@@ -53,6 +53,18 @@ describe('txCheckbox', () => {
     expect(wrapper.element.firstElementChild?.classList.contains('tx-checkbox__label')).toBe(true)
   })
 
+  it('defaults to the checkmark variant with the inner tick svg', () => {
+    const wrapper = mount(TxCheckbox, {
+      props: {
+        modelValue: true,
+        label: 'Selected',
+      },
+    })
+
+    expect(wrapper.classes()).toContain('tx-checkbox--checkmark')
+    expect(wrapper.find('svg .tx-checkbox__tick').exists()).toBe(true)
+  })
+
   it('renders the configured fill variant without the inner checkmark', () => {
     const wrapper = mount(TxCheckbox, {
       props: {
@@ -144,5 +156,67 @@ describe('txCheckbox', () => {
     expect(wrapper.attributes('tabindex')).toBeUndefined()
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
     expect(wrapper.emitted('change')).toBeUndefined()
+  })
+
+  it('does not emit events while loading', async () => {
+    const wrapper = mount(TxCheckbox, {
+      props: {
+        modelValue: false,
+        loading: true,
+      },
+    })
+
+    await wrapper.trigger('click')
+
+    expect(wrapper.attributes('disabled')).toBeDefined()
+    expect(wrapper.attributes('aria-busy')).toBe('true')
+    expect(wrapper.attributes('aria-disabled')).toBe('true')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.emitted('change')).toBeUndefined()
+  })
+
+  it('keeps loading visually distinct from disabled', () => {
+    const wrapper = mount(TxCheckbox, {
+      props: {
+        modelValue: true,
+        loading: true,
+      },
+    })
+
+    expect(wrapper.classes()).toContain('is-loading')
+    expect(wrapper.classes()).not.toContain('is-disabled')
+    // The fill still carries the value while the ring marks it as unresolved.
+    expect(wrapper.classes()).toContain('is-checked')
+  })
+
+  it('keeps reporting mixed while a partial selection is loading', () => {
+    const wrapper = mount(TxCheckbox, {
+      props: {
+        modelValue: false,
+        indeterminate: true,
+        loading: true,
+        ariaLabel: 'Select all',
+      },
+    })
+
+    expect(wrapper.attributes('aria-checked')).toBe('mixed')
+    expect(wrapper.attributes('aria-busy')).toBe('true')
+  })
+
+  it('drops the busy state when loading resolves', async () => {
+    const wrapper = mount(TxCheckbox, {
+      props: {
+        modelValue: false,
+        loading: true,
+      },
+    })
+
+    await wrapper.setProps({ loading: false })
+    await wrapper.trigger('click')
+
+    expect(wrapper.classes()).not.toContain('is-loading')
+    expect(wrapper.attributes('aria-busy')).toBeUndefined()
+    expect(wrapper.attributes('disabled')).toBeUndefined()
+    expect(wrapper.emitted('change')?.[0]).toEqual([true])
   })
 })

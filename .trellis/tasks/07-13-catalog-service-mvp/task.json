@@ -18,7 +18,9 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "09-03-remote-app-alias-catalog"
+  ],
   "parent": null,
   "relatedFiles": [
     "apps/core-app/src/main/modules/catalog/catalog-service.ts",

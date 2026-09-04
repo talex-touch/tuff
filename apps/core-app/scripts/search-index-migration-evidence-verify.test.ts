@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   verifySearchIndexMigrationEvidence,
   type SearchIndexMigrationSettingsVisibleArtifactEvidence
@@ -218,6 +218,21 @@ function runCli(args: string[]): string {
     stdio: ['ignore', 'pipe', 'pipe']
   })
 }
+
+/**
+ * Three tests below go through `runCli`, which pays corepack resolution, `pnpm exec` and a tsx
+ * transpile before the verifier starts. Vitest's 5,000 ms default covers that setup as well as the
+ * work, so an oversubscribed runner expires on cost that is not the verifier's — one failure in
+ * 6,257 tests, on a PR that changed only a workflow step (#1778).
+ *
+ * File-scoped rather than per-test, which is the weaker scope and deliberate. The `it(name, fn, ms)`
+ * and `it(name, { timeout }, fn)` forms both push the call past core-app's `printWidth: 100`, and
+ * prettier then breaks the arguments and re-indents all three bodies — about 170 lines of
+ * whitespace to express one number, which buries the change in review and in blame. The fourteen
+ * in-process tests inherit this; the cost is a slower failure if one ever hangs, which is the
+ * cheaper of the two.
+ */
+vi.setConfig({ testTimeout: 60_000 })
 
 const strictRequirements = {
   requireRealProfilePreflight: true,

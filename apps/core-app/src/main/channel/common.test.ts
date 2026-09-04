@@ -298,6 +298,7 @@ vi.mock('../modules/box-tool/addon/files/file-provider', () => ({
     getFailedFiles: vi.fn(),
     addWatchPath: vi.fn(),
     rebuildIndex: vi.fn(),
+    resolvePreviewResourcePath: vi.fn(),
     registerProgressStream: vi.fn()
   }
 }))
@@ -852,6 +853,69 @@ describe('CommonChannelModule private helpers', () => {
     } finally {
       packagedFlag.isPackaged = false
     }
+  })
+
+  it('keeps preview-resource grants host-only and delegates issuance to the indexed-file resolver', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const { fileProvider } = await import('../modules/box-tool/addon/files/file-provider')
+    const fileProviderMock = fileProvider as unknown as {
+      resolvePreviewResourcePath: ReturnType<typeof vi.fn>
+    }
+    fileProviderMock.resolvePreviewResourcePath
+      .mockResolvedValueOnce('/Users/demo/Downloads/indexed-preview.txt')
+      .mockResolvedValueOnce(null)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {}, onMaximizedChanged: () => () => {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const handler = handlers.get(AppEvents.fileIndex.previewResource.toEventName())
+    expect(handler).toBeTypeOf('function')
+
+    await expect(
+      handler?.(
+        { path: '/Users/demo/Downloads/indexed-preview.txt' },
+        { plugin: { name: 'third-party' } }
+      )
+    ).rejects.toThrow('HOST_ONLY_HANDLER')
+    expect(fileProviderMock.resolvePreviewResourcePath).not.toHaveBeenCalled()
+
+    await expect(
+      handler?.({ path: '/Users/demo/Downloads/indexed-preview.txt' }, {})
+    ).resolves.toMatchObject({
+      success: true,
+      tfileUrl: expect.stringContaining('previewGrant='),
+      expiresAt: expect.any(Number)
+    })
+    expect(fileProviderMock.resolvePreviewResourcePath).toHaveBeenCalledWith(
+      '/Users/demo/Downloads/indexed-preview.txt'
+    )
+
+    await expect(handler?.({ path: '/Users/demo/Downloads/not-indexed.txt' }, {})).resolves.toEqual(
+      {
+        success: false,
+        errorCode: 'FILE_INDEX_PREVIEW_NOT_AVAILABLE'
+      }
+    )
   })
 
   it('maps each supported desktop wallpaper backend output to a usable path', async () => {

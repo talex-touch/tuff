@@ -214,134 +214,144 @@ code: |
 | `division-box:session-destroyed` | Main → Renderer | Session destroyed |
 
 ## Resource Limits
-- Resource limits and caching policy follow the main-process implementation (`apps/core-app/src/main/modules/division-box/`).
+
+Enforced by the main process in `apps/core-app/src/main/modules/division-box/manager.ts`; treat these as the authority rather than the numbers here.
+
+| Limit | Value | Meaning |
+| --- | ---: | --- |
+| `MAX_ACTIVE_SESSIONS` | 5 | Live sessions globally, matching the window pool. Opening past it throws `DivisionBoxErrorCode.LIMIT_EXCEEDED`. |
+| `MAX_CACHED_SESSIONS` | 5 | `keepAlive` sessions held in the LRU cache. Beyond it the least recently used is evicted and destroyed. |
+| `MAX_VIEWS_PER_SESSION` | 3 | Reserved upper bound. The current runtime flow attaches at most one view per session. |
 
 ## Technical Notes
 - DivisionBox is managed by the main process using `WebContentsView`.
 - The SDK wraps IPC events and normalizes lifecycle updates.
 
-## Lifecycle Deep Dive
+## Lifecycle in Detail
 
-### prepare Phase
+The state machine is `prepare → attach → active → inactive → detach → destroy`, declared as `DivisionBoxState` in `packages/utils/types/division-box.ts`.
 
-`prepare` is the initial state of a DivisionBox session, entered after `open()` is called and before the window is created.
+### prepare
 
-**Triggers**:
-- Entered immediately when `divisionBox.open(config)` is called
-- The main process validates the config, assigns a sessionId, and creates the DivisionBoxSession instance
+The initial state of a session, between the `open()` call and window creation.
 
-**Resource management**:
-- Assigns a sessionId in the format `division-box-${timestamp}-${counter}` (timestamp plus an incrementing counter)
-- Validates the URL protocol and permissions
-- Initializes session state storage
-- If `keepAlive` is configured, registers with the LRU cache manager
+**Entered when**
+- `divisionBox.open(config)` is called **and** passes the preflight checks below. A rejected open never reaches this state.
+- The main process then assigns a session id and constructs the session.
 
-**Error handling**:
-- Invalid or missing URL (config validation failure) → returns `DivisionBoxError` (`CONFIG_ERROR`)
-- Insufficient permission → returns `DivisionBoxError` (`PERMISSION_DENIED`)
-- Resource limit exceeded (more than `MAX_ACTIVE_SESSIONS`) → returns `DivisionBoxError` (`LIMIT_EXCEEDED`)
+**Resources**
+- The global session cap is checked *before* anything is allocated.
+- A session id is generated and the session registered in the session map.
+- The config is validated and defaults applied; the plugin owner is resolved before any window is constructed.
+- With `keepAlive`, a state-change handler is installed. It does not put the session in the LRU cache yet — the cache entry is added when the session first reaches `inactive`, refreshed on return to `active`, and removed on `destroy`.
 
-### attach Phase
+**Failures**
 
-`attach` occurs after window creation completes.
+All three reject the `open()` call; none of them produce a session that then transitions.
 
-**Triggers**:
-- Entered explicitly: `createWindow()` calls `setState(attach)` at the end once the window has been created
-- Transitions are driven purely by explicit `setState` calls; the main process does not listen for Electron loading events such as `did-start-loading`
+- Global session cap reached → `DivisionBoxError(LIMIT_EXCEEDED)`, thrown before the session id is generated.
+- A UI view requested without an owning `pluginId`, or with a `pluginId` that resolves to no loaded plugin → `DivisionBoxError(CONFIG_ERROR)`.
+- A non-authoritative caller requesting a UI view, or a `pluginId` that does not match the calling plugin → `DivisionBoxError(PERMISSION_DENIED)`, raised at the IPC boundary before the manager is reached.
 
-**Resource management**:
-- Creates the WebContentsView instance
-- Loads the specified URL
-- Registers IPC channel listeners
-- If detached from CoreBox, transfers ownership of the UI view
+### attach
 
-**Error handling**:
-- Window creation failure → cleans up the window and throws `DivisionBoxError` (`RESOURCE_ERROR`)
-- URL load failure → `loadURL()` rejects and the error propagates to the caller while the manager drops the session from its registry; there are no `did-fail-load` / `render-process-gone` listeners
+Reached once the window exists and the view is attached to it.
 
-### active Phase
+**Entered when**
+- A `WebContentsView` is created and attached to the window.
+- The plugin UI begins loading (`did-start-loading`).
 
-`active` means the user is currently interacting with the DivisionBox.
+**Resources**
+- The view is created and the URL loaded.
+- IPC listeners are registered.
+- When detaching from CoreBox, ownership of the existing UI view is transferred rather than reloaded.
 
-**Triggers**:
-- `attachUIView()` explicitly calls `setState(active)` after `loadURL()` resolves
-- When an existing view is transferred from CoreBox, `attachExistingUIView()` enters `active` explicitly after attaching; sessions without a UI view are set to `active` directly by the manager once the window is created
-- Restoring from `inactive` also happens via an explicit `setState`; there is no focus-based automatic switching
+**Failures**
+- `did-fail-load` → the session moves to `destroy`.
+- `render-process-gone` → the session moves to `destroy`.
 
-**Resource management**:
-- Normal running state; no special resource management needed
-- IPC communication can be performed safely
+### active
 
-### inactive Phase
+The user is interacting with the DivisionBox.
 
-`inactive` means the DivisionBox is not currently active and may be cached.
+**Entered when**
+- The window takes focus.
+- The page finishes loading (`did-finish-load`).
+- Focus returns from `inactive`.
 
-**Triggers**:
-- No automatic trigger currently exists: the main process does not listen for `blur` or window-occlusion events
-- Currently only reachable programmatically via `setState` / the SDK; once entered, the manager places `keepAlive` sessions into the LRU cache
+**Resources**
+- Steady state. IPC is safe to use here.
 
-**Resource management**:
-- If `keepAlive=false`, delayed destruction may be triggered
-- If `keepAlive=true`, resources are retained but at lower priority
-- The LRU cache may reclaim low-priority sessions during this phase
+### inactive
 
-**Error handling**:
-- Staying inactive for a long time may trigger memory-pressure reclamation
-- When the LRU cache limit is exceeded, the least recently used session is destroyed
+The window lost focus or is occluded.
 
-### detach Phase
+**Entered when**
+- The window emits `blur`.
+- Another DivisionBox or CoreBox window covers it.
 
-`detach` means the session has been explicitly detached from its window.
+**Resources**
+- With `keepAlive: false`, deferred destruction may be scheduled.
+- With `keepAlive: true`, resources are retained at lower priority.
+- The LRU cache may reclaim low-priority sessions from here.
 
-**Triggers**:
-- No automatic trigger currently exists; the state is only reachable programmatically via `setState` / the SDK
-- `divisionBox.close(sessionId)` and the window `closed` event both go straight to `destroy` without passing through `detach`
+**Failures**
+- Prolonged inactivity can trigger memory-pressure reclamation.
+- Past `MAX_CACHED_SESSIONS`, the least recently used session is destroyed.
 
-**Resource management**:
-- If `keepAlive=true`, the session enters the LRU cache awaiting restoration
-- If `keepAlive=false`, it proceeds directly to the `destroy` phase
-- Releases the WebContentsView and associated resources
+### detach
 
-**Error handling**:
-- The close animation may be interrupted (`force: true`)
-- When the cache is full, the session may be destroyed immediately instead of cached
+The window closed, or the session was explicitly detached.
 
-### destroy Phase
+**Entered when**
+- `divisionBox.close(sessionId)` is called.
+- The user closes the window.
+- A resource limit forces teardown.
 
-`destroy` is the final state of a session; all resources have been fully released.
+**Resources**
+- With `keepAlive: true`, the session is already in the LRU cache from its first `inactive`, and can be restored from there.
+- With `keepAlive: false`, it proceeds straight to `destroy`.
+- The view and its associated resources are released.
 
-**Triggers**:
-- When `divisionBox.close(sessionId)` is called, `destroySession()` invokes `destroy()` directly
-- When the user closes the window, the `closed` event listener calls `destroy()`
-- When a `keepAlive` session is evicted from the LRU cache (eviction on cache overflow)
-- Forced destruction triggered by memory pressure (cached sessions are evicted when heap usage exceeds the threshold)
+**Failures**
+- The close animation can be interrupted with `force: true`.
+- A full cache means immediate destruction instead of caching.
 
-**Resource management**:
-- Releases all associated resources
-- Removed from the session map
-- Removed from the LRU cache
-- Unregisters IPC channel listeners
-- Fires the `session-destroyed` event
+### destroy
 
-**Error handling**:
-- No errors should occur in this phase; resources must be fully released
-- If a release fails, the error is logged but the state transition is not blocked
+Terminal state; resources are fully released.
 
-### State Transition Diagram
+**Entered when**
+- `detach` completes with `keepAlive: false`.
+- A `keepAlive` session is evicted by the LRU cache.
+- Memory pressure or a resource limit forces teardown.
+
+**Resources**
+- All associated resources are released.
+- The session is removed from the session map and the LRU cache.
+- IPC listeners are unregistered.
+- `division-box:session-destroyed` is emitted.
+
+**Failures**
+- Nothing should throw here. A failed release is logged and does not block the transition — a stuck session would be worse than a leaked handle.
+
+### State transitions
 
 ```mermaid
 stateDiagram-v2
     [*] --> prepare: open()
-    prepare --> attach: window created (explicit setState)
-    attach --> active: loadURL() resolved (explicit setState)
-    active --> inactive: setState (programmatic)
-    inactive --> active: setState (programmatic)
-    inactive --> detach: setState (programmatic)
-    active --> detach: setState (programmatic)
-    detach --> destroy: destroy()
-    prepare --> destroy: early close()
-    attach --> destroy: close() / window closed
-    active --> destroy: close() / window closed
+    prepare --> attach: window created
+    attach --> active: window focused
+    active --> inactive: window blurred
+    inactive --> active: window refocused
+    inactive --> detach: close() / reclaim
+    active --> detach: close() / reclaim
+    attach --> detach: close() / reclaim
+    detach --> [*]: keepAlive=false
+    detach --> prepare: keepAlive=true, restored
+    prepare --> destroy: load failure
+    attach --> destroy: load failure / crash
+    active --> destroy: crash
     inactive --> destroy: LRU eviction / memory pressure
     destroy --> [*]
 ```

@@ -21,9 +21,8 @@ const RULE = 'form-submit-button'
 
 /**
  * Components whose rendered `<button>` is pinned to `type="button"` by default.
- * `TuffFlatButton` and `TxCopyButton` render a bare `<button>` and therefore
- * inherit the HTML `type="submit"` default — the opposite hazard, deliberately
- * not covered here.
+ * `TxCopyButton` hardcodes `type="button"` in its own template, so it cannot be
+ * configured to submit and is deliberately not covered here.
  */
 const BUTTONS_DEFAULTING_TO_TYPE_BUTTON = new Set(['TxButton', 'TxIconButton'])
 

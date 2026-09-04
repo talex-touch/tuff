@@ -2496,6 +2496,14 @@ function normalizeReplaceAnswerFailure(error) {
   const code = normalizeText(error?.code || error?.result?.code)
   const fallbackMessage = normalizeText(error?.message)
 
+  if (code === 'MACOS_ACCESSIBILITY_PERMISSION_DENIED') {
+    return {
+      success: false,
+      code,
+      message: '替换失败：未授予 macOS 辅助功能权限',
+      recovery: '请在系统设置 > 隐私与安全性 > 辅助功能中允许 Tuff 后重试。',
+    }
+  }
   if (code === 'MACOS_AUTOMATION_PERMISSION_DENIED') {
     return {
       success: false,

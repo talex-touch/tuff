@@ -1,0 +1,35 @@
+{
+  "id": "clipboard-credential-labels",
+  "name": "clipboard-credential-labels",
+  "title": "Clipboard credential platform labels",
+  "description": "Classify copied credentials and software references locally, enrich Clipboard History search metadata, and prioritize the application locale for new clipboard OCR jobs.",
+  "status": "completed",
+  "dev_type": "feature",
+  "scope": "apps/core-app, plugins/clipboard-history",
+  "package": "@talex-touch/core-app",
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-03",
+  "completedAt": "2026-09-03",
+  "branch": "release/clipboard-credential-labels-20260903",
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "5d1a931da",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/1858",
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "apps/core-app/src/main/modules/clipboard-tagging.ts",
+    "apps/core-app/src/main/modules/clipboard/clipboard-stage-b-enrichment.ts",
+    "apps/core-app/src/main/modules/ocr/ocr-service.ts",
+    "plugins/clipboard-history/src/utils/clipboard-items.ts"
+  ],
+  "notes": "Local classification only; no credential validation or network lookup.",
+  "meta": {
+    "nextAction": "Merge pull request #1858 after all required checks pass, then create the next beta release from the resulting master commit.",
+    "blocker": "Protected master requires the seven mandatory checks and PR merge before versioning and tagging.",
+    "evidence": "Staged snapshot: 50 focused tests passed; CoreApp Node typecheck and Vite build passed; Clipboard History plugin typecheck/build and 29-plugin validation passed."
+  }
+}

@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import type { TransitionPreset } from '@tuffex-components/transition'
 import { ref } from 'vue'
 const { locale } = useI18n()
 const contentKey = ref('panel-a')
-const preset = ref('fade')
+const preset = ref<TransitionPreset>('fade')
 const value = ref<'A' | 'B'>('A')
 const toggle = () => {
   value.value = value.value === 'A' ? 'B' : 'A'

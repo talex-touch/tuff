@@ -1,7 +1,15 @@
 # 变更日志
 
-> 更新时间：2026-07-27
+> 更新时间：2026-08-20
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-08-20
+
+### catalog: record the CatalogService completed/open boundary
+
+- R8-F CatalogService MVP 的服务契约复核通过：pinned RSA 信任根拒绝 manifest 自带密钥，pack URL 由签名字段重新推导为内容寻址，归一化与验签在任何 mutation 之前 fail-closed，导入经 DB write scheduler 串行化且失败原子，activate/rollback 仅在持久化提交之后重建 official registry。catalog 6 个套件 38/38、`plugin-localization-channels` 12/12、`packages/utils` i18n 4 个套件 36/36 通过，双 typecheck 与两包各自的 eslint 均干净。
+- **触发面未接出**，这是本次记录的重点：除启动时 seed/activate 内置 pack 外，`checkUpdates` / `downloadPack` / `importPack` / `activatePack` / `rollback` 在运行中的应用里没有任何调用方，`getCatalogService()` 在 catalog 模块之外零调用方，诊断状态算得出来但没有出口。三者都与 PRD 的 Scope Boundaries 一致（不做 Settings UI、不做自动轮询），不是缺陷 —— 但「done」在这里的含义是服务契约成立，不是用户可以更新 catalog。
+- 任务 PRD 引用的 `.spec-workflow/specs/catalog-service-mvp/requirements.md` 在 git 历史中从未存在，已改为指向 [`engineering/catalog-service-boundary.md`](../../engineering/catalog-service-boundary.md)。
 
 ## 2026-07-27
 

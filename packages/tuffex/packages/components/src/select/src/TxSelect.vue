@@ -546,6 +546,67 @@ defineExpose({
   clear,
 })
 
+/**
+ * The multi trigger grows a row at a time as tags wrap, and `height: auto` is
+ * not a transitionable value — so the box snapped to its new size while the tags
+ * inside were still animating into place. Measuring the natural height and
+ * writing it back as an explicit px gives the CSS transition two numbers to
+ * interpolate, so the row appears and the box grows on the same beat.
+ */
+const multiTriggerRef = ref<HTMLElement | null>(null)
+const multiTriggerHeight = ref<number | null>(null)
+
+function syncMultiTriggerHeight(): void {
+  const el = multiTriggerRef.value
+  if (!el)
+    return
+  const pinned = el.style.height
+  el.style.height = 'auto'
+  const natural = el.offsetHeight
+  el.style.height = pinned
+  if (natural > 0 && multiTriggerHeight.value !== natural)
+    multiTriggerHeight.value = natural
+}
+
+let triggerResizeObserver: ResizeObserver | null = null
+/**
+ * Width only. Writing the height back re-fires the observer, and reacting to
+ * that would be a feedback loop; the width is the input that actually decides
+ * where the tags wrap.
+ */
+let lastTriggerWidth = -1
+
+watch(multiTriggerRef, (el) => {
+  triggerResizeObserver?.disconnect()
+  lastTriggerWidth = -1
+  if (!el || typeof ResizeObserver === 'undefined')
+    return
+  triggerResizeObserver = new ResizeObserver((entries) => {
+    const width = entries[0]?.contentRect.width ?? -1
+    if (width === lastTriggerWidth)
+      return
+    lastTriggerWidth = width
+    syncMultiTriggerHeight()
+  })
+  triggerResizeObserver.observe(el)
+})
+
+// Tag enter/leave animates transform and opacity, never layout, so the natural
+// height one tick after the change is already the settled one.
+watch(
+  // A signature, not a count: an edited option label or a `maxTagTextLength`
+  // change rewraps the rows without changing how many tags there are, and the
+  // width guard above would then keep the stale height pinned.
+  () => [
+    visibleSelectedOptions.value.map(opt => `${String(opt.value)}:${resolveTagLabel(opt.label)}`).join('\u0000'),
+    hiddenSelectedCount.value,
+  ].join('|'),
+  async () => {
+    await nextTick()
+    syncMultiTriggerHeight()
+  },
+)
+
 onMounted(() => {
   syncSelectedLabelFromValue(currentValue.value)
 })
@@ -642,6 +703,8 @@ watch(
 onBeforeUnmount(() => {
   if (searchTimer.value)
     clearTimeout(searchTimer.value)
+  triggerResizeObserver?.disconnect()
+  triggerResizeObserver = null
 })
 </script>
 
@@ -680,8 +743,10 @@ onBeforeUnmount(() => {
         <div class="tuff-select__trigger">
           <div
             v-if="multiple"
+            ref="multiTriggerRef"
             class="tuff-select__multi-trigger"
             :class="{ 'is-disabled': disabled }"
+            :style="multiTriggerHeight != null ? { height: `${multiTriggerHeight}px` } : undefined"
             role="combobox"
             aria-haspopup="listbox"
             :aria-expanded="isOpen"
@@ -746,7 +811,7 @@ onBeforeUnmount(() => {
             </template>
             <span class="tuff-select__arrow">
               <svg viewBox="0 0 24 24" width="16" height="16">
-                <path fill="currentColor" d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z" />
+                <path fill="currentColor" d="M12 4.9994L7.7573 9.242L9.1715 10.6563L12 7.8278L14.8284 10.6563L16.2426 9.242L12 4.9994ZM12 19.0006L7.7573 14.758L9.1715 13.3438L12 16.1722L14.8284 13.3438L16.2426 14.758L12 19.0006Z" />
               </svg>
             </span>
           </div>
@@ -768,7 +833,7 @@ onBeforeUnmount(() => {
             <template #suffix>
               <span class="tuff-select__arrow">
                 <svg viewBox="0 0 24 24" width="16" height="16">
-                  <path fill="currentColor" d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z" />
+                  <path fill="currentColor" d="M12 4.9994L7.7573 9.242L9.1715 10.6563L12 7.8278L14.8284 10.6563L16.2426 9.242L12 4.9994ZM12 19.0006L7.7573 14.758L9.1715 13.3438L12 16.1722L14.8284 13.3438L16.2426 14.758L12 19.0006Z" />
                 </svg>
               </span>
             </template>
@@ -888,7 +953,6 @@ onBeforeUnmount(() => {
     align-items: center;
     flex-shrink: 0;
     color: var(--tx-text-color-secondary, #909399);
-    transition: transform 0.16s ease;
   }
 
   &__multi-trigger {
@@ -903,7 +967,11 @@ onBeforeUnmount(() => {
     border: 1px solid var(--tx-border-color, #dcdfe6);
     border-radius: 12px;
     background-color: var(--tx-bg-color, #fff);
-    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    // Matches the tag transition so a wrapping row and the box that has to make
+    // space for it move together; height is only transitionable because the
+    // script writes the measured value back as an explicit px.
+    transition: border-color 0.18s ease, box-shadow 0.18s ease,
+      height 0.18s cubic-bezier(0.22, 1, 0.36, 1);
     cursor: pointer;
 
     &:hover:not(.is-disabled) {
@@ -1111,9 +1179,7 @@ onBeforeUnmount(() => {
       border-color: var(--tx-color-primary, #409eff);
     }
 
-    .tuff-select__arrow {
-      transform: rotate(180deg);
-    }
+    /* The up/down chevron pair is vertically symmetric, so no open rotation. */
 
     .tuff-select__multi-trigger {
       border-color: var(--tx-color-primary, #409eff);

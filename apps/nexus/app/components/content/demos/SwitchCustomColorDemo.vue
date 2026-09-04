@@ -53,12 +53,8 @@ const labels = computed(() => (locale.value === 'zh'
   font-size: 14px;
 }
 
-.switch-custom-color-demo__item :deep(.tuff-switch.is-active) {
-  background-color: var(--switch-demo-color);
-}
-
-.switch-custom-color-demo__item :deep(.tuff-switch.is-active:hover:not(.is-disabled)) {
-  box-shadow: 0 0 16px 1px color-mix(in srgb, var(--switch-demo-color) 72%, transparent);
+.switch-custom-color-demo__item :deep(.tuff-switch) {
+  --tuff-switch-active-color: var(--switch-demo-color);
 }
 
 .switch-custom-color-demo__item.is-success {

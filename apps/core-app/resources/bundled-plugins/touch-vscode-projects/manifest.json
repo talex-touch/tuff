@@ -1,0 +1,99 @@
+{
+  "id": "com.tuffex.vscode-projects",
+  "name": "touch-vscode-projects",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260817,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "安全列出并打开 VS Code 最近项目",
+  "main": "index.js",
+  "permissions": {
+    "required": [
+      "search.root-results"
+    ],
+    "optional": [
+      "fs.read",
+      "fs.index",
+      "system.shell"
+    ]
+  },
+  "permissionReasons": {
+    "search.root-results": "将 VS Code 最近项目入口展示在 CoreBox 根搜索结果",
+    "fs.read": "读取宿主允许的 VS Code 最近项目元数据",
+    "fs.index": "建立和刷新 VS Code 最近项目索引",
+    "system.shell": "由宿主通过固定 VS Code 启动器打开项目"
+  },
+  "searchProviders": [
+    {
+      "id": "touch-vscode-projects.projects",
+      "displayName": "VS Code Projects",
+      "featureId": "vscode-projects",
+      "kind": "vscode-workspace",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 84,
+      "permissionScopes": [
+        "root-results",
+        "file-system"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
+  "features": [
+    {
+      "id": "vscode-projects",
+      "name": "VS Code Projects",
+      "desc": "查看并打开最近使用的 VS Code 项目",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "vscode",
+        "visual studio code",
+        "project",
+        "workspace",
+        "项目",
+        "工作区"
+      ],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "vscode",
+            "vs code",
+            "vscode 项目",
+            "工作区"
+          ]
+        }
+      ]
+    }
+  ],
+  "_files": {
+    "index.js": "sha256-81993e5f88bb8adeee728442b5523b8f2d8eb649f728b842ae92e3f07f8c4b36",
+    "assets/logo.svg": "sha256-61034a20c94b10a2f736033f3dab3d757c3a9f13f6d4a4538c063e2ceaec2259"
+  },
+  "_signature": "iGU7Ts4HmCtLwHinz8SFT1DP0vKnq7jaf5UJXRZaV2A=",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  }
+}

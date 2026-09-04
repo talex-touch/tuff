@@ -1,0 +1,5 @@
+{"file": "apps/nexus/app/components/DocsSidebar.vue", "reason": "SUITES/CATEGORY_SUITE_MAP/SECTION 路由列表所在；工作区带他会话未提交 +208 行，Phase B 才动、hunk 级 stage"}
+{"file": "apps/nexus/content/docs/dev/components/ai-suite.zh.mdc", "reason": "套件 overview 页先例（frontmatter/结构/standalonePages 机制）"}
+{"file": "apps/nexus/content/docs/dev/components/index.zh.mdc", "reason": "hub 画廊嵌入（::DocsComponentsGallery）写法参考"}
+{"file": "apps/nexus/scripts/recategorize-component-docs.py", "reason": "category→suite taxonomy 镜像，必须与 DocsSidebar 同步改"}
+{"file": "apps/nexus/i18n/locales/zh.ts", "reason": "docsSidebar.suites 标签；工作区带他会话 families.* 未提交改动，Phase B 才动"}

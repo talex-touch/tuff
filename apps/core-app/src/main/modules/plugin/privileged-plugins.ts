@@ -43,6 +43,16 @@ export const PRIVILEGED_PLUGIN_CAPABILITIES = {
   batchRenameFilesystem: ['touch-batch-rename'],
   /** Spawns and tracks the screenshot helper process. */
   snipasteProcess: ['touch-snipaste'],
+  /** Reads and atomically updates the fixed operating-system hosts file. */
+  hosts: ['touch-hosts'],
+  /** Reads VS Code recent-project metadata and opens only host-issued targets. */
+  vscodeProjects: ['touch-vscode-projects'],
+  /** Reads a bounded Orca summary and opens the fixed Orca application. */
+  orca: ['touch-orca'],
+  /** Reads sanitized local AI-session metadata. */
+  aiSessions: ['touch-ai-sessions'],
+  /** Converts only lifecycle-approved image inputs through the bounded host renderer. */
+  imageTools: ['touch-image'],
   /** Reaches the intelligence providers for translation requests. */
   translation: ['touch-translation']
 } as const satisfies Record<string, readonly string[]>

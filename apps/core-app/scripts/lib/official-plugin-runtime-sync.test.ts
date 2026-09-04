@@ -6,6 +6,7 @@ import fs from 'fs-extra'
 import { afterEach, describe, expect, it } from 'vitest'
 
 interface OfficialPluginBuildTarget {
+  bundledProjection: string
   packageName: string
   pluginName: string
 }
@@ -58,13 +59,9 @@ const {
 }
 
 const fixtureRoots: string[] = []
-const pluginVersions: Record<string, string> = {
-  'clipboard-history': '1.1.10',
-  'touch-intelligence': '1.2.0',
-  'touch-quickops': '0.1.0',
-  'touch-snippets': '1.0.0',
-  'touch-translation': '1.0.11'
-}
+const pluginVersions = Object.fromEntries(
+  OFFICIAL_PLUGIN_BUILD_TARGETS.map(({ pluginName }, index) => [pluginName, `1.0.${index + 1}`])
+)
 
 async function createSyncFixture(): Promise<{
   projectRoot: string
@@ -74,7 +71,7 @@ async function createSyncFixture(): Promise<{
   fixtureRoots.push(workspaceRoot)
   const projectRoot = path.join(workspaceRoot, 'apps', 'core-app')
 
-  for (const { packageName, pluginName } of OFFICIAL_PLUGIN_BUILD_TARGETS) {
+  for (const { bundledProjection, packageName, pluginName } of OFFICIAL_PLUGIN_BUILD_TARGETS) {
     const version = pluginVersions[pluginName]
     const canonicalRoot = path.join(workspaceRoot, 'plugins', pluginName)
     const canonicalBuildRoot = path.join(canonicalRoot, 'dist', 'build')
@@ -90,7 +87,7 @@ async function createSyncFixture(): Promise<{
     })
     await fs.writeFile(path.join(canonicalBuildRoot, 'index.js'), `module.exports = '${version}'\n`)
 
-    const bundledRoot = path.join(projectRoot, 'resources', 'bundled-plugins', pluginName)
+    const bundledRoot = path.join(workspaceRoot, bundledProjection)
     await fs.ensureDir(path.join(bundledRoot, 'dist'))
     await fs.writeJson(path.join(bundledRoot, 'manifest.json'), {
       name: pluginName,
@@ -111,15 +108,8 @@ describe('official plugin build delivery', () => {
   it('builds the exporter after CLI core, TuffEx after Tuff CLI, and both before every official plugin', () => {
     const observed: string[] = []
     const expectedBuildOrder = [
-      '@talex-touch/tuff-cli-core',
-      '@talex-touch/unplugin-export-plugin',
-      '@talex-touch/tuff-cli',
-      '@talex-touch/tuffex',
-      '@talex-touch/clipboard-history-plugin',
-      '@talex-touch/touch-quickops-plugin',
-      '@talex-touch/touch-snippets-plugin',
-      '@talex-touch/touch-translation-plugin',
-      '@talex-touch/touch-intelligence-plugin'
+      ...OFFICIAL_PLUGIN_BUILD_PREREQUISITES,
+      ...OFFICIAL_PLUGIN_BUILD_TARGETS.map((target) => target.packageName)
     ]
 
     const buildOrder = buildOfficialPluginPackages({
@@ -128,7 +118,6 @@ describe('official plugin build delivery', () => {
       runPackageBuild: (packageName) => observed.push(packageName)
     })
 
-    expect(OFFICIAL_PLUGIN_BUILD_PREREQUISITES).toEqual(expectedBuildOrder.slice(0, 4))
     expect(observed).toEqual(expectedBuildOrder)
     expect(buildOrder).toEqual(expectedBuildOrder)
   })
@@ -168,7 +157,7 @@ describe('official plugin build delivery', () => {
 
     const results = syncOfficialPluginBundledRuntimes({ projectRoot, workspaceRoot })
 
-    expect(results).toHaveLength(5)
+    expect(results).toHaveLength(OFFICIAL_PLUGIN_BUILD_TARGETS.length)
     for (const result of results) {
       const expectedVersion = pluginVersions[result.pluginName]
       const bundledRoot = path.join(projectRoot, 'resources', 'bundled-plugins', result.pluginName)
@@ -188,7 +177,7 @@ describe('official plugin build delivery', () => {
     }
   })
 
-  it.each(['clipboard-history', 'touch-quickops', 'touch-snippets'])(
+  it.each(['touch-hosts', 'touch-vscode-projects', 'touch-orca', 'touch-ai-sessions'])(
     'copies %s canonical output byte-for-byte to packaged and runtime projections',
     async (pluginName) => {
       const { projectRoot, workspaceRoot } = await createSyncFixture()

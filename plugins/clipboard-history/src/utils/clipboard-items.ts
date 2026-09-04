@@ -145,6 +145,37 @@ function getMeta(item: PluginClipboardItem): Record<string, unknown> {
   }
 }
 
+const CLIPBOARD_TAG_LABELS: Record<string, string> = {
+  api_key: 'API 密钥',
+  github: 'GitHub',
+  npm: 'npm',
+  openai: 'OpenAI',
+  stripe: 'Stripe',
+  google: 'Google',
+  wechat: '微信',
+  aws: 'AWS',
+  slack: 'Slack',
+  token: '令牌',
+  password: '密码',
+  account: '账号',
+  email: '邮箱',
+  url: '链接',
+}
+
+export function getClipboardTagLabels(item: PluginClipboardItem): string[] {
+  const tags = getMeta(item).tags
+  if (!Array.isArray(tags)) {
+    return []
+  }
+
+  return unique(
+    tags.filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0),
+    tag => tag,
+  )
+    .slice(0, 6)
+    .map(tag => CLIPBOARD_TAG_LABELS[tag] ?? tag)
+}
+
 function unique<T>(values: T[], getKey: (value: T) => string): T[] {
   const seen = new Set<string>()
   const result: T[] = []

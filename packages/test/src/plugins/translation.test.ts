@@ -34,6 +34,15 @@ class TestTuffItemBuilder {
     return this
   }
 
+  setCustomRender(type: string, content: string, data?: Record<string, unknown>) {
+    this.item.render = {
+      mode: 'custom',
+      custom: { type, content, data },
+      basic: this.basic,
+    }
+    return this
+  }
+
   setMeta(meta: Record<string, unknown>) {
     this.item.meta = { ...this.item.meta, ...meta }
     return this
@@ -82,6 +91,12 @@ function createHarness(options: HarnessOptions = {}) {
         async pushItems(items: any[]) {
           pushes.push(structuredClone(items))
           calls.push({ kind: 'push', payload: structuredClone(items) })
+        },
+      },
+      widget: {
+        async pushItems(items: any[]) {
+          pushes.push(structuredClone(items))
+          calls.push({ kind: 'widget-push', payload: structuredClone(items) })
         },
       },
       translation: {
@@ -162,7 +177,7 @@ describe('touch-translation isolated Prelude', () => {
       'list-providers',
       'translate',
       'clear',
-      'push',
+      'widget-push',
     ])
     const translated = harness.calls.find(call => call.kind === 'translate')!
     expect(translated.payload).toEqual({ text: 'hello', targetLang: 'zh' })
@@ -180,6 +195,8 @@ describe('touch-translation isolated Prelude', () => {
     expect(item.meta).toEqual({
       pluginName: 'touch-translation',
       featureId: 'touch-translate',
+      status: 'complete',
+      keepCoreBoxOpen: true,
       defaultAction: 'copy-translation',
     })
     expect(item.actions[0].payload).toMatchObject({

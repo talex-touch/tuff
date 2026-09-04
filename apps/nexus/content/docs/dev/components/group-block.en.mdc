@@ -319,11 +319,12 @@ code: |
 ### Loading State
 
 #### BlockSwitch (loading)
+`loading` is forwarded straight to the inner switch: the thumb becomes a spinning ring, the row freezes without dimming, and a shimmer runs across it.
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchLoadingDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxGroupBlock name="Sync status" description="Loading freezes the inner control" default-icon="i-ri-refresh-line" :collapsible="false">
+    <TxGroupBlock name="Sync status" description="Loading turns the thumb into a ring and freezes the row" default-icon="i-ri-refresh-line" :collapsible="false">
       <TxBlockSwitch
         v-model="loading"
         title="Sync status"
@@ -528,7 +529,7 @@ code: |
 | `activeIcon` | `TxIconSource \| string` | - | Icon shown when the switch is on; falls back to `defaultIcon`. |
 | `disabled` | `boolean` | `false` | Disable the row and underlying switch. |
 | `guidance` | `boolean` | `false` | Render as a navigation row with a chevron instead of a switch. |
-| `loading` | `boolean` | `false` | Show a spinner/shimmer and temporarily disable switch interaction. |
+| `loading` | `boolean` | `false` | Forwarded to the inner `TuffSwitch` `loading` prop: the thumb becomes a spinning ring, the row gains a shimmer, and switch interaction is temporarily disabled. |
 
 ### TxBlockSwitch Events
 
@@ -555,7 +556,8 @@ None. Use props, `update:expanded`, `toggle`, and the row-specific events instea
 - After the user toggles a group, later `collapsed` / `defaultExpand` prop changes no longer overwrite the chosen state.
 - Group bodies stay mounted; expansion only animates height, opacity, and display.
 - `TxBlockLine` renders a non-interactive `div` by default and a native `button type="button"` only when `link=true`.
-- `TxBlockSlot` blocks click emits when disabled; `TxBlockSwitch` also disables the row while `loading=true`.
+- `TxBlockSlot` blocks click emits when disabled; `TxBlockSwitch` freezes the whole row's pointer events while `loading=true` too, but the row is not dimmed — `tx-block-switch--loading:not(.tx-block-switch--disabled)` takes back the slot's `opacity: .5` so busy and disabled stay visually distinct.
+- `TxBlockSwitch` shows the busy cue in exactly one place: `loading` is forwarded to the inner `TuffSwitch`, whose thumb becomes a spinning ring. The row only adds a shimmer and no longer renders a separate spinner.
 - `TxBlockSwitch` guidance mode replaces the switch with a chevron and only emits `click`; it does not mutate `modelValue`.
 
 ## Style Customization
@@ -564,7 +566,7 @@ None. Use props, `update:expanded`, `toggle`, and the row-specific events instea
 |-------------|----------|
 | `--tx-border-color-lighter` | Group card border and header divider. |
 | `--tx-fill-color-dark` / `--tx-fill-color` / `--tx-fill-color-light` | Header, row, hover, and touch-blur surfaces. |
-| `--tx-text-color-primary` / `--tx-text-color-secondary` | Group titles, row labels, descriptions, guidance arrows, and loader color. |
+| `--tx-text-color-primary` / `--tx-text-color-secondary` | Group titles, row labels, descriptions, guidance arrows, and the switch loading ring. |
 | `--tx-color-primary` / `--tx-color-primary-dark-2` | `TxBlockLine link` color and hover color. |
 | `--tx-color-white` | Loading shimmer highlight mixed into `TxBlockSwitch` loading overlay. |
 
@@ -581,8 +583,9 @@ None. Use props, `update:expanded`, `toggle`, and the row-specific events instea
 - Reviewed against `packages/tuffex/packages/components/src/group-block/src/types.ts` and all six Vue entry points in the group-block package.
 - `TxBlockLine` only becomes interactive when `link=true`; do not describe it as a generic clickable row.
 - `TxBlockSwitch` loading mode blocks mutation, while guidance mode emits only `click` and should be documented as navigation, not a boolean toggle.
+- **Busy-state ownership:** the loading visual belongs to the inner `TuffSwitch` (`is-loading` + `aria-busy`); `TxBlockSwitch` only owns the row shimmer and the un-dimming. Changing the switch's loading treatment means updating both components' docs.
 - Collapsed demos intentionally use `:default-expand="false"`; current source watches `collapsed` only before storage or user interaction changes the group state.
-- **Verified coverage:** persisted expansion, static-group behavior, semantic link rows, disabled slot-click blocking, guidance mode, and loading-state value-change guards.
+- **Verified coverage:** persisted expansion, static-group behavior, semantic link rows, disabled slot-click blocking, guidance mode, loading-state value-change guards, and that a loading row carries `is-loading` / `aria-busy` on the switch itself with no second spinner.
 
 ## Source
 

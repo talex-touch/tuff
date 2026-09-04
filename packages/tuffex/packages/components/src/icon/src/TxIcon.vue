@@ -41,6 +41,12 @@ const svgFetcher = computed(() => props.svgFetcher ?? injectedConfig.svgFetcher)
 const fileProtocol = computed(() => injectedConfig.fileProtocol ?? '')
 
 const builtinIcons = {
+  // TxStep's default `completedIcon` is 'check'; keep this entry or completed
+  // steps render an empty circle.
+  'check': {
+    viewBox: '0 0 24 24',
+    path: 'M10 15.172L19.192 5.979L20.607 7.393L10 18L3.636 11.636L5.05 10.222L10 15.172Z',
+  },
   'chevron-down': {
     viewBox: '0 0 24 24',
     path: 'M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z',

@@ -56,16 +56,16 @@ code: |
   import { createApp } from 'vue'
   import TxButton from '@talex-touch/tuffex/button'
   import TxSwitch from '@talex-touch/tuffex/switch'
-  import TuffFlatButton from '@talex-touch/tuffex/flat-button'
+  import TxTag from '@talex-touch/tuffex/tag'
   import '@talex-touch/tuffex/base.css'
   import '@talex-touch/tuffex/button/style.css'
   import '@talex-touch/tuffex/switch/style.css'
-  import '@talex-touch/tuffex/flat-button/style.css'
+  import '@talex-touch/tuffex/tag/style.css'
 
   const app = createApp(App)
   app.use(TxButton)
   app.use(TxSwitch)
-  app.use(TuffFlatButton)
+  app.use(TxTag)
 ---
 :::
 
@@ -86,7 +86,6 @@ code: |
 | 组件 | 描述 | 来源 |
 |------|------|------|
 | `TuffButton` | 带触感反馈的交互按钮 | `button/` |
-| `TuffFlatButton` | 扁平按钮，支持 loading 状态 | `flat-button/` |
 | `TuffSwitch` | 流畅动画的开关组件 | `switch/` |
 | `TuffInput` | 输入框，支持 clearable 和 textarea | `flat-input/` |
 | `TuffCheckbox` | 复选框，SVG 动画勾选效果 | `checkbox/` |

@@ -1,56 +1,10 @@
 {
   "name": "@talex-touch/touch-image-plugin",
-  "type": "module",
-  "version": "0.0.0",
   "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.34.4",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "pnpm exec eslint --cache .",
-    "lint:fix": "pnpm exec eslint --cache --fix .",
-    "preview": "vite preview"
-  },
-  "talex-touch": {
-    "icon": {
-      "type": "class",
-      "value": "i-ri-image-2-line"
-    },
-    "build": {
-      "files": [
-        "README.md"
-      ],
-      "secret": {
-        "pos": "Tuff",
-        "addon": [
-          "windows",
-          "darwin",
-          "linux"
-        ]
-      },
-      "verify": {
-        "enable": true,
-        "online": "always"
-      },
-      "version": {
-        "update": "auto",
-        "downgrade": false
-      }
-    }
-  },
-  "dependencies": {
-    "@iconify-json/ri": "^1.2.10",
-    "@talex-touch/unplugin-export-plugin": "workspace:^",
-    "@talex-touch/utils": "workspace:^",
-    "@unocss/preset-icons": "^66.7.5",
-    "@unocss/preset-uno": "^66.7.5",
-    "unocss": "^66.7.5",
-    "vue": "^3.5.39"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.7",
-    "sass": "catalog:",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.6",
-    "vue-tsc": "^3.3.6"
+    "test": "node --test index.test.cjs",
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
   }
 }

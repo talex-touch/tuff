@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
  * A manifest's `feature.platform` declaration has to actually gate registration (#820).
  *
  * Every shipped manifest writes `{ win32, darwin, linux }` booleans, and for a long time
- * nothing read them: five features declared themselves unavailable on Linux and registered
+ * nothing read them: features declared themselves unavailable on a platform and registered
  * there anyway. They avoided misbehaving only because each prelude re-checks
  * `process.platform` on its own, so the user saw the feature, triggered it, and was told it
  * was unsupported.
@@ -37,6 +37,7 @@ const EXCLUDED = new Map([
   ['touch-browser-open/browser-open', ['linux']],
   ['touch-quick-actions/quick-actions', ['linux']],
   ['touch-system-actions/system-actions', ['linux']],
+  ['touch-orca/orca', ['linux', 'win32']],
   ['touch-window-manager/window-app', ['linux']],
   ['touch-window-presets/window-presets', ['darwin', 'linux']],
 ])
@@ -50,7 +51,8 @@ function manifests(): Array<{ plugin: string, features: ManifestFeature[] }> {
   const found: Array<{ plugin: string, features: ManifestFeature[] }> = []
   for (const entry of readdirSync(PLUGINS)) {
     const file = path.join(PLUGINS, entry, 'manifest.json')
-    if (!statSync(path.join(PLUGINS, entry)).isDirectory()) continue
+    if (!statSync(path.join(PLUGINS, entry)).isDirectory())
+      continue
     try {
       const parsed = JSON.parse(readFileSync(file, 'utf8'))
       found.push({ plugin: entry, features: parsed.features ?? [] })
@@ -68,12 +70,14 @@ function declaredExclusions(): Map<string, string[]> {
   for (const { plugin, features } of manifests()) {
     for (const feature of features) {
       const platform = feature.platform
-      if (!platform || typeof platform !== 'object') continue
+      if (!platform || typeof platform !== 'object')
+        continue
       const off = Object.entries(platform)
         .filter(([, value]) => value === false)
         .map(([key]) => key)
         .sort()
-      if (off.length) found.set(`${plugin}/${feature.id}`, off)
+      if (off.length)
+        found.set(`${plugin}/${feature.id}`, off)
     }
   }
   return found
@@ -97,8 +101,8 @@ describe('manifest feature platform gating', () => {
   })
 
   it('only ever excludes on an explicit false', () => {
-    // 25 of the 30 shipped features declare no platform at all. Treating "undeclared" as
-    // "unavailable" would empty the launcher, so the gate has to be opt-out, not opt-in.
+    // Features without a platform declaration remain available everywhere. Treating "undeclared" as
+    // "unavailable" would hide them, so the gate has to be opt-out, not opt-in.
     const source = readFileSync(GATE, 'utf8')
 
     expect(source).toMatch(/\[platform\] === false/)

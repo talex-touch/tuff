@@ -71,7 +71,7 @@ describe('documented renderer signatures', () => {
   it('match the renderer class', () => {
     for (const signature of [
       'regChannel<TRequest = unknown>(eventName: string, callback: (data: TRequest) => Promise<unknown> | unknown): () => void',
-      'send<TRequest = unknown, TResponse = unknown>(eventName: string, arg?: TRequest): Promise<TResponse>'
+      'send<TRequest = unknown, TResponse = unknown>(eventName: string, arg?: TRequest, options?: { timeout?: number }): Promise<TResponse>'
     ]) {
       expect(flatRenderer).toContain(signature)
       expect(flatten(CLAUDE_MD)).toContain(flatten(signature))

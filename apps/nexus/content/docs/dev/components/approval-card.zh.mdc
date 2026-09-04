@@ -1,7 +1,7 @@
 ---
 title: "ApprovalCard 澄清问卷卡"
 description: "智能体动手前的逐题走查：单选、多选、自由作答，带分页与提交态。"
-category: Feedback
+category: AiAgent
 status: beta
 since: 0.3.9
 tags: [ai, approval, questionnaire, human-in-the-loop]

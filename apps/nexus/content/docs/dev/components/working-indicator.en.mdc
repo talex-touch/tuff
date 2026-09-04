@@ -1,7 +1,7 @@
 ---
 title: "WorkingIndicator"
 description: "Inline indicator for long-running work: a pixel grid, a shimmering label, and a live elapsed clock."
-category: Status
+category: AiAgent
 status: beta
 since: 0.3.9
 tags: [ai, loading, status, timer]

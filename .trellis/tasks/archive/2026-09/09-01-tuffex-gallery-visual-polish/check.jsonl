@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Integration review checks that each child synced its own docs page and every wrapper page (TxProgress for progress-bar), and that zh/en section counts still match."}
+{"file": ".trellis/tasks/09-01-tuffex-gallery-visual-polish/research/measurements.md", "reason": "Before-state numbers to diff the final screenshots against; the blast-radius list the status-badge child must sign off."}

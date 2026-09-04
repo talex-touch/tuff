@@ -1091,24 +1091,24 @@ export function createFixedPluginBrowserDataService(
     'tempDirectory',
     'query'
   ])
+  const platform = options.platform as NodeJS.Platform
+  const pathApi = platform === 'win32' ? path.win32 : path.posix
   if (
     typeof options.platform !== 'string' ||
     typeof options.homeDirectory !== 'string' ||
     typeof options.appDataDirectory !== 'string' ||
     typeof options.tempDirectory !== 'string' ||
-    !path.isAbsolute(options.homeDirectory) ||
-    !path.isAbsolute(options.appDataDirectory) ||
-    !path.isAbsolute(options.tempDirectory) ||
+    !pathApi.isAbsolute(options.homeDirectory) ||
+    !pathApi.isAbsolute(options.appDataDirectory) ||
+    !pathApi.isAbsolute(options.tempDirectory) ||
     typeof options.query !== 'function' ||
     !TRUSTED_QUERIES.has(options.query)
   ) {
     invalid()
   }
-  const platform = options.platform as NodeJS.Platform
-  const pathApi = platform === 'win32' ? path.win32 : path.posix
   const homeDirectory = pathApi.normalize(options.homeDirectory)
   const appDataDirectory = pathApi.normalize(options.appDataDirectory)
-  const tempDirectory = path.normalize(options.tempDirectory)
+  const tempDirectory = pathApi.normalize(options.tempDirectory)
   const query = options.query as PluginBrowserDataQuery
   const browserDefinitions = definitionsFor(platform, homeDirectory, appDataDirectory)
   const trustedParents = Object.freeze([homeDirectory, appDataDirectory])

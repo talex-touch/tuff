@@ -22,18 +22,9 @@ const labels = computed(() => (locale.value === 'zh'
 
 <template>
   <div class="switch-sizes-demo">
-    <label class="switch-sizes-demo__item">
-      <span>{{ labels.small }}</span>
-      <TuffSwitch v-model="smallEnabled" size="small" />
-    </label>
-    <label class="switch-sizes-demo__item">
-      <span>{{ labels.default }}</span>
-      <TuffSwitch v-model="defaultEnabled" />
-    </label>
-    <label class="switch-sizes-demo__item">
-      <span>{{ labels.large }}</span>
-      <TuffSwitch v-model="largeEnabled" size="large" />
-    </label>
+    <TuffSwitch v-model="smallEnabled" :label="labels.small" size="small" />
+    <TuffSwitch v-model="defaultEnabled" :label="labels.default" />
+    <TuffSwitch v-model="largeEnabled" :label="labels.large" size="large" />
   </div>
 </template>
 
@@ -42,14 +33,6 @@ const labels = computed(() => (locale.value === 'zh'
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-}
-
-.switch-sizes-demo__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--tx-text-color-secondary);
-  font-size: 14px;
+  gap: 18px;
 }
 </style>

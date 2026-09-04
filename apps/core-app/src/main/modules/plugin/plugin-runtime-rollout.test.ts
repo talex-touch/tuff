@@ -16,6 +16,7 @@ const pluginsRoot = path.join(workspaceRoot, 'plugins')
 const COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
   'clipboard-history',
   'json-formatter',
+  'touch-ai-sessions',
   'touch-batch-rename',
   'touch-browser-bookmarks',
   'touch-browser-data',
@@ -25,7 +26,10 @@ const COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
   'touch-dev-utils',
   'touch-dictation',
   'touch-emoji-symbols',
+  'touch-hosts',
+  'touch-image',
   'touch-intelligence',
+  'touch-orca',
   'touch-quick-actions',
   'touch-quickops',
   'touch-snipaste',
@@ -34,6 +38,7 @@ const COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
   'touch-text-snippets',
   'touch-text-tools',
   'touch-translation',
+  'touch-vscode-projects',
   'touch-window-manager',
   'touch-window-presets',
   'touch-workspace-scripts'
@@ -67,12 +72,12 @@ function officialManifestNames(): string[] {
 }
 
 describe('plugin runtime production rollout gate', () => {
-  it('enables the production default only after all 23 manifested activations are compatible', () => {
+  it('enables the production default only after all 28 manifested activations are compatible', () => {
     const official = officialManifestNames()
     const compatible = new Set<string>(COMPATIBLE_OFFICIAL_PRELUDES)
     const unmigrated = official.filter((name) => !compatible.has(name))
 
-    expect(official).toHaveLength(23)
+    expect(official).toHaveLength(28)
     // The inventory used to be compared against a hardcoded copy of itself here, which was
     // already a tautology when both lived in production. Now that the list is this file's own
     // constant, the meaningful direction is the other one: every plugin on disk must be in it,
@@ -85,7 +90,7 @@ describe('plugin runtime production rollout gate', () => {
 
   it('excludes the two manifestless Surface directories from activation success', () => {
     const official = new Set(officialManifestNames())
-    for (const name of ['touch-image', 'touch-music']) {
+    for (const name of ['touch-music']) {
       expect(fs.existsSync(path.join(pluginsRoot, name))).toBe(true)
       expect(fs.existsSync(path.join(pluginsRoot, name, 'manifest.json'))).toBe(false)
       expect(official.has(name)).toBe(false)
@@ -114,6 +119,7 @@ describe('plugin runtime production rollout gate', () => {
       'touch-dev-utils',
       'touch-dictation',
       'touch-emoji-symbols',
+      'touch-image',
       'touch-quick-actions',
       'touch-quickops',
       'touch-snipaste',
@@ -180,6 +186,15 @@ describe('plugin runtime production rollout gate', () => {
     ]
     expect(browserDataPermissions).toEqual(
       expect.arrayContaining(['fs.read', 'fs.index', 'search.root-results'])
+    )
+
+    const imageTools = manifests.get('touch-image')?.permissions
+    const imageToolsPermissions = [
+      ...(Array.isArray(imageTools?.required) ? imageTools.required : []),
+      ...(Array.isArray(imageTools?.optional) ? imageTools.optional : [])
+    ]
+    expect(imageToolsPermissions).toEqual(
+      expect.arrayContaining(['fs.read', 'fs.write', 'search.root-results'])
     )
 
     const browserOpen = manifests.get('touch-browser-open')?.permissions

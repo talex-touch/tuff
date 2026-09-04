@@ -66,9 +66,27 @@ export class TuffIconImpl implements ITuffIcon {
   }
 
   private async resolveLocalFilePath(iconPath: string): Promise<string | null> {
+    const rootPath = path.resolve(this.rootPath)
+    let canonicalRoot = rootPath
+    try {
+      if (typeof fse.realpath === 'function') canonicalRoot = await fse.realpath(rootPath)
+    } catch {
+      canonicalRoot = rootPath
+    }
     for (const candidate of this.getLocalFileCandidates(iconPath)) {
-      if (await fse.pathExists(candidate)) {
-        return candidate
+      try {
+        if (typeof fse.lstat !== 'function' || typeof fse.realpath !== 'function') {
+          if (await fse.pathExists(candidate)) return candidate
+          continue
+        }
+        const stats = await fse.lstat(candidate)
+        if (!stats.isFile() || stats.isSymbolicLink()) continue
+        const canonical = await fse.realpath(candidate)
+        const relative = path.relative(canonicalRoot, canonical)
+        if (relative.startsWith('..') || path.isAbsolute(relative)) continue
+        return canonical
+      } catch {
+        // Missing, non-regular, or symlinked icon candidates are ignored.
       }
     }
     return null

@@ -1,7 +1,7 @@
 ---
 title: "RecommendationCard 建议卡"
 description: "带置信度的智能体建议：正文、备选抽屉、确认动作，卡片尺寸不随内容跳动。"
-category: Data
+category: AiContext
 status: beta
 since: 0.3.9
 tags: [ai, recommendation, confidence, decision]

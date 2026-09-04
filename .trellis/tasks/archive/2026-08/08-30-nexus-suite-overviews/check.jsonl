@@ -1,0 +1,2 @@
+{"file": "apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts", "reason": "组件文档主 gate：hub 链接/结构断言，改分类与新页前先读其选页逻辑"}
+{"file": "apps/nexus/app/pages/docs/docs-page-performance.test.ts", "reason": "chrome 边界断言，套件调整可能触碰"}

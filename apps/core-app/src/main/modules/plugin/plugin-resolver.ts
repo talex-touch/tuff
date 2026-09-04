@@ -9,6 +9,7 @@ import { createLogger } from '../../utils/logger'
 import { pluginModule } from './plugin-module'
 import { removeNodeModulesDirs, shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
 import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
+import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
 
 type ResolverEvent = { msg: unknown }
 const pluginResolverLog = createLogger('PluginSystem').child('Resolver')
@@ -96,6 +97,9 @@ export class PluginResolver {
     })
     if (typeof manifest.name !== 'string' || !isSafePathSegment(manifest.name)) {
       return cb('invalid plugin name', 'error')
+    }
+    if (PRIVILEGED_PLUGIN_NAMES.includes(manifest.name)) {
+      return cb('privileged plugin name is reserved for the bundled runtime', 'error')
     }
     const _target = path.join(pluginModule.filePath!, manifest.name)
     const existingPlugin = fse.existsSync(_target)

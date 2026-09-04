@@ -1,7 +1,7 @@
 ---
 title: AI Elements
 description: Conversation and message primitives for AI chat surfaces.
-category: Data
+category: AiReasoning
 status: beta
 since: 1.0.0
 tags: [ai, conversation, message]

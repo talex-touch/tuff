@@ -35,6 +35,18 @@ describe('tuffProgress', () => {
     expect(wrapper.find('.tx-progress-bar').classes()).toContain('tx-progress-bar--indeterminate')
   })
 
+  it('inherits the flat track instead of forcing an opaque mask', () => {
+    const wrapper = mount(TuffProgress, {
+      props: {
+        percentage: 60,
+      },
+    })
+
+    expect(wrapper.classes()).toContain('tx-progress-bar-wrapper--mask-plain')
+    expect(wrapper.classes()).not.toContain('tx-progress-bar-wrapper--bg-mask')
+    expect(wrapper.find('.tx-progress-bar__mask').exists()).toBe(false)
+  })
+
   it('registers the component through install', () => {
     const app = { component: vi.fn() }
 

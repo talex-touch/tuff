@@ -162,6 +162,14 @@ function handleKeydown(ev: KeyboardEvent) {
 </template>
 
 <style scoped>
+/*
+ * The root must NOT clip: it is both the shape and the positioning context for
+ * the status dot, and those two jobs are mutually exclusive. `overflow: hidden`
+ * here plus a corner-anchored dot means the dot sits entirely outside the
+ * rounded shape and gets shaved down to a sliver. Clipping lives one level
+ * down, on the image and the fallback; the root's own background is still
+ * clipped by its `border-radius`, so a circle avatar stays a circle without it.
+ */
 .tx-avatar {
   position: relative;
   display: inline-flex;
@@ -171,22 +179,35 @@ function handleKeydown(ev: KeyboardEvent) {
   width: var(--tx-avatar-size, var(--tx-avatar-size-preset, auto));
   height: var(--tx-avatar-size, var(--tx-avatar-size-preset, auto));
   font-size: var(--tx-avatar-font-size, var(--tx-avatar-font-size-preset, inherit));
-  overflow: hidden;
+
+  /* Resolved once so the status rules don't repeat the three-level fallback. */
+  --tx-avatar-status-diameter: var(--tx-avatar-status-size, var(--tx-avatar-status-size-preset, 12px));
+  --tx-avatar-status-ring: var(--tx-avatar-status-border, var(--tx-avatar-status-border-preset, 2px));
   user-select: none;
   background: var(--tx-avatar-bg, var(--tx-avatar-background, #f3f4f6));
   color: var(--tx-avatar-text, var(--tx-avatar-color, #374151));
 }
 
+/*
+ * Status inset per shape. A circle's bottom-right 45 degree point sits
+ * 14.64% of the diameter in from each edge ((1 - (1 + 1/sqrt(2)) / 2)); pulling
+ * back half the dot leaves its centre on the circumference, so the dot reads as
+ * half in, half out. Square and rounded avatars anchor to the corner instead
+ * and overhang slightly, which their smaller radii can afford.
+ */
 .tx-avatar--circle {
   border-radius: 50%;
+  --tx-avatar-status-inset: calc(14.64% - var(--tx-avatar-status-diameter) * 0.5);
 }
 
 .tx-avatar--square {
   border-radius: 8px;
+  --tx-avatar-status-inset: calc(var(--tx-avatar-status-diameter) * -0.25);
 }
 
 .tx-avatar--rounded {
   border-radius: 12px;
+  --tx-avatar-status-inset: calc(var(--tx-avatar-status-diameter) * -0.25);
 }
 
 .tx-avatar--small {
@@ -236,6 +257,7 @@ function handleKeydown(ev: KeyboardEvent) {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: inherit;
 }
 
 .tx-avatar__fallback {
@@ -244,6 +266,8 @@ function handleKeydown(ev: KeyboardEvent) {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  border-radius: inherit;
 }
 
 .tx-avatar__text {
@@ -255,14 +279,21 @@ function handleKeydown(ev: KeyboardEvent) {
   font-size: inherit;
 }
 
+/*
+ * `border-box` makes the status size variable mean the dot's outer diameter,
+ * which is what the inset maths above and the documented variable both assume.
+ * Under the default `content-box` the ring was added outside it, so a medium
+ * avatar's "10px" dot actually measured 14px.
+ */
 .tx-avatar__status {
   position: absolute;
-  bottom: 0;
-  right: 0;
-  width: var(--tx-avatar-status-size, var(--tx-avatar-status-size-preset, 12px));
-  height: var(--tx-avatar-status-size, var(--tx-avatar-status-size-preset, 12px));
+  bottom: var(--tx-avatar-status-inset, 0);
+  right: var(--tx-avatar-status-inset, 0);
+  box-sizing: border-box;
+  width: var(--tx-avatar-status-diameter);
+  height: var(--tx-avatar-status-diameter);
   border-radius: 50%;
-  border: var(--tx-avatar-status-border, var(--tx-avatar-status-border-preset, 2px)) solid #ffffff;
+  border: var(--tx-avatar-status-ring) solid #ffffff;
 }
 
 .tx-avatar__status--online {

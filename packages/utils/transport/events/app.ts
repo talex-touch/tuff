@@ -76,6 +76,8 @@ import type {
   FileIndexBatteryStatus,
   FileIndexFailedFilesResult,
   FileIndexProgress,
+  FileIndexPreviewResourceRequest,
+  FileIndexPreviewResourceResult,
   FileIndexRebuildRequest,
   FileIndexRebuildResult,
   FileIndexStats,
@@ -372,6 +374,14 @@ export const AppEvents = {
       .module('file-index')
       .event('failed-files')
       .define<void, FileIndexFailedFilesResult>(),
+
+    /**
+     * Issue a short-lived grant for previewing one indexed file.
+     */
+    previewResource: defineEvent('app')
+      .module('file-index')
+      .event('preview-resource')
+      .define<FileIndexPreviewResourceRequest, FileIndexPreviewResourceResult>(),
 
     /**
      * Add a path to file index watch list.

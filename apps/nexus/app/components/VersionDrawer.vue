@@ -4,7 +4,6 @@ import type { TpexExtractedManifest, TpexPackagePreviewResult } from '@talex-tou
 import { computed, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import MDC from '@nuxtjs/mdc/runtime/components/MDC.vue'
-import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
@@ -370,9 +369,9 @@ watch([manifestPreview, packageLoading, packageError], () => {
                       <TxButton block class="rounded-xl" @click="onWarningConfirm">
                         {{ warningConfirmText }}
                       </TxButton>
-                      <FlatButton @click="step = 'form'">
+                      <TxButton variant="flat" @click="step = 'form'">
                         {{ warningCancelText }}
-                      </FlatButton>
+                      </TxButton>
                     </div>
                   </div>
 
@@ -393,9 +392,9 @@ watch([manifestPreview, packageLoading, packageError], () => {
                         </span>
                       </label>
                       <div class="flex gap-3">
-                        <FlatButton class="flex-1" @click="step = 'form'">
+                        <TxButton variant="flat" class="flex-1" @click="step = 'form'">
                           {{ t('dashboard.sections.plugins.license.cancel') }}
-                        </FlatButton>
+                        </TxButton>
                         <TxButton class="flex-1 rounded-xl" :disabled="!licenseAgreed || loading" @click="onLicenseSubmit">
                           <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
                           {{ t('dashboard.sections.plugins.license.submit') }}

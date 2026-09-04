@@ -2,14 +2,14 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { createRendererLogger } from '~/utils/renderer-log'
-import { buildTfileUrl } from '~/utils/tfile-url'
 
 const props = defineProps<{
   item: TuffItem
+  resourceUrl: string
 }>()
 
 const audioPreviewLog = createRendererLogger('AudioPreview')
-const audioSrc = computed(() => buildTfileUrl(props.item.meta?.file?.path ?? ''))
+const audioSrc = computed(() => props.resourceUrl)
 
 function handleError(e: Event): void {
   audioPreviewLog.error('Audio load error:', e)

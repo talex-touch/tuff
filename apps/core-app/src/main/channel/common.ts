@@ -23,6 +23,8 @@ import type {
   BatteryStatusPayload,
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
+  FileIndexPreviewResourceRequest,
+  FileIndexPreviewResourceResult,
   IndexedSourceDiagnosticsRequest,
   IndexedSourceDiagnosticsResponse,
   IndexedSourceReconcileRuntimeRequest,
@@ -65,6 +67,10 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
 import { AppEvents, PlatformEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import { toTfileUrl } from '@talex-touch/utils/network'
+import {
+  hasTfilePreviewGrant,
+  issueTfilePreviewGrant
+} from '../modules/file-protocol/tfile-preview-grant'
 import {
   BrowserWindow,
   app,
@@ -1736,6 +1742,31 @@ export class CommonChannelModule extends BaseModule {
           return null
         }
       }),
+      transport.on<FileIndexPreviewResourceRequest, FileIndexPreviewResourceResult>(
+        AppEvents.fileIndex.previewResource,
+        async (payload, context) => {
+          this.assertHostOnly(context, 'fileIndex.previewResource')
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) {
+            return { success: false, errorCode: 'FILE_INDEX_PREVIEW_PATH_INVALID' }
+          }
+          try {
+            const previewPath = await fileProvider.resolvePreviewResourcePath(inputPath)
+            if (!previewPath) {
+              return { success: false, errorCode: 'FILE_INDEX_PREVIEW_NOT_AVAILABLE' }
+            }
+            const grant = issueTfilePreviewGrant(previewPath)
+            return { success: true, ...grant }
+          } catch (error) {
+            const report = reportFileIndexTransportFailure('PREVIEW_RESOURCE', error)
+            return {
+              success: false,
+              errorCode: report.code,
+              reportId: report.id
+            }
+          }
+        }
+      ),
       transport.on<FileIndexAddPathRequest, FileIndexAddPathResult>(
         AppEvents.fileIndex.addPath,
         async (payload) => {
@@ -2101,20 +2132,25 @@ export class CommonChannelModule extends BaseModule {
       throw new Error('Unsupported file source')
     }
 
-    const cached = getCachedReadFile(resolvedPath)
-    if (cached) {
-      return cached.content
-    }
+    // Preview grants are short-lived bearer capabilities. Never let the
+    // path-keyed cache or inflight map outlive or bypass their expiry.
+    const cacheAllowed = !hasTfilePreviewGrant(resolvedSource)
+    if (cacheAllowed) {
+      const cached = getCachedReadFile(resolvedPath)
+      if (cached) {
+        return cached.content
+      }
 
-    const inflight = readFileInflight.get(resolvedPath)
-    if (inflight) {
-      try {
-        return await inflight
-      } catch (error) {
-        if (allowMissing && isFileMissingError(error)) {
-          return ''
+      const inflight = readFileInflight.get(resolvedPath)
+      if (inflight) {
+        try {
+          return await inflight
+        } catch (error) {
+          if (allowMissing && isFileMissingError(error)) {
+            return ''
+          }
+          throw error
         }
-        throw error
       }
     }
 
@@ -2132,7 +2168,7 @@ export class CommonChannelModule extends BaseModule {
         timeoutMs: timeoutMs > 0 ? timeoutMs : undefined
       })
       .then((content) => {
-        setCachedReadFile(resolvedPath, content)
+        if (cacheAllowed) setCachedReadFile(resolvedPath, content)
         return content
       })
       .catch((error) => {
@@ -2145,11 +2181,11 @@ export class CommonChannelModule extends BaseModule {
         throw error
       })
       .finally(() => {
-        readFileInflight.delete(resolvedPath)
+        if (cacheAllowed) readFileInflight.delete(resolvedPath)
         dispose()
       })
 
-    readFileInflight.set(resolvedPath, task)
+    if (cacheAllowed) readFileInflight.set(resolvedPath, task)
     return await task
   }
 

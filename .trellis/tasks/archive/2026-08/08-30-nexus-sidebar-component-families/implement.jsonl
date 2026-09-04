@@ -1,0 +1,4 @@
+{"file": "apps/nexus/app/components/DocsSidebar.vue", "reason": "Primary change site: components sidebar assembly (resolvedComponentSections), family map goes here, template renders member links"}
+{"file": "apps/nexus/app/components/docs/DocSection.vue", "reason": "Reference for collapse pattern (grid-template-rows animation, chevron, aria-expanded) the family node must match"}
+{"file": "apps/nexus/i18n/locales/en.ts", "reason": "docsSidebar.* i18n block (~line 567) — add family member label key"}
+{"file": "apps/nexus/i18n/locales/zh.ts", "reason": "docsSidebar.* i18n block (~line 566) — add family member label key"}

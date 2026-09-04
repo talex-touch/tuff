@@ -1,7 +1,7 @@
 ---
 title: Context Indicator
 description: A compact ring that shows how much of the conversation context is used.
-category: Status
+category: AiContext
 status: beta
 since: 0.3.9
 tags: [ai, context, token]

@@ -24,7 +24,7 @@ const sdkMocks = vi.hoisted(() => ({
   },
   box: {
     expand: vi.fn(),
-    getInput: vi.fn(),
+    setInput: vi.fn(),
   },
 }))
 
@@ -60,7 +60,7 @@ describe('clipboardManagerView', () => {
     sdkMocks.clipboard.history.setFavorite.mockResolvedValue(undefined)
     sdkMocks.clipboard.history.deleteItem.mockResolvedValue(undefined)
     sdkMocks.box.expand.mockResolvedValue(undefined)
-    sdkMocks.box.getInput.mockResolvedValue('')
+    sdkMocks.box.setInput.mockResolvedValue(undefined)
     sdkMocks.feature.onInputChange.mockReturnValue(vi.fn())
     sdkMocks.system.resolveApplication.mockResolvedValue(null)
   })

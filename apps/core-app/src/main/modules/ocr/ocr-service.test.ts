@@ -3,6 +3,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+const workerMocks = vi.hoisted(() => ({
+  instances: [] as Array<{ workerData: unknown }>
+}))
+
 const {
   ensureIntelligenceConfigLoadedMock,
   getCapabilityOptionsMock,
@@ -126,6 +130,33 @@ vi.mock('../ai/intelligence-sdk', () => ({
   }
 }))
 
+vi.mock('node:worker_threads', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:worker_threads')>()
+
+  return {
+    ...actual,
+    Worker: class {
+      private readonly listeners = new Map<string, (payload: unknown) => void>()
+
+      constructor(_workerPath: string, options: { workerData: unknown }) {
+        workerMocks.instances.push({ workerData: options.workerData })
+        queueMicrotask(() => {
+          this.listeners.get('message')?.({ status: 'success', result: { text: 'worker-path' } })
+        })
+      }
+
+      once(event: string, listener: (payload: unknown) => void) {
+        this.listeners.set(event, listener)
+        return this
+      }
+
+      terminate() {
+        return Promise.resolve(0)
+      }
+    }
+  }
+})
+
 import { ocrService } from './ocr-service'
 
 interface OcrServiceTestAccess {
@@ -143,7 +174,7 @@ interface OcrServiceTestAccess {
   buildJobPayload: (...args: unknown[]) => Promise<{
     clipboardId: number
     source: { type: string; dataUrl?: string; filePath?: string }
-    options: { language: string }
+    options: { language?: string }
     payloadHash: string | null
   } | null>
   buildAgentPrompt: (...args: unknown[]) => string
@@ -165,6 +196,7 @@ interface OcrServiceTestAccess {
 }
 
 afterEach(() => {
+  workerMocks.instances.length = 0
   vi.restoreAllMocks()
   ensureIntelligenceConfigLoadedMock.mockReset()
   getCapabilityOptionsMock.mockReset()
@@ -173,7 +205,7 @@ afterEach(() => {
 })
 
 describe('OcrService runAgentJob local-first options', () => {
-  it('prepends local system OCR provider and model preference', async () => {
+  it('preserves legacy persisted job language while prepending local OCR preferences', async () => {
     getCapabilityOptionsMock.mockReturnValue({
       allowedProviderIds: ['openai-default', 'anthropic-default'],
       modelPreference: ['gpt-4o']
@@ -206,13 +238,14 @@ describe('OcrService runAgentJob local-first options', () => {
       payloadHash: 'hash-1',
       meta: JSON.stringify({
         source: { type: 'clipboard' },
-        options: { language: 'eng' }
+        options: { language: 'fr-FR' }
       })
     })
 
     expect(aiInvokeMock).toHaveBeenCalledOnce()
     const call = aiInvokeMock.mock.calls[0]
     expect(call[0]).toBe('vision.ocr')
+    expect(call[1]).toMatchObject({ language: 'fr-FR' })
     expect(call[2].allowedProviderIds[0]).toBe('local-system-ocr')
     expect(call[2].modelPreference[0]).toBe('system-ocr')
   })
@@ -290,7 +323,58 @@ describe('OcrService runAgentJob local-first options', () => {
       expect(payload).not.toBeNull()
       expect(payload?.source.type).toBe('file')
       expect(payload?.source.filePath).toBe(imagePath)
+      expect(payload?.options).toEqual({})
       expect(typeof payload?.payloadHash).toBe('string')
+    } finally {
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    { name: 'Chinese app locale', languageHint: 'zh-CN', expectedLanguage: 'zh-Hans' },
+    { name: 'English app locale', languageHint: 'en-US', expectedLanguage: 'en-US' },
+    { name: 'absent app locale', languageHint: undefined, expectedLanguage: undefined },
+    { name: 'unsupported app locale', languageHint: 'ja-JP', expectedLanguage: undefined }
+  ])(
+    'normalizes $name into the native OCR language hint',
+    async ({ languageHint, expectedLanguage }) => {
+      const service = ocrService as unknown as OcrServiceTestAccess
+
+      const payload = await service.buildJobPayload({
+        clipboardId: 1003,
+        item: {
+          type: 'image',
+          content: 'data:image/png;base64,AA==',
+          meta: null
+        },
+        formats: ['public.png'],
+        languageHint
+      })
+
+      expect(payload?.options.language).toBe(expectedLanguage)
+    }
+  )
+
+  it('creates unhinted OCR jobs for clipboard file images', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'ocr-service-files-'))
+    const imagePath = path.join(tempDir, 'clipboard.png')
+    await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+
+    try {
+      const payload = await service.buildJobPayload({
+        clipboardId: 1002,
+        item: {
+          type: 'files',
+          content: JSON.stringify([imagePath]),
+          meta: null
+        },
+        formats: ['public.file-url']
+      })
+
+      expect(payload).not.toBeNull()
+      expect(payload?.source).toEqual({ type: 'file', filePath: imagePath })
+      expect(payload?.options).toEqual({})
     } finally {
       await rm(tempDir, { recursive: true, force: true })
     }
@@ -355,7 +439,7 @@ describe('OcrService runAgentJob local-first options', () => {
         payloadHash: 'hash-worker',
         meta: JSON.stringify({
           source: { type: 'clipboard' },
-          options: { language: 'eng' }
+          options: {}
         })
       })
 
@@ -369,6 +453,33 @@ describe('OcrService runAgentJob local-first options', () => {
         process.env.TUFF_OCR_WORKER_ENABLED = previousWorkerEnv
       }
     }
+  })
+
+  it('forwards an unhinted clipboard OCR job to the native worker', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+
+    const response = await service.invokeWorkerOcr(
+      12,
+      {
+        clipboardId: 500,
+        payloadHash: 'worker-unhinted'
+      },
+      {
+        source: { type: 'file', filePath: '/tmp/clipboard-image.png' },
+        options: {}
+      },
+      {
+        type: 'file',
+        filePath: '/tmp/clipboard-image.png'
+      }
+    )
+
+    expect(response).toMatchObject({ result: { text: 'worker-path' } })
+    expect(workerMocks.instances).toHaveLength(1)
+    const workerData = workerMocks.instances[0]?.workerData as {
+      options: { language?: string }
+    }
+    expect(workerData.options.language).toBeUndefined()
   })
 
   it('falls back to provider invocation when worker path fails', async () => {
@@ -410,7 +521,7 @@ describe('OcrService runAgentJob local-first options', () => {
         payloadHash: 'hash-worker-fallback',
         meta: JSON.stringify({
           source: { type: 'clipboard' },
-          options: { language: 'eng' }
+          options: {}
         })
       })
 
@@ -423,6 +534,88 @@ describe('OcrService runAgentJob local-first options', () => {
       } else {
         process.env.TUFF_OCR_WORKER_ENABLED = previousWorkerEnv
       }
+    }
+  })
+})
+
+describe('OcrService clipboard metadata', () => {
+  it('merges OCR-detected tags and search terms with persisted clipboard metadata', async () => {
+    type MetaWriteService = OcrServiceTestAccess & {
+      withDbWrite: (
+        label: string,
+        operation: (db: {
+          transaction: (
+            callback: (tx: {
+              select: () => {
+                from: () => {
+                  where: () => {
+                    limit: () => Promise<Array<{ metadata: string }>>
+                  }
+                }
+              }
+              delete: () => { where: () => Promise<void> }
+              insert: () => {
+                values: (values: Array<{ key: string; value: string }>) => Promise<void>
+              }
+              update: () => {
+                set: (values: { metadata: string }) => { where: () => Promise<void> }
+              }
+            }) => Promise<void>
+          ) => Promise<void>
+        }) => Promise<void>
+      ) => Promise<void>
+    }
+
+    const service = ocrService as unknown as MetaWriteService
+    const originalDb = service.db
+    const originalWithDbWrite = service.withDbWrite
+    let persistedMetadata: string | null = null
+
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                metadata: JSON.stringify({
+                  tags: ['email', 'legacy_tag'],
+                  tag_search_terms: ['email', 'legacy-alias']
+                })
+              }
+            ]
+          })
+        })
+      }),
+      delete: () => ({ where: async () => undefined }),
+      insert: () => ({ values: async () => undefined }),
+      update: () => ({
+        set: ({ metadata }: { metadata: string }) => ({
+          where: async () => {
+            persistedMetadata = metadata
+          }
+        })
+      })
+    }
+
+    service.db = {}
+    service.withDbWrite = async (_label, operation) =>
+      operation({ transaction: async (callback) => callback(tx) })
+
+    try {
+      await service.updateClipboardMeta(7, {
+        ocr_status: 'done',
+        tags: ['api_key', 'github', 'api_key'],
+        tag_search_terms: ['wechat', 'wx', '微信', 'wx']
+      })
+
+      expect(JSON.parse(persistedMetadata ?? '{}')).toMatchObject({
+        ocr_status: 'done',
+        tags: ['email', 'legacy_tag', 'api_key', 'github'],
+        tag_search_terms: ['email', 'legacy-alias', 'wechat', 'wx', '微信']
+      })
+    } finally {
+      service.db = originalDb
+      service.withDbWrite = originalWithDbWrite
     }
   })
 })

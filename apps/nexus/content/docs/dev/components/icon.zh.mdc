@@ -173,6 +173,22 @@ code: |
   </template>
 ---
 :::
+### TxOsIcon
+
+用于平台标签的内联操作系统图标。
+
+#### TxOsIcon
+按 `platform` / `os` 字符串自动识别平台。
+:::TuffDemoWrapper{demo="OsIconOsIconDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxOsIcon platform="darwin" os="macOS 15" />
+    <TxOsIcon platform="win32" os="Windows 11" />
+    <TxOsIcon platform="linux" os="Ubuntu 24.04" />
+  </template>
+---
+:::
 ### 类型与来源
 - `class`：使用图标类名（推荐）。
 - `emoji`：用于轻量强调。
@@ -248,6 +264,21 @@ rows:
 ---
 ::
 
+### TxOsIcon API（简版）
+::TuffPropsTable
+---
+rows:
+  - name: platform
+    type: 'string'
+    default: "''"
+    description: '运行时或平台标识，例如 darwin、win32、linux。'
+  - name: os
+    type: 'string'
+    default: "''"
+    description: '可读 OS 字符串，也会参与识别。'
+---
+::
+
 ### Slots
 
 | 名称 | 参数 | 说明 |
@@ -256,7 +287,7 @@ rows:
 
 ### Events
 
-`TuffIcon`、`TxIcon` 和 `TxStatusIcon` 不触发事件。
+`TuffIcon`、`TxIcon`、`TxStatusIcon` 和 `TxOsIcon` 不触发事件。
 
 ## 渲染契约
 
@@ -264,6 +295,7 @@ rows:
 - `file` 与本地绝对 `url` 可通过注入的 `fileProtocol` 或 `urlResolver` 转换。
 - SVG 在 `colorful=false` 时通过 mask 使用 `currentColor`；`colorful=true` 或 `icon.colorful=true` 时渲染为原图。
 - `status='loading' | 'error'` 会优先展示加载或错误状态。
+- `TxOsIcon` 将 `platform` 与 `os` 拼接转小写后识别 macOS / Windows / Linux，未识别值回退 macOS；SVG 为 `aria-hidden`，可访问名称由外层文本承载。
 
 ## 最佳实践
 
@@ -272,6 +304,7 @@ rows:
 - 只有图标本身承载语义时才传有意义的 `alt`；装饰性图标应由周围文本提供语义。
 - 单色 SVG 保持 `colorful=false`，让主题色通过 `currentColor` 生效；品牌标识和多色图使用 `colorful=true`。
 - 插件文件或自定义 SVG 传输建议在应用外壳统一注入 `TX_ICON_CONFIG_KEY`，不要在每个图标上重复传 resolver。
+- `TxOsIcon` 在表格或列表中应搭配可见平台文本；用 CSS 字号调整大小（组件固定 `1em`），回退行为只是视觉默认值，不要当作校验结果。
 
 ## 图标集
 
@@ -307,12 +340,13 @@ code: |
 
 - **可访问性说明：** 仅当设置了 `alt` 时，`TxIcon` 才渲染 `role="img"` 并把 `alt` 映射到 `title`；未设置 `alt` 时图标视为装饰性，会标记 `aria-hidden="true"` 从无障碍树中移除。纯图标交互控件应使用 `TxIconButton label` 或可见文本，不要只依赖图标 title 文案。
 - **实测覆盖:** `icon.test.ts` 覆盖 class 与内置名称渲染、尺寸/颜色样式、emoji/empty/loading/error 状态、注入 file protocol 解析、SVG mask 模式、colorful SVG 回退、data SVG 处理、多色 SVG 检测与状态角标尺寸。
+- **实测覆盖（TxOsIcon）:** `os-icon.test.ts` 覆盖 Windows 别名、Linux 发行版别名、macOS 别名/默认回退，以及装饰性 SVG 的无障碍与 class 形态。
 
 ## Source
 
-- Component sources: `packages/tuffex/packages/components/src/icon/src/TxIcon.vue` 与 `TxStatusIcon.vue`。
+- Component sources: `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`、`TxStatusIcon.vue` 与 `TxOsIcon.vue`。
 - Types/helpers: `types.ts` 导出 `TxIconSource`、状态/config 类型与 `TX_ICON_CONFIG_KEY`；`svg-color-mode.ts` 判断 SVG 是否可作为 currentColor mask 渲染。
-- Export aliases: `packages/tuffex/packages/components/src/icon/index.ts` 导出 `TuffIcon`、`TxIcon`、`TxStatusIcon`、`TX_ICON_CONFIG_KEY`、图标类型与 `shouldRenderSvgAsMask`。
-- Coverage: `packages/tuffex/packages/components/src/icon/__tests__/icon.test.ts` 覆盖图标来源解析、SVG 颜色模式、状态渲染、注入配置与状态角标。
+- Export aliases: `packages/tuffex/packages/components/src/icon/index.ts` 导出 `TuffIcon`、`TxIcon`、`TxStatusIcon`、`TxOsIcon`、`TX_ICON_CONFIG_KEY`、图标类型与 `shouldRenderSvgAsMask`。
+- Coverage: `packages/tuffex/packages/components/src/icon/__tests__/icon.test.ts` 覆盖图标来源解析、SVG 颜色模式、状态渲染、注入配置与状态角标；`os-icon.test.ts` 覆盖平台别名识别与 macOS 回退。
 
 <TuffDocSourceLink />

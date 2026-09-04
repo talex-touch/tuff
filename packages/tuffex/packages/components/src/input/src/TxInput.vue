@@ -160,17 +160,19 @@ defineExpose({
       </svg>
     </span>
 
-    <button
-      v-if="showClear"
-      type="button"
-      class="tx-input__clear"
-      aria-label="Clear input"
-      @click="handleClear"
-    >
-      <svg viewBox="0 0 24 24" width="16" height="16">
-        <path fill="currentColor" d="M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.95 4.95-1.414-1.414 4.95-4.95-4.95-4.95 1.414-1.414z" />
-      </svg>
-    </button>
+    <Transition name="tx-input-clear">
+      <button
+        v-if="showClear"
+        type="button"
+        class="tx-input__clear"
+        aria-label="Clear input"
+        @click="handleClear"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <path fill="currentColor" d="M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.95 4.95-1.414-1.414 4.95-4.95-4.95-4.95 1.414-1.414z" />
+        </svg>
+      </button>
+    </Transition>
 
     <slot name="suffix">
       <i v-if="suffixIcon" class="tx-input__icon tx-input__icon--suffix" :class="suffixIcon" />
@@ -186,7 +188,9 @@ defineExpose({
   width: 100%;
   min-width: 0;
   height: 32px;
-  padding: 0 0.5rem;
+  /* Horizontal inset matches the corner radius so the caret and placeholder
+     clear the rounded corner's curve instead of starting inside it. */
+  padding: 0 12px;
   border-radius: 12px;
   border: 1px solid var(--tx-border-color, #dcdfe6);
   background-color: var(--tx-bg-color, #fff);
@@ -290,5 +294,20 @@ defineExpose({
       cursor: default;
     }
   }
+}
+
+.tx-input-clear-enter-active,
+.tx-input-clear-leave-active {
+  transition:
+    opacity 0.16s ease,
+    filter 0.16s ease,
+    transform 0.16s ease;
+}
+
+.tx-input-clear-enter-from,
+.tx-input-clear-leave-to {
+  opacity: 0;
+  filter: blur(3px);
+  transform: scale(0.8);
 }
 </style>

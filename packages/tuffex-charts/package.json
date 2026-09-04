@@ -1,0 +1,62 @@
+{
+  "name": "@talex-touch/tuffex-charts",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Chart components for TuffEx — kumo-style API surface, SVG rendering, no echarts.",
+  "license": "MIT",
+  "keywords": [
+    "vue",
+    "charts",
+    "svg",
+    "tuffex"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/es/index.d.ts",
+      "import": "./dist/es/index.js",
+      "require": "./dist/lib/index.js"
+    },
+    "./style.css": "./dist/es/style.css"
+  },
+  "main": "dist/lib/index.js",
+  "module": "dist/es/index.js",
+  "types": "dist/es/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.27"
+  },
+  "devDependencies": {
+    "@types/d3-array": "^3.2.2",
+    "@types/d3-geo": "^3.1.1",
+    "@types/d3-sankey": "^0.12.5",
+    "@types/d3-scale": "^4.0.9",
+    "@types/d3-shape": "^3.2.0",
+    "@types/node": "catalog:dev",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/test-utils": "^2.4.11",
+    "jsdom": "^26.1.0",
+    "sass": "catalog:",
+    "typescript": "catalog:dev",
+    "vite": "catalog:build",
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^3.2.7",
+    "vue": "catalog:frontend",
+    "vue-tsc": "catalog:dev"
+  },
+  "dependencies": {
+    "d3-array": "^3.2.4",
+    "d3-geo": "^3.1.1",
+    "d3-sankey": "^0.12.3",
+    "d3-scale": "^4.0.2",
+    "d3-shape": "^3.2.0"
+  }
+}

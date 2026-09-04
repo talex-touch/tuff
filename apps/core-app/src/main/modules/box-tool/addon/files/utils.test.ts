@@ -95,4 +95,19 @@ describe('file provider utils', () => {
       }
     )
   })
+
+  it('preserves the file MIME type for preview consumers', () => {
+    const item = mapFileToTuffItem(
+      createFile({
+        name: 'cover.webp',
+        extension: '.webp',
+        path: '/Users/demo/Documents/cover.webp'
+      }),
+      {},
+      'file-provider',
+      'File Provider'
+    )
+
+    expect(item.meta?.file?.mime_type).toBe('image/webp')
+  })
 })

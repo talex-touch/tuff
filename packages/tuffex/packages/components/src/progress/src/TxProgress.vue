@@ -28,6 +28,5 @@ const props = withDefaults(
     text-placement="outside"
     :format="format"
     mask-variant="plain"
-    mask-background="mask"
   />
 </template>

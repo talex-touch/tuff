@@ -596,9 +596,14 @@ pub(crate) fn bgra_rows_to_rgba(
     for row in 0..height {
         let source_row = &source[row * bytes_per_row..row * bytes_per_row + packed_row_bytes];
         let destination_row = &mut rgba[row * packed_row_bytes..(row + 1) * packed_row_bytes];
+        // `as_chunks` rather than `chunks_exact`: the width is fixed at 4, so this yields
+        // `[u8; 4]` and the indexing below is bounds-checked at compile time. Both rows are exact
+        // multiples of 4 (`packed_row_bytes = width * 4`), so the returned remainders are empty.
         for (bgra, output) in source_row
-            .chunks_exact(4)
-            .zip(destination_row.chunks_exact_mut(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(destination_row.as_chunks_mut::<4>().0)
         {
             let alpha = bgra[3];
             output[0] = unpremultiply(bgra[2], alpha);

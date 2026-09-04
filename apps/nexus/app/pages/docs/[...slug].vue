@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, type FunctionalComponent } from 'vue'
+import { defineAsyncComponent, h, type FunctionalComponent } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
 import DocsProseHeading from '~/components/docs/DocsProseHeading.vue'
 import { appDescription, appName } from '~/constants'
@@ -213,6 +213,10 @@ const fullDocError = ref(false)
 
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
 const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value ?? doc.value : doc.value))
+
+// The loading skeleton reuses TxSkeleton without joining the first-paint TuffEx
+// import graph (docs-page-performance.test.ts guards this): async chunk only.
+const TxSkeleton = defineAsyncComponent(() => import('@talex-touch/tuffex/skeleton').then(m => m.TxSkeleton))
 
 const isLoading = ref(!doc.value)
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)
@@ -1964,10 +1968,28 @@ watch(
 <template>
   <div class="docs-root relative">
     <div :key="viewState" class="docs-state">
-        <div v-if="viewState === 'loading'" class="docs-state__body px-6 py-20">
-          <div class="docs-loading-state" role="status" aria-live="polite">
-            <span class="docs-loading-state__spinner i-carbon-circle-dash" aria-hidden="true" />
-            <span class="docs-loading-state__text">{{ t('docs.loading') }}</span>
+        <div v-if="viewState === 'loading'" class="docs-surface docs-surface--skeleton" role="status" aria-live="polite">
+          <span class="sr-only">{{ t('docs.loading') }}</span>
+          <div class="docs-skeleton-hero" aria-hidden="true">
+            <TxSkeleton :width="168" :height="12" :radius="6" />
+            <TxSkeleton width="56%" :height="34" :radius="10" />
+            <TxSkeleton :height="14" :radius="7" />
+            <TxSkeleton width="66%" :height="14" :radius="7" />
+            <div class="docs-skeleton-chips">
+              <TxSkeleton :width="76" :height="22" :radius="999" />
+              <TxSkeleton :width="100" :height="22" :radius="999" />
+              <TxSkeleton :width="88" :height="22" :radius="999" />
+            </div>
+          </div>
+          <div
+            v-for="section in 2"
+            :key="`docs-skeleton-section-${section}`"
+            class="docs-skeleton-section"
+            aria-hidden="true"
+          >
+            <TxSkeleton width="32%" :height="20" :radius="8" />
+            <TxSkeleton :lines="3" :height="13" :radius="7" />
+            <TxSkeleton :height="128" :radius="14" />
           </div>
         </div>
 
@@ -2237,30 +2259,23 @@ watch(
   border-radius: 20px;
 }
 
-.docs-loading-state {
+/* Skeleton mirrors the loaded layout (hero → prose sections) so nothing shifts
+   when the document arrives; the shimmer surface is owned by TxSkeleton. */
+.docs-surface--skeleton {
+  padding-top: 8px;
+}
+
+.docs-skeleton-hero,
+.docs-skeleton-section {
   display: flex;
-  min-height: 140px;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  color: var(--tx-text-color-secondary);
+  gap: 12px;
 }
 
-.docs-loading-state__spinner {
-  font-size: 28px;
-  color: var(--docs-accent);
-  animation: docs-loading-spin 1s linear infinite;
-}
-
-.docs-loading-state__text {
-  font-size: 14px;
-}
-
-@keyframes docs-loading-spin {
-  to {
-    transform: rotate(360deg);
-  }
+.docs-skeleton-chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .docs-state-enter-active,

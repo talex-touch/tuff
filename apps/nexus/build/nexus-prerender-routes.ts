@@ -1,16 +1,8 @@
 import { createDocsPageApiPrerenderRoutes, createDocsPrerenderRoutes } from './docs-prerender-routes'
-import { docsApiPrerenderRoutes, publicPrerenderRoutes } from './nexus-static-routes.mjs'
+import { docsApiPrerenderRoutes, docsPrerenderEvidenceRoutes, publicPrerenderRoutes } from './nexus-static-routes.mjs'
 import { toLocalizedDocsPaths } from '../shared/utils/docs-path'
 
-export { docsApiPrerenderRoutes, publicPrerenderRoutes }
-
-export const docsPrerenderEvidenceRoutes = [
-  '/docs',
-  '/docs/dev',
-  '/docs/dev/getting-started/quickstart',
-  '/docs/dev/components',
-  '/docs/guide/start',
-] as const
+export { docsApiPrerenderRoutes, docsPrerenderEvidenceRoutes, publicPrerenderRoutes }
 
 export function createNexusPrerenderRoutes(nexusRoot: string) {
   return [

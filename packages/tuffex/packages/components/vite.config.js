@@ -69,6 +69,11 @@ export default defineConfig({
     lib: {
       entry: 'src/index.ts',
       name: 'vuecomp',
+      // The extracted CSS bundle is named `<cssFileName>.css`, defaulting to the
+      // package.json name's last segment. The export map, dist/style.css shim and
+      // audit:size all expect components.css, so pin it instead of letting the
+      // package name (now @talex-touch/tuffex-components) leak into the artifact.
+      cssFileName: 'components',
       // No `formats`: `rollupOptions.output` above is already an array and owns
       // the es/cjs outputs, so Vite ignores this key and warns. Listing 'umd'
       // here was doubly misleading — the umd output block is commented out.

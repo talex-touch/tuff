@@ -48,7 +48,7 @@ Plugin UI and lifecycle code should use the plugin SDK export or `context.utils.
 code: |
   import { intelligence } from '@talex-touch/utils/plugin/sdk'
 
-  ## void intelligence
+  void intelligence
 ---
 :::
 
@@ -374,9 +374,12 @@ Stream consumers must treat event boundaries as transport details:
 - The default Nexus provider uses authenticated `/api/v1/intelligence/stream` SSE and forwards real provider token deltas plus backend route metadata and terminal usage. Retry/fallback is allowed only before the first visible delta; a post-delta failure is surfaced instead of replaying duplicate text. Never depend on delta count or chunk size.
 - Providers that do not report backend metadata remain compatible, so route fields are optional.
 
-## Complete Example
 
-**Translation Plugin**
+## Complete Examples
+
+**Translation plugin**
+
+Check availability before invoking: `getCapabilityStatus` returns `{ capabilityId, available, providerIds, reason? }`, and `available` is `false` when no configured provider serves that capability.
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -398,11 +401,13 @@ code: |
 
   }
 
-  ## void translateAndPaste
+  void translateAndPaste
 ---
 :::
 
-**OCR Recognition Plugin**
+**OCR plugin**
+
+`vision.ocr` resolves to an `IntelligenceInvokeResult<IntelligenceVisionOcrResult>`, so the extracted text is at `result.result.text`. `keywords` is populated only when `includeKeywords` is set, and stays optional even then.
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -410,6 +415,10 @@ code: |
   import { intelligence } from '@talex-touch/utils/plugin/sdk'
 
   async function recognizeText(imageDataUrl: string) {
+  // Same discovery gate as above: an unconfigured provider makes this unavailable.
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'vision.ocr' })
+  if (!status.available) return null
+
   const result = await intelligence.vision.ocr({
   source: { type: 'data-url', dataUrl: imageDataUrl },
   includeKeywords: true
@@ -422,7 +431,7 @@ code: |
 
   }
 
-  ## void recognizeText
+  void recognizeText
 ---
 :::
 
@@ -462,7 +471,7 @@ code: |
   CUSTOM = 'custom'
   }
 
-  ## void IntelligenceProviderType.OPENAI
+  void IntelligenceProviderType.OPENAI
 ---
 :::
 

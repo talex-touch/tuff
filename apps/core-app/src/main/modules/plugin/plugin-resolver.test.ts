@@ -22,6 +22,7 @@ vi.mock('./plugin-module', () => ({
 }))
 
 import { PluginResolver } from './plugin-resolver'
+import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
 
 async function createSourcePluginDir(root: string, manifest: IManifest): Promise<string> {
   const sourceDir = path.join(root, 'source-plugin')
@@ -120,4 +121,50 @@ describe('PluginResolver', () => {
     )
     expect(await fse.readFile(path.join(targetDir, 'index.js'), 'utf-8')).toBe('old-content')
   })
+
+  for (const [mode, options] of [
+    ['regular installation', undefined],
+    ['force update', { forceUpdate: true }]
+  ] as const) {
+    it(`rejects every privileged bundled name before ${mode} can touch its runtime`, async () => {
+      const root = await fse.mkdtemp(path.join(tmpdir(), 'plugin-resolver-reserved-name-test-'))
+      createdRoots.push(root)
+      const installRoot = path.join(root, 'installed-plugins')
+      await fse.ensureDir(installRoot)
+      pluginModuleMock.filePath = installRoot
+
+      for (const pluginName of PRIVILEGED_PLUGIN_NAMES) {
+        const manifest: IManifest = {
+          name: pluginName,
+          version: '2.0.0',
+          description: 'reserved runtime impersonation',
+          icon: 'logo.svg',
+          author: 'untrusted installer',
+          main: 'index.js',
+          sdkapi: CURRENT_SDK_VERSION,
+          features: []
+        }
+        const sourceDir = await createSourcePluginDir(root, manifest)
+        const targetDir = path.join(installRoot, pluginName)
+        const originalContents = `bundled ${pluginName} runtime`
+        await fse.ensureDir(targetDir)
+        await fse.writeFile(path.join(targetDir, 'index.js'), originalContents, 'utf-8')
+        const callback = vi.fn()
+
+        await new PluginResolver(sourceDir).install(manifest, callback, options)
+
+        expect(callback).toHaveBeenCalledWith(
+          'privileged plugin name is reserved for the bundled runtime',
+          'error'
+        )
+        await expect(fse.readFile(path.join(targetDir, 'index.js'), 'utf-8')).resolves.toBe(
+          originalContents
+        )
+      }
+
+      expect(pluginModuleMock.pluginManager.unloadPlugin).not.toHaveBeenCalled()
+      expect(pluginModuleMock.pluginManager.uninstallPlugin).not.toHaveBeenCalled()
+      expect(pluginModuleMock.pluginManager.loadPlugin).not.toHaveBeenCalled()
+    })
+  }
 })

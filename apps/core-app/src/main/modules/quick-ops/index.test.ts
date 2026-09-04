@@ -1,6 +1,9 @@
 import type { ModuleDestroyContext, ModuleInitContext, ModuleStopContext } from '@talex-touch/utils'
 import { TalexEvents } from '../../core/eventbus/touch-event'
-import type { QuickOpsCapabilityInfo } from '@talex-touch/utils/transport/events/types/quick-ops'
+import type {
+  QuickOpsCapabilityInfo,
+  QuickOpsDeveloperPreviewSaveRequest
+} from '@talex-touch/utils/transport/events/types/quick-ops'
 import { QuickOpsEvents } from '@talex-touch/utils/transport/events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -567,6 +570,7 @@ const fsMkdirMock = vi.hoisted(() => vi.fn(async () => undefined))
 const fsWriteFileMock = vi.hoisted(() =>
   vi.fn(async (_path: string, _data: string | Buffer, _options?: { flag?: string }) => undefined)
 )
+const fsUnlinkMock = vi.hoisted(() => vi.fn(async (_path: string) => undefined))
 const getMainConfigMock = vi.hoisted(() => vi.fn((): unknown => undefined))
 
 vi.mock('electron', () => ({
@@ -584,6 +588,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:fs/promises', () => ({
   mkdir: fsMkdirMock,
+  unlink: fsUnlinkMock,
   writeFile: fsWriteFileMock
 }))
 
@@ -799,7 +804,8 @@ import {
   QUICK_OPS_TEMP_DIRECTORY_FLOW_TARGET_FULL_ID,
   QUICK_OPS_TEMP_TEXT_FILE_FLOW_TARGET_FULL_ID,
   QUICK_OPS_TUFF_DIAGNOSTICS_FLOW_TARGET_FULL_ID,
-  QuickOpsModule
+  QuickOpsModule,
+  saveQuickOpsDeveloperPreview
 } from './index'
 
 const expectedQuickOpsFlowTargets: ExpectedQuickOpsFlowTarget[] = [
@@ -1132,6 +1138,7 @@ describe('QuickOpsModule', () => {
     parseQuickOpsQueryMock.mockReturnValue(null)
     fsMkdirMock.mockResolvedValue(undefined)
     fsWriteFileMock.mockResolvedValue(undefined)
+    fsUnlinkMock.mockResolvedValue(undefined)
   })
 
   it('exposes the shared QuickOps runtime without cleaning sessions on init', () => {
@@ -2769,6 +2776,45 @@ describe('QuickOpsModule', () => {
     expect(clipboardWriteTextMock).toHaveBeenCalledWith(
       expect.stringMatching(/^\/tmp\/tuff-quickops\/qr-code-[\w-]+\.png$/)
     )
+  })
+
+  it('cancels developer preview saving during filesystem waits without copying a stale path', async () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#fff"/><g fill="#000"><rect x="1" y="1" width="1" height="1"/></g></svg>'
+    const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+    const request: QuickOpsDeveloperPreviewSaveRequest = {
+      format: 'svg',
+      payload: {
+        abilityId: 'preview.quickops.developer',
+        title: 'QR Code 生成',
+        primaryValue: dataUrl,
+        meta: { quickOps: { render: { kind: 'qr-code-svg', dataUrl } } }
+      }
+    }
+
+    const abortDuringMkdir = new AbortController()
+    fsMkdirMock.mockImplementationOnce(async () => {
+      abortDuringMkdir.abort()
+    })
+    await expect(saveQuickOpsDeveloperPreview(request, abortDuringMkdir.signal)).rejects.toThrow(
+      'PLUGIN_HOST_CAPABILITY_CANCELLED'
+    )
+    expect(fsWriteFileMock).not.toHaveBeenCalled()
+    expect(clipboardWriteTextMock).not.toHaveBeenCalled()
+
+    const abortDuringWrite = new AbortController()
+    fsWriteFileMock.mockImplementationOnce(async () => {
+      abortDuringWrite.abort()
+    })
+    await expect(saveQuickOpsDeveloperPreview(request, abortDuringWrite.signal)).rejects.toThrow(
+      'PLUGIN_HOST_CAPABILITY_CANCELLED'
+    )
+    const writtenPath = fsWriteFileMock.mock.calls[0]?.[0]
+    expect(writtenPath).toEqual(
+      expect.stringMatching(/^\/tmp\/tuff-quickops\/qr-code-[\w-]+\.svg$/)
+    )
+    expect(fsUnlinkMock).toHaveBeenCalledWith(writtenPath)
+    expect(clipboardWriteTextMock).not.toHaveBeenCalled()
   })
 
   it('acks Flow publicIp delivery as disabled without explicit opt-in', async () => {

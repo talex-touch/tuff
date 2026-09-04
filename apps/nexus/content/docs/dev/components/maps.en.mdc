@@ -1,0 +1,109 @@
+---
+title: "Maps"
+description: "GeoJSON maps: bubble and choropleth, latitude-clamped Mercator by default, pan and zoom."
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, map, geo, d3-geo]
+syncStatus: reviewed
+verified: true
+---
+# Maps
+
+## Basic Usage
+
+Both map components consume a GeoJSON `FeatureCollection` (the package ships no geo data — bring your own). The default projection is Mercator clamped at ±85.05° latitude, with a display window that crops the empty poles so land fills the container. Container height defaults to the projected window's aspect ratio; pass `height` for a fixed pixel height. Data uses the accessor pattern: a key or `(row) => value` both work.
+
+### Bubble map
+
+:::TuffDemoWrapper{demo="MapsBubbleMapDemo" code-lang="vue" title="BubbleMap + roam" description="Bubble area is proportional to value; roam enables wheel zoom and drag pan."}
+---
+code: |
+  <template>
+    <TxBubbleMap
+      :geo-json="world"
+      :data="colos"
+      lng="lon"
+      lat="lat"
+      value="requests"
+      name="city"
+      roam
+      :value-format="(v) => `${v.toLocaleString()} req/s`"
+    />
+  </template>
+---
+:::
+
+### Choropleth map
+
+:::TuffDemoWrapper{demo="MapsChoroplethDemo" code-lang="vue" title="ChoroplethMap + legend" description="Continuous shading interpolates by value; regions without data keep the land fill."}
+---
+code: |
+  <template>
+    <TxChoroplethMap
+      :geo-json="world"
+      :data="data"
+      name="country"
+      value="share"
+      show-legend
+      :value-format="(v) => `${v}%`"
+    />
+  </template>
+---
+:::
+
+## Projection & Zoom
+
+`projection` takes a d3-geo projection instance (e.g. `geoNaturalEarth1()`); `null` degrades to raw lng/lat (equirectangular). The instance is fitted in place with `fitExtent`, so pass a stable reference. `zoom` (default 1.25) multiplies the auto-fit scale; `roam` enables wheel zoom + drag pan, clamped to `[min(1, zoom), zoom × 8]`, and bubbles/strokes counter-scale so their on-screen size stays constant.
+
+## Shading Ramp
+
+Choropleth shading is **continuous**: normalized values land between two adjacent stops of `--tx-chart-map-scale-1..5` and blend with CSS `color-mix(in oklab, …)` — the ramp flips automatically with the theme and no JS ever parses a color. `colorRange` swaps the ramp; `min`/`max` pin the scale bounds.
+
+## API
+
+### Shared Props (both components)
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `geoJson` | `MapGeoJson` | — | `FeatureCollection`, consumer-provided. |
+| `center` | `[lng, lat]` | auto-fit | Map center. |
+| `zoom` | `number` | `1.25` | Multiplier over the auto-fit scale. |
+| `roam` | `boolean` | `false` | Wheel zoom + drag pan. |
+| `projection` | `GeoProjection \| null` | clamped Mercator | A d3-geo projection; `null` for raw lng/lat. |
+| `showTooltip` | `boolean` | `true` | Hover tooltip. |
+| `valueFormat` | `(v: number) => string` | `toLocaleString` | Value format in the default tooltip. |
+| `aspectRatio` | `number \| string` | projected aspect | Container aspect ratio. |
+| `height` | `number` | — | Fixed pixel height; overrides `aspectRatio`. |
+| `width` | `number` | measured | Explicit width (SSR/tests). |
+
+### BubbleMap
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `data` / `lng` / `lat` / `value` / `name?` | accessor | — | Data rows and accessors. |
+| `minRadius` / `maxRadius` | `number` | `6` / `26` | Radius range (area-proportional, sqrt scaling). |
+| `bubbleSize` | `(v: number) => number` | — | Explicit radius, overriding min/max scaling. |
+| `bubbleColor` | `MapStyle<T, string>` | chart blue | Constant or `(row) => color`. |
+| `bubbleBorderColor` / `bubbleBorderWidth` | `MapStyle` | `'transparent'` / `0` | Border styling. |
+
+BubbleMap events: `bubble-hover(row \| undefined)`, `bubble-click(row)`; slot `tooltip` (scope `{ row }`).
+
+### ChoroplethMap
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `data` / `name` / `value` | accessor | — | Data rows; `name` joins features via `nameProperty`. |
+| `nameProperty` | `string` | `'name'` | Feature property to join on; ISO codes are often more reliable. |
+| `colorRange` | `string[]` | theme ramp | Low → high continuous ramp. |
+| `min` / `max` | `number` | data extent | Scale bounds. |
+| `noDataColor` | `string` | land fill | Fill for regions without data. |
+| `showLegend` | `boolean` | `false` | Gradient legend bar. |
+
+ChoroplethMap events: `region-hover(row \| undefined)`, `region-click(row)` (both fire only for regions with data); slot `tooltip` (scope `{ row, regionName, value }`).
+
+## Differences from kumo
+
+- `projection` takes a d3-geo instance directly (kumo wraps `{ project, unproject }` for echarts); `null` is implemented as equirectangular.
+- Zoom is an SVG transform; bubbles/strokes counter-scale so their visual size stays constant.
+- `tooltipFormatter` (HTML string) → the `tooltip` slot.

@@ -1,7 +1,7 @@
 ---
 title: Suggestion Chips
 description: A horizontal row of follow-up prompts users can send in one tap.
-category: Data
+category: AiChat
 status: beta
 since: 0.3.9
 tags: [ai, suggestion, chips]

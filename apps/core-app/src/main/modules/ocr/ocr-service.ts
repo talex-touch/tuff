@@ -35,6 +35,7 @@ import {
 } from '../ai/intelligence-config'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { windowManager } from '../box-tool/core-box/window'
+import { detectClipboardTags, getClipboardTagSearchTerms } from '../clipboard-tagging'
 import { databaseModule } from '../database'
 import { notificationModule } from '../notification'
 import {
@@ -49,6 +50,7 @@ export interface ClipboardOcrPayload {
   clipboardId: number
   item: IClipboardItem
   formats: string[]
+  languageHint?: string
 }
 
 interface AgentJobPayload {
@@ -61,7 +63,7 @@ interface AgentJobPayload {
     filePath?: string
   }
   options: {
-    language: string
+    language?: string
     tesseditPagesegMode?: number
     config?: Record<string, string | number | boolean>
     prompt?: string
@@ -77,6 +79,13 @@ const coreBoxClipboardMetaUpdatedEvent = defineRawEvent<
   },
   void
 >('core-box:clipboard-meta-updated')
+
+function resolveClipboardOcrLanguageHint(languageHint: string | undefined): string | undefined {
+  if (!languageHint) return undefined
+  if (/^zh(?:[-_]|$)/i.test(languageHint)) return 'zh-Hans'
+  if (/^en(?:[-_]|$)/i.test(languageHint)) return 'en-US'
+  return undefined
+}
 const ocrDashboardEvent = defineRawEvent<
   { limit?: number },
   {
@@ -270,7 +279,7 @@ class OcrService {
           payloadHash: job.payloadHash ?? null,
           source: workerSource,
           options: {
-            language: parsed.options?.language || 'eng',
+            language: parsed.options?.language,
             tesseditPagesegMode: parsed.options?.tesseditPagesegMode,
             config: parsed.options?.config
           }
@@ -770,9 +779,7 @@ class OcrService {
             type: 'data-url',
             dataUrl: content
           },
-          options: {
-            language: 'eng'
-          },
+          options: { language: resolveClipboardOcrLanguageHint(payload.languageHint) },
           payloadHash: dataUrlToHash(content)
         }
       }
@@ -791,9 +798,7 @@ class OcrService {
           type: 'file',
           filePath: content
         },
-        options: {
-          language: 'eng'
-        },
+        options: { language: resolveClipboardOcrLanguageHint(payload.languageHint) },
         payloadHash: fileHashKey(content)
       }
     }
@@ -817,9 +822,7 @@ class OcrService {
             type: 'file',
             filePath: imagePath
           },
-          options: {
-            language: 'eng'
-          },
+          options: { language: resolveClipboardOcrLanguageHint(payload.languageHint) },
           payloadHash: fileHashKey(imagePath)
         }
       } catch (error) {
@@ -1263,6 +1266,7 @@ class OcrService {
     )
 
     if (job.clipboardId) {
+      const tags = detectClipboardTags({ type: 'text', content: result.text })
       await this.updateClipboardMeta(job.clipboardId, {
         ocr_status: 'done',
         ocr_text: trimmedTextForMeta,
@@ -1278,7 +1282,8 @@ class OcrService {
         ocr_usage_completion: invocation.usage.completionTokens,
         ocr_last_error: null,
         ocr_retry_count: job.attempts ?? 0,
-        ocr_embedding_status: embedding ? 'generated' : 'skipped'
+        ocr_embedding_status: embedding ? 'generated' : 'skipped',
+        ...(tags.length > 0 ? { tags, tag_search_terms: getClipboardTagSearchTerms(tags) } : {})
       })
 
       await this.upsertConfig('ocr:last-success', {
@@ -1540,52 +1545,56 @@ class OcrService {
       patch.ocr_updated_at = new Date().toISOString()
     }
 
-    const insertValues = Object.entries(patch).map(([key, value]) => ({
-      clipboardId,
-      key,
-      value: JSON.stringify(value ?? null)
-    }))
-
     await this.withDbWrite('ocr.clipboard.meta', async (db) =>
       db.transaction(async (tx) => {
-        if (insertValues.length > 0) {
-          // Same replace-not-append rule as clipboard-meta-persistence (#646). ocr_status walks
-          // queued -> processing -> retrying -> completed, so appending leaves four rows for one
-          // key and a stale 'processing' can win the read.
-          await tx.delete(clipboardHistoryMeta).where(
-            and(
-              eq(clipboardHistoryMeta.clipboardId, clipboardId),
-              inArray(
-                clipboardHistoryMeta.key,
-                insertValues.map((entry) => entry.key)
-              )
-            )
-          )
-          await tx.insert(clipboardHistoryMeta).values(insertValues)
-        }
-
         const existing = await tx
           .select({ metadata: clipboardHistory.metadata })
           .from(clipboardHistory)
           .where(eq(clipboardHistory.id, clipboardId))
           .limit(1)
 
-        if (existing.length > 0) {
-          let base: Record<string, unknown> = {}
-          if (existing[0].metadata) {
-            try {
-              base = JSON.parse(existing[0].metadata)
-            } catch {
-              base = {}
-            }
-          }
+        if (existing.length === 0) return
 
-          const merged = { ...base, ...patch }
-          await tx
-            .update(clipboardHistory)
-            .set({ metadata: JSON.stringify(merged) })
-            .where(eq(clipboardHistory.id, clipboardId))
+        let base: Record<string, unknown> = {}
+        if (existing[0].metadata) {
+          try {
+            base = JSON.parse(existing[0].metadata)
+          } catch {
+            base = {}
+          }
         }
+
+        for (const key of ['tags', 'tag_search_terms'] as const) {
+          if (!Array.isArray(patch[key])) continue
+          const existingValues = Array.isArray(base[key])
+            ? base[key].filter((value): value is string => typeof value === 'string')
+            : []
+          patch[key] = [...new Set([...existingValues, ...patch[key]])]
+        }
+        const insertValues = Object.entries(patch).map(([key, value]) => ({
+          clipboardId,
+          key,
+          value: JSON.stringify(value ?? null)
+        }))
+
+        // Same replace-not-append rule as clipboard-meta-persistence (#646). ocr_status walks
+        // queued -> processing -> retrying -> completed, so appending leaves four rows for one
+        // key and a stale 'processing' can win the read.
+        await tx.delete(clipboardHistoryMeta).where(
+          and(
+            eq(clipboardHistoryMeta.clipboardId, clipboardId),
+            inArray(
+              clipboardHistoryMeta.key,
+              insertValues.map((entry) => entry.key)
+            )
+          )
+        )
+        await tx.insert(clipboardHistoryMeta).values(insertValues)
+
+        await tx
+          .update(clipboardHistory)
+          .set({ metadata: JSON.stringify({ ...base, ...patch }) })
+          .where(eq(clipboardHistory.id, clipboardId))
       })
     )
 

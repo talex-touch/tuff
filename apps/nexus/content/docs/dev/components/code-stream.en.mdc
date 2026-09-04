@@ -1,7 +1,7 @@
 ---
 title: "CodeStream"
 description: "A code block with a filename header that reveals line by line, with copy and syntax highlighting built in."
-category: Data
+category: AiReasoning
 status: beta
 since: 0.3.9
 tags: [ai, code, streaming, highlight]
@@ -114,7 +114,7 @@ The component splits shiki's output back into lines and pairs each with a number
 
 - Component source: `packages/tuffex/packages/components/src/code-stream/src/TxCodeStream.vue`.
 - Types: `packages/tuffex/packages/components/src/code-stream/src/types.ts`.
-- Reused: `packages/tuffex/packages/components/src/copy-button/src/TxCopyButton.vue`, `packages/tuffex/packages/components/src/stream-markdown/src/shiki-runtime.ts`, and `.../use-auto-theme.ts`.
+- Reused: `packages/tuffex/packages/components/src/button/src/copy-button.vue`, `packages/tuffex/packages/components/src/stream-markdown/src/shiki-runtime.ts`, and `.../use-auto-theme.ts`.
 - **Verified coverage:** `packages/tuffex/packages/components/src/code-stream/__tests__/code-stream.test.ts` (22 cases) covers reveal clamping and reuse of already-revealed lines, caret conditions, `complete` firing once, header presence, splitting shiki output into lines, the plain-text fallback on a line-count mismatch, theme forwarding, and copy event forwarding.
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 

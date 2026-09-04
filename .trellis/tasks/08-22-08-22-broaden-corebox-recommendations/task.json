@@ -22,5 +22,9 @@
   "parent": "08-05-search-audit-remediation",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "blocker": "Awaiting prioritization and acceptance against the search-audit remediation parent.",
+    "evidence": "Design and implementation artifacts capture the current recommendation candidate scope.",
+    "nextAction": "Run focused recommendation tests and record acceptance evidence."
+  }
 }

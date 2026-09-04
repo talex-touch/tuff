@@ -1,8 +1,9 @@
+import type { SQL } from 'drizzle-orm'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { StorageCleanupResult } from './types/storage-maintenance'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { eq, lt, sql } from 'drizzle-orm'
+import { eq, inArray, lt, ne, sql } from 'drizzle-orm'
 import { app } from 'electron'
 import {
   analyticsReportQueue,
@@ -85,6 +86,21 @@ async function getAuxDb(): Promise<LibSQLDatabase<typeof import('../db/schema')>
   return databaseModule.getAuxDb()
 }
 
+/**
+ * The connection the file index actually lives on.
+ *
+ * With `TUFF_DB_SEARCH_SPLIT_ENABLED` on -- the default -- file rows are written to
+ * `search-index.db` by the worker, and `database.db` keeps only the app catalog. Cleaning up
+ * through `getDb()` therefore counted and deleted from the wrong file: the live index survived and
+ * the number reported back to the UI came from a near-empty table.
+ *
+ * `getSearchDb()` returns the primary connection when the split is off or the search file is not
+ * open, so this needs no flag branch of its own.
+ */
+async function getFileIndexDb(): Promise<LibSQLDatabase<typeof import('../db/schema')> | null> {
+  return databaseModule.getSearchDb() ?? null
+}
+
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -106,7 +122,7 @@ export async function cleanupClipboard(
 export async function cleanupFileIndex(
   options?: CleanupFileIndexOptions
 ): Promise<StorageCleanupResult> {
-  const db = await getDb()
+  const db = await getFileIndexDb()
   if (!db) return { success: false }
 
   const removedCount: number[] = []
@@ -117,15 +133,40 @@ export async function cleanupFileIndex(
     await db.delete(table)
   }
 
+  /**
+   * `files` is shared: `type: 'app'` rows are the app catalog, which `app-provider` keeps on the
+   * primary connection on purpose because it includes user-authored managed entries added through
+   * `addAppByPath`. Those entries exist nowhere else -- there is no separate store -- and
+   * `rebuildIndex()` only rescans the watch paths, so an app added from outside them cannot come
+   * back. An unscoped `delete(files)` here deleted them, and had done so since this function was
+   * written, independently of the split.
+   */
+  const fileRows = ne(files.type, 'app')
+  const removeScoped = async (table: DeleteTable, where: SQL): Promise<void> => {
+    const rows = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(table)
+      .where(where)
+    removedCount.push(rows[0]?.count ?? 0)
+    await db.delete(table).where(where)
+  }
+
   await removeAll(fileIndexProgress)
-  await removeAll(fileExtensions)
-  await removeAll(files)
+  await removeScoped(
+    fileExtensions,
+    inArray(fileExtensions.fileId, db.select({ id: files.id }).from(files).where(fileRows))
+  )
+  await removeScoped(files, fileRows)
   await removeAll(scanProgress)
 
   if (options?.includeEmbeddings) {
     await db.delete(embeddings).where(eq(embeddings.sourceType, 'file'))
   }
 
+  // Adjacent gap, deliberately not widened here (#1770): `search_index` and `keyword_mappings`
+  // below carry the app catalog's searchable projection as well as the file index, so
+  // `clearSearchIndex` clears both. That is defensible while `rebuild` re-projects the catalog,
+  // and it is opt-in, but it is the same shape of over-broad delete as the one fixed above.
   if (options?.clearSearchIndex) {
     try {
       await db.run(sql`DELETE FROM search_index`)

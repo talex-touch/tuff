@@ -9,7 +9,8 @@
 
 - R8-D Domain Lexicon V1 已于 2026-07-13 完成：`packages/utils/i18n` 提供带 `source` provenance 的只读 `DomainLexiconRegistry`、53 个内置单位 canonical entries 与共享 conversion source，支持跨 locale aliases、确定性排序和当前 locale label 投影。
 - R8-E Plugin SDK facade 已于 2026-07-13 完成：`sdkapi 260713` 暴露 main/renderer 同构 i18n/lexicon facade，typed transport 只接受 verified context，并由 `i18n.read`、`lexicon.read`、`lexicon.register` fail-closed；plugin-local entries 由宿主命名/provenance、原子有界注册且 disable/unload 清理。
-- Phase 5 CatalogService 与 Phase 6 Quality Gates 仍保持开放；本批不代表 SQLite catalog、签名 pack 或 CI 门禁已完成。
+- R8-F CatalogService MVP 的**服务契约**已于 2026-08-20 复核完成：验签、hash、schema/SDK/locale 校验、SQLite 事务导入、activate/rollback 与 official registry 重建全部实现并通过测试。**但触发面未接出** —— 除启动时 seed/activate 内置 pack 外，远程更新链路在运行中的应用里没有任何调用方，诊断状态也没有出口。完整边界见 [`../../engineering/catalog-service-boundary.md`](../../engineering/catalog-service-boundary.md)。
+- Phase 6 Quality Gates 仍保持开放。
 
 ## 1. Final Goal / North Star
 
@@ -380,7 +381,7 @@ Catalog 数据源：
 
 ## 9. Acceptance Criteria
 
-> 当前完成边界：Phase 3 单位 Domain Lexicon 与 Phase 4 Plugin SDK facade 验收已通过；下列 CatalogService 与质量门禁条目仍是后续 phase 的最终验收要求。
+> 当前完成边界：Phase 3 单位 Domain Lexicon、Phase 4 Plugin SDK facade 与 Phase 5 CatalogService 的服务契约验收均已通过（CatalogService 复核于 2026-08-20）。CatalogService 条目的达成口径是「服务契约成立」而非「能力已交付给用户」：远程更新与状态展示今天没有触发面，逐条边界见 [`../../engineering/catalog-service-boundary.md`](../../engineering/catalog-service-boundary.md)。下列质量门禁条目仍是后续 phase 的最终验收要求。
 
 功能验收：
 

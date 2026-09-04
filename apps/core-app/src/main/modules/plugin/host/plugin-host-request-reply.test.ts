@@ -91,6 +91,11 @@ function createRegistry(
   options: {
     current?: PluginActivationIdentity
     authorize?: (pluginName: string, permissionId: string) => boolean
+    watchPermissionRevoked?: (
+      pluginName: string,
+      permissionId: string,
+      onRevoke: () => void
+    ) => () => void
     authState?: () => unknown
     nexusResponse?: (request: PluginHostNexusRequest) => unknown
     quickOpsInvoke?: (operation: string, payload: unknown, signal: AbortSignal) => unknown
@@ -115,6 +120,8 @@ function createRegistry(
   const capabilities = createPluginRequestReplyCapabilities({
     resolveCurrentActivation: () => options.current ?? activation,
     resolveHostGeneration: () => owner.hostGeneration,
+    authorizeCapability: options.authorize ?? (() => true),
+    watchPermissionRevoked: options.watchPermissionRevoked ?? (() => () => undefined),
     authState:
       options.authState ??
       (() => ({ isLoaded: true, isSignedIn: true, user: { id: 'user-1', name: 'Owner' } })),
@@ -359,6 +366,169 @@ describe('plugin host fixed request/reply capabilities', () => {
       })
     ).rejects.toMatchObject({ code: 'PLUGIN_HOST_CAPABILITY_INVALID_REQUEST' })
     expect(quickOpsInvoke).toHaveBeenCalledTimes(1)
+  })
+
+  it('requires operation-specific permissions before QuickOps file and preview side effects', async () => {
+    const quickOpsInvoke = vi.fn(async (operation, payload) => ({ operation, payload }))
+    const authorize = vi.fn(
+      (_pluginName: string, permissionId: string) => permissionId !== 'fs.read'
+    )
+    const { registry } = createRegistry({ authorize, quickOpsInvoke })
+
+    await expect(
+      registry.dispatch('quick-ops.invoke', {
+        operation: 'file-base64.get',
+        payload: { path: '/private/secret.txt' }
+      })
+    ).rejects.toMatchObject({ code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' })
+    expect(quickOpsInvoke).not.toHaveBeenCalled()
+    expect(authorize).toHaveBeenCalledWith('touch-snippets', 'fs.read')
+
+    const previewInvoke = vi.fn(async (operation, payload) => ({ operation, payload }))
+    const previewAuthorize = vi.fn(
+      (_pluginName: string, permissionId: string) => permissionId !== 'clipboard.read'
+    )
+    const preview = createRegistry({ authorize: previewAuthorize, quickOpsInvoke: previewInvoke })
+    await expect(
+      preview.registry.dispatch('quick-ops.invoke', {
+        operation: 'developer-preview.get',
+        payload: { query: { text: 'qr code', inputs: [] } }
+      })
+    ).rejects.toMatchObject({ code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' })
+    expect(previewInvoke).not.toHaveBeenCalled()
+    expect(previewAuthorize).toHaveBeenCalledWith('touch-snippets', 'clipboard.read')
+
+    await expect(
+      registry.dispatch('quick-ops.invoke', {
+        operation: 'format-text.get',
+        payload: { mode: 'snake', text: 'Public value' }
+      })
+    ).resolves.toMatchObject({ operation: 'format-text.get' })
+    expect(quickOpsInvoke).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects an uncommitted QuickOps preview when its clipboard permission is revoked', async () => {
+    let revokeClipboard: (() => void) | undefined
+    let operationSignal: AbortSignal | undefined
+    const quickOpsInvoke = vi.fn(
+      (_operation: string, _payload: unknown, signal: AbortSignal) =>
+        new Promise<{ state: string; reason: string }>((resolve) => {
+          operationSignal = signal
+          signal.addEventListener(
+            'abort',
+            () => resolve({ state: 'skipped', reason: 'permission-revoked' }),
+            { once: true }
+          )
+        })
+    )
+    const { registry } = createRegistry({
+      quickOpsInvoke,
+      watchPermissionRevoked: (_pluginName, permissionId, onRevoke) => {
+        if (permissionId === 'clipboard.write') revokeClipboard = onRevoke
+        return () => undefined
+      }
+    })
+
+    const pending = registry.dispatch('quick-ops.invoke', {
+      operation: 'developer-preview.save',
+      payload: { format: 'svg', payload: { abilityId: 'preview.quickops.developer' } }
+    })
+    await vi.waitFor(() => expect(revokeClipboard).toEqual(expect.any(Function)))
+    await vi.waitFor(() => expect(quickOpsInvoke).toHaveBeenCalledTimes(1))
+    revokeClipboard!()
+
+    await expect(pending).rejects.toMatchObject({
+      code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+    })
+    expect(operationSignal?.aborted).toBe(true)
+  })
+
+  it('returns a committed QuickOps preview save despite a synchronous late permission revoke', async () => {
+    let revokeClipboard: (() => void) | undefined
+    const quickOpsInvoke = vi.fn(() => {
+      revokeClipboard!()
+      return {
+        state: 'saved',
+        format: 'svg',
+        path: '/tmp/tuff-quickops/qr-code-committed.svg',
+        bytes: 128
+      }
+    })
+    const { registry } = createRegistry({
+      quickOpsInvoke,
+      watchPermissionRevoked: (_pluginName, permissionId, onRevoke) => {
+        if (permissionId === 'clipboard.write') revokeClipboard = onRevoke
+        return () => undefined
+      }
+    })
+
+    await expect(
+      registry.dispatch('quick-ops.invoke', {
+        operation: 'developer-preview.save',
+        payload: { format: 'svg', payload: { abilityId: 'preview.quickops.developer' } }
+      })
+    ).resolves.toEqual({
+      operation: 'developer-preview.save',
+      data: {
+        state: 'saved',
+        format: 'svg',
+        path: '/tmp/tuff-quickops/qr-code-committed.svg',
+        bytes: 128
+      }
+    })
+  })
+
+  it('returns only committed QuickOps preview saves across caller abort', async () => {
+    const committedCaller = new AbortController()
+    const committed = createRegistry({
+      quickOpsInvoke: vi.fn(() => {
+        committedCaller.abort()
+        return {
+          state: 'saved',
+          format: 'svg',
+          path: '/tmp/tuff-quickops/qr-code-caller-committed.svg',
+          bytes: 256
+        }
+      })
+    })
+
+    await expect(
+      committed.registry.dispatch(
+        'quick-ops.invoke',
+        {
+          operation: 'developer-preview.save',
+          payload: { format: 'svg', payload: { abilityId: 'preview.quickops.developer' } }
+        },
+        committedCaller.signal
+      )
+    ).resolves.toEqual({
+      operation: 'developer-preview.save',
+      data: {
+        state: 'saved',
+        format: 'svg',
+        path: '/tmp/tuff-quickops/qr-code-caller-committed.svg',
+        bytes: 256
+      }
+    })
+
+    const uncommittedCaller = new AbortController()
+    const uncommitted = createRegistry({
+      quickOpsInvoke: vi.fn(() => {
+        uncommittedCaller.abort()
+        return { state: 'skipped', reason: 'caller-cancelled-before-save' }
+      })
+    })
+
+    await expect(
+      uncommitted.registry.dispatch(
+        'quick-ops.invoke',
+        {
+          operation: 'developer-preview.save',
+          payload: { format: 'svg', payload: { abilityId: 'preview.quickops.developer' } }
+        },
+        uncommittedCaller.signal
+      )
+    ).rejects.toMatchObject({ code: 'PLUGIN_HOST_CAPABILITY_CANCELLED' })
   })
 
   it('binds Flow sender identity, fixed target allowlist and storage.shared permission', async () => {

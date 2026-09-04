@@ -71,6 +71,7 @@ code: |
 - 根元素使用 `role="status"`；可见 `text` 必须不依赖颜色也能表达状态。
 - 显式 `status` 优先于 `statusKey`。
 - `statusKey` 会把 `granted → success`、`denied → danger`、`notDetermined → warning`、`unsupported → muted`、未知 key 映射为 `info`。
+- 默认图标按色调固定：success `i-carbon-checkmark-outline`、warning `i-carbon-warning`、danger `i-carbon-close-outline`、info `i-carbon-information`、muted `i-carbon-circle-dash`，同为描线圆家族、线宽一致，不会让某一种状态看起来"更被选中"。
 - `icon` 会覆盖解析出的状态图标。
 - `os` 会在状态图标前渲染平台图标；`osOnly` 会隐藏状态图标但保留文本。
 - 点击徽标时会发出 `click`，payload 是原始 `MouseEvent`。
@@ -108,9 +109,10 @@ code: |
 
 ## 审阅说明
 
-- 组件源码:`packages/tuffex/packages/components/src/status-badge/src/TxStatusBadge.vue` 确认 `role="status"`、显式 `status` 优先级、`statusKey` 色调映射、OS 图标映射、`osOnly`、自定义 `icon` 和根节点点击派发。
+- 组件源码:`packages/tuffex/packages/components/src/status-badge/src/TxStatusBadge.vue` 确认 `role="status"`、显式 `status` 优先级、`statusKey` 色调映射、OS 图标映射、`osOnly`、描线图标家族、自定义 `icon` 和根节点点击派发。
 - 类型契约:`packages/tuffex/packages/components/src/status-badge/src/types.ts` 定义 `StatusTone`、`StatusKey`、`TxOsType`、`StatusBadgeProps` 和 `StatusBadgeEmits`。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/status-badge/__tests__/status-badge.test.ts` 覆盖文本/尺寸/状态渲染、key 映射、显式 status 优先级、OS 图标、`osOnly`、自定义图标和点击派发。
+- 视觉契约:胶囊圆角（`999px`）、字重 `500`、图标 `1em` 随文字缩放，与 `TxBadge` 同一家族；12% 填充 / 32% 描边配方与 `TxBadge`、`TxTag`、`TxAlert` 共用，暗色下的观感由 `variables.scss` `.dark` 块里显式定义的 `--tx-color-success / warning / danger` 决定，不在组件里单独覆盖。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/status-badge/__tests__/status-badge.test.ts` 覆盖文本/尺寸/状态渲染、key 映射、显式 status 优先级、OS 图标、`osOnly`、自定义图标、点击派发、五个色调的默认图标映射、胶囊圆角与 1em 图标；`__tests__/dark-semantic-tokens.test.ts` 锁定 `.dark` 块内三枚语义 token 的显式定义、`-rgb` 三元组一致性与暗色对比度下限。
 - 导出入口:`packages/tuffex/packages/components/src/status-badge/index.ts` 导出 `StatusBadge`、`TxStatusBadge`、公共类型和 `TxStatusBadgeInstance`。
 
 ## Source

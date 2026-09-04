@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### 💥 破坏性变更
+
+- 收拢 button / icon 组件族：`TxIconButton`、`TxCopyButton` 移入 `@talex-touch/tuffex/button`，`TxOsIcon` 移入 `@talex-touch/tuffex/icon`；深子路径 `./flat-button`、`./icon-button`、`./copy-button`、`./os-icon`（含各自 `style.css`）随之移除。根入口导出的组件名与类型不变，仅深子路径消费方需要改导入来源。
+- 删除冗余组件 `TuffFlatButton`（连同 `FlatButtonProps`、`TuffFlatButtonInstance`）：其能力与 `TxButton variant="flat"` 完全重复，请直接使用后者。
+
 ### 🧹 包体职责收口
 
 - TuffEx 包移除本地 VitePress `docs:*` / playground 展示入口，源码包只保留 build、watch、lint、test、typecheck 与 package audit 脚本。

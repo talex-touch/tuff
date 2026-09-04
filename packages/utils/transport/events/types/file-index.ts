@@ -93,6 +93,18 @@ export interface FileIndexAddPathResult {
   reportId?: string;
 }
 
+export interface FileIndexPreviewResourceRequest {
+  path: string;
+}
+
+export interface FileIndexPreviewResourceResult {
+  success: boolean;
+  tfileUrl?: string;
+  expiresAt?: number;
+  errorCode?: string;
+  reportId?: string;
+}
+
 export interface FileIndexRebuildRequest {
   force?: boolean;
 }

@@ -127,19 +127,14 @@ code: |
 
   const flow = createFlowSDK(channel, 'my-plugin-id')
 
-  // Register the flow receive handler (required!)
   const unsubscribe = flow.onFlowTransfer(async (payload, sessionId, sender) => {
-    console.log(`Received ${payload.type} data from ${sender.senderName}`)
+    console.log(`Received ${payload.type} from ${sender.senderName}`)
 
     try {
-      // Process the data
-      const result = await processPayload(payload)
-
-      // Send the acknowledgment
+      const result = await handlePayload(payload)
       await flow.acknowledge(sessionId, { success: true, result })
     } catch (error) {
-      // Report the error
-      await flow.reportError(sessionId, error.message)
+      await flow.reportError(sessionId, 'Failed to handle payload')
     }
   })
 
@@ -152,23 +147,27 @@ code: |
 
 ## Flow Session State
 
+A session moves through these states; `flow:session:update` broadcasts every transition.
+
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   type FlowSessionState =
-    | 'INIT'             // Initialized
-    | 'TARGET_SELECTING' // User is selecting a target
-    | 'TARGET_SELECTED'  // Target selected
-    | 'DELIVERING'       // Delivering
-    | 'DELIVERED'        // Delivered
-    | 'PROCESSING'       // Target is processing
-    | 'ACKED'            // Acknowledged
-    | 'FAILED'           // Failed
-    | 'CANCELLED'        // Cancelled
+    | 'INIT'             // created, no target chosen yet
+    | 'TARGET_SELECTING' // the chooser is open
+    | 'TARGET_SELECTED'  // a target has been picked
+    | 'DELIVERING'       // payload is being handed to the target
+    | 'DELIVERED'        // the target received it
+    | 'PROCESSING'       // the target is working on it
+    | 'ACKED'            // the target acknowledged completion
+    | 'FAILED'           // terminal failure
+    | 'CANCELLED'        // cancelled by the sender or the user
 ---
 :::
 
 ## Error Handling
+
+`flow.reportError(sessionId, message)` and failed dispatches carry a `FlowErrorCode`. Treat any unrecognised value as `INTERNAL_ERROR` rather than assuming the list is closed.
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -187,6 +186,7 @@ code: |
   }
 ---
 :::
+
 
 ## Native System Share
 
@@ -232,50 +232,57 @@ code: |
 
 Flow target lists expose the system chooser as `system-share`; `flow.nativeShare()` also accepts `system` as a compatibility alias. Windows and Linux currently expose only the explicit `mail` fallback, not a fake system share panel.
 
-## Target Ranking Rules
+## Target Ordering Rules
 
-The Flow target list is sorted by the following priority:
+The target list is ordered by:
 
-1. **Native share targets** - system share entries are shown first
-2. **Adapted plugins** - plugins that have registered an `onFlowTransfer` handler
-3. **Unadapted plugins** - plugins without a registered handler (shown with a "not adapted" hint)
+1. **Native share targets** — the system chooser and its siblings come first.
+2. **Adapted plugins** — those that registered an `onFlowTransfer` handler.
+3. **Unadapted plugins** — shown with an adaptation hint rather than hidden, so a user can tell the difference between "cannot receive this" and "not installed".
 
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  // Adaptation status fields on FlowTargetInfo
+  // The adaptation fields on FlowTargetInfo
   interface FlowTargetInfo {
     // ...other fields
-    hasFlowHandler: boolean    // Whether a handler is registered
-    isNativeShare?: boolean    // Whether this is a native share target
-    adaptationHint?: string    // Adaptation hint (e.g. "This plugin has not adapted Flow Transfer yet")
+    hasFlowHandler: boolean    // an onFlowTransfer handler is registered
+    isNativeShare?: boolean    // this is a native share target
+    adaptationHint?: string    // shown when the plugin has not adapted yet
   }
 ---
 :::
 
-## IPC Channels (Implementation-Aligned)
+## IPC Channels
 
-The following channels are the key event names used by the current implementation (see the main-process `apps/core-app/src/main/modules/flow-bus/`):
+Event names are composed as `namespace:module:action`, so every Flow channel carries a module segment. These are the names the main process actually registers — see `apps/core-app/src/main/modules/flow-bus/`.
 
-- **`flow:bus:dispatch`**: dispatch a flow
-- **`flow:bus:get-targets`**: get available targets
-- **`flow:bus:cancel`**: cancel a session
-- **`flow:bus:acknowledge`**: ack
-- **`flow:bus:report-error`**: report an error
-- **`flow:session:update`**: broadcast session state updates
-- **`flow:bus:select-target`**: user picks a target in the selector panel (UI → main process)
-- **`flow:native:share`**: system share
+| Channel | Direction | Purpose |
+| --- | --- | --- |
+| `flow:bus:dispatch` | plugin → main | Start a flow |
+| `flow:bus:get-targets` | plugin → main | List available targets |
+| `flow:bus:cancel` | plugin → main | Cancel a session |
+| `flow:bus:acknowledge` | target → main | Acknowledge completion |
+| `flow:bus:report-error` | target → main | Report a `FlowErrorCode` |
+| `flow:bus:select-target` | UI → main | User picked a target in the chooser |
+| `flow:session:update` | main → all | Broadcast a session state transition |
+| `flow:session:deliver` | main → target | Hand the payload to the target |
+| `flow:native:share` | plugin → main | Invoke a native share target |
+| `flow:consent:check` | plugin → main | Check transfer consent |
+| `flow:consent:grant` | UI → main | Grant transfer consent |
+| `flow:ui:trigger-transfer` | main → UI | Open the transfer surface |
+| `flow:ui:trigger-detach` | main → UI | Detach the transfer surface |
 
-Plugin integration (registered on the main-process side):
+Plugin registration, from the plugin process:
 
-- **`flow:plugin:register-targets`**: register targets (plugin → main process)
-- **`flow:plugin:unregister-targets`**: unregister targets
-- **`flow:plugin:set-plugin-enabled`**: update plugin enabled state
-- **`flow:plugin:set-plugin-handler`**: declare whether the current plugin has registered an `onFlowTransfer` handler
+| Channel | Purpose |
+| --- | --- |
+| `flow:plugin:register-targets` | Register this plugin's targets |
+| `flow:plugin:unregister-targets` | Remove them |
+| `flow:plugin:set-plugin-enabled` | Update the plugin's enabled state |
+| `flow:plugin:set-plugin-handler` | Declare whether `onFlowTransfer` is registered |
 
-## Technical Notes
-- Target list is maintained by the main process and merged with native share targets.
-- Plugins are registered via `flow:plugin:register-targets`; missing registration means targets won’t appear.
+Prefer the `FlowEvents` constants over these literals — the SDK builds the name from the same builder, so a rename stays in one place.
 
 ## Best Practices
 - Register `onFlowTransfer` to avoid being marked “not supported”.
@@ -283,6 +290,9 @@ Plugin integration (registered on the main-process side):
 - Use `requireAck` for critical workflows and handle fallback actions.
 - Use QuickActions `shareItem()` for MetaK item sharing.
 
+## Technical Notes
+- Target list is maintained by the main process and merged with native share targets.
+- Plugins are registered via `flow:plugin:register-targets`; missing registration means targets won’t appear.
 ## Related Docs
 - [QuickActions SDK](./quick-actions.en.mdc)
 - [DivisionBox API](./division-box.en.mdc)

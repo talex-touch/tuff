@@ -22,5 +22,9 @@
   "parent": "07-27-optimize-core-utility-plugins",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "blocker": "Requires three official-plugin beta end-to-end acceptance runs.",
+    "evidence": "The task artifacts define the AutoPaste convergence and plugin acceptance matrix.",
+    "nextAction": "Execute the packaged beta matrix and record the three plugin outcomes."
+  }
 }

@@ -11,6 +11,7 @@ import type { ProgressBarEmits, ProgressBarProps } from './types'
  * <TxProgressBar loading />
  * <TxProgressBar :percentage="75" show-text />
  * <TxProgressBar success message="Complete!" />
+ * <TxProgressBar :percentage="65" show-text text-placement="top" detail="1.4 MB of 2.3 MB" />
  * ```
  *
  * @component
@@ -30,6 +31,7 @@ const props = withDefaults(defineProps<ProgressBarProps>(), {
   success: false,
   status: '',
   message: '',
+  detail: '',
   ariaLabel: '',
   percentage: 0,
   segmentsTotal: 100,
@@ -40,8 +42,8 @@ const props = withDefaults(defineProps<ProgressBarProps>(), {
   indicatorEffect: 'none',
   hoverEffect: 'none',
   color: '',
-  maskVariant: 'solid',
-  maskBackground: 'blur',
+  maskVariant: 'plain',
+  maskBackground: 'none',
   tooltip: false,
 })
 
@@ -85,11 +87,18 @@ const fillColor = computed(() => {
   return 'var(--tx-color-primary, #409eff)'
 })
 
-const shadowColor = computed(() => {
+const isGradientColor = computed(() => String(fillColor.value || '').includes('gradient('))
+
+/**
+ * The fill fades in from the start and is fully saturated at the tip. A
+ * `color` that is already a gradient string is used verbatim so a caller's own
+ * gradient is not layered under another one.
+ */
+const fillBackground = computed(() => {
   const c = String(fillColor.value || '')
-  if (c.includes('gradient('))
-    return 'transparent'
-  return c
+  if (isGradientColor.value)
+    return c
+  return `linear-gradient(90deg, color-mix(in srgb, ${c} 58%, transparent), ${c})`
 })
 
 /**
@@ -100,7 +109,7 @@ const styleVars = computed(() => {
     '--tx-progress-height': props.height,
     '--tx-progress-width': `${resolvedPercentage.value}%`,
     '--tx-progress-color': fillColor.value,
-    '--tx-progress-shadow-color': shadowColor.value,
+    '--tx-progress-fill': fillBackground.value,
   }
   return vars
 })
@@ -115,10 +124,13 @@ const classList = computed(() => ({
   [`tx-progress-bar--status-${resolvedStatus.value}`]: !!resolvedStatus.value,
 }))
 
+const showMask = computed(() => props.maskBackground !== 'none')
+
 const wrapperClassList = computed(() => ({
   [`tx-progress-bar-wrapper--mask-${props.maskVariant}`]: true,
-  [`tx-progress-bar-wrapper--bg-${props.maskBackground}`]: true,
+  [`tx-progress-bar-wrapper--bg-${props.maskBackground}`]: showMask.value,
   'tx-progress-bar-wrapper--text-outside': props.textPlacement === 'outside',
+  'tx-progress-bar-wrapper--text-top': props.textPlacement === 'top',
   [`tx-progress-bar-wrapper--hover-${props.hoverEffect}`]: props.hoverEffect !== 'none',
 }))
 
@@ -180,6 +192,14 @@ const showOutsideText = computed(() => {
   return !!props.message || !!props.showText
 })
 
+const showTopText = computed(() => {
+  if (props.textPlacement !== 'top')
+    return false
+  if (props.loading || props.indeterminate)
+    return !!props.message
+  return !!props.message || !!props.showText
+})
+
 const segmentsResolved = computed(() => {
   const list = (props.segments || []).filter(s => Number.isFinite(s.value) && s.value > 0)
   const sum = Math.max(0.0001, segmentsSum.value)
@@ -194,6 +214,26 @@ const segmentsResolved = computed(() => {
 })
 
 const hasSegments = computed(() => !!props.segments?.length && segmentsSum.value > 0)
+
+/**
+ * The tip glow lives beside the track, not inside it: the track clips
+ * everything to its own height. It stays mounted for every determinate bar and
+ * only toggles visibility, so its `left` transition always shares the fill's
+ * `width` timeline; a node that mounted at 40% while the fill was still easing
+ * out from 0 would sit ahead of the tip for the whole transition.
+ *
+ * Segments end in the last segment's colour and a gradient `color` has no
+ * single hue to derive the halo from, so neither case renders it.
+ */
+const glowMounted = computed(() => {
+  if (props.loading || props.indeterminate)
+    return false
+  if (hasSegments.value || isGradientColor.value)
+    return false
+  return true
+})
+
+const showGlow = computed(() => glowMounted.value && resolvedPercentage.value > 0 && resolvedPercentage.value < 100)
 
 const completedEmitted = ref(false)
 watch(
@@ -214,9 +254,68 @@ watch(
 )
 </script>
 
+<!--
+  The tooltip-wrapped and plain branches below are two copies of the same
+  markup. Every DOM change has to land in both; merging them is out of scope
+  for the progress-bar redesign and is tracked in that task's report.
+-->
 <template>
   <TxTooltip v-if="tooltipEnabled" v-bind="tooltipBoundProps">
     <span class="tx-progress-bar-wrapper" :class="wrapperClassList" :style="styleVars">
+      <span v-if="showTopText" class="tx-progress-bar__head">
+        <span class="tx-progress-bar__head-label">{{ displayText }}</span>
+        <span v-if="detail" class="tx-progress-bar__head-detail">{{ detail }}</span>
+      </span>
+
+      <span class="tx-progress-bar__body">
+        <span
+          class="tx-progress-bar__track"
+          role="progressbar"
+          :aria-valuenow="loading || indeterminate ? undefined : resolvedPercentage"
+          :aria-valuemin="0"
+          :aria-valuemax="100"
+          :aria-label="ariaLabel || message || 'Progress'"
+        >
+          <span v-if="showMask" class="tx-progress-bar__mask" aria-hidden="true" />
+
+          <span class="tx-progress-bar" :class="classList" aria-hidden="true">
+            <span v-if="hasSegments" class="tx-progress-bar__segments">
+              <span
+                v-for="(seg, idx) in segmentsResolved"
+                :key="idx"
+                class="tx-progress-bar__segment"
+                :style="{ width: seg.width, background: seg.color }"
+              />
+            </span>
+          </span>
+
+          <span
+            v-if="showIndicator"
+            class="tx-progress-bar__indicator"
+            :class="[`tx-progress-bar__indicator--${indicatorEffect}`]"
+            :style="indicatorStyle"
+            aria-hidden="true"
+          />
+
+          <span v-if="showInsideText" class="tx-progress-bar__text">
+            {{ displayText }}
+          </span>
+        </span>
+
+        <span v-if="glowMounted" class="tx-progress-bar__glow" :class="{ 'is-visible': showGlow }" aria-hidden="true" />
+      </span>
+
+      <span v-if="showOutsideText" class="tx-progress-bar__outside-text">{{ displayText }}</span>
+    </span>
+  </TxTooltip>
+
+  <span v-else class="tx-progress-bar-wrapper" :class="wrapperClassList" :style="styleVars">
+    <span v-if="showTopText" class="tx-progress-bar__head">
+      <span class="tx-progress-bar__head-label">{{ displayText }}</span>
+      <span v-if="detail" class="tx-progress-bar__head-detail">{{ detail }}</span>
+    </span>
+
+    <span class="tx-progress-bar__body">
       <span
         class="tx-progress-bar__track"
         role="progressbar"
@@ -225,7 +324,7 @@ watch(
         :aria-valuemax="100"
         :aria-label="ariaLabel || message || 'Progress'"
       >
-        <span class="tx-progress-bar__mask" aria-hidden="true" />
+        <span v-if="showMask" class="tx-progress-bar__mask" aria-hidden="true" />
 
         <span class="tx-progress-bar" :class="classList" aria-hidden="true">
           <span v-if="hasSegments" class="tx-progress-bar__segments">
@@ -251,43 +350,7 @@ watch(
         </span>
       </span>
 
-      <span v-if="showOutsideText" class="tx-progress-bar__outside-text">{{ displayText }}</span>
-    </span>
-  </TxTooltip>
-
-  <span v-else class="tx-progress-bar-wrapper" :class="wrapperClassList" :style="styleVars">
-    <span
-      class="tx-progress-bar__track"
-      role="progressbar"
-      :aria-valuenow="loading || indeterminate ? undefined : resolvedPercentage"
-      :aria-valuemin="0"
-      :aria-valuemax="100"
-      :aria-label="ariaLabel || message || 'Progress'"
-    >
-      <span class="tx-progress-bar__mask" aria-hidden="true" />
-
-      <span class="tx-progress-bar" :class="classList" aria-hidden="true">
-        <span v-if="hasSegments" class="tx-progress-bar__segments">
-          <span
-            v-for="(seg, idx) in segmentsResolved"
-            :key="idx"
-            class="tx-progress-bar__segment"
-            :style="{ width: seg.width, background: seg.color }"
-          />
-        </span>
-      </span>
-
-      <span
-        v-if="showIndicator"
-        class="tx-progress-bar__indicator"
-        :class="[`tx-progress-bar__indicator--${indicatorEffect}`]"
-        :style="indicatorStyle"
-        aria-hidden="true"
-      />
-
-      <span v-if="showInsideText" class="tx-progress-bar__text">
-        {{ displayText }}
-      </span>
+      <span v-if="glowMounted" class="tx-progress-bar__glow" :class="{ 'is-visible': showGlow }" aria-hidden="true" />
     </span>
 
     <span v-if="showOutsideText" class="tx-progress-bar__outside-text">{{ displayText }}</span>
@@ -295,66 +358,53 @@ watch(
 </template>
 
 <style lang="scss">
+/*
+ * Indeterminate sweeps animate composited properties only (`transform`, plus
+ * `opacity` on `split`), never `left`/`width`. `translateX` is relative to the
+ * sweep's own fixed width, so the coefficient is travel/width (40% needs 250%).
+ */
 @keyframes tx-progress-loading {
   0% {
-    left: -100%;
-    width: 0;
-  }
-  50% {
-    width: 50%;
+    transform: translateX(-100%);
   }
   100% {
-    left: 100%;
-    width: 100%;
+    transform: translateX(250%);
   }
 }
 
 @keyframes tx-progress-classic {
   0% {
-    left: -100%;
-    width: 50%;
+    transform: translateX(-100%);
   }
   100% {
-    left: 100%;
-    width: 50%;
+    transform: translateX(192.3%);
   }
 }
 
 @keyframes tx-progress-bounce {
   0% {
-    left: 0%;
-    width: 28%;
+    transform: translateX(0);
   }
   50% {
-    left: 72%;
-    width: 28%;
+    transform: translateX(257%);
   }
   100% {
-    left: 0%;
-    width: 28%;
+    transform: translateX(0);
   }
 }
 
 @keyframes tx-progress-elastic {
   0% {
-    left: 0%;
-    width: 22%;
-    transform: scaleX(1);
+    transform: translateX(0) scaleX(1);
   }
   35% {
-    left: 78%;
-    width: 22%;
-    transform: scaleX(1.18);
+    transform: translateX(354.5%) scaleX(1.18);
   }
   60% {
-    left: 54%;
-    width: 22%;
-    transform: scaleX(0.92);
+    transform: translateX(245.5%) scaleX(0.92);
   }
   100% {
-    left: 0%;
-    width: 22%;
-    transform: scaleX(1);
+    transform: translateX(0) scaleX(1);
   }
 }
 
@@ -451,17 +501,48 @@ watch(
   gap: 10px;
 }
 
+.tx-progress-bar-wrapper--text-top {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/*
+ * The body is the glow's containing block. Percentage `left` resolves against
+ * the containing block, and under the outside placement the wrapper is wider
+ * than the track by the label and its gap, so the glow can only sit on the tip
+ * if it is positioned against a box that spans exactly the track.
+ */
+.tx-progress-bar__body {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.tx-progress-bar-wrapper--text-outside .tx-progress-bar__body {
+  flex: 1;
+  min-width: 0;
+}
+
 .tx-progress-bar__track {
   position: relative;
   display: block;
-  flex: 1;
   width: 100%;
   height: var(--tx-progress-height, 5px);
   border-radius: 999px;
+  /*
+   * Text tokens are the pair that really inverts between themes (a light grey
+   * on light, a lighter dark on dark), so a 10% tint never reads as a hole in
+   * the page the way an overlay-colour mask does. Same family as the slider.
+   */
+  background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 10%, transparent);
   overflow: hidden;
 }
 
-.tx-progress-bar__track::after {
+/* The rim is an explicit opt-in; the default `plain` variant draws none. */
+.tx-progress-bar-wrapper--mask-solid .tx-progress-bar__track::after,
+.tx-progress-bar-wrapper--mask-dashed .tx-progress-bar__track::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -471,6 +552,11 @@ watch(
   z-index: 2;
 }
 
+.tx-progress-bar-wrapper--mask-dashed .tx-progress-bar__track::after {
+  border-style: dashed;
+}
+
+/* Only rendered when `maskBackground` is not `none`. */
 .tx-progress-bar__mask {
   position: absolute;
   display: block;
@@ -480,18 +566,6 @@ watch(
   border: none;
   pointer-events: none;
   z-index: 0;
-}
-
-.tx-progress-bar-wrapper--mask-solid .tx-progress-bar__track::after {
-  border-style: solid;
-}
-
-.tx-progress-bar-wrapper--mask-dashed .tx-progress-bar__track::after {
-  border-style: dashed;
-}
-
-.tx-progress-bar-wrapper--mask-plain .tx-progress-bar__track::after {
-  border: none;
 }
 
 .tx-progress-bar-wrapper--mask-plain .tx-progress-bar__mask {
@@ -528,6 +602,14 @@ watch(
   border-color: color-mix(in srgb, rgba(255, 255, 255, 0.62) 62%, var(--tx-border-color-light, #e4e7ed));
 }
 
+// Silent comments on purpose: `/* */` in SCSS ships into every CSS bundle and
+// `audit:size` has ~200 bytes of headroom on the full-CSS budget.
+//
+// Known defect, deliberately left in place: the fill is a `background-image`
+// now, not a flat colour, so downstream overrides written as `background-color`
+// on `.tx-progress-bar` paint *behind* the gradient and only show through where
+// it is translucent. core-app's `DownloadTask.vue` does exactly this; those
+// callers should set `--tx-progress-fill` or pass `color` instead.
 .tx-progress-bar {
   position: absolute;
   display: block;
@@ -536,9 +618,8 @@ watch(
   height: 100%;
   width: var(--tx-progress-width, 0%);
   border-radius: inherit;
-  background: var(--tx-progress-color, var(--tx-color-primary, #409eff));
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--tx-progress-shadow-color, var(--tx-color-primary, #409eff)) 22%, transparent);
-  transition: width 0.26s ease;
+  background: var(--tx-progress-fill, var(--tx-progress-color, var(--tx-color-primary, #409eff)));
+  transition: width 480ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
   z-index: 1;
 }
 
@@ -605,7 +686,6 @@ watch(
 .tx-progress-bar--indeterminate {
   width: 100%;
   background: transparent;
-  box-shadow: none;
 }
 
 .tx-progress-bar--indeterminate::before {
@@ -632,7 +712,7 @@ watch(
 }
 
 .tx-progress-bar--indeterminate-bounce::before {
-  width: 26%;
+  width: 28%;
   background: radial-gradient(
     60% 120% at 50% 50%,
     color-mix(in srgb, var(--tx-progress-color, var(--tx-color-primary, #409eff)) 78%, transparent),
@@ -645,6 +725,7 @@ watch(
 
 .tx-progress-bar--indeterminate-elastic::before {
   width: 22%;
+  transform-origin: center;
   background: linear-gradient(
     90deg,
     transparent,
@@ -668,6 +749,62 @@ watch(
   animation: tx-progress-split 1.15s infinite ease-in-out;
 }
 
+.tx-progress-bar__glow {
+  position: absolute;
+  top: 50%;
+  left: var(--tx-progress-width, 0%);
+  width: 22px;
+  height: 14px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--tx-progress-color, var(--tx-color-primary, #409eff)) 42%, transparent),
+    transparent
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    left 480ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
+    opacity 200ms ease;
+  z-index: 2;
+}
+
+.tx-progress-bar__glow.is-visible {
+  opacity: 1;
+}
+
+.tx-progress-bar__head {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.tx-progress-bar__head-label {
+  font-weight: 500;
+  color: var(--tx-progress-color, var(--tx-color-primary, #409eff));
+}
+
+.tx-progress-bar__head-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--tx-text-color-secondary, #909399);
+}
+
+.tx-progress-bar__head-detail::before {
+  content: '•';
+  margin: 0 6px;
+}
+
+// Known defect, deliberately left in place: at the default 5px height a 12px
+// label does not fit inside the track, so `textPlacement: 'inside'` (the
+// default) plus `showText` renders as a white smear on a hairline. The fix is a
+// different default placement (`top` or `outside`), an API default change and
+// out of scope for the redesign.
 .tx-progress-bar__text {
   position: absolute;
   display: flex;
@@ -683,6 +820,10 @@ watch(
   z-index: 3;
 }
 
+/*
+ * Known defect, deliberately left in place: the indicator sits inside the
+ * track, whose `overflow: hidden` clips this 28×18 box to the track height.
+ */
 .tx-progress-bar__indicator {
   position: absolute;
   top: 50%;
@@ -715,10 +856,15 @@ watch(
   filter: saturate(1.22);
 }
 
+/*
+ * Known defect, deliberately left in place: this shadow is painted on the
+ * fill, which the track clips, so almost none of it is visible. A gradient
+ * `color` makes the color-mix invalid and drops the declaration entirely.
+ */
 .tx-progress-bar-wrapper--hover-glow:hover .tx-progress-bar {
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--tx-progress-shadow-color, var(--tx-color-primary, #409eff)) 35%, transparent),
-    0 18px 48px color-mix(in srgb, var(--tx-progress-shadow-color, var(--tx-color-primary, #409eff)) 30%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--tx-progress-color, var(--tx-color-primary, #409eff)) 35%, transparent),
+    0 18px 48px color-mix(in srgb, var(--tx-progress-color, var(--tx-color-primary, #409eff)) 30%, transparent);
 }
 
 .tx-progress-bar-wrapper--hover-glow:hover .tx-progress-bar__indicator--sparkle::before {
@@ -731,5 +877,23 @@ watch(
   font-weight: 600;
   color: var(--tx-text-color-regular, #606266);
   white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* A still, translucent full track still reads as "busy" without the sweep. */
+  .tx-progress-bar--indeterminate::before {
+    width: 100%;
+    transform: none;
+    background: color-mix(in srgb, var(--tx-progress-color, var(--tx-color-primary, #409eff)) 35%, transparent);
+    filter: none;
+    animation: none;
+  }
+
+  .tx-progress-bar--flow-shimmer::after,
+  .tx-progress-bar--flow-wave::after,
+  .tx-progress-bar--flow-particles::after,
+  .tx-progress-bar__indicator--sparkle::before {
+    animation: none;
+  }
 }
 </style>

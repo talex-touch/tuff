@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/08-30-tuffex-charts/design.md", "reason": "§12 对照表：文档不得声称未实现行为"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/docs-pages/index.mdx", "reason": "总览页结构"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/docs-pages/colors.mdx", "reason": "Colors 页结构"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/docs-pages/timeseries.mdx", "reason": "Timeseries 场景清单"}
+{"file": ".trellis/spec/frontend/nexus-docs-rendering-contract.md", "reason": "nexus 文档渲染契约"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "前端组件规范（命名/props/事件惯例）"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "类型规范；双侧 typecheck 严格度差异背景"}

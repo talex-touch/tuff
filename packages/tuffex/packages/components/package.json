@@ -1,5 +1,6 @@
 {
-  "name": "@windlil-design/components",
+  "name": "@talex-touch/tuffex-components",
+  "private": true,
   "type": "module",
   "scripts": {
     "build": "vite build"

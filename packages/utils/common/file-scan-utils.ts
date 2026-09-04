@@ -358,11 +358,23 @@ async function scanDirectoryInto(
   out: ScannedFileInfo[],
   stats: ScanDirectoryStats,
   sink?: ScanDirectoryBatchSink,
+  /**
+   * Entry names of `dirPath`'s parent, carried down from the caller's own `readdir` (#1727).
+   *
+   * Undefined at a scan root, which has no parent we have read — the filter reads that as "cannot
+   * tell" and keeps the stricter answer rather than guessing.
+   */
+  siblingNames?: readonly string[],
 ): Promise<void> {
   sink?.signal?.throwIfAborted();
   if (depth > MAX_SCAN_DEPTH) return;
   if (excludePaths?.has(dirPath)) return;
-  if (fileFilterService.getTraversalExclusionReason(dirPath, opts)) return;
+  if (
+    fileFilterService.getTraversalExclusionReason(dirPath, opts, {
+      siblingNames,
+    })
+  )
+    return;
 
   const fs = await getFsPromises();
 
@@ -441,6 +453,8 @@ async function scanDirectoryInto(
   );
 
   // Traverse serially to keep aggregate filesystem concurrency bounded.
+  // `entries` is already in hand, so handing the child its sibling list costs one map, no syscall.
+  const entryNames = entries.map((entry) => entry.name);
   for (const subDir of subDirs) {
     await scanDirectoryInto(
       subDir,
@@ -450,6 +464,7 @@ async function scanDirectoryInto(
       out,
       stats,
       sink,
+      entryNames,
     );
   }
 }

@@ -1,6 +1,8 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type { PluginRuntimeActivationOptions } from './host/plugin-runtime-service'
+import type { TouchPluginRuntimeCapabilities } from './plugin-runtime-capabilities'
 import { createHash } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
@@ -14,15 +16,14 @@ import {
   QuickOpsEvents
 } from '@talex-touch/utils/transport/events'
 import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/intelligence'
+
 import fse from 'fs-extra'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { getCoreBoxWindow } from '../box-tool/core-box'
-import type { PluginRuntimeActivationOptions } from './host/plugin-runtime-service'
 import { PluginRuntimeHostError } from './host/plugin-runtime-host'
-import type { TouchPluginRuntimeCapabilities } from './plugin'
-import { emptyTouchPluginRuntimeCapabilities, PLUGIN_CONFIG_MAX_SIZE, TouchPlugin } from './plugin'
+import { PLUGIN_CONFIG_MAX_SIZE, TouchPlugin } from './plugin'
+import { emptyTouchPluginRuntimeCapabilities } from './plugin-runtime-capabilities'
 import { widgetManager } from './widget/widget-manager'
 
 const permissionModuleMock = vi.hoisted(() => ({
@@ -2320,6 +2321,112 @@ describe('touchPlugin.enable', () => {
       )
       expect(runtime.lifecycle.onFeatureTriggered).toHaveBeenCalledOnce()
       await expect(startOptions.closeResources?.()).resolves.toBeUndefined()
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('aborts superseded and disabled image preparation before an old lifecycle result can publish', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-image-input-race-'))
+    const firstPrepared = deferred<unknown>()
+    const disabledPrepared = deferred<unknown>()
+    const lifecycle = createRuntimeServiceMock().lifecycle
+    const prepareSignals: AbortSignal[] = []
+    const prepareLifecycleQuery = vi.fn((_query: unknown, signal?: AbortSignal) => {
+      if (!signal) throw new Error('IMAGE_PREPARE_SIGNAL_MISSING')
+      prepareSignals.push(signal)
+      if (prepareSignals.length === 1) return firstPrepared.promise
+      if (prepareSignals.length === 2) {
+        return Promise.resolve({
+          text: 'new',
+          inputs: [{ type: 'image', content: 'img_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' }]
+        })
+      }
+      signal.addEventListener(
+        'abort',
+        () => disabledPrepared.resolve({ text: 'disabled', inputs: [] }),
+        { once: true }
+      )
+      return disabledPrepared.promise
+    })
+    const runtime = createRuntimeServiceMock({
+      startActivation: vi.fn(async (options: { activation: unknown }) => ({
+        activation: options.activation,
+        host: { state: 'active', processId: 7001 },
+        lifecycle
+      }))
+    })
+
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn(() => vi.fn()),
+        keyManager: { requestKey: vi.fn(() => 'image-key'), revokeKey: vi.fn(() => true) },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      installCapability({
+        imageTools: () =>
+          ({
+            definitions: [],
+            prepareLifecycleQuery,
+            close: vi.fn(async () => undefined)
+          }) as never,
+        runtimeService: runtime as never
+      })
+      const plugin = new TouchPlugin(
+        'touch-image',
+        { type: 'class', value: 'i-ri-image-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.sdkapi = SdkApi.V260713
+      plugin.declaredPermissions = {
+        required: ['fs.read', 'fs.write', 'search.root-results'],
+        optional: [],
+        reasons: {}
+      }
+      plugin.setPreludeContract({ main: 'index.js' })
+      await expect(plugin.enable()).resolves.toBe(true)
+
+      const feature = { id: 'image-tools' } as IPluginFeature
+      const first = plugin.triggerInputChanged(feature, { text: 'old', inputs: [] } as never)
+      await vi.waitFor(() => expect(prepareLifecycleQuery).toHaveBeenCalledTimes(1))
+      const second = plugin.triggerInputChanged(feature, { text: 'new', inputs: [] } as never)
+      await expect(second).resolves.toBeUndefined()
+      expect(prepareSignals[0]?.aborted).toBe(true)
+      expect(lifecycle.onFeatureTriggered).toHaveBeenCalledExactlyOnceWith(
+        'image-tools',
+        {
+          text: 'new',
+          inputs: [{ type: 'image', content: 'img_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' }]
+        },
+        expect.any(Object),
+        expect.any(AbortSignal)
+      )
+
+      firstPrepared.resolve({
+        text: 'old',
+        inputs: [{ type: 'image', content: 'img_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }]
+      })
+      await expect(first).resolves.toBeUndefined()
+      expect(lifecycle.onFeatureTriggered).toHaveBeenCalledOnce()
+
+      const disabled = plugin.triggerInputChanged(feature, {
+        text: 'disabled',
+        inputs: []
+      } as never)
+      await vi.waitFor(() => expect(prepareLifecycleQuery).toHaveBeenCalledTimes(3))
+      await expect(plugin.disable()).resolves.toBe(true)
+      expect(prepareSignals[2]?.aborted).toBe(true)
+      await expect(disabled).resolves.toBeUndefined()
+      expect(lifecycle.onFeatureTriggered).toHaveBeenCalledOnce()
     } finally {
       fse.removeSync(root)
     }

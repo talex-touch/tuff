@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import type { TransitionPreset } from '@tuffex-components/transition'
 import { ref } from 'vue'
 const { locale } = useI18n()
 const list = ref([
   { id: 1, text: 'Item 1' },
   { id: 2, text: 'Item 2' },
 ])
-const preset = ref('fade')
+const preset = ref<TransitionPreset>('fade')
 const add = () => {
   const last = list.value[list.value.length - 1]
   const nextId = last ? last.id + 1 : 1

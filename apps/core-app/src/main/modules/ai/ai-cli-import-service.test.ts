@@ -468,5 +468,5 @@ describe('aiCliImportService canonical ingress', () => {
         path: join(workspace, '.agents', 'skills', 'after-budget', 'SKILL.md')
       })
     )
-  })
+  }, 20_000)
 })

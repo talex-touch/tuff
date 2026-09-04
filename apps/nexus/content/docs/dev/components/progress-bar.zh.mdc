@@ -26,6 +26,31 @@ code: |
 ---
 :::
 
+### 上传进度
+
+:::TuffDemoWrapper{demo="ProgressBarUploadDemo" code-lang="vue" description="文案行位于轨道上方：主文案取填充色，detail 以分隔点弱化。默认轨道无描边、填充由淡到亮、前端有一点柔光。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const percentage = ref(65)
+  </script>
+
+  <template>
+    <TxProgressBar
+      :percentage="percentage"
+      :format="p => `上传中 ${p}%`"
+      detail="1.4 MB / 2.3 MB"
+      aria-label="上传 report.pdf"
+      show-text
+      text-placement="top"
+      height="6px"
+    />
+  </template>
+---
+:::
+
 ### 分段进度
 
 :::TuffDemoWrapper{demo="ProgressBarSegmentsDemo" code-lang="vue"}
@@ -80,7 +105,11 @@ code: |
 - `error` 与 `success` 布尔 props 优先于 `status`。
 - `success` 或 `error` 配合 `message` 且 `percentage` 为 `0` 时，视觉宽度会解析为 `100%`，适合完成类标签。
 - `message` 优先于 `format`，`format` 优先于默认四舍五入百分比文案。
-- 只有存在 `message` 或 `showText=true` 时才显示文本；loading/indeterminate 状态只有存在 `message` 时显示文本。
+- 只有存在 `message` 或 `showText=true` 时才显示文本；loading/indeterminate 状态只有存在 `message` 时显示文本。`textPlacement="top"` 与 `outside` 遵循同一规则，只是把文案行渲染在轨道上方。
+- `detail` 只在 `textPlacement="top"` 下渲染，位于主文案之后、以分隔点弱化；它是可见文本，不进入 progressbar 的可访问名（仍为 `ariaLabel` > `message` > `Progress`）。
+- 默认轨道是文字色 10% 的平铺色块，不渲染 `.tx-progress-bar__mask`、不画描边；`maskVariant="solid" | "dashed"` 才生成描边，`maskBackground` 不为 `'none'` 时才渲染 mask 层。
+- 填充默认是 `linear-gradient(90deg, 淡 → 饱和)`；`color` 本身是渐变字符串时原样使用。`.tx-progress-bar__glow` 只在非 indeterminate、非 segments、`color` 也不是渐变时挂载，位于轨道裁剪之外，且仅在 0% 与 100% 之间可见。
+- 宽度变化以 480ms `--tx-ease-out-strong` 过渡；不确定态的五种扫光只动合成属性（`transform`，`split` 另加 `opacity`），不动 `left` / `width`，`prefers-reduced-motion` 下停止扫光。
 - `segments` 会忽略非正数值。填充总宽度使用 `segmentsTotal`，填充区域内的各段宽度按正数 segment 总和归一化。
 - `complete` 在解析进度到达 `100` 时每个完成周期只触发一次；进度回落到 `100` 以下后再次完成可再次触发。
 - `tooltip` 或 `tooltipContent` 会把进度条包在 `TxTooltip` 中；`tooltipProps` 会透传给该 tooltip。
@@ -98,19 +127,20 @@ code: |
 | `success` | `boolean` | `false` | 成功状态，覆盖 `status`。 |
 | `status` | `'success' \| 'error' \| 'warning' \| ''` | `''` | 视觉状态色。 |
 | `message` | `string` | `''` | 可见和可访问文本标签。 |
+| `detail` | `string` | `''` | 次要文案（如 `1.4 MB / 2.3 MB`），只在 `textPlacement="top"` 下渲染；不进入可访问名。 |
 | `percentage` | `number` | `0` | 限制前的确定进度值。 |
 | `segments` | `ProgressSegment[]` | - | 多段进度数据。 |
 | `segmentsTotal` | `number` | `100` | 存在 segments 时用于计算填充宽度的总量。 |
 | `height` | `string` | `'5px'` | 进度条高度。 |
 | `showText` | `boolean` | `false` | 确定进度下显示百分比文本。 |
-| `textPlacement` | `'inside' \| 'outside'` | `'inside'` | message/百分比文本位置。 |
+| `textPlacement` | `'inside' \| 'outside' \| 'top'` | `'inside'` | message/百分比文本位置；`top` 在轨道上方渲染文案行（含可选 `detail`）。 |
 | `format` | `(percentage: number) => string` | - | 自定义百分比格式化函数。 |
 | `flowEffect` | `'none' \| 'shimmer' \| 'wave' \| 'particles'` | `'none'` | 确定进度填充层动效。 |
 | `indicatorEffect` | `'none' \| 'sparkle'` | `'none'` | 进度大于零时的端点指示器效果。 |
 | `hoverEffect` | `'none' \| 'glow'` | `'none'` | 外层 hover 效果。 |
 | `color` | `string` | - | 自定义填充颜色，覆盖状态颜色。 |
-| `maskVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 轨道 mask 样式。 |
-| `maskBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | 轨道背景效果。 |
+| `maskVariant` | `'solid' \| 'dashed' \| 'plain'` | `'plain'` | 轨道描边样式；`plain` 不画描边。 |
+| `maskBackground` | `'none' \| 'blur' \| 'glass' \| 'mask'` | `'none'` | 轨道 mask 层；`none` 不渲染 mask 节点，轨道为平铺色块。 |
 | `tooltip` | `boolean` | `false` | 使用解析文本启用 tooltip。 |
 | `tooltipContent` | `string` | - | tooltip 内容覆盖。 |
 | `tooltipProps` | `Partial<TooltipProps>` | - | 透传给 `TxTooltip` 的额外 props。 |
@@ -142,11 +172,15 @@ code: |
 - `message` 同时作为 progressbar 可访问标签，文案应保持简短。
 - segment 代表部分总量时，用 `segmentsTotal` 保持分段进度可信。
 - 动效只用于高价值进度反馈；过多 shimmer/wave 会让仪表盘变嘈杂。
+- 默认是无描边的平铺轨道；需要模糊或玻璃质感的轨道时显式传 `maskBackground`（配合 `maskVariant="solid"` 加描边），不要依赖旧默认值。
+- 上传、下载这类有量级信息的任务用 `textPlacement="top"` + `detail` 把"已传多少"放在文案行，而不是塞进 `message`（它同时是可访问名）。
 
 ## 审阅说明
 
 - 已对照 `packages/tuffex/packages/components/src/progress-bar/src/types.ts`、`TxProgressBar.vue` 与 `progress-bar.test.ts` 核对。
 - 现有测试覆盖确定进度钳制、progressbar ARIA 状态、不确定状态省略 `aria-valuenow`、`complete` 每个完成周期只触发一次，以及 segment 按正数总和归一化。
+- 实测覆盖（2026-09 重设计）：默认不渲染 mask 节点且 wrapper 无 `--bg-*` class；`--tx-progress-fill` 为 `linear-gradient(90deg, …)`、渐变 `color` 原样透传；光晕节点挂在轨道之外并在 0% / 100% / indeterminate / segments 下不可见或不渲染；`top` 文案行的 label / detail 渲染与显隐规则；全部 `@keyframes tx-progress-*` 块不含 `left` / `width`（含提取器阳性对照）；`prefers-reduced-motion` 下停止扫光。
+- 已知未修：`hoverEffect="glow"` 的 `box-shadow` 与 `indicatorEffect="sparkle"` 的光点都位于 `overflow: hidden` 的轨道内，会被裁到轨道高度；源码内有注释标记。
 - API 说明：`segments` 只使用正数值。外层填充宽度基于 `segmentsTotal`，填充区域内部各段宽度按正数 segment 总和归一化。
 - 可访问性说明：`message` 会作为可访问进度标签，应保持简短并表达状态。
 
@@ -154,7 +188,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`.
 - Types: `packages/tuffex/packages/components/src/progress-bar/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` 验证确定进度钳制与 ARIA 状态、不确定状态省略 `aria-valuenow`、`complete` 每个完成周期只触发一次，以及 segment 按正数总和归一化。
+- **实测覆盖:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` 验证确定进度钳制与 ARIA 状态、不确定状态省略 `aria-valuenow`、`complete` 每个完成周期只触发一次、segment 按正数总和归一化，以及默认无 mask 节点、渐变填充与光晕位置、`top` 文案行、关键帧不含 `left` / `width` 与 reduced-motion 停播。
 
 <TuffDocSourceLink />
 

@@ -49,6 +49,7 @@ export interface PluginHostCapabilityDefinition<Request = unknown, Result = unkn
   callbackFields?: readonly string[]
   validateRequest: (value: unknown) => Request
   validateResult: (value: unknown) => Result
+  isCommittedResult?: (value: unknown) => boolean
   invoke(
     context: PluginSecurityContext,
     request: Request,
@@ -102,6 +103,7 @@ const DEFINITION_KEYS = new Set([
   'callbackFields',
   'validateRequest',
   'validateResult',
+  'isCommittedResult',
   'invoke'
 ])
 
@@ -350,6 +352,7 @@ export function snapshotPluginHostCapabilityDefinition<Request, Result>(
   const callbackFields = snapshotCallbackFields(value('callbackFields'))
   const validateRequest = value('validateRequest')
   const validateResult = value('validateResult')
+  const isCommittedResult = value('isCommittedResult')
   const invoke = value('invoke')
   if (
     typeof id !== 'string' ||
@@ -361,6 +364,10 @@ export function snapshotPluginHostCapabilityDefinition<Request, Result>(
     (callbackLifetime !== undefined &&
       callbackLifetime !== 'transient' &&
       callbackLifetime !== 'resource') ||
+    (isCommittedResult !== undefined &&
+      (callbackLifetime === 'resource' ||
+        typeof isCommittedResult !== 'function' ||
+        utilTypes.isProxy(isCommittedResult))) ||
     typeof validateRequest !== 'function' ||
     utilTypes.isProxy(validateRequest) ||
     typeof validateResult !== 'function' ||
@@ -381,7 +388,10 @@ export function snapshotPluginHostCapabilityDefinition<Request, Result>(
     callbackFields,
     validateRequest: validateRequest as (value: unknown) => Request,
     validateResult: validateResult as (value: unknown) => Result,
-    invoke: invoke as PluginHostCapabilityDefinition<Request, Result>['invoke']
+    invoke: invoke as PluginHostCapabilityDefinition<Request, Result>['invoke'],
+    ...(isCommittedResult === undefined
+      ? {}
+      : { isCommittedResult: isCommittedResult as (value: unknown) => boolean })
   })
 }
 
@@ -551,12 +561,22 @@ export class PluginHostCapabilityRegistry {
     )
     call.timeout.unref?.()
 
-    const aborted = new Promise<never>((_resolve, reject) => {
-      const rejectAborted = (): void => {
+    let abortResponseTimer: NodeJS.Timeout | null = null
+    const rejectAborted = (reject: (error: PluginHostCapabilityError) => void): void => {
+      if (!definition.isCommittedResult) {
         reject(new PluginHostCapabilityError(call.abortCode))
+        return
       }
-      if (call.controller.signal.aborted) rejectAborted()
-      else call.controller.signal.addEventListener('abort', rejectAborted, { once: true })
+      abortResponseTimer = setTimeout(
+        () => reject(new PluginHostCapabilityError(call.abortCode)),
+        this.abortGraceMs
+      )
+      abortResponseTimer.unref?.()
+    }
+    const aborted = new Promise<never>((_resolve, reject) => {
+      const onAbort = (): void => rejectAborted(reject)
+      if (call.controller.signal.aborted) onAbort()
+      else call.controller.signal.addEventListener('abort', onAbort, { once: true })
     })
 
     const operation = this.runCall(call, definition, payload)
@@ -575,6 +595,7 @@ export class PluginHostCapabilityRegistry {
       return await Promise.race([settledOperation, aborted])
     } finally {
       callerSignal?.removeEventListener('abort', handleCallerAbort)
+      if (abortResponseTimer) clearTimeout(abortResponseTimer)
     }
   }
 
@@ -665,21 +686,19 @@ export class PluginHostCapabilityRegistry {
         call.controller.signal,
         invocation.resources
       )
-    } catch {
+    } catch (error) {
       await invocation.rollback()
       if (call.controller.signal.aborted) {
         throw new PluginHostCapabilityError(call.abortCode)
       }
+      if (
+        error instanceof PluginHostCapabilityError &&
+        (error.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' ||
+          error.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+      ) {
+        throw error
+      }
       throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED')
-    }
-    if (call.controller.signal.aborted) {
-      await invocation.rollback()
-      throw new PluginHostCapabilityError(call.abortCode)
-    }
-    this.assertRuntimeCurrent()
-    if (call.controller.signal.aborted) {
-      await invocation.rollback()
-      throw new PluginHostCapabilityError(call.abortCode)
     }
     let validatedResult: unknown
     try {
@@ -692,6 +711,33 @@ export class PluginHostCapabilityRegistry {
       void validatedResult.catch(() => undefined)
       await invocation.rollback()
       throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT')
+    }
+    let committedResult = false
+    if (definition.isCommittedResult) {
+      try {
+        const decision = definition.isCommittedResult(validatedResult)
+        if (typeof decision !== 'boolean') throw new Error()
+        committedResult = decision
+      } catch {
+        await invocation.rollback()
+        throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT')
+      }
+    }
+    if (call.controller.signal.aborted && !committedResult) {
+      await invocation.rollback()
+      throw new PluginHostCapabilityError(call.abortCode)
+    }
+    if (!committedResult) {
+      try {
+        this.assertRuntimeCurrent()
+      } catch (error) {
+        await invocation.rollback()
+        throw error
+      }
+      if (call.controller.signal.aborted) {
+        await invocation.rollback()
+        throw new PluginHostCapabilityError(call.abortCode)
+      }
     }
     if (definition.callbackLifetime === 'resource') {
       if (!invocation.owns(validatedResult)) {
@@ -711,7 +757,7 @@ export class PluginHostCapabilityRegistry {
         throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT')
       }
     }
-    if (call.controller.signal.aborted) {
+    if (call.controller.signal.aborted && !committedResult) {
       const resource = this.resources.inspect(validatedResult)
       if (resource) {
         try {
@@ -722,7 +768,7 @@ export class PluginHostCapabilityRegistry {
       }
       throw new PluginHostCapabilityError(call.abortCode)
     }
-    this.assertRuntimeCurrent()
+    if (!committedResult) this.assertRuntimeCurrent()
     return validatedResult
   }
 

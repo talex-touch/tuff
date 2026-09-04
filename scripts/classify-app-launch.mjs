@@ -153,6 +153,51 @@ export function classifyLaunch({ output, exitCode, stayedAlive }) {
   return { verdict: 'unknown-exit', product: true, detail: `exit ${exitCode}` }
 }
 
+/**
+ * What an `ok` verdict is worth for #213, given whether the runner had the restriction at all.
+ *
+ * The smoke test exists to answer "does the AppImage start on Ubuntu 24.04", and the thing that
+ * would stop it is `kernel.apparmor_restrict_unprivileged_userns=1` — 24.04's default, which an
+ * AppImage cannot satisfy because it carries no AppArmor profile. Three release runs came back
+ * `ok`, and that was read as evidence against the hypothesis.
+ *
+ * It is only evidence if the restriction was switched on. GitHub's hosted images are not
+ * guaranteed to match a desktop install here (actions/runner-images#10015 proposes disabling
+ * AppArmor on them), so a green run on a runner without it is passing because the condition under
+ * test is absent — the same shape as a check that cannot fail. Reported next to the verdict rather
+ * than left in the log, so nobody reads `ok` without it.
+ */
+export function describeUsernsRestriction(raw) {
+  const value = typeof raw === 'string' ? raw.trim() : ''
+
+  if (value === '1') {
+    return {
+      present: true,
+      text: 'userns restriction: ON (kernel.apparmor_restrict_unprivileged_userns=1) -- '
+        + 'this run exercised the #213 condition.',
+    }
+  }
+  if (value === '0') {
+    return {
+      present: false,
+      text: 'userns restriction: OFF (kernel.apparmor_restrict_unprivileged_userns=0) -- '
+        + 'this runner does not have the restriction, so a pass says nothing about #213.',
+    }
+  }
+  if (value === '' || value === 'not present') {
+    return {
+      present: false,
+      text: 'userns restriction: NOT PRESENT (no such sysctl) -- this kernel has no restriction to '
+        + 'trip, so a pass says nothing about #213.',
+    }
+  }
+  return {
+    present: false,
+    text: `userns restriction: UNRECOGNISED (${value}) -- treat as unknown rather than as absent, `
+      + 'and read the raw value before drawing a conclusion about #213.',
+  }
+}
+
 const DESCRIPTIONS = {
   'sandbox-denied': 'The app could not create its sandbox. This is #213: Ubuntu 24.04 restricts '
     + 'unprivileged user namespaces, a .deb carries an AppArmor profile and an AppImage cannot.',
@@ -190,6 +235,11 @@ function main(argv) {
   if (result.detail)
     console.log(`detail: ${result.detail}`)
 
+  // Only meaningful where the restriction is a Linux concept; the macOS and Windows steps pass
+  // nothing and get no line.
+  if (process.env.TUFF_LAUNCH_USERNS_RESTRICT !== undefined)
+    console.log(describeUsernsRestriction(process.env.TUFF_LAUNCH_USERNS_RESTRICT).text)
+
   if (result.verdict === 'ok')
     return 0
 
@@ -204,6 +254,70 @@ function selfTest() {
       name: 'a clean start is ok',
       actual: classifyLaunch({ output: 'ready', exitCode: 0, stayedAlive: true }).verdict,
       expected: 'ok',
+    },
+    // The distinction the smoke test could not previously make. `present` is what decides whether
+    // an `ok` verdict is evidence about #213 at all, so each spelling the runner can produce is
+    // pinned -- including the two that look like absence and the one that is neither.
+    {
+      name: 'restriction on means the run exercised the #213 condition',
+      actual: describeUsernsRestriction('1').present,
+      expected: true,
+    },
+    {
+      name: 'restriction on is reported as ON, not as an unrecognised value',
+      actual: describeUsernsRestriction('1').text.includes('ON ('),
+      expected: true,
+    },
+    /**
+     * These assert the message, not just `present`. Asserting `present === false` alone passes
+     * against a broken branch, because the unrecognised-value fallback is also `false` -- so
+     * deleting the `'0'` case entirely still satisfied it. Found by mutating that branch and
+     * watching all 47 cases stay green.
+     */
+    {
+      name: 'restriction off means a pass proves nothing about #213',
+      actual: describeUsernsRestriction('0').present,
+      expected: false,
+    },
+    {
+      name: 'restriction off is reported as OFF, not as an unrecognised value',
+      actual: describeUsernsRestriction('0').text.includes('OFF'),
+      expected: true,
+    },
+    {
+      name: 'a missing sysctl reads as absent, not as on',
+      actual: describeUsernsRestriction('not present').present,
+      expected: false,
+    },
+    {
+      name: 'a missing sysctl is reported as NOT PRESENT, not as unrecognised',
+      actual: describeUsernsRestriction('not present').text.includes('NOT PRESENT'),
+      expected: true,
+    },
+    {
+      name: 'an empty read reads as absent',
+      actual: describeUsernsRestriction('').present,
+      expected: false,
+    },
+    {
+      name: 'an empty read is reported as NOT PRESENT rather than unrecognised',
+      actual: describeUsernsRestriction('').text.includes('NOT PRESENT'),
+      expected: true,
+    },
+    {
+      name: 'trailing newline from cat still reads as on',
+      actual: describeUsernsRestriction('1\n').present,
+      expected: true,
+    },
+    {
+      name: 'an unrecognised value is not silently treated as on',
+      actual: describeUsernsRestriction('banana').present,
+      expected: false,
+    },
+    {
+      name: 'an unrecognised value says so rather than claiming absence',
+      actual: describeUsernsRestriction('banana').text.includes('UNRECOGNISED'),
+      expected: true,
     },
     // The message #213 is about, in the two spellings Electron actually prints.
     {

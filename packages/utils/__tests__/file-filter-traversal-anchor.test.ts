@@ -68,12 +68,13 @@ describe('#1727 system-dir anchoring', () => {
   })
 
   /**
-   * Recorded, not fixed. `TEMP_BLACKLISTED_DIRS` and `DEV_BLACKLISTED_DIRS` are still matched on the
-   * leaf name at any depth, so the folders that prompted #1727 are still excluded — by a different
-   * list. Whether an ordinary word should exclude a folder under a user's documents is a policy
-   * question, and this pins the current answer rather than deciding it.
+   * `TEMP_BLACKLISTED_DIRS` and `DEV_BLACKLISTED_DIRS` are matched on the leaf name at any depth,
+   * so the folders that prompted #1727 were still excluded here — by a different list. That policy
+   * question is now decided in `file-filter-project-context.test.ts`: the ordinary words exclude
+   * only beside a project marker. `reason()` passes no context, which is the deliberate
+   * "cannot tell" answer, so this file keeps asserting the strict result.
    */
-  it('documents the two lists this change does not touch', () => {
+  it('keeps the two other lists strict for a caller that reads no siblings', () => {
     expect(reason('/Users/x/Documents/tmp')).toBe('cache-path')
     expect(reason('/Users/x/Downloads/cache')).toBe('development-path')
     expect(reason('/Users/x/Documents/build')).toBe('development-path')

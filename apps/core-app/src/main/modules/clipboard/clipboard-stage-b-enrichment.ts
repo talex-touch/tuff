@@ -4,6 +4,7 @@ import type { LogOptions } from '../../utils/logger'
 import type { IClipboardItem } from './clipboard-history-persistence'
 import { eq } from 'drizzle-orm'
 import { clipboardHistory } from '../../db/schema'
+import { resolveAppSemanticAliases } from '../box-tool/addon/apps/app-semantic-catalog'
 import type { ClipboardMetaEntry, ClipboardMetaPersistence } from './clipboard-meta-persistence'
 
 export interface ClipboardActiveAppSnapshot {
@@ -26,11 +27,13 @@ export interface ClipboardStageBEnrichmentOptions {
   getDatabase: () => LibSQLDatabase<typeof schema> | undefined
   getCachedItemById: (clipboardId: number) => IClipboardItem | undefined
   getActiveAppSnapshot: () => ClipboardActiveAppSnapshot | null
+  getAppLanguageHint: () => string | undefined
   getLatestGeneration: () => number
   enqueueOcr: (job: {
     clipboardId: number
     item: IClipboardItem
     formats: string[]
+    languageHint?: string
   }) => Promise<void>
   patchCachedMeta: (clipboardId: number, patch: Record<string, unknown>) => void
   updateCachedSource: (clipboardId: number, sourceApp: string | null) => void
@@ -71,8 +74,15 @@ export function buildActiveAppSourcePatch(
     executablePath: activeApp.executablePath ?? null,
     icon: activeApp.icon ?? null
   }
+  const sourceSearchTerms = resolveAppSemanticAliases({
+    name: activeApp.displayName ?? undefined,
+    displayName: activeApp.displayName ?? undefined,
+    bundleId: activeApp.bundleId ?? activeApp.identifier ?? undefined,
+    path: activeApp.executablePath ?? undefined
+  })
   const patch: Record<string, unknown> = {
-    source: sourceMeta
+    source: sourceMeta,
+    ...(sourceSearchTerms.length > 0 ? { source_search_terms: sourceSearchTerms } : {})
   }
   for (const [key, value] of Object.entries(sourceMeta)) {
     if (value !== null && value !== undefined) {
@@ -100,7 +110,8 @@ export class ClipboardStageBEnrichment {
       await this.options.enqueueOcr({
         clipboardId: job.item.id,
         item: job.item,
-        formats: job.formats
+        formats: job.formats,
+        languageHint: this.options.getAppLanguageHint()
       })
     } catch (error) {
       this.options.logWarn('Failed to enqueue clipboard OCR', { error })

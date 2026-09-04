@@ -1,7 +1,7 @@
 ---
 title: "VirtualList"
 description: "Fixed-row virtualized list for long data sets with lower DOM cost and imperative scroll helpers."
-category: Data
+category: Advanced
 status: beta
 since: 1.0.0
 tags: [virtual-list, performance, list]

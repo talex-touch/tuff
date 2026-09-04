@@ -364,7 +364,7 @@ applyRefractionPreset(activePresetId.value)
             v-for="group in refractionPresetGroups"
             :key="group.id"
             class="tx-card-bg-preset-group"
-            :variant="activePresetGroup === group.id ? 'primary' : 'outline'"
+            :variant="activePresetGroup === group.id ? 'primary' : 'secondary'"
             size="small"
             @click="switchRefractionPresetGroup(group.id)"
           >
@@ -376,7 +376,7 @@ applyRefractionPreset(activePresetId.value)
             v-for="preset in visibleRefractionPresets"
             :key="preset.id"
             class="tx-card-bg-preset"
-            :variant="activePresetId === preset.id ? 'primary' : 'outline'"
+            :variant="activePresetId === preset.id ? 'primary' : 'secondary'"
             size="small"
             @click="applyRefractionPreset(preset.id)"
           >

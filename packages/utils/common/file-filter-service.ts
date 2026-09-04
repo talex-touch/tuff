@@ -4,12 +4,15 @@ import {
   BLACKLISTED_EXTENSIONS,
   BLACKLISTED_FILE_PREFIXES,
   BLACKLISTED_FILE_SUFFIXES,
+  CONTEXT_DEPENDENT_BLACKLISTED_DIRS,
   DATABASE_FILE_EXTENSIONS,
   DEFAULT_SCAN_OPTIONS,
   DEV_BLACKLISTED_DIRS,
   INTERNAL_DATABASE_FILE_EXTENSIONS,
   PATH_PATTERNS,
   PHOTOS_LIBRARY_CONFIG,
+  PROJECT_MARKER_ENTRIES,
+  PROJECT_MARKER_SUFFIXES,
   SEARCH_HIDDEN_FILE_EXTENSIONS,
   SYSTEM_BLACKLISTED_DIRS,
   SYSTEM_METADATA_FILE_NAMES,
@@ -36,6 +39,23 @@ export interface FileFilterTarget {
   isDirectory?: boolean;
 }
 
+/**
+ * What the caller knows about the directory it is asking about, beyond the path itself (#1727).
+ *
+ * Only the traversal can fill this in, and only because it has already read the parent directory.
+ * Everything else — index upserts, manual adds, the file-level containing-path check — passes
+ * nothing and keeps the stricter pre-#1727 behaviour.
+ */
+export interface TraversalContext {
+  /**
+   * Entry names of the directory containing the path being classified, i.e. its siblings.
+   *
+   * Present-but-empty is a real answer ("read it, found nothing"); `undefined` means the caller
+   * never looked, which is why the two cannot be collapsed.
+   */
+  siblingNames?: readonly string[];
+}
+
 export interface FileSearchItemLike {
   meta?: {
     file?: {
@@ -54,6 +74,9 @@ const LOWERCASE_INTERNAL_DATABASE_EXTENSIONS = lowerCaseSet(
 );
 const LOWERCASE_SYSTEM_DIRS = lowerCaseSet(SYSTEM_BLACKLISTED_DIRS);
 const LOWERCASE_TEMP_DIRS = lowerCaseSet(TEMP_BLACKLISTED_DIRS);
+const LOWERCASE_CONTEXT_DEPENDENT_DIRS = lowerCaseSet(
+  CONTEXT_DEPENDENT_BLACKLISTED_DIRS,
+);
 
 /**
  * The system names that sit under a home directory instead of the filesystem root.
@@ -147,6 +170,30 @@ function isHomeDirectoryChild(
   );
 }
 
+function isProjectMarker(entryName: string): boolean {
+  const lower = entryName.toLowerCase();
+  if (PROJECT_MARKER_ENTRIES.has(lower)) return true;
+  return PROJECT_MARKER_SUFFIXES.some((suffix) => lower.endsWith(suffix));
+}
+
+/**
+ * Whether the leaf-name blacklists should fire for this directory (#1727).
+ *
+ * Names outside `CONTEXT_DEPENDENT_BLACKLISTED_DIRS` are unaffected — `node_modules` excludes
+ * wherever it appears, as it always did. The ordinary English words fire only where a project
+ * marker sits beside the directory, and a caller that supplied no sibling list is treated as
+ * "cannot tell", which keeps the stricter pre-#1727 answer.
+ */
+function leafNameFilterApplies(
+  lowerDirectoryName: string,
+  context: TraversalContext | undefined,
+): boolean {
+  if (!LOWERCASE_CONTEXT_DEPENDENT_DIRS.has(lowerDirectoryName)) return true;
+  const siblings = context?.siblingNames;
+  if (!siblings) return true;
+  return siblings.some(isProjectMarker);
+}
+
 function basename(value: string): string {
   const normalized = normalizePath(value).replace(/\/+$/, "");
   const separator = normalized.lastIndexOf("/");
@@ -237,6 +284,7 @@ export class FileFilterService {
   getTraversalExclusionReason(
     directoryPath: string,
     options: FileScanOptions = DEFAULT_SCAN_OPTIONS,
+    context?: TraversalContext,
   ): FileFilterReason | null {
     const path = directoryPath.trim();
     if (!path) return "excluded-path";
@@ -250,7 +298,9 @@ export class FileFilterService {
     if (hasBundleSegment(segments)) return "bundle-internal";
     if (options.customBlacklistedDirs?.has(directoryName))
       return "excluded-path";
-    if (LOWERCASE_DEV_DIRS.has(lowerDirectoryName)) return "development-path";
+    const byLeafName = leafNameFilterApplies(lowerDirectoryName, context);
+    if (byLeafName && LOWERCASE_DEV_DIRS.has(lowerDirectoryName))
+      return "development-path";
     const normalized = normalizePath(path);
     if (
       (isFilesystemRootChild(normalized, segments) &&
@@ -260,7 +310,8 @@ export class FileFilterService {
     ) {
       return "system-path";
     }
-    if (LOWERCASE_TEMP_DIRS.has(lowerDirectoryName)) return "cache-path";
+    if (byLeafName && LOWERCASE_TEMP_DIRS.has(lowerDirectoryName))
+      return "cache-path";
 
     if (
       optionEnabled(
@@ -271,7 +322,24 @@ export class FileFilterService {
     ) {
       return "system-path";
     }
+
+    /**
+     * `DEV_PATHS` and `CACHE_PATHS` restate the same names as unanchored substrings — `/build\//`,
+     * `/\/tmp\//` — so they match on an *ancestor* segment. Relaxing only the leaf name above would
+     * therefore fix `~/Documents/build` and still lose `~/Documents/build/2026`: half a fix, and the
+     * half that looks right in a shallow test.
+     *
+     * A caller that supplied sibling names is walking top-down and has already had this same rule
+     * applied at every ancestor, so for it these patterns can only re-assert a decision already
+     * made one level too late. Every name they carry is in `DEV_BLACKLISTED_DIRS` /
+     * `TEMP_BLACKLISTED_DIRS` or starts with a dot, so nothing is lost by skipping them there.
+     *
+     * `SYSTEM_PATHS` above stays unconditional: it is the one of the three that catches paths the
+     * per-level name rule does not, `/usr/bin` being exactly the case once `bin` is relaxed.
+     */
+    const walksEveryLevel = context?.siblingNames !== undefined;
     if (
+      !walksEveryLevel &&
       optionEnabled(
         options.enableDevPathFilter,
         DEFAULT_SCAN_OPTIONS.enableDevPathFilter,
@@ -281,6 +349,7 @@ export class FileFilterService {
       return "development-path";
     }
     if (
+      !walksEveryLevel &&
       optionEnabled(
         options.enableCachePathFilter,
         DEFAULT_SCAN_OPTIONS.enableCachePathFilter,

@@ -1,7 +1,7 @@
 ---
 title: "Chat 消息列表"
 description: "支持 Markdown、图片附件、消息入场动画与图片点击事件的 AI 消息列表。"
-category: Data
+category: AiChat
 status: beta
 since: 1.0.0
 tags: [chat, ai, markdown]

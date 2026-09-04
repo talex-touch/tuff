@@ -39,12 +39,13 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * than shifting the pin again. That is a separate change: doing it inside a 38-file merge would
  * mix a schema-tooling run with conflict resolutions nobody could review apart.
  *
- * Raised 25 → 27 on 2026-08-18 for `0039_conversation_sync_tombstones` and
- * `0040_conversation_sync_state_migration`. Both are hand-written, upgrade-safe migrations in
- * the intentionally snapshotless 0015+ range; this records the two known additions explicitly
- * without pretending the broken snapshot chain has been repaired.
+ * Raised 25 → 28 through 2026-08-28 for the hand-written, upgrade-safe
+ * `0039_conversation_sync_tombstones`, `0040_conversation_sync_state_migration`, and
+ * `0041_ai_orchestrator_run_retention` migrations in the intentionally snapshotless 0015+ range.
+ * This records the three known additions explicitly without pretending the broken snapshot chain
+ * has been repaired.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 27
+export const KNOWN_MISSING_SNAPSHOTS = 28
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))
