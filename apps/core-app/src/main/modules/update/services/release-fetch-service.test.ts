@@ -35,11 +35,13 @@ function createService() {
     maxRetries: 1,
     retryDelay: 0
   }
+  const log = { warn: vi.fn() }
   return {
     settings,
+    log,
     service: new ReleaseFetchService({
       getSettings: () => settings,
-      log: { warn: vi.fn() }
+      log
     })
   }
 }
@@ -146,6 +148,33 @@ describe('ReleaseFetchService', () => {
     expect(result.result.release).toMatchObject({ tag_name: 'v2.4.11', source: 'github' })
     expect(requestUrls()).toHaveLength(2)
     expect(requestUrls()[1]).toContain('api.github.com')
+  })
+
+  /*
+   * AC7/AC8 for the transport-classification fix accept a live OTA round by grepping the log for
+   * this exact sentence, so the sentence is part of the contract and nothing else pinned it.
+   */
+  it('announces the fallback with the sentence the acceptance check greps for', async () => {
+    const { service, log } = createService()
+    networkRequestMock
+      .mockRejectedValueOnce(new Error('net::ERR_CONNECTION_CLOSED'))
+      .mockResolvedValueOnce({ data: [githubRelease()], status: 200, headers: {} })
+
+    await service.fetch(AppPreviewChannel.RELEASE)
+
+    expect(log.warn).toHaveBeenCalledWith(
+      'Nexus update lookup failed transiently; falling back to GitHub',
+      expect.objectContaining({ error: expect.any(Error) })
+    )
+  })
+
+  it('stays silent about a fallback that never happened', async () => {
+    const { service, log } = createService()
+    networkRequestMock.mockResolvedValueOnce({ data: nexusRelease() })
+
+    await service.fetch(AppPreviewChannel.RELEASE)
+
+    expect(log.warn).not.toHaveBeenCalled()
   })
 
   it('does not call GitHub after a non-transient Nexus HTTP failure', async () => {
