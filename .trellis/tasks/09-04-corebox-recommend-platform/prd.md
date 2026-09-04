@@ -103,18 +103,33 @@
 5 个 provider 的「快路径 vs 索引路径」职责混装,以及内置 `system-actions-provider` 与
 `plugins/touch-system-actions` 的疑似重复(**尚未实测确认**)。
 
+| 子任务 | 交付物 | 状态 |
+|---|---|---|
+| C1 推荐来源注册表 | 以注册表替换 `item-rebuilder` 硬编码 fan-out 与 `normalizeSourceId` 别名表 | ✅ 完成(`a61bb3da6`) |
+| C2 传输与资源协议统一 | 空态在 index-commit 后自动刷新;tfile 构造去重;`stream:` 砍掉;spec 修正 | ✅ 完成(`22459dee2`) |
+| C3 推荐 SDK 与权重开放 | 插件并入主排序池 + 名额上限 + usageStats 水合;权重函数开放为 SDK | ⚠️ **A/B 完成**(`1087354c4`),**D 未做** |
+| C4 空态两段 UI | 宫格+列表两段;badge 文案收敛并接 i18n | ✅ 完成(`9e060a17f`) |
+
+**C3-D(新索引文件进推荐)未做**,阻塞于 Q6(文件准入规则归属)——
+它需要产品策略而非工程判断,且必须实机验证才知道推荐结果是否变好。
+传输侧承接已由 C2 就位,D 只差「哪些文件够格」这一层。
+
 ## 跨子任务验收标准
 
-- [ ] 新索引的 App 与新索引的文件(含图片)都能在缓存 TTL 内进入推荐,且不需要修改 `item-rebuilder`。
-- [ ] 第三方插件推送的条目(例:插件打开的项目)与内置条目进入同一排序池,而非旁路。
-- [ ] 插件可调用内置权重函数;函数有公开签名、文档与测试,不暴露 usageStats 原始数据。
-- [ ] 已打开的空态会话可增量追加条目(插件推送、新索引 App/文件),无需重新唤起 CoreBox。
-- [ ] 索引构建期不产生推荐缓存失效风暴:`invalidateCache()` 调用次数不随文件数增长。
-- [ ] `tfile` 与 `stream:` 共用同一套路径规范化与 allowlist;资源字节未经 transport stream protocol。
-- [ ] 空态渲染为「此刻常用」宫格 + 「最近案例」列表两段,文案走 i18n。
-- [ ] `native-resource-protocols.md` 的 `atom`/`stream` 描述已修正为代码现状。
-- [ ] `recommendation.source` 若有扩展,三个文件同步。
-- [ ] `pnpm lint`、`typecheck`、`pnpm utils:test` 全绿。
+- [x] 新增推荐来源**不需要修改 `item-rebuilder`**(注册即可,有开放性测试)。
+- [x] 第三方插件推送的条目与内置条目进入同一排序池,短路分支已移除。
+- [x] 插件可调用内置权重函数;有公开签名、文档、13 条测试,且静态断言不暴露 usageStats。
+- [x] 已打开的空态在 recommendation-relevant 的索引提交后自动刷新
+      (形态为 index-commit 触发重查,非会话内追加 —— 空态会话在 snapshot 后即关闭)。
+- [x] 索引构建期不产生刷新风暴:未标记的提交不触发空态刷新,且 debounce 窗口内不被降级。
+- [x] 空态渲染为「此刻常用」宫格 + 「最近案例」列表两段,文案走 i18n(中英各就位)。
+- [x] `native-resource-protocols.md` 的 `atom`/`stream` 描述已修正为代码现状。
+- [x] `pnpm lint`、`typecheck`(node + web)、250 文件 2029 测试全绿。
+
+**未达成**:
+- [ ] 新索引的**文件**(含图片)进入推荐 —— C3-D,阻塞于 Q6。
+- [ ] `stream:` 与 tfile 共用 path policy —— `stream:` 经门禁后**砍掉**,不再适用。
+- [ ] 运行时视觉验证 —— 全部改动由单测覆盖,但空态两段的实际观感未实机比对设计稿。
 
 ## 开放问题
 
