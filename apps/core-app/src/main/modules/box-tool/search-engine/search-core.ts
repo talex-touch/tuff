@@ -57,6 +57,10 @@ import { SqliteIndexingTaskStateStore } from './indexing-task-state-store'
 import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
 import { recommendationSourceRegistry } from './recommendation/recommendation-source-registry'
+import {
+  FILE_RECOMMENDATION_ALIASES,
+  FILE_RECOMMENDATION_SOURCE_ID
+} from './recommendation/file-recommendation-source'
 import { recommendationExposureService } from './recommendation/recommendation-exposure-service'
 import { gatherAggregator } from './search-gather'
 import { markSearchActivity } from './search-activity'
@@ -125,6 +129,13 @@ const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
   channel.keyManager ?? channel
 const SEARCH_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000
 const SEARCH_MAINTENANCE_JITTER_MS = 10 * 60 * 1000
+/** How often a stream of file commits may drop the recommendation ranking cache. */
+const FILE_COMMIT_INVALIDATION_INTERVAL_MS = 60_000
+/** Every id the file index commits under; the per-platform providers are one logical source. */
+const FILE_RECOMMENDATION_SOURCE_IDS: ReadonlySet<string> = new Set([
+  FILE_RECOMMENDATION_SOURCE_ID,
+  ...FILE_RECOMMENDATION_ALIASES
+])
 const INITIAL_APP_SCAN_MAX_ATTEMPTS = 3
 const INITIAL_APP_SCAN_RETRY_BASE_MS = 1_000
 const INITIAL_APP_SCAN_RETRY_MAX_MS = 5_000
@@ -471,17 +482,24 @@ export class SearchEngineCore
    * is that a superseded entry holds its slot until it is looked up, expires at the 5s TTL, or is
    * evicted by the existing LRU bound.
    */
+  /** Throttle state for {@link shouldInvalidateForFileCommit}. */
+  private lastFileCommitInvalidationAt = 0
+
   private handleSearchIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
     // No searchCache.clear() here. #1729/#1730 removed it deliberately: cacheSearchResult
     // already refuses a write whose revision the hub has moved past, so the clear was redundant --
     // and while it was there, `revision-mismatch` could never be observed and the telemetry could
     // not say why an entry went away. app-shell-v2 still had the clear because it branched before
     // that; its recommendation invalidation below is the part worth keeping.
-    // The recommendation ranking is cached for 30 minutes, so an app installed
-    // or removed just now would otherwise stay invisible (or keep showing) for
-    // that long. Only app commits matter today: file commits fire continuously while
-    // the index builds, and the recommendation grid does not contain files yet.
+    //
+    // The recommendation ranking is cached for 30 minutes, so something that appeared just now
+    // would otherwise stay invisible for that long. App commits are rare and deliberate, so they
+    // invalidate outright. File commits fire continuously while an index builds, so they are
+    // throttled: the freshness dimension already ignores everything but files born inside the
+    // novelty window, and this bounds how often we recompute regardless of commit rate.
     const recommendationsInvalidated = payload.providerIds.includes(APP_INDEXED_SOURCE_ID)
+      ? true
+      : this.shouldInvalidateForFileCommit(payload)
     if (recommendationsInvalidated) {
       this.recommendationEngine?.invalidateCache()
     }
@@ -502,6 +520,23 @@ export class SearchEngineCore
       }
       context.emit(enrichedPayload)
     }
+  }
+
+  /**
+   * Rate-limits file commits to one recommendation invalidation per window.
+   *
+   * An index build emits a commit per batch; without this, a first scan of a large folder would
+   * drop the ranking cache thousands of times and each drop restarts a full recompute. One per
+   * minute keeps a file the user just saved appearing promptly while making the storm impossible.
+   */
+  private shouldInvalidateForFileCommit(payload: CoreBoxSearchIndexCommitPayload): boolean {
+    if (!payload.providerIds.some((id) => FILE_RECOMMENDATION_SOURCE_IDS.has(id))) return false
+
+    const now = Date.now()
+    if (now - this.lastFileCommitInvalidationAt < FILE_COMMIT_INVALIDATION_INTERVAL_MS) return false
+
+    this.lastFileCommitInvalidationAt = now
+    return true
   }
 
   registerProvider(provider: ISearchProvider<ProviderContext>): void {

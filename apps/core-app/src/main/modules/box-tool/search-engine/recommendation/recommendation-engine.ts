@@ -21,6 +21,7 @@ import { createFileRecommendationSource } from './file-recommendation-source'
 import { createAppRecommendationSource } from './app-recommendation-source'
 import { recommendationSourceRegistry } from './recommendation-source-registry'
 import { HABITUAL_RECOMMENDATION_SOURCES } from './recommendation-presentation'
+import { isRecommendableNewFile } from './file-recommendation-admission'
 import { i18nMsg } from '@talex-touch/utils/i18n'
 import { isSameAppIdentity, matchesAppRule, type AppMatchRule } from './app-identity-match'
 import { recommendationExposureService } from './recommendation-exposure-service'
@@ -127,6 +128,21 @@ const NOVELTY_FULL_WINDOW_MS = 48 * 60 * 60 * 1000
 const NOVELTY_MAX_AGE_MS = 7 * DAY_MS
 /** Candidate slots reserved for the freshness dimension. */
 const NEWLY_INSTALLED_CANDIDATE_LIMIT = 10
+/**
+ * Candidate slots for freshly created files.
+ *
+ * Smaller than the app limit on purpose. An install is a deliberate act and there are only ever a
+ * few; files arrive by the hundred, and the grid is not a file manager. The admission rules narrow
+ * the pool, this bounds what survives them.
+ */
+const NEWLY_ADDED_FILE_CANDIDATE_LIMIT = 4
+/**
+ * Rows fetched before admission filtering.
+ *
+ * The exclusion rules run in JS on the way out of a SQL `LIMIT`, so the query has to over-fetch or
+ * a burst of build output would consume the whole budget and leave nothing admissible.
+ */
+const NEWLY_ADDED_FILE_SCAN_LIMIT = 200
 /**
  * `file_extensions` key holding the app's filesystem creation time, written
  * once by the app provider and never refreshed (a self-update rebuilds the
@@ -1803,7 +1819,7 @@ export class RecommendationEngine {
         sourceType: 'application',
         usageStats: usageStatsMap.get(`app-provider:${app.path}`) ?? EMPTY_USAGE_STATS,
         source: 'newly-installed' as const,
-        installedAt
+        firstSeenAt: installedAt
       }))
     } catch (error) {
       recommendationLog.warn('Failed to collect newly installed candidates', {
@@ -1889,6 +1905,12 @@ export class RecommendationEngine {
       meta: { count: newlyInstalled.length }
     })
     candidates.push(...newlyInstalled)
+
+    const newlyAddedFiles = await this.getNewlyAddedFileItems(NEWLY_ADDED_FILE_CANDIDATE_LIMIT)
+    recommendationLog.debug('Loaded newly added file candidates', {
+      meta: { count: newlyAddedFiles.length }
+    })
+    candidates.push(...newlyAddedFiles)
 
     // 内置剪贴板 URL 推荐不在这里注入：候选池的产物会进缓存，而缓存键已不含剪贴板
     // (见 buildRecommendationCacheKey)，一旦入缓存，剪贴板换了之后旧的 URL 动作仍会
@@ -2034,6 +2056,61 @@ export class RecommendationEngine {
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(({ item }) => item)
+  }
+
+  /**
+   * Files that appeared on disk inside the novelty window (the file half of S1.1).
+   *
+   * A SINGLE gate, unlike apps. `files.ctime` holds the filesystem birth time
+   * (`stats.birthtime ?? stats.ctime`), so re-indexing an old folder cannot make its files look
+   * new and a full scan produces nothing here. Apps need a second gate only because a self-update
+   * rebuilds the bundle and refreshes its birthtime; editing a file moves `mtime`, never `ctime`.
+   *
+   * Directory scope is not decided here — the index only walks roots the user granted.
+   */
+  private async getNewlyAddedFileItems(limit: number): Promise<CandidateItem[]> {
+    try {
+      const now = Date.now()
+      const createdAfter = new Date(now - NOVELTY_MAX_AGE_MS)
+      // Bounded in SQL: the file index is routinely tens of thousands of rows and this runs on the
+      // empty-query path.
+      const rows = await this.dbUtils.getRecentlyCreatedFiles(
+        createdAfter,
+        NEWLY_ADDED_FILE_SCAN_LIMIT
+      )
+      if (rows.length === 0) return []
+
+      const admissible = rows
+        .filter((row) =>
+          isRecommendableNewFile({ path: row.path, size: row.size, isDir: row.isDir })
+        )
+        .slice(0, limit)
+      if (admissible.length === 0) return []
+
+      const usageStatsMap = new Map(
+        (
+          await this.dbUtils.getUsageStatsBatch(
+            admissible.map((row) => ({ sourceId: 'file-provider', itemId: row.path }))
+          )
+        ).map((stat) => [`${stat.sourceId}:${stat.itemId}`, stat])
+      )
+
+      return admissible.map((row) => ({
+        sourceId: 'file-provider',
+        itemId: row.path,
+        sourceType: 'file',
+        usageStats: usageStatsMap.get(`file-provider:${row.path}`) ?? EMPTY_USAGE_STATS,
+        source: 'newly-added' as const,
+        // The novelty channel hands the item back to frecency on first open, exactly as it does
+        // for a newly installed app: a file you have already opened is no longer news.
+        firstSeenAt: row.ctime?.getTime()
+      }))
+    } catch (error) {
+      recommendationLog.warn('Failed to collect newly added file candidates', {
+        meta: toErrorMeta(error)
+      })
+      return []
+    }
   }
 
   /**
@@ -2403,8 +2480,8 @@ export class RecommendationEngine {
     // item back to frecency the moment there is a real execute to rank on —
     // the item stays in the pool through the frequent/recent dimensions, it
     // just stops being news.
-    if (candidate.installedAt !== undefined && candidate.usageStats.executeCount === 0) {
-      score += calculateNoveltyFactor(Date.now() - candidate.installedAt) * NOVELTY_WEIGHT
+    if (candidate.firstSeenAt !== undefined && candidate.usageStats.executeCount === 0) {
+      score += calculateNoveltyFactor(Date.now() - candidate.firstSeenAt) * NOVELTY_WEIGHT
     }
 
     if (semanticSettings.localVectorEnabled && semanticProfile) {
@@ -3176,8 +3253,8 @@ export class RecommendationEngine {
       // never launched), which puts it in an earlier dimension first. Keep the
       // install stamp so the novelty boost still fires, and label it as the
       // reason it actually ranks — but only while that boost is live.
-      if (existing.installedAt === undefined && candidate.installedAt !== undefined) {
-        existing.installedAt = candidate.installedAt
+      if (existing.firstSeenAt === undefined && candidate.firstSeenAt !== undefined) {
+        existing.firstSeenAt = candidate.firstSeenAt
         if (existing.usageStats.executeCount === 0) {
           existing.source = 'newly-installed'
         }
@@ -3354,8 +3431,12 @@ interface ItemCandidate {
   timeStats?: ParsedItemTimeStats
   /** Plugin-provided candidate data (for source='plugin' or builtin clipboard URL) */
   pluginCandidate?: PluginRecommendCandidate
-  /** Epoch ms the app was installed on this machine; drives the novelty boost. */
-  installedAt?: number
+  /**
+   * Epoch ms this item first appeared on the machine — an app's install stamp, a file's
+   * filesystem birth time. Drives the novelty boost, which is why it is one field: the exploration
+   * channel is the same regardless of what appeared.
+   */
+  firstSeenAt?: number
 }
 
 /**
@@ -3380,6 +3461,8 @@ interface CandidateItem extends ItemCandidate {
     | 'pinned'
     | 'plugin'
     | 'newly-installed'
+    /** A file that appeared on disk inside the novelty window. */
+    | 'newly-added'
     | 'cold-start'
 }
 

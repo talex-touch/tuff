@@ -89,6 +89,8 @@ export interface ScoredItem {
     | 'plugin'
     /** Installed within the novelty window and never executed yet */
     | 'newly-installed'
+    /** A file that appeared on disk within the novelty window and has not been opened yet */
+    | 'newly-added'
     /** Catalog ordering used when there is no usage history at all */
     | 'cold-start'
   reason?: string
@@ -137,7 +139,7 @@ export interface RecommendProvider {
 export interface RecommendationBadge {
   text: string
   icon: string
-  variant: 'frequent' | 'intelligent' | 'recent' | 'trending' | 'newly-installed'
+  variant: 'frequent' | 'intelligent' | 'recent' | 'trending' | 'newly-installed' | 'newly-added'
 }
 
 /**

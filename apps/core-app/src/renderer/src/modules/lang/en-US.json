@@ -2431,7 +2431,8 @@
         "plugin": "Plugin",
         "newlyInstalled": "Just installed",
         "pinned": "Pinned",
-        "suggested": "Suggested"
+        "suggested": "Suggested",
+        "newlyAdded": "New file"
       }
     }
   },
