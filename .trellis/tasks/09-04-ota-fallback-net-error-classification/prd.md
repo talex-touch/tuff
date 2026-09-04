@@ -104,23 +104,40 @@ macOS 静默安装有构建信任闸门：`assertPlatformInstallPreflight`（`up
 
 ## Acceptance Criteria
 
-- [ ] **AC1** 给定 `new Error('net::ERR_CONNECTION_CLOSED')`，`isOfficialFallbackEligible` 返回 `true`；单测覆盖三种方言与 R2 列出的全部错误码，含 `ERR_CONNECTION_TIMED_OUT` 与 `Failed to fetch`（现有正则的两处漏网之鱼），以及 D1 涉及的 `ERR_SSL_PROTOCOL_ERROR` / `ERR_CERT_AUTHORITY_INVALID`。
-- [ ] **AC2** 单测：官方源抛 `net::ERR_CONNECTION_CLOSED` 时，`fetch()` 走到 `fetchGitHub` 并返回 GitHub 结果，而非上抛错误。
-- [ ] **AC3** 单测：官方源与 GitHub 均抛传输层错误时，命中 stale-cache 分支；无 stale 时上抛 GitHub 错误（行为与改动前一致）。
-- [ ] **AC4** 单测：渲染层 `GithubUpdateProvider.isRetryableError` 对 `net::ERR_*` 返回 `true`，且在错误已丢失原型链（纯 `Error`）时同样成立。
-- [ ] **AC5** 回归：既有 HTTP 状态码用例（429/5xx/403）行为不变，`src/main/modules/update` 108 个既有用例保持全绿；`NetworkTransportError` 归一化后原始 message 文本不变（覆盖 R1 的兼容性约束）。
-- [ ] **AC6** 全量校验通过：`npx vitest run src/main/modules/update src/renderer/src/modules/update`、`pnpm lint`、`npm run typecheck`。
-- [ ] **AC7** Electron 探针复现：官方源不可达时，更新检查返回 GitHub 的候选结果而非错误（需在能复现该网络故障的环境执行；若官方源已恢复，用可控的不可达地址覆盖 `settings.source.url` 模拟）。
-- [ ] **AC8**（R7）本机 dev 模式完整触发一次真实 OTA，逐段留证：
-  - 官方源传输失败 → 日志出现 `Nexus update lookup failed transiently; falling back to GitHub`（现状下该行**不会**出现，是修复生效的直接标志）
-  - GitHub 返回 `v2.4.14-beta.19` 候选
-  - 下载 `macos-latest-beta-tuff-2.4.14-beta.19-macos-arm64.dmg`
-  - sha256 与 `.sig` 校验通过，生命周期进入 `ready`
-  - 触发安装时以 `MAC_UPDATE_BUILD_UNTRUSTED` 终止（预期行为，非失败）
-  - 前置条件：本地版本须低于 `beta.19`，通过临时下调 `package.json` 版本号实现，验证完成后**必须还原**
+- [x] **AC1** 给定 `new Error('net::ERR_CONNECTION_CLOSED')`，`isOfficialFallbackEligible` 返回 `true`；单测覆盖三种方言与 R2 列出的全部错误码，含 `ERR_CONNECTION_TIMED_OUT` 与 `Failed to fetch`（现有正则的两处漏网之鱼），以及 D1 涉及的 `ERR_SSL_PROTOCOL_ERROR` / `ERR_CERT_AUTHORITY_INVALID`。
+- [x] **AC2** 单测：官方源抛 `net::ERR_CONNECTION_CLOSED` 时，`fetch()` 走到 `fetchGitHub` 并返回 GitHub 结果，而非上抛错误。
+- [x] **AC3** 单测：官方源与 GitHub 均抛传输层错误时，命中 stale-cache 分支；无 stale 时上抛 GitHub 错误（行为与改动前一致）。
+- [x] **AC4** 单测：渲染层 `GithubUpdateProvider.isRetryableError` 对 `net::ERR_*` 返回 `true`，且在错误已丢失原型链（纯 `Error`）时同样成立。
+- [x] **AC5** 回归：既有 HTTP 状态码用例（429/5xx/403）行为不变；`NetworkTransportError` 归一化后原始 message 文本不变（覆盖 R1 的兼容性约束）。
+- [x] **AC6** 全量校验通过（`f1f48bad1`）：`packages/utils` 41 条传输分类用例、`apps/core-app` update 相关 148 条全绿；`typecheck:node` 与 `vue-tsc` 通过；两个包按各自 eslint 配置 lint 干净。
+- [x] **AC7** Electron 探针：对真实不可达的 `tuff.tagzxia.com` 发请求，捕获 `net::ERR_CONNECTION_CLOSED`，断言旧正则匹配为 `false`、归一化后 `isOfficialFallbackEligible` 为 `true`、message 逐字节不变。
+- [~] **AC8**（R7）本机 dev 模式真实触发，逐段结果：
+  - [x] 官方源传输失败 → `17:25:50 [WARN] [UpdateService] Nexus update lookup failed transiently; falling back to GitHub error=NetworkTransportError: net::ERR_CONNECTION_REFUSED`（worktree 跑 `f1f48bad1` + 版本降至 beta.18，官方源指向 `https://127.0.0.1:9999`）
+  - [x] GitHub 返回 `v2.4.14-beta.19` 候选、UI 出现「下载更新」（另一次运行，官方源恰好可用时；`Update check fetched source=... hasUpdate=true tag=v2.4.14-beta.19`）
+  - [ ] 下载 arm64 dmg — **被 F2 阻塞**（dev 模式下载必被 `destination-outside-roots` 拒绝），非本任务缺陷
+  - [ ] sha256 + `.sig` 校验、进入 `ready` — 同上，受 F2 阻塞
+  - [ ] 触发安装以 `MAC_UPDATE_BUILD_UNTRUSTED` 终止 — 未达到该阶段
+  - [x] 版本号已还原，worktree 已移除，共享 dev 配置 `update-settings.json` 已从备份还原
+
+### AC8 验证方式与一处已纠正的错误
+
+无 computer-use 工具，改用 CDP 驱动：Electron 以 `--remote-debugging-port=9222` 启动，脚本连渲染层导航到 `/setting/update` 并点击按钮，全程无人工介入。
+
+两个必须绕过的 dev 闸门见下方 F1；测试夹具仅注入 `window.$argMapper = { touchType: 'main' }`，不改动被测逻辑。
+
+**已纠正**：首次 AC8 用 `https://127.0.0.1:9` 作不可达地址，得到 `net::ERR_UNSAFE_PORT` 并观察到回退，当时误判为"前缀兜底生效"。实际上 `ERR_UNSAFE_PORT` 是调用方错误而非传输故障，它能命中仅因当时存在通配前缀 `net::err_`——该前缀已被 `5072d9858` 正确移除（同时移除的还有 `ERR_ABORTED`/`ERR_ACCESS_DENIED`/`ERR_BLOCKED_BY_CLIENT`/`ERR_INVALID_URL` 的误判）。重跑改用 `127.0.0.1:9999` → `ERR_CONNECTION_REFUSED`，由显式 `err_connection_` 前缀命中，证据方成立。
+
+## 衍生发现（不属本任务，建议另开单）
+
+- **F1** dev 模式下「检查更新」按钮是死的：`window.$argMapper` 为 `{}`，`useArgMapper` 将空对象当作有效缓存返回，`touchType` 因此为 `undefined` → `isMainWindow()` false → `canShowUpdatePrompt()` 拦截 → `checkApplicationUpgrade()` 静默 return（`useUpdateRuntime.ts:130-132, 409-412`）。
+- **F2** dev 模式下更新下载必被拒（`destination-outside-roots`）：更新系统写 `ctx.app.rootPath`（实测 `…/@talex-touch/core-app/tuff-dev/modules/update-packages`），而 `getAllowedDownloadRoots()` 用 `resolveRuntimeRootPath(app)` 算出 `…/@talex-touch/tuff-dev/tuff-dev`（该目录不存在）。成因是 `polyfills.ts` 在 dev 分支执行 `app.setPath('userData', …)`，而 `precore.ts` 的 `innerRootPath` 在模块加载时求值、下载策略在调用时求值，两者跨越了这次改写。
+- F1/F2 均**推断**仅影响 dev（生产 `app.isPackaged` 为真，不进 polyfills 该分支），但**未在打包构建上验证该推断**。
+- **F3** `tuff.tagzxia.com` 表现为间歇可用（同一分钟内连测两次分别为 200 / 连接被重置），而非持续宕机。这提高了本修复的价值：间歇故障会频繁触发回退路径。
 
 ## Out of Scope
 
 - `tuff.tagzxia.com` 服务端可用性排查与修复（属运维，另行处理）。
 - 含"替换 App 并重启"的 macOS 安装腿真机验证：需官方 CI 签名构建（本地构建拿不到官方私钥签发的 attestation），属发布后验证。可选路径：装官方 `beta.18` dmg 升到 `beta.19`——但那跑的是已发布的旧代码，不含本次修复；真正覆盖本次修复的完整安装腿须待 `beta.20` 由 CI 签名发布后，从 `beta.19` 升级验证。
 - 更新源以外的其它 `NetworkService` 调用方的错误分类审查（本次仅在 utils 层留出共享分类器并保证向后兼容，不改其它调用方的判定逻辑）。
+- F1 / F2 两处 dev 模式缺陷的修复（本任务只记录证据与成因，不改动）。
+- GitHub 未认证 API 配额（`0/60`）耗尽期间的 GitHub 侧链路复验——外部限流，非代码问题。

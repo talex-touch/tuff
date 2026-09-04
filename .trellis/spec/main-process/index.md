@@ -49,6 +49,13 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   — charset rules import from search-charset only; SEARCH_KEYWORD_SCHEMA_VERSION
   bump semantics (app auto / file via bound backfill, never through the disk-reading
   worker); gated paged migration pattern; usage identity = source.id everywhere.
+- [network-error-classification-contracts.md](network-error-classification-contracts.md)
+  — one error belongs to exactly one of transport / timeout / HTTP-status, and
+  callers OR the classifiers rather than swapping one in; no blanket `net::err_`
+  marker (it claims cancellations and caller bugs); three live error dialects;
+  `NetworkTransportError` normalizes at the NetworkService boundary but preserves
+  `message` verbatim; classification degrades class → code → message because IPC
+  strips identity.
 
 ## Quality Check
 
