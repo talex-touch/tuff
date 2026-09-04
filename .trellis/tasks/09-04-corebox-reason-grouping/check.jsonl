@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "整体质量门槛"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "核对新增 evidence 可选字段与 RecommendationSource 联合类型的写法"}
+{"file": ".trellis/spec/main-process/recommendation-freshness-contracts.md", "reason": "核对 layout 改写没有破坏推荐缓存新鲜度契约"}
+{"file": ".trellis/spec/main-process/search-hotpath-contracts.md", "reason": "核对空态热路径未退化"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "核对三层改动一致、无契约漂移"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "核对 RECOMMENDATION_SECTION_ORDER 是唯一真源，未在主进程/渲染层各自重复一份顺序"}
