@@ -82,6 +82,10 @@ function resolvePreloadStartupContext(startupInfo: StartupInfo | null): StartupC
   return {
     startupInfo,
     metaOverlay,
+    // The composed `metaOverlay` above also folds in the hash check, so it is the authoritative
+    // one; carrying the raw argv value alongside it would give the renderer two answers to the
+    // same question. Callers read `metaOverlay` from the role, so it gets the composed value.
+    role: { ...role, metaOverlay },
     windowMode: resolveRendererWindowMode({
       ...role,
       metaOverlay
