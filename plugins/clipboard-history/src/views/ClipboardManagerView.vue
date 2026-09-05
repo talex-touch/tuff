@@ -18,6 +18,7 @@ import {
   selectNextClipboardItemId,
   toHistoryQueryType,
 } from '~/utils/clipboard-items'
+import { classifyClipboardItem } from '~/utils/clipboard-shapes'
 
 type ClipboardGlyphName = InstanceType<typeof ClipboardGlyph>['$props']['name']
 
@@ -54,13 +55,28 @@ let requestGeneration = 0
 const SEARCH_DEBOUNCE_MS = 180
 
 const hasMore = computed(() => items.value.length < total.value)
-const hasItems = computed(() => items.value.length > 0)
-const sections = computed(() => groupClipboardItems(items.value))
+
+/**
+ * `text` / `image` / `files` / `favorite` 由 getHistory 在库里过滤；其余分类是从内容派生的，
+ * 只能对已加载的这一页过滤——所以计数会显示成「M / N」，不能假装它是全库的结果。
+ */
+const visibleItems = computed(() => {
+  const category = filter.value
+  if (category === 'all' || toHistoryQueryType(category) || category === 'favorite') {
+    return items.value
+  }
+  return items.value.filter(item => classifyClipboardItem(item).includes(category))
+})
+const isDerivedCategory = computed(
+  () => filter.value !== 'all' && !toHistoryQueryType(filter.value) && filter.value !== 'favorite',
+)
+const hasItems = computed(() => visibleItems.value.length > 0)
+const sections = computed(() => groupClipboardItems(visibleItems.value))
 const selectedItem = computed<PluginClipboardItem | null>(() => {
   if (selectedId.value === null) {
     return null
   }
-  return items.value.find(item => item.id === selectedId.value) ?? null
+  return visibleItems.value.find(item => item.id === selectedId.value) ?? null
 })
 const selectedResolvedImageUrl = computed(() => {
   const id = selectedItem.value?.id
@@ -78,13 +94,13 @@ const selectedSourceApplication = computed(() => {
 const filterOptions: Array<{ key: ClipboardFilter; label: string; glyph: ClipboardGlyphName; ready: boolean }> = [
   { key: 'all', label: '全部', glyph: 'layers', ready: true },
   { key: 'text', label: '文本', glyph: 'text', ready: true },
-  { key: 'link', label: '链接', glyph: 'link', ready: false },
+  { key: 'link', label: '链接', glyph: 'link', ready: true },
   { key: 'image', label: '图片', glyph: 'image', ready: true },
-  { key: 'video', label: '视频', glyph: 'video', ready: false },
+  { key: 'video', label: '视频', glyph: 'video', ready: true },
   { key: 'files', label: '文件', glyph: 'folder', ready: true },
-  { key: 'color', label: '颜色', glyph: 'palette', ready: false },
-  { key: 'command', label: '命令', glyph: 'terminal', ready: false },
-  { key: 'secret', label: '密钥', glyph: 'key', ready: false },
+  { key: 'color', label: '颜色', glyph: 'palette', ready: true },
+  { key: 'command', label: '命令', glyph: 'terminal', ready: true },
+  { key: 'secret', label: '密钥', glyph: 'key', ready: true },
   { key: 'favorite', label: '收藏', glyph: 'star', ready: true },
 ]
 
@@ -130,7 +146,7 @@ function mergePageItems(nextItems: PluginClipboardItem[]): void {
 }
 
 function syncSelection(removedId?: number | null, removedIndex?: number | null): void {
-  const nextId = selectNextClipboardItemId(items.value, selectedId.value, removedId, removedIndex)
+  const nextId = selectNextClipboardItemId(visibleItems.value, selectedId.value, removedId, removedIndex)
   selectedId.value = Number.isFinite(nextId) ? nextId : null
 }
 
@@ -201,7 +217,7 @@ async function resolveSelectedSourceApplication(item: PluginClipboardItem | null
 }
 
 function moveSelection(delta: 1 | -1): void {
-  const selectableItems = items.value.filter(
+  const selectableItems = visibleItems.value.filter(
     (item): item is PluginClipboardItem & { id: number } => typeof item.id === 'number',
   )
   if (selectableItems.length === 0) {
@@ -352,6 +368,15 @@ async function handleCopy(): Promise<void> {
   }
 }
 
+function handleOpenLink(url: string): void {
+  const opened = window.open(url, '_blank', 'noopener')
+  if (!opened) {
+    // 插件 webview 可能拦掉 window.open；退化为复制而不是静默失败。
+    void handleCopyText(url)
+    errorMessage.value = '无法直接打开链接，已复制到剪贴板'
+  }
+}
+
 async function handleCopyText(value: string): Promise<void> {
   if (!value) {
     return
@@ -465,6 +490,7 @@ onBeforeUnmount(() => {
 
 watch(filter, async () => {
   page.value = 1
+  syncSelection()
   await loadHistory({ reset: true })
 })
 
@@ -509,7 +535,10 @@ watch(
             <span>{{ option.label }}</span>
           </button>
         </div>
-        <span class="record-count">{{ total }} 条</span>
+        <span
+          class="record-count"
+          :title="isDerivedCategory ? '派生分类只对已加载的记录生效，滚动加载更多后会继续增加' : undefined"
+        >{{ isDerivedCategory ? `${visibleItems.length} / ${items.length}` : `${total} 条` }}</span>
       </nav>
 
       <div v-if="hasItems" class="ClipboardPageHolder-Main">
@@ -538,6 +567,7 @@ watch(
             :resolving-image-url="resolvingSelectedImageUrl"
             :source-application="selectedSourceApplication"
             @copy-text="handleCopyText"
+            @open-link="handleOpenLink"
           />
         </section>
       </div>
