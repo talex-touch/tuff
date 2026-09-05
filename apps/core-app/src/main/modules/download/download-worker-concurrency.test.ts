@@ -128,4 +128,65 @@ describe('DownloadWorker chunk concurrency', () => {
       { downloaded: 1, size: 1, status: ChunkStatus.COMPLETED }
     ])
   })
+
+  it('drains active lanes without claiming queued chunks before surfacing a terminal failure', async () => {
+    const dir = await createWorkspace()
+    const chunks = Array.from({ length: 3 }, (_, index) => chunk(dir, index))
+    const delayedRequestStarted = Promise.withResolvers<void>()
+    const releaseDelayedRequest = Promise.withResolvers<void>()
+    const terminalFailure = new Error('first chunk failed permanently')
+    const requestRanges: string[] = []
+    let delayedRequestSettled = false
+    let delayedChunkStatusWhenErrorSurfaced: ChunkStatus | undefined
+    let errorSurfacedBeforeDelayedRequestSettled = false
+
+    requestStream.mockImplementation(async (request: { headers: Record<string, string> }) => {
+      const range = request.headers.Range
+      requestRanges.push(range)
+
+      if (range === 'bytes=0-0') {
+        await delayedRequestStarted.promise
+        releaseDelayedRequest.resolve()
+        throw terminalFailure
+      }
+
+      if (range === 'bytes=1-1') {
+        delayedRequestStarted.resolve()
+        await releaseDelayedRequest.promise
+        delayedRequestSettled = true
+      }
+
+      return { headers: {}, stream: Readable.from([Buffer.from('x')]) }
+    })
+
+    const worker = new DownloadWorker(
+      2,
+      {} as never,
+      {
+        getChunkProgress: (activeChunks: ChunkInfo[]) => ({
+          downloadedSize: activeChunks.reduce(
+            (sum, activeChunk) => sum + activeChunk.downloaded,
+            0
+          ),
+          totalSize: activeChunks.reduce((sum, activeChunk) => sum + activeChunk.size, 0)
+        })
+      } as never,
+      { chunk: { maxRetries: 0 }, network: { timeout: 5_000, retryDelay: 0 } } as never
+    )
+
+    const result = await downloadChunks(worker, task(dir), chunks).then(
+      () => ({ error: undefined }),
+      (error: unknown) => {
+        delayedChunkStatusWhenErrorSurfaced = chunks[1].status
+        errorSurfacedBeforeDelayedRequestSettled = !delayedRequestSettled
+        return { error }
+      }
+    )
+
+    expect(result.error).toMatchObject({ message: terminalFailure.message })
+    expect(delayedRequestSettled).toBe(true)
+    expect(delayedChunkStatusWhenErrorSurfaced).toBe(ChunkStatus.COMPLETED)
+    expect(errorSurfacedBeforeDelayedRequestSettled).toBe(false)
+    expect(requestRanges).toEqual(['bytes=0-0', 'bytes=1-1'])
+  })
 })
