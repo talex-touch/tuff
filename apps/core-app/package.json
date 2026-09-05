@@ -117,6 +117,7 @@
     "@sentry/electron": "^7.16.0",
     "@talex-touch/tuff-business": "workspace:^",
     "@talex-touch/tuff-intelligence": "workspace:^",
+    "@talex-touch/tuff-voice": "workspace:^",
     "@talex-touch/tuff-native": "workspace:^",
     "@talex-touch/tuffex": "workspace:^",
     "@talex-touch/utils": "workspace:^",
