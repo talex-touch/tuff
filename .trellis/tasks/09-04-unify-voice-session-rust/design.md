@@ -107,3 +107,37 @@ Selection capture 继续沿用现有 main selection service，不能把剪贴板
 - AI/STT 仍可能超时；session 必须在 main 侧用 AbortSignal 和稳定终态收口，不能让 Rust 等待网络。
 - AutoPaste 的系统权限与焦点行为不能仅靠单测证明；macOS 实机矩阵是发布前置条件。
 - 若新 stream/session DTO 未能保持现有插件 host resource 生命周期，可先让现有 `voice.invoke`/`voice.stream` 调用共享 service，再扩展跨 transport toggle，不允许恢复第二套录音实现。
+
+## 7. Package 边界与 Provider 适配
+
+新增 Node-only workspace package `packages/tuff-voice`，承载不依赖 Electron、Rust、renderer 或插件的 Provider contract、协议编解码、事件归一化和 Provider registry primitives。`@talex-touch/utils` 继续只承载跨层 Voice SDK DTO；CoreApp main 负责把 `native-audio` 的 PCM/WAV 接到 package adapter。
+
+```text
+packages/tuff-voice
+  ├─ contract：stream/upload 请求、连接生命周期、事件、错误、usage
+  ├─ normalize：累计/增量 partial、分句、时间戳、终态和 request id
+  ├─ providers/doubao：双向 WebSocket + 文件识别任务协议
+  └─ providers/bailian：Paraformer/Qwen 具体模型族的 stream + upload 协议
+```
+
+适配器接收 main 提供的凭据解析器、WebSocket 工厂、HTTP 客户端和临时文件读取器，不自行读取环境变量、Electron clipboard、绝对路径或持久化配置。这样可以在 package 层用 deterministic fake socket/fetch 测协议，在 main 层保留密钥和平台能力。
+
+`realtime` 与 `stream` 使用同一 `VoiceStreamConnection`，仅音频源和 caller 不同；`upload` 独立支持同步返回与 `submit → poll → terminal` 异步任务，不能把异步文件任务伪装成普通 `audio.stt`。
+
+## 8. Provider 运行时不变量
+
+- 握手成功前可报告 retryable failure；发送第一块音频后禁止跨 Provider 自动重试。
+- 每个连接最多一个终态；`final` 可以先于 `end`，重复或乱序事件由 adapter 丢弃或收敛。
+- partial 对外始终是完整当前文本；Provider delta 只在 adapter 内部合并。
+- heartbeat、send backpressure、abort、close 和 provider error 必须释放 socket、timer、PCM queue 和临时文件。
+- 所有 credential、URL query token、原始音频和 Provider 原始 payload 都不得进入普通日志。
+[.trellis/tasks/09-04-unify-voice-session-rust/implement.md#59B4]
+PUT >$:
+
+## Provider 兼容执行顺序
+
+9. 在 `packages/tuff-voice` 建立 Provider-neutral contract、事件归一化和 fake transport，不触碰 renderer。
+10. 根据官方协议实现豆包双向流式与录音文件 adapter，覆盖 API Key/Resource ID、sequence、终态和 upload task。
+11. 根据百炼具体模型族实现 stream 与 upload adapter；先接入用户提供或官方可验证的模型，不把 Paraformer、Qwen-ASR、Fun-ASR 混成一个协议。
+12. CoreApp main 注册 package adapters，替换 `TUFF_VOICE_ASR_WS_URL` 泛化生产旁路，并新增 main-owned upload handle。
+13. 运行 package protocol tests、CoreApp Voice tests、类型检查和双 Provider 的真实授权验收。

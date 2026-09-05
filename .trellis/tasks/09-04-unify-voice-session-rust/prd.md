@@ -42,3 +42,19 @@
 - 本轮不实现 local Whisper、本地模型下载、100+ 语言、实时翻译、跨设备同步、复杂个人词典或完整移动端适配。
 - TTS 继续由共享 Voice SDK 提供，但不与听写 session 强行合并为同一个 capture 状态机。
 - 不通过扩大 preload、裸 IPC、万能插件 capability 或 Rust 内置网络请求解决跨层问题。
+
+## Provider Compatibility Addendum
+
+本任务继续覆盖豆包语音与百炼语音 Provider，统一支持三类产品模式：
+
+- `realtime`：Rust 麦克风 PCM 持续输入，Provider 持续返回 partial/final；
+- `stream`：调用方控制 PCM chunk 输入，使用同一双向流协议；
+- `upload`：main-owned 音频文件或临时 URL 的同步/异步转写。
+
+Provider-neutral contract、协议事件归一化、豆包/百炼适配器和上传源约束放在 `packages/tuff-voice`；CoreApp main 只负责凭据解析、Rust 音频、Voice Session、Provider 注册、目标写回和生命周期。Renderer、插件和 Rust 不得依赖 Provider SDK。
+
+豆包与百炼必须分别保留协议边界，不得通过 OpenAI-compatible `CustomProvider` 伪装；每个适配器必须处理自身的鉴权、握手、心跳、序列、partial/final、结束、取消、超时、错误、上传任务和 usage/request id。
+
+原始音频只在 main/Provider adapter 内存或受控临时文件中流转，不进入 renderer、插件、普通日志或持久化；Provider fallback 只允许发生在未发送音频且未产生 partial/final 之前。
+
+验收必须覆盖协议 fixture、双 Provider 的真实 stream/upload、音频格式与采样率、取消/超时/断网、中文/英文/混说、partial 修正和 active-app delivery。
