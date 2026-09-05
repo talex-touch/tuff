@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   registerMainShortcut: vi.fn(),
   unregisterMainShortcut: vi.fn(),
-  beginCapture: vi.fn(),
-  endCapture: vi.fn(),
-  abortCapture: vi.fn()
+  startSession: vi.fn(),
+  stopSession: vi.fn(),
+  cancelSession: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -27,20 +27,14 @@ vi.mock('../global-shortcon', () => ({
 
 vi.mock('./voice-service', () => ({
   voiceService: {
-    beginCapture: mocks.beginCapture,
-    endCapture: mocks.endCapture,
-    abortCapture: mocks.abortCapture
+    startSession: mocks.startSession,
+    stopSession: mocks.stopSession,
+    cancelSession: mocks.cancelSession
   }
 }))
 
 import { GlobalDictationController } from './global-dictation'
 
-/**
- * `beginCapture` became async in #841 so opening the input stream stops blocking the main thread.
- * The session id it resolves to is then handed to `endCapture` / `abortCapture`, so a dropped
- * `await` here does not fail loudly -- it stores a Promise and every later call receives one.
- * Verified: mutating the await away leaves the whole voice suite green without these.
- */
 function pressShortcut(): { press: () => void; controller: GlobalDictationController } {
   const controller = new GlobalDictationController()
   mocks.registerMainShortcut.mockReturnValue(true)
@@ -53,54 +47,57 @@ function pressShortcut(): { press: () => void; controller: GlobalDictationContro
 describe('global dictation toggle', () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset())
-    mocks.beginCapture.mockResolvedValue('session-1')
-    mocks.endCapture.mockResolvedValue({ text: '', raw: '' })
+    mocks.startSession.mockResolvedValue('session-1')
+    mocks.stopSession.mockResolvedValue({
+      text: 'hello',
+      raw: 'hello',
+      delivery: { method: 'native' }
+    })
   })
 
-  it('把解析后的 session id 交给 endCapture,而不是一个 Promise', async () => {
+  it('passes the canonical session id to stopSession', async () => {
     const { press } = pressShortcut()
 
     press()
-    await vi.waitFor(() => expect(mocks.beginCapture).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(mocks.startSession).toHaveBeenCalledTimes(1))
+    expect(mocks.startSession).toHaveBeenCalledWith({
+      maxDurationMs: 120_000,
+      silenceStopMs: 3_600_000,
+      delivery: 'active-app'
+    })
 
     press()
-    await vi.waitFor(() => expect(mocks.endCapture).toHaveBeenCalledTimes(1))
-
-    const sessionId = mocks.endCapture.mock.calls[0]?.[0]
-    expect(sessionId).toBe('session-1')
-    expect(typeof sessionId).toBe('string')
+    await vi.waitFor(() => expect(mocks.stopSession).toHaveBeenCalledTimes(1))
+    expect(mocks.stopSession.mock.calls[0]?.[0]).toBe('session-1')
   })
 
-  it('拆除时正在启动的采集会被取消,而不是留在原生侧', async () => {
-    // beginCapture 是异步的,期间 activeSessionId 还是 null,unregister 无从取消。
-    // 落到一个已拆除的控制器上的 session id 是原生侧唯一的句柄,丢了就再也回收不了 (#1552)。
-    let resolveCapture!: (value: string) => void
-    mocks.beginCapture.mockImplementation(
+  it('cancels a session that resolves after controller teardown', async () => {
+    let resolveSession!: (value: string) => void
+    mocks.startSession.mockImplementation(
       async () =>
         await new Promise<string>((resolve) => {
-          resolveCapture = resolve
+          resolveSession = resolve
         })
     )
     const { press, controller } = pressShortcut()
 
     press()
-    await vi.waitFor(() => expect(mocks.beginCapture).toHaveBeenCalledTimes(1))
-
+    await vi.waitFor(() => expect(mocks.startSession).toHaveBeenCalledTimes(1))
     controller.unregister()
-    expect(mocks.abortCapture).not.toHaveBeenCalled()
+    expect(mocks.cancelSession).not.toHaveBeenCalled()
 
-    resolveCapture('session-late')
-    await vi.waitFor(() => expect(mocks.abortCapture).toHaveBeenCalledWith('session-late'))
+    resolveSession('session-late')
+    await vi.waitFor(() => expect(mocks.cancelSession).toHaveBeenCalledWith('session-late'))
   })
 
-  it('第二次按下之前不会重复开启采集', async () => {
+  it('does not start a second session before the first is stopped', async () => {
     const { press } = pressShortcut()
 
     press()
-    await vi.waitFor(() => expect(mocks.beginCapture).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(mocks.startSession).toHaveBeenCalledTimes(1))
     press()
-    await vi.waitFor(() => expect(mocks.endCapture).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(mocks.stopSession).toHaveBeenCalledTimes(1))
 
-    expect(mocks.beginCapture).toHaveBeenCalledTimes(1)
+    expect(mocks.startSession).toHaveBeenCalledTimes(1)
   })
 })

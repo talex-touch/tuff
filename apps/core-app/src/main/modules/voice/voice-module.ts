@@ -48,6 +48,7 @@ export class VoiceModule extends BaseModule<TalexEvents> {
   }
 
   async onDestroy(): Promise<void> {
+    voiceService.dispose()
     globalDictationController.unregister()
     for (const cleanup of this.cleanups.splice(0)) {
       try {
@@ -96,7 +97,8 @@ export class VoiceModule extends BaseModule<TalexEvents> {
             async (nextPayload, nextContext) => {
               const streamContext = nextContext as unknown as StreamContext<VoiceAsrStreamEvent>
               for await (const event of voiceService.streamDictation(
-                nextPayload as VoiceAsrStreamPayload
+                nextPayload as VoiceAsrStreamPayload,
+                streamContext.signal
               )) {
                 if (streamContext.isCancelled()) break
                 streamContext.emit(event)

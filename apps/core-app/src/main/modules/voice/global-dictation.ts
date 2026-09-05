@@ -10,24 +10,20 @@ const DEFAULT_ACCELERATOR = 'CommandOrControl+Shift+U'
 const OWNER = 'voice'
 
 /**
- * Global toggle dictation: a system-wide shortcut that starts capture on the
- * first press and, on the second press, transcribes → polishes → injects the
- * text into the frontmost app (native enigo keystrokes, clipboard fallback).
+ * Global toggle dictation: a system-wide shortcut that starts and stops the
+ * canonical Voice Session. The session owner performs transcription, polish,
+ * target validation and main-owned delivery for the frontmost app.
  *
- * The shortcut is registered DISABLED by default (a global mic+keystroke shortcut
- * is invasive) — the user opts in / rebinds it via the standard shortcut settings.
+ * The shortcut remains disabled by default because a global microphone shortcut
+ * is invasive; users opt in through the standard shortcut settings.
  */
 export class GlobalDictationController {
   private activeSessionId: string | null = null
   private busy = false
   private registered = false
   /**
-   * Set by `unregister`, cleared by `register`.
-   *
-   * `beginCapture()` is async, so between the call and its resolution there is no
-   * session id anywhere for teardown to cancel. A capture that lands after this is
-   * set has nobody left to stop it, and the id is the only handle the native side
-   * has to that session (#1552).
+   * A start can resolve after unregister. The canonical session id is retained
+   * by the controller once available so teardown can cancel it deterministically.
    */
   private disposed = false
 
@@ -63,7 +59,7 @@ export class GlobalDictationController {
       this.registered = false
     }
     if (this.activeSessionId) {
-      voiceService.abortCapture(this.activeSessionId)
+      voiceService.cancelSession(this.activeSessionId)
       this.activeSessionId = null
     }
   }
@@ -75,11 +71,13 @@ export class GlobalDictationController {
       if (this.activeSessionId) {
         await this.finish(this.activeSessionId)
       } else {
-        const sessionId = await voiceService.beginCapture()
+        const sessionId = await voiceService.startSession({
+          maxDurationMs: 120_000,
+          silenceStopMs: 3_600_000,
+          delivery: 'active-app'
+        })
         if (this.disposed) {
-          // Teardown ran while the native start was in flight. Nothing will toggle
-          // this controller again, so keeping the id here would strand the session.
-          voiceService.abortCapture(sessionId)
+          voiceService.cancelSession(sessionId)
           return
         }
         this.activeSessionId = sessionId
@@ -87,9 +85,7 @@ export class GlobalDictationController {
       }
     } catch (error) {
       log.error('Global dictation toggle failed', { error })
-      if (this.activeSessionId) {
-        voiceService.abortCapture(this.activeSessionId)
-      }
+      if (this.activeSessionId) voiceService.cancelSession(this.activeSessionId)
       this.activeSessionId = null
       this.notify('听写失败', '请检查麦克风权限与语音服务配置')
     } finally {
@@ -99,19 +95,14 @@ export class GlobalDictationController {
 
   private async finish(sessionId: string): Promise<void> {
     this.activeSessionId = null
-    const result = await voiceService.endCapture(sessionId, { cleanup: true })
+    const result = await voiceService.stopSession(sessionId, { cleanup: true })
     if (!result.text) {
       this.notify('没有识别到语音', '请靠近麦克风再试一次')
       return
     }
-    const delivery = voiceService.injectText(result.text)
-    if (delivery.method === 'clipboard') {
-      this.notify(
-        '已复制到剪贴板',
-        delivery.reason === 'accessibility-required'
-          ? '开启辅助功能权限即可自动键入；已复制，可 Cmd/Ctrl+V 粘贴'
-          : '已复制，可 Cmd/Ctrl+V 粘贴'
-      )
+    if (result.delivery?.method === 'autopaste') return
+    if (result.delivery?.method === 'none') {
+      this.notify('听写未写入', result.delivery.reason || '当前应用目标已变化，请重试')
     }
   }
 

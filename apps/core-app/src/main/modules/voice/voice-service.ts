@@ -2,16 +2,19 @@ import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type {
   VoiceAsrStreamEvent,
   VoiceAsrStreamPayload,
+  VoiceDeliveryResult,
   VoiceDictatePayload,
   VoiceDictateResult,
   VoiceSpeakPayload,
   VoiceSpeakResult
 } from '@talex-touch/utils/transport/sdk/domains/voice'
+import type { AudioCaptureResult } from '@talex-touch/tuff-native/audio'
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
-import { clipboard } from 'electron'
 import { createLogger } from '../../utils/logger'
+import { clipboardModule } from '../clipboard'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { intelligenceTtsService } from '../ai/intelligence-tts-service'
+import { activeAppService, type ActiveAppInfo } from '../system/active-app'
 import { POLISH_SYSTEM_PROMPT, withLanguageDirective, wrapTranscription } from './polish-prompt'
 import type { StreamingAsrConfig } from './streaming-asr-client'
 import { createAsrStream, getStreamingAsrConfig } from './streaming-asr-client'
@@ -29,8 +32,34 @@ const VOICE_CALLER = 'core.voice.dictate'
 // Toggle (global hotkey) capture: silence auto-stop effectively disabled so a pause
 // mid-thought doesn't end the session — the user's second key press stops it; the
 // max duration is only a safety cap.
-const TOGGLE_MAX_DURATION_MS = 120_000
-const TOGGLE_SILENCE_STOP_MS = 3_600_000
+type VoiceSessionPayload = VoiceDictatePayload | VoiceAsrStreamPayload
+
+interface VoiceSessionRecord {
+  readonly id: string
+  readonly nativeSessionId: string
+  readonly caller: string
+  readonly delivery: VoiceDictatePayload['delivery']
+  readonly targetKey: string | null
+  readonly abortSignal?: AbortSignal
+  readonly onAbort?: () => void
+}
+
+let voiceSessionCounter = 0
+
+function nextVoiceSessionId(): string {
+  voiceSessionCounter += 1
+  return `voice-session-${Date.now().toString(36)}-${voiceSessionCounter.toString(36)}`
+}
+
+function activeAppKey(info: ActiveAppInfo | null): string | null {
+  if (!info) return null
+  const identity = [
+    info.bundleId || info.identifier || 'unknown',
+    info.processId ?? 'unknown',
+    info.windowTitle || 'unknown'
+  ].join('|')
+  return `${info.platform ?? 'unknown'}:${identity}`
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -134,49 +163,151 @@ function dataUrlToBuffer(dataUrl: string): Buffer | null {
  * STT + polish reuse the existing `ai/` intelligence capabilities.
  */
 export class VoiceService {
-  /** One-shot dictation. Throws on hard failures (no mic / no ASR provider). */
-  async dictate(
-    payload: VoiceDictatePayload = {},
-    _context?: HandlerContext,
+  private readonly sessions = new Map<string, VoiceSessionRecord>()
+  private disposed = false
+
+  /** Opens the canonical session used by global, renderer and plugin callers. */
+  async startSession(
+    payload: VoiceSessionPayload = {},
     signal?: AbortSignal,
     caller = VOICE_CALLER
-  ): Promise<VoiceDictateResult> {
+  ): Promise<string> {
     throwIfCancelled(signal)
+    if (this.disposed) throw new Error('VOICE_SESSION_SERVICE_DISPOSED')
     this.assertSupported()
 
-    const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
-    const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
-
-    const { sessionId } = await nativeAudio.startCapture({ maxDurationMs, silenceStopMs })
-    const cancelCapture = (): void => {
+    const targetKey =
+      payload.delivery === 'active-app'
+        ? activeAppKey(await activeAppService.getActiveApp({ forceRefresh: true }))
+        : null
+    const { sessionId: nativeSessionId } = await nativeAudio.startCapture({
+      maxDurationMs: payload.maxDurationMs,
+      silenceStopMs: payload.silenceStopMs
+    })
+    if (this.disposed) {
       try {
-        nativeAudio.cancelCapture(sessionId)
+        nativeAudio.cancelCapture(nativeSessionId)
       } catch {
-        // The native session may already have stopped.
+        // The native session may already have stopped while teardown raced startup.
+      }
+      throw new Error('VOICE_SESSION_SERVICE_DISPOSED')
+    }
+    const id = nextVoiceSessionId()
+    const onAbort = signal ? () => this.cancelSession(id) : undefined
+    const record: VoiceSessionRecord = {
+      id,
+      nativeSessionId,
+      caller,
+      delivery: payload.delivery ?? 'none',
+      targetKey,
+      ...(signal ? { abortSignal: signal } : {}),
+      ...(onAbort ? { onAbort } : {})
+    }
+    this.sessions.set(id, record)
+    if (signal && onAbort) {
+      signal.addEventListener('abort', onAbort, { once: true })
+      if (signal.aborted) {
+        this.cancelSession(id)
+        throw voiceCancellationError()
       }
     }
-    signal?.addEventListener('abort', cancelCapture, { once: true })
+    return id
+  }
 
-    let capture: ReturnType<typeof nativeAudio.stopCapture>
-    try {
-      await this.waitForAutoStop(sessionId, maxDurationMs, signal)
-      throwIfCancelled(signal)
-      capture = nativeAudio.stopCapture(sessionId)
-    } catch (error) {
-      cancelCapture()
-      throw error
-    } finally {
-      signal?.removeEventListener('abort', cancelCapture)
+  private takeSession(sessionId: string): VoiceSessionRecord {
+    const record = this.sessions.get(sessionId)
+    if (!record) throw new Error('VOICE_SESSION_NOT_FOUND')
+    this.sessions.delete(sessionId)
+    if (record.abortSignal && record.onAbort) {
+      record.abortSignal.removeEventListener('abort', record.onAbort)
     }
+    return record
+  }
 
+  private async completeStoppedSession(
+    sessionId: string,
+    capture: AudioCaptureResult,
+    payload: VoiceSessionPayload,
+    signal?: AbortSignal
+  ): Promise<VoiceDictateResult> {
+    const record = this.takeSession(sessionId)
+    const result = await this.finalizeCapture(capture, payload, signal, record.caller)
+    if (record.delivery === 'active-app' && result.text) {
+      result.delivery = await this.deliverText(result.text, record.targetKey)
+    }
+    return result
+  }
+
+  /** Stops, transcribes, polishes and optionally delivers one canonical session. */
+  async stopSession(
+    sessionId: string,
+    options: { cleanup?: boolean; language?: string } = {}
+  ): Promise<VoiceDictateResult> {
+    const record = this.takeSession(sessionId)
+    let capture: AudioCaptureResult
+    try {
+      capture = nativeAudio.stopCapture(record.nativeSessionId)
+    } catch (error) {
+      try {
+        nativeAudio.cancelCapture(record.nativeSessionId)
+      } catch {
+        // The native session may already have been removed by stopCapture.
+      }
+      throw error
+    }
+    const result = await this.finalizeCapture(
+      capture,
+      { cleanup: options.cleanup, language: options.language, delivery: record.delivery },
+      record.abortSignal,
+      record.caller
+    )
+    if (record.delivery === 'active-app' && result.text) {
+      result.delivery = await this.deliverText(result.text, record.targetKey)
+    }
+    return result
+  }
+  cancelSession(sessionId: string): void {
+    const record = this.sessions.get(sessionId)
+    if (!record) return
+    this.sessions.delete(sessionId)
+    if (record.abortSignal && record.onAbort) {
+      record.abortSignal.removeEventListener('abort', record.onAbort)
+    }
+    try {
+      nativeAudio.cancelCapture(record.nativeSessionId)
+    } catch {
+      // The native session may already have stopped.
+    }
+  }
+
+  /** Cancels all sessions before module teardown. */
+  dispose(): void {
+    this.disposed = true
+    for (const sessionId of Array.from(this.sessions.keys())) {
+      this.cancelSession(sessionId)
+    }
+  }
+
+  private async finalizeCapture(
+    capture: AudioCaptureResult,
+    payload: VoiceSessionPayload,
+    signal: AbortSignal | undefined,
+    caller: string
+  ): Promise<VoiceDictateResult> {
     if (!capture.audio || capture.audio.length === 0) {
-      throw new Error('No audio was captured')
+      return {
+        text: '',
+        raw: '',
+        source: 'native-cpal',
+        polished: false,
+        durationMs: capture.durationMs,
+        stoppedReason: capture.stoppedReason
+      }
     }
 
     const transcript = await this.transcribe(capture.audio, payload.language, signal, caller)
     throwIfCancelled(signal)
     const language = transcript.language ?? payload.language
-
     if (!transcript.text) {
       return {
         text: '',
@@ -194,7 +325,6 @@ export class VoiceService {
       ? await this.polish(transcript.text, payload.language, signal, caller)
       : null
     throwIfCancelled(signal)
-
     return {
       text: polishedText ?? transcript.text,
       raw: transcript.text,
@@ -203,6 +333,65 @@ export class VoiceService {
       ...(language ? { language } : {}),
       durationMs: capture.durationMs,
       stoppedReason: capture.stoppedReason
+    }
+  }
+  private async deliverText(text: string, targetKey: string | null): Promise<VoiceDeliveryResult> {
+    const trimmed = text.trim()
+    if (!trimmed) return { method: 'none', reason: 'empty' }
+    if (!targetKey) return { method: 'none', reason: 'target-unavailable' }
+
+    const currentTargetKey = activeAppKey(
+      await activeAppService.getActiveApp({ forceRefresh: true })
+    )
+    if (currentTargetKey !== targetKey) {
+      return { method: 'none', reason: 'target-changed' }
+    }
+
+    const native = nativeAudio as unknown as {
+      typeText?: (value: string) => { ok: boolean; reason?: string }
+      isAccessibilityTrusted?: () => boolean
+    }
+    if (
+      typeof native.typeText === 'function' &&
+      (typeof native.isAccessibilityTrusted !== 'function' || native.isAccessibilityTrusted())
+    ) {
+      const result = native.typeText(trimmed)
+      if (result?.ok) return { method: 'native' }
+    }
+
+    const fallback = await clipboardModule.applyVoiceText(trimmed)
+    if (fallback.success) return { method: 'autopaste' }
+    return { method: 'none', reason: fallback.code ?? 'autopaste-failed' }
+  }
+  /** One-shot dictation backed by the canonical Voice Session owner. */
+  async dictate(
+    payload: VoiceDictatePayload = {},
+    _context?: HandlerContext,
+    signal?: AbortSignal,
+    caller = VOICE_CALLER
+  ): Promise<VoiceDictateResult> {
+    const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
+    const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
+    const sessionId = await this.startSession(
+      { ...payload, maxDurationMs, silenceStopMs },
+      signal,
+      caller
+    )
+    try {
+      const session = this.sessions.get(sessionId)
+      if (!session) {
+        throwIfCancelled(signal)
+        throw new Error('VOICE_SESSION_NOT_FOUND')
+      }
+      await this.waitForAutoStop(session.nativeSessionId, maxDurationMs, signal)
+      throwIfCancelled(signal)
+      return await this.stopSession(sessionId, {
+        cleanup: payload.cleanup,
+        language: payload.language
+      })
+    } catch (error) {
+      this.cancelSession(sessionId)
+      throw error
     }
   }
 
@@ -259,83 +448,6 @@ export class VoiceService {
   }
 
   /**
-   * Begins a toggle-controlled capture (global hotkey). Resolves to the native session id.
-   *
-   * Async since #841: opening the input stream is what takes the time, and it used to take it on
-   * the main thread -- the global hotkey froze the app while CoreAudio came up.
-   */
-  async beginCapture(): Promise<string> {
-    this.assertSupported()
-    const { sessionId } = await nativeAudio.startCapture({
-      maxDurationMs: TOGGLE_MAX_DURATION_MS,
-      silenceStopMs: TOGGLE_SILENCE_STOP_MS
-    })
-    return sessionId
-  }
-
-  /** Ends a toggle capture: stop → transcribe → optional polish. */
-  async endCapture(
-    sessionId: string,
-    options?: { cleanup?: boolean; language?: string }
-  ): Promise<{ text: string; raw: string; language?: string }> {
-    const capture = nativeAudio.stopCapture(sessionId)
-    if (!capture.audio || capture.audio.length === 0) {
-      return { text: '', raw: '' }
-    }
-    const transcript = await this.transcribe(capture.audio, options?.language)
-    const language = transcript.language ?? options?.language
-    if (!transcript.text) {
-      return { text: '', raw: '', ...(language ? { language } : {}) }
-    }
-    const cleanup = options?.cleanup ?? true
-    const polished = cleanup ? await this.polish(transcript.text, options?.language) : null
-    return {
-      text: polished ?? transcript.text,
-      raw: transcript.text,
-      ...(language ? { language } : {})
-    }
-  }
-
-  /** Discards an in-progress toggle capture. */
-  abortCapture(sessionId: string): void {
-    try {
-      nativeAudio.cancelCapture(sessionId)
-    } catch {
-      /* best effort — session may already be gone */
-    }
-  }
-
-  /**
-   * Injects text into the frontmost app: native `enigo` keystrokes when available
-   * and Accessibility is granted, otherwise falls back to the system clipboard.
-   */
-  injectText(text: string): { method: 'enigo' | 'clipboard' | 'none'; reason?: string } {
-    const trimmed = text.trim()
-    if (!trimmed) return { method: 'none', reason: 'empty' }
-
-    const native = nativeAudio as unknown as {
-      typeText?: (text: string) => { ok: boolean; reason?: string }
-      isAccessibilityTrusted?: () => boolean
-    }
-
-    if (typeof native.typeText === 'function') {
-      const trusted =
-        typeof native.isAccessibilityTrusted === 'function' ? native.isAccessibilityTrusted() : true
-      if (trusted) {
-        const result = native.typeText(trimmed)
-        if (result?.ok) return { method: 'enigo' }
-        clipboard.writeText(trimmed)
-        return { method: 'clipboard', reason: result?.reason ?? 'enigo-failed' }
-      }
-      clipboard.writeText(trimmed)
-      return { method: 'clipboard', reason: 'accessibility-required' }
-    }
-
-    clipboard.writeText(trimmed)
-    return { method: 'clipboard', reason: 'enigo-unavailable' }
-  }
-
-  /**
    * Streaming dictation: yields live `partial` transcripts while the user speaks
    * (chunked-batch — re-transcribes the audio-so-far via the batch `audio.stt`
    * capability), then a single polished `final`, then `end`. When the native
@@ -361,7 +473,7 @@ export class VoiceService {
     }
   }
 
-  /** Real streaming ASR: pipe native PCM frames to a WebSocket endpoint. */
+  /** Real streaming ASR: pipe native PCM frames through the canonical session. */
   private async *streamViaWebSocket(
     payload: VoiceAsrStreamPayload,
     wsConfig: StreamingAsrConfig,
@@ -370,28 +482,42 @@ export class VoiceService {
     caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const pollCapture = getPollCapture()
-    const { sessionId } = await nativeAudio.startCapture({
-      maxDurationMs: DEFAULT_MAX_DURATION_MS,
-      silenceStopMs: DEFAULT_SILENCE_STOP_MS
-    })
-    const cancelCapture = (): void => this.abortCapture(sessionId)
-    signal?.addEventListener('abort', cancelCapture, { once: true })
+    const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
+    const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
+    const sessionId = await this.startSession(
+      { ...payload, maxDurationMs, silenceStopMs },
+      signal,
+      caller
+    )
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      throwIfCancelled(signal)
+      throw new Error('VOICE_SESSION_NOT_FOUND')
+    }
     try {
       for await (const event of createAsrStream({
         url: wsConfig.url,
         sampleRate: wsConfig.sampleRate,
         language: payload.language,
         signal,
-        drainFrames: () => drainCapture(sessionId).pcm,
-        isCapturing: () => (pollCapture ? pollCapture(sessionId).active : true)
+        drainFrames: () => drainCapture(session.nativeSessionId).pcm,
+        isCapturing: () => (pollCapture ? pollCapture(session.nativeSessionId).active : true)
       })) {
         throwIfCancelled(signal)
         if (event.type === 'final' && event.text) {
-          const polished = await this.polish(event.text, payload.language, signal, caller)
+          const text =
+            payload.cleanup === false
+              ? event.text
+              : ((await this.polish(event.text, payload.language, signal, caller)) ?? event.text)
+          const delivery =
+            payload.delivery === 'active-app'
+              ? await this.deliverText(text, session.targetKey)
+              : undefined
           yield {
             type: 'final',
-            text: polished ?? event.text,
-            ...(event.language ? { language: event.language } : {})
+            text,
+            ...(event.language ? { language: event.language } : {}),
+            ...(delivery ? { delivery } : {})
           }
         } else {
           yield event
@@ -400,8 +526,7 @@ export class VoiceService {
       throwIfCancelled(signal)
       yield { type: 'end' }
     } finally {
-      signal?.removeEventListener('abort', cancelCapture)
-      this.abortCapture(sessionId)
+      this.cancelSession(sessionId)
     }
   }
 
@@ -412,17 +537,21 @@ export class VoiceService {
     caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const language = payload.language
+    const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
+    const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
     const snapshotCapture = getSnapshotCapture()
     const pollCapture = getPollCapture()
+    const sessionId = await this.startSession(
+      { ...payload, maxDurationMs, silenceStopMs },
+      signal,
+      caller
+    )
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      throwIfCancelled(signal)
+      throw new Error('VOICE_SESSION_NOT_FOUND')
+    }
 
-    const { sessionId } = await nativeAudio.startCapture({
-      maxDurationMs: DEFAULT_MAX_DURATION_MS,
-      silenceStopMs: DEFAULT_SILENCE_STOP_MS
-    })
-
-    const cancelCapture = (): void => this.abortCapture(sessionId)
-    signal?.addEventListener('abort', cancelCapture, { once: true })
-    let lastPartial = ''
     let stopped = false
     try {
       if (snapshotCapture) {
@@ -430,57 +559,41 @@ export class VoiceService {
         for (;;) {
           await awaitWithAbort(delay(PARTIAL_INTERVAL_MS), signal)
           throwIfCancelled(signal)
-          const active = pollCapture ? pollCapture(sessionId).active : true
-          const snapshot = snapshotCapture(sessionId)
+          const active = pollCapture ? pollCapture(session.nativeSessionId).active : true
+          const snapshot = snapshotCapture(session.nativeSessionId)
           if (snapshot?.audio && snapshot.audio.length > WAV_HEADER_BYTES) {
             try {
               const { text } = await this.transcribe(snapshot.audio, language, signal, caller)
-              if (text && text !== lastPartial) {
-                lastPartial = text
-                yield { type: 'partial', text }
-              }
+              if (text) yield { type: 'partial', text }
             } catch (error) {
               if (signal?.aborted) throw voiceCancellationError()
-              // A failed interim transcription must not kill the stream.
               voiceLog.debug('Partial transcription failed; continuing', { error })
             }
           }
           if (!active) break
         }
       } else {
-        // No snapshot support → no live partials; just wait for auto-stop.
-        await this.waitForAutoStop(sessionId, DEFAULT_MAX_DURATION_MS, signal)
+        await this.waitForAutoStop(session.nativeSessionId, maxDurationMs, signal)
       }
 
       throwIfCancelled(signal)
-      const final = nativeAudio.stopCapture(sessionId)
+      const final = nativeAudio.stopCapture(session.nativeSessionId)
       stopped = true
-
-      const transcript = await this.transcribe(final.audio, language, signal, caller)
-      throwIfCancelled(signal)
-      const finalLanguage = transcript.language ?? language
-
-      if (!transcript.text) {
-        yield { type: 'final', text: '', ...(finalLanguage ? { language: finalLanguage } : {}) }
-      } else {
-        const polished = await this.polish(transcript.text, language, signal, caller)
-        throwIfCancelled(signal)
-        yield {
-          type: 'final',
-          text: polished ?? transcript.text,
-          ...(finalLanguage ? { language: finalLanguage } : {})
-        }
+      const result = await this.completeStoppedSession(
+        sessionId,
+        final,
+        { ...payload, language, cleanup: payload.cleanup, delivery: session.delivery },
+        signal
+      )
+      yield {
+        type: 'final',
+        text: result.text,
+        ...(result.language ? { language: result.language } : {}),
+        ...(result.delivery ? { delivery: result.delivery } : {})
       }
       yield { type: 'end' }
     } finally {
-      signal?.removeEventListener('abort', cancelCapture)
-      if (!stopped) {
-        try {
-          nativeAudio.cancelCapture(sessionId)
-        } catch {
-          /* best effort — session may already be gone */
-        }
-      }
+      if (!stopped) this.cancelSession(sessionId)
     }
   }
 

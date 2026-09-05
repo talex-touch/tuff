@@ -70,21 +70,6 @@ async function readClipboardText() {
   }
 }
 
-async function deliver(text) {
-  try {
-    if (typeof clipboard?.copyAndPaste === 'function') {
-      return (await clipboard.copyAndPaste({ text })) === true
-    }
-    if (typeof clipboard?.writeText === 'function') {
-      await clipboard.writeText(text)
-      return true
-    }
-  }
-  catch {
-    logger?.warn?.('[touch-dictation] clipboard delivery failed')
-  }
-  return false
-}
 
 /**
  * Map a host capability error to a reason the caller can act on (#821-style contract, #822).
@@ -118,21 +103,21 @@ function failed(reason, message, status = 'failed') {
 }
 
 async function dictate() {
-  // plugin.voice is undefined when the capability is not injected. The old guard read
-  // `plugin.voice?.asrStream`, which is satisfied by undefined, and the next line then
-  // dereferenced plugin.voice — a TypeError the bare catch reported as a microphone
-  // permission problem (#822).
   if (!plugin.voice)
     throw Object.assign(new Error('voice capability unavailable'), { code: 'TUFF_VOICE_UNAVAILABLE' })
 
   if (typeof plugin.voice.asrStream !== 'function') {
     if (typeof plugin.voice.dictate !== 'function')
       throw Object.assign(new Error('voice capability unavailable'), { code: 'TUFF_VOICE_UNAVAILABLE' })
-    const result = await plugin.voice.dictate({ cleanup: true })
-    return String(result?.text ?? '').trim()
+    const result = await plugin.voice.dictate({ cleanup: true, delivery: 'active-app' })
+    return {
+      text: String(result?.text ?? '').trim(),
+      delivery: result?.delivery
+    }
   }
 
   let finalText = ''
+  let delivery
   await new Promise((resolve, reject) => {
     let settled = false
     const finish = (error) => {
@@ -143,7 +128,7 @@ async function dictate() {
     }
     Promise.resolve(
       plugin.voice.asrStream(
-        {},
+        { cleanup: true, delivery: 'active-app' },
         {
           onData: async (event) => {
             if (event?.type === 'partial' && event.text) {
@@ -151,6 +136,7 @@ async function dictate() {
             }
             else if (event?.type === 'final') {
               finalText = String(event.text ?? '').trim()
+              delivery = event.delivery
             }
           },
           onError: error => finish(error || new Error('VOICE_STREAM_FAILED')),
@@ -159,20 +145,24 @@ async function dictate() {
       ),
     ).catch(error => finish(error))
   })
-  return finalText
+  return { text: finalText, delivery }
 }
 
 async function onDictateAction() {
   await showRecording('🎙️ 录音中…', '请说话，停顿后自动结束')
   try {
-    const text = truncate(await dictate(), 4000)
+    const result = await dictate()
+    const text = truncate(result.text, 4000)
     if (!text)
       return failed('no-speech-detected', '没有识别到语音，请靠近麦克风再试一次')
-    const delivered = await deliver(text)
+    if (!result.delivery || result.delivery.method === 'none')
+      return failed('delivery-failed', '听写完成，但未能写入当前应用，请重试')
     return {
       externalAction: true,
       success: true,
-      message: delivered ? `已听写并粘贴：${truncate(text)}` : truncate(text),
+      message: result.delivery.method === 'native'
+        ? `已听写并输入：${truncate(text)}`
+        : `已听写并粘贴：${truncate(text)}`,
     }
   }
   catch (error) {

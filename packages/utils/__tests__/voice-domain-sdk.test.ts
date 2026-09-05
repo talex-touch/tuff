@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createVoiceSdk, voiceApiEvents } from "../transport/sdk/domains/voice";
+import {
+  createVoiceSdk,
+  type VoiceSdkTransport,
+  voiceApiEvents,
+} from "../transport/sdk/domains/voice";
 
 function createTransportMock(
   sendImpl?: (...args: any[]) => Promise<any>,
@@ -91,6 +95,21 @@ describe("voice domain sdk", () => {
     await expect(sdk.asrStream({}, { onData: () => {} })).rejects.toThrow(
       /stream-capable/,
     );
+  });
+
+  it("asrStream preserves the requested main-owned delivery mode", async () => {
+    const transport = createTransportMock();
+    // The mock does not express ITuffTransport's generic send signature.
+    const voiceTransport = transport as unknown as VoiceSdkTransport;
+    const sdk = createVoiceSdk(voiceTransport);
+    const options = { onData: vi.fn() };
+
+    await sdk.asrStream({ cleanup: true, delivery: "active-app" }, options);
+
+    expect(transport.stream).toHaveBeenCalledWith(voiceApiEvents.asrStream, {
+      cleanup: true,
+      delivery: "active-app",
+    }, options);
   });
 
   it("voice event names resolve to voice:api:<action>", () => {

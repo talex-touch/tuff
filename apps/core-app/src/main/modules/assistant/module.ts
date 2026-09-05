@@ -14,8 +14,6 @@ import { StorageList } from '@talex-touch/utils'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type {
   AssistantClipboardImageTranslateResponse,
-  AssistantVoiceTranscribePayload,
-  AssistantVoiceTranscribeResponse,
   AssistantRuntimeConfig,
   AssistantScreenshotFallbackReason,
   AssistantScreenshotCapturePayload,
@@ -103,11 +101,6 @@ const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
 const DEFAULT_WAKE_COOLDOWN = 2200
 const ASSISTANT_SCREENSHOT_TRANSLATE_CALLER = 'core.assistant.screenshot-translate'
 const ASSISTANT_SCREENSHOT_FALLBACK_SOURCE = 'assistant-screenshot-ocr-fallback'
-const ASSISTANT_VOICE_TRANSCRIBE_CALLER = 'core.assistant.voice-transcribe'
-const ASSISTANT_VOICE_TRANSCRIBE_SOURCE = 'assistant-voice-panel-provider-asr'
-const MAX_VOICE_AUDIO_BYTES = 5 * 1024 * 1024
-const MAX_VOICE_AUDIO_DATA_URL_LENGTH = Math.ceil((MAX_VOICE_AUDIO_BYTES * 4) / 3) + 1024
-const MAX_VOICE_RECORDING_DURATION_MS = 31_000
 
 function clamp(value: number, min: number, max: number): number {
   if (value < min) return min
@@ -235,100 +228,6 @@ function normalizeScreenshotTarget(
     return displayId ? { target: 'display', displayId } : { target: 'display' }
   }
   return { target: 'cursor-display' }
-}
-
-interface ValidatedVoiceAudio {
-  audioDataUrl: string
-  format: 'webm' | 'ogg' | 'wav' | 'mp3' | 'm4a'
-  language?: string
-}
-
-type VoiceAudioValidationResult =
-  | { valid: true; value: ValidatedVoiceAudio }
-  | { valid: false; response: AssistantVoiceTranscribeResponse }
-
-const VOICE_AUDIO_FORMAT_BY_MIME: ReadonlyMap<string, ValidatedVoiceAudio['format']> = new Map([
-  ['audio/webm', 'webm'],
-  ['audio/ogg', 'ogg'],
-  ['audio/wav', 'wav'],
-  ['audio/x-wav', 'wav'],
-  ['audio/wave', 'wav'],
-  ['audio/mpeg', 'mp3'],
-  ['audio/mp4', 'm4a'],
-  ['audio/x-m4a', 'm4a']
-])
-
-function invalidVoiceAudio(
-  code: 'AUDIO_INVALID' | 'AUDIO_TOO_LARGE' | 'AUDIO_TOO_LONG',
-  error: string
-): VoiceAudioValidationResult {
-  return { valid: false, response: { success: false, code, error } }
-}
-
-function normalizeVoiceAudioMime(value: unknown): string {
-  return typeof value === 'string' ? value.trim().toLowerCase().split(';', 1)[0] : ''
-}
-
-function validateVoiceAudio(payload?: AssistantVoiceTranscribePayload): VoiceAudioValidationResult {
-  if (!payload || typeof payload.audioDataUrl !== 'string') {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice audio payload is invalid.')
-  }
-
-  const audioDataUrl = payload.audioDataUrl.trim()
-  if (!audioDataUrl || audioDataUrl.length > MAX_VOICE_AUDIO_DATA_URL_LENGTH) {
-    return invalidVoiceAudio('AUDIO_TOO_LARGE', 'Voice audio exceeds the 5 MiB limit.')
-  }
-  if (
-    typeof payload.durationMs !== 'number' ||
-    !Number.isFinite(payload.durationMs) ||
-    payload.durationMs <= 0
-  ) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice recording duration is invalid.')
-  }
-  if (payload.durationMs > MAX_VOICE_RECORDING_DURATION_MS) {
-    return invalidVoiceAudio('AUDIO_TOO_LONG', 'Voice recording exceeds the 30 second limit.')
-  }
-
-  const dataUrlMatch = /^data:([^;,]+)(?:;[^,]*)*;base64,([A-Za-z0-9+/]+={0,2})$/i.exec(
-    audioDataUrl
-  )
-  if (!dataUrlMatch) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice audio must be a base64 audio data URL.')
-  }
-
-  const dataMime = normalizeVoiceAudioMime(dataUrlMatch[1])
-  const declaredMime = normalizeVoiceAudioMime(payload.mimeType)
-  const format = VOICE_AUDIO_FORMAT_BY_MIME.get(dataMime)
-  if (!format || declaredMime !== dataMime) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice audio format is unsupported or mismatched.')
-  }
-
-  const base64 = dataUrlMatch[2]
-  if (base64.length % 4 !== 0) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice audio encoding is invalid.')
-  }
-  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
-  const sizeBytes = (base64.length / 4) * 3 - padding
-  if (sizeBytes <= 0) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice audio is empty.')
-  }
-  if (sizeBytes > MAX_VOICE_AUDIO_BYTES) {
-    return invalidVoiceAudio('AUDIO_TOO_LARGE', 'Voice audio exceeds the 5 MiB limit.')
-  }
-
-  const language = typeof payload.language === 'string' ? payload.language.trim() : ''
-  if (language.length > 64) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice transcription language is invalid.')
-  }
-
-  return {
-    valid: true,
-    value: {
-      audioDataUrl,
-      format,
-      ...(language ? { language } : {})
-    }
-  }
 }
 
 export class AssistantModule extends BaseModule {
@@ -470,12 +369,6 @@ export class AssistantModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(AssistantEvents.voice.submitText, async (payload) => {
         return await this.handleVoiceSubmit(payload?.text, payload?.source)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.transcribeAudio, async (payload) => {
-        return await this.handleVoiceTranscribe(payload)
       })
     )
 
@@ -1149,71 +1042,6 @@ export class AssistantModule extends BaseModule {
     }, 120)
 
     return { accepted: true }
-  }
-
-  private async handleVoiceTranscribe(
-    payload?: AssistantVoiceTranscribePayload
-  ): Promise<AssistantVoiceTranscribeResponse> {
-    const setting = this.readAppSetting()
-    if (!this.isAssistantEnabled(setting)) {
-      return {
-        success: false,
-        code: 'ASSISTANT_DISABLED',
-        error: 'Assistant is disabled.'
-      }
-    }
-
-    const validation = validateVoiceAudio(payload)
-    if (!validation.valid) {
-      return validation.response
-    }
-
-    try {
-      const response = await tuffIntelligence.audio.stt(
-        {
-          audio: validation.value.audioDataUrl,
-          format: validation.value.format,
-          ...(validation.value.language ? { language: validation.value.language } : {})
-        },
-        {
-          timeout: 30_000,
-          metadata: {
-            caller: ASSISTANT_VOICE_TRANSCRIBE_CALLER,
-            source: ASSISTANT_VOICE_TRANSCRIBE_SOURCE
-          }
-        }
-      )
-      const text = typeof response.result?.text === 'string' ? response.result.text.trim() : ''
-      if (!text) {
-        return {
-          success: false,
-          code: 'TRANSCRIPTION_EMPTY',
-          error: 'Voice transcription returned no text.'
-        }
-      }
-
-      const language =
-        typeof response.result.language === 'string' ? response.result.language.trim() : ''
-      const confidence = response.result.confidence
-      return {
-        success: true,
-        text,
-        ...(language ? { language } : {}),
-        ...(Number.isFinite(confidence) ? { confidence } : {}),
-        provider: response.provider,
-        model: response.model,
-        traceId: response.traceId,
-        latencyMs: response.latency
-      }
-    } catch (error) {
-      return {
-        success: false,
-        ...toAssistantIntelligenceFailure(error, 'audio.stt', {
-          code: 'ASR_UNAVAILABLE',
-          error: 'Voice transcription is unavailable.'
-        })
-      }
-    }
   }
 
   private async handleClipboardImageTranslate(
