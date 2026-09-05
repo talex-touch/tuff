@@ -105,6 +105,24 @@ function downloadChunks(
     abortSignal
   )
 }
+/** downloadChunk is private; its URL selection and partial-file resume are the contract under test. */
+function downloadChunk(
+  worker: DownloadWorker,
+  downloadTask: DownloadTask,
+  chunkInfo: ChunkInfo,
+  progressTracker = new ProgressTracker(downloadTask.id),
+  abortSignal?: AbortSignal
+): Promise<void> {
+  const internals = worker as unknown as {
+    downloadChunk: (
+      chunk: ChunkInfo,
+      task: DownloadTask,
+      progressTracker: ProgressTracker,
+      abortSignal?: AbortSignal
+    ) => Promise<void>
+  }
+  return internals.downloadChunk(chunkInfo, downloadTask, progressTracker, abortSignal)
+}
 
 describe('DownloadWorker chunk concurrency', () => {
   it('never starts more ranged requests than the configured limit', async () => {
@@ -327,5 +345,74 @@ describe('DownloadWorker chunk concurrency', () => {
 
     const { error } = await result
     expect(error).toMatchObject({ message: terminalFailure.message })
+  })
+
+  it('switches once from an expired signed URL and resumes the existing chunk range', async () => {
+    const dir = await createWorkspace()
+    const chunkInfo = chunk(dir, 0)
+    chunkInfo.end = 3
+    chunkInfo.size = 4
+    chunkInfo.downloaded = 2
+    await fs.writeFile(chunkInfo.filePath, 'ab')
+    const fallbackUrl = 'https://github.com/talex-touch/tuff/releases/download/v2.4.10/payload.bin'
+    const downloadTask = {
+      ...task(dir),
+      metadata: { fallbackUrl }
+    }
+    const requests: Array<{ url: string; range: string }> = []
+
+    requestStream.mockImplementation(
+      async (request: { url: string; headers: { Range: string } }) => {
+        requests.push({ url: request.url, range: request.headers.Range })
+        if (requests.length === 1) {
+          throw Object.assign(new Error('NETWORK_HTTP_STATUS_403'), { status: 403 })
+        }
+        return { headers: {}, stream: Readable.from([Buffer.from('cd')]) }
+      }
+    )
+
+    const worker = new DownloadWorker(
+      1,
+      {} as never,
+      {} as never,
+      { chunk: { maxRetries: 0 }, network: { timeout: 5_000, retryDelay: 0 } } as never
+    )
+
+    await downloadChunk(worker, downloadTask, chunkInfo)
+
+    expect(requests).toEqual([
+      { url: downloadTask.url, range: 'bytes=2-3' },
+      { url: fallbackUrl, range: 'bytes=2-3' }
+    ])
+    expect(await fs.readFile(chunkInfo.filePath, 'utf8')).toBe('abcd')
+    expect(chunkInfo).toMatchObject({ downloaded: 4, status: ChunkStatus.COMPLETED })
+  })
+
+  it('does not switch URLs for a non-403 permission error', async () => {
+    const dir = await createWorkspace()
+    const chunkInfo = chunk(dir, 0)
+    const fallbackUrl = 'https://github.com/talex-touch/tuff/releases/download/v2.4.10/payload.bin'
+    const downloadTask = {
+      ...task(dir),
+      metadata: { fallbackUrl }
+    }
+    const permissionError = Object.assign(new Error('HTTP 401 permission denied'), { status: 401 })
+    requestStream.mockRejectedValueOnce(permissionError)
+
+    const worker = new DownloadWorker(
+      1,
+      {} as never,
+      {} as never,
+      { chunk: { maxRetries: 0 }, network: { timeout: 5_000, retryDelay: 0 } } as never
+    )
+
+    await expect(downloadChunk(worker, downloadTask, chunkInfo)).rejects.toThrow(
+      'HTTP 401 permission denied'
+    )
+    expect(requestStream).toHaveBeenCalledTimes(1)
+    expect(requestStream.mock.calls[0]?.[0]).toMatchObject({
+      url: downloadTask.url,
+      headers: { Range: 'bytes=0-0' }
+    })
   })
 })
