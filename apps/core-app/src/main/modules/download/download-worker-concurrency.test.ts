@@ -85,19 +85,24 @@ function chunk(dir: string, index: number): ChunkInfo {
 function downloadChunks(
   worker: DownloadWorker,
   downloadTask: DownloadTask,
-  chunks: ChunkInfo[]
+  chunks: ChunkInfo[],
+  abortSignal?: AbortSignal
 ): Promise<void> {
   const internals = worker as unknown as {
     downloadChunksConcurrently: (
       task: DownloadTask,
       chunks: ChunkInfo[],
-      progressTracker: ProgressTracker
+      progressTracker: ProgressTracker,
+      onProgress?: never,
+      abortSignal?: AbortSignal
     ) => Promise<void>
   }
   return internals.downloadChunksConcurrently(
     downloadTask,
     chunks,
-    new ProgressTracker(downloadTask.id)
+    new ProgressTracker(downloadTask.id),
+    undefined,
+    abortSignal
   )
 }
 
@@ -211,6 +216,39 @@ describe('DownloadWorker chunk concurrency', () => {
     expect(loggedPayload).not.toHaveProperty('error.context')
     expect(loggedPayload).not.toHaveProperty('error.originalError')
     expect(loggedPayload).not.toHaveProperty('error.stackTrace')
+  })
+
+  it('rejects cancellation raised during the final chunk after all lanes settle', async () => {
+    const dir = await createWorkspace()
+    const chunks = Array.from({ length: 2 }, (_, index) => chunk(dir, index))
+    const abortController = new AbortController()
+
+    requestStream.mockImplementation(async (request: { headers: Record<string, string> }) => {
+      if (request.headers.Range === 'bytes=1-1') {
+        abortController.abort()
+      }
+
+      return { headers: {}, stream: Readable.from([Buffer.from('x')]) }
+    })
+
+    const worker = new DownloadWorker(
+      1,
+      {} as never,
+      {
+        getChunkProgress: (activeChunks: ChunkInfo[]) => ({
+          downloadedSize: activeChunks.reduce(
+            (sum, activeChunk) => sum + activeChunk.downloaded,
+            0
+          ),
+          totalSize: activeChunks.reduce((sum, activeChunk) => sum + activeChunk.size, 0)
+        })
+      } as never,
+      { chunk: { maxRetries: 0 }, network: { timeout: 5_000, retryDelay: 0 } } as never
+    )
+
+    await expect(downloadChunks(worker, task(dir), chunks, abortController.signal)).rejects.toThrow(
+      'Task was cancelled'
+    )
   })
 
   it('keeps an active request owned until terminal failure can surface', async () => {
