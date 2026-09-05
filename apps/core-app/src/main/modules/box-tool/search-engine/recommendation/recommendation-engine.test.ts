@@ -2716,25 +2716,74 @@ describe('RecommendationEngine empty-state tiers', () => {
 
   const item = (id: string, source: string, pinned = false): unknown => ({
     id,
+    kind: 'app',
+    source: { id: 'app-provider', type: 'application' },
     meta: {
       recommendation: { source },
       ...(pinned ? { pinned: { isPinned: true } } : {})
     }
   })
 
-  it('puts habitual reasons in a grid and proposed ones in a list', () => {
+  const fileItem = (id: string, source: string): unknown => ({
+    id,
+    kind: 'file',
+    source: { id: 'file-provider', type: 'file' },
+    meta: { recommendation: { source } }
+  })
+
+  it('fills the grid habit-first, then by rank', () => {
+    // Habit wins a slot over a higher-ranked suggestion, but the row is filled either way. Seven
+    // items so the grid (one row of six) actually overflows and both sections exist.
     const sections = layoutOf([
-      item('daily-app', 'frequent'),
-      item('at-this-hour', 'time-based'),
-      item('plugin-thing', 'plugin')
+      item('rank-1', 'time-based'),
+      item('rank-2', 'plugin'),
+      item('rank-3', 'trending'),
+      item('rank-4', 'recent'),
+      item('rank-5', 'context'),
+      item('rank-6', 'cold-start'),
+      item('daily-app', 'frequent')
     ]).sections
 
     expect(sections?.map((section) => [section.id, section.layout])).toEqual([
       ['habitual', 'grid'],
       ['proposed', 'list']
     ])
-    expect(sections?.[0]?.itemIds).toEqual(['daily-app'])
-    expect(sections?.[1]?.itemIds).toEqual(['at-this-hour', 'plugin-thing'])
+    // The habitual one is last by rank yet takes the first slot; the rest fill in rank order.
+    expect(sections?.[0]?.itemIds).toEqual([
+      'daily-app',
+      'rank-1',
+      'rank-2',
+      'rank-3',
+      'rank-4',
+      'rank-5'
+    ])
+    expect(sections?.[1]?.itemIds).toEqual(['rank-6'])
+  })
+
+  it('still fills the grid when the user has no usage history at all', () => {
+    // Gating the grid on habit alone left it empty for every new user, and an all-list empty state
+    // loses the launch row entirely.
+    const sections = layoutOf([
+      item('fresh-a', 'newly-installed'),
+      item('fresh-b', 'newly-installed'),
+      item('suggested', 'cold-start')
+    ]).sections
+
+    expect(sections?.[0]).toMatchObject({ id: 'habitual', layout: 'grid' })
+    expect(sections?.[0]?.itemIds).toEqual(['fresh-a', 'fresh-b', 'suggested'])
+  })
+
+  it('keeps files out of the grid however they rank', () => {
+    // A file tile is a grey square: thumbnails are often ungenerated, and for media outside the
+    // tfile allowlist they never render. As a row it gets its path, size and date.
+    const sections = layoutOf([
+      fileItem('/Users/x/Downloads/a.png', 'newly-added'),
+      fileItem('/Users/x/Downloads/b.png', 'newly-added'),
+      item('an-app', 'newly-installed')
+    ]).sections
+
+    expect(sections?.[0]?.itemIds).toEqual(['an-app'])
+    expect(sections?.[1]?.itemIds).toEqual(['/Users/x/Downloads/a.png', '/Users/x/Downloads/b.png'])
   })
 
   it('does not flag the habitual grid as an intelligence tray', () => {
@@ -2747,7 +2796,7 @@ describe('RecommendationEngine empty-state tiers', () => {
   })
 
   it('titles both tiers with i18n keys rather than a hardcoded language', () => {
-    const sections = layoutOf([item('a', 'frequent'), item('b', 'plugin')]).sections
+    const sections = layoutOf([item('a', 'frequent'), fileItem('/b.png', 'newly-added')]).sections
 
     expect(sections?.[0]?.title).toBe('$i18n:coreBox.sections.habitual')
     expect(sections?.[1]?.title).toBe('$i18n:coreBox.sections.proposed')
@@ -2762,7 +2811,7 @@ describe('RecommendationEngine empty-state tiers', () => {
 
     expect(grid?.columns).toBe(6)
     expect(sections?.[0]?.itemIds).toHaveLength(6)
-    // A second, half-empty grid row reads as noise; the overflow belongs in the list.
+    // A second, half-empty grid row blurs the boundary between the tiers.
     expect(sections?.[1]?.itemIds).toHaveLength(4)
   })
 
@@ -2780,15 +2829,17 @@ describe('RecommendationEngine empty-state tiers', () => {
     expect(sections?.[0]?.itemIds).toHaveLength(6)
   })
 
-  it('emits only the grid when nothing needs explaining', () => {
+  it('emits only the grid when everything fits in one row', () => {
     const sections = layoutOf([item('a', 'frequent'), item('b', 'frequent')]).sections
 
     expect(sections?.map((section) => section.id)).toEqual(['habitual'])
   })
 
-  it('emits only the list when nothing is habitual yet', () => {
-    // Cold start: no usage history at all, so every card carries a reason.
-    const sections = layoutOf([item('a', 'cold-start'), item('b', 'cold-start')]).sections
+  it('emits only the list when nothing can be a tile', () => {
+    const sections = layoutOf([
+      fileItem('/a.png', 'newly-added'),
+      fileItem('/b.png', 'newly-added')
+    ]).sections
 
     expect(sections?.map((section) => [section.id, section.layout])).toEqual([['proposed', 'list']])
   })

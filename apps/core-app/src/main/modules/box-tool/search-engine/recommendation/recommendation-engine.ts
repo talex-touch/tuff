@@ -1526,15 +1526,30 @@ export class RecommendationEngine {
   }
 
   /**
-   * Two tiers: a grid of things the user reaches for out of habit, then a list of things the host
-   * is proposing.
+   * Two tiers: a grid of launch targets, then a list of things the host is proposing.
    *
-   * The split is by *reason*, not by pin state as before. A pinned entry and a daily-driver app
-   * both belong in the grid — bare icons, no explanation needed — while everything the host
-   * surfaced for a reason ("常在此时打开", "插件") belongs in the list, where there is room to say
-   * so. The grid is capped at one row so the tiers stay visually distinct however many candidates
-   * come back.
+   * The grid prefers what the user reaches for out of habit — pinned entries, then frequent ones —
+   * because those need no explanation and read well as bare icons. But it is filled to capacity
+   * either way: gating it on habit alone left the grid empty for anyone without usage history,
+   * which is every new user, and an all-list empty state loses the visual anchor the row provides.
+   * So the remaining slots go to the next-highest ranked items.
+   *
+   * Files never enter the grid. A tile is an icon and a name; a file's thumbnail often is not
+   * generated yet (and cannot be, for media outside the `tfile` allowlist), so it would render as
+   * a grey square — while as a row it gets its path, size and date. Its reason badge has room
+   * there too, which is the point of the lower tier.
    */
+  /**
+   * Whether this item reads as a grid tile rather than a list row.
+   *
+   * A tile is an icon plus a name. Files are excluded because their thumbnail is often not
+   * generated yet — and for media outside the `tfile` allowlist it never can be — so a file tile
+   * is a grey square with a truncated filename, while a file row carries its path, size and date.
+   */
+  private isTileableRecommendation(item: TuffItem): boolean {
+    return item.kind !== 'file' && item.kind !== 'folder' && item.source?.type !== 'file'
+  }
+
   private buildContainerLayout(
     _options: RecommendationOptions,
     items: TuffItem[]
@@ -1544,29 +1559,33 @@ export class RecommendationEngine {
     // Pinned entries claim grid slots first. They are appended last in score order (pinning is not
     // a score), so taking the grid in list order would push the one thing the user explicitly
     // asked to always see down into the "here is a suggestion" tier.
-    const pinned = items.filter((item) => item.meta?.pinned?.isPinned === true)
-    const rest = items.filter((item) => item.meta?.pinned?.isPinned !== true)
+    const pinned: TuffItem[] = []
+    const habitualCandidates: TuffItem[] = []
+    const otherTileable: TuffItem[] = []
+    const listOnly: TuffItem[] = []
 
-    const habitual = [...pinned]
-    const proposed: TuffItem[] = []
-    for (const item of rest) {
-      // Overflow past one row falls to the list rather than wrapping into a second grid row: the
-      // grid is the "no explanation needed" tier, and a half-empty second row reads as noise.
-      const fits =
-        habitual.length < columns &&
-        HABITUAL_RECOMMENDATION_SOURCES.has(readRecommendationSource(item))
-      if (fits) habitual.push(item)
-      else proposed.push(item)
+    for (const item of items) {
+      if (item.meta?.pinned?.isPinned === true) pinned.push(item)
+      else if (!this.isTileableRecommendation(item)) listOnly.push(item)
+      else if (HABITUAL_RECOMMENDATION_SOURCES.has(readRecommendationSource(item))) {
+        habitualCandidates.push(item)
+      } else otherTileable.push(item)
     }
+
+    // Overflow past one row falls to the list rather than wrapping into a second grid row: a
+    // half-empty second row blurs the boundary between the tiers.
+    const grid = [...pinned, ...habitualCandidates, ...otherTileable].slice(0, columns)
+    const gridIds = new Set(grid.map((item) => item.id))
+    const proposed = items.filter((item) => !gridIds.has(item.id))
 
     const sections: TuffContainerLayout['sections'] = []
 
-    if (habitual.length > 0) {
+    if (grid.length > 0) {
       sections.push({
         id: 'habitual',
         title: i18nMsg('coreBox.sections.habitual'),
         layout: 'grid',
-        itemIds: habitual.map((item) => item.id)
+        itemIds: grid.map((item) => item.id)
       })
     }
 
