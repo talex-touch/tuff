@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/main-process/channel-transport-contracts.md", "reason": "修复要新增一条 preload→渲染层的 contextBridge 暴露，须遵循既有的跨进程边界与暴露面约定"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "缺陷本身就是层边界问题：preload 隔离世界与渲染层主世界各持一份 window.$argMapper，修复横跨 utils/preload/renderer 三处"}
+{"file": ".trellis/spec/frontend/plugin-runtime-security.md", "reason": "涉及 contextIsolation/sandbox 边界，须确认新增暴露面不违反渲染层安全约定"}
+{"file": ".trellis/spec/main-process/index.md", "reason": "主进程与 preload 改动的通用约定入口"}

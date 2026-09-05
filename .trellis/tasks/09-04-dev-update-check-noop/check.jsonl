@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "验收重点：空结果不写缓存这条必须有能真正失败的测试；另需确认安全基线契约测试未被绕过"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "StartupContext 新增字段在渲染层的消费需符合类型安全约定"}
+{"file": ".trellis/spec/guides/index.md", "reason": "通用质量检查清单入口"}

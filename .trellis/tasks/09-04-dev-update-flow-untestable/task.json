@@ -1,0 +1,29 @@
+{
+  "id": "dev-update-flow-untestable",
+  "name": "dev-update-flow-untestable",
+  "title": "修复 dev 模式下更新链路无法验证",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-04",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "release/ota-transport-error-classification-20260904",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-04-dev-update-check-noop",
+    "09-04-dev-update-download-root-mismatch"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
