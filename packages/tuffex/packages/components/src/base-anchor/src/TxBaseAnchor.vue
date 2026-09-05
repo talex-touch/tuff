@@ -177,17 +177,27 @@ const middleware = computed(() => [
 
 const { floatingStyles, middlewareData, placement, update, isPositioned } = useFloating(floatingReference as any, floatingRef, {
   placement: computed(() => props.placement),
-  strategy: 'fixed',
+  /**
+   * `absolute` in the document, not `fixed` in the viewport.
+   *
+   * The panel is teleported to `<body>`, so an absolute panel sits at document
+   * coordinates and page scroll carries it on the compositor thread, glued to
+   * its reference with no script on the path. A fixed panel could only follow
+   * a scroll by having `autoUpdate` rewrite its position once the main thread
+   * heard about the new offset — a frame behind the content on every threaded
+   * scroll, which read as the panel trailing its trigger. `autoUpdate` still
+   * runs every frame while open, for what the compositor cannot do: a
+   * reference that moves in layout, an ancestor scroller, a resize.
+   */
+  strategy: 'absolute',
   /**
    * `translate()`, not `left`/`top`.
    *
-   * The panel is `position: fixed`, so page scroll does not carry it — it stays
-   * glued to the reference only because `autoUpdate({ animationFrame: true })`
-   * rewrites its position every frame. Writing that through `left`/`top`
-   * invalidates layout on each of those frames; a transform is a composited
-   * property and skips layout and paint entirely. Same number of updates,
-   * an order of magnitude less work per update, which is what showed up as the
-   * panel swimming behind its trigger during a fast scroll.
+   * `autoUpdate({ animationFrame: true })` rewrites the position every frame.
+   * Writing that through `left`/`top` invalidates layout on each of those
+   * frames; a transform is a composited property and skips layout and paint
+   * entirely. Same number of updates, an order of magnitude less work per
+   * update.
    *
    * Safe against the open/close animations: those write transforms on the
    * panel's *children* (`clipRef`, `contentRef`, `arrowRef`), never on this
