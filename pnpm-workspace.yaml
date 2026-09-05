@@ -109,7 +109,7 @@ catalogs:
     pinia: ^3.0.4
     vue: ^3.5.39
   icons:
-    '@iconify-json/carbon': ^1.2.24
+    '@iconify-json/carbon': ^1.2.26
     '@iconify-json/twemoji': ^1.2.5
 
 allowBuilds:
