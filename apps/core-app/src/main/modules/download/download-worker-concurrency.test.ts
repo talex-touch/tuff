@@ -35,6 +35,8 @@ const tempDirs: string[] = []
 afterEach(async () => {
   requestStream.mockReset()
   downloadWorkerLog.error.mockReset()
+  // createWriteStream emits close on the next check phase after the assertion settles.
+  await new Promise<void>((resolve) => setImmediate(resolve))
   await Promise.all(
     tempDirs.splice(0).map(async (dir) => await fs.rm(dir, { recursive: true, force: true }))
   )
