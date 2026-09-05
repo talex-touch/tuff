@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { SliderEmits, SliderProps } from './types'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { TxGlassSurface } from '../../glass-surface'
+import { useThumbJelly } from './use-thumb-jelly'
 import { clamp01, useTooltipMotion } from './use-tooltip-motion'
 
 defineOptions({
@@ -15,6 +17,7 @@ const props = withDefaults(defineProps<SliderProps>(), {
   disabled: false,
   showValue: false,
   thumbSurface: true,
+  thumbVariant: 'blur',
   showTooltip: true,
   tooltipTrigger: 'drag',
   tooltipPlacement: 'top',
@@ -44,7 +47,9 @@ const mainRef = ref<HTMLDivElement | null>(null)
 const tooltipRef = ref<HTMLDivElement | null>(null)
 
 const mainWidth = ref(0)
+const mainLeftPx = ref(0)
 const thumbSizePx = ref(18)
+const surfaceHeightPx = ref(28)
 const tooltipWidth = ref(0)
 
 const dragging = ref(false)
@@ -157,6 +162,59 @@ const motion = useTooltipMotion({
 })
 
 /**
+ * Under reduced motion the pill still changes rim and shadow with state; it just
+ * never deforms. Read once at setup — the preference does not flip mid-session in
+ * practice, and a media-query listener per slider would buy nothing.
+ */
+const reducedMotion = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+  ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  : false
+
+const jelly = useThumbJelly({
+  isEnabled: () => props.thumbSurface && !reducedMotion,
+})
+
+/**
+ * `left` is the per-frame position; the transform is the jelly, and only while
+ * it runs. At rest the property is dropped so the stylesheet's own
+ * `translate(-50%, -50%)` holds and the pill's radius and rim are exact.
+ */
+const surfaceStyle = computed<Record<string, string | undefined>>(() => ({
+  left: `${thumbCenterPx.value}px`,
+  transform: jelly.active.value
+    ? `translate(-50%, -50%) scale(${jelly.scaleX.value.toFixed(4)}, ${jelly.scaleY.value.toFixed(4)})`
+    : undefined,
+}))
+
+/**
+ * The glass body is the Radio indicator's `TxGlassSurface` with the indicator's
+ * tuning, and like the indicator it is only up while the thumb is held or
+ * settling: an SVG displacement filter is too heavy to keep alive under a
+ * thumb that moves on every frame it is dragged, so at rest the capsule is the
+ * solid body and the glass fades in on grab.
+ */
+const showGlass = computed(() =>
+  props.thumbSurface && props.thumbVariant === 'glass' && (dragging.value || jelly.active.value),
+)
+
+/** Read per grab, so a theme toggle mid-session is honoured; the class beats the OS preference. */
+const darkTheme = ref(false)
+
+function readDarkTheme(): boolean {
+  if (typeof document === 'undefined')
+    return false
+  const root = document.documentElement
+  if (root.classList.contains('dark') || root.dataset.theme === 'dark')
+    return true
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+/** The indicator's two looks, verbatim (`glassLook` in `radio-group-indicator.ts`). */
+const glassLook = computed(() => darkTheme.value
+  ? { brightness: 8, opacity: 0.6, backgroundOpacity: 0.06, saturation: 1.05 }
+  : { brightness: 100, opacity: 0.85, backgroundOpacity: 0.02, saturation: 1.15 })
+
+/**
  * `Transition` only manages CSS classes for the animated variants; `none` gets a
  * name with no rules behind it so the tooltip swaps in and out on the same frame.
  */
@@ -196,7 +254,8 @@ const tooltipStyle = computed(() => {
   const max = Math.max(min, mainWidth.value - half - safe)
   const clampedX = Math.min(max, Math.max(min, baseX + offsetX))
 
-  const y = props.tooltipPlacement === 'bottom' ? 28 : -28
+  // 36px clears the 28px pill with its held growth and a fast drag's stretch on top.
+  const y = props.tooltipPlacement === 'bottom' ? 36 : -36
   const origin = props.tooltipPlacement === 'bottom' ? '50% 0%' : '50% 100%'
 
   const useMotion = props.tooltipMotion !== 'none'
@@ -224,10 +283,12 @@ function refreshTooltipWidth(): void {
 function refreshMetrics(): void {
   if (!mainRef.value)
     return
-  mainWidth.value = mainRef.value.getBoundingClientRect().width
-  // Read the *geometric* thumb size only. It is deliberately constant across
-  // hover/drag — on the surface path it resolves to the pill's resting width,
-  // and the drag growth rides `--tx-slider-surface-extent` on the pill alone,
+  const rect = mainRef.value.getBoundingClientRect()
+  mainWidth.value = rect.width
+  mainLeftPx.value = rect.left
+  // Read the *geometric* thumb size only. It is constant across states by
+  // design — on the surface path it is the pill's authored width, and the
+  // jelly scales the pill through a transform that never touches its box —
   // so the fill and the native thumb can never drift out of alignment
   // mid-interaction.
   const size = Number.parseFloat(
@@ -235,6 +296,12 @@ function refreshMetrics(): void {
   )
   if (Number.isFinite(size) && size > 0)
     thumbSizePx.value = size
+  // The glass body is sized in px, so the capsule's authored height is read alongside.
+  const height = Number.parseFloat(
+    getComputedStyle(mainRef.value).getPropertyValue('--tx-slider-surface-size'),
+  )
+  if (Number.isFinite(height) && height > 0)
+    surfaceHeightPx.value = height
 }
 
 /**
@@ -270,7 +337,7 @@ function driveTooltipMotion(
 }
 
 function onGlobalPointerMove(e: PointerEvent): void {
-  if (!dragging.value || !props.tooltipTilt)
+  if (!dragging.value)
     return
 
   const now = performance.now()
@@ -285,7 +352,14 @@ function onGlobalPointerMove(e: PointerEvent): void {
       pointerVelocity.value = velocity
       pointerAcceleration.value = ((velocity - previousVelocity) / dtMs) * 1000
 
-      if (Math.abs(velocity) > 20 || Math.abs(pointerAcceleration.value) > 200) {
+      // The pill stretches with the pointer and lands when it reverses or slams
+      // into an end. The end is read from the pointer, not the value: the value
+      // only catches up on the `input` event after this listener has run.
+      const edge = thumbSizePx.value / 2
+      const atEnd = x <= mainLeftPx.value + edge || x >= mainLeftPx.value + mainWidth.value - edge
+      jelly.move(velocity, atEnd)
+
+      if (props.tooltipTilt && (Math.abs(velocity) > 20 || Math.abs(pointerAcceleration.value) > 200)) {
         driveTooltipMotion(velocity, pointerAcceleration.value, previousVelocity, 1200, 12000)
       }
     }
@@ -332,6 +406,8 @@ function startDragging(e: PointerEvent): void {
     return
   dragging.value = true
   refreshMetrics()
+  darkTheme.value = readDarkTheme()
+  jelly.press()
 
   if (props.tooltipTilt) {
     motion.reset()
@@ -349,6 +425,7 @@ function stopDragging(): void {
   if (!dragging.value)
     return
   dragging.value = false
+  jelly.release()
 
   window.removeEventListener('pointermove', onGlobalPointerMove)
   lastPointerTs.value = null
@@ -448,6 +525,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   motion.stop()
+  jelly.stop()
   window.removeEventListener('pointerup', onGlobalPointerUp)
   window.removeEventListener('pointermove', onGlobalPointerMove)
 
@@ -472,6 +550,7 @@ onBeforeUnmount(() => {
       'is-dragging': dragging,
       'is-focused': focusVisible,
       'has-surface': thumbSurface,
+      [`is-thumb-${thumbVariant}`]: thumbSurface,
     }"
   >
     <div
@@ -485,17 +564,38 @@ onBeforeUnmount(() => {
       </div>
 
       <!--
-        Positioned with `left` rather than a transform: the pill's box is what transitions on
-        drag, and folding the per-frame X into any transitioned property would make it lag the
-        native thumb by the transition duration. The pill is the whole visible thumb; the native
-        one underneath is a bare hit area on this path.
+        Positioned with `left` rather than a transform: `left` is written every frame from
+        the pointer, and folding it into a transitioned property would make it lag the native
+        thumb by the transition duration. The transform is the jelly's — see `surfaceStyle`.
+        The pill is the whole visible thumb; the native one underneath is a bare hit area.
       -->
       <div
         v-if="thumbSurface"
         class="tx-slider__surface"
         aria-hidden="true"
-        :style="{ left: `${thumbCenterPx}px` }"
-      />
+        :style="surfaceStyle"
+      >
+        <TxGlassSurface
+          v-if="showGlass"
+          class="tx-slider__glass"
+          :class="{ 'is-active': dragging }"
+          :width="thumbSizePx"
+          :height="surfaceHeightPx"
+          :border-radius="surfaceHeightPx / 2"
+          :border-width="8"
+          :brightness="glassLook.brightness"
+          :opacity="glassLook.opacity"
+          :blur="2"
+          :displace="0.25"
+          :background-opacity="glassLook.backgroundOpacity"
+          :saturation="glassLook.saturation"
+          :distortion-scale="2"
+          :red-offset="0"
+          :green-offset="4"
+          :blue-offset="8"
+          aria-hidden="true"
+        />
+      </div>
 
       <Transition :name="transitionName">
         <div
@@ -544,8 +644,9 @@ onBeforeUnmount(() => {
    * pill's width: the native thumb is then exactly as wide as the pill, which
    * is what keeps the fill's end on the pill's centre and the pill inside the
    * track at both ends. The flat path narrows it back to the 18px disc below.
+   * The row is as tall as the pill so the whole pill is grabbable.
    */
-  --tx-slider-height: 24px;
+  --tx-slider-height: 28px;
   --tx-slider-thumb-size: var(--tx-slider-surface-width);
 
   /** State surface — the rows below are the whole visual language. */
@@ -553,38 +654,24 @@ onBeforeUnmount(() => {
   --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 14%, transparent);
 
   /**
-   * The pill. One object in every state: the native thumb is a hit area and
-   * nothing more (see the `.has-surface` thumb rule), and this is the whole
-   * thumb the user sees. Wider than tall because the slider reads along one
-   * axis, and a disc kept pulling the eye into a point instead of onto the
-   * stretch of track being addressed. `--tx-slider-surface-size` stays the
-   * *height* — it is a public override point, so it keeps its meaning.
-   *
-   * The pair is the pill at rest; `--tx-slider-surface-extent` scales it on
-   * drag. Deriving real `width`/`height` rather than riding `transform: scale()`
-   * is deliberate: a scaled pill drags its radius and its 1px rim along with
-   * it. Sized this way both hold at their authored values in every state. The
-   * layout cost is bounded on purpose — see `.tx-slider__surface`.
+   * The pill: the Radio button-group indicator, borrowed whole. The same 28px
+   * height as `.tx-radio--button`, the same capsule, and the same body — an
+   * 88% tint of the overlay surface, a 1px rim from the light border family,
+   * a 1px top highlight and a short drop shadow. One object in every state:
+   * the native thumb is a hit area and nothing more (see the `.has-surface`
+   * thumb rule). These are the `solid` body; the `blur` and `glass` variants
+   * below re-tint it. `--tx-slider-surface-size` stays the *height* — it is a
+   * public override point, so it keeps its meaning. `slider.test.ts` holds the
+   * recipe to the indicator's source.
    */
-  --tx-slider-surface-size: 20px;
-  --tx-slider-surface-width: 40px;
+  --tx-slider-surface-size: 28px;
+  --tx-slider-surface-width: 36px;
   --tx-slider-surface-radius: 999px;
-  --tx-slider-surface-extent: 1;
   --tx-slider-surface-opacity: 1;
-
-  /**
-   * Glass recipe, shared with the Radio button-group indicator: a translucent
-   * tint of the overlay surface, a backdrop blur, a 1px rim from the light
-   * border family and a 1px top highlight. Neutral on purpose — the blue is
-   * the fill refracting through the blur where the pill overlaps it, not a
-   * tint of its own, so the pill reads as glass over the track rather than a
-   * sticker on it.
-   */
-  --tx-slider-surface-blur: 8px;
-  --tx-slider-surface-saturate: 160%;
-  --tx-slider-surface-tint: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 22%, transparent);
-  --tx-slider-surface-rim: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 55%, transparent);
+  --tx-slider-surface-tint: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 88%, transparent);
+  --tx-slider-surface-rim: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 50%, transparent);
   --tx-slider-surface-highlight: color-mix(in srgb, var(--tx-color-white, #fff) 17%, transparent);
+  --tx-slider-surface-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
 
   /**
    * Flat-path thumb (`thumbSurface: false`): the native disc, visible, growing
@@ -604,16 +691,12 @@ onBeforeUnmount(() => {
   --tx-slider-thumb-color: var(--tx-text-color-primary, #303133);
 
   /**
-   * Two clocks. The state clock drives the one step that has mass — the pill's
-   * size on drag — and is a spring compiled to `linear()` in the `@supports`
-   * block after this rule; the bezier here is the fallback for engines without
-   * `linear()`, and it does not overshoot, because a bezier faking a bounce is
-   * worse than no bounce. Everything else (rim, saturation, track thickness,
-   * focus ring) rides the hover clock, a plain ease-out: hover in and out must
-   * never bounce.
+   * One clock. Rim, shadow, track thickness and the focus ring ride a plain
+   * ease-out, and hover in and out must never bounce. The pill's size has no
+   * clock in the stylesheet at all: its grab, drag and release are the jelly
+   * (`use-thumb-jelly.ts`), written per frame as a transform on the Radio
+   * indicator's spring.
    */
-  --tx-slider-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --tx-slider-state-duration: 360ms;
   --tx-slider-hover-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --tx-slider-hover-duration: 180ms;
 
@@ -626,40 +709,61 @@ onBeforeUnmount(() => {
     --tx-slider-thumb-size: 18px;
   }
 
+  /**
+   * Three bodies — the Radio indicator's three (`indicatorVariant`). `solid`
+   * is the plain capsule above. `blur` thins the fill to 22% and frosts what
+   * lies under it; the fill's blue refracting up through the pill is the whole
+   * point of this variant, so unlike the indicator — which only frosts while it
+   * moves, over labels that must stay legible at rest — the frost is on at rest
+   * too. `glass` keeps the solid capsule at rest and mounts the indicator's
+   * `TxGlassSurface` while held (see the template); the capsule goes clear
+   * under it so the track refracts through the glass rather than an 88% fill.
+   */
+  &.is-thumb-blur {
+    --tx-slider-surface-tint: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 22%, transparent);
+    --tx-slider-surface-blur: 8px;
+    --tx-slider-surface-saturate: 160%;
+  }
+
+  &.is-thumb-blur.is-dragging {
+    --tx-slider-surface-blur: 10px;
+    --tx-slider-surface-saturate: 190%;
+  }
+
+  &.is-thumb-glass.is-dragging {
+    --tx-slider-surface-tint: transparent;
+  }
+
   /*
    * Known downstream trap, not fixed here: `plugins/touch-music` overrides
    * `--tx-slider-thumb-size` (0px / 10px !important) on sliders that keep the
    * default `thumbSurface`. Those overrides were written against the old
-   * 18px disc; with the pill they leave a 40px thumb over a 0–10px hit area,
+   * 18px disc; with the pill they leave a 36px thumb over a 0–10px hit area,
    * and `refreshMetrics()` ignores a 0px value and keeps its 18px fallback.
    * The fix belongs in the plugin: pass `thumbSurface=false` there, then
    * size the disc (see the slider docs' best practices).
    */
 
-  /* Hover brightens the rim and lifts the saturation. The pill does not grow. */
+  /* Hover brightens the rim. The pill does not grow. */
   &.is-hovering,
   &.is-focused {
     --tx-slider-track-height: 8px;
     --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 20%, transparent);
-    --tx-slider-surface-saturate: 180%;
     --tx-slider-surface-rim: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 75%, transparent);
     --tx-slider-thumb-shadow: 0 2px 6px color-mix(in srgb, #000 22%, transparent);
   }
 
   /**
-   * Dragging: thicker track, darker rail, a slightly larger pill with a deeper
-   * blur and a rim that picks up the accent. The size step is the whole press
-   * bounce — it runs on the spring, so it overshoots by a few percent and
-   * settles once. Driven by the `dragging` ref rather than `:active`, because
-   * the pointer routinely leaves the element mid-drag.
+   * Dragging: thicker track, darker rail, a rim that picks up the accent and a
+   * longer shadow under the lifted pill. The size step itself is the jelly's.
+   * Driven by the `dragging` ref rather than `:active`, because the pointer
+   * routinely leaves the element mid-drag.
    */
   &.is-dragging {
     --tx-slider-track-height: 10px;
     --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 26%, transparent);
-    --tx-slider-surface-extent: 1.08;
-    --tx-slider-surface-blur: 10px;
-    --tx-slider-surface-saturate: 190%;
     --tx-slider-surface-rim: color-mix(in srgb, var(--tx-color-primary, #409eff) 30%, color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 75%, transparent));
+    --tx-slider-surface-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
     --tx-slider-thumb-shadow: 0 4px 12px color-mix(in srgb, #000 30%, transparent);
   }
 
@@ -723,41 +827,61 @@ onBeforeUnmount(() => {
   }
 
   /**
-   * Sized, not scaled, so the radius and the rim below hold their authored
-   * values. Writing `width`/`height` is a layout write, which is exactly what
-   * the per-frame `left` must never do — but this one is not per-frame. It
-   * moves on drag start and drag end, once each per interaction, and
-   * `contain: layout` walls the resulting pass inside this element: an
-   * absolutely positioned, childless leaf that nothing else is sized against.
+   * Sized by its authored values and never by state. The jelly scales it
+   * through an inline transform while it runs and takes that transform away
+   * when it stops, so at rest the radius and the 1px rim are exact; while it
+   * runs, a scaled rim is the price of a body that visibly gives. `transform`
+   * is deliberately absent from the transition list — it is written per frame.
    */
   &__surface {
     position: absolute;
     top: 50%;
-    width: calc(var(--tx-slider-surface-width) * var(--tx-slider-surface-extent));
-    height: calc(var(--tx-slider-surface-size) * var(--tx-slider-surface-extent));
-    contain: layout;
+    width: var(--tx-slider-surface-width);
+    height: var(--tx-slider-surface-size);
     border-radius: var(--tx-slider-surface-radius);
     background: var(--tx-slider-surface-tint);
-    backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));
-    -webkit-backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));
     /*
      * Rim, highlight, lift — the Radio indicator's list. The rim is not
-     * decoration: on a flat card there is nothing behind the pill for the blur
-     * to refract, and without an edge it would be a formless smudge.
+     * decoration: on a flat card there is nothing to separate the pill from
+     * the track but its edge.
      */
     box-shadow:
       inset 0 0 0 1px var(--tx-slider-surface-rim),
       inset 0 1px 0 var(--tx-slider-surface-highlight),
-      0 2px 8px rgba(15, 23, 42, 0.08);
+      var(--tx-slider-surface-shadow);
     opacity: var(--tx-slider-surface-opacity);
     transform: translate(-50%, -50%);
+    will-change: transform;
     pointer-events: none;
     /* `left` is deliberately absent — it must track the thumb frame-for-frame. */
+    transition: box-shadow var(--tx-slider-hover-duration) var(--tx-slider-hover-ease);
+  }
+
+  &.is-thumb-blur .tx-slider__surface {
+    backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));
+    -webkit-backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));
     transition:
-      width var(--tx-slider-state-duration) var(--tx-slider-ease),
-      height var(--tx-slider-state-duration) var(--tx-slider-ease),
       box-shadow var(--tx-slider-hover-duration) var(--tx-slider-hover-ease),
       backdrop-filter var(--tx-slider-hover-duration) var(--tx-slider-hover-ease);
+  }
+
+  /*
+   * The glass body fills the capsule and rides its transform. The capsule's
+   * own inset rim would be hidden under it, so the rim is restated here;
+   * `.tx-slider` is repeated so this outranks `.tx-glass-surface`'s own
+   * opacity transition regardless of stylesheet order.
+   */
+  & .tx-slider__glass {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    box-shadow: inset 0 0 0 1px var(--tx-slider-surface-rim);
+    pointer-events: none;
+    transition: opacity 120ms ease;
+
+    &.is-active {
+      opacity: 1;
+    }
   }
 
   /*
@@ -777,7 +901,7 @@ onBeforeUnmount(() => {
     box-shadow:
       inset 0 0 0 1px var(--tx-slider-surface-rim),
       inset 0 1px 0 var(--tx-slider-surface-highlight),
-      0 2px 8px rgba(15, 23, 42, 0.08),
+      var(--tx-slider-surface-shadow),
       0 0 0 3px var(--tx-focus-ring-color, color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, white));
   }
 
@@ -908,25 +1032,9 @@ onBeforeUnmount(() => {
   }
 }
 
-/**
- * The press bounce, compiled. `resolveTransition({ stiffness: 560, damping: 34 })`
- * from `../../liquid/src/spring` emits exactly this list — ζ ≈ 0.72, +3%
- * overshoot, one reversal, settled at 362ms — and `slider.test.ts` holds the
- * two together so they cannot drift. Authored statically rather than resolved
- * at runtime because the slider never changes its stiffness, so a
- * `CSS.supports` probe and a style write per instance would buy nothing.
- */
-@supports (transition-timing-function: linear(0, 1)) {
-  .tx-slider {
-    --tx-slider-ease: linear(0, 0.0526, 0.1183, 0.2419, 0.377, 0.4661, 0.5913, 0.6664, 0.7645, 0.8442, 0.8874, 0.9388, 0.9759, 0.9939, 1.0126, 1.0235, 1.0275, 1.0297, 1.0295, 1.0273, 1.0239, 1.0212, 1.0172, 1.0134, 1.011, 1.0079, 1.0054, 1.004, 1.0023, 1.0014, 1.0004, 0.9998, 0.9995, 1);
-    --tx-slider-state-duration: 362ms;
-  }
-}
-
-/* After the `@supports` block on purpose: same specificity, so source order is what makes this win. */
+/* The jelly is switched off in script under the same query; this zeroes the hover clock. */
 @media (prefers-reduced-motion: reduce) {
   .tx-slider {
-    --tx-slider-state-duration: 0ms;
     --tx-slider-hover-duration: 0ms;
   }
 }
