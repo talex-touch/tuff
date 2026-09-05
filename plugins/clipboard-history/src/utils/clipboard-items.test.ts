@@ -3,10 +3,16 @@ import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import {
   buildClipboardWritePayload,
   getClipboardColorTokens,
+  getClipboardMetrics,
   getClipboardOcrInsight,
   getClipboardSizeLabel,
+  getClipboardSourceInfo,
+  getClipboardSubtitle,
+  getClipboardSummary,
   getClipboardTagLabels,
   getClipboardTextInsight,
+  getClipboardTitle,
+  groupFilesByDirectory,
   parseFileList,
   resolveDetailImagePreview,
   resolveDetailImageSrc,
@@ -296,5 +302,117 @@ describe('clipboard-items helpers', () => {
     }
 
     expect(getClipboardTagLabels(item)).toEqual([])
+  })
+})
+
+describe('list row copy', () => {
+  /**
+   * 重排前 title 与 subtitle 对纯文本取的是同一行文字，列表里每条都复述两遍。
+   * 这条负控制盯住的就是那个回归。
+   */
+  it('never repeats the content between title and subtitle', () => {
+    for (const content of ['679839', 'dsh web: https://dsh.tagzxia.com/?token=abc', '第一行\n第二行']) {
+      const item: PluginClipboardItem = {
+        id: 30,
+        type: 'text',
+        content,
+        timestamp: Date.parse('2026-09-05T03:49:00Z'),
+      }
+
+      expect(getClipboardSubtitle(item)).not.toBe(getClipboardTitle(item))
+      expect(getClipboardSubtitle(item)).not.toContain(content.split('\n')[0])
+    }
+  })
+
+  it('drops the file size from image titles so the row stays on one line', () => {
+    const item: PluginClipboardItem = {
+      id: 31,
+      type: 'image',
+      content: '',
+      meta: { image_size: { width: 3520, height: 2306 }, image_file_size: 7_549_747 },
+    }
+
+    expect(getClipboardTitle(item)).toBe('image/png · 3520×2306')
+    expect(getClipboardSubtitle(item)).toContain('7.2 MB')
+  })
+})
+
+describe('detail summary', () => {
+  it('splits text metrics into characters and lines', () => {
+    const item: PluginClipboardItem = {
+      id: 32,
+      type: 'text',
+      content: 'abc\ndef',
+      timestamp: Date.parse('2026-09-05T03:49:00Z'),
+    }
+
+    expect(getClipboardMetrics(item)).toEqual(['7 字符', '2 行'])
+    expect(getClipboardSummary(item).typeLabel).toBe('文本')
+    expect(getClipboardSummary(item).mime).toBe('text/plain')
+  })
+
+  it('splits image metrics into dimensions and byte size', () => {
+    const item: PluginClipboardItem = {
+      id: 33,
+      type: 'image',
+      content: '',
+      meta: { image_size: { width: 320, height: 180 }, image_file_size: 2048 },
+    }
+
+    expect(getClipboardMetrics(item)).toEqual(['320 × 180', '2 KB'])
+  })
+
+  /** 全称 application/x-tuff-files 在 720 宽下会撞上右对齐的时间戳。 */
+  it('shortens the tuff files mime for the summary strip', () => {
+    const item: PluginClipboardItem = {
+      id: 34,
+      type: 'files',
+      content: JSON.stringify(['/Users/demo/Downloads/a.pdf']),
+    }
+
+    expect(getClipboardSummary(item).mime).toBe('x-tuff-files')
+    expect(getClipboardMetrics(item)).toEqual(['1 个文件'])
+  })
+
+  it('keeps the bundle id only when it differs from the display name', () => {
+    const item: PluginClipboardItem = { id: 35, type: 'text', content: 'x', sourceApp: 'com.apple.Terminal' }
+
+    expect(getClipboardSourceInfo(item, { displayName: '终端', icon: null } as never)).toEqual({
+      displayName: '终端',
+      bundleId: 'com.apple.Terminal',
+      icon: null,
+    })
+    expect(getClipboardSourceInfo(item, null).bundleId).toBeNull()
+  })
+})
+
+describe('file tree grouping', () => {
+  it('groups files by parent directory and abbreviates the home path', () => {
+    const content = JSON.stringify([
+      '/Users/demo/Downloads/a.pdf',
+      '/Users/demo/Downloads/b.md',
+      '/Users/demo/Downloads/shots/c.png',
+    ])
+
+    expect(groupFilesByDirectory(content)).toEqual([
+      {
+        dir: '~/Downloads',
+        files: [
+          { name: 'a.pdf', path: '/Users/demo/Downloads/a.pdf', dir: '~/Downloads' },
+          { name: 'b.md', path: '/Users/demo/Downloads/b.md', dir: '~/Downloads' },
+        ],
+      },
+      {
+        dir: '~/Downloads/shots',
+        files: [
+          { name: 'c.png', path: '/Users/demo/Downloads/shots/c.png', dir: '~/Downloads/shots' },
+        ],
+      },
+    ])
+  })
+
+  it('returns nothing for malformed file payloads', () => {
+    expect(groupFilesByDirectory('{not-json')).toEqual([])
+    expect(groupFilesByDirectory(null)).toEqual([])
   })
 })
