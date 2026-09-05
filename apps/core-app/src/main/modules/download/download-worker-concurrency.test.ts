@@ -142,23 +142,17 @@ describe('DownloadWorker chunk concurrency', () => {
     const releaseDelayedStream = Promise.withResolvers<void>()
     const terminalFailure = new Error('first chunk failed permanently')
     const requestRanges: string[] = []
-    let delayedStreamRead = false
     let delayedStreamEnded = false
     let delayedChunkStatusWhenErrorSurfaced: ChunkStatus | undefined
     let errorSurfacedBeforeDelayedStreamEnded = false
 
-    const delayedStream = new Readable({
-      read() {
-        if (!delayedStreamRead) {
-          delayedStreamRead = true
-          delayedStreamStarted.resolve()
-          this.push(Buffer.from('x'))
-          return
-        }
-
-        void releaseDelayedStream.promise.then(() => this.push(null))
-      }
-    })
+    const delayedStream = Readable.from(
+      (async function* () {
+        delayedStreamStarted.resolve()
+        yield Buffer.from('x')
+        await releaseDelayedStream.promise
+      })()
+    )
     delayedStream.once('end', () => {
       delayedStreamEnded = true
     })
