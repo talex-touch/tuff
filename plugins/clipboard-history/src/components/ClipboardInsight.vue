@@ -7,6 +7,7 @@ import {
   getClipboardOcrInsight,
   getClipboardTextInsight,
 } from '~/utils/clipboard-items'
+import { describeContrast, parseColor, toColorFormats } from '~/utils/clipboard-colors'
 import {
   buildCleanLink,
   detectCommand,
@@ -33,6 +34,21 @@ const ocrInsight = computed(() => getClipboardOcrInsight(props.item))
 const secret = computed(() => detectSecret(props.item?.content))
 const command = computed(() => detectCommand(props.item?.content))
 const links = computed(() => extractLinks(props.item?.content))
+
+const primaryColor = computed(() => parseColor(colorTokens.value[0]?.value ?? null))
+const colorContrast = computed(() => (primaryColor.value ? describeContrast(primaryColor.value) : null))
+const colorFormatRows = computed<Array<[string, string]>>(() => {
+  if (!primaryColor.value) {
+    return []
+  }
+  const formats = toColorFormats(primaryColor.value)
+  return [
+    ['HEX', formats.hex],
+    ['RGB', formats.rgb],
+    ['HSL', formats.hsl],
+    ['OKLCH', formats.oklch],
+  ]
+})
 
 const selectedLink = ref(0)
 const revealSecret = ref(false)
@@ -189,9 +205,34 @@ function maskParamValue(value: string): string {
     <template v-else-if="kind === 'color'">
       <div class="insight-title">
         <span>颜色</span>
-        <span class="insight-meta">{{ colorTokens.length }} 个 · 点击复制</span>
+        <span class="insight-meta">
+          点击任意格式复制
+          <template v-if="colorContrast">
+            · 黑字 {{ colorContrast.black.ratio }}:1 {{ colorContrast.black.level }}
+          </template>
+        </span>
       </div>
-      <div class="color-grid">
+
+      <div v-for="[label, value] in colorFormatRows" :key="label" class="kv-row">
+        <span class="kv-label wide">{{ label }}</span>
+        <button class="kv-value" type="button" :title="`复制 ${value}`" @click="emit('copyText', value)">
+          <span class="kv-text">{{ value }}</span>
+        </button>
+      </div>
+
+      <div v-if="colorContrast" class="kv-row">
+        <span class="kv-label wide">对比度</span>
+        <span class="contrast-chip">
+          黑字 {{ colorContrast.black.ratio }}:1
+          <b :class="{ fail: colorContrast.black.level === '不达标' }">{{ colorContrast.black.level }}</b>
+        </span>
+        <span class="contrast-chip">
+          白字 {{ colorContrast.white.ratio }}:1
+          <b :class="{ fail: colorContrast.white.level === '不达标' }">{{ colorContrast.white.level }}</b>
+        </span>
+      </div>
+
+      <div v-if="colorTokens.length > 1" class="color-grid">
         <button
           v-for="color in colorTokens"
           :key="color.value"
@@ -343,6 +384,13 @@ function maskParamValue(value: string): string {
   font-size: 0.72rem;
 }
 
+.kv-label.wide {
+  width: 52px;
+  flex: none;
+  color: var(--clipboard-text-muted);
+  font-size: 0.72rem;
+}
+
 .kv-value {
   min-width: 0;
   flex: 1 1 auto;
@@ -424,6 +472,29 @@ button.kv-value:hover {
 .kv-tag.danger {
   border-color: color-mix(in srgb, var(--clipboard-color-danger) 40%, transparent);
   background: color-mix(in srgb, var(--clipboard-color-danger) 12%, transparent);
+  color: var(--clipboard-color-danger);
+}
+
+.contrast-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 70%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--clipboard-surface-base) 86%, transparent);
+  color: var(--clipboard-text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.7rem;
+}
+
+.contrast-chip b {
+  color: #67c23a;
+  font-weight: 600;
+}
+
+.contrast-chip b.fail {
   color: var(--clipboard-color-danger);
 }
 

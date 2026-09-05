@@ -457,4 +457,33 @@ describe('clipboardManagerView', () => {
 
     wrapper.unmount()
   })
+
+  it('turns a copied colour into a swatch preview with four formats and a contrast verdict', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 51, type: 'text', content: '#ABCDEE' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('.color-canvas').text()).toBe('#ABCDEE')
+    expect(wrapper.findAll('.kv-label').map(node => node.text())).toEqual([
+      'HEX',
+      'RGB',
+      'HSL',
+      'OKLCH',
+      '对比度',
+    ])
+    // 取色时就要知道能不能用，所以对比度结论进标题。
+    expect(wrapper.get('.insight-title').text()).toContain('AAA')
+
+    const rgbRow = wrapper.findAll('.kv-value')[1]
+    await rgbRow?.trigger('click')
+    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: 'rgb(171, 205, 238)' })
+
+    wrapper.unmount()
+  })
 })
