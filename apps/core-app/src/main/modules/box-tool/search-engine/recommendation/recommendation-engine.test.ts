@@ -123,6 +123,7 @@ import {
   calculateNoveltyFactor,
   calculateTimeContextBoost,
   calculateTimeRelevanceScore,
+  COLD_START_BASE_SCORE,
   RecommendationEngine
 } from './recommendation-engine'
 
@@ -1953,6 +1954,39 @@ describe('RecommendationEngine', () => {
     // The order above only survives combineRecommendedWithPinned's re-sort
     // because the score says so, so that is what gets asserted.
     expect(backfilled[1]?.scoring.final).toBeLessThan(survivor.scoring.final)
+  })
+
+  it('keeps backfill in the fallback band under a normally scored survivor', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    // The ranker's terms are banded by decade — frequency at 1e4, time relevance at 1e5, novelty
+    // at 1e7 — and cold-start sits at 1e3 so that it lands under all of them. A survivor with any
+    // real usage therefore scores far above the fallback pool, and the rewrite has nothing to
+    // correct. Pulling the backfill up to just under such a survivor would still order correctly,
+    // but the score is persisted: recommendation_cache would then hold a never-used app at ~3e5,
+    // indistinguishable from a daily habit to anyone reading the row.
+    const survivor = { id: 'survivor', source: { id: 'app-provider' }, scoring: { final: 3e5 } }
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      resolveFallbackItems: vi.fn(async () => [
+        { id: 'cold-1', source: { id: 'app-provider' }, scoring: { final: 1000 } },
+        { id: 'cold-2', source: { id: 'app-provider' }, scoring: { final: 999 } }
+      ])
+    })
+
+    const backfilled = await (
+      engine as unknown as {
+        backfillShortfall: (
+          items: unknown[],
+          pinned: unknown[],
+          limit: number
+        ) => Promise<Array<{ id: string; scoring: { final: number } }>>
+      }
+    ).backfillShortfall([survivor], [], 3)
+
+    expect(backfilled.map((item) => item.id)).toEqual(['survivor', 'cold-1', 'cold-2'])
+    for (const item of backfilled.slice(1)) {
+      expect(item.scoring.final).toBeLessThan(COLD_START_BASE_SCORE)
+    }
+    expect(backfilled[1]!.scoring.final).toBeGreaterThan(backfilled[2]!.scoring.final)
   })
 
   it('leaves the fallback untouched when the rebuild filled every slot', async () => {
