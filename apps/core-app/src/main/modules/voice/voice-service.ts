@@ -6,16 +6,25 @@ import type {
   VoiceDictatePayload,
   VoiceDictateResult,
   VoiceSpeakPayload,
-  VoiceSpeakResult
+  VoiceSpeakResult,
+  VoiceTranscribeUploadPayload,
+  VoiceTranscribeUploadResult
 } from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { AudioCaptureResult } from '@talex-touch/tuff-native/audio'
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
+import {
+  assertVoiceUploadUrl,
+  type VoiceProviderAdapter,
+  type VoiceStreamRequest,
+  type VoiceUploadRequest
+} from '@talex-touch/tuff-voice'
 import { createLogger } from '../../utils/logger'
 import { clipboardModule } from '../clipboard'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { intelligenceTtsService } from '../ai/intelligence-tts-service'
 import { activeAppService, type ActiveAppInfo } from '../system/active-app'
 import { POLISH_SYSTEM_PROMPT, withLanguageDirective, wrapTranscription } from './polish-prompt'
+import { getVoiceProvider } from './voice-provider-runtime'
 import type { StreamingAsrConfig } from './streaming-asr-client'
 import { createAsrStream, getStreamingAsrConfig } from './streaming-asr-client'
 
@@ -395,6 +404,49 @@ export class VoiceService {
     }
   }
 
+  /** Transcribes a main-owned HTTPS audio source through the selected Provider. */
+  async transcribeUpload(
+    payload: VoiceTranscribeUploadPayload,
+    signal?: AbortSignal
+  ): Promise<VoiceTranscribeUploadResult> {
+    throwIfCancelled(signal)
+    const provider = getVoiceProvider('upload', payload.providerId)
+    if (!provider) throw new Error('VOICE_UPLOAD_PROVIDER_UNAVAILABLE')
+    const request: VoiceUploadRequest = {
+      model: payload.model ?? provider.defaultUploadModel ?? 'default',
+      source: { kind: 'url', url: assertVoiceUploadUrl(payload.sourceUrl) },
+      ...(payload.language ? { language: payload.language } : {}),
+      ...(payload.enableTimestamps === undefined
+        ? {}
+        : { enableTimestamps: payload.enableTimestamps }),
+      ...(payload.enableSpeakerDiarization === undefined
+        ? {}
+        : { enableSpeakerDiarization: payload.enableSpeakerDiarization }),
+      ...(payload.removeDisfluencies === undefined
+        ? {}
+        : { removeDisfluencies: payload.removeDisfluencies }),
+      requestId: nextVoiceSessionId(),
+      signal
+    }
+    const result = await awaitWithAbort(provider.transcribeUpload(request), signal)
+    return {
+      text: result.text,
+      ...(result.language ? { language: result.language } : {}),
+      ...(result.durationMs === undefined ? {} : { durationMs: result.durationMs }),
+      ...(result.requestId ? { requestId: result.requestId } : {}),
+      ...(result.segments
+        ? {
+            segments: result.segments.map((segment) => ({
+              text: segment.text,
+              startMs: segment.startMs,
+              endMs: segment.endMs,
+              ...(segment.speaker ? { speaker: segment.speaker } : {})
+            }))
+          }
+        : {})
+    }
+  }
+
   /** Synthesize `text` via the intelligence `audio.tts` capability and (by default) play it. */
   async speak(
     payload: VoiceSpeakPayload,
@@ -448,13 +500,9 @@ export class VoiceService {
   }
 
   /**
-   * Streaming dictation: yields live `partial` transcripts while the user speaks
-   * (chunked-batch — re-transcribes the audio-so-far via the batch `audio.stt`
-   * capability), then a single polished `final`, then `end`. When the native
-   * `snapshotCapture` primitive is unavailable, it degrades to final-only.
-   *
-   * The event contract is provider-agnostic: a true streaming / WebSocket ASR
-   * backend can later replace the inner loop without changing consumers.
+   * Streaming dictation: routes native PCM through the configured Provider stream when available;
+   * otherwise retains the generic WebSocket or chunked-batch compatibility fallback. Each path
+   * yields partial/final/end events and keeps target delivery main-owned.
    */
   async *streamDictation(
     payload: VoiceAsrStreamPayload = {},
@@ -464,12 +512,114 @@ export class VoiceService {
     throwIfCancelled(signal)
     this.assertSupported()
 
-    const wsConfig = getStreamingAsrConfig()
     const drainCapture = getDrainCapture()
+    const provider = getVoiceProvider('stream', payload.providerId)
+    if (provider && drainCapture) {
+      yield* this.streamViaProvider(payload, provider, drainCapture, signal, caller)
+      return
+    }
+
+    const wsConfig = getStreamingAsrConfig()
     if (wsConfig && drainCapture) {
       yield* this.streamViaWebSocket(payload, wsConfig, drainCapture, signal, caller)
     } else {
       yield* this.streamViaChunkedBatch(payload, signal, caller)
+    }
+  }
+
+  private async *streamViaProvider(
+    payload: VoiceAsrStreamPayload,
+    provider: VoiceProviderAdapter,
+    drainCapture: (sessionId: string) => { pcm: Buffer },
+    signal?: AbortSignal,
+    caller = VOICE_CALLER
+  ): AsyncGenerator<VoiceAsrStreamEvent> {
+    const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
+    const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
+    const pollCapture = getPollCapture()
+    const sessionId = await this.startSession(
+      { ...payload, maxDurationMs, silenceStopMs },
+      signal,
+      caller
+    )
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      throwIfCancelled(signal)
+      throw new Error('VOICE_SESSION_NOT_FOUND')
+    }
+
+    let ownerReleased = false
+    let connection: Awaited<ReturnType<VoiceProviderAdapter['createStream']>> | null = null
+    try {
+      const request: VoiceStreamRequest = {
+        model: provider.defaultStreamModel ?? 'default',
+        audio: {
+          format: 'pcm',
+          sampleRate: 16_000,
+          channels: 1,
+          bitsPerSample: 16,
+          codec: 'raw'
+        },
+        ...(payload.language ? { language: payload.language } : {}),
+        requestId: sessionId,
+        signal,
+        timeoutMs: CAPABILITY_TIMEOUT_MS,
+        enableDdc: payload.cleanup ?? true
+      }
+      connection = await provider.createStream(request)
+
+      const pump = (async (): Promise<void> => {
+        const deadline = Date.now() + maxDurationMs + CAPTURE_HARD_TIMEOUT_GRACE_MS
+        for (;;) {
+          await awaitWithAbort(delay(100), signal)
+          throwIfCancelled(signal)
+          const active = pollCapture
+            ? pollCapture(session.nativeSessionId).active
+            : Date.now() < deadline
+          const chunk = drainCapture(session.nativeSessionId).pcm
+          if (chunk.length > 0) await connection!.writePcm(chunk)
+          if (!active) break
+        }
+        nativeAudio.stopCapture(session.nativeSessionId)
+        this.takeSession(sessionId)
+        ownerReleased = true
+        await connection!.end()
+      })()
+      void pump.catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'capture-pump-failed'
+        return connection?.abort(message)
+      })
+
+      for await (const event of connection.events) {
+        throwIfCancelled(signal)
+        if (event.type === 'partial') {
+          if (event.text) yield { type: 'partial', text: event.text }
+          continue
+        }
+        if (event.type === 'final') {
+          if (!event.text) continue
+          const text =
+            payload.cleanup === false
+              ? event.text
+              : ((await this.polish(event.text, payload.language, signal, caller)) ?? event.text)
+          const delivery =
+            payload.delivery === 'active-app'
+              ? await this.deliverText(text, session.targetKey)
+              : undefined
+          yield {
+            type: 'final',
+            text,
+            ...(event.language ? { language: event.language } : {}),
+            ...(delivery ? { delivery } : {})
+          }
+        }
+      }
+      await pump
+      throwIfCancelled(signal)
+      yield { type: 'end' }
+    } finally {
+      if (connection) await connection.abort('Voice session ended').catch(() => {})
+      if (!ownerReleased) this.cancelSession(sessionId)
     }
   }
 

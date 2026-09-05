@@ -86,6 +86,54 @@ describe("voice domain sdk", () => {
       played: true,
     });
   });
+  it("transcribeUpload sends the upload event and unwraps the result", async () => {
+    const transport = createTransportMock(async () => ({
+      ok: true,
+      result: {
+        text: "你好，世界",
+        language: "zh-CN",
+        durationMs: 1_234,
+        requestId: "request-upload-1",
+        segments: [{ text: "你好，世界", startMs: 0, endMs: 1_234, speaker: "A" }],
+      },
+    }));
+    const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport);
+    const payload = {
+      sourceUrl: "https://example.test/audio.wav",
+      providerId: "bailian",
+      model: "paraformer-v2",
+      language: "zh-CN",
+      enableTimestamps: true,
+      enableSpeakerDiarization: true,
+      removeDisfluencies: true,
+    };
+
+    const result = await sdk.transcribeUpload(payload);
+
+    expect(transport.send).toHaveBeenCalledWith(
+      voiceApiEvents.transcribeUpload,
+      payload,
+    );
+    expect(result).toEqual({
+      text: "你好，世界",
+      language: "zh-CN",
+      durationMs: 1_234,
+      requestId: "request-upload-1",
+      segments: [{ text: "你好，世界", startMs: 0, endMs: 1_234, speaker: "A" }],
+    });
+  });
+
+  it("transcribeUpload throws with the error from a failed envelope", async () => {
+    const transport = createTransportMock(async () => ({
+      ok: false,
+      error: "audio source unavailable",
+    }));
+    const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport);
+
+    await expect(
+      sdk.transcribeUpload({ sourceUrl: "https://example.test/audio.wav" }),
+    ).rejects.toThrow("audio source unavailable");
+  });
 
   it("asrStream requires a stream-capable transport", async () => {
     const sdk = createVoiceSdk({
@@ -115,6 +163,9 @@ describe("voice domain sdk", () => {
   it("voice event names resolve to voice:api:<action>", () => {
     expect(voiceApiEvents.dictate.toEventName()).toBe("voice:api:dictate");
     expect(voiceApiEvents.speak.toEventName()).toBe("voice:api:speak");
+    expect(voiceApiEvents.transcribeUpload.toEventName()).toBe(
+      "voice:api:transcribe-upload",
+    );
     expect(voiceApiEvents.asrStream.toEventName()).toBe("voice:api:asr-stream");
   });
 });

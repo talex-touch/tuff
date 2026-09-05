@@ -92,6 +92,33 @@ export interface VoiceAsrStreamPayload {
   maxDurationMs?: number;
   silenceStopMs?: number;
   delivery?: VoiceDeliveryMode;
+  /** Main-selected provider id; omitted uses the configured provider priority. */
+  providerId?: string;
+}
+
+/** Main-owned source reference for uploaded audio recognition. */
+export interface VoiceTranscribeUploadPayload {
+  /** HTTPS URL resolved by main; raw file paths and binary payloads are not public DTOs. */
+  sourceUrl: string;
+  language?: string;
+  providerId?: string;
+  model?: string;
+  enableTimestamps?: boolean;
+  enableSpeakerDiarization?: boolean;
+  removeDisfluencies?: boolean;
+}
+
+export interface VoiceTranscribeUploadResult {
+  text: string;
+  language?: string;
+  durationMs?: number;
+  requestId?: string;
+  segments?: Array<{
+    text: string;
+    startMs: number;
+    endMs: number;
+    speaker?: string;
+  }>;
 }
 
 /** Streaming ASR event. */
@@ -118,6 +145,13 @@ export const voiceApiEvents = {
     .module("api")
     .event("speak")
     .define<VoiceSpeakPayload, VoiceApiResponse<VoiceSpeakResult>>(),
+  transcribeUpload: defineEvent("voice")
+    .module("api")
+    .event("transcribe-upload")
+    .define<
+      VoiceTranscribeUploadPayload,
+      VoiceApiResponse<VoiceTranscribeUploadResult>
+    >(),
   asrStream: defineEvent("voice")
     .module("api")
     .event("asr-stream")
@@ -135,6 +169,10 @@ export interface VoiceSdk {
   dictate: (payload?: VoiceDictatePayload) => Promise<VoiceDictateResult>;
   /** Synthesize text and (by default) play it through the speakers. */
   speak: (payload: VoiceSpeakPayload) => Promise<VoiceSpeakResult>;
+  /** Transcribe a main-owned HTTPS audio source. */
+  transcribeUpload: (
+    payload: VoiceTranscribeUploadPayload,
+  ) => Promise<VoiceTranscribeUploadResult>;
   /** Open a live streaming ASR session (partial → final → end). */
   asrStream: (
     payload: VoiceAsrStreamPayload,
@@ -162,6 +200,10 @@ export function createVoiceSdk(transport: VoiceSdkTransport): VoiceSdk {
     async speak(payload) {
       const response = await transport.send(voiceApiEvents.speak, payload);
       return assertVoiceApiResponse(response, "Voice speak failed");
+    },
+    async transcribeUpload(payload) {
+      const response = await transport.send(voiceApiEvents.transcribeUpload, payload);
+      return assertVoiceApiResponse(response, "Voice upload transcription failed");
     },
 
     async asrStream(payload, options) {

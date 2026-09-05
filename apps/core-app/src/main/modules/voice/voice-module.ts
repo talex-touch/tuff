@@ -76,6 +76,18 @@ export class VoiceModule extends BaseModule<TalexEvents> {
       )
     )
 
+    // Main-owned uploaded audio transcription.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.transcribeUpload,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          (payload) => voiceService.transcribeUpload(payload),
+          { onError: (error) => voiceLog.error('Voice upload transcription failed:', { error }) }
+        )
+      )
+    )
+
     // Text-to-speech.
     this.cleanups.push(
       transport.on(
