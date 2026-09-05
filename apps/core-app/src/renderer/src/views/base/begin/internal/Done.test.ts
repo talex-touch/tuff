@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   step: vi.fn(),
   toastError: vi.fn(),
   loggerError: vi.fn(),
+  loggerWarn: vi.fn(),
   appSetting: {
     beginner: { init: false, shortcutArmed: false },
     setup: { hideDock: false }
@@ -59,7 +60,9 @@ vi.mock('~/modules/platform/renderer-platform', () => ({
   useRendererPlatform: () => ({ isMac: { value: false } })
 }))
 vi.mock('~/utils/renderer-log', () => ({
-  createRendererLogger: () => ({ error: mocks.loggerError })
+  // Both levels: a double missing `warn` turned the retry path into a TypeError swallowed by the
+  // component's own catch, which reads exactly like "the retry never happened".
+  createRendererLogger: () => ({ error: mocks.loggerError, warn: mocks.loggerWarn })
 }))
 
 import Done from './Done.vue'
@@ -148,5 +151,53 @@ describe('onboarding completion', () => {
     expect(mocks.step).not.toHaveBeenCalled()
     expect(mocks.hide).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith('beginner.done.persistFailed')
+  })
+
+  it('retries a transient failure instead of stranding the user on their first run', async () => {
+    // This write has no later tick, so a single contended flush would otherwise put a dead end in
+    // front of a first-run user.
+    mocks.saveDurable
+      .mockResolvedValueOnce({ success: false, version: 0, reason: 'transport' })
+      .mockResolvedValueOnce({ success: true, version: 2 })
+    const wrapper = mountDone()
+
+    wrapper.findComponent({ name: 'TxButton' }).vm.$emit('click')
+    await vi.waitFor(() => expect(mocks.appSetting.beginner.init).toBe(true))
+
+    expect(mocks.saveDurable).toHaveBeenCalledTimes(2)
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('does not retry a conflict, which a newer value already won', async () => {
+    // Resending the stale snapshot would only lose again; the user must re-read current state.
+    mocks.saveDurable.mockResolvedValue({
+      success: false,
+      version: 5,
+      conflict: true,
+      reason: 'conflict'
+    })
+    const wrapper = mountDone()
+
+    wrapper.findComponent({ name: 'TxButton' }).vm.$emit('click')
+    await vi.waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith('beginner.done.persistFailed')
+    )
+
+    expect(mocks.saveDurable).toHaveBeenCalledTimes(1)
+    expect(mocks.appSetting.beginner.init).toBe(false)
+  })
+
+  it('gives up after a bounded number of attempts', async () => {
+    mocks.saveDurable.mockResolvedValue({ success: false, version: 0, reason: 'transport' })
+    const wrapper = mountDone()
+
+    wrapper.findComponent({ name: 'TxButton' }).vm.$emit('click')
+    await vi.waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith('beginner.done.persistFailed')
+    )
+
+    // The user is waiting on a button; this must not loop.
+    expect(mocks.saveDurable).toHaveBeenCalledTimes(3)
+    expect(mocks.appSetting.beginner.init).toBe(false)
   })
 })

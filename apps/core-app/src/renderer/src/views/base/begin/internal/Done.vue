@@ -24,6 +24,9 @@ type StepFunction = (
 const step: StepFunction = inject('step')!
 const { t } = useI18n()
 const doneLog = createRendererLogger('BeginnerDone')
+/** Bounded because the user is waiting on a button; three tries cover a contended flush. */
+const ONBOARDING_SAVE_RETRIES = 2
+const ONBOARDING_SAVE_RETRY_DELAY_MS = 120
 const appSdk = useAppSdk()
 const transport = useTuffTransport()
 const { isMac } = useRendererPlatform()
@@ -84,13 +87,38 @@ async function completeBeginner(options: { openCoreBox?: boolean } = {}): Promis
   // `beginner.init` admits CoreBox and search in the main process. Send a detached snapshot and
   // require the main process to persist it before mutating renderer state: changing the reactive
   // object first would race its 300ms auto-save against this lifecycle-critical write.
+  //
+  // Retried because this write has no later tick — the main-process config repository says as much
+  // where it explains why *it* retries — so a single contended flush or transport hiccup would
+  // otherwise put a dead end in front of the user on their first run. A conflict is not retried:
+  // it means a newer value already won, and resending the stale snapshot would only lose again.
   try {
-    const result = await appSettingStore.saveDurable({
+    let result = await appSettingStore.saveDurable({
       ...toRaw(appSetting),
       beginner: completedBeginnerState
     })
+
+    for (
+      let attempt = 1;
+      attempt <= ONBOARDING_SAVE_RETRIES && !result.success && !result.conflict;
+      attempt += 1
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, ONBOARDING_SAVE_RETRY_DELAY_MS * attempt))
+      doneLog.warn('Retrying onboarding completion save', { attempt, reason: result.reason })
+      result = await appSettingStore.saveDurable({
+        ...toRaw(appSetting),
+        beginner: completedBeginnerState
+      })
+    }
+
     if (!result.success) {
-      throw new Error(result.conflict ? 'ONBOARDING_SAVE_CONFLICT' : 'ONBOARDING_SAVE_FAILED')
+      // Carry the reason: renderer logs do not reach the main log, so without it a failed first
+      // run leaves nothing to diagnose from.
+      throw new Error(
+        result.conflict
+          ? 'ONBOARDING_SAVE_CONFLICT'
+          : `ONBOARDING_SAVE_FAILED:${result.reason ?? 'unknown'}`
+      )
     }
   } catch (error) {
     isDoneClosing.value = false

@@ -95,6 +95,14 @@ export interface StorageSaveResult {
   success: boolean
   version: number
   conflict?: boolean
+  /**
+   * Why the save failed, for callers that surface it to the user.
+   *
+   * `transport` means the request never reached main (send rejected). Without it a failed
+   * lifecycle write — onboarding completion is the one that matters — is indistinguishable from a
+   * version conflict at the call site, and the renderer's own logs do not reach the main log.
+   */
+  reason?: 'conflict' | 'rejected' | 'transport'
 }
 
 /**

@@ -351,27 +351,39 @@ export class TouchStorage<T extends object> {
 
   async #saveRemote(request: StorageSaveRequest): Promise<SaveResult> {
     if (transport) {
-      const result = await transport.send(StorageEvents.app.save, request)
-      return this.#normalizeSaveResult(result)
+      try {
+        const result = await transport.send(StorageEvents.app.save, request)
+        return this.#normalizeSaveResult(result)
+      }
+      catch (error) {
+        // Mirror the main side, which deliberately reports a closed gate as a value rather than a
+        // rejection. A `saveDurable` caller gates a lifecycle step on this and has to tell a
+        // conflict from "the request never arrived"; an escaping transport error gave it neither,
+        // and renderer logs do not reach the main log, so the reason was lost entirely.
+        console.warn(`[TouchStorage] save("${this.#qualifiedName}") transport send failed`, error)
+        return { success: false, version: this.#currentVersion, reason: 'transport' }
+      }
     }
     warnStorageChannelIgnored()
     void request
-    return { success: false, version: 0 }
+    return { success: false, version: 0, reason: 'transport' }
   }
 
   #normalizeSaveResult(result: unknown): SaveResult {
     if (isRecord(result) && typeof result.success === 'boolean') {
+      const conflict = result.conflict === true ? true : undefined
       return {
         success: result.success,
         version: typeof result.version === 'number' ? result.version : this.#currentVersion,
-        conflict: result.conflict === true ? true : undefined,
+        conflict,
+        reason: result.success ? undefined : conflict ? 'conflict' : 'rejected',
       }
     }
 
     console.warn(`[TouchStorage] #executeSave("${this.#qualifiedName}") received invalid save result`, {
       resultType: result === null ? 'null' : typeof result,
     })
-    return { success: false, version: this.#currentVersion }
+    return { success: false, version: this.#currentVersion, reason: 'rejected' }
   }
 
   #registerUpdateListener(): void {
