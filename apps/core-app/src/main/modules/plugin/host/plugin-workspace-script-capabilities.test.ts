@@ -191,25 +191,29 @@ describe('isolated workspace script capability', () => {
   it('selects and lists only bounded display names plus opaque tokens', async () => {
     const harness = createHarness()
     const { listed, selected } = await selectAndList(harness)
+    const response = { selected, listed }
+    const workspace = {
+      name: path.basename(harness.root as string),
+      token: expect.stringMatching(/^ws_[A-Za-z0-9_-]{32}$/)
+    }
 
-    expect(selected).toMatchObject({
+    expect(selected).toEqual({
       operation: 'select-workspace',
       status: 'selected',
-      workspace: { name: path.basename(harness.root as string) }
+      workspace
     })
-    expect(selected.workspace.token).toMatch(/^ws_[A-Za-z0-9_-]{32}$/)
-    expect(listed).toMatchObject({
+    expect(listed).toEqual({
       operation: 'list-scripts',
       status: 'available',
-      scripts: [{ name: 'lint' }, { name: 'test' }]
+      workspace,
+      scripts: [
+        { name: 'lint', token: expect.stringMatching(/^wss_[A-Za-z0-9_-]{32}$/) },
+        { name: 'test', token: expect.stringMatching(/^wss_[A-Za-z0-9_-]{32}$/) }
+      ]
     })
-    expect(listed.scripts.every((script) => /^wss_[A-Za-z0-9_-]{32}$/.test(script.token))).toBe(
-      true
-    )
-    expect(JSON.stringify({ selected, listed })).not.toContain(harness.root)
-    expect(JSON.stringify({ selected, listed })).not.toMatch(
-      /eslint|vitest|command|cwd|path|args|env/i
-    )
+    const serializedResponse = JSON.stringify(response)
+    expect(serializedResponse).not.toContain(harness.root)
+    expect(serializedResponse).not.toMatch(/eslint|vitest/i)
   })
 
   it.each([
