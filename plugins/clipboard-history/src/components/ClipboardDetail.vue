@@ -4,6 +4,7 @@ import type { ResolvedApplication } from '@talex-touch/utils/transport/events/ty
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import ClipboardGlyph from './ClipboardGlyph.vue'
 import ClipboardInsight from './ClipboardInsight.vue'
+import ClipboardMoreInfo from './ClipboardMoreInfo.vue'
 import { extractPaletteFromImage, parseColor, pickReadableForeground, toHex } from '~/utils/clipboard-colors'
 import type { ClipboardFileNode } from '~/utils/clipboard-items'
 import {
@@ -295,6 +296,8 @@ function handleSourceIconError(event: Event): void {
         @copy-text="value => emit('copyText', value)"
         @open-link="url => emit('openLink', url)"
       />
+
+      <ClipboardMoreInfo :item="item" :palette="palette" @copy-text="value => emit('copyText', value)" />
     </div>
   </section>
 </template>
