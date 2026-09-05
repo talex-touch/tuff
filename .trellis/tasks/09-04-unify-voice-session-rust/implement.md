@@ -49,11 +49,11 @@
 
 - Voice/Assistant/plugin/clipboard focused tests：120 tests passed。
 - Shared Voice SDK tests：7 tests passed。
-- CoreApp Web typecheck passed；Node typecheck 在关闭 `noImplicitAny` 后无新增诊断。
+- CoreApp Web/Node typecheck passed；Node 严格检查依赖 CoreApp 自有 `@types/plist` 声明与 lockfile importer。
 - Rust `native-audio` tests：38 tests passed；release addon build 与 headless load verification passed。
 - Plugin manifest validation：29/29 plugins passed；Electron plugin-host isolation smoke passed。
 
 ## 仍需发布前手工门禁
 
-- 当前工作树的严格 Node typecheck 被既有 workspace 依赖链接缺失阻塞：`plist` 缺少 `@types/plist`，不属于本次 Voice 改动。
+- Node `typeText` 实机探针返回 `accessibility-required`；系统级 `osascript` AutoPaste 返回 Automation 错误 `1002`。TextEdit 目标已启动，但当前调用进程/自动化发送方仍未取得对应 macOS 权限，因此真实写回矩阵保持阻塞。
 - 尚未在真实 TextEdit、浏览器、VS Code、Terminal、飞书/Slack 中执行一次带真实 Provider 的语音生成→写回矩阵；当前证据覆盖 native addon、模拟 delivery、插件隔离和组件行为，不能替代该手工验收。
