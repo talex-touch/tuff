@@ -502,11 +502,7 @@ export class DownloadWorker {
           }
           terminalFailure ??= error
           downloadWorkerLog.error('Chunk download failed', {
-            error: {
-              type: error instanceof DownloadErrorClass ? error.type : 'unknown_error',
-              severity: error instanceof DownloadErrorClass ? error.severity : 'high',
-              canRetry: error instanceof DownloadErrorClass ? error.canRetry : false
-            },
+            error,
             meta: { taskId: task.id, chunkIndex: chunk.index }
           })
           return
@@ -547,6 +543,7 @@ export class DownloadWorker {
 
     const maxRetries = this.config.chunk.maxRetries
     let retryCount = 0
+    let requestUrl = task.url
 
     const errorContext = {
       taskId: task.id,
@@ -582,7 +579,7 @@ export class DownloadWorker {
         const requiresPartialContent = rangeStart > chunk.start
         const response = await getNetworkService().requestStream({
           method: 'GET',
-          url: task.url,
+          url: requestUrl,
           headers: {
             ...headers,
             Range: `bytes=${rangeStart}-${chunk.end}`
@@ -624,6 +621,22 @@ export class DownloadWorker {
         }
 
         const statusCode = getNetworkStatusCode(error)
+        const fallbackUrl =
+          typeof task.metadata?.fallbackUrl === 'string' ? task.metadata.fallbackUrl : undefined
+        const fallbackUsed = task.metadata?.fallbackUsed === true
+
+        if (statusCode === 403 && fallbackUrl && !fallbackUsed && requestUrl !== fallbackUrl) {
+          requestUrl = fallbackUrl
+          task.metadata = { ...task.metadata, fallbackUsed: true }
+          errorContext.url = fallbackUrl
+          retryCount = 0
+          chunk.status = chunk.downloaded > 0 ? ChunkStatus.PENDING : ChunkStatus.FAILED
+          downloadWorkerLog.warn('Signed download URL expired; switching to fallback', {
+            meta: { taskId: task.id, chunkIndex: chunk.index }
+          })
+          continue
+        }
+
         const isRangeIgnored = statusCode === 200 && chunk.downloaded > 0
 
         if (isRangeIgnored) {

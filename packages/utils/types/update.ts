@@ -29,6 +29,7 @@ export interface DownloadAsset {
   arch?: 'x64' | 'arm64'
   checksum?: string
   signatureUrl?: string
+  fallbackDownloadUrl?: string
 }
 
 /**
