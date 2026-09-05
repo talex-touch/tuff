@@ -486,4 +486,60 @@ describe('clipboardManagerView', () => {
 
     wrapper.unmount()
   })
+
+  it('keeps secondary metadata behind a collapsed disclosure', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [
+        {
+          id: 61,
+          type: 'text',
+          content: 'hello',
+          timestamp: Date.parse('2026-09-05T03:49:00Z'),
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.find('.more-body').exists()).toBe(false)
+    // 摘要由实际会渲染的分区名拼出来，不是写死的文案。
+    const summary = wrapper.get('.more-summary').text()
+    expect(summary).toContain('MIME')
+    expect(summary).toContain('记录 ID')
+    expect(summary).toContain('字符拆分')
+
+    await wrapper.get('.more-toggle').trigger('click')
+
+    expect(wrapper.findAll('.more-label').map(node => node.text())).toEqual([
+      'MIME',
+      '记录时间',
+      '记录 ID',
+    ])
+
+    wrapper.unmount()
+  })
+
+  it('abbreviates the mime in the summary strip but spells it out in the disclosure', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 62, type: 'files', content: JSON.stringify(['/Users/demo/Downloads/a.pdf']) }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    // 全称在 720 宽下会撞上右对齐的时间戳，摘要条只放子类型。
+    expect(wrapper.get('.summary-mime').text()).toBe('x-tuff-files')
+
+    await wrapper.get('.more-toggle').trigger('click')
+    expect(wrapper.findAll('.more-value')[0]?.text()).toBe('application/x-tuff-files')
+
+    wrapper.unmount()
+  })
 })
