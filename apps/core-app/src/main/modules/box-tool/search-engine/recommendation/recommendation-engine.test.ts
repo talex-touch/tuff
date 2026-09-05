@@ -2009,6 +2009,33 @@ describe('RecommendationEngine', () => {
     ])
   })
 
+  it('does not read the fallback when pinned slots leave no shortfall', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [createCatalogApp('/Applications/Cold.app', DAY_MS, 1)],
+      {}
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getPinnedItems: vi.fn(async () => createCandidates(['pin-a', 'pin-b'])),
+      getCandidates: vi.fn(async () => ({
+        items: createCandidates(['survives', 'broken']),
+        perf: candidatePerf(2)
+      })),
+      itemRebuilder: createPartialRebuilder(['broken'])
+    })
+
+    const result = await engine.recommend({ limit: 3 })
+
+    // Two pins claim two of the three slots and the one survivor fills the
+    // third, so there is no shortfall. Sizing the budget against the full limit
+    // would fetch and rebuild a cold-start list that combine then discards —
+    // invisible in the grid, and a wasted catalog read on every request.
+    expect(result.items.map((item) => item.id)).toEqual(['survives', 'pin-a', 'pin-b'])
+    expect(catalog.getFilesByType).not.toHaveBeenCalled()
+  })
+
   it('does not spend a backfill slot on something already in the grid', async () => {
     const dbUtils = createDbUtils()
     // The freshest catalog app is the one candidate that did rebuild, so the

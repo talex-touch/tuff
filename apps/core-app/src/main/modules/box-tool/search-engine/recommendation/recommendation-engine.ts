@@ -1647,7 +1647,7 @@ export class RecommendationEngine {
   ): Promise<TuffItem[]> {
     // Mirrors how combineRecommendedWithPinned splits the budget: pinned items
     // claim their slots first, so only the remainder is ours to fill.
-    const budget = Math.max(0, limit) // MUTATION 4
+    const budget = Math.max(0, limit - Math.min(pinnedItems.length, limit))
     const shortfall = budget - recommendItems.length
     if (shortfall <= 0) return recommendItems
 
