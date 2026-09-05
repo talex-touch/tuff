@@ -48,6 +48,7 @@ interface ReleaseCacheStore {
 interface OfficialReleaseAsset {
   filename: string
   downloadUrl: string
+  fallbackDownloadUrl?: string | null
   size: number
   platform: 'darwin' | 'win32' | 'linux'
   arch: 'x64' | 'arm64' | 'universal'
@@ -494,6 +495,7 @@ export class ReleaseFetchService {
         {
           name: asset.filename,
           url,
+          fallbackDownloadUrl: asset.fallbackDownloadUrl ?? undefined,
           size: asset.size,
           platform: asset.platform,
           arch: asset.arch === 'arm64' ? 'arm64' : 'x64',
