@@ -200,6 +200,16 @@ const CLIPBOARD_TAG_LABELS: Record<string, string> = {
   url: '链接',
 }
 
+/** 原始 tag 值（未本地化），供内容形态分类器使用。 */
+export function getClipboardRawTags(item: PluginClipboardItem): string[] {
+  const tags = getMeta(item).tags
+  if (!Array.isArray(tags)) {
+    return []
+  }
+
+  return tags.filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
+}
+
 export function getClipboardTagLabels(item: PluginClipboardItem): string[] {
   const tags = getMeta(item).tags
   if (!Array.isArray(tags)) {
