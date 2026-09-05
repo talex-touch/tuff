@@ -57,3 +57,22 @@
 
 - Node `typeText` 实机探针返回 `accessibility-required`；系统级 `osascript` AutoPaste 返回 Automation 错误 `1002`。TextEdit 目标已启动，但当前调用进程/自动化发送方仍未取得对应 macOS 权限，因此真实写回矩阵保持阻塞。
 - 尚未在真实 TextEdit、浏览器、VS Code、Terminal、飞书/Slack 中执行一次带真实 Provider 的语音生成→写回矩阵；当前证据覆盖 native addon、模拟 delivery、插件隔离和组件行为，不能替代该手工验收。
+
+## Provider 兼容执行顺序
+
+9. 在 `packages/tuff-voice` 建立 Provider-neutral contract、事件归一化和 fake transport，不触碰 renderer。
+10. 根据官方协议实现豆包双向流式与录音文件 adapter，覆盖 API Key/Resource ID、sequence、终态和 upload task。
+11. 根据百炼具体模型族实现 stream 与 upload adapter；先接入用户提供或官方可验证的模型，不把 Paraformer、Qwen-ASR、Fun-ASR 混成一个协议。
+12. CoreApp main 注册 package adapters，替换 `TUFF_VOICE_ASR_WS_URL` 泛化生产旁路，并新增 main-owned upload handle。
+13. 运行 package protocol tests、CoreApp Voice tests、类型检查和双 Provider 的真实授权验收。
+
+## Provider 开发配置
+
+当前 CoreApp 仅在 main 进程读取显式开发环境变量，不持久化或打印凭据：
+
+- 豆包：`TUFF_VOICE_DOUBAO_API_KEY` + `TUFF_VOICE_DOUBAO_RESOURCE_ID`，或旧版 `TUFF_VOICE_DOUBAO_APP_KEY` + `TUFF_VOICE_DOUBAO_ACCESS_KEY`；
+- 百炼 Paraformer：`TUFF_VOICE_BAILIAN_API_KEY` + `TUFF_VOICE_BAILIAN_WORKSPACE_ID`；
+- 默认流式 Provider 可由 `TUFF_VOICE_ASR_PROVIDER` 指定为 `doubao` 或 `bailian-paraformer`；
+- 豆包上传模式可用 `TUFF_VOICE_DOUBAO_UPLOAD_VARIANT=fast|standard|idle` 选择，默认 `fast`。
+
+这些环境变量是开发联调入口，不替代后续 Settings/secure-store 的 Provider credential lifecycle；未配置时保留现有 `audio.stt`/泛化 WebSocket 兼容路径。
