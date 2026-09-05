@@ -60,7 +60,11 @@ Nexus update lookup failed transiently; falling back to GitHub
 
 **实现**：新增私有方法 `backfillShortfall(recommendItems, pinnedItems, limit)`，接在正常路径的 `combineRecommendedWithPinned` 之前。原来那条全空回退分支**保持不动** —— 它不写 DB 缓存，是另一套语义。
 
-**回补项排在所有幸存项之下，而不是按分数并入。** 两个池子不同量纲：实测被打分的候选 `scoring.final` ≈ 2.9e5（含时间项），cold-start 是 `COLD_START_BASE_SCORE`(1e3) 减序号，frequent 回退是原始 `executeCount`（个位数）。按原始分并入，理论上会让"重建失败"反而把 cold-start 应用顶到幸存的真实推荐之上。重写 `final` 是该字段的既定契约（其 JSDoc 明说排序器回写绝对排序分、量级远大于 1）。
+**回补项排在所有幸存项之下，而不是按分数并入。** 打分机制不是"几个池子量纲不同"（我一开始这么写，是错的），而是**一把按十进制分带的绝对尺子**：新装 1e7 > 上下文匹配 1e6 > 时间 1e5 > 频率 1e4 > 近因/插件优先级 1e3，cold-start 被**故意**钉在 `COLD_START_BASE_SCORE`(1e3)、frequent 回退用原始 `executeCount`，就是为了压在所有真实项之下。真正的缺口只有一处：频率项 `(execute + 0.3·search − 0.5·cancel) × exp(−0.1·天)` **没有下限** —— 一个月前用过一次的应用约 500，取消多的能算成负数 —— 所以"回退项一定在真实项之下"从来没被保证过，只是通常成立。重写 `final` 是该字段的既定契约（其 JSDoc 明说排序器回写绝对排序分、量级远大于 1）。
+
+**重写的上限被钉在回退带自己的顶端**：`ceiling = min(最低幸存分, COLD_START_BASE_SCORE)`。正常幸存项（≥1e3）下回补落在 999、998…，几乎就是 cold-start 项原本的值；陈旧幸存项（<1e3）下才真正压下去。为什么要这个上限：`sanitizeRecommendationCacheValue` 保留 `scoring`，重写后的分数**会持久化进 `recommendation_cache`**。不加上限的话，一个从没用过的应用会以 ≈3e5 躺在缓存行里，调缓存的人分不出它和一个日常习惯。其余流向都查过：渲染层 `applyRecommendationResult` 直接赋值不按分重排、曝光遥测只发 `itemKeys`、`meta.recommendation.score` 全仓无读者。
+
+**没做、也不建议现在做的**：把 cold-start / frequent 回退真正接进 `scoreAndRank`，让它们在同一把尺子上自己挣位置。那会改变 cold-start 的排序语义（新装因子 7 天窗口之外全部并列 0，现在是按安装时间排），属于已发布行为的变更，该单开任务带 PRD。
 
 **诚实记录**：实测量纲下,打分候选本来就远高于 1e3，所以这条重写在端到端场景里**不可观察** —— 变异验证时全套 73 个测试照过。因此额外补了一条直接调用 `backfillShortfall`、构造"幸存项分数低于回退池"的单元测试来锁它。同理，预算公式扣除置顶槽位这件事在网格内容上也不可观察（`combineRecommendedWithPinned` 本来就会截断，多取的项排在最后正好被丢掉），它唯一的实际作用是**避免白做一次 cold-start 的库读 + 重建**，所以对应测试断言的是"没有读目录"，而不是网格内容。
 
