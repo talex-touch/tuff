@@ -134,47 +134,49 @@ describe('DownloadWorker chunk concurrency', () => {
     ])
   })
 
-  it('drains active lanes without claiming queued chunks before surfacing a terminal failure', async () => {
+  it('keeps an active request owned until terminal failure can surface', async () => {
     const dir = await createWorkspace()
     const chunks = Array.from({ length: 3 }, (_, index) => chunk(dir, index))
-    const delayedRequestStarted = Promise.withResolvers<void>()
-    const delayedStreamStarted = Promise.withResolvers<void>()
-    const releaseDelayedStream = Promise.withResolvers<void>()
+    const activeRequestStarted = Promise.withResolvers<void>()
+    const activeRequest = Promise.withResolvers<{
+      headers: Record<string, string>
+      stream: Readable
+    }>()
+    const activeRequestResolved = Promise.withResolvers<void>()
+    const terminalFailureLogged = Promise.withResolvers<void>()
+    const outerFailureSurfaced = Promise.withResolvers<void>()
     const terminalFailure = new Error('first chunk failed permanently')
     const requestRanges: string[] = []
-    let delayedStreamEnded = false
-    let delayedChunkStatusWhenErrorSurfaced: ChunkStatus | undefined
-    let errorSurfacedBeforeDelayedStreamEnded = false
 
-    const delayedStream = Readable.from(
-      (async function* () {
-        delayedStreamStarted.resolve()
-        yield Buffer.from('x')
-        await releaseDelayedStream.promise
-      })()
-    )
-    delayedStream.once('end', () => {
-      delayedStreamEnded = true
-    })
+    activeRequest.promise.then(() => activeRequestResolved.resolve())
 
     requestStream.mockImplementation(async (request: { headers: Record<string, string> }) => {
       const range = request.headers.Range
       requestRanges.push(range)
 
       if (range === 'bytes=0-0') {
-        await delayedRequestStarted.promise
-        await delayedStreamStarted.promise
+        await activeRequestStarted.promise
         throw terminalFailure
       }
 
       if (range === 'bytes=1-1') {
-        delayedRequestStarted.resolve()
-        return { headers: {}, stream: delayedStream }
+        activeRequestStarted.resolve()
+        return await activeRequest.promise
       }
 
-      return { headers: {}, stream: Readable.from([Buffer.from('x')]) }
+      throw new Error(`Queued chunk was claimed after terminal failure: ${range}`)
     })
-    downloadWorkerLog.error.mockImplementationOnce(() => releaseDelayedStream.resolve())
+    downloadWorkerLog.error.mockImplementationOnce(() => {
+      terminalFailureLogged.resolve()
+      // Keep the active lane at its request boundary through two microtask checkpoints. An
+      // immediate Promise.all rejection wins this race; a drained worker can only surface the
+      // terminal error after this request resolves.
+      queueMicrotask(() => {
+        queueMicrotask(() => {
+          activeRequest.resolve({ headers: {}, stream: Readable.from([Buffer.from('x')]) })
+        })
+      })
+    })
 
     const worker = new DownloadWorker(
       2,
@@ -191,19 +193,29 @@ describe('DownloadWorker chunk concurrency', () => {
       { chunk: { maxRetries: 0 }, network: { timeout: 5_000, retryDelay: 0 } } as never
     )
 
-    const result = await downloadChunks(worker, task(dir), chunks).then(
+    const result = downloadChunks(worker, task(dir), chunks).then(
       () => ({ error: undefined }),
       (error: unknown) => {
-        delayedChunkStatusWhenErrorSurfaced = chunks[1].status
-        errorSurfacedBeforeDelayedStreamEnded = !delayedStreamEnded
+        outerFailureSurfaced.resolve()
         return { error }
       }
     )
 
-    expect(result.error).toMatchObject({ message: terminalFailure.message })
-    expect(delayedStreamEnded).toBe(true)
-    expect(delayedChunkStatusWhenErrorSurfaced).toBe(ChunkStatus.COMPLETED)
-    expect(errorSurfacedBeforeDelayedStreamEnded).toBe(false)
+    await terminalFailureLogged.promise
+
+    expect(downloadWorkerLog.error).toHaveBeenCalledWith(
+      'Chunk download failed',
+      expect.objectContaining({ meta: expect.objectContaining({ chunkIndex: 0 }) })
+    )
     expect(requestRanges).toEqual(['bytes=0-0', 'bytes=1-1'])
+    await expect(
+      Promise.race([
+        activeRequestResolved.promise.then(() => 'active request resolved'),
+        outerFailureSurfaced.promise.then(() => 'outer failure surfaced')
+      ])
+    ).resolves.toBe('active request resolved')
+
+    const { error } = await result
+    expect(error).toMatchObject({ message: terminalFailure.message })
   })
 })
