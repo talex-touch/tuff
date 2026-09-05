@@ -73,6 +73,35 @@ cd plugins/clipboard-history
 
 第 1 步（纯数据层，可独立提交）与第 2 步（唯一的视觉风险点）各提交一次。回滚第 2 步只需还原 `ClipboardDetail.vue`。
 
+## 执行记录（2026-09-05）
+
+实现提交：`b887d59fe`，分支 `feature/clipboard-layout-shell`。
+
+| 验证 | 结果 |
+| --- | --- |
+| `vue-tsc --noEmit` | 0 错误 |
+| `vitest run` | 49 通过（基线 39，新增 10） |
+| `eslint src/` | exit 0，无输出 |
+| `scripts/assert-no-raw-channels.mjs` | 通过 |
+| `scripts/sync-builtin.mjs` | 已同步 |
+
+改过的既有断言只有两处，都是随 DOM 结构调整选择器、未放宽行为：
+`.info-value-copy` → `.source-name` / `.source-bundle`，`.detail-heading h2` → `.text-preview`。
+
+**仍未验证**：分类条 10 项在 720 宽下的实际渲染宽度。jsdom 不做布局，量不了；
+需要 `pnpm core:dev` 真机自查。设计稿测得 chips 566 + 计数 38，余量约 76px，但那是 pen 的字体度量。
+
+### 环境事故与修复
+
+`pnpm test` 会先做工作区依赖校验并触发全量 `pnpm install`。该 install 被超时 kill 后，
+根 `node_modules/.bin` 与 hoist 链接被删空（`.pnpm` store 完好），导致 pre-commit 的
+`check-bin-shims` 直接失败、eslint 无法解析 `@antfu/eslint-config`。
+
+修复：`pnpm install --filter . --prefer-offline --ignore-scripts`（只装根工作区，53s 完成）。
+全量 install 三次都卡在少数二进制包的网络下载上。
+
+**本包后续一律直接调 bin**：`./node_modules/.bin/vitest`、`./node_modules/.bin/vue-tsc`。
+
 ## 不做
 
 - 洞察路由（C2）、颜色能力（C3）、更多信息折叠区（C4）、文件预览面板（C5）、分享（C6）。
