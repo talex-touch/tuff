@@ -4,6 +4,7 @@ import type { ResolvedApplication } from '@talex-touch/utils/transport/events/ty
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import ClipboardGlyph from './ClipboardGlyph.vue'
 import ClipboardInsight from './ClipboardInsight.vue'
+import { extractPaletteFromImage, parseColor, pickReadableForeground, toHex } from '~/utils/clipboard-colors'
 import type { ClipboardFileNode } from '~/utils/clipboard-items'
 import {
   getClipboardSourceInfo,
@@ -36,6 +37,18 @@ const fileGroups = computed(() =>
   props.item?.type === 'files' ? groupFilesByDirectory(props.item.content) : [],
 )
 const collapsedDirs = ref<ReadonlySet<string>>(new Set())
+
+/**
+ * 图片主题色只能在渲染进程侧从缩略图提取——主进程从未写过 dominant_color / palette。
+ * 按 id 缓存，切回同一条不重算；取不到就整条不渲染，不留一条空色带。
+ */
+const palette = ref<string[]>([])
+const paletteCache = new Map<number, string[]>()
+
+/** 内容本身就是一个色值时，预览区直接变成色卡。含多个色值的 CSS 片段不走这条。 */
+const previewColor = computed(() =>
+  props.item?.type === 'text' ? parseColor(props.item.content?.trim() ?? '') : null,
+)
 
 function toggleDir(dir: string): void {
   const next = new Set(collapsedDirs.value)
@@ -89,6 +102,29 @@ onBeforeUnmount(() => {
   }
 })
 
+watch(
+  () => [props.item?.id, imagePreview.value.src] as const,
+  async ([id, src]) => {
+    palette.value = []
+    if (props.item?.type !== 'image' || typeof id !== 'number' || !src) {
+      return
+    }
+
+    const cached = paletteCache.get(id)
+    if (cached) {
+      palette.value = cached
+      return
+    }
+
+    const extracted = await extractPaletteFromImage(src)
+    paletteCache.set(id, extracted)
+    if (props.item?.id === id) {
+      palette.value = extracted
+    }
+  },
+  { immediate: true },
+)
+
 function handleImageError(): void {
   const failedPreview = imagePreview.value
   const failedSource = failedPreview.src
@@ -130,15 +166,45 @@ function handleSourceIconError(event: Event): void {
 
       <template v-else-if="item.type === 'image' && imagePreview.src">
         <div class="image-container">
-          <img
-            :key="imageRetryNonce"
-            :src="imagePreview.src || undefined"
-            :alt="getClipboardTitle(item)"
-            class="preview-img"
-            :class="{ thumbnail: imagePreview.isThumbnailOnly }"
-            @error="handleImageError"
-          >
-          <span v-if="imagePreview.isThumbnailOnly" class="preview-badge">缩略图预览</span>
+          <div class="image-block">
+            <div class="image-frame">
+              <img
+                :key="imageRetryNonce"
+                :src="imagePreview.src || undefined"
+                :alt="getClipboardTitle(item)"
+                class="preview-img"
+                :class="{ thumbnail: imagePreview.isThumbnailOnly }"
+                @error="handleImageError"
+              >
+              <span v-if="imagePreview.isThumbnailOnly" class="preview-badge">
+                {{ resolvingImageUrl ? '正在加载原图…' : '缩略图预览' }}
+              </span>
+            </div>
+
+            <div v-if="palette.length > 0" class="palette-strip">
+              <button
+                v-for="color in palette"
+                :key="color"
+                class="palette-swatch"
+                type="button"
+                :style="{ backgroundColor: color }"
+                :title="`复制 ${color}`"
+                @click="emit('copyText', color)"
+              />
+            </div>
+            <p v-if="palette.length > 0" class="palette-caption">
+              主题色 · 点击复制
+            </p>
+          </div>
+        </div>
+      </template>
+
+      <template v-else-if="previewColor">
+        <div
+          class="color-canvas"
+          :style="{ backgroundColor: toHex(previewColor), color: pickReadableForeground(previewColor) }"
+        >
+          {{ toHex(previewColor) }}
         </div>
       </template>
 
@@ -295,10 +361,58 @@ function handleSourceIconError(event: Event): void {
   image-rendering: auto;
 }
 
+.image-block {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  justify-items: stretch;
+}
+
+.image-frame {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.palette-strip {
+  display: flex;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 70%, transparent);
+}
+
+.palette-swatch {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.palette-caption {
+  margin: 0;
+  color: var(--clipboard-text-muted);
+  font-size: 0.66rem;
+}
+
+.color-canvas {
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
 .preview-badge {
   position: absolute;
-  left: 10px;
-  bottom: 10px;
+  right: 8px;
+  bottom: 8px;
   padding: 4px 8px;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 70%, transparent);
