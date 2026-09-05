@@ -175,11 +175,14 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
 }
 
 .BoxGridWrapper {
-  width: calc(100% - 1rem);
+  width: calc(100% - 0.5rem);
   border-radius: 18px;
   position: relative;
 
-  margin: 0.5rem;
+  // Tight on purpose: BoxItem already carries its own 8px inset, so a 0.5rem wrapper margin put
+  // list rows 16px from the edge and the section title 24px — visibly adrift from the design and
+  // from each other.
+  margin: 2px 4px;
 
   &.is-intelligence {
     &::before {
@@ -224,7 +227,8 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
 }
 
 .BoxGridTitle {
-  padding: 8px 16px 0;
+  // 8px left lines the label up with BoxItem's own inset, so title and rows share one edge.
+  padding: 4px 8px 2px;
   font-size: 12px;
   font-weight: 500;
   color: var(--tx-text-color-secondary);
@@ -235,7 +239,6 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
 .BoxGridList {
   display: flex;
   flex-direction: column;
-  padding: 4px 0;
 }
 
 .BoxGrid {

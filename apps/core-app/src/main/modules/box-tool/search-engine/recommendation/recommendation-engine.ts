@@ -1420,7 +1420,8 @@ export class RecommendationEngine {
       }
     }
 
-    const combinedItems = this.combineRecommendedWithPinned(filteredItems, pinnedTuffItems, limit)
+    const backfilledItems = await this.backfillShortfall(filteredItems, pinnedTuffItems, limit)
+    const combinedItems = this.combineRecommendedWithPinned(backfilledItems, pinnedTuffItems, limit)
 
     // Both caches hold the STABLE ranking; the volatile stage runs on the way
     // out here exactly as it does on a cache hit, so a warm and a cold request
@@ -1565,8 +1566,7 @@ export class RecommendationEngine {
         id: 'habitual',
         title: i18nMsg('coreBox.sections.habitual'),
         layout: 'grid',
-        itemIds: habitual.map((item) => item.id),
-        meta: { intelligence: true }
+        itemIds: habitual.map((item) => item.id)
       })
     }
 
@@ -1617,6 +1617,64 @@ export class RecommendationEngine {
       .map((item, index) => ({ item, index, score: item.scoring?.final ?? 0 }))
       .sort((a, b) => b.score - a.score || a.index - b.index)
       .map(({ item }) => item)
+  }
+
+  /**
+   * Refills the recommendation budget when fewer candidates survived the rebuild
+   * than there are slots for them.
+   *
+   * Scoring and rendering count different things, and the gap is normal rather
+   * than exceptional: a source that fails to rebuild returns `[]` on purpose
+   * ("One source failing must not empty the whole grid", `item-rebuilder.ts`),
+   * and `SystemActionsProvider` now drops one-shot actions — `file-index`,
+   * `tpex-plugin`, `app-index`, `dev-plugin` — from the grid deliberately, which
+   * is what used to fill ⌘7–⌘9. Only a *total* rebuild failure fell back before
+   * this, so 3 items rebuilt against a limit of 10 left seven slots empty.
+   *
+   * The backfill is ranked strictly below every survivor instead of being merged
+   * by score, because the two pools are not on one scale: cold-start items carry
+   * `COLD_START_BASE_SCORE` (1e3) and frequent fallbacks a raw execute count,
+   * against scored candidates that `scoreAndRank` normalises. Merging them would
+   * let a rebuild failure *promote* a cold-start app over the real
+   * recommendations that survived it. Rewriting `final` is that field's stated
+   * contract — the ranker owns the post-sort value, and it is explicitly not a
+   * 0–1 quantity.
+   */
+  private async backfillShortfall(
+    recommendItems: TuffItem[],
+    pinnedItems: TuffItem[],
+    limit: number
+  ): Promise<TuffItem[]> {
+    // Mirrors how combineRecommendedWithPinned splits the budget: pinned items
+    // claim their slots first, so only the remainder is ours to fill.
+    const budget = Math.max(0, limit) // MUTATION 4
+    const shortfall = budget - recommendItems.length
+    if (shortfall <= 0) return recommendItems
+
+    const taken = new Set(
+      [...recommendItems, ...pinnedItems].map((item) => this.getItemIdentity(item))
+    )
+    const backfill = this.dedupeItems(await this.resolveFallbackItems(budget))
+      .filter((item) => !taken.has(this.getItemIdentity(item)))
+      .slice(0, shortfall)
+    if (backfill.length === 0) return recommendItems
+
+    const lowestSurviving = recommendItems.reduce(
+      (lowest, item) => Math.min(lowest, item.scoring?.final ?? 0),
+      Number.POSITIVE_INFINITY
+    )
+    // An all-pinned grid leaves no survivor to sit under; 0 keeps the backfill
+    // in the same negative band it would occupy in every other case.
+    const ceiling = Number.isFinite(lowestSurviving) ? lowestSurviving : 0
+    backfill.forEach((item, index) => {
+      item.scoring = { ...item.scoring, final: ceiling - 1 - index }
+    })
+
+    recommendationLog.debug('Backfilled a partial recommendation rebuild', {
+      meta: { rebuilt: recommendItems.length, backfilled: backfill.length, budget }
+    })
+
+    return [...recommendItems, ...backfill]
   }
 
   /**

@@ -317,6 +317,41 @@ function createTimeStats({
   }
 }
 
+/**
+ * Renders everything except `dropped`, which is the shape a real partial rebuild
+ * has: the sources that fail contribute nothing and the rest come back whole.
+ * The cold-start and fallback rebuilds run through here too, so anything not
+ * named by `dropped` survives on those paths as well.
+ */
+function createPartialRebuilder(dropped: string[]) {
+  const missing = new Set(dropped)
+  return {
+    rebuildItems: vi.fn(
+      async (items: Array<{ itemId: string; sourceId: string; source: string; score: number }>) =>
+        items
+          .filter((item) => !missing.has(item.itemId))
+          .map((item) => ({
+            id: item.itemId,
+            source: { id: item.sourceId, type: 'app', name: item.sourceId },
+            kind: 'app',
+            render: { mode: 'default', basic: { title: item.itemId } },
+            scoring: { final: item.score },
+            meta: { recommendation: { source: item.source, score: item.score } }
+          }))
+    )
+  }
+}
+
+/** Candidates the scorer accepts, all on one source type and one usage profile. */
+function createCandidates(itemIds: string[]) {
+  return itemIds.map((itemId) => ({
+    sourceId: 'app-provider',
+    itemId,
+    sourceType: 'app',
+    usageStats: createUsageStats(itemId, { executeCount: 5 })
+  }))
+}
+
 function candidatePerf(totalCandidates: number, filteredCount = totalCandidates) {
   return {
     totalCandidates,
@@ -1855,6 +1890,158 @@ describe('RecommendationEngine', () => {
     expect(getFilesByType).not.toHaveBeenCalled()
   })
 
+  it('refills the grid from the fallback when only part of the ranking rebuilds', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [
+        createCatalogApp('/Applications/Cold1.app', 10 * DAY_MS, 1),
+        createCatalogApp('/Applications/Cold2.app', 20 * DAY_MS, 2),
+        createCatalogApp('/Applications/Cold3.app', 30 * DAY_MS, 3)
+      ],
+      {}
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getCandidates: vi.fn(async () => ({
+        items: createCandidates(['survives', 'broken-a', 'broken-b', 'broken-c']),
+        perf: candidatePerf(4)
+      })),
+      itemRebuilder: createPartialRebuilder(['broken-a', 'broken-b', 'broken-c'])
+    })
+
+    const result = await engine.recommend({ limit: 4 })
+
+    // Three of the four scored candidates could not render, and every slot is
+    // still filled. Placement is not the claim here: the ranker's absolute scale
+    // (~1e5 in this fixture) sits well above the cold-start band whether or not
+    // the backfill is re-ranked, so the invariant that makes the survivor's lead
+    // deliberate rather than lucky is pinned on its own below.
+    expect(result.items.map((item) => item.id)).toEqual([
+      'survives',
+      '/Applications/Cold1.app',
+      '/Applications/Cold2.app',
+      '/Applications/Cold3.app'
+    ])
+  })
+
+  it('ranks backfill under a survivor that scores below the fallback scale', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    // The two pools are not on one scale — cold-start items arrive at
+    // COLD_START_BASE_SCORE (1e3) and frequent fallbacks at a raw execute count,
+    // against a ranker that writes an absolute score. Nothing bounds a scored
+    // survivor above them, and merging by raw score would let a rebuild failure
+    // promote the backfill over the recommendation that survived it.
+    const survivor = { id: 'survivor', source: { id: 'app-provider' }, scoring: { final: 12 } }
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      resolveFallbackItems: vi.fn(async () => [
+        { id: 'cold', source: { id: 'app-provider' }, scoring: { final: 1000 } }
+      ])
+    })
+
+    const backfilled = await (
+      engine as unknown as {
+        backfillShortfall: (
+          items: unknown[],
+          pinned: unknown[],
+          limit: number
+        ) => Promise<Array<{ id: string; scoring: { final: number } }>>
+      }
+    ).backfillShortfall([survivor], [], 2)
+
+    expect(backfilled.map((item) => item.id)).toEqual(['survivor', 'cold'])
+    // The order above only survives combineRecommendedWithPinned's re-sort
+    // because the score says so, so that is what gets asserted.
+    expect(backfilled[1]?.scoring.final).toBeLessThan(survivor.scoring.final)
+  })
+
+  it('leaves the fallback untouched when the rebuild filled every slot', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [createCatalogApp('/Applications/Cold.app', DAY_MS, 1)],
+      {}
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getCandidates: vi.fn(async () => ({
+        items: createCandidates(['a', 'b']),
+        perf: candidatePerf(2)
+      })),
+      itemRebuilder: createPartialRebuilder([])
+    })
+
+    const result = await engine.recommend({ limit: 2 })
+
+    expect(result.items).toHaveLength(2)
+    expect(catalog.getFilesByType).not.toHaveBeenCalled()
+  })
+
+  it('counts pinned slots against the backfill budget', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [
+        createCatalogApp('/Applications/Cold1.app', 10 * DAY_MS, 1),
+        createCatalogApp('/Applications/Cold2.app', 20 * DAY_MS, 2)
+      ],
+      {}
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getPinnedItems: vi.fn(async () => createCandidates(['pinned-app'])),
+      getCandidates: vi.fn(async () => ({
+        items: createCandidates(['survives', 'broken']),
+        perf: candidatePerf(2)
+      })),
+      itemRebuilder: createPartialRebuilder(['broken'])
+    })
+
+    const result = await engine.recommend({ limit: 3 })
+
+    // The pin owns one of the three slots, so the shortfall is one, not two —
+    // backfilling against the full limit would push the pin off the grid it is
+    // pinned to. Pinned items sort last, as they do on every other path.
+    expect(result.items.map((item) => item.id)).toEqual([
+      'survives',
+      '/Applications/Cold1.app',
+      'pinned-app'
+    ])
+  })
+
+  it('does not spend a backfill slot on something already in the grid', async () => {
+    const dbUtils = createDbUtils()
+    // The freshest catalog app is the one candidate that did rebuild, so the
+    // fallback offers it back under the identity it already occupies.
+    const catalog = createCatalogDbUtils(
+      [
+        createCatalogApp('/Applications/Shared.app', 10 * DAY_MS, 1),
+        createCatalogApp('/Applications/Cold2.app', 20 * DAY_MS, 2),
+        createCatalogApp('/Applications/Cold3.app', 30 * DAY_MS, 3)
+      ],
+      {}
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getCandidates: vi.fn(async () => ({
+        items: createCandidates(['/Applications/Shared.app', 'broken']),
+        perf: candidatePerf(2)
+      })),
+      itemRebuilder: createPartialRebuilder(['broken'])
+    })
+
+    const result = await engine.recommend({ limit: 3 })
+
+    // Deduping only after the slice would let the repeat consume a slot and
+    // silently hand back a short grid, which is the defect being fixed.
+    expect(result.items.map((item) => item.id)).toEqual([
+      '/Applications/Shared.app',
+      '/Applications/Cold2.app',
+      '/Applications/Cold3.app'
+    ])
+  })
+
   it('matches path-form app ids against the foreground app', async () => {
     const dbUtils = createDbUtils()
     const engine = new RecommendationEngine(dbUtils as never)
@@ -2048,7 +2235,15 @@ describe('RecommendationEngine', () => {
 
     const result = await engine.recommend({ limit: 10 })
 
-    expect(result.items.map((item) => item.id)).toEqual(['/Applications/Fresh.app'])
+    // Only Fresh.app passes the gate. The other three still reach the grid, but
+    // as cold-start backfill for the nine slots one candidate cannot fill — so
+    // membership no longer distinguishes them, and the novelty label does.
+    const newlyInstalled = result.items.filter(
+      (item) =>
+        (item.meta?.recommendation as { source?: string } | undefined)?.source === 'newly-installed'
+    )
+    expect(newlyInstalled.map((item) => item.id)).toEqual(['/Applications/Fresh.app'])
+    expect(result.items[0]?.id).toBe('/Applications/Fresh.app')
   })
 
   it('fades novelty from full strength at 48h to nothing at 7 days', () => {
@@ -2479,6 +2674,15 @@ describe('RecommendationEngine empty-state tiers', () => {
     ])
     expect(sections?.[0]?.itemIds).toEqual(['daily-app'])
     expect(sections?.[1]?.itemIds).toEqual(['at-this-hour', 'plugin-thing'])
+  })
+
+  it('does not flag the habitual grid as an intelligence tray', () => {
+    // `meta.intelligence` is not decoration: it caps the grid at the intelligence column limit and
+    // draws an animated rainbow border. The habitual tier is neither — it is the plain row of
+    // things the user reaches for.
+    const sections = layoutOf([item('a', 'frequent'), item('b', 'plugin')]).sections
+
+    expect(sections?.[0]).not.toHaveProperty('meta.intelligence')
   })
 
   it('titles both tiers with i18n keys rather than a hardcoded language', () => {
