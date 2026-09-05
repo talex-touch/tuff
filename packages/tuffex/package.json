@@ -107,7 +107,7 @@
   "devDependencies": {
     "@types/gulp": "^4.0.18",
     "@types/gulp-autoprefixer": "^0.0.37",
-    "@types/gulp-sass": "^5.0.4",
+    "@types/gulp-sass": "^6.0.0",
     "@types/katex": "^0.16.8",
     "@types/node": "catalog:dev",
     "@vitejs/plugin-vue": "^6.0.7",
