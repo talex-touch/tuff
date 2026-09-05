@@ -97,7 +97,9 @@
     "check:search-index-writers": "node scripts/check-search-index-writers.mjs",
     "check:search-index-writers:self-test": "node scripts/check-search-index-writers.mjs --self-test",
     "check:permission-api-mappings": "node scripts/check-permission-api-mappings.mjs",
-    "check:permission-api-mappings:self-test": "node scripts/check-permission-api-mappings.mjs --self-test"
+    "check:permission-api-mappings:self-test": "node scripts/check-permission-api-mappings.mjs --self-test",
+    "check:app-root-single-source": "node scripts/check-app-root-single-source.mjs",
+    "check:app-root-single-source:self-test": "node scripts/check-app-root-single-source.mjs --self-test"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.141",
