@@ -62,18 +62,66 @@ function listSourceFiles(dir) {
   return found
 }
 
+/**
+ * Folds newlines that sit inside parentheses into spaces, so a call split across lines becomes one
+ * logical line. A `path.join(\n  app.getPath('userData'),\n  'tuff'\n)` reconstructs the root just
+ * as much as the single-line form, and matching physical lines would miss it entirely.
+ *
+ * Each logical line keeps the physical line number it started on, so reports still point somewhere
+ * useful. Quotes are tracked because a paren inside a string literal must not open a region.
+ */
+function toLogicalLines(text) {
+  const logical = []
+  let current = ''
+  let startLine = 1
+  let physicalLine = 1
+  let depth = 0
+  let quote = null
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]
+    const prev = text[i - 1]
+
+    if (quote) {
+      if (ch === quote && prev !== '\\') quote = null
+    } else if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch
+    } else if (ch === '(') {
+      depth += 1
+    } else if (ch === ')') {
+      depth = Math.max(0, depth - 1)
+    }
+
+    if (ch === '\n') {
+      physicalLine += 1
+      if (depth > 0 && !quote) {
+        current += ' '
+        continue
+      }
+      logical.push({ text: current, line: startLine })
+      current = ''
+      startLine = physicalLine
+      continue
+    }
+
+    current += ch
+  }
+
+  if (current.trim()) logical.push({ text: current, line: startLine })
+  return logical
+}
+
 function findViolations(files, readFile = (f) => readFileSync(f, 'utf8')) {
   const violations = []
   for (const file of files) {
     const relative = path.relative(SRC_MAIN, file)
     if (Object.hasOwn(APPROVED_READERS, relative)) continue
 
-    const lines = readFile(file).split('\n')
-    lines.forEach((line, index) => {
-      if (USER_DATA_READ.test(line) && APP_ROOT_FOLDER.test(line)) {
-        violations.push({ file: relative, line: index + 1, text: line.trim() })
+    for (const { text, line } of toLogicalLines(readFile(file))) {
+      if (USER_DATA_READ.test(text) && APP_ROOT_FOLDER.test(text)) {
+        violations.push({ file: relative, line, text: text.trim().replace(/\s+/g, ' ') })
       }
-    })
+    }
   }
   return violations
 }
@@ -86,6 +134,24 @@ function selfTest() {
   )
   if (violations.length !== 1) {
     console.error('[self-test] FAIL: the scanner did not flag a synthetic violation')
+    process.exitCode = 1
+    return
+  }
+
+  // Same reconstruction, split across lines. Matching physical lines misses this.
+  const multiline = findViolations(
+    ['/synthetic/modules/rogue-root-multiline.ts'],
+    () => "const root = path.join(\n  app.getPath('userData'),\n  APP_FOLDER_NAME\n)\n"
+  )
+  if (multiline.length !== 1) {
+    console.error('[self-test] FAIL: the scanner missed a multiline reconstruction')
+    process.exitCode = 1
+    return
+  }
+  if (multiline[0].line !== 1) {
+    console.error(
+      `[self-test] FAIL: multiline violation reported line ${multiline[0].line}, want 1`
+    )
     process.exitCode = 1
     return
   }
@@ -111,7 +177,21 @@ function selfTest() {
     return
   }
 
-  console.log('[self-test] ok: flags root reconstruction, exempts the owner and unrelated reads')
+  // Two unrelated statements must not be folded together into a false positive.
+  const separate = findViolations(
+    ['/synthetic/service/two-statements.ts'],
+    () => "const tmp = app.getPath('userData')\nconst label = 'tuff'\n"
+  )
+  if (separate.length !== 0) {
+    console.error('[self-test] FAIL: the scanner joined two unrelated statements')
+    process.exitCode = 1
+    return
+  }
+
+  console.log(
+    '[self-test] ok: flags same-line and multiline reconstruction, exempts the owner, ' +
+      'leaves unrelated reads and separate statements alone'
+  )
 }
 
 function main() {
