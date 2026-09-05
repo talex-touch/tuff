@@ -14,15 +14,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../ai/intelligence-test-harness'
 
 const requestStream = vi.hoisted(() => vi.fn())
+const downloadWorkerLog = vi.hoisted(() => ({
+  warn: vi.fn(),
+  info: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn()
+}))
 
 vi.mock('../network', () => ({
   getNetworkService: () => ({ requestStream })
 }))
 
-vi.mock('./logger', () => ({
-  downloadWorkerLog: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() }
-}))
-
+vi.mock('./logger', () => ({ downloadWorkerLog }))
 import { DownloadWorker } from './download-worker'
 import { ProgressTracker } from './progress-tracker'
 
@@ -30,8 +33,21 @@ const tempDirs: string[] = []
 
 afterEach(async () => {
   requestStream.mockReset()
+  downloadWorkerLog.error.mockReset()
   await Promise.all(
-    tempDirs.splice(0).map(async (dir) => await fs.rm(dir, { recursive: true, force: true }))
+    tempDirs.splice(0).map(async (dir) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          await fs.rm(dir, { recursive: true, force: true })
+          return
+        } catch (error: unknown) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOTEMPTY' || attempt === 2) {
+            throw error
+          }
+          await new Promise<void>((resolve) => setTimeout(resolve, 10))
+        }
+      }
+    })
   )
 })
 
@@ -124,5 +140,86 @@ describe('DownloadWorker chunk concurrency', () => {
       { downloaded: 1, size: 1, status: ChunkStatus.COMPLETED },
       { downloaded: 1, size: 1, status: ChunkStatus.COMPLETED }
     ])
+  })
+  it('keeps an active request owned until terminal failure can surface', async () => {
+    const dir = await createWorkspace()
+    const chunks = Array.from({ length: 3 }, (_, index) => chunk(dir, index))
+    const activeRequestStarted = Promise.withResolvers<void>()
+    const activeRequest = Promise.withResolvers<{
+      headers: Record<string, string>
+      stream: Readable
+    }>()
+    const activeRequestResolved = Promise.withResolvers<void>()
+    const terminalFailureLogged = Promise.withResolvers<void>()
+    const outerFailureSurfaced = Promise.withResolvers<void>()
+    const terminalFailure = new Error('first chunk failed permanently')
+    const requestRanges: string[] = []
+
+    activeRequest.promise.then(() => activeRequestResolved.resolve())
+
+    requestStream.mockImplementation(async (request: { headers: Record<string, string> }) => {
+      const range = request.headers.Range
+      requestRanges.push(range)
+
+      if (range === 'bytes=0-0') {
+        await activeRequestStarted.promise
+        throw terminalFailure
+      }
+
+      if (range === 'bytes=1-1') {
+        activeRequestStarted.resolve()
+        return await activeRequest.promise
+      }
+
+      throw new Error(`Queued chunk was claimed after terminal failure: ${range}`)
+    })
+    downloadWorkerLog.error.mockImplementationOnce(() => {
+      terminalFailureLogged.resolve()
+      queueMicrotask(() => {
+        queueMicrotask(() => {
+          activeRequest.resolve({ headers: {}, stream: Readable.from([Buffer.from('x')]) })
+        })
+      })
+    })
+
+    const worker = new DownloadWorker(
+      2,
+      {} as never,
+      {
+        getChunkProgress: (activeChunks: ChunkInfo[]) => ({
+          downloadedSize: activeChunks.reduce(
+            (sum, activeChunk) => sum + activeChunk.downloaded,
+            0
+          ),
+          totalSize: activeChunks.reduce((sum, activeChunk) => sum + activeChunk.size, 0)
+        })
+      } as never,
+      { chunk: { maxRetries: 0 }, network: { timeout: 5_000, retryDelay: 0 } } as never
+    )
+
+    const result = downloadChunks(worker, task(dir), chunks).then(
+      () => ({ error: undefined }),
+      (error: unknown) => {
+        outerFailureSurfaced.resolve()
+        return { error }
+      }
+    )
+
+    await terminalFailureLogged.promise
+
+    expect(downloadWorkerLog.error).toHaveBeenCalledWith(
+      'Chunk download failed',
+      expect.objectContaining({ meta: expect.objectContaining({ chunkIndex: 0 }) })
+    )
+    expect(requestRanges).toEqual(['bytes=0-0', 'bytes=1-1'])
+    await expect(
+      Promise.race([
+        activeRequestResolved.promise.then(() => 'active request resolved'),
+        outerFailureSurfaced.promise.then(() => 'outer failure surfaced')
+      ])
+    ).resolves.toBe('active request resolved')
+
+    const { error } = await result
+    expect(error).toMatchObject({ message: terminalFailure.message })
   })
 })
