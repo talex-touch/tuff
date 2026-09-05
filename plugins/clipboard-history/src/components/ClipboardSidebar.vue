@@ -76,7 +76,10 @@ function onScroll(event: Event): void {
                   :src="resolveListImageSrc(item) || undefined"
                   alt=""
                 >
-                <ClipboardGlyph v-else :name="item.type === 'files' ? 'folder' : 'text'" />
+                <ClipboardGlyph
+                  v-else
+                  :name="item.type === 'files' ? 'folder' : item.type === 'image' ? 'image' : 'text'"
+                />
               </div>
 
               <div class="item-copy">
@@ -90,6 +93,8 @@ function onScroll(event: Event): void {
                   {{ getClipboardTagLabels(item).join(' · ') }}
                 </span>
               </div>
+
+              <span v-if="item.isFavorite" class="item-star" aria-label="已收藏">★</span>
             </button>
           </li>
         </ol>
@@ -192,9 +197,8 @@ function onScroll(event: Event): void {
 
 .ClipboardItem {
   width: 100%;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
+  display: flex;
+  gap: 9px;
   align-items: center;
   min-height: 46px;
   padding: 5px 8px;
@@ -229,13 +233,13 @@ function onScroll(event: Event): void {
 }
 
 .item-icon {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: 7px;
   color: var(--clipboard-text-muted);
   background: color-mix(in srgb, var(--clipboard-surface-ghost) 90%, transparent);
   overflow: hidden;
@@ -254,9 +258,17 @@ function onScroll(event: Event): void {
 
 .item-copy {
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+.item-star {
+  flex: none;
+  color: var(--clipboard-text-muted);
+  font-size: 0.8rem;
+  line-height: 1;
 }
 
 .item-preview {

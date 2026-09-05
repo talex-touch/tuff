@@ -260,7 +260,7 @@ describe('clipboardManagerView', () => {
     inputHandler('latest')
     await vi.advanceTimersByTimeAsync(180)
     await flushPromises()
-    expect(wrapper.get('.detail-heading h2').text()).toBe('latest result')
+    expect(wrapper.get('.text-preview').text()).toBe('latest result')
 
     oldResponse.resolve({
       history: [{ id: 11, type: 'text', content: 'stale result' }],
@@ -269,7 +269,7 @@ describe('clipboardManagerView', () => {
       pageSize: 50,
     })
     await flushPromises()
-    expect(wrapper.get('.detail-heading h2').text()).toBe('latest result')
+    expect(wrapper.get('.text-preview').text()).toBe('latest result')
 
     wrapper.unmount()
     vi.useRealTimers()
@@ -350,8 +350,53 @@ describe('clipboardManagerView', () => {
 
     expect(sdkMocks.system.resolveApplication).toHaveBeenCalledWith('com.example.source')
     expect(wrapper.get('.source-app-icon').attributes('src')).toBe('tfile:///tmp/source-app.png')
-    expect(wrapper.get('.info-value-copy').text()).toContain('Source App')
-    expect(wrapper.get('.info-secondary').text()).toBe('com.example.source')
+    expect(wrapper.get('.source-name').text()).toContain('Source App')
+    expect(wrapper.get('.source-bundle').text()).toBe('com.example.source')
+    wrapper.unmount()
+  })
+
+  it('disables the categories that still need the content-shape classifier', async () => {
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    const chips = wrapper.findAll('.category-chip')
+    expect(chips.map(chip => chip.text())).toEqual([
+      '全部',
+      '文本',
+      '链接',
+      '图片',
+      '视频',
+      '文件',
+      '颜色',
+      '命令',
+      '密钥',
+      '收藏',
+    ])
+    expect(
+      chips.filter(chip => chip.attributes('disabled') !== undefined).map(chip => chip.text()),
+    ).toEqual(['链接', '视频', '颜色', '命令', '密钥'])
+
+    wrapper.unmount()
+  })
+
+  it('maps a ready category onto the existing history query', async () => {
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    await wrapper.findAll('.category-chip').find(chip => chip.text() === '图片')?.trigger('click')
+    await flushPromises()
+
+    expect(sdkMocks.clipboard.history.getHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'image', isFavorite: undefined }),
+    )
+
+    await wrapper.findAll('.category-chip').find(chip => chip.text() === '收藏')?.trigger('click')
+    await flushPromises()
+
+    expect(sdkMocks.clipboard.history.getHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: undefined, isFavorite: true }),
+    )
+
     wrapper.unmount()
   })
 })

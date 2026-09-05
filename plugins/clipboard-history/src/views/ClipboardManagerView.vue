@@ -16,7 +16,10 @@ import {
   groupClipboardItems,
   resolveDetailImageSrc,
   selectNextClipboardItemId,
+  toHistoryQueryType,
 } from '~/utils/clipboard-items'
+
+type ClipboardGlyphName = InstanceType<typeof ClipboardGlyph>['$props']['name']
 
 const clipboard = useClipboard()
 const feature = useFeature()
@@ -72,12 +75,17 @@ const selectedSourceApplication = computed(() => {
   return sourceId ? (resolvedSourceApplications.get(sourceId) ?? null) : null
 })
 
-const filterOptions: Array<{ key: ClipboardFilter; label: string }> = [
-  { key: 'all', label: '全部内容' },
-  { key: 'text', label: '文本' },
-  { key: 'image', label: '图片' },
-  { key: 'files', label: '文件' },
-  { key: 'favorite', label: '收藏' },
+const filterOptions: Array<{ key: ClipboardFilter; label: string; glyph: ClipboardGlyphName; ready: boolean }> = [
+  { key: 'all', label: '全部', glyph: 'layers', ready: true },
+  { key: 'text', label: '文本', glyph: 'text', ready: true },
+  { key: 'link', label: '链接', glyph: 'link', ready: false },
+  { key: 'image', label: '图片', glyph: 'image', ready: true },
+  { key: 'video', label: '视频', glyph: 'video', ready: false },
+  { key: 'files', label: '文件', glyph: 'folder', ready: true },
+  { key: 'color', label: '颜色', glyph: 'palette', ready: false },
+  { key: 'command', label: '命令', glyph: 'terminal', ready: false },
+  { key: 'secret', label: '密钥', glyph: 'key', ready: false },
+  { key: 'favorite', label: '收藏', glyph: 'star', ready: true },
 ]
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -295,7 +303,7 @@ async function loadHistory(options: { reset?: boolean } = {}): Promise<void> {
       page: requestPage,
       pageSize,
       sortOrder: 'desc',
-      type: filter.value === 'favorite' ? undefined : filter.value === 'all' ? undefined : filter.value,
+      type: toHistoryQueryType(filter.value),
       isFavorite: filter.value === 'favorite' ? true : undefined,
     })
     if (generation !== requestGeneration) {
@@ -485,6 +493,25 @@ watch(
 <template>
   <main ref="pageRoot" class="ClipboardManagerPage" tabindex="-1">
     <div class="ClipboardPageHolder manager-holder">
+      <nav class="category-bar" aria-label="内容分类">
+        <div class="category-chips">
+          <button
+            v-for="option in filterOptions"
+            :key="option.key"
+            class="category-chip"
+            :class="{ active: option.key === filter }"
+            type="button"
+            :disabled="!option.ready"
+            :title="option.ready ? option.label : `${option.label}（待内容形态分类器接入）`"
+            @click="filter = option.key"
+          >
+            <ClipboardGlyph :name="option.glyph" />
+            <span>{{ option.label }}</span>
+          </button>
+        </div>
+        <span class="record-count">{{ total }} 条</span>
+      </nav>
+
       <div v-if="hasItems" class="ClipboardPageHolder-Main">
         <aside class="holder-aside">
           <ClipboardSidebar
@@ -542,22 +569,15 @@ watch(
       <footer class="ClipboardPageHolder-Footer">
         <div class="ManagerFooterBar">
           <div class="footer-left">
-            <div class="footer-controls">
-              <div class="footer-inline">
-                <span class="record-count">共 {{ total }} 条记录</span>
-                <div class="filter-group">
-                  <button
-                    v-for="option in filterOptions"
-                    :key="option.key"
-                    class="filter-chip"
-                    :class="{ active: option.key === filter }"
-                    type="button"
-                    @click="filter = option.key"
-                  >
-                    {{ option.label }}
-                  </button>
-                </div>
-              </div>
+            <div class="footer-hints">
+              <span class="footer-hint">
+                <kbd>↑↓</kbd>
+                选择
+              </span>
+              <span class="footer-hint">
+                <kbd>Esc</kbd>
+                关闭
+              </span>
             </div>
           </div>
 
@@ -739,27 +759,6 @@ watch(
   min-width: 0;
 }
 
-.footer-controls {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.footer-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-  width: 100%;
-  min-width: 0;
-  white-space: nowrap;
-}
-
 .error-banner {
   display: flex;
   align-items: center;
@@ -796,45 +795,106 @@ watch(
 }
 
 .record-count {
-  color: var(--clipboard-text-secondary);
-  font-size: 0.78rem;
+  flex: none;
+  color: var(--clipboard-text-muted);
+  font-size: 0.7rem;
   font-weight: 600;
 }
 
-.filter-group {
+.category-bar {
+  flex: 0 0 auto;
+  height: 38px;
   display: flex;
   align-items: center;
-  gap: 5px;
-  flex-wrap: nowrap;
-  overflow: auto hidden;
-  min-width: 0;
-  scrollbar-width: none;
-}
-
-.filter-group::-webkit-scrollbar {
-  display: none;
-}
-
-.filter-chip {
-  flex: 0 0 auto;
-  min-height: 30px;
+  justify-content: space-between;
+  gap: 10px;
   padding: 0 10px;
-  border: 1px solid var(--clipboard-border-color);
-  border-radius: 999px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--clipboard-border-color);
   background: var(--clipboard-surface-subtle);
+}
+
+.category-chips {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.category-chip {
+  flex: 0 0 auto;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
   color: var(--clipboard-text-secondary);
   cursor: pointer;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
   transition:
     background 0.18s ease,
     border-color 0.18s ease,
     color 0.18s ease;
 }
 
-.filter-chip.active {
-  border-color: var(--clipboard-color-accent);
-  color: var(--clipboard-color-accent-strong);
+.category-chip .ClipboardGlyph {
+  width: 12px;
+  height: 12px;
+  color: var(--clipboard-text-muted);
+}
+
+.category-chip:hover:enabled {
+  background: color-mix(in srgb, var(--clipboard-surface-base) 70%, transparent);
+}
+
+.category-chip.active {
+  border-color: color-mix(in srgb, var(--clipboard-color-accent) 45%, transparent);
   background: color-mix(in srgb, var(--clipboard-color-accent) 14%, transparent);
+  color: var(--clipboard-color-accent-strong);
+  font-weight: 600;
+}
+
+.category-chip.active .ClipboardGlyph {
+  color: var(--clipboard-color-accent);
+}
+
+.category-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.footer-hints {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.footer-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--clipboard-text-muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.footer-hint kbd {
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 1px solid var(--clipboard-border-color);
+  border-radius: 5px;
+  background: var(--clipboard-surface-base);
+  color: var(--clipboard-text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.66rem;
 }
 
 @media (max-width: 640px) {

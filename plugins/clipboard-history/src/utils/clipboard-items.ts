@@ -1,7 +1,28 @@
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import type { ResolvedApplication } from '@talex-touch/utils/transport/events/types'
 
-export type ClipboardFilter = 'all' | 'text' | 'image' | 'files' | 'favorite'
+/**
+ * 分类条的取值。`link` / `video` / `color` / `command` / `secret` 依赖 C2 的内容形态分类器，
+ * 在它接入前这些分类没有判定依据，UI 侧渲染为禁用而不是临时写一套会和分类器打架的规则。
+ */
+export type ClipboardFilter =
+  | 'all'
+  | 'text'
+  | 'link'
+  | 'image'
+  | 'video'
+  | 'files'
+  | 'color'
+  | 'command'
+  | 'secret'
+  | 'favorite'
+
+/** 目前真正能落到 `getHistory` 查询上的分类。 */
+export type ClipboardQueryableType = 'text' | 'image' | 'files'
+
+export function toHistoryQueryType(filter: ClipboardFilter): ClipboardQueryableType | undefined {
+  return filter === 'text' || filter === 'image' || filter === 'files' ? filter : undefined
+}
 
 export interface ClipboardSection {
   key: string
@@ -10,11 +31,28 @@ export interface ClipboardSection {
   items: PluginClipboardItem[]
 }
 
-export interface ClipboardInfoRow {
-  label: string
-  value: string
-  secondaryValue?: string
-  icon?: string | null
+export interface ClipboardSummary {
+  typeLabel: string
+  mime: string
+  metrics: string[]
+  timeLabel: string
+}
+
+export interface ClipboardSourceInfo {
+  displayName: string
+  bundleId: string | null
+  icon: string | null
+}
+
+export interface ClipboardFileNode {
+  name: string
+  path: string
+  dir: string
+}
+
+export interface ClipboardFileGroup {
+  dir: string
+  files: ClipboardFileNode[]
 }
 
 export interface ClipboardTextInsight {
@@ -451,10 +489,15 @@ export function getClipboardSizeLabel(item: PluginClipboardItem | null | undefin
   return `${item.content.length} 字符`
 }
 
+function getImageDimensionLabel(item: PluginClipboardItem): string | null {
+  const imageSize = getImageSize(item)
+  return imageSize ? `${imageSize.width}×${imageSize.height}` : null
+}
+
 export function getClipboardTitle(item: PluginClipboardItem): string {
   if (item.type === 'image') {
-    const imageSize = getClipboardSizeLabel(item)
-    return `${inferClipboardMime(item)}${imageSize !== '未知' ? ` · ${imageSize}` : ''}`
+    const dimensions = getImageDimensionLabel(item)
+    return `${inferClipboardMime(item)}${dimensions ? ` · ${dimensions}` : ''}`
   }
 
   if (item.type === 'files') {
@@ -475,59 +518,109 @@ export function getClipboardTitle(item: PluginClipboardItem): string {
   return text.length > 72 ? `${text.slice(0, 71)}…` : text
 }
 
+export function getClipboardKindLabel(item: PluginClipboardItem | null | undefined): string {
+  if (!item) {
+    return '未知'
+  }
+
+  if (item.type === 'image') {
+    return '图片'
+  }
+
+  if (item.type === 'files') {
+    return '文件'
+  }
+
+  return item.rawContent ? '富文本' : '文本'
+}
+
 export function getClipboardSubtitle(item: PluginClipboardItem): string {
   const time = normalizeTimestamp(item.timestamp)
   const timeLabel = time ? formatDate(time) : '刚刚'
 
-  if (item.type === 'text') {
-    const lines = item.content
-      .split(/\r?\n/)
-      .map(line => line.trim())
-      .filter(Boolean)
+  if (item.type === 'image') {
+    const fileSize = getImageFileSize(item)
+    return fileSize ? `图片 · ${formatBytes(fileSize)} · ${timeLabel}` : `图片 · ${timeLabel}`
+  }
 
-    const preview = lines[1] ?? lines[0] ?? '文本内容'
-    return `${preview.slice(0, 40)}${preview.length > 40 ? '…' : ''} · ${timeLabel}`
+  return `${getClipboardKindLabel(item)} · ${timeLabel}`
+}
+
+export function getClipboardMetrics(item: PluginClipboardItem): string[] {
+  if (item.type === 'image') {
+    const imageSize = getImageSize(item)
+    const fileSize = getImageFileSize(item)
+    return [
+      imageSize ? `${imageSize.width} × ${imageSize.height}` : null,
+      fileSize ? formatBytes(fileSize) : null,
+    ].filter((value): value is string => Boolean(value))
   }
 
   if (item.type === 'files') {
-    return `${getClipboardSizeLabel(item)} · ${timeLabel}`
+    return [`${parseFileList(item.content).length} 个文件`]
   }
 
-  return timeLabel
+  const content = item.content ?? ''
+  const lineCount = content.length > 0 ? content.split(/\r\n|\r|\n/).length : 0
+  return [`${content.length} 字符`, `${lineCount} 行`]
 }
 
-export function getClipboardInfoRows(
+/**
+ * `application/x-tuff-files` 在 720 宽下会和右对齐的时间戳挤在一起，摘要条只显示子类型。
+ */
+function getSummaryMime(item: PluginClipboardItem): string {
+  const mime = inferClipboardMime(item)
+  return mime.startsWith('application/x-') ? mime.slice('application/'.length) : mime
+}
+
+export function getClipboardSummary(item: PluginClipboardItem): ClipboardSummary {
+  const timestamp = normalizeTimestamp(item.timestamp)
+
+  return {
+    typeLabel: getClipboardKindLabel(item),
+    mime: getSummaryMime(item),
+    metrics: getClipboardMetrics(item),
+    timeLabel: timestamp ? formatDate(timestamp) : '未知',
+  }
+}
+
+export function getClipboardSourceInfo(
   item: PluginClipboardItem,
   sourceApplication?: ResolvedApplication | null,
-): ClipboardInfoRow[] {
-  const timestamp = normalizeTimestamp(item.timestamp)
-  const sourceId = item.sourceApp || ''
+): ClipboardSourceInfo {
+  const sourceId = item.sourceApp?.trim() || ''
+  const displayName = sourceApplication?.displayName || sourceId || '未知来源'
 
-  return [
-    {
-      label: '来源应用',
-      value: sourceApplication?.displayName || sourceId || '未知来源',
-      secondaryValue:
-        sourceApplication && sourceId && sourceApplication.displayName !== sourceId ? sourceId : undefined,
-      icon: sourceApplication?.icon,
-    },
-    {
-      label: '内容类型',
-      value: getClipboardTypeLabel(item),
-    },
-    {
-      label: '大小',
-      value: getClipboardSizeLabel(item),
-    },
-    {
-      label: 'MIME',
-      value: inferClipboardMime(item),
-    },
-    {
-      label: '记录时间',
-      value: timestamp ? formatDate(timestamp) : '未知',
-    },
-  ]
+  return {
+    displayName,
+    bundleId: sourceId && sourceId !== displayName ? sourceId : null,
+    icon: sourceApplication?.icon ?? null,
+  }
+}
+
+function shortenDirectory(dir: string): string {
+  const match = dir.match(/^\/Users\/[^/]+(\/.*)?$/)
+  if (!match) {
+    return dir || '/'
+  }
+  return `~${match[1] ?? ''}`
+}
+
+export function groupFilesByDirectory(content: string | null | undefined): ClipboardFileGroup[] {
+  const groups = new Map<string, ClipboardFileGroup>()
+
+  for (const filePath of parseFileList(content)) {
+    const separatorIndex = filePath.lastIndexOf('/')
+    const rawDir = separatorIndex > 0 ? filePath.slice(0, separatorIndex) : '/'
+    const name = separatorIndex >= 0 ? filePath.slice(separatorIndex + 1) : filePath
+    const dir = shortenDirectory(rawDir)
+
+    const group = groups.get(dir) ?? { dir, files: [] }
+    group.files.push({ name: name || filePath, path: filePath, dir })
+    groups.set(dir, group)
+  }
+
+  return Array.from(groups.values())
 }
 
 export function getClipboardTextInsight(item: PluginClipboardItem | null | undefined): ClipboardTextInsight | null {

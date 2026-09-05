@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import { computed } from 'vue'
+import ClipboardGlyph from './ClipboardGlyph.vue'
 
 const props = defineProps<{
   item: PluginClipboardItem | null
@@ -59,22 +60,28 @@ const applyLabel = computed(() => {
     <div class="footer-actions">
       <button
         data-testid="favorite-button"
-        class="surface-button"
+        class="icon-button"
         type="button"
+        :title="favoriteLabel"
+        :aria-label="favoriteLabel"
         :disabled="!hasItem || favoritePending"
         @click="emit('toggleFavorite')"
       >
-        <span class="button-text">{{ favoriteLabel }}</span>
+        <ClipboardGlyph name="star" />
+        <span class="button-text" :class="{ 'sr-only': !favoritePending }">{{ favoriteLabel }}</span>
       </button>
 
       <button
         data-testid="delete-button"
-        class="surface-button danger"
+        class="icon-button danger"
         type="button"
+        :title="deletePending ? '删除中' : '删除'"
+        :aria-label="deletePending ? '删除中' : '删除'"
         :disabled="!hasItem || deletePending"
         @click="emit('delete')"
       >
-        <span class="button-text">{{ deletePending ? '删除中' : '删除' }}</span>
+        <ClipboardGlyph name="trash" />
+        <span class="button-text" :class="{ 'sr-only': !deletePending }">{{ deletePending ? '删除中' : '删除' }}</span>
       </button>
     </div>
   </div>
@@ -149,6 +156,58 @@ const applyLabel = computed(() => {
 
 .surface-button.danger {
   color: var(--clipboard-color-danger);
+}
+
+.icon-button {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 60%, transparent);
+  background: color-mix(in srgb, var(--clipboard-surface-strong) 90%, transparent);
+  color: var(--clipboard-text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.icon-button:hover:enabled {
+  color: var(--clipboard-text-primary);
+  border-color: color-mix(in srgb, currentColor 45%, var(--clipboard-border-color));
+}
+
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.icon-button.danger {
+  color: var(--clipboard-color-danger);
+}
+
+.icon-button .ClipboardGlyph {
+  width: 15px;
+  height: 15px;
+}
+
+/**
+ * 图标按钮仍要渲染文案节点：pending 态的「处理中 / 删除中」是既有的可访问性与测试契约，
+ * 非 pending 态只做视觉隐藏，不从 DOM 里摘掉。
+ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
 }
 
 .surface-button.with-shortcut {
