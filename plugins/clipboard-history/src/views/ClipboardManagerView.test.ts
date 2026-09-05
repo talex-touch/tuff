@@ -120,14 +120,42 @@ describe('clipboardManagerView', () => {
     })
     await flushPromises()
 
+    // 含空格 → 走词频而不是字符网格（字符网格只留给验证码 / 编号）。
     expect(wrapper.get('.insight-title').text()).toContain('拆词')
-    expect(wrapper.findAll('.character-chip').map(node => node.text())).toEqual(
-      expect.arrayContaining(['你', '好', 'T', 'u', 'f']),
+    expect(wrapper.findAll('.word-chip').map(node => node.text())).toEqual(
+      expect.arrayContaining(['你好', 'Tuff']),
     )
 
-    await wrapper.get('.character-chip').trigger('click')
+    await wrapper.get('.word-chip').trigger('click')
 
-    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: '你' })
+    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: '你好' })
+
+    wrapper.unmount()
+  })
+
+  it('routes a spaceless short code to the character grid instead', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 22, type: 'text', content: '679839' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('.insight-title').text()).toContain('字符')
+    expect(wrapper.findAll('.character-chip').map(node => node.text())).toEqual([
+      '6',
+      '7',
+      '9',
+      '8',
+      '3',
+      '9',
+    ])
+
+    await wrapper.get('.character-chip').trigger('click')
+    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: '6' })
 
     wrapper.unmount()
   })
@@ -159,13 +187,14 @@ describe('clipboardManagerView', () => {
     })
     await flushPromises()
 
+    // 洞察区只渲染一块：图片走 OCR。主题色改由缩略图下方的色带承载（09-05-color-capability）。
+    expect(wrapper.find('.color-chip').exists()).toBe(false)
+
     await wrapper.get('.ocr-text').trigger('click')
     await wrapper.get('.keyword-chip').trigger('click')
-    await wrapper.get('.color-chip').trigger('click')
 
     expect(sdkMocks.clipboard.write).toHaveBeenNthCalledWith(1, { text: 'Invoice total' })
     expect(sdkMocks.clipboard.write).toHaveBeenNthCalledWith(2, { text: 'invoice' })
-    expect(sdkMocks.clipboard.write).toHaveBeenNthCalledWith(3, { text: '#112233' })
 
     wrapper.unmount()
   })
@@ -355,7 +384,7 @@ describe('clipboardManagerView', () => {
     wrapper.unmount()
   })
 
-  it('disables the categories that still need the content-shape classifier', async () => {
+  it('offers every category once the content-shape classifier is wired', async () => {
     const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
     await flushPromises()
 
@@ -372,9 +401,7 @@ describe('clipboardManagerView', () => {
       '密钥',
       '收藏',
     ])
-    expect(
-      chips.filter(chip => chip.attributes('disabled') !== undefined).map(chip => chip.text()),
-    ).toEqual(['链接', '视频', '颜色', '命令', '密钥'])
+    expect(chips.filter(chip => chip.attributes('disabled') !== undefined)).toHaveLength(0)
 
     wrapper.unmount()
   })
@@ -396,6 +423,37 @@ describe('clipboardManagerView', () => {
     expect(sdkMocks.clipboard.history.getHistory).toHaveBeenLastCalledWith(
       expect.objectContaining({ type: undefined, isFavorite: true }),
     )
+
+    wrapper.unmount()
+  })
+
+  it('filters derived categories against the loaded page and says so in the count', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [
+        { id: 41, type: 'text', content: 'git push --force origin main' },
+        { id: 42, type: 'text', content: '这是一段普通的说明文字，没有命令。' },
+        { id: 43, type: 'text', content: 'https://dsh.tagzxia.com/dashboard' },
+      ],
+      total: 3,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+    expect(wrapper.get('.record-count').text()).toBe('3 条')
+
+    await wrapper.findAll('.category-chip').find(chip => chip.text() === '命令')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('.ClipboardItem')).toHaveLength(1)
+    // 派生分类只能过滤已加载的这一页，计数必须如实说明，不能伪装成全库结果。
+    expect(wrapper.get('.record-count').text()).toBe('1 / 3')
+
+    await wrapper.findAll('.category-chip').find(chip => chip.text() === '链接')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('.ClipboardItem')).toHaveLength(1)
 
     wrapper.unmount()
   })
