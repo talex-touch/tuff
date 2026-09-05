@@ -410,3 +410,45 @@ Closed all recorded BUI follow-up gaps, fixed a real TxContextMenu interaction d
 ### Next Steps
 
 - None - task complete
+
+
+## Session 61: OTA 传输层错误分类修复，及由此挖出的两个 dev 更新链路缺陷
+
+**Date**: 2026-09-05
+**Task**: OTA 传输层错误分类修复，及由此挖出的两个 dev 更新链路缺陷
+**Branch**: `release/ota-transport-error-classification-20260904`
+
+### Summary
+
+起点是验证 OTA 能否正常工作。单测全绿、发布产物合规，但官方源 tuff.tagzxia.com 从本机 TLS 握手即被重置，而本该兜底的 GitHub 回退没有触发。根因是错误分类建在了错误的抽象上：传输层用 Electron session.fetch（Chromium 网络栈，抛 net::ERR_*），判定却按 Node/undici 的错误串写正则，三种方言只覆盖了唯一不跑生产 OTA 的那一种。修复引入 NetworkTransportError 与 isTransportFailureError，在 NetworkService 边界归一化并保留原始 message，三处判定站点统一走共享分类器。合入后经 CodeRabbit 指出，通配前缀 net::err_ 会误吞用户取消与调用方错误，已收窄为显式枚举。
+
+验证过程中撞出两个独立缺陷，各自成任务并已合入：渲染层 window.$argMapper 恒为空对象（contextIsolation 下没有 process，且空结果被当作有效缓存永久保留），导致 isMainWindow() 恒 false，线上手动检查与更新提示双双失效——起初误判为仅影响 dev，查实后升为 P0；以及 app root 在 precore 与下载策略两处求值时机不同，dev 下更新下载必被 destination-outside-roots 拒绝，修法是记忆化而非重新定义来源。
+
+最终在合并后的 master 上完整跑通一次真实 OTA：解析 beta.24、下载 488.8MB dmg、sha256+签名校验进入 ready、安装以 MAC_UPDATE_BUILD_UNTRUSTED 终止，全程零夹具注入。突破口是纠正了一个诊断错误——两次归因为 GitHub 配额耗尽的 403，实为陈旧下载任务里过期的 Nexus 签名链接。新增 network-error-classification-contracts.md 固化契约。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `05588b437` | (see git log) |
+| `97bdf676f` | (see git log) |
+| `12ab13404` | (see git log) |
+| `b900dff95` | (see git log) |
+| `e7ccaae8b` | (see git log) |
+| `6e1c9ee60` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
