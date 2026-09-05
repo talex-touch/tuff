@@ -113,7 +113,7 @@ function readRecommendationSource(item: TuffItem): ScoredItem['source'] {
  */
 const SELECTION_CONTEXT_WEIGHT = 0.6
 /** Cold-start items rank below anything with real usage but above nothing at all. */
-const COLD_START_BASE_SCORE = 1e3
+export const COLD_START_BASE_SCORE = 1e3
 /**
  * Novelty channel for freshly installed apps. Frecency scores a brand-new item
  * at exactly zero, so without an explicit exploration channel an app the user
@@ -1631,14 +1631,17 @@ export class RecommendationEngine {
    * is what used to fill ⌘7–⌘9. Only a *total* rebuild failure fell back before
    * this, so 3 items rebuilt against a limit of 10 left seven slots empty.
    *
-   * The backfill is ranked strictly below every survivor instead of being merged
-   * by score, because the two pools are not on one scale: cold-start items carry
-   * `COLD_START_BASE_SCORE` (1e3) and frequent fallbacks a raw execute count,
-   * against scored candidates that `scoreAndRank` normalises. Merging them would
-   * let a rebuild failure *promote* a cold-start app over the real
-   * recommendations that survived it. Rewriting `final` is that field's stated
-   * contract — the ranker owns the post-sort value, and it is explicitly not a
-   * 0–1 quantity.
+   * The backfill is ranked strictly below every survivor rather than merged by
+   * score. The ranker writes one absolute ruler banded by decade — novelty 1e7,
+   * context 1e6, time 1e5, frequency 1e4 — with cold-start pinned at
+   * `COLD_START_BASE_SCORE` (1e3) and frequent fallbacks at a raw execute count
+   * precisely so they sit under everything real. That holds for any survivor
+   * with usage worth the name, but the base score has no floor: an app executed
+   * once a month ago decays to a few hundred, and cancels subtract. Left to raw
+   * scores, a rebuild failure could then *promote* a never-used app over the
+   * stale-but-real one that survived it. Rewriting `final` is that field's
+   * stated contract — the ranker owns the post-sort value, and it is explicitly
+   * not a 0–1 quantity.
    */
   private async backfillShortfall(
     recommendItems: TuffItem[],
@@ -1663,9 +1666,17 @@ export class RecommendationEngine {
       (lowest, item) => Math.min(lowest, item.scoring?.final ?? 0),
       Number.POSITIVE_INFINITY
     )
-    // An all-pinned grid leaves no survivor to sit under; 0 keeps the backfill
-    // in the same negative band it would occupy in every other case.
-    const ceiling = Number.isFinite(lowestSurviving) ? lowestSurviving : 0
+    // Capped at the fallback band's own top, so the rewrite only intervenes when
+    // it has to. Under any survivor with real usage (frequency × 1e4 alone puts
+    // it far above 1e3) the backfill lands at 999, 998, … — what a cold-start
+    // item carries anyway — and the persisted cache row still reads as the
+    // never-used app it is. Under a stale survivor that fell below 1e3 it drops
+    // beneath that instead. An all-pinned grid leaves no survivor at all; 0
+    // keeps the backfill at or below the fallback band like every other case.
+    const ceiling = Math.min(
+      Number.isFinite(lowestSurviving) ? lowestSurviving : 0,
+      COLD_START_BASE_SCORE
+    )
     backfill.forEach((item, index) => {
       item.scoring = { ...item.scoring, final: ceiling - 1 - index }
     })
