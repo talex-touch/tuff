@@ -502,7 +502,11 @@ export class DownloadWorker {
           }
           terminalFailure ??= error
           downloadWorkerLog.error('Chunk download failed', {
-            error,
+            error: {
+              type: error instanceof DownloadErrorClass ? error.type : 'unknown_error',
+              severity: error instanceof DownloadErrorClass ? error.severity : 'high',
+              canRetry: error instanceof DownloadErrorClass ? error.canRetry : false
+            },
             meta: { taskId: task.id, chunkIndex: chunk.index }
           })
           return
@@ -510,9 +514,18 @@ export class DownloadWorker {
       }
     }
 
-    await Promise.allSettled(
+    const laneResults = await Promise.allSettled(
       Array.from({ length: concurrentLimit }, (_, laneIndex) => runLane(laneIndex))
     )
+
+    if (abortSignal?.aborted) {
+      throw new Error('Task was cancelled')
+    }
+
+    const rejectedLane = laneResults.find((result) => result.status === 'rejected')
+    if (rejectedLane?.status === 'rejected') {
+      throw rejectedLane.reason
+    }
 
     if (terminalFailure) {
       throw terminalFailure
