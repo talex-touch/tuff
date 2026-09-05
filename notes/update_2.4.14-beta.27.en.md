@@ -4,6 +4,7 @@
 
 - The Beta26 updater preserves Nexus-signed URLs as primary and switches once to the signed asset's GitHub fallback after HTTP 403 expiry while resuming the current ranged chunk.
 - The release remains subject to checksum, detached-signature, and startup health acknowledgement gates.
+- The package remains bound to the same checksum, detached signature, and release manifest contract.
 
 ## What's Changed
 
