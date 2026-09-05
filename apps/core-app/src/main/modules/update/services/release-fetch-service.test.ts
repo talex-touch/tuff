@@ -59,7 +59,10 @@ function nexusRelease(tag = 'v2.4.10', channel = AppPreviewChannel.RELEASE) {
       assets: [
         {
           filename: 'Tuff-2.4.10-setup.exe',
-          downloadUrl: 'https://nexus.example.test/releases/Tuff-2.4.10-setup.exe',
+          downloadUrl:
+            'https://nexus.example.test/releases/Tuff-2.4.10-setup.exe?signature=expiring',
+          fallbackDownloadUrl:
+            'https://github.com/talex-touch/tuff/releases/download/v2.4.10/Tuff-2.4.10-setup.exe',
           size: 100,
           platform: 'win32',
           arch: 'x64',
@@ -102,6 +105,20 @@ describe('ReleaseFetchService', () => {
       hasUpdate: true,
       source: 'Official Releases',
       release: { tag_name: 'v2.4.10', source: 'nexus' }
+    })
+  })
+
+  it('keeps the signed Nexus URL first while carrying the release fallback URL', async () => {
+    const { service } = createService()
+    networkRequestMock.mockResolvedValueOnce({ data: nexusRelease() })
+
+    const result = await service.fetch(AppPreviewChannel.RELEASE)
+    const asset = result.result.release?.assets.find(({ name }) => name === 'Tuff-2.4.10-setup.exe')
+
+    expect(asset).toMatchObject({
+      url: 'https://nexus.example.test/releases/Tuff-2.4.10-setup.exe?signature=expiring',
+      fallbackDownloadUrl:
+        'https://github.com/talex-touch/tuff/releases/download/v2.4.10/Tuff-2.4.10-setup.exe'
     })
   })
 
