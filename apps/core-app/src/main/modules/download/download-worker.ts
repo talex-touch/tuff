@@ -627,7 +627,11 @@ export class DownloadWorker {
             : DownloadErrorClass.fromError(error as Error, errorContext)
 
         downloadWorkerLog.warn('Chunk download retry failed', {
-          error: downloadError,
+          error: {
+            type: downloadError.type,
+            severity: downloadError.severity,
+            canRetry: downloadError.canRetry
+          },
           meta: { taskId: task.id, chunkIndex: chunk.index, retryCount }
         })
 
