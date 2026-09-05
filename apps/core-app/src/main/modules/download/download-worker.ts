@@ -463,51 +463,50 @@ export class DownloadWorker {
     }
 
     const concurrentLimit = Math.min(this.maxConcurrent, runnableChunks.length)
-    const lanes: Promise<void>[] = Array.from({ length: concurrentLimit }, () => Promise.resolve())
+    let nextChunkIndex = 0
     let completedChunks = chunks.filter(
       (chunk) => chunk.status === ChunkStatus.COMPLETED || chunk.downloaded >= chunk.size
     ).length
     const completionCheckpoint = Math.max(1, Math.floor(chunks.length / 10))
 
-    const downloadPromises = runnableChunks.map(async (chunk, index) => {
-      if (abortSignal?.aborted) {
-        throw new Error('Task was cancelled')
-      }
-
-      const laneIndex = index % concurrentLimit
-      await lanes[laneIndex]
-
-      const downloadPromise = this.downloadChunk(chunk, task, progressTracker, abortSignal)
-      lanes[laneIndex] = downloadPromise
-
-      try {
-        await downloadPromise
-
+    const runLane = async (): Promise<void> => {
+      while (nextChunkIndex < runnableChunks.length) {
         if (abortSignal?.aborted) {
           throw new Error('Task was cancelled')
         }
 
-        completedChunks += 1
+        const chunk = runnableChunks[nextChunkIndex]
+        nextChunkIndex += 1
 
-        const progress = this.chunkManager.getChunkProgress(chunks)
-        progressTracker.updateProgress(progress.downloadedSize, progress.totalSize)
+        try {
+          await this.downloadChunk(chunk, task, progressTracker, abortSignal)
 
-        if (completedChunks % completionCheckpoint === 0 || completedChunks === chunks.length) {
-          progressTracker.forceUpdate()
+          if (abortSignal?.aborted) {
+            throw new Error('Task was cancelled')
+          }
+
+          completedChunks += 1
+
+          const progress = this.chunkManager.getChunkProgress(chunks)
+          progressTracker.updateProgress(progress.downloadedSize, progress.totalSize)
+
+          if (completedChunks % completionCheckpoint === 0 || completedChunks === chunks.length) {
+            progressTracker.forceUpdate()
+          }
+        } catch (error) {
+          if (abortSignal?.aborted) {
+            return
+          }
+          downloadWorkerLog.error('Chunk download failed', {
+            error,
+            meta: { taskId: task.id, chunkIndex: chunk.index }
+          })
+          throw error
         }
-      } catch (error) {
-        if (abortSignal?.aborted) {
-          return
-        }
-        downloadWorkerLog.error('Chunk download failed', {
-          error,
-          meta: { taskId: task.id, chunkIndex: chunk.index }
-        })
-        throw error
       }
-    })
+    }
 
-    await Promise.all(downloadPromises)
+    await Promise.all(Array.from({ length: concurrentLimit }, runLane))
   }
 
   // 下载单个切片
