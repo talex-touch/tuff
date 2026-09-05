@@ -35,10 +35,20 @@ const tempDirs: string[] = []
 afterEach(async () => {
   requestStream.mockReset()
   downloadWorkerLog.error.mockReset()
-  // createWriteStream emits close on the next check phase after the assertion settles.
-  await new Promise<void>((resolve) => setImmediate(resolve))
   await Promise.all(
-    tempDirs.splice(0).map(async (dir) => await fs.rm(dir, { recursive: true, force: true }))
+    tempDirs.splice(0).map(async (dir) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          await fs.rm(dir, { recursive: true, force: true })
+          return
+        } catch (error: unknown) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOTEMPTY' || attempt === 2) {
+            throw error
+          }
+          await new Promise<void>((resolve) => setTimeout(resolve, 10))
+        }
+      }
+    })
   )
 })
 
