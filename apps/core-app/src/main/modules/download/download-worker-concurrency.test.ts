@@ -26,8 +26,9 @@ vi.mock('../network', () => ({
 }))
 
 vi.mock('./logger', () => ({ downloadWorkerLog }))
-import { DownloadErrorType, ErrorSeverity } from './error-types'
+
 import { DownloadWorker } from './download-worker'
+import { DownloadErrorType, ErrorSeverity } from './error-types'
 import { ProgressTracker } from './progress-tracker'
 
 const tempDirs: string[] = []
@@ -85,15 +86,14 @@ function downloadChunks(
   worker: DownloadWorker,
   downloadTask: DownloadTask,
   chunks: ChunkInfo[],
-  abortSignal?: AbortSignal,
-  onProgress?: (taskId: string, progress: unknown) => void
+  abortSignal?: AbortSignal
 ): Promise<void> {
   const internals = worker as unknown as {
     downloadChunksConcurrently: (
       task: DownloadTask,
       chunks: ChunkInfo[],
       progressTracker: ProgressTracker,
-      onProgress?: (taskId: string, progress: unknown) => void,
+      onProgress?: never,
       abortSignal?: AbortSignal
     ) => Promise<void>
   }
@@ -101,7 +101,7 @@ function downloadChunks(
     downloadTask,
     chunks,
     new ProgressTracker(downloadTask.id),
-    onProgress,
+    undefined,
     abortSignal
   )
 }
@@ -135,8 +135,11 @@ describe('DownloadWorker chunk concurrency', () => {
     requestStream.mockImplementation(async () => {
       activeRequests += 1
       peakActiveRequests = Math.max(peakActiveRequests, activeRequests)
+
+      // The scheduler has an opportunity to start another chunk before this request settles.
       await new Promise<void>((resolve) => queueMicrotask(resolve))
       activeRequests -= 1
+
       return { headers: {}, stream: Readable.from([Buffer.from('x')]) }
     })
 
@@ -232,6 +235,7 @@ describe('DownloadWorker chunk concurrency', () => {
     expect(loggedPayload).not.toHaveProperty('error.originalError')
     expect(loggedPayload).not.toHaveProperty('error.stackTrace')
   })
+
   it('rejects cancellation raised during the final chunk after all lanes settle', async () => {
     const dir = await createWorkspace()
     const chunks = Array.from({ length: 2 }, (_, index) => chunk(dir, index))
@@ -299,6 +303,9 @@ describe('DownloadWorker chunk concurrency', () => {
     })
     downloadWorkerLog.error.mockImplementationOnce(() => {
       terminalFailureLogged.resolve()
+      // Keep the active lane at its request boundary through two microtask checkpoints. An
+      // immediate Promise.all rejection wins this race; a drained worker can only surface the
+      // terminal error after this request resolves.
       queueMicrotask(() => {
         queueMicrotask(() => {
           activeRequest.resolve({ headers: {}, stream: Readable.from([Buffer.from('x')]) })
