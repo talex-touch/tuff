@@ -138,12 +138,30 @@ describe('DownloadWorker chunk concurrency', () => {
     const dir = await createWorkspace()
     const chunks = Array.from({ length: 3 }, (_, index) => chunk(dir, index))
     const delayedRequestStarted = Promise.withResolvers<void>()
-    const releaseDelayedRequest = Promise.withResolvers<void>()
+    const delayedStreamStarted = Promise.withResolvers<void>()
+    const releaseDelayedStream = Promise.withResolvers<void>()
     const terminalFailure = new Error('first chunk failed permanently')
     const requestRanges: string[] = []
-    let delayedRequestSettled = false
+    let delayedStreamRead = false
+    let delayedStreamEnded = false
     let delayedChunkStatusWhenErrorSurfaced: ChunkStatus | undefined
-    let errorSurfacedBeforeDelayedRequestSettled = false
+    let errorSurfacedBeforeDelayedStreamEnded = false
+
+    const delayedStream = new Readable({
+      read() {
+        if (!delayedStreamRead) {
+          delayedStreamRead = true
+          delayedStreamStarted.resolve()
+          this.push(Buffer.from('x'))
+          return
+        }
+
+        void releaseDelayedStream.promise.then(() => this.push(null))
+      }
+    })
+    delayedStream.once('end', () => {
+      delayedStreamEnded = true
+    })
 
     requestStream.mockImplementation(async (request: { headers: Record<string, string> }) => {
       const range = request.headers.Range
@@ -151,18 +169,18 @@ describe('DownloadWorker chunk concurrency', () => {
 
       if (range === 'bytes=0-0') {
         await delayedRequestStarted.promise
+        await delayedStreamStarted.promise
         throw terminalFailure
       }
 
       if (range === 'bytes=1-1') {
         delayedRequestStarted.resolve()
-        await releaseDelayedRequest.promise
-        delayedRequestSettled = true
+        return { headers: {}, stream: delayedStream }
       }
 
       return { headers: {}, stream: Readable.from([Buffer.from('x')]) }
     })
-    downloadWorkerLog.error.mockImplementationOnce(() => releaseDelayedRequest.resolve())
+    downloadWorkerLog.error.mockImplementationOnce(() => releaseDelayedStream.resolve())
 
     const worker = new DownloadWorker(
       2,
@@ -183,15 +201,15 @@ describe('DownloadWorker chunk concurrency', () => {
       () => ({ error: undefined }),
       (error: unknown) => {
         delayedChunkStatusWhenErrorSurfaced = chunks[1].status
-        errorSurfacedBeforeDelayedRequestSettled = !delayedRequestSettled
+        errorSurfacedBeforeDelayedStreamEnded = !delayedStreamEnded
         return { error }
       }
     )
 
     expect(result.error).toMatchObject({ message: terminalFailure.message })
-    expect(delayedRequestSettled).toBe(true)
+    expect(delayedStreamEnded).toBe(true)
     expect(delayedChunkStatusWhenErrorSurfaced).toBe(ChunkStatus.COMPLETED)
-    expect(errorSurfacedBeforeDelayedRequestSettled).toBe(false)
+    expect(errorSurfacedBeforeDelayedStreamEnded).toBe(false)
     expect(requestRanges).toEqual(['bytes=0-0', 'bytes=1-1'])
   })
 })
