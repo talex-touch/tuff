@@ -27,7 +27,7 @@
     "@iconify-json/carbon": "^1.2.24",
     "@talex-touch/tuff-cli": "workspace:^",
     "@types/node": "catalog:dev",
-    "@unocss/eslint-config": "^66.7.5",
+    "@unocss/eslint-config": "^66.8.1",
     "@unocss/eslint-plugin": "^66.7.5",
     "@unocss/reset": "^66.7.5",
     "@vitejs/plugin-vue": "^6.0.7",
