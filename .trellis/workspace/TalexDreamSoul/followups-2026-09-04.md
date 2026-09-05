@@ -2,7 +2,7 @@
 
 三项在 OTA 传输层错误分类（PR #1864，已合并）与 CoreBox 推荐修复（`62f4b146a`）过程中发现、但**刻意未在当次改动里处理**的问题。每项都已实测复现，命令与行号见下。
 
-排序即建议处理顺序。**第 1 项已于 2026-09-04 解决**，条目保留而非删除：它的解决过程里量到的网络故障率，是判断第 2 项该怎么做的直接依据。待处理的是 2（未验证）和 3（已知缺陷，影响面最小）。
+排序即建议处理顺序。**第 1 项已于 2026-09-04 解决**，条目保留而非删除：它的解决过程里量到的网络故障率，是判断第 2 项该怎么做的直接依据。**第 3 项已于 2026-09-05 解决。** 仍待处理的只有第 2 项的真机验证部分。
 
 ---
 
@@ -52,25 +52,31 @@ Nexus update lookup failed transiently; falling back to GitHub
 
 ---
 
-## 3. 推荐位在"部分重建失败"时不回补
+## ~~3. 推荐位在"部分重建失败"时不回补~~
 
-**状态**：既有缺陷，非本次引入；但因 `62f4b146a` 会主动丢弃不可推荐项而更容易被看见。
+**状态：已解决**（2026-09-05，提交 `5dbf76dba` + `f9f8595b6`）。76/76 通过，typecheck 与 eslint 干净。
 
-`apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts:1351`：
+原症状：`recommendation-engine.ts` 的 `if (items.length === 0 && diversified.length > 0)` 只在重建结果**全空**时回退。若要 10 项、重建出 3 项，剩下 7 个格子就那么空着。`62f4b146a` 让 `SystemActionsProvider.rebuildRecommendationItems` 主动丢弃一次性动作（`file-index` / `tpex-plugin` / `app-index` / `dev-plugin`，此前正是这几类把 ⌘7–⌘9 占满），把"打分候选数 > 实际重建数"从偶发变成了常态。
 
-```ts
-if (items.length === 0 && diversified.length > 0) {
-```
+**实现**：新增私有方法 `backfillShortfall(recommendItems, pinnedItems, limit)`，接在正常路径的 `combineRecommendedWithPinned` 之前。原来那条全空回退分支**保持不动** —— 它不写 DB 缓存，是另一套语义。
 
-> 行号会漂（2026-09-04 当天就从 `:1311` 移到了 `:1351`，因为并行的空态分层改动落在了同一文件）。上面那行代码本身是稳定锚点，用它 grep。
+**回补项排在所有幸存项之下，而不是按分数并入。** 两个池子不同量纲：实测被打分的候选 `scoring.final` ≈ 2.9e5（含时间项），cold-start 是 `COLD_START_BASE_SCORE`(1e3) 减序号，frequent 回退是原始 `executeCount`（个位数）。按原始分并入，理论上会让"重建失败"反而把 cold-start 应用顶到幸存的真实推荐之上。重写 `final` 是该字段的既定契约（其 JSDoc 明说排序器回写绝对排序分、量级远大于 1）。
 
-回退**只在重建结果为空时**触发。若要 10 项、重建出 3 项，剩下 7 个格子就那么空着 —— 不回补。
+**诚实记录**：实测量纲下,打分候选本来就远高于 1e3，所以这条重写在端到端场景里**不可观察** —— 变异验证时全套 73 个测试照过。因此额外补了一条直接调用 `backfillShortfall`、构造"幸存项分数低于回退池"的单元测试来锁它。同理，预算公式扣除置顶槽位这件事在网格内容上也不可观察（`combineRecommendedWithPinned` 本来就会截断，多取的项排在最后正好被丢掉），它唯一的实际作用是**避免白做一次 cold-start 的库读 + 重建**，所以对应测试断言的是"没有读目录"，而不是网格内容。
 
-**与本次修复的关系**：`SystemActionsProvider.rebuildRecommendationItems` 现在会把一次性动作（`file-index` / `tpex-plugin` / `app-index` / `dev-plugin`）过滤掉。这是对的（它们本来就不该出现在推荐位），但它把"打分候选数 > 实际重建数"从偶发变成了常态 —— 此前正是这几类把 ⌘7–⌘9 占满的。
+**顺带改了一条既有测试**：`treats an app as new only when the install stamp and the index row are both fresh` 原本断言整份列表等于 `['/Applications/Fresh.app']`。回补后另外 3 个目录应用会以 cold-start 身份填进空格，该断言不再成立。改为直接按 `meta.recommendation.source === 'newly-installed'` 过滤 —— 它要证的是**新装门禁**，这样比靠列表长度间接推断更强，且与回补解耦（变异验证确认：回补失效时这条仍通过）。
 
-**注意**：修复方向不是"让 provider 少丢项"，而是引擎层应支持部分回补 —— 打分候选与可渲染项数量不一致是正常状态，不是异常。任何一个 source 重建失败（`item-rebuilder.ts:121` 那条 `catch` 也会返回 `[]`，注释写着"One source failing must not empty the whole grid"）都会走到同一处。
+**变异验证**：四处各破坏一次，均有具名测试失败 —— 回补整体失效、回补不重排、回补不去重、预算不扣置顶。
 
-**待定问题**（改之前需要决定）：回补项按什么顺序插入？追加在尾部最简单，但会让"高分项重建失败"表现为低分项上浮到它的位置。
+---
+
+## ⚠️ 共享工作目录：一次真实事故
+
+**2026-09-05 发生过一次，务必知道。** 并行会话与本会话共用同一个工作目录，它提交时会把**工作树里所有改动一起带走**，包括别人写到一半的东西。
+
+本次第 3 项做变异验证期间，`5dbf76dba` 把当时工作树里 `const budget = Math.max(0, limit) // MUTATION 4` —— 一处**故意植入的破坏** —— 连注释一起提交进了分支。而且当时它是"绿的"：能抓住这个变异的测试还没写完。由 `f9f8595b6` 修复。
+
+**教训**：在这个仓库里做变异测试，不要把破坏态留在工作树里跨越任何可能被别人提交的时间窗。要么一次变异一次立即还原（本次的做法，仍然被抓住了一次），要么在 `git worktree` 里做。提交后用 `git grep -n 'MUTATION' HEAD` 复查一遍，成本极低。
 
 ---
 
