@@ -28,12 +28,14 @@ vi.mock('../network', () => ({
 vi.mock('./logger', () => ({ downloadWorkerLog }))
 
 import { DownloadWorker } from './download-worker'
+import { DownloadErrorType, ErrorSeverity } from './error-types'
 import { ProgressTracker } from './progress-tracker'
 
 const tempDirs: string[] = []
 
 afterEach(async () => {
   requestStream.mockReset()
+  downloadWorkerLog.warn.mockReset()
   downloadWorkerLog.error.mockReset()
   await Promise.all(
     tempDirs.splice(0).map(async (dir) => {
@@ -144,6 +146,71 @@ describe('DownloadWorker chunk concurrency', () => {
       { downloaded: 1, size: 1, status: ChunkStatus.COMPLETED },
       { downloaded: 1, size: 1, status: ChunkStatus.COMPLETED }
     ])
+  })
+
+  it('logs a redacted summary when a chunk request is retried', async () => {
+    const dir = await createWorkspace()
+    const chunks = [chunk(dir, 0)]
+    const sensitiveToken = 'retry-secret-token'
+    const sensitiveUrl = 'https://private.example/download/payload.bin?token=retry-secret-token'
+    const rawError = Object.assign(new Error(`network request failed: ${sensitiveUrl}`), {
+      path: '/private/downloads/payload.bin',
+      token: sensitiveToken,
+      headers: { Authorization: `Bearer ${sensitiveToken}`, Range: 'bytes=0-0' },
+      request: { method: 'GET', url: sensitiveUrl },
+      config: { headers: { Authorization: `Bearer ${sensitiveToken}` }, url: sensitiveUrl }
+    })
+    let requestCount = 0
+
+    requestStream.mockImplementation(async () => {
+      requestCount += 1
+      if (requestCount === 1) {
+        throw rawError
+      }
+
+      return { headers: {}, stream: Readable.from([Buffer.from('x')]) }
+    })
+
+    const worker = new DownloadWorker(
+      1,
+      {} as never,
+      {
+        getChunkProgress: (activeChunks: ChunkInfo[]) => ({
+          downloadedSize: activeChunks.reduce(
+            (sum, activeChunk) => sum + activeChunk.downloaded,
+            0
+          ),
+          totalSize: activeChunks.reduce((sum, activeChunk) => sum + activeChunk.size, 0)
+        })
+      } as never,
+      { chunk: { maxRetries: 1 }, network: { timeout: 5_000, retryDelay: 0 } } as never
+    )
+
+    await downloadChunks(worker, task(dir), chunks)
+
+    expect(requestCount).toBe(2)
+    expect(downloadWorkerLog.warn).toHaveBeenCalledTimes(1)
+    expect(downloadWorkerLog.warn).toHaveBeenCalledWith('Chunk download retry failed', {
+      error: {
+        type: DownloadErrorType.NETWORK_ERROR,
+        severity: ErrorSeverity.MEDIUM,
+        canRetry: true
+      },
+      meta: { taskId: 'task-1', chunkIndex: 0, retryCount: 1 }
+    })
+
+    const [, loggedPayload] = downloadWorkerLog.warn.mock.calls[0]
+    expect(JSON.stringify(loggedPayload)).not.toContain(sensitiveUrl)
+    expect(JSON.stringify(loggedPayload)).not.toContain('/private/downloads/payload.bin')
+    expect(JSON.stringify(loggedPayload)).not.toContain(sensitiveToken)
+    expect(loggedPayload).not.toHaveProperty('headers')
+    expect(loggedPayload).not.toHaveProperty('request')
+    expect(loggedPayload).not.toHaveProperty('config')
+    expect(loggedPayload).not.toHaveProperty('stack')
+    expect(loggedPayload).not.toHaveProperty('error.message')
+    expect(loggedPayload).not.toHaveProperty('error.context')
+    expect(loggedPayload).not.toHaveProperty('error.originalError')
+    expect(loggedPayload).not.toHaveProperty('error.stackTrace')
   })
 
   it('keeps an active request owned until terminal failure can surface', async () => {
