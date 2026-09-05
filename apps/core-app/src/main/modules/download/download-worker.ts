@@ -463,51 +463,69 @@ export class DownloadWorker {
     }
 
     const concurrentLimit = Math.min(this.maxConcurrent, runnableChunks.length)
-    const lanes: Promise<void>[] = Array.from({ length: concurrentLimit }, () => Promise.resolve())
+    let terminalFailure: unknown
     let completedChunks = chunks.filter(
       (chunk) => chunk.status === ChunkStatus.COMPLETED || chunk.downloaded >= chunk.size
     ).length
     const completionCheckpoint = Math.max(1, Math.floor(chunks.length / 10))
 
-    const downloadPromises = runnableChunks.map(async (chunk, index) => {
-      if (abortSignal?.aborted) {
-        throw new Error('Task was cancelled')
-      }
-
-      const laneIndex = index % concurrentLimit
-      await lanes[laneIndex]
-
-      const downloadPromise = this.downloadChunk(chunk, task, progressTracker, abortSignal)
-      lanes[laneIndex] = downloadPromise
-
-      try {
-        await downloadPromise
-
+    const runLane = async (laneIndex: number): Promise<void> => {
+      for (
+        let chunkIndex = laneIndex;
+        !terminalFailure && chunkIndex < runnableChunks.length;
+        chunkIndex += concurrentLimit
+      ) {
         if (abortSignal?.aborted) {
           throw new Error('Task was cancelled')
         }
 
-        completedChunks += 1
+        const chunk = runnableChunks[chunkIndex]
 
-        const progress = this.chunkManager.getChunkProgress(chunks)
-        progressTracker.updateProgress(progress.downloadedSize, progress.totalSize)
+        try {
+          await this.downloadChunk(chunk, task, progressTracker, abortSignal)
 
-        if (completedChunks % completionCheckpoint === 0 || completedChunks === chunks.length) {
-          progressTracker.forceUpdate()
-        }
-      } catch (error) {
-        if (abortSignal?.aborted) {
+          if (abortSignal?.aborted) {
+            throw new Error('Task was cancelled')
+          }
+
+          completedChunks += 1
+
+          const progress = this.chunkManager.getChunkProgress(chunks)
+          progressTracker.updateProgress(progress.downloadedSize, progress.totalSize)
+
+          if (completedChunks % completionCheckpoint === 0 || completedChunks === chunks.length) {
+            progressTracker.forceUpdate()
+          }
+        } catch (error) {
+          if (abortSignal?.aborted) {
+            return
+          }
+          terminalFailure ??= error
+          downloadWorkerLog.error('Chunk download failed', {
+            error,
+            meta: { taskId: task.id, chunkIndex: chunk.index }
+          })
           return
         }
-        downloadWorkerLog.error('Chunk download failed', {
-          error,
-          meta: { taskId: task.id, chunkIndex: chunk.index }
-        })
-        throw error
       }
-    })
+    }
 
-    await Promise.all(downloadPromises)
+    const laneResults = await Promise.allSettled(
+      Array.from({ length: concurrentLimit }, (_, laneIndex) => runLane(laneIndex))
+    )
+
+    if (abortSignal?.aborted) {
+      throw new Error('Task was cancelled')
+    }
+
+    const rejectedLane = laneResults.find((result) => result.status === 'rejected')
+    if (rejectedLane?.status === 'rejected') {
+      throw rejectedLane.reason
+    }
+
+    if (terminalFailure) {
+      throw terminalFailure
+    }
   }
 
   // 下载单个切片
@@ -525,6 +543,7 @@ export class DownloadWorker {
 
     const maxRetries = this.config.chunk.maxRetries
     let retryCount = 0
+    let requestUrl = task.url
 
     const errorContext = {
       taskId: task.id,
@@ -560,7 +579,7 @@ export class DownloadWorker {
         const requiresPartialContent = rangeStart > chunk.start
         const response = await getNetworkService().requestStream({
           method: 'GET',
-          url: task.url,
+          url: requestUrl,
           headers: {
             ...headers,
             Range: `bytes=${rangeStart}-${chunk.end}`
@@ -602,6 +621,22 @@ export class DownloadWorker {
         }
 
         const statusCode = getNetworkStatusCode(error)
+        const fallbackUrl =
+          typeof task.metadata?.fallbackUrl === 'string' ? task.metadata.fallbackUrl : undefined
+        const fallbackUsed = task.metadata?.fallbackUsed === true
+
+        if (statusCode === 403 && fallbackUrl && !fallbackUsed && requestUrl !== fallbackUrl) {
+          requestUrl = fallbackUrl
+          task.metadata = { ...task.metadata, fallbackUsed: true }
+          errorContext.url = fallbackUrl
+          retryCount = 0
+          chunk.status = chunk.downloaded > 0 ? ChunkStatus.PENDING : ChunkStatus.FAILED
+          downloadWorkerLog.warn('Signed download URL expired; switching to fallback', {
+            meta: { taskId: task.id, chunkIndex: chunk.index }
+          })
+          continue
+        }
+
         const isRangeIgnored = statusCode === 200 && chunk.downloaded > 0
 
         if (isRangeIgnored) {
@@ -618,7 +653,11 @@ export class DownloadWorker {
             : DownloadErrorClass.fromError(error as Error, errorContext)
 
         downloadWorkerLog.warn('Chunk download retry failed', {
-          error: downloadError,
+          error: {
+            type: downloadError.type,
+            severity: downloadError.severity,
+            canRetry: downloadError.canRetry
+          },
           meta: { taskId: task.id, chunkIndex: chunk.index, retryCount }
         })
 
