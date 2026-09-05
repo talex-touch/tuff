@@ -218,3 +218,6 @@ peerDependencyRules:
     nodemailer: ^6.6.5 || ^7.0.0
     next-auth: ~4.24.15
     vue-tsc: ^2.1.10 || ^3.2.5
+
+patchedDependencies:
+  app-builder-lib@26.15.3: patches/app-builder-lib@26.15.3.patch
