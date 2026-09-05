@@ -111,20 +111,20 @@ macOS 静默安装有构建信任闸门：`assertPlatformInstallPreflight`（`up
 - [x] **AC5** 回归：既有 HTTP 状态码用例（429/5xx/403）行为不变；`NetworkTransportError` 归一化后原始 message 文本不变（覆盖 R1 的兼容性约束）。
 - [x] **AC6** 全量校验通过（`f1f48bad1`）：`packages/utils` 41 条传输分类用例、`apps/core-app` update 相关 148 条全绿；`typecheck:node` 与 `vue-tsc` 通过；两个包按各自 eslint 配置 lint 干净。
 - [x] **AC7** Electron 探针：对真实不可达的 `tuff.tagzxia.com` 发请求，捕获 `net::ERR_CONNECTION_CLOSED`，断言旧正则匹配为 `false`、归一化后 `isOfficialFallbackEligible` 为 `true`、message 逐字节不变。
-- [~] **AC8**（R7）本机 dev 模式真实触发，逐段结果：
+- [x] **AC8**（R7）本机 dev 模式真实触发，逐段结果：
   - [x] 官方源传输失败 → `17:25:50 [WARN] [UpdateService] Nexus update lookup failed transiently; falling back to GitHub error=NetworkTransportError: net::ERR_CONNECTION_REFUSED`（worktree 跑 `f1f48bad1` + 版本降至 beta.18，官方源指向 `https://127.0.0.1:9999`）
   - [x] GitHub 返回 `v2.4.14-beta.19` 候选、UI 出现「下载更新」（另一次运行，官方源恰好可用时；`Update check fetched source=... hasUpdate=true tag=v2.4.14-beta.19`）
-  - [ ] 下载 arm64 dmg — **被 F2 阻塞**（dev 模式下载必被 `destination-outside-roots` 拒绝），非本任务缺陷
-        → **2026-09-05 更新**：F2 已修复并合入（#1869）。下载现已能启动
-        （`Update download started`，无 `destination-outside-roots`），但产物落盘仍失败于
-        `NETWORK_HTTP_STATUS_403`——GitHub 未认证配额与 Nexus 空结果双双不可用，属外部阻塞。
-  - [ ] sha256 + `.sig` 校验、进入 `ready` — 同上，未达到该阶段
-  - [ ] 触发安装以 `MAC_UPDATE_BUILD_UNTRUSTED` 终止 — 未达到该阶段
+  - [x] 下载 arm64 dmg — **2026-09-05 完成**（F2 修复合入后，在 master `753e308f3` 上）：
+        `Update download started asset=macos-latest-beta-tuff-2.4.14-beta.24-macos-arm64.dmg`
+        → `488.8MB / 100%`，dmg 489M + `.sig` 685B 落盘。
+  - [x] sha256 + `.sig` 校验、进入 `ready` — `app_update_attempts.phase = ready`
+  - [x] 触发安装以 `MAC_UPDATE_BUILD_UNTRUSTED` 终止 —
+        `UpdateInstallPreflightError: Silent macOS updates require an official verified Tuff build`
   - [x] 版本号已还原，worktree 已移除，共享 dev 配置 `update-settings.json` 已从备份还原
 
-> 后续进展与完整逐段结果见父任务
+> AC8 至此全部完成。完整逐段证据、所用测试夹具，以及一处被纠正的诊断错误（早前归因为
+> "GitHub 配额耗尽"的 403，实为陈旧下载任务里过期的 Nexus 签名链接）见父任务
 > [09-04-dev-update-flow-untestable](../09-04-dev-update-flow-untestable/prd.md) 的 AC-P1。
-> 该任务的 AC8 剩余三条与父任务 AC-P1 是同一件事，不重复跟踪。
 
 ### AC8 验证方式与一处已纠正的错误
 
