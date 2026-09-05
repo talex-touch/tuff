@@ -466,10 +466,13 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
       return
     }
 
+    // The indicator is absolutely positioned inside the group's *padding* box,
+    // but both rects here are border boxes. The group's 1px border would
+    // otherwise push the indicator 1px down and right of the button it covers.
     const rootRect = root.getBoundingClientRect()
     const rect = checked.getBoundingClientRect()
-    const left = rect.left - rootRect.left
-    const top = rect.top - rootRect.top
+    const left = rect.left - rootRect.left - root.clientLeft
+    const top = rect.top - rootRect.top - root.clientTop
 
     indicatorVisible.value = true
     const next = {
@@ -514,11 +517,13 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
     const width = currentRect.value.width || targetRect.value.width || 0
     const height = currentRect.value.height || targetRect.value.height || 0
 
-    const maxX = Math.max(0, r.width - width)
-    const unclampedX = e.clientX - r.left - width / 2
+    // Padding-box coordinates, like `updateIndicator`: the origin sits inside
+    // the border and the travel is the client box, not the border box.
+    const maxX = Math.max(0, root.clientWidth - width)
+    const unclampedX = e.clientX - (r.left + root.clientLeft) - width / 2
     const px = Math.min(Math.max(unclampedX, 0), maxX)
     const baseY = dragLockY.value ?? (currentRect.value.y || targetRect.value.y || 0)
-    const py = Math.min(Math.max(baseY, 0), Math.max(0, r.height - height))
+    const py = Math.min(Math.max(baseY, 0), Math.max(0, root.clientHeight - height))
     const next = { x: px, y: py, width: Math.max(0, width), height: Math.max(0, height) }
     targetRect.value = next
 
@@ -562,7 +567,8 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
       const rootRect = root.getBoundingClientRect()
       for (const radio of radios) {
         const rect = radio.getBoundingClientRect()
-        const centerX = rect.left - rootRect.left + rect.width / 2
+        // Same padding-box origin as the indicator's own x.
+        const centerX = rect.left - rootRect.left - root.clientLeft + rect.width / 2
         const dist = Math.abs(centerX - currentX)
         if (dist < minDist) {
           minDist = dist
