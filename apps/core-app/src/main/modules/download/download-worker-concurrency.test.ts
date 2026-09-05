@@ -14,14 +14,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../ai/intelligence-test-harness'
 
 const requestStream = vi.hoisted(() => vi.fn())
+const downloadWorkerLog = vi.hoisted(() => ({
+  warn: vi.fn(),
+  info: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn()
+}))
 
 vi.mock('../network', () => ({
   getNetworkService: () => ({ requestStream })
 }))
 
-vi.mock('./logger', () => ({
-  downloadWorkerLog: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() }
-}))
+vi.mock('./logger', () => ({ downloadWorkerLog }))
 
 import { DownloadWorker } from './download-worker'
 import { ProgressTracker } from './progress-tracker'
@@ -30,6 +34,7 @@ const tempDirs: string[] = []
 
 afterEach(async () => {
   requestStream.mockReset()
+  downloadWorkerLog.error.mockReset()
   await Promise.all(
     tempDirs.splice(0).map(async (dir) => await fs.rm(dir, { recursive: true, force: true }))
   )
@@ -146,7 +151,6 @@ describe('DownloadWorker chunk concurrency', () => {
 
       if (range === 'bytes=0-0') {
         await delayedRequestStarted.promise
-        releaseDelayedRequest.resolve()
         throw terminalFailure
       }
 
@@ -158,6 +162,7 @@ describe('DownloadWorker chunk concurrency', () => {
 
       return { headers: {}, stream: Readable.from([Buffer.from('x')]) }
     })
+    downloadWorkerLog.error.mockImplementationOnce(() => releaseDelayedRequest.resolve())
 
     const worker = new DownloadWorker(
       2,
