@@ -463,20 +463,23 @@ export class DownloadWorker {
     }
 
     const concurrentLimit = Math.min(this.maxConcurrent, runnableChunks.length)
-    let nextChunkIndex = 0
+    let terminalFailure: unknown
     let completedChunks = chunks.filter(
       (chunk) => chunk.status === ChunkStatus.COMPLETED || chunk.downloaded >= chunk.size
     ).length
     const completionCheckpoint = Math.max(1, Math.floor(chunks.length / 10))
 
-    const runLane = async (): Promise<void> => {
-      while (nextChunkIndex < runnableChunks.length) {
+    const runLane = async (laneIndex: number): Promise<void> => {
+      for (
+        let chunkIndex = laneIndex;
+        !terminalFailure && chunkIndex < runnableChunks.length;
+        chunkIndex += concurrentLimit
+      ) {
         if (abortSignal?.aborted) {
           throw new Error('Task was cancelled')
         }
 
-        const chunk = runnableChunks[nextChunkIndex]
-        nextChunkIndex += 1
+        const chunk = runnableChunks[chunkIndex]
 
         try {
           await this.downloadChunk(chunk, task, progressTracker, abortSignal)
@@ -497,16 +500,23 @@ export class DownloadWorker {
           if (abortSignal?.aborted) {
             return
           }
+          terminalFailure ??= error
           downloadWorkerLog.error('Chunk download failed', {
             error,
             meta: { taskId: task.id, chunkIndex: chunk.index }
           })
-          throw error
+          return
         }
       }
     }
 
-    await Promise.all(Array.from({ length: concurrentLimit }, runLane))
+    await Promise.allSettled(
+      Array.from({ length: concurrentLimit }, (_, laneIndex) => runLane(laneIndex))
+    )
+
+    if (terminalFailure) {
+      throw terminalFailure
+    }
   }
 
   // 下载单个切片
