@@ -81,6 +81,41 @@ master 的独立 worktree 内执行，版本降至 `2.4.14-beta.18`，全程 CDP
 
 补跑条件：GitHub 配额恢复，或 Nexus 重新发布 beta 版本。代码侧无已知障碍。
 
+### 第二次补跑（2026-09-05 11:20，基线 `753e308f3` / beta.24）
+
+配额重置后立刻重跑，基线换成更新的 master（含 #1870/#1871 两个 download-worker 修复）。
+**比第一次走得更远**，但仍止于网络层：
+
+| 环节 | 结果 | 证据 |
+|---|---|---|
+| 窗口身份（无注入） | ✅ | `argMapper: {"touchType":"main"}` |
+| 路径策略 | ✅ | 全程无 `destination-outside-roots`，F2 修复稳定 |
+| 进入 manifest 解析 | ✅ | 首次到达该阶段（上次止于资产 403） |
+| manifest 拉取 | ❌ | `[11:22:22] Failed to fetch release manifest asset=tuff-release-manifest.json error=NetworkTransportError: net::ERR_CONNECTION_CLOSED` |
+| 重试检查 | ❌ | `[11:25:55] Update check deferred by upstream rate limit status=403 remaining=0 retryAt=04:19:22Z` |
+
+两点值得单独记：
+
+- **manifest 内容本身没问题**。直接拉 `v2.4.14-beta.23` 的 `tuff-release-manifest.json` 得到
+  `schemaVersion: 2` 且含 `core / darwin / arm64`。失败是**拉取**失败，不是"不匹配此平台"——
+  错误文案 `Update release manifest is required and must match this platform` 把网络失败
+  和平台不匹配混为一谈，排查时有误导性，值得单独看一眼。
+- **`NetworkTransportError` 出现在这里**，说明最早那个 OTA 传输层分类修复在 manifest 拉取路径上
+  同样生效。
+
+### 外部阻塞的性质（两次尝试后的结论）
+
+不是"等一会儿就好"，而是这台机器的网络环境本身不具备条件：
+
+- **GitHub 未认证配额被共享出口耗尽**。11:19 重置后仅剩 `11/60`（本次验证只发了 1 次请求），
+  几分钟内归零。等待没有意义——每个窗口开启后一分钟内就被别人用光。
+- **GitHub 主机间歇不可达**。`api.github.com` / `github.com` / `objects.githubusercontent.com`
+  曾同时返回 `000`，随后恢复；探测约 2~3 次才通 1 次。
+- **Nexus 对所有渠道持续返回 `release: null`**，且空结果是权威终止、不触发回退。
+
+要完成剩余三段（下载完成、验签+ready、安装终止），需要其中之一：GitHub 侧使用认证请求以绕开
+未认证配额、换一个网络出口、或 Nexus 重新发布 beta 版本。
+
 ### 验证期间清理掉的干扰源
 
 `/Applications/tuff.app`（PID 82642，`--user-data-dir=/tmp/tuff-beta23-ota-profile --disable-gpu`）
