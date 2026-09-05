@@ -127,7 +127,6 @@ const mocks = vi.hoisted(() => ({
   ocr: vi.fn(),
   textTranslate: vi.fn(),
   resolveCapabilityStatus: vi.fn(),
-  stt: vi.fn(),
   sendTo: vi.fn<
     (target: unknown, event: { toEventName: () => string }, payload: unknown) => Promise<void>
   >(() => Promise.resolve()),
@@ -288,9 +287,6 @@ vi.mock('../ai/intelligence-sdk', () => ({
     },
     text: {
       translate: mocks.textTranslate
-    },
-    audio: {
-      stt: mocks.stt
     }
   }
 }))
@@ -402,7 +398,6 @@ describe('AssistantModule screenshot translation', () => {
       available: true,
       providerIds: ['translation-provider']
     })
-    mocks.stt.mockReset()
     mocks.translateImageBase64.mockResolvedValue(mocks.createTranslateSuccess())
     mocks.sendTo.mockResolvedValue(undefined)
   })
@@ -1440,162 +1435,5 @@ describe('AssistantModule screenshot translation', () => {
 
     await module.onDestroy({} as never)
     vi.useRealTimers()
-  })
-  it('routes valid VoicePanel audio through governed Intelligence STT metadata', async () => {
-    mocks.stt.mockResolvedValue({
-      result: {
-        text: '  summarize the selected text  ',
-        confidence: 0.92,
-        language: 'en'
-      },
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      provider: 'openai-compatible',
-      model: 'whisper-1',
-      traceId: 'trace-asr-1',
-      latency: 47
-    })
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.transcribeAudio.toEventName()
-    )
-
-    const result = await handler(
-      {
-        audioDataUrl: 'data:audio/webm;base64,YXVkaW8=',
-        mimeType: 'audio/webm;codecs=opus',
-        durationMs: 1_250,
-        language: 'en-US'
-      },
-      {} as HandlerContext
-    )
-
-    expect(mocks.stt).toHaveBeenCalledWith(
-      {
-        audio: 'data:audio/webm;base64,YXVkaW8=',
-        format: 'webm',
-        language: 'en-US'
-      },
-      {
-        timeout: 30_000,
-        metadata: {
-          caller: 'core.assistant.voice-transcribe',
-          source: 'assistant-voice-panel-provider-asr'
-        }
-      }
-    )
-    expect(result).toEqual({
-      success: true,
-      text: 'summarize the selected text',
-      language: 'en',
-      confidence: 0.92,
-      provider: 'openai-compatible',
-      model: 'whisper-1',
-      traceId: 'trace-asr-1',
-      latencyMs: 47
-    })
-
-    await module.onDestroy({} as never)
-  })
-
-  it.each([
-    {
-      name: 'non-audio data URL',
-      payload: {
-        audioDataUrl: 'data:text/plain;base64,YXVkaW8=',
-        mimeType: 'text/plain',
-        durationMs: 1_000
-      },
-      code: 'AUDIO_INVALID'
-    },
-    {
-      name: 'mismatched MIME type',
-      payload: {
-        audioDataUrl: 'data:audio/webm;base64,YXVkaW8=',
-        mimeType: 'audio/ogg',
-        durationMs: 1_000
-      },
-      code: 'AUDIO_INVALID'
-    },
-    {
-      name: 'oversized recording',
-      payload: {
-        audioDataUrl: `data:audio/webm;base64,${'A'.repeat(7_000_000)}`,
-        mimeType: 'audio/webm',
-        durationMs: 1_000
-      },
-      code: 'AUDIO_TOO_LARGE'
-    },
-    {
-      name: 'overlong recording',
-      payload: {
-        audioDataUrl: 'data:audio/webm;base64,YXVkaW8=',
-        mimeType: 'audio/webm',
-        durationMs: 31_001
-      },
-      code: 'AUDIO_TOO_LONG'
-    }
-  ])('rejects $name before invoking an ASR provider', async ({ payload, code }) => {
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.transcribeAudio.toEventName()
-    )
-
-    const result = await handler(payload, {} as HandlerContext)
-
-    expect(result).toMatchObject({ success: false, code })
-    expect(mocks.stt).not.toHaveBeenCalled()
-    await module.onDestroy({} as never)
-  })
-
-  it('rejects VoicePanel transcription while Assistant is disabled', async () => {
-    mocks.getMainConfig.mockReturnValue(
-      mocks.createEnabledSetting({
-        assistant: {
-          enabled: false
-        }
-      })
-    )
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.transcribeAudio.toEventName()
-    )
-
-    const result = await handler(
-      {
-        audioDataUrl: 'data:audio/webm;base64,YXVkaW8=',
-        mimeType: 'audio/webm',
-        durationMs: 1_000
-      },
-      {} as HandlerContext
-    )
-
-    expect(result).toEqual({
-      success: false,
-      code: 'ASSISTANT_DISABLED',
-      error: 'Assistant is disabled.'
-    })
-    expect(mocks.stt).not.toHaveBeenCalled()
-    await module.onDestroy({} as never)
-  })
-
-  it('preserves canonical provider failures from governed VoicePanel STT', async () => {
-    mocks.stt.mockRejectedValue(new Error('No enabled providers available'))
-    const { handler, module } = await createInitializedModuleWithHandler(
-      AssistantEvents.voice.transcribeAudio.toEventName()
-    )
-
-    const result = await handler(
-      {
-        audioDataUrl: 'data:audio/webm;base64,YXVkaW8=',
-        mimeType: 'audio/webm',
-        durationMs: 1_000
-      },
-      {} as HandlerContext
-    )
-
-    expect(result).toMatchObject({
-      success: false,
-      code: 'PROVIDER_UNAVAILABLE'
-    })
-    expect(result).toHaveProperty('reason')
-    expect(result).toHaveProperty('recovery')
-    await module.onDestroy({} as never)
   })
 })

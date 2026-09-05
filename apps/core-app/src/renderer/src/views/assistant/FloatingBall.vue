@@ -2,26 +2,10 @@
 import type { AssistantRuntimeConfig } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import type { StreamController } from '@talex-touch/utils/transport/types'
+import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domains/voice'
+import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { useI18n } from 'vue-i18n'
-
-type SpeechRecognitionLike = {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  onstart: (() => void) | null
-  onerror: ((event: { error?: string }) => void) | null
-  onend: (() => void) | null
-  onresult:
-    | ((event: {
-        resultIndex: number
-        results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>
-      }) => void)
-    | null
-  start: () => void
-  stop: () => void
-}
-
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 
 const transport = useTuffTransport()
 const { t } = useI18n()
@@ -39,6 +23,7 @@ const listening = ref(false)
 const errorMessage = ref('')
 const isDragging = ref(false)
 const lastHeard = ref('')
+const voiceSdk = createVoiceSdk(transport)
 const dragState = reactive({
   active: false,
   originX: 0,
@@ -47,8 +32,8 @@ const dragState = reactive({
   offsetY: 0
 })
 
-let recognition: SpeechRecognitionLike | null = null
-let restartTimer: ReturnType<typeof setTimeout> | null = null
+let voiceStreamController: StreamController | null = null
+let wakeGeneration = 0
 let lastWakeAt = 0
 let lastMoveAt = 0
 
@@ -65,42 +50,23 @@ const statusText = computed(() => {
 
 const showWakeBadge = computed(() => runtimeConfig.value.enabled && listening.value)
 
-function resolveSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
-  const target = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionCtor
-    webkitSpeechRecognition?: SpeechRecognitionCtor
-  }
-  return target.SpeechRecognition ?? target.webkitSpeechRecognition ?? null
-}
-
 function normalizeWakeText(text: string): string {
   return text.toLowerCase().replace(/[\s,.!?，。！？、;；:：'"`~\-_/\\(){}\[\]]/g, '')
 }
 
 function scheduleRestart(): void {
-  if (!runtimeConfig.value.enabled) return
-  if (restartTimer) clearTimeout(restartTimer)
-  restartTimer = setTimeout(() => {
-    restartTimer = null
-    startWakeListening()
+  if (!runtimeConfig.value.enabled || wakeGeneration === 0) return
+  setTimeout(() => {
+    if (runtimeConfig.value.enabled && !voiceStreamController) void startWakeListening()
   }, 600)
 }
 
 function stopWakeListening(): void {
-  if (restartTimer) {
-    clearTimeout(restartTimer)
-    restartTimer = null
-  }
-  if (!recognition) return
-  const activeRecognition = recognition
-  recognition = null
+  wakeGeneration += 1
   listening.value = false
-  try {
-    activeRecognition.onend = null
-    activeRecognition.stop()
-  } catch {
-    // ignore stop errors
-  }
+  const controller = voiceStreamController
+  voiceStreamController = null
+  controller?.cancel()
 }
 
 function maybeWake(transcript: string): void {
@@ -115,66 +81,71 @@ function maybeWake(transcript: string): void {
   if (!matched) return
 
   lastWakeAt = now
+  stopWakeListening()
   void transport.send(AssistantEvents.floatingBall.openVoicePanel, { source: 'wake-word' })
 }
 
-function startWakeListening(): void {
+function handleWakeEvent(event: VoiceAsrStreamEvent): void {
+  if (event.type === 'partial' || event.type === 'final') {
+    if (!event.text) return
+    lastHeard.value = event.text
+    maybeWake(event.text)
+    return
+  }
+  listening.value = false
+  voiceStreamController = null
+  scheduleRestart()
+}
+
+async function startWakeListening(): Promise<void> {
   if (!runtimeConfig.value.enabled) {
     stopWakeListening()
     return
   }
-  if (recognition) return
+  if (voiceStreamController) return
 
-  const SpeechRecognitionCtor = resolveSpeechRecognitionCtor()
-  if (!SpeechRecognitionCtor) {
-    errorMessage.value = t('assistant.floatingBall.unsupported')
-    listening.value = false
-    return
-  }
-
-  const instance = new SpeechRecognitionCtor()
-  recognition = instance
+  const generation = ++wakeGeneration
   errorMessage.value = ''
-  instance.lang = runtimeConfig.value.language
-  instance.continuous = runtimeConfig.value.continuous
-  instance.interimResults = true
-  instance.onstart = () => {
-    listening.value = true
-  }
-  instance.onerror = (event) => {
-    const errorType = String(event?.error || 'unknown')
-    if (errorType === 'not-allowed' || errorType === 'service-not-allowed') {
-      errorMessage.value = t('assistant.floatingBall.permissionDenied')
-      stopWakeListening()
+  listening.value = true
+  try {
+    const controller = await voiceSdk.asrStream(
+      {
+        language: runtimeConfig.value.language,
+        cleanup: false,
+        delivery: 'none'
+      },
+      {
+        onData: handleWakeEvent,
+        onError: (error) => {
+          if (generation !== wakeGeneration) return
+          listening.value = false
+          voiceStreamController = null
+          errorMessage.value =
+            error instanceof Error
+              ? error.message
+              : t('assistant.floatingBall.recognitionError', { error: 'voice-session-failed' })
+          scheduleRestart()
+        },
+        onEnd: () => {
+          if (generation !== wakeGeneration) return
+          listening.value = false
+          voiceStreamController = null
+          scheduleRestart()
+        }
+      }
+    )
+    if (generation !== wakeGeneration || !runtimeConfig.value.enabled) {
+      controller.cancel()
       return
     }
-    errorMessage.value = t('assistant.floatingBall.recognitionError', { error: errorType })
-  }
-  instance.onresult = (event) => {
-    const fragments: string[] = []
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const line = event.results[i]?.[0]?.transcript
-      if (typeof line === 'string' && line.trim()) {
-        fragments.push(line.trim())
-      }
-    }
-    if (!fragments.length) return
-    const transcript = fragments.join(' ')
-    lastHeard.value = transcript
-    maybeWake(transcript)
-  }
-  instance.onend = () => {
-    listening.value = false
-    recognition = null
-    scheduleRestart()
-  }
-
-  try {
-    instance.start()
+    voiceStreamController = controller
   } catch (error) {
-    recognition = null
+    if (generation !== wakeGeneration) return
     listening.value = false
-    errorMessage.value = error instanceof Error ? error.message : String(error)
+    errorMessage.value =
+      error instanceof Error
+        ? error.message
+        : t('assistant.floatingBall.recognitionError', { error: 'voice-session-failed' })
     scheduleRestart()
   }
 }

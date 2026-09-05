@@ -11,6 +11,7 @@ import { getXdotoolUnavailableReason } from './linux-desktop-tools'
 // the store is separate so readers do not import this module's Electron deps.
 import { selectionSnapshotStore } from './selection-snapshot-store'
 import { withClipboardCaptureSuppressed } from '../clipboard/clipboard-capture-suppression'
+import { restoreClipboard, snapshotClipboard } from '../clipboard/clipboard-snapshot'
 
 const selectionCaptureLog = createLogger('SelectionCapture')
 const execFileAsync = promisify(execFile)
@@ -26,13 +27,6 @@ const COPY_RESULT_POLL_DELAY_MS = 120
  * Matched to the copy shortcut's budget: both are "ask the foreground app something".
  */
 const DIRECT_SELECTION_PROBE_TIMEOUT_MS = 900
-
-interface ClipboardSnapshot {
-  items: Array<{
-    format: string
-    data: Buffer
-  }>
-}
 
 export interface SelectionCaptureOptions {
   enabled?: boolean
@@ -86,67 +80,6 @@ async function captureMacSelectionTextDirectly(): Promise<string | null> {
   } catch {
     return null
   }
-}
-
-function snapshotClipboard(): ClipboardSnapshot {
-  const items: ClipboardSnapshot['items'] = []
-  for (const format of clipboard.availableFormats()) {
-    try {
-      items.push({
-        format,
-        data: clipboard.readBuffer(format)
-      })
-    } catch (error) {
-      selectionCaptureLog.debug(`Skip clipboard format snapshot: ${format}`, {
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
-  }
-  return { items }
-}
-
-function restoreClipboard(snapshot: ClipboardSnapshot): boolean {
-  // clear() has already destroyed the original by the time the writes run, so one throwing
-  // format used to abort the loop and take every format after it with it -- a user with an
-  // image plus RTF could be left with neither (#768). Each write is attempted independently
-  // now, so a format that cannot be restored costs only itself.
-  let cleared = false
-  const failedFormats: string[] = []
-
-  try {
-    clipboard.clear()
-    cleared = true
-  } catch (error) {
-    selectionCaptureLog.warn('Failed to clear clipboard before restore', {
-      error: error instanceof Error ? error.message : String(error)
-    })
-    return false
-  }
-
-  for (const item of snapshot.items) {
-    try {
-      clipboard.writeBuffer(item.format, item.data)
-    } catch (error) {
-      failedFormats.push(item.format)
-      selectionCaptureLog.warn('Failed to restore a clipboard format', {
-        meta: { format: item.format },
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
-  }
-
-  if (failedFormats.length > 0) {
-    selectionCaptureLog.warn('Clipboard snapshot restored only in part', {
-      meta: {
-        restored: snapshot.items.length - failedFormats.length,
-        total: snapshot.items.length,
-        failedFormats: failedFormats.join(', ')
-      }
-    })
-    return false
-  }
-
-  return cleared
 }
 
 async function captureSelection(

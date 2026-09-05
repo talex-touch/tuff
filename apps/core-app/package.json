@@ -182,6 +182,7 @@
     "@milkdown/utils": "^7.22.0",
     "@sentry/vite-plugin": "^4.9.1",
     "@types/fs-extra": "^11.0.4",
+    "@types/plist": "^3.0.5",
     "@types/node": "catalog:dev",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vitejs/plugin-vue-jsx": "^5.1.5",

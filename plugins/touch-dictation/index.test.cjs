@@ -58,7 +58,7 @@ function createHarness(overrides = {}) {
   const state = {
     items: [],
     order: [],
-    pasted: [],
+    dictationRequests: [],
     spoken: [],
     logs: [],
   }
@@ -77,15 +77,21 @@ function createHarness(overrides = {}) {
     },
     voice: {
       async dictate() {
-        return { text: 'one-shot words' }
+        return { text: 'one-shot words', delivery: { method: 'native' } }
       },
       async speak(payload) {
         state.spoken.push(structuredClone(payload))
         return { format: 'wav', played: true }
       },
-      async asrStream(_payload, options) {
+      async asrStream(payload, options) {
+        state.dictationRequests.push(structuredClone(payload))
         await options.onData({ type: 'partial', text: 'partial words' })
-        await options.onData({ type: 'final', text: 'final words', language: 'en-US' })
+        await options.onData({
+          type: 'final',
+          text: 'final words',
+          language: 'en-US',
+          delivery: { method: 'autopaste' },
+        })
         await options.onData({ type: 'end' })
         await options.onEnd()
         return { id: 'stream-1', cancelled: false, cancel: async () => undefined }
@@ -95,13 +101,6 @@ function createHarness(overrides = {}) {
   const clipboard = {
     async readText() {
       return 'clipboard words'
-    },
-    async copyAndPaste(payload) {
-      state.pasted.push(structuredClone(payload))
-      return true
-    },
-    async writeText(text) {
-      state.pasted.push({ text })
     },
   }
   Object.assign(plugin.voice, overrides.voice)
@@ -144,7 +143,7 @@ test('exports lifecycle only and awaits clear before feature publication', async
   })
 })
 
-test('streams partials, captures the final text and awaits governed delivery', async () => {
+test('streams partials, returns the main-owned delivery result, and never performs child-side paste', async () => {
   const { lifecycle, state } = createHarness()
   await lifecycle.onFeatureTriggered('dictate', { text: '' })
   const item = state.items[0]
@@ -156,7 +155,7 @@ test('streams partials, captures the final text and awaits governed delivery', a
     success: true,
     message: '已听写并粘贴：final words',
   })
-  assert.deepEqual(state.pasted, [{ text: 'final words' }])
+  assert.deepEqual(state.dictationRequests, [{ cleanup: true, delivery: 'active-app' }])
   assert.equal(state.items[0].render.basic.title, '🎙️ 识别中…')
   assert.equal(state.items[0].render.basic.subtitle, 'partial words')
 })
@@ -184,7 +183,6 @@ test('contains voice failures without leaking host details', async () => {
   // The part that matters most is unchanged: the host's own error text carries a device path,
   // and none of it may reach the result.
   assert.doesNotMatch(JSON.stringify(result), /private|native|microphone device/)
-  assert.deepEqual(state.pasted, [])
   assert.deepEqual(state.logs, ['[touch-dictation] permission-denied'])
 })
 

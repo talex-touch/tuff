@@ -23,6 +23,8 @@ import {
 } from './clipboard-action-diagnostics'
 import { createNativeImageFromClipboardSource } from './clipboard-image-persistence'
 import { buildApplyPayloadFromCopyAndPaste } from './clipboard-request-normalizer'
+import { withClipboardCaptureSuppressed } from './clipboard-capture-suppression'
+import { restoreClipboard, snapshotClipboard } from './clipboard-snapshot'
 
 export interface ClipboardAutopasteAutomationOptions {
   hasDatabase: () => boolean
@@ -182,6 +184,36 @@ export class ClipboardAutopasteAutomation {
         { notify: true }
       )
     }
+  }
+  /** Delivers voice text and restores the user's prior clipboard formats. */
+  public async handleVoiceTextRequest(text: string): Promise<ClipboardActionResult> {
+    const trimmed = text.trim()
+    if (!trimmed)
+      return { success: false, code: 'AUTO_PASTE_FAILED', message: 'Voice text is empty.' }
+
+    return await withClipboardCaptureSuppressed(async () => {
+      const snapshot = snapshotClipboard()
+      try {
+        await this.applyToActiveApp({ text: trimmed })
+        if (!restoreClipboard(snapshot)) {
+          return {
+            success: false,
+            code: 'AUTO_PASTE_FAILED',
+            message: 'Voice text was pasted, but the previous clipboard could not be restored.'
+          }
+        }
+        return { success: true }
+      } catch (error) {
+        restoreClipboard(snapshot)
+        return this.toActionFailureResult(
+          error,
+          'Voice text auto-paste failed',
+          { platform: process.platform },
+          AUTO_PASTE_FAILED_MESSAGE,
+          { notify: true }
+        )
+      }
+    })
   }
 
   public normalizeApplyPayload(payload: ClipboardApplyPayload): IClipboardItem {

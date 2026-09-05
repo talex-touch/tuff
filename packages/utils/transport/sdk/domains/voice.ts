@@ -3,10 +3,11 @@
  * @module @talex-touch/utils/transport/sdk/domains/voice
  *
  * Surface:
- * - {@link VoiceSdk.dictate} — one-shot capture → transcribe → optional polish.
- * - {@link VoiceSdk.asrStream} — live streaming ASR (partial → final → end).
- * - {@link VoiceSdk.speak} — text-to-speech, optionally played through the speakers.
+ * - {@link VoiceSdk.dictate} — canonical one-shot Voice Session.
+ * - {@link VoiceSdk.asrStream} — canonical live session (partial → final → end).
+ * - {@link VoiceSdk.speak} — text-to-speech backed by the same native audio package.
  *
+ * Every voice input caller uses this contract; capture and platform injection remain main-owned.
  * Modeled on the `intelligence` domain SDK.
  */
 import type { ITuffTransport, StreamController, StreamOptions } from "../../types";
@@ -16,6 +17,15 @@ import { defineEvent } from "../../event/builder";
 export type VoiceApiResponse<T = undefined> =
   | { ok: true; result?: T }
   | { ok: false; error: string };
+
+/** Where the canonical session should deliver its final text. */
+export type VoiceDeliveryMode = "none" | "active-app";
+
+/** Result of the main-owned text delivery step. */
+export interface VoiceDeliveryResult {
+  method: "native" | "autopaste" | "none";
+  reason?: string;
+}
 
 /** One-shot dictation request: capture mic → STT → optional AI polish. */
 export interface VoiceDictatePayload {
@@ -27,6 +37,8 @@ export interface VoiceDictatePayload {
   maxDurationMs?: number;
   /** Auto-stop after this much trailing silence in ms. */
   silenceStopMs?: number;
+  /** Keep text only, or let main deliver it to the active application. */
+  delivery?: VoiceDeliveryMode;
 }
 
 /** Result of a one-shot dictation. */
@@ -45,6 +57,8 @@ export interface VoiceDictateResult {
   durationMs?: number;
   /** Why capture stopped: "manual" | "max-duration" | "silence". */
   stoppedReason?: string;
+  /** Main-owned delivery outcome when delivery was requested. */
+  delivery?: VoiceDeliveryResult;
 }
 
 /** Text-to-speech request. */
@@ -71,16 +85,26 @@ export interface VoiceSpeakResult {
   durationMs?: number;
 }
 
-/** Reserved streaming ASR seam — not wired in the MVP backend. */
+/** Streaming ASR request backed by the same Voice Session owner. */
 export interface VoiceAsrStreamPayload {
   language?: string;
+  cleanup?: boolean;
+  maxDurationMs?: number;
+  silenceStopMs?: number;
+  delivery?: VoiceDeliveryMode;
 }
 
 /** Streaming ASR event. */
 export type VoiceAsrStreamEvent =
   | { type: "partial"; text: string }
-  | { type: "final"; text: string; language?: string }
+  | {
+      type: "final";
+      text: string;
+      language?: string;
+      delivery?: VoiceDeliveryResult;
+    }
   | { type: "end" };
+
 
 /**
  * Voice domain events. Event names resolve to `voice:api:<action>`.

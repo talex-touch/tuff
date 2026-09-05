@@ -1248,6 +1248,9 @@ export class ClipboardModule extends BaseModule {
   ): Promise<ClipboardActionResult> {
     return await this.autopasteAutomation.handleCopyAndPasteRequest(request, context)
   }
+  public async applyVoiceText(text: string): Promise<ClipboardActionResult> {
+    return await this.autopasteAutomation.handleVoiceTextRequest(text)
+  }
 
   private installClipboardHostService(): void {
     this.clipboardHostServiceDisposer?.()

@@ -5,13 +5,17 @@ import type {
   AssistantClipboardImageTranslateResponse,
   AssistantScreenshotDisplay,
   AssistantScreenshotRegionSelectionResponse,
-  AssistantScreenshotTranslateResponse,
-  AssistantVoiceTranscribeResponse
+  AssistantScreenshotTranslateResponse
 } from '@talex-touch/utils/transport/events/assistant'
+import {
+  voiceApiEvents,
+  type VoiceAsrStreamEvent
+} from '@talex-touch/utils/transport/sdk/domains/voice'
 import VoicePanel from './VoicePanel.vue'
 
 const transportSendMock = vi.hoisted(() => vi.fn())
 const transportOnMock = vi.hoisted(() => vi.fn())
+const transportStreamMock = vi.hoisted(() => vi.fn())
 
 const messages: Record<string, string> = {
   'assistant.voicePanel.textOnly': 'Text input only',
@@ -40,20 +44,18 @@ const messages: Record<string, string> = {
   'assistant.voicePanel.microphonePermissionSettingsOpened': 'Microphone settings opened',
   'assistant.voicePanel.microphonePermissionSettingsUnavailable': 'Microphone settings unavailable',
   'assistant.voicePanel.retryVoiceInput': 'Retry voice input',
-  'assistant.voicePanel.providerRecording': 'Provider recording',
-  'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe',
+  'assistant.voicePanel.voicePreparing': 'Preparing voice capture',
   'assistant.voicePanel.voiceTranscribing': 'Transcribing voice',
   'assistant.voicePanel.voiceTranscribed': 'Voice transcribed',
-  'assistant.voicePanel.voiceTranscribedWithProvider': 'Voice transcribed by {provider}',
-  'assistant.voicePanel.voiceBrowserFallback': 'Browser speech fallback ready',
-  'assistant.voicePanel.voiceTranscribeUnavailable': 'Voice transcription unavailable',
   'assistant.voicePanel.voiceTranscribeFailed': 'Voice transcription failed',
-  'assistant.voicePanel.startListening': 'Start listening'
+  'assistant.voicePanel.startListening': 'Start listening',
+  'assistant.voicePanel.stopListening': 'Stop listening'
 }
 
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
     send: transportSendMock,
+    stream: transportStreamMock,
     on: transportOnMock
   })
 }))
@@ -72,103 +74,64 @@ vi.mock('vue-i18n', () => ({
 let clipboardImageResponse: AssistantClipboardImageTranslateResponse
 let screenshotResponse: AssistantScreenshotTranslateResponse
 let permissionRequestResult: boolean
-let screenshotDisplaysResponse: AssistantScreenshotDisplay[]
 let intelligenceSettingsOpenResult: boolean
+let screenshotDisplaysResponse: AssistantScreenshotDisplay[]
 let screenshotRegionSelectionResponse: AssistantScreenshotRegionSelectionResponse
 let submitResponse: Promise<{ accepted: boolean }>
 let closePanelResponse: Promise<void>
-let voiceTranscribeResponse: AssistantVoiceTranscribeResponse
-let mediaRecorderInstances: ControllableMediaRecorder[]
-let mediaTrackStopMock: Mock<() => void>
-
-class ControllableSpeechRecognition {
-  lang = ''
-  continuous = false
-  interimResults = false
-  onstart: (() => void) | null = null
-  onerror: ((event: { error?: string }) => void) | null = null
-  onend: (() => void) | null = null
-  onresult: ((event: { resultIndex: number; results: ArrayLike<unknown> }) => void) | null = null
-  startCalls = 0
-
-  constructor() {
-    speechRecognitionInstances.push(this)
-  }
-
-  start(): void {
-    this.startCalls += 1
-    if (speechRecognitionStartError) throw speechRecognitionStartError
-  }
-
-  stop(): void {}
-
-  emitError(error: string): void {
-    this.onerror?.({ error })
-  }
-
-  emitResult(transcript: string, isFinal = true): void {
-    this.onresult?.({
-      resultIndex: 0,
-      results: [{ isFinal, 0: { transcript } }]
-    })
-  }
+type VoiceStreamCallbacks = {
+  onData?: (event: VoiceAsrStreamEvent) => unknown
+  onError?: (error: Error) => unknown
+  onEnd?: () => unknown
 }
 
-class ControllableMediaRecorder {
-  static isTypeSupported(mimeType: string): boolean {
-    return mimeType.startsWith('audio/webm')
-  }
+interface ControlledVoiceStream {
+  readonly cancel: Mock
+  readonly controller: Readonly<{ cancel: Mock }>
+  connect(
+    event: unknown,
+    payload: unknown,
+    callbacks: VoiceStreamCallbacks
+  ): Readonly<{ cancel: Mock }>
+  request(): { event: unknown; payload: unknown }
+  emitData(event: VoiceAsrStreamEvent): Promise<void>
+  emitEnd(): Promise<void>
+  emitError(error: Error): Promise<void>
+}
 
-  readonly mimeType: string
-  state: 'inactive' | 'recording' | 'paused' = 'inactive'
-  ondataavailable: ((event: { data: Blob }) => void) | null = null
-  onerror: ((event: Event) => void) | null = null
-  onstop: (() => void) | null = null
-  startCalls = 0
+function createControlledVoiceStream(): ControlledVoiceStream {
+  let event: unknown
+  let payload: unknown
+  let callbacks: VoiceStreamCallbacks | undefined
+  const cancel = vi.fn()
+  const controller = Object.freeze({ cancel })
 
-  constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
-    this.mimeType = options?.mimeType || 'audio/webm'
-    mediaRecorderInstances.push(this)
-  }
-
-  start(): void {
-    this.startCalls += 1
-    this.state = 'recording'
-  }
-
-  stop(): void {
-    if (this.state === 'inactive') return
-    this.state = 'inactive'
-    this.ondataavailable?.({
-      data: new Blob(['provider-audio'], { type: this.mimeType })
-    })
-    this.onstop?.()
+  return {
+    cancel,
+    controller,
+    connect(nextEvent, nextPayload, nextCallbacks) {
+      event = nextEvent
+      payload = nextPayload
+      callbacks = nextCallbacks
+      return controller
+    },
+    request() {
+      return { event, payload }
+    },
+    async emitData(nextEvent) {
+      await callbacks?.onData?.(nextEvent)
+    },
+    async emitEnd() {
+      await callbacks?.onEnd?.()
+    },
+    async emitError(error) {
+      await callbacks?.onError?.(error)
+    }
   }
 }
 
 let voiceWakeRuntimeEnabled: boolean
-let speechRecognitionStartError: Error | null
-let speechRecognitionInstances: ControllableSpeechRecognition[]
-
-function enableVoiceWakeRecognition(startError: Error | null = null): void {
-  voiceWakeRuntimeEnabled = true
-  speechRecognitionStartError = startError
-  vi.stubGlobal('SpeechRecognition', ControllableSpeechRecognition)
-}
-
-function enableProviderRecording(): void {
-  voiceWakeRuntimeEnabled = true
-  const getUserMedia = vi.fn().mockResolvedValue({
-    getTracks: () => [{ stop: mediaTrackStopMock }]
-  })
-  const navigatorWithMedia = Object.create(window.navigator) as Record<string, unknown>
-  Object.defineProperty(navigatorWithMedia, 'mediaDevices', {
-    configurable: true,
-    value: { getUserMedia }
-  })
-  vi.stubGlobal('navigator', navigatorWithMedia)
-  vi.stubGlobal('MediaRecorder', ControllableMediaRecorder)
-}
+let voiceStream: ControlledVoiceStream
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -190,10 +153,7 @@ afterEach(() => {
 
 beforeEach(() => {
   voiceWakeRuntimeEnabled = false
-  speechRecognitionStartError = null
-  speechRecognitionInstances = []
-  mediaRecorderInstances = []
-  mediaTrackStopMock = vi.fn()
+  voiceStream = createControlledVoiceStream()
   clipboardImageResponse = {
     success: false,
     code: 'IMAGE_UNAVAILABLE'
@@ -211,19 +171,13 @@ beforeEach(() => {
   }
   submitResponse = Promise.resolve({ accepted: true })
   closePanelResponse = Promise.resolve()
-  voiceTranscribeResponse = {
-    success: true,
-    text: 'Provider dictated request',
-    language: 'en',
-    confidence: 0.9,
-    provider: 'openai-compatible',
-    model: 'whisper-1',
-    traceId: 'trace-renderer-asr',
-    latencyMs: 35
-  }
   transportSendMock.mockReset()
+  transportStreamMock.mockReset()
   transportOnMock.mockReset()
   transportOnMock.mockReturnValue(() => undefined)
+  transportStreamMock.mockImplementation(async (event, payload, options) =>
+    voiceStream.connect(event, payload, options as VoiceStreamCallbacks)
+  )
   transportSendMock.mockImplementation(
     async (event: { toEventName: () => string }): Promise<unknown> => {
       switch (event.toEventName()) {
@@ -241,8 +195,6 @@ beforeEach(() => {
           return screenshotDisplaysResponse
         case 'assistant:voice-panel:submit':
           return submitResponse
-        case 'assistant:voice-panel:transcribe-audio':
-          return voiceTranscribeResponse
         case 'assistant:voice-panel:close':
           return closePanelResponse
         case 'assistant:voice-panel:select-screenshot-region':
@@ -332,15 +284,6 @@ function dispatchEscape(init: KeyboardEventInit = {}): KeyboardEvent {
   return event
 }
 
-function microphonePermissionRequestCalls() {
-  return transportSendMock.mock.calls.filter(
-    ([event, payload]) =>
-      hasTransportEventName(event) &&
-      event.toEventName() === 'system:permission:request' &&
-      payload === 'microphone'
-  )
-}
-
 async function openVoicePanel(): Promise<void> {
   const panelOpenedHandler = transportOnMock.mock.calls[0]?.[1]
   if (typeof panelOpenedHandler !== 'function') {
@@ -426,14 +369,15 @@ describe('VoicePanel keyboard submission', () => {
     wrapper.unmount()
   })
 
-  it('marks text contributed by speech recognition as voice-origin on Enter submit', async () => {
-    enableVoiceWakeRecognition()
+  it('marks text contributed by a shared Voice Session final event as voice-origin on Enter submit', async () => {
+    voiceWakeRuntimeEnabled = true
     const wrapper = await mountVoicePanel()
     await openVoicePanel()
+    await vi.waitFor(() => expect(transportStreamMock).toHaveBeenCalledTimes(1))
+    await voiceStream.emitData({ type: 'final', text: 'Dictated request' })
+    await flushPromises()
     const textarea = wrapper.find<HTMLTextAreaElement>('textarea')
 
-    speechRecognitionInstances[0]?.emitResult('Dictated request')
-    await flushPromises()
     dispatchEnter(textarea.element)
     await flushPromises()
 
@@ -536,149 +480,52 @@ async function surfaceScreenshotPermissionRecovery(wrapper: VueWrapper) {
   expect(wrapper.find('.permission-recovery-btn').exists()).toBe(true)
 }
 
-describe('VoicePanel provider ASR', () => {
-  it('records transient audio and applies a governed provider transcript', async () => {
-    enableProviderRecording()
+describe('VoicePanel shared Voice Session', () => {
+  it('renders partial and final shared-SDK events, then releases the stream on end', async () => {
+    voiceWakeRuntimeEnabled = true
     const wrapper = await mountVoicePanel()
     await openVoicePanel()
 
-    expect(mediaRecorderInstances).toHaveLength(1)
-    expect(mediaRecorderInstances[0]?.startCalls).toBe(1)
-    await findButton(wrapper, 'Stop and transcribe').trigger('click')
+    await vi.waitFor(() => expect(transportStreamMock).toHaveBeenCalledTimes(1))
+    expect(voiceStream.request()).toEqual({
+      event: voiceApiEvents.asrStream,
+      payload: { language: 'en-US', cleanup: true, delivery: 'none' }
+    })
 
-    await vi.waitFor(() => {
-      expect(screenshotTransportCalls('assistant:voice-panel:transcribe-audio')).toHaveLength(1)
+    await voiceStream.emitData({ type: 'partial', text: 'draft phrase' })
+    await flushPromises()
+    expect(wrapper.find('.interim-text').text()).toBe('draft phrase')
+
+    await voiceStream.emitData({
+      type: 'final',
+      text: 'final phrase',
+      delivery: { method: 'none', reason: 'target-unavailable' }
     })
-    const transcribeCall = screenshotTransportCalls('assistant:voice-panel:transcribe-audio')[0]
-    const payload = transcribeCall?.[1] as {
-      audioDataUrl: string
-      mimeType: string
-      durationMs: number
-      language: string
-    }
-    expect(payload).toMatchObject({
-      mimeType: 'audio/webm;codecs=opus',
-      language: 'en-US'
-    })
-    expect(payload.audioDataUrl).toMatch(/^data:audio\/webm;codecs=opus;base64,/)
-    expect(payload.durationMs).toBeGreaterThan(0)
-    expect(wrapper.find<HTMLTextAreaElement>('textarea').element.value).toBe(
-      'Provider dictated request'
-    )
-    expect(mediaTrackStopMock).toHaveBeenCalledTimes(1)
+    await flushPromises()
+    expect(wrapper.find<HTMLTextAreaElement>('textarea').element.value).toBe('final phrase')
+    expect(wrapper.find('.interim-text').exists()).toBe(false)
+
+    await voiceStream.emitEnd()
+    await flushPromises()
+    expect(findButton(wrapper, 'Start listening').exists()).toBe(true)
 
     wrapper.unmount()
   })
 
-  it('starts the existing Web Speech fallback after provider transcription fails', async () => {
-    enableVoiceWakeRecognition()
-    enableProviderRecording()
-    voiceTranscribeResponse = {
-      success: false,
-      code: 'ASR_UNAVAILABLE',
-      error: 'Voice transcription is unavailable.'
-    }
+  it('surfaces a shared stream error and cancels an explicitly stopped session', async () => {
+    voiceWakeRuntimeEnabled = true
     const wrapper = await mountVoicePanel()
     await openVoicePanel()
 
-    await findButton(wrapper, 'Stop and transcribe').trigger('click')
-    await vi.waitFor(() => {
-      expect(speechRecognitionInstances).toHaveLength(1)
-    })
-
-    expect(speechRecognitionInstances[0]?.startCalls).toBe(1)
-    expect(wrapper.find('.status-text').text()).toBe('Browser speech fallback ready')
-    expect(wrapper.find('.error-text').text()).toBe('Voice transcription unavailable')
-
-    speechRecognitionInstances[0]?.emitError('network')
+    await vi.waitFor(() => expect(transportStreamMock).toHaveBeenCalledTimes(1))
+    await voiceStream.emitError(new Error('Voice gateway unavailable'))
     await flushPromises()
+    expect(wrapper.find('.error-text').text()).toBe('Voice gateway unavailable')
+
     await findButton(wrapper, 'Start listening').trigger('click')
-    await vi.waitFor(() => {
-      expect(mediaRecorderInstances).toHaveLength(2)
-    })
-    expect(mediaRecorderInstances[1]?.startCalls).toBe(1)
-    expect(wrapper.find('.intelligence-recovery-btn').exists()).toBe(false)
-
-    wrapper.unmount()
-  })
-})
-
-describe('VoicePanel microphone permission recovery', () => {
-  it('opens settings once and retries with a fresh recognizer after a not-allowed callback', async () => {
-    enableVoiceWakeRecognition()
-    const wrapper = await mountVoicePanel()
-    await openVoicePanel()
-    const deniedRecognition = speechRecognitionInstances[0]
-
-    expect(deniedRecognition?.startCalls).toBe(1)
-    deniedRecognition?.emitError('not-allowed')
-    await flushPromises()
-
-    expect(wrapper.find('.error-text').text()).toBe('Microphone permission denied')
-    expect(findButton(wrapper, 'Open microphone settings').classes()).toContain(
-      'permission-recovery-btn'
-    )
-
-    await findButton(wrapper, 'Open microphone settings').trigger('click')
-    await flushPromises()
-
-    const microphoneRequests = microphonePermissionRequestCalls()
-    expect(microphoneRequests).toHaveLength(1)
-    expect(microphoneRequests[0]?.[0]).toMatchObject({
-      namespace: 'system',
-      module: 'permission',
-      action: 'request'
-    })
-    expect(microphoneRequests[0]?.[1]).toBe('microphone')
-    expect(wrapper.find('.status-text').text()).toBe('Microphone settings opened')
-    expect(findButton(wrapper, 'Retry voice input').exists()).toBe(true)
-
-    await findButton(wrapper, 'Retry voice input').trigger('click')
-    await flushPromises()
-
-    expect(microphonePermissionRequestCalls()).toHaveLength(1)
-    expect(speechRecognitionInstances).toHaveLength(2)
-    expect(speechRecognitionInstances[1]?.startCalls).toBe(1)
-    expect(wrapper.find('.permission-recovery-btn').exists()).toBe(false)
-    expect(wrapper.find('.error-text').exists()).toBe(false)
-
-    wrapper.unmount()
-  })
-
-  it('keeps microphone recovery actionable when opening settings fails', async () => {
-    permissionRequestResult = false
-    enableVoiceWakeRecognition()
-    const wrapper = await mountVoicePanel()
-    await openVoicePanel()
-
-    speechRecognitionInstances[0]?.emitError('service-not-allowed')
-    await flushPromises()
-    await findButton(wrapper, 'Open microphone settings').trigger('click')
-    await flushPromises()
-
-    expect(microphonePermissionRequestCalls()).toHaveLength(1)
-    expect(wrapper.find('.error-text').text()).toBe('Microphone settings unavailable')
-    expect(findButton(wrapper, 'Open microphone settings').exists()).toBe(true)
-    expect(wrapper.find('.status-text').exists()).toBe(false)
-
-    wrapper.unmount()
-  })
-
-  it('surfaces synchronous NotAllowedError recovery without restarting recognition', async () => {
-    vi.useFakeTimers()
-    const error = new Error('Microphone access denied')
-    error.name = 'NotAllowedError'
-    enableVoiceWakeRecognition(error)
-    const wrapper = await mountVoicePanel()
-    await openVoicePanel()
-
-    expect(wrapper.find('.error-text').text()).toBe('Microphone permission denied')
-    expect(findButton(wrapper, 'Open microphone settings').exists()).toBe(true)
-
-    vi.advanceTimersByTime(500)
-    await flushPromises()
-
-    expect(speechRecognitionInstances).toHaveLength(1)
+    await vi.waitFor(() => expect(transportStreamMock).toHaveBeenCalledTimes(2))
+    await findButton(wrapper, 'Stop listening').trigger('click')
+    expect(voiceStream.cancel).toHaveBeenCalledTimes(1)
 
     wrapper.unmount()
   })

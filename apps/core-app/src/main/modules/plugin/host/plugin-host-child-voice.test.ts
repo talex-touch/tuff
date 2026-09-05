@@ -30,7 +30,8 @@ describe('plugin Prelude voice facade', () => {
                   text: 'final words',
                   raw: 'raw words',
                   source: 'native-cpal',
-                  polished: true
+                  polished: true,
+                  delivery: { method: 'autopaste' }
                 }
               }
             : { operation: 'speak', data: { format: 'wav', played: true } }
@@ -61,7 +62,7 @@ describe('plugin Prelude voice facade', () => {
                   onEnd: async () => { ended += 1 }
                 }
               )
-              const dictated = await plugin.voice.dictate({ cleanup: true })
+              const dictated = await plugin.voice.dictate({ cleanup: true, delivery: 'active-app' })
               const spoken = await plugin.voice.speak({ text: 'hello', play: true })
               return {
                 events,
@@ -108,7 +109,8 @@ describe('plugin Prelude voice facade', () => {
         text: 'final words',
         raw: 'raw words',
         source: 'native-cpal',
-        polished: true
+        polished: true,
+        delivery: { method: 'autopaste' }
       },
       spoken: { format: 'wav', played: true },
       controller: {
