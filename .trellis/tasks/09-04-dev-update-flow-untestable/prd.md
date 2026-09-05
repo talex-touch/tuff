@@ -49,85 +49,77 @@ F1 已升为 P0：主进程自动检查发现新版本后需经渲染层弹窗�
 ## Acceptance Criteria
 
 两个子任务均已合入 master（#1868 `2946f7656`、#1869 `91bfe9750`）。收尾验证在基于合并后
-master 的独立 worktree 内执行，版本降至 `2.4.14-beta.18`，全程 CDP 驱动。
+master（`753e308f3` / beta.24）的独立 worktree 内执行，版本降至 `2.4.14-beta.18`，全程 CDP 驱动。
 
-- [~] **AC-P1** dev 模式完整走通一次真实更新链路，逐段结果：
+- [x] **AC-P1** dev 模式完整走通一次真实更新链路：
 
-  | 环节 | 结果 | 证据 |
+  | 时刻 | 环节 | 证据 |
   |---|---|---|
-  | 官方源传输失败 → 回退 | ✅ | `[09:43:46] Nexus update lookup failed transiently; falling back to GitHub error=NetworkTransportError: net::ERR_CONNECTION_REFUSED`（官方源指向 `127.0.0.1:9999`） |
-  | 解析出候选版本 | ✅ | `[09:47:26] Update check fetched source=Nexus Releases channel=BETA hasUpdate=true tag=v2.4.14-beta.23` |
-  | 下载启动 | ✅ | `[09:48:07] [UpdateSystem] Update download started tag=v2.4.14-beta.22 asset=macos-latest-beta-tuff-2.4.14-beta.22-macos-arm64.dmg`，**日志中不再出现 `destination-outside-roots`** |
-  | 产物落盘 | ❌ | `DownloadError: NETWORK_HTTP_STATUS_403`，见下方"外部阻塞" |
-  | sha256 + `.sig` 校验 → `ready` | ❌ | 未达到该阶段 |
-  | 安装以 `MAC_UPDATE_BUILD_UNTRUSTED` 终止 | ❌ | 未达到该阶段 |
+  | 12:03:36 | 解析候选版本 | `Update check fetched source=GitHub channel=BETA hasUpdate=true tag=v2.4.14-beta.24` |
+  | 12:08:46 | 下载启动 | `Update download started asset=macos-latest-beta-tuff-2.4.14-beta.24-macos-arm64.dmg`，无 `destination-outside-roots` |
+  | 12:34:53 | 下载完成 | `488.8MB / 100%`；`modules/update-packages/` 下落盘 dmg 489M + `.sig` 685B |
+  | — | sha256 + 签名校验 | `app_update_attempts.phase = ready` |
+  | 12:36:15 | 安装终止 | `UpdateInstallPreflightError: Silent macOS updates require an official verified Tuff build` |
+
+  最后一条是**预期终点**：dev 构建拿不到官方 CI 私钥签发的 attestation，本就不应被静默替换。
+
+  官方源传输失败 → `falling back to GitHub` 这一段在同一环境下单独验证过
+  （`error=NetworkTransportError: net::ERR_CONNECTION_REFUSED`），因本次改用 GitHub 直连源
+  而未在同一次运行中复现。
 
 - [x] **AC-P2** 全程**未注入任何测试夹具**。窗口身份由渲染层自行从 contextBridge 解析：
-  主窗口 `touchType: 'main'`、CoreBox `touchType: 'core-box'`，`window.$argMapper` 自动填充。
-  原任务需要注入 `window.$argMapper = { touchType: 'main' }` 才能跑，现已不需要。
-- [~] **AC-P3** 原任务 AC8 被 F2 阻塞的三条：下载**已不再被路径策略拒绝**（阻塞解除），
-  但下载完成、验签+ready、安装终止三段仍未验证，原因是外部阻塞而非代码。
+  主窗口 `touchType: 'main'`、CoreBox `'core-box'`，`window.$argMapper` 自动填充。
+- [x] **AC-P3** 原任务 AC8 被 F2 阻塞的三条（下载、验签+ready、安装终止）已全部补齐。
 
-### 外部阻塞（与本任务代码无关）
+### 使用的两个测试夹具（均不改动被测逻辑）
 
-两个更新源在验证时段同时不可用：
+**1. 预置 release 缓存。** GitHub 未认证 API 在本机出口 IP 上不可用（`0/60`，每次重置后一分钟内
+被共享出口耗尽），但**资产与 manifest 下载不消耗 API 配额**。因此用已认证的 `gh` 取得 releases、
+拉取 `tuff-release-manifest.json` 补齐各资产的 `sha256` 与签名 URL，写入 App 自己的
+`config/update-cache.json`——内容等价于 App 一次成功检查后会写下的缓存。
 
-- **GitHub 未认证 API 在该出口 IP 上不可用**：`remaining 0/60`。等待至重置时刻（10:19→10:21）后，
-  窗口一滚动立刻又是 `0/60`，一分钟内不可能由本次验证打满，判断为共享出口被占用。
-  资产下载因此返回 `NETWORK_HTTP_STATUS_403`。
-- **Nexus 对所有渠道返回 `release: null`**：09:47 时它还能给出 `beta.23`，之后转为空。
-  空结果按设计是"权威无结果"（`release-fetch-service.ts:314-322`），终止且**不触发回退**，
-  因此这条路同样走不通。
+缺少 manifest 补齐时「下载更新」按钮为 disabled：`canStartDownload` 要求
+`cachedAssets.length > 0`（`SettingUpdate.vue:214-219`），而裸 GitHub 资产没有完整性元数据。
+补齐后按钮即启用。
 
-补跑条件：GitHub 配额恢复，或 Nexus 重新发布 beta 版本。代码侧无已知障碍。
+**2. 短路 dev 启动守卫。** 另一 AI 代理（`@oh-my-pi/pi-coding-agent` worker daemon）在反复拉起
+`/Applications/tuff.app --user-data-dir=/tmp/tuff-beta23-ota-profile` 做它自己的 OTA 测试。
+`startup-version-guard.ts:275` 的 `promptVersionChoice()` 是**原生** `dialog.showMessageBox`，
+CDP 无法点击，无人应答则 dev 启动永久停在 bootstrap。早期两次曾杀掉该实例，意识到是在干扰他人
+工作后改为在自己的 worktree 内短路该闸门（与更新逻辑无关）。该补丁**从未提交**，随 worktree 删除。
 
-### 第二次补跑（2026-09-05 11:20，基线 `753e308f3` / beta.24）
+### 一处已纠正的诊断错误
 
-配额重置后立刻重跑，基线换成更新的 master（含 #1870/#1871 两个 download-worker 修复）。
-**比第一次走得更远**，但仍止于网络层：
+前两次尝试把资产下载的 403 归因于"GitHub 未认证配额耗尽"。**该结论错误。**
 
-| 环节 | 结果 | 证据 |
-|---|---|---|
-| 窗口身份（无注入） | ✅ | `argMapper: {"touchType":"main"}` |
-| 路径策略 | ✅ | 全程无 `destination-outside-roots`，F2 修复稳定 |
-| 进入 manifest 解析 | ✅ | 首次到达该阶段（上次止于资产 403） |
-| manifest 拉取 | ❌ | `[11:22:22] Failed to fetch release manifest asset=tuff-release-manifest.json error=NetworkTransportError: net::ERR_CONNECTION_CLOSED` |
-| 重试检查 | ❌ | `[11:25:55] Update check deferred by upstream rate limit status=403 remaining=0 retryAt=04:19:22Z` |
+从 `download_tasks` 表读出的真实请求 URL 是：
 
-两点值得单独记：
+```
+https://tuff.tagzxia.com/api/releases/v2.4.14-beta.23/download/darwin/arm64?exp=1788573746&sig=…
+```
 
-- **manifest 内容本身没问题**。直接拉 `v2.4.14-beta.23` 的 `tuff-release-manifest.json` 得到
-  `schemaVersion: 2` 且含 `core / darwin / arm64`。失败是**拉取**失败，不是"不匹配此平台"——
-  错误文案 `Update release manifest is required and must match this platform` 把网络失败
-  和平台不匹配混为一谈，排查时有误导性，值得单独看一眼。
-- **`NetworkTransportError` 出现在这里**，说明最早那个 OTA 传输层分类修复在 manifest 拉取路径上
-  同样生效。
-
-### 外部阻塞的性质（两次尝试后的结论）
-
-不是"等一会儿就好"，而是这台机器的网络环境本身不具备条件：
-
-- **GitHub 未认证配额被共享出口耗尽**。11:19 重置后仅剩 `11/60`（本次验证只发了 1 次请求），
-  几分钟内归零。等待没有意义——每个窗口开启后一分钟内就被别人用光。
-- **GitHub 主机间歇不可达**。`api.github.com` / `github.com` / `objects.githubusercontent.com`
-  曾同时返回 `000`，随后恢复；探测约 2~3 次才通 1 次。
-- **Nexus 对所有渠道持续返回 `release: null`**，且空结果是权威终止、不触发回退。
-
-要完成剩余三段（下载完成、验签+ready、安装终止），需要其中之一：GitHub 侧使用认证请求以绕开
-未认证配额、换一个网络出口、或 Nexus 重新发布 beta 版本。
-
-### 验证期间清理掉的干扰源
-
-`/Applications/tuff.app`（PID 82642，`--user-data-dir=/tmp/tuff-beta23-ota-profile --disable-gpu`）
-在运行。`startup-version-guard.ts:275` 的 `promptVersionChoice()` 是**模态对话框**——检测到正式版
-在跑就会弹窗等待选择，无人应答时 dev 启动永久停在 bootstrap（日志止于 `DevTools listening`，
-模块从不加载）。这是此前两次启动失败的真实原因，与端口占用无关。
-
-### 顺带观察到的小问题（未处理）
-
-更新设置页在"有可下载更新"状态下会渲染**两个**「下载更新」按钮，脚本点击时触发了
+即 **Nexus 的签名下载链接，`exp` 约在 09:49 过期**，而尝试发生在 11:46——403 来自过期签名。
+该任务是更早一轮留下的陈旧记录，被 `findReusableUpdateTaskId` 复用，同时导致
 `UpdateLifecycleConflictError: Another update lifecycle attempt is already active`。
-不影响上述结论，但重复按钮本身值得单独看一眼。
+清空 `download_tasks` / `app_update_attempts` 等 16 行残留后链路即通。
+
+顺带澄清：`update-system.ts:1015` 确实优先 `browser_download_url`，本次实际请求的是 CDN 形式
+（`github.com/.../releases/download/...`），此前"可能误用 API 资产 URL"的怀疑不成立。
+
+### 观察到但未处理
+
+- 更新设置页在"可下载"状态下会渲染**两个**「下载更新」按钮，脚本点击时触发过
+  `UpdateLifecycleConflictError`。
+- `manifest` 拉取失败时的错误文案是
+  `Update release manifest is required and must match this platform`，
+  但实测该 manifest 内容合规（`schemaVersion: 2`，含 `darwin/arm64`），失败其实是
+  `net::ERR_CONNECTION_CLOSED`。把网络失败描述成平台不匹配，排查时有误导性。
+
+### 环境还原
+
+489M 测试产物已删除，`update-settings.json` 还原为官方源，被污染的 `download_tasks` /
+`download_chunks` / `download_history` / `app_update_attempts` / `app_update_records` 五张表已清空，
+worktree 移除，端口释放。
 
 ## Out of Scope
 

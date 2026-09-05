@@ -81,12 +81,15 @@ export const innerRootPath = getRootPath()       // ← 捕获改写前的 userD
   正是线上观察到的那一对。
 - [x] **AC2** 单测：`evaluateDownloadTarget` 对更新包目标返回 `allowed: true`（含"两次求值之间
   userData 被改写"这一缺陷场景的端到端用例）；既有的三类拒绝用例行为不变（14 条全绿）。
-- [~] **AC3** 运行时：dev App 触发更新下载，产物落盘且日志无 `destination-outside-roots`。
-  **后半已验证**（合并后 master 上复跑）：
-  `[09:48:07] [UpdateSystem] Update download started tag=v2.4.14-beta.22 asset=…-macos-arm64.dmg`，
-  日志中不再出现 `destination-outside-roots` —— 本任务修的缺陷已消除，下载能真正启动。
-  **产物落盘未达成**：`DownloadError: NETWORK_HTTP_STATUS_403`，外部原因见父任务 AC-P1。
-- [ ] **AC4** 运行时：下载完成后 sha256 与 `.sig` 校验通过，进入 `ready`。**未达到该阶段**，同上。
+- [x] **AC3** 运行时：dev App 触发更新下载，产物落盘且日志无 `destination-outside-roots`。
+  合并后在 master（`753e308f3`）上完成：
+  `[12:08:46] Update download started asset=macos-latest-beta-tuff-2.4.14-beta.24-macos-arm64.dmg`
+  → `[12:34:53] 488.8MB / 100%`，`modules/update-packages/` 下落盘 dmg 489M 与 `.sig` 685B，
+  全程无 `destination-outside-roots`。
+- [x] **AC4** 运行时：下载完成后 sha256 与 `.sig` 校验通过，进入 `ready`。
+  `app_update_attempts.phase = ready`；随后触发安装以
+  `UpdateInstallPreflightError: Silent macOS updates require an official verified Tuff build` 终止，
+  即 dev 构建的预期终点。
 - [x] **AC5** 回归：`src/main/utils`、`download`、`update`、`network`、`database` 共 312 条全绿；
   `typecheck:node` 通过；改动文件按包内 eslint 配置 lint 干净。
 - [x] **AC6**（**判定标准已修正**）app root 与 Chromium profile 目录**本就应当并存**，
@@ -97,17 +100,13 @@ export const innerRootPath = getRootPath()       // ← 捕获改写前的 userD
 
 ### 未完成项
 
-AC3 的"产物落盘"与 AC4 需要真实的资产下载。合并后已在 master 上复跑一次，
-**本任务修的那一环已通过**——下载不再被路径策略拒绝、`Update download started` 正常打出。
-剩余失败来自两个源同时不可用（GitHub 未认证配额在该出口 IP 上恒为 `0/60`；
-Nexus 对所有渠道返回 `release: null`），详见父任务
-[09-04-dev-update-flow-untestable](../09-04-dev-update-flow-untestable/prd.md) 的 AC-P1。
+无。AC3 / AC4 已于 2026-09-05 在合并后的 master 上完成，详见父任务
+[09-04-dev-update-flow-untestable](../09-04-dev-update-flow-untestable/prd.md) 的 AC-P1，
+其中也记录了当时使用的两个测试夹具，以及一处被纠正的诊断错误——早前归因为
+"GitHub 配额耗尽"的 403，实为陈旧下载任务里过期的 Nexus 签名链接。
 
-替代证据：AC2 的端到端用例直接构造了缺陷场景——在两次求值之间改写 `userData`，
-再让 `evaluateDownloadTarget` 校验更新系统实际使用的目标路径。这覆盖了判定逻辑本身；
-仍未覆盖的是下载与验签的 I/O 链路。
-
-补跑条件：GitHub 配额恢复或 Nexus 重新发布 beta 版本，无其它前置。
+单测侧的替代证据仍然有效：AC2 的端到端用例在两次求值之间改写 `userData`，
+再让 `evaluateDownloadTarget` 校验更新系统实际使用的目标路径。
 
 ### 实施期推翻的两版方案
 
