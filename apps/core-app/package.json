@@ -176,7 +176,7 @@
     "@iconify-json/simple-icons": "^1.2.90",
     "@iconify/types": "^2.0.0",
     "@intlify/unplugin-vue-i18n": "^11.1.2",
-    "@milkdown/core": "^7.22.0",
+    "@milkdown/core": "^7.22.1",
     "@milkdown/ctx": "^7.22.0",
     "@milkdown/plugin-listener": "^7.22.0",
     "@milkdown/preset-commonmark": "^7.22.0",
