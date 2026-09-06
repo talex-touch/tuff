@@ -126,30 +126,28 @@ describe('VoiceDock renderer contract', () => {
     }
   )
 
-  it('shows finite processing loading after VoicePanel finished, then returns to the floating ball', async () => {
+  it('returns straight to the floating ball once the VoicePanel finishes', async () => {
     const wrapper = mount(VoiceDock)
     await openPanel()
 
     await wrapper.findComponent({ name: 'VoicePanel' }).vm.$emit('finished')
     await nextTick()
 
+    // The wait for the transcript is expressed inside the pill now, so there is no
+    // separate spinner phase left between the panel and the ball.
     expect(wrapper.find('.voice-panel-root').exists()).toBe(false)
-    expect(wrapper.find('.voice-dock-processing').attributes('aria-busy')).toBe('true')
-    expect(wrapper.find('.floating-ball-root').exists()).toBe(false)
-
-    vi.advanceTimersByTime(519)
-    await nextTick()
-    expect(wrapper.find('.voice-dock-processing').exists()).toBe(true)
-
-    vi.advanceTimersByTime(1)
-    await nextTick()
     expect(wrapper.find('.voice-dock-processing').exists()).toBe(false)
+    expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
+    expect(transportSendMock).toHaveBeenCalledWith(AssistantEvents.voice.closePanel, undefined)
+
+    vi.advanceTimersByTime(1000)
+    await nextTick()
     expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
 
     wrapper.unmount()
   })
 
-  it('cancels the processing transition timer when the dock is unmounted', async () => {
+  it('drops its transport listeners when the dock is unmounted', async () => {
     const wrapper = mount(VoiceDock)
     await openPanel()
     await wrapper.findComponent({ name: 'VoicePanel' }).vm.$emit('finished')
