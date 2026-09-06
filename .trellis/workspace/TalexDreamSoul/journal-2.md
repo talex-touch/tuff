@@ -486,3 +486,39 @@ Diagnosed the Home model menu overflowing its trigger: TxBaseAnchor bound --tx-b
 ### Next Steps
 
 - None - task complete
+
+
+## Session 63: Home model menu v2: provider filters, search, favorites, hotkeys, family icons
+
+**Date**: 2026-09-06
+**Task**: Home model menu v2: provider filters, search, favorites, hotkeys, family icons
+**Branch**: `release/ota-transport-error-classification-20260904`
+
+### Summary
+
+Rebuilt HomeModelMenu on TxDropdownMenu with a provider filter strip, cross-provider search, starred favorites and cmd/ctrl+1-9 hotkeys; selection and favorites persist in AppSetting.conversation and an unresolved persisted model falls back to Auto without being cleared. TxDropdownMenu gained initialFocus and lets editable targets keep Home/End. Real-app acceptance surfaced three regressions fixed in 00a6de331: icon classes living in .ts tables need the UnoCSS safelist (+configDeps), the kbd badge was too 3D, and rows now show model-family brand icons. Also extracted the shared CLI child-process runtime from the pi provider as Step 1 of the local CLI providers task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1be2a206f` | (see git log) |
+| `8da334466` | (see git log) |
+| `2178c013c` | (see git log) |
+| `00a6de331` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
