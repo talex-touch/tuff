@@ -166,6 +166,7 @@ code: |
 | `placement` | `DropdownPlacement` | `'bottom-start'` | Positions the panel relative to the trigger. |
 | `offset` | `number` | `6` | Distance in pixels between the trigger and panel. |
 | `closeOnSelect` | `boolean` | `true` | Closes the menu after an enabled item emits `select`. |
+| `initialFocus` | `'first-item' \| 'none'` | `'first-item'` | Where focus lands when the menu opens. `'first-item'` focuses the first enabled item; `'none'` leaves focus alone so the host can place it itself (a search field at the top of the panel, for example). Arrow keys still hand focus from there to the list. |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | Popover animation config forwarded to BaseAnchor; an empty object uses BaseAnchor's default animation. |
 | `minWidth` | `number` | `220` | Minimum panel width in pixels. The maximum panel width is fixed at 360px, with no prop to change it. |
 | `maxHeight` | `number` | `420` | Maximum scrollable panel height in pixels. |
@@ -250,8 +251,8 @@ code: |
 - `TxDropdownMenu` wraps `TxPopover`, so `placement`, `offset`, height limiting, panel card props, and animation follow the same anchor behavior.
 - `closeOnSelect` closes the parent menu after enabled items emit `select`; disabled items do not select or close.
 - The menu panel uses `role="menu"`, and each item uses `role="menuitem"` through `TxDropdownItem`.
-- The first enabled item receives focus when the menu opens.
-- Inside the panel, `ArrowDown` / `ArrowUp` move focus between enabled items with wraparound, and `Home` / `End` jump to the first / last item, skipping `aria-disabled` items.
+- The first enabled item receives focus when the menu opens; `initialFocus="none"` skips that step so the host can place focus itself (a search field at the top of the panel, for example).
+- Inside the panel, `ArrowDown` / `ArrowUp` move focus between enabled items with wraparound and enter the list from a non-item such as a search field; `Home` / `End` jump to the first / last item, skipping `aria-disabled` items, except when focus is inside an `input`, `textarea`, or `contenteditable` element, where they pass through and move the caret.
 - `TxDropdownItem` emits `select` with no payload; attach business context in the handler that renders the item.
 - The `TxDropdownSubmenu` trigger row is a `role="menuitem"`: `ArrowRight` / `Enter` expand the child panel and focus its first item, and `ArrowLeft` inside the child panel collapses it and returns focus to the trigger row.
 - Pointer travel from parent panel into the child panel never closes the parent; clicks inside the child panel don't count as outside-clicks for the parent, and closing the parent (including preemption by another menu) cascades to its children.
@@ -262,6 +263,7 @@ code: |
 - Use `danger` only for destructive commands and keep those commands visually separated from neutral actions when the list grows.
 - Use `arrow` for navigation/submenu rows; use the `right` slot for external-link icons, keyboard hints, or status badges.
 - Leave `closeOnSelect=true` for normal commands. Set it to `false` only when the row opens another surface or starts a multi-step flow.
+- Set `initialFocus="none"` only when the host places focus itself after opening (focusing a search field inside the panel, for example). Otherwise keyboard users open the menu with focus still on the trigger and need an extra arrow press to reach the list.
 - Prefer `panelBackground="refraction"` / default panel styling unless a surrounding surface already provides strong contrast.
 
 ## Review Notes
@@ -270,7 +272,8 @@ code: |
 - Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownItem.vue` confirms disabled/danger/arrow/closeOnSelect props, `right` slot behavior, `role="menuitem"`, and close-on-select injection.
 - Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownSubmenu.vue` confirms hover expansion, keyboard traversal, and root-context passthrough (selecting a nested item closes the whole chain).
 - Type contracts: `packages/tuffex/packages/components/src/dropdown-menu/src/types.ts` exports `DropdownMenuProps`, `DropdownItemProps`, and the supported placement union.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts` covers prop forwarding, open/close events, enabled selection, disabled item no-op behavior, and `closeOnSelect=false`.
+- Keyboard contract: `Home` / `End` pass through `input`, `textarea`, and `contenteditable` targets because a search field inside the panel needs them to move the caret; a menu that takes them leaves the field uneditable. Arrow keys are still claimed on editable targets on purpose, since that is the only way the field hands focus to the list. Asking hosts to `stopPropagation` on the field was rejected: it would copy the exception into every host.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts` covers prop forwarding, open/close events, enabled selection, disabled item no-op behavior, `closeOnSelect=false`, `initialFocus="none"` leaving focus alone on open and reopen, and an input / contenteditable inside the panel keeping `Home` / `End` while `ArrowDown` still enters the list.
 
 ## Source
 <TuffDocSourceLink />
