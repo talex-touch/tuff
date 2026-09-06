@@ -119,7 +119,8 @@ export class VoiceModule extends BaseModule<TalexEvents> {
               const streamContext = nextContext as unknown as StreamContext<VoiceAsrStreamEvent>
               for await (const event of voiceService.streamDictation(
                 nextPayload as VoiceAsrStreamPayload,
-                streamContext.signal
+                streamContext.signal,
+                { stopSignal: streamContext.stopSignal }
               )) {
                 if (streamContext.isCancelled()) break
                 streamContext.emit(event)

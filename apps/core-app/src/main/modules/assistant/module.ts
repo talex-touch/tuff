@@ -89,9 +89,18 @@ type ScreenshotUnavailableCode =
 
 const assistantLog = createLogger('Assistant')
 const FLOATING_BALL_DEFAULT_SIZE = 56
+const FLOATING_BALL_MIN_SIZE = 48
+const FLOATING_BALL_MAX_SIZE = 72
 const FLOATING_BALL_DEFAULT_PADDING = 24
-const VOICE_DOCK_WIDTH = 300
-const VOICE_DOCK_HEIGHT = 60
+/**
+ * The dock window is a transparent canvas, not the visible pill.
+ *
+ * The pill is 200x44 and animates its own width when a notice expands, so the window has to
+ * stay big enough for the widest notice without ever being resized mid-animation — window
+ * resizing has no system-level smoothing on Windows or Linux.
+ */
+const VOICE_DOCK_WIDTH = 360
+const VOICE_DOCK_HEIGHT = 64
 const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
@@ -562,7 +571,7 @@ export class AssistantModule extends BaseModule {
     const position = source?.position
     return {
       enabled: source?.enabled === true,
-      size: Math.round(clamp(size, 48, 72)),
+      size: Math.round(clamp(size, FLOATING_BALL_MIN_SIZE, FLOATING_BALL_MAX_SIZE)),
       opacity: clamp(opacity, 0.5, 1),
       edgePadding: Math.round(clamp(edgePadding, 8, 64)),
       position: {
@@ -707,14 +716,16 @@ export class AssistantModule extends BaseModule {
   }
 
   private async createVoiceDockWindow(): Promise<TouchWindow> {
+    // One window carries both the ball and the dock, so the bounds limits have to admit
+    // the union of the two: the ball's user-configurable 48..72 and the dock's 360x64.
     const touchWindow = new TouchWindow({
       ...AssistantVoiceDockWindowOption,
       width: VOICE_DOCK_WIDTH,
       height: VOICE_DOCK_HEIGHT,
-      minWidth: FLOATING_BALL_DEFAULT_SIZE,
-      minHeight: FLOATING_BALL_DEFAULT_SIZE,
+      minWidth: FLOATING_BALL_MIN_SIZE,
+      minHeight: FLOATING_BALL_MIN_SIZE,
       maxWidth: VOICE_DOCK_WIDTH,
-      maxHeight: VOICE_DOCK_HEIGHT
+      maxHeight: Math.max(VOICE_DOCK_HEIGHT, FLOATING_BALL_MAX_SIZE)
     })
 
     // VoiceDock stays visible on every macOS Space and full-screen app while compact.

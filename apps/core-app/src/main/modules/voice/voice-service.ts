@@ -15,6 +15,7 @@ import * as nativeAudio from '@talex-touch/tuff-native/audio'
 import {
   assertVoiceUploadUrl,
   type VoiceProviderAdapter,
+  type VoiceProviderEvent,
   type VoiceStreamRequest,
   type VoiceUploadRequest
 } from '@talex-touch/tuff-voice'
@@ -32,16 +33,48 @@ const voiceLog = createLogger('Voice')
 
 const DEFAULT_MAX_DURATION_MS = 15_000
 const DEFAULT_SILENCE_STOP_MS = 1_500
+const DEFAULT_ASR_SAMPLE_RATE = 16_000
 const POLL_INTERVAL_MS = 120
 const PARTIAL_INTERVAL_MS = 1_200
 const CAPTURE_HARD_TIMEOUT_GRACE_MS = 2_000
 const CAPABILITY_TIMEOUT_MS = 30_000
 const WAV_HEADER_BYTES = 44
 const VOICE_CALLER = 'core.voice.dictate'
+/**
+ * How many un-consumed level frames the merge queue keeps.
+ *
+ * At one frame per pump tick (~100ms) this is a couple of seconds of slack. Past that the
+ * oldest levels are dropped: a stale amplitude is worthless, and holding them would push
+ * `final` behind a backlog.
+ */
+const MAX_QUEUED_LEVELS = 20
 // Toggle (global hotkey) capture: silence auto-stop effectively disabled so a pause
 // mid-thought doesn't end the session — the user's second key press stops it; the
 // max duration is only a safety cap.
 type VoiceSessionPayload = VoiceDictatePayload | VoiceAsrStreamPayload
+
+/** One slot in the merged capture/provider queue that feeds `streamViaProvider`'s generator. */
+type MergedStreamItem =
+  | { kind: 'provider'; event: VoiceProviderEvent }
+  | { kind: 'level'; rms: number }
+  | { kind: 'done' }
+
+/**
+ * Root-mean-square amplitude of a 16-bit little-endian mono PCM chunk, normalized to 0..1.
+ *
+ * Returns 0 for an empty or odd-length chunk rather than guessing at a partial sample.
+ */
+function pcmRms(chunk: Buffer): number {
+  const sampleCount = Math.floor(chunk.length / 2)
+  if (sampleCount === 0) return 0
+
+  let sumOfSquares = 0
+  for (let index = 0; index < sampleCount; index += 1) {
+    const sample = chunk.readInt16LE(index * 2) / 32_768
+    sumOfSquares += sample * sample
+  }
+  return Math.min(1, Math.sqrt(sumOfSquares / sampleCount))
+}
 
 interface VoiceSessionRecord {
   readonly id: string
@@ -179,7 +212,8 @@ export class VoiceService {
   async startSession(
     payload: VoiceSessionPayload = {},
     signal?: AbortSignal,
-    caller = VOICE_CALLER
+    caller = VOICE_CALLER,
+    sampleRate = DEFAULT_ASR_SAMPLE_RATE
   ): Promise<string> {
     throwIfCancelled(signal)
     if (this.disposed) throw new Error('VOICE_SESSION_SERVICE_DISPOSED')
@@ -191,7 +225,8 @@ export class VoiceService {
         : null
     const { sessionId: nativeSessionId } = await nativeAudio.startCapture({
       maxDurationMs: payload.maxDurationMs,
-      silenceStopMs: payload.silenceStopMs
+      silenceStopMs: payload.silenceStopMs,
+      sampleRate
     })
     if (this.disposed) {
       try {
@@ -503,25 +538,30 @@ export class VoiceService {
    * Streaming dictation: routes native PCM through the configured Provider stream when available;
    * otherwise retains the generic WebSocket or chunked-batch compatibility fallback. Each path
    * yields partial/final/end events and keeps target delivery main-owned.
+   *
+   * `options.stopSignal` asks capture to stop early and still finalize — the opposite of `signal`,
+   * which aborts the whole session. It is an options bag rather than a fourth positional argument
+   * because two `AbortSignal`s in a row are trivially swapped at a call site.
    */
   async *streamDictation(
     payload: VoiceAsrStreamPayload = {},
     signal?: AbortSignal,
-    caller = VOICE_CALLER
+    options: { stopSignal?: AbortSignal; caller?: string } = {}
   ): AsyncGenerator<VoiceAsrStreamEvent> {
+    const { stopSignal, caller = VOICE_CALLER } = options
     throwIfCancelled(signal)
     this.assertSupported()
 
     const drainCapture = getDrainCapture()
     const provider = getVoiceProvider('stream', payload.providerId)
     if (provider && drainCapture) {
-      yield* this.streamViaProvider(payload, provider, drainCapture, signal, caller)
+      yield* this.streamViaProvider(payload, provider, drainCapture, signal, stopSignal, caller)
       return
     }
 
     const wsConfig = getStreamingAsrConfig()
     if (wsConfig && drainCapture) {
-      yield* this.streamViaWebSocket(payload, wsConfig, drainCapture, signal, caller)
+      yield* this.streamViaWebSocket(payload, wsConfig, drainCapture, signal, stopSignal, caller)
     } else {
       yield* this.streamViaChunkedBatch(payload, signal, caller)
     }
@@ -532,6 +572,7 @@ export class VoiceService {
     provider: VoiceProviderAdapter,
     drainCapture: (sessionId: string) => { pcm: Buffer },
     signal?: AbortSignal,
+    stopSignal?: AbortSignal,
     caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
@@ -568,16 +609,42 @@ export class VoiceService {
       }
       connection = await provider.createStream(request)
 
+      // The pump cannot `yield` — it is a detached task, while the generator is parked on
+      // `connection.events`. Merging both into one queue is what lets input levels interleave
+      // with transcript events without reordering them.
+      const queue: MergedStreamItem[] = []
+      let wake: (() => void) | null = null
+      const push = (item: MergedStreamItem): void => {
+        if (item.kind === 'level') {
+          // Levels are disposable: a renderer that falls behind should drop frames rather
+          // than push `final` behind a backlog of amplitudes.
+          let levelCount = 0
+          for (const queued of queue) if (queued.kind === 'level') levelCount += 1
+          if (levelCount >= MAX_QUEUED_LEVELS) {
+            const staleIndex = queue.findIndex((queued) => queued.kind === 'level')
+            queue.splice(staleIndex, 1)
+          }
+        }
+        queue.push(item)
+        wake?.()
+        wake = null
+      }
+
       const pump = (async (): Promise<void> => {
         const deadline = Date.now() + maxDurationMs + CAPTURE_HARD_TIMEOUT_GRACE_MS
         for (;;) {
           await awaitWithAbort(delay(100), signal)
           throwIfCancelled(signal)
-          const active = pollCapture
-            ? pollCapture(session.nativeSessionId).active
-            : Date.now() < deadline
+          const active = stopSignal?.aborted
+            ? false
+            : pollCapture
+              ? pollCapture(session.nativeSessionId).active
+              : Date.now() < deadline
           const chunk = drainCapture(session.nativeSessionId).pcm
-          if (chunk.length > 0) await connection!.writePcm(chunk)
+          if (chunk.length > 0) {
+            if (payload.emitLevel) push({ kind: 'level', rms: pcmRms(chunk) })
+            await connection!.writePcm(chunk)
+          }
           if (!active) break
         }
         nativeAudio.stopCapture(session.nativeSessionId)
@@ -590,8 +657,29 @@ export class VoiceService {
         return connection?.abort(message)
       })
 
-      for await (const event of connection.events) {
+      const forwarder = (async (): Promise<void> => {
+        for await (const event of connection!.events) push({ kind: 'provider', event })
+        push({ kind: 'done' })
+      })()
+      void forwarder.catch(() => push({ kind: 'done' }))
+
+      for (;;) {
+        if (queue.length === 0) {
+          await new Promise<void>((resolve) => {
+            wake = resolve
+          })
+          continue
+        }
+
+        const item = queue.shift()!
         throwIfCancelled(signal)
+        if (item.kind === 'done') break
+        if (item.kind === 'level') {
+          yield { type: 'level', rms: item.rms }
+          continue
+        }
+
+        const event = item.event
         if (event.type === 'partial') {
           if (event.text) yield { type: 'partial', text: event.text }
           continue
@@ -629,6 +717,7 @@ export class VoiceService {
     wsConfig: StreamingAsrConfig,
     drainCapture: (sessionId: string) => { pcm: Buffer },
     signal?: AbortSignal,
+    stopSignal?: AbortSignal,
     caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const pollCapture = getPollCapture()
@@ -637,7 +726,8 @@ export class VoiceService {
     const sessionId = await this.startSession(
       { ...payload, maxDurationMs, silenceStopMs },
       signal,
-      caller
+      caller,
+      wsConfig.sampleRate
     )
     const session = this.sessions.get(sessionId)
     if (!session) {
@@ -651,7 +741,12 @@ export class VoiceService {
         language: payload.language,
         signal,
         drainFrames: () => drainCapture(session.nativeSessionId).pcm,
-        isCapturing: () => (pollCapture ? pollCapture(session.nativeSessionId).active : true)
+        isCapturing: () =>
+          stopSignal?.aborted
+            ? false
+            : pollCapture
+              ? pollCapture(session.nativeSessionId).active
+              : true
       })) {
         throwIfCancelled(signal)
         if (event.type === 'final' && event.text) {

@@ -441,6 +441,26 @@ describe('AssistantModule screenshot translation', () => {
     await module.onDestroy({} as never)
   })
 
+  // One window carries both the ball and the dock, so its limits have to admit the union of
+  // the two. Before the dock shrank, minHeight (56) already excluded the smallest ball and
+  // maxHeight (60) excluded the largest — silently resizing whatever the user had chosen.
+  it('admits every configurable ball size and the full dock in one set of window limits', async () => {
+    await createInitializedModule()
+    const dock = mocks.touchWindows[0]
+    if (!dock) {
+      throw new Error('VoiceDock window was not created')
+    }
+
+    const ballMin = 48
+    const ballMax = 72
+    const { minWidth, minHeight, maxWidth, maxHeight } = dock.options
+
+    expect(minWidth).toBeLessThanOrEqual(ballMin)
+    expect(minHeight).toBeLessThanOrEqual(ballMin)
+    expect(maxWidth).toBeGreaterThanOrEqual(Math.max(ballMax, 360))
+    expect(maxHeight).toBeGreaterThanOrEqual(Math.max(ballMax, 64))
+  })
+
   it('uses the cursor display and default edge placement for the canonical unset ball position', async () => {
     const cursor = { x: 1800, y: 300 }
     const cursorDisplay: FloatingBallDisplay = {
@@ -624,10 +644,10 @@ describe('AssistantModule screenshot translation', () => {
 
     expect(mocks.touchWindows).toHaveLength(1)
     expect(voiceDock.window.setBounds).toHaveBeenCalledWith({
-      x: 140,
-      y: 176,
-      width: 520,
-      height: 300
+      x: 220,
+      y: 412,
+      width: 360,
+      height: 64
     })
     expect(voiceDock.window.show).not.toHaveBeenCalled()
     expect(voiceDock.window.focus).not.toHaveBeenCalled()
