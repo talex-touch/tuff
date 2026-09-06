@@ -13,10 +13,11 @@ import {
 describe('transparent windows without a background colour', () => {
   it('parses the config it means to measure', () => {
     // Positive control. Regex over source is brittle by nature: renaming the exports, or moving
-    // them to another file, would return an empty list and read as "debt repaired".
+    // them to another file, would return an empty list and read as "debt repaired". The floor
+    // dropped from 8 to 7 when the floating ball and voice panel merged into one option set.
     const options = readWindowOptions()
 
-    expect(options.length).toBeGreaterThanOrEqual(8)
+    expect(options.length).toBeGreaterThanOrEqual(7)
     expect(options.map(option => option.name)).toContain('MainWindowOption')
     expect(options.some(option => option.hasBackgroundColor)).toBe(true)
     expect(options.some(option => !option.transparent)).toBe(true)
