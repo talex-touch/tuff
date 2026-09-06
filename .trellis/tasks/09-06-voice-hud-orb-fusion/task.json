@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "合并 PR #1879 后归档。后续 #1878：悬浮球的麦克风图标把阿洛和语音混成了一件事。",
+    "blocker": "无阻塞。两项只能真机核：三个形态在 360×64 内不溢出、浅深色下 orb 与波形均可见。",
+    "evidence": "70d9a778a / b5462e6e0 / 55d1e3904；同域 49 → 146 passed，packages/utils 32 passed，tsc 与 vue-tsc 均 0 错误。负控制已跑：短路 stopSignal 令 3 例中 2 例转红；maxHeight 改回 dock 高度令窗口 limits 用例转红。"
+  }
 }

@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "合并 PR #1879 后归档；local Provider（FunASR/Whisper 系）另起任务，本轮不做。",
+    "blocker": "无阻塞。剩余未验的是真机项：macOS 麦克风与 Accessibility 写回、生产质量矩阵（首字延迟/CER/断网取消），协议 smoke 不等同于这些。",
+    "evidence": "VoiceService 成为唯一会话所有者，Doubao 与 Bailian Paraformer provider 落地（9f5aa9f0d / 21ed67204）；百炼 paraformer-realtime-v2 真实北京 WebSocket 一次性 smoke 走通握手、PCM duplex、partial/final/结束，临时凭据已清理未入库。"
+  }
 }
