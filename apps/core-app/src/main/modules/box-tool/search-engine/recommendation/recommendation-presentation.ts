@@ -82,6 +82,19 @@ export const RECOMMENDATION_BADGES: Record<ScoredItem['source'], RecommendationB
 }
 
 /**
+ * `meta.recommendation` for an item that did not come through the scorer — pinned entries, the
+ * usage-ranked fallback, the "no reason recorded" default — with its badge, so the tile or row
+ * still says why it is there. Writing the source alone left three grid tiles blank under their
+ * titles while their neighbours read "Frequent" and "Just installed".
+ */
+export function describeRecommendation(source: ScoredItem['source']): {
+  source: ScoredItem['source']
+  badge: RecommendationBadgeSpec
+} {
+  return { source, badge: RECOMMENDATION_BADGES[source] ?? DEFAULT_RECOMMENDATION_BADGE }
+}
+
+/**
  * Which tier of the empty state a reason belongs to.
  *
  * The split is not "important vs unimportant" but "needs explaining vs not": the top grid shows
