@@ -10,11 +10,6 @@ import { defineEvent } from "../event/builder";
 export interface AssistantRuntimeConfig {
   enabled: boolean;
   language: string;
-  wakeWords: string[];
-  cooldownMs: number;
-  continuous: boolean;
-  assistantName: string;
-  openPanelOnWake: boolean;
 }
 
 export interface AssistantOpenVoicePanelPayload {
