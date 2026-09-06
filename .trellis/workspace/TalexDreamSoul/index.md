@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 64
+- **Total Sessions**: 65
 - **Last Active**: 2026-09-06
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~559 | Active |
+| `journal-2.md` | ~593 | Active |
 | `journal-1.md` | ~2005 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -31,6 +31,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 65 | 2026-09-06 | 模型菜单筛选条改用 TxFilterChips：provider 级图标 chip、滑动指示器、渠道分组 | `c3b5222f4`, `2528f40ad` | `release/ota-transport-error-classification-20260904` |
 | 64 | 2026-09-06 | 模型菜单渠道分层 + 锚定面板背景修复 | `2838f31cd`, `3309c614d`, `4597c566f` | `release/ota-transport-error-classification-20260904` |
 | 63 | 2026-09-06 | Home model menu v2: provider filters, search, favorites, hotkeys, family icons | `1be2a206f`, `8da334466`, `2178c013c`, `00a6de331` | `release/ota-transport-error-classification-20260904` |
 | 62 | 2026-09-06 | Model menu redesign planning and tuffex anchor max-height fix | `2c54a037f`, `c672a028b` | `release/ota-transport-error-classification-20260904` |
