@@ -1,5 +1,9 @@
 import type { TuffItem } from '@talex-touch/utils'
+import type { files as filesSchema } from '../../../../db/schema'
 import type { DbUtils } from '../../../../db/utils'
+import path from 'node:path'
+import { getFileAssetBridge } from '../../addon/files/file-asset-bridge'
+import { normalizeExtension, THUMBNAIL_EXTENSIONS } from '../../addon/files/thumbnail-config'
 import { mapFileToTuffItem } from '../../addon/files/utils'
 import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
 import { createLogger } from '../../../../utils/logger'
@@ -7,6 +11,25 @@ import { createLogger } from '../../../../utils/logger'
 const fileSourceLog = createLogger('RecommendationEngine').child('FileSource')
 
 export const FILE_RECOMMENDATION_SOURCE_ID = 'file-provider'
+
+type FileRow = typeof filesSchema.$inferSelect
+
+/**
+ * How long a rebuild waits for thumbnails it just asked for. A screenshot's thumbnail takes the
+ * worker a few tens of milliseconds, so the common case ships the real picture on the first open;
+ * past this the card ships with the OS icon and the late thumbnail triggers a rebuild instead.
+ */
+export const DEFAULT_THUMBNAIL_WAIT_MS = 150
+
+export interface FileRecommendationSourceOptions {
+  /** Overrides {@link DEFAULT_THUMBNAIL_WAIT_MS}. */
+  thumbnailWaitMs?: number
+  /**
+   * A thumbnail landed after the wait. The cards already built (and cached) carry the OS icon for
+   * that file, so the caller should drop its cached ranking and rebuild.
+   */
+  onThumbnailLanded?: () => void
+}
 
 /**
  * The per-platform native file providers and the index provider are one logical source wearing
@@ -51,6 +74,32 @@ async function loadExtensionsByFileId(
   return byFileId
 }
 
+function isMissingThumbnail(
+  file: FileRow,
+  extensions: Record<string, string> | undefined
+): boolean {
+  if (extensions?.thumbnail) return false
+  const extension = normalizeExtension(file.extension || path.extname(file.name) || '')
+  return THUMBNAIL_EXTENSIONS.has(extension)
+}
+
+/** Resolves `true` if `work` settles within `ms`, `false` if the budget runs out first. */
+function settlesWithin(work: Promise<unknown>, ms: number): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => resolve(false), ms)
+    void work.then(
+      () => {
+        clearTimeout(timer)
+        resolve(true)
+      },
+      () => {
+        clearTimeout(timer)
+        resolve(true)
+      }
+    )
+  })
+}
+
 /**
  * File rows as a recommendation source.
  *
@@ -59,11 +108,51 @@ async function loadExtensionsByFileId(
  * the worker-owned `search-index.db`, and `FileProvider` holds a separate `createDbUtils` instance.
  * Reading through the provider's handle would silently change which database answers.
  */
-export function createFileRecommendationSource(dbUtils: DbUtils): {
+export function createFileRecommendationSource(
+  dbUtils: DbUtils,
+  options: FileRecommendationSourceOptions = {}
+): {
   sourceId: string
   aliases: readonly string[]
   rebuild(itemIds: readonly string[]): Promise<TuffItem[]>
 } {
+  const thumbnailWaitMs = options.thumbnailWaitMs ?? DEFAULT_THUMBNAIL_WAIT_MS
+
+  /**
+   * Ask the file provider for the thumbnails these files lack, and give them a moment to land.
+   *
+   * Search results get theirs lazily through the mapper's callback; recommendations never did, and
+   * the deferred sweep only runs after a full index pass — so a screenshot taken a minute ago sat in
+   * "recent picks" as a grey OS icon until it happened to come up in a search. Resolves once the
+   * extension rows are worth re-reading; `false` means some generation is still running.
+   */
+  async function warmMissingThumbnails(
+    files: FileRow[],
+    extensionsByFileId: Map<number, Record<string, string>>
+  ): Promise<boolean> {
+    const bridge = getFileAssetBridge()
+    if (!bridge) return true
+
+    const missing = files.filter((file) =>
+      isMissingThumbnail(file, extensionsByFileId.get(file.id))
+    )
+    if (missing.length === 0) return true
+
+    const generation = Promise.allSettled(
+      missing.map((file) => bridge.ensureThumbnail(file, extensionsByFileId.get(file.id) ?? {}))
+    )
+    const landedInTime = await settlesWithin(generation, thumbnailWaitMs)
+    if (landedInTime) return true
+
+    void generation.then(async () => {
+      const refreshed = await loadExtensionsByFileId(dbUtils, missing)
+      if (missing.some((file) => refreshed.get(file.id)?.thumbnail)) {
+        options.onThumbnailLanded?.()
+      }
+    })
+    return false
+  }
+
   return {
     sourceId: FILE_RECOMMENDATION_SOURCE_ID,
     aliases: FILE_RECOMMENDATION_ALIASES,
@@ -78,7 +167,16 @@ export function createFileRecommendationSource(dbUtils: DbUtils): {
         // a picture under ~/Pictures cannot be shown directly because `tfile` only serves
         // allowlisted roots, so the *generated thumbnail* — recorded here and living in an
         // allowlisted cache dir — is the only way an image card ever shows the image.
-        const extensionsByFileId = await loadExtensionsByFileId(dbUtils, files)
+        let extensionsByFileId = await loadExtensionsByFileId(dbUtils, files)
+        const bridge = getFileAssetBridge()
+        if (
+          bridge &&
+          files.some((file) => isMissingThumbnail(file, extensionsByFileId.get(file.id)))
+        ) {
+          await warmMissingThumbnails(files, extensionsByFileId)
+          // Whatever landed in time is on disk now; the rest still map to the OS icon.
+          extensionsByFileId = await loadExtensionsByFileId(dbUtils, files)
+        }
 
         return files.flatMap((file) => {
           const item = mapFileToTuffItem(
