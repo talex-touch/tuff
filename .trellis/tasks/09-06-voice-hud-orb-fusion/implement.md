@@ -108,8 +108,12 @@ cd packages/utils   # eslint 只在根 node_modules 里；但配置必须在包�
 - [x] 逐条走 `prd.md` 的 Acceptance Criteria —— 全部有测试覆盖，除两条只能靠真机看：
       「三个形态在 360×64 内不溢出、尺寸与画板一致」与「浅深色下 orb 与波形均可见」。
       两者都由常量与 shell token 直接决定，代码侧已核对；跑起来再确认一次。
-- [ ] 提交（三笔，按上面的分层）
-- [ ] 把「阿洛的球被画成麦克风钮」开成后续任务。**先建 issue 再引用编号**，不要凭空写号
+- [x] 提交（四笔）：`70d9a778a` transport / `b5462e6e0` voice 主进程 / `55d1e3904` assistant 渲染层 / `5f03f60f9` 任务工件
+- [x] 把「阿洛的球被画成麦克风钮」开成后续任务 → **#1878**
+- [ ] 推送 —— 被 GitHub push protection 拦住，**不是本任务的问题**：`e4dc92995`（C2 分类器，别人的提交）里
+      `plugins/clipboard-history/src/utils/clipboard-shapes.test.ts` 的假夹具 `sk_live_abcdefghijklmnopqrstuvwxyz`
+      命中 Stripe key 前缀。它是用来测密钥检测器本身的字母表占位串，不是真密钥。
+      两条出路：仓库管理员点 unblock URL，或改写那条夹具（需要改历史，而分支上还有别的会话在写）。
 
 ## 明确不做
 
