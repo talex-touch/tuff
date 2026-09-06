@@ -83,3 +83,10 @@
 15. 扩展 renderer window-role/app entrance 映射，保持旧 Assistant transport event 名称兼容但移除第二个 VoicePanel renderer 创建路径。
 16. 在 VoiceDock 内保留 VoicePanel 的编辑、截图与提交职责，新增 compact/listening/transcribing/committed/error surface；Canvas confetti 仅响应成功终态并有 TTL、reduced-motion 与清理边界。
 17. 运行 Assistant module contract、VoicePanel/VoiceDock focused tests、CoreApp Web/Node typecheck 和真实桌面窗口 smoke；确认隐藏 VoiceDock 没有持续 RAF 或第二个 Assistant renderer。
+
+## Command VoiceDock 手势
+
+- 在 macOS 使用 Command，在 Windows/Linux 使用 Ctrl 作为 primary modifier；继续沿用 `assistant.enabled`、`floatingBall.enabled`、`voiceWake.enabled` 作为全局手势总开关，避免默认常驻输入钩子。
+- 短按（小于 320ms）在 `start` / `stop` 间切换持续聆听；长按达到 320ms 后进入 push-to-talk，释放时发送 `stop`。
+- OmniPanel 继续独占 `uiohook` 生命周期，Voice 只注册 typed primary-modifier listener；VoiceDock 通过 typed `assistant:voice-panel:command` 事件控制 `VoicePanel`，不新增裸 IPC 或第二个录音实现。
+- Command 打开 VoiceDock 时使用 `showInactive`，不抢当前应用焦点；Command stop 不重置已显示的 VoicePanel 文本。
