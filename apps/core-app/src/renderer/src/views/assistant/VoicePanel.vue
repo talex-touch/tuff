@@ -93,6 +93,16 @@ function formatIntelligenceError(code: IntelligenceErrorCode, fallback?: string)
   return `${recovery.title}: ${recovery.detail}`
 }
 
+const props = withDefaults(
+  defineProps<{
+    managedByDock?: boolean
+  }>(),
+  { managedByDock: false }
+)
+const emit = defineEmits<{
+  completed: []
+}>()
+
 const systemPermissionRequestEvent = defineEvent('system')
   .module('permission')
   .event('request')
@@ -466,6 +476,9 @@ async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
   keepListening = voiceWakeEnabled.value
   if (keepListening) void startVoiceSession()
 }
+defineExpose({
+  openPanel: (source?: string): Promise<void> => handlePanelOpened({ source })
+})
 
 async function submitText(): Promise<void> {
   if (submitting.value) return
@@ -485,6 +498,7 @@ async function submitText(): Promise<void> {
       errorMessage.value = t('assistant.voicePanel.submitFailed')
       return
     }
+    emit('completed')
     keepListening = false
     stopVoiceSession()
     inputText.value = ''
@@ -786,9 +800,11 @@ function handleWindowKeydown(event: KeyboardEvent): void {
 }
 
 onMounted(() => {
-  disposePanelOpen = transport.on(AssistantEvents.voice.panelOpened, async (payload) => {
-    await handlePanelOpened(payload)
-  })
+  if (!props.managedByDock) {
+    disposePanelOpen = transport.on(AssistantEvents.voice.panelOpened, async (payload) => {
+      await handlePanelOpened(payload)
+    })
+  }
   window.addEventListener('keydown', handleWindowKeydown)
   void Promise.all([loadRuntimeConfig(), loadScreenshotDisplays()])
 })
@@ -812,6 +828,17 @@ onBeforeUnmount(() => {
             {{ panelStatusText }}
             <span v-if="sourceText"> · {{ sourceText }}</span>
           </p>
+        </div>
+        <div
+          class="voice-signal"
+          :class="{ active: listening || transcribingVoice || startingVoiceCapture }"
+          aria-hidden="true"
+        >
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
         </div>
         <button
           class="close-btn"
@@ -1351,5 +1378,137 @@ onBeforeUnmount(() => {
 .primary-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+.voice-panel {
+  background:
+    radial-gradient(circle at 86% 8%, var(--shell-primary-soft), transparent 32%),
+    linear-gradient(145deg, var(--shell-surface), var(--shell-surface-2));
+  border-color: var(--shell-border);
+  box-shadow:
+    0 18px 40px rgb(0 0 0 / 0.2),
+    0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
+.title {
+  color: var(--shell-text-primary);
+}
+
+.subtitle,
+.screenshot-target-field,
+.interim-text,
+.screenshot-preview-meta,
+.screenshot-preview-save,
+.screenshot-text-fallback-row span,
+.screenshot-text-fallback-meta,
+.screenshot-image-translate-route-list li,
+.screenshot-image-translate-route-summary {
+  color: var(--shell-text-secondary);
+}
+
+.close-btn,
+.secondary-btn,
+.screenshot-target-field select,
+.input-area,
+.screenshot-preview,
+.screenshot-text-fallback,
+.screenshot-image-translate-route {
+  border-color: var(--shell-border);
+  background: var(--shell-surface);
+  color: var(--shell-text-regular);
+}
+
+.input-area {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+
+.input-area:focus {
+  border-color: var(--shell-primary);
+  box-shadow: 0 0 0 3px var(--shell-primary-soft);
+}
+
+.primary-btn {
+  background: var(--shell-primary);
+  color: var(--shell-on-primary);
+  box-shadow: 0 8px 16px var(--shell-primary-soft);
+}
+
+.status-text,
+.screenshot-preview-copy {
+  color: var(--shell-success);
+}
+
+.error-text {
+  color: var(--shell-danger);
+}
+
+.voice-signal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 42px;
+  height: 24px;
+  margin-left: auto;
+  margin-right: 2px;
+  opacity: 0.45;
+}
+
+.voice-signal span {
+  width: 3px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--shell-primary);
+  transform-origin: center;
+}
+
+.voice-signal span:nth-child(2) {
+  height: 11px;
+}
+
+.voice-signal span:nth-child(3) {
+  height: 17px;
+}
+
+.voice-signal span:nth-child(4) {
+  height: 12px;
+}
+
+.voice-signal span:nth-child(5) {
+  height: 8px;
+}
+
+.voice-signal.active {
+  opacity: 1;
+}
+
+.voice-signal.active span {
+  animation: voice-signal-pulse 620ms ease-in-out infinite alternate;
+}
+
+.voice-signal.active span:nth-child(2) {
+  animation-delay: -180ms;
+}
+
+.voice-signal.active span:nth-child(3) {
+  animation-delay: -320ms;
+}
+
+.voice-signal.active span:nth-child(4) {
+  animation-delay: -100ms;
+}
+
+@keyframes voice-signal-pulse {
+  from {
+    transform: scaleY(0.55);
+  }
+  to {
+    transform: scaleY(1.16);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-signal.active span {
+    animation: none;
+  }
 }
 </style>

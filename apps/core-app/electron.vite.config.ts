@@ -27,6 +27,7 @@ const rendererPath = path.join(basePath, 'renderer', 'src')
 const tuffexRoot = path.join(workspaceRoot, 'packages', 'tuffex')
 const tuffBusinessRoot = path.join(workspaceRoot, 'packages', 'tuff-business')
 const tuffIntelligenceRoot = path.join(workspaceRoot, 'packages', 'tuff-intelligence')
+const tuffVoiceRoot = path.join(workspaceRoot, 'packages', 'tuff-voice')
 const utilsRoot = path.join(workspaceRoot, 'packages', 'utils')
 const tuffexSourceEntry = path.join(tuffexRoot, 'packages', 'components', 'src', 'index.ts')
 const tuffexBaseStyleEntry = path.join(tuffexRoot, 'packages', 'components', 'style', 'index.scss')
@@ -34,6 +35,7 @@ const tuffexComponentStyleEntry = path.join(tuffexRoot, 'dist', 'es', '$1', 'sty
 const tuffexUtilsEntry = path.join(tuffexRoot, 'packages', 'utils', 'index.ts')
 const tuffBusinessSourceEntry = path.join(tuffBusinessRoot, 'src', 'index.ts')
 const tuffIntelligenceRendererEntry = path.join(tuffIntelligenceRoot, 'src', 'renderer.ts')
+const tuffVoiceSourceEntry = path.join(tuffVoiceRoot, 'src', 'index.ts')
 const utilsRendererEntry = path.join(utilsRoot, 'renderer', 'index.ts')
 const devServerHost = process.env.TUFF_DEV_SERVER_HOST ?? '127.0.0.1'
 const devServerPortValue = Number(process.env.TUFF_DEV_SERVER_PORT)
@@ -238,6 +240,7 @@ export default defineConfig({
           'chalk', // Chalk 5 为 ESM-only，主进程 CJS 必须内联以保留 default export
           '@talex-touch/utils', // workspace 包必须打包
           '@talex-touch/tuff-intelligence', // 避免运行时直接加载 TS ESM 源码导致导入解析失败
+          '@talex-touch/tuff-voice', // Provider protocol source must be bundled for Node ESM resolution
           '@earendil-works/pi-agent-core', // Pi 是 ESM-only，Utility Process worker 必须内联
           '@earendil-works/pi-ai' // Pi provider bridge 与 agent-core 一并内联
         ]
@@ -247,7 +250,8 @@ export default defineConfig({
       alias: {
         // 强制 @libsql/isomorphic-ws 使用 web 版本而不是 node 版本
         // 这样就不会引入 ws 模块，避免原生依赖问题
-        '@libsql/isomorphic-ws': '@libsql/isomorphic-ws/web.mjs'
+        '@libsql/isomorphic-ws': '@libsql/isomorphic-ws/web.mjs',
+        '@talex-touch/tuff-voice': tuffVoiceSourceEntry
       }
     },
     define: {

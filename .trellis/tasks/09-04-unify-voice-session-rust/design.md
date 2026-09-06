@@ -141,3 +141,13 @@ PUT >$:
 11. 根据百炼具体模型族实现 stream 与 upload adapter；先接入用户提供或官方可验证的模型，不把 Paraformer、Qwen-ASR、Fun-ASR 混成一个协议。
 12. CoreApp main 注册 package adapters，替换 `TUFF_VOICE_ASR_WS_URL` 泛化生产旁路，并新增 main-owned upload handle。
 13. 运行 package protocol tests、CoreApp Voice tests、类型检查和双 Provider 的真实授权验收。
+
+## 9. VoiceDock 窗口与动效边界
+
+VoiceDock 是 Assistant 的单一可选 BrowserWindow，合并浮球入口、底部语音 HUD 和展开式 VoicePanel；CoreBox、设置页、截图窗口保持独立 owner。窗口使用 `assistantType: 'voice-dock'`，renderer 内部通过状态切换 surface，不再为 FloatingBall 与 VoicePanel 各加载一个 renderer。
+
+VoiceDock 只在 Assistant 需要时创建，不在启动阶段常驻。隐藏时必须停止 RAF、波形刷新和 confetti；动画只在明确的 session 状态或完成反馈期间运行，并在 TTL 到期后清理。
+
+底部 HUD 使用现有 CoreApp renderer 的 Canvas 2D 粒子层，不新增 Rust UI event loop、sidecar 或裸 IPC。粒子池预分配、DPR 有上限、动画只在 active/reduced-motion 允许时启动；Rust 继续只拥有 capture/VAD/PCM/typeText/playback。
+
+VoiceDock 的 renderer 状态只消费 typed Voice/Assistant transport；窗口可见性和边界由 main 的 `TouchWindow` owner 管理，不能仅依赖 `document.hidden` 判断是否暂停连续工作。

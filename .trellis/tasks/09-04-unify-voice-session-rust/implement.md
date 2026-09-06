@@ -76,3 +76,10 @@
 - 豆包上传模式可用 `TUFF_VOICE_DOUBAO_UPLOAD_VARIANT=fast|standard|idle` 选择，默认 `fast`。
 
 这些环境变量是开发联调入口，不替代后续 Settings/secure-store 的 Provider credential lifecycle；未配置时保留现有 `audio.stt`/泛化 WebSocket 兼容路径。
+
+## VoiceDock UI 执行顺序
+
+14. 将 Assistant 的浮球入口、底部 HUD 与 VoicePanel 收敛到一个按需创建的 `voice-dock` BrowserWindow；CoreBox、Settings、Screenshot 保持现有窗口 owner。
+15. 扩展 renderer window-role/app entrance 映射，保持旧 Assistant transport event 名称兼容但移除第二个 VoicePanel renderer 创建路径。
+16. 在 VoiceDock 内保留 VoicePanel 的编辑、截图与提交职责，新增 compact/listening/transcribing/committed/error surface；Canvas confetti 仅响应成功终态并有 TTL、reduced-motion 与清理边界。
+17. 运行 Assistant module contract、VoicePanel/VoiceDock focused tests、CoreApp Web/Node typecheck 和真实桌面窗口 smoke；确认隐藏 VoiceDock 没有持续 RAF 或第二个 Assistant renderer。
