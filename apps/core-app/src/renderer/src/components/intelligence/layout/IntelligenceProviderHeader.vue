@@ -13,6 +13,7 @@ import {
   isNexusManagedProvider as checkNexusManagedProvider,
   TUFF_NEXUS_PROVIDER_ICON
 } from '~/modules/intelligence/nexus-provider'
+import { providerIconFor } from '~/modules/intelligence/provider-icons'
 
 enum IntelligenceProviderType {
   OPENAI = 'openai',
@@ -56,18 +57,6 @@ const emits = defineEmits<{
 
 const { t } = useI18n()
 
-const providerIconMap: Record<IntelligenceProviderType, ITuffIcon> = {
-  [IntelligenceProviderType.OPENAI]: { type: 'class', value: 'i-simple-icons-openai' },
-  [IntelligenceProviderType.ANTHROPIC]: { type: 'class', value: 'i-simple-icons-anthropic' },
-  [IntelligenceProviderType.DEEPSEEK]: { type: 'class', value: 'i-carbon-search-advanced' },
-  [IntelligenceProviderType.SILICONFLOW]: {
-    type: 'class',
-    value: 'i-carbon-ibm-watson-machine-learning'
-  },
-  [IntelligenceProviderType.LOCAL]: { type: 'class', value: 'i-carbon-bare-metal-server' },
-  [IntelligenceProviderType.CUSTOM]: { type: 'class', value: 'i-carbon-settings' }
-}
-
 const overflowIcon: ITuffIcon = { type: 'class', value: 'i-carbon-overflow-menu-horizontal' }
 const trashIcon: ITuffIcon = { type: 'class', value: 'i-carbon-trash-can' }
 const copyIcon: ITuffIcon = { type: 'class', value: 'i-carbon-copy' }
@@ -75,7 +64,6 @@ const editIcon: ITuffIcon = { type: 'class', value: 'i-carbon-edit' }
 const shareIcon: ITuffIcon = { type: 'class', value: 'i-carbon-share' }
 const exportIcon: ITuffIcon = { type: 'class', value: 'i-carbon-document-export' }
 const configIcon: ITuffIcon = { type: 'class', value: 'i-carbon-settings-adjust' }
-const defaultIcon: ITuffIcon = { type: 'class', value: 'i-carbon-ibm-watson-machine-learning' }
 
 const localEnabled = computed({
   get: () => props.provider.enabled,
@@ -92,7 +80,7 @@ const providerIcon = computed<ITuffIcon>(() => {
   if (isNexusManagedProvider.value) {
     return TUFF_NEXUS_PROVIDER_ICON
   }
-  return providerIconMap[props.provider.type as IntelligenceProviderType] ?? defaultIcon
+  return providerIconFor(props.provider.type)
 })
 
 const deleteConfirmVisible = ref(false)

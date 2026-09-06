@@ -9,55 +9,152 @@ let closeActiveModelMenu: (() => void) | null = null
 </script>
 
 <script lang="ts" name="HomeModelMenu" setup>
+import type { ITuffIcon } from '@talex-touch/utils'
 import type { ModelChoice } from '~/modules/conversation/useModelOptions'
 import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
+import { TxIcon } from '@talex-touch/tuffex/icon'
+import { TxKbd } from '@talex-touch/tuffex/kbd'
+import { TxSearchInput } from '@talex-touch/tuffex/search-input'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { matchesModelQuery, modelSubtitle } from '~/modules/conversation/model-display'
+import { useModelFavorites } from '~/modules/conversation/useModelFavorites'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
+import { providerIconFor } from '~/modules/intelligence/provider-icons'
+import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
+import {
+  MODEL_MENU_HOTKEY_COUNT,
+  modelMenuHotkeyIndex,
+  modelMenuHotkeyLabel
+} from './model-menu-hotkeys'
 
 /**
  * The picker behind both model pills. Each caller hands its pill in through the trigger slot and
- * this control owns the rest: anchoring, outside-click, Escape and arrow traversal all come from
- * TxDropdownMenu, so the component is only the option content plus the shared selection state.
+ * this control owns the rest: anchoring, outside-click, Escape and arrow traversal come from
+ * TxDropdownMenu; the provider filter strip, search, favourites, hotkeys and the shared
+ * selection state are composed here. Rows are `menuitemradio` buttons so the primitive's arrow
+ * keys walk them; everything else in the panel is reached with Tab.
  */
 const props = withDefaults(defineProps<{ placement?: 'bottom-start' | 'top-end' }>(), {
   placement: 'bottom-start'
 })
 
 const { t } = useI18n()
-const { choices, loading, load, select, isSelected, selection } = useModelOptions()
+const { choices, loaded, ensureLoaded, select, isSelected, resolvedChoice } = useModelOptions()
+const { isFavorite, toggle: toggleFavorite } = useModelFavorites()
+
+/** Read once: the platform does not change under a running renderer. */
+const isMac = getCurrentRendererPlatformState().isMac
+
+/**
+ * Which rows the strip shows when there is no search. A tagged union rather than a string, so a
+ * provider whose id happened to be `favorites` could not collide with the star filter.
+ */
+type ModelFilter = { kind: 'favorites' } | { kind: 'provider'; providerId: string }
+
+const FAVORITES_FILTER: ModelFilter = { kind: 'favorites' }
+
+interface ProviderFilter {
+  providerId: string
+  providerName: string
+  icon: ITuffIcon
+}
 
 const open = ref(false)
+const query = ref('')
+const activeFilter = ref<ModelFilter>(FAVORITES_FILTER)
+/** Set by a click on the strip; until then the filter follows the data as it loads. */
+let filterPinned = false
 const triggerWrapRef = ref<HTMLElement | null>(null)
+const searchWrapRef = ref<HTMLElement | null>(null)
 /**
  * Focus goes back to the pill only when the menu closed from the keyboard or a selection —
  * an outside click moved focus somewhere deliberate, and yanking it back would fight the user.
  */
 let restoreFocusOnClose = false
 
-interface ModelChoiceGroup {
-  providerId: string
-  providerName: string
-  items: ModelChoice[]
-}
+/**
+ * One filter per provider that has something to pick, in the order the options arrived. Derived
+ * from the rows rather than the raw option list: a provider with no models would be a tab that
+ * opens on nothing.
+ */
+const providerFilters = computed<ProviderFilter[]>(() => {
+  const seen = new Set<string>()
+  const filters: ProviderFilter[] = []
+  for (const choice of choices.value) {
+    if (seen.has(choice.providerId)) continue
+    seen.add(choice.providerId)
+    filters.push({
+      providerId: choice.providerId,
+      providerName: choice.providerName,
+      icon: providerIconFor(choice.providerType)
+    })
+  }
+  return filters
+})
+
+/** Starred rows that resolve against the loaded choices, in list order. */
+const favoriteChoices = computed(() => choices.value.filter((choice) => isFavorite(choice)))
+
+const trimmedQuery = computed(() => query.value.trim())
 
 /**
- * One group per provider, in the order the options arrived. The flat list
- * repeated the provider under every row, which reads as noise once a single
- * provider carries many models.
+ * Where the panel opens: the pinned model's provider, else the star filter when a favourite is
+ * on offer, else the first provider. The star filter is the last resort only when there is no
+ * provider at all.
  */
-const groups = computed<ModelChoiceGroup[]>(() => {
-  const byProvider = new Map<string, ModelChoiceGroup>()
-  for (const choice of choices.value) {
-    let group = byProvider.get(choice.providerId)
-    if (!group) {
-      group = { providerId: choice.providerId, providerName: choice.providerName, items: [] }
-      byProvider.set(choice.providerId, group)
-    }
-    group.items.push(choice)
-  }
-  return [...byProvider.values()]
+function defaultFilter(): ModelFilter {
+  const resolved = resolvedChoice.value
+  if (resolved) return { kind: 'provider', providerId: resolved.providerId }
+  if (favoriteChoices.value.length) return FAVORITES_FILTER
+  const first = providerFilters.value[0]
+  return first ? { kind: 'provider', providerId: first.providerId } : FAVORITES_FILTER
+}
+
+/** The active filter, unless it names a provider that has since gone; then the default. */
+const effectiveFilter = computed<ModelFilter>(() => {
+  const chosen = activeFilter.value
+  if (chosen.kind === 'favorites') return chosen
+  const stillOffered = providerFilters.value.some(
+    (filter) => filter.providerId === chosen.providerId
+  )
+  return stillOffered ? chosen : defaultFilter()
 })
+
+const favoritesActive = computed(() => effectiveFilter.value.kind === 'favorites')
+
+function isProviderActive(providerId: string): boolean {
+  const filter = effectiveFilter.value
+  return filter.kind === 'provider' && filter.providerId === providerId
+}
+
+/** A search runs across every provider and ignores the strip; the strip only applies without one. */
+const visibleChoices = computed<ModelChoice[]>(() => {
+  const needle = trimmedQuery.value
+  if (needle) return choices.value.filter((choice) => matchesModelQuery(choice, needle))
+  const filter = effectiveFilter.value
+  if (filter.kind === 'favorites') return favoriteChoices.value
+  return choices.value.filter((choice) => choice.providerId === filter.providerId)
+})
+
+/**
+ * The line shown instead of the list, or `null` when there are rows. No skeleton: the row count
+ * is the data's to decide (design §7, the component-guidelines exception), so a fixed
+ * `min-height` under the body holds the panel steady between this line and the rows instead.
+ */
+const emptyHint = computed<string | null>(() => {
+  if (!loaded.value) return t('home.modelLoading')
+  // Not an error: a machine with no configured provider legitimately has nothing to list.
+  if (!choices.value.length) return t('home.modelEmpty')
+  if (visibleChoices.value.length) return null
+  if (trimmedQuery.value) return t('home.modelNoResults')
+  return favoritesActive.value ? t('home.modelFavoritesEmpty') : t('home.modelNoResults')
+})
+
+function pickFilter(filter: ModelFilter): void {
+  filterPinned = true
+  activeFilter.value = filter
+}
 
 function choose(choice: ModelChoice | null): void {
   select(choice)
@@ -65,9 +162,57 @@ function choose(choice: ModelChoice | null): void {
   open.value = false
 }
 
-/** The anchor closes on Escape by itself; this only marks that focus should return to the pill. */
+function searchInput(): HTMLInputElement | null {
+  return searchWrapRef.value?.querySelector('input') ?? null
+}
+
+/** Starring never selects and never closes; it is a side note on the row. */
+function toggleStar(choice: ModelChoice): void {
+  const removesFocusedRow = favoritesActive.value && !trimmedQuery.value && isFavorite(choice)
+  toggleFavorite(choice)
+  // Unstarring under the star filter unmounts the row that held focus; park it on the search
+  // field rather than let it fall to the document, where the next keystroke would go nowhere.
+  if (removesFocusedRow) void nextTick(() => searchInput()?.focus())
+}
+
+/**
+ * Escape is closed by the anchor itself; this only marks that focus should return to the pill.
+ * The digit chords reach here from anywhere inside the panel — and only from there, so a closed
+ * menu hears nothing. The panel owns the whole chord range while open: a digit past the last
+ * row still does nothing else.
+ */
 function onPanelKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') restoreFocusOnClose = true
+  if (event.key === 'Escape') {
+    restoreFocusOnClose = true
+    return
+  }
+  const index = modelMenuHotkeyIndex(event, isMac)
+  if (index === null) return
+  event.preventDefault()
+  const choice = visibleChoices.value[index]
+  if (choice) choose(choice)
+}
+
+/**
+ * The anchor keeps its panel at `visibility: hidden` until it has measured a position and the
+ * entrance animation starts, a few frames after `open` flips — and a hidden element refuses
+ * focus. Retry once per frame, bounded, until focus lands or the menu closes again. One run at a
+ * time: a reopen supersedes the previous run's token.
+ */
+const FOCUS_RETRY_FRAMES = 30
+let focusRun = 0
+
+function focusSearchWhenShown(): void {
+  const run = ++focusRun
+  let attempts = 0
+  const attempt = (): void => {
+    if (run !== focusRun || !open.value) return
+    const input = searchInput()
+    input?.focus()
+    if (input && document.activeElement === input) return
+    if (++attempts < FOCUS_RETRY_FRAMES) requestAnimationFrame(attempt)
+  }
+  void nextTick(attempt)
 }
 
 function closeSelf(): void {
@@ -79,16 +224,28 @@ watch(open, (isOpen) => {
     if (closeActiveModelMenu !== null && closeActiveModelMenu !== closeSelf) closeActiveModelMenu()
     closeActiveModelMenu = closeSelf
     restoreFocusOnClose = false
-    void load()
+    // A fresh look each time: the search is a one-off, and the filter follows what is pinned now.
+    query.value = ''
+    filterPinned = false
+    activeFilter.value = defaultFilter()
+    void ensureLoaded()
+    focusSearchWhenShown()
     return
   }
+  focusRun++
   if (closeActiveModelMenu === closeSelf) closeActiveModelMenu = null
   if (restoreFocusOnClose) {
     void nextTick(() => triggerWrapRef.value?.querySelector('button')?.focus())
   }
 })
 
+/** Options that land after the panel opened re-derive the default, unless a click pinned one. */
+watch(choices, () => {
+  if (open.value && !filterPinned) activeFilter.value = defaultFilter()
+})
+
 onBeforeUnmount(() => {
+  focusRun++
   if (closeActiveModelMenu === closeSelf) closeActiveModelMenu = null
 })
 </script>
@@ -97,11 +254,12 @@ onBeforeUnmount(() => {
   <TxDropdownMenu
     v-model="open"
     :placement="props.placement"
-    :min-width="240"
-    :max-height="320"
+    :min-width="300"
+    :max-height="380"
     :panel-radius="12"
     :panel-padding="6"
     panel-background="pure"
+    initial-focus="none"
   >
     <template #trigger>
       <!-- display: contents — the wrapper exists only so closing can find the pill to refocus. -->
@@ -110,48 +268,107 @@ onBeforeUnmount(() => {
       </span>
     </template>
 
-    <!-- `group` so the label is announced: on a bare div `aria-label` is ignored, and the
-         old listbox named itself. The radio rows also belong inside a group per ARIA menus. -->
+    <!-- `group` so the label is announced: on a bare div `aria-label` is ignored. The radio rows
+         belong inside a group per ARIA menus; the strip and the search field ride along as the
+         panel's own controls, reached with Tab (design §4 rejected `tablist` inside a `menu`). -->
     <div class="HomeModelMenu" role="group" :aria-label="t('home.model')" @keydown="onPanelKeydown">
+      <!-- Filters, not tabs: one `aria-pressed` button per provider, exactly one pressed.
+           Always shown, even for a single provider, so the star filter has a fixed place. -->
+      <div class="HomeModelMenu-Filters" role="group" :aria-label="t('home.modelProviders')">
+        <button
+          class="HomeModelMenu-Filter"
+          :class="{ 'is-active': favoritesActive }"
+          type="button"
+          :aria-pressed="favoritesActive"
+          :aria-label="t('home.modelFavorites')"
+          :title="t('home.modelFavorites')"
+          @click="pickFilter(FAVORITES_FILTER)"
+        >
+          <span :class="favoritesActive ? 'i-ri-star-fill' : 'i-ri-star-line'" />
+        </button>
+        <button
+          v-for="provider in providerFilters"
+          :key="provider.providerId"
+          class="HomeModelMenu-Filter"
+          :class="{ 'is-active': isProviderActive(provider.providerId) }"
+          type="button"
+          :aria-pressed="isProviderActive(provider.providerId)"
+          :aria-label="provider.providerName"
+          :title="provider.providerName"
+          @click="pickFilter({ kind: 'provider', providerId: provider.providerId })"
+        >
+          <TxIcon :icon="provider.icon" :size="15" />
+        </button>
+      </div>
+
+      <div ref="searchWrapRef" class="HomeModelMenu-Search">
+        <TxSearchInput
+          v-model="query"
+          :placeholder="t('home.modelSearch')"
+          :aria-label="t('home.modelSearch')"
+          clearable
+        />
+      </div>
+
+      <!-- Auto stays on top and outside every filter: it is the way out of pinning, not a model. -->
       <button
-        class="HomeModelMenu-Item"
+        class="HomeModelMenu-Item HomeModelMenu-Auto"
         type="button"
         role="menuitemradio"
-        :aria-checked="!selection.model"
+        :aria-checked="!resolvedChoice"
         @click="choose(null)"
       >
-        <span class="HomeModelMenu-Label">{{ t('home.modelAuto') }}</span>
-        <span v-if="!selection.model" class="i-ri-check-line HomeModelMenu-Check" />
+        <span class="HomeModelMenu-Name">{{ t('home.modelAuto') }}</span>
       </button>
 
       <div class="HomeModelMenu-Divider" />
 
-      <p v-if="loading" class="HomeModelMenu-Hint">{{ t('home.modelLoading') }}</p>
-      <!-- Not an error: a machine with no configured provider legitimately has nothing to list. -->
-      <p v-else-if="!choices.length" class="HomeModelMenu-Hint">{{ t('home.modelEmpty') }}</p>
+      <div class="HomeModelMenu-Body">
+        <p v-if="emptyHint" class="HomeModelMenu-Hint">{{ emptyHint }}</p>
 
-      <div
-        v-for="group in groups"
-        :key="group.providerId"
-        class="HomeModelMenu-Group"
-        role="group"
-        :aria-labelledby="`home-model-group-${group.providerId}`"
-      >
-        <p :id="`home-model-group-${group.providerId}`" class="HomeModelMenu-GroupLabel">
-          {{ group.providerName }}
-        </p>
-        <button
-          v-for="choice in group.items"
-          :key="`${choice.providerId}:${choice.model}`"
-          class="HomeModelMenu-Item"
-          type="button"
-          role="menuitemradio"
-          :aria-checked="isSelected(choice)"
-          @click="choose(choice)"
-        >
-          <span class="HomeModelMenu-Model">{{ choice.model }}</span>
-          <span v-if="isSelected(choice)" class="i-ri-check-line HomeModelMenu-Check" />
-        </button>
+        <div v-else class="HomeModelMenu-List" role="group">
+          <!-- Two buttons side by side, not nested: a control cannot sit inside another control,
+               and the star must neither select nor close. Arrow keys walk the radios only. -->
+          <div
+            v-for="(choice, index) in visibleChoices"
+            :key="`${choice.providerId} ${choice.model}`"
+            class="HomeModelMenu-Row"
+            :class="{ 'is-selected': isSelected(choice) }"
+          >
+            <button
+              class="HomeModelMenu-Item"
+              type="button"
+              role="menuitemradio"
+              :aria-checked="isSelected(choice)"
+              @click="choose(choice)"
+            >
+              <TxIcon
+                class="HomeModelMenu-Icon"
+                :icon="providerIconFor(choice.providerType)"
+                :size="15"
+              />
+              <span class="HomeModelMenu-Text">
+                <span class="HomeModelMenu-Name">{{ choice.displayName }}</span>
+                <span class="HomeModelMenu-Sub">
+                  {{ modelSubtitle(choice.providerName, choice.source) }}
+                </span>
+              </span>
+              <TxKbd v-if="index < MODEL_MENU_HOTKEY_COUNT" class="HomeModelMenu-Kbd">
+                {{ modelMenuHotkeyLabel(index, isMac) }}
+              </TxKbd>
+            </button>
+            <button
+              class="HomeModelMenu-Star"
+              type="button"
+              :aria-pressed="isFavorite(choice)"
+              :aria-label="isFavorite(choice) ? t('home.modelUnfavorite') : t('home.modelFavorite')"
+              :title="isFavorite(choice) ? t('home.modelUnfavorite') : t('home.modelFavorite')"
+              @click="toggleStar(choice)"
+            >
+              <span :class="isFavorite(choice) ? 'i-ri-star-fill' : 'i-ri-star-line'" />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </TxDropdownMenu>
@@ -166,16 +383,61 @@ onBeforeUnmount(() => {
 .HomeModelMenu {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  max-width: 320px;
+  gap: 4px;
+}
+
+.HomeModelMenu-Filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+  padding: 0 2px;
+}
+
+.HomeModelMenu-Filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: var(--shell-surface);
+    color: var(--shell-text-primary);
+  }
+
+  &.is-active {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: -2px;
+  }
+}
+
+.HomeModelMenu-Search {
+  padding: 0 2px 2px;
 }
 
 .HomeModelMenu-Item {
   display: flex;
+  flex: 1;
   gap: 10px;
   align-items: center;
-  justify-content: space-between;
-  padding: 7px 9px;
+  min-width: 0;
+  padding: 6px 9px;
   border: none;
   border-radius: var(--shell-radius-sm);
   background: transparent;
@@ -185,41 +447,131 @@ onBeforeUnmount(() => {
   font-size: var(--shell-fs-body);
   cursor: pointer;
 
-  &:hover {
-    background: var(--shell-surface);
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: -2px;
   }
 }
 
-.HomeModelMenu-Group {
+/* Auto is its own row; the model rows carry hover and selection on their container instead. */
+.HomeModelMenu-Auto {
+  padding: 7px 9px;
+
+  &:hover {
+    background: var(--shell-surface);
+  }
+
+  &[aria-checked='true'] {
+    background: var(--shell-surface-2);
+  }
+}
+
+.HomeModelMenu-Divider {
+  margin: 2px 2px 4px;
+  border-top: 1px solid var(--shell-border);
+}
+
+/* Four rows' worth, so loading → loaded → filtered does not move the panel's bottom edge. */
+.HomeModelMenu-Body {
+  min-height: 180px;
+}
+
+.HomeModelMenu-List {
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
 
-/* A label, not an option: the provider names the block so the rows can stay one line each. */
-.HomeModelMenu-GroupLabel {
-  margin: 0;
-  padding: 8px 9px 3px;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
+/* Selection reads on the whole row, star included: the row is the unit, the buttons are its parts. */
+.HomeModelMenu-Row {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  padding-right: 4px;
+  border-radius: var(--shell-radius-sm);
+  transition: background-color 0.12s ease;
+
+  &:hover,
+  &:has(:focus-visible) {
+    background: var(--shell-surface);
+  }
+
+  &.is-selected {
+    background: var(--shell-surface-2);
+  }
 }
 
-.HomeModelMenu-Model {
+.HomeModelMenu-Icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--shell-text-secondary);
+}
+
+.HomeModelMenu-Text {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
+}
+
+.HomeModelMenu-Name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.HomeModelMenu-Check {
-  flex: none;
-  color: var(--shell-primary);
+.HomeModelMenu-Sub {
+  overflow: hidden;
+  color: var(--shell-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--shell-fs-caption);
+  line-height: 1.3;
 }
 
-.HomeModelMenu-Divider {
-  margin: 4px 2px;
-  border-top: 1px solid var(--shell-border);
+.HomeModelMenu-Kbd {
+  flex: none;
+}
+
+.HomeModelMenu-Star {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition:
+    color 0.12s ease,
+    opacity 0.12s ease;
+
+  /* Quiet until the row is in play; a starred one stays lit as the state it is. */
+  .HomeModelMenu-Row:hover &,
+  .HomeModelMenu-Row:focus-within &,
+  &[aria-pressed='true'] {
+    opacity: 1;
+  }
+
+  &:hover {
+    color: var(--shell-text-primary);
+  }
+
+  &[aria-pressed='true'] {
+    color: var(--shell-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: -2px;
+  }
 }
 
 .HomeModelMenu-Hint {

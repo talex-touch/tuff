@@ -1,72 +1,134 @@
+import type { ModelDisplayFields, ModelRef } from './model-display'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
+import { appSettingStore } from '~/modules/storage/app-storage'
+import { waitForHydrationSoftTimeout } from '~/modules/startup/hydration-timeout'
+import {
+  readPersistedModel,
+  toModelRef,
+  writableConversationSettings
+} from './conversation-settings'
+import { sameModelRef, splitModelId } from './model-display'
+
+export type { ModelRef } from './model-display'
 
 /** Same capability the home conversation streams through, so the list matches what can answer. */
 const CHAT_CAPABILITY_ID = 'text.chat'
 
 /**
+ * Hydration normally finished before the renderer mounted (`main.ts` waits for it), so this only
+ * matters when the storage transport is wedged. The wait is bounded so the options still load in
+ * that case; the persisted selection is resolved reactively, so it catches up whenever hydration
+ * does land.
+ */
+const HYDRATION_SOFT_TIMEOUT_MS = 3000
+
+/**
  * The slice of `getProviderModelOptions`' result this picker reads, declared structurally rather
- * than imported: the transport barrel does not re-export the option type, and only these four
- * fields decide what the menu can render.
+ * than imported: the transport barrel does not re-export the option type, and only these fields
+ * decide what the menu can render.
  */
 export interface ProviderModelOption {
   providerId: string
   providerName: string
+  providerType: string
   models: string[]
   available: boolean
 }
 
-export interface ModelChoice {
-  providerId: string
-  providerName: string
-  model: string
+/** One row of the menu: identity, what to draw it with, and how to label it. */
+export interface ModelChoice extends ModelDisplayFields {
+  /** Picks the provider icon; see `providerIconFor`. */
+  providerType: string
 }
 
+/** What the send path reads: empty when the next turn should be auto-routed. */
 export interface ConversationModelSelection {
   providerId?: string
   model?: string
 }
 
 /**
- * Selection lives at module scope so the top bar pill and the composer pill are the same control
- * shown twice, rather than two independent pickers that can disagree about what will run.
- *
- * Session-scoped on purpose: there is no settings field for a conversation-level model yet, and
- * inventing a persisted one here would create a preference no settings page can manage.
+ * Module scope so the top bar pill and the composer pill are the same control shown twice, rather
+ * than two independent pickers that can disagree about what will run. The selection itself lives
+ * in `appSetting.conversation`; only the option list and its load state are held here.
  */
-const selection = ref<ConversationModelSelection>({})
 const options = ref<ProviderModelOption[]>([])
 const loading = ref(false)
-let loaded = false
+/** A load has finished, well or badly. Until then the persisted selection cannot be trusted to resolve. */
+const loaded = ref(false)
+/** A load has succeeded; a failed one leaves this false so the next `load()` tries again. */
+let fetched = false
+let inFlight: Promise<void> | null = null
+let hydrationWait: Promise<unknown> | null = null
 
 export interface UseModelOptionsReturn {
   options: Ref<ProviderModelOption[]>
+  /** Available providers only, flattened one row per model, in the order the options arrived. */
   choices: ComputedRef<ModelChoice[]>
-  selection: Ref<ConversationModelSelection>
-  /** What the pill shows: the chosen model, or the auto-routing label when nothing is pinned. */
-  selectedModel: ComputedRef<string | undefined>
   loading: Ref<boolean>
+  loaded: Ref<boolean>
   load: (force?: boolean) => Promise<void>
-  select: (choice: ModelChoice | null) => void
-  isSelected: (choice: ModelChoice) => boolean
+  /** Waits for settings hydration, then loads once; safe to call from every entry point. */
+  ensureLoaded: () => Promise<void>
+  /** `appSetting.conversation.model` as stored, whether or not it resolves to a current option. */
+  persistedSelection: ComputedRef<ModelRef | null>
+  /**
+   * The persisted selection resolved against the loaded choices. Undefined before the first load
+   * finishes and whenever the stored model is not on offer — the pill and routing then fall back
+   * to auto, but the stored value is left alone so it comes back with its provider.
+   */
+  resolvedChoice: ComputedRef<ModelChoice | undefined>
+  /** What the next send pins: the resolved choice, or nothing. */
+  routing: ComputedRef<ConversationModelSelection>
+  /** Persists the choice, or `null` for auto. Only the two identifying fields are written. */
+  select: (choice: ModelChoice | ModelRef | null) => void
+  /** Whether the row is the persisted selection. */
+  isSelected: (choice: ModelRef) => boolean
+}
+
+function toChoice(option: ProviderModelOption, model: string): ModelChoice {
+  const { source, name } = splitModelId(model)
+  return {
+    providerId: option.providerId,
+    providerName: option.providerName,
+    providerType: option.providerType,
+    model,
+    source,
+    displayName: name
+  }
 }
 
 export function useModelOptions(): UseModelOptionsReturn {
   const sdk = useIntelligenceSdk()
 
-  async function load(force = false): Promise<void> {
-    if (loading.value || (loaded && !force)) return
-    loading.value = true
-    try {
-      options.value = await sdk.getProviderModelOptions({ capabilityId: CHAT_CAPABILITY_ID })
-      loaded = true
-    } catch {
-      // A failed lookup leaves the pill on its auto label; the send path does not depend on this
-      // list, so surfacing an error here would be noise about a control the user may never open.
-      options.value = []
-    } finally {
-      loading.value = false
-    }
+  function load(force = false): Promise<void> {
+    if (inFlight) return inFlight
+    if (fetched && !force) return Promise.resolve()
+    inFlight = (async () => {
+      loading.value = true
+      try {
+        options.value = await sdk.getProviderModelOptions({ capabilityId: CHAT_CAPABILITY_ID })
+        fetched = true
+      } catch {
+        // A failed lookup leaves the pill on its auto label; the send path does not depend on
+        // this list, so surfacing an error here would be noise about a control the user may
+        // never open.
+        options.value = []
+      } finally {
+        loaded.value = true
+        loading.value = false
+        inFlight = null
+      }
+    })()
+    return inFlight
+  }
+
+  function ensureLoaded(): Promise<void> {
+    hydrationWait ??= waitForHydrationSoftTimeout(appSettingStore, {
+      timeoutMs: HYDRATION_SOFT_TIMEOUT_MS
+    })
+    return hydrationWait.then(() => load())
   }
 
   /**
@@ -76,32 +138,42 @@ export function useModelOptions(): UseModelOptionsReturn {
   const choices = computed<ModelChoice[]>(() =>
     options.value
       .filter((option) => option.available)
-      .flatMap((option) =>
-        option.models.map((model) => ({
-          providerId: option.providerId,
-          providerName: option.providerName,
-          model
-        }))
-      )
+      .flatMap((option) => option.models.map((model) => toChoice(option, model)))
   )
 
-  function select(choice: ModelChoice | null): void {
-    selection.value = choice ? { providerId: choice.providerId, model: choice.model } : {}
+  const persistedSelection = computed<ModelRef | null>(() => readPersistedModel())
+
+  const resolvedChoice = computed<ModelChoice | undefined>(() => {
+    if (!loaded.value) return undefined
+    const persisted = persistedSelection.value
+    if (!persisted) return undefined
+    return choices.value.find((choice) => sameModelRef(choice, persisted))
+  })
+
+  const routing = computed<ConversationModelSelection>(() => {
+    const choice = resolvedChoice.value
+    return choice ? toModelRef(choice) : {}
+  })
+
+  function select(choice: ModelChoice | ModelRef | null): void {
+    writableConversationSettings().model = choice ? toModelRef(choice) : null
   }
 
-  function isSelected(choice: ModelChoice): boolean {
-    return (
-      selection.value.providerId === choice.providerId && selection.value.model === choice.model
-    )
+  function isSelected(choice: ModelRef): boolean {
+    const persisted = persistedSelection.value
+    return persisted !== null && sameModelRef(persisted, choice)
   }
 
   return {
     options,
     choices,
-    selection,
-    selectedModel: computed(() => selection.value.model),
     loading,
+    loaded,
     load,
+    ensureLoaded,
+    persistedSelection,
+    resolvedChoice,
+    routing,
     select,
     isSelected
   }

@@ -1,6 +1,7 @@
 <script lang="ts" name="HomePage" setup>
 import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
+import type { ITuffIcon } from '@talex-touch/utils'
 import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
 import type {
   FormFieldValue,
@@ -12,6 +13,7 @@ import type { MessageSegment } from '~/modules/conversation/chain-steps'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
+import { TxIcon } from '@talex-touch/tuffex/icon'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxModal } from '@talex-touch/tuffex/modal'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
@@ -59,6 +61,7 @@ import {
 } from '~/modules/conversation/useConversationHistory'
 import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
+import { providerIconFor } from '~/modules/intelligence/provider-icons'
 import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import HomeModelMenu from './HomeModelMenu.vue'
@@ -98,11 +101,22 @@ const composerHeight = ref(0)
 const router = useRouter()
 const route = useRoute()
 
-const { selection: modelSelection, selectedModel } = useModelOptions()
+const {
+  resolvedChoice: resolvedModel,
+  routing: modelRouting,
+  ensureLoaded: ensureModelOptionsLoaded
+} = useModelOptions()
+/**
+ * Loaded at mount rather than on first menu open, so the persisted selection resolves — and
+ * the pill stops saying auto — before the user reaches for it.
+ */
+onMounted(() => {
+  void ensureModelOptionsLoaded()
+})
 
 const conversation = useHomeConversation({
   // A getter, not a snapshot: switching model mid-conversation must apply to the next send.
-  routing: () => modelSelection.value,
+  routing: () => modelRouting.value,
   // Likewise for Auto Context, which the settings page owns — each send reads its current value.
   autoContext: () => autoContext.value
 })
@@ -110,8 +124,16 @@ const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
 
 const panelOpen = ref(false)
 
-/** The pill shows the pinned model when there is one, and the routing label when there is not. */
-const modelLabel = computed(() => selectedModel.value ?? t('home.modelName'))
+/**
+ * Both pills read this: the pinned model's display name and provider icon when it resolves, the
+ * routing label alone when it does not — auto keeps its text-only look.
+ */
+const modelPill = computed<{ label: string; icon: ITuffIcon | undefined }>(() => {
+  const resolved = resolvedModel.value
+  return resolved
+    ? { label: resolved.displayName, icon: providerIconFor(resolved.providerType) }
+    : { label: t('home.modelName'), icon: undefined }
+})
 
 const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.value)
 
@@ -902,7 +924,8 @@ watch(
   >
     <HomeTopBar
       :title="conversationTitle"
-      :model-name="modelLabel"
+      :model-name="modelPill.label"
+      :model-icon="modelPill.icon"
       :panel-open="panelOpen"
       :turn="lastTurn"
       :message-count="messages.length"
@@ -1259,7 +1282,13 @@ watch(
                           :aria-label="t('home.model')"
                           :aria-expanded="open"
                         >
-                          <span class="HomePage-ModelName">{{ modelLabel }}</span>
+                          <TxIcon
+                            v-if="modelPill.icon"
+                            class="HomePage-ModelIcon"
+                            :icon="modelPill.icon"
+                            :size="13"
+                          />
+                          <span class="HomePage-ModelName">{{ modelPill.label }}</span>
                           <span class="HomePage-ModelEffort">{{ t('home.effortHigh') }}</span>
                           <span class="i-ri-arrow-down-s-line" />
                         </button>
@@ -2018,6 +2047,11 @@ textarea.HomePage-Input:focus-visible {
   .i-ri-arrow-down-s-line {
     color: var(--shell-text-muted);
   }
+}
+
+.HomePage-ModelIcon {
+  display: inline-flex;
+  color: var(--shell-text-secondary);
 }
 
 .HomePage-ModelName {
