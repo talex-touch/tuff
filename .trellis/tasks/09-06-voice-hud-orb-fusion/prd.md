@@ -1,6 +1,6 @@
 # 语音 HUD 融合 orb 的形态设计
 
-画板：`DQis6`（深色三态）/ `SJQ8R`（浅色三态）/ `VjHpd`（SPEC）
+画板：`DQis6`（深色三态）/ `SJQ8R`（浅色三态）/ `l7Xnp`（V3 完整六态矩阵）/ `VjHpd`（SPEC）
 
 ## Goal
 
@@ -14,7 +14,7 @@
 
 ## Requirements
 
-### R1 三个相位
+### R1 相位（R4.1 已扩到六个）
 
 悬浮球是助手**阿洛**的在场（`module.ts:96` `DEFAULT_WAKE_WORDS = ['阿洛','aler']`），不是语音按钮 —— 「待命」「收拢」是球的事。这条轨道只有三态：
 
@@ -69,6 +69,26 @@ finishVoiceInput() → controller.cancel()
 
 补一条 stream 级 `stop`（停采集、照常收 `final` / `end`；与 `cancel` 互斥），一次修好两件：✓ 真提交、thinking 变成停在 `end` 的真状态。
 
+### R4.1 六个相位（2026-09-06 追加）
+
+原来的三态不够用：取消没有键盘入口也没有回执，失败全是一种红，而 thinking 那格把一个按不动的 ✓ 留在用户刚点过的位置上。改成六个：
+
+| 相位 | 中间 | 右槽 | 宽度 | 语气 |
+| --- | --- | --- | --- | --- |
+| listening | 电平波形 | ✓ 可按 | 200 | — |
+| thinking | shimmer 文案 | **orb**（不再是钮） | 按文案测 | — |
+| cancelled | 「已取消」 | ✓ 置灰 | 按文案测 | muted / 700ms |
+| quota | 「AI 额度已用完」 | ✓ 置灰 | 按文案测 | warning / 1600ms |
+| busy | 「服务繁忙，请稍后重试」 | ✓ 置灰 | 按文案测 | warning / 1600ms |
+| error | 具体错误 | ✓ 置灰 | 按文案测 | danger / 900ms |
+
+- **Esc = ✕**，同一条路径。cancel 在 `listening` 与 `transcribing` 期间都可用 —— 主进程在 polish 前和 deliver 前都查 abort signal，所以文本落地之前 Esc 必须一直有效。
+- **额度与繁忙是 warning，不是 danger。** 它们不是坏了：一个是账户状态、一个是天气，都会自己好或者去设置里解决。停留也更长（1600ms），因为要读。未归类的失败留在 danger —— 不认识的失败才是值得打断的那种。
+- **取消停留最短（700ms）**：用户刚做完这个动作，不需要被告知两遍。
+- 语气只染描边和文字，不染底 —— 底一染，文字对比度就掉。
+- **只有 thinking 的文案 shimmer。** 提示是结果，结果应该站住不动。
+- 分类依据是错误码与消息（`QUOTA|CREDIT|INSUFFICIENT_BALANCE` / `RATE_LIMIT|OVERLOAD|HIGH_DEMAND|429|503|529`），不是新造的枚举。
+
 ### R5 orb 接入
 
 ```vue
@@ -96,7 +116,7 @@ Test Files  1 failed | 3 passed (4)       Tests  1 failed | 49 passed (50)
 
 ## Acceptance Criteria
 
-- [ ] 三个相位在 360×64 窗口内不溢出；胶囊 200×44、圆钮 34、槽位 106、orb 28、波形 24 根与画板一致。
+- [ ] 六个相位在 360×64 窗口内不溢出；胶囊 200×44、圆钮 34、槽位 106、orb 28、波形 24 根与画板一致。
 - [ ] listening 那一格**只有波形没有 orb**；thinking 那一格**只有 orb 没有波形**。
 - [ ] 波形高度由 `level` 事件驱动：没有 `level` 到达时不跑动画（负控制：断掉 level 后波形静止，而不是继续摆）。
 - [ ] `emitLevel` 未开启时流的事件序列与现状逐字相同（全局听写不受影响）。
@@ -109,6 +129,10 @@ Test Files  1 failed | 3 passed (4)       Tests  1 failed | 49 passed (50)
 - [ ] 连续两次会话 orb 的 `:key` 不同（负控制：只改 `state` 时不变）。
 - [ ] 浅色与深色下 orb 与波形均可见，无写死反色分支。
 - [ ] 球在 48 / 56 / 72 三档下窗口 bounds 都不被 min/max 夹变形。
+- [ ] Esc 与 ✕ 走同一条路径；`transcribing` 期间 Esc 仍然有效。
+- [ ] 额度 / 繁忙落在 warning 档，未归类失败落在 danger 档，取消落在 muted 档；三档停留时长各不相同。
+- [ ] `transcribing` 时右槽是 orb 而**不是**置灰的 ✓（两者不同时存在）。
+- [ ] 只有 thinking 的文案 shimmer，提示文案不 shimmer；`prefers-reduced-motion` 下 shimmer 关闭。
 - [ ] vitest 与 `vue-tsc --noEmit -p tsconfig.web.json --composite false` 全绿，测试数只增不减。
 
 ## 明确不做
