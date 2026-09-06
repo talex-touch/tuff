@@ -201,5 +201,28 @@ describe('txStatusBadge', () => {
       const horizontal = parts.length === 1 ? parts[0] : parts[1]
       expect(horizontal).toBeGreaterThanOrEqual(10)
     })
+
+    it('seats a leading glyph concentric with the end cap and matches the text side to it', () => {
+      // The cap is a circle of radius height/2 centred height/2 in from the edge;
+      // with the 1em icon's leading padding equal to the vertical padding, the
+      // glyph's centre lands on that circle's centre and the gap to the edge is
+      // the same all the way round — left and top read as one distance. The
+      // text side follows the glyph side (two px more for letters' square
+      // corners against the curve), not the text-only pill's 10px.
+      for (const size of ['sm', 'md']) {
+        const base = ownDeclarations(blockBody(root, `&--${size} {`))
+        const vertical = Number.parseFloat(declaration(base, 'padding')!.split(/\s+/)[0]!)
+        const withIcon = ownDeclarations(blockBody(root, `&--${size}.has-icon`))
+        expect(Number.parseFloat(declaration(withIcon, 'padding-left')!)).toBe(vertical)
+        expect(Number.parseFloat(declaration(withIcon, 'padding-right')!)).toBe(vertical + 2)
+      }
+    })
+  })
+
+  it('flags a pill that opens with a glyph, so only that side takes the concentric padding', () => {
+    expect(mount(TxStatusBadge, { props: { text: 'Online', status: 'success' } }).classes()).toContain('has-icon')
+    expect(mount(TxStatusBadge, { props: { text: 'macOS', os: 'macos', osOnly: true } }).classes()).toContain('has-icon')
+    // No glyph at all: the pill keeps its symmetric padding.
+    expect(mount(TxStatusBadge, { props: { text: 'Plain', osOnly: true } }).classes()).not.toContain('has-icon')
   })
 })
