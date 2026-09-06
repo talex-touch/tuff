@@ -4,10 +4,15 @@ import type {
   IntelligenceProviderConfig,
   IntelligenceUsageInfo
 } from '@talex-touch/tuff-intelligence'
-import { constants } from 'node:fs'
-import { access, readdir } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import type { CliExecutableForm, CliExecutableLookup } from './cli/cli-executable'
+import {
+  getResolvedCliExecutable,
+  resetCliExecutableCache,
+  resolveCliExecutable
+} from './cli/cli-executable'
+import { isFailedStopReason } from './cli/cli-process-runtime'
+
+export { isFailedStopReason }
 
 export const PI_CLI_PROVIDER_ID = 'pi-cli-default'
 export const PI_CLI_ORIGIN = 'pi-cli'
@@ -19,6 +24,13 @@ export const PI_CLI_ORIGIN = 'pi-cli'
  */
 export const PI_CLI_NOT_FOUND = 'PI_CLI_NOT_FOUND'
 
+/**
+ * Raised when a cancelled or failed run's child survived both SIGTERM and SIGKILL. Stable in both
+ * `error.code` and `error.message`: a live child can keep using tools and billing, so callers
+ * match on it rather than on prose.
+ */
+export const PI_CLI_TERMINATION_FAILED = 'PI_CLI_TERMINATION_FAILED'
+
 export function isPiCliProviderConfig(config: IntelligenceProviderConfig): boolean {
   return config.id === PI_CLI_PROVIDER_ID || config.metadata?.origin === PI_CLI_ORIGIN
 }
@@ -28,77 +40,16 @@ export function isPiCliProviderConfig(config: IntelligenceProviderConfig): boole
 // ============================================================================
 
 /**
- * Version-manager roots that install `pi` outside any PATH entry Electron inherits. A GUI launch on
- * macOS gets `/usr/bin:/bin:/usr/sbin:/sbin` from launchd — none of these are in it, so searching
- * PATH alone finds nothing even when the CLI is installed and works in the user's terminal.
+ * `pie` (`@talex-touch/touch-pie`) is pi's installer-shaped alias: it finds `pi` and passes every
+ * argument through, intercepting only `update` / `version` / `about`. Same protocol, same
+ * catalogue under `~/.pi/agent` — so it is the fallback form of the pi provider, searched only
+ * once every location for `pi` itself has come up empty.
  */
-function versionManagerRoots(home: string): string[] {
-  return [
-    join(home, '.local', 'share', 'mise', 'installs', 'node'),
-    join(home, '.volta', 'tools', 'image', 'node'),
-    join(home, '.nvm', 'versions', 'node'),
-    join(home, '.fnm', 'node-versions')
-  ]
+const PI_CLI_LOOKUP: CliExecutableLookup = {
+  command: 'pi',
+  fallbackCommands: ['pie'],
+  envOverride: 'TUFF_PI_CLI_PATH'
 }
-
-/** Fixed directories that hold a `pi` binary directly, no version subdirectory in between. */
-function directBinRoots(home: string): string[] {
-  return [
-    join(home, '.local', 'bin'),
-    join(home, '.bun', 'bin'),
-    join(home, '.deno', 'bin'),
-    join(home, '.npm-global', 'bin'),
-    '/opt/homebrew/bin',
-    '/usr/local/bin'
-  ]
-}
-
-async function isExecutable(path: string): Promise<boolean> {
-  try {
-    await access(path, constants.X_OK)
-    return true
-  } catch {
-    return false
-  }
-}
-
-function withPlatformExtensions(command: string): string[] {
-  if (process.platform !== 'win32') return [command]
-  const extensions = (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';').filter(Boolean)
-  return extensions.map((extension) => `${command}${extension}`)
-}
-
-async function findInDirectories(command: string, directories: string[]): Promise<string | null> {
-  const names = withPlatformExtensions(command)
-  for (const directory of directories) {
-    for (const name of names) {
-      const candidate = join(directory, name)
-      if (await isExecutable(candidate)) return candidate
-    }
-  }
-  return null
-}
-
-/**
- * Version managers nest binaries one level down (`installs/node/<version>/bin`). The versions are
- * read newest-first so a machine with several Node installs resolves to the most recently added one
- * rather than an abandoned old install that may not have `pi` at all.
- */
-async function expandVersionedBinDirs(root: string): Promise<string[]> {
-  try {
-    const entries = await readdir(root, { withFileTypes: true })
-    return entries
-      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-      .map((entry) => entry.name)
-      .sort()
-      .reverse()
-      .map((version) => join(root, version, 'bin'))
-  } catch {
-    return []
-  }
-}
-
-let cachedExecutable: string | null | undefined
 
 /**
  * Resolves the `pi` binary, preferring an explicit override, then PATH, then the version-manager and
@@ -106,32 +57,12 @@ let cachedExecutable: string | null | undefined
  * changes when the user installs or removes the CLI.
  */
 export async function resolvePiExecutable(): Promise<string | null> {
-  if (cachedExecutable !== undefined) return cachedExecutable
-
-  const override = process.env.TUFF_PI_CLI_PATH?.trim()
-  if (override) {
-    cachedExecutable = (await isExecutable(override)) ? override : null
-    return cachedExecutable
-  }
-
-  const pathDirectories = (process.env.PATH || '').split(delimiter).filter(Boolean)
-  const fromPath = await findInDirectories('pi', pathDirectories)
-  if (fromPath) {
-    cachedExecutable = fromPath
-    return cachedExecutable
-  }
-
-  const home = homedir()
-  const versioned = await Promise.all(versionManagerRoots(home).map(expandVersionedBinDirs))
-  const fallbackDirectories = [...versioned.flat(), ...directBinRoots(home)]
-
-  cachedExecutable = await findInDirectories('pi', fallbackDirectories)
-  return cachedExecutable
+  return (await resolveCliExecutable(PI_CLI_LOOKUP))?.path ?? null
 }
 
 /** Test seam and install-time refresh: drops the memoised lookup so the next resolve re-scans. */
 export function resetPiExecutableCache(): void {
-  cachedExecutable = undefined
+  resetCliExecutableCache(PI_CLI_LOOKUP.command)
 }
 
 /**
@@ -142,7 +73,16 @@ export function resetPiExecutableCache(): void {
  * CLI. Call {@link probePiCliAvailability} once at startup to settle it.
  */
 export function getResolvedPiExecutable(): string | null | undefined {
-  return cachedExecutable
+  const resolved = getResolvedCliExecutable(PI_CLI_LOOKUP.command)
+  return resolved === undefined ? undefined : (resolved?.path ?? null)
+}
+
+/**
+ * Which name answered the probe: `primary` for `pi`, `fallback` for `pie`. The display name
+ * hangs off this ("Pi · Touch Pie"); `undefined` while unprobed or when neither exists.
+ */
+export function getResolvedPiForm(): CliExecutableForm | undefined {
+  return getResolvedCliExecutable(PI_CLI_LOOKUP.command)?.form
 }
 
 export async function probePiCliAvailability(): Promise<boolean> {
@@ -384,15 +324,6 @@ export interface PiCliEvent {
   failure?: string
   /** Set on `auto_retry_start`, for the log line that records how often this happens. */
   retry?: { attempt: number; maxAttempts: number; delayMs: number }
-}
-
-/**
- * The two stop reasons that mean the message carried no answer. `pi` deletes such a message from
- * its own agent state before retrying, so text streamed under one of these is provisional even
- * though it already reached stdout.
- */
-export function isFailedStopReason(stopReason: string | undefined): boolean {
-  return stopReason === 'error' || stopReason === 'aborted'
 }
 
 /**
