@@ -1,0 +1,29 @@
+{
+  "id": "model-menu-redesign",
+  "name": "model-menu-redesign",
+  "title": "Model switch popup redesign and anchored panel max-height fix",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "release/ota-transport-error-classification-20260904",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-06-tuffex-anchor-max-height",
+    "09-06-home-model-menu-v2"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
