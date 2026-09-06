@@ -94,6 +94,13 @@ export interface VoiceAsrStreamPayload {
   delivery?: VoiceDeliveryMode;
   /** Main-selected provider id; omitted uses the configured provider priority. */
   providerId?: string;
+  /**
+   * Emit `level` events alongside the transcript, for input-level visualization.
+   *
+   * Off by default so existing callers keep their exact event sequence: a caller
+   * that only wants text must not have to filter frames it never asked for.
+   */
+  emitLevel?: boolean;
 }
 
 /** Main-owned source reference for uploaded audio recognition. */
@@ -124,6 +131,14 @@ export interface VoiceTranscribeUploadResult {
 /** Streaming ASR event. */
 export type VoiceAsrStreamEvent =
   | { type: "partial"; text: string }
+  /**
+   * Captured input level, normalized to 0..1, roughly 10Hz.
+   *
+   * Only emitted when the request opted in with `emitLevel`. It carries no
+   * transcript and must never be treated as progress: it is the measured
+   * amplitude of what the microphone just heard, nothing more.
+   */
+  | { type: "level"; rms: number }
   | {
       type: "final";
       text: string;

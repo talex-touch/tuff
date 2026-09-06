@@ -42,6 +42,7 @@ export async function startClientStream<TReq, TChunk>(
   const streamEvents = getStreamEventNames(eventName);
 
   let cancelled = false;
+  let stopped = false;
   let cleaned = false;
   let portHandle: TransportPortHandle | null = null;
   let portActive = false;
@@ -261,6 +262,15 @@ export async function startClientStream<TReq, TChunk>(
       cancelled = true;
       adapter.send(streamEvents.cancel, { streamId }).catch(() => {});
       cleanup();
+    },
+    // Deliberately no `cleanup()`: the producer keeps streaming until it emits
+    // `end`, and tearing the listeners down here would drop that final result.
+    stop: () => {
+      if (cancelled || stopped) {
+        return;
+      }
+      stopped = true;
+      adapter.send(streamEvents.stop, { streamId }).catch(() => {});
     },
     get cancelled() {
       return cancelled;

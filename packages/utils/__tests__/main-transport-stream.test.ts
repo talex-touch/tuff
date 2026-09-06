@@ -322,6 +322,82 @@ describe("TuffMainTransport.onStream", () => {
     expect(secondSender.send).toHaveBeenCalledTimes(2);
   });
 
+  // The two halves live in one test on purpose: `stop` is only meaningful as the
+  // opposite of `cancel`, and splitting them lets one drift into the other.
+  it("finishes a stopped stream and silences a cancelled one", () => {
+    const { channel, handlers } = createChannel();
+    const transport = new TuffMainTransport(channel as any, {} as any);
+    const eventName = ClipboardEvents.change.toEventName();
+    const stoppedSender = createSender(35);
+    const cancelledSender = createSender(36);
+    const contexts: StreamContext<ClipboardChangePayload>[] = [];
+
+    transport.onStream(ClipboardEvents.change, (_payload, context) => {
+      contexts.push(context);
+    });
+
+    const start = handlers.get(`main:${eventName}:stream:start`);
+    start?.({
+      data: { streamId: "stream-stopped" },
+      header: { event: { sender: stoppedSender } },
+    });
+    start?.({
+      data: { streamId: "stream-cancelled" },
+      header: { event: { sender: cancelledSender } },
+    });
+
+    handlers.get(`main:${eventName}:stream:stop`)?.({
+      data: { streamId: "stream-stopped" },
+      header: { event: { sender: stoppedSender } },
+    });
+    handlers.get(`main:${eventName}:stream:cancel`)?.({
+      data: { streamId: "stream-cancelled" },
+      header: { event: { sender: cancelledSender } },
+    });
+
+    expect(contexts[0].stopSignal.aborted).toBe(true);
+    expect(contexts[0].signal.aborted).toBe(false);
+    expect(contexts[1].signal.aborted).toBe(true);
+    expect(contexts[1].stopSignal.aborted).toBe(false);
+
+    contexts[0].emit({ latest: null, history: [] });
+    contexts[0].end();
+    contexts[1].emit({ latest: null, history: [] });
+    contexts[1].end();
+
+    // A stopped producer still gets to flush its result; a cancelled one does not.
+    expect(stoppedSender.send).toHaveBeenCalledTimes(2);
+    expect(cancelledSender.send).not.toHaveBeenCalled();
+  });
+
+  it("ignores stop for an already cancelled stream", () => {
+    const { channel, handlers } = createChannel();
+    const transport = new TuffMainTransport(channel as any, {} as any);
+    const eventName = ClipboardEvents.change.toEventName();
+    const sender = createSender(37);
+    const contexts: StreamContext<ClipboardChangePayload>[] = [];
+
+    transport.onStream(ClipboardEvents.change, (_payload, context) => {
+      contexts.push(context);
+    });
+
+    handlers.get(`main:${eventName}:stream:start`)?.({
+      data: { streamId: "stream-gone" },
+      header: { event: { sender } },
+    });
+    handlers.get(`main:${eventName}:stream:cancel`)?.({
+      data: { streamId: "stream-gone" },
+      header: { event: { sender } },
+    });
+    handlers.get(`main:${eventName}:stream:stop`)?.({
+      data: { streamId: "stream-gone" },
+      header: { event: { sender } },
+    });
+
+    expect(contexts[0].stopSignal.aborted).toBe(false);
+    expect(contexts[0].signal.aborted).toBe(true);
+  });
+
   it("rejects a duplicate stream id from the same owner without replacing it", () => {
     const { channel, handlers } = createChannel();
     const transport = new TuffMainTransport(channel as any, {} as any);
