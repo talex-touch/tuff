@@ -82,6 +82,8 @@ code: |
 | `items` | `FilterChipItem[]` | `[]` | The chips |
 | `disabled` | `boolean` | `false` | Disables the whole row |
 | `role` | `'toolbar' \| 'tablist'` | `'toolbar'` | ARIA shape; see Interaction Contract |
+| `indicator` | `boolean` | `true` | Paints the active fill as one element that slides between chips; off returns it to each chip |
+| `iconOnly` | `boolean` | `false` | Draws only `iconClass`, moving `label` to `aria-label` and `title`; a chip without an icon keeps its text |
 | `ariaLabel` | `string` | `'Filters'` | Accessible name for the chip row |
 
 ### FilterChipItem
@@ -90,6 +92,7 @@ code: |
 |------|------|------|
 | `value` | `string \| number` | Chip identity |
 | `label` | `string` | Chip text |
+| `iconClass` | `string` | Leading icon class, drawn before the dot and the label; omit to render none |
 | `dot` | `string` | Leading dot colour; omit to render no dot |
 | `count` | `number` | Trailing count badge; omit to render none. **Derive it from your data** |
 | `disabled` | `boolean` | Disables this chip alone |
@@ -114,6 +117,13 @@ code: |
 - With `role="toolbar"` (the default) chips are `aria-pressed` toggles and **moving focus does not change the filter** — activation is explicit.
 - With `role="tablist"` chips become `role="tab"` with `aria-selected` and **selection follows focus**; the host should render the matching `role="tabpanel"` region.
 - Clicking the already-selected chip emits nothing.
+- `indicator` (on by default) paints the active fill as **one** element and moves it to the new chip. The resting look is pixel for pixel what it is with the indicator off; only the travel between two chips differs. Off, the fill returns to each chip.
+- The slider is an absolutely positioned child of the scrolling row, so it **scrolls sideways with the chips** — it measures a chip's `offsetLeft` / `offsetTop`, not viewport coordinates.
+- A position nobody asked to see travelled to is not tweened: the first paint, a rebuilt chip list (a host refetching its options), and any resize — a webfont landing widens the chips — all land rather than slide.
+- With nothing selected the slider is not drawn, rather than parked on chip zero.
+- Under `iconOnly` each chip squares up to a 30px slot (the pill's padding was sized for a word, and a lone glyph would float in the oval) and its `label` moves to `aria-label` and `title`, so assistive tech and hover still get the name. **A chip without an `iconClass` is left alone** and keeps its text — a blank chip is worse than a wordy one.
+- Under `prefers-reduced-motion: reduce` the slider lands without a tween.
+- The no-travel guard lifts only on the frame **after** the new box has been written to the DOM. Lifting it in the same frame re-arms the transition mid-write and the width tweens up from 0, painting a 0-wide fill on first paint — an ordering bug that shipped once, now pinned by `filter-chips.test.ts`.
 - Counts come from the host: the component cannot see your data and never infers them.
 
 ## Best Practices
@@ -122,12 +132,15 @@ code: |
 - Keep the filtering in the host: the chips only say which option is selected, and filtered-out rows should genuinely leave the data rather than being hidden with CSS — a hidden row is still in the accessibility tree and the tab order.
 - Keep the default `role="toolbar"` for plain list filtering; reach for `tablist` only when mutually exclusive panels actually exist.
 - Treat the dot as supplementary. Colour must never be the only carrier of state, so the `label` has to stand on its own.
+- Give every chip an `iconClass` once there are more than two or three: a row of bare words runs together into one sentence, and the icon is what gives each chip a leading edge. The icon is decorative (`aria-hidden`); naming stays with `label`.
+- Reach for `iconOnly` only when the glyphs are recognisable on their own (a star, a brand mark). Keep the words when the icons are abstract category symbols — a chip you can only name on hover is not one you can recognise.
+- Turn `indicator` off only when the host itself moves the chips during its own animation: two travels layered on each other fight. Not wanting motion is not a reason — the system's reduced motion setting already cuts the tween.
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/filter-chips/src/TxFilterChips.vue`.
 - Types: `packages/tuffex/packages/components/src/filter-chips/src/types.ts` exports `FilterChipsProps`, `FilterChipItem`, `FilterChipsRole`, `FilterChipValue`, and `FilterChipsEmits`.
-- **Test coverage:** `packages/tuffex/packages/components/src/filter-chips/__tests__/filter-chips.test.ts` has 11 cases covering chip / dot / count rendering, both ARIA shapes, `v-model` and `change` emission, silence on re-clicking the active chip, roving tabindex including the no-selection fallback, arrow wrapping and disabled skipping, selection-follows-focus in tablist mode, the disabled state, and the chip slot.
+- **Test coverage:** `packages/tuffex/packages/components/src/filter-chips/__tests__/filter-chips.test.ts` has 15 cases covering chip / dot / count rendering, both ARIA shapes, `v-model` and `change` emission, silence on re-clicking the active chip, roving tabindex including the no-selection fallback, arrow wrapping and disabled skipping, selection-follows-focus in tablist mode, the disabled state, the chip slot, and the active-fill slider; `filter-chips-motion.test.ts` adds 3 compiled-style contract cases.
 
 <TuffDocSourceLink />
 
@@ -137,3 +150,6 @@ code: |
 - **Accessibility added:** Upstream ships `aria-pressed` and no keyboard navigation whatsoever. This port adds roving tabindex, arrow keys, `Home` / `End`, and the tablist shape to meet the repository standard.
 - **Upstream defect fixed:** Upstream hardcodes the counts as literal constants that merely happened to match the row count at the time. Here `count` is defined as a host-derived value, and the docs and demos follow that consistently.
 - **Palette:** Hover uses the neutral `--tx-bui-hover` rather than an accent tint — a filter row is paper chrome, not an emphasis element.
+- **Rejected design:** porting `TxTabs`' pointer. That is an inline implementation inside a 900-line component covering line/pill/block/dot/outline × stretch/warp/glide/snap/spring plus vertical layout; a filter row needs the fill to move, which is one look and one motion.
+- **Props declaration:** a runtime object, not `defineProps<FilterChipsProps>()`. The type-only form resolves the interface from `types.ts` at compile time, and the dev server's Vue plugin does not recompile this SFC when *that* file changes — `iconOnly` was added to the interface, vitest (a cold compile) passed, and the running app kept dropping it as an unknown attribute. The runtime object keeps the declaration in the file the compiler watches; `satisfies` pins it to the interface.
+- **Verified coverage:** `filter-chips.test.ts` asserts the runtime props match `FilterChipsProps` key for key; covers the slider taking its box from the active chip and following the selection, drawing nothing when nothing is active, leaving the fill on the chips when `indicator: false`, and taking the no-travel path when the chip list is rebuilt. `filter-chips-motion.test.ts` compiles the style block per BUI rule 2 and asserts both directions: the tween is cut under reduce, one exists by default, and the resting fill does not depend on the animation to be seen.
