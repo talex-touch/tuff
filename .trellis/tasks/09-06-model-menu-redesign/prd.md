@@ -40,3 +40,11 @@ Home 会话界面（HomePage 底部 composer 与 HomeTopBar）共用的模型切
 ## Integration review
 
 两个子任务归档前，父任务做一次整合复查：跨子任务验收逐条勾选，记录到本文件。
+
+## 实现期间标记的后续项（不在本任务范围）
+
+- `TxDropdownSubmenu.onPanelKeydown` 与 `TxContextMenuPanel` 在可编辑目标内仍会劫持 Home / End；两者都不承载输入框，暂不改。
+- `isEditableTarget`（TxDropdownMenu）与 `isTypingTarget`（TxSidebarNav）是两份私有副本；出现第三份时按 code-reuse guide 上提。
+- 虚拟引用（TxContextMenu）的面板在打开状态切换 `unlimitedHeight` true → false 时，`--tx-ba-max-height` 保持 `none` 直到下一次定位（修复前是回落 420px）；子任务 1 检查时标记，未改。
+- 本机 nexus dev server（:3200）的内容 watcher 已停止更新（contents.sqlite 不再刷新），需要 owner 重启 `pnpm -C apps/nexus dev:pure` 才能看到 dropdown-menu 文档的改动。
+- `TxDropdownMenu.focusFirstItem()` 只等一个 `nextTick`，而 TxBaseAnchor 的 clip 在 `animateOpen` 前一直是 `visibility: hidden`，Chromium 会拒绝对隐藏子树 `focus()`；默认下拉「打开即聚焦首项」在真机上大概率不成立（jsdom 忽略 visibility 所以测试仍绿）。需要单独任务：改成等可见后再聚焦，并用真机验证。
