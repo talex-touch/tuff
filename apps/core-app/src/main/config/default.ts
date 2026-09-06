@@ -88,37 +88,11 @@ export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions =
   })
 }
 
-export const AssistantFloatingBallWindowOption: Electron.BrowserWindowConstructorOptions = {
-  title: `${AppName} Assistant`,
+export const AssistantVoiceDockWindowOption: Electron.BrowserWindowConstructorOptions = {
+  title: `${AppName} Assistant VoiceDock`,
   frame: false,
-  width: 56,
-  height: 56,
-  minWidth: 56,
-  minHeight: 56,
-  maxWidth: 72,
-  maxHeight: 72,
-  resizable: false,
-  movable: false,
-  skipTaskbar: true,
-  autoHideMenuBar: true,
-  show: false,
-  transparent: true,
-  hasShadow: true,
-  webPreferences: buildWindowWebPreferences('app', {
-    preload: CORE_APP_PRELOAD_PATH,
-    scrollBounce: true,
-    additionalArguments: buildWindowArgs({
-      touchType: 'assistant',
-      assistantType: 'floating-ball'
-    })
-  })
-}
-
-export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorOptions = {
-  title: `${AppName} Voice Panel`,
-  frame: false,
-  width: 420,
-  height: 260,
+  width: 520,
+  height: 300,
   minWidth: 360,
   minHeight: 220,
   resizable: false,
@@ -133,7 +107,7 @@ export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorO
     scrollBounce: true,
     additionalArguments: buildWindowArgs({
       touchType: 'assistant',
-      assistantType: 'voice-panel'
+      assistantType: 'voice-dock'
     })
   })
 }

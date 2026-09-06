@@ -215,8 +215,7 @@ vi.mock('../../core/touch-window', () => ({
 }))
 
 vi.mock('../../config/default', () => ({
-  AssistantFloatingBallWindowOption: {},
-  AssistantVoicePanelWindowOption: {}
+  AssistantVoiceDockWindowOption: {}
 }))
 
 vi.mock('../../utils/renderer-url', () => ({
@@ -578,7 +577,7 @@ describe('AssistantModule screenshot translation', () => {
     await module.onDestroy({} as never)
   })
 
-  it('reanchors a visible Voice Panel after topology recovery without reopening it and leaves it hidden otherwise', async () => {
+  it('reanchors the expanded VoiceDock after topology recovery without reopening it and leaves it hidden otherwise', async () => {
     const savedSetting = mocks.createEnabledSetting({
       floatingBall: {
         enabled: true,
@@ -600,23 +599,22 @@ describe('AssistantModule screenshot translation', () => {
     }
     await openPanel({ source: 'click' }, {} as HandlerContext)
 
-    const floatingBall = mocks.touchWindows[0]
-    const voicePanel = mocks.touchWindows[1]
+    const voiceDock = mocks.touchWindows[0]
     const listener = mocks.screenListeners.get('display-metrics-changed')
-    if (!floatingBall || !voicePanel || !listener) {
-      throw new Error('Visible Voice Panel topology recovery prerequisites were not initialized')
+    if (!voiceDock || !listener) {
+      throw new Error('Visible VoiceDock topology recovery prerequisites were not initialized')
     }
 
-    vi.mocked(floatingBall.window.getBounds).mockReturnValue({
+    vi.mocked(voiceDock.window.getBounds).mockReturnValue({
       x: 744,
       y: 444,
       width: 56,
       height: 56
     })
-    vi.mocked(voicePanel.window.isVisible).mockReturnValue(true)
-    vi.mocked(voicePanel.window.setBounds).mockClear()
-    vi.mocked(voicePanel.window.show).mockClear()
-    vi.mocked(voicePanel.window.focus).mockClear()
+    vi.mocked(voiceDock.window.isVisible).mockReturnValue(true)
+    vi.mocked(voiceDock.window.setBounds).mockClear()
+    vi.mocked(voiceDock.window.show).mockClear()
+    vi.mocked(voiceDock.window.focus).mockClear()
     mocks.broadcastToWindow.mockClear()
     mocks.getDisplayNearestPoint.mockReturnValue({
       workArea: { x: 0, y: 0, width: 800, height: 500 }
@@ -624,26 +622,26 @@ describe('AssistantModule screenshot translation', () => {
 
     await listener()
 
-    expect(mocks.touchWindows).toHaveLength(2)
-    expect(voicePanel.window.setBounds).toHaveBeenCalledWith({
-      x: 380,
-      y: 240,
-      width: 420,
-      height: 260
+    expect(mocks.touchWindows).toHaveLength(1)
+    expect(voiceDock.window.setBounds).toHaveBeenCalledWith({
+      x: 140,
+      y: 176,
+      width: 520,
+      height: 300
     })
-    expect(voicePanel.window.show).not.toHaveBeenCalled()
-    expect(voicePanel.window.focus).not.toHaveBeenCalled()
+    expect(voiceDock.window.show).not.toHaveBeenCalled()
+    expect(voiceDock.window.focus).not.toHaveBeenCalled()
     expect(mocks.broadcastToWindow).not.toHaveBeenCalled()
 
-    vi.mocked(voicePanel.window.setBounds).mockClear()
-    vi.mocked(voicePanel.window.isVisible).mockReturnValue(false)
+    vi.mocked(voiceDock.window.setBounds).mockClear()
+    vi.mocked(voiceDock.window.isVisible).mockReturnValue(false)
 
     await listener()
 
-    expect(mocks.touchWindows).toHaveLength(2)
-    expect(voicePanel.window.setBounds).not.toHaveBeenCalled()
-    expect(voicePanel.window.show).not.toHaveBeenCalled()
-    expect(voicePanel.window.focus).not.toHaveBeenCalled()
+    expect(mocks.touchWindows).toHaveLength(1)
+    expect(voiceDock.window.setBounds).not.toHaveBeenCalled()
+    expect(voiceDock.window.show).not.toHaveBeenCalled()
+    expect(voiceDock.window.focus).not.toHaveBeenCalled()
     expect(mocks.broadcastToWindow).not.toHaveBeenCalled()
 
     await module.onDestroy({} as never)
@@ -691,7 +689,7 @@ describe('AssistantModule screenshot translation', () => {
     vi.useRealTimers()
   })
 
-  it('opens provider channels from the registered Voice Panel recovery event', async () => {
+  it('opens provider channels from the registered VoiceDock recovery event', async () => {
     const mainWindow = {
       isDestroyed: vi.fn(() => false),
       isMinimized: vi.fn(() => true),
@@ -711,10 +709,14 @@ describe('AssistantModule screenshot translation', () => {
       throw new Error('openVoicePanel handler was not registered')
     }
     await openVoicePanel({ source: 'provider-recovery' }, {} as HandlerContext)
-    const voicePanel = mocks.touchWindows[mocks.touchWindows.length - 1]
-    if (!voicePanel) {
-      throw new Error('Voice Panel was not opened')
+    const voiceDock = mocks.touchWindows[mocks.touchWindows.length - 1]
+    if (!voiceDock) {
+      throw new Error('VoiceDock was not opened')
     }
+    expect(mocks.touchWindows).toHaveLength(1)
+
+    vi.mocked(voiceDock.window.hide).mockClear()
+    vi.mocked(voiceDock.window.setBounds).mockClear()
 
     const result = await handler(undefined, {} as HandlerContext)
 
@@ -730,12 +732,14 @@ describe('AssistantModule screenshot translation', () => {
     expect(mocks.sendTo.mock.calls[0]?.[1]?.toEventName()).toBe(
       AppEvents.window.navigate.toEventName()
     )
-    expect(voicePanel.window.hide).toHaveBeenCalledTimes(1)
+    expect(voiceDock.window.hide).not.toHaveBeenCalled()
+    expect(voiceDock.window.setBounds).toHaveBeenCalledWith(
+      expect.objectContaining({ width: 56, height: 56 })
+    )
 
     await module.onDestroy({} as never)
   })
-
-  it('keeps the Voice Panel available when Intelligence navigation delivery fails', async () => {
+  it('keeps the VoiceDock available when Intelligence navigation delivery fails', async () => {
     mocks.sendTo.mockRejectedValueOnce(new Error('renderer transport unavailable'))
     const mainWindow = {
       isDestroyed: vi.fn(() => false),
@@ -756,15 +760,16 @@ describe('AssistantModule screenshot translation', () => {
       throw new Error('openVoicePanel handler was not registered')
     }
     await openVoicePanel({ source: 'provider-recovery' }, {} as HandlerContext)
-    const voicePanel = mocks.touchWindows[mocks.touchWindows.length - 1]
-    if (!voicePanel) {
-      throw new Error('Voice Panel was not opened')
+    const voiceDock = mocks.touchWindows[mocks.touchWindows.length - 1]
+    if (!voiceDock) {
+      throw new Error('VoiceDock was not opened')
     }
+    expect(mocks.touchWindows).toHaveLength(1)
 
     const result = await handler(undefined, {} as HandlerContext)
 
     expect(result).toBe(false)
-    expect(voicePanel.window.hide).not.toHaveBeenCalled()
+    expect(voiceDock.window.hide).not.toHaveBeenCalled()
 
     await module.onDestroy({} as never)
   })

@@ -200,6 +200,10 @@ export const AssistantEvents = {
       .module("voice-panel")
       .event("opened")
       .define<{ source?: string }, void>(),
+    panelClosed: defineEvent("assistant")
+      .module("voice-panel")
+      .event("closed")
+      .define<void, void>(),
     closePanel: defineEvent("assistant")
       .module("voice-panel")
       .event("close")

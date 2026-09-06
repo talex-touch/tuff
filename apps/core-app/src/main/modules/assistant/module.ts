@@ -43,10 +43,7 @@ import {
   type Rectangle,
   type SaveDialogOptions
 } from 'electron'
-import {
-  AssistantFloatingBallWindowOption,
-  AssistantVoicePanelWindowOption
-} from '../../config/default'
+import { AssistantVoiceDockWindowOption } from '../../config/default'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
 import { createLogger } from '../../utils/logger'
@@ -92,8 +89,8 @@ type ScreenshotUnavailableCode =
 const assistantLog = createLogger('Assistant')
 const FLOATING_BALL_DEFAULT_SIZE = 56
 const FLOATING_BALL_DEFAULT_PADDING = 24
-const VOICE_PANEL_WIDTH = 420
-const VOICE_PANEL_HEIGHT = 260
+const VOICE_DOCK_WIDTH = 520
+const VOICE_DOCK_HEIGHT = 300
 const ASSISTANT_DEFAULT_NAME = '阿洛 aler'
 const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
@@ -238,17 +235,16 @@ export class AssistantModule extends BaseModule {
   private mainWindow: BrowserWindow | null = null
   private transportDisposers: Array<() => void> = []
   private unsubscribeAppSetting: (() => void) | null = null
-  private floatingBallWindow: TouchWindow | null = null
-  private floatingBallWindowPending: Promise<TouchWindow> | null = null
-  private voicePanelWindow: TouchWindow | null = null
-  private voicePanelWindowPending: Promise<TouchWindow> | null = null
+  private voiceDockWindow: TouchWindow | null = null
+  private voiceDockWindowPending: Promise<TouchWindow> | null = null
+  private voiceDockExpanded = false
   private voicePanelAutoHideSuppressionDepth = 0
   private voicePanelAutoHideResumeTimer: NodeJS.Timeout | null = null
   private pendingPosition: FloatingBallPosition | null = null
   private positionSaveTimer: NodeJS.Timeout | null = null
   private readonly handleDisplayTopologyChange = (): void => {
-    const floatingWindow = this.floatingBallWindow
-    if (!floatingWindow || floatingWindow.window.isDestroyed()) {
+    const dock = this.voiceDockWindow
+    if (!dock || dock.window.isDestroyed()) {
       return
     }
 
@@ -258,13 +254,13 @@ export class AssistantModule extends BaseModule {
       return
     }
 
-    this.applyFloatingBallBounds(floatingWindow, floatingSetting)
-
-    const voiceWindow = this.voicePanelWindow
-    if (!voiceWindow || voiceWindow.window.isDestroyed() || !voiceWindow.window.isVisible()) {
+    if (this.voiceDockExpanded) {
+      if (!dock.window.isVisible()) return
+      this.applyVoiceDockBounds(dock, dock.window.getBounds())
       return
     }
-    this.applyVoicePanelBounds(voiceWindow, floatingWindow.window.getBounds())
+
+    this.applyFloatingBallBounds(dock, floatingSetting)
   }
 
   constructor() {
@@ -299,6 +295,7 @@ export class AssistantModule extends BaseModule {
     }
 
     this.pendingPosition = null
+    this.voiceDockExpanded = false
     this.voicePanelAutoHideSuppressionDepth = 0
     this.unsubscribeAppSetting?.()
     this.unsubscribeAppSetting = null
@@ -314,8 +311,7 @@ export class AssistantModule extends BaseModule {
     this.transport = null
     this.mainWindow = null
 
-    this.destroyVoicePanelWindow()
-    this.destroyFloatingBallWindow()
+    this.destroyVoiceDockWindow()
   }
 
   private setupTransport(ctx: ModuleInitContext<TalexEvents>): void {
@@ -356,7 +352,7 @@ export class AssistantModule extends BaseModule {
 
     this.transportDisposers.push(
       this.transport.on(AssistantEvents.voice.closePanel, () => {
-        this.hideVoicePanel()
+        this.closeVoicePanel()
       })
     )
 
@@ -610,23 +606,23 @@ export class AssistantModule extends BaseModule {
   private async applySettingSnapshot(setting: AppSetting): Promise<void> {
     if (!this.isAssistantEnabled(setting)) {
       this.hideVoicePanel()
-      this.destroyVoicePanelWindow()
-      this.destroyFloatingBallWindow()
+      this.destroyVoiceDockWindow()
       return
     }
 
     const floatingBall = this.getFloatingBallSetting(setting)
     if (!floatingBall.enabled) {
       this.hideVoicePanel()
-      this.destroyVoicePanelWindow()
-      this.destroyFloatingBallWindow()
+      this.destroyVoiceDockWindow()
       return
     }
 
-    const floatingWindow = await this.ensureFloatingBallWindow(floatingBall)
-    this.applyFloatingBallBounds(floatingWindow, floatingBall)
-    if (!floatingWindow.window.isVisible()) {
-      floatingWindow.window.showInactive()
+    const dock = await this.ensureVoiceDockWindow()
+    if (!this.voiceDockExpanded) {
+      this.applyFloatingBallBounds(dock, floatingBall)
+    }
+    if (!dock.window.isVisible()) {
+      dock.window.showInactive()
     }
   }
 
@@ -685,94 +681,48 @@ export class AssistantModule extends BaseModule {
         error: error instanceof Error ? error.message : 'Screenshot session is unavailable.'
       }
     } finally {
-      this.restoreVoicePanelWindow()
+      this.restoreVoiceDockWindow()
     }
   }
 
-  private restoreVoicePanelWindow(): void {
-    const voiceWindow = this.voicePanelWindow?.window
-    if (!voiceWindow || voiceWindow.isDestroyed()) return
-    if (!voiceWindow.isVisible()) voiceWindow.show()
-    voiceWindow.focus()
+  private restoreVoiceDockWindow(): void {
+    const dockWindow = this.voiceDockWindow?.window
+    if (!dockWindow || dockWindow.isDestroyed()) return
+    if (!dockWindow.isVisible()) dockWindow.show()
+    dockWindow.focus()
   }
 
-  private async ensureFloatingBallWindow(setting: FloatingBallSetting): Promise<TouchWindow> {
-    if (this.floatingBallWindow && !this.floatingBallWindow.window.isDestroyed()) {
-      return this.floatingBallWindow
+  private async ensureVoiceDockWindow(): Promise<TouchWindow> {
+    if (this.voiceDockWindow && !this.voiceDockWindow.window.isDestroyed()) {
+      return this.voiceDockWindow
     }
-    if (this.floatingBallWindowPending) {
-      return await this.floatingBallWindowPending
+    if (this.voiceDockWindowPending) {
+      return await this.voiceDockWindowPending
     }
 
-    const pending = this.createFloatingBallWindow(setting)
-    this.floatingBallWindowPending = pending
+    const pending = this.createVoiceDockWindow()
+    this.voiceDockWindowPending = pending
     try {
       return await pending
     } finally {
-      if (this.floatingBallWindowPending === pending) {
-        this.floatingBallWindowPending = null
+      if (this.voiceDockWindowPending === pending) {
+        this.voiceDockWindowPending = null
       }
     }
   }
 
-  private async createFloatingBallWindow(setting: FloatingBallSetting): Promise<TouchWindow> {
+  private async createVoiceDockWindow(): Promise<TouchWindow> {
     const touchWindow = new TouchWindow({
-      ...AssistantFloatingBallWindowOption,
-      width: setting.size,
-      height: setting.size,
-      minWidth: setting.size,
-      minHeight: setting.size,
-      maxWidth: setting.size,
-      maxHeight: setting.size
+      ...AssistantVoiceDockWindowOption,
+      width: VOICE_DOCK_WIDTH,
+      height: VOICE_DOCK_HEIGHT,
+      minWidth: FLOATING_BALL_DEFAULT_SIZE,
+      minHeight: FLOATING_BALL_DEFAULT_SIZE,
+      maxWidth: VOICE_DOCK_WIDTH,
+      maxHeight: VOICE_DOCK_HEIGHT
     })
 
-    // Floating ball stays visible on every macOS Space and full-screen app
-    // so the voice assistant is always one click away regardless of context.
-    touchWindow.window.setAlwaysOnTop(true, 'floating')
-    touchWindow.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-    touchWindow.window.setFullScreenable(false)
-    touchWindow.window.setSkipTaskbar(true)
-
-    touchWindow.window.on('closed', () => {
-      if (this.floatingBallWindow === touchWindow) {
-        this.floatingBallWindow = null
-      }
-      this.hideVoicePanel()
-    })
-
-    await this.loadAssistantRenderer(touchWindow)
-    this.floatingBallWindow = touchWindow
-    return touchWindow
-  }
-
-  private async ensureVoicePanelWindow(): Promise<TouchWindow> {
-    if (this.voicePanelWindow && !this.voicePanelWindow.window.isDestroyed()) {
-      return this.voicePanelWindow
-    }
-    if (this.voicePanelWindowPending) {
-      return await this.voicePanelWindowPending
-    }
-
-    const pending = this.createVoicePanelWindow()
-    this.voicePanelWindowPending = pending
-    try {
-      return await pending
-    } finally {
-      if (this.voicePanelWindowPending === pending) {
-        this.voicePanelWindowPending = null
-      }
-    }
-  }
-
-  private async createVoicePanelWindow(): Promise<TouchWindow> {
-    const touchWindow = new TouchWindow({
-      ...AssistantVoicePanelWindowOption,
-      width: VOICE_PANEL_WIDTH,
-      height: VOICE_PANEL_HEIGHT
-    })
-
-    // Voice panel mirrors floating-ball visibility: always accessible across
-    // all Spaces and full-screen apps.
+    // VoiceDock stays visible on every macOS Space and full-screen app while compact.
     touchWindow.window.setAlwaysOnTop(true, 'floating')
     touchWindow.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
     touchWindow.window.setFullScreenable(false)
@@ -782,19 +732,24 @@ export class AssistantModule extends BaseModule {
       if (this.voicePanelAutoHideSuppressionDepth > 0) {
         return
       }
-      if (!touchWindow.window.isDestroyed() && touchWindow.window.isVisible()) {
-        this.hideVoicePanel()
+      if (
+        this.voiceDockExpanded &&
+        !touchWindow.window.isDestroyed() &&
+        touchWindow.window.isVisible()
+      ) {
+        this.collapseVoicePanel()
       }
     })
 
     touchWindow.window.on('closed', () => {
-      if (this.voicePanelWindow === touchWindow) {
-        this.voicePanelWindow = null
+      if (this.voiceDockWindow === touchWindow) {
+        this.voiceDockWindow = null
+        this.voiceDockExpanded = false
       }
     })
 
     await this.loadAssistantRenderer(touchWindow)
-    this.voicePanelWindow = touchWindow
+    this.voiceDockWindow = touchWindow
     return touchWindow
   }
 
@@ -834,38 +789,30 @@ export class AssistantModule extends BaseModule {
     window.window.setOpacity(setting.opacity)
   }
 
-  private applyVoicePanelBounds(window: TouchWindow, anchorBounds: Rectangle): void {
+  private applyVoiceDockBounds(window: TouchWindow, anchorBounds: Rectangle): void {
     const display = screen.getDisplayNearestPoint({
       x: anchorBounds.x + anchorBounds.width / 2,
       y: anchorBounds.y + anchorBounds.height / 2
     })
     const workArea = display.workArea
-    const x = clamp(
-      anchorBounds.x + anchorBounds.width + 12,
-      workArea.x,
-      workArea.x + workArea.width - VOICE_PANEL_WIDTH
-    )
-    const y = clamp(
-      anchorBounds.y - 24,
-      workArea.y,
-      workArea.y + workArea.height - VOICE_PANEL_HEIGHT
-    )
+    const x = Math.round(workArea.x + (workArea.width - VOICE_DOCK_WIDTH) / 2)
+    const y = workArea.y + workArea.height - VOICE_DOCK_HEIGHT - 24
 
     window.window.setBounds({
-      x,
-      y,
-      width: VOICE_PANEL_WIDTH,
-      height: VOICE_PANEL_HEIGHT
+      x: clamp(x, workArea.x, workArea.x + Math.max(0, workArea.width - VOICE_DOCK_WIDTH)),
+      y: clamp(y, workArea.y, workArea.y + Math.max(0, workArea.height - VOICE_DOCK_HEIGHT)),
+      width: VOICE_DOCK_WIDTH,
+      height: VOICE_DOCK_HEIGHT
     })
   }
 
   private updateFloatingBallPosition(x: number, y: number): void {
-    const floatingWindow = this.floatingBallWindow
-    if (!floatingWindow || floatingWindow.window.isDestroyed()) {
+    const dock = this.voiceDockWindow
+    if (!dock || dock.window.isDestroyed() || this.voiceDockExpanded) {
       return
     }
 
-    const bounds = floatingWindow.window.getBounds()
+    const bounds = dock.window.getBounds()
     const display = screen.getDisplayNearestPoint({ x: Math.round(x), y: Math.round(y) })
     const workArea = display.workArea
     const maxX = workArea.x + workArea.width - bounds.width
@@ -873,7 +820,7 @@ export class AssistantModule extends BaseModule {
     const nextX = clamp(Math.round(x), workArea.x, maxX)
     const nextY = clamp(Math.round(y), workArea.y, maxY)
 
-    floatingWindow.window.setPosition(nextX, nextY)
+    dock.window.setPosition(nextX, nextY)
     this.pendingPosition = { x: nextX, y: nextY }
     this.schedulePositionPersist()
   }
@@ -912,22 +859,21 @@ export class AssistantModule extends BaseModule {
       return
     }
 
-    const floatingWindow = await this.ensureFloatingBallWindow(floatingSetting)
-    const voiceWindow = await this.ensureVoicePanelWindow()
-
-    const anchorBounds = floatingWindow.window.getBounds()
+    const dock = await this.ensureVoiceDockWindow()
+    const anchorBounds = dock.window.getBounds()
 
     this.beginVoicePanelAutoHideSuppression()
     try {
-      this.applyVoicePanelBounds(voiceWindow, anchorBounds)
+      this.voiceDockExpanded = true
+      this.applyVoiceDockBounds(dock, anchorBounds)
 
-      if (!voiceWindow.window.isVisible()) {
-        voiceWindow.window.show()
+      if (!dock.window.isVisible()) {
+        dock.window.show()
       }
-      voiceWindow.window.focus()
+      dock.window.focus()
 
       if (this.transport) {
-        this.transport.broadcastToWindow(voiceWindow.window.id, AssistantEvents.voice.panelOpened, {
+        this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.panelOpened, {
           source
         })
       }
@@ -937,10 +883,29 @@ export class AssistantModule extends BaseModule {
   }
 
   private hideVoicePanel(): void {
-    if (!this.voicePanelWindow || this.voicePanelWindow.window.isDestroyed()) {
+    const dockWindow = this.voiceDockWindow?.window
+    if (!dockWindow || dockWindow.isDestroyed()) {
       return
     }
-    this.voicePanelWindow.window.hide()
+    dockWindow.hide()
+  }
+
+  private collapseVoicePanel(): void {
+    const dock = this.voiceDockWindow
+    if (!dock || dock.window.isDestroyed() || !this.voiceDockExpanded) {
+      return
+    }
+
+    this.voiceDockExpanded = false
+    this.applyFloatingBallBounds(dock, this.getFloatingBallSetting(this.readAppSetting()))
+    if (!dock.window.isVisible()) {
+      dock.window.showInactive()
+    }
+    this.transport?.broadcastToWindow(dock.window.id, AssistantEvents.voice.panelClosed, undefined)
+  }
+
+  private closeVoicePanel(): void {
+    this.collapseVoicePanel()
   }
 
   private async openIntelligenceSettings(): Promise<boolean> {
@@ -959,7 +924,7 @@ export class AssistantModule extends BaseModule {
       await transport.sendTo(mainWindow.webContents, AppEvents.window.navigate, {
         path: '/intelligence/channels'
       })
-      this.hideVoicePanel()
+      this.collapseVoicePanel()
       return true
     } catch (error) {
       assistantLog.warn('Failed to open Intelligence settings from Assistant', { error })
@@ -1004,7 +969,7 @@ export class AssistantModule extends BaseModule {
 
     const source = typeof rawSource === 'string' && rawSource.trim() ? rawSource.trim() : 'voice'
 
-    this.hideVoicePanel()
+    this.collapseVoicePanel()
     const curScreen = windowManager.getCurScreen()
     const currentWindow = windowManager.current
     if (currentWindow) {
@@ -1205,9 +1170,10 @@ export class AssistantModule extends BaseModule {
         ownedTempArtifactUrl = captureResult.tfileUrl
       }
 
-      const ownerWindow = this.voicePanelWindow?.window.isDestroyed()
-        ? undefined
-        : this.voicePanelWindow?.window
+      const ownerWindow =
+        this.voiceDockExpanded && this.voiceDockWindow && !this.voiceDockWindow.window.isDestroyed()
+          ? this.voiceDockWindow.window
+          : undefined
       const saveOptions: SaveDialogOptions = {
         title: 'Save Screenshot',
         defaultPath: `tuff-screenshot-${new Date().toISOString().replace(/[:.]/g, '-')}.png`,
@@ -1447,20 +1413,13 @@ export class AssistantModule extends BaseModule {
     }
   }
 
-  private destroyFloatingBallWindow(): void {
-    if (!this.floatingBallWindow || this.floatingBallWindow.window.isDestroyed()) {
+  private destroyVoiceDockWindow(): void {
+    if (!this.voiceDockWindow || this.voiceDockWindow.window.isDestroyed()) {
       return
     }
-    this.floatingBallWindow.window.destroy()
-    this.floatingBallWindow = null
-  }
-
-  private destroyVoicePanelWindow(): void {
-    if (!this.voicePanelWindow || this.voicePanelWindow.window.isDestroyed()) {
-      return
-    }
-    this.voicePanelWindow.window.destroy()
-    this.voicePanelWindow = null
+    this.voiceDockWindow.window.destroy()
+    this.voiceDockWindow = null
+    this.voiceDockExpanded = false
   }
 }
 

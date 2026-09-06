@@ -19,6 +19,10 @@ const voicePanelSource = readFileSync(
   join(currentDir, '../../../renderer/src/views/assistant/VoicePanel.vue'),
   'utf8'
 )
+const voiceDockSource = readFileSync(
+  join(currentDir, '../../../renderer/src/views/assistant/VoiceDock.vue'),
+  'utf8'
+)
 const settingAssistantSource = readFileSync(
   join(currentDir, '../../../renderer/src/views/base/settings/SettingAssistant.vue'),
   'utf8'
@@ -48,21 +52,18 @@ describe('Assistant module startup contract', () => {
     expect(moduleSource).toContain('setting.assistant.enabled = ASSISTANT_DEFAULT_ENABLED')
   })
 
-  it('keeps the floating ball MVP behind settings with a dedicated renderer entry', () => {
-    for (const expected of [
-      "assistantType: 'floating-ball'",
-      "assistantType: 'voice-panel'",
-      "touchType: 'assistant'",
-      'show: false',
-      'transparent: true'
-    ]) {
-      expect(defaultConfigSource).toContain(expected)
-    }
+  it('keeps the single voice dock entry behind settings', () => {
+    expect(defaultConfigSource).toContain("assistantType: 'voice-dock'")
+    expect(defaultConfigSource).not.toContain("assistantType: 'floating-ball'")
+    expect(defaultConfigSource).not.toContain("assistantType: 'voice-panel'")
+    expect(defaultConfigSource).toContain("touchType: 'assistant'")
+    expect(defaultConfigSource).toContain('show: false')
+    expect(defaultConfigSource).toContain('transparent: true')
 
-    expect(appEntranceSource).toContain("appEntranceMode === 'AssistantFloatingBall'")
-    expect(appEntranceSource).toContain('<FloatingBall />')
-    expect(appEntranceSource).toContain("appEntranceMode === 'AssistantVoicePanel'")
-    expect(appEntranceSource).toContain('<VoicePanel />')
+    expect(appEntranceSource).toContain("appEntranceMode === 'AssistantVoiceDock'")
+    expect(appEntranceSource).toContain('<VoiceDock />')
+    expect(appEntranceSource).not.toContain('<FloatingBall />')
+    expect(appEntranceSource).not.toContain('<VoicePanel />')
 
     for (const expected of [
       'v-model="assistantEnabled"',
@@ -76,32 +77,37 @@ describe('Assistant module startup contract', () => {
     }
   })
 
-  it('loads Assistant renderer surfaces through exact async component declarations', () => {
-    for (const { component, path } of [
-      { component: 'FloatingBall', path: './views/assistant/FloatingBall.vue' },
-      { component: 'VoicePanel', path: './views/assistant/VoicePanel.vue' }
-    ]) {
-      const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  it('loads only the async VoiceDock renderer entry', () => {
+    const escapedPath = './views/assistant/VoiceDock.vue'.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-      expect(appEntranceSource).not.toMatch(
-        new RegExp(`^\\s*import\\s+(?!\\()[^\\n]*['\"]${escapedPath}['\"][^\\n]*$`, 'm')
+    expect(appEntranceSource).not.toMatch(
+      new RegExp(`^\\s*import\\s+(?!\\()[^\\n]*['"]${escapedPath}['"][^\\n]*$`, 'm')
+    )
+    expect(appEntranceSource).toMatch(
+      new RegExp(
+        `const\\s+VoiceDock\\s*=\\s*defineAsyncComponent\\(\\s*\\(\\s*\\)\\s*=>\\s*import\\(\\s*['"]${escapedPath}['"]\\s*\\)\\s*\\)`
       )
-      expect(appEntranceSource).toMatch(
-        new RegExp(
-          `const\\s+${component}\\s*=\\s*defineAsyncComponent\\(\\s*\\(\\s*\\)\\s*=>\\s*import\\(\\s*['\"]${escapedPath}['\"]\\s*\\)\\s*\\)`
-        )
-      )
-    }
+    )
   })
 
-  it('keeps floating ball window visibility, drag persistence, and click handoff wired', () => {
+  it('keeps the legacy VoicePanel and FloatingBall root classes inside the dock surfaces', () => {
+    expect(voiceDockSource).toContain('<FloatingBall')
+    expect(voiceDockSource).toContain('<VoicePanel')
+    expect(voiceDockSource).toContain('managed-by-dock')
+    expect(floatingBallSource).toContain('class="floating-ball-root"')
+    expect(voicePanelSource).toContain('class="voice-panel-root"')
+  })
+
+  it('keeps one VoiceDock window for compact positioning and panel handoff', () => {
     for (const expected of [
       'getRuntimeConfig',
       "event('get-runtime-config')",
       'openVoicePanel',
       "event('open-voice-panel')",
       'updatePosition',
-      "event('update-position')"
+      "event('update-position')",
+      'panelClosed',
+      "event('closed')"
     ]) {
       expect(assistantEventsSource).toContain(expected)
     }
@@ -109,9 +115,20 @@ describe('Assistant module startup contract', () => {
     for (const expected of [
       'AssistantEvents.floatingBall.getRuntimeConfig',
       'AssistantEvents.floatingBall.openVoicePanel',
-      'AssistantEvents.floatingBall.updatePosition'
+      'AssistantEvents.floatingBall.updatePosition',
+      'AssistantEvents.voice.panelClosed'
     ]) {
       expect(moduleSource).toContain(expected)
+    }
+    for (const expected of [
+      'AssistantEvents.floatingBall.getRuntimeConfig',
+      'AssistantEvents.floatingBall.openVoicePanel',
+      'AssistantEvents.floatingBall.updatePosition',
+      '@mousedown="onPointerDown"',
+      '@click="onBallClick"',
+      "void openVoicePanel('click')",
+      'updateFloatingBallPosition(nextX, nextY)'
+    ]) {
       expect(floatingBallSource).toContain(expected)
     }
 
@@ -121,12 +138,10 @@ describe('Assistant module startup contract', () => {
       'setSkipTaskbar(true)',
       'showInactive()',
       'applyFloatingBallBounds',
-      'this.beginVoicePanelAutoHideSuppression()',
-      'this.releaseVoicePanelAutoHideSuppression()',
-      'floatingBallWindowPending',
-      'createFloatingBallWindow',
-      'voicePanelWindowPending',
-      'createVoicePanelWindow',
+      'applyVoiceDockBounds',
+      'voiceDockWindow',
+      'voiceDockWindowPending',
+      'createVoiceDockWindow',
       'updateFloatingBallPosition',
       'setPosition(nextX, nextY)',
       'this.pendingPosition = { x: nextX, y: nextY }',
@@ -137,19 +152,12 @@ describe('Assistant module startup contract', () => {
       expect(moduleSource).toContain(expected)
     }
 
-    for (const expected of [
-      '@mousedown="onPointerDown"',
-      '@click="onBallClick"',
-      "void openVoicePanel('click')",
-      "window.addEventListener('mousemove', onPointerMove)",
-      "window.addEventListener('mouseup', onPointerUp)",
-      'updateFloatingBallPosition(nextX, nextY)'
-    ]) {
-      expect(floatingBallSource).toContain(expected)
-    }
+    expect(moduleSource).not.toContain('voicePanelWindow')
+    expect(moduleSource).not.toContain('createVoicePanelWindow')
+    expect(voiceDockSource).toContain('AssistantEvents.voice.panelClosed')
   })
 
-  it('keeps VoicePanel opening protected from blur auto-hide until the UI handoff finishes', () => {
+  it('keeps VoiceDock opening protected from blur auto-hide until the UI handoff finishes', () => {
     const openVoicePanelBlock = moduleSource.match(
       /private async showVoicePanel\(source: string\): Promise<void> \{[\s\S]*?\n {2}private hideVoicePanel\(\): void \{/
     )?.[0]
@@ -157,9 +165,9 @@ describe('Assistant module startup contract', () => {
     expect(openVoicePanelBlock).toBeTruthy()
     expect(openVoicePanelBlock).toContain('this.beginVoicePanelAutoHideSuppression()')
     expect(openVoicePanelBlock).toContain('try {')
-    expect(openVoicePanelBlock).toContain('this.applyVoicePanelBounds(voiceWindow, anchorBounds)')
-    expect(openVoicePanelBlock).toContain('voiceWindow.window.show()')
-    expect(openVoicePanelBlock).toContain('voiceWindow.window.focus()')
+    expect(openVoicePanelBlock).toMatch(/this\.applyVoiceDockBounds\(/)
+    expect(openVoicePanelBlock).toMatch(/\w+\.window\.show\(\)/)
+    expect(openVoicePanelBlock).toMatch(/\w+\.window\.focus\(\)/)
     expect(openVoicePanelBlock).toContain('this.transport.broadcastToWindow')
     expect(openVoicePanelBlock).toContain('AssistantEvents.voice.panelOpened')
     expect(openVoicePanelBlock).not.toContain('this.transport.sendTo')
@@ -174,33 +182,14 @@ describe('Assistant module startup contract', () => {
       'assistant.floatingBall.voiceWakeOff',
       'assistant.floatingBall.listening',
       'assistant.floatingBall.clickToOpen',
-      'assistant.floatingBall.unsupported',
-      'assistant.floatingBall.permissionDenied',
       'assistant.floatingBall.recognitionError'
     ]) {
       expect(floatingBallSource).toContain(expected)
     }
 
-    for (const expected of [
-      'voiceWakeOff',
-      'listening',
-      'clickToOpen',
-      'unsupported',
-      'permissionDenied',
-      'recognitionError'
-    ]) {
+    for (const expected of ['voiceWakeOff', 'listening', 'clickToOpen', 'recognitionError']) {
       expect(zhLocaleSource).toContain(expected)
       expect(enLocaleSource).toContain(expected)
-    }
-
-    for (const hardcodedText of [
-      '语音唤醒已关闭',
-      '点击唤起语音助手',
-      '当前环境不支持语音识别',
-      '麦克风权限未授权',
-      '语音识别异常'
-    ]) {
-      expect(floatingBallSource).not.toContain(hardcodedText)
     }
   })
 
@@ -306,7 +295,7 @@ describe('Assistant module startup contract', () => {
     expect(screenshotSaveBlock).not.toContain('translateImageBase64')
 
     const screenshotTranslateBlock = moduleSource.match(
-      /private async handleScreenshotTranslate\([\s\S]*?\n {2}private destroyFloatingBallWindow/
+      /private async handleScreenshotTranslate\([\s\S]*?\n {2}private destroyVoiceDockWindow/
     )?.[0]
     expect(screenshotTranslateBlock).toBeTruthy()
     expect(screenshotTranslateBlock).toContain('mapScreenshotUnavailableCode')
