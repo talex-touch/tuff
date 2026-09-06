@@ -12,7 +12,7 @@
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-09-05",
   "completedAt": null,
-  "branch": null,
+  "branch": "feature/clipboard-layout-shell",
   "base_branch": "master",
   "worktree_path": null,
   "commit": null,
@@ -22,5 +22,9 @@
   "parent": "09-05-clipboard-history-detail-relayout",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "合并 PR #1879 后归档。",
+    "blocker": "无阻塞。",
+    "evidence": "e4dc92995 / a4f917ee7；clipboard-shapes.test.ts 38 例覆盖前缀表与「高熵但无前缀不误报」的负控制，插件 112 tests 绿。"
+  }
 }

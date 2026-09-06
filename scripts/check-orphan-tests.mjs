@@ -74,6 +74,11 @@ export const COVERAGE = [
     command: 'package-name: tuff-intelligence',
   },
   {
+    root: 'packages/tuff-voice',
+    workflow: '.github/workflows/package-tuff-voice-ci.yml',
+    command: 'package-name: tuff-voice',
+  },
+  {
     root: 'packages/unplugin-export-plugin',
     workflow: '.github/workflows/package-unplugin-ci.yml',
     command: 'test-command: pnpm test',

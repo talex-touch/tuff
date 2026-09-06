@@ -1,0 +1,45 @@
+name: Tuff Voice Package CI
+
+# packages/tuff-voice arrived with the Doubao and Bailian providers and shipped a
+# test suite that no workflow ran — check:orphan-tests caught it. Its protocol
+# encoders are the part of voice dictation that talks to a remote provider, so a
+# regression here is invisible locally and expensive in production.
+#
+# Paths mirror the sibling package workflows.
+
+on:
+  pull_request:
+    paths:
+      - "packages/tuff-voice/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/package-tuff-voice-ci.yml"
+      - ".github/workflows/package-ci.yml"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "packages/tuff-voice/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/package-tuff-voice-ci.yml"
+      - ".github/workflows/package-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: tuff-voice
+      package-path: packages/tuff-voice
+      run-lint: true
+      lint-command: pnpm lint
+      run-test: true
+      test-command: pnpm test
+      run-typecheck: true
+      typecheck-command: pnpm typecheck
+      # No build script: this package is consumed from source by the main process.
+      run-build: false
