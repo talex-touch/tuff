@@ -42,13 +42,55 @@ declare global {
 }
 
 /**
+ * Reads the window role the preload published over the contextBridge.
+ *
+ * Undefined in the preload's own realm — `window.api` is what it exposes to the main world, not
+ * something it can read back — so callers must keep the argv path as a fallback.
+ */
+function readBridgedWindowRole(): WindowRole | undefined {
+  const api = (window as unknown as { api?: { getStartupContextSnapshot?: () => unknown } }).api
+  const snapshot = api?.getStartupContextSnapshot?.()
+  if (!snapshot || typeof snapshot !== 'object') {
+    return undefined
+  }
+  const role = (snapshot as { role?: WindowRole }).role
+  return role && typeof role === 'object' ? role : undefined
+}
+
+function roleToArgMapper(role: WindowRole): IArgMapperOptions {
+  const mapper: IArgMapperOptions = {}
+  if (role.touchType) mapper.touchType = role.touchType
+  if (role.coreType) mapper.coreType = role.coreType
+  if (role.assistantType) mapper.assistantType = role.assistantType
+  if (typeof role.metaOverlay === 'boolean') {
+    mapper.metaOverlay = role.metaOverlay ? 'true' : 'false'
+  }
+  return mapper
+}
+
+/**
  * Converts environment arguments into a structured mapper object
+ *
+ * Resolution order is bridge-then-argv, and an empty result is never cached. Both matter: the
+ * renderer's main world has no `process` (contextIsolation + sandbox are on for every window), so
+ * argv resolved to `[]` there, and because `{}` is truthy the empty parse was cached permanently —
+ * turning a missing source into a stuck answer. `isMainWindow()` was therefore always false in the
+ * renderer, which silently disabled the manual update check and every update prompt.
+ *
  * @param args - Array of command line arguments (defaults to process.argv)
  * @returns Mapped command line arguments as key-value pairs
  */
 export function useArgMapper(args: string[] = (globalThis as any)?.process?.argv ?? []): IArgMapperOptions {
-  if (window.$argMapper)
-    return window.$argMapper
+  const cached = window.$argMapper
+  if (cached && Object.keys(cached).length > 0)
+    return cached
+
+  const bridgedRole = readBridgedWindowRole()
+  if (bridgedRole) {
+    const bridged = roleToArgMapper(bridgedRole)
+    if (Object.keys(bridged).length > 0)
+      return window.$argMapper = bridged
+  }
 
   const mapper: IArgMapperOptions = {}
   for (const arg of args) {
@@ -87,6 +129,11 @@ export function useArgMapper(args: string[] = (globalThis as any)?.process?.argv
   if (typeof role.metaOverlay === 'boolean') {
     mapper.metaOverlay = role.metaOverlay ? 'true' : 'false'
   }
+
+  // An empty parse means the source was unavailable, not that this window has no role. Caching it
+  // would make the next call — possibly after the bridge is ready — return the same empty answer.
+  if (Object.keys(mapper).length === 0)
+    return mapper
 
   return window.$argMapper = mapper
 }

@@ -18,6 +18,19 @@ describe('network-log-noise', () => {
     expect(shouldDowngradeRemoteFailure('NETWORK_HTTP_STATUS_500')).toBe(false)
   })
 
+  /*
+   * Transport markers are shared with the classifier in @talex-touch/utils, which deliberately
+   * omits `etimedout` so that isTimeoutLikeError owns it alone. Noise suppression has no such
+   * ownership rule, so it keeps a local entry — and 'timed out' does not cover the errno spelling.
+   */
+  it.each([
+    'connect ETIMEDOUT 140.82.121.6:443',
+    'net::ERR_CONNECTION_CLOSED',
+    'getaddrinfo ENOTFOUND tuff.tagzxia.com'
+  ])('downgrades the connection-level failure %s', (message) => {
+    expect(shouldDowngradeRemoteFailure('Update lookup failed', new Error(message))).toBe(true)
+  })
+
   it('summarizes cloudflare html payloads', () => {
     const html = '<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>'
     expect(summarizeRemoteFailurePayload(html)).toBe('cloudflare_challenge')

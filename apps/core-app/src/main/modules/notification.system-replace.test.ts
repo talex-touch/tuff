@@ -52,6 +52,10 @@ const { FakeNotification } = vi.hoisted(() => {
  */
 vi.mock('electron', () => ({
   Notification: FakeNotification,
+  // `config/default.ts` reads `app.getAppPath()` at module load. Nothing here exercises it, but a
+  // mock that omits the export makes vitest throw on access rather than yield undefined, so any
+  // new edge into that module breaks this file.
+  app: { getAppPath: () => process.cwd() },
   ipcMain: { on: () => {}, off: () => {}, handle: () => {}, removeHandler: () => {} },
   MessageChannelMain: class {
     port1 = { on: () => {}, start: () => {}, close: () => {}, postMessage: () => {} }

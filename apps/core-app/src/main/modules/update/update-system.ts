@@ -99,6 +99,7 @@ interface ReleaseAsset {
   platform?: string
   arch?: string
   checksum?: string
+  fallbackDownloadUrl?: string
   browser_download_url?: string
   sha256?: string
   signatureUrl?: string
@@ -222,6 +223,7 @@ export class UpdateSystem {
           releaseDate: resolvedRelease.published_at,
           checksum: asset.checksum,
           signatureUrl: asset.signatureUrl,
+          fallbackUrl: asset.fallbackDownloadUrl,
           rollbackFromVersion: candidate.manifest.release.rollbackFromVersion,
           rollbackCompatible
         },
@@ -1028,6 +1030,7 @@ export class UpdateSystem {
       asset: {
         name: releaseAsset.name,
         url,
+        fallbackDownloadUrl: releaseAsset.fallbackDownloadUrl,
         size: releaseAsset.size,
         platform,
         arch,
