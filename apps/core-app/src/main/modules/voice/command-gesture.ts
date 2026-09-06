@@ -89,12 +89,18 @@ export class CommandVoiceGestureController {
 
     this.disposeGlobalKeyListener = omniPanelModule.registerGlobalKeyListener({
       onKeyDown: (event) => this.handleKeyDown(event),
-      onKeyUp: (event) => this.handleKeyUp(event)
+      onKeyUp: (event) => this.handleKeyUp(event),
+      onOtherKeyDown: () => this.handleOtherKeyDown()
     })
   }
 
   private handleKeyDown(event: OmniPanelGlobalKeyEvent): void {
-    if (!this.enabled || event.key !== 'primary-modifier' || this.commandDown) return
+    if (!this.enabled || event.key !== 'primary-modifier') return
+    if (event.hasOtherKeys) {
+      this.cancelCombinedGesture()
+      return
+    }
+    if (this.commandDown) return
 
     this.commandDown = true
     this.holdStarted = false
@@ -112,8 +118,30 @@ export class CommandVoiceGestureController {
     }, COMMAND_HOLD_DELAY_MS)
   }
 
+  private handleOtherKeyDown(): void {
+    if (!this.enabled || !this.commandDown) return
+    this.cancelCombinedGesture()
+  }
+
+  private cancelCombinedGesture(): void {
+    this.commandDown = false
+    this.clearHoldTimer()
+    if (!this.holdStarted) return
+
+    this.holdStarted = false
+    this.dispatch({
+      action: 'stop',
+      mode: 'hold',
+      source: 'command'
+    })
+  }
+
   private handleKeyUp(event: OmniPanelGlobalKeyEvent): void {
     if (!this.enabled || event.key !== 'primary-modifier' || !this.commandDown) return
+    if (event.hasOtherKeys) {
+      this.cancelCombinedGesture()
+      return
+    }
 
     this.commandDown = false
     this.clearHoldTimer()
