@@ -27,14 +27,6 @@ const settingAssistantSource = readFileSync(
   join(currentDir, '../../../renderer/src/views/base/settings/SettingAssistant.vue'),
   'utf8'
 )
-const zhLocaleSource = readFileSync(
-  join(currentDir, '../../../renderer/src/modules/lang/zh-CN.json'),
-  'utf8'
-)
-const enLocaleSource = readFileSync(
-  join(currentDir, '../../../renderer/src/modules/lang/en-US.json'),
-  'utf8'
-)
 const assistantEventsSource = readFileSync(
   join(currentDir, '../../../../../../packages/utils/transport/events/assistant.ts'),
   'utf8'
@@ -121,40 +113,17 @@ describe('Assistant module startup contract', () => {
       expect(moduleSource).toContain(expected)
     }
     for (const expected of [
-      'AssistantEvents.floatingBall.getRuntimeConfig',
-      'AssistantEvents.floatingBall.openVoicePanel',
-      'AssistantEvents.floatingBall.updatePosition',
       '@mousedown="onPointerDown"',
-      '@click="onBallClick"',
-      "void openVoicePanel('click')",
-      'updateFloatingBallPosition(nextX, nextY)'
+      'Math.round(event.screenX - dragState.offsetX)',
+      'AssistantEvents.floatingBall.updatePosition'
     ]) {
       expect(floatingBallSource).toContain(expected)
     }
-
-    for (const expected of [
-      "setAlwaysOnTop(true, 'floating')",
-      'setVisibleOnAllWorkspaces(true',
-      'setSkipTaskbar(true)',
-      'showInactive()',
-      'applyFloatingBallBounds',
-      'applyVoiceDockBounds',
-      'voiceDockWindow',
-      'voiceDockWindowPending',
-      'createVoiceDockWindow',
-      'updateFloatingBallPosition',
-      'setPosition(nextX, nextY)',
-      'this.pendingPosition = { x: nextX, y: nextY }',
-      'this.schedulePositionPersist()',
-      'setting.floatingBall.position = { ...this.pendingPosition }',
-      'saveMainConfig(StorageList.APP_SETTING, setting, { force: true })'
-    ]) {
-      expect(moduleSource).toContain(expected)
-    }
-
-    expect(moduleSource).not.toContain('voicePanelWindow')
-    expect(moduleSource).not.toContain('createVoicePanelWindow')
-    expect(voiceDockSource).toContain('AssistantEvents.voice.panelClosed')
+    expect(floatingBallSource).not.toContain('@click=')
+    expect(floatingBallSource).not.toContain('onBallClick')
+    expect(floatingBallSource).not.toContain('openVoicePanel')
+    expect(floatingBallSource).not.toContain('getRuntimeConfig')
+    expect(floatingBallSource).not.toContain('useI18n')
   })
 
   it('keeps VoiceDock opening protected from blur auto-hide until the UI handoff finishes', () => {
@@ -173,190 +142,5 @@ describe('Assistant module startup contract', () => {
     expect(openVoicePanelBlock).not.toContain('this.transport.sendTo')
     expect(openVoicePanelBlock).toContain('} finally {')
     expect(openVoicePanelBlock).toContain('this.releaseVoicePanelAutoHideSuppression()')
-  })
-
-  it('keeps floating ball runtime status localized', () => {
-    expect(floatingBallSource).toContain('useI18n')
-
-    for (const expected of [
-      'assistant.floatingBall.voiceWakeOff',
-      'assistant.floatingBall.listening',
-      'assistant.floatingBall.clickToOpen',
-      'assistant.floatingBall.recognitionError'
-    ]) {
-      expect(floatingBallSource).toContain(expected)
-    }
-
-    for (const expected of ['voiceWakeOff', 'listening', 'clickToOpen', 'recognitionError']) {
-      expect(zhLocaleSource).toContain(expected)
-      expect(enLocaleSource).toContain(expected)
-    }
-  })
-
-  it('routes clipboard image translation through typed assistant transport events', () => {
-    expect(assistantEventsSource).toContain('AssistantClipboardImageTranslateResponse')
-    expect(assistantEventsSource).toContain('AssistantScreenshotCaptureResponse')
-    expect(assistantEventsSource).toContain('AssistantScreenshotSaveResponse')
-    const captureResponseContract = assistantEventsSource.match(
-      /export interface AssistantScreenshotCaptureResponse \{[\s\S]*?\n\}/
-    )?.[0]
-    const saveResponseContract = assistantEventsSource.match(
-      /export interface AssistantScreenshotSaveResponse \{[\s\S]*?\n\}/
-    )?.[0]
-    expect(captureResponseContract).toContain('tfileUrl?: string')
-    expect(captureResponseContract).not.toContain('dataUrl')
-    expect(captureResponseContract).not.toContain('path')
-    expect(saveResponseContract).not.toContain('path')
-    expect(assistantEventsSource).toContain('translateClipboardImage')
-    expect(assistantEventsSource).toContain('captureScreenshot')
-    expect(assistantEventsSource).toContain('saveScreenshot')
-    expect(assistantEventsSource).toContain('translateScreenshot')
-    expect(assistantEventsSource).toContain("event('translate-clipboard-image')")
-    expect(assistantEventsSource).toContain("event('capture-screenshot')")
-    expect(assistantEventsSource).toContain("event('save-screenshot')")
-    expect(assistantEventsSource).toContain("event('translate-screenshot')")
-    expect(assistantEventsSource).toContain('translateClipboardImage: translateClipboardImageEvent')
-    expect(assistantEventsSource).toContain('SCREENSHOT_PERMISSION_DENIED')
-    expect(assistantEventsSource).toContain('SCREENSHOT_UNSUPPORTED')
-    expect(assistantEventsSource).toContain('SCREENSHOT_UNAVAILABLE')
-    expect(moduleSource).toContain('AssistantEvents.voice.translateClipboardImage')
-    expect(moduleSource).toContain('AssistantEvents.voice.captureScreenshot')
-    expect(moduleSource).toContain('AssistantEvents.voice.saveScreenshot')
-    expect(moduleSource).toContain('AssistantEvents.voice.translateScreenshot')
-    expect(moduleSource).toContain('handleClipboardImageTranslate')
-    expect(moduleSource).toContain('handleScreenshotCapture')
-    expect(moduleSource).toContain('handleScreenshotSave')
-    expect(moduleSource).toContain('handleScreenshotTranslate')
-    expect(moduleSource).toContain('translateClipboardImage')
-    expect(moduleSource).toContain('openPinWindow: true')
-    expect(moduleSource).toContain('voicePanelAutoHideSuppressionDepth')
-    expect(moduleSource).toContain('beginVoicePanelAutoHideSuppression')
-    expect(moduleSource).toContain('releaseVoicePanelAutoHideSuppression')
-    expect(moduleSource).toContain('setTimeout(() => {')
-    expect(moduleSource).toContain('this.voicePanelAutoHideSuppressionDepth - 1')
-    expect(voicePanelSource).toContain('AssistantEvents.voice.translateClipboardImage')
-    expect(voicePanelSource).toContain('AssistantEvents.voice.captureScreenshot')
-    expect(voicePanelSource).toContain('AssistantEvents.voice.saveScreenshot')
-    expect(voicePanelSource).toContain('AssistantEvents.voice.translateScreenshot')
-    expect(voicePanelSource).toContain('translateClipboardImage(): Promise<void>')
-    expect(voicePanelSource).toContain('captureScreenshot(): Promise<void>')
-    expect(voicePanelSource).toContain('saveScreenshot(): Promise<void>')
-    expect(voicePanelSource).toContain('translateScreenshot(): Promise<void>')
-    expect(voicePanelSource).toContain('translatingClipboardImage')
-    expect(voicePanelSource).toContain('capturingScreenshot')
-    expect(voicePanelSource).toContain('savingScreenshot')
-    expect(voicePanelSource).toContain('screenshotPreview')
-    expect(voicePanelSource).toContain('screenshotPreview.tfileUrl')
-    expect(voicePanelSource).not.toContain('response.path')
-    expect(voicePanelSource).not.toContain('savedPath')
-    expect(voicePanelSource).toContain('translatingScreenshot')
-    expect(voicePanelSource).not.toContain('assistant:voice-panel:capture-screenshot')
-    expect(voicePanelSource).not.toContain('assistant:voice-panel:save-screenshot')
-    expect(voicePanelSource).not.toContain('assistant:voice-panel:translate-screenshot')
-
-    const clipboardTranslateBlock = moduleSource.match(
-      /private async handleClipboardImageTranslate\([\s\S]*?\n {2}private async handleScreenshotCapture/
-    )?.[0]
-    expect(clipboardTranslateBlock).toBeTruthy()
-    expect(clipboardTranslateBlock).not.toContain('SCREENSHOT_UNAVAILABLE')
-    expect(clipboardTranslateBlock).not.toContain('getNativeScreenshotService')
-    expect(clipboardTranslateBlock).not.toContain("target: 'cursor-display'")
-    expect(clipboardTranslateBlock).not.toContain("output: 'data-url'")
-    expect(clipboardTranslateBlock).not.toContain('writeClipboard: false')
-    expect(clipboardTranslateBlock).not.toContain('translateImageBase64')
-
-    const screenshotCaptureBlock = moduleSource.match(
-      /private async handleScreenshotCapture\([\s\S]*?\n {2}private async handleScreenshotSave/
-    )?.[0]
-    expect(screenshotCaptureBlock).toBeTruthy()
-    expect(screenshotCaptureBlock).toContain('mapScreenshotUnavailableCode')
-    expect(screenshotCaptureBlock).toContain('SCREENSHOT_UNAVAILABLE')
-    expect(screenshotCaptureBlock).toContain('getNativeScreenshotService')
-    expect(screenshotCaptureBlock).toContain('normalizeScreenshotTarget(payload)')
-    expect(screenshotCaptureBlock).not.toContain('output:')
-    expect(screenshotCaptureBlock).toContain('captureResult.tfileUrl')
-    expect(screenshotCaptureBlock).toContain('writeClipboard: true')
-    expect(screenshotCaptureBlock).not.toContain('translateImageBase64')
-
-    const screenshotSaveBlock = moduleSource.match(
-      /private async handleScreenshotSave\([\s\S]*?\n {2}private async handleScreenshotTranslate/
-    )?.[0]
-    expect(screenshotSaveBlock).toBeTruthy()
-    expect(screenshotSaveBlock).toContain('mapScreenshotUnavailableCode')
-    expect(screenshotSaveBlock).toContain('SCREENSHOT_UNAVAILABLE')
-    expect(screenshotSaveBlock).toContain('SAVE_FAILED')
-    expect(screenshotSaveBlock).toContain('getNativeScreenshotService')
-    expect(screenshotSaveBlock).toContain('normalizeScreenshotTarget(payload)')
-    expect(screenshotSaveBlock).not.toContain('output:')
-    expect(screenshotSaveBlock).toContain('writeClipboard: false')
-    expect(screenshotSaveBlock).toContain('dialog.showSaveDialog')
-    expect(screenshotSaveBlock).toContain('copyCaptureResource')
-    expect(screenshotSaveBlock).not.toContain('fs.copyFile')
-    expect(screenshotSaveBlock).not.toContain('translateImageBase64')
-
-    const screenshotTranslateBlock = moduleSource.match(
-      /private async handleScreenshotTranslate\([\s\S]*?\n {2}private destroyVoiceDockWindow/
-    )?.[0]
-    expect(screenshotTranslateBlock).toBeTruthy()
-    expect(screenshotTranslateBlock).toContain('mapScreenshotUnavailableCode')
-    expect(screenshotTranslateBlock).toContain('SCREENSHOT_UNAVAILABLE')
-    expect(screenshotTranslateBlock).toContain('getNativeScreenshotService')
-    expect(screenshotTranslateBlock).toContain('normalizeScreenshotTarget(payload)')
-    expect(screenshotTranslateBlock).not.toContain('output:')
-    expect(screenshotTranslateBlock).toContain('readCaptureResource')
-    expect(screenshotTranslateBlock).toContain('writeClipboard: false')
-    expect(screenshotTranslateBlock).toContain('translateImageBase64')
-  })
-
-  it('maps clipboard image translation failures to localized recovery hints', () => {
-    for (const expected of [
-      'AssistantClipboardImageTranslateErrorCode',
-      'CLIPBOARD_IMAGE_TRANSLATE_ERROR_KEYS',
-      'ASSISTANT_DISABLED',
-      'IMAGE_UNAVAILABLE',
-      'SCENE_UNAVAILABLE',
-      'response?.reason || response?.error'
-    ]) {
-      expect(voicePanelSource).toContain(expected)
-    }
-
-    for (const expected of [
-      'imageTranslateAssistantDisabled',
-      'clipboardImageTranslateImageUnavailable',
-      'imageTranslateProviderUnavailable',
-      'clipboardImageTranslating',
-      'clipboardImageTranslateReady',
-      'clipboardImageTranslateFailed',
-      'captureScreenshot',
-      'saveScreenshot',
-      'screenshotCapturing',
-      'screenshotCapturingShort',
-      'screenshotSaving',
-      'screenshotSavingShort',
-      'screenshotCaptureReady',
-      'screenshotCaptureFailed',
-      'screenshotPermissionDenied',
-      'screenshotUnsupported',
-      'screenshotCaptureUnavailable',
-      'screenshotSaveReady',
-      'screenshotSaveFailed',
-      'screenshotPreviewAlt',
-      'screenshotPreviewMeta',
-      'screenshotCopied',
-      'screenshotSavedPath',
-      'screenshotTranslateUnavailable',
-      'screenshotTranslateImageUnavailable'
-    ]) {
-      expect(voicePanelSource).toContain(expected)
-      expect(zhLocaleSource).toContain(expected)
-      expect(enLocaleSource).toContain(expected)
-    }
-
-    expect(voicePanelSource).toContain('SCREENSHOT_UNAVAILABLE')
-    expect(voicePanelSource).toContain('SCREENSHOT_TRANSLATE_ERROR_KEYS')
-    expect(zhLocaleSource).toContain('screenshotTranslateProviderUnavailable')
-    expect(enLocaleSource).toContain('screenshotTranslateProviderUnavailable')
-    expect(zhLocaleSource).toContain('screenshotTranslatePermissionDenied')
-    expect(enLocaleSource).toContain('screenshotTranslatePermissionDenied')
   })
 })

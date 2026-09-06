@@ -7,10 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 
 const transportOnMock = vi.hoisted(() => vi.fn())
+const transportSendMock = vi.hoisted(() => vi.fn())
 const panelOpenMock = vi.hoisted(() => vi.fn())
+const panelStartMock = vi.hoisted(() => vi.fn())
+const panelStopMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
+    send: transportSendMock,
     on: transportOnMock
   })
 }))
@@ -30,12 +34,17 @@ vi.mock('./VoicePanel.vue', () => ({
     props: {
       managedByDock: Boolean
     },
+    emits: ['finished'],
     setup(_props, { expose, emit }) {
-      expose({ openPanel: panelOpenMock })
+      expose({
+        openPanel: panelOpenMock,
+        startVoiceInput: panelStartMock,
+        stopVoiceInput: panelStopMock
+      })
       return () =>
         h('div', {
           class: 'voice-panel-root',
-          onClick: () => emit('completed')
+          onClick: () => emit('finished')
         })
     }
   })
@@ -51,37 +60,44 @@ function emit(event: { toEventName: () => string }, payload?: unknown): void {
   handlers.get(event.toEventName())?.(payload)
 }
 
+async function openPanel(source = 'click') {
+  emit(AssistantEvents.voice.panelOpened, { source })
+  await nextTick()
+  await nextTick()
+}
+
 describe('VoiceDock renderer contract', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     handlers.clear()
     panelOpenMock.mockReset()
-    transportOnMock.mockReset()
+    panelStartMock.mockReset()
+    panelStopMock.mockReset()
+    transportSendMock.mockReset()
+    transportSendMock.mockResolvedValue(undefined)
     transportOnMock.mockImplementation(
       (event: { toEventName: () => string }, handler: TransportHandler) => {
         const eventName = event.toEventName()
         handlers.set(eventName, handler)
         return () => {
-          if (handlers.get(eventName) === handler) {
-            handlers.delete(eventName)
-          }
+          if (handlers.get(eventName) === handler) handlers.delete(eventName)
         }
       }
     )
   })
+
   afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.restoreAllMocks()
+    vi.clearAllTimers()
+    vi.useRealTimers()
   })
 
-  it('switches from compact FloatingBall to managed VoicePanel on panelOpened', async () => {
+  it('shows only the floating ball initially and hands panelOpened to the VoicePanel handle', async () => {
     const wrapper = mount(VoiceDock)
 
     expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
     expect(wrapper.find('.voice-panel-root').exists()).toBe(false)
 
-    emit(AssistantEvents.voice.panelOpened, { source: 'wake-word' })
-    await nextTick()
-    await nextTick()
+    await openPanel('wake-word')
 
     expect(wrapper.find('.floating-ball-root').exists()).toBe(false)
     const panel = wrapper.findComponent({ name: 'VoicePanel' })
@@ -90,84 +106,58 @@ describe('VoiceDock renderer contract', () => {
     expect(panelOpenMock).toHaveBeenCalledWith('wake-word')
   })
 
-  it('returns to compact FloatingBall on panelClosed without reopening the panel', async () => {
+  it.each([
+    { action: 'start' as const, expected: panelStartMock },
+    { action: 'stop' as const, expected: panelStopMock }
+  ])(
+    'routes a Command voice $action to the managed VoicePanel handle',
+    async ({ action, expected }) => {
+      const wrapper = mount(VoiceDock)
+      await openPanel()
+      panelStartMock.mockClear()
+      panelStopMock.mockClear()
+
+      emit(AssistantEvents.voice.command, { action, mode: 'toggle', source: 'command' })
+      await nextTick()
+      await nextTick()
+
+      expect(expected).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    }
+  )
+
+  it('shows finite processing loading after VoicePanel finished, then returns to the floating ball', async () => {
     const wrapper = mount(VoiceDock)
-    emit(AssistantEvents.voice.panelOpened, { source: 'click' })
-    await nextTick()
-    await nextTick()
-    panelOpenMock.mockClear()
+    await openPanel()
 
-    emit(AssistantEvents.voice.panelClosed)
+    await wrapper.findComponent({ name: 'VoicePanel' }).vm.$emit('finished')
     await nextTick()
 
-    expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
     expect(wrapper.find('.voice-panel-root').exists()).toBe(false)
-    expect(panelOpenMock).not.toHaveBeenCalled()
-  })
+    expect(wrapper.find('.voice-dock-processing').attributes('aria-busy')).toBe('true')
+    expect(wrapper.find('.floating-ball-root').exists()).toBe(false)
 
-  it('shows an aria-hidden confetti canvas after a completed VoicePanel action', async () => {
-    const requestAnimationFrameMock = vi.fn(() => 1)
-    vi.stubGlobal('requestAnimationFrame', requestAnimationFrameMock)
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-      clearRect: vi.fn(),
-      setTransform: vi.fn()
-    } as never)
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn(() => ({ matches: false }) as MediaQueryList)
-    )
-
-    const wrapper = mount(VoiceDock)
-    emit(AssistantEvents.voice.panelOpened, { source: 'click' })
+    vi.advanceTimersByTime(519)
     await nextTick()
+    expect(wrapper.find('.voice-dock-processing').exists()).toBe(true)
+
+    vi.advanceTimersByTime(1)
     await nextTick()
-
-    await wrapper.find('.voice-panel-root').trigger('click')
-    await nextTick()
-    await nextTick()
-
-    const canvas = wrapper.find('canvas.voice-dock-confetti')
-    expect(canvas.exists()).toBe(true)
-    expect(canvas.attributes('aria-hidden')).toBe('true')
-    expect(requestAnimationFrameMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not start confetti animation when reduced motion is requested', async () => {
-    const requestAnimationFrameMock = vi.fn(() => 1)
-    vi.stubGlobal('requestAnimationFrame', requestAnimationFrameMock)
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn(() => ({ matches: true }) as MediaQueryList)
-    )
-
-    const wrapper = mount(VoiceDock)
-    emit(AssistantEvents.voice.panelOpened, { source: 'click' })
-    await nextTick()
-    await nextTick()
-
-    await wrapper.find('.voice-panel-root').trigger('click')
-    await nextTick()
-
-    expect(wrapper.find('canvas.voice-dock-confetti').exists()).toBe(false)
-    expect(requestAnimationFrameMock).not.toHaveBeenCalled()
-  })
-
-  it('stops reacting after unmount instead of retaining transport-driven state', async () => {
-    const wrapper = mount(VoiceDock)
-    const openedEventName = AssistantEvents.voice.panelOpened.toEventName()
-    const closedEventName = AssistantEvents.voice.panelClosed.toEventName()
-    expect(handlers.has(openedEventName)).toBe(true)
-    expect(handlers.has(closedEventName)).toBe(true)
+    expect(wrapper.find('.voice-dock-processing').exists()).toBe(false)
+    expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
 
     wrapper.unmount()
+  })
 
-    expect(handlers.has(openedEventName)).toBe(false)
-    expect(handlers.has(closedEventName)).toBe(false)
-    emit(AssistantEvents.voice.panelOpened, { source: 'click' })
+  it('cancels the processing transition timer when the dock is unmounted', async () => {
+    const wrapper = mount(VoiceDock)
+    await openPanel()
+    await wrapper.findComponent({ name: 'VoicePanel' }).vm.$emit('finished')
     await nextTick()
 
-    expect(panelOpenMock).not.toHaveBeenCalled()
+    wrapper.unmount()
+    vi.advanceTimersByTime(520)
+
+    expect(handlers.size).toBe(0)
   })
 })

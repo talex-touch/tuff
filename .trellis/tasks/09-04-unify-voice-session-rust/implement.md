@@ -90,3 +90,10 @@
 - 短按（小于 320ms）在 `start` / `stop` 间切换持续聆听；长按达到 320ms 后进入 push-to-talk，释放时发送 `stop`。
 - OmniPanel 继续独占 `uiohook` 生命周期，Voice 只注册 typed primary-modifier listener；VoiceDock 通过 typed `assistant:voice-panel:command` 事件控制 `VoicePanel`，不新增裸 IPC 或第二个录音实现。
 - Command 打开 VoiceDock 时使用 `showInactive`，不抢当前应用焦点；Command stop 不重置已显示的 VoicePanel 文本。
+
+## VoiceDock 极简 HUD 收敛
+
+- VoiceDock 的 Electron 窗口保持透明、无阴影；紧凑 HUD 仅保留麦克风状态、语音波形和错误状态，输入框、截图来源选择、截图操作按钮、发送和关闭入口均不属于语音面板。
+- 浮球不再启动唤醒词 ASR，也不显示唤醒词/等待语音文案；Command/Ctrl 手势是唯一语音输入控制。最终文本请求使用 `active-app` delivery，交付由 main-owned Voice Session 负责。
+- 停止或流终态后，renderer 先显示有限时长的 processing ring，再回到浮球；结束事件通过 typed `voice.closePanel` 同步主进程收缩窗口，避免 renderer 与 BrowserWindow 几何状态分叉。
+- 出现/消失动画只作用于 VoiceDock renderer 内容，屏幕坐标仍由 main 根据浮球锚点所在显示器计算，避免多屏切换时自行改写全局坐标。

@@ -90,9 +90,8 @@ type ScreenshotUnavailableCode =
 const assistantLog = createLogger('Assistant')
 const FLOATING_BALL_DEFAULT_SIZE = 56
 const FLOATING_BALL_DEFAULT_PADDING = 24
-const VOICE_DOCK_WIDTH = 520
-const VOICE_DOCK_HEIGHT = 300
-const ASSISTANT_DEFAULT_NAME = '阿洛 aler'
+const VOICE_DOCK_WIDTH = 300
+const VOICE_DOCK_HEIGHT = 60
 const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
@@ -593,16 +592,9 @@ export class AssistantModule extends BaseModule {
 
   private buildRuntimeConfig(setting: AppSetting): AssistantRuntimeConfig {
     const voiceWake = this.getVoiceWakeSetting(setting)
-    const assistantEnabled = this.isAssistantEnabled(setting)
-    const assistantName = ASSISTANT_DEFAULT_NAME
     return {
-      enabled: assistantEnabled && voiceWake.enabled,
-      language: voiceWake.language,
-      wakeWords: voiceWake.wakeWords,
-      cooldownMs: voiceWake.cooldownMs,
-      continuous: voiceWake.continuous,
-      assistantName,
-      openPanelOnWake: assistantEnabled && voiceWake.openPanelOnWake
+      enabled: this.isAssistantEnabled(setting) && voiceWake.enabled,
+      language: voiceWake.language
     }
   }
 
