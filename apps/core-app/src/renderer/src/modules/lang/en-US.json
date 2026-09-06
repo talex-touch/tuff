@@ -1071,7 +1071,7 @@
     "modelNoResults": "No models match",
     "modelFavorite": "Add to favorites",
     "modelUnfavorite": "Remove from favorites",
-    "modelProviders": "Filter by provider",
+    "modelSources": "Filter by channel",
     "configureProvider": "Configure",
     "panel": {
       "title": "Conversation info",

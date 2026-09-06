@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "复查 UnoCSS safelist / configDeps 是否两处齐全，图标不得渲染成空盒子"}
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "图标正则表的兜底用例（router/mesh/cpa/touchapi）要能真的失败，不是恒真断言"}
+{"file": ".trellis/spec/frontend/anchor-overlay-chain.md", "reason": "复查方向键遍历、Tab 序、aria-checked 是否被 TxCardItem 改写后仍成立"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端 Quality Check 段的命令与包内 eslint 约定"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "工作区多会话共用，提交只取本任务文件"}
