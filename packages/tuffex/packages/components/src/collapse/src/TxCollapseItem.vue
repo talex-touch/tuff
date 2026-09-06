@@ -58,6 +58,11 @@ function onAfterLeave(el: Element) {
 
 <template>
   <div class="tx-collapse-item">
+    <!--
+      The chevron trails the title: a disclosure row reads title first and
+      state last, and a leading chevron made every row start with the same
+      glyph before the eye reached the words.
+    -->
     <button
       type="button"
       class="tx-collapse-item__header"
@@ -70,14 +75,17 @@ function onAfterLeave(el: Element) {
       :aria-controls="contentId"
       @click="handleHeaderClick"
     >
+      <span class="tx-collapse-item__title">
+        <slot name="title">
+          {{ title }}
+        </slot>
+      </span>
       <TxIcon
         :name="arrowIcon"
         class="tx-collapse-item__arrow"
         :class="{ 'tx-collapse-item__arrow--active': isActive }"
+        aria-hidden="true"
       />
-      <slot name="title">
-        {{ title }}
-      </slot>
     </button>
 
     <Transition
@@ -101,37 +109,73 @@ function onAfterLeave(el: Element) {
 </template>
 
 <style scoped>
-.tx-collapse-item {
-  border-bottom: 1px solid var(--tx-collapse-border, var(--tx-border-color-lighter, #e5e7eb));
-}
-
-.tx-collapse-item:last-child {
-  border-bottom: none;
+/* Hairlines between rows, none at the frame's edges — the frame draws its own rim. */
+.tx-collapse-item + .tx-collapse-item {
+  border-top: 1px solid var(--tx-collapse-border, color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 55%, transparent));
 }
 
 .tx-collapse-item__header {
   appearance: none;
   display: flex;
   align-items: center;
+  gap: 12px;
   width: 100%;
-  padding: 12px 16px;
+  min-height: 44px;
+  padding: 12px 14px 12px 16px;
   border: 0;
+  border-radius: 0;
   cursor: pointer;
   font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: left;
   user-select: none;
   background: var(--tx-collapse-header-bg, var(--tx-bg-color-overlay, #ffffff));
   color: var(--tx-collapse-header-text, var(--tx-text-color-primary, #374151));
-  font-weight: 500;
-  transition: background-color 0.2s;
+  outline: none;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
-.tx-collapse-item__header:hover:not(.tx-collapse-item__header--active) {
-  background: var(--tx-collapse-header-hover-bg, var(--tx-fill-color-light, #f9fafb));
+/*
+ * Corner nesting. The frame clips its children with `overflow: hidden`, so a
+ * square header at the frame's corners had its hover fill and focus ring cut
+ * off at an angle the frame's radius did not share. The first header and a
+ * collapsed last header take the frame's radius less its 1px border instead,
+ * so anything drawn on them follows the frame. An open last header ends in
+ * its content, not the frame, so it stays square.
+ */
+.tx-collapse-item:first-child .tx-collapse-item__header {
+  border-top-left-radius: calc(var(--tx-collapse-radius, 12px) - 1px);
+  border-top-right-radius: calc(var(--tx-collapse-radius, 12px) - 1px);
 }
 
+.tx-collapse-item:last-child .tx-collapse-item__header:not(.tx-collapse-item__header--active) {
+  border-bottom-left-radius: calc(var(--tx-collapse-radius, 12px) - 1px);
+  border-bottom-right-radius: calc(var(--tx-collapse-radius, 12px) - 1px);
+}
+
+/* Hover is a soft veil of the text ink, the same language as the menu rows. */
+.tx-collapse-item__header:hover:not(.tx-collapse-item__header--active):not(.tx-collapse-item__header--disabled) {
+  background: var(--tx-collapse-header-hover-bg, color-mix(in srgb, var(--tx-text-color-primary, #111827) 5%, transparent));
+}
+
+/* Open: a half-strength tint of the fill token, so the open row is marked without becoming a slab. */
 .tx-collapse-item__header--active {
-  background: var(--tx-collapse-header-active-bg, var(--tx-fill-color, #f3f4f6));
+  background: color-mix(in srgb, var(--tx-collapse-header-active-bg, var(--tx-fill-color, #f3f4f6)) 55%, transparent);
   color: var(--tx-collapse-header-active-text, var(--tx-text-color-primary, #111827));
+}
+
+/*
+ * Keyboard focus is an inset ring: the browser's own outline sat outside the
+ * button and was cut by the frame's clip into a square-cornered box. Inset,
+ * it follows the header's nested radius and is never clipped.
+ */
+.tx-collapse-item__header:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent);
 }
 
 .tx-collapse-item__header--disabled {
@@ -139,11 +183,16 @@ function onAfterLeave(el: Element) {
   cursor: not-allowed;
 }
 
+.tx-collapse-item__title {
+  flex: 1;
+  min-width: 0;
+}
+
 .tx-collapse-item__arrow {
-  margin-right: 8px;
-  transition: transform 0.3s;
-  font-size: 16px;
+  flex: none;
+  font-size: 14px;
   color: var(--tx-collapse-arrow, var(--tx-text-color-secondary, #6b7280));
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .tx-collapse-item__arrow--active {
@@ -155,7 +204,8 @@ function onAfterLeave(el: Element) {
 }
 
 .tx-collapse-item__content-inner {
-  padding: 16px;
+  padding: 2px 16px 16px;
+  font-size: 13px;
   color: var(--tx-collapse-content-text, var(--tx-text-color-regular, #6b7280));
   line-height: 1.6;
 }
