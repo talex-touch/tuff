@@ -1071,7 +1071,7 @@
     "modelNoResults": "没有匹配的模型",
     "modelFavorite": "加入收藏",
     "modelUnfavorite": "取消收藏",
-    "modelSources": "按渠道筛选",
+    "modelSources": "按提供方筛选",
     "configureProvider": "去配置",
     "panel": {
       "title": "会话信息",

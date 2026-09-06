@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "reduced-motion 的编译 SCSS 契约测试必须能真的失败：正反两向都要断言，不能写成恒真"}
+{"file": ".trellis/spec/frontend/bui-component-family.md", "reason": "复查 class 前缀、var() 内联兜底、静止态可见（不得依赖动画才显形）"}
+{"file": ".trellis/spec/frontend/anchor-overlay-chain.md", "reason": "复查 roving tabindex、方向键只移焦点、指示器不进焦点序与 a11y 树"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "包内 eslint 与最小验证命令"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "工作区多会话共用；提交只取本任务文件，且不得带上 touch-app.ts 的临时诊断"}

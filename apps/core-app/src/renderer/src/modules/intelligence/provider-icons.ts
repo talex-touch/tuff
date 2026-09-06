@@ -36,3 +36,35 @@ export function providerIconFor(type: string): ITuffIcon {
     ? PROVIDER_ICONS[type as keyof typeof PROVIDER_ICONS]
     : PROVIDER_ICONS.custom
 }
+
+/**
+ * The icons for the local AI CLIs, keyed by the seeded provider id the main process gives each
+ * one. `pi-cli-default` is `PI_CLI_PROVIDER_ID` in `main/modules/ai/providers/pi-cli-runtime.ts`;
+ * repeated here rather than imported because the renderer cannot reach main-process modules.
+ *
+ * Only pi exists as a provider today. omp, codex and claude are being added by the local-CLI
+ * providers task, which also threads an `origin` through the transport; when that lands, this
+ * table is keyed by origin instead of by seeded id and grows one row per CLI. The shape is
+ * already the one that task's design names.
+ */
+const CLI_PROVIDER_ICONS: Readonly<Record<string, ITuffIcon>> = Object.freeze({
+  'pi-cli-default': { type: 'class', value: 'i-simple-icons-pi' }
+})
+
+/** Every class `providerIconForId` can add on top of `PROVIDER_ICONS`, for the same safelist. */
+export const PROVIDER_ID_ICON_CLASSES: readonly string[] = Object.freeze(
+  Array.from(new Set(Object.values(CLI_PROVIDER_ICONS).map((icon) => icon.value)))
+)
+
+/**
+ * The icon for a provider *instance*: a CLI gets its own mark, anything else the type's icon.
+ *
+ * pi and a local Ollama are both `type: 'local'`, so by type alone they share the server glyph,
+ * and two chips side by side with the same mark tell the user nothing. Own-property lookup, as in
+ * `providerIconFor`, so `constructor` cannot resolve to a prototype member.
+ */
+export function providerIconForId(providerId: string, type: string): ITuffIcon {
+  return Object.hasOwn(CLI_PROVIDER_ICONS, providerId)
+    ? CLI_PROVIDER_ICONS[providerId]
+    : providerIconFor(type)
+}

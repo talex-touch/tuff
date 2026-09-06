@@ -61,7 +61,7 @@ import {
 } from '~/modules/conversation/useConversationHistory'
 import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
-import { providerIconFor } from '~/modules/intelligence/provider-icons'
+import { providerIconForId } from '~/modules/intelligence/provider-icons'
 import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import HomeModelMenu from './HomeModelMenu.vue'
@@ -131,7 +131,10 @@ const panelOpen = ref(false)
 const modelPill = computed<{ label: string; icon: ITuffIcon | undefined }>(() => {
   const resolved = resolvedModel.value
   return resolved
-    ? { label: resolved.displayName, icon: providerIconFor(resolved.providerType) }
+    ? {
+        label: resolved.displayName,
+        icon: providerIconForId(resolved.providerId, resolved.providerType)
+      }
     : { label: t('home.modelName'), icon: undefined }
 })
 
