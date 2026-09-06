@@ -108,8 +108,8 @@ function onAfterLeave(el: Element) {
   </div>
 </template>
 
-<style scoped>
-/* Hairlines between rows, none at the frame's edges — the frame draws its own rim. */
+<style lang="scss" scoped>
+// Hairlines between rows, none at the frame's edges — the frame draws its own rim.
 .tx-collapse-item + .tx-collapse-item {
   border-top: 1px solid var(--tx-collapse-border, color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 55%, transparent));
 }
@@ -140,14 +140,12 @@ function onAfterLeave(el: Element) {
     box-shadow 0.18s ease;
 }
 
-/*
- * Corner nesting. The frame clips its children with `overflow: hidden`, so a
- * square header at the frame's corners had its hover fill and focus ring cut
- * off at an angle the frame's radius did not share. The first header and a
- * collapsed last header take the frame's radius less its 1px border instead,
- * so anything drawn on them follows the frame. An open last header ends in
- * its content, not the frame, so it stays square.
- */
+// Corner nesting. The frame clips its children with `overflow: hidden`, so a
+// square header at the frame's corners had its hover fill and focus ring cut
+// off at an angle the frame's radius did not share. The first header and a
+// collapsed last header take the frame's radius less its 1px border instead,
+// so anything drawn on them follows the frame. An open last header ends in
+// its content, not the frame, so it stays square.
 .tx-collapse-item:first-child .tx-collapse-item__header {
   border-top-left-radius: calc(var(--tx-collapse-radius, 12px) - 1px);
   border-top-right-radius: calc(var(--tx-collapse-radius, 12px) - 1px);
@@ -158,22 +156,20 @@ function onAfterLeave(el: Element) {
   border-bottom-right-radius: calc(var(--tx-collapse-radius, 12px) - 1px);
 }
 
-/* Hover is a soft veil of the text ink, the same language as the menu rows. */
+// Hover is a soft veil of the text ink, the same language as the menu rows.
 .tx-collapse-item__header:hover:not(.tx-collapse-item__header--active):not(.tx-collapse-item__header--disabled) {
   background: var(--tx-collapse-header-hover-bg, color-mix(in srgb, var(--tx-text-color-primary, #111827) 5%, transparent));
 }
 
-/* Open: a half-strength tint of the fill token, so the open row is marked without becoming a slab. */
+// Open: a half-strength tint of the fill token, so the open row is marked without becoming a slab.
 .tx-collapse-item__header--active {
   background: color-mix(in srgb, var(--tx-collapse-header-active-bg, var(--tx-fill-color, #f3f4f6)) 55%, transparent);
   color: var(--tx-collapse-header-active-text, var(--tx-text-color-primary, #111827));
 }
 
-/*
- * Keyboard focus is an inset ring: the browser's own outline sat outside the
- * button and was cut by the frame's clip into a square-cornered box. Inset,
- * it follows the header's nested radius and is never clipped.
- */
+// Keyboard focus is an inset ring: the browser's own outline sat outside the
+// button and was cut by the frame's clip into a square-cornered box. Inset,
+// it follows the header's nested radius and is never clipped.
 .tx-collapse-item__header:focus-visible {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent);
 }
@@ -210,7 +206,7 @@ function onAfterLeave(el: Element) {
   line-height: 1.6;
 }
 
-/* Height is animated in JS (@enter/@leave); CSS cannot tween 0 ↔ auto. */
+// Height is animated in JS (@enter/@leave); CSS cannot tween 0 ↔ auto.
 .tx-collapse-enter-active,
 .tx-collapse-leave-active {
   overflow: hidden;

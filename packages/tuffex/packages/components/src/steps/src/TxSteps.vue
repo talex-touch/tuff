@@ -51,14 +51,14 @@ provide<StepsContext>('steps', {
   </div>
 </template>
 
-<style scoped>
+<style lang="scss" scoped>
 .tx-steps {
   display: flex;
 }
 
 .tx-steps--horizontal {
   flex-direction: row;
-  /* Markers align on their tops; a taller description in one step must not pull its neighbours' markers down. */
+  // Markers align on their tops; a taller description in one step must not pull its neighbours' markers down.
   align-items: flex-start;
   width: 100%;
 }

@@ -173,13 +173,13 @@ export default defineComponent({
 })
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .tx-avatar-group {
   display: inline-flex;
   align-items: center;
 
-  /* Indirection so `:hover` can retarget the whole row from one place: the items
-     inherit this, they don't each need their own state. */
+  // Indirection so `:hover` can retarget the whole row from one place: the items
+  //      inherit this, they don't each need their own state.
   --tx-avatar-group-gap: var(--tx-avatar-group-overlap);
 }
 
@@ -203,13 +203,11 @@ export default defineComponent({
   box-shadow: 0 6px 16px color-mix(in srgb, #000 18%, transparent);
 }
 
-/*
- * The popover's reference is a square wrapper, so lifting it directly would draw
- * a rectangular shadow around a round avatar and drag the anchor's reference rect
- * out from under the open panel. Lift the avatar inside it instead; the wrapper
- * already sits above its neighbours via --tx-avatar-group-more-z, so it needs no
- * z-index promotion of its own.
- */
+// The popover's reference is a square wrapper, so lifting it directly would draw
+// a rectangular shadow around a round avatar and drag the anchor's reference rect
+// out from under the open panel. Lift the avatar inside it instead; the wrapper
+// already sits above its neighbours via --tx-avatar-group-more-z, so it needs no
+// z-index promotion of its own.
 .tx-avatar-group.is-hover-lift :deep(.tx-avatar-group__more-ref:hover .tx-avatar-group__more) {
   transform: translateY(-4px) scale(1.06);
   box-shadow: 0 6px 16px color-mix(in srgb, #000 18%, transparent);
@@ -223,10 +221,8 @@ export default defineComponent({
   --tx-avatar-group-gap: var(--tx-avatar-group-spread-overlap);
 }
 
-/*
- * The count is a summary, not a person: a quieter fill and the secondary ink
- * keep it from passing for one more member of the group.
- */
+// The count is a summary, not a person: a quieter fill and the secondary ink
+// keep it from passing for one more member of the group.
 .tx-avatar-group__more {
   --tx-avatar-bg: var(--tx-avatar-group-more-bg, var(--tx-fill-color-light, #f5f7fa));
   --tx-avatar-text: var(--tx-avatar-group-more-text, var(--tx-text-color-secondary, #909399));
@@ -234,16 +230,14 @@ export default defineComponent({
   letter-spacing: 0;
 }
 
-/*
- * The panel is teleported to <body>, so it is not a descendant of the group root
- * and `.tx-avatar-group :deep(...)` cannot reach it. These have to be standalone
- * selectors, which still carry our scope id because we render them.
- */
+// The panel is teleported to <body>, so it is not a descendant of the group root
+// and `.tx-avatar-group :deep(...)` cannot reach it. These have to be standalone
+// selectors, which still carry our scope id because we render them.
 .tx-avatar-group__overflow-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  /* Five medium avatars across (5 * 40 + 4 * 8) before wrapping to a second row. */
+  // Five medium avatars across (5 * 40 + 4 * 8) before wrapping to a second row.
   max-width: var(--tx-avatar-group-overflow-width, 232px);
 }
 
@@ -251,10 +245,8 @@ export default defineComponent({
   flex: none;
 }
 
-/*
- * Motion is decoration here; the stacking order and the shadow are information
- * (which avatar is being pointed at), so they survive the preference.
- */
+// Motion is decoration here; the stacking order and the shadow are information
+// (which avatar is being pointed at), so they survive the preference.
 @media (prefers-reduced-motion: reduce) {
   .tx-avatar-group :deep(.tx-avatar-group__item),
   .tx-avatar-group :deep(.tx-avatar-group__more-ref .tx-avatar-group__more) {

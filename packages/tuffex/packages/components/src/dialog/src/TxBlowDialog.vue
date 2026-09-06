@@ -235,15 +235,13 @@ provide('destroy', destroy)
     }
   }
 
-  /**
-   * The card. A rimmed overlay surface, not a page-coloured slab: on a dark
-   * page the old `0 8px 32px` black shadow was a smudge around a box the same
-   * colour as the backdrop, and a 200px floor with the button pinned to the
-   * bottom left it hanging 60px under a one-line message. Now the content sets
-   * the height, the rim (border-light, as on every panel) draws the edge, the
-   * highlight catches the top, and the shadow is long, low and ink-tinted so
-   * it reads as depth rather than dirt. 18px radius matches the menu panels.
-   */
+  // The card. A rimmed overlay surface, not a page-coloured slab: on a dark
+  // page the old `0 8px 32px` black shadow was a smudge around a box the same
+  // colour as the backdrop, and a 200px floor with the button pinned to the
+  // bottom left it hanging 60px under a one-line message. Now the content sets
+  // the height, the rim (border-light, as on every panel) draws the edge, the
+  // highlight catches the top, and the shadow is long, low and ink-tinted so
+  // it reads as depth rather than dirt. 18px radius matches the menu panels.
   &__container {
     position: relative;
     display: flex;
@@ -251,7 +249,7 @@ provide('destroy', destroy)
     gap: 10px;
     width: min(360px, 100%);
     max-height: 100%;
-    /* The height comes from the spacing rhythm, not a floor: a floor left a hole between the message and the action. */
+    // The height comes from the spacing rhythm, not a floor: a floor left a hole between the message and the action.
     padding: 32px 24px 24px;
     border-radius: 18px;
     border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
@@ -265,7 +263,7 @@ provide('destroy', destroy)
     animation: tx-blow-dialog-scale 0.5s;
   }
 
-  /* Title / message / action: three steps, each one clearly under the last. */
+  // Title / message / action: three steps, each one clearly under the last.
   &__title {
     margin: 0;
     font-size: 17px;

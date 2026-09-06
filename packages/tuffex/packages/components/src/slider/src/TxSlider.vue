@@ -638,32 +638,28 @@ onBeforeUnmount(() => {
 
 <style lang="scss">
 .tx-slider {
-  /**
-   * Geometry. `TxSlider` measures `--tx-slider-thumb-size` to place the fill,
-   * so it must not change between states. On the surface path it *is* the
-   * pill's width: the native thumb is then exactly as wide as the pill, which
-   * is what keeps the fill's end on the pill's centre and the pill inside the
-   * track at both ends. The flat path narrows it back to the 18px disc below.
-   * The row is as tall as the pill so the whole pill is grabbable.
-   */
+  // Geometry. `TxSlider` measures `--tx-slider-thumb-size` to place the fill,
+  // so it must not change between states. On the surface path it *is* the
+  // pill's width: the native thumb is then exactly as wide as the pill, which
+  // is what keeps the fill's end on the pill's centre and the pill inside the
+  // track at both ends. The flat path narrows it back to the 18px disc below.
+  // The row is as tall as the pill so the whole pill is grabbable.
   --tx-slider-height: 28px;
   --tx-slider-thumb-size: var(--tx-slider-surface-width);
 
-  /** State surface — the rows below are the whole visual language. */
+  // State surface — the rows below are the whole visual language.
   --tx-slider-track-height: 6px;
   --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 14%, transparent);
 
-  /**
-   * The pill: the Radio button-group indicator, borrowed whole. The same 28px
-   * height as `.tx-radio--button`, the same capsule, and the same body — an
-   * 88% tint of the overlay surface, a 1px rim from the light border family,
-   * a 1px top highlight and a short drop shadow. One object in every state:
-   * the native thumb is a hit area and nothing more (see the `.has-surface`
-   * thumb rule). These are the `solid` body; the `blur` and `glass` variants
-   * below re-tint it. `--tx-slider-surface-size` stays the *height* — it is a
-   * public override point, so it keeps its meaning. `slider.test.ts` holds the
-   * recipe to the indicator's source.
-   */
+  // The pill: the Radio button-group indicator, borrowed whole. The same 28px
+  // height as `.tx-radio--button`, the same capsule, and the same body — an
+  // 88% tint of the overlay surface, a 1px rim from the light border family,
+  // a 1px top highlight and a short drop shadow. One object in every state:
+  // the native thumb is a hit area and nothing more (see the `.has-surface`
+  // thumb rule). These are the `solid` body; the `blur` and `glass` variants
+  // below re-tint it. `--tx-slider-surface-size` stays the *height* — it is a
+  // public override point, so it keeps its meaning. `slider.test.ts` holds the
+  // recipe to the indicator's source.
   --tx-slider-surface-size: 28px;
   --tx-slider-surface-width: 36px;
   --tx-slider-surface-radius: 999px;
@@ -673,30 +669,24 @@ onBeforeUnmount(() => {
   --tx-slider-surface-highlight: color-mix(in srgb, var(--tx-color-white, #fff) 17%, transparent);
   --tx-slider-surface-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
 
-  /**
-   * Flat-path thumb (`thumbSurface: false`): the native disc, visible, growing
-   * and ringing to separate its states. All of this is inert on the surface path.
-   */
+  // Flat-path thumb (`thumbSurface: false`): the native disc, visible, growing
+  // and ringing to separate its states. All of this is inert on the surface path.
   --tx-slider-thumb-scale: 1;
   --tx-slider-thumb-ring: 0 0 0 0 transparent;
   --tx-slider-thumb-shadow: 0 1px 3px color-mix(in srgb, #000 18%, transparent);
-  /**
-   * The text-colour family, not the page surface: those tokens are the ones that
-   * actually invert between themes (#111827 light, #ffffff dark), so the disc is
-   * dark on a light page and light on a dark one. Tracking `--tx-bg-color` made
-   * it the same colour as the page behind it, and in dark themes it read as a
-   * hole punched through the track rather than a knob sitting on it. This is
-   * also what `TxSwitch` does with its own thumb.
-   */
+  // The text-colour family, not the page surface: those tokens are the ones that
+  // actually invert between themes (#111827 light, #ffffff dark), so the disc is
+  // dark on a light page and light on a dark one. Tracking `--tx-bg-color` made
+  // it the same colour as the page behind it, and in dark themes it read as a
+  // hole punched through the track rather than a knob sitting on it. This is
+  // also what `TxSwitch` does with its own thumb.
   --tx-slider-thumb-color: var(--tx-text-color-primary, #303133);
 
-  /**
-   * One clock. Rim, shadow, track thickness and the focus ring ride a plain
-   * ease-out, and hover in and out must never bounce. The pill's size has no
-   * clock in the stylesheet at all: its grab, drag and release are the jelly
-   * (`use-thumb-jelly.ts`), written per frame as a transform on the Radio
-   * indicator's spring.
-   */
+  // One clock. Rim, shadow, track thickness and the focus ring ride a plain
+  // ease-out, and hover in and out must never bounce. The pill's size has no
+  // clock in the stylesheet at all: its grab, drag and release are the jelly
+  // (`use-thumb-jelly.ts`), written per frame as a transform on the Radio
+  // indicator's spring.
   --tx-slider-hover-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --tx-slider-hover-duration: 180ms;
 
@@ -709,16 +699,14 @@ onBeforeUnmount(() => {
     --tx-slider-thumb-size: 18px;
   }
 
-  /**
-   * Three bodies — the Radio indicator's three (`indicatorVariant`). `solid`
-   * is the plain capsule above. `blur` thins the fill to 22% and frosts what
-   * lies under it; the fill's blue refracting up through the pill is the whole
-   * point of this variant, so unlike the indicator — which only frosts while it
-   * moves, over labels that must stay legible at rest — the frost is on at rest
-   * too. `glass` keeps the solid capsule at rest and mounts the indicator's
-   * `TxGlassSurface` while held (see the template); the capsule goes clear
-   * under it so the track refracts through the glass rather than an 88% fill.
-   */
+  // Three bodies — the Radio indicator's three (`indicatorVariant`). `solid`
+  // is the plain capsule above. `blur` thins the fill to 22% and frosts what
+  // lies under it; the fill's blue refracting up through the pill is the whole
+  // point of this variant, so unlike the indicator — which only frosts while it
+  // moves, over labels that must stay legible at rest — the frost is on at rest
+  // too. `glass` keeps the solid capsule at rest and mounts the indicator's
+  // `TxGlassSurface` while held (see the template); the capsule goes clear
+  // under it so the track refracts through the glass rather than an 88% fill.
   &.is-thumb-blur {
     --tx-slider-surface-tint: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 22%, transparent);
     --tx-slider-surface-blur: 8px;
@@ -734,17 +722,15 @@ onBeforeUnmount(() => {
     --tx-slider-surface-tint: transparent;
   }
 
-  /*
-   * Known downstream trap, not fixed here: `plugins/touch-music` overrides
-   * `--tx-slider-thumb-size` (0px / 10px !important) on sliders that keep the
-   * default `thumbSurface`. Those overrides were written against the old
-   * 18px disc; with the pill they leave a 36px thumb over a 0–10px hit area,
-   * and `refreshMetrics()` ignores a 0px value and keeps its 18px fallback.
-   * The fix belongs in the plugin: pass `thumbSurface=false` there, then
-   * size the disc (see the slider docs' best practices).
-   */
+  // Known downstream trap, not fixed here: `plugins/touch-music` overrides
+  // `--tx-slider-thumb-size` (0px / 10px !important) on sliders that keep the
+  // default `thumbSurface`. Those overrides were written against the old
+  // 18px disc; with the pill they leave a 36px thumb over a 0–10px hit area,
+  // and `refreshMetrics()` ignores a 0px value and keeps its 18px fallback.
+  // The fix belongs in the plugin: pass `thumbSurface=false` there, then
+  // size the disc (see the slider docs' best practices).
 
-  /* Hover brightens the rim. The pill does not grow. */
+  // Hover brightens the rim. The pill does not grow.
   &.is-hovering,
   &.is-focused {
     --tx-slider-track-height: 8px;
@@ -753,12 +739,10 @@ onBeforeUnmount(() => {
     --tx-slider-thumb-shadow: 0 2px 6px color-mix(in srgb, #000 22%, transparent);
   }
 
-  /**
-   * Dragging: thicker track, darker rail, a rim that picks up the accent and a
-   * longer shadow under the lifted pill. The size step itself is the jelly's.
-   * Driven by the `dragging` ref rather than `:active`, because the pointer
-   * routinely leaves the element mid-drag.
-   */
+  // Dragging: thicker track, darker rail, a rim that picks up the accent and a
+  // longer shadow under the lifted pill. The size step itself is the jelly's.
+  // Driven by the `dragging` ref rather than `:active`, because the pointer
+  // routinely leaves the element mid-drag.
   &.is-dragging {
     --tx-slider-track-height: 10px;
     --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 26%, transparent);
@@ -767,11 +751,9 @@ onBeforeUnmount(() => {
     --tx-slider-thumb-shadow: 0 4px 12px color-mix(in srgb, #000 30%, transparent);
   }
 
-  /**
-   * With the pill on, a ring around the native thumb would sit inside an
-   * invisible box. Only sliders opting out of the surface fall back to the
-   * disc growing and ringing to separate their states.
-   */
+  // With the pill on, a ring around the native thumb would sit inside an
+  // invisible box. Only sliders opting out of the surface fall back to the
+  // disc growing and ringing to separate their states.
   &:not(.has-surface).is-hovering {
     --tx-slider-thumb-scale: 1.08;
     --tx-slider-thumb-ring: 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
@@ -782,11 +764,9 @@ onBeforeUnmount(() => {
     --tx-slider-thumb-ring: 0 0 0 6px color-mix(in srgb, var(--tx-color-primary, #409eff) 24%, transparent);
   }
 
-  /**
-   * Keyboard focus keeps a crisp ring regardless, on whichever thumb is
-   * visible: the disc on the flat path, through its ring variable; the pill on
-   * the surface path, through the dedicated rule below `.tx-slider__surface`.
-   */
+  // Keyboard focus keeps a crisp ring regardless, on whichever thumb is
+  // visible: the disc on the flat path, through its ring variable; the pill on
+  // the surface path, through the dedicated rule below `.tx-slider__surface`.
   &.is-focused:not(.is-dragging) {
     --tx-slider-thumb-ring: 0 0 0 3px var(--tx-focus-ring-color, color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, white));
   }
@@ -822,17 +802,15 @@ onBeforeUnmount(() => {
     height: 100%;
     border-radius: inherit;
     background: var(--tx-color-primary, #409eff);
-    /* Width is driven per-frame from the pointer — never transition it. */
+    // Width is driven per-frame from the pointer — never transition it.
     transition: background-color var(--tx-slider-hover-duration) var(--tx-slider-hover-ease);
   }
 
-  /**
-   * Sized by its authored values and never by state. The jelly scales it
-   * through an inline transform while it runs and takes that transform away
-   * when it stops, so at rest the radius and the 1px rim are exact; while it
-   * runs, a scaled rim is the price of a body that visibly gives. `transform`
-   * is deliberately absent from the transition list — it is written per frame.
-   */
+  // Sized by its authored values and never by state. The jelly scales it
+  // through an inline transform while it runs and takes that transform away
+  // when it stops, so at rest the radius and the 1px rim are exact; while it
+  // runs, a scaled rim is the price of a body that visibly gives. `transform`
+  // is deliberately absent from the transition list — it is written per frame.
   &__surface {
     position: absolute;
     top: 50%;
@@ -840,11 +818,9 @@ onBeforeUnmount(() => {
     height: var(--tx-slider-surface-size);
     border-radius: var(--tx-slider-surface-radius);
     background: var(--tx-slider-surface-tint);
-    /*
-     * Rim, highlight, lift — the Radio indicator's list. The rim is not
-     * decoration: on a flat card there is nothing to separate the pill from
-     * the track but its edge.
-     */
+    // Rim, highlight, lift — the Radio indicator's list. The rim is not
+    // decoration: on a flat card there is nothing to separate the pill from
+    // the track but its edge.
     box-shadow:
       inset 0 0 0 1px var(--tx-slider-surface-rim),
       inset 0 1px 0 var(--tx-slider-surface-highlight),
@@ -853,7 +829,7 @@ onBeforeUnmount(() => {
     transform: translate(-50%, -50%);
     will-change: transform;
     pointer-events: none;
-    /* `left` is deliberately absent — it must track the thumb frame-for-frame. */
+    // `left` is deliberately absent — it must track the thumb frame-for-frame.
     transition: box-shadow var(--tx-slider-hover-duration) var(--tx-slider-hover-ease);
   }
 
@@ -865,12 +841,10 @@ onBeforeUnmount(() => {
       backdrop-filter var(--tx-slider-hover-duration) var(--tx-slider-hover-ease);
   }
 
-  /*
-   * The glass body fills the capsule and rides its transform. The capsule's
-   * own inset rim would be hidden under it, so the rim is restated here;
-   * `.tx-slider` is repeated so this outranks `.tx-glass-surface`'s own
-   * opacity transition regardless of stylesheet order.
-   */
+  // The glass body fills the capsule and rides its transform. The capsule's
+  // own inset rim would be hidden under it, so the rim is restated here;
+  // `.tx-slider` is repeated so this outranks `.tx-glass-surface`'s own
+  // opacity transition regardless of stylesheet order.
   & .tx-slider__glass {
     position: absolute;
     inset: 0;
@@ -884,19 +858,17 @@ onBeforeUnmount(() => {
     }
   }
 
-  /*
-   * Keyboard focus, drawn on the pill: the native thumb is invisible on this
-   * path, so a ring on it would be a ring on nothing. Appended to the list
-   * above rather than replacing it — the rim and the highlight must survive
-   * focus — and restated in full because `box-shadow` is not additive. The
-   * first three entries are the same as `.tx-slider__surface`; the test holds
-   * them equal.
-   *
-   * Not fixed here: in the dark theme `--tx-focus-ring-color` resolves to
-   * `--tx-color-primary-light-7` (rgb(33, 61, 91)), a ring darker than the
-   * pill it surrounds. It reads, but only just; that is a token-level value
-   * shared by every focusable control, so it is out of this component's scope.
-   */
+  // Keyboard focus, drawn on the pill: the native thumb is invisible on this
+  // path, so a ring on it would be a ring on nothing. Appended to the list
+  // above rather than replacing it — the rim and the highlight must survive
+  // focus — and restated in full because `box-shadow` is not additive. The
+  // first three entries are the same as `.tx-slider__surface`; the test holds
+  // them equal.
+  //
+  // Not fixed here: in the dark theme `--tx-focus-ring-color` resolves to
+  // `--tx-color-primary-light-7` (rgb(33, 61, 91)), a ring darker than the
+  // pill it surrounds. It reads, but only just; that is a token-level value
+  // shared by every focusable control, so it is out of this component's scope.
   &.is-focused:not(.is-dragging) .tx-slider__surface {
     box-shadow:
       inset 0 0 0 1px var(--tx-slider-surface-rim),
@@ -938,7 +910,7 @@ onBeforeUnmount(() => {
     opacity: 0;
   }
 
-  /* `tooltipMotion: 'none'` — present so the intent is legible, not inherited. */
+  // `tooltipMotion: 'none'` — present so the intent is legible, not inherited.
   .tx-slider-tooltip-none-enter-active,
   .tx-slider-tooltip-none-leave-active {
     transition: none;
@@ -971,11 +943,9 @@ onBeforeUnmount(() => {
       background: transparent;
     }
 
-    /*
-     * The flat-path disc. Only WebKit/Blink are styled here; `::-moz-range-thumb`
-     * has never been, so Firefox shows its stock thumb on both paths — a
-     * pre-existing gap, left as is.
-     */
+    // The flat-path disc. Only WebKit/Blink are styled here; `::-moz-range-thumb`
+    // has never been, so Firefox shows its stock thumb on both paths — a
+    // pre-existing gap, left as is.
     &::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
@@ -993,13 +963,11 @@ onBeforeUnmount(() => {
     }
   }
 
-  /**
-   * On the surface path the native thumb is a hit area and nothing else. It
-   * exists so the browser handles pointer, keyboard and the value↔px mapping;
-   * the pill is what the user sees. As wide as the pill (that is what
-   * `--tx-slider-thumb-size` resolves to here) and as tall as the row, so the
-   * whole pill is grabbable.
-   */
+  // On the surface path the native thumb is a hit area and nothing else. It
+  // exists so the browser handles pointer, keyboard and the value↔px mapping;
+  // the pill is what the user sees. As wide as the pill (that is what
+  // `--tx-slider-thumb-size` resolves to here) and as tall as the row, so the
+  // whole pill is grabbable.
   &.has-surface .tx-slider__input::-webkit-slider-thumb {
     width: var(--tx-slider-thumb-size);
     height: var(--tx-slider-height);
@@ -1032,7 +1000,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* The jelly is switched off in script under the same query; this zeroes the hover clock. */
+// The jelly is switched off in script under the same query; this zeroes the hover clock.
 @media (prefers-reduced-motion: reduce) {
   .tx-slider {
     --tx-slider-hover-duration: 0ms;
