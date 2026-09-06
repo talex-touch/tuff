@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/main-process/voice-session-contracts.md", "reason": "VoiceService 是唯一的会话所有者；stop/cancel 的终态语义、投递前的 target snapshot 约束都写在这里，补 stream stop 时不能绕过"}
+{"file": ".trellis/spec/main-process/channel-transport-contracts.md", "reason": "stream 后缀频道的注册与所有权规则，新增 :stream:stop 必须照它的形状长"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "VoicePanel 模板重写要守的组件写法约定"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "StreamController.stop 与 StreamContext.stopSignal 是可选新增，类型收窄方式受此约束"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "本任务跨 transport / 主进程 / 渲染三层，改动要成对推演"}
