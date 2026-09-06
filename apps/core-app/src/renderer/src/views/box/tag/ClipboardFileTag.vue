@@ -1,6 +1,6 @@
 <script name="ClipboardFileTag" setup lang="ts">
 import { computed } from 'vue'
-import { buildTfileUrl } from '~/utils/tfile-url'
+import { toTfileUrl } from '@talex-touch/utils/network'
 
 const props = defineProps<{
   data: { content: string } // clipboard data with files
@@ -27,7 +27,7 @@ const firstFileName = computed(() => {
 // Use tfile:// protocol for file icon
 const fileIconUrl = computed(() => {
   if (filePaths.value.length === 0) return null
-  return buildTfileUrl(filePaths.value[0])
+  return toTfileUrl(filePaths.value[0])
 })
 </script>
 

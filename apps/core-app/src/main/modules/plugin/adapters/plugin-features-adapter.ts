@@ -720,6 +720,38 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
     return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
   }
+
+  /**
+   * Rebuild recommendation items from stored `pluginName/featureId` ids.
+   *
+   * A candidate whose plugin was uninstalled or whose feature was removed is dropped silently —
+   * disappearing from the grid is the correct outcome, not an error worth logging per item.
+   */
+  public async rebuildRecommendationItems(itemIds: readonly string[]): Promise<TuffItem[]> {
+    const pluginManager = pluginModule.pluginManager
+    if (!pluginManager) {
+      pluginFeaturesLog.warn(
+        `[PluginFeaturesAdapter] PluginManager not available for recommendation rebuild (${itemIds.length} items)`
+      )
+      return []
+    }
+
+    const items: TuffItem[] = []
+    for (const itemId of itemIds) {
+      const [pluginName, featureId] = itemId.split('/')
+      if (!pluginName || !featureId) continue
+
+      const plugin = pluginManager.plugins.get(pluginName)
+      if (!plugin) continue
+
+      const feature = plugin.getFeature(featureId)
+      if (!feature) continue
+
+      items.push(this.createTuffItem(plugin, feature))
+    }
+
+    return items
+  }
 }
 
 export default new PluginFeaturesAdapter()

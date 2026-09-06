@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import { buildTfileUrl } from '~/utils/tfile-url'
+import { toTfileUrl } from '@talex-touch/utils/network'
 import {
   AudioPreview,
   CodePreview,
@@ -134,7 +134,7 @@ watch(
     }
 
     if (!isElectronRenderer() || !transport) {
-      previewResourceUrl.value = buildTfileUrl(filePath)
+      previewResourceUrl.value = toTfileUrl(filePath)
       previewResourceReady.value = true
       return
     }

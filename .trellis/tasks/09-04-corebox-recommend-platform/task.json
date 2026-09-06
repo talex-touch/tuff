@@ -1,0 +1,31 @@
+{
+  "id": "corebox-recommend-platform",
+  "name": "corebox-recommend-platform",
+  "title": "CoreBox 推荐层重构:来源注册表、Stream 传输统一与推荐 SDK 开放",
+  "description": "把 CoreBox 空态推荐从硬编码 fan-out 改造为可扩展来源注册表;统一 tfile/stream 资源控制面进 transport SDK 并把推荐结果接入 stream 传输;对插件开放 recommend SDK 与内置权重函数;空态改为宫格+列表两段并收敛文案 i18n。",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-04",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "release/ota-transport-error-classification-20260904",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-04-reco-source-registry",
+    "09-04-transport-resource-unify",
+    "09-04-reco-sdk-weights",
+    "09-04-empty-state-sections"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

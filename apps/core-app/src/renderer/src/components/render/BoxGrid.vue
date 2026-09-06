@@ -1,17 +1,11 @@
 <script setup lang="ts">
-import type {
-  RecommendationEvidence,
-  RecommendationSource,
-  TuffContainerLayout,
-  TuffItem,
-  TuffSection
-} from '@talex-touch/utils'
+import type { TuffContainerLayout, TuffItem, TuffSection } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
 import { resolveBoxGridColumnCount } from './box-grid-layout'
 import BoxGridItem from './BoxGridItem.vue'
 import BoxItem from './BoxItem.vue'
-import { formatRecommendationEvidence } from './recommendation-evidence'
 
 interface Props {
   items: TuffItem[]
@@ -76,41 +70,19 @@ function getQuickKey(index: number): string {
   return `⌘${key}`
 }
 
-function isIntelligenceSection(section: TuffSection): boolean {
-  return section.meta?.intelligence === true
-}
-
-function isPinnedSection(section: TuffSection): boolean {
-  return section.meta?.pinned === true
-}
-
+/**
+ * Sections declare their own layout; `grid` is the fallback because the empty state was two grids
+ * before the tiered layout existed and `layout` is optional on TuffSection.
+ */
 function isListSection(section: TuffSection): boolean {
   return section.layout === 'list'
 }
 
-/**
- * Section titles arrive from the main process as i18n keys (`corebox.reason.*`)
- * because the main process has no idea what language the user reads. Older
- * cached layouts still carry finished English literals like `Recommend`, which
- * have no dot and must be shown as-is rather than as a missing key.
- */
-function getSectionTitle(section: TuffSection): string {
-  const title = section.title
-  if (!title) return ''
-  return title.includes('.') ? t(title) : title
+function isIntelligenceSection(section: TuffSection): boolean {
+  return section.meta?.intelligence === true
 }
 
-function getItemEvidence(section: TuffSection, item: TuffItem): string {
-  const recommendation = item.meta?.recommendation
-  if (!recommendation) return ''
 
-  const source = (section.meta?.source ?? recommendation.source) as RecommendationSource | undefined
-  return formatRecommendationEvidence(
-    source,
-    recommendation.evidence as RecommendationEvidence | undefined,
-    t
-  )
-}
 
 function getSectionColumnCount(sectionData: SectionData): number {
   return resolveBoxGridColumnCount(
@@ -138,30 +110,23 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
         v-for="sectionData in sectionsData"
         :key="sectionData.section.id"
         class="BoxGridWrapper"
-        :class="{
-          'is-list': isListSection(sectionData.section),
-          'is-intelligence':
-            isIntelligenceSection(sectionData.section) && !isListSection(sectionData.section),
-          'is-pinned': isPinnedSection(sectionData.section) && !isListSection(sectionData.section)
-        }"
+        :class="{ 'is-intelligence': isIntelligenceSection(sectionData.section) }"
       >
         <div v-if="sectionData.section.title" class="BoxGridTitle">
-          {{ getSectionTitle(sectionData.section) }}
+          {{ resolveI18nText(sectionData.section.title, t) }}
         </div>
-
-        <!-- Reason-grouped list: one row per item, with the reason it is here -->
-        <div v-if="isListSection(sectionData.section)" class="BoxReasonList">
+        <div v-if="isListSection(sectionData.section)" class="BoxGridList">
           <BoxItem
-            v-for="(item, localIndex) in getSectionVisibleItems(sectionData)"
+            v-for="(item, localIndex) in sectionData.items"
             :key="item.id"
             :item="item"
             :active="focus === sectionData.startIndex + localIndex"
             :render="item.render"
             :quick-key="getQuickKey(sectionData.startIndex + localIndex)"
-            :evidence="getItemEvidence(sectionData.section, item)"
             @click="emit('select', sectionData.startIndex + localIndex, item)"
           />
         </div>
+
 
         <div
           v-else
@@ -217,11 +182,14 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
 }
 
 .BoxGridWrapper {
-  width: calc(100% - 1rem);
+  width: calc(100% - 0.5rem);
   border-radius: 18px;
   position: relative;
 
-  margin: 0.5rem;
+  // Tight on purpose: BoxItem already carries its own 8px inset, so a 0.5rem wrapper margin put
+  // list rows 16px from the edge and the section title 24px — visibly adrift from the design and
+  // from each other.
+  margin: 2px 4px;
 
   // Reason sections stack down the panel, so the animated tray border that
   // frames a single intelligence grid would repeat up to nine times. They carry
@@ -258,24 +226,6 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
       opacity: 0.7;
     }
   }
-
-  &.is-pinned {
-    &::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 18px;
-      padding: 0.125rem;
-      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
-      -webkit-mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
-      pointer-events: none;
-      opacity: 0.5;
-    }
-  }
 }
 
 @keyframes rainbow-border {
@@ -291,29 +241,22 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
 }
 
 .BoxGridTitle {
-  padding: 8px 16px 0;
+  // 8px left lines the label up with BoxItem's own inset, so title and rows share one edge.
+  padding: 4px 8px 2px;
   font-size: 12px;
   font-weight: 500;
   color: var(--tx-text-color-secondary);
   opacity: 0.7;
 }
 
-.is-list > .BoxGridTitle {
-  padding: 10px 12px 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  opacity: 0.6;
-}
-
-.BoxReasonList {
+// A list section reuses BoxItem, which brings its own row padding, so the wrapper only stacks.
+.BoxGridList {
   display: flex;
   flex-direction: column;
 }
 
 .BoxGrid {
-  display: grid;
-  // Keep result cards compact while distributing every column across the available row.
+  display: grid; // Keep result cards compact while distributing every column across the available row.
   grid-template-columns: repeat(var(--grid-cols), minmax(0, 108px));
   justify-content: space-between;
   gap: var(--grid-gap);
