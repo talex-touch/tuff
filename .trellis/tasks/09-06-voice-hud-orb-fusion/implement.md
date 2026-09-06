@@ -111,8 +111,9 @@ cd packages/utils   # eslint 只在根 node_modules 里；但配置必须在包�
 - [x] 提交（四笔）：`70d9a778a` transport / `b5462e6e0` voice 主进程 / `55d1e3904` assistant 渲染层 / `5f03f60f9` 任务工件
 - [x] 把「阿洛的球被画成麦克风钮」开成后续任务 → **#1878**
 - [ ] 推送 —— 被 GitHub push protection 拦住，**不是本任务的问题**：`e4dc92995`（C2 分类器，别人的提交）里
-      `plugins/clipboard-history/src/utils/clipboard-shapes.test.ts` 的假夹具 `sk_live_abcdefghijklmnopqrstuvwxyz`
-      命中 Stripe key 前缀。它是用来测密钥检测器本身的字母表占位串，不是真密钥。
+      `plugins/clipboard-history/src/utils/clipboard-shapes.test.ts` 的假夹具（Stripe live 前缀 + 26 位字母表）
+      命中 Stripe key 模式。它是用来测密钥检测器本身的占位串，不是真密钥 —— 但**不要在文档里把它抄全**，
+      我第一版就是这么干的，结果 `f8f578be6` 自己也成了拦截点。夹具已改成运行时拼接（`6ac885876`）。
       两条出路：仓库管理员点 unblock URL，或改写那条夹具（需要改历史，而分支上还有别的会话在写）。
 
 ## 明确不做
