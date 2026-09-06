@@ -1031,7 +1031,7 @@ onBeforeUnmount(() => {
       v-bind="floatingAttrs"
       class="tx-base-anchor"
       :class="[floatingClass, { 'is-open': open, 'is-unlimited-height': isUnlimitedHeight, 'is-liquid': usesLiquidMotion }]"
-      :style="[floatingStyle, floatingStyles, { zIndex, '--tx-ba-max-height': isUnlimitedHeight ? 'none' : undefined }]"
+      :style="[floatingStyle, floatingStyles, { zIndex }]"
     >
       <span
         v-if="props.showArrow && !usesLiquidMotion"

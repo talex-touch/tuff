@@ -437,6 +437,7 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 
 - Reviewed against `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`, `base-anchor-motion.ts`, `types.ts`, and `base-anchor.test.ts`.
 - Existing tests cover uncontrolled toggling, controlled outside/Escape close paths, disabled blocking, close/toggle switches, floating attrs and reference classes, animation variants with legacy duration/ease fallbacks, and surface-motion adaptation strategies.
+- `--tx-ba-max-height` is written only by the `size` middleware: `min(availableHeight, maxHeight)` in pixels, or `none` when unlimited. The root `:style` does not declare it — it used to bind `isUnlimitedHeight ? 'none' : undefined`, and Vue's style patcher turns an `undefined` custom property into `setProperty(name, '')`, so every re-render after a positioning pass deleted the value the middleware had just written and the panel always fell back to the 420px CSS default, overflowing past its trigger.
 - Accessibility note: `TxBaseAnchor` is positioning infrastructure only. The built primitive must provide menu/dialog/listbox roles, focus handling, and keyboard traversal appropriate to its content.
 - `drip` / `bead` coverage lives in `base-anchor-liquid.test.ts` (cubic-bezier solver, spring rejection, spec geometry at p=0 / 0.45 / 1, height-edge independence, item reveal) and in `base-anchor.test.ts` (single merged goo filter, erode-derived outline ring, shadow twin outside the filter, arrow/outline/card suppression, horizontal degradation, no gsap path).
 - `drip` / `bead` is driven by a rAF loop rather than GSAP: the motion is specified as two CSS cubic-beziers, and every frame derives SVG geometry, the shadow twin, and per-item opacity from one progress scalar.
@@ -446,6 +447,6 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 
 - Component source: `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`.
 - Type contracts: `packages/tuffex/packages/components/src/base-anchor/src/types.ts` exports `BaseAnchorProps`, `BaseAnchorAnimationOptions`, and virtual-reference types.
-- **Verified coverage:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` verifies uncontrolled toggling, controlled outside/Escape closes, disabled behavior, close/toggle switches, floating attrs/reference classes, animation and legacy fallbacks, and surface-motion adaptation.
+- **Verified coverage:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` verifies uncontrolled toggling, controlled outside/Escape closes, disabled behavior, close/toggle switches, floating attrs/reference classes, animation and legacy fallbacks, and surface-motion adaptation. `base-anchor-max-height.test.ts` verifies `--tx-ba-max-height` ownership: after the open settles and after a re-render the value is still the pixel value the middleware wrote (`none` for `unlimitedHeight`), and no empty write ever clears it.
 
 <TuffDocSourceLink />
