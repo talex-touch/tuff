@@ -149,15 +149,19 @@ function panel(menu: VueWrapper) {
 }
 
 function rows(menu: VueWrapper) {
-  return menu.findAll('.HomeModelMenu-Row')
+  return menu.findAll('.HomeModelMenu-Item')
 }
 
 function rowNames(menu: VueWrapper): string[] {
-  return rows(menu).map((row) => row.find('.HomeModelMenu-Name').text())
+  return rows(menu).map((row) => row.find('.tx-card-item__title').text())
 }
 
 function filters(menu: VueWrapper) {
   return menu.findAll('.HomeModelMenu-Filter')
+}
+
+function groupNames(menu: VueWrapper): string[] {
+  return menu.findAll('.HomeModelMenu-GroupName').map((name) => name.text())
 }
 
 function pressedFilters(menu: VueWrapper): string[] {
@@ -196,16 +200,20 @@ describe('panel structure', () => {
     expect(menu.findComponent({ name: 'TxDropdownMenu' }).props('initialFocus')).toBe('none')
     expect(panel(menu).exists()).toBe(true)
     expect(menu.find('.HomeModelMenu-Filters').attributes('role')).toBe('group')
-    expect(menu.find('.HomeModelMenu-Filters').attributes('aria-label')).toBe('home.modelProviders')
+    expect(menu.find('.HomeModelMenu-Filters').attributes('aria-label')).toBe('home.modelSources')
 
     const strip = filters(menu)
+    // One tab per channel, and a provider tab only for the provider whose ids carry no channel.
+    // `Pi (local CLI)` has no tab of its own: it would open on the union its channels just split.
     expect(strip.map((button) => button.attributes('aria-label'))).toEqual([
       'home.modelFavorites',
       'Local Model',
-      'Pi (local CLI)'
+      'codex',
+      'cpa',
+      'kimi'
     ])
     expect(strip.every((button) => button.attributes('type') === 'button')).toBe(true)
-    // Nothing pinned and nothing starred: the first provider is the opening filter.
+    // Nothing pinned and nothing starred: the first bucket is the opening filter.
     expect(pressedFilters(menu)).toEqual(['Local Model'])
 
     const auto = menu.find('.HomeModelMenu-Auto')
@@ -288,10 +296,12 @@ describe('reopening', () => {
     expect(filters(menu).map((button) => button.attributes('aria-label'))).toEqual([
       'home.modelFavorites',
       'Local Model',
-      'Pi (local CLI)'
+      'codex',
+      'cpa',
+      'kimi'
     ])
     await filters(menu)[2].trigger('click')
-    expect(rowNames(menu)).toEqual(['gpt-6-astra', 'grok-4.6', 'k3'])
+    expect(rowNames(menu)).toEqual(['gpt-6-astra'])
   })
 
   it('keeps the rows it already has on screen while the refetch is in flight', async () => {
@@ -330,7 +340,9 @@ describe('reopening', () => {
     expect(filters(menu).map((button) => button.attributes('aria-label'))).toEqual([
       'home.modelFavorites',
       'Local Model',
-      'Pi (local CLI)',
+      'codex',
+      'cpa',
+      'kimi',
       'OpenAI'
     ])
     expect(rowNames(menu)).toEqual(['qwen2.5:3b'])
@@ -343,19 +355,19 @@ describe('rows', () => {
     await filters(menu)[2].trigger('click')
 
     const first = rows(menu)[0]
-    expect(first.find('.HomeModelMenu-Name').text()).toBe('gpt-6-astra')
-    expect(first.find('.HomeModelMenu-Sub').text()).toBe('Pi (local CLI) · codex')
+    expect(first.find('.tx-card-item__title').text()).toBe('gpt-6-astra')
+    expect(first.find('.tx-card-item__subtitle').text()).toBe('Pi (local CLI) · codex')
     // Family first: `gpt-6-astra` is OpenAI's, whatever icon the pi provider itself has.
     expect(first.find('.HomeModelMenu-Icon i').classes()).toContain('i-simple-icons-openai')
-    expect(first.find('[role="menuitemradio"]').attributes('aria-checked')).toBe('false')
+    expect(first.attributes('aria-checked')).toBe('false')
   })
 
   it('shows a local model whole, colon included, with the provider alone as subtitle', async () => {
     const menu = await openMenu()
 
     const first = rows(menu)[0]
-    expect(first.find('.HomeModelMenu-Name').text()).toBe('qwen2.5:3b')
-    expect(first.find('.HomeModelMenu-Sub').text()).toBe('Local Model')
+    expect(first.find('.tx-card-item__title').text()).toBe('qwen2.5:3b')
+    expect(first.find('.tx-card-item__subtitle').text()).toBe('Local Model')
     expect(first.find('.HomeModelMenu-Icon i').classes()).toContain('i-simple-icons-qwen')
   })
 
@@ -366,8 +378,9 @@ describe('rows', () => {
     expect(rowNames(menu)).toEqual(['qwen2.5:3b'])
     expect(rows(menu)[0].find('.HomeModelMenu-Icon i').classes()).toContain('i-simple-icons-qwen')
 
-    await filters(menu)[2].trigger('click')
-    expect(rowNames(menu)).toEqual(['gpt-6-astra', 'grok-4.6', 'k3'])
+    // A search reaches every channel at once; the strip would show one model per tab here.
+    await search(menu, '-')
+    expect(rowNames(menu)).toEqual(['gpt-6-astra', 'grok-4.6'])
     const icons = rows(menu).map((row) => row.find('.HomeModelMenu-Icon i').classes())
     // Matched on the name part, so the `codex/` source does not make this a codex family.
     expect(icons[0]).toContain('i-simple-icons-openai')
@@ -377,25 +390,41 @@ describe('rows', () => {
 
   it('falls back to the provider icon for a model whose name names no family', async () => {
     const menu = await openMenu()
-    await filters(menu)[2].trigger('click')
+    // The `kimi` channel, which serves k3 alone.
+    await filters(menu)[4].trigger('click')
 
-    // `kimi/k3`: the source is Kimi, but the name part `k3` says nothing, so the pi provider's
+    // `kimi/k3`: the channel is Kimi, but the name part `k3` says nothing, so the pi provider's
     // icon stands in — `custom` in this fixture.
-    const kimi = rows(menu)[2]
-    expect(kimi.find('.HomeModelMenu-Name').text()).toBe('k3')
+    const kimi = rows(menu)[0]
+    expect(kimi.find('.tx-card-item__title').text()).toBe('k3')
     expect(kimi.find('.HomeModelMenu-Icon i').classes()).toContain('i-carbon-settings')
     expect(kimi.find('.HomeModelMenu-Icon i').classes()).not.toContain('i-simple-icons-kimi')
   })
 
-  it('keeps the provider icon on the filter strip, where the provider is the subject', async () => {
+  it('brands each channel tab, and keeps the provider icon where the bucket is a provider', async () => {
     const menu = await openMenu()
 
-    // The star filter is a plain span; the provider buttons render a TxIcon each.
+    // The star filter is a plain span; every bucket button draws a TxIcon or an initial.
     const stripIcons = filters(menu)
       .slice(1)
-      .map((button) => button.find('i').classes())
+      .map((button) => (button.find('i').exists() ? button.find('i').classes() : []))
+    // `Local Model` is a provider bucket: its ids carry no channel, so the provider icon stands.
     expect(stripIcons[0]).toContain('i-carbon-bare-metal-server')
-    expect(stripIcons[1]).toContain('i-carbon-settings')
+    // The channels are branded off their own names — `codex` resolving to OpenAI, not to the pi
+    // provider's `custom` icon, which is what all three of these tabs used to show.
+    expect(stripIcons[1]).toContain('i-simple-icons-openai')
+    expect(stripIcons[3]).toContain('i-simple-icons-kimi')
+  })
+
+  it("badges a channel it cannot brand with the channel's own initial", async () => {
+    const menu = await openMenu()
+
+    // `cpa` is a name from the user's own pi config: branding it would be a guess, and a shared
+    // fallback glyph would make every such tab identical.
+    const cpa = filters(menu)[3]
+    expect(cpa.attributes('aria-label')).toBe('cpa')
+    expect(cpa.find('i').exists()).toBe(false)
+    expect(cpa.find('.HomeModelMenu-FilterInitial').text()).toBe('C')
   })
 
   it('badges the first nine rows with the platform chord and no more', async () => {
@@ -414,8 +443,9 @@ describe('rows', () => {
     expect(badges).toHaveLength(11)
     // The badge sits inside the radio, not beside it: the scoped rule that flattens TxKbd's
     // keycap relief keys on `.HomeModelMenu-Item .HomeModelMenu-Kbd` and would silently stop
-    // applying if the badge moved out.
-    expect(rows(menu)[0].find('.HomeModelMenu-Item .HomeModelMenu-Kbd').exists()).toBe(true)
+    // applying if the badge moved out. The row itself now carries that class.
+    expect(rows(menu)[0].classes()).toContain('HomeModelMenu-Item')
+    expect(rows(menu)[0].find('.HomeModelMenu-Kbd').exists()).toBe(true)
     expect(badges.slice(0, 9).map((badge) => badge.text())).toEqual([
       '⌘1',
       '⌘2',
@@ -437,18 +467,19 @@ describe('rows', () => {
     expect(rows(menu)[0].find('.HomeModelMenu-Kbd').text()).toBe('Ctrl+1')
   })
 
-  it('marks the persisted model as checked and opens on its provider', async () => {
+  it('marks the persisted model as checked and opens on its channel, not its provider', async () => {
     resetAppSetting({ model: { ...PI_GROK }, favoriteModels: [] })
     const menu = await openMenu()
 
-    expect(pressedFilters(menu)).toEqual(['Pi (local CLI)'])
+    // `cpa/grok-4.6` opens on `cpa`. Opening on `Pi (local CLI)` would land the user on the union
+    // of three channels and leave them to find the pinned model in it.
+    expect(pressedFilters(menu)).toEqual(['cpa'])
     expect(menu.find('.HomeModelMenu-Auto').attributes('aria-checked')).toBe('false')
-    const checked = rows(menu).filter(
-      (row) => row.find('[role="menuitemradio"]').attributes('aria-checked') === 'true'
-    )
+    const checked = rows(menu).filter((row) => row.attributes('aria-checked') === 'true')
     expect(checked).toHaveLength(1)
-    expect(checked[0].classes()).toContain('is-selected')
-    expect(checked[0].find('.HomeModelMenu-Name').text()).toBe('grok-4.6')
+    // Selection is the card item's own active state now, not a class on a wrapper row.
+    expect(checked[0].classes()).toContain('tx-card-item--active')
+    expect(checked[0].find('.tx-card-item__title').text()).toBe('grok-4.6')
   })
 
   it('keeps Auto checked when the persisted model is not on offer, without clearing it', async () => {
@@ -457,18 +488,18 @@ describe('rows', () => {
     const menu = await openMenu()
 
     expect(menu.find('.HomeModelMenu-Auto').attributes('aria-checked')).toBe('true')
-    expect(rows(menu).some((row) => row.classes().includes('is-selected'))).toBe(false)
+    expect(rows(menu).some((row) => row.classes().includes('tx-card-item--active'))).toBe(false)
     expect(appSetting.conversation).toEqual({ model: stale, favoriteModels: [] })
   })
 })
 
 describe('filters', () => {
-  it('shows only the pressed provider, and exactly one filter is pressed at a time', async () => {
+  it('shows only the pressed bucket, and exactly one filter is pressed at a time', async () => {
     const menu = await openMenu()
 
     await filters(menu)[2].trigger('click')
-    expect(pressedFilters(menu)).toEqual(['Pi (local CLI)'])
-    expect(rowNames(menu)).toEqual(['gpt-6-astra', 'grok-4.6', 'k3'])
+    expect(pressedFilters(menu)).toEqual(['codex'])
+    expect(rowNames(menu)).toEqual(['gpt-6-astra'])
 
     await filters(menu)[1].trigger('click')
     expect(pressedFilters(menu)).toEqual(['Local Model'])
@@ -520,12 +551,12 @@ describe('filters', () => {
     expect(menu.find('.HomeModelMenu-Auto').exists()).toBe(true)
   })
 
-  it("starts each opening with an empty query and the pinned model's provider", async () => {
+  it("starts each opening with an empty query and the pinned model's channel", async () => {
     const menu = await openMenu()
 
     await search(menu, 'grok')
     await filters(menu)[0].trigger('click')
-    await rows(menu)[0].find('[role="menuitemradio"]').trigger('click')
+    await rows(menu)[0].trigger('click')
     await nextTick()
     expect(panel(menu).exists()).toBe(false)
     expect(appSetting.conversation).toEqual({ model: PI_GROK, favoriteModels: [] })
@@ -535,8 +566,66 @@ describe('filters', () => {
     await nextTick()
 
     expect(menu.find<HTMLInputElement>('.HomeModelMenu-Search input').element.value).toBe('')
-    expect(pressedFilters(menu)).toEqual(['Pi (local CLI)'])
-    expect(rowNames(menu)).toEqual(['gpt-6-astra', 'grok-4.6', 'k3'])
+    expect(pressedFilters(menu)).toEqual(['cpa'])
+    expect(rowNames(menu)).toEqual(['grok-4.6'])
+  })
+})
+
+describe('groups', () => {
+  it('heads each bucket once the rows span more than one, in the order the rows arrive', async () => {
+    const menu = await openMenu()
+
+    // A search reaches every bucket, which is where a header earns its line: the pressed tab no
+    // longer says which channel a row came from.
+    await search(menu, 'o')
+    expect(rowNames(menu)).toEqual(['qwen2.5:3b', 'gpt-6-astra', 'grok-4.6', 'k3'])
+    expect(groupNames(menu)).toEqual(['Local Model', 'codex', 'cpa', 'kimi'])
+  })
+
+  it('leaves a single bucket bare, because the tab above it already names the channel', async () => {
+    const menu = await openMenu()
+
+    // `codex`, which serves one model here.
+    await filters(menu)[2].trigger('click')
+    expect(rowNames(menu)).toEqual(['gpt-6-astra'])
+    expect(groupNames(menu)).toEqual([])
+  })
+
+  it('numbers the chords across the groups, so a header never costs a digit', async () => {
+    const menu = await openMenu()
+
+    await search(menu, 'o')
+    const badges = rows(menu).map((row) => row.find('.HomeModelMenu-Kbd').text())
+    // Four rows over four groups: the count runs unbroken instead of restarting at each header.
+    expect(badges).toEqual(['\u23181', '\u23182', '\u23183', '\u23184'])
+
+    const event = new KeyboardEvent('keydown', {
+      key: '4',
+      metaKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    menu.find('.HomeModelMenu').element.dispatchEvent(event)
+    await nextTick()
+
+    // \u23184 is the last row of the last group, not the fourth row of the first.
+    expect(appSetting.conversation).toEqual({ model: PI_KIMI, favoriteModels: [] })
+  })
+
+  it('keeps the header out of the arrow traversal and out of the a11y tree', async () => {
+    const menu = await openMenu()
+    await search(menu, 'o')
+
+    const header = menu.find('.HomeModelMenu-GroupHeader')
+    expect(header.attributes('aria-hidden')).toBe('true')
+    expect(header.attributes('role')).toBeUndefined()
+    expect(header.attributes('tabindex')).toBeUndefined()
+    // The primitive walks `[role="menuitemradio"]` and friends; a header must not be one of them.
+    expect(header.element.matches('[role="menuitem"], [role="menuitemradio"]')).toBe(false)
+    // The group around it carries the name instead, so the channel is still announced.
+    const group = menu.findAll('.HomeModelMenu-Group')[0]
+    expect(group.attributes('role')).toBe('group')
+    expect(group.attributes('aria-label')).toBe('Local Model')
   })
 })
 
@@ -610,7 +699,7 @@ describe('choosing', () => {
   it('picks a row by click and Auto by its row, each closing the menu', async () => {
     const menu = await openMenu()
 
-    await rows(menu)[0].find('[role="menuitemradio"]').trigger('click')
+    await rows(menu)[0].trigger('click')
     await nextTick()
     expect(appSetting.conversation).toEqual({ model: LOCAL_QWEN, favoriteModels: [] })
     expect(panel(menu).exists()).toBe(false)
@@ -627,25 +716,29 @@ describe('choosing', () => {
 
   it('stars a row without selecting it or closing the menu', async () => {
     const menu = await openMenu()
-    await filters(menu)[2].trigger('click')
+    // The `cpa` channel, which serves grok alone.
+    await filters(menu)[3].trigger('click')
 
-    const star = rows(menu)[1].find('.HomeModelMenu-Star')
+    const star = rows(menu)[0].find('.HomeModelMenu-Star')
     expect(star.attributes('type')).toBe('button')
     expect(star.attributes('aria-pressed')).toBe('false')
     expect(star.attributes('aria-label')).toBe('home.modelFavorite')
-    // Never nested in the radio: a control inside a control is not a control.
-    expect(rows(menu)[1].find('[role="menuitemradio"] .HomeModelMenu-Star').exists()).toBe(false)
+    // Inside the radio, not beside it: the row is a card item, not a button, so a control may sit
+    // in it — which is what lets the hover surface run the full width of the row. Its click is
+    // stopped short of the row, which is what the rest of this test proves.
+    expect(rows(menu)[0].attributes('role')).toBe('menuitemradio')
+    expect(rows(menu)[0].find('.HomeModelMenu-Star').exists()).toBe(true)
 
     await star.trigger('click')
     await nextTick()
 
     expect(appSetting.conversation).toEqual({ model: null, favoriteModels: [PI_GROK] })
     expect(panel(menu).exists()).toBe(true)
-    expect(rows(menu)[1].find('.HomeModelMenu-Star').attributes('aria-pressed')).toBe('true')
-    expect(rows(menu)[1].find('.HomeModelMenu-Star').attributes('aria-label')).toBe(
+    expect(rows(menu)[0].find('.HomeModelMenu-Star').attributes('aria-pressed')).toBe('true')
+    expect(rows(menu)[0].find('.HomeModelMenu-Star').attributes('aria-label')).toBe(
       'home.modelUnfavorite'
     )
-    expect(rows(menu)[1].find('[role="menuitemradio"]').attributes('aria-checked')).toBe('false')
+    expect(rows(menu)[0].attributes('aria-checked')).toBe('false')
 
     // The star filter reflects it at once.
     await filters(menu)[0].trigger('click')

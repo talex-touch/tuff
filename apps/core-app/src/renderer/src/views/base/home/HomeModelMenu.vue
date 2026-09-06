@@ -11,6 +11,7 @@ let closeActiveModelMenu: (() => void) | null = null
 <script lang="ts" name="HomeModelMenu" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
 import type { ModelChoice } from '~/modules/conversation/useModelOptions'
+import { TxCardItem } from '@talex-touch/tuffex/card-item'
 import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxIcon } from '@talex-touch/tuffex/icon'
 import { TxKbd } from '@talex-touch/tuffex/kbd'
@@ -21,6 +22,10 @@ import { matchesModelQuery, modelSubtitle } from '~/modules/conversation/model-d
 import { useModelFavorites } from '~/modules/conversation/useModelFavorites'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
 import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
+import {
+  modelSourceIconFor,
+  modelSourceInitialFor
+} from '~/modules/intelligence/model-source-icons'
 import { providerIconFor } from '~/modules/intelligence/provider-icons'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import {
@@ -32,9 +37,9 @@ import {
 /**
  * The picker behind both model pills. Each caller hands its pill in through the trigger slot and
  * this control owns the rest: anchoring, outside-click, Escape and arrow traversal come from
- * TxDropdownMenu; the provider filter strip, search, favourites, hotkeys and the shared
- * selection state are composed here. Rows are `menuitemradio` buttons so the primitive's arrow
- * keys walk them; everything else in the panel is reached with Tab.
+ * TxDropdownMenu; the channel filter strip, search, favourites, hotkeys and the shared selection
+ * state are composed here. Rows are `menuitemradio` card items so the primitive's arrow keys walk
+ * them; everything else in the panel is reached with Tab.
  */
 const props = withDefaults(defineProps<{ placement?: 'bottom-start' | 'top-end' }>(), {
   placement: 'bottom-start'
@@ -49,16 +54,50 @@ const isMac = getCurrentRendererPlatformState().isMac
 
 /**
  * Which rows the strip shows when there is no search. A tagged union rather than a string, so a
- * provider whose id happened to be `favorites` could not collide with the star filter.
+ * bucket whose key happened to be `favorites` could not collide with the star filter.
  */
-type ModelFilter = { kind: 'favorites' } | { kind: 'provider'; providerId: string }
+type ModelFilter = { kind: 'favorites' } | { kind: 'bucket'; key: string }
 
 const FAVORITES_FILTER: ModelFilter = { kind: 'favorites' }
 
-interface ProviderFilter {
+/**
+ * One tab on the strip, and one group in the list — the same thing seen twice, which is why there
+ * is one type and one resolver rather than a copy on each side that can drift apart.
+ *
+ * A bucket is the channel a model was listed under (`codex/gpt-6-astra` → `codex`), falling back to
+ * the provider for the models whose id carries no channel at all (`qwen2.5:3b`).
+ */
+interface ModelBucket {
+  key: string
   providerId: string
-  providerName: string
-  icon: ITuffIcon
+  /** `null` when this provider's ids carry no channel prefix; the bucket is then the provider. */
+  source: string | null
+  label: string
+  /** `null` for a channel the icon table cannot place; `initial` is drawn instead. */
+  icon: ITuffIcon | null
+  initial: string
+}
+
+/**
+ * `\u0000` joins the two halves, because both are free text: a provider id may hold the `/` or `:`
+ * that would otherwise let `a/b` + `c` and `a` + `b/c` collide into one bucket. Neither a provider
+ * id nor a channel name can hold a NUL. Written as an escape, never as the character itself — a
+ * raw NUL in a source file is invisible in every editor and diff that would have to review it.
+ */
+function bucketKeyOf(choice: ModelChoice): string {
+  return `${choice.providerId}\u0000${choice.source ?? ''}`
+}
+
+function bucketOf(choice: ModelChoice): ModelBucket {
+  const source = choice.source
+  return {
+    key: bucketKeyOf(choice),
+    providerId: choice.providerId,
+    source,
+    label: source ?? choice.providerName,
+    icon: source ? modelSourceIconFor(source) : providerIconFor(choice.providerType),
+    initial: source ? modelSourceInitialFor(source) : ''
+  }
 }
 
 const open = ref(false)
@@ -75,29 +114,28 @@ const searchWrapRef = ref<HTMLElement | null>(null)
 let restoreFocusOnClose = false
 
 /**
- * One filter per provider that has something to pick, in the order the options arrived. Derived
- * from the rows rather than the raw option list: a provider with no models would be a tab that
- * opens on nothing.
+ * One tab per bucket that has something to pick, in the order the options arrived. A provider that
+ * serves several channels contributes one tab each and none of its own: `Pi (local CLI)` as a tab
+ * would open on the union of `codex` and `cpa`, which is the list the user just asked to split.
+ * Derived from the rows rather than the raw option list, so a bucket with no models is never a tab
+ * that opens on nothing.
  */
-const providerFilters = computed<ProviderFilter[]>(() => {
+const bucketFilters = computed<ModelBucket[]>(() => {
   const seen = new Set<string>()
-  const filters: ProviderFilter[] = []
+  const buckets: ModelBucket[] = []
   for (const choice of choices.value) {
-    if (seen.has(choice.providerId)) continue
-    seen.add(choice.providerId)
-    filters.push({
-      providerId: choice.providerId,
-      providerName: choice.providerName,
-      icon: providerIconFor(choice.providerType)
-    })
+    const key = bucketKeyOf(choice)
+    if (seen.has(key)) continue
+    seen.add(key)
+    buckets.push(bucketOf(choice))
   }
-  return filters
+  return buckets
 })
 
 /**
  * A row shows what the model is before who serves it: the family's brand mark (`qwen2.5:3b` →
  * Qwen, `codex/gpt-6-astra` → OpenAI), and the provider's icon only when the name names no
- * family. The strip keeps the provider icon; there the provider is the subject.
+ * family. A tab and a group header show the bucket instead — there the channel is the subject.
  */
 function rowIcon(choice: ModelChoice): ITuffIcon {
   return modelFamilyIconFor(choice.model) ?? providerIconFor(choice.providerType)
@@ -109,43 +147,77 @@ const favoriteChoices = computed(() => choices.value.filter((choice) => isFavori
 const trimmedQuery = computed(() => query.value.trim())
 
 /**
- * Where the panel opens: the pinned model's provider, else the star filter when a favourite is
- * on offer, else the first provider. The star filter is the last resort only when there is no
- * provider at all.
+ * Where the panel opens: the pinned model's bucket, else the star filter when a favourite is
+ * on offer, else the first bucket. The star filter is the last resort only when there is no
+ * bucket at all.
  */
 function defaultFilter(): ModelFilter {
   const resolved = resolvedChoice.value
-  if (resolved) return { kind: 'provider', providerId: resolved.providerId }
+  if (resolved) return { kind: 'bucket', key: bucketKeyOf(resolved) }
   if (favoriteChoices.value.length) return FAVORITES_FILTER
-  const first = providerFilters.value[0]
-  return first ? { kind: 'provider', providerId: first.providerId } : FAVORITES_FILTER
+  const first = bucketFilters.value[0]
+  return first ? { kind: 'bucket', key: first.key } : FAVORITES_FILTER
 }
 
-/** The active filter, unless it names a provider that has since gone; then the default. */
+/** The active filter, unless it names a bucket that has since gone; then the default. */
 const effectiveFilter = computed<ModelFilter>(() => {
   const chosen = activeFilter.value
   if (chosen.kind === 'favorites') return chosen
-  const stillOffered = providerFilters.value.some(
-    (filter) => filter.providerId === chosen.providerId
-  )
+  const stillOffered = bucketFilters.value.some((bucket) => bucket.key === chosen.key)
   return stillOffered ? chosen : defaultFilter()
 })
 
 const favoritesActive = computed(() => effectiveFilter.value.kind === 'favorites')
 
-function isProviderActive(providerId: string): boolean {
+function isBucketActive(key: string): boolean {
   const filter = effectiveFilter.value
-  return filter.kind === 'provider' && filter.providerId === providerId
+  return filter.kind === 'bucket' && filter.key === key
 }
 
-/** A search runs across every provider and ignores the strip; the strip only applies without one. */
+/** A search runs across every bucket and ignores the strip; the strip only applies without one. */
 const visibleChoices = computed<ModelChoice[]>(() => {
   const needle = trimmedQuery.value
   if (needle) return choices.value.filter((choice) => matchesModelQuery(choice, needle))
   const filter = effectiveFilter.value
   if (filter.kind === 'favorites') return favoriteChoices.value
-  return choices.value.filter((choice) => choice.providerId === filter.providerId)
+  return choices.value.filter((choice) => bucketKeyOf(choice) === filter.key)
 })
+
+/**
+ * The same rows, cut into their buckets. `visibleChoices` stays the ordering truth and this is a
+ * view of it, which is what keeps `startIndex` — and with it the ⌘1–9 chords — running unbroken
+ * across the group boundaries instead of restarting at each header.
+ */
+interface ModelGroup {
+  bucket: ModelBucket
+  choices: ModelChoice[]
+  /** Where this group's first row sits in `visibleChoices`; the chord index counts from here. */
+  startIndex: number
+}
+
+const visibleGroups = computed<ModelGroup[]>(() => {
+  const groups: ModelGroup[] = []
+  const byKey = new Map<string, ModelGroup>()
+  visibleChoices.value.forEach((choice, index) => {
+    const key = bucketKeyOf(choice)
+    const existing = byKey.get(key)
+    if (existing) {
+      existing.choices.push(choice)
+      return
+    }
+    const group: ModelGroup = { bucket: bucketOf(choice), choices: [choice], startIndex: index }
+    byKey.set(key, group)
+    groups.push(group)
+  })
+  return groups
+})
+
+/**
+ * A header over the only group on screen names what the tab above it already says, so the single
+ * group goes bare. Under a search — and under the star filter — the rows usually do span buckets,
+ * and that is exactly where the header earns its line.
+ */
+const showGroupHeaders = computed(() => visibleGroups.value.length > 1)
 
 /**
  * The line shown instead of the list, or `null` when there are rows. Gated on `loaded`, never on
@@ -288,9 +360,9 @@ onBeforeUnmount(() => {
          belong inside a group per ARIA menus; the strip and the search field ride along as the
          panel's own controls, reached with Tab (design §4 rejected `tablist` inside a `menu`). -->
     <div class="HomeModelMenu" role="group" :aria-label="t('home.model')" @keydown="onPanelKeydown">
-      <!-- Filters, not tabs: one `aria-pressed` button per provider, exactly one pressed.
-           Always shown, even for a single provider, so the star filter has a fixed place. -->
-      <div class="HomeModelMenu-Filters" role="group" :aria-label="t('home.modelProviders')">
+      <!-- Filters, not tabs: one `aria-pressed` button per bucket, exactly one pressed.
+           Always shown, even for a single bucket, so the star filter has a fixed place. -->
+      <div class="HomeModelMenu-Filters" role="group" :aria-label="t('home.modelSources')">
         <button
           class="HomeModelMenu-Filter"
           :class="{ 'is-active': favoritesActive }"
@@ -303,17 +375,20 @@ onBeforeUnmount(() => {
           <span :class="favoritesActive ? 'i-ri-star-fill' : 'i-ri-star-line'" />
         </button>
         <button
-          v-for="provider in providerFilters"
-          :key="provider.providerId"
+          v-for="bucket in bucketFilters"
+          :key="bucket.key"
           class="HomeModelMenu-Filter"
-          :class="{ 'is-active': isProviderActive(provider.providerId) }"
+          :class="{ 'is-active': isBucketActive(bucket.key) }"
           type="button"
-          :aria-pressed="isProviderActive(provider.providerId)"
-          :aria-label="provider.providerName"
-          :title="provider.providerName"
-          @click="pickFilter({ kind: 'provider', providerId: provider.providerId })"
+          :aria-pressed="isBucketActive(bucket.key)"
+          :aria-label="bucket.label"
+          :title="bucket.label"
+          @click="pickFilter({ kind: 'bucket', key: bucket.key })"
         >
-          <TxIcon :icon="provider.icon" :size="15" />
+          <TxIcon v-if="bucket.icon" :icon="bucket.icon" :size="15" />
+          <!-- A channel the icon table cannot place is named by the user (`mesh`, `cpa`), so it
+               gets its own initial rather than a shared glyph four such tabs would share. -->
+          <span v-else class="HomeModelMenu-FilterInitial">{{ bucket.initial }}</span>
         </button>
       </div>
 
@@ -328,13 +403,13 @@ onBeforeUnmount(() => {
 
       <!-- Auto stays on top and outside every filter: it is the way out of pinning, not a model. -->
       <button
-        class="HomeModelMenu-Item HomeModelMenu-Auto"
+        class="HomeModelMenu-Auto"
         type="button"
         role="menuitemradio"
         :aria-checked="!resolvedChoice"
         @click="choose(null)"
       >
-        <span class="HomeModelMenu-Name">{{ t('home.modelAuto') }}</span>
+        <span>{{ t('home.modelAuto') }}</span>
       </button>
 
       <div class="HomeModelMenu-Divider" />
@@ -343,42 +418,64 @@ onBeforeUnmount(() => {
         <p v-if="emptyHint" class="HomeModelMenu-Hint">{{ emptyHint }}</p>
 
         <div v-else class="HomeModelMenu-List" role="group">
-          <!-- Two buttons side by side, not nested: a control cannot sit inside another control,
-               and the star must neither select nor close. Arrow keys walk the radios only. -->
+          <!-- One block per bucket. The header is `aria-hidden` and unfocusable: the group's own
+               `aria-label` already announces the channel, and a focusable header would land in the
+               arrow traversal between two rows. -->
           <div
-            v-for="(choice, index) in visibleChoices"
-            :key="`${choice.providerId} ${choice.model}`"
-            class="HomeModelMenu-Row"
-            :class="{ 'is-selected': isSelected(choice) }"
+            v-for="group in visibleGroups"
+            :key="group.bucket.key"
+            class="HomeModelMenu-Group"
+            role="group"
+            :aria-label="group.bucket.label"
           >
-            <button
+            <div v-if="showGroupHeaders" class="HomeModelMenu-GroupHeader" aria-hidden="true">
+              <TxIcon v-if="group.bucket.icon" :icon="group.bucket.icon" :size="12" />
+              <span v-else class="HomeModelMenu-FilterInitial">{{ group.bucket.initial }}</span>
+              <span class="HomeModelMenu-GroupName">{{ group.bucket.label }}</span>
+            </div>
+
+            <!-- The star rides in the row's `right` slot rather than beside it: the row is a div,
+                 so a control may sit inside it, and the hover surface then covers the whole row
+                 instead of stopping short of the star. It still must neither select nor close, so
+                 its click is stopped before it reaches the row. Arrow keys walk the radios only. -->
+            <TxCardItem
+              v-for="(choice, index) in group.choices"
+              :key="`${choice.providerId} ${choice.model}`"
               class="HomeModelMenu-Item"
-              type="button"
               role="menuitemradio"
               :aria-checked="isSelected(choice)"
+              clickable
+              :active="isSelected(choice)"
               @click="choose(choice)"
             >
-              <TxIcon class="HomeModelMenu-Icon" :icon="rowIcon(choice)" :size="15" />
-              <span class="HomeModelMenu-Text">
-                <span class="HomeModelMenu-Name">{{ choice.displayName }}</span>
-                <span class="HomeModelMenu-Sub">
-                  {{ modelSubtitle(choice.providerName, choice.source) }}
-                </span>
-              </span>
-              <TxKbd v-if="index < MODEL_MENU_HOTKEY_COUNT" class="HomeModelMenu-Kbd">
-                {{ modelMenuHotkeyLabel(index, isMac) }}
-              </TxKbd>
-            </button>
-            <button
-              class="HomeModelMenu-Star"
-              type="button"
-              :aria-pressed="isFavorite(choice)"
-              :aria-label="isFavorite(choice) ? t('home.modelUnfavorite') : t('home.modelFavorite')"
-              :title="isFavorite(choice) ? t('home.modelUnfavorite') : t('home.modelFavorite')"
-              @click="toggleStar(choice)"
-            >
-              <span :class="isFavorite(choice) ? 'i-ri-star-fill' : 'i-ri-star-line'" />
-            </button>
+              <template #avatar>
+                <TxIcon class="HomeModelMenu-Icon" :icon="rowIcon(choice)" :size="15" />
+              </template>
+              <template #title>{{ choice.displayName }}</template>
+              <template #subtitle>
+                {{ modelSubtitle(choice.providerName, choice.source) }}
+              </template>
+              <template #right>
+                <TxKbd
+                  v-if="group.startIndex + index < MODEL_MENU_HOTKEY_COUNT"
+                  class="HomeModelMenu-Kbd"
+                >
+                  {{ modelMenuHotkeyLabel(group.startIndex + index, isMac) }}
+                </TxKbd>
+                <button
+                  class="HomeModelMenu-Star"
+                  type="button"
+                  :aria-pressed="isFavorite(choice)"
+                  :aria-label="
+                    isFavorite(choice) ? t('home.modelUnfavorite') : t('home.modelFavorite')
+                  "
+                  :title="isFavorite(choice) ? t('home.modelUnfavorite') : t('home.modelFavorite')"
+                  @click.stop="toggleStar(choice)"
+                >
+                  <span :class="isFavorite(choice) ? 'i-ri-star-fill' : 'i-ri-star-line'" />
+                </button>
+              </template>
+            </TxCardItem>
           </div>
         </div>
       </div>
@@ -398,16 +495,23 @@ onBeforeUnmount(() => {
   gap: 4px;
 }
 
+/*
+ * Capped at two rows of tabs. A provider that serves a dozen channels contributes a tab each, and
+ * an uncapped wrapping strip would push the list out of the panel; the eleventh tab scrolls
+ * instead. Two rows is what a 300px panel fits at 30px a slot.
+ */
 .HomeModelMenu-Filters {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
   align-items: center;
+  max-height: 64px;
   padding: 0 2px;
+  overflow-y: auto;
 }
 
 /*
- * Sized by its own box, not by its glyph. The strip is the only place a provider shows up, so a
+ * Sized by its own box, not by its glyph. The strip is the only place a channel shows up, so a
  * button whose icon fails to render (an icon class missing from the UnoCSS safelist is how the
  * Pi tab once vanished) must still hold its slot and answer hover. The border is reserved
  * transparent so nothing shifts should a state colour it.
@@ -459,13 +563,73 @@ onBeforeUnmount(() => {
   padding: 0 2px 2px;
 }
 
+/*
+ * The stand-in for a channel with no brand mark. Sized in `em` off the button's own font so it
+ * lines up with the 15px icons beside it, and weighted up because a single letter at caption size
+ * reads as debris next to a filled glyph.
+ */
+.HomeModelMenu-FilterInitial {
+  font-size: 0.85em;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/*
+ * The rows are `TxCardItem`s, so hover, selection, focus ring and disabled come from the primitive
+ * and only the sizing and the two surface colours are set here.
+ *
+ * Those two colours have to be set. The primitive's defaults wash `--tx-bg-color-overlay` at 18%
+ * over the row, and under the dark theme that token is `#1d1e1f` — a dark wash on this panel's own
+ * `#1c1c1e` surface, which is the invisible hover this menu had before. The shell's semantic
+ * surfaces are the ones that carry a contrast here, and they resolve inside the teleported panel
+ * because they are declared on `:root`, unlike the `--tx-*` bridge, which stops at `.HomePage`.
+ */
 .HomeModelMenu-Item {
+  --tx-card-item-padding: 6px 9px;
+  --tx-card-item-radius: var(--shell-radius-sm);
+  --tx-card-item-gap: 10px;
+  --tx-card-item-hover-bg: var(--shell-surface);
+  --tx-card-item-active-bg: var(--shell-surface-2);
+
+  align-items: center;
+  color: var(--shell-text-primary);
+  font-size: var(--shell-fs-body);
+
+  /* The row is one line of text over a caption; centring the icon and the trailing controls on it
+     reads better than the primitive's default top alignment, which is built for taller cards. */
+  :deep(.tx-card-item__top) {
+    align-items: center;
+  }
+
+  :deep(.tx-card-item__title) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :deep(.tx-card-item__subtitle) {
+    overflow: hidden;
+    color: var(--shell-text-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--shell-fs-caption);
+    line-height: 1.3;
+  }
+
+  :deep(.tx-card-item__right) {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+  }
+}
+
+/* Auto is a plain button, not a row: it is the way out of pinning, not a model to select. */
+.HomeModelMenu-Auto {
   display: flex;
-  flex: 1;
   gap: 10px;
   align-items: center;
-  min-width: 0;
-  padding: 6px 9px;
+  width: 100%;
+  padding: 7px 9px;
   border: none;
   border-radius: var(--shell-radius-sm);
   background: transparent;
@@ -475,22 +639,17 @@ onBeforeUnmount(() => {
   font-size: var(--shell-fs-body);
   cursor: pointer;
 
-  &:focus-visible {
-    outline: 2px solid var(--shell-primary);
-    outline-offset: -2px;
-  }
-}
-
-/* Auto is its own row; the model rows carry hover and selection on their container instead. */
-.HomeModelMenu-Auto {
-  padding: 7px 9px;
-
   &:hover {
     background: var(--shell-surface);
   }
 
   &[aria-checked='true'] {
     background: var(--shell-surface-2);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: -2px;
   }
 }
 
@@ -510,52 +669,40 @@ onBeforeUnmount(() => {
   gap: 1px;
 }
 
-/* Selection reads on the whole row, star included: the row is the unit, the buttons are its parts. */
-.HomeModelMenu-Row {
+.HomeModelMenu-Group {
   display: flex;
-  gap: 2px;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/*
+ * A label, not a row: no hover, no hit area, and it must not read as something to click. The top
+ * margin collapses on the first group so the list still starts flush under the divider.
+ */
+.HomeModelMenu-GroupHeader {
+  display: flex;
+  gap: 6px;
   align-items: center;
-  padding-right: 4px;
-  border-radius: var(--shell-radius-sm);
-  transition: background-color 0.12s ease;
+  margin-top: 6px;
+  padding: 2px 9px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
 
-  &:hover,
-  &:has(:focus-visible) {
-    background: var(--shell-surface);
+  .HomeModelMenu-Group:first-child & {
+    margin-top: 0;
   }
+}
 
-  &.is-selected {
-    background: var(--shell-surface-2);
-  }
+.HomeModelMenu-GroupName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .HomeModelMenu-Icon {
   display: inline-flex;
   flex: none;
   color: var(--shell-text-secondary);
-}
-
-.HomeModelMenu-Text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.HomeModelMenu-Name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.HomeModelMenu-Sub {
-  overflow: hidden;
-  color: var(--shell-text-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--shell-fs-caption);
-  line-height: 1.3;
 }
 
 /*
@@ -595,8 +742,8 @@ onBeforeUnmount(() => {
     opacity 0.12s ease;
 
   /* Quiet until the row is in play; a starred one stays lit as the state it is. */
-  .HomeModelMenu-Row:hover &,
-  .HomeModelMenu-Row:focus-within &,
+  .HomeModelMenu-Item:hover &,
+  .HomeModelMenu-Item:focus-within &,
   &[aria-pressed='true'] {
     opacity: 1;
   }
