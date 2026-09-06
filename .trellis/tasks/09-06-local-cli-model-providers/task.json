@@ -1,9 +1,9 @@
 {
-  "id": "model-menu-redesign",
-  "name": "model-menu-redesign",
-  "title": "Model switch popup redesign and anchored panel max-height fix",
+  "id": "local-cli-model-providers",
+  "name": "local-cli-model-providers",
+  "title": "Local AI CLIs as selectable chat providers",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -18,12 +18,8 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [
-    "09-06-tuffex-anchor-max-height",
-    "09-06-home-model-menu-v2",
-    "09-06-local-cli-model-providers"
-  ],
-  "parent": null,
+  "children": [],
+  "parent": "09-06-model-menu-redesign",
   "relatedFiles": [],
   "notes": "",
   "meta": {}
