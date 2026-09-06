@@ -12,6 +12,7 @@ import {
   type UpdateReleaseArtifact,
   type UpdateReleaseManifest
 } from '@talex-touch/utils'
+import { isTransportFailureError } from '@talex-touch/utils/network'
 import { compareVersions } from '~/composables/store/useVersionCompare'
 import { getBuildInfo } from '~/utils/build-info'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -537,10 +538,10 @@ export class GithubUpdateProvider extends UpdateProvider {
       return true
     }
 
-    if (
-      error instanceof Error &&
-      /(ENOTFOUND|EAI_AGAIN|ECONNRESET|NETWORK_TIMEOUT)/i.test(error.message)
-    ) {
+    // Errors arrive here across IPC, so the class and code are gone and only the message remains;
+    // the shared classifier keeps the Chromium and Node dialects in one place rather than growing
+    // a second copy of the marker list here.
+    if (isTransportFailureError(error)) {
       return true
     }
 

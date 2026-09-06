@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { getArgValue } from './lib/argv-utils.mjs'
@@ -99,21 +100,33 @@ export function getRemoteTags(remote) {
     .map(ref => ref.slice('refs/tags/'.length))
 }
 
+export function getTagsFromFile(tagsFile) {
+  try {
+    return readFileSync(tagsFile, 'utf8')
+      .split('\n')
+      .map(tag => tag.trim())
+      .filter(Boolean)
+  }
+  catch (error) {
+    throw new Error(
+      `Could not read --tags-file ${tagsFile}: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+}
+
 function main() {
   const argv = process.argv.slice(2)
   const tag = getArgValue(argv, '--tag')
-  const remote = getArgValue(argv, '--remote', 'origin')
-  if (!tag || !remote) {
+  const remote = getArgValue(argv, '--remote')
+  const tagsFile = getArgValue(argv, '--tags-file')
+  if (!tag || (!remote && !tagsFile)) {
     throw new Error(
-      'Usage: node scripts/resolve-update-rollback-version.mjs --tag <tag> [--remote <remote>]',
+      'Usage: node scripts/resolve-update-rollback-version.mjs --tag <tag> [--remote <remote>] [--tags-file <file>]',
     )
   }
 
-  console.log(
-    JSON.stringify(
-      resolveSameChannelRollbackVersion({ tag, tags: getRemoteTags(remote) }),
-    ),
-  )
+  const tags = tagsFile ? getTagsFromFile(tagsFile) : getRemoteTags(remote)
+  console.log(JSON.stringify(resolveSameChannelRollbackVersion({ tag, tags })))
 }
 
 if (

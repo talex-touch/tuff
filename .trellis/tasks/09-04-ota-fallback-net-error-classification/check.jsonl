@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "验收重点：新增测试必须能在分类器真正失效时失败。须核查是否覆盖负例（HTTP 状态码/abort/timeout 不得被误判为传输失败）与三种方言"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "核查三层改动一致性：utils 分类器、主进程归一化、渲染层判定；特别是渲染层在原型链丢失下仍须成立"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "渲染层 GithubUpdateProvider 改动的质量基线"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "新增 NetworkTransportError 类型在渲染层的使用需符合类型安全约定"}
+{"file": ".trellis/spec/guides/index.md", "reason": "通用质量检查清单入口"}
