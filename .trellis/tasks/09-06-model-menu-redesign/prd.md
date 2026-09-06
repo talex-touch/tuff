@@ -19,17 +19,18 @@ Home 会话界面（HomePage 底部 composer 与 HomeTopBar）共用的模型切
 |---|---|---|
 | `09-06-tuffex-anchor-max-height` | TxBaseAnchor 不再抹掉 `--tx-ba-max-height`；回归测试；docs review notes | 轻量（PRD-only） |
 | `09-06-home-model-menu-v2` | 新的 HomeModelMenu：tab / 搜索 / 收藏 / 快捷键 / 副标题；pill 显示名 + 图标 | 复杂（prd + design + implement） |
+| `09-06-local-cli-model-providers` | pi / pie / omp / codex / claude 作为 text.chat provider；模型家族图标 | 复杂（prd + design + implement） |
 
 顺序：先做 max-height 修复。重做后的面板高度依赖 `maxHeight` 真正生效，否则新面板同样会盖住 composer；
 子任务 2 的验收建立在子任务 1 已合入的前提上。
 
 ## 跨子任务验收
 
-- [ ] 在 HomePage composer（placement `top-end`）与 HomeTopBar（`bottom-start`）两个入口打开新弹窗，
-      面板在任何滚动位置都不与触发 pill 重叠，且不超出窗口可视区。
-- [ ] 两个入口是同一份选择状态（`useModelOptions` 模块级 state），任一处切换，另一处 pill 同步。
-- [ ] `pnpm -C apps/core-app run typecheck`、相关 vitest、`pnpm -C packages/tuffex test`（base-anchor 相关）全绿；
-      `git diff --check` 无告警。
+- [x] 在 HomePage composer（placement `top-end`）与 HomeTopBar（`bottom-start`）两个入口打开新弹窗，
+      面板在任何滚动位置都不与触发 pill 重叠，且不超出窗口可视区。（用户真机验收 2026-09-06，提交 1be2a206f / 8da334466 / 00a6de331）
+- [x] 两个入口是同一份选择状态（`useModelOptions` 模块级 state），任一处切换，另一处 pill 同步。（`useModelOptions.test.ts` 跨实例共享用例）
+- [x] `pnpm -C apps/core-app run typecheck`、相关 vitest、`pnpm -C packages/tuffex test`（base-anchor 相关）全绿；
+      `git diff --check` 无告警。（check-menu 2026-09-06：core-app 271 + tuffex 53 测试；check-menu-fixups：308 测试）
 
 ## Out of scope
 

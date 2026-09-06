@@ -62,18 +62,20 @@ provider 分栏过滤、搜索、星标收藏、⌘数字快捷选择；行内�
 
 ## Acceptance Criteria
 
-- [ ] AC1 打开面板：tab 条 + 搜索框 + Auto 行 + 当前 tab 的模型行；两个入口（composer / top bar）行为一致。
-- [ ] AC2 切换 tab 只显示该 provider 的模型；★ tab 只显示收藏；输入搜索词后跨 provider 过滤且忽略 tab。
-- [ ] AC3 pi 模型 `codex/gpt-6-astra` 显示为「gpt-6-astra」+ 副标题「Pi (local CLI) · codex」；`qwen2.5:3b` 显示原名 +「Local Model」。
-- [ ] AC4 ⌘1（Ctrl+1）选中可见列表第 1 行并关闭面板；pill 立即更新；⌘键在面板关闭时无副作用。
-- [ ] AC5 星标切换后 ★ tab 立即反映；重启 app 后收藏与上次选择均保留。
-- [ ] AC6 把持久化的模型改成不存在的 id 再启动：pill 显示 Auto，发送走 Auto，配置文件里的值不被清除。
-- [ ] AC7 键盘：Tab 可到达 tab 条 / 搜索框 / 星标；搜索框内 Home / End 移动光标；↓ 从搜索框进入列表；Esc 关闭并回焦 pill。
-- [ ] AC8 面板任何滚动位置不与 pill 重叠、不超出视口（依赖前置子任务）。
-- [ ] AC9 测试：`model-display` 纯函数、`useModelFavorites`、`useModelOptions`（持久化 / 解析规则）、
+- [x] AC1 打开面板：tab 条 + 搜索框 + Auto 行 + 当前 tab 的模型行；两个入口（composer / top bar）行为一致。
+- [x] AC2 切换 tab 只显示该 provider 的模型；★ tab 只显示收藏；输入搜索词后跨 provider 过滤且忽略 tab。
+- [x] AC3 pi 模型 `codex/gpt-6-astra` 显示为「gpt-6-astra」+ 副标题「Pi (local CLI) · codex」；`qwen2.5:3b` 显示原名 +「Local Model」。
+- [x] AC4 ⌘1（Ctrl+1）选中可见列表第 1 行并关闭面板；pill 立即更新；⌘键在面板关闭时无副作用。
+- [x] AC5 星标切换后 ★ tab 立即反映；重启 app 后收藏与上次选择均保留。
+- [x] AC6 把持久化的模型改成不存在的 id 再启动：pill 显示 Auto，发送走 Auto，配置文件里的值不被清除。
+- [x] AC7 键盘：Tab 可到达 tab 条 / 搜索框 / 星标；搜索框内 Home / End 移动光标；↓ 从搜索框进入列表；Esc 关闭并回焦 pill。
+- [x] AC8 面板任何滚动位置不与 pill 重叠、不超出视口（依赖前置子任务）。
+- [x] AC9 测试：`model-display` 纯函数、`useModelFavorites`、`useModelOptions`（持久化 / 解析规则）、
       `HomeModelMenu`（过滤 / 快捷键 / 空态）、TxDropdownMenu（`initialFocus` / 可编辑目标 Home / End）全绿；
       `pnpm -C apps/core-app run typecheck:web`、`git diff --check` 通过。
-- [ ] AC10 TuffEx 改动的 Nexus 文档（dropdown-menu zh / en）同步：props 表 + 交互契约 + review notes 覆盖行。
+- [x] AC10 TuffEx 改动的 Nexus 文档（dropdown-menu zh / en）同步：props 表 + 交互契约 + review notes 覆盖行。
+
+验收记录：AC1-AC8 用户真机验收通过（2026-09-06）；AC9 / AC10 由 check-menu 与 check-menu-fixups 复核（核心 271 + 308 测试、tuffex 53、doc-parity）。
 
 ## Out of scope
 
