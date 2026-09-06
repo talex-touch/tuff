@@ -452,3 +452,37 @@ Closed all recorded BUI follow-up gaps, fixed a real TxContextMenu interaction d
 ### Next Steps
 
 - None - task complete
+
+
+## Session 62: Model menu redesign planning and tuffex anchor max-height fix
+
+**Date**: 2026-09-06
+**Task**: Model menu redesign planning and tuffex anchor max-height fix
+**Branch**: `release/ota-transport-error-classification-20260904`
+
+### Summary
+
+Diagnosed the Home model menu overflowing its trigger: TxBaseAnchor bound --tx-ba-max-height to undefined in :style, and Vue's style patcher deleted the floating-ui size middleware's value on every re-render, so all anchored panels rendered at the 420px fallback. Fixed with a one-line change, a setProperty-spy regression test (mutation-verified), base-anchor docs review notes, and a single-writer CSS custom property rule in the frontend component spec. Planned the model menu redesign as a parent task with two children (tuffex fix done; home-model-menu-v2 has prd/design/implement: provider tabs, search, favorites, cmd-digit hotkeys, AppSetting.conversation persistence).
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2c54a037f` | (see git log) |
+| `c672a028b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
