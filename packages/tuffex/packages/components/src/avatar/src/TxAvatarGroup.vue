@@ -73,9 +73,11 @@ export default defineComponent({
       // The ring is the one thing still injected inline, because nothing hovers it.
       // Only the border, though: an inline border-radius would outrank TxAvatar's own
       // `shape` classes (square 8px / rounded 12px) and silently force every grouped
-      // avatar circular. The border follows whatever radius the avatar sets.
+      // avatar circular. The border follows whatever radius the avatar sets. Its
+      // colour is the page surface (TxAvatar's `--tx-avatar-ring-color`), so the
+      // stack reads as discs cut into the page rather than white plates on it.
       const ringStyle = {
-        border: '2px solid var(--tx-avatar-group-border, #fff)',
+        border: '2px solid var(--tx-avatar-group-border, var(--tx-avatar-ring-color, var(--tx-bg-color, #fff)))',
       }
 
       const stackStyle = (index: number) => ({
@@ -198,7 +200,7 @@ export default defineComponent({
 .tx-avatar-group.is-hover-lift :deep(.tx-avatar-group__item:not(.tx-avatar-group__more-ref):hover) {
   z-index: var(--tx-avatar-group-hover-z, 999);
   transform: translateY(-4px) scale(1.06);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 6px 16px color-mix(in srgb, #000 18%, transparent);
 }
 
 /*
@@ -210,7 +212,7 @@ export default defineComponent({
  */
 .tx-avatar-group.is-hover-lift :deep(.tx-avatar-group__more-ref:hover .tx-avatar-group__more) {
   transform: translateY(-4px) scale(1.06);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 6px 16px color-mix(in srgb, #000 18%, transparent);
 }
 
 .tx-avatar-group :deep(.tx-avatar-group__more-ref .tx-avatar-group__more) {
@@ -221,8 +223,15 @@ export default defineComponent({
   --tx-avatar-group-gap: var(--tx-avatar-group-spread-overlap);
 }
 
+/*
+ * The count is a summary, not a person: a quieter fill and the secondary ink
+ * keep it from passing for one more member of the group.
+ */
 .tx-avatar-group__more {
+  --tx-avatar-bg: var(--tx-avatar-group-more-bg, var(--tx-fill-color-light, #f5f7fa));
+  --tx-avatar-text: var(--tx-avatar-group-more-text, var(--tx-text-color-secondary, #909399));
   font-weight: 600;
+  letter-spacing: 0;
 }
 
 /*
