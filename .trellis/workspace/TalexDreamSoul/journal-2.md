@@ -557,3 +557,37 @@ Rebuilt HomeModelMenu on TxDropdownMenu with a provider filter strip, cross-prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 65: 模型菜单筛选条改用 TxFilterChips：provider 级图标 chip、滑动指示器、渠道分组
+
+**Date**: 2026-09-06
+**Task**: 模型菜单筛选条改用 TxFilterChips：provider 级图标 chip、滑动指示器、渠道分组
+**Branch**: `release/ota-transport-error-classification-20260904`
+
+### Summary
+
+用户看到上一轮渠道 tab 的真机效果后连提四条：要切换动效、要用 tuffex 组件、高度要固定、tab 只保留 pi 一个而渠道放进列表分类。规划：筛选条换 TxFilterChips（toolbar 语义，绕开 menu 内嵌 tablist 的否决），维度回退到 provider，bucketOf/visibleGroups/model-source-icons 原样保留改喂分组头。tuffex 侧给 TxFilterChips 加滑动指示器（活动底色从逐 chip 上色改为一个元素平移，绝对定位子元素随行横向滚动是特性），按 BUI 规则 2 用编译 SCSS 契约测试正反两向断言 reduced-motion；随后按真机反馈加 iconClass（对齐 TabBarItem）、再加 iconOnly（label 转 aria-label/title，无图标 chip 保留文字）。两个只有真机才暴露的缺陷：(1) place() 在同一帧写宽度并解除 is-placing，width transition 中途重新武装从 0 补间，首帧永远 0 宽，改为 nextTick→强制 recalc→再 rAF 一帧解除，变异验证新用例变红；(2) defineProps<FilterChipsProps>() 的接口在 types.ts，dev server 的 Vue 插件在该文件变化时不重编译 SFC，编译产物运行时 props 没有 iconOnly，宿主传的 icon-only 被当未知属性丢弃而 vitest 冷编译全绿——改为运行时对象声明 + 用例断言运行时 props 与接口逐键一致，并写入记忆。core-app 侧：pi 与 Ollama 同为 type local 共用服务器图标，新增 providerIconForId 按种子 id 给 pi 品牌标（表形状对齐 local-cli-model-providers 任务的 origin 设计），simple-icons 的 π 满填无留白故单独 scale(0.72) 光学对齐；选中行去掉 TxCardItem 自带的 primary 40% 描边（与搜索框焦点环并排像两个焦点环）。视觉验证：无 CDP 的情况下用 vitest dump + dev server 编译 CSS + scope id 重映射 + 无头 Chrome 出真实渲染截图（暗/亮/3x strip），并以此发现上述两个缺陷。教训：tuffex 的 prop 改动不能只靠 jsdom 说已生效，要拉 :5173 编译产物核对运行时 props。用户问为何没有 omp/codex/claude 图标：主进程今日只种子了 pi，其余三个 CLI 属 09-06-local-cli-model-providers（in_progress）。拖动隐藏问题仍未定位，touch-app.ts 的 [WindowDiag] 诊断有意留在工作区等 dev 重启。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c3b5222f4` | (see git log) |
+| `2528f40ad` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
