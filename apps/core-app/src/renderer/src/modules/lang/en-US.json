@@ -4674,6 +4674,7 @@
       "waiting": "Waiting for voice input",
       "textOnly": "Text input mode",
       "close": "Close",
+      "cancelSession": "Cancel this session",
       "placeholder": "Speak or type what you want to do, for example: search my latest meeting notes",
       "startListening": "Start listening",
       "listeningAction": "Listening",

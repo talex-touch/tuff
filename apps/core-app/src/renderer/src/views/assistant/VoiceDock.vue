@@ -12,49 +12,29 @@ type VoicePanelHandle = {
   stopVoiceInput: () => void
 }
 
-const PROCESSING_TRANSITION_MS = 520
-
 const transport = useTuffTransport()
 const expanded = ref(false)
-const processing = ref(false)
 const panel = ref<VoicePanelHandle | null>(null)
 
 let disposePanelOpened: (() => void) | null = null
 let disposePanelClosed: (() => void) | null = null
 let disposeCommand: (() => void) | null = null
-let processingTimer: ReturnType<typeof setTimeout> | null = null
-
-function clearProcessingTimer(): void {
-  if (processingTimer === null) return
-  clearTimeout(processingTimer)
-  processingTimer = null
-}
-
-function showFloatingBallAfterProcessing(): void {
-  clearProcessingTimer()
-  processing.value = true
-  processingTimer = setTimeout(() => {
-    processingTimer = null
-    processing.value = false
-  }, PROCESSING_TRANSITION_MS)
-}
 
 async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
-  clearProcessingTimer()
-  processing.value = false
   expanded.value = true
   await nextTick()
   await panel.value?.openPanel(payload?.source)
 }
+
+// No intermediate spinner: the panel owns the whole session now, including the wait for the
+// transcript, which it shows as the thinking orb inside the pill.
 function handlePanelFinished(): void {
   expanded.value = false
-  showFloatingBallAfterProcessing()
   void transport.send(AssistantEvents.voice.closePanel, undefined)
 }
 
 function handlePanelClosed(): void {
   expanded.value = false
-  showFloatingBallAfterProcessing()
 }
 
 async function handleCommand(payload: AssistantVoiceCommandPayload): Promise<void> {
@@ -63,8 +43,6 @@ async function handleCommand(payload: AssistantVoiceCommandPayload): Promise<voi
     return
   }
 
-  clearProcessingTimer()
-  processing.value = false
   expanded.value = true
   await nextTick()
   panel.value?.startVoiceInput()
@@ -89,7 +67,6 @@ onBeforeUnmount(() => {
   disposePanelClosed = null
   disposeCommand?.()
   disposeCommand = null
-  clearProcessingTimer()
 })
 </script>
 
@@ -103,16 +80,6 @@ onBeforeUnmount(() => {
         managed-by-dock
         @finished="handlePanelFinished"
       />
-      <div
-        v-else-if="processing"
-        key="processing"
-        class="voice-dock-processing"
-        role="status"
-        aria-live="polite"
-        aria-busy="true"
-      >
-        <span class="voice-dock-processing__ring" aria-hidden="true" />
-      </div>
       <FloatingBall v-else key="floating-ball" />
     </Transition>
   </div>
@@ -125,6 +92,10 @@ onBeforeUnmount(() => {
   background: transparent !important;
 }
 
+/*
+ * The window is a transparent canvas wider than the pill, so the pill can animate its own
+ * width without a window resize. Only the visible surfaces take pointer events.
+ */
 .voice-dock-root {
   width: 100%;
   height: 100%;
@@ -136,38 +107,9 @@ onBeforeUnmount(() => {
   isolation: isolate;
 }
 
-.voice-dock-root :deep(.floating-ball-root) {
+.voice-dock-root :deep(.floating-ball-root),
+.voice-dock-root :deep(.voice-dock) {
   pointer-events: auto;
-}
-
-.voice-dock-processing {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.voice-dock-processing__ring {
-  width: 28px;
-  height: 28px;
-  border: 2px solid var(--shell-border);
-  border-top-color: var(--shell-primary);
-  border-radius: 50%;
-  animation: voice-dock-processing-spin 680ms linear infinite;
-}
-
-@keyframes voice-dock-processing-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .voice-dock-processing__ring {
-    animation: none;
-  }
 }
 
 .voice-dock-surface-enter-active,
