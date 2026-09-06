@@ -70,7 +70,6 @@ async function readClipboardText() {
   }
 }
 
-
 /**
  * Map a host capability error to a reason the caller can act on (#821-style contract, #822).
  *
@@ -112,7 +111,7 @@ async function dictate() {
     const result = await plugin.voice.dictate({ cleanup: true, delivery: 'active-app' })
     return {
       text: String(result?.text ?? '').trim(),
-      delivery: result?.delivery
+      delivery: result?.delivery,
     }
   }
 
