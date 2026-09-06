@@ -9,7 +9,10 @@ import { defineConfig } from 'unocss'
 import { presetAttributify, presetUno } from 'unocss'
 import { MODEL_FAMILY_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-family-icons'
 import { MODEL_SOURCE_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-source-icons'
-import { PROVIDER_ICON_CLASSES } from './src/renderer/src/modules/intelligence/provider-icons'
+import {
+  PROVIDER_ICON_CLASSES,
+  PROVIDER_ID_ICON_CLASSES
+} from './src/renderer/src/modules/intelligence/provider-icons'
 
 /**
  * Icon classes that only ever appear inside plain `.ts` modules.
@@ -67,6 +70,7 @@ export default defineConfig({
     // Imported rather than copied so the list cannot drift; that module has only type-level
     // imports, so the config loader can evaluate it.
     ...PROVIDER_ICON_CLASSES,
+    ...PROVIDER_ID_ICON_CLASSES,
     // Model family icons — the brand mark a row shows for `qwen2.5:3b` or `codex/gpt-6-astra` —
     // from `renderer/src/modules/intelligence/model-family-icons.ts`; same trap, same wiring.
     ...MODEL_FAMILY_ICON_CLASSES,

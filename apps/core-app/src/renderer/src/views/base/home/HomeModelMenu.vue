@@ -10,9 +10,11 @@ let closeActiveModelMenu: (() => void) | null = null
 
 <script lang="ts" name="HomeModelMenu" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
+import type { FilterChipItem } from '@talex-touch/tuffex/filter-chips'
 import type { ModelChoice } from '~/modules/conversation/useModelOptions'
 import { TxCardItem } from '@talex-touch/tuffex/card-item'
 import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
+import { TxFilterChips } from '@talex-touch/tuffex/filter-chips'
 import { TxIcon } from '@talex-touch/tuffex/icon'
 import { TxKbd } from '@talex-touch/tuffex/kbd'
 import { TxSearchInput } from '@talex-touch/tuffex/search-input'
@@ -26,7 +28,7 @@ import {
   modelSourceIconFor,
   modelSourceInitialFor
 } from '~/modules/intelligence/model-source-icons'
-import { providerIconFor } from '~/modules/intelligence/provider-icons'
+import { providerIconForId } from '~/modules/intelligence/provider-icons'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import {
   MODEL_MENU_HOTKEY_COUNT,
@@ -54,18 +56,30 @@ const isMac = getCurrentRendererPlatformState().isMac
 
 /**
  * Which rows the strip shows when there is no search. A tagged union rather than a string, so a
- * bucket whose key happened to be `favorites` could not collide with the star filter.
+ * provider whose id happened to be `favorites` could not collide with the star filter.
  */
-type ModelFilter = { kind: 'favorites' } | { kind: 'bucket'; key: string }
+type ModelFilter = { kind: 'favorites' } | { kind: 'provider'; providerId: string }
 
 const FAVORITES_FILTER: ModelFilter = { kind: 'favorites' }
 
 /**
- * One tab on the strip, and one group in the list — the same thing seen twice, which is why there
- * is one type and one resolver rather than a copy on each side that can drift apart.
+ * Chip values are prefixed rather than raw, so a provider id can never be read as the star filter
+ * — a provider literally named `favorites` still lands on `provider:favorites`.
+ */
+const FAVORITES_CHIP = 'favorites'
+
+function providerChip(providerId: string): string {
+  return `provider:${providerId}`
+}
+
+/**
+ * One group in the list: the channel a model was listed under (`codex/gpt-6-astra` → `codex`),
+ * falling back to the provider for ids that carry no channel at all (`qwen2.5:3b`).
  *
- * A bucket is the channel a model was listed under (`codex/gpt-6-astra` → `codex`), falling back to
- * the provider for the models whose id carries no channel at all (`qwen2.5:3b`).
+ * The strip does not use this. Channels are what the list sorts rows into; the strip picks which
+ * provider's rows are on screen. Tying the two together was tried and reverted: pi alone serves
+ * eight channels here, and a tab each pushed the strip onto a second row while the list below it
+ * had nothing left to group.
  */
 interface ModelBucket {
   key: string
@@ -95,7 +109,9 @@ function bucketOf(choice: ModelChoice): ModelBucket {
     providerId: choice.providerId,
     source,
     label: source ?? choice.providerName,
-    icon: source ? modelSourceIconFor(source) : providerIconFor(choice.providerType),
+    icon: source
+      ? modelSourceIconFor(source)
+      : providerIconForId(choice.providerId, choice.providerType),
     initial: source ? modelSourceInitialFor(source) : ''
   }
 }
@@ -114,22 +130,23 @@ const searchWrapRef = ref<HTMLElement | null>(null)
 let restoreFocusOnClose = false
 
 /**
- * One tab per bucket that has something to pick, in the order the options arrived. A provider that
- * serves several channels contributes one tab each and none of its own: `Pi (local CLI)` as a tab
- * would open on the union of `codex` and `cpa`, which is the list the user just asked to split.
- * Derived from the rows rather than the raw option list, so a bucket with no models is never a tab
- * that opens on nothing.
+ * One chip per provider that has something to pick, in the order the options arrived. Derived from
+ * the rows rather than the raw option list, so a provider with no models is never a chip that
+ * opens on nothing.
  */
-const bucketFilters = computed<ModelBucket[]>(() => {
+const providerFilters = computed(() => {
   const seen = new Set<string>()
-  const buckets: ModelBucket[] = []
+  const providers: { providerId: string; providerName: string; providerType: string }[] = []
   for (const choice of choices.value) {
-    const key = bucketKeyOf(choice)
-    if (seen.has(key)) continue
-    seen.add(key)
-    buckets.push(bucketOf(choice))
+    if (seen.has(choice.providerId)) continue
+    seen.add(choice.providerId)
+    providers.push({
+      providerId: choice.providerId,
+      providerName: choice.providerName,
+      providerType: choice.providerType
+    })
   }
-  return buckets
+  return providers
 })
 
 /**
@@ -138,7 +155,9 @@ const bucketFilters = computed<ModelBucket[]>(() => {
  * family. A tab and a group header show the bucket instead — there the channel is the subject.
  */
 function rowIcon(choice: ModelChoice): ITuffIcon {
-  return modelFamilyIconFor(choice.model) ?? providerIconFor(choice.providerType)
+  return (
+    modelFamilyIconFor(choice.model) ?? providerIconForId(choice.providerId, choice.providerType)
+  )
 }
 
 /** Starred rows that resolve against the loaded choices, in list order. */
@@ -147,40 +166,70 @@ const favoriteChoices = computed(() => choices.value.filter((choice) => isFavori
 const trimmedQuery = computed(() => query.value.trim())
 
 /**
- * Where the panel opens: the pinned model's bucket, else the star filter when a favourite is
- * on offer, else the first bucket. The star filter is the last resort only when there is no
- * bucket at all.
+ * Where the panel opens: the pinned model's provider, else the star filter when a favourite is
+ * on offer, else the first provider. The star filter is the last resort only when there is no
+ * provider at all.
  */
 function defaultFilter(): ModelFilter {
   const resolved = resolvedChoice.value
-  if (resolved) return { kind: 'bucket', key: bucketKeyOf(resolved) }
+  if (resolved) return { kind: 'provider', providerId: resolved.providerId }
   if (favoriteChoices.value.length) return FAVORITES_FILTER
-  const first = bucketFilters.value[0]
-  return first ? { kind: 'bucket', key: first.key } : FAVORITES_FILTER
+  const first = providerFilters.value[0]
+  return first ? { kind: 'provider', providerId: first.providerId } : FAVORITES_FILTER
 }
 
-/** The active filter, unless it names a bucket that has since gone; then the default. */
+/** The active filter, unless it names a provider that has since gone; then the default. */
 const effectiveFilter = computed<ModelFilter>(() => {
   const chosen = activeFilter.value
   if (chosen.kind === 'favorites') return chosen
-  const stillOffered = bucketFilters.value.some((bucket) => bucket.key === chosen.key)
+  const stillOffered = providerFilters.value.some(
+    (provider) => provider.providerId === chosen.providerId
+  )
   return stillOffered ? chosen : defaultFilter()
 })
 
 const favoritesActive = computed(() => effectiveFilter.value.kind === 'favorites')
 
-function isBucketActive(key: string): boolean {
+/** The chip row is single-select, so the union collapses to one value and back. */
+const activeChip = computed<string>(() => {
   const filter = effectiveFilter.value
-  return filter.kind === 'bucket' && filter.key === key
+  return filter.kind === 'favorites' ? FAVORITES_CHIP : providerChip(filter.providerId)
+})
+
+function pickChip(value: string | number): void {
+  const chip = String(value)
+  if (chip === FAVORITES_CHIP) {
+    pickFilter(FAVORITES_FILTER)
+    return
+  }
+  pickFilter({ kind: 'provider', providerId: chip.slice('provider:'.length) })
 }
 
-/** A search runs across every bucket and ignores the strip; the strip only applies without one. */
+/**
+ * The star sits first and always, so it has a fixed place whatever the providers do. Every chip
+ * has an icon, since the strip draws nothing else: the label goes to `aria-label` and the hover
+ * title.
+ */
+const filterChips = computed<FilterChipItem[]>(() => [
+  {
+    value: FAVORITES_CHIP,
+    label: t('home.modelFavorites'),
+    iconClass: favoritesActive.value ? 'i-ri-star-fill' : 'i-ri-star-line'
+  },
+  ...providerFilters.value.map((provider) => ({
+    value: providerChip(provider.providerId),
+    label: provider.providerName,
+    iconClass: providerIconForId(provider.providerId, provider.providerType).value
+  }))
+])
+
+/** A search runs across every provider and ignores the strip; the strip only applies without one. */
 const visibleChoices = computed<ModelChoice[]>(() => {
   const needle = trimmedQuery.value
   if (needle) return choices.value.filter((choice) => matchesModelQuery(choice, needle))
   const filter = effectiveFilter.value
   if (filter.kind === 'favorites') return favoriteChoices.value
-  return choices.value.filter((choice) => bucketKeyOf(choice) === filter.key)
+  return choices.value.filter((choice) => choice.providerId === filter.providerId)
 })
 
 /**
@@ -360,37 +409,21 @@ onBeforeUnmount(() => {
          belong inside a group per ARIA menus; the strip and the search field ride along as the
          panel's own controls, reached with Tab (design §4 rejected `tablist` inside a `menu`). -->
     <div class="HomeModelMenu" role="group" :aria-label="t('home.model')" @keydown="onPanelKeydown">
-      <!-- Filters, not tabs: one `aria-pressed` button per bucket, exactly one pressed.
-           Always shown, even for a single bucket, so the star filter has a fixed place. -->
-      <div class="HomeModelMenu-Filters" role="group" :aria-label="t('home.modelSources')">
-        <button
-          class="HomeModelMenu-Filter"
-          :class="{ 'is-active': favoritesActive }"
-          type="button"
-          :aria-pressed="favoritesActive"
-          :aria-label="t('home.modelFavorites')"
-          :title="t('home.modelFavorites')"
-          @click="pickFilter(FAVORITES_FILTER)"
-        >
-          <span :class="favoritesActive ? 'i-ri-star-fill' : 'i-ri-star-line'" />
-        </button>
-        <button
-          v-for="bucket in bucketFilters"
-          :key="bucket.key"
-          class="HomeModelMenu-Filter"
-          :class="{ 'is-active': isBucketActive(bucket.key) }"
-          type="button"
-          :aria-pressed="isBucketActive(bucket.key)"
-          :aria-label="bucket.label"
-          :title="bucket.label"
-          @click="pickFilter({ kind: 'bucket', key: bucket.key })"
-        >
-          <TxIcon v-if="bucket.icon" :icon="bucket.icon" :size="15" />
-          <!-- A channel the icon table cannot place is named by the user (`mesh`, `cpa`), so it
-               gets its own initial rather than a shared glyph four such tabs would share. -->
-          <span v-else class="HomeModelMenu-FilterInitial">{{ bucket.initial }}</span>
-        </button>
-      </div>
+      <!-- Filters, not tabs: `TxFilterChips` in its toolbar role, so the chips are `aria-pressed`
+           toggles and the arrow keys move focus without changing the filter. A `tablist` inside a
+           `menu` was rejected in the redesign; this keeps that call. Icon-only: three named chips
+           side by side read as one run-on sentence, and each chip still names itself through
+           `aria-label` and its hover title. The row never wraps — the chips scroll sideways —
+           which is what holds the panel's height still. -->
+      <TxFilterChips
+        class="HomeModelMenu-Filters"
+        role="toolbar"
+        icon-only
+        :aria-label="t('home.modelSources')"
+        :items="filterChips"
+        :model-value="activeChip"
+        @update:model-value="pickChip"
+      />
 
       <div ref="searchWrapRef" class="HomeModelMenu-Search">
         <TxSearchInput
@@ -430,7 +463,7 @@ onBeforeUnmount(() => {
           >
             <div v-if="showGroupHeaders" class="HomeModelMenu-GroupHeader" aria-hidden="true">
               <TxIcon v-if="group.bucket.icon" :icon="group.bucket.icon" :size="12" />
-              <span v-else class="HomeModelMenu-FilterInitial">{{ group.bucket.initial }}</span>
+              <span v-else class="HomeModelMenu-GroupInitial">{{ group.bucket.initial }}</span>
               <span class="HomeModelMenu-GroupName">{{ group.bucket.label }}</span>
             </div>
 
@@ -496,66 +529,26 @@ onBeforeUnmount(() => {
 }
 
 /*
- * Capped at two rows of tabs. A provider that serves a dozen channels contributes a tab each, and
- * an uncapped wrapping strip would push the list out of the panel; the eleventh tab scrolls
- * instead. Two rows is what a 300px panel fits at 30px a slot.
+ * The chip row draws its own chips; this only points the BUI tokens at the shell's, so a control
+ * teleported onto the menu panel does not arrive in the docs site's palette. The row never wraps —
+ * it scrolls sideways — which is what holds the panel's height still however many providers load.
  */
 .HomeModelMenu-Filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  align-items: center;
-  max-height: 64px;
-  padding: 0 2px;
-  overflow-y: auto;
-}
+  --tx-bui-ink: var(--shell-text-primary);
+  --tx-bui-ink-2: var(--shell-text-muted);
+  --tx-bui-surface: var(--shell-surface-2);
+  --tx-bui-hover: var(--shell-surface);
+  --tx-bui-accent: var(--shell-primary);
+  --tx-bui-shadow-btn: none;
 
-/*
- * Sized by its own box, not by its glyph. The strip is the only place a channel shows up, so a
- * button whose icon fails to render (an icon class missing from the UnoCSS safelist is how the
- * Pi tab once vanished) must still hold its slot and answer hover. The border is reserved
- * transparent so nothing shifts should a state colour it.
- */
-.HomeModelMenu-Filter {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* Border-box, so the reserved border does not grow the 30×28 slot the strip was laid out on. */
-  box-sizing: border-box;
-  min-width: 30px;
-  min-height: 28px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--shell-radius-sm);
-  background: transparent;
-  color: var(--shell-text-muted);
-  font-size: 15px;
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
+  margin-bottom: 2px;
 
-  &:hover {
-    background: var(--shell-surface);
-    color: var(--shell-text-primary);
-  }
-
-  &.is-active {
-    background: var(--shell-surface-2);
-    color: var(--shell-text-primary);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--shell-primary);
-    outline-offset: -2px;
-  }
-
-  /* TxIcon paints a currentColor fill and lets the icon class mask it into the glyph. With no
-     mask the empty <i> collapses to nothing and the button is blank; held at 1em it shows as a
-     solid square instead — a visible "icon missing", not a missing control. */
-  :deep(.tuff-icon__class i) {
-    min-width: 1em;
-    min-height: 1em;
+  /* simple-icons' π is drawn edge to edge — the path opens at `M0 0` and fills its whole 24px
+     box — while the star and the server keep a margin inside theirs. At the same rendered size
+     it reads a weight heavier than its neighbours, so it alone is scaled down to sit on the
+     same optical line. Keyed on the glyph, not the chip: the slot stays 30px like the others. */
+  :deep(.tx-bui-filter-chips__icon.i-simple-icons-pi) {
+    transform: scale(0.72);
   }
 }
 
@@ -564,11 +557,11 @@ onBeforeUnmount(() => {
 }
 
 /*
- * The stand-in for a channel with no brand mark. Sized in `em` off the button's own font so it
- * lines up with the 15px icons beside it, and weighted up because a single letter at caption size
- * reads as debris next to a filled glyph.
+ * The stand-in for a channel with no brand mark, in the group header. Sized in `em` off the
+ * header's own font so it lines up with the 12px icons beside it, and weighted up because a single
+ * letter at caption size reads as debris next to a filled glyph.
  */
-.HomeModelMenu-FilterInitial {
+.HomeModelMenu-GroupInitial {
   font-size: 0.85em;
   font-weight: 600;
   line-height: 1;
@@ -594,6 +587,13 @@ onBeforeUnmount(() => {
   align-items: center;
   color: var(--shell-text-primary);
   font-size: var(--shell-fs-body);
+
+  /* The primitive rings the active row in `primary 40%`, which on this panel reads as a second
+     focus ring beside the search field's real one. Selection here is the fill alone; the ring is
+     the keyboard's. */
+  &.tx-card-item--active {
+    border-color: transparent;
+  }
 
   /* The row is one line of text over a caption; centring the icon and the trailing controls on it
      reads better than the primitive's default top alignment, which is built for taller cards. */
