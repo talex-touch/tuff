@@ -1,17 +1,25 @@
-import type { ParsedItemTimeStats } from '../time-stats-aggregator'
-import type { TimePattern } from './context-provider'
-
-export const DAY_MS = 86_400_000
-export const TIME_CONTEXT_SLOT_BOOST = 1.35
-export const TIME_CONTEXT_DAY_BOOST = 1.15
-/** Puts the slot ratio (0..1) on a 0..100 scale; the hour term reuses it so both halves are commensurate. */
-export const TIME_RELEVANCE_SCALE = 100
-/** Split of the time-relevance score between the coarse slot/weekday signal and hour-of-day affinity. */
-export const TIME_RELEVANCE_SLOT_WEIGHT = 0.5
-export const TIME_RELEVANCE_HOUR_WEIGHT = 0.5
+/**
+ * Logging helpers plus a re-export of the shared time-weighting model.
+ *
+ * The weight functions live in `@talex-touch/utils/core-box` because plugins rank against the same
+ * axis (see `RecommendSDK`); keeping a second copy here is how the two drift. `ParsedItemTimeStats`
+ * is structurally the shared `ItemTimeDistribution` plus identity/`lastUpdated` fields, so it
+ * satisfies the shared signatures without a cast.
+ */
+export {
+  calculateHourAffinity,
+  calculateTimeContextBoost,
+  calculateTimeRelevanceScore,
+  DAY_MS,
+  TIME_CONTEXT_DAY_BOOST,
+  TIME_CONTEXT_SLOT_BOOST,
+  TIME_RELEVANCE_HOUR_WEIGHT,
+  TIME_RELEVANCE_SCALE,
+  TIME_RELEVANCE_SLOT_WEIGHT,
+  toDayBucket
+} from '@talex-touch/utils/core-box'
 
 export type LogMeta = Record<string, string | number | boolean | null | undefined>
-
 export function toPrimitive(value: unknown): string | number | boolean | null | undefined {
   if (value == null) return value
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {

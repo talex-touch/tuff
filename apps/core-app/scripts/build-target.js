@@ -717,6 +717,11 @@ function build() {
     if (dir) {
       builderArgs.push('--dir')
     }
+    const customElectronDist = process.env.ELECTRON_DIST
+    if (customElectronDist) {
+      builderArgs.push(`--config.electronDist=${customElectronDist}`)
+      console.log(`[build-target] Using custom Electron distribution: ${customElectronDist}`)
+    }
 
     const macLsuiElementFlag = process.env.TUFF_MAC_LSUIELEMENT || process.env.BUILD_MAC_LSUIELEMENT
     const enableMacLsuiElement =
