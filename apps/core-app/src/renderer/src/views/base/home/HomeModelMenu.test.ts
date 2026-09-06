@@ -261,6 +261,82 @@ describe('panel structure', () => {
   })
 })
 
+describe('reopening', () => {
+  it('fetches the options again on every open, so a provider registered after the first load shows up', async () => {
+    // What the first load saw: only the local provider, as when a CLI is installed after launch.
+    mocks.getProviderModelOptions.mockResolvedValueOnce(
+      providerOptions().filter((option) => option.providerId === 'ollama')
+    )
+    const menu = await openMenu()
+
+    expect(mocks.getProviderModelOptions).toHaveBeenCalledTimes(1)
+    expect(filters(menu).map((button) => button.attributes('aria-label'))).toEqual([
+      'home.modelFavorites',
+      'Local Model'
+    ])
+    expect(rowNames(menu)).toEqual(['qwen2.5:3b'])
+
+    await menu.find('.pill').trigger('click')
+    await nextTick()
+    expect(panel(menu).exists()).toBe(false)
+
+    await menu.find('.pill').trigger('click')
+    await flushPromises()
+    await nextTick()
+
+    expect(mocks.getProviderModelOptions).toHaveBeenCalledTimes(2)
+    expect(filters(menu).map((button) => button.attributes('aria-label'))).toEqual([
+      'home.modelFavorites',
+      'Local Model',
+      'Pi (local CLI)'
+    ])
+    await filters(menu)[2].trigger('click')
+    expect(rowNames(menu)).toEqual(['gpt-6-astra', 'grok-4.6', 'k3'])
+  })
+
+  it('keeps the rows it already has on screen while the refetch is in flight', async () => {
+    const menu = await openMenu()
+    await menu.find('.pill').trigger('click')
+    await nextTick()
+
+    let resolveOptions: (value: ProviderModelOption[]) => void = () => {}
+    mocks.getProviderModelOptions.mockReturnValueOnce(
+      new Promise<ProviderModelOption[]>((resolve) => {
+        resolveOptions = resolve
+      })
+    )
+    await menu.find('.pill').trigger('click')
+    await nextTick()
+
+    // The refetch has started, but this is not a first load: the loading line would blank a list
+    // the user is already reading, so the previous rows stand until the new ones land.
+    expect(mocks.getProviderModelOptions).toHaveBeenCalledTimes(2)
+    expect(menu.find('.HomeModelMenu-Hint').exists()).toBe(false)
+    expect(rowNames(menu)).toEqual(['qwen2.5:3b'])
+
+    resolveOptions([
+      ...providerOptions(),
+      {
+        providerId: 'openai',
+        providerName: 'OpenAI',
+        providerType: 'openai',
+        models: ['gpt-5'],
+        available: true
+      }
+    ])
+    await flushPromises()
+    await nextTick()
+
+    expect(filters(menu).map((button) => button.attributes('aria-label'))).toEqual([
+      'home.modelFavorites',
+      'Local Model',
+      'Pi (local CLI)',
+      'OpenAI'
+    ])
+    expect(rowNames(menu)).toEqual(['qwen2.5:3b'])
+  })
+})
+
 describe('rows', () => {
   it('shows the pi model without its source prefix and names the source in the subtitle', async () => {
     const menu = await openMenu()
@@ -269,7 +345,8 @@ describe('rows', () => {
     const first = rows(menu)[0]
     expect(first.find('.HomeModelMenu-Name').text()).toBe('gpt-6-astra')
     expect(first.find('.HomeModelMenu-Sub').text()).toBe('Pi (local CLI) · codex')
-    expect(first.find('.HomeModelMenu-Icon i').classes()).toContain('i-carbon-settings')
+    // Family first: `gpt-6-astra` is OpenAI's, whatever icon the pi provider itself has.
+    expect(first.find('.HomeModelMenu-Icon i').classes()).toContain('i-simple-icons-openai')
     expect(first.find('[role="menuitemradio"]').attributes('aria-checked')).toBe('false')
   })
 
@@ -279,7 +356,46 @@ describe('rows', () => {
     const first = rows(menu)[0]
     expect(first.find('.HomeModelMenu-Name').text()).toBe('qwen2.5:3b')
     expect(first.find('.HomeModelMenu-Sub').text()).toBe('Local Model')
-    expect(first.find('.HomeModelMenu-Icon i').classes()).toContain('i-carbon-bare-metal-server')
+    expect(first.find('.HomeModelMenu-Icon i').classes()).toContain('i-simple-icons-qwen')
+  })
+
+  it('draws each row with its model family icon, whatever the provider serves it', async () => {
+    const menu = await openMenu()
+
+    // The local provider's own icon is a server; the row says what the model is instead.
+    expect(rowNames(menu)).toEqual(['qwen2.5:3b'])
+    expect(rows(menu)[0].find('.HomeModelMenu-Icon i').classes()).toContain('i-simple-icons-qwen')
+
+    await filters(menu)[2].trigger('click')
+    expect(rowNames(menu)).toEqual(['gpt-6-astra', 'grok-4.6', 'k3'])
+    const icons = rows(menu).map((row) => row.find('.HomeModelMenu-Icon i').classes())
+    // Matched on the name part, so the `codex/` source does not make this a codex family.
+    expect(icons[0]).toContain('i-simple-icons-openai')
+    // simple-icons has no xAI mark; the X glyph stands in.
+    expect(icons[1]).toContain('i-simple-icons-x')
+  })
+
+  it('falls back to the provider icon for a model whose name names no family', async () => {
+    const menu = await openMenu()
+    await filters(menu)[2].trigger('click')
+
+    // `kimi/k3`: the source is Kimi, but the name part `k3` says nothing, so the pi provider's
+    // icon stands in — `custom` in this fixture.
+    const kimi = rows(menu)[2]
+    expect(kimi.find('.HomeModelMenu-Name').text()).toBe('k3')
+    expect(kimi.find('.HomeModelMenu-Icon i').classes()).toContain('i-carbon-settings')
+    expect(kimi.find('.HomeModelMenu-Icon i').classes()).not.toContain('i-simple-icons-kimi')
+  })
+
+  it('keeps the provider icon on the filter strip, where the provider is the subject', async () => {
+    const menu = await openMenu()
+
+    // The star filter is a plain span; the provider buttons render a TxIcon each.
+    const stripIcons = filters(menu)
+      .slice(1)
+      .map((button) => button.find('i').classes())
+    expect(stripIcons[0]).toContain('i-carbon-bare-metal-server')
+    expect(stripIcons[1]).toContain('i-carbon-settings')
   })
 
   it('badges the first nine rows with the platform chord and no more', async () => {
@@ -296,6 +412,10 @@ describe('rows', () => {
 
     const badges = rows(menu).map((row) => row.find('.HomeModelMenu-Kbd'))
     expect(badges).toHaveLength(11)
+    // The badge sits inside the radio, not beside it: the scoped rule that flattens TxKbd's
+    // keycap relief keys on `.HomeModelMenu-Item .HomeModelMenu-Kbd` and would silently stop
+    // applying if the badge moved out.
+    expect(rows(menu)[0].find('.HomeModelMenu-Item .HomeModelMenu-Kbd').exists()).toBe(true)
     expect(badges.slice(0, 9).map((badge) => badge.text())).toEqual([
       '⌘1',
       '⌘2',

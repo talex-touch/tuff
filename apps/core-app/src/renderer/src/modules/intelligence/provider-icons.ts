@@ -17,6 +17,16 @@ const PROVIDER_ICONS = {
 } satisfies Record<IntelligenceProviderType, ITuffIcon>
 
 /**
+ * Every class the table can render, for the UnoCSS safelist in `uno.config.ts`. UnoCSS's
+ * extractor scans templates, not `.ts` modules, so a class that lives only here never has its
+ * CSS generated and the icon renders as an empty box — which is what happened when the map
+ * moved out of the two `.vue` files. Derived from the table so the safelist cannot drift from it.
+ */
+export const PROVIDER_ICON_CLASSES: readonly string[] = Object.values(PROVIDER_ICONS).map(
+  (icon) => icon.value
+)
+
+/**
  * The icon for a provider type. A type outside the enum — possible only from a hand-edited
  * config — gets the `custom` icon: it is a provider we know nothing about, which is what custom
  * means. Own-property lookup so `constructor` and friends cannot resolve to prototype members.

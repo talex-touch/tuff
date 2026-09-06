@@ -292,6 +292,40 @@ describe('load', () => {
     expect(mocks.getProviderModelOptions).toHaveBeenCalledTimes(2)
   })
 
+  it('replaces the cached list on a forced reload, so a provider registered later appears', async () => {
+    // First load: the pi CLI was not installed yet.
+    mocks.getProviderModelOptions.mockResolvedValueOnce(
+      providerOptions().filter((option) => option.providerId !== 'pi-cli')
+    )
+    const useModelOptions = await importComposable()
+    const { load, choices, options } = useModelOptions()
+
+    await load()
+    expect(choices.value.map((choice) => choice.model)).toEqual(['qwen2.5:3b'])
+
+    await load(true)
+
+    expect(options.value).toEqual(providerOptions())
+    expect(choices.value.map((choice) => choice.model)).toEqual([
+      'codex/gpt-6-astra',
+      'DeepSeekOfficial/deepseek-v4-flash',
+      'qwen2.5:3b'
+    ])
+  })
+
+  it('keeps the previous list when a forced reload fails, rather than blanking an open menu', async () => {
+    const useModelOptions = await importComposable()
+    const { load, choices, loaded, loading } = useModelOptions()
+    await load()
+    mocks.getProviderModelOptions.mockRejectedValueOnce(new Error('intelligence unavailable'))
+
+    await load(true)
+
+    expect(choices.value).toHaveLength(3)
+    expect(loaded.value).toBe(true)
+    expect(loading.value).toBe(false)
+  })
+
   it('joins an in-flight load instead of starting a second one', async () => {
     let resolveOptions: (value: ProviderModelOption[]) => void = () => {}
     mocks.getProviderModelOptions.mockReturnValueOnce(
@@ -338,6 +372,34 @@ describe('ensureLoaded', () => {
 
     expect(loaded.value).toBe(true)
     expect(mocks.getProviderModelOptions).toHaveBeenCalledTimes(1)
+  })
+
+  it('fetches again with refresh, but joins a load that is already in flight', async () => {
+    let resolveOptions: (value: ProviderModelOption[]) => void = () => {}
+    mocks.getProviderModelOptions.mockReturnValueOnce(
+      new Promise<ProviderModelOption[]>((resolve) => {
+        resolveOptions = resolve
+      })
+    )
+    const useModelOptions = await importComposable()
+    const { ensureLoaded, choices } = useModelOptions()
+
+    // The mount-time load and a quick first open of the menu share one round trip.
+    const mountLoad = ensureLoaded()
+    await Promise.resolve()
+    const firstOpen = ensureLoaded({ refresh: true })
+    await Promise.resolve()
+    expect(mocks.getProviderModelOptions).toHaveBeenCalledTimes(1)
+
+    resolveOptions(providerOptions().filter((option) => option.providerId !== 'pi-cli'))
+    await Promise.all([mountLoad, firstOpen])
+    expect(choices.value.map((choice) => choice.model)).toEqual(['qwen2.5:3b'])
+
+    // A later open refetches, and the provider that has since registered comes in.
+    await ensureLoaded({ refresh: true })
+
+    expect(mocks.getProviderModelOptions).toHaveBeenCalledTimes(2)
+    expect(choices.value).toHaveLength(3)
   })
 
   it('still loads when hydration never settles, so the menu is not held hostage by the transport', async () => {

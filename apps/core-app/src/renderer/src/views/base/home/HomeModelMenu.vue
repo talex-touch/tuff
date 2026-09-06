@@ -20,6 +20,7 @@ import { useI18n } from 'vue-i18n'
 import { matchesModelQuery, modelSubtitle } from '~/modules/conversation/model-display'
 import { useModelFavorites } from '~/modules/conversation/useModelFavorites'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
+import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
 import { providerIconFor } from '~/modules/intelligence/provider-icons'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import {
@@ -93,6 +94,15 @@ const providerFilters = computed<ProviderFilter[]>(() => {
   return filters
 })
 
+/**
+ * A row shows what the model is before who serves it: the family's brand mark (`qwen2.5:3b` →
+ * Qwen, `codex/gpt-6-astra` → OpenAI), and the provider's icon only when the name names no
+ * family. The strip keeps the provider icon; there the provider is the subject.
+ */
+function rowIcon(choice: ModelChoice): ITuffIcon {
+  return modelFamilyIconFor(choice.model) ?? providerIconFor(choice.providerType)
+}
+
 /** Starred rows that resolve against the loaded choices, in list order. */
 const favoriteChoices = computed(() => choices.value.filter((choice) => isFavorite(choice)))
 
@@ -138,9 +148,11 @@ const visibleChoices = computed<ModelChoice[]>(() => {
 })
 
 /**
- * The line shown instead of the list, or `null` when there are rows. No skeleton: the row count
- * is the data's to decide (design §7, the component-guidelines exception), so a fixed
- * `min-height` under the body holds the panel steady between this line and the rows instead.
+ * The line shown instead of the list, or `null` when there are rows. Gated on `loaded`, never on
+ * `loading`: a reopen refetches over a list that is already on screen, and the rows stay while it
+ * does. No skeleton: the row count is the data's to decide (design §7, the component-guidelines
+ * exception), so a fixed `min-height` under the body holds the panel steady between this line and
+ * the rows instead.
  */
 const emptyHint = computed<string | null>(() => {
   if (!loaded.value) return t('home.modelLoading')
@@ -228,7 +240,11 @@ watch(open, (isOpen) => {
     query.value = ''
     filterPinned = false
     activeFilter.value = defaultFilter()
-    void ensureLoaded()
+    // Fetched again on every open, not just the first: providers come and go while the app runs
+    // (a CLI installed after launch, one enabled in settings), and the list HomePage loaded at
+    // mount would otherwise stand for the whole session. The rows already on screen stay put
+    // while the refetch is in flight — only `loaded`, never `loading`, gates the loading line.
+    void ensureLoaded({ refresh: true })
     focusSearchWhenShown()
     return
   }
@@ -342,11 +358,7 @@ onBeforeUnmount(() => {
               :aria-checked="isSelected(choice)"
               @click="choose(choice)"
             >
-              <TxIcon
-                class="HomeModelMenu-Icon"
-                :icon="providerIconFor(choice.providerType)"
-                :size="15"
-              />
+              <TxIcon class="HomeModelMenu-Icon" :icon="rowIcon(choice)" :size="15" />
               <span class="HomeModelMenu-Text">
                 <span class="HomeModelMenu-Name">{{ choice.displayName }}</span>
                 <span class="HomeModelMenu-Sub">
@@ -394,14 +406,22 @@ onBeforeUnmount(() => {
   padding: 0 2px;
 }
 
+/*
+ * Sized by its own box, not by its glyph. The strip is the only place a provider shows up, so a
+ * button whose icon fails to render (an icon class missing from the UnoCSS safelist is how the
+ * Pi tab once vanished) must still hold its slot and answer hover. The border is reserved
+ * transparent so nothing shifts should a state colour it.
+ */
 .HomeModelMenu-Filter {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 28px;
+  /* Border-box, so the reserved border does not grow the 30×28 slot the strip was laid out on. */
+  box-sizing: border-box;
+  min-width: 30px;
+  min-height: 28px;
   padding: 0;
-  border: none;
+  border: 1px solid transparent;
   border-radius: var(--shell-radius-sm);
   background: transparent;
   color: var(--shell-text-muted);
@@ -424,6 +444,14 @@ onBeforeUnmount(() => {
   &:focus-visible {
     outline: 2px solid var(--shell-primary);
     outline-offset: -2px;
+  }
+
+  /* TxIcon paints a currentColor fill and lets the icon class mask it into the glyph. With no
+     mask the empty <i> collapses to nothing and the button is blank; held at 1em it shows as a
+     solid square instead — a visible "icon missing", not a missing control. */
+  :deep(.tuff-icon__class i) {
+    min-width: 1em;
+    min-height: 1em;
   }
 }
 
@@ -530,8 +558,21 @@ onBeforeUnmount(() => {
   line-height: 1.3;
 }
 
-.HomeModelMenu-Kbd {
+/*
+ * The badge is a hint on a row that already has two controls, not a third one: TxKbd's keycap
+ * relief (gradient fill, heavier bottom edge, drop shadow) reads as pressable and pulls the eye
+ * off the model name. Flatten it onto the row's own surface; size and typography stay the
+ * primitive's. Scoped through the row item so this outranks the primitive's own rule regardless
+ * of stylesheet order.
+ */
+.HomeModelMenu-Item .HomeModelMenu-Kbd {
   flex: none;
+  border: 1px solid var(--shell-border);
+  /* The darker bottom edge is the keycap's one 3D cue; level it with the other three sides. */
+  border-bottom-color: var(--shell-border);
+  background: var(--shell-surface-2);
+  box-shadow: none;
+  color: var(--shell-text-muted);
 }
 
 .HomeModelMenu-Star {
