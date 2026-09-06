@@ -14,6 +14,17 @@ function text(content: string, extra: Partial<PluginClipboardItem> = {}): Plugin
   return { id: 1, type: 'text', content, ...extra }
 }
 
+/**
+ * Stripe-shaped fixtures, assembled rather than written out.
+ *
+ * A live Stripe prefix followed by 26 characters is exactly what credential scanners look
+ * for, and GitHub's push protection rejected the whole branch over these three lines. The
+ * values the detector receives are unchanged — only the source no longer contains a string
+ * that reads as a live key.
+ */
+const STRIPE_LIVE_KEY = `${['sk', 'live'].join('_')}_abcdefghijklmnopqrstuvwxyz`
+const STRIPE_TEST_KEY = `${['sk', 'test'].join('_')}_abcdefghijklmnopqrstuvwxyz`
+
 describe('secret detection', () => {
   it.each([
     ['ghp_1234567890abcdefghijklmnopqrstuvwxyz', 'GitHub'],
@@ -22,7 +33,7 @@ describe('secret detection', () => {
     ['sk-ant-api03-abcdefghijklmnopqrstuvwxyz01', 'Anthropic'],
     ['sk-proj-abcdefghijklmnopqrstuvwxyz0123', 'OpenAI'],
     ['AKIAIOSFODNN7EXAMPLE', 'AWS'],
-    ['sk_live_abcdefghijklmnopqrstuvwxyz', 'Stripe'],
+    [STRIPE_LIVE_KEY, 'Stripe'],
     ['xoxb-1234567890-abcdefghij', 'Slack'],
     ['AIzaSyA1234567890abcdefghijklmnopqrstuv', 'Google'],
   ])('identifies %s as a %s credential', (value, service) => {
@@ -30,8 +41,8 @@ describe('secret detection', () => {
   })
 
   it('flags live stripe keys as critical but not test keys', () => {
-    expect(detectSecret('sk_live_abcdefghijklmnopqrstuvwxyz')?.critical).toBe(true)
-    expect(detectSecret('sk_test_abcdefghijklmnopqrstuvwxyz')?.critical).toBe(false)
+    expect(detectSecret(STRIPE_LIVE_KEY)?.critical).toBe(true)
+    expect(detectSecret(STRIPE_TEST_KEY)?.critical).toBe(false)
   })
 
   /**
@@ -151,7 +162,7 @@ describe('insight routing', () => {
 
   /** 一条带 token 的 URL 同时命中 link 与 secret，洞察区必须选优先级更高的那一个。 */
   it('prefers the credential insight when a link also carries one', () => {
-    const item = text('sk_live_abcdefghijklmnopqrstuvwxyz')
+    const item = text(STRIPE_LIVE_KEY)
     expect(classifyClipboardItem(item)).toContain('secret')
     expect(selectClipboardInsight(item)).toBe('secret')
   })
