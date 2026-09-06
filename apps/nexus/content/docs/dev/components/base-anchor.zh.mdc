@@ -441,6 +441,7 @@ code: |
 
 - 已核对 `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`、`base-anchor-motion.ts`、`types.ts` 与 `base-anchor.test.ts`。
 - 现有测试覆盖非受控切换、受控的外部点击/Escape 关闭路径、禁用阻断、关闭/切换开关、floating attrs 与 reference class、动画变体及旧版 duration/ease 兼容，以及 surface-motion adaptation 策略。
+- `--tx-ba-max-height` 只由 `size` middleware 写入：正常为 `min(availableHeight, maxHeight)` 的像素值，unlimited 时为 `none`。根节点 `:style` 不声明这个变量——它曾被绑定为 `isUnlimitedHeight ? 'none' : undefined`，而 Vue 的样式 patch 会把 `undefined` 写成 `setProperty(name, '')`，每次定位后的重渲染都删掉 middleware 刚写入的值，面板始终回落到 CSS 默认的 420px 并向下溢出触发元素。
 - 可访问性说明：`TxBaseAnchor` 只是定位基础设施。上层封装必须按内容类型提供 menu/dialog/listbox role、焦点管理与键盘导航。
 - `drip` / `bead` 的覆盖分布在 `base-anchor-liquid.test.ts`（cubic-bezier 求解、弹簧拒绝、p=0 / 0.45 / 1 的稿值几何、两条边的独立性、逐项揭示）与 `base-anchor.test.ts`（单一合并 goo 滤镜、腐蚀推导的轮廓环、滤镜外的阴影孪生、箭头/描边/卡片抑制、横向降级、不走 gsap）。
 - `drip` / `bead` 由 rAF 循环驱动而非 GSAP：动效由两条 CSS cubic-bezier 定义，且每帧都要从单一进度标量派生 SVG 几何、阴影孪生与逐项透明度。
@@ -450,6 +451,6 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`。
 - Type contracts: `packages/tuffex/packages/components/src/base-anchor/src/types.ts` 导出 `BaseAnchorProps`、`BaseAnchorAnimationOptions` 与虚拟 reference 类型。
-- **实测覆盖:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` 覆盖非受控切换、受控的外部点击/Escape 关闭、禁用行为、关闭/切换开关、floating attrs/reference class、动画及旧版兼容，以及 surface-motion adaptation。
+- **实测覆盖:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` 覆盖非受控切换、受控的外部点击/Escape 关闭、禁用行为、关闭/切换开关、floating attrs/reference class、动画及旧版兼容，以及 surface-motion adaptation。`base-anchor-max-height.test.ts` 覆盖 `--tx-ba-max-height` 的归属：面板打开稳定后与重渲染后都保持 middleware 写入的像素值（`unlimitedHeight` 时为 `none`），且没有任何空值写入将其清除。
 
 <TuffDocSourceLink />
