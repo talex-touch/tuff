@@ -420,6 +420,7 @@ code: |
 - `virtualReference` 会覆盖 DOM reference 参与 Floating UI 定位，但 reference 插槽仍会渲染以保持结构与插槽契约。适合需要坐标锚点的组件。
 - `class`、`style` 与非 class attrs 会透传到浮层面板；reference 包装层样式使用 `referenceClass`。
 - `maxHeight` 会被视口剩余高度裁剪。只有面板内部自带滚动容器时才使用 `unlimitedHeight`。
+- 超出 `maxHeight` 时滚动的是卡片的 body，不是 `.tx-base-anchor__card` 本身——卡片只负责裁剪。面板背景由卡片内一个绝对定位的 surface 层绘制，让卡片自己滚会把这层背景一起滚走。面板内容需要滚动位置时，取的是卡片 body 而不是卡片。
 - `surfaceMotionAdaptation` 是真实策略：`auto` 使用 Anchor 内部运动态，`manual` 读取 `panelCard.surfaceMoving`，`off` 强制 `surfaceMoving=false`。
 - 新动画优先使用 `animation` 对象；`duration` / `ease` 仅作为兼容入口参与默认值合并。
 - `eager` 会在首次打开前挂载；`keepAliveContent` 会在关闭后保留内容状态。优先用于需要测量或保留表单状态的面板，不要滥用于静态文案。
@@ -441,6 +442,7 @@ code: |
 
 - 已核对 `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`、`base-anchor-motion.ts`、`types.ts` 与 `base-anchor.test.ts`。
 - 现有测试覆盖非受控切换、受控的外部点击/Escape 关闭路径、禁用阻断、关闭/切换开关、floating attrs 与 reference class、动画变体及旧版 duration/ease 兼容，以及 surface-motion adaptation 策略。
+- 被否掉的做法：让 `.tx-base-anchor__card` 自己 `overflow: auto`。它曾是默认写法，但卡片的 surface 层是它的绝对定位子元素，包含块随卡片内容一起滚动——面板往下滚多少像素，底部就有多少像素只剩页面背景。自带列表滚动容器的面板（select、search-select）碰不到，把整个 body 交给卡片的 dropdown-menu 会。现在卡片 `overflow: hidden`、body `overflow: auto`，surface 留在原地。
 - `--tx-ba-max-height` 只由 `size` middleware 写入：正常为 `min(availableHeight, maxHeight)` 的像素值，unlimited 时为 `none`。根节点 `:style` 不声明这个变量——它曾被绑定为 `isUnlimitedHeight ? 'none' : undefined`，而 Vue 的样式 patch 会把 `undefined` 写成 `setProperty(name, '')`，每次定位后的重渲染都删掉 middleware 刚写入的值，面板始终回落到 CSS 默认的 420px 并向下溢出触发元素。
 - 可访问性说明：`TxBaseAnchor` 只是定位基础设施。上层封装必须按内容类型提供 menu/dialog/listbox role、焦点管理与键盘导航。
 - `drip` / `bead` 的覆盖分布在 `base-anchor-liquid.test.ts`（cubic-bezier 求解、弹簧拒绝、p=0 / 0.45 / 1 的稿值几何、两条边的独立性、逐项揭示）与 `base-anchor.test.ts`（单一合并 goo 滤镜、腐蚀推导的轮廓环、滤镜外的阴影孪生、箭头/描边/卡片抑制、横向降级、不走 gsap）。
