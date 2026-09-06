@@ -542,9 +542,8 @@ export class DownloadWorker {
     }
 
     const maxRetries = this.config.chunk.maxRetries
-    const fallbackUrl = typeof task.metadata?.fallbackUrl === 'string'
-      ? task.metadata.fallbackUrl
-      : undefined
+    const fallbackUrl =
+      typeof task.metadata?.fallbackUrl === 'string' ? task.metadata.fallbackUrl : undefined
     let retryCount = 0
     let requestUrl = task.metadata?.fallbackUsed === true && fallbackUrl ? fallbackUrl : task.url
 
