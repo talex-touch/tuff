@@ -258,6 +258,19 @@ const _appSettingOriginData = {
       },
     },
   },
+  conversation: {
+    /**
+     * The model pinned in the home model pill, or `null` for Tuff auto-routing.
+     *
+     * An object, not a `providerId:model` string: local model ids carry their own colon
+     * (`qwen2.5:3b`). Readers resolve it against the currently loaded options and fall back to
+     * auto when it does not resolve, but never clear it — a provider that is temporarily
+     * unavailable (the pi CLI not running) must not cost the user their choice.
+     */
+    model: null as null | { providerId: string, model: string },
+    /** Starred rows of the home model menu, in the order they were starred. */
+    favoriteModels: [] as Array<{ providerId: string, model: string }>,
+  },
   dashboard: {
     enable: false,
   },

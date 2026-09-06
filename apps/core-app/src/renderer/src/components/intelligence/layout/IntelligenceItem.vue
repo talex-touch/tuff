@@ -11,6 +11,7 @@ import {
   isNexusManagedProvider,
   TUFF_NEXUS_PROVIDER_ICON
 } from '~/modules/intelligence/nexus-provider'
+import { providerIconFor } from '~/modules/intelligence/provider-icons'
 
 enum IntelligenceProviderType {
   OPENAI = 'openai',
@@ -118,20 +119,8 @@ function getProviderIcon(provider: IntelligenceProviderConfig): ITuffIcon {
     return TUFF_NEXUS_PROVIDER_ICON
   }
 
-  const iconMap: Record<string, string> = {
-    [IntelligenceProviderType.OPENAI]: 'i-simple-icons-openai',
-    [IntelligenceProviderType.ANTHROPIC]: 'i-simple-icons-anthropic',
-    [IntelligenceProviderType.DEEPSEEK]: 'i-carbon-search-advanced',
-    [IntelligenceProviderType.SILICONFLOW]: 'i-carbon-ibm-watson-machine-learning',
-    [IntelligenceProviderType.LOCAL]: 'i-carbon-bare-metal-server',
-    [IntelligenceProviderType.CUSTOM]: 'i-carbon-settings'
-  }
-
-  const iconClass = iconMap[provider.type] || 'i-carbon-ibm-watson-machine-learning'
-
   return {
-    type: 'class',
-    value: iconClass,
+    ...providerIconFor(provider.type),
     status: 'normal' as const
   }
 }
