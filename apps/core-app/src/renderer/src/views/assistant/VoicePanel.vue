@@ -820,35 +820,52 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="voice-panel-root">
-    <div class="voice-panel">
+    <div
+      class="voice-panel"
+      :class="{ 'voice-panel--active': listening || transcribingVoice || startingVoiceCapture }"
+    >
       <header class="voice-panel-header">
-        <div class="title-wrap">
-          <p class="title">{{ runtimeConfig.assistantName }}</p>
-          <p class="subtitle">
-            {{ panelStatusText }}
-            <span v-if="sourceText"> · {{ sourceText }}</span>
-          </p>
+        <div class="voice-panel-heading">
+          <span
+            class="voice-panel-mark"
+            :class="{
+              active: listening || transcribingVoice || startingVoiceCapture,
+              error: !!errorMessage
+            }"
+            aria-hidden="true"
+          >
+            <span class="i-carbon-microphone-filled" />
+          </span>
+          <div class="title-wrap">
+            <p class="title">{{ runtimeConfig.assistantName }}</p>
+            <p class="subtitle">
+              {{ panelStatusText }}
+              <span v-if="sourceText"> · {{ sourceText }}</span>
+            </p>
+          </div>
         </div>
-        <div
-          class="voice-signal"
-          :class="{ active: listening || transcribingVoice || startingVoiceCapture }"
-          aria-hidden="true"
-        >
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
+        <div class="voice-panel-actions">
+          <div
+            class="voice-signal"
+            :class="{ active: listening || transcribingVoice || startingVoiceCapture }"
+            aria-hidden="true"
+          >
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+          <button
+            class="close-btn"
+            type="button"
+            :disabled="closingPanel"
+            aria-keyshortcuts="Escape"
+            @click="closePanel"
+          >
+            {{ t('assistant.voicePanel.close') }}
+          </button>
         </div>
-        <button
-          class="close-btn"
-          type="button"
-          :disabled="closingPanel"
-          aria-keyshortcuts="Escape"
-          @click="closePanel"
-        >
-          {{ t('assistant.voicePanel.close') }}
-        </button>
       </header>
 
       <main class="voice-panel-body">
@@ -1019,70 +1036,72 @@ onBeforeUnmount(() => {
       </main>
 
       <footer class="voice-panel-footer">
-        <button
-          class="secondary-btn"
-          type="button"
-          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
-          @click="translateClipboardImage"
-        >
-          {{
-            translatingClipboardImage
-              ? t('assistant.voicePanel.imageTranslatingShort')
-              : t('assistant.voicePanel.translateClipboardImage')
-          }}
-        </button>
-        <button
-          class="secondary-btn"
-          type="button"
-          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
-          @click="translateScreenshot"
-        >
-          {{
-            translatingScreenshot
-              ? t('assistant.voicePanel.imageTranslatingShort')
-              : t('assistant.voicePanel.translateScreenshot')
-          }}
-        </button>
-        <button
-          class="secondary-btn"
-          type="button"
-          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
-          @click="captureScreenshot"
-        >
-          {{
-            capturingScreenshot
-              ? t('assistant.voicePanel.screenshotCapturingShort')
-              : t('assistant.voicePanel.captureScreenshot')
-          }}
-        </button>
-        <button
-          class="secondary-btn"
-          type="button"
-          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
-          @click="saveScreenshot"
-        >
-          {{
-            savingScreenshot
-              ? t('assistant.voicePanel.screenshotSavingShort')
-              : t('assistant.voicePanel.saveScreenshot')
-          }}
-        </button>
-        <button
-          class="secondary-btn"
-          type="button"
-          :disabled="!voiceWakeEnabled || startingVoiceCapture || transcribingVoice"
-          @click="toggleVoiceInput"
-        >
-          {{
-            startingVoiceCapture
-              ? t('assistant.voicePanel.voicePreparing')
-              : transcribingVoice
-                ? t('assistant.voicePanel.voiceTranscribingShort')
-                : listening
-                  ? t('assistant.voicePanel.stopListening')
-                  : t('assistant.voicePanel.startListening')
-          }}
-        </button>
+        <div class="voice-panel-tools">
+          <button
+            class="secondary-btn"
+            type="button"
+            :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
+            @click="translateClipboardImage"
+          >
+            {{
+              translatingClipboardImage
+                ? t('assistant.voicePanel.imageTranslatingShort')
+                : t('assistant.voicePanel.translateClipboardImage')
+            }}
+          </button>
+          <button
+            class="secondary-btn"
+            type="button"
+            :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
+            @click="translateScreenshot"
+          >
+            {{
+              translatingScreenshot
+                ? t('assistant.voicePanel.imageTranslatingShort')
+                : t('assistant.voicePanel.translateScreenshot')
+            }}
+          </button>
+          <button
+            class="secondary-btn"
+            type="button"
+            :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
+            @click="captureScreenshot"
+          >
+            {{
+              capturingScreenshot
+                ? t('assistant.voicePanel.screenshotCapturingShort')
+                : t('assistant.voicePanel.captureScreenshot')
+            }}
+          </button>
+          <button
+            class="secondary-btn"
+            type="button"
+            :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
+            @click="saveScreenshot"
+          >
+            {{
+              savingScreenshot
+                ? t('assistant.voicePanel.screenshotSavingShort')
+                : t('assistant.voicePanel.saveScreenshot')
+            }}
+          </button>
+          <button
+            class="secondary-btn"
+            type="button"
+            :disabled="!voiceWakeEnabled || startingVoiceCapture || transcribingVoice"
+            @click="toggleVoiceInput"
+          >
+            {{
+              startingVoiceCapture
+                ? t('assistant.voicePanel.voicePreparing')
+                : transcribingVoice
+                  ? t('assistant.voicePanel.voiceTranscribingShort')
+                  : listening
+                    ? t('assistant.voicePanel.stopListening')
+                    : t('assistant.voicePanel.startListening')
+            }}
+          </button>
+        </div>
         <button
           class="primary-btn"
           type="button"
@@ -1509,6 +1528,275 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .voice-signal.active span {
     animation: none;
+  }
+}
+.voice-panel-root {
+  padding: 8px 10px 12px;
+}
+
+.voice-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--shell-radius-xl);
+  padding: 16px;
+  background:
+    radial-gradient(circle at 88% 0%, var(--shell-primary-soft), transparent 34%),
+    var(--shell-surface);
+  border: 1px solid var(--shell-border);
+  box-shadow: 0 8px 14px var(--shell-shadow);
+}
+
+.voice-panel::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: calc(var(--shell-radius-xl) - 1px);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  pointer-events: none;
+}
+
+.voice-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.voice-panel-header {
+  align-items: center;
+  gap: 12px;
+}
+
+.voice-panel-heading,
+.voice-panel-actions {
+  display: flex;
+  align-items: center;
+}
+
+.voice-panel-heading {
+  min-width: 0;
+  gap: 10px;
+}
+
+.voice-panel-actions {
+  flex-shrink: 0;
+  gap: 10px;
+}
+
+.voice-panel-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--shell-primary-border);
+  border-radius: var(--shell-radius-full);
+  background: var(--shell-primary-soft);
+  color: var(--shell-primary);
+  font-size: 15px;
+}
+
+.voice-panel-mark.active {
+  animation: voice-panel-mark-pulse 1.4s ease-out infinite;
+}
+
+.voice-panel-mark.error {
+  border-color: var(--shell-danger-border);
+  background: var(--shell-danger-soft);
+  color: var(--shell-danger);
+}
+
+.title {
+  font-size: var(--shell-fs-md);
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  margin-top: 3px;
+  font-size: var(--shell-fs-caption);
+}
+
+.voice-signal {
+  width: 48px;
+  margin: 0;
+}
+
+.close-btn {
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-full);
+  padding: 7px 10px;
+  background: var(--shell-bg);
+  color: var(--shell-text-secondary);
+  transition:
+    border-color 160ms ease-out,
+    color 160ms ease-out,
+    transform 160ms ease-out;
+}
+
+.close-btn:hover {
+  border-color: var(--shell-primary-border);
+  color: var(--shell-text-primary);
+}
+
+.close-btn:active,
+.secondary-btn:active,
+.primary-btn:active {
+  transform: scale(0.98);
+}
+
+.voice-panel-body {
+  margin-top: 12px;
+  gap: 8px;
+}
+
+.screenshot-target-controls {
+  gap: 8px;
+}
+
+.screenshot-target-field {
+  gap: 4px;
+  color: var(--shell-text-secondary);
+}
+
+.screenshot-target-field select,
+.input-area {
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-bg);
+  color: var(--shell-text-regular);
+}
+
+.screenshot-target-field select {
+  height: 30px;
+  padding: 0 9px;
+}
+
+.input-area {
+  min-height: 72px;
+  padding: 11px 12px;
+  font-size: var(--shell-fs-body);
+  line-height: 1.45;
+  box-shadow: none;
+  transition:
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+
+.input-area::placeholder {
+  color: var(--shell-text-muted);
+}
+
+.input-area:focus {
+  border-color: var(--shell-primary);
+  box-shadow: 0 0 0 3px var(--shell-primary-soft);
+}
+
+.interim-text {
+  padding: 6px 8px;
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-primary-soft);
+  color: var(--shell-primary);
+}
+
+.voice-panel-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.voice-panel-tools {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.secondary-btn,
+.primary-btn {
+  min-width: 0;
+  max-width: none;
+  border-radius: var(--shell-radius-md);
+  padding: 8px 9px;
+  font-size: var(--shell-fs-caption);
+  font-weight: 600;
+  transition:
+    border-color 160ms ease-out,
+    background-color 160ms ease-out,
+    color 160ms ease-out,
+    transform 160ms ease-out;
+}
+
+.secondary-btn {
+  overflow: hidden;
+  border: 1px solid var(--shell-border);
+  background: var(--shell-bg);
+  color: var(--shell-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secondary-btn:hover {
+  border-color: var(--shell-primary-border);
+  background: var(--shell-primary-soft);
+  color: var(--shell-text-primary);
+}
+
+.primary-btn {
+  align-self: flex-end;
+  min-width: 136px;
+  border: 1px solid var(--shell-primary);
+  background: var(--shell-primary);
+  color: var(--shell-on-primary);
+  box-shadow: none;
+}
+
+.primary-btn:hover {
+  filter: brightness(1.06);
+}
+
+.secondary-btn:disabled,
+.primary-btn:disabled,
+.close-btn:disabled {
+  opacity: 0.52;
+}
+
+@keyframes voice-panel-mark-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--shell-primary-soft);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.voice-panel-tools .secondary-btn {
+  padding-inline: 4px;
+  font-size: 10px;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 410px) {
+  .voice-panel-tools {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .primary-btn {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-panel-mark.active {
+    animation: none;
+  }
+
+  .close-btn,
+  .secondary-btn,
+  .primary-btn,
+  .input-area {
+    transition: none;
   }
 }
 </style>

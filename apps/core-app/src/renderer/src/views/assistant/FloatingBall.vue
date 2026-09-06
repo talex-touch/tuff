@@ -222,16 +222,23 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="floating-ball-root" @mousedown="onPointerDown" @click="onBallClick">
-    <div
+  <button
+    class="floating-ball-root"
+    type="button"
+    :aria-label="statusText"
+    @mousedown="onPointerDown"
+    @click="onBallClick"
+  >
+    <span
       class="floating-ball"
       :title="statusText"
       :class="{ listening: showWakeBadge, error: !!errorMessage }"
+      aria-hidden="true"
     >
       <span class="assistant-char">阿</span>
-    </div>
-    <div v-if="showWakeBadge" class="wake-dot" />
-  </div>
+    </span>
+    <span v-if="showWakeBadge" class="wake-dot" aria-hidden="true" />
+  </button>
 </template>
 
 <style scoped>
@@ -242,8 +249,15 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   user-select: none;
   cursor: grab;
+  appearance: none;
 }
 
 .floating-ball-root:active {
@@ -253,35 +267,42 @@ onBeforeUnmount(() => {
 .floating-ball {
   width: 48px;
   height: 48px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #fef3c7, #f97316 72%);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--shell-primary-border);
+  border-radius: var(--shell-radius-full);
+  background:
+    radial-gradient(circle at 30% 28%, var(--shell-primary), var(--shell-surface-2) 78%),
+    var(--shell-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 10px 24px rgba(120, 53, 15, 0.35);
+  box-shadow: 0 8px 14px var(--shell-shadow);
   transition:
-    transform 0.15s ease,
-    box-shadow 0.2s ease;
+    transform 160ms ease-out,
+    box-shadow 160ms ease-out,
+    filter 160ms ease-out;
 }
 
 .floating-ball:hover {
   transform: scale(1.04);
-  box-shadow: 0 12px 26px rgba(120, 53, 15, 0.45);
+  box-shadow: 0 8px 14px var(--shell-shadow);
+  filter: brightness(1.06);
 }
 
 .floating-ball.listening {
   box-shadow:
-    0 0 0 6px rgba(251, 146, 60, 0.2),
-    0 12px 26px rgba(120, 53, 15, 0.45);
+    0 0 0 6px var(--shell-primary-soft),
+    0 8px 14px var(--shell-shadow);
 }
 
 .floating-ball.error {
-  background: radial-gradient(circle at 30% 30%, #fecaca, #ef4444 72%);
+  border-color: var(--shell-danger-border);
+  background:
+    radial-gradient(circle at 30% 28%, var(--shell-danger), var(--shell-surface-2) 78%),
+    var(--shell-danger);
 }
 
 .assistant-char {
-  color: #7c2d12;
+  color: var(--shell-on-primary);
   font-size: 20px;
   font-weight: 700;
   line-height: 1;
@@ -293,8 +314,14 @@ onBeforeUnmount(() => {
   bottom: 4px;
   width: 9px;
   height: 9px;
+  border: 2px solid var(--shell-surface);
   border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15);
+  background: var(--shell-success);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-ball {
+    transition: none;
+  }
 }
 </style>
