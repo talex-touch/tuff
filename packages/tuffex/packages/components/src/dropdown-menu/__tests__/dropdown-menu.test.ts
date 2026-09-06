@@ -62,6 +62,14 @@ function mountMenu(props: Record<string, unknown> = {}) {
   })
 }
 
+// Dispatch a real, cancelable keydown so `defaultPrevented` is observable: the
+// menu must consume the keys it navigates with and leave the rest alone.
+function keydown(el: Element, key: string): KeyboardEvent {
+  const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+  el.dispatchEvent(event)
+  return event
+}
+
 afterEach(() => {
   document.body.innerHTML = ''
 })
@@ -218,6 +226,76 @@ describe('txDropdownMenu', () => {
 
     await radioOff.trigger('keydown', { key: 'End' })
     expect(document.activeElement).toBe(checkVerbose.element)
+  })
+
+  it('leaves focus where it was when initialFocus is none', async () => {
+    const outside = document.createElement('button')
+    outside.className = 'outside'
+    document.body.appendChild(outside)
+    outside.focus()
+
+    // Contrast: the default still lands on the first enabled item.
+    const focusing = mountMenu({ modelValue: true })
+    await nextTick()
+    expect(document.activeElement).toBe(focusing.find('.rename-item').element)
+    focusing.unmount()
+    outside.focus()
+
+    const wrapper = mountMenu({ modelValue: true, initialFocus: 'none' })
+    await nextTick()
+    expect(document.activeElement).toBe(outside)
+
+    // Re-opening later does not steal it either.
+    await wrapper.setProps({ modelValue: false })
+    await wrapper.setProps({ modelValue: true })
+    await nextTick()
+    expect(document.activeElement).toBe(outside)
+  })
+
+  it('keeps Home / End for an editable target inside the panel while arrows still enter the list', async () => {
+    const wrapper = mount(TxDropdownMenu, {
+      attachTo: document.body,
+      props: { modelValue: true, initialFocus: 'none' },
+      slots: {
+        trigger: '<button class="trigger">Models</button>',
+        default: `
+          <input class="search" type="text" value="gpt" />
+          <div class="note" contenteditable="true" tabindex="0">note</div>
+          <TxDropdownItem class="rename-item">Rename</TxDropdownItem>
+          <TxDropdownItem class="delete-item">Delete</TxDropdownItem>
+        `,
+      },
+      global: {
+        components: { TxDropdownItem },
+        stubs: { TxPopover: PopoverStub },
+      },
+    })
+    await nextTick()
+
+    const search = wrapper.find<HTMLInputElement>('.search')
+    search.element.focus()
+    expect(document.activeElement).toBe(search.element)
+
+    // Caret keys stay with the field: not consumed, focus untouched.
+    expect(keydown(search.element, 'Home').defaultPrevented).toBe(false)
+    expect(document.activeElement).toBe(search.element)
+    expect(keydown(search.element, 'End').defaultPrevented).toBe(false)
+    expect(document.activeElement).toBe(search.element)
+
+    // Same for a contenteditable host, which jsdom only exposes via the attribute walk.
+    const note = wrapper.find<HTMLElement>('.note')
+    note.element.focus()
+    expect(keydown(note.element, 'Home').defaultPrevented).toBe(false)
+    expect(document.activeElement).toBe(note.element)
+
+    // Arrow keys are still the menu's: that is how the field hands focus to the list.
+    search.element.focus()
+    expect(keydown(search.element, 'ArrowDown').defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(wrapper.find('.rename-item').element)
+
+    // A plain item keeps the jump-to-edge behaviour.
+    expect(keydown(wrapper.find('.rename-item').element, 'End').defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(wrapper.find('.delete-item').element)
   })
 
   it('selects enabled items and closes the parent dropdown when closeOnSelect is enabled', async () => {
