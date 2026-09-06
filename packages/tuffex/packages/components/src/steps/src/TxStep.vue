@@ -107,9 +107,19 @@ function handleClick() {
         <TxIcon v-else-if="icon" :name="icon" />
         <span v-else class="tx-step__number">{{ stepNumber }}</span>
       </div>
-
-      <div v-if="showLine && !isLast" class="tx-step__line" />
     </component>
+
+    <!--
+      The connector is a sibling of the head, not a child: it is positioned
+      against the whole step so it can run from this marker's edge to the next
+      marker's edge, and it must not sit inside the button's hit area.
+    -->
+    <div
+      v-if="showLine && !isLast"
+      class="tx-step__line"
+      :class="{ 'tx-step__line--completed': isCompleted }"
+      aria-hidden="true"
+    />
 
     <div class="tx-step__content">
       <div :id="titleId" class="tx-step__title">
@@ -123,19 +133,45 @@ function handleClick() {
 </template>
 
 <style scoped>
+/*
+ * One geometry, three sizes. The marker diameter drives everything that has to
+ * line up with it — the connector's offset from the marker, its vertical
+ * position, the label size — so a size change is one variable, not a set of
+ * hand-kept offsets. Both size and direction modifiers sit on this node.
+ */
 .tx-step {
-  display: flex;
-  align-items: center;
+  --tx-step-icon-size: 24px;
+  --tx-step-line-gap: 6px;
+  --tx-step-line-thickness: 2px;
+  --tx-step-title-size: 14px;
+  --tx-step-description-size: 12px;
+
   position: relative;
+  display: flex;
+}
+
+.tx-step--small {
+  --tx-step-icon-size: 20px;
+  --tx-step-title-size: 12px;
+  --tx-step-description-size: 11px;
+}
+
+.tx-step--large {
+  --tx-step-icon-size: 28px;
+  --tx-step-title-size: 16px;
+  --tx-step-description-size: 13px;
 }
 
 .tx-step--horizontal {
   flex: 1;
   flex-direction: column;
+  align-items: center;
 }
 
 .tx-step--vertical {
   flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
@@ -151,137 +187,139 @@ function handleClick() {
   color: var(--tx-step-title-hover, var(--tx-color-primary));
 }
 
+.tx-step--disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .tx-step__head {
   appearance: none;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  position: relative;
+  justify-content: center;
+  flex: none;
   padding: 0;
   border: 0;
+  border-radius: 50%;
   background: transparent;
   color: inherit;
   font: inherit;
+  outline: none;
 }
 
-.tx-step--horizontal .tx-step__head {
-  width: 100%;
-  justify-content: center;
+.tx-step__head:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
 }
 
-.tx-step--vertical .tx-step__head {
-  margin-right: 16px;
-}
-
+/*
+ * The marker. Wait is hollow — a ring of the border colour around a secondary
+ * number — so only the reached steps carry fill, and the row reads as "here is
+ * how far you are" at a glance. Completed and active share the primary hue:
+ * finished steps in green next to the current one in blue put two accents on
+ * one control and made the row look like a status legend.
+ */
 .tx-step__icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: var(--tx-step-icon-size);
+  height: var(--tx-step-icon-size);
   border-radius: 50%;
-  font-size: 12px;
+  font-size: calc(var(--tx-step-icon-size) * 0.5);
   font-weight: 600;
   position: relative;
   z-index: 2;
-  transition: all 0.3s;
-}
-
-.tx-step--small .tx-step__icon {
-  width: 20px;
-  height: 20px;
-  font-size: 10px;
-}
-
-.tx-step--large .tx-step__icon {
-  width: 28px;
-  height: 28px;
-  font-size: 14px;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .tx-step__icon--wait {
-  background: var(--tx-step-icon-wait-bg, var(--tx-fill-color-light));
+  background: var(--tx-step-icon-wait-bg, transparent);
   color: var(--tx-step-icon-wait-text, var(--tx-text-color-secondary));
-  border: 2px solid var(--tx-step-icon-wait-border, var(--tx-border-color-lighter));
+  box-shadow: inset 0 0 0 1.5px var(--tx-step-icon-wait-border, var(--tx-border-color));
 }
 
 .tx-step__icon--active {
   background: var(--tx-step-icon-active-bg, var(--tx-color-primary));
   color: var(--tx-step-icon-active-text, var(--tx-color-on-primary));
-  border: 2px solid var(--tx-step-icon-active-border, var(--tx-color-primary));
-  box-shadow: 0 0 0 4px var(--tx-step-icon-active-shadow, color-mix(in srgb, var(--tx-color-primary) 22%, transparent));
+  box-shadow: 0 0 0 4px var(--tx-step-icon-active-shadow, color-mix(in srgb, var(--tx-color-primary) 18%, transparent));
 }
 
 .tx-step__icon--completed {
-  background: var(--tx-step-icon-completed-bg, var(--tx-color-success));
+  background: var(--tx-step-icon-completed-bg, var(--tx-color-primary));
   color: var(--tx-step-icon-completed-text, var(--tx-color-on-primary));
-  border: 2px solid var(--tx-step-icon-completed-border, var(--tx-color-success));
+}
+
+.tx-step__icon--error {
+  background: var(--tx-step-icon-error-bg, var(--tx-color-danger));
+  color: var(--tx-step-icon-error-text, var(--tx-color-on-primary));
 }
 
 .tx-step__number {
   line-height: 1;
 }
 
+/*
+ * The connector runs from this marker's edge to the next marker's edge. The
+ * steps are equal flex columns, so the next marker's centre is one step width
+ * to the right of this one's: a line from `50% + r + gap` to `-50% + r + gap`
+ * lands exactly between the two, whatever the column width. It used to be a
+ * flex sibling of the marker inside the head, which pushed the marker off the
+ * column's centre — every icon sat left of its own title.
+ */
 .tx-step__line {
-  flex: 1;
-  height: 2px;
+  position: absolute;
   background: var(--tx-step-line, var(--tx-border-color-lighter));
-  position: relative;
-  top: -1px;
+  border-radius: calc(var(--tx-step-line-thickness) / 2);
+  transition: background-color 0.2s ease;
+}
+
+.tx-step__line--completed {
+  background: var(--tx-step-line-completed, var(--tx-color-primary));
 }
 
 .tx-step--horizontal .tx-step__line {
-  margin-left: 8px;
+  top: calc(var(--tx-step-icon-size) / 2 - var(--tx-step-line-thickness) / 2);
+  left: calc(50% + var(--tx-step-icon-size) / 2 + var(--tx-step-line-gap));
+  right: calc(-50% + var(--tx-step-icon-size) / 2 + var(--tx-step-line-gap));
+  height: var(--tx-step-line-thickness);
 }
 
+/* Vertically the line drops from under the marker into the 16px gap below, up to the next marker. */
 .tx-step--vertical .tx-step__line {
-  width: 2px;
-  height: 24px;
-  position: absolute;
-  left: 11px;
-  top: 24px;
-  margin-left: 0;
-}
-
-/* Size + direction modifiers sit on the same `.tx-step` node, so these must be compound
-   (no space) — a descendant combinator would look for a nested vertical step that never
-   exists, leaving the medium offsets in place for small/large vertical steps. */
-.tx-step--small.tx-step--vertical .tx-step__line {
-  left: 9px;
-  top: 20px;
-  height: 20px;
-}
-
-.tx-step--large.tx-step--vertical .tx-step__line {
-  left: 13px;
-  top: 28px;
-  height: 28px;
+  left: calc(var(--tx-step-icon-size) / 2 - var(--tx-step-line-thickness) / 2);
+  top: calc(var(--tx-step-icon-size) + var(--tx-step-line-gap));
+  bottom: calc(var(--tx-step-line-gap) - 16px);
+  width: var(--tx-step-line-thickness);
 }
 
 .tx-step__content {
   text-align: center;
   margin-top: 8px;
+  min-width: 0;
 }
 
 .tx-step--vertical .tx-step__content {
   text-align: left;
   margin-top: 0;
   flex: 1;
+  /* Keep the title's first line on the marker's centre line. */
+  padding-top: calc((var(--tx-step-icon-size) - var(--tx-step-title-size) * 1.4) / 2);
 }
 
+/* Labels: the reached steps in the primary ink, the ones ahead in the secondary. */
 .tx-step__title {
   font-weight: 500;
-  color: var(--tx-step-title, var(--tx-text-color-primary));
-  font-size: 14px;
+  color: var(--tx-step-title, var(--tx-text-color-secondary));
+  font-size: var(--tx-step-title-size);
   line-height: 1.4;
-  transition: color 0.3s;
+  transition: color 0.2s ease;
 }
 
-.tx-step--small .tx-step__title {
-  font-size: 12px;
-}
-
-.tx-step--large .tx-step__title {
-  font-size: 16px;
+.tx-step--completed .tx-step__title {
+  color: var(--tx-step-title-completed, var(--tx-text-color-primary));
 }
 
 .tx-step--active .tx-step__title {
@@ -291,16 +329,8 @@ function handleClick() {
 
 .tx-step__description {
   color: var(--tx-step-description, var(--tx-text-color-secondary));
-  font-size: 12px;
+  font-size: var(--tx-step-description-size);
   line-height: 1.4;
   margin-top: 4px;
-}
-
-.tx-step--small .tx-step__description {
-  font-size: 10px;
-}
-
-.tx-step--large .tx-step__description {
-  font-size: 14px;
 }
 </style>
