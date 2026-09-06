@@ -58,21 +58,19 @@ function onClick() {
   --tx-card-item-gap: 10px;
 }
 
-/*
- * Hover is a soft pane, not the card's outlined box. A menu row highlights by
- * lifting a translucent veil over the panel, the way a selection does in a
- * system menu; the card's hover — a hairline border around an 18% overlay
- * fill — is invisible on a dark panel except for the border, which read as a
- * box drawn around the row. So: no edge at all, not even an inset rim — on a
- * dark panel any 1px line reads as an outline. The fill takes the text ink, so
- * one rule gives a light veil on a dark panel and a grey one on a light panel,
- * with a barely-there white gradient over it — a touch brighter at the top,
- * where the light would fall on glass, but flat enough that the row does not
- * read as raised. Keyboard focus wears the same veil, so arrowing through the
- * menu looks exactly like hovering it, plus the library's focus ring. The
- * doubled class outranks the card's own hover rule without leaning on
- * stylesheet order.
- */
+// Hover is a soft pane, not the card's outlined box. A menu row highlights by
+// lifting a translucent veil over the panel, the way a selection does in a
+// system menu; the card's hover — a hairline border around an 18% overlay
+// fill — is invisible on a dark panel except for the border, which read as a
+// box drawn around the row. So: no edge at all, not even an inset rim — on a
+// dark panel any 1px line reads as an outline. The fill takes the text ink, so
+// one rule gives a light veil on a dark panel and a grey one on a light panel,
+// with a barely-there white gradient over it — a touch brighter at the top,
+// where the light would fall on glass, but flat enough that the row does not
+// read as raised. Keyboard focus wears the same veil, so arrowing through the
+// menu looks exactly like hovering it, plus the library's focus ring. The
+// doubled class outranks the card's own hover rule without leaning on
+// stylesheet order.
 .tx-dropdown-item.tx-dropdown-item:not(.is-disabled):hover,
 .tx-dropdown-item.tx-dropdown-item:not(.is-disabled):focus-visible {
   border-color: transparent;

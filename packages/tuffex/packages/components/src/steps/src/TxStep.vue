@@ -147,13 +147,11 @@ function handleClick() {
   </div>
 </template>
 
-<style scoped>
-/*
- * One geometry, three sizes. The marker diameter drives everything that has to
- * line up with it — the connector's offset from the marker, its vertical
- * position, the label size — so a size change is one variable, not a set of
- * hand-kept offsets. Both size and direction modifiers sit on this node.
- */
+<style lang="scss" scoped>
+// One geometry, three sizes. The marker diameter drives everything that has to
+// line up with it — the connector's offset from the marker, its vertical
+// position, the label size — so a size change is one variable, not a set of
+// hand-kept offsets. Both size and direction modifiers sit on this node.
 .tx-step {
   --tx-step-icon-size: 24px;
   --tx-step-line-gap: 6px;
@@ -226,13 +224,11 @@ function handleClick() {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
 }
 
-/*
- * The marker. Wait is hollow — a ring of the border colour around a secondary
- * number — so only the reached steps carry fill, and the row reads as "here is
- * how far you are" at a glance. Completed and active share the primary hue:
- * finished steps in green next to the current one in blue put two accents on
- * one control and made the row look like a status legend.
- */
+// The marker. Wait is hollow — a ring of the border colour around a secondary
+// number — so only the reached steps carry fill, and the row reads as "here is
+// how far you are" at a glance. Completed and active share the primary hue:
+// finished steps in green next to the current one in blue put two accents on
+// one control and made the row look like a status legend.
 .tx-step__icon {
   display: flex;
   align-items: center;
@@ -257,19 +253,17 @@ function handleClick() {
   box-shadow: inset 0 0 0 1.5px var(--tx-step-icon-wait-border, var(--tx-border-color));
 }
 
-/*
- * Motion. Three things move, in the order the eye reads progress:
- *   1. the marker just completed swaps its number for the check (glyph
- *      transition below, a small overshoot so it lands like a stamp),
- *   2. the connector after it sweeps from that marker to the next
- *      (`tx-step-line-fill`, staggered by step index so a freshly mounted
- *      row draws its progress left to right rather than all at once),
- *   3. the new current marker pops in behind the sweep (`tx-step-activate`,
- *      delayed by the sweep) and then keeps a slow breath in its halo
- *      (`tx-step-breathe`), the one continuous cue for "you are here".
- * Everything is CSS: the state classes flip together and the delays do the
- * sequencing. `prefers-reduced-motion` switches all of it off at the bottom.
- */
+// Motion. Three things move, in the order the eye reads progress:
+//   1. the marker just completed swaps its number for the check (glyph
+//      transition below, a small overshoot so it lands like a stamp),
+//   2. the connector after it sweeps from that marker to the next
+//      (`tx-step-line-fill`, staggered by step index so a freshly mounted
+//      row draws its progress left to right rather than all at once),
+//   3. the new current marker pops in behind the sweep (`tx-step-activate`,
+//      delayed by the sweep) and then keeps a slow breath in its halo
+//      (`tx-step-breathe`), the one continuous cue for "you are here".
+// Everything is CSS: the state classes flip together and the delays do the
+// sequencing. `prefers-reduced-motion` switches all of it off at the bottom.
 .tx-step__icon--active {
   background: var(--tx-step-icon-active-bg, var(--tx-color-primary));
   color: var(--tx-step-icon-active-text, var(--tx-color-on-primary));
@@ -300,7 +294,7 @@ function handleClick() {
   line-height: 1;
 }
 
-/* The glyph swap: the outgoing number shrinks away, the check stamps in with a little overshoot. */
+// The glyph swap: the outgoing number shrinks away, the check stamps in with a little overshoot.
 .tx-step-glyph-enter-active {
   transition:
     transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -323,20 +317,18 @@ function handleClick() {
   opacity: 0;
 }
 
-/*
- * The connector runs from this marker's edge to the next marker's edge. The
- * steps are equal flex columns, so the next marker's centre is one step width
- * to the right of this one's: a line from `50% + r + gap` to `-50% + r + gap`
- * lands exactly between the two, whatever the column width. It used to be a
- * flex sibling of the marker inside the head, which pushed the marker off the
- * column's centre — every icon sat left of its own title.
- *
- * The rail is the grey; the fill is a child that scales along it. Completion
- * sets the fill's resting transform to full *and* runs the sweep keyframes:
- * the keyframes are what animate on mount and on completion, the resting
- * value is what lets un-completion (stepping back) ease out through the
- * plain transition instead of snapping.
- */
+// The connector runs from this marker's edge to the next marker's edge. The
+// steps are equal flex columns, so the next marker's centre is one step width
+// to the right of this one's: a line from `50% + r + gap` to `-50% + r + gap`
+// lands exactly between the two, whatever the column width. It used to be a
+// flex sibling of the marker inside the head, which pushed the marker off the
+// column's centre — every icon sat left of its own title.
+//
+// The rail is the grey; the fill is a child that scales along it. Completion
+// sets the fill's resting transform to full *and* runs the sweep keyframes:
+// the keyframes are what animate on mount and on completion, the resting
+// value is what lets un-completion (stepping back) ease out through the
+// plain transition instead of snapping.
 .tx-step__line {
   position: absolute;
   overflow: hidden;
@@ -366,7 +358,7 @@ function handleClick() {
   height: var(--tx-step-line-thickness);
 }
 
-/* Vertically the line drops from under the marker into the 16px gap below, up to the next marker. */
+// Vertically the line drops from under the marker into the 16px gap below, up to the next marker.
 .tx-step--vertical .tx-step__line {
   left: calc(var(--tx-step-icon-size) / 2 - var(--tx-step-line-thickness) / 2);
   top: calc(var(--tx-step-icon-size) + var(--tx-step-line-gap));
@@ -437,11 +429,11 @@ function handleClick() {
   text-align: left;
   margin-top: 0;
   flex: 1;
-  /* Keep the title's first line on the marker's centre line. */
+  // Keep the title's first line on the marker's centre line.
   padding-top: calc((var(--tx-step-icon-size) - var(--tx-step-title-size) * 1.4) / 2);
 }
 
-/* Labels: the reached steps in the primary ink, the ones ahead in the secondary. */
+// Labels: the reached steps in the primary ink, the ones ahead in the secondary.
 .tx-step__title {
   font-weight: 500;
   color: var(--tx-step-title, var(--tx-text-color-secondary));
@@ -466,7 +458,7 @@ function handleClick() {
   margin-top: 4px;
 }
 
-/* Progress is still legible without motion: state colours stay, only the choreography goes. */
+// Progress is still legible without motion: state colours stay, only the choreography goes.
 @media (prefers-reduced-motion: reduce) {
   .tx-step__icon,
   .tx-step__line-fill,
