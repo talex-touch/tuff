@@ -260,8 +260,8 @@ function showVoiceSessionError(error: unknown): void {
       : t('assistant.voicePanel.voiceTranscribeFailed')
 }
 
-async function startVoiceSession(): Promise<void> {
-  if (!voiceWakeEnabled.value) {
+async function startVoiceSession(force = false): Promise<void> {
+  if (!force && !voiceWakeEnabled.value) {
     errorMessage.value = t('assistant.voicePanel.voiceWakeDisabled')
     return
   }
@@ -473,11 +473,15 @@ async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
   await nextTick()
   inputArea.value?.focus({ preventScroll: true })
   await Promise.all([loadRuntimeConfig(), loadScreenshotDisplays()])
-  keepListening = voiceWakeEnabled.value
+  keepListening = payload?.source !== 'command' && voiceWakeEnabled.value
   if (keepListening) void startVoiceSession()
 }
 defineExpose({
-  openPanel: (source?: string): Promise<void> => handlePanelOpened({ source })
+  openPanel: (source?: string): Promise<void> => handlePanelOpened({ source }),
+  startVoiceInput: (): void => {
+    void startVoiceSession(true)
+  },
+  stopVoiceInput: stopVoiceSession
 })
 
 async function submitText(): Promise<void> {

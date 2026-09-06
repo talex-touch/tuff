@@ -1,4 +1,5 @@
 <script lang="ts" setup name="VoiceDock">
+import type { AssistantVoiceCommandPayload } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -7,6 +8,8 @@ import VoicePanel from './VoicePanel.vue'
 
 type VoicePanelHandle = {
   openPanel: (source?: string) => Promise<void>
+  startVoiceInput: () => void
+  stopVoiceInput: () => void
 }
 
 const transport = useTuffTransport()
@@ -30,6 +33,7 @@ const particleColor = ['#ff6b35', '#ffbe0b', '#3a86ff', '#8338ec', '#06d6a0', '#
 
 let disposePanelOpened: (() => void) | null = null
 let disposePanelClosed: (() => void) | null = null
+let disposeCommand: (() => void) | null = null
 let animationFrame: number | null = null
 let confettiStartedAt = 0
 
@@ -148,6 +152,12 @@ function handlePanelClosed(): void {
   stopConfetti()
   expanded.value = false
 }
+async function handleCommand(payload: AssistantVoiceCommandPayload): Promise<void> {
+  expanded.value = true
+  await nextTick()
+  if (payload.action === 'start') panel.value?.startVoiceInput()
+  else panel.value?.stopVoiceInput()
+}
 
 onMounted(() => {
   disposePanelOpened = transport.on(AssistantEvents.voice.panelOpened, (payload) => {
@@ -156,6 +166,9 @@ onMounted(() => {
   disposePanelClosed = transport.on(AssistantEvents.voice.panelClosed, () => {
     handlePanelClosed()
   })
+  disposeCommand = transport.on(AssistantEvents.voice.command, (payload) => {
+    void handleCommand(payload)
+  })
 })
 
 onBeforeUnmount(() => {
@@ -163,6 +176,8 @@ onBeforeUnmount(() => {
   disposePanelOpened = null
   disposePanelClosed?.()
   disposePanelClosed = null
+  disposeCommand?.()
+  disposeCommand = null
   stopConfetti()
 })
 </script>
