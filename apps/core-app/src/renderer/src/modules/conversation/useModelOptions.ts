@@ -48,6 +48,11 @@ export interface ConversationModelSelection {
   model?: string
 }
 
+export interface EnsureLoadedOptions {
+  /** Fetch again even though a load has already succeeded. */
+  refresh?: boolean
+}
+
 /**
  * Module scope so the top bar pill and the composer pill are the same control shown twice, rather
  * than two independent pickers that can disagree about what will run. The selection itself lives
@@ -69,8 +74,13 @@ export interface UseModelOptionsReturn {
   loading: Ref<boolean>
   loaded: Ref<boolean>
   load: (force?: boolean) => Promise<void>
-  /** Waits for settings hydration, then loads once; safe to call from every entry point. */
-  ensureLoaded: () => Promise<void>
+  /**
+   * Waits for settings hydration, then loads: once by default, or again with `refresh` so a
+   * provider registered after the first load (a CLI installed while the app runs, a provider
+   * enabled in settings) is picked up. A refresh joins a load already in flight rather than
+   * queueing another, so the mount-time load and a quick first open cost one round trip.
+   */
+  ensureLoaded: (options?: EnsureLoadedOptions) => Promise<void>
   /** `appSetting.conversation.model` as stored, whether or not it resolves to a current option. */
   persistedSelection: ComputedRef<ModelRef | null>
   /**
@@ -111,10 +121,10 @@ export function useModelOptions(): UseModelOptionsReturn {
         options.value = await sdk.getProviderModelOptions({ capabilityId: CHAT_CAPABILITY_ID })
         fetched = true
       } catch {
-        // A failed lookup leaves the pill on its auto label; the send path does not depend on
-        // this list, so surfacing an error here would be noise about a control the user may
-        // never open.
-        options.value = []
+        // The list is left as it was: still empty on a first load, so the pill keeps its auto
+        // label; the previous list on a refresh, which is better than blanking a menu the user
+        // is looking at. The send path does not depend on this list, so surfacing an error here
+        // would be noise about a control the user may never open.
       } finally {
         loaded.value = true
         loading.value = false
@@ -124,11 +134,11 @@ export function useModelOptions(): UseModelOptionsReturn {
     return inFlight
   }
 
-  function ensureLoaded(): Promise<void> {
+  function ensureLoaded({ refresh = false }: EnsureLoadedOptions = {}): Promise<void> {
     hydrationWait ??= waitForHydrationSoftTimeout(appSettingStore, {
       timeoutMs: HYDRATION_SOFT_TIMEOUT_MS
     })
-    return hydrationWait.then(() => load())
+    return hydrationWait.then(() => load(refresh))
   }
 
   /**

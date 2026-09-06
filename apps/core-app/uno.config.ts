@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import carbonIcons from '@iconify-json/carbon/icons.json'
 import ri from '@iconify-json/ri/icons.json'
 import simpleIcons from '@iconify-json/simple-icons/icons.json'
@@ -6,6 +7,8 @@ import presetIcons from '@unocss/preset-icons'
 import transformerAttributifyJsx from '@unocss/transformer-attributify-jsx'
 import { defineConfig } from 'unocss'
 import { presetAttributify, presetUno } from 'unocss'
+import { MODEL_FAMILY_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-family-icons'
+import { PROVIDER_ICON_CLASSES } from './src/renderer/src/modules/intelligence/provider-icons'
 
 /**
  * Icon classes that only ever appear inside plain `.ts` modules.
@@ -38,8 +41,32 @@ const SETTINGS_CATEGORY_ICONS = [
   'i-ri-information-line'
 ]
 
+/**
+ * The safelist sources that are modules rather than literals. Absolute, because `configDeps`
+ * resolves against the Vite root (`src/renderer` under electron-vite), not against this file.
+ */
+const PROVIDER_ICONS_MODULE = fileURLToPath(
+  new URL('./src/renderer/src/modules/intelligence/provider-icons.ts', import.meta.url)
+)
+const MODEL_FAMILY_ICONS_MODULE = fileURLToPath(
+  new URL('./src/renderer/src/modules/intelligence/model-family-icons.ts', import.meta.url)
+)
+
 export default defineConfig({
-  safelist: [...COREBOX_ACTION_ICONS, ...SETTINGS_CATEGORY_ICONS],
+  // The dev server watches only the config file itself. Without this, a new icon in the table
+  // would stay an empty box until the next restart, which is the same defect one step removed.
+  configDeps: [PROVIDER_ICONS_MODULE, MODEL_FAMILY_ICONS_MODULE],
+  safelist: [
+    ...COREBOX_ACTION_ICONS,
+    ...SETTINGS_CATEGORY_ICONS,
+    // AI provider icons: the same trap, in `renderer/src/modules/intelligence/provider-icons.ts`.
+    // Imported rather than copied so the list cannot drift; that module has only type-level
+    // imports, so the config loader can evaluate it.
+    ...PROVIDER_ICON_CLASSES,
+    // Model family icons — the brand mark a row shows for `qwen2.5:3b` or `codex/gpt-6-astra` —
+    // from `renderer/src/modules/intelligence/model-family-icons.ts`; same trap, same wiring.
+    ...MODEL_FAMILY_ICON_CLASSES
+  ],
   theme: {
     colors: {
       brand: {
