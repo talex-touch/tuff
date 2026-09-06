@@ -522,3 +522,38 @@ Rebuilt HomeModelMenu on TxDropdownMenu with a provider filter strip, cross-prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 64: 模型菜单渠道分层 + 锚定面板背景修复
+
+**Date**: 2026-09-06
+**Task**: 模型菜单渠道分层 + 锚定面板背景修复
+**Branch**: `release/ota-transport-error-classification-20260904`
+
+### Summary
+
+排查主窗口拖动即隐藏：静态梳理出仅 5 处可隐藏主窗口的入口（托盘点击/托盘菜单/close+closeToTray/renderer window.hide/dev 清理），无一与拖动相关；在 touch-app.ts 加了仅 dev 的 [WindowDiag] 临时诊断（包住 hide/minimize 打调用栈 + 记录每次可见性变化），发现 electron-vite 未热重建主进程（out/main 停在 08:43），需重启 dev 才生效——该问题仍未定位，诊断代码有意留在工作区。修复模型菜单面板透明：根因是 TxBaseAnchor 让卡片自身 overflow:auto，而画背景的 .tx-card__surface 是它的绝对定位子元素，包含块随滚动一起走；用无头 Chrome 按真实选择器权重量到 scrollTop=120 时底部 120px 无背景，改为卡片裁剪、卡片 body 滚动后复测露底 0px。按用户三条反馈做渠道分层：新增 model-source-icons.ts（正则表，codex→OpenAI，禁止 /router/ 以免误伤用户自命名的 router 端点，认不出的渠道画首字母），接入 UnoCSS safelist+configDeps 并在运行中的 dev server __uno.css 验证新类已生成；筛选条改为混排桶（渠道 tab + 无渠道的 provider tab），列表加分组头，⌘1-9 用 startIndex 跨组连续；行换 TxCardItem——过程中发现光换组件修不好暗色 hover（其默认公式用 --tx-bg-color-overlay，暗色下即 #1d1e1f），故给 TxCardItem 加 hover/active 两个 token（默认值逐字符不变）。trellis-before-dev 拉规约时发现规划漏了前端硬规则：tuffex 组件改动须同 commit 带 Nexus zh/en 文档，已补 base-anchor 与 card-item 四个文档页并逐个核查 wrapper 页面无过期声明。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2838f31cd` | (see git log) |
+| `3309c614d` | (see git log) |
+| `4597c566f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
