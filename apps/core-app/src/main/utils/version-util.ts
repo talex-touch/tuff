@@ -1,13 +1,13 @@
 import process from 'node:process'
 import { app } from 'electron'
-import packageJson from '../../../../../package.json'
+import packageJson from '../../../package.json'
 
 /**
  * Get application version
  * Priority:
  * 1. globalThis.$pkg (from polyfills)
  * 2. process.env.APP_VERSION
- * 3. Bundled root package.json version
+ * 3. Bundled CoreApp package.json version
  * 4. app.getVersion()
  *
  * @returns Application version string (e.g., "2.1.0")
