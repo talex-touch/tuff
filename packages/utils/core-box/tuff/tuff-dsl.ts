@@ -1169,6 +1169,19 @@ export interface TuffMeta {
     source: RecommendationSource
     score?: number
     /**
+     * 推荐理由徽标：网格瓦片标题下方与列表行副标题里的那枚小标签。`text` 是渲染端解析的
+     * `$i18n:` key，`variant` 只决定配色。缺失时 UI 不显示徽标。
+     */
+    badge?: {
+      text: string
+      icon?: string
+      variant?: string
+    }
+    /** 推荐理由的人类可读说明（可选） */
+    reason?: string
+    /** 是否来自智能推荐管线 */
+    isIntelligent?: boolean
+    /**
      * Ranking split: `stableScore` is the cacheable half (time/frequency/
      * recency/semantic), `volatileScore` the per-request context half. Kept on
      * the item so re-ranking a cached list stays idempotent.
@@ -1461,7 +1474,10 @@ export interface TuffContainerLayout {
     /** 单项尺寸 */
     itemSize?: 'small' | 'medium' | 'large'
   }
-  /** 分组配置 */
+  /**
+   * 分组配置。分组顺序即显示顺序：CoreBox 会把 items 重排成分组拼接后的顺序，
+   * 并按该位置编号焦点、⌘1–⌘0 快捷选择与右侧预览；items 自身的顺序只表示排名。
+   */
   sections?: TuffSection[]
 }
 

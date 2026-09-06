@@ -47,6 +47,7 @@ import {
   isClipboardFreshForAutoPaste,
   normalizeClipboardTimestamp
 } from './clipboard-autopaste'
+import { alignItemsToSections } from './section-order'
 import { getLatestClipboard } from './useClipboardChannel'
 import { useResize } from './useResize'
 
@@ -928,13 +929,19 @@ export function useSearch(
   }
 
   const applyRecommendationResult = (initialResult: TuffSearchResult): void => {
-    const filteredItems = limitRenderedItems(filterDetachedItems(initialResult.items))
+    // A sectioned grid numbers focus by section order, so the list must follow the sections or
+    // `res[focus]` (preview pane, footer, ⌘-digits) resolves to a different item than the
+    // highlighted tile.
+    const { items: filteredItems, layout } = alignItemsToSections(
+      limitRenderedItems(filterDetachedItems(initialResult.items)),
+      initialResult.containerLayout
+    )
     currentSearchId.value = initialResult.sessionId || null
     searchResult.value = isDetachedDivisionMode()
       ? { ...initialResult, items: filteredItems }
       : initialResult
     searchResults.value = filteredItems
-    boxOptions.layout = initialResult.containerLayout
+    boxOptions.layout = layout
 
     activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
 

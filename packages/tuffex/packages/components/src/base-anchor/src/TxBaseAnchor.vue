@@ -1031,7 +1031,7 @@ onBeforeUnmount(() => {
       v-bind="floatingAttrs"
       class="tx-base-anchor"
       :class="[floatingClass, { 'is-open': open, 'is-unlimited-height': isUnlimitedHeight, 'is-liquid': usesLiquidMotion }]"
-      :style="[floatingStyle, floatingStyles, { zIndex, '--tx-ba-max-height': isUnlimitedHeight ? 'none' : undefined }]"
+      :style="[floatingStyle, floatingStyles, { zIndex }]"
     >
       <span
         v-if="props.showArrow && !usesLiquidMotion"
@@ -1366,9 +1366,29 @@ onBeforeUnmount(() => {
   max-height: var(--tx-ba-max-height, 420px);
 }
 
+/*
+  The card cannot be the scroller. The surface that paints the panel's
+  background is an absolutely positioned child of it, so its containing block
+  is the card's padding box *in the card's scrolled coordinate space* — one
+  flick down and the background slides out from under the rows, leaving the
+  scrolled distance painted on nothing but the page behind. Panels that scroll
+  their own list (select, search-select) never showed it; a dropdown handing its
+  whole body to the card did.
+
+  So the card clips, and the body underneath takes the scroll. The surface,
+  still a child of the unscrolled card, stays put and keeps covering the panel.
+*/
 .tx-base-anchor__card {
   width: 100%;
   max-height: var(--tx-ba-max-height, 420px);
+  overflow: hidden;
+}
+
+/* `min-height: 0` is already the card's own, repeated here as the pairing this
+   scroll depends on: without it the flex item refuses to shrink and nothing
+   scrolls. */
+.tx-base-anchor__card :deep(.tx-card__body) {
+  min-height: 0;
   overflow: auto;
 }
 

@@ -452,3 +452,142 @@ Closed all recorded BUI follow-up gaps, fixed a real TxContextMenu interaction d
 ### Next Steps
 
 - None - task complete
+
+
+## Session 62: Model menu redesign planning and tuffex anchor max-height fix
+
+**Date**: 2026-09-06
+**Task**: Model menu redesign planning and tuffex anchor max-height fix
+**Branch**: `release/ota-transport-error-classification-20260904`
+
+### Summary
+
+Diagnosed the Home model menu overflowing its trigger: TxBaseAnchor bound --tx-ba-max-height to undefined in :style, and Vue's style patcher deleted the floating-ui size middleware's value on every re-render, so all anchored panels rendered at the 420px fallback. Fixed with a one-line change, a setProperty-spy regression test (mutation-verified), base-anchor docs review notes, and a single-writer CSS custom property rule in the frontend component spec. Planned the model menu redesign as a parent task with two children (tuffex fix done; home-model-menu-v2 has prd/design/implement: provider tabs, search, favorites, cmd-digit hotkeys, AppSetting.conversation persistence).
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2c54a037f` | (see git log) |
+| `c672a028b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 63: Home model menu v2: provider filters, search, favorites, hotkeys, family icons
+
+**Date**: 2026-09-06
+**Task**: Home model menu v2: provider filters, search, favorites, hotkeys, family icons
+**Branch**: `release/ota-transport-error-classification-20260904`
+
+### Summary
+
+Rebuilt HomeModelMenu on TxDropdownMenu with a provider filter strip, cross-provider search, starred favorites and cmd/ctrl+1-9 hotkeys; selection and favorites persist in AppSetting.conversation and an unresolved persisted model falls back to Auto without being cleared. TxDropdownMenu gained initialFocus and lets editable targets keep Home/End. Real-app acceptance surfaced three regressions fixed in 00a6de331: icon classes living in .ts tables need the UnoCSS safelist (+configDeps), the kbd badge was too 3D, and rows now show model-family brand icons. Also extracted the shared CLI child-process runtime from the pi provider as Step 1 of the local CLI providers task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1be2a206f` | (see git log) |
+| `8da334466` | (see git log) |
+| `2178c013c` | (see git log) |
+| `00a6de331` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 64: 模型菜单渠道分层 + 锚定面板背景修复
+
+**Date**: 2026-09-06
+**Task**: 模型菜单渠道分层 + 锚定面板背景修复
+**Branch**: `release/ota-transport-error-classification-20260904`
+
+### Summary
+
+排查主窗口拖动即隐藏：静态梳理出仅 5 处可隐藏主窗口的入口（托盘点击/托盘菜单/close+closeToTray/renderer window.hide/dev 清理），无一与拖动相关；在 touch-app.ts 加了仅 dev 的 [WindowDiag] 临时诊断（包住 hide/minimize 打调用栈 + 记录每次可见性变化），发现 electron-vite 未热重建主进程（out/main 停在 08:43），需重启 dev 才生效——该问题仍未定位，诊断代码有意留在工作区。修复模型菜单面板透明：根因是 TxBaseAnchor 让卡片自身 overflow:auto，而画背景的 .tx-card__surface 是它的绝对定位子元素，包含块随滚动一起走；用无头 Chrome 按真实选择器权重量到 scrollTop=120 时底部 120px 无背景，改为卡片裁剪、卡片 body 滚动后复测露底 0px。按用户三条反馈做渠道分层：新增 model-source-icons.ts（正则表，codex→OpenAI，禁止 /router/ 以免误伤用户自命名的 router 端点，认不出的渠道画首字母），接入 UnoCSS safelist+configDeps 并在运行中的 dev server __uno.css 验证新类已生成；筛选条改为混排桶（渠道 tab + 无渠道的 provider tab），列表加分组头，⌘1-9 用 startIndex 跨组连续；行换 TxCardItem——过程中发现光换组件修不好暗色 hover（其默认公式用 --tx-bg-color-overlay，暗色下即 #1d1e1f），故给 TxCardItem 加 hover/active 两个 token（默认值逐字符不变）。trellis-before-dev 拉规约时发现规划漏了前端硬规则：tuffex 组件改动须同 commit 带 Nexus zh/en 文档，已补 base-anchor 与 card-item 四个文档页并逐个核查 wrapper 页面无过期声明。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2838f31cd` | (see git log) |
+| `3309c614d` | (see git log) |
+| `4597c566f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 65: 模型菜单筛选条改用 TxFilterChips：provider 级图标 chip、滑动指示器、渠道分组
+
+**Date**: 2026-09-06
+**Task**: 模型菜单筛选条改用 TxFilterChips：provider 级图标 chip、滑动指示器、渠道分组
+**Branch**: `release/ota-transport-error-classification-20260904`
+
+### Summary
+
+用户看到上一轮渠道 tab 的真机效果后连提四条：要切换动效、要用 tuffex 组件、高度要固定、tab 只保留 pi 一个而渠道放进列表分类。规划：筛选条换 TxFilterChips（toolbar 语义，绕开 menu 内嵌 tablist 的否决），维度回退到 provider，bucketOf/visibleGroups/model-source-icons 原样保留改喂分组头。tuffex 侧给 TxFilterChips 加滑动指示器（活动底色从逐 chip 上色改为一个元素平移，绝对定位子元素随行横向滚动是特性），按 BUI 规则 2 用编译 SCSS 契约测试正反两向断言 reduced-motion；随后按真机反馈加 iconClass（对齐 TabBarItem）、再加 iconOnly（label 转 aria-label/title，无图标 chip 保留文字）。两个只有真机才暴露的缺陷：(1) place() 在同一帧写宽度并解除 is-placing，width transition 中途重新武装从 0 补间，首帧永远 0 宽，改为 nextTick→强制 recalc→再 rAF 一帧解除，变异验证新用例变红；(2) defineProps<FilterChipsProps>() 的接口在 types.ts，dev server 的 Vue 插件在该文件变化时不重编译 SFC，编译产物运行时 props 没有 iconOnly，宿主传的 icon-only 被当未知属性丢弃而 vitest 冷编译全绿——改为运行时对象声明 + 用例断言运行时 props 与接口逐键一致，并写入记忆。core-app 侧：pi 与 Ollama 同为 type local 共用服务器图标，新增 providerIconForId 按种子 id 给 pi 品牌标（表形状对齐 local-cli-model-providers 任务的 origin 设计），simple-icons 的 π 满填无留白故单独 scale(0.72) 光学对齐；选中行去掉 TxCardItem 自带的 primary 40% 描边（与搜索框焦点环并排像两个焦点环）。视觉验证：无 CDP 的情况下用 vitest dump + dev server 编译 CSS + scope id 重映射 + 无头 Chrome 出真实渲染截图（暗/亮/3x strip），并以此发现上述两个缺陷。教训：tuffex 的 prop 改动不能只靠 jsdom 说已生效，要拉 :5173 编译产物核对运行时 props。用户问为何没有 omp/codex/claude 图标：主进程今日只种子了 pi，其余三个 CLI 属 09-06-local-cli-model-providers（in_progress）。拖动隐藏问题仍未定位，touch-app.ts 的 [WindowDiag] 诊断有意留在工作区等 dev 重启。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c3b5222f4` | (see git log) |
+| `2528f40ad` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

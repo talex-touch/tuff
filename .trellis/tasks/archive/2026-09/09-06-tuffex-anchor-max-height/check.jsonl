@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "复查测试是否真的能在绑定恢复时失败"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "复查 base-anchor zh/en review notes 是否同步"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "复查验证命令与 diff 清洁度"}

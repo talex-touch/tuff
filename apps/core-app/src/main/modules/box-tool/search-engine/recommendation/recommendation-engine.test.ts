@@ -1,3 +1,4 @@
+import type { TuffItem } from '@talex-touch/utils'
 import { ContextProvider, type ContextSignal, hashContextContent } from './context-provider'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -2690,6 +2691,52 @@ describe('RecommendationEngine plugin candidate quotas', () => {
   })
 })
 
+describe('RecommendationEngine fallback badges', () => {
+  it('keeps the badge the rebuilder wrote on usage-ranked fallback items', async () => {
+    // `getFallbackRecommendations` used to overwrite `meta.recommendation` with a bare
+    // `{ source: 'frequent' }` after the rebuild, so every tile the backfill supplied showed no
+    // badge while its neighbours read "Frequent" and "Just installed".
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      getFrequentItems: vi.fn(async () => [
+        {
+          sourceId: 'app-provider',
+          itemId: '/Applications/Mission Control.app',
+          sourceType: 'application',
+          usageStats: createUsageStats('/Applications/Mission Control.app', { executeCount: 2 })
+        }
+      ]),
+      itemRebuilder: {
+        rebuildItems: async (items: Array<{ itemId: string; source: string; score: number }>) =>
+          items.map((item) => ({
+            id: item.itemId,
+            kind: 'app',
+            source: { id: 'app-provider', type: 'application', name: 'apps' },
+            render: { mode: 'default', basic: { title: item.itemId } },
+            scoring: { final: item.score },
+            meta: {
+              recommendation: {
+                source: item.source,
+                score: item.score,
+                badge: { text: '$i18n:coreBox.recommendation.badge.frequent', variant: 'frequent' }
+              }
+            }
+          }))
+      }
+    })
+
+    const items = await (
+      engine as unknown as { getFallbackRecommendations: (limit: number) => Promise<TuffItem[]> }
+    ).getFallbackRecommendations(5)
+
+    expect(items).toHaveLength(1)
+    expect(items[0]?.meta?.recommendation).toMatchObject({
+      source: 'frequent',
+      badge: { variant: 'frequent' }
+    })
+  })
+})
+
 /**
  * The empty state used to be two grids split by pin state (`Recommend` + `Pinned`, both titled in
  * hardcoded English). It is now two tiers split by *reason*: a one-row grid of things reached for
@@ -2827,6 +2874,32 @@ describe('RecommendationEngine empty-state tiers', () => {
 
     expect(sections?.[0]?.itemIds?.[0]).toBe('pinned-app')
     expect(sections?.[0]?.itemIds).toHaveLength(6)
+  })
+
+  it('keeps a pinned file out of the grid and lets it lead the list', () => {
+    // A pinned file is still a file: as a tile it is a grey square, and it is what opens the
+    // right-hand preview pane, which the icon row must never do. The pin still counts — it is the
+    // one thing the user asked to always see — so it heads the list instead of trailing it where
+    // pinning appended it.
+    const pinnedFile: unknown = {
+      id: '/Users/x/Pinned/spec.pdf',
+      kind: 'file',
+      source: { id: 'file-provider', type: 'file' },
+      meta: { recommendation: { source: 'pinned' }, pinned: { isPinned: true } }
+    }
+
+    const sections = layoutOf([
+      item('an-app', 'frequent'),
+      fileItem('/Users/x/Downloads/a.png', 'newly-added'),
+      pinnedFile
+    ]).sections
+
+    expect(sections?.map((section) => [section.id, section.layout])).toEqual([
+      ['habitual', 'grid'],
+      ['proposed', 'list']
+    ])
+    expect(sections?.[0]?.itemIds).toEqual(['an-app'])
+    expect(sections?.[1]?.itemIds).toEqual(['/Users/x/Pinned/spec.pdf', '/Users/x/Downloads/a.png'])
   })
 
   it('emits only the grid when everything fits in one row', () => {

@@ -1065,6 +1065,13 @@
     "modelAuto": "自动选择",
     "modelLoading": "正在读取可用模型…",
     "modelEmpty": "没有可用的模型，先配置一个 AI 提供方或安装 pi CLI",
+    "modelSearch": "搜索模型…",
+    "modelFavorites": "收藏",
+    "modelFavoritesEmpty": "还没有收藏，点星标把模型固定在这里",
+    "modelNoResults": "没有匹配的模型",
+    "modelFavorite": "加入收藏",
+    "modelUnfavorite": "取消收藏",
+    "modelSources": "按提供方筛选",
     "configureProvider": "去配置",
     "panel": {
       "title": "会话信息",

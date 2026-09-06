@@ -1,5 +1,7 @@
 <script lang="ts" name="HomeTopBar" setup>
+import type { ITuffIcon } from '@talex-touch/utils'
 import type { ConversationTurnMeta } from '~/modules/conversation/useHomeConversation'
+import { TxIcon } from '@talex-touch/tuffex/icon'
 import { useI18n } from 'vue-i18n'
 import HomeModelMenu from './HomeModelMenu.vue'
 import HomeTurnInfoMenu from './HomeTurnInfoMenu.vue'
@@ -13,6 +15,8 @@ const props = defineProps<{
   /** Conversation title. Absent until the conversation has one, which selects the pill form below. */
   title?: string
   modelName: string
+  /** The pinned model's provider icon. Absent under auto routing, which keeps the pill text-only. */
+  modelIcon?: ITuffIcon
   /** Whether the right panel is open, so the toggle can describe what it will do. */
   panelOpen?: boolean
   /** Metadata of the last settled turn, read by the `⋯` float panel. */
@@ -48,6 +52,12 @@ const { t } = useI18n()
               :aria-label="t('home.model')"
               :aria-expanded="open"
             >
+              <TxIcon
+                v-if="props.modelIcon"
+                class="HomeTopBar-ModeIcon"
+                :icon="props.modelIcon"
+                :size="props.title ? 12 : 14"
+              />
               <span class="HomeTopBar-ModeLabel">{{ props.modelName }}</span>
               <span class="i-ri-arrow-down-s-line HomeTopBar-ModeChevron" />
             </button>
@@ -163,6 +173,12 @@ const { t } = useI18n()
       background: var(--shell-border);
     }
   }
+}
+
+.HomeTopBar-ModeIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--shell-text-secondary);
 }
 
 .HomeTopBar-ModeChevron {
