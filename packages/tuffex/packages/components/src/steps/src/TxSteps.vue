@@ -58,7 +58,8 @@ provide<StepsContext>('steps', {
 
 .tx-steps--horizontal {
   flex-direction: row;
-  align-items: center;
+  /* Markers align on their tops; a taller description in one step must not pull its neighbours' markers down. */
+  align-items: flex-start;
   width: 100%;
 }
 

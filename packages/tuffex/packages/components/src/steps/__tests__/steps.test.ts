@@ -114,13 +114,39 @@ describe('txSteps', () => {
     expect(wrapper.findAll('.tx-step')[0].classes()).toContain('tx-step--active')
   })
 
-  it('scopes small/large vertical line offsets with compound selectors (both modifiers on one node)', () => {
+  it('derives the connector geometry from one marker-size variable per size', () => {
     // `tx-step--small`/`tx-step--large` and `tx-step--vertical` render on the same element,
-    // so a descendant combinator (space) never matches and the size offsets go dead.
-    expect(txStepSource).toContain('.tx-step--small.tx-step--vertical .tx-step__line')
-    expect(txStepSource).toContain('.tx-step--large.tx-step--vertical .tx-step__line')
+    // so a descendant combinator (space) would never match. Since 2026-09-06 there are no
+    // per-size line offsets at all: each size sets `--tx-step-icon-size` and the line reads it.
+    expect(txStepSource).toMatch(/\.tx-step--small \{[^}]*--tx-step-icon-size: 20px/)
+    expect(txStepSource).toMatch(/\.tx-step--large \{[^}]*--tx-step-icon-size: 28px/)
+    expect(txStepSource).toMatch(/\.tx-step--horizontal \.tx-step__line \{[^}]*var\(--tx-step-icon-size\)/)
+    expect(txStepSource).toMatch(/\.tx-step--vertical \.tx-step__line \{[^}]*var\(--tx-step-icon-size\)/)
     expect(txStepSource).not.toContain('.tx-step--small .tx-step--vertical')
     expect(txStepSource).not.toContain('.tx-step--large .tx-step--vertical')
+  })
+
+  it('keeps the connector out of the marker button and colours it once the step is completed', () => {
+    const wrapper = mount(TxSteps, {
+      props: { active: 1 },
+      slots: {
+        default: `
+          <TxStep title="Download" :step="0" />
+          <TxStep title="Install" :step="1" />
+          <TxStep title="Done" :step="2" />
+        `,
+      },
+      global: { components: { TxStep } },
+    })
+    // Each step registers itself in setup; `isLast` only settles once every sibling is in.
+    await nextTick()
+
+    const steps = wrapper.findAll('.tx-step')
+    // Pre-fix the line was a flex sibling of the marker inside the head, which
+    // pushed every marker left of its own title.
+    expect(steps[0].find('.tx-step__head .tx-step__line').exists()).toBe(false)
+    expect(steps[0].find('.tx-step__line').classes()).toContain('tx-step__line--completed')
+    expect(steps[1].find('.tx-step__line').classes()).not.toContain('tx-step__line--completed')
   })
 
   it('names each step button from its visible title (and description) via aria references', () => {
