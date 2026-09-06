@@ -42,6 +42,9 @@ vi.mock('vue-i18n', () => ({
         'assistant.voicePanel.voiceTranscribeFailed': 'Voice transcription failed',
         'assistant.voicePanel.voiceWakeDisabled': 'Voice input is disabled',
         'assistant.voicePanel.cancelSession': 'Cancel this session',
+        'assistant.voicePanel.cancelled': 'Cancelled',
+        'assistant.voicePanel.quotaExhausted': 'AI credits are used up — check Settings',
+        'assistant.voicePanel.serviceBusy': 'The service is busy. Try again shortly.',
         'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe'
       })[key] ?? key
   })
@@ -244,7 +247,7 @@ describe('VoicePanel session control', () => {
     wrapper.unmount()
   })
 
-  it('aborts without finalizing on cancel', async () => {
+  it('aborts without finalizing on cancel, then holds a short cancelled notice', async () => {
     const wrapper = await mountVoicePanel()
 
     exposed(wrapper).startVoiceInput()
@@ -255,24 +258,102 @@ describe('VoicePanel session control', () => {
 
     expect(streamCancelMock).toHaveBeenCalledTimes(1)
     expect(streamStopMock).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Cancelled')
+    expect(wrapper.find('.voice-dock--muted').exists()).toBe(true)
+
+    // Shortest of the three holds: the user just did this and does not need telling twice.
+    expect(wrapper.emitted('finished')).toBeUndefined()
+    vi.advanceTimersByTime(700)
+    await nextTick()
     expect(wrapper.emitted('finished')).toHaveLength(1)
 
     wrapper.unmount()
   })
 
-  it('disables both actions while transcribing', async () => {
+  it('cancels on Escape exactly as the button does', async () => {
     const wrapper = await mountVoicePanel()
 
     exposed(wrapper).startVoiceInput()
     await flushPromises()
-    expect(wrapper.find('[data-testid="voice-cancel"]').attributes('disabled')).toBeUndefined()
-    expect(wrapper.find('[data-testid="voice-confirm"]').attributes('disabled')).toBeUndefined()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+
+    expect(streamCancelMock).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Cancelled')
+
+    wrapper.unmount()
+  })
+
+  it('replaces the confirm action with the orb while transcribing', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="voice-confirm"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-orb"]').exists()).toBe(false)
 
     exposed(wrapper).stopVoiceInput()
     await nextTick()
 
-    expect(wrapper.find('[data-testid="voice-cancel"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.find('[data-testid="voice-confirm"]').attributes('disabled')).toBeDefined()
+    // The slot cannot hold an action and a progress mark at once — that is the whole point.
+    expect(wrapper.find('[data-testid="voice-confirm"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-orb"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toBe('Transcribing…')
+    expect(wrapper.find('[data-testid="voice-hint"]').classes()).toContain(
+      'voice-dock__text--shimmer'
+    )
+    // Cancel stays live: Escape has to remain available while the transcript is in flight.
+    expect(wrapper.find('[data-testid="voice-cancel"]').attributes('disabled')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it.each([
+    ['quota', new Error('QUOTA_EXCEEDED'), 'AI credits are used up', 'voice-dock--warning'],
+    [
+      'high demand',
+      new Error('provider overloaded (529)'),
+      'service is busy',
+      'voice-dock--warning'
+    ],
+    ['unknown', new Error('socket reset'), 'socket reset', 'voice-dock--danger']
+  ])('sorts a %s failure into its own tone', async (_label, error, text, toneClass) => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onError?.(error)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toContain(text)
+    expect(wrapper.find(`.${toneClass}`).exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('expands for a notice and collapses when it clears', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 200px')
+
+    callbacksOrThrow().onError?.(new Error('We did not catch that, please say it again'))
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(true)
+    const width = Number(
+      /width:\s*(\d+)px/.exec(wrapper.find('.voice-dock').attributes('style') ?? '')?.[1]
+    )
+    expect(width).toBeGreaterThanOrEqual(200)
+    expect(width).toBeLessThanOrEqual(340)
+
+    await exposed(wrapper).openPanel()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 200px')
 
     wrapper.unmount()
   })
@@ -295,36 +376,6 @@ describe('VoicePanel session control', () => {
     panel.startVoiceInput()
     await flushPromises()
     expect((wrapper.vm as unknown as { sessionSeq: number }).sessionSeq).not.toBe(firstSeq)
-
-    wrapper.unmount()
-  })
-
-  it('expands for a notice and collapses when it clears', async () => {
-    const wrapper = await mountVoicePanel()
-
-    exposed(wrapper).startVoiceInput()
-    await flushPromises()
-    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 200px')
-
-    const notice = wrapper.find('[data-testid="voice-notice"]')
-    expect(notice.exists()).toBe(false)
-
-    callbacksOrThrow().onError?.(new Error('We did not catch that, please say it again'))
-    await flushPromises()
-
-    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(true)
-    expect(wrapper.find('.voice-dock--notice').exists()).toBe(true)
-    const width = Number(
-      /width:\s*(\d+)px/.exec(wrapper.find('.voice-dock').attributes('style') ?? '')?.[1]
-    )
-    expect(width).toBeGreaterThanOrEqual(200)
-    expect(width).toBeLessThanOrEqual(340)
-
-    await exposed(wrapper).openPanel()
-    await flushPromises()
-
-    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
-    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 200px')
 
     wrapper.unmount()
   })

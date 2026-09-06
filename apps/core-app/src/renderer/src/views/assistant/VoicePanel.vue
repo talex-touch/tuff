@@ -9,7 +9,20 @@ import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-const ERROR_DISPLAY_MS = 900
+/**
+ * How long each notice stays before the dock collapses.
+ *
+ * Cancelling is the shortest on purpose: the user just did it, so telling them at length
+ * repeats what they already know. A failure they did not cause needs longer to be read.
+ */
+const NOTICE_HOLD_MS = {
+  muted: 700,
+  warning: 1600,
+  danger: 900
+} as const
+
+type NoticeTone = keyof typeof NOTICE_HOLD_MS
+type Notice = { message: string; tone: NoticeTone }
 
 /** Bars in the input meter. Each one holds a single 10Hz level frame, so 24 ≈ 2.4s of history. */
 const WAVE_BAR_COUNT = 24
@@ -18,7 +31,7 @@ const WAVE_BAR_MAX_HEIGHT = 28
 
 const PILL_BASE_WIDTH = 200
 const PILL_MAX_WIDTH = 340
-/** padding (10) + both buttons (68) + both gaps (16); the notice gets whatever is left. */
+/** padding (10) + both round slots (68) + both gaps (16); the centre gets what is left. */
 const PILL_CHROME_WIDTH = 94
 
 const props = withDefaults(
@@ -42,10 +55,10 @@ const runtimeConfig = ref<AssistantRuntimeConfig>({
 const listening = ref(false)
 const transcribing = ref(false)
 const startingVoiceCapture = ref(false)
-const errorMessage = ref('')
+const notice = ref<Notice | null>(null)
 const sessionSeq = ref(0)
 const levels = ref<number[]>(new Array(WAVE_BAR_COUNT).fill(0))
-const noticeRef = ref<HTMLElement | null>(null)
+const centerTextRef = ref<HTMLElement | null>(null)
 const pillWidth = ref(PILL_BASE_WIDTH)
 
 const voiceSdk = createVoiceSdk(transport)
@@ -54,9 +67,23 @@ const voiceActive = computed(
   () => listening.value || transcribing.value || startingVoiceCapture.value
 )
 
-const hasNotice = computed(() => !!errorMessage.value)
-const canCancel = computed(() => listening.value || hasNotice.value)
+const hasNotice = computed(() => notice.value !== null)
+/**
+ * Cancel outlives the confirm action.
+ *
+ * While the transcript is in flight the session is still abortable — main checks its abort
+ * signal before polishing and before delivering — so Escape has to keep working right up to
+ * the moment the text lands.
+ */
+const canCancel = computed(() => listening.value || transcribing.value || hasNotice.value)
 const canConfirm = computed(() => listening.value && !hasNotice.value)
+/** The confirm slot stops being a button while transcribing — it becomes the progress mark. */
+const showsOrb = computed(() => transcribing.value && !hasNotice.value)
+const centerText = computed(() => {
+  if (notice.value) return notice.value.message
+  if (transcribing.value) return t('assistant.voicePanel.voiceTranscribingShort')
+  return ''
+})
 
 let voiceStreamController: StreamController | null = null
 let keepListening = false
@@ -80,10 +107,51 @@ function emitFinished(): void {
   emit('finished')
 }
 
+function showNotice(message: string, tone: NoticeTone): void {
+  notice.value = { message, tone }
+  listening.value = false
+  transcribing.value = false
+  startingVoiceCapture.value = false
+  clearFinishTimer()
+  finishTimer = setTimeout(() => {
+    finishTimer = null
+    emitFinished()
+  }, NOTICE_HOLD_MS[tone])
+}
+
+/**
+ * Sort a failure into the three tones.
+ *
+ * Quota and provider congestion are not failures of the user or of the app — they resolve on
+ * their own or in Settings, so they read as warnings rather than errors. Everything unclassified
+ * stays danger, because an unknown failure is the one worth interrupting for.
+ */
+function classifyFailure(error: unknown): Notice {
+  const raw = error instanceof Error ? `${error.name} ${error.message}` : String(error ?? '')
+  const code = ((error as { code?: unknown })?.code ?? '').toString()
+  const haystack = `${code} ${raw}`.toUpperCase()
+
+  if (/QUOTA|CREDIT|INSUFFICIENT_BALANCE/.test(haystack))
+    return { message: t('assistant.voicePanel.quotaExhausted'), tone: 'warning' }
+
+  const congested =
+    /RATE_?LIMIT|TOO_?MANY_?REQUESTS|OVERLOAD|HIGH_?DEMAND|BUSY|\b429\b|\b503\b|\b529\b/
+  if (congested.test(haystack))
+    return { message: t('assistant.voicePanel.serviceBusy'), tone: 'warning' }
+
+  return {
+    message:
+      error instanceof Error && error.message
+        ? error.message
+        : t('assistant.voicePanel.voiceTranscribeFailed'),
+    tone: 'danger'
+  }
+}
+
 function resetPanelState(): void {
   clearFinishTimer()
   finished = false
-  errorMessage.value = ''
+  notice.value = null
   listening.value = false
   transcribing.value = false
   startingVoiceCapture.value = false
@@ -97,7 +165,7 @@ async function loadRuntimeConfig(): Promise<void> {
       undefined
     )
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error)
+    showNotice(classifyFailure(error).message, 'danger')
   }
 }
 
@@ -154,25 +222,15 @@ function handleVoiceSessionEvent(event: VoiceAsrStreamEvent): void {
 }
 
 function showVoiceSessionError(error: unknown): void {
-  errorMessage.value =
-    error instanceof Error && error.message
-      ? error.message
-      : t('assistant.voicePanel.voiceTranscribeFailed')
-  listening.value = false
-  transcribing.value = false
-  startingVoiceCapture.value = false
   voiceStreamController = null
   keepListening = false
-  clearFinishTimer()
-  finishTimer = setTimeout(() => {
-    finishTimer = null
-    emitFinished()
-  }, ERROR_DISPLAY_MS)
+  const classified = classifyFailure(error)
+  showNotice(classified.message, classified.tone)
 }
 
 async function startVoiceSession(force = false): Promise<void> {
   if (!force && !voiceWakeEnabled.value) {
-    errorMessage.value = t('assistant.voicePanel.voiceWakeDisabled')
+    showNotice(t('assistant.voicePanel.voiceWakeDisabled'), 'warning')
     return
   }
   if (voiceStreamController || startingVoiceCapture.value || transcribing.value) return
@@ -182,7 +240,7 @@ async function startVoiceSession(force = false): Promise<void> {
   keepListening = true
   startingVoiceCapture.value = true
   listening.value = true
-  errorMessage.value = ''
+  notice.value = null
   levels.value = new Array(WAVE_BAR_COUNT).fill(0)
   // The orb is re-rolled per session through this key; changing its `state` would not.
   sessionSeq.value += 1
@@ -226,11 +284,16 @@ async function handlePanelOpened(): Promise<void> {
   await nextTick()
 }
 
-function handleCancel(): void {
+/** Cancelling is the same act from Esc, the ✕ button, or a dock command. */
+function cancelSession(): void {
   if (!canCancel.value) return
-  clearFinishTimer()
+  if (hasNotice.value) {
+    clearFinishTimer()
+    emitFinished()
+    return
+  }
   cancelVoiceSession()
-  emitFinished()
+  showNotice(t('assistant.voicePanel.cancelled'), 'muted')
 }
 
 function handleConfirm(): void {
@@ -238,15 +301,21 @@ function handleConfirm(): void {
   finishVoiceInput()
 }
 
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !canCancel.value) return
+  event.preventDefault()
+  cancelSession()
+}
+
 // Measured rather than expressed in CSS: `width: fit-content` is not animatable without
 // `interpolate-size`, and the window behind the pill deliberately never resizes.
-watch([hasNotice, errorMessage], async () => {
-  if (!hasNotice.value) {
+watch([centerText, showsOrb], async () => {
+  if (!centerText.value) {
     pillWidth.value = PILL_BASE_WIDTH
     return
   }
   await nextTick()
-  const textWidth = noticeRef.value?.scrollWidth ?? 0
+  const textWidth = centerTextRef.value?.scrollWidth ?? 0
   pillWidth.value = Math.min(
     PILL_MAX_WIDTH,
     Math.max(PILL_BASE_WIDTH, textWidth + PILL_CHROME_WIDTH)
@@ -267,10 +336,12 @@ onMounted(() => {
       await handlePanelOpened()
     })
   }
+  window.addEventListener('keydown', handleKeydown)
   void loadRuntimeConfig()
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
   clearFinishTimer()
   cancelVoiceSession()
   disposePanelOpen?.()
@@ -285,7 +356,7 @@ onBeforeUnmount(() => {
       role="status"
       aria-live="polite"
       :aria-busy="voiceActive"
-      :class="{ 'voice-dock--notice': hasNotice }"
+      :class="notice ? `voice-dock--${notice.tone}` : null"
       :style="{ width: `${pillWidth}px` }"
     >
       <button
@@ -294,14 +365,20 @@ onBeforeUnmount(() => {
         data-testid="voice-cancel"
         :disabled="!canCancel"
         :aria-label="t('assistant.voicePanel.cancelSession')"
-        @click="handleCancel"
+        @click="cancelSession"
       >
         <span class="i-carbon-close" aria-hidden="true" />
       </button>
 
       <div class="voice-dock__slot">
-        <p v-if="hasNotice" ref="noticeRef" class="voice-dock__notice" data-testid="voice-notice">
-          {{ errorMessage }}
+        <p
+          v-if="centerText"
+          ref="centerTextRef"
+          class="voice-dock__text"
+          :class="{ 'voice-dock__text--shimmer': showsOrb }"
+          :data-testid="notice ? 'voice-notice' : 'voice-hint'"
+        >
+          {{ centerText }}
         </p>
         <div
           v-else-if="listening"
@@ -315,18 +392,20 @@ onBeforeUnmount(() => {
             :style="{ height: `${barHeight(level)}px` }"
           />
         </div>
-        <TxThinkingOrb
-          v-else
-          :key="sessionSeq"
-          data-testid="voice-orb"
-          :size="64"
-          :display-size="28"
-          theme="auto"
-          :label="t('assistant.voicePanel.voiceTranscribingShort')"
-        />
       </div>
 
+      <!-- The confirm slot holds either an action or the progress mark, never both. -->
+      <TxThinkingOrb
+        v-if="showsOrb"
+        :key="sessionSeq"
+        data-testid="voice-orb"
+        :size="64"
+        :display-size="34"
+        theme="auto"
+        :label="t('assistant.voicePanel.voiceTranscribingShort')"
+      />
       <button
+        v-else
         class="voice-dock__btn voice-dock__btn--confirm"
         type="button"
         data-testid="voice-confirm"
@@ -366,8 +445,17 @@ onBeforeUnmount(() => {
     border-color 160ms ease-out;
 }
 
-.voice-dock--notice {
+/* Tone rides on the border only: the surface stays neutral so the text keeps its contrast. */
+.voice-dock--danger {
   border-color: var(--shell-danger-border);
+}
+
+.voice-dock--warning {
+  border-color: var(--shell-warning-border);
+}
+
+.voice-dock--muted {
+  border-color: var(--shell-border);
 }
 
 .voice-dock__btn {
@@ -426,14 +514,51 @@ onBeforeUnmount(() => {
   transition: height 100ms linear;
 }
 
-.voice-dock__notice {
+.voice-dock__text {
   overflow: hidden;
   margin: 0;
-  color: var(--shell-danger);
+  color: var(--shell-text-secondary);
   font-size: var(--shell-fs-caption);
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.voice-dock--danger .voice-dock__text {
+  color: var(--shell-danger);
+}
+
+.voice-dock--warning .voice-dock__text {
+  color: var(--shell-warning);
+}
+
+.voice-dock--muted .voice-dock__text {
+  color: var(--shell-text-muted);
+}
+
+/* Only the waiting hint shimmers. A notice is a result, and results should hold still. */
+.voice-dock__text--shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--shell-text-muted) 0%,
+    var(--shell-text-muted) 35%,
+    var(--shell-text-primary) 50%,
+    var(--shell-text-muted) 65%,
+    var(--shell-text-muted) 100%
+  );
+  background-clip: text;
+  background-size: 240% 100%;
+  -webkit-text-fill-color: transparent;
+  animation: voice-dock-shimmer 1400ms linear infinite;
+}
+
+@keyframes voice-dock-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -20% 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -443,6 +568,13 @@ onBeforeUnmount(() => {
 
   .voice-dock__wave span {
     transition: none;
+  }
+
+  .voice-dock__text--shimmer {
+    background: none;
+    color: var(--shell-text-secondary);
+    -webkit-text-fill-color: currentcolor;
+    animation: none;
   }
 }
 </style>
