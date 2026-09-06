@@ -1,4 +1,6 @@
 import type { BaseAnchorAnimationOptions } from '../src/types'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { flushPromises, mount } from '@vue/test-utils'
 import gsap from 'gsap'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -354,6 +356,24 @@ describe('txBaseAnchor', () => {
     expect(floating.style.width).toBe('480px')
     // The default maxWidth (360) must not silently clamp the explicit 480 back down.
     expect(floating.style.maxWidth).toBe('')
+  })
+
+  /**
+   * The card carries the surface that paints the panel background, and that
+   * surface is an absolutely positioned child of it. Scrolling the card scrolls
+   * its containing block too, so the background slides out from under the rows
+   * and the scrolled distance is left painted on the page behind the panel. The
+   * body takes the scroll instead. jsdom lays nothing out, so the guard is on
+   * the declarations themselves.
+   */
+  it('gives the scroll to the body, never to the card that carries the surface', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'packages/components/src/base-anchor/src/TxBaseAnchor.vue'),
+      'utf8'
+    )
+
+    expect(source).toMatch(/\.tx-base-anchor__card \{[^}]*\n\s*overflow: hidden;/)
+    expect(source).toMatch(/\.tx-base-anchor__card :deep\(\.tx-card__body\) \{[^}]*\n\s*overflow: auto;/)
   })
 })
 

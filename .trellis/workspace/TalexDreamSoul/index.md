@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 61
-- **Last Active**: 2026-09-05
+- **Total Sessions**: 65
+- **Last Active**: 2026-09-06
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~454 | Active |
+| `journal-2.md` | ~593 | Active |
 | `journal-1.md` | ~2005 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -31,6 +31,10 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 65 | 2026-09-06 | 模型菜单筛选条改用 TxFilterChips：provider 级图标 chip、滑动指示器、渠道分组 | `c3b5222f4`, `2528f40ad` | `release/ota-transport-error-classification-20260904` |
+| 64 | 2026-09-06 | 模型菜单渠道分层 + 锚定面板背景修复 | `2838f31cd`, `3309c614d`, `4597c566f` | `release/ota-transport-error-classification-20260904` |
+| 63 | 2026-09-06 | Home model menu v2: provider filters, search, favorites, hotkeys, family icons | `1be2a206f`, `8da334466`, `2178c013c`, `00a6de331` | `release/ota-transport-error-classification-20260904` |
+| 62 | 2026-09-06 | Model menu redesign planning and tuffex anchor max-height fix | `2c54a037f`, `c672a028b` | `release/ota-transport-error-classification-20260904` |
 | 61 | 2026-09-05 | OTA 传输层错误分类修复，及由此挖出的两个 dev 更新链路缺陷 | `05588b437`, `97bdf676f`, `12ab13404`, `b900dff95`, `e7ccaae8b`, `6e1c9ee60` | `release/ota-transport-error-classification-20260904` |
 | 60 | 2026-09-05 | 推荐位部分回补与打分带上限，兼一次共享工作树事故 | `e7030c0a9`, `3c10e42dc`, `64f12b8f2`, `f9f8595b6`, `2e07449ab`, `3f83b717d`, `63b3df8be` | `release/ota-transport-error-classification-20260904` |
 | 59 | 2026-08-17 | Clipboard History 1.1.12 production Nexus release | `bf3eb9434`, `c523af1db`, `2eccf3d79`, `989dad5a5`, `c90fcfb3d`, `a941469e3`, `151693652` | `master` |

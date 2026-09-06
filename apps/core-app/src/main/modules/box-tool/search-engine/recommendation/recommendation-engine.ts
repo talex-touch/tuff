@@ -20,7 +20,10 @@ import { createClipboardRecommendationSource } from './clipboard-recommendation-
 import { createFileRecommendationSource } from './file-recommendation-source'
 import { createAppRecommendationSource } from './app-recommendation-source'
 import { recommendationSourceRegistry } from './recommendation-source-registry'
-import { HABITUAL_RECOMMENDATION_SOURCES } from './recommendation-presentation'
+import {
+  describeRecommendation,
+  HABITUAL_RECOMMENDATION_SOURCES
+} from './recommendation-presentation'
 import { isRecommendableNewFile } from './file-recommendation-admission'
 import { i18nMsg } from '@talex-touch/utils/i18n'
 import { isSameAppIdentity, matchesAppRule, type AppMatchRule } from './app-identity-match'
@@ -464,7 +467,11 @@ export class RecommendationEngine {
     // takes over from a torn-down one, and nothing else writes these ids.
     this.disposeOwnedSources = [
       createClipboardRecommendationSource(dbUtils),
-      createFileRecommendationSource(dbUtils),
+      createFileRecommendationSource(dbUtils, {
+        // A thumbnail that landed after the rebuild shipped is baked into the cached cards as an
+        // OS icon; the next open must rebuild rather than replay them.
+        onThumbnailLanded: () => this.invalidateCache()
+      }),
       createAppRecommendationSource(appCatalogDbUtils)
     ].map((source) => {
       recommendationSourceRegistry.unregister(source.sourceId)
@@ -1313,7 +1320,7 @@ export class RecommendationEngine {
     for (const item of pinnedTuffItems) {
       if (!item.meta) item.meta = {}
       item.meta.pinned = { isPinned: true, pinnedAt: Date.now() }
-      item.meta.recommendation = { source: 'pinned' }
+      item.meta.recommendation = describeRecommendation('pinned')
     }
     pinnedTuffItems = this.dedupeItems(pinnedTuffItems)
 
@@ -1416,7 +1423,7 @@ export class RecommendationEngine {
       if (!item.meta) item.meta = {}
       const meta = item.meta as Record<string, unknown>
       if (!('recommendation' in meta)) {
-        meta.recommendation = { source: 'frequent' }
+        meta.recommendation = describeRecommendation('frequent')
       }
     }
 
@@ -1534,10 +1541,12 @@ export class RecommendationEngine {
    * which is every new user, and an all-list empty state loses the visual anchor the row provides.
    * So the remaining slots go to the next-highest ranked items.
    *
-   * Files never enter the grid. A tile is an icon and a name; a file's thumbnail often is not
-   * generated yet (and cannot be, for media outside the `tfile` allowlist), so it would render as
-   * a grey square — while as a row it gets its path, size and date. Its reason badge has room
-   * there too, which is the point of the lower tier.
+   * Files never enter the grid, pinned or not. A tile is an icon and a name; a file's thumbnail
+   * often is not generated yet (and cannot be, for media outside the `tfile` allowlist), so it
+   * would render as a grey square — while as a row it gets its path, size and date. Its reason
+   * badge has room there too, which is the point of the lower tier. Files are also what opens the
+   * right-hand preview pane (`addon` in CoreBox.vue), and a bare icon row is the wrong anchor for a
+   * panel that takes most of the window: anything that would open it belongs in the list.
    */
   /**
    * Whether this item reads as a grid tile rather than a list row.
@@ -1545,6 +1554,8 @@ export class RecommendationEngine {
    * A tile is an icon plus a name. Files are excluded because their thumbnail is often not
    * generated yet — and for media outside the `tfile` allowlist it never can be — so a file tile
    * is a grey square with a truncated filename, while a file row carries its path, size and date.
+   * Keeping them out is also what keeps the preview pane out of the grid: the renderer opens it
+   * for a focused `kind: 'file'` item, and the grid must never hold one.
    */
   private isTileableRecommendation(item: TuffItem): boolean {
     return item.kind !== 'file' && item.kind !== 'folder' && item.source?.type !== 'file'
@@ -1558,14 +1569,16 @@ export class RecommendationEngine {
     // Pinned entries claim grid slots first. They are appended last in score order (pinning is not
     // a score), so taking the grid in list order would push the one thing the user explicitly
     // asked to always see down into the "here is a suggestion" tier.
-    const pinned: TuffItem[] = []
+    const pinnedTiles: TuffItem[] = []
+    const pinnedRows: TuffItem[] = []
     const habitualCandidates: TuffItem[] = []
     const otherTileable: TuffItem[] = []
-    const listOnly: TuffItem[] = []
 
     for (const item of items) {
-      if (item.meta?.pinned?.isPinned === true) pinned.push(item)
-      else if (!this.isTileableRecommendation(item)) listOnly.push(item)
+      const isPinned = item.meta?.pinned?.isPinned === true
+      if (!this.isTileableRecommendation(item)) {
+        if (isPinned) pinnedRows.push(item)
+      } else if (isPinned) pinnedTiles.push(item)
       else if (HABITUAL_RECOMMENDATION_SOURCES.has(readRecommendationSource(item))) {
         habitualCandidates.push(item)
       } else otherTileable.push(item)
@@ -1573,9 +1586,11 @@ export class RecommendationEngine {
 
     // Overflow past one row falls to the list rather than wrapping into a second grid row: a
     // half-empty second row blurs the boundary between the tiers.
-    const grid = [...pinned, ...habitualCandidates, ...otherTileable].slice(0, columns)
-    const gridIds = new Set(grid.map((item) => item.id))
-    const proposed = items.filter((item) => !gridIds.has(item.id))
+    const grid = [...pinnedTiles, ...habitualCandidates, ...otherTileable].slice(0, columns)
+    // A pinned file cannot tile, but the user still asked to always see it, so it leads the list
+    // instead of trailing it where pinning appended it.
+    const leadingIds = new Set([...grid, ...pinnedRows].map((item) => item.id))
+    const proposed = [...pinnedRows, ...items.filter((item) => !leadingIds.has(item.id))]
 
     const sections: TuffContainerLayout['sections'] = []
     if (grid.length > 0) {
@@ -1761,6 +1776,9 @@ export class RecommendationEngine {
         return []
       }
 
+      // The rebuilder writes the full `meta.recommendation` (source, score, badge) from the
+      // candidate's source. Overwriting it here with a bare `{ source }` used to strip the badge
+      // off every backfilled tile.
       const items = await this.itemRebuilder.rebuildItems(
         frequentItems.map((item) => ({
           ...item,
@@ -1768,12 +1786,6 @@ export class RecommendationEngine {
           score: item.usageStats.executeCount
         }))
       )
-
-      // Mark as recommendation (not pinned)
-      for (const item of items) {
-        if (!item.meta) item.meta = {}
-        item.meta.recommendation = { source: 'frequent' }
-      }
 
       return items.slice(0, limit)
     } catch (error) {

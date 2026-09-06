@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { app } from 'electron'
 import fse from 'fs-extra'
 import * as log4js from 'log4js'
-import packageJson from '../../../../package.json'
+import packageJson from '../../package.json'
 
 globalThis.$pkg = packageJson
 
@@ -15,8 +15,8 @@ if (!app.isPackaged) {
   }
 }
 
-// Set APP_VERSION environment variable from package.json if not already set
-// This allows runtime access to version while keeping package.json as source of truth
+// Set APP_VERSION from the CoreApp package when the host has not provided one.
+// This keeps the main-process runtime version aligned with the packaged app metadata.
 if (!process.env.APP_VERSION) {
   process.env.APP_VERSION = packageJson.version
 }

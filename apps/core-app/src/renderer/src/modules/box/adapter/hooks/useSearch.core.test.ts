@@ -859,6 +859,65 @@ describe('useSearch CoreBox reopen behavior', () => {
     })
   })
 
+  it('orders the empty-query result the way its sections display it', async () => {
+    // The engine ranks a newly added file above the apps that fill the grid tier, while BoxGrid
+    // numbers focus from the grid down. Left in rank order, focus 0 highlights the first tile but
+    // `activeItem` — and with it the preview pane — is the file. Sections may also still name an
+    // item a later filter dropped; the layout handed to the keyboard must not.
+    state.searchResultForRequest = () => ({
+      items: [
+        {
+          id: '/Users/x/Downloads/shot.png',
+          kind: 'file',
+          source: { id: 'file-provider', type: 'file' },
+          render: { mode: 'default', basic: { title: 'shot.png' } },
+          meta: {
+            file: { path: '/Users/x/Downloads/shot.png' },
+            recommendation: { source: 'newly-added' }
+          }
+        } as TuffItem,
+        {
+          id: 'terminal',
+          kind: 'app',
+          source: { id: 'app-provider', type: 'application' },
+          render: { mode: 'default', basic: { title: 'Terminal' } },
+          meta: { recommendation: { source: 'frequent' } }
+        } as TuffItem
+      ],
+      query: { text: '', inputs: [] },
+      duration: 1,
+      sources: [],
+      sessionId: 'tiered-session',
+      containerLayout: {
+        mode: 'grid',
+        grid: { columns: 6 },
+        sections: [
+          { id: 'habitual', layout: 'grid', itemIds: ['terminal', 'dropped-app'] },
+          { id: 'proposed', layout: 'list', itemIds: ['/Users/x/Downloads/shot.png'] }
+        ]
+      }
+    })
+
+    const boxOptions = createBoxOptions()
+    const hook = useSearch(boxOptions, createClipboardOptions())
+    await flushPromises()
+
+    hook.searchVal.value = ''
+    await hook.handleSearchImmediate({ force: true })
+    await flushPromises()
+
+    expect(hook.res.value.map((item) => item.id)).toEqual([
+      'terminal',
+      '/Users/x/Downloads/shot.png'
+    ])
+    expect(boxOptions.focus).toBe(0)
+    expect(hook.activeItem.value?.id).toBe('terminal')
+    expect(boxOptions.layout?.sections?.map((section) => section.itemIds)).toEqual([
+      ['terminal'],
+      ['/Users/x/Downloads/shot.png']
+    ])
+  })
+
   it('does not report an exposure when the recommendation list is empty', async () => {
     state.searchResultForRequest = () => ({
       items: [],
