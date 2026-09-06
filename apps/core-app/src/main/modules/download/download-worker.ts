@@ -542,8 +542,11 @@ export class DownloadWorker {
     }
 
     const maxRetries = this.config.chunk.maxRetries
+    const fallbackUrl = typeof task.metadata?.fallbackUrl === 'string'
+      ? task.metadata.fallbackUrl
+      : undefined
     let retryCount = 0
-    let requestUrl = task.url
+    let requestUrl = task.metadata?.fallbackUsed === true && fallbackUrl ? fallbackUrl : task.url
 
     const errorContext = {
       taskId: task.id,
@@ -621,11 +624,8 @@ export class DownloadWorker {
         }
 
         const statusCode = getNetworkStatusCode(error)
-        const fallbackUrl =
-          typeof task.metadata?.fallbackUrl === 'string' ? task.metadata.fallbackUrl : undefined
-        const fallbackUsed = task.metadata?.fallbackUsed === true
 
-        if (statusCode === 403 && fallbackUrl && !fallbackUsed && requestUrl !== fallbackUrl) {
+        if (statusCode === 403 && fallbackUrl && requestUrl !== fallbackUrl) {
           requestUrl = fallbackUrl
           task.metadata = { ...task.metadata, fallbackUsed: true }
           errorContext.url = fallbackUrl
