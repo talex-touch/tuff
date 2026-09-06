@@ -14,6 +14,8 @@ import { withPermission } from '../permission/channel-guard'
 import { BaseModule } from '../abstract-base-module'
 import { globalDictationController } from './global-dictation'
 import { voiceService } from './voice-service'
+import { assistantModule } from '../assistant/module'
+import { CommandVoiceGestureController } from './command-gesture'
 
 const voiceLog = createLogger('Voice')
 const VOICE_PERMISSION = 'voice.dictation'
@@ -32,6 +34,7 @@ export class VoiceModule extends BaseModule<TalexEvents> {
 
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private cleanups: Array<() => void> = []
+  private commandGestureController: CommandVoiceGestureController | null = null
 
   constructor() {
     super(VoiceModule.key)
@@ -44,10 +47,16 @@ export class VoiceModule extends BaseModule<TalexEvents> {
     voiceLog.info('Initializing Voice module')
     this.registerChannels()
     globalDictationController.register()
+    this.commandGestureController = new CommandVoiceGestureController((payload) =>
+      assistantModule.handleVoiceCommandGesture(payload)
+    )
+    this.commandGestureController.register()
     voiceLog.success('Voice module initialized')
   }
 
   async onDestroy(): Promise<void> {
+    this.commandGestureController?.unregister()
+    this.commandGestureController = null
     voiceService.dispose()
     globalDictationController.unregister()
     for (const cleanup of this.cleanups.splice(0)) {

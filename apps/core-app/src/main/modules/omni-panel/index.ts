@@ -113,6 +113,18 @@ interface InputHookEvent {
   keycode?: number
 }
 
+export type OmniPanelGlobalKey = 'primary-modifier'
+
+export interface OmniPanelGlobalKeyEvent {
+  key: OmniPanelGlobalKey
+  keycode: number
+}
+
+export interface OmniPanelGlobalKeyListener {
+  onKeyDown?: (event: OmniPanelGlobalKeyEvent) => void
+  onKeyUp?: (event: OmniPanelGlobalKeyEvent) => void
+}
+
 interface InputHookKeyMap {
   P: number
   Shift: number
@@ -335,6 +347,19 @@ export class OmniPanelModule extends BaseModule {
     event: string
     callback: (event: InputHookEvent) => void
   }> = []
+  private globalKeyListeners = new Set<OmniPanelGlobalKeyListener>()
+
+  registerGlobalKeyListener(listener: OmniPanelGlobalKeyListener): () => void {
+    this.globalKeyListeners.add(listener)
+    if (this.touchApp) {
+      this.syncInputHookState()
+    }
+
+    return () => {
+      if (!this.globalKeyListeners.delete(listener)) return
+      this.syncInputHookState()
+    }
+  }
   private featureRegistry: OmniPanelFeatureRegistryItem[] = []
   private registryUpdatedAt = Date.now()
   private lastContext: OmniPanelContextPayload = {
@@ -707,7 +732,11 @@ export class OmniPanelModule extends BaseModule {
       this.cleanupInputHook()
       return
     }
-    if (!this.mouseLongPressEnabled && !this.shortcutHoldEnabled) {
+    if (
+      !this.mouseLongPressEnabled &&
+      !this.shortcutHoldEnabled &&
+      this.globalKeyListeners.size === 0
+    ) {
       this.clearLongPressTimer()
       this.clearShortcutHoldTimer()
       this.clearShortcutArmExpiryTimer()
@@ -1725,10 +1754,12 @@ export class OmniPanelModule extends BaseModule {
 
       const onKeyDown = (event: InputHookEvent) => {
         this.handleGlobalKeyDown(event)
+        this.dispatchGlobalKeyEvent('down', event)
       }
 
       const onKeyUp = (event: InputHookEvent) => {
         this.handleGlobalKeyUp(event)
+        this.dispatchGlobalKeyEvent('up', event)
       }
 
       hook.on('mousedown', onMouseDown)
@@ -1777,6 +1808,30 @@ export class OmniPanelModule extends BaseModule {
       this.inputHook = null
       this.inputHookKeys = null
       this.mouseHandlers = []
+    }
+  }
+
+  private dispatchGlobalKeyEvent(direction: 'down' | 'up', event: InputHookEvent): void {
+    const keycode = Number(event.keycode)
+    const keys = this.inputHookKeys
+    if (!Number.isFinite(keycode) || !keys) return
+
+    const isMeta = keycode === keys.Meta || keycode === keys.MetaRight
+    const isCtrl = keycode === keys.Ctrl || keycode === keys.CtrlRight
+    const isPrimary = process.platform === 'darwin' ? isMeta : isCtrl
+    if (!isPrimary) return
+
+    const payload: OmniPanelGlobalKeyEvent = {
+      key: 'primary-modifier',
+      keycode
+    }
+    for (const listener of [...this.globalKeyListeners]) {
+      try {
+        if (direction === 'down') listener.onKeyDown?.(payload)
+        else listener.onKeyUp?.(payload)
+      } catch (error) {
+        omniPanelLog.warn('Global key listener failed', { error })
+      }
     }
   }
 
@@ -1879,6 +1934,7 @@ export class OmniPanelModule extends BaseModule {
     this.clearShortcutHoldTimer()
     this.clearShortcutArmExpiryTimer()
     this.resetShortcutHoldState()
+    this.globalKeyListeners.clear()
     this.cleanupInputHook()
     shortcutModule.unregisterMainShortcut(OMNI_PANEL_SHORTCUT_ID)
     shortcutModule.unregisterMainTrigger(OMNI_PANEL_MOUSE_TRIGGER_ID)

@@ -21,6 +21,12 @@ export interface AssistantOpenVoicePanelPayload {
   source?: "click" | "wake-word";
 }
 
+export interface AssistantVoiceCommandPayload {
+  action: 'start' | 'stop'
+  mode: 'hold' | 'toggle'
+  source: 'command'
+}
+
 export interface AssistantFloatingBallPositionPayload {
   x: number;
   y: number;
@@ -204,6 +210,10 @@ export const AssistantEvents = {
       .module("voice-panel")
       .event("closed")
       .define<void, void>(),
+    command: defineEvent('assistant')
+      .module('voice-panel')
+      .event('command')
+      .define<AssistantVoiceCommandPayload, void>(),
     closePanel: defineEvent("assistant")
       .module("voice-panel")
       .event("close")

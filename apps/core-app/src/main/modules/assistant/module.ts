@@ -26,6 +26,7 @@ import type {
   AssistantScreenshotTranslatePayload,
   AssistantScreenshotTranslateResponse
 } from '@talex-touch/utils/transport/events/assistant'
+import type { AssistantVoiceCommandPayload } from '@talex-touch/utils/transport/events/assistant'
 import type {
   IntelligenceErrorCode,
   NativeScreenshotCaptureRequest,
@@ -240,6 +241,7 @@ export class AssistantModule extends BaseModule {
   private voiceDockExpanded = false
   private voicePanelAutoHideSuppressionDepth = 0
   private voicePanelAutoHideResumeTimer: NodeJS.Timeout | null = null
+  private voicePanelFocusSuppressed = false
   private pendingPosition: FloatingBallPosition | null = null
   private positionSaveTimer: NodeJS.Timeout | null = null
   private readonly handleDisplayTopologyChange = (): void => {
@@ -297,6 +299,7 @@ export class AssistantModule extends BaseModule {
     this.pendingPosition = null
     this.voiceDockExpanded = false
     this.voicePanelAutoHideSuppressionDepth = 0
+    this.voicePanelFocusSuppressed = false
     this.unsubscribeAppSetting?.()
     this.unsubscribeAppSetting = null
 
@@ -848,6 +851,31 @@ export class AssistantModule extends BaseModule {
     }, 220)
   }
 
+  async handleVoiceCommandGesture(payload: AssistantVoiceCommandPayload): Promise<void> {
+    const setting = this.readAppSetting()
+    if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
+      return
+    }
+    if (payload.action === 'stop') {
+      const dock = this.voiceDockWindow
+      if (!dock || dock.window.isDestroyed() || !this.voiceDockExpanded || !this.transport) {
+        return
+      }
+      this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, payload)
+      return
+    }
+
+    this.voicePanelFocusSuppressed = true
+    try {
+      await this.showVoicePanel('command')
+    } finally {
+      this.voicePanelFocusSuppressed = false
+    }
+    const dock = this.voiceDockWindow
+    if (!dock || dock.window.isDestroyed() || !this.transport) return
+    this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, payload)
+  }
+
   private async showVoicePanel(source: string): Promise<void> {
     const setting = this.readAppSetting()
     if (!this.isAssistantEnabled(setting)) {
@@ -867,10 +895,14 @@ export class AssistantModule extends BaseModule {
       this.voiceDockExpanded = true
       this.applyVoiceDockBounds(dock, anchorBounds)
 
+      const shouldFocus = !this.voicePanelFocusSuppressed
       if (!dock.window.isVisible()) {
-        dock.window.show()
+        if (shouldFocus) dock.window.show()
+        else dock.window.showInactive()
       }
-      dock.window.focus()
+      if (shouldFocus) {
+        dock.window.focus()
+      }
 
       if (this.transport) {
         this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.panelOpened, {
