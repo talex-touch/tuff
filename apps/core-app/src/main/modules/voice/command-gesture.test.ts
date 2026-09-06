@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StorageList } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
-import type { OmniPanelGlobalKeyEvent, OmniPanelGlobalKeyListener } from '../omni-panel'
+import type {
+  OmniPanelGlobalKeyEvent,
+  OmniPanelGlobalKeyListener,
+  OmniPanelGlobalOtherKeyEvent
+} from '../omni-panel'
 
 const mocks = vi.hoisted(() => ({
   getMainConfig: vi.fn(),
@@ -27,6 +31,11 @@ import { CommandVoiceGestureController } from './command-gesture'
 const primaryModifier: OmniPanelGlobalKeyEvent = {
   key: 'primary-modifier',
   keycode: 55
+}
+
+const otherKeyDown: OmniPanelGlobalOtherKeyEvent = {
+  key: 'other-key',
+  keycode: 30
 }
 
 function setting(enabled: boolean): AppSetting {
@@ -89,7 +98,8 @@ describe('command voice gesture', () => {
     expect(mocks.registerGlobalKeyListener).toHaveBeenCalledTimes(1)
     expect(globalKeyListener).toEqual({
       onKeyDown: expect.any(Function),
-      onKeyUp: expect.any(Function)
+      onKeyUp: expect.any(Function),
+      onOtherKeyDown: expect.any(Function)
     })
 
     controller.unregister()
@@ -110,6 +120,57 @@ describe('command voice gesture', () => {
       [{ action: 'start', mode: 'toggle', source: 'command' }],
       [{ action: 'stop', mode: 'toggle', source: 'command' }]
     ])
+
+    controller.unregister()
+  })
+
+  it('does not toggle when another key is pressed before the primary modifier is released', () => {
+    mocks.getMainConfig.mockReturnValue(setting(true))
+    const sink = vi.fn()
+    const controller = new CommandVoiceGestureController(sink)
+    controller.register()
+
+    globalKeyListener?.onKeyDown?.(primaryModifier)
+    globalKeyListener?.onOtherKeyDown?.(otherKeyDown)
+    globalKeyListener?.onKeyUp?.(primaryModifier)
+    vi.advanceTimersByTime(320)
+
+    expect(sink).not.toHaveBeenCalled()
+
+    controller.unregister()
+  })
+
+  it('stops a hold once when another key is pressed and never starts again', () => {
+    mocks.getMainConfig.mockReturnValue(setting(true))
+    const sink = vi.fn()
+    const controller = new CommandVoiceGestureController(sink)
+    controller.register()
+
+    globalKeyListener?.onKeyDown?.(primaryModifier)
+    vi.advanceTimersByTime(320)
+    globalKeyListener?.onOtherKeyDown?.(otherKeyDown)
+    globalKeyListener?.onKeyUp?.(primaryModifier)
+    vi.advanceTimersByTime(320)
+
+    expect(sink.mock.calls).toEqual([
+      [{ action: 'start', mode: 'hold', source: 'command' }],
+      [{ action: 'stop', mode: 'hold', source: 'command' }]
+    ])
+
+    controller.unregister()
+  })
+
+  it('does not start when the primary keydown already carries a combo marker', () => {
+    mocks.getMainConfig.mockReturnValue(setting(true))
+    const sink = vi.fn()
+    const controller = new CommandVoiceGestureController(sink)
+    controller.register()
+
+    globalKeyListener?.onKeyDown?.({ ...primaryModifier, hasOtherKeys: true })
+    vi.advanceTimersByTime(320)
+    globalKeyListener?.onKeyUp?.(primaryModifier)
+
+    expect(sink).not.toHaveBeenCalled()
 
     controller.unregister()
   })
