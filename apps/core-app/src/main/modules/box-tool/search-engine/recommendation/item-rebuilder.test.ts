@@ -2,7 +2,6 @@ import type { TuffItem } from '@talex-touch/utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ScoredItem } from './recommendation-engine'
-import { RECOMMENDATION_SECTION_ORDER } from '@talex-touch/utils'
 import { ItemRebuilder } from './item-rebuilder'
 import { recommendationSourceRegistry } from './recommendation-source-registry'
 

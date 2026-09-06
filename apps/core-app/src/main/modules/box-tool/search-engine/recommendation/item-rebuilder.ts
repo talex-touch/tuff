@@ -356,7 +356,7 @@ export class ItemRebuilder {
       evidence.lastExecutedAt = lastExecutedAt
     }
 
-    const { installedAt } = scored
+    const installedAt = scored.source === 'newly-installed' ? scored.firstSeenAt : undefined
     if (typeof installedAt === 'number' && Number.isFinite(installedAt) && installedAt > 0) {
       evidence.installedAt = installedAt
     }
