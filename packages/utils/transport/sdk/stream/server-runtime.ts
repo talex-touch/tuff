@@ -25,6 +25,8 @@ export interface ServerStreamCancelRequest {
   ownerKey: ServerStreamOwnerKey;
 }
 
+export type ServerStreamStopRequest = ServerStreamCancelRequest;
+
 export interface ServerStreamPortAdapter {
   portId?: string;
   send: (message: TransportPortEnvelope) => boolean;
@@ -60,6 +62,7 @@ export interface ServerStreamRuntimeConfig<
 export interface ServerStreamRuntime<TReq, TSender, TPlugin = unknown> {
   handleStart: (request: ServerStreamRequest<TReq, TSender, TPlugin>) => void;
   handleCancel: (request: ServerStreamCancelRequest) => void;
+  handleStop: (request: ServerStreamStopRequest) => void;
   cancelOwner: (ownerKey: ServerStreamOwnerKey) => void;
   cancelAll: () => void;
   dispose: () => void;
@@ -77,6 +80,7 @@ export function createServerStreamRuntime<
     cancelled: boolean;
     closed: boolean;
     abortController: AbortController;
+    stopController: AbortController;
   };
 
   const statesByOwner = new Map<
@@ -138,6 +142,25 @@ export function createServerStreamRuntime<
     cancelState(state);
   };
 
+  // Unlike handleCancel, the state stays registered: the producer is expected to
+  // keep emitting and finish with `end`, and dropping it here would strand that
+  // terminal message.
+  const handleStop = (request: ServerStreamStopRequest) => {
+    if (disposed) return;
+    const { streamId, ownerKey } = request;
+    if (!streamId) {
+      return;
+    }
+
+    const state = statesByOwner.get(ownerKey)?.get(streamId);
+    if (!state || state.closed || state.cancelled) return;
+    try {
+      state.stopController.abort();
+    } catch {
+      // One consumer's stop listener must not block host-owned cleanup.
+    }
+  };
+
   const handleStart = (
     request: ServerStreamRequest<TReq, TSender, TPlugin>,
   ) => {
@@ -160,6 +183,7 @@ export function createServerStreamRuntime<
       cancelled: false,
       closed: false,
       abortController: new AbortController(),
+      stopController: new AbortController(),
     };
     ownerStates.set(streamId, state);
 
@@ -269,6 +293,7 @@ export function createServerStreamRuntime<
       },
       isCancelled: () => state.cancelled,
       signal: state.abortController.signal,
+      stopSignal: state.stopController.signal,
       streamId,
     };
 
@@ -301,6 +326,7 @@ export function createServerStreamRuntime<
   return {
     handleStart,
     handleCancel,
+    handleStop,
     cancelOwner,
     cancelAll,
     dispose,

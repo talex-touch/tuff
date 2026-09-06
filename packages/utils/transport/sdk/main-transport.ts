@@ -848,6 +848,7 @@ export class TuffMainTransport implements ITuffTransportMain {
     const portEnabled = isPortChannelEnabled(eventName);
     const startEventName = `${eventName}:stream:start`;
     const cancelEventName = `${eventName}:stream:cancel`;
+    const stopEventName = `${eventName}:stream:stop`;
     type PluginStreamOwnerRecord = {
       sender: WebContents;
       keys: StreamOwnerKeys;
@@ -1128,10 +1129,34 @@ export class TuffMainTransport implements ITuffTransportMain {
         runtime.handleCancel({ streamId, ownerKey });
       };
 
+    const createStopHandler =
+      (channelType: BridgeChannelType) => (data: any) => {
+        if (!registered) return;
+        const rawPayload = data?.data as { streamId?: string } | undefined;
+        const streamId = rawPayload?.streamId;
+        const sender = data?.header?.event?.sender as WebContents | undefined;
+        if (!streamId || !sender) {
+          return;
+        }
+
+        const plugin =
+          channelType === BRIDGE_CHANNEL.PLUGIN
+            ? this.resolveChannelPluginContext(data)
+            : undefined;
+        const ownerKey = resolveOwnerKey(channelType, sender, plugin, false);
+        if (!ownerKey) {
+          return;
+        }
+
+        runtime.handleStop({ streamId, ownerKey });
+      };
+
     const startHandlerMain = createStartHandler(BRIDGE_CHANNEL.MAIN);
     const cancelHandlerMain = createCancelHandler(BRIDGE_CHANNEL.MAIN);
+    const stopHandlerMain = createStopHandler(BRIDGE_CHANNEL.MAIN);
     const startHandlerPlugin = createStartHandler(BRIDGE_CHANNEL.PLUGIN);
     const cancelHandlerPlugin = createCancelHandler(BRIDGE_CHANNEL.PLUGIN);
+    const stopHandlerPlugin = createStopHandler(BRIDGE_CHANNEL.PLUGIN);
 
     const startCleanupMain = this.channel.regChannel(
       BRIDGE_CHANNEL.MAIN,
@@ -1142,6 +1167,11 @@ export class TuffMainTransport implements ITuffTransportMain {
       BRIDGE_CHANNEL.MAIN,
       cancelEventName,
       cancelHandlerMain,
+    );
+    const stopCleanupMain = this.channel.regChannel(
+      BRIDGE_CHANNEL.MAIN,
+      stopEventName,
+      stopHandlerMain,
     );
     // Same gate as `on()`. Covering only `on()` would leave the entire stream surface bound
     // to the plugin channel, which is the half that is easy to miss (#688).
@@ -1158,6 +1188,13 @@ export class TuffMainTransport implements ITuffTransportMain {
           BRIDGE_CHANNEL.PLUGIN,
           cancelEventName,
           cancelHandlerPlugin,
+        )
+      : NOOP_UNREGISTER;
+    const stopCleanupPlugin = pluginFacing
+      ? this.channel.regChannel(
+          BRIDGE_CHANNEL.PLUGIN,
+          stopEventName,
+          stopHandlerPlugin,
         )
       : NOOP_UNREGISTER;
 
@@ -1177,8 +1214,10 @@ export class TuffMainTransport implements ITuffTransportMain {
       runtime.dispose();
       startCleanupMain();
       cancelCleanupMain();
+      stopCleanupMain();
       startCleanupPlugin();
       cancelCleanupPlugin();
+      stopCleanupPlugin();
     };
   }
 
