@@ -7,6 +7,9 @@
 - CoreBox empty states now separate habitual items from explained recommendations and fill cold-start slots instead of leaving them blank.
 - Tightened download concurrency, stream completion, and cancellation cleanup so failed transfers do not leave unfinished chunks behind.
 - Release gates remain tied to the same SHA, keeping signed manifests, rollback targets, and three-platform artifacts traceable.
+
+## What's Changed
+
 - Improved recovery for expired Nexus signed URLs: only recoverable 403 responses use the fallback URL, while other authorization failures remain fail-closed.
 - Added a patched `app-builder-lib` release path so `security set-key-partition-list` receives the temporary keychain password rather than the `.p12` import password.
 - Refactored CoreBox recommendation registration and cold-start backfill to distinguish habitual items from candidates that need an explanation, with a fixed upper bound.
