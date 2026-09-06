@@ -65,6 +65,10 @@ vi.mock('./everything-icon-cache', () => ({
   }))
 }))
 
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { registerFileAssetBridge } from './file-asset-bridge'
 import { __test__, macSpotlightFileProvider } from './native-file-search-provider'
 
 interface SearchableSpotlightProvider {
@@ -239,6 +243,93 @@ describe('native-file-search-provider', () => {
       })
     )
     expect(iconCacheEnsureMock).toHaveBeenCalledWith('/Users/demo/Documents/missing-icon.pdf')
+  })
+
+  it('shows the index thumbnail for an image Spotlight found and asks for a missing one', async () => {
+    // Spotlight hands back paths under ~/Pictures. Sent out as their own path those are refused by
+    // tfile and the row shows the renderer's "image failed" square; the index already holds a
+    // thumbnail for one of them, and the other can have one generated the way search results do.
+    const thumbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spotlight-thumbs-'))
+    const thumbnail = path.join(thumbDir, 'shot.jpg')
+    fs.writeFileSync(thumbnail, 'jpg')
+    const indexedRow = (id: number, filePath: string) => ({
+      id,
+      path: filePath,
+      name: path.basename(filePath),
+      displayName: null,
+      extension: '.png',
+      size: 12,
+      mtime: new Date('2026-05-12T00:00:00.000Z'),
+      ctime: new Date('2026-05-12T00:00:00.000Z'),
+      lastIndexedAt: new Date(),
+      isDir: false,
+      type: 'file' as const,
+      content: null,
+      embeddingStatus: 'none' as const
+    })
+    const ensureThumbnail = vi.fn(
+      async (_file: { id: number }, _extensions: Record<string, string>) => undefined
+    )
+    const lookupIndexedFiles = vi.fn(async () => {
+      const assets = new Map()
+      assets.set('/Users/demo/Pictures/shot.png', {
+        file: indexedRow(7, '/Users/demo/Pictures/shot.png'),
+        extensions: { thumbnail }
+      })
+      assets.set('/Users/demo/Pictures/fresh.png', {
+        file: indexedRow(8, '/Users/demo/Pictures/fresh.png'),
+        extensions: {}
+      })
+      return assets
+    })
+    const disposeBridge = registerFileAssetBridge({ lookupIndexedFiles, ensureThumbnail })
+
+    try {
+      execFileMock.mockImplementation((_command, args, _options, callback) => {
+        if (Array.isArray(args) && args.includes('-version')) {
+          callback(null, { stdout: 'mdfind test' })
+          return
+        }
+        callback(null, {
+          stdout:
+            '/Users/demo/Pictures/shot.png\0/Users/demo/Pictures/fresh.png\0/Users/demo/Pictures/stray.png\0'
+        })
+      })
+      statMock.mockResolvedValue({
+        size: 12,
+        mtime: new Date('2026-05-12T00:00:00.000Z'),
+        ctime: new Date('2026-05-12T00:00:00.000Z'),
+        isDirectory: () => false
+      })
+
+      await macSpotlightFileProvider.onLoad()
+      const result = await macSpotlightFileProvider.onSearch(
+        { text: 'png' },
+        new AbortController().signal
+      )
+
+      expect(lookupIndexedFiles).toHaveBeenCalledWith([
+        '/Users/demo/Pictures/shot.png',
+        '/Users/demo/Pictures/fresh.png',
+        '/Users/demo/Pictures/stray.png'
+      ])
+      const icons = result.items.map((item) => item.render.basic?.icon)
+      // Indexed with a thumbnail: the picture, served from the thumbnail cache.
+      expect(icons[0]?.type).toBe('url')
+      expect(icons[0]?.value.startsWith('tfile://')).toBe(true)
+      expect(icons[0]?.value).not.toContain('Pictures')
+      // Indexed without one: the image glyph now, and a generation request under the index id.
+      expect(icons[1]).toEqual({ type: 'class', value: 'i-ri-image-line' })
+      expect(ensureThumbnail).toHaveBeenCalledTimes(1)
+      expect(ensureThumbnail.mock.calls[0][0]).toMatchObject({ id: 8 })
+      // Not indexed at all: never its own (refused) path — the file glyph, with an icon warm-up.
+      expect(icons[2]).toEqual({ type: 'class', value: 'i-ri-file-line' })
+      expect(iconCacheEnsureMock).toHaveBeenCalledWith('/Users/demo/Pictures/stray.png')
+      expect(result.items[0]?.id).toBe('/Users/demo/Pictures/shot.png')
+    } finally {
+      disposeBridge()
+      fs.rmSync(thumbDir, { recursive: true, force: true })
+    }
   })
 
   it('checks Spotlight result containment using case-insensitive root keys', () => {

@@ -1,6 +1,7 @@
 import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
 import fs from 'node:fs'
 import { isHttpSource, resolveLocalFilePath, toTfileUrl } from '@talex-touch/utils/network'
+import { isServableLocalFilePath } from './local-file-policy'
 
 const IMAGE_FALLBACK_ICON = 'i-ri-image-line'
 const FILE_FALLBACK_ICON = 'i-ri-file-line'
@@ -102,6 +103,12 @@ export function normalizeRenderableIcon(
       missingLocalPath: normalized.localPath,
       changed: true
     }
+  }
+
+  // A local file the tfile handler would refuse never loads; the renderer then shows its
+  // "image failed" placeholder. Fall back before the request exists so the row gets its glyph.
+  if (normalized.localPath && !isServableLocalFilePath(normalized.localPath)) {
+    return { icon: fallbackIcon(fallbackKind), changed: true }
   }
 
   if (!normalized.changed && icon.type === 'url') {
