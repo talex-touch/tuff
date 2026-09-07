@@ -355,7 +355,7 @@ const preparing = computed(() => listening.value && !hasLevel.value && !hasNotic
 pillHeight.value = el && el.scrollWidth > el.clientWidth ? PILL_TALL_HEIGHT : PILL_BASE_HEIGHT
 ```
 
-`PILL_TALL_HEIGHT = 76`，文字 `-webkit-line-clamp: 2`。不是两行严格需要的 64——那个高度上文字块顶满卡片，读起来像一颗被拉长的胶囊，卡片是可以有余量的。窗口高度随之从 64 抬到 100（§2.3 的常量同步改），多出来的是投影和呼吸光晕的余量，它们画在面外，窗口边一刀切会露馅。
+`PILL_TALL_HEIGHT = 88`，文字 `-webkit-line-clamp: 2`。不是两行严格需要的 64——那个高度上文字块顶满卡片，读起来像一颗被拉长的胶囊，卡片是可以有余量的；88 才够放下「上文下钮」这套版式。窗口高度随之从 64 抬到 112（§2.3 的常量同步改），多出来的是投影和呼吸光晕的余量，它们画在面外，窗口边一刀切会露馅。
 
 ### 7.4 长高之后不再是胶囊
 
@@ -365,7 +365,7 @@ const expanded = computed(() => pillHeight.value > PILL_BASE_HEIGHT)
 const pillRadius = computed(() => (expanded.value ? PILL_TALL_RADIUS : PILL_BASE_HEIGHT / 2))
 ```
 
-胶囊的圆角是高度的一半。高度到 76 还保持全圆角，两端各吃掉 38px——正好吃在第二行要用的地方，而且看着像个被拉长的药丸，不像一张卡。所以一行是胶囊（22），两行是圆角矩形（24），`border-radius` 进过渡曲线，`TxBorderBeam` 吃同一个 `pillRadius`（原来写死 22，长高后光带会从卡片角上跑出去）。
+胶囊的圆角是高度的一半。高度到 88 还保持全圆角，两端各吃掉 44px——正好吃在第二行要用的地方，而且看着像个被拉长的药丸，不像一张卡。所以一行是胶囊（22），两行是圆角矩形（24），`border-radius` 进过渡曲线，`TxBorderBeam` 吃同一个 `pillRadius`（原来写死 22，长高后光带会从卡片角上跑出去）。
 
 ### 7.4.1 圆钮跟着长，但不等比例
 
@@ -375,7 +375,7 @@ const CONTROL_TALL_SIZE = 40
 const controlSize = computed(() => (expanded.value ? CONTROL_TALL_SIZE : CONTROL_BASE_SIZE))
 ```
 
-胶囊里 34 = 44 减两侧 5px padding —— **控件就是这根条**。照这个比例放到 76 高的卡片上是 58，荒谬。卡片比任何控件都高，所以那里换一条规则：控件对齐旁边的两行文字块（≈38），取 40。**控件跟内容走，不跟容器走。**
+胶囊里 34 = 44 减两侧 5px padding —— **控件就是这根条**。照这个比例放到 88 高的卡片上是 68，荒谬。卡片比任何控件都高，所以那里换一条规则：控件对齐旁边的两行文字块（≈38），取 40。**控件跟内容走，不跟容器走。**
 
 尺寸写在脚本里而不是 CSS 里：它是形态的函数，而且要能被测试读到（jsdom 不跑 SFC 的 scoped 样式，写在 CSS 里就等于没有守卫）。宽度测量不会因此震荡——展开后 chrome 从 94 变 106，文字更挤，只会更溢出，判定仍然是「展开」，二值状态稳定。
 
@@ -384,3 +384,22 @@ const controlSize = computed(() => (expanded.value ? CONTROL_TALL_SIZE : CONTROL
 ### 7.5 锁这一轮的测试
 
 六条负控制逐条验过：删掉半径联动 / 删掉长高 / 删掉 `preparing` 门 / 删掉设备分类 / 兜底改回甩原文 / 删掉首帧超时——各自都能让对应用例转红。
+
+### 7.4.2 卡片的版式：上文下钮
+
+```scss
+.voice-dock--expanded { align-items: flex-end; }              /* 两枚圆钮沉到底边 */
+.voice-dock--expanded .voice-dock__slot { align-self: flex-start; }  /* 文字压顶 */
+```
+
+88 高的面上把控件继续垂直居中，它们会浮在一片已经被文字让开的空白中间，整张卡看着像一颗没填满的胶囊。**上半是发生了什么，下半是你能做什么。**
+
+钮保持正圆，不跟着变成圆角矩形：控件跟着容器变形，就不再是同一个控件了——用户认的是那两个圆。角落里放得下：卡片圆角 24，钮心距角弧心 √2，20 + 1.41 < 24，圆完整落在弧内。
+
+### 7.4.3 麦克风图标只给麦克风的问题
+
+`Notice` 加 `icon?: string`，`classifyFailure` 只在三条设备/权限分支上挂 `i-carbon-microphone-off`（`microphoneDenied` / `microphoneMissing` / 首帧超时的 `microphoneUnresponsive`）。
+
+额度、拥塞、兜底**都不给**。一个划了杠的麦克风画在「额度用完了」旁边，指的是错的元凶——图标比句子先被读到，指错了就是先骗一次。
+
+宽度测量跟着加 `NOTICE_ICON_WIDTH = 26`（图标 + gap），否则带图标的那一档会按没图标的宽度算，正好挤掉最后一个字。

@@ -847,10 +847,10 @@ describe('VoicePanel device readiness and long messages', () => {
     await flushPromises()
 
     const style = wrapper.find('.voice-dock').attributes('style') ?? ''
-    expect(style).toContain('height: 76px')
+    expect(style).toContain('height: 88px')
     // Width goes to the cap first; only then does the island grow.
     expect(style).toContain('width: 340px')
-    // And it stops being a pill: a pill's radius is half its height, so at 76 the ends would
+    // And it stops being a pill: a pill's radius is half its height, so at 88 the ends would
     // swallow the room the second line needs. One line is a pill, two lines is a card.
     expect(style).toContain('border-radius: 24px')
     expect(wrapper.find('.voice-dock--expanded').exists()).toBe(true)
@@ -861,10 +861,46 @@ describe('VoicePanel device readiness and long messages', () => {
       expect(control).toContain('width: 40px')
       expect(control).toContain('height: 40px')
     }
+    // A microphone with a line through it names the culprit before the sentence is read.
+    expect(wrapper.find('[data-testid="voice-notice-icon"]').classes()).toContain(
+      'i-carbon-microphone-off'
+    )
 
     widthSpy.mockRestore()
     clientSpy.mockRestore()
     wrapper.unmount()
+  })
+
+  /**
+   * The icon is not decoration for "something went wrong" — it is a picture of the microphone.
+   * Handing it to every failure would put a microphone next to "out of credit", naming a
+   * culprit that is not the one.
+   */
+  it('draws the microphone icon only when the microphone is the problem', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('QUOTA_EXCEEDED'))
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe(
+      'AI credits are used up — check Settings'
+    )
+    expect(wrapper.find('[data-testid="voice-notice-icon"]').exists()).toBe(false)
+    wrapper.unmount()
+
+    // Nor does the fallback, which is where an unrecognised failure lands: we do not know that
+    // the microphone had anything to do with it, so we do not draw one.
+    const unclassified = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('E_SOMETHING_ELSE'))
+    await flushPromises()
+    await flushPromises()
+
+    expect(unclassified.find('[data-testid="voice-notice"]').text()).toBe(
+      'Voice transcription failed'
+    )
+    expect(unclassified.find('[data-testid="voice-notice-icon"]').exists()).toBe(false)
+
+    unclassified.unmount()
   })
 
   it('stays one line high when the message fits', async () => {
