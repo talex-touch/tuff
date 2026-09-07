@@ -60,17 +60,34 @@ JWT 过期判定留在插件侧：共享分类器只回答「是不是密钥、�
 
 ---
 
-## M3 详情显示预计删除时间 — 未开始
+## M3 详情显示预计删除时间 — 已完成 `99f372f45`
 
-- [ ] `getHistory` 每条记录带回 `expiresAt` / `retentionReason`，计算顺序：收藏 → protected → per-item → category
-- [ ] 计算逻辑与清理侧共用同一个函数，否则界面会承诺一个不会发生的删除
-- [ ] 插件「更多信息」加一行：`N 天后（YYYY-MM-DD HH:mm:ss）`；永不删除的显示原因
+- [x] `packages/utils/clipboard/retention-forecast.ts`：清理条件的逆运算，收藏 → 受保护 → 两个到期时刻取更早
+- [x] `ClipboardItem` / `PluginClipboardItem` 带回 `retentionExpiresAt` / `retentionReason`
+- [x] 主进程算好下发；策略读一次缓存，不是每条记录读一次
+- [x] 插件「更多信息」增加「自动删除」一行：`2 天后（2026/09/08 20:31:00）`
 
-## M4 设置可配置 — 未开始
+**把预测和清理绑在一起的那条测试**：它照 SQL 逐字重实现清理判定，然后断言「预测说已到期」恰好等价于「清理侧现在会删」，跨收藏 / 受保护 / 已过期码 / 未过期码四种行。把 `Math.min` 改成 `Math.max` 会点名 `expired-code disagrees` 而红。界面承诺一个不会发生的删除比不显示更糟——用户据此决定要不要收藏它。
 
-- [ ] 隐私设置页把 clipboard-history 拆成三档（密钥 / 验证码 / 普通）
-- [ ] 自定义密钥前缀输入（`customKeyPrefixes`）
-- [ ] 验证码时长目前是采集侧和 stage-B 两处的常量，M4 要把它们一起接到策略上
+其余细节：过期但还在库里的记录显示「已过期，待清理」而不是「0 天后」（清理是周期跑的，不是到点就删）。
+
+---
+
+## M4 设置可配置 — 未开始，且需要一次放置决策
+
+design.md 原本写的是「把 clipboard-history 拆成三档（密钥 / 验证码 / 普通）各自可选 preset」。实做前核对了爆炸半径，**这条设计我现在认为是错的**：
+
+`PRIVACY_RETENTION_CATEGORIES` 同时也是 `PRIVACY_DATA_CATEGORIES`，每个类别要有自己的 data owner（inspect / export / preview / delete）、i18n、注册表条目和已存策略的迁移。而「剪贴板里的验证码」不是一个独立数据域——它和普通剪贴板记录同表同 owner，删除路径完全一样。为了三个下拉框造两个假数据域，代价和语义都不对。
+
+**待定的三个选项：**
+
+| 方案 | 放哪 | 代价 |
+|---|---|---|
+| A 拆成三个 privacy 类别 | 隐私设置页现有列表 | 要造两个假 data owner + 策略 schema 迁移 |
+| B 剪贴板设置单开一块 | 剪贴板设置页 | 隐私页仍只有一个 clipboard-history 类别，两处设置分家 |
+| C 隐私页 clipboard-history 那行下挂子块 | 隐私设置页 | 设置集中，但要给现有列表加一层嵌套渲染 |
+
+三项待配置内容一致：验证码保留时长（现为采集侧与 stage-B 两处常量）、密钥是否永不删除、自定义密钥前缀（`customKeyPrefixes`，分类器已经接受这个入参，只差喂给它）。
 
 ---
 

@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "blocker": null,
-    "evidence": "M1+M2 完成。core-app clipboard/privacy/database 308 测试、utils 34、插件 121 全绿；retention_protected、DUE_CLAUSE、stage-B 过期写入三处各跑过负控制并确认会红。",
-    "nextAction": "M3：getHistory 带回 expiresAt/retentionReason（与清理侧共用同一函数），插件「更多信息」显示「N 天后（绝对时间）」。之后 M4 设置页三档配置 + 自定义前缀 + 把验证码时长常量接到策略。"
+    "blocker": "M4 需要一次放置决策：design.md 原写的「拆成三个 privacy 类别」经核对爆炸半径后判定为错误设计，三个备选见 implement.md。",
+    "evidence": "M1-M3 完成。插件 128 / utils 40 / core-app clipboard+privacy 291 全绿；retention_protected、DUE_CLAUSE、stage-B 过期写入、预测取 min 四处各跑过负控制并确认会红。",
+    "nextAction": "用户在 A/B/C 三个放置方案里选定后实现 M4：验证码时长（现为两处常量）、密钥永不删开关、自定义密钥前缀。"
   }
 }
