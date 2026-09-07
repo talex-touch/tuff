@@ -15,6 +15,7 @@ import { withPermission } from '../permission/channel-guard'
 import { BaseModule } from '../abstract-base-module'
 import { globalDictationController } from './global-dictation'
 import { voiceService } from './voice-service'
+import { voiceInsightsStore } from './voice-insights-store'
 import { assistantModule } from '../assistant/module'
 import { CommandVoiceGestureController, registerPlatformVoiceGesture } from './command-gesture'
 
@@ -131,6 +132,19 @@ export class VoiceModule extends BaseModule<TalexEvents> {
       )
     )
 
+    // The HUD's undo/retry notice has left the screen, so the audio it could have spent has
+    // nothing left pointing at it.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.discardRecovery,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          () => voiceService.discardRecovery(),
+          { onError: (error) => voiceLog.error('Voice discard recovery failed:', { error }) }
+        )
+      )
+    )
+
     // Does a cancelled or failed recording still exist? Lets the dock offer recovery after
     // the pill has already collapsed, which is the only thing that makes the window reachable.
     this.cleanups.push(
@@ -152,6 +166,34 @@ export class VoiceModule extends BaseModule<TalexEvents> {
           { permissionId: VOICE_PERMISSION },
           (payload) => voiceService.retryLastFailure(payload),
           { onError: (error) => voiceLog.error('Voice retry failed:', { error }) }
+        )
+      )
+    )
+
+    // Aggregate-only insights and deletion are host-renderer-only; plugins never receive these handlers.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.getInsights,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          (_payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_INSIGHTS_HOST_ONLY')
+            return voiceInsightsStore.getInsights()
+          },
+          { onError: (error) => voiceLog.error('Voice insights read failed:', { error }) }
+        )
+      )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.clearInsights,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async (_payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_INSIGHTS_HOST_ONLY')
+            await voiceInsightsStore.clearInsights()
+          },
+          { onError: (error) => voiceLog.error('Voice insights clear failed:', { error }) }
         )
       )
     )

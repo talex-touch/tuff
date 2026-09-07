@@ -128,6 +128,13 @@ let disposePanelOpenMock: Mock
 let recoveryStatusResult: { available: boolean; kind?: string; expiresInMs?: number }
 let retryResult: { text: string; expired?: boolean }
 
+/** How many times the panel told main the held recording is no longer reachable. */
+function discardCalls(): number {
+  return transportSendMock.mock.calls.filter(
+    ([event]) => eventName(event) === voiceApiEvents.discardRecovery.toEventName()
+  ).length
+}
+
 function eventName(event: unknown): string {
   if (
     !event ||
@@ -687,27 +694,51 @@ describe('VoicePanel recovery and pacing', () => {
     wrapper.unmount()
   })
 
-  // The affordance that makes the retention window reachable once the pill has collapsed.
-  it('offers to recover a recording left behind by an earlier session', async () => {
-    recoveryStatusResult = { available: true, kind: 'cancelled', expiresInMs: 20_000 }
+  /**
+   * The held audio is justified by there being a button to press. When that button leaves the
+   * screen the justification is gone, so main is told rather than left to time it out — ten
+   * megabytes of what the user just said is not something to keep for nobody.
+   */
+  it('drops the held recording when its undo button leaves the screen', async () => {
     const wrapper = await mountVoicePanel()
-
-    await exposed(wrapper).openPanel()
+    exposed(wrapper).startVoiceInput()
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="voice-notice"]').text()).toContain('cancelled a recording')
-    expect(wrapper.find('[data-testid="voice-recover"]').attributes('aria-label')).toBe('Undo')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    vi.advanceTimersByTime(700)
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
+    expect(discardCalls()).toBe(0)
+
+    // The action window closes and the panel reports itself finished; the dock takes the pill
+    // off screen, so whatever it was offering stops being reachable.
+    vi.advanceTimersByTime(6600)
+    await flushPromises()
+
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+    expect(discardCalls()).toBe(1)
 
     wrapper.unmount()
   })
 
-  it('stays quiet when nothing is recoverable', async () => {
+  it('does not drop the recording the user just asked to reuse', async () => {
     const wrapper = await mountVoicePanel()
-
-    await exposed(wrapper).openPanel()
+    exposed(wrapper).startVoiceInput()
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    vi.advanceTimersByTime(700)
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
+    await nextTick()
+
+    await wrapper.find('[data-testid="voice-recover"]').trigger('click')
+    await flushPromises()
+
+    // Clearing the notice to show the recovering state looks exactly like the offer expiring.
+    // Discarding there would delete the audio the retry is in the middle of using.
+    expect(discardCalls()).toBe(0)
 
     wrapper.unmount()
   })

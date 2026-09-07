@@ -2,7 +2,7 @@
 import type { AssistantVoiceCommandPayload } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import FloatingBall from './FloatingBall.vue'
 import VoicePanel from './VoicePanel.vue'
 
@@ -16,36 +16,122 @@ const transport = useTuffTransport()
 const expanded = ref(false)
 const panel = ref<VoicePanelHandle | null>(null)
 
+let dockGeneration = 0
+let voiceStartIssued = false
+let panelReady: Promise<void> | null = null
+let pendingStop = false
 let disposePanelOpened: (() => void) | null = null
 let disposePanelClosed: (() => void) | null = null
 let disposeCommand: (() => void) | null = null
 
+/**
+ * Resolve once VoicePanel actually exists.
+ *
+ * `<Transition mode="out-in">` keeps the panel unmounted until the ball's leave transition has
+ * finished, so the template ref is still null a tick after `expanded` flips. Reading it there
+ * and calling through `?.` is how the dock ends up on screen with an empty pill and no session:
+ * the open and the start were both issued to nobody, silently. Resolves null if the dock
+ * collapses while we are still waiting — there is nothing left to start by then.
+ */
+function whenPanelReady(): Promise<VoicePanelHandle | null> {
+  if (panel.value || !expanded.value) return Promise.resolve(panel.value)
+  return new Promise((resolve) => {
+    const stop = watch([panel, expanded], () => {
+      if (!panel.value && expanded.value) return
+      stop()
+      resolve(panel.value)
+    })
+  })
+}
+
+function startVoiceInputOnce(): void {
+  const voicePanel = panel.value
+  if (!expanded.value || !voicePanel || voiceStartIssued || pendingStop) return
+  voiceStartIssued = true
+  voicePanel.startVoiceInput()
+}
+
 async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
+  if (expanded.value && (panel.value || panelReady)) return
+  const generation = ++dockGeneration
   expanded.value = true
-  await nextTick()
-  await panel.value?.openPanel(payload?.source)
+  voiceStartIssued = false
+
+  const opening = (async (): Promise<void> => {
+    const voicePanel = await whenPanelReady()
+    if (generation !== dockGeneration || !expanded.value) return
+    await voicePanel?.openPanel(payload?.source)
+  })()
+  panelReady = opening
+  try {
+    await opening
+  } finally {
+    if (panelReady === opening) panelReady = null
+  }
+
+  // VoiceDock is a recording HUD, not a second confirmation screen: every open action starts
+  // the shared session once the panel has reset its state. A repeated command notification is
+  // harmless because the start gate below is idempotent.
+  if (generation !== dockGeneration || !expanded.value) return
+  if (pendingStop) {
+    pendingStop = false
+    handlePanelFinished(generation)
+    return
+  }
+  startVoiceInputOnce()
 }
 
 // No intermediate spinner: the panel owns the whole session now, including the wait for the
 // transcript, which it shows as the thinking orb inside the pill.
-function handlePanelFinished(): void {
+function handlePanelFinished(generation?: number): void {
+  if (generation !== undefined && generation !== dockGeneration) return
+  dockGeneration += 1
   expanded.value = false
+  panel.value = null
+  voiceStartIssued = false
+  pendingStop = false
+  panelReady = null
   void transport.send(AssistantEvents.voice.closePanel, undefined)
 }
 
 function handlePanelClosed(): void {
+  dockGeneration += 1
   expanded.value = false
+  panel.value = null
+  voiceStartIssued = false
+  pendingStop = false
+  panelReady = null
 }
 
 async function handleCommand(payload: AssistantVoiceCommandPayload): Promise<void> {
+  const generation = dockGeneration
   if (payload.action === 'stop') {
-    if (expanded.value) panel.value?.stopVoiceInput()
+    pendingStop = true
+    const ready = panelReady
+    if (ready) await ready
+    if (generation !== dockGeneration) return
+    if (!expanded.value) {
+      pendingStop = false
+      return
+    }
+    pendingStop = false
+    if (voiceStartIssued) {
+      panel.value?.stopVoiceInput()
+    } else {
+      handlePanelFinished()
+    }
     return
   }
 
-  expanded.value = true
-  await nextTick()
-  panel.value?.startVoiceInput()
+  pendingStop = false
+  if (!expanded.value) {
+    await handlePanelOpened({ source: payload.source })
+    return
+  }
+  const ready = panelReady
+  if (ready) await ready
+  if (generation !== dockGeneration || !expanded.value) return
+  startVoiceInputOnce()
 }
 
 onMounted(() => {
@@ -61,6 +147,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  dockGeneration += 1
   disposePanelOpened?.()
   disposePanelOpened = null
   disposePanelClosed?.()
@@ -75,9 +162,10 @@ onBeforeUnmount(() => {
     <Transition name="voice-dock-surface" mode="out-in">
       <VoicePanel
         v-if="expanded"
-        key="panel"
+        :key="dockGeneration"
         ref="panel"
         managed-by-dock
+        :generation="dockGeneration"
         @finished="handlePanelFinished"
       />
       <FloatingBall v-else key="floating-ball" />
@@ -112,21 +200,26 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 
+/*
+ * The surface grows out of its own footprint and collapses back into it.
+ *
+ * It used to drift up on the way out at `scale(0.98)`, which is small enough to be invisible:
+ * the pill looked like it was fading at full size rather than closing. Both ends now scale from
+ * the bottom edge — where the ball sits and where the surface is anchored — so the box reads as
+ * shrinking to nothing instead of sliding somewhere.
+ */
 .voice-dock-surface-enter-active,
 .voice-dock-surface-leave-active {
+  transform-origin: bottom center;
   transition:
-    opacity 180ms ease-out,
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 170ms ease-out,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.voice-dock-surface-enter-from {
-  opacity: 0;
-  transform: translateY(8px) scale(0.94);
-}
-
+.voice-dock-surface-enter-from,
 .voice-dock-surface-leave-to {
   opacity: 0;
-  transform: translateY(-8px) scale(0.98);
+  transform: scale(0.8);
 }
 
 @media (prefers-reduced-motion: reduce) {
