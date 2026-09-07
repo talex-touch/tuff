@@ -24,7 +24,7 @@
   "notes": "",
   "meta": {
     "blocker": null,
-    "evidence": "M1 共享分类器：utils 34 / core-app clipboard+privacy 288 / 插件 121 全绿；新旧 tag 差异 9 处逐条解释并钉成回归表。M2 的 retention_protected 有负控制测试（去掉写入即红）。",
-    "nextAction": "M2 余下：1-hour preset、retention_expires_at 列与幂等迁移、验证码写过期时间、清理侧过期扫描、stage-B 在 sourceApp 就绪后重跑分类。之后 M3（详情显示预计删除时间）与 M4（设置页）。"
+    "evidence": "M1+M2 完成。core-app clipboard/privacy/database 308 测试、utils 34、插件 121 全绿；retention_protected、DUE_CLAUSE、stage-B 过期写入三处各跑过负控制并确认会红。",
+    "nextAction": "M3：getHistory 带回 expiresAt/retentionReason（与清理侧共用同一函数），插件「更多信息」显示「N 天后（绝对时间）」。之后 M4 设置页三档配置 + 自定义前缀 + 把验证码时长常量接到策略。"
   }
 }

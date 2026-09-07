@@ -39,21 +39,38 @@ JWT 过期判定留在插件侧：共享分类器只回答「是不是密钥、�
 
 ---
 
-## M2 保留策略落地 — 部分完成
+## M2 保留策略落地 — 已完成
 
-- [x] 采集时按 `retentionClass` 写 `retention_protected`（`afc5c36f4`）。清理侧无需改动，所以配了负控制测试证明它真的生效。
-- [ ] `PRIVACY_RETENTION_PRESETS` 与 `PERIOD_MS` 加 `1-hour`
-- [ ] schema 加 `retention_expires_at` + 幂等迁移
-- [ ] 验证码写 per-item 过期时间
-- [ ] `clipboard-retention-owner` 增加过期扫描
-- [ ] stage-B 在 `sourceApp` 解析出来后重跑分类
+- [x] 采集时按 `retentionClass` 写 `retention_protected`（`afc5c36f4`）
+- [x] `1-hour` 预设（`7888a1644`）
+- [x] `retention_expires_at` 列 + 幂等迁移 + 部分索引
+- [x] 验证码写 per-item 过期时间
+- [x] `clipboard-retention-owner` 的到期扫描（预览 / 受保护计数 / 分页 / DELETE 共用一个 `DUE_CLAUSE`）
+- [x] stage-B 在 `sourceApp` 解析出来后重跑分类（`9334104cc`）
 
-**发现的时序约束**：`sourceApp` 要到 stage-B 才解析，采集时拿不到。所以验证码的第三条判据（来自短信/邮件应用的裸数字）在采集阶段不可能命中，必须在 stage-B 补一次分类。这一条设计时没预见到。
+**过程中修掉的三个问题：**
+
+1. `PRIVACY_RETENTION_PRESETS` 在 `privacy-lifecycle-service.ts` 里有第二张手抄表。加一档要改两处、忘了没有任何检查会说话——已改成引用共享常量。
+2. 到期判定第一版读 `Date.now()`。这套 owner 整个设计成从请求取 `nowMs` 才可确定性测试，测试立刻抓到：请求时钟固定在五周前，墙上时钟让一条未到期的记录变成已到期。`nowMs` 现在随 scope 传递。
+3. 到期条件曾要在四处各写一遍（预览、受保护计数、分页扫描、DELETE）。抽成 `DUE_CLAUSE` 常量——四处不一致的话，预览说要删 N 条、实际删掉另一批。
+
+**负控制都跑过**：去掉 `retention_protected` 写入、把 `DUE_CLAUSE` 改成恒假、去掉 stage-B 的过期写入，对应测试分别变红。
+
+**已知缺口**：历史数据不回填。库里已有的密钥仍会在 90 天后被删。
 
 ---
 
 ## M3 详情显示预计删除时间 — 未开始
+
+- [ ] `getHistory` 每条记录带回 `expiresAt` / `retentionReason`，计算顺序：收藏 → protected → per-item → category
+- [ ] 计算逻辑与清理侧共用同一个函数，否则界面会承诺一个不会发生的删除
+- [ ] 插件「更多信息」加一行：`N 天后（YYYY-MM-DD HH:mm:ss）`；永不删除的显示原因
+
 ## M4 设置可配置 — 未开始
+
+- [ ] 隐私设置页把 clipboard-history 拆成三档（密钥 / 验证码 / 普通）
+- [ ] 自定义密钥前缀输入（`customKeyPrefixes`）
+- [ ] 验证码时长目前是采集侧和 stage-B 两处的常量，M4 要把它们一起接到策略上
 
 ---
 
