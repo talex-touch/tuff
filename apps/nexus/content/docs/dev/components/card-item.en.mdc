@@ -71,6 +71,8 @@ code: |
 
 ## Interaction Contract
 
+- `align="center"` puts the row's columns on one centre line, which is what a single-line list row wants: a taller leading column — a caret, a checkbox, an avatar — otherwise pins the label to the top of the row. The default stays `start`, because a card whose text wraps to several lines should align with the top of its media column.
+
 - The left media column is omitted when there is no `avatar` slot, `avatarUrl`, `iconClass`, or `avatarText`.
 - Generated avatar priority is `avatarUrl` first, then `iconClass`, then `avatarText`.
 - `tabindex="0"` is applied only when `clickable=true` and `disabled=false`.

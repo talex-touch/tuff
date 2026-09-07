@@ -71,6 +71,8 @@ code: |
 
 ## 交互契约
 
+- `align="center"` 让行内各列对齐到同一条中线，这正是单行列表项需要的：左侧更高的一列（折叠箭头、复选框、头像）否则会把文字顶到行的上边。默认仍是 `start`，因为多行文字的卡片应当与媒体列顶部对齐。
+
 - 未提供 `avatar` 插槽、`avatarUrl`、`iconClass`、`avatarText` 时，左侧媒体列会被省略。
 - 生成头像优先级为 `avatarUrl`、`iconClass`、`avatarText`。
 - 只有 `clickable=true` 且 `disabled=false` 时才会应用 `tabindex="0"`。

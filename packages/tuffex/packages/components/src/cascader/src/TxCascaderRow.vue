@@ -35,6 +35,7 @@ const ctx = inject(CASCADER_CONTEXT)!
 <template>
   <TxCardItem
     class="tx-cascader__item"
+    align="center"
     :class="{ 'is-disabled': node.disabled, 'is-active': active, 'is-checked': checked }"
     role="option"
     :tabindex="-1"

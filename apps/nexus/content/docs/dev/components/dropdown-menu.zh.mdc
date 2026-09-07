@@ -246,6 +246,8 @@ code: |
 
 ## 交互契约
 
+- 菜单行与库中其它列表行使用同一套描边式悬停与选中样式。此前它单独用了一层半透明遮罩，但菜单的高亮方式与选择器、树、级联不一致，反而更让人困惑。
+
 - `TxDropdownMenu` 只承载短操作列表；包含说明、表单或复杂状态时改用 `TxPopover` / `TxDrawer`。
 - `TxDropdownMenu` 包装 `TxPopover`，因此 `placement`、`offset`、高度限制、panel card props 和动画都遵循同一套锚点行为。
 - `closeOnSelect` 默认会在可用菜单项触发 `select` 后关闭父菜单，禁用项不会触发选择或关闭。
