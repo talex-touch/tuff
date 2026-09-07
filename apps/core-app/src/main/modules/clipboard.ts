@@ -60,6 +60,7 @@ import {
   resolveClipboardClassificationSettings,
   type ClipboardClassificationSettings
 } from './clipboard/clipboard-classification-settings'
+import { backfillClipboardRetentionProtection } from './clipboard/clipboard-retention-backfill'
 import {
   normalizeClipboardWritePayload,
   type ClipboardHistoryQueryInput
@@ -1495,6 +1496,11 @@ export class ClipboardModule extends BaseModule {
     })
     ocrService.registerClipboardMetaListener(this.handleMetaPatch)
     void this.refreshRetentionPolicy()
+    setImmediate(() => {
+      void this.waitForAppTasksBeforeStartupWork('clipboard-retention-backfill')
+        .then(() => this.runRetentionBackfill())
+        .catch((error) => clipboardLog.warn('Clipboard retention backfill failed', { error }))
+    })
   }
 
   /**
@@ -1504,6 +1510,30 @@ export class ClipboardModule extends BaseModule {
    * 而策略读取是异步的存储访问。策略变更时重新读一次即可——用户改设置到界面刷新之间
    * 有一瞬间的旧值，代价远小于把一次分页查询变成 50 次存储读。
    */
+  /**
+   * 给启用保留策略之前采集的记录补上密钥保护。
+   *
+   * `retention_protected` 从本次工作才开始写，所以库里已有的 API key、私钥、连接串
+   * 仍按普通文本的类别策略走——默认 90 天后被清掉。延迟到应用任务排空之后跑，
+   * 分批并在批间让出事件循环：这是一次全表扫描，不能挂在启动路径上。
+   */
+  private async runRetentionBackfill(): Promise<void> {
+    if (!this.db) return
+    const result = await backfillClipboardRetentionProtection({
+      db: this.db,
+      getClassificationSettings: () => this.readClassificationSettings(),
+      yieldBetweenBatches: () =>
+        new Promise<void>((resolve) => {
+          setImmediate(resolve)
+        }),
+      logInfo: (message, data) => clipboardLog.info(message, data),
+      logWarn: (message, data) => clipboardLog.warn(message, data)
+    })
+    if (!result.skipped) {
+      clipboardLog.info('Clipboard retention backfill pass finished', { meta: { ...result } })
+    }
+  }
+
   /** 读用户设置里的剪贴板分类块。这里是唯一碰 storage 的地方，采集与 stage-B 只拿结果。 */
   private readClassificationSettings(): ClipboardClassificationSettings {
     try {
