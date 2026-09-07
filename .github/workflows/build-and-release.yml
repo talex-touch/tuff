@@ -230,16 +230,7 @@ jobs:
               echo "tag="
               echo "version="
             fi
-            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
-            echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          else
-            # 手动触发：只设置构建类型，不处理版本和标签
-            {
-              echo "type=$RELEASE_TYPE"
-              echo "tag="
-              echo "version="
-            } >> "$GITHUB_OUTPUT"
-          fi
+          } >> "$GITHUB_OUTPUT"
         env:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
@@ -1317,63 +1308,7 @@ jobs:
                 echo "prerelease=false"
               fi
             fi
-            {
-              echo "tag=$SYNC_TAG"
-              echo "name=Release $SYNC_TAG"
-              echo "target_ref=$SYNC_TAG"
-            } >> "$GITHUB_OUTPUT"
-            if [[ "$REF_NAME_LOWER" == *"beta"* || "$REF_NAME_LOWER" == *"snapshot"* ]]; then
-              echo "prerelease=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "prerelease=false" >> "$GITHUB_OUTPUT"
-            fi
-          elif [ "$EVENT_NAME" = "push" ]; then
-            # 标签触发：使用标签信息创建 release
-            REF_NAME_LOWER=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]')
-            {
-              echo "type=release"
-              echo "tag=$REF_NAME"
-              echo "name=Release $REF_NAME"
-              echo "target_ref=$TARGET_SHA"
-            } >> "$GITHUB_OUTPUT"
-            if [[ "$REF_NAME_LOWER" == *"beta"* || "$REF_NAME_LOWER" == *"snapshot"* ]]; then
-              echo "prerelease=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "prerelease=false" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            # 手动触发：创建 draft release，使用时间戳作为临时标签
-            # 标签会被 release action 自动创建，但因为是 draft，不会正式发布
-            #
-            # The tag has to be semver-shaped. The next step feeds it to
-            # resolve-update-rollback-version.mjs, which calls inferManifestChannel and throws on
-            # anything that is not MAJOR.MINOR.PATCH[-label.x] -- manual-build-<timestamp> is not,
-            # so every manual run died after the full three-platform build (#727).
-            #
-            # The label picks the channel, and only these work: snapshot/beta/alpha map to BETA,
-            # master maps to RELEASE; manual, release and rc all return null. The base version is
-            # used rather than the package version because inferManifestChannel reads the *first*
-            # prerelease identifier -- appending to 2.4.14-beta.2 keeps resolving to BETA even for
-            # a release-type build.
-            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-            BASE_VERSION=$(node -p "require('./package.json').version.split('-')[0]")
-            case "$RELEASE_TYPE" in
-              snapshot) CHANNEL_LABEL=snapshot ;;
-              beta) CHANNEL_LABEL=beta ;;
-              *) CHANNEL_LABEL=master ;;
-            esac
-            {
-              echo "type=$RELEASE_TYPE"
-              echo "tag=v${BASE_VERSION}-${CHANNEL_LABEL}.${TIMESTAMP}"
-              echo "name=Manual Build ($RELEASE_TYPE) - $TIMESTAMP"
-              echo "target_ref=$TARGET_SHA"
-            } >> "$GITHUB_OUTPUT"
-            if [ "$RELEASE_TYPE" = "snapshot" ] || [ "$RELEASE_TYPE" = "beta" ]; then
-              echo "prerelease=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "prerelease=false" >> "$GITHUB_OUTPUT"
-            fi
-          fi
+          } >> "$GITHUB_OUTPUT"
 
         env:
           EVENT_NAME: ${{ github.event_name }}
