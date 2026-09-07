@@ -198,7 +198,7 @@ function handleSourceIconError(event: Event): void {
               </span>
             </div>
 
-            <div v-if="palette.length > 0" class="palette-strip">
+            <div v-if="palette.length > 0" class="palette-rail" title="主题色 · 点击复制">
               <button
                 v-for="color in palette"
                 :key="color"
@@ -209,9 +209,6 @@ function handleSourceIconError(event: Event): void {
                 @click="emit('copyText', color)"
               />
             </div>
-            <p v-if="palette.length > 0" class="palette-caption">
-              主题色 · 点击复制
-            </p>
           </div>
         </div>
       </template>
@@ -358,8 +355,16 @@ function handleSourceIconError(event: Event): void {
   background: var(--clipboard-surface-strong);
 }
 
+/**
+ * 图片预览区用确定高度而不是 max-height：色带和图片要靠百分比互相约束，
+ * 而百分比高度只在父级高度确定时才成立。auto + max-height 会退化成内容高度，
+ * 于是图片按原始尺寸撑开、把色带顶出可视区——那正是这里出现滚动条的原因。
+ */
 .preview-surface[data-kind='image'] {
+  height: 45%;
   min-height: 200px;
+  display: flex;
+  overflow: hidden;
 }
 
 .preview-surface[data-kind='files'] {
@@ -374,17 +379,19 @@ function handleSourceIconError(event: Event): void {
 
 .image-container {
   position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 220px;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .preview-img {
-  width: 100%;
-  max-height: min(50vh, 520px);
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
   border-radius: 6px;
   background: color-mix(in srgb, var(--clipboard-surface-base) 92%, transparent);
@@ -396,21 +403,28 @@ function handleSourceIconError(event: Event): void {
 
 .image-block {
   min-width: 0;
-  display: grid;
-  gap: 6px;
-  justify-items: stretch;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
 }
 
 .image-frame {
   position: relative;
   min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
   display: flex;
+  align-items: center;
   justify-content: center;
 }
 
-.palette-strip {
+/** 色带竖排贴在图片右侧：垂直空间是这一区最稀缺的资源，横排会把自己挤出可视区。 */
+.palette-rail {
+  flex: 0 0 16px;
   display: flex;
-  height: 16px;
+  flex-direction: column;
   overflow: hidden;
   border-radius: 5px;
   border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 70%, transparent);
@@ -419,15 +433,10 @@ function handleSourceIconError(event: Event): void {
 .palette-swatch {
   flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
   border: 0;
   padding: 0;
   cursor: pointer;
-}
-
-.palette-caption {
-  margin: 0;
-  color: var(--clipboard-text-muted);
-  font-size: 0.66rem;
 }
 
 .color-canvas {
