@@ -1065,6 +1065,13 @@
     "modelAuto": "Auto",
     "modelLoading": "Loading available models…",
     "modelEmpty": "No models available — configure an AI provider or install the pi CLI",
+    "modelSearch": "Search models…",
+    "modelFavorites": "Favorites",
+    "modelFavoritesEmpty": "No favorites yet — star a model to keep it here",
+    "modelNoResults": "No models match",
+    "modelFavorite": "Add to favorites",
+    "modelUnfavorite": "Remove from favorites",
+    "modelSources": "Filter by provider",
     "configureProvider": "Configure",
     "panel": {
       "title": "Conversation info",
@@ -2416,6 +2423,24 @@
       "presentation": "Presentation",
       "ebook": "E-book",
       "other": "Other"
+    },
+    "sections": {
+      "habitual": "Right now",
+      "proposed": "Recent picks"
+    },
+    "recommendation": {
+      "badge": {
+        "frequent": "Frequent",
+        "timeBased": "Suggested",
+        "recent": "Recent",
+        "trending": "Trending",
+        "context": "Smart match",
+        "plugin": "Plugin",
+        "newlyInstalled": "Just installed",
+        "pinned": "Pinned",
+        "suggested": "Suggested",
+        "newlyAdded": "New file"
+      }
     }
   },
   "appConfigure": {
@@ -5063,7 +5088,15 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+      "weekdays": [
+        "Sun",
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat"
+      ]
     },
     "memoryReview": {
       "title": "Memory Review",

@@ -14,7 +14,7 @@ import {
 } from '../../../../../../shared/events/corebox-scenes'
 import { createCoreBoxKeyTransport } from '../transport/key-transport'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
-import { resolveBoxGridColumnCount } from '~/components/render/box-grid-layout'
+import { resolveVisibleBoxGridColumnCount } from '~/components/render/box-grid-layout'
 import { publishWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -61,12 +61,24 @@ function buildSectionRanges(sections: TuffSection[], fallbackColumns: number): S
         start,
         end: start + count - 1,
         count,
-        columns: resolveBoxGridColumnCount(section, count, fallbackColumns)
+        columns: resolveVisibleBoxGridColumnCount(section, count, fallbackColumns)
       })
       start += count
     }
   }
   return ranges
+}
+
+/**
+ * The columns BoxGrid is actually showing: what fit at the tile minimum (it wraps the rest onto
+ * another row), never more than the layout declared. Undefined until BoxGrid has measured.
+ */
+function resolveVisibleGridColumns(
+  boxOptions: Pick<IBoxOptions, 'layout' | 'visibleGridColumns'>
+): number {
+  const declared = boxOptions.layout?.grid?.columns || 5
+  const visible = boxOptions.visibleGridColumns
+  return visible ? Math.max(1, Math.min(visible, declared)) : declared
 }
 
 /** Find which section a global index belongs to */
@@ -857,7 +869,7 @@ export function useKeyboard(
       handleExecute(target)
     } else if (event.key === 'ArrowDown') {
       const isGrid = boxOptions.layout?.mode === 'grid'
-      const cols = boxOptions.layout?.grid?.columns || 5
+      const cols = resolveVisibleGridColumns(boxOptions)
       const sections = boxOptions.layout?.sections
 
       if (isGrid && sections && sections.length > 0) {
@@ -877,7 +889,7 @@ export function useKeyboard(
       event.preventDefault()
     } else if (event.key === 'ArrowUp') {
       const isGrid = boxOptions.layout?.mode === 'grid'
-      const cols = boxOptions.layout?.grid?.columns || 5
+      const cols = resolveVisibleGridColumns(boxOptions)
       const sections = boxOptions.layout?.sections
 
       if (isGrid && sections && sections.length > 0) {
@@ -1025,6 +1037,15 @@ export function useKeyboard(
       boxOptions.focus = res.value.length - 1
     }
 
+    scrollActiveItemIntoView()
+  }
+
+  /**
+   * Bring the focused row or tile into the scroll viewport, above the sticky footer. Runs after
+   * every handled key, and CoreBox calls it again when the grid re-wraps: the preview pane
+   * squeezing the row can push the item just selected below the fold after the key was handled.
+   */
+  function scrollActiveItemIntoView(): void {
     requestAnimationFrame(() => {
       if (boxOptions.focus < 0 || boxOptions.focus >= itemRefs.value.length) {
         return
@@ -1084,4 +1105,6 @@ export function useKeyboard(
   onBeforeUnmount(() => {
     document.removeEventListener('keydown', onKeyDown, true)
   })
+
+  return { scrollActiveItemIntoView }
 }

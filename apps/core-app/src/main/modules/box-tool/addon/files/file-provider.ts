@@ -102,6 +102,7 @@ import { FileScanWorkerClient, type FileScanRunStats } from './workers/file-scan
 import { EmbeddingService } from './embedding-service'
 import { iconService } from '../../../../service/icon-service'
 import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
+import { registerFileAssetBridge, type IndexedFileAssets } from './file-asset-bridge'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import {
   IndexedWriteDeleteExecutorService,
@@ -434,6 +435,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly reconcileWorker = new FileReconcileWorkerClient()
   private readonly fileIndexWorker: FileIndexWorkerClient
   private readonly thumbnailWorker = new ThumbnailWorkerClient()
+  private disposeAssetBridge: (() => void) | null = null
 
   private filePersistencePort: FilePersistencePort | null = null
   private filePersistenceReady: Promise<boolean> | null = null
@@ -663,6 +665,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       thumbnailWorker: this.thumbnailWorker,
       enableIconExtraction: this.enableFileIconExtraction,
       iconWriteMaxQueue: FILE_ICON_WRITE_MAX_QUEUE
+    })
+    // Spotlight, Everything and the recommendation engine render file rows this provider did not
+    // hand them; through the bridge they get the index's thumbnails and the same lazy generation
+    // search results have. See file-asset-bridge.ts.
+    this.disposeAssetBridge = registerFileAssetBridge({
+      lookupIndexedFiles: (paths) => this.lookupIndexedFileAssets(paths),
+      ensureThumbnail: (file, extensions) =>
+        this.assetService.ensureThumbnail(file.id, file.path, file, extensions)
     })
     this.openerService = new FileProviderOpenerService({
       emptyLogo: EMPTY_OPENER_LOGO,
@@ -1078,6 +1088,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   public async prepareForSearchIndexShutdown(): Promise<void> {
     this.shuttingDown = true
+    this.disposeAssetBridge?.()
+    this.disposeAssetBridge = null
     this.watchService.dispose()
     if (this.pathNormalizationTimer) {
       clearTimeout(this.pathNormalizationTimer)
@@ -4067,6 +4079,44 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
     return sanitized
   }
+  /**
+   * Index rows and their asset extensions for these paths, from the split-aware home the index
+   * lives in. Read through `dbUtils` so the ids match what `ensureThumbnail` writes under.
+   */
+  private async lookupIndexedFileAssets(
+    paths: readonly string[]
+  ): Promise<Map<string, IndexedFileAssets>> {
+    const assets = new Map<string, IndexedFileAssets>()
+    const dbUtils = this.dbUtils
+    if (!dbUtils || paths.length === 0) return assets
+
+    try {
+      const files = await dbUtils.getFilesByPaths([...paths])
+      if (files.length === 0) return assets
+
+      const rows = await dbUtils.getFileExtensionsByFileIds(
+        files.map((file) => file.id),
+        ['thumbnail', 'thumbnailStatus', 'icon']
+      )
+      const extensionsByFileId = new Map<number, Record<string, string>>()
+      for (const row of rows) {
+        if (row.value == null) continue
+        const bucket = extensionsByFileId.get(row.fileId) ?? {}
+        bucket[row.key] = row.value
+        extensionsByFileId.set(row.fileId, bucket)
+      }
+      for (const file of files) {
+        assets.set(file.path, {
+          file,
+          extensions: this.sanitizeFileExtensions(extensionsByFileId.get(file.id) ?? {})
+        })
+      }
+    } catch (error) {
+      this.logWarn('Failed to look up indexed file assets', error, { count: paths.length })
+    }
+    return assets
+  }
+
   private createFileSearchItem(
     file: typeof filesSchema.$inferSelect,
     extensions: Record<string, string>

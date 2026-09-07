@@ -192,26 +192,34 @@ export class SearchProviderRegistry {
 
   constructor(private readonly deps: SearchProviderRegistryDeps) {}
 
-  register(provider: ISearchProvider<ProviderContext>): void {
+  /**
+   * @returns `true` when the provider was newly registered, `false` when the id was already taken.
+   * Callers that mirror registration elsewhere (the recommendation source registry) need to know
+   * which of the two happened; the duplicate branch must not fan out a second time.
+   */
+  register(provider: ISearchProvider<ProviderContext>): boolean {
     if (this.providers.has(provider.id)) {
       log.warn(`Search provider '${provider.id}' is already registered`)
-      return
+      return false
     }
     this.providers.set(provider.id, provider)
     log.info(`Search provider '${provider.id}' registered`)
     if (provider.onLoad) this.providersToLoad.push(provider)
+    return true
   }
 
-  unregister(providerId: string): void {
+  /** @returns `true` when a provider was actually removed. */
+  unregister(providerId: string): boolean {
     const provider = this.providers.get(providerId)
     if (!provider) {
       log.warn(`Search provider '${providerId}' is not registered`)
-      return
+      return false
     }
     provider.onDeactivate?.()
     this.providers.delete(providerId)
     this.providersToLoad = this.providersToLoad.filter((candidate) => candidate.id !== providerId)
     log.info(`Search provider '${providerId}' unregistered`)
+    return true
   }
 
   activate(activations: IProviderActivate[] | null): void {

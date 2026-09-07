@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "根因就是同一条规则（dev userData 路径）在 polyfills 与 app-root-path 各写一份，修复的核心是收敛为单一来源"}
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "AC7 要求新增静态检查防止第二处求值再次出现；该指南讲的正是如何写出真能失败的检查（含 --self-test 模式）"}
+{"file": ".trellis/spec/main-process/index.md", "reason": "主进程路径解析与启动期约定入口"}

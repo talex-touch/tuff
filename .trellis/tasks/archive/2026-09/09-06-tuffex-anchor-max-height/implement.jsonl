@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "base-anchor 回归测试新增后 review notes 覆盖行要同步；确认包装组件文档无需改"}
+{"file": ".trellis/spec/frontend/anchor-overlay-chain.md", "reason": "锚定面板家族的验证命令与链模型，改 TxBaseAnchor 前读"}
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "回归测试必须做一次 mutation：恢复 style 绑定后测试应变红"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "TuffEx 原语的最小验证：组件本地 vitest + git diff --check"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "共享工作树，提交前核对 hunk 归属"}

@@ -2,7 +2,8 @@ import {
   NetworkAbortError,
   NetworkCooldownError,
   NetworkHttpStatusError,
-  NetworkTimeoutError
+  NetworkTimeoutError,
+  NetworkTransportError
 } from '@talex-touch/utils/network'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -517,6 +518,48 @@ describe('networkService cooldown policy', () => {
       code: 'NETWORK_HTTP_STATUS_401',
       responseData: undefined
     })
+  })
+
+  /*
+   * The link the OTA fallback tests assume but never exercise. `release-fetch-service.test.ts`
+   * hands its service a hand-written `new Error('net::ERR_CONNECTION_CLOSED')`; nothing checked
+   * that a real Chromium failure arrives at those callers in that shape. If this projection stopped
+   * running, the fallback would go back to never firing (2026-09-04) and every existing test would
+   * still pass.
+   */
+  it.each([
+    'net::ERR_CONNECTION_CLOSED',
+    'net::ERR_NAME_NOT_RESOLVED',
+    // Spelled TIMED_OUT, so isTimeoutLikeError does not claim it and it must land here instead.
+    'net::ERR_CONNECTION_TIMED_OUT'
+  ])('projects the Chromium transport failure %s', async (message) => {
+    const service = new NetworkService()
+    electronMocks.fetch.mockRejectedValue(new Error(message))
+
+    const request = service.request({
+      method: 'GET',
+      url: 'https://nexus.example.test/api/releases/latest',
+      retryPolicy: { maxRetries: 0 }
+    })
+
+    await expect(request).rejects.toBeInstanceOf(NetworkTransportError)
+    // The original text has to survive verbatim. Callers still classify by string -- and must, since
+    // IPC flattens the error to a plain one and takes the prototype with it.
+    await expect(request).rejects.toMatchObject({ code: 'NETWORK_TRANSPORT_FAILED', message })
+  })
+
+  it('leaves an error the transport classifier does not recognize untouched', async () => {
+    const service = new NetworkService()
+    electronMocks.fetch.mockRejectedValue(new Error('upstream rejected the payload'))
+
+    const request = service.request({
+      method: 'GET',
+      url: 'https://nexus.example.test/api/releases/latest',
+      retryPolicy: { maxRetries: 0 }
+    })
+
+    await expect(request).rejects.not.toBeInstanceOf(NetworkTransportError)
+    await expect(request).rejects.toThrow('upstream rejected the payload')
   })
 
   it('captures non-2xx JSON response bodies when explicitly requested and records the failure', async () => {

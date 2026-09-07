@@ -78,12 +78,14 @@ code: |
 - 只有 `clickable=true` 且 `disabled=false` 时才会应用 `tabindex="0"`。
 - `role` 也只会在 `clickable=true` 时应用；组件没有隐式默认 role。
 - `disabled=true` 会添加禁用 class、移除焦点能力，并阻止鼠标和 Enter 激活。
+- hover 底色读 `--tx-card-item-hover-bg`，选中底色读 `--tx-card-item-active-bg`；两者的默认值分别是 `--tx-bg-color-overlay` 的 18% 与 `--tx-color-primary` 的 8%，未覆写时渲染结果与以往逐像素一致。边框色不参与覆写，仍由 `--tx-border-color-light` / `--tx-color-primary` 决定。
 - `title` 与 `subtitle` 使用单行省略；`description` 可以换行。
 - 悬停 `active` 行时会加深其强调色，而不是替换成中性的悬停底色：悬停规则本身优先级高于激活规则，此前选中行在指针下会丢失高亮。
 
 ## 最佳实践
 
 - 只有整行本身会执行操作时才设置 `clickable=true`。如果只有右侧插槽可交互，整行保持非 clickable。
+- 行落在深色半透明面板上时覆写 `--tx-card-item-hover-bg`。默认公式把 `--tx-bg-color-overlay` 铺 18%，而暗色主题下该 token 本身是 `#1d1e1f`——深色叠深色，hover 会看不见。指向宿主自己的语义表面色，不要用 `:deep` 去改组件的规则。
 - 可点击行不在语义化列表或菜单内部时，显式传入合适的 `role`。
 - 复杂媒体使用 `avatar` 插槽；简单媒体使用 `avatarUrl`、`iconClass` 或 `avatarText`。
 - `right` 插槽保持紧凑，过长控件会挤压标题区域。
@@ -93,7 +95,7 @@ code: |
 ## 审阅说明
 
 - 已核对 `packages/tuffex/packages/components/src/card-item/src/TxCardItem.vue`、`types.ts` 与 `card-item.test.ts`。
-- **实测覆盖:** `card-item.test.ts` 覆盖文本和图标渲染、头像 CSS 变量、图片优先于图标/文本、命名插槽、可点击行的鼠标/Enter 事件、禁用阻断与无左侧媒体布局。
+- **实测覆盖:** `card-item.test.ts` 覆盖文本和图标渲染、头像 CSS 变量、图片优先于图标/文本、命名插槽、可点击行的鼠标/Enter 事件、禁用阻断、无左侧媒体布局，以及 hover / 选中底色的两个覆写变量与其默认公式未变。
 - 可访问性说明：可点击行具备焦点能力，但没有隐式 role。应按外层交互模式传入对应语义 role，并让 `right` 中的交互控件避开整行点击目标。
 
 ## Source

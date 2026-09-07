@@ -1,22 +1,36 @@
 <script setup lang="ts">
-import type {
-  RecommendationEvidence,
-  RecommendationSource,
-  TuffContainerLayout,
-  TuffItem,
-  TuffSection
-} from '@talex-touch/utils'
-import { computed } from 'vue'
+import type { TuffContainerLayout, TuffItem, TuffSection } from '@talex-touch/utils'
+import { useElementSize } from '@vueuse/core'
+import type { ComponentPublicInstance } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { resolveBoxGridColumnCount } from './box-grid-layout'
+import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
+import {
+  CORE_BOX_GRID_COMPACT_TILE_MIN_WIDTH,
+  CORE_BOX_GRID_TILE_MIN_WIDTH,
+  resolveBoxGridFitColumns,
+  resolveVisibleBoxGridColumnCount
+} from './box-grid-layout'
 import BoxGridItem from './BoxGridItem.vue'
 import BoxItem from './BoxItem.vue'
-import { formatRecommendationEvidence } from './recommendation-evidence'
 
 interface Props {
   items: TuffItem[]
   layout?: TuffContainerLayout
   focus: number
+  /** Tiles drop their labels and keep the icon: the preview pane has squeezed the row to 40%. */
+  compact?: boolean
+  /**
+   * Width the grid may use, when the parent knows it ahead of layout — the preview pane toggling
+   * changes it in the same render, so the column count lands with the compact state instead of a
+   * frame later from a resize observer. Measured here when absent or zero.
+   */
+  availableWidth?: number
+  /**
+   * Receives each rendered row or tile under its global index, so the keyboard's focus scroll
+   * finds grid items the same way it finds list rows.
+   */
+  registerItem?: (el: Element | ComponentPublicInstance | null, index: number) => void
 }
 
 interface SectionData {
@@ -31,6 +45,7 @@ const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'select', index: number, item: TuffItem): void
+  (e: 'update:visibleColumns', columns: number): void
 }>()
 
 const gridConfig = computed(() => ({
@@ -38,6 +53,35 @@ const gridConfig = computed(() => ({
   gap: props.layout?.grid?.gap || 8,
   itemSize: props.layout?.grid?.itemSize || 'medium'
 }))
+
+/**
+ * Horizontal space a grid section does not get for tiles: the wrapper's 4px side margins and the
+ * `.BoxGrid` 16px side padding, both defined in the styles below.
+ */
+const GRID_HORIZONTAL_INSET_PX = 2 * 4 + 2 * 16
+
+const containerRef = ref<HTMLElement | null>(null)
+const { width: containerWidth } = useElementSize(containerRef)
+
+/**
+ * Columns that fit at the tile's minimum width, capped at what the layout declared. Tiles past
+ * that wrap onto the next row instead of shrinking until a title is two letters and the badges
+ * overlap. It is the one number both the CSS (`--grid-cols`) and, through `update:visibleColumns`,
+ * the keyboard geometry use, so a wrapped row is still one row for ArrowDown. Unmeasured (0, before
+ * the first layout) means the declared count.
+ */
+const visibleColumns = computed(() => {
+  const width =
+    props.availableWidth && props.availableWidth > 0 ? props.availableWidth : containerWidth.value
+  return resolveBoxGridFitColumns(
+    width - GRID_HORIZONTAL_INSET_PX,
+    gridConfig.value.gap,
+    props.compact ? CORE_BOX_GRID_COMPACT_TILE_MIN_WIDTH : CORE_BOX_GRID_TILE_MIN_WIDTH,
+    gridConfig.value.columns
+  )
+})
+
+watch(visibleColumns, (columns) => emit('update:visibleColumns', columns), { immediate: true })
 
 /** Build sections with their items and global indices */
 const sectionsData = computed<SectionData[]>(() => {
@@ -76,47 +120,23 @@ function getQuickKey(index: number): string {
   return `⌘${key}`
 }
 
-function isIntelligenceSection(section: TuffSection): boolean {
-  return section.meta?.intelligence === true
-}
-
-function isPinnedSection(section: TuffSection): boolean {
-  return section.meta?.pinned === true
-}
-
+/**
+ * Sections declare their own layout; `grid` is the fallback because the empty state was two grids
+ * before the tiered layout existed and `layout` is optional on TuffSection.
+ */
 function isListSection(section: TuffSection): boolean {
   return section.layout === 'list'
 }
 
-/**
- * Section titles arrive from the main process as i18n keys (`corebox.reason.*`)
- * because the main process has no idea what language the user reads. Older
- * cached layouts still carry finished English literals like `Recommend`, which
- * have no dot and must be shown as-is rather than as a missing key.
- */
-function getSectionTitle(section: TuffSection): string {
-  const title = section.title
-  if (!title) return ''
-  return title.includes('.') ? t(title) : title
-}
-
-function getItemEvidence(section: TuffSection, item: TuffItem): string {
-  const recommendation = item.meta?.recommendation
-  if (!recommendation) return ''
-
-  const source = (section.meta?.source ?? recommendation.source) as RecommendationSource | undefined
-  return formatRecommendationEvidence(
-    source,
-    recommendation.evidence as RecommendationEvidence | undefined,
-    t
-  )
+function isIntelligenceSection(section: TuffSection): boolean {
+  return section.meta?.intelligence === true
 }
 
 function getSectionColumnCount(sectionData: SectionData): number {
-  return resolveBoxGridColumnCount(
+  return resolveVisibleBoxGridColumnCount(
     sectionData.section,
     sectionData.items.length,
-    gridConfig.value.columns
+    visibleColumns.value
   )
 }
 
@@ -131,34 +151,39 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
 </script>
 
 <template>
-  <div class="BoxGridContainer">
+  <!--
+    `data-flip-key` / `data-flip` opt rows, tiles and titles into the FLIP CoreBox plays when the
+    layout re-wraps (see modules/box/adapter/hooks/flip-layout.ts): tiles morph, rows and titles
+    slide.
+  -->
+  <div ref="containerRef" class="BoxGridContainer">
     <!-- Multiple sections mode -->
     <template v-if="hasSections">
       <div
         v-for="sectionData in sectionsData"
         :key="sectionData.section.id"
         class="BoxGridWrapper"
-        :class="{
-          'is-list': isListSection(sectionData.section),
-          'is-intelligence':
-            isIntelligenceSection(sectionData.section) && !isListSection(sectionData.section),
-          'is-pinned': isPinnedSection(sectionData.section) && !isListSection(sectionData.section)
-        }"
+        :class="{ 'is-intelligence': isIntelligenceSection(sectionData.section) }"
       >
-        <div v-if="sectionData.section.title" class="BoxGridTitle">
-          {{ getSectionTitle(sectionData.section) }}
+        <div
+          v-if="sectionData.section.title"
+          class="BoxGridTitle"
+          :data-flip-key="`title:${sectionData.section.id}`"
+          data-flip="move"
+        >
+          {{ resolveI18nText(sectionData.section.title, t) }}
         </div>
-
-        <!-- Reason-grouped list: one row per item, with the reason it is here -->
-        <div v-if="isListSection(sectionData.section)" class="BoxReasonList">
+        <div v-if="isListSection(sectionData.section)" class="BoxGridList">
           <BoxItem
-            v-for="(item, localIndex) in getSectionVisibleItems(sectionData)"
+            v-for="(item, localIndex) in sectionData.items"
             :key="item.id"
+            :ref="(el) => registerItem?.(el, sectionData.startIndex + localIndex)"
             :item="item"
             :active="focus === sectionData.startIndex + localIndex"
             :render="item.render"
             :quick-key="getQuickKey(sectionData.startIndex + localIndex)"
-            :evidence="getItemEvidence(sectionData.section, item)"
+            :data-flip-key="item.id"
+            data-flip="move"
             @click="emit('select', sectionData.startIndex + localIndex, item)"
           />
         </div>
@@ -175,11 +200,15 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
           <BoxGridItem
             v-for="(item, localIndex) in getSectionVisibleItems(sectionData)"
             :key="item.id"
+            :ref="(el) => registerItem?.(el, sectionData.startIndex + localIndex)"
             :item="item"
             :active="focus === sectionData.startIndex + localIndex"
             :render="item.render"
+            :compact="compact"
             :quick-key="getQuickKey(sectionData.startIndex + localIndex)"
             :style="{ '--item-index': localIndex }"
+            :data-flip-key="item.id"
+            data-flip="scale"
             @click="emit('select', sectionData.startIndex + localIndex, item)"
           />
         </div>
@@ -191,7 +220,7 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
       <div
         class="BoxGrid p-4"
         :style="{
-          '--grid-cols': gridConfig.columns,
+          '--grid-cols': visibleColumns,
           '--grid-gap': `${gridConfig.gap}px`
         }"
         :class="`size-${gridConfig.itemSize}`"
@@ -199,11 +228,15 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
         <BoxGridItem
           v-for="(item, index) in items"
           :key="item.id"
+          :ref="(el) => registerItem?.(el, index)"
           :item="item"
           :active="focus === index"
           :render="item.render"
+          :compact="compact"
           :quick-key="getQuickKey(index)"
           :style="{ '--item-index': index }"
+          :data-flip-key="item.id"
+          data-flip="scale"
           @click="emit('select', index, item)"
         />
       </div>
@@ -217,11 +250,14 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
 }
 
 .BoxGridWrapper {
-  width: calc(100% - 1rem);
+  width: calc(100% - 0.5rem);
   border-radius: 18px;
   position: relative;
 
-  margin: 0.5rem;
+  // Tight on purpose: BoxItem already carries its own 8px inset, so a 0.5rem wrapper margin put
+  // list rows 16px from the edge and the section title 24px — visibly adrift from the design and
+  // from each other.
+  margin: 2px 4px;
 
   // Reason sections stack down the panel, so the animated tray border that
   // frames a single intelligence grid would repeat up to nine times. They carry
@@ -258,24 +294,6 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
       opacity: 0.7;
     }
   }
-
-  &.is-pinned {
-    &::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 18px;
-      padding: 0.125rem;
-      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
-      -webkit-mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
-      pointer-events: none;
-      opacity: 0.5;
-    }
-  }
 }
 
 @keyframes rainbow-border {
@@ -291,29 +309,22 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
 }
 
 .BoxGridTitle {
-  padding: 8px 16px 0;
+  // 8px left lines the label up with BoxItem's own inset, so title and rows share one edge.
+  padding: 4px 8px 2px;
   font-size: 12px;
   font-weight: 500;
   color: var(--tx-text-color-secondary);
   opacity: 0.7;
 }
 
-.is-list > .BoxGridTitle {
-  padding: 10px 12px 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  opacity: 0.6;
-}
-
-.BoxReasonList {
+// A list section reuses BoxItem, which brings its own row padding, so the wrapper only stacks.
+.BoxGridList {
   display: flex;
   flex-direction: column;
 }
 
 .BoxGrid {
-  display: grid;
-  // Keep result cards compact while distributing every column across the available row.
+  display: grid; // Keep result cards compact while distributing every column across the available row.
   grid-template-columns: repeat(var(--grid-cols), minmax(0, 108px));
   justify-content: space-between;
   gap: var(--grid-gap);

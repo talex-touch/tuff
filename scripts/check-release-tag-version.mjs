@@ -23,6 +23,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT_MANIFEST = 'package.json'
 const MANIFEST = path.join('apps', 'core-app', 'package.json')
 
 /** A release tag. Anything else is a branch build with no tag to reconcile. */
@@ -40,8 +41,17 @@ export function checkTagVersion(ref, manifestVersion) {
   return { ok: false, tagVersion, manifestVersion }
 }
 
-function readManifestVersion(root = ROOT) {
-  return JSON.parse(readFileSync(path.join(root, MANIFEST), 'utf8')).version
+export function checkManifestVersions(rootVersion, coreAppVersion) {
+  const ok = typeof rootVersion === 'string'
+    && rootVersion.length > 0
+    && typeof coreAppVersion === 'string'
+    && coreAppVersion.length > 0
+    && rootVersion === coreAppVersion
+  return { ok, rootVersion, coreAppVersion }
+}
+
+function readManifestVersion(manifest = MANIFEST, root = ROOT) {
+  return JSON.parse(readFileSync(path.join(root, manifest), 'utf8')).version
 }
 
 function getArg(flag) {
@@ -50,6 +60,10 @@ function getArg(flag) {
 }
 
 function selfTest() {
+  const manifestCases = [
+    { name: 'matching root and CoreApp manifests pass', rootVersion: '2.4.14-beta.2', coreAppVersion: '2.4.14-beta.2', expect: 'ok' },
+    { name: 'drifting root and CoreApp manifests fail', rootVersion: '2.4.14-beta.2', coreAppVersion: '2.4.14-beta.3', expect: 'fail' },
+  ]
   const cases = [
     { name: 'a tag matching the manifest passes', ref: 'v2.4.14-beta.2', version: '2.4.14-beta.2', expect: 'ok' },
     { name: 'a tag ahead of the manifest fails', ref: 'v2.5.0', version: '2.4.14-beta.2', expect: 'fail' },
@@ -63,6 +77,17 @@ function selfTest() {
   ]
 
   let failures = 0
+  for (const testCase of manifestCases) {
+    const result = checkManifestVersions(testCase.rootVersion, testCase.coreAppVersion)
+    const actual = result.ok ? 'ok' : 'fail'
+    const passed = actual === testCase.expect
+    console.log(`${passed ? 'ok  ' : 'FAIL'} ${testCase.name}`)
+    if (!passed) {
+      failures += 1
+      console.log(`     expected ${testCase.expect}, got ${actual}: ${JSON.stringify(result)}`)
+    }
+  }
+
   for (const testCase of cases) {
     const result = checkTagVersion(testCase.ref, testCase.version)
     const actual = result.skipped ? 'skip' : result.ok ? 'ok' : 'fail'
@@ -75,7 +100,13 @@ function selfTest() {
   }
 
   // The repository as it stands must be self-consistent for a tag of its own version.
-  const version = readManifestVersion()
+  const rootVersion = readManifestVersion(ROOT_MANIFEST)
+  const version = readManifestVersion(MANIFEST)
+  const manifests = checkManifestVersions(rootVersion, version)
+  console.log(`${manifests.ok ? 'ok  ' : 'FAIL'} current root and CoreApp manifests match`)
+  if (!manifests.ok)
+    failures += 1
+
   const real = checkTagVersion(`v${version}`, version)
   console.log(`${real.ok ? 'ok  ' : 'FAIL'} a tag of the current manifest version (v${version}) passes`)
   if (!real.ok)
@@ -88,7 +119,18 @@ if (process.argv.includes('--self-test'))
   process.exit(selfTest() > 0 ? 1 : 0)
 
 const ref = getArg('--tag') ?? process.env.GITHUB_REF_NAME ?? ''
-const manifestVersion = readManifestVersion()
+const rootVersion = readManifestVersion(ROOT_MANIFEST)
+const manifestVersion = readManifestVersion(MANIFEST)
+const manifestCheck = checkManifestVersions(rootVersion, manifestVersion)
+
+if (!manifestCheck.ok) {
+  console.error(
+    '[release-tag-version] package.json and apps/core-app/package.json must contain the same '
+    + 'non-empty version; synchronize both manifests before releasing.',
+  )
+  process.exit(1)
+}
+
 const result = checkTagVersion(ref, manifestVersion)
 
 if (result.skipped) {

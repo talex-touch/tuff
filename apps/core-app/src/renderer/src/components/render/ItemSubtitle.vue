@@ -83,6 +83,10 @@ const recommendationBadgeIcon = computed(() => {
   const icon = recommendationBadge.value?.icon?.trim()
   return icon?.startsWith('i-') ? icon : ''
 })
+/** Main sends an `$i18n:` key so one badge table serves both locales. */
+const recommendationBadgeText = computed(() =>
+  resolveI18nText(recommendationBadge.value?.text ?? '', t)
+)
 
 const resolvedSubtitle = computed(() => resolveI18nText(props.render.basic?.subtitle || '', t))
 
@@ -99,6 +103,8 @@ const badgeStyle = computed(() => {
       return 'bg-green-500/10 text-green-500'
     case 'newly-installed':
       return 'bg-violet-500/10 text-violet-500'
+    case 'plugin':
+      return 'bg-purple-500/10 text-purple-500'
     default:
       return 'bg-primary-500/10 text-primary-500'
   }
@@ -106,42 +112,45 @@ const badgeStyle = computed(() => {
 </script>
 
 <template>
-  <p class="text-xs opacity-60 truncate max-w-[90%]">
-    <template v-if="fileInfo">
-      <div class="flex items-center w-full overflow-hidden gap-x-1.5">
-        <span class="flex items-center gap-1">
-          <i :class="fileTypeMeta?.icon" />
-          <span>{{ fileTypeMeta?.label }}</span>
-        </span>
-        <span class="opacity-50">&bull;</span>
-        <span>
-          {{ formatBytes(fileInfo.size ?? 0) }}
-        </span>
-        <span class="opacity-50">&bull;</span>
-        <span>
-          {{ dayjs(fileInfo.modified_at).format('YYYY/M/D HH:mm') }}
-        </span>
-        <span class="opacity-50">&bull;</span>
-        <span class="flex flex-1 items-center gap-1">
-          <i class="i-carbon-folder" />
-          <span class="w-full truncate">{{ displayParentName(fileInfo.path) }}</span>
-        </span>
+  <div class="text-xs opacity-60 truncate max-w-[90%]">
+    <!--
+      The badge answers "why am I being shown this", which is the whole point of the proposed tier.
+      It sits outside the file/non-file split because a recommended file needs it just as much as a
+      recommended action does — before this it was rendered only on the non-file branch, so a
+      freshly created file arrived with no reason attached.
+    -->
+    <div class="flex items-center gap-2 w-full overflow-hidden">
+      <div
+        v-if="recommendationBadge"
+        class="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"
+        :class="badgeStyle"
+      >
+        <i v-if="recommendationBadgeIcon" :class="recommendationBadgeIcon" aria-hidden="true" />
+        <span>{{ recommendationBadgeText }}</span>
       </div>
-    </template>
-    <template v-else>
-      <div class="flex items-center gap-2 w-full overflow-hidden">
-        <!-- 推荐徽章 -->
-        <div
-          v-if="recommendationBadge"
-          class="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"
-          :class="badgeStyle"
-        >
-          <i v-if="recommendationBadgeIcon" :class="recommendationBadgeIcon" aria-hidden="true" />
-          <span>{{ recommendationBadge.text }}</span>
-        </div>
 
-        <span class="truncate">{{ resolvedSubtitle }}</span>
-      </div>
-    </template>
-  </p>
+      <template v-if="fileInfo">
+        <div class="flex items-center flex-1 overflow-hidden gap-x-1.5">
+          <span class="flex items-center gap-1">
+            <i :class="fileTypeMeta?.icon" />
+            <span>{{ fileTypeMeta?.label }}</span>
+          </span>
+          <span class="opacity-50">&bull;</span>
+          <span>
+            {{ formatBytes(fileInfo.size ?? 0) }}
+          </span>
+          <span class="opacity-50">&bull;</span>
+          <span>
+            {{ dayjs(fileInfo.modified_at).format('YYYY/M/D HH:mm') }}
+          </span>
+          <span class="opacity-50">&bull;</span>
+          <span class="flex flex-1 items-center gap-1">
+            <i class="i-carbon-folder" />
+            <span class="w-full truncate">{{ displayParentName(fileInfo.path) }}</span>
+          </span>
+        </div>
+      </template>
+      <span v-else class="truncate">{{ resolvedSubtitle }}</span>
+    </div>
+  </div>
 </template>

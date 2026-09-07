@@ -7,6 +7,7 @@ import { devLog } from '~/utils/dev-log'
 import { getGlobalI18nInstance, loadLocaleMessages, setI18nLanguage } from './i18n'
 import {
   resolveInitialLanguagePreference,
+  resolveSupportedLocale,
   SUPPORTED_LANGUAGES,
   type SupportedLanguage
 } from './language-preferences'
@@ -60,35 +61,72 @@ function clearRetiredLanguageSnapshot(): void {
   localStorage.removeItem('app-follow-system-language')
 }
 
+function requireI18nInstance() {
+  const i18n = getGlobalI18nInstance()
+  if (!i18n) {
+    throw new Error(
+      '[useLanguage] i18n instance not initialized. Make sure setupI18n is called before using useLanguage.'
+    )
+  }
+  return i18n
+}
+
+/** Put this window's i18n on `lang`. Persisting is the caller's decision. */
+async function applyLanguage(lang: SupportedLanguage): Promise<void> {
+  const i18n = requireI18nInstance()
+  await loadLocaleMessages(i18n, lang)
+  setI18nLanguage(i18n, lang)
+  currentLanguage.value = lang
+}
+
+let languageFollowStarted = false
+
+/**
+ * Keep this window's locale on the persisted setting.
+ *
+ * Only the main window owns the language UI. Every other window (CoreBox, division boxes) boots
+ * from `appSetting.lang` and, until this ran, never heard about a later switch: the storage
+ * broadcast did update `appSetting.lang` in that window, but nothing applied it, so CoreBox kept
+ * the language it was opened with. Apply only — a follower that persisted would echo its own
+ * stale `followSystem` back over the value the main window just wrote.
+ */
+export function setupLanguageFollow(): void {
+  if (languageFollowStarted) {
+    return
+  }
+  languageFollowStarted = true
+  resolveInitialState()
+
+  watch(
+    () => [appSetting?.lang?.locale, appSetting?.lang?.followSystem] as const,
+    async ([locale, followSystem]) => {
+      if (typeof followSystem === 'boolean') {
+        followSystemLanguage.value = followSystem
+      }
+      const resolved = resolveSupportedLocale(locale)
+      if (!resolved || resolved === currentLanguage.value) {
+        return
+      }
+      try {
+        await applyLanguage(resolved)
+      } catch (error) {
+        languageLog.error('Failed to follow language setting', error)
+      }
+    }
+  )
+}
+
 /**
  * 语言管理 composable
  */
 export function useLanguage() {
   resolveInitialState()
   /**
-   * 获取全局 i18n 实例
-   */
-  function getI18nInstance() {
-    const i18n = getGlobalI18nInstance()
-    if (!i18n) {
-      throw new Error(
-        '[useLanguage] i18n instance not initialized. Make sure setupI18n is called before using useLanguage.'
-      )
-    }
-    return i18n
-  }
-
-  /**
    * 切换语言
    */
   async function switchLanguage(lang: SupportedLanguage) {
     try {
-      const i18n = getI18nInstance()
-
-      await loadLocaleMessages(i18n, lang)
-
-      setI18nLanguage(i18n, lang)
-      currentLanguage.value = lang
+      await applyLanguage(lang)
       persistLanguagePreference(lang, followSystemLanguage.value)
 
       if (!followSystemLanguage.value) {

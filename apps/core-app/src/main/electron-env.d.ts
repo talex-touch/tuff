@@ -28,7 +28,7 @@ declare namespace NodeJS {
   interface Global {
     logger: Logger
     errLogger: Logger
-    $pkg: typeof import('../../../package.json')
+    $pkg: typeof import('../../package.json')
   }
 }
 
@@ -36,7 +36,7 @@ declare namespace NodeJS {
 declare global {
   var logger: Logger
   var errLogger: Logger
-  var $pkg: typeof import('../../../package.json')
+  var $pkg: typeof import('../../package.json')
 
   interface Console {
     _log: (message?: unknown, ...optionalParams: unknown[]) => void

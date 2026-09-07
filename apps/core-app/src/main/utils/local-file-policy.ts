@@ -8,10 +8,35 @@ type AppPathName = 'home' | 'userData' | 'temp' | 'cache'
 
 function appPathSafe(name: AppPathName): string {
   try {
-    return app.getPath(name as Parameters<typeof app.getPath>[0])
+    const value = app.getPath(name as Parameters<typeof app.getPath>[0])
+    if (typeof value !== 'string' || value.length === 0) {
+      throw new TypeError(`app.getPath(${name}) returned no path`)
+    }
+    return value
   } catch {
     return name === 'temp' ? os.tmpdir() : process.cwd()
   }
+}
+
+let additionalAllowedRoots: string[] = []
+
+/**
+ * Roots the `tfile:` handler serves beyond the built-in allowlist — today the temp-file base dir,
+ * where generated thumbnails live. The file-protocol module registers them once; the handler and
+ * {@link isServableLocalFilePath} both read them here, so "will this URL load" has one answer.
+ */
+export function configureAdditionalAllowedLocalFileRoots(roots: string[]): () => void {
+  const configured = roots.filter((root) => typeof root === 'string' && root.length > 0)
+  additionalAllowedRoots = configured
+  return () => {
+    if (additionalAllowedRoots === configured) {
+      additionalAllowedRoots = []
+    }
+  }
+}
+
+export function getAdditionalAllowedLocalFileRoots(): string[] {
+  return additionalAllowedRoots
 }
 
 /**
@@ -141,4 +166,21 @@ export function isAllowedLocalFilePath(filePath: string, roots: string[]): boole
       }).resolvedPath
     )
   })
+}
+
+/**
+ * Whether a `tfile:` URL for this path would be served rather than blocked (preview grants
+ * aside). Item builders ask before handing the renderer a local image: a request the handler
+ * refuses — anything under the user's home outside ~/Applications on macOS (#914) — leaves the
+ * row showing the "image failed" placeholder, a grey square where a file icon belongs.
+ */
+export function isServableLocalFilePath(filePath: string): boolean {
+  try {
+    return isAllowedLocalFilePath(filePath, [
+      ...getAllowedLocalFileRoots(),
+      ...additionalAllowedRoots
+    ])
+  } catch {
+    return false
+  }
 }

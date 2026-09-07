@@ -1,14 +1,14 @@
 {
   "contractVersion": "talex.plugin-source-audit/v1",
-  "generatedAt": "2026-08-27T07:18:34.372Z",
-  "evidenceLevel": "release-candidate",
-  "sourceRevision": "2016af1f508702b654cee5647f6f8947a913ced4",
-  "dirty": true,
+  "generatedAt": "2026-09-03T15:28:29.189Z",
+  "evidenceLevel": "local",
+  "sourceRevision": "a7cd2c07644d0717132c14ce9fa328a04eabdd2b",
+  "dirty": false,
   "dirtyAllowed": false,
   "toolchain": {
-    "node": "v24.18.0",
+    "node": "v26.8.1",
     "pnpm": "10.34.4",
-    "sourceDateEpoch": "1787728834"
+    "sourceDateEpoch": "1787904744"
   },
   "selectedTargets": [
     "clipboard-history",
@@ -18,10 +18,807 @@
     "touch-intelligence"
   ],
   "artifactPathBase": "report-directory",
-  "prerequisiteCommands": [],
-  "targets": [],
-  "status": "failed",
-  "blockers": [
-    "Relevant source or build tooling is dirty; pass --allow-dirty only for local evidence."
-  ]
+  "prerequisiteCommands": [
+    {
+      "id": "prerequisite:@talex-touch/tuff-cli-core",
+      "label": "pnpm --filter @talex-touch/tuff-cli-core run build @ .",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1717
+    },
+    {
+      "id": "prerequisite:@talex-touch/unplugin-export-plugin",
+      "label": "pnpm --filter @talex-touch/unplugin-export-plugin run build @ .",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1472
+    },
+    {
+      "id": "prerequisite:@talex-touch/tuff-cli",
+      "label": "pnpm --filter @talex-touch/tuff-cli run build @ .",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1791
+    },
+    {
+      "id": "prerequisite:@talex-touch/tuffex",
+      "label": "pnpm --filter @talex-touch/tuffex run build @ .",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 16968
+    }
+  ],
+  "targets": [
+    {
+      "pluginName": "clipboard-history",
+      "packageName": "@talex-touch/clipboard-history-plugin",
+      "sourceRoot": "plugins/clipboard-history",
+      "manifest": "plugins/clipboard-history/manifest.json",
+      "identity": {
+        "id": "com.tuffex.clipboard-history",
+        "name": "clipboard-history",
+        "version": "1.1.13-beta.2"
+      },
+      "gates": {
+        "build": {
+          "required": true
+        },
+        "test": {
+          "required": true
+        },
+        "typecheck": {
+          "required": true
+        },
+        "lint": {
+          "required": false,
+          "reason": "The package has an ESLint configuration but no standalone lint script; repository scoped lint covers its maintained source."
+        }
+      },
+      "runs": [
+        {
+          "run": 1,
+          "artifactPath": "artifacts/clipboard-history/clipboard-history-1.1.13-beta.2-run-1-fbf5f665d43dd209a015abd21e2ac26572aa4ecda043f7184ae71d7013db39c7.tpex",
+          "artifactSha256": "fbf5f665d43dd209a015abd21e2ac26572aa4ecda043f7184ae71d7013db39c7",
+          "artifactSize": 285184,
+          "inventorySha256": "d7ae67e47258ab3b1710d185cfadd529513dc4447130db353f0a214b7ddf7fef",
+          "entryCount": 8,
+          "expandedBytes": 277927,
+          "policyVersion": "1",
+          "scan": {
+            "decision": "passed",
+            "reportSha256": "3b824b0099e5bc873341e08ae46c9a2c729dd59c2a91ec376c51f50c916ceb02",
+            "scannerVersion": "1",
+            "ruleSetVersion": "1",
+            "findingCount": 0
+          },
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ephemeral-local-audit",
+            "payloadSha256": "4e2cd46a2088507731ea6627279baa162f3728dfb78b47b71f4986f5fd66f326",
+            "mode": "ephemeral-local"
+          },
+          "projection": {
+            "configured": true,
+            "matched": true,
+            "inventorySha256": "d7ae67e47258ab3b1710d185cfadd529513dc4447130db353f0a214b7ddf7fef"
+          },
+          "commands": [
+            {
+              "id": "clipboard-history:test",
+              "label": "pnpm run test @ plugins/clipboard-history",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 1577
+            },
+            {
+              "id": "clipboard-history:typecheck",
+              "label": "pnpm run typecheck @ plugins/clipboard-history",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 3273
+            },
+            {
+              "id": "clipboard-history:lint",
+              "label": "clipboard-history:lint",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package has an ESLint configuration but no standalone lint script; repository scoped lint covers its maintained source."
+            },
+            {
+              "id": "clipboard-history:build",
+              "label": "pnpm run build @ plugins/clipboard-history",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 1280
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "artifactPath": "artifacts/clipboard-history/clipboard-history-1.1.13-beta.2-run-2-03e678a2781d72729bec5aed1997812a149b681c425eeec677da201921e59350.tpex",
+          "artifactSha256": "03e678a2781d72729bec5aed1997812a149b681c425eeec677da201921e59350",
+          "artifactSize": 285184,
+          "inventorySha256": "d7ae67e47258ab3b1710d185cfadd529513dc4447130db353f0a214b7ddf7fef",
+          "entryCount": 8,
+          "expandedBytes": 277927,
+          "policyVersion": "1",
+          "scan": {
+            "decision": "passed",
+            "reportSha256": "8c2326883cb1b191ff13fc92d44a605051e79e8190315f3072a67a9be1b749bd",
+            "scannerVersion": "1",
+            "ruleSetVersion": "1",
+            "findingCount": 0
+          },
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ephemeral-local-audit",
+            "payloadSha256": "8b78c495361d29cb40706246995966836623447acbc2b9bbe936043b75bf82a4",
+            "mode": "ephemeral-local"
+          },
+          "projection": {
+            "configured": true,
+            "matched": true,
+            "inventorySha256": "d7ae67e47258ab3b1710d185cfadd529513dc4447130db353f0a214b7ddf7fef"
+          },
+          "commands": [
+            {
+              "id": "clipboard-history:test",
+              "label": "pnpm run test @ plugins/clipboard-history",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 1395
+            },
+            {
+              "id": "clipboard-history:typecheck",
+              "label": "pnpm run typecheck @ plugins/clipboard-history",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 2092
+            },
+            {
+              "id": "clipboard-history:lint",
+              "label": "clipboard-history:lint",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package has an ESLint configuration but no standalone lint script; repository scoped lint covers its maintained source."
+            },
+            {
+              "id": "clipboard-history:build",
+              "label": "pnpm run build @ plugins/clipboard-history",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 1261
+            }
+          ]
+        }
+      ],
+      "reproducibility": {
+        "normalizedInventory": "passed",
+        "artifactContainer": "different"
+      },
+      "status": "passed",
+      "blockers": []
+    },
+    {
+      "pluginName": "touch-quickops",
+      "packageName": "@talex-touch/touch-quickops-plugin",
+      "sourceRoot": "plugins/touch-quickops",
+      "manifest": "plugins/touch-quickops/manifest.json",
+      "identity": {
+        "id": "com.tuffex.quickops",
+        "name": "touch-quickops",
+        "version": "0.1.0"
+      },
+      "gates": {
+        "build": {
+          "required": true
+        },
+        "test": {
+          "required": true
+        },
+        "typecheck": {
+          "required": false,
+          "reason": "The package ships a JavaScript Prelude and declares no standalone typecheck script."
+        },
+        "lint": {
+          "required": false,
+          "reason": "The package declares no standalone lint script; repository plugin lint covers its maintained source."
+        }
+      },
+      "runs": [
+        {
+          "run": 1,
+          "artifactPath": "artifacts/touch-quickops/touch-quickops-0.1.0-run-1-9cf9d5c98aa7547542db159f54253d0391559642b4861932db00d361715d2f69.tpex",
+          "artifactSha256": "9cf9d5c98aa7547542db159f54253d0391559642b4861932db00d361715d2f69",
+          "artifactSize": 64512,
+          "inventorySha256": "79e5bd17e8bb255376d634cf668ef4bf87ba3a9ded9ed8becd34d29ac43cf63d",
+          "entryCount": 2,
+          "expandedBytes": 61809,
+          "policyVersion": "1",
+          "scan": {
+            "decision": "passed",
+            "reportSha256": "ebb914d3ed90cab259f834a4739b497695d4b3b8f4610c9a1ed5915b43942ac9",
+            "scannerVersion": "1",
+            "ruleSetVersion": "1",
+            "findingCount": 0
+          },
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ephemeral-local-audit",
+            "payloadSha256": "eaaf6e11308548ed6c5a71490c564a1998f594071fbd9188fddb6d5fcd738301",
+            "mode": "ephemeral-local"
+          },
+          "projection": {
+            "configured": true,
+            "matched": true,
+            "inventorySha256": "79e5bd17e8bb255376d634cf668ef4bf87ba3a9ded9ed8becd34d29ac43cf63d"
+          },
+          "commands": [
+            {
+              "id": "touch-quickops:test",
+              "label": "pnpm run test @ plugins/touch-quickops",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 262
+            },
+            {
+              "id": "touch-quickops:typecheck",
+              "label": "touch-quickops:typecheck",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package ships a JavaScript Prelude and declares no standalone typecheck script."
+            },
+            {
+              "id": "touch-quickops:lint",
+              "label": "touch-quickops:lint",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package declares no standalone lint script; repository plugin lint covers its maintained source."
+            },
+            {
+              "id": "touch-quickops:build",
+              "label": "pnpm run build @ plugins/touch-quickops",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 352
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "artifactPath": "artifacts/touch-quickops/touch-quickops-0.1.0-run-2-9cf9d5c98aa7547542db159f54253d0391559642b4861932db00d361715d2f69.tpex",
+          "artifactSha256": "9cf9d5c98aa7547542db159f54253d0391559642b4861932db00d361715d2f69",
+          "artifactSize": 64512,
+          "inventorySha256": "79e5bd17e8bb255376d634cf668ef4bf87ba3a9ded9ed8becd34d29ac43cf63d",
+          "entryCount": 2,
+          "expandedBytes": 61809,
+          "policyVersion": "1",
+          "scan": {
+            "decision": "passed",
+            "reportSha256": "472ebecc30accac76b4575cb6ed0289a53ba303baf3d72bbfac477d343c1a4c9",
+            "scannerVersion": "1",
+            "ruleSetVersion": "1",
+            "findingCount": 0
+          },
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ephemeral-local-audit",
+            "payloadSha256": "a3a5211776eefb2560809a6ad11de9ce3171fbe011e903a02925a1cf16ed16c6",
+            "mode": "ephemeral-local"
+          },
+          "projection": {
+            "configured": true,
+            "matched": true,
+            "inventorySha256": "79e5bd17e8bb255376d634cf668ef4bf87ba3a9ded9ed8becd34d29ac43cf63d"
+          },
+          "commands": [
+            {
+              "id": "touch-quickops:test",
+              "label": "pnpm run test @ plugins/touch-quickops",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 261
+            },
+            {
+              "id": "touch-quickops:typecheck",
+              "label": "touch-quickops:typecheck",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package ships a JavaScript Prelude and declares no standalone typecheck script."
+            },
+            {
+              "id": "touch-quickops:lint",
+              "label": "touch-quickops:lint",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package declares no standalone lint script; repository plugin lint covers its maintained source."
+            },
+            {
+              "id": "touch-quickops:build",
+              "label": "pnpm run build @ plugins/touch-quickops",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 348
+            }
+          ]
+        }
+      ],
+      "reproducibility": {
+        "normalizedInventory": "passed",
+        "artifactContainer": "identical"
+      },
+      "status": "passed",
+      "blockers": []
+    },
+    {
+      "pluginName": "touch-snippets",
+      "packageName": "@talex-touch/touch-snippets-plugin",
+      "sourceRoot": "plugins/touch-snippets",
+      "manifest": "plugins/touch-snippets/manifest.json",
+      "identity": {
+        "id": "com.tuffex.snippets",
+        "name": "touch-snippets",
+        "version": "1.0.0"
+      },
+      "gates": {
+        "build": {
+          "required": true
+        },
+        "test": {
+          "required": true
+        },
+        "typecheck": {
+          "required": false,
+          "reason": "The package ships a JavaScript Prelude and declares no standalone typecheck script."
+        },
+        "lint": {
+          "required": false,
+          "reason": "The package declares no standalone lint script; repository plugin lint covers its maintained source."
+        }
+      },
+      "runs": [
+        {
+          "run": 1,
+          "artifactPath": "artifacts/touch-snippets/touch-snippets-1.0.0-run-1-1ba51fe606398c4e63e9816d9a073388b0b3ca9197435fb2b57055a1e4b998fa.tpex",
+          "artifactSha256": "1ba51fe606398c4e63e9816d9a073388b0b3ca9197435fb2b57055a1e4b998fa",
+          "artifactSize": 20992,
+          "inventorySha256": "ec80b17b3dc40ea37e81b0a0c8bd6e21b294298e936aecc61d8bdc471cc59863",
+          "entryCount": 3,
+          "expandedBytes": 17913,
+          "policyVersion": "1",
+          "scan": {
+            "decision": "passed",
+            "reportSha256": "636b6bc3b398055690dc261f816b3a246894cb979bb25175884c953b1ec4122b",
+            "scannerVersion": "1",
+            "ruleSetVersion": "1",
+            "findingCount": 0
+          },
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ephemeral-local-audit",
+            "payloadSha256": "97d15316d3868bedc0a39faa01426d1c40d89241576cd37d3b41072bf754716e",
+            "mode": "ephemeral-local"
+          },
+          "projection": {
+            "configured": true,
+            "matched": true,
+            "inventorySha256": "ec80b17b3dc40ea37e81b0a0c8bd6e21b294298e936aecc61d8bdc471cc59863"
+          },
+          "commands": [
+            {
+              "id": "touch-snippets:test",
+              "label": "pnpm run test @ plugins/touch-snippets",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 261
+            },
+            {
+              "id": "touch-snippets:typecheck",
+              "label": "touch-snippets:typecheck",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package ships a JavaScript Prelude and declares no standalone typecheck script."
+            },
+            {
+              "id": "touch-snippets:lint",
+              "label": "touch-snippets:lint",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package declares no standalone lint script; repository plugin lint covers its maintained source."
+            },
+            {
+              "id": "touch-snippets:build",
+              "label": "pnpm run build @ plugins/touch-snippets",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 345
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "artifactPath": "artifacts/touch-snippets/touch-snippets-1.0.0-run-2-21b5841172ff45018f581e5925c1b35dc4a53ab8ccb51ac9f6ba3e99874ee6b2.tpex",
+          "artifactSha256": "21b5841172ff45018f581e5925c1b35dc4a53ab8ccb51ac9f6ba3e99874ee6b2",
+          "artifactSize": 20992,
+          "inventorySha256": "ec80b17b3dc40ea37e81b0a0c8bd6e21b294298e936aecc61d8bdc471cc59863",
+          "entryCount": 3,
+          "expandedBytes": 17913,
+          "policyVersion": "1",
+          "scan": {
+            "decision": "passed",
+            "reportSha256": "bff95f1f981f88e88f19ceda5285ec2f9d29a98c16bebd0ec9cbe7e557b3024c",
+            "scannerVersion": "1",
+            "ruleSetVersion": "1",
+            "findingCount": 0
+          },
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ephemeral-local-audit",
+            "payloadSha256": "f0924da2074679e5fd5db9a1634345982e5af97932f800f1dde7332982a528de",
+            "mode": "ephemeral-local"
+          },
+          "projection": {
+            "configured": true,
+            "matched": true,
+            "inventorySha256": "ec80b17b3dc40ea37e81b0a0c8bd6e21b294298e936aecc61d8bdc471cc59863"
+          },
+          "commands": [
+            {
+              "id": "touch-snippets:test",
+              "label": "pnpm run test @ plugins/touch-snippets",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 255
+            },
+            {
+              "id": "touch-snippets:typecheck",
+              "label": "touch-snippets:typecheck",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package ships a JavaScript Prelude and declares no standalone typecheck script."
+            },
+            {
+              "id": "touch-snippets:lint",
+              "label": "touch-snippets:lint",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package declares no standalone lint script; repository plugin lint covers its maintained source."
+            },
+            {
+              "id": "touch-snippets:build",
+              "label": "pnpm run build @ plugins/touch-snippets",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 371
+            }
+          ]
+        }
+      ],
+      "reproducibility": {
+        "normalizedInventory": "passed",
+        "artifactContainer": "different"
+      },
+      "status": "passed",
+      "blockers": []
+    },
+    {
+      "pluginName": "touch-translation",
+      "packageName": "@talex-touch/touch-translation-plugin",
+      "sourceRoot": "plugins/touch-translation",
+      "manifest": "plugins/touch-translation/manifest.json",
+      "identity": {
+        "id": "com.tuffex.translation",
+        "name": "touch-translation",
+        "version": "1.0.18-beta.4"
+      },
+      "gates": {
+        "build": {
+          "required": true
+        },
+        "test": {
+          "required": true
+        },
+        "typecheck": {
+          "required": true
+        },
+        "lint": {
+          "required": true
+        }
+      },
+      "runs": [
+        {
+          "run": 1,
+          "artifactPath": "artifacts/touch-translation/touch-translation-1.0.18-beta.4-run-1-f200a66fe989f1f3efc685d73fd5734a8e0b52db12184f986129a55e0fc2909a.tpex",
+          "artifactSha256": "f200a66fe989f1f3efc685d73fd5734a8e0b52db12184f986129a55e0fc2909a",
+          "artifactSize": 607232,
+          "inventorySha256": "61306ec2d36f7b6064de2f573f0b50b644c258cff75127b9cf273afcbcc8d1ac",
+          "entryCount": 28,
+          "expandedBytes": 584358,
+          "policyVersion": "1",
+          "scan": {
+            "decision": "passed",
+            "reportSha256": "2210cb16865d2ded767bd2cc6c7132c0d514bdd09f17c9f657437d10fdda79ff",
+            "scannerVersion": "1",
+            "ruleSetVersion": "1",
+            "findingCount": 0
+          },
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ephemeral-local-audit",
+            "payloadSha256": "9cf2544d5b18164a2d6c9dbdadbf750a12d797024e32c1d6c9e8233ca9f34c9f",
+            "mode": "ephemeral-local"
+          },
+          "projection": {
+            "configured": true,
+            "matched": true,
+            "inventorySha256": "61306ec2d36f7b6064de2f573f0b50b644c258cff75127b9cf273afcbcc8d1ac"
+          },
+          "commands": [
+            {
+              "id": "touch-translation:test",
+              "label": "pnpm exec vitest run @ plugins/touch-translation",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 3576
+            },
+            {
+              "id": "touch-translation:typecheck",
+              "label": "pnpm run typecheck @ plugins/touch-translation",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 2431
+            },
+            {
+              "id": "touch-translation:lint",
+              "label": "pnpm run lint @ plugins/touch-translation",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 2308
+            },
+            {
+              "id": "touch-translation:build",
+              "label": "pnpm run build @ plugins/touch-translation",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 2385
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "artifactPath": "artifacts/touch-translation/touch-translation-1.0.18-beta.4-run-2-9236d8369951a9a9b15e66bb2dc81f19cc62a97635de38b4c391e21bda808c06.tpex",
+          "artifactSha256": "9236d8369951a9a9b15e66bb2dc81f19cc62a97635de38b4c391e21bda808c06",
+          "artifactSize": 607232,
+          "inventorySha256": "61306ec2d36f7b6064de2f573f0b50b644c258cff75127b9cf273afcbcc8d1ac",
+          "entryCount": 28,
+          "expandedBytes": 584358,
+          "policyVersion": "1",
+          "scan": {
+            "decision": "passed",
+            "reportSha256": "ca33897508e40e48b9d124e1ae3777cfd291a0a9f0cc3d2cfd08cae854898363",
+            "scannerVersion": "1",
+            "ruleSetVersion": "1",
+            "findingCount": 0
+          },
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ephemeral-local-audit",
+            "payloadSha256": "dbd0546db8cdd82562f5b2b2ef1ea62298b703654f1570391d7c1a7e068f07df",
+            "mode": "ephemeral-local"
+          },
+          "projection": {
+            "configured": true,
+            "matched": true,
+            "inventorySha256": "61306ec2d36f7b6064de2f573f0b50b644c258cff75127b9cf273afcbcc8d1ac"
+          },
+          "commands": [
+            {
+              "id": "touch-translation:test",
+              "label": "pnpm exec vitest run @ plugins/touch-translation",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 3861
+            },
+            {
+              "id": "touch-translation:typecheck",
+              "label": "pnpm run typecheck @ plugins/touch-translation",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 2504
+            },
+            {
+              "id": "touch-translation:lint",
+              "label": "pnpm run lint @ plugins/touch-translation",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 1527
+            },
+            {
+              "id": "touch-translation:build",
+              "label": "pnpm run build @ plugins/touch-translation",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 2223
+            }
+          ]
+        }
+      ],
+      "reproducibility": {
+        "normalizedInventory": "passed",
+        "artifactContainer": "different"
+      },
+      "status": "passed",
+      "blockers": []
+    },
+    {
+      "pluginName": "touch-intelligence",
+      "packageName": "@talex-touch/touch-intelligence-plugin",
+      "sourceRoot": "plugins/touch-intelligence",
+      "manifest": "plugins/touch-intelligence/manifest.json",
+      "identity": {
+        "id": "com.tuffex.intelligence",
+        "name": "touch-intelligence",
+        "version": "1.2.0"
+      },
+      "gates": {
+        "build": {
+          "required": true
+        },
+        "test": {
+          "required": false,
+          "reason": "The package currently has no test script or test files; runtime behavior is covered by CoreApp official-plugin integration tests."
+        },
+        "typecheck": {
+          "required": false,
+          "reason": "The package currently ships precompiled JavaScript and declares no standalone typecheck script."
+        },
+        "lint": {
+          "required": false,
+          "reason": "The package currently declares no standalone lint script; repository lint still covers shared code."
+        }
+      },
+      "runs": [
+        {
+          "run": 1,
+          "artifactPath": "artifacts/touch-intelligence/touch-intelligence-1.2.0-run-1-420a908b593232c232a47f8e86b4a4c7d2e827f4843ff43144eed8fce882b1c2.tpex",
+          "artifactSha256": "420a908b593232c232a47f8e86b4a4c7d2e827f4843ff43144eed8fce882b1c2",
+          "artifactSize": 581120,
+          "inventorySha256": "2176890e88d78b96551b5e255e7f3d8303c894d6d4cf7ad725f9c563810d8c9c",
+          "entryCount": 18,
+          "expandedBytes": 565842,
+          "policyVersion": "1",
+          "scan": {
+            "decision": "passed",
+            "reportSha256": "60e076b6d2df06612d638be5dbb58d0ef78031700101b234da92e29019df6a73",
+            "scannerVersion": "1",
+            "ruleSetVersion": "1",
+            "findingCount": 0
+          },
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ephemeral-local-audit",
+            "payloadSha256": "91f0eb596621a15a550edae34e3ee69faafe1cd18de7ef4d2ab6c957b6cd1be4",
+            "mode": "ephemeral-local"
+          },
+          "projection": {
+            "configured": true,
+            "matched": true,
+            "inventorySha256": "2176890e88d78b96551b5e255e7f3d8303c894d6d4cf7ad725f9c563810d8c9c"
+          },
+          "commands": [
+            {
+              "id": "touch-intelligence:test",
+              "label": "touch-intelligence:test",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package currently has no test script or test files; runtime behavior is covered by CoreApp official-plugin integration tests."
+            },
+            {
+              "id": "touch-intelligence:typecheck",
+              "label": "touch-intelligence:typecheck",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package currently ships precompiled JavaScript and declares no standalone typecheck script."
+            },
+            {
+              "id": "touch-intelligence:lint",
+              "label": "touch-intelligence:lint",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package currently declares no standalone lint script; repository lint still covers shared code."
+            },
+            {
+              "id": "touch-intelligence:build",
+              "label": "pnpm run build @ plugins/touch-intelligence",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 1994
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "artifactPath": "artifacts/touch-intelligence/touch-intelligence-1.2.0-run-2-f98175625fb65b6a1d6e8e045248ddf2f6cc5757d61945b427433e05ebb3338f.tpex",
+          "artifactSha256": "f98175625fb65b6a1d6e8e045248ddf2f6cc5757d61945b427433e05ebb3338f",
+          "artifactSize": 581120,
+          "inventorySha256": "2176890e88d78b96551b5e255e7f3d8303c894d6d4cf7ad725f9c563810d8c9c",
+          "entryCount": 18,
+          "expandedBytes": 565842,
+          "policyVersion": "1",
+          "scan": {
+            "decision": "passed",
+            "reportSha256": "d7ab53b9b5d5338b81ddad3ed069e6ab4f066fa3e29325f6368638920e95700a",
+            "scannerVersion": "1",
+            "ruleSetVersion": "1",
+            "findingCount": 0
+          },
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ephemeral-local-audit",
+            "payloadSha256": "173be495d9ae0a66a8e8614601364926d3489911aab5e7b5ddd07accaa4984ca",
+            "mode": "ephemeral-local"
+          },
+          "projection": {
+            "configured": true,
+            "matched": true,
+            "inventorySha256": "2176890e88d78b96551b5e255e7f3d8303c894d6d4cf7ad725f9c563810d8c9c"
+          },
+          "commands": [
+            {
+              "id": "touch-intelligence:test",
+              "label": "touch-intelligence:test",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package currently has no test script or test files; runtime behavior is covered by CoreApp official-plugin integration tests."
+            },
+            {
+              "id": "touch-intelligence:typecheck",
+              "label": "touch-intelligence:typecheck",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package currently ships precompiled JavaScript and declares no standalone typecheck script."
+            },
+            {
+              "id": "touch-intelligence:lint",
+              "label": "touch-intelligence:lint",
+              "status": "not-applicable",
+              "exitCode": null,
+              "durationMs": 0,
+              "reason": "The package currently declares no standalone lint script; repository lint still covers shared code."
+            },
+            {
+              "id": "touch-intelligence:build",
+              "label": "pnpm run build @ plugins/touch-intelligence",
+              "status": "passed",
+              "exitCode": 0,
+              "durationMs": 1946
+            }
+          ]
+        }
+      ],
+      "reproducibility": {
+        "normalizedInventory": "passed",
+        "artifactContainer": "different"
+      },
+      "status": "passed",
+      "blockers": []
+    }
+  ],
+  "status": "passed",
+  "blockers": []
 }

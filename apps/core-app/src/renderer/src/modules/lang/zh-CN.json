@@ -1065,6 +1065,13 @@
     "modelAuto": "自动选择",
     "modelLoading": "正在读取可用模型…",
     "modelEmpty": "没有可用的模型，先配置一个 AI 提供方或安装 pi CLI",
+    "modelSearch": "搜索模型…",
+    "modelFavorites": "收藏",
+    "modelFavoritesEmpty": "还没有收藏，点星标把模型固定在这里",
+    "modelNoResults": "没有匹配的模型",
+    "modelFavorite": "加入收藏",
+    "modelUnfavorite": "取消收藏",
+    "modelSources": "按提供方筛选",
     "configureProvider": "去配置",
     "panel": {
       "title": "会话信息",
@@ -2416,6 +2423,24 @@
       "presentation": "演示",
       "ebook": "电子书",
       "other": "其他"
+    },
+    "sections": {
+      "habitual": "此刻常用",
+      "proposed": "最近案例"
+    },
+    "recommendation": {
+      "badge": {
+        "frequent": "常用",
+        "timeBased": "推荐",
+        "recent": "最近",
+        "trending": "趋势",
+        "context": "智能推荐",
+        "plugin": "插件",
+        "newlyInstalled": "新安装",
+        "pinned": "已固定",
+        "suggested": "推荐",
+        "newlyAdded": "新文件"
+      }
     }
   },
   "appConfigure": {
@@ -5063,7 +5088,15 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+      "weekdays": [
+        "日",
+        "一",
+        "二",
+        "三",
+        "四",
+        "五",
+        "六"
+      ]
     },
     "memoryReview": {
       "title": "记忆审核",

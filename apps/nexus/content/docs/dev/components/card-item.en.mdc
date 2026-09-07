@@ -78,12 +78,14 @@ code: |
 - `tabindex="0"` is applied only when `clickable=true` and `disabled=false`.
 - `role` is also applied only when `clickable=true`; there is no implicit default role.
 - `disabled=true` adds the disabled class, removes focusability, and suppresses mouse and Enter activation.
+- The hover fill reads `--tx-card-item-hover-bg` and the active fill reads `--tx-card-item-active-bg`. Their defaults are 18% of `--tx-bg-color-overlay` and 8% of `--tx-color-primary`, so an unset row renders pixel for pixel what it did before. Border colours are not overridable and still come from `--tx-border-color-light` / `--tx-color-primary`.
 - Text areas use single-line ellipsis for `title` and `subtitle`; `description` can wrap.
 - Hovering an `active` row deepens its accent rather than replacing it with the neutral hover fill: the hover rule outranks the active rule on its own, so a selected row used to lose its highlight under the pointer.
 
 ## Best Practices
 
 - Set `clickable=true` only when the row itself performs an action. If only the `right` slot is interactive, keep the row non-clickable.
+- Override `--tx-card-item-hover-bg` when the rows sit on a dark, translucent surface. The default washes `--tx-bg-color-overlay` at 18%, and under the dark theme that token is `#1d1e1f` itself — a dark wash on a dark panel, which reads as no hover at all. Point it at a semantic surface colour of the host rather than fighting the component's rule with `:deep`.
 - Pass an explicit `role` when a clickable row is not already inside a semantic list or menu.
 - Use `avatar` slot for complex media. Use `avatarUrl`, `iconClass`, or `avatarText` for simple, generated media.
 - Keep the `right` slot compact; long controls can collapse the title area.
@@ -93,7 +95,7 @@ code: |
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/card-item/src/TxCardItem.vue`, `types.ts`, and `card-item.test.ts`.
-- **Verified coverage:** `card-item.test.ts` covers text and icon rendering, avatar CSS variables, image-over-icon/text priority, named slots, clickable mouse/Enter emits, disabled blocking, and the no-left layout.
+- **Verified coverage:** `card-item.test.ts` covers text and icon rendering, avatar CSS variables, image-over-icon/text priority, named slots, clickable mouse/Enter emits, disabled blocking, the no-left layout, and that the two overridable surface variables still fall back to their original formulas.
 - Accessibility note: a clickable row gets focusability but no implicit role. Supply the semantic role that matches the surrounding interaction pattern, and keep interactive controls in `right` outside the row click target.
 
 ## Source
