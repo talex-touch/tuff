@@ -28,8 +28,8 @@
   ],
   "notes": "",
   "meta": {
-    "blocker": "R5 的链接打开与文件定位需要放宽插件通道白名单（PLUGIN_FACING_EVENTS），这是权限模型决策，等用户裁定 A/B/C 三案。",
-    "evidence": "packages/utils/transport/sdk/main-transport.ts:818 自 #688 起对插件通道默认拒绝；packages/utils/transport/security/plugin-facing-events.ts:66 的 AppEvents.system.* 只含 captureSelection/getActiveApp/resolveApplication；design.md D8 引用的 system-shell-handlers.ts:99 注释已过时。",
-    "nextAction": "用户在 implement.md 的 A/B/C 三案中选定后，实现链接打开与文件定位，补齐 AC8/AC9。M1-M4 与 M5 的图片预览部分已提交。"
+    "blocker": null,
+    "evidence": "插件 121 测试 + core-app src/main/channel 88 测试 + utils plugin-facing-events 8 测试全绿；掩码的“不包含”断言与 system.shell 权限门都跑过反向对照并确认会红。",
+    "nextAction": "AC5（user-select）与 AC7（图片预览定高版式）是纯样式，需在真实窗口人工确认；其余已完成。"
   }
 }

@@ -100,7 +100,9 @@ const FLOATING_BALL_DEFAULT_PADDING = 24
  * resizing has no system-level smoothing on Windows or Linux.
  */
 const VOICE_DOCK_WIDTH = 360
-const VOICE_DOCK_HEIGHT = 64
+// 88, not 64: the pill grows to two lines when a message does not fit one, and a window sized
+// to the short pill would clip the taller one instead of showing the half that says what to do.
+const VOICE_DOCK_HEIGHT = 88
 const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'

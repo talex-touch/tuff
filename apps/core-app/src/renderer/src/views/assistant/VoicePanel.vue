@@ -43,6 +43,14 @@ const CHARGE_TICK_MS = 30
 const SLOW_AFTER_MS = 3000
 const VERY_SLOW_AFTER_MS = 8000
 
+/**
+ * How long the device gets to produce its first level frame before we stop saying "preparing".
+ *
+ * Breathing forever is its own kind of lie: after this the microphone is not slow, it is not
+ * answering, and the user needs to be told that instead of watched at.
+ */
+const CAPTURE_START_TIMEOUT_MS = 2000
+
 type NoticeTone = keyof typeof NOTICE_HOLD_MS
 type NoticeAction = 'undo' | 'retry'
 type Notice = { message: string; tone: NoticeTone; action?: NoticeAction }
@@ -77,6 +85,18 @@ const WAVE_REF_RELEASE = 0.15
 
 const PILL_BASE_WIDTH = 200
 const PILL_MAX_WIDTH = 340
+const PILL_BASE_HEIGHT = 44
+/** Two lines of caption text plus the same padding — the tallest the island ever gets. */
+const PILL_TALL_HEIGHT = 64
+/**
+ * The shape changes with the height, not just the size.
+ *
+ * A pill radius is half its height by definition, so keeping `radius: full` at 64px turns the
+ * two ends into oversized semicircles and eats the room the second line needs. Expanding into
+ * a rounded rectangle is what the shape is actually doing — one line is a pill, two lines is a
+ * card — so the radius says so.
+ */
+const PILL_TALL_RADIUS = 20
 /** padding (10) + both round slots (68) + both gaps (16); the centre gets what is left. */
 const PILL_CHROME_WIDTH = 94
 
@@ -106,10 +126,17 @@ const sessionSeq = ref(0)
 const levels = ref<number[]>(new Array(WAVE_BAR_COUNT).fill(0))
 const centerTextRef = ref<HTMLElement | null>(null)
 const pillWidth = ref(PILL_BASE_WIDTH)
+const pillHeight = ref(PILL_BASE_HEIGHT)
+const expanded = computed(() => pillHeight.value > PILL_BASE_HEIGHT)
+const pillRadius = computed(() =>
+  expanded.value ? PILL_TALL_RADIUS : Math.round(PILL_BASE_HEIGHT / 2)
+)
 /** 0..1 while Escape is held; the border draws it so the commitment is visible. */
 const cancelCharge = ref(0)
 const waitedMs = ref(0)
 const recovering = ref(false)
+/** False until the first level frame lands — see `preparing`. */
+const hasLevel = ref(false)
 
 const voiceSdk = createVoiceSdk(transport)
 const voiceWakeEnabled = computed(() => runtimeConfig.value.enabled)
@@ -129,6 +156,14 @@ const canCancel = computed(() => listening.value || transcribing.value || hasNot
 const canConfirm = computed(() => listening.value && !hasNotice.value)
 /** The confirm slot stops being a button while transcribing — it becomes the progress mark. */
 const showsOrb = computed(() => (transcribing.value || recovering.value) && !hasNotice.value)
+/**
+ * Before the first level frame, the meter has nothing to draw.
+ *
+ * Drawing 24 bars at minimum height is not "empty": it is a working meter reporting silence,
+ * which is a claim we cannot make while the device is still opening. So the meter waits for
+ * data and the pill breathes instead.
+ */
+const preparing = computed(() => listening.value && !hasLevel.value && !hasNotice.value)
 const holdingCancel = computed(() => cancelCharge.value > 0)
 const slowness = computed(() => {
   if (!transcribing.value) return 'normal'
@@ -173,6 +208,7 @@ const centerText = computed(() => {
   if (notice.value) return notice.value.message
   if (holdingCancel.value) return t('assistant.voicePanel.holdToCancel')
   if (recovering.value) return t('assistant.voicePanel.recovering')
+  if (preparing.value) return t('assistant.voicePanel.capturingDevice')
   if (!transcribing.value) return ''
   if (slowness.value === 'very-slow') return t('assistant.voicePanel.stillWorkingLong')
   if (slowness.value === 'slow') return t('assistant.voicePanel.stillWorking')
@@ -187,6 +223,13 @@ let finished = false
 let waveReference = WAVE_REF_FLOOR
 let holdTimer: ReturnType<typeof setInterval> | null = null
 let waitTimer: ReturnType<typeof setInterval> | null = null
+let captureStartTimer: ReturnType<typeof setTimeout> | null = null
+
+function stopCaptureStartTimer(): void {
+  if (captureStartTimer === null) return
+  clearTimeout(captureStartTimer)
+  captureStartTimer = null
+}
 
 function stopHold(): void {
   if (holdTimer !== null) {
@@ -245,6 +288,7 @@ function showNotice(message: string, tone: NoticeTone, action?: NoticeAction): v
   recovering.value = false
   stopHold()
   stopWaitClock()
+  stopCaptureStartTimer()
   clearFinishTimer()
   // A notice you can act on gets the long hold; one you can only read gets its own.
   const hold = action ? NOTICE_HOLD_MS.action : NOTICE_HOLD_MS[tone]
@@ -266,6 +310,17 @@ function classifyFailure(error: unknown): Notice {
   const code = ((error as { code?: unknown })?.code ?? '').toString()
   const haystack = `${code} ${raw}`.toUpperCase()
 
+  // Device and permission failures are the ones the provider describes worst: its sentence is
+  // English, truncated by the width, and offers no way out. They are entirely classifiable, so
+  // they get our own copy and no retry — retrying finds the same missing microphone.
+  if (/PERMISSION|DENIED|NOT_?AUTHORIZ|UNAUTHORIZED/.test(haystack))
+    return { message: t('assistant.voicePanel.microphoneDenied'), tone: 'warning' }
+
+  const deviceMissing =
+    /CANNOT_?FIND|NO_?(INPUT_?)?DEVICE|DEVICE_?NOT_?FOUND|NO_?MICROPHONE|CAPTURE_?UNAVAILABLE|UNSUPPORTED/
+  if (deviceMissing.test(haystack))
+    return { message: t('assistant.voicePanel.microphoneMissing'), tone: 'warning' }
+
   if (/QUOTA|CREDIT|INSUFFICIENT_BALANCE/.test(haystack))
     return { message: t('assistant.voicePanel.quotaExhausted'), tone: 'warning' }
 
@@ -274,13 +329,11 @@ function classifyFailure(error: unknown): Notice {
   if (congested.test(haystack))
     return { message: t('assistant.voicePanel.serviceBusy'), tone: 'warning' }
 
-  return {
-    message:
-      error instanceof Error && error.message
-        ? error.message
-        : t('assistant.voicePanel.voiceTranscribeFailed'),
-    tone: 'danger'
-  }
+  // The raw message goes to the console, not into the pill. A provider's own sentence is
+  // English, gets truncated by the width, and tells the user nothing they can act on.
+  // eslint-disable-next-line no-console
+  if (error) console.warn('[voice] unclassified failure', error)
+  return { message: t('assistant.voicePanel.voiceTranscribeFailed'), tone: 'danger' }
 }
 
 function resetPanelState(): void {
@@ -292,9 +345,11 @@ function resetPanelState(): void {
   startingVoiceCapture.value = false
   levels.value = new Array(WAVE_BAR_COUNT).fill(0)
   waveReference = WAVE_REF_FLOOR
+  hasLevel.value = false
   recovering.value = false
   stopHold()
   stopWaitClock()
+  stopCaptureStartTimer()
 }
 
 async function loadRuntimeConfig(): Promise<void> {
@@ -353,6 +408,10 @@ function finishVoiceInput(): void {
 
 function handleVoiceSessionEvent(event: VoiceAsrStreamEvent): void {
   if (event.type === 'level') {
+    // The handover is the data arriving, not a timer: the meter takes over the moment it has
+    // something true to draw.
+    hasLevel.value = true
+    stopCaptureStartTimer()
     levels.value = [...levels.value.slice(1), normalizeLevel(event.rms)]
     return
   }
@@ -390,8 +449,17 @@ async function startVoiceSession(force = false): Promise<void> {
   listening.value = true
   notice.value = null
   levels.value = new Array(WAVE_BAR_COUNT).fill(0)
+  hasLevel.value = false
   // A stale peak from the last session would flatten the first words of this one.
   waveReference = WAVE_REF_FLOOR
+  stopCaptureStartTimer()
+  captureStartTimer = setTimeout(() => {
+    captureStartTimer = null
+    if (hasLevel.value || !listening.value) return
+    // Not slow — not answering. Breathing forever would be its own kind of lie.
+    cancelVoiceSession()
+    showNotice(t('assistant.voicePanel.microphoneUnresponsive'), 'warning')
+  }, CAPTURE_START_TIMEOUT_MS)
   // The orb is re-rolled per session through this key; changing its `state` would not.
   sessionSeq.value += 1
   try {
@@ -543,6 +611,7 @@ function handleKeyup(event: KeyboardEvent): void {
 watch([centerText, showsOrb], async () => {
   if (!centerText.value) {
     pillWidth.value = PILL_BASE_WIDTH
+    pillHeight.value = PILL_BASE_HEIGHT
     return
   }
   await nextTick()
@@ -551,6 +620,14 @@ watch([centerText, showsOrb], async () => {
     PILL_MAX_WIDTH,
     Math.max(PILL_BASE_WIDTH, textWidth + PILL_CHROME_WIDTH)
   )
+
+  // Width first, height second. Truncating at the cap loses the half of the sentence that
+  // says what to do — "Cannot find m…" is exactly the wrong half to drop — so once the widest
+  // line still does not fit, the island grows instead.
+  await nextTick()
+  const element = centerTextRef.value
+  pillHeight.value =
+    element && element.scrollWidth > element.clientWidth ? PILL_TALL_HEIGHT : PILL_BASE_HEIGHT
 })
 
 defineExpose({
@@ -577,6 +654,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keyup', handleKeyup)
   stopHold()
   stopWaitClock()
+  stopCaptureStartTimer()
   clearFinishTimer()
   cancelVoiceSession()
   disposePanelOpen?.()
@@ -593,10 +671,16 @@ onBeforeUnmount(() => {
       :aria-busy="voiceActive"
       :class="[
         notice ? `voice-dock--${notice.tone}` : null,
+        preparing ? 'voice-dock--preparing' : null,
+        expanded ? 'voice-dock--expanded' : null,
         holdingCancel ? 'voice-dock--holding' : null,
         slowness !== 'normal' && !notice ? 'voice-dock--warning' : null
       ]"
-      :style="{ width: `${pillWidth}px` }"
+      :style="{
+        width: `${pillWidth}px`,
+        height: `${pillHeight}px`,
+        borderRadius: `${pillRadius}px`
+      }"
     >
       <button
         class="voice-dock__btn voice-dock__btn--cancel"
@@ -611,7 +695,7 @@ onBeforeUnmount(() => {
 
       <TxBorderBeam
         :active="beamActive"
-        :border-radius="22"
+        :border-radius="pillRadius"
         :duration="beamDurationSeconds"
         :color-variant="beamVariant"
         aria-hidden="true"
@@ -701,18 +785,45 @@ onBeforeUnmount(() => {
 
 .voice-dock {
   display: flex;
-  height: 44px;
   align-items: center;
   gap: 8px;
   padding: 5px;
   box-sizing: border-box;
   border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-full);
+  /* Radius is inline: it tracks the height, so the shape and the size change together. */
   background: var(--shell-surface);
   box-shadow: 0 5px 12px var(--shell-shadow);
   transition:
     width 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 600ms ease-out,
     border-color 160ms ease-out;
+}
+
+/*
+ * Breathing, not a meter.
+ *
+ * Before the first level frame there is nothing true to draw, and 24 bars at minimum height
+ * would read as a working meter reporting silence. A soft pulse says "opening the device"
+ * without claiming to measure anything.
+ */
+.voice-dock--preparing {
+  animation: voice-dock-breathe 2000ms ease-in-out infinite;
+}
+
+@keyframes voice-dock-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 5px 12px var(--shell-shadow),
+      0 0 0 0 var(--shell-primary-soft);
+  }
+  50% {
+    box-shadow:
+      0 5px 12px var(--shell-shadow),
+      0 0 0 6px var(--shell-primary-soft);
+  }
 }
 
 /* Tone rides on the border only: the surface stays neutral so the text keeps its contrast. */
@@ -800,6 +911,19 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
+/*
+ * Two lines read as a paragraph, not as a label. Centring them leaves ragged edges on both
+ * sides; the round controls stay vertically centred because they are still controls.
+ */
+.voice-dock--expanded .voice-dock__slot {
+  height: auto;
+  justify-content: flex-start;
+}
+
+.voice-dock--expanded .voice-dock__text {
+  text-align: left;
+}
+
 .voice-dock__wave {
   display: flex;
   align-items: center;
@@ -814,14 +938,20 @@ onBeforeUnmount(() => {
   transition: height 100ms linear;
 }
 
+/*
+ * Two lines, then ellipsis. `-webkit-line-clamp` is what allows the second line at all; the
+ * measurement in the script decides whether the island is tall enough for it to show.
+ */
 .voice-dock__text {
+  display: -webkit-box;
   overflow: hidden;
   margin: 0;
+  -webkit-box-orient: vertical;
   color: var(--shell-text-secondary);
   font-size: var(--shell-fs-caption);
-  line-height: 1.3;
+  -webkit-line-clamp: 2;
+  line-height: 1.4;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .voice-dock--danger .voice-dock__text {
@@ -863,6 +993,7 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .voice-dock {
+    animation: none;
     transition: border-color 160ms ease-out;
   }
 

@@ -84,12 +84,20 @@ pnpm --filter @talex-touch/utils typecheck
 
 ### 阻塞中
 
-- [ ] 链接 → 默认浏览器打开
-- [ ] 文件 → 在访达中定位
+已解除。用户裁定走「白名单 + 权限门」，链接与文件一起做。落地：
 
-当前退化行为：文件复制路径并显式提示「暂不支持在访达中定位」；链接保持原有的 `window.open` + 降级复制（也就是说 AC8 描述的坏行为仍在）。
+- `packages/utils/plugin/sdk/system.ts` 加 `openExternal` / `showInFolder`（三段式补齐）。
+- `PLUGIN_FACING_EVENTS` 的 AppEvents 从 6 条增至 8 条。
+- `system-shell-handlers.ts` 两个 handler 包 `withPermission({ permissionId: 'system.shell', failClosedForPlugin: true })`；**不**开 `requireVerifiedPlugin`——宿主 renderer 也调这两个事件且没有 plugin context，开了会把宿主自己拒掉。
+- clipboard-history manifest 把 `system.shell` 声明为 **optional**，所以拒绝是正常结局，UI 区分「无权限」与「打不开」两种文案。
+- 顺手改掉 `system-shell-handlers.ts` 里那条导致本次规划出错的过时注释。
 
-### 三条可选路径（等决策）
+反向对照都跑过：
+
+- 把 SDK 里的 `transport.send(AppEvents.system.openExternal, ...)` 去掉 → 白名单派生测试报 `extra`，证明它双向咬合。
+- 把 `withPermission` 换成恒等函数 → 新增的两条权限测试红，证明门是真的。（注意：只改属性名不改 `AppEvents.*` 引用**不会**让派生测试失败——它扫的是事件引用，第一次控制组我设计错了。）
+
+### 三条可选路径（决策已定：A）
 
 | 方案 | 动作 | 代价 |
 |---|---|---|
