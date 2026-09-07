@@ -150,6 +150,14 @@ code: |
 ---
 ::
 
+## Interaction Contract
+
+- The row is one `radiogroup` and each stop a `radio`, so a screen reader announces it as a set of mutually exclusive choices rather than a row of toggles.
+- Roving tabindex: Tab reaches the row once and lands on the current stop. Arrow keys move and clamp at both ends, Home and End jump to them. The vertical layout stacks bottom-to-top, so Up advances there.
+- Stops are round because the dot is a block: as an inline `<span>` its width and height were dropped and its 2px border rendered as a bare vertical stroke on the track.
+- The track is tinted from the text colour, the pair that actually inverts between themes, so it stays visible on a dark surface.
+- The focus ring is keyboard-only; hover previews an unselected stop by growing it slightly. Both stop under `prefers-reduced-motion`.
+
 ## API
 
 ### Props
