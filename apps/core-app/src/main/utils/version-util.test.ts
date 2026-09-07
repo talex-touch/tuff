@@ -44,4 +44,39 @@ describe('getAppVersion', () => {
       }
     }
   })
+
+  it('uses Electron packaged metadata after an OTA relaunch with stale inherited metadata', async () => {
+    const hadAppVersion = Object.hasOwn(process.env, 'APP_VERSION')
+    const originalAppVersion = process.env.APP_VERSION
+    const hadPackageGlobal = Object.hasOwn(globalThis, '$pkg')
+    const originalPackageGlobal = globalThis.$pkg
+
+    process.env.APP_VERSION = '2.4.14-beta.30'
+    globalThis.$pkg = { version: '2.4.14-beta.30' } as typeof globalThis.$pkg
+    vi.resetModules()
+    vi.doMock('electron', () => ({
+      app: { isPackaged: true, getVersion: vi.fn(() => '2.4.14-beta.31') }
+    }))
+
+    try {
+      const { getAppVersion } = await import('./version-util')
+
+      expect(getAppVersion()).toBe('2.4.14-beta.31')
+    } finally {
+      vi.doUnmock('electron')
+      vi.resetModules()
+
+      if (hadAppVersion) {
+        process.env.APP_VERSION = originalAppVersion
+      } else {
+        Reflect.deleteProperty(process.env, 'APP_VERSION')
+      }
+
+      if (hadPackageGlobal) {
+        globalThis.$pkg = originalPackageGlobal
+      } else {
+        Reflect.deleteProperty(globalThis, '$pkg')
+      }
+    }
+  })
 })
