@@ -9,10 +9,15 @@ export const PRIVACY_RETENTION_CATEGORIES = [
 
 export type PrivacyRetentionCategory = (typeof PRIVACY_RETENTION_CATEGORIES)[number]
 
-export const PRIVACY_DATA_CATEGORIES = [...PRIVACY_RETENTION_CATEGORIES, 'intelligence-memory', 'plugin-data'] as const
+export const PRIVACY_DATA_CATEGORIES = [
+  ...PRIVACY_RETENTION_CATEGORIES,
+  'intelligence-memory',
+  'plugin-data',
+  'voice-insights',
+] as const
 
-// Memory and plugin data have independent, authority-bound deletion lifecycles.
-export const PRIVACY_SETTINGS_DATA_CATEGORIES = [...PRIVACY_RETENTION_CATEGORIES] as const
+// Memory, plugin data, and voice aggregates have independent explicit-deletion lifecycles.
+export const PRIVACY_SETTINGS_DATA_CATEGORIES = [...PRIVACY_RETENTION_CATEGORIES, 'voice-insights'] as const
 
 export type PrivacyDataCategory = (typeof PRIVACY_DATA_CATEGORIES)[number]
 

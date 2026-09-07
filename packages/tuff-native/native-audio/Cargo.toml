@@ -16,5 +16,11 @@ napi.workspace = true
 napi-derive.workspace = true
 symphonia = { version = "0.5", features = ["mp3", "wav", "pcm"] }
 
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { version = "=0.6.4", default-features = false, features = ["std"] }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFMachPort", "CFRunLoop"] }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation"] }
+
 [build-dependencies]
 napi-build.workspace = true

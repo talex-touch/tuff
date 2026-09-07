@@ -105,7 +105,8 @@
   ],
   "gypfile": true,
   "scripts": {
-    "build": "node-gyp rebuild",
+    "install": "node-gyp configure build",
+    "build": "node-gyp configure build",
     "build:screenshot": "node scripts/build-screenshot.js",
     "build:audio": "node scripts/build-audio.js",
     "build:protocol-fixture": "node scripts/build-protocol-fixture.js",
@@ -113,7 +114,7 @@
     "test:screenshot-protocol": "node --test screenshot-addon-contract.test.js screenshot-protocol.test.js",
     "verify:audio-production": "node scripts/verify-audio-production.js",
     "verify:screenshot-production": "node scripts/verify-screenshot-production.js",
-    "rebuild": "node-gyp rebuild",
+    "rebuild": "node-gyp configure build",
     "check:everything": "node scripts/everything-selfcheck.js"
   },
   "dependencies": {
