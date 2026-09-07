@@ -13,21 +13,14 @@ describe('landing page performance boundaries', () => {
     expect(stickyBar).toContain('v-bind="$attrs"')
   })
 
-  it('keeps waitlist aurora styles deterministic across SSR hydration', () => {
+  it('removes decorative gradient layers from the waitlist surface', () => {
     const waitlist = readLandingFile('./TuffLandingWaitlist.vue')
-    const auroraBar = readLandingFile('./TuffLandingAuroraBar.vue')
 
     expect(waitlist).not.toContain('Math.random')
-    expect(waitlist).toContain('const seed = i + 1')
-    expect(waitlist).toContain('hue: 210 + ((seed * 47) % 110)')
-    expect(waitlist).toContain('aspectRatio: (seed * 7) % 10 + 1')
-    expect(waitlist).toContain(':hue="bar.hue"')
-    expect(waitlist).toContain(':aspect-ratio="bar.aspectRatio"')
-
-    expect(auroraBar).not.toContain('Math.random')
-    expect(auroraBar).not.toContain("import { computed } from 'vue'")
-    expect(auroraBar).toContain('hue: number')
-    expect(auroraBar).toContain('aspectRatio: number')
+    expect(waitlist).not.toContain('TuffLandingAuroraBar')
+    expect(waitlist).not.toMatch(/class="[^"]*(?:aurora|horizon|orb)[^"]*"/i)
+    expect(waitlist).not.toContain('bg-[radial-gradient')
+    expect(waitlist).not.toContain('backdrop-blur-')
   })
 
   it('keeps async GSAP setup scoped to mounted DOM and setup-time cleanup', () => {
