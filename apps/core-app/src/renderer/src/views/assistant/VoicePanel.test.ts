@@ -624,7 +624,8 @@ describe('VoicePanel recovery and pacing', () => {
 
   it('recovers through the same call whether it was cancelled or failed', async () => {
     const wrapper = await failedPanel()
-    expect(wrapper.find('[data-testid="voice-recover"]').text()).toContain('Retry')
+    // Icon-only now, so the label lives where a screen reader can still reach it.
+    expect(wrapper.find('[data-testid="voice-recover"]').attributes('aria-label')).toBe('Retry')
 
     await wrapper.find('[data-testid="voice-recover"]').trigger('click')
     await flushPromises()
@@ -676,7 +677,7 @@ describe('VoicePanel recovery and pacing', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="voice-notice"]').text()).toContain('cancelled a recording')
-    expect(wrapper.find('[data-testid="voice-recover"]').text()).toContain('Undo')
+    expect(wrapper.find('[data-testid="voice-recover"]').attributes('aria-label')).toBe('Undo')
 
     wrapper.unmount()
   })

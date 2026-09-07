@@ -652,22 +652,27 @@ onBeforeUnmount(() => {
         theme="auto"
         :label="t('assistant.voicePanel.voiceTranscribingShort')"
       />
+      <!--
+        Icon only, and the same circle as the other two: the slot holds one round control
+        whatever it means, so a label here would be the only thing in the pill made of words
+        competing with the notice that is already saying something.
+      -->
       <button
         v-else-if="notice?.action"
-        class="voice-dock__action"
+        class="voice-dock__btn voice-dock__btn--action"
         type="button"
         data-testid="voice-recover"
+        :aria-label="
+          notice.action === 'undo'
+            ? t('assistant.voicePanel.undo')
+            : t('assistant.voicePanel.retry')
+        "
         @click="recoverLast"
       >
         <span
           :class="notice.action === 'undo' ? 'i-carbon-undo' : 'i-carbon-renew'"
           aria-hidden="true"
         />
-        {{
-          notice.action === 'undo'
-            ? t('assistant.voicePanel.undo')
-            : t('assistant.voicePanel.retry')
-        }}
       </button>
       <button
         v-else
@@ -742,23 +747,14 @@ onBeforeUnmount(() => {
  * The recovery action replaces the confirm button rather than joining it: a notice offers one
  * thing to do, and a second circle in that slot would read as a choice that does not exist.
  */
-.voice-dock__action {
-  display: inline-flex;
-  height: 26px;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 4px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--shell-radius-full);
+/* Same circle as cancel and confirm — the trailing slot has exactly one shape. */
+.voice-dock__btn--action {
   background: var(--shell-surface-2);
   color: var(--shell-text-primary);
-  cursor: pointer;
-  font-size: var(--shell-fs-caption);
-  transition: background 160ms ease-out;
+  font-size: 16px;
 }
 
-.voice-dock__action:hover {
+.voice-dock__btn--action:hover {
   background: var(--shell-border);
 }
 
