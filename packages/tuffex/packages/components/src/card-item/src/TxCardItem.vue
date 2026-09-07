@@ -156,6 +156,15 @@ const avatarStyle = computed(() => {
   background: color-mix(in srgb, var(--tx-color-primary, #409eff) 8%, transparent);
 }
 
+/* Hovering an active row deepens the accent instead of trading it for the
+   neutral hover fill. `--clickable:hover` alone outranks `--active`, so an
+   active row lost its highlight under the pointer — which is exactly when a
+   cascader branch or a selected list row most needs to stay legible. */
+.tx-card-item--clickable.tx-card-item--active:hover {
+  border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 58%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 15%, transparent);
+}
+
 .tx-card-item--clickable:active {
   box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0.03);
 }
