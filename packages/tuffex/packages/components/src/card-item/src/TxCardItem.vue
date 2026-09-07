@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<CardItemProps>(), {
   active: false,
   disabled: false,
   tabindex: undefined,
+  align: 'start',
 })
 
 const emit = defineEmits<{
@@ -66,6 +67,7 @@ const avatarStyle = computed(() => {
       'tx-card-item--active': active,
       'tx-card-item--disabled': disabled,
       'tx-card-item--no-left': !($slots.avatar || avatarUrl || iconClass || avatarText),
+      'tx-card-item--center': align === 'center',
     }"
     :role="role"
     :tabindex="tabindex !== undefined ? tabindex : ((clickable && !disabled) ? 0 : undefined)"
@@ -140,6 +142,12 @@ const avatarStyle = computed(() => {
 .tx-card-item--disabled {
   opacity: 0.5;
   pointer-events: none;
+}
+
+/* A single-line row: without this the label sits at the top of a row made
+   taller by a caret or a checkbox beside it, and reads as unaligned. */
+.tx-card-item--center {
+  align-items: center;
 }
 
 .tx-card-item--clickable {

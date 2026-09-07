@@ -21,4 +21,16 @@ export interface CardItemProps {
    * options never become Tab stops of their own.
    */
   tabindex?: number
+
+  /**
+   * Cross-axis alignment of the row's columns.
+   *
+   * `start` is right for a card whose text wraps to several lines. `center` is
+   * right for a single-line list row, where a taller leading column — a caret,
+   * a checkbox, an avatar — otherwise pins the label to the top of the row and
+   * leaves it looking unaligned.
+   *
+   * @default 'start'
+   */
+  align?: 'start' | 'center'
 }

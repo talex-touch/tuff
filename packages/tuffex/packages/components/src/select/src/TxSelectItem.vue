@@ -97,6 +97,7 @@ function handleClick() {
   <TxCardItem
     v-show="visible"
     class="tuff-select-item"
+    :align="description ? 'start' : 'center'"
     :class="{ 'is-selected': isSelected, 'is-disabled': disabled }"
     role="option"
     :tabindex="-1"

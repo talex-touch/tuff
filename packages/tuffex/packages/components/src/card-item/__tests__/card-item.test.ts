@@ -178,3 +178,21 @@ describe('txCardItem active under the pointer', () => {
     expect(rule).toMatch(/background:[^;]*15%/)
   })
 })
+
+describe('txCardItem row alignment', () => {
+  it('centres a single-line row and leaves a multi-line card at the top', () => {
+    // A caret or a checkbox beside the label makes the row taller than the text,
+    // and top alignment then pins the label to the top of it.
+    const centred = mount(TxCardItem, { props: { title: 'Appearance', align: 'center' } })
+    expect(centred.classes()).toContain('tx-card-item--center')
+
+    // The default has to stay top-aligned: a card with a description wraps to
+    // several lines and centring those against an avatar looks wrong.
+    const card = mount(TxCardItem, { props: { title: 'Appearance', description: 'Theme and accent' } })
+    expect(card.classes()).not.toContain('tx-card-item--center')
+  })
+
+  it('has the centred rule to go with the class', () => {
+    expect(cardItemSource).toMatch(/\.tx-card-item--center \{[^}]*align-items: center/)
+  })
+})

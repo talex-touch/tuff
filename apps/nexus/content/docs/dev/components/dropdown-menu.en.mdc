@@ -246,6 +246,8 @@ code: |
 
 ## Interaction Contract
 
+- Menu rows use the same outlined hover and active states as every other list row in the library. They previously opted out for a translucent veil; a menu highlighting differently from a select, a tree or a cascader was the more confusing of the two.
+
 - `TxDropdownMenu` is for short action lists; use `TxPopover` / `TxDrawer` when content includes explanations, forms, or complex state.
 - `TxDropdownMenu` wraps `TxPopover`, so `placement`, `offset`, height limiting, panel card props, and animation follow the same anchor behavior.
 - `closeOnSelect` closes the parent menu after enabled items emit `select`; disabled items do not select or close.

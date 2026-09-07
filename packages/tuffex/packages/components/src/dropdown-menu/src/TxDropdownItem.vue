@@ -32,6 +32,7 @@ function onClick() {
 <template>
   <TxCardItem
     class="tx-dropdown-item"
+    align="center"
     :class="{ 'is-disabled': disabled, 'is-danger': danger }"
     role="menuitem"
     :clickable="true"
@@ -58,32 +59,11 @@ function onClick() {
   --tx-card-item-gap: 10px;
 }
 
-// Hover is a soft pane, not the card's outlined box. A menu row highlights by
-// lifting a translucent veil over the panel, the way a selection does in a
-// system menu; the card's hover — a hairline border around an 18% overlay
-// fill — is invisible on a dark panel except for the border, which read as a
-// box drawn around the row. So: no edge at all, not even an inset rim — on a
-// dark panel any 1px line reads as an outline. The fill takes the text ink, so
-// one rule gives a light veil on a dark panel and a grey one on a light panel,
-// with a barely-there white gradient over it — a touch brighter at the top,
-// where the light would fall on glass, but flat enough that the row does not
-// read as raised. Keyboard focus wears the same veil, so arrowing through the
-// menu looks exactly like hovering it, plus the library's focus ring. The
-// doubled class outranks the card's own hover rule without leaning on
-// stylesheet order.
-.tx-dropdown-item.tx-dropdown-item:not(.is-disabled):hover,
-.tx-dropdown-item.tx-dropdown-item:not(.is-disabled):focus-visible {
-  border-color: transparent;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--tx-color-white, #fff) 6%, transparent),
-      color-mix(in srgb, var(--tx-color-white, #fff) 4%, transparent)
-    ),
-    color-mix(in srgb, var(--tx-text-color-primary, #303133) 5%, transparent);
-  box-shadow: none;
-}
-
+// Menu rows wear the same outlined hover and active states as every other
+// list row in the library. They used to opt out for a translucent veil, on the
+// grounds that a hairline border reads as a box drawn around the row on a dark
+// panel; that made a menu the one list that highlighted differently from a
+// select, a tree or a cascader, which is the more confusing of the two.
 .tx-dropdown-item.tx-dropdown-item:not(.is-disabled):focus-visible {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 22%, transparent);
 }
