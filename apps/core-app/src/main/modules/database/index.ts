@@ -884,7 +884,8 @@ export class DatabaseModule extends BaseModule {
         source_app text,
         is_favorite integer DEFAULT 0,
         metadata text,
-        retention_protected integer NOT NULL DEFAULT 0
+        retention_protected integer NOT NULL DEFAULT 0,
+        retention_expires_at integer
       )`,
       'CREATE INDEX IF NOT EXISTS idx_clipboard_history_timestamp ON clipboard_history (timestamp)',
       `CREATE TABLE IF NOT EXISTS clipboard_history_meta (
@@ -940,10 +941,26 @@ export class DatabaseModule extends BaseModule {
       )
     }
 
+    // Per-item expiry, for entries whose useful life is far shorter than the category policy.
+    // A verification code is spent the moment it is pasted; keeping it the category's ninety
+    // days is ninety days of a working credential sitting in a plaintext table. Nullable, so
+    // an entry without one simply falls through to the category policy.
+    const clipboardExpiryColumn = await this.auxClient.execute(
+      "SELECT 1 FROM pragma_table_info('clipboard_history') WHERE name = 'retention_expires_at' LIMIT 1"
+    )
+    if (clipboardExpiryColumn.rows.length === 0) {
+      await this.auxClient.execute(
+        'ALTER TABLE clipboard_history ADD COLUMN retention_expires_at integer'
+      )
+    }
+
     const retentionIndexes = [
       `CREATE INDEX IF NOT EXISTS clipboard_history_retention_idx
          ON clipboard_history (timestamp, id)
       WHERE COALESCE(is_favorite, 0) = 0 AND COALESCE(retention_protected, 0) = 0`,
+      `CREATE INDEX IF NOT EXISTS clipboard_history_expiry_idx
+         ON clipboard_history (retention_expires_at)
+      WHERE retention_expires_at IS NOT NULL AND COALESCE(is_favorite, 0) = 0`,
       `CREATE INDEX IF NOT EXISTS ocr_jobs_retention_idx
          ON ocr_jobs (COALESCE(finished_at, queued_at), id)
       WHERE status IN ('completed', 'failed', 'cancelled')`,

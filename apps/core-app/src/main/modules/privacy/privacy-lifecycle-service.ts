@@ -36,6 +36,7 @@ import { randomUUID } from 'node:crypto'
 import { isProxy } from 'node:util/types'
 import {
   PRIVACY_DATA_CATEGORIES,
+  PRIVACY_RETENTION_PRESETS,
   PRIVACY_SETTINGS_DATA_CATEGORIES,
   normalizePrivacyRequest,
   normalizePrivacyResult
@@ -771,15 +772,9 @@ export function createPrivacyLifecycleService(
             ok: true as const,
             data: Object.freeze({
               policy,
-              supportedPresets: Object.freeze([
-                '1-day',
-                '7-days',
-                '30-days',
-                '90-days',
-                '180-days',
-                '365-days',
-                'permanent'
-              ] as const)
+              // 这里曾经是同一份预设的第二张手抄表。加一档就得记得改两处，
+              // 忘了的话 UI 拿不到新档位，而且没有任何检查会说话。
+              supportedPresets: PRIVACY_RETENTION_PRESETS
             })
           })
         } catch (error) {

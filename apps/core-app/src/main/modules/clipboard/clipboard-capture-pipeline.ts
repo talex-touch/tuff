@@ -20,6 +20,12 @@ import { windowManager } from '../box-tool/core-box/window'
 import { getClipboardTagSearchTerms } from '../clipboard-tagging'
 import type { ClipboardRetentionClass } from '@talex-touch/utils/clipboard'
 import { classifyClipboardContent } from '@talex-touch/utils/clipboard'
+
+/**
+ * 验证码的保留时长。放常量而不是读用户策略，是因为采集路径在热路径上，
+ * 每条都去读一次策略存储不划算；设置页改档时由 M4 把它接成可配置。
+ */
+const VERIFICATION_CODE_RETENTION_MS = 60 * 60 * 1000
 import {
   CLIPBOARD_HTML_FORMATS,
   CLIPBOARD_IMAGE_FORMATS,
@@ -298,7 +304,12 @@ export class ClipboardCapturePipeline {
       timestamp: new Date(),
       // 保留策略清理侧早就写着 `COALESCE(retention_protected, 0) = 0`，列和索引也都建好了，
       // 但在这之前没有任何代码写过它——密钥和普通文本一样会在 90 天后被清掉。
-      retentionProtected: retentionClass === 'secret'
+      retentionProtected: retentionClass === 'secret',
+      // 验证码一被粘贴就作废了，留满类别的 90 天等于让一个还能用的凭据在明文表里躺三个月。
+      retentionExpiresAt:
+        retentionClass === 'verification-code'
+          ? new Date(Date.now() + VERIFICATION_CODE_RETENTION_MS)
+          : null
     }
 
     if (

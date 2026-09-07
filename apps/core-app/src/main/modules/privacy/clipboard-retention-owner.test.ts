@@ -47,6 +47,9 @@ async function installTrustedProtectionFixture(client: TestClient): Promise<void
       'ALTER TABLE clipboard_history ADD COLUMN retention_protected INTEGER NOT NULL DEFAULT 0'
     )
   }
+  if (!columns.rows.some((row) => row.name === 'retention_expires_at')) {
+    await client.execute('ALTER TABLE clipboard_history ADD COLUMN retention_expires_at INTEGER')
+  }
 }
 
 async function seedClipboard(
@@ -57,6 +60,7 @@ async function seedClipboard(
     timestamp: number
     favorite?: boolean
     retentionProtected?: boolean
+    expiresAt?: number | null
     metadata?: string
   }>
 ): Promise<number[]> {
@@ -65,8 +69,8 @@ async function seedClipboard(
     const inserted = await client.execute({
       sql: `
         INSERT INTO clipboard_history
-          (type, content, timestamp, is_favorite, metadata, retention_protected)
-        VALUES (?, ?, ?, ?, ?, ?)
+          (type, content, timestamp, is_favorite, metadata, retention_protected, retention_expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
       args: [
         value.type ?? 'text',
@@ -74,7 +78,8 @@ async function seedClipboard(
         value.timestamp,
         value.favorite ? 1 : 0,
         value.metadata ?? null,
-        value.retentionProtected ? 1 : 0
+        value.retentionProtected ? 1 : 0,
+        value.expiresAt ?? null
       ]
     })
     ids.push(Number(inserted.lastInsertRowid))
@@ -206,6 +211,43 @@ describe('clipboard retention owner RED 2A', () => {
     })
     expect(await listClipboardIds(client)).toEqual([2, 3, 4, 5, 6])
     expect(JSON.stringify({ preview, result })).not.toContain('CANARY_CLIPBOARD')
+  })
+
+  /**
+   * 每条记录自己的过期时刻。验证码走这条：它的时间戳还很新，类别的 90 天窗口够不到它，
+   * 但一次性码被粘贴的那一刻就作废了。
+   *
+   * 收藏豁免的优先级高于一切——包括这条。用户主动收藏了一个验证码，说明他有别的打算。
+   */
+  it('deletes an item past its own expiry even when the category window has not reached it', async () => {
+    const { client } = await createPrivacyTestClient('clipboard-per-item-expiry')
+    await applyPrivacyMigrations(client, ['0002_eager_the_executioner.sql'])
+    await installTrustedProtectionFixture(client)
+
+    const recent = Math.floor(NOW_MS / 1000) - 60
+    const expired = Math.floor(NOW_MS / 1000) - 1
+    const notYet = Math.floor(NOW_MS / 1000) + 3600
+
+    await seedClipboard(client, [
+      { content: 'CANARY_CODE_EXPIRED', timestamp: recent, expiresAt: expired },
+      { content: 'CANARY_CODE_STILL_VALID', timestamp: recent, expiresAt: notYet },
+      { content: 'CANARY_ORDINARY_RECENT', timestamp: recent },
+      {
+        content: 'CANARY_CODE_EXPIRED_BUT_FAVORITE',
+        timestamp: recent,
+        expiresAt: expired,
+        favorite: true
+      }
+    ])
+
+    const owner = createClipboardRetentionOwner({ client })
+    const preview = await owner.previewDelete(retentionRequest(), new AbortController().signal)
+    expect(preview).toMatchObject({ ok: true, eligibleItemCount: 1, protectedItemCount: 1 })
+
+    const result = await owner.delete(retentionRequest(), new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, deletedItemCount: 1 })
+    // 只有过期且未收藏的那条被删；未到期的、普通的、收藏的都还在。
+    expect(await listClipboardIds(client)).toEqual([2, 3, 4])
   })
 
   it('includes trusted protected rows in manual-delete impact evidence', async () => {
