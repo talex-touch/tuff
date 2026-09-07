@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxPicker from '../src/TxPicker.vue'
+import pickerSource from '../src/TxPicker.vue?raw'
 
 const columns = [
   {
@@ -302,5 +303,85 @@ describe('txPicker keyboard a11y', () => {
     expect(option?.getAttribute('tabindex')).toBe('-1')
 
     wrapper.unmount()
+  })
+})
+
+describe('txPicker wheel', () => {
+  const wheelColumns = [
+    {
+      key: 'channel',
+      options: Array.from({ length: 8 }).map((_, i) => ({ value: `v${i}`, label: `Option ${i}` })),
+    },
+  ]
+
+  function mountWheel(props: Record<string, unknown> = {}) {
+    return mount(TxPicker, {
+      attachTo: document.body,
+      props: { popup: false, columns: wheelColumns, modelValue: ['v0'], ...props },
+    })
+  }
+
+  it('derives the drum radius from the row height so arc length matches the layout', () => {
+    // r = (itemHeight / 2) / tan(step / 2); 36px rows at 18° give 114px.
+    const wrapper = mountWheel()
+    const columnsEl = wrapper.find('.tx-picker__columns').element as HTMLElement
+
+    expect(columnsEl.style.getPropertyValue('--tx-picker-radius')).toBe('114px')
+    expect(columnsEl.style.getPropertyValue('--tx-picker-step')).toBe('18')
+
+    wrapper.unmount()
+
+    const tall = mountWheel({ itemHeight: 48 })
+    expect((tall.find('.tx-picker__columns').element as HTMLElement).style.getPropertyValue('--tx-picker-radius')).toBe('152px')
+    tall.unmount()
+  })
+
+  it('numbers every row so its rotation is one calc off the scroll offset', () => {
+    const wrapper = mountWheel()
+    const rows = wrapper.findAll('.tx-picker__item')
+
+    expect(rows).toHaveLength(8)
+    expect(rows.map(row => (row.element as HTMLElement).style.getPropertyValue('--tx-picker-index')))
+      .toEqual(['0', '1', '2', '3', '4', '5', '6', '7'])
+
+    wrapper.unmount()
+  })
+
+  it('writes the scroll offset in rows onto the column as the wheel turns', () => {
+    const wrapper = mountWheel()
+    const scroller = wrapper.find('.tx-picker__scroller').element as HTMLElement
+
+    // Read synchronously: the offset has to land on the scroll event itself,
+    // not a frame later, or the drum lags the finger. Awaiting here would also
+    // let the column settle onto a row and overwrite the value under test.
+    scroller.scrollTop = 90
+    scroller.dispatchEvent(new Event('scroll'))
+    // Two and a half rows down at 36px each.
+    expect(scroller.style.getPropertyValue('--tx-picker-scroll')).toBe('2.5')
+
+    scroller.scrollTop = 144
+    scroller.dispatchEvent(new Event('scroll'))
+    expect(scroller.style.getPropertyValue('--tx-picker-scroll')).toBe('4')
+
+    wrapper.unmount()
+  })
+
+  it('keeps the native scroller, so momentum, snapping and the listbox stay', () => {
+    // The drum is a paint on top of a real scroll container; replacing it with
+    // a transform-driven list would have cost the platform's own inertia.
+    const scrollerRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__scroller {'))
+    const body = scrollerRule.slice(0, scrollerRule.indexOf('&::-webkit-scrollbar'))
+
+    expect(body).toContain('overflow-y: auto')
+    expect(body).toContain('scroll-snap-type: y mandatory')
+    expect(body).toContain('perspective:')
+    expect(body).toContain('mask-image:')
+
+    const itemRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__item {'))
+    expect(itemRule.slice(0, itemRule.indexOf('&.is-selected'))).toMatch(/rotateX\([\s\S]*translateZ\(/)
+
+    // Flat fallback when motion is unwelcome.
+    const reduced = pickerSource.slice(pickerSource.indexOf('@media (prefers-reduced-motion: reduce)'))
+    expect(reduced).toContain('transform: none')
   })
 })
