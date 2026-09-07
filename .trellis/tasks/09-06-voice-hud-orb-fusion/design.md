@@ -622,3 +622,23 @@ handlePanelFinished()  →  只置 expanded=false，挂一个 400ms 的兜底
 `@after-leave` 是快路径（220ms 后到），400ms 定时器是兜底——给「hook 不会来」的场景：Test Utils 默认 stub 掉 `<Transition>`，以及生产里动画中途被拆掉的表面。`handlePanelClosed`（主进程自己收的）和卸载时都会取消这个定时器。
 
 三条负控制：改回「同一帧就通知」转红（这是这次真正的回归点）；`@after-leave` 不通知，在**真实 Transition** 的用例下转红（stub 环境里兜底会掩盖它，所以那条用例必须关掉 stub）。缩放数值本身在 jsdom 里观察不到，没有守卫——CSS 值这一层这里测不了，如实记一笔。
+
+## 14. 一行文案却换了行（2026-09-07）
+
+「设备捕获中…」/「Opening the microphone…」这种一行的短句在实机上会折成两行，而且左对齐。两个原因叠在一起：
+
+**① `scrollWidth` 是整数，文字宽度不是。**
+
+一句真实宽度 145.7 的话，`scrollWidth` 报 145，于是槽位拿到 145 —— 差那 0.7px，就换行。**每一句刚好能放下的文案都是在掷硬币。** 加 `TEXT_WIDTH_SLACK = 2`：
+
+```ts
+const needed = measureNaturalWidth(element) + TEXT_WIDTH_SLACK + chrome
+```
+
+测试断言写成**不等式**而不是数字：`pillWidth − chrome > 量到的自然宽`。这条正是余量存在的唯一理由，把余量去掉立刻转红；写成 `width: 241px` 就只是把常量抄了一遍。
+
+**② 换行之后是左对齐的。**
+
+`.voice-dock__text` 没写 `text-align`，默认 left。单行时看不出来（盒子贴着文字），一换行就露馅。胶囊是绕中心对称的，所以基础态补 `text-align: center`；只有卡片态覆盖成 left——两行是段落，段落本来就该有一边是毛边。
+
+这条**没有守卫**：CSS 的 `text-align` 在 jsdom 里观察不到，删掉它测试照样全绿。如实记一笔，不假装盖住。

@@ -909,6 +909,37 @@ describe('VoicePanel device readiness and long messages', () => {
   })
 
   /**
+   * The one-line states have to actually get one line.
+   *
+   * `scrollWidth` is an integer and text is not, so a sentence whose real width is 145.7 reports
+   * 145 and gets a slot exactly 145 wide — a fraction too narrow, and it wraps. Asserted as an
+   * inequality rather than a number: the rule is that the slot is strictly wider than the text
+   * it was measured from, which is the only thing the slack is there to guarantee.
+   */
+  it('gives a one-line message a slot wider than the text it measured', async () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.style.whiteSpace === 'nowrap' ? 145 : 106
+    })
+
+    const wrapper = await listeningPanel()
+    await flushPromises()
+
+    // Still waiting on the first level frame, so this is the "opening the microphone" line.
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toBe('Opening the microphone…')
+
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    const width = Number(/width: (\d+)px/.exec(style)?.[1] ?? 0)
+    expect(width - 94).toBeGreaterThan(145)
+    expect(style).toContain('height: 44px')
+    expect(wrapper.find('.voice-dock--expanded').exists()).toBe(false)
+
+    vi.restoreAllMocks()
+    wrapper.unmount()
+  })
+
+  /**
    * A short sentence still has to widen the pill.
    *
    * `scrollWidth` on a wrapped paragraph reports the width it already has, not the width it wants,
@@ -928,9 +959,9 @@ describe('VoicePanel device readiness and long messages', () => {
     await flushPromises()
     await flushPromises()
 
-    // 130 of text + 94 of chrome, not the 200 the base pill would have kept.
+    // 130 of text + 2 of rounding slack + 94 of chrome, not the 200 the base pill would keep.
     const style = wrapper.find('.voice-dock').attributes('style') ?? ''
-    expect(style).toContain('width: 224px')
+    expect(style).toContain('width: 226px')
     expect(style).toContain('height: 44px')
     // And the measurement leaves no trace on the element it borrowed.
     expect(wrapper.find('[data-testid="voice-notice"]').attributes('style') ?? '').not.toContain(
