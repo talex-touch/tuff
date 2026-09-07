@@ -146,6 +146,20 @@ The renderer consumes one typed verification status and derives `pass | unverifi
 
 **Rule**: If correctness depends on “route A ran before route B,” treat it as an invalid cross-layer contract unless the ordering is durably represented outside process/module memory.
 
+### Mistake 9: Letting Snapshot And Realtime Coverage Drift
+
+**Bad**: A full file scan walks 24 directory levels while the macOS FSEvents adapter is
+configured for 8. Files below level 8 appear after a rebuild but never when created, renamed,
+changed, or deleted during the running session.
+
+**Good**: Give snapshot traversal and realtime watching one shared depth constant. Verify the
+real chain after the watcher reports ready: create valid files at the root, former boundary,
+one level past it, and the maximum; then assert both metadata and searchable projection rows,
+plus rename/delete convergence and one out-of-bound negative control.
+
+**Rule**: Every snapshot + change-stream pair must share its coverage policy (roots, depth,
+normalization, exclusions). A unit test of either half alone does not prove freshness.
+
 ## Checklist for Cross-Layer Features
 
 Before implementation:

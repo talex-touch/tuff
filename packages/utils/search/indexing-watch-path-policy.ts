@@ -1,5 +1,6 @@
 import pathBrowserify from "path-browserify";
 import { hasWindow } from "../env";
+import { FILE_SCAN_MAX_DEPTH } from "../common/file-scan-constants";
 
 const path = (() => {
   if (hasWindow()) {
@@ -39,7 +40,7 @@ export function getIndexedWatchDepthForPath(
   const platform = input.platform ?? getCurrentPlatform();
 
   if (platform === "darwin") {
-    return 8;
+    return FILE_SCAN_MAX_DEPTH;
   }
 
   if (platform === "win32") {
