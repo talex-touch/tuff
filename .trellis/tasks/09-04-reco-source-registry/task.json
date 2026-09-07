@@ -22,5 +22,9 @@
   "parent": "09-04-corebox-recommend-platform",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Archive the completed implementation after recording the unrelated Apple Vision OCR timeout as external to this task.",
+    "blocker": "No task-scope blocker; the only reported failure is two Apple Vision OCR timeouts outside the recommendation registry scope.",
+    "evidence": "prd.md records core-app and utils lint, node and web typecheck, 1436 box-tool tests, 1380 plugin tests, source-registration behavior, ordering, warning isolation, and no-N+1 coverage."
+  }
 }

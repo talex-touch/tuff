@@ -22,5 +22,9 @@
   "parent": "09-04-corebox-recommend-platform",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Archive the completed transport and resource unification; create separate tasks only for dead-channel removal or TTS data-URL remediation.",
+    "blocker": "No task-scope blocker; dead-channel deletion and TTS data-URL remediation are explicitly out of scope.",
+    "evidence": "prd.md records core-app and utils lint, node and web typecheck, 842 renderer and search tests, eleven toTfileUrl cases, and the stream-scheme rejection evidence."
+  }
 }

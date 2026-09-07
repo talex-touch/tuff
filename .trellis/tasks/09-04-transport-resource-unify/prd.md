@@ -92,7 +92,7 @@ tfile 实现分散三处:`modules/file-protocol/`(scheme + session 注册 + prev
   `transport/sdk/stream/protocol.ts` 不得携带 image/audio/video/file 字节。
 - C3 路径规范化与 `getAllowedLocalFileRoots()` 的**判定逻辑留在主进程**,只有类型上移。
   收敛不得新建第二套 path policy。
-- C4 `cache/app-icons` 根必须继续通过,否则全部图标 403 退化为占位符。
+- C4 `cache/app-icons` 根必须继续通过,否则全部图标 403 退化为默认图标。
 
 ### D. `stream:` scheme:建立或放弃
 

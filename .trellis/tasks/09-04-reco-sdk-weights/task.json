@@ -22,5 +22,9 @@
   "parent": "09-04-corebox-recommend-platform",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Close and archive the task after deciding whether plugin usageStats ranking needs a user-visible privacy disclosure; implementation acceptance is otherwise complete.",
+    "blocker": "Product copy and privacy decision Q5 remains open; no implementation or test blocker is recorded.",
+    "evidence": "prd.md records node and web typecheck, 174 recommendation tests, 13 public-weight tests, and real-file recommendation evidence with thumbnails and badges."
+  }
 }
