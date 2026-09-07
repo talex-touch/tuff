@@ -4,16 +4,19 @@ import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/u
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { UpdateSystem } from './update-system'
 
-const { networkRequestMock, createReadStreamMock, readFileMock } = vi.hoisted(() => ({
-  networkRequestMock: vi.fn(),
-  createReadStreamMock: vi.fn(),
-  readFileMock: vi.fn()
-}))
+const { networkRequestMock, createReadStreamMock, readFileMock, appGetVersionMock } = vi.hoisted(
+  () => ({
+    networkRequestMock: vi.fn(),
+    createReadStreamMock: vi.fn(),
+    readFileMock: vi.fn(),
+    appGetVersionMock: vi.fn()
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
     getPath: vi.fn(() => '/tmp/tuff-test'),
-    getVersion: vi.fn(() => '2.4.9'),
+    getVersion: appGetVersionMock,
     isPackaged: true
   }
 }))
@@ -136,16 +139,14 @@ function trustedManifest() {
 }
 
 describe('UpdateSystem install handoff preparation', () => {
-  let savedAppVersion: string | undefined
-
   beforeEach(() => {
     vi.useFakeTimers()
     PollingService.getInstance().stop('test setup')
     createReadStreamMock.mockReset()
     createReadStreamMock.mockReturnValue((async function* () {})())
     readFileMock.mockReset()
-    savedAppVersion = process.env.APP_VERSION
-    process.env.APP_VERSION = '2.4.9'
+    appGetVersionMock.mockReset()
+    appGetVersionMock.mockReturnValue('2.4.9')
     networkRequestMock.mockReset()
     networkRequestMock.mockImplementation(async ({ url }: { url: string }) => {
       if (url === manifestUrl) return { data: trustedManifest() }
@@ -155,8 +156,6 @@ describe('UpdateSystem install handoff preparation', () => {
 
   afterEach(() => {
     PollingService.getInstance().stop('test cleanup')
-    if (savedAppVersion === undefined) delete process.env.APP_VERSION
-    else process.env.APP_VERSION = savedAppVersion
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
@@ -287,7 +286,7 @@ describe('UpdateSystem install handoff preparation', () => {
 
   it('fails closed when the installed version is not the exact manifest rollback version', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    process.env.APP_VERSION = '2.4.8'
+    appGetVersionMock.mockReturnValue('2.4.8')
     const updateSystem = new UpdateSystem(createDownloadCenterMock() as never, {
       storageRoot: '/tmp/tuff-test'
     })
