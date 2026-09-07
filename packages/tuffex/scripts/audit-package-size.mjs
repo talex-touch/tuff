@@ -456,16 +456,36 @@ async function auditDistSizes(errors) {
       `Component CSS ${relativeToRepo(entry.file)} is ${formatBytes(entry.bytes)}; limit is ${formatBytes(cssLimitFor(entry.file))}`,
     )
   }
+  // Alias packages re-export another component and add no rules of their own, so
+  // their stylesheet is empty and `style-deps.json` is what carries them to the
+  // real one. The failure this guards against is an alias quietly going back to
+  // holding a full copy of empty-state.
+  const styleDepsFile = resolve(distEs, 'style-deps.json')
+  let styleDeps = {}
+  try {
+    styleDeps = JSON.parse(await readFile(styleDepsFile, 'utf-8'))
+  }
+  catch {
+    errors.push(`${relativeToRepo(styleDepsFile)} is missing; the on-demand style plugin has no dependency graph to walk`)
+  }
+
   for (const distDir of [distEs, distLib]) {
     for (const componentName of emptyStateStyleAliases) {
       const styleFile = resolve(distDir, componentName, 'style.css')
       const bytes = await sizeOf(styleFile)
-      const source = await readFile(styleFile, 'utf-8')
-      if (bytes > LIMITS.emptyStateAliasCssBytes || !source.includes('../empty-state/style.css')) {
+      if (bytes > LIMITS.emptyStateAliasCssBytes) {
         errors.push(
-          `${relativeToRepo(styleFile)} is ${formatBytes(bytes)}; expected a lightweight import of ../empty-state/style.css`,
+          `${relativeToRepo(styleFile)} is ${formatBytes(bytes)}; an alias carries no rules of its own`,
         )
       }
+    }
+  }
+
+  for (const componentName of emptyStateStyleAliases) {
+    if (!(styleDeps[componentName] ?? []).includes('empty-state')) {
+      errors.push(
+        `style-deps.json does not route ${componentName} to empty-state; the alias would render unstyled`,
+      )
     }
   }
 

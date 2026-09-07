@@ -102,9 +102,14 @@ function chunkOwner(chunk: ComponentStyleOutput, componentNames: Set<string>): s
  * Inlining the whole dependency graph is what made these files enormous: the
  * base-surface rules were copied into 26 packages and the spinner's into 29,
  * so the 151 stylesheets came to 2.2 MiB of which 68% was the same bytes over
- * and over. A dependency is emitted as an `@import` of that component's own
- * stylesheet instead, which a bundler resolves once no matter how many
- * components ask for it.
+ * and over. Each stylesheet now carries only its own rules, and the graph is
+ * published beside them as `style-deps.json` for the on-demand plugin to walk.
+ *
+ * The dependencies are deliberately *not* written as `@import`s. A bundler
+ * resolves those within one CSS module graph but not across two separate JS
+ * imports of two stylesheets, so five components importing base-surface still
+ * inlined it five times. Independent `import` statements are the thing that
+ * dedupes, because a module graph loads one path exactly once.
  */
 export function collectCssAssets(result: Awaited<ReturnType<typeof build>>, componentNames: Set<string>) {
   const buildResult = result as ComponentStyleBuildResult | ComponentStyleBuildResult[]
@@ -167,11 +172,6 @@ export function collectCssAssets(result: Awaited<ReturnType<typeof build>>, comp
 }
 
 async function writeComponentStyle(componentName: string, parts: ComponentStyleParts) {
-  // `@import` is only honoured before any rule, so the dependencies lead the
-  // file. That also puts them lower in the cascade than the component's own
-  // rules, which is the order a component would want anyway.
-  const imports = parts.deps.map(dep => `@import "../${dep}/style.css";`).join('\n')
-
   // `@charset` is only read as the very first thing in a file, and each SFC's
   // CSS arrives carrying its own. Concatenating them left one at the top and
   // the rest stranded mid-file; hoisting a single declaration keeps the one
@@ -181,11 +181,13 @@ async function writeComponentStyle(componentName: string, parts: ComponentStyleP
   const needsCharset = parts.own.some(part => CHARSET_RE.test(part))
   CHARSET_RE.lastIndex = 0
 
-  const body = [imports, ownParts.join('\n')].filter(part => part.trim().length > 0).join('\n\n')
+  const body = ownParts.join('\n')
 
+  // Alias packages re-export another component wholesale and add nothing of
+  // their own; the dependency graph carries them to the real stylesheet.
   const style = emptyStateStyleAliases.has(componentName)
-    ? '@import "../empty-state/style.css";\n'
-    : needsCharset ? `@charset "UTF-8";\n${body}` : body
+    ? ''
+    : needsCharset && body.length > 0 ? `@charset "UTF-8";\n${body}` : body
 
   await Promise.all([
     mkdir(resolve(distPath, 'es', componentName), { recursive: true }),
@@ -228,11 +230,25 @@ export async function buildComponentStyles() {
 
   const componentNames = new Set(Object.keys(entries))
   const entryCss = collectCssAssets(result, componentNames)
-  await Promise.all(
-    Object.entries(entries).map(([componentName]) =>
+
+  const styleDeps: Record<string, string[]> = {}
+  for (const componentName of Object.keys(entries).sort()) {
+    const parts = entryCss.get(componentName) ?? { own: [], deps: [] }
+    const deps = emptyStateStyleAliases.has(componentName) ? ['empty-state'] : parts.deps
+    if (deps.length > 0)
+      styleDeps[componentName] = deps
+  }
+
+  await Promise.all([
+    ...Object.entries(entries).map(([componentName]) =>
       writeComponentStyle(componentName, entryCss.get(componentName) ?? { own: [], deps: [] }),
     ),
-  )
+    // Published beside the stylesheets: the on-demand plugin walks this to turn
+    // one component import into the full set of stylesheets it needs.
+    ...['es', 'lib'].map(dir =>
+      writeFile(resolve(distPath, dir, 'style-deps.json'), `${JSON.stringify(styleDeps, null, 2)}\n`),
+    ),
+  ])
 
   await rm(tempOutDir, { recursive: true, force: true })
 }

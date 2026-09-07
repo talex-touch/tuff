@@ -38,13 +38,31 @@ app.use(TxDrawer)
 
 `@talex-touch/tuffex/base.css` 只包含共享 token 和全局 utility。旧的 `@talex-touch/tuffex/style.css` 仅作为全量样式兼容入口保留。
 
-需要进一步控制样式体积时，也可以只引入对应组件样式：
+#### 每个样式表只包含单个组件的规则
+
+`<component>/style.css` 只含该组件自身的规则。依赖其它组件的组件——`progress-bar`
+用到 `tooltip`，`tooltip` 用到 `base-anchor`，再到 `base-surface`——需要把这些依赖的
+样式表一并引入，否则对应部分会缺样式，而且不会有任何报错。
+
+这些文件此前是自包含的：base-surface 的规则被复制进 26 个包、spinner 的进了 29 个，
+总计 2.2 MiB 的样式表里 68% 是重复字节，一个用了五个组件的页面要为 base-surface
+付五份成本。
+
+装上构建插件，它会按依赖顺序替你算出完整集合：
 
 ```ts
-import { TxButton } from '@talex-touch/tuffex/button'
-import '@talex-touch/tuffex/base.css'
-import '@talex-touch/tuffex/button/style.css'
+// vite.config.ts
+import { tuffexOnDemandStylePlugin } from '@talex-touch/tuffex/vite'
+
+export default defineConfig({
+  plugins: [tuffexOnDemandStylePlugin()],
+})
 ```
+
+装了之后只需引入组件本身，样式会自动跟上；共享样式无论被多少组件依赖都只加载一次。
+一个由五个组件构成的页面，CSS 从 208 KiB 降到 104 KiB。
+
+不装插件时需要自行引入整个闭包，`dist/es/style-deps.json` 记录了每个组件的依赖。
 
 ### 兼容完整引入
 

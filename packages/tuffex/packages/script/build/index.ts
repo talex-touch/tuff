@@ -75,6 +75,62 @@ export const buildComponent = async () => {
   return run("pnpm run build", componentPath);
 }
 
+/**
+ * Ships the on-demand style plugin as `@talex-touch/tuffex/vite`.
+ *
+ * Component stylesheets carry only their own rules, so a consumer needs the
+ * dependency closure imported alongside them. The plugin is what works that out
+ * — publishing it is what makes the documented setup something a consumer
+ * outside this repo can actually follow.
+ */
+export const buildVitePlugin = async () => {
+  const outDir = resolve(distPath, 'vite')
+  await mkdir(outDir, { recursive: true })
+
+  const source = resolve(__dirname, 'on-demand-style-plugin.ts')
+  const { build: viteBuild } = await import('vite')
+
+  // Baked in rather than looked up at runtime: a published plugin that has to
+  // locate a JSON file inside its own package is at the mercy of the consumer's
+  // resolution rules, and when it comes up empty it injects one stylesheet
+  // instead of the closure — a silently under-styled page, with no error.
+  const styleDeps = await readFile(resolve(distPath, 'es/style-deps.json'), 'utf-8')
+
+  await viteBuild({
+    configFile: false,
+    logLevel: 'warn',
+    define: { __TUFFEX_STYLE_DEPS__: styleDeps.trim() },
+    build: {
+      outDir,
+      emptyOutDir: true,
+      target: 'node20',
+      minify: false,
+      lib: { entry: source, formats: ['es', 'cjs'], fileName: format => `index.${format === 'es' ? 'js' : 'cjs'}` },
+      rollupOptions: {
+        // Vite is the host's own; everything else here is a node builtin.
+        external: (id: string) => id === 'vite' || id.startsWith('node:'),
+      },
+    },
+  })
+
+  await writeFile(
+    resolve(outDir, 'index.d.ts'),
+    [
+      `import type { Plugin } from 'vite'`,
+      ``,
+      `export interface TuffexOnDemandStylePluginOptions {`,
+      `  enabled?: boolean`,
+      `  styleDeps?: Record<string, string[]>`,
+      `}`,
+      ``,
+      `export declare function expandStyleClosure(componentNames: string[], styleDeps: Record<string, string[]>): string[]`,
+      `export declare function tuffexOnDemandStylePlugin(options?: TuffexOnDemandStylePluginOptions): Plugin`,
+      `export default tuffexOnDemandStylePlugin`,
+      ``,
+    ].join('\n'),
+  )
+}
+
 async function readBaseStyle(): Promise<string> {
   const generatedCandidates = [
     resolve(distPath, 'es/index.css'),
@@ -134,6 +190,7 @@ const build: TaskFunction = series(
   async () => fixComponentDeclarations(),
   async () => buildComponentStyles(),
   async () => buildStyleEntry(),
+  async () => buildVitePlugin(),
   async () => writeCjsScopeManifest(),
 )
 
