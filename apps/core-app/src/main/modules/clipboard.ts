@@ -56,6 +56,11 @@ import {
 import { ClipboardFreshnessStore, ClipboardHelper } from './clipboard/clipboard-capture-freshness'
 import { ClipboardCapturePipeline } from './clipboard/clipboard-capture-pipeline'
 import {
+  DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS,
+  resolveClipboardClassificationSettings,
+  type ClipboardClassificationSettings
+} from './clipboard/clipboard-classification-settings'
+import {
   normalizeClipboardWritePayload,
   type ClipboardHistoryQueryInput
 } from './clipboard/clipboard-request-normalizer'
@@ -228,6 +233,7 @@ export class ClipboardModule extends BaseModule {
     }
   })
   private readonly stageBEnrichment = new ClipboardStageBEnrichment({
+    getClassificationSettings: () => this.readClassificationSettings(),
     getDatabase: () => this.db,
     getCachedItemById: (clipboardId) => this.historyPersistence.getCachedItemById(clipboardId),
     getActiveAppSnapshot: () => this.getActiveAppSnapshot(),
@@ -251,6 +257,7 @@ export class ClipboardModule extends BaseModule {
     }
   })
   private readonly capturePipeline = new ClipboardCapturePipeline({
+    getClassificationSettings: () => this.readClassificationSettings(),
     getDatabase: () => this.db,
     getClipboardHelper: () => this.clipboardHelper,
     getReader: () => this.resolveClipboardReader(),
@@ -1497,6 +1504,17 @@ export class ClipboardModule extends BaseModule {
    * 而策略读取是异步的存储访问。策略变更时重新读一次即可——用户改设置到界面刷新之间
    * 有一瞬间的旧值，代价远小于把一次分页查询变成 50 次存储读。
    */
+  /** 读用户设置里的剪贴板分类块。这里是唯一碰 storage 的地方，采集与 stage-B 只拿结果。 */
+  private readClassificationSettings(): ClipboardClassificationSettings {
+    try {
+      return resolveClipboardClassificationSettings(
+        getMainConfig(StorageList.APP_SETTING)?.clipboard
+      )
+    } catch {
+      return DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS
+    }
+  }
+
   private async refreshRetentionPolicy(): Promise<void> {
     try {
       const policy = await createMainPrivacyRetentionPolicyStore().load()

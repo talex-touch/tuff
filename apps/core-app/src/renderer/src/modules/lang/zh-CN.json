@@ -268,6 +268,21 @@
         "permanent": "永久保留"
       }
     },
+    "clipboardTiers": {
+      "title": "剪贴板内容分档",
+      "hint": "验证码和密钥与普通剪贴内容同表，删除路径也一样，所以它们的策略挂在这里而不是单列成数据类别。",
+      "verificationCode": "验证码保留时长",
+      "protectSecrets": "密钥永不自动删除",
+      "customPrefixes": "自定义密钥前缀",
+      "customPrefixesPlaceholder": "如 cr_、zz-，用逗号分隔",
+      "durations": {
+        "300000": "5 分钟",
+        "900000": "15 分钟",
+        "3600000": "1 小时",
+        "21600000": "6 小时",
+        "86400000": "24 小时"
+      }
+    },
     "actions": {
       "selectCategories": "选择数据类别",
       "preview": "预览影响",
@@ -4678,9 +4693,9 @@
       "cancelSession": "取消本次",
       "cancelled": "已取消",
       "capturingDevice": "设备捕获中…",
-      "microphoneUnresponsive": "麦克风没有响应，请检查输入设备",
-      "microphoneMissing": "找不到可用的麦克风，请检查系统输入设备",
-      "microphoneDenied": "麦克风权限未授权，请在系统设置中允许",
+      "microphoneUnresponsive": "麦克风没有响应",
+      "microphoneMissing": "找不到可用的麦克风",
+      "microphoneDenied": "麦克风权限未授权",
       "holdToCancel": "按住…松开取消",
       "stillWorking": "还在转写，稍等",
       "stillWorkingLong": "比平时久，可按住 Esc 取消",
@@ -4785,7 +4800,9 @@
       "screenshotTranslateUnavailable": "截图不可用，请检查系统录屏权限或稍后重试",
       "screenshotTranslateImageUnavailable": "截图图片无效，请重新截图后再试",
       "imageTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态",
-      "screenshotTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态"
+      "screenshotTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态",
+      "openMicrophoneSettings": "打开麦克风设置",
+      "microphoneSettingsUnavailable": "这个系统没有可直接打开的麦克风设置"
     },
     "regionSelector": {
       "title": "选择截图区域",
@@ -5081,7 +5098,15 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+      "weekdays": [
+        "日",
+        "一",
+        "二",
+        "三",
+        "四",
+        "五",
+        "六"
+      ]
     },
     "memoryReview": {
       "title": "记忆审核",
