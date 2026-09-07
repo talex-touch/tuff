@@ -58,11 +58,17 @@ const MAX_QUEUED_LEVELS = 20
  * dropped the moment the reason to keep it disappears:
  *
  * - one slot; a new session replaces it
- * - cleared on success and on cancel (the user said no)
- * - kept for RETRY_GRACE_MS after a failure, then dropped by timer
- * - capped, so a long session degrades to "no retry" rather than to unbounded memory
+ * - cleared on success, the only path where the reason to keep it is gone: the transcript
+ *   already landed in the foreground app
+ * - kept for RECOVERY_GRACE_MS after a failure (retry) and after a cancel (undo), then
+ *   dropped by timer. Cancel keeps it because "undo" has to restore the same words —
+ *   otherwise that button is "record again" wearing the wrong name.
+ * - capped, so a long session degrades to "no recovery" rather than to unbounded memory
+ *
+ * The window is a trade, not a conclusion: the pill only offers undo/retry for ~5s, so audio
+ * held past that has no reachable entry point. See the open question in the task design.
  */
-const RETRY_GRACE_MS = 60_000
+const RECOVERY_GRACE_MS = 30_000
 const MAX_RETRY_BUFFER_BYTES = 4 * 1024 * 1024
 const PCM_BITS_PER_SAMPLE = 16
 const PCM_CHANNELS = 1
@@ -255,7 +261,7 @@ function dataUrlToBuffer(dataUrl: string): Buffer | null {
 export class VoiceService {
   private readonly sessions = new Map<string, VoiceSessionRecord>()
   private disposed = false
-  /** See RETRY_GRACE_MS: one slot, memory only, dropped as soon as its reason disappears. */
+  /** See RECOVERY_GRACE_MS: one slot, memory only, dropped as soon as its reason disappears. */
   private retryBuffer: RetryBuffer | null = null
   private retryExpiryTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -294,19 +300,19 @@ export class VoiceService {
     buffer.bytes += chunk.length
   }
 
-  /** Failure is the only path that keeps audio, and only for the grace window. */
+  /** Success is the only path that drops audio immediately; the rest get a recovery window. */
   private armRetryBuffer(): void {
     const buffer = this.retryBuffer
     if (!buffer || buffer.overflowed || buffer.bytes === 0) {
       this.clearRetryBuffer()
       return
     }
-    buffer.expiresAt = Date.now() + RETRY_GRACE_MS
+    buffer.expiresAt = Date.now() + RECOVERY_GRACE_MS
     if (this.retryExpiryTimer) clearTimeout(this.retryExpiryTimer)
     this.retryExpiryTimer = setTimeout(() => {
       this.retryExpiryTimer = null
       this.retryBuffer = null
-    }, RETRY_GRACE_MS)
+    }, RECOVERY_GRACE_MS)
     this.retryExpiryTimer.unref?.()
   }
 
@@ -815,10 +821,9 @@ export class VoiceService {
       this.clearRetryBuffer()
       yield { type: 'end' }
     } catch (error) {
-      // Cancellation is the user saying no — that clears. Anything else may be retried.
-      if (error instanceof Error && error.message === 'VOICE_OPERATION_CANCELLED')
-        this.clearRetryBuffer()
-      else this.armRetryBuffer()
+      // Cancel and failure both keep the audio: one feeds undo, the other feeds retry.
+      // Only the success path above drops it, because there the words already landed.
+      this.armRetryBuffer()
       throw error
     } finally {
       if (connection) await connection.abort('Voice session ended').catch(() => {})
