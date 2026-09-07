@@ -18,11 +18,11 @@ import { useI18n } from 'vue-i18n'
  * repeats what they already know. A failure they did not cause needs longer to be read.
  */
 const NOTICE_HOLD_MS = {
-  muted: 700,
-  warning: 1600,
-  danger: 900,
+  muted: 900,
+  warning: 2100,
+  danger: 1200,
   /** A notice carrying a button has to outlast the reflex to reach for it. */
-  action: 5000
+  action: 6500
 } as const
 
 /**
@@ -81,7 +81,7 @@ const MIC_FAILURE_ICON = 'i-carbon-microphone-off'
  * "the microphone" before it says anything else.
  */
 const ICON_CARD_WIDTH = 264
-const ICON_CARD_HEIGHT = 120
+const ICON_CARD_HEIGHT = 124
 
 /** Bars in the input meter. Each one holds a single 10Hz level frame, so 24 ≈ 2.4s of history. */
 const WAVE_BAR_COUNT = 24
@@ -1217,9 +1217,27 @@ onBeforeUnmount(() => {
  * keeps it clear of the curve rather than merely clear of the border.
  */
 .voice-dock--icon-card {
-  padding-top: 12px;
+  padding-top: 16px;
   grid-template-rows: 1fr auto;
   row-gap: 6px;
+}
+
+/*
+ * The icon takes the board's warning hue rather than the shell's darkened one.
+ *
+ * `--shell-warning` is deliberately deepened for 11px chip ink — it has to clear AA on a soft
+ * surface — and at icon size that reads as brown rather than as a warning. An icon is a
+ * graphic, so the bar it has to clear is 3:1 rather than 4.5:1, which the lighter value passes
+ * comfortably. The sentence keeps the accessible ink but grows to 13px/500: the stack has the
+ * room, and the muddiness was as much 11px as it was hue.
+ */
+.voice-dock--icon-card .voice-dock__icon {
+  color: #b57a18;
+}
+
+.voice-dock--icon-card .voice-dock__text {
+  font-size: var(--shell-fs-body);
+  font-weight: 500;
 }
 
 /*

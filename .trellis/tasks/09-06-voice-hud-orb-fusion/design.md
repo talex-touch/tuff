@@ -516,32 +516,35 @@ root.querySelector('.voice-dock__slot:not(.voice-swap-leave-active) .voice-dock_
 
 否则胶囊会按「它正在忘掉的那句话」定宽。测试用真实 `<Transition>`（其余用例吃的是 Test Utils 默认的 transition stub，对此全盲），桩按元素内容返回不同宽度；把选择器换成不带 `:not(...)` 的版本立刻转红。
 
-## 10. 底部系统栏（2026-09-07）
+## 10. 底部系统栏（2026-09-07，第二版推翻第一版）
 
-### 10.1 能反应的那一半：已经在
+### 10.1 第一版：留出余量 —— 已撤销
 
-`display-added` / `display-removed` / `display-metrics-changed` 三个事件都已订阅，`handleDisplayTopologyChange` 会在 dock 可见时按当前 display 重新贴边。工作区真的变了（任务栏从隐藏改成常驻、分辨率变化、Dock 换边、多屏拓扑变化）——这条路走得通。
+先做的是「系统没给信息就把那条会被盖住的带子提前让出来」：无保留时底部留 24 + 72(mac) / 48(win)。结果是**HUD 被顶得太靠上**，而且每台没有底栏的机器都在白付这份空间。
 
-### 10.2 反应不了的那一半：自动隐藏
+### 10.2 第二版：不躲，压上去
 
-**自动隐藏的 Dock / 任务栏滑出来时不改工作区。** macOS 无论 Dock 是藏着还是被划出来，`visibleFrame` 一模一样；Windows 自动隐藏的任务栏同理。所以不会有 `display-metrics-changed`，没有任何 API 能观察到这一刻——Dock 的窗口层级在我们之上，重叠也测不出来。
+窗口本来就是 `type: 'panel'`（NSPanel），盖住它的不是类型而是**层级**：
 
-唯一还剩的信号是**轮询鼠标位置**（贴到屏幕底边 4px 就当它要出来）。没做：它会在没有底栏的机器上把 HUD 无故弹起来，而「HUD 自己乱跳」比「偶尔被 Dock 盖住一角」更糟。要做的话这是一条独立的、可以单独开关的启发式。
+| | 层级 |
+| --- | --- |
+| `floating` = NSFloatingWindowLevel | **3** |
+| Dock = kCGDockWindowLevel | **20** |
+| `status` = NSStatusWindowLevel | **25** |
 
-### 10.3 做的是：把那条会被盖住的带子提前让出来
+原来用的是 `floating`(3)，在 Dock(20) 之下，所以 Dock 一滑出来就把 HUD 埋了。改成 **`status`(25)**：HUD 画在栏的上面，滑出来的 Dock 从它下面过。Windows 上 `setAlwaysOnTop(true)` 本身就在任务栏之上，层级参数只对 macOS 生效。
 
-```ts
-private bottomGapFor(display: Display): number {
-  const reservedBottom = bounds.y + bounds.height - (workArea.y + workArea.height)
-  const reservedSide = workArea.x > bounds.x || workArea.x + workArea.width < bounds.x + bounds.width
-  if (reservedBottom > 0 || reservedSide) return VOICE_DOCK_EDGE_GAP        // 24
-  return VOICE_DOCK_EDGE_GAP + (AUTO_HIDDEN_BAR_RESERVE[process.platform] ?? 0)
-}
-```
+于是底部余量退回**单一的 24**，`bottomGapFor` 和 `AUTO_HIDDEN_BAR_RESERVE` 一起删掉——盖不住就不用躲。
 
-- **系统已经为底栏留了位置** → 它不可能再回来盖住我们，24 就够。
-- **左右边被占** → Dock 停在侧边，是可见的，永远不会跑到底部，也是 24。
-- **除了菜单栏什么都没占** → 要么没有底栏，要么它设成了自动隐藏。第二种看不见，所以按第二种留：macOS 72（Dock 默认磁贴尺寸）、Windows 48（任务栏）、其他平台 0——没有哪个桌面环境的底部面板可预测到值得为它牺牲每台机器的垂直空间。
-- **拿不到 `bounds`** → 没有可比对象，就不留：一份说不出理由的余量只是让 HUD 白白悬空。
+`display-metrics-changed` 那条重新贴边的路保持不变：工作区真变了（任务栏改常驻、换边、分辨率、插拔屏），HUD 照样跟着走。
 
-窗口高度 144 + 底部 96（隐藏态）= 屏幕底部 240px 内不会有 HUD 被 Dock 吃掉。四条规则各有负控制。
+## 11. 设备卡的第二轮（2026-09-07）
+
+| | 原 | 现 | 理由 |
+| --- | --- | --- | --- |
+| 图标色 | `--shell-warning` #946210 | **#B57A18** | shell 那个值是为 11px 小字压暗过的（要在 `-soft` 面上过 AA 4.5:1），放到图标尺寸上读起来是棕不是警告。图标是图形，门槛是 3:1，画板原值轻松够。 |
+| 文案 | 11px caption | **13px / 500** | 「颜色怪怪的」有一半是 11px 的锅。字号上去之后仍用可访问的深色墨水，AA 不降。 |
+| 图标上方留白 | 18px | **22px**（`padding-top` 12→16，卡高 120→124） | +22%。 |
+| 通知驻留 | 700 / 900 / 1600 / 5000 | **900 / 1200 / 2100 / 6500** | 一律 +30%。带按钮那档尤其重要：它要活得比伸手去点的反射弧长。 |
+
+窗口高度随卡片到 **148**。

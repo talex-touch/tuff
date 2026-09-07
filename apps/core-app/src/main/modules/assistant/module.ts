@@ -41,7 +41,6 @@ import {
   dialog,
   screen,
   type BrowserWindow,
-  type Display,
   type Rectangle,
   type SaveDialogOptions
 } from 'electron'
@@ -103,27 +102,18 @@ const FLOATING_BALL_DEFAULT_PADDING = 24
 const VOICE_DOCK_WIDTH = 360
 // 100, not 64: the pill grows to two lines when a message does not fit one, and a window sized
 // to the short pill would clip the taller one instead of showing the half that says what to do.
-// The slack over the 120px device card is the drop shadow and the breathing glow, which are
+// The slack over the 124px device card is the drop shadow and the breathing glow, which are
 // drawn outside the surface and would otherwise be cut off square by the window edge.
-const VOICE_DOCK_HEIGHT = 144
-/** Air between the dock and the bottom of the work area when the system bar is where it says. */
-const VOICE_DOCK_EDGE_GAP = 24
+const VOICE_DOCK_HEIGHT = 148
 /**
- * Room kept for a bottom bar that is not there yet.
+ * Air between the dock and the bottom of the work area.
  *
- * An auto-hidden Dock or taskbar slides in over the bottom strip **without changing the work
- * area** — macOS reports the same `visibleFrame` whether the Dock is hidden or revealed, so no
- * `display-metrics-changed` ever fires and there is nothing to react to. The only thing that
- * keeps the HUD out from under it is not being there in the first place.
- *
- * Sized per platform because the bars are: the macOS Dock at its default tile size, the Windows
- * taskbar. Elsewhere the reserve is zero — no desktop environment's bottom panel is predictable
- * enough to move a HUD for, and guessing costs vertical space on every machine that has none.
+ * One number, no reserve for a bar that might slide in: the window sits at the `status` level,
+ * above the Dock and the taskbar, so a bar appearing under it cannot bury it. Reserving room
+ * for that case instead pushed the HUD a Dock's height up the screen on every machine, whether
+ * or not one was ever going to appear.
  */
-const AUTO_HIDDEN_BAR_RESERVE: Partial<Record<NodeJS.Platform, number>> = {
-  darwin: 72,
-  win32: 48
-}
+const VOICE_DOCK_EDGE_GAP = 24
 const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
@@ -751,8 +741,16 @@ export class AssistantModule extends BaseModule {
       maxHeight: Math.max(VOICE_DOCK_HEIGHT, FLOATING_BALL_MAX_SIZE)
     })
 
-    // VoiceDock stays visible on every macOS Space and full-screen app while compact.
-    touchWindow.window.setAlwaysOnTop(true, 'floating')
+    /*
+     * `status`, not `floating`.
+     *
+     * The window is already an NSPanel; what kept the Dock on top of it was the level.
+     * `floating` is NSFloatingWindowLevel (3) and the Dock sits at kCGDockWindowLevel (20), so
+     * a Dock sliding in covered the HUD. `status` (25) clears it — the HUD draws over the bar
+     * instead of hiding from it, which is also why the bottom gap is a plain edge gap again
+     * rather than room reserved for a bar that might appear.
+     */
+    touchWindow.window.setAlwaysOnTop(true, 'status')
     touchWindow.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
     touchWindow.window.setFullScreenable(false)
     touchWindow.window.setSkipTaskbar(true)
@@ -818,32 +816,6 @@ export class AssistantModule extends BaseModule {
     window.window.setOpacity(setting.opacity)
   }
 
-  /**
-   * How far above the work area's bottom edge the dock sits on this display.
-   *
-   * A bar the system has already reserved room for cannot come back and cover us: the work area
-   * ends above it, so the ordinary gap is enough. Nothing reserved anywhere but the top means
-   * either there is no bottom bar or it is set to auto-hide, and the second case is invisible
-   * to every API we have — so that is the case we leave room for.
-   *
-   * A Dock parked on the left or right counts as "we know where it is": it reserves a side
-   * edge, it is not hidden, and it is never going to appear along the bottom.
-   */
-  private bottomGapFor(display: Display): number {
-    const bounds = display.bounds
-    // Without bounds there is nothing to compare the work area against, and a reserve we cannot
-    // justify is just the HUD floating for no reason.
-    if (!bounds) return VOICE_DOCK_EDGE_GAP
-
-    const workArea = display.workArea
-    const reservedBottom = bounds.y + bounds.height - (workArea.y + workArea.height)
-    const reservedSide =
-      workArea.x > bounds.x || workArea.x + workArea.width < bounds.x + bounds.width
-    if (reservedBottom > 0 || reservedSide) return VOICE_DOCK_EDGE_GAP
-
-    return VOICE_DOCK_EDGE_GAP + (AUTO_HIDDEN_BAR_RESERVE[process.platform] ?? 0)
-  }
-
   private applyVoiceDockBounds(window: TouchWindow, anchorBounds: Rectangle): void {
     const display = screen.getDisplayNearestPoint({
       x: anchorBounds.x + anchorBounds.width / 2,
@@ -851,7 +823,7 @@ export class AssistantModule extends BaseModule {
     })
     const workArea = display.workArea
     const x = Math.round(workArea.x + (workArea.width - VOICE_DOCK_WIDTH) / 2)
-    const y = workArea.y + workArea.height - VOICE_DOCK_HEIGHT - this.bottomGapFor(display)
+    const y = workArea.y + workArea.height - VOICE_DOCK_HEIGHT - VOICE_DOCK_EDGE_GAP
 
     window.window.setBounds({
       x: clamp(x, workArea.x, workArea.x + Math.max(0, workArea.width - VOICE_DOCK_WIDTH)),
