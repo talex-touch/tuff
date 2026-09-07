@@ -917,7 +917,7 @@ importers:
         specifier: workspace:^
         version: link:../tuff-native
       '@talex-touch/utils':
-        specifier: workspace:^1.0.0
+        specifier: workspace:^
         version: link:../utils
       ts-node:
         specifier: ^10.9.2
