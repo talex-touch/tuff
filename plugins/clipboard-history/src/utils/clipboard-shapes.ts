@@ -285,6 +285,49 @@ export function getClipboardPreviewText(
   return reveal && secret.kind !== 'private-key' ? content : secret.maskedContent
 }
 
+/**
+ * Cmd/Ctrl+Enter 的动作按内容类型分派，而不是永远复制。
+ * 顺序即优先级；`copy` 是兜底，任何判定不出来的内容都落到它。
+ */
+export type ClipboardPrimaryAction =
+  | { kind: 'open-link'; url: string }
+  | { kind: 'preview-image' }
+  | { kind: 'reveal-file'; path: string }
+  | { kind: 'copy' }
+
+export function resolveClipboardPrimaryAction(
+  item: PluginClipboardItem | null | undefined,
+): ClipboardPrimaryAction {
+  if (!item) {
+    return { kind: 'copy' }
+  }
+
+  if (item.type === 'image') {
+    return { kind: 'preview-image' }
+  }
+
+  if (item.type === 'files') {
+    const first = parseFileList(item.content)[0]
+    return first ? { kind: 'reveal-file', path: first } : { kind: 'copy' }
+  }
+
+  const url = extractLinks(item.content)[0]
+  return url ? { kind: 'open-link', url } : { kind: 'copy' }
+}
+
+export function getClipboardPrimaryActionLabel(action: ClipboardPrimaryAction): string {
+  switch (action.kind) {
+    case 'open-link':
+      return '浏览器打开'
+    case 'preview-image':
+      return '预览'
+    case 'reveal-file':
+      return '在访达中显示'
+    default:
+      return '复制'
+  }
+}
+
 export function detectCommand(rawContent: string | null | undefined): ClipboardCommandInfo | null {
   const content = (rawContent ?? '').trim()
   if (!content || content.length > 2000) {

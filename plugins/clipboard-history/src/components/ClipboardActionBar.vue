@@ -5,6 +5,8 @@ import ClipboardGlyph from './ClipboardGlyph.vue'
 
 const props = defineProps<{
   item: PluginClipboardItem | null
+  /** Cmd/Ctrl+Enter 现在按内容类型分派，按钮文案必须跟着走，不能写死「复制」。 */
+  primaryActionLabel: string
   copyPending: boolean
   applyPending: boolean
   favoritePending: boolean
@@ -12,7 +14,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (event: 'copy'): void
+  (event: 'primary'): void
   (event: 'apply'): void
   (event: 'toggleFavorite'): void
   (event: 'delete'): void
@@ -40,9 +42,9 @@ const applyLabel = computed(() => {
       class="surface-button with-shortcut"
       type="button"
       :disabled="!hasItem || copyPending"
-      @click="emit('copy')"
+      @click="emit('primary')"
     >
-      <span class="button-text">{{ copyPending ? '复制中' : '复制' }}</span>
+      <span class="button-text">{{ copyPending ? '处理中' : props.primaryActionLabel }}</span>
       <span class="button-shortcut">Cmd/Ctrl + Enter</span>
     </button>
 

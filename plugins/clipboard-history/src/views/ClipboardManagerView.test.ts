@@ -690,4 +690,61 @@ describe('clipboardManagerView', () => {
     input.remove()
     wrapper.unmount()
   })
+
+  /**
+   * Cmd/Ctrl+Enter 以前对所有类型都只是复制。现在按内容类型分派，
+   * 所以底栏按钮的文案必须跟着走——「写着复制、实际打开浏览器」比没做还糟。
+   */
+  it('opens an image in place instead of copying it, and says so on the button', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 101, type: 'image', content: 'data:image/png;base64,AAA', thumbnail: 'data:image/png;base64,AAA' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="copy-button"]').text()).toContain('预览')
+    expect(wrapper.find('.image-viewer').exists()).toBe(false)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.find('.image-viewer').exists()).toBe(true)
+    expect(sdkMocks.clipboard.write).not.toHaveBeenCalled()
+
+    // 浮层开着时方向键归浮层，不能在看不见列表的情况下偷偷换记录。
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    await flushPromises()
+    expect(wrapper.find('.image-viewer').exists()).toBe(true)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await flushPromises()
+    expect(wrapper.find('.image-viewer').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('still copies plain text under the same shortcut', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 102, type: 'text', content: 'just words' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="copy-button"]').text()).toContain('复制')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: 'just words', html: undefined })
+
+    wrapper.unmount()
+  })
 })
