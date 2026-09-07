@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { CascaderEmits, CascaderNode, CascaderPath, CascaderProps, CascaderValue } from './types'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, provide, ref, watch } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
 import TxSearchInput from '../../search-input/src/TxSearchInput.vue'
 import TxTag from '../../tag/src/TxTag.vue'
+import { CASCADER_CONTEXT } from './context'
+import TxCascaderLevel from './TxCascaderLevel.vue'
 
 defineOptions({ name: 'TxCascader' })
 
@@ -18,7 +20,7 @@ const props = withDefaults(defineProps<CascaderProps>(), {
   clearable: true,
   placement: 'bottom-start',
   dropdownOffset: 6,
-  dropdownWidth: 360,
+  dropdownWidth: 260,
   dropdownMaxWidth: 520,
   dropdownMaxHeight: 340,
   expandTrigger: 'both',
@@ -188,77 +190,32 @@ const displayTags = computed(() => {
   return selectedPaths.value.map(p => ({ key: pathKey(p), label: formatPath(p) }))
 })
 
-interface ColumnItem { node: CascaderNode, level: number, path: CascaderPath, leaf: boolean, loading: boolean }
-
-const columns = computed<ColumnItem[][]>(() => {
-  const out: ColumnItem[][] = []
-  let list = props.options
-  let current: CascaderNode | null = null
-
-  for (let level = 0; level <= activePath.value.length; level++) {
-    const column: ColumnItem[] = list.map((n) => {
-      const p = [...activePath.value.slice(0, level), n.value]
-      const k = pathKey(p)
-      return {
-        node: n,
-        level,
-        path: p,
-        leaf: isLeaf(n, p),
-        loading: loadingKeys.value.has(k),
-      }
-    })
-
-    out.push(column)
-
-    const nextVal = activePath.value[level]
-    if (nextVal === undefined)
-      break
-    current = list.find(x => x.value === nextVal) ?? null
-    if (!current)
-      break
-
-    const p = activePath.value.slice(0, level + 1)
-    list = getChildren(current, p)
-
-    if (!list.length)
-      break
-  }
-
-  return out
+/**
+ * Everything a level needs, handed down the recursive chain. Child panels are
+ * teleported to the body, but provide/inject follows the component tree, so a
+ * level nested three panels deep still reads this cascader's state.
+ */
+provide(CASCADER_CONTEXT, {
+  multiple: () => props.multiple,
+  disabled: () => props.disabled,
+  expandTrigger: () => props.expandTrigger,
+  panelMinWidth: () => 200,
+  panelMaxWidth: () => props.dropdownMaxWidth,
+  panelMaxHeight: () => props.dropdownMaxHeight,
+  isLeaf,
+  childrenOf: (node, path) => getChildren(node, path),
+  ensureChildren: (node, path, level) => ensureChildren(node, path, level),
+  isLoading: path => loadingKeys.value.has(pathKey(path)),
+  isChecked: path => selectedPaths.value.some(p => samePath(p, path)),
+  // A row stays lit while it is on the trail to the open panel, not only when
+  // it is the last thing clicked.
+  isOnActivePath: path => path.every((value, index) => activePath.value[index] === value),
+  select: toggleSelect,
+  setActivePath: (path) => {
+    activePath.value = path
+  },
+  pathKey,
 })
-
-async function onHoverItem(item: ColumnItem) {
-  if (props.expandTrigger === 'click')
-    return
-  if (props.disabled || item.node.disabled)
-    return
-  if (item.leaf)
-    return
-
-  activePath.value = item.path
-  if (!props.load)
-    return
-  if (item.leaf)
-    return
-  await ensureChildren(item.node, item.path, item.level + 1)
-}
-
-async function onPick(item: ColumnItem) {
-  if (props.disabled || item.node.disabled)
-    return
-
-  if (item.leaf) {
-    toggleSelect(item.path)
-    return
-  }
-
-  if (props.expandTrigger === 'hover') {
-    return
-  }
-
-  activePath.value = item.path
-  await ensureChildren(item.node, item.path, item.level + 1)
-}
 
 interface SearchHit { key: string, path: CascaderPath, label: string, disabled: boolean, checked: boolean }
 
@@ -412,17 +369,19 @@ defineExpose({
       </div>
     </template>
 
-    <div class="tx-cascader__panel" role="listbox" :style="{ maxHeight: `${dropdownMaxHeight}px` }">
+    <div class="tx-cascader__panel" :style="{ maxHeight: `${dropdownMaxHeight}px` }">
       <div v-if="searchable" class="tx-cascader__search">
         <TxSearchInput v-model="query" placeholder="Search" />
       </div>
 
-      <div v-if="query.trim()" class="tx-cascader__search-list">
+      <div v-if="query.trim()" class="tx-cascader__search-list" role="listbox">
         <TxCardItem
           v-for="hit in searchHits"
           :key="hit.key"
           class="tx-cascader__search-item"
           :class="{ 'is-disabled': hit.disabled }"
+          role="option"
+          :aria-selected="hit.checked"
           :clickable="!hit.disabled"
           :active="hit.checked"
           :disabled="hit.disabled"
@@ -446,44 +405,7 @@ defineExpose({
         </div>
       </div>
 
-      <div v-else class="tx-cascader__columns">
-        <div v-for="(col, idx) in columns" :key="idx" class="tx-cascader__col">
-          <TxCardItem
-            v-for="item in col"
-            :key="pathKey(item.path)"
-            class="tx-cascader__item"
-            :class="{
-              'is-disabled': item.node.disabled,
-              'is-active': activePath[item.level] === item.node.value,
-              'is-checked': selectedPaths.some(p => samePath(p, item.path)),
-            }"
-            :clickable="!item.node.disabled"
-            :disabled="!!item.node.disabled"
-            :active="activePath[item.level] === item.node.value || selectedPaths.some(p => samePath(p, item.path))"
-            @mouseenter="onHoverItem(item)"
-            @click="onPick(item)"
-          >
-            <template v-if="multiple && item.leaf" #avatar>
-              <TxCheckbox
-                :model-value="selectedPaths.some(p => samePath(p, item.path))"
-                :disabled="!!item.node.disabled"
-                aria-label="Select"
-                @click.stop
-                @update:model-value="() => toggleSelect(item.path)"
-              />
-            </template>
-
-            <template #title>
-              <span class="tx-cascader__label">{{ item.node.label }}</span>
-            </template>
-
-            <template #right>
-              <span v-if="item.loading" class="tx-cascader__meta">Loading</span>
-              <span v-else-if="!item.leaf" class="tx-cascader__meta">›</span>
-            </template>
-          </TxCardItem>
-        </div>
-      </div>
+      <TxCascaderLevel v-else :nodes="options" :parent-path="[]" :level="0" />
     </div>
   </TxPopover>
 </template>
@@ -579,7 +501,7 @@ defineExpose({
 
 .tx-cascader__panel {
   width: 100%;
-  min-width: 320px;
+  min-width: 200px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -587,46 +509,6 @@ defineExpose({
 
 .tx-cascader__search {
   padding: 2px;
-}
-
-.tx-cascader__columns {
-  display: flex;
-  gap: 10px;
-  overflow: auto;
-  padding: 2px;
-}
-
-.tx-cascader__col {
-  min-width: 180px;
-  max-height: 260px;
-  overflow: auto;
-  border-right: 1px solid var(--tx-border-color-light, #e4e7ed);
-  padding-right: 8px;
-
-  &:last-child {
-    border-right: none;
-    padding-right: 0;
-  }
-}
-
-.tx-cascader__item {
-  --tx-card-item-padding: 6px 10px;
-  --tx-card-item-radius: 10px;
-  --tx-card-item-gap: 8px;
-}
-
-.tx-cascader__label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--tx-text-color-primary, #303133);
-}
-
-.tx-cascader__meta {
-  color: var(--tx-text-color-secondary, #909399);
-  font-size: 12px;
 }
 
 .tx-cascader__search-list {

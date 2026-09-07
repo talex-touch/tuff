@@ -130,8 +130,17 @@ code: |
 ## Notes
 
 - Single-select `modelValue` is a path array; multi-select is an array of path arrays.
-- `expandTrigger` controls click/hover expansion (in `hover` mode, clicking non-leaf nodes will not expand).
+- `expandTrigger` chooses how a branch opens: `hover` and `both` open its panel on hover, `click` on click. A click on a branch row always expands it, under every setting.
 - Async `load` only triggers when a node has no `children` and is not marked `leaf`.
+
+## Interaction Contract
+
+- Each level is its own floating panel, anchored `right-start` to the row that opened it, rather than a column inside one wide panel. Panels are sized to their own labels (`matchReferenceWidth` is off), and only a branch that has actually been opened is mounted.
+- Hover travel between a row and the panel it opened, the outside-click exemption, and cascading close are owned by the anchor-delay service, the same plumbing `TxDropdownSubmenu` runs on.
+- Rows are `role="option"` inside a `role="listbox"` level. A branch row adds `aria-haspopup="listbox"` and `aria-expanded`; a leaf row carries neither.
+- Keyboard, within the focused level: Up/Down move and wrap, Home/End jump to the ends, ArrowRight opens the focused branch and puts focus on its first row, ArrowLeft closes the level and returns focus to the row that opened it. ArrowLeft at the root level is left alone.
+- Every row on the trail to the open panel stays active, so a deep selection reads as a path instead of one highlighted row.
+- Searching replaces the levels with a flat list of matching leaf paths; clearing the query restores them.
 
 ## API
 
@@ -140,7 +149,7 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|------|
 | `modelValue` | `CascaderValue` | - | Selected value. Single mode uses one path array; multiple mode uses an array of path arrays. |
-| `options` | `CascaderNode[]` | `[]` | Root option tree rendered by the cascader columns. |
+| `options` | `CascaderNode[]` | `[]` | Root option tree rendered by the first level. |
 | `multiple` | `boolean` | `false` | Enables selecting multiple leaf paths and renders selected paths as tags. |
 | `disabled` | `boolean` | `false` | Disables the trigger, clear button, node selection, and keyboard open behavior. |
 | `placeholder` | `string` | `'Please select'` | Placeholder text shown when no path is selected. |
@@ -148,7 +157,7 @@ code: |
 | `clearable` | `boolean` | `true` | Shows the clear button when a value is selected and the component is enabled. |
 | `placement` | `PopoverPlacement` | `'bottom-start'` | Placement forwarded to the underlying `TxPopover`. |
 | `dropdownOffset` | `number` | `6` | Offset forwarded to the underlying `TxPopover`. |
-| `dropdownWidth` | `number` | `360` | Width forwarded to the underlying `TxPopover`. |
+| `dropdownWidth` | `number` | `260` | Width of the root panel, forwarded to the underlying `TxPopover`. Child level panels size to their own content between 200px and `dropdownMaxWidth`. |
 | `dropdownMaxWidth` | `number` | `520` | Maximum width forwarded to the underlying `TxPopover`. |
 | `dropdownMaxHeight` | `number` | `340` | Maximum panel height in px. |
 | `expandTrigger` | `'click' \| 'hover' \| 'both'` | `'both'` | Controls how non-leaf nodes expand; `hover` ignores click expansion for branch nodes. |
@@ -159,10 +168,10 @@ code: |
 | Field | Type | Description |
 |------|------|------|
 | `value` | `string \| number` | Stable node key used to build selected paths. |
-| `label` | `string` | Text rendered in columns, selected tags, and local search results. |
+| `label` | `string` | Text rendered in level rows, selected tags, and local search results. |
 | `disabled` | `boolean` | Prevents expanding or selecting this node. |
 | `leaf` | `boolean` | Marks the node as selectable and prevents lazy loading. |
-| `children` | `CascaderNode[]` | Child nodes rendered in the next column when this branch is active. |
+| `children` | `CascaderNode[]` | Child nodes rendered in the panel anchored to this branch's row. |
 
 ### CascaderValue
 
@@ -214,7 +223,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`.
 - Types: `packages/tuffex/packages/components/src/cascader/src/types.ts` exports `CascaderProps`, `CascaderEmits`, `CascaderNode`, and `CascaderValue`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/cascader/__tests__/cascader.test.ts` verifies leaf selection, empty search, multiple clearing, disabled blocking, lazy child loading, and exposed helpers.
+- **Verified coverage:** `packages/tuffex/packages/components/src/cascader/__tests__/cascader.test.ts` verifies leaf selection, empty search, multiple clearing, disabled blocking, lazy child loading, and exposed helpers, plus the anchored levels: one panel per branch (no column layout), `right-start` placement with `matchReferenceWidth` off, `expandTrigger` choosing the popover trigger, the branch row's `aria-haspopup` / `aria-expanded`, roving focus with ArrowRight opening and ArrowLeft closing a level, and the active trail across levels.
 - Screenshot: `.codex-screenshots/nexus-cascader-release-policy-demo-playwright-2026-05-28.png`.
 
 <TuffDocSourceLink />
