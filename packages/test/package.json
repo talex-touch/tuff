@@ -18,7 +18,7 @@
   "dependencies": {
     "@talex-touch/tuff-intelligence": "workspace:^",
     "@talex-touch/tuff-native": "workspace:^",
-    "@talex-touch/utils": "workspace:^1.0.0",
+    "@talex-touch/utils": "workspace:^",
     "ts-node": "^10.9.2",
     "vitest": "^3.2.7"
   }
