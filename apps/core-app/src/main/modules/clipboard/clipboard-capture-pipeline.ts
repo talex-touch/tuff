@@ -79,7 +79,14 @@ export interface ClipboardCapturePipelineOptions {
   logWarn: (message: string, data?: LogOptions) => void
 }
 
-type PendingClipboardItem = Omit<IClipboardItem, 'timestamp' | 'id' | 'metadata' | 'meta'>
+/**
+ * 从剪贴板读到的内容本身。保留字段不在其中：它们是落库时由分类结果推导的，
+ * 不是读出来的。
+ */
+type PendingClipboardItem = Omit<
+  IClipboardItem,
+  'timestamp' | 'id' | 'metadata' | 'meta' | 'retentionProtected' | 'retentionExpiresAt'
+>
 
 export class ClipboardCapturePipeline {
   constructor(private readonly options: ClipboardCapturePipelineOptions) {}

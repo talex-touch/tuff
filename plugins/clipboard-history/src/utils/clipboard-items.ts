@@ -596,8 +596,64 @@ export function getClipboardSummary(item: PluginClipboardItem): ClipboardSummary
   }
 }
 
-export function getClipboardSourceInfo(
-  item: PluginClipboardItem,
+/**
+ * 「这条什么时候会被删」。相对时间给的是量级判断，绝对时间给的是确凿answer——
+ * 只给「2 天后」的话，用户没法知道到底是明天下班前还是后天早上。
+ */
+export function getClipboardRetentionLabel(item: PluginClipboardItem | null | undefined): string | null {
+  if (!item) {
+    return null
+  }
+
+  if (item.retentionReason === 'favorite') {
+    return '永不自动删除（已收藏）'
+  }
+  if (item.retentionReason === 'protected') {
+    return '永不自动删除（密钥）'
+  }
+
+  const expiresAt = item.retentionExpiresAt
+  if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) {
+    return item.retentionReason === 'disabled' ? '永不自动删除' : null
+  }
+
+  const remainingMs = expiresAt - Date.now()
+  const absolute = new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(expiresAt)
+
+  if (remainingMs <= 0) {
+    // 到期了但还在库里：清理是周期性跑的，不是到点就删。说「已过期」而不是「0 天后」。
+    return `已过期，待清理（${absolute}）`
+  }
+
+  return `${formatRemaining(remainingMs)}（${absolute}）`
+}
+
+function formatRemaining(ms: number): string {
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 1) {
+    return '不到 1 分钟后'
+  }
+  if (minutes < 60) {
+    return `${minutes} 分钟后`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return `${hours} 小时后`
+  }
+
+  return `${Math.floor(hours / 24)} 天后`
+}
+
+export function getClipboardSourceInfo(  item: PluginClipboardItem,
   sourceApplication?: ResolvedApplication | null,
 ): ClipboardSourceInfo {
   const sourceId = item.sourceApp?.trim() || ''
