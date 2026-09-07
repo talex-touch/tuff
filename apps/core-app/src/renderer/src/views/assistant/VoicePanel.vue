@@ -86,17 +86,31 @@ const WAVE_REF_RELEASE = 0.15
 const PILL_BASE_WIDTH = 200
 const PILL_MAX_WIDTH = 340
 const PILL_BASE_HEIGHT = 44
-/** Two lines of caption text plus the same padding — the tallest the island ever gets. */
-const PILL_TALL_HEIGHT = 64
+/**
+ * Two lines of caption text with room around them — the tallest the island ever gets.
+ *
+ * Not the 64 that two lines strictly need: at that height the text block fills the card edge
+ * to edge and the pill reads as a pill someone stretched. A card is allowed to have air.
+ */
+const PILL_TALL_HEIGHT = 76
 /**
  * The shape changes with the height, not just the size.
  *
- * A pill radius is half its height by definition, so keeping `radius: full` at 64px turns the
+ * A pill radius is half its height by definition, so keeping `radius: full` at 76px turns the
  * two ends into oversized semicircles and eats the room the second line needs. Expanding into
  * a rounded rectangle is what the shape is actually doing — one line is a pill, two lines is a
- * card — so the radius says so.
+ * card — so the radius says so, and stays far below the 38 that would make it a pill again.
  */
-const PILL_TALL_RADIUS = 20
+const PILL_TALL_RADIUS = 24
+/**
+ * The round controls grow with the surface, but not in proportion to it.
+ *
+ * In the pill they are the height minus its padding — the control *is* the bar. A card is
+ * taller than any control should be, so there they match the two-line text block beside them
+ * instead: the control tracks the content, not the container.
+ */
+const CONTROL_BASE_SIZE = 34
+const CONTROL_TALL_SIZE = 40
 /** padding (10) + both round slots (68) + both gaps (16); the centre gets what is left. */
 const PILL_CHROME_WIDTH = 94
 
@@ -131,6 +145,12 @@ const expanded = computed(() => pillHeight.value > PILL_BASE_HEIGHT)
 const pillRadius = computed(() =>
   expanded.value ? PILL_TALL_RADIUS : Math.round(PILL_BASE_HEIGHT / 2)
 )
+const controlSize = computed(() => (expanded.value ? CONTROL_TALL_SIZE : CONTROL_BASE_SIZE))
+/** Script-owned rather than CSS: the size is a function of the surface, and tests read it. */
+const controlStyle = computed(() => ({
+  width: `${controlSize.value}px`,
+  height: `${controlSize.value}px`
+}))
 /** 0..1 while Escape is held; the border draws it so the commitment is visible. */
 const cancelCharge = ref(0)
 const waitedMs = ref(0)
@@ -686,6 +706,7 @@ onBeforeUnmount(() => {
         class="voice-dock__btn voice-dock__btn--cancel"
         type="button"
         data-testid="voice-cancel"
+        :style="controlStyle"
         :disabled="!canCancel"
         :aria-label="t('assistant.voicePanel.cancelSession')"
         @click="cancelSession"
@@ -731,7 +752,7 @@ onBeforeUnmount(() => {
         :key="sessionSeq"
         data-testid="voice-orb"
         :size="64"
-        :display-size="34"
+        :display-size="controlSize"
         state="random"
         theme="auto"
         :label="t('assistant.voicePanel.voiceTranscribingShort')"
@@ -746,6 +767,7 @@ onBeforeUnmount(() => {
         class="voice-dock__btn voice-dock__btn--action"
         type="button"
         data-testid="voice-recover"
+        :style="controlStyle"
         :aria-label="
           notice.action === 'undo'
             ? t('assistant.voicePanel.undo')
@@ -763,6 +785,7 @@ onBeforeUnmount(() => {
         class="voice-dock__btn voice-dock__btn--confirm"
         type="button"
         data-testid="voice-confirm"
+        :style="controlStyle"
         :disabled="!canConfirm"
         :aria-label="t('assistant.voicePanel.stopAndTranscribe')"
         @click="handleConfirm"
@@ -871,8 +894,6 @@ onBeforeUnmount(() => {
 
 .voice-dock__btn {
   display: inline-flex;
-  width: 34px;
-  height: 34px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -882,6 +903,8 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font-size: 15px;
   transition:
+    width 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 260ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 160ms ease-out,
     background 160ms ease-out;
 }
@@ -999,6 +1022,13 @@ onBeforeUnmount(() => {
 
   .voice-dock__wave span {
     transition: none;
+  }
+
+  /* The controls resize with the surface, so they follow the same rule the surface does. */
+  .voice-dock__btn {
+    transition:
+      opacity 160ms ease-out,
+      background 160ms ease-out;
   }
 
   .voice-dock__text--shimmer {

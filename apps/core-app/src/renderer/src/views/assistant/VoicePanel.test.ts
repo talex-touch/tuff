@@ -847,13 +847,20 @@ describe('VoicePanel device readiness and long messages', () => {
     await flushPromises()
 
     const style = wrapper.find('.voice-dock').attributes('style') ?? ''
-    expect(style).toContain('height: 64px')
+    expect(style).toContain('height: 76px')
     // Width goes to the cap first; only then does the island grow.
     expect(style).toContain('width: 340px')
-    // And it stops being a pill: a pill's radius is half its height, so at 64 the ends would
+    // And it stops being a pill: a pill's radius is half its height, so at 76 the ends would
     // swallow the room the second line needs. One line is a pill, two lines is a card.
-    expect(style).toContain('border-radius: 20px')
+    expect(style).toContain('border-radius: 24px')
     expect(wrapper.find('.voice-dock--expanded').exists()).toBe(true)
+    // The controls grow with the card. Leaving them at the pill's 34 would strand two small
+    // circles in a surface twice their height.
+    for (const testId of ['voice-cancel', 'voice-confirm']) {
+      const control = wrapper.find(`[data-testid="${testId}"]`).attributes('style') ?? ''
+      expect(control).toContain('width: 40px')
+      expect(control).toContain('height: 40px')
+    }
 
     widthSpy.mockRestore()
     clientSpy.mockRestore()
@@ -870,6 +877,10 @@ describe('VoicePanel device readiness and long messages', () => {
     expect(style).toContain('height: 44px')
     expect(style).toContain('border-radius: 22px')
     expect(wrapper.find('.voice-dock--expanded').exists()).toBe(false)
+    // In the pill the control is the bar: 44 minus its 5px padding on both sides.
+    expect(wrapper.find('[data-testid="voice-cancel"]').attributes('style')).toContain(
+      'width: 34px'
+    )
 
     wrapper.unmount()
   })
