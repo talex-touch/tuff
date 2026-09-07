@@ -56,9 +56,7 @@ export interface ClipboardFileGroup {
 }
 
 export interface ClipboardTextInsight {
-  characterTokens: string[]
   wordTokens: string[]
-  characterCount: number
   wordCount: number
   lineCount: number
 }
@@ -633,6 +631,27 @@ export function groupFilesByDirectory(content: string | null | undefined): Clipb
   return Array.from(groups.values())
 }
 
+/**
+ * 分词。`selectClipboardInsight` 的「值不值得拆」判定和这里的渲染必须用同一个实现——
+ * 用一条更便宜的正则近似它，中文连写会被整段当成一个词，于是整段中文再也拿不到拆词分区。
+ */
+export function splitWordTokens(content: string): string[] {
+  if (!content) {
+    return []
+  }
+
+  const SegmenterCtor =
+    typeof Intl !== 'undefined' && 'Segmenter' in Intl ? (Intl as IntlWithSegmenter).Segmenter : null
+  const wordSegmenter = SegmenterCtor ? new SegmenterCtor('zh-CN', { granularity: 'word' }) : null
+
+  return wordSegmenter
+    ? Array.from(wordSegmenter.segment(content) as Iterable<{ segment: string; isWordLike?: boolean }>)
+        .filter(segment => segment.isWordLike === true || /[\p{L}\p{N}_-]/u.test(segment.segment))
+        .map(segment => segment.segment.trim())
+        .filter(Boolean)
+    : (content.match(/[\p{L}\p{N}_-]+/gu) ?? [])
+}
+
 export function getClipboardTextInsight(item: PluginClipboardItem | null | undefined): ClipboardTextInsight | null {
   if (!item || item.type !== 'text') {
     return null
@@ -641,34 +660,17 @@ export function getClipboardTextInsight(item: PluginClipboardItem | null | undef
   const content = item.content ?? ''
   if (!content) {
     return {
-      characterTokens: [],
       wordTokens: [],
-      characterCount: 0,
       wordCount: 0,
       lineCount: 0,
     }
   }
 
-  const SegmenterCtor =
-    typeof Intl !== 'undefined' && 'Segmenter' in Intl ? (Intl as IntlWithSegmenter).Segmenter : null
-  const characterSegmenter = SegmenterCtor ? new SegmenterCtor('zh-CN', { granularity: 'grapheme' }) : null
-  const wordSegmenter = SegmenterCtor ? new SegmenterCtor('zh-CN', { granularity: 'word' }) : null
-  const characters = characterSegmenter
-    ? Array.from(characterSegmenter.segment(content), segment => segment.segment)
-    : Array.from(content)
-  const characterTokens = characters.filter(char => char.trim().length > 0)
-  const words = wordSegmenter
-    ? Array.from(wordSegmenter.segment(content) as Iterable<{ segment: string; isWordLike?: boolean }>)
-        .filter(segment => segment.isWordLike === true || /[\p{L}\p{N}_-]/u.test(segment.segment))
-        .map(segment => segment.segment.trim())
-        .filter(Boolean)
-    : (content.match(/[\p{L}\p{N}_-]+/gu) ?? [])
+  const words = splitWordTokens(content)
   const lines = content.length > 0 ? content.split(/\r\n|\r|\n/).length : 0
 
   return {
-    characterTokens: characterTokens.slice(0, 80),
     wordTokens: unique(words, word => word.toLowerCase()).slice(0, 40),
-    characterCount: characters.length,
     wordCount: words.length,
     lineCount: lines,
   }

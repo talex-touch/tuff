@@ -154,7 +154,6 @@ describe('insight routing', () => {
     ['git push --force origin main', 'command'],
     ['dsh web: https://dsh.tagzxia.com/?token=abc', 'link'],
     ['#ABCDEE', 'color'],
-    ['679839', 'chars'],
     ['这个文件夹里面有非常多的图片，需要批量处理。', 'words'],
   ])('routes %s to the %s insight', (content, kind) => {
     expect(selectClipboardInsight(text(content))).toBe(kind)
@@ -168,13 +167,22 @@ describe('insight routing', () => {
   })
 
   /**
-   * 中文没有词间空格，「无空白」不能当作短文本的判据——否则一整段中文又会被拆成字符格，
-   * 正是这次重排要消灭的那类错误。
+   * 拆词的判定必须和渲染用同一个分词器。用一条更便宜的正则近似它，中文连写会被整段
+   * 当成一个词、于是整段中文再也拿不到拆词分区——这条用例锁的就是那个坑。
    */
-  it('does not send unspaced chinese prose to the character grid', () => {
+  it('splits unspaced chinese prose into words', () => {
     expect(selectClipboardInsight(text('这个文件夹里面有非常多的图片，需要批量处理。'))).toBe('words')
     expect(selectClipboardInsight(text('把这段话直接粘贴过来就好了不要再改动它了谢谢'))).toBe('words')
-    expect(selectClipboardInsight(text('你好世界'))).toBe('chars')
+    expect(selectClipboardInsight(text('你好世界'))).toBe('words')
+  })
+
+  /**
+   * 拆出来只有整条内容本身时不出分区。验证码、编号、单个英文词都落在这里——
+   * 它们该被识别成对应的形态，而不是回一个和原文一模一样的词块。
+   */
+  it('gives no insight when splitting would just echo the content', () => {
+    expect(selectClipboardInsight(text('679839'))).toBe('none')
+    expect(selectClipboardInsight(text('ORD20260906'))).toBe('none')
   })
 
   it('gives files no insight and images the ocr insight only when ocr exists', () => {

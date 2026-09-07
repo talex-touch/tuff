@@ -85,8 +85,8 @@ const fullPalette = computed(() => {
 })
 
 /**
- * 密钥不给字符拆分：把 51 个字符逐个渲染成按钮，等于把掩码拼回原文，
- * 而拆一个 API key 的字符本来就没有任何使用价值。summary 由实际渲染的分区名拼成，
+ * 密钥不给拆词：把一个 API key 拆开渲染成可点按钮，等于把掩码拼回原文，
+ * 而拆一个 key 本来就没有任何使用价值。summary 由实际渲染的分区名拼成，
  * 所以这里返回 null 之后摘要行也不会再宣传它。
  */
 const textInsight = computed(() =>
@@ -102,8 +102,8 @@ const summary = computed(() => {
   if (fullPalette.value.length > 0) {
     names.push('完整调色板')
   }
-  if ((textInsight.value?.characterTokens.length ?? 0) > 0) {
-    names.push('字符拆分')
+  if ((textInsight.value?.wordTokens.length ?? 0) > 0) {
+    names.push('拆词')
   }
   return names.join(' · ')
 })
@@ -150,22 +150,22 @@ const summary = computed(() => {
         </div>
       </div>
 
-      <div v-if="textInsight && textInsight.characterTokens.length > 0" class="more-block">
+      <div v-if="textInsight && textInsight.wordTokens.length > 0" class="more-block">
         <span class="more-block-title">
-          字符拆分
-          <!-- getClipboardTextInsight 把字符截到 80 个，所以标注写实际 / 总数，不假装是全部。 -->
-          <small>{{ textInsight.characterTokens.length }} / {{ textInsight.characterCount }}</small>
+          拆词
+          <!-- getClipboardTextInsight 把词截到 40 个，所以标注写实际 / 总数，不假装是全部。 -->
+          <small>{{ textInsight.wordTokens.length }} / {{ textInsight.wordCount }}</small>
         </span>
         <div class="more-chars">
           <button
-            v-for="(char, index) in textInsight.characterTokens"
-            :key="`${char}-${index}`"
+            v-for="word in textInsight.wordTokens"
+            :key="word"
             class="more-char"
             type="button"
-            :title="`复制 ${char}`"
-            @click="emit('copyText', char)"
+            :title="`复制 ${word}`"
+            @click="emit('copyText', word)"
           >
-            {{ char }}
+            {{ word }}
           </button>
         </div>
       </div>
