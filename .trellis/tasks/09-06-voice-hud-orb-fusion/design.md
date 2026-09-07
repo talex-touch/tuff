@@ -320,3 +320,55 @@ watch([hasNotice, errorMessage], async () => {
 ## 6. 回滚
 
 协议层是纯增量（新后缀 + 可选方法 + 新 signal + 默认关的 `emitLevel`），旧调用方不受影响，可单独 revert。渲染层集中在两个 `.vue` + 一个常量文件 + 两个 locale JSON。三层各自一个提交。
+
+## 7. 设备就绪与展开（2026-09-06 第六轮，来自两张实机截图）
+
+### 7.1 采集未开始 ≠ 在听
+
+`listening` 只表示「流已开」，第一帧 PCM 到达前它什么也没听到。原来这段时间画的是一条静止的波形——一条不动的波形是在说「你没出声」，而真相是「设备还没开」。
+
+```ts
+const preparing = computed(() => listening.value && !hasLevel.value && !hasNotice.value)
+```
+
+`preparing` 期间：中间显示 `capturingDevice`，胶囊外圈跑呼吸辉光（`.voice-dock--preparing` 的 box-shadow 动画，`prefers-reduced-motion` 下关掉），**不画波形**。首帧 `level` 到达即切走。
+
+同一个门还兜住了死设备：`CAPTURE_START_TIMEOUT_MS = 2000` 内没有任何 `level`，说明设备没在送数据，弹 `microphoneUnresponsive`（warning，不终止会话）。没有这条，麦克风被别的应用独占时 UI 会一直显示「在听」，永远不出错。
+
+### 7.2 设备类失败要分开说
+
+`classifyFailure` 原来只分 quota / 拥塞 / 兜底。权限没给和设备不存在都会落进兜底那句「转写失败」，而这两种恰恰是用户能自己修的：
+
+| 匹配 | 文案 |
+| --- | --- |
+| `PERMISSION`/`DENIED`/`NOT_?AUTHORIZED`/`UNAUTHORIZED` | `microphoneDenied` — 去系统设置里允许 |
+| `NO_?(INPUT\|AUDIO\|MIC)`/`DEVICE_?NOT_?FOUND`/`NO_?DEFAULT_?DEVICE` | `microphoneMissing` — 检查系统输入设备 |
+
+顺序在 quota 之前：权限串里也可能出现 `LIMIT` 之类的词，先判更具体的。
+
+### 7.3 长文案：灵动岛式展开
+
+一行放不下时旧行为是 `text-overflow: ellipsis`——把「该怎么办」那半句吃掉，只留「失败了」。宽度先吃满到 `PILL_MAX_WIDTH = 340`，还溢出才长高：
+
+```ts
+// 宽度定死之后再量溢出，否则量到的是上一帧的宽度
+pillHeight.value = el && el.scrollWidth > el.clientWidth ? PILL_TALL_HEIGHT : PILL_BASE_HEIGHT
+```
+
+`PILL_TALL_HEIGHT = 64`，文字 `-webkit-line-clamp: 2`。窗口高度随之从 64 抬到 88（§2.3 的常量同步改），否则长高的胶囊会被窗口裁掉——裁掉的正是要露出来的第二行。
+
+### 7.4 长高之后不再是胶囊
+
+```ts
+const PILL_TALL_RADIUS = 20
+const expanded = computed(() => pillHeight.value > PILL_BASE_HEIGHT)
+const pillRadius = computed(() => (expanded.value ? PILL_TALL_RADIUS : PILL_BASE_HEIGHT / 2))
+```
+
+胶囊的圆角是高度的一半。高度到 64 还保持全圆角，两端各吃掉 32px——正好吃在第二行要用的地方，而且看着像个被拉长的药丸，不像一张卡。所以一行是胶囊（22），两行是圆角矩形（20），`border-radius` 进过渡曲线，`TxBorderBeam` 吃同一个 `pillRadius`（原来写死 22，长高后光带会从卡片角上跑出去）。
+
+展开态另加 `.voice-dock--expanded`：文字左对齐（两行居中读起来是海报不是通知），两枚圆钮仍垂直居中。
+
+### 7.5 锁这一轮的测试
+
+六条负控制逐条验过：删掉半径联动 / 删掉长高 / 删掉 `preparing` 门 / 删掉设备分类 / 兜底改回甩原文 / 删掉首帧超时——各自都能让对应用例转红。
