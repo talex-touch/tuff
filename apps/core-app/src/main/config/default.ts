@@ -1,4 +1,5 @@
 import path from 'node:path'
+import type { TalexTouch } from '@talex-touch/utils'
 import { app } from 'electron'
 import { buildWindowArgs } from '@talex-touch/utils/renderer/window-role'
 import { buildWindowWebPreferences } from '../core/window-security-profile'
@@ -87,9 +88,10 @@ export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions =
     additionalArguments: buildWindowArgs({ touchType: 'core-box', coreType: 'division-box' })
   })
 }
-
-export const AssistantVoiceDockWindowOption: Electron.BrowserWindowConstructorOptions = {
+export const AssistantVoiceDockWindowOption: TalexTouch.TouchWindowConstructorOptions = {
   title: `${AppName} Assistant VoiceDock`,
+  type: 'panel',
+  acceptFirstMouse: true,
   frame: false,
   width: 520,
   height: 300,
@@ -101,6 +103,7 @@ export const AssistantVoiceDockWindowOption: Electron.BrowserWindowConstructorOp
   autoHideMenuBar: true,
   show: false,
   transparent: true,
+  disableVibrancy: true,
   backgroundColor: '#00000000',
   hasShadow: false,
   webPreferences: buildWindowWebPreferences('app', {

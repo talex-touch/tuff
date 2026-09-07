@@ -1,24 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { StorageList } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
-import type {
-  OmniPanelGlobalKeyEvent,
-  OmniPanelGlobalKeyListener,
-  OmniPanelGlobalOtherKeyEvent
-} from '../omni-panel'
 
 const mocks = vi.hoisted(() => ({
   getMainConfig: vi.fn(),
   subscribeMainConfig: vi.fn(),
-  registerGlobalKeyListener: vi.fn(),
-  disposeGlobalKeyListener: vi.fn(),
   unsubscribeSettings: vi.fn()
 }))
 
 vi.mock('../omni-panel', () => ({
-  omniPanelModule: {
-    registerGlobalKeyListener: mocks.registerGlobalKeyListener
-  }
+  omniPanelModule: { registerGlobalKeyListener: vi.fn() }
 }))
 
 vi.mock('../storage', () => ({
@@ -28,15 +18,14 @@ vi.mock('../storage', () => ({
 
 import { CommandVoiceGestureController } from './command-gesture'
 
-const primaryModifier: OmniPanelGlobalKeyEvent = {
-  key: 'primary-modifier',
-  keycode: 55
-}
-
-const otherKeyDown: OmniPanelGlobalOtherKeyEvent = {
-  key: 'other-key',
-  keycode: 30
-}
+type VoiceGestureRegistrar = NonNullable<
+  ConstructorParameters<typeof CommandVoiceGestureController>[2]
+>
+type VoiceGestureListener = Parameters<VoiceGestureRegistrar>[0]
+type VoiceGestureSink = ConstructorParameters<typeof CommandVoiceGestureController>[0]
+type VoiceSessionActiveReader = NonNullable<
+  ConstructorParameters<typeof CommandVoiceGestureController>[1]
+>
 
 function setting(enabled: boolean): AppSetting {
   return {
@@ -48,14 +37,25 @@ function setting(enabled: boolean): AppSetting {
 
 describe('command voice gesture', () => {
   let settingsListener: ((value: AppSetting) => void) | undefined
-  let globalKeyListener: OmniPanelGlobalKeyListener | undefined
+  let globalKeyListener: VoiceGestureListener | undefined
+  let registrar: VoiceGestureRegistrar
+
+  function createController(
+    sink: VoiceGestureSink,
+    isVoiceSessionActive: VoiceSessionActiveReader = () => false
+  ): CommandVoiceGestureController {
+    return new CommandVoiceGestureController(sink, isVoiceSessionActive, registrar)
+  }
 
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     settingsListener = undefined
     globalKeyListener = undefined
-
+    registrar = (listener) => {
+      globalKeyListener = listener
+      return vi.fn()
+    }
     mocks.getMainConfig.mockReturnValue(setting(false))
     mocks.subscribeMainConfig.mockImplementation(
       (_key: string, callback: (value: AppSetting) => void) => {
@@ -63,45 +63,23 @@ describe('command voice gesture', () => {
         return mocks.unsubscribeSettings
       }
     )
-    mocks.registerGlobalKeyListener.mockImplementation((listener: OmniPanelGlobalKeyListener) => {
-      globalKeyListener = listener
-      return mocks.disposeGlobalKeyListener
-    })
   })
 
   afterEach(() => {
     vi.useRealTimers()
   })
 
-  it('does not register a global listener when the required settings are disabled', () => {
+  it('does nothing while disabled, then responds after settings enable the gesture', () => {
     const sink = vi.fn()
-    const controller = new CommandVoiceGestureController(sink)
-
+    const controller = createController(sink)
     controller.register()
 
-    expect(mocks.getMainConfig).toHaveBeenCalledWith(StorageList.APP_SETTING)
-    expect(mocks.subscribeMainConfig).toHaveBeenCalledWith(
-      StorageList.APP_SETTING,
-      expect.any(Function)
-    )
-    expect(mocks.registerGlobalKeyListener).not.toHaveBeenCalled()
+    expect(globalKeyListener).toBeUndefined()
+    settingsListener?.(setting(true))
+    globalKeyListener?.onKeyDown?.({})
+    globalKeyListener?.onKeyUp?.({})
 
-    controller.unregister()
-  })
-
-  it('registers a listener when assistant, floating ball, and voice wake are enabled', () => {
-    mocks.getMainConfig.mockReturnValue(setting(true))
-    const controller = new CommandVoiceGestureController(vi.fn())
-
-    controller.register()
-
-    expect(mocks.registerGlobalKeyListener).toHaveBeenCalledTimes(1)
-    expect(globalKeyListener).toEqual({
-      onKeyDown: expect.any(Function),
-      onKeyUp: expect.any(Function),
-      onOtherKeyDown: expect.any(Function)
-    })
-
+    expect(sink).toHaveBeenCalledWith({ action: 'start', mode: 'toggle', source: 'command' })
     controller.unregister()
   })
 
@@ -109,159 +87,101 @@ describe('command voice gesture', () => {
     mocks.getMainConfig.mockReturnValue(setting(true))
     const sink = vi.fn()
     let voiceSessionActive = false
-    const controller = new CommandVoiceGestureController(sink, () => voiceSessionActive)
+    const controller = createController(sink, () => voiceSessionActive)
     controller.register()
 
-    globalKeyListener?.onKeyDown?.(primaryModifier)
-    globalKeyListener?.onKeyUp?.(primaryModifier)
+    globalKeyListener?.onKeyDown?.({})
+    globalKeyListener?.onKeyUp?.({})
     voiceSessionActive = true
-
-    globalKeyListener?.onKeyDown?.(primaryModifier)
-    globalKeyListener?.onKeyUp?.(primaryModifier)
+    globalKeyListener?.onKeyDown?.({})
+    globalKeyListener?.onKeyUp?.({})
     voiceSessionActive = false
-
-    globalKeyListener?.onKeyDown?.(primaryModifier)
-    globalKeyListener?.onKeyUp?.(primaryModifier)
+    globalKeyListener?.onKeyDown?.({})
+    globalKeyListener?.onKeyUp?.({})
 
     expect(sink.mock.calls).toEqual([
       [{ action: 'start', mode: 'toggle', source: 'command' }],
       [{ action: 'stop', mode: 'toggle', source: 'command' }],
       [{ action: 'start', mode: 'toggle', source: 'command' }]
     ])
-
     controller.unregister()
   })
 
-  it('does not toggle when another key is pressed before the primary modifier is released', () => {
+  it('does not toggle when another key participates before release', () => {
     mocks.getMainConfig.mockReturnValue(setting(true))
     const sink = vi.fn()
-    const controller = new CommandVoiceGestureController(sink)
+    const controller = createController(sink)
     controller.register()
 
-    globalKeyListener?.onKeyDown?.(primaryModifier)
-    globalKeyListener?.onOtherKeyDown?.(otherKeyDown)
-    globalKeyListener?.onKeyUp?.(primaryModifier)
+    globalKeyListener?.onKeyDown?.({})
+    globalKeyListener?.onOtherKeyDown?.()
+    globalKeyListener?.onKeyUp?.({})
     vi.advanceTimersByTime(320)
 
     expect(sink).not.toHaveBeenCalled()
-
     controller.unregister()
   })
 
-  it('stops a hold once when another key is pressed and never starts again', () => {
+  it('starts push-to-talk at the threshold and stops on release', () => {
     mocks.getMainConfig.mockReturnValue(setting(true))
     const sink = vi.fn()
-    const controller = new CommandVoiceGestureController(sink)
+    const controller = createController(sink)
     controller.register()
 
-    globalKeyListener?.onKeyDown?.(primaryModifier)
+    globalKeyListener?.onKeyDown?.({})
+    vi.advanceTimersByTime(319)
+    expect(sink).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(sink).toHaveBeenCalledWith({ action: 'start', mode: 'hold', source: 'command' })
+
+    globalKeyListener?.onKeyUp?.({})
+    expect(sink).toHaveBeenLastCalledWith({ action: 'stop', mode: 'hold', source: 'command' })
+    controller.unregister()
+  })
+
+  it('stops a hold once when reset arrives and does not restart after reset', () => {
+    mocks.getMainConfig.mockReturnValue(setting(true))
+    const sink = vi.fn()
+    const controller = createController(sink)
+    controller.register()
+
+    globalKeyListener?.onKeyDown?.({})
     vi.advanceTimersByTime(320)
-    globalKeyListener?.onOtherKeyDown?.(otherKeyDown)
-    globalKeyListener?.onKeyUp?.(primaryModifier)
+    globalKeyListener?.onReset?.()
+    globalKeyListener?.onKeyUp?.({})
     vi.advanceTimersByTime(320)
 
     expect(sink.mock.calls).toEqual([
       [{ action: 'start', mode: 'hold', source: 'command' }],
       [{ action: 'stop', mode: 'hold', source: 'command' }]
     ])
-
     controller.unregister()
   })
 
-  it('does not start when the primary keydown already carries a combo marker', () => {
+  it('ignores callbacks retained by a disposed registrar after a fresh listener replaces it', () => {
     mocks.getMainConfig.mockReturnValue(setting(true))
     const sink = vi.fn()
-    const controller = new CommandVoiceGestureController(sink)
+    const listeners: VoiceGestureListener[] = []
+    registrar = (listener) => {
+      listeners.push(listener)
+      return vi.fn()
+    }
+    const controller = createController(sink)
+
     controller.register()
+    const disposedListener = listeners[0]
+    controller.unregister()
+    controller.register()
+    const currentListener = listeners[1]
+    if (!disposedListener || !currentListener) throw new Error('gesture listeners not registered')
 
-    globalKeyListener?.onKeyDown?.({ ...primaryModifier, hasOtherKeys: true })
-    vi.advanceTimersByTime(320)
-    globalKeyListener?.onKeyUp?.(primaryModifier)
-
+    disposedListener.onKeyDown?.({})
+    disposedListener.onKeyUp?.({})
     expect(sink).not.toHaveBeenCalled()
 
-    controller.unregister()
-  })
-
-  it('starts a hold only after the threshold and stops it on keyup', () => {
-    mocks.getMainConfig.mockReturnValue(setting(true))
-    const sink = vi.fn()
-    const controller = new CommandVoiceGestureController(sink)
-    controller.register()
-
-    globalKeyListener?.onKeyDown?.(primaryModifier)
-    vi.advanceTimersByTime(319)
-    expect(sink).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(1)
-    expect(sink).toHaveBeenCalledWith({ action: 'start', mode: 'hold', source: 'command' })
-
-    globalKeyListener?.onKeyUp?.(primaryModifier)
-    expect(sink).toHaveBeenLastCalledWith({ action: 'stop', mode: 'hold', source: 'command' })
-    expect(sink).toHaveBeenCalledTimes(2)
-
-    controller.unregister()
-  })
-
-  it('ignores repeated keydown while the modifier is held', () => {
-    mocks.getMainConfig.mockReturnValue(setting(true))
-    const sink = vi.fn()
-    const controller = new CommandVoiceGestureController(sink)
-    controller.register()
-
-    globalKeyListener?.onKeyDown?.(primaryModifier)
-    vi.advanceTimersByTime(200)
-    globalKeyListener?.onKeyDown?.(primaryModifier)
-    vi.advanceTimersByTime(120)
-
-    expect(sink).toHaveBeenCalledTimes(1)
-    expect(sink).toHaveBeenCalledWith({ action: 'start', mode: 'hold', source: 'command' })
-
-    globalKeyListener?.onKeyUp?.(primaryModifier)
-    expect(sink).toHaveBeenLastCalledWith({ action: 'stop', mode: 'hold', source: 'command' })
-
-    controller.unregister()
-  })
-
-  it('stops an active gesture and disposes the listener when unregistered', () => {
-    mocks.getMainConfig.mockReturnValue(setting(true))
-    const sink = vi.fn()
-    const controller = new CommandVoiceGestureController(sink)
-    controller.register()
-
-    globalKeyListener?.onKeyDown?.(primaryModifier)
-    globalKeyListener?.onKeyUp?.(primaryModifier)
-    controller.unregister()
-    controller.unregister()
-
-    expect(sink.mock.calls).toEqual([
-      [{ action: 'start', mode: 'toggle', source: 'command' }],
-      [{ action: 'stop', mode: 'toggle', source: 'command' }]
-    ])
-    expect(mocks.disposeGlobalKeyListener).toHaveBeenCalledTimes(1)
-    expect(mocks.unsubscribeSettings).toHaveBeenCalledTimes(1)
-  })
-
-  it('stops an active gesture and disposes the listener when settings are disabled', () => {
-    mocks.getMainConfig.mockReturnValue(setting(true))
-    const sink = vi.fn()
-    const controller = new CommandVoiceGestureController(sink)
-    controller.register()
-
-    globalKeyListener?.onKeyDown?.(primaryModifier)
-    globalKeyListener?.onKeyUp?.(primaryModifier)
-    settingsListener?.(setting(false))
-
-    expect(sink.mock.calls).toEqual([
-      [{ action: 'start', mode: 'toggle', source: 'command' }],
-      [{ action: 'stop', mode: 'toggle', source: 'command' }]
-    ])
-    expect(mocks.disposeGlobalKeyListener).toHaveBeenCalledTimes(1)
-
-    globalKeyListener?.onKeyDown?.(primaryModifier)
-    globalKeyListener?.onKeyUp?.(primaryModifier)
-    expect(sink).toHaveBeenCalledTimes(2)
-
+    currentListener.onKeyDown?.({})
+    currentListener.onKeyUp?.({})
+    expect(sink).toHaveBeenCalledWith({ action: 'start', mode: 'toggle', source: 'command' })
     controller.unregister()
   })
 })

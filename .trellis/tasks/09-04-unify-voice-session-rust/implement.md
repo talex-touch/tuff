@@ -84,30 +84,49 @@
 16. 在 VoiceDock 内保留 VoicePanel 的编辑、截图与提交职责，新增 compact/listening/transcribing/committed/error surface；Canvas confetti 仅响应成功终态并有 TTL、reduced-motion 与清理边界。
 17. 运行 Assistant module contract、VoicePanel/VoiceDock focused tests、CoreApp Web/Node typecheck 和真实桌面窗口 smoke；确认隐藏 VoiceDock 没有持续 RAF 或第二个 Assistant renderer。
 
-## Command VoiceDock 手势
+## Fn VoiceDock 手势
 
-- 在 macOS 使用 Command，在 Windows/Linux 使用 Ctrl 作为 primary modifier；继续沿用 `assistant.enabled`、`floatingBall.enabled`、`voiceWake.enabled` 作为全局手势总开关，避免默认常驻输入钩子。
+- macOS 默认使用 Fn，Windows/Linux 保留 Ctrl（硬件 Fn 不保证向系统上报）；继续沿用 `assistant.enabled`、`floatingBall.enabled`、`voiceWake.enabled` 总开关，不默认常驻输入拦截。
 - 短按（小于 320ms）在 `start` / `stop` 间切换持续聆听；长按达到 320ms 后进入 push-to-talk，释放时发送 `stop`。
-- OmniPanel 继续独占 `uiohook` 生命周期，Voice 只注册 typed primary-modifier listener；VoiceDock 通过 typed `assistant:voice-panel:command` 事件控制 `VoicePanel`，不新增裸 IPC 或第二个录音实现。
-- Command 打开 VoiceDock 时使用 `showInactive`，不抢当前应用焦点；Command stop 不重置已显示的 VoicePanel 文本。
+- macOS 使用现有 `native-audio` 内的主动 `CGEventTap`：只消费由单键 Fn 开始的按下/松开，保留组合键事件；Windows/Linux 由 OmniPanel 独占 `uiohook`。VoiceDock 仍通过 typed `assistant:voice-panel:command` 控制，不增加裸 IPC 或第二套录音。
+- Fn 打开 VoiceDock 使用 `showInactive`，不抢当前应用焦点；stop 不重置录音，句柄未就绪时排队到达后结束。
 
 ## VoiceDock 极简 HUD 收敛
 
 - VoiceDock 的 Electron 窗口保持透明、无阴影；紧凑 HUD 仅保留麦克风状态、语音波形和错误状态，输入框、截图来源选择、截图操作按钮、发送和关闭入口均不属于语音面板。
-- 浮球不再启动唤醒词 ASR，也不显示唤醒词/等待语音文案；Command/Ctrl 手势是唯一语音输入控制。最终文本请求使用 `active-app` delivery，交付由 main-owned Voice Session 负责。
+- 浮球不再启动唤醒词 ASR；Fn/Ctrl 手势和浮球点击调用同一录音入口。最终文本使用 `active-app` delivery，由 main-owned Voice Session 交付。
 - 停止或流终态后，renderer 先显示有限时长的 processing ring，再回到浮球；结束事件通过 typed `voice.closePanel` 同步主进程收缩窗口，避免 renderer 与 BrowserWindow 几何状态分叉。
 - 出现/消失动画只作用于 VoiceDock renderer 内容，屏幕坐标仍由 main 根据浮球锚点所在显示器计算，避免多屏切换时自行改写全局坐标。
 
-## Command/Ctrl 单键安全边界
+## Fn/Ctrl 单键安全边界
 
-- 只有没有其他按键参与的 primary modifier tap/hold 才产生语音动作；Command/Ctrl 与 Shift、字母、数字或其他按键组合时不触发 toggle，也不保留 hold。
-- OmniPanel 在 main 内跟踪按键参与状态：primary 按住期间收到其他键会通过 typed `onOtherKeyDown` 使待启动手势失效；若 hold 已启动则只发送一次 `stop` 收口。组合状态会贯穿到 primary `keyup`，避免其他键先释放后误判为单键。
+- 只有无其他按键参与的 tap/hold 才产生语音动作；其他键先按、后按或先松开都使本次手势失效。
+- 已开始的 hold 遇到组合键或 native reset 只发送一次 stop；注册代次、UI 会话代次与待打开面板均隔离旧回调。
 
 ## ASR 现状与落地结论
 
 - 当前主链路仍是 Rust/cpal 采集 → main-owned Provider/`audio.stt` → 可选 `text.chat` polish → active-app delivery。可用 Provider 是豆包、百炼 Paraformer；未配置时退回泛化 Whisper-compatible WebSocket，再退回定时 WAV snapshot 重识别。
 - 现有 Provider 契约已经有 `stream`/`upload`、partial/final/end、取消和请求边界，但没有本地 FunASR/Whisper runtime；`TUFF_VOICE_ASR_WS_URL` 仍是外部兼容旁路，不是本地模型产品入口。
-- Rust capture 默认使用设备采样率，而 Provider stream request 固定声明 16 kHz；`drainCapture` 返回的实际 sample rate 当前没有在发送前重采样，部署本地或云端 ASR 前必须先补采样率归一化，否则 48 kHz 设备可能按 16 kHz 解释 PCM，导致速度、音高与识别率异常。
+- VoiceService canonical sessions now request 16 kHz capture for Provider/one-shot paths; the generic WebSocket path requests its configured 8/16 kHz rate. Native capture failure remains explicit rather than silently sending a mismatched device-rate PCM stream.
 - 选型不应把“FunASR”当成一个模型：中文/英文低延迟优先评估 Paraformer streaming；CPU 离线优先评估 SenseVoiceSmall；中文/英文/日文和口音覆盖可评估 Fun-ASR-Nano，但其 GPU/模型体量不适合作为所有桌面默认；Whisper/faster-whisper/whisper.cpp 作为多语言与 Apple Silicon/Windows 可移植 fallback。
 - 推荐顺序：先抽象 `local` Provider adapter 和统一 16 kHz mono PCM/VAD contract；macOS 优先 whisper.cpp 或 faster-whisper sidecar 做可复现 baseline，再以独立 FunASR 服务验证中文实时质量；不要把 Python FunASR 直接塞进 Electron 主进程，也不要同时引入两套本地模型下载/生命周期。
 - ASR 验收必须按真实短句集比较首字延迟、partial 稳定性、终字延迟、实时率、内存、CPU/GPU 占用、中文/英文混说 CER/WER、专名和数字、断网/取消；“能跑 CPU”不等于适合全局听写。
+
+## Provider 首发决策（2026-09）
+
+- 本地 FunASR、Whisper、whisper.cpp 和 faster-whisper 先归档，不进入本轮实现；保留为后续 `local` Provider 任务，不下载模型、不新增 Python sidecar、不改变当前桌面安装包。
+- 首发选择阿里云百炼 `bailian-paraformer`：现有 WebSocket adapter 已覆盖 `run-task`、`task-started`、PCM duplex、`finish-task`、partial/final、`task-finished` 和取消；业务空间专属北京域名与 API Key 边界也已明确。
+- 官方价格页当前显示 `paraformer-realtime-v2` 按输入秒计费，原价 `0.00024 元/秒`，北京地域每月自动发放 `36,000 秒（10 小时）`免费额度，有效期 1 个月；实际活动以百炼控制台为准，不在代码中硬编码额度。
+- 无显式 `TUFF_VOICE_ASR_PROVIDER` 时，若百炼和豆包同时配置，runtime 优先百炼；仅豆包配置时自动使用豆包；显式选择未配置 Provider 必须 fail-closed。豆包保留为下一阶段的显式/备用 Provider。
+
+## 百炼真实授权 smoke（一次性）
+
+- 使用临时本地凭据对 `paraformer-realtime-v2` 执行了真实北京 WebSocket 连接；`task-started` 握手、PCM duplex、partial、final、结束事件均可收到，中文指定 `zh-CN` 与英文两条样本均完成。
+- 真实调用未把 API Key 写入仓库、日志或任务文档；临时凭据和测试音频已清理。当前 smoke 证明 Provider 协议与鉴权可用，不等同于 macOS 麦克风、Accessibility 写回或生产质量矩阵验收。
+
+## 本地音频构建与洞察执行
+
+- C++ 安装/build/rebuild 使用 `node-gyp configure build`，不清空 Cargo addon 所在的 `build/Release`；开发包装器先 build/verify audio，再启动 Electron。
+- Cargo addon 在临时路径签名后原子替换唯一 `build/Release/tuff_native_audio.node`；不从 `target/runtime` 回退加载旧版本。
+- 洞察由 VoiceService 成功终态记账，SQLite 原子保存/清空；共享 Voice SDK `getInsights`/`clearInsights` 仅允许受信任宿主页面调用。UI `/voice-insights` 从侧栏进入。
+- 洞察按本地日历处理连续天数、零时长和最近365天热力图；节省时间按每分钟40字的标注基线计算，不能声称测得用户真实打字速度。

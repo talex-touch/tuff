@@ -89,7 +89,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     /**
      * Auto apply Vibrancy(darwin) or MicaMaterial(windows) on window
      */
-    if (process.platform === 'darwin') {
+    if (process.platform === 'darwin' && options?.disableVibrancy !== true) {
       this.window.setVibrancy('fullscreen-ui')
     } else if (shouldApplyMicaFallback(process.platform, this.isMicaWindow)) {
       // Fallback for Windows if MicaBrowserWindow is not used

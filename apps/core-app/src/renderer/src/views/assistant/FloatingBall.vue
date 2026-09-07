@@ -2,8 +2,10 @@
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { onBeforeUnmount, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const transport = useTuffTransport()
+const { t } = useI18n()
 const isDragging = ref(false)
 const dragState = reactive({
   active: false,
@@ -57,6 +59,11 @@ function onPointerDown(event: MouseEvent): void {
   window.addEventListener('mouseup', onPointerUp)
 }
 
+function onBallClick(): void {
+  if (isDragging.value) return
+  void transport.send(AssistantEvents.floatingBall.openVoicePanel, { source: 'click' })
+}
+
 onBeforeUnmount(() => {
   window.removeEventListener('mousemove', onPointerMove)
   window.removeEventListener('mouseup', onPointerUp)
@@ -64,11 +71,17 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="floating-ball-root" aria-hidden="true" @mousedown="onPointerDown">
-    <span class="floating-ball">
+  <button
+    class="floating-ball-root"
+    type="button"
+    :aria-label="t('assistant.floatingBall.clickToOpen')"
+    @mousedown="onPointerDown"
+    @click="onBallClick"
+  >
+    <span class="floating-ball" aria-hidden="true">
       <span class="i-carbon-microphone-filled" aria-hidden="true" />
     </span>
-  </div>
+  </button>
 </template>
 
 <style scoped>
@@ -82,6 +95,11 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 0;
   user-select: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  appearance: none;
   cursor: grab;
 }
 

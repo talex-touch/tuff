@@ -1,14 +1,74 @@
+import * as nativeAudio from '@talex-touch/tuff-native/audio'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { StorageList } from '@talex-touch/utils'
 import type { AssistantVoiceCommandPayload } from '@talex-touch/utils/transport/events/assistant'
-import { omniPanelModule, type OmniPanelGlobalKeyEvent } from '../omni-panel'
+import { omniPanelModule } from '../omni-panel'
 import { getMainConfig, subscribeMainConfig } from '../storage'
+import { createLogger } from '../../utils/logger'
 
-const COMMAND_HOLD_DELAY_MS = 320
+const VOICE_KEY_HOLD_DELAY_MS = 320
+const voiceGestureLog = createLogger('VoiceGesture')
+let platformRegistration = 0
 
 type VoiceCommandGestureSink = (payload: AssistantVoiceCommandPayload) => void | Promise<void>
 type VoiceSessionActiveReader = () => boolean
-function isCommandGestureEnabled(setting: AppSetting): boolean {
+interface VoiceGestureKeyEvent {
+  hasOtherKeys?: boolean
+}
+
+interface VoiceGestureKeyListener {
+  onKeyDown?: (event: VoiceGestureKeyEvent) => void
+  onKeyUp?: (event: VoiceGestureKeyEvent) => void
+  onOtherKeyDown?: () => void
+  onReset?: () => void
+}
+
+type VoiceGestureKeyRegistrar = (listener: VoiceGestureKeyListener) => () => void
+
+const registerPrimaryModifierGesture: VoiceGestureKeyRegistrar = (listener) =>
+  omniPanelModule.registerGlobalKeyListener({
+    onKeyDown: (event) => listener.onKeyDown?.({ hasOtherKeys: event.hasOtherKeys }),
+    onKeyUp: (event) => listener.onKeyUp?.({ hasOtherKeys: event.hasOtherKeys }),
+    onOtherKeyDown: () => listener.onOtherKeyDown?.()
+  })
+
+export const registerPlatformVoiceGesture: VoiceGestureKeyRegistrar = (listener) => {
+  if (process.platform !== 'darwin') return registerPrimaryModifierGesture(listener)
+  const registration = ++platformRegistration
+  let disposed = false
+
+  try {
+    const result = nativeAudio.startFunctionKeyMonitor((event) => {
+      if (disposed || registration !== platformRegistration) return
+      if (event.type === 'down') {
+        listener.onKeyDown?.({ hasOtherKeys: event.hasOtherKeys })
+      } else if (event.type === 'up') {
+        listener.onKeyUp?.({})
+      } else if (event.type === 'reset') {
+        listener.onReset?.()
+      } else {
+        listener.onOtherKeyDown?.()
+      }
+    })
+    if (!result.active) {
+      voiceGestureLog.warn('macOS Fn voice gesture unavailable', {
+        meta: { reason: result.reason ?? 'unknown' }
+      })
+      return () => {}
+    }
+
+    return () => {
+      if (disposed || registration !== platformRegistration) return
+      disposed = true
+      nativeAudio.stopFunctionKeyMonitor()
+    }
+  } catch (error) {
+    voiceGestureLog.warn('Failed to start macOS Fn voice gesture', { error })
+    return () => {}
+  }
+}
+
+function isVoiceGestureEnabled(setting: AppSetting): boolean {
   return (
     setting.assistant?.enabled === true &&
     setting.floatingBall?.enabled === true &&
@@ -17,12 +77,12 @@ function isCommandGestureEnabled(setting: AppSetting): boolean {
 }
 
 /**
- * Maps the primary desktop modifier to two intentional gestures:
- * - tap Command/Ctrl: toggle persistent listening;
- * - hold Command/Ctrl: push-to-talk until release.
+ * Maps the platform voice key to two intentional gestures:
+ * - macOS Fn tap / Windows-Linux Ctrl tap: toggle persistent listening;
+ * - macOS Fn hold / Windows-Linux Ctrl hold: push-to-talk until release.
  *
- * The raw global hook is owned by OmniPanel so only one uiohook lifecycle is
- * active in the main process. This controller owns only the voice gesture state.
+ * OmniPanel continues to own the shared uiohook lifecycle on Windows/Linux.
+ * macOS owns an active native event tap to suppress the standalone Fn/Globe action.
  */
 export class CommandVoiceGestureController {
   private disposeGlobalKeyListener: (() => void) | null = null
@@ -32,10 +92,12 @@ export class CommandVoiceGestureController {
   private commandDown = false
   private holdStarted = false
   private toggleActive = false
+  private registrationGeneration = 0
 
   constructor(
     private readonly sink: VoiceCommandGestureSink,
-    private readonly isVoiceSessionActive: VoiceSessionActiveReader = () => false
+    private readonly isVoiceSessionActive: VoiceSessionActiveReader = () => false,
+    private readonly registerKeyListener: VoiceGestureKeyRegistrar = registerPlatformVoiceGesture
   ) {}
 
   register(): void {
@@ -48,6 +110,7 @@ export class CommandVoiceGestureController {
   }
 
   unregister(): void {
+    this.registrationGeneration += 1
     this.disposeSettingsSubscription?.()
     this.disposeSettingsSubscription = null
     this.enabled = false
@@ -69,10 +132,11 @@ export class CommandVoiceGestureController {
   }
 
   private syncEnabled(setting: AppSetting): void {
-    const nextEnabled = isCommandGestureEnabled(setting)
+    const nextEnabled = isVoiceGestureEnabled(setting)
     if (nextEnabled === this.enabled) return
 
     this.enabled = nextEnabled
+    const generation = ++this.registrationGeneration
     if (!nextEnabled) {
       this.clearHoldTimer()
       this.commandDown = false
@@ -90,10 +154,20 @@ export class CommandVoiceGestureController {
       return
     }
 
-    this.disposeGlobalKeyListener = omniPanelModule.registerGlobalKeyListener({
-      onKeyDown: (event) => this.handleKeyDown(event),
-      onKeyUp: (event) => this.handleKeyUp(event),
-      onOtherKeyDown: () => this.handleOtherKeyDown()
+    const current = (): boolean => this.enabled && generation === this.registrationGeneration
+    this.disposeGlobalKeyListener = this.registerKeyListener({
+      onKeyDown: (event) => {
+        if (current()) this.handleKeyDown(event)
+      },
+      onKeyUp: (event) => {
+        if (current()) this.handleKeyUp(event)
+      },
+      onOtherKeyDown: () => {
+        if (current()) this.handleOtherKeyDown()
+      },
+      onReset: () => {
+        if (current()) this.cancelCombinedGesture()
+      }
     })
   }
   private readVoiceSessionActive(): boolean {
@@ -104,8 +178,8 @@ export class CommandVoiceGestureController {
     }
   }
 
-  private handleKeyDown(event: OmniPanelGlobalKeyEvent): void {
-    if (!this.enabled || event.key !== 'primary-modifier') return
+  private handleKeyDown(event: VoiceGestureKeyEvent): void {
+    if (!this.enabled) return
     if (this.toggleActive && !this.readVoiceSessionActive()) {
       this.toggleActive = false
     }
@@ -128,7 +202,7 @@ export class CommandVoiceGestureController {
         mode: 'hold',
         source: 'command'
       })
-    }, COMMAND_HOLD_DELAY_MS)
+    }, VOICE_KEY_HOLD_DELAY_MS)
   }
 
   private handleOtherKeyDown(): void {
@@ -149,8 +223,8 @@ export class CommandVoiceGestureController {
     })
   }
 
-  private handleKeyUp(event: OmniPanelGlobalKeyEvent): void {
-    if (!this.enabled || event.key !== 'primary-modifier' || !this.commandDown) return
+  private handleKeyUp(event: VoiceGestureKeyEvent): void {
+    if (!this.enabled || !this.commandDown) return
     if (event.hasOtherKeys) {
       this.cancelCombinedGesture()
       return
