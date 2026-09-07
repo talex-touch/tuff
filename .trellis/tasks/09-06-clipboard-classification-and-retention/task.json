@@ -24,7 +24,7 @@
   "notes": "",
   "meta": {
     "blocker": null,
-    "evidence": "M1-M4 全部完成。core-app clipboard+privacy+storage 视图 332 测试（45 文件）/ 插件 128 / utils 40 全绿；retention_protected、DUE_CLAUSE、stage-B 过期写入、预测取 min 四处各跑过负控制并确认会红。",
-    "nextAction": "剩余缺口：历史数据不回填（库里已有的密钥仍会在 90 天后被删）；AC5/AC7 类的样式与真实窗口人工验证未做。回填需全表扫描+分类，待用户决定。"
+    "evidence": "M1-M4 + 历史回填完成。core-app clipboard/privacy 310 测试、utils 193 文件/1511 测试、packages/test 253 全绿；CI 的 typecheck 用 --composite false 复现并修好。保护写入、到期条件、stage-B 过期、预测取 min、回填保护、回填不写过期 六处跑过负控制。",
+    "nextAction": "PR #1879 仍 BLOCKED，剩余红灯属并发 agent 的语音模块（registerPlatformVoiceGesture / isVoiceCommandActive 不存在），不由本任务修。样式三处（user-select、图片预览定高、设置块版式）仍需真实窗口人工确认。"
   }
 }
