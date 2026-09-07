@@ -413,30 +413,19 @@ onBeforeUnmount(() => {
     }
 
     &.is-animating {
+      // The fade is held back until the collapse has almost finished, then run
+      // fast. The panel sits directly over the trigger, so anything that makes
+      // it translucent while it is still travelling lets the trigger's own
+      // label show through and the two render as one doubled word. Staying
+      // opaque until 120ms keeps it a cover; the last 80ms hand off to the
+      // trigger without the hard cut that made the label appear to blink.
       transition:
         clip-path 0.2s cubic-bezier(0.2, 0, 0, 1),
-        background-color 0.2s ease,
-        border-color 0.2s ease,
-        box-shadow 0.2s ease;
+        opacity 0.08s ease 0.12s;
     }
 
-    // Collapsing onto the trigger: drop the panel's chrome on the way down so
-    // the last frame already matches what the trigger shows.
     &.is-closing {
-      background: transparent;
-      border-color: transparent;
-      box-shadow: none;
-
-      :deep(.tx-flat-select-item.is-selected) {
-        color: var(--tx-text-color-primary, #303133);
-        background: transparent;
-        transition: color 0.2s ease, background-color 0.2s ease;
-      }
-
-      :deep(.tx-flat-select-item__check) {
-        opacity: 0;
-        transition: opacity 0.14s ease;
-      }
+      opacity: 0;
     }
   }
 }

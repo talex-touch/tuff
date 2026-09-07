@@ -237,13 +237,16 @@ describe('txFlatSelect settling back onto the trigger', () => {
     wrapper.unmount()
   })
 
-  it('keeps the collapsing chrome transitional rather than instant', () => {
-    // jsdom applies no stylesheet, so the transition is read from the source.
+  it('stays opaque while it collapses, then fades at the end', () => {
+    // jsdom applies no stylesheet, so the contract is read from the source.
+    // The panel covers the trigger: going translucent mid-travel lets the
+    // trigger's own label show through and the word renders doubled.
     const closing = flatSelectSource.slice(flatSelectSource.indexOf('&.is-closing'))
-    const body = closing.slice(0, closing.indexOf('&__'))
-    expect(body).toContain('background: transparent')
-    expect(body).toContain('border-color: transparent')
-    expect(body).toContain('box-shadow: none')
-    expect(flatSelectSource).toMatch(/&\.is-animating \{[\s\S]*?background-color 0\.2s ease/)
+    const body = closing.slice(0, closing.indexOf('}'))
+    expect(body).toContain('opacity: 0')
+    expect(body).not.toContain('background: transparent')
+
+    // Delayed, so the fade only runs once the collapse is nearly done.
+    expect(flatSelectSource).toMatch(/opacity 0\.08s ease 0\.12s/)
   })
 })
