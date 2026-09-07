@@ -60,7 +60,7 @@ export default defineConfig({
 ```
 
 装了之后只需引入组件本身，样式会自动跟上；共享样式无论被多少组件依赖都只加载一次。
-一个由五个组件构成的页面，CSS 从 208 KiB 降到 104 KiB。
+一个由五个组件构成的页面，CSS 从 208 KiB 降到 90 KiB（gzip 后 14 KiB）。
 
 不装插件时需要自行引入整个闭包，`dist/es/style-deps.json` 记录了每个组件的依赖。
 

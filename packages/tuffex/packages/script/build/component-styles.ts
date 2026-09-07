@@ -213,6 +213,9 @@ export async function buildComponentStyles() {
       outDir: tempOutDir,
       emptyOutDir: true,
       minify: false,
+      // Same reasoning as the component build: the JS here is thrown away, the
+      // CSS is what ships.
+      cssMinify: true,
       cssCodeSplit: true,
       write: false,
       rollupOptions: {

@@ -63,7 +63,7 @@ export default defineConfig({
 
 With it in place, importing the component is enough — the stylesheets follow,
 and a shared one is loaded once however many components ask for it. A page built
-from five components drops from 208 KiB of CSS to 104 KiB.
+from five components drops from 208 KiB of CSS to 90 KiB (14 KiB gzipped).
 
 Without the plugin, import the closure yourself. `dist/es/style-deps.json` maps
 each component to what it depends on.
