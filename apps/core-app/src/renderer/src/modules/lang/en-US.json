@@ -4726,7 +4726,7 @@
       "voiceTranscribeTooLong": "The recording exceeds the 30-second limit. Shorten it and try again.",
       "voiceTranscribeUnavailable": "AI voice transcription is unavailable. Check login, quota, or provider status.",
       "voiceTranscribeEmpty": "No speech was detected. Record it again.",
-      "voiceTranscribeFailed": "Voice transcription failed. Try again.",
+      "voiceTranscribeFailed": "Voice transcription failed",
       "submitting": "Sending...",
       "sendToCoreBox": "Send to CoreBox",
       "translateClipboardImage": "Translate clipboard image",
