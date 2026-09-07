@@ -89,6 +89,12 @@ code: |
 - `variant="picker"` keeps the wheel picker, `variant="field"` renders an input-like calendar grid, and `variant="adaptive"` uses the field calendar on desktop width while keeping the wheel picker on narrow screens.
 - With the `picker` surface, popup mode uses `v-model:visible`; `popup="false"` renders that surface inline. The `field` surface always uses `TxPopover` and syncs `update:visible`, `open`, and `close`.
 - `confirm` emits the formatted date and then closes through the underlying picker. Live column changes emit both `update:modelValue` and `change`.
+- The `field` calendar panel is sized to the month grid, not to the field: it opts out of `matchReferenceWidth` and sits between 280px and 360px. A field narrower than the grid previously cut the last weekday column off the panel's edge. The grid's 7 columns are `minmax(0, 1fr)` and the calendar is capped at `100%` of its panel, so a host that pins the panel narrower compresses the columns instead of clipping them.
+- The header title is a button that zooms out: day grid → month grid → year block. Picking a year drops to that year's months, picking a month drops to that month's days. The arrows step whatever the current view shows — one month, one year, or one 12-year block — and the year view keeps one dimmed year of padding on each side. The title stops acting as a control at the year view, which is the top.
+- Stepping slides the grid in the direction of travel; changing zoom level scales in place; landing on a day settles the cell into position. All of it collapses to a short fade under `prefers-reduced-motion`.
+- Hovering the selected day deepens it instead of replacing its fill: `:hover` alone outranks `.is-selected`, so the selection used to disappear under the pointer.
+- `range` turns the calendar into a two-click range. The first click anchors the start and previews the band under the pointer, the second closes the range and emits `[start, end]`; clicking the ends out of order still emits them in order. Nothing is emitted until both ends exist, and closing the panel mid-pick abandons the half-range rather than leaving one end armed. Days between the ends carry `is-in-range`, the ends carry `is-range-start` / `is-range-end`.
+- Closing the panel returns it to the day grid, so the next open starts where a reader expects.
 
 ## API
 
@@ -96,7 +102,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string` | `''` | Selected date in `YYYY-MM-DD` format. Invalid or empty values initialize from today and are clamped by `min` / `max` when provided. |
+| `modelValue` | `string \| DateRangeValue` | `''` | Selected date in `YYYY-MM-DD` format. Under `range` it is a `[start, end]` pair instead. Invalid or empty values initialize from today and are clamped by `min` / `max` when provided. |
 | `visible` | `boolean` | `false` | Controls popup visibility via `v-model:visible`. |
 | `popup` | `boolean` | `true` | Controls only the picker surface: `true` renders the `TxPicker` popup and `false` renders it inline. The field surface renders through `TxPopover`. |
 | `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | Selects the surface. `picker` is the wheel picker, `field` is the calendar field, and `adaptive` switches by viewport width. |
@@ -111,6 +117,8 @@ code: |
 | `closeOnClickMask` | `boolean` | `true` | Allows the popup mask to close the picker when clicked. |
 | `adaptiveBreakpoint` | `number` | `768` | Minimum viewport width where the `adaptive` variant switches to the field calendar. |
 | `weekStartsOn` | `0 \| 1` | `0` | Week start for the field calendar, where `0` is Sunday and `1` is Monday. |
+| `range` | `boolean` | `false` | Field calendar only: pick a start and an end date, and emit `modelValue` as a `[start, end]` pair. The wheel picker has no range surface and ignores it. |
+| `rangeSeparator` | `string` | `' → '` | Text between the two dates in the field's display value. |
 
 ### Events
 
