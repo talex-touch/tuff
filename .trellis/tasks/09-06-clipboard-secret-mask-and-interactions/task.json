@@ -1,0 +1,35 @@
+{
+  "id": "clipboard-secret-mask-and-interactions",
+  "name": "clipboard-secret-mask-and-interactions",
+  "title": "剪贴板历史：密钥掩码一致性与交互修复",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "feature/clipboard-layout-shell",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "plugins/clipboard-history/src/utils/clipboard-shapes.ts",
+    "plugins/clipboard-history/src/components/ClipboardDetail.vue",
+    "plugins/clipboard-history/src/views/ClipboardManagerView.vue",
+    "packages/utils/transport/security/plugin-facing-events.ts"
+  ],
+  "notes": "",
+  "meta": {
+    "blocker": "R5 的链接打开与文件定位需要放宽插件通道白名单（PLUGIN_FACING_EVENTS），这是权限模型决策，等用户裁定 A/B/C 三案。",
+    "evidence": "packages/utils/transport/sdk/main-transport.ts:818 自 #688 起对插件通道默认拒绝；packages/utils/transport/security/plugin-facing-events.ts:66 的 AppEvents.system.* 只含 captureSelection/getActiveApp/resolveApplication；design.md D8 引用的 system-shell-handlers.ts:99 注释已过时。",
+    "nextAction": "用户在 implement.md 的 A/B/C 三案中选定后，实现链接打开与文件定位，补齐 AC8/AC9。M1-M4 与 M5 的图片预览部分已提交。"
+  }
+}
