@@ -3,10 +3,13 @@ import carbonIcons from '@iconify-json/carbon/icons.json'
 import ri from '@iconify-json/ri/icons.json'
 import simpleIcons from '@iconify-json/simple-icons/icons.json'
 import type { IconifyJSON } from '@iconify/types'
-import presetIcons from '@unocss/preset-icons'
-import transformerAttributifyJsx from '@unocss/transformer-attributify-jsx'
-import { defineConfig } from 'unocss'
-import { presetAttributify, presetUno } from 'unocss'
+import {
+  defineConfig,
+  presetAttributify,
+  presetIcons,
+  presetUno,
+  transformerAttributifyJsx
+} from 'unocss'
 import { MODEL_FAMILY_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-family-icons'
 import { MODEL_SOURCE_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-source-icons'
 import {
