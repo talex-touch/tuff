@@ -85,3 +85,29 @@ JWT 过期判定留在插件侧：共享分类器只回答「是不是密钥、�
 **踩到的一个坑**：设置读取模块一开始直接 `import { getMainConfig } from '../storage'`，那个桶会把整个 transport（连同 `ipcMain`）拖进来，导致采集管线的测试**整个文件加载失败**。而我第一次的验证命令 `grep -E "×|Tests "` 只看得到成功加载的文件的统计，差点漏过去——`Test Files 1 failed | 17 passed` 才是那条要看的行。改成注入后 18 个文件全部加载。
 
 **校验策略**：设置来自用户可编辑的文件，逐字段校验、坏值退默认；`protectSecrets` 只在显式 `false` 时关闭——配置手误不该悄悄让密钥开始过期。
+
+
+---
+
+## 收尾：历史回填（`f0baca5f3`）与 CI 门（`b129f083e`）
+
+`clipboard-retention-backfill.ts`：一次性全表扫描，给启用保护之前采集的密钥补上
+`retention_protected`。延迟到应用任务排空之后跑，分批 + 批间让出事件循环；标记只在
+扫完时写，撞上预算则下次启动续扫。
+
+**只往保护方向改，不回填验证码过期时刻**——给三天前的码补「采集时刻 + 1 小时」得到的是
+早已过去的时间，下一轮清理就删掉它，等于在用户没要求的情况下追溯删数据。
+
+### 四个被 CI 抓到的红灯
+
+1. **两个 typecheck 错误本地没看见**：CI 跑 `tsc -p tsconfig.node.json --composite false`，
+   我漏了 `--composite false`。「用 CI 自己的命令验证」这条我上一轮刚写下就又犯了。
+2. `PRIVACY_RETENTION_PRESETS` 在 utils 有逐字断言，加 `1-hour` 要同步。
+3. `packages/test/src/plugins/manifest-boundary.test.ts` 钉死了哪些官方插件可声明
+   `system.shell`。这是一道**故意设的门**，把扩权变成有人签字的动作——clipboard-history
+   加进去并写明理由。
+
+### 一条空断言
+
+「绝不写过期时刻」那条测试第一版只喂验证码，而写库分支只在密钥命中时才跑——注入一个
+过期写入它照样绿。种子里补上密钥、并先断言保护位确实写了，这条断言才有意义。
