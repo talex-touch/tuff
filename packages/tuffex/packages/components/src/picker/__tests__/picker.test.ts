@@ -347,21 +347,31 @@ describe('txPicker wheel', () => {
     wrapper.unmount()
   })
 
-  it('writes the scroll offset in rows onto the column as the wheel turns', () => {
+  it('writes the scroll offset in rows onto the column, once per frame', async () => {
     const wrapper = mountWheel()
     const scroller = wrapper.find('.tx-picker__scroller').element as HTMLElement
+    const frame = () => new Promise(resolve => requestAnimationFrame(resolve))
 
-    // Read synchronously: the offset has to land on the scroll event itself,
-    // not a frame later, or the drum lags the finger. Awaiting here would also
-    // let the column settle onto a row and overwrite the value under test.
-    scroller.scrollTop = 90
-    scroller.dispatchEvent(new Event('scroll'))
-    // Two and a half rows down at 36px each.
-    expect(scroller.style.getPropertyValue('--tx-picker-scroll')).toBe('2.5')
+    // Mounting positions the column asynchronously; without waiting for that it
+    // lands after the scroll below and resets it.
+    await flushPromises()
 
-    scroller.scrollTop = 144
+    // Under inertia a scroll event fires several times per frame, and each
+    // write re-evaluates the transform of every row, so the offset is written
+    // on the frame rather than on the event.
+    scroller.scrollTop = 4
     scroller.dispatchEvent(new Event('scroll'))
-    expect(scroller.style.getPropertyValue('--tx-picker-scroll')).toBe('4')
+    // A quarter of a row at 36px each. Staying within the selected row keeps
+    // the column from resolving to a new value and settling somewhere else,
+    // which would overwrite the offset under test.
+    scroller.scrollTop = 9
+    scroller.dispatchEvent(new Event('scroll'))
+    await frame()
+
+    expect(scroller.style.getPropertyValue('--tx-picker-scroll')).toBe('0.25')
+
+    // Written from inside the frame callback, not from the event handler.
+    expect(pickerSource).toMatch(/requestAnimationFrame\(\(\) => \{[\s\S]{0,200}?writeWheelOffset\(colIndex\)/)
 
     wrapper.unmount()
   })
