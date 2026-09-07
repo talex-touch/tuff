@@ -83,6 +83,43 @@ async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
 
 // No intermediate spinner: the panel owns the whole session now, including the wait for the
 // transcript, which it shows as the thinking orb inside the pill.
+/**
+ * How long the close waits for the pill's own leave animation before giving up on it.
+ *
+ * Longer than the 220ms transition, and only ever reached when `@after-leave` does not arrive —
+ * a stubbed transition in tests, or a surface torn down mid-animation.
+ */
+const SURFACE_CLOSE_FALLBACK_MS = 400
+let closeFallbackTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * Telling main to collapse is what ends the pill's animation, so it has to wait for it.
+ *
+ * `closePanel` shrinks the window from 360x148 to the ball's 56x56 immediately. Sent in the
+ * same tick as `expanded = false`, that clipped the leaving pill out of existence on the first
+ * frame — the shrink was running, inside a window that had already stopped being there to show
+ * it. Now the window keeps its size until the surface has finished leaving.
+ */
+function sendClose(): void {
+  if (closeFallbackTimer) {
+    clearTimeout(closeFallbackTimer)
+    closeFallbackTimer = null
+  }
+  void transport.send(AssistantEvents.voice.closePanel, undefined)
+}
+
+function cancelPendingClose(): void {
+  if (!closeFallbackTimer) return
+  clearTimeout(closeFallbackTimer)
+  closeFallbackTimer = null
+}
+
+/** Fires for whichever surface left; only the pill leaving means the dock is closing. */
+function handleSurfaceLeft(): void {
+  if (expanded.value || !closeFallbackTimer) return
+  sendClose()
+}
+
 function handlePanelFinished(generation?: number): void {
   if (generation !== undefined && generation !== dockGeneration) return
   dockGeneration += 1
@@ -91,10 +128,14 @@ function handlePanelFinished(generation?: number): void {
   voiceStartIssued = false
   pendingStop = false
   panelReady = null
-  void transport.send(AssistantEvents.voice.closePanel, undefined)
+  cancelPendingClose()
+  closeFallbackTimer = setTimeout(sendClose, SURFACE_CLOSE_FALLBACK_MS)
 }
 
 function handlePanelClosed(): void {
+  // Main collapsed on its own; the window is already the ball's size, so there is nothing left
+  // to wait for and nothing left to ask for.
+  cancelPendingClose()
   dockGeneration += 1
   expanded.value = false
   panel.value = null
@@ -147,6 +188,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  cancelPendingClose()
   dockGeneration += 1
   disposePanelOpened?.()
   disposePanelOpened = null
@@ -159,7 +201,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="voice-dock-root" :class="{ 'voice-dock-root--expanded': expanded }">
-    <Transition name="voice-dock-surface" mode="out-in">
+    <Transition name="voice-dock-surface" mode="out-in" @after-leave="handleSurfaceLeft">
       <VoicePanel
         v-if="expanded"
         :key="dockGeneration"

@@ -599,3 +599,26 @@ HUD 在「撤销 / 重试」那条通知离开屏幕时调用它——过期、�
 
 只测「超了会降级」是不够的：那条用例在 4MB 和 10MB 下都绿。另加一条**正向**用例——按 pump 实际的 8 次抽取喂满 8MB，断言重试仍拿得到文本；把上限改回 4MB 它立刻转红。这才让 10MB 这个数本身有守卫。
 
+
+## 13. 收起动画为什么一直没播出来（2026-09-07）
+
+改完 `scale(0.8)` 之后收缩仍然看不见，因为**动画不是被覆盖了，是被裁掉了**：
+
+```
+handlePanelFinished()
+  expanded.value = false            → Vue 开始 220ms 的 leave
+  send(closePanel)                  → 主进程同一帧把窗口从 360×148 缩到 56×56
+```
+
+`collapseVoicePanel` 立刻 `applyFloatingBallBounds`。于是 leave 确实在跑，但它跑在一个**已经不存在的窗口里**——第一帧就被裁没了。CSS 怎么调都没用。
+
+改法：**通知主进程收起这件事本身，要等自己的离场动画放完。**
+
+```ts
+handlePanelFinished()  →  只置 expanded=false，挂一个 400ms 的兜底
+@after-leave           →  真正 send(closePanel)
+```
+
+`@after-leave` 是快路径（220ms 后到），400ms 定时器是兜底——给「hook 不会来」的场景：Test Utils 默认 stub 掉 `<Transition>`，以及生产里动画中途被拆掉的表面。`handlePanelClosed`（主进程自己收的）和卸载时都会取消这个定时器。
+
+三条负控制：改回「同一帧就通知」转红（这是这次真正的回归点）；`@after-leave` 不通知，在**真实 Transition** 的用例下转红（stub 环境里兜底会掩盖它，所以那条用例必须关掉 stub）。缩放数值本身在 jsdom 里观察不到，没有守卫——CSS 值这一层这里测不了，如实记一笔。
