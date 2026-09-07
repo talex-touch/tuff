@@ -11,11 +11,11 @@ import {
   getClipboardSourceInfo,
   getClipboardSummary,
   getClipboardTagLabels,
-  getClipboardTitle,
   groupFilesByDirectory,
   resolveDetailImagePreview,
   resolveListImageSrc,
 } from '~/utils/clipboard-items'
+import { detectSecret, getClipboardDisplayTitle, getClipboardPreviewText } from '~/utils/clipboard-shapes'
 
 const props = defineProps<{
   item: PluginClipboardItem | null
@@ -38,6 +38,22 @@ const fileGroups = computed(() =>
   props.item?.type === 'files' ? groupFilesByDirectory(props.item.content) : [],
 )
 const collapsedDirs = ref<ReadonlySet<string>>(new Set())
+
+/**
+ * 密钥的可见性只有这一个开关，切记录必须复位——否则「看过一次」会静默地跟着列表往下走。
+ * 私钥不给开关，`getClipboardPreviewText` 那侧也会把 reveal 吞掉，两层都拦。
+ */
+const secret = computed(() => detectSecret(props.item?.content))
+const revealSecret = ref(false)
+const canRevealSecret = computed(() => Boolean(secret.value) && secret.value?.kind !== 'private-key')
+const previewText = computed(() => (props.item ? getClipboardPreviewText(props.item, revealSecret.value) : ''))
+
+watch(
+  () => props.item?.id,
+  () => {
+    revealSecret.value = false
+  },
+)
 
 /**
  * 图片主题色只能在渲染进程侧从缩略图提取——主进程从未写过 dominant_color / palette。
@@ -172,7 +188,7 @@ function handleSourceIconError(event: Event): void {
               <img
                 :key="imageRetryNonce"
                 :src="imagePreview.src || undefined"
-                :alt="getClipboardTitle(item)"
+                :alt="getClipboardDisplayTitle(item)"
                 class="preview-img"
                 :class="{ thumbnail: imagePreview.isThumbnailOnly }"
                 @error="handleImageError"
@@ -216,7 +232,20 @@ function handleSourceIconError(event: Event): void {
       </template>
 
       <template v-else-if="item?.type === 'text'">
-        <pre class="code-preview text-preview">{{ item.content }}</pre>
+        <div class="text-preview-block">
+          <pre class="code-preview text-preview">{{ previewText }}</pre>
+          <button
+            v-if="canRevealSecret"
+            class="reveal-toggle"
+            type="button"
+            :title="revealSecret ? '隐藏完整值' : '显示完整值'"
+            :aria-label="revealSecret ? '隐藏完整值' : '显示完整值'"
+            :aria-pressed="revealSecret"
+            @click="revealSecret = !revealSecret"
+          >
+            <ClipboardGlyph name="eye" />
+          </button>
+        </div>
       </template>
 
       <template v-else>
@@ -293,6 +322,7 @@ function handleSourceIconError(event: Event): void {
 
       <ClipboardInsight
         :item="item"
+        :reveal-secret="revealSecret"
         @copy-text="value => emit('copyText', value)"
         @open-link="url => emit('openLink', url)"
       />
@@ -448,6 +478,48 @@ function handleSourceIconError(event: Event): void {
   word-break: break-word;
   line-height: 1.45;
   color: var(--clipboard-text-primary);
+  /* 全局基线是 user-select: none（拖拽不再全选整个窗口）；正文是少数该放开的地方。 */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.text-preview-block {
+  position: relative;
+}
+
+/**
+ * 密钥可见性的唯一开关。放在预览区而不是洞察区，是因为预览区是明文原本泄漏的地方；
+ * 列表标题不受它影响。
+ */
+.reveal-toggle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 70%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--clipboard-surface-base) 92%, transparent);
+  color: var(--clipboard-text-muted);
+  cursor: pointer;
+}
+
+.reveal-toggle:hover {
+  border-color: color-mix(in srgb, var(--clipboard-color-accent) 55%, transparent);
+  color: var(--clipboard-color-accent);
+}
+
+.reveal-toggle[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--clipboard-color-accent) 55%, transparent);
+  color: var(--clipboard-color-accent);
+}
+
+.reveal-toggle .ClipboardGlyph {
+  width: 14px;
+  height: 14px;
 }
 
 .text-preview {

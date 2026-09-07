@@ -8,6 +8,7 @@ import {
   getClipboardTextInsight,
   inferClipboardMime,
 } from '~/utils/clipboard-items'
+import { detectSecret } from '~/utils/clipboard-shapes'
 import { useDisclosureState } from '~/utils/use-disclosure-state'
 
 const props = defineProps<{
@@ -83,7 +84,14 @@ const fullPalette = computed(() => {
   return getClipboardColorTokens(props.item).map(token => token.label)
 })
 
-const textInsight = computed(() => getClipboardTextInsight(props.item))
+/**
+ * 密钥不给字符拆分：把 51 个字符逐个渲染成按钮，等于把掩码拼回原文，
+ * 而拆一个 API key 的字符本来就没有任何使用价值。summary 由实际渲染的分区名拼成，
+ * 所以这里返回 null 之后摘要行也不会再宣传它。
+ */
+const textInsight = computed(() =>
+  detectSecret(props.item?.content) ? null : getClipboardTextInsight(props.item),
+)
 
 /**
  * 摘要由实际会渲染出来的分区名拼，而不是按类型写死四套文案——
