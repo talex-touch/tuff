@@ -371,6 +371,7 @@
       "intelligence-audit": "Intelligence audit metadata",
       "intelligence-context": "Intelligence context conversations",
       "diagnostics": "Diagnostics and telemetry metadata",
+      "voice-insights": "Voice insight aggregates",
       "intelligence-memory": "Explicit AI Memory",
       "plugin-data": "Plugin data"
     },
@@ -1027,6 +1028,7 @@
   "shell": {
     "search": "Search",
     "newChat": "New Chat",
+    "voiceInsights": "Voice Insights",
     "store": "Plugins",
     "setting": "Settings",
     "collapseSidebar": "Collapse sidebar",
@@ -1045,6 +1047,113 @@
       "earlier": "Earlier",
       "untitled": "New chat",
       "delete": "Delete conversation"
+    }
+  },
+  "voiceInsights": {
+    "headline": "Speak, don't type",
+    "subtitle": "See the aggregate impact of successful voice captures without storing transcripts, audio, app names, or file paths.",
+    "sectionTitle": "Insights",
+    "loading": "Loading voice insights...",
+    "actions": {
+      "refresh": "Refresh",
+      "share": "Share",
+      "clear": "Clear insights",
+      "retry": "Retry",
+      "showReport": "View report",
+      "hideReport": "Hide report",
+      "cancel": "Cancel"
+    },
+    "boundary": {
+      "notStarted": "Statistics begin with your first successful, non-empty voice capture.",
+      "since": "Recorded locally since {date}."
+    },
+    "metrics": {
+      "label": "Voice usage metrics",
+      "characters": "Dictated characters",
+      "saved": "Estimated time saved",
+      "rate": "Average dictation rate",
+      "duration": "Total dictation time",
+      "savedBasis": "Estimated against a {count} characters/minute typing baseline; not measured typing."
+    },
+    "units": {
+      "characters": "characters",
+      "charactersPerMinute": "characters/min",
+      "days": "days",
+      "zeroMinutes": "0 min",
+      "lessThanMinute": "< 1 min",
+      "minutes": "{count} min",
+      "hours": "{count} hr",
+      "hoursMinutes": "{hours} hr {minutes} min"
+    },
+    "streak": {
+      "title": "Activity — last 365 local days",
+      "windowNote": "Active-day and longest-streak values are limited to this rolling window.",
+      "label": "Voice activity streaks within the last 365 local days",
+      "activeDays": "Active days",
+      "current": "Current streak",
+      "longest": "Longest streak"
+    },
+    "heatmap": {
+      "title": "Last 365 local days",
+      "description": "Color reflects dictated character volume. Hatched days predate recording.",
+      "legend": "Activity volume legend",
+      "less": "Less",
+      "more": "More",
+      "accessibleLabel": "Voice activity calendar for the last 365 local days",
+      "scrollLabel": "Scrollable voice activity calendar; use horizontal scrolling to review all 365 days",
+      "beforeTracking": "{date}: statistics were not recording yet",
+      "noActivity": "{date}: no recorded voice activity",
+      "daySummary": "{date}: {characters} characters across {sessions} successful captures, {duration}"
+    },
+    "empty": {
+      "title": "Your voice history starts here",
+      "description": "Complete a successful, non-empty voice capture and this page will begin showing real totals, streaks, and daily activity.",
+      "privacy": "Only aggregate counts are kept. Raw audio, transcripts, app names, and paths are not part of voice insights."
+    },
+    "error": {
+      "title": "Voice insights could not be loaded",
+      "description": "Your existing statistics were not changed. Retry the local request."
+    },
+    "share": {
+      "title": "Tuff Voice Insights",
+      "copied": "Aggregate voice insights copied",
+      "copyFailed": "Could not copy the aggregate summary",
+      "unavailable": "not available yet",
+      "rateValue": "{count} characters/minute",
+      "characters": "Dictated characters: {count}",
+      "saved": "Estimated time saved: {duration}",
+      "rate": "Average dictation rate: {rate}",
+      "duration": "Total dictation time: {duration}",
+      "activeDays": "Active days in the last 365 local days: {count}",
+      "currentStreak": "Current streak in the last 365 local days: {count} days",
+      "longestStreak": "Longest streak in the last 365 local days: {count} days",
+      "sessions": "Successful captures: {count}",
+      "polishedSessions": "Polished captures: {count}",
+      "estimateBasis": "Time-saved estimate uses a {count} characters/minute typing baseline; it is not measured typing."
+    },
+    "clear": {
+      "title": "Clear voice insights?",
+      "description": "This permanently deletes the aggregate totals and daily activity shown here. Recording starts again after your next successful, non-empty voice capture.",
+      "confirm": "Clear all insights",
+      "success": "Voice insights cleared",
+      "failed": "Voice insights could not be cleared. Nothing shown here was changed.",
+      "refreshNeededTitle": "Insights were cleared",
+      "refreshNeededDescription": "The cleared state could not be refreshed yet. No previous statistics are being shown; refresh to load the current zero state."
+    },
+    "report": {
+      "title": "Aggregate report",
+      "description": "A transparent summary of what was counted and how cleanup usage is calculated.",
+      "successfulSessions": "Successful captures recorded",
+      "polishedSessions": "Captures polished",
+      "cleanupRate": "Cleanup rate",
+      "learningTitle": "Personalized learning is not enabled",
+      "learningUnavailable": "This report does not infer a learning score, vocabulary profile, or personal dictionary. It only displays real aggregate usage.",
+      "methodologyTitle": "How these numbers are calculated",
+      "successMethod": "Each successful, non-empty live capture is counted once, including a successful retry; uploads, TTS, and partial results are excluded.",
+      "characterMethod": "Characters are visible CJK and other characters after whitespace and punctuation are excluded. They are not English word counts.",
+      "savedMethod": "Estimated time saved is the non-negative difference between a {count} characters/minute typing baseline and recorded dictation duration. The baseline is an estimate, not measured typing.",
+      "rateMethod": "Average dictation rate is total counted characters divided by total recorded duration.",
+      "calendarMethod": "Active days and streaks use a rolling 365-day window of local calendar dates in {timezone}; future days are never included."
     }
   },
   "home": {
@@ -2484,6 +2593,7 @@
     "homeConversation": "Conversation",
     "login": "Please login first!",
     "permission": "You don't have permission!",
+    "voiceInsights": "Voice Insights",
     "pluginStore": "Plugin Store",
     "installedPlugins": "Installed Plugins",
     "storeDocs": "Store Docs",
@@ -5098,15 +5208,7 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": [
-        "Sun",
-        "Mon",
-        "Tue",
-        "Wed",
-        "Thu",
-        "Fri",
-        "Sat"
-      ]
+      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     },
     "memoryReview": {
       "title": "Memory Review",

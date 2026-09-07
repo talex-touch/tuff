@@ -213,6 +213,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/voice-insights',
+    name: '$I18n:router.voiceInsights',
+    component: withRouteComponentPerf(
+      '/voice-insights',
+      () => import('../views/base/VoiceInsights.vue')
+    ),
+    meta: {
+      index: 1
+    }
+  },
+  {
     path: '/store',
     name: '$I18n:router.pluginStore',
     component: withRouteComponentPerf('/store', () => import('../views/base/Store.vue')),

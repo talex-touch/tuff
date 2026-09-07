@@ -127,6 +127,12 @@ function openCoreBox(): void {
 
         <nav class="ShellSidebar-Nav">
           <ShellNavItem icon="i-ri-edit-box-line" :label="t('shell.newChat')" to="/home" />
+          <ShellNavItem
+            icon="i-ri-mic-line"
+            :label="t('shell.voiceInsights')"
+            to="/voice-insights"
+            data-testid="shell-nav-voice-insights"
+          />
           <!-- Intelligence configuration lives in the settings rail, not the home-mode nav. -->
           <ShellNavItem icon="i-ri-store-2-line" :label="t('shell.store')" to="/store" />
         </nav>
