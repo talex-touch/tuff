@@ -1,24 +1,40 @@
 <div align="center">
 
   <img width="160" src="https://files.catbox.moe/2el8uf.png" alt="Tuff logo">
----
 
-  [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
-  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/master/LICENSE)
-  [![GitHub release](https://img.shields.io/github/v/release/talex-touch/tuff?include_prereleases&style=flat-square)](https://github.com/talex-touch/tuff/releases)
-  <br>
+  <h1>Tuff</h1>
+
+  <p><b>The command center, reimagined for creators.</b></p>
+
+  [![Release](https://img.shields.io/github/v/release/talex-touch/tuff?include_prereleases&style=flat-square)](https://github.com/talex-touch/tuff/releases)
+  [![Downloads](https://img.shields.io/github/downloads/talex-touch/tuff/total?style=flat-square)](https://github.com/talex-touch/tuff/releases)
+  [![Issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
+  [![License](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](./LICENSE)
+  [![Linux.do](https://img.shields.io/badge/Linux.do-Community-f0b400?style=flat-square)](https://linux.do)
+
+  [Website](https://tuff.tagzxia.com) · [Download](https://github.com/talex-touch/tuff/releases) · [Docs](https://tuff.tagzxia.com/docs) · [Plugin store](https://tuff.tagzxia.com/store)
+
   English | [简体中文](./README.zh-CN.md)
+
 </div>
+
+![Tuff CoreBox on macOS](./docs/assets/corebox-hero.jpg)
 
 ## What is Tuff?
 
 Tuff (formerly TalexTouch) is a local-first, AI-native, extensible desktop command center. It helps you find applications and files, run commands, automate workflows, and connect governed AI providers from one keyboard-first surface.
 
-## Release and platform status
+Press <kbd>⌘</kbd> <kbd>E</kbd> (<kbd>Ctrl</kbd> <kbd>E</kbd> on Windows and Linux) from anywhere to open CoreBox.
 
-The repository's latest stable release is `2.4.13` (see [GitHub Releases](https://github.com/talex-touch/tuff/releases)); the current release candidate declared in the [root package manifest](./package.json) and [CoreApp package manifest](./apps/core-app/package.json) is `2.4.14-beta.14`.
+## ⬇️ Download
 
-The `2.4.14` public-release gate is intentionally strict: macOS, Windows, and Linux must each pass real installation, N→N+1 update, startup health, and recovery evidence before release. Stable launch/search and individually verified official plugins are the initial public scope; AI and unfinished UI surfaces remain explicitly Beta or unavailable. See the [release-readiness roadmap](./.trellis/tasks/09-03-release-readiness-roadmap/prd.md).
+Prebuilt packages for all three platforms are published on the [Releases page](https://github.com/talex-touch/tuff/releases).
+
+| Platform | Packages |
+| --- | --- |
+| macOS | `.dmg` / `.zip`, Apple Silicon and Intel |
+| Windows | `.exe` installer (x64) |
+| Linux | `.deb` (recommended) / `.AppImage` |
 
 On Ubuntu 24.04 and later, install from the `.deb` rather than the AppImage. 24.04 restricts
 unprivileged user namespaces by default, which Electron's sandbox needs; the `.deb` registers an
@@ -28,44 +44,44 @@ which to do that. If you must use the AppImage, either allow it for that session
 [#213](https://github.com/talex-touch/tuff/issues/213), which is still waiting on a report that
 says which of the two was used.
 
-## Highlights
+## 📌 Release and platform status
 
-- Search applications, files, plugin actions, calculations, units, currencies, and time directly from CoreBox.
-- Extend the host through permission-gated plugins and typed SDKs.
-- Connect private-cloud, hosted, or self-hosted language models.
-- Use clipboard, screenshot, workflow, download, and automation capabilities through host-owned boundaries.
+The latest stable build and the current pre-release are both listed on the [Releases page](https://github.com/talex-touch/tuff/releases); the in-development version is whatever the [root package manifest](./package.json) and [CoreApp package manifest](./apps/core-app/package.json) declare. Exact version numbers are deliberately not repeated in this README, so it cannot drift away from them.
+
+The `2.4.14` public-release gate is intentionally strict: macOS, Windows, and Linux must each pass real installation, N→N+1 update, startup health, and recovery evidence before release. Stable launch/search and individually verified official plugins are the initial public scope; AI and unfinished UI surfaces remain explicitly Beta or unavailable. See the [current stabilization plan](./docs/plan-prd/TODO.md) and the [cross-platform audit](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md).
+
+A stable source version does not imply identical maturity on all three platforms: per-platform capability and fallback boundaries follow that platform's own acceptance evidence.
 
 ## 🚀 Background
 
 **We believe your most powerful tool should be as adaptable as you are. Tuff is a new kind of command center—a foundational, open-source layer for your OS, crafted to anticipate your intent and seamlessly integrate with your unique workflow. Hackable to its core and open by design, it’s ready to be shaped by you.**
 
+## 🗻 Features
+
+- **Universal search** — applications, files, plugin actions, calculations, units, currencies, and time, all from CoreBox.
+- **AI-powered search** — natural language queries over files, apps, and actions.
+- **Contextual intelligence** — proactively suggests commands based on what you are doing.
+- **Inline previews** — arithmetic, unit, currency, time, and scientific-constant queries render instant, copy-ready cards.
+- **Extensible** — permission-gated plugins ("Capabilities") and typed SDKs extend the host.
+- **Bring your own LLM** — connect a private cloud, a hosted provider, or any self-hosted model.
+- **Core utilities** — multiple windows, shortcuts, clipboard management, screenshots, timers, and more.
+- **Unified download center** — centralized progress tracking and resume support.
+- **Host-owned boundaries** — clipboard, screenshot, workflow, download, and automation capabilities all run behind permission gates.
+
+### Plugin management policy
+
+- Plugins installed from the official marketplace have the `dev` entry in their manifest disabled during installation, so they cannot accidentally connect to a development server.
+- Every plugin's origin is recorded in the database, and uninstalling removes the plugin directory and its cached data along with it.
+
 ## 🦋 Beautiful UI Design
 
 The design style of Tuff is inspired by TDesignS, which is simple and elegant. The themes, fonts, and icons have been carefully adjusted to provide users with a better experience.
-
-### The best than ever UI design
 
 ![Plugins](https://files.catbox.moe/8ltyn1.png)
 
 ![Application Empty](https://files.catbox.moe/ih8nj9.png)
 
 ![Application Select.png](https://files.catbox.moe/fh19zg.png)
-
-## 🗻 Rich Functionality
-
-Tuff integrates a variety of practical functions to make your desktop smarter and more efficient.
-- **Core Utilities:** Supports multiple windows, shortcuts, clipboard management, screenshots, timers, and more.
-- **AI-Powered Search:** Understands natural language to find files, apps, and actions.
-- **Contextual Intelligence:** Proactively suggests commands based on your current context.
-- **Extensible:** Supports custom plugins ("Capabilities") to extend its functionality.
-- **Direct preview calculation:** Inline arithmetic/unit/currency/time queries now render instant cards, including scientific constants, so results are copy-ready.
-- **Bring Your Own LLM:** Allows you to connect to your own private cloud or any self-hosted Large Language Model for ultimate privacy and control.
-- **Unified Download Center:** Centralized download management with progress tracking and resume support.
-
-### Plugin management policy
-
-- Plugins installed from the official marketplace have the `dev` entry in their manifest disabled during installation, so they cannot accidentally connect to a development server.
-- Every plugin's origin is recorded in the database, and uninstalling removes the plugin directory and its cached data along with it.
 
 ## 🍀 Simple and Easy-to-Use Operations
 
@@ -85,6 +101,12 @@ If you are looking for a cross-platform and beautifully designed desktop softwar
 - [Contribution guide](./.github/docs/contribution/CONTRIBUTING.md)
 - [Repository development instructions](./AGENTS.md)
 
+## 💚 Community
+
+<a href="https://linux.do"><img src="https://ld.xh.do/ld-badge.svg" alt="认可 linux.do" width="420"></a>
+
+Thanks to the [linux.do](https://linux.do) community for the attention, feedback, and testing that keep shaping Tuff. Questions, bug reports, and plugin ideas are welcome there and in [GitHub Issues](https://github.com/talex-touch/tuff/issues).
+
 ## 🤝 License
 
 This project is open-sourced under the **Mozilla Public License 2.0 (MPL-2.0)** — see [`LICENSE`](./LICENSE).
@@ -101,6 +123,12 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 - Runtime, dependency, and build-tool versions are authoritative in the [root package manifest](./package.json), [CoreApp package manifest](./apps/core-app/package.json), [workspace catalog](./pnpm-workspace.yaml), and [lockfile](./pnpm-lock.yaml).
 - Use Corepack and a Node.js version allowed by the root manifest; do not rely on version numbers copied into this README.
+
+```bash
+corepack enable
+pnpm install
+pnpm core:dev
+```
 
 #### [Click here to learn more](./.github/docs/contribution/CONTRIBUTING.md)
 
