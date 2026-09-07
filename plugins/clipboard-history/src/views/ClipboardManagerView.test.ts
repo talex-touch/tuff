@@ -632,4 +632,62 @@ describe('clipboardManagerView', () => {
 
     wrapper.unmount()
   })
+
+  /**
+   * 分类是闭合的环：从「全部」往左要走到「收藏」，不是停在原地。
+   * 裸方向键仍归列表选择所有，只有带修饰键才归分类条。
+   */
+  it('cycles the category bar with Cmd/Ctrl and the arrow keys', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 91, type: 'text', content: 'hello' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('.category-chip.active').text()).toContain('全部')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.get('.category-chip.active').text()).toContain('文本')
+    expect(sdkMocks.clipboard.history.getHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'text' }),
+    )
+
+    // 从头往左回绕到末位，而不是卡在「全部」。
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', ctrlKey: true, bubbles: true }))
+    await flushPromises()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', ctrlKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.get('.category-chip.active').text()).toContain('收藏')
+
+    wrapper.unmount()
+  })
+
+  it('leaves the category bar alone while typing in an input', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 92, type: 'text', content: 'hello' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.get('.category-chip.active').text()).toContain('全部')
+
+    input.remove()
+    wrapper.unmount()
+  })
 })
