@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import ClipboardGlyph from './ClipboardGlyph.vue'
 import {
   getClipboardColorTokens,
+  getClipboardRetentionLabel,
   getClipboardSourceInfo,
   getClipboardTextInsight,
   inferClipboardMime,
@@ -65,12 +66,14 @@ const rows = computed<DetailRow[]>(() => {
   const source = getClipboardSourceInfo(item)
   const originalUrl = item.type === 'image' ? readMetaString(item, 'image_original_url', 'imageOriginalUrl') : null
   const fullTime = formatFullTimestamp(item)
+  const retention = getClipboardRetentionLabel(item)
 
   return [
     // 摘要条里的 MIME 是缩写（x-tuff-files），这里给全称。
     { label: 'MIME', value: inferClipboardMime(item) },
     source.bundleId ? { label: 'Bundle ID', value: source.bundleId } : null,
     fullTime ? { label: '记录时间', value: fullTime } : null,
+    retention ? { label: '自动删除', value: retention } : null,
     typeof item.id === 'number' ? { label: '记录 ID', value: `#${item.id}` } : null,
     originalUrl ? { label: '原图路径', value: originalUrl } : null,
   ].filter((row): row is DetailRow => row !== null)

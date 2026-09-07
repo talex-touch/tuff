@@ -100,6 +100,8 @@ function toPluginClipboardItem(item: ClipboardItem | null): PluginClipboardItem 
     sourceApp: typeof item.source === 'string' ? item.source : null,
     timestamp: item.createdAt,
     isFavorite: item.isFavorite ?? null,
+    retentionExpiresAt: item.retentionExpiresAt ?? null,
+    retentionReason: item.retentionReason,
     metadata: typeof item.metadata === 'string' ? item.metadata : null,
     meta: Object.keys(meta).length > 0 ? meta : null,
   })

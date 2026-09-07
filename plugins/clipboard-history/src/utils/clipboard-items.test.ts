@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import {
   buildClipboardWritePayload,
   getClipboardColorTokens,
   getClipboardMetrics,
   getClipboardOcrInsight,
+  getClipboardRetentionLabel,
   getClipboardSizeLabel,
   getClipboardSourceInfo,
   getClipboardSubtitle,
@@ -413,5 +414,60 @@ describe('file tree grouping', () => {
   it('returns nothing for malformed file payloads', () => {
     expect(groupFilesByDirectory('{not-json')).toEqual([])
     expect(groupFilesByDirectory(null)).toEqual([])
+  })
+})
+
+describe('retention label', () => {
+  const NOW = Date.UTC(2026, 8, 6, 20, 31)
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function item(overrides: Partial<PluginClipboardItem>): PluginClipboardItem {
+    return { id: 1, type: 'text', content: 'x', ...overrides }
+  }
+
+  it('explains why an entry is never deleted, rather than just saying never', () => {
+    expect(getClipboardRetentionLabel(item({ retentionReason: 'favorite' }))).toBe(
+      '永不自动删除（已收藏）',
+    )
+    expect(getClipboardRetentionLabel(item({ retentionReason: 'protected' }))).toBe(
+      '永不自动删除（密钥）',
+    )
+    expect(getClipboardRetentionLabel(item({ retentionReason: 'disabled' }))).toBe('永不自动删除')
+  })
+
+  /** 相对时间给量级，绝对时间给确凿答案——只说「2 天后」没法区分明天下班前和后天早上。 */
+  it.each([
+    [30_000, '不到 1 分钟后'],
+    [5 * 60_000, '5 分钟后'],
+    [3 * 3_600_000, '3 小时后'],
+    [2 * 86_400_000, '2 天后'],
+  ])('renders %s ms out as %s, alongside the absolute time', (offset, expected) => {
+    const label = getClipboardRetentionLabel(
+      item({ retentionReason: 'policy', retentionExpiresAt: NOW + offset }),
+    )
+    expect(label).toContain(expected)
+    expect(label).toMatch(/（\d{4}\/\d{2}\/\d{2}.+）$/)
+  })
+
+  /** 清理是周期性跑的，不是到点就删——所以过期的记录还能被看到，别写成「0 天后」。 */
+  it('says an entry is awaiting cleanup rather than counting down past zero', () => {
+    const label = getClipboardRetentionLabel(
+      item({ retentionReason: 'policy', retentionExpiresAt: NOW - 1000 }),
+    )
+    expect(label).toContain('已过期，待清理')
+    expect(label).not.toContain('0 天后')
+  })
+
+  it('says nothing when the host did not send a forecast', () => {
+    expect(getClipboardRetentionLabel(item({}))).toBeNull()
+    expect(getClipboardRetentionLabel(null)).toBeNull()
   })
 })

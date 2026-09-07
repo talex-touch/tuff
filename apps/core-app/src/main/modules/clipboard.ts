@@ -40,6 +40,9 @@ import { perfMonitor } from '../utils/perf-monitor'
 import { BaseModule } from './abstract-base-module'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
+import { forecastClipboardRetention } from '@talex-touch/utils/clipboard'
+import { DEFAULT_PRIVACY_RETENTION_POLICY } from './privacy/retention-policy'
+import { createMainPrivacyRetentionPolicyStore } from './privacy/retention-policy-store'
 import { getPermissionModule } from './permission'
 import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
@@ -126,6 +129,9 @@ const CLIPBOARD_META_LOG_THROTTLE_MS = 5_000
 const CLIPBOARD_STAGE_B_LOG_THROTTLE_MS = 5_000
 
 export class ClipboardModule extends BaseModule {
+  /** 当前生效的类别保留时长；null 表示永久保留或策略关闭。见 refreshRetentionPolicy。 */
+  private clipboardRetentionMs: number | null =
+    DEFAULT_PRIVACY_RETENTION_POLICY.categories['clipboard-history'].retentionMs
   private transport: ITuffTransportMain | null = null
   private clipboardHostServiceDisposer: (() => void) | null = null
   private readonly transportHandlers = new ClipboardTransportHandlersRegistry()
@@ -676,6 +682,14 @@ export class ClipboardModule extends BaseModule {
       }
     }
 
+    const forecast = forecastClipboardRetention({
+      timestamp: createdAt,
+      isFavorite: item.isFavorite,
+      retentionProtected: item.retentionProtected,
+      retentionExpiresAt: item.retentionExpiresAt ? item.retentionExpiresAt.getTime() : null,
+      categoryRetentionMs: this.clipboardRetentionMs
+    })
+
     return {
       id: item.id,
       type,
@@ -689,6 +703,8 @@ export class ClipboardModule extends BaseModule {
       freshnessBaseAt: freshness.freshnessBaseAt,
       autoPasteEligible: freshness.eligible,
       isFavorite: item.isFavorite ?? undefined,
+      retentionExpiresAt: forecast.expiresAt,
+      retentionReason: forecast.reason,
       tags,
       meta: Object.keys(meta).length > 0 ? meta : undefined
     }
@@ -1471,6 +1487,25 @@ export class ClipboardModule extends BaseModule {
         .catch((error) => clipboardLog.error('Failed to start OCR service', { error }))
     })
     ocrService.registerClipboardMetaListener(this.handleMetaPatch)
+    void this.refreshRetentionPolicy()
+  }
+
+  /**
+   * 缓存当前生效的类别保留时长，用于算「这条记录什么时候会被删」。
+   *
+   * 缓存而不是每条记录去读一次：`toTransportItem` 在每次 getHistory 的每条记录上都跑，
+   * 而策略读取是异步的存储访问。策略变更时重新读一次即可——用户改设置到界面刷新之间
+   * 有一瞬间的旧值，代价远小于把一次分页查询变成 50 次存储读。
+   */
+  private async refreshRetentionPolicy(): Promise<void> {
+    try {
+      const policy = await createMainPrivacyRetentionPolicyStore().load()
+      this.clipboardRetentionMs = policy.categories['clipboard-history'].enabled
+        ? policy.categories['clipboard-history'].retentionMs
+        : null
+    } catch (error) {
+      clipboardLog.warn('Failed to read clipboard retention policy', { error })
+    }
   }
 
   onDestroy(): MaybePromise<void> {
