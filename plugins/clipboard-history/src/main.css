@@ -147,6 +147,21 @@ body {
   box-sizing: border-box;
 }
 
+/**
+ * 启动器面板的基线是不可选中：不这样的话在列表或详情区按住拖一下就把整个窗口的
+ * 文字全选中了。真正的正文（预览区、OCR 结果）在各自组件里就近放开。
+ */
+#app {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 button,
 input,
 textarea {

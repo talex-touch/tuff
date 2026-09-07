@@ -233,11 +233,38 @@ function moveSelection(delta: 1 | -1): void {
   selectedId.value = selectableItems[nextIndex]?.id ?? null
 }
 
+/**
+ * 分类条循环切换。和 moveSelection 不同，这里到头回绕——分类是一个闭合的环，
+ * 停在「全部」或「收藏」上不动没有任何意义。
+ */
+function moveFilter(delta: 1 | -1): void {
+  const options = filterOptions.filter(option => option.ready)
+  if (options.length === 0) {
+    return
+  }
+
+  const currentIndex = options.findIndex(option => option.key === filter.value)
+  const nextIndex = (((currentIndex < 0 ? 0 : currentIndex) + delta) % options.length + options.length) % options.length
+
+  filter.value = options[nextIndex]?.key ?? filter.value
+}
+
 function handleKeydown(event: KeyboardEvent): void {
   if (event.defaultPrevented || event.altKey || event.isComposing) {
     return
   }
   if (isEditableTarget(event.target)) {
+    return
+  }
+
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    if (!event.metaKey && !event.ctrlKey) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    moveFilter(event.key === 'ArrowRight' ? 1 : -1)
     return
   }
 
@@ -603,6 +630,10 @@ watch(
               <span class="footer-hint">
                 <kbd>↑↓</kbd>
                 选择
+              </span>
+              <span class="footer-hint">
+                <kbd>⌘/Ctrl ←→</kbd>
+                切换分类
               </span>
               <span class="footer-hint">
                 <kbd>Esc</kbd>
