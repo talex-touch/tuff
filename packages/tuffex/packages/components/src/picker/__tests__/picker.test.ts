@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxPicker from '../src/TxPicker.vue'
 import pickerSource from '../src/TxPicker.vue?raw'
@@ -32,19 +32,7 @@ function mountInlinePicker(props: Record<string, unknown> = {}) {
 }
 
 describe('txPicker', () => {
-  // jsdom does not implement Element.prototype.scrollTo (calling it throws), so
-  // shim it here — mirroring how scroll.test.ts stubs ResizeObserver / rAF —
-  // and record the target offset so mount-time scroll positioning is observable.
-  beforeEach(() => {
-    HTMLElement.prototype.scrollTo = function scrollToShim(this: HTMLElement, options?: ScrollToOptions | number) {
-      if (options && typeof options === 'object' && typeof options.top === 'number')
-        this.scrollTop = options.top
-    } as HTMLElement['scrollTo']
-  })
-
   afterEach(() => {
-    // @ts-expect-error remove the shim so it never leaks past this file
-    delete HTMLElement.prototype.scrollTo
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
@@ -106,10 +94,14 @@ describe('txPicker', () => {
 
     expect(wrapper.classes()).toContain('is-disabled')
     expect(wrapper.findAll('.tx-picker__btn').every(button => button.attributes('disabled') !== undefined)).toBe(true)
-    expect(wrapper.findAll('.tx-picker__item').every(item => item.attributes('disabled') !== undefined)).toBe(true)
+    // Rows are inert by design — the column owns the pointer — so a disabled
+    // picker is expressed on the column, and a disabled option on the row.
+    expect(wrapper.findAll('.tx-picker__wheel').every(wheel => wheel.attributes('tabindex') === '-1')).toBe(true)
+    const disabledOption = wrapper.findAll('.tx-picker__item').find(item => item.text() === 'A')
+    expect(disabledOption?.attributes('aria-disabled')).toBe('true')
   })
 
-  it('clamps itemHeight and normalizes visibleItemCount for spacing variables', () => {
+  it('clamps itemHeight and derives the drum geometry from it', () => {
     const wrapper = mountInlinePicker({
       itemHeight: 12,
       visibleItemCount: 4,
@@ -117,8 +109,12 @@ describe('txPicker', () => {
 
     const style = wrapper.find('.tx-picker__columns').attributes('style')
 
+    // 12 is below the floor of 24.
     expect(style).toContain('--tx-picker-item-height: 24px')
-    expect(style).toContain('--tx-picker-padding-y: 48px')
+    // r = (itemHeight / 2) / tan(step / 2), so the row's arc length matches its
+    // height and the labels neither stretch nor bunch on the surface.
+    expect(style).toContain('--tx-picker-radius: 76px')
+    expect(style).toContain('--tx-picker-step: 18')
   })
 
   it('sizes the inline track to visibleItemCount rows via the CSS variable', () => {
@@ -133,28 +129,21 @@ describe('txPicker', () => {
     expect(style).toContain('--tx-picker-visible-count: 7')
   })
 
-  it('scrolls each inline column to its active option on mount', async () => {
+  it('turns each inline column to its active row on mount', async () => {
     const wrapper = mountInlinePicker({
       modelValue: ['b', 2],
     })
 
     await flushPromises()
 
-    const scrollers = wrapper.findAll('.tx-picker__scroller')
-    // itemHeight defaults to 36; 'b' is index 1 in column 0 and 2 is index 1 in
-    // column 1, so both scrollers land one row (36px) down without user input.
-    expect((scrollers[0]!.element as HTMLElement).scrollTop).toBe(36)
-    expect((scrollers[1]!.element as HTMLElement).scrollTop).toBe(36)
+    // The column's position is one number, in rows: 'b' is index 1 in column 0
+    // and 2 is index 1 in column 1, so both land on row 1 without user input.
+    const wheels = wrapper.findAll('.tx-picker__wheel')
+    expect((wheels[0]!.element as HTMLElement).style.getPropertyValue('--tx-picker-offset')).toBe('1')
+    expect((wheels[1]!.element as HTMLElement).style.getPropertyValue('--tx-picker-offset')).toBe('1')
   })
 
-  it('does not emit while scrolling when disabled', async () => {
-    // Run the queued frame synchronously so the (guarded) settle path would emit
-    // if the disabled check were missing.
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
-      cb(0)
-      return 1
-    })
-
+  it('does not turn or emit when disabled', async () => {
     const wrapper = mountInlinePicker({
       disabled: true,
       modelValue: ['b', 2],
@@ -162,28 +151,22 @@ describe('txPicker', () => {
 
     await flushPromises()
 
-    const scroller = wrapper.findAll('.tx-picker__scroller')[0]!
-    ;(scroller.element as HTMLElement).scrollTop = 36
-    await scroller.trigger('scroll')
+    const wheel = wrapper.findAll('.tx-picker__wheel')[0]!
+    const before = (wheel.element as HTMLElement).style.getPropertyValue('--tx-picker-offset')
 
+    await wheel.trigger('wheel', { deltaY: 120 })
+    await wheel.trigger('pointerdown', { pointerId: 1, clientY: 100 })
+    await wheel.trigger('pointermove', { pointerId: 1, clientY: 40 })
+    await wheel.trigger('pointerup', { pointerId: 1, clientY: 40 })
+
+    expect((wheel.element as HTMLElement).style.getPropertyValue('--tx-picker-offset')).toBe(before)
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
     expect(wrapper.emitted('change')).toBeUndefined()
   })
 })
 
 describe('txPicker keyboard a11y', () => {
-  // Same scrollTo shim as above: the keyboard path calls scrollToIndex to keep the
-  // chosen option centered, which would otherwise throw in jsdom.
-  beforeEach(() => {
-    HTMLElement.prototype.scrollTo = function scrollToShim(this: HTMLElement, options?: ScrollToOptions | number) {
-      if (options && typeof options === 'object' && typeof options.top === 'number')
-        this.scrollTop = options.top
-    } as HTMLElement['scrollTo']
-  })
-
   afterEach(() => {
-    // @ts-expect-error remove the shim so it never leaks past this file
-    delete HTMLElement.prototype.scrollTo
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
@@ -199,7 +182,7 @@ describe('txPicker keyboard a11y', () => {
   it('exposes a focusable listbox, option roles, and an active descendant', () => {
     const wrapper = mountInlinePicker({ modelValue: ['b', 2] })
 
-    const scroller = wrapper.findAll('.tx-picker__scroller')[0]!
+    const scroller = wrapper.findAll('.tx-picker__wheel')[0]!
     // The listbox is the single tab stop; its options are pulled out of the tab
     // sequence so focus stays put and aria-activedescendant conveys position.
     expect(scroller.attributes('role')).toBe('listbox')
@@ -207,7 +190,11 @@ describe('txPicker keyboard a11y', () => {
 
     const options = wrapper.findAll('.tx-picker__item')
     expect(options.every(o => o.attributes('role') === 'option')).toBe(true)
-    expect(options.every(o => o.attributes('tabindex') === '-1')).toBe(true)
+    // Focus stays on the column; the rows never take a tab stop of their own.
+    expect(options.every(o => o.attributes('tabindex') === undefined)).toBe(true)
+    // Only a window of rows is rendered, so each carries its place in the whole.
+    expect(options.every(o => o.attributes('aria-setsize') !== undefined)).toBe(true)
+    expect(options.every(o => o.attributes('aria-posinset') !== undefined)).toBe(true)
 
     const selectedInFirstCol = wrapper.findAll('.tx-picker__col')[0]!.find('.tx-picker__item.is-selected')
     expect(selectedInFirstCol.attributes('aria-selected')).toBe('true')
@@ -218,7 +205,7 @@ describe('txPicker keyboard a11y', () => {
     const wrapper = mountInlinePicker({ modelValue: ['b', 2] })
     await flushPromises()
 
-    const numberCol = wrapper.findAll('.tx-picker__scroller')[1]!.element
+    const numberCol = wrapper.findAll('.tx-picker__wheel')[1]!.element
 
     // 2 is index 1; ArrowUp lands on 1 and reports the change through v-model.
     const up = keydown(numberCol, 'ArrowUp')
@@ -250,7 +237,7 @@ describe('txPicker keyboard a11y', () => {
     await flushPromises()
 
     // ArrowDown from P must skip the disabled Q and settle on R.
-    keydown(wrapper.find('.tx-picker__scroller').element, 'ArrowDown')
+    keydown(wrapper.find('.tx-picker__wheel').element, 'ArrowDown')
     await nextTick()
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['r']])
   })
@@ -261,12 +248,12 @@ describe('txPicker keyboard a11y', () => {
 
     // Home in column 0 must consume the key even though the disabled 'a' leaves
     // 'b' as the first enabled option (already selected, so no value change).
-    const home = keydown(wrapper.findAll('.tx-picker__scroller')[0]!.element, 'Home')
+    const home = keydown(wrapper.findAll('.tx-picker__wheel')[0]!.element, 'Home')
     await nextTick()
     expect(home.defaultPrevented).toBe(true)
 
     // End in the number column jumps from 1 to the last option 2.
-    keydown(wrapper.findAll('.tx-picker__scroller')[1]!.element, 'End')
+    keydown(wrapper.findAll('.tx-picker__wheel')[1]!.element, 'End')
     await nextTick()
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['b', 2]])
   })
@@ -275,7 +262,7 @@ describe('txPicker keyboard a11y', () => {
     const wrapper = mountInlinePicker({ disabled: true, modelValue: ['b', 2] })
     await flushPromises()
 
-    const numberCol = wrapper.findAll('.tx-picker__scroller')[1]!
+    const numberCol = wrapper.findAll('.tx-picker__wheel')[1]!
     // The a11y markup still renders, but disabled mirrors the scroll guard: the
     // listbox drops out of the tab order and arrow keys neither move nor consume.
     expect(numberCol.find('.tx-picker__item').attributes('role')).toBe('option')
@@ -294,39 +281,107 @@ describe('txPicker keyboard a11y', () => {
     })
     await flushPromises()
 
-    const scroller = document.body.querySelector('.tx-picker-popup .tx-picker__scroller')
+    const scroller = document.body.querySelector('.tx-picker-popup .tx-picker__wheel')
     expect(scroller?.getAttribute('role')).toBe('listbox')
     expect(scroller?.getAttribute('tabindex')).toBe('0')
 
     const option = document.body.querySelector('.tx-picker-popup .tx-picker__item')
     expect(option?.getAttribute('role')).toBe('option')
-    expect(option?.getAttribute('tabindex')).toBe('-1')
+    expect(option?.getAttribute('aria-posinset')).toBeTruthy()
 
     wrapper.unmount()
   })
 })
 
-describe('txPicker scroll travel', () => {
-  it('gives a column enough travel to bring its last row to the centre', () => {
-    // The blank half-column above and below the rows is two real boxes, not
-    // padding on the scroller: a scroller's bottom padding is not reliably part
-    // of its scrollable area, and without it the column runs out of travel one
-    // row early — the last option is visible but can never be selected.
-    const padRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__pad {'))
-    expect(padRule.slice(0, padRule.indexOf('}'))).toContain('height: var(--tx-picker-padding-y)')
+describe('txPicker wheel', () => {
+  const many = [{
+    key: 'c',
+    options: Array.from({ length: 40 }).map((_, i) => ({ value: `v${i}`, label: `O${i}` })),
+  }]
 
-    const scrollerRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__scroller {'))
-    expect(scrollerRule.slice(0, scrollerRule.indexOf('}'))).not.toMatch(/padding:[^;]*picker-padding-y/)
+  function mountWheel(props: Record<string, unknown> = {}) {
+    return mount(TxPicker, { props: { popup: false, columns: many, modelValue: ['v20'], ...props } })
+  }
 
-    const wrapper = mount(TxPicker, {
-      props: {
-        popup: false,
-        modelValue: ['v0'],
-        columns: [{ key: 'c', options: Array.from({ length: 8 }).map((_, i) => ({ value: `v${i}`, label: `O${i}` })) }],
-      },
-    })
-    // One pad before the rows and one after.
-    expect(wrapper.findAll('.tx-picker__pad')).toHaveLength(2)
+  it('draws only the rows within a quarter turn, not the whole column', async () => {
+    const wrapper = mountWheel()
+    await flushPromises()
+
+    const rows = wrapper.findAll('.tx-picker__item')
+    // 40 options, a window of 5 rows either side of the centre.
+    expect(rows.length).toBeGreaterThan(6)
+    expect(rows.length).toBeLessThan(16)
+
+    // Each still reports its place in the full column, so the window is
+    // invisible to assistive tech.
+    expect(rows[0]?.attributes('aria-setsize')).toBe('40')
+    const selected = wrapper.find('.tx-picker__item.is-selected')
+    expect(selected.attributes('aria-posinset')).toBe('21')
+
     wrapper.unmount()
+  })
+
+  it('turns with the wheel and lands on a row', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountWheel()
+    await flushPromises()
+    const wheel = wrapper.find('.tx-picker__wheel')
+
+    // Two rows' worth of wheel travel at the default 36px row height.
+    await wheel.trigger('wheel', { deltaY: 72 })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v22']])
+
+    // A partial turn settles onto the nearest row rather than resting between two.
+    await wheel.trigger('wheel', { deltaY: 20 })
+    vi.advanceTimersByTime(160)
+    await nextTick()
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v23']])
+
+    vi.useRealTimers()
+    wrapper.unmount()
+  })
+
+  it('drags with the pointer and keeps the value in step', async () => {
+    const wrapper = mountWheel()
+    await flushPromises()
+    const wheel = wrapper.find('.tx-picker__wheel')
+
+    await wheel.trigger('pointerdown', { pointerId: 1, clientY: 200 })
+    // Dragging up by three rows moves three rows down the column.
+    await wheel.trigger('pointermove', { pointerId: 1, clientY: 92 })
+
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v23']])
+
+    wrapper.unmount()
+  })
+
+  it('reads the row under a click out of the drum geometry', async () => {
+    const wrapper = mountWheel()
+    await flushPromises()
+    const wheel = wrapper.find('.tx-picker__wheel')
+
+    // The rows are inert; the column hit-tests against what it drew. jsdom
+    // reports a zero-sized rect, so a click at the centre resolves to the
+    // centre row and the value holds.
+    await wheel.trigger('click', { clientY: 0 })
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('keeps the rows out of hit testing so the centre one cannot swallow clicks', () => {
+    // The drum's predecessor rotated rows that were still clickable where they
+    // were laid out: the enlarged centre row covered its neighbours.
+    const itemRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__item {'))
+    const body = itemRule.slice(0, itemRule.indexOf('&.is-selected'))
+
+    expect(body).toContain('pointer-events: none')
+    expect(body).toContain('position: absolute')
+    // Stacked on the centre line, so a rotation has no layout offset to fight.
+    expect(body).toContain('top: 50%')
+    expect(body).toMatch(/rotateX\([\s\S]*translateZ\(/)
+
+    const wheelRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__wheel {'))
+    expect(wheelRule.slice(0, wheelRule.indexOf('&:active'))).toContain('touch-action: none')
   })
 })
