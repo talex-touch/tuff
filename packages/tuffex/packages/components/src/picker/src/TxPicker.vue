@@ -302,14 +302,15 @@ function onScroll(colIndex: number) {
   if (!state)
     return
 
-  // The wheel has to track the finger, so the rotation is written on the event
-  // itself; only the (heavier) value resolution waits for the frame.
-  writeWheelOffset(colIndex)
-
+  // Both the rotation and the value resolution ride one frame. A scroll event
+  // can fire several times per frame under inertia, and each write of the
+  // offset re-evaluates the transform of every row in the column, so writing
+  // on the event itself did that work two or three times over for one paint.
   if (state.rafId != null)
     cancelAnimationFrame(state.rafId)
   state.rafId = requestAnimationFrame(() => {
     state.rafId = null
+    writeWheelOffset(colIndex)
     pickIndexFromScroll(colIndex)
   })
 
@@ -629,6 +630,9 @@ onBeforeUnmount(() => {
   // tenth rather than looming at it.
   perspective: calc(var(--tx-picker-radius, 114px) * 9);
   perspective-origin: 50% 50%;
+  // Keeps the column's layout and painting to itself, so turning the drum does
+  // not invalidate the surrounding panel on every frame.
+  contain: layout paint;
   mask-image: linear-gradient(
     to bottom,
     transparent 0%,
@@ -683,7 +687,6 @@ onBeforeUnmount(() => {
     translateZ(var(--tx-picker-radius, 114px));
   backface-visibility: hidden;
   transition: color 0.18s ease, font-weight 0.18s ease;
-  will-change: transform;
 
   &.is-selected {
     color: var(--tx-text-color-primary, #303133);
