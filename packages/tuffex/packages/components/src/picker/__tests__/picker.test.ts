@@ -378,7 +378,14 @@ describe('txPicker wheel', () => {
     expect(body).toContain('mask-image:')
 
     const itemRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__item {'))
-    expect(itemRule.slice(0, itemRule.indexOf('&.is-selected'))).toMatch(/rotateX\([\s\S]*translateZ\(/)
+    const transform = itemRule.slice(0, itemRule.indexOf('&.is-selected'))
+    expect(transform).toMatch(/rotateX\([\s\S]*translateZ\(/)
+
+    // The rows are laid out flat and stacked, so each starts at its own offset
+    // down the column. Without cancelling that offset first, rotating in place
+    // swings every row but the centred one off its position and out of view.
+    expect(transform).toMatch(/translateY\([\s\S]*rotateX\([\s\S]*translateZ\(/)
+    expect(transform).toContain('var(--tx-picker-item-height)')
 
     // Flat fallback when motion is unwelcome.
     const reduced = pickerSource.slice(pickerSource.indexOf('@media (prefers-reduced-motion: reduce)'))
