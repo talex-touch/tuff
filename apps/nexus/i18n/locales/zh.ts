@@ -408,6 +408,7 @@ export default {
       placeholder: '搜索官方插件',
     },
     filters: {
+      label: '插件分类',
       all: '全部分类',
     },
     detail: {
@@ -469,6 +470,8 @@ export default {
       empty: '没有符合条件的官方插件。',
       clearFilters: '清除筛选',
       none: '目前还没有官方插件。',
+      noneHint: '插件通过审核后会陆续上架。可以先看开发者文档自己做一个，或去获取最新版本的应用。',
+      emptyHint: '换个关键词或分类试试。',
       loadMore: '加载更多插件',
       loadMoreFailed: '加载更多插件失败。',
     },

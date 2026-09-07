@@ -13,12 +13,12 @@ const { t } = useI18n()
     </div>
     <div class="relative z-10 min-h-screen flex flex-col">
       <TheHeader class="z-10" title="Store" />
-      <main class="container mx-auto p-4 lg:p-8">
-        <header class="pt-16 text-center">
-          <h1 class="text-16xl m-0 text-black font-bold sm:text-4xl dark:text-light">
+      <main class="Layout-Store-Main">
+        <header class="Layout-Store-Hero">
+          <h1 class="Layout-Store-Title">
             {{ t('store.hero.title') }}
           </h1>
-          <p class="m-0 mx-auto max-w-2xl text-base text-black/70 dark:text-light/80">
+          <p class="Layout-Store-Subtitle">
             {{ t('store.hero.subtitle') }}
           </p>
         </header>
@@ -39,6 +39,41 @@ const { t } = useI18n()
 
   animation: fade-in 2.5s ease-in-out;
   mask-image: radial-gradient(circle at top, #000000 15%, #0000 68%);
+}
+
+/*
+ * One column shared by the hero and the page: the header reserves 88px for
+ * its floating pill, the hero sits just under it, and the page content that
+ * follows starts a fixed distance below the subtitle rather than a viewport
+ * height away.
+ */
+.Layout-Store-Main {
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 7.5rem clamp(1.25rem, 4vw, 3rem) 5rem;
+  box-sizing: border-box;
+}
+
+.Layout-Store-Hero {
+  margin: 0 auto 2.5rem;
+  max-width: 40rem;
+  text-align: center;
+}
+
+.Layout-Store-Title {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.Layout-Store-Subtitle {
+  margin: 0.75rem 0 0;
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  color: color-mix(in srgb, currentColor 68%, transparent);
 }
 
 @keyframes fade-in {
