@@ -95,13 +95,11 @@ const WAVE_REF_RELEASE = 0.15
 const PILL_BASE_WIDTH = 200
 const PILL_MAX_WIDTH = 340
 const PILL_BASE_HEIGHT = 44
-/**
- * Two lines of caption text with room around them — the tallest the island ever gets.
- *
- * Not the 64 that two lines strictly need: at that height the text block fills the card edge
- * to edge and the pill reads as a pill someone stretched. A card is allowed to have air.
- */
+/** The tallest the island ever gets: its padding, two clamped lines, the gap and one control. */
 const PILL_TALL_HEIGHT = 88
+/** Both paddings, and the gap between the text row and the control row. */
+const PILL_TALL_PADDING = 10
+const PILL_ROW_GAP = 4
 /**
  * The shape changes with the height, not just the size.
  *
@@ -668,8 +666,25 @@ watch([centerText, showsOrb, () => notice.value?.icon], async () => {
   // line still does not fit, the island grows instead.
   await nextTick()
   const element = centerTextRef.value
-  pillHeight.value =
-    element && element.scrollWidth > element.clientWidth ? PILL_TALL_HEIGHT : PILL_BASE_HEIGHT
+  if (!element || element.scrollWidth <= element.clientWidth) {
+    pillHeight.value = PILL_BASE_HEIGHT
+    return
+  }
+
+  // Grow first, then measure what the text actually took. The card hands it the full width
+  // instead of the pill's middle column, so how many lines it needs is only knowable after the
+  // layout has already changed — and a card sized for two lines around one line of text is the
+  // same empty band as before, just turned on its side.
+  pillHeight.value = PILL_TALL_HEIGHT
+  await nextTick()
+  const textHeight = centerTextRef.value?.scrollHeight ?? 0
+  pillHeight.value = Math.min(
+    PILL_TALL_HEIGHT,
+    Math.max(
+      PILL_BASE_HEIGHT + 1,
+      PILL_TALL_PADDING + textHeight + PILL_ROW_GAP + CONTROL_TALL_SIZE
+    )
+  )
 })
 
 defineExpose({
@@ -896,13 +911,21 @@ onBeforeUnmount(() => {
   border-color: var(--shell-danger-border);
 }
 
-/* The beam is drawn on the pill's own border box, so it has to be positioned, not in flow. */
 .voice-dock {
   position: relative;
 }
 
-.voice-dock :deep(.tx-border-beam) {
+/*
+ * TxBorderBeam is a wrapper: it draws the beam on its own border box and expects content in
+ * its slot. Used here as an empty sibling it collapsed to nothing and drew nothing — while
+ * still taking a flex slot and one 8px gap. Lifting it out of flow onto the pill's own box is
+ * what makes the beam exist at all, and it also makes PILL_CHROME_WIDTH's two-gap arithmetic
+ * true (in flow there were three).
+ */
+.voice-dock :deep([data-beam]) {
+  position: absolute;
   border-radius: inherit;
+  inset: 0;
   pointer-events: none;
 }
 
@@ -964,22 +987,42 @@ onBeforeUnmount(() => {
 }
 
 /*
- * Two lines read as a paragraph, not as a label. Centring them leaves ragged edges on both
- * sides, so the text goes left and stays at the top of the card.
+ * The card is two rows, not a row with the controls pushed down.
  *
- * The controls drop to the bottom edge with it: at this height, centred controls float in the
- * middle of a surface whose content has already moved up, and the card reads as a pill that
- * failed to fill. Top is what happened, bottom is what you can do about it. They stay circles —
- * a control that changes shape with the surface stops being recognisable as the same control.
+ * Dropping the controls to the floor while the text stayed in the middle column left a 250px
+ * empty band across the bottom — the card was half air. Here the text takes the whole top row
+ * (330px instead of 234, so it needs fewer lines in the first place) and the controls own the
+ * bottom one. Top is what happened, bottom is what you can do about it.
+ *
+ * They stay circles at both ends: a control that changes shape or side along with its surface
+ * stops being recognisable as the same control.
  */
 .voice-dock--expanded {
-  align-items: flex-end;
+  display: grid;
+  align-items: center;
+  column-gap: 8px;
+  grid-template-columns: auto 1fr auto;
+  /* Row 2 takes whatever is left, so the controls sit on the floor at any card height. */
+  grid-template-rows: auto 1fr;
+  row-gap: 4px;
 }
 
 .voice-dock--expanded .voice-dock__slot {
   height: auto;
-  align-self: flex-start;
+  align-self: start;
+  grid-area: 1 / 1 / 2 / 4;
   justify-content: flex-start;
+}
+
+.voice-dock--expanded .voice-dock__btn--cancel {
+  align-self: end;
+  grid-area: 2 / 1 / 3 / 2;
+}
+
+/* Whichever trailing control is rendered — confirm, recovery action, or the orb. */
+.voice-dock--expanded > *:last-child {
+  align-self: end;
+  grid-area: 2 / 3 / 3 / 4;
 }
 
 .voice-dock--expanded .voice-dock__text {

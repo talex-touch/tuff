@@ -385,14 +385,39 @@ const controlSize = computed(() => (expanded.value ? CONTROL_TALL_SIZE : CONTROL
 
 六条负控制逐条验过：删掉半径联动 / 删掉长高 / 删掉 `preparing` 门 / 删掉设备分类 / 兜底改回甩原文 / 删掉首帧超时——各自都能让对应用例转红。
 
-### 7.4.2 卡片的版式：上文下钮
+### 7.4.2 卡片的版式：两排，不是把钮往下推的一排
+
+第一版只把两枚钮 `align-items: flex-end` 沉到底，文字仍留在中间那一列 —— 底下空出一条 250px 的带子，整张卡一半是空气。**沉底只有在版式真的变成两排时才成立。**
 
 ```scss
-.voice-dock--expanded { align-items: flex-end; }              /* 两枚圆钮沉到底边 */
-.voice-dock--expanded .voice-dock__slot { align-self: flex-start; }  /* 文字压顶 */
+.voice-dock--expanded {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto 1fr;      /* 第二排吃掉剩下的，钮在任何高度都贴地 */
+  column-gap: 8px;
+  row-gap: 4px;
+}
+.voice-dock--expanded .voice-dock__slot        { grid-area: 1 / 1 / 2 / 4; align-self: start; }
+.voice-dock--expanded .voice-dock__btn--cancel { grid-area: 2 / 1 / 3 / 2; align-self: end; }
+.voice-dock--expanded > *:last-child           { grid-area: 2 / 3 / 3 / 4; align-self: end; }
 ```
 
-88 高的面上把控件继续垂直居中，它们会浮在一片已经被文字让开的空白中间，整张卡看着像一颗没填满的胶囊。**上半是发生了什么，下半是你能做什么。**
+用 grid 而不是改 DOM：尾槽是 confirm / 恢复动作 / orb 三选一，`> *:last-child` 一条规则全覆盖，模板一行不动。
+
+文字因此拿到整排 330 宽（原来中列只有 234）——**很多句子在这里根本不需要第二行**。上排是发生了什么，下排是你能做什么。
+
+### 7.4.2.1 高度跟着量出来的文字
+
+```ts
+pillHeight.value = PILL_TALL_HEIGHT          // 先长成卡片，版式才会变
+await nextTick()
+const textHeight = centerTextRef.value?.scrollHeight ?? 0
+pillHeight.value = Math.min(PILL_TALL_HEIGHT, PILL_TALL_PADDING + textHeight + PILL_ROW_GAP + CONTROL_TALL_SIZE)
+```
+
+一行 71、两行封顶 88。溢出判定是在**胶囊的中列**上做的，而卡片给的是整排宽度 —— 所以「装不下」之后到底占几行，只有在版式换完之后才知道。照两行的高度一律画，就是把那条空带竖过来。不会震荡：`expanded` 只看 `> PILL_BASE_HEIGHT`，71 和 88 都还在卡片态里。
+
+**上半是发生了什么，下半是你能做什么。**
 
 钮保持正圆，不跟着变成圆角矩形：控件跟着容器变形，就不再是同一个控件了——用户认的是那两个圆。角落里放得下：卡片圆角 24，钮心距角弧心 √2，20 + 1.41 < 24，圆完整落在弧内。
 
@@ -403,3 +428,20 @@ const controlSize = computed(() => (expanded.value ? CONTROL_TALL_SIZE : CONTROL
 额度、拥塞、兜底**都不给**。一个划了杠的麦克风画在「额度用完了」旁边，指的是错的元凶——图标比句子先被读到，指错了就是先骗一次。
 
 宽度测量跟着加 `NOTICE_ICON_WIDTH = 26`（图标 + gap），否则带图标的那一档会按没图标的宽度算，正好挤掉最后一个字。
+
+### 7.5 BorderBeam 之前根本没画出来
+
+`TxBorderBeam` 是**包裹型**组件：它把光带画在自己的 border box 上，内容走 `<slot>`。而这里把它当成空的兄弟节点塞在 flex 行里 —— 没有内容就没有尺寸，塌成 0×0，什么都没画，还白吃一个 8px 的 gap。
+
+```scss
+.voice-dock :deep([data-beam]) {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+```
+
+注意它的根节点上没有 `.tx-border-beam` 类（只有 `[data-beam="<id>"]`），所以原来那条 `:deep(.tx-border-beam)` 规则一个元素都没匹配到 —— 这是它一直没被发现的原因。
+
+顺带把 `PILL_CHROME_WIDTH = 94`（padding 10 + 双钮 68 + **两个** gap 16）算对了：在流里时实际是三个 gap，24。

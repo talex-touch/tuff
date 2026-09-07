@@ -840,6 +840,8 @@ describe('VoicePanel device readiness and long messages', () => {
   it('grows a second line rather than dropping the half that says what to do', async () => {
     const widthSpy = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(420)
     const clientSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(246)
+    // Two clamped lines of caption text: 10 padding + 34 + 4 gap + 40 control = 88.
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(34)
 
     const wrapper = await listeningPanel()
     callbacksOrThrow().onError?.(new Error('PERMISSION_DENIED'))
@@ -868,6 +870,33 @@ describe('VoicePanel device readiness and long messages', () => {
 
     widthSpy.mockRestore()
     clientSpy.mockRestore()
+    heightSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  /**
+   * The card hands the text the full width the pill's middle column could not give it, so a
+   * message that needed two lines in the pill often needs only one here. Sizing the card for
+   * two lines regardless is the same empty band the bottom row had, turned on its side.
+   */
+  it('sizes the card to the text it ended up with, not to the worst case', async () => {
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(420)
+    const clientSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(246)
+    // One line once the text spans the card: 10 padding + 17 + 4 gap + 40 control = 71.
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(17)
+
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('PERMISSION_DENIED'))
+    await flushPromises()
+    await flushPromises()
+
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    expect(style).toContain('height: 71px')
+    expect(wrapper.find('.voice-dock--expanded').exists()).toBe(true)
+
+    widthSpy.mockRestore()
+    clientSpy.mockRestore()
+    heightSpy.mockRestore()
     wrapper.unmount()
   })
 
