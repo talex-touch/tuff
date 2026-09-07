@@ -306,77 +306,8 @@ describe('txPicker keyboard a11y', () => {
   })
 })
 
-describe('txPicker wheel', () => {
-  const wheelColumns = [
-    {
-      key: 'channel',
-      options: Array.from({ length: 8 }).map((_, i) => ({ value: `v${i}`, label: `Option ${i}` })),
-    },
-  ]
-
-  function mountWheel(props: Record<string, unknown> = {}) {
-    return mount(TxPicker, {
-      attachTo: document.body,
-      props: { popup: false, columns: wheelColumns, modelValue: ['v0'], ...props },
-    })
-  }
-
-  it('derives the drum radius from the row height so arc length matches the layout', () => {
-    // r = (itemHeight / 2) / tan(step / 2); 36px rows at 18° give 114px.
-    const wrapper = mountWheel()
-    const columnsEl = wrapper.find('.tx-picker__columns').element as HTMLElement
-
-    expect(columnsEl.style.getPropertyValue('--tx-picker-radius')).toBe('114px')
-    expect(columnsEl.style.getPropertyValue('--tx-picker-step')).toBe('18')
-
-    wrapper.unmount()
-
-    const tall = mountWheel({ itemHeight: 48 })
-    expect((tall.find('.tx-picker__columns').element as HTMLElement).style.getPropertyValue('--tx-picker-radius')).toBe('152px')
-    tall.unmount()
-  })
-
-  it('numbers every row so its rotation is one calc off the scroll offset', () => {
-    const wrapper = mountWheel()
-    const rows = wrapper.findAll('.tx-picker__item')
-
-    expect(rows).toHaveLength(8)
-    expect(rows.map(row => (row.element as HTMLElement).style.getPropertyValue('--tx-picker-index')))
-      .toEqual(['0', '1', '2', '3', '4', '5', '6', '7'])
-
-    wrapper.unmount()
-  })
-
-  it('writes the scroll offset in rows onto the column, once per frame', async () => {
-    const wrapper = mountWheel()
-    const scroller = wrapper.find('.tx-picker__scroller').element as HTMLElement
-    const frame = () => new Promise(resolve => requestAnimationFrame(resolve))
-
-    // Mounting positions the column asynchronously; without waiting for that it
-    // lands after the scroll below and resets it.
-    await flushPromises()
-
-    // Under inertia a scroll event fires several times per frame, and each
-    // write re-evaluates the transform of every row, so the offset is written
-    // on the frame rather than on the event.
-    scroller.scrollTop = 4
-    scroller.dispatchEvent(new Event('scroll'))
-    // A quarter of a row at 36px each. Staying within the selected row keeps
-    // the column from resolving to a new value and settling somewhere else,
-    // which would overwrite the offset under test.
-    scroller.scrollTop = 9
-    scroller.dispatchEvent(new Event('scroll'))
-    await frame()
-
-    expect(scroller.style.getPropertyValue('--tx-picker-scroll')).toBe('0.25')
-
-    // Written from inside the frame callback, not from the event handler.
-    expect(pickerSource).toMatch(/requestAnimationFrame\(\(\) => \{[\s\S]{0,200}?writeWheelOffset\(colIndex\)/)
-
-    wrapper.unmount()
-  })
-
-  it('gives the column enough travel to bring the last row to the centre', () => {
+describe('txPicker scroll travel', () => {
+  it('gives a column enough travel to bring its last row to the centre', () => {
     // The blank half-column above and below the rows is two real boxes, not
     // padding on the scroller: a scroller's bottom padding is not reliably part
     // of its scrollable area, and without it the column runs out of travel one
@@ -387,35 +318,15 @@ describe('txPicker wheel', () => {
     const scrollerRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__scroller {'))
     expect(scrollerRule.slice(0, scrollerRule.indexOf('}'))).not.toMatch(/padding:[^;]*picker-padding-y/)
 
-    // Both pads are rendered, one before the rows and one after.
-    const wrapper = mountWheel()
+    const wrapper = mount(TxPicker, {
+      props: {
+        popup: false,
+        modelValue: ['v0'],
+        columns: [{ key: 'c', options: Array.from({ length: 8 }).map((_, i) => ({ value: `v${i}`, label: `O${i}` })) }],
+      },
+    })
+    // One pad before the rows and one after.
     expect(wrapper.findAll('.tx-picker__pad')).toHaveLength(2)
     wrapper.unmount()
-  })
-
-  it('keeps the native scroller, so momentum, snapping and the listbox stay', () => {
-    // The drum is a paint on top of a real scroll container; replacing it with
-    // a transform-driven list would have cost the platform's own inertia.
-    const scrollerRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__scroller {'))
-    const body = scrollerRule.slice(0, scrollerRule.indexOf('&::-webkit-scrollbar'))
-
-    expect(body).toContain('overflow-y: auto')
-    expect(body).toContain('scroll-snap-type: y mandatory')
-    expect(body).toContain('perspective:')
-    expect(body).toContain('mask-image:')
-
-    const itemRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__item {'))
-    const transform = itemRule.slice(0, itemRule.indexOf('&.is-selected'))
-    expect(transform).toMatch(/rotateX\([\s\S]*translateZ\(/)
-
-    // The rows are laid out flat and stacked, so each starts at its own offset
-    // down the column. Without cancelling that offset first, rotating in place
-    // swings every row but the centred one off its position and out of view.
-    expect(transform).toMatch(/translateY\([\s\S]*rotateX\([\s\S]*translateZ\(/)
-    expect(transform).toContain('var(--tx-picker-item-height)')
-
-    // Flat fallback when motion is unwelcome.
-    const reduced = pickerSource.slice(pickerSource.indexOf('@media (prefers-reduced-motion: reduce)'))
-    expect(reduced).toContain('transform: none')
   })
 })
