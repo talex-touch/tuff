@@ -1,0 +1,30 @@
+{
+  "id": "clipboard-classification-and-retention",
+  "name": "clipboard-classification-and-retention",
+  "title": "剪贴板内容分类统一与按类保留策略",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "feature/clipboard-layout-shell",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": null,
+    "evidence": "M1 共享分类器：utils 34 / core-app clipboard+privacy 288 / 插件 121 全绿；新旧 tag 差异 9 处逐条解释并钉成回归表。M2 的 retention_protected 有负控制测试（去掉写入即红）。",
+    "nextAction": "M2 余下：1-hour preset、retention_expires_at 列与幂等迁移、验证码写过期时间、清理侧过期扫描、stage-B 在 sourceApp 就绪后重跑分类。之后 M3（详情显示预计删除时间）与 M4（设置页）。"
+  }
+}
