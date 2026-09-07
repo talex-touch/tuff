@@ -139,6 +139,14 @@ const CONTROL_BASE_SIZE = 34
 const CONTROL_TALL_SIZE = 40
 /** padding (10) + both round slots (68) + both gaps (16); the centre gets what is left. */
 const PILL_CHROME_WIDTH = 94
+/**
+ * Slack for the pixel the measurement cannot see.
+ *
+ * `scrollWidth` is an integer and the text's real width is not, so a sentence measuring 145.7
+ * reports 145 and gets a 145-wide slot — a fraction too narrow, and it wraps. Every message
+ * short enough to fit on one line is a coin flip without this.
+ */
+const TEXT_WIDTH_SLACK = 2
 
 const props = withDefaults(
   defineProps<{
@@ -826,7 +834,7 @@ watch([centerText, showsOrb, () => notice.value?.icon], async () => {
   const element = currentTextEl()
   if (!element) return
   const chrome = PILL_CHROME_WIDTH
-  const needed = measureNaturalWidth(element) + chrome
+  const needed = measureNaturalWidth(element) + TEXT_WIDTH_SLACK + chrome
   pillWidth.value = Math.min(PILL_MAX_WIDTH, Math.max(PILL_BASE_WIDTH, needed))
 
   // Width first, height second. Truncating at the cap loses the half of the sentence that
@@ -1336,6 +1344,9 @@ onBeforeUnmount(() => {
   font-size: var(--shell-fs-caption);
   -webkit-line-clamp: 2;
   line-height: 1.4;
+  /* The pill is symmetric around its centre, so a line that does wrap wraps centred. Only the
+     card overrides this: two lines read as a paragraph, and paragraphs are ragged on one side. */
+  text-align: center;
   text-overflow: ellipsis;
 }
 
