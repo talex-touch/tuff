@@ -33,6 +33,7 @@ const DAY = 24 * 60 * 60 * 1000
 const RETENTION_MS_BY_PRESET: Readonly<
   Record<Exclude<PrivacyRetentionPreset, 'permanent'>, number>
 > = {
+  '1-hour': 60 * 60 * 1000,
   '1-day': DAY,
   '7-days': 7 * DAY,
   '30-days': 30 * DAY,

@@ -17,6 +17,8 @@ export const PRIVACY_SETTINGS_DATA_CATEGORIES = [...PRIVACY_RETENTION_CATEGORIES
 export type PrivacyDataCategory = (typeof PRIVACY_DATA_CATEGORIES)[number]
 
 export const PRIVACY_RETENTION_PRESETS = [
+  // 验证码那一档要它。在此之前最短是一天，而一个一次性码留一天本来就没有意义。
+  '1-hour',
   '1-day',
   '7-days',
   '30-days',

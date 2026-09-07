@@ -258,6 +258,7 @@
       "memoryIndependent": "Explicit AI Memory follows its own TTL or user deletion and is not removed by audit retention.",
       "unsupportedSelection": "Choose a currently supported retention period for every category before saving.",
       "presets": {
+        "1-hour": "1 hour",
         "1-day": "1 day",
         "7-days": "7 days",
         "30-days": "30 days",

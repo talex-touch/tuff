@@ -409,6 +409,12 @@ export const clipboardHistory = sqliteTable(
     retentionProtected: integer('retention_protected', { mode: 'boolean' })
       .notNull()
       .default(false),
+    /**
+     * 单条记录自己的过期时刻，为空则按类别策略走。
+     * 验证码用它：一次性码被粘贴的那一刻就作废了，留满类别的 90 天等于让一个
+     * 还能用的凭据在明文表里躺三个月。
+     */
+    retentionExpiresAt: integer('retention_expires_at', { mode: 'timestamp' }),
     metadata: text('metadata') // 存储其他元数据 (JSON string)
   },
   (table) => ({
@@ -416,7 +422,10 @@ export const clipboardHistory = sqliteTable(
       .on(table.timestamp, table.id)
       .where(
         sql`COALESCE(${table.isFavorite}, 0) = 0 AND COALESCE(${table.retentionProtected}, 0) = 0`
-      )
+      ),
+    expiryIdx: index('clipboard_history_expiry_idx')
+      .on(table.retentionExpiresAt)
+      .where(sql`${table.retentionExpiresAt} IS NOT NULL AND COALESCE(${table.isFavorite}, 0) = 0`)
   })
 )
 

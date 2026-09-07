@@ -8,6 +8,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 
 export const PRIVACY_RETENTION_DAY_MS = 86_400_000
+export const PRIVACY_RETENTION_HOUR_MS = 3_600_000
 export const PRIVACY_OCR_TEMP_NAMESPACE = 'ocr/intermediate'
 export const PRIVACY_SCREENSHOT_TEMP_NAMESPACE = 'native/screenshots'
 
@@ -21,6 +22,7 @@ export const PRIVACY_RETENTION_CATEGORIES = [
 ] as const satisfies readonly PrivacyRetentionCategory[]
 
 const PERIOD_MS: Readonly<Record<PrivacyRetentionPreset, number | null>> = Object.freeze({
+  '1-hour': PRIVACY_RETENTION_HOUR_MS,
   '1-day': PRIVACY_RETENTION_DAY_MS,
   '7-days': 7 * PRIVACY_RETENTION_DAY_MS,
   '30-days': 30 * PRIVACY_RETENTION_DAY_MS,
