@@ -68,7 +68,10 @@ const AUX_COPY_TABLES = [
   'clipboard_history_meta',
   'ocr_jobs',
   'ocr_results',
-  'config'
+  'config',
+  'voice_insights_state',
+  'voice_insight_days',
+  'voice_insight_captures'
 ] as const
 
 export class DatabaseModule extends BaseModule {
@@ -874,6 +877,31 @@ export class DatabaseModule extends BaseModule {
         PRIMARY KEY (day, surface, k)
       )`,
       'CREATE INDEX IF NOT EXISTS idx_recommendation_exposure_daily_day ON recommendation_exposure_daily (day)',
+      `CREATE TABLE IF NOT EXISTS voice_insights_state (
+        id integer PRIMARY KEY,
+        generation integer NOT NULL DEFAULT 0,
+        started_at integer,
+        updated_at integer NOT NULL,
+        timezone text NOT NULL,
+        total_characters integer NOT NULL DEFAULT 0,
+        total_duration_ms integer NOT NULL DEFAULT 0,
+        session_count integer NOT NULL DEFAULT 0,
+        polished_session_count integer NOT NULL DEFAULT 0,
+        estimated_saved_ms integer NOT NULL DEFAULT 0
+      )`,
+      `CREATE TABLE IF NOT EXISTS voice_insight_days (
+        day text PRIMARY KEY,
+        characters integer NOT NULL DEFAULT 0,
+        duration_ms integer NOT NULL DEFAULT 0,
+        session_count integer NOT NULL DEFAULT 0
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_voice_insight_days_day ON voice_insight_days (day)',
+      `CREATE TABLE IF NOT EXISTS voice_insight_captures (
+        capture_id text PRIMARY KEY,
+        generation integer NOT NULL,
+        captured_at integer NOT NULL
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_voice_insight_captures_captured_at ON voice_insight_captures (captured_at)',
       `CREATE TABLE IF NOT EXISTS clipboard_history (
         id integer PRIMARY KEY AUTOINCREMENT,
         type text NOT NULL,
