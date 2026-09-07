@@ -409,12 +409,22 @@ async function handleCopy(): Promise<void> {
   }
 }
 
-function handleOpenLink(url: string): void {
-  const opened = window.open(url, '_blank', 'noopener')
-  if (!opened) {
-    // 插件 webview 可能拦掉 window.open；退化为复制而不是静默失败。
-    void handleCopyText(url)
-    errorMessage.value = '无法直接打开链接，已复制到剪贴板'
+/**
+ * `window.open` is denied for a plugin surface (`plugin-window-policy.ts` installs a
+ * blanket `setWindowOpenHandler` deny), so this used to fail every single time and quietly
+ * degrade to a copy. The host's own shell handler is the only route that opens anything.
+ */
+async function handleOpenLink(url: string): Promise<void> {
+  errorMessage.value = ''
+  try {
+    await system.openExternal(url)
+  } catch (error) {
+    // system.shell is optional in the manifest, so a denial is a normal outcome here,
+    // not a bug — degrade to the clipboard and say which of the two happened.
+    await handleCopyText(url)
+    errorMessage.value = isPermissionDenied(error)
+      ? '未授予打开链接的权限，已复制到剪贴板'
+      : '无法直接打开链接，已复制到剪贴板'
   }
 }
 
@@ -430,7 +440,7 @@ async function handlePrimaryAction(): Promise<void> {
   }
 
   if (action.kind === 'open-link') {
-    handleOpenLink(action.url)
+    await handleOpenLink(action.url)
     return
   }
 
@@ -456,13 +466,24 @@ async function handleCopyText(value: string): Promise<void> {
 }
 
 /**
- * 「在访达中显示」还没有插件可用的宿主能力：`AppEvents.system.showInFolder` 自 #688
- * 起不在插件通道白名单里，Prelude 侧也没有对应的 capability。在补上之前先退化为
- * 复制路径，并且说明白为什么——静默什么都不做才是最坏的那种。
+ * 主进程把权限拒绝序列化成带 `code` 的普通对象，不是 Error 实例——
+ * 用 instanceof 判会漏掉，所以读 code 字段。
  */
+function isPermissionDenied(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code
+  return typeof code === 'string' && code.startsWith('SYSTEM_SHELL_PERMISSION_')
+}
+
 async function handleRevealFile(path: string): Promise<void> {
-  await handleCopyText(path)
-  errorMessage.value = '暂不支持在访达中定位，已复制文件路径'
+  errorMessage.value = ''
+  try {
+    await system.showInFolder(path)
+  } catch (error) {
+    await handleCopyText(path)
+    errorMessage.value = isPermissionDenied(error)
+      ? '未授予定位文件的权限，已复制文件路径'
+      : '无法定位该文件，已复制文件路径'
+  }
 }
 
 async function handleApply(): Promise<void> {

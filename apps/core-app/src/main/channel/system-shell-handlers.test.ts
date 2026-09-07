@@ -13,6 +13,26 @@ const { fsStatMock, shellOpenExternalMock, shellOpenPathMock, shellShowItemInFol
     shellShowItemInFolderMock: vi.fn()
   }))
 
+const { checkPermissionMock, getPermissionModuleMock } = vi.hoisted(() => {
+  const checkPermissionMock = vi.fn(
+    () => ({ allowed: true }) as { allowed: boolean; reason?: string }
+  )
+  return {
+    checkPermissionMock,
+    getPermissionModuleMock: vi.fn(() => ({ checkPermission: checkPermissionMock }))
+  }
+})
+
+vi.mock('../modules/permission/permission-module-ref', () => ({
+  getPermissionModule: getPermissionModuleMock
+}))
+
+// withPermission resolves a plugin's declared sdkapi through the plugin module; pulling the
+// real one in would boot half the main process for a check these tests do not exercise.
+vi.mock('../modules/plugin/plugin-module', () => ({
+  pluginModule: { pluginManager: { getPluginByName: () => undefined } }
+}))
+
 vi.mock('node:fs/promises', () => ({
   default: {
     stat: fsStatMock
@@ -58,6 +78,86 @@ describe('registerSystemShellHandlers', () => {
     fsStatMock.mockReset()
     shellOpenPathMock.mockReset()
     shellOpenPathMock.mockResolvedValue('')
+    checkPermissionMock.mockReturnValue({ allowed: true })
+  })
+
+  /**
+   * These two events are on the plugin-facing allowlist, so a plugin surface can reach them.
+   * The allowlist decides who is heard, not who is allowed — `system.shell` is what decides
+   * the latter, and it has to hold for the surface exactly as it does for the Prelude's
+   * `open-url` capability. Without a plugin context in play the earlier cases would pass on
+   * a handler with no gate at all, so the gate needs its own evidence.
+   */
+  describe('the system.shell gate', () => {
+    function registerAndGet(eventName: string) {
+      const { handlers, transport } = createTransport()
+      registerSystemShellHandlers(transport as never, {
+        configRootPath: () => '/tmp/tuff',
+        appRootPath: () => '/tmp/tuff',
+        logger: { warn: vi.fn() },
+        registerSafeHandler: vi.fn(() => vi.fn()) as never
+      })
+      return getHandler(handlers, eventName)
+    }
+
+    it('refuses a plugin without system.shell, for both events', async () => {
+      checkPermissionMock.mockReturnValue({ allowed: false, reason: 'not granted' })
+      const pluginContext = { plugin: { name: 'com.example.greedy' } }
+
+      await expect(
+        registerAndGet(AppEvents.system.openExternal.toEventName())(
+          { url: 'https://example.com/docs' },
+          pluginContext
+        )
+      ).rejects.toMatchObject({ code: 'SYSTEM_SHELL_PERMISSION_DENIED' })
+
+      fsStatMock.mockResolvedValue({ isDirectory: () => false })
+      await expect(
+        registerAndGet(AppEvents.system.showInFolder.toEventName())(
+          { path: '/Users/demo/secret.txt' },
+          pluginContext
+        )
+      ).rejects.toMatchObject({ code: 'SYSTEM_SHELL_PERMISSION_DENIED' })
+
+      expect(shellOpenExternalMock).not.toHaveBeenCalled()
+      // The reveal path is also an existence oracle, so the stat must not run either.
+      expect(fsStatMock).not.toHaveBeenCalled()
+      expect(shellShowItemInFolderMock).not.toHaveBeenCalled()
+    })
+
+    it('lets a plugin holding system.shell through', async () => {
+      fsStatMock.mockResolvedValue({ isDirectory: () => false })
+      const pluginContext = { plugin: { name: 'com.tuffex.clipboard-history' } }
+
+      await registerAndGet(AppEvents.system.openExternal.toEventName())(
+        { url: 'https://example.com/docs' },
+        pluginContext
+      )
+      await registerAndGet(AppEvents.system.showInFolder.toEventName())(
+        { path: '/Users/demo/a.pdf' },
+        pluginContext
+      )
+
+      expect(checkPermissionMock).toHaveBeenCalledWith(
+        'com.tuffex.clipboard-history',
+        'system.shell',
+        undefined
+      )
+      expect(shellOpenExternalMock).toHaveBeenCalledWith('https://example.com/docs')
+      expect(shellShowItemInFolderMock).toHaveBeenCalledWith('/Users/demo/a.pdf')
+    })
+
+    it('still lets the host renderer through, which carries no plugin context', async () => {
+      checkPermissionMock.mockReturnValue({ allowed: false, reason: 'not granted' })
+
+      await registerAndGet(AppEvents.system.openExternal.toEventName())(
+        { url: 'https://example.com/docs' },
+        {}
+      )
+
+      expect(shellOpenExternalMock).toHaveBeenCalledWith('https://example.com/docs')
+      expect(checkPermissionMock).not.toHaveBeenCalled()
+    })
   })
 
   it('blocks unsafe external URLs before reaching Electron shell', () => {
