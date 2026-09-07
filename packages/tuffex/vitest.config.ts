@@ -23,6 +23,14 @@ export default defineConfig({
           include: ['packages/utils/__tests__/**/*.test.ts'],
         },
       },
+      {
+        extends: true,
+        test: {
+          name: 'build',
+          environment: 'node',
+          include: ['packages/script/build/__tests__/**/*.test.ts'],
+        },
+      },
     ],
   },
 })
