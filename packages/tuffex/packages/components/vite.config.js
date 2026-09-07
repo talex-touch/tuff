@@ -3,6 +3,22 @@ import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
 
+function isLegalCssComment(text) {
+  const normalized = text.trim()
+  return normalized.startsWith('!') || /@license|copyright/i.test(normalized)
+}
+
+export function createLegalCommentPreservingStripper() {
+  return {
+    postcssPlugin: 'tuffex-strip-nonlegal-comments',
+    Once(root) {
+      root.walkComments(comment => {
+        if (!isLegalCssComment(comment.text)) comment.remove()
+      })
+    }
+  }
+}
+
 const pkg = JSON.parse(
   readFileSync(new URL('../../package.json', import.meta.url), 'utf-8')
 )
@@ -24,6 +40,11 @@ const componentEntries = Object.fromEntries(
 )
 
 export default defineConfig({
+  css: {
+    postcss: {
+      plugins: [createLegalCommentPreservingStripper()]
+    }
+  },
   build: {
     target: 'esnext',
     outDir: 'es',
