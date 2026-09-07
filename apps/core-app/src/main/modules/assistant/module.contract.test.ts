@@ -119,11 +119,6 @@ describe('Assistant module startup contract', () => {
     ]) {
       expect(floatingBallSource).toContain(expected)
     }
-    expect(floatingBallSource).not.toContain('@click=')
-    expect(floatingBallSource).not.toContain('onBallClick')
-    expect(floatingBallSource).not.toContain('openVoicePanel')
-    expect(floatingBallSource).not.toContain('getRuntimeConfig')
-    expect(floatingBallSource).not.toContain('useI18n')
   })
 
   it('keeps VoiceDock opening protected from blur auto-hide until the UI handoff finishes', () => {

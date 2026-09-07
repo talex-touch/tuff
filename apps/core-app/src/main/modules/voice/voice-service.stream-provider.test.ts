@@ -676,7 +676,7 @@ describe('VoiceService recovery status', () => {
     // session. Aborting instead would not prove it — that path still reaches the capture setup,
     // which replaces the slot on its own.
     support.mockReturnValueOnce({ supported: false, reason: 'no device' })
-    await expect(drainStream(service.streamDictation({}))).rejects.toThrow()
+    await expect(service.streamDictation({}).next()).rejects.toThrow('Voice capture is unavailable')
 
     expect(service.getRecoveryStatus()).toEqual({ available: false })
   })

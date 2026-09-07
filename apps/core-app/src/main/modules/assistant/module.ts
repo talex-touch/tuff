@@ -260,6 +260,8 @@ export class AssistantModule extends BaseModule {
   private voiceDockWindow: TouchWindow | null = null
   private voiceDockWindowPending: Promise<TouchWindow> | null = null
   private voiceDockExpanded = false
+  private voiceCommandStartPending: Promise<void> | null = null
+  private voiceCommandStopPending = false
   private voicePanelAutoHideSuppressionDepth = 0
   private voicePanelAutoHideResumeTimer: NodeJS.Timeout | null = null
   private voicePanelFocusSuppressed = false
@@ -316,9 +318,10 @@ export class AssistantModule extends BaseModule {
       clearTimeout(this.voicePanelAutoHideResumeTimer)
       this.voicePanelAutoHideResumeTimer = null
     }
-
     this.pendingPosition = null
     this.voiceDockExpanded = false
+    this.voiceCommandStartPending = null
+    this.voiceCommandStopPending = false
     this.voicePanelAutoHideSuppressionDepth = 0
     this.voicePanelFocusSuppressed = false
     this.unsubscribeAppSetting?.()
@@ -874,6 +877,14 @@ export class AssistantModule extends BaseModule {
       })
     }, 220)
   }
+  /** True while the VoiceDock is open or its first renderer window is still being created. */
+  isVoiceCommandActive(): boolean {
+    return (
+      this.voiceDockExpanded ||
+      this.voiceDockWindowPending !== null ||
+      this.voiceCommandStartPending !== null
+    )
+  }
 
   async handleVoiceCommandGesture(payload: AssistantVoiceCommandPayload): Promise<void> {
     const setting = this.readAppSetting()
@@ -881,20 +892,55 @@ export class AssistantModule extends BaseModule {
       return
     }
     if (payload.action === 'stop') {
-      const dock = this.voiceDockWindow
-      if (!dock || dock.window.isDestroyed() || !this.voiceDockExpanded || !this.transport) {
+      if (!this.voiceDockExpanded) {
+        if (this.voiceCommandStartPending || this.voiceDockWindowPending) {
+          this.voiceCommandStopPending = true
+        }
         return
       }
+      const dock = this.voiceDockWindow
+      if (!dock || dock.window.isDestroyed() || !this.transport) return
+      this.voiceCommandStopPending = false
       this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, payload)
       return
     }
 
-    this.voicePanelFocusSuppressed = true
-    try {
-      await this.showVoicePanel('command')
-    } finally {
-      this.voicePanelFocusSuppressed = false
+    // A compact dock has no mounted VoicePanel yet. `panelOpened` starts the session after the
+    // renderer has mounted; sending a second command here can race that handoff and leave the
+    // first session reset by `openPanel()`.
+    if (this.voiceCommandStartPending) return
+    if (!this.voiceDockExpanded) {
+      this.voiceCommandStopPending = false
+      this.voicePanelFocusSuppressed = true
+      const opening = (async (): Promise<void> => {
+        try {
+          await this.showVoicePanel('command')
+        } finally {
+          this.voicePanelFocusSuppressed = false
+        }
+      })()
+      this.voiceCommandStartPending = opening
+      try {
+        await opening
+      } catch {
+        this.voiceCommandStopPending = false
+        return
+      } finally {
+        if (this.voiceCommandStartPending === opening) {
+          this.voiceCommandStartPending = null
+        }
+      }
+
+      if (this.voiceCommandStopPending) {
+        this.voiceCommandStopPending = false
+        const dock = this.voiceDockWindow
+        if (dock && !dock.window.isDestroyed() && this.transport) {
+          this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, payload)
+        }
+      }
+      return
     }
+
     const dock = this.voiceDockWindow
     if (!dock || dock.window.isDestroyed() || !this.transport) return
     this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, payload)
@@ -918,8 +964,7 @@ export class AssistantModule extends BaseModule {
     try {
       this.voiceDockExpanded = true
       this.applyVoiceDockBounds(dock, anchorBounds)
-
-      const shouldFocus = !this.voicePanelFocusSuppressed
+      const shouldFocus = !this.voicePanelFocusSuppressed && source !== 'click'
       if (!dock.window.isVisible()) {
         if (shouldFocus) dock.window.show()
         else dock.window.showInactive()
