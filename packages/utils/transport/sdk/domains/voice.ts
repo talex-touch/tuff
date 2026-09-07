@@ -129,6 +129,23 @@ export interface VoiceRetryResult {
   expired?: boolean;
 }
 
+/** What left a recoverable recording behind — the two paths that keep audio. */
+export type VoiceRecoveryKind = "cancelled" | "failed";
+
+/**
+ * Whether the last session left audio that can still be recovered.
+ *
+ * Exists so the dock can offer recovery after it has already collapsed: without it, audio
+ * kept past the five seconds the pill is on screen would have no reachable entry point, and
+ * retention with nothing to reach it is just retention.
+ */
+export interface VoiceRecoveryStatus {
+  available: boolean;
+  kind?: VoiceRecoveryKind;
+  /** Milliseconds left in the recovery window; absent when nothing is held. */
+  expiresInMs?: number;
+}
+
 /** Main-owned source reference for uploaded audio recognition. */
 export interface VoiceTranscribeUploadPayload {
   /** HTTPS URL resolved by main; raw file paths and binary payloads are not public DTOs. */
@@ -193,6 +210,10 @@ export const voiceApiEvents = {
       VoiceTranscribeUploadPayload,
       VoiceApiResponse<VoiceTranscribeUploadResult>
     >(),
+  recoveryStatus: defineEvent("voice")
+    .module("api")
+    .event("recovery-status")
+    .define<void, VoiceApiResponse<VoiceRecoveryStatus>>(),
   retryLastFailure: defineEvent("voice")
     .module("api")
     .event("retry-last-failure")
@@ -225,6 +246,8 @@ export interface VoiceSdk {
   ) => Promise<StreamController>;
   /** Re-transcribe the audio the last failed session already captured. */
   retryLastFailure: (payload?: VoiceRetryPayload) => Promise<VoiceRetryResult>;
+  /** Ask whether a cancelled or failed recording is still recoverable. */
+  recoveryStatus: () => Promise<VoiceRecoveryStatus>;
 }
 
 function assertVoiceApiResponse<T>(
@@ -251,6 +274,11 @@ export function createVoiceSdk(transport: VoiceSdkTransport): VoiceSdk {
     async transcribeUpload(payload) {
       const response = await transport.send(voiceApiEvents.transcribeUpload, payload);
       return assertVoiceApiResponse(response, "Voice upload transcription failed");
+    },
+
+    async recoveryStatus() {
+      const response = await transport.send(voiceApiEvents.recoveryStatus, undefined);
+      return assertVoiceApiResponse(response, "Voice recovery status failed");
     },
 
     async retryLastFailure(payload = {}) {

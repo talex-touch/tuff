@@ -80,7 +80,14 @@ export function getVoiceProvider(
   preferredId?: string
 ): VoiceProviderAdapter | undefined {
   const active = getVoiceProviderRegistry()
-  if (active.list().length === 0) return undefined
   const configuredId = preferredId ?? env('TUFF_VOICE_ASR_PROVIDER')
-  return active.resolve(mode, configuredId)
+  if (configuredId) {
+    return active.resolve(mode, configuredId)
+  }
+  if (active.list().length === 0) return undefined
+
+  // Bailian Paraformer is the first-party Chinese streaming default. Keep
+  // Doubao as an explicit override or automatic fallback when Bailian is not configured.
+  const defaultId = active.get('bailian-paraformer') ? 'bailian-paraformer' : undefined
+  return active.resolve(mode, defaultId)
 }

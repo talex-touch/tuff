@@ -512,3 +512,122 @@ describe('VoiceService retry buffer retention', () => {
     expect(stt).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * The affordance that makes the recovery window reachable at all.
+ *
+ * Without a way to ask after the pill has collapsed, audio held past those five seconds has
+ * no entry point — and retention nothing can reach is just retention.
+ */
+describe('VoiceService recovery status', () => {
+  let fake: ReturnType<typeof createFakeConnection>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    support.mockReturnValue({ supported: true, platform: 'darwin' })
+    startCapture.mockResolvedValue({ sessionId: 's1' })
+    drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16000, channels: 1 })
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+    invoke.mockResolvedValue({ result: 'Hello world.' })
+    fake = createFakeConnection()
+    resolveProvider.mockReturnValue({
+      id: 'fake',
+      defaultStreamModel: 'fake-model',
+      createStream: vi.fn(async () => fake.connection)
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function cancelAfterSpeaking(service: VoiceService): Promise<void> {
+    const controller = new AbortController()
+    const generator = service.streamDictation({}, controller.signal)
+    const drained = (async () => {
+      try {
+        for await (const _event of generator) {
+          // drain
+        }
+      } catch {
+        // the cancellation under test
+      }
+    })()
+    await vi.advanceTimersByTimeAsync(400)
+    controller.abort()
+    await vi.advanceTimersByTimeAsync(300)
+    await drained
+  }
+
+  it('reports nothing to recover before anything has run', () => {
+    expect(new VoiceService().getRecoveryStatus()).toEqual({ available: false })
+  })
+
+  it('names why the recording survived, and how long is left', async () => {
+    const service = new VoiceService()
+    await cancelAfterSpeaking(service)
+
+    const status = service.getRecoveryStatus()
+    expect(status.available).toBe(true)
+    expect(status.kind).toBe('cancelled')
+    // A countdown, not a boolean: an action that expires mid-click is worse than no action.
+    // Asserted against the near-full window — `> 0` would pass on a hardcoded constant.
+    expect(status.expiresInMs).toBeGreaterThan(29_000)
+    expect(status.expiresInMs).toBeLessThanOrEqual(30_000)
+  })
+
+  it('distinguishes a failure from a cancel', async () => {
+    const service = new VoiceService()
+    const generator = service.streamDictation({})
+    const drained = (async () => {
+      try {
+        for await (const _event of generator) {
+          // drain
+        }
+      } catch {
+        // the failure under test
+      }
+    })()
+    await vi.advanceTimersByTimeAsync(300)
+    fake.fail(new Error('provider socket closed'))
+    await vi.advanceTimersByTimeAsync(500)
+    await drained
+
+    expect(service.getRecoveryStatus().kind).toBe('failed')
+  })
+
+  it('stops offering recovery once the window closes', async () => {
+    const service = new VoiceService()
+    await cancelAfterSpeaking(service)
+    await vi.advanceTimersByTimeAsync(30_001)
+
+    expect(service.getRecoveryStatus()).toEqual({ available: false })
+  })
+
+  /**
+   * The clock, not the timer.
+   *
+   * The expiry timer is the normal mechanism, which means a status check that trusted it
+   * alone would pass even with the deadline comparison removed. Moving the wall clock past
+   * the deadline without running timers is what actually exercises the guard — and it is not
+   * hypothetical: the timer is unref'd, so a sleeping or throttled process can reach this.
+   */
+  it('refuses an expired recording even if its timer has not fired', async () => {
+    const service = new VoiceService()
+    await cancelAfterSpeaking(service)
+    expect(service.getRecoveryStatus().available).toBe(true)
+
+    vi.setSystemTime(Date.now() + 30_001)
+    expect(service.getRecoveryStatus()).toEqual({ available: false })
+  })
+
+  it('offers nothing after a successful session', async () => {
+    pollCapture.mockReturnValueOnce({ active: true, durationMs: 100, stoppedReason: null })
+    pollCapture.mockReturnValue({ active: false, durationMs: 200, stoppedReason: 'silence' })
+    const service = new VoiceService()
+    await drainStream(service.streamDictation({}))
+
+    expect(service.getRecoveryStatus()).toEqual({ available: false })
+  })
+})

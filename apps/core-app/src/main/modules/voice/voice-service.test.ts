@@ -408,6 +408,12 @@ describe('VoiceService canonical session', () => {
     typeText.mockReturnValue({ ok: true })
   })
 
+  it('requests 16 kHz native capture for cloud streaming ASR', async () => {
+    await new VoiceService().startSession()
+
+    expect(startCapture).toHaveBeenCalledWith(expect.objectContaining({ sampleRate: 16_000 }))
+  })
+
   it('keeps one owner id across start and stop and delivers natively', async () => {
     stt.mockResolvedValue({ result: { text: 'raw dictation', language: 'en' } })
     invoke.mockResolvedValue({ result: 'Raw dictation.' })

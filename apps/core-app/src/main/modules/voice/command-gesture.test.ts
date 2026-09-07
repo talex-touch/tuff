@@ -105,20 +105,28 @@ describe('command voice gesture', () => {
     controller.unregister()
   })
 
-  it('alternates tap gestures between toggle start and stop', () => {
+  it('uses the actual voice session state when toggling taps', () => {
     mocks.getMainConfig.mockReturnValue(setting(true))
     const sink = vi.fn()
-    const controller = new CommandVoiceGestureController(sink)
+    let voiceSessionActive = false
+    const controller = new CommandVoiceGestureController(sink, () => voiceSessionActive)
     controller.register()
 
     globalKeyListener?.onKeyDown?.(primaryModifier)
     globalKeyListener?.onKeyUp?.(primaryModifier)
+    voiceSessionActive = true
+
+    globalKeyListener?.onKeyDown?.(primaryModifier)
+    globalKeyListener?.onKeyUp?.(primaryModifier)
+    voiceSessionActive = false
+
     globalKeyListener?.onKeyDown?.(primaryModifier)
     globalKeyListener?.onKeyUp?.(primaryModifier)
 
     expect(sink.mock.calls).toEqual([
       [{ action: 'start', mode: 'toggle', source: 'command' }],
-      [{ action: 'stop', mode: 'toggle', source: 'command' }]
+      [{ action: 'stop', mode: 'toggle', source: 'command' }],
+      [{ action: 'start', mode: 'toggle', source: 'command' }]
     ])
 
     controller.unregister()

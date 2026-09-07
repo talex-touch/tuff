@@ -5,6 +5,8 @@ import type {
   VoiceDeliveryResult,
   VoiceDictatePayload,
   VoiceDictateResult,
+  VoiceRecoveryKind,
+  VoiceRecoveryStatus,
   VoiceRetryPayload,
   VoiceRetryResult,
   VoiceSpeakPayload,
@@ -125,8 +127,9 @@ interface RetryBuffer {
   bytes: number
   sampleRate: number
   language?: string
-  /** Set once the session fails; until then the buffer belongs to a live session. */
+  /** Set once the session ends abnormally; until then the buffer belongs to a live session. */
   expiresAt: number | null
+  kind: VoiceRecoveryKind | null
   overflowed: boolean
 }
 
@@ -281,6 +284,7 @@ export class VoiceService {
       sampleRate,
       ...(language ? { language } : {}),
       expiresAt: null,
+      kind: null,
       overflowed: false
     }
   }
@@ -301,12 +305,13 @@ export class VoiceService {
   }
 
   /** Success is the only path that drops audio immediately; the rest get a recovery window. */
-  private armRetryBuffer(): void {
+  private armRetryBuffer(kind: VoiceRecoveryKind): void {
     const buffer = this.retryBuffer
     if (!buffer || buffer.overflowed || buffer.bytes === 0) {
       this.clearRetryBuffer()
       return
     }
+    buffer.kind = kind
     buffer.expiresAt = Date.now() + RECOVERY_GRACE_MS
     if (this.retryExpiryTimer) clearTimeout(this.retryExpiryTimer)
     this.retryExpiryTimer = setTimeout(() => {
@@ -823,7 +828,8 @@ export class VoiceService {
     } catch (error) {
       // Cancel and failure both keep the audio: one feeds undo, the other feeds retry.
       // Only the success path above drops it, because there the words already landed.
-      this.armRetryBuffer()
+      const cancelled = error instanceof Error && error.message === 'VOICE_OPERATION_CANCELLED'
+      this.armRetryBuffer(cancelled ? 'cancelled' : 'failed')
       throw error
     } finally {
       if (connection) await connection.abort('Voice session ended').catch(() => {})
@@ -838,6 +844,28 @@ export class VoiceService {
    * and "transcription failed" are different things to tell someone, and only one of them
    * is worth a retry button.
    */
+  /**
+   * What the dock asks when it reopens: is there still something to recover?
+   *
+   * Reports the remaining window so the caller can show a countdown instead of offering an
+   * action that may expire mid-click.
+   */
+  getRecoveryStatus(): VoiceRecoveryStatus {
+    const buffer = this.retryBuffer
+    if (!buffer || buffer.expiresAt === null || buffer.bytes === 0) return { available: false }
+
+    const remaining = buffer.expiresAt - Date.now()
+    if (remaining <= 0) {
+      this.clearRetryBuffer()
+      return { available: false }
+    }
+    return {
+      available: true,
+      ...(buffer.kind ? { kind: buffer.kind } : {}),
+      expiresInMs: remaining
+    }
+  }
+
   async retryLastFailure(
     payload: VoiceRetryPayload = {},
     signal?: AbortSignal,
