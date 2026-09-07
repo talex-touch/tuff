@@ -95,7 +95,14 @@ const LIMITS = {
   // the slider's dissolve add 4.8 KiB on top, measured at 644.6 KiB. Same contract as every
   // note above: actuals plus minimal headroom, growth from here fails, and #1555 still owns
   // whether the total should be coming down instead.
-  fullCssBytes: 656 * 1024,
+  // 656 -> 664 on 2026-09-07: three surfaces grew at once — the date picker gained month and
+  // year quick-switch grids, a range band with its own end/middle geometry and direction-aware
+  // step transitions (+4.3 KiB, after moving its style block to SCSS so its comments stop
+  // shipping, which gave 1.4 KiB back); the cascader split into per-level anchored panels with
+  // their own row and level styles (+0.1 KiB net, the old column layout came out); and card-item
+  // gained the hover-over-active rule. Measured 660.8 KiB. Same contract as every note above:
+  // actuals plus minimal headroom, growth from here fails.
+  fullCssBytes: 664 * 1024,
   componentCssBytes: 96 * 1024,
   componentJsBytes: 48 * 1024,
   // Per-file exceptions to `componentJsBytes`, keyed by the path under `dist/es`.
