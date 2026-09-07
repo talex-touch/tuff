@@ -625,14 +625,10 @@ onBeforeUnmount(() => {
   overflow-x: hidden;
   scroll-snap-type: y mandatory;
   -webkit-overflow-scrolling: touch;
-  padding: var(--tx-picker-padding-y) 0;
   // Far enough back that riding the drum's near face enlarges a row by about a
   // tenth rather than looming at it.
   perspective: calc(var(--tx-picker-radius, 114px) * 9);
   perspective-origin: 50% 50%;
-  // Keeps the column's layout and painting to itself, so turning the drum does
-  // not invalidate the surrounding panel on every frame.
-  contain: layout paint;
   mask-image: linear-gradient(
     to bottom,
     transparent 0%,
@@ -647,8 +643,20 @@ onBeforeUnmount(() => {
   }
 }
 
+/*
+ * The half-column of blank space above and below the rows, so the first and
+ * last of them can reach the centre line.
+ *
+ * Real boxes rather than padding on the scroller: a scroller's bottom padding
+ * is not reliably part of its scrollable area, and where it is dropped the
+ * column runs out of travel one row early — the last option can be seen but
+ * never brought onto the centre line, and so never selected. With as many rows
+ * as the window is tall the shortfall is invisible, which is why it only
+ * surfaced once a column held more rows than it showed.
+ */
 .tx-picker__pad {
-  height: 0;
+  flex: none;
+  height: var(--tx-picker-padding-y);
 }
 
 // Every row sits on the drum: rotated by its distance from the scroll position
