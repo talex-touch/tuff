@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+/* eslint-disable vue/one-component-per-file -- The two components here are test doubles for
+   tuffex renderers the panel composes, not components this file owns. */
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, getCurrentInstance, h, nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
@@ -21,6 +23,27 @@ vi.mock('@talex-touch/utils/transport', () => ({
     send: transportSendMock,
     stream: transportStreamMock,
     on: transportOnMock
+  })
+}))
+
+vi.mock('@talex-touch/tuffex/border-beam', () => ({
+  TxBorderBeam: defineComponent({
+    name: 'TxBorderBeam',
+    props: {
+      active: { type: Boolean, default: true },
+      duration: { type: Number, default: undefined },
+      colorVariant: { type: String, default: undefined }
+    },
+    setup(props) {
+      // The real one injects an @property stylesheet, which lands in wrapper.text().
+      return () =>
+        h('span', {
+          class: 'tx-border-beam',
+          'data-beam-active': String(props.active),
+          'data-beam-variant': props.colorVariant,
+          'data-beam-duration': props.duration
+        })
+    }
   })
 }))
 
@@ -58,6 +81,16 @@ vi.mock('vue-i18n', () => ({
         'assistant.voicePanel.cancelled': 'Cancelled',
         'assistant.voicePanel.quotaExhausted': 'AI credits are used up — check Settings',
         'assistant.voicePanel.serviceBusy': 'The service is busy. Try again shortly.',
+        'assistant.voicePanel.holdToCancel': 'Hold to cancel',
+        'assistant.voicePanel.stillWorking': 'Still transcribing…',
+        'assistant.voicePanel.stillWorkingLong': 'Longer than usual — hold Esc to cancel',
+        'assistant.voicePanel.recovering': 'Recovering…',
+        'assistant.voicePanel.recoverCancelled': 'You cancelled a recording',
+        'assistant.voicePanel.recoverFailed': 'The last transcription failed',
+        'assistant.voicePanel.recoveryExpired': 'That recording expired — say it again',
+        'assistant.voicePanel.undo': 'Undo',
+        'assistant.voicePanel.retry': 'Retry',
+        'assistant.voicePanel.voiceTranscribeEmpty': 'No speech detected',
         'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe'
       })[key] ?? key
   })
@@ -81,6 +114,8 @@ let streamRequest: StreamRequest | undefined
 let streamCancelMock: Mock
 let streamStopMock: Mock
 let disposePanelOpenMock: Mock
+let recoveryStatusResult: { available: boolean; kind?: string; expiresInMs?: number }
+let retryResult: { text: string; expired?: boolean }
 
 function eventName(event: unknown): string {
   if (
@@ -128,6 +163,8 @@ beforeEach(() => {
   streamCancelMock = vi.fn()
   streamStopMock = vi.fn()
   disposePanelOpenMock = vi.fn()
+  recoveryStatusResult = { available: false }
+  retryResult = { text: 'recovered words' }
   transportSendMock.mockReset()
   transportOnMock.mockReset()
   transportStreamMock.mockReset()
@@ -135,6 +172,12 @@ beforeEach(() => {
   transportSendMock.mockImplementation(async (event: unknown) => {
     if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
       return { enabled: true, language: 'en-US' }
+    }
+    if (eventName(event) === voiceApiEvents.recoveryStatus.toEventName()) {
+      return { ok: true, result: recoveryStatusResult }
+    }
+    if (eventName(event) === voiceApiEvents.retryLastFailure.toEventName()) {
+      return { ok: true, result: retryResult }
     }
     throw new Error(`Unexpected transport event: ${eventName(event)}`)
   })
@@ -165,6 +208,45 @@ describe('VoicePanel dock surface', () => {
     expect(wrapper.text().trim()).toBe('')
     expect(wrapper.text()).not.toMatch(/阿洛|aler|等待|wake[- ]?word/i)
 
+    wrapper.unmount()
+  })
+  it('returns from openPanel before runtime config resolves and still permits starting voice', async () => {
+    let resolveConfig!: (config: { enabled: boolean; language: string }) => void
+    const configRequest = new Promise<{ enabled: boolean; language: string }>((resolve) => {
+      resolveConfig = resolve
+    })
+    transportSendMock.mockImplementation(async (event: unknown) => {
+      if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+        return configRequest
+      }
+      throw new Error(`Unexpected transport event: ${eventName(event)}`)
+    })
+
+    const wrapper = mount(VoicePanel)
+    await nextTick()
+
+    let panelOpened = false
+    const opening = exposed(wrapper)
+      .openPanel()
+      .then(() => {
+        panelOpened = true
+      })
+    await Promise.resolve()
+    await nextTick()
+
+    expect(panelOpened).toBe(true)
+    expect(transportSendMock).toHaveBeenCalledWith(
+      AssistantEvents.floatingBall.getRuntimeConfig,
+      undefined
+    )
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    expect(eventName(streamRequest?.event)).toBe(voiceApiEvents.asrStream.toEventName())
+
+    resolveConfig({ enabled: true, language: 'en-US' })
+    await opening
+    await flushPromises()
     wrapper.unmount()
   })
 
@@ -276,23 +358,38 @@ describe('VoicePanel session control', () => {
     expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Cancelled')
     expect(wrapper.find('.voice-dock--muted').exists()).toBe(true)
 
-    // Shortest of the three holds: the user just did this and does not need telling twice.
-    expect(wrapper.emitted('finished')).toBeUndefined()
+    // Carrying an undo button, so it gets the long hold — a notice you can act on has to
+    // outlast the reflex to reach for it.
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
     vi.advanceTimersByTime(700)
+    await nextTick()
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    vi.advanceTimersByTime(4400)
     await nextTick()
     expect(wrapper.emitted('finished')).toHaveLength(1)
 
     wrapper.unmount()
   })
 
-  it('cancels on Escape exactly as the button does', async () => {
+  // Tap is what people do to dismiss something they were not looking at. Losing a sentence to
+  // that is a bad trade, so the tap has to do nothing and only the hold may cancel.
+  it('ignores a tapped Escape and cancels only on a held one', async () => {
     const wrapper = await mountVoicePanel()
 
     exposed(wrapper).startVoiceInput()
     await flushPromises()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    vi.advanceTimersByTime(200)
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
     await nextTick()
+
+    expect(streamCancelMock).not.toHaveBeenCalled()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    vi.advanceTimersByTime(650)
+    await flushPromises()
 
     expect(streamCancelMock).toHaveBeenCalledTimes(1)
     expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Cancelled')
@@ -407,8 +504,13 @@ describe('VoicePanel session control', () => {
     callbacksOrThrow().onError?.(new Error('stream unavailable'))
     await nextTick()
 
-    expect(wrapper.emitted('finished')).toBeUndefined()
+    // A retryable failure carries a button, so it holds for the action window, not 900ms.
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
     vi.advanceTimersByTime(900)
+    await nextTick()
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    vi.advanceTimersByTime(4200)
     await nextTick()
     expect(wrapper.emitted('finished')).toHaveLength(1)
 
@@ -505,6 +607,130 @@ describe('VoicePanel input meter gain', () => {
     await flushPromises()
 
     expect(Math.max(...(await feed(wrapper, 0.03, 2)))).toBeGreaterThan(12)
+
+    wrapper.unmount()
+  })
+})
+
+describe('VoicePanel recovery and pacing', () => {
+  async function failedPanel() {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onError?.(new Error('socket reset'))
+    await flushPromises()
+    return wrapper
+  }
+
+  it('recovers through the same call whether it was cancelled or failed', async () => {
+    const wrapper = await failedPanel()
+    expect(wrapper.find('[data-testid="voice-recover"]').text()).toContain('Retry')
+
+    await wrapper.find('[data-testid="voice-recover"]').trigger('click')
+    await flushPromises()
+
+    expect(transportSendMock).toHaveBeenCalledWith(
+      voiceApiEvents.retryLastFailure,
+      expect.objectContaining({ delivery: 'active-app' })
+    )
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  // Expiry is a different sentence from failure: one sends you to say it again, the other to
+  // check your connection. Collapsing them would send people to the wrong place.
+  it('says the recording expired rather than reporting another failure', async () => {
+    retryResult = { text: '', expired: true }
+    const wrapper = await failedPanel()
+
+    await wrapper.find('[data-testid="voice-recover"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toContain('expired')
+    expect(wrapper.find('.voice-dock--warning').exists()).toBe(true)
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('offers no retry for quota or congestion, because retrying changes nothing', async () => {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onError?.(new Error('QUOTA_EXCEEDED'))
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  // The affordance that makes the retention window reachable once the pill has collapsed.
+  it('offers to recover a recording left behind by an earlier session', async () => {
+    recoveryStatusResult = { available: true, kind: 'cancelled', expiresInMs: 20_000 }
+    const wrapper = await mountVoicePanel()
+
+    await exposed(wrapper).openPanel()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toContain('cancelled a recording')
+    expect(wrapper.find('[data-testid="voice-recover"]').text()).toContain('Undo')
+
+    wrapper.unmount()
+  })
+
+  it('stays quiet when nothing is recoverable', async () => {
+    const wrapper = await mountVoicePanel()
+
+    await exposed(wrapper).openPanel()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('escalates the wait in two steps and slows the beam with it', async () => {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    exposed(wrapper).stopVoiceInput()
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toBe('Transcribing…')
+
+    vi.advanceTimersByTime(3100)
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toContain('Still transcribing')
+    expect(wrapper.find('.voice-dock--warning').exists()).toBe(true)
+
+    vi.advanceTimersByTime(5100)
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toContain('Longer than usual')
+    // The beam reads as pace: the same wait, drawn slower, is what "stuck" looks like.
+    expect(
+      Number(wrapper.find('.tx-border-beam').attributes('data-beam-duration'))
+    ).toBeGreaterThan(3)
+
+    wrapper.unmount()
+  })
+
+  it('draws the hold on the border and unwinds it when released', async () => {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    vi.advanceTimersByTime(200)
+    await nextTick()
+    expect(wrapper.find('.voice-dock--holding').exists()).toBe(true)
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.find('.voice-dock--holding').exists()).toBe(false)
+    expect(streamCancelMock).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })
