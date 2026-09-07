@@ -661,14 +661,10 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-/* Static fallback (SSR first paint & no-WebGL): soft cyan/violet orbs echoing
-   the shader palette; the canvas paints over them once it is live. */
+/* Static fallback for SSR first paint and browsers without WebGL. */
 .ExpHero-Sky {
   z-index: 0;
-  background:
-    radial-gradient(34% 42% at 30% 34%, rgba(27, 181, 244, 0.07), transparent 70%),
-    radial-gradient(30% 38% at 72% 62%, rgba(124, 92, 255, 0.07), transparent 70%),
-    #030305;
+  background: #030305;
 }
 
 /* Short blend only — the shader's ripple wavefront owns the real entrance */
