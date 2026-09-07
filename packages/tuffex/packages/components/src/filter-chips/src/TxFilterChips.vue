@@ -165,7 +165,11 @@ function onKeydown(event: KeyboardEvent, index: number): void {
   }
 }
 
-.tx-bui-filter-chips__chip {
+// Written as `.tx-bui-filter-chips .tx-bui-filter-chips__chip`: the scope
+// mixin resets `button { padding: 0 }` under the root, and that compound
+// selector outranks a bare class, so a chip styled by class alone rendered
+// with its label flush against the pill edge.
+.tx-bui-filter-chips .tx-bui-filter-chips__chip {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;

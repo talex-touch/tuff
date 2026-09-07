@@ -2,6 +2,7 @@ import type { FilterChipItem } from '../src/types'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxFilterChips from '../src/TxFilterChips.vue'
+import txFilterChipsSource from '../src/TxFilterChips.vue?raw'
 
 const items: FilterChipItem[] = [
   { value: 'all', label: 'All', count: 5 },
@@ -157,5 +158,16 @@ describe('txFilterChips', () => {
     expect(chips[1].find('.custom').text()).toBe('To do:false')
     expect(chips[0].element.tagName).toBe('BUTTON')
     expect(wrapper.find('.tx-bui-filter-chips__count').exists()).toBe(false)
+  })
+})
+
+describe('txFilterChips chip padding', () => {
+  it('styles the chip through the scoped root so the scope reset cannot zero its padding', () => {
+    // `@include bui-scope` emits `.tx-bui-filter-chips button { padding: 0 }`
+    // (0,1,1). A bare `.tx-bui-filter-chips__chip` (0,1,0) loses to it, and the
+    // chip renders with no horizontal padding. jsdom applies no CSS, so this is
+    // read from the source.
+    expect(txFilterChipsSource).toMatch(/\.tx-bui-filter-chips \.tx-bui-filter-chips__chip \{[^}]*padding: 0 10px/)
+    expect(txFilterChipsSource).not.toMatch(/^\.tx-bui-filter-chips__chip \{/m)
   })
 })
