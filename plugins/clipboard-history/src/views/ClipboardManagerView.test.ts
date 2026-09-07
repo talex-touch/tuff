@@ -542,4 +542,94 @@ describe('clipboardManagerView', () => {
 
     wrapper.unmount()
   })
+
+  /**
+   * 掩码只在洞察区「值」那一行成立过，同一条记录的完整明文还同时出现在列表标题、
+   * 预览区和「更多信息 → 字符拆分」里。断言整棵 DOM 而不是逐个表面，
+   * 是因为下一个泄漏点多半出现在这条用例还没点名的第四个地方。
+   */
+  it('keeps a detected secret masked on every surface, including the character split', async () => {
+    const apiKey = `sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`
+
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 71, type: 'text', content: apiKey }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('.insight-title').text()).toContain('密钥')
+    expect(wrapper.html()).not.toContain(apiKey)
+    expect(wrapper.get('.item-preview').text()).not.toContain(apiKey)
+    expect(wrapper.get('.item-preview').attributes('title')).not.toContain(apiKey)
+    expect(wrapper.get('.text-preview').text()).not.toContain(apiKey)
+
+    // 字符拆分对密钥没有使用价值，只有把掩码拼回原文的泄漏面。
+    expect(wrapper.get('.more-summary').text()).not.toContain('字符拆分')
+    await wrapper.get('.more-toggle').trigger('click')
+    expect(wrapper.find('.more-chars').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('never renders private key material, not even a masked prefix', async () => {
+    const privateKey = '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAxLoNGoOfHm\n-----END RSA PRIVATE KEY-----'
+
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 72, type: 'text', content: privateKey }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.html()).not.toContain('MIIEowIBAAKCAQEAxLoNGoOfHm')
+    expect(wrapper.get('.text-preview').text()).toBe('私钥内容不予显示')
+    // 私钥没有显示开关；`getClipboardPreviewText` 那侧也会吞掉 reveal，两层都拦。
+    expect(wrapper.find('.reveal-toggle').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * 「看过一次」不能跟着列表往下走：换记录必须复位成掩码，否则用户按住方向键
+   * 划过一串密钥时，每一条都是打开状态。
+   */
+  it('reveals a secret on demand and re-masks it when the selection moves', async () => {
+    const first = `sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`
+    const second = `sk-${'ZZZZZZZZZZFAKEKEYFAKEKEYFORTESTS1FAKEKEY0'}`
+
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [
+        { id: 81, type: 'text', content: first },
+        { id: 82, type: 'text', content: second },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.html()).not.toContain(first)
+
+    await wrapper.get('.reveal-toggle').trigger('click')
+    expect(wrapper.get('.text-preview').text()).toBe(first)
+    // 洞察区「值」跟随同一个开关，不需要第二次点击。
+    expect(wrapper.findAll('.kv-text')[0]?.text()).toBe(first)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.get('.text-preview').text()).not.toBe(second)
+    expect(wrapper.html()).not.toContain(second)
+
+    wrapper.unmount()
+  })
 })

@@ -15,11 +15,14 @@ import {
   extractLinks,
   getLinkHost,
   parseLinkParams,
+  readSecretPlainValue,
   selectClipboardInsight,
 } from '~/utils/clipboard-shapes'
 
 const props = defineProps<{
   item: PluginClipboardItem | null
+  /** 由详情区那一个开关控制。私钥永远拿不到明文，`readSecretPlainValue` 里也拦了一道。 */
+  revealSecret?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -51,15 +54,28 @@ const colorFormatRows = computed<Array<[string, string]>>(() => {
 })
 
 const selectedLink = ref(0)
-const revealSecret = ref(false)
+/**
+ * 链接里的敏感 query 参数是另一件事，和密钥值的可见性不共享开关——
+ * 否则「想看看这个 utm token」会顺手把密钥也露出来。
+ */
+const revealParams = ref(false)
 
 watch(
   () => props.item?.id,
   () => {
     selectedLink.value = 0
-    revealSecret.value = false
+    revealParams.value = false
   },
 )
+
+/** 洞察区「值」那一行在 reveal 时显示的原文。明文只在这里现算，不进 ClipboardSecretInfo。 */
+const secretDisplayValue = computed(() => {
+  const info = secret.value
+  if (!info) {
+    return ''
+  }
+  return props.revealSecret === true ? readSecretPlainValue(info, props.item?.content) : info.masked
+})
 
 /** 单链接时不出选择器：主链接的敏感参数单独成行就够了。 */
 const primaryLink = computed(() => links.value[selectedLink.value] ?? links.value[0] ?? '')
@@ -117,10 +133,10 @@ function maskParamValue(value: string): string {
           @click="emit('copyText', param.value)"
         >
           <span class="kv-text muted">
-            {{ param.key }} = {{ revealSecret ? param.value : maskParamValue(param.value) }}
+            {{ param.key }} = {{ revealParams ? param.value : maskParamValue(param.value) }}
           </span>
         </button>
-        <button class="kv-toggle" type="button" title="显示 / 隐藏" @click="revealSecret = !revealSecret">
+        <button class="kv-toggle" type="button" title="显示 / 隐藏" @click="revealParams = !revealParams">
           <ClipboardGlyph name="eye" />
         </button>
         <span class="kv-tag">敏感</span>
@@ -148,7 +164,7 @@ function maskParamValue(value: string): string {
       <div class="kv-row">
         <span class="kv-label">值</span>
         <span class="kv-value" :class="{ danger: secret.critical }">
-          <span class="kv-text muted">{{ secret.masked }}</span>
+          <span class="kv-text muted">{{ secretDisplayValue }}</span>
         </span>
         <span v-if="secret.critical" class="kv-tag danger">高危</span>
       </div>
@@ -671,6 +687,9 @@ button.kv-value:hover {
   text-align: left;
   white-space: pre-wrap;
   word-break: break-word;
+  /* 全局基线是 user-select: none；识别出来的正文是少数该放开的地方。 */
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .keyword-row {

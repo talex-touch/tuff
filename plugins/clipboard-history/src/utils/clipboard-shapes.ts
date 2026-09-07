@@ -1,5 +1,11 @@
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
-import { getClipboardColorTokens, getClipboardOcrInsight, getClipboardRawTags, parseFileList } from './clipboard-items'
+import {
+  getClipboardColorTokens,
+  getClipboardOcrInsight,
+  getClipboardRawTags,
+  getClipboardTitle,
+  parseFileList,
+} from './clipboard-items'
 
 /**
  * 一条内容可以同时属于多个形态——带 token 的 URL 既是 `link` 也是 `secret`。
@@ -31,6 +37,11 @@ export interface ClipboardSecretInfo {
   kind: 'token' | 'private-key' | 'connection-string' | 'jwt' | 'env'
   /** 永远是脱敏后的展示值。私钥不在此处放任何正文片段。 */
   masked: string
+  /**
+   * 整条内容的脱敏呈现，供列表标题和预览区使用。
+   * 和 `masked` 的区别只在 env：那里 `masked` 只是值，这里要带上键名才读得懂。
+   */
+  maskedContent: string
   length: number
   /** live 密钥、私钥、连接串这类「泄漏即事故」的，UI 上要额外红标。 */
   critical: boolean
@@ -140,6 +151,7 @@ function detectJwt(value: string): ClipboardSecretInfo | null {
       service: `JWT · ${header.alg}`,
       kind: 'jwt',
       masked: maskSecret(value),
+      maskedContent: maskSecret(value),
       length: value.length,
       critical: false,
       detail: exp === null ? '无 exp 声明' : expired ? '已过期' : '未过期',
@@ -167,6 +179,7 @@ export function detectSecret(rawContent: string | null | undefined): ClipboardSe
       kind: 'private-key',
       // 私钥正文一个字符都不进 DOM，连掩码里的前缀都不给。
       masked: '私钥内容不予显示',
+      maskedContent: '私钥内容不予显示',
       length: content.length,
       critical: true,
     }
@@ -179,11 +192,13 @@ export function detectSecret(rawContent: string | null | undefined): ClipboardSe
 
   const envMatch = value.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.+)$/)
   if (envMatch && SENSITIVE_ENV_KEY.test(envMatch[1] as string)) {
+    const envKey = envMatch[1] as string
     const secretValue = envMatch[2] as string
     return {
-      service: envMatch[1] as string,
+      service: envKey,
       kind: 'env',
       masked: maskSecret(secretValue),
+      maskedContent: `${envKey}=${maskSecret(secretValue)}`,
       length: secretValue.length,
       critical: false,
     }
@@ -195,6 +210,7 @@ export function detectSecret(rawContent: string | null | undefined): ClipboardSe
       service: `${scheme} 连接串`,
       kind: 'connection-string',
       masked: maskConnectionString(value),
+      maskedContent: maskConnectionString(value),
       length: value.length,
       critical: true,
     }
@@ -211,6 +227,7 @@ export function detectSecret(rawContent: string | null | undefined): ClipboardSe
         service: pattern.service,
         kind: 'token',
         masked: maskSecret(value),
+        maskedContent: maskSecret(value),
         length: value.length,
         critical: pattern.critical?.(value) ?? false,
       }
@@ -218,6 +235,54 @@ export function detectSecret(rawContent: string | null | undefined): ClipboardSe
   }
 
   return null
+}
+
+/**
+ * 密钥记录里被 `detectSecret` 认定为「值」的那一段原文。
+ *
+ * 只在用户显式点开显示开关时才会被调用，所以刻意不做成 `ClipboardSecretInfo` 的字段——
+ * 那个对象会被传进列表、洞察、更多信息各处，一旦带上明文就等于掩码没做。
+ */
+export function readSecretPlainValue(secret: ClipboardSecretInfo, rawContent: string | null | undefined): string {
+  const content = rawContent ?? ''
+  if (secret.kind === 'private-key') {
+    return secret.maskedContent
+  }
+  if (secret.kind === 'env') {
+    const separator = content.indexOf('=')
+    return separator >= 0 ? content.slice(separator + 1).trim() : content.trim()
+  }
+  return content.trim()
+}
+
+/**
+ * 列表标题：命中密钥就永远只给掩码，没有显示开关。
+ * 列表是旁人扫一眼就能看到的表面，它和详情区的可见性不该共享同一个开关。
+ */
+export function getClipboardDisplayTitle(item: PluginClipboardItem): string {
+  const secret = detectSecret(item.content)
+  if (!secret) {
+    return getClipboardTitle(item)
+  }
+
+  return getClipboardTitle({ ...item, content: secret.maskedContent })
+}
+
+/**
+ * 详情预览区正文。`reveal` 由详情区那一个开关控制，私钥在这里就被吞掉，
+ * 不依赖调用方记得「私钥不要渲染开关」。
+ */
+export function getClipboardPreviewText(
+  item: PluginClipboardItem,
+  reveal: boolean,
+): string {
+  const content = item.content ?? ''
+  const secret = detectSecret(content)
+  if (!secret) {
+    return content
+  }
+
+  return reveal && secret.kind !== 'private-key' ? content : secret.maskedContent
 }
 
 export function detectCommand(rawContent: string | null | undefined): ClipboardCommandInfo | null {
