@@ -393,7 +393,7 @@ describe('VoiceService retry buffer retention', () => {
     const service = new VoiceService()
     await runUntilFailure(service)
 
-    await vi.advanceTimersByTimeAsync(30_001)
+    await vi.advanceTimersByTimeAsync(15_001)
     const result = await service.retryLastFailure()
 
     expect(result).toEqual({ text: '', expired: true })
@@ -501,9 +501,30 @@ describe('VoiceService retry buffer retention', () => {
     expect(heldAudioBytes(service)).toBe(0)
   })
 
+  /**
+   * The cap is sized for a whole 300s recording (~9.6 MiB). Below that, a long dictation used
+   * to lose undo and retry partway through without saying so — the worst version of this
+   * feature, since the button was still on screen.
+   */
+  it('keeps the retry for a recording the length of the cap allows', async () => {
+    // 1 MB per drain across the ~8 the pump makes here: past the old 4 MiB cap around the
+    // fifth, still well inside the current one.
+    drainCapture.mockReturnValue({ pcm: pcm(16_384, 500_000), sampleRate: 16000, channels: 1 })
+    const service = new VoiceService()
+    await runUntilFailure(service)
+
+    // The audio is still there to re-transcribe: not `{ text: '', expired: true }`, which is
+    // what the old cap turned a long dictation into halfway through.
+    const result = await service.retryLastFailure()
+    expect(result.expired).toBeUndefined()
+    expect(result.text).toBeTruthy()
+  })
+
   it('degrades to no retry rather than buffering without bound', async () => {
-    // 2.2 MiB per drain: two ticks clear the 4 MiB cap before the failure lands.
-    drainCapture.mockReturnValue({ pcm: pcm(16_384, 1_100_000), sampleRate: 16000, channels: 1 })
+    // 5.5 MiB per drain: two ticks clear the 10 MiB cap before the failure lands. The cap is
+    // sized for a full 300s recording (~9.6 MiB), so overflow now means something went wrong
+    // rather than someone spoke for a while.
+    drainCapture.mockReturnValue({ pcm: pcm(16_384, 2_750_000), sampleRate: 16000, channels: 1 })
     stt.mockResolvedValue({ result: { text: 'should never be reached' } })
     const service = new VoiceService()
     await runUntilFailure(service)
@@ -573,7 +594,7 @@ describe('VoiceService recovery status', () => {
     expect(status.kind).toBe('cancelled')
     // A countdown, not a boolean: an action that expires mid-click is worse than no action.
     // Asserted against the near-full window — `> 0` would pass on a hardcoded constant.
-    expect(status.expiresInMs).toBeGreaterThan(29_000)
+    expect(status.expiresInMs).toBeGreaterThan(14_000)
     expect(status.expiresInMs).toBeLessThanOrEqual(30_000)
   })
 
@@ -618,7 +639,45 @@ describe('VoiceService recovery status', () => {
     await cancelAfterSpeaking(service)
     expect(service.getRecoveryStatus().available).toBe(true)
 
-    vi.setSystemTime(Date.now() + 30_001)
+    vi.setSystemTime(Date.now() + 15_001)
+    expect(service.getRecoveryStatus()).toEqual({ available: false })
+  })
+
+  /**
+   * The normal end of the window, and the reason the timer above is only a backstop: the HUD
+   * says the offer has left the screen, and ten megabytes of what the user just said should not
+   * outlive the button that could have spent it.
+   */
+  it('drops the recording the moment the UI says its offer is gone', async () => {
+    const service = new VoiceService()
+    await cancelAfterSpeaking(service)
+    expect(service.getRecoveryStatus().available).toBe(true)
+
+    service.discardRecovery()
+
+    expect(service.getRecoveryStatus()).toEqual({ available: false })
+    expect((service as unknown as { retryBuffer: unknown | null }).retryBuffer).toBeNull()
+    // A surface that reports the same dismissal twice is not an error.
+    expect(() => service.discardRecovery()).not.toThrow()
+  })
+
+  /**
+   * A session start is a dismissal too: the user has moved on, and nothing on screen points at
+   * the previous recording any more. Cleared at the entry point rather than where capture
+   * begins, so a session that dies before its first byte still takes the old audio with it.
+   */
+  it('clears the previous recording as soon as the next session starts', async () => {
+    const service = new VoiceService()
+    await cancelAfterSpeaking(service)
+    expect(service.getRecoveryStatus().available).toBe(true)
+
+    // Fails on the unsupported check, which is upstream of everything that touches the buffer:
+    // if the entry point does not clear it, the previous recording survives into the next
+    // session. Aborting instead would not prove it — that path still reaches the capture setup,
+    // which replaces the slot on its own.
+    support.mockReturnValueOnce({ supported: false, reason: 'no device' })
+    await expect(drainStream(service.streamDictation({}))).rejects.toThrow()
+
     expect(service.getRecoveryStatus()).toEqual({ available: false })
   })
 

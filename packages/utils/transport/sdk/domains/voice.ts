@@ -10,97 +10,120 @@
  * Every voice input caller uses this contract; capture and platform injection remain main-owned.
  * Modeled on the `intelligence` domain SDK.
  */
-import type { ITuffTransport, StreamController, StreamOptions } from "../../types";
-import { defineEvent } from "../../event/builder";
+import type { ITuffTransport, StreamController, StreamOptions } from '../../types'
+import { defineEvent } from '../../event/builder'
 
 /** Standard envelope returned by voice API handlers. */
-export type VoiceApiResponse<T = undefined> =
-  | { ok: true; result?: T }
-  | { ok: false; error: string };
+export type VoiceApiResponse<T = undefined> = { ok: true; result?: T } | { ok: false; error: string }
 
 /** Where the canonical session should deliver its final text. */
-export type VoiceDeliveryMode = "none" | "active-app";
+export type VoiceDeliveryMode = 'none' | 'active-app'
 
 /** Result of the main-owned text delivery step. */
 export interface VoiceDeliveryResult {
-  method: "native" | "autopaste" | "none";
-  reason?: string;
+  method: 'native' | 'autopaste' | 'none'
+  reason?: string
+}
+
+/**
+ * Aggregate-only local voice usage insight. Characters exclude whitespace and punctuation; the
+ * typing baseline is an estimate rather than measured keyboard activity. No transcript, audio,
+ * provider payload, caller, or active-application information is exposed or retained.
+ */
+export interface VoiceInsights {
+  startedAt: number | null
+  updatedAt: number
+  timezone: string
+  totalCharacters: number
+  totalDurationMs: number
+  sessionCount: number
+  polishedSessionCount: number
+  estimatedSavedMs: number
+  typingCharactersPerMinute: number
+  averageCharactersPerMinute: number | null
+  /** Rolling 365-local-day activity count; totals remain since `startedAt`. */
+  activeDays: number
+  /** Rolling 365-local-day streak ending today or yesterday when today is inactive. */
+  currentStreak: number
+  /** Longest streak inside the returned rolling 365-local-day day series. */
+  longestStreak: number
+  days: Array<{ date: string; characters: number; durationMs: number; sessions: number }>
 }
 
 /** One-shot dictation request: capture mic → STT → optional AI polish. */
 export interface VoiceDictatePayload {
   /** BCP-47 language hint (e.g. "zh-CN", "en-US"). Auto-detect when omitted. */
-  language?: string;
+  language?: string
   /** Run the AI cleanup/polish pass over the raw transcript. Default `true`. */
-  cleanup?: boolean;
+  cleanup?: boolean
   /** Hard cap on capture length in ms (native auto-stops at this). */
-  maxDurationMs?: number;
+  maxDurationMs?: number
   /** Auto-stop after this much trailing silence in ms. */
-  silenceStopMs?: number;
+  silenceStopMs?: number
   /** Keep text only, or let main deliver it to the active application. */
-  delivery?: VoiceDeliveryMode;
+  delivery?: VoiceDeliveryMode
 }
 
 /** Result of a one-shot dictation. */
 export interface VoiceDictateResult {
   /** Final text — polished when `cleanup` ran, otherwise the raw transcript. */
-  text: string;
+  text: string
   /** Raw transcript before any polish pass. */
-  raw: string;
+  raw: string
   /** Where the transcript came from (e.g. "native-cpal"). */
-  source: string;
+  source: string
   /** Whether the AI polish pass actually ran. */
-  polished: boolean;
+  polished: boolean
   /** Detected/echoed language, when available. */
-  language?: string;
+  language?: string
   /** Captured audio duration in ms. */
-  durationMs?: number;
+  durationMs?: number
   /** Why capture stopped: "manual" | "max-duration" | "silence". */
-  stoppedReason?: string;
+  stoppedReason?: string
   /** Main-owned delivery outcome when delivery was requested. */
-  delivery?: VoiceDeliveryResult;
+  delivery?: VoiceDeliveryResult
 }
 
 /** Text-to-speech request. */
 export interface VoiceSpeakPayload {
   /** The text to synthesize. */
-  text: string;
+  text: string
   /** BCP-47 language hint. */
-  language?: string;
+  language?: string
   /** Provider voice id, when supported. */
-  voice?: string;
+  voice?: string
   /** Also play the audio through the system speakers. Default `true`. */
-  play?: boolean;
+  play?: boolean
 }
 
 /** Result of a text-to-speech request. */
 export interface VoiceSpeakResult {
   /** Synthesized audio as a data URL. */
-  audio: string;
+  audio: string
   /** Audio container format (e.g. "wav", "mp3"). */
-  format: string;
+  format: string
   /** Whether it was played through the speakers. */
-  played: boolean;
+  played: boolean
   /** Audio duration in ms, when reported. */
-  durationMs?: number;
+  durationMs?: number
 }
 
 /** Streaming ASR request backed by the same Voice Session owner. */
 export interface VoiceAsrStreamPayload {
-  language?: string;
-  cleanup?: boolean;
-  maxDurationMs?: number;
-  silenceStopMs?: number;
-  delivery?: VoiceDeliveryMode;
+  language?: string
+  cleanup?: boolean
+  maxDurationMs?: number
+  silenceStopMs?: number
+  delivery?: VoiceDeliveryMode
   /** Main-selected provider id; omitted uses the configured provider priority. */
-  providerId?: string;
+  providerId?: string
   /**
    * Emit `level` events alongside the transcript, for input-level visualization.
    *
    * Off by default so existing callers keep their exact event sequence: a caller
    * that only wants text must not have to filter frames it never asked for.
    */
-  emitLevel?: boolean;
+  emitLevel?: boolean
 }
 
 /**
@@ -112,25 +135,25 @@ export interface VoiceAsrStreamPayload {
  * expires on a grace timer after a failure.
  */
 export interface VoiceRetryPayload {
-  language?: string;
-  delivery?: VoiceDeliveryMode;
+  language?: string
+  delivery?: VoiceDeliveryMode
 }
 
 export interface VoiceRetryResult {
-  text: string;
-  language?: string;
-  delivery?: VoiceDeliveryResult;
+  text: string
+  language?: string
+  delivery?: VoiceDeliveryResult
   /**
    * The buffered audio is gone — the grace window closed, or it was cleared.
    *
    * The caller must say so rather than pretending a retry happened: `text` is empty here,
    * and reporting it as a failed transcription would blame the wrong thing.
    */
-  expired?: boolean;
+  expired?: boolean
 }
 
 /** What left a recoverable recording behind — the two paths that keep audio. */
-export type VoiceRecoveryKind = "cancelled" | "failed";
+export type VoiceRecoveryKind = 'cancelled' | 'failed'
 
 /**
  * Whether the last session left audio that can still be recovered.
@@ -140,40 +163,40 @@ export type VoiceRecoveryKind = "cancelled" | "failed";
  * retention with nothing to reach it is just retention.
  */
 export interface VoiceRecoveryStatus {
-  available: boolean;
-  kind?: VoiceRecoveryKind;
+  available: boolean
+  kind?: VoiceRecoveryKind
   /** Milliseconds left in the recovery window; absent when nothing is held. */
-  expiresInMs?: number;
+  expiresInMs?: number
 }
 
 /** Main-owned source reference for uploaded audio recognition. */
 export interface VoiceTranscribeUploadPayload {
   /** HTTPS URL resolved by main; raw file paths and binary payloads are not public DTOs. */
-  sourceUrl: string;
-  language?: string;
-  providerId?: string;
-  model?: string;
-  enableTimestamps?: boolean;
-  enableSpeakerDiarization?: boolean;
-  removeDisfluencies?: boolean;
+  sourceUrl: string
+  language?: string
+  providerId?: string
+  model?: string
+  enableTimestamps?: boolean
+  enableSpeakerDiarization?: boolean
+  removeDisfluencies?: boolean
 }
 
 export interface VoiceTranscribeUploadResult {
-  text: string;
-  language?: string;
-  durationMs?: number;
-  requestId?: string;
+  text: string
+  language?: string
+  durationMs?: number
+  requestId?: string
   segments?: Array<{
-    text: string;
-    startMs: number;
-    endMs: number;
-    speaker?: string;
-  }>;
+    text: string
+    startMs: number
+    endMs: number
+    speaker?: string
+  }>
 }
 
 /** Streaming ASR event. */
 export type VoiceAsrStreamEvent =
-  | { type: "partial"; text: string }
+  | { type: 'partial'; text: string }
   /**
    * Captured input level, normalized to 0..1, roughly 10Hz.
    *
@@ -181,35 +204,31 @@ export type VoiceAsrStreamEvent =
    * transcript and must never be treated as progress: it is the measured
    * amplitude of what the microphone just heard, nothing more.
    */
-  | { type: "level"; rms: number }
+  | { type: 'level'; rms: number }
   | {
-      type: "final";
-      text: string;
-      language?: string;
-      delivery?: VoiceDeliveryResult;
+      type: 'final'
+      text: string
+      language?: string
+      delivery?: VoiceDeliveryResult
     }
-  | { type: "end" };
-
+  | { type: 'end' }
 
 /**
  * Voice domain events. Event names resolve to `voice:api:<action>`.
  */
 export const voiceApiEvents = {
-  dictate: defineEvent("voice")
-    .module("api")
-    .event("dictate")
+  dictate: defineEvent('voice')
+    .module('api')
+    .event('dictate')
     .define<VoiceDictatePayload, VoiceApiResponse<VoiceDictateResult>>(),
-  speak: defineEvent("voice")
-    .module("api")
-    .event("speak")
+  speak: defineEvent('voice')
+    .module('api')
+    .event('speak')
     .define<VoiceSpeakPayload, VoiceApiResponse<VoiceSpeakResult>>(),
-  transcribeUpload: defineEvent("voice")
-    .module("api")
-    .event("transcribe-upload")
-    .define<
-      VoiceTranscribeUploadPayload,
-      VoiceApiResponse<VoiceTranscribeUploadResult>
-    >(),
+  transcribeUpload: defineEvent('voice')
+    .module('api')
+    .event('transcribe-upload')
+    .define<VoiceTranscribeUploadPayload, VoiceApiResponse<VoiceTranscribeUploadResult>>(),
   /**
    * Open the operating system's microphone settings.
    *
@@ -218,100 +237,122 @@ export const voiceApiEvents = {
    * allowlist, and it must not be — letting a renderer hand over an arbitrary scheme to open
    * would reopen exactly what that allowlist closes.
    */
-  openMicrophoneSettings: defineEvent("voice")
-    .module("api")
-    .event("open-microphone-settings")
+  openMicrophoneSettings: defineEvent('voice')
+    .module('api')
+    .event('open-microphone-settings')
     .define<void, VoiceApiResponse>(),
-  recoveryStatus: defineEvent("voice")
-    .module("api")
-    .event("recovery-status")
+  /**
+   * Drop the held recording because the button that could spend it has left the screen.
+   *
+   * The normal end of the retention window: the audio is kept because there is an undo or a
+   * retry to press, so when the notice carrying it is dismissed there is nothing left to keep
+   * it for. Main also expires it on a timer, but only as a backstop for a renderer that never
+   * gets to say so.
+   */
+  discardRecovery: defineEvent('voice').module('api').event('discard-recovery').define<void, VoiceApiResponse>(),
+  recoveryStatus: defineEvent('voice')
+    .module('api')
+    .event('recovery-status')
     .define<void, VoiceApiResponse<VoiceRecoveryStatus>>(),
-  retryLastFailure: defineEvent("voice")
-    .module("api")
-    .event("retry-last-failure")
+  retryLastFailure: defineEvent('voice')
+    .module('api')
+    .event('retry-last-failure')
     .define<VoiceRetryPayload, VoiceApiResponse<VoiceRetryResult>>(),
-  asrStream: defineEvent("voice")
-    .module("api")
-    .event("asr-stream")
+  asrStream: defineEvent('voice')
+    .module('api')
+    .event('asr-stream')
     .define<VoiceAsrStreamPayload, AsyncIterable<VoiceAsrStreamEvent>>({
       stream: { enabled: true },
     }),
-} as const;
+  /** Host-renderer-only aggregate insights: no plugin read access. */
+  getInsights: defineEvent('voice').module('api').event('get-insights').define<void, VoiceApiResponse<VoiceInsights>>(),
+  /** Host-renderer-only permanent deletion of all durable voice insight aggregates. */
+  clearInsights: defineEvent('voice').module('api').event('clear-insights').define<void, VoiceApiResponse>(),
+} as const
 
 /** Minimal transport surface the voice SDK needs (send required, stream optional). */
-export type VoiceSdkTransport = Pick<ITuffTransport, "send"> &
-  Partial<Pick<ITuffTransport, "stream">>;
+export type VoiceSdkTransport = Pick<ITuffTransport, 'send'> & Partial<Pick<ITuffTransport, 'stream'>>
 
 export interface VoiceSdk {
   /** Capture speech and return (optionally AI-polished) text in one shot. */
-  dictate: (payload?: VoiceDictatePayload) => Promise<VoiceDictateResult>;
+  dictate: (payload?: VoiceDictatePayload) => Promise<VoiceDictateResult>
   /** Synthesize text and (by default) play it through the speakers. */
-  speak: (payload: VoiceSpeakPayload) => Promise<VoiceSpeakResult>;
+  speak: (payload: VoiceSpeakPayload) => Promise<VoiceSpeakResult>
   /** Transcribe a main-owned HTTPS audio source. */
-  transcribeUpload: (
-    payload: VoiceTranscribeUploadPayload,
-  ) => Promise<VoiceTranscribeUploadResult>;
+  transcribeUpload: (payload: VoiceTranscribeUploadPayload) => Promise<VoiceTranscribeUploadResult>
   /** Open a live streaming ASR session (partial → final → end). */
-  asrStream: (
-    payload: VoiceAsrStreamPayload,
-    options: StreamOptions<VoiceAsrStreamEvent>,
-  ) => Promise<StreamController>;
+  asrStream: (payload: VoiceAsrStreamPayload, options: StreamOptions<VoiceAsrStreamEvent>) => Promise<StreamController>
   /** Re-transcribe the audio the last failed session already captured. */
-  retryLastFailure: (payload?: VoiceRetryPayload) => Promise<VoiceRetryResult>;
+  retryLastFailure: (payload?: VoiceRetryPayload) => Promise<VoiceRetryResult>
   /** Ask whether a cancelled or failed recording is still recoverable. */
-  recoveryStatus: () => Promise<VoiceRecoveryStatus>;
+  recoveryStatus: () => Promise<VoiceRecoveryStatus>
+  /** Drop the held recording once its undo/retry button is off screen. */
+  discardRecovery: () => Promise<void>
   /** Open the OS microphone settings pane; rejects where the platform has none. */
-  openMicrophoneSettings: () => Promise<void>;
+  openMicrophoneSettings: () => Promise<void>
+  /** Read aggregate-only local voice insights. Available only to the host renderer. */
+  getInsights: () => Promise<VoiceInsights>
+  /** Delete all durable aggregate-only voice insights. Available only to the host renderer. */
+  clearInsights: () => Promise<void>
 }
 
-function assertVoiceApiResponse<T>(
-  response: VoiceApiResponse<T>,
-  fallbackMessage: string,
-): T {
+function assertVoiceApiResponse<T>(response: VoiceApiResponse<T>, fallbackMessage: string): T {
   if (!response?.ok) {
-    throw new Error(response?.error || fallbackMessage);
+    throw new Error(response?.error || fallbackMessage)
   }
-  return response.result as T;
+  return response.result as T
 }
 
 export function createVoiceSdk(transport: VoiceSdkTransport): VoiceSdk {
   return {
     async dictate(payload = {}) {
-      const response = await transport.send(voiceApiEvents.dictate, payload);
-      return assertVoiceApiResponse(response, "Voice dictate failed");
+      const response = await transport.send(voiceApiEvents.dictate, payload)
+      return assertVoiceApiResponse(response, 'Voice dictate failed')
     },
 
     async speak(payload) {
-      const response = await transport.send(voiceApiEvents.speak, payload);
-      return assertVoiceApiResponse(response, "Voice speak failed");
+      const response = await transport.send(voiceApiEvents.speak, payload)
+      return assertVoiceApiResponse(response, 'Voice speak failed')
     },
     async transcribeUpload(payload) {
-      const response = await transport.send(voiceApiEvents.transcribeUpload, payload);
-      return assertVoiceApiResponse(response, "Voice upload transcription failed");
+      const response = await transport.send(voiceApiEvents.transcribeUpload, payload)
+      return assertVoiceApiResponse(response, 'Voice upload transcription failed')
     },
 
     async openMicrophoneSettings() {
-      const response = await transport.send(voiceApiEvents.openMicrophoneSettings, undefined);
-      assertVoiceApiResponse(response, "Voice microphone settings failed");
+      const response = await transport.send(voiceApiEvents.openMicrophoneSettings, undefined)
+      assertVoiceApiResponse(response, 'Voice microphone settings failed')
+    },
+
+    async discardRecovery() {
+      const response = await transport.send(voiceApiEvents.discardRecovery, undefined)
+      assertVoiceApiResponse(response, 'Voice discard recovery failed')
     },
 
     async recoveryStatus() {
-      const response = await transport.send(voiceApiEvents.recoveryStatus, undefined);
-      return assertVoiceApiResponse(response, "Voice recovery status failed");
+      const response = await transport.send(voiceApiEvents.recoveryStatus, undefined)
+      return assertVoiceApiResponse(response, 'Voice recovery status failed')
     },
 
     async retryLastFailure(payload = {}) {
-      const response = await transport.send(voiceApiEvents.retryLastFailure, payload);
-      return assertVoiceApiResponse(response, "Voice retry failed");
+      const response = await transport.send(voiceApiEvents.retryLastFailure, payload)
+      return assertVoiceApiResponse(response, 'Voice retry failed')
     },
 
-    async asrStream(payload, options) {
-      if (typeof transport.stream !== "function") {
-        throw new TypeError(
-          "Voice streaming requires a stream-capable transport",
-        );
-      }
-      return transport.stream(voiceApiEvents.asrStream, payload, options);
+    async getInsights() {
+      const response = await transport.send(voiceApiEvents.getInsights, undefined)
+      return assertVoiceApiResponse(response, 'Voice insights failed')
     },
-  };
+
+    async clearInsights() {
+      const response = await transport.send(voiceApiEvents.clearInsights, undefined)
+      assertVoiceApiResponse(response, 'Voice insights clear failed')
+    },
+    async asrStream(payload, options) {
+      if (typeof transport.stream !== 'function') {
+        throw new TypeError('Voice streaming requires a stream-capable transport')
+      }
+      return transport.stream(voiceApiEvents.asrStream, payload, options)
+    },
+  }
 }

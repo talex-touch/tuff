@@ -379,7 +379,29 @@ function emitFinished(): void {
   emit('finished', props.generation)
 }
 
+/**
+ * The held recording outlives nothing but its own button.
+ *
+ * Main keeps the audio because there is an undo or a retry to press. The moment that notice
+ * leaves the screen — expired, replaced, or reset by the next session — the reason is gone, so
+ * main is told to drop it instead of being left to time it out. Ten megabytes of what the user
+ * just said is not something to keep for nobody; the timer over there is only the backstop for
+ * a renderer that never gets to say this.
+ */
+function endRecoveryOffer(): void {
+  // `recoverLast` clears the notice *before* it calls main, so spending an offer is already
+  // indistinguishable from not having one — which is what keeps a retry from deleting the very
+  // audio it is about to use. That ordering is load-bearing and is pinned by a test.
+  const action = notice.value?.action
+  if (action !== 'undo' && action !== 'retry') return
+  void voiceSdk.discardRecovery().catch(() => {
+    // Best effort: a failed discard must not surface as an error on a surface the user has
+    // already dismissed, and main's timer still closes the window.
+  })
+}
+
 function showNotice(message: string, tone: NoticeTone, action?: NoticeAction, icon?: string): void {
+  endRecoveryOffer()
   notice.value = { message, tone, ...(action ? { action } : {}), ...(icon ? { icon } : {}) }
   listening.value = false
   transcribing.value = false
@@ -393,6 +415,8 @@ function showNotice(message: string, tone: NoticeTone, action?: NoticeAction, ic
   const hold = action ? NOTICE_HOLD_MS.action : NOTICE_HOLD_MS[tone]
   finishTimer = setTimeout(() => {
     finishTimer = null
+    // The surface is collapsing, so whatever it was offering stops being reachable here.
+    endRecoveryOffer()
     emitFinished()
   }, hold)
 }
@@ -446,6 +470,7 @@ function classifyFailure(error: unknown): Notice {
 }
 
 function resetPanelState(): void {
+  endRecoveryOffer()
   clearFinishTimer()
   finished = false
   notice.value = null
@@ -642,26 +667,6 @@ async function startVoiceSession(force = false): Promise<void> {
   }
 }
 
-async function offerRecoveryIfAny(generation: number, taskGeneration: number): Promise<void> {
-  try {
-    const status = await voiceSdk.recoveryStatus()
-    if (!isCurrentPanel(generation, taskGeneration) || !status.available) return
-    // The affordance that makes the retention window reachable at all: without it, audio kept
-    // past the five seconds the pill is on screen has no entry point.
-    showNotice(
-      t(
-        status.kind === 'failed'
-          ? 'assistant.voicePanel.recoverFailed'
-          : 'assistant.voicePanel.recoverCancelled'
-      ),
-      'muted',
-      status.kind === 'failed' ? 'retry' : 'undo'
-    )
-  } catch {
-    // Recovery is a bonus; failing to ask must not stop the user from speaking.
-  }
-}
-
 async function handlePanelOpened(): Promise<void> {
   const generation = ++panelGeneration
   const taskGeneration = ++panelTaskGeneration
@@ -670,7 +675,6 @@ async function handlePanelOpened(): Promise<void> {
   // Configuration is a hint for the next request, not a prerequisite for opening the mic.
   // Keep the default language immediately usable and refresh the setting in the background.
   void loadRuntimeConfig(generation, taskGeneration)
-  void offerRecoveryIfAny(generation, taskGeneration)
   await nextTick()
 }
 

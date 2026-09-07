@@ -32,10 +32,17 @@ import { POLISH_SYSTEM_PROMPT, withLanguageDirective, wrapTranscription } from '
 import { getVoiceProvider } from './voice-provider-runtime'
 import type { StreamingAsrConfig } from './streaming-asr-client'
 import { createAsrStream, getStreamingAsrConfig } from './streaming-asr-client'
+import { voiceInsightsStore } from './voice-insights-store'
 
 const voiceLog = createLogger('Voice')
 
-const DEFAULT_MAX_DURATION_MS = 15_000
+/**
+ * The recording cap, and the denominator the HUD's progress ring is drawn against.
+ *
+ * 300s rather than the old 15s because dictation is a paragraph, not a phrase. It is also what
+ * sizes MAX_RETRY_BUFFER_BYTES below: the two numbers are one decision.
+ */
+const DEFAULT_MAX_DURATION_MS = 300_000
 const DEFAULT_SILENCE_STOP_MS = 1_500
 const DEFAULT_ASR_SAMPLE_RATE = 16_000
 const POLL_INTERVAL_MS = 120
@@ -59,19 +66,26 @@ const MAX_QUEUED_LEVELS = 20
  * The retention rules are the point of this feature, not an afterthought — memory only,
  * dropped the moment the reason to keep it disappears:
  *
- * - one slot; a new session replaces it
+ * - one slot, and a session start clears the previous one before recording a byte, so audio
+ *   from a session the user has already moved on from never survives into the next
  * - cleared on success, the only path where the reason to keep it is gone: the transcript
  *   already landed in the foreground app
- * - kept for RECOVERY_GRACE_MS after a failure (retry) and after a cancel (undo), then
- *   dropped by timer. Cancel keeps it because "undo" has to restore the same words —
- *   otherwise that button is "record again" wearing the wrong name.
+ * - after a failure or a cancel it lives exactly as long as the button that can spend it.
+ *   `discardRecovery` is what the HUD calls when that button leaves the screen, and it is the
+ *   normal path — the timer below is only the backstop for a renderer that never says so.
  * - capped, so a long session degrades to "no recovery" rather than to unbounded memory
  *
- * The window is a trade, not a conclusion: the pill only offers undo/retry for ~5s, so audio
- * held past that has no reachable entry point. See the open question in the task design.
+ * Cancel keeps audio for the same reason a failure does: "undo" has to restore the same words,
+ * or that button is "record again" wearing the wrong name.
  */
-const RECOVERY_GRACE_MS = 30_000
-const MAX_RETRY_BUFFER_BYTES = 4 * 1024 * 1024
+const RECOVERY_GRACE_MS = 15_000
+/**
+ * 10MB: 300s of 16kHz mono 16-bit PCM is ~9.6MB, so the cap now admits a full-length recording
+ * instead of silently dropping undo and retry partway through one. It is a real cost — that is
+ * ten megabytes of what the user just said, resident until the offer goes away — which is why
+ * the offer going away is wired to delete it rather than left to a timer.
+ */
+const MAX_RETRY_BUFFER_BYTES = 10 * 1024 * 1024
 const PCM_BITS_PER_SAMPLE = 16
 const PCM_CHANNELS = 1
 // Toggle (global hotkey) capture: silence auto-stop effectively disabled so a pause
@@ -123,6 +137,7 @@ function pcmToWav(pcm: Buffer, sampleRate: number): Buffer {
 }
 
 interface RetryBuffer {
+  captureId: string
   chunks: Buffer[]
   bytes: number
   sampleRate: number
@@ -132,13 +147,13 @@ interface RetryBuffer {
   kind: VoiceRecoveryKind | null
   overflowed: boolean
 }
-
 interface VoiceSessionRecord {
   readonly id: string
   readonly nativeSessionId: string
   readonly caller: string
   readonly delivery: VoiceDictatePayload['delivery']
   readonly targetKey: string | null
+  readonly startedAt: number
   readonly abortSignal?: AbortSignal
   readonly onAbort?: () => void
 }
@@ -268,6 +283,17 @@ export class VoiceService {
   private retryBuffer: RetryBuffer | null = null
   private retryExpiryTimer: ReturnType<typeof setTimeout> | null = null
 
+  /**
+   * Drop the held audio because the affordance that could spend it is gone.
+   *
+   * Called by the HUD when the undo/retry notice leaves the screen. Retention here is justified
+   * by there being a button to press; once there is not, keeping the audio is keeping it for
+   * nobody. Idempotent — a UI that reports the same dismissal twice is not an error.
+   */
+  discardRecovery(): void {
+    this.clearRetryBuffer()
+  }
+
   private clearRetryBuffer(): void {
     if (this.retryExpiryTimer) {
       clearTimeout(this.retryExpiryTimer)
@@ -275,10 +301,10 @@ export class VoiceService {
     }
     this.retryBuffer = null
   }
-
-  private beginRetryBuffer(sampleRate: number, language?: string): void {
+  private beginRetryBuffer(captureId: string, sampleRate: number, language?: string): void {
     this.clearRetryBuffer()
     this.retryBuffer = {
+      captureId,
       chunks: [],
       bytes: 0,
       sampleRate,
@@ -321,6 +347,20 @@ export class VoiceService {
     this.retryExpiryTimer.unref?.()
   }
 
+  private async recordInsightSuccess(
+    captureId: string,
+    text: string,
+    durationMs: number,
+    polished: boolean,
+    capturedAt = Date.now()
+  ): Promise<void> {
+    try {
+      await voiceInsightsStore.recordSuccess({ captureId, text, durationMs, polished, capturedAt })
+    } catch (error) {
+      voiceLog.warn('Voice insights persistence failed; speech remains delivered', { error })
+    }
+  }
+
   /** Opens the canonical session used by global, renderer and plugin callers. */
   async startSession(
     payload: VoiceSessionPayload = {},
@@ -357,6 +397,7 @@ export class VoiceService {
       caller,
       delivery: payload.delivery ?? 'none',
       targetKey,
+      startedAt: Date.now(),
       ...(signal ? { abortSignal: signal } : {}),
       ...(onAbort ? { onAbort } : {})
     }
@@ -392,6 +433,14 @@ export class VoiceService {
     if (record.delivery === 'active-app' && result.text) {
       result.delivery = await this.deliverText(result.text, record.targetKey)
     }
+    if (result.text && (record.delivery !== 'active-app' || result.delivery?.method !== 'none')) {
+      await this.recordInsightSuccess(
+        record.id,
+        result.text,
+        result.durationMs ?? Math.max(0, Date.now() - record.startedAt),
+        result.polished
+      )
+    }
     return result
   }
 
@@ -420,6 +469,14 @@ export class VoiceService {
     )
     if (record.delivery === 'active-app' && result.text) {
       result.delivery = await this.deliverText(result.text, record.targetKey)
+    }
+    if (result.text && (record.delivery !== 'active-app' || result.delivery?.method !== 'none')) {
+      await this.recordInsightSuccess(
+        record.id,
+        result.text,
+        result.durationMs ?? Math.max(0, Date.now() - record.startedAt),
+        result.polished
+      )
     }
     return result
   }
@@ -663,6 +720,11 @@ export class VoiceService {
     options: { stopSignal?: AbortSignal; caller?: string } = {}
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const { stopSignal, caller = VOICE_CALLER } = options
+    // Whatever the last session left behind stops being recoverable the moment a new one
+    // starts — the user has moved on, and holding the previous recording through this one has
+    // no affordance left pointing at it. Done here rather than where capture begins so a
+    // session that fails before its first byte still clears the old audio.
+    this.clearRetryBuffer()
     throwIfCancelled(signal)
     this.assertSupported()
 
@@ -705,8 +767,9 @@ export class VoiceService {
 
     let ownerReleased = false
     let connection: Awaited<ReturnType<VoiceProviderAdapter['createStream']>> | null = null
+    let capturedBytes = 0
     // A new session owns the single retry slot; whatever the last one left is dropped here.
-    this.beginRetryBuffer(DEFAULT_ASR_SAMPLE_RATE, payload.language)
+    this.beginRetryBuffer(sessionId, DEFAULT_ASR_SAMPLE_RATE, payload.language)
     try {
       const request: VoiceStreamRequest = {
         model: provider.defaultStreamModel ?? 'default',
@@ -758,6 +821,7 @@ export class VoiceService {
               : Date.now() < deadline
           const chunk = drainCapture(session.nativeSessionId).pcm
           if (chunk.length > 0) {
+            capturedBytes += chunk.length
             if (payload.emitLevel) push({ kind: 'level', rms: pcmRms(chunk) })
             this.appendRetryBuffer(chunk)
             await connection!.writePcm(chunk)
@@ -803,14 +867,23 @@ export class VoiceService {
         }
         if (event.type === 'final') {
           if (!event.text) continue
-          const text =
+          const polishedText =
             payload.cleanup === false
-              ? event.text
-              : ((await this.polish(event.text, payload.language, signal, caller)) ?? event.text)
+              ? null
+              : await this.polish(event.text, payload.language, signal, caller)
+          const text = polishedText ?? event.text
           const delivery =
             payload.delivery === 'active-app'
               ? await this.deliverText(text, session.targetKey)
               : undefined
+          if (payload.delivery !== 'active-app' || delivery?.method !== 'none') {
+            await this.recordInsightSuccess(
+              session.id,
+              text,
+              Math.round(capturedBytes / 32),
+              polishedText !== null
+            )
+          }
           yield {
             type: 'final',
             text,
@@ -893,9 +966,18 @@ export class VoiceService {
       return { text: '' }
     }
 
-    const text = (await this.polish(recognized.text, language, signal, caller)) ?? recognized.text
+    const polishedText = await this.polish(recognized.text, language, signal, caller)
+    const text = polishedText ?? recognized.text
     const delivery =
       payload.delivery === 'active-app' ? await this.deliverText(text, targetKey) : undefined
+    if (payload.delivery !== 'active-app' || delivery?.method !== 'none') {
+      await this.recordInsightSuccess(
+        buffer.captureId,
+        text,
+        Math.round(buffer.bytes / 32),
+        polishedText !== null
+      )
+    }
 
     this.clearRetryBuffer()
     return {
@@ -929,12 +1011,17 @@ export class VoiceService {
       throw new Error('VOICE_SESSION_NOT_FOUND')
     }
     try {
+      let capturedBytes = 0
       for await (const event of createAsrStream({
         url: wsConfig.url,
         sampleRate: wsConfig.sampleRate,
         language: payload.language,
         signal,
-        drainFrames: () => drainCapture(session.nativeSessionId).pcm,
+        drainFrames: () => {
+          const pcm = drainCapture(session.nativeSessionId).pcm
+          capturedBytes += pcm.length
+          return pcm
+        },
         isCapturing: () =>
           stopSignal?.aborted
             ? false
@@ -944,14 +1031,23 @@ export class VoiceService {
       })) {
         throwIfCancelled(signal)
         if (event.type === 'final' && event.text) {
-          const text =
+          const polishedText =
             payload.cleanup === false
-              ? event.text
-              : ((await this.polish(event.text, payload.language, signal, caller)) ?? event.text)
+              ? null
+              : await this.polish(event.text, payload.language, signal, caller)
+          const text = polishedText ?? event.text
           const delivery =
             payload.delivery === 'active-app'
               ? await this.deliverText(text, session.targetKey)
               : undefined
+          if (payload.delivery !== 'active-app' || delivery?.method !== 'none') {
+            await this.recordInsightSuccess(
+              session.id,
+              text,
+              Math.round((capturedBytes * 1000) / (wsConfig.sampleRate * PCM_CHANNELS * 2)),
+              polishedText !== null
+            )
+          }
           yield {
             type: 'final',
             text,
