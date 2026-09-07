@@ -47,8 +47,9 @@ export class VoiceModule extends BaseModule<TalexEvents> {
     voiceLog.info('Initializing Voice module')
     this.registerChannels()
     globalDictationController.register()
-    this.commandGestureController = new CommandVoiceGestureController((payload) =>
-      assistantModule.handleVoiceCommandGesture(payload)
+    this.commandGestureController = new CommandVoiceGestureController(
+      (payload) => assistantModule.handleVoiceCommandGesture(payload),
+      () => assistantModule.isVoiceCommandActive()
     )
     this.commandGestureController.register()
     voiceLog.success('Voice module initialized')
@@ -93,6 +94,18 @@ export class VoiceModule extends BaseModule<TalexEvents> {
           { permissionId: VOICE_PERMISSION },
           (payload) => voiceService.transcribeUpload(payload),
           { onError: (error) => voiceLog.error('Voice upload transcription failed:', { error }) }
+        )
+      )
+    )
+
+    // Retry the last failed streaming session against the audio it already captured.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.retryLastFailure,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          (payload) => voiceService.retryLastFailure(payload),
+          { onError: (error) => voiceLog.error('Voice retry failed:', { error }) }
         )
       )
     )

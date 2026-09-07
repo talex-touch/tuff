@@ -103,7 +103,54 @@ maxHeight: 72                  // 球 clamp 上限，was VOICE_DOCK_HEIGHT
 
 原来的 `min=56` / `maxHeight=60` 与球的 48–72 本就矛盾，这三行必须一起改。
 
-## 3. 渲染层
+## 4. 失败重试的音频留存契约（2026-09-06 决定：真重试）
+
+「重试」定为**重传同一段音频**，不是重新录。这需要留住 PCM，所以边界必须先写死 —— 这是隐私面，不是实现细节。
+
+### 留什么、留多久
+
+| | |
+| --- | --- |
+| 存放 | **仅主进程内存**。不落盘、不进数据库、不进日志、不跨进程 |
+| 内容 | 本次会话已采集的 16kHz 单声道 16-bit PCM |
+| 上限 | 由既有 `maxDurationMs`（默认 15s）天然封顶 ≈ 480KB；另设 `MAX_RETRY_BUFFER_BYTES` 硬上限，超了就停止累积并放弃重试能力（宁可没有重试，也不无限吃内存） |
+| 槽位 | **全局一个**。新会话开始即覆盖旧的 |
+| 成功后 | **立即清** |
+| 取消后 | **立即清** —— 用户主动放弃，没有理由留着 |
+| 失败后 | 保留 `RETRY_GRACE_MS`（60s），到点由计时器清 |
+| 服务 dispose | 清 |
+| 插件可见性 | **不可见**。`narrowVoiceStreamForPlugins` 已经把插件面收在四种事件上，重试不进插件 SDK |
+
+### 为什么是这些数
+
+- **60s 宽限**：UI 上失败提示只停 5s，但用户可能先去看一眼网络再回来点。60s 之后那次说话的上下文对用户自己也已经失效了。
+- **失败才留、成功即清**：留存的唯一理由是「还有一次重试的可能」。成功之后这个理由消失，继续留就是无理由留存。
+- **取消也即清**：取消是明确的「我不要了」。把它和失败区别对待，是因为二者的用户意图不同。
+
+### 接口形状
+
+不走 token 传递 —— 错误经 `context.error()` 投递，`projectStreamError` 只保留 `message` 与 `code`，塞不下 token，硬塞就得改错误通道。改用「重试最近一次失败」：
+
+```ts
+export interface VoiceRetryPayload { language?: string; delivery?: VoiceDeliveryMode }
+export interface VoiceRetryResult {
+  text: string
+  language?: string
+  delivery?: VoiceDeliveryResult
+  /** 缓冲已过期或已被清 —— UI 必须据此说实话，不能假装在重试 */
+  expired?: boolean
+}
+voiceApiEvents.retryLastFailure
+```
+
+`expired: true` 是这个设计的诚实出口：宽限窗过了就明说「录音已过期，请重新说一次」，而不是静默失败或假装重试。
+
+### 重试走的路
+
+缓冲 PCM 套 44 字节 WAV 头 → 复用已有的 `transcribe()` → `polish()` → `deliverText()`。**不新开转写实现**，与一次性听写同一条路。
+
+
+## 5. 渲染层
 
 | 文件 | 改动 |
 | --- | --- |
@@ -256,6 +303,6 @@ watch([hasNotice, errorMessage], async () => {
 
 配色全走 shell token；orb `theme="auto"` 跟随环境。`.voice-signal` 整段（5 个静态 span + `@keyframes voice-signal-pulse` + 它的 reduced-motion 分支）删除 —— 那正是要否掉的假动画。
 
-## 4. 回滚
+## 6. 回滚
 
 协议层是纯增量（新后缀 + 可选方法 + 新 signal + 默认关的 `emitLevel`），旧调用方不受影响，可单独 revert。渲染层集中在两个 `.vue` + 一个常量文件 + 两个 locale JSON。三层各自一个提交。
