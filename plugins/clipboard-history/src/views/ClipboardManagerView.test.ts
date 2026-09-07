@@ -21,6 +21,8 @@ const sdkMocks = vi.hoisted(() => ({
   },
   system: {
     resolveApplication: vi.fn(),
+    openExternal: vi.fn(),
+    showInFolder: vi.fn(),
   },
   box: {
     expand: vi.fn(),
@@ -63,6 +65,8 @@ describe('clipboardManagerView', () => {
     sdkMocks.box.setInput.mockResolvedValue(undefined)
     sdkMocks.feature.onInputChange.mockReturnValue(vi.fn())
     sdkMocks.system.resolveApplication.mockResolvedValue(null)
+    sdkMocks.system.openExternal.mockResolvedValue(undefined)
+    sdkMocks.system.showInFolder.mockResolvedValue(undefined)
   })
 
   it('uses Enter to paste and Cmd/Ctrl+Enter to copy the selected item', async () => {
@@ -744,6 +748,65 @@ describe('clipboardManagerView', () => {
     await flushPromises()
 
     expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: 'just words', html: undefined })
+
+    wrapper.unmount()
+  })
+
+  /**
+   * `window.open` is denied outright for a plugin surface, so the old path could only ever
+   * fall through to a copy. Assert the host call, not the absence of a crash.
+   */
+  it('opens a link through the host instead of window.open', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 103, type: 'text', content: 'see https://example.com/docs for details' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="copy-button"]').text()).toContain('浏览器打开')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(sdkMocks.system.openExternal).toHaveBeenCalledWith('https://example.com/docs')
+    expect(sdkMocks.clipboard.write).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('reveals a copied file through the host, and falls back to its path when denied', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [
+        { id: 104, type: 'files', content: JSON.stringify(['/Users/demo/a.pdf', '/Users/demo/b.pdf']) },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="copy-button"]').text()).toContain('在访达中显示')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(sdkMocks.system.showInFolder).toHaveBeenCalledWith('/Users/demo/a.pdf')
+
+    // system.shell 在 manifest 里是可选权限，所以拒绝是正常结局，得说清是哪一种。
+    sdkMocks.system.showInFolder.mockRejectedValueOnce(
+      Object.assign(new Error('denied'), { code: 'SYSTEM_SHELL_PERMISSION_DENIED' }),
+    )
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: '/Users/demo/a.pdf' })
+    expect(wrapper.get('.error-banner').text()).toContain('未授予定位文件的权限')
 
     wrapper.unmount()
   })

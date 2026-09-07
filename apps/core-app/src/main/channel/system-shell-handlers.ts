@@ -4,6 +4,7 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import { shell } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { withPermission } from '../modules/permission/channel-guard'
 import { validateExternalUrl } from '../utils/external-url-policy'
 import { evaluateInstalledAppPath } from '../utils/installed-app-policy'
 import type { LogOptions } from '../utils/logger'
@@ -48,57 +49,83 @@ export interface SystemShellHandlerOptions {
   ) => () => void
 }
 
+/**
+ * `openExternal` and `showInFolder` are reachable from a plugin surface, so both carry the
+ * same permission the Prelude's `open-url` capability carries. A surface must not be the
+ * cheaper route to the same shell.
+ *
+ * `requireVerifiedPlugin` is deliberately off: unlike `resolveApplication`, these two are
+ * also called by the app's own renderer, which has no plugin context at all — requiring one
+ * would reject the host. `withPermission` already lets a context with no plugin through and
+ * gates every context that has one.
+ */
+const SHELL_PERMISSION = {
+  permissionId: 'system.shell',
+  failClosedForPlugin: true,
+  unavailableCode: 'SYSTEM_SHELL_PERMISSION_UNAVAILABLE',
+  deniedCode: 'SYSTEM_SHELL_PERMISSION_DENIED',
+  sdkMismatchCode: 'SDKAPI_MISMATCH'
+} as const
+
 export function registerSystemShellHandlers(
   transport: ITuffTransportMain,
   options: SystemShellHandlerOptions
 ): Array<() => void> {
   return [
-    transport.on(AppEvents.system.openExternal, (payload) => {
-      const decision = validateExternalUrl(payload?.url)
-      if (!decision.allowed) {
-        options.logger.warn('Blocked external URL open request', {
-          meta: {
-            reason: decision.reason,
-            protocol: decision.protocol
-          }
-        })
-        return undefined
-      }
-      return systemShellCapabilities.openExternal(decision.url)
-    }),
-    transport.on(AppEvents.system.showInFolder, async (payload) => {
-      const target = typeof payload?.path === 'string' ? payload.path : ''
-      if (!target.trim()) {
-        throw new Error(SYSTEM_SHELL_PATH_REQUIRED)
-      }
+    transport.on(
+      AppEvents.system.openExternal,
+      withPermission(SHELL_PERMISSION, (payload) => {
+        const decision = validateExternalUrl(payload?.url)
+        if (!decision.allowed) {
+          options.logger.warn('Blocked external URL open request', {
+            meta: {
+              reason: decision.reason,
+              protocol: decision.protocol
+            }
+          })
+          return undefined
+        }
+        return systemShellCapabilities.openExternal(decision.url)
+      })
+    ),
+    transport.on(
+      AppEvents.system.showInFolder,
+      withPermission(SHELL_PERMISSION, async (payload) => {
+        const target = typeof payload?.path === 'string' ? payload.path : ''
+        if (!target.trim()) {
+          throw new Error(SYSTEM_SHELL_PATH_REQUIRED)
+        }
 
-      let stats: Awaited<ReturnType<typeof fs.stat>>
-      try {
-        stats = await fs.stat(target)
-      } catch {
-        throw new Error(SYSTEM_SHELL_PATH_UNAVAILABLE)
-      }
-
-      if (stats.isDirectory()) {
-        let error: string
+        let stats: Awaited<ReturnType<typeof fs.stat>>
         try {
-          error = await shell.openPath(target)
+          stats = await fs.stat(target)
         } catch {
-          throw new Error(SYSTEM_SHELL_OPEN_PATH_FAILED)
+          throw new Error(SYSTEM_SHELL_PATH_UNAVAILABLE)
         }
-        if (error) {
-          throw new Error(SYSTEM_SHELL_OPEN_PATH_FAILED)
-        }
-        return
-      }
 
-      shell.showItemInFolder(target)
-    }),
+        if (stats.isDirectory()) {
+          let error: string
+          try {
+            error = await shell.openPath(target)
+          } catch {
+            throw new Error(SYSTEM_SHELL_OPEN_PATH_FAILED)
+          }
+          if (error) {
+            throw new Error(SYSTEM_SHELL_OPEN_PATH_FAILED)
+          }
+          return
+        }
+
+        shell.showItemInFolder(target)
+      })
+    ),
     transport.on(AppEvents.system.openApp, (payload) => {
-      // shell.openPath launches by OS association, so this handler was a way for any caller —
-      // transport.on registers on the plugin channel too — to execute a file it had dropped
-      // elsewhere, e.g. through the download handler (#908). The target must now be an
-      // application this machine actually has installed.
+      // shell.openPath launches by OS association, so this handler was a way for any caller
+      // to execute a file it had dropped elsewhere, e.g. through the download handler (#908).
+      // The target must now be an application this machine actually has installed.
+      //
+      // This event is not on the plugin-facing allowlist, so it is host-only — but the
+      // installed-app check is what makes that a defence rather than a configuration.
       const target = payload?.appName || payload?.path
       const decision = evaluateInstalledAppPath(target)
       if (!decision.allowed) {

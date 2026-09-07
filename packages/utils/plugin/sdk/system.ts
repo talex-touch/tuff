@@ -101,6 +101,22 @@ export interface PluginSystemSDK {
    * Show and focus the host application's main window.
    */
   showMainWindow: () => Promise<void>
+  /**
+   * Open a URL in the user's default browser.
+   *
+   * Requires the `system.shell` permission, the same one the Prelude's `open-url`
+   * capability requires — a surface must not be the cheaper way to reach the same shell.
+   * The host validates the protocol; this only rejects an empty argument.
+   */
+  openExternal: (url: string) => Promise<void>
+  /**
+   * Reveal a path in the system file manager. Directories open, files are selected
+   * in their parent.
+   *
+   * Requires the `system.shell` permission. The host resolves and stats the path, so a
+   * caller cannot use this to walk the filesystem without holding that permission.
+   */
+  showInFolder: (path: string) => Promise<void>
 }
 
 export function createPluginSystemSDK(transport: Pick<ITuffTransport, 'send'>): PluginSystemSDK {
@@ -128,6 +144,20 @@ export function createPluginSystemSDK(transport: Pick<ITuffTransport, 'send'>): 
     },
     showMainWindow: async () => {
       await transport.send(AppEvents.window.show, undefined)
+    },
+    openExternal: async url => {
+      const normalizedUrl = typeof url === 'string' ? url.trim() : ''
+      if (!normalizedUrl) {
+        throw new TypeError('External URL is required.')
+      }
+      await transport.send(AppEvents.system.openExternal, { url: normalizedUrl })
+    },
+    showInFolder: async path => {
+      const normalizedPath = typeof path === 'string' ? path.trim() : ''
+      if (!normalizedPath) {
+        throw new TypeError('Path is required.')
+      }
+      await transport.send(AppEvents.system.showInFolder, { path: normalizedPath })
     },
   }
 }
@@ -160,9 +190,19 @@ export async function showMainWindow(): Promise<void> {
   await getRendererSystemSdk().showMainWindow()
 }
 
+export async function openExternal(url: string): Promise<void> {
+  await getRendererSystemSdk().openExternal(url)
+}
+
+export async function showInFolder(path: string): Promise<void> {
+  await getRendererSystemSdk().showInFolder(path)
+}
+
 export const system: PluginSystemSDK = {
   getActiveAppSnapshot,
   resolveApplication,
   captureSelection: captureSelectedText,
   showMainWindow,
+  openExternal,
+  showInFolder,
 }
