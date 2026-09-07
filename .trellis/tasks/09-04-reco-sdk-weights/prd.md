@@ -186,7 +186,7 @@ if (payload.providerIds.includes(APP_INDEXED_SOURCE_ID)) {
 **实机跑出来才发现的两个缺口**(单测都测不到):
 1. `新文件` badge 从不渲染 —— `ItemSubtitle` 在文件元信息和推荐 badge 之间二选一,
    文件永远走前者。而下段存在的全部意义就是携带理由。已把 badge 移出该分支。
-2. 图片显示占位符 —— 文件来源给 mapper 传 `{}`,连已有缩略图都用不上。
+2. 图片显示默认图 —— 文件来源给 mapper 传 `{}`,连已有缩略图都用不上。
    而 `~/Pictures` 下的图片**只能**经缩略图渲染:`tfile` 只服务 allowlist 根,
    用户媒体目录被刻意排除在外(这是正确的安全设计,不应放宽)。
 
