@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxCardItem from '../src/TxCardItem.vue'
+import cardItemSource from '../src/TxCardItem.vue?raw'
 
 describe('txCardItem', () => {
   it('renders title, subtitle, description, and icon avatar', () => {
@@ -160,5 +161,20 @@ describe('txCardItem', () => {
     wrapper.element.dispatchEvent(onRow)
     expect(onRow.defaultPrevented).toBe(true)
     expect(wrapper.emitted('click')).toHaveLength(1)
+  })
+})
+
+describe('txCardItem active under the pointer', () => {
+  it('keeps the active accent when an active row is hovered', () => {
+    // jsdom applies no stylesheet, so the cascade is read from the source.
+    // `.tx-card-item--clickable:hover` (0,2,0) outranks `.tx-card-item--active`
+    // (0,1,0) on its own, so an active row went neutral under the pointer.
+    const combined = cardItemSource.indexOf('.tx-card-item--clickable.tx-card-item--active:hover')
+    expect(combined).toBeGreaterThan(-1)
+
+    const rule = cardItemSource.slice(combined, cardItemSource.indexOf('}', combined))
+    expect(rule).toContain('--tx-color-primary')
+    // Deeper than the resting active fill (8%), not a neutral overlay.
+    expect(rule).toMatch(/background:[^;]*15%/)
   })
 })

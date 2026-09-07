@@ -77,6 +77,7 @@ code: |
 - `role` 也只会在 `clickable=true` 时应用；组件没有隐式默认 role。
 - `disabled=true` 会添加禁用 class、移除焦点能力，并阻止鼠标和 Enter 激活。
 - `title` 与 `subtitle` 使用单行省略；`description` 可以换行。
+- 悬停 `active` 行时会加深其强调色，而不是替换成中性的悬停底色：悬停规则本身优先级高于激活规则，此前选中行在指针下会丢失高亮。
 
 ## 最佳实践
 

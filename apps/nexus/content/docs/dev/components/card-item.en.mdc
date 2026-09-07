@@ -77,6 +77,7 @@ code: |
 - `role` is also applied only when `clickable=true`; there is no implicit default role.
 - `disabled=true` adds the disabled class, removes focusability, and suppresses mouse and Enter activation.
 - Text areas use single-line ellipsis for `title` and `subtitle`; `description` can wrap.
+- Hovering an `active` row deepens its accent rather than replacing it with the neutral hover fill: the hover rule outranks the active rule on its own, so a selected row used to lose its highlight under the pointer.
 
 ## Best Practices
 
