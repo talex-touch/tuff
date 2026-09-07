@@ -47,7 +47,9 @@ const mocks = vi.hoisted(() => ({
   getAttachedPlugin: vi.fn(),
   shouldForwardClipboardChange: vi.fn(),
   schedule: vi.fn(async (_label: string, operation: () => Promise<unknown>) => await operation()),
-  values: vi.fn(() => ({
+  // 声明入参而不是留空：它替身的是 `db.insert().values(record)`，本来就收一个参数。
+  // 留空的话 `mock.calls` 的元组长度是 0，取 `[0]` 在 typecheck 下是错的。
+  values: vi.fn((_record?: Record<string, unknown>) => ({
     returning: vi.fn(async () => [
       {
         id: 11,
@@ -282,9 +284,9 @@ describe('clipboard-capture-pipeline', () => {
 
     await context.pipeline.process('visible-poll')
 
-    const record = mocks.values.mock.calls.at(-1)?.[0] as { retentionExpiresAt?: Date }
+    const record = mocks.values.mock.calls.at(-1)?.[0]
     expect(record?.retentionExpiresAt).toBeInstanceOf(Date)
-    const lifetimeMs = (record!.retentionExpiresAt as Date).getTime() - before
+    const lifetimeMs = (record?.retentionExpiresAt as Date).getTime() - before
     expect(lifetimeMs).toBeGreaterThan(14 * 60_000)
     expect(lifetimeMs).toBeLessThan(16 * 60_000)
   })

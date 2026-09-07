@@ -23,7 +23,7 @@ describe('clipboard classification settings', () => {
    * 配置文件是用户可编辑的。一个手改坏的字段不该让分类整个失效——尤其
    * `protectSecrets`：读不出来时必须偏向"保护"，否则一次配置手误就能让密钥开始过期。
    */
-  it.each([
+  it.each<[unknown, string]>([
     [{ verificationCodeRetentionMs: 'soon' }, 'verificationCodeRetentionMs'],
     [{ verificationCodeRetentionMs: -1 }, 'verificationCodeRetentionMs'],
     [{ verificationCodeRetentionMs: Number.NaN }, 'verificationCodeRetentionMs'],
