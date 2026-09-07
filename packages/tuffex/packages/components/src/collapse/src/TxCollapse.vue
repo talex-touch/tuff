@@ -104,7 +104,7 @@ provide<CollapseContext>('collapse', {
 // `--tx-collapse-radius` is read by the items so the first and last headers
 // can nest their corners into this one (see TxCollapseItem).
 .tx-collapse {
-  --tx-collapse-radius: 12px;
+  --tx-collapse-radius: 10px;
 
   border: 1px solid var(--tx-collapse-border, color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent));
   border-radius: var(--tx-collapse-radius);

@@ -118,17 +118,17 @@ function onAfterLeave(el: Element) {
   appearance: none;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  min-height: 44px;
-  padding: 12px 14px 12px 16px;
+  min-height: 40px;
+  padding: 9px 12px 9px 14px;
   border: 0;
   border-radius: 0;
   cursor: pointer;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.45;
   text-align: left;
   user-select: none;
   background: var(--tx-collapse-header-bg, var(--tx-bg-color-overlay, #ffffff));
@@ -184,11 +184,21 @@ function onAfterLeave(el: Element) {
   min-width: 0;
 }
 
+// The glyph is a hairline stroke (see TxIcon's builtin table) held one step
+// below the title in both size and ink, so the row's weight sits on the words.
 .tx-collapse-item__arrow {
   flex: none;
-  font-size: 14px;
+  font-size: 12px;
   color: var(--tx-collapse-arrow, var(--tx-text-color-secondary, #6b7280));
-  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 0.75;
+  transition:
+    transform 0.32s var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
+    opacity 0.18s ease;
+}
+
+.tx-collapse-item__header:hover .tx-collapse-item__arrow,
+.tx-collapse-item__arrow--active {
+  opacity: 1;
 }
 
 .tx-collapse-item__arrow--active {
@@ -200,16 +210,45 @@ function onAfterLeave(el: Element) {
 }
 
 .tx-collapse-item__content-inner {
-  padding: 2px 16px 16px;
+  padding: 0 14px 13px;
   font-size: 13px;
   color: var(--tx-collapse-content-text, var(--tx-text-color-regular, #6b7280));
   line-height: 1.6;
 }
 
-// Height is animated in JS (@enter/@leave); CSS cannot tween 0 ↔ auto.
+// Height is animated in JS (@enter/@leave); CSS cannot tween 0 ↔ auto. The body
+// fades a touch behind the height so the panel arrives instead of snapping in.
 .tx-collapse-enter-active,
 .tx-collapse-leave-active {
   overflow: hidden;
-  transition: height 0.3s ease-in-out;
+  transition: height 0.32s var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.tx-collapse-enter-active .tx-collapse-item__content-inner,
+.tx-collapse-leave-active .tx-collapse-item__content-inner {
+  transition:
+    opacity 0.28s ease,
+    transform 0.32s var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.tx-collapse-enter-from .tx-collapse-item__content-inner,
+.tx-collapse-leave-to .tx-collapse-item__content-inner {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-collapse-item__arrow,
+  .tx-collapse-enter-active,
+  .tx-collapse-leave-active,
+  .tx-collapse-enter-active .tx-collapse-item__content-inner,
+  .tx-collapse-leave-active .tx-collapse-item__content-inner {
+    transition-duration: 0.01ms;
+  }
+
+  .tx-collapse-enter-from .tx-collapse-item__content-inner,
+  .tx-collapse-leave-to .tx-collapse-item__content-inner {
+    transform: none;
+  }
 }
 </style>
