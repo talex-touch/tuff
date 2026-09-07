@@ -625,7 +625,9 @@ onBeforeUnmount(() => {
   scroll-snap-type: y mandatory;
   -webkit-overflow-scrolling: touch;
   padding: var(--tx-picker-padding-y) 0;
-  perspective: calc(var(--tx-picker-radius, 114px) * 6);
+  // Far enough back that riding the drum's near face enlarges a row by about a
+  // tenth rather than looming at it.
+  perspective: calc(var(--tx-picker-radius, 114px) * 9);
   perspective-origin: 50% 50%;
   mask-image: linear-gradient(
     to bottom,
@@ -666,7 +668,17 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 0 10px;
+  // Read right to left: the row is pushed out to the drum's radius along its own
+  // axis, tilted by its distance from the centre, and only then moved back up
+  // the column to where the drum's axis actually is.
+  //
+  // That last step is not optional. Rows are laid out flat and stacked, so each
+  // one starts at its own offset down the column; rotating in place swung every
+  // row except the centred one off its own position and out of view. The
+  // translate cancels the layout offset first, putting every row on the axis
+  // before it is placed on the surface.
   transform:
+    translateY(calc((var(--tx-picker-scroll, 0) - var(--tx-picker-index, 0)) * var(--tx-picker-item-height)))
     rotateX(calc((var(--tx-picker-scroll, 0) - var(--tx-picker-index, 0)) * var(--tx-picker-step, 18) * 1deg))
     translateZ(var(--tx-picker-radius, 114px));
   backface-visibility: hidden;
