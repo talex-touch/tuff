@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => {
     updateMetaOverlayBounds: vi.fn(),
     unregisterPolling: vi.fn(),
     getMainConfig: vi.fn(() => ({})),
+    subscribeMainConfig: vi.fn(),
+    createTouchWindow: vi.fn(),
     attachExistingUIView: vi.fn(),
     releaseExistingUIView: vi.fn(),
     createSessionWithoutUI: vi.fn(),
@@ -132,6 +134,15 @@ vi.mock('../../../core/runtime-accessor', () => ({
   }))
 }))
 
+vi.mock('../../../types', () => ({
+  TalexTouch: {
+    AppVersion: {
+      DEV: 'dev',
+      RELEASE: 'release'
+    }
+  }
+}))
+
 vi.mock('../../../core/window-security-profile', () => ({
   buildWindowWebPreferences: vi.fn((_: string, options: unknown) => options)
 }))
@@ -153,7 +164,11 @@ vi.mock('../../../core/eventbus/touch-event', () => ({
 }))
 
 vi.mock('../../../core/touch-window', () => ({
-  TouchWindow: class TouchWindow {}
+  TouchWindow: class TouchWindow {
+    constructor() {
+      return mocks.createTouchWindow()
+    }
+  }
 }))
 
 vi.mock('../../../hooks/use-electron-guard', () => ({
@@ -195,7 +210,7 @@ vi.mock('../../plugin/runtime/plugin-view-security-profile', () => ({
 
 vi.mock('../../storage', () => ({
   getMainConfig: mocks.getMainConfig,
-  subscribeMainConfig: vi.fn(() => vi.fn())
+  subscribeMainConfig: mocks.subscribeMainConfig
 }))
 
 vi.mock('../item-sdk', () => ({
@@ -277,7 +292,27 @@ function createHiddenCoreBoxWindow() {
     isAlwaysOnTop: vi.fn(() => false),
     isFocused: vi.fn(() => true),
     isMinimized: vi.fn(() => false),
-    getOpacity: vi.fn(() => 1)
+    getOpacity: vi.fn(() => 1),
+    destroy: vi.fn()
+  }
+}
+
+function createCoreBoxTouchWindow() {
+  const window = {
+    ...createHiddenCoreBoxWindow(),
+    addListener: vi.fn(),
+    on: vi.fn(),
+    webContents: {
+      id: 8,
+      on: vi.fn()
+    }
+  }
+
+  return {
+    window,
+    loadURL: vi.fn(async () => undefined),
+    loadFile: vi.fn(async () => undefined),
+    openDevTools: vi.fn()
   }
 }
 
@@ -300,6 +335,9 @@ describe('WindowManager CoreBox compact bounds', () => {
     mocks.transport.broadcastToWindow.mockReset()
     mocks.transport.sendTo.mockReset()
     mocks.getMainConfig.mockReturnValue({})
+    mocks.subscribeMainConfig.mockReset()
+    mocks.subscribeMainConfig.mockImplementation(() => vi.fn())
+    mocks.createTouchWindow.mockReset()
     mocks.createSessionWithoutUI.mockResolvedValue({
       sessionId: 'division-session',
       meta: { pluginId: 'demo-plugin' },
@@ -445,46 +483,93 @@ describe('WindowManager CoreBox compact bounds', () => {
     }
   })
 
-  it('keeps the unpinned box on every macOS Space, fullscreen ones included', () => {
+  it('configures the initial unpinned macOS panel and ignores unrelated settings saves', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     try {
       const manager = new WindowManager()
-      const browserWindow = {
-        isDestroyed: vi.fn(() => false),
-        setVisibleOnAllWorkspaces: vi.fn(),
-        setAlwaysOnTop: vi.fn()
+      const touchWindow = createCoreBoxTouchWindow()
+      let receiveAppSetting: (settings: {
+        tools?: { autoHide?: boolean }
+        [key: string]: unknown
+      }) => void = () => {
+        throw new Error('Expected the CoreBox settings subscription to be registered')
       }
-      manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
+      mocks.getMainConfig.mockReturnValue({ tools: { autoHide: true } })
+      mocks.createTouchWindow.mockReturnValue(touchWindow)
+      mocks.subscribeMainConfig.mockImplementation(
+        (
+          _storageList: string,
+          listener: (settings: { tools?: { autoHide?: boolean }; [key: string]: unknown }) => void
+        ) => {
+          receiveAppSetting = listener
+          return vi.fn()
+        }
+      )
 
-      manager.setPinned(false)
+      await manager.create()
 
-      // Showing the box no longer activates Tuff, so macOS neither switches Spaces for it nor
-      // orders it above the frontmost app. Both traits have to be asked for explicitly.
-      expect(browserWindow.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true, {
-        visibleOnFullScreen: true
+      // Creation must configure a new unpinned panel directly: setPinned() correctly treats the
+      // initial false state as an already-satisfied state. The process-transform skip keeps
+      // Electron from hiding the main/onboarding window while joining fullscreen Spaces.
+      expect(manager.isPinned()).toBe(false)
+      expect(touchWindow.window.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true, {
+        visibleOnFullScreen: true,
+        skipTransformProcessType: true
       })
-      expect(browserWindow.setAlwaysOnTop).toHaveBeenCalledWith(true, 'floating')
+      expect(touchWindow.window.setAlwaysOnTop).toHaveBeenCalledWith(true, 'floating')
+
+      touchWindow.window.setVisibleOnAllWorkspaces.mockClear()
+      touchWindow.window.setAlwaysOnTop.mockClear()
+      receiveAppSetting({ tools: { autoHide: true }, theme: 'light' })
+
+      // An unrelated save must not re-enter Electron's workspace API, whose default process
+      // transform hides every app window.
+      expect(touchWindow.window.setVisibleOnAllWorkspaces).not.toHaveBeenCalled()
+      expect(touchWindow.window.setAlwaysOnTop).not.toHaveBeenCalled()
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
 
-  it('leaves the unpinned box on its own workspace off macOS', () => {
+  it('applies the non-mac workspace and topmost policy after a real pin setting change', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {
       const manager = new WindowManager()
-      const browserWindow = {
-        isDestroyed: vi.fn(() => false),
-        setVisibleOnAllWorkspaces: vi.fn(),
-        setAlwaysOnTop: vi.fn()
+      const touchWindow = createCoreBoxTouchWindow()
+      let receiveAppSetting: (settings: { tools?: { autoHide?: boolean } }) => void = () => {
+        throw new Error('Expected the CoreBox settings subscription to be registered')
       }
-      manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
+      mocks.getMainConfig.mockReturnValue({ tools: { autoHide: true } })
+      mocks.createTouchWindow.mockReturnValue(touchWindow)
+      mocks.subscribeMainConfig.mockImplementation(
+        (
+          _storageList: string,
+          listener: (settings: { tools?: { autoHide?: boolean } }) => void
+        ) => {
+          receiveAppSetting = listener
+          return vi.fn()
+        }
+      )
 
-      manager.setPinned(false)
+      await manager.create()
+      touchWindow.window.setVisibleOnAllWorkspaces.mockClear()
+      touchWindow.window.setAlwaysOnTop.mockClear()
 
-      expect(browserWindow.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(false)
+      receiveAppSetting({ tools: { autoHide: false } })
+
+      expect(manager.isPinned()).toBe(true)
+      expect(touchWindow.window.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true)
+      expect(touchWindow.window.setAlwaysOnTop).toHaveBeenCalledWith(true, 'floating')
+
+      touchWindow.window.setVisibleOnAllWorkspaces.mockClear()
+      touchWindow.window.setAlwaysOnTop.mockClear()
+      receiveAppSetting({ tools: { autoHide: true } })
+
+      expect(manager.isPinned()).toBe(false)
+      expect(touchWindow.window.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(false)
+      expect(touchWindow.window.setAlwaysOnTop).toHaveBeenCalledWith(false)
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
