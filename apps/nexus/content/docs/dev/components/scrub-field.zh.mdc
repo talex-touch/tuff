@@ -77,6 +77,8 @@ code: |
 
 ## 交互契约
 
+- 芯片左右都留了内边距，把手字符和数值都不再贴着边缘；贴边时字段看起来像被裁掉，而不是紧凑。
+
 - 手柄是 `role="slider"`，带 `aria-valuenow` / `aria-valuemin` / `aria-valuemax` / `aria-orientation`，有 `suffix` 时另带 `aria-valuetext`（如 `100%`）。数值输入框是**另一个**控件，有自己的可访问名——这是刻意的双控件设计。
 - 量化的是**位移**不是结果：`round(位移 / pixelsPerStep) * step`。这样小数步长成立，起始值不在步长网格上时也不会被吸附过去。
 - 拖动全程用指针捕获；`pointercancel` 与 `lostpointercapture` 同样结束手势（上游两者都没监听，被系统手势抢走指针后会留下一个悬空的拖拽态）。

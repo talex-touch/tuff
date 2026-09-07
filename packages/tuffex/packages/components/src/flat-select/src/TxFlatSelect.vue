@@ -89,6 +89,14 @@ const activeDescendantId = computed(() => {
 // --- Dropdown clip-path animation ---
 const dropdownTop = ref('0px')
 const dropdownClip = ref('inset(50% 0 50% 0 round 10px)')
+/**
+ * True while the panel is collapsing back onto the trigger. The panel's own
+ * chrome — surface, border, shadow, and the selected row's accent — used to
+ * vanish on the frame the panel was hidden, so the label appeared to blink as
+ * it settled. Fading that chrome out across the same 200ms leaves nothing to
+ * blink: by the time the panel is gone it already looks like the trigger.
+ */
+const isClosing = ref(false)
 
 function getSelectedItemRect(): { top: number, height: number } | null {
   const entry = itemEntries.value.find(e => e.value === props.modelValue)
@@ -135,6 +143,7 @@ function close() {
 function performOpen() {
   if (props.disabled)
     return
+  isClosing.value = false
   // Bail only when fully open; if a close is still settling (closeTimer pending) this
   // click should re-open rather than be swallowed.
   if (isOpen.value && closeTimer == null)
@@ -164,11 +173,13 @@ function performClose() {
   if (!isOpen.value || closeTimer != null) return
 
   isAnimating.value = true
+  isClosing.value = true
   dropdownClip.value = calcClipClosed()
 
   closeTimer = setTimeout(() => {
     isOpen.value = false
     isAnimating.value = false
+    isClosing.value = false
     closeTimer = null
   }, 200)
 }
@@ -302,6 +313,7 @@ onBeforeUnmount(() => {
       :class="{
         'is-visible': isOpen,
         'is-animating': isAnimating,
+        'is-closing': isClosing,
       }"
       :style="{
         top: dropdownTop,
@@ -401,7 +413,30 @@ onBeforeUnmount(() => {
     }
 
     &.is-animating {
-      transition: clip-path 0.2s cubic-bezier(0.2, 0, 0, 1);
+      transition:
+        clip-path 0.2s cubic-bezier(0.2, 0, 0, 1),
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+    }
+
+    // Collapsing onto the trigger: drop the panel's chrome on the way down so
+    // the last frame already matches what the trigger shows.
+    &.is-closing {
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+
+      :deep(.tx-flat-select-item.is-selected) {
+        color: var(--tx-text-color-primary, #303133);
+        background: transparent;
+        transition: color 0.2s ease, background-color 0.2s ease;
+      }
+
+      :deep(.tx-flat-select-item__check) {
+        opacity: 0;
+        transition: opacity 0.14s ease;
+      }
     }
   }
 }
