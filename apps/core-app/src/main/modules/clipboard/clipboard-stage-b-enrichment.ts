@@ -3,9 +3,13 @@ import type * as schema from '../../db/schema'
 import type { LogOptions } from '../../utils/logger'
 import type { IClipboardItem } from './clipboard-history-persistence'
 import { eq } from 'drizzle-orm'
+import { classifyClipboardContent } from '@talex-touch/utils/clipboard'
 import { clipboardHistory } from '../../db/schema'
 import { resolveAppSemanticAliases } from '../box-tool/addon/apps/app-semantic-catalog'
 import type { ClipboardMetaEntry, ClipboardMetaPersistence } from './clipboard-meta-persistence'
+
+/** 与采集侧同一个时长。M4 会把两处一起接成可配置。 */
+const VERIFICATION_CODE_RETENTION_MS = 60 * 60 * 1000
 
 export interface ClipboardActiveAppSnapshot {
   bundleId?: string | null
@@ -127,6 +131,29 @@ export class ClipboardStageBEnrichment {
     }
 
     const { sourceApp, patch, entries } = buildActiveAppSourcePatch(activeApp, job.item.sourceApp)
+
+    /**
+     * 来源应用是验证码判定的第三条判据，而它到这一步才解析出来——采集时看到的只是一串
+     * 数字，没有任何依据把它和订单号区分开。所以这里重跑一次分类：只有当它现在被认成
+     * 验证码、且还没有过期时刻时才写，别的分类结果都不动。
+     *
+     * 只往「更早过期」的方向改。重跑的结果如果没命中，采集时定下的档位保持不变——
+     * 一次判定失误不应该让一条已经受保护的记录失去保护。
+     */
+    const rescored =
+      job.item.type === 'text' && sourceApp
+        ? classifyClipboardContent({
+            type: 'text',
+            content: job.item.content,
+            rawContent: job.item.rawContent ?? null,
+            sourceApp
+          })
+        : null
+    const expiresAt =
+      rescored?.retentionClass === 'verification-code'
+        ? new Date(Date.now() + VERIFICATION_CODE_RETENTION_MS)
+        : null
+
     const db = this.options.getDatabase()
     if (db) {
       try {
@@ -139,7 +166,8 @@ export class ClipboardStageBEnrichment {
               .update(clipboardHistory)
               .set({
                 sourceApp,
-                metadata: nextMetadata
+                metadata: nextMetadata,
+                ...(expiresAt ? { retentionExpiresAt: expiresAt } : {})
               })
               .where(eq(clipboardHistory.id, job.clipboardId)),
           { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }
