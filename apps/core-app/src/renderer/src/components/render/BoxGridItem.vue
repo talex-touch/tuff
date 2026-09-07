@@ -79,9 +79,9 @@ const recommendationBadgeText = computed(() =>
         <i v-if="recommendationBadgeIcon" :class="recommendationBadgeIcon" aria-hidden="true" />
         {{ recommendationBadgeText }}
       </span>
-      <span v-if="quickKey" class="BoxGridItem-QuickKey">{{ quickKey }}</span>
       <span v-if="quickKey" class="BoxGridItem-QuickKeyInline">{{ quickKey }}</span>
     </div>
+    <span v-if="quickKey" class="BoxGridItem-QuickKey">{{ quickKey }}</span>
   </div>
 </template>
 
@@ -214,8 +214,8 @@ const recommendationBadgeText = computed(() =>
 
 .BoxGridItem-QuickKey {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
   font-size: 10px;
   font-weight: 600;
   padding: 2px 4px;
