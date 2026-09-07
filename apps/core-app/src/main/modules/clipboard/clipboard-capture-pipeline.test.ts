@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 import { ClipboardCapturePipeline } from './clipboard-capture-pipeline'
+import {
+  DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS,
+  type ClipboardClassificationSettings
+} from './clipboard-classification-settings'
 import { ClipboardHelper } from './clipboard-capture-freshness'
 import {
   resetClipboardCaptureSuppression,
@@ -96,7 +100,7 @@ vi.mock('../../utils/perf-monitor', () => ({
   }
 }))
 
-function createPipeline() {
+function createPipeline(settingsOverride?: Partial<ClipboardClassificationSettings>) {
   const helper = new ClipboardHelper()
   const db = {
     insert: vi.fn(() => ({ values: mocks.values }))
@@ -122,6 +126,10 @@ function createPipeline() {
   let cooldownUntil = 0
 
   const pipeline = new ClipboardCapturePipeline({
+    getClassificationSettings: () => ({
+      ...DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS,
+      ...settingsOverride
+    }),
     getDatabase: () => db as never,
     getClipboardHelper: () => helper,
     getReader: () => ({
@@ -248,6 +256,37 @@ describe('clipboard-capture-pipeline', () => {
     expect(mocks.values).toHaveBeenCalledWith(
       expect.objectContaining({ retentionProtected: false })
     )
+  })
+
+  /**
+   * 保护是可以关的——「我不想让密钥永久留在库里」是个合理选择。但它必须是显式关掉的
+   * 结果，而不是配置读不出来时的默认。
+   */
+  it('honours the setting that turns secret protection off', async () => {
+    const context = createPipeline({ protectSecrets: false })
+    mocks.readText
+      .mockReturnValueOnce('previous')
+      .mockReturnValue(`sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`)
+
+    await context.pipeline.process('visible-poll')
+
+    expect(mocks.values).toHaveBeenCalledWith(
+      expect.objectContaining({ retentionProtected: false })
+    )
+  })
+
+  it('uses the configured verification-code lifetime rather than a fixed hour', async () => {
+    const context = createPipeline({ verificationCodeRetentionMs: 15 * 60_000 })
+    const before = Date.now()
+    mocks.readText.mockReturnValueOnce('previous').mockReturnValue('G-123456')
+
+    await context.pipeline.process('visible-poll')
+
+    const record = mocks.values.mock.calls.at(-1)?.[0] as { retentionExpiresAt?: Date }
+    expect(record?.retentionExpiresAt).toBeInstanceOf(Date)
+    const lifetimeMs = (record!.retentionExpiresAt as Date).getTime() - before
+    expect(lifetimeMs).toBeGreaterThan(14 * 60_000)
+    expect(lifetimeMs).toBeLessThan(16 * 60_000)
   })
 
   it('persists WeChat aliases with their metadata search terms', async () => {

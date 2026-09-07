@@ -268,6 +268,21 @@
         "permanent": "Keep permanently"
       }
     },
+    "clipboardTiers": {
+      "title": "Clipboard content tiers",
+      "hint": "Verification codes and secrets share a table and a deletion path with ordinary clipboard entries, so their policies live here rather than as separate data categories.",
+      "verificationCode": "Keep verification codes for",
+      "protectSecrets": "Never auto-delete secrets",
+      "customPrefixes": "Custom key prefixes",
+      "customPrefixesPlaceholder": "e.g. cr_, zz- (comma separated)",
+      "durations": {
+        "300000": "5 minutes",
+        "900000": "15 minutes",
+        "3600000": "1 hour",
+        "21600000": "6 hours",
+        "86400000": "24 hours"
+      }
+    },
     "actions": {
       "selectCategories": "Select data categories",
       "preview": "Preview impact",
@@ -4678,9 +4693,9 @@
       "cancelSession": "Cancel this session",
       "cancelled": "Cancelled",
       "capturingDevice": "Opening the microphone…",
-      "microphoneUnresponsive": "The microphone is not responding — check your input device",
-      "microphoneMissing": "No microphone available — check your system input device",
-      "microphoneDenied": "Microphone access is not granted — allow it in System Settings",
+      "microphoneUnresponsive": "The microphone is not responding",
+      "microphoneMissing": "No microphone available",
+      "microphoneDenied": "Microphone access not granted",
       "holdToCancel": "Hold to cancel",
       "stillWorking": "Still transcribing…",
       "stillWorkingLong": "Longer than usual — hold Esc to cancel",
@@ -4785,7 +4800,9 @@
       "screenshotTranslateUnavailable": "Screenshot is unavailable. Check screen recording permission or try again later.",
       "screenshotTranslateImageUnavailable": "The screenshot image is invalid. Take another screenshot and try again.",
       "imageTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status.",
-      "screenshotTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status."
+      "screenshotTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status.",
+      "openMicrophoneSettings": "Open microphone settings",
+      "microphoneSettingsUnavailable": "This system has no microphone settings pane to open"
     },
     "regionSelector": {
       "title": "Select a screenshot region",
@@ -5081,7 +5098,15 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+      "weekdays": [
+        "Sun",
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat"
+      ]
     },
     "memoryReview": {
       "title": "Memory Review",

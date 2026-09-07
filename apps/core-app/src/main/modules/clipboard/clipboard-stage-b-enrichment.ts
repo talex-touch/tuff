@@ -7,9 +7,8 @@ import { classifyClipboardContent } from '@talex-touch/utils/clipboard'
 import { clipboardHistory } from '../../db/schema'
 import { resolveAppSemanticAliases } from '../box-tool/addon/apps/app-semantic-catalog'
 import type { ClipboardMetaEntry, ClipboardMetaPersistence } from './clipboard-meta-persistence'
-
-/** 与采集侧同一个时长。M4 会把两处一起接成可配置。 */
-const VERIFICATION_CODE_RETENTION_MS = 60 * 60 * 1000
+import type { ClipboardClassificationSettings } from './clipboard-classification-settings'
+import { DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS } from './clipboard-classification-settings'
 
 export interface ClipboardActiveAppSnapshot {
   bundleId?: string | null
@@ -42,6 +41,9 @@ export interface ClipboardStageBEnrichmentOptions {
   patchCachedMeta: (clipboardId: number, patch: Record<string, unknown>) => void
   updateCachedSource: (clipboardId: number, sourceApp: string | null) => void
   metaPersistence: ClipboardMetaPersistence
+  /** 剪贴板分类与保留的用户设置。由持有 storage 的模块注入——这两条路径都在热路径上，
+   * 而 storage 那个桶会把整个 transport（连同 `ipcMain`）一起拖进来。 */
+  getClassificationSettings?: () => ClipboardClassificationSettings
   logWarn: (message: string, data?: LogOptions) => void
   logDebug: (message: string, data?: LogOptions) => void
 }
@@ -140,18 +142,21 @@ export class ClipboardStageBEnrichment {
      * 只往「更早过期」的方向改。重跑的结果如果没命中，采集时定下的档位保持不变——
      * 一次判定失误不应该让一条已经受保护的记录失去保护。
      */
+    const settings =
+      this.options.getClassificationSettings?.() ?? DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS
     const rescored =
       job.item.type === 'text' && sourceApp
         ? classifyClipboardContent({
             type: 'text',
             content: job.item.content,
             rawContent: job.item.rawContent ?? null,
-            sourceApp
+            sourceApp,
+            customKeyPrefixes: settings.customKeyPrefixes
           })
         : null
     const expiresAt =
       rescored?.retentionClass === 'verification-code'
-        ? new Date(Date.now() + VERIFICATION_CODE_RETENTION_MS)
+        ? new Date(Date.now() + settings.verificationCodeRetentionMs)
         : null
 
     const db = this.options.getDatabase()

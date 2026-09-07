@@ -20,12 +20,8 @@ import { windowManager } from '../box-tool/core-box/window'
 import { getClipboardTagSearchTerms } from '../clipboard-tagging'
 import type { ClipboardRetentionClass } from '@talex-touch/utils/clipboard'
 import { classifyClipboardContent } from '@talex-touch/utils/clipboard'
-
-/**
- * 验证码的保留时长。放常量而不是读用户策略，是因为采集路径在热路径上，
- * 每条都去读一次策略存储不划算；设置页改档时由 M4 把它接成可配置。
- */
-const VERIFICATION_CODE_RETENTION_MS = 60 * 60 * 1000
+import type { ClipboardClassificationSettings } from './clipboard-classification-settings'
+import { DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS } from './clipboard-classification-settings'
 import {
   CLIPBOARD_HTML_FORMATS,
   CLIPBOARD_IMAGE_FORMATS,
@@ -75,6 +71,9 @@ export interface ClipboardCapturePipelineOptions {
   setLastImagePersistAt: (value: number) => void
   setCooldownUntil: (value: number) => void
   setTaskMeta: (meta: Record<string, unknown>) => void
+  /** 剪贴板分类与保留的用户设置。由持有 storage 的模块注入——这两条路径都在热路径上，
+   * 而 storage 那个桶会把整个 transport（连同 `ipcMain`）一起拖进来。 */
+  getClassificationSettings?: () => ClipboardClassificationSettings
   logInfo: (message: string, data?: LogOptions) => void
   logWarn: (message: string, data?: LogOptions) => void
 }
@@ -305,17 +304,19 @@ export class ClipboardCapturePipeline {
     const metadataPayload = trackPhase(phaseDurations, 'meta.stringify', () => {
       return Object.keys(metaObject).length > 0 ? JSON.stringify(metaObject) : null
     })
+    const settings =
+      this.options.getClassificationSettings?.() ?? DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS
     const record = {
       ...item,
       metadata: metadataPayload,
       timestamp: new Date(),
       // 保留策略清理侧早就写着 `COALESCE(retention_protected, 0) = 0`，列和索引也都建好了，
       // 但在这之前没有任何代码写过它——密钥和普通文本一样会在 90 天后被清掉。
-      retentionProtected: retentionClass === 'secret',
+      retentionProtected: settings.protectSecrets && retentionClass === 'secret',
       // 验证码一被粘贴就作废了，留满类别的 90 天等于让一个还能用的凭据在明文表里躺三个月。
       retentionExpiresAt:
         retentionClass === 'verification-code'
-          ? new Date(Date.now() + VERIFICATION_CODE_RETENTION_MS)
+          ? new Date(Date.now() + settings.verificationCodeRetentionMs)
           : null
     }
 
@@ -512,11 +513,14 @@ export class ClipboardCapturePipeline {
     //
     // `sourceApp` 此刻还没有——它由 stage-B 补齐——所以验证码的第三条判据
     // （来自短信 / 邮件应用的裸数字）在这里不成立，只有带前缀和带关键词的能命中。
+    const settings =
+      this.options.getClassificationSettings?.() ?? DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS
     const classification = trackPhase(phaseDurations, 'tags.detect', () =>
       classifyClipboardContent({
         type: item.type,
         content: item.content,
-        rawContent: item.rawContent ?? null
+        rawContent: item.rawContent ?? null,
+        customKeyPrefixes: settings.customKeyPrefixes
       })
     )
     const tags = classification.tags
