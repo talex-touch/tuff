@@ -320,3 +320,49 @@ Closed all recorded BUI follow-up gaps, fixed a real TxContextMenu interaction d
 - 门禁：vitest 227 文件/1421 用例全绿、typecheck/eslint/fences/parity/demo-registry 绿；CDP 25 项断言 + 明暗截图（自起 3201 新服务）。
 - 排障：新起 dev server 仍陈旧的根因是第三个存储 `.nuxt/content` 解析缓存——`.data/contents.sqlite` 是「新建但从旧缓存灌的」，mtime 会骗人；wipe 后 bc 报的 zh 四条幽灵条目（copy/flat/icon-button、os-icon）一并消失，确认非仓库尾巴。记忆 nexus-content-dev-stale-d1 已补第三存储与 unlink 安全性。
 - 协作：bc 的 #1818 journal 段随本提交入库（其分支未含，已知会防双加）；documents 2.0.pen 老板手稿未动未提交。
+
+
+## Session 60: 剪贴板历史：密钥掩码一致性、内容分类统一与按类保留
+
+**Date**: 2026-09-07
+**Task**: 剪贴板历史：密钥掩码一致性、内容分类统一与按类保留
+**Branch**: `feature/clipboard-layout-shell`
+
+### Summary
+
+把剪贴板历史的密钥掩码从「只有洞察区成立」修成全表面成立，并把主进程与插件两套互相打架的分类器合并成一份共享实现（带 span，因此正文里嵌的密钥也能掩码）。在此之上落地按内容类别的保留：密钥永不自动删除（retention_protected 列、索引与清理豁免早已存在但从未被写过）、验证码 1 小时过期（新增 per-item 列 + 1-hour 预设）、详情显示预计删除时间（清理条件的逆运算，有一条测试把两者绑死）、三档全部可配置，并回填历史记录的密钥保护。另修交互四项：拆词取代拆字、全局 user-select、Cmd+方向键切分类、Cmd+Enter 按内容类型分派动作。过程中放宽了插件通道白名单（openExternal/showInFolder）并给它们补上 system.shell 权限门。教训：CI 的 typecheck 带 --composite false 而我没带；一条「不写过期」的断言因为种子到不了被测分支而恒真；grep Tests 看不见整个文件加载失败。遗留：三处纯样式未在真实窗口验证；PR #1879 仍 BLOCKED（剩余红灯属并发 agent 的语音模块）；会话中我误把用户真 API key 当测试夹具并经并发推送进入公开仓库，已重写历史清除但 key 仍需吊销。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fbddec35d` | (see git log) |
+| `23c734c50` | (see git log) |
+| `e1796d4a9` | (see git log) |
+| `820ea3c78` | (see git log) |
+| `d848b0b74` | (see git log) |
+| `e2b7bc39a` | (see git log) |
+| `d160bdfcf` | (see git log) |
+| `67dd05a6a` | (see git log) |
+| `cdc705adf` | (see git log) |
+| `abd485732` | (see git log) |
+| `99f372f45` | (see git log) |
+| `98511ac2a` | (see git log) |
+| `b129f083e` | (see git log) |
+| `f0baca5f3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

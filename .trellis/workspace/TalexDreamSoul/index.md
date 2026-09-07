@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 59
-- **Last Active**: 2026-08-17
+- **Total Sessions**: 60
+- **Last Active**: 2026-09-07
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~258 | Active |
+| `journal-2.md` | ~368 | Active |
 | `journal-1.md` | ~2005 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -31,6 +31,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 60 | 2026-09-07 | 剪贴板历史：密钥掩码一致性、内容分类统一与按类保留 | `fbddec35d`, `23c734c50`, `e1796d4a9`, `820ea3c78`, `d848b0b74`, `e2b7bc39a`, `d160bdfcf`, `67dd05a6a`, `cdc705adf`, `abd485732`, `99f372f45`, `98511ac2a`, `b129f083e`, `f0baca5f3` | `feature/clipboard-layout-shell` |
 | 59 | 2026-08-17 | Clipboard History 1.1.12 production Nexus release | `bf3eb9434`, `c523af1db`, `2eccf3d79`, `989dad5a5`, `c90fcfb3d`, `a941469e3`, `151693652` | `master` |
 | 58 | 2026-08-17 | 三插件生产 Nexus 发布与运行时加固 | `d7401961d`, `3d59117e0`, `4f6add9c6`, `88f315ca1`, `bcd8c0fba`, `0db79eede` | `feat/nexus-header-controls-tuffex` |
 | 57 | 2026-08-16 | 主进程轮询与外部调用超时兜底（CoreBox 搜索延迟根因） | `109560387` | `feat/nexus-header-controls-tuffex` |
