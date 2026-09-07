@@ -11,7 +11,7 @@ import pathBrowserify from "path-browserify";
 import type { FileScanOptions } from "./file-scan-constants";
 import { hasWindow } from "../env";
 import { fileFilterService } from "./file-filter-service";
-import { DEFAULT_SCAN_OPTIONS } from "./file-scan-constants";
+import { DEFAULT_SCAN_OPTIONS, FILE_SCAN_MAX_DEPTH } from "./file-scan-constants";
 
 const path = (() => {
   if (hasWindow()) {
@@ -298,11 +298,6 @@ export async function scanDirectoryBatches(
 // ---- scanDirectory 内部实现与工具 ----
 
 /**
- * 递归深度上限，防止异常深的目录树或软链环导致的栈/耗时失控
- */
-const MAX_SCAN_DEPTH = 24;
-
-/**
  * 单个目录内并发 stat 文件的上限。文件是叶子操作（不再递归），
  * 因此该并发不会与目录递归相互抢占而死锁
  */
@@ -367,7 +362,7 @@ async function scanDirectoryInto(
   siblingNames?: readonly string[],
 ): Promise<void> {
   sink?.signal?.throwIfAborted();
-  if (depth > MAX_SCAN_DEPTH) return;
+  if (depth > FILE_SCAN_MAX_DEPTH) return;
   if (excludePaths?.has(dirPath)) return;
   if (
     fileFilterService.getTraversalExclusionReason(dirPath, opts, {
