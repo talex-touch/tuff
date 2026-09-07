@@ -355,17 +355,29 @@ const preparing = computed(() => listening.value && !hasLevel.value && !hasNotic
 pillHeight.value = el && el.scrollWidth > el.clientWidth ? PILL_TALL_HEIGHT : PILL_BASE_HEIGHT
 ```
 
-`PILL_TALL_HEIGHT = 64`，文字 `-webkit-line-clamp: 2`。窗口高度随之从 64 抬到 88（§2.3 的常量同步改），否则长高的胶囊会被窗口裁掉——裁掉的正是要露出来的第二行。
+`PILL_TALL_HEIGHT = 76`，文字 `-webkit-line-clamp: 2`。不是两行严格需要的 64——那个高度上文字块顶满卡片，读起来像一颗被拉长的胶囊，卡片是可以有余量的。窗口高度随之从 64 抬到 100（§2.3 的常量同步改），多出来的是投影和呼吸光晕的余量，它们画在面外，窗口边一刀切会露馅。
 
 ### 7.4 长高之后不再是胶囊
 
 ```ts
-const PILL_TALL_RADIUS = 20
+const PILL_TALL_RADIUS = 24
 const expanded = computed(() => pillHeight.value > PILL_BASE_HEIGHT)
 const pillRadius = computed(() => (expanded.value ? PILL_TALL_RADIUS : PILL_BASE_HEIGHT / 2))
 ```
 
-胶囊的圆角是高度的一半。高度到 64 还保持全圆角，两端各吃掉 32px——正好吃在第二行要用的地方，而且看着像个被拉长的药丸，不像一张卡。所以一行是胶囊（22），两行是圆角矩形（20），`border-radius` 进过渡曲线，`TxBorderBeam` 吃同一个 `pillRadius`（原来写死 22，长高后光带会从卡片角上跑出去）。
+胶囊的圆角是高度的一半。高度到 76 还保持全圆角，两端各吃掉 38px——正好吃在第二行要用的地方，而且看着像个被拉长的药丸，不像一张卡。所以一行是胶囊（22），两行是圆角矩形（24），`border-radius` 进过渡曲线，`TxBorderBeam` 吃同一个 `pillRadius`（原来写死 22，长高后光带会从卡片角上跑出去）。
+
+### 7.4.1 圆钮跟着长，但不等比例
+
+```ts
+const CONTROL_BASE_SIZE = 34
+const CONTROL_TALL_SIZE = 40
+const controlSize = computed(() => (expanded.value ? CONTROL_TALL_SIZE : CONTROL_BASE_SIZE))
+```
+
+胶囊里 34 = 44 减两侧 5px padding —— **控件就是这根条**。照这个比例放到 76 高的卡片上是 58，荒谬。卡片比任何控件都高，所以那里换一条规则：控件对齐旁边的两行文字块（≈38），取 40。**控件跟内容走，不跟容器走。**
+
+尺寸写在脚本里而不是 CSS 里：它是形态的函数，而且要能被测试读到（jsdom 不跑 SFC 的 scoped 样式，写在 CSS 里就等于没有守卫）。宽度测量不会因此震荡——展开后 chrome 从 94 变 106，文字更挤，只会更溢出，判定仍然是「展开」，二值状态稳定。
 
 展开态另加 `.voice-dock--expanded`：文字左对齐（两行居中读起来是海报不是通知），两枚圆钮仍垂直居中。
 

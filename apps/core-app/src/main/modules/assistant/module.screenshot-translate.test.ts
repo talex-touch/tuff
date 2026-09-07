@@ -643,11 +643,13 @@ describe('AssistantModule screenshot translation', () => {
     await listener()
 
     expect(mocks.touchWindows).toHaveLength(1)
+    // Centred on the work area, 24px off its bottom edge: x = (800 - 360) / 2,
+    // y = 500 - VOICE_DOCK_HEIGHT - 24. Both track the dock constants in module.ts.
     expect(voiceDock.window.setBounds).toHaveBeenCalledWith({
       x: 220,
-      y: 412,
+      y: 376,
       width: 360,
-      height: 64
+      height: 100
     })
     expect(voiceDock.window.show).not.toHaveBeenCalled()
     expect(voiceDock.window.focus).not.toHaveBeenCalled()
