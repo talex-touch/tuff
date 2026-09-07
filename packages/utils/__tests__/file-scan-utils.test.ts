@@ -9,6 +9,7 @@ import {
   scanDirectory,
   scanDirectoryBatches,
 } from "../common/file-scan-utils";
+import { FILE_SCAN_MAX_DEPTH } from "../common/file-scan-constants";
 
 // Disable the system/dev/cache/photos path heuristics so the test only exercises
 // traversal + dir-blacklist + indexable-file logic. NOTE: temp dirs are rooted
@@ -58,6 +59,29 @@ describe("scanDirectory", () => {
     const files = await scanDirectory(root, scanOpts, excludePaths);
     const names = files.map((f) => f.name).sort();
     expect(names).toEqual(["a.txt", "b.txt", "c.txt"]);
+  });
+
+  it("includes files at the shared depth limit and truncates deeper descendants", async () => {
+    const dir = await mkdtemp(path.join(process.cwd(), "scan-utils-depth-"));
+    try {
+      let nested = dir;
+      for (let depth = 1; depth <= FILE_SCAN_MAX_DEPTH + 1; depth += 1) {
+        nested = path.join(nested, `level-${depth}`);
+        await mkdir(nested);
+        if (depth === FILE_SCAN_MAX_DEPTH) {
+          await writeFile(path.join(nested, "at-limit.txt"), "included");
+        }
+        if (depth === FILE_SCAN_MAX_DEPTH + 1) {
+          await writeFile(path.join(nested, "past-limit.txt"), "truncated");
+        }
+      }
+
+      const files = await scanDirectory(dir, scanOpts);
+
+      expect(files.map((file) => file.name)).toEqual(["at-limit.txt"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("returns complete ScannedFileInfo metadata", async () => {

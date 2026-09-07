@@ -106,6 +106,28 @@ That wrapper is a plain rectangle. Two consequences when the trigger itself is r
 - `box-shadow` follows the wrapper's `border-radius`, so a hover shadow applied to it renders as a square halo around a circular trigger. Apply the shadow to the element inside.
 - A `transform` on the wrapper moves the anchor's reference rect out from under an already-open panel. Transform the inner element instead.
 
+### One writer per CSS custom property
+
+A `:style` binding and an imperative `style.setProperty()` must not share a custom property. Vue's `setStyle` turns a `null`/`undefined` value into `''`, and for a `--*` name that is `style.setProperty(name, '')`, which **deletes** the declaration — on every patch of that element, not only when the bound value changes. Anything another code path wrote imperatively is gone after the next re-render.
+
+This is how every `TxBaseAnchor` panel ignored `maxHeight` until 2026-09-06: the floating-ui `size` middleware wrote `--tx-ba-max-height` in `apply()`, the root carried `'--tx-ba-max-height': isUnlimitedHeight ? 'none' : undefined`, and each positioning pass triggered a re-render that wiped the value. Panels rendered at the CSS `420px` fallback while positioned for the clamped height, so they overflowed their trigger (regression: `base-anchor-max-height.test.ts`).
+
+```ts
+// Wrong: two writers, the binding wins on every patch
+:style="[floatingStyles, { '--tx-ba-max-height': unlimited ? 'none' : undefined }]"
+elements.floating.style.setProperty('--tx-ba-max-height', `${maxH}px`)
+
+// Correct: the middleware owns the property for both cases
+:style="[floatingStyles, { zIndex }]"
+elements.floating.style.setProperty('--tx-ba-max-height', unlimited ? 'none' : `${maxH}px`)
+```
+
+Rules of thumb:
+
+- If a value comes from a layout pass (floating-ui, ResizeObserver, measurement), the imperative side owns it; the template never binds that name.
+- Binding a custom property conditionally is fine only when nothing else writes it. `undefined` in a style object is not "leave it alone"; it is "remove it".
+- To catch the wipe in a test, spy on `CSSStyleDeclaration.prototype.setProperty` and assert no `''` write for the property after the panel settles and after a forced re-render.
+
 ### State motion: compile the spring, do not keyframe the bounce
 
 A press/drag bounce written as a multi-stop `@keyframes` where each segment carries its own overshooting bezier reverses velocity at **every** keyframe boundary. It reads as jitter at any amplitude, and shrinking the numbers does not fix it — the structure is the defect. `TxSlider` carried four such stops (scale 1 → 0.90 → 1.32 → 1.08 → 1.16, 43 % swing, four reversals) until 2026-09-02.
@@ -229,6 +251,7 @@ prune, spacer origin) and `useHomeConversation.test.ts` (id uniqueness after res
 ## Common Mistakes
 
 - Replacing a native control with `div @click` to preserve styling.
+- Binding a CSS custom property in `:style` that another code path also writes with `setProperty()`; an `undefined` value deletes the imperative write on every re-render (see One writer per CSS custom property).
 - Adding a CoreApp-only primitive when a TuffEx primitive already exists.
 - Changing class names during semantic migrations without updating focused tests.
 - Reading browser-only state in Nexus SSR paths.

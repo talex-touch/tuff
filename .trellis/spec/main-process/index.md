@@ -35,6 +35,12 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   `RECOMMENDATION_SECTION_ORDER` source of truth (also the section render order),
   verifiable-or-absent evidence rules, cache-invalidation read-guard vs cleanup
   deletion, exposure slice tag rules.
+- [recommendation-source-registry-contracts.md](recommendation-source-registry-contracts.md) —
+  how a source enters the empty-state grid: capability-vs-standalone registration
+  (chosen by which db handle answers), push-in-only registration because
+  `<provider> → search-core → recommendation-engine → item-rebuilder` is a real
+  cycle, batched rebuild to avoid N+1, source-declared aliases, throw-on-conflict,
+  per-source failure isolation.
 - [search-hotpath-contracts.md](search-hotpath-contracts.md) — per-keystroke search
   path: token dedup funnels through `addSearchToken` (O(1) WeakMap/Set), per-app
   derivation memoized with a content key that must cover every input field, cached
@@ -50,6 +56,13 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   — charset rules import from search-charset only; SEARCH_KEYWORD_SCHEMA_VERSION
   bump semantics (app auto / file via bound backfill, never through the disk-reading
   worker); gated paged migration pattern; usage identity = source.id everywhere.
+- [network-error-classification-contracts.md](network-error-classification-contracts.md)
+  — one error belongs to exactly one of transport / timeout / HTTP-status, and
+  callers OR the classifiers rather than swapping one in; no blanket `net::err_`
+  marker (it claims cancellations and caller bugs); three live error dialects;
+  `NetworkTransportError` normalizes at the NetworkService boundary but preserves
+  `message` verbatim; classification degrades class → code → message because IPC
+  strips identity.
 
 ## Quality Check
 

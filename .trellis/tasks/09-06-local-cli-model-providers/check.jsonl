@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/main-process/pi-provider-contracts.md", "reason": "复查每个 provider 的终止 / 结束语义 / 密钥边界是否与契约一致"}
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "解析器 fixture 与缺席探测测试要做 mutation 验证"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "renderer 侧图标 / 类型 / 最小验证命令"}
+{"file": ".trellis/spec/main-process/index.md", "reason": "主进程 Quality Check 段的命令"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "复查提交只含本任务 hunk"}

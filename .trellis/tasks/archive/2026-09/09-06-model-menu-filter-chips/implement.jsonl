@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/bui-component-family.md", "reason": "tx-bui 组件加动效的硬规则：class 前缀、非 scoped scss + 内联兜底、MIT 头，以及 reduced-motion 必须用编译 SCSS 契约测试验证"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "筛选条从手搓按钮换成 tuffex 原语：组件复用、语义控件与 i18n 约定"}
+{"file": ".trellis/spec/frontend/anchor-overlay-chain.md", "reason": "chip 行位于 teleport 到 body 的菜单面板内：token 继承、焦点与键盘契约，且不得引入 menu 内 tablist"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "TxFilterChips 改动必须同 commit 带 zh/en 文档，含 Props 表的放置规则与 demo 义务"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "ModelFilter 联合类型回退与 chip value 哨兵的类型安全"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "指示器不得复制 TxTabs 的 5×5 pointer 实现；先确认没有可复用的 composable 再写新的"}

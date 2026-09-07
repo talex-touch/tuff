@@ -75,6 +75,7 @@ import { EverythingBackendService, type EverythingSdkAddon } from './everything-
 import { EverythingInstallService } from './everything-install-service'
 import { fileProvider } from './file-provider'
 import { expandWindowsEnvironmentVariables } from '../apps/app-provider-path-utils'
+import { getFileAssetBridge, type IndexedFileAssets } from './file-asset-bridge'
 import { mapFileToTuffItem } from './utils'
 
 const execFileAsync = promisify(execFile)
@@ -1773,12 +1774,19 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         return new TuffSearchResultBuilder(query).build()
       }
 
-      // Convert Everything results to TuffItems
+      // Convert Everything results to TuffItems. The index is consulted first for thumbnails:
+      // an image result sent out as its own path is refused by tfile outside the allowlist,
+      // and the row then shows the renderer's "image failed" square.
       const now = Date.now()
       let scheduledIconWarmups = 0
+      const bridge = getFileAssetBridge()
+      const indexed = bridge
+        ? await bridge.lookupIndexedFiles(results.map((result) => result.path))
+        : new Map<string, IndexedFileAssets>()
       const items = results.map((result, index) => {
+        const known = indexed.get(result.path)
         // Create a file object compatible with mapFileToTuffItem
-        const fileObj = {
+        const fileObj = known?.file ?? {
           id: index, // Temporary ID
           path: result.path,
           name: result.name,
@@ -1794,10 +1802,12 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           embeddingStatus: 'none' as const
         }
         const cachedIcon = this.iconCache.get(result.path)
+        const extensions: Record<string, string> = { ...(known?.extensions ?? {}) }
+        if (cachedIcon) extensions.icon = cachedIcon
 
         const tuffItem = mapFileToTuffItem(
           fileObj,
-          cachedIcon ? { icon: cachedIcon } : {},
+          extensions,
           this.id,
           this.name,
           cachedIcon || result.isDir || scheduledIconWarmups >= EVERYTHING_ICON_WARMUP_LIMIT
@@ -1805,7 +1815,12 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
             : (file) => {
                 scheduledIconWarmups += 1
                 void this.iconCache.ensure(file.path)
+              },
+          known && bridge
+            ? (file) => {
+                void bridge.ensureThumbnail(file, extensions).catch(() => undefined)
               }
+            : undefined
         )
         tuffItem.meta = {
           ...tuffItem.meta,

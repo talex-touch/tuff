@@ -333,6 +333,13 @@ export class WindowsShellFileProvider implements ISearchProvider<ProviderContext
     return this.buildEntryItem({ entry, highlights: [], score: 0 })
   }
 
+  async rebuildRecommendationItems(itemIds: readonly string[]): Promise<TuffItem[]> {
+    return itemIds.flatMap((itemId) => {
+      const item = this.rebuildItem(itemId)
+      return item ? [item] : []
+    })
+  }
+
   private buildEntryItem(match: WindowsShellMatch): TuffItem {
     const { entry, highlights, score } = match
 

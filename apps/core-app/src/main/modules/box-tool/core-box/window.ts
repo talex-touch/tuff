@@ -776,11 +776,18 @@ export class WindowManager {
    */
   private applyMacPanelBehaviour(window: TouchWindow): void {
     if (window.window.isDestroyed()) return
-    window.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    // NSPanel already supports fullscreen Spaces. Do not transform the whole app into
+    // a UIElement here: Electron's default transform hides the main/onboarding window.
+    window.window.setVisibleOnAllWorkspaces(true, {
+      visibleOnFullScreen: true,
+      skipTransformProcessType: true
+    })
     window.window.setAlwaysOnTop(true, 'floating')
   }
 
   public setPinned(pinned: boolean): void {
+    if (this.isPinned() === pinned) return
+
     this.focusPolicy.setPinned(pinned)
 
     for (const window of this.windows) {

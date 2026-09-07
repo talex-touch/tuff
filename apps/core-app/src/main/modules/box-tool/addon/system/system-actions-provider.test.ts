@@ -440,3 +440,99 @@ describe('SystemActionsProvider app index actions', () => {
     expect(mocks.addWatchPath).not.toHaveBeenCalled()
   })
 })
+
+/*
+ * Three `加入文件索引：…` cards were sitting in the CoreBox empty state on ⌘7–⌘9, badged 常用.
+ *
+ * System-action item ids embed the path they were built from, so every folder a user had ever added
+ * to the index became its own usage record and then its own "frequent" recommendation — pointing at
+ * work that was already done, under a title truncated to an ellipsis because the clipboard content
+ * that gave the name its meaning was long gone.
+ *
+ * Each case below asserts `rebuildItem` still resolves the same id before asserting
+ * `rebuildRecommendationItems` drops it. Without that pairing the tests would pass for the wrong
+ * reason: `resolveAction` stats the path, so any made-up path yields null with or without the fix.
+ */
+describe('SystemActionsProvider recommendation rebuild', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+    vi.restoreAllMocks()
+  })
+
+  const SCREENSHOT_ITEM_PATH = 'native:screenshot:cursor-display:copy'
+
+  async function newProvider(): Promise<
+    InstanceType<typeof import('./system-actions-provider').SystemActionsProvider>
+  > {
+    const { SystemActionsProvider } = await import('./system-actions-provider')
+    return new SystemActionsProvider()
+  }
+
+  it('never recommends a folder that was already added to the file index', async () => {
+    const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'system-actions-reco-file-'))
+    const provider = await newProvider()
+    const itemId = `${provider.id}:file-index:${folder}`
+
+    expect(getSystemAction((await provider.rebuildItem(itemId)) as TuffItem)).toEqual({
+      action: 'file-index',
+      path: folder
+    })
+    expect(await provider.rebuildRecommendationItems([itemId])).toEqual([])
+  })
+
+  it('never recommends a plugin package that was already installed', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'system-actions-reco-tpex-'))
+    const tpexPath = path.join(tempDir, 'some-plugin.tpex')
+    await fs.writeFile(tpexPath, 'package-placeholder', 'utf8')
+
+    const provider = await newProvider()
+    const itemId = `${provider.id}:tpex-plugin:${tpexPath}`
+
+    expect(getSystemAction((await provider.rebuildItem(itemId)) as TuffItem)).toEqual({
+      action: 'tpex-plugin',
+      path: tpexPath
+    })
+    expect(await provider.rebuildRecommendationItems([itemId])).toEqual([])
+  })
+
+  it('still recommends the screenshot action, which carries no context', async () => {
+    const provider = await newProvider()
+
+    const items = await provider.rebuildRecommendationItems([
+      `${provider.id}:screenshot-cursor-display:${SCREENSHOT_ITEM_PATH}`
+    ])
+
+    expect(getSystemAction(expectFirstItem(items))).toEqual({
+      action: 'screenshot-cursor-display',
+      path: SCREENSHOT_ITEM_PATH
+    })
+  })
+
+  it('drops the one-shot ids without dropping the recommendable ones beside them', async () => {
+    const first = await fs.mkdtemp(path.join(os.tmpdir(), 'system-actions-reco-mix-a-'))
+    const second = await fs.mkdtemp(path.join(os.tmpdir(), 'system-actions-reco-mix-b-'))
+    const provider = await newProvider()
+
+    const items = await provider.rebuildRecommendationItems([
+      `${provider.id}:file-index:${first}`,
+      `${provider.id}:screenshot-cursor-display:${SCREENSHOT_ITEM_PATH}`,
+      `${provider.id}:file-index:${second}`
+    ])
+
+    expect(items.map((item) => getSystemAction(item)?.action)).toEqual([
+      'screenshot-cursor-display'
+    ])
+  })
+
+  it('ignores ids that belong to another provider, name no type, or carry no path', async () => {
+    const provider = await newProvider()
+
+    const items = await provider.rebuildRecommendationItems([
+      `some-other-provider:screenshot-cursor-display:${SCREENSHOT_ITEM_PATH}`,
+      `${provider.id}:screenshot-cursor-display:`,
+      `${provider.id}:not-a-real-type:${SCREENSHOT_ITEM_PATH}`
+    ])
+
+    expect(items).toEqual([])
+  })
+})

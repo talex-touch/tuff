@@ -136,9 +136,9 @@ mdfind 原查询返回 **330** 个 `.app`，而目录只有 228 行。差额的�
 
 ```
 文件落盘
-  ├─① chokidar depth：darwin = 8（indexing-watch-path-policy.ts:41）
+  ├─① chokidar depth：darwin = `FILE_SCAN_MAX_DEPTH`（当前 24）
   │    awaitWriteFinish stabilityThreshold 2000ms 对 file 生效
-  │    ⚠ F-M5 部分缓解：2026-09-03 将 watch 深度从 5 提升至 8；scan 深度仍为 24，第 9 层以下仍收不到实时事件
+  │    ✅ F-M5（2026-09-07）：watch 与 scan 统一共享深度 24；深度 24 实时增删改通过，25 保持边界外
   ├─② IndexedSourceEventRouter → FILE_INDEXED_SOURCE_ID（同样零防抖）
   ├─③ fileProvider.handleIndexedSourceWatchEvent   file-provider.ts:2340-2369
   │    isWithinWatchRoots 门（:3345）→ 不在 root 内静默 return []
@@ -378,6 +378,8 @@ sudo rm -rf /Applications/ZZTestProbe.app
 - **A-M8**（watch roots 缺 `/System/Applications` 与 CoreServices）：确认仍然成立
   （`app-scanner.ts:39` 只有 `/Applications` 与 `~/Applications`）。但这两个目录在
   非越狱的 macOS 上基本不会有用户级变更，优先级低于 F1–F4。
-- **F-M5**（watch 深度 8 vs scan 深度 24）：2026-09-03 已从 5 提升到 8，并补启动对账；第 9 层以下实时事件缺口仍成立。
+- **F-M5**（watch 深度 8 vs scan 深度 24）：2026-09-07 已修，二者统一复用
+  `FILE_SCAN_MAX_DEPTH=24`；隔离 dev 的深度 0–24 多类型实时增删改与双表收录通过，
+  深度 25 负例未泄漏。
 - **新增（本次）**：`last_indexed_at` app 侧从不写入（F5）；健康检查无文件系统口径（F4）；
   全链路无时间窗合并（F2）；索引期 / 搜索期两套独立的 app 过滤器口径未统一（§1.4）。

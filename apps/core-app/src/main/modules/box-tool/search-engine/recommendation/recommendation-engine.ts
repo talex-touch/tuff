@@ -1,19 +1,11 @@
 import type { TuffContainerLayout, TuffItem } from '@talex-touch/utils'
-import type {
-  PluginRecommendCandidate,
-  RecommendProvider,
-  RecommendationSource
-} from '@talex-touch/utils/core-box'
+import type { PluginRecommendCandidate, RecommendProvider } from '@talex-touch/utils/core-box'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { DbUtils } from '../../../../db/utils'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import type { ContextSignal, TimePattern } from './context-provider'
 import { createHash } from 'node:crypto'
 import { StorageList } from '@talex-touch/utils'
-import {
-  RECOMMENDATION_SECTION_ITEM_LIMIT,
-  RECOMMENDATION_SECTION_ORDER
-} from '@talex-touch/utils/core-box'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { and, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm'
@@ -24,6 +16,16 @@ import { getSentryService } from '../../../sentry'
 import { ContextProvider, hashContextContent } from './context-provider'
 import { toParsedItemTimeStats } from '../time-stats-aggregator'
 import { ItemRebuilder } from './item-rebuilder'
+import { createClipboardRecommendationSource } from './clipboard-recommendation-source'
+import { createFileRecommendationSource } from './file-recommendation-source'
+import { createAppRecommendationSource } from './app-recommendation-source'
+import { recommendationSourceRegistry } from './recommendation-source-registry'
+import {
+  describeRecommendation,
+  HABITUAL_RECOMMENDATION_SOURCES
+} from './recommendation-presentation'
+import { isRecommendableNewFile } from './file-recommendation-admission'
+import { i18nMsg } from '@talex-touch/utils/i18n'
 import { isSameAppIdentity, matchesAppRule, type AppMatchRule } from './app-identity-match'
 import { recommendationExposureService } from './recommendation-exposure-service'
 import { enterPerfContext } from '../../../../utils/perf-context'
@@ -69,14 +71,52 @@ const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
 const USAGE_IDENTITY_MIGRATION_INITIAL_DELAY_MS = 20_000
 const CONTEXT_MATCH_WEIGHT = 1e6
-const PLUGIN_PRIORITY_WEIGHT = 1e5
+/**
+ * Band for host-generated contextual candidates (currently the clipboard-URL card).
+ *
+ * These carry a priority the *host* assigned from a signal it observed itself, so they may sit
+ * above usage the way an explicit intent should. Kept at the original 1e5 so the clipboard card's
+ * effective score (95 × 1e5) is unchanged.
+ */
+const HOST_CONTEXT_PRIORITY_WEIGHT = 1e5
+/**
+ * Band for plugin-declared `priority`.
+ *
+ * Deliberately two decades below {@link HOST_CONTEXT_PRIORITY_WEIGHT}: `priority` is a number the
+ * plugin picks for itself, and at 1e5 a default of 50 scored 5e6 — above a heavily used app's
+ * frequency term (~1e6) and every recency boost (≤1e5). Any plugin could pin itself to the top of
+ * the user's grid by declaring 100, and there was nothing the host could check.
+ *
+ * At 1e3 a top priority of 100 lands at 1e5, level with "used within the hour": a plugin can order
+ * its own candidates and be visible, but it climbs past the user's habits only by being used, via
+ * the same frequency/recency terms as everything else.
+ */
+const PLUGIN_PRIORITY_WEIGHT = 1e3
+/** Candidates one plugin may contribute to a single recommendation pass. */
+const PLUGIN_CANDIDATES_PER_PROVIDER_LIMIT = 5
+/** Candidates all plugins together may contribute, so N plugins cannot crowd out the built-ins. */
+const PLUGIN_CANDIDATES_TOTAL_LIMIT = 15
+/**
+ * The clipboard-URL card. It rides the plugin-candidate carrier (it has a title/subtitle/action
+ * rather than a catalog row) but it is host-generated, and its `source` is already `'context'`.
+ */
+const BUILTIN_CLIPBOARD_URL_SOURCE_ID = '__builtin_clipboard_url__'
+/** One row. The grid tier is capped to it so the two tiers stay visually distinct. */
+const GRID_TIER_COLUMNS = 6
+
+/** The reason `mergeAndEnrichItems` recorded, or `cold-start` when an item carries none. */
+function readRecommendationSource(item: TuffItem): ScoredItem['source'] {
+  const recommendation = (item.meta as Record<string, unknown> | undefined)?.recommendation
+  const source = (recommendation as { source?: ScoredItem['source'] } | undefined)?.source
+  return source ?? 'cold-start'
+}
 /**
  * A captured selection is the same privacy tier as the clipboard but a weaker
  * intent signal — it is often minutes old and was captured for another action.
  */
 const SELECTION_CONTEXT_WEIGHT = 0.6
 /** Cold-start items rank below anything with real usage but above nothing at all. */
-const COLD_START_BASE_SCORE = 1e3
+export const COLD_START_BASE_SCORE = 1e3
 /**
  * Novelty channel for freshly installed apps. Frecency scores a brand-new item
  * at exactly zero, so without an explicit exploration channel an app the user
@@ -91,6 +131,21 @@ const NOVELTY_FULL_WINDOW_MS = 48 * 60 * 60 * 1000
 const NOVELTY_MAX_AGE_MS = 7 * DAY_MS
 /** Candidate slots reserved for the freshness dimension. */
 const NEWLY_INSTALLED_CANDIDATE_LIMIT = 10
+/**
+ * Candidate slots for freshly created files.
+ *
+ * Smaller than the app limit on purpose. An install is a deliberate act and there are only ever a
+ * few; files arrive by the hundred, and the grid is not a file manager. The admission rules narrow
+ * the pool, this bounds what survives them.
+ */
+const NEWLY_ADDED_FILE_CANDIDATE_LIMIT = 4
+/**
+ * Rows fetched before admission filtering.
+ *
+ * The exclusion rules run in JS on the way out of a SQL `LIMIT`, so the query has to over-fetch or
+ * a burst of build output would consume the whole budget and leave nothing admissible.
+ */
+const NEWLY_ADDED_FILE_SCAN_LIMIT = 200
 /**
  * `file_extensions` key holding the app's filesystem creation time, written
  * once by the app provider and never refreshed (a self-update rebuilds the
@@ -354,6 +409,9 @@ export class RecommendationEngine {
   /** Persisted rows older than this were invalidated and must not be read back. */
   private cacheInvalidatedAt = 0
 
+  /** Releases this engine's claim on the host-owned recommendation sources (clipboard, file). */
+  private disposeOwnedSources: Array<() => void> = []
+
   private readonly CACHE_DURATION_MS = 30 * 60 * 1000
   private readonly REFRESH_INTERVAL_MS = 15 * 60 * 1000
   private readonly REFRESH_JITTER_MS = 15 * 1000
@@ -400,7 +458,25 @@ export class RecommendationEngine {
     private appCatalogDbUtils: DbUtils = dbUtils
   ) {
     this.contextProvider = new ContextProvider()
-    this.itemRebuilder = new ItemRebuilder(dbUtils, appCatalogDbUtils)
+    this.itemRebuilder = new ItemRebuilder()
+
+    // Clipboard history and file rows recommend through host-owned sources rather than through a
+    // search provider: clipboard has no provider at all, and file lookups must go through this
+    // engine's split-aware handle (#295) rather than FileProvider's own `createDbUtils`.
+    // Unregister first because both are bound to this engine's handles — a new engine legitimately
+    // takes over from a torn-down one, and nothing else writes these ids.
+    this.disposeOwnedSources = [
+      createClipboardRecommendationSource(dbUtils),
+      createFileRecommendationSource(dbUtils, {
+        // A thumbnail that landed after the rebuild shipped is baked into the cached cards as an
+        // OS icon; the next open must rebuild rather than replay them.
+        onThumbnailLanded: () => this.invalidateCache()
+      }),
+      createAppRecommendationSource(appCatalogDbUtils)
+    ].map((source) => {
+      recommendationSourceRegistry.unregister(source.sourceId)
+      return recommendationSourceRegistry.registerSource(source)
+    })
 
     this.startBackgroundRefresh()
     this.startTelemetryReport()
@@ -1052,6 +1128,8 @@ export class RecommendationEngine {
 
   /** Stop background refresh timer */
   public stopBackgroundRefresh(): void {
+    for (const dispose of this.disposeOwnedSources) dispose()
+    this.disposeOwnedSources = []
     this.pollingService.unregister(this.refreshTaskId)
     this.pollingService.unregister(this.trendBackfillTaskId)
     this.pollingService.unregister(this.telemetryTaskId)
@@ -1242,7 +1320,7 @@ export class RecommendationEngine {
     for (const item of pinnedTuffItems) {
       if (!item.meta) item.meta = {}
       item.meta.pinned = { isPinned: true, pinnedAt: Date.now() }
-      item.meta.recommendation = { source: 'pinned' }
+      item.meta.recommendation = describeRecommendation('pinned')
     }
     pinnedTuffItems = this.dedupeItems(pinnedTuffItems)
 
@@ -1345,11 +1423,12 @@ export class RecommendationEngine {
       if (!item.meta) item.meta = {}
       const meta = item.meta as Record<string, unknown>
       if (!('recommendation' in meta)) {
-        meta.recommendation = { source: 'frequent' }
+        meta.recommendation = describeRecommendation('frequent')
       }
     }
 
-    const combinedItems = this.combineRecommendedWithPinned(filteredItems, pinnedTuffItems, limit)
+    const backfilledItems = await this.backfillShortfall(filteredItems, pinnedTuffItems, limit)
+    const combinedItems = this.combineRecommendedWithPinned(backfilledItems, pinnedTuffItems, limit)
 
     // Both caches hold the STABLE ranking; the volatile stage runs on the way
     // out here exactly as it does on a cache hit, so a warm and a cold request
@@ -1454,52 +1533,93 @@ export class RecommendationEngine {
   }
 
   /**
-   * Groups the empty state by *why* each item is there, in
-   * `RECOMMENDATION_SECTION_ORDER`.
+   * Two tiers: a grid of launch targets, then a list of things the host is proposing.
    *
-   * This used to emit a single `Recommend` grid plus a `Pinned` grid at the
-   * bottom, so every item carried a badge that read the same and the panel said
-   * nothing about why anything was on it. Pinned now leads, because an explicit
-   * pin is the strongest statement of intent on the list.
+   * The grid prefers what the user reaches for out of habit — pinned entries, then frequent ones —
+   * because those need no explanation and read well as bare icons. But it is filled to capacity
+   * either way: gating it on habit alone left the grid empty for anyone without usage history,
+   * which is every new user, and an all-list empty state loses the visual anchor the row provides.
+   * So the remaining slots go to the next-highest ranked items.
    *
-   * `title` is an i18n key, not a finished string — the main process has no
-   * business knowing the user's language, so the renderer resolves it.
+   * Files never enter the grid, pinned or not. A tile is an icon and a name; a file's thumbnail
+   * often is not generated yet (and cannot be, for media outside the `tfile` allowlist), so it
+   * would render as a grey square — while as a row it gets its path, size and date. Its reason
+   * badge has room there too, which is the point of the lower tier. Files are also what opens the
+   * right-hand preview pane (`addon` in CoreBox.vue), and a bare icon row is the wrong anchor for a
+   * panel that takes most of the window: anything that would open it belongs in the list.
    */
+  /**
+   * Whether this item reads as a grid tile rather than a list row.
+   *
+   * A tile is an icon plus a name. Files are excluded because their thumbnail is often not
+   * generated yet — and for media outside the `tfile` allowlist it never can be — so a file tile
+   * is a grey square with a truncated filename, while a file row carries its path, size and date.
+   * Keeping them out is also what keeps the preview pane out of the grid: the renderer opens it
+   * for a focused `kind: 'file'` item, and the grid must never hold one.
+   */
+  private isTileableRecommendation(item: TuffItem): boolean {
+    return item.kind !== 'file' && item.kind !== 'folder' && item.source?.type !== 'file'
+  }
   private buildContainerLayout(
     _options: RecommendationOptions,
     items: TuffItem[]
   ): TuffContainerLayout {
-    const buckets = new Map<RecommendationSource, string[]>()
+    const columns = Math.min(GRID_TIER_COLUMNS, items.length || GRID_TIER_COLUMNS)
+
+    // Pinned entries claim grid slots first. They are appended last in score order (pinning is not
+    // a score), so taking the grid in list order would push the one thing the user explicitly
+    // asked to always see down into the "here is a suggestion" tier.
+    const pinnedTiles: TuffItem[] = []
+    const pinnedRows: TuffItem[] = []
+    const habitualCandidates: TuffItem[] = []
+    const otherTileable: TuffItem[] = []
 
     for (const item of items) {
-      // An explicit pin outranks whatever the scorer attributed the item to:
-      // the user said so themselves. Items that somehow arrive without a source
-      // fall back to 'cold-start' ("suggested", no stronger claim) rather than
-      // being dropped, so nothing can silently vanish from the panel.
-      const source: RecommendationSource = item.meta?.pinned?.isPinned
-        ? 'pinned'
-        : (item.meta?.recommendation?.source ?? 'cold-start')
-
-      const bucket = buckets.get(source)
-      if (bucket) bucket.push(item.id)
-      else buckets.set(source, [item.id])
+      const isPinned = item.meta?.pinned?.isPinned === true
+      if (!this.isTileableRecommendation(item)) {
+        if (isPinned) pinnedRows.push(item)
+      } else if (isPinned) pinnedTiles.push(item)
+      else if (HABITUAL_RECOMMENDATION_SOURCES.has(readRecommendationSource(item))) {
+        habitualCandidates.push(item)
+      } else otherTileable.push(item)
     }
 
-    const sections: TuffContainerLayout['sections'] = []
-    for (const source of RECOMMENDATION_SECTION_ORDER) {
-      const itemIds = buckets.get(source)
-      if (!itemIds?.length) continue
+    // Overflow past one row falls to the list rather than wrapping into a second grid row: a
+    // half-empty second row blurs the boundary between the tiers.
+    const grid = [...pinnedTiles, ...habitualCandidates, ...otherTileable].slice(0, columns)
+    // A pinned file cannot tile, but the user still asked to always see it, so it leads the list
+    // instead of trailing it where pinning appended it.
+    const leadingIds = new Set([...grid, ...pinnedRows].map((item) => item.id))
+    const proposed = [...pinnedRows, ...items.filter((item) => !leadingIds.has(item.id))]
 
+    const sections: TuffContainerLayout['sections'] = []
+    if (grid.length > 0) {
       sections.push({
-        id: source,
-        title: `corebox.reason.${source}`,
-        layout: 'list',
-        itemIds: itemIds.slice(0, RECOMMENDATION_SECTION_ITEM_LIMIT),
-        meta: { intelligence: source !== 'pinned', pinned: source === 'pinned', source }
+        id: 'habitual',
+        title: i18nMsg('coreBox.sections.habitual'),
+        layout: 'grid',
+        itemIds: grid.map((item) => item.id)
       })
     }
 
-    return { mode: 'list', sections }
+    if (proposed.length > 0) {
+      sections.push({
+        id: 'proposed',
+        title: i18nMsg('coreBox.sections.proposed'),
+        layout: 'list',
+        itemIds: proposed.map((item) => item.id)
+      })
+    }
+
+    return {
+      mode: 'grid',
+      grid: {
+        columns,
+        gap: 12,
+        itemSize: 'medium'
+      },
+      sections
+    }
   }
 
   private combineRecommendedWithPinned(
@@ -1529,6 +1649,75 @@ export class RecommendationEngine {
       .map((item, index) => ({ item, index, score: item.scoring?.final ?? 0 }))
       .sort((a, b) => b.score - a.score || a.index - b.index)
       .map(({ item }) => item)
+  }
+
+  /**
+   * Refills the recommendation budget when fewer candidates survived the rebuild
+   * than there are slots for them.
+   *
+   * Scoring and rendering count different things, and the gap is normal rather
+   * than exceptional: a source that fails to rebuild returns `[]` on purpose
+   * ("One source failing must not empty the whole grid", `item-rebuilder.ts`),
+   * and `SystemActionsProvider` now drops one-shot actions — `file-index`,
+   * `tpex-plugin`, `app-index`, `dev-plugin` — from the grid deliberately, which
+   * is what used to fill ⌘7–⌘9. Only a *total* rebuild failure fell back before
+   * this, so 3 items rebuilt against a limit of 10 left seven slots empty.
+   *
+   * The backfill is ranked strictly below every survivor rather than merged by
+   * score. The ranker writes one absolute ruler banded by decade — novelty 1e7,
+   * context 1e6, time 1e5, frequency 1e4 — with cold-start pinned at
+   * `COLD_START_BASE_SCORE` (1e3) and frequent fallbacks at a raw execute count
+   * precisely so they sit under everything real. That holds for any survivor
+   * with usage worth the name, but the base score has no floor: an app executed
+   * once a month ago decays to a few hundred, and cancels subtract. Left to raw
+   * scores, a rebuild failure could then *promote* a never-used app over the
+   * stale-but-real one that survived it. Rewriting `final` is that field's
+   * stated contract — the ranker owns the post-sort value, and it is explicitly
+   * not a 0–1 quantity.
+   */
+  private async backfillShortfall(
+    recommendItems: TuffItem[],
+    pinnedItems: TuffItem[],
+    limit: number
+  ): Promise<TuffItem[]> {
+    // Mirrors how combineRecommendedWithPinned splits the budget: pinned items
+    // claim their slots first, so only the remainder is ours to fill.
+    const budget = Math.max(0, limit - Math.min(pinnedItems.length, limit))
+    const shortfall = budget - recommendItems.length
+    if (shortfall <= 0) return recommendItems
+
+    const taken = new Set(
+      [...recommendItems, ...pinnedItems].map((item) => this.getItemIdentity(item))
+    )
+    const backfill = this.dedupeItems(await this.resolveFallbackItems(budget))
+      .filter((item) => !taken.has(this.getItemIdentity(item)))
+      .slice(0, shortfall)
+    if (backfill.length === 0) return recommendItems
+
+    const lowestSurviving = recommendItems.reduce(
+      (lowest, item) => Math.min(lowest, item.scoring?.final ?? 0),
+      Number.POSITIVE_INFINITY
+    )
+    // Capped at the fallback band's own top, so the rewrite only intervenes when
+    // it has to. Under any survivor with real usage (frequency × 1e4 alone puts
+    // it far above 1e3) the backfill lands at 999, 998, … — what a cold-start
+    // item carries anyway — and the persisted cache row still reads as the
+    // never-used app it is. Under a stale survivor that fell below 1e3 it drops
+    // beneath that instead. An all-pinned grid leaves no survivor at all; 0
+    // keeps the backfill at or below the fallback band like every other case.
+    const ceiling = Math.min(
+      Number.isFinite(lowestSurviving) ? lowestSurviving : 0,
+      COLD_START_BASE_SCORE
+    )
+    backfill.forEach((item, index) => {
+      item.scoring = { ...item.scoring, final: ceiling - 1 - index }
+    })
+
+    recommendationLog.debug('Backfilled a partial recommendation rebuild', {
+      meta: { rebuilt: recommendItems.length, backfilled: backfill.length, budget }
+    })
+
+    return [...recommendItems, ...backfill]
   }
 
   /**
@@ -1587,6 +1776,9 @@ export class RecommendationEngine {
         return []
       }
 
+      // The rebuilder writes the full `meta.recommendation` (source, score, badge) from the
+      // candidate's source. Overwriting it here with a bare `{ source }` used to strip the badge
+      // off every backfilled tile.
       const items = await this.itemRebuilder.rebuildItems(
         frequentItems.map((item) => ({
           ...item,
@@ -1594,12 +1786,6 @@ export class RecommendationEngine {
           score: item.usageStats.executeCount
         }))
       )
-
-      // Mark as recommendation (not pinned)
-      for (const item of items) {
-        if (!item.meta) item.meta = {}
-        item.meta.recommendation = { source: 'frequent' }
-      }
 
       return items.slice(0, limit)
     } catch (error) {
@@ -1731,7 +1917,7 @@ export class RecommendationEngine {
         sourceType: 'application',
         usageStats: usageStatsMap.get(`app-provider:${app.path}`) ?? EMPTY_USAGE_STATS,
         source: 'newly-installed' as const,
-        installedAt
+        firstSeenAt: installedAt
       }))
     } catch (error) {
       recommendationLog.warn('Failed to collect newly installed candidates', {
@@ -1817,6 +2003,12 @@ export class RecommendationEngine {
       meta: { count: newlyInstalled.length }
     })
     candidates.push(...newlyInstalled)
+
+    const newlyAddedFiles = await this.getNewlyAddedFileItems(NEWLY_ADDED_FILE_CANDIDATE_LIMIT)
+    recommendationLog.debug('Loaded newly added file candidates', {
+      meta: { count: newlyAddedFiles.length }
+    })
+    candidates.push(...newlyAddedFiles)
 
     // 内置剪贴板 URL 推荐不在这里注入：候选池的产物会进缓存，而缓存键已不含剪贴板
     // (见 buildRecommendationCacheKey)，一旦入缓存，剪贴板换了之后旧的 URL 动作仍会
@@ -1965,6 +2157,61 @@ export class RecommendationEngine {
   }
 
   /**
+   * Files that appeared on disk inside the novelty window (the file half of S1.1).
+   *
+   * A SINGLE gate, unlike apps. `files.ctime` holds the filesystem birth time
+   * (`stats.birthtime ?? stats.ctime`), so re-indexing an old folder cannot make its files look
+   * new and a full scan produces nothing here. Apps need a second gate only because a self-update
+   * rebuilds the bundle and refreshes its birthtime; editing a file moves `mtime`, never `ctime`.
+   *
+   * Directory scope is not decided here — the index only walks roots the user granted.
+   */
+  private async getNewlyAddedFileItems(limit: number): Promise<CandidateItem[]> {
+    try {
+      const now = Date.now()
+      const createdAfter = new Date(now - NOVELTY_MAX_AGE_MS)
+      // Bounded in SQL: the file index is routinely tens of thousands of rows and this runs on the
+      // empty-query path.
+      const rows = await this.dbUtils.getRecentlyCreatedFiles(
+        createdAfter,
+        NEWLY_ADDED_FILE_SCAN_LIMIT
+      )
+      if (rows.length === 0) return []
+
+      const admissible = rows
+        .filter((row) =>
+          isRecommendableNewFile({ path: row.path, size: row.size, isDir: row.isDir })
+        )
+        .slice(0, limit)
+      if (admissible.length === 0) return []
+
+      const usageStatsMap = new Map(
+        (
+          await this.dbUtils.getUsageStatsBatch(
+            admissible.map((row) => ({ sourceId: 'file-provider', itemId: row.path }))
+          )
+        ).map((stat) => [`${stat.sourceId}:${stat.itemId}`, stat])
+      )
+
+      return admissible.map((row) => ({
+        sourceId: 'file-provider',
+        itemId: row.path,
+        sourceType: 'file',
+        usageStats: usageStatsMap.get(`file-provider:${row.path}`) ?? EMPTY_USAGE_STATS,
+        source: 'newly-added' as const,
+        // The novelty channel hands the item back to frecency on first open, exactly as it does
+        // for a newly installed app: a file you have already opened is no longer news.
+        firstSeenAt: row.ctime?.getTime()
+      }))
+    } catch (error) {
+      recommendationLog.warn('Failed to collect newly added file candidates', {
+        meta: toErrorMeta(error)
+      })
+      return []
+    }
+  }
+
+  /**
    * 收集插件注册的推荐候选项
    */
   private async getPluginCandidates(context: ContextSignal): Promise<CandidateItem[]> {
@@ -1992,7 +2239,7 @@ export class RecommendationEngine {
             })
           ])
 
-          return result.map((candidate) => ({
+          return result.slice(0, PLUGIN_CANDIDATES_PER_PROVIDER_LIMIT).map((candidate) => ({
             sourceId: `plugin-recommend:${provider.id}`,
             itemId: candidate.id,
             sourceType: 'plugin-recommend' as const,
@@ -2014,7 +2261,45 @@ export class RecommendationEngine {
       })
     )
 
-    return settled.flat()
+    // Two bounds, not one: the per-provider slice above stops a single plugin from flooding the
+    // pool, and this stops N well-behaved plugins from doing it collectively.
+    const candidates = settled.flat().slice(0, PLUGIN_CANDIDATES_TOTAL_LIMIT)
+    return this.hydratePluginUsageStats(candidates)
+  }
+
+  /**
+   * Replace the placeholder usage stats on plugin candidates with the rows the host actually
+   * recorded for them.
+   *
+   * Without this every plugin candidate scores as if it had never been used, so a plugin item the
+   * user runs daily ranks exactly like one they have never touched — the plugin's self-declared
+   * `priority` was the only thing separating them. The rows already exist: execution goes through
+   * the host, which writes `item_usage_stats` under the same `sourceId:itemId` key used here.
+   */
+  private async hydratePluginUsageStats(candidates: CandidateItem[]): Promise<CandidateItem[]> {
+    if (candidates.length === 0) return candidates
+
+    try {
+      const rows = await this.dbUtils.getUsageStatsBatch(
+        candidates.map((candidate) => ({
+          sourceId: candidate.sourceId,
+          itemId: candidate.itemId
+        }))
+      )
+      if (rows.length === 0) return candidates
+
+      const byKey = new Map(rows.map((row) => [`${row.sourceId}:${row.itemId}`, row]))
+      return candidates.map((candidate) => {
+        const usageStats = byKey.get(`${candidate.sourceId}:${candidate.itemId}`)
+        return usageStats ? { ...candidate, usageStats } : candidate
+      })
+    } catch (error) {
+      // A stats lookup failure must not drop the candidates; they simply rank as unused.
+      recommendationLog.warn('Failed to hydrate plugin candidate usage stats', {
+        meta: { candidateCount: candidates.length, ...toErrorMeta(error) }
+      })
+      return candidates
+    }
   }
 
   /**
@@ -2036,7 +2321,7 @@ export class RecommendationEngine {
 
     return [
       {
-        sourceId: '__builtin_clipboard_url__',
+        sourceId: BUILTIN_CLIPBOARD_URL_SOURCE_ID,
         itemId: `clipboard-url-open:${url}`,
         sourceType: 'action',
         usageStats: EMPTY_USAGE_STATS,
@@ -2253,14 +2538,12 @@ export class RecommendationEngine {
     usagePreferenceProfile: RecommendationSemanticProfile | null,
     usageAvoidanceProfile: RecommendationSemanticProfile | null
   ): Promise<number> {
-    // Plugin candidates: use priority directly, skip usageStats-based calculation
-    if (candidate.source === 'plugin' && candidate.pluginCandidate) {
-      return (candidate.pluginCandidate.priority ?? 50) * PLUGIN_PRIORITY_WEIGHT
-    }
-
-    // Built-in clipboard URL candidate: high priority contextual match
-    if (candidate.sourceId === '__builtin_clipboard_url__' && candidate.pluginCandidate) {
-      return (candidate.pluginCandidate.priority ?? 95) * PLUGIN_PRIORITY_WEIGHT
+    // Host-generated contextual candidates (the clipboard-URL card) keep their own band: the
+    // priority came from a signal the host observed, not from something a caller declared, so it
+    // may legitimately outrank usage. It short-circuits because it has no usage history to add —
+    // the card exists only for as long as the clipboard holds that URL.
+    if (candidate.sourceId === BUILTIN_CLIPBOARD_URL_SOURCE_ID && candidate.pluginCandidate) {
+      return (candidate.pluginCandidate.priority ?? 95) * HOST_CONTEXT_PRIORITY_WEIGHT
     }
 
     // NOTE: context match (clipboard / selection / foreground app / system
@@ -2268,6 +2551,14 @@ export class RecommendationEngine {
     // the cache in `applyVolatileContextRerank`. Only slow-moving components
     // may land in a cached score.
     let score = 0
+
+    // Plugin-declared priority orders a plugin's own candidates. It used to *replace* the whole
+    // calculation, which meant a plugin item ranked identically whether the user had run it a
+    // hundred times or never. It is now one bounded term among the rest, and the terms below —
+    // which a plugin item earns exactly like a built-in — are what move it.
+    if (candidate.source === 'plugin' && candidate.pluginCandidate) {
+      score += (candidate.pluginCandidate.priority ?? 50) * PLUGIN_PRIORITY_WEIGHT
+    }
 
     // 时间相关性
     if (candidate.timeStats) {
@@ -2287,8 +2578,8 @@ export class RecommendationEngine {
     // item back to frecency the moment there is a real execute to rank on —
     // the item stays in the pool through the frequent/recent dimensions, it
     // just stops being news.
-    if (candidate.installedAt !== undefined && candidate.usageStats.executeCount === 0) {
-      score += calculateNoveltyFactor(Date.now() - candidate.installedAt) * NOVELTY_WEIGHT
+    if (candidate.firstSeenAt !== undefined && candidate.usageStats.executeCount === 0) {
+      score += calculateNoveltyFactor(Date.now() - candidate.firstSeenAt) * NOVELTY_WEIGHT
     }
 
     if (semanticSettings.localVectorEnabled && semanticProfile) {
@@ -2510,7 +2801,7 @@ export class RecommendationEngine {
   }
 
   private isExternalPriorityCandidate(candidate: CandidateItem): boolean {
-    return candidate.source === 'plugin' || candidate.sourceId === '__builtin_clipboard_url__'
+    return candidate.source === 'plugin' || candidate.sourceId === BUILTIN_CLIPBOARD_URL_SOURCE_ID
   }
 
   private getCandidateKey(candidate: CandidateItem): string {
@@ -3060,8 +3351,8 @@ export class RecommendationEngine {
       // never launched), which puts it in an earlier dimension first. Keep the
       // install stamp so the novelty boost still fires, and label it as the
       // reason it actually ranks — but only while that boost is live.
-      if (existing.installedAt === undefined && candidate.installedAt !== undefined) {
-        existing.installedAt = candidate.installedAt
+      if (existing.firstSeenAt === undefined && candidate.firstSeenAt !== undefined) {
+        existing.firstSeenAt = candidate.firstSeenAt
         if (existing.usageStats.executeCount === 0) {
           existing.source = 'newly-installed'
         }
@@ -3238,8 +3529,12 @@ interface ItemCandidate {
   timeStats?: ParsedItemTimeStats
   /** Plugin-provided candidate data (for source='plugin' or builtin clipboard URL) */
   pluginCandidate?: PluginRecommendCandidate
-  /** Epoch ms the app was installed on this machine; drives the novelty boost. */
-  installedAt?: number
+  /**
+   * Epoch ms this item first appeared on the machine — an app's install stamp, a file's
+   * filesystem birth time. Drives the novelty boost, which is why it is one field: the exploration
+   * channel is the same regardless of what appeared.
+   */
+  firstSeenAt?: number
 }
 
 /**
@@ -3264,6 +3559,8 @@ interface CandidateItem extends ItemCandidate {
     | 'pinned'
     | 'plugin'
     | 'newly-installed'
+    /** A file that appeared on disk inside the novelty window. */
+    | 'newly-added'
     | 'cold-start'
 }
 

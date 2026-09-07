@@ -17,8 +17,19 @@ import {
   VIDEO_THUMBNAIL_EXTENSIONS,
   normalizeExtension
 } from './thumbnail-config'
+import { isServableLocalFilePath } from '../../../../utils/local-file-policy'
 
 const DIRECT_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'gif', 'bmp', 'webp', 'ico'])
+
+const BASE64_MARKER = 'base64,'
+const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
+
+export function isValidBase64DataUrl(value: string): boolean {
+  const markerIndex = value.indexOf(BASE64_MARKER)
+  if (markerIndex === -1) return true
+  const payload = value.slice(markerIndex + BASE64_MARKER.length)
+  return payload.length > 0 && BASE64_PAYLOAD_PATTERN.test(payload)
+}
 
 export function isIndexableFile(
   fullPath: string,
@@ -164,7 +175,10 @@ export function mapFileToTuffItem(
       type: 'class',
       value: VIDEO_THUMBNAIL_EXTENSIONS.has(extension) ? 'i-ri-video-line' : 'i-ri-image-line'
     }
-  } else if (DIRECT_IMAGE_EXTENSIONS.has(extension)) {
+  } else if (DIRECT_IMAGE_EXTENSIONS.has(extension) && isServableLocalFilePath(file.path)) {
+    // The picture itself, but only where tfile will serve it: for a screenshot under ~/Pictures
+    // the request is refused and the renderer shows its "image failed" square, so such a file
+    // takes the OS icon or the glyph below like any other.
     icon = {
       type: 'file',
       value: file.path

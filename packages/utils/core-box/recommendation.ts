@@ -24,6 +24,8 @@ export const RECOMMENDATION_SECTION_ORDER = [
   'recent',
   /** Installed within the novelty window and never executed yet */
   'newly-installed',
+  /** A file that appeared on disk within the novelty window and has not been opened yet */
+  'newly-added',
   /** Matched against the current context signal (currently clipboard URLs only) */
   'context',
   /** Supplied by a plugin recommend provider */
@@ -209,6 +211,7 @@ export interface RecommendationBadge {
     | 'recent'
     | 'trending'
     | 'newly-installed'
+    | 'newly-added'
     | 'plugin'
     | 'pinned'
 }

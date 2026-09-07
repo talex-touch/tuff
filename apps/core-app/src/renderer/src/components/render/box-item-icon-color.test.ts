@@ -104,6 +104,32 @@ describe('CoreBox result icon color rendering', () => {
     )
   })
 
+  it('anchors the regular quick key to the card while keeping the compact key under the inner icon content', async () => {
+    const wrapper = mount(BoxGridItem, {
+      props: {
+        item: createItem(),
+        active: false,
+        quickKey: '⌘1',
+        render: createRender('i-ri-clipboard-line')
+      }
+    })
+
+    const card = wrapper.get('.BoxGridItem')
+    const inner = wrapper.get('.BoxGridItem-Inner')
+    const cornerKey = wrapper.get('.BoxGridItem-QuickKey')
+    const inlineKey = wrapper.get('.BoxGridItem-QuickKeyInline')
+
+    expect(cornerKey.element.parentElement).toBe(card.element)
+    expect(inlineKey.element.parentElement).toBe(inner.element)
+    expect(card.classes()).not.toContain('is-compact')
+
+    await wrapper.setProps({ compact: true })
+
+    expect(card.classes()).toContain('is-compact')
+    expect(cornerKey.element.parentElement).toBe(card.element)
+    expect(inlineKey.element.parentElement).toBe(inner.element)
+  })
+
   it('renders recommendation badge icons as classes in list results', () => {
     const wrapper = mount(BoxItem, {
       props: {

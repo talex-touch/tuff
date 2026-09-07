@@ -228,11 +228,12 @@ const foregroundModulesToLoad = [
   syncModule,
   flowBusModule, // Flow Transfer system - after plugin module
   divisionBoxModule,
+  // CoreBox renderers subscribe during window creation; Clipboard stream handlers must exist first.
+  clipboardModule,
   coreBoxModule,
   omniPanelModule,
   assistantModule,
   addonOpenerModule,
-  clipboardModule,
   privacyLifecycleModule,
   tuffDashboardModule,
   terminalModule,

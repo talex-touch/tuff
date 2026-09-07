@@ -47,6 +47,7 @@ import {
   isClipboardFreshForAutoPaste,
   normalizeClipboardTimestamp
 } from './clipboard-autopaste'
+import { alignItemsToSections } from './section-order'
 import { getLatestClipboard } from './useClipboardChannel'
 import { useResize } from './useResize'
 
@@ -600,6 +601,8 @@ export function useSearch(
   let programmaticQueryValue: string | null = null
   let indexCommitRefreshTimer: ReturnType<typeof setTimeout> | null = null
   let indexCommitRefreshPending = false
+  /** Latched across the debounce window so a plain commit cannot cancel a grid-relevant one. */
+  let indexCommitRefreshForRecommendations = false
   let indexCommitStreamDisposed = false
   let indexCommitStreamGeneration = 0
   let indexCommitStreamStartPending = false
@@ -926,13 +929,19 @@ export function useSearch(
   }
 
   const applyRecommendationResult = (initialResult: TuffSearchResult): void => {
-    const filteredItems = limitRenderedItems(filterDetachedItems(initialResult.items))
+    // A sectioned grid numbers focus by section order, so the list must follow the sections or
+    // `res[focus]` (preview pane, footer, ⌘-digits) resolves to a different item than the
+    // highlighted tile.
+    const { items: filteredItems, layout } = alignItemsToSections(
+      limitRenderedItems(filterDetachedItems(initialResult.items)),
+      initialResult.containerLayout
+    )
     currentSearchId.value = initialResult.sessionId || null
     searchResult.value = isDetachedDivisionMode()
       ? { ...initialResult, items: filteredItems }
       : initialResult
     searchResults.value = filteredItems
-    boxOptions.layout = initialResult.containerLayout
+    boxOptions.layout = layout
 
     activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
 
@@ -1283,19 +1292,29 @@ export function useSearch(
     await executeSearch(options)
   }
 
-  function shouldRefreshForIndexCommit(): boolean {
-    return (
-      !isDivisionBoxMode() &&
-      hasWindow() &&
-      (!hasDocument() || !document.hidden) &&
-      Boolean(searchVal.value.trim()) &&
-      !hasPluginFeatureActivation(activeActivations.value)
-    )
+  /**
+   * Whether a committed index revision should re-run the current query.
+   *
+   * The empty query is the recommendation grid, and it is refreshed only when main says the commit
+   * actually changed what belongs there (`recommendationsInvalidated`). Refreshing it on every
+   * commit would re-query CoreBox continuously while a file index builds; never refreshing it —
+   * the behaviour before 2026-09-04 — left an open CoreBox showing a stale grid until the user
+   * closed and reopened it, even for a freshly installed app whose cache main had already dropped.
+   */
+  function shouldRefreshForIndexCommit(recommendationsInvalidated: boolean): boolean {
+    if (isDivisionBoxMode() || !hasWindow()) return false
+    if (hasDocument() && document.hidden) return false
+    if (hasPluginFeatureActivation(activeActivations.value)) return false
+
+    return searchVal.value.trim() ? true : recommendationsInvalidated
   }
 
-  function scheduleIndexCommitRefresh(): void {
-    if (!shouldRefreshForIndexCommit()) return
+  function scheduleIndexCommitRefresh(recommendationsInvalidated = false): void {
+    if (!shouldRefreshForIndexCommit(recommendationsInvalidated)) return
     indexCommitRefreshPending = true
+    // A commit that only matters to the grid must not be downgraded by a later plain commit
+    // arriving inside the debounce window.
+    indexCommitRefreshForRecommendations ||= recommendationsInvalidated
     if (indexCommitRefreshTimer) return
 
     indexCommitRefreshTimer = setTimeout(() => {
@@ -1306,23 +1325,25 @@ export function useSearch(
 
   async function runIndexCommitRefresh(): Promise<void> {
     if (!indexCommitRefreshPending) return
-    if (!shouldRefreshForIndexCommit()) {
+    if (!shouldRefreshForIndexCommit(indexCommitRefreshForRecommendations)) {
       indexCommitRefreshPending = false
+      indexCommitRefreshForRecommendations = false
       return
     }
     if (loading.value || inFlightQuery !== null) {
-      scheduleIndexCommitRefresh()
+      scheduleIndexCommitRefresh(indexCommitRefreshForRecommendations)
       return
     }
 
     indexCommitRefreshPending = false
+    indexCommitRefreshForRecommendations = false
     await handleSearchImmediate({
       force: true,
       preserveSelection: true,
       refreshClipboard: false
     })
     if (indexCommitRefreshPending) {
-      scheduleIndexCommitRefresh()
+      scheduleIndexCommitRefresh(indexCommitRefreshForRecommendations)
     }
   }
 
@@ -1355,9 +1376,9 @@ export function useSearch(
     indexCommitStreamStartPending = true
     void transport
       .stream(CoreBoxEvents.search.indexCommitted, undefined, {
-        onData: () => {
+        onData: (payload) => {
           if (generation === indexCommitStreamGeneration && !indexCommitStreamDisposed) {
-            scheduleIndexCommitRefresh()
+            scheduleIndexCommitRefresh(payload?.recommendationsInvalidated === true)
           }
         },
         onError: (error) => {

@@ -161,6 +161,13 @@ export class MainWindowProvider implements ISearchProvider<ProviderContext> {
     return itemId === 'main-window' ? this.buildMainWindowItem('') : null
   }
 
+  async rebuildRecommendationItems(itemIds: readonly string[]): Promise<TuffItem[]> {
+    return itemIds.flatMap((itemId) => {
+      const item = this.rebuildItem(itemId)
+      return item ? [item] : []
+    })
+  }
+
   private buildMainWindowItem(queryText: string): TuffItem {
     const title = t('tray.showWindow')
     const subtitle = t('tray.tooltip')

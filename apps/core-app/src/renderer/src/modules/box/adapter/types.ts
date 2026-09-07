@@ -26,6 +26,12 @@ export interface IBoxOptions {
   data: unknown
   /** 当前布局配置 */
   layout?: TuffContainerLayout
+  /**
+   * Grid columns BoxGrid is actually rendering, as it last measured them (undefined until it has).
+   * The keyboard steps rows by this rather than by the declared count, which a narrow row cannot
+   * honour without squeezing the tiles.
+   */
+  visibleGridColumns?: number
 }
 
 export interface IUseSearch {

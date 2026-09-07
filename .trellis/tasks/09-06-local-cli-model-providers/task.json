@@ -1,0 +1,30 @@
+{
+  "id": "local-cli-model-providers",
+  "name": "local-cli-model-providers",
+  "title": "Local AI CLIs as selectable chat providers",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "release/ota-transport-error-classification-20260904",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-06-model-menu-redesign",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Execute implement.md Step 0: record the AI provider test baseline and refresh sanitized protocol samples before extracting the shared CLI runtime.",
+    "blocker": "No external blocker is recorded; implementation and runtime acceptance have not started.",
+    "evidence": "prd.md Background and research/cli-protocol-samples.md document the verified pi, pie, omp, codex, and claude CLI contracts; AC1 through AC9 remain open."
+  }
+}
