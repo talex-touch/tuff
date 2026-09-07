@@ -91,6 +91,13 @@ vi.mock('vue-i18n', () => ({
         'assistant.voicePanel.undo': 'Undo',
         'assistant.voicePanel.retry': 'Retry',
         'assistant.voicePanel.voiceTranscribeEmpty': 'No speech detected',
+        'assistant.voicePanel.capturingDevice': 'Opening the microphone…',
+        'assistant.voicePanel.microphoneUnresponsive':
+          'The microphone is not responding — check your input device',
+        'assistant.voicePanel.microphoneMissing':
+          'No microphone available — check your system input device',
+        'assistant.voicePanel.microphoneDenied':
+          'Microphone access is not granted — allow it in System Settings',
         'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe'
       })[key] ?? key
   })
@@ -258,6 +265,10 @@ describe('VoicePanel dock surface', () => {
     exposed(wrapper).startVoiceInput()
     await flushPromises()
 
+    // The meter waits for data: before the first level frame the pill is still preparing.
+    callbacksOrThrow().onData?.({ type: 'level', rms: 0.4 })
+    await nextTick()
+
     expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="voice-orb"]').exists()).toBe(false)
 
@@ -276,10 +287,12 @@ describe('VoicePanel dock surface', () => {
     exposed(wrapper).startVoiceInput()
     await flushPromises()
 
+    const callbacks = callbacksOrThrow()
+    callbacks.onData?.({ type: 'level', rms: 0.05 })
+    await nextTick()
     const idle = barHeights(wrapper)
     expect(idle).toHaveLength(24)
 
-    const callbacks = callbacksOrThrow()
     callbacks.onData?.({ type: 'level', rms: 0.5 })
     await nextTick()
     const afterFirst = barHeights(wrapper)
@@ -429,7 +442,9 @@ describe('VoicePanel session control', () => {
       'service is busy',
       'voice-dock--warning'
     ],
-    ['unknown', new Error('socket reset'), 'socket reset', 'voice-dock--danger']
+    // Unclassified failures no longer surface the provider's own sentence: it is English,
+    // gets truncated by the pill width, and offers nothing to act on.
+    ['unknown', new Error('socket reset'), 'Voice transcription failed', 'voice-dock--danger']
   ])('sorts a %s failure into its own tone', async (_label, error, text, toneClass) => {
     const wrapper = await mountVoicePanel()
 
@@ -732,6 +747,129 @@ describe('VoicePanel recovery and pacing', () => {
     await nextTick()
     expect(wrapper.find('.voice-dock--holding').exists()).toBe(false)
     expect(streamCancelMock).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+})
+
+describe('VoicePanel device readiness and long messages', () => {
+  async function listeningPanel() {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    return wrapper
+  }
+
+  /**
+   * Twenty-four bars at minimum height is not an empty pill — it is a working meter reporting
+   * silence, which is a claim we cannot make while the device is still opening.
+   */
+  it('breathes instead of drawing a meter it has no data for', async () => {
+    const wrapper = await listeningPanel()
+
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(false)
+    expect(wrapper.find('.voice-dock--preparing').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toContain('Opening the microphone')
+
+    wrapper.unmount()
+  })
+
+  it('hands over to the meter when data arrives, not when a timer says so', async () => {
+    const wrapper = await listeningPanel()
+
+    // Well past the give-up threshold in wall time, but no frame has landed yet.
+    callbacksOrThrow().onData?.({ type: 'level', rms: 0.3 })
+    await nextTick()
+
+    expect(wrapper.find('.voice-dock--preparing').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('stops breathing and says so when the device never answers', async () => {
+    const wrapper = await listeningPanel()
+
+    vi.advanceTimersByTime(2100)
+    await flushPromises()
+
+    expect(wrapper.find('.voice-dock--preparing').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toContain('not responding')
+    expect(streamCancelMock).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it('keeps breathing while frames keep arriving', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onData?.({ type: 'level', rms: 0.3 })
+    await nextTick()
+
+    // Negative control for the timeout: once data flows, the give-up timer must not fire.
+    vi.advanceTimersByTime(3000)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it.each([
+    ['no device', 'CAPTURE_UNAVAILABLE: Cannot find microphone', 'No microphone available'],
+    ['denied', 'PERMISSION_DENIED', 'Microphone access is not granted']
+  ])('classifies a %s failure instead of quoting the provider', async (_label, raw, expected) => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error(raw))
+    await flushPromises()
+
+    const text = wrapper.find('[data-testid="voice-notice"]').text()
+    expect(text).toContain(expected)
+    expect(text).not.toContain('Cannot find')
+    expect(wrapper.find('.voice-dock--warning').exists()).toBe(true)
+    // Retrying finds the same missing microphone, so there is nothing to offer.
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * jsdom has no layout, so overflow is stubbed on the prototype: the component measures
+   * `scrollWidth > clientWidth`, and the point of the test is that the answer drives height.
+   */
+  it('grows a second line rather than dropping the half that says what to do', async () => {
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(420)
+    const clientSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(246)
+
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('PERMISSION_DENIED'))
+    await flushPromises()
+    await flushPromises()
+
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    expect(style).toContain('height: 64px')
+    // Width goes to the cap first; only then does the island grow.
+    expect(style).toContain('width: 340px')
+    // And it stops being a pill: a pill's radius is half its height, so at 64 the ends would
+    // swallow the room the second line needs. One line is a pill, two lines is a card.
+    expect(style).toContain('border-radius: 20px')
+    expect(wrapper.find('.voice-dock--expanded').exists()).toBe(true)
+
+    widthSpy.mockRestore()
+    clientSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('stays one line high when the message fits', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('PERMISSION_DENIED'))
+    await flushPromises()
+    await flushPromises()
+
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    expect(style).toContain('height: 44px')
+    expect(style).toContain('border-radius: 22px')
+    expect(wrapper.find('.voice-dock--expanded').exists()).toBe(false)
 
     wrapper.unmount()
   })
