@@ -7,7 +7,7 @@ import { getMainConfig, subscribeMainConfig } from '../storage'
 const COMMAND_HOLD_DELAY_MS = 320
 
 type VoiceCommandGestureSink = (payload: AssistantVoiceCommandPayload) => void | Promise<void>
-
+type VoiceSessionActiveReader = () => boolean
 function isCommandGestureEnabled(setting: AppSetting): boolean {
   return (
     setting.assistant?.enabled === true &&
@@ -33,7 +33,10 @@ export class CommandVoiceGestureController {
   private holdStarted = false
   private toggleActive = false
 
-  constructor(private readonly sink: VoiceCommandGestureSink) {}
+  constructor(
+    private readonly sink: VoiceCommandGestureSink,
+    private readonly isVoiceSessionActive: VoiceSessionActiveReader = () => false
+  ) {}
 
   register(): void {
     if (this.disposeSettingsSubscription) return
@@ -93,9 +96,19 @@ export class CommandVoiceGestureController {
       onOtherKeyDown: () => this.handleOtherKeyDown()
     })
   }
+  private readVoiceSessionActive(): boolean {
+    try {
+      return this.isVoiceSessionActive()
+    } catch {
+      return false
+    }
+  }
 
   private handleKeyDown(event: OmniPanelGlobalKeyEvent): void {
     if (!this.enabled || event.key !== 'primary-modifier') return
+    if (this.toggleActive && !this.readVoiceSessionActive()) {
+      this.toggleActive = false
+    }
     if (event.hasOtherKeys) {
       this.cancelCombinedGesture()
       return
@@ -155,9 +168,14 @@ export class CommandVoiceGestureController {
       return
     }
 
-    this.toggleActive = !this.toggleActive
+    const voiceSessionActive = this.readVoiceSessionActive()
+    if (this.toggleActive && !voiceSessionActive) {
+      this.toggleActive = false
+    }
+    const wasActive = this.toggleActive || voiceSessionActive
+    this.toggleActive = !wasActive
     this.dispatch({
-      action: this.toggleActive ? 'start' : 'stop',
+      action: wasActive ? 'stop' : 'start',
       mode: 'toggle',
       source: 'command'
     })

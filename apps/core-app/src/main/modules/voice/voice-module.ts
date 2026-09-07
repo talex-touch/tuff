@@ -98,6 +98,19 @@ export class VoiceModule extends BaseModule<TalexEvents> {
       )
     )
 
+    // Does a cancelled or failed recording still exist? Lets the dock offer recovery after
+    // the pill has already collapsed, which is the only thing that makes the window reachable.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.recoveryStatus,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          () => voiceService.getRecoveryStatus(),
+          { onError: (error) => voiceLog.error('Voice recovery status failed:', { error }) }
+        )
+      )
+    )
+
     // Retry the last failed streaming session against the audio it already captured.
     this.cleanups.push(
       transport.on(
