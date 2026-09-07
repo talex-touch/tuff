@@ -1,3 +1,4 @@
+import { shell } from 'electron'
 import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { getTuffTransportMain, HandlerContext } from '@talex-touch/utils/transport/main'
 import type { StreamContext } from '@talex-touch/utils/transport/types'
@@ -15,9 +16,22 @@ import { BaseModule } from '../abstract-base-module'
 import { globalDictationController } from './global-dictation'
 import { voiceService } from './voice-service'
 import { assistantModule } from '../assistant/module'
-import { CommandVoiceGestureController } from './command-gesture'
+import { CommandVoiceGestureController, registerPlatformVoiceGesture } from './command-gesture'
 
 const voiceLog = createLogger('Voice')
+
+/**
+ * Where each platform keeps the microphone permission pane.
+ *
+ * Constants, never renderer input: these schemes are deliberately absent from the external-URL
+ * allowlist, so the only safe way to reach them is for main to hold the whole string. Linux has
+ * no equivalent that works across desktops, so it is absent and the caller is told so rather
+ * than being handed a button that does nothing.
+ */
+const MICROPHONE_SETTINGS_URL: Partial<Record<NodeJS.Platform, string>> = {
+  darwin: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+  win32: 'ms-settings:privacy-microphone'
+}
 const VOICE_PERMISSION = 'voice.dictation'
 
 /**
@@ -49,7 +63,8 @@ export class VoiceModule extends BaseModule<TalexEvents> {
     globalDictationController.register()
     this.commandGestureController = new CommandVoiceGestureController(
       (payload) => assistantModule.handleVoiceCommandGesture(payload),
-      () => assistantModule.isVoiceCommandActive()
+      () => assistantModule.isVoiceCommandActive(),
+      registerPlatformVoiceGesture
     )
     this.commandGestureController.register()
     voiceLog.success('Voice module initialized')
@@ -94,6 +109,24 @@ export class VoiceModule extends BaseModule<TalexEvents> {
           { permissionId: VOICE_PERMISSION },
           (payload) => voiceService.transcribeUpload(payload),
           { onError: (error) => voiceLog.error('Voice upload transcription failed:', { error }) }
+        )
+      )
+    )
+
+    // The settings button on a device failure. Nothing crosses the boundary but the intent.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.openMicrophoneSettings,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async () => {
+            const url = MICROPHONE_SETTINGS_URL[process.platform]
+            if (!url) throw new Error('VOICE_MICROPHONE_SETTINGS_UNSUPPORTED')
+            await shell.openExternal(url)
+          },
+          {
+            onError: (error) => voiceLog.error('Opening microphone settings failed:', { error })
+          }
         )
       )
     )
