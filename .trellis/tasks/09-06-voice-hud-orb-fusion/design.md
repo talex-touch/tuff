@@ -445,3 +445,21 @@ pillHeight.value = Math.min(PILL_TALL_HEIGHT, PILL_TALL_PADDING + textHeight + P
 注意它的根节点上没有 `.tx-border-beam` 类（只有 `[data-beam="<id>"]`），所以原来那条 `:deep(.tx-border-beam)` 规则一个元素都没匹配到 —— 这是它一直没被发现的原因。
 
 顺带把 `PILL_CHROME_WIDTH = 94`（padding 10 + 双钮 68 + **两个** gap 16）算对了：在流里时实际是三个 gap，24。
+
+### 7.6 宽度量的是「想多宽」，不是「现在多宽」
+
+`scrollWidth` 读的是**已经换行之后**的宽度，而那个宽度正是上一轮这段测量算出来的 —— 一句短文案在 200 的基础宽里换了行，它就报告「我装得下」，胶囊于是永远停在 200，文字永远是两行。截图里的「语音转写失败，请重试」就是这么卡住的。
+
+```ts
+function measureNaturalWidth(element: HTMLElement): number {
+  const previous = element.style.whiteSpace
+  element.style.whiteSpace = 'nowrap'
+  const width = element.scrollWidth
+  element.style.whiteSpace = previous
+  return width
+}
+```
+
+强制单行的那一瞬间才问得出第二个问题。有了自然宽度，展开判定也不必再拿 `scrollWidth > clientWidth` 绕一圈：`needed = 自然宽 + chrome`，`needed > PILL_MAX_WIDTH` 就换卡片版式，一个数说了算。
+
+测试里的桩按 `style.whiteSpace === 'nowrap'` 返回不同的值（130 / 106）—— 两个问题的差别只在这里，桩不区分就测不出。另有一条断言：量完必须还原，不能在元素上留下 `nowrap`。
