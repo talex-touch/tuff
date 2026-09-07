@@ -15,12 +15,35 @@ function getNetworkStatusCode(error: unknown): number | null {
     return null
   }
 
-  if (!error.message.startsWith('NETWORK_HTTP_STATUS_')) {
+  const candidate = error as Error & {
+    status?: unknown
+    statusCode?: unknown
+    code?: unknown
+  }
+  const status = [candidate.status, candidate.statusCode].find(
+    (value): value is number => typeof value === 'number' && Number.isInteger(value)
+  )
+  if (status !== undefined) {
+    return status
+  }
+
+  const marker = [error.message, typeof candidate.code === 'string' ? candidate.code : ''].find(
+    (value) => value.startsWith('NETWORK_HTTP_STATUS_')
+  )
+  if (!marker) {
     return null
   }
 
-  const parsed = Number.parseInt(error.message.replace('NETWORK_HTTP_STATUS_', ''), 10)
+  const parsed = Number.parseInt(marker.replace('NETWORK_HTTP_STATUS_', ''), 10)
   return Number.isInteger(parsed) ? parsed : null
+}
+
+const DEFAULT_APP_UPDATE_IDLE_TIMEOUT_MS = 120_000
+
+function getDownloadIdleTimeoutMs(task: DownloadTask, configuredTimeoutMs: number): number {
+  return task.module === DownloadModule.APP_UPDATE
+    ? Math.max(configuredTimeoutMs, DEFAULT_APP_UPDATE_IDLE_TIMEOUT_MS)
+    : configuredTimeoutMs
 }
 
 /**
@@ -182,9 +205,28 @@ export class DownloadWorker {
     }
 
     try {
-      // 获取文件大小 - headers 可能来自 metadata
       const headers = (task.metadata?.headers as Record<string, string>) || undefined
-      const totalSize = await this.getFileSize(task.url, headers)
+      const fallbackUrl =
+        typeof task.metadata?.fallbackUrl === 'string' ? task.metadata.fallbackUrl : undefined
+      let totalSize: number | null
+
+      try {
+        totalSize = await this.getFileSize(task.url, headers)
+      } catch (error) {
+        const statusCode = getNetworkStatusCode(error)
+        if (statusCode !== 403 || !fallbackUrl || task.url === fallbackUrl) {
+          throw error
+        }
+
+        task.metadata = { ...task.metadata, fallbackUsed: true }
+        downloadWorkerLog.warn(
+          'Signed download URL expired during size probe; switching to fallback',
+          {
+            meta: { taskId: task.id }
+          }
+        )
+        totalSize = await this.getFileSize(fallbackUrl, headers)
+      }
 
       if (!totalSize) {
         const allowUnknownSize =
@@ -542,8 +584,11 @@ export class DownloadWorker {
     }
 
     const maxRetries = this.config.chunk.maxRetries
+    const fallbackUrl =
+      typeof task.metadata?.fallbackUrl === 'string' ? task.metadata.fallbackUrl : undefined
+    const idleTimeoutMs = getDownloadIdleTimeoutMs(task, this.config.network.timeout)
     let retryCount = 0
-    let requestUrl = task.url
+    let requestUrl = task.metadata?.fallbackUsed === true && fallbackUrl ? fallbackUrl : task.url
 
     const errorContext = {
       taskId: task.id,
@@ -563,6 +608,9 @@ export class DownloadWorker {
         chunk.status = chunk.downloaded > 0 ? ChunkStatus.PENDING : ChunkStatus.FAILED
         throw new Error('Task was cancelled')
       }
+
+      const idle = createIdleTimeout(idleTimeoutMs)
+      const requestSignal = abortSignal ? AbortSignal.any([abortSignal, idle.signal]) : idle.signal
 
       try {
         chunk.status = ChunkStatus.DOWNLOADING
@@ -586,7 +634,8 @@ export class DownloadWorker {
           },
           responseType: 'stream',
           timeoutMs: this.config.network.timeout,
-          signal: abortSignal,
+          signal: requestSignal,
+          streamTimeoutMode: 'caller-signal',
           validateStatus: requiresPartialContent ? [206] : [200, 206],
           retryPolicy: { maxRetries: 0 }
         })
@@ -596,6 +645,7 @@ export class DownloadWorker {
         })
 
         const onData = (data: Buffer) => {
+          idle.touch()
           chunk.downloaded += data.length
         }
         response.stream.on('data', onData)
@@ -620,12 +670,12 @@ export class DownloadWorker {
           throw new Error('Task was cancelled')
         }
 
-        const statusCode = getNetworkStatusCode(error)
-        const fallbackUrl =
-          typeof task.metadata?.fallbackUrl === 'string' ? task.metadata.fallbackUrl : undefined
-        const fallbackUsed = task.metadata?.fallbackUsed === true
+        const normalizedError = idle.signal.aborted
+          ? new Error(`NETWORK_TIMEOUT after ${idleTimeoutMs}ms`)
+          : error
+        const statusCode = getNetworkStatusCode(normalizedError)
 
-        if (statusCode === 403 && fallbackUrl && !fallbackUsed && requestUrl !== fallbackUrl) {
+        if (statusCode === 403 && fallbackUrl && requestUrl !== fallbackUrl) {
           requestUrl = fallbackUrl
           task.metadata = { ...task.metadata, fallbackUsed: true }
           errorContext.url = fallbackUrl
@@ -648,9 +698,9 @@ export class DownloadWorker {
         retryCount++
 
         const downloadError =
-          error instanceof DownloadErrorClass
-            ? error
-            : DownloadErrorClass.fromError(error as Error, errorContext)
+          normalizedError instanceof DownloadErrorClass
+            ? normalizedError
+            : DownloadErrorClass.fromError(normalizedError as Error, errorContext)
 
         downloadWorkerLog.warn('Chunk download retry failed', {
           error: {
@@ -667,6 +717,8 @@ export class DownloadWorker {
         }
 
         await new Promise((resolve) => setTimeout(resolve, this.config.network.retryDelay))
+      } finally {
+        idle.dispose()
       }
     }
   }

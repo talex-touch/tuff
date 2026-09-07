@@ -17,6 +17,7 @@ import { getMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
 import type { FileIndexSettings } from './types'
 import { EverythingIconCache } from './everything-icon-cache'
+import { getFileAssetBridge, type IndexedFileAssets } from './file-asset-bridge'
 import { mapFileToTuffItem } from './utils'
 
 export interface NativeFileSearchCapabilities {
@@ -164,36 +165,48 @@ async function toNativeResult(filePath: string): Promise<NativeFileSearchResult 
   }
 }
 
-function buildNativeSearchItems(
+async function buildNativeSearchItems(
   provider: Pick<NativeFileSearchProvider, 'id' | 'name'>,
   query: TuffQuery,
   results: NativeFileSearchResult[],
   iconCache?: EverythingIconCache
-): TuffSearchResult {
+): Promise<TuffSearchResult> {
   const searchText = query.text.trim()
   const now = Date.now()
   let scheduledIconWarmups = 0
+  // Spotlight knows the path; the index knows the thumbnail. Without this lookup an image
+  // result went out as its own path, which tfile refuses under ~/Pictures, and the row showed
+  // the renderer's "image failed" square where the picture belonged.
+  const bridge = getFileAssetBridge()
+  const indexed = bridge
+    ? await bridge.lookupIndexedFiles(results.map((result) => result.path))
+    : new Map<string, IndexedFileAssets>()
   const items = results.flatMap((result, index) => {
-    const fileObj = {
-      id: index,
-      path: result.path,
-      name: result.name,
-      displayName: null,
-      extension: result.extension,
-      size: result.size,
-      mtime: result.mtime,
-      ctime: result.ctime,
-      lastIndexedAt: new Date(),
-      isDir: result.isDir,
-      type: result.isDir ? ('directory' as const) : ('file' as const),
-      content: null,
-      embeddingStatus: 'none' as const
-    } satisfies typeof filesSchema.$inferSelect
+    const known = indexed.get(result.path)
+    const fileObj =
+      known?.file ??
+      ({
+        id: index,
+        path: result.path,
+        name: result.name,
+        displayName: null,
+        extension: result.extension,
+        size: result.size,
+        mtime: result.mtime,
+        ctime: result.ctime,
+        lastIndexedAt: new Date(),
+        isDir: result.isDir,
+        type: result.isDir ? ('directory' as const) : ('file' as const),
+        content: null,
+        embeddingStatus: 'none' as const
+      } satisfies typeof filesSchema.$inferSelect)
 
     const cachedIcon = iconCache?.get(result.path)
+    const extensions: Record<string, string> = { ...(known?.extensions ?? {}) }
+    if (cachedIcon) extensions.icon = cachedIcon
     const item = mapFileToTuffItem(
       fileObj,
-      cachedIcon ? { icon: cachedIcon } : {},
+      extensions,
       provider.id,
       provider.name || provider.id,
       cachedIcon || result.isDir || scheduledIconWarmups >= NATIVE_ICON_WARMUP_LIMIT
@@ -201,7 +214,12 @@ function buildNativeSearchItems(
         : (file) => {
             scheduledIconWarmups += 1
             void iconCache?.ensure(file.path)
+          },
+      known && bridge
+        ? (file) => {
+            void bridge.ensureThumbnail(file, extensions).catch(() => undefined)
           }
+        : undefined
     )
     const daysSinceModified = (now - result.mtime.getTime()) / (1000 * 3600 * 24)
     const recencyScore = Number.isFinite(daysSinceModified)
@@ -300,7 +318,7 @@ abstract class BaseNativeFileSearchProvider implements NativeFileSearchProvider 
         results: results.length,
         duration: formatDuration(performance.now() - startedAt)
       })
-      return buildNativeSearchItems(this, query, results, this.iconCache)
+      return await buildNativeSearchItems(this, query, results, this.iconCache)
     } catch (error) {
       if (!isAbortError(error)) {
         this.lastError = error instanceof Error ? error.message : String(error)

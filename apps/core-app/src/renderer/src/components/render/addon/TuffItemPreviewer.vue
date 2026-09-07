@@ -5,7 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import { buildTfileUrl } from '~/utils/tfile-url'
+import { toTfileUrl } from '@talex-touch/utils/network'
+import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import {
   AudioPreview,
   CodePreview,
@@ -23,6 +24,8 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const transport = isElectronRenderer() ? useTuffTransport() : null
+// Same scroller setup as the results column: native on macOS so the trackpad drives it directly.
+const isMac = getCurrentRendererPlatformState().isMac
 
 type FilePreviewType =
   | 'image'
@@ -134,7 +137,7 @@ watch(
     }
 
     if (!isElectronRenderer() || !transport) {
-      previewResourceUrl.value = buildTfileUrl(filePath)
+      previewResourceUrl.value = toTfileUrl(filePath)
       previewResourceReady.value = true
       return
     }
@@ -157,8 +160,8 @@ watch(
 
 <template>
   <div class="TuffItemPreviewer">
-    <TxScroll class="h-full w-full">
-      <div class="preview-area max-h-[60%]">
+    <TxScroll class="h-full w-full" no-padding :native="isMac" :native-auto-fallback="!isMac">
+      <div class="preview-area">
         <DefaultPreview v-if="previewComponent === DefaultPreview" :item="item" />
         <component
           :is="previewComponent"
@@ -247,20 +250,16 @@ watch(
   flex-direction: column;
   padding: 0.5rem;
 
+  // A fixed stage for the media. The old `max-height: 70%` resolved against the scroller's
+  // auto-height content, i.e. to nothing, so a tall screenshot rendered at full size and pushed
+  // the info table off the bottom. The picture scales to fit and centres in here.
   .preview-area {
     flex-shrink: 0;
-    max-height: 70%;
+    height: 280px;
     display: flex;
     justify-content: center;
     align-items: center;
     overflow: hidden;
-
-    & > :deep(img),
-    & > :deep(video) {
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-    }
   }
 }
 </style>

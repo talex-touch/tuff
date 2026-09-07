@@ -108,3 +108,21 @@ describe('isAllowedLocalFilePath against the narrowed roots', () => {
     expect(isAllowedLocalFilePath(sibling, roots)).toBe(false)
   })
 })
+
+describe('isServableLocalFilePath', () => {
+  it('answers for the built-in roots and the roots the tfile module adds', async () => {
+    const policy = await import('./local-file-policy')
+    const tmpFile = path.join(os.tmpdir(), 'servable-check.png')
+
+    // os.tmpdir() is a built-in root; an arbitrary path is not.
+    expect(policy.isServableLocalFilePath(tmpFile)).toBe(true)
+    expect(policy.isServableLocalFilePath('/definitely/not/allowed/shot.png')).toBe(false)
+
+    // The thumbnail cache lives under a root the file-protocol module registers at init; the
+    // answer here must track that registration, and its release.
+    const release = policy.configureAdditionalAllowedLocalFileRoots(['/definitely/not/allowed'])
+    expect(policy.isServableLocalFilePath('/definitely/not/allowed/shot.png')).toBe(true)
+    release()
+    expect(policy.isServableLocalFilePath('/definitely/not/allowed/shot.png')).toBe(false)
+  })
+})

@@ -21,15 +21,26 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../utils/local-file-policy', () => ({
-  getAllowedLocalFileRoots: () => ['/allowed'],
-  isAllowedLocalFilePath: (filePath: string, roots: string[]) =>
-    roots.some((root) => filePath === root || filePath.startsWith(`${root}/`)),
-  normalizeDarwinUsersPath: (filePath: string) =>
-    process.platform === 'darwin' && filePath.toLowerCase().startsWith('/users/demo/')
-      ? `/Users/demo${filePath.slice('/users/demo'.length)}`
-      : filePath
-}))
+vi.mock('../../utils/local-file-policy', () => {
+  // The additional-roots registry the module now shares with `isServableLocalFilePath`.
+  let additionalRoots: string[] = []
+  return {
+    getAllowedLocalFileRoots: () => ['/allowed'],
+    getAdditionalAllowedLocalFileRoots: () => additionalRoots,
+    configureAdditionalAllowedLocalFileRoots: (roots: string[]) => {
+      additionalRoots = roots
+      return () => {
+        if (additionalRoots === roots) additionalRoots = []
+      }
+    },
+    isAllowedLocalFilePath: (filePath: string, roots: string[]) =>
+      roots.some((root) => filePath === root || filePath.startsWith(`${root}/`)),
+    normalizeDarwinUsersPath: (filePath: string) =>
+      process.platform === 'darwin' && filePath.toLowerCase().startsWith('/users/demo/')
+        ? `/Users/demo${filePath.slice('/users/demo'.length)}`
+        : filePath
+  }
+})
 
 vi.mock('../../service/temp-file.service', () => ({
   tempFileService: {

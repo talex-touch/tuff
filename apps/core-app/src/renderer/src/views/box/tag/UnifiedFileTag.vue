@@ -4,7 +4,7 @@ import { displayBasename, displayExtension } from '@talex-touch/utils/common/uti
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createRendererLogger } from '~/utils/renderer-log'
-import { buildTfileUrl } from '~/utils/tfile-url'
+import { toTfileUrl } from '@talex-touch/utils/network'
 
 /**
  * Unified file tag component that handles both FILE mode and clipboard files
@@ -93,12 +93,12 @@ const firstFileName = computed(() => {
 const fileIconUrl = computed(() => {
   // Priority 1: Explicit icon path (for FILE mode)
   if (props.iconPath && isValidFilePath(props.iconPath) && isImagePath(props.iconPath)) {
-    return buildTfileUrl(props.iconPath)
+    return toTfileUrl(props.iconPath)
   }
 
   // Priority 2: First file path
   if (firstFilePath.value && isImagePath(firstFilePath.value)) {
-    return buildTfileUrl(firstFilePath.value)
+    return toTfileUrl(firstFilePath.value)
   }
 
   return null

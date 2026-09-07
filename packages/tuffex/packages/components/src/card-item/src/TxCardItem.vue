@@ -154,14 +154,29 @@ const avatarStyle = computed(() => {
   cursor: pointer;
 }
 
+/*
+  Hover and active read through their own variables so a host on a dark, translucent surface can
+  re-point them. The defaults are the formulas that were inlined here before, unchanged.
+
+  The formulas alone are not enough everywhere: `--tx-bg-color-overlay` is `#1d1e1f` under the dark
+  theme, so an 18% wash of it over a dark panel is invisible — which is what an anchored menu on a
+  `#1c1c1e` surface hits. Such a host points `--tx-card-item-hover-bg` at a semantic surface colour
+  of its own instead of fighting this rule with `:deep`.
+*/
 .tx-card-item--clickable:hover {
   border-color: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 70%, transparent);
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 18%, transparent);
+  background: var(
+    --tx-card-item-hover-bg,
+    color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 18%, transparent)
+  );
 }
 
 .tx-card-item--active {
   border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 40%, transparent);
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 8%, transparent);
+  background: var(
+    --tx-card-item-active-bg,
+    color-mix(in srgb, var(--tx-color-primary, #409eff) 8%, transparent)
+  );
 }
 
 /* Hovering an active row deepens the accent instead of trading it for the

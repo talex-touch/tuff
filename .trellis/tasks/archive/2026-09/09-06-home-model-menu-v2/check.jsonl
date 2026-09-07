@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "复查 aria-pressed / menuitemradio / 焦点回退 / token 使用"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "复查禁用模式、测试覆盖与 git diff --check"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "复查 dropdown-menu 文档 zh/en 段落数与描述是否与源码一致"}
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "复查每条测试在实现被破坏时是否会失败（解析规则、快捷键、过滤）"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "复查持久化值缺失 / 无效时的回落与不清除规则"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "复查提交只含本任务 hunk"}

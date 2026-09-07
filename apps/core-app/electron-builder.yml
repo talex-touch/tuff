@@ -141,6 +141,10 @@ mac:
   # exists where it matters; turning this on would only break local builds for developers who
   # have no certificate and are not producing releases.
   forceCodeSigning: false
+  # node-pty ships Windows-only conpty DLLs for every platform. They are data on macOS,
+  # not Mach-O code, and codesign cannot attach an Apple timestamp to them.
+  signIgnore:
+    - '(^|/)node_modules/node-pty/third_party/conpty/'
   hardenedRuntime: true
   # Both parts are load-bearing. ${arch}: without it the arm64 and x64 builds resolve to the same
   # filename and one silently overwrites the other. `macos`: inferCoreArtifactIdentity recognises

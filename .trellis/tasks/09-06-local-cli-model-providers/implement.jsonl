@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/main-process/pi-provider-contracts.md", "reason": "pi provider 的 argv / NDJSON commit-rollback / 目录密钥边界 / 有界终止契约，新 CLI provider 必须同构"}
+{"file": ".trellis/spec/main-process/background-task-timeout-contracts.md", "reason": "子进程与流式请求的超时归属、失败子进程退避"}
+{"file": ".trellis/spec/main-process/network-error-classification-contracts.md", "reason": "CLI 失败（401 / 404 / 网络）归一化为可重试或回落的错误类别"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "origin 字段跨 main → transport 双镜像 → renderer 三层，先定契约"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "四个 provider 共享运行时与可执行文件解析，禁止复制 pi 实现"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "IntelligenceProviderModelOption 双镜像与运行时校验规则"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "共享工作树，只暂存本任务 hunk"}

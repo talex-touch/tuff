@@ -7,34 +7,27 @@ import type {
   IntelligenceTranslatePayload,
   IntelligenceUsageInfo
 } from '@talex-touch/tuff-intelligence'
-import type { ChildProcessByStdio } from 'node:child_process'
-import type { Readable } from 'node:stream'
-import { spawn } from 'node:child_process'
+import type { CliLineEvent } from './cli/cli-process-runtime'
 import { existsSync } from 'node:fs'
-import { delimiter, dirname, join } from 'node:path'
-import { createInterface } from 'node:readline'
+import { join } from 'node:path'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { app } from 'electron'
 import { createLogger } from '../../../utils/logger'
 import { IntelligenceProvider } from '../runtime/base-provider'
-import { collectMessageAttachments, spillAttachments } from './attachment-spill'
+import { collectMessageAttachments } from './attachment-spill'
+import { runCliChat } from './cli/cli-process-runtime'
 import {
   buildPiArgs,
   buildPiPrompt,
-  isFailedStopReason,
   parsePiCliLine,
   PI_CLI_NOT_FOUND,
+  PI_CLI_TERMINATION_FAILED,
   PI_SESSION_PROTOCOL_VERSION,
   readPiSessionProtocolVersion,
   resolvePiExecutable
 } from './pi-cli-runtime'
 
 const piCliLog = createLogger('Intelligence').child('PiCli')
-
-/** Enough stderr to identify a failure without letting a chatty run grow unbounded in memory. */
-const STDERR_TAIL_LIMIT = 4_000
-const CHILD_TERMINATION_GRACE_MS = 150
-const CHILD_FORCE_KILL_TIMEOUT_MS = 750
 
 export interface PiToolRuntimeConfig {
   url: string
@@ -80,18 +73,41 @@ function resolveTuffExtensionPath(): string | null {
   return tuffExtensionPath
 }
 
-interface PiRunState {
-  provider?: string
-  model?: string
-  usage?: IntelligenceUsageInfo
-  /** How the most recent assistant message ended — the run's terminal state once stdout closes. */
-  stopReason?: string
-  /** The failure `pi` last reported, kept so a dead run can say why rather than just going quiet. */
-  failure?: string
-}
-
 type PiCliRuntimeOptions = IntelligenceInvokeOptions & {
   readonly signal?: AbortSignal
+}
+
+/**
+ * Per-run line parser: `parsePiCliLine` behind a one-shot protocol check.
+ *
+ * `pi` is an external CLI with no version constraint in this repo, so an upgrade can change the
+ * stream contract with nothing to announce it. Its first line carries the protocol version; a
+ * mismatch means the shapes this provider parses were read off a different protocol than the one
+ * now running (#970).
+ *
+ * Warn rather than fail: the parser degrades to skipping lines it does not recognise, and refusing
+ * to answer because a number moved would be worse than a partial reply. Once per run -- this is a
+ * diagnostic, not a stream annotation.
+ */
+function createPiLineParser(): (line: string) => CliLineEvent | null {
+  let protocolChecked = false
+  return (line) => {
+    if (!protocolChecked) {
+      const protocolVersion = readPiSessionProtocolVersion(line)
+      if (protocolVersion !== null) {
+        protocolChecked = true
+        if (protocolVersion !== PI_SESSION_PROTOCOL_VERSION) {
+          piCliLog.warn(
+            'pi session protocol version differs from the one this parser was written against',
+            {
+              meta: { observed: protocolVersion, expected: PI_SESSION_PROTOCOL_VERSION }
+            }
+          )
+        }
+      }
+    }
+    return parsePiCliLine(line)
+  }
 }
 
 /**
@@ -109,11 +125,14 @@ export class PiCliProvider extends IntelligenceProvider {
     return options.modelPreference?.[0] || this.config.defaultModel || undefined
   }
 
-  private async spawnPi(
+  async *chatStream(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions,
-    attachmentPaths: string[]
-  ): Promise<ChildProcessByStdio<null, Readable, Readable>> {
+    options: IntelligenceInvokeOptions
+  ): AsyncGenerator<IntelligenceStreamChunk> {
+    const signal = (options as PiCliRuntimeOptions).signal
+    if (signal?.aborted) return
+
+    // Resolved before anything is written for the run: a missing CLI has nothing to clean up.
     const executable = await resolvePiExecutable()
     if (!executable) {
       throw new Error(
@@ -123,274 +142,40 @@ export class PiCliProvider extends IntelligenceProvider {
 
     const toolRuntime = resolveToolRuntime?.() ?? null
     const toolsGranted = (toolRuntime?.tools.length ?? 0) > 0
-    const args = buildPiArgs(
-      buildPiPrompt(payload.messages, { toolsGranted }),
-      this.resolveModel(options),
-      toolRuntime
-        ? { tools: toolRuntime.tools, extensionPath: resolveTuffExtensionPath() ?? undefined }
-        : undefined,
-      attachmentPaths
+    const prompt = buildPiPrompt(payload.messages, { toolsGranted })
+    const model = this.resolveModel(options)
+    const toolOptions = toolRuntime
+      ? { tools: toolRuntime.tools, extensionPath: resolveTuffExtensionPath() ?? undefined }
+      : undefined
+
+    yield* runCliChat(
+      {
+        name: 'pi',
+        errorPrefix: '[PiCliProvider]',
+        executable,
+        args: (attachmentPaths) => buildPiArgs(prompt, model, toolOptions, attachmentPaths),
+        env: {
+          // Defence in depth against duplicated answers. The `pi-retry` extension aborts a stream
+          // that goes 90s without a token and hands the turn to pi's auto-retry — a watchdog built
+          // for the interactive TUI, where a "retrying" banner explains the pause. Here nobody sees
+          // it, so it only produces a second copy of the answer. The runtime's commit/rollback
+          // handling survives a retry either way; this stops provoking them.
+          PI_RETRY_STALL_TIMEOUT_MS: '0',
+          // The extension reads these to reach back into the app. Absent them it
+          // registers nothing, so a stale `--tools` list can't grant anything.
+          ...(toolRuntime
+            ? {
+                TUFF_TOOL_GATEWAY_URL: toolRuntime.url,
+                TUFF_TOOL_GATEWAY_TOKEN: toolRuntime.token
+              }
+            : {})
+        },
+        parseLine: createPiLineParser(),
+        terminationErrorCode: PI_CLI_TERMINATION_FAILED,
+        logger: piCliLog
+      },
+      { signal, attachments: collectMessageAttachments(payload.messages) }
     )
-
-    return spawn(executable, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        // `pi` is a `#!/usr/bin/env node` script and version managers keep `node` beside it. A GUI
-        // launch inherits a PATH that contains neither, so without this the shebang fails to resolve
-        // even though the binary itself was found by absolute path.
-        PATH: [dirname(executable), process.env.PATH].filter(Boolean).join(delimiter),
-        // Defence in depth against duplicated answers. The `pi-retry` extension aborts a stream
-        // that goes 90s without a token and hands the turn to pi's auto-retry — a watchdog built
-        // for the interactive TUI, where a "retrying" banner explains the pause. Here nobody sees
-        // it, so it only produces a second copy of the answer. The commit/rollback handling below
-        // survives a retry either way; this stops provoking them.
-        PI_RETRY_STALL_TIMEOUT_MS: '0',
-        // The extension reads these to reach back into the app. Absent them it
-        // registers nothing, so a stale `--tools` list can't grant anything.
-        ...(toolRuntime
-          ? {
-              TUFF_TOOL_GATEWAY_URL: toolRuntime.url,
-              TUFF_TOOL_GATEWAY_TOKEN: toolRuntime.token
-            }
-          : {})
-      }
-    })
-  }
-
-  async *chatStream(
-    payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions
-  ): AsyncGenerator<IntelligenceStreamChunk> {
-    const signal = (options as PiCliRuntimeOptions).signal
-    if (signal?.aborted) return
-
-    // Written before the spawn and removed in the `finally` below: the files exist only for the
-    // length of this run, which is the whole window in which `pi` can read them.
-    const attachments = await spillAttachments(collectMessageAttachments(payload.messages))
-    if (signal?.aborted) {
-      await attachments.cleanup()
-      return
-    }
-
-    let child: ChildProcessByStdio<null, Readable, Readable>
-    try {
-      child = await this.spawnPi(payload, options, attachments.paths)
-    } catch (error) {
-      // A missing CLI throws here, before the run's own cleanup path exists.
-      await attachments.cleanup()
-      throw error
-    }
-
-    const state: PiRunState = {}
-    // Deltas are a preview until `pi` settles the message they belong to, so the run tracks two
-    // marks: everything streamed and still standing, and the part of it pi committed. A retry
-    // rolls the first back to the second; only the second counts as an answer.
-    let streamedLength = 0
-    let committedLength = 0
-    let stderrTail = ''
-
-    child.stderr.setEncoding('utf8')
-    const onStderrData = (chunk: string): void => {
-      stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT)
-    }
-    child.stderr.on('data', onStderrData)
-
-    const exited = new Promise<number | null>((resolve, reject) => {
-      const onError = (error: Error): void => reject(error)
-      child.on('error', onError)
-      child.once('close', (code) => {
-        child.removeListener('error', onError)
-        resolve(code)
-      })
-    })
-    // A consumer can return from the async generator before the normal `await exited` path. Keep
-    // the rejection observed in that teardown path while preserving it for normal error propagation.
-    void exited.catch(() => undefined)
-
-    const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })
-    const hasExited = (): boolean => child.exitCode !== null || child.signalCode !== null
-    const waitForChildExit = (timeoutMs: number): Promise<boolean> => {
-      if (hasExited()) return Promise.resolve(true)
-
-      return new Promise<boolean>((resolve) => {
-        const onExit = (): void => {
-          child.removeListener('exit', onExit)
-          clearTimeout(timer)
-          resolve(true)
-        }
-        const timer = setTimeout(() => {
-          child.removeListener('exit', onExit)
-          resolve(hasExited())
-        }, timeoutMs)
-        child.once('exit', onExit)
-        if (hasExited()) onExit()
-      })
-    }
-    let termination: Promise<boolean> | null = null
-    const terminateChild = (): Promise<boolean> => {
-      if (termination) return termination
-      termination = (async () => {
-        if (hasExited()) return true
-        try {
-          child.kill('SIGTERM')
-        } catch {
-          // The exit event below is still the authoritative process state.
-        }
-        if (await waitForChildExit(CHILD_TERMINATION_GRACE_MS)) return true
-        if (!hasExited()) {
-          try {
-            child.kill('SIGKILL')
-          } catch {
-            // Report the bounded failure after the final wait.
-          }
-        }
-        return await waitForChildExit(CHILD_FORCE_KILL_TIMEOUT_MS)
-      })()
-      return termination
-    }
-    let resolveAbort: (() => void) | null = null
-    const aborted = signal
-      ? new Promise<undefined>((resolve) => {
-          resolveAbort = () => resolve(undefined)
-        })
-      : null
-    const onAbort = (): void => {
-      resolveAbort?.()
-      void terminateChild()
-      // AsyncGenerator.return() cannot preempt a pending readline next(), so close both the
-      // interface and its input here instead of waiting for the child exit event.
-      lines.close()
-      child.stdout.destroy()
-    }
-    signal?.addEventListener('abort', onAbort, { once: true })
-    if (signal?.aborted) onAbort()
-
-    try {
-      let protocolChecked = false
-
-      for await (const line of lines) {
-        if (signal?.aborted) return
-        // `pi` is an external CLI with no version constraint in this repo, so an upgrade can change
-        // the stream contract with nothing to announce it. Its first line carries the protocol
-        // version; a mismatch means the shapes this provider parses were read off a different
-        // protocol than the one now running (#970).
-        //
-        // Warn rather than fail: the parser degrades to skipping lines it does not recognise, and
-        // refusing to answer because a number moved would be worse than a partial reply. Once per
-        // run -- this is a diagnostic, not a stream annotation.
-        if (!protocolChecked) {
-          const protocolVersion = readPiSessionProtocolVersion(line)
-          if (protocolVersion !== null) {
-            protocolChecked = true
-            if (protocolVersion !== PI_SESSION_PROTOCOL_VERSION) {
-              piCliLog.warn(
-                'pi session protocol version differs from the one this parser was written against',
-                {
-                  meta: { observed: protocolVersion, expected: PI_SESSION_PROTOCOL_VERSION }
-                }
-              )
-            }
-          }
-        }
-
-        const event = parsePiCliLine(line)
-        if (!event) continue
-
-        if (event.provider) state.provider = event.provider
-        if (event.model) state.model = event.model
-        if (event.usage) state.usage = event.usage
-        if (event.stopReason) state.stopReason = event.stopReason
-        if (event.failure) state.failure = event.failure
-
-        if (event.retry) {
-          // The one record of how often pi retries behind the app's back — the diagnosis could pin
-          // the mechanism but not the frequency.
-          piCliLog.warn('pi is retrying the turn; dropping the text the failed attempt streamed', {
-            meta: {
-              attempt: event.retry.attempt,
-              maxAttempts: event.retry.maxAttempts,
-              delayMs: event.retry.delayMs
-            }
-          })
-        }
-
-        const partEvents = event.partEvents ?? (event.partEvent ? [event.partEvent] : [])
-        for (const partEvent of partEvents) {
-          if (partEvent.kind === 'message-commit') committedLength = streamedLength
-          else if (partEvent.kind === 'text-reset') streamedLength = committedLength
-
-          yield {
-            delta: '',
-            done: false,
-            partEvent,
-            provider: state.provider,
-            model: state.model
-          }
-        }
-
-        if (event.delta) {
-          streamedLength += event.delta.length
-          yield {
-            delta: event.delta,
-            done: false,
-            provider: state.provider,
-            model: state.model
-          }
-        }
-      }
-
-      if (signal?.aborted) return
-      const code = aborted ? await Promise.race([aborted, exited]) : await exited
-      if (signal?.aborted) return
-      if (code === undefined) return
-      // `pi --mode json` exits 0 however the run went — the non-zero path exists only in text mode —
-      // so its own terminal state is the only trustworthy failure signal. Text that was never
-      // committed does not rescue the run: it belongs to an attempt pi discarded, which is exactly
-      // the case that used to surface as an unexplained empty bubble.
-      if (!committedLength && isFailedStopReason(state.stopReason)) {
-        throw new Error(
-          `[PiCliProvider] pi ended the run without an answer: ${state.failure ?? state.stopReason}`
-        )
-      }
-
-      // Deltas already reached the user, so a late non-zero exit must not discard them; the stream
-      // closes on what did arrive instead of turning a partial answer into an error.
-      if (code !== 0 && !streamedLength) {
-        throw new Error(
-          `[PiCliProvider] pi exited with code ${code}${stderrTail.trim() ? `: ${stderrTail.trim()}` : ''}`
-        )
-      }
-
-      yield {
-        delta: '',
-        done: true,
-        provider: state.provider,
-        model: state.model,
-        ...(state.usage ? { usage: state.usage } : {})
-      }
-    } finally {
-      signal?.removeEventListener('abort', onAbort)
-      // Reached both on cancellation (the consumer breaks, which returns the generator) and on
-      // failure. Without it a stopped turn leaves `pi` running and still billing.
-      const childTerminated = await terminateChild()
-      lines.close()
-      child.stdout.destroy()
-      child.stderr.removeListener('data', onStderrData)
-      child.stderr.destroy()
-      if (!childTerminated) {
-        piCliLog.warn('pi child did not exit after forced termination')
-        child.unref()
-      }
-      await attachments.cleanup()
-      if (!childTerminated) {
-        const error = new Error('PI_CLI_TERMINATION_FAILED') as NodeJS.ErrnoException
-        error.code = 'PI_CLI_TERMINATION_FAILED'
-        // A live child can keep using tools and billing, so this teardown failure must override return().
-        // eslint-disable-next-line no-unsafe-finally
-        throw error
-      }
-    }
   }
 
   async chat(

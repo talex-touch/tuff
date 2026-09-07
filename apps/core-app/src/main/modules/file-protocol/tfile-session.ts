@@ -3,6 +3,8 @@ import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path
 import { net } from 'electron'
 import { FILE_SCHEMA } from '../../config/default'
 import {
+  configureAdditionalAllowedLocalFileRoots,
+  getAdditionalAllowedLocalFileRoots,
   getAllowedLocalFileRoots,
   isAllowedLocalFilePath,
   normalizeDarwinUsersPath
@@ -110,17 +112,12 @@ export function clearTfileProtocolLogState(): void {
   loggedErrorPaths.clear()
 }
 
-let configuredAdditionalAllowedRoots: string[] = []
-
+/**
+ * Kept in the local-file policy so item builders can ask `isServableLocalFilePath` the same
+ * question this handler answers with a 403.
+ */
 export function configureTfileProtocolAdditionalAllowedRoots(roots: string[]): () => void {
-  const configuredRoots = roots.filter((root) => typeof root === 'string' && root.length > 0)
-  configuredAdditionalAllowedRoots = configuredRoots
-
-  return () => {
-    if (configuredAdditionalAllowedRoots === configuredRoots) {
-      configuredAdditionalAllowedRoots = []
-    }
-  }
+  return configureAdditionalAllowedLocalFileRoots(roots)
 }
 
 export function registerTfileProtocolForSession(
@@ -129,7 +126,7 @@ export function registerTfileProtocolForSession(
 ): () => void {
   const allowedRoots = [
     ...getAllowedLocalFileRoots(),
-    ...configuredAdditionalAllowedRoots,
+    ...getAdditionalAllowedLocalFileRoots(),
     ...additionalAllowedRoots
   ]
   targetSession.protocol.handle(FILE_SCHEMA, async (request) => {

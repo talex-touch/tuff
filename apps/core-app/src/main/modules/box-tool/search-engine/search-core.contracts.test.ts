@@ -409,6 +409,10 @@ describe('SearchEngineCore facade contracts', () => {
     state.getUsageStatsBatch.mockResolvedValue([])
     state.togglePin.mockResolvedValue(true)
     core.init({ app: { channel: {} } } as never)
+    // File-commit invalidation is throttled with a per-instance timestamp, and these tests share
+    // one engine. Without this reset the first file commit of a test would be silently swallowed
+    // by whichever test ran before it.
+    ;(core as unknown as { lastFileCommitInvalidationAt: number }).lastFileCommitInvalidationAt = 0
   })
 
   afterEach(async () => {
@@ -1001,13 +1005,75 @@ describe('SearchEngineCore facade contracts', () => {
 
   it('invalidates the recommendation ranking on an app index commit but not a file one', () => {
     // A newly installed app has to be recommendable before the 30-minute
-    // ranking cache expires; file commits fire throughout indexing and never
-    // change the recommendation grid, which excludes files.
-    searchIndexCommitHub.markCommitted(['file-provider'])
-    expect(state.invalidateRecommendationCache).not.toHaveBeenCalled()
-
+    // ranking cache expires; file commits fire throughout indexing, so they are
+    // throttled rather than invalidating outright.
     searchIndexCommitHub.markCommitted(['app-provider'])
     expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
+  })
+
+  it('coalesces a storm of file commits into one ranking invalidation', () => {
+    // A first scan of a large folder emits a commit per batch. Without the throttle each one drops
+    // the cache and restarts a full recompute — the reason files were excluded entirely before.
+    for (let i = 0; i < 200; i += 1) {
+      searchIndexCommitHub.markCommitted(['file-provider'])
+    }
+
+    expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
+  })
+
+  it('flags the first file commit for renderers and stays quiet for the rest', () => {
+    const emit = vi.fn()
+    const abort = new AbortController()
+    core.registerIndexCommitStream({
+      emit,
+      end: vi.fn(),
+      error: vi.fn(),
+      isCancelled: () => abort.signal.aborted,
+      signal: abort.signal
+    } as never)
+
+    searchIndexCommitHub.markCommitted(['file-provider'])
+    expect(emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ recommendationsInvalidated: true })
+    )
+
+    searchIndexCommitHub.markCommitted(['file-provider'])
+    expect(emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ recommendationsInvalidated: false })
+    )
+
+    abort.abort()
+  })
+
+  it('tells subscribed renderers which commits changed the recommendation grid', () => {
+    // Dropping the cache is invisible to an already-open CoreBox: the renderer's index-commit
+    // refresh skips the empty query unless it is told the grid actually changed. Deriving that
+    // renderer-side from providerIds would either miss it or re-query on every file commit.
+    const emit = vi.fn()
+    const abort = new AbortController()
+    core.registerIndexCommitStream({
+      emit,
+      end: vi.fn(),
+      error: vi.fn(),
+      isCancelled: () => abort.signal.aborted,
+      signal: abort.signal
+    } as never)
+
+    searchIndexCommitHub.markCommitted(['app-provider'])
+    expect(emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ recommendationsInvalidated: true })
+    )
+
+    // The original payload fields must survive the enrichment.
+    expect(emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        providerIds: ['app-provider'],
+        revision: expect.any(Number),
+        committedAt: expect.any(Number)
+      })
+    )
+
+    abort.abort()
   })
 
   it('cleans initialized index and provider resources when the facade is destroyed', async () => {

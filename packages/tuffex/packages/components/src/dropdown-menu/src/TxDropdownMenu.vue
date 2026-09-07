@@ -11,6 +11,7 @@ const props = withDefaults(defineProps<DropdownMenuProps>(), {
   trigger: 'click',
   offset: 6,
   closeOnSelect: true,
+  initialFocus: 'first-item',
   animation: () => ({}),
 
   minWidth: 220,
@@ -68,12 +69,30 @@ function focusFirstItem() {
   nextTick(() => getEnabledItems()[0]?.focus())
 }
 
+// A field inside the panel (a search box) owns its caret keys: Home / End must
+// move the caret, not jump to the first / last item. `isContentEditable`
+// covers inherited editability (the caret sits in a <b> inside the editable
+// host); the `closest` walk covers engines without the property, jsdom among
+// them. Neither alone is sufficient.
+function isEditableTarget(target: HTMLElement | null): boolean {
+  if (!target)
+    return false
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+    return true
+  return target.isContentEditable || !!target.closest('[contenteditable]:not([contenteditable="false"])')
+}
+
 function handleKeydown(event: KeyboardEvent) {
   if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key))
     return
 
   const eventTarget = event.target instanceof HTMLElement ? event.target : null
   if (eventTarget?.closest('[role="menu"]') !== panelRef.value)
+    return
+
+  // Arrow keys are still taken on an editable target: that is how the field
+  // hands focus to the list without the host wiring a handler of its own.
+  if ((event.key === 'Home' || event.key === 'End') && isEditableTarget(eventTarget))
     return
 
   const items = getEnabledItems()
@@ -104,7 +123,7 @@ function handleKeydown(event: KeyboardEvent) {
 watch(
   open,
   (isOpen) => {
-    if (isOpen)
+    if (isOpen && props.initialFocus === 'first-item')
       focusFirstItem()
   },
   { immediate: true },

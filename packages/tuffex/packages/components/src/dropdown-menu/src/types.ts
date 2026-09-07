@@ -22,6 +22,14 @@ export interface DropdownMenuProps {
   trigger?: 'click' | 'hover'
   offset?: number
   closeOnSelect?: boolean
+  /**
+   * Where focus lands when the menu opens. `'first-item'` moves it to the
+   * first enabled item, which is what a plain command list wants. `'none'`
+   * leaves focus alone for a host that places it itself — a panel that opens
+   * on a search field must not have that field's focus stolen by the item
+   * below it. Arrow keys from the field still hand focus to the list.
+   */
+  initialFocus?: 'first-item' | 'none'
   animation?: BaseAnchorAnimationOptions
 
   minWidth?: number

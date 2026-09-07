@@ -1,6 +1,7 @@
 import type { FilterChipItem } from '../src/types'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import TxFilterChips from '../src/TxFilterChips.vue'
 import txFilterChipsSource from '../src/TxFilterChips.vue?raw'
 
@@ -12,6 +13,51 @@ const items: FilterChipItem[] = [
 ]
 
 describe('txFilterChips', () => {
+  it('draws a leading icon when the chip declares one, and nothing when it does not', () => {
+    const wrapper = mount(TxFilterChips, {
+      props: {
+        items: [
+          { value: 'starred', label: 'Favorites', iconClass: 'i-ri-star-line' },
+          { value: 'all', label: 'All' },
+        ],
+        modelValue: 'starred',
+      },
+    })
+
+    const chips = wrapper.findAll('.tx-bui-filter-chips__chip')
+    const icon = chips[0].find('.tx-bui-filter-chips__icon')
+    expect(icon.exists()).toBe(true)
+    expect(icon.classes()).toContain('i-ri-star-line')
+    // Decorative: the label is what names the chip.
+    expect(icon.attributes('aria-hidden')).toBe('true')
+    expect(chips[0].text()).toBe('Favorites')
+    expect(chips[1].find('.tx-bui-filter-chips__icon').exists()).toBe(false)
+  })
+
+  it('hides the words under iconOnly but keeps naming the chip, and leaves an iconless chip alone', () => {
+    const wrapper = mount(TxFilterChips, {
+      props: {
+        items: [
+          { value: 'starred', label: 'Favorites', iconClass: 'i-ri-star-line' },
+          { value: 'all', label: 'All' },
+        ],
+        modelValue: 'starred',
+        iconOnly: true,
+      },
+    })
+
+    const chips = wrapper.findAll('.tx-bui-filter-chips__chip')
+    // The glyph stands alone; the name moves where a screen reader and a hover can still reach it.
+    expect(chips[0].classes()).toContain('is-icon-only')
+    expect(chips[0].find('.tx-bui-filter-chips__label').exists()).toBe(false)
+    expect(chips[0].attributes('aria-label')).toBe('Favorites')
+    expect(chips[0].attributes('title')).toBe('Favorites')
+    // No icon to stand in for the words, so the words stay.
+    expect(chips[1].classes()).not.toContain('is-icon-only')
+    expect(chips[1].text()).toBe('All')
+    expect(chips[1].attributes('aria-label')).toBeUndefined()
+  })
+
   it('renders one native button per chip with dot and count', () => {
     const wrapper = mount(TxFilterChips, { props: { items, modelValue: 'all' } })
 
@@ -161,13 +207,151 @@ describe('txFilterChips', () => {
   })
 })
 
+/**
+ * The active fill is one element that moves, so what has to hold is that it
+ * reads its box off the *active* chip, in the row's own scrolled coordinate
+ * space, and that it does not travel to a position nobody asked to see move.
+ *
+ * jsdom lays nothing out, so the chip offsets are stubbed: the assertions are
+ * about which chip is measured and when, which is the part that can break.
+ */
+/**
+ * The props are declared as a runtime object, not `defineProps<FilterChipsProps>()`. The
+ * type-only form resolves the interface from `types.ts` at compile time, and the dev server does
+ * not recompile this SFC when that file changes — `iconOnly` was added to the interface, vitest
+ * (a cold compile) passed, and the running app kept treating it as an unknown attribute. Every
+ * key of the public interface must be a declared runtime prop, or the type is lying.
+ */
+describe('txFilterChips props declaration', () => {
+  it('declares every key of FilterChipsProps at runtime, so the compiler never has to guess', () => {
+    const declared = Object.keys((TxFilterChips as { props: Record<string, unknown> }).props).sort()
+    expect(declared).toEqual(['ariaLabel', 'disabled', 'iconOnly', 'indicator', 'items', 'modelValue', 'role'])
+  })
+})
+
+describe('txFilterChips active-fill indicator', () => {
+  function stubOffsets(wrapper: ReturnType<typeof mount>): void {
+    wrapper.findAll('.tx-bui-filter-chips__chip').forEach((chip, index) => {
+      Object.defineProperties(chip.element, {
+        offsetLeft: { value: index * 100, configurable: true },
+        offsetTop: { value: 4, configurable: true },
+        offsetWidth: { value: 90, configurable: true },
+        offsetHeight: { value: 26, configurable: true },
+      })
+    })
+  }
+
+  it('takes its box from the active chip and follows the selection', async () => {
+    const wrapper = mount(TxFilterChips, {
+      attachTo: document.body,
+      props: { items, modelValue: 'all' },
+    })
+    stubOffsets(wrapper)
+
+    await wrapper.setProps({ modelValue: 'progress' })
+    await nextTick()
+
+    const style = wrapper.attributes('style') ?? ''
+    // Third chip: 2 × 100.
+    expect(style).toContain('--tx-bui-filter-chips-indicator-x: 200px')
+    expect(style).toContain('--tx-bui-filter-chips-indicator-y: 4px')
+    expect(style).toContain('--tx-bui-filter-chips-indicator-w: 90px')
+    expect(style).toContain('--tx-bui-filter-chips-indicator-h: 26px')
+    expect(wrapper.find('.tx-bui-filter-chips__indicator').exists()).toBe(true)
+    expect(wrapper.classes()).toContain('is-sliding')
+
+    wrapper.unmount()
+  })
+
+  it('draws nothing rather than parking the fill on the first chip when nothing is active', async () => {
+    const wrapper = mount(TxFilterChips, {
+      attachTo: document.body,
+      props: { items, modelValue: 'all' },
+    })
+    stubOffsets(wrapper)
+    await wrapper.setProps({ modelValue: 'gone' })
+    await nextTick()
+
+    expect(wrapper.find('.tx-bui-filter-chips__indicator').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('leaves the fill on the chips when the indicator is off', async () => {
+    const wrapper = mount(TxFilterChips, {
+      attachTo: document.body,
+      props: { items, modelValue: 'all', indicator: false },
+    })
+    stubOffsets(wrapper)
+    await wrapper.setProps({ modelValue: 'todo' })
+    await nextTick()
+
+    expect(wrapper.find('.tx-bui-filter-chips__indicator').exists()).toBe(false)
+    // Without `is-sliding` the chip's own `.is-active` fill is the one that paints.
+    expect(wrapper.classes()).not.toContain('is-sliding')
+    expect(wrapper.findAll('.tx-bui-filter-chips__chip')[1].classes()).toContain('is-active')
+
+    wrapper.unmount()
+  })
+
+  it('keeps the no-travel guard up until the frame after the new box is written', async () => {
+    // The order is the bug that shipped: lifting `is-placing` in the same frame the width is
+    // written re-arms the transition mid-write, and the fill tweens up from 0 — paints 0-wide.
+    const frames: FrameRequestCallback[] = []
+    const raf = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+      frames.push(cb)
+      return frames.length
+    })
+    try {
+      const wrapper = mount(TxFilterChips, {
+        attachTo: document.body,
+        props: { items, modelValue: 'todo' },
+      })
+      stubOffsets(wrapper)
+      await wrapper.setProps({ items: [...items] })
+      await nextTick()
+      // Geometry is written…
+      expect(wrapper.attributes('style')).toContain('--tx-bui-filter-chips-indicator-w: 90px')
+      // …and the guard is still up: nothing may have lifted it before the DOM write landed.
+      expect(wrapper.classes()).toContain('is-placing')
+      // Only the deferred frame lifts it.
+      expect(frames.length).toBeGreaterThan(0)
+      frames.splice(0).forEach((cb) => cb(0))
+      await nextTick()
+      expect(wrapper.classes()).not.toContain('is-placing')
+      wrapper.unmount()
+    }
+    finally {
+      raf.mockRestore()
+    }
+  })
+
+  it('re-measures a rebuilt chip list without travelling to the new position', async () => {
+    const wrapper = mount(TxFilterChips, {
+      attachTo: document.body,
+      props: { items, modelValue: 'todo' },
+    })
+    stubOffsets(wrapper)
+
+    // A host that refetches its options hands over a new array; the user picked
+    // nothing, so the fill must land rather than slide.
+    await wrapper.setProps({ items: [...items] })
+    await nextTick()
+
+    expect(wrapper.classes()).toContain('is-placing')
+
+    wrapper.unmount()
+  })
+})
+
 describe('txFilterChips chip padding', () => {
-  it('styles the chip through the scoped root so the scope reset cannot zero its padding', () => {
+  it('gives the chip padding enough weight to survive the scope reset', () => {
     // `@include bui-scope` emits `.tx-bui-filter-chips button { padding: 0 }`
-    // (0,1,1). A bare `.tx-bui-filter-chips__chip` (0,1,0) loses to it, and the
-    // chip renders with no horizontal padding. jsdom applies no CSS, so this is
+    // (0,1,1), which outranks the bare `.tx-bui-filter-chips__chip` rule
+    // (0,1,0): the chip rendered with its label flush against the pill edge.
+    // Only the padding is lifted — raising the whole rule would rewrite the
+    // parent of every `&` nested inside it. jsdom applies no CSS, so this is
     // read from the source.
     expect(txFilterChipsSource).toMatch(/\.tx-bui-filter-chips \.tx-bui-filter-chips__chip \{[^}]*padding: 0 10px/)
-    expect(txFilterChipsSource).not.toMatch(/^\.tx-bui-filter-chips__chip \{/m)
   })
 })
