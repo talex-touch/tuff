@@ -647,9 +647,9 @@ describe('AssistantModule screenshot translation', () => {
     // y = 500 - VOICE_DOCK_HEIGHT - 24. Both track the dock constants in module.ts.
     expect(voiceDock.window.setBounds).toHaveBeenCalledWith({
       x: 220,
-      y: 376,
+      y: 364,
       width: 360,
-      height: 100
+      height: 112
     })
     expect(voiceDock.window.show).not.toHaveBeenCalled()
     expect(voiceDock.window.focus).not.toHaveBeenCalled()

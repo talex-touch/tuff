@@ -53,7 +53,16 @@ const CAPTURE_START_TIMEOUT_MS = 2000
 
 type NoticeTone = keyof typeof NOTICE_HOLD_MS
 type NoticeAction = 'undo' | 'retry'
-type Notice = { message: string; tone: NoticeTone; action?: NoticeAction }
+type Notice = { message: string; tone: NoticeTone; action?: NoticeAction; icon?: string }
+
+/**
+ * The one failure class that has a picture worth drawing.
+ *
+ * A microphone with a line through it says "the device, not the words" before the sentence is
+ * read. It is deliberately not given to quota, congestion or the unclassified fallback: an icon
+ * of a microphone next to "out of credit" would name the wrong culprit.
+ */
+const MIC_FAILURE_ICON = 'i-carbon-microphone-off'
 
 /** Bars in the input meter. Each one holds a single 10Hz level frame, so 24 ≈ 2.4s of history. */
 const WAVE_BAR_COUNT = 24
@@ -92,14 +101,14 @@ const PILL_BASE_HEIGHT = 44
  * Not the 64 that two lines strictly need: at that height the text block fills the card edge
  * to edge and the pill reads as a pill someone stretched. A card is allowed to have air.
  */
-const PILL_TALL_HEIGHT = 76
+const PILL_TALL_HEIGHT = 88
 /**
  * The shape changes with the height, not just the size.
  *
- * A pill radius is half its height by definition, so keeping `radius: full` at 76px turns the
+ * A pill radius is half its height by definition, so keeping `radius: full` at 88px turns the
  * two ends into oversized semicircles and eats the room the second line needs. Expanding into
  * a rounded rectangle is what the shape is actually doing — one line is a pill, two lines is a
- * card — so the radius says so, and stays far below the 38 that would make it a pill again.
+ * card — so the radius says so, and stays far below the 44 that would make it a pill again.
  */
 const PILL_TALL_RADIUS = 24
 /**
@@ -113,6 +122,8 @@ const CONTROL_BASE_SIZE = 34
 const CONTROL_TALL_SIZE = 40
 /** padding (10) + both round slots (68) + both gaps (16); the centre gets what is left. */
 const PILL_CHROME_WIDTH = 94
+/** The leading failure icon and its gap, when the notice carries one. */
+const NOTICE_ICON_WIDTH = 26
 
 const props = withDefaults(
   defineProps<{
@@ -300,8 +311,8 @@ function emitFinished(): void {
   emit('finished')
 }
 
-function showNotice(message: string, tone: NoticeTone, action?: NoticeAction): void {
-  notice.value = { message, tone, ...(action ? { action } : {}) }
+function showNotice(message: string, tone: NoticeTone, action?: NoticeAction, icon?: string): void {
+  notice.value = { message, tone, ...(action ? { action } : {}), ...(icon ? { icon } : {}) }
   listening.value = false
   transcribing.value = false
   startingVoiceCapture.value = false
@@ -334,12 +345,20 @@ function classifyFailure(error: unknown): Notice {
   // English, truncated by the width, and offers no way out. They are entirely classifiable, so
   // they get our own copy and no retry — retrying finds the same missing microphone.
   if (/PERMISSION|DENIED|NOT_?AUTHORIZ|UNAUTHORIZED/.test(haystack))
-    return { message: t('assistant.voicePanel.microphoneDenied'), tone: 'warning' }
+    return {
+      message: t('assistant.voicePanel.microphoneDenied'),
+      tone: 'warning',
+      icon: MIC_FAILURE_ICON
+    }
 
   const deviceMissing =
     /CANNOT_?FIND|NO_?(INPUT_?)?DEVICE|DEVICE_?NOT_?FOUND|NO_?MICROPHONE|CAPTURE_?UNAVAILABLE|UNSUPPORTED/
   if (deviceMissing.test(haystack))
-    return { message: t('assistant.voicePanel.microphoneMissing'), tone: 'warning' }
+    return {
+      message: t('assistant.voicePanel.microphoneMissing'),
+      tone: 'warning',
+      icon: MIC_FAILURE_ICON
+    }
 
   if (/QUOTA|CREDIT|INSUFFICIENT_BALANCE/.test(haystack))
     return { message: t('assistant.voicePanel.quotaExhausted'), tone: 'warning' }
@@ -452,7 +471,7 @@ function showVoiceSessionError(error: unknown): void {
   const classified = classifyFailure(error)
   // Quota and congestion get no retry button: retrying is still out of credit, still busy.
   const retryable = classified.tone === 'danger'
-  showNotice(classified.message, classified.tone, retryable ? 'retry' : undefined)
+  showNotice(classified.message, classified.tone, retryable ? 'retry' : undefined, classified.icon)
 }
 
 async function startVoiceSession(force = false): Promise<void> {
@@ -478,7 +497,12 @@ async function startVoiceSession(force = false): Promise<void> {
     if (hasLevel.value || !listening.value) return
     // Not slow — not answering. Breathing forever would be its own kind of lie.
     cancelVoiceSession()
-    showNotice(t('assistant.voicePanel.microphoneUnresponsive'), 'warning')
+    showNotice(
+      t('assistant.voicePanel.microphoneUnresponsive'),
+      'warning',
+      undefined,
+      MIC_FAILURE_ICON
+    )
   }, CAPTURE_START_TIMEOUT_MS)
   // The orb is re-rolled per session through this key; changing its `state` would not.
   sessionSeq.value += 1
@@ -628,7 +652,7 @@ function handleKeyup(event: KeyboardEvent): void {
 
 // Measured rather than expressed in CSS: `width: fit-content` is not animatable without
 // `interpolate-size`, and the window behind the pill deliberately never resizes.
-watch([centerText, showsOrb], async () => {
+watch([centerText, showsOrb, () => notice.value?.icon], async () => {
   if (!centerText.value) {
     pillWidth.value = PILL_BASE_WIDTH
     pillHeight.value = PILL_BASE_HEIGHT
@@ -636,10 +660,8 @@ watch([centerText, showsOrb], async () => {
   }
   await nextTick()
   const textWidth = centerTextRef.value?.scrollWidth ?? 0
-  pillWidth.value = Math.min(
-    PILL_MAX_WIDTH,
-    Math.max(PILL_BASE_WIDTH, textWidth + PILL_CHROME_WIDTH)
-  )
+  const chrome = PILL_CHROME_WIDTH + (notice.value?.icon ? NOTICE_ICON_WIDTH : 0)
+  pillWidth.value = Math.min(PILL_MAX_WIDTH, Math.max(PILL_BASE_WIDTH, textWidth + chrome))
 
   // Width first, height second. Truncating at the cap loses the half of the sentence that
   // says what to do — "Cannot find m…" is exactly the wrong half to drop — so once the widest
@@ -723,6 +745,13 @@ onBeforeUnmount(() => {
       />
 
       <div class="voice-dock__slot">
+        <span
+          v-if="notice?.icon && centerText"
+          class="voice-dock__icon"
+          :class="notice.icon"
+          data-testid="voice-notice-icon"
+          aria-hidden="true"
+        />
         <p
           v-if="centerText"
           ref="centerTextRef"
@@ -936,15 +965,51 @@ onBeforeUnmount(() => {
 
 /*
  * Two lines read as a paragraph, not as a label. Centring them leaves ragged edges on both
- * sides; the round controls stay vertically centred because they are still controls.
+ * sides, so the text goes left and stays at the top of the card.
+ *
+ * The controls drop to the bottom edge with it: at this height, centred controls float in the
+ * middle of a surface whose content has already moved up, and the card reads as a pill that
+ * failed to fill. Top is what happened, bottom is what you can do about it. They stay circles —
+ * a control that changes shape with the surface stops being recognisable as the same control.
  */
+.voice-dock--expanded {
+  align-items: flex-end;
+}
+
 .voice-dock--expanded .voice-dock__slot {
   height: auto;
+  align-self: flex-start;
   justify-content: flex-start;
 }
 
 .voice-dock--expanded .voice-dock__text {
   text-align: left;
+}
+
+/* Sized in em so it tracks the caption text it leads. */
+.voice-dock__icon {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  font-size: 1.35em;
+  color: currentcolor;
+}
+
+/*
+ * Pinned to the first line rather than centred on the block: an icon drifting to the vertical
+ * middle of a two-line paragraph reads as decoration instead of as the subject of the sentence.
+ * On one line there is no block to drift in, so it stays centred with the text.
+ */
+.voice-dock--expanded .voice-dock__icon {
+  align-self: flex-start;
+  margin-top: 1px;
+}
+
+.voice-dock--danger .voice-dock__icon {
+  color: var(--shell-danger);
+}
+
+.voice-dock--warning .voice-dock__icon {
+  color: var(--shell-warning);
 }
 
 .voice-dock__wave {
