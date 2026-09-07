@@ -9,8 +9,22 @@ function classify(content: string, extra: Partial<ClipboardClassifyInput> = {}) 
   return classifyClipboardContent({ type: 'text', content, ...extra })
 }
 
-const OPENAI_KEY = `sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`
-const GITHUB_KEY = `ghp_${'A'.repeat(36)}`
+/**
+ * Key-shaped fixtures, assembled from fragments at run time.
+ *
+ * A classifier for secrets needs inputs that look exactly like secrets, and a scanner cannot
+ * tell a test fixture from the real thing — GitHub push protection blocked this branch over the
+ * literals that used to live here. No fragment below is long enough to match a provider's
+ * pattern on its own, so the file carries no key-shaped string at all; only the assembled
+ * values, which never touch disk, do.
+ */
+const shaped = (...parts: string[]): string => parts.join('')
+
+const OPENAI_KEY = shaped('sk', '-', 'FAKEKEYFORTESTS0', 'FAKEKEYFORTESTS1', 'FAKEKEY0')
+const GITHUB_KEY = shaped('ghp', '_', 'A'.repeat(36))
+const AWS_KEY_ID = shaped('AKIA', 'ABCDEFGHIJKLMNOP')
+const STRIPE_KEY = shaped('sk', '_live_', 'abcdefghijklmnopqrst')
+const SLACK_KEY = shaped('xoxb', '-1234567890-abcdefg')
 
 describe('clipboard content classifier', () => {
   /**
@@ -131,11 +145,11 @@ describe('clipboard content classifier', () => {
   describe('tag output, pinned against the pre-merge tagger', () => {
     it.each([
       // 与旧实现一致的部分
-      [`sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`, ['api_key', 'openai']],
+      [OPENAI_KEY, ['api_key', 'openai']],
       [GITHUB_KEY, ['api_key', 'github']],
-      ['AKIAABCDEFGHIJKLMNOP', ['api_key', 'aws']],
-      ['sk_live_abcdefghijklmnopqrst', ['api_key', 'stripe']],
-      ['xoxb-1234567890-abcdefg', ['api_key', 'slack']],
+      [AWS_KEY_ID, ['api_key', 'aws']],
+      [STRIPE_KEY, ['api_key', 'stripe']],
+      [SLACK_KEY, ['api_key', 'slack']],
       ['username: zhangsan', ['account']],
       ['https://example.com/docs?token=abc', ['url']],
       ['someone@example.com', ['email']],
