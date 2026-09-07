@@ -117,6 +117,7 @@
     "esno": "^4.8.0",
     "gulp": "^5.0.1",
     "gulp-autoprefixer": "^9.0.0",
+    "postcss": "catalog:",
     "sass": "^1.101.0",
     "sucrase": "^3.35.1",
     "ts-node": "^10.9.2",
