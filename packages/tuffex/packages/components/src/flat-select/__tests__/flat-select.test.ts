@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxFlatSelect from '../src/TxFlatSelect.vue'
 import TxFlatSelectItem from '../src/TxFlatSelectItem.vue'
+import flatSelectSource from '../src/TxFlatSelect.vue?raw'
 
 function mountSelect(props: Record<string, unknown> = {}) {
   return mount(TxFlatSelect, {
@@ -204,5 +205,45 @@ describe('txFlatSelect', () => {
     finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('txFlatSelect settling back onto the trigger', () => {
+  it('fades the panel chrome out while it collapses instead of dropping it in one frame', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountSelect({ modelValue: 'b' })
+    await nextTick()
+
+    await wrapper.find('.tx-flat-select__trigger').trigger('click')
+    await nextTick()
+    const dropdown = wrapper.find('.tx-flat-select__dropdown')
+    expect(dropdown.classes()).toContain('is-visible')
+    expect(dropdown.classes()).not.toContain('is-closing')
+
+    await wrapper.find('.tx-flat-select__trigger').trigger('click')
+    await nextTick()
+    // Still visible, now marked as collapsing: the surface, border, shadow and
+    // the selected row's accent all animate away over the same 200ms, so the
+    // label does not blink as the panel hands back to the trigger.
+    expect(dropdown.classes()).toContain('is-visible')
+    expect(dropdown.classes()).toContain('is-closing')
+
+    vi.advanceTimersByTime(200)
+    await nextTick()
+    expect(dropdown.classes()).not.toContain('is-visible')
+    expect(dropdown.classes()).not.toContain('is-closing')
+
+    vi.useRealTimers()
+    wrapper.unmount()
+  })
+
+  it('keeps the collapsing chrome transitional rather than instant', () => {
+    // jsdom applies no stylesheet, so the transition is read from the source.
+    const closing = flatSelectSource.slice(flatSelectSource.indexOf('&.is-closing'))
+    const body = closing.slice(0, closing.indexOf('&__'))
+    expect(body).toContain('background: transparent')
+    expect(body).toContain('border-color: transparent')
+    expect(body).toContain('box-shadow: none')
+    expect(flatSelectSource).toMatch(/&\.is-animating \{[\s\S]*?background-color 0\.2s ease/)
   })
 })

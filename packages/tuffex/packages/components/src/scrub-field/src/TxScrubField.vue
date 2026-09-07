@@ -277,7 +277,9 @@ defineExpose({
   align-items: center;
   min-width: 0;
   height: 26px;
-  padding: 4px 4px 4px 2px;
+  // Horizontal breathing room: the handle glyph and the value both sat hard
+  // against the chip's edge, which reads as clipped rather than compact.
+  padding: 4px 8px 4px 6px;
   background: var(--tx-bui-field, #f2f2f3);
   border-radius: var(--tx-bui-radius-chip, 6px);
   transition:
@@ -306,7 +308,7 @@ defineExpose({
   flex-shrink: 0;
   align-items: center;
   height: 100%;
-  padding: 0 2px;
+  padding: 0 4px;
   font-size: 12px;
   color: var(--tx-bui-ink-3, #9a9da3);
   cursor: ew-resize;

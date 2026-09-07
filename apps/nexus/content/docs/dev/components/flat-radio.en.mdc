@@ -263,6 +263,9 @@ When the container is focused:
 
 ## Interaction Contract
 
+- The sliding indicator is mixed from the text colour into the overlay colour so it reads as raised in both themes. `--tx-bg-color-overlay` alone is white on light but darker than the track on dark, which sank the indicator into the groove and made its travel invisible.
+- Items carry their own keyboard focus ring, so the UA's default outline never lands on top of the indicator.
+
 - Single-select mode uses `role="radiogroup"` on `TxFlatRadio` and `role="radio"` on each item.
 - Multiple mode uses `role="group"` on the container and `role="checkbox"` on each item; the sliding indicator is hidden.
 - Item buttons keep `tabindex="-1"`; focus stays on the container so arrow keys can drive the whole group.
