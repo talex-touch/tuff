@@ -228,7 +228,7 @@ describe('txFlatSelect settling back onto the trigger', () => {
     expect(dropdown.classes()).toContain('is-visible')
     expect(dropdown.classes()).toContain('is-closing')
 
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(240)
     await nextTick()
     expect(dropdown.classes()).not.toContain('is-visible')
     expect(dropdown.classes()).not.toContain('is-closing')
@@ -242,11 +242,26 @@ describe('txFlatSelect settling back onto the trigger', () => {
     // The panel covers the trigger: going translucent mid-travel lets the
     // trigger's own label show through and the word renders doubled.
     const closing = flatSelectSource.slice(flatSelectSource.indexOf('&.is-closing'))
-    const body = closing.slice(0, closing.indexOf('}'))
-    expect(body).toContain('opacity: 0')
-    expect(body).not.toContain('background: transparent')
+    const panelBody = closing.slice(0, closing.indexOf(':deep('))
+    expect(panelBody).toContain('opacity: 0')
+    expect(panelBody).not.toContain('background: transparent')
 
     // Delayed, so the fade only runs once the collapse is nearly done.
-    expect(flatSelectSource).toMatch(/opacity 0\.08s ease 0\.12s/)
+    expect(flatSelectSource).toMatch(/opacity 0\.07s ease 0\.17s/)
+  })
+
+  it('drops the selected row to the trigger\'s own appearance before handing over', () => {
+    // The handover reads as instant only if there is nothing left to change at
+    // the moment it happens: the row sheds its accent, fill and tick over the
+    // first half of the collapse, so the label underneath is already identical.
+    const closing = flatSelectSource.slice(flatSelectSource.indexOf('&.is-closing'))
+    const rowRule = closing.slice(closing.indexOf('.tx-flat-select-item.is-selected'))
+
+    expect(rowRule).toContain('color: var(--tx-text-color-primary')
+    expect(rowRule).toContain('background: transparent')
+    expect(rowRule).toMatch(/__check\)? \{[^}]*opacity: 0/)
+
+    // The row finishes changing well before the panel gives way.
+    expect(rowRule).toMatch(/color 0\.14s ease/)
   })
 })

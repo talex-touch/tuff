@@ -176,12 +176,14 @@ function performClose() {
   isClosing.value = true
   dropdownClip.value = calcClipClosed()
 
+  // Matches the collapse plus its trailing fade (240ms) in the stylesheet;
+  // cutting the panel earlier would put the hard edge back.
   closeTimer = setTimeout(() => {
     isOpen.value = false
     isAnimating.value = false
     isClosing.value = false
     closeTimer = null
-  }, 200)
+  }, 240)
 }
 
 function toggle() {
@@ -413,19 +415,35 @@ onBeforeUnmount(() => {
     }
 
     &.is-animating {
-      // The fade is held back until the collapse has almost finished, then run
-      // fast. The panel sits directly over the trigger, so anything that makes
-      // it translucent while it is still travelling lets the trigger's own
-      // label show through and the two render as one doubled word. Staying
-      // opaque until 120ms keeps it a cover; the last 80ms hand off to the
-      // trigger without the hard cut that made the label appear to blink.
+      // The panel stays fully opaque while it travels — it sits directly over
+      // the trigger, and anything translucent lets the trigger's own label show
+      // through as a second, offset copy of the word. Only once the collapse is
+      // essentially done does it fade, over 70ms.
       transition:
-        clip-path 0.2s cubic-bezier(0.2, 0, 0, 1),
-        opacity 0.08s ease 0.12s;
+        clip-path 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.07s ease 0.17s;
     }
 
+    // What makes the handover invisible is that the row being collapsed onto
+    // stops looking like a menu row first. Its accent, its fill and its tick
+    // fade over the first half of the collapse, so by the time the panel gives
+    // way the label underneath it is already the same words in the same place
+    // in the same colour — there is nothing left to see change.
     &.is-closing {
       opacity: 0;
+
+      :deep(.tx-flat-select-item.is-selected) {
+        color: var(--tx-text-color-primary, #303133);
+        background: transparent;
+        transition:
+          color 0.14s ease,
+          background-color 0.14s ease;
+      }
+
+      :deep(.tx-flat-select-item__check) {
+        opacity: 0;
+        transition: opacity 0.1s ease;
+      }
     }
   }
 }
