@@ -183,6 +183,10 @@ function getMeta(item: PluginClipboardItem): Record<string, unknown> {
 
 const CLIPBOARD_TAG_LABELS: Record<string, string> = {
   api_key: 'API 密钥',
+  private_key: '私钥',
+  jwt: 'JWT',
+  connection_string: '连接串',
+  verification_code: '验证码',
   github: 'GitHub',
   npm: 'npm',
   openai: 'OpenAI',

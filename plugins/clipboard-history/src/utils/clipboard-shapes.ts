@@ -1,4 +1,6 @@
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
+import type { ClipboardSecretHit } from '@talex-touch/utils/clipboard'
+import { classifyClipboardContent, maskSecretSpans } from '@talex-touch/utils/clipboard'
 import {
   getClipboardColorTokens,
   getClipboardOcrInsight,
@@ -39,7 +41,7 @@ export interface ClipboardSecretInfo {
   masked: string
   /**
    * 整条内容的脱敏呈现，供列表标题和预览区使用。
-   * 和 `masked` 的区别只在 env：那里 `masked` 只是值，这里要带上键名才读得懂。
+   * 和 `masked` 的区别在于：正文里嵌了密钥时，这里是整条内容、只有命中的那一段被打码。
    */
   maskedContent: string
   length: number
@@ -62,9 +64,6 @@ export interface ClipboardLinkParam {
   sensitive: boolean
 }
 
-const PRIVATE_KEY_PATTERN = /-----BEGIN ([A-Z ]*)PRIVATE KEY-----/
-const CONNECTION_STRING_PATTERN = /^(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis):\/\//i
-const SENSITIVE_ENV_KEY = /(SECRET|TOKEN|KEY|PASSWORD|PASSWD|CREDENTIAL)/
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'`]+/gi
 const SENSITIVE_PARAM = /^(?:token|access_token|refresh_token|api_key|apikey|key|secret|password|passwd|pwd|auth|authorization|signature|sig)$/i
 
@@ -72,25 +71,6 @@ const SENSITIVE_PARAM = /^(?:token|access_token|refresh_token|api_key|apikey|key
  * 前缀表是「不误报」的全部依据：未命中这里的高熵字符串一律不算密钥。
  * 顺序有意义——`sk-ant-` 必须排在 `sk-` 前面。
  */
-const SECRET_PATTERNS: Array<{
-  service: string
-  test: RegExp
-  critical?: (value: string) => boolean
-}> = [
-  { service: 'GitHub', test: /^gh[pousr]_[A-Za-z0-9]{36}$/ },
-  { service: 'GitHub', test: /^github_pat_[A-Za-z0-9_]{22,}$/ },
-  { service: 'npm', test: /^npm_[A-Za-z0-9]{36}$/ },
-  { service: 'Anthropic', test: /^sk-ant-[A-Za-z0-9_-]{20,}$/ },
-  { service: 'OpenAI', test: /^sk-(?:proj-)?[A-Za-z0-9_-]{20,}$/ },
-  { service: 'AWS', test: /^AKIA[0-9A-Z]{16}$/ },
-  {
-    service: 'Stripe',
-    test: /^(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{20,}$/,
-    critical: value => value.includes('_live_'),
-  },
-  { service: 'Slack', test: /^xox[baprs]-[A-Za-z0-9-]{10,}$/ },
-  { service: 'Google', test: /^AIza[0-9A-Za-z_-]{35}$/ },
-]
 
 const COMMAND_EXECUTABLES = new Set([
   'awk', 'brew', 'bun', 'cargo', 'cat', 'chmod', 'chown', 'code', 'cp', 'curl', 'dd', 'docker',
@@ -115,130 +95,79 @@ const CREDENTIAL_IN_COMMAND =
 
 const VIDEO_EXTENSIONS = /\.(?:mp4|mov|mkv|webm|avi|m4v)$/i
 
-function maskSecret(value: string): string {
-  const visible = Math.min(12, Math.max(4, Math.floor(value.length / 4)))
-  const hidden = Math.min(20, Math.max(4, value.length - visible))
-  return `${value.slice(0, visible)}${'•'.repeat(hidden)}`
-}
-
-function decodeBase64Url(segment: string): string {
-  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/')
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
-  return atob(padded)
-}
-
-function detectJwt(value: string): ClipboardSecretInfo | null {
-  const parts = value.split('.')
-  if (parts.length !== 3) {
-    return null
-  }
-  const [rawHeader, rawPayload] = parts
-  if (!/^[A-Za-z0-9_-]+$/.test(rawHeader ?? '') || !/^[A-Za-z0-9_-]+$/.test(rawPayload ?? '')) {
-    return null
-  }
-
-  try {
-    const header = JSON.parse(decodeBase64Url(rawHeader as string)) as { alg?: unknown }
-    if (typeof header.alg !== 'string') {
-      return null
-    }
-
-    const payload = JSON.parse(decodeBase64Url(rawPayload as string)) as { exp?: unknown }
-    const exp = typeof payload.exp === 'number' ? payload.exp : null
-    const expired = exp !== null && exp * 1000 < Date.now()
-
-    return {
-      service: `JWT · ${header.alg}`,
-      kind: 'jwt',
-      masked: maskSecret(value),
-      maskedContent: maskSecret(value),
-      length: value.length,
-      critical: false,
-      detail: exp === null ? '无 exp 声明' : expired ? '已过期' : '未过期',
-    }
-  } catch {
-    // 非法 JWT 不是密钥，降级交给后面的前缀表判断。
-    return null
-  }
-}
-
-function maskConnectionString(value: string): string {
-  return value.replace(/(\/\/[^:/@]+:)([^@]+)(@)/, (_, prefix: string, _password: string, suffix: string) => {
-    return `${prefix}${'•'.repeat(8)}${suffix}`
-  })
-}
-
-export function detectSecret(rawContent: string | null | undefined): ClipboardSecretInfo | null {
-  const content = rawContent ?? ''
-
-  const privateKey = content.match(PRIVATE_KEY_PATTERN)
-  if (privateKey) {
-    const label = (privateKey[1] ?? '').trim()
-    return {
-      service: label ? `${label} 私钥` : '私钥',
-      kind: 'private-key',
-      // 私钥正文一个字符都不进 DOM，连掩码里的前缀都不给。
-      masked: '私钥内容不予显示',
-      maskedContent: '私钥内容不予显示',
-      length: content.length,
-      critical: true,
-    }
-  }
-
-  const value = content.trim()
-  if (!value || /\s/.test(value)) {
-    return null
-  }
-
-  const envMatch = value.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.+)$/)
-  if (envMatch && SENSITIVE_ENV_KEY.test(envMatch[1] as string)) {
-    const envKey = envMatch[1] as string
-    const secretValue = envMatch[2] as string
-    return {
-      service: envKey,
-      kind: 'env',
-      masked: maskSecret(secretValue),
-      maskedContent: `${envKey}=${maskSecret(secretValue)}`,
-      length: secretValue.length,
-      critical: false,
-    }
-  }
-
-  if (CONNECTION_STRING_PATTERN.test(value)) {
-    const scheme = value.slice(0, value.indexOf(':'))
-    return {
-      service: `${scheme} 连接串`,
-      kind: 'connection-string',
-      masked: maskConnectionString(value),
-      maskedContent: maskConnectionString(value),
-      length: value.length,
-      critical: true,
-    }
-  }
-
-  const jwt = detectJwt(value)
-  if (jwt) {
-    return jwt
-  }
-
-  for (const pattern of SECRET_PATTERNS) {
-    if (pattern.test.test(value)) {
-      return {
-        service: pattern.service,
-        kind: 'token',
-        masked: maskSecret(value),
-        maskedContent: maskSecret(value),
-        length: value.length,
-        critical: pattern.critical?.(value) ?? false,
-      }
-    }
-  }
-
-  return null
+/** 共享分类器的 kind 比这里多两档（字段式的 token / password），映射到最接近的展示形态。 */
+const SECRET_KIND_MAP: Record<ClipboardSecretHit['kind'], ClipboardSecretInfo['kind']> = {
+  'api-key': 'token',
+  'private-key': 'private-key',
+  jwt: 'jwt',
+  'connection-string': 'connection-string',
+  env: 'env',
+  'token-field': 'token',
+  'password-field': 'token',
 }
 
 /**
- * 密钥记录里被 `detectSecret` 认定为「值」的那一段原文。
+ * JWT 是否过期，只用于洞察区那行副标题。
+ *
+ * 刻意留在插件侧而不是推进共享分类器：共享的那份只回答「是不是密钥、在哪一段」，
+ * 主进程不需要知道一个 token 的 exp，把 base64 解码也塞进去只会让两边都背上不用的代码。
+ */
+function describeJwt(value: string): string | undefined {
+  const parts = value.split('.')
+  if (parts.length !== 3) {
+    return undefined
+  }
+
+  try {
+    const normalized = (parts[1] as string).replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='))) as {
+      exp?: unknown
+    }
+    if (typeof payload.exp !== 'number') {
+      return '无 exp 声明'
+    }
+    return payload.exp * 1000 < Date.now() ? '已过期' : '未过期'
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 密钥判定。实现在 `@talex-touch/utils/clipboard`，主进程用的是同一份。
+ *
+ * 这里以前是一张独立的正则表，且只认「整条内容就是密钥」——所以 `api_key: sk-xxx`
+ * 写在句子里时，主进程给它挂上「API 密钥」标签，这里却判定为否、把 key 明文渲染了
+ * 出来。现在按 span 判定，嵌在正文里的同样会被打码。
+ */
+export function detectSecret(rawContent: string | null | undefined): ClipboardSecretInfo | null {
+  const content = rawContent ?? ''
+  if (!content) {
+    return null
+  }
+
+  const { secrets } = classifyClipboardContent({ type: 'text', content })
+  // 一条内容可能命中多段；洞察区只讲一件事，优先讲最危险的那一段。
+  const primary = secrets.find(hit => hit.critical) ?? secrets[0]
+  if (!primary) {
+    return null
+  }
+
+  const value = content.slice(primary.start, primary.end)
+  const detail = primary.kind === 'jwt' ? describeJwt(value) : undefined
+
+  return {
+    service: primary.service ?? 'API 密钥（未识别服务）',
+    kind: SECRET_KIND_MAP[primary.kind],
+    masked: maskSecretSpans(value, [{ ...primary, start: 0, end: value.length }]),
+    maskedContent: maskSecretSpans(content, secrets),
+    length: value.length,
+    critical: primary.critical,
+    ...(detail === undefined ? {} : { detail }),
+  }
+}
+
+/**
+ * 密钥记录里被认定为「值」的那一段原文。
  *
  * 只在用户显式点开显示开关时才会被调用，所以刻意不做成 `ClipboardSecretInfo` 的字段——
  * 那个对象会被传进列表、洞察、更多信息各处，一旦带上明文就等于掩码没做。
@@ -248,11 +177,10 @@ export function readSecretPlainValue(secret: ClipboardSecretInfo, rawContent: st
   if (secret.kind === 'private-key') {
     return secret.maskedContent
   }
-  if (secret.kind === 'env') {
-    const separator = content.indexOf('=')
-    return separator >= 0 ? content.slice(separator + 1).trim() : content.trim()
-  }
-  return content.trim()
+
+  const { secrets } = classifyClipboardContent({ type: 'text', content })
+  const primary = secrets.find(hit => hit.critical) ?? secrets[0]
+  return primary ? content.slice(primary.start, primary.end) : content.trim()
 }
 
 /**
