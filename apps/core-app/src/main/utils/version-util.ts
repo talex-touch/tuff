@@ -3,22 +3,28 @@ import { app } from 'electron'
 import packageJson from '../../../package.json'
 
 /**
- * Get application version
- * Priority:
- * 1. globalThis.$pkg (from polyfills)
- * 2. process.env.APP_VERSION
- * 3. Bundled CoreApp package.json version
- * 4. app.getVersion()
+ * Get application version.
+ *
+ * Packaged builds must trust Electron's bundle metadata first. The macOS OTA helper inherits the
+ * previous process environment, so APP_VERSION can still contain the version that launched the
+ * handoff even after the application bundle has been replaced.
  *
  * @returns Application version string (e.g., "2.1.0")
  */
 export function getAppVersion(): string {
-  // Priority 1: Global package object (set by polyfills.ts)
+  try {
+    if (app.isPackaged) {
+      const packagedVersion = app.getVersion()
+      if (packagedVersion) return packagedVersion
+    }
+  } catch {
+    // Fall through for tests and early startup environments without complete Electron metadata.
+  }
+
   if (typeof globalThis.$pkg !== 'undefined' && globalThis.$pkg?.version) {
     return globalThis.$pkg.version
   }
 
-  // Priority 2: Environment variable
   if (process.env.APP_VERSION) {
     return process.env.APP_VERSION
   }
@@ -27,7 +33,6 @@ export function getAppVersion(): string {
     return packageJson.version
   }
 
-  // Priority 4: Electron app.getVersion() (if available)
   try {
     return app.getVersion()
   } catch {
