@@ -18,7 +18,7 @@ import {
   selectNextClipboardItemId,
   toHistoryQueryType,
 } from '~/utils/clipboard-items'
-import { classifyClipboardItem } from '~/utils/clipboard-shapes'
+import { classifyClipboardItem, getClipboardPrimaryActionLabel, resolveClipboardPrimaryAction } from '~/utils/clipboard-shapes'
 
 type ClipboardGlyphName = InstanceType<typeof ClipboardGlyph>['$props']['name']
 
@@ -41,6 +41,7 @@ const applyPending = ref(false)
 const favoritePending = ref(false)
 const deletePending = ref(false)
 const pageRoot = ref<HTMLElement | null>(null)
+const imageViewerOpen = ref(false)
 const resolvedImageUrls = ref<Record<number, string>>({})
 const resolvingImageIds = ref<Record<number, boolean>>({})
 const resolvedSourceApplications = reactive(new Map<string, ResolvedApplication | null>())
@@ -90,6 +91,8 @@ const selectedSourceApplication = computed(() => {
   const sourceId = selectedItem.value?.sourceApp
   return sourceId ? (resolvedSourceApplications.get(sourceId) ?? null) : null
 })
+const primaryAction = computed(() => resolveClipboardPrimaryAction(selectedItem.value))
+const primaryActionLabel = computed(() => getClipboardPrimaryActionLabel(primaryAction.value))
 
 const filterOptions: Array<{ key: ClipboardFilter; label: string; glyph: ClipboardGlyphName; ready: boolean }> = [
   { key: 'all', label: '全部', glyph: 'layers', ready: true },
@@ -257,6 +260,17 @@ function handleKeydown(event: KeyboardEvent): void {
     return
   }
 
+  // 浮层开着时它吃掉所有按键：Esc 关自己（不能穿到宿主去关 CoreBox），
+  // 方向键也不该在看不见列表的情况下偷偷移动选中项。
+  if (imageViewerOpen.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.key === 'Escape') {
+      imageViewerOpen.value = false
+    }
+    return
+  }
+
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
     if (!event.metaKey && !event.ctrlKey) {
       return
@@ -288,7 +302,7 @@ function handleKeydown(event: KeyboardEvent): void {
 
   if (event.metaKey || event.ctrlKey) {
     if (!copyPending.value) {
-      void handleCopy()
+      void handlePrimaryAction()
     }
     return
   }
@@ -404,6 +418,30 @@ function handleOpenLink(url: string): void {
   }
 }
 
+/**
+ * Cmd/Ctrl+Enter 的分派。`copy` 是兜底，所以任何新内容类型不接这里也不会没反应。
+ */
+async function handlePrimaryAction(): Promise<void> {
+  const action = primaryAction.value
+
+  if (action.kind === 'preview-image') {
+    imageViewerOpen.value = true
+    return
+  }
+
+  if (action.kind === 'open-link') {
+    handleOpenLink(action.url)
+    return
+  }
+
+  if (action.kind === 'reveal-file') {
+    await handleRevealFile(action.path)
+    return
+  }
+
+  await handleCopy()
+}
+
 async function handleCopyText(value: string): Promise<void> {
   if (!value) {
     return
@@ -415,6 +453,16 @@ async function handleCopyText(value: string): Promise<void> {
   } catch (error) {
     errorMessage.value = error instanceof Error && error.message ? error.message : '复制文本失败'
   }
+}
+
+/**
+ * 「在访达中显示」还没有插件可用的宿主能力：`AppEvents.system.showInFolder` 自 #688
+ * 起不在插件通道白名单里，Prelude 侧也没有对应的 capability。在补上之前先退化为
+ * 复制路径，并且说明白为什么——静默什么都不做才是最坏的那种。
+ */
+async function handleRevealFile(path: string): Promise<void> {
+  await handleCopyText(path)
+  errorMessage.value = '暂不支持在访达中定位，已复制文件路径'
 }
 
 async function handleApply(): Promise<void> {
@@ -522,6 +570,7 @@ watch(filter, async () => {
 })
 
 watch(selectedId, async id => {
+  imageViewerOpen.value = false
   if (id === null) {
     return
   }
@@ -589,12 +638,14 @@ watch(
             </button>
           </div>
           <ClipboardDetail
+            v-model:image-viewer-open="imageViewerOpen"
             :item="selectedItem"
             :resolved-image-url="selectedResolvedImageUrl"
             :resolving-image-url="resolvingSelectedImageUrl"
             :source-application="selectedSourceApplication"
             @copy-text="handleCopyText"
             @open-link="handleOpenLink"
+            @preview-file="file => handleRevealFile(file.path)"
           />
         </section>
       </div>
@@ -645,11 +696,12 @@ watch(
           <ClipboardActionBar
             class="footer-right"
             :item="selectedItem"
+            :primary-action-label="primaryActionLabel"
             :copy-pending="copyPending"
             :apply-pending="applyPending"
             :favorite-pending="favoritePending"
             :delete-pending="deletePending"
-            @copy="handleCopy"
+            @primary="handlePrimaryAction"
             @apply="handleApply"
             @toggle-favorite="handleToggleFavorite"
             @delete="handleDelete"
