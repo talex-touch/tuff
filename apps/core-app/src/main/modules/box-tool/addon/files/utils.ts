@@ -21,6 +21,16 @@ import { isServableLocalFilePath } from '../../../../utils/local-file-policy'
 
 const DIRECT_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'gif', 'bmp', 'webp', 'ico'])
 
+const BASE64_MARKER = 'base64,'
+const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
+
+export function isValidBase64DataUrl(value: string): boolean {
+  const markerIndex = value.indexOf(BASE64_MARKER)
+  if (markerIndex === -1) return true
+  const payload = value.slice(markerIndex + BASE64_MARKER.length)
+  return payload.length > 0 && BASE64_PAYLOAD_PATTERN.test(payload)
+}
+
 export function isIndexableFile(
   fullPath: string,
   extension: string,
