@@ -44,6 +44,40 @@ const visibleCount = computed(() => {
 
 const paddingY = computed(() => (visibleCount.value - 1) / 2 * itemHeightPx.value)
 
+/**
+ * Wheel geometry. Rows are laid out flat and scrolled natively — that is what
+ * keeps the momentum, the snapping, the keyboard and the listbox semantics —
+ * and each row is then rotated onto the surface of a drum whose axis runs
+ * through the centre row.
+ *
+ * The step angle is fixed and the radius follows from it, so a row's arc length
+ * matches its laid-out height and the drum neither stretches nor bunches the
+ * labels: r = (itemHeight / 2) / tan(step / 2).
+ */
+const WHEEL_STEP_DEG = 18
+
+const wheelRadiusPx = computed(() => {
+  const half = (WHEEL_STEP_DEG / 2) * (Math.PI / 180)
+  return Math.round(itemHeightPx.value / 2 / Math.tan(half))
+})
+
+/**
+ * Scroll offset in rows, written to the column as a CSS variable so the
+ * rotation of every row is one `calc()` off it. Driving it through a variable
+ * rather than per-row inline styles keeps a 60-row column at one style write
+ * per frame instead of sixty.
+ */
+function writeWheelOffset(colIndex: number) {
+  const el = colRefs.value[colIndex]
+  if (!el)
+    return
+  el.style.setProperty('--tx-picker-scroll', String(el.scrollTop / itemHeightPx.value))
+}
+
+function writeAllWheelOffsets() {
+  for (let i = 0; i < columns.value.length; i++) writeWheelOffset(i)
+}
+
 const localValue = ref<PickerValue>([])
 
 function normalizeValue(v: PickerValue): PickerValue {
@@ -136,7 +170,15 @@ function scrollToIndex(colIndex: number, idx: number, behavior: ScrollBehavior =
   if (!el)
     return
   const top = idx * itemHeightPx.value
-  el.scrollTo({ top, behavior })
+  // jsdom implements `scrollTop` but not `scrollTo`, so the fallback is what
+  // lets the wheel's own tests drive a column at all.
+  if (typeof el.scrollTo === 'function')
+    el.scrollTo({ top, behavior })
+  else
+    el.scrollTop = top
+  // An instant jump fires no scroll event in some engines, and a smooth one
+  // starts a frame later; either way the drum would be a frame stale.
+  writeWheelOffset(colIndex)
 }
 
 function pickIndexFromScroll(colIndex: number) {
@@ -260,6 +302,10 @@ function onScroll(colIndex: number) {
   if (!state)
     return
 
+  // The wheel has to track the finger, so the rotation is written on the event
+  // itself; only the (heavier) value resolution waits for the frame.
+  writeWheelOffset(colIndex)
+
   if (state.rafId != null)
     cancelAnimationFrame(state.rafId)
   state.rafId = requestAnimationFrame(() => {
@@ -298,6 +344,7 @@ async function syncScrollPositions(behavior: ScrollBehavior = 'auto') {
     const idx = getIndexForValue(i, v[i])
     scrollToIndex(i, idx, behavior)
   }
+  writeAllWheelOffsets()
 }
 
 watch(
@@ -393,7 +440,7 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px`, '--tx-picker-visible-count': `${visibleCount}` }">
+    <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px`, '--tx-picker-visible-count': `${visibleCount}`, '--tx-picker-radius': `${wheelRadiusPx}px`, '--tx-picker-step': `${WHEEL_STEP_DEG}` }">
       <div class="tx-picker__highlight" aria-hidden="true" />
 
       <div v-for="(col, colIndex) in columns" :key="col.key ?? colIndex" class="tx-picker__col">
@@ -419,6 +466,7 @@ onBeforeUnmount(() => {
             class="tx-picker__item"
             role="option"
             tabindex="-1"
+            :style="{ '--tx-picker-index': optIndex }"
             :aria-selected="localValue[colIndex] === opt.value"
             :class="{ 'is-disabled': !!opt.disabled, 'is-selected': localValue[colIndex] === opt.value }"
             :disabled="disabled || !!opt.disabled"
@@ -451,7 +499,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px`, '--tx-picker-visible-count': `${visibleCount}` }">
+          <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px`, '--tx-picker-visible-count': `${visibleCount}`, '--tx-picker-radius': `${wheelRadiusPx}px`, '--tx-picker-step': `${WHEEL_STEP_DEG}` }">
             <div class="tx-picker__highlight" aria-hidden="true" />
 
             <div v-for="(col, colIndex) in columns" :key="col.key ?? colIndex" class="tx-picker__col">
@@ -477,6 +525,7 @@ onBeforeUnmount(() => {
                   class="tx-picker__item"
                   role="option"
                   tabindex="-1"
+                  :style="{ '--tx-picker-index': optIndex }"
                   :aria-selected="localValue[colIndex] === opt.value"
                   :class="{ 'is-disabled': !!opt.disabled, 'is-selected': localValue[colIndex] === opt.value }"
                   :disabled="disabled || !!opt.disabled"
@@ -561,6 +610,14 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+// The drum's vanishing point. `perspective` lives on the scroller because its
+// padding box is exactly the visible window, so the axis passes through the
+// centre row no matter how far the column has scrolled. Rows are transformed
+// individually rather than as a shared 3D scene: `overflow` forces a flat
+// transform-style, so a `preserve-3d` wrapper inside a scroller is flattened.
+//
+// The mask fades the top and bottom rows out as they rotate away, which is what
+// sells the surface as curved rather than as a list of tilted rows.
 .tx-picker__scroller {
   height: 100%;
   overflow-y: auto;
@@ -568,6 +625,15 @@ onBeforeUnmount(() => {
   scroll-snap-type: y mandatory;
   -webkit-overflow-scrolling: touch;
   padding: var(--tx-picker-padding-y) 0;
+  perspective: calc(var(--tx-picker-radius, 114px) * 6);
+  perspective-origin: 50% 50%;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 22%,
+    #000 78%,
+    transparent 100%
+  );
 
   &::-webkit-scrollbar {
     width: 0;
@@ -579,6 +645,14 @@ onBeforeUnmount(() => {
   height: 0;
 }
 
+// Every row sits on the drum: rotated by its distance from the scroll position
+// and pushed out to the radius, so it lands back where it was laid out but
+// facing the viewer at an angle. `--tx-picker-scroll` is a float the scroll
+// handler writes on the column, so this stays one composited transform per row
+// with no per-row style writes.
+//
+// Rows past the quarter turn face away; `backface-visibility` retires them
+// instead of leaving mirrored text on the far side of the drum.
 .tx-picker__item {
   scroll-snap-align: center;
   height: var(--tx-picker-item-height);
@@ -592,6 +666,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 0 10px;
+  transform:
+    rotateX(calc((var(--tx-picker-scroll, 0) - var(--tx-picker-index, 0)) * var(--tx-picker-step, 18) * 1deg))
+    translateZ(var(--tx-picker-radius, 114px));
+  backface-visibility: hidden;
+  transition: color 0.18s ease, font-weight 0.18s ease;
+  will-change: transform;
 
   &.is-selected {
     color: var(--tx-text-color-primary, #303133);
@@ -601,6 +681,19 @@ onBeforeUnmount(() => {
   &.is-disabled {
     cursor: not-allowed;
     opacity: 0.45;
+  }
+}
+
+// Flat fallback: without a drum there is nothing for the mask to curve, and a
+// rotated row that cannot animate is just a squashed one.
+@media (prefers-reduced-motion: reduce) {
+  .tx-picker__item {
+    transform: none;
+    transition: none;
+  }
+
+  .tx-picker__scroller {
+    perspective: none;
   }
 }
 
