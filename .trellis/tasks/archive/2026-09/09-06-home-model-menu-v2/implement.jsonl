@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "语义控件 / aria / i18n / shell token / 加载态例外规则，面板与 pill 都要遵守"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useModelFavorites / useModelOptions 的 composable 形态与纯函数拆分"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "APP_SETTING 默认值归属与顶层浅合并 hydration 契约，新增 conversation 区块"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "TxDropdownMenu 新 prop / 键盘契约变化必须同步 dropdown-menu zh/en 文档与包装组件"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "provider 图标映射已有两份私有副本，上提为共享模块而非第三份"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "HomePage.vue / lang JSON 是其他会话在途的共享文件，按 guide 暂存"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "禁用模式（div @click 等）与最小验证命令"}

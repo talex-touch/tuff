@@ -36,7 +36,7 @@ import {
   type ThemeWindowPreference
 } from '~/modules/storage/theme-style'
 import { createRendererLogger } from '~/utils/renderer-log'
-import { buildTfileUrl } from '~/utils/tfile-url'
+import { toTfileUrl } from '@talex-touch/utils/network'
 import CoreBoxCanvasSection from './CoreBoxCanvasSection.vue'
 import SectionItem from './SectionItem.vue'
 import { getWallpaperSourceHintKey } from './wallpaper-display-state'
@@ -174,7 +174,7 @@ const bgSourceValue = computed({
 const customBgPath = computed(() => appSetting.background?.customPath ?? '')
 const folderBgPath = computed(() => appSetting.background?.folderPath ?? '')
 const desktopBgPath = computed(() => appSetting.background?.desktopPath ?? '')
-const customBgPreviewUrl = computed(() => buildTfileUrl(customBgPath.value))
+const customBgPreviewUrl = computed(() => toTfileUrl(customBgPath.value))
 const bgBlur = computed({
   get: () => appSetting.background?.blur ?? 0,
   set: (val: number) => {

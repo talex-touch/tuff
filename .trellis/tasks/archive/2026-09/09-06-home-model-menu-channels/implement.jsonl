@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "行改用 tuffex 既有 item 组件而不是手搓：组件复用与 SFC 结构约定"}
+{"file": ".trellis/spec/frontend/bui-component-family.md", "reason": "TxCardItem / TxDropdownMenu 的家族定位与 token 命名（新增 --tx-card-item-*-bg 要合表）"}
+{"file": ".trellis/spec/frontend/anchor-overlay-chain.md", "reason": "面板 teleport 到 body 后的 token 继承与焦点/键盘契约，分组头不得进入方向键遍历"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "渠道图标表照 model-family-icons 的既有形态，禁止再抄一份查找表"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "ModelBucket / ModelFilter 的联合类型改写与 satisfies 用法"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "renderer 侧图标（UnoCSS safelist）与最小验证命令"}

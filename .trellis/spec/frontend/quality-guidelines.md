@@ -33,6 +33,8 @@ Quality in this repo means matching the owning surface, preserving trust boundar
 - Normalize untrusted or cross-layer payloads at the boundary.
 - Keep generated chunks, local profiles, raw logs, and exploratory evidence out of source changes unless an evidence README explicitly lists them as curated artifacts.
 - Completing onboarding must mark the beginner state, hide the primary window through the host app SDK, and only then optionally summon CoreBox. Main-window hiding is a completion invariant, not a caller option.
+- CoreBox's `WindowManager.setPinned(pinned)` must no-op when the pin state is unchanged; broad `APP_SETTING` notifications include onboarding choices and main-window bounds saves. New-window creation must still initialize native policy even when the default pin state is unchanged.
+- CoreBox is a nonactivating macOS `NSPanel`. Its `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })` must retain the process-transform skip: Electron's default fullscreen handling invokes native `DockHide()` for the whole process, bypassing JavaScript `app.dock.hide()` instrumentation and disrupting the main window. Do not apply this exemption blindly to ordinary `BrowserWindow` instances.
 
 ---
 
@@ -47,6 +49,7 @@ Choose the smallest meaningful verification for the slice:
 - Nexus: focused route/component/build guard tests, `pnpm -C "apps/nexus" run typecheck`, and production preview evidence when the TODO requires it.
 - Always run `git diff --check` before reporting completion.
 - Onboarding window-lifecycle changes: use an isolated profile to finish onboarding, verify the primary window hides, then summon and hide CoreBox and verify the primary window does not reappear.
+- CoreBox pin/workspace regressions must cover initial unpinned creation, unchanged pin values through the real settings subscription, and genuine pin/unpin transitions. In isolated Electron, a bounds/config save with unchanged pin must cause zero workspace setter calls; CoreBox show/hide must preserve its floating, all-Spaces panel behavior without revealing the primary window.
 
 Package-level recommended commands are listed in:
 

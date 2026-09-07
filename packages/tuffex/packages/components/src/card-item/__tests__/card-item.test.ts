@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxCardItem from '../src/TxCardItem.vue'
@@ -160,5 +162,28 @@ describe('txCardItem', () => {
     wrapper.element.dispatchEvent(onRow)
     expect(onRow.defaultPrevented).toBe(true)
     expect(wrapper.emitted('click')).toHaveLength(1)
+  })
+
+  /**
+   * Hover and active are overridable so a host on a dark, translucent surface can re-point them —
+   * an 18% wash of the dark theme's `--tx-bg-color-overlay` over a dark panel is invisible. The
+   * fallbacks are the formulas that used to be inlined, and every existing host still renders on
+   * those, so they have to stay byte-for-byte what they were. jsdom lays out no styles, so the
+   * guard is on the declarations.
+   */
+  it('lets a host re-point hover and active without changing what anyone else renders', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'packages/components/src/card-item/src/TxCardItem.vue'),
+      'utf8',
+    )
+
+    expect(source).toContain(
+      'background: var(\n    --tx-card-item-hover-bg,\n'
+      + '    color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 18%, transparent)\n  );',
+    )
+    expect(source).toContain(
+      'background: var(\n    --tx-card-item-active-bg,\n'
+      + '    color-mix(in srgb, var(--tx-color-primary, #409eff) 8%, transparent)\n  );',
+    )
   })
 })

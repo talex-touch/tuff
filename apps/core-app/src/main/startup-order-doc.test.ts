@@ -47,6 +47,9 @@ describe('startup arrays', () => {
     // flow bus binds to plugin-provided transports.
     expect(foreground.indexOf('permissionModule')).toBeLessThan(foreground.indexOf('pluginModule'))
     expect(foreground.indexOf('flowBusModule')).toBeGreaterThan(foreground.indexOf('pluginModule'))
+    // CoreBox creates its renderer during initialization, and that renderer starts the clipboard
+    // change stream on mount. Register the main stream handler before the renderer can request it.
+    expect(foreground.indexOf('clipboardModule')).toBeLessThan(foreground.indexOf('coreBoxModule'))
   })
 })
 

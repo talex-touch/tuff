@@ -21,6 +21,9 @@ export const PLATFORM = {
   IS_UNIX: runtimePlatform !== "win32",
 } as const;
 
+/** 全量扫描与 macOS FSEvents 实时监听共享的目录深度上限（根目录为 0）。 */
+export const FILE_SCAN_MAX_DEPTH = 24;
+
 // ==================== 基础黑名单 ====================
 
 /** 开发相关目录黑名单（跨平台通用） */

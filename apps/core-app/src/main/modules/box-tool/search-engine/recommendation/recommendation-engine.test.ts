@@ -1,3 +1,4 @@
+import type { TuffItem } from '@talex-touch/utils'
 import { ContextProvider, type ContextSignal, hashContextContent } from './context-provider'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -123,6 +124,7 @@ import {
   calculateNoveltyFactor,
   calculateTimeContextBoost,
   calculateTimeRelevanceScore,
+  COLD_START_BASE_SCORE,
   RecommendationEngine
 } from './recommendation-engine'
 
@@ -315,6 +317,41 @@ function createTimeStats({
     },
     lastUpdated: new Date('2026-05-04T09:00:00.000Z')
   }
+}
+
+/**
+ * Renders everything except `dropped`, which is the shape a real partial rebuild
+ * has: the sources that fail contribute nothing and the rest come back whole.
+ * The cold-start and fallback rebuilds run through here too, so anything not
+ * named by `dropped` survives on those paths as well.
+ */
+function createPartialRebuilder(dropped: string[]) {
+  const missing = new Set(dropped)
+  return {
+    rebuildItems: vi.fn(
+      async (items: Array<{ itemId: string; sourceId: string; source: string; score: number }>) =>
+        items
+          .filter((item) => !missing.has(item.itemId))
+          .map((item) => ({
+            id: item.itemId,
+            source: { id: item.sourceId, type: 'app', name: item.sourceId },
+            kind: 'app',
+            render: { mode: 'default', basic: { title: item.itemId } },
+            scoring: { final: item.score },
+            meta: { recommendation: { source: item.source, score: item.score } }
+          }))
+    )
+  }
+}
+
+/** Candidates the scorer accepts, all on one source type and one usage profile. */
+function createCandidates(itemIds: string[]) {
+  return itemIds.map((itemId) => ({
+    sourceId: 'app-provider',
+    itemId,
+    sourceType: 'app',
+    usageStats: createUsageStats(itemId, { executeCount: 5 })
+  }))
 }
 
 function candidatePerf(totalCandidates: number, filteredCount = totalCandidates) {
@@ -654,13 +691,14 @@ describe('RecommendationEngine', () => {
     expect(ids).toContain('pinned-app')
     expect(ids).toHaveLength(10)
     expect(ids.at(-1)).toBe('pinned-app')
-    // Pinned leads the reason sections now (it used to trail them): an explicit
-    // pin is the strongest statement of intent on the panel. The item order in
-    // `items` above is a separate concern and still puts it last.
+    // Pinning is not a score, so a pinned entry is appended last in the item order — but it claims
+    // a grid slot first, or the one thing the user asked to always see would land in the
+    // "here is a suggestion" list below.
     expect(result.containerLayout?.sections?.at(0)).toMatchObject({
-      id: 'pinned',
-      itemIds: ['pinned-app']
+      id: 'habitual',
+      layout: 'grid'
     })
+    expect(result.containerLayout?.sections?.at(0)?.itemIds?.[0]).toBe('pinned-app')
   })
 
   it('drops the lowest-scored recommendation, not the highest, when pinned items take a slot', async () => {
@@ -1854,6 +1892,218 @@ describe('RecommendationEngine', () => {
     expect(getFilesByType).not.toHaveBeenCalled()
   })
 
+  it('refills the grid from the fallback when only part of the ranking rebuilds', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [
+        createCatalogApp('/Applications/Cold1.app', 10 * DAY_MS, 1),
+        createCatalogApp('/Applications/Cold2.app', 20 * DAY_MS, 2),
+        createCatalogApp('/Applications/Cold3.app', 30 * DAY_MS, 3)
+      ],
+      {}
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getCandidates: vi.fn(async () => ({
+        items: createCandidates(['survives', 'broken-a', 'broken-b', 'broken-c']),
+        perf: candidatePerf(4)
+      })),
+      itemRebuilder: createPartialRebuilder(['broken-a', 'broken-b', 'broken-c'])
+    })
+
+    const result = await engine.recommend({ limit: 4 })
+
+    // Three of the four scored candidates could not render, and every slot is
+    // still filled. Placement is not the claim here: the ranker's absolute scale
+    // (~1e5 in this fixture) sits well above the cold-start band whether or not
+    // the backfill is re-ranked, so the invariant that makes the survivor's lead
+    // deliberate rather than lucky is pinned on its own below.
+    expect(result.items.map((item) => item.id)).toEqual([
+      'survives',
+      '/Applications/Cold1.app',
+      '/Applications/Cold2.app',
+      '/Applications/Cold3.app'
+    ])
+  })
+
+  it('ranks backfill under a survivor that scores below the fallback scale', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    // The two pools are not on one scale — cold-start items arrive at
+    // COLD_START_BASE_SCORE (1e3) and frequent fallbacks at a raw execute count,
+    // against a ranker that writes an absolute score. Nothing bounds a scored
+    // survivor above them, and merging by raw score would let a rebuild failure
+    // promote the backfill over the recommendation that survived it.
+    const survivor = { id: 'survivor', source: { id: 'app-provider' }, scoring: { final: 12 } }
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      resolveFallbackItems: vi.fn(async () => [
+        { id: 'cold', source: { id: 'app-provider' }, scoring: { final: 1000 } }
+      ])
+    })
+
+    const backfilled = await (
+      engine as unknown as {
+        backfillShortfall: (
+          items: unknown[],
+          pinned: unknown[],
+          limit: number
+        ) => Promise<Array<{ id: string; scoring: { final: number } }>>
+      }
+    ).backfillShortfall([survivor], [], 2)
+
+    expect(backfilled.map((item) => item.id)).toEqual(['survivor', 'cold'])
+    // The order above only survives combineRecommendedWithPinned's re-sort
+    // because the score says so, so that is what gets asserted.
+    expect(backfilled[1]?.scoring.final).toBeLessThan(survivor.scoring.final)
+  })
+
+  it('keeps backfill in the fallback band under a normally scored survivor', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    // The ranker's terms are banded by decade — frequency at 1e4, time relevance at 1e5, novelty
+    // at 1e7 — and cold-start sits at 1e3 so that it lands under all of them. A survivor with any
+    // real usage therefore scores far above the fallback pool, and the rewrite has nothing to
+    // correct. Pulling the backfill up to just under such a survivor would still order correctly,
+    // but the score is persisted: recommendation_cache would then hold a never-used app at ~3e5,
+    // indistinguishable from a daily habit to anyone reading the row.
+    const survivor = { id: 'survivor', source: { id: 'app-provider' }, scoring: { final: 3e5 } }
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      resolveFallbackItems: vi.fn(async () => [
+        { id: 'cold-1', source: { id: 'app-provider' }, scoring: { final: 1000 } },
+        { id: 'cold-2', source: { id: 'app-provider' }, scoring: { final: 999 } }
+      ])
+    })
+
+    const backfilled = await (
+      engine as unknown as {
+        backfillShortfall: (
+          items: unknown[],
+          pinned: unknown[],
+          limit: number
+        ) => Promise<Array<{ id: string; scoring: { final: number } }>>
+      }
+    ).backfillShortfall([survivor], [], 3)
+
+    expect(backfilled.map((item) => item.id)).toEqual(['survivor', 'cold-1', 'cold-2'])
+    for (const item of backfilled.slice(1)) {
+      expect(item.scoring.final).toBeLessThan(COLD_START_BASE_SCORE)
+    }
+    expect(backfilled[1]!.scoring.final).toBeGreaterThan(backfilled[2]!.scoring.final)
+  })
+
+  it('leaves the fallback untouched when the rebuild filled every slot', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [createCatalogApp('/Applications/Cold.app', DAY_MS, 1)],
+      {}
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getCandidates: vi.fn(async () => ({
+        items: createCandidates(['a', 'b']),
+        perf: candidatePerf(2)
+      })),
+      itemRebuilder: createPartialRebuilder([])
+    })
+
+    const result = await engine.recommend({ limit: 2 })
+
+    expect(result.items).toHaveLength(2)
+    expect(catalog.getFilesByType).not.toHaveBeenCalled()
+  })
+
+  it('counts pinned slots against the backfill budget', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [
+        createCatalogApp('/Applications/Cold1.app', 10 * DAY_MS, 1),
+        createCatalogApp('/Applications/Cold2.app', 20 * DAY_MS, 2)
+      ],
+      {}
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getPinnedItems: vi.fn(async () => createCandidates(['pinned-app'])),
+      getCandidates: vi.fn(async () => ({
+        items: createCandidates(['survives', 'broken']),
+        perf: candidatePerf(2)
+      })),
+      itemRebuilder: createPartialRebuilder(['broken'])
+    })
+
+    const result = await engine.recommend({ limit: 3 })
+
+    // The pin owns one of the three slots, so the shortfall is one, not two —
+    // backfilling against the full limit would push the pin off the grid it is
+    // pinned to. Pinned items sort last, as they do on every other path.
+    expect(result.items.map((item) => item.id)).toEqual([
+      'survives',
+      '/Applications/Cold1.app',
+      'pinned-app'
+    ])
+  })
+
+  it('does not read the fallback when pinned slots leave no shortfall', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [createCatalogApp('/Applications/Cold.app', DAY_MS, 1)],
+      {}
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getPinnedItems: vi.fn(async () => createCandidates(['pin-a', 'pin-b'])),
+      getCandidates: vi.fn(async () => ({
+        items: createCandidates(['survives', 'broken']),
+        perf: candidatePerf(2)
+      })),
+      itemRebuilder: createPartialRebuilder(['broken'])
+    })
+
+    const result = await engine.recommend({ limit: 3 })
+
+    // Two pins claim two of the three slots and the one survivor fills the
+    // third, so there is no shortfall. Sizing the budget against the full limit
+    // would fetch and rebuild a cold-start list that combine then discards —
+    // invisible in the grid, and a wasted catalog read on every request.
+    expect(result.items.map((item) => item.id)).toEqual(['survives', 'pin-a', 'pin-b'])
+    expect(catalog.getFilesByType).not.toHaveBeenCalled()
+  })
+
+  it('does not spend a backfill slot on something already in the grid', async () => {
+    const dbUtils = createDbUtils()
+    // The freshest catalog app is the one candidate that did rebuild, so the
+    // fallback offers it back under the identity it already occupies.
+    const catalog = createCatalogDbUtils(
+      [
+        createCatalogApp('/Applications/Shared.app', 10 * DAY_MS, 1),
+        createCatalogApp('/Applications/Cold2.app', 20 * DAY_MS, 2),
+        createCatalogApp('/Applications/Cold3.app', 30 * DAY_MS, 3)
+      ],
+      {}
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getCandidates: vi.fn(async () => ({
+        items: createCandidates(['/Applications/Shared.app', 'broken']),
+        perf: candidatePerf(2)
+      })),
+      itemRebuilder: createPartialRebuilder(['broken'])
+    })
+
+    const result = await engine.recommend({ limit: 3 })
+
+    // Deduping only after the slice would let the repeat consume a slot and
+    // silently hand back a short grid, which is the defect being fixed.
+    expect(result.items.map((item) => item.id)).toEqual([
+      '/Applications/Shared.app',
+      '/Applications/Cold2.app',
+      '/Applications/Cold3.app'
+    ])
+  })
+
   it('matches path-form app ids against the foreground app', async () => {
     const dbUtils = createDbUtils()
     const engine = new RecommendationEngine(dbUtils as never)
@@ -2047,7 +2297,15 @@ describe('RecommendationEngine', () => {
 
     const result = await engine.recommend({ limit: 10 })
 
-    expect(result.items.map((item) => item.id)).toEqual(['/Applications/Fresh.app'])
+    // Only Fresh.app passes the gate. The other three still reach the grid, but
+    // as cold-start backfill for the nine slots one candidate cannot fill — so
+    // membership no longer distinguishes them, and the novelty label does.
+    const newlyInstalled = result.items.filter(
+      (item) =>
+        (item.meta?.recommendation as { source?: string } | undefined)?.source === 'newly-installed'
+    )
+    expect(newlyInstalled.map((item) => item.id)).toEqual(['/Applications/Fresh.app'])
+    expect(result.items[0]?.id).toBe('/Applications/Fresh.app')
   })
 
   it('fades novelty from full strength at 48h to nothing at 7 days', () => {
@@ -2237,5 +2495,553 @@ describe('recommendation app-task gate wait', () => {
     await createStubbedEngine().recommend({ limit: 5 })
 
     expect(appTaskGateMock.waitForIdle).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Plugin recommendation candidates used to bypass scoring entirely:
+ * `return (priority ?? 50) * 1e5`. That put a default-priority plugin item at 5e6 — above the
+ * frequency term of an app the user opens every day (~1e6) and above every recency boost (≤1e5) —
+ * from a number the plugin picks for itself and the host cannot verify. It also meant a plugin
+ * item ranked identically whether it had been used a hundred times or never.
+ */
+describe('RecommendationEngine plugin candidate ranking', () => {
+  type ScoreFn = (
+    candidate: unknown,
+    context: unknown,
+    semanticSettings: unknown,
+    semanticProfile: unknown,
+    usagePreferenceProfile: unknown,
+    usageAvoidanceProfile: unknown
+  ) => Promise<number>
+
+  const semanticOff = {
+    localVectorEnabled: false,
+    aiRerankEnabled: false,
+    aiEmbeddingEnabled: false
+  }
+
+  function scoreOf(engine: RecommendationEngine, candidate: unknown): Promise<number> {
+    const score = (engine as unknown as { calculateRecommendationScore: ScoreFn })
+      .calculateRecommendationScore
+    return score.call(engine, candidate, morningContext, semanticOff, null, null, null)
+  }
+
+  const pluginCandidate = (
+    priority: number,
+    usageStats = createUsageStats('open-project', { executeCount: 0, lastExecuted: null })
+  ): unknown => ({
+    sourceId: 'plugin-recommend:demo',
+    itemId: 'open-project',
+    sourceType: 'plugin-recommend',
+    usageStats,
+    source: 'plugin',
+    pluginCandidate: {
+      providerId: 'demo',
+      id: 'open-project',
+      title: 'Open Project',
+      action: 'open',
+      priority
+    }
+  })
+
+  const heavilyUsedApp = (): unknown => ({
+    sourceId: 'app-provider',
+    itemId: '/Applications/Daily.app',
+    sourceType: 'app',
+    usageStats: createUsageStats('/Applications/Daily.app', {
+      executeCount: 100,
+      lastExecuted: new Date()
+    }),
+    source: 'frequent'
+  })
+
+  it('does not let a plugin outrank a daily-driver app by declaring priority 100', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    const appScore = await scoreOf(engine, heavilyUsedApp())
+    const pluginScore = await scoreOf(engine, pluginCandidate(100))
+
+    expect(pluginScore).toBeLessThan(appScore)
+  })
+
+  it('still orders a plugin its own candidates by priority', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    const high = await scoreOf(engine, pluginCandidate(90))
+    const low = await scoreOf(engine, pluginCandidate(10))
+
+    expect(high).toBeGreaterThan(low)
+  })
+
+  it('lets a plugin item climb once the user actually uses it', async () => {
+    // The whole point of removing the short-circuit: usage, not the plugin's own number, is what
+    // moves an item up.
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    const unused = await scoreOf(engine, pluginCandidate(50))
+    const used = await scoreOf(
+      engine,
+      pluginCandidate(
+        50,
+        createUsageStats('open-project', { executeCount: 40, lastExecuted: new Date() })
+      )
+    )
+
+    expect(used).toBeGreaterThan(unused)
+  })
+
+  it('keeps the host-generated clipboard URL card in its own band', async () => {
+    // Not a regression the demotion may take with it: the priority on this card comes from a
+    // signal the host observed itself, so it still outranks usage.
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    const cardScore = await scoreOf(engine, {
+      sourceId: '__builtin_clipboard_url__',
+      itemId: 'clipboard-url-open:https://example.com',
+      sourceType: 'action',
+      usageStats: createUsageStats('clipboard-url-open', { executeCount: 0, lastExecuted: null }),
+      source: 'context',
+      pluginCandidate: {
+        id: 'clipboard-url-open:https://example.com',
+        title: '打开 URL',
+        action: 'open-url',
+        priority: 95
+      }
+    })
+
+    expect(cardScore).toBe(95 * 1e5)
+    expect(cardScore).toBeGreaterThan(await scoreOf(engine, heavilyUsedApp()))
+  })
+})
+
+describe('RecommendationEngine plugin candidate quotas', () => {
+  type CollectFn = (context: unknown) => Promise<Array<{ sourceId: string; itemId: string }>>
+
+  function collect(
+    engine: RecommendationEngine
+  ): Promise<Array<{ sourceId: string; itemId: string }>> {
+    return (engine as unknown as { getPluginCandidates: CollectFn }).getPluginCandidates.call(
+      engine,
+      morningContext
+    )
+  }
+
+  function registerProvider(engine: RecommendationEngine, id: string, count: number): void {
+    engine.registerPluginProvider('demo-plugin', {
+      id,
+      canProvide: () => true,
+      getCandidates: async () =>
+        Array.from({ length: count }, (_unused, index) => ({
+          id: `${id}-candidate-${index}`,
+          title: `Candidate ${index}`,
+          action: 'open'
+        }))
+    } as never)
+  }
+
+  it('caps how many candidates one plugin may contribute', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    registerProvider(engine, 'greedy', 40)
+
+    await expect(collect(engine)).resolves.toHaveLength(5)
+  })
+
+  it('caps the plugins collectively, so well-behaved plugins cannot crowd out built-ins', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    // Each is under the per-provider cap; together they are not.
+    for (let i = 0; i < 6; i += 1) registerProvider(engine, `provider-${i}`, 5)
+
+    await expect(collect(engine)).resolves.toHaveLength(15)
+  })
+
+  it('hydrates plugin candidates with the usage rows the host recorded for them', async () => {
+    const dbUtils = createDbUtils()
+    dbUtils.getUsageStatsBatch = vi.fn(async () => [
+      {
+        ...createUsageStats('used-candidate-0', { executeCount: 7 }),
+        sourceId: 'plugin-recommend:used',
+        itemId: 'used-candidate-0'
+      }
+    ]) as never
+
+    const engine = new RecommendationEngine(dbUtils as never)
+    registerProvider(engine, 'used', 2)
+
+    const candidates = (await collect(engine)) as unknown as Array<{
+      itemId: string
+      usageStats: { executeCount: number }
+    }>
+
+    expect(candidates.find((c) => c.itemId === 'used-candidate-0')?.usageStats.executeCount).toBe(7)
+    // The one with no row keeps the empty placeholder rather than inheriting its sibling's.
+    expect(candidates.find((c) => c.itemId === 'used-candidate-1')?.usageStats.executeCount).toBe(0)
+  })
+
+  it('keeps the candidates when the usage lookup fails', async () => {
+    const dbUtils = createDbUtils()
+    dbUtils.getUsageStatsBatch = vi.fn(async () => {
+      throw new Error('db unavailable')
+    }) as never
+
+    const engine = new RecommendationEngine(dbUtils as never)
+    registerProvider(engine, 'flaky', 3)
+
+    await expect(collect(engine)).resolves.toHaveLength(3)
+  })
+})
+
+describe('RecommendationEngine fallback badges', () => {
+  it('keeps the badge the rebuilder wrote on usage-ranked fallback items', async () => {
+    // `getFallbackRecommendations` used to overwrite `meta.recommendation` with a bare
+    // `{ source: 'frequent' }` after the rebuild, so every tile the backfill supplied showed no
+    // badge while its neighbours read "Frequent" and "Just installed".
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      getFrequentItems: vi.fn(async () => [
+        {
+          sourceId: 'app-provider',
+          itemId: '/Applications/Mission Control.app',
+          sourceType: 'application',
+          usageStats: createUsageStats('/Applications/Mission Control.app', { executeCount: 2 })
+        }
+      ]),
+      itemRebuilder: {
+        rebuildItems: async (items: Array<{ itemId: string; source: string; score: number }>) =>
+          items.map((item) => ({
+            id: item.itemId,
+            kind: 'app',
+            source: { id: 'app-provider', type: 'application', name: 'apps' },
+            render: { mode: 'default', basic: { title: item.itemId } },
+            scoring: { final: item.score },
+            meta: {
+              recommendation: {
+                source: item.source,
+                score: item.score,
+                badge: { text: '$i18n:coreBox.recommendation.badge.frequent', variant: 'frequent' }
+              }
+            }
+          }))
+      }
+    })
+
+    const items = await (
+      engine as unknown as { getFallbackRecommendations: (limit: number) => Promise<TuffItem[]> }
+    ).getFallbackRecommendations(5)
+
+    expect(items).toHaveLength(1)
+    expect(items[0]?.meta?.recommendation).toMatchObject({
+      source: 'frequent',
+      badge: { variant: 'frequent' }
+    })
+  })
+})
+
+/**
+ * The empty state used to be two grids split by pin state (`Recommend` + `Pinned`, both titled in
+ * hardcoded English). It is now two tiers split by *reason*: a one-row grid of things reached for
+ * out of habit, then a list of things the host is proposing, where there is room for the reason
+ * line that makes them make sense.
+ */
+describe('RecommendationEngine empty-state tiers', () => {
+  type LayoutFn = (
+    options: unknown,
+    items: unknown[]
+  ) => {
+    grid?: { columns: number }
+    sections?: Array<{ id: string; title?: string; layout: string; itemIds: string[] }>
+  }
+
+  function layoutOf(items: unknown[]): ReturnType<LayoutFn> {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    return (engine as unknown as { buildContainerLayout: LayoutFn }).buildContainerLayout.call(
+      engine,
+      {},
+      items
+    )
+  }
+
+  const item = (id: string, source: string, pinned = false): unknown => ({
+    id,
+    kind: 'app',
+    source: { id: 'app-provider', type: 'application' },
+    meta: {
+      recommendation: { source },
+      ...(pinned ? { pinned: { isPinned: true } } : {})
+    }
+  })
+
+  const fileItem = (id: string, source: string): unknown => ({
+    id,
+    kind: 'file',
+    source: { id: 'file-provider', type: 'file' },
+    meta: { recommendation: { source } }
+  })
+
+  it('fills the grid habit-first, then by rank', () => {
+    // Habit wins a slot over a higher-ranked suggestion, but the row is filled either way. Seven
+    // items so the grid (one row of six) actually overflows and both sections exist.
+    const sections = layoutOf([
+      item('rank-1', 'time-based'),
+      item('rank-2', 'plugin'),
+      item('rank-3', 'trending'),
+      item('rank-4', 'recent'),
+      item('rank-5', 'context'),
+      item('rank-6', 'cold-start'),
+      item('daily-app', 'frequent')
+    ]).sections
+
+    expect(sections?.map((section) => [section.id, section.layout])).toEqual([
+      ['habitual', 'grid'],
+      ['proposed', 'list']
+    ])
+    // The habitual one is last by rank yet takes the first slot; the rest fill in rank order.
+    expect(sections?.[0]?.itemIds).toEqual([
+      'daily-app',
+      'rank-1',
+      'rank-2',
+      'rank-3',
+      'rank-4',
+      'rank-5'
+    ])
+    expect(sections?.[1]?.itemIds).toEqual(['rank-6'])
+  })
+
+  it('still fills the grid when the user has no usage history at all', () => {
+    // Gating the grid on habit alone left it empty for every new user, and an all-list empty state
+    // loses the launch row entirely.
+    const sections = layoutOf([
+      item('fresh-a', 'newly-installed'),
+      item('fresh-b', 'newly-installed'),
+      item('suggested', 'cold-start')
+    ]).sections
+
+    expect(sections?.[0]).toMatchObject({ id: 'habitual', layout: 'grid' })
+    expect(sections?.[0]?.itemIds).toEqual(['fresh-a', 'fresh-b', 'suggested'])
+  })
+
+  it('keeps files out of the grid however they rank', () => {
+    // A file tile is a grey square: thumbnails are often ungenerated, and for media outside the
+    // tfile allowlist they never render. As a row it gets its path, size and date.
+    const sections = layoutOf([
+      fileItem('/Users/x/Downloads/a.png', 'newly-added'),
+      fileItem('/Users/x/Downloads/b.png', 'newly-added'),
+      item('an-app', 'newly-installed')
+    ]).sections
+
+    expect(sections?.[0]?.itemIds).toEqual(['an-app'])
+    expect(sections?.[1]?.itemIds).toEqual(['/Users/x/Downloads/a.png', '/Users/x/Downloads/b.png'])
+  })
+
+  it('does not flag the habitual grid as an intelligence tray', () => {
+    // `meta.intelligence` is not decoration: it caps the grid at the intelligence column limit and
+    // draws an animated rainbow border. The habitual tier is neither — it is the plain row of
+    // things the user reaches for.
+    const sections = layoutOf([item('a', 'frequent'), item('b', 'plugin')]).sections
+
+    expect(sections?.[0]).not.toHaveProperty('meta.intelligence')
+  })
+
+  it('titles both tiers with i18n keys rather than a hardcoded language', () => {
+    const sections = layoutOf([item('a', 'frequent'), fileItem('/b.png', 'newly-added')]).sections
+
+    expect(sections?.[0]?.title).toBe('$i18n:coreBox.sections.habitual')
+    expect(sections?.[1]?.title).toBe('$i18n:coreBox.sections.proposed')
+  })
+
+  it('caps the grid at one row and spills the rest into the list', () => {
+    const many = Array.from({ length: 10 }, (_unused, index) =>
+      item(`frequent-${index}`, 'frequent')
+    )
+
+    const { grid, sections } = layoutOf(many)
+
+    expect(grid?.columns).toBe(6)
+    expect(sections?.[0]?.itemIds).toHaveLength(6)
+    // A second, half-empty grid row blurs the boundary between the tiers.
+    expect(sections?.[1]?.itemIds).toHaveLength(4)
+  })
+
+  it('gives pinned entries a grid slot even though they sort last', () => {
+    // Pinning is not a score, so pinned items are appended after the ranked ones. Taking the grid
+    // in list order would drop the one thing the user asked to always see into the tier below.
+    const items = [
+      ...Array.from({ length: 8 }, (_unused, index) => item(`frequent-${index}`, 'frequent')),
+      item('pinned-app', 'frequent', true)
+    ]
+
+    const sections = layoutOf(items).sections
+
+    expect(sections?.[0]?.itemIds?.[0]).toBe('pinned-app')
+    expect(sections?.[0]?.itemIds).toHaveLength(6)
+  })
+
+  it('keeps a pinned file out of the grid and lets it lead the list', () => {
+    // A pinned file is still a file: as a tile it is a grey square, and it is what opens the
+    // right-hand preview pane, which the icon row must never do. The pin still counts — it is the
+    // one thing the user asked to always see — so it heads the list instead of trailing it where
+    // pinning appended it.
+    const pinnedFile: unknown = {
+      id: '/Users/x/Pinned/spec.pdf',
+      kind: 'file',
+      source: { id: 'file-provider', type: 'file' },
+      meta: { recommendation: { source: 'pinned' }, pinned: { isPinned: true } }
+    }
+
+    const sections = layoutOf([
+      item('an-app', 'frequent'),
+      fileItem('/Users/x/Downloads/a.png', 'newly-added'),
+      pinnedFile
+    ]).sections
+
+    expect(sections?.map((section) => [section.id, section.layout])).toEqual([
+      ['habitual', 'grid'],
+      ['proposed', 'list']
+    ])
+    expect(sections?.[0]?.itemIds).toEqual(['an-app'])
+    expect(sections?.[1]?.itemIds).toEqual(['/Users/x/Pinned/spec.pdf', '/Users/x/Downloads/a.png'])
+  })
+
+  it('emits only the grid when everything fits in one row', () => {
+    const sections = layoutOf([item('a', 'frequent'), item('b', 'frequent')]).sections
+
+    expect(sections?.map((section) => section.id)).toEqual(['habitual'])
+  })
+
+  it('emits only the list when nothing can be a tile', () => {
+    const sections = layoutOf([
+      fileItem('/a.png', 'newly-added'),
+      fileItem('/b.png', 'newly-added')
+    ]).sections
+
+    expect(sections?.map((section) => [section.id, section.layout])).toEqual([['proposed', 'list']])
+  })
+
+  it('emits no sections for an empty result', () => {
+    expect(layoutOf([]).sections).toEqual([])
+  })
+})
+
+/**
+ * Files reach the grid through a single freshness gate: `files.ctime` is the filesystem birth
+ * time, so re-indexing an old folder cannot make its contents look new and a full scan produces
+ * nothing here. Apps need a second gate only because a self-update rebuilds the bundle and
+ * refreshes its birthtime.
+ */
+describe('RecommendationEngine newly added files', () => {
+  type CollectFn = (
+    limit: number
+  ) => Promise<Array<{ sourceId: string; itemId: string; source: string; firstSeenAt?: number }>>
+
+  const fileRow = (path: string, bornAgoMs: number, overrides: Record<string, unknown> = {}) => ({
+    id: Math.abs(path.length * 31),
+    path,
+    name: path.split('/').pop(),
+    size: 2048,
+    isDir: false,
+    ctime: new Date(Date.now() - bornAgoMs),
+    mtime: new Date(Date.now() - bornAgoMs),
+    ...overrides
+  })
+
+  function engineWith(rows: unknown[], usage: unknown[] = []) {
+    const dbUtils = createDbUtils()
+    const getRecentlyCreatedFiles = vi.fn(async () => rows)
+    Object.assign(dbUtils, {
+      getRecentlyCreatedFiles,
+      getUsageStatsBatch: vi.fn(async () => usage)
+    })
+    const engine = new RecommendationEngine(dbUtils as never)
+    const collect: CollectFn = (limit) =>
+      (engine as unknown as { getNewlyAddedFileItems: CollectFn }).getNewlyAddedFileItems.call(
+        engine,
+        limit
+      )
+    return { engine, collect, getRecentlyCreatedFiles }
+  }
+
+  it('asks the database for a bounded, time-filtered window instead of scanning the index', async () => {
+    // The file index is routinely tens of thousands of rows and this runs on the empty-query path.
+    const { collect, getRecentlyCreatedFiles } = engineWith([])
+
+    await collect(4)
+
+    expect(getRecentlyCreatedFiles).toHaveBeenCalledTimes(1)
+    const [createdAfter, limit] = getRecentlyCreatedFiles.mock.calls[0] as unknown as [Date, number]
+    expect(createdAfter).toBeInstanceOf(Date)
+    expect(Date.now() - createdAfter.getTime()).toBeCloseTo(7 * DAY_MS, -4)
+    expect(limit).toBeGreaterThan(4)
+  })
+
+  it('carries the birth time as firstSeenAt so novelty scores it like a new app', async () => {
+    const bornAgo = 2 * HOUR_MS
+    const { collect } = engineWith([fileRow('/Users/x/Downloads/report.pdf', bornAgo)])
+
+    const [candidate] = await collect(4)
+
+    expect(candidate).toMatchObject({ sourceId: 'file-provider', source: 'newly-added' })
+    expect(Date.now() - (candidate.firstSeenAt ?? 0)).toBeCloseTo(bornAgo, -4)
+  })
+
+  it('drops build output before it can consume the slot budget', async () => {
+    const { collect } = engineWith([
+      fileRow('/Users/x/code/node_modules/react/index.js', HOUR_MS),
+      fileRow('/Users/x/code/dist/bundle.js', HOUR_MS),
+      fileRow('/Users/x/code/.git/COMMIT_EDITMSG.txt', HOUR_MS),
+      fileRow('/Users/x/Downloads/keeper.pdf', HOUR_MS)
+    ])
+
+    const candidates = await collect(4)
+
+    expect(candidates.map((candidate) => candidate.itemId)).toEqual([
+      '/Users/x/Downloads/keeper.pdf'
+    ])
+  })
+
+  it('never returns more than the slot budget', async () => {
+    const { collect } = engineWith(
+      Array.from({ length: 30 }, (_unused, index) =>
+        fileRow(`/Users/x/Downloads/file-${index}.pdf`, HOUR_MS)
+      )
+    )
+
+    await expect(collect(4)).resolves.toHaveLength(4)
+  })
+
+  it('hydrates the usage row so an already-opened file stops being news', async () => {
+    // Novelty is gated on executeCount === 0; without the real row every file would look untouched.
+    const { collect } = engineWith(
+      [fileRow('/Users/x/Downloads/seen.pdf', HOUR_MS)],
+      [
+        {
+          ...createUsageStats('/Users/x/Downloads/seen.pdf', { executeCount: 3 }),
+          sourceId: 'file-provider',
+          itemId: '/Users/x/Downloads/seen.pdf'
+        }
+      ]
+    )
+
+    const [candidate] = await collect(4)
+
+    expect(
+      (candidate as unknown as { usageStats: { executeCount: number } }).usageStats.executeCount
+    ).toBe(3)
+  })
+
+  it('degrades to [] when the lookup fails', async () => {
+    const dbUtils = createDbUtils()
+    Object.assign(dbUtils, {
+      getRecentlyCreatedFiles: vi.fn(async () => {
+        throw new Error('db unavailable')
+      })
+    })
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    await expect(
+      (engine as unknown as { getNewlyAddedFileItems: CollectFn }).getNewlyAddedFileItems.call(
+        engine,
+        4
+      )
+    ).resolves.toEqual([])
   })
 })

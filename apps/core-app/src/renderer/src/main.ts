@@ -14,7 +14,7 @@ import { TX_ICON_CONFIG_KEY } from '@talex-touch/tuffex/icon'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
 import { appSetting } from '~/modules/storage/app-storage'
 import type { I18nInstance } from '~/modules/lang/i18n'
-import { resolveInitialLanguagePreference, setupI18n } from '~/modules/lang'
+import { resolveInitialLanguagePreference, setupI18n, setupLanguageFollow } from '~/modules/lang'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
 import { waitForHydrationSoftTimeout } from '~/modules/startup/hydration-timeout'
 import { createCoreAppIconConfig } from '~/modules/tuffex/icon-config'
@@ -192,6 +192,8 @@ async function bootstrap() {
   const i18n = await runBootStep('Loading localization resources...', 0.05, () =>
     setupI18n({ locale: initialLanguage })
   )
+  // Every window, not only the main one: a locale switched in settings must reach CoreBox too.
+  setupLanguageFollow()
 
   const app = await runBootStep('Creating Vue application instance', 0.05, () => createApp(App))
   app.provide(TX_ICON_CONFIG_KEY, createCoreAppIconConfig())

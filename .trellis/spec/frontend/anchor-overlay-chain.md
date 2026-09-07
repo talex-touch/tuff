@@ -41,6 +41,29 @@
 - Escape closes every open level at once (each anchor listens on document); this is accepted
   behavior, not a bug to fix per-level.
 
+## Panels that host a text field
+
+A dropdown that opens on a search box (the Home model menu) breaks two assumptions the menu
+primitives make. Both are handled in `TxDropdownMenu` since 2026-09-06:
+
+- `initialFocus="none"` keeps the primitive from moving focus to the first item on open; the
+  host places focus itself. Default `'first-item'` is unchanged.
+- `Home` / `End` on an `input`, `textarea` or `contenteditable` target pass through so the caret
+  moves; `ArrowUp` / `ArrowDown` are still claimed there — that is how the field hands focus to
+  the item list without a host handler. `TxDropdownSubmenu` and `TxContextMenuPanel` still take
+  `Home` / `End` everywhere (neither hosts a field).
+
+Focusing anything inside an anchored panel right after `open` flips does not work in Chromium:
+`TxBaseAnchor` keeps `.tx-base-anchor__clip` at `visibility: hidden` until `animateOpen` runs,
+which is two `nextTick`s + `waitForFirstPosition` + `waitForStablePanelSize` (2+ rAF) later, and
+`focus()` inside a `visibility: hidden` subtree is refused. jsdom ignores CSS visibility, so a
+single-`nextTick` focus passes its unit test and silently fails in the app. Host pattern
+(`HomeModelMenu.focusSearchWhenShown`): retry `focus()` once per `requestAnimationFrame`, stop
+when `document.activeElement` is the target, bound the loop (30 frames), and abort on close /
+unmount via a run token. Known gap: the primitive's own `focusFirstItem()` is a single
+`nextTick` and is subject to the same failure — treat "first item focused on open" as unverified
+in a real browser until that is reworked.
+
 ## referenceFullWidth chain
 
 The reference wrapper stack is `.tx-base-anchor__reference` > `.tx-tooltip__reference` >

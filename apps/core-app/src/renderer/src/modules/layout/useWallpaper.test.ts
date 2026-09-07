@@ -115,8 +115,10 @@ vi.mock('~/utils/renderer-log', () => ({
   })
 }))
 
-vi.mock('~/utils/tfile-url', () => ({
-  buildTfileUrl: (path: string) => `tfile://${path}`
+vi.mock('@talex-touch/utils/network', () => ({
+  // Mirrors the real contract: anything that is not a local path passes through untouched.
+  toTfileUrl: (path: string) =>
+    !path || /^(?:https?:|data:)/.test(path) ? path : `tfile://${path}`
 }))
 
 async function flushAsync(): Promise<void> {

@@ -7,7 +7,8 @@ import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useElementSize } from '@vueuse/core'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 
@@ -32,6 +33,11 @@ import { useDetach } from '../../modules/box/adapter/hooks/useDetach'
 import { useFocus } from '../../modules/box/adapter/hooks/useFocus'
 import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
 import { usePreviewHistory } from '../../modules/box/adapter/hooks/usePreviewHistory'
+import {
+  captureFlipSnapshot,
+  playFlip,
+  type FlipSnapshot
+} from '../../modules/box/adapter/hooks/flip-layout'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
 import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
 import { useCoreBoxTheme } from './theme'
@@ -94,10 +100,9 @@ const {
 
 const { lowBatteryMode } = useBatteryOptimizer()
 
-const resultTransitionName = computed(() => {
-  const enabled = appSetting.animation?.resultTransition === true
-  return enabled && !lowBatteryMode.value ? 'result-switch' : ''
-})
+const resultTransitionEnabled = computed(
+  () => appSetting.animation?.resultTransition === true && !lowBatteryMode.value
+)
 
 type CoreBoxSendFeatureItem = TuffItem & {
   meta?: {
@@ -605,7 +610,7 @@ function setItemRef(el: Element | ComponentPublicInstance | null, index: number)
   }
 }
 
-useKeyboard(
+const { scrollActiveItemIntoView } = useKeyboard(
   boxOptions,
   res,
   select,
@@ -745,6 +750,32 @@ function handleGridSelect(index: number, item: TuffItem): void {
   handleItemTrigger(index, item)
 }
 
+/**
+ * BoxGrid wraps tiles past what fits at their minimum width; the keyboard has to step rows by that
+ * same count. The window keeps its height on purpose — a re-wrap while the preview pane slides in
+ * would otherwise resize the window mid-animation — and the list scrolls instead.
+ */
+function handleGridColumnsChange(columns: number): void {
+  if (boxOptions.visibleGridColumns === columns) return
+  boxOptions.visibleGridColumns = columns
+  revealActiveItemAfterReflow()
+}
+
+/**
+ * Re-run the focus scroll once the grid has re-wrapped and the tiles have finished collapsing.
+ * Selecting a file opens the preview pane, which squeezes the grid onto more rows and pushes the
+ * very row just selected below the fold — after the key handler already scrolled.
+ */
+const TILE_REFLOW_SETTLE_MS = 260
+function revealActiveItemAfterReflow(): void {
+  void nextTick(scrollActiveItemIntoView)
+  window.setTimeout(scrollActiveItemIntoView, TILE_REFLOW_SETTLE_MS)
+}
+
+watch(addon, () => {
+  if (isGridMode.value) revealActiveItemAfterReflow()
+})
+
 async function handleDeactivateProvider(id?: string): Promise<void> {
   await deactivateProvider(id)
   await focusWindowAndInput()
@@ -764,6 +795,48 @@ const shouldShowResultArea = computed(() => !isUIMode.value && res.value.length 
 type CoreBoxCanvasArea = 'logo' | 'input' | 'tags' | 'actions' | 'results' | 'addon' | 'footer'
 
 const isCanvasLayout = computed(() => canvasEnabled.value && !isDivisionBox.value)
+
+/**
+ * Fraction of the results row the list keeps when the preview pane is open; mirrors
+ * `.CoreBoxRes-Main.compressed { width: 40% }` below.
+ */
+const COMPRESSED_RESULTS_FRACTION = 0.4
+
+const resultsRootRef = ref<HTMLElement | null>(null)
+const scrollContentRef = ref<HTMLElement | null>(null)
+const { width: resultsRootWidth } = useElementSize(resultsRootRef)
+
+/**
+ * Width BoxGrid may lay out in, known in the same render that toggles the preview pane, so the
+ * column count lands together with the compact state rather than a frame later. Canvas layouts
+ * size the results area themselves; BoxGrid measures there.
+ */
+const gridAvailableWidth = computed(() => {
+  if (isCanvasLayout.value || resultsRootWidth.value <= 0) return undefined
+  return addon.value ? resultsRootWidth.value * COMPRESSED_RESULTS_FRACTION : resultsRootWidth.value
+})
+
+/**
+ * FLIP around a layout change of the results area: rects are captured before this component
+ * re-renders (pre-flush), the DOM settles in one pass — the results column's width, the compact
+ * tiles and the column count all switch together — and each row and tile is played from its old
+ * box to its new one with transforms only. Nothing is transitioned in layout, which is what kept
+ * the collapse from stuttering.
+ */
+let pendingFlipSnapshot: FlipSnapshot | null = null
+function captureResultsLayout(): void {
+  if (pendingFlipSnapshot || !isGridMode.value) return
+  const snapshot = captureFlipSnapshot(scrollContentRef.value)
+  if (!snapshot) return
+  pendingFlipSnapshot = snapshot
+  void nextTick(() => {
+    pendingFlipSnapshot = null
+    playFlip(scrollContentRef.value, snapshot)
+  })
+}
+
+watch(addon, captureResultsLayout, { flush: 'pre' })
+watch(gridAvailableWidth, captureResultsLayout, { flush: 'pre' })
 
 const canvasAreaMap = computed(() => {
   const map = new Map<string, { x: number; y: number; w: number; h: number; visible?: boolean }>()
@@ -918,6 +991,7 @@ const customCss = computed(() => {
     </div>
 
     <div
+      ref="resultsRootRef"
       class="CoreBoxRes flex"
       :class="{
         'CoreBoxRes--canvas': isCanvasLayout,
@@ -957,15 +1031,27 @@ const customCss = computed(() => {
             :native="isMac"
             :native-auto-fallback="!isMac"
           >
-            <div class="CoreBoxRes-ScrollContent" :class="{ 'has-footer': !!res.length }">
-              <Transition :name="resultTransitionName" mode="out-in">
+            <div
+              ref="scrollContentRef"
+              class="CoreBoxRes-ScrollContent"
+              :class="{ 'has-footer': !!res.length }"
+            >
+              <Transition
+                name="result-switch"
+                :css="resultTransitionEnabled"
+                :mode="resultTransitionEnabled ? 'out-in' : undefined"
+              >
                 <BoxGrid
                   v-if="isGridMode"
                   key="grid"
                   :items="res"
                   :layout="boxOptions.layout"
                   :focus="boxOptions.focus"
+                  :compact="!!addon"
+                  :available-width="gridAvailableWidth"
+                  :register-item="setItemRef"
                   @select="handleGridSelect"
+                  @update:visible-columns="handleGridColumnsChange"
                 />
                 <div v-else key="list" class="item-list">
                   <CoreBoxRender
@@ -1228,12 +1314,13 @@ div.CoreBoxRes {
   border-radius: 0 0 var(--corebox-container-radius, 8px) var(--corebox-container-radius, 8px);
   border-top: 1px solid var(--tx-border-color);
 
+  // No width transition: the column switches in one layout pass and the FLIP above moves what is
+  // in it. Animating the width re-laid out every row and the preview image per frame.
   .CoreBoxRes-Main {
     position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
-    transition: width 0.12s ease;
   }
 
   .CoreBoxRes-Main.compressed {

@@ -3,17 +3,29 @@
  * to its lane, rather than all observing the initially resolved placeholder. A one-microtask
  * response delay keeps each range request active long enough to expose eager starts deterministically.
  */
-import { ChunkStatus } from '@talex-touch/utils'
+import { DownloadModule, ChunkStatus } from '@talex-touch/utils'
 import type { ChunkInfo, DownloadTask } from '@talex-touch/utils'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { Readable } from 'node:stream'
+import { PassThrough, Readable } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import '../ai/intelligence-test-harness'
 
+const request = vi.hoisted(() => vi.fn())
 const requestStream = vi.hoisted(() => vi.fn())
+
+vi.mock('../network', () => ({
+  getNetworkService: () => ({ request, requestStream })
+}))
+
+const downloadChunkLog = vi.hoisted(() => ({
+  warn: vi.fn(),
+  info: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn()
+}))
 const downloadWorkerLog = vi.hoisted(() => ({
   warn: vi.fn(),
   info: vi.fn(),
@@ -21,12 +33,9 @@ const downloadWorkerLog = vi.hoisted(() => ({
   debug: vi.fn()
 }))
 
-vi.mock('../network', () => ({
-  getNetworkService: () => ({ requestStream })
-}))
+vi.mock('./logger', () => ({ downloadChunkLog, downloadWorkerLog }))
 
-vi.mock('./logger', () => ({ downloadWorkerLog }))
-
+import { ChunkManager } from './chunk-manager'
 import { DownloadWorker } from './download-worker'
 import { DownloadErrorType, ErrorSeverity } from './error-types'
 import { ProgressTracker } from './progress-tracker'
@@ -34,6 +43,8 @@ import { ProgressTracker } from './progress-tracker'
 const tempDirs: string[] = []
 
 afterEach(async () => {
+  vi.useRealTimers()
+  request.mockReset()
   requestStream.mockReset()
   downloadWorkerLog.warn.mockReset()
   downloadWorkerLog.error.mockReset()
@@ -421,5 +432,103 @@ describe('DownloadWorker chunk concurrency', () => {
       url: downloadTask.url,
       headers: { Range: 'bytes=0-0' }
     })
+  })
+  it('uses the fallback after an APP_UPDATE HEAD 403 and completes the fallback download', async () => {
+    const dir = await createWorkspace()
+    const signedUrl = 'https://updates.example.test/signed/payload.bin'
+    const fallbackUrl = 'https://releases.example.test/payload.bin'
+    const metadata = { fallbackUrl } as Record<string, unknown> & { fallbackUsed?: boolean }
+    const downloadTask = {
+      ...task(dir),
+      url: signedUrl,
+      module: DownloadModule.APP_UPDATE,
+      metadata
+    }
+    const headUrls: string[] = []
+    const streamRequests: Array<{ url: string; range: string }> = []
+    const requestOrder: string[] = []
+    const progressUpdates: Array<{ percentage: number; downloadedSize: number }> = []
+
+    request.mockImplementation(async ({ url }: { url: string }) => {
+      headUrls.push(url)
+      requestOrder.push(`HEAD ${url}`)
+      if (url === signedUrl) {
+        return { status: 403, statusText: 'Forbidden', headers: {} }
+      }
+      return { status: 200, statusText: 'OK', headers: { 'content-length': '4' } }
+    })
+    requestStream.mockImplementation(
+      async (options: { url: string; headers: { Range: string } }) => {
+        requestOrder.push(`GET ${options.url}`)
+        streamRequests.push({ url: options.url, range: options.headers.Range })
+        return { headers: {}, stream: Readable.from([Buffer.from('data')]) }
+      }
+    )
+
+    const worker = new DownloadWorker(1, {} as never, new ChunkManager(4, path.join(dir, 'temp')), {
+      chunk: { maxRetries: 0 },
+      network: { timeout: 30_000, retryDelay: 0 },
+      storage: { tempDir: path.join(dir, 'temp') }
+    } as never)
+
+    await worker.startTask(downloadTask, (_taskId, progress) => {
+      progressUpdates.push({
+        percentage: progress.percentage,
+        downloadedSize: progress.downloadedSize
+      })
+    })
+
+    expect(requestOrder).toEqual([`HEAD ${signedUrl}`, `HEAD ${fallbackUrl}`, `GET ${fallbackUrl}`])
+    expect(headUrls).toEqual([signedUrl, fallbackUrl])
+    expect(streamRequests).toEqual([{ url: fallbackUrl, range: 'bytes=0-3' }])
+    expect(downloadTask.metadata).toMatchObject({ fallbackUsed: true })
+    expect(await fs.readFile(path.join(dir, downloadTask.filename), 'utf8')).toBe('data')
+    expect(downloadTask.chunks).toHaveLength(1)
+    expect(downloadTask.chunks[0]).toMatchObject({
+      downloaded: 4,
+      status: ChunkStatus.COMPLETED
+    })
+    expect(progressUpdates.at(-1)).toEqual({ percentage: 100, downloadedSize: 4 })
+  })
+
+  it('allows an APP_UPDATE stream to outlast 30 seconds while data keeps resetting its idle window', async () => {
+    const dir = await createWorkspace()
+    const downloadTask = { ...task(dir), module: DownloadModule.APP_UPDATE }
+    const chunkInfo = chunk(dir, 0)
+    chunkInfo.end = 3
+    chunkInfo.size = 4
+    const stream = new PassThrough()
+
+    requestStream.mockResolvedValue({ headers: {}, stream })
+    vi.useFakeTimers()
+
+    const download = downloadChunk(
+      new DownloadWorker(
+        1,
+        {} as never,
+        {} as never,
+        { chunk: { maxRetries: 0 }, network: { timeout: 30_000, retryDelay: 0 } } as never
+      ),
+      downloadTask,
+      chunkInfo
+    )
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(requestStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeoutMs: 30_000,
+        streamTimeoutMode: 'caller-signal'
+      })
+    )
+
+    await vi.advanceTimersByTimeAsync(110_000)
+    stream.write(Buffer.from('ab'))
+    await vi.advanceTimersByTimeAsync(110_000)
+    stream.end(Buffer.from('cd'))
+    await download
+
+    expect(await fs.readFile(chunkInfo.filePath, 'utf8')).toBe('abcd')
+    expect(chunkInfo).toMatchObject({ downloaded: 4, status: ChunkStatus.COMPLETED })
   })
 })

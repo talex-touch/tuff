@@ -467,6 +467,90 @@ describe('useSearch CoreBox reopen behavior', () => {
     vi.useRealTimers()
   })
 
+  it('refreshes the empty-query grid only when main flags the commit as recommendation-relevant', async () => {
+    // The empty query is the recommendation grid. Refreshing it on every commit would re-query
+    // continuously while a file index builds; never refreshing it (the behaviour before
+    // 2026-09-04) left an open CoreBox on a stale grid even after a freshly installed app had
+    // already invalidated the ranking cache in main.
+    vi.useFakeTimers()
+    try {
+      const hook = useSearch(createBoxOptions(), createClipboardOptions())
+      await flushPromises()
+      hook.searchVal.value = ''
+      await nextTick()
+      await flushPromises()
+
+      const commitStream = Array.from(state.streams.entries()).find(([name]) =>
+        name.includes('index-committed')
+      )?.[1]
+      expect(commitStream).toBeDefined()
+
+      const baseline = state.searchRequests.length
+
+      // An ordinary file commit during indexing: main did not flag it, so nothing happens.
+      commitStream?.onData({
+        revision: 1,
+        providerIds: ['file-provider'],
+        committedAt: 1,
+        recommendationsInvalidated: false
+      })
+      await vi.advanceTimersByTimeAsync(600)
+      await flushPromises()
+      expect(state.searchRequests).toHaveLength(baseline)
+
+      // A commit main flagged: the open grid re-queries.
+      commitStream?.onData({
+        revision: 2,
+        providerIds: ['app-provider'],
+        committedAt: 2,
+        recommendationsInvalidated: true
+      })
+      await vi.advanceTimersByTimeAsync(500)
+      await flushPromises()
+      expect(state.searchRequests).toHaveLength(baseline + 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not let an unflagged commit cancel a flagged one inside the debounce window', async () => {
+    // Both arrive within the 500ms debounce; the flagged one must win, or a busy file index would
+    // starve the grid refresh it is racing with.
+    vi.useFakeTimers()
+    try {
+      const hook = useSearch(createBoxOptions(), createClipboardOptions())
+      await flushPromises()
+      hook.searchVal.value = ''
+      await nextTick()
+      await flushPromises()
+
+      const commitStream = Array.from(state.streams.entries()).find(([name]) =>
+        name.includes('index-committed')
+      )?.[1]
+      const baseline = state.searchRequests.length
+
+      commitStream?.onData({
+        revision: 1,
+        providerIds: ['app-provider'],
+        committedAt: 1,
+        recommendationsInvalidated: true
+      })
+      await vi.advanceTimersByTimeAsync(100)
+      commitStream?.onData({
+        revision: 2,
+        providerIds: ['file-provider'],
+        committedAt: 2,
+        recommendationsInvalidated: false
+      })
+
+      await vi.advanceTimersByTimeAsync(500)
+      await flushPromises()
+      expect(state.searchRequests).toHaveLength(baseline + 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('runs one trailing committed index refresh after an in-flight search ends', async () => {
     vi.useFakeTimers()
     const queryText = 'progressive-refresh'
@@ -773,6 +857,65 @@ describe('useSearch CoreBox reopen behavior', () => {
       itemKeys: ['app-provider:/Applications/Rebuilt.app'],
       surface: 'core-box'
     })
+  })
+
+  it('orders the empty-query result the way its sections display it', async () => {
+    // The engine ranks a newly added file above the apps that fill the grid tier, while BoxGrid
+    // numbers focus from the grid down. Left in rank order, focus 0 highlights the first tile but
+    // `activeItem` — and with it the preview pane — is the file. Sections may also still name an
+    // item a later filter dropped; the layout handed to the keyboard must not.
+    state.searchResultForRequest = () => ({
+      items: [
+        {
+          id: '/Users/x/Downloads/shot.png',
+          kind: 'file',
+          source: { id: 'file-provider', type: 'file' },
+          render: { mode: 'default', basic: { title: 'shot.png' } },
+          meta: {
+            file: { path: '/Users/x/Downloads/shot.png' },
+            recommendation: { source: 'newly-added' }
+          }
+        } as TuffItem,
+        {
+          id: 'terminal',
+          kind: 'app',
+          source: { id: 'app-provider', type: 'application' },
+          render: { mode: 'default', basic: { title: 'Terminal' } },
+          meta: { recommendation: { source: 'frequent' } }
+        } as TuffItem
+      ],
+      query: { text: '', inputs: [] },
+      duration: 1,
+      sources: [],
+      sessionId: 'tiered-session',
+      containerLayout: {
+        mode: 'grid',
+        grid: { columns: 6 },
+        sections: [
+          { id: 'habitual', layout: 'grid', itemIds: ['terminal', 'dropped-app'] },
+          { id: 'proposed', layout: 'list', itemIds: ['/Users/x/Downloads/shot.png'] }
+        ]
+      }
+    })
+
+    const boxOptions = createBoxOptions()
+    const hook = useSearch(boxOptions, createClipboardOptions())
+    await flushPromises()
+
+    hook.searchVal.value = ''
+    await hook.handleSearchImmediate({ force: true })
+    await flushPromises()
+
+    expect(hook.res.value.map((item) => item.id)).toEqual([
+      'terminal',
+      '/Users/x/Downloads/shot.png'
+    ])
+    expect(boxOptions.focus).toBe(0)
+    expect(hook.activeItem.value?.id).toBe('terminal')
+    expect(boxOptions.layout?.sections?.map((section) => section.itemIds)).toEqual([
+      ['terminal'],
+      ['/Users/x/Downloads/shot.png']
+    ])
   })
 
   it('does not report an exposure when the recommendation list is empty', async () => {

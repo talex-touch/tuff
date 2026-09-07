@@ -82,6 +82,19 @@ the model).
 Gated by `admission.state === 'blocked'`, so it only warns for users mid-onboarding.
 Convert to broadcast on next touch of that file.
 
+## Scenario: Register Main Stream Handlers Before Creating Their Renderer
+
+- A renderer may start a typed stream as soon as its component mounts. For CoreBox,
+  `usePreviewHistory()` starts `ClipboardEvents.change` immediately.
+- The owning main module must therefore register the base event's `onStream` handler before the
+  module that creates/prewarms that renderer. `app-ready`, `dom-ready`, and `did-finish-load` do
+  not prove handler readiness.
+- The foreground startup order keeps `clipboardModule` before `coreBoxModule`; a contract test
+  must compare their actual positions. Reversing them produces
+  `clipboard:monitor:change:stream:start` / `reason=no_handler` during a fresh process.
+- Do not hide the race with renderer retries or a swallowed `.catch()`: those suppress UI fallout,
+  not the missing-handler request or its performance/error records.
+
 ## Scenario: Renderer Quiesce Before Main Handler Teardown
 
 ### 1. Scope / Trigger

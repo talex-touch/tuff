@@ -93,6 +93,7 @@ import { getTypeTagsForExtension, KEYWORD_MAP, WHITELISTED_EXTENSIONS } from './
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import {
   isIndexableFile,
+  isValidBase64DataUrl,
   mapFileToTuffItem,
   scanDirectoryBatches as scanDirectoryBatchesDirect
 } from './utils'
@@ -102,6 +103,11 @@ import { FileScanWorkerClient, type FileScanRunStats } from './workers/file-scan
 import { EmbeddingService } from './embedding-service'
 import { iconService } from '../../../../service/icon-service'
 import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
+import {
+  createIndexedFileAssetLookup,
+  registerFileAssetBridge,
+  sanitizeIndexedFileExtensions
+} from './file-asset-bridge'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import {
   IndexedWriteDeleteExecutorService,
@@ -184,8 +190,6 @@ import { FileProviderSearchResultService } from './services/file-provider-search
 import FileSystemWatcher from '../../file-system-watcher'
 
 const fileProviderLog = getLogger('file-provider')
-const BASE64_MARKER = 'base64,'
-const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
 const FILE_PROVIDER_STARTUP_READY_WAIT_MS = 3_000
 const FILE_EXTENSION_WRITE_MAX_QUEUE = 12
 const FILE_ICON_WRITE_MAX_QUEUE = 24
@@ -196,18 +200,6 @@ const FILE_KEYWORD_BACKFILL_INITIAL_DELAY_MS = 30_000
 const FILE_KEYWORD_BACKFILL_CONFIG_KEY = 'file_provider_keyword_schema_version'
 const fileIntegrityEvidenceService = new IndexedSourceIntegrityEvidenceService()
 const indexFlushEvidenceService = new IndexedWriteFlushEvidenceService()
-
-function isValidBase64DataUrl(value: string): boolean {
-  const markerIndex = value.indexOf(BASE64_MARKER)
-  if (markerIndex === -1) {
-    return true
-  }
-  const payload = value.slice(markerIndex + BASE64_MARKER.length)
-  if (!payload) {
-    return false
-  }
-  return BASE64_PAYLOAD_PATTERN.test(payload)
-}
 
 function chunkArray<T>(items: T[], chunkSize: number): T[][] {
   const safeChunkSize = Math.max(1, Math.floor(chunkSize))
@@ -434,6 +426,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly reconcileWorker = new FileReconcileWorkerClient()
   private readonly fileIndexWorker: FileIndexWorkerClient
   private readonly thumbnailWorker = new ThumbnailWorkerClient()
+  private disposeAssetBridge: (() => void) | null = null
 
   private filePersistencePort: FilePersistencePort | null = null
   private filePersistenceReady: Promise<boolean> | null = null
@@ -663,6 +656,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       thumbnailWorker: this.thumbnailWorker,
       enableIconExtraction: this.enableFileIconExtraction,
       iconWriteMaxQueue: FILE_ICON_WRITE_MAX_QUEUE
+    })
+    const lookupIndexedFiles = createIndexedFileAssetLookup({
+      getDbUtils: () => this.dbUtils,
+      logWarn: (message, error, meta) => this.logWarn(message, error, meta)
+    })
+    // Spotlight, Everything and the recommendation engine render file rows this provider did not
+    // hand them; through the bridge they get the index's thumbnails and the same lazy generation
+    // search results have. See file-asset-bridge.ts.
+    this.disposeAssetBridge = registerFileAssetBridge({
+      lookupIndexedFiles,
+      ensureThumbnail: (file, extensions) =>
+        this.assetService.ensureThumbnail(file.id, file.path, file, extensions)
     })
     this.openerService = new FileProviderOpenerService({
       emptyLogo: EMPTY_OPENER_LOGO,
@@ -991,7 +996,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       buildItem: (file, extensions) => this.createFileSearchItem(file, extensions),
       normalizeItem: (item, file, extensions, reason) =>
         this.normalizeFileSearchItem(item, file, extensions, { reason }),
-      sanitizeExtensions: (extensions) => this.sanitizeFileExtensions(extensions),
+      sanitizeExtensions: sanitizeIndexedFileExtensions,
       cleanupStaleCandidates: (paths) => this.cleanupStaleSearchCandidates(paths),
       semanticSearch: (semanticQuery, limit) =>
         this.embeddingService?.semanticSearch(semanticQuery, limit) ?? Promise.resolve([]),
@@ -1078,6 +1083,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   public async prepareForSearchIndexShutdown(): Promise<void> {
     this.shuttingDown = true
+    this.disposeAssetBridge?.()
+    this.disposeAssetBridge = null
     this.watchService.dispose()
     if (this.pathNormalizationTimer) {
       clearTimeout(this.pathNormalizationTimer)
@@ -4048,25 +4055,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private sanitizeFileExtensions(extensions: Record<string, string>): Record<string, string> {
-    const sanitized = { ...extensions }
-    for (const key of ['icon', 'thumbnail'] as const) {
-      const value = sanitized[key]
-      if (!value) continue
-      if (value.startsWith('data:')) {
-        if (!isValidBase64DataUrl(value)) {
-          delete sanitized[key]
-        }
-        continue
-      }
-      const normalized = normalizeRenderableSource(value)
-      if ('missing' in normalized) {
-        continue
-      }
-      sanitized[key] = normalized.value
-    }
-    return sanitized
-  }
   private createFileSearchItem(
     file: typeof filesSchema.$inferSelect,
     extensions: Record<string, string>

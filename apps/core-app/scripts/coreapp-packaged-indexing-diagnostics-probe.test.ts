@@ -262,7 +262,6 @@ describe('packaged indexing diagnostics probe helpers', () => {
 
     expect(selected).toBeUndefined()
   })
-
   it('rejects a target with no channel bridge, since the probe cannot talk to it', () => {
     const selected = selectSettingsTarget([
       {

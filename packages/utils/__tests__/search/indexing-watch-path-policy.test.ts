@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FILE_SCAN_MAX_DEPTH } from "../../common/file-scan-constants";
 import {
   getIndexedWatchDepthForPath,
   normalizeIndexedWatchPath,
@@ -13,25 +14,18 @@ describe("indexing watch path policy", () => {
     expect(insensitive).toBe(sensitive.toLowerCase());
   });
 
-  it("uses deeper macOS watch depth for file index roots", () => {
-    expect(
-      getIndexedWatchDepthForPath({
-        platform: "darwin",
-        watchPath: "/Users/test/Downloads",
-      }),
-    ).toBe(8);
-    expect(
-      getIndexedWatchDepthForPath({
-        platform: "darwin",
-        watchPath: "/Applications",
-      }),
-    ).toBe(8);
-    expect(
-      getIndexedWatchDepthForPath({
-        platform: "darwin",
-        watchPath: "/Users/test/Documents",
-      }),
-    ).toBe(8);
+  it("shares the 24-level full-scan limit for macOS file index roots", () => {
+    expect(FILE_SCAN_MAX_DEPTH).toBe(24);
+
+    for (const watchPath of [
+      "/Users/test/Downloads",
+      "/Applications",
+      "/Users/test/Documents",
+    ]) {
+      expect(
+        getIndexedWatchDepthForPath({ platform: "darwin", watchPath }),
+      ).toBe(FILE_SCAN_MAX_DEPTH);
+    }
   });
 
   it("uses platform defaults for non-macOS roots", () => {
