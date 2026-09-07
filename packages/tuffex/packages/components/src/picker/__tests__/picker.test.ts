@@ -376,6 +376,23 @@ describe('txPicker wheel', () => {
     wrapper.unmount()
   })
 
+  it('gives the column enough travel to bring the last row to the centre', () => {
+    // The blank half-column above and below the rows is two real boxes, not
+    // padding on the scroller: a scroller's bottom padding is not reliably part
+    // of its scrollable area, and without it the column runs out of travel one
+    // row early — the last option is visible but can never be selected.
+    const padRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__pad {'))
+    expect(padRule.slice(0, padRule.indexOf('}'))).toContain('height: var(--tx-picker-padding-y)')
+
+    const scrollerRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__scroller {'))
+    expect(scrollerRule.slice(0, scrollerRule.indexOf('}'))).not.toMatch(/padding:[^;]*picker-padding-y/)
+
+    // Both pads are rendered, one before the rows and one after.
+    const wrapper = mountWheel()
+    expect(wrapper.findAll('.tx-picker__pad')).toHaveLength(2)
+    wrapper.unmount()
+  })
+
   it('keeps the native scroller, so momentum, snapping and the listbox stay', () => {
     // The drum is a paint on top of a real scroll container; replacing it with
     // a transform-driven list would have cost the platform's own inertia.
