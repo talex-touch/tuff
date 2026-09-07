@@ -5,6 +5,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import type { StreamController } from '@talex-touch/utils/transport/types'
 import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
+import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -18,11 +19,33 @@ import { useI18n } from 'vue-i18n'
 const NOTICE_HOLD_MS = {
   muted: 700,
   warning: 1600,
-  danger: 900
+  danger: 900,
+  /** A notice carrying a button has to outlast the reflex to reach for it. */
+  action: 5000
 } as const
 
+/**
+ * Escape cancels on hold, not on tap.
+ *
+ * A tap is what someone does to dismiss a dialog they were not looking at; losing a sentence
+ * to that is a bad trade. Holding is deliberate, and the charge is drawn on the border so the
+ * commitment is visible before it lands.
+ */
+const CANCEL_HOLD_MS = 600
+const CHARGE_TICK_MS = 30
+
+/**
+ * When waiting stops being normal.
+ *
+ * Both are starting points, not measurements: nobody has p50/p90 for this path yet. They are
+ * named rather than inlined so the eventual real numbers replace something visible.
+ */
+const SLOW_AFTER_MS = 3000
+const VERY_SLOW_AFTER_MS = 8000
+
 type NoticeTone = keyof typeof NOTICE_HOLD_MS
-type Notice = { message: string; tone: NoticeTone }
+type NoticeAction = 'undo' | 'retry'
+type Notice = { message: string; tone: NoticeTone; action?: NoticeAction }
 
 /** Bars in the input meter. Each one holds a single 10Hz level frame, so 24 ≈ 2.4s of history. */
 const WAVE_BAR_COUNT = 24
@@ -83,6 +106,10 @@ const sessionSeq = ref(0)
 const levels = ref<number[]>(new Array(WAVE_BAR_COUNT).fill(0))
 const centerTextRef = ref<HTMLElement | null>(null)
 const pillWidth = ref(PILL_BASE_WIDTH)
+/** 0..1 while Escape is held; the border draws it so the commitment is visible. */
+const cancelCharge = ref(0)
+const waitedMs = ref(0)
+const recovering = ref(false)
 
 const voiceSdk = createVoiceSdk(transport)
 const voiceWakeEnabled = computed(() => runtimeConfig.value.enabled)
@@ -101,11 +128,55 @@ const hasNotice = computed(() => notice.value !== null)
 const canCancel = computed(() => listening.value || transcribing.value || hasNotice.value)
 const canConfirm = computed(() => listening.value && !hasNotice.value)
 /** The confirm slot stops being a button while transcribing — it becomes the progress mark. */
-const showsOrb = computed(() => transcribing.value && !hasNotice.value)
+const showsOrb = computed(() => (transcribing.value || recovering.value) && !hasNotice.value)
+const holdingCancel = computed(() => cancelCharge.value > 0)
+const slowness = computed(() => {
+  if (!transcribing.value) return 'normal'
+  if (waitedMs.value >= VERY_SLOW_AFTER_MS) return 'very-slow'
+  if (waitedMs.value >= SLOW_AFTER_MS) return 'slow'
+  return 'normal'
+})
+
+/**
+ * The border is the only progress this surface can honestly draw.
+ *
+ * There is no percentage to show — the provider reports partials and a final, never a
+ * fraction — so the beam says "still running" and changes colour when that stops being
+ * routine. Holding Escape takes it over entirely, because a charge that is about to throw
+ * away a sentence outranks a progress hint.
+ */
+const beamTone = computed(() => {
+  if (holdingCancel.value) return 'danger'
+  if (notice.value) return notice.value.tone === 'muted' ? 'muted' : notice.value.tone
+  if (slowness.value !== 'normal') return 'warning'
+  return 'accent'
+})
+const beamActive = computed(() => voiceActive.value || holdingCancel.value || hasNotice.value)
+/**
+ * Colour carries the same three-tone scale the notices use, so the border never says something
+ * the text contradicts. `mono` is the neutral one; the palettes are reserved for a live session.
+ */
+const beamVariant = computed<'colorful' | 'mono' | 'sunset'>(() => {
+  if (beamTone.value === 'danger' || beamTone.value === 'warning') return 'sunset'
+  if (beamTone.value === 'muted') return 'mono'
+  return 'colorful'
+})
+
+/** Faster while transcribing, slower when the wait stops being routine — the beam reads as pace. */
+const beamDurationSeconds = computed(() => {
+  if (holdingCancel.value) return 0.6
+  if (slowness.value === 'very-slow') return 12
+  if (transcribing.value || recovering.value) return 3
+  return 6
+})
 const centerText = computed(() => {
   if (notice.value) return notice.value.message
-  if (transcribing.value) return t('assistant.voicePanel.voiceTranscribingShort')
-  return ''
+  if (holdingCancel.value) return t('assistant.voicePanel.holdToCancel')
+  if (recovering.value) return t('assistant.voicePanel.recovering')
+  if (!transcribing.value) return ''
+  if (slowness.value === 'very-slow') return t('assistant.voicePanel.stillWorkingLong')
+  if (slowness.value === 'slow') return t('assistant.voicePanel.stillWorking')
+  return t('assistant.voicePanel.voiceTranscribingShort')
 })
 
 let voiceStreamController: StreamController | null = null
@@ -114,6 +185,24 @@ let disposePanelOpen: (() => void) | null = null
 let finishTimer: ReturnType<typeof setTimeout> | null = null
 let finished = false
 let waveReference = WAVE_REF_FLOOR
+let holdTimer: ReturnType<typeof setInterval> | null = null
+let waitTimer: ReturnType<typeof setInterval> | null = null
+
+function stopHold(): void {
+  if (holdTimer !== null) {
+    clearInterval(holdTimer)
+    holdTimer = null
+  }
+  cancelCharge.value = 0
+}
+
+function stopWaitClock(): void {
+  if (waitTimer !== null) {
+    clearInterval(waitTimer)
+    waitTimer = null
+  }
+  waitedMs.value = 0
+}
 
 /**
  * Map one raw RMS frame onto 0..1 against the running reference.
@@ -148,16 +237,21 @@ function emitFinished(): void {
   emit('finished')
 }
 
-function showNotice(message: string, tone: NoticeTone): void {
-  notice.value = { message, tone }
+function showNotice(message: string, tone: NoticeTone, action?: NoticeAction): void {
+  notice.value = { message, tone, ...(action ? { action } : {}) }
   listening.value = false
   transcribing.value = false
   startingVoiceCapture.value = false
+  recovering.value = false
+  stopHold()
+  stopWaitClock()
   clearFinishTimer()
+  // A notice you can act on gets the long hold; one you can only read gets its own.
+  const hold = action ? NOTICE_HOLD_MS.action : NOTICE_HOLD_MS[tone]
   finishTimer = setTimeout(() => {
     finishTimer = null
     emitFinished()
-  }, NOTICE_HOLD_MS[tone])
+  }, hold)
 }
 
 /**
@@ -198,6 +292,9 @@ function resetPanelState(): void {
   startingVoiceCapture.value = false
   levels.value = new Array(WAVE_BAR_COUNT).fill(0)
   waveReference = WAVE_REF_FLOOR
+  recovering.value = false
+  stopHold()
+  stopWaitClock()
 }
 
 async function loadRuntimeConfig(): Promise<void> {
@@ -207,7 +304,9 @@ async function loadRuntimeConfig(): Promise<void> {
       undefined
     )
   } catch (error) {
-    showNotice(classifyFailure(error).message, 'danger')
+    // A late settings failure must not turn an already-running microphone session into a
+    // misleading error surface; the session can safely use the default language.
+    if (!voiceActive.value) showNotice(classifyFailure(error).message, 'danger')
   }
 }
 
@@ -234,6 +333,11 @@ function finishVoiceInput(): void {
   listening.value = false
   transcribing.value = true
   startingVoiceCapture.value = false
+
+  stopWaitClock()
+  waitTimer = setInterval(() => {
+    waitedMs.value += 100
+  }, 100)
 
   const controller = voiceStreamController
   if (controller?.stop) {
@@ -267,7 +371,9 @@ function showVoiceSessionError(error: unknown): void {
   voiceStreamController = null
   keepListening = false
   const classified = classifyFailure(error)
-  showNotice(classified.message, classified.tone)
+  // Quota and congestion get no retry button: retrying is still out of credit, still busy.
+  const retryable = classified.tone === 'danger'
+  showNotice(classified.message, classified.tone, retryable ? 'retry' : undefined)
 }
 
 async function startVoiceSession(force = false): Promise<void> {
@@ -321,10 +427,33 @@ async function startVoiceSession(force = false): Promise<void> {
   }
 }
 
+async function offerRecoveryIfAny(): Promise<void> {
+  try {
+    const status = await voiceSdk.recoveryStatus()
+    if (!status.available) return
+    // The affordance that makes the retention window reachable at all: without it, audio kept
+    // past the five seconds the pill is on screen has no entry point.
+    showNotice(
+      t(
+        status.kind === 'failed'
+          ? 'assistant.voicePanel.recoverFailed'
+          : 'assistant.voicePanel.recoverCancelled'
+      ),
+      'muted',
+      status.kind === 'failed' ? 'retry' : 'undo'
+    )
+  } catch {
+    // Recovery is a bonus; failing to ask must not stop the user from speaking.
+  }
+}
+
 async function handlePanelOpened(): Promise<void> {
   cancelVoiceSession()
   resetPanelState()
-  await loadRuntimeConfig()
+  // Configuration is a hint for the next request, not a prerequisite for opening the mic.
+  // Keep the default language immediately usable and refresh the setting in the background.
+  void loadRuntimeConfig()
+  void offerRecoveryIfAny()
   await nextTick()
 }
 
@@ -336,8 +465,11 @@ function cancelSession(): void {
     emitFinished()
     return
   }
+  const wasListening = listening.value
   cancelVoiceSession()
-  showNotice(t('assistant.voicePanel.cancelled'), 'muted')
+  // Undo restores the same words from the audio main kept. Offering it after the transcript
+  // may already have been delivered would be a promise this side cannot keep.
+  showNotice(t('assistant.voicePanel.cancelled'), 'muted', wasListening ? 'undo' : undefined)
 }
 
 function handleConfirm(): void {
@@ -345,10 +477,65 @@ function handleConfirm(): void {
   finishVoiceInput()
 }
 
+/**
+ * Undo and retry are the same call.
+ *
+ * Both mean "use the audio main is still holding": one because the user cancelled, one
+ * because transcription failed. The difference is the sentence shown, not the work done.
+ */
+async function recoverLast(): Promise<void> {
+  const action = notice.value?.action
+  if (!action) return
+
+  clearFinishTimer()
+  notice.value = null
+  recovering.value = true
+  sessionSeq.value += 1
+
+  try {
+    const result = await voiceSdk.retryLastFailure({ delivery: 'active-app' })
+    recovering.value = false
+    if (result.expired) {
+      // Say which thing failed. "Recording expired" and "transcription failed" send the
+      // user to different places, and only one of them is worth another button.
+      showNotice(t('assistant.voicePanel.recoveryExpired'), 'warning')
+      return
+    }
+    if (!result.text) {
+      showNotice(t('assistant.voicePanel.voiceTranscribeEmpty'), 'warning')
+      return
+    }
+    emitFinished()
+  } catch (error) {
+    recovering.value = false
+    const classified = classifyFailure(error)
+    showNotice(classified.message, classified.tone, 'retry')
+  }
+}
+
+function beginCancelHold(): void {
+  if (holdTimer !== null || !canCancel.value) return
+  const startedAt = Date.now()
+  holdTimer = setInterval(() => {
+    const progress = (Date.now() - startedAt) / CANCEL_HOLD_MS
+    cancelCharge.value = Math.min(1, progress)
+    if (progress < 1) return
+    stopHold()
+    cancelSession()
+  }, CHARGE_TICK_MS)
+}
+
 function handleKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !canCancel.value) return
+  if (event.key !== 'Escape') return
   event.preventDefault()
-  cancelSession()
+  if (event.repeat || !canCancel.value) return
+  beginCancelHold()
+}
+
+function handleKeyup(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') return
+  // Released early: the charge unwinds and nothing is lost. That is the point of the hold.
+  stopHold()
 }
 
 // Measured rather than expressed in CSS: `width: fit-content` is not animatable without
@@ -379,13 +566,17 @@ onMounted(() => {
     disposePanelOpen = transport.on(AssistantEvents.voice.panelOpened, async () => {
       await handlePanelOpened()
     })
+    void loadRuntimeConfig()
   }
   window.addEventListener('keydown', handleKeydown)
-  void loadRuntimeConfig()
+  window.addEventListener('keyup', handleKeyup)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('keyup', handleKeyup)
+  stopHold()
+  stopWaitClock()
   clearFinishTimer()
   cancelVoiceSession()
   disposePanelOpen?.()
@@ -400,7 +591,11 @@ onBeforeUnmount(() => {
       role="status"
       aria-live="polite"
       :aria-busy="voiceActive"
-      :class="notice ? `voice-dock--${notice.tone}` : null"
+      :class="[
+        notice ? `voice-dock--${notice.tone}` : null,
+        holdingCancel ? 'voice-dock--holding' : null,
+        slowness !== 'normal' && !notice ? 'voice-dock--warning' : null
+      ]"
       :style="{ width: `${pillWidth}px` }"
     >
       <button
@@ -413,6 +608,14 @@ onBeforeUnmount(() => {
       >
         <span class="i-carbon-close" aria-hidden="true" />
       </button>
+
+      <TxBorderBeam
+        :active="beamActive"
+        :border-radius="22"
+        :duration="beamDurationSeconds"
+        :color-variant="beamVariant"
+        aria-hidden="true"
+      />
 
       <div class="voice-dock__slot">
         <p
@@ -449,6 +652,23 @@ onBeforeUnmount(() => {
         theme="auto"
         :label="t('assistant.voicePanel.voiceTranscribingShort')"
       />
+      <button
+        v-else-if="notice?.action"
+        class="voice-dock__action"
+        type="button"
+        data-testid="voice-recover"
+        @click="recoverLast"
+      >
+        <span
+          :class="notice.action === 'undo' ? 'i-carbon-undo' : 'i-carbon-renew'"
+          aria-hidden="true"
+        />
+        {{
+          notice.action === 'undo'
+            ? t('assistant.voicePanel.undo')
+            : t('assistant.voicePanel.retry')
+        }}
+      </button>
       <button
         v-else
         class="voice-dock__btn voice-dock__btn--confirm"
@@ -501,6 +721,45 @@ onBeforeUnmount(() => {
 
 .voice-dock--muted {
   border-color: var(--shell-border);
+}
+
+/* Holding Escape outranks every other tone: it is about to discard what was just said. */
+.voice-dock--holding {
+  border-color: var(--shell-danger-border);
+}
+
+/* The beam is drawn on the pill's own border box, so it has to be positioned, not in flow. */
+.voice-dock {
+  position: relative;
+}
+
+.voice-dock :deep(.tx-border-beam) {
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/*
+ * The recovery action replaces the confirm button rather than joining it: a notice offers one
+ * thing to do, and a second circle in that slot would read as a choice that does not exist.
+ */
+.voice-dock__action {
+  display: inline-flex;
+  height: 26px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--shell-radius-full);
+  background: var(--shell-surface-2);
+  color: var(--shell-text-primary);
+  cursor: pointer;
+  font-size: var(--shell-fs-caption);
+  transition: background 160ms ease-out;
+}
+
+.voice-dock__action:hover {
+  background: var(--shell-border);
 }
 
 .voice-dock__btn {
