@@ -350,7 +350,7 @@ describe('VoicePanel session control', () => {
     expect(streamCancelMock).not.toHaveBeenCalled()
     expect(wrapper.emitted('finished')).toBeUndefined()
 
-    vi.advanceTimersByTime(5000)
+    vi.advanceTimersByTime(6400)
     await nextTick()
     expect(wrapper.emitted('finished')).toBeUndefined()
 
@@ -378,11 +378,11 @@ describe('VoicePanel session control', () => {
     // Carrying an undo button, so it gets the long hold — a notice you can act on has to
     // outlast the reflex to reach for it.
     expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
-    vi.advanceTimersByTime(700)
+    vi.advanceTimersByTime(900)
     await nextTick()
     expect(wrapper.emitted('finished')).toBeUndefined()
 
-    vi.advanceTimersByTime(4400)
+    vi.advanceTimersByTime(5700)
     await nextTick()
     expect(wrapper.emitted('finished')).toHaveLength(1)
 
@@ -523,13 +523,13 @@ describe('VoicePanel session control', () => {
     callbacksOrThrow().onError?.(new Error('stream unavailable'))
     await nextTick()
 
-    // A retryable failure carries a button, so it holds for the action window, not 900ms.
+    // A retryable failure carries a button, so it holds for the action window, not 1200ms.
     expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
-    vi.advanceTimersByTime(900)
+    vi.advanceTimersByTime(1200)
     await nextTick()
     expect(wrapper.emitted('finished')).toBeUndefined()
 
-    vi.advanceTimersByTime(4200)
+    vi.advanceTimersByTime(5400)
     await nextTick()
     expect(wrapper.emitted('finished')).toHaveLength(1)
 
@@ -726,7 +726,7 @@ describe('VoicePanel recovery and pacing', () => {
     expect(wrapper.find('[data-testid="voice-hint"]').text()).toContain('Still transcribing')
     expect(wrapper.find('.voice-dock--warning').exists()).toBe(true)
 
-    vi.advanceTimersByTime(5100)
+    vi.advanceTimersByTime(6600)
     await nextTick()
     expect(wrapper.find('[data-testid="voice-hint"]').text()).toContain('Longer than usual')
     // The beam reads as pace: the same wait, drawn slower, is what "stuck" looks like.
@@ -997,7 +997,7 @@ describe('VoicePanel device readiness and long messages', () => {
 
     const style = wrapper.find('.voice-dock').attributes('style') ?? ''
     expect(style).toContain('width: 264px')
-    expect(style).toContain('height: 120px')
+    expect(style).toContain('height: 124px')
     expect(wrapper.find('.voice-dock--icon-card').exists()).toBe(true)
     expect(wrapper.find('[data-testid="voice-notice-icon"]').classes()).toContain(
       'i-carbon-microphone-off'
@@ -1145,7 +1145,7 @@ describe('VoicePanel stream generation boundaries', () => {
     await nextTick()
     expect(wrapper.emitted('finished')).toBeUndefined()
 
-    vi.advanceTimersByTime(5100)
+    vi.advanceTimersByTime(6600)
     await nextTick()
     expect(wrapper.emitted('finished')).toHaveLength(1)
 

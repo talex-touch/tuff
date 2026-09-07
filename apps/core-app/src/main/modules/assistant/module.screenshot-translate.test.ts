@@ -17,6 +17,19 @@ type ScreenTopologyListener = () => void | Promise<void>
 
 type FloatingBallDisplay = {
   workArea: { x: number; y: number; width: number; height: number }
+  /** Present only where a test needs the screen behind the work area. */
+  bounds?: { x: number; y: number; width: number; height: number }
+}
+function eventName(event: unknown): string {
+  if (
+    !event ||
+    typeof event !== 'object' ||
+    !('toEventName' in event) ||
+    typeof event.toEventName !== 'function'
+  ) {
+    return ''
+  }
+  return event.toEventName()
 }
 
 const mocks = vi.hoisted(() => ({
@@ -114,8 +127,10 @@ const mocks = vi.hoisted(() => ({
       webContents: { id: number }
       destroy: () => void
       hide: () => void
+      showInactive: () => void
       show: () => void
       focus: () => void
+      setAlwaysOnTop: (flag: boolean, level?: string) => void
       setBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
       getBounds: () => { x: number; y: number; width: number; height: number }
       isVisible: () => boolean
@@ -401,6 +416,87 @@ describe('AssistantModule screenshot translation', () => {
     mocks.sendTo.mockResolvedValue(undefined)
   })
 
+  it('opens the panel without a duplicate command when collapsed, then forwards active commands', async () => {
+    const { module } = await createInitializedModule()
+    mocks.broadcastToWindow.mockClear()
+
+    const start = { action: 'start', mode: 'toggle', source: 'command' } as const
+    const stop = { action: 'stop', mode: 'toggle', source: 'command' } as const
+
+    await module.handleVoiceCommandGesture(start)
+
+    expect(mocks.broadcastToWindow).toHaveBeenCalledTimes(1)
+    const collapsedCall = mocks.broadcastToWindow.mock.calls[0]
+    expect(collapsedCall?.[1]).toEqual(
+      expect.objectContaining({ toEventName: expect.any(Function) })
+    )
+    expect(eventName(collapsedCall?.[1])).toBe(AssistantEvents.voice.panelOpened.toEventName())
+    expect(collapsedCall?.[2]).toEqual({ source: 'command' })
+    expect(mocks.broadcastToWindow.mock.calls.map(([, event]) => eventName(event))).not.toContain(
+      AssistantEvents.voice.command.toEventName()
+    )
+    mocks.broadcastToWindow.mockClear()
+    await module.handleVoiceCommandGesture(start)
+    expect(mocks.broadcastToWindow).toHaveBeenCalledTimes(1)
+    const expandedStartCall = mocks.broadcastToWindow.mock.calls[0]
+    expect(expandedStartCall?.[1]).toEqual(
+      expect.objectContaining({ toEventName: expect.any(Function) })
+    )
+    expect(eventName(expandedStartCall?.[1])).toBe(AssistantEvents.voice.command.toEventName())
+    expect(expandedStartCall?.[2]).toEqual(start)
+    mocks.broadcastToWindow.mockClear()
+    await module.handleVoiceCommandGesture(stop)
+    expect(mocks.broadcastToWindow).toHaveBeenCalledTimes(1)
+    const expandedStopCall = mocks.broadcastToWindow.mock.calls[0]
+    expect(expandedStopCall?.[1]).toEqual(
+      expect.objectContaining({ toEventName: expect.any(Function) })
+    )
+    expect(eventName(expandedStopCall?.[1])).toBe(AssistantEvents.voice.command.toEventName())
+    expect(expandedStopCall?.[2]).toEqual(stop)
+
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+
+  it('opens click-origin voice panels without focusing the active application target', async () => {
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.floatingBall.openVoicePanel.toEventName()
+    )
+    const dock = mocks.touchWindows[0]
+    if (!dock) throw new Error('VoiceDock was not created')
+    const showInactive = vi.mocked(dock.window.showInactive)
+    const focus = vi.mocked(dock.window.focus)
+    showInactive.mockClear()
+    focus.mockClear()
+
+    await handler({ source: 'click' }, {} as HandlerContext)
+
+    expect(showInactive).toHaveBeenCalledTimes(1)
+    expect(focus).not.toHaveBeenCalled()
+
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+
+  it('opens command-origin voice panels without focusing the active application target', async () => {
+    const { module } = await createInitializedModule()
+    const dock = mocks.touchWindows[0]
+    if (!dock) throw new Error('VoiceDock was not created')
+    const showInactive = vi.mocked(dock.window.showInactive)
+    const focus = vi.mocked(dock.window.focus)
+    showInactive.mockClear()
+    focus.mockClear()
+
+    await module.handleVoiceCommandGesture({
+      action: 'start',
+      mode: 'toggle',
+      source: 'command'
+    })
+
+    expect(showInactive).toHaveBeenCalledTimes(1)
+    expect(focus).not.toHaveBeenCalled()
+
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+
   it('restores a persisted negative ball position on its saved display', async () => {
     const savedDisplay: FloatingBallDisplay = {
       workArea: { x: -1280, y: 0, width: 1280, height: 720 }
@@ -598,66 +694,35 @@ describe('AssistantModule screenshot translation', () => {
   })
 
   /**
-   * An auto-hidden Dock or taskbar slides in over the bottom strip without changing the work
-   * area, so nothing ever fires and there is nothing to react to. The only defence is to sit
-   * above where it would land — but only when the display actually looks like it could have
-   * one, or every machine without a bottom bar pays for the space.
+   * The Dock is at kCGDockWindowLevel (20) and `floating` is NSFloatingWindowLevel (3), so the
+   * HUD used to be covered by a bar sliding in underneath it. Above the Dock it does not have
+   * to dodge one, which is why the bottom gap is a plain edge gap and not a bar's height.
    */
-  it.each([
-    {
-      label: 'a bar the system already reserved room for',
-      display: {
-        bounds: { x: 0, y: 0, width: 800, height: 600 },
-        workArea: { x: 0, y: 24, width: 800, height: 530 }
-      },
-      // 24 + 530 - 144 - 24
-      expectedY: 386
-    },
-    {
-      label: 'nothing reserved but the menu bar, so a hidden bar could still appear',
-      display: {
-        bounds: { x: 0, y: 0, width: 800, height: 600 },
-        workArea: { x: 0, y: 24, width: 800, height: 576 }
-      },
-      // 24 + 576 - 144 - (24 + 72)
-      expectedY: 360
-    },
-    {
-      label: 'a Dock parked on the left, which is visible and never coming to the bottom',
-      display: {
-        bounds: { x: 0, y: 0, width: 800, height: 600 },
-        workArea: { x: 70, y: 24, width: 730, height: 576 }
-      },
-      // 24 + 576 - 144 - 24
-      expectedY: 432
-    }
-  ])('anchors the VoiceDock above $label', async ({ display, expectedY }) => {
-    const platform = process.platform
-    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
-    try {
-      mocks.getMainConfig.mockReturnValue(mocks.createEnabledSetting())
-      mocks.getDisplayNearestPoint.mockReturnValue(display)
+  it('floats the VoiceDock above the Dock rather than reserving room below it', async () => {
+    mocks.getMainConfig.mockReturnValue(mocks.createEnabledSetting())
+    mocks.getDisplayNearestPoint.mockReturnValue({
+      bounds: { x: 0, y: 0, width: 800, height: 600 },
+      workArea: { x: 0, y: 24, width: 800, height: 576 }
+    })
 
-      const { module } = await createInitializedModule()
-      const openPanel = mocks.handlers.get(
-        AssistantEvents.floatingBall.openVoicePanel.toEventName()
-      )
-      if (!openPanel) throw new Error('openVoicePanel handler was not registered')
-      await openPanel({ source: 'click' }, {} as HandlerContext)
+    const { module } = await createInitializedModule()
+    const openPanel = mocks.handlers.get(AssistantEvents.floatingBall.openVoicePanel.toEventName())
+    if (!openPanel) throw new Error('openVoicePanel handler was not registered')
+    await openPanel({ source: 'click' }, {} as HandlerContext)
 
-      const voiceDock = mocks.touchWindows[0]
-      if (!voiceDock) throw new Error('VoiceDock window was not created')
-      const bounds = vi
-        .mocked(voiceDock.window.setBounds)
-        .mock.calls.map(([value]) => value)
-        .pop()
-      expect(bounds?.y).toBe(expectedY)
-      expect(bounds?.height).toBe(144)
+    const voiceDock = mocks.touchWindows[0]
+    if (!voiceDock) throw new Error('VoiceDock window was not created')
+    expect(voiceDock.window.setAlwaysOnTop).toHaveBeenCalledWith(true, 'status')
 
-      await module.onDestroy({} as never)
-    } finally {
-      Object.defineProperty(process, 'platform', { value: platform, configurable: true })
-    }
+    // 24 + 576 - 148 - 24: the ordinary gap, with nothing held back for a hidden bar.
+    const bounds = vi
+      .mocked(voiceDock.window.setBounds)
+      .mock.calls.map(([value]) => value)
+      .pop()
+    expect(bounds?.y).toBe(428)
+    expect(bounds?.height).toBe(148)
+
+    await module.onDestroy({} as never)
   })
 
   it('reanchors the expanded VoiceDock after topology recovery without reopening it and leaves it hidden otherwise', async () => {
@@ -706,14 +771,16 @@ describe('AssistantModule screenshot translation', () => {
     await listener()
 
     expect(mocks.touchWindows).toHaveLength(1)
-    // Centred on the work area, 24px off its bottom edge: x = (800 - 360) / 2,
-    // y = 500 - VOICE_DOCK_HEIGHT - 24. Both track the dock constants in module.ts.
-    expect(voiceDock.window.setBounds).toHaveBeenCalledWith({
-      x: 220,
-      y: 364,
-      width: 360,
-      height: 112
-    })
+    const recoveredBounds = vi.mocked(voiceDock.window.setBounds).mock.calls[0]?.[0]
+    if (!recoveredBounds) {
+      throw new Error('Visible VoiceDock was not reanchored after display recovery')
+    }
+    expect(recoveredBounds.x).toBeGreaterThanOrEqual(0)
+    expect(recoveredBounds.y).toBeGreaterThanOrEqual(0)
+    expect(recoveredBounds.x + recoveredBounds.width).toBeLessThanOrEqual(800)
+    expect(recoveredBounds.y + recoveredBounds.height).toBeLessThanOrEqual(500)
+    expect(recoveredBounds.x + recoveredBounds.width / 2).toBe(400)
+    expect(recoveredBounds.y + recoveredBounds.height).toBe(476)
     expect(voiceDock.window.show).not.toHaveBeenCalled()
     expect(voiceDock.window.focus).not.toHaveBeenCalled()
     expect(mocks.broadcastToWindow).not.toHaveBeenCalled()
