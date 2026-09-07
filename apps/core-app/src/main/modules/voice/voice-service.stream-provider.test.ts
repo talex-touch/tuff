@@ -393,7 +393,7 @@ describe('VoiceService retry buffer retention', () => {
     const service = new VoiceService()
     await runUntilFailure(service)
 
-    await vi.advanceTimersByTimeAsync(60_001)
+    await vi.advanceTimersByTimeAsync(30_001)
     const result = await service.retryLastFailure()
 
     expect(result).toEqual({ text: '', expired: true })
@@ -424,8 +424,13 @@ describe('VoiceService retry buffer retention', () => {
     expect(await service.retryLastFailure()).toEqual({ text: '', expired: true })
   })
 
-  it('holds no audio after the caller cancels', async () => {
+  /**
+   * Cancel keeps the audio so undo can restore the same words. If it cleared, the undo button
+   * could only ever mean "record again", which is a different act wearing the wrong name.
+   */
+  it('keeps the audio after a cancel so undo can restore it', async () => {
     pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+    stt.mockResolvedValue({ result: { text: 'cancelled words', language: 'en' } })
     const service = new VoiceService()
     const controller = new AbortController()
     const generator = service.streamDictation({}, controller.signal)
@@ -439,8 +444,8 @@ describe('VoiceService retry buffer retention', () => {
       }
     })()
 
-    // Let real audio accumulate first. Cancelling on the first tick buffers nothing, and then
-    // the assertion below passes whether or not cancel actually clears anything.
+    // Let real audio accumulate first: cancelling on the first tick buffers nothing, and the
+    // assertions below would then pass no matter what the cancel path does.
     await vi.advanceTimersByTimeAsync(400)
     expect(heldAudioBytes(service)).toBeGreaterThan(0)
 
@@ -448,6 +453,32 @@ describe('VoiceService retry buffer retention', () => {
     await vi.advanceTimersByTimeAsync(300)
     await drained
 
+    expect(heldAudioBytes(service)).toBeGreaterThan(0)
+    const restored = await service.retryLastFailure()
+    expect(restored.expired).toBeUndefined()
+    expect(restored.text).toBe('Hello world.')
+  })
+
+  it('drops cancelled audio when its recovery window closes', async () => {
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+    const service = new VoiceService()
+    const controller = new AbortController()
+    const generator = service.streamDictation({}, controller.signal)
+    const drained = (async () => {
+      try {
+        for await (const _event of generator) {
+          // drain
+        }
+      } catch {
+        // the cancellation under test
+      }
+    })()
+    await vi.advanceTimersByTimeAsync(400)
+    controller.abort()
+    await vi.advanceTimersByTimeAsync(300)
+    await drained
+
+    await vi.advanceTimersByTimeAsync(30_001)
     expect(heldAudioBytes(service)).toBe(0)
     expect(await service.retryLastFailure()).toEqual({ text: '', expired: true })
   })
@@ -457,7 +488,7 @@ describe('VoiceService retry buffer retention', () => {
     await runUntilFailure(service)
     expect(heldAudioBytes(service)).toBeGreaterThan(0)
 
-    await vi.advanceTimersByTimeAsync(60_001)
+    await vi.advanceTimersByTimeAsync(30_001)
     expect(heldAudioBytes(service)).toBe(0)
   })
 
