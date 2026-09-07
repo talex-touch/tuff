@@ -38,13 +38,35 @@ app.use(TxDrawer)
 
 `@talex-touch/tuffex/base.css` contains shared tokens and global utilities. Keep `@talex-touch/tuffex/style.css` only for legacy full-style imports.
 
-For stricter style budgets, import only the matching component stylesheet:
+#### Each stylesheet holds one component's rules
+
+`<component>/style.css` contains that component's own rules and nothing else. A
+component that builds on others — `progress-bar` uses `tooltip`, which uses
+`base-anchor`, which uses `base-surface` — needs their stylesheets imported too,
+or it renders unstyled in those parts with no error to point at it.
+
+They used to be self-contained, which meant the base-surface rules were copied
+into 26 packages and the spinner's into 29: 2.2 MiB of stylesheets, 68% of it
+the same bytes repeated, and a page using five components paid for base-surface
+five times over.
+
+Install the build plugin and it works out the set for you, in dependency order:
 
 ```ts
-import { TxButton } from '@talex-touch/tuffex/button'
-import '@talex-touch/tuffex/base.css'
-import '@talex-touch/tuffex/button/style.css'
+// vite.config.ts
+import { tuffexOnDemandStylePlugin } from '@talex-touch/tuffex/vite'
+
+export default defineConfig({
+  plugins: [tuffexOnDemandStylePlugin()],
+})
 ```
+
+With it in place, importing the component is enough — the stylesheets follow,
+and a shared one is loaded once however many components ask for it. A page built
+from five components drops from 208 KiB of CSS to 104 KiB.
+
+Without the plugin, import the closure yourself. `dist/es/style-deps.json` maps
+each component to what it depends on.
 
 ### Legacy full import
 
