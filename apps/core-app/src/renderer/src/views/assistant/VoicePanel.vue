@@ -29,6 +29,29 @@ const WAVE_BAR_COUNT = 24
 const WAVE_BAR_MIN_HEIGHT = 3
 const WAVE_BAR_MAX_HEIGHT = 28
 
+/**
+ * Auto-gain for the meter.
+ *
+ * Raw RMS from a normal speaking voice sits around 0.02–0.10, so drawing it directly gives a
+ * flat line with no legible difference between syllables. The meter instead normalizes against
+ * a reference that tracks the recent peak: it rises fast so a sudden shout does not clip, and
+ * falls slowly so the quiet words right after a loud one are still readable.
+ *
+ * `WAVE_NOISE_GATE` is what stops this from lying. Without it, dividing by a small reference
+ * would amplify room tone into a full-scale display — the meter would look alive in a silent
+ * room, which is exactly the fake animation this whole surface exists to avoid.
+ */
+const WAVE_NOISE_GATE = 0.012
+const WAVE_REF_FLOOR = 0.05
+const WAVE_REF_ATTACK = 0.6
+/**
+ * Release is the number that matters for the second half of the ask: after a loud burst the
+ * reference has to come back down fast enough that the next quiet sentence is legible again.
+ * At 10Hz this recovers from a shout to the floor in roughly 1.7s. Much slower (0.03 was the
+ * first guess) leaves nine seconds of near-flat meter; much faster makes it pump per syllable.
+ */
+const WAVE_REF_RELEASE = 0.15
+
 const PILL_BASE_WIDTH = 200
 const PILL_MAX_WIDTH = 340
 /** padding (10) + both round slots (68) + both gaps (16); the centre gets what is left. */
@@ -90,6 +113,24 @@ let keepListening = false
 let disposePanelOpen: (() => void) | null = null
 let finishTimer: ReturnType<typeof setTimeout> | null = null
 let finished = false
+let waveReference = WAVE_REF_FLOOR
+
+/**
+ * Map one raw RMS frame onto 0..1 against the running reference.
+ *
+ * The reference chases peaks quickly and decays slowly, so a whisper fills the meter and a
+ * shout does not clip — the visible difference between syllables survives either way. Below
+ * the noise gate the answer is a hard zero: room tone must read as silence, not as speech.
+ */
+function normalizeLevel(rms: number): number {
+  if (!Number.isFinite(rms) || rms < WAVE_NOISE_GATE) return 0
+
+  const rate = rms > waveReference ? WAVE_REF_ATTACK : WAVE_REF_RELEASE
+  waveReference = Math.max(WAVE_REF_FLOOR, waveReference + (rms - waveReference) * rate)
+
+  // Square root, not linear: loudness is perceptual, and the interesting detail lives low.
+  return Math.min(1, Math.sqrt(rms / waveReference))
+}
 
 function barHeight(level: number): number {
   return WAVE_BAR_MIN_HEIGHT + Math.round(level * (WAVE_BAR_MAX_HEIGHT - WAVE_BAR_MIN_HEIGHT))
@@ -156,6 +197,7 @@ function resetPanelState(): void {
   transcribing.value = false
   startingVoiceCapture.value = false
   levels.value = new Array(WAVE_BAR_COUNT).fill(0)
+  waveReference = WAVE_REF_FLOOR
 }
 
 async function loadRuntimeConfig(): Promise<void> {
@@ -207,7 +249,7 @@ function finishVoiceInput(): void {
 
 function handleVoiceSessionEvent(event: VoiceAsrStreamEvent): void {
   if (event.type === 'level') {
-    levels.value = [...levels.value.slice(1), event.rms]
+    levels.value = [...levels.value.slice(1), normalizeLevel(event.rms)]
     return
   }
   if (event.type === 'partial' || event.type === 'final') {
@@ -242,6 +284,8 @@ async function startVoiceSession(force = false): Promise<void> {
   listening.value = true
   notice.value = null
   levels.value = new Array(WAVE_BAR_COUNT).fill(0)
+  // A stale peak from the last session would flatten the first words of this one.
+  waveReference = WAVE_REF_FLOOR
   // The orb is re-rolled per session through this key; changing its `state` would not.
   sessionSeq.value += 1
   try {
@@ -401,6 +445,7 @@ onBeforeUnmount(() => {
         data-testid="voice-orb"
         :size="64"
         :display-size="34"
+        state="random"
         theme="auto"
         :label="t('assistant.voicePanel.voiceTranscribingShort')"
       />
