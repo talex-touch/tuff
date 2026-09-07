@@ -49,10 +49,9 @@ describe('check-release-gates local checks', () => {
         gateEChecks.push({ name, status, detail, ...meta })
       },
     })
-    runLocalReleaseGateChecks({
+    checkNotes({
       repoRoot,
       version,
-      stage: 'gate-d',
       pushCheck: (name, status, detail, meta = {}) => {
         gateDChecks.push({ name, status, detail, ...meta })
       },
