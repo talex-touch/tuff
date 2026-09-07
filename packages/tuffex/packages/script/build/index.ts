@@ -43,7 +43,9 @@ function sass() {
       }
 
       try {
-        const result = sassLang.compile(file.path, { loadPaths: [dirname(file.path)] })
+        // Compressed for the same reason the component build minifies its CSS:
+        // this stylesheet ships as-is, and no consumer tree-shakes it.
+        const result = sassLang.compile(file.path, { loadPaths: [dirname(file.path)], style: 'compressed' })
         file.contents = Buffer.from(result.css)
         file.path = file.path.replace(/\.s[ac]ss$/, '.css')
         done(null, file)
@@ -147,7 +149,7 @@ async function readBaseStyle(): Promise<string> {
     }
   }
 
-  return sassLang.compile(baseStyleSourcePath).css
+  return sassLang.compile(baseStyleSourcePath, { style: 'compressed' }).css
 }
 
 export const buildStyleEntry = async () => {

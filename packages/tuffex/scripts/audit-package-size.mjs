@@ -102,7 +102,23 @@ const LIMITS = {
   // their own row and level styles (+0.1 KiB net, the old column layout came out); and card-item
   // gained the hover-over-active rule. Measured 660.8 KiB. Same contract as every note above:
   // actuals plus minimal headroom, growth from here fails.
-  fullCssBytes: 664 * 1024,
+  // 664 -> 552 on 2026-09-07: CSS is now minified on the way out (`cssMinify`,
+  // with the JS deliberately left readable), which took the same stylesheets
+  // from 663.5 KiB to 541.2. Re-baselined against the smaller artifact so the
+  // saving cannot be quietly spent.
+  //
+  // Note what this number is and is not. `components.css` is the full-import
+  // entry, which nothing in this repo loads: both apps import `base.css` plus
+  // per-component stylesheets. It is a ceiling on the library's total surface,
+  // not a measure of what any page downloads — `onDemandCssBytes` below is the
+  // one that tracks a real cost.
+  fullCssBytes: 552 * 1024,
+  // The per-component stylesheets, added up. This is the set a consumer
+  // actually installs and the on-demand plugin picks from, so it is the number
+  // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
+  // stopped being copied into every package that imports them, and it climbs
+  // again the moment one starts inlining another's rules.
+  onDemandCssBytes: 580 * 1024,
   componentCssBytes: 96 * 1024,
   componentJsBytes: 48 * 1024,
   // Per-file exceptions to `componentJsBytes`, keyed by the path under `dist/es`.
@@ -456,6 +472,17 @@ async function auditDistSizes(errors) {
       `Component CSS ${relativeToRepo(entry.file)} is ${formatBytes(entry.bytes)}; limit is ${formatBytes(cssLimitFor(entry.file))}`,
     )
   }
+
+  // The suite barrels aggregate their members by construction, so counting them
+  // here would charge for the same rules twice.
+  const onDemandCssBytes = componentCssSizes
+    .filter(entry => !suiteAggregateCss.has(entry.file))
+    .reduce((total, entry) => total + entry.bytes, 0)
+  if (onDemandCssBytes > LIMITS.onDemandCssBytes) {
+    errors.push(
+      `On-demand CSS totals ${formatBytes(onDemandCssBytes)} across ${componentCssSizes.length} stylesheets; limit is ${formatBytes(LIMITS.onDemandCssBytes)}. A component inlining another's rules is the usual cause.`,
+    )
+  }
   // Alias packages re-export another component and add no rules of their own, so
   // their stylesheet is empty and `style-deps.json` is what carries them to the
   // real one. The failure this guards against is an alias quietly going back to
@@ -521,7 +548,8 @@ async function auditDistSizes(errors) {
   }
 
   console.log(`[audit-package-size] Base CSS: ${formatBytes(baseCssBytes)}/${formatBytes(LIMITS.baseCssBytes)}`)
-  console.log(`[audit-package-size] Full CSS: ${formatBytes(fullCssBytes)}/${formatBytes(LIMITS.fullCssBytes)}`)
+  console.log(`[audit-package-size] Full CSS: ${formatBytes(fullCssBytes)}/${formatBytes(LIMITS.fullCssBytes)} (full-import entry; nothing in this repo loads it)`)
+  console.log(`[audit-package-size] On-demand CSS: ${formatBytes(onDemandCssBytes)}/${formatBytes(LIMITS.onDemandCssBytes)} across ${componentCssSizes.length} stylesheets`)
   printTop('Largest component CSS files:', componentCssSizes)
   printTop('Largest component JS files:', componentJsSizes)
 }
