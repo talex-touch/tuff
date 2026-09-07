@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, getCurrentInstance, h, nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import {
@@ -11,6 +11,10 @@ import {
 const transportSendMock = vi.hoisted(() => vi.fn())
 const transportOnMock = vi.hoisted(() => vi.fn())
 const transportStreamMock = vi.hoisted(() => vi.fn())
+const orbMounts = vi.hoisted(() => ({
+  nextId: 0,
+  records: [] as Array<{ key: unknown; state: unknown }>
+}))
 
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
@@ -26,10 +30,19 @@ vi.mock('@talex-touch/tuffex/thinking-orb', () => ({
     props: {
       size: { type: Number, default: 20 },
       displaySize: { type: Number, default: undefined },
-      label: { type: String, default: '' }
+      label: { type: String, default: '' },
+      state: { type: String, default: undefined }
     },
     setup(props) {
-      return () => h('canvas', { class: 'tx-thinking-orb', 'aria-label': props.label })
+      const mountId = orbMounts.nextId++
+      orbMounts.records.push({ key: getCurrentInstance()?.vnode.key, state: props.state })
+      return () =>
+        h('canvas', {
+          class: 'tx-thinking-orb',
+          'aria-label': props.label,
+          'data-orb-mount': mountId,
+          'data-orb-state': props.state
+        })
     }
   })
 }))
@@ -108,6 +121,8 @@ function barHeights(wrapper: VueWrapper): string[] {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  orbMounts.nextId = 0
+  orbMounts.records.length = 0
   streamCallbacks = undefined
   streamRequest = undefined
   streamCancelMock = vi.fn()
@@ -358,24 +373,28 @@ describe('VoicePanel session control', () => {
     wrapper.unmount()
   })
 
-  it('rolls a new orb key per session rather than per state change', async () => {
+  it('remounts the orb with a fresh key and random state for every session', async () => {
     const wrapper = await mountVoicePanel()
     const panel = exposed(wrapper)
 
     panel.startVoiceInput()
     await flushPromises()
-    const firstSeq = (wrapper.vm as unknown as { sessionSeq: number }).sessionSeq
-
-    // A state change alone must not re-roll: the orb is bound to the session, not the phase.
     panel.stopVoiceInput()
     await nextTick()
-    expect((wrapper.vm as unknown as { sessionSeq: number }).sessionSeq).toBe(firstSeq)
+    const firstOrb = orbMounts.records.at(-1)
+
+    expect(firstOrb?.state).toBe('random')
 
     callbacksOrThrow().onEnd?.()
     await nextTick()
     panel.startVoiceInput()
     await flushPromises()
-    expect((wrapper.vm as unknown as { sessionSeq: number }).sessionSeq).not.toBe(firstSeq)
+    panel.stopVoiceInput()
+    await nextTick()
+    const secondOrb = orbMounts.records.at(-1)
+
+    expect(secondOrb?.state).toBe('random')
+    expect(secondOrb?.key).not.toBe(firstOrb?.key)
 
     wrapper.unmount()
   })
@@ -407,5 +426,86 @@ describe('VoicePanel session control', () => {
     expect(streamCancelMock).toHaveBeenCalledTimes(1)
     expect(registeredHandler).toBeTypeOf('function')
     expect(disposePanelOpenMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('VoicePanel input meter gain', () => {
+  function heightsOf(wrapper: VueWrapper): number[] {
+    return wrapper
+      .findAll('[data-testid="voice-wave"] span')
+      .map((bar) => Number(/height:\s*(\d+)px/.exec(bar.attributes('style') ?? '')?.[1] ?? 0))
+  }
+
+  async function feed(wrapper: VueWrapper, rms: number, frames: number): Promise<number[]> {
+    const callbacks = callbacksOrThrow()
+    for (let frame = 0; frame < frames; frame += 1) callbacks.onData?.({ type: 'level', rms })
+    await nextTick()
+    return heightsOf(wrapper)
+  }
+
+  async function listeningPanel() {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    return wrapper
+  }
+
+  // The whole point of the auto-gain: a quiet voice and a loud one both have to be readable,
+  // because the raw RMS of ordinary speech is far too small to draw directly.
+  it('makes a quiet voice as legible as a loud one', async () => {
+    const quiet = await listeningPanel()
+    const quietPeak = Math.max(...(await feed(quiet, 0.03, 6)))
+    quiet.unmount()
+
+    const loud = await listeningPanel()
+    const loudPeak = Math.max(...(await feed(loud, 0.9, 6)))
+    loud.unmount()
+
+    expect(quietPeak).toBeGreaterThan(12)
+    expect(loudPeak).toBeGreaterThan(12)
+    // Neither runs away from the other: 30x the input amplitude, comparable on screen.
+    expect(Math.abs(quietPeak - loudPeak)).toBeLessThanOrEqual(8)
+  })
+
+  // Negative control, and the one that keeps the gain honest: amplifying a quiet voice must
+  // not amplify an empty room. Without the noise gate the meter would dance in silence.
+  it('leaves silence flat no matter how much gain the quiet path needs', async () => {
+    const wrapper = await listeningPanel()
+
+    const speech = Math.max(...(await feed(wrapper, 0.03, 6)))
+    const silence = await feed(wrapper, 0.002, 24)
+
+    expect(speech).toBeGreaterThan(12)
+    expect(Math.max(...silence)).toBe(3)
+
+    wrapper.unmount()
+  })
+
+  it('recovers from a shout fast enough for the next quiet sentence', async () => {
+    const wrapper = await listeningPanel()
+
+    await feed(wrapper, 0.9, 8)
+    // The newest bar, not the window maximum: the buffer still holds the shout's own frames.
+    const rightAfter = (await feed(wrapper, 0.03, 1)).at(-1) ?? 0
+    // ~1.7s of release at 10Hz; asserted as frames so the constant cannot quietly slow down.
+    const recovered = (await feed(wrapper, 0.03, 20)).at(-1) ?? 0
+
+    expect(rightAfter).toBeLessThan(12)
+    expect(recovered).toBeGreaterThan(12)
+
+    wrapper.unmount()
+  })
+
+  it(`starts each session from the floor rather than the last session peak`, async () => {
+    const wrapper = await listeningPanel()
+
+    await feed(wrapper, 0.9, 8)
+    await exposed(wrapper).openPanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    expect(Math.max(...(await feed(wrapper, 0.03, 2)))).toBeGreaterThan(12)
+
+    wrapper.unmount()
   })
 })
