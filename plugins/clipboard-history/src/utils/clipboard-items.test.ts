@@ -174,9 +174,8 @@ describe('clipboard-items helpers', () => {
 
     const insight = getClipboardTextInsight(item)
 
-    expect(insight?.characterTokens.slice(0, 4)).toEqual(['你', '好', 'T', 'u'])
     expect(insight?.wordTokens).toContain('Tuff')
-    expect(insight?.characterCount).toBe(12)
+    expect(insight?.wordTokens).toContain('你好')
     expect(insight?.lineCount).toBe(2)
     expect(insight?.wordCount).toBeGreaterThan(0)
   })

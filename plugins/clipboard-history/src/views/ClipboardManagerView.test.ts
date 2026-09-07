@@ -124,7 +124,7 @@ describe('clipboardManagerView', () => {
     })
     await flushPromises()
 
-    // 含空格 → 走词频而不是字符网格（字符网格只留给验证码 / 编号）。
+    // 拆词，不是拆字：分词器认得中文的词边界，「你好」是一个词而不是两个字。
     expect(wrapper.get('.insight-title').text()).toContain('拆词')
     expect(wrapper.findAll('.word-chip').map(node => node.text())).toEqual(
       expect.arrayContaining(['你好', 'Tuff']),
@@ -137,7 +137,11 @@ describe('clipboardManagerView', () => {
     wrapper.unmount()
   })
 
-  it('routes a spaceless short code to the character grid instead', async () => {
+  /**
+   * 拆字整档已经去掉。一个六位验证码拆词只会得到它自己，所以洞察区不出分区——
+   * 一个和原文一模一样的词块是纯噪音。
+   */
+  it('gives a spaceless short code no insight section at all', async () => {
     sdkMocks.clipboard.history.getHistory.mockResolvedValue({
       history: [{ id: 22, type: 'text', content: '679839' }],
       total: 1,
@@ -148,18 +152,8 @@ describe('clipboardManagerView', () => {
     const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
     await flushPromises()
 
-    expect(wrapper.get('.insight-title').text()).toContain('字符')
-    expect(wrapper.findAll('.character-chip').map(node => node.text())).toEqual([
-      '6',
-      '7',
-      '9',
-      '8',
-      '3',
-      '9',
-    ])
-
-    await wrapper.get('.character-chip').trigger('click')
-    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: '6' })
+    expect(wrapper.find('.insight-section').exists()).toBe(false)
+    expect(wrapper.find('.character-chip').exists()).toBe(false)
 
     wrapper.unmount()
   })
@@ -514,7 +508,7 @@ describe('clipboardManagerView', () => {
     const summary = wrapper.get('.more-summary').text()
     expect(summary).toContain('MIME')
     expect(summary).toContain('记录 ID')
-    expect(summary).toContain('字符拆分')
+    expect(summary).toContain('拆词')
 
     await wrapper.get('.more-toggle').trigger('click')
 
@@ -549,7 +543,7 @@ describe('clipboardManagerView', () => {
 
   /**
    * 掩码只在洞察区「值」那一行成立过，同一条记录的完整明文还同时出现在列表标题、
-   * 预览区和「更多信息 → 字符拆分」里。断言整棵 DOM 而不是逐个表面，
+   * 预览区和「更多信息 → 拆词」里。断言整棵 DOM 而不是逐个表面，
    * 是因为下一个泄漏点多半出现在这条用例还没点名的第四个地方。
    */
   it('keeps a detected secret masked on every surface, including the character split', async () => {
@@ -571,8 +565,8 @@ describe('clipboardManagerView', () => {
     expect(wrapper.get('.item-preview').attributes('title')).not.toContain(apiKey)
     expect(wrapper.get('.text-preview').text()).not.toContain(apiKey)
 
-    // 字符拆分对密钥没有使用价值，只有把掩码拼回原文的泄漏面。
-    expect(wrapper.get('.more-summary').text()).not.toContain('字符拆分')
+    // 拆词对密钥没有使用价值，只有把掩码拼回原文的泄漏面。
+    expect(wrapper.get('.more-summary').text()).not.toContain('拆词')
     await wrapper.get('.more-toggle').trigger('click')
     expect(wrapper.find('.more-chars').exists()).toBe(false)
 

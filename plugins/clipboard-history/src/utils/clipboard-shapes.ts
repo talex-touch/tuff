@@ -5,6 +5,7 @@ import {
   getClipboardRawTags,
   getClipboardTitle,
   parseFileList,
+  splitWordTokens,
 } from './clipboard-items'
 
 /**
@@ -28,7 +29,6 @@ export type ClipboardInsightKind =
   | 'secret'
   | 'command'
   | 'color'
-  | 'chars'
   | 'words'
   | 'none'
 
@@ -457,38 +457,11 @@ export function classifyClipboardItem(item: PluginClipboardItem): ClipboardShape
 }
 
 /**
- * 字符网格只对验证码 / 编号 / 单个词这种场景有意义。
- *
- * 不能只用「没有空白」判断：中文没有词间空格，一整句话同样无空白，
- * 那样又会退回到「把一段中文拆成 20 个字符格」的老毛病。
- */
-function isShortToken(content: string): boolean {
-  const value = content.trim()
-  if (!value || /\s/.test(value)) {
-    return false
-  }
-
-  const graphemes = Array.from(value)
-  if (graphemes.length > 32) {
-    return false
-  }
-
-  // 验证码 / 编号 / 订单号：ASCII 词字符构成，拆字确实有用。
-  if (/^[\w.:@/+-]+$/.test(value)) {
-    return true
-  }
-
-  // 带句读的一律按长文本处理；只有很短、无标点的 CJK 片段才值得拆字。
-  if (/[，。！？；：、“”‘’（）《》…—]/.test(value)) {
-    return false
-  }
-
-  return graphemes.length <= 8
-}
-
-/**
- * 洞察区只渲染一个分区。优先级：密钥 > 命令 > 链接 > 颜色 > 短文本 > 长文本。
+ * 洞察区只渲染一个分区。优先级：密钥 > 命令 > 链接 > 颜色 > 文本拆词。
  * 图片先走 OCR，文件不给洞察（预览区的文件树本身就是内容）。
+ *
+ * 曾经在这之前还有一档 `chars`（把短内容拆成单字符网格）。拆字对任何内容都没有
+ * 使用价值——验证码该被识别成验证码，不是被拆成六个数字格——所以整档去掉了。
  */
 export function selectClipboardInsight(
   item: PluginClipboardItem | null | undefined,
@@ -519,9 +492,19 @@ export function selectClipboardInsight(
   if (getClipboardColorTokens(item).length > 0) {
     return 'color'
   }
-  if (isShortToken(content)) {
-    return 'chars'
-  }
 
-  return content ? 'words' : 'none'
+  // 拆词结果只有整条内容本身时不出分区：一个和原文一模一样的词块是纯噪音。
+  return hasUsefulWordSplit(content) ? 'words' : 'none'
+}
+
+/**
+ * 拆词是否值得渲染。拆出来只有整条内容本身时等于没拆——验证码、编号、单个英文词
+ * 都会落到这里，它们该被识别成对应的形态，而不是回一个和原文一模一样的词块。
+ */
+function hasUsefulWordSplit(content: string): boolean {
+  const words = splitWordTokens(content)
+  if (words.length === 0) {
+    return false
+  }
+  return words.length > 1 || words[0] !== content.trim()
 }

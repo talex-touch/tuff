@@ -263,26 +263,6 @@ function maskParamValue(value: string): string {
       </div>
     </template>
 
-    <template v-else-if="kind === 'chars' && textInsight">
-      <div class="insight-title">
-        <span>字符</span>
-        <span class="insight-meta">点击任意字符复制</span>
-      </div>
-      <div class="character-grid" :class="{ empty: textInsight.characterTokens.length === 0 }">
-        <button
-          v-for="(char, index) in textInsight.characterTokens"
-          :key="`${char}-${index}`"
-          class="character-chip"
-          type="button"
-          :title="`复制 ${char}`"
-          @click="emit('copyText', char)"
-        >
-          {{ char }}
-        </button>
-        <span v-if="textInsight.characterTokens.length === 0" class="insight-empty">无可拆分字符</span>
-      </div>
-    </template>
-
     <template v-else-if="kind === 'words' && textInsight">
       <div class="insight-title">
         <span>拆词</span>
@@ -573,19 +553,6 @@ button.kv-value:hover {
   color: var(--clipboard-color-accent);
 }
 
-.character-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  max-height: 92px;
-  overflow: auto;
-}
-
-.character-grid.empty {
-  display: block;
-}
-
-.character-chip,
 .word-chip,
 .keyword-chip {
   min-width: 22px;
@@ -600,11 +567,6 @@ button.kv-value:hover {
   text-align: center;
 }
 
-.character-chip {
-  cursor: pointer;
-}
-
-.character-chip:hover,
 .word-chip:hover,
 .color-chip:hover,
 .keyword-chip:hover,
