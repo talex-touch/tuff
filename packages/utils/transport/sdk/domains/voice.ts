@@ -103,6 +103,32 @@ export interface VoiceAsrStreamPayload {
   emitLevel?: boolean;
 }
 
+/**
+ * Retry the most recent failed streaming session, reusing the audio it already captured.
+ *
+ * There is no token: stream failures travel the error channel, which only preserves a message
+ * and a stable code, so main keeps a single slot instead. See the retention contract in the
+ * task design — the buffer lives in main memory only, is dropped on success or cancel, and
+ * expires on a grace timer after a failure.
+ */
+export interface VoiceRetryPayload {
+  language?: string;
+  delivery?: VoiceDeliveryMode;
+}
+
+export interface VoiceRetryResult {
+  text: string;
+  language?: string;
+  delivery?: VoiceDeliveryResult;
+  /**
+   * The buffered audio is gone — the grace window closed, or it was cleared.
+   *
+   * The caller must say so rather than pretending a retry happened: `text` is empty here,
+   * and reporting it as a failed transcription would blame the wrong thing.
+   */
+  expired?: boolean;
+}
+
 /** Main-owned source reference for uploaded audio recognition. */
 export interface VoiceTranscribeUploadPayload {
   /** HTTPS URL resolved by main; raw file paths and binary payloads are not public DTOs. */
@@ -167,6 +193,10 @@ export const voiceApiEvents = {
       VoiceTranscribeUploadPayload,
       VoiceApiResponse<VoiceTranscribeUploadResult>
     >(),
+  retryLastFailure: defineEvent("voice")
+    .module("api")
+    .event("retry-last-failure")
+    .define<VoiceRetryPayload, VoiceApiResponse<VoiceRetryResult>>(),
   asrStream: defineEvent("voice")
     .module("api")
     .event("asr-stream")
@@ -193,6 +223,8 @@ export interface VoiceSdk {
     payload: VoiceAsrStreamPayload,
     options: StreamOptions<VoiceAsrStreamEvent>,
   ) => Promise<StreamController>;
+  /** Re-transcribe the audio the last failed session already captured. */
+  retryLastFailure: (payload?: VoiceRetryPayload) => Promise<VoiceRetryResult>;
 }
 
 function assertVoiceApiResponse<T>(
@@ -219,6 +251,11 @@ export function createVoiceSdk(transport: VoiceSdkTransport): VoiceSdk {
     async transcribeUpload(payload) {
       const response = await transport.send(voiceApiEvents.transcribeUpload, payload);
       return assertVoiceApiResponse(response, "Voice upload transcription failed");
+    },
+
+    async retryLastFailure(payload = {}) {
+      const response = await transport.send(voiceApiEvents.retryLastFailure, payload);
+      return assertVoiceApiResponse(response, "Voice retry failed");
     },
 
     async asrStream(payload, options) {

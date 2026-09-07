@@ -5,6 +5,8 @@ import type {
   VoiceDeliveryResult,
   VoiceDictatePayload,
   VoiceDictateResult,
+  VoiceRetryPayload,
+  VoiceRetryResult,
   VoiceSpeakPayload,
   VoiceSpeakResult,
   VoiceTranscribeUploadPayload,
@@ -48,6 +50,22 @@ const VOICE_CALLER = 'core.voice.dictate'
  * `final` behind a backlog.
  */
 const MAX_QUEUED_LEVELS = 20
+/**
+ * The retry buffer: the raw PCM of the session in flight, kept so a failure can be retried
+ * against the same audio instead of asking the user to say it again.
+ *
+ * The retention rules are the point of this feature, not an afterthought — memory only,
+ * dropped the moment the reason to keep it disappears:
+ *
+ * - one slot; a new session replaces it
+ * - cleared on success and on cancel (the user said no)
+ * - kept for RETRY_GRACE_MS after a failure, then dropped by timer
+ * - capped, so a long session degrades to "no retry" rather than to unbounded memory
+ */
+const RETRY_GRACE_MS = 60_000
+const MAX_RETRY_BUFFER_BYTES = 4 * 1024 * 1024
+const PCM_BITS_PER_SAMPLE = 16
+const PCM_CHANNELS = 1
 // Toggle (global hotkey) capture: silence auto-stop effectively disabled so a pause
 // mid-thought doesn't end the session — the user's second key press stops it; the
 // max duration is only a safety cap.
@@ -74,6 +92,36 @@ function pcmRms(chunk: Buffer): number {
     sumOfSquares += sample * sample
   }
   return Math.min(1, Math.sqrt(sumOfSquares / sampleCount))
+}
+
+/** 44-byte RIFF header so buffered PCM can go through the same `transcribe()` as one-shot audio. */
+function pcmToWav(pcm: Buffer, sampleRate: number): Buffer {
+  const header = Buffer.alloc(WAV_HEADER_BYTES)
+  const byteRate = (sampleRate * PCM_CHANNELS * PCM_BITS_PER_SAMPLE) / 8
+  header.write('RIFF', 0)
+  header.writeUInt32LE(36 + pcm.length, 4)
+  header.write('WAVE', 8)
+  header.write('fmt ', 12)
+  header.writeUInt32LE(16, 16)
+  header.writeUInt16LE(1, 20)
+  header.writeUInt16LE(PCM_CHANNELS, 22)
+  header.writeUInt32LE(sampleRate, 24)
+  header.writeUInt32LE(byteRate, 28)
+  header.writeUInt16LE((PCM_CHANNELS * PCM_BITS_PER_SAMPLE) / 8, 32)
+  header.writeUInt16LE(PCM_BITS_PER_SAMPLE, 34)
+  header.write('data', 36)
+  header.writeUInt32LE(pcm.length, 40)
+  return Buffer.concat([header, pcm])
+}
+
+interface RetryBuffer {
+  chunks: Buffer[]
+  bytes: number
+  sampleRate: number
+  language?: string
+  /** Set once the session fails; until then the buffer belongs to a live session. */
+  expiresAt: number | null
+  overflowed: boolean
 }
 
 interface VoiceSessionRecord {
@@ -207,6 +255,60 @@ function dataUrlToBuffer(dataUrl: string): Buffer | null {
 export class VoiceService {
   private readonly sessions = new Map<string, VoiceSessionRecord>()
   private disposed = false
+  /** See RETRY_GRACE_MS: one slot, memory only, dropped as soon as its reason disappears. */
+  private retryBuffer: RetryBuffer | null = null
+  private retryExpiryTimer: ReturnType<typeof setTimeout> | null = null
+
+  private clearRetryBuffer(): void {
+    if (this.retryExpiryTimer) {
+      clearTimeout(this.retryExpiryTimer)
+      this.retryExpiryTimer = null
+    }
+    this.retryBuffer = null
+  }
+
+  private beginRetryBuffer(sampleRate: number, language?: string): void {
+    this.clearRetryBuffer()
+    this.retryBuffer = {
+      chunks: [],
+      bytes: 0,
+      sampleRate,
+      ...(language ? { language } : {}),
+      expiresAt: null,
+      overflowed: false
+    }
+  }
+
+  private appendRetryBuffer(chunk: Buffer): void {
+    const buffer = this.retryBuffer
+    if (!buffer || buffer.overflowed) return
+    if (buffer.bytes + chunk.length > MAX_RETRY_BUFFER_BYTES) {
+      // Degrade to "no retry" rather than growing without bound. Dropping the partial audio
+      // is deliberate: a truncated retry would transcribe half a sentence and look like a bug.
+      buffer.chunks.length = 0
+      buffer.bytes = 0
+      buffer.overflowed = true
+      return
+    }
+    buffer.chunks.push(chunk)
+    buffer.bytes += chunk.length
+  }
+
+  /** Failure is the only path that keeps audio, and only for the grace window. */
+  private armRetryBuffer(): void {
+    const buffer = this.retryBuffer
+    if (!buffer || buffer.overflowed || buffer.bytes === 0) {
+      this.clearRetryBuffer()
+      return
+    }
+    buffer.expiresAt = Date.now() + RETRY_GRACE_MS
+    if (this.retryExpiryTimer) clearTimeout(this.retryExpiryTimer)
+    this.retryExpiryTimer = setTimeout(() => {
+      this.retryExpiryTimer = null
+      this.retryBuffer = null
+    }, RETRY_GRACE_MS)
+    this.retryExpiryTimer.unref?.()
+  }
 
   /** Opens the canonical session used by global, renderer and plugin callers. */
   async startSession(
@@ -327,6 +429,7 @@ export class VoiceService {
   /** Cancels all sessions before module teardown. */
   dispose(): void {
     this.disposed = true
+    this.clearRetryBuffer()
     for (const sessionId of Array.from(this.sessions.keys())) {
       this.cancelSession(sessionId)
     }
@@ -591,6 +694,8 @@ export class VoiceService {
 
     let ownerReleased = false
     let connection: Awaited<ReturnType<VoiceProviderAdapter['createStream']>> | null = null
+    // A new session owns the single retry slot; whatever the last one left is dropped here.
+    this.beginRetryBuffer(DEFAULT_ASR_SAMPLE_RATE, payload.language)
     try {
       const request: VoiceStreamRequest = {
         model: provider.defaultStreamModel ?? 'default',
@@ -643,6 +748,7 @@ export class VoiceService {
           const chunk = drainCapture(session.nativeSessionId).pcm
           if (chunk.length > 0) {
             if (payload.emitLevel) push({ kind: 'level', rms: pcmRms(chunk) })
+            this.appendRetryBuffer(chunk)
             await connection!.writePcm(chunk)
           }
           if (!active) break
@@ -704,10 +810,65 @@ export class VoiceService {
       }
       await pump
       throwIfCancelled(signal)
+      // Reaching `end` means the transcript was delivered: the only reason to hold the audio
+      // is gone, so it goes now rather than waiting for the grace timer.
+      this.clearRetryBuffer()
       yield { type: 'end' }
+    } catch (error) {
+      // Cancellation is the user saying no — that clears. Anything else may be retried.
+      if (error instanceof Error && error.message === 'VOICE_OPERATION_CANCELLED')
+        this.clearRetryBuffer()
+      else this.armRetryBuffer()
+      throw error
     } finally {
       if (connection) await connection.abort('Voice session ended').catch(() => {})
       if (!ownerReleased) this.cancelSession(sessionId)
+    }
+  }
+
+  /**
+   * Re-transcribe the audio the last failed session captured.
+   *
+   * Returns `expired` rather than throwing when the buffer is gone: "the recording expired"
+   * and "transcription failed" are different things to tell someone, and only one of them
+   * is worth a retry button.
+   */
+  async retryLastFailure(
+    payload: VoiceRetryPayload = {},
+    signal?: AbortSignal,
+    caller = VOICE_CALLER
+  ): Promise<VoiceRetryResult> {
+    throwIfCancelled(signal)
+    const buffer = this.retryBuffer
+    if (
+      !buffer ||
+      buffer.expiresAt === null ||
+      buffer.bytes === 0 ||
+      Date.now() > buffer.expiresAt
+    ) {
+      this.clearRetryBuffer()
+      return { text: '', expired: true }
+    }
+
+    const language = payload.language ?? buffer.language
+    const wav = pcmToWav(Buffer.concat(buffer.chunks), buffer.sampleRate)
+    const targetKey = activeAppKey(await activeAppService.getActiveApp())
+
+    const recognized = await this.transcribe(wav, language, signal, caller)
+    if (!recognized.text) {
+      // Still retryable: an empty result is not proof the audio is unusable.
+      return { text: '' }
+    }
+
+    const text = (await this.polish(recognized.text, language, signal, caller)) ?? recognized.text
+    const delivery =
+      payload.delivery === 'active-app' ? await this.deliverText(text, targetKey) : undefined
+
+    this.clearRetryBuffer()
+    return {
+      text,
+      ...(recognized.language ? { language: recognized.language } : {}),
+      ...(delivery ? { delivery } : {})
     }
   }
 
