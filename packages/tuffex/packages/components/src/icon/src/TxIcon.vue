@@ -47,9 +47,13 @@ const builtinIcons = {
     viewBox: '0 0 24 24',
     path: 'M10 15.172L19.192 5.979L20.607 7.393L10 18L3.636 11.636L5.05 10.222L10 15.172Z',
   },
+  // Drawn as a stroke, not a filled wedge: every consumer is a disclosure
+  // affordance rendered at 12–14px, and a filled chevron at that size reads as
+  // a heavy blob next to the 500-weight label it trails.
   'chevron-down': {
     viewBox: '0 0 24 24',
-    path: 'M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z',
+    path: 'M6 9.5 12 15.5 18 9.5',
+    stroke: 1.75,
   },
   'close': {
     viewBox: '0 0 24 24',
@@ -289,7 +293,18 @@ watch(
 
     <span v-else-if="safeIcon.type === 'builtin' && builtin" class="tuff-icon__builtin">
       <svg :viewBox="builtin.viewBox" width="1em" height="1em" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path :d="builtin.path" fill="currentColor" />
+        <!-- Entries carrying a `stroke` width are open paths; the rest are
+             closed silhouettes that only make sense filled. -->
+        <path
+          v-if="builtin.stroke"
+          :d="builtin.path"
+          fill="none"
+          stroke="currentColor"
+          :stroke-width="builtin.stroke"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path v-else :d="builtin.path" fill="currentColor" />
       </svg>
     </span>
 
