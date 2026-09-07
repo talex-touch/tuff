@@ -839,7 +839,6 @@ describe('VoicePanel device readiness and long messages', () => {
    */
   it('grows a second line rather than dropping the half that says what to do', async () => {
     const widthSpy = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(420)
-    const clientSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(246)
     // Two clamped lines of caption text: 10 padding + 34 + 4 gap + 40 control = 88.
     const heightSpy = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(34)
 
@@ -869,8 +868,40 @@ describe('VoicePanel device readiness and long messages', () => {
     )
 
     widthSpy.mockRestore()
-    clientSpy.mockRestore()
     heightSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  /**
+   * A short sentence still has to widen the pill.
+   *
+   * `scrollWidth` on a wrapped paragraph reports the width it already has, not the width it wants,
+   * and that width came from this measurement — so the pill would sit at its base width with
+   * the text wrapped inside it forever. The stub answers differently depending on whether the
+   * element is being held to one line, which is the only difference between the two questions.
+   */
+  it('widens for a sentence that would otherwise wrap inside the base pill', async () => {
+    const widthSpy = vi
+      .spyOn(HTMLElement.prototype, 'scrollWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.style.whiteSpace === 'nowrap' ? 130 : 106
+      })
+
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('E_SOMETHING_ELSE'))
+    await flushPromises()
+    await flushPromises()
+
+    // 130 of text + 94 of chrome, not the 200 the base pill would have kept.
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    expect(style).toContain('width: 224px')
+    expect(style).toContain('height: 44px')
+    // And the measurement leaves no trace on the element it borrowed.
+    expect(wrapper.find('[data-testid="voice-notice"]').attributes('style') ?? '').not.toContain(
+      'nowrap'
+    )
+
+    widthSpy.mockRestore()
     wrapper.unmount()
   })
 
@@ -881,7 +912,6 @@ describe('VoicePanel device readiness and long messages', () => {
    */
   it('sizes the card to the text it ended up with, not to the worst case', async () => {
     const widthSpy = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(420)
-    const clientSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(246)
     // One line once the text spans the card: 10 padding + 17 + 4 gap + 40 control = 71.
     const heightSpy = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(17)
 
@@ -895,7 +925,6 @@ describe('VoicePanel device readiness and long messages', () => {
     expect(wrapper.find('.voice-dock--expanded').exists()).toBe(true)
 
     widthSpy.mockRestore()
-    clientSpy.mockRestore()
     heightSpy.mockRestore()
     wrapper.unmount()
   })

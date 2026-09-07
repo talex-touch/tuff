@@ -648,6 +648,22 @@ function handleKeyup(event: KeyboardEvent): void {
   stopHold()
 }
 
+/**
+ * How wide the text would be on one line — which is not what `scrollWidth` reports.
+ *
+ * The paragraph wraps inside a slot whose width comes from this very measurement, so reading
+ * it as it stands answers "how wide are you right now", not "how wide do you want to be": a
+ * short sentence that wrapped at the base width reports that it fits, and the pill never grows
+ * for it. Forcing one line for the duration of the read is what asks the second question.
+ */
+function measureNaturalWidth(element: HTMLElement): number {
+  const previous = element.style.whiteSpace
+  element.style.whiteSpace = 'nowrap'
+  const width = element.scrollWidth
+  element.style.whiteSpace = previous
+  return width
+}
+
 // Measured rather than expressed in CSS: `width: fit-content` is not animatable without
 // `interpolate-size`, and the window behind the pill deliberately never resizes.
 watch([centerText, showsOrb, () => notice.value?.icon], async () => {
@@ -657,16 +673,16 @@ watch([centerText, showsOrb, () => notice.value?.icon], async () => {
     return
   }
   await nextTick()
-  const textWidth = centerTextRef.value?.scrollWidth ?? 0
+  const element = centerTextRef.value
+  if (!element) return
   const chrome = PILL_CHROME_WIDTH + (notice.value?.icon ? NOTICE_ICON_WIDTH : 0)
-  pillWidth.value = Math.min(PILL_MAX_WIDTH, Math.max(PILL_BASE_WIDTH, textWidth + chrome))
+  const needed = measureNaturalWidth(element) + chrome
+  pillWidth.value = Math.min(PILL_MAX_WIDTH, Math.max(PILL_BASE_WIDTH, needed))
 
   // Width first, height second. Truncating at the cap loses the half of the sentence that
-  // says what to do — "Cannot find m…" is exactly the wrong half to drop — so once the widest
-  // line still does not fit, the island grows instead.
-  await nextTick()
-  const element = centerTextRef.value
-  if (!element || element.scrollWidth <= element.clientWidth) {
+  // says what to do — "Cannot find m…" is exactly the wrong half to drop — so only once one
+  // line cannot fit even at the cap does the island grow instead.
+  if (needed <= PILL_MAX_WIDTH) {
     pillHeight.value = PILL_BASE_HEIGHT
     return
   }
