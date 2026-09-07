@@ -597,6 +597,69 @@ describe('AssistantModule screenshot translation', () => {
     await module.onDestroy({} as never)
   })
 
+  /**
+   * An auto-hidden Dock or taskbar slides in over the bottom strip without changing the work
+   * area, so nothing ever fires and there is nothing to react to. The only defence is to sit
+   * above where it would land — but only when the display actually looks like it could have
+   * one, or every machine without a bottom bar pays for the space.
+   */
+  it.each([
+    {
+      label: 'a bar the system already reserved room for',
+      display: {
+        bounds: { x: 0, y: 0, width: 800, height: 600 },
+        workArea: { x: 0, y: 24, width: 800, height: 530 }
+      },
+      // 24 + 530 - 144 - 24
+      expectedY: 386
+    },
+    {
+      label: 'nothing reserved but the menu bar, so a hidden bar could still appear',
+      display: {
+        bounds: { x: 0, y: 0, width: 800, height: 600 },
+        workArea: { x: 0, y: 24, width: 800, height: 576 }
+      },
+      // 24 + 576 - 144 - (24 + 72)
+      expectedY: 360
+    },
+    {
+      label: 'a Dock parked on the left, which is visible and never coming to the bottom',
+      display: {
+        bounds: { x: 0, y: 0, width: 800, height: 600 },
+        workArea: { x: 70, y: 24, width: 730, height: 576 }
+      },
+      // 24 + 576 - 144 - 24
+      expectedY: 432
+    }
+  ])('anchors the VoiceDock above $label', async ({ display, expectedY }) => {
+    const platform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
+      mocks.getMainConfig.mockReturnValue(mocks.createEnabledSetting())
+      mocks.getDisplayNearestPoint.mockReturnValue(display)
+
+      const { module } = await createInitializedModule()
+      const openPanel = mocks.handlers.get(
+        AssistantEvents.floatingBall.openVoicePanel.toEventName()
+      )
+      if (!openPanel) throw new Error('openVoicePanel handler was not registered')
+      await openPanel({ source: 'click' }, {} as HandlerContext)
+
+      const voiceDock = mocks.touchWindows[0]
+      if (!voiceDock) throw new Error('VoiceDock window was not created')
+      const bounds = vi
+        .mocked(voiceDock.window.setBounds)
+        .mock.calls.map(([value]) => value)
+        .pop()
+      expect(bounds?.y).toBe(expectedY)
+      expect(bounds?.height).toBe(144)
+
+      await module.onDestroy({} as never)
+    } finally {
+      Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+    }
+  })
+
   it('reanchors the expanded VoiceDock after topology recovery without reopening it and leaves it hidden otherwise', async () => {
     const savedSetting = mocks.createEnabledSetting({
       floatingBall: {
