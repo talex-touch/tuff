@@ -210,6 +210,18 @@ export const voiceApiEvents = {
       VoiceTranscribeUploadPayload,
       VoiceApiResponse<VoiceTranscribeUploadResult>
     >(),
+  /**
+   * Open the operating system's microphone settings.
+   *
+   * Takes no payload on purpose: the caller names an intent, main owns the URL. The scheme
+   * these panes use (`x-apple.systempreferences:`, `ms-settings:`) is not on the external-URL
+   * allowlist, and it must not be — letting a renderer hand over an arbitrary scheme to open
+   * would reopen exactly what that allowlist closes.
+   */
+  openMicrophoneSettings: defineEvent("voice")
+    .module("api")
+    .event("open-microphone-settings")
+    .define<void, VoiceApiResponse>(),
   recoveryStatus: defineEvent("voice")
     .module("api")
     .event("recovery-status")
@@ -248,6 +260,8 @@ export interface VoiceSdk {
   retryLastFailure: (payload?: VoiceRetryPayload) => Promise<VoiceRetryResult>;
   /** Ask whether a cancelled or failed recording is still recoverable. */
   recoveryStatus: () => Promise<VoiceRecoveryStatus>;
+  /** Open the OS microphone settings pane; rejects where the platform has none. */
+  openMicrophoneSettings: () => Promise<void>;
 }
 
 function assertVoiceApiResponse<T>(
@@ -274,6 +288,11 @@ export function createVoiceSdk(transport: VoiceSdkTransport): VoiceSdk {
     async transcribeUpload(payload) {
       const response = await transport.send(voiceApiEvents.transcribeUpload, payload);
       return assertVoiceApiResponse(response, "Voice upload transcription failed");
+    },
+
+    async openMicrophoneSettings() {
+      const response = await transport.send(voiceApiEvents.openMicrophoneSettings, undefined);
+      assertVoiceApiResponse(response, "Voice microphone settings failed");
     },
 
     async recoveryStatus() {

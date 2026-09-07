@@ -8,6 +8,7 @@ import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { getPreloadProcessInfo } from '~/modules/preload/process-info'
 import { useI18n } from 'vue-i18n'
 
 /**
@@ -52,7 +53,15 @@ const VERY_SLOW_AFTER_MS = 8000
 const CAPTURE_START_TIMEOUT_MS = 2000
 
 type NoticeTone = keyof typeof NOTICE_HOLD_MS
-type NoticeAction = 'undo' | 'retry'
+type NoticeAction = 'undo' | 'retry' | 'settings'
+
+/**
+ * Where a microphone failure can actually be fixed — and only where such a pane exists.
+ *
+ * Linux has no equivalent that works across desktops, so there the notice keeps its sentence
+ * and no button: offering a control that opens nothing is worse than offering none.
+ */
+const MIC_SETTINGS_PLATFORMS = new Set(['darwin', 'win32'])
 type Notice = { message: string; tone: NoticeTone; action?: NoticeAction; icon?: string }
 
 /**
@@ -63,6 +72,16 @@ type Notice = { message: string; tone: NoticeTone; action?: NoticeAction; icon?:
  * of a microphone next to "out of credit" would name the wrong culprit.
  */
 const MIC_FAILURE_ICON = 'i-carbon-microphone-off'
+
+/**
+ * The device card is not measured — its copy is fixed and short.
+ *
+ * It is also the one notice with a picture, so it stacks instead of running in a line: the
+ * icon centred, the sentence under it, the two controls on the floor. A layout that says
+ * "the microphone" before it says anything else.
+ */
+const ICON_CARD_WIDTH = 264
+const ICON_CARD_HEIGHT = 120
 
 /** Bars in the input meter. Each one holds a single 10Hz level frame, so 24 ≈ 2.4s of history. */
 const WAVE_BAR_COUNT = 24
@@ -120,18 +139,17 @@ const CONTROL_BASE_SIZE = 34
 const CONTROL_TALL_SIZE = 40
 /** padding (10) + both round slots (68) + both gaps (16); the centre gets what is left. */
 const PILL_CHROME_WIDTH = 94
-/** The leading failure icon and its gap, when the notice carries one. */
-const NOTICE_ICON_WIDTH = 26
 
 const props = withDefaults(
   defineProps<{
     managedByDock?: boolean
+    generation?: number
   }>(),
-  { managedByDock: false }
+  { managedByDock: false, generation: 0 }
 )
 
 const emit = defineEmits<{
-  finished: []
+  finished: [generation?: number]
 }>()
 
 const transport = useTuffTransport()
@@ -148,6 +166,7 @@ const notice = ref<Notice | null>(null)
 const sessionSeq = ref(0)
 const levels = ref<number[]>(new Array(WAVE_BAR_COUNT).fill(0))
 const centerTextRef = ref<HTMLElement | null>(null)
+const pillRef = ref<HTMLElement | null>(null)
 const pillWidth = ref(PILL_BASE_WIDTH)
 const pillHeight = ref(PILL_BASE_HEIGHT)
 const expanded = computed(() => pillHeight.value > PILL_BASE_HEIGHT)
@@ -155,6 +174,24 @@ const pillRadius = computed(() =>
   expanded.value ? PILL_TALL_RADIUS : Math.round(PILL_BASE_HEIGHT / 2)
 )
 const controlSize = computed(() => (expanded.value ? CONTROL_TALL_SIZE : CONTROL_BASE_SIZE))
+/** The card that leads with a picture: icon over sentence, controls on the floor. */
+const iconCard = computed(() => Boolean(notice.value?.icon))
+const ACTION_ICONS: Record<NoticeAction, string> = {
+  undo: 'i-carbon-undo',
+  retry: 'i-carbon-renew',
+  settings: 'i-carbon-settings'
+}
+const ACTION_LABELS: Record<NoticeAction, string> = {
+  undo: 'assistant.voicePanel.undo',
+  retry: 'assistant.voicePanel.retry',
+  settings: 'assistant.voicePanel.openMicrophoneSettings'
+}
+const actionIcon = computed(() =>
+  notice.value?.action ? ACTION_ICONS[notice.value.action] : ACTION_ICONS.retry
+)
+const actionLabel = computed(() =>
+  t(notice.value?.action ? ACTION_LABELS[notice.value.action] : ACTION_LABELS.retry)
+)
 /** Script-owned rather than CSS: the size is a function of the surface, and tests read it. */
 const controlStyle = computed(() => ({
   width: `${controlSize.value}px`,
@@ -244,8 +281,41 @@ const centerText = computed(() => {
   return t('assistant.voicePanel.voiceTranscribingShort')
 })
 
+/**
+ * What counts as "different content" for the swap.
+ *
+ * Keyed on the sentence rather than on the phase, so slow → very-slow reads as a change too:
+ * the words are what the user is looking at, and swapping them in place under a still frame is
+ * the jarring part. The waveform is one identity for as long as it is the waveform — its bars
+ * animate on their own and must not be torn down every level frame.
+ */
+const centerKey = computed(() =>
+  centerText.value ? `text:${centerText.value}` : listening.value ? 'wave' : 'idle'
+)
+
+/**
+ * The text element of the slot that is arriving, not the one that is leaving.
+ *
+ * Both are in the DOM together for the length of the transition, and the outgoing one still
+ * carries the old sentence — measuring that would size the pill for the message it is in the
+ * middle of forgetting.
+ */
+function currentTextEl(): HTMLElement | null {
+  const root = pillRef.value
+  if (!root) return centerTextRef.value
+  return (
+    root.querySelector<HTMLElement>(
+      '.voice-dock__slot:not(.voice-swap-leave-active) .voice-dock__text'
+    ) ?? centerTextRef.value
+  )
+}
+
 let voiceStreamController: StreamController | null = null
-let keepListening = false
+let activeVoiceGeneration: number | null = null
+let nextVoiceGeneration = 0
+let stopRequestedGeneration: number | null = null
+let panelGeneration = 0
+let panelTaskGeneration = 0
 let disposePanelOpen: (() => void) | null = null
 let finishTimer: ReturnType<typeof setTimeout> | null = null
 let finished = false
@@ -306,7 +376,7 @@ function clearFinishTimer(): void {
 function emitFinished(): void {
   if (finished) return
   finished = true
-  emit('finished')
+  emit('finished', props.generation)
 }
 
 function showNotice(message: string, tone: NoticeTone, action?: NoticeAction, icon?: string): void {
@@ -346,16 +416,18 @@ function classifyFailure(error: unknown): Notice {
     return {
       message: t('assistant.voicePanel.microphoneDenied'),
       tone: 'warning',
-      icon: MIC_FAILURE_ICON
+      icon: MIC_FAILURE_ICON,
+      ...(canOpenMicSettings ? { action: 'settings' as const } : {})
     }
 
   const deviceMissing =
-    /CANNOT_?FIND|NO_?(INPUT_?)?DEVICE|DEVICE_?NOT_?FOUND|NO_?MICROPHONE|CAPTURE_?UNAVAILABLE|UNSUPPORTED/
+    /CANNOT_?FIND|NO_?(INPUT_?)?DEVICE|DEVICE_?NOT_?FOUND|NO_?MICROPHONE|CAPTURE_?UNAVAILABLE|(?:MICROPHONE|INPUT|CAPTURE|AUDIO).{0,80}UNSUPPORTED|UNSUPPORTED.{0,80}(?:MICROPHONE|INPUT|CAPTURE|AUDIO)/
   if (deviceMissing.test(haystack))
     return {
       message: t('assistant.voicePanel.microphoneMissing'),
       tone: 'warning',
-      icon: MIC_FAILURE_ICON
+      icon: MIC_FAILURE_ICON,
+      ...(canOpenMicSettings ? { action: 'settings' as const } : {})
     }
 
   if (/QUOTA|CREDIT|INSUFFICIENT_BALANCE/.test(haystack))
@@ -389,26 +461,52 @@ function resetPanelState(): void {
   stopCaptureStartTimer()
 }
 
-async function loadRuntimeConfig(): Promise<void> {
+function isCurrentPanel(generation: number, taskGeneration?: number): boolean {
+  return (
+    panelGeneration === generation &&
+    (taskGeneration === undefined || panelTaskGeneration === taskGeneration)
+  )
+}
+function isCurrentVoiceSession(generation: number): boolean {
+  return activeVoiceGeneration === generation
+}
+
+function retireVoiceSession(generation: number): boolean {
+  if (!isCurrentVoiceSession(generation)) return false
+  activeVoiceGeneration = null
+  if (stopRequestedGeneration === generation) stopRequestedGeneration = null
+  voiceStreamController = null
+  return true
+}
+
+async function loadRuntimeConfig(
+  generation = panelGeneration,
+  taskGeneration = panelTaskGeneration
+): Promise<void> {
   try {
-    runtimeConfig.value = await transport.send(
+    const nextConfig = await transport.send(
       AssistantEvents.floatingBall.getRuntimeConfig,
       undefined
     )
+    if (isCurrentPanel(generation, taskGeneration)) runtimeConfig.value = nextConfig
   } catch (error) {
     // A late settings failure must not turn an already-running microphone session into a
     // misleading error surface; the session can safely use the default language.
-    if (!voiceActive.value) showNotice(classifyFailure(error).message, 'danger')
+    if (isCurrentPanel(generation, taskGeneration) && !voiceActive.value) {
+      showNotice(classifyFailure(error).message, 'danger')
+    }
   }
 }
 
 function cancelVoiceSession(): void {
-  keepListening = false
+  const controller = voiceStreamController
+  const generation = activeVoiceGeneration
+  if (generation !== null) retireVoiceSession(generation)
+  voiceStreamController = null
+  stopRequestedGeneration = null
   listening.value = false
   transcribing.value = false
   startingVoiceCapture.value = false
-  const controller = voiceStreamController
-  voiceStreamController = null
   controller?.cancel()
 }
 
@@ -416,12 +514,13 @@ function cancelVoiceSession(): void {
  * Stop capturing but let the session finish.
  *
  * Deliberately not `cancel()`: cancelling aborts the whole session main-side, so the
- * transcript is never delivered. The controller is kept because `final` and `end` are
- * still coming — they are what ends the thinking phase.
+ * transcript is never delivered. When opening the stream is still pending, remember the stop
+ * and apply it as soon as its controller arrives instead of discarding that new session.
  */
 function finishVoiceInput(): void {
-  if (finished || !listening.value) return
-  keepListening = false
+  const generation = activeVoiceGeneration
+  if (finished || generation === null || !listening.value) return
+  stopRequestedGeneration = generation
   listening.value = false
   transcribing.value = true
   startingVoiceCapture.value = false
@@ -431,19 +530,22 @@ function finishVoiceInput(): void {
     waitedMs.value += 100
   }, 100)
 
-  const controller = voiceStreamController
-  if (controller?.stop) {
-    controller.stop()
-    return
-  }
+  voiceStreamController?.stop?.()
+}
 
-  // A transport without `stop` cannot finalize; discarding is the only honest fallback.
-  voiceStreamController = null
-  controller?.cancel()
+function completeVoiceSession(generation: number): void {
+  if (!retireVoiceSession(generation)) return
+  listening.value = false
+  transcribing.value = false
+  startingVoiceCapture.value = false
+  stopWaitClock()
+  stopCaptureStartTimer()
+  if (notice.value) return
   emitFinished()
 }
 
-function handleVoiceSessionEvent(event: VoiceAsrStreamEvent): void {
+function handleVoiceSessionEvent(generation: number, event: VoiceAsrStreamEvent): void {
+  if (!isCurrentVoiceSession(generation)) return
   if (event.type === 'level') {
     // The handover is the data arriving, not a timer: the meter takes over the moment it has
     // something true to draw.
@@ -452,24 +554,23 @@ function handleVoiceSessionEvent(event: VoiceAsrStreamEvent): void {
     levels.value = [...levels.value.slice(1), normalizeLevel(event.rms)]
     return
   }
-  if (event.type === 'partial' || event.type === 'final') {
-    return
-  }
-
-  listening.value = false
-  transcribing.value = false
-  voiceStreamController = null
-  keepListening = false
-  emitFinished()
+  if (event.type === 'partial' || event.type === 'final') return
+  completeVoiceSession(generation)
 }
 
-function showVoiceSessionError(error: unknown): void {
-  voiceStreamController = null
-  keepListening = false
+function showVoiceSessionError(generation: number, error: unknown): void {
+  if (!retireVoiceSession(generation)) return
   const classified = classifyFailure(error)
   // Quota and congestion get no retry button: retrying is still out of credit, still busy.
+  // A classified failure knows better than the tone rule what can be done about it: a missing
+  // microphone is fixed in Settings, not by asking the same provider again.
   const retryable = classified.tone === 'danger'
-  showNotice(classified.message, classified.tone, retryable ? 'retry' : undefined, classified.icon)
+  showNotice(
+    classified.message,
+    classified.tone,
+    classified.action ?? (retryable ? 'retry' : undefined),
+    classified.icon
+  )
 }
 
 async function startVoiceSession(force = false): Promise<void> {
@@ -477,11 +578,14 @@ async function startVoiceSession(force = false): Promise<void> {
     showNotice(t('assistant.voicePanel.voiceWakeDisabled'), 'warning')
     return
   }
-  if (voiceStreamController || startingVoiceCapture.value || transcribing.value) return
+  if (activeVoiceGeneration !== null || startingVoiceCapture.value || transcribing.value) return
 
+  const owner = panelGeneration
+  panelTaskGeneration += 1
+  const generation = ++nextVoiceGeneration
+  activeVoiceGeneration = generation
   clearFinishTimer()
   finished = false
-  keepListening = true
   startingVoiceCapture.value = true
   listening.value = true
   notice.value = null
@@ -492,13 +596,20 @@ async function startVoiceSession(force = false): Promise<void> {
   stopCaptureStartTimer()
   captureStartTimer = setTimeout(() => {
     captureStartTimer = null
-    if (hasLevel.value || !listening.value) return
+    if (
+      !isCurrentPanel(owner) ||
+      !isCurrentVoiceSession(generation) ||
+      hasLevel.value ||
+      !listening.value
+    ) {
+      return
+    }
     // Not slow — not answering. Breathing forever would be its own kind of lie.
     cancelVoiceSession()
     showNotice(
       t('assistant.voicePanel.microphoneUnresponsive'),
       'warning',
-      undefined,
+      canOpenMicSettings ? 'settings' : undefined,
       MIC_FAILURE_ICON
     )
   }, CAPTURE_START_TIMEOUT_MS)
@@ -513,34 +624,28 @@ async function startVoiceSession(force = false): Promise<void> {
         emitLevel: true
       },
       {
-        onData: handleVoiceSessionEvent,
-        onError: showVoiceSessionError,
-        onEnd: () => {
-          listening.value = false
-          transcribing.value = false
-          startingVoiceCapture.value = false
-          voiceStreamController = null
-          keepListening = false
-          emitFinished()
-        }
+        onData: (event) => handleVoiceSessionEvent(generation, event),
+        onError: (error) => showVoiceSessionError(generation, error),
+        onEnd: () => completeVoiceSession(generation)
       }
     )
-    if (keepListening) {
-      voiceStreamController = controller
-    } else {
+    if (!isCurrentPanel(owner) || !isCurrentVoiceSession(generation)) {
       controller.cancel()
+      return
     }
+    voiceStreamController = controller
+    if (stopRequestedGeneration === generation) controller.stop?.()
   } catch (error) {
-    showVoiceSessionError(error)
+    showVoiceSessionError(generation, error)
   } finally {
-    startingVoiceCapture.value = false
+    if (isCurrentVoiceSession(generation)) startingVoiceCapture.value = false
   }
 }
 
-async function offerRecoveryIfAny(): Promise<void> {
+async function offerRecoveryIfAny(generation: number, taskGeneration: number): Promise<void> {
   try {
     const status = await voiceSdk.recoveryStatus()
-    if (!status.available) return
+    if (!isCurrentPanel(generation, taskGeneration) || !status.available) return
     // The affordance that makes the retention window reachable at all: without it, audio kept
     // past the five seconds the pill is on screen has no entry point.
     showNotice(
@@ -558,12 +663,14 @@ async function offerRecoveryIfAny(): Promise<void> {
 }
 
 async function handlePanelOpened(): Promise<void> {
+  const generation = ++panelGeneration
+  const taskGeneration = ++panelTaskGeneration
   cancelVoiceSession()
   resetPanelState()
   // Configuration is a hint for the next request, not a prerequisite for opening the mic.
   // Keep the default language immediately usable and refresh the setting in the background.
-  void loadRuntimeConfig()
-  void offerRecoveryIfAny()
+  void loadRuntimeConfig(generation, taskGeneration)
+  void offerRecoveryIfAny(generation, taskGeneration)
   await nextTick()
 }
 
@@ -593,10 +700,39 @@ function handleConfirm(): void {
  * Both mean "use the audio main is still holding": one because the user cancelled, one
  * because transcription failed. The difference is the sentence shown, not the work done.
  */
+const canOpenMicSettings = MIC_SETTINGS_PLATFORMS.has(getPreloadProcessInfo()?.platform ?? '')
+
+/**
+ * The one action on the pill that is not about the recording.
+ *
+ * Undo and retry both mean "use the audio main is still holding"; settings means "the audio was
+ * never going to arrive, go turn the microphone on". Routing them through one handler would put
+ * a recovery spinner on a button that recovers nothing.
+ */
+async function openMicSettings(): Promise<void> {
+  try {
+    await voiceSdk.openMicrophoneSettings()
+    clearFinishTimer()
+    emitFinished()
+  } catch {
+    showNotice(t('assistant.voicePanel.microphoneSettingsUnavailable'), 'warning')
+  }
+}
+
+async function handleNoticeAction(): Promise<void> {
+  if (notice.value?.action === 'settings') {
+    await openMicSettings()
+    return
+  }
+  await recoverLast()
+}
+
 async function recoverLast(): Promise<void> {
   const action = notice.value?.action
-  if (!action) return
+  if (!action || action === 'settings') return
 
+  const generation = panelGeneration
+  const taskGeneration = ++panelTaskGeneration
   clearFinishTimer()
   notice.value = null
   recovering.value = true
@@ -604,6 +740,7 @@ async function recoverLast(): Promise<void> {
 
   try {
     const result = await voiceSdk.retryLastFailure({ delivery: 'active-app' })
+    if (!isCurrentPanel(generation, taskGeneration)) return
     recovering.value = false
     if (result.expired) {
       // Say which thing failed. "Recording expired" and "transcription failed" send the
@@ -617,6 +754,7 @@ async function recoverLast(): Promise<void> {
     }
     emitFinished()
   } catch (error) {
+    if (!isCurrentPanel(generation, taskGeneration)) return
     recovering.value = false
     const classified = classifyFailure(error)
     showNotice(classified.message, classified.tone, 'retry')
@@ -672,10 +810,18 @@ watch([centerText, showsOrb, () => notice.value?.icon], async () => {
     pillHeight.value = PILL_BASE_HEIGHT
     return
   }
+  // Fixed geometry, no measurement: this card's copy is short and constant, and it stacks
+  // rather than running in a line, so there is no natural width to ask about.
+  if (notice.value?.icon) {
+    pillWidth.value = ICON_CARD_WIDTH
+    pillHeight.value = ICON_CARD_HEIGHT
+    return
+  }
+
   await nextTick()
-  const element = centerTextRef.value
+  const element = currentTextEl()
   if (!element) return
-  const chrome = PILL_CHROME_WIDTH + (notice.value?.icon ? NOTICE_ICON_WIDTH : 0)
+  const chrome = PILL_CHROME_WIDTH
   const needed = measureNaturalWidth(element) + chrome
   pillWidth.value = Math.min(PILL_MAX_WIDTH, Math.max(PILL_BASE_WIDTH, needed))
 
@@ -693,7 +839,7 @@ watch([centerText, showsOrb, () => notice.value?.icon], async () => {
   // same empty band as before, just turned on its side.
   pillHeight.value = PILL_TALL_HEIGHT
   await nextTick()
-  const textHeight = centerTextRef.value?.scrollHeight ?? 0
+  const textHeight = currentTextEl()?.scrollHeight ?? 0
   pillHeight.value = Math.min(
     PILL_TALL_HEIGHT,
     Math.max(
@@ -723,6 +869,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  panelGeneration += 1
+  panelTaskGeneration += 1
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('keyup', handleKeyup)
   stopHold()
@@ -738,6 +886,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="voice-panel-root">
     <div
+      ref="pillRef"
       class="voice-dock"
       role="status"
       aria-live="polite"
@@ -746,6 +895,7 @@ onBeforeUnmount(() => {
         notice ? `voice-dock--${notice.tone}` : null,
         preparing ? 'voice-dock--preparing' : null,
         expanded ? 'voice-dock--expanded' : null,
+        iconCard ? 'voice-dock--icon-card' : null,
         holdingCancel ? 'voice-dock--holding' : null,
         slowness !== 'normal' && !notice ? 'voice-dock--warning' : null
       ]"
@@ -775,36 +925,38 @@ onBeforeUnmount(() => {
         aria-hidden="true"
       />
 
-      <div class="voice-dock__slot">
-        <span
-          v-if="notice?.icon && centerText"
-          class="voice-dock__icon"
-          :class="notice.icon"
-          data-testid="voice-notice-icon"
-          aria-hidden="true"
-        />
-        <p
-          v-if="centerText"
-          ref="centerTextRef"
-          class="voice-dock__text"
-          :class="{ 'voice-dock__text--shimmer': showsOrb }"
-          :data-testid="notice ? 'voice-notice' : 'voice-hint'"
-        >
-          {{ centerText }}
-        </p>
-        <div
-          v-else-if="listening"
-          class="voice-dock__wave"
-          data-testid="voice-wave"
-          aria-hidden="true"
-        >
+      <Transition name="voice-swap">
+        <div :key="centerKey" class="voice-dock__slot">
           <span
-            v-for="(level, index) in levels"
-            :key="index"
-            :style="{ height: `${barHeight(level)}px` }"
+            v-if="notice?.icon && centerText"
+            class="voice-dock__icon"
+            :class="notice.icon"
+            data-testid="voice-notice-icon"
+            aria-hidden="true"
           />
+          <p
+            v-if="centerText"
+            ref="centerTextRef"
+            class="voice-dock__text"
+            :class="{ 'voice-dock__text--shimmer': showsOrb }"
+            :data-testid="notice ? 'voice-notice' : 'voice-hint'"
+          >
+            {{ centerText }}
+          </p>
+          <div
+            v-else-if="listening"
+            class="voice-dock__wave"
+            data-testid="voice-wave"
+            aria-hidden="true"
+          >
+            <span
+              v-for="(level, index) in levels"
+              :key="index"
+              :style="{ height: `${barHeight(level)}px` }"
+            />
+          </div>
         </div>
-      </div>
+      </Transition>
 
       <!-- The confirm slot holds either an action or the progress mark, never both. -->
       <TxThinkingOrb
@@ -828,17 +980,10 @@ onBeforeUnmount(() => {
         type="button"
         data-testid="voice-recover"
         :style="controlStyle"
-        :aria-label="
-          notice.action === 'undo'
-            ? t('assistant.voicePanel.undo')
-            : t('assistant.voicePanel.retry')
-        "
-        @click="recoverLast"
+        :aria-label="actionLabel"
+        @click="handleNoticeAction"
       >
-        <span
-          :class="notice.action === 'undo' ? 'i-carbon-undo' : 'i-carbon-renew'"
-          aria-hidden="true"
-        />
+        <span :class="actionIcon" aria-hidden="true" />
       </button>
       <button
         v-else
@@ -1063,12 +1208,83 @@ onBeforeUnmount(() => {
   margin-top: 1px;
 }
 
+/*
+ * The stack takes the flexible row here, not the controls.
+ *
+ * With `auto 1fr` every spare pixel collects under the text and the icon ends up pinned 5px
+ * below a 24px corner — it reads as crowded against the edge it is nearest. Flipping the rows
+ * lets the stack centre itself in the space above the controls, and the extra top padding
+ * keeps it clear of the curve rather than merely clear of the border.
+ */
+.voice-dock--icon-card {
+  padding-top: 12px;
+  grid-template-rows: 1fr auto;
+  row-gap: 6px;
+}
+
+/*
+ * The device card leads with the picture.
+ *
+ * A microphone with a line through it is the whole message; the sentence under it only names
+ * which microphone problem it is. So the icon goes on top at the centre, the sentence sits
+ * beneath it, and the two controls stay on the floor at either end — the same two circles in
+ * the same two corners as every other card, because they are still the same two controls.
+ */
+.voice-dock--icon-card .voice-dock__slot {
+  flex-direction: column;
+  align-self: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.voice-dock--icon-card .voice-dock__icon {
+  align-self: center;
+  margin: 0;
+  font-size: 1.9em;
+}
+
+.voice-dock--icon-card .voice-dock__text {
+  -webkit-line-clamp: 1;
+  text-align: center;
+}
+
 .voice-dock--danger .voice-dock__icon {
   color: var(--shell-danger);
 }
 
 .voice-dock--warning .voice-dock__icon {
   color: var(--shell-warning);
+}
+
+/*
+ * Content changes as one piece, not element by element.
+ *
+ * The box is already animating its width, height and radius; letting the sentence inside it
+ * cut straight to the next one reads as two unrelated events happening at once. The outgoing
+ * content blurs and shrinks away, the incoming one blurs and grows in, and because the whole
+ * slot is the unit, the icon and its sentence move together rather than racing each other.
+ *
+ * The leaving copy is taken out of flow so it cannot push the arriving one around — in the
+ * card layouts both would otherwise claim the same grid cell.
+ */
+.voice-swap-enter-active,
+.voice-swap-leave-active {
+  transition:
+    opacity 170ms ease-out,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 220ms ease-out;
+}
+
+.voice-swap-leave-active {
+  position: absolute;
+  inset: 5px;
+}
+
+.voice-swap-enter-from,
+.voice-swap-leave-to {
+  opacity: 0;
+  filter: blur(5px);
+  transform: scale(0.86);
 }
 
 .voice-dock__wave {
@@ -1146,6 +1362,18 @@ onBeforeUnmount(() => {
 
   .voice-dock__wave span {
     transition: none;
+  }
+
+  /* No blur, no scale — the swap becomes a plain cut, which is what reduced motion asks for. */
+  .voice-swap-enter-active,
+  .voice-swap-leave-active {
+    transition: opacity 100ms ease-out;
+  }
+
+  .voice-swap-enter-from,
+  .voice-swap-leave-to {
+    filter: none;
+    transform: none;
   }
 
   /* The controls resize with the surface, so they follow the same rule the surface does. */

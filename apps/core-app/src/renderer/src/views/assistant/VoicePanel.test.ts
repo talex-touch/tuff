@@ -18,6 +18,10 @@ const orbMounts = vi.hoisted(() => ({
   records: [] as Array<{ key: unknown; state: unknown }>
 }))
 
+vi.mock('~/modules/preload/process-info', () => ({
+  getPreloadProcessInfo: () => ({ platform: 'darwin', arch: 'arm64' })
+}))
+
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
     send: transportSendMock,
@@ -92,12 +96,12 @@ vi.mock('vue-i18n', () => ({
         'assistant.voicePanel.retry': 'Retry',
         'assistant.voicePanel.voiceTranscribeEmpty': 'No speech detected',
         'assistant.voicePanel.capturingDevice': 'Opening the microphone…',
-        'assistant.voicePanel.microphoneUnresponsive':
-          'The microphone is not responding — check your input device',
-        'assistant.voicePanel.microphoneMissing':
-          'No microphone available — check your system input device',
-        'assistant.voicePanel.microphoneDenied':
-          'Microphone access is not granted — allow it in System Settings',
+        'assistant.voicePanel.microphoneUnresponsive': 'The microphone is not responding',
+        'assistant.voicePanel.microphoneMissing': 'No microphone available',
+        'assistant.voicePanel.microphoneDenied': 'Microphone access not granted',
+        'assistant.voicePanel.openMicrophoneSettings': 'Open microphone settings',
+        'assistant.voicePanel.microphoneSettingsUnavailable':
+          'This system has no microphone settings pane to open',
         'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe'
       })[key] ?? key
   })
@@ -817,7 +821,7 @@ describe('VoicePanel device readiness and long messages', () => {
 
   it.each([
     ['no device', 'CAPTURE_UNAVAILABLE: Cannot find microphone', 'No microphone available'],
-    ['denied', 'PERMISSION_DENIED', 'Microphone access is not granted']
+    ['denied', 'PERMISSION_DENIED', 'Microphone access not granted']
   ])('classifies a %s failure instead of quoting the provider', async (_label, raw, expected) => {
     const wrapper = await listeningPanel()
     callbacksOrThrow().onError?.(new Error(raw))
@@ -827,8 +831,12 @@ describe('VoicePanel device readiness and long messages', () => {
     expect(text).toContain(expected)
     expect(text).not.toContain('Cannot find')
     expect(wrapper.find('.voice-dock--warning').exists()).toBe(true)
-    // Retrying finds the same missing microphone, so there is nothing to offer.
-    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(false)
+    // Retrying finds the same missing microphone. Opening the pane where it is turned on does
+    // not, so that — and only that — is what the button offers.
+    const action = wrapper.find('[data-testid="voice-recover"]')
+    expect(action.exists()).toBe(true)
+    expect(action.find('.i-carbon-settings').exists()).toBe(true)
+    expect(action.find('.i-carbon-renew').exists()).toBe(false)
 
     wrapper.unmount()
   })
@@ -843,7 +851,7 @@ describe('VoicePanel device readiness and long messages', () => {
     const heightSpy = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(34)
 
     const wrapper = await listeningPanel()
-    callbacksOrThrow().onError?.(new Error('PERMISSION_DENIED'))
+    callbacksOrThrow().onError?.(new Error('E_LONG_UNCLASSIFIED'))
     await flushPromises()
     await flushPromises()
 
@@ -857,15 +865,12 @@ describe('VoicePanel device readiness and long messages', () => {
     expect(wrapper.find('.voice-dock--expanded').exists()).toBe(true)
     // The controls grow with the card. Leaving them at the pill's 34 would strand two small
     // circles in a surface twice their height.
-    for (const testId of ['voice-cancel', 'voice-confirm']) {
+    // An unclassified failure is the retryable one, so the trailing slot holds its action.
+    for (const testId of ['voice-cancel', 'voice-recover']) {
       const control = wrapper.find(`[data-testid="${testId}"]`).attributes('style') ?? ''
       expect(control).toContain('width: 40px')
       expect(control).toContain('height: 40px')
     }
-    // A microphone with a line through it names the culprit before the sentence is read.
-    expect(wrapper.find('[data-testid="voice-notice-icon"]').classes()).toContain(
-      'i-carbon-microphone-off'
-    )
 
     widthSpy.mockRestore()
     heightSpy.mockRestore()
@@ -916,7 +921,7 @@ describe('VoicePanel device readiness and long messages', () => {
     const heightSpy = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(17)
 
     const wrapper = await listeningPanel()
-    callbacksOrThrow().onError?.(new Error('PERMISSION_DENIED'))
+    callbacksOrThrow().onError?.(new Error('E_LONG_UNCLASSIFIED'))
     await flushPromises()
     await flushPromises()
 
@@ -926,6 +931,94 @@ describe('VoicePanel device readiness and long messages', () => {
 
     widthSpy.mockRestore()
     heightSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  /**
+   * Content swaps as a whole, and for the length of that swap both sentences are in the DOM.
+   *
+   * Every other test here mounts with Test Utils' default `<Transition>` stub, which never puts
+   * two of them there at once. With the real one, measuring the wrong element sizes the pill for
+   * the message it is in the middle of forgetting — so the stub answers by element, and the test
+   * asserts the pill took the width of the sentence that is arriving.
+   */
+  it('sizes the pill from the arriving sentence while the old one is still leaving', async () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      if (!this.classList.contains('voice-dock__text')) return 0
+      return this.textContent?.includes('busy') ? 246 : 40
+    })
+
+    const wrapper = mount(VoicePanel, {
+      props: { managedByDock: true },
+      global: { stubs: { transition: false } }
+    })
+    await flushPromises()
+    ;(wrapper.vm as unknown as { startVoiceInput: () => void }).startVoiceInput()
+    await flushPromises()
+
+    // A short notice first, so there is something on screen for the next one to replace.
+    callbacksOrThrow().onError?.(new Error('QUOTA_EXCEEDED'))
+    await flushPromises()
+    await flushPromises()
+    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 200px')
+    ;(wrapper.vm as unknown as { startVoiceInput: () => void }).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onError?.(new Error('SERVICE_IS_busy_RIGHT_NOW'))
+    await flushPromises()
+    await flushPromises()
+
+    // 246 of arriving text + 94 of chrome, not the 40 the leaving one still reports.
+    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 340px')
+    // Both are on screen together, which is the swap: one blurring out, one blurring in.
+    // Not an exact count — jsdom never fires transitionend, so leaving copies pile up here in a
+    // way they never would in a browser. What matters is that the two states coexist at all.
+    const slots = wrapper.findAll('.voice-dock__slot')
+    const leaving = slots.filter((slot) => slot.classes().includes('voice-swap-leave-active'))
+    expect(leaving.length).toBeGreaterThan(0)
+    expect(slots.length - leaving.length).toBe(1)
+
+    vi.restoreAllMocks()
+    wrapper.unmount()
+  })
+
+  /**
+   * The device card is the one that leads with a picture, so it stops being a line of text with
+   * an icon in front and becomes a stack: microphone on top, one short sentence under it, the
+   * two controls on the floor. Its geometry is fixed because its copy is — there is nothing to
+   * measure and nothing that can overflow.
+   */
+  it('stacks the device failure and offers the settings pane instead of a dead checkmark', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('PERMISSION_DENIED'))
+    await flushPromises()
+    await flushPromises()
+
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    expect(style).toContain('width: 264px')
+    expect(style).toContain('height: 120px')
+    expect(wrapper.find('.voice-dock--icon-card').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-notice-icon"]').classes()).toContain(
+      'i-carbon-microphone-off'
+    )
+    // The sentence no longer carries "go to Settings" — the button does.
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe(
+      'Microphone access not granted'
+    )
+
+    const action = wrapper.find('[data-testid="voice-recover"]')
+    expect(action.exists()).toBe(true)
+    expect(action.find('.i-carbon-settings').exists()).toBe(true)
+
+    await action.trigger('click')
+    await flushPromises()
+    expect(
+      transportSendMock.mock.calls.some(
+        ([event]) => eventName(event) === voiceApiEvents.openMicrophoneSettings.toEventName()
+      )
+    ).toBe(true)
+
     wrapper.unmount()
   })
 
@@ -963,7 +1056,7 @@ describe('VoicePanel device readiness and long messages', () => {
 
   it('stays one line high when the message fits', async () => {
     const wrapper = await listeningPanel()
-    callbacksOrThrow().onError?.(new Error('PERMISSION_DENIED'))
+    callbacksOrThrow().onError?.(new Error('E_LONG_UNCLASSIFIED'))
     await flushPromises()
     await flushPromises()
 
@@ -975,6 +1068,86 @@ describe('VoicePanel device readiness and long messages', () => {
     expect(wrapper.find('[data-testid="voice-cancel"]').attributes('style')).toContain(
       'width: 34px'
     )
+
+    wrapper.unmount()
+  })
+})
+describe('VoicePanel stream generation boundaries', () => {
+  it('stops an unresolved stream as soon as its handle arrives after the user releases', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ cancel: () => void; stop: () => void }>()
+    const cancel = vi.fn()
+    const stop = vi.fn()
+    transportStreamMock.mockImplementationOnce(
+      async (_event: unknown, _payload: unknown, options: StreamCallbacks) => {
+        streamCallbacks = options
+        return promise
+      }
+    )
+    const wrapper = await mountVoicePanel()
+    const panel = exposed(wrapper)
+
+    panel.startVoiceInput()
+    await Promise.resolve()
+    panel.stopVoiceInput()
+    expect(cancel).not.toHaveBeenCalled()
+    expect(stop).not.toHaveBeenCalled()
+
+    resolve({ cancel, stop })
+    await flushPromises()
+    expect(stop).toHaveBeenCalledTimes(1)
+    expect(cancel).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+  it('keeps a reopened session listening when a terminal callback from its prior stream arrives late', async () => {
+    const wrapper = await mountVoicePanel()
+    const panel = exposed(wrapper)
+
+    panel.startVoiceInput()
+    await flushPromises()
+    const priorCallbacks = callbacksOrThrow()
+    priorCallbacks.onEnd?.()
+    await nextTick()
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+
+    await panel.openPanel()
+    panel.startVoiceInput()
+    await flushPromises()
+    const currentCallbacks = callbacksOrThrow()
+    currentCallbacks.onData?.({ type: 'level', rms: 0.4 })
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+
+    // The old transport can still settle after its terminal event. It must not replace the
+    // current recording with an error/finished state.
+    priorCallbacks.onError?.(new Error('late stream failure'))
+    priorCallbacks.onEnd?.()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it('retains an actionable error notice when transport end follows the error', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    const callbacks = callbacksOrThrow()
+    callbacks.onError?.(new Error('stream unavailable'))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
+
+    callbacks.onEnd?.()
+    await nextTick()
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    vi.advanceTimersByTime(5100)
+    await nextTick()
+    expect(wrapper.emitted('finished')).toHaveLength(1)
 
     wrapper.unmount()
   })

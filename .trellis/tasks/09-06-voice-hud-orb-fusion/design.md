@@ -463,3 +463,55 @@ function measureNaturalWidth(element: HTMLElement): number {
 强制单行的那一瞬间才问得出第二个问题。有了自然宽度，展开判定也不必再拿 `scrollWidth > clientWidth` 绕一圈：`needed = 自然宽 + chrome`，`needed > PILL_MAX_WIDTH` 就换卡片版式，一个数说了算。
 
 测试里的桩按 `style.whiteSpace === 'nowrap'` 返回不同的值（130 / 106）—— 两个问题的差别只在这里，桩不区分就测不出。另有一条断言：量完必须还原，不能在元素上留下 `nowrap`。
+
+## 8. 设备失败：一摞，不是一行（2026-09-07）
+
+前一版把设备失败套进「两排卡片」的规则里，结果是一行长句配一个什么都做不了的禁用 ✓。三处改法：
+
+### 8.1 版式换成竖排
+
+图标居中在上，一句话在下，两枚 40 圆钮仍在下排两端。**这是唯一带图片的通知**——划一杠的麦克风本身就是全部信息，句子只负责说清是哪一种麦克风问题，所以它不该是「一行字前面挂个图标」。
+
+`grid-template-rows` 从 `auto 1fr` 翻成 **`1fr auto`**：前者把所有富余都堆到控件那一排，图标被钉在离 24 圆角只有 5px 的地方，看着挤（用户原话「不然很急」）。翻过来之后那摞内容在控件上方的空间里自己居中，再加 `padding-top: 12px` 让它躲开圆角的弧，而不只是躲开边框。
+
+几何写死 `264 × 120`，不量：这张卡的文案是固定短句，没有可测的自然宽度，也不可能溢出。
+
+### 8.2 文案砍短，出路搬到按钮上
+
+「找不到可用的麦克风」/「麦克风权限未授权」/「麦克风没有响应」—— 后半句「请检查系统输入设备」「请在系统设置中允许」全删。**「去哪里修」不再写在句子里，它现在是那枚 ⚙。**
+
+### 8.3 ⚙ 是主进程拥有的意图，不是渲染层递过来的 URL
+
+```ts
+voiceApiEvents.openMicrophoneSettings   // 无 payload
+const MICROPHONE_SETTINGS_URL: Partial<Record<NodeJS.Platform, string>> = {
+  darwin: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+  win32: 'ms-settings:privacy-microphone'
+}
+```
+
+这两个 scheme **故意不在** `ALLOWED_EXTERNAL_PROTOCOLS`（`http/https/mailto/tel/tuff`）里，而那张白名单是插件面共用的。让渲染层把 scheme 递过来就等于把它重新打开，所以事件不带 payload：调用方只说意图，URL 整串留在主进程。事件也没进 `PLUGIN_FACING_*` 清单，插件够不着。
+
+Linux 没有跨桌面通用的入口 —— 那里 `canOpenMicSettings` 为 false，通知照旧只有句子，不给一枚点了没反应的按钮。
+
+`NoticeAction` 因此扩成 `'undo' | 'retry' | 'settings'`，并且 `classifyFailure` 返回的 action 优先于「danger 才给重试」那条兜底规则：**一次分类过的失败，比色调更清楚自己能怎么办**。
+
+## 9. 内容整块交接（2026-09-07）
+
+盒子已经在动宽、动高、动圆角，里面的句子却是硬切，读起来像两件不相干的事同时发生。
+
+```scss
+.voice-swap-enter-from,
+.voice-swap-leave-to { opacity: 0; filter: blur(5px); transform: scale(0.86); }
+.voice-swap-leave-active { position: absolute; inset: 5px; }   /* 离场那份出流，否则两块抢同一个 grid 格 */
+```
+
+`<Transition>` 包的是**整个 `.voice-dock__slot`**，`:key="centerKey"`（按句子取键，所以「还在转写」→「比平时久」也算换内容）。包整块而不是逐个元素，图标和它的句子才会一起动，不会互相赛跑。
+
+**这里埋着一个会坏的点**：过渡期间新旧两块同时在 DOM 里，而旧的那块还挂着上一句话。宽度测量必须只认进来的那块：
+
+```ts
+root.querySelector('.voice-dock__slot:not(.voice-swap-leave-active) .voice-dock__text')
+```
+
+否则胶囊会按「它正在忘掉的那句话」定宽。测试用真实 `<Transition>`（其余用例吃的是 Test Utils 默认的 transition stub，对此全盲），桩按元素内容返回不同宽度；把选择器换成不带 `:not(...)` 的版本立刻转红。
