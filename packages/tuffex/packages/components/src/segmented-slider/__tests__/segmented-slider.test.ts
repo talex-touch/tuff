@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxSegmentedSlider from '../src/TxSegmentedSlider.vue'
+import sliderSource from '../src/TxSegmentedSlider.vue?raw'
 
 const segments = [
   { value: 0, label: 'Small' },
@@ -25,10 +26,10 @@ describe('txSegmentedSlider', () => {
     expect(items).toHaveLength(4)
     expect(items.map(item => item.element.tagName)).toEqual(['BUTTON', 'BUTTON', 'BUTTON', 'BUTTON'])
     expect(items[0]?.attributes('type')).toBe('button')
-    expect(items[0]?.attributes('role')).toBeUndefined()
+    expect(items[0]?.attributes('role')).toBe('radio')
     expect(items[0]?.attributes('style')).toContain('left: 0%')
     expect(items[1]?.attributes('style')).toContain('left: 33.333')
-    expect(items[2]?.attributes('aria-pressed')).toBe('true')
+    expect(items[2]?.attributes('aria-checked')).toBe('true')
     expect(items[2]?.classes()).toContain('is-active')
     expect(items[0]?.classes()).toContain('is-completed')
     expect(items[1]?.classes()).toContain('is-completed')
@@ -139,5 +140,80 @@ describe('txSegmentedSlider', () => {
     expect(buttons[1].attributes('aria-label')).toBe('High')
     // A segment with no label falls back to its stringified value.
     expect(buttons[2].attributes('aria-label')).toBe('2')
+  })
+})
+
+describe('txSegmentedSlider stops and keyboard', () => {
+  const segments = [
+    { value: 's', label: 'S' },
+    { value: 'm', label: 'M' },
+    { value: 'l', label: 'L' },
+  ]
+
+  function mountSlider(props: Record<string, unknown> = {}) {
+    return mount(TxSegmentedSlider, { props: { segments, modelValue: 'm', ...props } })
+  }
+
+  it('is one radio group with a single tab stop on the current value', () => {
+    const wrapper = mountSlider()
+
+    expect(wrapper.attributes('role')).toBe('radiogroup')
+    expect(wrapper.attributes('aria-orientation')).toBe('horizontal')
+
+    const stops = wrapper.findAll('.tx-segmented-slider__segment')
+    // Roving tabindex: Tab reaches the row once and lands on the current stop.
+    expect(stops.map(stop => stop.attributes('tabindex'))).toEqual(['-1', '0', '-1'])
+    expect(stops[1]?.attributes('aria-checked')).toBe('true')
+    expect(stops[0]?.attributes('aria-checked')).toBe('false')
+  })
+
+  it('moves the value with the arrow keys and clamps at both ends', async () => {
+    const wrapper = mountSlider()
+
+    await wrapper.trigger('keydown', { key: 'ArrowRight' })
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['l'])
+    expect(wrapper.emitted('change')?.[0]).toEqual(['l'])
+
+    await wrapper.trigger('keydown', { key: 'ArrowLeft' })
+    expect(wrapper.emitted('update:modelValue')?.[1]).toEqual(['s'])
+
+    await wrapper.trigger('keydown', { key: 'Home' })
+    // Already at index 0 from the caller's point of view (modelValue is still
+    // 'm'), so Home lands on 's' and re-emitting the same value is suppressed.
+    await wrapper.setProps({ modelValue: 's' })
+    await wrapper.trigger('keydown', { key: 'ArrowLeft' })
+    expect(wrapper.emitted('update:modelValue')).toHaveLength(3)
+
+    await wrapper.trigger('keydown', { key: 'End' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['l'])
+  })
+
+  it('reverses the arrow axis when stacked vertically', async () => {
+    const wrapper = mountSlider({ vertical: true })
+
+    expect(wrapper.attributes('aria-orientation')).toBe('vertical')
+    // Bottom-to-top: Up advances.
+    await wrapper.trigger('keydown', { key: 'ArrowUp' })
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['l'])
+
+    await wrapper.trigger('keydown', { key: 'ArrowDown' })
+    expect(wrapper.emitted('update:modelValue')?.[1]).toEqual(['s'])
+  })
+
+  it('ignores the keyboard while disabled', async () => {
+    const wrapper = mountSlider({ disabled: true })
+
+    await wrapper.trigger('keydown', { key: 'ArrowRight' })
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.findAll('.tx-segmented-slider__segment').map(s => s.attributes('tabindex')))
+      .toEqual(['-1', '-1', '-1'])
+  })
+
+  it('draws round stops rather than a bare border stroke', () => {
+    // A `<span>` is inline, so width and height were dropped and the 2px border
+    // rendered as a vertical stroke on the track.
+    const source = sliderSource
+    const dot = source.slice(source.indexOf('&__dot {'))
+    expect(dot.slice(0, dot.indexOf('}'))).toContain('display: block')
   })
 })
