@@ -100,10 +100,9 @@ const {
 
 const { lowBatteryMode } = useBatteryOptimizer()
 
-const resultTransitionName = computed(() => {
-  const enabled = appSetting.animation?.resultTransition === true
-  return enabled && !lowBatteryMode.value ? 'result-switch' : ''
-})
+const resultTransitionEnabled = computed(
+  () => appSetting.animation?.resultTransition === true && !lowBatteryMode.value
+)
 
 type CoreBoxSendFeatureItem = TuffItem & {
   meta?: {
@@ -1037,7 +1036,11 @@ const customCss = computed(() => {
               class="CoreBoxRes-ScrollContent"
               :class="{ 'has-footer': !!res.length }"
             >
-              <Transition :name="resultTransitionName" mode="out-in">
+              <Transition
+                name="result-switch"
+                :css="resultTransitionEnabled"
+                :mode="resultTransitionEnabled ? 'out-in' : undefined"
+              >
                 <BoxGrid
                   v-if="isGridMode"
                   key="grid"
