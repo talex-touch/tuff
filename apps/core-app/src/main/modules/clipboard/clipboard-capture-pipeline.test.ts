@@ -224,6 +224,32 @@ describe('clipboard-capture-pipeline', () => {
     )
   })
 
+  /**
+   * `retention_protected` 的列、索引和清理侧的豁免条件在这之前就都存在了，但没有任何
+   * 代码写过它——所以密钥和普通文本一样会在 90 天后被清掉。清理侧不需要改动，
+   * 也就意味着这条链路只有"采集时写没写"这一个失败点，必须有测试盯着它。
+   */
+  it('marks a captured secret as retention protected, and ordinary text as not', async () => {
+    const context = createPipeline()
+    mocks.readText
+      .mockReturnValueOnce('previous')
+      .mockReturnValue(`sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`)
+
+    await context.pipeline.process('visible-poll')
+
+    expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ retentionProtected: true }))
+
+    mocks.values.mockClear()
+    const ordinary = createPipeline()
+    mocks.readText.mockReturnValueOnce('previous').mockReturnValue('今天下午三点开会')
+
+    await ordinary.pipeline.process('visible-poll')
+
+    expect(mocks.values).toHaveBeenCalledWith(
+      expect.objectContaining({ retentionProtected: false })
+    )
+  })
+
   it('persists WeChat aliases with their metadata search terms', async () => {
     const context = createPipeline()
     mocks.readText.mockReturnValueOnce('previous').mockReturnValue('@wechat')
