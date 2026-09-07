@@ -306,6 +306,12 @@ describe('official plugin manifest trust boundary', () => {
       .sort()
 
     expect(shellPlugins).toEqual([
+      // Declared optional, not required: the surface opens a copied link in the browser and
+      // reveals a copied file in the file manager. Both go through the host's own shell
+      // handlers, which carry this same permission — a plugin surface must not be the cheaper
+      // route to a shell than the Prelude's `open-url` capability. A denial is a normal
+      // outcome here and degrades to the clipboard.
+      'clipboard-history',
       'touch-browser-open',
       'touch-hosts',
       'touch-quick-actions',
