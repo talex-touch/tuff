@@ -1,0 +1,96 @@
+---
+title: Icons
+description: How TxIcon resolves a name, and how an app teaches it to load its own
+category: Foundations
+status: beta
+since: 0.4.0
+tags: [icon, svg, resolver, iconify]
+syncStatus: reviewed
+verified: false
+---
+
+## One prop, five sources
+
+Icons reach components as a `name` string, and `TxIcon` decides what that string *is* rather than making the caller declare it. The order is fixed, and the first match wins:
+
+| `name` looks like | Resolved as | Rendered as |
+|-------------------|-------------|-------------|
+| `i-carbon-search` | `class` | `<i>` carrying the class — an Iconify / UnoCSS preset icon |
+| `chevron-down` | `builtin` | Inline `<svg>` from Tuffex's own table |
+| anything else | `emoji` | The characters, as text |
+| — | `url` | Fetched and painted (see below) |
+| — | `file` | Same, after the local-file protocol is applied |
+
+`url` and `file` are never inferred from a bare string: they arrive through the `icon` prop, which takes the source explicitly.
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <!-- class: any Iconify collection your build ships -->
+    <TxIcon name="i-carbon-search" />
+
+    <!-- builtin: no icon set required -->
+    <TxIcon name="chevron-down" />
+
+    <!-- emoji: the fallback, and often the point -->
+    <TxIcon name="🚀" />
+
+    <!-- explicit source -->
+    <TxIcon :icon="{ type: 'url', value: '/icons/plugin.svg' }" />
+    <TxIcon :icon="{ type: 'file', value: '/Users/me/icon.png', colorful: true }" />
+  </template>
+---
+:::
+
+## The builtin table
+
+Seven glyphs ship inside the component so core affordances never depend on an icon set being installed: `check`, `chevron-down`, `close`, `search`, `user`, `star`, `star-half`.
+
+They are deliberately few. The table exists so a disclosure arrow or a rating star renders in an app that has configured no icon collection at all — not as a general icon library. Anything beyond these seven should come from an Iconify class or an explicit source.
+
+Entries are drawn either as a filled silhouette or as an open stroked path. `chevron-down` is stroked: it is a disclosure affordance rendered at 12–14px in collapses, dropdowns and submenus, where a filled wedge reads as a heavy blob beside its label.
+
+## Colour, mask, and `colorful`
+
+Addressable icons (`url` / `file`) render one of two ways:
+
+- **Monochrome (default).** A single-colour SVG is painted as a CSS mask, so it takes `currentColor` and inherits the surrounding text colour — including through theme switches.
+- **`colorful: true`.** The file renders as an `<img>` with its own colours untouched. Use it for logos and app icons, where recolouring would be wrong.
+
+`color` on the source overrides the ink for monochrome rendering.
+
+## Teaching it to load your icons
+
+An app usually stores icons somewhere `<img src>` cannot reach directly — behind a custom protocol, an authenticated endpoint, or a transport layer. Rather than special-casing that in every component, provide a config once and every descendant `TxIcon` picks it up:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TX_ICON_CONFIG_KEY } from '@talex-touch/tuffex/icon'
+
+  app.provide(TX_ICON_CONFIG_KEY, {
+    // Rewrite a raw value into something the browser can fetch
+    urlResolver: (url, type) => (type === 'file' ? `tfile://${url}` : url),
+    // Own the fetch: retries, auth headers, an IPC transport…
+    svgFetcher: async url => (await fetch(url)).text(),
+    // Prefix applied to `file` sources when no resolver is given
+    fileProtocol: 'tfile://',
+  })
+---
+:::
+
+Any single `TxIcon` can override the injected config with its own `urlResolver` / `svgFetcher` props — useful when one surface loads from a different origin than the rest of the app.
+
+## Related components
+
+| Component | For |
+|-----------|-----|
+| [Icon](./icon.en.mdc) | The general case, and the full prop list |
+| [IconChip](./icon-chip.en.mdc) | A small tinted plate holding a glyph or a short label |
+| Status icon | A tone-coloured glyph for success / warning / error states |
+
+## Source
+
+- Resolution and rendering: `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`.
+- Config contract: `packages/tuffex/packages/components/src/icon/src/types.ts` (`TxIconSource`, `TxIconConfig`, `TX_ICON_CONFIG_KEY`).
