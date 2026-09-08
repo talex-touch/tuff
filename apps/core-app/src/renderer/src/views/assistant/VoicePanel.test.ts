@@ -1286,8 +1286,18 @@ describe('VoicePanel device readiness and long messages', () => {
     expect(started).toBeLessThan(100)
     expect(started).toBeGreaterThan(0)
 
+    // The surface tightens with the bar: one gesture, not two effects. A fixed step was three
+    // percent, which is present in the DOM and invisible on a 340px card.
+    const scaleAt = (): number => {
+      const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+      return Number(/scale\(([\d.]+)\)/.exec(style)?.[1] ?? -1)
+    }
+    const earlyScale = scaleAt()
+    expect(earlyScale).toBeLessThan(1)
+
     vi.advanceTimersByTime(300)
     await nextTick()
+    expect(scaleAt()).toBeLessThan(earlyScale)
     const later = Number(
       /width: ([\d.]+)%/.exec(
         wrapper.find('[data-testid="voice-charge"]').attributes('style') ?? ''
@@ -1299,6 +1309,7 @@ describe('VoicePanel device readiness and long messages', () => {
     hold(wrapper, 'release')
     await nextTick()
     expect(wrapper.find('[data-testid="voice-charge"]').exists()).toBe(false)
+    expect(wrapper.find('.voice-dock').attributes('style')).not.toContain('scale(')
     // Still the same session: no notice, and the cancel control is still live. (The wave is not
     // up yet — no level frame has arrived, so this is the "opening the microphone" phase.)
     expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)

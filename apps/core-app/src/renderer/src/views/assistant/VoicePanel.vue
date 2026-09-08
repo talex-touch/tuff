@@ -265,6 +265,15 @@ const holdingCancel = computed(() => cancelCharge.value > 0)
  * being consumed is the countdown, and releasing early visibly gives it back.
  */
 const cancelRemaining = computed(() => `${Math.max(0, 1 - cancelCharge.value) * 100}%`)
+/**
+ * The surface tightens as the hold fills, rather than stepping once when it starts.
+ *
+ * A fixed `scale(0.97)` was three percent — five pixels a side on a 340px card, which is
+ * present in the DOM and invisible on the screen. Tying it to the charge makes the last moment
+ * before the cancel the smallest the pill ever gets, so the shrink says the same thing the
+ * draining bar says.
+ */
+const cancelScale = computed(() => 1 - cancelCharge.value * 0.06)
 const slowness = computed(() => {
   if (!transcribing.value) return 'normal'
   if (waitedMs.value >= VERY_SLOW_AFTER_MS) return 'very-slow'
@@ -998,7 +1007,8 @@ onBeforeUnmount(() => {
       :style="{
         width: `${pillWidth}px`,
         height: `${pillHeight}px`,
-        borderRadius: `${pillRadius}px`
+        borderRadius: `${pillRadius}px`,
+        ...(holdingCancel ? { transform: `scale(${cancelScale})` } : {})
       }"
     >
       <div
@@ -1135,6 +1145,7 @@ onBeforeUnmount(() => {
     width 260ms cubic-bezier(0.22, 1, 0.36, 1),
     height 260ms cubic-bezier(0.22, 1, 0.36, 1),
     border-radius 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 30ms linear,
     box-shadow 600ms ease-out,
     border-color 160ms ease-out;
 }
@@ -1178,10 +1189,15 @@ onBeforeUnmount(() => {
 }
 
 /* Holding Escape outranks every other tone: it is about to discard what was just said. */
-/* Held: the surface tightens as it drains, so the shrink and the bar are one gesture. */
+/*
+ * Held: the surface tightens as it drains, so the shrink and the bar are one gesture.
+ *
+ * The scale itself is inline because it tracks the charge; this only stops the breathing pulse,
+ * which is about opening a microphone and has nothing to say once the user is discarding it.
+ */
 .voice-dock--holding {
   border-color: var(--shell-danger-border);
-  transform: scale(0.97);
+  animation: none;
 }
 
 /*
@@ -1196,7 +1212,16 @@ onBeforeUnmount(() => {
   z-index: 0;
   height: 100%;
   border-radius: inherit;
-  background: var(--shell-danger-soft);
+  /*
+   * Faded at the leading edge rather than cut off: a flat block ending mid-card reads as two
+   * differently coloured halves, not as something draining away.
+   */
+  background: linear-gradient(
+    90deg,
+    var(--shell-danger-soft) 0%,
+    var(--shell-danger-soft) 62%,
+    transparent 100%
+  );
   inset: 0 auto 0 0;
   pointer-events: none;
   transition: width 30ms linear;
