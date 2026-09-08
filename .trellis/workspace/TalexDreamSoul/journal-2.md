@@ -674,3 +674,41 @@ Rebuilt HomeModelMenu on TxDropdownMenu with a provider filter strip, cross-prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 68: 剪贴板识别 SSH 与主机端点
+
+**Date**: 2026-09-08
+**Task**: 剪贴板识别 SSH 与主机端点
+**Branch**: `master`
+
+### Summary
+
+识别 SSH 端点、主机 IP 与公钥，详情区拆成可单独复制的字段，主机 IP 默认掩码。前置改动是把掩码和保留期解耦：retentionClass 原本由 secrets.length > 0 推导，而 maskSecretSpans 只认 ClipboardSecretHit，所以任何为掩码而加入的东西都会顺带让记录永不自动删除；改为按 kind 查 RETENTION_PROTECTING_KINDS。动手前先发现保留期只有 2/7 个 kind 有断言，补齐后逐项注入验证。识别规则几乎全是「什么不算」：裸数字永不当端口（与验证码同一条纪律）、公网 IPv4 在散文中当版本号而私有段直接当主机、公钥 base64 下限 32、前导零不认；IP 命中排在扫描顺序最末，使连接串里的 IP 仍归连接串并保持凭据保护。实现暴露三处规划未预见的问题：邮箱与 user@host 同形（由既有 email 测试抓出）、掩码不能挂在 detectSecret 上（纯 IP 记录会完全不掩码）、Vue 把缺省 Boolean prop 铸成 false 导致掩码默认值失效。累计 29 处注入验证。发布 1.2.0-beta.6。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `49560c7cf` | (see git log) |
+| `ec081c9e8` | (see git log) |
+| `205190ed8` | (see git log) |
+| `8da78649b` | (see git log) |
+| `96e5f7894` | (see git log) |
+| `8b00fff05` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
