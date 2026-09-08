@@ -28,22 +28,37 @@ const WEEKLY_BAR_COUNT = 12
  * Generated once from a fixed sequence rather than `Math.random`, so the field is the same on
  * every mount and nothing about it depends on when the page happened to open.
  */
-const STREAM_GLYPHS = '·:-=+*~/\\|<>^'
-const STREAM_ROW_COUNT = 9
-const STREAM_ROW_LENGTH = 96
+const STREAM_ROW_COUNT = 6
+const STREAM_ROW_LENGTH = 220
 
+/**
+ * Sparse bursts of two glyphs, not a wall of characters.
+ *
+ * The first attempt used `/\\|<>~+=*` at high density and read as corrupted terminal output:
+ * the glyphs had too many angles to settle into anything, and at that density the eye caught the
+ * seam where each row repeats itself for the loop. Dots and dashes in short runs with long gaps
+ * between them read as particles drifting past instead — quiet enough that the repeat stops
+ * being findable, which is the only way this technique looks unplanned.
+ */
 const streamRows = Array.from({ length: STREAM_ROW_COUNT }, (_, row) => {
-  const glyphs = Array.from({ length: STREAM_ROW_LENGTH }, (_, column) => {
-    const wave = Math.sin(column * 0.31 + row * 1.7) + Math.sin(column * 0.09 - row * 0.6)
-    const index = Math.floor(((wave + 2) / 4) * STREAM_GLYPHS.length)
-    // Gaps matter more than glyphs: a solid wall of characters reads as noise, a sparse one
-    // reads as movement.
-    return wave > 1.1 || wave < -1.1 ? ' ' : (STREAM_GLYPHS[index] ?? ' ')
-  }).join('')
-  // Doubled so the horizontal loop has no seam to hide.
+  let glyphs = ''
+  let column = 0
+  while (glyphs.length < STREAM_ROW_LENGTH) {
+    const gap = 8 + Math.floor(Math.abs(Math.sin(row * 3.1 + column * 0.37)) * 22)
+    glyphs += ' '.repeat(gap)
+    const run = 2 + Math.floor(Math.abs(Math.cos(row * 1.3 + column * 0.21)) * 5)
+    for (let index = 0; index < run; index += 1) {
+      const wave = Math.sin((column + index) * 0.45 + row * 1.9)
+      glyphs += wave > 0.35 ? '—' : wave > -0.35 ? '·' : '-'
+    }
+    column += gap + run
+  }
+  const trimmed = glyphs.slice(0, STREAM_ROW_LENGTH)
   return {
-    glyphs: glyphs + glyphs,
-    duration: `${26 + row * 5}s`,
+    // Doubled so the horizontal loop has no seam; the density above is what keeps the repeat
+    // from being recognisable when both halves are on screen at once.
+    glyphs: trimmed + trimmed,
+    duration: `${74 + row * 13}s`,
     direction: row % 2 === 0 ? 'normal' : ('reverse' as const)
   }
 })
@@ -1506,11 +1521,13 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   color: var(--shell-text-muted);
   font-family: var(--shell-font-mono, ui-monospace, monospace);
-  font-size: 13px;
+  font-size: 12px;
   inset: 0;
-  line-height: 1.9;
-  mask-image: radial-gradient(ellipse 46% 58% at 50% 50%, transparent 40%, #000 78%);
-  opacity: 0.32;
+  /* Wide leading is half of what makes it read as drift rather than as a paragraph. */
+  line-height: 3.2;
+  letter-spacing: 0.14em;
+  mask-image: radial-gradient(ellipse 52% 62% at 50% 50%, transparent 52%, #000 94%);
+  opacity: 0.22;
   pointer-events: none;
   user-select: none;
 
