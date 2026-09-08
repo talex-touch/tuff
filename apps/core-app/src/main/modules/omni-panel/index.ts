@@ -113,7 +113,7 @@ interface InputHookEvent {
   keycode?: number
 }
 
-export type OmniPanelGlobalKey = 'primary-modifier'
+export type OmniPanelGlobalKey = 'primary-modifier' | 'escape'
 export type OmniPanelGlobalOtherKey = 'other-key'
 
 export interface OmniPanelGlobalKeyEvent {
@@ -142,6 +142,7 @@ interface InputHookKeyMap {
   CtrlRight: number
   Meta: number
   MetaRight: number
+  Escape: number
 }
 
 interface InputHookApi {
@@ -1721,7 +1722,8 @@ export class OmniPanelModule extends BaseModule {
         hookKeys?.Ctrl !== undefined &&
         hookKeys?.CtrlRight !== undefined &&
         hookKeys?.Meta !== undefined &&
-        hookKeys?.MetaRight !== undefined
+        hookKeys?.MetaRight !== undefined &&
+        hookKeys?.Escape !== undefined
       ) {
         this.inputHookKeys = hookKeys as InputHookKeyMap
       } else {
@@ -1832,12 +1834,25 @@ export class OmniPanelModule extends BaseModule {
     const isMeta = keycode === keys.Meta || keycode === keys.MetaRight
     const isCtrl = keycode === keys.Ctrl || keycode === keys.CtrlRight
     const isPrimary = process.platform === 'darwin' ? isMeta : isCtrl
+    const isEscape = keycode === keys.Escape
     const isPressedPrimary = (pressedKeycode: number): boolean =>
       process.platform === 'darwin'
         ? pressedKeycode === keys.Meta || pressedKeycode === keys.MetaRight
         : pressedKeycode === keys.Ctrl || pressedKeycode === keys.CtrlRight
 
     if (direction === 'down') {
+      if (isEscape) {
+        const payload: OmniPanelGlobalKeyEvent = { key: 'escape', keycode }
+        for (const listener of [...this.globalKeyListeners]) {
+          try {
+            listener.onKeyDown?.(payload)
+          } catch (error) {
+            omniPanelLog.warn('Global key listener failed', { error })
+          }
+        }
+        this.pressedGlobalKeycodes.add(keycode)
+        return
+      }
       const hasOtherKeys = [...this.pressedGlobalKeycodes].some(
         (pressedKeycode) => !isPressedPrimary(pressedKeycode)
       )
@@ -1867,6 +1882,19 @@ export class OmniPanelModule extends BaseModule {
         }
       }
       this.pressedGlobalKeycodes.add(keycode)
+      return
+    }
+
+    if (isEscape) {
+      const payload: OmniPanelGlobalKeyEvent = { key: 'escape', keycode }
+      for (const listener of [...this.globalKeyListeners]) {
+        try {
+          listener.onKeyUp?.(payload)
+        } catch (error) {
+          omniPanelLog.warn('Global key listener failed', { error })
+        }
+      }
+      this.pressedGlobalKeycodes.delete(keycode)
       return
     }
 

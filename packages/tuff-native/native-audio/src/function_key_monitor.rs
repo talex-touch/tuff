@@ -26,6 +26,9 @@ pub(crate) const EVENT_DOWN_WITH_OTHER_KEYS: u32 = 2;
 pub(crate) const EVENT_UP: u32 = 3;
 pub(crate) const EVENT_OTHER_KEY_DOWN: u32 = 4;
 pub(crate) const EVENT_RESET: u32 = 5;
+pub(crate) const EVENT_ESCAPE_DOWN: u32 = 6;
+pub(crate) const EVENT_ESCAPE_UP: u32 = 7;
+const ESCAPE_KEY_CODE: u16 = 53;
 const FUNCTION_KEY_CODE: u16 = 63;
 const CALLBACK_QUEUE_CAPACITY: usize = 64;
 
@@ -53,7 +56,9 @@ struct MonitorState {
 }
 
 impl MonitorState {
-    fn emit(&self, event: u32) {
+    /// Returns false after a queue overflow, so one physical input cannot append
+    /// a later transition behind the reset that invalidates its earlier sibling.
+    fn emit(&self, event: u32) -> bool {
         let message = CallbackMessage {
             event,
             epoch: self.callbacks.epoch.load(Ordering::Acquire),
@@ -67,7 +72,9 @@ impl MonitorState {
             // its first JS projection becomes reset, never a stale down without up.
             self.callbacks.reset_pending.store(true, Ordering::Release);
             self.callbacks.epoch.fetch_add(1, Ordering::AcqRel);
+            return false;
         }
+        true
     }
 }
 
@@ -170,8 +177,8 @@ pub(crate) fn reduce_gesture(state: &mut GestureState, input: MonitorInput) -> O
     }
 }
 
-/// Only consume the Fn transitions whose initial down was standalone. Combination
-/// key events retain their original flags; neither letters nor arrow/F-keys are swallowed.
+/// Neutralize Fn transitions whose initial down was standalone. Combination
+/// key events retain their original flags; no event is discarded.
 pub(crate) fn process_input(state: &mut GestureState, input: MonitorInput) -> (Option<u32>, bool) {
     let owned = state.suppress_function_events;
     let output = reduce_gesture(state, input);
@@ -189,6 +196,35 @@ pub(crate) fn process_input(state: &mut GestureState, input: MonitorInput) -> (O
     (output, suppress)
 }
 
+/// Reduces one native event to its ordered JavaScript projections without
+/// allocating. Escape is deliberately a second projection of its ordinary key
+/// transition: it still contaminates an in-progress Fn gesture before main sees
+/// the Escape hold.
+pub(crate) fn process_event(
+    state: &mut GestureState,
+    input: MonitorInput,
+) -> ([Option<u32>; 2], bool) {
+    let (function_event, suppress) = process_input(state, input);
+    let escape_event = match input {
+        MonitorInput::KeyDown {
+            key_code: ESCAPE_KEY_CODE,
+        } => Some(EVENT_ESCAPE_DOWN),
+        MonitorInput::KeyUp {
+            key_code: ESCAPE_KEY_CODE,
+        } => Some(EVENT_ESCAPE_UP),
+        _ => None,
+    };
+    ([function_event, escape_event], suppress)
+}
+
+pub(crate) fn forwarded_event_flags(flags: CGEventFlags, neutralize_fn: bool) -> CGEventFlags {
+    if neutralize_fn {
+        flags & !CGEventFlags::MaskSecondaryFn
+    } else {
+        flags
+    }
+}
+
 unsafe extern "C-unwind" fn handle_event(
     _proxy: CGEventTapProxy,
     event_type: CGEventType,
@@ -202,7 +238,7 @@ unsafe extern "C-unwind" fn handle_event(
         || event_type == CGEventType::TapDisabledByUserInput
     {
         *state.gesture.borrow_mut() = GestureState::default();
-        state.emit(EVENT_RESET);
+        let _ = state.emit(EVENT_RESET);
         // macOS disables slow taps. Reset the gesture before allowing fresh events.
         MONITOR.with(|monitor| {
             if let Ok(handles) = monitor.try_borrow()
@@ -234,15 +270,24 @@ unsafe extern "C-unwind" fn handle_event(
         CGEventType::KeyUp => MonitorInput::KeyUp { key_code },
         _ => return event.as_ptr(),
     };
-    let (output, suppress) = process_input(&mut state.gesture.borrow_mut(), input);
-    if let Some(output) = output {
-        state.emit(output);
+    let (outputs, suppress) = process_event(&mut state.gesture.borrow_mut(), input);
+    let can_project_escape = match outputs[0] {
+        Some(output) => state.emit(output),
+        None => true,
+    };
+    // Escape is observed globally, never consumed. It is projected after the Fn
+    // reducer's contamination notification, so Fn+Escape reaches JavaScript in
+    // source order without swallowing the foreground application's Escape key.
+    if can_project_escape {
+        if let Some(escape_event) = outputs[1] {
+            let _ = state.emit(escape_event);
+        }
     }
-    if suppress {
-        std::ptr::null_mut()
-    } else {
-        event.as_ptr()
-    }
+    // Project the original Fn edge above before removing its system-action flag.
+    // Dropping the entire event still opened Character Viewer in physical testing;
+    // forwarding the neutralized state transition prevents that default action.
+    CGEvent::set_flags(Some(event_ref), forwarded_event_flags(flags, suppress));
+    event.as_ptr()
 }
 
 pub fn start(env: Env, callback: Function<'_, u32, ()>) -> Result<FunctionKeyMonitorStart> {
@@ -298,11 +343,13 @@ pub fn start(env: Env, callback: Function<'_, u32, ()>) -> Result<FunctionKeyMon
     let mask = (1_u64 << CGEventType::FlagsChanged.0)
         | (1_u64 << CGEventType::KeyDown.0)
         | (1_u64 << CGEventType::KeyUp.0);
-    // SAFETY: callback returns the original event or null, and boxed state outlives
-    // the tap. An active tap is required to suppress the system's Fn/Globe action.
+    // Use the HID entry point verified by the physical Fn neutralization probe.
+    // No Session fallback: keep the tested event-rewriting boundary explicit.
+    // SAFETY: callback always returns the original event; boxed state outlives
+    // the tap. Fn state is read before its system-action flag is cleared.
     let Some(tap) = (unsafe {
         CGEvent::tap_create(
-            CGEventTapLocation::SessionEventTap,
+            CGEventTapLocation::HIDEventTap,
             CGEventTapPlacement::HeadInsertEventTap,
             CGEventTapOptions::Default,
             mask,
@@ -310,7 +357,7 @@ pub fn start(env: Env, callback: Function<'_, u32, ()>) -> Result<FunctionKeyMon
             (&mut *state as *mut MonitorState).cast(),
         )
     }) else {
-        return Ok(inactive("event-tap-registration-failed"));
+        return Ok(inactive("hid-event-tap-registration-failed"));
     };
     let Some(source) = CFMachPort::new_run_loop_source(None, Some(&tap), 0) else {
         tap.invalidate();

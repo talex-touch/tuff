@@ -16,10 +16,20 @@ export interface AssistantOpenVoicePanelPayload {
   source?: "click" | "wake-word";
 }
 
-export interface AssistantVoiceCommandPayload {
-  action: 'start' | 'stop'
-  mode: 'hold' | 'toggle'
-  source: 'command'
+export type AssistantVoiceCommandPayload =
+  | {
+      action: 'start' | 'stop' | 'toggle'
+      mode: 'hold' | 'toggle'
+      source: 'command'
+    }
+  | {
+      action: 'cancel'
+      state: 'start' | 'reset'
+      source: 'command'
+    }
+
+export interface AssistantVoiceCancelHoldPayload {
+  state: 'start' | 'reset' | 'commit'
 }
 
 export interface AssistantFloatingBallPositionPayload {
@@ -209,6 +219,10 @@ export const AssistantEvents = {
       .module('voice-panel')
       .event('command')
       .define<AssistantVoiceCommandPayload, void>(),
+    cancelHold: defineEvent('assistant')
+      .module('voice-panel')
+      .event('cancel-hold')
+      .define<AssistantVoiceCancelHoldPayload, void>(),
     closePanel: defineEvent("assistant")
       .module("voice-panel")
       .event("close")

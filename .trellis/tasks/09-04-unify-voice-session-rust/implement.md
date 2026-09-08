@@ -86,22 +86,39 @@
 
 ## Fn VoiceDock 手势
 
-- macOS 默认使用 Fn，Windows/Linux 保留 Ctrl（硬件 Fn 不保证向系统上报）；继续沿用 `assistant.enabled`、`floatingBall.enabled`、`voiceWake.enabled` 总开关，不默认常驻输入拦截。
-- 短按（小于 320ms）在 `start` / `stop` 间切换持续聆听；长按达到 320ms 后进入 push-to-talk，释放时发送 `stop`。
-- macOS 使用现有 `native-audio` 内的主动 `CGEventTap`：只消费由单键 Fn 开始的按下/松开，保留组合键事件；Windows/Linux 由 OmniPanel 独占 `uiohook`。VoiceDock 仍通过 typed `assistant:voice-panel:command` 控制，不增加裸 IPC 或第二套录音。
+- macOS 默认使用 Fn，Windows/Linux 保留 Ctrl（硬件 Fn 不保证向系统上报）；仅由独立 `voiceInput.enabled` 开关控制，不依赖 Assistant、浮球或旧唤醒词开关，默认关闭。
+- 短按（小于 320ms）发送 `toggle` 意图，由录音状态决定开始/停止，不再把胶囊可见当作正在录音；错误/取消提示期间再次触发开始新录音，不重试旧音频。长按达到 320ms 开始 push-to-talk，释放发送 `stop`。
+- macOS 使用现有 `native-audio` 内 HID 层主动 `CGEventTap`：只消费由单键 Fn 开始的按下/松开，保留组合键和 Esc 透传；HID 创建失败明确 unavailable，不静默退回 Session tap 或修改用户系统 Fn 偏好。Windows/Linux 由 OmniPanel 独占 `uiohook`。
 - Fn 打开 VoiceDock 使用 `showInactive`，不抢当前应用焦点；stop 不重置录音，句柄未就绪时排队到达后结束。
 
 ## VoiceDock 极简 HUD 收敛
 
 - VoiceDock 的 Electron 窗口保持透明、无阴影；紧凑 HUD 仅保留麦克风状态、语音波形和错误状态，输入框、截图来源选择、截图操作按钮、发送和关闭入口均不属于语音面板。
 - 浮球不再启动唤醒词 ASR；Fn/Ctrl 手势和浮球点击调用同一录音入口。最终文本使用 `active-app` delivery，由 main-owned Voice Session 交付。
-- 停止或流终态后，renderer 先显示有限时长的 processing ring，再回到浮球；结束事件通过 typed `voice.closePanel` 同步主进程收缩窗口，避免 renderer 与 BrowserWindow 几何状态分叉。
+- 停止或流终态后，renderer 先显示有限时长的 processing ring，再结束临时 HUD；浮球原本关闭时继续隐藏。结束事件通过 typed `voice.closePanel` 同步主进程收缩窗口，避免 renderer 与 BrowserWindow 几何状态分叉。
 - 出现/消失动画只作用于 VoiceDock renderer 内容，屏幕坐标仍由 main 根据浮球锚点所在显示器计算，避免多屏切换时自行改写全局坐标。
+- 胶囊不因 blur、切换应用或失去焦点关闭。Esc 全局长按 600ms 由 main 计时，通过 typed `cancelHold` 发送蓄力/重置/取消；短按不取消。待挂载/等待配置时收到取消也不得延迟启动录音。
 
 ## Fn/Ctrl 单键安全边界
 
 - 只有无其他按键参与的 tap/hold 才产生语音动作；其他键先按、后按或先松开都使本次手势失效。
 - 已开始的 hold 遇到组合键或 native reset 只发送一次 stop；注册代次、UI 会话代次与待打开面板均隔离旧回调。
+
+## 独立语音输入设置
+
+- `voiceInput: { enabled, language }` 在主进程配置 hydration 时归一化。仅旧配置缺失整个字段时，从 `assistant.enabled && voiceWake.enabled` 和旧 language 一次迁移；显式 false 永不被旧值覆盖。
+- 设置 → 智能提供独立“语音输入”和“显示语音输入浮球”；唤醒词只显示暂不可用说明，不提供伪可用开关。
+- VoicePanel 等待 runtime config 后才启动，关闭语音输入阻断后续启动并收口当前 HUD。
+- 本轮 5 个 focused 文件共 107 tests 通过，Node/Web typecheck 通过。隔离 Electron 设置页已检查中英文说明并操作开关，确认 Assistant/浮球关闭时独立语音输入可开启并持久化；不等同实体 Fn、麦克风与 Provider 端到端通过。
+
+## 全局取消与重触发验证
+
+- 更新后 5 个 focused 文件 154 tests 通过；Rust native-audio 46 tests 通过；Node/Web typecheck 与 CoreApp 修改范围 ESLint 通过；原生 release addon 构建与加载通过。
+- 隔离真实 Electron + 合成 HID 输入：native 收到 Fn down/up 和 Esc down/up；独立 Session 下游观察到 Fn 0 条、Esc down/up 各 1 条。
+- Finder 前台时，隔离胶囊保留；短 Esc 收到 start/reset 不取消，长 Esc 约 600ms 收到 start/commit 并显示“已取消”。错误胶囊再次注入 Fn 收到 toggle，进入新录音，无旧错误提示。
+- 旧“丢弃事件”方案实体验收失败：4 组 Fn HID down/up、Session 下游 0 条，用户仍确认表情面板弹出。不能把下游截断当作默认动作抑制证据。
+- 正式修复：原生回调先投影原始 Fn 状态，再仅清除 `MaskSecondaryFn`，将原事件放行。用户已对同机制的临时探针反复实体按键并确认“不弹了”；未改系统 Fn 设置，也未杀面板或抢焦点。
+- 接入后 native release build/load 通过，46 项 Rust 测试和 7 文件 163 项语音回归通过。真实 Electron 加载正式 addon 的集成探针确认：语音侧收到 down/up，下游收到 2 个事件且 Fn 标志均为 0。ABI marker 升级为 V3，阻止旧丢弃事件版 addon 被误加载。
 
 ## ASR 现状与落地结论
 
@@ -130,3 +147,18 @@
 - Cargo addon 在临时路径签名后原子替换唯一 `build/Release/tuff_native_audio.node`；不从 `target/runtime` 回退加载旧版本。
 - 洞察由 VoiceService 成功终态记账，SQLite 原子保存/清空；共享 Voice SDK `getInsights`/`clearInsights` 仅允许受信任宿主页面调用。UI `/voice-insights` 从侧栏进入。
 - 洞察按本地日历处理连续天数、零时长和最近365天热力图；节省时间按每分钟40字的标注基线计算，不能声称测得用户真实打字速度。
+
+## 最终回归证据（2026-09-07）
+
+- CoreApp voice/assistant regression：10 个文件、199 tests passed；覆盖 Fn/Ctrl 手势、VoiceDock 开关与 stale close、VoiceService stop/cancel、pending partial、WebSocket/Provider 错误、空 final、VoicePanel 终态、Assistant deferred-open STOP；无 unhandled rejection。
+- CoreApp Node/Web typecheck passed；`git diff --check` passed；sensitive-data inventory verification passed（15 entries，50 structural evidence references）。
+- Rust `native-audio`：45 tests passed；release addon build、production verification 与 Electron headless load passed。
+- macOS 原生 Fn probe：standalone Fn down/up 回调已收到；Fn+J 产生 `other-key-down`，J 的 keyDown/keyUp 仍到达下游，证明不吞组合键；单独 Fn 事件由 active CGEventTap 消费。Electron microphone probe 采集约 501ms、16kHz、mono、约16KB PCM。
+- 真实百炼 `paraformer-realtime-v2` standalone stream：收到 4 个 partial、1 个 final、1 个 end；受控中文短句匹配成功。随后在隔离 Electron 预览中播放同一句，VoiceDock 录音→百炼→polish→TextEdit 写回成功；Accessibility readback 为 10 字且短语匹配，Voice insights SQLite 记录 1 个成功会话、9 个聚合字符、3627ms。
+- 真实 VoiceDock 失败路径也已验证：未配置 Provider 时停止后显示“语音转写失败”并恢复浮球，不伪报成功；配置 Provider 后成功终态恢复浮球。
+- 语音洞察真实 UI：刷新、分享摘要复制、报告展开、365 日热力图、取消清空、确认清空及清空后刷新均通过；数据库清空后 `session_count=0,total_characters=0`。系统输出音量经用户授权临时设为 10% 播放测试，完成后恢复原值 0。
+
+## 仍未宣称的能力
+
+- 尚未完成真实 TextEdit 以外的浏览器、VS Code、Terminal、飞书/Slack 矩阵；未验证的平台和应用不宣称 Typeless 级跨应用可靠性。
+- 当前 real-App 结果证明受控 macOS + TextEdit + 百炼路径，不证明硬件 Fn、所有应用焦点语义、AutoPaste 权限或其他 Provider 的端到端质量。

@@ -19,6 +19,7 @@ const { nativeBinding, loadError } = loadNativeBinding({
     'isAccessibilityTrusted',
     'typeText',
     'startFunctionKeyMonitor',
+    'functionKeyMonitorApiV3',
     'stopFunctionKeyMonitor',
   ],
 })
@@ -181,6 +182,12 @@ function startFunctionKeyMonitor(listener) {
     }
     else if (eventCode === 5) {
       listener({ type: 'reset' })
+    }
+    else if (eventCode === 6) {
+      listener({ type: 'escape-down' })
+    }
+    else if (eventCode === 7) {
+      listener({ type: 'escape-up' })
     }
   })
 }

@@ -1,7 +1,8 @@
 <script setup lang="ts" name="SettingAssistant">
+import { ensureVoiceInputSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { appSetting } from '~/modules/storage/app-storage'
@@ -20,10 +21,7 @@ const assistantEnabled = computed({
   set: (value: boolean) => {
     ensureAssistantSettings()
     appSetting.assistant.enabled = value
-    if (!value) {
-      appSetting.floatingBall.enabled = false
-      appSetting.voiceWake.enabled = false
-    }
+    if (!value) appSetting.floatingBall.enabled = false
   }
 })
 
@@ -38,31 +36,16 @@ const floatingBallEnabled = computed({
   }
 })
 
-const voiceWakeEnabled = computed({
-  get: () => appSetting.voiceWake?.enabled === true,
+const voiceInputEnabled = computed({
+  get: () => appSetting.voiceInput?.enabled === true,
   set: (value: boolean) => {
     ensureAssistantSettings()
-    appSetting.voiceWake.enabled = value
-    if (value) {
-      appSetting.assistant.enabled = true
-      appSetting.floatingBall.enabled = true
-    }
-  }
-})
-
-const wakeWords = computed({
-  get: () => appSetting.voiceWake?.wakeWords?.join(', ') || '阿洛, aler',
-  set: (value: string | number) => {
-    ensureAssistantSettings()
-    const next = String(value)
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
-    appSetting.voiceWake.wakeWords = next.length ? next : ['阿洛', 'aler']
+    appSetting.voiceInput.enabled = value
   }
 })
 
 function ensureAssistantSettings(): void {
+  ensureVoiceInputSetting(appSetting as Record<string, unknown>)
   if (!appSetting.assistant || typeof appSetting.assistant !== 'object') {
     appSetting.assistant = {
       enabled: false
@@ -102,42 +85,10 @@ function ensureAssistantSettings(): void {
   if (!appSetting.floatingBall.position || typeof appSetting.floatingBall.position !== 'object') {
     appSetting.floatingBall.position = { x: -1, y: -1 }
   }
-
-  if (!appSetting.voiceWake || typeof appSetting.voiceWake !== 'object') {
-    appSetting.voiceWake = {
-      enabled: false,
-      wakeWords: ['阿洛', 'aler'],
-      language: 'zh-CN',
-      continuous: true,
-      cooldownMs: 2200,
-      openPanelOnWake: true
-    }
-  }
-  if (typeof appSetting.voiceWake.enabled !== 'boolean') {
-    appSetting.voiceWake.enabled = false
-  }
-  if (
-    !Array.isArray(appSetting.voiceWake.wakeWords) ||
-    appSetting.voiceWake.wakeWords.length === 0
-  ) {
-    appSetting.voiceWake.wakeWords = ['阿洛', 'aler']
-  }
-  if (typeof appSetting.voiceWake.language !== 'string' || !appSetting.voiceWake.language.trim()) {
-    appSetting.voiceWake.language = 'zh-CN'
-  }
-  if (typeof appSetting.voiceWake.continuous !== 'boolean') {
-    appSetting.voiceWake.continuous = true
-  }
-  if (!Number.isFinite(appSetting.voiceWake.cooldownMs)) {
-    appSetting.voiceWake.cooldownMs = 2200
-  }
-  if (typeof appSetting.voiceWake.openPanelOnWake !== 'boolean') {
-    appSetting.voiceWake.openPanelOnWake = true
-  }
 }
 
 watch(
-  () => [appSetting.assistant, appSetting.floatingBall, appSetting.voiceWake],
+  () => [appSetting.assistant, appSetting.floatingBall, appSetting.voiceInput],
   () => ensureAssistantSettings(),
   { immediate: true }
 )
@@ -170,23 +121,19 @@ watch(
     />
 
     <TuffBlockSwitch
-      v-if="props.mode !== 'standard'"
-      v-model="voiceWakeEnabled"
-      :title="t('settingAssistant.voiceWake')"
-      :description="t('settingAssistant.voiceWakeDesc')"
+      v-model="voiceInputEnabled"
+      :title="t('settingAssistant.voiceInput')"
+      :description="t('settingAssistant.voiceInputDesc')"
       default-icon="i-carbon-microphone"
       active-icon="i-carbon-microphone-filled"
     />
 
-    <TuffBlockInput
+    <TuffBlockSlot
       v-if="props.mode !== 'standard'"
-      v-model="wakeWords"
-      :title="t('settingAssistant.wakeWords')"
-      :description="t('settingAssistant.wakeWordsDesc')"
-      :placeholder="t('settingAssistant.wakeWordsPlaceholder')"
-      :disabled="!voiceWakeEnabled"
-      default-icon="i-carbon-text-link"
-      active-icon="i-carbon-text-link"
+      :title="t('settingAssistant.voiceWake')"
+      :description="t('settingAssistant.voiceWakeDesc')"
+      :disabled="true"
+      default-icon="i-carbon-microphone-off"
     />
   </TuffGroupBlock>
 </template>

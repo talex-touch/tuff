@@ -6,7 +6,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import type { CoreBoxImageTranslateResponse } from '../../../shared/events/corebox-scenes'
 import type { AssistantModule } from './module'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 
@@ -52,6 +52,7 @@ const mocks = vi.hoisted(() => ({
       filePath: '/tmp/tuff-screenshot.png'
     })
   ),
+  loadDockRenderer: vi.fn<() => Promise<void>>(() => Promise.resolve()),
   createEnabledSetting: (overrides: Partial<AppSetting> = {}): AppSetting =>
     ({
       assistant: {
@@ -76,6 +77,10 @@ const mocks = vi.hoisted(() => ({
         continuous: true,
         cooldownMs: 2200,
         openPanelOnWake: true
+      },
+      voiceInput: {
+        enabled: true,
+        language: 'zh-CN'
       },
       setup: {
         microphone: false
@@ -108,7 +113,11 @@ const mocks = vi.hoisted(() => ({
   getMainConfig: vi.fn<() => AppSetting>(),
   saveMainConfig: vi.fn(),
   persistMainConfig: vi.fn(() => Promise.resolve()),
-  subscribeMainConfig: vi.fn(() => vi.fn()),
+  appSettingListener: undefined as ((setting: AppSetting) => void) | undefined,
+  subscribeMainConfig: vi.fn((_key: unknown, listener: (setting: AppSetting) => void) => {
+    mocks.appSettingListener = listener
+    return vi.fn()
+  }),
   capture: vi.fn<() => Promise<NativeScreenshotCaptureResult>>(),
   releaseTempArtifact: vi.fn(() => Promise.resolve(true)),
   listDisplays: vi.fn<() => NativeScreenshotDisplay[]>(),
@@ -135,6 +144,7 @@ const mocks = vi.hoisted(() => ({
       getBounds: () => { x: number; y: number; width: number; height: number }
       isVisible: () => boolean
       isDestroyed: () => boolean
+      on: (event: string, listener: () => void) => void
     }
   }>,
   translateImageBase64: vi.fn<() => Promise<CoreBoxImageTranslateResponse>>(),
@@ -221,8 +231,8 @@ vi.mock('../../core/touch-window', () => ({
         destroy: vi.fn(),
         on: vi.fn()
       },
-      loadURL: vi.fn(),
-      loadFile: vi.fn()
+      loadURL: mocks.loadDockRenderer,
+      loadFile: mocks.loadDockRenderer
     }
     mocks.touchWindows.push(touchWindow)
     return touchWindow
@@ -366,6 +376,7 @@ describe('AssistantModule screenshot translation', () => {
     vi.clearAllMocks()
     vi.resetModules()
     mocks.handlers.clear()
+    mocks.appSettingListener = undefined
     mocks.screenListeners.clear()
     mocks.copyCaptureResource.mockClear()
     mocks.copyCaptureResource.mockResolvedValue(undefined)
@@ -378,6 +389,8 @@ describe('AssistantModule screenshot translation', () => {
     })
     mocks.getMainConfig.mockImplementation(() => mocks.createEnabledSetting())
     mocks.persistMainConfig.mockResolvedValue(undefined)
+    mocks.loadDockRenderer.mockReset()
+    mocks.loadDockRenderer.mockResolvedValue(undefined)
     mocks.capture.mockResolvedValue(mocks.createCaptureResult())
     mocks.listDisplays.mockReturnValue([])
     mocks.getSupport.mockReturnValue({ supported: true, platform: 'darwin' })
@@ -414,6 +427,11 @@ describe('AssistantModule screenshot translation', () => {
     })
     mocks.translateImageBase64.mockResolvedValue(mocks.createTranslateSuccess())
     mocks.sendTo.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
   })
 
   it('opens the panel without a duplicate command when collapsed, then forwards active commands', async () => {
@@ -454,6 +472,308 @@ describe('AssistantModule screenshot translation', () => {
     expect(eventName(expandedStopCall?.[1])).toBe(AssistantEvents.voice.command.toEventName())
     expect(expandedStopCall?.[2]).toEqual(stop)
 
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+
+  it('reports explicit voice input disablement despite enabled legacy settings', async () => {
+    const setting = mocks.createEnabledSetting({
+      voiceWake: {
+        enabled: true,
+        wakeWords: ['Alo'],
+        language: 'fr-FR',
+        continuous: true,
+        cooldownMs: 2200,
+        openPanelOnWake: true
+      },
+      voiceInput: { enabled: false, language: 'fr-FR' }
+    })
+    mocks.getMainConfig.mockReturnValue(setting)
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.floatingBall.getRuntimeConfig.toEventName()
+    )
+
+    expect(await handler(undefined, {} as HandlerContext)).toEqual({
+      enabled: false,
+      language: 'fr-FR'
+    })
+
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+
+  it('opens a command HUD without a floating entry and hides it when the session closes', async () => {
+    mocks.getMainConfig.mockReturnValue(
+      mocks.createEnabledSetting({
+        assistant: { enabled: false },
+        floatingBall: {
+          enabled: false,
+          size: 56,
+          opacity: 1,
+          edgePadding: 24,
+          position: { x: -1, y: -1 }
+        },
+        voiceWake: {
+          enabled: false,
+          wakeWords: ['Alo'],
+          language: 'fr-FR',
+          continuous: true,
+          cooldownMs: 2200,
+          openPanelOnWake: true
+        },
+        voiceInput: { enabled: true, language: 'fr-FR' }
+      })
+    )
+    const { module } = await createInitializedModule()
+    const start = { action: 'start', mode: 'toggle', source: 'command' } as const
+
+    await module.handleVoiceCommandGesture(start)
+
+    const dock = mocks.touchWindows.at(-1)
+    if (!dock) throw new Error('Voice HUD was not created')
+    expect(mocks.broadcastToWindow.mock.calls.map(([, event]) => eventName(event))).toContain(
+      AssistantEvents.voice.panelOpened.toEventName()
+    )
+    vi.mocked(dock.window.hide).mockClear()
+    vi.mocked(dock.window.showInactive).mockClear()
+    const closePanel = mocks.handlers.get(AssistantEvents.voice.closePanel.toEventName())
+    if (!closePanel) throw new Error('closePanel handler was not registered')
+
+    await closePanel(undefined, {} as HandlerContext)
+
+    expect(dock.window.hide).toHaveBeenCalled()
+    expect(dock.window.showInactive).not.toHaveBeenCalled()
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+  it('stops an active temporary HUD when voice input is disabled', async () => {
+    const setting = mocks.createEnabledSetting({
+      assistant: { enabled: false },
+      floatingBall: {
+        enabled: false,
+        size: 56,
+        opacity: 1,
+        edgePadding: 24,
+        position: { x: -1, y: -1 }
+      },
+      voiceInput: { enabled: true, language: 'fr-FR' }
+    })
+    mocks.getMainConfig.mockReturnValue(setting)
+    const { module } = await createInitializedModule()
+
+    await module.handleVoiceCommandGesture({ action: 'start', mode: 'toggle', source: 'command' })
+    const dock = mocks.touchWindows.at(-1)
+    if (!dock || !mocks.appSettingListener)
+      throw new Error('Voice HUD settings observer was not active')
+    mocks.broadcastToWindow.mockClear()
+    vi.mocked(dock.window.hide).mockClear()
+    vi.mocked(dock.window.showInactive).mockClear()
+    setting.voiceInput.enabled = false
+
+    mocks.appSettingListener(setting)
+    await Promise.resolve()
+
+    expect(
+      mocks.broadcastToWindow.mock.calls.map(([, event, payload]) => ({
+        event: eventName(event),
+        payload
+      }))
+    ).toEqual([
+      {
+        event: AssistantEvents.voice.command.toEventName(),
+        payload: { action: 'stop', mode: 'toggle', source: 'command' }
+      },
+      { event: AssistantEvents.voice.panelClosed.toEventName(), payload: undefined }
+    ])
+    expect(dock.window.hide).toHaveBeenCalled()
+    expect(dock.window.showInactive).not.toHaveBeenCalled()
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+
+  it('forwards only a pending STOP after the first VoiceDock window has loaded', async () => {
+    mocks.getMainConfig.mockReturnValue(
+      mocks.createEnabledSetting({
+        assistant: { enabled: false }
+      })
+    )
+    // `vi.resetModules()` gives every Electron fixture a fresh Assistant singleton, so this
+    // intentional dynamic import starts with a hidden resting entry before the delayed HUD load.
+    const { AssistantModule } = await import('./module')
+    const module = new AssistantModule()
+    await module.onInit({
+      app: { channel: {} },
+      runtime: { channel: {} },
+      file: { dirPath: '/tmp/assistant' }
+    } as unknown as Parameters<typeof module.onInit>[0])
+
+    mocks.getMainConfig.mockReturnValue(mocks.createEnabledSetting())
+    const renderer = Promise.withResolvers<void>()
+    mocks.loadDockRenderer.mockReturnValueOnce(renderer.promise)
+    const start = { action: 'start', mode: 'toggle', source: 'command' } as const
+    const stop = { action: 'stop', mode: 'toggle', source: 'command' } as const
+
+    const opening = module.handleVoiceCommandGesture(start)
+    await Promise.resolve()
+    await module.handleVoiceCommandGesture(stop)
+    renderer.resolve()
+    await opening
+
+    expect(
+      mocks.broadcastToWindow.mock.calls.map(([, event, payload]) => ({
+        event: eventName(event),
+        payload
+      }))
+    ).toEqual([
+      { event: AssistantEvents.voice.panelOpened.toEventName(), payload: { source: 'command' } },
+      { event: AssistantEvents.voice.command.toEventName(), payload: stop }
+    ])
+
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+  it('does not carry a released Escape hold into a VoiceDock still being created', async () => {
+    mocks.getMainConfig.mockReturnValue(
+      mocks.createEnabledSetting({ assistant: { enabled: false } })
+    )
+    const { AssistantModule } = await import('./module')
+    const module = new AssistantModule()
+    await module.onInit({
+      app: { channel: {} },
+      runtime: { channel: {} },
+      file: { dirPath: '/tmp/assistant' }
+    } as unknown as Parameters<typeof module.onInit>[0])
+
+    mocks.getMainConfig.mockReturnValue(mocks.createEnabledSetting())
+    const renderer = Promise.withResolvers<void>()
+    mocks.loadDockRenderer.mockReturnValueOnce(renderer.promise)
+    const opening = module.handleVoiceCommandGesture({
+      action: 'start',
+      mode: 'toggle',
+      source: 'command'
+    })
+    await Promise.resolve()
+    await module.handleVoiceCommandGesture({ action: 'cancel', state: 'start', source: 'command' })
+    await module.handleVoiceCommandGesture({ action: 'cancel', state: 'reset', source: 'command' })
+    renderer.resolve()
+    await opening
+
+    const delivered = mocks.broadcastToWindow.mock.calls.map(([, event, payload]) => ({
+      event: eventName(event),
+      payload
+    }))
+    expect(delivered).toContainEqual({
+      event: AssistantEvents.voice.panelOpened.toEventName(),
+      payload: { source: 'command' }
+    })
+    expect(delivered).not.toContainEqual({
+      event: AssistantEvents.voice.cancelHold.toEventName(),
+      payload: { state: 'commit' }
+    })
+    expect(delivered).not.toContainEqual({
+      event: AssistantEvents.voice.command.toEventName(),
+      payload: { action: 'stop', mode: 'toggle', source: 'command' }
+    })
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+  it('cancels an unfocused active HUD only after the global Escape hold reaches 600ms', async () => {
+    vi.useFakeTimers()
+    const { module } = await createInitializedModule()
+    await module.handleVoiceCommandGesture({ action: 'start', mode: 'toggle', source: 'command' })
+    mocks.broadcastToWindow.mockClear()
+
+    await module.handleVoiceCommandGesture({ action: 'cancel', state: 'start', source: 'command' })
+    expect(
+      mocks.broadcastToWindow.mock.calls.map(([, event, payload]) => ({
+        event: eventName(event),
+        payload
+      }))
+    ).toEqual([
+      { event: AssistantEvents.voice.cancelHold.toEventName(), payload: { state: 'start' } }
+    ])
+
+    vi.advanceTimersByTime(599)
+    expect(
+      mocks.broadcastToWindow.mock.calls.map(([, event, payload]) => ({
+        event: eventName(event),
+        payload
+      }))
+    ).toEqual([
+      { event: AssistantEvents.voice.cancelHold.toEventName(), payload: { state: 'start' } }
+    ])
+
+    vi.advanceTimersByTime(1)
+    expect(
+      mocks.broadcastToWindow.mock.calls.map(([, event, payload]) => ({
+        event: eventName(event),
+        payload
+      }))
+    ).toEqual([
+      { event: AssistantEvents.voice.cancelHold.toEventName(), payload: { state: 'start' } },
+      { event: AssistantEvents.voice.cancelHold.toEventName(), payload: { state: 'commit' } }
+    ])
+    expect(mocks.broadcastToWindow.mock.calls.map(([, event]) => eventName(event))).not.toContain(
+      AssistantEvents.voice.command.toEventName()
+    )
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+
+  it('resets a released global Escape hold without cancelling the active HUD', async () => {
+    vi.useFakeTimers()
+    const { module } = await createInitializedModule()
+    await module.handleVoiceCommandGesture({ action: 'start', mode: 'toggle', source: 'command' })
+    mocks.broadcastToWindow.mockClear()
+
+    await module.handleVoiceCommandGesture({ action: 'cancel', state: 'start', source: 'command' })
+    vi.advanceTimersByTime(599)
+    await module.handleVoiceCommandGesture({ action: 'cancel', state: 'reset', source: 'command' })
+    vi.advanceTimersByTime(600)
+
+    expect(
+      mocks.broadcastToWindow.mock.calls.map(([, event, payload]) => ({
+        event: eventName(event),
+        payload
+      }))
+    ).toEqual([
+      { event: AssistantEvents.voice.cancelHold.toEventName(), payload: { state: 'start' } },
+      { event: AssistantEvents.voice.cancelHold.toEventName(), payload: { state: 'reset' } }
+    ])
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+
+  it('does not let a destroyed Escape timer cancel a newly opened HUD', async () => {
+    vi.useFakeTimers()
+    const { module: closingModule } = await createInitializedModule()
+    await closingModule.handleVoiceCommandGesture({
+      action: 'start',
+      mode: 'toggle',
+      source: 'command'
+    })
+    await closingModule.handleVoiceCommandGesture({
+      action: 'cancel',
+      state: 'start',
+      source: 'command'
+    })
+    await closingModule.onDestroy({} as Parameters<typeof closingModule.onDestroy>[0])
+
+    const { module: reopenedModule } = await createInitializedModule()
+    await reopenedModule.handleVoiceCommandGesture({
+      action: 'start',
+      mode: 'toggle',
+      source: 'command'
+    })
+    mocks.broadcastToWindow.mockClear()
+    vi.advanceTimersByTime(600)
+
+    expect(mocks.broadcastToWindow).not.toHaveBeenCalled()
+    await reopenedModule.onDestroy({} as Parameters<typeof reopenedModule.onDestroy>[0])
+  })
+  it('leaves an expanded VoiceDock alone when it loses focus', async () => {
+    const { module } = await createInitializedModule()
+    await module.handleVoiceCommandGesture({ action: 'start', mode: 'toggle', source: 'command' })
+    const dock = mocks.touchWindows.at(-1)
+    if (!dock) throw new Error('Voice HUD was not created')
+
+    expect(vi.mocked(dock.window.on)).not.toHaveBeenCalledWith('blur', expect.any(Function))
+    expect(mocks.broadcastToWindow.mock.calls.map(([, event]) => eventName(event))).not.toContain(
+      AssistantEvents.voice.panelClosed.toEventName()
+    )
+    expect(dock.window.hide).not.toHaveBeenCalled()
     await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
   })
 
