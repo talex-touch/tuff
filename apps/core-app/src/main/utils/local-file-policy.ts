@@ -1,8 +1,10 @@
+import { readdirSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { app } from 'electron'
 import { normalizeAbsolutePath, resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
+import { resolveRuntimeRootPath } from './app-root-path'
 
 type AppPathName = 'home' | 'userData' | 'temp' | 'cache'
 
@@ -47,10 +49,11 @@ export function getAdditionalAllowedLocalFileRoots(): string[] {
  * script could read ~/.ssh/id_rsa, ~/.aws/credentials or a browser cookie database through it
  * and exfiltrate the result (#914).
  *
- * Everything here is a scan root the app already uses to find installed applications and
- * their icons, taken from app-scanner's WATCH_PATHS and the Steam provider. Nothing else
- * under home was ever needed: userData, the exact app-icon cache root, and temp are separate
- * least-privilege roots below, and they stay.
+ * Home roots are limited to application-scan locations. The runtime plugin resource roots are
+ * limited to each installed plugin's `assets` and `public` directories, which contain manifest-
+ * owned icons. Plugin data, logs, and configuration remain outside the local-resource data plane.
+ * Nothing else under home was ever needed: userData, the exact app-icon cache root, and temp are
+ * separate least-privilege roots below.
  */
 function getAllowedHomeSubRoots(): string[] {
   const home = appPathSafe('home')
@@ -73,6 +76,18 @@ function getAllowedHomeSubRoots(): string[] {
   return [path.join(home, '.local', 'share', 'applications')]
 }
 
+function getRuntimePluginResourceRoots(): string[] {
+  const runtimePluginRoot = path.join(resolveRuntimeRootPath(app), 'modules', 'plugins')
+  try {
+    return readdirSync(runtimePluginRoot, { withFileTypes: true }).flatMap((entry) => {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) return []
+      return ['assets', 'public'].map((directory) => path.join(runtimePluginRoot, entry.name, directory))
+    })
+  } catch {
+    return []
+  }
+}
+
 export function getAllowedLocalFileRoots(options: { includeCwd?: boolean } = {}): string[] {
   const winRoots =
     process.platform === 'win32'
@@ -82,11 +97,13 @@ export function getAllowedLocalFileRoots(options: { includeCwd?: boolean } = {})
       : []
   const linuxRoots = process.platform === 'linux' ? ['/usr/share', '/usr/local/share', '/opt'] : []
 
+  const runtimePluginResourceRoots = getRuntimePluginResourceRoots()
   const candidates = [
     options.includeCwd ? process.cwd() : null,
     ...getAllowedHomeSubRoots(),
     path.join(appPathSafe('cache'), 'app-icons'),
     appPathSafe('userData'),
+    ...runtimePluginResourceRoots,
     appPathSafe('temp'),
     os.tmpdir(),
     ...winRoots,
