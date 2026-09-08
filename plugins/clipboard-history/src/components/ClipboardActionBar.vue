@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import ClipboardGlyph from './ClipboardGlyph.vue'
 
 const props = defineProps<{
@@ -33,6 +33,49 @@ const applyLabel = computed(() => {
   }
   return '粘贴到当前应用'
 })
+
+/**
+ * 删除要按两次。第一次把按钮变成「再按一次删除」，第二次才真删。
+ *
+ * 用按钮自己的状态而不是弹一个对话框：这是个键盘驱动的启动器面板，弹层会抢走焦点、
+ * 打断 Esc 关闭的肌肉记忆；而删除的代价是一条记录，不值得一个模态。
+ *
+ * 三秒内没有第二次点击就自己退回去——一个一直亮着「再按一次删除」的按钮，
+ * 下次误触时反而成了陷阱。
+ */
+const deleteArmed = ref(false)
+let disarmTimer: ReturnType<typeof setTimeout> | null = null
+
+const deleteLabel = computed(() => {
+  if (props.deletePending) {
+    return '删除中'
+  }
+  return deleteArmed.value ? '再按一次删除' : '删除'
+})
+
+function disarmDelete(): void {
+  if (disarmTimer) {
+    clearTimeout(disarmTimer)
+    disarmTimer = null
+  }
+  deleteArmed.value = false
+}
+
+function requestDelete(): void {
+  if (deleteArmed.value) {
+    disarmDelete()
+    emit('delete')
+    return
+  }
+
+  deleteArmed.value = true
+  disarmTimer = setTimeout(disarmDelete, 3000)
+}
+
+// 切换记录后待确认态必须清掉，否则下一条记录的第一次点击就直接删了。
+watch(() => props.item?.id, disarmDelete)
+
+onBeforeUnmount(disarmDelete)
 </script>
 
 <template>
@@ -76,14 +119,16 @@ const applyLabel = computed(() => {
       <button
         data-testid="delete-button"
         class="icon-button danger"
+        :class="{ armed: deleteArmed }"
         type="button"
-        :title="deletePending ? '删除中' : '删除'"
-        :aria-label="deletePending ? '删除中' : '删除'"
+        :title="deleteLabel"
+        :aria-label="deleteLabel"
         :disabled="!hasItem || deletePending"
-        @click="emit('delete')"
+        @click="requestDelete"
+        @blur="disarmDelete"
       >
         <ClipboardGlyph name="trash" />
-        <span class="button-text" :class="{ 'sr-only': !deletePending }">{{ deletePending ? '删除中' : '删除' }}</span>
+        <span class="button-text" :class="{ 'sr-only': !deletePending && !deleteArmed }">{{ deleteLabel }}</span>
       </button>
     </div>
   </div>
@@ -190,6 +235,23 @@ const applyLabel = computed(() => {
 
 .icon-button.danger {
   color: var(--clipboard-color-danger);
+}
+
+/**
+ * 待确认态要一眼看得出来，否则「按两次」就成了「第一次没反应」。
+ * 图标按钮在这里撑开成带文字的胶囊，把它和旁边的收藏按钮明确区分开。
+ */
+.icon-button.danger.armed {
+  width: auto;
+  gap: 5px;
+  padding: 0 9px;
+  border-color: var(--clipboard-color-danger);
+  background: color-mix(in srgb, var(--clipboard-color-danger) 14%, transparent);
+}
+
+.icon-button.danger.armed .button-text {
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 .icon-button .ClipboardGlyph {
