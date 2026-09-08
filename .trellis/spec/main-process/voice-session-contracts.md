@@ -60,6 +60,18 @@ identity, and plugin permissions remain in main.
 - Permission and stream failures project stable user-facing states, with
   microphone recovery available for recognized permission failures.
 
+## Voice input enablement
+
+- `AppSetting.voiceInput.enabled` alone gates platform dictation gestures, HUD entry, and the
+  Assistant voice runtime projection. Assistant visibility, floating-ball visibility, and legacy
+  wake-word preferences must not authorize or disable shortcut dictation.
+- Missing `voiceInput` is migrated during raw main-storage normalization, before caching/defaults
+  can hide absence: preserve legacy `assistant.enabled && voiceWake.enabled` and language once.
+  Any explicit new value wins; malformed new values fail closed rather than restoring legacy enablement.
+- A hidden resting ball permits a temporary Fn HUD, and remains hidden when that HUD closes.
+  Turning voice input off stops the active HUD; renderer starts must wait for enabled runtime config.
+- Wake-word controls are unavailable until their actual runtime is implemented and verified.
+
 ## Required checks
 
 - VoiceService and GlobalDictation focused Vitest.
@@ -81,14 +93,25 @@ Changes to native Fn capture, voice gestures, HUD open/stop/close, or audio addo
 ### Signatures
 
 - `startFunctionKeyMonitor(listener): { active: boolean; reason?: string }`, `stopFunctionKeyMonitor()`.
-- Events: `down { hasOtherKeys }`, `up`, `other-key-down`, `reset`.
+- Events: `down { hasOtherKeys }`, `up`, `other-key-down`, `reset`, `escape-down`, `escape-up`.
 - `CommandVoiceGestureController(sink, isVoiceSessionActive, registerKeyListener?)` defaults to the platform registrar.
 
 ### Contracts
 
-- macOS Fn requires a main-thread active CGEventTap and Accessibility permission. Physical keycode63,
-  not the Function flag alone, identifies Fn. Standalone-owned down/up are consumed to prevent the
-  system Globe/emoji action; other key events pass unchanged. Stopping the monitor restores OS behavior.
+- macOS Fn requires a main-thread active HID-level CGEventTap and Accessibility permission. Physical keycode63,
+  not the Function flag alone, identifies Fn. Read/project original Fn down/up first, then clear only
+  `MaskSecondaryFn` on standalone-owned Fn transitions and forward the original event. Preserve
+  other flags and combination-key events. Do not return null: physical testing still opened Emoji
+  with dropped events, whereas the user confirmed flag-neutralized forwarding prevented it.
+- Failed HID tap creation is explicitly unavailable; do not silently fall back to Session-level
+  interception or change the user's global Fn preference. Native loader requires the current monitor ABI marker.
+- Escape is observed globally but passes through to other applications. Assistant main owns the 600ms
+  hold and sends typed `cancelHold` start/reset/commit; renderer progress is visual only. A short press
+  does not cancel, and closing/resetting a HUD clears its hold timer.
+- VoiceDock never dismisses or cancels on blur. Pending mount/config cancellation must fence late startup.
+- Short Fn/Ctrl taps send `toggle` intent, not a start/stop guess based on window visibility.
+  The recording HUD stops active capture or starts a fresh session from a terminal notice; it does not
+  invoke recovery for old audio. Explicit hold-start is not blocked by a prior session's start latch.
 - A bounded FIFO retains transition ordering; overflow invalidates queued actions and projects reset.
   Environment cleanup removes the tap and stale registered callbacks are inert.
 - A panel/session generation owns every async callback. A pending-handle stop is applied as `stop()`

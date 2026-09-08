@@ -10,6 +10,8 @@ const transportSendMock = vi.hoisted(() => vi.fn())
 const panelOpenMock = vi.hoisted(() => vi.fn())
 const panelStartMock = vi.hoisted(() => vi.fn())
 const panelStopMock = vi.hoisted(() => vi.fn())
+const panelCancelHoldMock = vi.hoisted(() => vi.fn())
+const panelToggleMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
@@ -34,7 +36,9 @@ vi.mock('./VoicePanel.vue', () => ({
       expose({
         openPanel: panelOpenMock,
         startVoiceInput: panelStartMock,
-        stopVoiceInput: panelStopMock
+        stopVoiceInput: panelStopMock,
+        toggleVoiceInput: panelToggleMock,
+        handleCancelHold: panelCancelHoldMock
       })
       return () =>
         h('div', {
@@ -68,6 +72,8 @@ describe('VoiceDock renderer contract', () => {
     panelOpenMock.mockReset()
     panelStartMock.mockReset()
     panelStopMock.mockReset()
+    panelToggleMock.mockReset()
+    panelCancelHoldMock.mockReset()
     transportSendMock.mockReset()
     transportSendMock.mockResolvedValue(undefined)
     transportOnMock.mockImplementation(
@@ -136,7 +142,7 @@ describe('VoiceDock renderer contract', () => {
 
     wrapper.unmount()
   })
-  it('starts voice after a command panel opens and ignores the duplicate command event', async () => {
+  it('starts after a command panel opens and forwards a later hold start again', async () => {
     const wrapper = mount(VoiceDock)
     let resolveOpen!: () => void
     panelOpenMock.mockImplementationOnce(
@@ -153,14 +159,12 @@ describe('VoiceDock renderer contract', () => {
     expect(panelStartMock).not.toHaveBeenCalled()
 
     resolveOpen()
-    await nextTick()
-    await nextTick()
+    await flushPromises()
     expect(panelStartMock).toHaveBeenCalledTimes(1)
 
-    emit(AssistantEvents.voice.command, { action: 'start', mode: 'toggle', source: 'command' })
-    await nextTick()
-    await nextTick()
-    expect(panelStartMock).toHaveBeenCalledTimes(1)
+    emit(AssistantEvents.voice.command, { action: 'start', mode: 'hold', source: 'command' })
+    await flushPromises()
+    expect(panelStartMock).toHaveBeenCalledTimes(2)
 
     wrapper.unmount()
   })
@@ -226,24 +230,58 @@ describe('VoiceDock renderer contract', () => {
   })
 
   it.each([
-    { action: 'start' as const, expected: panelStartMock, expectedCalls: 0 },
-    { action: 'stop' as const, expected: panelStopMock, expectedCalls: 1 }
+    { action: 'start' as const, mode: 'hold' as const, expected: panelStartMock },
+    { action: 'stop' as const, mode: 'toggle' as const, expected: panelStopMock },
+    { action: 'toggle' as const, mode: 'toggle' as const, expected: panelToggleMock }
   ])(
-    'routes a Command voice $action to the managed VoicePanel handle',
-    async ({ action, expected, expectedCalls }) => {
+    'routes Command voice $action to the managed VoicePanel handle',
+    async ({ action, mode, expected }) => {
       const wrapper = mount(VoiceDock)
       await openPanel()
       panelStartMock.mockClear()
       panelStopMock.mockClear()
+      panelToggleMock.mockClear()
 
-      emit(AssistantEvents.voice.command, { action, mode: 'toggle', source: 'command' })
+      emit(AssistantEvents.voice.command, { action, mode, source: 'command' })
       await nextTick()
       await nextTick()
 
-      expect(expected).toHaveBeenCalledTimes(expectedCalls)
+      expect(expected).toHaveBeenCalledTimes(1)
       wrapper.unmount()
     }
   )
+  it.each(['start', 'reset', 'commit'] as const)(
+    'relays a global Escape cancellation %s to the active VoicePanel',
+    async (state) => {
+      const wrapper = mount(VoiceDock)
+      await openPanel()
+
+      emit(AssistantEvents.voice.cancelHold, { state })
+      await nextTick()
+
+      expect(panelCancelHoldMock).toHaveBeenCalledWith(state)
+      wrapper.unmount()
+    }
+  )
+  it('queues a global cancellation commit until a mounted VoicePanel finishes opening', async () => {
+    const wrapper = mount(VoiceDock)
+    const opening = Promise.withResolvers<void>()
+    panelOpenMock.mockImplementationOnce(() => opening.promise)
+
+    emit(AssistantEvents.voice.panelOpened, { source: 'command' })
+    await nextTick()
+    await nextTick()
+    expect(panelOpenMock).toHaveBeenCalledWith('command')
+
+    emit(AssistantEvents.voice.cancelHold, { state: 'commit' })
+    opening.resolve()
+    await flushPromises()
+    await nextTick()
+
+    expect(panelCancelHoldMock).toHaveBeenCalledWith('commit')
+    expect(panelStartMock).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
 
   it('returns straight to the floating ball once the VoicePanel finishes', async () => {
     const wrapper = mount(VoiceDock)
@@ -271,6 +309,27 @@ describe('VoiceDock renderer contract', () => {
     vi.advanceTimersByTime(1000)
     await nextTick()
     expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('does not let a stale close fallback collapse a reopened recording', async () => {
+    const wrapper = mount(VoiceDock)
+    await openPanel()
+
+    await wrapper.findComponent({ name: 'VoicePanel' }).vm.$emit('finished')
+    await nextTick()
+    expect(wrapper.find('.floating-ball-root').exists()).toBe(true)
+
+    transportSendMock.mockClear()
+    await openPanel()
+    expect(wrapper.find('.voice-panel-root').exists()).toBe(true)
+
+    vi.advanceTimersByTime(400)
+    await nextTick()
+
+    expect(transportSendMock).not.toHaveBeenCalledWith(AssistantEvents.voice.closePanel, undefined)
+    expect(wrapper.find('.voice-panel-root').exists()).toBe(true)
 
     wrapper.unmount()
   })
@@ -322,7 +381,38 @@ describe('VoiceDock renderer contract', () => {
     expect(wrapper.find('.voice-panel-root').exists()).toBe(true)
     expect(panelOpenMock).toHaveBeenCalledWith('click')
     expect(panelStartMock).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
 
+  it('starts recording after a released cancellation arrives before the VoicePanel mounts', async () => {
+    const wrapper = mount(VoiceDock, { global: { stubs: { transition: false } } })
+
+    emit(AssistantEvents.voice.panelOpened, { source: 'command' })
+    await nextTick()
+    emit(AssistantEvents.voice.cancelHold, { state: 'start' })
+    emit(AssistantEvents.voice.cancelHold, { state: 'reset' })
+
+    vi.advanceTimersByTime(400)
+    await flushPromises()
+    await nextTick()
+
+    expect(panelCancelHoldMock).toHaveBeenCalledWith('reset')
+    expect(panelStartMock).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+  it('does not start recording when a global cancellation commits before the VoicePanel mounts', async () => {
+    const wrapper = mount(VoiceDock, { global: { stubs: { transition: false } } })
+
+    emit(AssistantEvents.voice.panelOpened, { source: 'command' })
+    await nextTick()
+    emit(AssistantEvents.voice.cancelHold, { state: 'commit' })
+
+    vi.advanceTimersByTime(400)
+    await flushPromises()
+    await nextTick()
+
+    expect(panelCancelHoldMock).toHaveBeenCalledWith('commit')
+    expect(panelStartMock).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 

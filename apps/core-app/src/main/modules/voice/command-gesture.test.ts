@@ -27,11 +27,15 @@ type VoiceSessionActiveReader = NonNullable<
   ConstructorParameters<typeof CommandVoiceGestureController>[1]
 >
 
-function setting(enabled: boolean): AppSetting {
+function setting(
+  voiceInputEnabled: boolean,
+  legacy: { assistant?: boolean; floatingBall?: boolean; voiceWake?: boolean } = {}
+): AppSetting {
   return {
-    assistant: { enabled },
-    floatingBall: { enabled },
-    voiceWake: { enabled }
+    assistant: { enabled: legacy.assistant ?? false },
+    floatingBall: { enabled: legacy.floatingBall ?? false },
+    voiceWake: { enabled: legacy.voiceWake ?? false },
+    voiceInput: { enabled: voiceInputEnabled, language: 'zh-CN' }
   } as AppSetting
 }
 
@@ -69,21 +73,31 @@ describe('command voice gesture', () => {
     vi.useRealTimers()
   })
 
-  it('does nothing while disabled, then responds after settings enable the gesture', () => {
+  it('responds when voice input is enabled even while legacy assistant controls are off', () => {
+    mocks.getMainConfig.mockReturnValue(setting(true))
     const sink = vi.fn()
     const controller = createController(sink)
     controller.register()
 
-    expect(globalKeyListener).toBeUndefined()
-    settingsListener?.(setting(true))
     globalKeyListener?.onKeyDown?.({})
     globalKeyListener?.onKeyUp?.({})
 
-    expect(sink).toHaveBeenCalledWith({ action: 'start', mode: 'toggle', source: 'command' })
+    expect(sink).toHaveBeenCalledWith({ action: 'toggle', mode: 'toggle', source: 'command' })
+    controller.unregister()
+  })
+  it('does not register a gesture when voice input is explicitly off despite enabled legacy controls', () => {
+    mocks.getMainConfig.mockReturnValue(
+      setting(false, { assistant: true, floatingBall: true, voiceWake: true })
+    )
+    const controller = createController(vi.fn())
+
+    controller.register()
+
+    expect(globalKeyListener).toBeUndefined()
     controller.unregister()
   })
 
-  it('uses the actual voice session state when toggling taps', () => {
+  it('dispatches toggle on every short Fn tap regardless of the current session state', () => {
     mocks.getMainConfig.mockReturnValue(setting(true))
     const sink = vi.fn()
     let voiceSessionActive = false
@@ -95,14 +109,10 @@ describe('command voice gesture', () => {
     voiceSessionActive = true
     globalKeyListener?.onKeyDown?.({})
     globalKeyListener?.onKeyUp?.({})
-    voiceSessionActive = false
-    globalKeyListener?.onKeyDown?.({})
-    globalKeyListener?.onKeyUp?.({})
 
     expect(sink.mock.calls).toEqual([
-      [{ action: 'start', mode: 'toggle', source: 'command' }],
-      [{ action: 'stop', mode: 'toggle', source: 'command' }],
-      [{ action: 'start', mode: 'toggle', source: 'command' }]
+      [{ action: 'toggle', mode: 'toggle', source: 'command' }],
+      [{ action: 'toggle', mode: 'toggle', source: 'command' }]
     ])
     controller.unregister()
   })
@@ -136,6 +146,38 @@ describe('command voice gesture', () => {
 
     globalKeyListener?.onKeyUp?.({})
     expect(sink).toHaveBeenLastCalledWith({ action: 'stop', mode: 'hold', source: 'command' })
+    controller.unregister()
+  })
+  it('forwards global Escape transitions as cancellation lifecycle commands without changing Fn input', () => {
+    mocks.getMainConfig.mockReturnValue(setting(true))
+    const sink = vi.fn()
+    const controller = createController(sink)
+    controller.register()
+
+    globalKeyListener?.onEscapeKeyDown?.()
+    globalKeyListener?.onEscapeKeyUp?.()
+    globalKeyListener?.onReset?.()
+
+    expect(sink.mock.calls).toEqual([
+      [{ action: 'cancel', state: 'start', source: 'command' }],
+      [{ action: 'cancel', state: 'reset', source: 'command' }]
+    ])
+    controller.unregister()
+  })
+  it('stops an active hold when voice input is disabled', () => {
+    mocks.getMainConfig.mockReturnValue(setting(true))
+    const sink = vi.fn()
+    const controller = createController(sink)
+    controller.register()
+
+    globalKeyListener?.onKeyDown?.({})
+    vi.advanceTimersByTime(320)
+    settingsListener?.(setting(false, { assistant: true, floatingBall: true, voiceWake: true }))
+
+    expect(sink.mock.calls).toEqual([
+      [{ action: 'start', mode: 'hold', source: 'command' }],
+      [{ action: 'stop', mode: 'hold', source: 'command' }]
+    ])
     controller.unregister()
   })
 
@@ -181,7 +223,7 @@ describe('command voice gesture', () => {
 
     currentListener.onKeyDown?.({})
     currentListener.onKeyUp?.({})
-    expect(sink).toHaveBeenCalledWith({ action: 'start', mode: 'toggle', source: 'command' })
+    expect(sink).toHaveBeenCalledWith({ action: 'toggle', mode: 'toggle', source: 'command' })
     controller.unregister()
   })
 })

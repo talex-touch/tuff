@@ -129,10 +129,10 @@ pub fn start_function_key_monitor(
     function_key_monitor::start(env, callback)
 }
 
-/// Required by the JS loader so a stale addon cannot silently omit Escape or HID behavior.
+/// Required by the JS loader so stale addons cannot retain the failed Fn-drop behavior.
 #[napi]
-pub fn function_key_monitor_api_v2() -> u32 {
-    2
+pub fn function_key_monitor_api_v3() -> u32 {
+    3
 }
 
 #[napi]

@@ -134,11 +134,11 @@ export declare function isAccessibilityTrusted(): boolean
 export declare function typeText(text: string): TypeTextResult
 /**
  * macOS-only active, head-inserted HID event tap. It observes global Escape
- * down/up without consuming them. Standalone Fn down/up are consumed; other
- * key combinations pass through and invalidate the Fn gesture. It fails closed
- * with `hid-event-tap-registration-failed` rather than silently using a later
- * session tap. `active` proves installation only; physical Globe/emoji
- * suppression still requires an Electron downstream hardware probe.
+ * down/up without consuming them. Standalone Fn edges are delivered to the
+ * listener before their Fn flag is cleared and the original event is forwarded.
+ * Other key combinations pass through and invalidate the Fn gesture. No system
+ * preferences are changed. HID registration failure is explicit; `active` alone
+ * does not prove the user-visible behavior on a particular keyboard.
  */
 export declare function startFunctionKeyMonitor(listener: (event: FunctionKeyEvent) => void): FunctionKeyMonitorStart
 /** Stop the active Fn monitor. Safe when no monitor exists. */

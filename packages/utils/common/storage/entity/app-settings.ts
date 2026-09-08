@@ -200,6 +200,10 @@ const _appSettingOriginData = {
     cooldownMs: 2200,
     openPanelOnWake: true,
   },
+  voiceInput: {
+    enabled: false,
+    language: 'zh-CN',
+  },
   clipboard: {
     /**
      * 剪贴板内容分类与按类保留。
@@ -503,4 +507,46 @@ export const appSettingOriginData = Object.freeze(_appSettingOriginData)
  */
 export type AppSetting = typeof _appSettingOriginData & {
   [key: string]: any
+}
+
+export interface VoiceInputSetting {
+  enabled: boolean
+  language: string
+}
+
+function isSettingRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Adds the dedicated dictation switch exactly once. Existing voiceInput data
+ * always wins, including an explicit false; only a missing field derives the
+ * prior combined voice gate.
+ */
+export function ensureVoiceInputSetting(setting: Record<string, unknown>): boolean {
+  const hasVoiceInput = Object.prototype.hasOwnProperty.call(setting, 'voiceInput')
+  const legacyAssistant = isSettingRecord(setting.assistant) ? setting.assistant : {}
+  const legacyVoiceWake = isSettingRecord(setting.voiceWake) ? setting.voiceWake : {}
+
+  if (!hasVoiceInput) {
+    setting.voiceInput = {
+      enabled: legacyAssistant.enabled === true && legacyVoiceWake.enabled === true,
+      language:
+        typeof legacyVoiceWake.language === 'string' && legacyVoiceWake.language.trim()
+          ? legacyVoiceWake.language
+          : 'zh-CN'
+    }
+    return true
+  }
+
+  const source = isSettingRecord(setting.voiceInput) ? setting.voiceInput : {}
+  const enabled = typeof source.enabled === 'boolean' ? source.enabled : false
+  const language =
+    typeof source.language === 'string' && source.language.trim() ? source.language : 'zh-CN'
+  if (isSettingRecord(setting.voiceInput) && source.enabled === enabled && source.language === language) {
+    return false
+  }
+
+  setting.voiceInput = { ...source, enabled, language }
+  return true
 }

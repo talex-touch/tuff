@@ -26,7 +26,10 @@ import type {
   AssistantScreenshotTranslatePayload,
   AssistantScreenshotTranslateResponse
 } from '@talex-touch/utils/transport/events/assistant'
-import type { AssistantVoiceCommandPayload } from '@talex-touch/utils/transport/events/assistant'
+import type {
+  AssistantVoiceCancelHoldPayload,
+  AssistantVoiceCommandPayload
+} from '@talex-touch/utils/transport/events/assistant'
 import type {
   IntelligenceErrorCode,
   NativeScreenshotCaptureRequest,
@@ -73,13 +76,9 @@ interface FloatingBallSetting {
   position: FloatingBallPosition
 }
 
-interface VoiceWakeSetting {
+interface VoiceInputSetting {
   enabled: boolean
-  wakeWords: string[]
   language: string
-  continuous: boolean
-  cooldownMs: number
-  openPanelOnWake: boolean
 }
 
 type ScreenshotUnavailableCode =
@@ -126,6 +125,7 @@ const DEFAULT_WAKE_COOLDOWN = 2200
 const ASSISTANT_SCREENSHOT_TRANSLATE_CALLER = 'core.assistant.screenshot-translate'
 const ASSISTANT_SCREENSHOT_FALLBACK_SOURCE = 'assistant-screenshot-ocr-fallback'
 
+const ESCAPE_CANCEL_HOLD_MS = 600
 function clamp(value: number, min: number, max: number): number {
   if (value < min) return min
   if (value > max) return max
@@ -266,10 +266,10 @@ export class AssistantModule extends BaseModule {
   private voiceDockWindowPending: Promise<TouchWindow> | null = null
   private voiceDockExpanded = false
   private voiceCommandStartPending: Promise<void> | null = null
-  private voiceCommandStopPending = false
-  private voicePanelAutoHideSuppressionDepth = 0
-  private voicePanelAutoHideResumeTimer: NodeJS.Timeout | null = null
-  private voicePanelFocusSuppressed = false
+  private voiceCommandStopPending: AssistantVoiceCommandPayload | null = null
+  private escapeCancelTimer: NodeJS.Timeout | null = null
+  private escapeCancelHolding = false
+  private escapeCancelCommitted = false
   private pendingPosition: FloatingBallPosition | null = null
   private positionSaveTimer: NodeJS.Timeout | null = null
   private readonly handleDisplayTopologyChange = (): void => {
@@ -279,14 +279,16 @@ export class AssistantModule extends BaseModule {
     }
 
     const setting = this.readAppSetting()
-    const floatingSetting = this.getFloatingBallSetting(setting)
-    if (!this.isAssistantEnabled(setting) || !floatingSetting.enabled) {
+    if (this.voiceDockExpanded) {
+      if (!this.getVoiceInputSetting(setting).enabled || !dock.window.isVisible()) {
+        return
+      }
+      this.applyVoiceDockBounds(dock, dock.window.getBounds())
       return
     }
 
-    if (this.voiceDockExpanded) {
-      if (!dock.window.isVisible()) return
-      this.applyVoiceDockBounds(dock, dock.window.getBounds())
+    const floatingSetting = this.getFloatingBallSetting(setting)
+    if (!this.isAssistantEnabled(setting) || !floatingSetting.enabled) {
       return
     }
 
@@ -319,16 +321,11 @@ export class AssistantModule extends BaseModule {
       clearTimeout(this.positionSaveTimer)
       this.positionSaveTimer = null
     }
-    if (this.voicePanelAutoHideResumeTimer) {
-      clearTimeout(this.voicePanelAutoHideResumeTimer)
-      this.voicePanelAutoHideResumeTimer = null
-    }
+    this.resetEscapeCancelHold(false, true)
     this.pendingPosition = null
     this.voiceDockExpanded = false
     this.voiceCommandStartPending = null
-    this.voiceCommandStopPending = false
-    this.voicePanelAutoHideSuppressionDepth = 0
-    this.voicePanelFocusSuppressed = false
+    this.voiceCommandStopPending = null
     this.unsubscribeAppSetting?.()
     this.unsubscribeAppSetting = null
 
@@ -602,43 +599,43 @@ export class AssistantModule extends BaseModule {
     }
   }
 
-  private getVoiceWakeSetting(setting: AppSetting): VoiceWakeSetting {
-    const source = setting.voiceWake as Partial<VoiceWakeSetting> | undefined
-    const wakeWords = Array.isArray(source?.wakeWords) ? source.wakeWords.filter(Boolean) : []
+  private getVoiceInputSetting(setting: AppSetting): VoiceInputSetting {
+    const source = setting.voiceInput as Partial<VoiceInputSetting> | undefined
     return {
       enabled: source?.enabled === true,
-      wakeWords: wakeWords.length ? wakeWords : [...DEFAULT_WAKE_WORDS],
       language:
         typeof source?.language === 'string' && source.language.trim()
           ? source.language
-          : DEFAULT_WAKE_LANGUAGE,
-      continuous: source?.continuous !== false,
-      cooldownMs: Number.isFinite(source?.cooldownMs)
-        ? Math.max(500, Number(source?.cooldownMs))
-        : DEFAULT_WAKE_COOLDOWN,
-      openPanelOnWake: source?.openPanelOnWake !== false
+          : appSettingOriginData.voiceInput.language
     }
   }
 
   private buildRuntimeConfig(setting: AppSetting): AssistantRuntimeConfig {
-    const voiceWake = this.getVoiceWakeSetting(setting)
+    const voiceInput = this.getVoiceInputSetting(setting)
     return {
-      enabled: this.isAssistantEnabled(setting) && voiceWake.enabled,
-      language: voiceWake.language
+      enabled: voiceInput.enabled,
+      language: voiceInput.language
     }
   }
 
   private async applySettingSnapshot(setting: AppSetting): Promise<void> {
-    if (!this.isAssistantEnabled(setting)) {
-      this.hideVoicePanel()
-      this.destroyVoiceDockWindow()
-      return
+    const voiceInput = this.getVoiceInputSetting(setting)
+    const floatingBall = this.getFloatingBallSetting(setting)
+    const showFloatingBall = this.isAssistantEnabled(setting) && floatingBall.enabled
+
+    if (!voiceInput.enabled) {
+      this.stopActiveVoiceInput()
+      if (this.voiceDockExpanded) {
+        this.collapseVoicePanel()
+      }
     }
 
-    const floatingBall = this.getFloatingBallSetting(setting)
-    if (!floatingBall.enabled) {
-      this.hideVoicePanel()
-      this.destroyVoiceDockWindow()
+    if (!showFloatingBall) {
+      // A hidden assistant ball must not tear down an active dictation HUD. It is a separate
+      // temporary surface that can be opened by Fn even when the resting ball is disabled.
+      if (!this.voiceDockExpanded) {
+        this.hideVoicePanel()
+      }
       return
     }
 
@@ -763,22 +760,10 @@ export class AssistantModule extends BaseModule {
     touchWindow.window.setFullScreenable(false)
     touchWindow.window.setSkipTaskbar(true)
 
-    touchWindow.window.on('blur', () => {
-      if (this.voicePanelAutoHideSuppressionDepth > 0) {
-        return
-      }
-      if (
-        this.voiceDockExpanded &&
-        !touchWindow.window.isDestroyed() &&
-        touchWindow.window.isVisible()
-      ) {
-        this.collapseVoicePanel()
-      }
-    })
-
     touchWindow.window.on('closed', () => {
       if (this.voiceDockWindow === touchWindow) {
         this.voiceDockWindow = null
+        this.resetEscapeCancelHold(false, true)
         this.voiceDockExpanded = false
       }
     })
@@ -891,44 +876,63 @@ export class AssistantModule extends BaseModule {
     )
   }
 
+  private stopActiveVoiceInput(): void {
+    this.resetEscapeCancelHold(false, true)
+    if (this.voiceCommandStartPending || this.voiceDockWindowPending) {
+      this.voiceCommandStopPending = { action: 'stop', mode: 'toggle', source: 'command' }
+    }
+    const dock = this.voiceDockWindow
+    if (!this.voiceDockExpanded || !dock || dock.window.isDestroyed() || !this.transport) {
+      return
+    }
+    this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, {
+      action: 'stop',
+      mode: 'toggle',
+      source: 'command'
+    })
+  }
+
   async handleVoiceCommandGesture(payload: AssistantVoiceCommandPayload): Promise<void> {
+    if (payload.action === 'cancel') {
+      this.handleVoiceCancelGesture(payload.state)
+      return
+    }
+
     const setting = this.readAppSetting()
-    if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
+    if (!this.getVoiceInputSetting(setting).enabled) {
+      return
+    }
+    if (payload.action === 'toggle' && this.voiceCommandStartPending) {
+      this.voiceCommandStopPending = { action: 'stop', mode: 'toggle', source: 'command' }
       return
     }
     if (payload.action === 'stop') {
       if (!this.voiceDockExpanded) {
         if (this.voiceCommandStartPending || this.voiceDockWindowPending) {
-          this.voiceCommandStopPending = true
+          this.voiceCommandStopPending = payload
         }
         return
       }
       const dock = this.voiceDockWindow
       if (!dock || dock.window.isDestroyed() || !this.transport) return
-      this.voiceCommandStopPending = false
+      this.voiceCommandStopPending = null
       this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, payload)
       return
     }
 
+    this.resetEscapeCancelHold(false, true)
     // A compact dock has no mounted VoicePanel yet. `panelOpened` starts the session after the
     // renderer has mounted; sending a second command here can race that handoff and leave the
     // first session reset by `openPanel()`.
     if (this.voiceCommandStartPending) return
     if (!this.voiceDockExpanded) {
-      this.voiceCommandStopPending = false
-      this.voicePanelFocusSuppressed = true
-      const opening = (async (): Promise<void> => {
-        try {
-          await this.showVoicePanel('command')
-        } finally {
-          this.voicePanelFocusSuppressed = false
-        }
-      })()
+      this.voiceCommandStopPending = null
+      const opening = this.showVoicePanel('command')
       this.voiceCommandStartPending = opening
       try {
         await opening
       } catch {
-        this.voiceCommandStopPending = false
+        this.voiceCommandStopPending = null
         return
       } finally {
         if (this.voiceCommandStartPending === opening) {
@@ -936,11 +940,20 @@ export class AssistantModule extends BaseModule {
         }
       }
 
+      if (this.escapeCancelCommitted) {
+        this.voiceCommandStopPending = null
+        return
+      }
       if (this.voiceCommandStopPending) {
-        this.voiceCommandStopPending = false
+        const stopPayload = this.voiceCommandStopPending
+        this.voiceCommandStopPending = null
         const dock = this.voiceDockWindow
         if (dock && !dock.window.isDestroyed() && this.transport) {
-          this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, payload)
+          this.transport.broadcastToWindow(
+            dock.window.id,
+            AssistantEvents.voice.command,
+            stopPayload
+          )
         }
       }
       return
@@ -951,40 +964,62 @@ export class AssistantModule extends BaseModule {
     this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, payload)
   }
 
-  private async showVoicePanel(source: string): Promise<void> {
-    const setting = this.readAppSetting()
-    if (!this.isAssistantEnabled(setting)) {
+  private handleVoiceCancelGesture(state: 'start' | 'reset'): void {
+    if (state === 'reset') {
+      this.resetEscapeCancelHold(true)
       return
     }
+    if (!this.isVoiceCommandActive() || this.escapeCancelHolding) return
 
-    const floatingSetting = this.getFloatingBallSetting(setting)
-    if (!floatingSetting.enabled) {
+    this.escapeCancelHolding = true
+    this.broadcastVoiceCancelHold('start')
+    this.escapeCancelTimer = setTimeout(() => {
+      this.escapeCancelTimer = null
+      if (!this.escapeCancelHolding) return
+      this.escapeCancelHolding = false
+      this.escapeCancelCommitted = true
+      this.broadcastVoiceCancelHold('commit')
+    }, ESCAPE_CANCEL_HOLD_MS)
+  }
+
+  private resetEscapeCancelHold(notify: boolean, clearCommit = false): void {
+    const wasHolding = this.escapeCancelHolding || this.escapeCancelTimer !== null
+    if (this.escapeCancelTimer) {
+      clearTimeout(this.escapeCancelTimer)
+      this.escapeCancelTimer = null
+    }
+    this.escapeCancelHolding = false
+    if (clearCommit) this.escapeCancelCommitted = false
+    if (notify && wasHolding) this.broadcastVoiceCancelHold('reset')
+  }
+
+  private broadcastVoiceCancelHold(state: AssistantVoiceCancelHoldPayload['state']): void {
+    const dock = this.voiceDockWindow
+    if (!dock || dock.window.isDestroyed() || !this.transport) return
+    this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.cancelHold, { state })
+  }
+
+  private async showVoicePanel(source: string): Promise<void> {
+    if (!this.getVoiceInputSetting(this.readAppSetting()).enabled) {
       return
     }
 
     const dock = await this.ensureVoiceDockWindow()
+    if (!this.getVoiceInputSetting(this.readAppSetting()).enabled || this.escapeCancelCommitted) {
+      return
+    }
     const anchorBounds = dock.window.getBounds()
 
-    this.beginVoicePanelAutoHideSuppression()
-    try {
-      this.voiceDockExpanded = true
-      this.applyVoiceDockBounds(dock, anchorBounds)
-      const shouldFocus = !this.voicePanelFocusSuppressed && source !== 'click'
-      if (!dock.window.isVisible()) {
-        if (shouldFocus) dock.window.show()
-        else dock.window.showInactive()
-      }
-      if (shouldFocus) {
-        dock.window.focus()
-      }
+    this.voiceDockExpanded = true
+    this.applyVoiceDockBounds(dock, anchorBounds)
+    if (!dock.window.isVisible()) {
+      dock.window.showInactive()
+    }
 
-      if (this.transport) {
-        this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.panelOpened, {
-          source
-        })
-      }
-    } finally {
-      this.releaseVoicePanelAutoHideSuppression()
+    if (this.transport) {
+      this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.panelOpened, {
+        source
+      })
     }
   }
 
@@ -997,15 +1032,23 @@ export class AssistantModule extends BaseModule {
   }
 
   private collapseVoicePanel(): void {
+    this.voiceCommandStopPending = null
+    this.resetEscapeCancelHold(false, true)
     const dock = this.voiceDockWindow
     if (!dock || dock.window.isDestroyed() || !this.voiceDockExpanded) {
       return
     }
 
     this.voiceDockExpanded = false
-    this.applyFloatingBallBounds(dock, this.getFloatingBallSetting(this.readAppSetting()))
-    if (!dock.window.isVisible()) {
-      dock.window.showInactive()
+    const setting = this.readAppSetting()
+    const floatingBall = this.getFloatingBallSetting(setting)
+    if (this.isAssistantEnabled(setting) && floatingBall.enabled) {
+      this.applyFloatingBallBounds(dock, floatingBall)
+      if (!dock.window.isVisible()) {
+        dock.window.showInactive()
+      }
+    } else {
+      dock.window.hide()
     }
     this.transport?.broadcastToWindow(dock.window.id, AssistantEvents.voice.panelClosed, undefined)
   }
@@ -1036,27 +1079,6 @@ export class AssistantModule extends BaseModule {
       assistantLog.warn('Failed to open Intelligence settings from Assistant', { error })
       return false
     }
-  }
-
-  private beginVoicePanelAutoHideSuppression(): void {
-    if (this.voicePanelAutoHideResumeTimer) {
-      clearTimeout(this.voicePanelAutoHideResumeTimer)
-      this.voicePanelAutoHideResumeTimer = null
-    }
-    this.voicePanelAutoHideSuppressionDepth += 1
-  }
-
-  private releaseVoicePanelAutoHideSuppression(): void {
-    if (this.voicePanelAutoHideResumeTimer) {
-      clearTimeout(this.voicePanelAutoHideResumeTimer)
-    }
-    this.voicePanelAutoHideResumeTimer = setTimeout(() => {
-      this.voicePanelAutoHideResumeTimer = null
-      this.voicePanelAutoHideSuppressionDepth = Math.max(
-        0,
-        this.voicePanelAutoHideSuppressionDepth - 1
-      )
-    }, 600)
   }
 
   private async handleVoiceSubmit(
@@ -1127,35 +1149,30 @@ export class AssistantModule extends BaseModule {
       }
     }
 
-    this.beginVoicePanelAutoHideSuppression()
-    try {
-      const result = await translateClipboardImage(targetLang || 'zh', {
-        openPinWindow: true
-      })
-      if (!result.success) {
-        const code = isIntelligenceErrorCode(result.code)
-          ? result.code
-          : result.code === 'SCENE_UNAVAILABLE'
-            ? 'SCENE_UNAVAILABLE'
-            : 'IMAGE_UNAVAILABLE'
-        return {
-          success: false,
-          code,
-          error: result.error,
-          reason: result.reason,
-          recovery: result.recovery
-        }
-      }
-
+    const result = await translateClipboardImage(targetLang || 'zh', {
+      openPinWindow: true
+    })
+    if (!result.success) {
+      const code = isIntelligenceErrorCode(result.code)
+        ? result.code
+        : result.code === 'SCENE_UNAVAILABLE'
+          ? 'SCENE_UNAVAILABLE'
+          : 'IMAGE_UNAVAILABLE'
       return {
-        success: true,
-        translatedImageBase64: result.translatedImageBase64,
-        sourceText: result.sourceText,
-        targetText: result.targetText,
-        metadata: result.metadata
+        success: false,
+        code,
+        error: result.error,
+        reason: result.reason,
+        recovery: result.recovery
       }
-    } finally {
-      this.releaseVoicePanelAutoHideSuppression()
+    }
+
+    return {
+      success: true,
+      translatedImageBase64: result.translatedImageBase64,
+      sourceText: result.sourceText,
+      targetText: result.targetText,
+      metadata: result.metadata
     }
   }
 
@@ -1171,7 +1188,6 @@ export class AssistantModule extends BaseModule {
       }
     }
 
-    this.beginVoicePanelAutoHideSuppression()
     try {
       const screenshotService = getNativeScreenshotService()
       let captureResult = managedCaptureResult(payload)
@@ -1218,8 +1234,6 @@ export class AssistantModule extends BaseModule {
         code: mapScreenshotUnavailableCode(error),
         error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
       }
-    } finally {
-      this.releaseVoicePanelAutoHideSuppression()
     }
   }
 
@@ -1235,7 +1249,6 @@ export class AssistantModule extends BaseModule {
       }
     }
 
-    this.beginVoicePanelAutoHideSuppression()
     let ownedTempArtifactUrl: string | undefined
     let ownsCaptureArtifact = false
     try {
@@ -1319,7 +1332,6 @@ export class AssistantModule extends BaseModule {
           // Scheduled retention remains the fallback if eager release fails.
         }
       }
-      this.releaseVoicePanelAutoHideSuppression()
     }
   }
 
@@ -1445,81 +1457,78 @@ export class AssistantModule extends BaseModule {
       }
     }
 
-    this.beginVoicePanelAutoHideSuppression()
+    let screenshotDataUrl = ''
+    let imageBase64 = ''
     try {
-      let screenshotDataUrl = ''
-      let imageBase64 = ''
-      try {
-        const screenshotService = getNativeScreenshotService()
-        const managed = managedCaptureResult(payload)
-        if (payload?.target === 'resource' && !managed) {
-          return {
-            success: false,
-            code: 'SCREENSHOT_UNAVAILABLE',
-            error: 'Screenshot resource is invalid.'
-          }
-        }
-        const captureResult =
-          managed ??
-          (await screenshotService.capture({
-            ...normalizeScreenshotTarget(payload),
-            writeClipboard: false
-          }))
-        const imageBuffer = await screenshotService.readCaptureResource(captureResult.tfileUrl)
-        imageBase64 = imageBuffer.toString('base64')
-        screenshotDataUrl = `data:${captureResult.mimeType};base64,${imageBase64}`
-      } catch (error) {
-        return {
-          success: false,
-          code: mapScreenshotUnavailableCode(error),
-          error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
-        }
-      }
-
-      if (!imageBase64) {
+      const screenshotService = getNativeScreenshotService()
+      const managed = managedCaptureResult(payload)
+      if (payload?.target === 'resource' && !managed) {
         return {
           success: false,
           code: 'SCREENSHOT_UNAVAILABLE',
-          error: 'Screenshot image is unavailable.'
+          error: 'Screenshot resource is invalid.'
         }
       }
-
-      const targetLang = payload?.targetLang?.trim() || 'zh'
-      const result = await translateImageBase64(imageBase64, targetLang, {
-        openPinWindow: true
-      })
-      if (!result.success) {
-        if (result.code === 'SCENE_UNAVAILABLE' || isIntelligenceErrorCode(result.code)) {
-          const degradedReason: AssistantScreenshotFallbackReason = `IMAGE_TRANSLATE_${result.code}`
-          return await this.translateScreenshotWithOcrFallback(
-            screenshotDataUrl,
-            targetLang,
-            degradedReason
-          )
-        }
-        return {
-          success: false,
-          code: 'IMAGE_UNAVAILABLE',
-          error: result.error,
-          reason: result.reason,
-          recovery: result.recovery
-        }
-      }
-
+      const captureResult =
+        managed ??
+        (await screenshotService.capture({
+          ...normalizeScreenshotTarget(payload),
+          writeClipboard: false
+        }))
+      const imageBuffer = await screenshotService.readCaptureResource(captureResult.tfileUrl)
+      imageBase64 = imageBuffer.toString('base64')
+      screenshotDataUrl = `data:${captureResult.mimeType};base64,${imageBase64}`
+    } catch (error) {
       return {
-        success: true,
-        mode: 'translated-image',
-        translatedImageBase64: result.translatedImageBase64,
-        sourceText: result.sourceText,
-        targetText: result.targetText,
-        metadata: result.metadata
+        success: false,
+        code: mapScreenshotUnavailableCode(error),
+        error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
       }
-    } finally {
-      this.releaseVoicePanelAutoHideSuppression()
+    }
+
+    if (!imageBase64) {
+      return {
+        success: false,
+        code: 'SCREENSHOT_UNAVAILABLE',
+        error: 'Screenshot image is unavailable.'
+      }
+    }
+
+    const targetLang = payload?.targetLang?.trim() || 'zh'
+    const result = await translateImageBase64(imageBase64, targetLang, {
+      openPinWindow: true
+    })
+    if (!result.success) {
+      if (result.code === 'SCENE_UNAVAILABLE' || isIntelligenceErrorCode(result.code)) {
+        const degradedReason: AssistantScreenshotFallbackReason = `IMAGE_TRANSLATE_${result.code}`
+        return await this.translateScreenshotWithOcrFallback(
+          screenshotDataUrl,
+          targetLang,
+          degradedReason
+        )
+      }
+      return {
+        success: false,
+        code: 'IMAGE_UNAVAILABLE',
+        error: result.error,
+        reason: result.reason,
+        recovery: result.recovery
+      }
+    }
+
+    return {
+      success: true,
+      mode: 'translated-image',
+      translatedImageBase64: result.translatedImageBase64,
+      sourceText: result.sourceText,
+      targetText: result.targetText,
+      metadata: result.metadata
     }
   }
 
   private destroyVoiceDockWindow(): void {
+    this.resetEscapeCancelHold(false, true)
+    this.voiceCommandStopPending = null
     if (!this.voiceDockWindow || this.voiceDockWindow.window.isDestroyed()) {
       return
     }

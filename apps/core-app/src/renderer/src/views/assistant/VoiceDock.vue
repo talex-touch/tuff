@@ -1,5 +1,8 @@
 <script lang="ts" setup name="VoiceDock">
-import type { AssistantVoiceCommandPayload } from '@talex-touch/utils/transport/events/assistant'
+import type {
+  AssistantVoiceCancelHoldPayload,
+  AssistantVoiceCommandPayload
+} from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -10,6 +13,8 @@ type VoicePanelHandle = {
   openPanel: (source?: string) => Promise<void>
   startVoiceInput: () => void
   stopVoiceInput: () => void
+  toggleVoiceInput: () => void
+  handleCancelHold: (state: AssistantVoiceCancelHoldPayload['state']) => void
 }
 
 const transport = useTuffTransport()
@@ -23,6 +28,8 @@ let pendingStop = false
 let disposePanelOpened: (() => void) | null = null
 let disposePanelClosed: (() => void) | null = null
 let disposeCommand: (() => void) | null = null
+let disposeCancelHold: (() => void) | null = null
+let pendingCancelHold: AssistantVoiceCancelHoldPayload['state'] | null = null
 
 /**
  * Resolve once VoicePanel actually exists.
@@ -53,6 +60,7 @@ function startVoiceInputOnce(): void {
 
 async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
   if (expanded.value && (panel.value || panelReady)) return
+  cancelPendingClose()
   const generation = ++dockGeneration
   expanded.value = true
   voiceStartIssued = false
@@ -73,6 +81,15 @@ async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
   // the shared session once the panel has reset its state. A repeated command notification is
   // harmless because the start gate below is idempotent.
   if (generation !== dockGeneration || !expanded.value) return
+  if (pendingCancelHold !== null) {
+    const state = pendingCancelHold
+    pendingCancelHold = null
+    panel.value?.handleCancelHold(state)
+    if (state === 'commit') {
+      handlePanelFinished(generation)
+      return
+    }
+  }
   if (pendingStop) {
     pendingStop = false
     handlePanelFinished(generation)
@@ -127,6 +144,7 @@ function handlePanelFinished(generation?: number): void {
   panel.value = null
   voiceStartIssued = false
   pendingStop = false
+  pendingCancelHold = null
   panelReady = null
   cancelPendingClose()
   closeFallbackTimer = setTimeout(sendClose, SURFACE_CLOSE_FALLBACK_MS)
@@ -142,9 +160,19 @@ function handlePanelClosed(): void {
   voiceStartIssued = false
   pendingStop = false
   panelReady = null
+  pendingCancelHold = null
+}
+
+function handleCancelHold(payload: AssistantVoiceCancelHoldPayload): void {
+  if (expanded.value && panel.value && !panelReady) {
+    panel.value.handleCancelHold(payload.state)
+    return
+  }
+  pendingCancelHold = payload.state
 }
 
 async function handleCommand(payload: AssistantVoiceCommandPayload): Promise<void> {
+  if (payload.action === 'cancel') return
   const generation = dockGeneration
   if (payload.action === 'stop') {
     pendingStop = true
@@ -172,7 +200,9 @@ async function handleCommand(payload: AssistantVoiceCommandPayload): Promise<voi
   const ready = panelReady
   if (ready) await ready
   if (generation !== dockGeneration || !expanded.value) return
-  startVoiceInputOnce()
+  voiceStartIssued = true
+  if (payload.action === 'toggle') panel.value?.toggleVoiceInput()
+  else panel.value?.startVoiceInput()
 }
 
 onMounted(() => {
@@ -185,6 +215,9 @@ onMounted(() => {
   disposeCommand = transport.on(AssistantEvents.voice.command, (payload) => {
     void handleCommand(payload)
   })
+  disposeCancelHold = transport.on(AssistantEvents.voice.cancelHold, (payload) => {
+    handleCancelHold(payload)
+  })
 })
 
 onBeforeUnmount(() => {
@@ -196,6 +229,9 @@ onBeforeUnmount(() => {
   disposePanelClosed = null
   disposeCommand?.()
   disposeCommand = null
+  disposeCancelHold?.()
+  disposeCancelHold = null
+  pendingCancelHold = null
 })
 </script>
 

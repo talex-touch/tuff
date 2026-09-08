@@ -19,6 +19,8 @@ interface VoiceGestureKeyEvent {
 interface VoiceGestureKeyListener {
   onKeyDown?: (event: VoiceGestureKeyEvent) => void
   onKeyUp?: (event: VoiceGestureKeyEvent) => void
+  onEscapeKeyDown?: () => void
+  onEscapeKeyUp?: () => void
   onOtherKeyDown?: () => void
   onReset?: () => void
 }
@@ -27,8 +29,20 @@ type VoiceGestureKeyRegistrar = (listener: VoiceGestureKeyListener) => () => voi
 
 const registerPrimaryModifierGesture: VoiceGestureKeyRegistrar = (listener) =>
   omniPanelModule.registerGlobalKeyListener({
-    onKeyDown: (event) => listener.onKeyDown?.({ hasOtherKeys: event.hasOtherKeys }),
-    onKeyUp: (event) => listener.onKeyUp?.({ hasOtherKeys: event.hasOtherKeys }),
+    onKeyDown: (event) => {
+      if (event.key === 'escape') {
+        listener.onEscapeKeyDown?.()
+        return
+      }
+      listener.onKeyDown?.({ hasOtherKeys: event.hasOtherKeys })
+    },
+    onKeyUp: (event) => {
+      if (event.key === 'escape') {
+        listener.onEscapeKeyUp?.()
+        return
+      }
+      listener.onKeyUp?.({ hasOtherKeys: event.hasOtherKeys })
+    },
     onOtherKeyDown: () => listener.onOtherKeyDown?.()
   })
 
@@ -44,6 +58,10 @@ export const registerPlatformVoiceGesture: VoiceGestureKeyRegistrar = (listener)
         listener.onKeyDown?.({ hasOtherKeys: event.hasOtherKeys })
       } else if (event.type === 'up') {
         listener.onKeyUp?.({})
+      } else if (event.type === 'escape-down') {
+        listener.onEscapeKeyDown?.()
+      } else if (event.type === 'escape-up') {
+        listener.onEscapeKeyUp?.()
       } else if (event.type === 'reset') {
         listener.onReset?.()
       } else {
@@ -69,11 +87,7 @@ export const registerPlatformVoiceGesture: VoiceGestureKeyRegistrar = (listener)
 }
 
 function isVoiceGestureEnabled(setting: AppSetting): boolean {
-  return (
-    setting.assistant?.enabled === true &&
-    setting.floatingBall?.enabled === true &&
-    setting.voiceWake?.enabled === true
-  )
+  return setting.voiceInput?.enabled === true
 }
 
 /**
@@ -91,7 +105,7 @@ export class CommandVoiceGestureController {
   private enabled = false
   private commandDown = false
   private holdStarted = false
-  private toggleActive = false
+  private escapeDown = false
   private registrationGeneration = 0
 
   constructor(
@@ -116,7 +130,7 @@ export class CommandVoiceGestureController {
     this.enabled = false
     this.clearHoldTimer()
 
-    if (this.holdStarted || this.toggleActive) {
+    if (this.holdStarted || this.readVoiceSessionActive()) {
       this.dispatch({
         action: 'stop',
         mode: this.holdStarted ? 'hold' : 'toggle',
@@ -124,9 +138,9 @@ export class CommandVoiceGestureController {
       })
     }
 
+    this.resetEscapeGesture()
     this.commandDown = false
     this.holdStarted = false
-    this.toggleActive = false
     this.disposeGlobalKeyListener?.()
     this.disposeGlobalKeyListener = null
   }
@@ -139,8 +153,9 @@ export class CommandVoiceGestureController {
     const generation = ++this.registrationGeneration
     if (!nextEnabled) {
       this.clearHoldTimer()
+      this.resetEscapeGesture()
       this.commandDown = false
-      if (this.holdStarted || this.toggleActive) {
+      if (this.holdStarted || this.readVoiceSessionActive()) {
         this.dispatch({
           action: 'stop',
           mode: this.holdStarted ? 'hold' : 'toggle',
@@ -148,7 +163,6 @@ export class CommandVoiceGestureController {
         })
       }
       this.holdStarted = false
-      this.toggleActive = false
       this.disposeGlobalKeyListener?.()
       this.disposeGlobalKeyListener = null
       return
@@ -165,8 +179,16 @@ export class CommandVoiceGestureController {
       onOtherKeyDown: () => {
         if (current()) this.handleOtherKeyDown()
       },
+      onEscapeKeyDown: () => {
+        if (current()) this.handleEscapeKeyDown()
+      },
+      onEscapeKeyUp: () => {
+        if (current()) this.handleEscapeKeyUp()
+      },
       onReset: () => {
-        if (current()) this.cancelCombinedGesture()
+        if (!current()) return
+        this.cancelCombinedGesture()
+        this.resetEscapeGesture()
       }
     })
   }
@@ -180,9 +202,6 @@ export class CommandVoiceGestureController {
 
   private handleKeyDown(event: VoiceGestureKeyEvent): void {
     if (!this.enabled) return
-    if (this.toggleActive && !this.readVoiceSessionActive()) {
-      this.toggleActive = false
-    }
     if (event.hasOtherKeys) {
       this.cancelCombinedGesture()
       return
@@ -206,8 +225,9 @@ export class CommandVoiceGestureController {
   }
 
   private handleOtherKeyDown(): void {
-    if (!this.enabled || !this.commandDown) return
-    this.cancelCombinedGesture()
+    if (!this.enabled) return
+    this.resetEscapeGesture()
+    if (this.commandDown) this.cancelCombinedGesture()
   }
 
   private cancelCombinedGesture(): void {
@@ -221,6 +241,22 @@ export class CommandVoiceGestureController {
       mode: 'hold',
       source: 'command'
     })
+  }
+
+  private handleEscapeKeyDown(): void {
+    if (!this.enabled || this.escapeDown) return
+    this.escapeDown = true
+    this.dispatch({ action: 'cancel', state: 'start', source: 'command' })
+  }
+
+  private handleEscapeKeyUp(): void {
+    this.resetEscapeGesture()
+  }
+
+  private resetEscapeGesture(): void {
+    if (!this.escapeDown) return
+    this.escapeDown = false
+    this.dispatch({ action: 'cancel', state: 'reset', source: 'command' })
   }
 
   private handleKeyUp(event: VoiceGestureKeyEvent): void {
@@ -242,14 +278,8 @@ export class CommandVoiceGestureController {
       return
     }
 
-    const voiceSessionActive = this.readVoiceSessionActive()
-    if (this.toggleActive && !voiceSessionActive) {
-      this.toggleActive = false
-    }
-    const wasActive = this.toggleActive || voiceSessionActive
-    this.toggleActive = !wasActive
     this.dispatch({
-      action: wasActive ? 'stop' : 'start',
+      action: 'toggle',
       mode: 'toggle',
       source: 'command'
     })

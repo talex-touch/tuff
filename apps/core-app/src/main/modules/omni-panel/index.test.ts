@@ -1255,4 +1255,40 @@ describe('OmniPanel shortcut and input-hook guards', () => {
     expect(cleanupInputHook).toHaveBeenCalledTimes(1)
     expect(setupInputHook).not.toHaveBeenCalled()
   })
+  it('relays global Escape down and up without requiring a focused VoiceDock', () => {
+    const module = new OmniPanelModule() as unknown as {
+      inputHookKeys: {
+        Ctrl: number
+        CtrlRight: number
+        Meta: number
+        MetaRight: number
+        Escape: number
+      }
+      dispatchGlobalKeyEvent: (direction: 'down' | 'up', event: { keycode: number }) => void
+      registerGlobalKeyListener: (listener: {
+        onKeyDown: (event: { key: string; keycode: number }) => void
+        onKeyUp: (event: { key: string; keycode: number }) => void
+      }) => () => void
+    }
+    module.inputHookKeys = {
+      Ctrl: 29,
+      CtrlRight: 3613,
+      Meta: 3675,
+      MetaRight: 3676,
+      Escape: 1
+    }
+    const transitions: string[] = []
+    const unregister = module.registerGlobalKeyListener({
+      onKeyDown: (event) => transitions.push(`down:${event.key}:${event.keycode}`),
+      onKeyUp: (event) => transitions.push(`up:${event.key}:${event.keycode}`)
+    })
+
+    withPlatform('win32', () => {
+      module.dispatchGlobalKeyEvent('down', { keycode: 1 })
+      module.dispatchGlobalKeyEvent('up', { keycode: 1 })
+    })
+
+    expect(transitions).toEqual(['down:escape:1', 'up:escape:1'])
+    unregister()
+  })
 })

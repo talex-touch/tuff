@@ -14,7 +14,10 @@ import type { ThemeStyleConfig } from '../box-tool/core-box/window'
 import type { FlowConsentSnapshot } from '../flow-bus/flow-consent'
 import type { SentryConfig } from '../sentry/sentry-service'
 import { StorageList } from '@talex-touch/utils'
-import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
+import {
+  appSettingOriginData,
+  ensureVoiceInputSetting
+} from '@talex-touch/utils/common/storage/entity/app-settings'
 import { openersOriginData } from '@talex-touch/utils/common/storage/entity/openers'
 import { shortcutSettingOriginData } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { createDefaultStoreSourcesPayload } from '@talex-touch/utils/store'
@@ -134,10 +137,12 @@ function normalizeObject<T>(value: unknown, fallback: T): T {
 function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
   if (!isPlainObject(value)) return fallback
 
-  const setup = isPlainObject(value.setup) ? value.setup : {}
-  const window = isPlainObject(value.window) ? value.window : {}
-  const omniPanel = isPlainObject(value.omniPanel) ? value.omniPanel : {}
-  const localAiCli = isPlainObject(value.localAiCli) ? value.localAiCli : {}
+  const nextValue = { ...value }
+  ensureVoiceInputSetting(nextValue)
+  const setup = isPlainObject(nextValue.setup) ? nextValue.setup : {}
+  const window = isPlainObject(nextValue.window) ? nextValue.window : {}
+  const omniPanel = isPlainObject(nextValue.omniPanel) ? nextValue.omniPanel : {}
+  const localAiCli = isPlainObject(nextValue.localAiCli) ? nextValue.localAiCli : {}
   const localAiCliProviders = isPlainObject(localAiCli.providers) ? localAiCli.providers : {}
   const providerIds = ['pi', 'codex', 'claude', 'oh-my-pi'] as const
   const normalizedProviders = Object.fromEntries(
@@ -164,10 +169,10 @@ function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
   )
     ? (localAiCli.defaultProvider as AppSetting['localAiCli']['defaultProvider'])
     : fallback.localAiCli.defaultProvider
-  const auth = getAuthSettings(value)
+  const auth = getAuthSettings(nextValue)
 
   return {
-    ...value,
+    ...nextValue,
     ...(auth ? { auth: omitLegacyAuthProtectionFields(auth) } : {}),
     setup: {
       ...setup,
