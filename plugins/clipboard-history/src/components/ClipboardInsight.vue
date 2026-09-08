@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import { computed, ref, watch } from 'vue'
+import { useMaskHostIp } from '~/utils/use-disclosure-state'
 import ClipboardGlyph from './ClipboardGlyph.vue'
 import {
   getClipboardColorTokens,
@@ -11,6 +12,7 @@ import {
   buildCleanLink,
   detectCommand,
   detectSecret,
+  detectSshInfo,
   extractLinks,
   getLinkHost,
   parseLinkParams,
@@ -34,6 +36,30 @@ const textInsight = computed(() => getClipboardTextInsight(props.item))
 const colorTokens = computed(() => getClipboardColorTokens(props.item))
 const secret = computed(() => detectSecret(props.item?.content))
 const command = computed(() => detectCommand(props.item?.content))
+const ssh = computed(() => detectSshInfo(props.item?.content))
+const maskHostIp = useMaskHostIp()
+const revealHost = ref(false)
+
+// 换记录时收回揭示。上一条的主机不该因为选中了新记录还摊在那里。
+watch(
+  () => props.item?.id,
+  () => {
+    revealHost.value = false
+  },
+)
+
+const hostDisplay = computed(() => {
+  const endpoint = ssh.value?.endpoint
+  if (!endpoint) return ''
+  // 域名不掩码——掩掉就看不出连的是哪台了。
+  if (!endpoint.hostIsIp || !maskHostIp.value || revealHost.value) return endpoint.host
+  const tail = endpoint.host.slice(endpoint.host.lastIndexOf('.') + 1)
+  return `${'•'.repeat(Math.max(3, endpoint.host.length - tail.length - 1))}.${tail}`
+})
+
+const hostIsMasked = computed(
+  () => Boolean(ssh.value?.endpoint?.hostIsIp) && maskHostIp.value && !revealHost.value,
+)
 const links = computed(() => extractLinks(props.item?.content))
 
 const primaryColor = computed(() => parseColor(colorTokens.value[0]?.value ?? null))
@@ -148,6 +174,84 @@ function maskParamValue(value: string): string {
       >
         复制去参链接
       </button>
+    </template>
+
+    <template v-else-if="kind === 'ssh' && ssh">
+      <div class="insight-title">
+        <span>SSH</span>
+        <span class="insight-meta">
+          <template v-if="ssh.endpoint">
+            主机端点
+          </template>
+          <template v-else>
+            公钥
+          </template>
+        </span>
+      </div>
+
+      <template v-if="ssh.endpoint">
+        <div v-if="ssh.endpoint.user" class="kv-row">
+          <span class="kv-label">用户</span>
+          <button class="kv-value" type="button" @click="emit('copyText', ssh.endpoint.user)">
+            <span class="kv-text">{{ ssh.endpoint.user }}</span>
+          </button>
+        </div>
+
+        <div class="kv-row">
+          <span class="kv-label">主机</span>
+          <button
+            class="kv-value"
+            type="button"
+            :title="hostIsMasked ? '复制完整主机' : '复制主机'"
+            @click="emit('copyText', ssh.endpoint.host)"
+          >
+            <span class="kv-text" :class="{ muted: hostIsMasked }">{{ hostDisplay }}</span>
+          </button>
+          <button
+            v-if="ssh.endpoint.hostIsIp && maskHostIp"
+            class="kv-tag reveal"
+            type="button"
+            @click="revealHost = !revealHost"
+          >
+            {{ revealHost ? '隐藏' : '显示' }}
+          </button>
+        </div>
+
+        <div v-if="ssh.endpoint.port !== null" class="kv-row">
+          <span class="kv-label">端口</span>
+          <button
+            class="kv-value"
+            type="button"
+            @click="emit('copyText', String(ssh.endpoint.port))"
+          >
+            <span class="kv-text">{{ ssh.endpoint.port }}</span>
+          </button>
+        </div>
+      </template>
+
+      <template v-if="ssh.publicKey">
+        <div class="kv-row">
+          <span class="kv-label">算法</span>
+          <button class="kv-value" type="button" @click="emit('copyText', ssh.publicKey.algorithm)">
+            <span class="kv-text">{{ ssh.publicKey.algorithm }}</span>
+          </button>
+        </div>
+        <div v-if="ssh.publicKey.comment" class="kv-row">
+          <span class="kv-label">注释</span>
+          <button class="kv-value" type="button" @click="emit('copyText', ssh.publicKey.comment)">
+            <span class="kv-text">{{ ssh.publicKey.comment }}</span>
+          </button>
+        </div>
+      </template>
+
+      <p class="insight-note">
+        <template v-if="hostIsMasked">
+          主机地址默认掩码；复制写入的是完整值。
+        </template>
+        <template v-else-if="ssh.publicKey">
+          公钥是公开信息，不做掩码。
+        </template>
+      </p>
     </template>
 
     <template v-else-if="kind === 'secret' && secret">
@@ -429,6 +533,15 @@ button.kv-value:hover {
   color: var(--clipboard-color-accent);
   font-size: 0.66rem;
   font-weight: 600;
+}
+
+/* 揭示开关是可点的，`.kv-tag` 本身只是个静态徽章。 */
+.kv-tag.reveal {
+  cursor: pointer;
+}
+
+.kv-tag.reveal:hover {
+  border-color: color-mix(in srgb, var(--clipboard-color-accent) 60%, transparent);
 }
 
 .kv-tag.danger {

@@ -1,5 +1,9 @@
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
-import type { ClipboardSecretHit } from '@talex-touch/utils/clipboard'
+import type {
+  ClipboardSecretHit,
+  ClipboardSshEndpoint,
+  ClipboardSshPublicKey,
+} from '@talex-touch/utils/clipboard'
 import { classifyClipboardContent, maskSecretSpans } from '@talex-touch/utils/clipboard'
 import {
   getClipboardColorTokens,
@@ -22,9 +26,11 @@ export type ClipboardShape =
   | 'color'
   | 'command'
   | 'secret'
+  | 'ssh'
   | 'favorite'
 
 export type ClipboardInsightKind =
+  | 'ssh'
   | 'link'
   | 'secret'
   | 'command'
@@ -200,13 +206,48 @@ export function readSecretPlainValue(secret: ClipboardSecretInfo, rawContent: st
  * 列表标题：命中密钥就永远只给掩码，没有显示开关。
  * 列表是旁人扫一眼就能看到的表面，它和详情区的可见性不该共享同一个开关。
  */
-export function getClipboardDisplayTitle(item: PluginClipboardItem): string {
-  const secret = detectSecret(item.content)
-  if (!secret) {
+export interface ClipboardMaskOptions {
+  /**
+   * 主机 IP 是否掩码。默认 true。
+   *
+   * 这个开关住在插件侧，因为被开关的行为本身就只发生在插件侧——主进程不掩码自己的
+   * CoreBox 预览（所有密钥今天都如此）。放到主进程的分类设置里，插件反而读不到它。
+   */
+  maskHostIp?: boolean
+}
+
+/**
+ * 整条内容的脱敏呈现：凭据和主机 IP 都打码。
+ *
+ * 和 `detectSecret().maskedContent` 分开，是因为那个函数回答的是「这是不是一条密钥记录」，
+ * 而主机 IP 要掩码但不是密钥。只用 `detectSecret` 的话，一条纯 IP 的记录会因为「不是密钥」
+ * 而完全不掩码。
+ */
+export function getClipboardMaskedContent(
+  rawContent: string | null | undefined,
+  options: ClipboardMaskOptions = {},
+): string {
+  const content = rawContent ?? ''
+  if (!content) {
+    return content
+  }
+
+  const { secrets } = classifyClipboardContent({ type: 'text', content })
+  const hits = options.maskHostIp === false ? secrets.filter(isCredentialHit) : secrets
+  return hits.length > 0 ? maskSecretSpans(content, hits) : content
+}
+
+export function getClipboardDisplayTitle(
+  item: PluginClipboardItem,
+  options: ClipboardMaskOptions = {},
+): string {
+  const content = item.content ?? ''
+  const masked = getClipboardMaskedContent(content, options)
+  if (masked === content) {
     return getClipboardTitle(item)
   }
 
-  return getClipboardTitle({ ...item, content: secret.maskedContent })
+  return getClipboardTitle({ ...item, content: masked })
 }
 
 /**
@@ -216,14 +257,17 @@ export function getClipboardDisplayTitle(item: PluginClipboardItem): string {
 export function getClipboardPreviewText(
   item: PluginClipboardItem,
   reveal: boolean,
+  options: ClipboardMaskOptions = {},
 ): string {
   const content = item.content ?? ''
-  const secret = detectSecret(content)
-  if (!secret) {
+  const masked = getClipboardMaskedContent(content, options)
+  if (masked === content) {
     return content
   }
 
-  return reveal && secret.kind !== 'private-key' ? content : secret.maskedContent
+  // 私钥吞掉 reveal，不依赖调用方记得「私钥不要渲染开关」。
+  const secret = detectSecret(content)
+  return reveal && secret?.kind !== 'private-key' ? content : masked
 }
 
 /**
@@ -352,8 +396,61 @@ export function buildCleanLink(url: string): string {
   }
 }
 
+/**
+ * 一条路径是不是 SSH 相关。
+ *
+ * 这一档走不了共享分类器——`classifyClipboardContent` 只处理 `type === 'text'`，
+ * files 记录进去就直接返回空分类。
+ *
+ * `config` 只在 `.ssh` 目录下才算：单独一个叫 config 的文件到处都是。
+ */
+const SSH_KEY_BASENAMES = /^id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?$/
+const SSH_WELL_KNOWN_BASENAMES = /^(?:known_hosts(?:\.old)?|authorized_keys)$/
+
+export function isSshRelatedPath(rawPath: string): boolean {
+  const path = rawPath.replace(/\\/g, '/')
+  const basename = path.slice(path.lastIndexOf('/') + 1)
+  const inSshDir = /(?:^|\/)\.ssh\//.test(path)
+
+  if (inSshDir) return true
+  if (SSH_KEY_BASENAMES.test(basename)) return true
+  return SSH_WELL_KNOWN_BASENAMES.test(basename)
+}
+
+function hasSshFile(item: PluginClipboardItem): boolean {
+  return parseFileList(item.content).some(isSshRelatedPath)
+}
+
 function hasVideoFile(item: PluginClipboardItem): boolean {
   return parseFileList(item.content).some(path => VIDEO_EXTENSIONS.test(path))
+}
+
+export interface ClipboardSshInfo {
+  endpoint: ClipboardSshEndpoint | null
+  publicKey: ClipboardSshPublicKey | null
+}
+
+/**
+ * SSH / 主机端点信息，没有则返回 null。
+ *
+ * 判定全在共享分类器里，这里只是把两个产物收成一个「有没有」的问句，
+ * 免得每个调用点都要写 `endpoint || publicKey`。
+ */
+export function detectSshInfo(rawContent: string | null | undefined): ClipboardSshInfo | null {
+  const content = rawContent ?? ''
+  if (!content) {
+    return null
+  }
+
+  const { sshEndpoint, publicKey } = (() => {
+    const result = classifyClipboardContent({ type: 'text', content })
+    return { sshEndpoint: result.sshEndpoint, publicKey: result.sshPublicKey }
+  })()
+
+  if (!sshEndpoint && !publicKey) {
+    return null
+  }
+  return { endpoint: sshEndpoint, publicKey }
 }
 
 export function classifyClipboardItem(item: PluginClipboardItem): ClipboardShape[] {
@@ -373,6 +470,9 @@ export function classifyClipboardItem(item: PluginClipboardItem): ClipboardShape
     if (hasVideoFile(item)) {
       shapes.add('video')
     }
+    if (hasSshFile(item)) {
+      shapes.add('ssh')
+    }
     return Array.from(shapes)
   }
 
@@ -383,6 +483,9 @@ export function classifyClipboardItem(item: PluginClipboardItem): ClipboardShape
 
   if (detectSecret(content) || tags.some(tag => /^(api_key|token|password)$/.test(tag))) {
     shapes.add('secret')
+  }
+  if (detectSshInfo(content)) {
+    shapes.add('ssh')
   }
   if (detectCommand(content)) {
     shapes.add('command')
@@ -398,7 +501,7 @@ export function classifyClipboardItem(item: PluginClipboardItem): ClipboardShape
 }
 
 /**
- * 洞察区只渲染一个分区。优先级：密钥 > 命令 > 链接 > 颜色 > 文本拆词。
+ * 洞察区只渲染一个分区。优先级：密钥 > SSH > 命令 > 链接 > 颜色 > 文本拆词。
  * 图片和文件都不给洞察：文件的预览区就是内容本身，而图片的 OCR 正文很长，
  * 顶在详情区会把图片本身挤出视野——它现在收在「更多信息」里（ClipboardMoreInfo）。
  *
@@ -420,6 +523,11 @@ export function selectClipboardInsight(
 
   if (detectSecret(content)) {
     return 'secret'
+  }
+  // 排在命令之前：`ssh user@host` 会被命令分支先吃掉，而拆出主机和端口比
+  // 「这是一条 ssh 命令」有用得多。
+  if (detectSshInfo(content)) {
+    return 'ssh'
   }
   if (detectCommand(content)) {
     return 'command'
