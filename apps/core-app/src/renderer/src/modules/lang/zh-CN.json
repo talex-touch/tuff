@@ -3908,7 +3908,17 @@
       "duplicateProvider": "复制渠道",
       "editProviderBasic": "修改基本信息",
       "providerNameHint": "显示在列表和详情页中的名称。",
-      "providerTypeHint": "用于匹配内置适配器；未知类型会作为 custom 处理。",
+      "providerTypeHint": "决定此渠道使用的协议与内置适配器。",
+      "providerTypeOptions": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "deepseek": "DeepSeek",
+        "siliconflow": "SiliconFlow",
+        "local": "本地模型（Ollama）",
+        "compatible": "兼容",
+        "bailian": "百炼",
+        "volcengine": "火山引擎"
+      },
       "deleteConfirmTitle": "删除提供商",
       "deleteConfirmMessage": "确定要删除提供商「{name}」吗？此操作不可撤销。",
       "deleteConfirmButton": "删除",
