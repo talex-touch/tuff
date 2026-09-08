@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/privacy-data-lifecycle.md", "reason": "掩码与保留期解耦是本任务的前置改动；这份文档是隐私/留存期的既有约定，改 retentionClass 推导前必须先对齐它。"}
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "新增的每条识别规则都是判定门（端口不得由裸数字推断、公网 IP 需上下文）；写规则前先按这份指南想清楚门的正反两向。"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "要往 ClipboardSecretKind 塞一个不是 secret 的成员，并新增两个可空的分类产物；类型收敛口径按这份走。"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "apps/core-app 有其他会话在写，提交前的暂存纪律按这份执行。"}
