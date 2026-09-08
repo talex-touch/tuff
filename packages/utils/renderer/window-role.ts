@@ -2,7 +2,7 @@ const FLAG_PREFIX = '--'
 
 export const TOUCH_TYPES = ['main', 'core-box', 'assistant', 'screenshot'] as const
 export const CORE_TYPES = ['division-box', 'omni-panel'] as const
-export const ASSISTANT_TYPES = ['floating-ball', 'voice-panel'] as const
+export const ASSISTANT_TYPES = ['voice-dock'] as const
 
 export const SCREENSHOT_TYPES = ['overlay', 'editor'] as const
 
@@ -24,9 +24,7 @@ export type RendererWindowMode =
   | 'CoreBox'
   | 'DivisionBox'
   | 'OmniPanel'
-  | 'Assistant'
-  | 'AssistantFloatingBall'
-  | 'AssistantVoicePanel'
+  | 'AssistantVoiceDock'
   | 'ScreenshotOverlay'
   | 'ScreenshotEditor'
   | 'MetaOverlay'
@@ -103,13 +101,10 @@ export function resolveRendererWindowMode(role: WindowRole): RendererWindowMode 
   }
 
   if (role.touchType === 'assistant') {
-    if (role.assistantType === 'floating-ball') {
-      return 'AssistantFloatingBall'
+    if (role.assistantType === 'voice-dock') {
+      return 'AssistantVoiceDock'
     }
-    if (role.assistantType === 'voice-panel') {
-      return 'AssistantVoicePanel'
-    }
-    return 'Assistant'
+    return 'MainApp'
   }
 
   if (role.touchType === 'screenshot') {

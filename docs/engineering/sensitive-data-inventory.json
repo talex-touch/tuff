@@ -1,8 +1,26 @@
 {
   "schema": "talex.touch.sensitive-data-inventory/v1",
-  "updatedAt": "2026-09-02",
+  "updatedAt": "2026-09-07",
   "verificationCommand": "corepack pnpm privacy:inventory:verify",
   "entries": [
+    {
+      "id": "voice-insights",
+      "classification": "behavioral-metadata",
+      "owner": "VoiceInsightsStore/VoiceInsightsPrivacyOwner",
+      "storageLocations": ["auxiliary database: voice_insights_state, voice_insight_days, voice_insight_captures"],
+      "writers": ["VoiceService successful capture finalization"],
+      "readers": ["host Voice Insights page", "main-owned Privacy export"],
+      "exportPolicy": "aggregate DTO only; no capture IDs, transcript, audio, provider payload or target app",
+      "deletionPolicy": "typed clearInsights or Privacy manual category deletion atomically clears aggregates with a generation fence",
+      "retentionPolicy": "daily buckets and opaque deduplication IDs pruned to 365 days on writes; lifetime totals until explicit clear",
+      "rendererExposure": "host-renderer-only aggregate DTO; plugins denied",
+      "portable": false,
+      "migrationStatus": "additive-0042-primary-and-aux-parity",
+      "evidence": [
+        "apps/core-app/src/main/modules/voice/voice-insights-store.ts#symbol=VoiceInsightsStore",
+        "apps/core-app/src/main/modules/privacy/owners/voice-insights-privacy-owner.ts#symbol=createVoiceInsightsPrivacyOwner"
+      ]
+    },
     {
       "id": "core-provider-credentials",
       "classification": "credential",

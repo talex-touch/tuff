@@ -1,0 +1,35 @@
+{
+  "id": "clipboard-secret-mask-and-interactions",
+  "name": "clipboard-secret-mask-and-interactions",
+  "title": "剪贴板历史：密钥掩码一致性与交互修复",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-06",
+  "completedAt": "2026-09-07",
+  "branch": null,
+  "base_branch": "feature/clipboard-layout-shell",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "plugins/clipboard-history/src/utils/clipboard-shapes.ts",
+    "plugins/clipboard-history/src/components/ClipboardDetail.vue",
+    "plugins/clipboard-history/src/views/ClipboardManagerView.vue",
+    "packages/utils/transport/security/plugin-facing-events.ts"
+  ],
+  "notes": "",
+  "meta": {
+    "blocker": null,
+    "evidence": "插件 121 测试 + core-app src/main/channel 88 测试 + utils plugin-facing-events 8 测试全绿；掩码的“不包含”断言与 system.shell 权限门都跑过反向对照并确认会红。",
+    "nextAction": "AC5（user-select）与 AC7（图片预览定高版式）是纯样式，需在真实窗口人工确认；其余已完成。"
+  }
+}

@@ -258,6 +258,7 @@
       "memoryIndependent": "Explicit AI Memory follows its own TTL or user deletion and is not removed by audit retention.",
       "unsupportedSelection": "Choose a currently supported retention period for every category before saving.",
       "presets": {
+        "1-hour": "1 hour",
         "1-day": "1 day",
         "7-days": "7 days",
         "30-days": "30 days",
@@ -265,6 +266,21 @@
         "180-days": "180 days",
         "365-days": "365 days",
         "permanent": "Keep permanently"
+      }
+    },
+    "clipboardTiers": {
+      "title": "Clipboard content tiers",
+      "hint": "Verification codes and secrets share a table and a deletion path with ordinary clipboard entries, so their policies live here rather than as separate data categories.",
+      "verificationCode": "Keep verification codes for",
+      "protectSecrets": "Never auto-delete secrets",
+      "customPrefixes": "Custom key prefixes",
+      "customPrefixesPlaceholder": "e.g. cr_, zz- (comma separated)",
+      "durations": {
+        "300000": "5 minutes",
+        "900000": "15 minutes",
+        "3600000": "1 hour",
+        "21600000": "6 hours",
+        "86400000": "24 hours"
       }
     },
     "actions": {
@@ -355,6 +371,7 @@
       "intelligence-audit": "Intelligence audit metadata",
       "intelligence-context": "Intelligence context conversations",
       "diagnostics": "Diagnostics and telemetry metadata",
+      "voice-insights": "Voice insight aggregates",
       "intelligence-memory": "Explicit AI Memory",
       "plugin-data": "Plugin data"
     },
@@ -1011,6 +1028,7 @@
   "shell": {
     "search": "Search",
     "newChat": "New Chat",
+    "voiceInsights": "Voice Insights",
     "store": "Plugins",
     "setting": "Settings",
     "collapseSidebar": "Collapse sidebar",
@@ -1029,6 +1047,113 @@
       "earlier": "Earlier",
       "untitled": "New chat",
       "delete": "Delete conversation"
+    }
+  },
+  "voiceInsights": {
+    "headline": "Speak, don't type",
+    "subtitle": "See the aggregate impact of successful voice captures without storing transcripts, audio, app names, or file paths.",
+    "sectionTitle": "Insights",
+    "loading": "Loading voice insights...",
+    "actions": {
+      "refresh": "Refresh",
+      "share": "Share",
+      "clear": "Clear insights",
+      "retry": "Retry",
+      "showReport": "View report",
+      "hideReport": "Hide report",
+      "cancel": "Cancel"
+    },
+    "boundary": {
+      "notStarted": "Statistics begin with your first successful, non-empty voice capture.",
+      "since": "Recorded locally since {date}."
+    },
+    "metrics": {
+      "label": "Voice usage metrics",
+      "characters": "Dictated characters",
+      "saved": "Estimated time saved",
+      "rate": "Average dictation rate",
+      "duration": "Total dictation time",
+      "savedBasis": "Estimated against a {count} characters/minute typing baseline; not measured typing."
+    },
+    "units": {
+      "characters": "characters",
+      "charactersPerMinute": "characters/min",
+      "days": "days",
+      "zeroMinutes": "0 min",
+      "lessThanMinute": "< 1 min",
+      "minutes": "{count} min",
+      "hours": "{count} hr",
+      "hoursMinutes": "{hours} hr {minutes} min"
+    },
+    "streak": {
+      "title": "Activity — last 365 local days",
+      "windowNote": "Active-day and longest-streak values are limited to this rolling window.",
+      "label": "Voice activity streaks within the last 365 local days",
+      "activeDays": "Active days",
+      "current": "Current streak",
+      "longest": "Longest streak"
+    },
+    "heatmap": {
+      "title": "Last 365 local days",
+      "description": "Color reflects dictated character volume. Hatched days predate recording.",
+      "legend": "Activity volume legend",
+      "less": "Less",
+      "more": "More",
+      "accessibleLabel": "Voice activity calendar for the last 365 local days",
+      "scrollLabel": "Scrollable voice activity calendar; use horizontal scrolling to review all 365 days",
+      "beforeTracking": "{date}: statistics were not recording yet",
+      "noActivity": "{date}: no recorded voice activity",
+      "daySummary": "{date}: {characters} characters across {sessions} successful captures, {duration}"
+    },
+    "empty": {
+      "title": "Your voice history starts here",
+      "description": "Complete a successful, non-empty voice capture and this page will begin showing real totals, streaks, and daily activity.",
+      "privacy": "Only aggregate counts are kept. Raw audio, transcripts, app names, and paths are not part of voice insights."
+    },
+    "error": {
+      "title": "Voice insights could not be loaded",
+      "description": "Your existing statistics were not changed. Retry the local request."
+    },
+    "share": {
+      "title": "Tuff Voice Insights",
+      "copied": "Aggregate voice insights copied",
+      "copyFailed": "Could not copy the aggregate summary",
+      "unavailable": "not available yet",
+      "rateValue": "{count} characters/minute",
+      "characters": "Dictated characters: {count}",
+      "saved": "Estimated time saved: {duration}",
+      "rate": "Average dictation rate: {rate}",
+      "duration": "Total dictation time: {duration}",
+      "activeDays": "Active days in the last 365 local days: {count}",
+      "currentStreak": "Current streak in the last 365 local days: {count} days",
+      "longestStreak": "Longest streak in the last 365 local days: {count} days",
+      "sessions": "Successful captures: {count}",
+      "polishedSessions": "Polished captures: {count}",
+      "estimateBasis": "Time-saved estimate uses a {count} characters/minute typing baseline; it is not measured typing."
+    },
+    "clear": {
+      "title": "Clear voice insights?",
+      "description": "This permanently deletes the aggregate totals and daily activity shown here. Recording starts again after your next successful, non-empty voice capture.",
+      "confirm": "Clear all insights",
+      "success": "Voice insights cleared",
+      "failed": "Voice insights could not be cleared. Nothing shown here was changed.",
+      "refreshNeededTitle": "Insights were cleared",
+      "refreshNeededDescription": "The cleared state could not be refreshed yet. No previous statistics are being shown; refresh to load the current zero state."
+    },
+    "report": {
+      "title": "Aggregate report",
+      "description": "A transparent summary of what was counted and how cleanup usage is calculated.",
+      "successfulSessions": "Successful captures recorded",
+      "polishedSessions": "Captures polished",
+      "cleanupRate": "Cleanup rate",
+      "learningTitle": "Personalized learning is not enabled",
+      "learningUnavailable": "This report does not infer a learning score, vocabulary profile, or personal dictionary. It only displays real aggregate usage.",
+      "methodologyTitle": "How these numbers are calculated",
+      "successMethod": "Each successful, non-empty live capture is counted once, including a successful retry; uploads, TTS, and partial results are excluded.",
+      "characterMethod": "Characters are visible CJK and other characters after whitespace and punctuation are excluded. They are not English word counts.",
+      "savedMethod": "Estimated time saved is the non-negative difference between a {count} characters/minute typing baseline and recorded dictation duration. The baseline is an estimate, not measured typing.",
+      "rateMethod": "Average dictation rate is total counted characters divided by total recorded duration.",
+      "calendarMethod": "Active days and streaks use a rolling 365-day window of local calendar dates in {timezone}; future days are never included."
     }
   },
   "home": {
@@ -2493,6 +2618,7 @@
     "homeConversation": "Conversation",
     "login": "Please login first!",
     "permission": "You don't have permission!",
+    "voiceInsights": "Voice Insights",
     "pluginStore": "Plugin Store",
     "installedPlugins": "Installed Plugins",
     "storeDocs": "Store Docs",
@@ -4699,6 +4825,23 @@
       "waiting": "Waiting for voice input",
       "textOnly": "Text input mode",
       "close": "Close",
+      "cancelSession": "Cancel this session",
+      "cancelled": "Cancelled",
+      "capturingDevice": "Opening the microphone…",
+      "microphoneUnresponsive": "The microphone is not responding",
+      "microphoneMissing": "No microphone available",
+      "microphoneDenied": "Microphone access not granted",
+      "holdToCancel": "Hold to cancel",
+      "stillWorking": "Still transcribing…",
+      "stillWorkingLong": "Longer than usual — hold Esc to cancel",
+      "recovering": "Recovering…",
+      "recoverCancelled": "You cancelled a recording",
+      "recoverFailed": "The last transcription failed",
+      "recoveryExpired": "That recording expired — say it again",
+      "undo": "Undo",
+      "retry": "Retry",
+      "quotaExhausted": "AI credits are used up — check Settings",
+      "serviceBusy": "The service is busy. Try again shortly.",
       "placeholder": "Speak or type what you want to do, for example: search my latest meeting notes",
       "startListening": "Start listening",
       "listeningAction": "Listening",
@@ -4718,7 +4861,7 @@
       "voiceTranscribeTooLong": "The recording exceeds the 30-second limit. Shorten it and try again.",
       "voiceTranscribeUnavailable": "AI voice transcription is unavailable. Check login, quota, or provider status.",
       "voiceTranscribeEmpty": "No speech was detected. Record it again.",
-      "voiceTranscribeFailed": "Voice transcription failed. Try again.",
+      "voiceTranscribeFailed": "Voice transcription failed",
       "submitting": "Sending...",
       "sendToCoreBox": "Send to CoreBox",
       "translateClipboardImage": "Translate clipboard image",
@@ -4792,7 +4935,9 @@
       "screenshotTranslateUnavailable": "Screenshot is unavailable. Check screen recording permission or try again later.",
       "screenshotTranslateImageUnavailable": "The screenshot image is invalid. Take another screenshot and try again.",
       "imageTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status.",
-      "screenshotTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status."
+      "screenshotTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status.",
+      "openMicrophoneSettings": "Open microphone settings",
+      "microphoneSettingsUnavailable": "This system has no microphone settings pane to open"
     },
     "regionSelector": {
       "title": "Select a screenshot region",

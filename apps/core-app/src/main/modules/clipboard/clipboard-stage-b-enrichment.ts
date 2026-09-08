@@ -3,9 +3,12 @@ import type * as schema from '../../db/schema'
 import type { LogOptions } from '../../utils/logger'
 import type { IClipboardItem } from './clipboard-history-persistence'
 import { eq } from 'drizzle-orm'
+import { classifyClipboardContent } from '@talex-touch/utils/clipboard'
 import { clipboardHistory } from '../../db/schema'
 import { resolveAppSemanticAliases } from '../box-tool/addon/apps/app-semantic-catalog'
 import type { ClipboardMetaEntry, ClipboardMetaPersistence } from './clipboard-meta-persistence'
+import type { ClipboardClassificationSettings } from './clipboard-classification-settings'
+import { DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS } from './clipboard-classification-settings'
 
 export interface ClipboardActiveAppSnapshot {
   bundleId?: string | null
@@ -38,6 +41,9 @@ export interface ClipboardStageBEnrichmentOptions {
   patchCachedMeta: (clipboardId: number, patch: Record<string, unknown>) => void
   updateCachedSource: (clipboardId: number, sourceApp: string | null) => void
   metaPersistence: ClipboardMetaPersistence
+  /** 剪贴板分类与保留的用户设置。由持有 storage 的模块注入——这两条路径都在热路径上，
+   * 而 storage 那个桶会把整个 transport（连同 `ipcMain`）一起拖进来。 */
+  getClassificationSettings?: () => ClipboardClassificationSettings
   logWarn: (message: string, data?: LogOptions) => void
   logDebug: (message: string, data?: LogOptions) => void
 }
@@ -127,6 +133,32 @@ export class ClipboardStageBEnrichment {
     }
 
     const { sourceApp, patch, entries } = buildActiveAppSourcePatch(activeApp, job.item.sourceApp)
+
+    /**
+     * 来源应用是验证码判定的第三条判据，而它到这一步才解析出来——采集时看到的只是一串
+     * 数字，没有任何依据把它和订单号区分开。所以这里重跑一次分类：只有当它现在被认成
+     * 验证码、且还没有过期时刻时才写，别的分类结果都不动。
+     *
+     * 只往「更早过期」的方向改。重跑的结果如果没命中，采集时定下的档位保持不变——
+     * 一次判定失误不应该让一条已经受保护的记录失去保护。
+     */
+    const settings =
+      this.options.getClassificationSettings?.() ?? DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS
+    const rescored =
+      job.item.type === 'text' && sourceApp
+        ? classifyClipboardContent({
+            type: 'text',
+            content: job.item.content,
+            rawContent: job.item.rawContent ?? null,
+            sourceApp,
+            customKeyPrefixes: settings.customKeyPrefixes
+          })
+        : null
+    const expiresAt =
+      rescored?.retentionClass === 'verification-code'
+        ? new Date(Date.now() + settings.verificationCodeRetentionMs)
+        : null
+
     const db = this.options.getDatabase()
     if (db) {
       try {
@@ -139,7 +171,8 @@ export class ClipboardStageBEnrichment {
               .update(clipboardHistory)
               .set({
                 sourceApp,
-                metadata: nextMetadata
+                metadata: nextMetadata,
+                ...(expiresAt ? { retentionExpiresAt: expiresAt } : {})
               })
               .where(eq(clipboardHistory.id, job.clipboardId)),
           { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }

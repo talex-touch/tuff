@@ -344,6 +344,22 @@ if (process.env.TUFF_DEV_ELECTRON_PREPARE_ONLY === '1') {
   process.exit(0)
 }
 
+// node-gyp owns C++ artifacts; Cargo's audio addon must be prepared separately
+// before Electron caches the wrapper's load result. Cargo reuses unchanged builds.
+if (process.env.TUFF_DISABLE_NATIVE_AUDIO !== '1') {
+  const nativeRoot = path.dirname(require.resolve('@talex-touch/tuff-native/audio'))
+  execFileSync(process.execPath, [path.join(nativeRoot, 'scripts', 'build-audio.js')], {
+    cwd: nativeRoot,
+    env,
+    stdio: 'inherit'
+  })
+  execFileSync(process.execPath, [path.join(nativeRoot, 'scripts', 'verify-audio-production.js')], {
+    cwd: nativeRoot,
+    env,
+    stdio: 'inherit'
+  })
+}
+
 // macOS 26/27 (Tahoe) can crash the Electron *browser* process with a V8
 // JIT-page fault (electron/electron#51351). app.commandLine (see precore.ts)
 // only reaches renderer/child V8 — the browser process's V8 is already

@@ -13,8 +13,12 @@ vi.mock('@talex-touch/tuff-native/audio', () => ({
   isAccessibilityTrusted: vi.fn()
 }))
 
-vi.mock('electron', () => ({
-  clipboard: { writeText: vi.fn() }
+vi.mock('../clipboard', () => ({
+  clipboardModule: { applyVoiceText: vi.fn() }
+}))
+
+vi.mock('../system/active-app', () => ({
+  activeAppService: { getActiveApp: vi.fn() }
 }))
 
 vi.mock('../ai/intelligence-sdk', () => ({
@@ -29,31 +33,29 @@ vi.mock('../ai/intelligence-tts-service', () => ({
 }))
 
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
-import { clipboard } from 'electron'
+import { clipboardModule } from '../clipboard'
+import { activeAppService } from '../system/active-app'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { intelligenceTtsService } from '../ai/intelligence-tts-service'
 import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { VoiceService } from './voice-service'
 
 const support = nativeAudio.getNativeAudioSupport as unknown as ReturnType<typeof vi.fn>
-// Resolved rather than plain values: `startCapture` is async since #841, and a mock returning a
-// bare object lets a dropped `await` keep passing -- `const { sessionId } = promise` would just
-// hand every downstream call an undefined id.
 const startCapture = nativeAudio.startCapture as unknown as ReturnType<typeof vi.fn>
 const pollCapture = nativeAudio.pollCapture as unknown as ReturnType<typeof vi.fn>
 const snapshotCapture = nativeAudio.snapshotCapture as unknown as ReturnType<typeof vi.fn>
 const stopCapture = nativeAudio.stopCapture as unknown as ReturnType<typeof vi.fn>
 const cancelCapture = nativeAudio.cancelCapture as unknown as ReturnType<typeof vi.fn>
 const playAudio = (nativeAudio as unknown as { playAudio: ReturnType<typeof vi.fn> }).playAudio
+const ttsSpeak = intelligenceTtsService.speak as unknown as ReturnType<typeof vi.fn>
 const typeText = (nativeAudio as unknown as { typeText: ReturnType<typeof vi.fn> }).typeText
 const isAccessibilityTrusted = (
   nativeAudio as unknown as { isAccessibilityTrusted: ReturnType<typeof vi.fn> }
 ).isAccessibilityTrusted
-const clipboardWrite = (clipboard as unknown as { writeText: ReturnType<typeof vi.fn> }).writeText
+const applyVoiceText = clipboardModule.applyVoiceText as unknown as ReturnType<typeof vi.fn>
+const getActiveApp = activeAppService.getActiveApp as unknown as ReturnType<typeof vi.fn>
 const stt = tuffIntelligence.audio.stt as unknown as ReturnType<typeof vi.fn>
 const invoke = tuffIntelligence.invoke as unknown as ReturnType<typeof vi.fn>
-const ttsSpeak = intelligenceTtsService.speak as unknown as ReturnType<typeof vi.fn>
-
 function wav(bytes = 200): Buffer {
   return Buffer.alloc(bytes)
 }
@@ -200,7 +202,7 @@ describe('VoiceService.streamDictation', () => {
     return events
   }
 
-  it('emits live partials, a polished final, then end', async () => {
+  it('emits partials, a delivery result on final, then end from one shared session', async () => {
     // active for the first interval, then auto-stopped.
     pollCapture.mockReturnValueOnce({ active: true, durationMs: 1000, stoppedReason: null })
     pollCapture.mockReturnValue({ active: false, durationMs: 2000, stoppedReason: 'silence' })
@@ -209,14 +211,34 @@ describe('VoiceService.streamDictation', () => {
     stt.mockResolvedValueOnce({ result: { text: 'hello world' } })
     stt.mockResolvedValue({ result: { text: 'hello world', language: 'en' } })
     invoke.mockResolvedValue({ result: 'Hello world.' })
+    const activeApp = {
+      identifier: 'com.example.editor',
+      displayName: 'Editor',
+      bundleId: 'com.example.editor',
+      processId: 123,
+      executablePath: null,
+      platform: 'macos',
+      windowTitle: null,
+      lastUpdated: Date.now()
+    }
+    getActiveApp.mockResolvedValue(activeApp)
+    isAccessibilityTrusted.mockReturnValue(true)
+    typeText.mockReturnValue({ ok: true })
 
-    const events = await collect(new VoiceService().streamDictation({ language: 'en' }))
+    const events = await collect(
+      new VoiceService().streamDictation({ language: 'en', delivery: 'active-app' })
+    )
 
-    const partials = events.filter((e) => e.type === 'partial')
+    const partials = events.filter((event) => event.type === 'partial')
     expect(partials.length).toBeGreaterThanOrEqual(1)
-    const final = events.find((e) => e.type === 'final')
-    expect(final).toMatchObject({ type: 'final', text: 'Hello world.', language: 'en' })
+    expect(events.find((event) => event.type === 'final')).toMatchObject({
+      type: 'final',
+      text: 'Hello world.',
+      language: 'en',
+      delivery: { method: 'native' }
+    })
     expect(events.at(-1)).toEqual({ type: 'end' })
+    expect(typeText).toHaveBeenCalledWith('Hello world.')
   })
 
   it('cancels in-flight streaming capture without emitting a terminal result', async () => {
@@ -358,57 +380,11 @@ describe('VoiceService.speak', () => {
   })
 })
 
-describe('VoiceService.injectText', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('uses enigo when accessibility is trusted', () => {
-    isAccessibilityTrusted.mockReturnValue(true)
-    typeText.mockReturnValue({ ok: true })
-
-    const result = new VoiceService().injectText('hello world')
-
-    expect(result.method).toBe('enigo')
-    expect(typeText).toHaveBeenCalledWith('hello world')
-    expect(clipboardWrite).not.toHaveBeenCalled()
-  })
-
-  it('falls back to clipboard when accessibility is not trusted', () => {
-    isAccessibilityTrusted.mockReturnValue(false)
-
-    const result = new VoiceService().injectText('hello')
-
-    expect(result.method).toBe('clipboard')
-    expect(result.reason).toBe('accessibility-required')
-    expect(typeText).not.toHaveBeenCalled()
-    expect(clipboardWrite).toHaveBeenCalledWith('hello')
-  })
-
-  it('falls back to clipboard when enigo fails', () => {
-    isAccessibilityTrusted.mockReturnValue(true)
-    typeText.mockReturnValue({ ok: false, reason: 'boom' })
-
-    const result = new VoiceService().injectText('hello')
-
-    expect(result.method).toBe('clipboard')
-    expect(result.reason).toBe('boom')
-    expect(clipboardWrite).toHaveBeenCalledWith('hello')
-  })
-
-  it('returns none for empty text', () => {
-    const result = new VoiceService().injectText('   ')
-    expect(result.method).toBe('none')
-    expect(typeText).not.toHaveBeenCalled()
-    expect(clipboardWrite).not.toHaveBeenCalled()
-  })
-})
-
-describe('VoiceService toggle capture', () => {
+describe('VoiceService canonical session', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     support.mockReturnValue({ supported: true, platform: 'darwin' })
-    startCapture.mockResolvedValue({ sessionId: 't1' })
+    startCapture.mockResolvedValue({ sessionId: 'native-session' })
     stopCapture.mockReturnValue({
       audio: wav(),
       format: 'wav',
@@ -417,36 +393,93 @@ describe('VoiceService toggle capture', () => {
       durationMs: 3000,
       stoppedReason: 'manual'
     })
+    getActiveApp.mockResolvedValue({
+      identifier: 'com.example.editor',
+      displayName: 'Editor',
+      bundleId: 'com.example.editor',
+      processId: 123,
+      executablePath: null,
+      platform: 'macos',
+      windowTitle: null,
+      lastUpdated: Date.now()
+    })
+    applyVoiceText.mockResolvedValue({ success: true })
+    isAccessibilityTrusted.mockReturnValue(true)
+    typeText.mockReturnValue({ ok: true })
   })
 
-  it('beginCapture starts native capture and returns a session id', async () => {
-    const id = await new VoiceService().beginCapture()
-    expect(id).toBe('t1')
-    expect(startCapture).toHaveBeenCalledTimes(1)
+  it('requests 16 kHz native capture for cloud streaming ASR', async () => {
+    await new VoiceService().startSession()
+
+    expect(startCapture).toHaveBeenCalledWith(expect.objectContaining({ sampleRate: 16_000 }))
   })
 
-  it('endCapture stops, transcribes, and polishes', async () => {
+  it('keeps one owner id across start and stop and delivers natively', async () => {
     stt.mockResolvedValue({ result: { text: 'raw dictation', language: 'en' } })
     invoke.mockResolvedValue({ result: 'Raw dictation.' })
 
-    const result = await new VoiceService().endCapture('t1', { cleanup: true })
+    const service = new VoiceService()
+    const sessionId = await service.startSession({ delivery: 'active-app' })
+    const result = await service.stopSession(sessionId, { cleanup: true })
 
-    expect(result.raw).toBe('raw dictation')
     expect(result.text).toBe('Raw dictation.')
-    expect(result.language).toBe('en')
+    expect(result.delivery).toEqual({ method: 'native' })
+    expect(typeText).toHaveBeenCalledWith('Raw dictation.')
+    expect(applyVoiceText).not.toHaveBeenCalled()
   })
 
-  it('endCapture returns empty when no audio was captured', async () => {
-    stopCapture.mockReturnValue({
-      audio: Buffer.alloc(0),
-      format: 'wav',
-      sampleRate: 16000,
-      channels: 1,
-      durationMs: 0,
-      stoppedReason: 'manual'
-    })
-    const result = await new VoiceService().endCapture('t1')
-    expect(result.text).toBe('')
-    expect(stt).not.toHaveBeenCalled()
+  it('falls back to main-owned auto-paste when native injection is unavailable', async () => {
+    stt.mockResolvedValue({ result: { text: 'hello' } })
+    isAccessibilityTrusted.mockReturnValue(false)
+
+    const service = new VoiceService()
+    const sessionId = await service.startSession({ delivery: 'active-app' })
+    const result = await service.stopSession(sessionId, { cleanup: false })
+
+    expect(result.delivery).toEqual({ method: 'autopaste' })
+    expect(applyVoiceText).toHaveBeenCalledWith('hello')
+    expect(typeText).not.toHaveBeenCalled()
+  })
+
+  it('refuses delivery when the active target changes during recognition', async () => {
+    stt.mockResolvedValue({ result: { text: 'hello' } })
+    getActiveApp
+      .mockResolvedValueOnce({
+        identifier: 'com.example.editor',
+        displayName: 'Editor',
+        bundleId: 'com.example.editor',
+        processId: 123,
+        executablePath: null,
+        platform: 'macos',
+        windowTitle: null,
+        lastUpdated: Date.now()
+      })
+      .mockResolvedValueOnce({
+        identifier: 'com.example.chat',
+        displayName: 'Chat',
+        bundleId: 'com.example.chat',
+        processId: 456,
+        executablePath: null,
+        platform: 'macos',
+        windowTitle: null,
+        lastUpdated: Date.now()
+      })
+
+    const service = new VoiceService()
+    const sessionId = await service.startSession({ delivery: 'active-app' })
+    const result = await service.stopSession(sessionId, { cleanup: false })
+
+    expect(result.delivery).toEqual({ method: 'none', reason: 'target-changed' })
+    expect(typeText).not.toHaveBeenCalled()
+    expect(applyVoiceText).not.toHaveBeenCalled()
+  })
+
+  it('cancels all owned native sessions on dispose', async () => {
+    const service = new VoiceService()
+    await service.startSession()
+    service.dispose()
+
+    expect(cancelCapture).toHaveBeenCalledWith('native-session')
+    await expect(service.startSession()).rejects.toThrow('VOICE_SESSION_SERVICE_DISPOSED')
   })
 })

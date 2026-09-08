@@ -16,7 +16,11 @@ import {
   groupClipboardItems,
   resolveDetailImageSrc,
   selectNextClipboardItemId,
+  toHistoryQueryType,
 } from '~/utils/clipboard-items'
+import { classifyClipboardItem, getClipboardPrimaryActionLabel, resolveClipboardPrimaryAction } from '~/utils/clipboard-shapes'
+
+type ClipboardGlyphName = InstanceType<typeof ClipboardGlyph>['$props']['name']
 
 const clipboard = useClipboard()
 const feature = useFeature()
@@ -37,6 +41,7 @@ const applyPending = ref(false)
 const favoritePending = ref(false)
 const deletePending = ref(false)
 const pageRoot = ref<HTMLElement | null>(null)
+const imageViewerOpen = ref(false)
 const resolvedImageUrls = ref<Record<number, string>>({})
 const resolvingImageIds = ref<Record<number, boolean>>({})
 const resolvedSourceApplications = reactive(new Map<string, ResolvedApplication | null>())
@@ -51,13 +56,28 @@ let requestGeneration = 0
 const SEARCH_DEBOUNCE_MS = 180
 
 const hasMore = computed(() => items.value.length < total.value)
-const hasItems = computed(() => items.value.length > 0)
-const sections = computed(() => groupClipboardItems(items.value))
+
+/**
+ * `text` / `image` / `files` / `favorite` 由 getHistory 在库里过滤；其余分类是从内容派生的，
+ * 只能对已加载的这一页过滤——所以计数会显示成「M / N」，不能假装它是全库的结果。
+ */
+const visibleItems = computed(() => {
+  const category = filter.value
+  if (category === 'all' || toHistoryQueryType(category) || category === 'favorite') {
+    return items.value
+  }
+  return items.value.filter(item => classifyClipboardItem(item).includes(category))
+})
+const isDerivedCategory = computed(
+  () => filter.value !== 'all' && !toHistoryQueryType(filter.value) && filter.value !== 'favorite',
+)
+const hasItems = computed(() => visibleItems.value.length > 0)
+const sections = computed(() => groupClipboardItems(visibleItems.value))
 const selectedItem = computed<PluginClipboardItem | null>(() => {
   if (selectedId.value === null) {
     return null
   }
-  return items.value.find(item => item.id === selectedId.value) ?? null
+  return visibleItems.value.find(item => item.id === selectedId.value) ?? null
 })
 const selectedResolvedImageUrl = computed(() => {
   const id = selectedItem.value?.id
@@ -71,13 +91,20 @@ const selectedSourceApplication = computed(() => {
   const sourceId = selectedItem.value?.sourceApp
   return sourceId ? (resolvedSourceApplications.get(sourceId) ?? null) : null
 })
+const primaryAction = computed(() => resolveClipboardPrimaryAction(selectedItem.value))
+const primaryActionLabel = computed(() => getClipboardPrimaryActionLabel(primaryAction.value))
 
-const filterOptions: Array<{ key: ClipboardFilter; label: string }> = [
-  { key: 'all', label: '全部内容' },
-  { key: 'text', label: '文本' },
-  { key: 'image', label: '图片' },
-  { key: 'files', label: '文件' },
-  { key: 'favorite', label: '收藏' },
+const filterOptions: Array<{ key: ClipboardFilter; label: string; glyph: ClipboardGlyphName; ready: boolean }> = [
+  { key: 'all', label: '全部', glyph: 'layers', ready: true },
+  { key: 'text', label: '文本', glyph: 'text', ready: true },
+  { key: 'link', label: '链接', glyph: 'link', ready: true },
+  { key: 'image', label: '图片', glyph: 'image', ready: true },
+  { key: 'video', label: '视频', glyph: 'video', ready: true },
+  { key: 'files', label: '文件', glyph: 'folder', ready: true },
+  { key: 'color', label: '颜色', glyph: 'palette', ready: true },
+  { key: 'command', label: '命令', glyph: 'terminal', ready: true },
+  { key: 'secret', label: '密钥', glyph: 'key', ready: true },
+  { key: 'favorite', label: '收藏', glyph: 'star', ready: true },
 ]
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -122,7 +149,7 @@ function mergePageItems(nextItems: PluginClipboardItem[]): void {
 }
 
 function syncSelection(removedId?: number | null, removedIndex?: number | null): void {
-  const nextId = selectNextClipboardItemId(items.value, selectedId.value, removedId, removedIndex)
+  const nextId = selectNextClipboardItemId(visibleItems.value, selectedId.value, removedId, removedIndex)
   selectedId.value = Number.isFinite(nextId) ? nextId : null
 }
 
@@ -193,7 +220,7 @@ async function resolveSelectedSourceApplication(item: PluginClipboardItem | null
 }
 
 function moveSelection(delta: 1 | -1): void {
-  const selectableItems = items.value.filter(
+  const selectableItems = visibleItems.value.filter(
     (item): item is PluginClipboardItem & { id: number } => typeof item.id === 'number',
   )
   if (selectableItems.length === 0) {
@@ -209,11 +236,49 @@ function moveSelection(delta: 1 | -1): void {
   selectedId.value = selectableItems[nextIndex]?.id ?? null
 }
 
+/**
+ * 分类条循环切换。和 moveSelection 不同，这里到头回绕——分类是一个闭合的环，
+ * 停在「全部」或「收藏」上不动没有任何意义。
+ */
+function moveFilter(delta: 1 | -1): void {
+  const options = filterOptions.filter(option => option.ready)
+  if (options.length === 0) {
+    return
+  }
+
+  const currentIndex = options.findIndex(option => option.key === filter.value)
+  const nextIndex = (((currentIndex < 0 ? 0 : currentIndex) + delta) % options.length + options.length) % options.length
+
+  filter.value = options[nextIndex]?.key ?? filter.value
+}
+
 function handleKeydown(event: KeyboardEvent): void {
   if (event.defaultPrevented || event.altKey || event.isComposing) {
     return
   }
   if (isEditableTarget(event.target)) {
+    return
+  }
+
+  // 浮层开着时它吃掉所有按键：Esc 关自己（不能穿到宿主去关 CoreBox），
+  // 方向键也不该在看不见列表的情况下偷偷移动选中项。
+  if (imageViewerOpen.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.key === 'Escape') {
+      imageViewerOpen.value = false
+    }
+    return
+  }
+
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    if (!event.metaKey && !event.ctrlKey) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    moveFilter(event.key === 'ArrowRight' ? 1 : -1)
     return
   }
 
@@ -237,7 +302,7 @@ function handleKeydown(event: KeyboardEvent): void {
 
   if (event.metaKey || event.ctrlKey) {
     if (!copyPending.value) {
-      void handleCopy()
+      void handlePrimaryAction()
     }
     return
   }
@@ -295,7 +360,7 @@ async function loadHistory(options: { reset?: boolean } = {}): Promise<void> {
       page: requestPage,
       pageSize,
       sortOrder: 'desc',
-      type: filter.value === 'favorite' ? undefined : filter.value === 'all' ? undefined : filter.value,
+      type: toHistoryQueryType(filter.value),
       isFavorite: filter.value === 'favorite' ? true : undefined,
     })
     if (generation !== requestGeneration) {
@@ -344,6 +409,49 @@ async function handleCopy(): Promise<void> {
   }
 }
 
+/**
+ * `window.open` is denied for a plugin surface (`plugin-window-policy.ts` installs a
+ * blanket `setWindowOpenHandler` deny), so this used to fail every single time and quietly
+ * degrade to a copy. The host's own shell handler is the only route that opens anything.
+ */
+async function handleOpenLink(url: string): Promise<void> {
+  errorMessage.value = ''
+  try {
+    await system.openExternal(url)
+  } catch (error) {
+    // system.shell is optional in the manifest, so a denial is a normal outcome here,
+    // not a bug — degrade to the clipboard and say which of the two happened.
+    await handleCopyText(url)
+    errorMessage.value = isPermissionDenied(error)
+      ? '未授予打开链接的权限，已复制到剪贴板'
+      : '无法直接打开链接，已复制到剪贴板'
+  }
+}
+
+/**
+ * Cmd/Ctrl+Enter 的分派。`copy` 是兜底，所以任何新内容类型不接这里也不会没反应。
+ */
+async function handlePrimaryAction(): Promise<void> {
+  const action = primaryAction.value
+
+  if (action.kind === 'preview-image') {
+    imageViewerOpen.value = true
+    return
+  }
+
+  if (action.kind === 'open-link') {
+    await handleOpenLink(action.url)
+    return
+  }
+
+  if (action.kind === 'reveal-file') {
+    await handleRevealFile(action.path)
+    return
+  }
+
+  await handleCopy()
+}
+
 async function handleCopyText(value: string): Promise<void> {
   if (!value) {
     return
@@ -354,6 +462,27 @@ async function handleCopyText(value: string): Promise<void> {
     await clipboard.write({ text: value })
   } catch (error) {
     errorMessage.value = error instanceof Error && error.message ? error.message : '复制文本失败'
+  }
+}
+
+/**
+ * 主进程把权限拒绝序列化成带 `code` 的普通对象，不是 Error 实例——
+ * 用 instanceof 判会漏掉，所以读 code 字段。
+ */
+function isPermissionDenied(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code
+  return typeof code === 'string' && code.startsWith('SYSTEM_SHELL_PERMISSION_')
+}
+
+async function handleRevealFile(path: string): Promise<void> {
+  errorMessage.value = ''
+  try {
+    await system.showInFolder(path)
+  } catch (error) {
+    await handleCopyText(path)
+    errorMessage.value = isPermissionDenied(error)
+      ? '未授予定位文件的权限，已复制文件路径'
+      : '无法定位该文件，已复制文件路径'
   }
 }
 
@@ -457,10 +586,12 @@ onBeforeUnmount(() => {
 
 watch(filter, async () => {
   page.value = 1
+  syncSelection()
   await loadHistory({ reset: true })
 })
 
 watch(selectedId, async id => {
+  imageViewerOpen.value = false
   if (id === null) {
     return
   }
@@ -485,6 +616,28 @@ watch(
 <template>
   <main ref="pageRoot" class="ClipboardManagerPage" tabindex="-1">
     <div class="ClipboardPageHolder manager-holder">
+      <nav class="category-bar" aria-label="内容分类">
+        <div class="category-chips">
+          <button
+            v-for="option in filterOptions"
+            :key="option.key"
+            class="category-chip"
+            :class="{ active: option.key === filter }"
+            type="button"
+            :disabled="!option.ready"
+            :title="option.ready ? option.label : `${option.label}（待内容形态分类器接入）`"
+            @click="filter = option.key"
+          >
+            <ClipboardGlyph :name="option.glyph" />
+            <span>{{ option.label }}</span>
+          </button>
+        </div>
+        <span
+          class="record-count"
+          :title="isDerivedCategory ? '派生分类只对已加载的记录生效，滚动加载更多后会继续增加' : undefined"
+        >{{ isDerivedCategory ? `${visibleItems.length} / ${items.length}` : `${total} 条` }}</span>
+      </nav>
+
       <div v-if="hasItems" class="ClipboardPageHolder-Main">
         <aside class="holder-aside">
           <ClipboardSidebar
@@ -506,11 +659,14 @@ watch(
             </button>
           </div>
           <ClipboardDetail
+            v-model:image-viewer-open="imageViewerOpen"
             :item="selectedItem"
             :resolved-image-url="selectedResolvedImageUrl"
             :resolving-image-url="resolvingSelectedImageUrl"
             :source-application="selectedSourceApplication"
             @copy-text="handleCopyText"
+            @open-link="handleOpenLink"
+            @preview-file="file => handleRevealFile(file.path)"
           />
         </section>
       </div>
@@ -542,33 +698,31 @@ watch(
       <footer class="ClipboardPageHolder-Footer">
         <div class="ManagerFooterBar">
           <div class="footer-left">
-            <div class="footer-controls">
-              <div class="footer-inline">
-                <span class="record-count">共 {{ total }} 条记录</span>
-                <div class="filter-group">
-                  <button
-                    v-for="option in filterOptions"
-                    :key="option.key"
-                    class="filter-chip"
-                    :class="{ active: option.key === filter }"
-                    type="button"
-                    @click="filter = option.key"
-                  >
-                    {{ option.label }}
-                  </button>
-                </div>
-              </div>
+            <div class="footer-hints">
+              <span class="footer-hint">
+                <kbd>↑↓</kbd>
+                选择
+              </span>
+              <span class="footer-hint">
+                <kbd>⌘/Ctrl ←→</kbd>
+                切换分类
+              </span>
+              <span class="footer-hint">
+                <kbd>Esc</kbd>
+                关闭
+              </span>
             </div>
           </div>
 
           <ClipboardActionBar
             class="footer-right"
             :item="selectedItem"
+            :primary-action-label="primaryActionLabel"
             :copy-pending="copyPending"
             :apply-pending="applyPending"
             :favorite-pending="favoritePending"
             :delete-pending="deletePending"
-            @copy="handleCopy"
+            @primary="handlePrimaryAction"
             @apply="handleApply"
             @toggle-favorite="handleToggleFavorite"
             @delete="handleDelete"
@@ -739,27 +893,6 @@ watch(
   min-width: 0;
 }
 
-.footer-controls {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.footer-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-  width: 100%;
-  min-width: 0;
-  white-space: nowrap;
-}
-
 .error-banner {
   display: flex;
   align-items: center;
@@ -796,45 +929,106 @@ watch(
 }
 
 .record-count {
-  color: var(--clipboard-text-secondary);
-  font-size: 0.78rem;
+  flex: none;
+  color: var(--clipboard-text-muted);
+  font-size: 0.7rem;
   font-weight: 600;
 }
 
-.filter-group {
+.category-bar {
+  flex: 0 0 auto;
+  height: 38px;
   display: flex;
   align-items: center;
-  gap: 5px;
-  flex-wrap: nowrap;
-  overflow: auto hidden;
-  min-width: 0;
-  scrollbar-width: none;
-}
-
-.filter-group::-webkit-scrollbar {
-  display: none;
-}
-
-.filter-chip {
-  flex: 0 0 auto;
-  min-height: 30px;
+  justify-content: space-between;
+  gap: 10px;
   padding: 0 10px;
-  border: 1px solid var(--clipboard-border-color);
-  border-radius: 999px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--clipboard-border-color);
   background: var(--clipboard-surface-subtle);
+}
+
+.category-chips {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.category-chip {
+  flex: 0 0 auto;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
   color: var(--clipboard-text-secondary);
   cursor: pointer;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
   transition:
     background 0.18s ease,
     border-color 0.18s ease,
     color 0.18s ease;
 }
 
-.filter-chip.active {
-  border-color: var(--clipboard-color-accent);
-  color: var(--clipboard-color-accent-strong);
+.category-chip .ClipboardGlyph {
+  width: 12px;
+  height: 12px;
+  color: var(--clipboard-text-muted);
+}
+
+.category-chip:hover:enabled {
+  background: color-mix(in srgb, var(--clipboard-surface-base) 70%, transparent);
+}
+
+.category-chip.active {
+  border-color: color-mix(in srgb, var(--clipboard-color-accent) 45%, transparent);
   background: color-mix(in srgb, var(--clipboard-color-accent) 14%, transparent);
+  color: var(--clipboard-color-accent-strong);
+  font-weight: 600;
+}
+
+.category-chip.active .ClipboardGlyph {
+  color: var(--clipboard-color-accent);
+}
+
+.category-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.footer-hints {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.footer-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--clipboard-text-muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.footer-hint kbd {
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 1px solid var(--clipboard-border-color);
+  border-radius: 5px;
+  background: var(--clipboard-surface-base);
+  color: var(--clipboard-text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.66rem;
 }
 
 @media (max-width: 640px) {

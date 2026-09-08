@@ -64,12 +64,14 @@ export const PLUGIN_FACING_INTELLIGENCE_EVENTS = [
  * `context.plugin` checks still apply.
  */
 export const PLUGIN_FACING_EVENTS = [
-  // AppEvents — 6
+  // AppEvents — 8
   AppEvents.fileIndex.batteryLevel,
   AppEvents.power.batteryStatus,
   AppEvents.system.captureSelection,
   AppEvents.system.getActiveApp,
+  AppEvents.system.openExternal,
   AppEvents.system.resolveApplication,
+  AppEvents.system.showInFolder,
   AppEvents.window.show,
 
   // ClipboardEvents — 15

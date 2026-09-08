@@ -127,6 +127,9 @@ const FORBIDDEN_KEY =
 const EXPORT_RECORD_FIELDS: Readonly<
   Record<PrivacyDataCategory, Readonly<Record<string, ReadonlySet<string>>>>
 > = Object.freeze({
+  'voice-insights': Object.freeze({
+    'voice-insights-aggregate': new Set(['kind', 'insights'])
+  }),
   'clipboard-history': Object.freeze({
     'clipboard-record': new Set(['kind', 'id', 'type', 'createdAt', 'favorite', 'important'])
   }),

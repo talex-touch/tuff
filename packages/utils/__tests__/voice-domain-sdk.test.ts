@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createVoiceSdk, voiceApiEvents } from "../transport/sdk/domains/voice";
+import {
+  createVoiceSdk,
+  type VoiceSdkTransport,
+  voiceApiEvents,
+} from "../transport/sdk/domains/voice";
 
 function createTransportMock(
   sendImpl?: (...args: any[]) => Promise<any>,
@@ -82,6 +86,54 @@ describe("voice domain sdk", () => {
       played: true,
     });
   });
+  it("transcribeUpload sends the upload event and unwraps the result", async () => {
+    const transport = createTransportMock(async () => ({
+      ok: true,
+      result: {
+        text: "你好，世界",
+        language: "zh-CN",
+        durationMs: 1_234,
+        requestId: "request-upload-1",
+        segments: [{ text: "你好，世界", startMs: 0, endMs: 1_234, speaker: "A" }],
+      },
+    }));
+    const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport);
+    const payload = {
+      sourceUrl: "https://example.test/audio.wav",
+      providerId: "bailian",
+      model: "paraformer-v2",
+      language: "zh-CN",
+      enableTimestamps: true,
+      enableSpeakerDiarization: true,
+      removeDisfluencies: true,
+    };
+
+    const result = await sdk.transcribeUpload(payload);
+
+    expect(transport.send).toHaveBeenCalledWith(
+      voiceApiEvents.transcribeUpload,
+      payload,
+    );
+    expect(result).toEqual({
+      text: "你好，世界",
+      language: "zh-CN",
+      durationMs: 1_234,
+      requestId: "request-upload-1",
+      segments: [{ text: "你好，世界", startMs: 0, endMs: 1_234, speaker: "A" }],
+    });
+  });
+
+  it("transcribeUpload throws with the error from a failed envelope", async () => {
+    const transport = createTransportMock(async () => ({
+      ok: false,
+      error: "audio source unavailable",
+    }));
+    const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport);
+
+    await expect(
+      sdk.transcribeUpload({ sourceUrl: "https://example.test/audio.wav" }),
+    ).rejects.toThrow("audio source unavailable");
+  });
 
   it("asrStream requires a stream-capable transport", async () => {
     const sdk = createVoiceSdk({
@@ -93,9 +145,27 @@ describe("voice domain sdk", () => {
     );
   });
 
+  it("asrStream preserves the requested main-owned delivery mode", async () => {
+    const transport = createTransportMock();
+    // The mock does not express ITuffTransport's generic send signature.
+    const voiceTransport = transport as unknown as VoiceSdkTransport;
+    const sdk = createVoiceSdk(voiceTransport);
+    const options = { onData: vi.fn() };
+
+    await sdk.asrStream({ cleanup: true, delivery: "active-app" }, options);
+
+    expect(transport.stream).toHaveBeenCalledWith(voiceApiEvents.asrStream, {
+      cleanup: true,
+      delivery: "active-app",
+    }, options);
+  });
+
   it("voice event names resolve to voice:api:<action>", () => {
     expect(voiceApiEvents.dictate.toEventName()).toBe("voice:api:dictate");
     expect(voiceApiEvents.speak.toEventName()).toBe("voice:api:speak");
+    expect(voiceApiEvents.transcribeUpload.toEventName()).toBe(
+      "voice:api:transcribe-upload",
+    );
     expect(voiceApiEvents.asrStream.toEventName()).toBe("voice:api:asr-stream");
   });
 });

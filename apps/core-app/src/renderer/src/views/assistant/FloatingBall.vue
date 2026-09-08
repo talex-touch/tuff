@@ -1,44 +1,12 @@
 <script lang="ts" setup name="FloatingBall">
-import type { AssistantRuntimeConfig } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { onBeforeUnmount, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-
-type SpeechRecognitionLike = {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  onstart: (() => void) | null
-  onerror: ((event: { error?: string }) => void) | null
-  onend: (() => void) | null
-  onresult:
-    | ((event: {
-        resultIndex: number
-        results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>
-      }) => void)
-    | null
-  start: () => void
-  stop: () => void
-}
-
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 
 const transport = useTuffTransport()
 const { t } = useI18n()
-const runtimeConfig = ref<AssistantRuntimeConfig>({
-  enabled: false,
-  language: 'zh-CN',
-  wakeWords: ['阿洛', 'aler'],
-  cooldownMs: 2200,
-  continuous: true,
-  assistantName: '阿洛 aler',
-  openPanelOnWake: true
-})
-
-const listening = ref(false)
-const errorMessage = ref('')
 const isDragging = ref(false)
-const lastHeard = ref('')
 const dragState = reactive({
   active: false,
   originX: 0,
@@ -47,150 +15,7 @@ const dragState = reactive({
   offsetY: 0
 })
 
-let recognition: SpeechRecognitionLike | null = null
-let restartTimer: ReturnType<typeof setTimeout> | null = null
-let lastWakeAt = 0
 let lastMoveAt = 0
-
-const statusText = computed(() => {
-  if (errorMessage.value) return errorMessage.value
-  if (!runtimeConfig.value.enabled) return t('assistant.floatingBall.voiceWakeOff')
-  if (listening.value) {
-    return t('assistant.floatingBall.listening', {
-      wakeWords: runtimeConfig.value.wakeWords.join(' / ')
-    })
-  }
-  return t('assistant.floatingBall.clickToOpen')
-})
-
-const showWakeBadge = computed(() => runtimeConfig.value.enabled && listening.value)
-
-function resolveSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
-  const target = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionCtor
-    webkitSpeechRecognition?: SpeechRecognitionCtor
-  }
-  return target.SpeechRecognition ?? target.webkitSpeechRecognition ?? null
-}
-
-function normalizeWakeText(text: string): string {
-  return text.toLowerCase().replace(/[\s,.!?，。！？、;；:：'"`~\-_/\\(){}\[\]]/g, '')
-}
-
-function scheduleRestart(): void {
-  if (!runtimeConfig.value.enabled) return
-  if (restartTimer) clearTimeout(restartTimer)
-  restartTimer = setTimeout(() => {
-    restartTimer = null
-    startWakeListening()
-  }, 600)
-}
-
-function stopWakeListening(): void {
-  if (restartTimer) {
-    clearTimeout(restartTimer)
-    restartTimer = null
-  }
-  if (!recognition) return
-  const activeRecognition = recognition
-  recognition = null
-  listening.value = false
-  try {
-    activeRecognition.onend = null
-    activeRecognition.stop()
-  } catch {
-    // ignore stop errors
-  }
-}
-
-function maybeWake(transcript: string): void {
-  if (!runtimeConfig.value.enabled || !runtimeConfig.value.openPanelOnWake) return
-  const now = Date.now()
-  if (now - lastWakeAt < runtimeConfig.value.cooldownMs) return
-
-  const normalized = normalizeWakeText(transcript)
-  const matched = runtimeConfig.value.wakeWords.some((wakeWord) => {
-    return normalized.includes(normalizeWakeText(wakeWord))
-  })
-  if (!matched) return
-
-  lastWakeAt = now
-  void transport.send(AssistantEvents.floatingBall.openVoicePanel, { source: 'wake-word' })
-}
-
-function startWakeListening(): void {
-  if (!runtimeConfig.value.enabled) {
-    stopWakeListening()
-    return
-  }
-  if (recognition) return
-
-  const SpeechRecognitionCtor = resolveSpeechRecognitionCtor()
-  if (!SpeechRecognitionCtor) {
-    errorMessage.value = t('assistant.floatingBall.unsupported')
-    listening.value = false
-    return
-  }
-
-  const instance = new SpeechRecognitionCtor()
-  recognition = instance
-  errorMessage.value = ''
-  instance.lang = runtimeConfig.value.language
-  instance.continuous = runtimeConfig.value.continuous
-  instance.interimResults = true
-  instance.onstart = () => {
-    listening.value = true
-  }
-  instance.onerror = (event) => {
-    const errorType = String(event?.error || 'unknown')
-    if (errorType === 'not-allowed' || errorType === 'service-not-allowed') {
-      errorMessage.value = t('assistant.floatingBall.permissionDenied')
-      stopWakeListening()
-      return
-    }
-    errorMessage.value = t('assistant.floatingBall.recognitionError', { error: errorType })
-  }
-  instance.onresult = (event) => {
-    const fragments: string[] = []
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const line = event.results[i]?.[0]?.transcript
-      if (typeof line === 'string' && line.trim()) {
-        fragments.push(line.trim())
-      }
-    }
-    if (!fragments.length) return
-    const transcript = fragments.join(' ')
-    lastHeard.value = transcript
-    maybeWake(transcript)
-  }
-  instance.onend = () => {
-    listening.value = false
-    recognition = null
-    scheduleRestart()
-  }
-
-  try {
-    instance.start()
-  } catch (error) {
-    recognition = null
-    listening.value = false
-    errorMessage.value = error instanceof Error ? error.message : String(error)
-    scheduleRestart()
-  }
-}
-
-async function loadRuntimeConfig(): Promise<void> {
-  try {
-    const next = await transport.send(AssistantEvents.floatingBall.getRuntimeConfig, undefined)
-    runtimeConfig.value = next
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error)
-  }
-}
-
-async function openVoicePanel(source: 'click' | 'wake-word'): Promise<void> {
-  await transport.send(AssistantEvents.floatingBall.openVoicePanel, { source })
-}
 
 function updateFloatingBallPosition(x: number, y: number): void {
   const now = Date.now()
@@ -209,9 +34,10 @@ function onPointerMove(event: MouseEvent): void {
   }
   if (!isDragging.value) return
 
-  const nextX = Math.round(event.screenX - dragState.offsetX)
-  const nextY = Math.round(event.screenY - dragState.offsetY)
-  updateFloatingBallPosition(nextX, nextY)
+  updateFloatingBallPosition(
+    Math.round(event.screenX - dragState.offsetX),
+    Math.round(event.screenY - dragState.offsetY)
+  )
 }
 
 function onPointerUp(): void {
@@ -235,32 +61,27 @@ function onPointerDown(event: MouseEvent): void {
 
 function onBallClick(): void {
   if (isDragging.value) return
-  void openVoicePanel('click')
+  void transport.send(AssistantEvents.floatingBall.openVoicePanel, { source: 'click' })
 }
-
-onMounted(async () => {
-  await loadRuntimeConfig()
-  startWakeListening()
-})
 
 onBeforeUnmount(() => {
   window.removeEventListener('mousemove', onPointerMove)
   window.removeEventListener('mouseup', onPointerUp)
-  stopWakeListening()
 })
 </script>
 
 <template>
-  <div class="floating-ball-root" @mousedown="onPointerDown" @click="onBallClick">
-    <div
-      class="floating-ball"
-      :title="statusText"
-      :class="{ listening: showWakeBadge, error: !!errorMessage }"
-    >
-      <span class="assistant-char">阿</span>
-    </div>
-    <div v-if="showWakeBadge" class="wake-dot" />
-  </div>
+  <button
+    class="floating-ball-root"
+    type="button"
+    :aria-label="t('assistant.floatingBall.clickToOpen')"
+    @mousedown="onPointerDown"
+    @click="onBallClick"
+  >
+    <span class="floating-ball" aria-hidden="true">
+      <span class="i-carbon-microphone-filled" aria-hidden="true" />
+    </span>
+  </button>
 </template>
 
 <style scoped>
@@ -271,7 +92,14 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin: 0;
+  padding: 0;
   user-select: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  appearance: none;
   cursor: grab;
 }
 
@@ -282,48 +110,34 @@ onBeforeUnmount(() => {
 .floating-ball {
   width: 48px;
   height: 48px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #fef3c7, #f97316 72%);
-  border: 1px solid rgba(255, 255, 255, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 10px 24px rgba(120, 53, 15, 0.35);
+  border: 1px solid var(--shell-primary-border);
+  border-radius: var(--shell-radius-full);
+  background: var(--shell-primary);
+  box-shadow: 0 8px 14px var(--shell-shadow);
   transition:
-    transform 0.15s ease,
-    box-shadow 0.2s ease;
+    transform 160ms ease-out,
+    box-shadow 160ms ease-out,
+    filter 160ms ease-out;
 }
 
 .floating-ball:hover {
   transform: scale(1.04);
-  box-shadow: 0 12px 26px rgba(120, 53, 15, 0.45);
+  box-shadow: 0 8px 14px var(--shell-shadow);
+  filter: brightness(1.06);
 }
 
-.floating-ball.listening {
-  box-shadow:
-    0 0 0 6px rgba(251, 146, 60, 0.2),
-    0 12px 26px rgba(120, 53, 15, 0.45);
-}
-
-.floating-ball.error {
-  background: radial-gradient(circle at 30% 30%, #fecaca, #ef4444 72%);
-}
-
-.assistant-char {
-  color: #7c2d12;
+.floating-ball > span {
+  color: var(--shell-on-primary);
   font-size: 20px;
-  font-weight: 700;
   line-height: 1;
 }
 
-.wake-dot {
-  position: absolute;
-  right: 5px;
-  bottom: 4px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15);
+@media (prefers-reduced-motion: reduce) {
+  .floating-ball {
+    transition: none;
+  }
 }
 </style>

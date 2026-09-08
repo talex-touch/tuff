@@ -36,6 +36,9 @@ function removeUnhandledProcessErrorGuards(): void {
 }
 
 const mocks = vi.hoisted(() => ({
+  clipboardAvailableFormats: vi.fn(),
+  clipboardClear: vi.fn(),
+  clipboardReadBuffer: vi.fn(),
   clipboardWrite: vi.fn(),
   clipboardWriteImage: vi.fn(),
   clipboardWriteBuffer: vi.fn(),
@@ -50,6 +53,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   clipboard: {
+    availableFormats: mocks.clipboardAvailableFormats,
+    clear: mocks.clipboardClear,
+    readBuffer: mocks.clipboardReadBuffer,
     write: mocks.clipboardWrite,
     writeImage: mocks.clipboardWriteImage,
     writeBuffer: mocks.clipboardWriteBuffer
@@ -176,6 +182,7 @@ describe('clipboard-autopaste-automation', () => {
     vi.clearAllMocks()
     mocks.getAutoPasteCapabilityPatch.mockResolvedValue({ supportLevel: 'supported' })
     mocks.sendPlatformShortcut.mockResolvedValue(undefined)
+    mocks.clipboardAvailableFormats.mockReturnValue([])
   })
 
   afterEach(async () => {
@@ -289,6 +296,45 @@ describe('clipboard-autopaste-automation', () => {
     expect(mocks.getAutoPasteCapabilityPatch).toHaveBeenCalledOnce()
     expect(mocks.sendPlatformShortcut).toHaveBeenCalledWith('paste')
     expect(mocks.showInternalSystemNotification).not.toHaveBeenCalled()
+  })
+
+  it('reports a voice delivery failure while restoring every surviving clipboard format', async () => {
+    vi.useFakeTimers()
+    const snapshot = [
+      { format: 'text/plain', data: Buffer.from('prior plain') },
+      { format: 'text/html', data: Buffer.from('<b>prior rich</b>') },
+      { format: 'application/x-app-state', data: Buffer.from([0, 255, 1]) }
+    ]
+    mocks.clipboardAvailableFormats.mockReturnValue(snapshot.map(({ format }) => format))
+    mocks.clipboardReadBuffer.mockImplementation(
+      (format: string) => snapshot.find((item) => item.format === format)?.data
+    )
+    mocks.clipboardWriteBuffer.mockImplementation((format: string) => {
+      if (format === 'text/html') throw new Error('clipboard locked')
+    })
+    const automation = new ClipboardAutopasteAutomation(createOptions())
+
+    try {
+      const delivery = automation.handleVoiceTextRequest('voice text')
+      await vi.runAllTimersAsync()
+      await expect(delivery).resolves.toEqual({
+        success: false,
+        code: 'AUTO_PASTE_FAILED',
+        message: 'Voice text was pasted, but the previous clipboard could not be restored.'
+      })
+
+      expect(mocks.clipboardClear).toHaveBeenCalledOnce()
+      expect(mocks.clipboardWriteBuffer).toHaveBeenCalledWith('text/plain', snapshot[0].data)
+      expect(mocks.clipboardWriteBuffer).toHaveBeenCalledWith('text/html', snapshot[1].data)
+      expect(mocks.clipboardWriteBuffer).toHaveBeenCalledWith(
+        'application/x-app-state',
+        snapshot[2].data
+      )
+    } finally {
+      vi.useRealTimers()
+      mocks.clipboardReadBuffer.mockReset()
+      mocks.clipboardWriteBuffer.mockReset()
+    }
   })
 
   it('normalizes copy-and-paste payloads and reports auto paste failures', async () => {

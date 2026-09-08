@@ -26,4 +26,5 @@ export const STREAM_SUFFIXES = {
   END: ':stream:end',
   ERROR: ':stream:error',
   CANCEL: ':stream:cancel',
+  STOP: ':stream:stop',
 } as const

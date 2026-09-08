@@ -20,14 +20,23 @@ describe('window-role', () => {
     expect(role.coreType).toBeUndefined()
   })
 
-  it('builds deterministic window args', () => {
+  it('builds deterministic voice dock window args', () => {
     const args = buildWindowArgs({
       touchType: 'assistant',
-      assistantType: 'voice-panel',
+      assistantType: 'voice-dock',
       metaOverlay: false,
     })
-    expect(args).toEqual(['--touch-type=assistant', '--assistant-type=voice-panel', '--meta-overlay=false'])
+    expect(args).toEqual(['--touch-type=assistant', '--assistant-type=voice-dock', '--meta-overlay=false'])
   })
+
+  it('rejects retired assistant window roles instead of selecting a renderer surface', () => {
+    const role = parseWindowArgs(['--touch-type=assistant', '--assistant-type=voice-panel'])
+
+    expect(role.touchType).toBe('assistant')
+    expect(role.assistantType).toBeUndefined()
+    expect(resolveRendererWindowMode(role)).toBe('MainApp')
+  })
+
 
   it('round-trips screenshot overlay and editor roles to dedicated renderer modes', () => {
     const overlayRole = {
@@ -69,9 +78,9 @@ describe('window-role', () => {
     expect(
       resolveRendererWindowMode({
         touchType: 'assistant',
-        assistantType: 'voice-panel',
+        assistantType: 'voice-dock',
       }),
-    ).toBe('AssistantVoicePanel')
+    ).toBe('AssistantVoiceDock')
     expect(
       resolveRendererWindowMode({
         touchType: 'core-box',
