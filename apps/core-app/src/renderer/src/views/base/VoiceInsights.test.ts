@@ -71,26 +71,16 @@ describe('VoiceInsights empty state', () => {
 
   /**
    * The description restated the title and the privacy sentence is already the page subtitle, so
-   * both are gone. What fills the space instead is ornament and has to stay ornament: there is
-   * no data on this screen, and anything shaped like a waveform would be drawing one from
-   * nothing. Hidden from assistive technology for the same reason.
+   * both are gone. Nothing replaces them: three attempts at an ambient character field all read
+   * as dirt rather than as sound, and an empty screen beats a decorated one that looks broken.
    */
-  it('shows one line over an ambient field, with nothing that could be read as data', async () => {
+  it('shows the icon and one line, and nothing else', async () => {
     const wrapper = await mountPage()
 
     const empty = wrapper.find('[data-testid="voice-insights-empty"]')
     expect(empty.exists()).toBe(true)
     expect(empty.findAll('p')).toHaveLength(0)
 
-    const stream = empty.find('.VoiceInsights-Stream')
-    expect(stream.attributes('aria-hidden')).toBe('true')
-    expect(stream.findAll('span').length).toBeGreaterThan(1)
-    // Deterministic: the same field on every mount, so nothing about it encodes the moment the
-    // page opened.
-    const second = await mountPage()
-    expect(second.find('.VoiceInsights-Stream').text()).toBe(stream.text())
-
-    second.unmount()
     wrapper.unmount()
   })
 })
