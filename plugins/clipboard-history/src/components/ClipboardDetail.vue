@@ -16,6 +16,7 @@ import {
   resolveListImageSrc,
 } from '~/utils/clipboard-items'
 import { detectSecret, getClipboardDisplayTitle, getClipboardPreviewText } from '~/utils/clipboard-shapes'
+import { useMaskHostIp } from '~/utils/use-disclosure-state'
 
 const props = defineProps<{
   item: PluginClipboardItem | null
@@ -30,6 +31,9 @@ const emit = defineEmits<{
   (event: 'previewFile', file: ClipboardFileNode): void
   (event: 'annotate', payload: { note?: string | null; tags?: string[] }): void
 }>()
+
+/** 插件存储只在这一处读，往下当 prop 传——组件内部读的话开关就没法从外部翻转，也就测不到。 */
+const maskHostIp = useMaskHostIp()
 
 const summary = computed(() => (props.item ? getClipboardSummary(props.item) : null))
 const sourceInfo = computed(() =>
@@ -362,6 +366,7 @@ function readableTextOn(color: string): string {
       <ClipboardInsight
         :item="item"
         :reveal-secret="revealSecret"
+        :mask-host-ip="maskHostIp"
         @copy-text="value => emit('copyText', value)"
         @open-link="url => emit('openLink', url)"
       />

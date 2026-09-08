@@ -3,9 +3,9 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import ClipboardInsight from './ClipboardInsight.vue'
 
-function mountWith(content: string) {
+function mountWith(content: string, props: Record<string, unknown> = {}) {
   return mount(ClipboardInsight, {
-    props: { item: { id: 1, type: 'text', content } as PluginClipboardItem },
+    props: { item: { id: 1, type: 'text', content } as PluginClipboardItem, ...props },
   })
 }
 
@@ -70,6 +70,26 @@ describe('clipboardInsight ssh panel', () => {
     const wrapper = mountWith('ssh deploy@10.0.3.14')
 
     expect(rows(wrapper)).not.toHaveProperty('端口')
+  })
+
+  it('masks by default when no flag is passed', () => {
+    // Vue 把缺省的 Boolean prop 铸成 `false`，所以"默认为真"必须靠 withDefaults 显式声明。
+    // 少了它，不传 prop 就等于关掉掩码——而不传 prop 正是真实调用方最容易写出的形态。
+    const wrapper = mountWith('ssh deploy@10.0.3.14')
+
+    expect(rows(wrapper)['主机']).toContain('•')
+  })
+
+  it('shows the ip in the clear when masking is turned off, and still splits the fields', () => {
+    const wrapper = mountWith('ssh deploy@10.0.3.14 -p 2222', { maskHostIp: false })
+
+    // 关掉的是掩码，不是识别：拆行必须照常。
+    expect(rows(wrapper)).toMatchObject({
+      用户: 'deploy',
+      主机: '10.0.3.14',
+      端口: '2222',
+    })
+    expect(wrapper.find('.kv-tag.reveal').exists()).toBe(false)
   })
 
   it('does not claim an email address is a host', () => {

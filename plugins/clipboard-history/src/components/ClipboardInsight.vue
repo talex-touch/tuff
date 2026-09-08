@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import { computed, ref, watch } from 'vue'
-import { useMaskHostIp } from '~/utils/use-disclosure-state'
 import ClipboardGlyph from './ClipboardGlyph.vue'
 import {
   getClipboardColorTokens,
@@ -20,11 +19,23 @@ import {
   selectClipboardInsight,
 } from '~/utils/clipboard-shapes'
 
-const props = defineProps<{
+const props = withDefaults(
+  defineProps<{
   item: PluginClipboardItem | null
   /** 由详情区那一个开关控制。私钥永远拿不到明文，`readSecretPlainValue` 里也拦了一道。 */
   revealSecret?: boolean
-}>()
+  /**
+   * 主机 IP 是否掩码，默认 true。
+   *
+   * 作为 prop 传进来而不是在这里读插件存储：`usePluginStorage` 在插件上下文之外会降级成
+   * 内存状态，组件内部读的话就没有任何外部手段能翻转它——这个开关也就测不到。
+   */
+  maskHostIp?: boolean
+  }>(),
+  // Vue 会把缺省的 Boolean prop 铸成 `false`，不是 `undefined`——
+  // 想要"默认掩码"就必须显式声明，否则不传 prop 等于关掉掩码。
+  { maskHostIp: true },
+)
 
 const emit = defineEmits<{
   (event: 'copyText', value: string): void
@@ -37,7 +48,7 @@ const colorTokens = computed(() => getClipboardColorTokens(props.item))
 const secret = computed(() => detectSecret(props.item?.content))
 const command = computed(() => detectCommand(props.item?.content))
 const ssh = computed(() => detectSshInfo(props.item?.content))
-const maskHostIp = useMaskHostIp()
+const maskHostIp = computed(() => props.maskHostIp)
 const revealHost = ref(false)
 
 // 换记录时收回揭示。上一条的主机不该因为选中了新记录还摊在那里。
