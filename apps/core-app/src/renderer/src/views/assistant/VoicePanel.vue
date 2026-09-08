@@ -140,6 +140,16 @@ const CONTROL_TALL_SIZE = 40
 /** padding (10) + both round slots (68) + both gaps (16); the centre gets what is left. */
 const PILL_CHROME_WIDTH = 94
 /**
+ * The per-character reveal.
+ *
+ * `CHAR_STAGGER_MS` is the gap between neighbours; `CHAR_STAGGER_TOTAL_MS` is the ceiling on the
+ * whole wave, so a long sentence tightens its spacing instead of taking a second and a half to
+ * finish arriving. The message is still one string to a screen reader — the spans are presentation.
+ */
+const CHAR_STAGGER_MS = 16
+const CHAR_STAGGER_TOTAL_MS = 240
+
+/**
  * Slack for the pixel the measurement cannot see.
  *
  * `scrollWidth` is an integer and the text's real width is not, so a sentence measuring 145.7
@@ -297,6 +307,13 @@ const centerText = computed(() => {
  * the jarring part. The waveform is one identity for as long as it is the waveform — its bars
  * animate on their own and must not be torn down every level frame.
  */
+/** Split for the reveal only; `centerText` stays the single source of the sentence. */
+const centerChars = computed(() => Array.from(centerText.value))
+function charDelay(index: number): number {
+  const count = Math.max(1, centerChars.value.length)
+  return Math.round(index * Math.min(CHAR_STAGGER_MS, CHAR_STAGGER_TOTAL_MS / count))
+}
+
 const centerKey = computed(() =>
   centerText.value ? `text:${centerText.value}` : listening.value ? 'wave' : 'idle'
 )
@@ -587,7 +604,21 @@ function handleVoiceSessionEvent(generation: number, event: VoiceAsrStreamEvent)
     levels.value = [...levels.value.slice(1), normalizeLevel(event.rms)]
     return
   }
-  if (event.type === 'partial' || event.type === 'final') return
+  if (event.type === 'partial') return
+  if (event.type === 'final') {
+    if (!event.text.trim() || event.delivery?.method === 'none') {
+      retireVoiceSession(generation)
+      showNotice(
+        t(
+          !event.text.trim()
+            ? 'assistant.voicePanel.voiceTranscribeEmpty'
+            : 'assistant.voicePanel.voiceDeliveryFailed'
+        ),
+        'warning'
+      )
+    }
+    return
+  }
   completeVoiceSession(generation)
 }
 
@@ -953,7 +984,13 @@ onBeforeUnmount(() => {
             :class="{ 'voice-dock__text--shimmer': showsOrb }"
             :data-testid="notice ? 'voice-notice' : 'voice-hint'"
           >
-            {{ centerText }}
+            <span
+              v-for="(char, index) in centerChars"
+              :key="`${centerKey}:${index}`"
+              class="voice-dock__char"
+              :style="{ animationDelay: `${charDelay(index)}ms` }"
+              >{{ char }}</span
+            >
           </p>
           <div
             v-else-if="listening"
@@ -1310,7 +1347,10 @@ onBeforeUnmount(() => {
   inset: 5px;
 }
 
-.voice-swap-enter-from,
+/*
+ * Only the leave blurs as a block now. The arriving content has its own wave of characters, and
+ * blurring the whole slot on top of that reads as two effects fighting for the same moment.
+ */
 .voice-swap-leave-to {
   opacity: 0;
   filter: blur(5px);
@@ -1347,7 +1387,46 @@ onBeforeUnmount(() => {
   /* The pill is symmetric around its centre, so a line that does wrap wraps centred. Only the
      card overrides this: two lines read as a paragraph, and paragraphs are ragged on one side. */
   text-align: center;
+  /*
+   * One line for the whole width animation.
+   *
+   * The box takes 260ms to reach the width the text asked for, and until it gets there the text
+   * does not fit — so it wrapped, then snapped back onto one line when the box caught up. That
+   * flash was the whole "not smooth". Held to one line it simply reveals as the pill opens.
+   */
+  white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* The card is where wrapping is the point, so it is the card that turns it back on. */
+.voice-dock--expanded .voice-dock__text {
+  white-space: normal;
+}
+
+/*
+ * Characters arrive in a wave rather than the sentence appearing at once.
+ *
+ * `inline-block` is what makes each one animatable, and `pre` keeps the spaces between words
+ * from collapsing now that every character is its own box.
+ */
+.voice-dock__char {
+  display: inline-block;
+  animation: voice-char-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  white-space: pre;
+}
+
+@keyframes voice-char-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(3px) scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
 }
 
 .voice-dock--danger .voice-dock__text {
@@ -1403,10 +1482,14 @@ onBeforeUnmount(() => {
     transition: opacity 100ms ease-out;
   }
 
-  .voice-swap-enter-from,
   .voice-swap-leave-to {
     filter: none;
     transform: none;
+  }
+
+  /* The sentence arrives all at once, with no delay to stagger and nothing to blur through. */
+  .voice-dock__char {
+    animation: none;
   }
 
   /* The controls resize with the surface, so they follow the same rule the surface does. */

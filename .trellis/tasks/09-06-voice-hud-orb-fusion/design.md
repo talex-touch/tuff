@@ -642,3 +642,29 @@ const needed = measureNaturalWidth(element) + TEXT_WIDTH_SLACK + chrome
 `.voice-dock__text` 没写 `text-align`，默认 left。单行时看不出来（盒子贴着文字），一换行就露馅。胶囊是绕中心对称的，所以基础态补 `text-align: center`；只有卡片态覆盖成 left——两行是段落，段落本来就该有一边是毛边。
 
 这条**没有守卫**：CSS 的 `text-align` 在 jsdom 里观察不到，删掉它测试照样全绿。如实记一笔，不假装盖住。
+
+## 15. 变宽过程中的换行，与逐字浮现（2026-09-07）
+
+### 15.1 换行发生在动画中途
+
+盒子要 260ms 才长到文字要的宽度，**在它到位之前文字放不下**，于是先换行、等盒子追上来再弹回一行。那一下回弹就是「不够丝滑」的全部内容——终态是对的，过程是错的。
+
+胶囊态改成 `white-space: nowrap`：一行到底，宽度动画期间只是「露出得越来越多」，没有回弹。换行本来就是**卡片**的事，所以由 `.voice-dock--expanded` 把它打开。
+
+### 15.2 逐字浮现
+
+```html
+<span v-for="(char, index) in centerChars" :style="{ animationDelay: charDelay(index) + 'ms' }">
+```
+
+每个字 `inline-block` + 一段 260ms 的 `opacity / blur(4px) / translateY(3px) scale(0.94)` 关键帧。`white-space: pre` 让词间空格不被吃掉——每个字符现在都是独立的盒子。
+
+**波次有上限**：`charDelay = index × min(16ms, 240ms / 字数)`。没有这个上限，长句子会在胶囊打开一秒多之后还在往外蹦，那就不是「浮现」而是「卡顿」了。测试断言的是「最后一个字的延迟 ≤ 240ms 且延迟单调不减」，把上限去掉立刻转红。
+
+整块的 `.voice-swap` **进场**模糊同时撤掉了：内容自己有一波逐字浮现，再叠一层整体模糊，是两个效果抢同一个时刻。**离场**仍然整块模糊缩走。
+
+文案对外仍是一整个字符串——`.text()` 断言逐字符拼回原句，这也是这份文件里其它所有文案断言的前提。Vue 的 `whitespace: 'condense'` 会把 `<p>` 与 `<span>` 之间的换行空白整段删掉，所以模板换行不会渲染出多余的前导空格。
+
+### 15.3 没有守卫的两条
+
+`white-space` 和 `text-align` 在 jsdom 里都观察不到，删掉它们测试照样绿。逐字浮现和波次上限有守卫，这两条 CSS 声明没有——记在这里，不写测不出东西的用例。
