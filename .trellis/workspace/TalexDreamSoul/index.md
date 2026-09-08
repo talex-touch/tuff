@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 67
+- **Total Sessions**: 68
 - **Last Active**: 2026-09-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~676 | Active |
+| `journal-2.md` | ~714 | Active |
 | `journal-1.md` | ~2005 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -31,6 +31,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 68 | 2026-09-08 | 剪贴板识别 SSH 与主机端点 | `49560c7cf`, `ec081c9e8`, `205190ed8`, `8da78649b`, `96e5f7894`, `8b00fff05` | `master` |
 | 67 | 2026-09-08 | 剪贴板历史：系统预览、快速标注、OCR 收纳 | `7bad7935d`, `e2eeac327`, `d5a703d8e`, `d5c10d261`, `c9f42a721` | `master` |
 | 66 | 2026-09-07 | 剪贴板历史：密钥掩码一致性、内容分类统一与按类保留 | `fbddec35d`, `23c734c50`, `e1796d4a9`, `820ea3c78`, `d848b0b74`, `e2b7bc39a`, `d160bdfcf`, `67dd05a6a`, `cdc705adf`, `abd485732`, `99f372f45`, `98511ac2a`, `b129f083e`, `f0baca5f3` | `feature/clipboard-layout-shell` |
 | 65 | 2026-09-06 | 模型菜单筛选条改用 TxFilterChips：provider 级图标 chip、滑动指示器、渠道分组 | `c3b5222f4`, `2528f40ad` | `release/ota-transport-error-classification-20260904` |
