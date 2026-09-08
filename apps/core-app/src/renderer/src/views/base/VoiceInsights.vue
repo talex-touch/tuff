@@ -8,7 +8,7 @@ import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 
@@ -17,6 +17,113 @@ const INSIGHT_DAY_COUNT = 365
 
 /** How many weeks the compact activity strip shows; the heatmap below still covers the year. */
 const WEEKLY_BAR_COUNT = 12
+
+/**
+ * The waveform behind the empty state.
+ *
+ * Ornament, and it has to stay ornament: there is no data on this screen, so these curves are a
+ * texture, not a reading. What makes them legible as sound rather than as decoration is that
+ * every line is *continuous* — three earlier attempts drew sparse characters and every one of
+ * them read as dust on the display.
+ *
+ * Canvas rather than DOM because this is 200-odd points per line per frame; the alternative is
+ * an SVG path string rebuilt sixty times a second.
+ */
+const WAVE_LAYERS = [
+  { amplitude: 0.26, frequency: 1.1, speed: 0.11, alpha: 0.5, width: 1.6 },
+  { amplitude: 0.18, frequency: 1.9, speed: -0.16, alpha: 0.34, width: 1.3 },
+  { amplitude: 0.12, frequency: 3.1, speed: 0.23, alpha: 0.22, width: 1.1 },
+  { amplitude: 0.07, frequency: 5.3, speed: -0.31, alpha: 0.14, width: 1 }
+]
+/** Only redraw ~30 times a second: this is background texture, not an animation anyone watches. */
+const WAVE_FRAME_MS = 33
+
+const waveCanvas = ref<HTMLCanvasElement | null>(null)
+let waveFrame: number | null = null
+let waveObserver: ResizeObserver | null = null
+
+function drawWave(canvas: HTMLCanvasElement, elapsed: number): void {
+  const context = canvas.getContext('2d')
+  // jsdom has no 2D context, and a themed canvas is not worth crashing a page over.
+  if (!context) return
+
+  const { width, height } = canvas
+  const ratio = window.devicePixelRatio || 1
+  context.clearRect(0, 0, width, height)
+  context.strokeStyle = window.getComputedStyle(canvas).color
+  context.lineCap = 'round'
+
+  const centre = height / 2
+  for (const layer of WAVE_LAYERS) {
+    context.beginPath()
+    context.globalAlpha = layer.alpha
+    context.lineWidth = layer.width * ratio
+    for (let x = 0; x <= width; x += 2 * ratio) {
+      const position = x / width
+      // Damped where the type sits, so the words stand in still air instead of over a wave.
+      const envelope = 1 - Math.exp(-(((position - 0.5) * 2.6) ** 2))
+      const phase = position * Math.PI * 2 * layer.frequency + elapsed * layer.speed
+      const y = centre + Math.sin(phase) * layer.amplitude * centre * envelope
+      if (x === 0) context.moveTo(x, y)
+      else context.lineTo(x, y)
+    }
+    context.stroke()
+  }
+  context.globalAlpha = 1
+}
+
+function resizeWave(canvas: HTMLCanvasElement): void {
+  const ratio = window.devicePixelRatio || 1
+  const rect = canvas.getBoundingClientRect()
+  // Measured from the element, never from the window: the canvas is inside a padded card whose
+  // width has nothing to do with the viewport's.
+  canvas.width = Math.max(1, Math.round(rect.width * ratio))
+  canvas.height = Math.max(1, Math.round(rect.height * ratio))
+}
+
+function stopWave(): void {
+  if (waveFrame !== null) {
+    cancelAnimationFrame(waveFrame)
+    waveFrame = null
+  }
+  waveObserver?.disconnect()
+  waveObserver = null
+}
+
+function startWave(canvas: HTMLCanvasElement): void {
+  stopWave()
+  resizeWave(canvas)
+
+  if (typeof ResizeObserver !== 'undefined') {
+    waveObserver = new ResizeObserver(() => {
+      resizeWave(canvas)
+      drawWave(canvas, performance.now() / 1000)
+    })
+    waveObserver.observe(canvas)
+  }
+
+  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  if (still) {
+    // One frame, held. The shape is the point; the drift is the part that can be declined.
+    drawWave(canvas, 0)
+    return
+  }
+
+  let last = 0
+  const tick = (now: number): void => {
+    if (now - last >= WAVE_FRAME_MS) {
+      last = now
+      drawWave(canvas, now / 1000)
+    }
+    waveFrame = requestAnimationFrame(tick)
+  }
+  waveFrame = requestAnimationFrame(tick)
+}
+
+watch(waveCanvas, (canvas) => {
+  if (canvas) startWave(canvas)
+  else stopWave()
+})
 
 interface HeatmapCell {
   date: string
@@ -498,6 +605,9 @@ onBeforeUnmount(() => {
   disposed = true
   loadRevision += 1
   refreshing.value = false
+  // The watcher only fires when the canvas goes away with the branch; leaving the page does not
+  // go through it, and a loose rAF outlives the component that owns it.
+  stopWave()
 })
 </script>
 
@@ -620,10 +730,11 @@ onBeforeUnmount(() => {
       data-testid="voice-insights-empty"
     >
       <!--
-        Icon and one line, nothing else. The description restated the title, and the privacy
+        Icon and one line over a waveform. The description restated the title, and the privacy
         sentence is already the page subtitle four inches above it — an empty state that
         explains itself twice reads as an apology for being empty.
       -->
+      <canvas ref="waveCanvas" class="VoiceInsights-Wave" aria-hidden="true" />
       <span class="VoiceInsights-EmptyIcon i-ri-mic-line" aria-hidden="true" />
       <h2>{{ t('voiceInsights.empty.title') }}</h2>
     </div>
@@ -1448,6 +1559,27 @@ onBeforeUnmount(() => {
     color: var(--shell-text-secondary);
     font-size: var(--shell-fs-body);
     line-height: 1.55;
+  }
+}
+
+/*
+ * Sized by CSS, resolved by JS: the backing store is set from the element's own box times the
+ * device ratio, so the curves are crisp on a retina display instead of scaled up from CSS pixels.
+ * `color` is what the canvas strokes with, which is what keeps it on the theme.
+ */
+.VoiceInsights-Wave {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  color: var(--shell-primary);
+  inset: 0;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VoiceInsights-Wave {
+    opacity: 0.35;
   }
 }
 

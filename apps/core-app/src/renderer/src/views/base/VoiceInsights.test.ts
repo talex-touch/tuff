@@ -74,14 +74,41 @@ describe('VoiceInsights empty state', () => {
    * both are gone. Nothing replaces them: three attempts at an ambient character field all read
    * as dirt rather than as sound, and an empty screen beats a decorated one that looks broken.
    */
-  it('shows the icon and one line, and nothing else', async () => {
+  it('shows the icon and one line over a waveform, and nothing else', async () => {
     const wrapper = await mountPage()
 
     const empty = wrapper.find('[data-testid="voice-insights-empty"]')
     expect(empty.exists()).toBe(true)
     expect(empty.findAll('p')).toHaveLength(0)
 
+    // Texture, not a reading: there is no data on this screen, so it is hidden from anything
+    // that would try to announce it.
+    const wave = empty.find('canvas.VoiceInsights-Wave')
+    expect(wave.exists()).toBe(true)
+    expect(wave.attributes('aria-hidden')).toBe('true')
+
     wrapper.unmount()
+  })
+
+  /**
+   * A loose `requestAnimationFrame` outlives the component that scheduled it, and this one is
+   * scheduled by a watcher that does not fire when the whole page goes away.
+   *
+   * Scope note: this does *not* cover the null-context guard in `drawWave`. jsdom returns null
+   * from `getContext('2d')`, but no frame runs before the test ends, so that branch is never
+   * executed here — it is defensive code without a guard, and naming this test after it would
+   * claim coverage that does not exist.
+   */
+  it('cancels its animation frame on unmount', async () => {
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame')
+
+    const wrapper = await mountPage()
+    expect(wrapper.find('canvas.VoiceInsights-Wave').exists()).toBe(true)
+
+    wrapper.unmount()
+    expect(cancel).toHaveBeenCalled()
+
+    cancel.mockRestore()
   })
 })
 
