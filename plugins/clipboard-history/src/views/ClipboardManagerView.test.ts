@@ -1,5 +1,5 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import ClipboardManagerView from './ClipboardManagerView.vue'
 
@@ -48,6 +48,14 @@ vi.mock('@talex-touch/utils/plugin/sdk/system', () => ({
 }))
 
 describe('clipboardManagerView', () => {
+  /**
+   * 每个用例都 `mount(..., { attachTo: document.body })`，组件在 document 上挂了 keydown。
+   * 用例结尾的 `wrapper.unmount()` 在断言抛出时根本不会执行，于是那个组件继续活着，
+   * 后面用例的 `document.dispatchEvent` 会同时打到它身上——一个失败的用例因此能把
+   * 后面几个无关用例一起弄红，指向完全错误的地方。
+   */
+  enableAutoUnmount(afterEach)
+
   beforeEach(() => {
     vi.clearAllMocks()
     sdkMocks.clipboard.write.mockResolvedValue(undefined)
@@ -186,11 +194,18 @@ describe('clipboardManagerView', () => {
     })
     await flushPromises()
 
-    // 洞察区只渲染一块：图片走 OCR。主题色改由缩略图下方的色带承载（09-05-color-capability）。
+    // 主题色由缩略图下方的色带承载（09-05-color-capability），不进洞察区。
     expect(wrapper.find('.color-chip').exists()).toBe(false)
+    // OCR 正文有十几行，顶在图片上方会把图片挤出视野，所以它收在「更多信息」里。
+    expect(wrapper.find('.ocr-text').exists()).toBe(false)
 
-    await wrapper.get('.ocr-text').trigger('click')
-    await wrapper.get('.keyword-chip').trigger('click')
+    await wrapper.get('.more-toggle').trigger('click')
+
+    // 按包含 .ocr-text 的那一块取词条：`.more-char` 也是拆词和调色板用的类名。
+    const ocrBlock = wrapper.findAll('.more-block').find(block => block.find('.ocr-text').exists())
+    expect(ocrBlock).toBeDefined()
+    await ocrBlock!.get('.ocr-text').trigger('click')
+    await ocrBlock!.get('.more-char').trigger('click')
 
     expect(sdkMocks.clipboard.write).toHaveBeenNthCalledWith(1, { text: 'Invoice total' })
     expect(sdkMocks.clipboard.write).toHaveBeenNthCalledWith(2, { text: 'invoice' })

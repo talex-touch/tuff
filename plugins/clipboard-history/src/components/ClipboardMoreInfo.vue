@@ -11,6 +11,7 @@ import {
 import ClipboardGlyph from './ClipboardGlyph.vue'
 import {
   getClipboardColorTokens,
+  getClipboardOcrInsight,
   getClipboardRetentionLabel,
   getClipboardSourceInfo,
   getClipboardTextInsight,
@@ -159,6 +160,12 @@ const rows = computed<DetailRow[]>(() => {
   ].filter((row): row is DetailRow => row !== null)
 })
 
+/**
+ * OCR 从详情区搬到这里。识别出来的正文往往有十几行，顶在图片上方会把图片本身挤出视野，
+ * 而它是「关于这张图的信息」，不是图本身。
+ */
+const ocrInsight = computed(() => getClipboardOcrInsight(props.item))
+
 const fullPalette = computed(() => {
   const fromImage = props.palette ?? []
   if (fromImage.length > 0) {
@@ -181,10 +188,15 @@ const textInsight = computed(() =>
  * 否则会出现「摘要说有原图路径、展开却没有」的空头支票。
  */
 const summary = computed(() => {
-  const names = rows.value.map(row => row.label)
-  // 备注和标签放在最前：它们是这条记录上唯一由人写的东西，收起时也该看得见有没有。
+  const names: string[] = []
+  // 备注和标签排在最前，和展开后的顺序一致：它们是这条记录上唯一由人写的东西，
+  // 收起时也该一眼看见有没有。
   if (savedNote.value || tags.value.length > 0) {
-    names.unshift(tags.value.length > 0 ? `标注 · ${tags.value.length} 标签` : '标注')
+    names.push(tags.value.length > 0 ? `标注 · ${tags.value.length} 标签` : '标注')
+  }
+  names.push(...rows.value.map(row => row.label))
+  if (ocrInsight.value) {
+    names.push('OCR')
   }
   if (fullPalette.value.length > 0) {
     names.push('完整调色板')
@@ -210,18 +222,6 @@ const summary = computed(() => {
     </button>
 
     <div v-if="expanded" class="more-body">
-      <div v-for="row in rows" :key="row.label" class="more-row">
-        <span class="more-label">{{ row.label }}</span>
-        <button
-          class="more-value"
-          type="button"
-          :title="`复制 ${row.label}`"
-          @click="emit('copyText', row.value)"
-        >
-          {{ row.value }}
-        </button>
-      </div>
-
       <div class="more-block annotate-block">
         <span class="more-block-title">标注</span>
 
@@ -261,6 +261,50 @@ const summary = computed(() => {
             @keydown.delete="handleTagBackspace"
             @blur="addTag"
           >
+        </div>
+      </div>
+
+      <div v-for="row in rows" :key="row.label" class="more-row">
+        <span class="more-label">{{ row.label }}</span>
+        <button
+          class="more-value"
+          type="button"
+          :title="`复制 ${row.label}`"
+          @click="emit('copyText', row.value)"
+        >
+          {{ row.value }}
+        </button>
+      </div>
+
+      <div v-if="ocrInsight" class="more-block">
+        <span class="more-block-title">
+          OCR
+          <small>
+            {{ ocrInsight.statusLabel }}
+            <template v-if="ocrInsight.language"> · {{ ocrInsight.language }}</template>
+            <template v-if="ocrInsight.confidence"> · {{ ocrInsight.confidence }}</template>
+          </small>
+        </span>
+        <button
+          v-if="ocrInsight.displayText"
+          class="ocr-text"
+          type="button"
+          title="复制 OCR 文本"
+          @click="emit('copyText', ocrInsight.displayText)"
+        >
+          {{ ocrInsight.displayText }}
+        </button>
+        <div v-if="ocrInsight.keywords.length > 0" class="more-chars">
+          <button
+            v-for="keyword in ocrInsight.keywords"
+            :key="keyword"
+            class="more-char"
+            type="button"
+            :title="`复制 ${keyword}`"
+            @click="emit('copyText', keyword)"
+          >
+            {{ keyword }}
+          </button>
         </div>
       </div>
 
@@ -402,10 +446,10 @@ const summary = computed(() => {
   gap: 6px;
 }
 
-/* 标注是唯一可写的区块，用一条上分隔线把它和上面只读的键值行分开。 */
+/* 标注排在最前，是唯一可写的区块；用一条下分隔线把它和下面只读的键值行分开。 */
 .annotate-block {
-  padding-top: 10px;
-  border-top: 1px solid color-mix(in srgb, var(--clipboard-border-color) 40%, transparent);
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--clipboard-border-color) 40%, transparent);
 }
 
 .note-input {
@@ -506,6 +550,31 @@ const summary = computed(() => {
   border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 70%, transparent);
   cursor: pointer;
   padding: 0;
+}
+
+.ocr-text {
+  width: 100%;
+  max-height: 92px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 55%, transparent);
+  background: color-mix(in srgb, var(--clipboard-surface-base) 88%, transparent);
+  color: var(--clipboard-text-primary);
+  cursor: pointer;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* 全局基线是 user-select: none；识别出来的正文是少数该放开的地方。 */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.ocr-text:hover {
+  border-color: color-mix(in srgb, var(--clipboard-color-accent) 55%, transparent);
 }
 
 .more-chars {
