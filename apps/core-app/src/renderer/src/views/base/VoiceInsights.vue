@@ -18,51 +18,6 @@ const INSIGHT_DAY_COUNT = 365
 /** How many weeks the compact activity strip shows; the heatmap below still covers the year. */
 const WEEKLY_BAR_COUNT = 12
 
-/**
- * The ambient character field behind the empty state.
- *
- * Ornament, not a reading: there is no data here yet, and anything that looked like a waveform
- * would be drawing one out of nothing. Glyphs drifting past cannot be mistaken for a measurement
- * — which is exactly why they are allowed to fill the space a chart is not.
- *
- * Generated once from a fixed sequence rather than `Math.random`, so the field is the same on
- * every mount and nothing about it depends on when the page happened to open.
- */
-const STREAM_ROW_COUNT = 7
-const STREAM_ROW_LENGTH = 220
-
-/**
- * Sparse bursts of two glyphs, not a wall of characters.
- *
- * The first attempt used `/\\|<>~+=*` at high density and read as corrupted terminal output:
- * the glyphs had too many angles to settle into anything, and at that density the eye caught the
- * seam where each row repeats itself for the loop. Dots and dashes in short runs with long gaps
- * between them read as particles drifting past instead — quiet enough that the repeat stops
- * being findable, which is the only way this technique looks unplanned.
- */
-const streamRows = Array.from({ length: STREAM_ROW_COUNT }, (_, row) => {
-  let glyphs = ''
-  let column = 0
-  while (glyphs.length < STREAM_ROW_LENGTH) {
-    const gap = 5 + Math.floor(Math.abs(Math.sin(row * 3.1 + column * 0.37)) * 16)
-    glyphs += ' '.repeat(gap)
-    const run = 3 + Math.floor(Math.abs(Math.cos(row * 1.3 + column * 0.21)) * 6)
-    for (let index = 0; index < run; index += 1) {
-      const wave = Math.sin((column + index) * 0.45 + row * 1.9)
-      glyphs += wave > 0.35 ? '—' : wave > -0.35 ? '·' : '-'
-    }
-    column += gap + run
-  }
-  const trimmed = glyphs.slice(0, STREAM_ROW_LENGTH)
-  return {
-    // Doubled so the horizontal loop has no seam; the density above is what keeps the repeat
-    // from being recognisable when both halves are on screen at once.
-    glyphs: trimmed + trimmed,
-    duration: `${74 + row * 13}s`,
-    direction: row % 2 === 0 ? 'normal' : ('reverse' as const)
-  }
-})
-
 interface HeatmapCell {
   date: string
   characters: number
@@ -669,14 +624,6 @@ onBeforeUnmount(() => {
         sentence is already the page subtitle four inches above it — an empty state that
         explains itself twice reads as an apology for being empty.
       -->
-      <div class="VoiceInsights-Stream" aria-hidden="true">
-        <span
-          v-for="(row, index) in streamRows"
-          :key="index"
-          :style="{ animationDuration: row.duration, animationDirection: row.direction }"
-          >{{ row.glyphs }}</span
-        >
-      </div>
       <span class="VoiceInsights-EmptyIcon i-ri-mic-line" aria-hidden="true" />
       <h2>{{ t('voiceInsights.empty.title') }}</h2>
     </div>
@@ -1501,62 +1448,6 @@ onBeforeUnmount(() => {
     color: var(--shell-text-secondary);
     font-size: var(--shell-fs-body);
     line-height: 1.55;
-  }
-}
-
-/*
- * Streams drifting past, thinned out toward the middle so the type sits in still air.
- *
- * The mask is what makes it read as flow rather than as wallpaper: the field is densest at the
- * edges and gone where the icon and the sentence are, so the eye is pulled inward without
- * anything actually moving toward the centre.
- */
-.VoiceInsights-Stream {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  overflow: hidden;
-  padding: var(--shell-space-5) 0;
-  box-sizing: border-box;
-  color: var(--shell-text-muted);
-  font-family: var(--shell-font-mono, ui-monospace, monospace);
-  font-size: 12px;
-  inset: 0;
-  /* Wide leading is half of what makes it read as drift rather than as a paragraph. */
-  line-height: 2.9;
-  letter-spacing: 0.05em;
-  /*
-   * The hole only has to clear the type. At `transparent 52%` reaching full ink at 94% the field
-   * was invisible everywhere except the outer corners — the correction for a wall of noise
-   * overshot into nothing at all.
-   */
-  mask-image: radial-gradient(ellipse 46% 56% at 50% 50%, transparent 26%, #000 72%);
-  opacity: 0.5;
-  pointer-events: none;
-  user-select: none;
-
-  span {
-    display: block;
-    animation: voice-insights-stream 30s linear infinite;
-    white-space: pre;
-    will-change: transform;
-  }
-}
-
-@keyframes voice-insights-stream {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-
-  to {
-    transform: translate3d(-50%, 0, 0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .VoiceInsights-Stream span {
-    animation: none;
   }
 }
 
