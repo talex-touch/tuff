@@ -313,19 +313,25 @@ class OcrService {
       // completion callback. Let the worker exit naturally instead of terminating that callback.
       worker.once('message', (message: unknown) => {
         const payload =
-          message && typeof message === 'object' ? (message as Record<string, unknown>) : null
-        if (!payload) {
+          message && typeof message === 'object' && !Array.isArray(message)
+            ? (message as Record<string, unknown>)
+            : null
+        if (!payload || payload.jobId !== jobId) {
           finishReject(new Error('[OCR Worker] Invalid worker response payload'))
           return
         }
 
         if (payload.status === 'success') {
           const resultPayload =
-            payload.result && typeof payload.result === 'object'
+            payload.result && typeof payload.result === 'object' && !Array.isArray(payload.result)
               ? (payload.result as Record<string, unknown>)
-              : {}
+              : null
+          if (!resultPayload || typeof resultPayload.text !== 'string') {
+            finishReject(new Error('[OCR Worker] Invalid success response payload'))
+            return
+          }
           finishResolve({
-            text: typeof resultPayload.text === 'string' ? resultPayload.text : '',
+            text: resultPayload.text,
             confidence:
               typeof resultPayload.confidence === 'number' ? resultPayload.confidence : undefined,
             language:
@@ -346,11 +352,11 @@ class OcrService {
           return
         }
 
-        const messageText =
-          typeof payload.error === 'string'
-            ? payload.error
-            : `[OCR Worker] Unknown worker error for job ${jobId}`
-        finishReject(new Error(messageText))
+        if (payload.status !== 'error' || typeof payload.error !== 'string' || !payload.error) {
+          finishReject(new Error('[OCR Worker] Invalid error response payload'))
+          return
+        }
+        finishReject(new Error(payload.error))
       })
 
       worker.once('error', (error) => {

@@ -6,7 +6,7 @@
 
 ## Confirmed Facts
 
-- 当前真实版本为 `2.4.14-beta.32`；该 tag 的 Windows、macOS arm64/x64 与 Linux 发布产物、签名、公证、同 SHA `release-quality` 和生产 Gate E 基线均已通过。
+- 最新已验证发布版本为 `2.4.14-beta.32`；该 tag 的 Windows、macOS arm64/x64 与 Linux 发布产物、签名、公证、同 SHA `release-quality` 和生产 Gate E 基线均已通过。`2.4.14-beta.33` 目前仅为未发布修复候选，不复用 Beta32 的发布或 OTA 证据。
 - `ci.yml` 对 pull request 与 master push 无路径过滤；GitHub `master` 的经典 branch protection 已启用 7 个稳定 required checks，最近 5 个 PR SHA 与最近 6 个 master SHA 均完整产生这些 context。`enforce_admins=true`、conversation resolution 已启用、`strict=false`；唯一 ruleset 仍处于 disabled。脱敏证据见 `evidence/github-remote-baseline.md`。
 - `build-and-release.yml` 已增加同一 SHA 的 `release-quality` 硬依赖；workflow 合同与负向变异证明 build/create/sync 不能绕过失败 gate。
 - 当前工作区包含跨 CoreApp、Nexus、Utils 和三个插件的未提交批次，远端全绿不能证明这批代码可发布。

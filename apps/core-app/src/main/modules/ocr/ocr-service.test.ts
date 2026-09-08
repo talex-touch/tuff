@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 const workerMocks = vi.hoisted(() => ({
-  instances: [] as Array<{ workerData: unknown; terminateCalls: number }>
+  instances: [] as Array<{ workerData: unknown; terminateCalls: number }>,
+  terminalMessage: undefined as unknown
 }))
 
 const {
@@ -139,11 +140,17 @@ vi.mock('node:worker_threads', async (importOriginal) => {
       private readonly listeners = new Map<string, (payload: unknown) => void>()
       private readonly instance: { workerData: unknown; terminateCalls: number }
 
-      constructor(_workerPath: string, options: { workerData: unknown }) {
+      constructor(_workerPath: string, options: { workerData: { jobId: number } }) {
         this.instance = { workerData: options.workerData, terminateCalls: 0 }
         workerMocks.instances.push(this.instance)
         queueMicrotask(() => {
-          this.listeners.get('message')?.({ status: 'success', result: { text: 'worker-path' } })
+          this.listeners.get('message')?.(
+            workerMocks.terminalMessage ?? {
+              status: 'success',
+              jobId: options.workerData.jobId,
+              result: { text: 'worker-path' }
+            }
+          )
         })
       }
 
@@ -200,6 +207,7 @@ interface OcrServiceTestAccess {
 
 afterEach(() => {
   workerMocks.instances.length = 0
+  workerMocks.terminalMessage = undefined
   vi.restoreAllMocks()
   ensureIntelligenceConfigLoadedMock.mockReset()
   getCapabilityOptionsMock.mockReset()
@@ -483,6 +491,66 @@ describe('OcrService runAgentJob local-first options', () => {
       options: { language?: string }
     }
     expect(workerData.options.language).toBeUndefined()
+    expect(workerMocks.instances[0]?.terminateCalls).toBe(0)
+  })
+
+  it('rejects malformed success messages without terminating during N-API completion', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    workerMocks.terminalMessage = {
+      status: 'success',
+      jobId: 13,
+      result: { text: 42 }
+    }
+
+    await expect(
+      service.invokeWorkerOcr(
+        13,
+        {
+          clipboardId: 501,
+          payloadHash: 'worker-malformed-success'
+        },
+        {
+          source: { type: 'file', filePath: '/tmp/clipboard-image.png' },
+          options: {}
+        },
+        {
+          type: 'file',
+          filePath: '/tmp/clipboard-image.png'
+        }
+      )
+    ).rejects.toThrow('[OCR Worker] Invalid success response payload')
+
+    expect(workerMocks.instances).toHaveLength(1)
+    expect(workerMocks.instances[0]?.terminateCalls).toBe(0)
+  })
+
+  it('rejects success messages for another job without terminating during N-API completion', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    workerMocks.terminalMessage = {
+      status: 'success',
+      jobId: 15,
+      result: { text: 'worker-path' }
+    }
+
+    await expect(
+      service.invokeWorkerOcr(
+        14,
+        {
+          clipboardId: 502,
+          payloadHash: 'worker-mismatched-job'
+        },
+        {
+          source: { type: 'file', filePath: '/tmp/clipboard-image.png' },
+          options: {}
+        },
+        {
+          type: 'file',
+          filePath: '/tmp/clipboard-image.png'
+        }
+      )
+    ).rejects.toThrow('[OCR Worker] Invalid worker response payload')
+
+    expect(workerMocks.instances).toHaveLength(1)
     expect(workerMocks.instances[0]?.terminateCalls).toBe(0)
   })
 
