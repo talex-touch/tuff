@@ -368,6 +368,53 @@ describe('VoicePanel session control', () => {
     wrapper.unmount()
   })
 
+  it.each([
+    { final: { type: 'final', text: '' } as const, name: 'an empty transcription' },
+    {
+      final: {
+        type: 'final',
+        text: 'recognized words',
+        delivery: { method: 'none', reason: 'target-changed' }
+      } as const,
+      name: 'a transcript that could not reach the active app'
+    }
+  ])('keeps a warning visible after $name ends', async ({ final }) => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    const callbacks = callbacksOrThrow()
+    callbacks.onData?.(final)
+    await nextTick()
+    callbacks.onEnd?.()
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(true)
+    expect(wrapper.find('.voice-dock--warning').exists()).toBe(true)
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('finishes exactly once after a native delivery reaches end', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    const callbacks = callbacksOrThrow()
+    callbacks.onData?.({ type: 'final', text: 'delivered words', delivery: { method: 'native' } })
+    await nextTick()
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    callbacks.onEnd?.()
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
   it('aborts without finalizing on cancel, then holds a short cancelled notice', async () => {
     const wrapper = await mountVoicePanel()
 
@@ -905,6 +952,35 @@ describe('VoicePanel device readiness and long messages', () => {
 
     widthSpy.mockRestore()
     heightSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  /**
+   * The sentence arrives as a wave of characters, and the wave has a ceiling.
+   *
+   * Without one, a long message would still be landing more than a second after the pill opened
+   * — the reveal would stop reading as arrival and start reading as lag. The spacing tightens
+   * with length instead. The text itself stays one string: the spans are presentation, which is
+   * what every other assertion in this file reading `.text()` depends on.
+   */
+  it('reveals the sentence character by character within a fixed window', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('E_SOMETHING_ELSE'))
+    await flushPromises()
+
+    const message = 'Voice transcription failed'
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe(message)
+
+    const chars = wrapper.findAll('.voice-dock__char')
+    expect(chars).toHaveLength(message.length)
+
+    const delays = chars.map((char) =>
+      Number(/animation-delay: (\d+)ms/.exec(char.attributes('style') ?? '')?.[1] ?? -1)
+    )
+    expect(delays[0]).toBe(0)
+    expect(delays.every((delay, index) => index === 0 || delay >= delays[index - 1]!)).toBe(true)
+    expect(delays.at(-1)).toBeLessThanOrEqual(240)
+
     wrapper.unmount()
   })
 
