@@ -1072,7 +1072,8 @@
       "saved": "Estimated time saved",
       "rate": "Average dictation rate",
       "duration": "Total dictation time",
-      "savedBasis": "Estimated against a {count} characters/minute typing baseline; not measured typing."
+      "savedBasis": "Estimated against a {count} characters/minute typing baseline; not measured typing.",
+      "savedEquivalent": "{count} characters you did not type"
     },
     "units": {
       "characters": "characters",
@@ -1153,6 +1154,11 @@
       "savedMethod": "Estimated time saved is the non-negative difference between a {count} characters/minute typing baseline and recorded dictation duration. The baseline is an estimate, not measured typing.",
       "rateMethod": "Average dictation rate is total counted characters divided by total recorded duration.",
       "calendarMethod": "Active days and streaks use a rolling 365-day window of local calendar dates in {timezone}; future days are never included."
+    },
+    "weeks": {
+      "title": "Last 12 weeks",
+      "note": "Bar height is that week’s dictated characters against the busiest week.",
+      "streak": "{current}-day streak · longest {longest} · {active} active days"
     }
   },
   "home": {

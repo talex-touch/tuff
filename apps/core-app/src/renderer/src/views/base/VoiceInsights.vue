@@ -15,6 +15,9 @@ import { toast } from 'vue-sonner'
 const DAY_MS = 24 * 60 * 60 * 1000
 const INSIGHT_DAY_COUNT = 365
 
+/** How many weeks the compact activity strip shows; the heatmap below still covers the year. */
+const WEEKLY_BAR_COUNT = 12
+
 interface HeatmapCell {
   date: string
   characters: number
@@ -212,11 +215,38 @@ const streaks = computed(() => {
   ]
 })
 
+/**
+ * One number leads, the rest support it.
+ *
+ * Four equally sized cards make the reader choose what matters; this page has an answer — the
+ * time not spent typing is the conclusion, and characters, rate and duration are the working.
+ * The estimate basis rides with the headline number rather than sitting in a footnote, because
+ * a figure this prominent is exactly the one that must not be mistaken for a measurement.
+ */
+const heroMetric = computed(() => metrics.value.find((metric) => metric.key === 'saved') ?? null)
+const supportMetrics = computed(() => metrics.value.filter((metric) => metric.key !== 'saved'))
+
+/** The last 12 weeks of dictated characters, as a share of the busiest of them. */
+const recentWeeks = computed(() => {
+  const weeks = heatmapWeeks.value.slice(-WEEKLY_BAR_COUNT)
+  const totals = weeks.map((week) =>
+    week.reduce((sum, cell) => sum + (cell && !cell.beforeTracking ? cell.characters : 0), 0)
+  )
+  const peak = Math.max(...totals, 0)
+  return totals.map((characters, index) => ({
+    key: weeks[index]?.find((cell) => cell)?.date ?? String(index),
+    characters,
+    // A week with nothing in it still gets a visible sliver: an empty column and a missing
+    // column look the same, and only one of them is true.
+    ratio: peak > 0 ? Math.max(characters / peak, characters > 0 ? 0.08 : 0.02) : 0.02
+  }))
+})
+
 const heatmapWeeks = computed<Array<Array<HeatmapCell | null>>>(() => {
   const value = insights.value
   if (!value) return []
 
-  const todayKey = dateKeyFromTimestamp(value.updatedAt)
+  const todayKey = dateKeyFromTimestamp(Date.now())
   const todayUtc = utcFromDateKey(todayKey)
   const firstUtc = todayUtc - (INSIGHT_DAY_COUNT - 1) * DAY_MS
   const gridStartUtc = firstUtc - new Date(firstUtc).getUTCDay() * DAY_MS
@@ -614,21 +644,66 @@ onBeforeUnmount(() => {
         </TxButton>
       </div>
 
-      <section class="VoiceInsights-Metrics" :aria-label="t('voiceInsights.metrics.label')">
+      <section class="VoiceInsights-Headline" :aria-label="t('voiceInsights.metrics.label')">
         <article
-          v-for="metric in metrics"
-          :key="metric.key"
-          class="VoiceInsights-Metric"
-          :data-metric="metric.key"
+          v-if="heroMetric"
+          class="VoiceInsights-Hero2"
+          data-testid="voice-insights-hero-metric"
+          :data-metric="heroMetric.key"
         >
-          <div class="VoiceInsights-MetricValue">
-            <strong>{{ metric.value }}</strong>
-            <span v-if="metric.unit">{{ metric.unit }}</span>
+          <p class="VoiceInsights-Hero2Label">{{ heroMetric.label }}</p>
+          <div class="VoiceInsights-Hero2Value">
+            <strong>{{ heroMetric.value }}</strong>
+            <span v-if="insights">{{
+              t('voiceInsights.metrics.savedEquivalent', {
+                count: numberFormatter.format(insights.totalCharacters)
+              })
+            }}</span>
           </div>
-          <p>{{ metric.label }}</p>
-          <small v-if="metric.note">{{ metric.note }}</small>
+          <small v-if="heroMetric.note">{{ heroMetric.note }}</small>
         </article>
+
+        <div class="VoiceInsights-Metrics">
+          <article
+            v-for="metric in supportMetrics"
+            :key="metric.key"
+            class="VoiceInsights-Metric"
+            :data-metric="metric.key"
+          >
+            <div class="VoiceInsights-MetricValue">
+              <strong>{{ metric.value }}</strong>
+              <span v-if="metric.unit">{{ metric.unit }}</span>
+            </div>
+            <p>{{ metric.label }}</p>
+            <small v-if="metric.note">{{ metric.note }}</small>
+          </article>
+        </div>
       </section>
+
+      <article class="VoiceInsights-Weeks" data-testid="voice-insights-weeks">
+        <header class="VoiceInsights-WeeksHeading">
+          <div>
+            <h3>{{ t('voiceInsights.weeks.title') }}</h3>
+            <p>{{ t('voiceInsights.weeks.note') }}</p>
+          </div>
+          <p v-if="insights" class="VoiceInsights-WeeksStreak">
+            {{
+              t('voiceInsights.weeks.streak', {
+                current: numberFormatter.format(insights.currentStreak),
+                longest: numberFormatter.format(insights.longestStreak),
+                active: numberFormatter.format(insights.activeDays)
+              })
+            }}
+          </p>
+        </header>
+        <div class="VoiceInsights-WeekBars" aria-hidden="true">
+          <span
+            v-for="week in recentWeeks"
+            :key="week.key"
+            :style="{ height: `${Math.round(week.ratio * 100)}%` }"
+          />
+        </div>
+      </article>
 
       <article class="VoiceInsights-Activity" data-testid="voice-insights-activity">
         <header class="VoiceInsights-ActivityHeading">
@@ -915,13 +990,105 @@ onBeforeUnmount(() => {
   }
 }
 
-.VoiceInsights-Metrics {
+.VoiceInsights-Headline {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--shell-space-5);
 }
 
+/*
+ * The conclusion, at the size of a conclusion.
+ *
+ * Its basis line sits inside the same card rather than under the section: a number this large is
+ * the one most likely to be read as measured, and the sentence that says it is an estimate has
+ * to be impossible to scroll past separately from it.
+ */
+.VoiceInsights-Hero2 {
+  display: flex;
+  flex-direction: column;
+  gap: var(--shell-space-2);
+
+  small {
+    color: var(--shell-warning);
+    font-size: var(--shell-fs-caption);
+    line-height: 1.4;
+  }
+}
+
+.VoiceInsights-Hero2Label {
+  margin: 0;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-sm);
+}
+
+.VoiceInsights-Hero2Value {
+  display: flex;
+  gap: var(--shell-space-3);
+  align-items: baseline;
+  flex-wrap: wrap;
+
+  strong {
+    color: var(--shell-text-primary);
+    font-size: var(--shell-fs-display);
+    font-weight: 600;
+    line-height: 1.1;
+  }
+
+  span {
+    color: var(--shell-text-secondary);
+    font-size: var(--shell-fs-sm);
+  }
+}
+
+.VoiceInsights-Metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--shell-space-5);
+}
+
+/* Twelve weeks at a glance; the year is still below, for the reader who wants the whole shape. */
+.VoiceInsights-WeeksHeading {
+  display: flex;
+  gap: var(--shell-space-4);
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: space-between;
+
+  h3 {
+    margin: 0;
+    color: var(--shell-text-primary);
+    font-size: var(--shell-fs-body);
+    font-weight: 600;
+  }
+
+  p {
+    margin: var(--shell-space-1) 0 0;
+    color: var(--shell-text-muted);
+    font-size: var(--shell-fs-caption);
+  }
+}
+
+.VoiceInsights-WeeksStreak {
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
+}
+
+.VoiceInsights-WeekBars {
+  display: flex;
+  height: 84px;
+  gap: var(--shell-space-2);
+  align-items: flex-end;
+  margin-top: var(--shell-space-4);
+
+  span {
+    min-height: 2px;
+    border-radius: var(--shell-radius-sm);
+    background: var(--shell-primary);
+    flex: 1;
+  }
+}
+
 .VoiceInsights-Metric,
+.VoiceInsights-Weeks,
 .VoiceInsights-Activity,
 .VoiceInsights-Report {
   border-radius: var(--shell-radius-xl);

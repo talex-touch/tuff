@@ -1072,7 +1072,8 @@
       "saved": "预计节省时间",
       "rate": "平均口述速度",
       "duration": "总口述时间",
-      "savedBasis": "按每分钟打字 {count} 字估算，并非实测打字速度。"
+      "savedBasis": "按每分钟打字 {count} 字估算，并非实测打字速度。",
+      "savedEquivalent": "相当于少敲 {count} 个字"
     },
     "units": {
       "characters": "字",
@@ -1153,6 +1154,11 @@
       "savedMethod": "预计节省时间为每分钟打字 {count} 字的基线耗时减去口述时长，并保证不小于零；基线是估算值，并非实测打字速度。",
       "rateMethod": "平均口述速度为总计数字数除以总记录时长。",
       "calendarMethod": "活跃天数与连续记录按 {timezone} 的本地自然日滚动统计最近 365 天，未来日期不会计入。"
+    },
+    "weeks": {
+      "title": "最近 12 周",
+      "note": "柱高按当周口述字数，与最忙的一周相比。",
+      "streak": "当前连续 {current} 天 · 最长 {longest} 天 · 活跃 {active} 天"
     }
   },
   "home": {
