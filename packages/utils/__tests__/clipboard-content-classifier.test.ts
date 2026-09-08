@@ -123,6 +123,27 @@ describe('clipboard content classifier', () => {
   })
 
   describe('retention class', () => {
+    /**
+     * 每一个 kind 单独钉一遍，而不是只测一两个代表。
+     *
+     * 保留期以前由「有没有命中」决定（`secrets.length > 0`），现在由命中的 kind 决定，
+     * 于是「哪些 kind 算凭据」变成了一份可以被改错的名单。名单漏掉一项的表现是几周后
+     * 「我的密钥怎么被自动删了」，不是任何一条测试变红——除非每一项都在这里。
+     */
+    it.each([
+      ['api-key', OPENAI_KEY],
+      ['private-key', '-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEA\n-----END OPENSSH PRIVATE KEY-----'],
+      ['jwt', shaped('eyJ', 'hbGciOiJIUzI1NiJ9', '.eyJzdWIiOiJ0ZXN0In0', '.c2lnbmF0dXJlLXBsYWNlaG9sZGVy')],
+      ['connection-string', 'postgres://appuser:s3cr3tPass@db.internal:5432/app'],
+      ['env', 'MY_SERVICE_TOKEN=abcd1234EFGH5678'],
+      ['password-field', 'password: hunter2-Xyz!'],
+      ['token-field', 'token: abc123DEF456ghi'],
+    ])('protects a %s from automatic deletion', (kind, content) => {
+      const result = classify(content)
+      expect(result.secrets.map(hit => hit.kind)).toContain(kind)
+      expect(result.retentionClass).toBe('secret')
+    })
+
     it.each([
       [OPENAI_KEY, 'secret'],
       ['G-123456', 'verification-code'],

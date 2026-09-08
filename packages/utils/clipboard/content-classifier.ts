@@ -52,6 +52,12 @@ export const CLIPBOARD_TAG_ORDER: readonly ClipboardTag[] = [
   'email',
 ]
 
+/**
+ * 一段要被掩码的敏感片段的种类。
+ *
+ * 注意「敏感」不等于「凭据」：见下面的 `RETENTION_PROTECTING_KINDS`。这个类型名里的
+ * secret 是历史称呼，成员里已经有不是凭据的东西。
+ */
 export type ClipboardSecretKind =
   | 'api-key'
   | 'private-key'
@@ -81,6 +87,25 @@ export interface ClipboardVerificationCode {
 
 /** 保留档位。主进程据此决定这条记录进哪一档清理策略。 */
 export type ClipboardRetentionClass = 'secret' | 'verification-code' | 'ordinary'
+
+/**
+ * 命中哪些 kind 才让整条记录免于自动清理。
+ *
+ * 在此之前保留期由「有没有命中」决定（`secrets.length > 0`），也就是说掩码和永不删除
+ * 是同一个开关：任何为了掩码而加进来的东西，都会顺带让记录永久留存。主机 IP 要掩码，
+ * 但它不是凭据——该过期就得过期，否则复制几个 IP 就能让历史只增不减。
+ *
+ * 这份名单要和 `ClipboardSecretKind` 一起改：新增一个 kind 时必须显式回答它算不算凭据。
+ */
+const RETENTION_PROTECTING_KINDS: ReadonlySet<ClipboardSecretKind> = new Set([
+  'api-key',
+  'private-key',
+  'jwt',
+  'connection-string',
+  'env',
+  'password-field',
+  'token-field',
+])
 
 export interface ClipboardClassification {
   tags: ClipboardTag[]
@@ -395,8 +420,13 @@ export function classifyClipboardContent(input: ClipboardClassifyInput): Clipboa
   const verificationCode = detectVerificationCode(sample, input.sourceApp, secrets.length > 0)
   const tags = collectTags(sample, secrets, verificationCode)
 
-  const retentionClass: ClipboardRetentionClass =
-    secrets.length > 0 ? 'secret' : verificationCode ? 'verification-code' : 'ordinary'
+  const retentionClass: ClipboardRetentionClass = secrets.some(hit =>
+    RETENTION_PROTECTING_KINDS.has(hit.kind),
+  )
+    ? 'secret'
+    : verificationCode
+      ? 'verification-code'
+      : 'ordinary'
 
   return { tags, secrets, verificationCode, retentionClass }
 }
