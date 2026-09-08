@@ -553,6 +553,91 @@
     "voiceWake": "唤醒词唤醒",
     "voiceWakeDesc": "唤醒词唤醒暂不可用。"
   },
+  "settingSpeechRecognition": {
+    "title": "语音识别",
+    "description": "实时识别与录音文件转写分别配置；Provider 凭据统一保存在 AI 渠道。",
+    "refresh": "刷新可用性",
+    "channel": "AI 渠道",
+    "selectChannel": "选择渠道",
+    "model": "模型",
+    "language": "语言",
+    "languageDescription": "使用 BCP-47 语言标签，例如 zh-CN 或 en-US。",
+    "save": "保存路由",
+    "clear": "清除路由",
+    "channels": {
+      "title": "AI 渠道凭据",
+      "description": "请在 AI 渠道中配置并保存 Provider 凭据；本页不会显示或保存第二份密钥。",
+      "action": "前往 AI 渠道"
+    },
+    "unavailable": {
+      "title": "无法读取识别设置",
+      "description": "无法加载识别路由，请刷新后重试。"
+    },
+    "status": {
+      "configured": "已配置",
+      "configuredDesc": "将在实际使用时检查已保存路由；这不是 Provider 服务连通性测试。",
+      "saveFailedLabel": "保存失败",
+      "saveFailed": "未能保存路由，之前已保存的路由未改变。"
+    },
+    "reasons": {
+      "notConfigured": "未配置",
+      "providerDisabled": "所选 AI 渠道已停用。",
+      "credentialMissing": "所选 AI 渠道尚无凭据。",
+      "capabilityUnsupported": "所选 AI 渠道不支持此能力。",
+      "modelUnsupported": "所选模型不能用于此路由。",
+      "invalidRoute": "请补全路由所需字段后再保存。",
+      "unavailable": "识别暂不可用。"
+    },
+    "asr": {
+      "title": "实时语音识别（ASR）",
+      "description": "为 Fn/Ctrl 听写选择已保存的 AI 渠道；该路由与文件转写独立。",
+      "channelDescription": "显式实时路由只可选择已启用且已有凭据的 AI 渠道。",
+      "protocol": "实时协议",
+      "protocolDescription": "选择与所选 Provider 渠道匹配的协议。",
+      "protocols": {
+        "bailian": "百炼 Paraformer",
+        "doubao": "豆包"
+      },
+      "modelDescription": "仅可选择所选 AI 渠道已声明的模型。",
+      "workspaceId": "百炼业务空间 ID",
+      "workspaceIdDescription": "百炼实时协议所需的公开路由标识，不是凭据。",
+      "resourceId": "豆包资源 ID",
+      "resourceIdDescription": "豆包实时协议所需的公开路由标识，不是凭据。",
+      "status": "ASR 路由状态",
+      "test": {
+        "title": "测试已保存的 ASR",
+        "description": "只测试最新已保存的 ASR 路由，不会向当前应用写入文字。",
+        "start": "开始测试",
+        "stop": "停止并转写",
+        "cancel": "取消测试",
+        "listening": "正在聆听…",
+        "transcribing": "正在转写…",
+        "empty": "未检测到语音。",
+        "cancelled": "测试已取消。",
+        "failed": "ASR 测试失败，请检查已保存路由和渠道状态。"
+      }
+    },
+    "stt": {
+      "title": "录音文件转写（STT）",
+      "description": "为本地音频文件选择已保存的 AI 渠道；仅显示声明支持音频文件转写的渠道。",
+      "channelDescription": "仅可选择已启用、已有凭据且支持音频文件转写的渠道。",
+      "modelDescription": "仅可选择所选 AI 渠道已声明的模型。",
+      "status": "STT 路由状态"
+    },
+    "transcription": {
+      "file": "音频文件",
+      "fileDescription": "选择本地音频文件。主进程会校验文件，并且仅为本次转写上传。",
+      "chooseFile": "选择音频文件",
+      "cancel": "取消转写",
+      "result": "转写结果",
+      "clearResult": "清除结果",
+      "selecting": "请选择音频文件…",
+      "transcribing": "正在转写所选音频文件…",
+      "cancelled": "转写已取消。",
+      "failed": "文件转写失败，请检查已保存路由和渠道状态。",
+      "empty": "尚无转写结果。"
+    }
+  },
   "settingLocalAiCli": {
     "groupTitle": "本机 AI 代理",
     "groupDesc": "快速调用这台 Mac 已安装并完成登录的 Pi、Codex、Claude Code 或 OMP。默认关闭，所有任务均由 CoreApp 主进程校验后启动。",
@@ -4872,6 +4957,8 @@
       "voiceTranscribeTooLarge": "录音超过 5 MiB 限制，请缩短后重试",
       "voiceTranscribeTooLong": "录音超过 30 秒限制，请缩短后重试",
       "voiceTranscribeUnavailable": "AI 语音转写不可用，请检查登录、额度或 Provider 状态",
+      "voiceRecognitionNotConfigured": "尚未配置语音识别",
+      "voiceRecognitionUnavailable": "已保存的语音识别路由不可用，请检查对应 AI 渠道和凭据。",
       "voiceTranscribeEmpty": "未识别到语音内容，请重新录制",
       "voiceTranscribeFailed": "语音转写失败",
       "voiceDeliveryFailed": "未能写入原应用，请先激活输入框",
@@ -4951,7 +5038,8 @@
       "screenshotTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态",
       "openMicrophoneSettings": "打开麦克风设置",
       "microphoneSettingsUnavailable": "这个系统没有可直接打开的麦克风设置",
-      "usingDevice": "使用设备 {name}"
+      "usingDevice": "使用设备 {name}",
+      "openRecognitionSettings": "打开智能设置"
     },
     "regionSelector": {
       "title": "选择截图区域",
@@ -5115,7 +5203,7 @@
       "providersCount": "个提供商"
     },
     "item": {
-      "configError": "配置不完整或无效",
+      "configError": "待完成配置",
       "nexusOfficial": "官方",
       "nexusAuthReady": "Nexus 登录态就绪",
       "nexusAuthRequired": "Nexus 需登录"

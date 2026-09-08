@@ -102,6 +102,8 @@ vi.mock('vue-i18n', () => ({
           'assistant.voicePanel.voiceTranscribeEmpty': 'No speech detected',
           'assistant.voicePanel.capturingDevice': 'Opening the microphone…',
           'assistant.voicePanel.usingDevice': 'Using {name}',
+          'assistant.voicePanel.voiceRecognitionNotConfigured': 'Speech recognition is not set up',
+          'assistant.voicePanel.openRecognitionSettings': 'Open Intelligence settings',
           'assistant.voicePanel.microphoneUnresponsive': 'The microphone is not responding',
           'assistant.voicePanel.microphoneMissing': 'No microphone available',
           'assistant.voicePanel.microphoneDenied': 'Microphone access not granted',
@@ -1210,6 +1212,41 @@ describe('VoicePanel device readiness and long messages', () => {
     expect(slots.length - leaving.length).toBe(1)
 
     vi.restoreAllMocks()
+    wrapper.unmount()
+  })
+
+  /**
+   * A configuration failure gets the same treatment as a device one, for the same reason: its
+   * sentence used to carry the instruction ("请在智能设置中配置 ASR 路由"), which is a sentence too
+   * long to read at pill size and long enough to break the card holding it. Icon says which kind
+   * of problem, sentence says which problem, button does it.
+   */
+  it('turns an unconfigured recogniser into a card with a way out', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('VOICE_ASR_NOT_CONFIGURED'))
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe(
+      'Speech recognition is not set up'
+    )
+    expect(wrapper.find('.voice-dock--icon-card').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-notice-icon"]').classes()).toContain(
+      'i-carbon-settings-adjust'
+    )
+
+    const action = wrapper.find('[data-testid="voice-recover"]')
+    expect(action.exists()).toBe(true)
+    await action.trigger('click')
+    await flushPromises()
+
+    expect(
+      transportSendMock.mock.calls.some(
+        ([event]) =>
+          eventName(event) === AssistantEvents.voice.openIntelligenceSettings.toEventName()
+      )
+    ).toBe(true)
+
     wrapper.unmount()
   })
 

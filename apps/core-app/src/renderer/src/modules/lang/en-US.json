@@ -553,6 +553,91 @@
     "voiceWake": "Wake-word activation",
     "voiceWakeDesc": "Wake-word activation is not available yet."
   },
+  "settingSpeechRecognition": {
+    "title": "Speech recognition",
+    "description": "Configure live recognition and audio-file transcription independently. Provider credentials remain in AI channels.",
+    "refresh": "Refresh availability",
+    "channel": "AI channel",
+    "selectChannel": "Select a channel",
+    "model": "Model",
+    "language": "Language",
+    "languageDescription": "Use a BCP-47 language tag, such as zh-CN or en-US.",
+    "save": "Save route",
+    "clear": "Clear route",
+    "channels": {
+      "title": "AI channel credentials",
+      "description": "Configure and store provider credentials in AI channels; this page never displays or stores a second key.",
+      "action": "Open AI channels"
+    },
+    "unavailable": {
+      "title": "Recognition settings unavailable",
+      "description": "Recognition routes could not be loaded. Refresh to try again."
+    },
+    "status": {
+      "configured": "Configured",
+      "configuredDesc": "The saved route will be checked when you use it; this is not a provider service test.",
+      "saveFailedLabel": "Save failed",
+      "saveFailed": "The route could not be saved. Your prior saved route is unchanged."
+    },
+    "reasons": {
+      "notConfigured": "Not configured",
+      "providerDisabled": "The selected AI channel is disabled.",
+      "credentialMissing": "The selected AI channel has no credential.",
+      "capabilityUnsupported": "The selected AI channel does not support this capability.",
+      "modelUnsupported": "The selected model is unavailable for this route.",
+      "invalidRoute": "Complete the required route fields before saving.",
+      "unavailable": "Recognition is unavailable."
+    },
+    "asr": {
+      "title": "Real-time speech recognition (ASR)",
+      "description": "Use a saved AI channel for Fn/Ctrl dictation. This route is independent from file transcription.",
+      "channelDescription": "Only enabled AI channels with a credential are available for this explicit realtime route.",
+      "protocol": "Realtime protocol",
+      "protocolDescription": "Choose the protocol that matches the selected provider channel.",
+      "protocols": {
+        "bailian": "Bailian Paraformer",
+        "doubao": "Doubao"
+      },
+      "modelDescription": "Only models declared by the selected AI channel are available.",
+      "workspaceId": "Bailian workspace ID",
+      "workspaceIdDescription": "Public routing identifier required by the Bailian realtime protocol; it is not a credential.",
+      "resourceId": "Doubao resource ID",
+      "resourceIdDescription": "Public routing identifier required by the Doubao realtime protocol; it is not a credential.",
+      "status": "ASR route status",
+      "test": {
+        "title": "Test saved ASR",
+        "description": "Tests the latest saved ASR route only. It does not insert text into the active app.",
+        "start": "Start test",
+        "stop": "Stop and transcribe",
+        "cancel": "Cancel test",
+        "listening": "Listening…",
+        "transcribing": "Transcribing…",
+        "empty": "No speech was detected.",
+        "cancelled": "Test cancelled.",
+        "failed": "ASR test failed. Check the saved route and channel status."
+      }
+    },
+    "stt": {
+      "title": "Audio-file transcription (STT)",
+      "description": "Choose a saved AI channel for a local audio file. Only channels that declare audio-file transcription are offered.",
+      "channelDescription": "Only enabled, credentialed channels with audio-file transcription are available.",
+      "modelDescription": "Only models declared by the selected AI channel are available.",
+      "status": "STT route status"
+    },
+    "transcription": {
+      "file": "Audio file",
+      "fileDescription": "Choose a local audio file. The main process validates and uploads it only for this transcription.",
+      "chooseFile": "Choose audio file",
+      "cancel": "Cancel transcription",
+      "result": "Transcription result",
+      "clearResult": "Clear result",
+      "selecting": "Choose an audio file…",
+      "transcribing": "Transcribing the selected audio file…",
+      "cancelled": "Transcription cancelled.",
+      "failed": "File transcription failed. Check the saved route and channel status.",
+      "empty": "No transcription yet."
+    }
+  },
   "settingLocalAiCli": {
     "groupTitle": "Local AI agents",
     "groupDesc": "Quickly invoke Pi, Codex, Claude Code, or OMP already installed and authenticated on this Mac. Off by default; CoreApp validates every request before spawning a process.",
@@ -4872,6 +4957,8 @@
       "voiceTranscribeTooLarge": "The recording exceeds the 5 MiB limit. Shorten it and try again.",
       "voiceTranscribeTooLong": "The recording exceeds the 30-second limit. Shorten it and try again.",
       "voiceTranscribeUnavailable": "AI voice transcription is unavailable. Check login, quota, or provider status.",
+      "voiceRecognitionNotConfigured": "Speech recognition is not set up",
+      "voiceRecognitionUnavailable": "The saved speech-recognition route is unavailable. Check its AI channel and credentials.",
       "voiceTranscribeEmpty": "No speech was detected. Record it again.",
       "voiceTranscribeFailed": "Voice transcription failed",
       "voiceDeliveryFailed": "Could not insert text. Focus the target input and try again.",
@@ -4951,7 +5038,8 @@
       "screenshotTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status.",
       "openMicrophoneSettings": "Open microphone settings",
       "microphoneSettingsUnavailable": "This system has no microphone settings pane to open",
-      "usingDevice": "Using {name}"
+      "usingDevice": "Using {name}",
+      "openRecognitionSettings": "Open Intelligence settings"
     },
     "regionSelector": {
       "title": "Select a screenshot region",
@@ -5115,7 +5203,7 @@
       "providersCount": "providers"
     },
     "item": {
-      "configError": "Configuration incomplete or invalid",
+      "configError": "Setup needed",
       "nexusOfficial": "Official",
       "nexusAuthReady": "Nexus auth ready",
       "nexusAuthRequired": "Nexus sign-in required"

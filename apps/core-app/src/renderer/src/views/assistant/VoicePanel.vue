@@ -53,7 +53,7 @@ const VERY_SLOW_AFTER_MS = 8000
 const CAPTURE_START_TIMEOUT_MS = 2000
 
 type NoticeTone = keyof typeof NOTICE_HOLD_MS
-type NoticeAction = 'undo' | 'retry' | 'settings'
+type NoticeAction = 'undo' | 'retry' | 'settings' | 'asrSettings'
 
 /**
  * Where a microphone failure can actually be fixed — and only where such a pane exists.
@@ -72,6 +72,12 @@ type Notice = { message: string; tone: NoticeTone; action?: NoticeAction; icon?:
  * of a microphone next to "out of credit" would name the wrong culprit.
  */
 const MIC_FAILURE_ICON = 'i-carbon-microphone-off'
+/**
+ * The other failure that has a picture: nothing is wrong with the hardware, the feature simply
+ * has not been set up. A sliders icon says "this is a setting" before the sentence does, which
+ * is what lets the sentence stop carrying the instruction.
+ */
+const SETUP_ICON = 'i-carbon-settings-adjust'
 
 /**
  * The device card is not measured — its copy is fixed and short.
@@ -197,12 +203,14 @@ const iconCard = computed(() => Boolean(notice.value?.icon))
 const ACTION_ICONS: Record<NoticeAction, string> = {
   undo: 'i-carbon-undo',
   retry: 'i-carbon-renew',
-  settings: 'i-carbon-settings'
+  settings: 'i-carbon-settings',
+  asrSettings: 'i-carbon-settings'
 }
 const ACTION_LABELS: Record<NoticeAction, string> = {
   undo: 'assistant.voicePanel.undo',
   retry: 'assistant.voicePanel.retry',
-  settings: 'assistant.voicePanel.openMicrophoneSettings'
+  settings: 'assistant.voicePanel.openMicrophoneSettings',
+  asrSettings: 'assistant.voicePanel.openRecognitionSettings'
 }
 const actionIcon = computed(() =>
   notice.value?.action ? ACTION_ICONS[notice.value.action] : ACTION_ICONS.retry
@@ -479,6 +487,22 @@ function classifyFailure(error: unknown): Notice {
       icon: MIC_FAILURE_ICON,
       ...(canOpenMicSettings ? { action: 'settings' as const } : {})
     }
+
+  // Same shape as the microphone card, for the same reason: "请在智能设置中配置 ASR 路由" is an
+  // instruction, and an instruction inside a pill is a sentence too long to read at that size.
+  // The icon says which kind of problem, the sentence says which problem, the button does it.
+  if (/VOICE_ASR_NOT_CONFIGURED/.test(haystack)) {
+    return {
+      message: t('assistant.voicePanel.voiceRecognitionNotConfigured'),
+      tone: 'warning',
+      icon: SETUP_ICON,
+      action: 'asrSettings'
+    }
+  }
+
+  if (/VOICE_ASR_PROVIDER_UNAVAILABLE/.test(haystack)) {
+    return { message: t('assistant.voicePanel.voiceRecognitionUnavailable'), tone: 'warning' }
+  }
 
   if (/QUOTA|CREDIT|INSUFFICIENT_BALANCE/.test(haystack))
     return { message: t('assistant.voicePanel.quotaExhausted'), tone: 'warning' }
@@ -772,6 +796,15 @@ async function openMicSettings(): Promise<void> {
 async function handleNoticeAction(): Promise<void> {
   if (notice.value?.action === 'settings') {
     await openMicSettings()
+    return
+  }
+  if (notice.value?.action === 'asrSettings') {
+    // Main brings the settings window forward and collapses this surface; nothing to report
+    // back here, and a failure to open is not worth replacing the sentence that explains why
+    // the user is here in the first place.
+    void transport.send(AssistantEvents.voice.openIntelligenceSettings, undefined)
+    clearFinishTimer()
+    emitFinished()
     return
   }
   await recoverLast()
@@ -1195,6 +1228,7 @@ onBeforeUnmount(() => {
 .voice-dock__slot {
   display: flex;
   min-width: 0;
+  overflow: hidden;
   height: 34px;
   flex: 1;
   align-items: center;
@@ -1347,9 +1381,22 @@ onBeforeUnmount(() => {
     filter 220ms ease-out;
 }
 
+/*
+ * The leaving copy is clipped to its own box, and leaves faster than it used to.
+ *
+ * It holds the previous sentence at `nowrap`, so while the pill is shrinking from card width
+ * back to pill width that sentence is wider than the box it sits in — and with nothing clipping
+ * it, it painted *outside* the pill as a faint blurred line trailing the surface. Clipping is
+ * the fix; the shorter fade just narrows the window in which the two shapes overlap at all.
+ */
 .voice-swap-leave-active {
   position: absolute;
+  overflow: hidden;
   inset: 5px;
+  transition:
+    opacity 120ms ease-out,
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 160ms ease-out;
 }
 
 /*

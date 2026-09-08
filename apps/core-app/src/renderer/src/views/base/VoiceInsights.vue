@@ -18,6 +18,36 @@ const INSIGHT_DAY_COUNT = 365
 /** How many weeks the compact activity strip shows; the heatmap below still covers the year. */
 const WEEKLY_BAR_COUNT = 12
 
+/**
+ * The ambient character field behind the empty state.
+ *
+ * Ornament, not a reading: there is no data here yet, and anything that looked like a waveform
+ * would be drawing one out of nothing. Glyphs drifting past cannot be mistaken for a measurement
+ * — which is exactly why they are allowed to fill the space a chart is not.
+ *
+ * Generated once from a fixed sequence rather than `Math.random`, so the field is the same on
+ * every mount and nothing about it depends on when the page happened to open.
+ */
+const STREAM_GLYPHS = '·:-=+*~/\\|<>^'
+const STREAM_ROW_COUNT = 9
+const STREAM_ROW_LENGTH = 96
+
+const streamRows = Array.from({ length: STREAM_ROW_COUNT }, (_, row) => {
+  const glyphs = Array.from({ length: STREAM_ROW_LENGTH }, (_, column) => {
+    const wave = Math.sin(column * 0.31 + row * 1.7) + Math.sin(column * 0.09 - row * 0.6)
+    const index = Math.floor(((wave + 2) / 4) * STREAM_GLYPHS.length)
+    // Gaps matter more than glyphs: a solid wall of characters reads as noise, a sparse one
+    // reads as movement.
+    return wave > 1.1 || wave < -1.1 ? ' ' : (STREAM_GLYPHS[index] ?? ' ')
+  }).join('')
+  // Doubled so the horizontal loop has no seam to hide.
+  return {
+    glyphs: glyphs + glyphs,
+    duration: `${26 + row * 5}s`,
+    direction: row % 2 === 0 ? 'normal' : ('reverse' as const)
+  }
+})
+
 interface HeatmapCell {
   date: string
   characters: number
@@ -619,10 +649,21 @@ onBeforeUnmount(() => {
       class="VoiceInsights-Canvas VoiceInsights-Empty"
       data-testid="voice-insights-empty"
     >
+      <!--
+        Icon and one line, nothing else. The description restated the title, and the privacy
+        sentence is already the page subtitle four inches above it — an empty state that
+        explains itself twice reads as an apology for being empty.
+      -->
+      <div class="VoiceInsights-Stream" aria-hidden="true">
+        <span
+          v-for="(row, index) in streamRows"
+          :key="index"
+          :style="{ animationDuration: row.duration, animationDirection: row.direction }"
+          >{{ row.glyphs }}</span
+        >
+      </div>
       <span class="VoiceInsights-EmptyIcon i-ri-mic-line" aria-hidden="true" />
       <h2>{{ t('voiceInsights.empty.title') }}</h2>
-      <p>{{ t('voiceInsights.empty.description') }}</p>
-      <span>{{ t('voiceInsights.empty.privacy') }}</span>
     </div>
 
     <main v-else-if="insights" class="VoiceInsights-Canvas" data-testid="voice-insights-data">
@@ -1448,7 +1489,57 @@ onBeforeUnmount(() => {
   }
 }
 
+/*
+ * Streams drifting past, thinned out toward the middle so the type sits in still air.
+ *
+ * The mask is what makes it read as flow rather than as wallpaper: the field is densest at the
+ * edges and gone where the icon and the sentence are, so the eye is pulled inward without
+ * anything actually moving toward the centre.
+ */
+.VoiceInsights-Stream {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: var(--shell-space-5) 0;
+  box-sizing: border-box;
+  color: var(--shell-text-muted);
+  font-family: var(--shell-font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  inset: 0;
+  line-height: 1.9;
+  mask-image: radial-gradient(ellipse 46% 58% at 50% 50%, transparent 40%, #000 78%);
+  opacity: 0.32;
+  pointer-events: none;
+  user-select: none;
+
+  span {
+    display: block;
+    animation: voice-insights-stream 30s linear infinite;
+    white-space: pre;
+    will-change: transform;
+  }
+}
+
+@keyframes voice-insights-stream {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VoiceInsights-Stream span {
+    animation: none;
+  }
+}
+
 .VoiceInsights-Empty {
+  position: relative;
   display: flex;
   min-height: 420px;
   flex-direction: column;
