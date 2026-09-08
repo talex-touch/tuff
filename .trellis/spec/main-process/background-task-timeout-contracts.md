@@ -123,6 +123,85 @@ try {
 }
 ```
 
+## Scenario: One-shot native workers exit after terminal delivery
+
+### 1. Scope / Trigger
+
+This applies to a `worker_threads.Worker` that invokes a native/N-API addon and
+posts one terminal success or error message to its parent.
+
+### 2. Signatures
+
+```ts
+type NativeWorkerMessage =
+  | { status: 'success'; jobId: number; result: { text: string } }
+  | { status: 'error'; jobId: number; error: string }
+
+worker.once('message', settleFromMessage)
+worker.once('error', rejectFromWorker)
+worker.once('exit', rejectUnexpectedExit)
+```
+
+### 3. Contracts
+
+- Posting the terminal message does not prove the native completion callback has
+  returned. Promise continuations can post to `parentPort` while
+  `Napi::AsyncWorker::OnWorkComplete` is still unwinding.
+- Treat `message` as untrusted at the parent boundary. Its `jobId` must equal
+  the one worker-owned job; success requires an object result with string
+  `text`, and error requires a non-empty string `error`.
+- A terminal `message` settles the parent promise but must not call
+  `worker.terminate()`. The one-shot worker returns from its entrypoint and exits
+  naturally with code 0.
+- Force termination is reserved for a parent-owned timeout or cancellation that
+  occurs before terminal delivery. Keep that path bounded and idempotent.
+- `error` and `exit` are observations of a worker already failing or exiting;
+  they must not trigger a second termination attempt.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Native success message received | Resolve; no `terminate()`; natural exit |
+| Native error message received | Reject with the projected error; no `terminate()`; natural exit |
+| Missing/mismatched job id or malformed terminal payload | Reject as invalid; no immediate `terminate()` |
+| Parent deadline expires before a message | Terminate once; reject with the stable timeout error |
+| Worker exits nonzero before settlement | Reject as worker failure |
+
+### 5. Good / Base / Bad Cases
+
+- Good: OCR posts its result, the parent resolves immediately, and the child
+  exits after the N-API completion callback returns.
+- Base: a pure-JavaScript one-shot worker follows the same natural-exit path.
+- Bad: the parent receives a valid result and immediately terminates the child;
+  the process can abort in `Napi::Error::ThrowAsJavaScriptException` even though
+  application logs already reported the native call as successful.
+
+### 6. Tests Required
+
+- The parent-worker unit test must observe `terminate()` calls and assert zero
+  after a terminal success message; restoring the old immediate termination must
+  turn the test red.
+- Cover missing/mismatched `jobId` and missing success `result.text`; neither
+  may persist a false successful job or force-terminate after delivery.
+- A runtime probe must execute the real native worker repeatedly and require a
+  terminal result plus natural exit code 0 for every worker.
+- Timeout coverage must still prove that a silent worker is force-terminated.
+
+### 7. Wrong vs Correct
+
+```ts
+// Wrong: the native completion callback may still be on the child stack.
+worker.once('message', (message) => {
+  void worker.terminate()
+  settle(message)
+})
+
+// Correct: terminal delivery owns settlement; the one-shot entrypoint owns exit.
+worker.once('message', settle)
+timeout = setTimeout(() => void worker.terminate(), WORKER_TIMEOUT_MS)
+```
+
 ## PollingService: bounded by default
 
 `packages/utils/common/utils/polling.ts`
