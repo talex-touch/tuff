@@ -181,6 +181,32 @@ describe('clipboard-items helpers', () => {
     expect(insight?.wordCount).toBeGreaterThan(0)
   })
 
+  /**
+   * 富文本的 HTML 带着它的排版：从控制台复制一行日志，标记里就有语法高亮的
+   * `color: #767676`。扫它等于把「这段文字长什么样」当成「这段文字是什么」——
+   * 一个时间戳因此被归进了「颜色」分类。
+   */
+  it('ignores colours that only exist in the rich-text markup', () => {
+    const logLine: PluginClipboardItem = {
+      id: 90,
+      type: 'text',
+      content: '2026-09-07 23:17:28   422   103   298K   6.2s',
+      rawContent:
+        '<span style="color: #767676">2026-09-07 23:17:28</span> <span style="color: rgb(118, 118, 118)">422</span>',
+    }
+
+    expect(getClipboardColorTokens(logLine)).toEqual([])
+
+    // 正文里真写了色值的富文本仍然要认出来——`content` 是它的纯文本形式。
+    const realColor: PluginClipboardItem = {
+      id: 91,
+      type: 'text',
+      content: '主色 #112233',
+      rawContent: '<span style="color: #FFFFFF">主色 #112233</span>',
+    }
+    expect(getClipboardColorTokens(realColor).map(token => token.value)).toEqual(['#112233'])
+  })
+
   it('extracts color tokens from text and metadata', () => {
     const item: PluginClipboardItem = {
       id: 15,
