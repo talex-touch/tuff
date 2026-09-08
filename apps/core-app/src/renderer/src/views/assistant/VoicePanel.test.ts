@@ -370,7 +370,9 @@ describe('VoicePanel dock surface', () => {
       language: 'en-US',
       cleanup: true,
       delivery: 'active-app',
-      emitLevel: true
+      emitLevel: true,
+      // The cap the border divides by, sent rather than inherited from main's default.
+      maxDurationMs: 300_000
     })
 
     wrapper.unmount()
@@ -1483,6 +1485,147 @@ describe('VoicePanel stream generation boundaries', () => {
     vi.advanceTimersByTime(6600)
     await nextTick()
     expect(wrapper.emitted('finished')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+})
+
+describe('VoicePanel recording budget', () => {
+  async function recordingPanel(): Promise<VueWrapper> {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    // The clock starts on the first level frame, not on the request: opening a device can take
+    // seconds, and none of that time is recording.
+    callbacksOrThrow().onData?.({ type: 'level', rms: 0.4 })
+    await nextTick()
+    return wrapper
+  }
+
+  /** The fraction actually drawn, read off the two attributes that draw it. */
+  function spent(wrapper: VueWrapper): number {
+    const rect = wrapper.find('[data-testid="voice-budget"] rect')
+    const length = Number(rect.attributes('stroke-dasharray'))
+    const offset = Number(rect.attributes('stroke-dashoffset'))
+    return (length - offset) / length
+  }
+
+  function beamOn(wrapper: VueWrapper): boolean {
+    return wrapper.find('.tx-border-beam').attributes('data-beam-active') === 'true'
+  }
+
+  /**
+   * The denominator has to come from this side. Leaning on main's default would make the line a
+   * fraction of a number the renderer never saw, which is the kind of drift that only shows up
+   * as a border that finishes early.
+   */
+  it('asks main for the same cap the border divides by', async () => {
+    const wrapper = await recordingPanel()
+
+    expect((streamRequest?.payload as { maxDurationMs?: number })?.maxDurationMs).toBe(300_000)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The border carries one claim at a time: the beam means "running, no fraction available", and
+   * it must step aside the moment a real fraction exists. Two strokes on one 1px edge read as
+   * neither.
+   */
+  it('takes the border from the beam once audio is flowing, and gives it back on stop', async () => {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    // Still opening the device: nothing has been recorded, so there is nothing to divide.
+    expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(false)
+    expect(beamOn(wrapper)).toBe(true)
+
+    callbacksOrThrow().onData?.({ type: 'level', rms: 0.4 })
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(true)
+    expect(beamOn(wrapper)).toBe(false)
+
+    exposed(wrapper).stopVoiceInput()
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(false)
+    expect(beamOn(wrapper)).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('advances the line with the recording, and starts the next one from zero', async () => {
+    const wrapper = await recordingPanel()
+    expect(spent(wrapper)).toBeCloseTo(0, 3)
+
+    vi.advanceTimersByTime(60_000)
+    await nextTick()
+    expect(spent(wrapper)).toBeCloseTo(0.2, 3)
+
+    vi.advanceTimersByTime(60_000)
+    await nextTick()
+    expect(spent(wrapper)).toBeCloseTo(0.4, 3)
+
+    // Negative control: the next recording starts its own budget. Carrying the previous
+    // session's elapsed time over would show a line already two-fifths spent on a microphone
+    // that has just been opened.
+    callbacksOrThrow().onEnd?.()
+    await nextTick()
+    // And the clock itself is gone, not merely hidden: a one-second interval left running behind
+    // a finished session is invisible in the DOM and still there in the process.
+    expect(vi.getTimerCount()).toBe(0)
+
+    await exposed(wrapper).openPanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onData?.({ type: 'level', rms: 0.4 })
+    await nextTick()
+    expect(spent(wrapper)).toBeCloseTo(0, 3)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * Five minutes is a ceiling nobody reaches, so for almost the whole recording this line is a
+   * fact rather than a warning. It only changes tone when the remaining budget is short enough
+   * that the recording is about to be stopped for the user.
+   */
+  it('stays neutral until the last half-minute of the budget', async () => {
+    const wrapper = await recordingPanel()
+
+    vi.advanceTimersByTime(269_000)
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-budget"]').classes()).not.toContain(
+      'voice-dock__budget--ending'
+    )
+
+    vi.advanceTimersByTime(2_000)
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-budget"]').classes()).toContain(
+      'voice-dock__budget--ending'
+    )
+
+    wrapper.unmount()
+  })
+
+  /** A notice and an Escape hold each own the border for something more urgent than a ceiling. */
+  it('yields the border to a hold and to a notice', async () => {
+    const wrapper = await recordingPanel()
+    expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(true)
+
+    hold(wrapper, 'start')
+    vi.advanceTimersByTime(150)
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(false)
+
+    hold(wrapper, 'release')
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(true)
+
+    callbacksOrThrow().onError?.(new Error('stream unavailable'))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(false)
 
     wrapper.unmount()
   })

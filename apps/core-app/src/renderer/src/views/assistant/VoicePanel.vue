@@ -52,6 +52,26 @@ const VERY_SLOW_AFTER_MS = 8000
  */
 const CAPTURE_START_TIMEOUT_MS = 2000
 
+/**
+ * The recording budget, and the denominator the border draws against.
+ *
+ * Main stops the device itself at five minutes, so this is a real ceiling rather than a
+ * decoration. It is sent with the request instead of being left to main's default, because a
+ * fraction is only honest when this side knows the number it is dividing by — reading a cap off
+ * the other process's default is how a progress line ends up measuring the wrong thing.
+ */
+const MAX_RECORDING_MS = 300_000
+/**
+ * The line advances one three-hundredth per second, which is already finer than the screen can
+ * show; a CSS transition of the same length carries it between ticks so it reads as time passing
+ * rather than as a bar stepping.
+ */
+const RECORDING_TICK_MS = 1000
+/** Where the remaining budget stops being theoretical, and the line changes tone to say so. */
+const RECORDING_WARNING_MS = 30_000
+/** Thick enough to read as progress rather than as a recoloured border. */
+const RECORDING_STROKE = 2
+
 type NoticeTone = keyof typeof NOTICE_HOLD_MS
 type NoticeAction = 'undo' | 'retry' | 'settings' | 'asrSettings'
 
@@ -226,6 +246,8 @@ const controlStyle = computed(() => ({
 /** 0..1 while Escape is held; the border draws it so the commitment is visible. */
 const cancelCharge = ref(0)
 const waitedMs = ref(0)
+/** Milliseconds of audio this session has actually captured — see `startRecordClock`. */
+const recordedMs = ref(0)
 const recovering = ref(false)
 /** False until the first level frame lands — see `preparing`. */
 const hasLevel = ref(false)
@@ -274,6 +296,43 @@ const cancelRemaining = computed(() => `${Math.max(0, 1 - cancelCharge.value) * 
  * draining bar says.
  */
 const cancelScale = computed(() => 1 - cancelCharge.value * 0.06)
+/**
+ * How much of the recording budget is gone.
+ *
+ * The second fraction on this surface with a real denominator — the Escape hold is the other —
+ * and the only one that can say *how much longer*. It is deliberately unremarkable for most of a
+ * dictation, because for most of a dictation there is nothing to warn about: five minutes is a
+ * ceiling almost nobody reaches, and a line that shouted about it at ten seconds would be
+ * claiming urgency it does not have.
+ */
+const recordingProgress = computed(() => Math.min(1, recordedMs.value / MAX_RECORDING_MS))
+/** The last stretch is the only part of the budget that is news rather than a fact about the cap. */
+const recordingEnding = computed(() => MAX_RECORDING_MS - recordedMs.value <= RECORDING_WARNING_MS)
+/**
+ * Drawn only while audio is provably flowing.
+ *
+ * Not during `preparing` — there is no elapsed time to report before the first frame — and not
+ * under a notice or an Escape hold, both of which own the border for something more urgent.
+ */
+const showsRecordingBudget = computed(
+  () => listening.value && hasLevel.value && !hasNotice.value && !holdingCancel.value
+)
+/**
+ * The stroke's own box, centred on the pill's border line.
+ *
+ * `stroke-dasharray` needs the length of the path being drawn, not of the pill: the stroke sits
+ * half its width inside the border box, so its corners run a smaller radius and its perimeter is
+ * shorter. Getting this wrong fails quietly — the line simply stops short of, or laps past, the
+ * corner it should have finished on.
+ */
+const budgetPath = computed(() => {
+  const inset = RECORDING_STROKE / 2
+  const width = Math.max(0, pillWidth.value - RECORDING_STROKE)
+  const height = Math.max(0, pillHeight.value - RECORDING_STROKE)
+  const radius = Math.max(0, Math.min(pillRadius.value - inset, width / 2, height / 2))
+  const length = 2 * (width - 2 * radius) + 2 * (height - 2 * radius) + 2 * Math.PI * radius
+  return { inset, width, height, radius, length }
+})
 const slowness = computed(() => {
   if (!transcribing.value) return 'normal'
   if (waitedMs.value >= VERY_SLOW_AFTER_MS) return 'very-slow'
@@ -284,10 +343,11 @@ const slowness = computed(() => {
 /**
  * The border is the only progress this surface can honestly draw.
  *
- * There is no percentage to show — the provider reports partials and a final, never a
- * fraction — so the beam says "still running" and changes colour when that stops being
- * routine. Holding Escape takes it over entirely, because a charge that is about to throw
- * away a sentence outranks a progress hint.
+ * Once the words are in flight there is no percentage to show — the provider reports partials
+ * and a final, never a fraction — so the beam says "still running" and changes colour when that
+ * stops being routine. Recording is the exception: it has a cap, so it gets a real line instead
+ * (`budgetPath`). Holding Escape takes the border over entirely, because a charge that is about
+ * to throw away a sentence outranks both.
  */
 const beamTone = computed(() => {
   if (holdingCancel.value) return 'danger'
@@ -295,7 +355,16 @@ const beamTone = computed(() => {
   if (slowness.value !== 'normal') return 'warning'
   return 'accent'
 })
-const beamActive = computed(() => voiceActive.value || holdingCancel.value || hasNotice.value)
+/**
+ * The border carries one claim at a time.
+ *
+ * The beam means "still running, and there is no fraction to give you". While the budget line is
+ * up there is one, so the stronger statement takes the edge — two strokes chasing each other
+ * around the same 1px border read as neither.
+ */
+const beamActive = computed(
+  () => (voiceActive.value || holdingCancel.value || hasNotice.value) && !showsRecordingBudget.value
+)
 /**
  * Colour carries the same three-tone scale the notices use, so the border never says something
  * the text contradicts. `mono` is the neutral one; the palettes are reserved for a live session.
@@ -373,6 +442,8 @@ let finished = false
 let waveReference = WAVE_REF_FLOOR
 let holdTimer: ReturnType<typeof setInterval> | null = null
 let waitTimer: ReturnType<typeof setInterval> | null = null
+let recordTimer: ReturnType<typeof setInterval> | null = null
+let recordStartedAt = 0
 let captureStartTimer: ReturnType<typeof setTimeout> | null = null
 
 function stopCaptureStartTimer(): void {
@@ -395,6 +466,33 @@ function stopWaitClock(): void {
     waitTimer = null
   }
   waitedMs.value = 0
+}
+
+function stopRecordClock(): void {
+  if (recordTimer !== null) {
+    clearInterval(recordTimer)
+    recordTimer = null
+  }
+  recordStartedAt = 0
+  recordedMs.value = 0
+}
+
+/**
+ * Started by the first level frame, not by the request.
+ *
+ * Opening an input can take seconds while a Bluetooth device reconnects, and on first use it
+ * waits on a consent sheet — so counting from the call would report time the microphone was not
+ * recording. The first frame is the earliest moment audio is provably flowing, which is the
+ * moment main's own budget starts being spent.
+ */
+function startRecordClock(): void {
+  stopRecordClock()
+  recordStartedAt = Date.now()
+  recordTimer = setInterval(() => {
+    // The wall clock, not an accumulator: a timer that fires a few milliseconds late every second
+    // drifts visibly over five minutes, and the end is the only part of this line anyone reads.
+    recordedMs.value = Date.now() - recordStartedAt
+  }, RECORDING_TICK_MS)
 }
 
 /**
@@ -460,6 +558,7 @@ function showNotice(message: string, tone: NoticeTone, action?: NoticeAction, ic
   recovering.value = false
   stopHold()
   stopWaitClock()
+  stopRecordClock()
   stopCaptureStartTimer()
   clearFinishTimer()
   // A notice you can act on gets the long hold; one you can only read gets its own.
@@ -557,6 +656,7 @@ function resetPanelState(): void {
   recovering.value = false
   stopHold()
   stopWaitClock()
+  stopRecordClock()
   stopCaptureStartTimer()
 }
 
@@ -606,6 +706,7 @@ function cancelVoiceSession(): void {
   listening.value = false
   transcribing.value = false
   startingVoiceCapture.value = false
+  stopRecordClock()
   controller?.cancel()
 }
 
@@ -624,6 +725,8 @@ function finishVoiceInput(): void {
   transcribing.value = true
   startingVoiceCapture.value = false
 
+  // The budget belongs to the microphone, and the microphone is being stopped right here.
+  stopRecordClock()
   stopWaitClock()
   waitTimer = setInterval(() => {
     waitedMs.value += 100
@@ -638,6 +741,7 @@ function completeVoiceSession(generation: number): void {
   transcribing.value = false
   startingVoiceCapture.value = false
   stopWaitClock()
+  stopRecordClock()
   stopCaptureStartTimer()
   if (notice.value) return
   emitFinished()
@@ -654,7 +758,8 @@ function handleVoiceSessionEvent(generation: number, event: VoiceAsrStreamEvent)
   }
   if (event.type === 'level') {
     // The handover is the data arriving, not a timer: the meter takes over the moment it has
-    // something true to draw.
+    // something true to draw, and the budget starts counting from the same frame.
+    if (!hasLevel.value) startRecordClock()
     hasLevel.value = true
     stopCaptureStartTimer()
     levels.value = [...levels.value.slice(1), normalizeLevel(event.rms)]
@@ -711,6 +816,9 @@ async function startVoiceSession(): Promise<void> {
   notice.value = null
   levels.value = new Array(WAVE_BAR_COUNT).fill(0)
   hasLevel.value = false
+  // No budget reset here: every path that ends a recording stops the clock, and `startRecordClock`
+  // zeroes it again on the first frame. Adding one more looked prudent and guarded nothing —
+  // deleting it left the suite green.
   // A stale peak from the last session would flatten the first words of this one.
   waveReference = WAVE_REF_FLOOR
   stopCaptureStartTimer()
@@ -741,7 +849,10 @@ async function startVoiceSession(): Promise<void> {
         language: runtimeConfig.value.language,
         cleanup: true,
         delivery: 'active-app',
-        emitLevel: true
+        emitLevel: true,
+        // Sent, not inherited: the border draws a fraction of this number, so it has to be the
+        // number main is actually enforcing rather than whatever its default happens to be.
+        maxDurationMs: MAX_RECORDING_MS
       },
       {
         onData: (event) => handleVoiceSessionEvent(generation, event),
@@ -980,6 +1091,7 @@ onBeforeUnmount(() => {
   disposeCancelHold = null
   stopHold()
   stopWaitClock()
+  stopRecordClock()
   stopCaptureStartTimer()
   clearFinishTimer()
   cancelVoiceSession()
@@ -1018,6 +1130,32 @@ onBeforeUnmount(() => {
         data-testid="voice-charge"
         aria-hidden="true"
       />
+
+      <!--
+        The recording budget, drawn on the pill's own border line. No viewBox on purpose: without
+        one the SVG's user units are CSS pixels, so the geometry computed in script lands on the
+        border unscaled instead of being stretched by a fitted viewport.
+      -->
+      <svg
+        v-if="showsRecordingBudget"
+        class="voice-dock__budget"
+        :class="{ 'voice-dock__budget--ending': recordingEnding }"
+        :style="{ '--voice-budget-tick': `${RECORDING_TICK_MS}ms` }"
+        data-testid="voice-budget"
+        aria-hidden="true"
+      >
+        <rect
+          :x="budgetPath.inset"
+          :y="budgetPath.inset"
+          :width="budgetPath.width"
+          :height="budgetPath.height"
+          :rx="budgetPath.radius"
+          fill="none"
+          :stroke-width="RECORDING_STROKE"
+          :stroke-dasharray="budgetPath.length"
+          :stroke-dashoffset="budgetPath.length * (1 - recordingProgress)"
+        />
+      </svg>
 
       <button
         class="voice-dock__btn voice-dock__btn--cancel"
@@ -1230,6 +1368,38 @@ onBeforeUnmount(() => {
 .voice-dock__btn,
 .voice-dock__slot {
   z-index: 1;
+}
+
+/*
+ * The five-minute recording cap, drawn as the border being spent.
+ *
+ * It shares the edge with the beam, so the two never run at once (`beamActive`): a sweeping
+ * highlight crossing a static stroke reads as neither of them. It starts at the top-left corner
+ * and travels clockwise, which is the direction a clock face has already taught everyone.
+ */
+.voice-dock__budget {
+  position: absolute;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  inset: 0;
+  pointer-events: none;
+}
+
+.voice-dock__budget rect {
+  stroke: var(--shell-primary);
+  /* One tick long and linear: this has to look like time passing, not like a bar easing in. */
+  transition:
+    stroke-dashoffset var(--voice-budget-tick, 1000ms) linear,
+    stroke 400ms ease-out;
+}
+
+/*
+ * The last half-minute is the only part of this that is news. Before it, the line is a fact
+ * about the ceiling; after it, the recording is about to be stopped for the user.
+ */
+.voice-dock__budget--ending rect {
+  stroke: var(--shell-warning-border);
 }
 
 .voice-dock {
@@ -1603,6 +1773,11 @@ onBeforeUnmount(() => {
 
   /* The bar still drains — it is information, not decoration — it just stops easing between ticks. */
   .voice-dock__charge {
+    transition: none;
+  }
+
+  /* Same rule as the charge: the budget line still advances, it just steps once per tick. */
+  .voice-dock__budget rect {
     transition: none;
   }
 
