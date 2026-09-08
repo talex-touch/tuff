@@ -24,6 +24,7 @@ import {
   WindowAllClosedEvent
 } from './eventbus/touch-event'
 import { installDefaultSessionPermissionPolicy } from './default-session-permissions'
+import { installReportOnlyCspPolicy } from './report-only-csp'
 import { getCurrentTouchApp } from './main-runtime-state'
 import { runWithBeforeQuitTimeout } from './before-quit-guard'
 import { ensureUserNormalQuitIntent, getQuitIntent, setQuitIntent } from './quit-intent'
@@ -288,6 +289,8 @@ export function isDuplicateInstance(): boolean {
   return !hasSingleInstanceLock
 }
 
+let hasLoggedReportOnlyCspDelivery = false
+
 void app.whenReady().then(() => {
   // Installed here rather than in a module: modules load after this, and some of
   // them create windows. A window that loads before the handlers are attached
@@ -298,6 +301,19 @@ void app.whenReady().then(() => {
       mainLog.warn('Denied a permission request on the default session', {
         meta: { permission }
       })
+    }
+  })
+
+  // Same reason for the placement: the header has to be attachable before the first document
+  // loads. It replaces the report-only `<meta>` in renderer/index.html, which Chromium ignored
+  // outright because report-only cannot be delivered that way (#689).
+  installReportOnlyCspPolicy(session.defaultSession, {
+    onAttached: (url) => {
+      // Once per launch. Without it, an empty [csp-report-only] log is indistinguishable from
+      // the policy not loading at all — which is exactly how the `<meta>` version went unnoticed.
+      if (hasLoggedReportOnlyCspDelivery) return
+      hasLoggedReportOnlyCspDelivery = true
+      mainLog.info('Report-only CSP attached as a response header', { meta: { url } })
     }
   })
 
