@@ -542,17 +542,16 @@
     "recommendationContextLocationDesc": "Use a hashed local timezone and network bucket instead of raw location data."
   },
   "settingAssistant": {
-    "groupTitle": "Assistant Floating Ball",
-    "groupDesc": "Enable a desktop floating entry that sends text commands to CoreBox.",
+    "groupTitle": "Assistant and voice input",
+    "groupDesc": "Manage the Assistant floating entry and voice input separately.",
     "enableAssistant": "Enable Assistant",
-    "enableAssistantDesc": "Assistant entries such as the floating ball and voice panel only respond when this is enabled. It stays off by default.",
-    "floatingBall": "Show floating ball",
-    "floatingBallDesc": "Show a draggable desktop entry. Click it to open the text command panel.",
-    "voiceWake": "Voice wake",
-    "voiceWakeDesc": "When enabled, the floating ball and panel may request speech recognition. When disabled, only text input is used.",
-    "wakeWords": "Wake words",
-    "wakeWordsDesc": "Separate multiple wake words with commas.",
-    "wakeWordsPlaceholder": "Alo, aler"
+    "enableAssistantDesc": "Controls only the Assistant floating entry; it does not affect voice input.",
+    "floatingBall": "Show voice-input floating ball",
+    "floatingBallDesc": "Show a draggable voice-input entry and status on the desktop. Hiding it does not affect the Fn/Ctrl shortcut.",
+    "voiceInput": "Voice input",
+    "voiceInputDesc": "Briefly press Fn on macOS or Ctrl on Windows/Linux to start, then press again to finish. Hold and release to finish. The microphone is captured only while voice input is active.",
+    "voiceWake": "Wake-word activation",
+    "voiceWakeDesc": "Wake-word activation is not available yet."
   },
   "settingLocalAiCli": {
     "groupTitle": "Local AI agents",
@@ -4807,18 +4806,18 @@
   },
   "assistant": {
     "floatingBall": {
-      "voiceWakeOff": "Voice wake is off",
-      "listening": "Listening: {wakeWords}",
-      "clickToOpen": "Click to open Assistant",
-      "unsupported": "Speech recognition is not supported in this environment",
+      "voiceWakeOff": "Voice input is off",
+      "listening": "Voice input active",
+      "clickToOpen": "Click to open voice input",
+      "unsupported": "Voice input is not supported in this environment",
       "permissionDenied": "Microphone permission was not granted",
-      "recognitionError": "Speech recognition error: {error}"
+      "recognitionError": "Voice input error: {error}"
     },
     "voicePanel": {
-      "unsupported": "Speech recognition is not supported in this environment",
+      "unsupported": "Voice input is not supported in this environment",
       "permissionDenied": "Microphone permission was not granted",
-      "recognitionError": "Speech recognition error: {error}",
-      "voiceWakeDisabled": "Voice wake is off. You can type a text command directly.",
+      "recognitionError": "Voice input error: {error}",
+      "voiceInputDisabled": "Voice input is off. Turn it on in Settings to continue.",
       "emptyInput": "Speak or enter something to execute first",
       "submitFailed": "Send failed. Please try again.",
       "listening": "Listening...",
@@ -4853,15 +4852,13 @@
       "voiceTranscribingShort": "Transcribing...",
       "voiceTranscribed": "Voice transcription complete",
       "voiceTranscribedWithProvider": "Voice transcribed by {provider}",
-      "voiceBrowserFallback": "AI transcription is unavailable. Browser speech recognition is ready; speak again.",
-      "providerRecordingUnavailable": "Recording is unavailable. Trying browser speech recognition.",
-      "voiceTranscribeAssistantDisabled": "Assistant is disabled, so voice transcription is unavailable.",
       "voiceTranscribeInvalid": "The recording is invalid. Record it again.",
       "voiceTranscribeTooLarge": "The recording exceeds the 5 MiB limit. Shorten it and try again.",
       "voiceTranscribeTooLong": "The recording exceeds the 30-second limit. Shorten it and try again.",
       "voiceTranscribeUnavailable": "AI voice transcription is unavailable. Check login, quota, or provider status.",
       "voiceTranscribeEmpty": "No speech was detected. Record it again.",
       "voiceTranscribeFailed": "Voice transcription failed",
+      "voiceDeliveryFailed": "Could not insert text. Focus the target input and try again.",
       "submitting": "Sending...",
       "sendToCoreBox": "Send to CoreBox",
       "translateClipboardImage": "Translate clipboard image",
@@ -4937,7 +4934,8 @@
       "imageTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status.",
       "screenshotTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status.",
       "openMicrophoneSettings": "Open microphone settings",
-      "microphoneSettingsUnavailable": "This system has no microphone settings pane to open"
+      "microphoneSettingsUnavailable": "This system has no microphone settings pane to open",
+      "usingDevice": "Using {name}"
     },
     "regionSelector": {
       "title": "Select a screenshot region",

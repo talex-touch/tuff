@@ -31,7 +31,7 @@ import { activeAppService, type ActiveAppInfo } from '../system/active-app'
 import { POLISH_SYSTEM_PROMPT, withLanguageDirective, wrapTranscription } from './polish-prompt'
 import { getVoiceProvider } from './voice-provider-runtime'
 import type { StreamingAsrConfig } from './streaming-asr-client'
-import { createAsrStream, getStreamingAsrConfig } from './streaming-asr-client'
+import { createAsrStream, getStreamingAsrConfig, pcmRms } from './streaming-asr-client'
 import { voiceInsightsStore } from './voice-insights-store'
 
 const voiceLog = createLogger('Voice')
@@ -97,24 +97,8 @@ type VoiceSessionPayload = VoiceDictatePayload | VoiceAsrStreamPayload
 type MergedStreamItem =
   | { kind: 'provider'; event: VoiceProviderEvent }
   | { kind: 'level'; rms: number }
+  | { kind: 'error'; error: unknown }
   | { kind: 'done' }
-
-/**
- * Root-mean-square amplitude of a 16-bit little-endian mono PCM chunk, normalized to 0..1.
- *
- * Returns 0 for an empty or odd-length chunk rather than guessing at a partial sample.
- */
-function pcmRms(chunk: Buffer): number {
-  const sampleCount = Math.floor(chunk.length / 2)
-  if (sampleCount === 0) return 0
-
-  let sumOfSquares = 0
-  for (let index = 0; index < sampleCount; index += 1) {
-    const sample = chunk.readInt16LE(index * 2) / 32_768
-    sumOfSquares += sample * sample
-  }
-  return Math.min(1, Math.sqrt(sumOfSquares / sampleCount))
-}
 
 /** 44-byte RIFF header so buffered PCM can go through the same `transcribe()` as one-shot audio. */
 function pcmToWav(pcm: Buffer, sampleRate: number): Buffer {
@@ -150,6 +134,10 @@ interface RetryBuffer {
 interface VoiceSessionRecord {
   readonly id: string
   readonly nativeSessionId: string
+  /** What the OS called the input device this session opened; empty when it would not say. */
+  readonly deviceName: string
+  /** True only when this session opened a *different* device than the last one that named one. */
+  readonly deviceChanged: boolean
   readonly caller: string
   readonly delivery: VoiceDictatePayload['delivery']
   readonly targetKey: string | null
@@ -281,6 +269,8 @@ export class VoiceService {
   private disposed = false
   /** See RECOVERY_GRACE_MS: one slot, memory only, dropped as soon as its reason disappears. */
   private retryBuffer: RetryBuffer | null = null
+  /** The last input device that named itself; `null` until one does. See `noteCaptureDevice`. */
+  private lastDeviceName: string | null = null
   private retryExpiryTimer: ReturnType<typeof setTimeout> | null = null
 
   /**
@@ -292,6 +282,20 @@ export class VoiceService {
    */
   discardRecovery(): void {
     this.clearRetryBuffer()
+  }
+
+  /**
+   * Remember which input device this capture opened, and say whether it is a new one.
+   *
+   * A switch is only reportable against something to switch *from*: the first session of a run
+   * names a device nobody asked about, so it returns false and simply records. Unnamed devices
+   * neither report nor overwrite — the platform going quiet is not the user changing hardware.
+   */
+  private noteCaptureDevice(deviceName: string): boolean {
+    if (!deviceName) return false
+    const changed = this.lastDeviceName !== null && this.lastDeviceName !== deviceName
+    this.lastDeviceName = deviceName
+    return changed
   }
 
   private clearRetryBuffer(): void {
@@ -376,11 +380,12 @@ export class VoiceService {
       payload.delivery === 'active-app'
         ? activeAppKey(await activeAppService.getActiveApp({ forceRefresh: true }))
         : null
-    const { sessionId: nativeSessionId } = await nativeAudio.startCapture({
+    const { sessionId: nativeSessionId, deviceName } = await nativeAudio.startCapture({
       maxDurationMs: payload.maxDurationMs,
       silenceStopMs: payload.silenceStopMs,
       sampleRate
     })
+    const deviceChanged = this.noteCaptureDevice(deviceName)
     if (this.disposed) {
       try {
         nativeAudio.cancelCapture(nativeSessionId)
@@ -394,6 +399,8 @@ export class VoiceService {
     const record: VoiceSessionRecord = {
       id,
       nativeSessionId,
+      deviceName,
+      deviceChanged,
       caller,
       delivery: payload.delivery ?? 'none',
       targetKey,
@@ -430,6 +437,7 @@ export class VoiceService {
   ): Promise<VoiceDictateResult> {
     const record = this.takeSession(sessionId)
     const result = await this.finalizeCapture(capture, payload, signal, record.caller)
+    throwIfCancelled(signal)
     if (record.delivery === 'active-app' && result.text) {
       result.delivery = await this.deliverText(result.text, record.targetKey)
     }
@@ -739,8 +747,25 @@ export class VoiceService {
     if (wsConfig && drainCapture) {
       yield* this.streamViaWebSocket(payload, wsConfig, drainCapture, signal, stopSignal, caller)
     } else {
-      yield* this.streamViaChunkedBatch(payload, signal, caller)
+      yield* this.streamViaChunkedBatch(payload, drainCapture, signal, stopSignal, caller)
     }
+  }
+
+  /**
+   * The device notice for this session, or null when there is nothing to announce.
+   *
+   * Returned rather than yielded from a delegated generator: `yield*` steps its iterator even
+   * when it produces nothing, which costs a microtask on every session and shifts the timing of
+   * everything downstream. A plain `yield` only costs one when there is actually something to
+   * say — which is the rare case.
+   *
+   * Saying it every time would be noise; saying nothing when the hardware moved leaves the user
+   * wondering which microphone is live.
+   */
+  private deviceChangeEvent(sessionId: string): VoiceAsrStreamEvent | null {
+    const session = this.sessions.get(sessionId)
+    if (!session?.deviceChanged) return null
+    return { type: 'device', name: session.deviceName }
   }
 
   private async *streamViaProvider(
@@ -759,6 +784,8 @@ export class VoiceService {
       signal,
       caller
     )
+    const deviceNotice = this.deviceChangeEvent(sessionId)
+    if (deviceNotice) yield deviceNotice
     const session = this.sessions.get(sessionId)
     if (!session) {
       throwIfCancelled(signal)
@@ -768,6 +795,7 @@ export class VoiceService {
     let ownerReleased = false
     let connection: Awaited<ReturnType<VoiceProviderAdapter['createStream']>> | null = null
     let capturedBytes = 0
+    let hasFinal = false
     // A new session owns the single retry slot; whatever the last one left is dropped here.
     this.beginRetryBuffer(sessionId, DEFAULT_ASR_SAMPLE_RATE, payload.language)
     try {
@@ -842,7 +870,7 @@ export class VoiceService {
         for await (const event of connection!.events) push({ kind: 'provider', event })
         push({ kind: 'done' })
       })()
-      void forwarder.catch(() => push({ kind: 'done' }))
+      void forwarder.catch((error: unknown) => push({ kind: 'error', error }))
 
       for (;;) {
         if (queue.length === 0) {
@@ -854,6 +882,7 @@ export class VoiceService {
 
         const item = queue.shift()!
         throwIfCancelled(signal)
+        if (item.kind === 'error') throw item.error
         if (item.kind === 'done') break
         if (item.kind === 'level') {
           yield { type: 'level', rms: item.rms }
@@ -861,17 +890,20 @@ export class VoiceService {
         }
 
         const event = item.event
+        if (event.type === 'error') throw new Error(event.code || 'VOICE_PROVIDER_STREAM_FAILED')
         if (event.type === 'partial') {
           if (event.text) yield { type: 'partial', text: event.text }
           continue
         }
         if (event.type === 'final') {
-          if (!event.text) continue
+          if (!event.text.trim()) continue
+          hasFinal = true
           const polishedText =
             payload.cleanup === false
               ? null
               : await this.polish(event.text, payload.language, signal, caller)
           const text = polishedText ?? event.text
+          throwIfCancelled(signal)
           const delivery =
             payload.delivery === 'active-app'
               ? await this.deliverText(text, session.targetKey)
@@ -894,9 +926,10 @@ export class VoiceService {
       }
       await pump
       throwIfCancelled(signal)
-      // Reaching `end` means the transcript was delivered: the only reason to hold the audio
-      // is gone, so it goes now rather than waiting for the grace timer.
+      // Completed recognition, including a no-speech result, needs no retry buffer.
+      // An empty final lets every caller distinguish silence from delivered text.
       this.clearRetryBuffer()
+      if (!hasFinal) yield { type: 'final', text: '' }
       yield { type: 'end' }
     } catch (error) {
       // Cancel and failure both keep the audio: one feeds undo, the other feeds retry.
@@ -1005,18 +1038,33 @@ export class VoiceService {
       caller,
       wsConfig.sampleRate
     )
+    const deviceNotice = this.deviceChangeEvent(sessionId)
+    if (deviceNotice) yield deviceNotice
     const session = this.sessions.get(sessionId)
     if (!session) {
       throwIfCancelled(signal)
       throw new Error('VOICE_SESSION_NOT_FOUND')
     }
+    let captureStopped = false
+    const finishNativeCapture = (): void => {
+      if (captureStopped) return
+      captureStopped = true
+      try {
+        nativeAudio.stopCapture(session.nativeSessionId)
+      } catch {
+        // Cancellation or native auto-stop may already have retired the capture.
+      }
+    }
     try {
       let capturedBytes = 0
+      let hasFinal = false
       for await (const event of createAsrStream({
         url: wsConfig.url,
         sampleRate: wsConfig.sampleRate,
         language: payload.language,
         signal,
+        emitLevel: payload.emitLevel,
+        onCaptureEnded: finishNativeCapture,
         drainFrames: () => {
           const pcm = drainCapture(session.nativeSessionId).pcm
           capturedBytes += pcm.length
@@ -1030,11 +1078,13 @@ export class VoiceService {
               : true
       })) {
         throwIfCancelled(signal)
+        if (event.type === 'final') hasFinal = true
         if (event.type === 'final' && event.text) {
           const polishedText =
             payload.cleanup === false
               ? null
               : await this.polish(event.text, payload.language, signal, caller)
+          throwIfCancelled(signal)
           const text = polishedText ?? event.text
           const delivery =
             payload.delivery === 'active-app'
@@ -1059,16 +1109,20 @@ export class VoiceService {
         }
       }
       throwIfCancelled(signal)
+      if (!hasFinal) yield { type: 'final', text: '' }
       yield { type: 'end' }
     } finally {
+      finishNativeCapture()
       this.cancelSession(sessionId)
     }
   }
 
-  /** Chunked-batch streaming: re-transcribe the audio-so-far on an interval. */
+  /** Chunked-batch streaming: bounded partial snapshots with a PCM-owned input meter. */
   private async *streamViaChunkedBatch(
     payload: VoiceAsrStreamPayload,
+    drainCapture: ((sessionId: string) => { pcm: Buffer }) | undefined,
     signal?: AbortSignal,
+    stopSignal?: AbortSignal,
     caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const language = payload.language
@@ -1081,36 +1135,72 @@ export class VoiceService {
       signal,
       caller
     )
+    const deviceNotice = this.deviceChangeEvent(sessionId)
+    if (deviceNotice) yield deviceNotice
     const session = this.sessions.get(sessionId)
     if (!session) {
       throwIfCancelled(signal)
       throw new Error('VOICE_SESSION_NOT_FOUND')
     }
 
+    const partialController = new AbortController()
+    const abortPartial = (): void => partialController.abort()
+    signal?.addEventListener('abort', abortPartial, { once: true })
+    let partialWork: { settled: boolean; text?: string; error?: unknown } | null = null
+    let nextPartialAt = Date.now() + PARTIAL_INTERVAL_MS
     let stopped = false
     try {
-      if (snapshotCapture) {
-        // Live partials: transcribe the audio-so-far on an interval until auto-stop.
-        for (;;) {
-          await awaitWithAbort(delay(PARTIAL_INTERVAL_MS), signal)
-          throwIfCancelled(signal)
-          const active = pollCapture ? pollCapture(session.nativeSessionId).active : true
+      const deadline = Date.now() + maxDurationMs + CAPTURE_HARD_TIMEOUT_GRACE_MS
+      let waitBeforePoll = false
+      for (;;) {
+        if (waitBeforePoll) await awaitWithAbort(delay(POLL_INTERVAL_MS), signal)
+        waitBeforePoll = true
+        throwIfCancelled(signal)
+
+        const active =
+          !stopSignal?.aborted &&
+          Date.now() < deadline &&
+          (!pollCapture || pollCapture(session.nativeSessionId).active)
+        const pcm = payload.emitLevel ? drainCapture?.(session.nativeSessionId)?.pcm : undefined
+        if (pcm && pcm.length > 0) {
+          yield { type: 'level', rms: pcmRms(pcm) }
+        }
+
+        if (partialWork?.settled) {
+          const completed = partialWork
+          partialWork = null
+          if (completed.error) {
+            if (signal?.aborted) throw voiceCancellationError()
+            if (!partialController.signal.aborted) {
+              voiceLog.debug('Partial transcription failed; continuing', { error: completed.error })
+            }
+          } else if (completed.text) {
+            yield { type: 'partial', text: completed.text }
+          }
+        }
+        if (snapshotCapture && active && !partialWork && Date.now() >= nextPartialAt) {
+          nextPartialAt = Date.now() + PARTIAL_INTERVAL_MS
           const snapshot = snapshotCapture(session.nativeSessionId)
           if (snapshot?.audio && snapshot.audio.length > WAV_HEADER_BYTES) {
-            try {
-              const { text } = await this.transcribe(snapshot.audio, language, signal, caller)
-              if (text) yield { type: 'partial', text }
-            } catch (error) {
-              if (signal?.aborted) throw voiceCancellationError()
-              voiceLog.debug('Partial transcription failed; continuing', { error })
-            }
+            const work: { settled: boolean; text?: string; error?: unknown } = { settled: false }
+            partialWork = work
+            void this.transcribe(snapshot.audio, language, partialController.signal, caller).then(
+              ({ text }) => {
+                work.text = text
+                work.settled = true
+              },
+              (error: unknown) => {
+                work.error = error
+                work.settled = true
+              }
+            )
           }
-          if (!active) break
         }
-      } else {
-        await this.waitForAutoStop(session.nativeSessionId, maxDurationMs, signal)
+
+        if (!active) break
       }
 
+      abortPartial()
       throwIfCancelled(signal)
       const final = nativeAudio.stopCapture(session.nativeSessionId)
       stopped = true
@@ -1128,6 +1218,8 @@ export class VoiceService {
       }
       yield { type: 'end' }
     } finally {
+      abortPartial()
+      signal?.removeEventListener('abort', abortPartial)
       if (!stopped) this.cancelSession(sessionId)
     }
   }

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const voiceInsightsMocks = vi.hoisted(() => ({ recordSuccess: vi.fn(async () => undefined) }))
+
 vi.mock('@talex-touch/tuff-native/audio', () => ({
   getNativeAudioSupport: vi.fn(),
   startCapture: vi.fn(),
@@ -34,6 +36,9 @@ vi.mock('../ai/intelligence-sdk', () => ({
 
 vi.mock('../ai/intelligence-tts-service', () => ({
   intelligenceTtsService: { speak: vi.fn() }
+}))
+vi.mock('./voice-insights-store', () => ({
+  voiceInsightsStore: { recordSuccess: voiceInsightsMocks.recordSuccess }
 }))
 
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
@@ -302,6 +307,75 @@ describe('VoiceService.streamDictation via provider', () => {
     ])
     expect(events.find((event) => event.type === 'final')).toBeDefined()
     expect(events.at(-1)).toEqual({ type: 'end' })
+  })
+
+  it('surfaces a provider iterator rejection that arrives after native capture stops', async () => {
+    pollCapture.mockReturnValue({ active: false, durationMs: 100, stoppedReason: 'silence' })
+    const releaseIterator = Promise.withResolvers<void>()
+    const iteratorFailure = new Error('VOICE_PROVIDER_ITERATOR_FAILED')
+    const connection = {
+      events: (async function* () {
+        await releaseIterator.promise
+        throw iteratorFailure
+      })(),
+      writePcm: vi.fn(async () => undefined),
+      end: vi.fn(async () => releaseIterator.resolve()),
+      abort: vi.fn(async () => undefined)
+    }
+    resolveProvider.mockReturnValue({
+      id: 'fake',
+      defaultStreamModel: 'fake-model',
+      createStream: vi.fn(async () => connection)
+    })
+
+    const iteratorDraining = (async () => {
+      for await (const _event of new VoiceService().streamDictation()) {
+        // The public stream must reject instead of completing as if recognition succeeded.
+      }
+    })()
+    const observedIteratorFailure = iteratorDraining.catch((error: unknown) => error)
+    await vi.runAllTimersAsync()
+    await expect(observedIteratorFailure).resolves.toMatchObject({
+      message: 'VOICE_PROVIDER_ITERATOR_FAILED'
+    })
+
+    expect(stopCapture).toHaveBeenCalledTimes(1)
+    expect(connection.end).toHaveBeenCalledTimes(1)
+  })
+
+  it('projects a provider error event as its stable stream failure code', async () => {
+    pollCapture.mockReturnValue({ active: false, durationMs: 100, stoppedReason: 'silence' })
+    fake = createFakeConnection('')
+    fake.connection.end.mockImplementationOnce(async () => {
+      fake.push({
+        type: 'error',
+        code: 'VOICE_PROVIDER_STREAM_FAILED',
+        message: 'provider failed',
+        retryable: false
+      })
+    })
+
+    const errorDraining = (async () => {
+      for await (const _event of new VoiceService().streamDictation()) {
+        // The public stream must reject instead of completing as if recognition succeeded.
+      }
+    })()
+    const observedProviderError = errorDraining.catch((error: unknown) => error)
+    await vi.runAllTimersAsync()
+    await expect(observedProviderError).resolves.toMatchObject({
+      message: 'VOICE_PROVIDER_STREAM_FAILED'
+    })
+  })
+
+  it('emits an empty final before end for clean no-speech completion without delivery or stats', async () => {
+    pollCapture.mockReturnValue({ active: false, durationMs: 100, stoppedReason: 'silence' })
+    fake = createFakeConnection('')
+
+    const events = await collect(new VoiceService().streamDictation({ delivery: 'active-app' }))
+
+    expect(events).toEqual([{ type: 'final', text: '' }, { type: 'end' }])
+    expect(typeText).not.toHaveBeenCalled()
+    expect(voiceInsightsMocks.recordSuccess).not.toHaveBeenCalled()
   })
 })
 
@@ -679,6 +753,41 @@ describe('VoiceService recovery status', () => {
     await expect(service.streamDictation({}).next()).rejects.toThrow('Voice capture is unavailable')
 
     expect(service.getRecoveryStatus()).toEqual({ available: false })
+  })
+
+  /**
+   * The first session of a run has nothing to have switched from, so it says nothing — a HUD
+   * that announces the microphone every single time is noise, and noise is what people learn to
+   * stop reading. The announcement only exists to answer "which one is live now" after it moved.
+   */
+  async function sessionOn(service: VoiceService, deviceName: string): Promise<string[]> {
+    startCapture.mockResolvedValue({ sessionId: 's1', deviceName })
+    pollCapture.mockReturnValueOnce({ active: true, durationMs: 100, stoppedReason: null })
+    pollCapture.mockReturnValue({ active: false, durationMs: 200, stoppedReason: 'silence' })
+    const events = await drainStream(service.streamDictation({}))
+    return events.flatMap((event) => (event.type === 'device' ? [event.name] : []))
+  }
+
+  it('announces a microphone only once it is a different one', async () => {
+    const service = new VoiceService()
+
+    expect(await sessionOn(service, 'MacBook Pro Microphone')).toEqual([])
+    expect(await sessionOn(service, 'AirPods Pro')).toEqual(['AirPods Pro'])
+    // Same hardware again: nothing to report, and the notice does not repeat itself.
+    expect(await sessionOn(service, 'AirPods Pro')).toEqual([])
+  })
+
+  /**
+   * A platform that will not name the device reports an empty string. That is not a switch, and
+   * it must not overwrite the name we do know — otherwise the next real session would announce
+   * a device the user never changed.
+   */
+  it('treats an unnamed device as no news rather than as a change', async () => {
+    const service = new VoiceService()
+
+    expect(await sessionOn(service, 'Studio Display Microphone')).toEqual([])
+    expect(await sessionOn(service, '')).toEqual([])
+    expect(await sessionOn(service, 'Studio Display Microphone')).toEqual([])
   })
 
   it('offers nothing after a successful session', async () => {

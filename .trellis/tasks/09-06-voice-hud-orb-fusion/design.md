@@ -686,3 +686,44 @@ const needed = measureNaturalWidth(element) + TEXT_WIDTH_SLACK + chrome
 窗口离屏幕底边只剩 9px 不要紧——它是透明画布，而且现在在 `status` 层，本来就压在 Dock 之上。注释里写清楚了这个常量是「主进程能控制的那一半」，看得见的那个数是它加上画布余量。
 
 负控制：把 9 改回 24 立刻转红。
+
+## 17. 换了麦克风就说一声（2026-09-08）
+
+### 17.1 设备名以前根本传不上来
+
+原生层的 `AudioCaptureStart` 只有 `sessionId`。cpal **0.18** 把 `device.name()` 换成了 `description()`（`DeviceDescription::name()`），所以取名字要走这条：
+
+```rust
+let device_name = device.description().map(|d| d.name().to_string()).unwrap_or_default();
+let _ = ready_tx.send(Ok(device_name));   // 名字搭着「就绪」信号回去
+```
+
+搭在 `ready_tx` 上而不是另开一条：调用方本来就阻塞在那儿等它，而**打不开的设备没有名字值得上报**。`ready_tx` 的类型从 `Result<(), String>` 变成 `Result<String, String>`，`start_capture_blocking` 返回 `(session_id, device_name)`。
+
+### 17.2 什么时候算「切换」
+
+```ts
+private noteCaptureDevice(deviceName: string): boolean {
+  if (!deviceName) return false                                   // 平台不肯说 ≠ 用户换了硬件
+  const changed = this.lastDeviceName !== null && this.lastDeviceName !== deviceName
+  this.lastDeviceName = deviceName
+  return changed
+}
+```
+
+两条边界各有测试：
+
+- **一次会话不报**：没有「从哪儿切过来」这回事。**每次都报的 HUD 就是噪音，而噪音的下场是被学会忽略。**
+- **空名不报也不覆盖**：否则下一次真实会话会去宣布一个用户根本没换过的设备。
+
+### 17.3 `yield*` 会多吃一个微任务
+
+第一版把通知写成 `private *announceDeviceChange()` 再 `yield*`。它**一个事件都不产出时仍然会步进一次迭代器**，于是每个会话都多一个微任务，把下游所有时序推后一格——一条按微任务计数的既有用例当场变红。
+
+改成返回 `VoiceAsrStreamEvent | null`，`if (event) yield event`：只有真有话说时才付那一格。
+
+### 17.4 面上怎么显示
+
+muted 档 + 短驻留，文案 `使用设备 {name}` / `Using {name}`。**不是失败也不是指令**，所以既不给按钮也不用警告色。它替掉「设备捕获中…」——说出设备名，本来就把「在开哪个麦克风」这件事一起答了。
+
+插件面自动拿不到：`narrowVoiceStreamForPlugins` 是白名单（partial / final / end），设备名属于宿主信息，不下发。

@@ -1,5 +1,8 @@
 <script lang="ts" setup name="VoicePanel">
-import type { AssistantRuntimeConfig } from '@talex-touch/utils/transport/events/assistant'
+import type {
+  AssistantRuntimeConfig,
+  AssistantVoiceCancelHoldPayload
+} from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import type { StreamController } from '@talex-touch/utils/transport/types'
@@ -26,11 +29,8 @@ const NOTICE_HOLD_MS = {
 } as const
 
 /**
- * Escape cancels on hold, not on tap.
- *
- * A tap is what someone does to dismiss a dialog they were not looking at; losing a sentence
- * to that is a bad trade. Holding is deliberate, and the charge is drawn on the border so the
- * commitment is visible before it lands.
+ * Main owns the cancellation deadline. The HUD uses the same interval only to draw the charge
+ * that main has already accepted; reaching one is never a local cancellation decision.
  */
 const CANCEL_HOLD_MS = 600
 const CHARGE_TICK_MS = 30
@@ -223,7 +223,7 @@ const recovering = ref(false)
 const hasLevel = ref(false)
 
 const voiceSdk = createVoiceSdk(transport)
-const voiceWakeEnabled = computed(() => runtimeConfig.value.enabled)
+const voiceInputEnabled = computed(() => runtimeConfig.value.enabled)
 const voiceActive = computed(
   () => listening.value || transcribing.value || startingVoiceCapture.value
 )
@@ -342,6 +342,7 @@ let stopRequestedGeneration: number | null = null
 let panelGeneration = 0
 let panelTaskGeneration = 0
 let disposePanelOpen: (() => void) | null = null
+let disposeCancelHold: (() => void) | null = null
 let finishTimer: ReturnType<typeof setTimeout> | null = null
 let finished = false
 let waveReference = WAVE_REF_FLOOR
@@ -596,6 +597,13 @@ function completeVoiceSession(generation: number): void {
 
 function handleVoiceSessionEvent(generation: number, event: VoiceAsrStreamEvent): void {
   if (!isCurrentVoiceSession(generation)) return
+  if (event.type === 'device') {
+    // Said once, at the top of a session that opened different hardware than the last one did.
+    // Not a failure and not an instruction, so it takes the muted tone and its short hold; it
+    // replaces "opening the microphone" because naming the device answers that too.
+    showNotice(t('assistant.voicePanel.usingDevice', { name: event.name }), 'muted')
+    return
+  }
   if (event.type === 'level') {
     // The handover is the data arriving, not a timer: the meter takes over the moment it has
     // something true to draw.
@@ -637,9 +645,9 @@ function showVoiceSessionError(generation: number, error: unknown): void {
   )
 }
 
-async function startVoiceSession(force = false): Promise<void> {
-  if (!force && !voiceWakeEnabled.value) {
-    showNotice(t('assistant.voicePanel.voiceWakeDisabled'), 'warning')
+async function startVoiceSession(): Promise<void> {
+  if (!voiceInputEnabled.value) {
+    showNotice(t('assistant.voicePanel.voiceInputDisabled'), 'warning')
     return
   }
   if (activeVoiceGeneration !== null || startingVoiceCapture.value || transcribing.value) return
@@ -711,9 +719,8 @@ async function handlePanelOpened(): Promise<void> {
   const taskGeneration = ++panelTaskGeneration
   cancelVoiceSession()
   resetPanelState()
-  // Configuration is a hint for the next request, not a prerequisite for opening the mic.
-  // Keep the default language immediately usable and refresh the setting in the background.
-  void loadRuntimeConfig(generation, taskGeneration)
+  // The voice-input gate and language must be current before any entry can start capture.
+  await loadRuntimeConfig(generation, taskGeneration)
   await nextTick()
 }
 
@@ -804,29 +811,21 @@ async function recoverLast(): Promise<void> {
   }
 }
 
-function beginCancelHold(): void {
-  if (holdTimer !== null || !canCancel.value) return
+function beginCancelCharge(): void {
+  if (holdTimer !== null) return
   const startedAt = Date.now()
   holdTimer = setInterval(() => {
-    const progress = (Date.now() - startedAt) / CANCEL_HOLD_MS
-    cancelCharge.value = Math.min(1, progress)
-    if (progress < 1) return
-    stopHold()
-    cancelSession()
+    cancelCharge.value = Math.min(1, (Date.now() - startedAt) / CANCEL_HOLD_MS)
   }, CHARGE_TICK_MS)
 }
 
-function handleKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return
-  event.preventDefault()
-  if (event.repeat || !canCancel.value) return
-  beginCancelHold()
-}
-
-function handleKeyup(event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return
-  // Released early: the charge unwinds and nothing is lost. That is the point of the hold.
+function handleCancelHold(state: AssistantVoiceCancelHoldPayload['state']): void {
+  if (state === 'start') {
+    beginCancelCharge()
+    return
+  }
   stopHold()
+  if (state === 'commit') cancelSession()
 }
 
 /**
@@ -895,9 +894,14 @@ watch([centerText, showsOrb, () => notice.value?.icon], async () => {
 defineExpose({
   openPanel: handlePanelOpened,
   startVoiceInput: (): void => {
-    void startVoiceSession(true)
+    void startVoiceSession()
   },
-  stopVoiceInput: finishVoiceInput
+  stopVoiceInput: finishVoiceInput,
+  toggleVoiceInput: (): void => {
+    if (listening.value || startingVoiceCapture.value) finishVoiceInput()
+    else if (!transcribing.value && !recovering.value) void startVoiceSession()
+  },
+  handleCancelHold
 })
 
 onMounted(() => {
@@ -905,17 +909,18 @@ onMounted(() => {
     disposePanelOpen = transport.on(AssistantEvents.voice.panelOpened, async () => {
       await handlePanelOpened()
     })
+    disposeCancelHold = transport.on(AssistantEvents.voice.cancelHold, (payload) => {
+      handleCancelHold(payload.state)
+    })
     void loadRuntimeConfig()
   }
-  window.addEventListener('keydown', handleKeydown)
-  window.addEventListener('keyup', handleKeyup)
 })
 
 onBeforeUnmount(() => {
   panelGeneration += 1
   panelTaskGeneration += 1
-  window.removeEventListener('keydown', handleKeydown)
-  window.removeEventListener('keyup', handleKeyup)
+  disposeCancelHold?.()
+  disposeCancelHold = null
   stopHold()
   stopWaitClock()
   stopCaptureStartTimer()
