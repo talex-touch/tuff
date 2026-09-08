@@ -28,7 +28,7 @@ const WEEKLY_BAR_COUNT = 12
  * Generated once from a fixed sequence rather than `Math.random`, so the field is the same on
  * every mount and nothing about it depends on when the page happened to open.
  */
-const STREAM_ROW_COUNT = 6
+const STREAM_ROW_COUNT = 7
 const STREAM_ROW_LENGTH = 220
 
 /**
@@ -44,9 +44,9 @@ const streamRows = Array.from({ length: STREAM_ROW_COUNT }, (_, row) => {
   let glyphs = ''
   let column = 0
   while (glyphs.length < STREAM_ROW_LENGTH) {
-    const gap = 8 + Math.floor(Math.abs(Math.sin(row * 3.1 + column * 0.37)) * 22)
+    const gap = 5 + Math.floor(Math.abs(Math.sin(row * 3.1 + column * 0.37)) * 16)
     glyphs += ' '.repeat(gap)
-    const run = 2 + Math.floor(Math.abs(Math.cos(row * 1.3 + column * 0.21)) * 5)
+    const run = 3 + Math.floor(Math.abs(Math.cos(row * 1.3 + column * 0.21)) * 6)
     for (let index = 0; index < run; index += 1) {
       const wave = Math.sin((column + index) * 0.45 + row * 1.9)
       glyphs += wave > 0.35 ? '—' : wave > -0.35 ? '·' : '-'
@@ -1524,10 +1524,15 @@ onBeforeUnmount(() => {
   font-size: 12px;
   inset: 0;
   /* Wide leading is half of what makes it read as drift rather than as a paragraph. */
-  line-height: 3.2;
-  letter-spacing: 0.14em;
-  mask-image: radial-gradient(ellipse 52% 62% at 50% 50%, transparent 52%, #000 94%);
-  opacity: 0.22;
+  line-height: 2.9;
+  letter-spacing: 0.05em;
+  /*
+   * The hole only has to clear the type. At `transparent 52%` reaching full ink at 94% the field
+   * was invisible everywhere except the outer corners — the correction for a wall of noise
+   * overshot into nothing at all.
+   */
+  mask-image: radial-gradient(ellipse 46% 56% at 50% 50%, transparent 26%, #000 72%);
+  opacity: 0.5;
   pointer-events: none;
   user-select: none;
 
