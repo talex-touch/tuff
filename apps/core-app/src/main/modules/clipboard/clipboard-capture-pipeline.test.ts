@@ -261,6 +261,24 @@ describe('clipboard-capture-pipeline', () => {
   })
 
   /**
+   * 主机 IP 要掩码，但它不是凭据。
+   *
+   * 掩码和保留期在 `49560c7cf` 之前是同一个开关（`secrets.length > 0`），所以「让 IP
+   * 被掩码」会顺带让每一条含 IP 的记录永不自动删除——一天复制几个 IP 就足以让历史
+   * 只增不减。这条测试盯的就是这两个轴没有重新粘回去。
+   */
+  it('does not protect a record just because it carries a host ip', async () => {
+    const context = createPipeline()
+    mocks.readText.mockReturnValueOnce('previous').mockReturnValue('ssh deploy@10.0.3.14 -p 2222')
+
+    await context.pipeline.process('visible-poll')
+
+    expect(mocks.values).toHaveBeenCalledWith(
+      expect.objectContaining({ retentionProtected: false })
+    )
+  })
+
+  /**
    * 保护是可以关的——「我不想让密钥永久留在库里」是个合理选择。但它必须是显式关掉的
    * 结果，而不是配置读不出来时的默认。
    */
