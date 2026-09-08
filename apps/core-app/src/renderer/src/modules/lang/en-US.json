@@ -555,86 +555,58 @@
   },
   "settingSpeechRecognition": {
     "title": "Speech recognition",
-    "description": "Configure live recognition and audio-file transcription independently. Provider credentials remain in AI channels.",
+    "description": "Review recognition readiness here. Configure channels, models, and bindings in Intelligence.",
     "refresh": "Refresh availability",
-    "channel": "AI channel",
-    "selectChannel": "Select a channel",
-    "model": "Model",
-    "language": "Language",
-    "languageDescription": "Use a BCP-47 language tag, such as zh-CN or en-US.",
-    "save": "Save route",
-    "clear": "Clear route",
     "channels": {
-      "title": "AI channel credentials",
-      "description": "Configure and store provider credentials in AI channels; this page never displays or stores a second key.",
+      "title": "AI channels",
+      "description": "Configure a channel in Intelligence. Tuff Nexus is built in and uses your signed-in account; no provider key is required.",
       "action": "Open AI channels"
     },
+    "capabilities": {
+      "title": "Capability bindings",
+      "description": "Bind a channel and model to audio.asr for live dictation or audio.stt for file transcription.",
+      "action": "Open capabilities"
+    },
     "unavailable": {
-      "title": "Recognition settings unavailable",
-      "description": "Recognition routes could not be loaded. Refresh to try again."
+      "title": "Recognition status unavailable",
+      "description": "Recognition readiness could not be loaded. Refresh to try again."
     },
     "status": {
-      "configured": "Configured",
-      "configuredDesc": "The saved route will be checked when you use it; this is not a provider service test.",
-      "saveFailedLabel": "Save failed",
-      "saveFailed": "The route could not be saved. Your prior saved route is unchanged."
+      "configured": "Ready",
+      "configuredDesc": "The configured Intelligence capability is ready to use."
     },
     "reasons": {
       "notConfigured": "Not configured",
-      "providerDisabled": "The selected AI channel is disabled.",
       "credentialMissing": "The selected AI channel has no credential.",
-      "capabilityUnsupported": "The selected AI channel does not support this capability.",
-      "modelUnsupported": "The selected model is unavailable for this route.",
-      "invalidRoute": "Complete the required route fields before saving.",
       "unavailable": "Recognition is unavailable."
     },
     "asr": {
       "title": "Real-time speech recognition (ASR)",
-      "description": "Use a saved AI channel for Fn/Ctrl dictation. This route is independent from file transcription.",
-      "channelDescription": "Only enabled AI channels with a credential are available for this explicit realtime route.",
-      "protocol": "Realtime protocol",
-      "protocolDescription": "Choose the protocol that matches the selected provider channel.",
-      "protocols": {
-        "bailian": "Bailian Paraformer",
-        "doubao": "Doubao"
-      },
-      "modelDescription": "Only models declared by the selected AI channel are available.",
-      "workspaceId": "Bailian workspace ID",
-      "workspaceIdDescription": "Public routing identifier required by the Bailian realtime protocol; it is not a credential.",
-      "resourceId": "Doubao resource ID",
-      "resourceIdDescription": "Public routing identifier required by the Doubao realtime protocol; it is not a credential.",
-      "status": "ASR route status",
-      "test": {
-        "title": "Test saved ASR",
-        "description": "Tests the latest saved ASR route only. It does not insert text into the active app.",
-        "start": "Start test",
-        "stop": "Stop and transcribe",
-        "cancel": "Cancel test",
-        "listening": "Listening…",
-        "transcribing": "Transcribing…",
-        "empty": "No speech was detected.",
-        "cancelled": "Test cancelled.",
-        "failed": "ASR test failed. Check the saved route and channel status."
-      }
+      "description": "Live dictation resolves audio.asr. Tuff Nexus currently does not provide realtime audio.",
+      "status": "ASR status"
     },
     "stt": {
       "title": "Audio-file transcription (STT)",
-      "description": "Choose a saved AI channel for a local audio file. Only channels that declare audio-file transcription are offered.",
-      "channelDescription": "Only enabled, credentialed channels with audio-file transcription are available.",
-      "modelDescription": "Only models declared by the selected AI channel are available.",
-      "status": "STT route status"
+      "description": "Tuff Nexus provides batch-only WAV transcription through audio.stt. Sign in and use Nexus credits; no provider key is required.",
+      "status": "STT status"
     },
     "transcription": {
       "file": "Audio file",
-      "fileDescription": "Choose a local audio file. The main process validates and uploads it only for this transcription.",
-      "chooseFile": "Choose audio file",
+      "fileDescription": "Choose a local WAV file (up to 20 MiB and 10 minutes). It is uploaded only for this transcription; the result is shown here and is not delivered automatically.",
+      "chooseFile": "Choose WAV file",
       "cancel": "Cancel transcription",
       "result": "Transcription result",
       "clearResult": "Clear result",
       "selecting": "Choose an audio file…",
       "transcribing": "Transcribing the selected audio file…",
-      "cancelled": "Transcription cancelled.",
-      "failed": "File transcription failed. Check the saved route and channel status.",
+      "cancelled": "Transcription cancelled. The server job is not cancelled and no refund is implied.",
+      "failed": "File transcription failed.",
+      "authRequired": "Sign in to Tuff Nexus, then try again.",
+      "creditsRequired": "Nexus credits are insufficient. Check your credits and try again.",
+      "invalidAudio": "Use a valid WAV file up to 20 MiB and 10 minutes.",
+      "timeout": "Nexus transcription is still pending or the connection timed out. Check the request status and try again later.",
+      "providerFailed": "Nexus transcription could not be completed. Try again later.",
+      "receipt": "(Nexus receipt: {credits} credits, {seconds}s billable)",
       "empty": "No transcription yet."
     }
   },
@@ -4058,6 +4030,7 @@
       "configuredModels": "Configured Models",
       "capabilityTestTitle": "Test Capability",
       "capabilityTestDesc": "Test if this capability works with current configuration",
+      "capabilityAsrBindingTestDesc": "This test uses the saved audio.asr capability binding and its configured model; provider and model overrides are unavailable.",
       "testProvider": "Select Test Provider",
       "testProviderDesc": "Choose an enabled provider for testing",
       "testInput": "Test Input",
@@ -4957,8 +4930,8 @@
       "voiceTranscribeTooLarge": "The recording exceeds the 5 MiB limit. Shorten it and try again.",
       "voiceTranscribeTooLong": "The recording exceeds the 30-second limit. Shorten it and try again.",
       "voiceTranscribeUnavailable": "AI voice transcription is unavailable. Check login, quota, or provider status.",
-      "voiceRecognitionNotConfigured": "Speech recognition is not set up",
-      "voiceRecognitionUnavailable": "The saved speech-recognition route is unavailable. Check its AI channel and credentials.",
+      "voiceRecognitionNotConfigured": "Set up live speech recognition",
+      "voiceRecognitionUnavailable": "Speech recognition is unavailable",
       "voiceTranscribeEmpty": "No speech was detected. Record it again.",
       "voiceTranscribeFailed": "Voice transcription failed",
       "voiceDeliveryFailed": "Could not insert text. Focus the target input and try again.",
@@ -4988,8 +4961,6 @@
       "screenshotTranslating": "Taking and translating a screenshot...",
       "screenshotTranslateReady": "Screenshot translation opened",
       "screenshotTextFallbackReady": "Image translation was unavailable. OCR text translation is shown below.",
-      "screenshotTextFallbackTitle": "OCR text translation",
-      "screenshotTextFallbackSource": "Detected text",
       "screenshotTextFallbackTarget": "Translation",
       "screenshotTextFallbackMetadata": "OCR: {ocr} · Translation: {translation}",
       "screenshotImageTranslateRouteTitle": "Image translation route",
@@ -5223,6 +5194,17 @@
         "apiKey": "API Key",
         "apiKeyPlaceholder": "Enter your API key",
         "apiKeyRequired": "API key is required for enabled providers",
+        "apiKeySaving": "Saving API key…",
+        "apiKeySaved": "Saved",
+        "apiKeyReplacePlaceholder": "Saved — enter a new key to replace",
+        "apiKeySaveFailed": "Could not save the API key. Your input is retained; please retry.",
+        "apiKeyRevealFailed": "Could not reveal the saved API key.",
+        "apiKeyShow": "Show saved API key",
+        "apiKeyHide": "Hide API key",
+        "voiceAsrDoubaoResourceId": "Doubao resource ID",
+        "voiceAsrDoubaoResourceIdPlaceholder": "resource-id",
+        "voiceAsrIdentifierInvalid": "Enter the required public ASR identifier before saving.",
+        "dialogClose": "Close",
         "baseUrl": "Base URL",
         "baseUrlPlaceholder": "https://api.example.com/v1",
         "baseUrlHint": "Leave empty to use the default endpoint",
