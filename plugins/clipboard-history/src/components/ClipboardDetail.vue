@@ -90,6 +90,25 @@ const retriedImageSources = ref<ReadonlySet<string>>(new Set())
 const imageRetryNonce = ref(0)
 let imageRetryTimer: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * 刚复制过的那个色值。复制本身没有任何可见结果——剪贴板变了但界面没动——
+ * 所以这里给一个短暂的回执，让点击有着落。
+ */
+const copiedColor = ref<string | null>(null)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+
+function copyColor(color: string): void {
+  emit('copyText', color)
+  copiedColor.value = color
+  if (copiedTimer) {
+    clearTimeout(copiedTimer)
+  }
+  copiedTimer = setTimeout(() => {
+    copiedColor.value = null
+    copiedTimer = null
+  }, 1400)
+}
+
 const imagePreview = computed(() => {
   const primary = resolveDetailImagePreview(props.item, props.resolvedImageUrl)
   if (!primary.src || !failedImageSources.value.has(primary.src)) {
@@ -108,6 +127,11 @@ function resetImageFailureState(): void {
     clearTimeout(imageRetryTimer)
     imageRetryTimer = null
   }
+  if (copiedTimer) {
+    clearTimeout(copiedTimer)
+    copiedTimer = null
+  }
+  copiedColor.value = null
   failedImageSources.value = new Set()
   retriedImageSources.value = new Set()
   collapsedDirs.value = new Set()
@@ -119,6 +143,9 @@ watch([() => props.item?.id, () => props.resolvedImageUrl], resetImageFailureSta
 onBeforeUnmount(() => {
   if (imageRetryTimer) {
     clearTimeout(imageRetryTimer)
+  }
+  if (copiedTimer) {
+    clearTimeout(copiedTimer)
   }
 })
 
@@ -177,6 +204,7 @@ function readableTextOn(color: string): string {
   return rgb ? pickReadableForeground(rgb) : 'inherit'
 }
 
+
 /** 浮层只在真有图可放时才认为是打开的，避免出现一块空的黑幕挡住整个面板。 */
 const imageViewerVisible = computed(
   () => props.imageViewerOpen === true && props.item?.type === 'image' && Boolean(imagePreview.value.src),
@@ -220,9 +248,14 @@ const imageViewerVisible = computed(
                 type="button"
                 :style="{ backgroundColor: color }"
                 :aria-label="`复制 ${color}`"
-                @click="emit('copyText', color)"
+                @click="copyColor(color)"
               >
-                <span class="palette-value" :style="{ color: readableTextOn(color) }">{{ color }}</span>
+                <span class="palette-value" :style="{ color: readableTextOn(color) }">
+                  <Transition name="palette-copy" mode="out-in">
+                    <span v-if="copiedColor === color" key="copied">已复制</span>
+                    <span v-else key="value">{{ color }}</span>
+                  </Transition>
+                </span>
               </button>
             </div>
           </div>
@@ -530,6 +563,27 @@ const imageViewerVisible = computed(
 .palette-swatch:focus-visible {
   outline: 2px solid var(--clipboard-color-accent);
   outline-offset: 1px;
+}
+
+/**
+ * 色值与「已复制」之间交替淡入淡出。`mode="out-in"` 让两段文字不重叠，
+ * 否则等宽字体下会看到两串字符互相穿插一帧。
+ */
+.palette-copy-enter-active,
+.palette-copy-leave-active {
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+}
+
+.palette-copy-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.palette-copy-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .color-canvas {
@@ -947,6 +1001,11 @@ const imageViewerVisible = computed(
 /** 关掉展开动画，但保留展开本身——色值仍然要读得到。 */
 @media (prefers-reduced-motion: reduce) {
   .palette-value {
+    transition: none;
+  }
+
+  .palette-copy-enter-active,
+  .palette-copy-leave-active {
     transition: none;
   }
 }

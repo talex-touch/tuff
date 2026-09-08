@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import ClipboardDetail from './ClipboardDetail.vue'
 
 /**
@@ -65,5 +66,56 @@ describe('clipboardDetail palette rail', () => {
 
     await swatch.trigger('click')
     expect(wrapper.emitted('copyText')?.[0]).toEqual(['#ABCDEE'])
+  })
+
+  /**
+   * 复制本身没有任何可见结果——剪贴板变了但界面没动。所以点击要给一个短暂的回执，
+   * 并且只给被点的那一个：整条色带一起变「已复制」会让人以为复制了全部。
+   */
+  it('acknowledges the click on the swatch that was clicked, then reverts', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountWithImage()
+    await flushPromises()
+
+    const swatches = wrapper.findAll('.palette-swatch')
+    await swatches[1]!.trigger('click')
+    await nextTick()
+
+    expect(swatches[1]!.get('.palette-value').text()).toBe('已复制')
+    expect(swatches[0]!.get('.palette-value').text()).toBe('#123456')
+
+    await vi.advanceTimersByTimeAsync(1500)
+    await nextTick()
+    expect(swatches[1]!.get('.palette-value').text()).toBe('#ABCDEE')
+
+    vi.useRealTimers()
+    wrapper.unmount()
+  })
+
+  /** 回执不能跟着列表往下走：换一条记录后它必须已经消失。 */
+  it('drops the acknowledgement when the selection moves', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountWithImage()
+    await flushPromises()
+
+    await wrapper.findAll('.palette-swatch')[0]!.trigger('click')
+    await nextTick()
+    expect(wrapper.get('.palette-value').text()).toBe('已复制')
+
+    await wrapper.setProps({
+      item: {
+        id: 2,
+        type: 'image',
+        content: 'data:image/png;base64,other',
+        thumbnail: 'data:image/png;base64,other',
+      },
+    })
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.get('.palette-value').text()).toBe('#123456')
+
+    vi.useRealTimers()
+    wrapper.unmount()
   })
 })
