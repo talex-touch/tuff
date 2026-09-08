@@ -6,6 +6,7 @@ import {
   detectCommand,
   detectSecret,
   extractLinks,
+  isSshRelatedPath,
   parseLinkParams,
   selectClipboardInsight,
 } from './clipboard-shapes'
@@ -145,6 +146,32 @@ describe('link extraction', () => {
       { key: 'page', value: '2', sensitive: false },
     ])
     expect(buildCleanLink(url)).toBe('https://dsh.tagzxia.com/?page=2')
+  })
+})
+
+describe('ssh related paths', () => {
+  it('recognises keys, well-known files and anything under .ssh', () => {
+    expect(isSshRelatedPath('/Users/me/.ssh/id_ed25519')).toBe(true)
+    expect(isSshRelatedPath('/Users/me/.ssh/config')).toBe(true)
+    expect(isSshRelatedPath('/backup/known_hosts')).toBe(true)
+    expect(isSshRelatedPath('/tmp/id_rsa.pub')).toBe(true)
+    expect(isSshRelatedPath('C:\\Users\\me\\.ssh\\id_rsa')).toBe(true)
+  })
+
+  it('leaves an unrelated config file alone', () => {
+    // 单独一个叫 config 的文件到处都是；只有在 .ssh 目录下才算。
+    expect(isSshRelatedPath('/Users/me/project/config')).toBe(false)
+    expect(isSshRelatedPath('/Users/me/notes.txt')).toBe(false)
+    expect(isSshRelatedPath('/Users/me/sshfs/readme.md')).toBe(false)
+  })
+
+  it('tags a files record that carries one', () => {
+    const item = {
+      id: 1,
+      type: 'files',
+      content: JSON.stringify(['/Users/me/.ssh/id_ed25519']),
+    } as PluginClipboardItem
+    expect(classifyClipboardItem(item)).toContain('ssh')
   })
 })
 
