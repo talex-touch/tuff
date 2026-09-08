@@ -6,7 +6,7 @@
 
 ## Confirmed Facts
 
-- 最新已验证发布版本为 `2.4.14-beta.32`；该 tag 的 Windows、macOS arm64/x64 与 Linux 发布产物、签名、公证、同 SHA `release-quality` 和生产 Gate E 基线均已通过。`2.4.14-beta.33` 目前仅为未发布修复候选，不复用 Beta32 的发布或 OTA 证据。
+- 最新已验证发布版本为 `2.4.14-beta.33`；Beta33 的 Windows、macOS arm64/x64 与 Linux 发布产物、签名、公证、同 SHA `release-quality`、生产 Gate E 和 macOS arm64 N/N+1 OTA 均已通过。Beta32 的历史证据保持独立，不跨版本复用。
 - `ci.yml` 对 pull request 与 master push 无路径过滤；GitHub `master` 的经典 branch protection 已启用 7 个稳定 required checks，最近 5 个 PR SHA 与最近 6 个 master SHA 均完整产生这些 context。`enforce_admins=true`、conversation resolution 已启用、`strict=false`；唯一 ruleset 仍处于 disabled。脱敏证据见 `evidence/github-remote-baseline.md`。
 - `build-and-release.yml` 已增加同一 SHA 的 `release-quality` 硬依赖；workflow 合同与负向变异证明 build/create/sync 不能绕过失败 gate。
 - 当前工作区包含跨 CoreApp、Nexus、Utils 和三个插件的未提交批次，远端全绿不能证明这批代码可发布。
@@ -22,6 +22,8 @@
 - Beta32 的 GitHub release、Nexus latest、manifest v2、四个首选平台资产、签名下载路由与回退路由已收敛；严格生产 Gate E `18/18` 通过，macOS arm64 OTA 下载包 SHA-256 和 detached RSA 签名与 manifest 一致，详见 `evidence/release-matrix-beta32.md`。
 - 官方 macOS arm64 Beta31 -> Beta32 已从隔离 profile 完成发现、下载、校验、Settings UI `Restart to Update`、无提权 helper、DMG 原位替换、Beta32 官方 attestation、startup health 和 attempt-bound `healthy` ack；SQLite 终态 revision 8 / `healthy`，详见 `evidence/macos-ota-beta31-beta32.md`。
 - 同一隔离源进程在安装前的 clipboard `vision.ocr` 成功返回后 abort；minidump 指向 `tuff_native_ocr.node` 的 N-API AsyncWorker 完成路径。根因是父进程在 terminal message 到达时立即 `worker.terminate()`，可能在 native completion callback 尚未退栈时销毁环境；本地已改为 terminal message 后自然退出，并验证 jobId/result/error 消息边界，聚焦测试 `20/20`、负向变异和 200 个真实 Electron native worker 自然退出 smoke 通过。Beta32 仍含旧实现，修复必须随下一官方版本发布后再解除推广风险。
+- Beta33 的 GitHub release、Nexus latest、manifest v2、四个首选平台资产、签名下载路由与回退路由已收敛；严格生产 Gate E `18/18` 通过，详见 `evidence/release-matrix-beta33.md`。
+- 官方 macOS arm64 Beta32 -> Beta33 已从隔离 profile 完成发现、下载、校验、Settings UI `Restart to Update`、无提权 helper、DMG 原位替换、Beta33 官方 attestation、startup health 和 attempt-bound `healthy` ack；同一发布包的 11 个真实 OCR worker 任务全部完成且进程保持存活，详见 `evidence/macos-ota-beta32-beta33.md`。
 
 ## Requirements
 
@@ -54,10 +56,10 @@
 | AC2 | pass | 同 SHA release gate 已形成硬依赖，合同测试与负向变异通过。 |
 | AC3 | pass | `master` 已启用 7 个 GitHub Actions required checks；最近 5 个 PR SHA 与最近 6 个 master SHA 均完整产生，失败提交也真实呈现失败或取消。`strict=false` 作为非阻塞限制保留。 |
 | AC4 | pass | tuff-cli CI/publish 假绿已修复，workflow contracts `33/33` 与 CLI tests `6/6` 通过。 |
-| AC5 | pass | Beta32 GitHub/Nexus/latest/manifest/rollback/签名/架构矩阵一致；严格生产 Gate E `18/18`，真实 macOS arm64 下载 SHA-256 与 detached 签名通过。 |
-| AC6 | pass | 官方 Beta31 -> Beta32 完成 ready、Settings UI install、无提权 handoff、原位替换、Beta32 startup health 与 attempt-bound `healthy` ack。 |
+| AC5 | pass | Beta33 GitHub/Nexus/latest/manifest/rollback/签名/架构矩阵一致；严格生产 Gate E `18/18`，真实 macOS arm64 下载 SHA-256 与 detached 签名通过。 |
+| AC6 | pass | 官方 Beta32 -> Beta33 完成 ready、Settings UI install、无提权 handoff、原位替换、Beta33 startup health 与 attempt-bound `healthy` ack；Beta33 packaged OCR smoke `11/11` 完成且无 crashpad/N-API 崩溃。 |
 | AC7 | blocked | Linux helper 打包、替换/恢复与 no-FUSE 重启源码缺陷已修并通过受控测试；Windows/Linux 尚无官方 N/N+1 的发现、下载、替换、handoff 与 health-ack 真机证据。 |
-| AC8 | partial | actionlint、release checks、本地 `quality:release`、Beta32 同 SHA `release-quality`、严格 Gate E 和 macOS N/N+1 已通过；Windows/Linux 真机及最终文档收尾未闭环。 |
+| AC8 | partial | actionlint、release checks、本地 `quality:release`、Beta33 同 SHA `release-quality`、严格 Gate E、macOS N/N+1 和 packaged OCR smoke 已通过；Windows/Linux 真机及最终文档收尾未闭环。
 
 ## Out of Scope
 
