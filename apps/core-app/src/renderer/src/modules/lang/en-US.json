@@ -3912,7 +3912,17 @@
       "duplicateProvider": "Duplicate channel",
       "editProviderBasic": "Edit basic info",
       "providerNameHint": "Name shown in the list and details panel.",
-      "providerTypeHint": "Used to match built-in adapters; unknown types are handled as custom.",
+      "providerTypeHint": "Determines this channel's protocol and built-in adapter.",
+      "providerTypeOptions": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "deepseek": "DeepSeek",
+        "siliconflow": "SiliconFlow",
+        "local": "Local model (Ollama)",
+        "compatible": "Compatible",
+        "bailian": "Bailian",
+        "volcengine": "Volcengine"
+      },
       "deleteConfirmTitle": "Delete Provider",
       "deleteConfirmMessage": "Are you sure you want to delete provider \"{name}\"? This action cannot be undone.",
       "deleteConfirmButton": "Delete",

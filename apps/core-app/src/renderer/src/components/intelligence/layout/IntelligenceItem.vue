@@ -12,6 +12,7 @@ import {
   TUFF_NEXUS_PROVIDER_ICON
 } from '~/modules/intelligence/nexus-provider'
 import { providerIconFor } from '~/modules/intelligence/provider-icons'
+import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
 
 enum IntelligenceProviderType {
   OPENAI = 'openai',
@@ -88,7 +89,7 @@ const hasConfigError = computed(() => {
 
 const providerSubtitle = computed(() => {
   if (!isNexusManagedProvider(props.provider)) {
-    return props.provider.type
+    return t(`settings.intelligence.providerTypeOptions.${getProviderChannelType(props.provider)}`)
   }
   return props.isLoggedIn
     ? t('intelligence.item.nexusAuthReady')
