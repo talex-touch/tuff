@@ -40,6 +40,9 @@ import { perfMonitor } from '../utils/perf-monitor'
 import { BaseModule } from './abstract-base-module'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
+import { forecastClipboardRetention } from '@talex-touch/utils/clipboard'
+import { DEFAULT_PRIVACY_RETENTION_POLICY } from './privacy/retention-policy'
+import { createMainPrivacyRetentionPolicyStore } from './privacy/retention-policy-store'
 import { getPermissionModule } from './permission'
 import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
@@ -52,6 +55,12 @@ import {
 } from './clipboard/clipboard-freshness'
 import { ClipboardFreshnessStore, ClipboardHelper } from './clipboard/clipboard-capture-freshness'
 import { ClipboardCapturePipeline } from './clipboard/clipboard-capture-pipeline'
+import {
+  DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS,
+  resolveClipboardClassificationSettings,
+  type ClipboardClassificationSettings
+} from './clipboard/clipboard-classification-settings'
+import { backfillClipboardRetentionProtection } from './clipboard/clipboard-retention-backfill'
 import {
   normalizeClipboardWritePayload,
   type ClipboardHistoryQueryInput
@@ -126,6 +135,9 @@ const CLIPBOARD_META_LOG_THROTTLE_MS = 5_000
 const CLIPBOARD_STAGE_B_LOG_THROTTLE_MS = 5_000
 
 export class ClipboardModule extends BaseModule {
+  /** 当前生效的类别保留时长；null 表示永久保留或策略关闭。见 refreshRetentionPolicy。 */
+  private clipboardRetentionMs: number | null =
+    DEFAULT_PRIVACY_RETENTION_POLICY.categories['clipboard-history'].retentionMs
   private transport: ITuffTransportMain | null = null
   private clipboardHostServiceDisposer: (() => void) | null = null
   private readonly transportHandlers = new ClipboardTransportHandlersRegistry()
@@ -222,6 +234,7 @@ export class ClipboardModule extends BaseModule {
     }
   })
   private readonly stageBEnrichment = new ClipboardStageBEnrichment({
+    getClassificationSettings: () => this.readClassificationSettings(),
     getDatabase: () => this.db,
     getCachedItemById: (clipboardId) => this.historyPersistence.getCachedItemById(clipboardId),
     getActiveAppSnapshot: () => this.getActiveAppSnapshot(),
@@ -245,6 +258,7 @@ export class ClipboardModule extends BaseModule {
     }
   })
   private readonly capturePipeline = new ClipboardCapturePipeline({
+    getClassificationSettings: () => this.readClassificationSettings(),
     getDatabase: () => this.db,
     getClipboardHelper: () => this.clipboardHelper,
     getReader: () => this.resolveClipboardReader(),
@@ -676,6 +690,14 @@ export class ClipboardModule extends BaseModule {
       }
     }
 
+    const forecast = forecastClipboardRetention({
+      timestamp: createdAt,
+      isFavorite: item.isFavorite,
+      retentionProtected: item.retentionProtected,
+      retentionExpiresAt: item.retentionExpiresAt ? item.retentionExpiresAt.getTime() : null,
+      categoryRetentionMs: this.clipboardRetentionMs
+    })
+
     return {
       id: item.id,
       type,
@@ -689,6 +711,8 @@ export class ClipboardModule extends BaseModule {
       freshnessBaseAt: freshness.freshnessBaseAt,
       autoPasteEligible: freshness.eligible,
       isFavorite: item.isFavorite ?? undefined,
+      retentionExpiresAt: forecast.expiresAt,
+      retentionReason: forecast.reason,
       tags,
       meta: Object.keys(meta).length > 0 ? meta : undefined
     }
@@ -1248,6 +1272,9 @@ export class ClipboardModule extends BaseModule {
   ): Promise<ClipboardActionResult> {
     return await this.autopasteAutomation.handleCopyAndPasteRequest(request, context)
   }
+  public async applyVoiceText(text: string): Promise<ClipboardActionResult> {
+    return await this.autopasteAutomation.handleVoiceTextRequest(text)
+  }
 
   private installClipboardHostService(): void {
     this.clipboardHostServiceDisposer?.()
@@ -1468,6 +1495,65 @@ export class ClipboardModule extends BaseModule {
         .catch((error) => clipboardLog.error('Failed to start OCR service', { error }))
     })
     ocrService.registerClipboardMetaListener(this.handleMetaPatch)
+    void this.refreshRetentionPolicy()
+    setImmediate(() => {
+      void this.waitForAppTasksBeforeStartupWork('clipboard-retention-backfill')
+        .then(() => this.runRetentionBackfill())
+        .catch((error) => clipboardLog.warn('Clipboard retention backfill failed', { error }))
+    })
+  }
+
+  /**
+   * 缓存当前生效的类别保留时长，用于算「这条记录什么时候会被删」。
+   *
+   * 缓存而不是每条记录去读一次：`toTransportItem` 在每次 getHistory 的每条记录上都跑，
+   * 而策略读取是异步的存储访问。策略变更时重新读一次即可——用户改设置到界面刷新之间
+   * 有一瞬间的旧值，代价远小于把一次分页查询变成 50 次存储读。
+   */
+  /**
+   * 给启用保留策略之前采集的记录补上密钥保护。
+   *
+   * `retention_protected` 从本次工作才开始写，所以库里已有的 API key、私钥、连接串
+   * 仍按普通文本的类别策略走——默认 90 天后被清掉。延迟到应用任务排空之后跑，
+   * 分批并在批间让出事件循环：这是一次全表扫描，不能挂在启动路径上。
+   */
+  private async runRetentionBackfill(): Promise<void> {
+    if (!this.db) return
+    const result = await backfillClipboardRetentionProtection({
+      db: this.db,
+      getClassificationSettings: () => this.readClassificationSettings(),
+      yieldBetweenBatches: () =>
+        new Promise<void>((resolve) => {
+          setImmediate(resolve)
+        }),
+      logInfo: (message, data) => clipboardLog.info(message, data),
+      logWarn: (message, data) => clipboardLog.warn(message, data)
+    })
+    if (!result.skipped) {
+      clipboardLog.info('Clipboard retention backfill pass finished', { meta: { ...result } })
+    }
+  }
+
+  /** 读用户设置里的剪贴板分类块。这里是唯一碰 storage 的地方，采集与 stage-B 只拿结果。 */
+  private readClassificationSettings(): ClipboardClassificationSettings {
+    try {
+      return resolveClipboardClassificationSettings(
+        getMainConfig(StorageList.APP_SETTING)?.clipboard
+      )
+    } catch {
+      return DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS
+    }
+  }
+
+  private async refreshRetentionPolicy(): Promise<void> {
+    try {
+      const policy = await createMainPrivacyRetentionPolicyStore().load()
+      this.clipboardRetentionMs = policy.categories['clipboard-history'].enabled
+        ? policy.categories['clipboard-history'].retentionMs
+        : null
+    } catch (error) {
+      clipboardLog.warn('Failed to read clipboard retention policy', { error })
+    }
   }
 
   onDestroy(): MaybePromise<void> {

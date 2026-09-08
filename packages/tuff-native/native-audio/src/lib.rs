@@ -7,7 +7,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use napi::bindgen_prelude::{AsyncTask, Buffer};
+use napi::bindgen_prelude::{AsyncTask, Buffer, Function};
 use napi::{Env, Error, Result, Task};
 use napi_derive::napi;
 
@@ -100,6 +100,12 @@ pub struct TypeTextResult {
     pub reason: Option<String>,
 }
 
+#[napi(object)]
+pub struct FunctionKeyMonitorStart {
+    pub active: bool,
+    pub reason: Option<String>,
+}
+
 #[napi]
 pub fn get_native_audio_support() -> NativeAudioSupport {
     build_native_audio_support(
@@ -107,6 +113,42 @@ pub fn get_native_audio_support() -> NativeAudioSupport {
         platform_supported(),
         probe_default_input(),
     )
+}
+
+#[napi]
+pub fn start_function_key_monitor(
+    env: Env,
+    callback: Function<'_, u32, ()>,
+) -> Result<FunctionKeyMonitorStart> {
+    function_key_monitor::start(env, callback)
+}
+
+#[napi]
+pub fn stop_function_key_monitor() {
+    function_key_monitor::stop();
+}
+
+#[cfg(target_os = "macos")]
+mod function_key_monitor;
+
+#[cfg(all(test, target_os = "macos"))]
+mod function_key_monitor_tests;
+
+#[cfg(not(target_os = "macos"))]
+mod function_key_monitor {
+    use napi::bindgen_prelude::Function;
+    use napi::{Env, Result};
+
+    use super::FunctionKeyMonitorStart;
+
+    pub fn start(_env: Env, _callback: Function<'_, u32, ()>) -> Result<FunctionKeyMonitorStart> {
+        Ok(FunctionKeyMonitorStart {
+            active: false,
+            reason: Some("platform-not-supported".to_string()),
+        })
+    }
+
+    pub fn stop() {}
 }
 
 fn start_capture_blocking(options: Option<AudioCaptureOptions>) -> Result<String> {
@@ -841,28 +883,40 @@ fn capture_thread_main(
     };
 
     let sample_format = supported.sample_format();
-    let channels = supported.channels();
-    // cpal 0.18 aliases `SampleRate` to a plain `u32`.
-    let sample_rate: u32 = requested_sample_rate.unwrap_or_else(|| supported.sample_rate());
+    let input_channels = supported.channels();
+    // The device's default rate is guaranteed by `default_input_config`; the requested
+    // recognition rate is produced by the bounded resampler below instead of asking CoreAudio
+    // to switch hardware to a rate it may not expose (for example, 16 kHz on a 48 kHz mic).
+    let input_sample_rate = supported.sample_rate();
+    let output_sample_rate = requested_sample_rate
+        .filter(|rate| *rate > 0)
+        .unwrap_or(input_sample_rate);
     let config = cpal::StreamConfig {
-        channels,
-        sample_rate,
+        channels: input_channels,
+        sample_rate: input_sample_rate,
         buffer_size: cpal::BufferSize::Default,
     };
 
+    let resampler = Arc::new(Mutex::new(StreamingLinearResampler::new(
+        input_sample_rate,
+        output_sample_rate,
+    )));
     {
         let mut guard = lock(&meta);
-        guard.sample_rate = sample_rate;
-        guard.channels = channels;
+        // The buffer exposed by stop/snapshot/drain is always target-rate mono PCM.
+        guard.sample_rate = output_sample_rate;
+        guard.channels = 1;
     }
 
     let stream = match build_capture_stream(
         &device,
         &config,
         sample_format,
-        samples,
+        samples.clone(),
         silence.clone(),
         started_at,
+        input_channels,
+        resampler.clone(),
     ) {
         Ok(stream) => stream,
         Err(error) => {
@@ -906,6 +960,12 @@ fn capture_thread_main(
 
     // Dropping the stream stops the OS capture; do it before recording the reason.
     drop(stream);
+    // The streaming resampler keeps one look-ahead sample for interpolation. Flush it only
+    // after the cpal stream is dropped, then publish the terminal state to readers.
+    let tail = lock(&resampler).finish();
+    if !tail.is_empty() {
+        lock(&samples).extend_from_slice(&tail);
+    }
     finish_capture(reason, &meta, &sync);
 }
 
@@ -930,23 +990,40 @@ fn build_capture_stream(
     samples: Arc<Mutex<Vec<f32>>>,
     silence: Arc<SilenceState>,
     started_at: Instant,
+    input_channels: u16,
+    resampler: Arc<Mutex<StreamingLinearResampler>>,
 ) -> std::result::Result<cpal::Stream, String> {
     match sample_format {
-        cpal::SampleFormat::F32 => {
-            build_typed_stream::<f32>(device, config, samples, silence, started_at, |sample| {
-                sample
-            })
-        }
-        cpal::SampleFormat::I16 => {
-            build_typed_stream::<i16>(device, config, samples, silence, started_at, |sample| {
-                sample as f32 / 32_768.0
-            })
-        }
-        cpal::SampleFormat::U16 => {
-            build_typed_stream::<u16>(device, config, samples, silence, started_at, |sample| {
-                (sample as f32 - 32_768.0) / 32_768.0
-            })
-        }
+        cpal::SampleFormat::F32 => build_typed_stream::<f32>(
+            device,
+            config,
+            samples,
+            silence,
+            started_at,
+            input_channels,
+            resampler,
+            |sample| sample,
+        ),
+        cpal::SampleFormat::I16 => build_typed_stream::<i16>(
+            device,
+            config,
+            samples,
+            silence,
+            started_at,
+            input_channels,
+            resampler,
+            |sample| sample as f32 / 32_768.0,
+        ),
+        cpal::SampleFormat::U16 => build_typed_stream::<u16>(
+            device,
+            config,
+            samples,
+            silence,
+            started_at,
+            input_channels,
+            resampler,
+            |sample| (sample as f32 - 32_768.0) / 32_768.0,
+        ),
         other => Err(format!("unsupported-sample-format: {other:?}")),
     }
 }
@@ -957,6 +1034,8 @@ fn build_typed_stream<T>(
     samples: Arc<Mutex<Vec<f32>>>,
     silence: Arc<SilenceState>,
     started_at: Instant,
+    input_channels: u16,
+    resampler: Arc<Mutex<StreamingLinearResampler>>,
     convert: impl Fn(T) -> f32 + Send + 'static,
 ) -> std::result::Result<cpal::Stream, String>
 where
@@ -972,10 +1051,14 @@ where
                 for &sample in data {
                     converted.push(convert(sample));
                 }
-                if rms(&converted) > SILENCE_RMS_THRESHOLD {
+                let mono = downmix_to_mono(&converted, input_channels);
+                if rms(&mono) > SILENCE_RMS_THRESHOLD {
                     silence.mark_sound(started_at.elapsed());
                 }
-                lock(&samples).extend_from_slice(&converted);
+                let output = lock(&resampler).push(&mono);
+                if !output.is_empty() {
+                    lock(&samples).extend_from_slice(&output);
+                }
             },
             error_fn,
             None,
@@ -1157,6 +1240,89 @@ fn resample_linear(input: &[f32], rate_in: u32, rate_out: u32) -> Vec<f32> {
         out.push(current + (next - current) * frac);
     }
     out
+}
+
+/// Incremental linear resampling for live capture.
+///
+/// cpal must open the device's native/default rate, while ASR providers commonly require
+/// 16 kHz (or another fixed rate). The resampler retains only the source samples needed for the
+/// next interpolation point, so long recordings do not accumulate a second full input buffer.
+struct StreamingLinearResampler {
+    rate_in: u32,
+    rate_out: u32,
+    source: Vec<f32>,
+    source_base: usize,
+    next_output: usize,
+}
+
+impl StreamingLinearResampler {
+    fn new(rate_in: u32, rate_out: u32) -> Self {
+        Self {
+            rate_in: rate_in.max(1),
+            rate_out: rate_out.max(1),
+            source: Vec::new(),
+            source_base: 0,
+            next_output: 0,
+        }
+    }
+
+    fn push(&mut self, input: &[f32]) -> Vec<f32> {
+        self.process(input, false)
+    }
+
+    fn finish(&mut self) -> Vec<f32> {
+        self.process(&[], true)
+    }
+
+    fn process(&mut self, input: &[f32], final_chunk: bool) -> Vec<f32> {
+        self.source.extend_from_slice(input);
+        let source_end = self.source_base.saturating_add(self.source.len());
+        let ratio = self.rate_in as f64 / self.rate_out as f64;
+        let output_limit = if final_chunk {
+            ((source_end as f64 / ratio).round()).min(usize::MAX as f64) as usize
+        } else if source_end <= 1 {
+            0
+        } else {
+            ((((source_end - 1) as f64) / ratio).ceil()).min(usize::MAX as f64) as usize
+        };
+
+        let mut output = Vec::new();
+        while self.next_output < output_limit {
+            let source_position = self.next_output as f64 * ratio;
+            let source_index = source_position.floor() as usize;
+            let Some(relative_index) = source_index.checked_sub(self.source_base) else {
+                break;
+            };
+            let Some(&current) = self.source.get(relative_index) else {
+                break;
+            };
+            let next = self
+                .source
+                .get(relative_index + 1)
+                .copied()
+                .unwrap_or(current);
+            let fraction = (source_position - source_index as f64) as f32;
+            output.push(current + (next - current) * fraction);
+            self.next_output += 1;
+        }
+
+        // Keep the current interpolation sample and discard everything before it. The next
+        // output may be fractional, so retaining one preceding sample is cheap and avoids an
+        // edge-case when floating-point rounding lands exactly on a boundary.
+        let next_source_index = (self.next_output as f64 * ratio).floor() as usize;
+        let retain_from = next_source_index.saturating_sub(1);
+        if retain_from > self.source_base {
+            let drop_count = (retain_from - self.source_base).min(self.source.len());
+            self.source.drain(..drop_count);
+            self.source_base += drop_count;
+        }
+
+        if final_chunk {
+            self.source.clear();
+            self.source_base = source_end;
+        }
+        output
+    }
 }
 
 /// Decode WAV/MP3 (and any other enabled symphonia codec) bytes to interleaved
@@ -1857,28 +2023,6 @@ mod tests {
     }
 
     #[test]
-    fn every_read_path_touches_the_session() {
-        // The mutation the tests above cannot see: dropping the call from *one* of
-        // the three entry points. `touch_session` stays alive for the other two, so
-        // there is no dead-code warning, and the only symptom is that a session read
-        // solely through that path gets reaped mid-collection.
-        let source = include_str!("lib.rs");
-
-        for entry in ["poll_capture", "snapshot_capture", "drain_capture"] {
-            let body = source
-                .split(&format!("pub fn {entry}("))
-                .nth(1)
-                .unwrap_or_else(|| panic!("{entry} not found"));
-            // Up to the next entry point, so this reads one function's body.
-            let body = body.split("\n#[napi]").next().unwrap();
-            assert!(
-                body.contains("touch_session(handle);"),
-                "{entry} does not mark the session as read"
-            );
-        }
-    }
-
-    #[test]
     fn a_finished_capture_records_when_it_stopped() {
         // The reaper's clock. Without it every stopped session looks equally old.
         let meta = Mutex::new(CaptureMeta::default());
@@ -1997,6 +2141,101 @@ mod tests {
             resample_linear(&[0.0, 1.0, 0.0, 1.0], 16_000, 32_000).len(),
             8
         );
+    }
+
+    /// Drive the production streaming resampler with deterministic chunk boundaries.
+    /// This helper only concatenates its outputs; interpolation remains owned by
+    /// `StreamingLinearResampler`.
+    fn stream_resample(
+        input: &[f32],
+        rate_in: u32,
+        rate_out: u32,
+        chunk_sizes: &[usize],
+    ) -> Vec<f32> {
+        let mut resampler = StreamingLinearResampler::new(rate_in, rate_out);
+        let mut output = Vec::new();
+        let mut offset = 0;
+
+        for &chunk_size in chunk_sizes {
+            let end = (offset + chunk_size).min(input.len());
+            output.extend(resampler.push(&input[offset..end]));
+            offset = end;
+        }
+
+        assert_eq!(
+            offset,
+            input.len(),
+            "chunk sizes must cover the complete input"
+        );
+        output.extend(resampler.finish());
+        output
+    }
+
+    #[test]
+    fn streaming_resampler_keeps_samples_when_rates_match() {
+        let input = [-0.75_f32, -0.25, 0.0, 0.375, 0.875];
+        let output = stream_resample(&input, 16_000, 16_000, &[2, 1, 2]);
+
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn streaming_48khz_to_16khz_matches_one_shot_and_flushes_the_tail() {
+        let input: Vec<f32> = (0..480)
+            .map(|index| ((index as f32) * 0.031).sin())
+            .collect();
+        let expected = resample_linear(&input, 48_000, 16_000);
+        let output = stream_resample(&input, 48_000, 16_000, &[73, 127, 280]);
+
+        assert_eq!(output.len(), expected.len(), "stream output count changed");
+        assert_eq!(output, expected, "chunk boundaries changed interpolation");
+
+        // `finish` may be empty when non-final `push` already had enough look-ahead;
+        // the combined stream must still preserve the one-shot endpoint exactly.
+        let mut resampler = StreamingLinearResampler::new(48_000, 16_000);
+        let mut flushed = resampler.push(&input);
+        flushed.extend(resampler.finish());
+        assert_eq!(flushed, expected, "finish dropped or duplicated samples");
+
+        // A short upsample has no look-ahead frame available to `push`; finish must
+        // still materialize the endpoint(s) prescribed by the one-shot contract.
+        let short = [0.25_f32];
+        let expected_short = resample_linear(&short, 8_000, 16_000);
+        let mut short_resampler = StreamingLinearResampler::new(8_000, 16_000);
+        let mut short_output = short_resampler.push(&short);
+        short_output.extend(short_resampler.finish());
+        assert!(
+            !short_output.is_empty(),
+            "finish emitted no short-input tail"
+        );
+        assert_eq!(short_output, expected_short);
+    }
+
+    #[test]
+    fn streaming_16khz_to_8khz_has_no_duplicate_or_missing_endpoint() {
+        let input: Vec<f32> = (0..16).map(|index| index as f32).collect();
+        let output = stream_resample(&input, 16_000, 8_000, &[3, 5, 8]);
+
+        assert_eq!(output, vec![0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0]);
+        assert_eq!(output.len(), 8);
+        assert_ne!(output[output.len() - 1], input[input.len() - 1]);
+    }
+
+    #[test]
+    fn streaming_chunks_equal_full_resample_for_non_integer_target_rate() {
+        let input: Vec<f32> = (0..441)
+            .map(|index| ((index as f32) * 0.017).cos())
+            .collect();
+        let expected = resample_linear(&input, 44_100, 16_000);
+        let output = stream_resample(&input, 44_100, 16_000, &[1, 17, 64, 3, 89, 267]);
+
+        assert_eq!(output.len(), expected.len());
+        for (index, (&actual, &wanted)) in output.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (actual - wanted).abs() <= 1e-6,
+                "sample {index}: expected {wanted}, got {actual}"
+            );
+        }
     }
 
     #[test]

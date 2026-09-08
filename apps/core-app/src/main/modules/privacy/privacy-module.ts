@@ -28,6 +28,8 @@ import { createIntelligenceRetentionOwner } from './owners/intelligence-retentio
 import { createOrchestratorRunPrivacyLifecycle } from './owners/orchestrator-run-privacy-lifecycle'
 import { createOcrScreenshotRetentionOwner } from './owners/ocr-screenshot-retention-owner'
 import { createSearchRetentionOwner } from './owners/search-retention-owner'
+import { createVoiceInsightsPrivacyOwner } from './owners/voice-insights-privacy-owner'
+import { voiceInsightsStore } from '../voice/voice-insights-store'
 import { createPrivacyCategoryExporter } from './privacy-export'
 import { createPrivacyLifecycleService } from './privacy-lifecycle-service'
 import {
@@ -120,7 +122,8 @@ export function createPrivacyProductionOwnerRegistry(
       // Startup write-storm gate (R4): scheduled-retention telemetry DB-writes
       // skip while inside the startup degrade window.
       isStartupDegradeWindowActive: isInStartupDegradeWindow
-    })
+    }),
+    createVoiceInsightsPrivacyOwner(voiceInsightsStore)
   ])
 }
 

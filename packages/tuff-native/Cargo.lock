@@ -2621,6 +2621,9 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "objc2",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
  "symphonia",
 ]
 

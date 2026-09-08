@@ -165,6 +165,9 @@ const TABLE_CATALOG: Array<{ name: string; label: string; category: string }> = 
   { name: 'plugin_analytics', label: '分析-插件统计', category: 'analytics' },
   { name: 'analytics_report_queue', label: '分析-上报队列', category: 'analytics' },
   { name: 'telemetry_upload_stats', label: '遥测-上传统计', category: 'telemetry' },
+  { name: 'voice_insights_state', label: '语音-洞察汇总', category: 'voice' },
+  { name: 'voice_insight_days', label: '语音-洞察日统计', category: 'voice' },
+  { name: 'voice_insight_captures', label: '语音-洞察去重标识', category: 'voice' },
   { name: 'app_update_records', label: '更新-记录', category: 'updates' }
 ]
 

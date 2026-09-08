@@ -9,7 +9,7 @@ const rootDir = path.resolve(__dirname, '..')
 const workspaceDir = rootDir
 const crateDir = path.join(rootDir, 'native-audio')
 const releaseDir = path.join(workspaceDir, 'target', 'release')
-const outDir = path.join(rootDir, 'build', 'Release')
+const packagedOutDir = path.join(rootDir, 'build', 'Release')
 
 const platformLibraryName
   = process.platform === 'win32'
@@ -28,15 +28,20 @@ if (result.status !== 0) {
   process.exit(result.status ?? 1)
 }
 
-fs.mkdirSync(outDir, { recursive: true })
-const outNodePath = path.join(outDir, 'tuff_native_audio.node')
-fs.copyFileSync(path.join(releaseDir, platformLibraryName), outNodePath)
-
-// macOS/Apple Silicon: cargo emits the dylib ad-hoc *linker-signed* (codesign
-// flags 0x20002). A byte-identical copy of a linker-signed Mach-O is SIGKILLed by
-// AMFI on load ("Killed: 9") from any path other than where it was built — which
-// breaks the pnpm-managed core-app copy of this package. Re-sign with a plain
-// ad-hoc signature (flags 0x2) so every copy loads from any path.
-if (process.platform === 'darwin') {
-  execFileSync('codesign', ['--force', '--sign', '-', outNodePath], { stdio: 'inherit' })
+// Keep a single runtime location for both development and packaging. Plain ad-hoc
+// signing makes the copied Cargo dylib loadable on Apple Silicon.
+fs.mkdirSync(packagedOutDir, { recursive: true })
+const packagedNodePath = path.join(packagedOutDir, 'tuff_native_audio.node')
+const stagingDir = fs.mkdtempSync(path.join(packagedOutDir, '.audio-'))
+try {
+  const stagedNodePath = path.join(stagingDir, 'tuff_native_audio.node')
+  fs.copyFileSync(path.join(releaseDir, platformLibraryName), stagedNodePath)
+  if (process.platform === 'darwin') {
+    execFileSync('codesign', ['--force', '--sign', '-', stagedNodePath], { stdio: 'inherit' })
+  }
+  // Never truncate an addon still mapped by a running development process.
+  fs.renameSync(stagedNodePath, packagedNodePath)
+}
+finally {
+  fs.rmSync(stagingDir, { recursive: true, force: true })
 }

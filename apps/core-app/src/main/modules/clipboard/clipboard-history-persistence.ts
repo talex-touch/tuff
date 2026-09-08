@@ -39,6 +39,10 @@ export interface IClipboardItem {
   sourceApp?: string | null
   timestamp?: Date
   isFavorite?: boolean | null
+  /** 密钥类，永不被自动清理。 */
+  retentionProtected?: boolean | null
+  /** 这条记录自己的过期时刻，比类别策略更早。验证码走这条。 */
+  retentionExpiresAt?: Date | null
   metadata?: string | null
   meta?: Record<string, unknown> | null
 }

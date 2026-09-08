@@ -78,6 +78,15 @@ export interface ClipboardItem {
   freshnessBaseAt?: number
   autoPasteEligible?: boolean
   isFavorite?: boolean
+  /**
+   * 这条记录预计被自动删除的时刻，null 表示不会。
+   *
+   * 由主进程算好下发：它综合了收藏、密钥保护、记录自身的过期时刻和**当前生效的**
+   * 类别策略，而渲染侧看不到策略。让客户端自己算的话，用户改一次设置界面就开始撒谎。
+   */
+  retentionExpiresAt?: number | null
+  /** 为什么是这个结果，供 UI 写出「已收藏」还是「密钥」。 */
+  retentionReason?: 'favorite' | 'protected' | 'policy' | 'disabled'
 }
 
 /**

@@ -7,6 +7,7 @@ describe('clipboardActionBar', () => {
     const wrapper = mount(ClipboardActionBar, {
       props: {
         item: null,
+        primaryActionLabel: '复制',
         copyPending: false,
         applyPending: false,
         favoritePending: false,
@@ -28,6 +29,7 @@ describe('clipboardActionBar', () => {
           type: 'text',
           content: 'hello',
         },
+        primaryActionLabel: '复制',
         copyPending: false,
         applyPending: false,
         favoritePending: false,
@@ -47,6 +49,7 @@ describe('clipboardActionBar', () => {
           content: 'hello',
           isFavorite: true,
         },
+        primaryActionLabel: '复制',
         copyPending: true,
         applyPending: true,
         favoritePending: true,
@@ -54,7 +57,7 @@ describe('clipboardActionBar', () => {
       },
     })
 
-    expect(wrapper.get('[data-testid="copy-button"]').text()).toContain('复制中')
+    expect(wrapper.get('[data-testid="copy-button"]').text()).toContain('处理中')
     expect(wrapper.get('[data-testid="apply-button"]').text()).toContain('粘贴中')
     expect(wrapper.get('[data-testid="favorite-button"]').text()).toContain('处理中')
     expect(wrapper.get('[data-testid="delete-button"]').text()).toContain('删除中')
@@ -68,6 +71,7 @@ describe('clipboardActionBar', () => {
           type: 'text',
           content: 'hello',
         },
+        primaryActionLabel: '复制',
         copyPending: false,
         applyPending: false,
         favoritePending: false,
@@ -80,7 +84,7 @@ describe('clipboardActionBar', () => {
     await wrapper.get('[data-testid="favorite-button"]').trigger('click')
     await wrapper.get('[data-testid="delete-button"]').trigger('click')
 
-    expect(wrapper.emitted('copy')).toHaveLength(1)
+    expect(wrapper.emitted('primary')).toHaveLength(1)
     expect(wrapper.emitted('apply')).toHaveLength(1)
     expect(wrapper.emitted('toggleFavorite')).toHaveLength(1)
     expect(wrapper.emitted('delete')).toHaveLength(1)

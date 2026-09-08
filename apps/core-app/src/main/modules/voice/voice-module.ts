@@ -1,3 +1,4 @@
+import { shell } from 'electron'
 import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { getTuffTransportMain, HandlerContext } from '@talex-touch/utils/transport/main'
 import type { StreamContext } from '@talex-touch/utils/transport/types'
@@ -14,8 +15,24 @@ import { withPermission } from '../permission/channel-guard'
 import { BaseModule } from '../abstract-base-module'
 import { globalDictationController } from './global-dictation'
 import { voiceService } from './voice-service'
+import { voiceInsightsStore } from './voice-insights-store'
+import { assistantModule } from '../assistant/module'
+import { CommandVoiceGestureController, registerPlatformVoiceGesture } from './command-gesture'
 
 const voiceLog = createLogger('Voice')
+
+/**
+ * Where each platform keeps the microphone permission pane.
+ *
+ * Constants, never renderer input: these schemes are deliberately absent from the external-URL
+ * allowlist, so the only safe way to reach them is for main to hold the whole string. Linux has
+ * no equivalent that works across desktops, so it is absent and the caller is told so rather
+ * than being handed a button that does nothing.
+ */
+const MICROPHONE_SETTINGS_URL: Partial<Record<NodeJS.Platform, string>> = {
+  darwin: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+  win32: 'ms-settings:privacy-microphone'
+}
 const VOICE_PERMISSION = 'voice.dictation'
 
 /**
@@ -32,6 +49,7 @@ export class VoiceModule extends BaseModule<TalexEvents> {
 
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private cleanups: Array<() => void> = []
+  private commandGestureController: CommandVoiceGestureController | null = null
 
   constructor() {
     super(VoiceModule.key)
@@ -44,10 +62,19 @@ export class VoiceModule extends BaseModule<TalexEvents> {
     voiceLog.info('Initializing Voice module')
     this.registerChannels()
     globalDictationController.register()
+    this.commandGestureController = new CommandVoiceGestureController(
+      (payload) => assistantModule.handleVoiceCommandGesture(payload),
+      () => assistantModule.isVoiceCommandActive(),
+      registerPlatformVoiceGesture
+    )
+    this.commandGestureController.register()
     voiceLog.success('Voice module initialized')
   }
 
   async onDestroy(): Promise<void> {
+    this.commandGestureController?.unregister()
+    this.commandGestureController = null
+    voiceService.dispose()
     globalDictationController.unregister()
     for (const cleanup of this.cleanups.splice(0)) {
       try {
@@ -75,6 +102,102 @@ export class VoiceModule extends BaseModule<TalexEvents> {
       )
     )
 
+    // Main-owned uploaded audio transcription.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.transcribeUpload,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          (payload) => voiceService.transcribeUpload(payload),
+          { onError: (error) => voiceLog.error('Voice upload transcription failed:', { error }) }
+        )
+      )
+    )
+
+    // The settings button on a device failure. Nothing crosses the boundary but the intent.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.openMicrophoneSettings,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async () => {
+            const url = MICROPHONE_SETTINGS_URL[process.platform]
+            if (!url) throw new Error('VOICE_MICROPHONE_SETTINGS_UNSUPPORTED')
+            await shell.openExternal(url)
+          },
+          {
+            onError: (error) => voiceLog.error('Opening microphone settings failed:', { error })
+          }
+        )
+      )
+    )
+
+    // The HUD's undo/retry notice has left the screen, so the audio it could have spent has
+    // nothing left pointing at it.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.discardRecovery,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          () => voiceService.discardRecovery(),
+          { onError: (error) => voiceLog.error('Voice discard recovery failed:', { error }) }
+        )
+      )
+    )
+
+    // Does a cancelled or failed recording still exist? Lets the dock offer recovery after
+    // the pill has already collapsed, which is the only thing that makes the window reachable.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.recoveryStatus,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          () => voiceService.getRecoveryStatus(),
+          { onError: (error) => voiceLog.error('Voice recovery status failed:', { error }) }
+        )
+      )
+    )
+
+    // Retry the last failed streaming session against the audio it already captured.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.retryLastFailure,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          (payload) => voiceService.retryLastFailure(payload),
+          { onError: (error) => voiceLog.error('Voice retry failed:', { error }) }
+        )
+      )
+    )
+
+    // Aggregate-only insights and deletion are host-renderer-only; plugins never receive these handlers.
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.getInsights,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          (_payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_INSIGHTS_HOST_ONLY')
+            return voiceInsightsStore.getInsights()
+          },
+          { onError: (error) => voiceLog.error('Voice insights read failed:', { error }) }
+        )
+      )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.clearInsights,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async (_payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_INSIGHTS_HOST_ONLY')
+            await voiceInsightsStore.clearInsights()
+          },
+          { onError: (error) => voiceLog.error('Voice insights clear failed:', { error }) }
+        )
+      )
+    )
+
     // Text-to-speech.
     this.cleanups.push(
       transport.on(
@@ -96,7 +219,9 @@ export class VoiceModule extends BaseModule<TalexEvents> {
             async (nextPayload, nextContext) => {
               const streamContext = nextContext as unknown as StreamContext<VoiceAsrStreamEvent>
               for await (const event of voiceService.streamDictation(
-                nextPayload as VoiceAsrStreamPayload
+                nextPayload as VoiceAsrStreamPayload,
+                streamContext.signal,
+                { stopSignal: streamContext.stopSignal }
               )) {
                 if (streamContext.isCancelled()) break
                 streamContext.emit(event)

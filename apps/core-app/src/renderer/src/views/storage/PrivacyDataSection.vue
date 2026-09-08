@@ -27,12 +27,14 @@ import { createPrivacySdk } from '@talex-touch/utils/transport/sdk/domains/priva
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatBytesShort } from '~/components/plugin/runtime/format'
+import { appSetting } from '~/modules/storage/app-storage'
 import { focusModalDialog, handleModalDialogKeydown } from '~/utils/modal-dialog'
 
 const DAY = 24 * 60 * 60 * 1000
 const RETENTION_MS_BY_PRESET: Readonly<
   Record<Exclude<PrivacyRetentionPreset, 'permanent'>, number>
 > = {
+  '1-hour': 60 * 60 * 1000,
   '1-day': DAY,
   '7-days': 7 * DAY,
   '30-days': 30 * DAY,
@@ -51,6 +53,38 @@ const DEFAULT_SELECTIONS: Record<PrivacyRetentionCategory, PrivacyRetentionPrese
 
 const privacySdk = createPrivacySdk(useTuffTransport())
 const { t } = useI18n()
+
+/** 验证码可选时长。比这更长的话，一次性码的意义本身就没了。 */
+const VERIFICATION_CODE_OPTIONS = [
+  5 * 60_000,
+  15 * 60_000,
+  60 * 60_000,
+  6 * 60 * 60_000,
+  24 * 60 * 60_000
+]
+
+/**
+ * 剪贴板三档设置直接绑在 appSetting 上（自动持久化），而不是走隐私策略的保存按钮——
+ * 它们不属于那张策略表，混进那次保存会让「保存保留策略」这个动作变得名不副实。
+ */
+const clipboardTiers = computed(() => appSetting.clipboard)
+const customPrefixInput = ref('')
+
+watch(
+  () => clipboardTiers.value?.customKeyPrefixes,
+  (prefixes) => {
+    customPrefixInput.value = (prefixes ?? []).join(', ')
+  },
+  { immediate: true }
+)
+
+function commitCustomPrefixes(): void {
+  if (!clipboardTiers.value) return
+  clipboardTiers.value.customKeyPrefixes = customPrefixInput.value
+    .split(/[,，\s]+/)
+    .map((prefix) => prefix.trim())
+    .filter(Boolean)
+}
 
 const initialLoading = ref(true)
 const loadFailed = ref(false)
@@ -918,6 +952,54 @@ onBeforeUnmount(() => {
                 v-text="t(`privacyData.retention.presets.${preset}`)"
               />
             </select>
+          </label>
+        </div>
+
+        <!--
+          剪贴板的三档不是三个保留类别：那张类别表同时也是数据域清单，每一项都要有自己的
+          data owner。而「剪贴板里的验证码」和普通记录同表同 owner，删除路径一样，
+          所以它挂在剪贴板那一行下面，不占一个假数据域。
+        -->
+        <div class="PrivacyDataSection-ClipboardTiers">
+          <h4 v-text="t('privacyData.clipboardTiers.title')" />
+          <p
+            class="PrivacyDataSection-ClipboardHint"
+            v-text="t('privacyData.clipboardTiers.hint')"
+          />
+
+          <label class="PrivacyDataSection-RetentionRow">
+            <span v-text="t('privacyData.clipboardTiers.verificationCode')" />
+            <select
+              v-model.number="clipboardTiers.verificationCodeRetentionMs"
+              data-testid="clipboard-code-retention"
+            >
+              <option
+                v-for="option in VERIFICATION_CODE_OPTIONS"
+                :key="option"
+                :value="option"
+                v-text="t(`privacyData.clipboardTiers.durations.${option}`)"
+              />
+            </select>
+          </label>
+
+          <label class="PrivacyDataSection-RetentionRow">
+            <span v-text="t('privacyData.clipboardTiers.protectSecrets')" />
+            <input
+              v-model="clipboardTiers.protectSecrets"
+              type="checkbox"
+              data-testid="clipboard-protect-secrets"
+            />
+          </label>
+
+          <label class="PrivacyDataSection-RetentionRow">
+            <span v-text="t('privacyData.clipboardTiers.customPrefixes')" />
+            <input
+              v-model="customPrefixInput"
+              type="text"
+              data-testid="clipboard-custom-prefixes"
+              :placeholder="t('privacyData.clipboardTiers.customPrefixesPlaceholder')"
+              @change="commitCustomPrefixes"
+            />
           </label>
         </div>
         <div class="PrivacyDataSection-Notes">

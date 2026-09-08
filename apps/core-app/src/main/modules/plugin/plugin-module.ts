@@ -120,7 +120,11 @@ import {
 } from './host/plugin-host-request-reply'
 import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
 import { createQuickOpsDeveloperPreviewResponse, saveQuickOpsDeveloperPreview } from '../quick-ops'
-import type { PluginVoiceHostService } from './host/plugin-voice-capabilities'
+import type {
+  PluginVoiceHostService,
+  PluginVoiceStreamEvent
+} from './host/plugin-voice-capabilities'
+import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { createPluginIntelligenceCapabilities } from './host/plugin-intelligence-capabilities'
 import { createPluginIntelligenceHostService } from './host/plugin-intelligence-host-service'
 import { createPluginIntelligenceContextCapabilities } from './host/plugin-intelligence-context-capabilities'
@@ -219,6 +223,23 @@ import { registerPluginWindowTransportHandlers } from './services/plugin-window-
 import { buildPluginManagerRuntime } from './services/plugin-manager-orchestrator'
 
 const pluginLog = getLogger('plugin-system')
+
+/**
+ * Keeps the plugin voice stream to the four events its contract declares.
+ *
+ * The core stream can also carry `level` frames, but only for callers that ask for them.
+ * Plugins never do, and forwarding one anyway would widen a published surface by accident —
+ * so the boundary drops anything the contract does not name instead of relaxing the type.
+ */
+async function* narrowVoiceStreamForPlugins(
+  source: AsyncIterable<VoiceAsrStreamEvent>
+): AsyncIterable<PluginVoiceStreamEvent> {
+  for await (const event of source) {
+    if (event.type === 'partial' || event.type === 'final' || event.type === 'end') {
+      yield event
+    }
+  }
+}
 const pluginModuleLog = createLogger('PluginSystem')
 const pluginIpcLog = pluginModuleLog.child('IPC')
 const WIDGET_ROOT_DIR = 'widgets'
@@ -2223,12 +2244,14 @@ export class PluginModule extends BaseModule {
         },
         stream: (payload, signal, caller) => {
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
-          return voiceService.streamDictation(
-            {
-              ...(payload.language ? { language: payload.language } : {})
-            },
-            signal,
-            caller
+          return narrowVoiceStreamForPlugins(
+            voiceService.streamDictation(
+              {
+                ...(payload.language ? { language: payload.language } : {})
+              },
+              signal,
+              { caller }
+            )
           )
         }
       })

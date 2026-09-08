@@ -804,7 +804,8 @@ async function run() {
               text: 'smoke dictated words',
               raw: 'smoke dictated words',
               source: 'electron-smoke',
-              polished: false
+              polished: false,
+              delivery: { method: 'native' }
             }
           },
           async speak(payload, signal) {
@@ -821,7 +822,12 @@ async function run() {
             state.voiceCalls.push({ operation: 'stream', payload })
             yield { type: 'partial', text: 'smoke partial' }
             if (signal.aborted) return
-            yield { type: 'final', text: 'smoke isolated final', language: 'en-US' }
+            yield {
+              type: 'final',
+              text: 'smoke isolated final',
+              language: 'en-US',
+              delivery: { method: 'native' }
+            }
             if (signal.aborted) return
             yield { type: 'end' }
           }
@@ -2108,8 +2114,12 @@ async function run() {
       firstDictationItem
     ])
     assert(acceptedDictation?.success === true)
-    assert(firstBatchDictation.state.clipboardWrites.includes('smoke isolated final'))
-    assert(firstBatchDictation.state.voiceCalls.some((call) => call.operation === 'stream'))
+    assert(firstBatchDictation.state.clipboardWrites.length === 0)
+    assert(
+      firstBatchDictation.state.voiceCalls.some(
+        (call) => call.operation === 'stream' && call.payload.delivery === 'active-app'
+      )
+    )
     await waitFor(() => firstBatchDictation.resources.size === 0, 1000)
 
     const firstBatchBookmarks = firstBatch.find(
@@ -2897,7 +2907,12 @@ async function run() {
       secondBatchDictation.state.items[0]
     ])
     assert(secondDictationResult?.success === true)
-    assert(secondBatchDictation.state.clipboardWrites.includes('smoke isolated final'))
+    assert(secondBatchDictation.state.clipboardWrites.length === 0)
+    assert(
+      secondBatchDictation.state.voiceCalls.some(
+        (call) => call.operation === 'stream' && call.payload.delivery === 'active-app'
+      )
+    )
     await waitFor(() => secondBatchDictation.resources.size === 0, 1000)
 
     for (const pluginName of ['touch-quickops', 'touch-snippets']) {

@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 65
-- **Last Active**: 2026-09-06
+- **Total Sessions**: 66
+- **Last Active**: 2026-09-07
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~593 | Active |
+| `journal-2.md` | ~640 | Active |
 | `journal-1.md` | ~2005 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -31,6 +31,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 66 | 2026-09-07 | 剪贴板历史：密钥掩码一致性、内容分类统一与按类保留 | `fbddec35d`, `23c734c50`, `e1796d4a9`, `820ea3c78`, `d848b0b74`, `e2b7bc39a`, `d160bdfcf`, `67dd05a6a`, `cdc705adf`, `abd485732`, `99f372f45`, `98511ac2a`, `b129f083e`, `f0baca5f3` | `feature/clipboard-layout-shell` |
 | 65 | 2026-09-06 | 模型菜单筛选条改用 TxFilterChips：provider 级图标 chip、滑动指示器、渠道分组 | `c3b5222f4`, `2528f40ad` | `release/ota-transport-error-classification-20260904` |
 | 64 | 2026-09-06 | 模型菜单渠道分层 + 锚定面板背景修复 | `2838f31cd`, `3309c614d`, `4597c566f` | `release/ota-transport-error-classification-20260904` |
 | 63 | 2026-09-06 | Home model menu v2: provider filters, search, favorites, hotkeys, family icons | `1be2a206f`, `8da334466`, `2178c013c`, `00a6de331` | `release/ota-transport-error-classification-20260904` |

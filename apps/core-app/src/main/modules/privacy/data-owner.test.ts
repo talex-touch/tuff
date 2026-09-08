@@ -154,7 +154,8 @@ describe('privacy data owner registry', () => {
     ).toEqual({
       kind: 'eligible',
       cutoffMs: Number.MAX_SAFE_INTEGER,
-      includeProtected: true
+      includeProtected: true,
+      nowMs
     })
   })
 

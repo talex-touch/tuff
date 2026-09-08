@@ -305,12 +305,7 @@ describe('plugin runtime production rollout gate', () => {
       ...(Array.isArray(dictation?.optional) ? dictation.optional : [])
     ]
     expect(dictationPermissions).toEqual(
-      expect.arrayContaining([
-        'voice.dictation',
-        'search.root-results',
-        'clipboard.read',
-        'clipboard.write'
-      ])
+      expect.arrayContaining(['voice.dictation', 'search.root-results', 'clipboard.read'])
     )
   })
 

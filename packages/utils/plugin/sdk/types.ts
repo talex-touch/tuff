@@ -97,6 +97,16 @@ export interface PluginClipboardItem {
   sourceApp?: string | null;
   timestamp?: string | number | Date | null;
   isFavorite?: boolean | null;
+  /**
+   * When this entry is expected to be deleted automatically, or null if it never will be.
+   *
+   * Computed by the host, because it depends on the retention policy currently in force and
+   * a plugin cannot see that. Recomputing it here would start lying the moment the user
+   * changes a setting.
+   */
+  retentionExpiresAt?: number | null;
+  /** Why that answer, so the UI can say "favourited" rather than just "never". */
+  retentionReason?: "favorite" | "protected" | "policy" | "disabled";
   metadata?: string | null;
   meta?: Record<string, unknown> | null;
 }

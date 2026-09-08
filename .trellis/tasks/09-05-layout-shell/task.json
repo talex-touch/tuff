@@ -1,0 +1,30 @@
+{
+  "id": "layout-shell",
+  "name": "layout-shell",
+  "title": "版式骨架",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-05",
+  "completedAt": null,
+  "branch": "feature/clipboard-layout-shell",
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-05-clipboard-history-detail-relayout",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "合并 PR #1879 后归档。C5 文件预览接线另起任务 —— ClipboardDetail 的 👁 已 emit previewFile，ClipboardManagerView 尚未监听。",
+    "blocker": "无阻塞。三项只能真机核：分类条 10 项在 720 宽下的实际渲染、window.open 在插件 webview 里是否放行、图片主题色提取（jsdom 无 canvas）。",
+    "evidence": "b887d59fe / 2cecff0f3；插件 112 tests 绿、vue-tsc 0 错误（2026-09-06 08:05 实测）。"
+  }
+}

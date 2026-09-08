@@ -2,35 +2,178 @@ import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type {
   VoiceAsrStreamEvent,
   VoiceAsrStreamPayload,
+  VoiceDeliveryResult,
   VoiceDictatePayload,
   VoiceDictateResult,
+  VoiceRecoveryKind,
+  VoiceRecoveryStatus,
+  VoiceRetryPayload,
+  VoiceRetryResult,
   VoiceSpeakPayload,
-  VoiceSpeakResult
+  VoiceSpeakResult,
+  VoiceTranscribeUploadPayload,
+  VoiceTranscribeUploadResult
 } from '@talex-touch/utils/transport/sdk/domains/voice'
+import type { AudioCaptureResult } from '@talex-touch/tuff-native/audio'
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
-import { clipboard } from 'electron'
+import {
+  assertVoiceUploadUrl,
+  type VoiceProviderAdapter,
+  type VoiceProviderEvent,
+  type VoiceStreamRequest,
+  type VoiceUploadRequest
+} from '@talex-touch/tuff-voice'
 import { createLogger } from '../../utils/logger'
+import { clipboardModule } from '../clipboard'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { intelligenceTtsService } from '../ai/intelligence-tts-service'
+import { activeAppService, type ActiveAppInfo } from '../system/active-app'
 import { POLISH_SYSTEM_PROMPT, withLanguageDirective, wrapTranscription } from './polish-prompt'
+import { getVoiceProvider } from './voice-provider-runtime'
 import type { StreamingAsrConfig } from './streaming-asr-client'
 import { createAsrStream, getStreamingAsrConfig } from './streaming-asr-client'
+import { voiceInsightsStore } from './voice-insights-store'
 
 const voiceLog = createLogger('Voice')
 
-const DEFAULT_MAX_DURATION_MS = 15_000
+/**
+ * The recording cap, and the denominator the HUD's progress ring is drawn against.
+ *
+ * 300s rather than the old 15s because dictation is a paragraph, not a phrase. It is also what
+ * sizes MAX_RETRY_BUFFER_BYTES below: the two numbers are one decision.
+ */
+const DEFAULT_MAX_DURATION_MS = 300_000
 const DEFAULT_SILENCE_STOP_MS = 1_500
+const DEFAULT_ASR_SAMPLE_RATE = 16_000
 const POLL_INTERVAL_MS = 120
 const PARTIAL_INTERVAL_MS = 1_200
 const CAPTURE_HARD_TIMEOUT_GRACE_MS = 2_000
 const CAPABILITY_TIMEOUT_MS = 30_000
 const WAV_HEADER_BYTES = 44
 const VOICE_CALLER = 'core.voice.dictate'
+/**
+ * How many un-consumed level frames the merge queue keeps.
+ *
+ * At one frame per pump tick (~100ms) this is a couple of seconds of slack. Past that the
+ * oldest levels are dropped: a stale amplitude is worthless, and holding them would push
+ * `final` behind a backlog.
+ */
+const MAX_QUEUED_LEVELS = 20
+/**
+ * The retry buffer: the raw PCM of the session in flight, kept so a failure can be retried
+ * against the same audio instead of asking the user to say it again.
+ *
+ * The retention rules are the point of this feature, not an afterthought — memory only,
+ * dropped the moment the reason to keep it disappears:
+ *
+ * - one slot, and a session start clears the previous one before recording a byte, so audio
+ *   from a session the user has already moved on from never survives into the next
+ * - cleared on success, the only path where the reason to keep it is gone: the transcript
+ *   already landed in the foreground app
+ * - after a failure or a cancel it lives exactly as long as the button that can spend it.
+ *   `discardRecovery` is what the HUD calls when that button leaves the screen, and it is the
+ *   normal path — the timer below is only the backstop for a renderer that never says so.
+ * - capped, so a long session degrades to "no recovery" rather than to unbounded memory
+ *
+ * Cancel keeps audio for the same reason a failure does: "undo" has to restore the same words,
+ * or that button is "record again" wearing the wrong name.
+ */
+const RECOVERY_GRACE_MS = 15_000
+/**
+ * 10MB: 300s of 16kHz mono 16-bit PCM is ~9.6MB, so the cap now admits a full-length recording
+ * instead of silently dropping undo and retry partway through one. It is a real cost — that is
+ * ten megabytes of what the user just said, resident until the offer goes away — which is why
+ * the offer going away is wired to delete it rather than left to a timer.
+ */
+const MAX_RETRY_BUFFER_BYTES = 10 * 1024 * 1024
+const PCM_BITS_PER_SAMPLE = 16
+const PCM_CHANNELS = 1
 // Toggle (global hotkey) capture: silence auto-stop effectively disabled so a pause
 // mid-thought doesn't end the session — the user's second key press stops it; the
 // max duration is only a safety cap.
-const TOGGLE_MAX_DURATION_MS = 120_000
-const TOGGLE_SILENCE_STOP_MS = 3_600_000
+type VoiceSessionPayload = VoiceDictatePayload | VoiceAsrStreamPayload
+
+/** One slot in the merged capture/provider queue that feeds `streamViaProvider`'s generator. */
+type MergedStreamItem =
+  | { kind: 'provider'; event: VoiceProviderEvent }
+  | { kind: 'level'; rms: number }
+  | { kind: 'done' }
+
+/**
+ * Root-mean-square amplitude of a 16-bit little-endian mono PCM chunk, normalized to 0..1.
+ *
+ * Returns 0 for an empty or odd-length chunk rather than guessing at a partial sample.
+ */
+function pcmRms(chunk: Buffer): number {
+  const sampleCount = Math.floor(chunk.length / 2)
+  if (sampleCount === 0) return 0
+
+  let sumOfSquares = 0
+  for (let index = 0; index < sampleCount; index += 1) {
+    const sample = chunk.readInt16LE(index * 2) / 32_768
+    sumOfSquares += sample * sample
+  }
+  return Math.min(1, Math.sqrt(sumOfSquares / sampleCount))
+}
+
+/** 44-byte RIFF header so buffered PCM can go through the same `transcribe()` as one-shot audio. */
+function pcmToWav(pcm: Buffer, sampleRate: number): Buffer {
+  const header = Buffer.alloc(WAV_HEADER_BYTES)
+  const byteRate = (sampleRate * PCM_CHANNELS * PCM_BITS_PER_SAMPLE) / 8
+  header.write('RIFF', 0)
+  header.writeUInt32LE(36 + pcm.length, 4)
+  header.write('WAVE', 8)
+  header.write('fmt ', 12)
+  header.writeUInt32LE(16, 16)
+  header.writeUInt16LE(1, 20)
+  header.writeUInt16LE(PCM_CHANNELS, 22)
+  header.writeUInt32LE(sampleRate, 24)
+  header.writeUInt32LE(byteRate, 28)
+  header.writeUInt16LE((PCM_CHANNELS * PCM_BITS_PER_SAMPLE) / 8, 32)
+  header.writeUInt16LE(PCM_BITS_PER_SAMPLE, 34)
+  header.write('data', 36)
+  header.writeUInt32LE(pcm.length, 40)
+  return Buffer.concat([header, pcm])
+}
+
+interface RetryBuffer {
+  captureId: string
+  chunks: Buffer[]
+  bytes: number
+  sampleRate: number
+  language?: string
+  /** Set once the session ends abnormally; until then the buffer belongs to a live session. */
+  expiresAt: number | null
+  kind: VoiceRecoveryKind | null
+  overflowed: boolean
+}
+interface VoiceSessionRecord {
+  readonly id: string
+  readonly nativeSessionId: string
+  readonly caller: string
+  readonly delivery: VoiceDictatePayload['delivery']
+  readonly targetKey: string | null
+  readonly startedAt: number
+  readonly abortSignal?: AbortSignal
+  readonly onAbort?: () => void
+}
+
+let voiceSessionCounter = 0
+
+function nextVoiceSessionId(): string {
+  voiceSessionCounter += 1
+  return `voice-session-${Date.now().toString(36)}-${voiceSessionCounter.toString(36)}`
+}
+
+function activeAppKey(info: ActiveAppInfo | null): string | null {
+  if (!info) return null
+  const identity = [
+    info.bundleId || info.identifier || 'unknown',
+    info.processId ?? 'unknown',
+    info.windowTitle || 'unknown'
+  ].join('|')
+  return `${info.platform ?? 'unknown'}:${identity}`
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -134,49 +277,252 @@ function dataUrlToBuffer(dataUrl: string): Buffer | null {
  * STT + polish reuse the existing `ai/` intelligence capabilities.
  */
 export class VoiceService {
-  /** One-shot dictation. Throws on hard failures (no mic / no ASR provider). */
-  async dictate(
-    payload: VoiceDictatePayload = {},
-    _context?: HandlerContext,
+  private readonly sessions = new Map<string, VoiceSessionRecord>()
+  private disposed = false
+  /** See RECOVERY_GRACE_MS: one slot, memory only, dropped as soon as its reason disappears. */
+  private retryBuffer: RetryBuffer | null = null
+  private retryExpiryTimer: ReturnType<typeof setTimeout> | null = null
+
+  /**
+   * Drop the held audio because the affordance that could spend it is gone.
+   *
+   * Called by the HUD when the undo/retry notice leaves the screen. Retention here is justified
+   * by there being a button to press; once there is not, keeping the audio is keeping it for
+   * nobody. Idempotent — a UI that reports the same dismissal twice is not an error.
+   */
+  discardRecovery(): void {
+    this.clearRetryBuffer()
+  }
+
+  private clearRetryBuffer(): void {
+    if (this.retryExpiryTimer) {
+      clearTimeout(this.retryExpiryTimer)
+      this.retryExpiryTimer = null
+    }
+    this.retryBuffer = null
+  }
+  private beginRetryBuffer(captureId: string, sampleRate: number, language?: string): void {
+    this.clearRetryBuffer()
+    this.retryBuffer = {
+      captureId,
+      chunks: [],
+      bytes: 0,
+      sampleRate,
+      ...(language ? { language } : {}),
+      expiresAt: null,
+      kind: null,
+      overflowed: false
+    }
+  }
+
+  private appendRetryBuffer(chunk: Buffer): void {
+    const buffer = this.retryBuffer
+    if (!buffer || buffer.overflowed) return
+    if (buffer.bytes + chunk.length > MAX_RETRY_BUFFER_BYTES) {
+      // Degrade to "no retry" rather than growing without bound. Dropping the partial audio
+      // is deliberate: a truncated retry would transcribe half a sentence and look like a bug.
+      buffer.chunks.length = 0
+      buffer.bytes = 0
+      buffer.overflowed = true
+      return
+    }
+    buffer.chunks.push(chunk)
+    buffer.bytes += chunk.length
+  }
+
+  /** Success is the only path that drops audio immediately; the rest get a recovery window. */
+  private armRetryBuffer(kind: VoiceRecoveryKind): void {
+    const buffer = this.retryBuffer
+    if (!buffer || buffer.overflowed || buffer.bytes === 0) {
+      this.clearRetryBuffer()
+      return
+    }
+    buffer.kind = kind
+    buffer.expiresAt = Date.now() + RECOVERY_GRACE_MS
+    if (this.retryExpiryTimer) clearTimeout(this.retryExpiryTimer)
+    this.retryExpiryTimer = setTimeout(() => {
+      this.retryExpiryTimer = null
+      this.retryBuffer = null
+    }, RECOVERY_GRACE_MS)
+    this.retryExpiryTimer.unref?.()
+  }
+
+  private async recordInsightSuccess(
+    captureId: string,
+    text: string,
+    durationMs: number,
+    polished: boolean,
+    capturedAt = Date.now()
+  ): Promise<void> {
+    try {
+      await voiceInsightsStore.recordSuccess({ captureId, text, durationMs, polished, capturedAt })
+    } catch (error) {
+      voiceLog.warn('Voice insights persistence failed; speech remains delivered', { error })
+    }
+  }
+
+  /** Opens the canonical session used by global, renderer and plugin callers. */
+  async startSession(
+    payload: VoiceSessionPayload = {},
     signal?: AbortSignal,
-    caller = VOICE_CALLER
-  ): Promise<VoiceDictateResult> {
+    caller = VOICE_CALLER,
+    sampleRate = DEFAULT_ASR_SAMPLE_RATE
+  ): Promise<string> {
     throwIfCancelled(signal)
+    if (this.disposed) throw new Error('VOICE_SESSION_SERVICE_DISPOSED')
     this.assertSupported()
 
-    const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
-    const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
-
-    const { sessionId } = await nativeAudio.startCapture({ maxDurationMs, silenceStopMs })
-    const cancelCapture = (): void => {
+    const targetKey =
+      payload.delivery === 'active-app'
+        ? activeAppKey(await activeAppService.getActiveApp({ forceRefresh: true }))
+        : null
+    const { sessionId: nativeSessionId } = await nativeAudio.startCapture({
+      maxDurationMs: payload.maxDurationMs,
+      silenceStopMs: payload.silenceStopMs,
+      sampleRate
+    })
+    if (this.disposed) {
       try {
-        nativeAudio.cancelCapture(sessionId)
+        nativeAudio.cancelCapture(nativeSessionId)
       } catch {
-        // The native session may already have stopped.
+        // The native session may already have stopped while teardown raced startup.
+      }
+      throw new Error('VOICE_SESSION_SERVICE_DISPOSED')
+    }
+    const id = nextVoiceSessionId()
+    const onAbort = signal ? () => this.cancelSession(id) : undefined
+    const record: VoiceSessionRecord = {
+      id,
+      nativeSessionId,
+      caller,
+      delivery: payload.delivery ?? 'none',
+      targetKey,
+      startedAt: Date.now(),
+      ...(signal ? { abortSignal: signal } : {}),
+      ...(onAbort ? { onAbort } : {})
+    }
+    this.sessions.set(id, record)
+    if (signal && onAbort) {
+      signal.addEventListener('abort', onAbort, { once: true })
+      if (signal.aborted) {
+        this.cancelSession(id)
+        throw voiceCancellationError()
       }
     }
-    signal?.addEventListener('abort', cancelCapture, { once: true })
+    return id
+  }
 
-    let capture: ReturnType<typeof nativeAudio.stopCapture>
-    try {
-      await this.waitForAutoStop(sessionId, maxDurationMs, signal)
-      throwIfCancelled(signal)
-      capture = nativeAudio.stopCapture(sessionId)
-    } catch (error) {
-      cancelCapture()
-      throw error
-    } finally {
-      signal?.removeEventListener('abort', cancelCapture)
+  private takeSession(sessionId: string): VoiceSessionRecord {
+    const record = this.sessions.get(sessionId)
+    if (!record) throw new Error('VOICE_SESSION_NOT_FOUND')
+    this.sessions.delete(sessionId)
+    if (record.abortSignal && record.onAbort) {
+      record.abortSignal.removeEventListener('abort', record.onAbort)
     }
+    return record
+  }
 
+  private async completeStoppedSession(
+    sessionId: string,
+    capture: AudioCaptureResult,
+    payload: VoiceSessionPayload,
+    signal?: AbortSignal
+  ): Promise<VoiceDictateResult> {
+    const record = this.takeSession(sessionId)
+    const result = await this.finalizeCapture(capture, payload, signal, record.caller)
+    if (record.delivery === 'active-app' && result.text) {
+      result.delivery = await this.deliverText(result.text, record.targetKey)
+    }
+    if (result.text && (record.delivery !== 'active-app' || result.delivery?.method !== 'none')) {
+      await this.recordInsightSuccess(
+        record.id,
+        result.text,
+        result.durationMs ?? Math.max(0, Date.now() - record.startedAt),
+        result.polished
+      )
+    }
+    return result
+  }
+
+  /** Stops, transcribes, polishes and optionally delivers one canonical session. */
+  async stopSession(
+    sessionId: string,
+    options: { cleanup?: boolean; language?: string } = {}
+  ): Promise<VoiceDictateResult> {
+    const record = this.takeSession(sessionId)
+    let capture: AudioCaptureResult
+    try {
+      capture = nativeAudio.stopCapture(record.nativeSessionId)
+    } catch (error) {
+      try {
+        nativeAudio.cancelCapture(record.nativeSessionId)
+      } catch {
+        // The native session may already have been removed by stopCapture.
+      }
+      throw error
+    }
+    const result = await this.finalizeCapture(
+      capture,
+      { cleanup: options.cleanup, language: options.language, delivery: record.delivery },
+      record.abortSignal,
+      record.caller
+    )
+    if (record.delivery === 'active-app' && result.text) {
+      result.delivery = await this.deliverText(result.text, record.targetKey)
+    }
+    if (result.text && (record.delivery !== 'active-app' || result.delivery?.method !== 'none')) {
+      await this.recordInsightSuccess(
+        record.id,
+        result.text,
+        result.durationMs ?? Math.max(0, Date.now() - record.startedAt),
+        result.polished
+      )
+    }
+    return result
+  }
+  cancelSession(sessionId: string): void {
+    const record = this.sessions.get(sessionId)
+    if (!record) return
+    this.sessions.delete(sessionId)
+    if (record.abortSignal && record.onAbort) {
+      record.abortSignal.removeEventListener('abort', record.onAbort)
+    }
+    try {
+      nativeAudio.cancelCapture(record.nativeSessionId)
+    } catch {
+      // The native session may already have stopped.
+    }
+  }
+
+  /** Cancels all sessions before module teardown. */
+  dispose(): void {
+    this.disposed = true
+    this.clearRetryBuffer()
+    for (const sessionId of Array.from(this.sessions.keys())) {
+      this.cancelSession(sessionId)
+    }
+  }
+
+  private async finalizeCapture(
+    capture: AudioCaptureResult,
+    payload: VoiceSessionPayload,
+    signal: AbortSignal | undefined,
+    caller: string
+  ): Promise<VoiceDictateResult> {
     if (!capture.audio || capture.audio.length === 0) {
-      throw new Error('No audio was captured')
+      return {
+        text: '',
+        raw: '',
+        source: 'native-cpal',
+        polished: false,
+        durationMs: capture.durationMs,
+        stoppedReason: capture.stoppedReason
+      }
     }
 
     const transcript = await this.transcribe(capture.audio, payload.language, signal, caller)
     throwIfCancelled(signal)
     const language = transcript.language ?? payload.language
-
     if (!transcript.text) {
       return {
         text: '',
@@ -194,7 +540,6 @@ export class VoiceService {
       ? await this.polish(transcript.text, payload.language, signal, caller)
       : null
     throwIfCancelled(signal)
-
     return {
       text: polishedText ?? transcript.text,
       raw: transcript.text,
@@ -203,6 +548,108 @@ export class VoiceService {
       ...(language ? { language } : {}),
       durationMs: capture.durationMs,
       stoppedReason: capture.stoppedReason
+    }
+  }
+  private async deliverText(text: string, targetKey: string | null): Promise<VoiceDeliveryResult> {
+    const trimmed = text.trim()
+    if (!trimmed) return { method: 'none', reason: 'empty' }
+    if (!targetKey) return { method: 'none', reason: 'target-unavailable' }
+
+    const currentTargetKey = activeAppKey(
+      await activeAppService.getActiveApp({ forceRefresh: true })
+    )
+    if (currentTargetKey !== targetKey) {
+      return { method: 'none', reason: 'target-changed' }
+    }
+
+    const native = nativeAudio as unknown as {
+      typeText?: (value: string) => { ok: boolean; reason?: string }
+      isAccessibilityTrusted?: () => boolean
+    }
+    if (
+      typeof native.typeText === 'function' &&
+      (typeof native.isAccessibilityTrusted !== 'function' || native.isAccessibilityTrusted())
+    ) {
+      const result = native.typeText(trimmed)
+      if (result?.ok) return { method: 'native' }
+    }
+
+    const fallback = await clipboardModule.applyVoiceText(trimmed)
+    if (fallback.success) return { method: 'autopaste' }
+    return { method: 'none', reason: fallback.code ?? 'autopaste-failed' }
+  }
+  /** One-shot dictation backed by the canonical Voice Session owner. */
+  async dictate(
+    payload: VoiceDictatePayload = {},
+    _context?: HandlerContext,
+    signal?: AbortSignal,
+    caller = VOICE_CALLER
+  ): Promise<VoiceDictateResult> {
+    const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
+    const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
+    const sessionId = await this.startSession(
+      { ...payload, maxDurationMs, silenceStopMs },
+      signal,
+      caller
+    )
+    try {
+      const session = this.sessions.get(sessionId)
+      if (!session) {
+        throwIfCancelled(signal)
+        throw new Error('VOICE_SESSION_NOT_FOUND')
+      }
+      await this.waitForAutoStop(session.nativeSessionId, maxDurationMs, signal)
+      throwIfCancelled(signal)
+      return await this.stopSession(sessionId, {
+        cleanup: payload.cleanup,
+        language: payload.language
+      })
+    } catch (error) {
+      this.cancelSession(sessionId)
+      throw error
+    }
+  }
+
+  /** Transcribes a main-owned HTTPS audio source through the selected Provider. */
+  async transcribeUpload(
+    payload: VoiceTranscribeUploadPayload,
+    signal?: AbortSignal
+  ): Promise<VoiceTranscribeUploadResult> {
+    throwIfCancelled(signal)
+    const provider = getVoiceProvider('upload', payload.providerId)
+    if (!provider) throw new Error('VOICE_UPLOAD_PROVIDER_UNAVAILABLE')
+    const request: VoiceUploadRequest = {
+      model: payload.model ?? provider.defaultUploadModel ?? 'default',
+      source: { kind: 'url', url: assertVoiceUploadUrl(payload.sourceUrl) },
+      ...(payload.language ? { language: payload.language } : {}),
+      ...(payload.enableTimestamps === undefined
+        ? {}
+        : { enableTimestamps: payload.enableTimestamps }),
+      ...(payload.enableSpeakerDiarization === undefined
+        ? {}
+        : { enableSpeakerDiarization: payload.enableSpeakerDiarization }),
+      ...(payload.removeDisfluencies === undefined
+        ? {}
+        : { removeDisfluencies: payload.removeDisfluencies }),
+      requestId: nextVoiceSessionId(),
+      signal
+    }
+    const result = await awaitWithAbort(provider.transcribeUpload(request), signal)
+    return {
+      text: result.text,
+      ...(result.language ? { language: result.language } : {}),
+      ...(result.durationMs === undefined ? {} : { durationMs: result.durationMs }),
+      ...(result.requestId ? { requestId: result.requestId } : {}),
+      ...(result.segments
+        ? {
+            segments: result.segments.map((segment) => ({
+              text: segment.text,
+              startMs: segment.startMs,
+              endMs: segment.endMs,
+              ...(segment.speaker ? { speaker: segment.speaker } : {})
+            }))
+          }
+        : {})
     }
   }
 
@@ -259,139 +706,353 @@ export class VoiceService {
   }
 
   /**
-   * Begins a toggle-controlled capture (global hotkey). Resolves to the native session id.
+   * Streaming dictation: routes native PCM through the configured Provider stream when available;
+   * otherwise retains the generic WebSocket or chunked-batch compatibility fallback. Each path
+   * yields partial/final/end events and keeps target delivery main-owned.
    *
-   * Async since #841: opening the input stream is what takes the time, and it used to take it on
-   * the main thread -- the global hotkey froze the app while CoreAudio came up.
-   */
-  async beginCapture(): Promise<string> {
-    this.assertSupported()
-    const { sessionId } = await nativeAudio.startCapture({
-      maxDurationMs: TOGGLE_MAX_DURATION_MS,
-      silenceStopMs: TOGGLE_SILENCE_STOP_MS
-    })
-    return sessionId
-  }
-
-  /** Ends a toggle capture: stop → transcribe → optional polish. */
-  async endCapture(
-    sessionId: string,
-    options?: { cleanup?: boolean; language?: string }
-  ): Promise<{ text: string; raw: string; language?: string }> {
-    const capture = nativeAudio.stopCapture(sessionId)
-    if (!capture.audio || capture.audio.length === 0) {
-      return { text: '', raw: '' }
-    }
-    const transcript = await this.transcribe(capture.audio, options?.language)
-    const language = transcript.language ?? options?.language
-    if (!transcript.text) {
-      return { text: '', raw: '', ...(language ? { language } : {}) }
-    }
-    const cleanup = options?.cleanup ?? true
-    const polished = cleanup ? await this.polish(transcript.text, options?.language) : null
-    return {
-      text: polished ?? transcript.text,
-      raw: transcript.text,
-      ...(language ? { language } : {})
-    }
-  }
-
-  /** Discards an in-progress toggle capture. */
-  abortCapture(sessionId: string): void {
-    try {
-      nativeAudio.cancelCapture(sessionId)
-    } catch {
-      /* best effort — session may already be gone */
-    }
-  }
-
-  /**
-   * Injects text into the frontmost app: native `enigo` keystrokes when available
-   * and Accessibility is granted, otherwise falls back to the system clipboard.
-   */
-  injectText(text: string): { method: 'enigo' | 'clipboard' | 'none'; reason?: string } {
-    const trimmed = text.trim()
-    if (!trimmed) return { method: 'none', reason: 'empty' }
-
-    const native = nativeAudio as unknown as {
-      typeText?: (text: string) => { ok: boolean; reason?: string }
-      isAccessibilityTrusted?: () => boolean
-    }
-
-    if (typeof native.typeText === 'function') {
-      const trusted =
-        typeof native.isAccessibilityTrusted === 'function' ? native.isAccessibilityTrusted() : true
-      if (trusted) {
-        const result = native.typeText(trimmed)
-        if (result?.ok) return { method: 'enigo' }
-        clipboard.writeText(trimmed)
-        return { method: 'clipboard', reason: result?.reason ?? 'enigo-failed' }
-      }
-      clipboard.writeText(trimmed)
-      return { method: 'clipboard', reason: 'accessibility-required' }
-    }
-
-    clipboard.writeText(trimmed)
-    return { method: 'clipboard', reason: 'enigo-unavailable' }
-  }
-
-  /**
-   * Streaming dictation: yields live `partial` transcripts while the user speaks
-   * (chunked-batch — re-transcribes the audio-so-far via the batch `audio.stt`
-   * capability), then a single polished `final`, then `end`. When the native
-   * `snapshotCapture` primitive is unavailable, it degrades to final-only.
-   *
-   * The event contract is provider-agnostic: a true streaming / WebSocket ASR
-   * backend can later replace the inner loop without changing consumers.
+   * `options.stopSignal` asks capture to stop early and still finalize — the opposite of `signal`,
+   * which aborts the whole session. It is an options bag rather than a fourth positional argument
+   * because two `AbortSignal`s in a row are trivially swapped at a call site.
    */
   async *streamDictation(
     payload: VoiceAsrStreamPayload = {},
     signal?: AbortSignal,
-    caller = VOICE_CALLER
+    options: { stopSignal?: AbortSignal; caller?: string } = {}
   ): AsyncGenerator<VoiceAsrStreamEvent> {
+    const { stopSignal, caller = VOICE_CALLER } = options
+    // Whatever the last session left behind stops being recoverable the moment a new one
+    // starts — the user has moved on, and holding the previous recording through this one has
+    // no affordance left pointing at it. Done here rather than where capture begins so a
+    // session that fails before its first byte still clears the old audio.
+    this.clearRetryBuffer()
     throwIfCancelled(signal)
     this.assertSupported()
 
-    const wsConfig = getStreamingAsrConfig()
     const drainCapture = getDrainCapture()
+    const provider = getVoiceProvider('stream', payload.providerId)
+    if (provider && drainCapture) {
+      yield* this.streamViaProvider(payload, provider, drainCapture, signal, stopSignal, caller)
+      return
+    }
+
+    const wsConfig = getStreamingAsrConfig()
     if (wsConfig && drainCapture) {
-      yield* this.streamViaWebSocket(payload, wsConfig, drainCapture, signal, caller)
+      yield* this.streamViaWebSocket(payload, wsConfig, drainCapture, signal, stopSignal, caller)
     } else {
       yield* this.streamViaChunkedBatch(payload, signal, caller)
     }
   }
 
-  /** Real streaming ASR: pipe native PCM frames to a WebSocket endpoint. */
+  private async *streamViaProvider(
+    payload: VoiceAsrStreamPayload,
+    provider: VoiceProviderAdapter,
+    drainCapture: (sessionId: string) => { pcm: Buffer },
+    signal?: AbortSignal,
+    stopSignal?: AbortSignal,
+    caller = VOICE_CALLER
+  ): AsyncGenerator<VoiceAsrStreamEvent> {
+    const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
+    const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
+    const pollCapture = getPollCapture()
+    const sessionId = await this.startSession(
+      { ...payload, maxDurationMs, silenceStopMs },
+      signal,
+      caller
+    )
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      throwIfCancelled(signal)
+      throw new Error('VOICE_SESSION_NOT_FOUND')
+    }
+
+    let ownerReleased = false
+    let connection: Awaited<ReturnType<VoiceProviderAdapter['createStream']>> | null = null
+    let capturedBytes = 0
+    // A new session owns the single retry slot; whatever the last one left is dropped here.
+    this.beginRetryBuffer(sessionId, DEFAULT_ASR_SAMPLE_RATE, payload.language)
+    try {
+      const request: VoiceStreamRequest = {
+        model: provider.defaultStreamModel ?? 'default',
+        audio: {
+          format: 'pcm',
+          sampleRate: 16_000,
+          channels: 1,
+          bitsPerSample: 16,
+          codec: 'raw'
+        },
+        ...(payload.language ? { language: payload.language } : {}),
+        requestId: sessionId,
+        signal,
+        timeoutMs: CAPABILITY_TIMEOUT_MS,
+        enableDdc: payload.cleanup ?? true
+      }
+      connection = await provider.createStream(request)
+
+      // The pump cannot `yield` — it is a detached task, while the generator is parked on
+      // `connection.events`. Merging both into one queue is what lets input levels interleave
+      // with transcript events without reordering them.
+      const queue: MergedStreamItem[] = []
+      let wake: (() => void) | null = null
+      const push = (item: MergedStreamItem): void => {
+        if (item.kind === 'level') {
+          // Levels are disposable: a renderer that falls behind should drop frames rather
+          // than push `final` behind a backlog of amplitudes.
+          let levelCount = 0
+          for (const queued of queue) if (queued.kind === 'level') levelCount += 1
+          if (levelCount >= MAX_QUEUED_LEVELS) {
+            const staleIndex = queue.findIndex((queued) => queued.kind === 'level')
+            queue.splice(staleIndex, 1)
+          }
+        }
+        queue.push(item)
+        wake?.()
+        wake = null
+      }
+
+      const pump = (async (): Promise<void> => {
+        const deadline = Date.now() + maxDurationMs + CAPTURE_HARD_TIMEOUT_GRACE_MS
+        for (;;) {
+          await awaitWithAbort(delay(100), signal)
+          throwIfCancelled(signal)
+          const active = stopSignal?.aborted
+            ? false
+            : pollCapture
+              ? pollCapture(session.nativeSessionId).active
+              : Date.now() < deadline
+          const chunk = drainCapture(session.nativeSessionId).pcm
+          if (chunk.length > 0) {
+            capturedBytes += chunk.length
+            if (payload.emitLevel) push({ kind: 'level', rms: pcmRms(chunk) })
+            this.appendRetryBuffer(chunk)
+            await connection!.writePcm(chunk)
+          }
+          if (!active) break
+        }
+        nativeAudio.stopCapture(session.nativeSessionId)
+        this.takeSession(sessionId)
+        ownerReleased = true
+        await connection!.end()
+      })()
+      void pump.catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'capture-pump-failed'
+        return connection?.abort(message)
+      })
+
+      const forwarder = (async (): Promise<void> => {
+        for await (const event of connection!.events) push({ kind: 'provider', event })
+        push({ kind: 'done' })
+      })()
+      void forwarder.catch(() => push({ kind: 'done' }))
+
+      for (;;) {
+        if (queue.length === 0) {
+          await new Promise<void>((resolve) => {
+            wake = resolve
+          })
+          continue
+        }
+
+        const item = queue.shift()!
+        throwIfCancelled(signal)
+        if (item.kind === 'done') break
+        if (item.kind === 'level') {
+          yield { type: 'level', rms: item.rms }
+          continue
+        }
+
+        const event = item.event
+        if (event.type === 'partial') {
+          if (event.text) yield { type: 'partial', text: event.text }
+          continue
+        }
+        if (event.type === 'final') {
+          if (!event.text) continue
+          const polishedText =
+            payload.cleanup === false
+              ? null
+              : await this.polish(event.text, payload.language, signal, caller)
+          const text = polishedText ?? event.text
+          const delivery =
+            payload.delivery === 'active-app'
+              ? await this.deliverText(text, session.targetKey)
+              : undefined
+          if (payload.delivery !== 'active-app' || delivery?.method !== 'none') {
+            await this.recordInsightSuccess(
+              session.id,
+              text,
+              Math.round(capturedBytes / 32),
+              polishedText !== null
+            )
+          }
+          yield {
+            type: 'final',
+            text,
+            ...(event.language ? { language: event.language } : {}),
+            ...(delivery ? { delivery } : {})
+          }
+        }
+      }
+      await pump
+      throwIfCancelled(signal)
+      // Reaching `end` means the transcript was delivered: the only reason to hold the audio
+      // is gone, so it goes now rather than waiting for the grace timer.
+      this.clearRetryBuffer()
+      yield { type: 'end' }
+    } catch (error) {
+      // Cancel and failure both keep the audio: one feeds undo, the other feeds retry.
+      // Only the success path above drops it, because there the words already landed.
+      const cancelled = error instanceof Error && error.message === 'VOICE_OPERATION_CANCELLED'
+      this.armRetryBuffer(cancelled ? 'cancelled' : 'failed')
+      throw error
+    } finally {
+      if (connection) await connection.abort('Voice session ended').catch(() => {})
+      if (!ownerReleased) this.cancelSession(sessionId)
+    }
+  }
+
+  /**
+   * Re-transcribe the audio the last failed session captured.
+   *
+   * Returns `expired` rather than throwing when the buffer is gone: "the recording expired"
+   * and "transcription failed" are different things to tell someone, and only one of them
+   * is worth a retry button.
+   */
+  /**
+   * What the dock asks when it reopens: is there still something to recover?
+   *
+   * Reports the remaining window so the caller can show a countdown instead of offering an
+   * action that may expire mid-click.
+   */
+  getRecoveryStatus(): VoiceRecoveryStatus {
+    const buffer = this.retryBuffer
+    if (!buffer || buffer.expiresAt === null || buffer.bytes === 0) return { available: false }
+
+    const remaining = buffer.expiresAt - Date.now()
+    if (remaining <= 0) {
+      this.clearRetryBuffer()
+      return { available: false }
+    }
+    return {
+      available: true,
+      ...(buffer.kind ? { kind: buffer.kind } : {}),
+      expiresInMs: remaining
+    }
+  }
+
+  async retryLastFailure(
+    payload: VoiceRetryPayload = {},
+    signal?: AbortSignal,
+    caller = VOICE_CALLER
+  ): Promise<VoiceRetryResult> {
+    throwIfCancelled(signal)
+    const buffer = this.retryBuffer
+    if (
+      !buffer ||
+      buffer.expiresAt === null ||
+      buffer.bytes === 0 ||
+      Date.now() > buffer.expiresAt
+    ) {
+      this.clearRetryBuffer()
+      return { text: '', expired: true }
+    }
+
+    const language = payload.language ?? buffer.language
+    const wav = pcmToWav(Buffer.concat(buffer.chunks), buffer.sampleRate)
+    const targetKey = activeAppKey(await activeAppService.getActiveApp())
+
+    const recognized = await this.transcribe(wav, language, signal, caller)
+    if (!recognized.text) {
+      // Still retryable: an empty result is not proof the audio is unusable.
+      return { text: '' }
+    }
+
+    const polishedText = await this.polish(recognized.text, language, signal, caller)
+    const text = polishedText ?? recognized.text
+    const delivery =
+      payload.delivery === 'active-app' ? await this.deliverText(text, targetKey) : undefined
+    if (payload.delivery !== 'active-app' || delivery?.method !== 'none') {
+      await this.recordInsightSuccess(
+        buffer.captureId,
+        text,
+        Math.round(buffer.bytes / 32),
+        polishedText !== null
+      )
+    }
+
+    this.clearRetryBuffer()
+    return {
+      text,
+      ...(recognized.language ? { language: recognized.language } : {}),
+      ...(delivery ? { delivery } : {})
+    }
+  }
+
+  /** Real streaming ASR: pipe native PCM frames through the canonical session. */
   private async *streamViaWebSocket(
     payload: VoiceAsrStreamPayload,
     wsConfig: StreamingAsrConfig,
     drainCapture: (sessionId: string) => { pcm: Buffer },
     signal?: AbortSignal,
+    stopSignal?: AbortSignal,
     caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const pollCapture = getPollCapture()
-    const { sessionId } = await nativeAudio.startCapture({
-      maxDurationMs: DEFAULT_MAX_DURATION_MS,
-      silenceStopMs: DEFAULT_SILENCE_STOP_MS
-    })
-    const cancelCapture = (): void => this.abortCapture(sessionId)
-    signal?.addEventListener('abort', cancelCapture, { once: true })
+    const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
+    const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
+    const sessionId = await this.startSession(
+      { ...payload, maxDurationMs, silenceStopMs },
+      signal,
+      caller,
+      wsConfig.sampleRate
+    )
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      throwIfCancelled(signal)
+      throw new Error('VOICE_SESSION_NOT_FOUND')
+    }
     try {
+      let capturedBytes = 0
       for await (const event of createAsrStream({
         url: wsConfig.url,
         sampleRate: wsConfig.sampleRate,
         language: payload.language,
         signal,
-        drainFrames: () => drainCapture(sessionId).pcm,
-        isCapturing: () => (pollCapture ? pollCapture(sessionId).active : true)
+        drainFrames: () => {
+          const pcm = drainCapture(session.nativeSessionId).pcm
+          capturedBytes += pcm.length
+          return pcm
+        },
+        isCapturing: () =>
+          stopSignal?.aborted
+            ? false
+            : pollCapture
+              ? pollCapture(session.nativeSessionId).active
+              : true
       })) {
         throwIfCancelled(signal)
         if (event.type === 'final' && event.text) {
-          const polished = await this.polish(event.text, payload.language, signal, caller)
+          const polishedText =
+            payload.cleanup === false
+              ? null
+              : await this.polish(event.text, payload.language, signal, caller)
+          const text = polishedText ?? event.text
+          const delivery =
+            payload.delivery === 'active-app'
+              ? await this.deliverText(text, session.targetKey)
+              : undefined
+          if (payload.delivery !== 'active-app' || delivery?.method !== 'none') {
+            await this.recordInsightSuccess(
+              session.id,
+              text,
+              Math.round((capturedBytes * 1000) / (wsConfig.sampleRate * PCM_CHANNELS * 2)),
+              polishedText !== null
+            )
+          }
           yield {
             type: 'final',
-            text: polished ?? event.text,
-            ...(event.language ? { language: event.language } : {})
+            text,
+            ...(event.language ? { language: event.language } : {}),
+            ...(delivery ? { delivery } : {})
           }
         } else {
           yield event
@@ -400,8 +1061,7 @@ export class VoiceService {
       throwIfCancelled(signal)
       yield { type: 'end' }
     } finally {
-      signal?.removeEventListener('abort', cancelCapture)
-      this.abortCapture(sessionId)
+      this.cancelSession(sessionId)
     }
   }
 
@@ -412,17 +1072,21 @@ export class VoiceService {
     caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const language = payload.language
+    const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
+    const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
     const snapshotCapture = getSnapshotCapture()
     const pollCapture = getPollCapture()
+    const sessionId = await this.startSession(
+      { ...payload, maxDurationMs, silenceStopMs },
+      signal,
+      caller
+    )
+    const session = this.sessions.get(sessionId)
+    if (!session) {
+      throwIfCancelled(signal)
+      throw new Error('VOICE_SESSION_NOT_FOUND')
+    }
 
-    const { sessionId } = await nativeAudio.startCapture({
-      maxDurationMs: DEFAULT_MAX_DURATION_MS,
-      silenceStopMs: DEFAULT_SILENCE_STOP_MS
-    })
-
-    const cancelCapture = (): void => this.abortCapture(sessionId)
-    signal?.addEventListener('abort', cancelCapture, { once: true })
-    let lastPartial = ''
     let stopped = false
     try {
       if (snapshotCapture) {
@@ -430,57 +1094,41 @@ export class VoiceService {
         for (;;) {
           await awaitWithAbort(delay(PARTIAL_INTERVAL_MS), signal)
           throwIfCancelled(signal)
-          const active = pollCapture ? pollCapture(sessionId).active : true
-          const snapshot = snapshotCapture(sessionId)
+          const active = pollCapture ? pollCapture(session.nativeSessionId).active : true
+          const snapshot = snapshotCapture(session.nativeSessionId)
           if (snapshot?.audio && snapshot.audio.length > WAV_HEADER_BYTES) {
             try {
               const { text } = await this.transcribe(snapshot.audio, language, signal, caller)
-              if (text && text !== lastPartial) {
-                lastPartial = text
-                yield { type: 'partial', text }
-              }
+              if (text) yield { type: 'partial', text }
             } catch (error) {
               if (signal?.aborted) throw voiceCancellationError()
-              // A failed interim transcription must not kill the stream.
               voiceLog.debug('Partial transcription failed; continuing', { error })
             }
           }
           if (!active) break
         }
       } else {
-        // No snapshot support → no live partials; just wait for auto-stop.
-        await this.waitForAutoStop(sessionId, DEFAULT_MAX_DURATION_MS, signal)
+        await this.waitForAutoStop(session.nativeSessionId, maxDurationMs, signal)
       }
 
       throwIfCancelled(signal)
-      const final = nativeAudio.stopCapture(sessionId)
+      const final = nativeAudio.stopCapture(session.nativeSessionId)
       stopped = true
-
-      const transcript = await this.transcribe(final.audio, language, signal, caller)
-      throwIfCancelled(signal)
-      const finalLanguage = transcript.language ?? language
-
-      if (!transcript.text) {
-        yield { type: 'final', text: '', ...(finalLanguage ? { language: finalLanguage } : {}) }
-      } else {
-        const polished = await this.polish(transcript.text, language, signal, caller)
-        throwIfCancelled(signal)
-        yield {
-          type: 'final',
-          text: polished ?? transcript.text,
-          ...(finalLanguage ? { language: finalLanguage } : {})
-        }
+      const result = await this.completeStoppedSession(
+        sessionId,
+        final,
+        { ...payload, language, cleanup: payload.cleanup, delivery: session.delivery },
+        signal
+      )
+      yield {
+        type: 'final',
+        text: result.text,
+        ...(result.language ? { language: result.language } : {}),
+        ...(result.delivery ? { delivery: result.delivery } : {})
       }
       yield { type: 'end' }
     } finally {
-      signal?.removeEventListener('abort', cancelCapture)
-      if (!stopped) {
-        try {
-          nativeAudio.cancelCapture(sessionId)
-        } catch {
-          /* best effort — session may already be gone */
-        }
-      }
+      if (!stopped) this.cancelSession(sessionId)
     }
   }
 

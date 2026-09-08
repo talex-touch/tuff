@@ -17,7 +17,11 @@ import { clipboardHistory } from '../../db/schema'
 import { enterPerfContext } from '../../utils/perf-context'
 import { perfMonitor } from '../../utils/perf-monitor'
 import { windowManager } from '../box-tool/core-box/window'
-import { detectClipboardTags, getClipboardTagSearchTerms } from '../clipboard-tagging'
+import { getClipboardTagSearchTerms } from '../clipboard-tagging'
+import type { ClipboardRetentionClass } from '@talex-touch/utils/clipboard'
+import { classifyClipboardContent } from '@talex-touch/utils/clipboard'
+import type { ClipboardClassificationSettings } from './clipboard-classification-settings'
+import { DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS } from './clipboard-classification-settings'
 import {
   CLIPBOARD_HTML_FORMATS,
   CLIPBOARD_IMAGE_FORMATS,
@@ -67,11 +71,21 @@ export interface ClipboardCapturePipelineOptions {
   setLastImagePersistAt: (value: number) => void
   setCooldownUntil: (value: number) => void
   setTaskMeta: (meta: Record<string, unknown>) => void
+  /** 剪贴板分类与保留的用户设置。由持有 storage 的模块注入——这两条路径都在热路径上，
+   * 而 storage 那个桶会把整个 transport（连同 `ipcMain`）一起拖进来。 */
+  getClassificationSettings?: () => ClipboardClassificationSettings
   logInfo: (message: string, data?: LogOptions) => void
   logWarn: (message: string, data?: LogOptions) => void
 }
 
-type PendingClipboardItem = Omit<IClipboardItem, 'timestamp' | 'id' | 'metadata' | 'meta'>
+/**
+ * 从剪贴板读到的内容本身。保留字段不在其中：它们是落库时由分类结果推导的，
+ * 不是读出来的。
+ */
+type PendingClipboardItem = Omit<
+  IClipboardItem,
+  'timestamp' | 'id' | 'metadata' | 'meta' | 'retentionProtected' | 'retentionExpiresAt'
+>
 
 export class ClipboardCapturePipeline {
   constructor(private readonly options: ClipboardCapturePipelineOptions) {}
@@ -271,7 +285,7 @@ export class ClipboardCapturePipeline {
       return
     }
 
-    const metaObject = this.buildMetaObject({
+    const { metaObject, retentionClass } = this.buildMetaObject({
       item,
       metaEntries,
       source,
@@ -290,10 +304,20 @@ export class ClipboardCapturePipeline {
     const metadataPayload = trackPhase(phaseDurations, 'meta.stringify', () => {
       return Object.keys(metaObject).length > 0 ? JSON.stringify(metaObject) : null
     })
+    const settings =
+      this.options.getClassificationSettings?.() ?? DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS
     const record = {
       ...item,
       metadata: metadataPayload,
-      timestamp: new Date()
+      timestamp: new Date(),
+      // 保留策略清理侧早就写着 `COALESCE(retention_protected, 0) = 0`，列和索引也都建好了，
+      // 但在这之前没有任何代码写过它——密钥和普通文本一样会在 90 天后被清掉。
+      retentionProtected: settings.protectSecrets && retentionClass === 'secret',
+      // 验证码一被粘贴就作废了，留满类别的 90 天等于让一个还能用的凭据在明文表里躺三个月。
+      retentionExpiresAt:
+        retentionClass === 'verification-code'
+          ? new Date(Date.now() + settings.verificationCodeRetentionMs)
+          : null
     }
 
     if (
@@ -483,14 +507,23 @@ export class ClipboardCapturePipeline {
     observedAt: number
     previousScanAt: number | null
     phaseDurations: ClipboardPhaseDurations
-  }): Record<string, unknown> {
-    const tags = trackPhase(phaseDurations, 'tags.detect', () =>
-      detectClipboardTags({
+  }): { metaObject: Record<string, unknown>; retentionClass: ClipboardRetentionClass } {
+    // 一次判定同时给出标签和保留档位。分两次调用会让「界面上标着 API 密钥」和
+    // 「这一行被标成永不删除」有机会说不一样的话。
+    //
+    // `sourceApp` 此刻还没有——它由 stage-B 补齐——所以验证码的第三条判据
+    // （来自短信 / 邮件应用的裸数字）在这里不成立，只有带前缀和带关键词的能命中。
+    const settings =
+      this.options.getClassificationSettings?.() ?? DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS
+    const classification = trackPhase(phaseDurations, 'tags.detect', () =>
+      classifyClipboardContent({
         type: item.type,
         content: item.content,
-        rawContent: item.rawContent ?? null
+        rawContent: item.rawContent ?? null,
+        customKeyPrefixes: settings.customKeyPrefixes
       })
     )
+    const tags = classification.tags
     if (tags.length > 0) {
       metaEntries.push({ key: 'tags', value: tags })
       metaEntries.push({ key: 'tag_search_terms', value: getClipboardTagSearchTerms(tags) })
@@ -505,7 +538,7 @@ export class ClipboardCapturePipeline {
       if (key === 'tag') continue
       metaObject[key] = value
     }
-    return metaObject
+    return { metaObject, retentionClass: classification.retentionClass }
   }
 
   private async yieldBeforePersist(phaseDurations: ClipboardPhaseDurations): Promise<void> {

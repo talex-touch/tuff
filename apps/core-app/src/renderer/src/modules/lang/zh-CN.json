@@ -258,6 +258,7 @@
       "memoryIndependent": "显式 AI Memory 遵循自身 TTL 或用户删除，不受审计保留策略影响。",
       "unsupportedSelection": "保存前，请为每个类别选择当前支持的保留期限。",
       "presets": {
+        "1-hour": "1 小时",
         "1-day": "1 天",
         "7-days": "7 天",
         "30-days": "30 天",
@@ -265,6 +266,21 @@
         "180-days": "180 天",
         "365-days": "365 天",
         "permanent": "永久保留"
+      }
+    },
+    "clipboardTiers": {
+      "title": "剪贴板内容分档",
+      "hint": "验证码和密钥与普通剪贴内容同表，删除路径也一样，所以它们的策略挂在这里而不是单列成数据类别。",
+      "verificationCode": "验证码保留时长",
+      "protectSecrets": "密钥永不自动删除",
+      "customPrefixes": "自定义密钥前缀",
+      "customPrefixesPlaceholder": "如 cr_、zz-，用逗号分隔",
+      "durations": {
+        "300000": "5 分钟",
+        "900000": "15 分钟",
+        "3600000": "1 小时",
+        "21600000": "6 小时",
+        "86400000": "24 小时"
       }
     },
     "actions": {
@@ -355,6 +371,7 @@
       "intelligence-audit": "智能审计元数据",
       "intelligence-context": "智能上下文对话",
       "diagnostics": "诊断与遥测元数据",
+      "voice-insights": "语音洞察聚合数据",
       "intelligence-memory": "显式 AI Memory",
       "plugin-data": "插件数据"
     },
@@ -1011,6 +1028,7 @@
   "shell": {
     "search": "搜索",
     "newChat": "新建对话",
+    "voiceInsights": "语音洞察",
     "store": "插件",
     "setting": "设置",
     "collapseSidebar": "收起侧边栏",
@@ -1029,6 +1047,113 @@
       "earlier": "更早",
       "untitled": "新对话",
       "delete": "删除对话"
+    }
+  },
+  "voiceInsights": {
+    "headline": "说话，不要打字",
+    "subtitle": "只查看成功语音输入的聚合影响，不保存转写文本、音频、应用名称或文件路径。",
+    "sectionTitle": "洞察",
+    "loading": "正在加载语音洞察…",
+    "actions": {
+      "refresh": "刷新",
+      "share": "分享",
+      "clear": "清除洞察",
+      "retry": "重试",
+      "showReport": "查看报告",
+      "hideReport": "收起报告",
+      "cancel": "取消"
+    },
+    "boundary": {
+      "notStarted": "统计将从第一次成功且非空的语音输入开始。",
+      "since": "自 {date} 起在本机记录。"
+    },
+    "metrics": {
+      "label": "语音使用指标",
+      "characters": "口述字数",
+      "saved": "预计节省时间",
+      "rate": "平均口述速度",
+      "duration": "总口述时间",
+      "savedBasis": "按每分钟打字 {count} 字估算，并非实测打字速度。"
+    },
+    "units": {
+      "characters": "字",
+      "charactersPerMinute": "字/分钟",
+      "days": "天",
+      "zeroMinutes": "0 分钟",
+      "lessThanMinute": "少于 1 分钟",
+      "minutes": "{count} 分钟",
+      "hours": "{count} 小时",
+      "hoursMinutes": "{hours} 小时 {minutes} 分钟"
+    },
+    "streak": {
+      "title": "最近 365 个本地自然日的活动",
+      "windowNote": "活跃天数与最长连续天数仅统计此滚动时间窗。",
+      "label": "最近 365 个本地自然日的语音连续记录",
+      "activeDays": "活跃天数",
+      "current": "当前连续天数",
+      "longest": "最长连续天数"
+    },
+    "heatmap": {
+      "title": "最近 365 个本地自然日",
+      "description": "颜色表示口述字数；斜纹日期早于统计启用时间。",
+      "legend": "活跃量图例",
+      "less": "更少",
+      "more": "更多",
+      "accessibleLabel": "最近 365 个本地自然日的语音活跃日历",
+      "scrollLabel": "可横向滚动的语音活动日历，滚动查看全部 365 天",
+      "beforeTracking": "{date}：当时尚未开始记录统计",
+      "noActivity": "{date}：没有记录到语音活动",
+      "daySummary": "{date}：{sessions} 次成功输入，共 {characters} 字，时长 {duration}"
+    },
+    "empty": {
+      "title": "从下一次语音输入开始",
+      "description": "完成一次成功且非空的语音输入后，这里会开始显示真实总量、连续天数与每日活动。",
+      "privacy": "只保留聚合计数；原始音频、转写文本、应用名称与路径不会进入语音洞察。"
+    },
+    "error": {
+      "title": "无法加载语音洞察",
+      "description": "已有统计未被更改，请重试本地请求。"
+    },
+    "share": {
+      "title": "Tuff 语音洞察",
+      "copied": "已复制聚合语音洞察",
+      "copyFailed": "无法复制聚合摘要",
+      "unavailable": "暂不可用",
+      "rateValue": "{count} 字/分钟",
+      "characters": "口述字数：{count}",
+      "saved": "预计节省时间：{duration}",
+      "rate": "平均口述速度：{rate}",
+      "duration": "总口述时间：{duration}",
+      "activeDays": "最近 365 个本地自然日的活跃天数：{count}",
+      "currentStreak": "最近 365 个本地自然日的当前连续：{count} 天",
+      "longestStreak": "最近 365 个本地自然日的最长连续：{count} 天",
+      "sessions": "成功输入：{count} 次",
+      "polishedSessions": "已润色输入：{count} 次",
+      "estimateBasis": "节省时间按每分钟打字 {count} 字估算，并非实测打字速度。"
+    },
+    "clear": {
+      "title": "清除语音洞察？",
+      "description": "这会永久删除此处显示的聚合总量与每日活动。下一次成功且非空的语音输入后将重新开始记录。",
+      "confirm": "清除全部洞察",
+      "success": "语音洞察已清除",
+      "failed": "无法清除语音洞察，此处显示的数据未被更改。",
+      "refreshNeededTitle": "语音洞察已清除",
+      "refreshNeededDescription": "暂时无法刷新清除后的状态。这里不会继续显示旧统计；请刷新以加载当前的零状态。"
+    },
+    "report": {
+      "title": "聚合报告",
+      "description": "透明说明统计范围，以及润色使用率的计算方式。",
+      "successfulSessions": "已记录的成功输入",
+      "polishedSessions": "已润色输入",
+      "cleanupRate": "润色使用率",
+      "learningTitle": "未启用个性化学习",
+      "learningUnavailable": "本报告不会虚构学习评分、词汇画像或个人词典，只展示真实聚合用量。",
+      "methodologyTitle": "这些数字如何计算",
+      "successMethod": "每次成功且非空的实时语音输入只计一次，成功重试同样只计一次；上传识别、朗读和中间结果不计入。",
+      "characterMethod": "字数统计会排除空白与标点，计算可见的中日韩文字及其他字符；它不是英文单词数。",
+      "savedMethod": "预计节省时间为每分钟打字 {count} 字的基线耗时减去口述时长，并保证不小于零；基线是估算值，并非实测打字速度。",
+      "rateMethod": "平均口述速度为总计数字数除以总记录时长。",
+      "calendarMethod": "活跃天数与连续记录按 {timezone} 的本地自然日滚动统计最近 365 天，未来日期不会计入。"
     }
   },
   "home": {
@@ -2493,6 +2618,7 @@
     "homeConversation": "对话",
     "login": "请先登录!",
     "permission": "您没有权限!",
+    "voiceInsights": "语音洞察",
     "pluginStore": "插件市场",
     "installedPlugins": "已安装插件",
     "storeDocs": "市场文档",
@@ -4699,6 +4825,23 @@
       "waiting": "等待语音输入",
       "textOnly": "文本输入模式",
       "close": "关闭",
+      "cancelSession": "取消本次",
+      "cancelled": "已取消",
+      "capturingDevice": "设备捕获中…",
+      "microphoneUnresponsive": "麦克风没有响应",
+      "microphoneMissing": "找不到可用的麦克风",
+      "microphoneDenied": "麦克风权限未授权",
+      "holdToCancel": "按住…松开取消",
+      "stillWorking": "还在转写，稍等",
+      "stillWorkingLong": "比平时久，可按住 Esc 取消",
+      "recovering": "正在恢复…",
+      "recoverCancelled": "刚才取消了一段",
+      "recoverFailed": "上次转写失败了",
+      "recoveryExpired": "录音已过期，请重新说一次",
+      "undo": "撤销",
+      "retry": "重试",
+      "quotaExhausted": "AI 额度已用完，去设置查看",
+      "serviceBusy": "服务繁忙，请稍后重试",
       "placeholder": "说出或输入要执行的内容，例如：帮我搜索最近的会议记录",
       "startListening": "开始监听",
       "listeningAction": "监听中",
@@ -4718,7 +4861,7 @@
       "voiceTranscribeTooLong": "录音超过 30 秒限制，请缩短后重试",
       "voiceTranscribeUnavailable": "AI 语音转写不可用，请检查登录、额度或 Provider 状态",
       "voiceTranscribeEmpty": "未识别到语音内容，请重新录制",
-      "voiceTranscribeFailed": "语音转写失败，请重试",
+      "voiceTranscribeFailed": "语音转写失败",
       "submitting": "发送中...",
       "sendToCoreBox": "发送到 CoreBox",
       "translateClipboardImage": "翻译剪贴板图片",
@@ -4792,7 +4935,9 @@
       "screenshotTranslateUnavailable": "截图不可用，请检查系统录屏权限或稍后重试",
       "screenshotTranslateImageUnavailable": "截图图片无效，请重新截图后再试",
       "imageTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态",
-      "screenshotTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态"
+      "screenshotTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态",
+      "openMicrophoneSettings": "打开麦克风设置",
+      "microphoneSettingsUnavailable": "这个系统没有可直接打开的麦克风设置"
     },
     "regionSelector": {
       "title": "选择截图区域",

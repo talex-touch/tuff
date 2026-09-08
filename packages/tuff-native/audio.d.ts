@@ -69,6 +69,18 @@ export interface TypeTextResult {
   reason?: string
 }
 
+export type FunctionKeyEvent
+  = | { type: 'down', hasOtherKeys: boolean }
+    | { type: 'up' }
+    | { type: 'other-key-down' }
+  /** Native monitor fault/backpressure reset; discard any pending Fn gesture. */
+    | { type: 'reset' }
+
+export interface FunctionKeyMonitorStart {
+  active: boolean
+  reason?: string
+}
+
 export declare function getNativeAudioSupport(): NativeAudioSupport
 /**
  * Opens the input stream and resolves once the capture thread confirms it is live.
@@ -102,3 +114,10 @@ export declare function stopPlayback(playbackId?: string): void
 export declare function isAccessibilityTrusted(): boolean
 /** Type `text` into the frontmost app (unicode-safe). On macOS without AX trust returns `{ ok:false, reason:'accessibility-required' }`. Never throws. */
 export declare function typeText(text: string): TypeTextResult
+/**
+ * macOS-only active Fn event tap. Standalone Fn down/up are consumed to prevent
+ * the system Globe action; combination keys pass through and cancel voice gestures.
+ */
+export declare function startFunctionKeyMonitor(listener: (event: FunctionKeyEvent) => void): FunctionKeyMonitorStart
+/** Stop the active Fn monitor. Safe when no monitor exists. */
+export declare function stopFunctionKeyMonitor(): void

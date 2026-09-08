@@ -1,277 +1,151 @@
 // @vitest-environment jsdom
+/* eslint-disable vue/one-component-per-file -- The two components here are test doubles for
+   tuffex renderers the panel composes, not components this file owns. */
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { defineComponent, getCurrentInstance, h, nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
-import type {
-  AssistantClipboardImageTranslateResponse,
-  AssistantScreenshotDisplay,
-  AssistantScreenshotRegionSelectionResponse,
-  AssistantScreenshotTranslateResponse,
-  AssistantVoiceTranscribeResponse
-} from '@talex-touch/utils/transport/events/assistant'
-import VoicePanel from './VoicePanel.vue'
+import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
+import {
+  voiceApiEvents,
+  type VoiceAsrStreamEvent
+} from '@talex-touch/utils/transport/sdk/domains/voice'
 
 const transportSendMock = vi.hoisted(() => vi.fn())
 const transportOnMock = vi.hoisted(() => vi.fn())
+const transportStreamMock = vi.hoisted(() => vi.fn())
+const orbMounts = vi.hoisted(() => ({
+  nextId: 0,
+  records: [] as Array<{ key: unknown; state: unknown }>
+}))
 
-const messages: Record<string, string> = {
-  'assistant.voicePanel.textOnly': 'Text input only',
-  'assistant.voicePanel.translateClipboardImage': 'Translate clipboard image',
-  'assistant.voicePanel.translateScreenshot': 'Translate screenshot',
-  'assistant.voicePanel.captureScreenshot': 'Capture screenshot',
-  'assistant.voicePanel.saveScreenshot': 'Save screenshot',
-  'assistant.voicePanel.screenshotPermissionDenied': 'Screenshot permission denied',
-  'assistant.voicePanel.openScreenshotPermissionSettings': 'Open screenshot settings',
-  'assistant.voicePanel.screenshotPermissionSettingsOpened': 'Screenshot settings opened',
-  'assistant.voicePanel.screenshotPermissionSettingsUnavailable': 'Screenshot settings unavailable',
-  'assistant.voicePanel.screenshotTextFallbackMetadata': 'OCR: {ocr}; Translation: {translation}',
-  'assistant.voicePanel.screenshotImageTranslateRouteTitle': 'Image translation route',
-  'assistant.voicePanel.screenshotImageTranslateRouteStage': '{capability}: {route}',
-  'assistant.voicePanel.screenshotImageTranslateRouteStageLatency': '{stage} · {latency} ms',
-  'assistant.voicePanel.screenshotImageTranslateRouteSummary': '{duration} ms total · Run {runId}',
-  'assistant.voicePanel.openIntelligenceSettings': 'Open AI provider settings',
-  'assistant.voicePanel.intelligenceSettingsOpened':
-    'AI provider settings opened. Check login, quota, and provider status, then retry.',
-  'assistant.voicePanel.intelligenceSettingsUnavailable':
-    'Could not open AI provider settings. Open Intelligence from the main window.',
-  'assistant.voicePanel.imageTranslateProviderUnavailable':
-    'Image translation is unavailable. Check login, quota, or provider status.',
-  'assistant.voicePanel.permissionDenied': 'Microphone permission denied',
-  'assistant.voicePanel.openMicrophonePermissionSettings': 'Open microphone settings',
-  'assistant.voicePanel.microphonePermissionSettingsOpened': 'Microphone settings opened',
-  'assistant.voicePanel.microphonePermissionSettingsUnavailable': 'Microphone settings unavailable',
-  'assistant.voicePanel.retryVoiceInput': 'Retry voice input',
-  'assistant.voicePanel.providerRecording': 'Provider recording',
-  'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe',
-  'assistant.voicePanel.voiceTranscribing': 'Transcribing voice',
-  'assistant.voicePanel.voiceTranscribed': 'Voice transcribed',
-  'assistant.voicePanel.voiceTranscribedWithProvider': 'Voice transcribed by {provider}',
-  'assistant.voicePanel.voiceBrowserFallback': 'Browser speech fallback ready',
-  'assistant.voicePanel.voiceTranscribeUnavailable': 'Voice transcription unavailable',
-  'assistant.voicePanel.voiceTranscribeFailed': 'Voice transcription failed',
-  'assistant.voicePanel.startListening': 'Start listening'
-}
+vi.mock('~/modules/preload/process-info', () => ({
+  getPreloadProcessInfo: () => ({ platform: 'darwin', arch: 'arm64' })
+}))
 
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
     send: transportSendMock,
+    stream: transportStreamMock,
     on: transportOnMock
+  })
+}))
+
+vi.mock('@talex-touch/tuffex/border-beam', () => ({
+  TxBorderBeam: defineComponent({
+    name: 'TxBorderBeam',
+    props: {
+      active: { type: Boolean, default: true },
+      duration: { type: Number, default: undefined },
+      colorVariant: { type: String, default: undefined }
+    },
+    setup(props) {
+      // The real one injects an @property stylesheet, which lands in wrapper.text().
+      return () =>
+        h('span', {
+          class: 'tx-border-beam',
+          'data-beam-active': String(props.active),
+          'data-beam-variant': props.colorVariant,
+          'data-beam-duration': props.duration
+        })
+    }
+  })
+}))
+
+vi.mock('@talex-touch/tuffex/thinking-orb', () => ({
+  TxThinkingOrb: defineComponent({
+    name: 'TxThinkingOrb',
+    props: {
+      size: { type: Number, default: 20 },
+      displaySize: { type: Number, default: undefined },
+      label: { type: String, default: '' },
+      state: { type: String, default: undefined }
+    },
+    setup(props) {
+      const mountId = orbMounts.nextId++
+      orbMounts.records.push({ key: getCurrentInstance()?.vnode.key, state: props.state })
+      return () =>
+        h('canvas', {
+          class: 'tx-thinking-orb',
+          'aria-label': props.label,
+          'data-orb-mount': mountId,
+          'data-orb-state': props.state
+        })
+    }
   })
 }))
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string, values?: Record<string, string> | string) => {
-      const template = messages[key] ?? (typeof values === 'string' ? values : key)
-      return template.replace(/\{(\w+)\}/g, (_match, name: string) =>
-        typeof values === 'object' && values ? (values[name] ?? '') : ''
-      )
-    }
+    t: (key: string) =>
+      ({
+        'assistant.voicePanel.voiceTranscribingShort': 'Transcribing…',
+        'assistant.voicePanel.voiceTranscribeFailed': 'Voice transcription failed',
+        'assistant.voicePanel.voiceWakeDisabled': 'Voice input is disabled',
+        'assistant.voicePanel.cancelSession': 'Cancel this session',
+        'assistant.voicePanel.cancelled': 'Cancelled',
+        'assistant.voicePanel.quotaExhausted': 'AI credits are used up — check Settings',
+        'assistant.voicePanel.serviceBusy': 'The service is busy. Try again shortly.',
+        'assistant.voicePanel.holdToCancel': 'Hold to cancel',
+        'assistant.voicePanel.stillWorking': 'Still transcribing…',
+        'assistant.voicePanel.stillWorkingLong': 'Longer than usual — hold Esc to cancel',
+        'assistant.voicePanel.recovering': 'Recovering…',
+        'assistant.voicePanel.recoverCancelled': 'You cancelled a recording',
+        'assistant.voicePanel.recoverFailed': 'The last transcription failed',
+        'assistant.voicePanel.recoveryExpired': 'That recording expired — say it again',
+        'assistant.voicePanel.undo': 'Undo',
+        'assistant.voicePanel.retry': 'Retry',
+        'assistant.voicePanel.voiceTranscribeEmpty': 'No speech detected',
+        'assistant.voicePanel.capturingDevice': 'Opening the microphone…',
+        'assistant.voicePanel.microphoneUnresponsive': 'The microphone is not responding',
+        'assistant.voicePanel.microphoneMissing': 'No microphone available',
+        'assistant.voicePanel.microphoneDenied': 'Microphone access not granted',
+        'assistant.voicePanel.openMicrophoneSettings': 'Open microphone settings',
+        'assistant.voicePanel.microphoneSettingsUnavailable':
+          'This system has no microphone settings pane to open',
+        'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe'
+      })[key] ?? key
   })
 }))
 
-let clipboardImageResponse: AssistantClipboardImageTranslateResponse
-let screenshotResponse: AssistantScreenshotTranslateResponse
-let permissionRequestResult: boolean
-let screenshotDisplaysResponse: AssistantScreenshotDisplay[]
-let intelligenceSettingsOpenResult: boolean
-let screenshotRegionSelectionResponse: AssistantScreenshotRegionSelectionResponse
-let submitResponse: Promise<{ accepted: boolean }>
-let closePanelResponse: Promise<void>
-let voiceTranscribeResponse: AssistantVoiceTranscribeResponse
-let mediaRecorderInstances: ControllableMediaRecorder[]
-let mediaTrackStopMock: Mock<() => void>
+import VoicePanel from './VoicePanel.vue'
 
-class ControllableSpeechRecognition {
-  lang = ''
-  continuous = false
-  interimResults = false
-  onstart: (() => void) | null = null
-  onerror: ((event: { error?: string }) => void) | null = null
-  onend: (() => void) | null = null
-  onresult: ((event: { resultIndex: number; results: ArrayLike<unknown> }) => void) | null = null
-  startCalls = 0
-
-  constructor() {
-    speechRecognitionInstances.push(this)
-  }
-
-  start(): void {
-    this.startCalls += 1
-    if (speechRecognitionStartError) throw speechRecognitionStartError
-  }
-
-  stop(): void {}
-
-  emitError(error: string): void {
-    this.onerror?.({ error })
-  }
-
-  emitResult(transcript: string, isFinal = true): void {
-    this.onresult?.({
-      resultIndex: 0,
-      results: [{ isFinal, 0: { transcript } }]
-    })
-  }
+type StreamCallbacks = {
+  onData?: (event: VoiceAsrStreamEvent) => unknown
+  onError?: (error: Error) => unknown
+  onEnd?: () => unknown
 }
 
-class ControllableMediaRecorder {
-  static isTypeSupported(mimeType: string): boolean {
-    return mimeType.startsWith('audio/webm')
-  }
-
-  readonly mimeType: string
-  state: 'inactive' | 'recording' | 'paused' = 'inactive'
-  ondataavailable: ((event: { data: Blob }) => void) | null = null
-  onerror: ((event: Event) => void) | null = null
-  onstop: (() => void) | null = null
-  startCalls = 0
-
-  constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
-    this.mimeType = options?.mimeType || 'audio/webm'
-    mediaRecorderInstances.push(this)
-  }
-
-  start(): void {
-    this.startCalls += 1
-    this.state = 'recording'
-  }
-
-  stop(): void {
-    if (this.state === 'inactive') return
-    this.state = 'inactive'
-    this.ondataavailable?.({
-      data: new Blob(['provider-audio'], { type: this.mimeType })
-    })
-    this.onstop?.()
-  }
+type StreamRequest = {
+  event: unknown
+  payload: unknown
 }
 
-let voiceWakeRuntimeEnabled: boolean
-let speechRecognitionStartError: Error | null
-let speechRecognitionInstances: ControllableSpeechRecognition[]
+let streamCallbacks: StreamCallbacks | undefined
+let streamRequest: StreamRequest | undefined
+let streamCancelMock: Mock
+let streamStopMock: Mock
+let disposePanelOpenMock: Mock
+let recoveryStatusResult: { available: boolean; kind?: string; expiresInMs?: number }
+let retryResult: { text: string; expired?: boolean }
 
-function enableVoiceWakeRecognition(startError: Error | null = null): void {
-  voiceWakeRuntimeEnabled = true
-  speechRecognitionStartError = startError
-  vi.stubGlobal('SpeechRecognition', ControllableSpeechRecognition)
+/** How many times the panel told main the held recording is no longer reachable. */
+function discardCalls(): number {
+  return transportSendMock.mock.calls.filter(
+    ([event]) => eventName(event) === voiceApiEvents.discardRecovery.toEventName()
+  ).length
 }
 
-function enableProviderRecording(): void {
-  voiceWakeRuntimeEnabled = true
-  const getUserMedia = vi.fn().mockResolvedValue({
-    getTracks: () => [{ stop: mediaTrackStopMock }]
-  })
-  const navigatorWithMedia = Object.create(window.navigator) as Record<string, unknown>
-  Object.defineProperty(navigatorWithMedia, 'mediaDevices', {
-    configurable: true,
-    value: { getUserMedia }
-  })
-  vi.stubGlobal('navigator', navigatorWithMedia)
-  vi.stubGlobal('MediaRecorder', ControllableMediaRecorder)
+function eventName(event: unknown): string {
+  if (
+    !event ||
+    typeof event !== 'object' ||
+    !('toEventName' in event) ||
+    typeof event.toEventName !== 'function'
+  ) {
+    return ''
+  }
+  return event.toEventName()
 }
-
-type Deferred<T> = {
-  promise: Promise<T>
-  resolve: (value: T) => void
-}
-
-function createDeferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((resolvePromise) => {
-    resolve = resolvePromise
-  })
-  return { promise, resolve }
-}
-
-afterEach(() => {
-  vi.unstubAllGlobals()
-  vi.useRealTimers()
-})
-
-beforeEach(() => {
-  voiceWakeRuntimeEnabled = false
-  speechRecognitionStartError = null
-  speechRecognitionInstances = []
-  mediaRecorderInstances = []
-  mediaTrackStopMock = vi.fn()
-  clipboardImageResponse = {
-    success: false,
-    code: 'IMAGE_UNAVAILABLE'
-  }
-  screenshotResponse = {
-    success: false,
-    code: 'SCREENSHOT_PERMISSION_DENIED'
-  }
-  permissionRequestResult = true
-  intelligenceSettingsOpenResult = true
-  screenshotDisplaysResponse = []
-  screenshotRegionSelectionResponse = {
-    success: false,
-    canceled: true
-  }
-  submitResponse = Promise.resolve({ accepted: true })
-  closePanelResponse = Promise.resolve()
-  voiceTranscribeResponse = {
-    success: true,
-    text: 'Provider dictated request',
-    language: 'en',
-    confidence: 0.9,
-    provider: 'openai-compatible',
-    model: 'whisper-1',
-    traceId: 'trace-renderer-asr',
-    latencyMs: 35
-  }
-  transportSendMock.mockReset()
-  transportOnMock.mockReset()
-  transportOnMock.mockReturnValue(() => undefined)
-  transportSendMock.mockImplementation(
-    async (event: { toEventName: () => string }): Promise<unknown> => {
-      switch (event.toEventName()) {
-        case 'assistant:floating-ball:get-runtime-config':
-          return {
-            enabled: voiceWakeRuntimeEnabled,
-            language: 'en-US',
-            wakeWords: [],
-            cooldownMs: 1,
-            continuous: false,
-            assistantName: 'Test Assistant',
-            openPanelOnWake: false
-          }
-        case 'assistant:voice-panel:list-screenshot-displays':
-          return screenshotDisplaysResponse
-        case 'assistant:voice-panel:submit':
-          return submitResponse
-        case 'assistant:voice-panel:transcribe-audio':
-          return voiceTranscribeResponse
-        case 'assistant:voice-panel:close':
-          return closePanelResponse
-        case 'assistant:voice-panel:select-screenshot-region':
-          return screenshotRegionSelectionResponse
-        case 'assistant:voice-panel:capture-screenshot':
-          return {
-            success: true,
-            tfileUrl: 'tfile:///tmp/native/screenshots/screenshot.png',
-            width: 2560,
-            height: 1440,
-            displayName: 'Studio Display',
-            wroteClipboard: true
-          }
-        case 'assistant:voice-panel:translate-clipboard-image':
-          return clipboardImageResponse
-        case 'assistant:voice-panel:open-intelligence-settings':
-          return intelligenceSettingsOpenResult
-        case 'assistant:voice-panel:translate-screenshot':
-          return screenshotResponse
-        case 'assistant:voice-panel:save-screenshot':
-          return { success: false, canceled: true }
-        case 'system:permission:request':
-          return permissionRequestResult
-        default:
-          throw new Error(`Unexpected transport event: ${event.toEventName()}`)
-      }
-    }
-  )
-})
 
 async function mountVoicePanel() {
   const wrapper = mount(VoicePanel)
@@ -279,894 +153,1139 @@ async function mountVoicePanel() {
   return wrapper
 }
 
-function hasTransportEventName(event: unknown): event is { toEventName: () => string } {
-  return (
-    !!event &&
-    typeof event === 'object' &&
-    'toEventName' in event &&
-    typeof event.toEventName === 'function'
-  )
-}
-
-function findButton(wrapper: VueWrapper, label: string) {
-  const button = wrapper.findAll('button').find((candidate) => candidate.text() === label)
-  if (!button) {
-    throw new Error(`Could not find button: ${label}`)
+function exposed(wrapper: VueWrapper) {
+  return wrapper.vm as unknown as {
+    openPanel: () => Promise<void>
+    startVoiceInput: () => void
+    stopVoiceInput: () => void
   }
-  return button
 }
 
-function screenshotTransportCalls(eventName: string) {
-  return transportSendMock.mock.calls.filter(
-    ([event]) => hasTransportEventName(event) && event.toEventName() === eventName
-  )
+function callbacksOrThrow(): StreamCallbacks {
+  if (!streamCallbacks) throw new Error('Voice stream callbacks were not registered')
+  return streamCallbacks
 }
 
-function voicePanelSubmitCalls() {
-  return screenshotTransportCalls('assistant:voice-panel:submit')
+function barHeights(wrapper: VueWrapper): string[] {
+  return wrapper
+    .findAll('[data-testid="voice-wave"] span')
+    .map((bar) => bar.attributes('style') ?? '')
 }
 
-function voicePanelCloseCalls() {
-  return screenshotTransportCalls('assistant:voice-panel:close')
-}
-
-function dispatchEnter(textarea: HTMLTextAreaElement, init: KeyboardEventInit = {}): KeyboardEvent {
-  const event = new KeyboardEvent('keydown', {
-    bubbles: true,
-    cancelable: true,
-    key: 'Enter',
-    ...init
-  })
-  textarea.dispatchEvent(event)
-  return event
-}
-
-function dispatchEscape(init: KeyboardEventInit = {}): KeyboardEvent {
-  const event = new KeyboardEvent('keydown', {
-    bubbles: true,
-    cancelable: true,
-    key: 'Escape',
-    ...init
-  })
-  window.dispatchEvent(event)
-  return event
-}
-
-function microphonePermissionRequestCalls() {
-  return transportSendMock.mock.calls.filter(
-    ([event, payload]) =>
-      hasTransportEventName(event) &&
-      event.toEventName() === 'system:permission:request' &&
-      payload === 'microphone'
-  )
-}
-
-async function openVoicePanel(): Promise<void> {
-  const panelOpenedHandler = transportOnMock.mock.calls[0]?.[1]
-  if (typeof panelOpenedHandler !== 'function') {
-    throw new Error('VoicePanel did not register its panel-open handler')
-  }
-  await panelOpenedHandler()
-  await flushPromises()
-}
-
-describe('VoicePanel keyboard submission', () => {
-  it('focuses the text input for every panel-open event', async () => {
-    const wrapper = mount(VoicePanel, { attachTo: document.body })
-    await flushPromises()
-    const textarea = wrapper.find<HTMLTextAreaElement>('textarea')
-
-    await openVoicePanel()
-    expect(document.activeElement).toBe(textarea.element)
-
-    textarea.element.blur()
-    await openVoicePanel()
-    expect(document.activeElement).toBe(textarea.element)
-
-    wrapper.unmount()
-  })
-
-  it('submits typed text through the manual submit event on plain Enter', async () => {
-    const wrapper = await mountVoicePanel()
-    const textarea = wrapper.find<HTMLTextAreaElement>('textarea')
-    await textarea.setValue('Summarize the release notes')
-
-    const event = dispatchEnter(textarea.element)
-    expect(event.defaultPrevented).toBe(true)
-    await flushPromises()
-
-    const submitCalls = voicePanelSubmitCalls()
-    expect(submitCalls).toHaveLength(1)
-    expect(submitCalls[0]?.[0]).toMatchObject({
-      namespace: 'assistant',
-      module: 'voice-panel',
-      action: 'submit'
-    })
-    expect(submitCalls[0]?.[1]).toEqual({
-      text: 'Summarize the release notes',
-      source: 'manual'
-    })
-
-    wrapper.unmount()
-  })
-
-  it.each([
-    { name: 'Shift+Enter', init: { shiftKey: true } },
-    { name: 'an IME-composing Enter', init: { isComposing: true } }
-  ])('keeps $name available for multiline text without submitting', async ({ init }) => {
-    const wrapper = await mountVoicePanel()
-    const textarea = wrapper.find<HTMLTextAreaElement>('textarea')
-    await textarea.setValue('First line')
-
-    const event = dispatchEnter(textarea.element, init)
-    expect(event.defaultPrevented).toBe(false)
-    await flushPromises()
-
-    expect(voicePanelSubmitCalls()).toHaveLength(0)
-    expect(textarea.element.value).toBe('First line')
-
-    wrapper.unmount()
-  })
-
-  it('suppresses repeated Enter submissions until the first submit settles', async () => {
-    const deferredSubmit = createDeferred<{ accepted: boolean }>()
-    submitResponse = deferredSubmit.promise
-    const wrapper = await mountVoicePanel()
-    const textarea = wrapper.find<HTMLTextAreaElement>('textarea')
-    await textarea.setValue('Run the duplicate check')
-
-    dispatchEnter(textarea.element)
-    dispatchEnter(textarea.element)
-
-    expect(voicePanelSubmitCalls()).toHaveLength(1)
-
-    deferredSubmit.resolve({ accepted: true })
-    await flushPromises()
-
-    wrapper.unmount()
-  })
-
-  it('marks text contributed by speech recognition as voice-origin on Enter submit', async () => {
-    enableVoiceWakeRecognition()
-    const wrapper = await mountVoicePanel()
-    await openVoicePanel()
-    const textarea = wrapper.find<HTMLTextAreaElement>('textarea')
-
-    speechRecognitionInstances[0]?.emitResult('Dictated request')
-    await flushPromises()
-    dispatchEnter(textarea.element)
-    await flushPromises()
-
-    const submitCalls = voicePanelSubmitCalls()
-    expect(submitCalls).toHaveLength(1)
-    expect(submitCalls[0]?.[0]).toMatchObject({
-      namespace: 'assistant',
-      module: 'voice-panel',
-      action: 'submit'
-    })
-    expect(submitCalls[0]?.[1]).toEqual({
-      text: 'Dictated request',
-      source: 'voice'
-    })
-
-    wrapper.unmount()
-  })
-})
-
-describe('VoicePanel Escape dismissal', () => {
-  it('prevents a cancelable Escape and sends the typed close event without a payload', async () => {
-    const wrapper = await mountVoicePanel()
-
-    const event = dispatchEscape()
-    expect(event.defaultPrevented).toBe(true)
-    await flushPromises()
-
-    const closeCalls = voicePanelCloseCalls()
-    expect(closeCalls).toHaveLength(1)
-    expect(closeCalls[0]?.[0]).toMatchObject({
-      namespace: 'assistant',
-      module: 'voice-panel',
-      action: 'close'
-    })
-    expect(closeCalls[0]?.[1]).toBeUndefined()
-
-    wrapper.unmount()
-  })
-
-  it('suppresses repeated Escape close requests until the first close settles', async () => {
-    const deferredClose = createDeferred<void>()
-    closePanelResponse = deferredClose.promise
-    const wrapper = await mountVoicePanel()
-
-    const firstEscape = dispatchEscape()
-    const secondEscape = dispatchEscape()
-
-    expect(firstEscape.defaultPrevented).toBe(true)
-    expect(secondEscape.defaultPrevented).toBe(true)
-    expect(voicePanelCloseCalls()).toHaveLength(1)
-
-    deferredClose.resolve()
-    await flushPromises()
-    wrapper.unmount()
-  })
-
-  it.each([
-    { name: 'an IME-composing Escape', init: { isComposing: true }, preemptivelyPrevented: false },
-    { name: 'an already-defaultPrevented Escape', init: {}, preemptivelyPrevented: true }
-  ])('does not close for $name', async ({ init, preemptivelyPrevented }) => {
-    const wrapper = await mountVoicePanel()
-    const event = new KeyboardEvent('keydown', {
-      bubbles: true,
-      cancelable: true,
-      key: 'Escape',
-      ...init
-    })
-    if (preemptivelyPrevented) event.preventDefault()
-
-    window.dispatchEvent(event)
-    await flushPromises()
-
-    expect(event.defaultPrevented).toBe(preemptivelyPrevented)
-    expect(voicePanelCloseCalls()).toHaveLength(0)
-    wrapper.unmount()
-  })
-
-  it('removes its global Escape listener after unmount', async () => {
-    const wrapper = await mountVoicePanel()
-    wrapper.unmount()
-
-    const event = dispatchEscape()
-    await flushPromises()
-
-    expect(event.defaultPrevented).toBe(false)
-    expect(voicePanelCloseCalls()).toHaveLength(0)
-  })
-})
-
-async function selectScreenshotRegionTarget(wrapper: VueWrapper, displayId: string): Promise<void> {
-  await wrapper.find('.screenshot-target-field select').setValue('region')
-  await wrapper.find('.screenshot-region-display-field select').setValue(displayId)
-}
-
-async function surfaceScreenshotPermissionRecovery(wrapper: VueWrapper) {
-  await findButton(wrapper, 'Translate screenshot').trigger('click')
-  await flushPromises()
-
-  expect(wrapper.find('.error-text').text()).toBe('Screenshot permission denied')
-  expect(wrapper.find('.permission-recovery-btn').exists()).toBe(true)
-}
-
-describe('VoicePanel provider ASR', () => {
-  it('records transient audio and applies a governed provider transcript', async () => {
-    enableProviderRecording()
-    const wrapper = await mountVoicePanel()
-    await openVoicePanel()
-
-    expect(mediaRecorderInstances).toHaveLength(1)
-    expect(mediaRecorderInstances[0]?.startCalls).toBe(1)
-    await findButton(wrapper, 'Stop and transcribe').trigger('click')
-
-    await vi.waitFor(() => {
-      expect(screenshotTransportCalls('assistant:voice-panel:transcribe-audio')).toHaveLength(1)
-    })
-    const transcribeCall = screenshotTransportCalls('assistant:voice-panel:transcribe-audio')[0]
-    const payload = transcribeCall?.[1] as {
-      audioDataUrl: string
-      mimeType: string
-      durationMs: number
-      language: string
+beforeEach(() => {
+  vi.useFakeTimers()
+  orbMounts.nextId = 0
+  orbMounts.records.length = 0
+  streamCallbacks = undefined
+  streamRequest = undefined
+  streamCancelMock = vi.fn()
+  streamStopMock = vi.fn()
+  disposePanelOpenMock = vi.fn()
+  recoveryStatusResult = { available: false }
+  retryResult = { text: 'recovered words' }
+  transportSendMock.mockReset()
+  transportOnMock.mockReset()
+  transportStreamMock.mockReset()
+  transportOnMock.mockReturnValue(disposePanelOpenMock)
+  transportSendMock.mockImplementation(async (event: unknown) => {
+    if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+      return { enabled: true, language: 'en-US' }
     }
-    expect(payload).toMatchObject({
-      mimeType: 'audio/webm;codecs=opus',
-      language: 'en-US'
-    })
-    expect(payload.audioDataUrl).toMatch(/^data:audio\/webm;codecs=opus;base64,/)
-    expect(payload.durationMs).toBeGreaterThan(0)
-    expect(wrapper.find<HTMLTextAreaElement>('textarea').element.value).toBe(
-      'Provider dictated request'
-    )
-    expect(mediaTrackStopMock).toHaveBeenCalledTimes(1)
-
-    wrapper.unmount()
-  })
-
-  it('starts the existing Web Speech fallback after provider transcription fails', async () => {
-    enableVoiceWakeRecognition()
-    enableProviderRecording()
-    voiceTranscribeResponse = {
-      success: false,
-      code: 'ASR_UNAVAILABLE',
-      error: 'Voice transcription is unavailable.'
+    if (eventName(event) === voiceApiEvents.recoveryStatus.toEventName()) {
+      return { ok: true, result: recoveryStatusResult }
     }
-    const wrapper = await mountVoicePanel()
-    await openVoicePanel()
-
-    await findButton(wrapper, 'Stop and transcribe').trigger('click')
-    await vi.waitFor(() => {
-      expect(speechRecognitionInstances).toHaveLength(1)
-    })
-
-    expect(speechRecognitionInstances[0]?.startCalls).toBe(1)
-    expect(wrapper.find('.status-text').text()).toBe('Browser speech fallback ready')
-    expect(wrapper.find('.error-text').text()).toBe('Voice transcription unavailable')
-
-    speechRecognitionInstances[0]?.emitError('network')
-    await flushPromises()
-    await findButton(wrapper, 'Start listening').trigger('click')
-    await vi.waitFor(() => {
-      expect(mediaRecorderInstances).toHaveLength(2)
-    })
-    expect(mediaRecorderInstances[1]?.startCalls).toBe(1)
-    expect(wrapper.find('.intelligence-recovery-btn').exists()).toBe(false)
-
-    wrapper.unmount()
+    if (eventName(event) === voiceApiEvents.retryLastFailure.toEventName()) {
+      return { ok: true, result: retryResult }
+    }
+    throw new Error(`Unexpected transport event: ${eventName(event)}`)
   })
+  transportStreamMock.mockImplementation(
+    async (event: unknown, payload: unknown, options: StreamCallbacks) => {
+      streamRequest = { event, payload }
+      streamCallbacks = options
+      return { cancel: streamCancelMock, stop: streamStopMock }
+    }
+  )
 })
 
-describe('VoicePanel microphone permission recovery', () => {
-  it('opens settings once and retries with a fresh recognizer after a not-allowed callback', async () => {
-    enableVoiceWakeRecognition()
-    const wrapper = await mountVoicePanel()
-    await openVoicePanel()
-    const deniedRecognition = speechRecognitionInstances[0]
-
-    expect(deniedRecognition?.startCalls).toBe(1)
-    deniedRecognition?.emitError('not-allowed')
-    await flushPromises()
-
-    expect(wrapper.find('.error-text').text()).toBe('Microphone permission denied')
-    expect(findButton(wrapper, 'Open microphone settings').classes()).toContain(
-      'permission-recovery-btn'
-    )
-
-    await findButton(wrapper, 'Open microphone settings').trigger('click')
-    await flushPromises()
-
-    const microphoneRequests = microphonePermissionRequestCalls()
-    expect(microphoneRequests).toHaveLength(1)
-    expect(microphoneRequests[0]?.[0]).toMatchObject({
-      namespace: 'system',
-      module: 'permission',
-      action: 'request'
-    })
-    expect(microphoneRequests[0]?.[1]).toBe('microphone')
-    expect(wrapper.find('.status-text').text()).toBe('Microphone settings opened')
-    expect(findButton(wrapper, 'Retry voice input').exists()).toBe(true)
-
-    await findButton(wrapper, 'Retry voice input').trigger('click')
-    await flushPromises()
-
-    expect(microphonePermissionRequestCalls()).toHaveLength(1)
-    expect(speechRecognitionInstances).toHaveLength(2)
-    expect(speechRecognitionInstances[1]?.startCalls).toBe(1)
-    expect(wrapper.find('.permission-recovery-btn').exists()).toBe(false)
-    expect(wrapper.find('.error-text').exists()).toBe(false)
-
-    wrapper.unmount()
-  })
-
-  it('keeps microphone recovery actionable when opening settings fails', async () => {
-    permissionRequestResult = false
-    enableVoiceWakeRecognition()
-    const wrapper = await mountVoicePanel()
-    await openVoicePanel()
-
-    speechRecognitionInstances[0]?.emitError('service-not-allowed')
-    await flushPromises()
-    await findButton(wrapper, 'Open microphone settings').trigger('click')
-    await flushPromises()
-
-    expect(microphonePermissionRequestCalls()).toHaveLength(1)
-    expect(wrapper.find('.error-text').text()).toBe('Microphone settings unavailable')
-    expect(findButton(wrapper, 'Open microphone settings').exists()).toBe(true)
-    expect(wrapper.find('.status-text').exists()).toBe(false)
-
-    wrapper.unmount()
-  })
-
-  it('surfaces synchronous NotAllowedError recovery without restarting recognition', async () => {
-    vi.useFakeTimers()
-    const error = new Error('Microphone access denied')
-    error.name = 'NotAllowedError'
-    enableVoiceWakeRecognition(error)
-    const wrapper = await mountVoicePanel()
-    await openVoicePanel()
-
-    expect(wrapper.find('.error-text').text()).toBe('Microphone permission denied')
-    expect(findButton(wrapper, 'Open microphone settings').exists()).toBe(true)
-
-    vi.advanceTimersByTime(500)
-    await flushPromises()
-
-    expect(speechRecognitionInstances).toHaveLength(1)
-
-    wrapper.unmount()
-  })
+afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
 })
 
-describe('VoicePanel screenshot permission recovery', () => {
-  it('opens screen recording settings after a denied screenshot action', async () => {
+describe('VoicePanel dock surface', () => {
+  it('renders the two actions and no text, and never names the assistant', async () => {
     const wrapper = await mountVoicePanel()
-    await surfaceScreenshotPermissionRecovery(wrapper)
 
-    await wrapper.find('.permission-recovery-btn').trigger('click')
-    await flushPromises()
+    expect(wrapper.find('.voice-dock').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-cancel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-confirm"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(wrapper.find('textarea').exists()).toBe(false)
+    expect(wrapper.find('input').exists()).toBe(false)
+    expect(wrapper.text().trim()).toBe('')
+    expect(wrapper.text()).not.toMatch(/阿洛|aler|等待|wake[- ]?word/i)
 
-    const eventNames = transportSendMock.mock.calls.map(([event]) => {
-      if (!hasTransportEventName(event)) {
-        throw new Error('Transport call did not receive an event')
+    wrapper.unmount()
+  })
+  it('returns from openPanel before runtime config resolves and still permits starting voice', async () => {
+    let resolveConfig!: (config: { enabled: boolean; language: string }) => void
+    const configRequest = new Promise<{ enabled: boolean; language: string }>((resolve) => {
+      resolveConfig = resolve
+    })
+    transportSendMock.mockImplementation(async (event: unknown) => {
+      if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+        return configRequest
       }
-      return event.toEventName()
+      throw new Error(`Unexpected transport event: ${eventName(event)}`)
     })
-    expect(eventNames).toContain('system:permission:request')
+
+    const wrapper = mount(VoicePanel)
+    await nextTick()
+
+    let panelOpened = false
+    const opening = exposed(wrapper)
+      .openPanel()
+      .then(() => {
+        panelOpened = true
+      })
+    await Promise.resolve()
+    await nextTick()
+
+    expect(panelOpened).toBe(true)
     expect(transportSendMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        namespace: 'system',
-        module: 'permission',
-        action: 'request'
-      }),
-      'screenRecording'
+      AssistantEvents.floatingBall.getRuntimeConfig,
+      undefined
     )
-    expect(wrapper.find('.status-text').text()).toBe('Screenshot settings opened')
-    expect(wrapper.find('.error-text').exists()).toBe(false)
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    expect(eventName(streamRequest?.event)).toBe(voiceApiEvents.asrStream.toEventName())
+
+    resolveConfig({ enabled: true, language: 'en-US' })
+    await opening
+    await flushPromises()
+    wrapper.unmount()
+  })
+
+  // Speaking and thinking have to look different; asserting both halves keeps one from
+  // silently taking over the other's phase.
+  it('shows the waveform while listening and the orb while transcribing', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    // The meter waits for data: before the first level frame the pill is still preparing.
+    callbacksOrThrow().onData?.({ type: 'level', rms: 0.4 })
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-orb"]').exists()).toBe(false)
+
+    exposed(wrapper).stopVoiceInput()
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-orb"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
 
-  it('reports unavailable settings instead of a successful recovery', async () => {
-    permissionRequestResult = false
+  it('drives bar heights from level events and freezes when they stop', async () => {
     const wrapper = await mountVoicePanel()
-    await surfaceScreenshotPermissionRecovery(wrapper)
 
-    await wrapper.find('.permission-recovery-btn').trigger('click')
+    exposed(wrapper).startVoiceInput()
     await flushPromises()
 
-    expect(wrapper.find('.error-text').text()).toBe('Screenshot settings unavailable')
-    expect(wrapper.find('.status-text').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('Screenshot settings opened')
+    const callbacks = callbacksOrThrow()
+    callbacks.onData?.({ type: 'level', rms: 0.05 })
+    await nextTick()
+    const idle = barHeights(wrapper)
+    expect(idle).toHaveLength(24)
+
+    callbacks.onData?.({ type: 'level', rms: 0.5 })
+    await nextTick()
+    const afterFirst = barHeights(wrapper)
+    expect(afterFirst).not.toEqual(idle)
+
+    callbacks.onData?.({ type: 'level', rms: 1 })
+    await nextTick()
+    const afterSecond = barHeights(wrapper)
+    expect(afterSecond).not.toEqual(afterFirst)
+
+    // Negative control: with no level data the meter must sit still rather than animate.
+    // Without this, a decorative CSS animation would satisfy every assertion above.
+    callbacks.onData?.({ type: 'partial', text: 'hello' })
+    vi.advanceTimersByTime(2000)
+    await nextTick()
+    expect(barHeights(wrapper)).toEqual(afterSecond)
 
     wrapper.unmount()
   })
-})
 
-describe('VoicePanel Intelligence settings recovery', () => {
-  async function surfaceProviderRecovery(wrapper: VueWrapper): Promise<void> {
-    await findButton(wrapper, 'Translate clipboard image').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('.error-text').text()).toBe(
-      'Image translation is unavailable. Check login, quota, or provider status.'
-    )
-    expect(wrapper.find('.intelligence-recovery-btn').exists()).toBe(true)
-  }
-
-  it('opens Intelligence settings after a provider translation failure and clears the error', async () => {
-    clipboardImageResponse = {
-      success: false,
-      code: 'SCENE_UNAVAILABLE'
-    }
+  it('opts into level frames on the shared active-app stream', async () => {
     const wrapper = await mountVoicePanel()
-    await surfaceProviderRecovery(wrapper)
 
-    await wrapper.find('.intelligence-recovery-btn').trigger('click')
+    exposed(wrapper).startVoiceInput()
     await flushPromises()
 
-    const [event, payload] = transportSendMock.mock.calls.at(-1) ?? []
-    expect(hasTransportEventName(event) && event.toEventName()).toBe(
-      'assistant:voice-panel:open-intelligence-settings'
-    )
-    expect(event).toMatchObject({
-      namespace: 'assistant',
-      module: 'voice-panel',
-      action: 'open-intelligence-settings'
+    expect(eventName(streamRequest?.event)).toBe(voiceApiEvents.asrStream.toEventName())
+    expect(streamRequest?.payload).toEqual({
+      language: 'en-US',
+      cleanup: true,
+      delivery: 'active-app',
+      emitLevel: true
     })
-    expect(payload).toBeUndefined()
-    expect(wrapper.find('.intelligence-recovery-btn').exists()).toBe(false)
-    expect(wrapper.find('.error-text').exists()).toBe(false)
-    expect(wrapper.find('.status-text').text()).toBe(
-      'AI provider settings opened. Check login, quota, and provider status, then retry.'
-    )
-
-    wrapper.unmount()
-  })
-
-  it('keeps provider recovery actionable when Intelligence settings cannot be opened', async () => {
-    clipboardImageResponse = {
-      success: false,
-      code: 'SCENE_UNAVAILABLE'
-    }
-    intelligenceSettingsOpenResult = false
-    const wrapper = await mountVoicePanel()
-    await surfaceProviderRecovery(wrapper)
-
-    await wrapper.find('.intelligence-recovery-btn').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('.error-text').text()).toBe(
-      'Could not open AI provider settings. Open Intelligence from the main window.'
-    )
-    expect(wrapper.find('.intelligence-recovery-btn').exists()).toBe(true)
-    expect(wrapper.find('.status-text').exists()).toBe(false)
-
-    wrapper.unmount()
-  })
-
-  it.each([
-    {
-      name: 'clipboard image is unavailable',
-      label: 'Translate clipboard image',
-      setResponse: () => {
-        clipboardImageResponse = { success: false, code: 'IMAGE_UNAVAILABLE' }
-      }
-    },
-    {
-      name: 'screenshot permission is denied',
-      label: 'Translate screenshot',
-      setResponse: () => {
-        screenshotResponse = { success: false, code: 'SCREENSHOT_PERMISSION_DENIED' }
-      }
-    }
-  ])('does not offer Intelligence settings when $name', async ({ label, setResponse }) => {
-    setResponse()
-    const wrapper = await mountVoicePanel()
-
-    await findButton(wrapper, label).trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('.intelligence-recovery-btn').exists()).toBe(false)
-
-    wrapper.unmount()
-  })
-  it.each([
-    { code: 'OCR_UNAVAILABLE', showsIntelligenceRecovery: true },
-    { code: 'TEXT_TRANSLATE_UNAVAILABLE', showsIntelligenceRecovery: true },
-    { code: 'SCREENSHOT_UNAVAILABLE', showsIntelligenceRecovery: false }
-  ] as const)(
-    'shows Intelligence recovery $showsIntelligenceRecovery for screenshot $code',
-    async ({ code, showsIntelligenceRecovery }) => {
-      screenshotResponse = { success: false, code }
-      const wrapper = await mountVoicePanel()
-
-      await findButton(wrapper, 'Translate screenshot').trigger('click')
-      await flushPromises()
-
-      expect(wrapper.find('.intelligence-recovery-btn').exists()).toBe(showsIntelligenceRecovery)
-
-      wrapper.unmount()
-    }
-  )
-
-  it.each([
-    {
-      source: 'clipboard',
-      code: 'QUOTA_CHECK_UNAVAILABLE',
-      label: 'Translate clipboard image',
-      eventName: 'assistant:voice-panel:translate-clipboard-image',
-      payload: { targetLang: 'zh' },
-      reason: 'Quota verification is unavailable, so the request was blocked.',
-      recovery: 'Retry after quota storage recovers or inspect Intelligence quota configuration.',
-      expected:
-        'Quota verification unavailable: Retry later. If this continues, inspect Intelligence quota storage and configuration.'
-    },
-    {
-      source: 'clipboard',
-      code: 'NEXUS_AUTH_REQUIRED',
-      label: 'Translate clipboard image',
-      eventName: 'assistant:voice-panel:translate-clipboard-image',
-      payload: { targetLang: 'zh' },
-      reason: 'Nexus provider requires a signed-in account.',
-      recovery: 'Sign in to Nexus or switch to another enabled provider.',
-      expected: 'Sign in required: Sign in to Tuff Nexus, then retry this AI request.'
-    },
-    {
-      source: 'screenshot',
-      code: 'QUOTA_CHECK_UNAVAILABLE',
-      label: 'Translate screenshot',
-      eventName: 'assistant:voice-panel:translate-screenshot',
-      payload: { targetLang: 'zh', target: 'cursor-display' },
-      reason: 'Quota verification is unavailable, so the request was blocked.',
-      recovery: 'Retry after quota storage recovers or inspect Intelligence quota configuration.',
-      expected:
-        'Quota verification unavailable: Retry later. If this continues, inspect Intelligence quota storage and configuration.'
-    },
-    {
-      source: 'screenshot',
-      code: 'NEXUS_AUTH_REQUIRED',
-      label: 'Translate screenshot',
-      eventName: 'assistant:voice-panel:translate-screenshot',
-      payload: { targetLang: 'zh', target: 'cursor-display' },
-      reason: 'Nexus provider requires a signed-in account.',
-      recovery: 'Sign in to Nexus or switch to another enabled provider.',
-      expected: 'Sign in required: Sign in to Tuff Nexus, then retry this AI request.'
-    }
-  ] as const)(
-    'renders $source $code recovery and opens Intelligence settings',
-    async ({ source, code, label, eventName, payload, reason, recovery, expected }) => {
-      const response = { success: false, code, reason, recovery }
-      if (source === 'clipboard') {
-        clipboardImageResponse = response
-      } else {
-        screenshotResponse = response
-      }
-      const wrapper = await mountVoicePanel()
-
-      await findButton(wrapper, label).trigger('click')
-      await flushPromises()
-
-      const translationCalls = screenshotTransportCalls(eventName)
-      expect(translationCalls).toHaveLength(1)
-      expect(translationCalls[0]?.[1]).toEqual(payload)
-      expect(wrapper.find('.error-text').text()).toBe(expected)
-      expect(wrapper.find('.intelligence-recovery-btn').exists()).toBe(true)
-
-      await wrapper.find('.intelligence-recovery-btn').trigger('click')
-      await flushPromises()
-
-      expect(
-        screenshotTransportCalls('assistant:voice-panel:open-intelligence-settings')
-      ).toHaveLength(1)
-
-      wrapper.unmount()
-    }
-  )
-
-  it.each([
-    {
-      source: 'clipboard',
-      code: 'INVALID_REQUEST',
-      label: 'Translate clipboard image',
-      eventName: 'assistant:voice-panel:translate-clipboard-image',
-      payload: { targetLang: 'zh' },
-      reason: 'The image translation request is invalid.'
-    },
-    {
-      source: 'screenshot',
-      code: 'UNKNOWN',
-      label: 'Translate screenshot',
-      eventName: 'assistant:voice-panel:translate-screenshot',
-      payload: { targetLang: 'zh', target: 'cursor-display' },
-      reason: 'The image translation failed unexpectedly.'
-    }
-  ] as const)(
-    'keeps $source $code recovery visible without Intelligence settings',
-    async ({ source, code, label, eventName, payload, reason }) => {
-      const response = { success: false, code, reason }
-      if (source === 'clipboard') {
-        clipboardImageResponse = response
-      } else {
-        screenshotResponse = response
-      }
-      const wrapper = await mountVoicePanel()
-
-      await findButton(wrapper, label).trigger('click')
-      await flushPromises()
-
-      const translationCalls = screenshotTransportCalls(eventName)
-      expect(translationCalls).toHaveLength(1)
-      expect(translationCalls[0]?.[1]).toEqual(payload)
-      expect(wrapper.find('.error-text').text()).toBe(`AI request failed: ${reason}`)
-      expect(wrapper.find('.intelligence-recovery-btn').exists()).toBe(false)
-
-      wrapper.unmount()
-    }
-  )
-})
-
-describe('VoicePanel screenshot display selection', () => {
-  it('loads available displays and sends the selected display with screenshot capture', async () => {
-    screenshotDisplaysResponse = [
-      {
-        id: 'display-external',
-        name: 'External Display',
-        friendlyName: 'Studio Display',
-        x: 1440,
-        y: 0,
-        width: 2560,
-        height: 1440,
-        scaleFactor: 2,
-        rotation: 0,
-        isPrimary: false
-      }
-    ]
-    const wrapper = await mountVoicePanel()
-
-    const modeSelect = wrapper.find('.screenshot-target-field select')
-    expect(modeSelect.find('option[value="display"]').attributes('disabled')).toBeUndefined()
-    await modeSelect.setValue('display')
-
-    const displaySelect = wrapper.find('.screenshot-target-field:nth-child(2) select')
-    expect(displaySelect.findAll('option').map((option) => option.text())).toEqual([
-      'Studio Display · 2560 × 1440'
-    ])
-    await displaySelect.setValue('display-external')
-    await findButton(wrapper, 'Capture screenshot').trigger('click')
-    await flushPromises()
-
-    const captureCalls = transportSendMock.mock.calls.filter(
-      ([event]) =>
-        hasTransportEventName(event) &&
-        event.toEventName() === 'assistant:voice-panel:capture-screenshot'
-    )
-    expect(captureCalls).toHaveLength(1)
-    expect(captureCalls[0]?.[1]).toEqual({ target: 'display', displayId: 'display-external' })
 
     wrapper.unmount()
   })
 })
 
-describe('VoicePanel screenshot region selection', () => {
-  const display: AssistantScreenshotDisplay = {
-    id: 'display-external',
-    name: 'External Display',
-    friendlyName: 'Studio Display',
-    x: 1440,
-    y: 0,
-    width: 2560,
-    height: 1440,
-    scaleFactor: 2,
-    rotation: 0,
-    isPrimary: false
-  }
-  const resource = {
-    tfileUrl: 'tfile:///managed/assistant-region.png',
-    mimeType: 'image/png' as const,
-    width: 640,
-    height: 360,
-    sizeBytes: 2048
-  }
-
-  it.each([
-    { label: 'Capture screenshot', eventName: 'assistant:voice-panel:capture-screenshot' },
-    { label: 'Translate screenshot', eventName: 'assistant:voice-panel:translate-screenshot' }
-  ])('forwards a managed interactive capture to $label', async ({ label, eventName }) => {
-    screenshotDisplaysResponse = [display]
-    screenshotRegionSelectionResponse = {
-      success: true,
-      resource
-    }
+describe('VoicePanel session control', () => {
+  it('stops instead of cancelling on confirm, and waits for end to finish', async () => {
     const wrapper = await mountVoicePanel()
-    await selectScreenshotRegionTarget(wrapper, display.id)
 
-    await findButton(wrapper, label).trigger('click')
+    exposed(wrapper).startVoiceInput()
     await flushPromises()
 
-    const selectionCalls = screenshotTransportCalls(
-      'assistant:voice-panel:select-screenshot-region'
-    )
-    expect(selectionCalls).toHaveLength(1)
-    expect(selectionCalls[0]?.[1]).toEqual({ target: 'display', displayId: display.id })
+    await wrapper.find('[data-testid="voice-confirm"]').trigger('click')
+    await nextTick()
 
-    const actionCalls = screenshotTransportCalls(eventName)
-    expect(actionCalls).toHaveLength(1)
-    expect(actionCalls[0]?.[1]).toEqual(
-      eventName === 'assistant:voice-panel:translate-screenshot'
-        ? { targetLang: 'zh', target: 'resource', tfileUrl: resource.tfileUrl, resource }
-        : { target: 'resource', tfileUrl: resource.tfileUrl, resource }
-    )
+    // Cancelling here would abort the session main-side and drop the transcript.
+    expect(streamStopMock).toHaveBeenCalledTimes(1)
+    expect(streamCancelMock).not.toHaveBeenCalled()
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    vi.advanceTimersByTime(6400)
+    await nextTick()
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    callbacksOrThrow().onEnd?.()
+    await nextTick()
+    expect(wrapper.emitted('finished')).toHaveLength(1)
 
     wrapper.unmount()
   })
 
   it.each([
-    { label: 'Capture screenshot', eventName: 'assistant:voice-panel:capture-screenshot' },
-    { label: 'Translate screenshot', eventName: 'assistant:voice-panel:translate-screenshot' },
-    { label: 'Save screenshot', eventName: 'assistant:voice-panel:save-screenshot' }
-  ])('does not invoke $label work when selection is canceled', async ({ label, eventName }) => {
-    screenshotDisplaysResponse = [display]
+    { final: { type: 'final', text: '' } as const, name: 'an empty transcription' },
+    {
+      final: {
+        type: 'final',
+        text: 'recognized words',
+        delivery: { method: 'none', reason: 'target-changed' }
+      } as const,
+      name: 'a transcript that could not reach the active app'
+    }
+  ])('keeps a warning visible after $name ends', async ({ final }) => {
     const wrapper = await mountVoicePanel()
-    await selectScreenshotRegionTarget(wrapper, display.id)
 
-    await findButton(wrapper, label).trigger('click')
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    const callbacks = callbacksOrThrow()
+    callbacks.onData?.(final)
+    await nextTick()
+    callbacks.onEnd?.()
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(true)
+    expect(wrapper.find('.voice-dock--warning').exists()).toBe(true)
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('finishes exactly once after a native delivery reaches end', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    const callbacks = callbacksOrThrow()
+    callbacks.onData?.({ type: 'final', text: 'delivered words', delivery: { method: 'native' } })
+    await nextTick()
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    callbacks.onEnd?.()
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it('aborts without finalizing on cancel, then holds a short cancelled notice', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
     await flushPromises()
 
+    await wrapper.find('[data-testid="voice-cancel"]').trigger('click')
+    await nextTick()
+
+    expect(streamCancelMock).toHaveBeenCalledTimes(1)
+    expect(streamStopMock).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Cancelled')
+    expect(wrapper.find('.voice-dock--muted').exists()).toBe(true)
+
+    // Carrying an undo button, so it gets the long hold — a notice you can act on has to
+    // outlast the reflex to reach for it.
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
+    vi.advanceTimersByTime(900)
+    await nextTick()
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    vi.advanceTimersByTime(5700)
+    await nextTick()
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  // Tap is what people do to dismiss something they were not looking at. Losing a sentence to
+  // that is a bad trade, so the tap has to do nothing and only the hold may cancel.
+  it('ignores a tapped Escape and cancels only on a held one', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    vi.advanceTimersByTime(200)
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
+    await nextTick()
+
+    expect(streamCancelMock).not.toHaveBeenCalled()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    vi.advanceTimersByTime(650)
+    await flushPromises()
+
+    expect(streamCancelMock).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Cancelled')
+
+    wrapper.unmount()
+  })
+
+  it('replaces the confirm action with the orb while transcribing', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="voice-confirm"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-orb"]').exists()).toBe(false)
+
+    exposed(wrapper).stopVoiceInput()
+    await nextTick()
+
+    // The slot cannot hold an action and a progress mark at once — that is the whole point.
+    expect(wrapper.find('[data-testid="voice-confirm"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-orb"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toBe('Transcribing…')
+    expect(wrapper.find('[data-testid="voice-hint"]').classes()).toContain(
+      'voice-dock__text--shimmer'
+    )
+    // Cancel stays live: Escape has to remain available while the transcript is in flight.
+    expect(wrapper.find('[data-testid="voice-cancel"]').attributes('disabled')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it.each([
+    ['quota', new Error('QUOTA_EXCEEDED'), 'AI credits are used up', 'voice-dock--warning'],
+    [
+      'high demand',
+      new Error('provider overloaded (529)'),
+      'service is busy',
+      'voice-dock--warning'
+    ],
+    // Unclassified failures no longer surface the provider's own sentence: it is English,
+    // gets truncated by the pill width, and offers nothing to act on.
+    ['unknown', new Error('socket reset'), 'Voice transcription failed', 'voice-dock--danger']
+  ])('sorts a %s failure into its own tone', async (_label, error, text, toneClass) => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onError?.(error)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toContain(text)
+    expect(wrapper.find(`.${toneClass}`).exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('expands for a notice and collapses when it clears', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 200px')
+
+    callbacksOrThrow().onError?.(new Error('We did not catch that, please say it again'))
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(true)
+    const width = Number(
+      /width:\s*(\d+)px/.exec(wrapper.find('.voice-dock').attributes('style') ?? '')?.[1]
+    )
+    expect(width).toBeGreaterThanOrEqual(200)
+    expect(width).toBeLessThanOrEqual(340)
+
+    await exposed(wrapper).openPanel()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 200px')
+
+    wrapper.unmount()
+  })
+
+  it('remounts the orb with a fresh key and random state for every session', async () => {
+    const wrapper = await mountVoicePanel()
+    const panel = exposed(wrapper)
+
+    panel.startVoiceInput()
+    await flushPromises()
+    panel.stopVoiceInput()
+    await nextTick()
+    const firstOrb = orbMounts.records.at(-1)
+
+    expect(firstOrb?.state).toBe('random')
+
+    callbacksOrThrow().onEnd?.()
+    await nextTick()
+    panel.startVoiceInput()
+    await flushPromises()
+    panel.stopVoiceInput()
+    await nextTick()
+    const secondOrb = orbMounts.records.at(-1)
+
+    expect(secondOrb?.state).toBe('random')
+    expect(secondOrb?.key).not.toBe(firstOrb?.key)
+
+    wrapper.unmount()
+  })
+
+  it('emits finished after the notice display window', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onError?.(new Error('stream unavailable'))
+    await nextTick()
+
+    // A retryable failure carries a button, so it holds for the action window, not 1200ms.
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
+    vi.advanceTimersByTime(1200)
+    await nextTick()
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    vi.advanceTimersByTime(5400)
+    await nextTick()
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it('cancels the owned stream and removes listeners on unmount', async () => {
+    const wrapper = await mountVoicePanel()
+    const registeredHandler = transportOnMock.mock.calls[0]?.[1]
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    wrapper.unmount()
+
+    expect(streamCancelMock).toHaveBeenCalledTimes(1)
+    expect(registeredHandler).toBeTypeOf('function')
+    expect(disposePanelOpenMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('VoicePanel input meter gain', () => {
+  function heightsOf(wrapper: VueWrapper): number[] {
+    return wrapper
+      .findAll('[data-testid="voice-wave"] span')
+      .map((bar) => Number(/height:\s*(\d+)px/.exec(bar.attributes('style') ?? '')?.[1] ?? 0))
+  }
+
+  async function feed(wrapper: VueWrapper, rms: number, frames: number): Promise<number[]> {
+    const callbacks = callbacksOrThrow()
+    for (let frame = 0; frame < frames; frame += 1) callbacks.onData?.({ type: 'level', rms })
+    await nextTick()
+    return heightsOf(wrapper)
+  }
+
+  async function listeningPanel() {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    return wrapper
+  }
+
+  // The whole point of the auto-gain: a quiet voice and a loud one both have to be readable,
+  // because the raw RMS of ordinary speech is far too small to draw directly.
+  it('makes a quiet voice as legible as a loud one', async () => {
+    const quiet = await listeningPanel()
+    const quietPeak = Math.max(...(await feed(quiet, 0.03, 6)))
+    quiet.unmount()
+
+    const loud = await listeningPanel()
+    const loudPeak = Math.max(...(await feed(loud, 0.9, 6)))
+    loud.unmount()
+
+    expect(quietPeak).toBeGreaterThan(12)
+    expect(loudPeak).toBeGreaterThan(12)
+    // Neither runs away from the other: 30x the input amplitude, comparable on screen.
+    expect(Math.abs(quietPeak - loudPeak)).toBeLessThanOrEqual(8)
+  })
+
+  // Negative control, and the one that keeps the gain honest: amplifying a quiet voice must
+  // not amplify an empty room. Without the noise gate the meter would dance in silence.
+  it('leaves silence flat no matter how much gain the quiet path needs', async () => {
+    const wrapper = await listeningPanel()
+
+    const speech = Math.max(...(await feed(wrapper, 0.03, 6)))
+    const silence = await feed(wrapper, 0.002, 24)
+
+    expect(speech).toBeGreaterThan(12)
+    expect(Math.max(...silence)).toBe(3)
+
+    wrapper.unmount()
+  })
+
+  it('recovers from a shout fast enough for the next quiet sentence', async () => {
+    const wrapper = await listeningPanel()
+
+    await feed(wrapper, 0.9, 8)
+    // The newest bar, not the window maximum: the buffer still holds the shout's own frames.
+    const rightAfter = (await feed(wrapper, 0.03, 1)).at(-1) ?? 0
+    // ~1.7s of release at 10Hz; asserted as frames so the constant cannot quietly slow down.
+    const recovered = (await feed(wrapper, 0.03, 20)).at(-1) ?? 0
+
+    expect(rightAfter).toBeLessThan(12)
+    expect(recovered).toBeGreaterThan(12)
+
+    wrapper.unmount()
+  })
+
+  it(`starts each session from the floor rather than the last session peak`, async () => {
+    const wrapper = await listeningPanel()
+
+    await feed(wrapper, 0.9, 8)
+    await exposed(wrapper).openPanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    expect(Math.max(...(await feed(wrapper, 0.03, 2)))).toBeGreaterThan(12)
+
+    wrapper.unmount()
+  })
+})
+
+describe('VoicePanel recovery and pacing', () => {
+  async function failedPanel() {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onError?.(new Error('socket reset'))
+    await flushPromises()
+    return wrapper
+  }
+
+  it('recovers through the same call whether it was cancelled or failed', async () => {
+    const wrapper = await failedPanel()
+    // Icon-only now, so the label lives where a screen reader can still reach it.
+    expect(wrapper.find('[data-testid="voice-recover"]').attributes('aria-label')).toBe('Retry')
+
+    await wrapper.find('[data-testid="voice-recover"]').trigger('click')
+    await flushPromises()
+
+    expect(transportSendMock).toHaveBeenCalledWith(
+      voiceApiEvents.retryLastFailure,
+      expect.objectContaining({ delivery: 'active-app' })
+    )
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  // Expiry is a different sentence from failure: one sends you to say it again, the other to
+  // check your connection. Collapsing them would send people to the wrong place.
+  it('says the recording expired rather than reporting another failure', async () => {
+    retryResult = { text: '', expired: true }
+    const wrapper = await failedPanel()
+
+    await wrapper.find('[data-testid="voice-recover"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toContain('expired')
+    expect(wrapper.find('.voice-dock--warning').exists()).toBe(true)
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('offers no retry for quota or congestion, because retrying changes nothing', async () => {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onError?.(new Error('QUOTA_EXCEEDED'))
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The held audio is justified by there being a button to press. When that button leaves the
+   * screen the justification is gone, so main is told rather than left to time it out — ten
+   * megabytes of what the user just said is not something to keep for nobody.
+   */
+  it('drops the held recording when its undo button leaves the screen', async () => {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    vi.advanceTimersByTime(700)
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
+    expect(discardCalls()).toBe(0)
+
+    // The action window closes and the panel reports itself finished; the dock takes the pill
+    // off screen, so whatever it was offering stops being reachable.
+    vi.advanceTimersByTime(6600)
+    await flushPromises()
+
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+    expect(discardCalls()).toBe(1)
+
+    wrapper.unmount()
+  })
+
+  it('does not drop the recording the user just asked to reuse', async () => {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    vi.advanceTimersByTime(700)
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
+    await nextTick()
+
+    await wrapper.find('[data-testid="voice-recover"]').trigger('click')
+    await flushPromises()
+
+    // Clearing the notice to show the recovering state looks exactly like the offer expiring.
+    // Discarding there would delete the audio the retry is in the middle of using.
+    expect(discardCalls()).toBe(0)
+
+    wrapper.unmount()
+  })
+
+  it('escalates the wait in two steps and slows the beam with it', async () => {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    exposed(wrapper).stopVoiceInput()
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toBe('Transcribing…')
+
+    vi.advanceTimersByTime(3100)
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toContain('Still transcribing')
+    expect(wrapper.find('.voice-dock--warning').exists()).toBe(true)
+
+    vi.advanceTimersByTime(6600)
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toContain('Longer than usual')
+    // The beam reads as pace: the same wait, drawn slower, is what "stuck" looks like.
     expect(
-      screenshotTransportCalls('assistant:voice-panel:select-screenshot-region')[0]?.[1]
-    ).toEqual({ target: 'display', displayId: display.id })
-    expect(screenshotTransportCalls(eventName)).toHaveLength(0)
+      Number(wrapper.find('.tx-border-beam').attributes('data-beam-duration'))
+    ).toBeGreaterThan(3)
+
+    wrapper.unmount()
+  })
+
+  it('draws the hold on the border and unwinds it when released', async () => {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    vi.advanceTimersByTime(200)
+    await nextTick()
+    expect(wrapper.find('.voice-dock--holding').exists()).toBe(true)
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.find('.voice-dock--holding').exists()).toBe(false)
+    expect(streamCancelMock).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })
 })
 
-describe('VoicePanel screenshot OCR fallback', () => {
-  it('renders OCR text and provider models, then clears stale fallback content on capture', async () => {
-    screenshotResponse = {
-      success: true,
-      mode: 'ocr-text',
-      sourceText: 'Invoice total',
-      targetText: '合计金额',
-      fallback: {
-        degradedReason: 'IMAGE_TRANSLATE_SCENE_UNAVAILABLE',
-        ocr: {
-          provider: 'ocr-provider',
-          model: 'ocr-model',
-          traceId: 'ocr-trace',
-          latencyMs: 17,
-          engine: 'cloud'
-        },
-        translation: {
-          provider: 'translation-provider',
-          model: 'translation-model',
-          traceId: 'translation-trace',
-          latencyMs: 23
-        }
-      }
-    }
+describe('VoicePanel device readiness and long messages', () => {
+  async function listeningPanel() {
     const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    return wrapper
+  }
 
-    await findButton(wrapper, 'Translate screenshot').trigger('click')
+  /**
+   * Twenty-four bars at minimum height is not an empty pill — it is a working meter reporting
+   * silence, which is a claim we cannot make while the device is still opening.
+   */
+  it('breathes instead of drawing a meter it has no data for', async () => {
+    const wrapper = await listeningPanel()
+
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(false)
+    expect(wrapper.find('.voice-dock--preparing').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toContain('Opening the microphone')
+
+    wrapper.unmount()
+  })
+
+  it('hands over to the meter when data arrives, not when a timer says so', async () => {
+    const wrapper = await listeningPanel()
+
+    // Well past the give-up threshold in wall time, but no frame has landed yet.
+    callbacksOrThrow().onData?.({ type: 'level', rms: 0.3 })
+    await nextTick()
+
+    expect(wrapper.find('.voice-dock--preparing').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('stops breathing and says so when the device never answers', async () => {
+    const wrapper = await listeningPanel()
+
+    vi.advanceTimersByTime(2100)
     await flushPromises()
 
-    const fallbackCard = wrapper.find('.screenshot-text-fallback')
-    expect(fallbackCard.text()).toContain('Invoice total')
-    expect(fallbackCard.text()).toContain('合计金额')
-    expect(fallbackCard.text()).toContain('OCR: ocr-provider / ocr-model')
-    expect(fallbackCard.text()).toContain('Translation: translation-provider / translation-model')
+    expect(wrapper.find('.voice-dock--preparing').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toContain('not responding')
+    expect(streamCancelMock).toHaveBeenCalledTimes(1)
 
-    await findButton(wrapper, 'Capture screenshot').trigger('click')
+    wrapper.unmount()
+  })
+
+  it('keeps breathing while frames keep arriving', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onData?.({ type: 'level', rms: 0.3 })
+    await nextTick()
+
+    // Negative control for the timeout: once data flows, the give-up timer must not fire.
+    vi.advanceTimersByTime(3000)
     await flushPromises()
 
-    expect(wrapper.find('.screenshot-text-fallback').exists()).toBe(false)
-    expect(wrapper.find('.screenshot-preview').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it.each([
+    ['no device', 'CAPTURE_UNAVAILABLE: Cannot find microphone', 'No microphone available'],
+    ['denied', 'PERMISSION_DENIED', 'Microphone access not granted']
+  ])('classifies a %s failure instead of quoting the provider', async (_label, raw, expected) => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error(raw))
+    await flushPromises()
+
+    const text = wrapper.find('[data-testid="voice-notice"]').text()
+    expect(text).toContain(expected)
+    expect(text).not.toContain('Cannot find')
+    expect(wrapper.find('.voice-dock--warning').exists()).toBe(true)
+    // Retrying finds the same missing microphone. Opening the pane where it is turned on does
+    // not, so that — and only that — is what the button offers.
+    const action = wrapper.find('[data-testid="voice-recover"]')
+    expect(action.exists()).toBe(true)
+    expect(action.find('.i-carbon-settings').exists()).toBe(true)
+    expect(action.find('.i-carbon-renew').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * jsdom has no layout, so overflow is stubbed on the prototype: the component measures
+   * `scrollWidth > clientWidth`, and the point of the test is that the answer drives height.
+   */
+  it('grows a second line rather than dropping the half that says what to do', async () => {
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(420)
+    // Two clamped lines of caption text: 10 padding + 34 + 4 gap + 40 control = 88.
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(34)
+
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('E_LONG_UNCLASSIFIED'))
+    await flushPromises()
+    await flushPromises()
+
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    expect(style).toContain('height: 88px')
+    // Width goes to the cap first; only then does the island grow.
+    expect(style).toContain('width: 340px')
+    // And it stops being a pill: a pill's radius is half its height, so at 88 the ends would
+    // swallow the room the second line needs. One line is a pill, two lines is a card.
+    expect(style).toContain('border-radius: 24px')
+    expect(wrapper.find('.voice-dock--expanded').exists()).toBe(true)
+    // The controls grow with the card. Leaving them at the pill's 34 would strand two small
+    // circles in a surface twice their height.
+    // An unclassified failure is the retryable one, so the trailing slot holds its action.
+    for (const testId of ['voice-cancel', 'voice-recover']) {
+      const control = wrapper.find(`[data-testid="${testId}"]`).attributes('style') ?? ''
+      expect(control).toContain('width: 40px')
+      expect(control).toContain('height: 40px')
+    }
+
+    widthSpy.mockRestore()
+    heightSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  /**
+   * The sentence arrives as a wave of characters, and the wave has a ceiling.
+   *
+   * Without one, a long message would still be landing more than a second after the pill opened
+   * — the reveal would stop reading as arrival and start reading as lag. The spacing tightens
+   * with length instead. The text itself stays one string: the spans are presentation, which is
+   * what every other assertion in this file reading `.text()` depends on.
+   */
+  it('reveals the sentence character by character within a fixed window', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('E_SOMETHING_ELSE'))
+    await flushPromises()
+
+    const message = 'Voice transcription failed'
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe(message)
+
+    const chars = wrapper.findAll('.voice-dock__char')
+    expect(chars).toHaveLength(message.length)
+
+    const delays = chars.map((char) =>
+      Number(/animation-delay: (\d+)ms/.exec(char.attributes('style') ?? '')?.[1] ?? -1)
+    )
+    expect(delays[0]).toBe(0)
+    expect(delays.every((delay, index) => index === 0 || delay >= delays[index - 1]!)).toBe(true)
+    expect(delays.at(-1)).toBeLessThanOrEqual(240)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The one-line states have to actually get one line.
+   *
+   * `scrollWidth` is an integer and text is not, so a sentence whose real width is 145.7 reports
+   * 145 and gets a slot exactly 145 wide — a fraction too narrow, and it wraps. Asserted as an
+   * inequality rather than a number: the rule is that the slot is strictly wider than the text
+   * it was measured from, which is the only thing the slack is there to guarantee.
+   */
+  it('gives a one-line message a slot wider than the text it measured', async () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.style.whiteSpace === 'nowrap' ? 145 : 106
+    })
+
+    const wrapper = await listeningPanel()
+    await flushPromises()
+
+    // Still waiting on the first level frame, so this is the "opening the microphone" line.
+    expect(wrapper.find('[data-testid="voice-hint"]').text()).toBe('Opening the microphone…')
+
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    const width = Number(/width: (\d+)px/.exec(style)?.[1] ?? 0)
+    expect(width - 94).toBeGreaterThan(145)
+    expect(style).toContain('height: 44px')
+    expect(wrapper.find('.voice-dock--expanded').exists()).toBe(false)
+
+    vi.restoreAllMocks()
+    wrapper.unmount()
+  })
+
+  /**
+   * A short sentence still has to widen the pill.
+   *
+   * `scrollWidth` on a wrapped paragraph reports the width it already has, not the width it wants,
+   * and that width came from this measurement — so the pill would sit at its base width with
+   * the text wrapped inside it forever. The stub answers differently depending on whether the
+   * element is being held to one line, which is the only difference between the two questions.
+   */
+  it('widens for a sentence that would otherwise wrap inside the base pill', async () => {
+    const widthSpy = vi
+      .spyOn(HTMLElement.prototype, 'scrollWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.style.whiteSpace === 'nowrap' ? 130 : 106
+      })
+
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('E_SOMETHING_ELSE'))
+    await flushPromises()
+    await flushPromises()
+
+    // 130 of text + 2 of rounding slack + 94 of chrome, not the 200 the base pill would keep.
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    expect(style).toContain('width: 226px')
+    expect(style).toContain('height: 44px')
+    // And the measurement leaves no trace on the element it borrowed.
+    expect(wrapper.find('[data-testid="voice-notice"]').attributes('style') ?? '').not.toContain(
+      'nowrap'
+    )
+
+    widthSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  /**
+   * The card hands the text the full width the pill's middle column could not give it, so a
+   * message that needed two lines in the pill often needs only one here. Sizing the card for
+   * two lines regardless is the same empty band the bottom row had, turned on its side.
+   */
+  it('sizes the card to the text it ended up with, not to the worst case', async () => {
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(420)
+    // One line once the text spans the card: 10 padding + 17 + 4 gap + 40 control = 71.
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(17)
+
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('E_LONG_UNCLASSIFIED'))
+    await flushPromises()
+    await flushPromises()
+
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    expect(style).toContain('height: 71px')
+    expect(wrapper.find('.voice-dock--expanded').exists()).toBe(true)
+
+    widthSpy.mockRestore()
+    heightSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  /**
+   * Content swaps as a whole, and for the length of that swap both sentences are in the DOM.
+   *
+   * Every other test here mounts with Test Utils' default `<Transition>` stub, which never puts
+   * two of them there at once. With the real one, measuring the wrong element sizes the pill for
+   * the message it is in the middle of forgetting — so the stub answers by element, and the test
+   * asserts the pill took the width of the sentence that is arriving.
+   */
+  it('sizes the pill from the arriving sentence while the old one is still leaving', async () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      if (!this.classList.contains('voice-dock__text')) return 0
+      return this.textContent?.includes('busy') ? 246 : 40
+    })
+
+    const wrapper = mount(VoicePanel, {
+      props: { managedByDock: true },
+      global: { stubs: { transition: false } }
+    })
+    await flushPromises()
+    ;(wrapper.vm as unknown as { startVoiceInput: () => void }).startVoiceInput()
+    await flushPromises()
+
+    // A short notice first, so there is something on screen for the next one to replace.
+    callbacksOrThrow().onError?.(new Error('QUOTA_EXCEEDED'))
+    await flushPromises()
+    await flushPromises()
+    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 200px')
+    ;(wrapper.vm as unknown as { startVoiceInput: () => void }).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onError?.(new Error('SERVICE_IS_busy_RIGHT_NOW'))
+    await flushPromises()
+    await flushPromises()
+
+    // 246 of arriving text + 94 of chrome, not the 40 the leaving one still reports.
+    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 340px')
+    // Both are on screen together, which is the swap: one blurring out, one blurring in.
+    // Not an exact count — jsdom never fires transitionend, so leaving copies pile up here in a
+    // way they never would in a browser. What matters is that the two states coexist at all.
+    const slots = wrapper.findAll('.voice-dock__slot')
+    const leaving = slots.filter((slot) => slot.classes().includes('voice-swap-leave-active'))
+    expect(leaving.length).toBeGreaterThan(0)
+    expect(slots.length - leaving.length).toBe(1)
+
+    vi.restoreAllMocks()
+    wrapper.unmount()
+  })
+
+  /**
+   * The device card is the one that leads with a picture, so it stops being a line of text with
+   * an icon in front and becomes a stack: microphone on top, one short sentence under it, the
+   * two controls on the floor. Its geometry is fixed because its copy is — there is nothing to
+   * measure and nothing that can overflow.
+   */
+  it('stacks the device failure and offers the settings pane instead of a dead checkmark', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('PERMISSION_DENIED'))
+    await flushPromises()
+    await flushPromises()
+
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    expect(style).toContain('width: 264px')
+    expect(style).toContain('height: 124px')
+    expect(wrapper.find('.voice-dock--icon-card').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-notice-icon"]').classes()).toContain(
+      'i-carbon-microphone-off'
+    )
+    // The sentence no longer carries "go to Settings" — the button does.
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe(
+      'Microphone access not granted'
+    )
+
+    const action = wrapper.find('[data-testid="voice-recover"]')
+    expect(action.exists()).toBe(true)
+    expect(action.find('.i-carbon-settings').exists()).toBe(true)
+
+    await action.trigger('click')
+    await flushPromises()
+    expect(
+      transportSendMock.mock.calls.some(
+        ([event]) => eventName(event) === voiceApiEvents.openMicrophoneSettings.toEventName()
+      )
+    ).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The icon is not decoration for "something went wrong" — it is a picture of the microphone.
+   * Handing it to every failure would put a microphone next to "out of credit", naming a
+   * culprit that is not the one.
+   */
+  it('draws the microphone icon only when the microphone is the problem', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('QUOTA_EXCEEDED'))
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe(
+      'AI credits are used up — check Settings'
+    )
+    expect(wrapper.find('[data-testid="voice-notice-icon"]').exists()).toBe(false)
+    wrapper.unmount()
+
+    // Nor does the fallback, which is where an unrecognised failure lands: we do not know that
+    // the microphone had anything to do with it, so we do not draw one.
+    const unclassified = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('E_SOMETHING_ELSE'))
+    await flushPromises()
+    await flushPromises()
+
+    expect(unclassified.find('[data-testid="voice-notice"]').text()).toBe(
+      'Voice transcription failed'
+    )
+    expect(unclassified.find('[data-testid="voice-notice-icon"]').exists()).toBe(false)
+
+    unclassified.unmount()
+  })
+
+  it('stays one line high when the message fits', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('E_LONG_UNCLASSIFIED'))
+    await flushPromises()
+    await flushPromises()
+
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    expect(style).toContain('height: 44px')
+    expect(style).toContain('border-radius: 22px')
+    expect(wrapper.find('.voice-dock--expanded').exists()).toBe(false)
+    // In the pill the control is the bar: 44 minus its 5px padding on both sides.
+    expect(wrapper.find('[data-testid="voice-cancel"]').attributes('style')).toContain(
+      'width: 34px'
+    )
 
     wrapper.unmount()
   })
 })
-
-describe('VoicePanel image translation route metadata', () => {
-  const metadata = {
-    runId: 'run-image-translation',
-    sceneId: 'corebox.screenshot.translate',
-    durationMs: 147,
-    stages: [
-      {
-        capability: 'vision.ocr',
-        providerId: 'provider-1',
-        providerName: 'Nexus Vision',
-        model: 'vision-ocr-v2',
-        latencyMs: 17
+describe('VoicePanel stream generation boundaries', () => {
+  it('stops an unresolved stream as soon as its handle arrives after the user releases', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ cancel: () => void; stop: () => void }>()
+    const cancel = vi.fn()
+    const stop = vi.fn()
+    transportStreamMock.mockImplementationOnce(
+      async (_event: unknown, _payload: unknown, options: StreamCallbacks) => {
+        streamCallbacks = options
+        return promise
       }
-    ]
-  }
+    )
+    const wrapper = await mountVoicePanel()
+    const panel = exposed(wrapper)
 
-  function expectRouteCard(wrapper: VueWrapper) {
-    const routeCard = wrapper.find('.screenshot-image-translate-route')
-    expect(routeCard.exists()).toBe(true)
-    expect(routeCard.text()).toContain('Nexus Vision')
-    expect(routeCard.text()).toContain('vision-ocr-v2')
-    expect(routeCard.text()).toContain('147 ms')
-    expect(routeCard.text()).toContain('run-image-translation')
-  }
+    panel.startVoiceInput()
+    await Promise.resolve()
+    panel.stopVoiceInput()
+    expect(cancel).not.toHaveBeenCalled()
+    expect(stop).not.toHaveBeenCalled()
 
-  it('renders translated screenshot and clipboard route details, then clears them before a new capture', async () => {
-    screenshotResponse = {
-      success: true,
-      mode: 'translated-image',
-      translatedImageBase64: 'dHJhbnNsYXRlZA==',
-      metadata
-    }
+    resolve({ cancel, stop })
+    await flushPromises()
+    expect(stop).toHaveBeenCalledTimes(1)
+    expect(cancel).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+  it('keeps a reopened session listening when a terminal callback from its prior stream arrives late', async () => {
+    const wrapper = await mountVoicePanel()
+    const panel = exposed(wrapper)
+
+    panel.startVoiceInput()
+    await flushPromises()
+    const priorCallbacks = callbacksOrThrow()
+    priorCallbacks.onEnd?.()
+    await nextTick()
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+
+    await panel.openPanel()
+    panel.startVoiceInput()
+    await flushPromises()
+    const currentCallbacks = callbacksOrThrow()
+    currentCallbacks.onData?.({ type: 'level', rms: 0.4 })
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+
+    // The old transport can still settle after its terminal event. It must not replace the
+    // current recording with an error/finished state.
+    priorCallbacks.onError?.(new Error('late stream failure'))
+    priorCallbacks.onEnd?.()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(wrapper.emitted('finished')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it('retains an actionable error notice when transport end follows the error', async () => {
     const wrapper = await mountVoicePanel()
 
-    await findButton(wrapper, 'Translate screenshot').trigger('click')
+    exposed(wrapper).startVoiceInput()
     await flushPromises()
-
-    expectRouteCard(wrapper)
-
-    await findButton(wrapper, 'Capture screenshot').trigger('click')
+    const callbacks = callbacksOrThrow()
+    callbacks.onError?.(new Error('stream unavailable'))
     await flushPromises()
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
 
-    expect(wrapper.find('.screenshot-image-translate-route').exists()).toBe(false)
-    expect(wrapper.find('.screenshot-preview').exists()).toBe(true)
+    callbacks.onEnd?.()
+    await nextTick()
+    expect(wrapper.emitted('finished')).toBeUndefined()
 
-    clipboardImageResponse = {
-      success: true,
-      translatedImageBase64: 'dHJhbnNsYXRlZA==',
-      metadata
-    }
-    await findButton(wrapper, 'Translate clipboard image').trigger('click')
-    await flushPromises()
-
-    expectRouteCard(wrapper)
+    vi.advanceTimersByTime(6600)
+    await nextTick()
+    expect(wrapper.emitted('finished')).toHaveLength(1)
 
     wrapper.unmount()
   })
