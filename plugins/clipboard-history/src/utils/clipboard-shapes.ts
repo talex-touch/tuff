@@ -93,8 +93,21 @@ const CREDENTIAL_IN_COMMAND =
 
 const VIDEO_EXTENSIONS = /\.(?:mp4|mov|mkv|webm|avi|m4v)$/i
 
+/**
+ * 会进「密钥」洞察区的 kind。
+ *
+ * `host-ip` 被排除在外：它在共享分类器里是一段「要掩码的敏感片段」，不是凭据。
+ * 把它喂进这里会让一个 IP 顶着「API 密钥（未识别服务）」显示。掩码仍然照做，
+ * 只是由 SSH 那一档承载展示。
+ */
+type CredentialSecretKind = Exclude<ClipboardSecretHit['kind'], 'host-ip'>
+
+function isCredentialHit(hit: ClipboardSecretHit): boolean {
+  return hit.kind !== 'host-ip'
+}
+
 /** 共享分类器的 kind 比这里多两档（字段式的 token / password），映射到最接近的展示形态。 */
-const SECRET_KIND_MAP: Record<ClipboardSecretHit['kind'], ClipboardSecretInfo['kind']> = {
+const SECRET_KIND_MAP: Record<CredentialSecretKind, ClipboardSecretInfo['kind']> = {
   'api-key': 'token',
   'private-key': 'private-key',
   jwt: 'jwt',
@@ -145,7 +158,9 @@ export function detectSecret(rawContent: string | null | undefined): ClipboardSe
 
   const { secrets } = classifyClipboardContent({ type: 'text', content })
   // 一条内容可能命中多段；洞察区只讲一件事，优先讲最危险的那一段。
-  const primary = secrets.find(hit => hit.critical) ?? secrets[0]
+  // 主机 IP 不参与评选——它要掩码，但它不是这一档要讲的东西。
+  const credentials = secrets.filter(isCredentialHit)
+  const primary = credentials.find(hit => hit.critical) ?? credentials[0]
   if (!primary) {
     return null
   }
@@ -155,7 +170,7 @@ export function detectSecret(rawContent: string | null | undefined): ClipboardSe
 
   return {
     service: primary.service ?? 'API 密钥（未识别服务）',
-    kind: SECRET_KIND_MAP[primary.kind],
+    kind: SECRET_KIND_MAP[primary.kind as CredentialSecretKind],
     masked: maskSecretSpans(value, [{ ...primary, start: 0, end: value.length }]),
     maskedContent: maskSecretSpans(content, secrets),
     length: value.length,

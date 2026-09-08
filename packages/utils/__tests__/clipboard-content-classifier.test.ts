@@ -122,6 +122,53 @@ describe('clipboard content classifier', () => {
     })
   })
 
+  describe('ssh and host endpoints', () => {
+    it('masks a host ip without making the record undeletable', () => {
+      // 这是本任务的核心不变式：IP 敏感所以掩码，但它不是凭据，
+      // 该按类别策略过期就得过期。掩码和保留期在此之前是同一个开关。
+      const result = classify('ssh deploy@10.0.3.14 -p 2222')
+
+      expect(result.secrets.map(hit => hit.kind)).toEqual(['host-ip'])
+      expect(result.retentionClass).toBe('ordinary')
+      expect(result.tags).toContain('ssh')
+      expect(maskSecretSpans('ssh deploy@10.0.3.14 -p 2222', result.secrets)).toContain('•')
+      expect(maskSecretSpans('ssh deploy@10.0.3.14 -p 2222', result.secrets)).not.toContain('10.0.3')
+    })
+
+    it('leaves the ip inside a connection string to the connection string', () => {
+      // 扫描顺序的意义所在：整串是凭据，拆出一个 host-ip 会让它反而失去保护。
+      const result = classify('postgres://appuser:s3cr3tPass@10.0.0.1:5432/app')
+
+      expect(result.secrets.map(hit => hit.kind)).toEqual(['connection-string'])
+      expect(result.retentionClass).toBe('secret')
+    })
+
+    it('does not mask a domain host', () => {
+      const result = classify('ssh deploy@build.example.com')
+
+      expect(result.secrets).toEqual([])
+      expect(result.sshEndpoint).toMatchObject({ host: 'build.example.com', hostIsIp: false })
+      expect(result.retentionClass).toBe('ordinary')
+    })
+
+    it('reports a public key without masking it', () => {
+      // 公钥按定义就是公开的，掩码只制造摩擦、不提供保护。
+      const result = classify(`ssh-ed25519 ${'A'.repeat(68)} deploy@laptop`)
+
+      expect(result.sshPublicKey).toMatchObject({ algorithm: 'ssh-ed25519' })
+      expect(result.secrets).toEqual([])
+      expect(result.tags).toContain('ssh')
+    })
+
+    it('still protects an ssh private key', () => {
+      const result = classify(
+        '-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEA\n-----END OPENSSH PRIVATE KEY-----',
+      )
+
+      expect(result.retentionClass).toBe('secret')
+    })
+  })
+
   describe('retention class', () => {
     /**
      * 每一个 kind 单独钉一遍，而不是只测一两个代表。

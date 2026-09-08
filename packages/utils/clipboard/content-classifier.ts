@@ -10,6 +10,9 @@
  * `start === 0 && end === length` 的特例，不再是一条独立的代码路径。
  */
 
+import type { ClipboardSshEndpoint, ClipboardSshPublicKey } from './ssh-endpoint'
+import { detectSshEndpoint, detectSshPublicKey } from './ssh-endpoint'
+
 export type ClipboardTag =
   | 'url'
   | 'api_key'
@@ -29,6 +32,7 @@ export type ClipboardTag =
   | 'jwt'
   | 'connection_string'
   | 'verification_code'
+  | 'ssh'
 
 /** 展示顺序。UI 直接按这个顺序渲染标签，不再各自排序。 */
 export const CLIPBOARD_TAG_ORDER: readonly ClipboardTag[] = [
@@ -38,6 +42,7 @@ export const CLIPBOARD_TAG_ORDER: readonly ClipboardTag[] = [
   'jwt',
   'connection_string',
   'verification_code',
+  'ssh',
   'github',
   'npm',
   'openai',
@@ -66,6 +71,8 @@ export type ClipboardSecretKind =
   | 'env'
   | 'password-field'
   | 'token-field'
+  /** 主机 IP。要掩码，但**不是**凭据——见 `RETENTION_PROTECTING_KINDS`。 */
+  | 'host-ip'
 
 export interface ClipboardSecretHit {
   kind: ClipboardSecretKind
@@ -111,6 +118,9 @@ export interface ClipboardClassification {
   tags: ClipboardTag[]
   secrets: ClipboardSecretHit[]
   verificationCode: ClipboardVerificationCode | null
+  /** SSH / 主机端点。字段拆解用，不参与掩码——掩码由 `host-ip` 命中承担。 */
+  sshEndpoint: ClipboardSshEndpoint | null
+  sshPublicKey: ClipboardSshPublicKey | null
   retentionClass: ClipboardRetentionClass
 }
 
@@ -354,6 +364,7 @@ function collectTags(
   sample: string,
   hits: readonly ClipboardSecretHit[],
   verificationCode: ClipboardVerificationCode | null,
+  ssh: { endpoint: ClipboardSshEndpoint | null; publicKey: ClipboardSshPublicKey | null },
 ): ClipboardTag[] {
   const tags = new Set<ClipboardTag>()
 
@@ -362,6 +373,7 @@ function collectTags(
   if (ACCOUNT_FIELD_PATTERN.test(sample)) tags.add('account')
   if (WECHAT_MENTION_PATTERN.test(sample)) tags.add('wechat')
   if (verificationCode) tags.add('verification_code')
+  if (ssh.endpoint || ssh.publicKey) tags.add('ssh')
 
   for (const hit of hits) {
     switch (hit.kind) {
@@ -397,6 +409,8 @@ const EMPTY_CLASSIFICATION: ClipboardClassification = {
   tags: [],
   secrets: [],
   verificationCode: null,
+  sshEndpoint: null,
+  sshPublicKey: null,
   retentionClass: 'ordinary',
 }
 
@@ -417,8 +431,26 @@ export function classifyClipboardContent(input: ClipboardClassifyInput): Clipboa
   collectUnknownKeyHits(sample, secrets, input.customKeyPrefixes ?? [])
   secrets.sort((left, right) => left.start - right.start)
 
+  // 主机 IP 最后扫：连接串里的 IP（`postgres://u:p@10.0.0.1:5432/db`）应当由
+  // `connection-string` 整段吃掉并按凭据处理，而不是被拆出一个 host-ip 让整串反而
+  // 失去保护。`pushHit` 丢弃重叠区间，排在最后就自动是这个结果。
+  const sshEndpoint = detectSshEndpoint(sample)
+  const sshPublicKey = detectSshPublicKey(sample)
+  if (sshEndpoint?.hostIsIp) {
+    pushHit(secrets, {
+      kind: 'host-ip',
+      service: null,
+      start: sshEndpoint.hostStart,
+      end: sshEndpoint.hostEnd,
+      critical: false,
+    })
+  }
+
   const verificationCode = detectVerificationCode(sample, input.sourceApp, secrets.length > 0)
-  const tags = collectTags(sample, secrets, verificationCode)
+  const tags = collectTags(sample, secrets, verificationCode, {
+    endpoint: sshEndpoint,
+    publicKey: sshPublicKey,
+  })
 
   const retentionClass: ClipboardRetentionClass = secrets.some(hit =>
     RETENTION_PROTECTING_KINDS.has(hit.kind),
@@ -428,7 +460,7 @@ export function classifyClipboardContent(input: ClipboardClassifyInput): Clipboa
       ? 'verification-code'
       : 'ordinary'
 
-  return { tags, secrets, verificationCode, retentionClass }
+  return { tags, secrets, verificationCode, sshEndpoint, sshPublicKey, retentionClass }
 }
 
 /**
@@ -454,6 +486,11 @@ export function maskSecretSpans(content: string, secrets: readonly ClipboardSecr
 
 function maskValue(value: string, kind: ClipboardSecretKind): string {
   if (kind === 'private-key') return '私钥内容不予显示'
+  if (kind === 'host-ip') {
+    // 留最后一段，够用来认出「是不是我那台」，又不把整个地址摊开。
+    const tail = value.slice(value.lastIndexOf('.') + 1)
+    return `${'•'.repeat(Math.max(3, value.length - tail.length - 1))}.${tail}`
+  }
   if (kind === 'connection-string') {
     return value.replace(/(\/\/[^:/@]+:)([^@]+)(@)/, (_, prefix: string, __: string, suffix: string) => {
       return `${prefix}${'•'.repeat(8)}${suffix}`
