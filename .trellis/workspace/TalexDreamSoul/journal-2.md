@@ -637,3 +637,40 @@ Rebuilt HomeModelMenu on TxDropdownMenu with a provider filter strip, cross-prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 67: 剪贴板历史：系统预览、快速标注、OCR 收纳
+
+**Date**: 2026-09-08
+**Task**: 剪贴板历史：系统预览、快速标注、OCR 收纳
+**Branch**: `master`
+
+### Summary
+
+图片预览改为交给系统预览器（Esc 被宿主 before-input-event 拦截，插件内浮层无法关闭；Quick Look 面板挂在 BrowserWindow 上会被 CoreBox 失焦隐藏一起带走，故全平台走 shell.openPath，请求只带记录 id 并在剪贴板图片目录内定界）。新增快速标注：备注 + 用户标签写入记录 metadata，因此立刻可被关键词搜索命中；与分类器产出的 tags 分开存，避免被下一次捕获覆盖；同时写 metadata 列和 clipboard_history_meta 表，因为 hydrateWithMeta 优先读后者。OCR 从详情区收进更多信息，标注排到最前。顺带修复三处失效的验证：clipboard-image-persistence.test.ts 因 electron mock 缺 app 而整文件不加载（7 条用例从未跑过）、renderer-csp.test.ts 仍在扒已迁移到响应头的 meta 标签、以及 tuff-cli 的 dashboard slug 归一化缺回归测试（该 bug 造出过重复插件条目）。发布 1.2.0-beta.5 到 Nexus。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7bad7935d` | (see git log) |
+| `e2eeac327` | (see git log) |
+| `d5a703d8e` | (see git log) |
+| `d5c10d261` | (see git log) |
+| `c9f42a721` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
