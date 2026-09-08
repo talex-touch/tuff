@@ -916,6 +916,11 @@ describe('VoicePanel recovery and pacing', () => {
   })
 })
 
+/** Drives the hold the way main does: `start`, then `commit` or `release`. */
+function hold(wrapper: VueWrapper, state: 'start' | 'commit' | 'release'): void {
+  ;(wrapper.vm as unknown as { handleCancelHold: (value: string) => void }).handleCancelHold(state)
+}
+
 describe('VoicePanel device readiness and long messages', () => {
   async function listeningPanel() {
     const wrapper = await mountVoicePanel()
@@ -1256,6 +1261,48 @@ describe('VoicePanel device readiness and long messages', () => {
           eventName(event) === AssistantEvents.voice.openIntelligenceSettings.toEventName()
       )
     ).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The beam says something is charging; it cannot say how much longer, because a ring looks the
+   * same at 10% as at 90%. The bar drains 100% → 0% behind the content, so the surface being
+   * consumed *is* the countdown — and releasing early gives it back rather than leaving a stub.
+   */
+  it('drains a width behind the content while Escape is held, and restores it on release', async () => {
+    const wrapper = await listeningPanel()
+    expect(wrapper.find('[data-testid="voice-charge"]').exists()).toBe(false)
+
+    // Main owns the key now and reports the hold over the transport, so the panel is driven
+    // through the same handle the dock uses rather than through a synthetic keydown.
+    hold(wrapper, 'start')
+    vi.advanceTimersByTime(150)
+    await nextTick()
+
+    const quarter = wrapper.find('[data-testid="voice-charge"]')
+    expect(quarter.exists()).toBe(true)
+    const started = Number(/width: ([\d.]+)%/.exec(quarter.attributes('style') ?? '')?.[1] ?? -1)
+    expect(started).toBeLessThan(100)
+    expect(started).toBeGreaterThan(0)
+
+    vi.advanceTimersByTime(300)
+    await nextTick()
+    const later = Number(
+      /width: ([\d.]+)%/.exec(
+        wrapper.find('[data-testid="voice-charge"]').attributes('style') ?? ''
+      )?.[1] ?? -1
+    )
+    expect(later).toBeLessThan(started)
+
+    // Released before the hold completes: the charge unwinds and nothing is cancelled.
+    hold(wrapper, 'release')
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-charge"]').exists()).toBe(false)
+    // Still the same session: no notice, and the cancel control is still live. (The wave is not
+    // up yet — no level frame has arrived, so this is the "opening the microphone" phase.)
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-cancel"]').attributes('disabled')).toBeUndefined()
 
     wrapper.unmount()
   })

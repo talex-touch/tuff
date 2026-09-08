@@ -257,6 +257,14 @@ const showsOrb = computed(() => (transcribing.value || recovering.value) && !has
  */
 const preparing = computed(() => listening.value && !hasLevel.value && !hasNotice.value)
 const holdingCancel = computed(() => cancelCharge.value > 0)
+/**
+ * What is left of the hold, as a width.
+ *
+ * The beam already says "something is charging", but a ring gives no sense of *how much longer*
+ * — it looks the same at 10% as at 90%. This drains 100% → 0% behind the content, so the surface
+ * being consumed is the countdown, and releasing early visibly gives it back.
+ */
+const cancelRemaining = computed(() => `${Math.max(0, 1 - cancelCharge.value) * 100}%`)
 const slowness = computed(() => {
   if (!transcribing.value) return 'normal'
   if (waitedMs.value >= VERY_SLOW_AFTER_MS) return 'very-slow'
@@ -993,6 +1001,14 @@ onBeforeUnmount(() => {
         borderRadius: `${pillRadius}px`
       }"
     >
+      <div
+        v-if="holdingCancel"
+        class="voice-dock__charge"
+        :style="{ width: cancelRemaining }"
+        data-testid="voice-charge"
+        aria-hidden="true"
+      />
+
       <button
         class="voice-dock__btn voice-dock__btn--cancel"
         type="button"
@@ -1162,8 +1178,33 @@ onBeforeUnmount(() => {
 }
 
 /* Holding Escape outranks every other tone: it is about to discard what was just said. */
+/* Held: the surface tightens as it drains, so the shrink and the bar are one gesture. */
 .voice-dock--holding {
   border-color: var(--shell-danger-border);
+  transform: scale(0.97);
+}
+
+/*
+ * Behind everything the pill draws, and clipped to its own corners.
+ *
+ * Width rather than `scaleX`: a scaled box distorts its border radius, and this one has to keep
+ * the pill's shape while it shortens. It is the only element in the surface that is allowed to
+ * report a fraction, because the hold is the only thing here with a known denominator.
+ */
+.voice-dock__charge {
+  position: absolute;
+  z-index: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--shell-danger-soft);
+  inset: 0 auto 0 0;
+  pointer-events: none;
+  transition: width 30ms linear;
+}
+
+.voice-dock__btn,
+.voice-dock__slot {
+  z-index: 1;
 }
 
 .voice-dock {
@@ -1533,6 +1574,15 @@ onBeforeUnmount(() => {
 
   .voice-dock__wave span {
     transition: none;
+  }
+
+  /* The bar still drains — it is information, not decoration — it just stops easing between ticks. */
+  .voice-dock__charge {
+    transition: none;
+  }
+
+  .voice-dock--holding {
+    transform: none;
   }
 
   /* No blur, no scale — the swap becomes a plain cut, which is what reduced motion asks for. */
