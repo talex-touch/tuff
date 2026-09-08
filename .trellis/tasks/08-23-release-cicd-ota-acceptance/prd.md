@@ -21,7 +21,7 @@
 - Beta29 -> Beta30 的新鲜隔离 macOS arm64 OTA 已完成 signed URL 403 fallback、SHA-256 校验、DMG 原位替换、无提权 handoff、Beta30 官方 attestation 和 startup health；但目标进程仍从 workspace 根 package metadata 解析为 Beta29，启动时进入 recovery-required 且未写入 healthy ack，另暴露 release notes catalog 版本不一致。根因是主进程 `polyfills.ts`/`version-util.ts` 读取根 `package.json`，而 Builder 打包的 CoreApp metadata 已是 Beta30；已切换为 `apps/core-app/package.json`，需包含该修复的新官方版本重新执行 AC6。
 - Beta32 的 GitHub release、Nexus latest、manifest v2、四个首选平台资产、签名下载路由与回退路由已收敛；严格生产 Gate E `18/18` 通过，macOS arm64 OTA 下载包 SHA-256 和 detached RSA 签名与 manifest 一致，详见 `evidence/release-matrix-beta32.md`。
 - 官方 macOS arm64 Beta31 -> Beta32 已从隔离 profile 完成发现、下载、校验、Settings UI `Restart to Update`、无提权 helper、DMG 原位替换、Beta32 官方 attestation、startup health 和 attempt-bound `healthy` ack；SQLite 终态 revision 8 / `healthy`，详见 `evidence/macos-ota-beta31-beta32.md`。
-- 同一隔离源进程在安装前的 clipboard `vision.ocr` 成功返回后 abort；minidump 指向 `tuff_native_ocr.node` 的 N-API AsyncWorker 完成路径。根因是父进程在 terminal message 到达时立即 `worker.terminate()`，可能在 native completion callback 尚未退栈时销毁环境；本地已改为 terminal message 后自然退出，聚焦测试 `18/18`、负向变异和 200 个真实 Electron native worker 自然退出 smoke 通过。Beta32 仍含旧实现，修复必须随下一官方版本发布后再解除推广风险。
+- 同一隔离源进程在安装前的 clipboard `vision.ocr` 成功返回后 abort；minidump 指向 `tuff_native_ocr.node` 的 N-API AsyncWorker 完成路径。根因是父进程在 terminal message 到达时立即 `worker.terminate()`，可能在 native completion callback 尚未退栈时销毁环境；本地已改为 terminal message 后自然退出，并验证 jobId/result/error 消息边界，聚焦测试 `20/20`、负向变异和 200 个真实 Electron native worker 自然退出 smoke 通过。Beta32 仍含旧实现，修复必须随下一官方版本发布后再解除推广风险。
 
 ## Requirements
 
