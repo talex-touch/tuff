@@ -101,7 +101,7 @@ vi.mock('vue-i18n', () => ({
           'assistant.voicePanel.retry': 'Retry',
           'assistant.voicePanel.voiceTranscribeEmpty': 'No speech detected',
           'assistant.voicePanel.capturingDevice': 'Opening the microphone…',
-          'assistant.voicePanel.usingDevice': 'Using {name}',
+          'assistant.voicePanel.usingDevice': 'Switched to {name}',
           'assistant.voicePanel.voiceRecognitionNotConfigured': 'Speech recognition is not set up',
           'assistant.voicePanel.voiceRecognitionUnavailable':
             'Speech recognition channel is unavailable',
@@ -1077,7 +1077,7 @@ describe('VoicePanel device readiness and long messages', () => {
     callbacksOrThrow().onData?.({ type: 'device', name: 'AirPods Pro' })
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Using AirPods Pro')
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Switched to AirPods Pro')
     expect(wrapper.find('.voice-dock--muted').exists()).toBe(true)
     // Nothing to act on, so no button — and the wave is gone with the session state.
     expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(false)
