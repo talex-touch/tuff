@@ -714,12 +714,13 @@ describe('AssistantModule screenshot translation', () => {
     if (!voiceDock) throw new Error('VoiceDock window was not created')
     expect(voiceDock.window.setAlwaysOnTop).toHaveBeenCalledWith(true, 'status')
 
-    // 24 + 576 - 148 - 24: the ordinary gap, with nothing held back for a hidden bar.
+    // 24 + 576 - 148 - 9: the window's own gap, with nothing held back for a hidden bar. What
+    // the user sees is this plus the canvas slack below the pill.
     const bounds = vi
       .mocked(voiceDock.window.setBounds)
       .mock.calls.map(([value]) => value)
       .pop()
-    expect(bounds?.y).toBe(428)
+    expect(bounds?.y).toBe(443)
     expect(bounds?.height).toBe(148)
 
     await module.onDestroy({} as never)
@@ -780,7 +781,8 @@ describe('AssistantModule screenshot translation', () => {
     expect(recoveredBounds.x + recoveredBounds.width).toBeLessThanOrEqual(800)
     expect(recoveredBounds.y + recoveredBounds.height).toBeLessThanOrEqual(500)
     expect(recoveredBounds.x + recoveredBounds.width / 2).toBe(400)
-    expect(recoveredBounds.y + recoveredBounds.height).toBe(476)
+    // The window's bottom edge sits VOICE_DOCK_EDGE_GAP above the work area's: 500 - 9.
+    expect(recoveredBounds.y + recoveredBounds.height).toBe(491)
     expect(voiceDock.window.show).not.toHaveBeenCalled()
     expect(voiceDock.window.focus).not.toHaveBeenCalled()
     expect(mocks.broadcastToWindow).not.toHaveBeenCalled()
