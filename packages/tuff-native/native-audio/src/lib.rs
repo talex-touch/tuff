@@ -57,6 +57,12 @@ pub struct AudioCaptureOptions {
 #[napi(object)]
 pub struct AudioCaptureStart {
     pub session_id: String,
+    /// Name of the input device this session opened, as the OS reports it.
+    ///
+    /// Empty when the platform will not name it. Read once at start rather than polled: the
+    /// device a session records on cannot change under it, so this is the answer for its whole
+    /// lifetime, and the caller compares consecutive sessions to notice a switch.
+    pub device_name: String,
 }
 
 #[napi(object)]
@@ -123,6 +129,12 @@ pub fn start_function_key_monitor(
     function_key_monitor::start(env, callback)
 }
 
+/// Required by the JS loader so a stale addon cannot silently omit Escape or HID behavior.
+#[napi]
+pub fn function_key_monitor_api_v2() -> u32 {
+    2
+}
+
 #[napi]
 pub fn stop_function_key_monitor() {
     function_key_monitor::stop();
@@ -150,8 +162,7 @@ mod function_key_monitor {
 
     pub fn stop() {}
 }
-
-fn start_capture_blocking(options: Option<AudioCaptureOptions>) -> Result<String> {
+fn start_capture_blocking(options: Option<AudioCaptureOptions>) -> Result<(String, String)> {
     if !platform_supported() {
         return Err(Error::from_reason("platform-not-supported"));
     }
@@ -172,7 +183,7 @@ fn start_capture_blocking(options: Option<AudioCaptureOptions>) -> Result<String
     let drain_cursor = Arc::new(AtomicUsize::new(0));
     let started_at = Instant::now();
 
-    let (ready_tx, ready_rx) = mpsc::channel::<std::result::Result<(), String>>();
+    let (ready_tx, ready_rx) = mpsc::channel::<std::result::Result<String, String>>();
 
     let thread_sync = sync.clone();
     let thread_samples = samples.clone();
@@ -202,8 +213,8 @@ fn start_capture_blocking(options: Option<AudioCaptureOptions>) -> Result<String
 
     // Block until the capture thread confirms the stream is live (or failed to
     // open), so start_capture surfaces device errors synchronously.
-    match ready_rx.recv() {
-        Ok(Ok(())) => {}
+    let device_name = match ready_rx.recv() {
+        Ok(Ok(name)) => name,
         Ok(Err(reason)) => {
             let _ = join_handle.join();
             return Err(Error::from_reason(reason));
@@ -212,7 +223,7 @@ fn start_capture_blocking(options: Option<AudioCaptureOptions>) -> Result<String
             let _ = join_handle.join();
             return Err(Error::from_reason("capture-thread-exited-before-ready"));
         }
-    }
+    };
 
     let session_id = next_session_id();
     let handle = SessionHandle {
@@ -236,7 +247,7 @@ fn start_capture_blocking(options: Option<AudioCaptureOptions>) -> Result<String
         map.insert(session_id.clone(), handle);
     }
 
-    Ok(session_id)
+    Ok((session_id, device_name))
 }
 
 /// Runs the blocking half on the libuv pool instead of the JS thread.
@@ -255,15 +266,19 @@ pub struct StartCaptureTask {
 }
 
 impl Task for StartCaptureTask {
-    type Output = String;
+    type Output = (String, String);
     type JsValue = AudioCaptureStart;
 
     fn compute(&mut self) -> Result<Self::Output> {
         start_capture_blocking(self.options.take())
     }
 
-    fn resolve(&mut self, _env: Env, session_id: Self::Output) -> Result<Self::JsValue> {
-        Ok(AudioCaptureStart { session_id })
+    fn resolve(&mut self, _env: Env, started: Self::Output) -> Result<Self::JsValue> {
+        let (session_id, device_name) = started;
+        Ok(AudioCaptureStart {
+            session_id,
+            device_name,
+        })
     }
 }
 
@@ -864,7 +879,7 @@ fn capture_thread_main(
     max_duration_ms: u32,
     silence_stop_ms: u32,
     requested_sample_rate: Option<u32>,
-    ready_tx: mpsc::Sender<std::result::Result<(), String>>,
+    ready_tx: mpsc::Sender<std::result::Result<String, String>>,
 ) {
     let host = cpal::default_host();
     let device = match host.default_input_device() {
@@ -874,6 +889,13 @@ fn capture_thread_main(
             return;
         }
     };
+    // Asked before the config: a device that cannot describe itself is still usable, and the
+    // empty string is what "the platform will not say" looks like on the other side. cpal 0.18
+    // reports this through `description()` rather than the older `name()`.
+    let device_name = device
+        .description()
+        .map(|description| description.name().to_string())
+        .unwrap_or_default();
     let supported = match device.default_input_config() {
         Ok(config) => config,
         Err(error) => {
@@ -930,7 +952,9 @@ fn capture_thread_main(
         return;
     }
 
-    let _ = ready_tx.send(Ok(()));
+    // The name travels with readiness rather than through the session map: the caller is
+    // already blocked here, and a device that failed to open has no name worth reporting.
+    let _ = ready_tx.send(Ok(device_name));
 
     // Auto-stop policy: end on manual/cancel signal, on the hard duration cap,
     // or on a trailing-silence window once speech has been detected.

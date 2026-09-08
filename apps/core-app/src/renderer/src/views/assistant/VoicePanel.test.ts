@@ -17,6 +17,7 @@ const orbMounts = vi.hoisted(() => ({
   nextId: 0,
   records: [] as Array<{ key: unknown; state: unknown }>
 }))
+const transportHandlers = vi.hoisted(() => new Map<string, (payload?: unknown) => unknown>())
 
 vi.mock('~/modules/preload/process-info', () => ({
   getPreloadProcessInfo: () => ({ platform: 'darwin', arch: 'arm64' })
@@ -76,34 +77,40 @@ vi.mock('@talex-touch/tuffex/thinking-orb', () => ({
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string) =>
-      ({
-        'assistant.voicePanel.voiceTranscribingShort': 'Transcribing…',
-        'assistant.voicePanel.voiceTranscribeFailed': 'Voice transcription failed',
-        'assistant.voicePanel.voiceWakeDisabled': 'Voice input is disabled',
-        'assistant.voicePanel.cancelSession': 'Cancel this session',
-        'assistant.voicePanel.cancelled': 'Cancelled',
-        'assistant.voicePanel.quotaExhausted': 'AI credits are used up — check Settings',
-        'assistant.voicePanel.serviceBusy': 'The service is busy. Try again shortly.',
-        'assistant.voicePanel.holdToCancel': 'Hold to cancel',
-        'assistant.voicePanel.stillWorking': 'Still transcribing…',
-        'assistant.voicePanel.stillWorkingLong': 'Longer than usual — hold Esc to cancel',
-        'assistant.voicePanel.recovering': 'Recovering…',
-        'assistant.voicePanel.recoverCancelled': 'You cancelled a recording',
-        'assistant.voicePanel.recoverFailed': 'The last transcription failed',
-        'assistant.voicePanel.recoveryExpired': 'That recording expired — say it again',
-        'assistant.voicePanel.undo': 'Undo',
-        'assistant.voicePanel.retry': 'Retry',
-        'assistant.voicePanel.voiceTranscribeEmpty': 'No speech detected',
-        'assistant.voicePanel.capturingDevice': 'Opening the microphone…',
-        'assistant.voicePanel.microphoneUnresponsive': 'The microphone is not responding',
-        'assistant.voicePanel.microphoneMissing': 'No microphone available',
-        'assistant.voicePanel.microphoneDenied': 'Microphone access not granted',
-        'assistant.voicePanel.openMicrophoneSettings': 'Open microphone settings',
-        'assistant.voicePanel.microphoneSettingsUnavailable':
-          'This system has no microphone settings pane to open',
-        'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe'
-      })[key] ?? key
+    // Mirrors vue-i18n's `t(key, params)` closely enough for the one interpolated string here:
+    // a message that renders `{name}` literally would pass an assertion on the key alone.
+    t: (key: string, params?: Record<string, unknown>) =>
+      Object.entries(params ?? {}).reduce(
+        (message, [token, value]) => message.replace(`{${token}}`, String(value)),
+        {
+          'assistant.voicePanel.voiceTranscribingShort': 'Transcribing…',
+          'assistant.voicePanel.voiceTranscribeFailed': 'Voice transcription failed',
+          'assistant.voicePanel.voiceInputDisabled': 'Voice input is disabled',
+          'assistant.voicePanel.cancelSession': 'Cancel this session',
+          'assistant.voicePanel.cancelled': 'Cancelled',
+          'assistant.voicePanel.quotaExhausted': 'AI credits are used up — check Settings',
+          'assistant.voicePanel.serviceBusy': 'The service is busy. Try again shortly.',
+          'assistant.voicePanel.holdToCancel': 'Hold to cancel',
+          'assistant.voicePanel.stillWorking': 'Still transcribing…',
+          'assistant.voicePanel.stillWorkingLong': 'Longer than usual — hold Esc to cancel',
+          'assistant.voicePanel.recovering': 'Recovering…',
+          'assistant.voicePanel.recoverCancelled': 'You cancelled a recording',
+          'assistant.voicePanel.recoverFailed': 'The last transcription failed',
+          'assistant.voicePanel.recoveryExpired': 'That recording expired — say it again',
+          'assistant.voicePanel.undo': 'Undo',
+          'assistant.voicePanel.retry': 'Retry',
+          'assistant.voicePanel.voiceTranscribeEmpty': 'No speech detected',
+          'assistant.voicePanel.capturingDevice': 'Opening the microphone…',
+          'assistant.voicePanel.usingDevice': 'Using {name}',
+          'assistant.voicePanel.microphoneUnresponsive': 'The microphone is not responding',
+          'assistant.voicePanel.microphoneMissing': 'No microphone available',
+          'assistant.voicePanel.microphoneDenied': 'Microphone access not granted',
+          'assistant.voicePanel.openMicrophoneSettings': 'Open microphone settings',
+          'assistant.voicePanel.microphoneSettingsUnavailable':
+            'This system has no microphone settings pane to open',
+          'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe'
+        }[key] ?? key
+      )
   })
 }))
 
@@ -124,7 +131,6 @@ let streamCallbacks: StreamCallbacks | undefined
 let streamRequest: StreamRequest | undefined
 let streamCancelMock: Mock
 let streamStopMock: Mock
-let disposePanelOpenMock: Mock
 let recoveryStatusResult: { available: boolean; kind?: string; expiresInMs?: number }
 let retryResult: { text: string; expired?: boolean }
 
@@ -146,6 +152,9 @@ function eventName(event: unknown): string {
   }
   return event.toEventName()
 }
+function emitTransport(event: { toEventName: () => string }, payload?: unknown): void {
+  transportHandlers.get(event.toEventName())?.(payload)
+}
 
 async function mountVoicePanel() {
   const wrapper = mount(VoicePanel)
@@ -158,6 +167,7 @@ function exposed(wrapper: VueWrapper) {
     openPanel: () => Promise<void>
     startVoiceInput: () => void
     stopVoiceInput: () => void
+    toggleVoiceInput: () => void
   }
 }
 
@@ -180,13 +190,21 @@ beforeEach(() => {
   streamRequest = undefined
   streamCancelMock = vi.fn()
   streamStopMock = vi.fn()
-  disposePanelOpenMock = vi.fn()
   recoveryStatusResult = { available: false }
   retryResult = { text: 'recovered words' }
+  transportHandlers.clear()
   transportSendMock.mockReset()
   transportOnMock.mockReset()
   transportStreamMock.mockReset()
-  transportOnMock.mockReturnValue(disposePanelOpenMock)
+  transportOnMock.mockImplementation(
+    (event: { toEventName: () => string }, handler: (payload?: unknown) => unknown) => {
+      const eventName = event.toEventName()
+      transportHandlers.set(eventName, handler)
+      return () => {
+        if (transportHandlers.get(eventName) === handler) transportHandlers.delete(eventName)
+      }
+    }
+  )
   transportSendMock.mockImplementation(async (event: unknown) => {
     if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
       return { enabled: true, language: 'en-US' }
@@ -228,7 +246,7 @@ describe('VoicePanel dock surface', () => {
 
     wrapper.unmount()
   })
-  it('returns from openPanel before runtime config resolves and still permits starting voice', async () => {
+  it('waits for runtime voice input configuration before starting recognition', async () => {
     let resolveConfig!: (config: { enabled: boolean; language: string }) => void
     const configRequest = new Promise<{ enabled: boolean; language: string }>((resolve) => {
       resolveConfig = resolve
@@ -242,7 +260,6 @@ describe('VoicePanel dock surface', () => {
 
     const wrapper = mount(VoicePanel)
     await nextTick()
-
     let panelOpened = false
     const opening = exposed(wrapper)
       .openPanel()
@@ -251,20 +268,34 @@ describe('VoicePanel dock surface', () => {
       })
     await Promise.resolve()
     await nextTick()
-
-    expect(panelOpened).toBe(true)
-    expect(transportSendMock).toHaveBeenCalledWith(
-      AssistantEvents.floatingBall.getRuntimeConfig,
-      undefined
-    )
-
     exposed(wrapper).startVoiceInput()
     await flushPromises()
-    expect(eventName(streamRequest?.event)).toBe(voiceApiEvents.asrStream.toEventName())
+
+    expect(panelOpened).toBe(false)
+    expect(transportStreamMock).not.toHaveBeenCalled()
 
     resolveConfig({ enabled: true, language: 'en-US' })
     await opening
+    exposed(wrapper).startVoiceInput()
     await flushPromises()
+
+    expect(eventName(streamRequest?.event)).toBe(voiceApiEvents.asrStream.toEventName())
+    wrapper.unmount()
+  })
+  it('does not start recognition when runtime voice input is disabled', async () => {
+    transportSendMock.mockImplementation(async (event: unknown) => {
+      if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+        return { enabled: false, language: 'fr-FR' }
+      }
+      throw new Error(`Unexpected transport event: ${eventName(event)}`)
+    })
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    expect(transportStreamMock).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Voice input is disabled')
     wrapper.unmount()
   })
 
@@ -443,28 +474,75 @@ describe('VoicePanel session control', () => {
     wrapper.unmount()
   })
 
-  // Tap is what people do to dismiss something they were not looking at. Losing a sentence to
-  // that is a bad trade, so the tap has to do nothing and only the hold may cancel.
-  it('ignores a tapped Escape and cancels only on a held one', async () => {
+  it('cancels only when the main-owned global Escape hold commits', async () => {
     const wrapper = await mountVoicePanel()
 
     exposed(wrapper).startVoiceInput()
     await flushPromises()
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    vi.advanceTimersByTime(200)
-    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
+    emitTransport(AssistantEvents.voice.cancelHold, { state: 'start' })
+    emitTransport(AssistantEvents.voice.cancelHold, { state: 'reset' })
     await nextTick()
-
     expect(streamCancelMock).not.toHaveBeenCalled()
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    vi.advanceTimersByTime(650)
+    emitTransport(AssistantEvents.voice.cancelHold, { state: 'start' })
+    emitTransport(AssistantEvents.voice.cancelHold, { state: 'commit' })
     await flushPromises()
 
     expect(streamCancelMock).toHaveBeenCalledTimes(1)
     expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Cancelled')
+    wrapper.unmount()
+  })
+  it('starts a fresh session from an error notice without retrying or accepting stale callbacks', async () => {
+    const wrapper = await mountVoicePanel()
+    const panel = exposed(wrapper)
 
+    panel.startVoiceInput()
+    await flushPromises()
+    const priorCallbacks = callbacksOrThrow()
+    priorCallbacks.onError?.(new Error('socket reset'))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
+
+    panel.toggleVoiceInput()
+    await flushPromises()
+    const currentCallbacks = callbacksOrThrow()
+    expect(currentCallbacks).not.toBe(priorCallbacks)
+    expect(transportStreamMock).toHaveBeenCalledTimes(2)
+    expect(transportSendMock).not.toHaveBeenCalledWith(
+      voiceApiEvents.retryLastFailure,
+      expect.anything()
+    )
+
+    currentCallbacks.onData?.({ type: 'level', rms: 0.4 })
+    priorCallbacks.onError?.(new Error('late stream failure'))
+    priorCallbacks.onEnd?.()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('starts a fresh session from a cancelled notice instead of recovering old audio', async () => {
+    const wrapper = await mountVoicePanel()
+    const panel = exposed(wrapper)
+
+    panel.startVoiceInput()
+    await flushPromises()
+    emitTransport(AssistantEvents.voice.cancelHold, { state: 'commit' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Cancelled')
+
+    panel.toggleVoiceInput()
+    await flushPromises()
+
+    expect(transportStreamMock).toHaveBeenCalledTimes(2)
+    expect(transportSendMock).not.toHaveBeenCalledWith(
+      voiceApiEvents.retryLastFailure,
+      expect.anything()
+    )
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -592,15 +670,13 @@ describe('VoicePanel session control', () => {
 
   it('cancels the owned stream and removes listeners on unmount', async () => {
     const wrapper = await mountVoicePanel()
-    const registeredHandler = transportOnMock.mock.calls[0]?.[1]
 
     exposed(wrapper).startVoiceInput()
     await flushPromises()
     wrapper.unmount()
 
     expect(streamCancelMock).toHaveBeenCalledTimes(1)
-    expect(registeredHandler).toBeTypeOf('function')
-    expect(disposePanelOpenMock).toHaveBeenCalledTimes(1)
+    expect(transportHandlers.size).toBe(0)
   })
 })
 
@@ -751,9 +827,7 @@ describe('VoicePanel recovery and pacing', () => {
     exposed(wrapper).startVoiceInput()
     await flushPromises()
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    vi.advanceTimersByTime(700)
-    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
+    emitTransport(AssistantEvents.voice.cancelHold, { state: 'commit' })
     await nextTick()
 
     expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(true)
@@ -775,9 +849,7 @@ describe('VoicePanel recovery and pacing', () => {
     exposed(wrapper).startVoiceInput()
     await flushPromises()
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    vi.advanceTimersByTime(700)
-    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
+    emitTransport(AssistantEvents.voice.cancelHold, { state: 'commit' })
     await nextTick()
 
     await wrapper.find('[data-testid="voice-recover"]').trigger('click')
@@ -820,12 +892,12 @@ describe('VoicePanel recovery and pacing', () => {
     exposed(wrapper).startVoiceInput()
     await flushPromises()
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    emitTransport(AssistantEvents.voice.cancelHold, { state: 'start' })
     vi.advanceTimersByTime(200)
     await nextTick()
     expect(wrapper.find('.voice-dock--holding').exists()).toBe(true)
 
-    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape' }))
+    emitTransport(AssistantEvents.voice.cancelHold, { state: 'reset' })
     await nextTick()
     expect(wrapper.find('.voice-dock--holding').exists()).toBe(false)
     expect(streamCancelMock).not.toHaveBeenCalled()
@@ -985,6 +1057,25 @@ describe('VoicePanel device readiness and long messages', () => {
   })
 
   /**
+   * A device switch is the one thing the HUD says that is neither a failure nor an instruction,
+   * so it takes the muted tone — and it names the device, because "the microphone changed" and
+   * "you are on the AirPods now" answer different questions.
+   */
+  it('names the microphone when the session opened a different one', async () => {
+    const wrapper = await listeningPanel()
+
+    callbacksOrThrow().onData?.({ type: 'device', name: 'AirPods Pro' })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Using AirPods Pro')
+    expect(wrapper.find('.voice-dock--muted').exists()).toBe(true)
+    // Nothing to act on, so no button — and the wave is gone with the session state.
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
    * The one-line states have to actually get one line.
    *
    * `scrollWidth` is an integer and text is not, so a sentence whose real width is 145.7 reports
@@ -1093,6 +1184,7 @@ describe('VoicePanel device readiness and long messages', () => {
       global: { stubs: { transition: false } }
     })
     await flushPromises()
+    await exposed(wrapper).openPanel()
     ;(wrapper.vm as unknown as { startVoiceInput: () => void }).startVoiceInput()
     await flushPromises()
 

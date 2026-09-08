@@ -19,6 +19,14 @@ export interface AudioCaptureOptions {
 
 export interface AudioCaptureStart {
   sessionId: string
+  /**
+   * Name of the input device this session opened, as the OS reports it.
+   *
+   * Empty string where the platform will not name it. Read once at start: the device a session
+   * records on cannot change under it, so callers compare consecutive sessions to notice a
+   * switch rather than polling this.
+   */
+  deviceName: string
 }
 
 export type AudioStoppedReason = 'manual' | 'max-duration' | 'silence' | 'cancelled'
@@ -73,11 +81,21 @@ export type FunctionKeyEvent
   = | { type: 'down', hasOtherKeys: boolean }
     | { type: 'up' }
     | { type: 'other-key-down' }
-  /** Native monitor fault/backpressure reset; discard any pending Fn gesture. */
+  /** Native monitor fault/backpressure reset; discard pending Fn and Escape holds. */
     | { type: 'reset' }
+  /** Global Escape transition. It is observed but never consumed. */
+    | { type: 'escape-down' }
+  /** Global Escape transition. It is observed but never consumed. */
+    | { type: 'escape-up' }
 
 export interface FunctionKeyMonitorStart {
+  /**
+   * `true` proves a main-thread, Accessibility-authorized native tap was enabled.
+   * It does not prove a physical key reached the Quartz stream; hardware behavior
+   * must be checked with an external downstream probe.
+   */
   active: boolean
+  /** Stable availability reason when `active` is false. */
   reason?: string
 }
 
@@ -115,8 +133,12 @@ export declare function isAccessibilityTrusted(): boolean
 /** Type `text` into the frontmost app (unicode-safe). On macOS without AX trust returns `{ ok:false, reason:'accessibility-required' }`. Never throws. */
 export declare function typeText(text: string): TypeTextResult
 /**
- * macOS-only active Fn event tap. Standalone Fn down/up are consumed to prevent
- * the system Globe action; combination keys pass through and cancel voice gestures.
+ * macOS-only active, head-inserted HID event tap. It observes global Escape
+ * down/up without consuming them. Standalone Fn down/up are consumed; other
+ * key combinations pass through and invalidate the Fn gesture. It fails closed
+ * with `hid-event-tap-registration-failed` rather than silently using a later
+ * session tap. `active` proves installation only; physical Globe/emoji
+ * suppression still requires an Electron downstream hardware probe.
  */
 export declare function startFunctionKeyMonitor(listener: (event: FunctionKeyEvent) => void): FunctionKeyMonitorStart
 /** Stop the active Fn monitor. Safe when no monitor exists. */

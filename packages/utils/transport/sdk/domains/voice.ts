@@ -198,6 +198,14 @@ export interface VoiceTranscribeUploadResult {
 export type VoiceAsrStreamEvent =
   | { type: 'partial'; text: string }
   /**
+   * The capture opened a different input device than the last one did.
+   *
+   * Emitted once, at the start of the session, and only on a change — the first session of a
+   * run has nothing to have switched from, so it says nothing. Carries the name the OS gave the
+   * device so the surface can say which one rather than only that it moved.
+   */
+  | { type: "device"; name: string }
+  /**
    * Captured input level, normalized to 0..1, roughly 10Hz.
    *
    * Only emitted when the request opted in with `emitLevel`. It carries no
