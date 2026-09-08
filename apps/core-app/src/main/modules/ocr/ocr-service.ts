@@ -309,11 +309,12 @@ class OcrService {
         finishReject(new Error(`[OCR Worker] Timeout after ${OCR_WORKER_TIMEOUT_MS}ms`))
       }, OCR_WORKER_TIMEOUT_MS)
 
+      // A terminal message can be posted while native OCR is still unwinding its N-API
+      // completion callback. Let the worker exit naturally instead of terminating that callback.
       worker.once('message', (message: unknown) => {
         const payload =
           message && typeof message === 'object' ? (message as Record<string, unknown>) : null
         if (!payload) {
-          void worker.terminate().catch(() => {})
           finishReject(new Error('[OCR Worker] Invalid worker response payload'))
           return
         }
@@ -323,7 +324,6 @@ class OcrService {
             payload.result && typeof payload.result === 'object'
               ? (payload.result as Record<string, unknown>)
               : {}
-          void worker.terminate().catch(() => {})
           finishResolve({
             text: typeof resultPayload.text === 'string' ? resultPayload.text : '',
             confidence:
@@ -350,7 +350,6 @@ class OcrService {
           typeof payload.error === 'string'
             ? payload.error
             : `[OCR Worker] Unknown worker error for job ${jobId}`
-        void worker.terminate().catch(() => {})
         finishReject(new Error(messageText))
       })
 
