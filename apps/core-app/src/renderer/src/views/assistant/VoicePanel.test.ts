@@ -103,6 +103,8 @@ vi.mock('vue-i18n', () => ({
           'assistant.voicePanel.capturingDevice': 'Opening the microphone…',
           'assistant.voicePanel.usingDevice': 'Using {name}',
           'assistant.voicePanel.voiceRecognitionNotConfigured': 'Speech recognition is not set up',
+          'assistant.voicePanel.voiceRecognitionUnavailable':
+            'Speech recognition channel is unavailable',
           'assistant.voicePanel.openRecognitionSettings': 'Open Intelligence settings',
           'assistant.voicePanel.microphoneUnresponsive': 'The microphone is not responding',
           'assistant.voicePanel.microphoneMissing': 'No microphone available',
@@ -574,6 +576,12 @@ describe('VoicePanel session control', () => {
 
   it.each([
     ['quota', new Error('QUOTA_EXCEEDED'), 'AI credits are used up', 'voice-dock--warning'],
+    [
+      'missing ASR credential',
+      new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE'),
+      'Speech recognition channel is unavailable',
+      'voice-dock--warning'
+    ],
     [
       'high demand',
       new Error('provider overloaded (529)'),
@@ -1221,15 +1229,17 @@ describe('VoicePanel device readiness and long messages', () => {
    * long to read at pill size and long enough to break the card holding it. Icon says which kind
    * of problem, sentence says which problem, button does it.
    */
-  it('turns an unconfigured recogniser into a card with a way out', async () => {
+  it.each([
+    ['VOICE_ASR_NOT_CONFIGURED', 'Speech recognition is not set up'],
+    // The sibling branch, left behind the first time and reported from a real build.
+    ['VOICE_ASR_PROVIDER_UNAVAILABLE', 'Speech recognition channel is unavailable']
+  ])('turns %s into a card with a way out', async (code, expected) => {
     const wrapper = await listeningPanel()
-    callbacksOrThrow().onError?.(new Error('VOICE_ASR_NOT_CONFIGURED'))
+    callbacksOrThrow().onError?.(new Error(code))
     await flushPromises()
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe(
-      'Speech recognition is not set up'
-    )
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe(expected)
     expect(wrapper.find('.voice-dock--icon-card').exists()).toBe(true)
     expect(wrapper.find('[data-testid="voice-notice-icon"]').classes()).toContain(
       'i-carbon-settings-adjust'

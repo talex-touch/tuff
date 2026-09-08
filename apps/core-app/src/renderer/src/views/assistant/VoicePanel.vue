@@ -488,9 +488,8 @@ function classifyFailure(error: unknown): Notice {
       ...(canOpenMicSettings ? { action: 'settings' as const } : {})
     }
 
-  // Same shape as the microphone card, for the same reason: "请在智能设置中配置 ASR 路由" is an
-  // instruction, and an instruction inside a pill is a sentence too long to read at that size.
-  // The icon says which kind of problem, the sentence says which problem, the button does it.
+  // Same compact recovery shape as the microphone card: the status names the recognition issue,
+  // and the action opens the existing Intelligence channel and capability configuration.
   if (/VOICE_ASR_NOT_CONFIGURED/.test(haystack)) {
     return {
       message: t('assistant.voicePanel.voiceRecognitionNotConfigured'),
@@ -500,8 +499,16 @@ function classifyFailure(error: unknown): Notice {
     }
   }
 
-  if (/VOICE_ASR_PROVIDER_UNAVAILABLE/.test(haystack)) {
-    return { message: t('assistant.voicePanel.voiceRecognitionUnavailable'), tone: 'warning' }
+  // The sibling of the branch above, and it was left behind when that one was fixed: same
+  // instruction inside the sentence, same 47 characters breaking the same card. Both routes end
+  // in the same place, so both offer the same button.
+  if (/VOICE_ASR_(?:PROVIDER|CREDENTIAL)_UNAVAILABLE/.test(haystack)) {
+    return {
+      message: t('assistant.voicePanel.voiceRecognitionUnavailable'),
+      tone: 'warning',
+      icon: SETUP_ICON,
+      action: 'asrSettings'
+    }
   }
 
   if (/QUOTA|CREDIT|INSUFFICIENT_BALANCE/.test(haystack))
