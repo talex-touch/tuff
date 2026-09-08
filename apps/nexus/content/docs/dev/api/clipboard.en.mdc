@@ -188,6 +188,24 @@ code: |
 ---
 :::
 
+**previewHistoryImage(id)**
+
+Hand a history image item to the operating system's own previewer (Preview on macOS, the registered default application elsewhere).
+
+Takes a record id rather than a path: the main process resolves the file inside its own clipboard image directory, so a plugin cannot use this to open anything outside it. Returns `false` when the record has no stored image left.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const opened = await clipboard.previewHistoryImage(123)
+  if (!opened) {
+    console.warn('this record has no image left to preview')
+  }
+---
+:::
+
+**Returns**: `boolean`
+
 **readFiles()**
 
 Read file paths from clipboard.

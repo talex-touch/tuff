@@ -41,7 +41,6 @@ const applyPending = ref(false)
 const favoritePending = ref(false)
 const deletePending = ref(false)
 const pageRoot = ref<HTMLElement | null>(null)
-const imageViewerOpen = ref(false)
 const resolvedImageUrls = ref<Record<number, string>>({})
 const resolvingImageIds = ref<Record<number, boolean>>({})
 const resolvedSourceApplications = reactive(new Map<string, ResolvedApplication | null>())
@@ -260,17 +259,6 @@ function handleKeydown(event: KeyboardEvent): void {
     return
   }
 
-  // 浮层开着时它吃掉所有按键：Esc 关自己（不能穿到宿主去关 CoreBox），
-  // 方向键也不该在看不见列表的情况下偷偷移动选中项。
-  if (imageViewerOpen.value) {
-    event.preventDefault()
-    event.stopPropagation()
-    if (event.key === 'Escape') {
-      imageViewerOpen.value = false
-    }
-    return
-  }
-
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
     if (!event.metaKey && !event.ctrlKey) {
       return
@@ -435,7 +423,7 @@ async function handlePrimaryAction(): Promise<void> {
   const action = primaryAction.value
 
   if (action.kind === 'preview-image') {
-    imageViewerOpen.value = true
+    await handlePreviewImage()
     return
   }
 
@@ -472,6 +460,33 @@ async function handleCopyText(value: string): Promise<void> {
 function isPermissionDenied(error: unknown): boolean {
   const code = (error as { code?: unknown } | null)?.code
   return typeof code === 'string' && code.startsWith('SYSTEM_SHELL_PERMISSION_')
+}
+
+/**
+ * 预览交给系统，插件不自己做浮层。
+ *
+ * 自建浮层有个关不掉的毛病：Esc 由宿主在主进程的 `before-input-event` 里拦掉直接退出
+ * UI 模式（`plugin-view-controller.ts`），插件的 DOM 监听根本轮不到。所以「Esc 关闭浮层」
+ * 是个做不到的承诺——用户按下去整个面板就没了。系统预览器（macOS 上是 Quick Look）自己
+ * 处理 Esc，也顺带给了缩放、旋转、分享。
+ *
+ * 传的是记录 id 不是路径，宿主自己在剪贴板图片目录里找文件。
+ */
+async function handlePreviewImage(): Promise<void> {
+  const item = selectedItem.value
+  if (!item || !Number.isFinite(item.id)) {
+    return
+  }
+
+  errorMessage.value = ''
+  try {
+    const opened = await clipboard.previewHistoryImage(Number(item.id))
+    if (!opened) {
+      errorMessage.value = '这条记录没有可预览的原图'
+    }
+  } catch (error) {
+    errorMessage.value = error instanceof Error && error.message ? error.message : '无法打开系统预览'
+  }
 }
 
 async function handleRevealFile(path: string): Promise<void> {
@@ -591,7 +606,6 @@ watch(filter, async () => {
 })
 
 watch(selectedId, async id => {
-  imageViewerOpen.value = false
   if (id === null) {
     return
   }
@@ -659,7 +673,6 @@ watch(
             </button>
           </div>
           <ClipboardDetail
-            v-model:image-viewer-open="imageViewerOpen"
             :item="selectedItem"
             :resolved-image-url="selectedResolvedImageUrl"
             :resolving-image-url="resolvingSelectedImageUrl"

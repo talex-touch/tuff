@@ -51,6 +51,7 @@ function createHandlers(
       limit: 20
     })),
     getImageUrl: vi.fn(async () => ({ url: null })),
+    previewImage: vi.fn(async () => ({ opened: true })),
     queryHistoryByMeta: vi.fn(async () => []),
     apply: vi.fn(async () => ({ success: true })),
     deleteItem: vi.fn(async () => {}),
@@ -179,7 +180,7 @@ describe('clipboard-transport-handlers', () => {
     })
 
     registry.dispose()
-    expect(disposeCallbacks).toHaveLength(16)
+    expect(disposeCallbacks).toHaveLength(17)
     expect(disposeCallbacks.every((dispose) => vi.mocked(dispose).mock.calls.length === 1)).toBe(
       true
     )

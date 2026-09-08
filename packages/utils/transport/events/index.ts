@@ -84,6 +84,8 @@ import type {
   ClipboardItem,
   ClipboardMetaHistoryItem,
   ClipboardMetaQueryRequest,
+  ClipboardPreviewImageRequest,
+  ClipboardPreviewImageResponse,
   ClipboardQueryRequest,
   ClipboardQueryResponse,
   ClipboardReadImageRequest,
@@ -2580,6 +2582,14 @@ export const ClipboardEvents = {
     .module('history')
     .event('image-url')
     .define<ClipboardGetImageUrlRequest, ClipboardGetImageUrlResponse>(),
+
+  /**
+   * Open a stored clipboard image in the operating system's previewer.
+   */
+  previewImage: defineEvent('clipboard')
+    .module('history')
+    .event('preview-image')
+    .define<ClipboardPreviewImageRequest, ClipboardPreviewImageResponse>(),
 
   /**
    * Write content to system clipboard programmatically.

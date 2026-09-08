@@ -188,6 +188,24 @@ code: |
 ---
 :::
 
+**previewHistoryImage(id)**
+
+把历史图片条目交给操作系统自己的预览器打开（macOS 上是「预览」，其他平台是系统注册的默认程序）。
+
+传的是记录 id 而不是路径：主进程自己在剪贴板图片目录里查文件，所以插件无法借此打开目录之外的任何文件。记录里没有可用原图时返回 `false`。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const opened = await clipboard.previewHistoryImage(123)
+  if (!opened) {
+    console.warn('这条记录没有可预览的原图')
+  }
+---
+:::
+
+**返回值**：`boolean`
+
 **readFiles()**
 
 读取剪贴板中的文件路径。
