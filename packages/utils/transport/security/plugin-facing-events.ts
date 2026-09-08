@@ -74,7 +74,7 @@ export const PLUGIN_FACING_EVENTS = [
   AppEvents.system.showInFolder,
   AppEvents.window.show,
 
-  // ClipboardEvents — 15
+  // ClipboardEvents — 16
   ClipboardEvents.apply,
   ClipboardEvents.change,
   ClipboardEvents.clear,
@@ -83,6 +83,7 @@ export const PLUGIN_FACING_EVENTS = [
   ClipboardEvents.delete,
   ClipboardEvents.getHistory,
   ClipboardEvents.getImageUrl,
+  ClipboardEvents.previewImage,
   ClipboardEvents.getLatest,
   ClipboardEvents.getStatus,
   ClipboardEvents.read,

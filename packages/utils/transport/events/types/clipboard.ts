@@ -261,3 +261,18 @@ export interface ClipboardGetImageUrlRequest extends ClipboardSdkApiPayload {
 export interface ClipboardGetImageUrlResponse {
   url: string | null
 }
+
+/**
+ * Hand a stored clipboard image to the operating system's own previewer.
+ *
+ * Identified by record id rather than by path: the caller never names a file, so it cannot
+ * ask the host to open anything outside the clipboard image store.
+ */
+export interface ClipboardPreviewImageRequest extends ClipboardSdkApiPayload {
+  id: number
+}
+
+export interface ClipboardPreviewImageResponse {
+  /** false when the record has no stored file to hand over. */
+  opened: boolean
+}

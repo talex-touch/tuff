@@ -22,15 +22,12 @@ const props = defineProps<{
   resolvedImageUrl?: string | null
   resolvingImageUrl?: boolean
   sourceApplication?: ResolvedApplication | null
-  /** 大图浮层的开合。状态放在容器里，因为按键分派要知道浮层是否正吃着方向键。 */
-  imageViewerOpen?: boolean
 }>()
 
 const emit = defineEmits<{
   (event: 'copyText', value: string): void
   (event: 'openLink', url: string): void
   (event: 'previewFile', file: ClipboardFileNode): void
-  (event: 'update:imageViewerOpen', value: boolean): void
 }>()
 
 const summary = computed(() => (props.item ? getClipboardSummary(props.item) : null))
@@ -204,11 +201,6 @@ function readableTextOn(color: string): string {
   return rgb ? pickReadableForeground(rgb) : 'inherit'
 }
 
-
-/** 浮层只在真有图可放时才认为是打开的，避免出现一块空的黑幕挡住整个面板。 */
-const imageViewerVisible = computed(
-  () => props.imageViewerOpen === true && props.item?.type === 'image' && Boolean(imagePreview.value.src),
-)
 </script>
 
 <template>
@@ -374,18 +366,6 @@ const imageViewerVisible = computed(
       />
 
       <ClipboardMoreInfo :item="item" :palette="palette" @copy-text="value => emit('copyText', value)" />
-    </div>
-
-    <div
-      v-if="imageViewerVisible"
-      class="image-viewer"
-      role="dialog"
-      aria-modal="true"
-      aria-label="图片预览"
-      @click="emit('update:imageViewerOpen', false)"
-    >
-      <img :src="imagePreview.src || undefined" :alt="item ? getClipboardDisplayTitle(item) : ''" class="viewer-img">
-      <span class="viewer-hint">Esc 关闭</span>
     </div>
   </section>
 </template>
@@ -965,37 +945,6 @@ const imageViewerVisible = computed(
 .empty-icon .ClipboardGlyph {
   width: 24px;
   height: 24px;
-}
-
-/**
- * 大图浮层盖住整个详情面板而不是整个窗口：左侧列表要保持可见，
- * 这样按 Esc 之前也知道自己停在哪一条上。
- */
-.image-viewer {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  backdrop-filter: blur(18px) saturate(180%);
-  background: color-mix(in srgb, var(--clipboard-surface-base) 88%, transparent);
-  cursor: zoom-out;
-}
-
-.viewer-img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: 8px;
-}
-
-.viewer-hint {
-  position: absolute;
-  bottom: 12px;
-  color: var(--clipboard-text-muted);
-  font-size: 0.7rem;
 }
 
 /** 关掉展开动画，但保留展开本身——色值仍然要读得到。 */

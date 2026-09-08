@@ -505,6 +505,20 @@ export function useClipboard() {
     },
 
     /**
+     * Hands a stored clipboard image to the operating system's own previewer.
+     *
+     * Quick Look on macOS, the registered default application elsewhere. Takes a record id
+     * rather than a path — the host resolves the file and keeps the lookup inside its own
+     * clipboard image store, so this cannot be pointed at an arbitrary file.
+     *
+     * Resolves false when the record has no stored file to hand over.
+     */
+    async previewHistoryImage(id: number): Promise<boolean> {
+      const res = await transport.send(ClipboardEvents.previewImage, withSdkApiPayload({ id }))
+      return res?.opened === true
+    },
+
+    /**
      * Reads file paths from clipboard.
      */
     async readFiles(): Promise<string[]> {

@@ -8,6 +8,8 @@ import type {
   ClipboardDeleteRequest,
   ClipboardGetImageUrlRequest,
   ClipboardGetImageUrlResponse,
+  ClipboardPreviewImageRequest,
+  ClipboardPreviewImageResponse,
   ClipboardItem,
   ClipboardMetaQueryRequest,
   ClipboardQueryRequest,
@@ -28,7 +30,8 @@ import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
-import { clipboard, powerMonitor } from 'electron'
+import fs from 'node:fs'
+import { clipboard, powerMonitor, shell } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../db/db-write-scheduler'
 import { isStartupDegradeActive } from '../db/startup-degrade'
@@ -1259,6 +1262,41 @@ export class ClipboardModule extends BaseModule {
     return await this.historyPersistence.getImageUrl(request)
   }
 
+  /**
+   * Hand a stored clipboard image to the operating system's previewer.
+   *
+   * Takes a record id, never a path: the caller cannot name a file, so it cannot ask this to
+   * open anything the clipboard store does not own. The path is bounded again on the way out.
+   *
+   * Deliberately `shell.openPath` on every platform, including macOS. `previewFile` (Quick
+   * Look) would be the more native answer, but its panel hangs off a BrowserWindow, and taking
+   * focus blurs CoreBox — which hides itself on blur in UI mode (`core-box/window.ts`). The
+   * preview would take the window it lives in down with it. A separate application does not
+   * care what CoreBox does next.
+   */
+  private async handlePreviewImageRequest(
+    request: ClipboardPreviewImageRequest
+  ): Promise<ClipboardPreviewImageResponse> {
+    const item = await this.getItemById(Number(request?.id))
+    if (!item || item.type !== 'image') return { opened: false }
+
+    const filePath = this.imagePersistence.resolveOwnedImagePath(item.content)
+    if (!filePath) return { opened: false }
+
+    try {
+      await fs.promises.access(filePath, fs.constants.R_OK)
+    } catch {
+      return { opened: false }
+    }
+
+    const error = await shell.openPath(filePath)
+    if (error) {
+      clipboardLog.warn('Failed to hand a clipboard image to the system', { meta: { error } })
+      return { opened: false }
+    }
+    return { opened: true }
+  }
+
   private async handleApplyRequest(
     request: ClipboardApplyRequest,
     context: HandlerContext
@@ -1393,6 +1431,7 @@ export class ClipboardModule extends BaseModule {
       toTransportItem: (item) => this.toTransportItem(item),
       queryClipboardHistory: async (request) => await this.queryClipboardHistory(request),
       getImageUrl: async (request) => await this.handleGetImageUrlRequest(request),
+      previewImage: async (request) => await this.handlePreviewImageRequest(request),
       queryHistoryByMeta: async (request) => await this.queryHistoryByMeta(request),
       apply: async (request, context) => await this.handleApplyRequest(request, context),
       deleteItem: async (request) => {
