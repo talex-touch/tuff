@@ -1049,7 +1049,7 @@
     }
   },
   "voiceInsights": {
-    "headline": "Speak, don't type",
+    "headline": "Faster said than typed",
     "subtitle": "See the aggregate impact of successful voice captures without storing transcripts, audio, app names, or file paths.",
     "sectionTitle": "Insights",
     "loading": "Loading voice insights...",

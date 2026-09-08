@@ -1049,7 +1049,7 @@
     }
   },
   "voiceInsights": {
-    "headline": "说话，不要打字",
+    "headline": "嘴比手利索",
     "subtitle": "只查看成功语音输入的聚合影响，不保存转写文本、音频、应用名称或文件路径。",
     "sectionTitle": "洞察",
     "loading": "正在加载语音洞察…",
