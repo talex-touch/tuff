@@ -745,10 +745,13 @@ export function getClipboardColorTokens(item: PluginClipboardItem | null | undef
   const tokens: ClipboardColorToken[] = []
 
   if (item.type === 'text') {
+    // 只看可见文本，不看 `rawContent`。
+    //
+    // 富文本的 HTML 里带着它的排版：从控制台复制一行日志，标记里就有语法高亮的
+    // `color: #767676`。扫它等于把「这段文字长什么样」当成了「这段文字是什么」，
+    // 于是一个时间戳被归进了「颜色」分类。而 `content` 本身就是富文本的纯文本形式，
+    // 正文里真写了色值的情况它已经覆盖。
     tokens.push(...extractColorTokensFromText(item.content ?? ''))
-    if (item.rawContent) {
-      tokens.push(...extractColorTokensFromText(item.rawContent))
-    }
   }
 
   const likelyColorKeys = [
