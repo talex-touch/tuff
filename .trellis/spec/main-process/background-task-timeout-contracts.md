@@ -133,7 +133,9 @@ posts one terminal success or error message to its parent.
 ### 2. Signatures
 
 ```ts
-type NativeWorkerMessage = { status: 'success'; result: unknown } | { status: 'error'; error: string }
+type NativeWorkerMessage =
+  | { status: 'success'; jobId: number; result: { text: string } }
+  | { status: 'error'; jobId: number; error: string }
 
 worker.once('message', settleFromMessage)
 worker.once('error', rejectFromWorker)
@@ -145,6 +147,9 @@ worker.once('exit', rejectUnexpectedExit)
 - Posting the terminal message does not prove the native completion callback has
   returned. Promise continuations can post to `parentPort` while
   `Napi::AsyncWorker::OnWorkComplete` is still unwinding.
+- Treat `message` as untrusted at the parent boundary. Its `jobId` must equal
+  the one worker-owned job; success requires an object result with string
+  `text`, and error requires a non-empty string `error`.
 - A terminal `message` settles the parent promise but must not call
   `worker.terminate()`. The one-shot worker returns from its entrypoint and exits
   naturally with code 0.
@@ -159,7 +164,7 @@ worker.once('exit', rejectUnexpectedExit)
 | --- | --- |
 | Native success message received | Resolve; no `terminate()`; natural exit |
 | Native error message received | Reject with the projected error; no `terminate()`; natural exit |
-| Malformed terminal message received | Reject as invalid; no immediate `terminate()` |
+| Missing/mismatched job id or malformed terminal payload | Reject as invalid; no immediate `terminate()` |
 | Parent deadline expires before a message | Terminate once; reject with the stable timeout error |
 | Worker exits nonzero before settlement | Reject as worker failure |
 
@@ -177,6 +182,8 @@ worker.once('exit', rejectUnexpectedExit)
 - The parent-worker unit test must observe `terminate()` calls and assert zero
   after a terminal success message; restoring the old immediate termination must
   turn the test red.
+- Cover missing/mismatched `jobId` and missing success `result.text`; neither
+  may persist a false successful job or force-terminate after delivery.
 - A runtime probe must execute the real native worker repeatedly and require a
   terminal result plus natural exit code 0 for every worker.
 - Timeout coverage must still prove that a silent worker is force-terminated.
