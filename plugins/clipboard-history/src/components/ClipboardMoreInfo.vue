@@ -1,6 +1,13 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import {
+  CLIPBOARD_NOTE_MAX_LENGTH,
+  CLIPBOARD_TAG_MAX_LENGTH,
+  CLIPBOARD_TAGS_MAX_COUNT,
+  normalizeClipboardNote,
+  normalizeClipboardTags,
+} from '@talex-touch/utils/clipboard'
 import ClipboardGlyph from './ClipboardGlyph.vue'
 import {
   getClipboardColorTokens,
@@ -19,9 +26,82 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'copyText', value: string): void
+  (event: 'annotate', payload: { note?: string | null; tags?: string[] }): void
 }>()
 
 const expanded = useDisclosureState('moreInfoExpanded')
+
+const noteDraft = ref('')
+const tagDraft = ref('')
+const tagInput = ref<HTMLInputElement | null>(null)
+
+const savedNote = computed(() => props.item?.note ?? '')
+const tags = computed(() => props.item?.userTags ?? [])
+const tagsFull = computed(() => tags.value.length >= CLIPBOARD_TAGS_MAX_COUNT)
+
+// 切换记录时把草稿丢掉。留着上一条的半句备注，下一次失焦就会把它写到别的记录上。
+watch(
+  () => props.item?.id,
+  () => {
+    noteDraft.value = savedNote.value
+    tagDraft.value = ''
+  },
+  { immediate: true },
+)
+
+// 主进程会裁剪、去重、截断，返回的才是真正入库的东西；这里跟着回写，
+// 否则输入框会一直显示一段数据库里并不存在的文字。
+watch(savedNote, value => {
+  noteDraft.value = value
+})
+
+function commitNote(): void {
+  const next = normalizeClipboardNote(noteDraft.value)
+  // 归一化之后和已存的一样就什么都不做：每次失焦都发一次写请求会让 change 流空转。
+  if ((next ?? '') === savedNote.value) {
+    noteDraft.value = savedNote.value
+    return
+  }
+  emit('annotate', { note: next })
+}
+
+function addTag(): void {
+  const [tag] = normalizeClipboardTags([tagDraft.value])
+  if (!tag) {
+    tagDraft.value = ''
+    return
+  }
+  if (tags.value.some(existing => existing.toLowerCase() === tag.toLowerCase())) {
+    tagDraft.value = ''
+    return
+  }
+  if (tagsFull.value) {
+    return
+  }
+
+  emit('annotate', { tags: [...tags.value, tag] })
+  tagDraft.value = ''
+}
+
+function removeTag(tag: string): void {
+  emit('annotate', { tags: tags.value.filter(existing => existing !== tag) })
+}
+
+/** 输入框空着时退格删掉最后一个标签，和常见的标签输入控件一致。 */
+function handleTagBackspace(): void {
+  if (tagDraft.value.length > 0 || tags.value.length === 0) {
+    return
+  }
+  removeTag(tags.value[tags.value.length - 1]!)
+}
+
+async function focusTagInput(): Promise<void> {
+  expanded.value = true
+  await nextTick()
+  tagInput.value?.focus()
+}
+
+defineExpose({ focusTagInput })
 
 interface DetailRow {
   label: string
@@ -102,6 +182,10 @@ const textInsight = computed(() =>
  */
 const summary = computed(() => {
   const names = rows.value.map(row => row.label)
+  // 备注和标签放在最前：它们是这条记录上唯一由人写的东西，收起时也该看得见有没有。
+  if (savedNote.value || tags.value.length > 0) {
+    names.unshift(tags.value.length > 0 ? `标注 · ${tags.value.length} 标签` : '标注')
+  }
   if (fullPalette.value.length > 0) {
     names.push('完整调色板')
   }
@@ -136,6 +220,48 @@ const summary = computed(() => {
         >
           {{ row.value }}
         </button>
+      </div>
+
+      <div class="more-block annotate-block">
+        <span class="more-block-title">标注</span>
+
+        <input
+          v-model="noteDraft"
+          class="note-input"
+          type="text"
+          :maxlength="CLIPBOARD_NOTE_MAX_LENGTH"
+          placeholder="写点备注，比如这个 key 属于哪个项目"
+          @keydown.enter.prevent="commitNote"
+          @keydown.esc.prevent.stop="noteDraft = savedNote"
+          @blur="commitNote"
+        >
+
+        <div class="tag-row">
+          <button
+            v-for="tag in tags"
+            :key="tag"
+            class="tag-chip"
+            type="button"
+            :title="`移除标签 ${tag}`"
+            @click="removeTag(tag)"
+          >
+            {{ tag }}
+            <ClipboardGlyph class="tag-remove" name="close" />
+          </button>
+
+          <input
+            ref="tagInput"
+            v-model="tagDraft"
+            class="tag-input"
+            type="text"
+            :maxlength="CLIPBOARD_TAG_MAX_LENGTH"
+            :disabled="tagsFull"
+            :placeholder="tagsFull ? `最多 ${CLIPBOARD_TAGS_MAX_COUNT} 个标签` : '加标签，回车确认'"
+            @keydown.enter.prevent="addTag"
+            @keydown.delete="handleTagBackspace"
+            @blur="addTag"
+          >
+        </div>
       </div>
 
       <div v-if="fullPalette.length > 0" class="more-block">
@@ -274,6 +400,82 @@ const summary = computed(() => {
 .more-block {
   display: grid;
   gap: 6px;
+}
+
+/* 标注是唯一可写的区块，用一条上分隔线把它和上面只读的键值行分开。 */
+.annotate-block {
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--clipboard-border-color) 40%, transparent);
+}
+
+.note-input {
+  width: 100%;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 60%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--clipboard-surface-base) 86%, transparent);
+  color: var(--clipboard-text-primary);
+  font-size: 0.74rem;
+}
+
+.note-input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--clipboard-color-accent) 60%, transparent);
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px 0 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--clipboard-color-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--clipboard-color-accent) 12%, transparent);
+  color: var(--clipboard-text-primary);
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+
+.tag-chip:hover {
+  border-color: color-mix(in srgb, var(--clipboard-color-accent) 70%, transparent);
+}
+
+.tag-remove {
+  width: 9px;
+  height: 9px;
+  color: var(--clipboard-text-muted);
+}
+
+.tag-input {
+  min-width: 116px;
+  flex: 1 1 116px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px dashed color-mix(in srgb, var(--clipboard-border-color) 70%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--clipboard-text-primary);
+  font-size: 0.7rem;
+}
+
+.tag-input:focus {
+  outline: none;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--clipboard-color-accent) 60%, transparent);
+}
+
+.tag-input:disabled {
+  cursor: not-allowed;
+  color: var(--clipboard-text-muted);
 }
 
 .more-block-title {

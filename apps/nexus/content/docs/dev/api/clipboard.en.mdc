@@ -188,6 +188,29 @@ code: |
 ---
 :::
 
+**history.annotate({ id, note, tags })**
+
+Writes the user's own note and tags onto a history item.
+
+The two fields are independent: sending only `note` leaves the tags alone and vice versa, so an editor for one does not have to hold the other to avoid wiping it. Pass `null` or an empty string to clear the note, an empty array to clear the tags.
+
+Resolves with what was **actually stored** — the main process trims, collapses whitespace, de-duplicates case-insensitively and applies the caps (200 characters for the note, 24 per tag, 12 tags). Render the result rather than the text that was typed.
+
+Annotations live in the record's metadata, which the keyword search already matches, so a tag is searchable as soon as it is written.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const { note, tags } = await clipboard.history.annotate({
+    id: 123,
+    note: 'production key for ego lite',
+    tags: ['prod', 'openai'],
+  })
+---
+:::
+
+**Returns**: `{ updated: boolean, note: string | null, tags: string[] }`. `updated` is `false` when no such record exists.
+
 **previewHistoryImage(id)**
 
 Hand a history image item to the operating system's own previewer (Preview on macOS, the registered default application elsewhere).

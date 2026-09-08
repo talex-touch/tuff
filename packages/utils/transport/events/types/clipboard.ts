@@ -79,6 +79,15 @@ export interface ClipboardItem {
   autoPasteEligible?: boolean
   isFavorite?: boolean
   /**
+   * 用户手写的备注，null / 缺省表示没写。
+   *
+   * 和 `tags` 分开存：`tags` 是分类器在捕获时算出来的产物，用户写的东西混进去会被下一次
+   * 分类覆盖掉。
+   */
+  note?: string | null
+  /** 用户自己打的标签，与分类器产出的 `tags` 互不影响。 */
+  userTags?: string[]
+  /**
    * 这条记录预计被自动删除的时刻，null 表示不会。
    *
    * 由主进程算好下发：它综合了收藏、密钥保护、记录自身的过期时刻和**当前生效的**
@@ -275,4 +284,25 @@ export interface ClipboardPreviewImageRequest extends ClipboardSdkApiPayload {
 export interface ClipboardPreviewImageResponse {
   /** false when the record has no stored file to hand over. */
   opened: boolean
+}
+
+/**
+ * Attach a user's own note and tags to a history record.
+ *
+ * Both fields are optional and independent: omitting one leaves it as it was, so the note can be
+ * edited without resending the tags. Passing `null` for the note clears it, and an empty array
+ * clears the tags.
+ */
+export interface ClipboardAnnotateRequest extends ClipboardSdkApiPayload {
+  id: number
+  note?: string | null
+  tags?: string[]
+}
+
+export interface ClipboardAnnotateResponse {
+  /** false when no record with that id exists. */
+  updated: boolean
+  /** What was actually stored, after trimming, de-duplication and the length caps. */
+  note: string | null
+  tags: string[]
 }

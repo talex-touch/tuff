@@ -467,6 +467,7 @@ describe('ClipboardModule transport registration', () => {
       ClipboardEvents.queryMeta.toString(),
       ClipboardEvents.apply.toString(),
       ClipboardEvents.delete.toString(),
+      ClipboardEvents.annotate.toString(),
       ClipboardEvents.setFavorite.toString(),
       ClipboardEvents.clearHistory.toString(),
       ClipboardEvents.write.toString(),
@@ -672,6 +673,73 @@ describe('ClipboardModule auto-paste failure notification', () => {
       dedupeKey: 'clipboard-auto-paste-failed:MACOS_AUTOMATION_PERMISSION_DENIED',
       system: { silent: false }
     })
+  })
+})
+
+describe('ClipboardModule annotation', () => {
+  type AnnotateModule = {
+    historyPersistence: { annotate: ReturnType<typeof vi.fn> }
+    metaPersistence: {
+      persistMetaEntries: ReturnType<typeof vi.fn>
+      deleteMetaEntries: ReturnType<typeof vi.fn>
+    }
+    handleAnnotateRequest: (request: {
+      id: number
+      note?: string | null
+      tags?: string[]
+    }) => Promise<{ updated: boolean; note: string | null; tags: string[] }>
+  }
+
+  function createAnnotateModule(result: {
+    updated: boolean
+    note: string | null
+    tags: string[]
+  }): AnnotateModule {
+    const module = new ClipboardModule() as unknown as AnnotateModule
+    module.historyPersistence.annotate = vi.fn(async () => result)
+    module.metaPersistence.persistMetaEntries = vi.fn(async () => {})
+    module.metaPersistence.deleteMetaEntries = vi.fn(async () => {})
+    return module
+  }
+
+  /**
+   * The invariant this exists for: meta lives in two places. `clipboard_history.metadata` is what
+   * the keyword search LIKEs, and `clipboard_history_meta` is what `hydrateWithMeta` prefers
+   * whenever the item has rows there. Write only one and the annotation is either searchable but
+   * invisible, or visible but unfindable — and it takes a re-read to notice.
+   */
+  it('mirrors the annotation into the meta table so the two stores agree', async () => {
+    const module = createAnnotateModule({ updated: true, note: 'ego lite', tags: ['prod'] })
+
+    await module.handleAnnotateRequest({ id: 7, note: 'ego lite', tags: ['prod'] })
+
+    expect(module.metaPersistence.persistMetaEntries).toHaveBeenCalledWith(7, {}, [
+      { key: 'user_note', value: 'ego lite' },
+      { key: 'user_tags', value: ['prod'] }
+    ])
+    expect(module.metaPersistence.deleteMetaEntries).toHaveBeenCalledWith(7, [])
+  })
+
+  it('deletes the meta rows for a cleared field instead of writing an empty one', async () => {
+    const module = createAnnotateModule({ updated: true, note: null, tags: ['prod'] })
+
+    await module.handleAnnotateRequest({ id: 8, note: '' })
+
+    // 清掉的键必须删行：persistMetaEntries 写 null 会留下一行 `"null"`，
+    // hydrate 时那仍然是一个"存在的键"，和 JSON 列删键的结果对不上。
+    expect(module.metaPersistence.deleteMetaEntries).toHaveBeenCalledWith(8, ['user_note'])
+    expect(module.metaPersistence.persistMetaEntries).toHaveBeenCalledWith(8, {}, [
+      { key: 'user_tags', value: ['prod'] }
+    ])
+  })
+
+  it('touches neither store when the record is gone', async () => {
+    const module = createAnnotateModule({ updated: false, note: null, tags: [] })
+
+    await module.handleAnnotateRequest({ id: 404, note: 'hi' })
+
+    expect(module.metaPersistence.persistMetaEntries).not.toHaveBeenCalled()
+    expect(module.metaPersistence.deleteMetaEntries).not.toHaveBeenCalled()
   })
 })
 

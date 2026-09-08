@@ -1,5 +1,6 @@
 import type {
   ClipboardActionResult,
+  ClipboardAnnotateResponse,
   ClipboardChangePayload,
   ClipboardCopyAndPasteRequest,
   ClipboardItem,
@@ -100,6 +101,8 @@ function toPluginClipboardItem(item: ClipboardItem | null): PluginClipboardItem 
     sourceApp: typeof item.source === 'string' ? item.source : null,
     timestamp: item.createdAt,
     isFavorite: item.isFavorite ?? null,
+    note: item.note ?? null,
+    userTags: Array.isArray(item.userTags) ? item.userTags : [],
     retentionExpiresAt: item.retentionExpiresAt ?? null,
     retentionReason: item.retentionReason,
     metadata: typeof item.metadata === 'string' ? item.metadata : null,
@@ -258,6 +261,14 @@ export interface ClipboardDeleteOptions {
   id: number
 }
 
+export interface ClipboardAnnotateOptions {
+  id: number
+  /** Omit to leave the note alone; pass `null` or an empty string to clear it. */
+  note?: string | null
+  /** Omit to leave the tags alone; pass an empty array to clear them. */
+  tags?: string[]
+}
+
 export interface ClipboardApplyOptions {
   item?: PluginClipboardItem
   text?: string
@@ -287,6 +298,8 @@ export interface ClipboardCopyAndPasteOptions {
   delayMs?: number
   hideCoreBox?: boolean
 }
+
+export type ClipboardAnnotateResult = ClipboardAnnotateResponse
 
 export type ClipboardSearchOptions = PluginClipboardSearchOptions
 export type ClipboardSearchResponse = PluginClipboardSearchResponse
@@ -351,6 +364,25 @@ export function useClipboard() {
      */
     async deleteItem(options: ClipboardDeleteOptions): Promise<void> {
       await transport.send(ClipboardEvents.delete, withSdkApiPayload(options))
+    },
+
+    /**
+     * Writes the user's own note and tags onto a history item.
+     *
+     * The two fields are independent — sending only `note` leaves the tags untouched — so an
+     * inline editor does not have to hold the other one to avoid wiping it.
+     *
+     * Resolves with what was actually stored: the host trims, de-duplicates and caps both, and
+     * returning the result is what keeps the UI from showing text that is not in the database.
+     */
+    async annotate(options: ClipboardAnnotateOptions): Promise<ClipboardAnnotateResult> {
+      const response = await transport.send(ClipboardEvents.annotate, withSdkApiPayload(options))
+      assertClipboardTransportSuccess(response)
+      return {
+        updated: response?.updated === true,
+        note: typeof response?.note === 'string' ? response.note : null,
+        tags: Array.isArray(response?.tags) ? response.tags : [],
+      }
     },
 
     /**
