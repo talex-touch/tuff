@@ -35,7 +35,7 @@
 
 - Before the install action, the long-running Beta31 source process aborted after a clipboard `vision.ocr` invocation. The minidump resolves the native frames to `tuff_native_ocr.node`, `Napi::AsyncWorker::OnWorkComplete`, and `Napi::Error::ThrowAsJavaScriptException`.
 - The parent called `worker.terminate()` as soon as the one-shot child posted its terminal result, even though the native completion callback could still be unwinding. The fix lets terminal success/error messages settle the promise and leaves forced termination to the pre-message timeout path.
-- Focused CoreApp OCR tests pass `18/18`; the regression turns red when immediate terminal-message termination is restored. A real Electron probe completed 200 native OCR workers with a result and natural exit code 0 for every worker. Beta32 still contains the old lifecycle, so this remains a promotion risk until a later official build carries the fix.
+- Focused CoreApp OCR tests pass `20/20`; the regression turns red when immediate terminal-message termination is restored. A real Electron probe completed 200 native OCR workers with a result and natural exit code 0 for every worker. Beta32 still contains the old lifecycle, so this remains a promotion risk until a later official build carries the fix.
 - This crash is not counted as an OTA transition failure: the persisted `ready` task survived, Beta31 restarted cleanly, and the subsequent handoff reached `healthy`.
 
 ## Evidence Boundary
