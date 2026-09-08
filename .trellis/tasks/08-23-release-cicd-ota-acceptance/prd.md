@@ -6,7 +6,7 @@
 
 ## Confirmed Facts
 
-- 当前真实版本为 `2.4.14-beta.14`；该 tag 的 Windows、macOS arm64/x64 与 Linux 发布产物、签名和公证基线已存在。
+- 当前真实版本为 `2.4.14-beta.32`；该 tag 的 Windows、macOS arm64/x64 与 Linux 发布产物、签名、公证、同 SHA `release-quality` 和生产 Gate E 基线均已通过。
 - `ci.yml` 对 pull request 与 master push 无路径过滤；GitHub `master` 的经典 branch protection 已启用 7 个稳定 required checks，最近 5 个 PR SHA 与最近 6 个 master SHA 均完整产生这些 context。`enforce_admins=true`、conversation resolution 已启用、`strict=false`；唯一 ruleset 仍处于 disabled。脱敏证据见 `evidence/github-remote-baseline.md`。
 - `build-and-release.yml` 已增加同一 SHA 的 `release-quality` 硬依赖；workflow 合同与负向变异证明 build/create/sync 不能绕过失败 gate。
 - 当前工作区包含跨 CoreApp、Nexus、Utils 和三个插件的未提交批次，远端全绿不能证明这批代码可发布。
@@ -17,6 +17,11 @@
 - 本地 Nexus 下载 resolver 已修复 `allowUnsignedFallback=false` 时 `missing-secret` 错误放行：GET/HEAD 现在均 fail-closed 返回 `403`，聚焦回归 `14/14`、Nexus typecheck 与 scoped ESLint 通过。该改动尚未部署，不改变 beta.14 生产 Gate E 的失败结论。
 - beta.14 的远端 release workflow 已在 GitHub-hosted `windows-2022`、`ubuntu-24.04`、`macos-26` runner 完成三平台构建与 packaged-launch smoke；release summary 同时明确 downgrade/OTA 证据仍为 `static-only`，因此该运行不能关闭 AC6/AC7。当前本地新增的 `release-quality` 尚未进入远端 workflow，最近发布运行也没有该 job。
 - Linux packaged updater 的两个源码缺陷已在本地修复：apply helper 进入 `extraResources`，hosted runner 的官方 no-FUSE 环境会跨 helper 继承到更新后重启；脚本不再从 `APPDIR` 猜测模式，AppImage/deb 失败日志也不泄漏完整路径。受控脚本、adapter、handoff 与 workflow tests 全绿，负向变异可拦截配置回退；但尚无包含修复的官方 Linux N -> N+1 runtime 证据，详见 `evidence/linux-packaged-updater-controlled.md`。
+- Beta24 -> Beta25 的新鲜隔离尝试在下载达到约 53% 后因 Nexus signed URL 短时过期返回 HTTP 403 而失败，未进入安装；PR #1873 保留 `fallbackDownloadUrl` 并仅在 403 时恢复同一分块，需随新官方版本复验。证据见 `evidence/macos-ota-beta24-beta25-signed-url-expiry.md`。
+- Beta29 -> Beta30 的新鲜隔离 macOS arm64 OTA 已完成 signed URL 403 fallback、SHA-256 校验、DMG 原位替换、无提权 handoff、Beta30 官方 attestation 和 startup health；但目标进程仍从 workspace 根 package metadata 解析为 Beta29，启动时进入 recovery-required 且未写入 healthy ack，另暴露 release notes catalog 版本不一致。根因是主进程 `polyfills.ts`/`version-util.ts` 读取根 `package.json`，而 Builder 打包的 CoreApp metadata 已是 Beta30；已切换为 `apps/core-app/package.json`，需包含该修复的新官方版本重新执行 AC6。
+- Beta32 的 GitHub release、Nexus latest、manifest v2、四个首选平台资产、签名下载路由与回退路由已收敛；严格生产 Gate E `18/18` 通过，macOS arm64 OTA 下载包 SHA-256 和 detached RSA 签名与 manifest 一致，详见 `evidence/release-matrix-beta32.md`。
+- 官方 macOS arm64 Beta31 -> Beta32 已从隔离 profile 完成发现、下载、校验、Settings UI `Restart to Update`、无提权 helper、DMG 原位替换、Beta32 官方 attestation、startup health 和 attempt-bound `healthy` ack；SQLite 终态 revision 8 / `healthy`，详见 `evidence/macos-ota-beta31-beta32.md`。
+- 同一隔离源进程在安装前的 clipboard `vision.ocr` 成功返回后 abort；minidump 指向 `tuff_native_ocr.node` 的 N-API AsyncWorker 完成路径。根因是父进程在 terminal message 到达时立即 `worker.terminate()`，可能在 native completion callback 尚未退栈时销毁环境；本地已改为 terminal message 后自然退出，聚焦测试 `18/18`、负向变异和 200 个真实 Electron native worker 自然退出 smoke 通过。Beta32 仍含旧实现，修复必须随下一官方版本发布后再解除推广风险。
 
 ## Requirements
 
@@ -36,8 +41,8 @@
 - [x] release 构建明确 `needs` 同 SHA quality gate，且负向测试证明 gate 失败时 build/create-release 不可运行。
 - [x] master required checks 已启用并指向无路径过滤的确定性 job；远端状态有可核对证据。
 - [x] 每个 package CI/publish workflow 与包脚本/依赖一致，关键 package 的 build/typecheck/test 不再软跳过。
-- [ ] 当前发布 tag 的 GitHub/Nexus/latest/manifest/rollback/签名/架构矩阵一致，真实 host 下载 SHA-256 与 manifest/GitHub 一致。
-- [ ] 官方 macOS N/N+1 一键静默替换和 health ack 真机通过，记录 bounded timestamps 与失败恢复状态。
+- [x] 当前发布 tag 的 GitHub/Nexus/latest/manifest/rollback/签名/架构矩阵一致，真实 host 下载 SHA-256 与 manifest/GitHub 一致。
+- [x] 官方 macOS N/N+1 一键静默替换和 health ack 真机通过，记录 bounded timestamps 与失败恢复状态。
 - [ ] Windows/Linux 真实平台 workflow 或宿主 smoke 通过；不能执行的项明确 blocked/static-only，不伪造完成。
 - [ ] actionlint、release acceptance tests、构建前置检查、release summary 和文档同步全部通过。
 
@@ -49,10 +54,10 @@
 | AC2 | pass | 同 SHA release gate 已形成硬依赖，合同测试与负向变异通过。 |
 | AC3 | pass | `master` 已启用 7 个 GitHub Actions required checks；最近 5 个 PR SHA 与最近 6 个 master SHA 均完整产生，失败提交也真实呈现失败或取消。`strict=false` 作为非阻塞限制保留。 |
 | AC4 | pass | tuff-cli CI/publish 假绿已修复，workflow contracts `33/33` 与 CLI tests `6/6` 通过。 |
-| AC5 | partial | 资产、manifest、签名、宿主 macOS 信任通过；生产 Nexus 同源签名下载投影缺失，严格 Gate E 失败。 |
-| AC6 | blocked | beta.13 -> beta.14 在目标 startup health 失败；需官方 post-fix N -> N+1 复验。 |
-| AC7 | blocked | Linux helper 打包、替换/恢复与 no-FUSE 重启源码缺陷已修并通过受控测试；Windows/Linux 远端 release summary 仍为 `static-only`，尚无官方 N/N+1 的发现、下载、替换、handoff 与 health-ack 证据。 |
-| AC8 | partial | actionlint、release checks、本地 `quality:release` 和 Linux updater 聚焦门禁通过，见 `evidence/local-release-preflight.md` 与 `evidence/linux-packaged-updater-controlled.md`；Gate E、新 `release-quality` 的远端运行、跨平台/双版本真机及最终文档收尾未闭环。 |
+| AC5 | pass | Beta32 GitHub/Nexus/latest/manifest/rollback/签名/架构矩阵一致；严格生产 Gate E `18/18`，真实 macOS arm64 下载 SHA-256 与 detached 签名通过。 |
+| AC6 | pass | 官方 Beta31 -> Beta32 完成 ready、Settings UI install、无提权 handoff、原位替换、Beta32 startup health 与 attempt-bound `healthy` ack。 |
+| AC7 | blocked | Linux helper 打包、替换/恢复与 no-FUSE 重启源码缺陷已修并通过受控测试；Windows/Linux 尚无官方 N/N+1 的发现、下载、替换、handoff 与 health-ack 真机证据。 |
+| AC8 | partial | actionlint、release checks、本地 `quality:release`、Beta32 同 SHA `release-quality`、严格 Gate E 和 macOS N/N+1 已通过；Windows/Linux 真机及最终文档收尾未闭环。 |
 
 ## Out of Scope
 

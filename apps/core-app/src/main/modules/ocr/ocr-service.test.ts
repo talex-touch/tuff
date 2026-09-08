@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 const workerMocks = vi.hoisted(() => ({
-  instances: [] as Array<{ workerData: unknown }>
+  instances: [] as Array<{ workerData: unknown; terminateCalls: number }>
 }))
 
 const {
@@ -137,9 +137,11 @@ vi.mock('node:worker_threads', async (importOriginal) => {
     ...actual,
     Worker: class {
       private readonly listeners = new Map<string, (payload: unknown) => void>()
+      private readonly instance: { workerData: unknown; terminateCalls: number }
 
       constructor(_workerPath: string, options: { workerData: unknown }) {
-        workerMocks.instances.push({ workerData: options.workerData })
+        this.instance = { workerData: options.workerData, terminateCalls: 0 }
+        workerMocks.instances.push(this.instance)
         queueMicrotask(() => {
           this.listeners.get('message')?.({ status: 'success', result: { text: 'worker-path' } })
         })
@@ -151,6 +153,7 @@ vi.mock('node:worker_threads', async (importOriginal) => {
       }
 
       terminate() {
+        this.instance.terminateCalls += 1
         return Promise.resolve(0)
       }
     }
@@ -455,7 +458,7 @@ describe('OcrService runAgentJob local-first options', () => {
     }
   })
 
-  it('forwards an unhinted clipboard OCR job to the native worker', async () => {
+  it('lets the worker exit after a success message instead of terminating during N-API completion', async () => {
     const service = ocrService as unknown as OcrServiceTestAccess
 
     const response = await service.invokeWorkerOcr(
@@ -480,6 +483,7 @@ describe('OcrService runAgentJob local-first options', () => {
       options: { language?: string }
     }
     expect(workerData.options.language).toBeUndefined()
+    expect(workerMocks.instances[0]?.terminateCalls).toBe(0)
   })
 
   it('falls back to provider invocation when worker path fails', async () => {
