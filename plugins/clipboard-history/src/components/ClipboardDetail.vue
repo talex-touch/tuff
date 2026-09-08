@@ -171,6 +171,12 @@ function handleSourceIconError(event: Event): void {
   }
 }
 
+/** 色值标签的文字色按底色的对比度算。深色块上写死白字，浅色块上就读不出来了。 */
+function readableTextOn(color: string): string {
+  const rgb = parseColor(color)
+  return rgb ? pickReadableForeground(rgb) : 'inherit'
+}
+
 /** 浮层只在真有图可放时才认为是打开的，避免出现一块空的黑幕挡住整个面板。 */
 const imageViewerVisible = computed(
   () => props.imageViewerOpen === true && props.item?.type === 'image' && Boolean(imagePreview.value.src),
@@ -206,16 +212,18 @@ const imageViewerVisible = computed(
               </span>
             </div>
 
-            <div v-if="palette.length > 0" class="palette-rail" title="主题色 · 点击复制">
+            <div v-if="palette.length > 0" class="palette-rail">
               <button
                 v-for="color in palette"
                 :key="color"
                 class="palette-swatch"
                 type="button"
                 :style="{ backgroundColor: color }"
-                :title="`复制 ${color}`"
+                :aria-label="`复制 ${color}`"
                 @click="emit('copyText', color)"
-              />
+              >
+                <span class="palette-value" :style="{ color: readableTextOn(color) }">{{ color }}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -446,18 +454,82 @@ const imageViewerVisible = computed(
   flex: 0 0 16px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   border-radius: 5px;
   border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 70%, transparent);
 }
 
+/**
+ * 不裁剪：展开的色值标签要溢出到图片上方。
+ * 圆角改由首尾色块自己承担，否则去掉 overflow 之后色块的直角会戳出圆角边框。
+ */
 .palette-swatch {
+  position: relative;
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
   border: 0;
   padding: 0;
   cursor: pointer;
+  background-clip: padding-box;
+}
+
+.palette-swatch:first-child {
+  border-radius: 4px 4px 0 0;
+}
+
+.palette-swatch:last-child {
+  border-radius: 0 0 4px 4px;
+}
+
+/**
+ * 悬浮时向**左**长成药丸，把色值显示在里面。
+ *
+ * 往左溢出是硬要求，不是审美选择：色带是 `.image-block` 这个 flex 行里的
+ * `flex: 0 0 16px` 项，任何改变它布局宽度的做法都会压缩旁边的 `.image-frame`，
+ * 于是鼠标每划过一个色块，整张图片就抖一下。绝对定位让它完全不进入布局计算。
+ *
+ * 背景取 `inherit`：标签和色块同色，展开看起来就是色块自己变宽，而不是弹出一个浮层。
+ */
+.palette-value {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 4px;
+  border-radius: 4px;
+  background: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    width 0.18s ease,
+    opacity 0.14s ease;
+}
+
+.palette-swatch:hover .palette-value,
+.palette-swatch:focus-visible .palette-value {
+  width: 82px;
+  opacity: 1;
+  box-shadow: var(--tx-box-shadow-lighter, 0 1px 6px rgb(0 0 0 / 22%));
+}
+
+/** 展开的那一块要盖住相邻色块和图片，否则药丸会被后面的兄弟节点切掉一角。 */
+.palette-swatch:hover,
+.palette-swatch:focus-visible {
+  z-index: 2;
+}
+
+.palette-swatch:focus-visible {
+  outline: 2px solid var(--clipboard-color-accent);
+  outline-offset: 1px;
 }
 
 .color-canvas {
@@ -870,5 +942,12 @@ const imageViewerVisible = computed(
   bottom: 12px;
   color: var(--clipboard-text-muted);
   font-size: 0.7rem;
+}
+
+/** 关掉展开动画，但保留展开本身——色值仍然要读得到。 */
+@media (prefers-reduced-motion: reduce) {
+  .palette-value {
+    transition: none;
+  }
 }
 </style>
