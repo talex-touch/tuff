@@ -106,14 +106,19 @@ const VOICE_DOCK_WIDTH = 360
 // drawn outside the surface and would otherwise be cut off square by the window edge.
 const VOICE_DOCK_HEIGHT = 148
 /**
- * Air between the dock and the bottom of the work area.
+ * Air between the dock *window* and the bottom of the work area.
  *
- * One number, no reserve for a bar that might slide in: the window sits at the `status` level,
- * above the Dock and the taskbar, so a bar appearing under it cannot bury it. Reserving room
- * for that case instead pushed the HUD a Dock's height up the screen on every machine, whether
- * or not one was ever going to appear.
+ * Not the gap anyone sees: the window is a transparent canvas taller than the pill, and the
+ * pill is centred in it, so what reads as the HUD's distance from the screen edge is this plus
+ * the canvas slack below the pill — 9 + 52 = 61 for the short pill. That total is the number to
+ * reason about; this constant is just the part main controls.
+ *
+ * No reserve for a bar that might slide in: the window sits at the `status` level, above the
+ * Dock and the taskbar, so a bar appearing under it cannot bury it. Reserving room for that
+ * instead pushed the HUD a Dock's height up the screen on every machine, whether or not one was
+ * ever going to appear.
  */
-const VOICE_DOCK_EDGE_GAP = 24
+const VOICE_DOCK_EDGE_GAP = 9
 const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
