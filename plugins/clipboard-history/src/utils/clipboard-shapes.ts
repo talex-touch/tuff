@@ -3,7 +3,6 @@ import type { ClipboardSecretHit } from '@talex-touch/utils/clipboard'
 import { classifyClipboardContent, maskSecretSpans } from '@talex-touch/utils/clipboard'
 import {
   getClipboardColorTokens,
-  getClipboardOcrInsight,
   getClipboardRawTags,
   getClipboardTitle,
   parseFileList,
@@ -26,7 +25,6 @@ export type ClipboardShape =
   | 'favorite'
 
 export type ClipboardInsightKind =
-  | 'ocr'
   | 'link'
   | 'secret'
   | 'command'
@@ -386,7 +384,8 @@ export function classifyClipboardItem(item: PluginClipboardItem): ClipboardShape
 
 /**
  * 洞察区只渲染一个分区。优先级：密钥 > 命令 > 链接 > 颜色 > 文本拆词。
- * 图片先走 OCR，文件不给洞察（预览区的文件树本身就是内容）。
+ * 图片和文件都不给洞察：文件的预览区就是内容本身，而图片的 OCR 正文很长，
+ * 顶在详情区会把图片本身挤出视野——它现在收在「更多信息」里（ClipboardMoreInfo）。
  *
  * 曾经在这之前还有一档 `chars`（把短内容拆成单字符网格）。拆字对任何内容都没有
  * 使用价值——验证码该被识别成验证码，不是被拆成六个数字格——所以整档去掉了。
@@ -398,11 +397,7 @@ export function selectClipboardInsight(
     return 'none'
   }
 
-  if (item.type === 'image') {
-    return getClipboardOcrInsight(item) ? 'ocr' : 'none'
-  }
-
-  if (item.type === 'files') {
+  if (item.type === 'image' || item.type === 'files') {
     return 'none'
   }
 

@@ -185,7 +185,7 @@ describe('insight routing', () => {
     expect(selectClipboardInsight(text('ORD20260906'))).toBe('none')
   })
 
-  it('gives files no insight and images the ocr insight only when ocr exists', () => {
+  it('gives neither files nor images an insight, ocr included', () => {
     const files = { id: 2, type: 'files', content: JSON.stringify(['/a/b.mp4']) } as PluginClipboardItem
     expect(selectClipboardInsight(files)).toBe('none')
 
@@ -198,7 +198,8 @@ describe('insight routing', () => {
       content: '',
       meta: { ocr_status: 'done', ocr_text: 'hi' },
     } as PluginClipboardItem
-    expect(selectClipboardInsight(withOcr)).toBe('ocr')
+    // OCR 搬进「更多信息」之后，洞察区对图片一律不出内容（ClipboardMoreInfo）。
+    expect(selectClipboardInsight(withOcr)).toBe('none')
   })
 })
 

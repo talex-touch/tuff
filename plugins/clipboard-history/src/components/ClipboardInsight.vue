@@ -4,7 +4,6 @@ import { computed, ref, watch } from 'vue'
 import ClipboardGlyph from './ClipboardGlyph.vue'
 import {
   getClipboardColorTokens,
-  getClipboardOcrInsight,
   getClipboardTextInsight,
 } from '~/utils/clipboard-items'
 import { describeContrast, parseColor, toColorFormats } from '~/utils/clipboard-colors'
@@ -33,7 +32,6 @@ const emit = defineEmits<{
 const kind = computed(() => selectClipboardInsight(props.item))
 const textInsight = computed(() => getClipboardTextInsight(props.item))
 const colorTokens = computed(() => getClipboardColorTokens(props.item))
-const ocrInsight = computed(() => getClipboardOcrInsight(props.item))
 const secret = computed(() => detectSecret(props.item?.content))
 const command = computed(() => detectCommand(props.item?.content))
 const links = computed(() => extractLinks(props.item?.content))
@@ -282,38 +280,6 @@ function maskParamValue(value: string): string {
       </div>
       <span v-else class="insight-empty">无可拆分词</span>
     </template>
-
-    <template v-else-if="kind === 'ocr' && ocrInsight">
-      <div class="insight-title">
-        <span>OCR</span>
-        <span class="insight-meta">
-          {{ ocrInsight.statusLabel }}
-          <template v-if="ocrInsight.language"> · {{ ocrInsight.language }}</template>
-          <template v-if="ocrInsight.confidence"> · {{ ocrInsight.confidence }}</template>
-        </span>
-      </div>
-      <button
-        v-if="ocrInsight.displayText"
-        class="ocr-text"
-        type="button"
-        title="复制 OCR 文本"
-        @click="emit('copyText', ocrInsight.displayText)"
-      >
-        {{ ocrInsight.displayText }}
-      </button>
-      <div v-if="ocrInsight.keywords.length > 0" class="keyword-row">
-        <button
-          v-for="keyword in ocrInsight.keywords"
-          :key="keyword"
-          class="keyword-chip"
-          type="button"
-          :title="`复制 ${keyword}`"
-          @click="emit('copyText', keyword)"
-        >
-          {{ keyword }}
-        </button>
-      </div>
-    </template>
   </div>
 </template>
 
@@ -553,8 +519,7 @@ button.kv-value:hover {
   color: var(--clipboard-color-accent);
 }
 
-.word-chip,
-.keyword-chip {
+.word-chip {
   min-width: 22px;
   height: 22px;
   padding: 0 6px;
@@ -568,9 +533,7 @@ button.kv-value:hover {
 }
 
 .word-chip:hover,
-.color-chip:hover,
-.keyword-chip:hover,
-.ocr-text:hover {
+.color-chip:hover {
   border-color: color-mix(in srgb, var(--clipboard-color-accent) 55%, transparent);
   background: color-mix(in srgb, var(--clipboard-color-accent) 10%, transparent);
 }
@@ -633,30 +596,4 @@ button.kv-value:hover {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-.ocr-text {
-  width: 100%;
-  max-height: 92px;
-  margin: 0;
-  padding: 8px;
-  overflow: auto;
-  border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 55%, transparent);
-  background: color-mix(in srgb, var(--clipboard-surface-base) 88%, transparent);
-  color: var(--clipboard-text-primary);
-  cursor: pointer;
-  font-size: 0.76rem;
-  line-height: 1.45;
-  text-align: left;
-  white-space: pre-wrap;
-  word-break: break-word;
-  /* 全局基线是 user-select: none；识别出来的正文是少数该放开的地方。 */
-  user-select: text;
-  -webkit-user-select: text;
-}
-
-.keyword-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
 </style>
