@@ -20,12 +20,12 @@
 ## 验证、文档与人工动作
 
 - **`docs:verify` 当前失败，报告门不可用。** verifier 实测 `DOC-TASK-ACTIVE-COMPLETED=5` 与 `DOC-TASK-META=15`：五个 completed task 仍位于活跃树，另有五个任务缺 `blocker`、`nextAction`、`evidence`。由 [#309](https://github.com/talex-touch/tuff/issues/309) 的 task-governance owner 写入真实状态或归档；不得用占位文本伪造进度。
-- **四项安全/质量检查未能启动。** `pnpm check:prod-audit`、`privacy:inventory:verify`、`check:orphan-tests`、`check:build-allowlist` 和 `plugins:validate` 都在依赖状态检查阶段被 `packages/tuff-native` 的 Node 26 `node-gyp rebuild` 阻断：已有 `build/node_gyp_bins/python3` 时创建同名 symlink 返回 `EEXIST`。这与 [#1843](https://github.com/talex-touch/tuff/issues/1843) 的 Node 26 native rebuild 主题相关但错误形态不同；维护者须复现、判定同根后扩展该 issue 或新建独立 root-cause issue。验证未执行，不应被报告为通过。
+- **五项安全/质量检查未能启动。** `pnpm check:prod-audit`、`privacy:inventory:verify`、`check:orphan-tests`、`check:build-allowlist` 和 `plugins:validate` 都在依赖状态检查阶段被 `packages/tuff-native` 的 Node 26 `node-gyp rebuild` 阻断：已有 `build/node_gyp_bins/python3` 时创建同名 symlink 返回 `EEXIST`。这与 [#1843](https://github.com/talex-touch/tuff/issues/1843) 的 Node 26 native rebuild 主题相关但错误形态不同；维护者须复现、判定同根后扩展该 issue 或新建独立 root-cause issue。验证未执行，不应被报告为通过。
 - **Nexus worker bundle gates 尚未接线。** [#1776](https://github.com/talex-touch/tuff/issues/1776) 仍须先以实际产物解决 gzip/chunk/page budget 与图标规则冲突，再接为阻断 gate；禁止 `continue-on-error`。
 - **路线图需要人工收口任务治理。** 全局顺序文件已指向 release/runtime 再到 search/cross-platform，但 98 个活跃任务中含已完成记录与空元数据，造成 `docs:verify` 失效并掩盖真实阻塞。先完成 #309 的归档/元数据收口，再更新每个 lane 的可执行 owner 与真实设备条件；本报告只更新当前审计入口，不重写任务本地优先级。
 
 ## 本次验证边界
 
-- Drizzle snapshot ratchet 通过，未发现新增 snapshot drift。
+- Drizzle snapshot ratchet：`node scripts/check-drizzle-snapshot-drift.mjs` 退出码为 0，未发现新增 snapshot drift。
 - `mise run docs:verify` 与直接 verifier 均失败，原因如上。
 - 本工作树存在其他所有者的两处未提交测试修改；本报告和推送不包含它们。
