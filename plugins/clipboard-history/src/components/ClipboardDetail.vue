@@ -28,6 +28,7 @@ const emit = defineEmits<{
   (event: 'copyText', value: string): void
   (event: 'openLink', url: string): void
   (event: 'previewFile', file: ClipboardFileNode): void
+  (event: 'annotate', payload: { note?: string | null; tags?: string[] }): void
 }>()
 
 const summary = computed(() => (props.item ? getClipboardSummary(props.item) : null))
@@ -365,7 +366,12 @@ function readableTextOn(color: string): string {
         @open-link="url => emit('openLink', url)"
       />
 
-      <ClipboardMoreInfo :item="item" :palette="palette" @copy-text="value => emit('copyText', value)" />
+      <ClipboardMoreInfo
+        :item="item"
+        :palette="palette"
+        @copy-text="value => emit('copyText', value)"
+        @annotate="payload => emit('annotate', payload)"
+      />
     </div>
   </section>
 </template>

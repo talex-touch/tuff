@@ -75,6 +75,8 @@ import type {
 import type {
   ClipboardActionResult,
   ClipboardApplyRequest,
+  ClipboardAnnotateRequest,
+  ClipboardAnnotateResponse,
   ClipboardChangePayload,
   ClipboardCopyAndPasteRequest,
   ClipboardDeleteRequest,
@@ -2582,6 +2584,14 @@ export const ClipboardEvents = {
     .module('history')
     .event('image-url')
     .define<ClipboardGetImageUrlRequest, ClipboardGetImageUrlResponse>(),
+
+  /**
+   * Attach a user's own note and tags to a history record.
+   */
+  annotate: defineEvent('clipboard')
+    .module('history')
+    .event('annotate')
+    .define<ClipboardAnnotateRequest, ClipboardAnnotateResponse>(),
 
   /**
    * Open a stored clipboard image in the operating system's previewer.

@@ -489,6 +489,37 @@ async function handlePreviewImage(): Promise<void> {
   }
 }
 
+/**
+ * 备注和标签的写入。
+ *
+ * 用主进程返回的结果回填本地那条记录，而不是把用户输入的原文直接塞进去：主进程会裁剪、
+ * 去重、截到上限，乐观更新写回原文的话，界面显示的就是一段数据库里不存在的东西，直到
+ * 下一次刷新才悄悄变样。
+ */
+async function handleAnnotate(payload: { note?: string | null; tags?: string[] }): Promise<void> {
+  const item = selectedItem.value
+  if (!item || !Number.isFinite(item.id)) {
+    return
+  }
+
+  const id = Number(item.id)
+  errorMessage.value = ''
+  try {
+    const result = await clipboard.history.annotate({ id, ...payload })
+    if (!result.updated) {
+      errorMessage.value = '这条记录已经不在了，标注没有保存'
+      return
+    }
+
+    const index = items.value.findIndex(entry => entry.id === id)
+    if (index !== -1) {
+      items.value[index] = { ...items.value[index], note: result.note, userTags: result.tags }
+    }
+  } catch (error) {
+    errorMessage.value = error instanceof Error && error.message ? error.message : '保存标注失败'
+  }
+}
+
 async function handleRevealFile(path: string): Promise<void> {
   errorMessage.value = ''
   try {
@@ -680,6 +711,7 @@ watch(
             @copy-text="handleCopyText"
             @open-link="handleOpenLink"
             @preview-file="file => handleRevealFile(file.path)"
+            @annotate="handleAnnotate"
           />
         </section>
       </div>

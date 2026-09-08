@@ -1,6 +1,8 @@
 import type { AppSetting, MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type {
   ClipboardActionResult,
+  ClipboardAnnotateRequest,
+  ClipboardAnnotateResponse,
   ClipboardApplyRequest,
   ClipboardCaptureSource,
   ClipboardChangePayload,
@@ -43,7 +45,12 @@ import { perfMonitor } from '../utils/perf-monitor'
 import { BaseModule } from './abstract-base-module'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
-import { forecastClipboardRetention } from '@talex-touch/utils/clipboard'
+import {
+  CLIPBOARD_NOTE_METADATA_KEY,
+  CLIPBOARD_TAGS_METADATA_KEY,
+  forecastClipboardRetention,
+  readClipboardAnnotation
+} from '@talex-touch/utils/clipboard'
 import { DEFAULT_PRIVACY_RETENTION_POLICY } from './privacy/retention-policy'
 import { createMainPrivacyRetentionPolicyStore } from './privacy/retention-policy-store'
 import { getPermissionModule } from './permission'
@@ -669,6 +676,8 @@ export class ClipboardModule extends BaseModule {
 
     const value = item.type === 'image' ? (clientItem.content ?? '') : (item.content ?? '')
     const tags = this.extractTags(item)
+    // 用户标注单独取，不并进 `tags`：那份是分类器每次捕获重算的，混在一起下一次就没了。
+    const annotation = readClipboardAnnotation(item.meta)
     const meta: Record<string, unknown> = {}
     if (clientItem.meta && typeof clientItem.meta === 'object') {
       for (const key of [
@@ -714,6 +723,8 @@ export class ClipboardModule extends BaseModule {
       freshnessBaseAt: freshness.freshnessBaseAt,
       autoPasteEligible: freshness.eligible,
       isFavorite: item.isFavorite ?? undefined,
+      note: annotation.note,
+      userTags: annotation.tags,
       retentionExpiresAt: forecast.expiresAt,
       retentionReason: forecast.reason,
       tags,
@@ -1252,6 +1263,37 @@ export class ClipboardModule extends BaseModule {
     await this.historyPersistence.setFavorite(request)
   }
 
+  /**
+   * 写入用户自己的备注和标签。
+   *
+   * 两处存储都要写：`clipboard_history.metadata` 那一列是关键词搜索 LIKE 的对象（标签
+   * 因此立刻可搜），而 `hydrateWithMeta` 在 `clipboard_history_meta` 有行时优先读那张表、
+   * 完全忽略 JSON 列。只写其中一处的话，要么搜得到但显示不出来，要么反过来。
+   */
+  private async handleAnnotateRequest(
+    request: ClipboardAnnotateRequest
+  ): Promise<ClipboardAnnotateResponse> {
+    const result = await this.historyPersistence.annotate(request)
+    if (!result.updated) return result
+
+    const id = Number(request.id)
+    const setEntries: Array<{ key: string; value: unknown }> = []
+    const clearedKeys: string[] = []
+
+    if (result.note === null) clearedKeys.push(CLIPBOARD_NOTE_METADATA_KEY)
+    else setEntries.push({ key: CLIPBOARD_NOTE_METADATA_KEY, value: result.note })
+
+    if (result.tags.length === 0) clearedKeys.push(CLIPBOARD_TAGS_METADATA_KEY)
+    else setEntries.push({ key: CLIPBOARD_TAGS_METADATA_KEY, value: result.tags })
+
+    if (setEntries.length > 0) {
+      await this.metaPersistence.persistMetaEntries(id, {}, setEntries)
+    }
+    await this.metaPersistence.deleteMetaEntries(id, clearedKeys)
+
+    return result
+  }
+
   private async handleDeleteRequest(request: ClipboardDeleteRequest): Promise<void> {
     await this.historyPersistence.deleteItem(request)
   }
@@ -1432,6 +1474,7 @@ export class ClipboardModule extends BaseModule {
       queryClipboardHistory: async (request) => await this.queryClipboardHistory(request),
       getImageUrl: async (request) => await this.handleGetImageUrlRequest(request),
       previewImage: async (request) => await this.handlePreviewImageRequest(request),
+      annotate: async (request) => await this.handleAnnotateRequest(request),
       queryHistoryByMeta: async (request) => await this.queryHistoryByMeta(request),
       apply: async (request, context) => await this.handleApplyRequest(request, context),
       deleteItem: async (request) => {

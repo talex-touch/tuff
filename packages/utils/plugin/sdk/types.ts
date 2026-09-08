@@ -97,6 +97,13 @@ export interface PluginClipboardItem {
   sourceApp?: string | null;
   timestamp?: string | number | Date | null;
   isFavorite?: boolean | null;
+  /** The user's own note on this entry, or null when they have not written one. */
+  note?: string | null;
+  /**
+   * Tags the user typed. Separate from the classifier's `meta.tags`, which is recomputed on every
+   * capture and would overwrite anything a person put there.
+   */
+  userTags?: string[];
   /**
    * When this entry is expected to be deleted automatically, or null if it never will be.
    *

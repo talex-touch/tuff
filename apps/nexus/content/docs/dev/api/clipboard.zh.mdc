@@ -188,6 +188,29 @@ code: |
 ---
 :::
 
+**history.annotate({ id, note, tags })**
+
+给一条历史记录写上用户自己的备注和标签。
+
+两个字段互相独立：只传 `note` 不会动标签，只传 `tags` 不会动备注，所以一个只编辑备注的输入框不必始终持有最新标签。传 `null` 或空字符串清空备注，传空数组清空标签。
+
+返回的是**实际入库**的内容——主进程会去首尾空白、把换行压成空格、按不区分大小写去重、并按上限截断（备注 200 字符，标签 24 字符 / 最多 12 个）。拿返回值回填界面，而不是回填用户输入的原文。
+
+标签和备注写在记录的 metadata 里，而 metadata 已经在关键词搜索的匹配范围内，所以打完标签立刻就能搜到。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const { note, tags } = await clipboard.history.annotate({
+    id: 123,
+    note: 'ego lite 的生产 key',
+    tags: ['prod', 'openai'],
+  })
+---
+:::
+
+**返回值**：`{ updated: boolean, note: string | null, tags: string[] }`，`updated` 为 `false` 表示这条记录已经不存在。
+
 **previewHistoryImage(id)**
 
 把历史图片条目交给操作系统自己的预览器打开（macOS 上是「预览」，其他平台是系统注册的默认程序）。

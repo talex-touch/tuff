@@ -4,6 +4,7 @@ defineProps<{
     | 'arrow-left'
     | 'chevron'
     | 'clipboard'
+    | 'close'
     | 'eye'
     | 'folder'
     | 'image'
@@ -69,6 +70,11 @@ defineProps<{
 
     <template v-else-if="name === 'chevron'">
       <path d="m6 9 6 6 6-6" />
+    </template>
+
+    <template v-else-if="name === 'close'">
+      <path d="M6 6l12 12" />
+      <path d="M18 6 6 18" />
     </template>
 
     <template v-else-if="name === 'star'">
