@@ -295,6 +295,24 @@ onUnmounted(() => {
   min-width: 0;
 }
 
+/*
+ * Compact bar: the brand's second word steps down so "Tuff" leads, on the
+ * same clock as the bar's own collapse. Baseline-aligned rather than centred
+ * once the sizes differ, or the smaller word floats mid-height beside the
+ * larger one.
+ */
+:deep(.IconComposer-Nexus) {
+  transition: font-size 620ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.TuffHeader-Main--scrolled :deep(.IconComposer-Brand) {
+  align-items: baseline;
+}
+
+.TuffHeader-Main--scrolled :deep(.IconComposer-Nexus) {
+  font-size: 1rem;
+}
+
 nav :deep(a) {
   letter-spacing: var(--wm-letter-space-1, 0px);
 }

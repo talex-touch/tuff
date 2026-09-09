@@ -149,7 +149,8 @@ code: |
 | `disabled` | `boolean` | `false` | Disables the native range input and suppresses tooltip display. |
 | `showValue` | `boolean` | `false` | Renders the formatted current value beside the slider. |
 | `formatValue` | `(value: number) => string` | - | Formats the visible side value; also feeds tooltip text when `tooltipFormatter` is absent. |
-| `thumbSurface` | `boolean` | `true` | Always-visible glass pill thumb, built to the same recipe as the sliding indicator of a Radio button group: translucent fill, hairline rim, top highlight, blurring and saturating the fill it sits over; grows slightly while dragging. The native thumb is reduced to a hit area. Pass `false` for a flat disc and to skip the `backdrop-filter` layer. |
+| `thumbSurface` | `boolean` | `true` | Always-visible capsule thumb, borrowed whole from the sliding indicator of a Radio button group: the same 28px-tall capsule, the same 88% overlay fill, hairline rim and top highlight, and the same jelly while dragging (a pop on grab, stretch with speed, a squash on a reversal, at the track ends and on a fast release). The native thumb is reduced to a hit area. Pass `false` for a flat disc. |
+| `thumbVariant` | `'solid' \| 'blur' \| 'glass'` | `'blur'` | The capsule's body, the Radio button group's three `indicatorVariant`s: `solid` is the plain 88% overlay fill; `blur` thins the fill to 22% and frosts the track and fill under it, at rest as well as on drag — the fill's blue showing up through the pill comes from this; `glass` keeps the solid capsule at rest and swaps in the indicator's refractive `TxGlassSurface` while the thumb is held, leaving with the jelly on release. |
 | `showTooltip` | `boolean` | `true` | Enables tooltip rendering when the trigger condition is met. |
 | `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | Controls when the tooltip is visible: while dragging, on hover/drag, or always. |
 | `tooltipFormatter` | `(value: number) => string` | - | Formats tooltip text independently from `formatValue`. |
@@ -186,7 +187,7 @@ code: |
 ## Interaction Contract
 
 - The rendered native range input clamps `modelValue` into the `min..max` range.
-- With `thumbSurface` (the default) the visible thumb is a persistent glass pill (`.tx-slider__surface`) and the native thumb is a hit area as wide as the resting pill; the keyboard focus ring (`:focus-visible`, except for a drag-initiated focus) is drawn on the pill. `thumbSurface=false` returns to the flat disc, and the focus ring returns to it as well.
+- With `thumbSurface` (the default) the visible thumb is a persistent capsule (`.tx-slider__surface`) and the native thumb is a hit area as wide as the capsule; the keyboard focus ring (`:focus-visible`, except for a drag-initiated focus) is drawn on the capsule. `thumbSurface=false` returns to the flat disc, and the focus ring returns to it as well.
 - Native `input` emits `update:modelValue` with the clamped value; native `change` emits `change`.
 - `disabled` blocks value updates and suppresses tooltip rendering.
 - `formatValue` controls the visible side value and is also used for tooltip text when `tooltipFormatter` is absent.
@@ -206,13 +207,13 @@ code: |
 
 - Source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
 - Screenshot: `.codex-screenshots/nexus-slider-release-policy-demo-playwright-2026-05-28.png`.
-- Thumb (2026-09-01): the resting state is the persistent glass pill, on the recipe of the `TxRadioGroup type="button"` indicator; the press bounce is one spring transition (stiffness 560 / damping 34, about 3% overshoot, settled at 362ms) compiled to a static `linear()` inside an `@supports` branch, with a non-overshooting ease-out fallback where `linear()` is unsupported; hover in and out ride a separate short ease-out and never bounce. The replaced design was "white disc + refractive slab fading in on hover + four-keyframe press bounce": two objects taking turns, with the velocity reversing at every keyframe boundary, which was the root of the earlier roughness.
+- Thumb (2026-09-06): the capsule now borrows the `TxRadioGroup type="button"` indicator whole — 36 × 28, 88% overlay fill, 50% rim, 17% top highlight, `0 2px 8px` shadow — with the indicator's three bodies as `thumbVariant`: `solid`, `blur` (default; 22% fill plus an 8px frost, 10px on drag) and `glass` (the indicator's `TxGlassSurface`, mounted while held). It deforms through the indicator's own jelly maths (`jellyScale` plus the `JELLY` constants in `packages/tuffex/packages/utils/animation/jelly.ts`, shared by Radio and Slider): a 1.08 pop for 110ms on grab, a held base of 1.08 on the stiffness 110 / damping 12 spring, stretch from pointer speed, a squash along the track on a reversal, at either end and on a fast release, then the spring carries it home with a 0.97 landing; no deformation under `prefers-reduced-motion`. The previous design (2026-09-01) was a 40 × 20 translucent, blurred capsule with one CSS spring transition compiled to `linear()`; it went because it and the Radio indicator were not one material.
 - Recommendation: sliders should own continuous thresholds only; release traffic, quota ratios, and sampling rates fit here, while risk tiers should use `TxSegmentedSlider`.
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
 - Types: `packages/tuffex/packages/components/src/slider/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` covers display and emitted-value clamping, disabled interaction and tooltip suppression, formatted bottom tooltips, non-transition tooltip rendering, global pointer-listener cleanup, and the pill thumb (rest and hover share one size, drag grows it by at most 1.10×, radius and rim never scale with state, the hit width equals the pill width, the focus ring is appended to the pill's shadow list, no keyframes or disc dissolve remain, and the spring-compiled `linear()` curve is locked verbatim to the `resolveTransition` output).
+- **Verified coverage:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` covers display and emitted-value clamping, disabled interaction and tooltip suppression, formatted bottom tooltips, non-transition tooltip rendering, global pointer-listener cleanup, and the capsule thumb (geometry and recipe locked item by item to the Radio indicator's source: 28px tall, 88% fill, 50% rim, 17% highlight and the same shadow; the three bodies' classes and variables, with `glass` mounted only while held or settling; no size transition, no keyframes; the hit width equals the capsule width; the focus ring is appended to the capsule's shadow list; the jelly scales the capsule through an inline transform after a press, holds 1.08 through a still drag, and removes the transform once the release has settled; no deformation under reduced motion).
 
 <TuffDocSourceLink />

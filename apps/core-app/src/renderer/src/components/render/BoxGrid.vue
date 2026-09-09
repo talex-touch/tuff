@@ -187,6 +187,7 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
             @click="emit('select', sectionData.startIndex + localIndex, item)"
           />
         </div>
+
         <div
           v-else
           class="BoxGrid p-4"

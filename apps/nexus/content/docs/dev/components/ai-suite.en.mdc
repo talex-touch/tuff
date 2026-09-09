@@ -1,5 +1,5 @@
 ---
-title: AI Suite Overview
+title: AI Suite
 description: 19 AI-native interface component showcases adapted from Beautiful UI
 category: AiSuite
 status: beta
@@ -12,6 +12,13 @@ verified: true
 ## Suite Groups
 
 In the components sidebar the AI suite is split into four groups: **Chat** (Chat, ChatComposer, PromptBar, AttachmentTray, MessageActions, SuggestionChips, TypingIndicator, ConversationStream), **Agents** (Agents, AgentTrace, TaskRows, ToolCallCard, ToolChips, ToolConfirmation, ApprovalCard, WorkingIndicator), **Reasoning** (AiElements, ChainOfThought, ReasoningDisclosure, ThinkingOrb, StreamMarkdown, CodeStream, InlineCitation, Sources) and **Context & Insight** (ContextCards, ContextIndicator, InsightCards, RecommendationCard, FineTuneCard). Every component in the suite can be imported through the `@talex-touch/tuffex/ai` category entry.
+
+## Preview
+
+Every cell is a live, interactive component; click the name in the top-left corner to open its documentation.
+
+::DocsComponentsGallery{suite="ai"}
+::
 
 ## Groups at a Glance
 

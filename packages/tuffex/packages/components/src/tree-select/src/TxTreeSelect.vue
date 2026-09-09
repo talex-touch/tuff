@@ -211,6 +211,7 @@ defineExpose({
           <template #item="{ node, level, hasChildren, expanded, selected, toggleExpand, toggleSelect, indent }">
             <TxCardItem
               class="tx-tree-select__item"
+              align="center"
               :class="{ 'is-disabled': node.disabled, 'is-selected': selected }"
               :clickable="!node.disabled"
               :disabled="!!node.disabled"

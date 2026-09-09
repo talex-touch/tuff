@@ -16,8 +16,9 @@ export const DOCS_SUITE_KEYS: DocsSuiteKey[] = ['concepts', 'base', 'pro', 'ai',
 /**
  * Ordered `category` frontmatter values per suite.
  *
- * `concepts` is intentionally empty: its pages (concepts-suite, foundations,
- * utils) render as standalone links rather than category groups.
+ * `concepts` is intentionally empty: its pages (the components index, which
+ * doubles as the Concepts overview, plus foundations and utils) render as
+ * standalone links rather than category groups.
  */
 export const SUITE_CATEGORY_KEYS: Record<DocsSuiteKey, string[]> = {
   concepts: [],
@@ -47,6 +48,7 @@ export const CATEGORY_SUITE_MAP: Record<string, DocsSuiteKey> = {
   Primitives: 'pro',
   Visualization: 'data',
   Charts: 'data',
+  DataSuite: 'data',
   AiSuite: 'ai',
   AiChat: 'ai',
   AiAgent: 'ai',

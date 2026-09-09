@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxFilterChips from '../src/TxFilterChips.vue'
+import txFilterChipsSource from '../src/TxFilterChips.vue?raw'
 
 const items: FilterChipItem[] = [
   { value: 'all', label: 'All', count: 5 },
@@ -340,5 +341,17 @@ describe('txFilterChips active-fill indicator', () => {
     expect(wrapper.classes()).toContain('is-placing')
 
     wrapper.unmount()
+  })
+})
+
+describe('txFilterChips chip padding', () => {
+  it('gives the chip padding enough weight to survive the scope reset', () => {
+    // `@include bui-scope` emits `.tx-bui-filter-chips button { padding: 0 }`
+    // (0,1,1), which outranks the bare `.tx-bui-filter-chips__chip` rule
+    // (0,1,0): the chip rendered with its label flush against the pill edge.
+    // Only the padding is lifted — raising the whole rule would rewrite the
+    // parent of every `&` nested inside it. jsdom applies no CSS, so this is
+    // read from the source.
+    expect(txFilterChipsSource).toMatch(/\.tx-bui-filter-chips \.tx-bui-filter-chips__chip \{[^}]*padding: 0 10px/)
   })
 })

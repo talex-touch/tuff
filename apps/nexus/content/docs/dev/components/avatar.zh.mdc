@@ -154,7 +154,7 @@ code: |
 - 设置 `backgroundColor` 时也会设置 `textColor`；未传 `textColor` 时回退为白色。
 - 只有 `clickable=true` 时才会发出 `click`。
 - 状态点位置按 `shape` 内缩：圆形贴 45° 切点、方形与圆角贴角。根节点不做裁切（裁切由图片与 fallback 层承担），否则状态点会被形状切掉大半。
-- `--tx-avatar-status-size` 是状态点的**外径**（含白色描边），不是描边内侧的直径。
+- `--tx-avatar-status-size` 是状态点的**外径**（含描边），不是描边内侧的直径。状态点与头像组的描边颜色都取 `--tx-avatar-ring`（默认 `--tx-bg-color`，即页面底色），暗色下不再是一圈白边。
 - `TxAvatarGroup` 会保留子节点 props，只给没有自定义 size 的子头像注入 group `size`，并在 `max` 小于子节点数量时渲染 `+N`。
 - 叠放偏移（负 margin 与 `z-index`）由组样式表提供，不再内联注入；子头像上只内联注入 ring 边框与 `--tx-avatar-group-index`。靠内联 `margin-left` / `z-index` 做覆盖的调用方需要改用 CSS 变量。
 - 组内 `z-index` 自左向右递增，所以右侧头像会盖住左侧头像的右下角（包括状态点）；`hoverEffect="lift"` 会把悬浮头像置顶，从而露出被盖住的部分。

@@ -89,6 +89,12 @@ code: |
 - 默认 `variant="picker"` 保持滚轮选择器；`variant="field"` 使用输入框 + 日历网格；`variant="adaptive"` 在桌面宽度切到字段日历，窄屏保留滚轮选择器。
 - `picker` 形态的弹层模式通过 `v-model:visible` 控制；`popup="false"` 会将该形态以内联方式渲染。`field` 形态始终通过 `TxPopover` 渲染，并同步 `update:visible`、`open` 与 `close`。
 - `confirm` 会输出当前格式化日期，并沿用底层 Picker 的关闭行为。滚动列实时变更会同时触发 `update:modelValue` 与 `change`。
+- `field` 日历面板按月历网格排版，而不是按输入框宽度：它关闭了 `matchReferenceWidth`，宽度在 280px 到 360px 之间。此前输入框比网格窄时，最后一列星期会被面板边缘裁掉。网格的 7 列是 `minmax(0, 1fr)`，日历上限为面板的 `100%`，因此宿主把面板固定得更窄时，列会压缩而不是被裁掉。
+- 标题是一个按钮，点击逐级拉远：日期网格 → 月份网格 → 年份区块。选中年份进入该年的月份，选中月份进入该月的日期。左右箭头按当前视图步进——一个月、一年或一个 12 年区块；年份视图两端各留一格暗色年份作为过渡。年份视图已是最上层，标题不再作为控件。
+- 步进时网格按方向滑动，切换层级时原地缩放，选中日期时单元格会落位。以上动效在 `prefers-reduced-motion` 下统一降级为短促淡入淡出。
+- 悬停选中日期时加深其填充，而不是替换：`:hover` 本身优先级高于 `.is-selected`，此前选中态会在指针下消失。
+- `range` 把日历变成两次点击的区间选择。第一次点击确定起点并跟随指针预览区段，第二次点击闭合区间并输出 `[start, end]`；反向点击也会按顺序输出。两端齐全前不会触发任何事件；中途关闭面板会放弃这半个区间，而不是留一端悬着。区间中间的日期带 `is-in-range`，两端带 `is-range-start` / `is-range-end`。
+- 关闭面板会回到日期网格，下次打开从读者预期的位置开始。
 
 ## API
 
@@ -96,7 +102,7 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `string` | `''` | 当前日期，格式为 `YYYY-MM-DD`。空值或非法值会按今天初始化，并在存在 `min` / `max` 时被限制到边界内。 |
+| `modelValue` | `string \| DateRangeValue` | `''` | 当前日期，格式为 `YYYY-MM-DD`；`range` 模式下为 `[start, end]` 数组。空值或非法值会按今天初始化，并在存在 `min` / `max` 时被限制到边界内。 |
 | `visible` | `boolean` | `false` | 通过 `v-model:visible` 控制弹层显示状态。 |
 | `popup` | `boolean` | `true` | 仅控制 `picker` 形态：`true` 使用 `TxPicker` 弹层，`false` 以内联方式渲染。`field` 形态通过 `TxPopover` 渲染。 |
 | `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | 选择渲染形态。`picker` 为滚轮选择器，`field` 为字段日历，`adaptive` 会按视口宽度自动选择。 |
@@ -110,6 +116,8 @@ code: |
 | `cancelText` | `string` | `'Cancel'` | 转发给 `TxPicker` 的取消按钮文案。 |
 | `closeOnClickMask` | `boolean` | `true` | 弹层模式下是否允许点击遮罩关闭。 |
 | `adaptiveBreakpoint` | `number` | `768` | `adaptive` 变体切换到字段日历的最小视口宽度。 |
+| `range` | `boolean` | `false` | 仅 field 日历：选择起止两个日期，`modelValue` 变为 `[start, end]` 数组。滚轮 Picker 没有区间形态，会忽略该属性。 |
+| `rangeSeparator` | `string` | `' → '` | 字段展示值中两个日期之间的分隔文本。 |
 | `weekStartsOn` | `0 \| 1` | `0` | 字段日历周起始日，`0` 为周日，`1` 为周一。 |
 
 ### Events

@@ -228,16 +228,21 @@ describe('Nexus deploy asset budget', () => {
     const faqSource = readFileSync(landingFaqPath, 'utf8')
     const waitlistSource = readFileSync(landingWaitlistPath, 'utf8')
 
+    // Sections that still carry decoration have to inset it on small screens,
+    // or a fixed-size orb pushes the page wider than the viewport.
     expect(ecosystemSource).toContain('w-full max-w-[720px]')
     expect(ecosystemSource).not.toContain('h-[520px] w-[720px]')
     expect(ecosystemSource).toContain('right-0 h-[640px]')
     expect(ecosystemSource).toContain('sm:right-[-240px]')
-    expect(communitySource).toContain('right-0 top-[15%]')
-    expect(communitySource).toContain('sm:right-[-200px]')
     expect(faqSource).toContain('right-0 h-[520px]')
     expect(faqSource).toContain('sm:right-[-240px]')
-    expect(waitlistSource).toContain('right-0 h-[460px]')
-    expect(waitlistSource).toContain('sm:right-[-200px]')
+
+    // Community and Waitlist carry none at all: the blurred orbs, the aurora
+    // bars and the backdrop-blur layer were taken out for their paint cost.
+    // Nothing left to keep inside the viewport, so what this guards now is that
+    // a fixed-size orb does not come back without the inset that made it safe.
+    expect(communitySource).not.toMatch(/h-\[\d+px\] w-\[\d+px\]/)
+    expect(waitlistSource).not.toMatch(/h-\[\d+px\] w-\[\d+px\]/)
   })
 
   it('keeps Content SQL on the Worker boundary without duplicate client payloads', () => {

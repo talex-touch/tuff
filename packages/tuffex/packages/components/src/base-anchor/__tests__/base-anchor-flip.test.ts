@@ -24,7 +24,7 @@ vi.mock('@floating-ui/vue', async (importOriginal) => {
         placement: ref('bottom-start'),
         x: ref(0),
         y: ref(0),
-        strategy: ref('fixed'),
+        strategy: ref('absolute'),
         isPositioned: ref(false),
         update: vi.fn(),
       }
@@ -96,7 +96,9 @@ describe('txBaseAnchor disableFlip', () => {
     // point is that nothing changes them by accident.
     mountAnchor()
 
-    expect(capturedOptions[0]?.strategy).toBe('fixed')
+    // Document-anchored: the panel lives in <body>, so page scroll carries it on
+    // the compositor instead of a per-frame script rewrite trailing the content.
+    expect(capturedOptions[0]?.strategy).toBe('absolute')
     // Composited positioning: the panel is repositioned every frame while it is
     // open, and `left`/`top` would invalidate layout on each one.
     expect(capturedOptions[0]?.transform).toBe(true)

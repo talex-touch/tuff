@@ -82,7 +82,7 @@ code: |
 - `TxCollapseItem` uses `name`, falling back to `title`, then `''` as its identity.
 - Panel headers are native `button type="button"` controls with `aria-expanded` and `aria-controls`.
 - Disabled panel headers set native `disabled`, add the disabled class, and ignore toggles.
-- `arrowIcon` controls the leading `TxIcon`; the arrow rotates when active.
+- `arrowIcon` controls the trailing `TxIcon`; the arrow rotates when active.
 - Content is kept in the DOM and hidden with `v-show`; transition classes animate height.
 - An item outside a `TxCollapse` can render, but its header click has no effect.
 
@@ -109,14 +109,14 @@ code: |
 | `title` | `string` | `undefined` | Header text when no `title` slot is provided. Also used as identity fallback. |
 | `name` | `string` | `undefined` | Unique panel identity. Prefer explicit names. |
 | `disabled` | `boolean` | `false` | Disables header toggling. |
-| `arrowIcon` | `string` | `'chevron-down'` | Leading icon name for the toggle arrow. |
+| `arrowIcon` | `string` | `'chevron-down'` | Icon name for the toggle arrow, which trails the title. |
 
 ### Slots
 
 | Component | Slot | Props | Description |
 |-----------|------|-------|-------------|
 | `TxCollapse` | `default` | none | Collapse items. |
-| `TxCollapseItem` | `title` | none | Custom header content after the arrow icon. |
+| `TxCollapseItem` | `title` | none | Custom header content before the arrow icon. |
 | `TxCollapseItem` | `default` | none | Panel body content. |
 
 ## Best Practices

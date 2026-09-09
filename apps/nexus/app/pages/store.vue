@@ -14,6 +14,8 @@ import type {
   StorePluginSummary,
 } from '~/types/store'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue'
 import StoreItem from '~/components/store/StoreItem.vue'
 import StoreSearch from '~/components/store/StoreSearch.vue'
@@ -126,6 +128,8 @@ const reviewForm = reactive({
 })
 
 const handleSignIn = () => navigateTo('/sign-in')
+const goToDeveloperDocs = () => navigateTo(docsDevLink.value)
+const goToUpdates = () => navigateTo('/updates')
 
 const STORE_PLUGIN_PAGE_SIZE = 50
 
@@ -487,65 +491,51 @@ useSeoMeta({
 </script>
 
 <template>
-  <section class="relative mx-auto max-w-6xl w-full flex flex-col gap-8 px-24 py-20 lg:px-12 sm:px-6">
+  <section class="StorePage">
     <StoreSearch v-model:filter="filters.category" v-model="filters.search" remote :search-debounce="180" class="w-full" @search="applyStoreSearch">
       <template v-if="resultSummary" #result>
         {{ resultSummary }}
       </template>
     </StoreSearch>
 
-    <div
-      v-if="pluginsPending"
-      class="flex items-center justify-center gap-3 border border-primary/20 rounded-3xl border-dashed bg-dark/5 px-6 py-12 text-sm text-black/70 dark:border-light/20 dark:bg-light/5 dark:text-light/70"
-    >
-      <span class="i-carbon-circle-dash animate-spin text-base" aria-hidden="true" />
-      <span>{{ t('dashboard.sections.plugins.loading') }}</span>
+    <!-- Skeleton cards in the grid's own shape, so the list lands without a jump. -->
+    <div v-if="pluginsPending" class="StorePage-Grid" aria-busy="true">
+      <div v-for="index in 4" :key="index" class="StorePage-Skeleton">
+        <TxSkeleton variant="rect" :width="48" :height="48" :radius="14" />
+        <div class="StorePage-SkeletonLines">
+          <TxSkeleton width="42%" :height="14" />
+          <TxSkeleton width="88%" :height="12" />
+          <TxSkeleton width="56%" :height="12" />
+        </div>
+      </div>
     </div>
 
-    <div v-else>
-      <div
+    <div v-else class="StorePage-Results">
+      <TxEmptyState
         v-if="!hasPlugins"
-        class="border border-primary/10 rounded-3xl bg-white/80 px-6 py-12 text-center text-sm text-black/70 shadow-sm dark:border-light/15 dark:bg-dark/30 dark:text-light/80"
-      >
-        <p class="m-0">
-{{ t('store.results.none') }}
-</p>
-        <div class="mt-4 flex flex-wrap items-center justify-center gap-3">
-          <NuxtLink
-            class="inline-flex items-center gap-1.5 rounded-full bg-dark px-3 py-1.5 text-xs text-white font-semibold no-underline dark:bg-light dark:text-dark"
-            :to="docsDevLink"
-          >
-            {{ t('nav.developer') }}
-          </NuxtLink>
-          <NuxtLink
-            class="inline-flex items-center gap-1.5 rounded-full border border-primary/20 px-3 py-1.5 text-xs text-black/70 font-semibold no-underline dark:border-light/20 dark:text-light/80"
-            to="/updates"
-          >
-            {{ t('nav.download') }}
-          </NuxtLink>
-        </div>
-      </div>
-      <div
+        variant="empty"
+        surface="card"
+        size="large"
+        :title="t('store.results.none')"
+        :description="t('store.results.noneHint')"
+        :primary-action="{ label: t('nav.developer'), icon: 'i-carbon-code' }"
+        :secondary-action="{ label: t('nav.download'), variant: 'ghost' }"
+        class="StorePage-Empty"
+        @primary="goToDeveloperDocs"
+        @secondary="goToUpdates"
+      />
+      <TxEmptyState
         v-else-if="!hasResults"
-        class="border border-primary/10 rounded-3xl bg-white/80 px-6 py-12 text-center text-sm text-black/70 shadow-sm dark:border-light/15 dark:bg-dark/30 dark:text-light/80"
-      >
-        <p class="m-0">
-{{ t('store.results.empty') }}
-</p>
-        <div class="mt-4 flex justify-center">
-          <button
-            type="button"
-            class="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-transparent px-3 py-1.5 text-xs text-black/70 font-semibold transition hover:bg-dark/5 dark:border-light/20 dark:text-light/80 dark:hover:bg-light/10"
-            @click="clearStoreFilters"
-          >
-            {{ t('store.results.clearFilters') }}
-          </button>
-        </div>
-      </div>
-      <div
-        v-else
-        class="grid gap-4 md:grid-cols-1 xl:grid-cols-2"
-      >
+        variant="search-empty"
+        surface="card"
+        size="large"
+        :title="t('store.results.empty')"
+        :description="t('store.results.emptyHint')"
+        :primary-action="{ label: t('store.results.clearFilters'), variant: 'ghost', icon: 'i-carbon-filter-remove' }"
+        class="StorePage-Empty"
+        @primary="clearStoreFilters"
+      />
+      <div v-else class="StorePage-Grid">
         <StoreItem
           v-for="plugin in filteredPlugins"
           :key="plugin.id"
@@ -553,7 +543,7 @@ useSeoMeta({
           @view-detail="openPluginDetail"
         />
       </div>
-      <div v-if="canLoadMorePlugins" class="mt-6 flex justify-center">
+      <div v-if="canLoadMorePlugins" class="StorePage-More">
         <TxButton size="small" :loading="pluginsLoadingMore" @click="loadMorePlugins">
           {{ t('store.results.loadMore') }}
         </TxButton>
@@ -837,6 +827,62 @@ useSeoMeta({
 </template>
 
 <style lang="scss">
+.StorePage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+}
+
+.StorePage-Results {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.StorePage-Grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+}
+
+.StorePage-Skeleton {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 1rem;
+  border-radius: 1.5rem;
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 40%, transparent);
+}
+
+.StorePage-SkeletonLines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+/*
+ * The empty state is a card on a rayed, near-black page: a translucent fill
+ * with the theme's overlay colour keeps it a panel rather than a white slab.
+ */
+.StorePage-Empty.tx-empty-state--card {
+  padding-top: 3.5rem;
+  padding-bottom: 3.5rem;
+  border-radius: 1.5rem;
+  border-color: color-mix(in srgb, var(--tx-border-color-lighter, #cbd5e1) 45%, transparent);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 42%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.StorePage-More {
+  display: flex;
+  justify-content: center;
+}
+
 .StoreDetailOverlay-Inner {
   display: flex;
   flex-direction: column;
