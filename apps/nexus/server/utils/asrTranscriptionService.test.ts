@@ -204,3 +204,75 @@ describe('ASR terminal accounting', () => {
     expect(storeMocks.markAsrReleased).not.toHaveBeenCalled()
   })
 })
+
+describe('ASR pre-acceptance rollback', () => {
+  it('releases the request without refunding when the credit debit is rejected before reservation', async () => {
+    const debitRejected = new Error('credit debit rejected')
+    const providerAdapter = adapter({ status: 'pending' })
+    creditsMocks.consumeCredits.mockRejectedValueOnce(debitRejected)
+
+    await expect(startAsrTranscription(
+      {} as never,
+      'user-1',
+      { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+      { adapter: providerAdapter },
+    )).rejects.toBe(debitRejected)
+
+    expect(creditsMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+    expect(storeMocks.markAsrReleased).toHaveBeenCalledWith({}, 'asr-request-1', 'ASR_REQUEST_FAILED')
+    expect(storeMocks.deleteAsrHandoffObject).toHaveBeenCalledWith({}, expect.objectContaining({
+      status: 'released',
+      failureCode: 'ASR_REQUEST_FAILED',
+    }))
+    expect(providerAdapter.submit).not.toHaveBeenCalled()
+  })
+
+  it('compensates exactly once when reserving the request fails after a successful debit', async () => {
+    const reservationFailed = new Error('reserve state persistence failed')
+    const providerAdapter = adapter({ status: 'pending' })
+    storeMocks.markAsrReserved.mockRejectedValueOnce(reservationFailed)
+
+    await expect(startAsrTranscription(
+      {} as never,
+      'user-1',
+      { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+      { adapter: providerAdapter },
+    )).rejects.toBe(reservationFailed)
+
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledTimes(1)
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith({}, 'user-1', 10, 'asr-reservation-release', expect.objectContaining({
+      requestId: 'asr-request-1',
+      failureCode: 'ASR_REQUEST_FAILED',
+    }), { idempotencyKey: 'asr-release:asr-request-1:0' })
+    expect(storeMocks.markAsrReleased).toHaveBeenCalledWith({}, 'asr-request-1', 'ASR_REQUEST_FAILED')
+    expect(storeMocks.deleteAsrHandoffObject).toHaveBeenCalledWith({}, expect.objectContaining({
+      status: 'released',
+      failureCode: 'ASR_REQUEST_FAILED',
+    }))
+    expect(providerAdapter.submit).not.toHaveBeenCalled()
+  })
+
+  it('releases the entire reservation when DashScope rejects submission before task acceptance', async () => {
+    const providerRejected = new DashScopeAsrError('ASR_PROVIDER_REJECTED', false)
+    const providerAdapter = adapter({ status: 'pending' })
+    vi.mocked(providerAdapter.submit).mockRejectedValueOnce(providerRejected)
+
+    await expect(startAsrTranscription(
+      {} as never,
+      'user-1',
+      { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+      { adapter: providerAdapter },
+    )).rejects.toBe(providerRejected)
+
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledTimes(1)
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith({}, 'user-1', 10, 'asr-reservation-release', expect.objectContaining({
+      requestId: 'asr-request-1',
+      failureCode: 'ASR_PROVIDER_REJECTED',
+    }), { idempotencyKey: 'asr-release:asr-request-1:0' })
+    expect(storeMocks.markAsrReleased).toHaveBeenCalledWith({}, 'asr-request-1', 'ASR_PROVIDER_REJECTED')
+    expect(storeMocks.deleteAsrHandoffObject).toHaveBeenCalledWith({}, expect.objectContaining({
+      status: 'released',
+      failureCode: 'ASR_PROVIDER_REJECTED',
+    }))
+  })
+})
