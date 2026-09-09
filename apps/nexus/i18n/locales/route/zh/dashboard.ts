@@ -1437,6 +1437,8 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
         rejectReason: '驳回原因',
         rejectReasonPlaceholder: '请说明驳回此提交的原因（可选）...',
         myPlugins: '我的发布物',
+        allAssets: '全部发布物',
+        viewAdminOnly: '待处理审核与全部发布物仅管理员可见。',
       },
       images: {
         title: '资源库',
