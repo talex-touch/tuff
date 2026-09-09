@@ -10,7 +10,6 @@ import { APP_TOOL_SOURCE_CATALOG_VERSION } from './app-tool-source-catalog'
 import {
   addWatchPathMock,
   appRuntimeApplyDeltaMock,
-  appRuntimeInvalidateRecommendationsMock,
   appRuntimeResetMock,
   appRuntimeScanMock,
   asPrivateProvider,
@@ -852,7 +851,6 @@ describe('appProvider rebuild maintenance', () => {
       scan,
       reconcile,
       applyDelta: vi.fn(async () => undefined),
-      invalidateRecommendations: vi.fn(),
       reset: vi.fn(async (request) => ({
         sourceId: request.sourceId,
         reason: request.reason,
@@ -2692,7 +2690,6 @@ describe('appProvider rebuild maintenance', () => {
         scan: vi.fn(async () => undefined),
         reconcile,
         applyDelta: vi.fn(async () => undefined),
-        invalidateRecommendations: vi.fn(),
         reset: vi.fn(async (request) => ({
           sourceId: request.sourceId,
           reason: request.reason,
@@ -3335,7 +3332,6 @@ describe('appProvider rebuild maintenance', () => {
       privateProvider._recordMissingIconApps = vi.fn(async () => undefined)
       ensureAppIconMock.mockResolvedValue(cachePath)
       appRuntimeApplyDeltaMock.mockClear()
-      appRuntimeInvalidateRecommendationsMock.mockClear()
 
       privateProvider.scheduleAppIconHydration([
         {
@@ -3361,40 +3357,6 @@ describe('appProvider rebuild maintenance', () => {
           appInfo: expect.objectContaining({ path: appPath, icon: cachePath })
         })
       ])
-      expect(appRuntimeApplyDeltaMock).not.toHaveBeenCalled()
-      expect(appRuntimeInvalidateRecommendationsMock).toHaveBeenCalledTimes(1)
-      expect(appRuntimeInvalidateRecommendationsMock).toHaveBeenCalledWith()
-    })
-  })
-
-  it('does not invalidate recommendations when icon hydration resolves no icon', async () => {
-    await withPlatform('darwin', async () => {
-      const { appProvider } = await loadSubject()
-      const privateProvider = asPrivateProvider(appProvider)
-      const appPath = '/Applications/NoIcon.app'
-      privateProvider._recordMissingIconApps = vi.fn(async () => undefined)
-      ensureAppIconMock.mockResolvedValue(null)
-      appRuntimeApplyDeltaMock.mockClear()
-      appRuntimeInvalidateRecommendationsMock.mockClear()
-
-      privateProvider.scheduleAppIconHydration([
-        {
-          name: 'NoIcon',
-          displayName: 'NoIcon',
-          path: appPath,
-          icon: '',
-          bundleId: 'com.example.no-icon',
-          launchKind: 'bundle',
-          launchTarget: appPath,
-          lastModified: new Date('2026-07-27T00:00:00.000Z')
-        }
-      ])
-
-      const hydrationTasks = [...privateProvider.externalMutationTasks]
-      expect(hydrationTasks).toHaveLength(1)
-      await withTimeout(Promise.all(hydrationTasks), 'app icon hydration without icon')
-      expect(ensureAppIconMock).toHaveBeenCalledWith(appPath, 'com.example.no-icon')
-      expect(appRuntimeInvalidateRecommendationsMock).not.toHaveBeenCalled()
       expect(appRuntimeApplyDeltaMock).not.toHaveBeenCalled()
     })
   })
@@ -3559,7 +3521,6 @@ describe('appProvider rebuild maintenance', () => {
       scan: vi.fn(async () => undefined),
       reconcile: vi.fn(async () => undefined),
       applyDelta: vi.fn(async () => undefined),
-      invalidateRecommendations: vi.fn(),
       reset
     })
 
@@ -3619,7 +3580,6 @@ describe('appProvider rebuild maintenance', () => {
         scan: vi.fn(async () => undefined),
         reconcile: vi.fn(async () => undefined),
         applyDelta,
-        invalidateRecommendations: vi.fn(),
         reset: vi.fn(async (request) => ({
           sourceId: request.sourceId,
           reason: request.reason,

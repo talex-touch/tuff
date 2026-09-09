@@ -82,7 +82,6 @@ const appProviderMocks = vi.hoisted(() => {
       scan: vi.fn(async () => undefined),
       reconcile: vi.fn(async () => undefined),
       applyDelta: vi.fn(async (_delta: IndexedSourceDelta) => undefined),
-      invalidateRecommendations: vi.fn(),
       reset: vi.fn(
         async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => ({
           sourceId: request.sourceId,
@@ -125,8 +124,6 @@ export const withSqliteRetryMock = appProviderMocks.withSqliteRetryMock
 export const appRuntimeScanMock = appProviderMocks.runtimeDelegate.scan
 export const appRuntimeReconcileMock = appProviderMocks.runtimeDelegate.reconcile
 export const appRuntimeApplyDeltaMock = appProviderMocks.runtimeDelegate.applyDelta
-export const appRuntimeInvalidateRecommendationsMock =
-  appProviderMocks.runtimeDelegate.invalidateRecommendations
 export const appRuntimeResetMock = appProviderMocks.runtimeDelegate.reset
 
 export function getHarnessLogger(namespace: string): HarnessLogger {
@@ -137,14 +134,12 @@ export function resetAppRuntimeDelegateMocks(): void {
   appRuntimeScanMock.mockReset()
   appRuntimeReconcileMock.mockReset()
   appRuntimeApplyDeltaMock.mockReset()
-  appRuntimeInvalidateRecommendationsMock.mockReset()
   appRuntimeResetMock.mockReset()
   ensureAppIconMock.mockReset()
   ensureAppIconMock.mockResolvedValue(null)
   appRuntimeScanMock.mockResolvedValue(undefined)
   appRuntimeReconcileMock.mockResolvedValue(undefined)
   appRuntimeApplyDeltaMock.mockResolvedValue(undefined)
-  appRuntimeInvalidateRecommendationsMock.mockImplementation(() => undefined)
   appRuntimeResetMock.mockImplementation(
     async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => ({
       sourceId: request.sourceId,
@@ -467,7 +462,6 @@ export async function loadSubject() {
     scan: appRuntimeScanMock,
     reconcile: appRuntimeReconcileMock,
     applyDelta: appRuntimeApplyDeltaMock,
-    invalidateRecommendations: appRuntimeInvalidateRecommendationsMock,
     reset: appRuntimeResetMock
   })
   return subject
@@ -769,7 +763,6 @@ export type AppProviderPrivate = {
       scan: (reason: string) => Promise<unknown>
       reconcile: (reason: string) => Promise<unknown>
       applyDelta: (delta: unknown) => Promise<unknown>
-      invalidateRecommendations: () => void
       reset: (request: {
         sourceId: string
         reason: string
