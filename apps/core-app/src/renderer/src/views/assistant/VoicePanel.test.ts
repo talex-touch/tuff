@@ -1074,6 +1074,46 @@ describe('VoicePanel device readiness and long messages', () => {
   })
 
   /**
+   * The waiting hint's highlight has to live on the characters.
+   *
+   * It used to be a gradient clipped to the paragraph's text, and that stopped painting entirely
+   * once the reveal gave every character its own `filter`: a filtered inline-block composites
+   * separately and leaves the parent's text-clip shape, while the transparent text fill keeps
+   * inheriting into it. The pill widened around a sentence rendered in nothing.
+   *
+   * Scope note: jsdom computes no CSS, so this cannot see the glyphs. What it pins is the
+   * mechanism — a second, evenly stepped delay per character — which is the part that vanished.
+   * The rendering itself was checked in headless Chrome against the old and new rules.
+   */
+  it('phases the waiting hint per character so the highlight travels across it', async () => {
+    const wrapper = await listeningPanel()
+    callbacksOrThrow().onData?.({ type: 'level', rms: 0.4 })
+    await nextTick()
+    exposed(wrapper).stopVoiceInput()
+    vi.advanceTimersByTime(8500)
+    await nextTick()
+
+    const hint = wrapper.find('[data-testid="voice-hint"]')
+    expect(hint.classes()).toContain('voice-dock__text--shimmer')
+
+    const phases = wrapper
+      .findAll('.voice-dock__char')
+      .map((char) =>
+        Number(
+          /animation-delay: [^,]+,\s*(-?\d+)ms/.exec(char.attributes('style') ?? '')?.[1] ?? -1
+        )
+      )
+    expect(phases.length).toBeGreaterThan(2)
+    // A constant step, not the reveal's tightening one: the wave crosses a long sentence at the
+    // same speed it crosses a short one.
+    const step = phases[1]! - phases[0]!
+    expect(step).toBeGreaterThan(0)
+    expect(phases.every((phase, index) => phase === phases[0]! + index * step)).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  /**
    * A device switch is the one thing the HUD says that is neither a failure nor an instruction,
    * so it takes the muted tone — and it names the device, because "the microphone changed" and
    * "you are on the AirPods now" answer different questions.
