@@ -120,10 +120,13 @@ watch(open, (isOpen) => {
           :class="{ active: props.mode === 'review', 'is-full': props.mode === 'full' }"
           type="button"
           :aria-expanded="open"
+          :aria-label="`${t('home.permission')} · ${t(`home.permissionMode.${props.mode}`)}`"
           :title="t(`home.permissionHint.${props.mode}`)"
         >
-          <span :class="pillIcon" />
-          <span>{{ t('home.permission') }} · {{ t(`home.permissionMode.${props.mode}`) }}</span>
+          <span :class="pillIcon" class="HomePermissionMenu-PillIcon" aria-hidden="true" />
+          <span class="HomePermissionMenu-PillLabel">
+            {{ t('home.permission') }} · {{ t(`home.permissionMode.${props.mode}`) }}
+          </span>
         </button>
       </span>
     </template>
@@ -211,10 +214,12 @@ watch(open, (isOpen) => {
 
 .HomePermissionMenu-Pill {
   display: inline-flex;
+  flex: none;
   gap: 6px;
   align-items: center;
   justify-content: center;
   height: 30px;
+  white-space: nowrap;
   padding: 0 12px;
   border: 1px solid var(--shell-border-strong);
   border-radius: var(--shell-radius-full);
@@ -248,6 +253,20 @@ watch(open, (isOpen) => {
     background: var(--shell-danger-soft);
     color: var(--shell-danger);
     font-weight: 500;
+  }
+}
+
+/* The right preview panel and a narrow window both reduce the composer itself. Query that real
+   space instead of the viewport, and keep the current permission state available to assistive
+   technology through the button's aria-label. */
+@container home-composer-tools (max-width: 520px) {
+  .HomePermissionMenu-Pill {
+    width: 30px;
+    padding-inline: 0;
+  }
+
+  .HomePermissionMenu-PillLabel {
+    display: none;
   }
 }
 
