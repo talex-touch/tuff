@@ -22,9 +22,7 @@ const { t } = useI18n()
 const { user } = useAuthUser()
 
 // Admin check - redirect if not admin
-const isAdmin = computed(() => {
-  return user.value?.role === 'admin'
-})
+const { isAdmin } = useAccountRole()
 
 watch(isAdmin, (admin) => {
   if (user.value && !admin) {

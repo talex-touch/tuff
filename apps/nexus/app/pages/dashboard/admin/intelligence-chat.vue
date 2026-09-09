@@ -30,7 +30,7 @@ interface ChatStreamEvent {
 }
 
 const { user, pending, status } = useAuthUser()
-const isAdmin = computed(() => user.value?.role === 'admin')
+const { isAdmin } = useAccountRole()
 // `!isAdmin` is also true before the session resolves, so gating the template on it
 // alone told a signed-in admin they were not allowed in until the profile landed.
 const sessionResolving = computed(() => {

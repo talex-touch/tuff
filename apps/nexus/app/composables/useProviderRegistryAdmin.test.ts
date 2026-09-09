@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Ref } from 'vue'
 import type { ProviderRegistryRecord, SceneRegistryRecord } from '~/utils/provider-registry-admin'
@@ -97,6 +97,7 @@ function installComposableRuntime(role: 'admin' | 'member' = 'admin') {
   lifecycle.mountedCallbacks.splice(0)
   vi.stubGlobal('navigateTo', navigateTo)
   vi.stubGlobal('useAuthUser', () => ({ user }))
+  vi.stubGlobal('useAccountRole', () => ({ isAdmin: computed(() => user.value?.role === 'admin') }))
   vi.stubGlobal('useI18n', () => ({
     t: (key: string, ...args: unknown[]) => {
       const fallback = args.at(-1)

@@ -15,7 +15,7 @@ definePageMeta({
 
 const { t } = useI18n()
 const { user, error: userError, refresh: refreshUser } = useAuthUser()
-const isAdmin = computed(() => user.value?.role === 'admin')
+const { isAdmin } = useAccountRole()
 
 interface ApiKey {
   id: string

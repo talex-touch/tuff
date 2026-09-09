@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 const page = readFileSync(new URL('./[...slug].vue', import.meta.url), 'utf8')
 const docsOutline = readFileSync(new URL('../../components/DocsOutline.vue', import.meta.url), 'utf8')
+const accountRoleComposable = readFileSync(new URL('../../composables/useAccountRole.ts', import.meta.url), 'utf8')
 const docsSidebar = readFileSync(new URL('../../components/DocsSidebar.vue', import.meta.url), 'utf8')
 const docSection = readFileSync(new URL('../../components/docs/DocSection.vue', import.meta.url), 'utf8')
 const docsAsideCards = readFileSync(new URL('../../components/docs/DocsAsideCards.vue', import.meta.url), 'utf8')
@@ -142,10 +143,18 @@ describe('docs page performance boundaries', () => {
   })
 
   it('reads docs admin state without pulling auth composables into the docs setup graph', () => {
-    expect.soft(page).toContain("const authUserState = useState<{ role?: string } | null>('auth-user', () => null)")
-    expect.soft(page).toContain("const isAdmin = computed(() => authUserState.value?.role === 'admin')")
+    // The page reads the role through useAccountRole() now. The contract is
+    // unchanged — what must stay out of the docs setup graph is useAuthUser,
+    // which installs a status watcher and fires a profile request — so the
+    // composable is asserted to be a plain read of the same shared state.
+    expect.soft(page).toContain('const { isAdmin } = useAccountRole()')
     expect.soft(page).not.toContain('useAuthUser({ fetchOnAuth: false, server: false })')
     expect.soft(page).not.toContain('const { user } = useAuthUser')
+
+    expect.soft(accountRoleComposable).toContain("useState<AccountRoleState | null>('auth-user', () => null)")
+    expect.soft(accountRoleComposable).not.toMatch(/^\s*(?:const|await|void).*useAuthUser\(/m)
+    expect.soft(accountRoleComposable).not.toContain('useNexusAuth(')
+    expect.soft(accountRoleComposable).not.toContain('fetchCurrentUserProfile')
 
     expect.soft(appRoot).toContain("const authUserState = useState<AppAuthUserState | null>('auth-user', () => null)")
     expect.soft(appRoot).toContain("const authUserPending = useState<boolean>('auth-user-pending', () => false)")

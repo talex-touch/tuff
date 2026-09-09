@@ -57,12 +57,8 @@ const { user } = useAuthUser()
 
 const { data: teamData, pending: teamPending } = useTypedFetch<TeamSummaryResponse>('/api/dashboard/team')
 
-const isNexusAdmin = computed(() => String(user.value?.role || '').toLowerCase() === 'admin')
-const isTeamAdmin = computed(() => {
-  const team = teamData.value?.team
-  const role = String(team?.role || '').toLowerCase()
-  return team?.type === 'organization' && (role === 'owner' || role === 'admin')
-})
+const { isAdmin: isNexusAdmin } = useAccountRole()
+const { isTeamAdmin } = useTeamRole(() => teamData.value?.team)
 const canManageOauth = computed(() => isNexusAdmin.value || isTeamAdmin.value)
 
 const scopeOptions = computed<Array<{ value: OauthScope, label: string }>>(() => {

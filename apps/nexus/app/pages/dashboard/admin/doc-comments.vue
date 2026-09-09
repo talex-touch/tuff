@@ -21,7 +21,7 @@ const { user } = useAuthUser()
 const toast = useToast()
 const { deviceId } = useDeviceIdentity()
 
-const isAdmin = computed(() => user.value?.role === 'admin')
+const { isAdmin } = useAccountRole()
 
 watch(isAdmin, (admin) => {
   if (user.value && !admin) {
