@@ -82,7 +82,7 @@ code: |
 - `TxCollapseItem` 用 `name` 作为身份，回退到 `title`，再回退到 `''`。
 - 面板标题是原生 `button type="button"`，带有 `aria-expanded` 和 `aria-controls`。
 - 禁用面板标题会设置原生 `disabled`，添加禁用类，并忽略切换。
-- `arrowIcon` 控制前置 `TxIcon`；展开时箭头会旋转。
+- `arrowIcon` 控制标题后置的 `TxIcon`；展开时箭头会旋转。
 - 内容保留在 DOM 中并通过 `v-show` 隐藏；过渡类负责高度动画。
 - item 放在 `TxCollapse` 外部时仍会渲染，但点击标题不会生效。
 
@@ -109,14 +109,14 @@ code: |
 | `title` | `string` | `undefined` | 未提供 `title` 插槽时的标题文本，也会作为身份回退。 |
 | `name` | `string` | `undefined` | 面板唯一身份。建议显式提供。 |
 | `disabled` | `boolean` | `false` | 禁用标题切换。 |
-| `arrowIcon` | `string` | `'chevron-down'` | 切换箭头的前置图标名称。 |
+| `arrowIcon` | `string` | `'chevron-down'` | 切换箭头的图标名称，位于标题之后。 |
 
 ### Slots
 
 | 组件 | 插槽名 | Props | 说明 |
 |------|------|-------|------|
 | `TxCollapse` | `default` | 无 | 折叠面板项。 |
-| `TxCollapseItem` | `title` | 无 | 箭头图标后的自定义标题内容。 |
+| `TxCollapseItem` | `title` | 无 | 箭头图标之前的自定义标题内容。 |
 | `TxCollapseItem` | `default` | 无 | 面板正文内容。 |
 
 ## 最佳实践

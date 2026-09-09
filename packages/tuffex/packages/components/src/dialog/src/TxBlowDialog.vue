@@ -183,6 +183,7 @@ provide('destroy', destroy)
             class="tx-blow-dialog__confirm"
             type="primary"
             native-type="button"
+            block
             @click="destroy"
           >
             {{ confirmText }}
@@ -218,6 +219,8 @@ provide('destroy', destroy)
   justify-content: center;
   align-items: center;
   inset: 0;
+  padding: 24px;
+  box-sizing: border-box;
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(5px);
   transition: opacity 0.5s;
@@ -232,35 +235,51 @@ provide('destroy', destroy)
     }
   }
 
+  // The card. A rimmed overlay surface, not a page-coloured slab: on a dark
+  // page the old `0 8px 32px` black shadow was a smudge around a box the same
+  // colour as the backdrop, and a 200px floor with the button pinned to the
+  // bottom left it hanging 60px under a one-line message. Now the content sets
+  // the height, the rim (border-light, as on every panel) draws the edge, the
+  // highlight catches the top, and the shadow is long, low and ink-tinted so
+  // it reads as depth rather than dirt. 18px radius matches the menu panels.
   &__container {
     position: relative;
     display: flex;
     flex-direction: column;
-    padding: 20px 24px;
-    min-width: 320px;
-    min-height: 200px;
-    max-height: 80%;
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    background: var(--tx-bg-color, #fff);
+    gap: 10px;
+    width: min(360px, 100%);
+    max-height: 100%;
+    // The height comes from the spacing rhythm, not a floor: a floor left a hole between the message and the action.
+    padding: 32px 24px 24px;
+    border-radius: 18px;
+    border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
+    background: var(--tx-bg-color-overlay, #fff);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--tx-color-white, #fff) 10%, transparent),
+      0 24px 64px -20px rgba(15, 23, 42, 0.45),
+      0 2px 8px rgba(15, 23, 42, 0.08);
     box-sizing: border-box;
-    transition: all 0.5s;
+    transition: transform 0.5s, opacity 0.5s;
     animation: tx-blow-dialog-scale 0.5s;
   }
 
+  // Title / message / action: three steps, each one clearly under the last.
   &__title {
-    margin: 0 0 16px;
-    font-size: 1.5rem;
+    margin: 0;
+    font-size: 17px;
     font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
     text-align: center;
     color: var(--tx-text-color-primary, #303133);
   }
 
   &__content {
-    flex: 1;
-    margin-bottom: 60px;
+    margin: 0;
     max-height: 300px;
     overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.55;
 
     span {
       display: block;
@@ -272,11 +291,7 @@ provide('destroy', destroy)
   }
 
   &__confirm {
-    position: absolute;
-    bottom: 20px;
-    left: 24px;
-    right: 24px;
-    width: auto;
+    margin-top: 14px;
   }
 }
 </style>

@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxCardItem from '../src/TxCardItem.vue'
+import cardItemSource from '../src/TxCardItem.vue?raw'
 
 describe('txCardItem', () => {
   it('renders title, subtitle, description, and icon avatar', () => {
@@ -185,5 +186,38 @@ describe('txCardItem', () => {
       'background: var(\n    --tx-card-item-active-bg,\n'
       + '    color-mix(in srgb, var(--tx-color-primary, #409eff) 8%, transparent)\n  );',
     )
+  })
+})
+
+describe('txCardItem active under the pointer', () => {
+  it('keeps the active accent when an active row is hovered', () => {
+    // jsdom applies no stylesheet, so the cascade is read from the source.
+    // `.tx-card-item--clickable:hover` (0,2,0) outranks `.tx-card-item--active`
+    // (0,1,0) on its own, so an active row went neutral under the pointer.
+    const combined = cardItemSource.indexOf('.tx-card-item--clickable.tx-card-item--active:hover')
+    expect(combined).toBeGreaterThan(-1)
+
+    const rule = cardItemSource.slice(combined, cardItemSource.indexOf('}', combined))
+    expect(rule).toContain('--tx-color-primary')
+    // Deeper than the resting active fill (8%), not a neutral overlay.
+    expect(rule).toMatch(/background:[^;]*15%/)
+  })
+})
+
+describe('txCardItem row alignment', () => {
+  it('centres a single-line row and leaves a multi-line card at the top', () => {
+    // A caret or a checkbox beside the label makes the row taller than the text,
+    // and top alignment then pins the label to the top of it.
+    const centred = mount(TxCardItem, { props: { title: 'Appearance', align: 'center' } })
+    expect(centred.classes()).toContain('tx-card-item--center')
+
+    // The default has to stay top-aligned: a card with a description wraps to
+    // several lines and centring those against an avatar looks wrong.
+    const card = mount(TxCardItem, { props: { title: 'Appearance', description: 'Theme and accent' } })
+    expect(card.classes()).not.toContain('tx-card-item--center')
+  })
+
+  it('has the centred rule to go with the class', () => {
+    expect(cardItemSource).toMatch(/\.tx-card-item--center \{[^}]*align-items: center/)
   })
 })

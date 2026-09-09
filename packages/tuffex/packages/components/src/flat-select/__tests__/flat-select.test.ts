@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxFlatSelect from '../src/TxFlatSelect.vue'
 import TxFlatSelectItem from '../src/TxFlatSelectItem.vue'
+import flatSelectSource from '../src/TxFlatSelect.vue?raw'
 
 function mountSelect(props: Record<string, unknown> = {}) {
   return mount(TxFlatSelect, {
@@ -204,5 +205,63 @@ describe('txFlatSelect', () => {
     finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('txFlatSelect settling back onto the trigger', () => {
+  it('fades the panel chrome out while it collapses instead of dropping it in one frame', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountSelect({ modelValue: 'b' })
+    await nextTick()
+
+    await wrapper.find('.tx-flat-select__trigger').trigger('click')
+    await nextTick()
+    const dropdown = wrapper.find('.tx-flat-select__dropdown')
+    expect(dropdown.classes()).toContain('is-visible')
+    expect(dropdown.classes()).not.toContain('is-closing')
+
+    await wrapper.find('.tx-flat-select__trigger').trigger('click')
+    await nextTick()
+    // Still visible, now marked as collapsing: the surface, border, shadow and
+    // the selected row's accent all animate away over the same 200ms, so the
+    // label does not blink as the panel hands back to the trigger.
+    expect(dropdown.classes()).toContain('is-visible')
+    expect(dropdown.classes()).toContain('is-closing')
+
+    vi.advanceTimersByTime(240)
+    await nextTick()
+    expect(dropdown.classes()).not.toContain('is-visible')
+    expect(dropdown.classes()).not.toContain('is-closing')
+
+    vi.useRealTimers()
+    wrapper.unmount()
+  })
+
+  it('stays opaque while it collapses, then fades at the end', () => {
+    // jsdom applies no stylesheet, so the contract is read from the source.
+    // The panel covers the trigger: going translucent mid-travel lets the
+    // trigger's own label show through and the word renders doubled.
+    const closing = flatSelectSource.slice(flatSelectSource.indexOf('&.is-closing'))
+    const panelBody = closing.slice(0, closing.indexOf(':deep('))
+    expect(panelBody).toContain('opacity: 0')
+    expect(panelBody).not.toContain('background: transparent')
+
+    // Delayed, so the fade only runs once the collapse is nearly done.
+    expect(flatSelectSource).toMatch(/opacity 0\.07s ease 0\.17s/)
+  })
+
+  it('drops the selected row to the trigger\'s own appearance before handing over', () => {
+    // The handover reads as instant only if there is nothing left to change at
+    // the moment it happens: the row sheds its accent, fill and tick over the
+    // first half of the collapse, so the label underneath is already identical.
+    const closing = flatSelectSource.slice(flatSelectSource.indexOf('&.is-closing'))
+    const rowRule = closing.slice(closing.indexOf('.tx-flat-select-item.is-selected'))
+
+    expect(rowRule).toContain('color: var(--tx-text-color-primary')
+    expect(rowRule).toContain('background: transparent')
+    expect(rowRule).toMatch(/__check\)? \{[^}]*opacity: 0/)
+
+    // The row finishes changing well before the panel gives way.
+    expect(rowRule).toMatch(/color 0\.14s ease/)
   })
 })

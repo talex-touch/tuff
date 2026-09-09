@@ -49,41 +49,6 @@
   line-height: 1.4;
 }
 
-/* Echoes the sidebar's underlined suite tabs (Basics / Advanced / AI). */
-.docs-gallery__suite {
-  display: flex;
-  align-items: baseline;
-  gap: 18px;
-  padding: 18px 20px 14px;
-  border-top: 1px solid var(--docs-gallery-line);
-  /* Keeps the tab row visible below the fixed site header when a suite tab
-     scrolls its section into view. */
-  scroll-margin-top: 90px;
-}
-
-.docs-gallery__suite-tab {
-  padding: 0 0 6px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--docs-muted);
-  cursor: pointer;
-  transition: color 0.18s ease;
-}
-
-.docs-gallery__suite-tab.is-active {
-  color: inherit;
-  border-bottom-color: currentcolor;
-}
-
-.docs-gallery__suite-tab:not(.is-active):hover {
-  color: var(--docs-accent);
-}
-
 .docs-gallery__install {
   display: inline-flex;
   align-items: center;

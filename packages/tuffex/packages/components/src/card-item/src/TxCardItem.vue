@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<CardItemProps>(), {
   active: false,
   disabled: false,
   tabindex: undefined,
+  align: 'start',
 })
 
 const emit = defineEmits<{
@@ -66,6 +67,7 @@ const avatarStyle = computed(() => {
       'tx-card-item--active': active,
       'tx-card-item--disabled': disabled,
       'tx-card-item--no-left': !($slots.avatar || avatarUrl || iconClass || avatarText),
+      'tx-card-item--center': align === 'center',
     }"
     :role="role"
     :tabindex="tabindex !== undefined ? tabindex : ((clickable && !disabled) ? 0 : undefined)"
@@ -142,6 +144,12 @@ const avatarStyle = computed(() => {
   pointer-events: none;
 }
 
+/* A single-line row: without this the label sits at the top of a row made
+   taller by a caret or a checkbox beside it, and reads as unaligned. */
+.tx-card-item--center {
+  align-items: center;
+}
+
 .tx-card-item--clickable {
   cursor: pointer;
 }
@@ -169,6 +177,15 @@ const avatarStyle = computed(() => {
     --tx-card-item-active-bg,
     color-mix(in srgb, var(--tx-color-primary, #409eff) 8%, transparent)
   );
+}
+
+/* Hovering an active row deepens the accent instead of trading it for the
+   neutral hover fill. `--clickable:hover` alone outranks `--active`, so an
+   active row lost its highlight under the pointer — which is exactly when a
+   cascader branch or a selected list row most needs to stay legible. */
+.tx-card-item--clickable.tx-card-item--active:hover {
+  border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 58%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 15%, transparent);
 }
 
 .tx-card-item--clickable:active {

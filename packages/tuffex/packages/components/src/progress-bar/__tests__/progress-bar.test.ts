@@ -156,33 +156,30 @@ describe('txProgressBar gradient fill and tip glow', () => {
     expect((wrapper.element as HTMLElement).style.getPropertyValue('--tx-progress-shadow-color')).toBe('')
   })
 
-  it('places the glow beside the track, outside the clipped box, sharing its containing block', () => {
+  it('puts the head light inside the fill, so it is clipped to the filled part', () => {
     const wrapper = mount(TxProgressBar, { props: { percentage: 40 } })
     const glow = wrapper.find('.tx-progress-bar__glow')
 
     expect(glow.exists()).toBe(true)
-    expect(glow.attributes('aria-hidden')).toBe('true')
     expect(glow.classes()).toContain('is-visible')
-    expect(wrapper.find('.tx-progress-bar__track .tx-progress-bar__glow').exists()).toBe(false)
 
-    // The glow's percentage `left` must resolve against a box that spans
-    // exactly the track: under the outside placement the wrapper is wider
-    // than the track by the label and its gap.
-    const body = glow.element.parentElement
-    expect(body?.classList.contains('tx-progress-bar__body')).toBe(true)
-    expect(body?.parentElement).toBe(wrapper.element)
-    expect(wrapper.find('.tx-progress-bar__track').element.parentElement).toBe(body)
+    // The parent is the fill, not the body: a light that is a sibling of the
+    // fill blooms past the tip and above and below the bar, which is what this
+    // replaced. The fill is the only box whose right edge is the progress.
+    const fill = glow.element.parentElement
+    expect(fill?.classList.contains('tx-progress-bar')).toBe(true)
+    expect(fill?.parentElement?.classList.contains('tx-progress-bar__track')).toBe(true)
+    expect(wrapper.find('.tx-progress-bar__body > .tx-progress-bar__glow').exists()).toBe(false)
   })
 
-  it('places the glow beside the track in the tooltip-wrapped template too', () => {
+  it('puts the head light inside the fill in the tooltip-wrapped template too', () => {
     const wrapper = mount(TxProgressBar, { props: { percentage: 40, tooltip: true } })
     const glow = wrapper.find('.tx-progress-bar__glow')
 
     expect(glow.exists()).toBe(true)
     expect(glow.classes()).toContain('is-visible')
-    expect(glow.element.parentElement?.classList.contains('tx-progress-bar__body')).toBe(true)
-    expect(glow.element.parentElement?.parentElement?.classList.contains('tx-progress-bar-wrapper')).toBe(true)
-    expect(wrapper.find('.tx-progress-bar__track .tx-progress-bar__glow').exists()).toBe(false)
+    expect(glow.element.parentElement?.classList.contains('tx-progress-bar')).toBe(true)
+    expect(wrapper.find('.tx-progress-bar__body > .tx-progress-bar__glow').exists()).toBe(false)
   })
 
   it('keeps the glow mounted but invisible at both ends so its position transitions with the fill', () => {
@@ -215,6 +212,86 @@ describe('txProgressBar gradient fill and tip glow', () => {
 
     await wrapper.setProps({ percentage: 100 })
     expect(wrapper.find('.tx-progress-bar__glow').classes()).not.toContain('is-visible')
+  })
+})
+
+describe('txProgressBar stardust flow', () => {
+  it('classes the fill for stardust and treats particles as its alias', () => {
+    const stardust = mount(TxProgressBar, { props: { percentage: 40, flowEffect: 'stardust' } })
+    expect(stardust.find('.tx-progress-bar').classes()).toContain('tx-progress-bar--flow-stardust')
+
+    const particles = mount(TxProgressBar, { props: { percentage: 40, flowEffect: 'particles' } })
+    expect(particles.find('.tx-progress-bar').classes()).toContain('tx-progress-bar--flow-stardust')
+    expect(particles.find('.tx-progress-bar').classes()).not.toContain('tx-progress-bar--flow-particles')
+  })
+
+  it('draws no flow overlay over segments or while indeterminate', () => {
+    const segmented = mount(TxProgressBar, {
+      props: { segments: [{ value: 20 }, { value: 30 }], flowEffect: 'stardust' },
+    })
+    expect(segmented.find('.tx-progress-bar').classes().some(c => c.startsWith('tx-progress-bar--flow-'))).toBe(false)
+
+    const busy = mount(TxProgressBar, { props: { indeterminate: true, flowEffect: 'stardust' } })
+    expect(busy.find('.tx-progress-bar').classes().some(c => c.startsWith('tx-progress-bar--flow-'))).toBe(false)
+  })
+
+  it('keeps the tip glow for a gradient colour and turns it white', () => {
+    const gradient = mount(TxProgressBar, {
+      props: { percentage: 40, color: 'linear-gradient(90deg, #3b82f6, #a855f7)' },
+    })
+    const style = gradient.element as HTMLElement
+
+    expect(gradient.find('.tx-progress-bar__glow').exists()).toBe(true)
+    expect(gradient.find('.tx-progress-bar__glow').classes()).toContain('is-visible')
+    expect(style.style.getPropertyValue('--tx-progress-glow')).toBe('#fff')
+    // No single hue to colour the head label with either: it falls back to ink.
+    expect(style.style.getPropertyValue('--tx-progress-accent')).toContain('--tx-text-color-primary')
+
+    const flat = mount(TxProgressBar, { props: { percentage: 40, status: 'success' } })
+    expect((flat.element as HTMLElement).style.getPropertyValue('--tx-progress-glow')).toContain('--tx-color-success')
+    expect((flat.element as HTMLElement).style.getPropertyValue('--tx-progress-accent')).toContain('--tx-color-success')
+  })
+})
+
+describe('txProgressBar segment hover', () => {
+  const segments = [
+    { value: 25, color: '#60a5fa', label: 'Video' },
+    { value: 18, color: '#a78bfa' },
+    { value: 12, color: '#fb7185', label: 'Documents' },
+  ]
+
+  it('gives every segment a tip built from its label and its share of segmentsTotal', () => {
+    const wrapper = mount(TxProgressBar, { props: { segments, segmentsTotal: 100 } })
+    const tips = wrapper.findAll('.tx-progress-bar__segment').map(s => s.attributes('data-tip'))
+
+    // Share is of the total, not of the segment sum: 25/100, not 25/55.
+    expect(tips).toEqual(['Video · 25%', '18%', 'Documents · 12%'])
+
+    const partial = mount(TxProgressBar, { props: { segments, segmentsTotal: 110 } })
+    expect(partial.findAll('.tx-progress-bar__segment')[0]?.attributes('data-tip')).toBe('Video · 23%')
+  })
+
+  it('paints the colour on an inner fill so the slot can grow past the track', () => {
+    const wrapper = mount(TxProgressBar, { props: { segments } })
+    const fills = wrapper.findAll('.tx-progress-bar__segment > .tx-progress-bar__segment-fill')
+
+    expect(fills).toHaveLength(3)
+    expect(fills[0]?.attributes('style')).toContain('background: rgb(96, 165, 250)')
+    expect(wrapper.findAll('.tx-progress-bar__segment')[0]?.attributes('style')).not.toContain('background')
+    expect(wrapper.classes()).toContain('tx-progress-bar-wrapper--segmented')
+    expect(wrapper.find('.tx-progress-bar').classes()).toContain('tx-progress-bar--segmented')
+  })
+
+  it('renders the same segment markup inside the tooltip-wrapped template', () => {
+    const wrapper = mount(TxProgressBar, { props: { segments, tooltip: true } })
+    expect(wrapper.findAll('.tx-progress-bar__segment-fill')).toHaveLength(3)
+    expect(wrapper.findAll('.tx-progress-bar__segment')[2]?.attributes('data-tip')).toBe('Documents · 12%')
+  })
+
+  it('does not class an unsegmented bar as segmented', () => {
+    const wrapper = mount(TxProgressBar, { props: { percentage: 40 } })
+    expect(wrapper.classes()).not.toContain('tx-progress-bar-wrapper--segmented')
+    expect(wrapper.find('.tx-progress-bar').classes()).not.toContain('tx-progress-bar--segmented')
   })
 })
 
@@ -374,15 +451,22 @@ describe('txProgressBar motion contract', () => {
       expect(keyframeBlocks(source).get(name), name).toMatch(/transform:\s*translateX\(/)
   })
 
-  it('eases the fill and the glow together over ~480ms', () => {
+  it('eases the fill over ~480ms and lets the head light ride it', () => {
     const bar = ruleBody(source, '.tx-progress-bar {').body
     const glow = ruleBody(source, '.tx-progress-bar__glow {').body
 
     expect(bar).toMatch(/transition:[^;]*\bwidth\b[^;]*480ms[^;]*var\(--tx-ease-out-strong/)
-    expect(glow).toMatch(/transition:[^;]*\bleft\b[^;]*480ms[^;]*var\(--tx-ease-out-strong/)
     expect(bar).not.toContain('box-shadow')
     expect(bar).toContain('background: var(--tx-progress-fill')
     expect(source).not.toContain('--tx-progress-shadow-color')
+
+    // The light is anchored to the fill's leading edge and carried by the
+    // fill's own width transition. Animating a position of its own is what
+    // let it drift ahead of the tip mid-transition.
+    expect(glow).toMatch(/right:\s*0/)
+    expect(glow).not.toMatch(/\bleft\s*:/)
+    expect(glow).toMatch(/transition:\s*opacity/)
+    expect(bar).toContain('overflow: hidden')
   })
 
   it('paints the plain track without a border and tints it from the text colour', () => {
@@ -401,5 +485,50 @@ describe('txProgressBar motion contract', () => {
     const reduced = ruleBody(source, '@media (prefers-reduced-motion: reduce)').body
     expect(reduced).toContain('.tx-progress-bar--indeterminate::before')
     expect(reduced).toContain('animation: none')
+    expect(reduced).toContain('.tx-progress-bar--flow-stardust::before')
+    expect(reduced).toContain('.tx-progress-bar--flow-stardust::after')
+  })
+
+  it('runs the travelling sweeps linear and seamless, so nothing stalls at the wrap', () => {
+    // An eased sweep decelerates into the far end and then snaps back, which
+    // reads as the bar stopping once per loop.
+    for (const selector of [
+      '.tx-progress-bar--indeterminate::before {',
+      '.tx-progress-bar--indeterminate-classic::before {',
+      '.tx-progress-bar--indeterminate-elastic::before {',
+    ]) {
+      expect(ruleBody(source, selector).body, selector).toMatch(/animation:[^;]*\binfinite linear\b/)
+    }
+
+    // Elastic starts fully off the left end and ends fully past the right one
+    // (22% band: 100/0.22 = 454.5%), so the loop point is never on screen.
+    const elastic = keyframeBlocks(source).get('tx-progress-elastic') ?? ''
+    expect(elastic).toMatch(/0%\s*\{\s*transform:\s*translateX\(-100%\)/)
+    expect(elastic).toMatch(/100%\s*\{\s*transform:\s*translateX\(454\.5%\)/)
+  })
+
+  it('drifts the stardust by whole tile widths, so the field loops without a seam', () => {
+    const blocks = keyframeBlocks(source)
+    // The two layers share a base rule whose selector list starts with the
+    // same `::before` text, so each lookup starts after that shared block.
+    const shared = ruleBody(source, '.tx-progress-bar--flow-stardust::before,')
+    const far = ruleBody(source, '.tx-progress-bar--flow-stardust::before {', shared.end).body
+    const near = ruleBody(source, '.tx-progress-bar--flow-stardust::after {', shared.end).body
+
+    expect(far).toMatch(/background-size:\s*96px/)
+    expect(blocks.get('tx-progress-stardust-far')).toMatch(/background-position:\s*96px 0/)
+    expect(near).toMatch(/background-size:\s*132px/)
+    expect(blocks.get('tx-progress-stardust-near')).toMatch(/background-position:\s*132px 0/)
+    // The points are white, not the fill colour: dust catches light.
+    expect(far).not.toContain('--tx-progress-color')
+    expect(near).not.toContain('--tx-progress-color')
+  })
+
+  it('lets a segmented track overflow so the hover lift and tip have room', () => {
+    const track = ruleBody(source, '.tx-progress-bar-wrapper--segmented .tx-progress-bar__track {').body
+    expect(track).toContain('overflow: visible')
+
+    const tip = ruleBody(source, '.tx-progress-bar__segment::after {').body
+    expect(tip).toContain('content: attr(data-tip)')
   })
 })

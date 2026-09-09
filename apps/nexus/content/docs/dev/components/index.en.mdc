@@ -1,18 +1,46 @@
 ---
-title: Tuffex Components
-description: Component documentation hub for Tuffex
+title: Concepts Overview
+description: "What Tuffex is, the three concept blocks behind it, and the full component index"
+category: Foundations
+status: beta
+since: 0.3.9
+tags: [concepts, overview, foundations, utils]
 syncStatus: reviewed
 verified: true
 ---
 
-# Tuffex Components
+# Concepts Overview
 
-## Preview
+## Tuffex Components
 
-Every cell is a live, interactive component; click the name in the top-left corner to open its documentation.
+Tuffex (`@talex-touch/tuffex`) is the Vue 3 component family powering the Talex Touch ecosystem: one set of components serves the desktop CoreBox, plugin surfaces, and this docs site itself. Components are split into suites — **Basics** carries the everyday interface body, **Pro** carries rich interaction and visual expression, **AI** carries AI-native interfaces, and **Data** carries visualization plus the standalone charts package. The suite switcher at the top of the sidebar adds Concepts as a fifth, documentation-only tab alongside these four component suites, and picking a tab takes you straight to that suite's overview.
 
-::DocsComponentsGallery
-::
+- Live specimens: every suite page opens with a preview grid — [Basics](./base-suite.en.mdc), [Pro](./pro-suite.en.mdc), [AI](./ai-suite.en.mdc), [Data](./data-suite.en.mdc) — where each cell is a real, interactive component; click its name to open the docs.
+- Per-suite imports: the `@talex-touch/tuffex/base`, `/pro` and `/ai` entries load on demand; the chart family ships as the standalone `@talex-touch/tuffex-charts` package.
+
+## Installation
+
+Three import shapes — per component, per suite barrel, or the root entry — plus the stylesheet each one needs. Start at [Installation](./installation.en.mdc).
+
+## Design Foundations
+
+The bottom layer of every component's visual is a set of `--tx-*` design tokens: the font stack with its size/weight scale, and color semantics for both light and dark themes (primary, success/warning/danger, layered text and fill). Components never define their own visuals — they consume this layer, so re-theming means changing tokens, and app-side customization should land on the same layer. The full inventory lives in [Design Foundations](./foundations.en.mdc).
+
+## Theming
+
+Where Foundations lists the tokens, [Theming](./theming.en.mdc) is how you override them: global tokens, the dark and high-contrast selectors, the AI suite's own `--tx-bui-*` layer, and the ~300 per-component hooks that retheme one component or one subtree.
+
+## Icons
+
+`TxIcon` decides what an icon string is rather than making the caller declare it — an Iconify class, one of seven builtin glyphs, an emoji, or an explicit URL / file source. [Icons](./icons.en.mdc) covers that resolution order and how an app teaches the component to load icons from its own storage.
+
+## Accessibility
+
+Focus rings on `:focus-visible`, `prefers-reduced-motion` handling, the high-contrast palette, and the ARIA conventions the components share — along with a plain account of where coverage stops. See [Accessibility](./accessibility.en.mdc).
+
+## Utils
+
+Public helper functions that ship alongside the components, exported from the root entry and the `./utils` subpath: `nextZIndex` for unified overlay stacking, `toast` notifications, dialog orchestration, environment guards (`hasWindow` and friends), haptics and animation helpers. The components themselves go through this same layer, so reusing it keeps app behavior consistent. The full API lives in [Utils](./utils.en.mdc).
 
 ## Composed Workspace Demo
 
@@ -80,18 +108,20 @@ code: |
 
 ## Suite Overview
 
+Each suite has one overview page carrying its own live preview and its own component list — the first entry under that suite's sidebar tab.
+
 | Suite | Groups | Components | Entry |
 |-------|--------|------------|-------|
-| [Basics](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 91 | `@talex-touch/tuffex/base` |
-| [Pro](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 27 | `@talex-touch/tuffex/pro` |
+| [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 91 | `@talex-touch/tuffex/base` |
+| [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 27 | `@talex-touch/tuffex/pro` |
 | [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 29 | `@talex-touch/tuffex/ai` |
-| [Data](./charts.en.mdc) | Charts / Visualization | 10 | `@talex-touch/tuffex/pro` (visualization) + `@talex-touch/tuffex-charts` (charts) |
+| [Data Suite](./data-suite.en.mdc) | Charts / Visualization | 10 | `@talex-touch/tuffex/pro` (visualization) + `@talex-touch/tuffex-charts` (charts) |
 
-Concepts is the fifth suite tab — documentation-only, with no component entry of its own (library positioning, design foundations and utils); it lives in the [Concepts Overview](./concepts-suite.en.mdc).
+Concepts is the fifth suite tab — documentation-only, with no component entry of its own. This page is that tab's overview: library positioning, design foundations and utils above, the full component index below.
 
 ## Basics
 
-The everyday building blocks, importable through the `@talex-touch/tuffex/base` category entry. Suite overview: [Basics Suite Overview](./base-suite.en.mdc). Design foundations live in [Foundations](./foundations.en.mdc); shared helpers in [Utils](./utils.en.mdc).
+The everyday building blocks, importable through the `@talex-touch/tuffex/base` category entry. Suite page: [Basics Suite](./base-suite.en.mdc). Design foundations live in [Foundations](./foundations.en.mdc); shared helpers in [Utils](./utils.en.mdc).
 
 ### General
 
@@ -207,7 +237,7 @@ The everyday building blocks, importable through the `@talex-touch/tuffex/base` 
 
 ## Pro
 
-Rich interaction, visual effects and low-level primitives, importable through the `@talex-touch/tuffex/pro` category entry. Suite overview: [Pro Suite Overview](./pro-suite.en.mdc).
+Rich interaction, visual effects and low-level primitives, importable through the `@talex-touch/tuffex/pro` category entry. Suite page: [Pro Suite](./pro-suite.en.mdc).
 
 ### Interaction
 
@@ -247,7 +277,7 @@ Rich interaction, visual effects and low-level primitives, importable through th
 
 ## AI Suite
 
-AI-native interface components, partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT) — see the [AI Suite Overview](./ai-suite.en.mdc) for full showcases — importable through the `@talex-touch/tuffex/ai` category entry.
+AI-native interface components, partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT) — see the [AI Suite](./ai-suite.en.mdc) page for full showcases — importable through the `@talex-touch/tuffex/ai` category entry.
 
 ### Chat
 
@@ -292,7 +322,7 @@ AI-native interface components, partly adapted from [Beautiful UI](https://www.b
 
 ## Data
 
-Data visualization and charts: the main package's visualization components (imported through `@talex-touch/tuffex/pro`) plus the standalone `@talex-touch/tuffex-charts` package (kumo-shaped, no echarts). The suite overview is the [Charts overview](./charts.en.mdc) itself.
+Data visualization and charts: the main package's visualization components (imported through `@talex-touch/tuffex/pro`) plus the standalone `@talex-touch/tuffex-charts` package (kumo-shaped, no echarts). Suite page: [Data Suite](./data-suite.en.mdc).
 
 ### Charts
 
@@ -314,9 +344,9 @@ Docs for the standalone `@talex-touch/tuffex-charts` package (kumo), installed s
 
 ## Review Notes
 
-- Hub scope: this page is a component documentation index and composed-demo guide; per-component API / props / best-practice details live in the linked component pages.
+- Hub scope: this page is the Concepts suite overview and the component documentation index; per-component API / props / best-practice details live in the linked component pages.
 - Source registry: `packages/tuffex/packages/components/src/components.ts` defines the exported component slug set used by docs coverage.
 - Demo registry: `apps/nexus/app/components/content/demo-registry.ts` maps each `TuffDemoWrapper` demo on this page to a standalone Vue demo file.
-- Preview grid: `apps/nexus/app/components/docs/DocsComponentsGallery.vue` renders the "Preview" grid at the top of this page.
+- Preview grid: `apps/nexus/app/components/docs/DocsComponentsGallery.vue` renders the live "Preview" grid on each suite page; it takes a required `suite` prop and renders that band only.
 - **Verified coverage:** Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies exported components have English and Chinese docs, localized hubs link documented components, and all demo references resolve to registered Vue files.
 
