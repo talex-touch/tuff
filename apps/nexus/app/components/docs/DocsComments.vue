@@ -90,7 +90,7 @@ async function deleteComment(commentId: string) {
 function canDelete(comment: DocComment) {
   if (!user.value)
     return false
-  return user.value.id === comment.userId || user.value.role === 'admin'
+  return user.value.id === comment.userId || isAdminAccountRole(user.value.role)
 }
 
 function formatTimeAgo(timestamp: number) {
