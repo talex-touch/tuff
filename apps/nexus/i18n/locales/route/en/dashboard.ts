@@ -1442,6 +1442,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         rejectReason: 'Rejection reason',
         rejectReasonPlaceholder: 'Explain why this submission was rejected (optional)...',
         myPlugins: 'My Plugins',
+        allAssets: 'All Assets',
+        viewAdminOnly: 'Pending Reviews and All Assets are visible to administrators only.',
       },
       images: {
         title: 'Resource library',

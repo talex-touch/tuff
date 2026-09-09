@@ -330,16 +330,21 @@ const activeDescendantId = computed(() =>
   }
 }
 
+// The indicator has to sit *above* the track it slides on. `--tx-bg-color-overlay`
+// is white on light but darker than the track on dark (#1d1e1f against #303030),
+// so the slider disappeared into the groove and the movement read as no
+// movement at all. Mixing the text colour into the overlay lifts it in both
+// themes, because that pair is the one that actually inverts.
 .tx-flat-radio__indicator {
   position: absolute;
   top: var(--tx-flat-radio-padding, 3px);
   left: 0;
   height: calc(100% - var(--tx-flat-radio-padding, 3px) * 2);
   border-radius: var(--tx-flat-radio-item-radius, 6px);
-  background: var(--tx-bg-color-overlay, #fff);
+  background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 10%, var(--tx-bg-color-overlay, #fff));
   box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.08),
-    0 1px 2px rgba(0, 0, 0, 0.04);
+    0 1px 3px rgba(0, 0, 0, 0.16),
+    0 1px 2px rgba(0, 0, 0, 0.08);
   pointer-events: none;
   z-index: 0;
 

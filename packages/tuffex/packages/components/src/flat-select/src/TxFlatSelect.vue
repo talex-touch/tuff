@@ -89,6 +89,14 @@ const activeDescendantId = computed(() => {
 // --- Dropdown clip-path animation ---
 const dropdownTop = ref('0px')
 const dropdownClip = ref('inset(50% 0 50% 0 round 10px)')
+/**
+ * True while the panel is collapsing back onto the trigger. The panel's own
+ * chrome — surface, border, shadow, and the selected row's accent — used to
+ * vanish on the frame the panel was hidden, so the label appeared to blink as
+ * it settled. Fading that chrome out across the same 200ms leaves nothing to
+ * blink: by the time the panel is gone it already looks like the trigger.
+ */
+const isClosing = ref(false)
 
 function getSelectedItemRect(): { top: number, height: number } | null {
   const entry = itemEntries.value.find(e => e.value === props.modelValue)
@@ -135,6 +143,7 @@ function close() {
 function performOpen() {
   if (props.disabled)
     return
+  isClosing.value = false
   // Bail only when fully open; if a close is still settling (closeTimer pending) this
   // click should re-open rather than be swallowed.
   if (isOpen.value && closeTimer == null)
@@ -164,13 +173,17 @@ function performClose() {
   if (!isOpen.value || closeTimer != null) return
 
   isAnimating.value = true
+  isClosing.value = true
   dropdownClip.value = calcClipClosed()
 
+  // Matches the collapse plus its trailing fade (240ms) in the stylesheet;
+  // cutting the panel earlier would put the hard edge back.
   closeTimer = setTimeout(() => {
     isOpen.value = false
     isAnimating.value = false
+    isClosing.value = false
     closeTimer = null
-  }, 200)
+  }, 240)
 }
 
 function toggle() {
@@ -302,6 +315,7 @@ onBeforeUnmount(() => {
       :class="{
         'is-visible': isOpen,
         'is-animating': isAnimating,
+        'is-closing': isClosing,
       }"
       :style="{
         top: dropdownTop,
@@ -401,7 +415,35 @@ onBeforeUnmount(() => {
     }
 
     &.is-animating {
-      transition: clip-path 0.2s cubic-bezier(0.2, 0, 0, 1);
+      // The panel stays fully opaque while it travels — it sits directly over
+      // the trigger, and anything translucent lets the trigger's own label show
+      // through as a second, offset copy of the word. Only once the collapse is
+      // essentially done does it fade, over 70ms.
+      transition:
+        clip-path 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.07s ease 0.17s;
+    }
+
+    // What makes the handover invisible is that the row being collapsed onto
+    // stops looking like a menu row first. Its accent, its fill and its tick
+    // fade over the first half of the collapse, so by the time the panel gives
+    // way the label underneath it is already the same words in the same place
+    // in the same colour — there is nothing left to see change.
+    &.is-closing {
+      opacity: 0;
+
+      :deep(.tx-flat-select-item.is-selected) {
+        color: var(--tx-text-color-primary, #303133);
+        background: transparent;
+        transition:
+          color 0.14s ease,
+          background-color 0.14s ease;
+      }
+
+      :deep(.tx-flat-select-item__check) {
+        opacity: 0;
+        transition: opacity 0.1s ease;
+      }
     }
   }
 }

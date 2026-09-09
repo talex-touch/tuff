@@ -25,7 +25,7 @@ const message = computed(() => {
   if (isPrompt.value)
     return props.t('auth.passkeyPrompt', '确认系统弹出完成验证。')
   if (isError.value)
-    return props.t('auth.passkeyError', '出错了，请重试。')
+    return props.errorMessage || props.t('auth.passkeyError', '出错了，请重试。')
   return ''
 })
 
@@ -50,7 +50,7 @@ const showRetry = computed(() => isError.value)
     </div>
 
     <div class="auth-passkey-actions" :class="{ 'is-visible': showRetry }">
-      <TxButton class="auth-button auth-button--primary" size="lg" block @click="emit('retry')">
+      <TxButton variant="primary" class="auth-button auth-button--primary" size="lg" block @click="emit('retry')">
         {{ t('auth.passkeyRetry', '重新尝试') }}
       </TxButton>
     </div>

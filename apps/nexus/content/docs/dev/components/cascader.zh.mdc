@@ -130,8 +130,17 @@ code: |
 ## 注意事项
 
 - 单选模式 `modelValue` 为路径数组，多选模式为路径数组列表。
-- `expandTrigger` 可控制点击/悬停展开（`hover` 模式下点击非叶子节点不会展开）。
+- `expandTrigger` 决定分支如何展开：`hover` 与 `both` 悬停打开面板，`click` 点击打开。任何设置下，点击分支行都会展开它。
 - 异步 `load` 仅在节点未提供 `children` 且未标记 `leaf` 时触发。
+
+## 交互约定
+
+- 每一级都是独立的浮层面板，以 `right-start` 锚定在打开它的那一行上，而不是挤在同一个宽面板里的一列。面板按自身文本宽度排版（`matchReferenceWidth` 关闭），且只有真正被展开过的分支才会挂载。
+- 行与其打开的面板之间的悬停移动、外部点击豁免以及级联关闭，都由 anchor-delay 服务负责，与 `TxDropdownSubmenu` 使用同一套机制。
+- 行是 `role="option"`，所在层级是 `role="listbox"`。分支行额外带 `aria-haspopup="listbox"` 与 `aria-expanded`，叶子行两者都没有。
+- 键盘操作（作用于当前聚焦的层级）：上/下移动并循环，Home/End 跳到首尾，ArrowRight 展开当前分支并把焦点移到子面板首行，ArrowLeft 关闭当前层级并把焦点交还给打开它的那一行。根层级的 ArrowLeft 不做拦截。
+- 通往已展开面板路径上的每一行都保持激活态，因此深层选择读起来是一条路径，而不是孤零零一行高亮。
+- 搜索时用扁平的叶子路径结果替换层级列表，清空搜索词后恢复。
 
 ## API
 
@@ -140,7 +149,7 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `modelValue` | `CascaderValue` | - | 当前值。单选模式是一条路径数组，多选模式是路径数组列表。 |
-| `options` | `CascaderNode[]` | `[]` | 根级选项树，用于渲染级联列。 |
+| `options` | `CascaderNode[]` | `[]` | 根级选项树，用于渲染第一层级。 |
 | `multiple` | `boolean` | `false` | 启用多选叶子路径，并把选中的路径渲染为标签。 |
 | `disabled` | `boolean` | `false` | 禁用触发器、清空按钮、节点选择和键盘打开行为。 |
 | `placeholder` | `string` | `'Please select'` | 未选择路径时显示的占位文本。 |
@@ -148,7 +157,7 @@ code: |
 | `clearable` | `boolean` | `true` | 组件启用且已有值时显示清空按钮。 |
 | `placement` | `PopoverPlacement` | `'bottom-start'` | 转发给底层 `TxPopover` 的浮层位置。 |
 | `dropdownOffset` | `number` | `6` | 转发给底层 `TxPopover` 的浮层偏移。 |
-| `dropdownWidth` | `number` | `360` | 转发给底层 `TxPopover` 的浮层宽度。 |
+| `dropdownWidth` | `number` | `260` | 根面板宽度，转发给底层 `TxPopover`。子层级面板按自身内容在 200px 与 `dropdownMaxWidth` 之间自适应。 |
 | `dropdownMaxWidth` | `number` | `520` | 转发给底层 `TxPopover` 的最大浮层宽度。 |
 | `dropdownMaxHeight` | `number` | `340` | 面板最大高度，单位 px。 |
 | `expandTrigger` | `'click' \| 'hover' \| 'both'` | `'both'` | 控制非叶子节点展开方式；`hover` 模式下点击分支节点不会展开。 |
@@ -162,7 +171,7 @@ code: |
 | `label` | `string` | 展示文本 |
 | `disabled` | `boolean` | 是否禁用 |
 | `leaf` | `boolean` | 是否叶子节点 |
-| `children` | `CascaderNode[]` | 子节点（可选） |
+| `children` | `CascaderNode[]` | 子节点，渲染在锚定于该分支行的面板中（可选） |
 
 ### CascaderValue
 
@@ -214,7 +223,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`.
 - Types: `packages/tuffex/packages/components/src/cascader/src/types.ts` exports `CascaderProps`, `CascaderEmits`, `CascaderNode`, and `CascaderValue`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/cascader/__tests__/cascader.test.ts` 验证叶子选择、空搜索、多选清空、禁用阻断、懒加载子节点与暴露方法。
+- **实测覆盖:** `packages/tuffex/packages/components/src/cascader/__tests__/cascader.test.ts` 验证叶子选择、空搜索、多选清空、禁用阻断、懒加载子节点与暴露方法，以及锚定层级：每个分支一个面板（不再是分列布局）、`right-start` 且关闭 `matchReferenceWidth`、`expandTrigger` 决定浮层触发方式、分支行的 `aria-haspopup` / `aria-expanded`、ArrowRight 展开与 ArrowLeft 收起的漫游焦点，以及跨层级的激活路径。
 - Screenshot: `.codex-screenshots/nexus-cascader-release-policy-demo-playwright-2026-05-28.png`.
 
 <TuffDocSourceLink />

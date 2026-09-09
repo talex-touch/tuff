@@ -22,7 +22,7 @@ const toast = useToast()
 const { formatDate } = useStoreFormatters()
 
 // Admin check - redirect if not admin
-const isAdmin = computed(() => user.value?.role === 'admin')
+const { isAdmin } = useAccountRole()
 
 watch(isAdmin, (admin) => {
   if (user.value && !admin) {

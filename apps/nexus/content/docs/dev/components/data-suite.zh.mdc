@@ -1,0 +1,28 @@
+---
+title: 数据套件
+description: 可视化与图表：主包内的数据展示组件，以及独立的图表包
+category: DataSuite
+status: beta
+since: 0.4.0
+tags: [data, charts, visualization, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## 套件定位
+
+数据套件负责把数字变成图形，也是唯一横跨两个包的套件。**可视化**（SparkChart、AllocationBar、DiffTable、SignalMeter）是随主包发布的轻量内联数据展示，经 `@talex-touch/tuffex/pro` 入口引入；**图表**则是独立的 `@talex-touch/tuffex-charts` 包——与 kumo 同构的 API 面、Vue 直渲 SVG、不依赖 echarts，需要单独安装。图表家族从《[Charts 图表](./charts.zh.mdc)》开始看；当版面放不下一张完整图表时，用可视化组件。
+
+## 组件预览
+
+每个格子都是可交互的真实组件，点击左上角名称进入对应组件文档。
+
+::DocsComponentsGallery{suite="data"}
+::
+
+## 分组一览
+
+下面按分组列出该套件的**全部**组件，数据来自每个文档的 `category` frontmatter，新增组件会自动出现。
+
+::DocsSuiteCatalog{suite="data"}
+::

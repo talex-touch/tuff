@@ -1,5 +1,5 @@
 ---
-title: 进阶套件总览
+title: 进阶套件
 description: 高级交互、视觉效果与底层原语
 category: ProSuite
 status: beta
@@ -11,7 +11,7 @@ verified: false
 
 ## 套件定位
 
-进阶套件承载重交互与视觉表达：**高级交互**是命令面板、搜索面板、双编辑器与虚拟列表这类完整交互件；**视觉效果**是玻璃拟态、流光边框、渐变模糊、文本动效与液态流体这类表达层；**底层原语**（BaseSurface、BaseAnchor、Floating、AutoSizer、ResizeBox）是其余组件搭在其上的地基，业务侧极少直接使用。全部经 `@talex-touch/tuffex/pro` 分类入口引入。数据可视化与图表族已拆至**数据**套件，总览见《[Charts 图表](/docs/dev/components/charts)》。
+进阶套件承载重交互与视觉表达：**高级交互**是命令面板、搜索面板、双编辑器与虚拟列表这类完整交互件；**视觉效果**是玻璃拟态、流光边框、渐变模糊、文本动效与液态流体这类表达层；**底层原语**（BaseSurface、BaseAnchor、Floating、AutoSizer、ResizeBox）是其余组件搭在其上的地基，业务侧极少直接使用。全部经 `@talex-touch/tuffex/pro` 分类入口引入。数据可视化与图表族已拆至**数据**套件，见《[数据套件](/docs/dev/components/data-suite)》。
 
 ## 组件预览
 

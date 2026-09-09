@@ -87,9 +87,7 @@ const toast = useToast()
 
 const { plugins, pending: pluginsPending, error: pluginsLoadError, refresh: refreshPlugins } = useDashboardPluginsData()
 
-const isAdmin = computed(() => {
-  return user.value?.role === 'admin'
-})
+const { isAdmin } = useAccountRole()
 
 const currentUserId = computed(() => user.value?.id ?? null)
 
@@ -389,6 +387,60 @@ const pendingReviewColumns = computed<DataTableColumn<PendingReviewItem>[]>(() =
 // Computed: my plugins (owned by current user)
 const myPlugins = computed(() =>
   plugins.value.filter(p => p.userId === currentUserId.value),
+)
+
+/**
+ * The review queue used to sit stacked above the author's own list, so an admin
+ * scrolled past a moderation table to reach their own assets and the two tables'
+ * row actions read as interchangeable. They are separate views now.
+ *
+ * `pending` and `all` are admin-only: a normal account never renders the
+ * switcher and stays on `mine`, which is what it could already see.
+ */
+type AssetView = 'mine' | 'pending' | 'all'
+
+const assetView = ref<AssetView>('mine')
+
+const assetViews = computed(() => ([
+  {
+    id: 'mine' as const,
+    label: t('dashboard.sections.plugins.myPlugins'),
+    count: myPlugins.value.length,
+    adminOnly: false,
+  },
+  {
+    id: 'pending' as const,
+    label: t('dashboard.sections.plugins.pendingReviews'),
+    count: pendingReviewItems.value.length,
+    adminOnly: true,
+  },
+  {
+    id: 'all' as const,
+    label: t('dashboard.sections.plugins.allAssets', 'All Assets'),
+    count: plugins.value.length,
+    adminOnly: true,
+  },
+]).filter(view => isAdmin.value || !view.adminOnly))
+
+/**
+ * `isAdmin` resolves from the user payload after mount, so the first render is
+ * always non-admin. Without this an admin view selected before a role change —
+ * or restored on a re-render — would leave the page on a tab it may no longer
+ * render.
+ */
+watch(isAdmin, (admin) => {
+  if (!admin)
+    assetView.value = 'mine'
+}, { immediate: true })
+
+const visiblePlugins = computed(() =>
+  assetView.value === 'all' ? plugins.value : myPlugins.value,
+)
+
+const visiblePluginsTitle = computed(() =>
+  assetView.value === 'all'
+    ? t('dashboard.sections.plugins.allAssets', 'All Assets')
+    : t('dashboard.sections.plugins.myPlugins'),
 )
 
 const myPluginColumns = computed<DataTableColumn<DashboardPlugin>[]>(() => [
@@ -1120,8 +1172,36 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
       </p>
     </div>
 
+    <!-- View switcher: only an admin has more than one entry, so the whole row
+         collapses for a normal account rather than showing disabled tabs. -->
+    <div v-if="assetViews.length > 1" class="flex flex-wrap items-center justify-between gap-3">
+      <div
+        class="inline-flex items-center gap-1 rounded-2xl bg-black/[0.04] p-1 dark:bg-white/[0.06]"
+        role="tablist"
+        :aria-label="t('dashboard.sections.plugins.title')"
+      >
+        <button
+          v-for="view in assetViews"
+          :key="view.id"
+          type="button"
+          role="tab"
+          :aria-selected="assetView === view.id"
+          class="dashboard-asset-tab"
+          :class="assetView === view.id ? 'dashboard-asset-tab--active' : ''"
+          @click="assetView = view.id"
+        >
+          <span v-if="view.adminOnly" class="i-carbon-locked text-[11px] opacity-60" aria-hidden="true" />
+          <span>{{ view.label }}</span>
+          <span class="dashboard-asset-tab-count">{{ view.count }}</span>
+        </button>
+      </div>
+      <p class="text-xs text-black/40 dark:text-white/40">
+        {{ t('dashboard.sections.plugins.viewAdminOnly', '待处理审核与全部发布物仅管理员可见。') }}
+      </p>
+    </div>
+
     <!-- Admin: Pending Reviews -->
-    <div v-if="isAdmin" class="apple-card-lg p-6">
+    <div v-if="isAdmin && assetView === 'pending'" class="apple-card-lg p-6">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.04] pb-4 dark:border-white/[0.06]">
         <div>
           <h3 class="apple-section-title">
@@ -1220,13 +1300,13 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
       </p>
     </div>
 
-    <!-- My Plugins Section -->
-    <div class="apple-card-lg p-6">
+    <!-- Owned assets (or every asset, for an admin on the `all` view) -->
+    <div v-if="assetView !== 'pending'" class="apple-card-lg p-6">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.04] pb-4 dark:border-white/[0.06]">
         <div>
           <h3 class="apple-section-title">
-            {{ t('dashboard.sections.plugins.myPlugins') }}
-            <span class="ml-1 text-black/40 dark:text-white/40">({{ myPlugins.length }})</span>
+            {{ visiblePluginsTitle }}
+            <span class="ml-1 text-black/40 dark:text-white/40">({{ visiblePlugins.length }})</span>
           </h3>
           <p class="mt-1 text-xs text-black/45 dark:text-white/45">
             {{ isZh ? '统一管理发布物元数据、版本与审核状态。' : 'Manage asset metadata, versions, and review states in one table.' }}
@@ -1295,7 +1375,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
         </TxButton>
       </div>
 
-      <div v-else-if="!myPlugins.length" class="py-8 text-center text-sm text-black/40 dark:text-white/40">
+      <div v-else-if="!visiblePlugins.length" class="py-8 text-center text-sm text-black/40 dark:text-white/40">
         {{ t('dashboard.sections.plugins.empty') }}
       </div>
 
@@ -1307,7 +1387,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
         <div class="overflow-x-auto">
           <TxDataTable
             :columns="myPluginColumns"
-            :data="myPlugins"
+            :data="visiblePlugins"
             row-key="id"
             table-layout="fixed"
             interactive-rows
@@ -1540,5 +1620,48 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
   display: inline-block;
   white-space: normal;
   line-height: 1.45;
+}
+
+/**
+ * Segmented control for the asset views. Sized off the same 13px/pill rhythm as
+ * the dashboard's other tab strips so it does not read as a second control set.
+ */
+.dashboard-asset-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--tx-text-color-secondary, rgba(0, 0, 0, 0.5));
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.dashboard-asset-tab:hover {
+  color: var(--tx-text-color-primary, #000);
+}
+
+.dashboard-asset-tab--active,
+.dashboard-asset-tab--active:hover {
+  background: rgb(255 255 255 / 90%);
+  color: var(--tx-text-color-primary, #000);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+}
+
+:root.dark .dashboard-asset-tab--active,
+:root.dark .dashboard-asset-tab--active:hover {
+  background: rgb(255 255 255 / 12%);
+  box-shadow: none;
+}
+
+.dashboard-asset-tab-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.55;
 }
 </style>

@@ -95,7 +95,30 @@ const LIMITS = {
   // the slider's dissolve add 4.8 KiB on top, measured at 644.6 KiB. Same contract as every
   // note above: actuals plus minimal headroom, growth from here fails, and #1555 still owns
   // whether the total should be coming down instead.
-  fullCssBytes: 656 * 1024,
+  // 656 -> 664 on 2026-09-07: three surfaces grew at once — the date picker gained month and
+  // year quick-switch grids, a range band with its own end/middle geometry and direction-aware
+  // step transitions (+4.3 KiB, after moving its style block to SCSS so its comments stop
+  // shipping, which gave 1.4 KiB back); the cascader split into per-level anchored panels with
+  // their own row and level styles (+0.1 KiB net, the old column layout came out); and card-item
+  // gained the hover-over-active rule. Measured 660.8 KiB. Same contract as every note above:
+  // actuals plus minimal headroom, growth from here fails.
+  // 664 -> 552 on 2026-09-07: CSS is now minified on the way out (`cssMinify`,
+  // with the JS deliberately left readable), which took the same stylesheets
+  // from 663.5 KiB to 541.2. Re-baselined against the smaller artifact so the
+  // saving cannot be quietly spent.
+  //
+  // Note what this number is and is not. `components.css` is the full-import
+  // entry, which nothing in this repo loads: both apps import `base.css` plus
+  // per-component stylesheets. It is a ceiling on the library's total surface,
+  // not a measure of what any page downloads — `onDemandCssBytes` below is the
+  // one that tracks a real cost.
+  fullCssBytes: 552 * 1024,
+  // The per-component stylesheets, added up. This is the set a consumer
+  // actually installs and the on-demand plugin picks from, so it is the number
+  // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
+  // stopped being copied into every package that imports them, and it climbs
+  // again the moment one starts inlining another's rules.
+  onDemandCssBytes: 580 * 1024,
   componentCssBytes: 96 * 1024,
   componentJsBytes: 48 * 1024,
   // Per-file exceptions to `componentJsBytes`, keyed by the path under `dist/es`.
@@ -449,16 +472,47 @@ async function auditDistSizes(errors) {
       `Component CSS ${relativeToRepo(entry.file)} is ${formatBytes(entry.bytes)}; limit is ${formatBytes(cssLimitFor(entry.file))}`,
     )
   }
+
+  // The suite barrels aggregate their members by construction, so counting them
+  // here would charge for the same rules twice.
+  const onDemandCssBytes = componentCssSizes
+    .filter(entry => !suiteAggregateCss.has(entry.file))
+    .reduce((total, entry) => total + entry.bytes, 0)
+  if (onDemandCssBytes > LIMITS.onDemandCssBytes) {
+    errors.push(
+      `On-demand CSS totals ${formatBytes(onDemandCssBytes)} across ${componentCssSizes.length} stylesheets; limit is ${formatBytes(LIMITS.onDemandCssBytes)}. A component inlining another's rules is the usual cause.`,
+    )
+  }
+  // Alias packages re-export another component and add no rules of their own, so
+  // their stylesheet is empty and `style-deps.json` is what carries them to the
+  // real one. The failure this guards against is an alias quietly going back to
+  // holding a full copy of empty-state.
+  const styleDepsFile = resolve(distEs, 'style-deps.json')
+  let styleDeps = {}
+  try {
+    styleDeps = JSON.parse(await readFile(styleDepsFile, 'utf-8'))
+  }
+  catch {
+    errors.push(`${relativeToRepo(styleDepsFile)} is missing; the on-demand style plugin has no dependency graph to walk`)
+  }
+
   for (const distDir of [distEs, distLib]) {
     for (const componentName of emptyStateStyleAliases) {
       const styleFile = resolve(distDir, componentName, 'style.css')
       const bytes = await sizeOf(styleFile)
-      const source = await readFile(styleFile, 'utf-8')
-      if (bytes > LIMITS.emptyStateAliasCssBytes || !source.includes('../empty-state/style.css')) {
+      if (bytes > LIMITS.emptyStateAliasCssBytes) {
         errors.push(
-          `${relativeToRepo(styleFile)} is ${formatBytes(bytes)}; expected a lightweight import of ../empty-state/style.css`,
+          `${relativeToRepo(styleFile)} is ${formatBytes(bytes)}; an alias carries no rules of its own`,
         )
       }
+    }
+  }
+
+  for (const componentName of emptyStateStyleAliases) {
+    if (!(styleDeps[componentName] ?? []).includes('empty-state')) {
+      errors.push(
+        `style-deps.json does not route ${componentName} to empty-state; the alias would render unstyled`,
+      )
     }
   }
 
@@ -494,7 +548,8 @@ async function auditDistSizes(errors) {
   }
 
   console.log(`[audit-package-size] Base CSS: ${formatBytes(baseCssBytes)}/${formatBytes(LIMITS.baseCssBytes)}`)
-  console.log(`[audit-package-size] Full CSS: ${formatBytes(fullCssBytes)}/${formatBytes(LIMITS.fullCssBytes)}`)
+  console.log(`[audit-package-size] Full CSS: ${formatBytes(fullCssBytes)}/${formatBytes(LIMITS.fullCssBytes)} (full-import entry; nothing in this repo loads it)`)
+  console.log(`[audit-package-size] On-demand CSS: ${formatBytes(onDemandCssBytes)}/${formatBytes(LIMITS.onDemandCssBytes)} across ${componentCssSizes.length} stylesheets`)
   printTop('Largest component CSS files:', componentCssSizes)
   printTop('Largest component JS files:', componentJsSizes)
 }

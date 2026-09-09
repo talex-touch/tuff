@@ -154,7 +154,7 @@ code: |
 - `backgroundColor` also sets `textColor`; when `textColor` is omitted it falls back to white.
 - `click` emits only when `clickable=true`.
 - The status dot is inset per `shape`: circles anchor to the 45 degree tangent point, squares and rounded avatars to the corner. The root does not clip (the image and fallback layers do), otherwise the shape would shave most of the dot away.
-- `--tx-avatar-status-size` is the dot's **outer** diameter including its white ring, not the diameter inside the ring.
+- `--tx-avatar-status-size` is the dot's **outer** diameter including its ring, not the diameter inside the ring. The ring around the dot and around each grouped avatar takes `--tx-avatar-ring` (default `--tx-bg-color`, the page surface), so it is no longer a white halo on a dark page.
 - `TxAvatarGroup` preserves child props, injects group `size` only into children without their own size, and renders `+N` for hidden children when `max` is lower than the child count.
 - Stacking offsets (negative margin and `z-index`) come from the group stylesheet rather than inline styles; children only receive the ring border and `--tx-avatar-group-index` inline. Callers overriding inline `margin-left` / `z-index` must switch to the CSS variables.
 - Group `z-index` increases left to right, so each avatar covers the bottom-right corner — status dot included — of the one before it; `hoverEffect="lift"` brings the hovered avatar forward and reveals it.

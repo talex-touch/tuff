@@ -49,7 +49,13 @@ export default defineConfig({
     target: 'esnext',
     outDir: 'es',
     emptyOutDir: false,
+    // JS stays unminified on purpose: consumers bundle and minify it themselves,
+    // and readable output is what makes this package debuggable in a dependent's
+    // node_modules. CSS gets none of that treatment — nobody tree-shakes a
+    // stylesheet, and shipping it with the indentation still in was costing 13%
+    // of every byte a consumer downloads.
     minify: false,
+    cssMinify: true,
     rollupOptions: {
       // Match subpaths too: sources import '@talex-touch/utils/env', and an
       // exact-string external list silently misses that, vendoring the

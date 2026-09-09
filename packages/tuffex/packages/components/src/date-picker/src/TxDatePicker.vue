@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PickerColumn, PickerValue } from '../../picker/src/types'
-import type { DatePickerEmits, DatePickerProps } from './types'
+import type { DatePickerEmits, DatePickerPanelView, DatePickerProps, DateRangeValue } from './types'
 import TxPicker from '../../picker/src/TxPicker.vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -21,6 +21,8 @@ const props = withDefaults(defineProps<DatePickerProps>(), {
   closeOnClickMask: true,
   adaptiveBreakpoint: 768,
   weekStartsOn: 0,
+  range: false,
+  rangeSeparator: ' → ',
 })
 
 const emit = defineEmits<DatePickerEmits>()
@@ -39,6 +41,21 @@ interface CalendarCell {
   selected: boolean
   today: boolean
   disabled: boolean
+  /** Range mode: strictly between the two ends. */
+  inRange: boolean
+  rangeStart: boolean
+  rangeEnd: boolean
+}
+
+/** A month or year tile in the quick-switch grids. */
+interface PanelCell {
+  key: string
+  label: string
+  value: number
+  current: boolean
+  selected: boolean
+  disabled: boolean
+  muted?: boolean
 }
 
 function pad2(n: number) {
@@ -134,10 +151,63 @@ const maxDate = computed(() => {
 const localParts = ref<DateParts>({ y: 2025, m: 1, d: 1 })
 const calendarMonth = ref<Pick<DateParts, 'y' | 'm'>>({ y: 2025, m: 1 })
 
+/** Which grid the field calendar shows, and which way the last move went. */
+const panelView = ref<DatePickerPanelView>('day')
+const navDirection = ref<'next' | 'prev' | 'none'>('none')
+const YEAR_BLOCK = 12
+const yearBlockStart = ref(2020)
+
+const rangeStart = ref<DateParts | null>(null)
+const rangeEnd = ref<DateParts | null>(null)
+/** The end being previewed under the pointer while the second click is pending. */
+const rangeHover = ref<DateParts | null>(null)
+const pickingEnd = ref(false)
+
+/** The wheel picker has no range surface, so range only applies to the calendar. */
+const isRange = computed(() => props.range && resolvedVariant.value === 'field')
+
+const modelString = computed(() => (typeof props.modelValue === 'string' ? props.modelValue : ''))
+
 function emitModel(parts: DateParts): void {
   const s = formatYmd(parts.y, parts.m, parts.d)
   emit('update:modelValue', s)
   emit('change', s)
+}
+
+function emitRange(start: DateParts, end: DateParts): void {
+  const value: DateRangeValue = [
+    formatYmd(start.y, start.m, start.d),
+    formatYmd(end.y, end.m, end.d),
+  ]
+  emit('update:modelValue', value)
+  emit('change', value)
+}
+
+function setRangeFromModel(v: unknown): void {
+  const pair = Array.isArray(v) ? v : []
+  const start = parseYmd(typeof pair[0] === 'string' ? pair[0] : '')
+  const end = parseYmd(typeof pair[1] === 'string' ? pair[1] : '')
+
+  rangeStart.value = start ? clampDate(start, minDate.value, maxDate.value) : null
+  rangeEnd.value = end ? clampDate(end, minDate.value, maxDate.value) : null
+  rangeHover.value = null
+  pickingEnd.value = false
+
+  const anchor = rangeStart.value ?? rangeEnd.value
+  if (anchor) {
+    calendarMonth.value = { y: anchor.y, m: anchor.m }
+    return
+  }
+
+  // An empty range still has to open somewhere; `setFromModel` is the single
+  // mode's path, so without this the grid sat on the ref's placeholder month.
+  const now = new Date()
+  const today = clampDate(
+    { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() },
+    minDate.value,
+    maxDate.value,
+  )
+  calendarMonth.value = { y: today.y, m: today.m }
 }
 
 function setFromModel(v: string) {
@@ -159,11 +229,21 @@ function setFromModel(v: string) {
 
 watch(
   () => props.modelValue,
-  v => setFromModel(v || ''),
+  (v) => {
+    if (props.range) {
+      setRangeFromModel(v)
+      return
+    }
+    setFromModel(typeof v === 'string' ? v : '')
+  },
   { immediate: true },
 )
 
 watch([minDate, maxDate], () => {
+  if (props.range) {
+    setRangeFromModel(props.modelValue)
+    return
+  }
   const clamped = clampDate(localParts.value, minDate.value, maxDate.value)
   const changed = compareDateParts(clamped, localParts.value) !== 0
   localParts.value = clamped
@@ -253,8 +333,26 @@ const selectedValue = computed(() => {
   return formatYmd(y, m, d)
 })
 
-const hasFieldValue = computed(() => !!parseYmd(props.modelValue || ''))
-const fieldDisplayValue = computed(() => hasFieldValue.value ? selectedValue.value : props.placeholder)
+const rangeDisplayValue = computed(() => {
+  const start = rangeStart.value
+  const end = rangeEnd.value
+  if (!start || !end)
+    return ''
+  return [
+    formatYmd(start.y, start.m, start.d),
+    formatYmd(end.y, end.m, end.d),
+  ].join(props.rangeSeparator)
+})
+
+const hasFieldValue = computed(() => (props.range
+  ? !!rangeDisplayValue.value
+  : !!parseYmd(modelString.value)))
+
+const fieldDisplayValue = computed(() => {
+  if (!hasFieldValue.value)
+    return props.placeholder
+  return props.range ? rangeDisplayValue.value : selectedValue.value
+})
 
 const fieldOpenInternal = ref(false)
 
@@ -332,24 +430,51 @@ function isDateOutsideBounds(parts: DateParts): boolean {
   )
 }
 
+/**
+ * The pair the grid should paint right now. While the second click is pending
+ * the hovered day stands in for the end, so the band follows the pointer; the
+ * ends are ordered here so dragging backwards previews correctly.
+ */
+const effectiveRange = computed<{ start: DateParts, end: DateParts } | null>(() => {
+  const start = rangeStart.value
+  if (!start)
+    return null
+  const end = rangeEnd.value ?? (pickingEnd.value ? rangeHover.value : null)
+  if (!end)
+    return { start, end: start }
+  return compareDateParts(start, end) <= 0 ? { start, end } : { start: end, end: start }
+})
+
 const calendarCells = computed<CalendarCell[]>(() => {
   const { y, m } = calendarMonth.value
   const firstDay = new Date(y, m - 1, 1).getDay()
   const startOffset = (firstDay - weekStart.value + 7) % 7
   const start = new Date(y, m - 1, 1 - startOffset)
   const today = toPartsFromDate(new Date())
+  const span = effectiveRange.value
 
   return Array.from({ length: 42 }).map((_, index) => {
     const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index)
     const parts = toPartsFromDate(date)
+
+    const isStart = !!span && compareDateParts(parts, span.start) === 0
+    const isEnd = !!span && compareDateParts(parts, span.end) === 0
+
     return {
       key: formatYmd(parts.y, parts.m, parts.d),
       label: String(parts.d),
       parts,
       inCurrentMonth: parts.y === y && parts.m === m,
-      selected: compareDateParts(parts, localParts.value) === 0,
+      selected: props.range
+        ? isStart || isEnd
+        : compareDateParts(parts, localParts.value) === 0,
       today: compareDateParts(parts, today) === 0,
       disabled: isDateOutsideBounds(parts),
+      inRange: !!span
+        && compareDateParts(parts, span.start) > 0
+        && compareDateParts(parts, span.end) < 0,
+      rangeStart: props.range && isStart,
+      rangeEnd: props.range && isEnd,
     }
   })
 })
@@ -365,15 +490,104 @@ const calendarWeeks = computed<CalendarCell[][]>(() => {
 
 const calendarTitle = computed(() => {
   const { y, m } = calendarMonth.value
+  if (panelView.value === 'month')
+    return String(y)
+  if (panelView.value === 'year')
+    return `${yearBlockStart.value} – ${yearBlockStart.value + YEAR_BLOCK - 1}`
   return `${y}-${pad2(m)}`
 })
 
+/** Grids are keyed on this, so a step or a view change swaps a fresh element. */
+const panelKey = computed(() => {
+  if (panelView.value === 'month')
+    return `month-${calendarMonth.value.y}`
+  if (panelView.value === 'year')
+    return `year-${yearBlockStart.value}`
+  return `day-${calendarMonth.value.y}-${calendarMonth.value.m}`
+})
+
+function isYearOutsideBounds(year: number): boolean {
+  const min = minDate.value
+  const max = maxDate.value
+  if (min && year < min.getFullYear())
+    return true
+  if (max && year > max.getFullYear())
+    return true
+  return false
+}
+
+function isMonthOutsideBounds(year: number, month: number): boolean {
+  const first = { y: year, m: month, d: 1 }
+  const last = { y: year, m: month, d: new Date(year, month, 0).getDate() }
+  const min = minDate.value ? toPartsFromDate(minDate.value) : null
+  const max = maxDate.value ? toPartsFromDate(maxDate.value) : null
+
+  if (min && compareDateParts(last, min) < 0)
+    return true
+  if (max && compareDateParts(first, max) > 0)
+    return true
+  return false
+}
+
+const monthCells = computed<PanelCell[]>(() => {
+  const year = calendarMonth.value.y
+  const today = toPartsFromDate(new Date())
+  return Array.from({ length: 12 }).map((_, index) => {
+    const month = index + 1
+    return {
+      key: `${year}-${pad2(month)}`,
+      label: pad2(month),
+      value: month,
+      current: today.y === year && today.m === month,
+      selected: calendarMonth.value.m === month,
+      disabled: isMonthOutsideBounds(year, month),
+    }
+  })
+})
+
+const yearCells = computed<PanelCell[]>(() => {
+  const today = toPartsFromDate(new Date())
+  // One year of padding on each side, dimmed, so the block reads as a window
+  // onto a longer run of years rather than a hard boundary.
+  return Array.from({ length: YEAR_BLOCK + 2 }).map((_, index) => {
+    const year = yearBlockStart.value - 1 + index
+    return {
+      key: `y-${year}`,
+      label: String(year),
+      value: year,
+      current: today.y === year,
+      selected: calendarMonth.value.y === year,
+      disabled: isYearOutsideBounds(year),
+      muted: index === 0 || index === YEAR_BLOCK + 1,
+    }
+  })
+})
+
 function canMoveCalendarMonth(delta: number): boolean {
+  const min = minDate.value ? toPartsFromDate(minDate.value) : null
+  const max = maxDate.value ? toPartsFromDate(maxDate.value) : null
+
+  if (panelView.value === 'year') {
+    const nextStart = yearBlockStart.value + delta * YEAR_BLOCK
+    if (delta < 0 && min && nextStart + YEAR_BLOCK - 1 < min.y)
+      return false
+    if (delta > 0 && max && nextStart > max.y)
+      return false
+    return true
+  }
+
+  if (panelView.value === 'month') {
+    const nextYear = calendarMonth.value.y + delta
+    if (delta < 0 && min && nextYear < min.y)
+      return false
+    if (delta > 0 && max && nextYear > max.y)
+      return false
+    return true
+  }
+
   const next = addMonths(calendarMonth.value, delta)
   const start = { y: next.y, m: next.m, d: 1 }
   const end = { y: next.y, m: next.m, d: new Date(next.y, next.m, 0).getDate() }
-  const min = minDate.value ? toPartsFromDate(minDate.value) : null
-  const max = maxDate.value ? toPartsFromDate(maxDate.value) : null
 
   if (delta < 0 && min && compareDateParts(end, min) < 0)
     return false
@@ -385,14 +599,96 @@ function canMoveCalendarMonth(delta: number): boolean {
 function shiftCalendarMonth(delta: number) {
   if (!canMoveCalendarMonth(delta))
     return
+
+  navDirection.value = delta > 0 ? 'next' : 'prev'
+
+  if (panelView.value === 'year') {
+    yearBlockStart.value += delta * YEAR_BLOCK
+    return
+  }
+
+  if (panelView.value === 'month') {
+    calendarMonth.value = { y: calendarMonth.value.y + delta, m: calendarMonth.value.m }
+    return
+  }
+
   calendarMonth.value = addMonths(calendarMonth.value, delta)
 }
+
+/** The title is the way up: day → month → year. */
+function zoomOut() {
+  if (props.disabled)
+    return
+  navDirection.value = 'none'
+  if (panelView.value === 'day') {
+    panelView.value = 'month'
+    return
+  }
+  if (panelView.value === 'month') {
+    yearBlockStart.value = Math.floor(calendarMonth.value.y / YEAR_BLOCK) * YEAR_BLOCK
+    panelView.value = 'year'
+  }
+}
+
+function selectPanelMonth(cell: PanelCell) {
+  if (props.disabled || cell.disabled)
+    return
+  navDirection.value = 'none'
+  calendarMonth.value = { y: calendarMonth.value.y, m: cell.value }
+  panelView.value = 'day'
+}
+
+function selectPanelYear(cell: PanelCell) {
+  if (props.disabled || cell.disabled)
+    return
+  navDirection.value = 'none'
+  calendarMonth.value = { y: cell.value, m: calendarMonth.value.m }
+  panelView.value = 'month'
+}
+
+/**
+ * Stepping slides in the direction of travel; changing zoom level has no
+ * direction, so it scales instead.
+ */
+const panelTransition = computed(() => {
+  if (navDirection.value === 'next')
+    return 'tx-date-slide-next'
+  if (navDirection.value === 'prev')
+    return 'tx-date-slide-prev'
+  return 'tx-date-zoom'
+})
 
 function selectCalendarDate(parts: DateParts) {
   if (props.disabled || isDateOutsideBounds(parts))
     return
 
   const next = clampDate(parts, minDate.value, maxDate.value)
+
+  if (props.range) {
+    // The first click anchors the start and arms the preview; the second closes
+    // the range. Clicking again on a finished range starts a new one.
+    if (!pickingEnd.value) {
+      rangeStart.value = next
+      rangeEnd.value = null
+      rangeHover.value = next
+      pickingEnd.value = true
+      return
+    }
+
+    const start = rangeStart.value ?? next
+    const backwards = compareDateParts(start, next) > 0
+    const from = backwards ? next : start
+    const to = backwards ? start : next
+
+    rangeStart.value = from
+    rangeEnd.value = to
+    rangeHover.value = null
+    pickingEnd.value = false
+    emitRange(from, to)
+    fieldOpen.value = false
+    return
+  }
+
   localParts.value = next
   calendarMonth.value = { y: next.y, m: next.m }
   const value = formatYmd(next.y, next.m, next.d)
@@ -400,6 +696,23 @@ function selectCalendarDate(parts: DateParts) {
   emit('change', value)
   fieldOpen.value = false
 }
+
+function onCellHover(cell: CalendarCell) {
+  if (!props.range || !pickingEnd.value || cell.disabled)
+    return
+  rangeHover.value = cell.parts
+}
+
+// Closing puts the panel back at the day grid, and abandons a half-picked
+// range rather than leaving one end armed for the next open.
+watch(fieldOpen, (open) => {
+  if (open)
+    return
+  panelView.value = 'day'
+  navDirection.value = 'none'
+  if (props.range && pickingEnd.value)
+    setRangeFromModel(props.modelValue)
+})
 
 function onConfirm() {
   const { y, m, d } = localParts.value
@@ -424,6 +737,7 @@ function onCancel() {
     :min-width="280"
     :panel-padding="0"
     :panel-radius="20"
+    :match-reference-width="false"
     reference-full-width
   >
     <template #reference>
@@ -445,62 +759,113 @@ function onCancel() {
       </button>
     </template>
 
-    <div class="tx-date-picker-calendar">
+    <div class="tx-date-picker-calendar" :class="{ 'is-range': isRange }">
       <div class="tx-date-picker-calendar__header">
         <button
           type="button"
           class="tx-date-picker-calendar__nav"
           :disabled="disabled || !canMoveCalendarMonth(-1)"
-          :aria-label="`${title} previous month`"
+          :aria-label="`${title} previous`"
           @click="shiftCalendarMonth(-1)"
         >
           ‹
         </button>
-        <span class="tx-date-picker-calendar__title">{{ calendarTitle }}</span>
+        <button
+          type="button"
+          class="tx-date-picker-calendar__title"
+          :class="{ 'is-static': panelView === 'year' }"
+          :disabled="disabled || panelView === 'year'"
+          :aria-label="`${title} switch view`"
+          @click="zoomOut"
+        >
+          {{ calendarTitle }}
+        </button>
         <button
           type="button"
           class="tx-date-picker-calendar__nav"
           :disabled="disabled || !canMoveCalendarMonth(1)"
-          :aria-label="`${title} next month`"
+          :aria-label="`${title} next`"
           @click="shiftCalendarMonth(1)"
         >
           ›
         </button>
       </div>
 
-      <div class="tx-date-picker-calendar__weekdays" aria-hidden="true">
-        <span v-for="weekday in weekdayLabels" :key="weekday">
-          {{ weekday }}
-        </span>
-      </div>
+      <Transition :name="panelTransition" mode="out-in">
+        <div :key="panelKey" class="tx-date-picker-calendar__view">
+          <template v-if="panelView === 'day'">
+            <div class="tx-date-picker-calendar__weekdays" aria-hidden="true">
+              <span v-for="weekday in weekdayLabels" :key="weekday">
+                {{ weekday }}
+              </span>
+            </div>
 
-      <div class="tx-date-picker-calendar__grid" role="grid">
-        <div
-          v-for="(week, weekIndex) in calendarWeeks"
-          :key="weekIndex"
-          class="tx-date-picker-calendar__row"
-          role="row"
-        >
-          <button
-            v-for="cell in week"
-            :key="cell.key"
-            type="button"
-            class="tx-date-picker-calendar__cell"
-            :class="{
-              'is-outside-month': !cell.inCurrentMonth,
-              'is-selected': cell.selected,
-              'is-today': cell.today,
-            }"
-            :disabled="disabled || cell.disabled"
-            :aria-selected="cell.selected"
-            :aria-label="cell.key"
-            role="gridcell"
-            @click="selectCalendarDate(cell.parts)"
-          >
-            {{ cell.label }}
-          </button>
+            <div class="tx-date-picker-calendar__grid" role="grid">
+              <div
+                v-for="(week, weekIndex) in calendarWeeks"
+                :key="weekIndex"
+                class="tx-date-picker-calendar__row"
+                role="row"
+              >
+                <button
+                  v-for="cell in week"
+                  :key="cell.key"
+                  type="button"
+                  class="tx-date-picker-calendar__cell"
+                  :class="{
+                    'is-outside-month': !cell.inCurrentMonth,
+                    'is-selected': cell.selected,
+                    'is-today': cell.today,
+                    'is-in-range': cell.inRange,
+                    'is-range-start': cell.rangeStart,
+                    'is-range-end': cell.rangeEnd,
+                  }"
+                  :disabled="disabled || cell.disabled"
+                  :aria-selected="cell.selected"
+                  :aria-label="cell.key"
+                  role="gridcell"
+                  @click="selectCalendarDate(cell.parts)"
+                  @mouseenter="onCellHover(cell)"
+                >
+                  {{ cell.label }}
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <div v-else-if="panelView === 'month'" class="tx-date-picker-calendar__tiles" role="grid">
+            <button
+              v-for="cell in monthCells"
+              :key="cell.key"
+              type="button"
+              class="tx-date-picker-calendar__tile"
+              :class="{ 'is-selected': cell.selected, 'is-today': cell.current }"
+              :disabled="disabled || cell.disabled"
+              :aria-selected="cell.selected"
+              role="gridcell"
+              @click="selectPanelMonth(cell)"
+            >
+              {{ cell.label }}
+            </button>
+          </div>
+
+          <div v-else class="tx-date-picker-calendar__tiles is-years" role="grid">
+            <button
+              v-for="cell in yearCells"
+              :key="cell.key"
+              type="button"
+              class="tx-date-picker-calendar__tile"
+              :class="{ 'is-selected': cell.selected, 'is-today': cell.current, 'is-muted': cell.muted }"
+              :disabled="disabled || cell.disabled"
+              :aria-selected="cell.selected"
+              role="gridcell"
+              @click="selectPanelYear(cell)"
+            >
+              {{ cell.label }}
+            </button>
+          </div>
         </div>
-      </div>
+      </Transition>
     </div>
   </TxPopover>
 
@@ -523,7 +888,7 @@ function onCancel() {
   />
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .tx-date-picker-popover {
   width: 100%;
 }
@@ -573,8 +938,14 @@ function onCancel() {
   color: var(--tx-text-color-secondary, #606266);
 }
 
+// The panel sizes to this calendar rather than to the field (`matchReferenceWidth`
+// is off): a month grid's width has nothing to do with how wide the input is, and
+// matching a narrow field cut the last weekday column off the panel's edge.
+// `max-width` is the backstop for a host that pins the panel narrower anyway —
+// the 7 columns are `minmax(0, 1fr)`, so they compress instead of overflowing.
 .tx-date-picker-calendar {
   width: min(336px, calc(100vw - 28px));
+  max-width: 100%;
   padding: 14px;
   border-radius: 20px;
   background:
@@ -591,10 +962,32 @@ function onCancel() {
 }
 
 .tx-date-picker-calendar__title {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 10px;
   font-size: 14px;
   font-weight: 700;
   color: var(--tx-text-color-primary, #303133);
+  background: transparent;
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.tx-date-picker-calendar__title:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
+}
+
+// At the top zoom level there is nowhere further to go, so the title stops
+// advertising itself as a control.
+.tx-date-picker-calendar__title.is-static {
+  cursor: default;
+  opacity: 1;
+}
+
+.tx-date-picker-calendar__view {
+  display: flex;
+  flex-direction: column;
 }
 
 .tx-date-picker-calendar__nav {
@@ -621,8 +1014,8 @@ function onCancel() {
   gap: 4px;
 }
 
-/* The ARIA row wrappers must not disturb the 7-column grid: `display: contents`
-   keeps each week's cells as direct grid items while still exposing role="row". */
+// The ARIA row wrappers must not disturb the 7-column grid: `display: contents`
+// keeps each week's cells as direct grid items while still exposing role="row".
 .tx-date-picker-calendar__row {
   display: contents;
 }
@@ -649,7 +1042,10 @@ function onCancel() {
   transition: background 0.16s, color 0.16s, box-shadow 0.16s;
 }
 
-.tx-date-picker-calendar__cell:hover:not(:disabled) {
+// `:hover` on its own outranks `.is-selected`, so hovering the selected day
+// used to swap its fill for the faint hover tint and the selection vanished
+// under the pointer. Selected days get their own, deeper hover instead.
+.tx-date-picker-calendar__cell:hover:not(:disabled):not(.is-selected) {
   background: color-mix(in srgb, var(--tx-color-primary, #409eff) 11%, transparent);
 }
 
@@ -665,11 +1061,177 @@ function onCancel() {
   color: var(--tx-color-on-primary, #fff);
   background: linear-gradient(135deg, var(--tx-color-primary, #409eff), color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, #111827));
   box-shadow: 0 8px 18px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
+  // Landing on a day is the moment the picker answers, so the cell settles
+  // into place rather than appearing fully formed.
+  animation: tx-date-pick 260ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+.tx-date-picker-calendar__cell.is-selected:hover:not(:disabled) {
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--tx-color-primary, #409eff) 40%, transparent);
+}
+
+@keyframes tx-date-pick {
+  0% {
+    transform: scale(0.82);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--tx-color-primary, #409eff) 45%, transparent);
+  }
+
+  60% {
+    transform: scale(1.06);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+// The band between the ends. It is a square-cornered fill so consecutive days
+// read as one continuous stretch, with the ends rounding it off.
+.tx-date-picker-calendar__cell.is-in-range {
+  border-radius: 0;
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
+}
+
+.tx-date-picker-calendar__cell.is-in-range.is-outside-month {
+  color: color-mix(in srgb, var(--tx-text-color-primary, #303133) 55%, transparent);
+}
+
+.tx-date-picker-calendar__cell.is-range-start:not(.is-range-end) {
+  border-radius: 12px 0 0 12px;
+}
+
+.tx-date-picker-calendar__cell.is-range-end:not(.is-range-start) {
+  border-radius: 0 12px 12px 0;
+}
+
+// The row gap would otherwise cut the band into separate pills.
+.tx-date-picker-calendar.is-range .tx-date-picker-calendar__grid {
+  column-gap: 0;
+}
+
+.tx-date-picker-calendar.is-range .tx-date-picker-calendar__cell {
+  width: 100%;
 }
 
 .tx-date-picker-calendar__cell:disabled {
   cursor: not-allowed;
   opacity: 0.34;
+}
+
+.tx-date-picker-calendar__tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.tx-date-picker-calendar__tiles.is-years {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.tx-date-picker-calendar__tile {
+  min-width: 0;
+  padding: 12px 0;
+  border: 0;
+  border-radius: 12px;
+  color: var(--tx-text-color-primary, #303133);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s, box-shadow 0.16s;
+}
+
+.tx-date-picker-calendar__tile:hover:not(:disabled):not(.is-selected) {
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 11%, transparent);
+}
+
+.tx-date-picker-calendar__tile.is-muted {
+  color: var(--tx-text-color-placeholder, #a8abb2);
+}
+
+.tx-date-picker-calendar__tile.is-today:not(.is-selected) {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 45%, transparent);
+}
+
+.tx-date-picker-calendar__tile.is-selected {
+  color: var(--tx-color-on-primary, #fff);
+  background: linear-gradient(135deg, var(--tx-color-primary, #409eff), color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, #111827));
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
+}
+
+.tx-date-picker-calendar__tile:disabled {
+  cursor: not-allowed;
+  opacity: 0.34;
+}
+
+// Stepping a month or a year block travels sideways; changing zoom level has
+// no direction, so it scales in place.
+.tx-date-slide-next-enter-active,
+.tx-date-slide-prev-enter-active,
+.tx-date-zoom-enter-active {
+  transition: opacity 160ms ease, transform 160ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+.tx-date-slide-next-leave-active,
+.tx-date-slide-prev-leave-active,
+.tx-date-zoom-leave-active {
+  transition: opacity 110ms ease, transform 110ms ease;
+}
+
+.tx-date-slide-next-enter-from {
+  opacity: 0;
+  transform: translateX(14px);
+}
+
+.tx-date-slide-next-leave-to {
+  opacity: 0;
+  transform: translateX(-10px);
+}
+
+.tx-date-slide-prev-enter-from {
+  opacity: 0;
+  transform: translateX(-14px);
+}
+
+.tx-date-slide-prev-leave-to {
+  opacity: 0;
+  transform: translateX(10px);
+}
+
+.tx-date-zoom-enter-from {
+  opacity: 0;
+  transform: scale(0.94);
+}
+
+.tx-date-zoom-leave-to {
+  opacity: 0;
+  transform: scale(1.04);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-date-picker-calendar__cell.is-selected {
+    animation: none;
+  }
+
+  .tx-date-slide-next-enter-active,
+  .tx-date-slide-prev-enter-active,
+  .tx-date-zoom-enter-active,
+  .tx-date-slide-next-leave-active,
+  .tx-date-slide-prev-leave-active,
+  .tx-date-zoom-leave-active {
+    transition: opacity 90ms ease;
+  }
+
+  .tx-date-slide-next-enter-from,
+  .tx-date-slide-prev-enter-from,
+  .tx-date-zoom-enter-from,
+  .tx-date-slide-next-leave-to,
+  .tx-date-slide-prev-leave-to,
+  .tx-date-zoom-leave-to {
+    transform: none;
+  }
 }
 
 @media (max-width: 520px) {

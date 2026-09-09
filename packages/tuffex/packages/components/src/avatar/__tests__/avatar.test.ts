@@ -333,7 +333,7 @@ describe('txAvatarGroup overflow popover', () => {
 })
 
 describe('txAvatar status dot geometry', () => {
-  const style = avatarSource.slice(avatarSource.indexOf('<style scoped>'))
+  const style = avatarSource.slice(avatarSource.indexOf('<style'))
 
   it('does not clip at the root', () => {
     // The root is both the shape and the status dot's positioning context. Clipping

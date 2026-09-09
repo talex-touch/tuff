@@ -123,6 +123,8 @@ code: |
 
 ## Interaction Contract
 
+- Closing collapses the panel back onto the trigger and fades its chrome out over the same 200ms: surface, border, shadow and the selected row's accent all animate away. Dropping them on the frame the panel hides made the label appear to blink as it settled.
+
 `TxFlatSelect` exposes the trigger as a combobox and the dropdown as a listbox. Items expose option selection state, disabled items cannot be selected, and ArrowUp/ArrowDown navigation skips disabled options while the dropdown is open.
 
 ## Comparison with TxSelect

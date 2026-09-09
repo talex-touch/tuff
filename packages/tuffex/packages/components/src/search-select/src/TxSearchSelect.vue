@@ -321,6 +321,7 @@ defineExpose({
             :id="optionId(index)"
             :key="String(opt.value)"
             class="tx-search-select__item"
+            align="center"
             :class="{ 'is-selected': opt.value === props.modelValue, 'is-disabled': opt.disabled, 'is-active': index === activeIndex }"
             role="option"
             :tabindex="-1"

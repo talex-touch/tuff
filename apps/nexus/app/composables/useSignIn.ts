@@ -54,6 +54,22 @@ function resolveErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
+/**
+ * WebAuthn also uses NotAllowedError for timeout and policy/context denial, so it cannot prove the
+ * user cancelled. Keep that ambiguous path neutral while treating an explicit abort as cancelled.
+ */
+function classifyPasskeyPromptError(error: unknown): 'cancelled' | 'unavailable' | null {
+  if (!error || typeof error !== 'object')
+    return null
+
+  const name = 'name' in error ? error.name : undefined
+  if (name === 'AbortError')
+    return 'cancelled'
+  if (name === 'NotAllowedError')
+    return 'unavailable'
+  return null
+}
+
 function isValidEmail(value: string) {
   return value.includes('@')
 }
@@ -1113,10 +1129,23 @@ export function useSignIn() {
       }, 700)
     }
     catch (error: unknown) {
-      const message = resolveErrorMessage(error, t('auth.passkeyFailed', 'Passkey login failed'))
+      const promptError = classifyPasskeyPromptError(error)
+      let message: string
+      if (promptError === 'cancelled') {
+        message = t('auth.passkeyCancelled', 'Passkey sign-in was cancelled.')
+      }
+      else if (promptError === 'unavailable') {
+        message = t(
+          'auth.passkeyUnavailable',
+          'Passkey sign-in was cancelled, timed out, or unavailable.',
+        )
+      }
+      else {
+        message = resolveErrorMessage(error, t('auth.passkeyFailed', 'Passkey login failed'))
+      }
       passkeyError.value = message
       passkeyPhase.value = 'error'
-      notify('error', message)
+      notify(promptError === null ? 'error' : 'warning', message)
     }
     finally {
       passkeyLoading.value = false

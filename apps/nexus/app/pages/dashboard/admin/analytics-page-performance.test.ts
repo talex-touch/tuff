@@ -132,6 +132,7 @@ interface AnalyticsExecutionDependencies {
     defineI18nRoute: () => void
     definePageMeta: () => void
     useAuthUser: () => { user: Ref<AnalyticsUser | null> }
+    useAccountRole: () => { isAdmin: ComputedRef<boolean> }
     useI18n: () => { t: (_key: string, fallback: string) => string, locale: Ref<string> }
     useRoute: () => AnalyticsRoute
     navigateTo: (path: string) => unknown
@@ -176,7 +177,7 @@ async function compileFacade(): Promise<AnalyticsFacadeSetup> {
   const executable = `
 export function setupAnalyticsFacade(dependencies) {
   const { ref, computed, watch, onMounted, onBeforeUnmount } = dependencies.vue
-  const { defineAsyncComponent, definePageMeta, defineI18nRoute, useI18n, useAuthUser, useRoute, navigateTo, requestJson } = dependencies.nuxt
+  const { defineAsyncComponent, definePageMeta, defineI18nRoute, useI18n, useAuthUser, useAccountRole, useRoute, navigateTo, requestJson } = dependencies.nuxt
   const { useAdminAnalyticsData, formatAnalyticsCategoryKey, formatAnalyticsCategoryLabel, formatAnalyticsDateTime, formatAnalyticsDuration, formatAnalyticsNumber, formatExchangeRate, formatPayloadPreview, toSortedAnalyticsList } = dependencies.analyticsDependencies
 ${scriptWithoutImports}
   return {
@@ -256,6 +257,7 @@ ${scriptWithoutImports}
       defineI18nRoute: () => undefined,
       definePageMeta: () => undefined,
       useAuthUser: () => ({ user: page.user }),
+      useAccountRole: () => ({ isAdmin: computed(() => page.user.value?.role === 'admin') }),
       useI18n: () => ({ t: (_key: string, fallback: string) => fallback, locale: page.locale }),
       useRoute: () => page.route,
       navigateTo: page.navigateTo,

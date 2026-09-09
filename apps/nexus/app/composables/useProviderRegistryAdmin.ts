@@ -93,7 +93,7 @@ export function useProviderRegistryAdmin() {
   const providerService = createProviderRegistryCrudService()
   const sceneObservabilityService = createProviderRegistrySceneObservabilityService()
 
-  const isAdmin = computed(() => user.value?.role === 'admin')
+  const { isAdmin } = useAccountRole()
 
   watch(isAdmin, (admin) => {
     if (user.value && !admin) {

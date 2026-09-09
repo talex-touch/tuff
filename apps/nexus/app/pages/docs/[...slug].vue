@@ -79,8 +79,7 @@ watch(
   { immediate: import.meta.client },
 )
 
-const authUserState = useState<{ role?: string } | null>('auth-user', () => null)
-const isAdmin = computed(() => authUserState.value?.role === 'admin')
+const { isAdmin } = useAccountRole()
 
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
 const docPath = computed(() => normalizeDocsPagePath(activeRoutePath.value))

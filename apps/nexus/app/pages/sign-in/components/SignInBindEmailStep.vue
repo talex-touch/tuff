@@ -24,10 +24,10 @@ const bindValue = computed({
 <template>
   <div class="auth-step">
     <Input v-model="bindValue" type="text" :placeholder="t('auth.email', '邮箱')" class="auth-input" />
-    <TxButton class="auth-button auth-button--primary" size="lg" block :loading="bindLoading" @click="emit('bind')">
+    <TxButton variant="primary" class="auth-button auth-button--primary" size="lg" block :loading="bindLoading" @click="emit('bind')">
       {{ t('auth.bindEmailConfirm', '绑定邮箱') }}
     </TxButton>
-    <TxButton class="auth-button auth-button--ghost" size="lg" block :loading="bindLoading" @click="emit('skip')">
+    <TxButton variant="ghost" class="auth-button auth-button--ghost" size="lg" block :loading="bindLoading" @click="emit('skip')">
       {{ t('auth.bindEmailSkip', '暂时跳过') }}
     </TxButton>
   </div>

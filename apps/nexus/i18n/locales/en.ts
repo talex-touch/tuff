@@ -150,7 +150,8 @@ export default {
     linuxdoFailed: 'LinuxDO sign-in failed',
     passkeyNotSupported: 'Passkeys are not supported in this browser.',
     passkeyNeedEmail: 'Please enter your email first.',
-    passkeyCancelled: 'Passkey cancelled.',
+    passkeyCancelled: 'Passkey sign-in was cancelled.',
+    passkeyUnavailable: 'Passkey sign-in was cancelled, timed out, or unavailable.',
     passkeyFailed: 'Passkey login failed.',
     passkeyTitle: 'Passkey sign-in',
     passkeySubtitle: 'System Passkey verification will be invoked.',
@@ -409,6 +410,7 @@ export default {
       placeholder: 'Search official plugins',
     },
     filters: {
+      label: 'Plugin categories',
       all: 'All categories',
     },
     detail: {
@@ -470,6 +472,8 @@ export default {
       empty: 'No official plugins match your filters.',
       clearFilters: 'Clear filters',
       none: 'No official plugins are available yet.',
+      noneHint: 'The catalogue fills as plugins pass review. Build one with the developer docs, or grab the latest app release.',
+      emptyHint: 'Try another keyword or category.',
       loadMore: 'Load more plugins',
       loadMoreFailed: 'Failed to load more plugins.',
     },

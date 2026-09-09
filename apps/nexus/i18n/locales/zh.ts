@@ -149,7 +149,8 @@ export default {
     linuxdoFailed: 'LinuxDO 登录失败',
     passkeyNotSupported: '当前浏览器不支持 Passkey',
     passkeyNeedEmail: '请先输入邮箱',
-    passkeyCancelled: '操作已取消',
+    passkeyCancelled: 'Passkey 登录已取消',
+    passkeyUnavailable: 'Passkey 登录已取消、超时或当前不可用',
     passkeyFailed: 'Passkey 登录失败',
     passkeyTitle: 'Passkey 登录',
     passkeySubtitle: '将调用系统 Passkey 完成验证。',
@@ -408,6 +409,7 @@ export default {
       placeholder: '搜索官方插件',
     },
     filters: {
+      label: '插件分类',
       all: '全部分类',
     },
     detail: {
@@ -469,6 +471,8 @@ export default {
       empty: '没有符合条件的官方插件。',
       clearFilters: '清除筛选',
       none: '目前还没有官方插件。',
+      noneHint: '插件通过审核后会陆续上架。可以先看开发者文档自己做一个，或去获取最新版本的应用。',
+      emptyHint: '换个关键词或分类试试。',
       loadMore: '加载更多插件',
       loadMoreFailed: '加载更多插件失败。',
     },
