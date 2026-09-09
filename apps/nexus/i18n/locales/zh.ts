@@ -149,7 +149,7 @@ export default {
     linuxdoFailed: 'LinuxDO 登录失败',
     passkeyNotSupported: '当前浏览器不支持 Passkey',
     passkeyNeedEmail: '请先输入邮箱',
-    passkeyCancelled: '操作已取消',
+    passkeyCancelled: 'Passkey 登录已取消或超时',
     passkeyFailed: 'Passkey 登录失败',
     passkeyTitle: 'Passkey 登录',
     passkeySubtitle: '将调用系统 Passkey 完成验证。',

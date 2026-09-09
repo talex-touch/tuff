@@ -150,7 +150,7 @@ export default {
     linuxdoFailed: 'LinuxDO sign-in failed',
     passkeyNotSupported: 'Passkeys are not supported in this browser.',
     passkeyNeedEmail: 'Please enter your email first.',
-    passkeyCancelled: 'Passkey cancelled.',
+    passkeyCancelled: 'Passkey sign-in was cancelled or timed out.',
     passkeyFailed: 'Passkey login failed.',
     passkeyTitle: 'Passkey sign-in',
     passkeySubtitle: 'System Passkey verification will be invoked.',
