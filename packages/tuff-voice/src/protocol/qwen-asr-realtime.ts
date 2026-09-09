@@ -85,7 +85,7 @@ export function buildDashscopeQwenAsrRealtimeHeaders(
     throw new VoiceProviderError('DASHSCOPE_USER_AGENT_INVALID', 'DashScope user-agent is invalid.')
   }
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
+    'Authorization': `Bearer ${apiKey}`,
     'user-agent': safeUserAgent,
   }
   const workspace = credentials.workspaceId?.trim()
@@ -160,18 +160,21 @@ export function parseDashscopeQwenAsrRealtimeEvent(data: string | Uint8Array): V
   let message: unknown
   try {
     message = JSON.parse(raw)
-  } catch {
+  }
+  catch {
     return null
   }
   const root = asRecord(message)
-  if (!root) return null
+  if (!root)
+    return null
   const type = readText(root.type)
   const requestId = readRequestId(root)
   if (type === 'conversation.item.input_audio_transcription.text') {
     const text = readText(root.text)
     const stash = readText(root.stash)
     const visible = `${text}${stash}`.trim()
-    if (!visible) return null
+    if (!visible)
+      return null
     return {
       type: 'partial',
       text: visible,
@@ -181,7 +184,8 @@ export function parseDashscopeQwenAsrRealtimeEvent(data: string | Uint8Array): V
   }
   if (type === 'conversation.item.input_audio_transcription.completed') {
     const transcript = readText(root.transcript) || readText(asRecord(root.input_audio_transcription)?.transcript)
-    if (!transcript) return null
+    if (!transcript)
+      return null
     const segments = parseSegments(root.segments ?? root.utterances)
     const language = readText(root.language) || readText(asRecord(root.input_audio_transcription)?.language)
     const usage = parseUsage(root.usage)
@@ -201,8 +205,8 @@ export function parseDashscopeQwenAsrRealtimeEvent(data: string | Uint8Array): V
   if (type === 'conversation.item.input_audio_transcription.failed' || type === 'error') {
     const error = asRecord(root.error)
     const code = readText(root.code) || readText(error?.code) || 'DASHSCOPE_QWEN_ASR_REALTIME_ERROR'
-    const messageText =
-      readText(root.message) || readText(error?.message) || 'DashScope Qwen ASR realtime request failed.'
+    const messageText
+      = readText(root.message) || readText(error?.message) || 'DashScope Qwen ASR realtime request failed.'
     return {
       type: 'error',
       code,
@@ -222,15 +226,18 @@ export function isDashscopeQwenAsrRealtimeReadyEvent(data: string | Uint8Array):
     const root = asRecord(JSON.parse(raw))
     const type = readText(root?.type)
     return type === 'session.created' || type === 'session.updated'
-  } catch {
+  }
+  catch {
     return false
   }
 }
 
 function toDashscopeLanguage(language: string | undefined): string | undefined {
-  if (!language) return undefined
+  if (!language)
+    return undefined
   const normalized = language.trim().toLowerCase()
-  if (!normalized) return undefined
+  if (!normalized)
+    return undefined
   return (
     (
       {
@@ -246,11 +253,13 @@ function toDashscopeLanguage(language: string | undefined): string | undefined {
 }
 
 function parseSegments(value: unknown): VoiceSegment[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap(item => {
+  if (!Array.isArray(value))
+    return []
+  return value.flatMap((item) => {
     const row = asRecord(item)
     const text = readText(row?.text) || readText(row?.transcript)
-    if (!text) return []
+    if (!text)
+      return []
     const startMs = readFiniteNumber(row?.start_ms) ?? readFiniteNumber(row?.start_time) ?? 0
     const endMs = readFiniteNumber(row?.end_ms) ?? readFiniteNumber(row?.end_time) ?? startMs
     return [{ text, startMs, endMs }]
@@ -259,22 +268,23 @@ function parseSegments(value: unknown): VoiceSegment[] {
 
 function parseUsage(value: unknown): VoiceUsage | undefined {
   const usage = asRecord(value)
-  if (!usage) return undefined
-  const durationMs =
-    readFiniteNumber(usage.duration_ms) ??
-    (readFiniteNumber(usage.duration_seconds) === undefined
-      ? undefined
-      : readFiniteNumber(usage.duration_seconds)! * 1000)
+  if (!usage)
+    return undefined
+  const durationMs
+    = readFiniteNumber(usage.duration_ms)
+      ?? (readFiniteNumber(usage.duration_seconds) === undefined
+        ? undefined
+        : readFiniteNumber(usage.duration_seconds)! * 1000)
   const inputBytes = readFiniteNumber(usage.input_bytes)
   const inputTokens = readFiniteNumber(usage.input_tokens) ?? readFiniteNumber(usage.inputTokens)
   const outputTokens = readFiniteNumber(usage.output_tokens) ?? readFiniteNumber(usage.outputTokens)
   const totalTokens = readFiniteNumber(usage.total_tokens) ?? readFiniteNumber(usage.totalTokens)
   if (
-    durationMs === undefined &&
-    inputBytes === undefined &&
-    inputTokens === undefined &&
-    outputTokens === undefined &&
-    totalTokens === undefined
+    durationMs === undefined
+    && inputBytes === undefined
+    && inputTokens === undefined
+    && outputTokens === undefined
+    && totalTokens === undefined
   ) {
     return undefined
   }
@@ -292,8 +302,8 @@ function readEventId(value: EventIdInput): string {
 }
 function readRequestId(root: Record<string, unknown>): string | undefined {
   const error = asRecord(root.error)
-  const value =
-    readText(root.request_id) || readText(root.requestId) || readText(error?.request_id) || readText(error?.requestId)
+  const value
+    = readText(root.request_id) || readText(root.requestId) || readText(error?.request_id) || readText(error?.requestId)
   return value || undefined
 }
 
@@ -317,7 +327,7 @@ function assertSafeId(value: string, code: string): string {
 }
 
 function isRetryableError(code: string): boolean {
-  return /(?:429|5\d\d|rate[_-]?limit|thrott|timeout|temporar|unavailable)/i.test(code)
+  return /429|5\d\d|rate[_-]?limit|thrott|timeout|temporar|unavailable/i.test(code)
 }
 
 export function dashscopeQwenAsrRealtimeAudioSpec(sampleRate = 16_000): VoiceAudioSpec {

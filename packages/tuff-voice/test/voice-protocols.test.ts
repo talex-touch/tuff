@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest'
 import {
   assertHttpSuccess,
   BAILIAN_PARAFORMER_DEFAULT_MODEL,
-  DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_MODEL,
   bailianAudioSpec,
   BailianParaformerVoiceProvider,
   buildBailianFinishTask,
@@ -19,6 +18,7 @@ import {
   buildDoubaoHeaders,
   buildDoubaoStreamPayload,
   createVoiceProviderRegistry,
+  DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_MODEL,
   decodeDoubaoFrame,
   doubaoAudioSpec,
   DoubaoVoiceProvider,
@@ -292,7 +292,7 @@ describe('tuff-voice provider protocol contracts', () => {
       'wss://workspace_1.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=qwen3-asr-flash-realtime',
     )
     expect(buildDashscopeQwenAsrRealtimeHeaders({ apiKey: ' fixture-key ', workspaceId: 'workspace_1' }, 'fixture-agent')).toEqual({
-      Authorization: 'Bearer fixture-key',
+      'Authorization': 'Bearer fixture-key',
       'user-agent': 'fixture-agent',
       'X-DashScope-WorkSpace': 'workspace_1',
     })
@@ -351,7 +351,6 @@ describe('tuff-voice provider protocol contracts', () => {
       requestId: 'request-1',
     })
   })
-
 
   it('resolves HTTPS URLs and byte sources, and always releases resolver-owned sources', async () => {
     const url = await resolveUploadSource({ model: 'm', source: { kind: 'url', url: 'https://example.test/audio.wav' }, requestId: 'u1' })
