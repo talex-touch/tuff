@@ -174,6 +174,16 @@ const PILL_CHROME_WIDTH = 94
  */
 const CHAR_STAGGER_MS = 16
 const CHAR_STAGGER_TOTAL_MS = 240
+/**
+ * How far the shimmer's highlight is behind the character to its left.
+ *
+ * The wave is carried by the characters rather than by a gradient over the paragraph. That was
+ * not a style preference: `background-clip: text` on the paragraph stopped painting the moment
+ * the per-character reveal gave each span its own `filter`, because a filtered inline-block is
+ * composited on its own and drops out of the parent's text clip — while the transparent text
+ * fill kept inheriting into it. The sentence went invisible and no test could see it.
+ */
+const SHIMMER_STEP_MS = 45
 
 /**
  * Slack for the pixel the measurement cannot see.
@@ -403,9 +413,21 @@ const centerText = computed(() => {
  */
 /** Split for the reveal only; `centerText` stays the single source of the sentence. */
 const centerChars = computed(() => Array.from(centerText.value))
-function charDelay(index: number): number {
+/**
+ * Two staggers on one span, in the order the `animation` list declares them.
+ *
+ * The first fires once and is what makes the sentence arrive; it tightens for a long message so
+ * the whole wave still lands inside `CHAR_STAGGER_TOTAL_MS`. The second runs forever and holds a
+ * fixed step per character, so the highlight crosses the sentence at one speed instead of
+ * sprinting through short messages and crawling through long ones.
+ *
+ * Extra values are ignored when only one animation is running, so the same string serves the
+ * plain reveal and the shimmering one.
+ */
+function charDelay(index: number): string {
   const count = Math.max(1, centerChars.value.length)
-  return Math.round(index * Math.min(CHAR_STAGGER_MS, CHAR_STAGGER_TOTAL_MS / count))
+  const reveal = Math.round(index * Math.min(CHAR_STAGGER_MS, CHAR_STAGGER_TOTAL_MS / count))
+  return `${reveal}ms, ${index * SHIMMER_STEP_MS}ms`
 }
 
 const centerKey = computed(() =>
@@ -1197,7 +1219,7 @@ onBeforeUnmount(() => {
               v-for="(char, index) in centerChars"
               :key="`${centerKey}:${index}`"
               class="voice-dock__char"
-              :style="{ animationDelay: `${charDelay(index)}ms` }"
+              :style="{ animationDelay: charDelay(index) }"
               >{{ char }}</span
             >
           </p>
@@ -1736,28 +1758,33 @@ onBeforeUnmount(() => {
   color: var(--shell-text-muted);
 }
 
-/* Only the waiting hint shimmers. A notice is a result, and results should hold still. */
+/*
+ * Only the waiting hint shimmers. A notice is a result, and results should hold still.
+ *
+ * The highlight is a per-character colour wave, not a gradient clipped to the paragraph's text.
+ * The gradient version drew nothing at all once the reveal gave each character a `filter`: a
+ * filtered inline-block composites on its own and leaves the parent's `background-clip: text`
+ * shape, while `-webkit-text-fill-color: transparent` still inherits into it. Every glyph was
+ * transparent with no gradient behind it, so the pill widened around a sentence nobody could see.
+ */
 .voice-dock__text--shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--shell-text-muted) 0%,
-    var(--shell-text-muted) 35%,
-    var(--shell-text-primary) 50%,
-    var(--shell-text-muted) 65%,
-    var(--shell-text-muted) 100%
-  );
-  background-clip: text;
-  background-size: 240% 100%;
-  -webkit-text-fill-color: transparent;
-  animation: voice-dock-shimmer 1400ms linear infinite;
+  color: var(--shell-text-muted);
 }
 
-@keyframes voice-dock-shimmer {
-  from {
-    background-position: 120% 0;
+.voice-dock__text--shimmer .voice-dock__char {
+  animation:
+    voice-char-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both,
+    voice-char-shimmer 1400ms linear infinite;
+}
+
+@keyframes voice-char-shimmer {
+  0%,
+  100% {
+    color: var(--shell-text-muted);
   }
-  to {
-    background-position: -20% 0;
+
+  50% {
+    color: var(--shell-text-primary);
   }
 }
 
@@ -1808,10 +1835,10 @@ onBeforeUnmount(() => {
       background 160ms ease-out;
   }
 
-  .voice-dock__text--shimmer {
-    background: none;
+  /* Still legible, just not travelling: the wave was the only motion it had. */
+  .voice-dock__text--shimmer,
+  .voice-dock__text--shimmer .voice-dock__char {
     color: var(--shell-text-secondary);
-    -webkit-text-fill-color: currentcolor;
     animation: none;
   }
 }
