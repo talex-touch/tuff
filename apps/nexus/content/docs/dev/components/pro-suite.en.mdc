@@ -1,5 +1,5 @@
 ---
-title: Pro Suite Overview
+title: Pro Suite
 description: Rich interaction, visual effects and low-level primitives
 category: ProSuite
 status: beta
@@ -11,7 +11,7 @@ verified: false
 
 ## Positioning
 
-The Pro suite carries heavy interaction and visual expression: **Interaction** means complete interactive pieces like the command palette, search panel, both editors and the virtual list; **Effects** is the expression layer — glass surfaces, border beams, gradual blur, text motion and liquid; **Primitives** (BaseSurface, BaseAnchor, Floating, AutoSizer, ResizeBox) are the foundation the rest of the family is built on, rarely used directly by apps. Everything imports through the `@talex-touch/tuffex/pro` entry. Data visualization and the chart family moved to the **Data** suite — see the [Charts overview](/docs/dev/components/charts).
+The Pro suite carries heavy interaction and visual expression: **Interaction** means complete interactive pieces like the command palette, search panel, both editors and the virtual list; **Effects** is the expression layer — glass surfaces, border beams, gradual blur, text motion and liquid; **Primitives** (BaseSurface, BaseAnchor, Floating, AutoSizer, ResizeBox) are the foundation the rest of the family is built on, rarely used directly by apps. Everything imports through the `@talex-touch/tuffex/pro` entry. Data visualization and the chart family moved to the **Data** suite — see the [Data Suite](/docs/dev/components/data-suite).
 
 ## Preview
 

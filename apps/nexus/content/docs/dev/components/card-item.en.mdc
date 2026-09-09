@@ -71,6 +71,8 @@ code: |
 
 ## Interaction Contract
 
+- `align="center"` puts the row's columns on one centre line, which is what a single-line list row wants: a taller leading column — a caret, a checkbox, an avatar — otherwise pins the label to the top of the row. The default stays `start`, because a card whose text wraps to several lines should align with the top of its media column.
+
 - The left media column is omitted when there is no `avatar` slot, `avatarUrl`, `iconClass`, or `avatarText`.
 - Generated avatar priority is `avatarUrl` first, then `iconClass`, then `avatarText`.
 - `tabindex="0"` is applied only when `clickable=true` and `disabled=false`.
@@ -78,6 +80,7 @@ code: |
 - `disabled=true` adds the disabled class, removes focusability, and suppresses mouse and Enter activation.
 - The hover fill reads `--tx-card-item-hover-bg` and the active fill reads `--tx-card-item-active-bg`. Their defaults are 18% of `--tx-bg-color-overlay` and 8% of `--tx-color-primary`, so an unset row renders pixel for pixel what it did before. Border colours are not overridable and still come from `--tx-border-color-light` / `--tx-color-primary`.
 - Text areas use single-line ellipsis for `title` and `subtitle`; `description` can wrap.
+- Hovering an `active` row deepens its accent rather than replacing it with the neutral hover fill: the hover rule outranks the active rule on its own, so a selected row used to lose its highlight under the pointer.
 
 ## Best Practices
 

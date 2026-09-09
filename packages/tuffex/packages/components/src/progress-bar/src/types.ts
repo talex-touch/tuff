@@ -8,12 +8,29 @@ import type { TooltipProps } from '../../tooltip/src/types'
 export interface ProgressSegment {
   value: number
   color?: string
+  /**
+   * Shown in the tip that rises above the segment on hover, ahead of the
+   * segment's share of `segmentsTotal` (`Release · 56%`). Without it the tip
+   * shows the share alone.
+   */
   label?: string
 }
 
 export type ProgressIndeterminateVariant = 'classic' | 'sweep' | 'bounce' | 'elastic' | 'split'
 
-export type ProgressFlowEffect = 'none' | 'shimmer' | 'wave' | 'particles'
+/**
+ * Overlay drawn over the determinate fill.
+ *
+ * - `shimmer`: one soft highlight sweeping the fill.
+ * - `wave`: two glows breathing in from the ends.
+ * - `stardust`: two depths of white star points drifting forward over the
+ *   fill, the near layer twinkling — dust catching light. It sits on top of
+ *   whatever `color` resolves to, flat or gradient.
+ * - `particles`: deprecated alias of `stardust`.
+ *
+ * Ignored while `segments` render: the segments own the fill's surface there.
+ */
+export type ProgressFlowEffect = 'none' | 'shimmer' | 'wave' | 'stardust' | 'particles'
 
 export type ProgressIndicatorEffect = 'none' | 'sparkle'
 
@@ -91,6 +108,8 @@ export interface ProgressBarProps {
    * Multi segment progress.
    *
    * When provided, the component will render segments inside the filled area.
+   * Each segment lifts on hover, dims its neighbours and raises a tip with its
+   * `label` and share; the track stops clipping so the lift has room.
    */
   segments?: ProgressSegment[]
 
@@ -125,7 +144,7 @@ export interface ProgressBarProps {
   format?: (percentage: number) => string
 
   /**
-   * Flow overlay effect on determinate progress.
+   * Flow overlay effect on determinate progress. See {@link ProgressFlowEffect}.
    * @default 'none'
    */
   flowEffect?: ProgressFlowEffect

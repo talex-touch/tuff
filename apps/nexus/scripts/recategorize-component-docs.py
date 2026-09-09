@@ -6,7 +6,7 @@ this field, so it is the single source of truth for sidebar structure.
 
 Categories roll up into five suites via DocsSidebar's CATEGORY_SUITE_MAP:
 
-- concepts 理念: Foundations (concepts-suite, foundations, utils — standalone pages)
+- concepts 理念: Foundations (index — doubles as the Concepts overview —, foundations, utils)
 - base 基础组件: BaseSuite, Basic, Form, Layout, Navigation, Data, Feedback, Status
 - pro  进阶套件: ProSuite, Advanced, Effects, Primitives
 - ai   AI 套件:  AiSuite, AiChat, AiAgent, AiReasoning, AiContext
@@ -23,7 +23,7 @@ sidebar renders their pages as standalone links (suite overview first) rather
 than as collapsible groups.
 
 Chart docs (standalone @talex-touch/tuffex-charts package) live in data / "Charts";
-charts.mdc doubles as the data suite's overview page.
+data-suite.mdc is the data suite's overview page.
 """
 
 from __future__ import annotations
@@ -38,8 +38,12 @@ COMPONENTS_DIR = Path(__file__).resolve().parent.parent / "content" / "docs" / "
 TAXONOMY: dict[str, list[str]] = {
     # ── suite: concepts 理念 ─────────────────────────────────────────────
     "Foundations": [
-        "concepts-suite",
+        "index",
+        "installation",
         "foundations",
+        "theming",
+        "icons",
+        "accessibility",
         "utils",
     ],
     # ── suite: base 基础组件 ──────────────────────────────────────────────
@@ -234,8 +238,12 @@ TAXONOMY: dict[str, list[str]] = {
         "fine-tune-card",
     ],
     # ── suite: data 数据 ─────────────────────────────────────────────────
-    # Docs for the standalone @talex-touch/tuffex-charts package (kumo);
-    # charts.mdc doubles as the data suite's overview page.
+    # Suite overview page: rendered as the suite's first standalone link. The
+    # Charts group below documents the standalone @talex-touch/tuffex-charts
+    # package (kumo).
+    "DataSuite": [
+        "data-suite",
+    ],
     "Charts": [
         "charts",
         "chart-colors",
@@ -252,8 +260,9 @@ TAXONOMY: dict[str, list[str]] = {
     ],
 }
 
-# Pages that are not categorised component entries.
-EXCLUDED_SLUGS = {"index"}
+# Pages that are not categorised component entries. `index` is not one of them:
+# it doubles as the Concepts suite overview and carries `category: Foundations`.
+EXCLUDED_SLUGS: set[str] = set()
 
 CATEGORY_RE = re.compile(r"^category:[ \t]*.*$", re.MULTILINE)
 TITLE_RE = re.compile(r"^title:[ \t]*.*$", re.MULTILINE)

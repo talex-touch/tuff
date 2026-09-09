@@ -6,7 +6,7 @@ import { coerceJsonArray } from '~/utils/docs-api'
 import { categoryI18nKey, CATEGORY_SUITE_MAP, SUITE_CATEGORY_KEYS } from '~/utils/docs-suites'
 import { requestDocsPage } from '~/utils/docs-page-client-cache'
 import { useTypedFetch } from '~/utils/request'
-import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
+import { canonicalDocsPageIdentity, normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
@@ -105,7 +105,9 @@ const TOP_SECTIONS = computed(() => [
   {
     key: 'components',
     basePath: '/docs/dev/components',
-    entryPath: '/docs/dev/components/index',
+    // The section root, not `/index`: they render the same document, but only
+    // this spelling matches the Concepts Overview row's exact-match highlight.
+    entryPath: '/docs/dev/components',
     label: t('docsSidebar.components'),
     icon: 'i-carbon-cube',
     description: 'Components',
@@ -209,10 +211,14 @@ const SECTION_ORDER: Record<string, string[]> = {
   // Mirrors the `category` frontmatter taxonomy applied by
   // scripts/recategorize-component-docs.py, and fixes the order inside each group.
   '/docs/dev/components': [
+    // ── suite: concepts — the components index doubles as the Concepts
+    // overview, then the two other standalone pages
     '/docs/dev/components/index',
-    // ── suite: concepts — Foundations (standalone pages, overview first)
-    '/docs/dev/components/concepts-suite',
+    '/docs/dev/components/installation',
     '/docs/dev/components/foundations',
+    '/docs/dev/components/theming',
+    '/docs/dev/components/icons',
+    '/docs/dev/components/accessibility',
     '/docs/dev/components/utils',
     // ── suite: base — overview
     '/docs/dev/components/base-suite',
@@ -382,7 +388,9 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/insight-cards',
     '/docs/dev/components/recommendation-card',
     '/docs/dev/components/fine-tune-card',
-    // ── suite: data — Charts (@talex-touch/tuffex-charts; overview first, mirrors the kumo docs order)
+    // ── suite: data — overview
+    '/docs/dev/components/data-suite',
+    // data — Charts (@talex-touch/tuffex-charts; mirrors the kumo docs order)
     '/docs/dev/components/charts',
     '/docs/dev/components/chart-colors',
     '/docs/dev/components/timeseries-chart',
@@ -440,7 +448,8 @@ interface SuiteDef {
   key: SuiteKey
   label: string
   categories: { key: string; label: string }[]
-  // Rendered as flat links above the groups, right after the index page.
+  // Rendered as flat links above the groups. The first one is the suite's
+  // overview page, which picking the tab navigates to.
   standalonePages: string[]
 }
 
@@ -458,9 +467,16 @@ const SUITES = computed<SuiteDef[]>(() => [
     key: 'concepts',
     label: t('docsSidebar.suites.concepts'),
     categories: suiteCategories('concepts'),
+    // The overview is the components index itself: it carries the library
+    // positioning and the full component catalog, and lives at the section
+    // root, so it is linked as `/docs/dev/components`.
     standalonePages: [
-      '/docs/dev/components/concepts-suite',
+      '/docs/dev/components/index',
+      '/docs/dev/components/installation',
       '/docs/dev/components/foundations',
+      '/docs/dev/components/theming',
+      '/docs/dev/components/icons',
+      '/docs/dev/components/accessibility',
       '/docs/dev/components/utils',
     ],
   },
@@ -486,10 +502,7 @@ const SUITES = computed<SuiteDef[]>(() => [
     key: 'data',
     label: t('docsSidebar.suites.data'),
     categories: suiteCategories('data'),
-    // The charts package overview doubles as this suite's overview page; the
-    // standalone slot consumes it before the Charts group renders, so it never
-    // shows twice.
-    standalonePages: ['/docs/dev/components/charts'],
+    standalonePages: ['/docs/dev/components/data-suite'],
   },
 ])
 
@@ -517,7 +530,13 @@ const selectedSuite = ref<SuiteKey | null>(null)
 
 const suiteOfRoute = computed<SuiteKey | null>(() => {
   if (!isComponentDocsRoute.value) return null
-  const current = componentItems.value.find(item => item.normalizedPath === normalizedRoutePath.value)
+  // Compared by canonical identity: the Concepts overview is the section's
+  // index document, so the route `/docs/dev/components` and the item's
+  // `/docs/dev/components/index` are the same page under different spellings.
+  const here = canonicalDocsPageIdentity(normalizedRoutePath.value)
+  const current = componentItems.value.find(
+    item => canonicalDocsPageIdentity(item.normalizedPath) === here,
+  )
   const category = current?.category
   return category ? (CATEGORY_SUITE_MAP[category] ?? null) : null
 })
@@ -532,8 +551,28 @@ const activeSuiteDef = computed<SuiteDef>(
   () => SUITES.value.find(suite => suite.key === activeSuite.value) ?? SUITES.value[0]!,
 )
 
-function selectSuite(key: SuiteKey) {
+// The index document is the section root; `/docs/dev/components/index` is a
+// distinct route that path normalization deliberately keeps apart from it.
+const COMPONENTS_INDEX_PATH = '/docs/dev/components/index'
+const COMPONENTS_INDEX_LINK = '/docs/dev/components'
+
+function suiteOverviewLink(suite: SuiteDef | undefined) {
+  const overview = suite?.standalonePages[0]
+  if (!overview) return null
+  return overview === COMPONENTS_INDEX_PATH ? COMPONENTS_INDEX_LINK : overview
+}
+
+// Picking a tab is a navigation, not just a filter: every suite's first entry
+// is its overview page, and that is what the tab means.
+async function selectSuite(key: SuiteKey) {
   selectedSuite.value = key
+
+  const target = suiteOverviewLink(SUITES.value.find(def => def.key === key))
+  if (!target) return
+
+  const localized = localizedDocsPath(target)
+  if (localized && localized !== route.path)
+    await navigateTo(localized)
 }
 
 const COMPONENT_SYNC_STATUS_LABELS = computed<Record<SyncStatusKey, string>>(() => {
@@ -785,14 +824,13 @@ const resolvedComponentSections = computed(() => {
 
   if (!normalizedItems.length) return []
 
-  const indexItem = normalizedItems.find(item => item.normalizedPath === '/docs/dev/components/index')
+  const indexItem = normalizedItems.find(item => item.normalizedPath === COMPONENTS_INDEX_PATH)
   const entries = normalizedItems.filter(
-    item => item.normalizedPath && item.normalizedPath !== '/docs/dev/components/index',
+    item => item.normalizedPath && item.normalizedPath !== COMPONENTS_INDEX_PATH,
   )
 
   const used = new Set<string>()
   const sections: any[] = []
-  const indexLinkPath = '/docs/dev/components'
 
   const addSection = (title: string, children: any[]) => {
     if (!children.length) return
@@ -807,22 +845,14 @@ const resolvedComponentSections = computed(() => {
     })
   }
 
-  if (indexItem) {
-    sections.push({
-      title: indexItem.title,
-      path: indexLinkPath,
-      children: [],
-      page: true,
-    })
-  }
-
   for (const standalonePath of activeSuiteDef.value.standalonePages) {
-    const item = entries.find(entry => entry.normalizedPath === standalonePath)
+    const isIndex = standalonePath === COMPONENTS_INDEX_PATH
+    const item = isIndex ? indexItem : entries.find(entry => entry.normalizedPath === standalonePath)
     if (!item) continue
     used.add(standalonePath)
     sections.push({
       title: item.title,
-      path: item.path,
+      path: isIndex ? COMPONENTS_INDEX_LINK : item.path,
       children: [],
       page: true,
     })

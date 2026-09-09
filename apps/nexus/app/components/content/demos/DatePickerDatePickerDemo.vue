@@ -8,6 +8,7 @@ const popupVisible = ref(false)
 const fieldValue = ref('2026-03-18')
 const boundedValue = ref('2026-05-20')
 const inlineValue = ref('2026-07-14')
+const rangeValue = ref<[string, string]>(['2026-04-06', '2026-04-12'])
 
 const labels = computed(() => {
   if (locale.value === 'zh') {
@@ -19,6 +20,9 @@ const labels = computed(() => {
       boundedLabel: '受限范围',
       inlineLabel: '内联模式',
       inlineTitle: '排期日期',
+      rangeLabel: '日期区间',
+      rangeHint: '点选起始日，再点选结束日；中间的日期会连成一段。标题可点击，用来快速切换月份和年份。',
+      rangePlaceholder: '选择日期区间',
       popupHint: '弹层适合表单和紧凑筛选器。',
       fieldHint: 'field/adaptive 变体适合桌面表单，在窄屏仍保持触控友好的面板。',
       boundedHint: '只能选择 2026-05-10 到 2026-05-31。',
@@ -40,6 +44,9 @@ const labels = computed(() => {
     boundedLabel: 'Bounded range',
     inlineLabel: 'Inline mode',
     inlineTitle: 'Schedule date',
+    rangeLabel: 'Date range',
+    rangeHint: 'Click a start day, then an end day; the days between join into one stretch. The title is a button for jumping by month and year.',
+    rangePlaceholder: 'Select a date range',
     popupHint: 'Popup mode works well in forms and compact filters.',
     fieldHint: 'The field/adaptive variant fits desktop forms while staying touch-friendly on narrow screens.',
     boundedHint: 'Selection is limited to 2026-05-10 through 2026-05-31.',
@@ -111,6 +118,32 @@ const labels = computed(() => {
       <TxCard variant="plain" background="mask" :padding="10" :radius="12">
         <div class="tx-demo__meta">
           {{ labels.value }}: {{ fieldValue }}
+        </div>
+      </TxCard>
+    </section>
+
+    <section class="date-picker-demo__section">
+      <div class="date-picker-demo__header">
+        <div>
+          <div class="tx-demo__label">
+            {{ labels.rangeLabel }}
+          </div>
+          <div class="date-picker-demo__hint">
+            {{ labels.rangeHint }}
+          </div>
+        </div>
+      </div>
+
+      <TxDatePicker
+        v-model="rangeValue"
+        variant="field"
+        range
+        :placeholder="labels.rangePlaceholder"
+      />
+
+      <TxCard variant="plain" background="mask" :padding="10" :radius="12">
+        <div class="tx-demo__meta">
+          {{ labels.value }}: {{ rangeValue.join(' → ') }}
         </div>
       </TxCard>
     </section>

@@ -31,6 +31,12 @@ async function onSearchClick(event: MouseEvent) {
 
 <template>
   <div class="HeaderControls flex shrink-0 items-center justify-end gap-2 text-sm">
+    <span
+      v-if="props.showSearchButton && props.showLanguageToggle"
+      class="HeaderControls-Divider"
+      aria-hidden="true"
+    />
+
     <div
       v-if="props.showSearchButton"
       class="relative"
@@ -47,11 +53,6 @@ async function onSearchClick(event: MouseEvent) {
     </div>
 
     <div class="relative flex shrink-0 items-center gap-1 sm:ml-auto">
-      <span
-        v-if="props.showLanguageToggle"
-        class="HeaderControls-Divider"
-        aria-hidden="true"
-      />
       <template v-if="props.showLanguageToggle">
         <LanguageToggle />
       </template>

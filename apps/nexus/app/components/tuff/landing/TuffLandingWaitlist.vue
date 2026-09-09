@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import TuffLandingAuroraBar from './TuffLandingAuroraBar.vue'
 import TuffLandingSection from './TuffLandingSection.vue'
 
 const { t } = useI18n()
@@ -48,23 +47,6 @@ const headlineParts = computed(() =>
 const headlineLead = computed(() => headlineParts.value.slice(0, -1))
 const headlineAccent = computed(() => headlineParts.value[headlineParts.value.length - 1] ?? '')
 
-const auroraBarCount = 28
-const auroraBars = Array.from({ length: auroraBarCount }, (_, i) => {
-  const seed = i + 1
-
-  return {
-    id: i,
-    x: `${((seed * 37) % 101).toFixed(2)}%`,
-    width: `${(0.5 + ((seed * 17) % 30) / 10).toFixed(2)}%`,
-    delay: Number((((seed * 23) % 80) / 10).toFixed(2)),
-    duration: Number((4 + ((seed * 19) % 60) / 10).toFixed(2)),
-    // Constrain hues to the blue → violet band so the backdrop reads as one
-    // aurora instead of confetti.
-    hue: 210 + ((seed * 47) % 110),
-    aspectRatio: (seed * 7) % 10 + 1,
-  }
-})
-
 function goToSignIn() {
   router.push(signInRoute.value)
 }
@@ -84,29 +66,6 @@ function goToSignIn() {
       stagger: 0.1,
     }"
   >
-    <template #decoration>
-      <!-- Aurora bars background -->
-      <div class="pioneer-aurora pointer-events-none absolute inset-0 overflow-hidden opacity-45">
-        <TuffLandingAuroraBar
-          v-for="bar in auroraBars"
-          :key="bar.id"
-          :x="bar.x"
-          :width="bar.width"
-          :delay="bar.delay"
-          :duration="bar.duration"
-          :hue="bar.hue"
-          :aspect-ratio="bar.aspectRatio"
-        />
-      </div>
-      <!-- Blur overlay to soften aurora -->
-      <div class="pointer-events-none absolute inset-0 backdrop-blur-[64px]" />
-      <!-- Horizon glow -->
-      <div class="pointer-events-none absolute inset-x-0 bottom-[-14%] h-[52%] bg-[radial-gradient(ellipse_72%_92%_at_50%_100%,rgba(139,92,246,0.16),transparent_68%)]" />
-      <!-- Glow orbs -->
-      <div class="absolute left-[-220px] top-[30%] h-[500px] w-[500px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(147,51,234,0.14),_transparent_70%)] blur-3xl" />
-      <div class="absolute bottom-[10%] right-0 h-[460px] w-[460px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.12),_transparent_70%)] blur-3xl sm:right-[-200px]" />
-    </template>
-
     <!-- Two-column layout -->
     <div class="waitlist-grid grid items-start gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16">
       <!-- Left: eyebrow + headline + CTA -->
@@ -339,9 +298,6 @@ function goToSignIn() {
   color: color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
-.pioneer-aurora {
-  container-type: size;
-}
 
 /* CJK copy should break at punctuation, not mid-word; `anywhere` keeps long
    unbroken runs from overflowing as an escape hatch. */

@@ -1,0 +1,60 @@
+---
+title: Accessibility
+description: The four conventions Tuffex components follow, and where coverage stops
+category: Foundations
+status: beta
+since: 0.4.0
+tags: [a11y, focus, reduced-motion, contrast, aria]
+syncStatus: reviewed
+verified: false
+---
+
+## Scope
+
+Tuffex targets WCAG 2.1 AA. That is the goal the components are built against, not a certification — this page describes the conventions they follow and says plainly where coverage is still partial.
+
+## Focus
+
+Focus rings are drawn on `:focus-visible`, never on `:focus`, so a mouse click does not leave a ring behind while keyboard traversal always does. The ring itself is two tokens rather than a hard-coded outline:
+
+| Token | Role |
+|-------|------|
+| `--tx-focus-ring-color` | The ring's own colour |
+| `--tx-focus-ring-shadow` | The halo around it |
+
+Both are redefined by the dark and high-contrast palettes, so a ring stays visible when the surface under it changes. Around fifty component stylesheets carry an explicit `:focus-visible` rule; the rest either aren't focusable or delegate to a focusable child.
+
+Components clipped by a rounded frame draw the ring **inset** instead of outside — a browser's own outline sits outside the element and gets cut into square corners by the parent's `overflow: hidden`. The collapse header is the worked example.
+
+## Motion
+
+Every animation is expected to answer `prefers-reduced-motion: reduce`, and roughly sixty component stylesheets carry that block today. The convention is to keep the *state* and drop the *travel*: an indeterminate progress bar stops sweeping but stays a filled translucent track, so it still reads as "busy"; a disclosure opens instantly instead of easing.
+
+Animate composited properties — `transform` and `opacity`. Where a component must animate layout (height from `0` to `auto` cannot be tweened in CSS), it measures and drives the value in JavaScript rather than animating `height` from a fixed guess.
+
+## Contrast
+
+Beyond the default palette, Tuffex ships a high-contrast one that raises text and border contrast in both light and dark. It follows the OS preference automatically through `@media (prefers-contrast: more)`, and an app can force it on or opt out — see [Theming](./theming.en.mdc) for the selectors.
+
+Contrast ratios are treated as a reviewable property, not a guess: token pairs that are easy to get wrong (a tinted badge on its own tint, a version pill on a dark page) carry their measured ratio in a comment beside the declaration.
+
+## Semantics
+
+Roughly nine in ten components set an explicit `role` or ARIA attributes. The recurring patterns:
+
+- **Named by their own text.** A component's accessible name comes from its visible label. Where a bar could only be named by printing text across it, an `ariaLabel` prop exists so the name is not forced to become visible copy.
+- **Decorative parts are hidden.** Glyphs and ornaments that duplicate adjacent text carry `aria-hidden`, so a screen reader hears the label once, not twice.
+- **Disclosures are wired.** Expandable rows pair `aria-expanded` on the trigger with `aria-controls` pointing at the panel's generated id.
+
+## Where coverage stops
+
+- There is **no automated accessibility test suite**. The package's cross-cutting tests cover suite barrels and the global install path; a11y behaviour is verified per component in its own tests and by review, so gaps are possible.
+- The conventions above are followed by most, not all, components. A component whose docs page is still marked `In progress` in the sidebar has not been through review.
+- Screen-reader testing is manual and not yet run against a fixed matrix.
+
+If you find a gap, the component's own doc page links to its source — a fix there lands for every consumer at once.
+
+## Source
+
+- Focus and contrast tokens: `packages/tuffex/packages/components/style/variables.scss`.
+- Theme and contrast selectors: [Theming](./theming.en.mdc).

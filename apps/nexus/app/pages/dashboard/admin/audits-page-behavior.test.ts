@@ -87,7 +87,7 @@ beforeAll(async () => {
   const executable = `
 export function setupAuditsFacade(dependencies) {
   const { ref, reactive, computed, watch, onMounted, onBeforeUnmount } = dependencies.vue
-  const { definePageMeta, defineI18nRoute, useI18n, useAuthUser, navigateTo, requestJson, hasWindow } = dependencies.nuxt
+  const { definePageMeta, defineI18nRoute, useI18n, useAuthUser, useAccountRole, navigateTo, requestJson, hasWindow } = dependencies.nuxt
 ${scriptWithoutImports}
   return {
     audits, loading, error, pagination, filters, hasPrev, hasNext,
@@ -112,6 +112,7 @@ ${scriptWithoutImports}
         locale: dependencies.locale,
       }),
       useAuthUser: () => ({ user: ref({ role: dependencies.role ?? 'admin' }) }),
+      useAccountRole: () => ({ isAdmin: computed(() => (dependencies.role ?? 'admin') === 'admin') }),
       navigateTo: vi.fn(),
       requestJson: dependencies.requestJson,
       hasWindow: () => false,

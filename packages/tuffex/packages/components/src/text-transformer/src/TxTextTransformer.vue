@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Slots } from 'vue'
 import type { TextTransformerProps } from './types'
 import { computed, nextTick, onBeforeUnmount, ref, useSlots, watch } from 'vue'
 import TxTextMorph from '../../text-morph/src/TxTextMorph.vue'
@@ -15,7 +16,7 @@ const props = withDefaults(defineProps<TextTransformerProps>(), {
   wrap: false,
 })
 
-const slots = useSlots()
+const slots: Slots = useSlots()
 
 /*
   Two escape hatches, both structural rather than stylistic:

@@ -114,13 +114,59 @@ describe('txSteps', () => {
     expect(wrapper.findAll('.tx-step')[0].classes()).toContain('tx-step--active')
   })
 
-  it('scopes small/large vertical line offsets with compound selectors (both modifiers on one node)', () => {
+  it('derives the connector geometry from one marker-size variable per size', () => {
     // `tx-step--small`/`tx-step--large` and `tx-step--vertical` render on the same element,
-    // so a descendant combinator (space) never matches and the size offsets go dead.
-    expect(txStepSource).toContain('.tx-step--small.tx-step--vertical .tx-step__line')
-    expect(txStepSource).toContain('.tx-step--large.tx-step--vertical .tx-step__line')
+    // so a descendant combinator (space) would never match. Since 2026-09-06 there are no
+    // per-size line offsets at all: each size sets `--tx-step-icon-size` and the line reads it.
+    expect(txStepSource).toMatch(/\.tx-step--small \{[^}]*--tx-step-icon-size: 20px/)
+    expect(txStepSource).toMatch(/\.tx-step--large \{[^}]*--tx-step-icon-size: 28px/)
+    expect(txStepSource).toMatch(/\.tx-step--horizontal \.tx-step__line \{[^}]*var\(--tx-step-icon-size\)/)
+    expect(txStepSource).toMatch(/\.tx-step--vertical \.tx-step__line \{[^}]*var\(--tx-step-icon-size\)/)
     expect(txStepSource).not.toContain('.tx-step--small .tx-step--vertical')
     expect(txStepSource).not.toContain('.tx-step--large .tx-step--vertical')
+  })
+
+  it('keeps the connector out of the marker button and colours it once the step is completed', async () => {
+    const wrapper = mount(TxSteps, {
+      props: { active: 1 },
+      slots: {
+        default: `
+          <TxStep title="Download" :step="0" />
+          <TxStep title="Install" :step="1" />
+          <TxStep title="Done" :step="2" />
+        `,
+      },
+      global: { components: { TxStep } },
+    })
+    // Each step registers itself in setup; `isLast` only settles once every sibling is in.
+    await nextTick()
+
+    const steps = wrapper.findAll('.tx-step')
+    // Pre-fix the line was a flex sibling of the marker inside the head, which
+    // pushed every marker left of its own title.
+    expect(steps[0].find('.tx-step__head .tx-step__line').exists()).toBe(false)
+    expect(steps[0].find('.tx-step__line').classes()).toContain('tx-step__line--completed')
+    expect(steps[1].find('.tx-step__line').classes()).not.toContain('tx-step__line--completed')
+    // The fill is its own element so completion can sweep along the rail.
+    expect(steps[0].find('.tx-step__line .tx-step__line-fill').exists()).toBe(true)
+    // Each step publishes its index for the sweep stagger.
+    expect(steps[1].attributes('style')).toContain('--tx-step-index: 1')
+  })
+
+  it('choreographs progress in CSS and switches it all off under reduced motion', () => {
+    // The sweep runs on mount and on completion (keyframes), un-completion eases
+    // back through the plain transition, the new current marker pops in behind
+    // the sweep and then breathes; none of it is JS.
+    expect(txStepSource).toContain('@keyframes tx-step-line-fill')
+    expect(txStepSource).toContain('@keyframes tx-step-line-fill-vertical')
+    expect(txStepSource).toContain('@keyframes tx-step-activate')
+    expect(txStepSource).toContain('@keyframes tx-step-breathe')
+    expect(txStepSource).toMatch(/\.tx-step__line--completed \.tx-step__line-fill \{[^}]*animation: tx-step-line-fill[^;]*var\(--tx-step-index/)
+    expect(txStepSource).toMatch(/\.tx-step__icon--active \{[^}]*animation:[^;]*tx-step-activate[^;]*tx-step-breathe/)
+
+    const reduced = txStepSource.slice(txStepSource.indexOf('@media (prefers-reduced-motion: reduce)'))
+    expect(reduced).toContain('animation: none')
+    expect(reduced).toContain('transition: none')
   })
 
   it('names each step button from its visible title (and description) via aria references', () => {

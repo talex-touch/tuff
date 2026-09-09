@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
-import { computed, ref, watchEffect } from 'vue'
+import { ref, watchEffect } from 'vue'
 import { useDashboardImagesData } from '~/composables/useDashboardData'
 import { requestJson } from '~/utils/request'
 
@@ -19,11 +19,8 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t } = useI18n()
-const { user } = useAuthUser()
 
-const isAdmin = computed(() => {
-  return user.value?.role === 'admin'
-})
+const { isAdmin } = useAccountRole()
 
 const {
   images,

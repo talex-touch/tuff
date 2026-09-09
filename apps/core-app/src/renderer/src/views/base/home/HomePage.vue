@@ -695,20 +695,19 @@ function onDrop(event: DragEvent): void {
 }
 
 /**
- * Feeds the floating composer's measured height to the stream's bottom padding.
+ * Feeds the measured composer stack height to the stream's bottom padding.
  *
- * Observed rather than computed from the textarea's `scrollHeight`: the composer also carries the
- * tool row and its own padding, and a wrapped tool row changes the total without the textarea
- * changing at all.
+ * The stack can contain both the composer and a pending tool confirmation. Observing the stack
+ * keeps the transcript and back-to-bottom control clear of every blocking control without
+ * duplicating either component's variable height in CSS.
  */
 let composerObserver: ResizeObserver | null = null
 
 onMounted(() => {
-  const element = composerRef.value
+  const element = composerGroupRef.value
   if (!element || typeof ResizeObserver === 'undefined') return
   composerObserver = new ResizeObserver(([entry]) => {
-    // Border-box, not contentRect: the clearance and the back-to-bottom pill
-    // offset need the composer's *visual* height, padding and border included.
+    // Border-box, not contentRect: the clearance must include every card, gap, border and padding.
     if (entry)
       composerHeight.value = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height
   })
@@ -1185,23 +1184,6 @@ watch(
             </TxConversationStream>
           </Transition>
 
-          <!-- Sits above the composer rather than inside the stream: the agent
-               is blocked until this is answered, so it must stay in view even
-               when the reader has scrolled away from the tail. -->
-          <div v-if="agentTools.pending.value" class="HomePage-ConfirmSlot">
-            <TxToolConfirmation
-              :tool-name="agentTools.pending.value.tool"
-              :summary="agentTools.pending.value.summary"
-              :input="agentTools.pending.value.input"
-              :risk="agentTools.pending.value.risk"
-              :allow-label="t('home.toolAllow')"
-              :deny-label="t('home.toolDeny')"
-              :remember-label="t('home.toolRemember')"
-              @approve="agentTools.approve($event.remember)"
-              @deny="agentTools.deny($event.remember)"
-            />
-          </div>
-
           <!-- The dev payload inspector: one dialog for whichever widget's
                toggle was clicked, highlighted JSON with its own copy button. -->
           <TxModal
@@ -1219,6 +1201,22 @@ watch(
           </TxModal>
 
           <div ref="composerGroupRef" class="HomePage-ComposerGroup">
+            <!-- The agent cannot continue until this is answered. Keeping the card in the measured
+                 composer stack reserves its full height while the transcript still scrolls behind it. -->
+            <div v-if="agentTools.pending.value" class="HomePage-ConfirmSlot">
+              <TxToolConfirmation
+                :tool-name="agentTools.pending.value.tool"
+                :summary="agentTools.pending.value.summary"
+                :input="agentTools.pending.value.input"
+                :risk="agentTools.pending.value.risk"
+                :allow-label="t('home.toolAllow')"
+                :deny-label="t('home.toolDeny')"
+                :remember-label="t('home.toolRemember')"
+                @approve="agentTools.approve($event.remember)"
+                @deny="agentTools.deny($event.remember)"
+              />
+            </div>
+
             <div
               ref="composerRef"
               class="HomePage-Composer"
@@ -1370,22 +1368,24 @@ watch(
    * truncated both.
    */
   --home-panel-width: 360px;
+  // Resolve against each lane's containing block, not the whole viewport: the right panel is a
+  // real flex sibling and must reduce the transcript, confirmation and composer together.
+  --home-chat-lane-width: min(720px, calc(100% - 64px));
 
   // ---------------------------------------------------------------------------
-  // Layer scale. One rule governs it: the composer is the top layer and a
+  // Layer scale. One rule governs it: the composer stack is the top layer and a
   // message is always one layer beneath it — mid-flight included. The send
   // animation's clone used to carry a hardcoded `z-index: 30` and flew OVER
   // the box it had just left.
   //
-  // The four values compete directly: nothing between here and them opens a
+  // The three values compete directly: nothing between here and them opens a
   // stacking context (`.HomePage-Center` is `position: relative` at `z-index:
   // auto`, `.HomePage-Body` only has `overflow`), so they have to be read off
   // one scale rather than picked per site.
   // ---------------------------------------------------------------------------
   --home-z-leaving: 0; // the stream and greeting dissolving on their way out
   --home-z-flight: 1; // the send animation's in-air bubble clone
-  --home-z-composer: 2; // the composer — above every message, always
-  --home-z-confirm: 3; // pending-tool card: not a message, so it may sit higher
+  --home-z-composer: 2; // composer and pending confirmation — above every message
 
   // ---------------------------------------------------------------------------
   // TuffEx token bridge: every tuffex component under this surface renders in
@@ -1555,11 +1555,9 @@ watch(
   min-height: 0;
 
   /**
-   * The tail clears the floating composer instead of ending underneath it, and the
-   * back-to-bottom pill has to hover above that composer, not under it. Both are
-   * driven by the measured composer height for the same reason the padding always
-   * was: the textarea grows to 200px. `:deep` because these live inside the stream
-   * component and scoped selectors would never reach them otherwise.
+   * The tail and back-to-bottom pill clear the measured composer stack. That stack grows when a
+   * tool confirmation is pending, so neither the last tool row nor its status can sit underneath
+   * an actionable card. `:deep` is required because both controls live inside the stream.
    */
   :deep(.tx-conversation-stream__scroller) {
     padding: 28px 0 calc(var(--home-composer-height, 112px) + 28px);
@@ -1571,10 +1569,10 @@ watch(
   }
 }
 
-/** Per-row column: same 720px lane as the composer, one row per virtualized item. */
+/** One container-relative lane shared by every virtualized message row and the composer stack. */
 .HomePage-StreamRow {
-  width: 720px;
-  max-width: calc(100vw - var(--shell-sidebar-width) - 64px);
+  width: var(--home-chat-lane-width);
+  min-width: 0;
   margin: 0 auto;
   padding-bottom: 20px;
   box-sizing: border-box;
@@ -1617,20 +1615,14 @@ watch(
 }
 
 /**
- * The pending-tool card floats with the composer rather than scrolling with the
- * transcript: the agent is blocked until it is answered, so it has to stay
- * reachable even when the reader has scrolled away.
+ * The blocking card stays in the floating composer stack instead of the transcript. Its height is
+ * measured as real layout, so it remains reachable without covering the last running tool row.
  */
 .HomePage-ConfirmSlot {
-  position: absolute;
+  width: var(--home-chat-lane-width);
+  min-width: 0;
   animation: home-msg-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  right: 0;
-  bottom: calc(var(--home-composer-height, 112px) + 28px);
-  left: 0;
-  z-index: var(--home-z-confirm);
-  width: 720px;
-  max-width: calc(100vw - var(--shell-sidebar-width) - 64px);
-  margin: 0 auto;
+  pointer-events: auto;
 }
 
 .HomePage-Chain,
@@ -1807,6 +1799,8 @@ watch(
   flex-direction: column;
   gap: 18px;
   align-items: center;
+  width: 100%;
+  min-width: 0;
   // Above the dissolving stream while a conversation is being left, and above
   // the send animation's clone while a message is on its way up.
   position: relative;
@@ -1816,8 +1810,8 @@ watch(
    * Floats over the stream rather than sitting below it, so the transcript runs the full height of
    * the pane and scrolls under the composer.
    *
-   * `pointer-events` is handed back only to the composer itself: the group spans the full width, and
-   * left as-is its empty margins would swallow wheel events aimed at the messages behind them.
+   * `pointer-events` is handed back only to the actionable confirmation and composer cards: the
+   * group spans the full width, and its empty margins must not swallow transcript wheel events.
    */
   .HomePage.conversing & {
     position: absolute;
@@ -1833,8 +1827,8 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 14px;
-  width: 720px;
-  max-width: calc(100vw - var(--shell-sidebar-width) - 64px);
+  width: var(--home-chat-lane-width);
+  min-width: 0;
   padding: 16px 16px 12px;
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-2xl);
@@ -1979,6 +1973,7 @@ textarea.HomePage-Input:focus-visible {
 }
 
 .HomePage-ToolRow {
+  container: home-composer-tools / inline-size;
   display: flex;
   align-items: center;
   justify-content: space-between;

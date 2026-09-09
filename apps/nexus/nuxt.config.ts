@@ -381,6 +381,7 @@ export default defineNuxtConfig({
     alias: {
       '@panva/hkdf': hkdfCompatEntry,
       'next-auth/core': nextAuthCoreEntry,
+      '@talex-touch/tuffex/utils': tuffexDistUtilsEntry,
     },
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
     cloudflare: {

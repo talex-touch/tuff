@@ -1,18 +1,46 @@
 ---
-title: Tuffex 组件
-description: 塔芙组件库的组件展示中心
+title: 理念总览
+description: Tuffex 是什么、背后的三块理念版图，以及完整组件索引
+category: Foundations
+status: beta
+since: 0.3.9
+tags: [concepts, overview, foundations, utils]
 syncStatus: reviewed
 verified: true
 ---
 
-# Tuffex 组件
+# 理念总览
 
-## 组件预览
+## Tuffex Components 组件库
 
-每个格子都是可交互的真实组件，点击左上角名称进入对应组件文档。
+Tuffex（`@talex-touch/tuffex`）是服务 Talex Touch 生态的 Vue 3 组件库：同一套组件覆盖桌面端 CoreBox、插件 Surface 与本文档站。组件按套件划分——**基础**承载日常界面主体、**进阶**承载高级交互与视觉表达、**AI** 承载 AI 原生界面、**数据**承载可视化与独立图表包——侧边栏顶部的套件切换在这四个组件套件之外，另设「理念」作为第五个纯文档页签；点哪个页签就直接进入该套件的总览页。
 
-::DocsComponentsGallery
-::
+- 交互标本：每个套件页开头都有一块组件预览——《[基础套件](./base-suite.zh.mdc)》《[进阶套件](./pro-suite.zh.mdc)》《[AI 套件](./ai-suite.zh.mdc)》《[数据套件](./data-suite.zh.mdc)》——每个格子都是可交互的真实组件，点名称直达文档。
+- 分套件引入：`@talex-touch/tuffex/base`、`/pro`、`/ai` 三个分类入口按需加载；图表族在独立包 `@talex-touch/tuffex-charts`。
+
+## 安装与引入
+
+三种引入形态——按组件、按套件入口、或根入口——以及各自需要的样式文件。从《[安装与引入](./installation.zh.mdc)》开始。
+
+## Design Foundations 设计基础
+
+组件视觉的最底层是一组 `--tx-*` design token：字体栈与字号字重体系、明暗双主题下的颜色语义（主色、成功/警告/危险、文本与填充分层）。组件不各自定义视觉，而是统一消费这层变量——改主题就是改 token，业务侧自定义也应落在同一层。完整清单见《[Design Foundations 设计基础](./foundations.zh.mdc)》。
+
+## 主题定制
+
+设计基础列出的是 token 清单，《[主题定制](./theming.zh.mdc)》讲的是怎么覆盖它们：全局 token、深色与高对比度选择器、AI 套件自带的 `--tx-bui-*` 层，以及约三百个可以只改一个组件或一棵子树的组件变量。
+
+## 图标体系
+
+`TxIcon` 自己判断一个图标字符串**是什么**，而不需要调用方声明——Iconify class、七个内置字形之一、emoji，或显式的 URL / 文件来源。《[图标体系](./icons.zh.mdc)》讲清这套解析顺序，以及应用如何教组件从自己的存储里加载图标。
+
+## 无障碍
+
+`:focus-visible` 上的焦点环、`prefers-reduced-motion` 处理、高对比度调色板，以及组件共用的 ARIA 约定——同时坦白说明覆盖到哪里为止。见《[无障碍](./accessibility.zh.mdc)》。
+
+## Utils 工具函数
+
+与组件配套的公开工具函数，从根入口与 `./utils` 子路径导出：`nextZIndex` 统一浮层层级、`toast` 轻提示、对话框编排、环境守卫（`hasWindow` 等）、触感反馈与动画辅助。组件内部走的也是这一层，业务侧复用同一入口即可保证行为一致。完整 API 见《[Utils 工具函数](./utils.zh.mdc)》。
 
 ## 组合工作台 Demo
 
@@ -80,18 +108,20 @@ code: |
 
 ## 套件总览
 
+每个套件都有一个总览页，承载自己那一部分的实时预览和组件清单——也就是该套件页签下的第一个条目。
+
 | 套件 | 分组 | 组件数 | 引入入口 |
 |------|------|--------|----------|
-| [基础组件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 91 | `@talex-touch/tuffex/base` |
+| [基础套件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 91 | `@talex-touch/tuffex/base` |
 | [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 27 | `@talex-touch/tuffex/pro` |
 | [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 29 | `@talex-touch/tuffex/ai` |
-| [数据](./charts.zh.mdc) | 图表 / 可视化 | 10 | `@talex-touch/tuffex/pro`（可视化）+ `@talex-touch/tuffex-charts`（图表） |
+| [数据套件](./data-suite.zh.mdc) | 图表 / 可视化 | 10 | `@talex-touch/tuffex/pro`（可视化）+ `@talex-touch/tuffex-charts`（图表） |
 
-理念是第五个套件页签——纯文档性质、不对应组件入口（组件库定位、设计基础与工具函数），见《[理念总览](./concepts-suite.zh.mdc)》。
+理念是第五个套件页签——纯文档性质、不对应组件入口。本页就是这个页签的总览：上半是组件库定位、设计基础与工具函数，下半是完整组件索引。
 
 ## 基础组件
 
-日常界面的主体组件，通过 `@talex-touch/tuffex/base` 分类入口引入。套件总览见《[基础套件总览](./base-suite.zh.mdc)》，设计基础见《[Foundations 设计基础](./foundations.zh.mdc)》，工具函数见《[Utils 工具函数](./utils.zh.mdc)》。
+日常界面的主体组件，通过 `@talex-touch/tuffex/base` 分类入口引入。套件页见《[基础套件](./base-suite.zh.mdc)》，设计基础见《[Foundations 设计基础](./foundations.zh.mdc)》，工具函数见《[Utils 工具函数](./utils.zh.mdc)》。
 
 ### 通用
 
@@ -207,7 +237,7 @@ code: |
 
 ## 进阶套件
 
-高级交互、视觉效果与底层原语，通过 `@talex-touch/tuffex/pro` 分类入口引入。套件总览见《[进阶套件总览](./pro-suite.zh.mdc)》。
+高级交互、视觉效果与底层原语，通过 `@talex-touch/tuffex/pro` 分类入口引入。套件页见《[进阶套件](./pro-suite.zh.mdc)》。
 
 ### 高级交互
 
@@ -248,7 +278,7 @@ code: |
 
 ## AI 套件
 
-AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifului.dev)（MIT），完整案例见《[AI 套件总览](./ai-suite.zh.mdc)》，通过 `@talex-touch/tuffex/ai` 分类入口引入。
+AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifului.dev)（MIT），完整案例见《[AI 套件](./ai-suite.zh.mdc)》，通过 `@talex-touch/tuffex/ai` 分类入口引入。
 
 ### 对话
 
@@ -293,7 +323,7 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 
 ## 数据
 
-数据可视化与图表：tuffex 主包的可视化组件（经 `@talex-touch/tuffex/pro` 引入）+ 独立图表包 `@talex-touch/tuffex-charts`（kumo 同构、无 echarts）。套件总览即《[Charts 图表](./charts.zh.mdc)》。
+数据可视化与图表：tuffex 主包的可视化组件（经 `@talex-touch/tuffex/pro` 引入）+ 独立图表包 `@talex-touch/tuffex-charts`（kumo 同构、无 echarts）。套件页见《[数据套件](./data-suite.zh.mdc)》。
 
 ### 图表
 
@@ -315,8 +345,8 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 
 ## 审阅说明
 
-- 中心页范围：本页是组件文档索引和组合 Demo 指南；单组件 API、Props、最佳实践细节由各组件详情页承载。
+- 中心页范围：本页既是理念套件总览，也是组件文档索引；单组件 API、Props、最佳实践细节由各组件详情页承载。
 - 源码注册表：`packages/tuffex/packages/components/src/components.ts` 定义文档覆盖测试使用的导出组件 slug 集合。
 - Demo 注册表：`apps/nexus/app/components/content/demo-registry.ts` 把本页每个 `TuffDemoWrapper` demo 映射到独立 Vue demo 文件。
-- 预览网格：`apps/nexus/app/components/docs/DocsComponentsGallery.vue` 渲染顶部「组件预览」网格。
+- 预览网格：`apps/nexus/app/components/docs/DocsComponentsGallery.vue` 渲染各套件页的「组件预览」网格；`suite` 为必填 prop，一次只渲染该套件那一段。
 - **实测覆盖:** Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 校验导出组件具备中英文文档、本地化中心页链接已文档化组件、所有 demo 引用都能解析到已注册 Vue 文件。

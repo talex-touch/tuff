@@ -26,8 +26,8 @@ const title = computed(() => {
   <div class="IconComposer flex items-center gap-2">
     <Logo />
     <div class="IconComposer-Brand flex items-center gap-3">
-      <span class="text-lg sm:text-xl font-sans">Tuff</span>
-      <span class="text-lg sm:text-xl op-50 font-nexus-display">Nexus</span>
+      <span class="IconComposer-Tuff text-lg sm:text-xl font-sans">Tuff</span>
+      <span class="IconComposer-Nexus text-lg sm:text-xl op-50 font-nexus-display">Nexus</span>
       <transition name="fade">
         <div v-if="title" class="IconComposer-SubType flex gap-3 items-center">
           <span class="block text-xl op-25 scale-y-120">|</span>
