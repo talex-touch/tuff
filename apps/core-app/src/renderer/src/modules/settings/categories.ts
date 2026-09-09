@@ -25,6 +25,8 @@ export interface SettingSubPage {
   descriptionKey: string
   /** Promotes this child route into the settings sidebar when present. */
   navIcon?: string
+  /** Beta pages stay out of normal navigation until Developer Mode is enabled. */
+  beta?: boolean
 }
 
 export interface SettingCategory {
@@ -88,18 +90,27 @@ export const SETTING_CATEGORIES: SettingCategory[] = [
         navIcon: 'i-ri-global-line'
       },
       {
+        key: 'voice',
+        path: '/setting/intelligence/voice',
+        labelKey: 'settingsIntelligenceHub.voice',
+        descriptionKey: 'settingsIntelligenceHub.voiceDesc',
+        navIcon: 'i-ri-mic-line'
+      },
+      {
         key: 'prompts',
         path: '/setting/intelligence/prompts',
         labelKey: 'settingsIntelligenceHub.prompts',
         descriptionKey: 'settingsIntelligenceHub.promptsDesc',
-        navIcon: 'i-carbon-text-font'
+        navIcon: 'i-carbon-text-font',
+        beta: true
       },
       {
         key: 'agents',
         path: '/setting/intelligence/agents',
         labelKey: 'settingsIntelligenceHub.agents',
         descriptionKey: 'settingsIntelligenceHub.agentsDesc',
-        navIcon: 'i-carbon-bot'
+        navIcon: 'i-carbon-bot',
+        beta: true
       },
       {
         key: 'workflows',
@@ -183,8 +194,9 @@ export const LEGACY_SECTION_REDIRECTS: Record<string, string> = {
   'file-index': '/setting/file-index'
 }
 
-export function settingCategoryChildren(key: string): SettingSubPage[] {
-  return SETTING_CATEGORIES.find((category) => category.key === key)?.children ?? []
+export function settingCategoryChildren(key: string, includeBeta = true): SettingSubPage[] {
+  const children = SETTING_CATEGORIES.find((category) => category.key === key)?.children ?? []
+  return includeBeta ? children : children.filter((child) => !child.beta)
 }
 
 export function groupedSettingCategories(): { group: SettingGroupKey; items: SettingCategory[] }[] {
@@ -200,18 +212,22 @@ export interface SettingNavItem {
   icon: string
   /** Full i18n key, unlike a category's key relative to settingsNav.category. */
   labelKey: string
+  /** Beta pages are visible only in Developer Mode and carry a neutral status marker. */
+  beta?: boolean
   /** Parent hubs with promoted children only select on their exact route. */
   activeExact: boolean
 }
 
-export function groupedSettingNavigation(): {
+export function groupedSettingNavigation(includeBeta = true): {
   group: SettingGroupKey
   items: SettingNavItem[]
 }[] {
   return groupedSettingCategories().map(({ group, items }) => ({
     group,
     items: items.flatMap((category) => {
-      const promotedChildren = (category.children ?? []).filter((child) => child.navIcon)
+      const promotedChildren = (category.children ?? []).filter(
+        (child) => child.navIcon && (includeBeta || !child.beta)
+      )
       return [
         {
           key: category.key,
@@ -225,6 +241,7 @@ export function groupedSettingNavigation(): {
           path: child.path,
           icon: child.navIcon ?? category.icon,
           labelKey: child.labelKey,
+          beta: child.beta,
           activeExact: false
         }))
       ]

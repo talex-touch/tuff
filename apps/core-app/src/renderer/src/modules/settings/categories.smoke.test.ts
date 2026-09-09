@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   SETTING_CATEGORIES,
   groupedSettingCategories,
+  groupedSettingNavigation,
   SETTING_GROUP_ORDER,
   settingCategoryChildren
 } from './categories'
@@ -103,10 +104,33 @@ describe('settings sub-page table', () => {
 
   it('has a unique key and path across all sub-pages', () => {
     const children = SETTING_CATEGORIES.flatMap((category) => category.children ?? [])
+    const keys = children.map((child) => child.key)
     const paths = children.map((child) => child.path)
 
-    expect(children).toHaveLength(6)
+    expect(new Set(keys).size).toBe(keys.length)
     expect(new Set(paths).size).toBe(paths.length)
+  })
+
+  it('keeps beta intelligence routes registered but hides them from normal child lists', () => {
+    const registeredKeys = settingCategoryChildren('intelligence').map((child) => child.key)
+    const normalKeys = settingCategoryChildren('intelligence', false).map((child) => child.key)
+
+    expect(registeredKeys).toEqual(expect.arrayContaining(['prompts', 'agents']))
+    expect(normalKeys).toEqual(expect.arrayContaining(['channels', 'capabilities']))
+    expect(normalKeys).not.toContain('prompts')
+    expect(normalKeys).not.toContain('agents')
+  })
+
+  it('hides beta-promoted intelligence navigation while retaining ordinary destinations', () => {
+    const normalNavigationKeys = groupedSettingNavigation(false)
+      .find((group) => group.group === 'intelligence')!
+      .items.map((item) => item.key)
+
+    expect(normalNavigationKeys).toEqual(
+      expect.arrayContaining(['intelligence-channels', 'intelligence-capabilities'])
+    )
+    expect(normalNavigationKeys).not.toContain('intelligence-prompts')
+    expect(normalNavigationKeys).not.toContain('intelligence-agents')
   })
 
   it('has a page file for every intelligence sub-page, and no page file without one', () => {
