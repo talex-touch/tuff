@@ -1187,6 +1187,10 @@
       "title": "Last 12 weeks",
       "note": "Bar height is that week’s dictated characters against the busiest week.",
       "streak": "{current}-day streak · longest {longest} · {active} active days"
+    },
+    "tiers": {
+      "weeksPending": "After a week of records, the 12-week comparison appears here.",
+      "activityPending": "After a month of records, the year heatmap and report appear here."
     }
   },
   "home": {

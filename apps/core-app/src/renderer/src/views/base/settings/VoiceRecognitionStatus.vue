@@ -88,10 +88,8 @@ onBeforeUnmount(() => {
 <template>
   <div v-if="visible" class="VoiceRecognitionStatus" data-testid="voice-status-alert" role="alert">
     <span class="VoiceRecognitionStatus-Icon i-carbon-warning-filled" aria-hidden="true" />
-    <div class="VoiceRecognitionStatus-Copy">
-      <strong>{{ title }}</strong>
-      <p>{{ message }}</p>
-    </div>
+    <span class="VoiceRecognitionStatus-Title">{{ title }}</span>
+    <span class="VoiceRecognitionStatus-Message">{{ message }}</span>
     <!--
       One button, and it does the thing the sentence names. An unreadable status is retried here;
       a missing binding is fixed where bindings live.
@@ -121,43 +119,42 @@ onBeforeUnmount(() => {
 /*
  * Danger, not warning. Dictation is the feature this page exists to report on; when it cannot
  * run, every number below is a record of something that has stopped happening.
+ *
+ * It lives in the page's title row, so it is one line — a stacked card up there would push the
+ * heading around. The sentence is what gets dropped when the row runs out of width: the title
+ * and the button are what the user needs, and the sentence only elaborates on the title.
  */
 .VoiceRecognitionStatus {
   display: flex;
+  min-width: 0;
   align-items: center;
-  margin-bottom: 0.7rem;
-  padding: 12px 16px;
+  padding: 5px 6px 5px 12px;
   border: 1px solid var(--tx-color-danger-light-7, var(--tx-color-danger));
-  border-radius: 12px;
+  border-radius: 999px;
   background: var(--tx-color-danger-light-9, var(--tx-fill-color-light));
-  gap: 12px;
+  gap: 8px;
 }
 
 .VoiceRecognitionStatus-Icon {
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
   flex: none;
   color: var(--tx-color-danger);
 }
 
-.VoiceRecognitionStatus-Copy {
-  display: flex;
+.VoiceRecognitionStatus-Title {
+  flex: none;
+  color: var(--tx-text-color-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.VoiceRecognitionStatus-Message {
+  overflow: hidden;
   min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-
-  strong {
-    color: var(--tx-text-color-primary);
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  p {
-    margin: 0;
-    color: var(--tx-text-color-regular);
-    font-size: 12px;
-    line-height: 1.5;
-  }
+  color: var(--tx-text-color-regular);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

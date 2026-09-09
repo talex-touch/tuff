@@ -83,7 +83,20 @@ function goBack(): void {
           <span>{{ backLabel }}</span>
         </button>
 
-        <h1 v-if="title" class="SettingsPage-Title">
+        <!--
+          The title row carries page-level status when a page has any.
+
+          Kept a bare `<h1>` when nothing fills the slot: wrapping every settings page's title in
+          a flex row for the sake of one that needs it would move the other pages' headings by
+          whatever the row's alignment decided.
+        -->
+        <div v-if="title && $slots.titleAside" class="SettingsPage-TitleRow">
+          <h1 class="SettingsPage-Title">{{ title }}</h1>
+          <div class="SettingsPage-TitleAside">
+            <slot name="titleAside" />
+          </div>
+        </div>
+        <h1 v-else-if="title" class="SettingsPage-Title">
           {{ title }}
         </h1>
 
@@ -204,6 +217,27 @@ function goBack(): void {
   width: 14px;
   height: 14px;
   font-size: 14px;
+}
+
+.SettingsPage-TitleRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--shell-space-4, 16px);
+  justify-content: space-between;
+
+  /* The heading never gives way; whatever is beside it shrinks or truncates first. */
+  .SettingsPage-Title {
+    flex: none;
+  }
+}
+
+/* Right-aligned and allowed to shrink: the title is the thing that must never be cut. */
+.SettingsPage-TitleAside {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .SettingsPage-Title {
