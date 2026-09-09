@@ -262,6 +262,14 @@ const CONTROL_TALL_SIZE = 40
 /** padding (10) + both round slots (68) + both gaps (16); the centre gets what is left. */
 const PILL_CHROME_WIDTH = 94
 /**
+ * Both paddings and both borders — the pill's width less its content box.
+ *
+ * The live transcript is not a centre-column citizen. While listening the pill is in its
+ * two-row layout, where the text row spans all three columns and the controls sit on the
+ * floor beneath it, so the room the sentence has is the whole content box.
+ */
+const PILL_EDGE_WIDTH = 12
+/**
  * The per-character reveal.
  *
  * `CHAR_STAGGER_MS` is the gap between neighbours; `CHAR_STAGGER_TOTAL_MS` is the ceiling on the
@@ -324,7 +332,13 @@ const pillHeight = ref(PILL_BASE_HEIGHT)
 const streamTextWidth = ref(0)
 
 /**
- * The window the transcript scrolls inside — the centre column less both fade bands.
+ * The window the transcript scrolls inside — the pill's content box less both fade bands.
+ *
+ * It used to subtract `PILL_CHROME_WIDTH`, which describes the column between the two round
+ * controls. The live row is not that column: it spans the pill. Aiming at a window 82px
+ * narrower than the real one put both branches in the wrong place — a short sentence sat left
+ * of centre under a meter that is centred, and a long one parked its newest word two thirds of
+ * the way across with a band of empty pill after it.
  *
  * Derived from `pillWidth` rather than read off the DOM on purpose. The pill takes 260ms
  * to reach a new width, so measuring the element mid-transition would answer "how wide am
@@ -332,7 +346,7 @@ const streamTextWidth = ref(0)
  * settled number instead, and arrive together.
  */
 const streamViewportWidth = computed(() =>
-  Math.max(0, pillWidth.value - PILL_CHROME_WIDTH - STREAM_FADE * 2)
+  Math.max(0, pillWidth.value - PILL_EDGE_WIDTH - STREAM_FADE * 2)
 )
 
 /**
@@ -2163,6 +2177,12 @@ onBeforeUnmount(() => {
    * block sitting on top of whatever is behind the window.
    */
   padding-inline: var(--voice-stream-fade, 14px);
+  /*
+   * Stated rather than inherited from the global reset: `streamViewportWidth` subtracts both
+   * fade bands from the pill's width, which is only the box this row actually has if the
+   * padding is counted inside it. The number and the box that has to match it live together.
+   */
+  box-sizing: border-box;
   mask-image: linear-gradient(
     to right,
     transparent 0,
