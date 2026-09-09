@@ -9,7 +9,7 @@ import type { StreamController } from '@talex-touch/utils/transport/types'
 import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
-import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
+import { ORB_STATES, TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getPreloadProcessInfo } from '~/modules/preload/process-info'
 import { useI18n } from 'vue-i18n'
@@ -71,6 +71,33 @@ const RECORDING_TICK_MS = 1000
 const RECORDING_WARNING_MS = 30_000
 /** Thick enough to read as progress rather than as a recoloured border. */
 const RECORDING_STROKE = 2
+
+/**
+ * The send bar's nominal pace, and where it stops.
+ *
+ * Two of these three numbers are estimates and are named so the eventual real ones replace
+ * something visible — nobody has latency figures for this path, exactly as with `SLOW_AFTER_MS`.
+ * The scaling is the defensible part: a longer recording is a bigger request, so the bar paces
+ * itself against how much audio there is rather than against a constant.
+ *
+ * `UPLOAD_PARKED` is the honest part. The bar stops one percent short because the step it cannot
+ * see — the provider actually transcribing — has no measurable end, and a bar that reached 100%
+ * while nothing had come back would be claiming the work was done.
+ */
+const UPLOAD_BASE_MS = 900
+const UPLOAD_PER_AUDIO_SECOND_MS = 120
+const UPLOAD_TICK_MS = 60
+const UPLOAD_PARKED = 0.99
+
+/**
+ * How long one orb shape holds before another is rolled.
+ *
+ * The orb's own `random` picks a shape per mount, which meant one shape per session — a mark
+ * that never changed while the wait it stands for did. Rolling through the whole family instead
+ * makes the wait look like something turning over rather than a frozen glyph, and the interval
+ * is long enough to register as a change of mind rather than a flicker.
+ */
+const ORB_SWAP_MS = 1200
 
 type NoticeTone = keyof typeof NOTICE_HOLD_MS
 type NoticeAction = 'undo' | 'retry' | 'settings' | 'asrSettings'
@@ -258,6 +285,10 @@ const cancelCharge = ref(0)
 const waitedMs = ref(0)
 /** Milliseconds of audio this session has actually captured — see `startRecordClock`. */
 const recordedMs = ref(0)
+/** 0..`UPLOAD_PARKED` while the transcript is in flight — see `startUploadClock`. */
+const uploadProgress = ref(0)
+/** Which shape the thinking mark is wearing right now — see `rollOrbState`. */
+const orbState = ref<(typeof ORB_STATES)[number]>(ORB_STATES[0]!)
 const recovering = ref(false)
 /** False until the first level frame lands — see `preparing`. */
 const hasLevel = ref(false)
@@ -327,6 +358,16 @@ const recordingEnding = computed(() => MAX_RECORDING_MS - recordedMs.value <= RE
 const showsRecordingBudget = computed(
   () => listening.value && hasLevel.value && !hasNotice.value && !holdingCancel.value
 )
+/**
+ * The send bar runs for as long as the words are out of the user's hands.
+ *
+ * Recovery is the same act with the audio main kept, so it gets the same bar. A notice or a held
+ * Escape takes the surface back — the same rule the budget line follows, for the same reason.
+ */
+const showsUpload = computed(
+  () => (transcribing.value || recovering.value) && !hasNotice.value && !holdingCancel.value
+)
+const uploadWidth = computed(() => `${uploadProgress.value * 100}%`)
 /**
  * The stroke's own box, centred on the pill's border line.
  *
@@ -466,6 +507,8 @@ let holdTimer: ReturnType<typeof setInterval> | null = null
 let waitTimer: ReturnType<typeof setInterval> | null = null
 let recordTimer: ReturnType<typeof setInterval> | null = null
 let recordStartedAt = 0
+let uploadTimer: ReturnType<typeof setInterval> | null = null
+let orbTimer: ReturnType<typeof setInterval> | null = null
 let captureStartTimer: ReturnType<typeof setTimeout> | null = null
 
 function stopCaptureStartTimer(): void {
@@ -516,6 +559,73 @@ function startRecordClock(): void {
     recordedMs.value = Date.now() - recordStartedAt
   }, RECORDING_TICK_MS)
 }
+
+/** Clears the bar and its timer. Use `parkUpload` when the value has to survive. */
+function stopUploadClock(): void {
+  if (uploadTimer !== null) {
+    clearInterval(uploadTimer)
+    uploadTimer = null
+  }
+  uploadProgress.value = 0
+}
+
+/**
+ * Stop advancing, keep the bar where the last honest thing put it.
+ *
+ * Called when the provider first answers — the one moment on this path that is a fact rather
+ * than a projection. From here the bar holds: the remaining work has no end this side can see,
+ * and pretending otherwise is what a bar sliding to 100% would do.
+ */
+function parkUpload(): void {
+  if (uploadTimer !== null) {
+    clearInterval(uploadTimer)
+    uploadTimer = null
+  }
+  uploadProgress.value = UPLOAD_PARKED
+}
+
+/**
+ * Run the bar over an estimate scaled by `audioMs`, then hold at 99%.
+ *
+ * The estimate is the whole mechanism and it is not a measurement — see the constants. What
+ * keeps it from being a lie is where it stops and what can cut it short: the first word back
+ * from the provider parks it immediately, so the bar is never ahead of a real signal for long.
+ */
+function startUploadClock(audioMs: number): void {
+  stopUploadClock()
+  const span = UPLOAD_BASE_MS + (audioMs / 1000) * UPLOAD_PER_AUDIO_SECOND_MS
+  const startedAt = Date.now()
+  uploadTimer = setInterval(() => {
+    const ratio = Math.min(1, (Date.now() - startedAt) / span)
+    uploadProgress.value = ratio * UPLOAD_PARKED
+    if (ratio >= 1) parkUpload()
+  }, UPLOAD_TICK_MS)
+}
+
+/** Never twice in a row: the same shape returning reads as the mark having stopped. */
+function rollOrbState(): void {
+  const others = ORB_STATES.filter((state) => state !== orbState.value)
+  orbState.value = others[Math.floor(Math.random() * others.length)] ?? orbState.value
+}
+
+function stopOrbRoll(): void {
+  if (orbTimer === null) return
+  clearInterval(orbTimer)
+  orbTimer = null
+}
+
+function startOrbRoll(): void {
+  stopOrbRoll()
+  rollOrbState()
+  orbTimer = setInterval(rollOrbState, ORB_SWAP_MS)
+}
+
+// Driven by the mark being on screen rather than by each phase that puts it there: `showsOrb`
+// already knows about both transcribing and recovery, and about every way they end.
+watch(showsOrb, (visible) => {
+  if (visible) startOrbRoll()
+  else stopOrbRoll()
+})
 
 /**
  * Map one raw RMS frame onto 0..1 against the running reference.
@@ -581,6 +691,7 @@ function showNotice(message: string, tone: NoticeTone, action?: NoticeAction, ic
   stopHold()
   stopWaitClock()
   stopRecordClock()
+  stopUploadClock()
   stopCaptureStartTimer()
   clearFinishTimer()
   // A notice you can act on gets the long hold; one you can only read gets its own.
@@ -679,6 +790,7 @@ function resetPanelState(): void {
   stopHold()
   stopWaitClock()
   stopRecordClock()
+  stopUploadClock()
   stopCaptureStartTimer()
 }
 
@@ -729,6 +841,7 @@ function cancelVoiceSession(): void {
   transcribing.value = false
   startingVoiceCapture.value = false
   stopRecordClock()
+  stopUploadClock()
   controller?.cancel()
 }
 
@@ -747,6 +860,8 @@ function finishVoiceInput(): void {
   transcribing.value = true
   startingVoiceCapture.value = false
 
+  // Read the budget before it is cleared: the bar paces itself against how much audio there is.
+  startUploadClock(recordedMs.value)
   // The budget belongs to the microphone, and the microphone is being stopped right here.
   stopRecordClock()
   stopWaitClock()
@@ -764,6 +879,7 @@ function completeVoiceSession(generation: number): void {
   startingVoiceCapture.value = false
   stopWaitClock()
   stopRecordClock()
+  stopUploadClock()
   stopCaptureStartTimer()
   if (notice.value) return
   emitFinished()
@@ -787,7 +903,12 @@ function handleVoiceSessionEvent(generation: number, event: VoiceAsrStreamEvent)
     levels.value = [...levels.value.slice(1), normalizeLevel(event.rms)]
     return
   }
-  if (event.type === 'partial') return
+  if (event.type === 'partial') {
+    // The provider answering is the only fact available here: our audio landed and it is
+    // working on it. Everything before this was a projection, so it stops projecting.
+    parkUpload()
+    return
+  }
   if (event.type === 'final') {
     if (!event.text.trim() || event.delivery?.method === 'none') {
       retireVoiceSession(generation)
@@ -977,6 +1098,9 @@ async function recoverLast(): Promise<void> {
   notice.value = null
   recovering.value = true
   sessionSeq.value += 1
+  // Retrying sends audio main is still holding — the same act, so the same bar. Its length is
+  // not known here, so it runs on the base estimate alone.
+  startUploadClock(0)
 
   try {
     const result = await voiceSdk.retryLastFailure({ delivery: 'active-app' })
@@ -1114,6 +1238,8 @@ onBeforeUnmount(() => {
   stopHold()
   stopWaitClock()
   stopRecordClock()
+  stopUploadClock()
+  stopOrbRoll()
   stopCaptureStartTimer()
   clearFinishTimer()
   cancelVoiceSession()
@@ -1124,6 +1250,27 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="voice-panel-root">
+    <!--
+      The orb's colour, defined once for the window.
+
+      The orb paints a greyscale depth ramp — near dots one ink value, far dots another — so a
+      per-channel table remaps that ramp onto a gradient without touching alpha or the 3D reading
+      it carries. Blend modes cannot do this: they leak into the transparent square around the
+      sphere. Kept theme-agnostic on purpose (the ink ramp inverts on dark, which flips the
+      gradient's direction and nothing else), so there is still no hardcoded inverse branch.
+    -->
+    <svg class="voice-panel-defs" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="voice-orb-tint" color-interpolation-filters="sRGB">
+          <feComponentTransfer>
+            <feFuncR type="table" tableValues="0.16 0.45 0.90" />
+            <feFuncG type="table" tableValues="0.83 0.36 0.55" />
+            <feFuncB type="table" tableValues="0.85 0.95 0.35" />
+          </feComponentTransfer>
+        </filter>
+      </defs>
+    </svg>
+
     <div
       ref="pillRef"
       class="voice-dock"
@@ -1150,6 +1297,18 @@ onBeforeUnmount(() => {
         class="voice-dock__charge"
         :style="{ width: cancelRemaining }"
         data-testid="voice-charge"
+        aria-hidden="true"
+      />
+
+      <!--
+        The same shape as the cancel charge and the opposite direction: that one is being spent,
+        this one is being earned. Both sit behind the content and are clipped to the pill.
+      -->
+      <div
+        v-if="showsUpload"
+        class="voice-dock__upload"
+        :style="{ width: uploadWidth }"
+        data-testid="voice-upload"
         aria-hidden="true"
       />
 
@@ -1239,16 +1398,25 @@ onBeforeUnmount(() => {
       </Transition>
 
       <!-- The confirm slot holds either an action or the progress mark, never both. -->
-      <TxThinkingOrb
-        v-if="showsOrb"
-        :key="sessionSeq"
-        data-testid="voice-orb"
-        :size="64"
-        :display-size="controlSize"
-        state="random"
-        theme="auto"
-        :label="t('assistant.voicePanel.voiceTranscribingShort')"
-      />
+      <!--
+        The hue lives on this wrapper, not on the canvas.
+
+        A `filter` list containing a `url()` is not interpolable, so animating
+        `filter: url(#tint) hue-rotate(…)` falls back to discrete and the colour never moves —
+        confirmed in headless Chrome, where five sampled phases came out identical. Split across
+        two elements each list is interpolable on its own and the drift is smooth.
+      -->
+      <span v-if="showsOrb" class="voice-dock__orb">
+        <TxThinkingOrb
+          :key="sessionSeq"
+          data-testid="voice-orb"
+          :size="64"
+          :display-size="controlSize"
+          :state="orbState"
+          theme="auto"
+          :label="t('assistant.voicePanel.voiceTranscribingShort')"
+        />
+      </span>
       <!--
         Icon only, and the same circle as the other two: the slot holds one round control
         whatever it means, so a label here would be the only thing in the pill made of words
@@ -1390,6 +1558,68 @@ onBeforeUnmount(() => {
 .voice-dock__btn,
 .voice-dock__slot {
   z-index: 1;
+}
+
+/*
+ * The send bar: the cancel charge's shape, running the other way.
+ *
+ * Behind the content and clipped to the pill, like the charge, and faded at its leading edge for
+ * the same reason — a flat block ending mid-pill reads as two coloured halves rather than as
+ * something filling. It is the accent tone, not danger: this one is the words arriving.
+ */
+.voice-dock__upload {
+  position: absolute;
+  z-index: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--shell-primary-soft) 0%,
+    var(--shell-primary-soft) 62%,
+    transparent 100%
+  );
+  inset: 0 auto 0 0;
+  pointer-events: none;
+  transition: width 120ms ease-out;
+}
+
+/*
+ * The thinking mark's colour.
+ *
+ * The tint is a per-channel table over the orb's own greyscale depth ramp, so near dots land at
+ * one end of the gradient and far dots at the other — the 3D reading survives, and alpha is
+ * untouched, which is what keeps the transparent square around the sphere transparent. Blend
+ * modes cannot do that.
+ *
+ * `filter` here is safe where it was not on the text: the orb is a sibling of the slot, not a
+ * child of anything clipping a background to its glyphs.
+ */
+.voice-dock__orb {
+  display: flex;
+  flex: none;
+  animation: voice-orb-hue 9000ms linear infinite;
+}
+
+.voice-dock__orb :deep(.tx-thinking-orb) {
+  filter: url('#voice-orb-tint');
+}
+
+@keyframes voice-orb-hue {
+  from {
+    filter: hue-rotate(0deg);
+  }
+
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+
+/* Defs only — it paints nothing itself and must not take a flex slot. */
+.voice-panel-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
 }
 
 /*
@@ -1806,6 +2036,16 @@ onBeforeUnmount(() => {
   /* Same rule as the charge: the budget line still advances, it just steps once per tick. */
   .voice-dock__budget rect {
     transition: none;
+  }
+
+  /* The send bar keeps its meaning and loses its easing, like the other two. */
+  .voice-dock__upload {
+    transition: none;
+  }
+
+  /* The orb keeps its colour and stops drifting through hues. */
+  .voice-dock__orb {
+    animation: none;
   }
 
   .voice-dock--holding {
