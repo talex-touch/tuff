@@ -70,10 +70,10 @@ function toneClass(type: string) {
   outline: none;
 }
 
-:global(.dark) .toast-dismiss:hover,
-:global([data-theme='dark']) .toast-dismiss:hover,
-:global(.dark) .toast-dismiss:focus-visible,
-:global([data-theme='dark']) .toast-dismiss:focus-visible {
+:global(.dark .toast-dismiss:hover),
+:global([data-theme='dark'] .toast-dismiss:hover),
+:global(.dark .toast-dismiss:focus-visible),
+:global([data-theme='dark'] .toast-dismiss:focus-visible) {
   background: rgba(255, 255, 255, 0.12);
 }
 
