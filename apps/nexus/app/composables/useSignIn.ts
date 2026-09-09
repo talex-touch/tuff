@@ -54,6 +54,14 @@ function resolveErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
+function isPasskeyCancellation(error: unknown) {
+  if (!error || typeof error !== 'object')
+    return false
+
+  const name = 'name' in error ? error.name : undefined
+  return name === 'NotAllowedError' || name === 'AbortError'
+}
+
 function isValidEmail(value: string) {
   return value.includes('@')
 }
@@ -1113,10 +1121,13 @@ export function useSignIn() {
       }, 700)
     }
     catch (error: unknown) {
-      const message = resolveErrorMessage(error, t('auth.passkeyFailed', 'Passkey login failed'))
+      const cancelled = isPasskeyCancellation(error)
+      const message = cancelled
+        ? t('auth.passkeyCancelled', 'Passkey login cancelled or timed out.')
+        : resolveErrorMessage(error, t('auth.passkeyFailed', 'Passkey login failed'))
       passkeyError.value = message
       passkeyPhase.value = 'error'
-      notify('error', message)
+      notify(cancelled ? 'warning' : 'error', message)
     }
     finally {
       passkeyLoading.value = false
