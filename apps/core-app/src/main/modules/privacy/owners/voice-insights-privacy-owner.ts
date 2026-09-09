@@ -10,6 +10,7 @@ import {
 } from '../data-owner'
 import type { PrivacyOwnerExportWriter } from '../data-owner'
 import type { VoiceInsightsStore } from '../../voice/voice-insights-store'
+import type { VoiceRecognitionStore } from '../../voice/voice-recognition-store'
 
 const CATEGORY = 'voice-insights' as const
 
@@ -37,9 +38,11 @@ function emptyPreview() {
     bounded: false
   }
 }
-
-/** Privacy lifecycle for local aggregate-only voice insight counters. */
-export function createVoiceInsightsPrivacyOwner(store: VoiceInsightsStore): PrivacyDataOwner {
+/** Privacy lifecycle for local voice aggregates and optional detailed recognition records. */
+export function createVoiceInsightsPrivacyOwner(
+  store: VoiceInsightsStore,
+  recordsStore?: VoiceRecognitionStore
+): PrivacyDataOwner {
   return definePrivacyDataOwner({
     categories: [CATEGORY],
     inspect: async (request) => {
@@ -69,10 +72,13 @@ export function createVoiceInsightsPrivacyOwner(store: VoiceInsightsStore): Priv
         }
       }
       const insights = await store.getInsights(request.nowMs)
+      const records = recordsStore ? await recordsStore.list() : []
       await store.clearInsights(request.nowMs)
+      await recordsStore?.clear()
       return privacyOwnerCompletedDelete(CATEGORY, {
-        deletedItemCount: insights.sessionCount > 0 ? 1 : 0,
-        batches: 1
+        deletedItemCount: (insights.sessionCount > 0 ? 1 : 0) + records.length,
+        deletedByteCount: records.reduce((sum, record) => sum + (record.audioBytes ?? 0), 0),
+        batches: recordsStore ? 2 : 1
       })
     },
     export: async (request: PrivacyOwnerExportRequest, writer: PrivacyOwnerExportWriter) => {

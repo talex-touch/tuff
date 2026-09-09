@@ -2,7 +2,7 @@
 /* eslint-disable vue/one-component-per-file -- The two components here are test doubles for
    tuffex renderers the panel composes, not components this file owns. */
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { defineComponent, getCurrentInstance, h, nextTick } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { ORB_STATES } from '@talex-touch/tuffex/thinking-orb'
@@ -14,10 +14,6 @@ import {
 const transportSendMock = vi.hoisted(() => vi.fn())
 const transportOnMock = vi.hoisted(() => vi.fn())
 const transportStreamMock = vi.hoisted(() => vi.fn())
-const orbMounts = vi.hoisted(() => ({
-  nextId: 0,
-  records: [] as Array<{ key: unknown; state: unknown }>
-}))
 const transportHandlers = vi.hoisted(() => new Map<string, (payload?: unknown) => unknown>())
 
 vi.mock('~/modules/preload/process-info', () => ({
@@ -70,13 +66,10 @@ vi.mock('@talex-touch/tuffex/thinking-orb', async () => ({
       state: { type: String, default: undefined }
     },
     setup(props) {
-      const mountId = orbMounts.nextId++
-      orbMounts.records.push({ key: getCurrentInstance()?.vnode.key, state: props.state })
       return () =>
         h('canvas', {
           class: 'tx-thinking-orb',
           'aria-label': props.label,
-          'data-orb-mount': mountId,
           'data-orb-state': props.state
         })
     }
@@ -108,6 +101,7 @@ vi.mock('vue-i18n', () => ({
           'assistant.voicePanel.undo': 'Undo',
           'assistant.voicePanel.retry': 'Retry',
           'assistant.voicePanel.voiceTranscribeEmpty': 'No speech detected',
+          'assistant.voicePanel.voiceListening': 'Listening…',
           'assistant.voicePanel.capturingDevice': 'Opening the microphone…',
           'assistant.voicePanel.usingDevice': 'Switched to {name}',
           'assistant.voicePanel.voiceRecognitionNotConfigured': 'Speech recognition is not set up',
@@ -196,8 +190,6 @@ function barHeights(wrapper: VueWrapper): string[] {
 
 beforeEach(() => {
   vi.useFakeTimers()
-  orbMounts.nextId = 0
-  orbMounts.records.length = 0
   streamCallbacks = undefined
   streamRequest = undefined
   streamCancelMock = vi.fn()
@@ -335,7 +327,7 @@ describe('VoicePanel dock surface', () => {
     wrapper.unmount()
   })
 
-  it('drives bar heights from level events and freezes when they stop', async () => {
+  it('aggregates consecutive partial transcript chunks while retaining the live waveform', async () => {
     const wrapper = await mountVoicePanel()
 
     exposed(wrapper).startVoiceInput()
@@ -357,12 +349,14 @@ describe('VoicePanel dock surface', () => {
     const afterSecond = barHeights(wrapper)
     expect(afterSecond).not.toEqual(afterFirst)
 
-    // Negative control: with no level data the meter must sit still rather than animate.
-    // Without this, a decorative CSS animation would satisfy every assertion above.
-    callbacks.onData?.({ type: 'partial', text: 'hello' })
-    vi.advanceTimersByTime(2000)
+    callbacks.onData?.({ type: 'partial', text: '你好' })
     await nextTick()
-    expect(barHeights(wrapper)).toEqual(afterSecond)
+    expect(wrapper.find('[data-testid="voice-live-text"]').text()).toBe('你好')
+
+    callbacks.onData?.({ type: 'partial', text: '世界' })
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-live-text"]').text()).toBe('你好世界')
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
@@ -413,23 +407,13 @@ describe('VoicePanel session control', () => {
     wrapper.unmount()
   })
 
-  it.each([
-    { final: { type: 'final', text: '' } as const, name: 'an empty transcription' },
-    {
-      final: {
-        type: 'final',
-        text: 'recognized words',
-        delivery: { method: 'none', reason: 'target-changed' }
-      } as const,
-      name: 'a transcript that could not reach the active app'
-    }
-  ])('keeps a warning visible after $name ends', async ({ final }) => {
+  it('keeps a warning visible after an empty transcription ends', async () => {
     const wrapper = await mountVoicePanel()
 
     exposed(wrapper).startVoiceInput()
     await flushPromises()
     const callbacks = callbacksOrThrow()
-    callbacks.onData?.(final)
+    callbacks.onData?.({ type: 'final', text: '' })
     await nextTick()
     callbacks.onEnd?.()
     await nextTick()
@@ -441,13 +425,17 @@ describe('VoicePanel session control', () => {
     wrapper.unmount()
   })
 
-  it('finishes exactly once after a native delivery reaches end', async () => {
+  it('finishes exactly once after active-app delivery reaches end', async () => {
     const wrapper = await mountVoicePanel()
 
     exposed(wrapper).startVoiceInput()
     await flushPromises()
     const callbacks = callbacksOrThrow()
-    callbacks.onData?.({ type: 'final', text: 'delivered words', delivery: { method: 'native' } })
+    callbacks.onData?.({
+      type: 'final',
+      text: 'delivered words',
+      delivery: { method: 'native' }
+    })
     await nextTick()
     expect(wrapper.emitted('finished')).toBeUndefined()
 
@@ -641,34 +629,6 @@ describe('VoicePanel session control', () => {
     wrapper.unmount()
   })
 
-  it('remounts the orb with a fresh key for every session', async () => {
-    const wrapper = await mountVoicePanel()
-    const panel = exposed(wrapper)
-
-    panel.startVoiceInput()
-    await flushPromises()
-    panel.stopVoiceInput()
-    await nextTick()
-    const firstOrb = orbMounts.records.at(-1)
-
-    // The panel now owns the roll, so the orb is told a concrete shape rather than 'random' —
-    // its own per-mount roll would have pinned one shape for the whole wait.
-    expect(ORB_STATES).toContain(firstOrb?.state)
-
-    callbacksOrThrow().onEnd?.()
-    await nextTick()
-    panel.startVoiceInput()
-    await flushPromises()
-    panel.stopVoiceInput()
-    await nextTick()
-    const secondOrb = orbMounts.records.at(-1)
-
-    expect(ORB_STATES).toContain(secondOrb?.state)
-    expect(secondOrb?.key).not.toBe(firstOrb?.key)
-
-    wrapper.unmount()
-  })
-
   /**
    * The mark has to keep turning over while the wait does.
    *
@@ -849,7 +809,6 @@ describe('VoicePanel recovery and pacing', () => {
 
     wrapper.unmount()
   })
-
   // Expiry is a different sentence from failure: one sends you to say it again, the other to
   // check your connection. Collapsing them would send people to the wrong place.
   it('says the recording expired rather than reporting another failure', async () => {
@@ -982,15 +941,36 @@ describe('VoicePanel device readiness and long messages', () => {
   }
 
   /**
-   * Twenty-four bars at minimum height is not an empty pill — it is a working meter reporting
-   * silence, which is a claim we cannot make while the device is still opening.
+   * The live meter is present from session start; before the first level frame it uses its pending
+   * presentation rather than disappearing while the microphone opens.
    */
-  it('breathes instead of drawing a meter it has no data for', async () => {
+  it('shows a pending waveform while the device is opening', async () => {
     const wrapper = await listeningPanel()
 
-    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-wave"]').classes()).toContain(
+      'voice-dock__wave--pending'
+    )
     expect(wrapper.find('.voice-dock--preparing').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="voice-hint"]').text()).toContain('Opening the microphone')
+    expect(wrapper.find('[data-testid="voice-live-text"]').text()).toContain(
+      'Opening the microphone'
+    )
+
+    wrapper.unmount()
+  })
+
+  it('switches from opening to listening when native capture is ready', async () => {
+    const wrapper = await listeningPanel()
+
+    callbacksOrThrow().onData?.({ type: 'ready' })
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-live-text"]').text()).toContain('Listening')
+
+    vi.advanceTimersByTime(2100)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(streamCancelMock).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })
@@ -1185,12 +1165,12 @@ describe('VoicePanel device readiness and long messages', () => {
   /**
    * The one-line states have to actually get one line.
    *
-   * `scrollWidth` is an integer and text is not, so a sentence whose real width is 145.7 reports
-   * 145 and gets a slot exactly 145 wide — a fraction too narrow, and it wraps. Asserted as an
-   * inequality rather than a number: the rule is that the slot is strictly wider than the text
-   * it was measured from, which is the only thing the slack is there to guarantee.
+   * `scrollWidth` is an integer and text is not, so a sentence whose real width is 145.7
+   * reports 145 and gets a slot exactly 145 wide — a fraction too narrow, and it wraps. Asserted
+   * as an inequality rather than a number: the rule is that the slot is strictly wider than the
+   * text it was measured from, which is the only thing the slack is there to guarantee.
    */
-  it('gives a one-line message a slot wider than the text it measured', async () => {
+  it('gives a one-line terminal notice a slot wider than the text it measured', async () => {
     vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
       this: HTMLElement
     ) {
@@ -1198,10 +1178,10 @@ describe('VoicePanel device readiness and long messages', () => {
     })
 
     const wrapper = await listeningPanel()
+    callbacksOrThrow().onError?.(new Error('E_SOMETHING_ELSE'))
     await flushPromises()
 
-    // Still waiting on the first level frame, so this is the "opening the microphone" line.
-    expect(wrapper.find('[data-testid="voice-hint"]').text()).toBe('Opening the microphone…')
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Voice transcription failed')
 
     const style = wrapper.find('.voice-dock').attributes('style') ?? ''
     const width = Number(/width: (\d+)px/.exec(style)?.[1] ?? 0)
@@ -1271,14 +1251,10 @@ describe('VoicePanel device readiness and long messages', () => {
   })
 
   /**
-   * Content swaps as a whole, and for the length of that swap both sentences are in the DOM.
-   *
-   * Every other test here mounts with Test Utils' default `<Transition>` stub, which never puts
-   * two of them there at once. With the real one, measuring the wrong element sizes the pill for
-   * the message it is in the middle of forgetting — so the stub answers by element, and the test
-   * asserts the pill took the width of the sentence that is arriving.
+   * A long terminal notice is capped at the dock maximum while keeping its complete user-facing
+   * text in the rendered notice surface.
    */
-  it('sizes the pill from the arriving sentence while the old one is still leaving', async () => {
+  it('sizes the terminal notice from its content', async () => {
     vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
       this: HTMLElement
     ) {
@@ -1286,35 +1262,19 @@ describe('VoicePanel device readiness and long messages', () => {
       return this.textContent?.includes('busy') ? 246 : 40
     })
 
-    const wrapper = mount(VoicePanel, {
-      props: { managedByDock: true },
-      global: { stubs: { transition: false } }
-    })
-    await flushPromises()
-    await exposed(wrapper).openPanel()
-    ;(wrapper.vm as unknown as { startVoiceInput: () => void }).startVoiceInput()
-    await flushPromises()
-
-    // A short notice first, so there is something on screen for the next one to replace.
-    callbacksOrThrow().onError?.(new Error('QUOTA_EXCEEDED'))
-    await flushPromises()
-    await flushPromises()
-    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 200px')
-    ;(wrapper.vm as unknown as { startVoiceInput: () => void }).startVoiceInput()
-    await flushPromises()
+    const wrapper = await listeningPanel()
     callbacksOrThrow().onError?.(new Error('SERVICE_IS_busy_RIGHT_NOW'))
     await flushPromises()
     await flushPromises()
 
-    // 246 of arriving text + 94 of chrome, not the 40 the leaving one still reports.
-    expect(wrapper.find('.voice-dock').attributes('style')).toContain('width: 340px')
-    // Both are on screen together, which is the swap: one blurring out, one blurring in.
-    // Not an exact count — jsdom never fires transitionend, so leaving copies pile up here in a
-    // way they never would in a browser. What matters is that the two states coexist at all.
-    const slots = wrapper.findAll('.voice-dock__slot')
-    const leaving = slots.filter((slot) => slot.classes().includes('voice-swap-leave-active'))
-    expect(leaving.length).toBeGreaterThan(0)
-    expect(slots.length - leaving.length).toBe(1)
+    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe(
+      'The service is busy. Try again shortly.'
+    )
+    const style = wrapper.find('.voice-dock').attributes('style') ?? ''
+    const height = Number(/height: (\d+)px/.exec(style)?.[1] ?? 0)
+    expect(style).toContain('width: 340px')
+    expect(height).toBeGreaterThan(44)
+    expect(wrapper.find('.voice-dock--expanded').exists()).toBe(true)
 
     vi.restoreAllMocks()
     wrapper.unmount()
@@ -1402,8 +1362,8 @@ describe('VoicePanel device readiness and long messages', () => {
     await nextTick()
     expect(wrapper.find('[data-testid="voice-charge"]').exists()).toBe(false)
     expect(wrapper.find('.voice-dock').attributes('style')).not.toContain('scale(')
-    // Still the same session: no notice, and the cancel control is still live. (The wave is not
-    // up yet — no level frame has arrived, so this is the "opening the microphone" phase.)
+    // Still the same session: no notice, and the cancel control is still live. The waveform stays
+    // visible in its pending presentation until the first level frame arrives.
     expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="voice-cancel"]').attributes('disabled')).toBeUndefined()
 
@@ -1617,21 +1577,40 @@ describe('VoicePanel recording budget', () => {
     wrapper.unmount()
   })
 
+  /** Listening long enough that the cap is news, which is the only time the line is drawn. */
+  async function endingPanel(): Promise<VueWrapper> {
+    const wrapper = await recordingPanel()
+    vi.advanceTimersByTime(280_000)
+    await nextTick()
+    return wrapper
+  }
+
   /**
-   * The border carries one claim at a time: the beam means "running, no fraction available", and
-   * it must step aside the moment a real fraction exists. Two strokes on one 1px edge read as
-   * neither.
+   * Who owns the 1px border, in the order a session walks through it.
+   *
+   * The rule is still "one claim at a time"; what changed is which claim wins in the middle.
+   * The budget used to take the edge for the whole five minutes, so the beam — the thing that
+   * says "this is live" — was the one state it never appeared in. For all but the last half
+   * minute the line is a fact about a ceiling nobody is near, not news.
    */
-  it('takes the border from the beam once audio is flowing, and gives it back on stop', async () => {
+  it('gives the border to the beam while listening, and to the budget only near the cap', async () => {
     const wrapper = await mountVoicePanel()
     exposed(wrapper).startVoiceInput()
     await flushPromises()
 
-    // Still opening the device: nothing has been recorded, so there is nothing to divide.
+    // Still opening the device. Nothing is running yet, so nothing claims the edge: the pill
+    // is already saying "preparing" by breathing, and a beam on top would claim a live session
+    // half a second early.
     expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(false)
-    expect(beamOn(wrapper)).toBe(true)
+    expect(beamOn(wrapper)).toBe(false)
 
     callbacksOrThrow().onData?.({ type: 'level', rms: 0.4 })
+    await nextTick()
+    expect(beamOn(wrapper)).toBe(true)
+    expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(false)
+
+    // The last half minute is where the ceiling becomes news and takes the edge back.
+    vi.advanceTimersByTime(280_000)
     await nextTick()
     expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(true)
     expect(beamOn(wrapper)).toBe(false)
@@ -1645,20 +1624,18 @@ describe('VoicePanel recording budget', () => {
   })
 
   it('advances the line with the recording, and starts the next one from zero', async () => {
-    const wrapper = await recordingPanel()
-    expect(spent(wrapper)).toBeCloseTo(0, 3)
+    const wrapper = await endingPanel()
+    // 280s of a 300s cap. The fraction has been accumulating since the first level frame,
+    // even though the line only started drawing it in the last half minute.
+    expect(spent(wrapper)).toBeCloseTo(280 / 300, 3)
 
-    vi.advanceTimersByTime(60_000)
+    vi.advanceTimersByTime(10_000)
     await nextTick()
-    expect(spent(wrapper)).toBeCloseTo(0.2, 3)
-
-    vi.advanceTimersByTime(60_000)
-    await nextTick()
-    expect(spent(wrapper)).toBeCloseTo(0.4, 3)
+    expect(spent(wrapper)).toBeCloseTo(290 / 300, 3)
 
     // Negative control: the next recording starts its own budget. Carrying the previous
-    // session's elapsed time over would show a line already two-fifths spent on a microphone
-    // that has just been opened.
+    // session's elapsed time over would show a line already spent on a microphone that has
+    // just been opened.
     callbacksOrThrow().onEnd?.()
     await nextTick()
     // And the clock itself is gone, not merely hidden: a one-second interval left running behind
@@ -1670,37 +1647,41 @@ describe('VoicePanel recording budget', () => {
     await flushPromises()
     callbacksOrThrow().onData?.({ type: 'level', rms: 0.4 })
     await nextTick()
-    expect(spent(wrapper)).toBeCloseTo(0, 3)
+    // A fresh session is nowhere near the cap, so there is no line at all — which is itself
+    // the assertion that the elapsed time did not carry over.
+    expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(false)
+    vi.advanceTimersByTime(280_000)
+    await nextTick()
+    expect(spent(wrapper)).toBeCloseTo(280 / 300, 3)
 
     wrapper.unmount()
   })
 
   /**
-   * Five minutes is a ceiling nobody reaches, so for almost the whole recording this line is a
-   * fact rather than a warning. It only changes tone when the remaining budget is short enough
-   * that the recording is about to be stopped for the user.
+   * Five minutes is a ceiling nobody reaches, so for almost the whole recording there is nothing
+   * to say. The line appears only once the remaining budget is short enough that the recording
+   * is about to be stopped for the user — and it appears already in its warning tone, because
+   * that is the only condition under which it is drawn.
    */
-  it('stays neutral until the last half-minute of the budget', async () => {
+  it('draws nothing until the last half-minute, then draws it as a warning', async () => {
     const wrapper = await recordingPanel()
 
     vi.advanceTimersByTime(269_000)
     await nextTick()
-    expect(wrapper.find('[data-testid="voice-budget"]').classes()).not.toContain(
-      'voice-dock__budget--ending'
-    )
+    expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(false)
 
     vi.advanceTimersByTime(2_000)
     await nextTick()
-    expect(wrapper.find('[data-testid="voice-budget"]').classes()).toContain(
-      'voice-dock__budget--ending'
-    )
+    const budget = wrapper.find('[data-testid="voice-budget"]')
+    expect(budget.exists()).toBe(true)
+    expect(budget.classes()).toContain('voice-dock__budget--ending')
 
     wrapper.unmount()
   })
 
   /** A notice and an Escape hold each own the border for something more urgent than a ceiling. */
   it('yields the border to a hold and to a notice', async () => {
-    const wrapper = await recordingPanel()
+    const wrapper = await endingPanel()
     expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(true)
 
     hold(wrapper, 'start')

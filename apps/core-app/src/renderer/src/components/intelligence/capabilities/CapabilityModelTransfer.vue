@@ -1,5 +1,8 @@
 <script lang="ts" setup name="CapabilityModelTransfer">
+import type { TransferItem } from '@talex-touch/tuffex/transfer'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxInput } from '@talex-touch/tuffex/input'
+import { TxTransfer } from '@talex-touch/tuffex/transfer'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -24,8 +27,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const availableSelection = ref<string[]>([])
-const selectedSelection = ref<string[]>([])
 const customModelInput = ref('')
 const seenModels = ref<string[]>([])
 
@@ -44,8 +45,6 @@ function trackModel(value?: string): void {
 watch(
   () => props.scopeKey,
   () => {
-    availableSelection.value = []
-    selectedSelection.value = []
     customModelInput.value = ''
     seenModels.value = []
   }
@@ -63,13 +62,18 @@ watch(
   () => props.modelValue,
   (list) => {
     list?.forEach(trackModel)
-    selectedSelection.value = selectedSelection.value.filter((item) => list?.includes(item))
   },
   { immediate: true, deep: true }
 )
 
-const availableList = computed(() => {
-  const selectedSet = new Set((props.modelValue ?? []).map(normalizeModel))
+const selectedList = computed(() => (props.modelValue ?? []).map(normalizeModel).filter(Boolean))
+
+/**
+ * The pool keeps custom models that were added and then moved back: they are in
+ * neither `availableModels` nor `modelValue`, so without `seenModels` they would
+ * vanish from both panels.
+ */
+const transferData = computed<TransferItem[]>(() => {
   const pool = new Set<string>()
   ;(props.availableModels ?? []).forEach((model) => {
     const normalized = normalizeModel(model)
@@ -78,23 +82,27 @@ const availableList = computed(() => {
   seenModels.value.forEach((model) => {
     if (model) pool.add(model)
   })
-  return Array.from(pool).filter((model) => !selectedSet.has(model))
+  selectedList.value.forEach((model) => pool.add(model))
+
+  return Array.from(pool)
+    .sort((a, b) => a.localeCompare(b))
+    .map((model) => ({ key: model, label: model }))
 })
 
-const selectedList = computed(() => (props.modelValue ?? []).map(normalizeModel).filter(Boolean))
+const panelTitles = computed<[string, string]>(() => [
+  t('settings.intelligence.transferAvailableModels'),
+  t('settings.intelligence.transferSelectedModels')
+])
 
-watch(availableList, (list) => {
-  availableSelection.value = availableSelection.value.filter((item) => list.includes(item))
-})
+const panelEmptyText = computed<[string, string]>(() => [
+  t('settings.intelligence.transferEmptyAvailable'),
+  t('settings.intelligence.transferEmptySelected')
+])
 
-watch(selectedList, (list) => {
-  selectedSelection.value = selectedSelection.value.filter((item) => list.includes(item))
-})
-
-function emitSelection(next: string[]): void {
+function emitSelection(next: Array<string | number>): void {
   const deduped: string[] = []
   next.forEach((model) => {
-    const normalized = normalizeModel(model)
+    const normalized = normalizeModel(String(model))
     if (!normalized) return
     if (!deduped.includes(normalized)) deduped.push(normalized)
     trackModel(normalized)
@@ -102,49 +110,10 @@ function emitSelection(next: string[]): void {
   emit('update:modelValue', deduped)
 }
 
-function handleToggleAvailable(model: string): void {
-  if (props.disabled) return
-  availableSelection.value = availableSelection.value.includes(model)
-    ? availableSelection.value.filter((item) => item !== model)
-    : [...availableSelection.value, model]
-}
-
-function handleToggleSelected(model: string): void {
-  if (props.disabled) return
-  selectedSelection.value = selectedSelection.value.includes(model)
-    ? selectedSelection.value.filter((item) => item !== model)
-    : [...selectedSelection.value, model]
-}
-
-function moveToSelected(model?: string): void {
-  if (props.disabled) return
-  const moveList = model ? [model] : availableSelection.value
-  if (!moveList.length) return
-  const ordered = availableList.value.filter((item) => moveList.includes(item))
-  emitSelection([...selectedList.value, ...ordered])
-  availableSelection.value = []
-}
-
-function removeFromSelected(model?: string): void {
-  if (props.disabled) return
-  const removeList = model ? [model] : selectedSelection.value
-  if (!removeList.length) return
-  emitSelection(selectedList.value.filter((item) => !removeList.includes(item)))
-  selectedSelection.value = []
-}
-
-function moveItem(model: string, direction: number): void {
-  if (props.disabled) return
-  const current = [...selectedList.value]
-  const index = current.findIndex((item) => item === model)
-  if (index === -1) return
-  const nextIndex = index + direction
-  if (nextIndex < 0 || nextIndex >= current.length) {
-    return
-  }
-  ;[current[index], current[nextIndex]] = [current[nextIndex], current[index]]
-  emitSelection(current)
-}
+const selectedModels = computed<Array<string | number>>({
+  get: () => selectedList.value,
+  set: (value) => emitSelection(value ?? [])
+})
 
 function handleAddCustom(): void {
   if (props.disabled) return
@@ -163,142 +132,50 @@ function handleKeyAdd(event: KeyboardEvent): void {
 
 <template>
   <div class="capability-transfer" :class="{ 'is-disabled': disabled }">
-    <div class="capability-transfer__panel" aria-label="Available models">
-      <header>
-        <div>
-          <p>{{ t('settings.intelligence.transferAvailableModels') }}</p>
-          <span class="capability-transfer__hint">({{ availableList.length }})</span>
-        </div>
-      </header>
-      <div class="capability-transfer__list" role="listbox">
-        <p v-if="availableList.length === 0" class="capability-transfer__empty">
-          {{ t('settings.intelligence.transferEmptyAvailable') }}
-        </p>
-        <TxButton
-          v-for="model in availableList"
-          :key="model"
-          variant="bare"
-          native-type="button"
-          class="capability-transfer__item"
-          :class="{ 'is-selected': availableSelection.includes(model) }"
-          :aria-pressed="availableSelection.includes(model)"
-          @click="handleToggleAvailable(model)"
-          @dblclick="moveToSelected(model)"
-        >
-          <i class="i-carbon-model" aria-hidden="true" />
-          <span>{{ model }}</span>
-        </TxButton>
-      </div>
-      <div class="capability-transfer__custom">
-        <input
-          v-model="customModelInput"
-          :disabled="disabled"
-          type="text"
-          :placeholder="t('settings.intelligence.transferCustomPlaceholder')"
-          @keyup="handleKeyAdd"
-        />
-        <TxButton
-          variant="flat"
-          size="sm"
-          :disabled="disabled || !customModelInput.trim()"
-          @click="handleAddCustom"
-        >
-          <i class="i-carbon-add" />
-          {{ t('settings.intelligence.transferAddButton') }}
-        </TxButton>
-      </div>
-    </div>
+    <TxTransfer
+      v-model="selectedModels"
+      :data="transferData"
+      :titles="panelTitles"
+      :empty-text="panelEmptyText"
+      :filter-placeholder="t('settings.intelligence.transferFilterPlaceholder')"
+      :add-aria-label="t('settings.intelligence.transferAddAriaLabel')"
+      :remove-aria-label="t('settings.intelligence.transferRemoveAriaLabel')"
+      :move-up-aria-label="t('settings.intelligence.transferMoveUpAriaLabel')"
+      :move-down-aria-label="t('settings.intelligence.transferMoveDownAriaLabel')"
+      :select-all-aria-label="t('settings.intelligence.transferSelectAllAriaLabel')"
+      max-height="min(56dvh, 520px)"
+      filterable
+      orderable
+      target-order="push"
+    />
 
-    <div class="capability-transfer__actions" aria-hidden="true">
+    <div class="capability-transfer__custom">
+      <TxInput
+        v-model="customModelInput"
+        class="capability-transfer__custom-input"
+        :disabled="disabled"
+        :placeholder="t('settings.intelligence.transferCustomPlaceholder')"
+        @keyup="handleKeyAdd"
+      />
       <TxButton
-        variant="bare"
-        native-type="button"
-        class="capability-transfer__action-btn"
-        :disabled="disabled || !availableSelection.length"
-        @click="moveToSelected()"
+        variant="flat"
+        type="primary"
+        :disabled="disabled || !customModelInput.trim()"
+        @click="handleAddCustom"
       >
-        <i class="i-carbon-chevron-right" aria-hidden="true" />
+        <i class="i-carbon-add" />
+        {{ t('settings.intelligence.transferAddButton') }}
       </TxButton>
-      <TxButton
-        variant="bare"
-        native-type="button"
-        class="capability-transfer__action-btn"
-        :disabled="disabled || !selectedSelection.length"
-        @click="removeFromSelected()"
-      >
-        <i class="i-carbon-chevron-left" aria-hidden="true" />
-      </TxButton>
-    </div>
-
-    <div
-      class="capability-transfer__panel capability-transfer__panel--selected"
-      aria-label="Selected models"
-    >
-      <header>
-        <div>
-          <p>{{ t('settings.intelligence.transferSelectedModels') }}</p>
-          <span class="capability-transfer__hint">({{ selectedList.length }})</span>
-        </div>
-      </header>
-      <div class="capability-transfer__list capability-transfer__list--selected" role="listbox">
-        <p v-if="selectedList.length === 0" class="capability-transfer__empty">
-          {{ t('settings.intelligence.transferEmptySelected') }}
-        </p>
-        <div
-          v-for="(model, index) in selectedList"
-          :key="model"
-          class="capability-transfer__selected"
-          :class="{ 'is-picked': selectedSelection.includes(model) }"
-        >
-          <TxButton
-            variant="bare"
-            native-type="button"
-            class="capability-transfer__item capability-transfer__item--selected"
-            :aria-pressed="selectedSelection.includes(model)"
-            @click="handleToggleSelected(model)"
-          >
-            <span class="capability-transfer__order">{{ index + 1 }}</span>
-            <span>{{ model }}</span>
-          </TxButton>
-          <div class="capability-transfer__selected-actions">
-            <TxButton
-              variant="bare"
-              native-type="button"
-              :disabled="disabled || index === 0"
-              @click="moveItem(model, -1)"
-            >
-              <i class="i-carbon-arrow-up" aria-hidden="true" />
-            </TxButton>
-            <TxButton
-              variant="bare"
-              native-type="button"
-              :disabled="disabled || index === selectedList.length - 1"
-              @click="moveItem(model, 1)"
-            >
-              <i class="i-carbon-arrow-down" aria-hidden="true" />
-            </TxButton>
-            <TxButton
-              variant="bare"
-              native-type="button"
-              :disabled="disabled"
-              @click="removeFromSelected(model)"
-            >
-              <i class="i-carbon-trash-can" aria-hidden="true" />
-            </TxButton>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
 
 <style scoped lang="scss">
 .capability-transfer {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   width: 100%;
-  min-height: 240px;
 
   &.is-disabled {
     opacity: 0.6;
@@ -306,173 +183,13 @@ function handleKeyAdd(event: KeyboardEvent): void {
   }
 }
 
-.capability-transfer__panel {
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 1rem;
-  padding: 1rem;
-  background: var(--tx-fill-color-lighter);
-  display: flex;
-  flex-direction: column;
-
-  header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 0.75rem;
-
-    p {
-      font-weight: 600;
-      font-size: 0.9rem;
-      margin: 0;
-    }
-  }
-}
-
-.capability-transfer__hint {
-  font-size: 0.75rem;
-  color: var(--tx-text-color-secondary);
-}
-
-.capability-transfer__list {
-  flex: 1;
-  border: 1px dashed var(--tx-border-color);
-  border-radius: 0.75rem;
-  padding: 0.75rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  background: var(--tx-bg-color);
-}
-
-.capability-transfer__empty {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--tx-text-color-secondary);
-  text-align: center;
-}
-
-.capability-transfer__item {
-  width: 100%;
-  border: 1px solid transparent;
-  border-radius: 0.65rem;
-  padding: 0.6rem 0.75rem;
-  background: var(--tx-fill-color-light);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease;
-
-  i {
-    color: var(--tx-text-color-placeholder);
-  }
-
-  &.is-selected {
-    border-color: var(--tx-color-primary-light-5);
-    background: rgba(99, 102, 241, 0.08);
-  }
-}
-
 .capability-transfer__custom {
-  margin-top: 0.75rem;
   display: flex;
   gap: 0.5rem;
-
-  input {
-    flex: 1;
-    border: 1px solid var(--tx-border-color);
-    border-radius: 0.75rem;
-    padding: 0.45rem 0.75rem;
-    background: var(--tx-bg-color);
-    font: inherit;
-  }
 }
 
-.capability-transfer__actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  align-items: center;
-  justify-content: center;
-}
-
-.capability-transfer__action-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid var(--tx-border-color);
-  background: var(--tx-bg-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s ease;
-
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-}
-
-.capability-transfer__panel--selected {
-  background: rgba(99, 102, 241, 0.04);
-}
-
-.capability-transfer__selected {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.4rem;
-  border-radius: 0.75rem;
-
-  &.is-picked {
-    background: rgba(99, 102, 241, 0.08);
-  }
-}
-
-.capability-transfer__item--selected {
-  justify-content: flex-start;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0.45rem 0.5rem;
-}
-
-.capability-transfer__order {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--tx-fill-color);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--tx-text-color-secondary);
-}
-
-.capability-transfer__selected-actions {
-  display: flex;
-  gap: 0.25rem;
-
-  button {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 1px solid var(--tx-border-color-lighter);
-    background: var(--tx-bg-color);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-
-    &:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-  }
+.capability-transfer__custom-input {
+  flex: 1;
+  min-width: 0;
 }
 </style>

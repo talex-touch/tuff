@@ -225,6 +225,8 @@ const answer = await intelligence.rag.query({
 
 OpenAI-compatible provider 已实现 `audio.tts`、`audio.stt`、`audio.transcribe`、`image.generate` 和 `image.edit`，分别调用 `/audio/speech`、`/audio/transcriptions`、`/audio/translations`、`/images/generations` 与 `/images/edits`；自定义厂商若不兼容这些 OpenAI 端点，仍需要 custom/provider plugin 实现相应 runtime method。当前 Nexus server 对 non-chat provider shape 明确 fail-closed，因此 `tuff-nexus-default` 不再声明或绑定 `audio.tts`；已存配置会移除该 stale capability/binding，OpenAI/SiliconFlow TTS 不受影响。
 
+`tuff-nexus-default` 的 `audio.stt` 是独立的 Nexus 批量能力：只接受 CoreApp 主进程校验后的 WAV，使用 `nexus-audio-transcribe` 产品别名，经 `/api/v1/ai/audio/transcribe` 提交并轮询同一请求；它不参与 `audio.asr` 实时流、不读取本地 Provider 密钥，也不经过通用 STT 缓存或失败 fallback。
+
 `search.semantic` 优先使用 provider 的 `semanticSearch` runtime method；未实现时 SDK 使用 `embedding` runtime method 和本地余弦排序作为 fallback。语义搜索和重排序 fallback 分别优先采用 `search.semantic` / `search.rerank` binding；对应能力没有启用 binding 时继承 `embedding.generate` 的 provider 与模型 binding。
 
 `getCapabilityStatus` 与 `getProviderModelOptions` 共享运行时方法检查；后者仅返回具备模型且真正实现该能力的候选供应商，并在 capability binding 声明模型时仅展示该 binding 的模型。未声明 binding 时，内置 OpenAI-compatible provider 使用能力专属默认模型，而不是把全局聊天模型暴露给图片、语音或 embedding 入口：OpenAI 图像使用 `gpt-image-1`，STT/转录使用 `whisper-1` / `gpt-4o-transcribe`，TTS 使用 `tts-1` / `tts-1-hd`；SiliconFlow 图像生成使用 `Kwai-Kolors/Kolors`，STT/转录使用 `FunAudioLLM/SenseVoiceSmall`，TTS 使用 `fnlp/MOSS-TTSD-v0.5`，embedding/search fallback 使用 `netease-youdao/bce-embedding-base_v1` / `BAAI/bge-m3`。自定义 OpenAI-compatible provider 如果在全局 `models` 混放多类模型，必须通过 capability binding 明确每个能力可选模型。任何可执行入口都必须仅展示和选择 `available: true` 的选项。`workflow.execute` 和 `agent.run` 由内部编排运行：声明 `text.chat` 的 provider 即可作为其运行时供应商，无需重复声明这两个内部能力；未配置已启用的专用 binding 时，两者继承 `text.chat` 的 provider 与模型 binding。

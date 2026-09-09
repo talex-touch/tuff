@@ -12,22 +12,20 @@ import {
   IntelligenceProviderType,
 } from '../../types/intelligence'
 import { createStorageDataProxy, createStorageProxy, TouchStorage } from './base-storage'
+import { getVoiceCapabilityRecommendedModels } from '../../intelligence/voice-asr'
 
 // Re-export types for convenience
 export { IntelligenceProviderType }
 export type { IntelligenceGlobalConfig, IntelligenceProviderConfig }
 
-function buildPromptSchemaFromCapabilities(
-  capabilities: Record<string, { promptTemplate?: string }>
-) {
+function buildPromptSchemaFromCapabilities(capabilities: Record<string, { promptTemplate?: string }>) {
   const promptRegistry: NonNullable<IntelligenceStorageData['promptRegistry']> = []
   const promptBindings: NonNullable<IntelligenceStorageData['promptBindings']> = []
   const nowTs = Date.now()
 
   for (const [capabilityId, capabilityConfig] of Object.entries(capabilities || {})) {
-    const promptTemplate = typeof capabilityConfig?.promptTemplate === 'string'
-      ? capabilityConfig.promptTemplate.trim()
-      : ''
+    const promptTemplate =
+      typeof capabilityConfig?.promptTemplate === 'string' ? capabilityConfig.promptTemplate.trim() : ''
     if (!promptTemplate) {
       continue
     }
@@ -65,7 +63,7 @@ const defaultIntelligenceData: IntelligenceStorageData = {
   capabilities: { ...DEFAULT_CAPABILITIES },
   promptRegistry: defaultPromptSchema.promptRegistry,
   promptBindings: defaultPromptSchema.promptBindings,
-  version: 2,
+  version: 4,
 }
 
 const INTELLIGENCE_STORAGE_KEY = `storage:${StorageList.IntelligenceConfig}`
@@ -99,8 +97,7 @@ class IntelligenceStorage extends TouchStorage<IntelligenceStorageData> {
     if (providerIndex !== -1) {
       const updatedProviders = [...currentData.providers]
       const currentProvider = updatedProviders[providerIndex]
-      if (!currentProvider)
-        return
+      if (!currentProvider) return
       updatedProviders[providerIndex] = {
         ...currentProvider,
         ...updatedProvider,
@@ -160,8 +157,7 @@ class IntelligenceStorage extends TouchStorage<IntelligenceStorageData> {
    */
   isProviderConfigured(id: string): boolean {
     const provider = this.get().providers.find(p => p.id === id)
-    if (!provider || !provider.enabled)
-      return false
+    if (!provider || !provider.enabled) return false
 
     // 检查是否有必要的配置项
     const hasApiKey = provider.type === IntelligenceProviderType.LOCAL || !!provider.apiKey
@@ -186,6 +182,56 @@ export const intelligenceSettings = intelligenceStorage
 
 export const intelligenceSettingsData = intelligenceData
 
+function migrateVoiceCapabilityRouting(data: IntelligenceStorageData): IntelligenceStorageData {
+  const providers = data.providers.map(provider => {
+    const metadata = { ...(provider.metadata || {}) }
+    const recommendations = getVoiceCapabilityRecommendedModels('audio.asr', {
+      ...metadata,
+      baseUrl: provider.baseUrl,
+    })
+    if (recommendations.length > 0) {
+      metadata.channelType ??= 'bailian'
+      metadata.voiceAsr ??= { protocol: 'bailian-paraformer' }
+    }
+    return Object.keys(metadata).length > 0 ? { ...provider, metadata } : provider
+  })
+  const providerMap = new Map(providers.map(provider => [provider.id, provider]))
+  const capabilities = { ...data.capabilities }
+  let changed = false
+
+  for (const capabilityId of ['audio.asr', 'audio.stt']) {
+    const capability = capabilities[capabilityId]
+    if (!capability?.providers) continue
+    const nextBindings = capability.providers.map(binding => {
+      if (binding.enabled === false) return binding
+      const provider = providerMap.get(binding.providerId)
+      if (!provider) return binding
+      const recommendations = getVoiceCapabilityRecommendedModels(capabilityId, {
+        ...(provider.metadata || {}),
+        baseUrl: provider.baseUrl,
+      })
+      if (!recommendations.length) return binding
+
+      const supportedModels = (binding.models || []).filter(model => recommendations.includes(model))
+      const nextModels = supportedModels.length > 0 ? supportedModels : [recommendations[0]]
+      if (
+        nextModels.length === (binding.models || []).length &&
+        nextModels.every((model, index) => model === binding.models?.[index])
+      ) {
+        return binding
+      }
+      changed = true
+      return { ...binding, models: nextModels }
+    })
+    if (nextBindings.some((binding, index) => binding !== capability.providers![index])) {
+      capabilities[capabilityId] = { ...capability, providers: nextBindings }
+    }
+  }
+
+  const metadataChanged = providers.some((provider, index) => provider !== data.providers[index])
+  return metadataChanged || changed ? { ...data, providers, capabilities, version: 4 } : { ...data, version: 4 }
+}
+
 export async function migrateIntelligenceSettings(): Promise<void> {
   intelligenceStorageLog.info('Starting migration check...')
   const currentData = intelligenceStorage.data
@@ -205,15 +251,14 @@ export async function migrateIntelligenceSettings(): Promise<void> {
     }))
 
     const storedStrategy = currentData.globalConfig?.defaultStrategy
-    const normalizedStrategy
-      = storedStrategy === 'priority' ? 'rule-based-default' : storedStrategy ?? 'adaptive-default'
+    const normalizedStrategy =
+      storedStrategy === 'priority' ? 'rule-based-default' : (storedStrategy ?? 'adaptive-default')
 
     const migratedGlobalConfig: IntelligenceGlobalConfig = {
       defaultStrategy: normalizedStrategy,
       enableAudit: currentData.globalConfig?.enableAudit ?? false,
       enableCache: currentData.globalConfig?.enableCache ?? true,
-      enableQuota:
-        currentData.globalConfig?.enableQuota ?? DEFAULT_GLOBAL_CONFIG.enableQuota ?? true,
+      enableQuota: currentData.globalConfig?.enableQuota ?? DEFAULT_GLOBAL_CONFIG.enableQuota ?? true,
       cacheExpiration: currentData.globalConfig?.cacheExpiration ?? 3600,
     }
 
@@ -231,9 +276,10 @@ export async function migrateIntelligenceSettings(): Promise<void> {
 
     await intelligenceStorage.saveToRemote({ force: true })
 
-    intelligenceStorageLog.info(`Migration to v2 complete, capabilities count: ${Object.keys(DEFAULT_CAPABILITIES).length}`)
-  }
-  else {
+    intelligenceStorageLog.info(
+      `Migration to v2 complete, capabilities count: ${Object.keys(DEFAULT_CAPABILITIES).length}`,
+    )
+  } else {
     if (!Array.isArray(currentData.promptRegistry) || !Array.isArray(currentData.promptBindings)) {
       const promptSchema = buildPromptSchemaFromCapabilities(currentData.capabilities || DEFAULT_CAPABILITIES)
       intelligenceStorage.applyData({
@@ -245,6 +291,14 @@ export async function migrateIntelligenceSettings(): Promise<void> {
       await intelligenceStorage.saveToRemote({ force: true })
     }
     intelligenceStorageLog.info(`No migration needed, current version: ${currentData.version}`)
+  }
+
+  if ((intelligenceStorage.data.version ?? 0) < 4) {
+    intelligenceStorageLog.info('Migrating settings to version 4')
+    const migrated = migrateVoiceCapabilityRouting(intelligenceStorage.data)
+    intelligenceStorage.applyData(migrated)
+    await intelligenceStorage.saveToRemote({ force: true })
+    intelligenceStorageLog.info('Migration to v4 complete')
   }
 
   intelligenceStorageLog.info(`Final providers count: ${intelligenceStorage.data.providers.length}`)
@@ -260,7 +314,7 @@ export async function resetIntelligenceConfig(): Promise<void> {
     capabilities: { ...DEFAULT_CAPABILITIES },
     promptRegistry: defaultPromptSchema.promptRegistry,
     promptBindings: defaultPromptSchema.promptBindings,
-    version: 2,
+    version: 4,
   })
 
   await intelligenceStorage.saveToRemote({ force: true })

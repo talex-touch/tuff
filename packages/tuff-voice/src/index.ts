@@ -7,14 +7,14 @@ export * from './http'
 export * from './node-ws'
 export * from './protocol/bailian-paraformer'
 export * from './protocol/doubao'
+export * from './protocol/qwen-asr-realtime'
 export * from './providers/bailian-paraformer'
 export * from './providers/doubao'
+export * from './providers/dashscope-qwen-asr-realtime'
 export * from './socket-session'
 export * from './upload-source'
 
-export function createVoiceProviderRegistry(
-  providers: readonly VoiceProviderAdapter[] = [],
-): VoiceProviderRegistry {
+export function createVoiceProviderRegistry(providers: readonly VoiceProviderAdapter[] = []): VoiceProviderRegistry {
   const entries = new Map<string, VoiceProviderAdapter>()
   for (const provider of providers) {
     if (entries.has(provider.id)) {
@@ -37,8 +37,7 @@ export function createVoiceProviderRegistry(
     },
     resolve(mode: VoiceRecognitionMode, preferredId?: string) {
       const provider = preferredId ? entries.get(preferredId) : undefined
-      if (provider && supportsMode(provider, mode))
-        return provider
+      if (provider && supportsMode(provider, mode)) return provider
       if (preferredId && !provider) {
         throw new VoiceProviderError('VOICE_PROVIDER_NOT_FOUND', `Voice provider is not configured: ${preferredId}`)
       }

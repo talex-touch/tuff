@@ -129,10 +129,15 @@ pub fn start_function_key_monitor(
     function_key_monitor::start(env, callback)
 }
 
-/// Required by the JS loader so stale addons cannot retain the failed Fn-drop behavior.
+/// Required by the JS loader so stale addons cannot retain CGEventSource held-key seeding.
 #[napi]
-pub fn function_key_monitor_api_v3() -> u32 {
-    3
+pub fn function_key_monitor_api_v5() -> u32 {
+    5
+}
+
+#[napi]
+pub fn set_function_key_monitor_escape_capture(enabled: bool) -> bool {
+    function_key_monitor::set_escape_capture(enabled)
 }
 
 #[napi]
@@ -547,30 +552,115 @@ pub fn is_accessibility_trusted() -> bool {
     accessibility_trusted()
 }
 
-#[napi]
-pub fn type_text(text: String) -> Result<TypeTextResult> {
+/// One long-lived thread owns all keystroke injection.
+///
+/// Three problems, one structure:
+///
+/// 1. **Blocking.** `enigo.text()` posts one synthetic event per character and does not
+///    return until the last one is out. Called straight from `#[napi] fn`, that ran on the
+///    Electron main thread and froze the whole app for the length of the transcript —
+///    the longer the dictation, the longer the stall. Same shape as `play_audio` (#845).
+/// 2. **Ordering.** Live dictation types deltas as they are recognized. Two of those
+///    running concurrently would interleave their characters into the target application,
+///    which is worse than being slow. A single consumer serializes them by construction.
+/// 3. **Setup cost.** `Enigo::new` reads `NSEvent.doubleClickInterval` and builds an event
+///    source. Per call that is pure waste when the caller is typing a word at a time; here
+///    it happens once and the instance is reused for the life of the process.
+///
+/// The accessibility check rides along rather than staying at the call site, so every
+/// AppKit/AX touch this feature makes happens on the same thread.
+struct TypeRequest {
+    text: String,
+    reply: mpsc::Sender<TypeTextResult>,
+}
+
+static TYPIST: OnceLock<mpsc::Sender<TypeRequest>> = OnceLock::new();
+
+fn typist() -> &'static mpsc::Sender<TypeRequest> {
+    TYPIST.get_or_init(|| {
+        let (tx, rx) = mpsc::channel::<TypeRequest>();
+        thread::spawn(move || {
+            let mut enigo: Option<enigo::Enigo> = None;
+            for request in rx {
+                let _ = request.reply.send(type_on_thread(&mut enigo, &request.text));
+            }
+        });
+        tx
+    })
+}
+
+/// The whole of one typing request, from the thread that owns the keyboard.
+fn type_on_thread(enigo: &mut Option<enigo::Enigo>, text: &str) -> TypeTextResult {
+    use enigo::{Enigo, Keyboard, Settings};
+
     // On macOS, keystroke injection requires Accessibility (AX) trust. Report the
     // gate rather than prompting — the app surfaces the system prompt itself.
-    #[cfg(target_os = "macos")]
-    {
-        if !accessibility_trusted() {
-            return Ok(TypeTextResult {
-                ok: false,
-                reason: Some("accessibility-required".to_string()),
-            });
+    if !accessibility_trusted() {
+        return TypeTextResult {
+            ok: false,
+            reason: Some("accessibility-required".to_string()),
+        };
+    }
+
+    if enigo.is_none() {
+        match Enigo::new(&Settings::default()) {
+            Ok(instance) => *enigo = Some(instance),
+            Err(error) => {
+                return TypeTextResult {
+                    ok: false,
+                    reason: Some(format!("enigo-init-failed: {error}")),
+                };
+            }
         }
     }
 
-    match type_text_impl(&text) {
-        Ok(()) => Ok(TypeTextResult {
+    // `expect` is unreachable: the branch above either filled it or returned.
+    match enigo.as_mut().expect("enigo initialized above").text(text) {
+        Ok(()) => TypeTextResult {
             ok: true,
             reason: None,
-        }),
-        Err(reason) => Ok(TypeTextResult {
+        },
+        Err(error) => TypeTextResult {
             ok: false,
-            reason: Some(reason),
-        }),
+            // A failed instance may be in an unusable state; drop it so the next
+            // request rebuilds rather than inheriting whatever went wrong.
+            reason: {
+                *enigo = None;
+                Some(format!("type-failed: {error}"))
+            },
+        },
     }
+}
+
+pub struct TypeTextTask {
+    text: String,
+}
+
+impl Task for TypeTextTask {
+    type Output = TypeTextResult;
+    type JsValue = TypeTextResult;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        let (reply, answer) = mpsc::channel();
+        typist()
+            .send(TypeRequest {
+                text: std::mem::take(&mut self.text),
+                reply,
+            })
+            .map_err(|_| Error::from_reason("type-text-worker-gone"))?;
+        answer
+            .recv()
+            .map_err(|_| Error::from_reason("type-text-worker-gone"))
+    }
+
+    fn resolve(&mut self, _env: Env, result: Self::Output) -> Result<Self::JsValue> {
+        Ok(result)
+    }
+}
+
+#[napi]
+pub fn type_text(text: String) -> AsyncTask<TypeTextTask> {
+    AsyncTask::new(TypeTextTask { text })
 }
 
 /// State shared with the audio callback to track trailing silence.
@@ -1615,16 +1705,6 @@ fn accessibility_trusted() -> bool {
 #[cfg(not(target_os = "macos"))]
 fn accessibility_trusted() -> bool {
     true
-}
-
-fn type_text_impl(text: &str) -> std::result::Result<(), String> {
-    use enigo::{Enigo, Keyboard, Settings};
-    let mut enigo =
-        Enigo::new(&Settings::default()).map_err(|error| format!("enigo-init-failed: {error}"))?;
-    enigo
-        .text(text)
-        .map_err(|error| format!("type-failed: {error}"))?;
-    Ok(())
 }
 
 // napi's Rust runtime references these Node-provided symbols; under `cargo test`

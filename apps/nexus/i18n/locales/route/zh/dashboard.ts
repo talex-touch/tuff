@@ -287,6 +287,7 @@ export default {
         'core-app': 'CoreApp',
         'custom': '自定义',
         'deepseek': 'DeepSeek',
+        'dashscope': '百炼 / DashScope',
         'degraded': '降级',
         'disabled': '已禁用',
         'dry_run': '试运行',

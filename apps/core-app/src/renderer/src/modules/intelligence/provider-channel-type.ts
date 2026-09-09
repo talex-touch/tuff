@@ -36,6 +36,7 @@ export function normalizeProviderChannelType(value: unknown): ProviderChannelKin
 
 export function getProviderChannelType(provider: {
   type: string
+  baseUrl?: string
   metadata?: Record<string, unknown>
 }): ProviderChannelKind {
   const selected = provider.metadata?.channelType
@@ -43,9 +44,32 @@ export function getProviderChannelType(provider: {
     return normalizeProviderChannelType(selected)
   }
 
-  return provider.type === IntelligenceProviderType.CUSTOM
-    ? ProviderChannelType.COMPATIBLE
-    : normalizeProviderChannelType(provider.type)
+  if (provider.type === IntelligenceProviderType.CUSTOM) {
+    const voiceAsr = provider.metadata?.voiceAsr
+    if (
+      voiceAsr &&
+      typeof voiceAsr === 'object' &&
+      !Array.isArray(voiceAsr) &&
+      ['bailian-paraformer', 'dashscope-qwen-asr-realtime'].includes(
+        String((voiceAsr as Record<string, unknown>).protocol)
+      )
+    ) {
+      return ProviderChannelType.BAILIAN
+    }
+
+    try {
+      const host = new URL(provider.baseUrl || '').hostname.toLowerCase()
+      if (host === 'dashscope.aliyuncs.com' || host.endsWith('.maas.aliyuncs.com')) {
+        return ProviderChannelType.BAILIAN
+      }
+    } catch {
+      // An incomplete custom URL remains a compatible channel until it is saved.
+    }
+
+    return ProviderChannelType.COMPATIBLE
+  }
+
+  return normalizeProviderChannelType(provider.type)
 }
 
 export function getRuntimeProviderType(channelType: ProviderChannelKind): IntelligenceProviderType {

@@ -176,9 +176,9 @@ const _appSettingOriginData = {
     enabled: false,
     defaultProvider: null as null | 'pi' | 'codex' | 'claude' | 'oh-my-pi',
     providers: {
-      'pi': { enabled: false, executableOverride: '' },
-      'codex': { enabled: false, executableOverride: '' },
-      'claude': { enabled: false, executableOverride: '' },
+      pi: { enabled: false, executableOverride: '' },
+      codex: { enabled: false, executableOverride: '' },
+      claude: { enabled: false, executableOverride: '' },
       'oh-my-pi': { enabled: false, executableOverride: '' },
     },
   },
@@ -304,9 +304,9 @@ const _appSettingOriginData = {
      * auto when it does not resolve, but never clear it — a provider that is temporarily
      * unavailable (the pi CLI not running) must not cost the user their choice.
      */
-    model: null as null | { providerId: string, model: string },
+    model: null as null | { providerId: string; model: string },
     /** Starred rows of the home model menu, in the order they were starred. */
-    favoriteModels: [] as Array<{ providerId: string, model: string }>,
+    favoriteModels: [] as Array<{ providerId: string; model: string }>,
   },
   dashboard: {
     enable: false,
@@ -512,6 +512,7 @@ export type AppSetting = typeof _appSettingOriginData & {
 export interface VoiceInputSetting {
   enabled: boolean
   language: string
+  historyEnabled?: boolean
 }
 
 function isSettingRecord(value: unknown): value is Record<string, unknown> {
@@ -534,19 +535,30 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
       language:
         typeof legacyVoiceWake.language === 'string' && legacyVoiceWake.language.trim()
           ? legacyVoiceWake.language
-          : 'zh-CN'
+          : 'zh-CN',
     }
     return true
   }
 
   const source = isSettingRecord(setting.voiceInput) ? setting.voiceInput : {}
   const enabled = typeof source.enabled === 'boolean' ? source.enabled : false
-  const language =
-    typeof source.language === 'string' && source.language.trim() ? source.language : 'zh-CN'
-  if (isSettingRecord(setting.voiceInput) && source.enabled === enabled && source.language === language) {
+  const language = typeof source.language === 'string' && source.language.trim() ? source.language : 'zh-CN'
+  const hasHistory = Object.prototype.hasOwnProperty.call(source, 'historyEnabled')
+  const historyEnabled = source.historyEnabled === true
+  if (
+    isSettingRecord(setting.voiceInput) &&
+    source.enabled === enabled &&
+    source.language === language &&
+    (!hasHistory || source.historyEnabled === historyEnabled)
+  ) {
     return false
   }
 
-  setting.voiceInput = { ...source, enabled, language }
+  setting.voiceInput = {
+    ...source,
+    enabled,
+    language,
+    ...(hasHistory ? { historyEnabled } : {}),
+  }
   return true
 }

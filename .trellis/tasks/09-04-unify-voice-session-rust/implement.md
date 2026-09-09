@@ -116,25 +116,33 @@
 - 更新后 5 个 focused 文件 154 tests 通过；Rust native-audio 46 tests 通过；Node/Web typecheck 与 CoreApp 修改范围 ESLint 通过；原生 release addon 构建与加载通过。
 - 隔离真实 Electron + 合成 HID 输入：native 收到 Fn down/up 和 Esc down/up；独立 Session 下游观察到 Fn 0 条、Esc down/up 各 1 条。
 - Finder 前台时，隔离胶囊保留；短 Esc 收到 start/reset 不取消，长 Esc 约 600ms 收到 start/commit 并显示“已取消”。错误胶囊再次注入 Fn 收到 toggle，进入新录音，无旧错误提示。
-- 旧“丢弃事件”方案实体验收失败：4 组 Fn HID down/up、Session 下游 0 条，用户仍确认表情面板弹出。不能把下游截断当作默认动作抑制证据。
-- 正式修复：原生回调先投影原始 Fn 状态，再仅清除 `MaskSecondaryFn`，将原事件放行。用户已对同机制的临时探针反复实体按键并确认“不弹了”；未改系统 Fn 设置，也未杀面板或抢焦点。
-- 接入后 native release build/load 通过，46 项 Rust 测试和 7 文件 163 项语音回归通过。真实 Electron 加载正式 addon 的集成探针确认：语音侧收到 down/up，下游收到 2 个事件且 Fn 标志均为 0。ABI marker 升级为 V3，阻止旧丢弃事件版 addon 被误加载。
+- 旧“丢弃事件”方案实体验收失败：4 组 Fn HID down/up、Session 下游 0 条，用户仍确认表情面板弹出。该结果说明仅靠下游事件观察不能证明 macOS 默认动作已停止。
+- 当前修复改为：先向 Voice controller 投影 standalone Fn down/up，再从 HID OS event stream 移除原始 standalone `FlagsChanged` 事件；组合键事件保持放行。后续实机必须重新确认 Emoji 不弹，不能复用旧的 flag-neutralized 结论。
+- native release build/load 与 Rust focused tests 必须绑定同一份 addon；ABI marker 继续阻止旧实现被误加载。
 
 ## ASR 现状与落地结论
 
-- 当前主链路仍是 Rust/cpal 采集 → main-owned Provider/`audio.stt` → 可选 `text.chat` polish → active-app delivery。可用 Provider 是豆包、百炼 Paraformer；未配置时退回泛化 Whisper-compatible WebSocket，再退回定时 WAV snapshot 重识别。
-- 现有 Provider 契约已经有 `stream`/`upload`、partial/final/end、取消和请求边界，但没有本地 FunASR/Whisper runtime；`TUFF_VOICE_ASR_WS_URL` 仍是外部兼容旁路，不是本地模型产品入口。
-- VoiceService canonical sessions now request 16 kHz capture for Provider/one-shot paths; the generic WebSocket path requests its configured 8/16 kHz rate. Native capture failure remains explicit rather than silently sending a mismatched device-rate PCM stream.
+- 实时识别由既有 Intelligence `audio.asr` 能力绑定选择渠道与模型，再使用 Rust/cpal → 百炼或豆包流式适配器 → 可选润色 → active-app delivery；不再用环境变量或泛化 snapshot ASR 作为隐式备用路由。
+- 文件转写消费既有 `audio.stt` 能力绑定，由主进程原生文件选择、限额校验、读取与上传，结果只回显 UI，不写回其他应用。`audio.transcribe` 保留原语义，不冒充实时流。
+- 两种能力共用已有渠道凭据库；ASR 公开协议参数位于该渠道的 `metadata.voiceAsr`，不再维护 `AppSetting.voiceRecognition` 或第二套路由编辑器。
 - 选型不应把“FunASR”当成一个模型：中文/英文低延迟优先评估 Paraformer streaming；CPU 离线优先评估 SenseVoiceSmall；中文/英文/日文和口音覆盖可评估 Fun-ASR-Nano，但其 GPU/模型体量不适合作为所有桌面默认；Whisper/faster-whisper/whisper.cpp 作为多语言与 Apple Silicon/Windows 可移植 fallback。
 - 推荐顺序：先抽象 `local` Provider adapter 和统一 16 kHz mono PCM/VAD contract；macOS 优先 whisper.cpp 或 faster-whisper sidecar 做可复现 baseline，再以独立 FunASR 服务验证中文实时质量；不要把 Python FunASR 直接塞进 Electron 主进程，也不要同时引入两套本地模型下载/生命周期。
 - ASR 验收必须按真实短句集比较首字延迟、partial 稳定性、终字延迟、实时率、内存、CPU/GPU 占用、中文/英文混说 CER/WER、专名和数字、断网/取消；“能跑 CPU”不等于适合全局听写。
+
+## 渠道与能力收敛（代码待联调）
+
+- `audio.asr` 纳入现有能力注册、配置、模型选项和测试框架；复用 `resolveFirstIntelligenceProviderRoute`，不在 Voice 中重新实现模型和优先级算法。
+- 语音设置仅提供 ASR/STT 只读状态、跳转现有渠道/能力页面和文件转写消费入口；渠道协议参数使用既有 saveProviderConfig 且保留原凭据。
+- ASR 测试只测保存后的绑定，拒绝临时 provider/model override；generic invoke 拒绝实时 ASR，不误走文件 multipart。
+- ASR 恢复固定原 adapter/model/language 重放 PCM，文件 STT 取消传到实际网络请求并拒绝迟到结果。
+- 用户要求测试前联系、不得自行启动应用或服务。本次收敛之后仅做源码与契约静态检查，测试文件已同步，尚未运行测试、类型检查或构建，也未提交。
 
 ## Provider 首发决策（2026-09）
 
 - 本地 FunASR、Whisper、whisper.cpp 和 faster-whisper 先归档，不进入本轮实现；保留为后续 `local` Provider 任务，不下载模型、不新增 Python sidecar、不改变当前桌面安装包。
 - 首发选择阿里云百炼 `bailian-paraformer`：现有 WebSocket adapter 已覆盖 `run-task`、`task-started`、PCM duplex、`finish-task`、partial/final、`task-finished` 和取消；业务空间专属北京域名与 API Key 边界也已明确。
 - 官方价格页当前显示 `paraformer-realtime-v2` 按输入秒计费，原价 `0.00024 元/秒`，北京地域每月自动发放 `36,000 秒（10 小时）`免费额度，有效期 1 个月；实际活动以百炼控制台为准，不在代码中硬编码额度。
-- 无显式 `TUFF_VOICE_ASR_PROVIDER` 时，若百炼和豆包同时配置，runtime 优先百炼；仅豆包配置时自动使用豆包；显式选择未配置 Provider 必须 fail-closed。豆包保留为下一阶段的显式/备用 Provider。
+- 当前 Provider 与模型以用户保存的能力绑定为准；不再以 `TUFF_VOICE_ASR_PROVIDER` 或百炼/豆包环境变量自动选路。历史开发联调方式不构成当前配置事实源。
 
 ## 百炼真实授权 smoke（一次性）
 

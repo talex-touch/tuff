@@ -138,6 +138,8 @@ function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
   if (!isPlainObject(value)) return fallback
 
   const nextValue = { ...value }
+  // The unpublished voiceRecognition routes duplicated Intelligence capability bindings.
+  delete nextValue.voiceRecognition
   ensureVoiceInputSetting(nextValue)
   const setup = isPlainObject(nextValue.setup) ? nextValue.setup : {}
   const window = isPlainObject(nextValue.window) ? nextValue.window : {}

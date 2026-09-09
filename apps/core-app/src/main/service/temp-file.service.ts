@@ -220,7 +220,8 @@ export class TempFileService {
   private namespaces = new Map<string, TempNamespaceConfig>()
 
   constructor(options?: { baseDir?: string; cleanupIntervalMs?: number }) {
-    this.baseDir = options?.baseDir ?? path.join(app.getPath('userData'), 'temp')
+    const userData = typeof app?.getPath === 'function' ? app.getPath('userData') : process.cwd()
+    this.baseDir = options?.baseDir ?? path.join(userData, 'temp')
     const cleanupIntervalMs = Number(options?.cleanupIntervalMs ?? 10 * 60_000)
     this.cleanupIntervalMs = Number.isFinite(cleanupIntervalMs)
       ? Math.max(30_000, Math.floor(cleanupIntervalMs))
