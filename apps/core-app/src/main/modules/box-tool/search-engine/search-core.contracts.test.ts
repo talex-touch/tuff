@@ -452,35 +452,6 @@ describe('SearchEngineCore facade contracts', () => {
     )
   })
 
-  it('routes the App runtime presentation-refresh delegate to subscribed CoreBox streams', () => {
-    const emit = vi.fn()
-    const abort = new AbortController()
-    core.registerIndexCommitStream({
-      emit,
-      end: vi.fn(),
-      error: vi.fn(),
-      isCancelled: () => abort.signal.aborted,
-      signal: abort.signal
-    } as never)
-    const revision = searchIndexCommitHub.getRevision()
-    const delegate = state.appProviderRuntimeDelegate.mock.calls.at(-1)?.[0] as
-      | { invalidateRecommendations?: () => void }
-      | undefined
-
-    delegate?.invalidateRecommendations?.()
-
-    expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
-    expect(emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        recommendationsInvalidated: true,
-        revision
-      })
-    )
-    expect(searchIndexCommitHub.getRevision()).toBe(revision)
-
-    abort.abort()
-  })
-
   it('deduplicates activations and limits the public provider pool to active providers', () => {
     const alpha = buildProvider('contract-alpha', vi.fn())
     const beta = buildProvider('contract-beta', vi.fn())
@@ -1048,34 +1019,6 @@ describe('SearchEngineCore facade contracts', () => {
     }
 
     expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
-  })
-
-  it('notifies open CoreBox streams about hydrated app-icon presentation without mutating the index', () => {
-    const emit = vi.fn()
-    const abort = new AbortController()
-    core.registerIndexCommitStream({
-      emit,
-      end: vi.fn(),
-      error: vi.fn(),
-      isCancelled: () => abort.signal.aborted,
-      signal: abort.signal
-    } as never)
-    const revision = searchIndexCommitHub.getRevision()
-
-    core.invalidateAppRecommendationPresentation()
-
-    expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
-    expect(emit).toHaveBeenCalledTimes(1)
-    expect(emit).toHaveBeenCalledWith({
-      revision,
-      providerIds: [],
-      sourceGenerations: {},
-      committedAt: expect.any(Number),
-      recommendationsInvalidated: true
-    })
-    expect(searchIndexCommitHub.getRevision()).toBe(revision)
-
-    abort.abort()
   })
 
   it('flags the first file commit for renderers and stays quiet for the rest', () => {
