@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@talex-touch/tuff-native/audio', () => ({
+const nativeAudioMock = vi.hoisted(() => ({
   getNativeAudioSupport: vi.fn(),
   startCapture: vi.fn(),
   pollCapture: vi.fn(),
@@ -12,6 +12,8 @@ vi.mock('@talex-touch/tuff-native/audio', () => ({
   typeText: vi.fn(),
   isAccessibilityTrusted: vi.fn()
 }))
+
+vi.mock('@talex-touch/tuff-native/audio', () => nativeAudioMock)
 
 vi.mock('../clipboard', () => ({
   clipboardModule: { applyVoiceText: vi.fn() }
@@ -31,19 +33,23 @@ vi.mock('../ai/intelligence-sdk', () => ({
 vi.mock('../ai/intelligence-tts-service', () => ({
   intelligenceTtsService: { speak: vi.fn() }
 }))
+vi.mock('./voice-insights-store', () => ({
+  voiceInsightsStore: { recordSuccess: vi.fn(async () => undefined) }
+}))
+vi.mock('./voice-provider-runtime', () => ({
+  getConfiguredAsrProvider: vi.fn()
+}))
 
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
 import { clipboardModule } from '../clipboard'
 import { activeAppService } from '../system/active-app'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { intelligenceTtsService } from '../ai/intelligence-tts-service'
-import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { VoiceService } from './voice-service'
 
 const support = nativeAudio.getNativeAudioSupport as unknown as ReturnType<typeof vi.fn>
 const startCapture = nativeAudio.startCapture as unknown as ReturnType<typeof vi.fn>
 const pollCapture = nativeAudio.pollCapture as unknown as ReturnType<typeof vi.fn>
-const snapshotCapture = nativeAudio.snapshotCapture as unknown as ReturnType<typeof vi.fn>
 const stopCapture = nativeAudio.stopCapture as unknown as ReturnType<typeof vi.fn>
 const cancelCapture = nativeAudio.cancelCapture as unknown as ReturnType<typeof vi.fn>
 const playAudio = (nativeAudio as unknown as { playAudio: ReturnType<typeof vi.fn> }).playAudio
@@ -102,6 +108,60 @@ describe('VoiceService.dictate', () => {
 
     expect(result.text).toBe('raw text')
     expect(result.polished).toBe(false)
+  })
+  it('propagates caller cancellation into an in-flight polish request', async () => {
+    stt.mockResolvedValue({ result: { text: 'raw text' } })
+    const polishRequest = Promise.withResolvers<never>()
+    let polishSignal: AbortSignal | undefined
+    invoke.mockImplementation(
+      (_capability: unknown, _payload: unknown, options: { signal?: AbortSignal }) => {
+        polishSignal = options.signal
+        options.signal?.addEventListener(
+          'abort',
+          () => polishRequest.reject(new Error('polish cancelled')),
+          { once: true }
+        )
+        return polishRequest.promise
+      }
+    )
+    const controller = new AbortController()
+    const pending = new VoiceService().dictate({ cleanup: true }, undefined, controller.signal)
+
+    await vi.waitFor(() => expect(polishSignal).toBeDefined())
+    expect(polishSignal?.aborted).toBe(false)
+
+    controller.abort()
+
+    await expect(pending).rejects.toThrow('VOICE_OPERATION_CANCELLED')
+    expect(polishSignal?.aborted).toBe(true)
+  })
+
+  it('returns raw recognized text when polish reaches its bounded timeout', async () => {
+    vi.useFakeTimers()
+    stt.mockResolvedValue({ result: { text: 'raw text' } })
+    let polishSignal: AbortSignal | undefined
+    invoke.mockImplementation(
+      (_capability: unknown, _payload: unknown, options: { signal?: AbortSignal }) =>
+        new Promise<never>((_resolve, reject) => {
+          polishSignal = options.signal
+          options.signal?.addEventListener('abort', () => reject(new Error('polish deadline')), {
+            once: true
+          })
+        })
+    )
+    const pending = new VoiceService().dictate({ cleanup: true })
+
+    await vi.waitFor(() => expect(polishSignal).toBeDefined())
+    expect(polishSignal?.aborted).toBe(false)
+    await vi.advanceTimersByTimeAsync(1_500)
+
+    await expect(pending).resolves.toMatchObject({
+      raw: 'raw text',
+      text: 'raw text',
+      polished: false
+    })
+    expect(polishSignal?.aborted).toBe(true)
+    vi.useRealTimers()
   })
 
   it('skips polish when cleanup is false', async () => {
@@ -168,108 +228,6 @@ describe('VoiceService.dictate', () => {
     expect(result.text).toBe('')
     expect(result.raw).toBe('')
     expect(invoke).not.toHaveBeenCalled()
-  })
-})
-
-describe('VoiceService.streamDictation', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    vi.useFakeTimers()
-    support.mockReturnValue({ supported: true, platform: 'darwin' })
-    startCapture.mockResolvedValue({ sessionId: 's1' })
-    snapshotCapture.mockReturnValue({ audio: wav(), durationMs: 1000 })
-    stopCapture.mockReturnValue({
-      audio: wav(),
-      format: 'wav',
-      sampleRate: 16000,
-      channels: 1,
-      durationMs: 2000,
-      stoppedReason: 'silence'
-    })
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  async function collect(gen: AsyncGenerator<VoiceAsrStreamEvent>): Promise<VoiceAsrStreamEvent[]> {
-    const events: VoiceAsrStreamEvent[] = []
-    const draining = (async () => {
-      for await (const event of gen) events.push(event)
-    })()
-    await vi.runAllTimersAsync()
-    await draining
-    return events
-  }
-
-  it('emits partials, a delivery result on final, then end from one shared session', async () => {
-    // active for the first interval, then auto-stopped.
-    pollCapture.mockReturnValueOnce({ active: true, durationMs: 1000, stoppedReason: null })
-    pollCapture.mockReturnValue({ active: false, durationMs: 2000, stoppedReason: 'silence' })
-    // partial#1, partial#2, then the final transcription.
-    stt.mockResolvedValueOnce({ result: { text: 'hello' } })
-    stt.mockResolvedValueOnce({ result: { text: 'hello world' } })
-    stt.mockResolvedValue({ result: { text: 'hello world', language: 'en' } })
-    invoke.mockResolvedValue({ result: 'Hello world.' })
-    const activeApp = {
-      identifier: 'com.example.editor',
-      displayName: 'Editor',
-      bundleId: 'com.example.editor',
-      processId: 123,
-      executablePath: null,
-      platform: 'macos',
-      windowTitle: null,
-      lastUpdated: Date.now()
-    }
-    getActiveApp.mockResolvedValue(activeApp)
-    isAccessibilityTrusted.mockReturnValue(true)
-    typeText.mockReturnValue({ ok: true })
-
-    const events = await collect(
-      new VoiceService().streamDictation({ language: 'en', delivery: 'active-app' })
-    )
-
-    const partials = events.filter((event) => event.type === 'partial')
-    expect(partials.length).toBeGreaterThanOrEqual(1)
-    expect(events.find((event) => event.type === 'final')).toMatchObject({
-      type: 'final',
-      text: 'Hello world.',
-      language: 'en',
-      delivery: { method: 'native' }
-    })
-    expect(events.at(-1)).toEqual({ type: 'end' })
-    expect(typeText).toHaveBeenCalledWith('Hello world.')
-  })
-
-  it('cancels in-flight streaming capture without emitting a terminal result', async () => {
-    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
-    const controller = new AbortController()
-    const generator = new VoiceService().streamDictation({}, controller.signal)
-    const pending = generator.next()
-    const cancelled = expect(pending).rejects.toThrow('VOICE_OPERATION_CANCELLED')
-
-    await Promise.resolve()
-    controller.abort()
-    await vi.runAllTimersAsync()
-
-    await cancelled
-    expect(cancelCapture).toHaveBeenCalledWith('s1')
-    expect(stopCapture).not.toHaveBeenCalled()
-  })
-
-  it('does not let a failed interim transcription kill the stream', async () => {
-    pollCapture.mockReturnValueOnce({ active: true, durationMs: 1000, stoppedReason: null })
-    pollCapture.mockReturnValue({ active: false, durationMs: 2000, stoppedReason: 'silence' })
-    // interim rejects, final resolves.
-    stt.mockRejectedValueOnce(new Error('interim boom'))
-    stt.mockResolvedValue({ result: { text: 'final text' } })
-    invoke.mockResolvedValue({ result: 'Final text' })
-
-    const events = await collect(new VoiceService().streamDictation())
-
-    const final = events.find((e) => e.type === 'final')
-    expect(final).toMatchObject({ type: 'final', text: 'Final text' })
-    expect(events.at(-1)).toEqual({ type: 'end' })
   })
 })
 

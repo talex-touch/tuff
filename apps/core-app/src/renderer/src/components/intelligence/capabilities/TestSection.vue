@@ -14,12 +14,13 @@ defineProps<{
     provider?: IntelligenceProviderConfig
     models?: string[]
   }>
+  bindingOnly?: boolean
 }>()
 
 const emits = defineEmits<{
   test: [
     options: {
-      providerId: string
+      providerId?: string
       model?: string
       promptTemplate?: string
       promptVariables?: Record<string, unknown>
@@ -29,7 +30,7 @@ const emits = defineEmits<{
 }>()
 
 function handleTest(options: {
-  providerId: string
+  providerId?: string
   model?: string
   promptTemplate?: string
   promptVariables?: Record<string, unknown>
@@ -46,6 +47,7 @@ function handleTest(options: {
       :is-testing="isTesting"
       :disabled="disabled"
       :enabled-bindings="enabledBindings"
+      :binding-only="bindingOnly"
       @test="handleTest"
     />
 

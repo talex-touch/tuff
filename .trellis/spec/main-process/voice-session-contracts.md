@@ -72,6 +72,19 @@ identity, and plugin permissions remain in main.
   Turning voice input off stops the active HUD; renderer starts must wait for enabled runtime config.
 - Wake-word controls are unavailable until their actual runtime is implemented and verified.
 
+## Speech capability configuration authority
+
+- Existing Intelligence channels own credentials and safe protocol metadata. A custom speech
+  channel stores only normalized `metadata.voiceAsr` identifiers beside its existing credential reference.
+- `audio.asr` owns realtime capability bindings; `audio.stt` owns file transcription bindings.
+  Reuse the shared Intelligence route resolver and model policy; never create a Voice-specific provider catalog
+  or persist a second routing table in app settings. `audio.transcribe` retains its original semantics.
+- Voice settings expose read-only readiness and links to the existing channel/capability editors.
+  A configured state is not proof of cloud connectivity. ASR capability tests exercise only saved bindings.
+- A live ASR session and its recovery retain the original adapter/model; no cross-provider/STT replay.
+  Local file transcription is host-owned, bounded, cancellable through the network layer, and returns text
+  without active-app delivery. Raw paths, bytes, and credentials do not cross into the renderer.
+
 ## Required checks
 
 - VoiceService and GlobalDictation focused Vitest.
@@ -99,10 +112,10 @@ Changes to native Fn capture, voice gestures, HUD open/stop/close, or audio addo
 ### Contracts
 
 - macOS Fn requires a main-thread active HID-level CGEventTap and Accessibility permission. Physical keycode63,
-  not the Function flag alone, identifies Fn. Read/project original Fn down/up first, then clear only
-  `MaskSecondaryFn` on standalone-owned Fn transitions and forward the original event. Preserve
-  other flags and combination-key events. Do not return null: physical testing still opened Emoji
-  with dropped events, whereas the user confirmed flag-neutralized forwarding prevented it.
+  not the Function flag alone, identifies Fn. Project standalone Fn down/up to the Voice controller, then
+  remove those original standalone `FlagsChanged` events from the OS stream so macOS cannot execute its
+  default Globe/Emoji action. Combination-key events are forwarded unchanged. A stale/old addon that still
+  forwards the standalone event is not considered suppression evidence.
 - Failed HID tap creation is explicitly unavailable; do not silently fall back to Session-level
   interception or change the user's global Fn preference. Native loader requires the current monitor ABI marker.
 - Escape is observed globally but passes through to other applications. Assistant main owns the 600ms

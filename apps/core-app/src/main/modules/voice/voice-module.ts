@@ -4,7 +4,8 @@ import type { getTuffTransportMain, HandlerContext } from '@talex-touch/utils/tr
 import type { StreamContext } from '@talex-touch/utils/transport/types'
 import type {
   VoiceAsrStreamEvent,
-  VoiceAsrStreamPayload
+  VoiceAsrStreamPayload,
+  VoiceFileTranscriptionEvent
 } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { voiceApiEvents } from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
@@ -15,7 +16,9 @@ import { withPermission } from '../permission/channel-guard'
 import { BaseModule } from '../abstract-base-module'
 import { globalDictationController } from './global-dictation'
 import { voiceService } from './voice-service'
+import { getRecognitionStatus } from './voice-provider-runtime'
 import { voiceInsightsStore } from './voice-insights-store'
+import { voiceRecognitionStore } from './voice-recognition-store'
 import { assistantModule } from '../assistant/module'
 import { CommandVoiceGestureController, registerPlatformVoiceGesture } from './command-gesture'
 
@@ -60,6 +63,7 @@ export class VoiceModule extends BaseModule<TalexEvents> {
     this.transport = runtime.transport
 
     voiceLog.info('Initializing Voice module')
+    voiceRecognitionStore.initialize()
     this.registerChannels()
     globalDictationController.register()
     this.commandGestureController = new CommandVoiceGestureController(
@@ -112,6 +116,43 @@ export class VoiceModule extends BaseModule<TalexEvents> {
           { onError: (error) => voiceLog.error('Voice upload transcription failed:', { error }) }
         )
       )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.getRecognitionStatus,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          (_payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_RECOGNITION_HOST_ONLY')
+            return getRecognitionStatus()
+          },
+          { onError: (error) => voiceLog.error('Voice recognition status read failed:', { error }) }
+        )
+      )
+    )
+
+    this.cleanups.push(
+      transport.onStream(voiceApiEvents.transcribeFile, async (_payload, context) => {
+        const streamContext = context as unknown as StreamContext<VoiceFileTranscriptionEvent>
+        try {
+          await withPermission(
+            { permissionId: VOICE_PERMISSION },
+            async (_nextPayload, nextContext) => {
+              if (nextContext.plugin) throw new Error('VOICE_RECOGNITION_HOST_ONLY')
+              for await (const event of voiceService.transcribeFile(streamContext.signal)) {
+                if (streamContext.isCancelled()) return
+                streamContext.emit(event)
+              }
+              if (!streamContext.isCancelled()) streamContext.end()
+            }
+          )(_payload, context as unknown as HandlerContext)
+        } catch (error) {
+          if (!streamContext.isCancelled()) {
+            voiceLog.error('Voice file transcription failed:', { error })
+            context.error(error instanceof Error ? error : new Error(String(error)))
+          }
+        }
+      })
     )
 
     // The settings button on a device failure. Nothing crosses the boundary but the intent.
@@ -181,6 +222,36 @@ export class VoiceModule extends BaseModule<TalexEvents> {
             return voiceInsightsStore.getInsights()
           },
           { onError: (error) => voiceLog.error('Voice insights read failed:', { error }) }
+        )
+      )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.getRecognitionRecords,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          (_payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_RECOGNITION_RECORDS_HOST_ONLY')
+            return voiceRecognitionStore.list()
+          },
+          {
+            onError: (error) => voiceLog.error('Voice recognition records read failed:', { error })
+          }
+        )
+      )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.clearRecognitionRecords,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async (_payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_RECOGNITION_RECORDS_HOST_ONLY')
+            await voiceRecognitionStore.clear()
+          },
+          {
+            onError: (error) => voiceLog.error('Voice recognition records clear failed:', { error })
+          }
         )
       )
     )

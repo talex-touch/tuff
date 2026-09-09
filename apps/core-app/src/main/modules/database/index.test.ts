@@ -162,6 +162,31 @@ describe('DatabaseModule background startup tasks', () => {
     expect(statements.join('\n')).toContain('analytics_snapshots_retention_idx')
     expect(statements.join('\n')).toContain('recommendation_cache_retention_idx')
   })
+  it('creates voice recognition records and indexes in the auxiliary database', async () => {
+    const execute = vi.fn(async (_statement: unknown) => ({ rows: [] }))
+    const module = new DatabaseModule()
+    const target = module as unknown as {
+      auxClient: { execute: typeof execute }
+      ensureAuxTables: () => Promise<void>
+    }
+    target.auxClient = { execute }
+
+    await target.ensureAuxTables()
+
+    const statements = execute.mock.calls.map(([statement]) => String(statement))
+    const create = statements.find((statement) =>
+      statement.includes('CREATE TABLE IF NOT EXISTS voice_recognition_records')
+    )
+    expect(create).toContain('id text PRIMARY KEY NOT NULL')
+    expect(create).toContain('captured_at integer NOT NULL')
+    expect(create).toContain('status text NOT NULL')
+    expect(statements).toContain(
+      'CREATE INDEX IF NOT EXISTS idx_voice_recognition_records_captured_at ON voice_recognition_records (captured_at)'
+    )
+    expect(statements).toContain(
+      'CREATE INDEX IF NOT EXISTS idx_voice_recognition_records_status ON voice_recognition_records (status)'
+    )
+  })
 })
 
 describe('DatabaseModule WAL checkpoint maintenance', () => {

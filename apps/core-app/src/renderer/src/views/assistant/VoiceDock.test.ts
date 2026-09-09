@@ -107,6 +107,19 @@ describe('VoiceDock renderer contract', () => {
     expect(panelOpenMock).toHaveBeenCalledWith('wake-word')
     expect(panelStartMock).toHaveBeenCalledTimes(1)
   })
+  it('starts an initial short toggle command only once while opening the collapsed dock', async () => {
+    const wrapper = mount(VoiceDock)
+
+    emit(AssistantEvents.voice.command, { action: 'toggle', mode: 'toggle', source: 'command' })
+    await nextTick()
+    await nextTick()
+    await flushPromises()
+
+    expect(panelStartMock).toHaveBeenCalledTimes(1)
+    expect(panelToggleMock).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
   it('opens the voice panel from native button activation with a click source', async () => {
     const wrapper = mount(VoiceDock)
     const ball = wrapper.find('.floating-ball-root')

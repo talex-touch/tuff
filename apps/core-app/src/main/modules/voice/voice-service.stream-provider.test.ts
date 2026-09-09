@@ -16,7 +16,7 @@ vi.mock('@talex-touch/tuff-native/audio', () => ({
 }))
 
 vi.mock('./voice-provider-runtime', () => ({
-  getVoiceProvider: vi.fn()
+  getConfiguredAsrProvider: vi.fn()
 }))
 
 vi.mock('../clipboard', () => ({
@@ -44,9 +44,10 @@ vi.mock('./voice-insights-store', () => ({
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
 import type { VoiceProviderEvent } from '@talex-touch/tuff-voice'
 import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domains/voice'
+import { clipboardModule } from '../clipboard'
 import { activeAppService } from '../system/active-app'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
-import { getVoiceProvider } from './voice-provider-runtime'
+import { getConfiguredAsrProvider } from './voice-provider-runtime'
 import { VoiceService } from './voice-service'
 
 const support = nativeAudio.getNativeAudioSupport as unknown as ReturnType<typeof vi.fn>
@@ -60,9 +61,10 @@ const isAccessibilityTrusted = (
   nativeAudio as unknown as { isAccessibilityTrusted: ReturnType<typeof vi.fn> }
 ).isAccessibilityTrusted
 const getActiveApp = activeAppService.getActiveApp as unknown as ReturnType<typeof vi.fn>
+const applyVoiceText = clipboardModule.applyVoiceText as unknown as ReturnType<typeof vi.fn>
 const invoke = tuffIntelligence.invoke as unknown as ReturnType<typeof vi.fn>
 const stt = tuffIntelligence.audio.stt as unknown as ReturnType<typeof vi.fn>
-const resolveProvider = getVoiceProvider as unknown as ReturnType<typeof vi.fn>
+const resolveAsrProvider = getConfiguredAsrProvider as unknown as ReturnType<typeof vi.fn>
 
 async function drainStream(
   gen: AsyncGenerator<VoiceAsrStreamEvent>
@@ -91,7 +93,7 @@ function pcm(amplitude: number, samples = 160): Buffer {
  * `end()` is what a real adapter does when the capture pump finishes: flush the final
  * transcript and close. That is precisely the path `stop` has to keep alive.
  */
-function createFakeConnection(finalText = 'hello world') {
+function createFakeConnection(finalText = 'hello world', emitFinal = true) {
   const pending: VoiceProviderEvent[] = []
   let wake: (() => void) | null = null
   let closed = false
@@ -127,7 +129,7 @@ function createFakeConnection(finalText = 'hello world') {
       if (failure) throw failure
     }),
     end: vi.fn(async () => {
-      push({ type: 'final', text: finalText, language: 'en' })
+      if (emitFinal) push({ type: 'final', text: finalText, language: 'en' })
       close()
     }),
     abort: vi.fn(async () => {
@@ -175,10 +177,13 @@ describe('VoiceService.streamDictation via provider', () => {
     typeText.mockReturnValue({ ok: true })
 
     fake = createFakeConnection()
-    resolveProvider.mockReturnValue({
-      id: 'fake',
-      defaultStreamModel: 'fake-model',
-      createStream: vi.fn(async () => fake.connection)
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      provider: {
+        id: 'fake',
+        defaultStreamModel: 'fake-model',
+        createStream: vi.fn(async () => fake.connection)
+      }
     })
   })
 
@@ -225,10 +230,13 @@ describe('VoiceService.streamDictation via provider', () => {
     drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16000, channels: 1 })
     pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
     fake = createFakeConnection()
-    resolveProvider.mockReturnValue({
-      id: 'fake',
-      defaultStreamModel: 'fake-model',
-      createStream: vi.fn(async () => fake.connection)
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      provider: {
+        id: 'fake',
+        defaultStreamModel: 'fake-model',
+        createStream: vi.fn(async () => fake.connection)
+      }
     })
 
     const cancelController = new AbortController()
@@ -244,6 +252,68 @@ describe('VoiceService.streamDictation via provider', () => {
     await rejected
 
     expect(typeText).not.toHaveBeenCalled()
+  })
+
+  // The threshold is the whole point, so both sides of it are pinned here. Asserting only
+  // the long case would pass just as well if delivery had stopped typing altogether.
+  it('types a short transcript but pastes a long one', async () => {
+    const short = 'Hello world.'
+    const long = 'A'.repeat(81)
+
+    for (const [text, expectation] of [
+      [short, 'native'],
+      [long, 'autopaste']
+    ] as const) {
+      vi.clearAllMocks()
+      isAccessibilityTrusted.mockReturnValue(true)
+      typeText.mockReturnValue({ ok: true })
+      applyVoiceText.mockResolvedValue({ success: true })
+      invoke.mockResolvedValue({ result: text })
+      getActiveApp.mockResolvedValue({
+        name: 'Notes',
+        bundleId: 'com.apple.Notes',
+        processId: 123,
+        executablePath: null,
+        platform: 'macos',
+        windowTitle: null,
+        lastUpdated: Date.now()
+      })
+      drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16000, channels: 1 })
+      pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+      fake = createFakeConnection()
+      resolveAsrProvider.mockReturnValue({
+        model: 'fake-model',
+        provider: {
+          id: 'fake',
+          defaultStreamModel: 'fake-model',
+          createStream: vi.fn(async () => fake.connection)
+        }
+      })
+
+      const controller = new AbortController()
+      const collected = collect(
+        new VoiceService().streamDictation({ delivery: 'active-app' }, undefined, {
+          stopSignal: controller.signal
+        })
+      )
+      await Promise.resolve()
+      controller.abort()
+      const events = await collected
+
+      expect(events.find((event) => event.type === 'final')).toMatchObject({
+        delivery: { method: expectation }
+      })
+
+      if (expectation === 'native') {
+        expect(typeText).toHaveBeenCalledWith(text)
+        expect(applyVoiceText).not.toHaveBeenCalled()
+      } else {
+        // Typing a paragraph blocks the main process for one synthetic key event per
+        // character; the paste path costs the same two events at any length.
+        expect(typeText).not.toHaveBeenCalled()
+        expect(applyVoiceText).toHaveBeenCalledWith(text)
+      }
+    }
   })
 
   it('emits normalized levels only when the caller opts in', async () => {
@@ -268,10 +338,13 @@ describe('VoiceService.streamDictation via provider', () => {
     pollCapture.mockReturnValue({ active: false, durationMs: 200, stoppedReason: 'silence' })
     invoke.mockResolvedValue({ result: 'Hello world.' })
     fake = createFakeConnection()
-    resolveProvider.mockReturnValue({
-      id: 'fake',
-      defaultStreamModel: 'fake-model',
-      createStream: vi.fn(async () => fake.connection)
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      provider: {
+        id: 'fake',
+        defaultStreamModel: 'fake-model',
+        createStream: vi.fn(async () => fake.connection)
+      }
     })
 
     // Negative control: the default sequence must be byte-for-byte what it was before
@@ -322,10 +395,13 @@ describe('VoiceService.streamDictation via provider', () => {
       end: vi.fn(async () => releaseIterator.resolve()),
       abort: vi.fn(async () => undefined)
     }
-    resolveProvider.mockReturnValue({
-      id: 'fake',
-      defaultStreamModel: 'fake-model',
-      createStream: vi.fn(async () => connection)
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      provider: {
+        id: 'fake',
+        defaultStreamModel: 'fake-model',
+        createStream: vi.fn(async () => connection)
+      }
     })
 
     const iteratorDraining = (async () => {
@@ -373,9 +449,23 @@ describe('VoiceService.streamDictation via provider', () => {
 
     const events = await collect(new VoiceService().streamDictation({ delivery: 'active-app' }))
 
-    expect(events).toEqual([{ type: 'final', text: '' }, { type: 'end' }])
+    expect(events).toEqual([{ type: 'ready' }, { type: 'final', text: '' }, { type: 'end' }])
     expect(typeText).not.toHaveBeenCalled()
     expect(voiceInsightsMocks.recordSuccess).not.toHaveBeenCalled()
+  })
+  it('promotes the last non-empty partial when the provider closes without a final', async () => {
+    pollCapture.mockReturnValue({ active: false, durationMs: 100, stoppedReason: 'silence' })
+    fake = createFakeConnection('', false)
+    fake.push({ type: 'partial', text: 'partial transcript', language: 'en' })
+
+    const events = await collect(new VoiceService().streamDictation({ cleanup: false }))
+
+    expect(events).toEqual([
+      { type: 'ready' },
+      { type: 'partial', text: 'partial transcript' },
+      { type: 'final', text: 'partial transcript' },
+      { type: 'end' }
+    ])
   })
 })
 
@@ -386,7 +476,7 @@ describe('VoiceService.streamDictation via provider', () => {
  */
 describe('VoiceService retry buffer retention', () => {
   let fake: ReturnType<typeof createFakeConnection>
-
+  let provider: { createStream: ReturnType<typeof vi.fn> }
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
@@ -415,10 +505,16 @@ describe('VoiceService retry buffer retention', () => {
     isAccessibilityTrusted.mockReturnValue(true)
     typeText.mockReturnValue({ ok: true })
     fake = createFakeConnection()
-    resolveProvider.mockReturnValue({
-      id: 'fake',
-      defaultStreamModel: 'fake-model',
+    provider = {
       createStream: vi.fn(async () => fake.connection)
+    }
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      provider: {
+        id: 'fake',
+        defaultStreamModel: 'fake-model',
+        ...provider
+      }
     })
   })
 
@@ -446,21 +542,31 @@ describe('VoiceService retry buffer retention', () => {
     await drained
   }
 
-  it('retries the same audio after a failure and delivers the transcript', async () => {
+  it('replays retained PCM through the frozen failed ASR adapter without falling back to STT', async () => {
     const service = new VoiceService()
     await runUntilFailure(service)
+    const retry = createFakeConnection('buffered words')
+    provider.createStream.mockResolvedValueOnce(retry.connection)
+    resolveAsrProvider.mockReturnValue({
+      model: 'replacement-model',
+      provider: {
+        id: 'replacement',
+        defaultStreamModel: 'replacement-model',
+        createStream: vi.fn()
+      }
+    })
 
-    stt.mockResolvedValue({ result: { text: 'buffered words', language: 'en' } })
     const result = await service.retryLastFailure({ delivery: 'active-app' })
 
     expect(result.expired).toBeUndefined()
     expect(result.text).toBe('Hello world.')
     expect(typeText).toHaveBeenCalledWith('Hello world.')
-    // The buffered PCM went out as WAV through the same one-shot path, not a second decoder.
-    expect(stt).toHaveBeenCalledWith(
-      expect.objectContaining({ format: 'wav', audio: expect.stringContaining('data:audio/wav') }),
-      expect.any(Object)
+    expect(retry.connection.writePcm).toHaveBeenCalled()
+    expect(retry.connection.end).toHaveBeenCalledOnce()
+    expect(provider.createStream).toHaveBeenLastCalledWith(
+      expect.objectContaining({ model: 'fake-model' })
     )
+    expect(stt).not.toHaveBeenCalled()
   })
 
   it('reports expiry instead of pretending, once the grace window closes', async () => {
@@ -471,7 +577,6 @@ describe('VoiceService retry buffer retention', () => {
     const result = await service.retryLastFailure()
 
     expect(result).toEqual({ text: '', expired: true })
-    expect(stt).not.toHaveBeenCalled()
   })
 
   /**
@@ -502,9 +607,8 @@ describe('VoiceService retry buffer retention', () => {
    * Cancel keeps the audio so undo can restore the same words. If it cleared, the undo button
    * could only ever mean "record again", which is a different act wearing the wrong name.
    */
-  it('keeps the audio after a cancel so undo can restore it', async () => {
+  it('keeps the audio after a cancel so undo can replay it through the same ASR adapter', async () => {
     pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
-    stt.mockResolvedValue({ result: { text: 'cancelled words', language: 'en' } })
     const service = new VoiceService()
     const controller = new AbortController()
     const generator = service.streamDictation({}, controller.signal)
@@ -528,6 +632,8 @@ describe('VoiceService retry buffer retention', () => {
     await drained
 
     expect(heldAudioBytes(service)).toBeGreaterThan(0)
+    const retry = createFakeConnection('cancelled words')
+    provider.createStream.mockResolvedValueOnce(retry.connection)
     const restored = await service.retryLastFailure()
     expect(restored.expired).toBeUndefined()
     expect(restored.text).toBe('Hello world.')
@@ -586,6 +692,8 @@ describe('VoiceService retry buffer retention', () => {
     drainCapture.mockReturnValue({ pcm: pcm(16_384, 500_000), sampleRate: 16000, channels: 1 })
     const service = new VoiceService()
     await runUntilFailure(service)
+    const retry = createFakeConnection('long recording')
+    provider.createStream.mockResolvedValueOnce(retry.connection)
 
     // The audio is still there to re-transcribe: not `{ text: '', expired: true }`, which is
     // what the old cap turned a long dictation into halfway through.
@@ -599,12 +707,10 @@ describe('VoiceService retry buffer retention', () => {
     // sized for a full 300s recording (~9.6 MiB), so overflow now means something went wrong
     // rather than someone spoke for a while.
     drainCapture.mockReturnValue({ pcm: pcm(16_384, 2_750_000), sampleRate: 16000, channels: 1 })
-    stt.mockResolvedValue({ result: { text: 'should never be reached' } })
     const service = new VoiceService()
     await runUntilFailure(service)
 
     expect(await service.retryLastFailure()).toEqual({ text: '', expired: true })
-    expect(stt).not.toHaveBeenCalled()
   })
 })
 
@@ -626,10 +732,13 @@ describe('VoiceService recovery status', () => {
     pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
     invoke.mockResolvedValue({ result: 'Hello world.' })
     fake = createFakeConnection()
-    resolveProvider.mockReturnValue({
-      id: 'fake',
-      defaultStreamModel: 'fake-model',
-      createStream: vi.fn(async () => fake.connection)
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      provider: {
+        id: 'fake',
+        defaultStreamModel: 'fake-model',
+        createStream: vi.fn(async () => fake.connection)
+      }
     })
   })
 

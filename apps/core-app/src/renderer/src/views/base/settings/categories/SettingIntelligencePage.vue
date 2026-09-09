@@ -6,7 +6,6 @@ import SettingsPage from '~/components/settings/SettingsPage.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { settingCategoryChildren } from '~/modules/settings/categories'
 import SettingAssistant from '../SettingAssistant.vue'
-import SettingLocalAiCli from '../SettingLocalAiCli.vue'
 import SettingSkillsMcp from '../SettingSkillsMcp.vue'
 
 const { t } = useI18n()

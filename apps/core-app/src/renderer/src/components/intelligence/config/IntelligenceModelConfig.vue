@@ -1,6 +1,7 @@
 <script lang="ts" name="IntelligenceModelConfig" setup>
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxTransfer } from '@talex-touch/tuffex/transfer'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
@@ -453,30 +454,37 @@ watch(
               t('intelligence.config.model.transferAll'),
               t('intelligence.config.model.transferEnabled')
             ]"
+            :add-aria-label="t('intelligence.config.model.transferAddAriaLabel')"
+            :remove-aria-label="t('intelligence.config.model.transferRemoveAriaLabel')"
+            :select-all-aria-label="t('intelligence.config.model.transferSelectAllAriaLabel')"
+            :empty-text="[
+              t('intelligence.config.model.transferEmptyAll'),
+              t('intelligence.config.model.transferEmptyEnabled')
+            ]"
+            max-height="min(56dvh, 520px)"
             target-order="original"
           />
         </div>
 
         <div class="model-actions">
-          <input
+          <TxInput
             v-model="newModelInput"
-            type="text"
+            class="model-actions__input"
             :placeholder="t('intelligence.config.model.addModelPlaceholder')"
-            class="add-model-input"
             @keyup.enter="handleAddModel"
           />
           <TxButton
             variant="flat"
-            class="add-model-button"
+            type="primary"
             :disabled="!newModelInput.trim()"
             @click="handleAddModel"
           >
             <i class="i-carbon-add" />
             {{ t('intelligence.config.model.addModel') }}
           </TxButton>
+          <span class="model-actions__divider" aria-hidden="true" />
           <TxButton
             variant="flat"
-            class="fetch-models-button"
             :disabled="disabled || !canFetchModels || isFetching"
             :loading="isFetching"
             @click="handleFetchModels"
@@ -601,72 +609,31 @@ watch(
 
     :deep(.tx-transfer) {
       width: 100%;
-      min-height: 260px;
     }
 
     :deep(.tx-transfer__actions) {
       margin: 0 8px;
-    }
-
-    :deep(.tx-transfer__panel) {
-      min-height: 220px;
-      border-radius: 10px;
     }
   }
 
   .model-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     padding-top: 2px;
   }
 
-  .add-model-input {
+  .model-actions__input {
     flex: 1;
     min-width: 0;
-    padding: 8px 12px;
-    border: 1px solid var(--tx-border-color);
-    border-radius: 6px;
-    background: var(--tx-fill-color-blank);
-    color: var(--tx-text-color-primary);
-    font-size: 14px;
-    outline: none;
-
-    &:focus {
-      border-color: var(--tx-color-primary);
-    }
-
-    &::placeholder {
-      color: var(--tx-text-color-placeholder);
-    }
   }
 
-  .fetch-models-button,
-  .add-model-button {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    background: var(--tx-color-primary);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
-
-    &:hover:not(.is-disabled) {
-      background: var(--tx-color-primary-light-3);
-    }
-
-    &.is-disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    i {
-      font-size: 16px;
-    }
+  /* Adding a model by hand and pulling the provider's catalogue are different
+     jobs; the rule keeps them from reading as one three-part control. */
+  .model-actions__divider {
+    width: 1px;
+    height: 20px;
+    background: var(--tx-border-color-lighter);
   }
 }
 </style>

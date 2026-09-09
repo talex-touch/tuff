@@ -136,21 +136,29 @@ import { defineEvent } from "../../event/builder";
 import {
   normalizeIntelligenceProviderConfigDeleteRequest,
   normalizeIntelligenceProviderConfigSaveRequest,
+  normalizeIntelligenceProviderCredentialRevealRequest,
+  normalizeIntelligenceProviderCredentialRevealResult,
   normalizeIntelligenceProviderDeleteResult,
   normalizeIntelligenceProviderRuntimeConfig,
   normalizeIntelligenceProviderStoredConfig,
   type IntelligenceProviderConfigDeleteRequest,
   type IntelligenceProviderConfigSaveRequest,
+  type IntelligenceProviderCredentialRevealRequest,
+  type IntelligenceProviderCredentialRevealResult,
   type IntelligenceProviderStoredConfig,
 } from "./intelligence-provider-credential";
 
 export {
   normalizeIntelligenceProviderConfigDeleteRequest,
   normalizeIntelligenceProviderConfigSaveRequest,
+  normalizeIntelligenceProviderCredentialRevealRequest,
+  normalizeIntelligenceProviderCredentialRevealResult,
   normalizeIntelligenceProviderRuntimeConfig,
   normalizeIntelligenceProviderStoredConfig,
   type IntelligenceProviderConfigDeleteRequest,
   type IntelligenceProviderConfigSaveRequest,
+  type IntelligenceProviderCredentialRevealRequest,
+  type IntelligenceProviderCredentialRevealResult,
   type IntelligenceProviderCredentialMutation,
   type IntelligenceProviderStoredConfig,
 } from "./intelligence-provider-credential";
@@ -669,6 +677,9 @@ export interface IntelligenceSdk {
     payload: IntelligenceChatRequest,
   ) => Promise<IntelligenceInvokeResult<string>>;
   testProvider: (config: IntelligenceProviderConfig) => Promise<unknown>;
+  revealProviderCredential: (
+    providerId: string,
+  ) => Promise<string>;
   saveProviderConfig: (
     request: IntelligenceProviderConfigSaveRequest,
   ) => Promise<IntelligenceProviderStoredConfig>;
@@ -942,6 +953,13 @@ export const intelligenceApiEvents = {
     .define<
       IntelligenceProviderConfigSaveRequest,
       IntelligenceApiResponse<IntelligenceProviderStoredConfig>
+    >(),
+  revealProviderCredential: defineEvent("intelligence")
+    .module("api")
+    .event("provider-credential:reveal")
+    .define<
+      IntelligenceProviderCredentialRevealRequest,
+      IntelligenceApiResponse<IntelligenceProviderCredentialRevealResult>
     >(),
   deleteProviderConfig: defineEvent("intelligence")
     .module("api")
@@ -1583,6 +1601,20 @@ export function createIntelligenceSdk(
       return assertApiResponse(response, "Intelligence chat failed");
     },
 
+    async revealProviderCredential(providerId) {
+      const normalizedRequest =
+        normalizeIntelligenceProviderCredentialRevealRequest({ providerId });
+      const response = await transport.send(
+        intelligenceApiEvents.revealProviderCredential,
+        normalizedRequest,
+      );
+      return normalizeIntelligenceProviderCredentialRevealResult(
+        assertApiResponse(
+          response,
+          "Intelligence provider credential reveal failed",
+        ),
+      ).value;
+    },
     async testProvider(config) {
       const response = await transport.send(
         intelligenceApiEvents.testProvider,

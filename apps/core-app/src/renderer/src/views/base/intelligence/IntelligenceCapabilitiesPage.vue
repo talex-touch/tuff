@@ -52,9 +52,9 @@ const CAPABILITY_USAGE_ORDER = [
   'image.caption',
   'image.analyze',
   'image.translate.e2e',
-  'audio.transcribe',
-  'audio.tts',
-  'embedding.generate'
+  'audio.asr',
+  'audio.stt',
+  'audio.transcribe'
 ] as const
 const capabilityUsageRank = new Map<string, number>(
   CAPABILITY_USAGE_ORDER.map((id, index) => [id, index])
@@ -144,6 +144,8 @@ function getCapabilityIcon(capability: IntelligenceCapabilityConfig): ITuffIcon 
     'vision.ocr': { icon: 'i-carbon-image-search', color: '#fb8c00' },
     'text.translate': { icon: 'i-carbon-translate', color: '#43a047' },
     'text.summarize': { icon: 'i-carbon-document-tasks', color: '#e53935' },
+    'audio.asr': { icon: 'i-carbon-microphone', color: '#00acc1' },
+    'audio.stt': { icon: 'i-carbon-audio-file', color: '#00acc1' },
     'audio.transcribe': { icon: 'i-carbon-microphone', color: '#00acc1' },
     'code.generate': { icon: 'i-carbon-code', color: '#5e35b1' },
     'intent.detect': { icon: 'i-carbon-explore', color: '#f4511e' }

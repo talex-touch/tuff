@@ -86,6 +86,16 @@ export const registerPlatformVoiceGesture: VoiceGestureKeyRegistrar = (listener)
   }
 }
 
+/**
+ * Captures Escape at the native HID tap while VoiceDock owns the active session.
+ * The event is still projected to the main process for the typed cancel gesture;
+ * only the foreground application's copy is suppressed.
+ */
+export function setPlatformVoiceEscapeCapture(enabled: boolean): void {
+  if (process.platform !== 'darwin') return
+  nativeAudio.setFunctionKeyMonitorEscapeCapture(enabled)
+}
+
 function isVoiceGestureEnabled(setting: AppSetting): boolean {
   return setting.voiceInput?.enabled === true
 }
@@ -117,6 +127,7 @@ export class CommandVoiceGestureController {
   register(): void {
     if (this.disposeSettingsSubscription) return
 
+    setPlatformVoiceEscapeCapture(false)
     this.disposeSettingsSubscription = subscribeMainConfig(StorageList.APP_SETTING, (next) => {
       this.syncEnabled(next as AppSetting)
     })
@@ -143,6 +154,7 @@ export class CommandVoiceGestureController {
     this.holdStarted = false
     this.disposeGlobalKeyListener?.()
     this.disposeGlobalKeyListener = null
+    setPlatformVoiceEscapeCapture(false)
   }
 
   private syncEnabled(setting: AppSetting): void {
@@ -165,6 +177,7 @@ export class CommandVoiceGestureController {
       this.holdStarted = false
       this.disposeGlobalKeyListener?.()
       this.disposeGlobalKeyListener = null
+      setPlatformVoiceEscapeCapture(false)
       return
     }
 

@@ -194,6 +194,8 @@ async function handleCommand(payload: AssistantVoiceCommandPayload): Promise<voi
 
   pendingStop = false
   if (!expanded.value) {
+    // handlePanelOpened owns the first recording start. Calling toggleVoiceInput after it
+    // resolves would immediately stop that newly opened session, leaving an empty transcript.
     await handlePanelOpened({ source: payload.source })
     return
   }

@@ -6,7 +6,12 @@ import {
   SentimentAnalyzeTester,
   TextClassifyTester
 } from './analysis-tester'
-import { AudioTranscribeTester, SttCapabilityTester, TtsCapabilityTester } from './audio-tester'
+import {
+  AsrCapabilityTester,
+  AudioTranscribeTester,
+  SttCapabilityTester,
+  TtsCapabilityTester
+} from './audio-tester'
 import { ChatCapabilityTester } from './chat-tester'
 import {
   CodeDebugTester,
@@ -83,6 +88,7 @@ capabilityTesterRegistry.register('image.edit', new ImageEditTester())
 // Audio capabilities
 capabilityTesterRegistry.register('audio.tts', new TtsCapabilityTester())
 capabilityTesterRegistry.register('audio.stt', new SttCapabilityTester())
+capabilityTesterRegistry.register('audio.asr', new AsrCapabilityTester())
 capabilityTesterRegistry.register('audio.transcribe', new AudioTranscribeTester())
 
 // RAG & Search capabilities

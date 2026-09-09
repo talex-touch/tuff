@@ -13,7 +13,7 @@ import {
   isNexusManagedProvider as checkNexusManagedProvider,
   TUFF_NEXUS_PROVIDER_ICON
 } from '~/modules/intelligence/nexus-provider'
-import { providerIconFor } from '~/modules/intelligence/provider-icons'
+import { providerIconForChannel } from '~/modules/intelligence/provider-icons'
 import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
 
 enum IntelligenceProviderType {
@@ -81,7 +81,7 @@ const providerIcon = computed<ITuffIcon>(() => {
   if (isNexusManagedProvider.value) {
     return TUFF_NEXUS_PROVIDER_ICON
   }
-  return providerIconFor(props.provider.type)
+  return providerIconForChannel(getProviderChannelType(props.provider), props.provider.type)
 })
 
 const deleteConfirmVisible = ref(false)

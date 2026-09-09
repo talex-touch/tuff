@@ -2,10 +2,12 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { IntelligenceProviderType } from '@talex-touch/utils/types/intelligence'
 import { describe, expect, it } from 'vitest'
+import { ProviderChannelType } from './provider-channel-type'
 import {
   PROVIDER_ICON_CLASSES,
   PROVIDER_ID_ICON_CLASSES,
   providerIconFor,
+  providerIconForChannel,
   providerIconForId
 } from './provider-icons'
 
@@ -38,6 +40,22 @@ describe('providerIconForId prototype safety', () => {
   })
 })
 
+describe('providerIconForChannel', () => {
+  it.each([
+    [ProviderChannelType.BAILIAN, 'i-simple-icons-qwen'],
+    [ProviderChannelType.VOLCENGINE, 'i-simple-icons-bytedance']
+  ])('uses the adapter mark for %s channels', (channelType, value) => {
+    expect(providerIconForChannel(channelType, 'custom')).toEqual({ type: 'class', value })
+  })
+
+  it.each([
+    [ProviderChannelType.COMPATIBLE, 'custom'],
+    [ProviderChannelType.OPENAI, 'openai']
+  ])('keeps the runtime-provider icon for non-adapter channel %s', (channelType, type) => {
+    expect(providerIconForChannel(channelType, type)).toEqual(providerIconFor(type))
+  })
+})
+
 describe('providerIconForId', () => {
   it('gives the pi CLI its own mark, since by type alone it shares the local server glyph', () => {
     expect(providerIconForId('pi-cli-default', 'local')).toEqual({
@@ -63,10 +81,10 @@ describe('providerIconForId', () => {
  * moved out of two `.vue` files and every provider icon became an empty box.
  */
 describe('PROVIDER_ICON_CLASSES', () => {
-  it('lists one class per provider type, and every one of them', () => {
+  it('lists every provider and adapter-specific channel icon class', () => {
     const types = Object.values(IntelligenceProviderType)
     expect(types).toHaveLength(6)
-    expect(PROVIDER_ICON_CLASSES).toHaveLength(types.length)
+    expect(PROVIDER_ICON_CLASSES).toHaveLength(types.length + 2)
     for (const type of types) {
       expect(PROVIDER_ICON_CLASSES).toContain(providerIconFor(type).value)
     }
@@ -76,7 +94,9 @@ describe('PROVIDER_ICON_CLASSES', () => {
       'i-carbon-search-advanced',
       'i-carbon-ibm-watson-machine-learning',
       'i-carbon-bare-metal-server',
-      'i-carbon-settings'
+      'i-carbon-settings',
+      'i-simple-icons-qwen',
+      'i-simple-icons-bytedance'
     ])
   })
 

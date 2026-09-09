@@ -133,13 +133,14 @@ export declare function isAccessibilityTrusted(): boolean
 /** Type `text` into the frontmost app (unicode-safe). On macOS without AX trust returns `{ ok:false, reason:'accessibility-required' }`. Never throws. */
 export declare function typeText(text: string): TypeTextResult
 /**
- * macOS-only active, head-inserted HID event tap. It observes global Escape
- * down/up without consuming them. Standalone Fn edges are delivered to the
- * listener before their Fn flag is cleared and the original event is forwarded.
- * Other key combinations pass through and invalidate the Fn gesture. No system
- * preferences are changed. HID registration failure is explicit; `active` alone
- * does not prove the user-visible behavior on a particular keyboard.
+ * macOS-only active, head-inserted HID event tap. Standalone Fn edges are
+ * delivered to the listener and then removed from the OS stream so the default
+ * Globe/Emoji action cannot run. Combination-key events pass through and
+ * invalidate the Fn gesture. Escape is observed globally; callers may explicitly
+ * capture it only while a voice session owns cancellation. No system preferences are changed.
  */
 export declare function startFunctionKeyMonitor(listener: (event: FunctionKeyEvent) => void): FunctionKeyMonitorStart
+/** Capture or release global Escape down/up while the native Fn monitor is active. */
+export declare function setFunctionKeyMonitorEscapeCapture(enabled: boolean): boolean
 /** Stop the active Fn monitor. Safe when no monitor exists. */
 export declare function stopFunctionKeyMonitor(): void

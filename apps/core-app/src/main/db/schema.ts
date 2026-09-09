@@ -654,9 +654,9 @@ export const recommendationExposureDaily = sqliteTable(
 )
 
 /**
- * Main-owned voice-insights aggregates. These tables deliberately keep only counters, day
- * buckets, and opaque successful-capture ids for idempotency: transcripts, audio, callers,
- * provider payloads, and active-app data never reach SQLite.
+ * Main-owned voice aggregates and optional detailed recognition records. Aggregate tables keep
+ * only counters and opaque successful-capture ids; detailed transcript/audio rows live separately
+ * and are written only when the user enables voiceInput.historyEnabled.
  */
 export const voiceInsightsState = sqliteTable('voice_insights_state', {
   id: integer('id').primaryKey(),
@@ -693,6 +693,38 @@ export const voiceInsightCaptures = sqliteTable(
   },
   (table) => ({
     capturedAtIdx: index('idx_voice_insight_captures_captured_at').on(table.capturedAt)
+  })
+)
+
+/**
+ * Detailed host-only voice recognition records. Audio remains in the main-owned
+ * temp namespace; the table stores only its opaque path and bounded metadata.
+ */
+export const voiceRecognitionRecords = sqliteTable(
+  'voice_recognition_records',
+  {
+    id: text('id').primaryKey(),
+    capturedAt: integer('captured_at').notNull(),
+    source: text('source').notNull(),
+    status: text('status').notNull(),
+    audioPath: text('audio_path'),
+    audioBytes: integer('audio_bytes'),
+    audioDurationMs: integer('audio_duration_ms'),
+    recognitionDurationMs: integer('recognition_duration_ms'),
+    rawText: text('raw_text'),
+    text: text('text'),
+    providerId: text('provider_id'),
+    model: text('model'),
+    channel: text('channel'),
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    totalTokens: integer('total_tokens'),
+    errorCode: text('error_code'),
+    deliveryMethod: text('delivery_method')
+  },
+  (table) => ({
+    capturedAtIdx: index('idx_voice_recognition_records_captured_at').on(table.capturedAt),
+    statusIdx: index('idx_voice_recognition_records_status').on(table.status)
   })
 )
 

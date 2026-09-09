@@ -5,12 +5,17 @@ import { describe, expect, it } from 'vitest'
 import {
   assertHttpSuccess,
   BAILIAN_PARAFORMER_DEFAULT_MODEL,
+  DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_MODEL,
   bailianAudioSpec,
   BailianParaformerVoiceProvider,
   buildBailianFinishTask,
   buildBailianHeaders,
   buildBailianRunTask,
   buildBailianWebSocketUrl,
+  buildDashscopeQwenAsrRealtimeAudioAppend,
+  buildDashscopeQwenAsrRealtimeHeaders,
+  buildDashscopeQwenAsrRealtimeSessionUpdate,
+  buildDashscopeQwenAsrRealtimeWebSocketUrl,
   buildDoubaoHeaders,
   buildDoubaoStreamPayload,
   createVoiceProviderRegistry,
@@ -22,6 +27,7 @@ import {
   normalizeBailianUploadResult,
   normalizeDoubaoUploadResult,
   parseBailianEvent,
+  parseDashscopeQwenAsrRealtimeEvent,
   parseDoubaoResponse,
   resolveUploadSource,
 
@@ -276,6 +282,76 @@ describe('tuff-voice provider protocol contracts', () => {
     expect(() => normalizeBailianUploadResult({ output: {} })).toThrowError(expect.objectContaining({ code: 'BAILIAN_RESULT_INVALID' }))
     expect(bailianAudioSpec('pcm')).toEqual({ format: 'pcm', sampleRate: 16000, channels: 1, bitsPerSample: 16 })
   })
+  it('builds and normalizes the DashScope Qwen realtime wire protocol', () => {
+    const qwenRequest: VoiceStreamRequest = {
+      ...request,
+      model: DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_MODEL,
+      language: 'zh-CN',
+    }
+    expect(buildDashscopeQwenAsrRealtimeWebSocketUrl('workspace_1', qwenRequest.model)).toBe(
+      'wss://workspace_1.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=qwen3-asr-flash-realtime',
+    )
+    expect(buildDashscopeQwenAsrRealtimeHeaders({ apiKey: ' fixture-key ', workspaceId: 'workspace_1' }, 'fixture-agent')).toEqual({
+      Authorization: 'Bearer fixture-key',
+      'user-agent': 'fixture-agent',
+      'X-DashScope-WorkSpace': 'workspace_1',
+    })
+    expect(buildDashscopeQwenAsrRealtimeSessionUpdate(qwenRequest, {
+      language: 'zh-CN',
+      vad: { threshold: 0.35, silenceDurationMs: 500, prefixPaddingMs: 250 },
+    })).toEqual({
+      type: 'session.update',
+      event_id: 'request-1',
+      session: {
+        modalities: ['text'],
+        input_audio_format: 'pcm',
+        sample_rate: 16_000,
+        input_audio_transcription: { language: 'zh' },
+        turn_detection: { type: 'server_vad', threshold: 0.35, silence_duration_ms: 500, prefix_padding_ms: 250 },
+      },
+    })
+    expect(buildDashscopeQwenAsrRealtimeAudioAppend(Uint8Array.from([0, 1, 2, 255]), 'audio-1')).toEqual({
+      type: 'input_audio_buffer.append',
+      event_id: 'audio-1',
+      audio: 'AAEC/w==',
+    })
+
+    expect(parseDashscopeQwenAsrRealtimeEvent(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.text',
+      request_id: 'request-1',
+      text: '  你好',
+      stash: '，世界  ',
+    }))).toEqual({ type: 'partial', text: '你好，世界', requestId: 'request-1' })
+    expect(parseDashscopeQwenAsrRealtimeEvent(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript: '你好，世界',
+      language: 'zh',
+      segments: [{ text: '你好', start_ms: 0, end_ms: 500 }],
+      usage: { duration_ms: 500, input_bytes: 3200 },
+    }))).toEqual({
+      type: 'final',
+      text: '你好，世界',
+      language: 'zh',
+      segments: [{ text: '你好', startMs: 0, endMs: 500 }],
+      usage: { durationMs: 500, inputBytes: 3200 },
+    })
+    expect(parseDashscopeQwenAsrRealtimeEvent(JSON.stringify({ type: 'session.finished', request_id: 'request-1' }))).toEqual({
+      type: 'end',
+      requestId: 'request-1',
+    })
+    expect(parseDashscopeQwenAsrRealtimeEvent(JSON.stringify({
+      type: 'error',
+      request_id: 'request-1',
+      error: { code: '429_RATE_LIMIT', message: 'try again later' },
+    }))).toEqual({
+      type: 'error',
+      code: '429_RATE_LIMIT',
+      message: 'try again later',
+      retryable: true,
+      requestId: 'request-1',
+    })
+  })
+
 
   it('resolves HTTPS URLs and byte sources, and always releases resolver-owned sources', async () => {
     const url = await resolveUploadSource({ model: 'm', source: { kind: 'url', url: 'https://example.test/audio.wav' }, requestId: 'u1' })

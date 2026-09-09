@@ -10,6 +10,7 @@
  * Every voice input caller uses this contract; capture and platform injection remain main-owned.
  * Modeled on the `intelligence` domain SDK.
  */
+import type { IntelligenceSTTBilling } from '../../../types/intelligence'
 import type { ITuffTransport, StreamController, StreamOptions } from '../../types'
 import { defineEvent } from '../../event/builder'
 
@@ -50,6 +51,30 @@ export interface VoiceInsights {
   days: Array<{ date: string; characters: number; durationMs: number; sessions: number }>
 }
 
+export type VoiceRecognitionRecordStatus = 'success' | 'empty' | 'failed' | 'cancelled'
+
+/** Detailed local record shown only in the host Intelligence settings surface. */
+export interface VoiceRecognitionRecord {
+  id: string
+  capturedAt: number
+  source: 'microphone' | 'file'
+  status: VoiceRecognitionRecordStatus
+  audioUrl?: string
+  audioBytes?: number
+  audioDurationMs?: number
+  recognitionDurationMs?: number
+  rawText?: string
+  text?: string
+  providerId?: string
+  model?: string
+  channel?: string
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+  errorCode?: string
+  deliveryMethod?: VoiceDeliveryResult['method']
+}
+
 /** One-shot dictation request: capture mic → STT → optional AI polish. */
 export interface VoiceDictatePayload {
   /** BCP-47 language hint (e.g. "zh-CN", "en-US"). Auto-detect when omitted. */
@@ -82,6 +107,8 @@ export interface VoiceDictateResult {
   stoppedReason?: string
   /** Main-owned delivery outcome when delivery was requested. */
   delivery?: VoiceDeliveryResult
+  /** Authoritative STT receipt, when the selected provider returns one. */
+  billing?: IntelligenceSTTBilling
 }
 
 /** Text-to-speech request. */
@@ -108,6 +135,25 @@ export interface VoiceSpeakResult {
   durationMs?: number
 }
 
+/**
+ * When a delivered transcript reaches the target application.
+ *
+ * `final` waits for the whole recognition and delivers it once — the tap-to-start,
+ * tap-to-stop gesture, where the user is composing a thought and wants it to land as
+ * one piece.
+ *
+ * `live` delivers as the words are recognized — the push-to-talk gesture, where the
+ * point is watching the text appear while speaking. It carries two consequences the
+ * caller has to accept, because neither can be undone once a character is in somebody
+ * else's text field:
+ *
+ * - Only the part of the transcript that consecutive partials agree on is delivered,
+ *   so text lands roughly one partial behind the voice rather than instantly.
+ * - The AI cleanup pass is skipped. Polishing rewrites the sentence, and the raw words
+ *   are already typed; delivering the polished version too would duplicate them.
+ */
+export type VoiceDeliveryTiming = 'final' | 'live'
+
 /** Streaming ASR request backed by the same Voice Session owner. */
 export interface VoiceAsrStreamPayload {
   language?: string
@@ -115,6 +161,8 @@ export interface VoiceAsrStreamPayload {
   maxDurationMs?: number
   silenceStopMs?: number
   delivery?: VoiceDeliveryMode
+  /** When delivery reaches the target. Defaults to `final`. */
+  deliveryTiming?: VoiceDeliveryTiming
   /** Main-selected provider id; omitted uses the configured provider priority. */
   providerId?: string
   /**
@@ -143,6 +191,8 @@ export interface VoiceRetryResult {
   text: string
   language?: string
   delivery?: VoiceDeliveryResult
+  /** Authoritative STT receipt, when the selected provider returns one. */
+  billing?: IntelligenceSTTBilling
   /**
    * The buffered audio is gone — the grace window closed, or it was cleared.
    *
@@ -174,8 +224,6 @@ export interface VoiceTranscribeUploadPayload {
   /** HTTPS URL resolved by main; raw file paths and binary payloads are not public DTOs. */
   sourceUrl: string
   language?: string
-  providerId?: string
-  model?: string
   enableTimestamps?: boolean
   enableSpeakerDiarization?: boolean
   removeDisfluencies?: boolean
@@ -194,8 +242,32 @@ export interface VoiceTranscribeUploadResult {
   }>
 }
 
+/** Whether the capability-selected ASR or STT path is ready for use. */
+export interface VoiceRecognitionStatus {
+  ready: boolean
+  /** Stable non-secret reason code. Omitted only when ready. */
+  reason?: string
+}
+
+/** Read-only availability projection; routing remains in Intelligence configuration. */
+export interface VoiceRecognitionStatusSnapshot {
+  asr: VoiceRecognitionStatus
+  stt: VoiceRecognitionStatus
+}
+
+/** Main-owned local-file transcription lifecycle. No path or provider override leaves main. */
+export type VoiceFileTranscriptionEvent =
+  | { type: 'selected'; name: string }
+  | { type: 'result'; text: string; billing?: IntelligenceSTTBilling }
+  | { type: 'cancelled' }
+
 /** Streaming ASR event. */
 export type VoiceAsrStreamEvent =
+  /**
+   * The native capture stream is open. This arrives before the provider handshake finishes, so
+   * the HUD can stop calling the microphone slow while audio is already being buffered.
+   */
+  | { type: 'ready' }
   | { type: 'partial'; text: string }
   /**
    * The capture opened a different input device than the last one did.
@@ -204,7 +276,7 @@ export type VoiceAsrStreamEvent =
    * run has nothing to have switched from, so it says nothing. Carries the name the OS gave the
    * device so the surface can say which one rather than only that it moved.
    */
-  | { type: "device"; name: string }
+  | { type: 'device'; name: string }
   /**
    * Captured input level, normalized to 0..1, roughly 10Hz.
    *
@@ -237,6 +309,16 @@ export const voiceApiEvents = {
     .module('api')
     .event('transcribe-upload')
     .define<VoiceTranscribeUploadPayload, VoiceApiResponse<VoiceTranscribeUploadResult>>(),
+  /** Host-renderer-only readiness projection; routing remains in Intelligence configuration. */
+  getRecognitionStatus: defineEvent('voice')
+    .module('api')
+    .event('get-recognition-status')
+    .define<void, VoiceApiResponse<VoiceRecognitionStatusSnapshot>>(),
+  /** Main opens a local audio-file dialog and streams only selected/result/cancelled UI events. */
+  transcribeFile: defineEvent('voice')
+    .module('api')
+    .event('transcribe-file')
+    .define<void, AsyncIterable<VoiceFileTranscriptionEvent>>({ stream: { enabled: true } }),
   /**
    * Open the operating system's microphone settings.
    *
@@ -274,7 +356,17 @@ export const voiceApiEvents = {
     }),
   /** Host-renderer-only aggregate insights: no plugin read access. */
   getInsights: defineEvent('voice').module('api').event('get-insights').define<void, VoiceApiResponse<VoiceInsights>>(),
-  /** Host-renderer-only permanent deletion of all durable voice insight aggregates. */
+  /** Host-renderer-only detailed local recognition records. */
+  getRecognitionRecords: defineEvent('voice')
+    .module('api')
+    .event('get-recognition-records')
+    .define<void, VoiceApiResponse<VoiceRecognitionRecord[]>>(),
+  /** Host-renderer-only deletion of detailed local recognition records. */
+  clearRecognitionRecords: defineEvent('voice')
+    .module('api')
+    .event('clear-recognition-records')
+    .define<void, VoiceApiResponse>(),
+  /** Host-renderer-only permanent deletion of all durable aggregate voice insight counters. */
   clearInsights: defineEvent('voice').module('api').event('clear-insights').define<void, VoiceApiResponse>(),
 } as const
 
@@ -288,6 +380,10 @@ export interface VoiceSdk {
   speak: (payload: VoiceSpeakPayload) => Promise<VoiceSpeakResult>
   /** Transcribe a main-owned HTTPS audio source. */
   transcribeUpload: (payload: VoiceTranscribeUploadPayload) => Promise<VoiceTranscribeUploadResult>
+  /** Read ASR/STT availability without exposing or persisting a second route configuration. */
+  getRecognitionStatus: () => Promise<VoiceRecognitionStatusSnapshot>
+  /** Main-owned file picker → bounded in-memory `audio.stt` transcription. */
+  transcribeFile: (options: StreamOptions<VoiceFileTranscriptionEvent>) => Promise<StreamController>
   /** Open a live streaming ASR session (partial → final → end). */
   asrStream: (payload: VoiceAsrStreamPayload, options: StreamOptions<VoiceAsrStreamEvent>) => Promise<StreamController>
   /** Re-transcribe the audio the last failed session already captured. */
@@ -298,6 +394,10 @@ export interface VoiceSdk {
   discardRecovery: () => Promise<void>
   /** Open the OS microphone settings pane; rejects where the platform has none. */
   openMicrophoneSettings: () => Promise<void>
+  /** Read detailed local recognition records; available only to the host renderer. */
+  getRecognitionRecords: () => Promise<VoiceRecognitionRecord[]>
+  /** Delete detailed local recognition records; available only to the host renderer. */
+  clearRecognitionRecords: () => Promise<void>
   /** Read aggregate-only local voice insights. Available only to the host renderer. */
   getInsights: () => Promise<VoiceInsights>
   /** Delete all durable aggregate-only voice insights. Available only to the host renderer. */
@@ -327,6 +427,25 @@ export function createVoiceSdk(transport: VoiceSdkTransport): VoiceSdk {
       return assertVoiceApiResponse(response, 'Voice upload transcription failed')
     },
 
+    async getRecognitionStatus() {
+      const response = await transport.send(voiceApiEvents.getRecognitionStatus, undefined)
+      return assertVoiceApiResponse(response, 'Voice recognition status read failed')
+    },
+
+    async transcribeFile(options) {
+      if (typeof transport.stream !== 'function') {
+        throw new TypeError('Voice file transcription requires a stream-capable transport')
+      }
+      return transport.stream(voiceApiEvents.transcribeFile, undefined, options)
+    },
+    async getRecognitionRecords() {
+      const response = await transport.send(voiceApiEvents.getRecognitionRecords, undefined)
+      return assertVoiceApiResponse(response, 'Voice recognition records failed')
+    },
+    async clearRecognitionRecords() {
+      const response = await transport.send(voiceApiEvents.clearRecognitionRecords, undefined)
+      assertVoiceApiResponse(response, 'Voice recognition records clear failed')
+    },
     async openMicrophoneSettings() {
       const response = await transport.send(voiceApiEvents.openMicrophoneSettings, undefined)
       assertVoiceApiResponse(response, 'Voice microphone settings failed')

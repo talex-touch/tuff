@@ -100,8 +100,6 @@ describe("voice domain sdk", () => {
     const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport);
     const payload = {
       sourceUrl: "https://example.test/audio.wav",
-      providerId: "bailian",
-      model: "paraformer-v2",
       language: "zh-CN",
       enableTimestamps: true,
       enableSpeakerDiarization: true,
@@ -121,6 +119,26 @@ describe("voice domain sdk", () => {
       requestId: "request-upload-1",
       segments: [{ text: "你好，世界", startMs: 0, endMs: 1_234, speaker: "A" }],
     });
+  });
+
+  it("reads the main-owned ASR and STT capability readiness snapshot", async () => {
+    const transport = createTransportMock(async () => ({
+      ok: true,
+      result: {
+        asr: { ready: false, reason: "VOICE_ASR_CREDENTIAL_UNAVAILABLE" },
+        stt: { ready: true },
+      },
+    }));
+    const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport);
+
+    await expect(sdk.getRecognitionStatus()).resolves.toEqual({
+      asr: { ready: false, reason: "VOICE_ASR_CREDENTIAL_UNAVAILABLE" },
+      stt: { ready: true },
+    });
+    expect(transport.send).toHaveBeenCalledWith(
+      voiceApiEvents.getRecognitionStatus,
+      undefined,
+    );
   });
 
   it("transcribeUpload throws with the error from a failed envelope", async () => {
@@ -167,5 +185,6 @@ describe("voice domain sdk", () => {
       "voice:api:transcribe-upload",
     );
     expect(voiceApiEvents.asrStream.toEventName()).toBe("voice:api:asr-stream");
+    expect(voiceApiEvents.getRecognitionStatus.toEventName()).toBe("voice:api:get-recognition-status");
   });
 });

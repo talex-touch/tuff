@@ -19,12 +19,14 @@ const { nativeBinding, loadError } = loadNativeBinding({
     'isAccessibilityTrusted',
     'typeText',
     'startFunctionKeyMonitor',
-    'functionKeyMonitorApiV3',
+    'functionKeyMonitorApiV5',
+    'setFunctionKeyMonitorEscapeCapture',
     'stopFunctionKeyMonitor',
   ],
 })
 
 const DISABLE_FLAG = 'TUFF_DISABLE_NATIVE_AUDIO'
+let cachedNativeAudioSupport = null
 
 function isDisabledByEnv() {
   return process.env[DISABLE_FLAG] === '1'
@@ -39,6 +41,9 @@ function getNativeAudioSupport() {
     }
   }
 
+  if (cachedNativeAudioSupport)
+    return cachedNativeAudioSupport
+
   if (!nativeBinding || typeof nativeBinding.getNativeAudioSupport !== 'function') {
     return {
       supported: false,
@@ -47,7 +52,10 @@ function getNativeAudioSupport() {
     }
   }
 
-  return nativeBinding.getNativeAudioSupport()
+  const support = nativeBinding.getNativeAudioSupport()
+  if (support?.supported)
+    cachedNativeAudioSupport = support
+  return support
 }
 
 function createUnavailableError() {
@@ -192,6 +200,15 @@ function startFunctionKeyMonitor(listener) {
   })
 }
 
+function setFunctionKeyMonitorEscapeCapture(enabled) {
+  if (process.platform !== 'darwin' || isDisabledByEnv())
+    return false
+  if (!nativeBinding || typeof nativeBinding.setFunctionKeyMonitorEscapeCapture !== 'function') {
+    return false
+  }
+  return nativeBinding.setFunctionKeyMonitorEscapeCapture(Boolean(enabled))
+}
+
 function stopFunctionKeyMonitor() {
   if (!nativeBinding || typeof nativeBinding.stopFunctionKeyMonitor !== 'function')
     return
@@ -211,5 +228,6 @@ module.exports = {
   isAccessibilityTrusted,
   typeText,
   startFunctionKeyMonitor,
+  setFunctionKeyMonitorEscapeCapture,
   stopFunctionKeyMonitor,
 }

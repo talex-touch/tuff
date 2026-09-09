@@ -56,33 +56,36 @@ export interface VoiceWord {
 export interface VoiceUsage {
   durationMs?: number
   inputBytes?: number
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
 }
 
-export type VoiceProviderEvent
-  = | {
-    type: 'partial'
-    text: string
-    language?: string
-    segments?: readonly VoiceSegment[]
-    requestId?: string
-  }
+export type VoiceProviderEvent =
   | {
-    type: 'final'
-    text: string
-    language?: string
-    segments?: readonly VoiceSegment[]
-    requestId?: string
-    usage?: VoiceUsage
-  }
-  | { type: 'metadata', requestId?: string, usage?: VoiceUsage }
-  | { type: 'end', requestId?: string, usage?: VoiceUsage }
+      type: 'partial'
+      text: string
+      language?: string
+      segments?: readonly VoiceSegment[]
+      requestId?: string
+    }
   | {
-    type: 'error'
-    code: string
-    message: string
-    retryable: boolean
-    requestId?: string
-  }
+      type: 'final'
+      text: string
+      language?: string
+      segments?: readonly VoiceSegment[]
+      requestId?: string
+      usage?: VoiceUsage
+    }
+  | { type: 'metadata'; requestId?: string; usage?: VoiceUsage }
+  | { type: 'end'; requestId?: string; usage?: VoiceUsage }
+  | {
+      type: 'error'
+      code: string
+      message: string
+      retryable: boolean
+      requestId?: string
+    }
 
 export interface VoiceStreamConnection {
   readonly ready: Promise<void>
@@ -92,9 +95,9 @@ export interface VoiceStreamConnection {
   abort: (reason?: string) => Promise<void>
 }
 
-export type VoiceUploadSource
-  = | { kind: 'url', url: string, format?: VoiceAudioFormat }
-    | { kind: 'bytes', bytes: Buffer | Uint8Array, format: VoiceAudioFormat, fileName?: string }
+export type VoiceUploadSource =
+  | { kind: 'url'; url: string; format?: VoiceAudioFormat }
+  | { kind: 'bytes'; bytes: Buffer | Uint8Array; format: VoiceAudioFormat; fileName?: string }
 
 export interface VoiceUploadRequest {
   model: string
@@ -187,7 +190,7 @@ export class VoiceProviderError extends Error {
   constructor(
     code: string,
     message: string,
-    options: { retryable?: boolean, requestId?: string, cause?: unknown } = {},
+    options: { retryable?: boolean; requestId?: string; cause?: unknown } = {},
   ) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause })
     this.name = 'VoiceProviderError'
@@ -209,8 +212,7 @@ export function assertVoiceUploadUrl(url: string): string {
   let parsed: URL
   try {
     parsed = new URL(url)
-  }
-  catch {
+  } catch {
     throw new VoiceProviderError('VOICE_UPLOAD_URL_INVALID', 'Voice upload URL is invalid.')
   }
   if (parsed.protocol !== 'https:') {

@@ -5,6 +5,7 @@ import { isDeepStrictEqual, types as utilTypes } from 'node:util'
 import {
   normalizeIntelligenceProviderConfigDeleteRequest,
   normalizeIntelligenceProviderConfigSaveRequest,
+  normalizeIntelligenceProviderCredentialRevealRequest,
   normalizeIntelligenceProviderStoredConfig
 } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 
@@ -235,7 +236,7 @@ export class ProviderCredentialService {
   private initializePromise: Promise<void> | null = null
   private mutationTail: Promise<void> = Promise.resolve()
   private accepting = true
-
+  private initialized = false
   constructor(private readonly options: ProviderCredentialServiceOptions) {
     if (
       options.surfaces.length === 0 ||
@@ -259,6 +260,43 @@ export class ProviderCredentialService {
 
   resolve(provider: Pick<IntelligenceProviderConfig, 'id'>): string | undefined {
     return this.accepting ? this.credentials.get(provider.id) : undefined
+  }
+
+  async revealCredential(providerId: string): Promise<string> {
+    if (!this.accepting) throw new Error('PROVIDER_CREDENTIAL_SERVICE_CLOSED')
+    if (!this.initializePromise || !this.initialized) {
+      throw new Error('PROVIDER_CREDENTIAL_SERVICE_NOT_INITIALIZED')
+    }
+    const normalized = normalizeIntelligenceProviderCredentialRevealRequest({ providerId })
+
+    return this.enqueueMutation(async () => {
+      if (!this.initialized) throw new Error('PROVIDER_CREDENTIAL_SERVICE_NOT_INITIALIZED')
+      let providerExists = false
+      try {
+        providerExists = (await this.readSurfaceStates()).some((state) =>
+          state.providers.some((provider) => provider.id === normalized.providerId)
+        )
+      } catch {
+        throw new Error('PROVIDER_CREDENTIAL_REVEAL_UNAVAILABLE')
+      }
+      if (!providerExists) throw new Error('PROVIDER_CREDENTIAL_REVEAL_UNAVAILABLE')
+
+      try {
+        const credential = this.normalizeVaultCredential(
+          await this.readVaultCredential(providerCredentialSecureStoreKey(normalized.providerId))
+        )
+        if (!this.accepting || !this.initialized) {
+          throw new Error('PROVIDER_CREDENTIAL_SERVICE_CLOSED')
+        }
+        if (credential === null) throw new Error('PROVIDER_CREDENTIAL_REVEAL_UNAVAILABLE')
+        return credential
+      } catch (error) {
+        if (error instanceof Error && error.message === 'PROVIDER_CREDENTIAL_SERVICE_CLOSED') {
+          throw error
+        }
+        throw new Error('PROVIDER_CREDENTIAL_REVEAL_UNAVAILABLE')
+      }
+    })
   }
 
   has(providerId: string): boolean {
@@ -285,6 +323,7 @@ export class ProviderCredentialService {
     await this.initializePromise?.catch(() => undefined)
     await this.mutationTail.catch(() => undefined)
     this.credentials.clear()
+    this.initialized = false
     this.initializePromise = null
   }
 
@@ -433,6 +472,7 @@ export class ProviderCredentialService {
     }
 
     this.publishCredentials(selected)
+    this.initialized = true
     if (legacy.size > 0) {
       this.report('PROVIDER_CREDENTIAL_MIGRATED', 'all', undefined, legacy.size)
     }

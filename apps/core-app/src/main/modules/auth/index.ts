@@ -118,6 +118,26 @@ let stepUpToken: string | null = null
 let stepUpTokenExpiresAt = 0
 let authStartupRefreshTimer: NodeJS.Timeout | null = null
 let deviceAuthLoginAttempt = 0
+
+/**
+ * Main-process-only request controls. Transport events remain on the narrow
+ * string-body contract; binary callers use this internal auth owner directly.
+ */
+export interface NexusAuthenticatedRequestOptions {
+  readonly signal?: AbortSignal
+  readonly timeoutMs?: number
+  /** Reject redirects while carrying an app bearer credential. */
+  readonly rejectRedirects?: boolean
+  /** Require the request URL to remain on this captured Nexus origin. */
+  readonly trustedBaseUrl?: string
+}
+
+type NexusMainRequestPayload = Omit<NexusRequestPayload, 'body'> & {
+  readonly body?: unknown
+}
+
+let authRequestIdentity = ''
+let authRequestIdentityController = new AbortController()
 let activeDeviceAuthCode: string | null = null
 
 type AuthEventDefinition<TPayload, TResult> = Parameters<ITuffTransportMain['on']>[0] & {
@@ -382,7 +402,20 @@ function resolveAccessTokenExpiresAt(ttlSeconds: unknown): number | null {
   return normalizedTtl === null ? null : Date.now() + normalizedTtl * 1000
 }
 
+function resolveAuthRequestIdentity(state: AuthCredentialState | null): string {
+  if (!state?.accessToken) return ''
+  return state.refreshToken ? `refresh:${state.refreshToken}` : `access:${state.accessToken}`
+}
+
+function replaceAuthRequestIdentity(nextIdentity: string): void {
+  if (authRequestIdentity === nextIdentity) return
+  authRequestIdentityController.abort()
+  authRequestIdentity = nextIdentity
+  authRequestIdentityController = new AbortController()
+}
+
 function applyAuthCredentialState(state: AuthCredentialState | null): void {
+  replaceAuthRequestIdentity(resolveAuthRequestIdentity(state))
   authToken = state?.accessToken ?? null
   authRefreshToken = state?.refreshToken ?? null
   authAccessTokenExpiresAt = state?.accessTokenExpiresAt ?? null
@@ -1642,6 +1675,91 @@ async function performNexusRequest(
   return executeNexusRequest(url, method, headers, payload.body, payload.context)
 }
 
+/** Internal main-process Nexus request used by binary capability clients. */
+export async function performNexusRequestWithAuth(
+  payload: NexusMainRequestPayload,
+  options: NexusAuthenticatedRequestOptions = {}
+): Promise<NexusResponsePayload | null> {
+  const trustedBaseUrl = options.trustedBaseUrl?.trim() || resolveAuthBaseUrl()
+  const url = resolveNexusRequestUrl(payload)
+  const trustedOrigin = new URL(trustedBaseUrl).origin
+  if (new URL(url).origin !== trustedOrigin) {
+    throw Object.assign(new Error('NEXUS_INVALID_REQUEST'), { code: 'INVALID_REQUEST' as const })
+  }
+  const timeoutMs =
+    typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
+      ? Math.max(100, Math.floor(options.timeoutMs))
+      : undefined
+  const deadlineController = new AbortController()
+  const timer = timeoutMs ? setTimeout(() => deadlineController.abort(), timeoutMs) : null
+  const signal = AbortSignal.any([
+    ...(options.signal ? [options.signal] : []),
+    authRequestIdentityController.signal,
+    deadlineController.signal
+  ])
+  try {
+    const token = await ensureFreshAccessToken('request')
+    if (signal.aborted) throw new Error('NEXUS_REQUEST_CANCELLED')
+    if (!token) return null
+    if (new URL(resolveAuthBaseUrl()).origin !== trustedOrigin) {
+      throw new Error('NEXUS_REQUEST_CONTEXT_CHANGED')
+    }
+    const requestIdentity = authRequestIdentity
+    const headers = new Headers(payload.headers ?? {})
+    headers.set('Authorization', normalizeBearerToken(token))
+    const method = (payload.method ? payload.method.toUpperCase() : 'GET') as NetworkMethod
+    const requestOptions = {
+      method,
+      url,
+      headers: Object.fromEntries(headers.entries()),
+      body: payload.body,
+      responseType: 'text' as const,
+      signal,
+      timeoutMs,
+      validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+      retryPolicy: {
+        maxRetries: 0,
+        retryOnNetworkError: false,
+        retryOnTimeout: false,
+        retryableStatusCodes: []
+      }
+    }
+    const sendRequest = () =>
+      options.rejectRedirects
+        ? getNetworkService().requestNoRedirect<string>(requestOptions)
+        : getNetworkService().request<string>(requestOptions)
+    let response = await sendRequest()
+    if (response.status === 401 && authRefreshToken && !signal.aborted) {
+      const refreshed = await refreshAccessToken('request-unauthorized')
+      if (
+        refreshed.kind === 'success' &&
+        requestIdentity === authRequestIdentity &&
+        new URL(resolveAuthBaseUrl()).origin === trustedOrigin &&
+        !signal.aborted
+      ) {
+        headers.set('Authorization', normalizeBearerToken(refreshed.token))
+        requestOptions.headers = Object.fromEntries(headers.entries())
+        response = await sendRequest()
+      }
+    }
+    if (new URL(resolveAuthBaseUrl()).origin !== trustedOrigin) {
+      throw new Error('NEXUS_REQUEST_CONTEXT_CHANGED')
+    }
+    if (requestIdentity !== authRequestIdentity || signal.aborted) {
+      throw new Error('NEXUS_REQUEST_CANCELLED')
+    }
+    return {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+      url: response.url || url,
+      body: response.data ?? ''
+    }
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 async function performNexusUpload(
   payload: NexusUploadPayload
 ): Promise<NexusResponsePayload | null> {
@@ -1914,7 +2032,6 @@ function setStepUpToken(token: string): void {
   stepUpToken = trimmed
   stepUpTokenExpiresAt = Date.now() + STEP_UP_TOKEN_TTL_MS
 }
-
 function clearStepUpToken(): void {
   stepUpToken = null
   stepUpTokenExpiresAt = 0
@@ -1995,6 +2112,7 @@ function resetAuthModuleTestState(): void {
   authToken = null
   authRefreshToken = null
   authAccessTokenExpiresAt = null
+  replaceAuthRequestIdentity('')
   authRefreshInFlight = null
   stepUpToken = null
   stepUpTokenExpiresAt = 0
@@ -2015,6 +2133,13 @@ function setAuthModuleTestState(nextState: AuthModuleTestState): void {
   if (Object.prototype.hasOwnProperty.call(nextState, 'authAccessTokenExpiresAt')) {
     authAccessTokenExpiresAt = nextState.authAccessTokenExpiresAt ?? null
   }
+  replaceAuthRequestIdentity(
+    resolveAuthRequestIdentity({
+      accessToken: authToken ?? '',
+      refreshToken: authRefreshToken,
+      accessTokenExpiresAt: authAccessTokenExpiresAt
+    })
+  )
 }
 
 export const __test__ = {

@@ -34,7 +34,7 @@ import {
 } from '../box-tool/search-engine/scan-progress-schema'
 
 const dbLog = getLogger('database')
-const AUX_MIGRATION_MARKER_KEY = 'db.aux.migration.v1.complete'
+const AUX_MIGRATION_MARKER_KEY = 'db.aux.migration.v2.complete'
 const DB_WAL_PASSIVE_TASK_ID = 'database_wal_checkpoint_passive'
 const DB_WAL_TRUNCATE_TASK_ID = 'database_wal_checkpoint_truncate'
 const DB_HEALTH_REPORT_TASK_ID = 'database_health_report'
@@ -72,7 +72,8 @@ const AUX_COPY_TABLES = [
   'config',
   'voice_insights_state',
   'voice_insight_days',
-  'voice_insight_captures'
+  'voice_insight_captures',
+  'voice_recognition_records'
 ] as const
 
 export class DatabaseModule extends BaseModule {
@@ -903,6 +904,28 @@ export class DatabaseModule extends BaseModule {
         captured_at integer NOT NULL
       )`,
       'CREATE INDEX IF NOT EXISTS idx_voice_insight_captures_captured_at ON voice_insight_captures (captured_at)',
+      `CREATE TABLE IF NOT EXISTS voice_recognition_records (
+        id text PRIMARY KEY NOT NULL,
+        captured_at integer NOT NULL,
+        source text NOT NULL,
+        status text NOT NULL,
+        audio_path text,
+        audio_bytes integer,
+        audio_duration_ms integer,
+        recognition_duration_ms integer,
+        raw_text text,
+        text text,
+        provider_id text,
+        model text,
+        channel text,
+        input_tokens integer,
+        output_tokens integer,
+        total_tokens integer,
+        error_code text,
+        delivery_method text
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_voice_recognition_records_captured_at ON voice_recognition_records (captured_at)',
+      'CREATE INDEX IF NOT EXISTS idx_voice_recognition_records_status ON voice_recognition_records (status)',
       `CREATE TABLE IF NOT EXISTS clipboard_history (
         id integer PRIMARY KEY AUTOINCREMENT,
         type text NOT NULL,

@@ -136,10 +136,53 @@ const SETUP_ICON = 'i-carbon-settings-adjust'
 const ICON_CARD_WIDTH = 264
 const ICON_CARD_HEIGHT = 124
 
-/** Bars in the input meter. Each one holds a single 10Hz level frame, so 24 ≈ 2.4s of history. */
-const WAVE_BAR_COUNT = 24
+/**
+ * The input meter's geometry.
+ *
+ * The bar count is derived from the room the pill actually has rather than fixed, so a
+ * sentence that grows the island grows the meter with it instead of leaving a band of
+ * empty pill either side of a stub of bars.
+ *
+ * That changes what the meter means, and the change is the point: each bar holds one
+ * 10Hz level frame, so the count IS the history in tenths of a second. The floor keeps
+ * the base-width pill at the 24 bars (2.4s) it has always shown; at full width it reaches
+ * roughly six seconds, which is the span of a long sentence.
+ */
+const WAVE_BAR_WIDTH = 2
+const WAVE_BAR_GAP = 2
+const WAVE_MIN_BARS = 24
+/**
+ * Breathing room between the meter and the round controls either side.
+ *
+ * Six is not a taste call: without it the base-width pill fits 27 bars and the meter runs
+ * edge to edge into the cancel and confirm circles. Six lands the base width back on the
+ * 24 bars this has always drawn, which keeps the change to what it claims to be — the
+ * meter growing with the island, not the island's resting state quietly redrawn.
+ */
+const WAVE_SIDE_INSET = 6
 const WAVE_BAR_MIN_HEIGHT = 3
 const WAVE_BAR_MAX_HEIGHT = 28
+
+/** How many bars fit a given centre column, floored at the historical count. */
+function barsForWidth(centreWidth: number): number {
+  const usable = centreWidth - WAVE_SIDE_INSET * 2
+  const fitted = Math.floor((usable + WAVE_BAR_GAP) / (WAVE_BAR_WIDTH + WAVE_BAR_GAP))
+  return Math.max(WAVE_MIN_BARS, fitted)
+}
+
+/**
+ * Re-fits the level history to a new bar count without inventing or reordering samples.
+ *
+ * Growing pads on the left because the left is the past: a wider meter has simply not
+ * been recording long enough to fill itself yet, and zeros there read as "before this
+ * started" rather than as silence in the middle of a word. Shrinking drops from the same
+ * end, so the newest frames — the ones next to the speaker's current syllable — survive.
+ */
+function refitLevels(levels: readonly number[], count: number): number[] {
+  if (levels.length === count) return [...levels]
+  if (levels.length > count) return levels.slice(levels.length - count)
+  return [...new Array(count - levels.length).fill(0), ...levels]
+}
 
 /**
  * Auto-gain for the meter.
@@ -169,6 +212,8 @@ const PILL_MAX_WIDTH = 340
 const PILL_BASE_HEIGHT = 44
 /** The tallest the island ever gets: its padding, two clamped lines, the gap and one control. */
 const PILL_TALL_HEIGHT = 88
+/** One transcript row above the 24-bar live audio meter. */
+const PILL_LIVE_HEIGHT = 70
 /** Both paddings, and the gap between the text row and the control row. */
 const PILL_TALL_PADDING = 10
 const PILL_ROW_GAP = 4
@@ -244,12 +289,20 @@ const listening = ref(false)
 const transcribing = ref(false)
 const startingVoiceCapture = ref(false)
 const notice = ref<Notice | null>(null)
+const transcriptPreview = ref('')
 const sessionSeq = ref(0)
-const levels = ref<number[]>(new Array(WAVE_BAR_COUNT).fill(0))
+const levels = ref<number[]>(new Array(WAVE_MIN_BARS).fill(0))
 const centerTextRef = ref<HTMLElement | null>(null)
 const pillRef = ref<HTMLElement | null>(null)
 const pillWidth = ref(PILL_BASE_WIDTH)
 const pillHeight = ref(PILL_BASE_HEIGHT)
+/** The centre column is what the meter gets: the pill minus its padding and both controls. */
+const waveBarCount = computed(() => barsForWidth(pillWidth.value - PILL_CHROME_WIDTH))
+// The meter's width follows the pill, so its history has to follow the meter. Rebuilding
+// the array instead would blank the wave every time the sentence grew the island by a bar.
+watch(waveBarCount, (count) => {
+  levels.value = refitLevels(levels.value, count)
+})
 const expanded = computed(() => pillHeight.value > PILL_BASE_HEIGHT)
 const pillRadius = computed(() =>
   expanded.value ? PILL_TALL_RADIUS : Math.round(PILL_BASE_HEIGHT / 2)
@@ -290,6 +343,8 @@ const uploadProgress = ref(0)
 /** Which shape the thinking mark is wearing right now — see `rollOrbState`. */
 const orbState = ref<(typeof ORB_STATES)[number]>(ORB_STATES[0]!)
 const recovering = ref(false)
+/** False until the native capture stream is open; provider handshakes may continue afterward. */
+const hasCaptureReady = ref(false)
 /** False until the first level frame lands — see `preparing`. */
 const hasLevel = ref(false)
 
@@ -318,7 +373,9 @@ const showsOrb = computed(() => (transcribing.value || recovering.value) && !has
  * which is a claim we cannot make while the device is still opening. So the meter waits for
  * data and the pill breathes instead.
  */
-const preparing = computed(() => listening.value && !hasLevel.value && !hasNotice.value)
+const preparing = computed(
+  () => listening.value && !hasLevel.value && !hasCaptureReady.value && !hasNotice.value
+)
 const holdingCancel = computed(() => cancelCharge.value > 0)
 /**
  * What is left of the hold, as a width.
@@ -350,13 +407,23 @@ const recordingProgress = computed(() => Math.min(1, recordedMs.value / MAX_RECO
 /** The last stretch is the only part of the budget that is news rather than a fact about the cap. */
 const recordingEnding = computed(() => MAX_RECORDING_MS - recordedMs.value <= RECORDING_WARNING_MS)
 /**
- * Drawn only while audio is provably flowing.
+ * Drawn only while audio is provably flowing, and only once the cap is news.
  *
  * Not during `preparing` — there is no elapsed time to report before the first frame — and not
  * under a notice or an Escape hold, both of which own the border for something more urgent.
+ *
+ * `recordingEnding` is the gate that matters. The budget used to take the border for the whole
+ * recording, which meant the beam — the thing that says "this is live" — never appeared during
+ * the one state where it is most true. For the first four and a half minutes the line is not
+ * news, it is a fact about a cap nobody is near; the beam is the better use of the same 1px.
  */
 const showsRecordingBudget = computed(
-  () => listening.value && hasLevel.value && !hasNotice.value && !holdingCancel.value
+  () =>
+    listening.value &&
+    hasLevel.value &&
+    recordingEnding.value &&
+    !hasNotice.value &&
+    !holdingCancel.value
 )
 /**
  * The send bar runs for as long as the words are out of the user's hands.
@@ -412,9 +479,16 @@ const beamTone = computed(() => {
  * The beam means "still running, and there is no fraction to give you". While the budget line is
  * up there is one, so the stronger statement takes the edge — two strokes chasing each other
  * around the same 1px border read as neither.
+ *
+ * `preparing` is excluded for the opposite reason: there is nothing running yet. The device is
+ * still opening, the meter has no frame to draw, and the pill is already saying so by breathing.
+ * A beam on top of that claims a live session half a second before there is one.
  */
 const beamActive = computed(
-  () => (voiceActive.value || holdingCancel.value || hasNotice.value) && !showsRecordingBudget.value
+  () =>
+    (voiceActive.value || holdingCancel.value || hasNotice.value) &&
+    !preparing.value &&
+    !showsRecordingBudget.value
 )
 /**
  * Colour carries the same three-tone scale the notices use, so the border never says something
@@ -437,7 +511,9 @@ const centerText = computed(() => {
   if (notice.value) return notice.value.message
   if (holdingCancel.value) return t('assistant.voicePanel.holdToCancel')
   if (recovering.value) return t('assistant.voicePanel.recovering')
+  if (listening.value && transcriptPreview.value) return transcriptPreview.value
   if (preparing.value) return t('assistant.voicePanel.capturingDevice')
+  if (listening.value && hasCaptureReady.value) return t('assistant.voicePanel.voiceListening')
   if (!transcribing.value) return ''
   if (slowness.value === 'very-slow') return t('assistant.voicePanel.stillWorkingLong')
   if (slowness.value === 'slow') return t('assistant.voicePanel.stillWorking')
@@ -493,6 +569,8 @@ function currentTextEl(): HTMLElement | null {
 }
 
 let voiceStreamController: StreamController | null = null
+let committedVoiceText = ''
+let partialVoiceText = ''
 let activeVoiceGeneration: number | null = null
 let nextVoiceGeneration = 0
 let stopRequestedGeneration: number | null = null
@@ -775,6 +853,39 @@ function classifyFailure(error: unknown): Notice {
   return { message: t('assistant.voicePanel.voiceTranscribeFailed'), tone: 'danger' }
 }
 
+function appendTranscriptText(base: string, incoming: string): string {
+  const next = incoming.trim()
+  if (!next) return base
+  if (!base) return next
+  if (next === base || next.startsWith(base)) return next
+  if (base.startsWith(next)) return base
+
+  const overlapLimit = Math.min(base.length, next.length)
+  for (let size = overlapLimit; size > 0; size -= 1) {
+    if (base.slice(-size) === next.slice(0, size)) return `${base}${next.slice(size)}`
+  }
+
+  const last = Array.from(base).at(-1) ?? ''
+  const first = Array.from(next)[0] ?? ''
+  const cjk = /[\u3400-\u9fff]/
+  const separator =
+    /\s/.test(last) || /^\s/.test(next) || cjk.test(last) || cjk.test(first) ? '' : ' '
+  return `${base}${separator}${next}`
+}
+
+function updateLiveTranscript(next: string): void {
+  partialVoiceText = appendTranscriptText(partialVoiceText, next)
+  transcriptPreview.value = appendTranscriptText(committedVoiceText, partialVoiceText)
+}
+
+function commitLiveTranscript(next: string): string {
+  const finalText = appendTranscriptText(committedVoiceText, next || partialVoiceText)
+  committedVoiceText = finalText
+  partialVoiceText = ''
+  transcriptPreview.value = finalText
+  return finalText
+}
+
 function resetPanelState(): void {
   endRecoveryOffer()
   clearFinishTimer()
@@ -783,8 +894,11 @@ function resetPanelState(): void {
   listening.value = false
   transcribing.value = false
   startingVoiceCapture.value = false
-  levels.value = new Array(WAVE_BAR_COUNT).fill(0)
-  waveReference = WAVE_REF_FLOOR
+  transcriptPreview.value = ''
+  committedVoiceText = ''
+  partialVoiceText = ''
+  levels.value = new Array(waveBarCount.value).fill(0)
+  hasCaptureReady.value = false
   hasLevel.value = false
   recovering.value = false
   stopHold()
@@ -840,6 +954,9 @@ function cancelVoiceSession(): void {
   listening.value = false
   transcribing.value = false
   startingVoiceCapture.value = false
+  transcriptPreview.value = ''
+  committedVoiceText = ''
+  partialVoiceText = ''
   stopRecordClock()
   stopUploadClock()
   controller?.cancel()
@@ -887,6 +1004,11 @@ function completeVoiceSession(generation: number): void {
 
 function handleVoiceSessionEvent(generation: number, event: VoiceAsrStreamEvent): void {
   if (!isCurrentVoiceSession(generation)) return
+  if (event.type === 'ready') {
+    hasCaptureReady.value = true
+    stopCaptureStartTimer()
+    return
+  }
   if (event.type === 'device') {
     // Said once, at the top of a session that opened different hardware than the last one did.
     // Not a failure and not an instruction, so it takes the muted tone and its short hold; it
@@ -904,22 +1026,17 @@ function handleVoiceSessionEvent(generation: number, event: VoiceAsrStreamEvent)
     return
   }
   if (event.type === 'partial') {
+    updateLiveTranscript(event.text)
     // The provider answering is the only fact available here: our audio landed and it is
     // working on it. Everything before this was a projection, so it stops projecting.
     parkUpload()
     return
   }
   if (event.type === 'final') {
-    if (!event.text.trim() || event.delivery?.method === 'none') {
+    const finalText = commitLiveTranscript(event.text)
+    if (!finalText) {
       retireVoiceSession(generation)
-      showNotice(
-        t(
-          !event.text.trim()
-            ? 'assistant.voicePanel.voiceTranscribeEmpty'
-            : 'assistant.voicePanel.voiceDeliveryFailed'
-        ),
-        'warning'
-      )
+      showNotice(t('assistant.voicePanel.voiceTranscribeEmpty'), 'warning')
     }
     return
   }
@@ -954,10 +1071,14 @@ async function startVoiceSession(): Promise<void> {
   activeVoiceGeneration = generation
   clearFinishTimer()
   finished = false
+  transcriptPreview.value = ''
+  committedVoiceText = ''
+  partialVoiceText = ''
+  levels.value = new Array(waveBarCount.value).fill(0)
   startingVoiceCapture.value = true
   listening.value = true
   notice.value = null
-  levels.value = new Array(WAVE_BAR_COUNT).fill(0)
+  hasCaptureReady.value = false
   hasLevel.value = false
   // No budget reset here: every path that ends a recording stops the clock, and `startRecordClock`
   // zeroes it again on the first frame. Adding one more looked prudent and guarded nothing —
@@ -1160,7 +1281,7 @@ function measureNaturalWidth(element: HTMLElement): number {
 
 // Measured rather than expressed in CSS: `width: fit-content` is not animatable without
 // `interpolate-size`, and the window behind the pill deliberately never resizes.
-watch([centerText, showsOrb, () => notice.value?.icon], async () => {
+watch([centerText, showsOrb, () => notice.value?.icon, listening], async () => {
   if (!centerText.value) {
     pillWidth.value = PILL_BASE_WIDTH
     pillHeight.value = PILL_BASE_HEIGHT
@@ -1184,8 +1305,8 @@ watch([centerText, showsOrb, () => notice.value?.icon], async () => {
   // Width first, height second. Truncating at the cap loses the half of the sentence that
   // says what to do — "Cannot find m…" is exactly the wrong half to drop — so only once one
   // line cannot fit even at the cap does the island grow instead.
-  if (needed <= PILL_MAX_WIDTH) {
-    pillHeight.value = PILL_BASE_HEIGHT
+  if (listening.value || needed <= PILL_MAX_WIDTH) {
+    pillHeight.value = listening.value ? PILL_LIVE_HEIGHT : PILL_BASE_HEIGHT
     return
   }
 
@@ -1358,7 +1479,7 @@ onBeforeUnmount(() => {
         aria-hidden="true"
       />
 
-      <Transition name="voice-swap">
+      <Transition v-if="!listening" name="voice-swap">
         <div :key="centerKey" class="voice-dock__slot">
           <span
             v-if="notice?.icon && centerText"
@@ -1382,20 +1503,42 @@ onBeforeUnmount(() => {
               >{{ char }}</span
             >
           </p>
+        </div>
+      </Transition>
+      <div v-else class="voice-dock__slot voice-dock__live-slot">
+        <div class="voice-dock__live">
+          <p
+            v-if="centerText"
+            ref="centerTextRef"
+            class="voice-dock__text"
+            data-testid="voice-live-text"
+          >
+            <span
+              v-for="(char, index) in centerChars"
+              :key="`live:${index}`"
+              class="voice-dock__char"
+              :style="{ animationDelay: charDelay(index) }"
+              >{{ char }}</span
+            >
+          </p>
           <div
-            v-else-if="listening"
             class="voice-dock__wave"
+            :class="{ 'voice-dock__wave--pending': !hasLevel }"
+            :style="{
+              '--voice-wave-bar': `${WAVE_BAR_WIDTH}px`,
+              '--voice-wave-gap': `${WAVE_BAR_GAP}px`
+            }"
             data-testid="voice-wave"
             aria-hidden="true"
           >
             <span
               v-for="(level, index) in levels"
               :key="index"
-              :style="{ height: `${barHeight(level)}px` }"
+              :style="{ height: `${barHeight(level)}px`, '--voice-wave-delay': `${index * 35}ms` }"
             />
           </div>
         </div>
-      </Transition>
+      </div>
 
       <!-- The confirm slot holds either an action or the progress mark, never both. -->
       <!--
@@ -1904,18 +2047,57 @@ onBeforeUnmount(() => {
   transform: scale(0.86);
 }
 
+/* Geometry comes from the script so the bar count and the bars agree by construction:
+   `barsForWidth` divides the centre column by exactly these two numbers. */
 .voice-dock__wave {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--voice-wave-gap, 2px);
 }
 
 .voice-dock__wave span {
-  width: 2px;
+  width: var(--voice-wave-bar, 2px);
   border-radius: 1px;
   background: var(--shell-primary);
   /* Matches the 10Hz level cadence, so each bar lands exactly as the next frame arrives. */
   transition: height 100ms linear;
+}
+.voice-dock__live {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.voice-dock__live .voice-dock__text {
+  width: 100%;
+  max-width: 100%;
+  text-align: center;
+}
+
+.voice-dock__live .voice-dock__wave {
+  min-height: 28px;
+}
+
+.voice-dock__wave--pending span {
+  animation: voice-wave-pending 900ms ease-in-out infinite;
+  animation-delay: var(--voice-wave-delay, 0ms);
+  transform-origin: center;
+}
+
+@keyframes voice-wave-pending {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scaleY(0.45);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scaleY(1.25);
+  }
 }
 
 /*
@@ -1948,6 +2130,9 @@ onBeforeUnmount(() => {
 /* The card is where wrapping is the point, so it is the card that turns it back on. */
 .voice-dock--expanded .voice-dock__text {
   white-space: normal;
+}
+.voice-dock__live .voice-dock__text {
+  white-space: nowrap;
 }
 
 /*
@@ -2024,7 +2209,9 @@ onBeforeUnmount(() => {
     transition: border-color 160ms ease-out;
   }
 
-  .voice-dock__wave span {
+  .voice-dock__wave span,
+  .voice-dock__wave--pending span {
+    animation: none;
     transition: none;
   }
 

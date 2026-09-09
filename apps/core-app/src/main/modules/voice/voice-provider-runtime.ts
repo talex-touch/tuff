@@ -1,93 +1,178 @@
+import { resolveFirstIntelligenceProviderRoute } from '@talex-touch/tuff-intelligence'
+import type {
+  VoiceRecognitionStatus,
+  VoiceRecognitionStatusSnapshot
+} from '@talex-touch/utils/transport/sdk/domains/voice'
 import {
   BailianParaformerVoiceProvider,
   createFetchHttpClient,
   createNodeVoiceSocketFactory,
-  createVoiceProviderRegistry,
+  DashscopeQwenAsrRealtimeVoiceProvider,
   DoubaoVoiceProvider,
-  type VoiceProviderAdapter,
-  type VoiceProviderRegistry
+  type VoiceProviderAdapter
 } from '@talex-touch/tuff-voice'
+import {
+  getVoiceAsrMetadata,
+  getVoiceCapabilityRecommendedModels,
+  resolveBailianVoiceEndpoints
+} from '@talex-touch/utils/intelligence/voice-asr'
+import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
+import {
+  ensureIntelligenceConfigLoaded,
+  getCapabilityOptions,
+  getEffectiveCapabilityRoutingConfig
+} from '../ai/intelligence-config'
+import { getIntelligenceProviderManager, providerSupportsCapability } from '../ai/intelligence-sdk'
+import { getAuthToken } from '../auth'
+import { resolveProviderCredential } from '../ai/provider-credential-runtime'
 
-let registry: VoiceProviderRegistry | null = null
+const ASR_CAPABILITY_ID = 'audio.asr'
+const STT_CAPABILITY_ID = 'audio.stt'
 
-function env(name: string): string | undefined {
-  const value = process.env[name]?.trim()
-  return value || undefined
+export interface ConfiguredAsrProvider {
+  provider: VoiceProviderAdapter
+  model: string
 }
 
-function createConfiguredProviders(): VoiceProviderAdapter[] {
+function hasEnabledCapabilityBinding(capabilityId: string): boolean {
+  ensureIntelligenceConfigLoaded()
+  return Boolean(
+    getEffectiveCapabilityRoutingConfig(capabilityId)?.providers?.some(
+      (binding) => binding.enabled !== false
+    )
+  )
+}
+
+function resolveCapabilityProvider(
+  capabilityId: string,
+  capabilityType: 'asr' | 'stt',
+  requireCredential = false
+) {
+  ensureIntelligenceConfigLoaded()
+  const capability = getEffectiveCapabilityRoutingConfig(capabilityId)
+  const bindings = capability?.providers ?? []
+  if (!bindings.some((binding) => binding.enabled !== false)) return null
+
+  const manager = getIntelligenceProviderManager()
+  const boundProviderIds = new Set(
+    bindings.filter((binding) => binding.enabled !== false).map((binding) => binding.providerId)
+  )
+  const providers = Array.from(boundProviderIds)
+    .map((providerId) => manager.get(providerId))
+    .filter((provider): provider is NonNullable<typeof provider> => Boolean(provider))
+    .filter((provider) => provider.getConfig().enabled !== false)
+    .map((provider) => {
+      const config = provider.getConfig()
+      const credential = isNexusManagedProvider(config)
+        ? (getAuthToken() ?? undefined)
+        : resolveProviderCredential(config)
+      return { ...config, apiKey: credential, hasApiKey: Boolean(credential) }
+    })
+  const options = getCapabilityOptions(capabilityId)
+  return resolveFirstIntelligenceProviderRoute({
+    capabilityId,
+    providers,
+    capability,
+    options,
+    requireApiKey: requireCredential,
+    isProviderAvailable: (provider) => {
+      const adapter = manager.get(provider.id)
+      const supportsGenericCapability = Boolean(
+        adapter && providerSupportsCapability(adapter, capabilityId, capabilityType, false)
+      )
+      const supportsVoiceCapability =
+        (capabilityType === 'asr' || capabilityType === 'stt') &&
+        Boolean(getVoiceAsrMetadata(provider.metadata))
+      return supportsGenericCapability || supportsVoiceCapability
+    }
+  })
+}
+
+function capabilityStatus(
+  capabilityId: string,
+  capabilityType: 'asr' | 'stt',
+  prefix: 'VOICE_ASR' | 'VOICE_STT'
+): VoiceRecognitionStatus {
+  if (!hasEnabledCapabilityBinding(capabilityId)) {
+    return { ready: false, reason: `${prefix}_NOT_CONFIGURED` }
+  }
+  if (!resolveCapabilityProvider(capabilityId, capabilityType)) {
+    return { ready: false, reason: `${prefix}_PROVIDER_UNAVAILABLE` }
+  }
+  if (!resolveCapabilityProvider(capabilityId, capabilityType, true)) {
+    return { ready: false, reason: `${prefix}_CREDENTIAL_UNAVAILABLE` }
+  }
+  return { ready: true }
+}
+
+/** Read-only projection for the voice UI; Intelligence capability bindings remain the route owner. */
+export function getRecognitionStatus(): VoiceRecognitionStatusSnapshot {
+  return {
+    asr: capabilityStatus(ASR_CAPABILITY_ID, 'asr', 'VOICE_ASR'),
+    stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT')
+  }
+}
+
+/** Resolves and freezes the shared route resolver's live-ASR adapter before microphone capture. */
+export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
+  if (!hasEnabledCapabilityBinding(ASR_CAPABILITY_ID)) {
+    throw new Error('VOICE_ASR_NOT_CONFIGURED')
+  }
+  const route = resolveCapabilityProvider(ASR_CAPABILITY_ID, 'asr', true)
+  if (!route?.model) {
+    throw new Error(
+      resolveCapabilityProvider(ASR_CAPABILITY_ID, 'asr')
+        ? 'VOICE_ASR_CREDENTIAL_UNAVAILABLE'
+        : 'VOICE_ASR_PROVIDER_UNAVAILABLE'
+    )
+  }
+  const credential = resolveProviderCredential(route.provider)
+  if (!credential) throw new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
+  const metadata = getVoiceAsrMetadata(route.provider.metadata)
+  if (!metadata) throw new Error('VOICE_ASR_PROVIDER_UNAVAILABLE')
+  const recommendedModels = getVoiceCapabilityRecommendedModels(ASR_CAPABILITY_ID, {
+    ...(route.provider.metadata ?? {}),
+    baseUrl: route.provider.baseUrl
+  })
+  const model = recommendedModels.length
+    ? recommendedModels.find((candidate) => route.bindingModels.includes(candidate))
+    : route.model
+  if (!model) throw new Error('VOICE_ASR_MODEL_UNSUPPORTED')
   const socketFactory = createNodeVoiceSocketFactory()
   const httpClient = createFetchHttpClient()
-  const providers: VoiceProviderAdapter[] = []
-
-  const doubaoApiKey = env('TUFF_VOICE_DOUBAO_API_KEY')
-  const doubaoAppKey = env('TUFF_VOICE_DOUBAO_APP_KEY')
-  const doubaoAccessKey = env('TUFF_VOICE_DOUBAO_ACCESS_KEY')
-  const doubaoResourceId =
-    env('TUFF_VOICE_DOUBAO_RESOURCE_ID') ??
-    (doubaoApiKey ? 'volc.seedasr.sauc.duration' : undefined)
-  if (doubaoResourceId && (doubaoApiKey || (doubaoAppKey && doubaoAccessKey))) {
-    providers.push(
-      new DoubaoVoiceProvider({
-        credentials: {
-          ...(doubaoApiKey ? { apiKey: doubaoApiKey } : {}),
-          ...(doubaoAppKey ? { appKey: doubaoAppKey } : {}),
-          ...(doubaoAccessKey ? { accessKey: doubaoAccessKey } : {}),
-          resourceId: doubaoResourceId
-        },
-        socketFactory,
-        httpClient,
-        ...(env('TUFF_VOICE_DOUBAO_ASR_WS_URL')
-          ? { streamUrl: env('TUFF_VOICE_DOUBAO_ASR_WS_URL') }
-          : {}),
-        ...(env('TUFF_VOICE_DOUBAO_UPLOAD_VARIANT') === 'standard' ||
-        env('TUFF_VOICE_DOUBAO_UPLOAD_VARIANT') === 'idle'
-          ? { uploadVariant: env('TUFF_VOICE_DOUBAO_UPLOAD_VARIANT') as 'standard' | 'idle' }
-          : {})
-      })
-    )
+  switch (metadata.protocol) {
+    case 'bailian-paraformer': {
+      const endpoints = resolveBailianVoiceEndpoints(route.provider.baseUrl)
+      return {
+        model,
+        provider: new BailianParaformerVoiceProvider({
+          credentials: { apiKey: credential, workspaceId: endpoints.workspaceId },
+          socketFactory,
+          httpClient,
+          streamOptions: { model }
+        })
+      }
+    }
+    case 'dashscope-qwen-asr-realtime': {
+      const endpoints = resolveBailianVoiceEndpoints(route.provider.baseUrl)
+      return {
+        model,
+        provider: new DashscopeQwenAsrRealtimeVoiceProvider({
+          credentials: { apiKey: credential, workspaceId: endpoints.workspaceId },
+          socketFactory,
+          streamOptions: { model }
+        })
+      }
+    }
+    case 'doubao':
+      return {
+        model,
+        provider: new DoubaoVoiceProvider({
+          credentials: { apiKey: credential, resourceId: metadata.resourceId! },
+          socketFactory,
+          httpClient,
+          streamOptions: { model }
+        })
+      }
   }
-
-  const bailianApiKey = env('TUFF_VOICE_BAILIAN_API_KEY')
-  const bailianWorkspaceId = env('TUFF_VOICE_BAILIAN_WORKSPACE_ID')
-  if (bailianApiKey && bailianWorkspaceId) {
-    providers.push(
-      new BailianParaformerVoiceProvider({
-        credentials: { apiKey: bailianApiKey, workspaceId: bailianWorkspaceId },
-        socketFactory,
-        httpClient,
-        ...(env('TUFF_VOICE_BAILIAN_MODEL')
-          ? { streamOptions: { model: env('TUFF_VOICE_BAILIAN_MODEL') } }
-          : {})
-      })
-    )
-  }
-
-  return providers
-}
-
-export function getVoiceProviderRegistry(): VoiceProviderRegistry {
-  if (!registry) registry = createVoiceProviderRegistry(createConfiguredProviders())
-  return registry
-}
-
-export function resetVoiceProviderRegistryForTests(): void {
-  registry = null
-}
-
-export function getVoiceProvider(
-  mode: 'stream' | 'upload',
-  preferredId?: string
-): VoiceProviderAdapter | undefined {
-  const active = getVoiceProviderRegistry()
-  const configuredId = preferredId ?? env('TUFF_VOICE_ASR_PROVIDER')
-  if (configuredId) {
-    return active.resolve(mode, configuredId)
-  }
-  if (active.list().length === 0) return undefined
-
-  // Bailian Paraformer is the first-party Chinese streaming default. Keep
-  // Doubao as an explicit override or automatic fallback when Bailian is not configured.
-  const defaultId = active.get('bailian-paraformer') ? 'bailian-paraformer' : undefined
-  return active.resolve(mode, defaultId)
 }

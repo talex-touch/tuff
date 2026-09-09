@@ -40,6 +40,7 @@ import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/typ
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
+import { setPlatformVoiceEscapeCapture } from '../voice/command-gesture'
 import {
   dialog,
   screen,
@@ -762,6 +763,7 @@ export class AssistantModule extends BaseModule {
 
     touchWindow.window.on('closed', () => {
       if (this.voiceDockWindow === touchWindow) {
+        setPlatformVoiceEscapeCapture(false)
         this.voiceDockWindow = null
         this.resetEscapeCancelHold(false, true)
         this.voiceDockExpanded = false
@@ -1010,6 +1012,7 @@ export class AssistantModule extends BaseModule {
     }
     const anchorBounds = dock.window.getBounds()
 
+    setPlatformVoiceEscapeCapture(true)
     this.voiceDockExpanded = true
     this.applyVoiceDockBounds(dock, anchorBounds)
     if (!dock.window.isVisible()) {
@@ -1032,6 +1035,7 @@ export class AssistantModule extends BaseModule {
   }
 
   private collapseVoicePanel(): void {
+    setPlatformVoiceEscapeCapture(false)
     this.voiceCommandStopPending = null
     this.resetEscapeCancelHold(false, true)
     const dock = this.voiceDockWindow
@@ -1527,6 +1531,7 @@ export class AssistantModule extends BaseModule {
   }
 
   private destroyVoiceDockWindow(): void {
+    setPlatformVoiceEscapeCapture(false)
     this.resetEscapeCancelHold(false, true)
     this.voiceCommandStopPending = null
     if (!this.voiceDockWindow || this.voiceDockWindow.window.isDestroyed()) {

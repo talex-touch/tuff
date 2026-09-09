@@ -44,8 +44,11 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * `0041_ai_orchestrator_run_retention` migrations in the intentionally snapshotless 0015+ range.
  * This records the three known additions explicitly without pretending the broken snapshot chain
  * has been repaired.
+ *
+ * Raised 28 → 30 on 2026-09-08 for the hand-written voice insight and detailed recognition
+ * record migrations `0042` and `0043`; the snapshot chain remains intentionally untouched.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 28
+export const KNOWN_MISSING_SNAPSHOTS = 30
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))
