@@ -542,21 +542,19 @@
     "recommendationContextLocationDesc": "Use a hashed local timezone and network bucket instead of raw location data."
   },
   "settingAssistant": {
-    "groupTitle": "Assistant and voice input",
-    "groupDesc": "Manage the Assistant floating entry and voice input separately.",
+    "groupTitle": "Assistant",
     "enableAssistant": "Enable Assistant",
-    "enableAssistantDesc": "Controls only the Assistant floating entry; it does not affect voice input.",
-    "floatingBall": "Show voice-input floating ball",
-    "floatingBallDesc": "Show a draggable voice-input entry and status on the desktop. Hiding it does not affect the Fn/Ctrl shortcut.",
-    "voiceInput": "Voice input",
-    "voiceInputDesc": "Briefly press Fn on macOS or Ctrl on Windows/Linux to start, then press again to finish. Hold and release to finish. The microphone is captured only while voice input is active.",
-    "voiceWake": "Wake-word activation",
-    "voiceWakeDesc": "Wake-word activation is not available yet."
+    "floatingBall": "Floating ball",
+    "floatingBallDesc": "Show the draggable Assistant entry on the desktop."
   },
   "settingSpeechRecognition": {
     "title": "Speech recognition",
-    "description": "Records, and where the settings live.",
+    "description": "Manage voice entry, recognition history, and channel and model configuration.",
     "refresh": "Try again",
+    "voiceInput": {
+      "title": "Voice input",
+      "description": "Briefly press Fn on macOS or Ctrl on Windows/Linux to start, then press again to finish. Hold and release to finish. The microphone is captured only while voice input is active."
+    },
     "capabilities": {
       "title": "Channel and model",
       "description": "Set in Intelligence — binding and order are on that page.",
