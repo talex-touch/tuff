@@ -119,6 +119,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private actionController: UpdateActionController | null = null
   private installBeforeQuitListener: EventHandler | null = null
   private installWillQuitListener: EventHandler | null = null
+  /** Prevents retained quit listeners from touching the database after module teardown. */
+  private destroyed = false
   private readonly messageStore = getAnalyticsMessageStore()
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
@@ -260,6 +262,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Initialize update service
    */
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    this.destroyed = false
     this.initContext = ctx
     updateLog.info('Initializing update service')
     this.loadSettings()
@@ -283,6 +286,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
 
     this.installBeforeQuitListener = async (event) => {
+      if (this.destroyed) return
       await this.installCoordinator?.handleBeforeQuit((event as BeforeAppQuitEvent).intent)
     }
     this.installWillQuitListener = (event) => {
@@ -322,6 +326,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Destroy update service
    */
   async onDestroy(): Promise<void> {
+    this.destroyed = true
     updateLog.info('Destroying update service')
 
     this.clearStartupBackgroundTasks()

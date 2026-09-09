@@ -1,6 +1,6 @@
 import { pickTuffIntelligenceBuiltinAbilities } from '@talex-touch/tuff-intelligence/light'
 
-export type ProviderVendor = 'tencent-cloud' | 'openai' | 'deepseek' | 'exchange-rate' | 'custom'
+export type ProviderVendor = 'tencent-cloud' | 'openai' | 'deepseek' | 'dashscope' | 'exchange-rate' | 'custom'
 export type ProviderServiceCategory = 'ai' | 'exchange' | 'screenshot' | 'translation'
 export type ProviderStatus = 'enabled' | 'disabled' | 'degraded'
 export type ProviderAuthType = 'api_key' | 'secret_pair' | 'oauth' | 'none'
@@ -95,6 +95,7 @@ export type ProviderRegistryTemplateId =
   | 'openai-compatible-ai'
   | 'openai-responses-ai'
   | 'deepseek-ai'
+  | 'dashscope-filetrans-asr'
   | 'exchange-rate'
   | 'screenshot-overlay'
 
@@ -378,7 +379,7 @@ export interface SceneRunPanelState {
   error: string | null
 }
 
-export const providerVendorOptions: ProviderVendor[] = ['tencent-cloud', 'openai', 'deepseek', 'exchange-rate', 'custom']
+export const providerVendorOptions: ProviderVendor[] = ['tencent-cloud', 'openai', 'deepseek', 'dashscope', 'exchange-rate', 'custom']
 export const providerServiceCategoryOptions: ProviderServiceCategory[] = ['ai', 'exchange', 'screenshot', 'translation']
 export const providerStatusOptions: ProviderStatus[] = ['enabled', 'disabled', 'degraded']
 export const authTypeOptions: ProviderAuthType[] = ['secret_pair', 'api_key', 'oauth', 'none']
@@ -483,6 +484,27 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
       intelligenceProviderId: 'deepseek-ai-main',
       intelligenceType: 'deepseek',
       defaultModel: 'deepseek-chat',
+    },
+  },
+  {
+    id: 'dashscope-filetrans-asr',
+    serviceCategory: 'ai',
+    vendor: 'dashscope',
+    name: 'dashscope-filetrans-asr-main',
+    displayName: 'DashScope Filetrans ASR',
+    authType: 'api_key',
+    authRef: 'secure://providers/dashscope-filetrans-asr-main',
+    endpoint: 'https://dashscope.aliyuncs.com/api/v1',
+    region: 'cn-beijing',
+    models: ['qwen-audio-3.0-asr-flash-filetrans'],
+    defaultModel: 'qwen-audio-3.0-asr-flash-filetrans',
+    capabilities: builtinCapabilityRows(['audio.transcribe']),
+    metadata: {
+      source: 'provider-registry',
+      adapter: 'dashscope-filetrans-asr',
+      transport: 'filetrans',
+      defaultModel: 'qwen-audio-3.0-asr-flash-filetrans',
+      inputUnit: 'audio_second',
     },
   },
   {

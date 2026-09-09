@@ -1,7 +1,8 @@
 import type { GitHubRelease } from '@talex-touch/utils'
 import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import type { PathLike } from 'node:fs'
-import type { TalexEvents } from '../../core/eventbus/touch-event'
+import { resetQuitIntentForTest, setQuitIntent } from '../../core/quit-intent'
+import { TalexEvents } from '../../core/eventbus/touch-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppPreviewChannel, UpdateProviderType } from '@talex-touch/utils'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
@@ -336,7 +337,9 @@ async function useGitHubSource(): Promise<void> {
   })
 }
 
+
 describe('UpdateServiceModule facade', () => {
+
   beforeEach(() => {
     Object.defineProperty(process, 'resourcesPath', {
       configurable: true,
@@ -361,6 +364,30 @@ describe('UpdateServiceModule facade', () => {
     }
     vi.useRealTimers()
     vi.restoreAllMocks()
+  })
+
+  it('ignores a late before-modules-unload event after quit-intent destruction', async () => {
+    resetQuitIntentForTest()
+    const service = await createService()
+    const beforeModulesUnload = mocks.eventBus.on.mock.calls.find(
+      ([event]) => event === TalexEvents.BEFORE_MODULES_UNLOAD
+    )?.[1]
+
+    if (typeof beforeModulesUnload !== 'function') {
+      throw new Error('UpdateService did not register its before-modules-unload listener')
+    }
+
+    const intent = setQuitIntent('update-now', 'update-service-regression-test')
+    mocks.lifecycleRepository.getActive.mockClear()
+
+    try {
+      await service.onDestroy()
+
+      await expect(beforeModulesUnload({ intent })).resolves.toBeUndefined()
+      expect(mocks.lifecycleRepository.getActive).not.toHaveBeenCalled()
+    } finally {
+      resetQuitIntentForTest()
+    }
   })
 
   it('coalesces renderer quick checks into one background release request', async () => {
