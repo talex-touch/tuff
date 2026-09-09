@@ -9,16 +9,20 @@ import SettingSpeechRecognition from '../settings/SettingSpeechRecognition.vue'
  * Whether it works, then how much it has been used, then where to change it.
  *
  * The configuration card used to come first, so a page called 音频洞察 opened on plumbing and
- * pushed the insight below the fold. Status leads because it is the one thing that can stop the
- * rest of the page from meaning anything; settings go last because nobody arrives here to change
- * them.
+ * pushed the insight below the fold. Settings go last because nobody arrives here to change them.
+ *
+ * Status rides the title row rather than taking a band of its own: it says nothing at all while
+ * dictation works, and a band that is empty most of the time is a gap in the page that only
+ * makes sense on the days it is filled.
  */
 const { t } = useI18n()
 </script>
 
 <template>
   <SettingsPage :title="t('settingsIntelligenceHub.voice')">
-    <VoiceRecognitionStatus />
+    <template #titleAside>
+      <VoiceRecognitionStatus />
+    </template>
     <VoiceInsights />
     <SettingSpeechRecognition />
   </SettingsPage>
