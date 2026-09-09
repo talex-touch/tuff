@@ -78,7 +78,7 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
     <Input v-model="emailValue" type="text" :placeholder="t('auth.email', '邮箱')" class="auth-input" />
 
     <div class="auth-method auth-method--full">
-      <TxButton class="auth-button auth-button--ghost" size="lg" block :loading="emailCheckLoading" @click="emit('email-next')">
+      <TxButton variant="primary" class="auth-button auth-button--primary" size="lg" block :loading="emailCheckLoading" @click="emit('email-next')">
         {{ t('auth.continueWithEmail', 'Continue with Email') }}
       </TxButton>
       <TxBadge v-if="lastMethod === 'email'" class="auth-last-badge">
