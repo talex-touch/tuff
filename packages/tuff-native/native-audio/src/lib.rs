@@ -582,7 +582,9 @@ fn typist() -> &'static mpsc::Sender<TypeRequest> {
         thread::spawn(move || {
             let mut enigo: Option<enigo::Enigo> = None;
             for request in rx {
-                let _ = request.reply.send(type_on_thread(&mut enigo, &request.text));
+                let _ = request
+                    .reply
+                    .send(type_on_thread(&mut enigo, &request.text));
             }
         });
         tx
@@ -1027,7 +1029,6 @@ fn capture_thread_main(
         samples.clone(),
         silence.clone(),
         started_at,
-        input_channels,
         resampler.clone(),
     ) {
         Ok(stream) => stream,
@@ -1104,7 +1105,6 @@ fn build_capture_stream(
     samples: Arc<Mutex<Vec<f32>>>,
     silence: Arc<SilenceState>,
     started_at: Instant,
-    input_channels: u16,
     resampler: Arc<Mutex<StreamingLinearResampler>>,
 ) -> std::result::Result<cpal::Stream, String> {
     match sample_format {
@@ -1114,7 +1114,6 @@ fn build_capture_stream(
             samples,
             silence,
             started_at,
-            input_channels,
             resampler,
             |sample| sample,
         ),
@@ -1124,7 +1123,6 @@ fn build_capture_stream(
             samples,
             silence,
             started_at,
-            input_channels,
             resampler,
             |sample| sample as f32 / 32_768.0,
         ),
@@ -1134,7 +1132,6 @@ fn build_capture_stream(
             samples,
             silence,
             started_at,
-            input_channels,
             resampler,
             |sample| (sample as f32 - 32_768.0) / 32_768.0,
         ),
@@ -1148,13 +1145,13 @@ fn build_typed_stream<T>(
     samples: Arc<Mutex<Vec<f32>>>,
     silence: Arc<SilenceState>,
     started_at: Instant,
-    input_channels: u16,
     resampler: Arc<Mutex<StreamingLinearResampler>>,
     convert: impl Fn(T) -> f32 + Send + 'static,
 ) -> std::result::Result<cpal::Stream, String>
 where
     T: cpal::SizedSample + Send + 'static,
 {
+    let input_channels = config.channels;
     let error_fn = |error| eprintln!("[tuff-native-audio] input stream error: {error}");
     device
         .build_input_stream(

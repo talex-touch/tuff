@@ -16,8 +16,8 @@ use objc2_core_foundation::{
     Type, kCFRunLoopCommonModes,
 };
 use objc2_core_graphics::{
-    CGEvent, CGEventField, CGEventFlags, CGEventSourceStateID, CGEventTapLocation, CGEventTapOptions,
-    CGEventTapPlacement, CGEventTapProxy, CGEventType,
+    CGEvent, CGEventField, CGEventFlags, CGEventSourceStateID, CGEventTapLocation,
+    CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy, CGEventType,
 };
 use objc2_io_kit::{
     IOHIDDevice, IOHIDElement, IOHIDElementType, IOHIDManager, IOHIDValue, kIOReturnSuccess,
@@ -72,9 +72,7 @@ struct PhysicalKeyboardState {
 
 impl PhysicalKeyboardState {
     fn new(run_loop: &CFRunLoop) -> Option<Self> {
-        let Some(run_loop_mode) = (unsafe { kCFRunLoopCommonModes }) else {
-            return None;
-        };
+        let run_loop_mode = (unsafe { kCFRunLoopCommonModes })?;
         let device_usage_page_key = CFString::from_str("DeviceUsagePage");
         let device_usage_key = CFString::from_str("DeviceUsage");
         let device_usage_page = CFNumber::new_isize(HID_USAGE_PAGE_GENERIC_DESKTOP as isize);
@@ -429,7 +427,6 @@ pub(crate) fn should_suppress_escape(capture_enabled: bool, input: MonitorInput)
         )
 }
 
-
 unsafe extern "C-unwind" fn handle_event(
     _proxy: CGEventTapProxy,
     event_type: CGEventType,
@@ -516,10 +513,8 @@ unsafe extern "C-unwind" fn handle_event(
     // Escape is observed globally, never consumed. It is projected after the Fn
     // reducer's contamination notification, so Fn+Escape reaches JavaScript in
     // source order without swallowing the foreground application's Escape key.
-    if can_project_escape {
-        if let Some(escape_event) = outputs[1] {
-            let _ = state.emit(escape_event);
-        }
+    if can_project_escape && let Some(escape_event) = outputs[1] {
+        let _ = state.emit(escape_event);
     }
     // Project the original Fn edge to the Voice controller, then remove only
     // standalone Fn transitions from the OS event stream. Combination Fn events
