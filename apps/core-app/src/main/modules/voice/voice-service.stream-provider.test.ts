@@ -316,6 +316,110 @@ describe('VoiceService.streamDictation via provider', () => {
     }
   })
 
+  /**
+   * Push-to-talk, end to end: the words reach the target while the speaker is still
+   * talking, one agreed-on delta at a time, and the polish pass never runs.
+   *
+   * Polish is the subtle half. It rewrites the sentence, and in live mode the raw words
+   * are already in somebody's editor — delivering the polished version afterwards would
+   * type the whole thing a second time.
+   */
+  it('types the stable prefix as it recognizes, and skips polish, in live mode', async () => {
+    vi.clearAllMocks()
+    isAccessibilityTrusted.mockReturnValue(true)
+    typeText.mockResolvedValue({ ok: true })
+    applyVoiceText.mockResolvedValue({ success: true })
+    getActiveApp.mockResolvedValue({
+      name: 'Notes',
+      bundleId: 'com.apple.Notes',
+      processId: 123,
+      executablePath: null,
+      platform: 'macos',
+      windowTitle: null,
+      lastUpdated: Date.now()
+    })
+    drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16000, channels: 1 })
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+    fake = createFakeConnection('one two three')
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      provider: {
+        id: 'fake',
+        defaultStreamModel: 'fake-model',
+        createStream: vi.fn(async () => fake.connection)
+      }
+    })
+
+    const controller = new AbortController()
+    const collected = collect(
+      new VoiceService().streamDictation(
+        { delivery: 'active-app', deliveryTiming: 'live' },
+        undefined,
+        { stopSignal: controller.signal }
+      )
+    )
+    await Promise.resolve()
+
+    // "one" alone is a guess with nothing to agree with, so it waits. Each later partial
+    // confirms the one before it and releases exactly that much.
+    fake.push({ type: 'partial', text: 'one' })
+    fake.push({ type: 'partial', text: 'one two' })
+    fake.push({ type: 'partial', text: 'one two three' })
+    controller.abort()
+    await collected
+
+    expect(typeText.mock.calls.map((call) => call[0])).toEqual(['one', ' two', ' three'])
+    // The spaces are the assertion above's real point: a trimmed delta would type
+    // "onetwothree" and lose every word boundary in the sentence.
+    expect(typeText.mock.calls.map((call) => call[0]).join('')).toBe('one two three')
+    expect(invoke).not.toHaveBeenCalled()
+    expect(applyVoiceText).not.toHaveBeenCalled()
+  })
+
+  /** The default gesture still delivers once, at the end, and still gets polished. */
+  it('delivers once at the end when the timing is final', async () => {
+    vi.clearAllMocks()
+    isAccessibilityTrusted.mockReturnValue(true)
+    typeText.mockResolvedValue({ ok: true })
+    invoke.mockResolvedValue({ result: 'One two three.' })
+    getActiveApp.mockResolvedValue({
+      name: 'Notes',
+      bundleId: 'com.apple.Notes',
+      processId: 123,
+      executablePath: null,
+      platform: 'macos',
+      windowTitle: null,
+      lastUpdated: Date.now()
+    })
+    drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16000, channels: 1 })
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+    fake = createFakeConnection('one two three')
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      provider: {
+        id: 'fake',
+        defaultStreamModel: 'fake-model',
+        createStream: vi.fn(async () => fake.connection)
+      }
+    })
+
+    const controller = new AbortController()
+    const collected = collect(
+      new VoiceService().streamDictation({ delivery: 'active-app' }, undefined, {
+        stopSignal: controller.signal
+      })
+    )
+    await Promise.resolve()
+    fake.push({ type: 'partial', text: 'one' })
+    fake.push({ type: 'partial', text: 'one two' })
+    controller.abort()
+    await collected
+
+    // Nothing was typed while the partials arrived; the polished sentence landed once.
+    expect(typeText.mock.calls.map((call) => call[0])).toEqual(['One two three.'])
+    expect(invoke).toHaveBeenCalled()
+  })
+
   it('emits normalized levels only when the caller opts in', async () => {
     pollCapture.mockReturnValueOnce({ active: true, durationMs: 100, stoppedReason: null })
     pollCapture.mockReturnValue({ active: false, durationMs: 200, stoppedReason: 'silence' })
