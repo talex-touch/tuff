@@ -405,6 +405,8 @@ export interface AppIndexedSourceRuntimeDelegate {
   reconcile(reason: string): Promise<unknown>
   applyDelta(delta: IndexedSourceDelta): Promise<unknown>
   reset(request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult>
+  /** Invalidates the empty-query recommendation projection without an index mutation. */
+  invalidateRecommendations(): void
 }
 
 const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
@@ -1668,12 +1670,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       if (!this.shuttingDown) {
         await this._recordMissingIconApps(scannedApps)
-      }
-      if (hydratedEntries.length > 0) {
-        logApp(
-          `Hydrated ${chalk.green(hydratedEntries.length)} app icons in background`,
-          LogStyle.success
-        )
+        if (hydratedEntries.length > 0) {
+          // The icon cache is already readable even if pointer persistence is retried. Notify the
+          // open empty-query grid once, without manufacturing an IndexedSource/FTS mutation.
+          this.requireIndexedSourceRuntimeDelegate().invalidateRecommendations()
+          logApp(
+            `Hydrated ${chalk.green(hydratedEntries.length)} app icons in background`,
+            LogStyle.success
+          )
+        }
       }
     }).finally(() => {
       for (const appInfo of candidates) {
