@@ -16,7 +16,7 @@ watch(() => user.value, (current) => {
   // `replace` matters: this route only forwards, so leaving it in history means
   // Back lands here and is immediately forwarded again — the reader cannot get
   // out of the subscriptions page with the Back button.
-  if (current.role === 'admin') {
+  if (isAdminAccountRole(current.role)) {
     navigateTo('/dashboard/admin/subscriptions', { replace: true })
     return
   }

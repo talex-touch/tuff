@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { computed, ref } from 'vue'
 import { describe, expect, it } from 'vitest'
+import { isAdminAccountRole } from '~/utils/account-role'
 import { isFeatureFlagEnabled } from '#shared/utils/feature-flags'
 
 /**
@@ -100,7 +101,7 @@ function evaluateNav(state: NavState = {}): NavBindings {
   // eslint-disable-next-line no-new-func
   const factory = new Function(
     'deps',
-    `const { computed, t, route, mounted, user, runtimeConfig, isFeatureFlagEnabled, canManageOauthApps } = deps
+    `const { computed, t, route, mounted, user, isAccountAdmin, runtimeConfig, isFeatureFlagEnabled, canManageOauthApps } = deps
 ${body}
 return {
   sectionPaths,
@@ -113,6 +114,8 @@ return {
 }`,
   ) as (deps: Record<string, unknown>) => NavBindings
 
+  const user = ref(state.role === undefined ? { role: 'admin' } : state.role === null ? null : { role: state.role })
+
   return factory({
     computed,
     // Returning the key keeps assertions locale-independent; the locale files
@@ -120,7 +123,12 @@ return {
     t: (key: string) => key,
     route: { path: state.path ?? '/dashboard/overview' },
     mounted: ref(state.mounted ?? true),
-    user: ref(state.role === undefined ? { role: 'admin' } : state.role === null ? null : { role: state.role }),
+    user,
+    // The component resolves the role through useAccountRole(); injecting the
+    // flag keeps this test on the routing and menu tables it exists for, while
+    // still driving it from the same `role` fixture. The predicate has its own
+    // coverage in utils/account-role.test.ts.
+    isAccountAdmin: computed(() => isAdminAccountRole(user.value?.role)),
     runtimeConfig: { public: { riskControl: { enabled: state.riskFlag } } },
     isFeatureFlagEnabled,
     canManageOauthApps: computed(() => state.canManageOauthApps ?? true),

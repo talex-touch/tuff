@@ -79,7 +79,7 @@ async function compileGovernanceFacade(): Promise<GovernanceFacadeSetup> {
 export async function setupGovernanceFacade(dependencies) {
   const { computed, onMounted, reactive, ref, watch } = dependencies.vue
   const { createGovernanceFormatters } = dependencies.governance
-  const { defineI18nRoute, definePageMeta, navigateTo, useAuthUser, useAsyncData, useI18n } = dependencies.nuxt
+  const { defineI18nRoute, definePageMeta, navigateTo, useAuthUser, useAccountRole, useAsyncData, useI18n } = dependencies.nuxt
   const { requestJson } = dependencies.request
 ${governancePageScriptWithoutImports}
   return {
@@ -126,6 +126,7 @@ ${governancePageScriptWithoutImports}
       definePageMeta: () => undefined,
       navigateTo: page.navigateTo,
       useAuthUser: () => ({ user: page.user }),
+      useAccountRole: () => ({ isAdmin: computed(() => page.user.value?.role === 'admin') }),
       useAsyncData: page.useAsyncData,
       useI18n: () => ({ t: (_key: string, fallback: string) => fallback, te: () => false, locale: page.locale }),
     },
