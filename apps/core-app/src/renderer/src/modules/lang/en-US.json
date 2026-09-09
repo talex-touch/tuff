@@ -555,59 +555,30 @@
   },
   "settingSpeechRecognition": {
     "title": "Speech recognition",
-    "description": "Review recognition readiness here. Configure channels, models, and bindings in Intelligence.",
-    "refresh": "Refresh availability",
-    "channels": {
-      "title": "AI channels",
-      "description": "Configure a channel in Intelligence. Tuff Nexus is built in and uses your signed-in account; no provider key is required.",
-      "action": "Open AI channels"
-    },
+    "description": "Records, and where the settings live.",
+    "refresh": "Try again",
     "capabilities": {
-      "title": "Capability bindings",
-      "description": "Bind a channel and model to audio.asr for live dictation or audio.stt for file transcription.",
-      "action": "Open capabilities"
+      "title": "Channel and model",
+      "description": "Set in Intelligence — binding and order are on that page.",
+      "action": "Open Intelligence"
+    },
+    "history": {
+      "title": "Keep recognition records",
+      "description": "Keeps source audio and transcripts; off keeps statistics only."
     },
     "unavailable": {
-      "title": "Recognition status unavailable",
-      "description": "Recognition readiness could not be loaded. Refresh to try again."
-    },
-    "status": {
-      "configured": "Ready",
-      "configuredDesc": "The configured Intelligence capability is ready to use."
+      "title": "Recognition status could not be read",
+      "description": "Readiness could not be loaded. Try again."
     },
     "reasons": {
-      "notConfigured": "Not configured",
       "credentialMissing": "The selected AI channel has no credential.",
-      "unavailable": "Recognition is unavailable."
+      "unavailable": "Recognition is unavailable right now."
     },
     "asr": {
-      "title": "Real-time speech recognition (ASR)",
-      "description": "Live dictation resolves audio.asr. Tuff Nexus currently does not provide realtime audio.",
-      "status": "ASR status"
-    },
-    "stt": {
-      "title": "Audio-file transcription (STT)",
-      "description": "Tuff Nexus provides batch-only WAV transcription through audio.stt. Sign in and use Nexus credits; no provider key is required.",
-      "status": "STT status"
-    },
-    "transcription": {
-      "file": "Audio file",
-      "fileDescription": "Choose a local WAV file (up to 20 MiB and 10 minutes). It is uploaded only for this transcription; the result is shown here and is not delivered automatically.",
-      "chooseFile": "Choose WAV file",
-      "cancel": "Cancel transcription",
-      "result": "Transcription result",
-      "clearResult": "Clear result",
-      "selecting": "Choose an audio file…",
-      "transcribing": "Transcribing the selected audio file…",
-      "cancelled": "Transcription cancelled. The server job is not cancelled and no refund is implied.",
-      "failed": "File transcription failed.",
-      "authRequired": "Sign in to Tuff Nexus, then try again.",
-      "creditsRequired": "Nexus credits are insufficient. Check your credits and try again.",
-      "invalidAudio": "Use a valid WAV file up to 20 MiB and 10 minutes.",
-      "timeout": "Nexus transcription is still pending or the connection timed out. Check the request status and try again later.",
-      "providerFailed": "Nexus transcription could not be completed. Try again later.",
-      "receipt": "(Nexus receipt: {credits} credits, {seconds}s billable)",
-      "empty": "No transcription yet."
+      "ready": "Speech recognition is ready",
+      "readyHint": "Hold ⌘ and speak; the text lands in the app you are in.",
+      "notReady": "Speech recognition is not set up",
+      "notConfigured": "No channel is bound to audio.asr, so holding ⌘ and speaking does nothing."
     }
   },
   "settingLocalAiCli": {
