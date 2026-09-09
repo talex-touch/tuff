@@ -16,6 +16,7 @@ type PluginChannelWithMain = PluginChannelClient & {
 type HostOnlyIntelligenceMethod
   = | 'saveProviderConfig'
     | 'deleteProviderConfig'
+    | 'revealProviderCredential'
     | 'contextPrepareTurn'
     | 'contextListCheckpoints'
     | 'contextListPackageLogs'
@@ -87,6 +88,7 @@ type HostOnlyIntelligenceMethod
 const HOST_ONLY_INTELLIGENCE_METHODS: Record<HostOnlyIntelligenceMethod, true> = {
   saveProviderConfig: true,
   deleteProviderConfig: true,
+  revealProviderCredential: true,
   contextPrepareTurn: true,
   contextListCheckpoints: true,
   contextListPackageLogs: true,

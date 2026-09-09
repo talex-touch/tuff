@@ -6,10 +6,27 @@ const { loadNativeBinding } = require('./native-loader')
 const { nativeBinding, loadError } = loadNativeBinding({
   baseDir: __dirname,
   moduleName: 'tuff_native_audio',
-  expectedExports: ['getNativeAudioSupport', 'startCapture', 'pollCapture', 'snapshotCapture', 'drainCapture', 'stopCapture', 'cancelCapture', 'playAudio', 'stopPlayback', 'isAccessibilityTrusted', 'typeText'],
+  expectedExports: [
+    'getNativeAudioSupport',
+    'startCapture',
+    'pollCapture',
+    'snapshotCapture',
+    'drainCapture',
+    'stopCapture',
+    'cancelCapture',
+    'playAudio',
+    'stopPlayback',
+    'isAccessibilityTrusted',
+    'typeText',
+    'startFunctionKeyMonitor',
+    'functionKeyMonitorApiV5',
+    'setFunctionKeyMonitorEscapeCapture',
+    'stopFunctionKeyMonitor',
+  ],
 })
 
 const DISABLE_FLAG = 'TUFF_DISABLE_NATIVE_AUDIO'
+let cachedNativeAudioSupport = null
 
 function isDisabledByEnv() {
   return process.env[DISABLE_FLAG] === '1'
@@ -24,6 +41,9 @@ function getNativeAudioSupport() {
     }
   }
 
+  if (cachedNativeAudioSupport)
+    return cachedNativeAudioSupport
+
   if (!nativeBinding || typeof nativeBinding.getNativeAudioSupport !== 'function') {
     return {
       supported: false,
@@ -32,7 +52,10 @@ function getNativeAudioSupport() {
     }
   }
 
-  return nativeBinding.getNativeAudioSupport()
+  const support = nativeBinding.getNativeAudioSupport()
+  if (support?.supported)
+    cachedNativeAudioSupport = support
+  return support
 }
 
 function createUnavailableError() {
@@ -135,6 +158,63 @@ function typeText(text) {
   return nativeBinding.typeText(text)
 }
 
+function startFunctionKeyMonitor(listener) {
+  if (typeof listener !== 'function') {
+    throw new TypeError('Function key monitor listener must be a function')
+  }
+  if (process.platform !== 'darwin') {
+    return { active: false, reason: 'platform-not-supported' }
+  }
+  if (isDisabledByEnv()) {
+    return { active: false, reason: 'disabled-by-env' }
+  }
+  if (!nativeBinding || typeof nativeBinding.startFunctionKeyMonitor !== 'function') {
+    return {
+      active: false,
+      reason: loadError instanceof Error ? loadError.message : 'native-module-not-loaded',
+    }
+  }
+
+  return nativeBinding.startFunctionKeyMonitor((eventCode) => {
+    if (eventCode === 1) {
+      listener({ type: 'down', hasOtherKeys: false })
+    }
+    else if (eventCode === 2) {
+      listener({ type: 'down', hasOtherKeys: true })
+    }
+    else if (eventCode === 3) {
+      listener({ type: 'up' })
+    }
+    else if (eventCode === 4) {
+      listener({ type: 'other-key-down' })
+    }
+    else if (eventCode === 5) {
+      listener({ type: 'reset' })
+    }
+    else if (eventCode === 6) {
+      listener({ type: 'escape-down' })
+    }
+    else if (eventCode === 7) {
+      listener({ type: 'escape-up' })
+    }
+  })
+}
+
+function setFunctionKeyMonitorEscapeCapture(enabled) {
+  if (process.platform !== 'darwin' || isDisabledByEnv())
+    return false
+  if (!nativeBinding || typeof nativeBinding.setFunctionKeyMonitorEscapeCapture !== 'function') {
+    return false
+  }
+  return nativeBinding.setFunctionKeyMonitorEscapeCapture(Boolean(enabled))
+}
+
+function stopFunctionKeyMonitor() {
+  if (!nativeBinding || typeof nativeBinding.stopFunctionKeyMonitor !== 'function')
+    return
+  nativeBinding.stopFunctionKeyMonitor()
+}
+
 module.exports = {
   getNativeAudioSupport,
   startCapture,
@@ -147,4 +227,7 @@ module.exports = {
   stopPlayback,
   isAccessibilityTrusted,
   typeText,
+  startFunctionKeyMonitor,
+  setFunctionKeyMonitorEscapeCapture,
+  stopFunctionKeyMonitor,
 }

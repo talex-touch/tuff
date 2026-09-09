@@ -10,10 +10,19 @@ export interface TransferProps {
   titles?: [string, string]
   filterable?: boolean
   filterPlaceholder?: string
-  emptyText?: string
+  /** A single string applies to both panels; a tuple is `[source, target]`. */
+  emptyText?: string | [string, string]
+  /** Caps each panel so long lists scroll inside the list instead of growing the page. */
+  maxHeight?: string | number
   addAriaLabel?: string
   removeAriaLabel?: string
+  moveUpAriaLabel?: string
+  moveDownAriaLabel?: string
+  /** Accessible name for each panel's select-all box; the panel title is appended. */
+  selectAllAriaLabel?: string
   targetOrder?: 'original' | 'push'
+  /** Target panel becomes a ranked list: order badges plus per-row move up/down. */
+  orderable?: boolean
 }
 
 export interface TransferEmits {

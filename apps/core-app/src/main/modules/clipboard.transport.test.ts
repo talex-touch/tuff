@@ -19,6 +19,10 @@ const RETIRED_CLIPBOARD_EVENT_NAMES = [
   'clipboard:query'
 ] as const
 
+const shellMock = vi.hoisted(() => ({
+  openPath: vi.fn(async () => '')
+}))
+
 const notificationModuleMock = vi.hoisted(() => ({
   showInternalSystemNotification: vi.fn()
 }))
@@ -128,19 +132,32 @@ vi.mock('electron', () => ({
     }))
   },
   shell: {
-    openExternal: vi.fn()
+    openExternal: vi.fn(),
+    openPath: shellMock.openPath
   }
 }))
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+  const existsSync = vi.fn((filePath: string) => filePath.startsWith('/tmp/clipboard/images/'))
+  const promises = {
+    ...actual.promises,
+    // 只有剪贴板图片目录里的文件当作真实存在，其余一律 ENOENT。
+    access: vi.fn(async (filePath: string) => {
+      if (!filePath.startsWith('/tmp/clipboard/images/')) {
+        throw new Error('ENOENT')
+      }
+    })
+  }
   return {
     ...actual,
     default: {
       ...actual,
-      existsSync: vi.fn((filePath: string) => filePath.startsWith('/tmp/clipboard/images/'))
+      existsSync,
+      promises
     },
-    existsSync: vi.fn((filePath: string) => filePath.startsWith('/tmp/clipboard/images/'))
+    existsSync,
+    promises
   }
 })
 
@@ -362,7 +379,9 @@ vi.mock('../service/temp-file.service', () => ({
     allocateFile: vi.fn(),
     releaseFile: vi.fn(),
     cleanupNamespace: vi.fn(),
-    isWithinBaseDir: vi.fn(() => true)
+    isWithinBaseDir: vi.fn(() => true),
+    registerNamespace: vi.fn(),
+    resolveNamespaceDir: vi.fn(() => '/tmp/clipboard/images')
   }
 }))
 
@@ -444,9 +463,11 @@ describe('ClipboardModule transport registration', () => {
       ClipboardEvents.getLatest.toString(),
       ClipboardEvents.getHistory.toString(),
       ClipboardEvents.getImageUrl.toString(),
+      ClipboardEvents.previewImage.toString(),
       ClipboardEvents.queryMeta.toString(),
       ClipboardEvents.apply.toString(),
       ClipboardEvents.delete.toString(),
+      ClipboardEvents.annotate.toString(),
       ClipboardEvents.setFavorite.toString(),
       ClipboardEvents.clearHistory.toString(),
       ClipboardEvents.write.toString(),
@@ -652,6 +673,136 @@ describe('ClipboardModule auto-paste failure notification', () => {
       dedupeKey: 'clipboard-auto-paste-failed:MACOS_AUTOMATION_PERMISSION_DENIED',
       system: { silent: false }
     })
+  })
+})
+
+describe('ClipboardModule annotation', () => {
+  type AnnotateModule = {
+    historyPersistence: { annotate: ReturnType<typeof vi.fn> }
+    metaPersistence: {
+      persistMetaEntries: ReturnType<typeof vi.fn>
+      deleteMetaEntries: ReturnType<typeof vi.fn>
+    }
+    handleAnnotateRequest: (request: {
+      id: number
+      note?: string | null
+      tags?: string[]
+    }) => Promise<{ updated: boolean; note: string | null; tags: string[] }>
+  }
+
+  function createAnnotateModule(result: {
+    updated: boolean
+    note: string | null
+    tags: string[]
+  }): AnnotateModule {
+    const module = new ClipboardModule() as unknown as AnnotateModule
+    module.historyPersistence.annotate = vi.fn(async () => result)
+    module.metaPersistence.persistMetaEntries = vi.fn(async () => {})
+    module.metaPersistence.deleteMetaEntries = vi.fn(async () => {})
+    return module
+  }
+
+  /**
+   * The invariant this exists for: meta lives in two places. `clipboard_history.metadata` is what
+   * the keyword search LIKEs, and `clipboard_history_meta` is what `hydrateWithMeta` prefers
+   * whenever the item has rows there. Write only one and the annotation is either searchable but
+   * invisible, or visible but unfindable — and it takes a re-read to notice.
+   */
+  it('mirrors the annotation into the meta table so the two stores agree', async () => {
+    const module = createAnnotateModule({ updated: true, note: 'ego lite', tags: ['prod'] })
+
+    await module.handleAnnotateRequest({ id: 7, note: 'ego lite', tags: ['prod'] })
+
+    expect(module.metaPersistence.persistMetaEntries).toHaveBeenCalledWith(7, {}, [
+      { key: 'user_note', value: 'ego lite' },
+      { key: 'user_tags', value: ['prod'] }
+    ])
+    expect(module.metaPersistence.deleteMetaEntries).toHaveBeenCalledWith(7, [])
+  })
+
+  it('deletes the meta rows for a cleared field instead of writing an empty one', async () => {
+    const module = createAnnotateModule({ updated: true, note: null, tags: ['prod'] })
+
+    await module.handleAnnotateRequest({ id: 8, note: '' })
+
+    // 清掉的键必须删行：persistMetaEntries 写 null 会留下一行 `"null"`，
+    // hydrate 时那仍然是一个"存在的键"，和 JSON 列删键的结果对不上。
+    expect(module.metaPersistence.deleteMetaEntries).toHaveBeenCalledWith(8, ['user_note'])
+    expect(module.metaPersistence.persistMetaEntries).toHaveBeenCalledWith(8, {}, [
+      { key: 'user_tags', value: ['prod'] }
+    ])
+  })
+
+  it('touches neither store when the record is gone', async () => {
+    const module = createAnnotateModule({ updated: false, note: null, tags: [] })
+
+    await module.handleAnnotateRequest({ id: 404, note: 'hi' })
+
+    expect(module.metaPersistence.persistMetaEntries).not.toHaveBeenCalled()
+    expect(module.metaPersistence.deleteMetaEntries).not.toHaveBeenCalled()
+  })
+})
+
+describe('ClipboardModule system image preview', () => {
+  type PreviewModule = {
+    getItemById: (id: number) => Promise<Record<string, unknown> | null>
+    imagePersistence: { resolveOwnedImagePath: (reference: string) => string | null }
+    handlePreviewImageRequest: (request: { id: number }) => Promise<{ opened: boolean }>
+  }
+
+  function createPreviewModule(item: Record<string, unknown> | null): PreviewModule {
+    const module = new ClipboardModule() as unknown as PreviewModule
+    module.getItemById = vi.fn(async () => item)
+    return module
+  }
+
+  it('hands the stored file to the OS and never lets the caller name it', async () => {
+    const module = createPreviewModule({
+      id: 7,
+      type: 'image',
+      content: '/tmp/clipboard/images/shot.png'
+    })
+
+    await expect(module.handlePreviewImageRequest({ id: 7 })).resolves.toEqual({ opened: true })
+    expect(shellMock.openPath).toHaveBeenCalledWith('/tmp/clipboard/images/shot.png')
+    // 请求里只有 id，路径是主进程自己从记录里查出来的。
+    expect(module.getItemById).toHaveBeenCalledWith(7)
+  })
+
+  it('refuses a record whose path escaped the clipboard image namespace', async () => {
+    const module = createPreviewModule({
+      id: 8,
+      type: 'image',
+      content: '/etc/passwd'
+    })
+    // 数据库里的路径也不可信：它落在命名空间外就当作没有原图。
+    module.imagePersistence.resolveOwnedImagePath = vi.fn(() => null)
+
+    await expect(module.handlePreviewImageRequest({ id: 8 })).resolves.toEqual({ opened: false })
+    expect(shellMock.openPath).not.toHaveBeenCalled()
+  })
+
+  it('reports not-opened for a text record and for a missing file', async () => {
+    const textModule = createPreviewModule({
+      id: 9,
+      type: 'text',
+      content: '/tmp/clipboard/images/shot.png'
+    })
+    await expect(textModule.handlePreviewImageRequest({ id: 9 })).resolves.toEqual({
+      opened: false
+    })
+
+    const goneModule = createPreviewModule({
+      id: 10,
+      type: 'image',
+      content: '/tmp/clipboard/images/gone.png'
+    })
+    goneModule.imagePersistence.resolveOwnedImagePath = vi.fn(() => '/tmp/clipboard/other/gone.png')
+
+    await expect(goneModule.handlePreviewImageRequest({ id: 10 })).resolves.toEqual({
+      opened: false
+    })
+    expect(shellMock.openPath).not.toHaveBeenCalled()
   })
 })
 

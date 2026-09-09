@@ -409,6 +409,12 @@ export const clipboardHistory = sqliteTable(
     retentionProtected: integer('retention_protected', { mode: 'boolean' })
       .notNull()
       .default(false),
+    /**
+     * 单条记录自己的过期时刻，为空则按类别策略走。
+     * 验证码用它：一次性码被粘贴的那一刻就作废了，留满类别的 90 天等于让一个
+     * 还能用的凭据在明文表里躺三个月。
+     */
+    retentionExpiresAt: integer('retention_expires_at', { mode: 'timestamp' }),
     metadata: text('metadata') // 存储其他元数据 (JSON string)
   },
   (table) => ({
@@ -416,7 +422,10 @@ export const clipboardHistory = sqliteTable(
       .on(table.timestamp, table.id)
       .where(
         sql`COALESCE(${table.isFavorite}, 0) = 0 AND COALESCE(${table.retentionProtected}, 0) = 0`
-      )
+      ),
+    expiryIdx: index('clipboard_history_expiry_idx')
+      .on(table.retentionExpiresAt)
+      .where(sql`${table.retentionExpiresAt} IS NOT NULL AND COALESCE(${table.isFavorite}, 0) = 0`)
   })
 )
 
@@ -641,6 +650,81 @@ export const recommendationExposureDaily = sqliteTable(
   (table) => ({
     pk: primaryKey({ columns: [table.day, table.surface, table.k] }),
     dayIdx: index('idx_recommendation_exposure_daily_day').on(table.day)
+  })
+)
+
+/**
+ * Main-owned voice aggregates and optional detailed recognition records. Aggregate tables keep
+ * only counters and opaque successful-capture ids; detailed transcript/audio rows live separately
+ * and are written only when the user enables voiceInput.historyEnabled.
+ */
+export const voiceInsightsState = sqliteTable('voice_insights_state', {
+  id: integer('id').primaryKey(),
+  generation: integer('generation').notNull().default(0),
+  startedAt: integer('started_at'),
+  updatedAt: integer('updated_at').notNull(),
+  timezone: text('timezone').notNull(),
+  totalCharacters: integer('total_characters').notNull().default(0),
+  totalDurationMs: integer('total_duration_ms').notNull().default(0),
+  sessionCount: integer('session_count').notNull().default(0),
+  polishedSessionCount: integer('polished_session_count').notNull().default(0),
+  estimatedSavedMs: integer('estimated_saved_ms').notNull().default(0)
+})
+
+export const voiceInsightDays = sqliteTable(
+  'voice_insight_days',
+  {
+    day: text('day').primaryKey(),
+    characters: integer('characters').notNull().default(0),
+    durationMs: integer('duration_ms').notNull().default(0),
+    sessionCount: integer('session_count').notNull().default(0)
+  },
+  (table) => ({
+    dayIdx: index('idx_voice_insight_days_day').on(table.day)
+  })
+)
+
+export const voiceInsightCaptures = sqliteTable(
+  'voice_insight_captures',
+  {
+    captureId: text('capture_id').primaryKey(),
+    generation: integer('generation').notNull(),
+    capturedAt: integer('captured_at').notNull()
+  },
+  (table) => ({
+    capturedAtIdx: index('idx_voice_insight_captures_captured_at').on(table.capturedAt)
+  })
+)
+
+/**
+ * Detailed host-only voice recognition records. Audio remains in the main-owned
+ * temp namespace; the table stores only its opaque path and bounded metadata.
+ */
+export const voiceRecognitionRecords = sqliteTable(
+  'voice_recognition_records',
+  {
+    id: text('id').primaryKey(),
+    capturedAt: integer('captured_at').notNull(),
+    source: text('source').notNull(),
+    status: text('status').notNull(),
+    audioPath: text('audio_path'),
+    audioBytes: integer('audio_bytes'),
+    audioDurationMs: integer('audio_duration_ms'),
+    recognitionDurationMs: integer('recognition_duration_ms'),
+    rawText: text('raw_text'),
+    text: text('text'),
+    providerId: text('provider_id'),
+    model: text('model'),
+    channel: text('channel'),
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    totalTokens: integer('total_tokens'),
+    errorCode: text('error_code'),
+    deliveryMethod: text('delivery_method')
+  },
+  (table) => ({
+    capturedAtIdx: index('idx_voice_recognition_records_captured_at').on(table.capturedAt),
+    statusIdx: index('idx_voice_recognition_records_status').on(table.status)
   })
 )
 

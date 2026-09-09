@@ -34,6 +34,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  // `app` 不是这个模块自己用的，是导入链末端 `config/default.ts` 在模块顶层读的。
+  // 少了它整个文件加载失败——报的是「no tests」而不是失败，所以文件里的用例一条都没跑。
+  app: {
+    getAppPath: () => '/tmp/tuff-app'
+  },
   clipboard: {
     readImage: mocks.clipboardReadImage
   },
@@ -133,6 +138,30 @@ function createPersistence(db?: ReturnType<typeof createDb>): ClipboardImagePers
 }
 
 describe('clipboard-image-persistence', () => {
+  describe('resolveOwnedImagePath', () => {
+    /**
+     * This is what stops `previewImage` from being a "open any file on this machine" call:
+     * the id comes from a plugin, the path comes from a database row, and neither is trusted.
+     */
+    it('rejects a reference that escapes the clipboard image namespace', () => {
+      const persistence = createPersistence()
+
+      expect(persistence.resolveOwnedImagePath('/tmp/tuff/clipboard/images/shot.png')).toBe(
+        '/tmp/tuff/clipboard/images/shot.png'
+      )
+      expect(
+        persistence.resolveOwnedImagePath('/tmp/tuff/clipboard/images/../../../etc/passwd')
+      ).toBeNull()
+      expect(persistence.resolveOwnedImagePath('/etc/passwd')).toBeNull()
+      // 前缀相同但不是同一个目录，`startsWith` 写漏分隔符时就会漏这一条。
+      expect(
+        persistence.resolveOwnedImagePath('/tmp/tuff/clipboard/images-evil/shot.png')
+      ).toBeNull()
+      expect(persistence.resolveOwnedImagePath('data:image/png;base64,AAA')).toBeNull()
+      expect(persistence.resolveOwnedImagePath(null)).toBeNull()
+    })
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.clipboardReadImage.mockReturnValue(mocks.availableImage)

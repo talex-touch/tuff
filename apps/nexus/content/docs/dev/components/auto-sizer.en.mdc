@@ -156,14 +156,13 @@ code: |
 ---
 :::
 
-### Number Transition + Width Follow (NumberFlow)
+### Number Transition + Width Follow (TextMorph)
 
-### AutoSizer + NumberFlow
-:::TuffDemoWrapper{demo="AutoSizerAutoSizerNumberFlowDemo" code-lang="vue"}
+### AutoSizer + TextMorph
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerTextMorphDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import NumberFlow from '@number-flow/vue'
   import { ref } from 'vue'
 
   const value = ref(123.45)
@@ -190,7 +189,7 @@ code: |
         <TxButton variant="secondary">
           <span style="display: inline-flex; align-items: center; gap: 6px;">
             <span style="opacity: 0.7;">$</span>
-            <NumberFlow :value="value" />
+            <TxTextMorph :text="value" :decimals="2" />
           </span>
         </TxButton>
       </TxAutoSizer>

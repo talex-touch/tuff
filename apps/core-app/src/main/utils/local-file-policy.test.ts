@@ -1,7 +1,9 @@
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { app } from 'electron'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetRuntimeRootPathForTests, resolveRuntimeRootPath } from './app-root-path'
 
 /**
  * Which parts of the filesystem local-file access may reach (#914).
@@ -19,12 +21,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const HOME = process.platform === 'win32' ? 'C:\\Users\\tester' : '/home/tester'
 const USER_DATA = path.join(HOME, '.config', 'tuff-userdata')
 const CACHE = path.join(HOME, '.cache', 'tuff-cache')
+let mockedUserDataPath = USER_DATA
+let mockedRuntimePluginRoot: string | null = null
 
 vi.mock('electron', () => ({
   app: {
+    isPackaged: false,
     getPath: vi.fn((name: string) => {
       if (name === 'home') return HOME
-      if (name === 'userData') return USER_DATA
+      if (name === 'userData') return mockedUserDataPath
       if (name === 'cache') return CACHE
       if (name === 'temp') return os.tmpdir()
       throw new Error(`unexpected path ${name}`)
@@ -32,7 +37,22 @@ vi.mock('electron', () => ({
   }
 }))
 
+vi.mock('node:fs', () => ({
+  readdirSync: vi.fn((directory: string) => {
+    if (directory === mockedRuntimePluginRoot) {
+      return [{ name: 'clipboard-history', isDirectory: () => true }]
+    }
+    throw new Error(`unexpected directory ${directory}`)
+  })
+}))
+
 const { getAllowedLocalFileRoots, isAllowedLocalFilePath } = await import('./local-file-policy')
+
+afterEach(() => {
+  mockedUserDataPath = USER_DATA
+  resetRuntimeRootPathForTests()
+  mockedRuntimePluginRoot = null
+})
 
 describe('getAllowedLocalFileRoots', () => {
   let roots: string[]
@@ -106,6 +126,36 @@ describe('isAllowedLocalFilePath against the narrowed roots', () => {
           ? path.join(HOME, 'AppData', 'Local', 'ProgramsPrivate', 'secret.txt')
           : path.join(HOME, '.local', 'share', 'applications-private', 'secret.txt')
     expect(isAllowedLocalFilePath(sibling, roots)).toBe(false)
+  })
+})
+
+describe('runtime plugin resource policy', () => {
+  it('serves official plugin assets from the memoized runtime root after userData changes, but not plugin data', () => {
+    const runtimeUserData = path.join(HOME, '.config', 'tuff-runtime-userdata')
+    const rewrittenUserData = path.join(HOME, '.config', 'tuff-chromium-userdata')
+    const plugin = 'clipboard-history'
+
+    mockedUserDataPath = runtimeUserData
+    resetRuntimeRootPathForTests()
+    const runtimeRoot = resolveRuntimeRootPath(app)
+    mockedRuntimePluginRoot = path.join(runtimeRoot, 'modules', 'plugins')
+
+    // Electron's later dev rewrite is for Chromium's profile, not the CoreApp runtime root.
+    mockedUserDataPath = rewrittenUserData
+    const roots = getAllowedLocalFileRoots()
+
+    expect(
+      isAllowedLocalFilePath(
+        path.join(runtimeRoot, 'modules', 'plugins', plugin, 'assets', 'logo.svg'),
+        roots
+      )
+    ).toBe(true)
+    expect(
+      isAllowedLocalFilePath(
+        path.join(runtimeRoot, 'modules', 'plugins', plugin, 'data', 'private.json'),
+        roots
+      )
+    ).toBe(false)
   })
 })
 

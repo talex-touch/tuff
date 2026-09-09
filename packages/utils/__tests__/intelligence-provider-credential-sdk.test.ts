@@ -95,6 +95,69 @@ describe('intelligence provider credential SDK', () => {
     expect(proxyOwnKeys).not.toHaveBeenCalled()
   })
 
+  it.each([
+    {
+      name: 'Bailian protocol metadata',
+      metadata: { voiceAsr: { protocol: 'bailian-paraformer' } }
+    },
+    {
+      name: 'Volcengine resource metadata',
+      metadata: { voiceAsr: { protocol: 'doubao', resourceId: 'volc.bigasr.auc_turbo' } }
+    }
+  ])('preserves safe $name for an audio.asr custom channel', ({ metadata }) => {
+    const normalized = normalizeIntelligenceProviderConfigSaveRequest({
+      provider: {
+        id: 'voice-asr-channel',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Voice ASR channel',
+        enabled: true,
+        models: ['asr-model'],
+        capabilities: ['audio.asr'],
+        metadata
+      },
+      credential: { action: 'preserve' }
+    })
+
+    expect(normalized.provider).toMatchObject({
+      id: 'voice-asr-channel',
+      capabilities: ['audio.asr'],
+      metadata
+    })
+  })
+
+  it.each([
+    {
+      name: 'missing protocol metadata',
+      provider: {
+        id: 'voice-asr-channel',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Voice ASR channel',
+        enabled: true,
+        models: ['asr-model'],
+        capabilities: ['audio.asr']
+      }
+    },
+    {
+      name: 'Bailian metadata with a Doubao-only resource ID',
+      provider: {
+        id: 'voice-asr-channel',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Voice ASR channel',
+        enabled: true,
+        models: ['asr-model'],
+        capabilities: ['audio.asr'],
+        metadata: { voiceAsr: { protocol: 'bailian-paraformer', resourceId: 'wrong' } }
+      }
+    }
+  ])('rejects an audio.asr channel with $name', ({ provider: asrProvider }) => {
+    expect(() =>
+      normalizeIntelligenceProviderConfigSaveRequest({
+        provider: asrProvider,
+        credential: { action: 'preserve' }
+      })
+    ).toThrow('PROVIDER_CREDENTIAL_REQUEST_INVALID')
+  })
+
   it('rejects extra credential fields and oversized nested input before transport', async () => {
     const send = vi.fn()
     const sdk = createIntelligenceSdk({ send } as never)

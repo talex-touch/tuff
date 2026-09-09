@@ -218,6 +218,13 @@ export const tuffIntelligenceBuiltinAbilities = [
     description: 'Converts speech audio into text.',
   }),
   createBuiltinAbility({
+    id: 'audio.asr',
+    type: 'asr',
+    category: 'audio',
+    meteringUnit: 'audio_second',
+    description: 'Converts live microphone PCM into text.',
+  }),
+  createBuiltinAbility({
     id: 'audio.transcribe',
     type: 'audio-transcribe',
     category: 'audio',

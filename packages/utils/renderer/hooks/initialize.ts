@@ -203,4 +203,4 @@ export function refreshPerformanceInfo(): IInitializationInfo {
 /**
  * Development mode flag
  */
-export const isDev = import.meta.env.MODE === 'development'
+export const isDev = (import.meta as ImportMeta & { env?: { MODE?: string } }).env?.MODE === 'development'

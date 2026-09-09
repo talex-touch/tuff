@@ -48,6 +48,7 @@ const color = () => (status.value === 'ok' ? 'var(--tx-color-success)' : 'var(--
                 :style="{ background: color() }"
               />
               <TxTextTransformer
+                mode="fade"
                 :text="label()"
                 :duration-ms="duration"
                 :blur-px="blurPx"
@@ -94,6 +95,7 @@ const color = () => (status.value === 'ok' ? 'var(--tx-color-success)' : 'var(--
                 :style="{ background: color() }"
               />
               <TxTextTransformer
+                mode="fade"
                 :text="label()"
                 :duration-ms="duration"
                 :blur-px="blurPx"

@@ -16,7 +16,11 @@ const props = withDefaults(defineProps<TransferProps>(), {
   emptyText: 'No data',
   addAriaLabel: 'Move selected items to target',
   removeAriaLabel: 'Move selected items to source',
+  moveUpAriaLabel: 'Move item up',
+  moveDownAriaLabel: 'Move item down',
+  selectAllAriaLabel: 'Select all',
   targetOrder: 'original',
+  orderable: false,
 })
 
 const emit = defineEmits<TransferEmits>()
@@ -28,6 +32,24 @@ const rightChecked = ref<Array<string | number>>([])
 
 const selectedSet = computed(() => new Set(props.modelValue ?? []))
 
+function toCssUnit(value: string | number | undefined): string | undefined {
+  if (value === undefined)
+    return undefined
+  return typeof value === 'number' ? `${value}px` : value
+}
+
+const rootStyle = computed(() => {
+  const maxHeight = toCssUnit(props.maxHeight)
+  return maxHeight ? { '--tx-transfer-max-height': maxHeight } : undefined
+})
+
+const sourceEmptyText = computed(() =>
+  Array.isArray(props.emptyText) ? props.emptyText[0] : props.emptyText,
+)
+const targetEmptyText = computed(() =>
+  Array.isArray(props.emptyText) ? props.emptyText[1] : props.emptyText,
+)
+
 const dataMap = computed(() => {
   return new Map((props.data ?? []).map(item => [item.key, item]))
 })
@@ -37,7 +59,9 @@ const sourceItems = computed(() => {
 })
 
 const targetItems = computed(() => {
-  if (props.targetOrder === 'original') {
+  // `orderable` means the target list *is* the ranking, so it always follows
+  // modelValue — otherwise a reorder would be re-sorted away on the next render.
+  if (props.targetOrder === 'original' && !props.orderable) {
     return (props.data ?? []).filter(item => selectedSet.value.has(item.key))
   }
   const ordered: TransferItem[] = []
@@ -48,6 +72,15 @@ const targetItems = computed(() => {
   }
   return ordered
 })
+
+/** Rank of each selected key, read from modelValue so a filter cannot shift it. */
+const targetIndexMap = computed(() => {
+  const map = new Map<string | number, number>()
+  ;(props.modelValue ?? []).forEach((key, index) => map.set(key, index))
+  return map
+})
+
+const targetCount = computed(() => (props.modelValue ?? []).length)
 
 function filterItems(list: TransferItem[], query: string) {
   const normalized = query.trim().toLowerCase()
@@ -82,7 +115,9 @@ function updateChecked(list: Array<string | number>, key: string | number, check
 }
 
 function resolveOrder(keys: Array<string | number>) {
-  if (props.targetOrder !== 'original')
+  // A ranked list carries its own order; re-deriving it from `data` would undo
+  // every move the user just made.
+  if (props.orderable || props.targetOrder !== 'original')
     return keys
   const order = (props.data ?? []).map(item => item.key)
   const set = new Set(keys)
@@ -110,12 +145,81 @@ function handleRemove() {
   emitChange(resolveOrder(nextKeys))
   rightChecked.value = []
 }
+
+function moveTarget(key: string | number, direction: -1 | 1) {
+  const keys = [...(props.modelValue ?? [])]
+  const index = keys.indexOf(key)
+  const nextIndex = index + direction
+  if (index === -1 || nextIndex < 0 || nextIndex >= keys.length)
+    return
+  const [moved] = keys.splice(index, 1)
+  if (moved === undefined)
+    return
+  keys.splice(nextIndex, 0, moved)
+  emitChange(resolveOrder(keys))
+}
+
+/** Double-click moves one row on its own, without the check-then-press detour. */
+function moveOne(item: TransferItem, direction: 'add' | 'remove') {
+  if (item.disabled)
+    return
+  if (direction === 'add') {
+    const nextKeys = new Set(props.modelValue ?? [])
+    nextKeys.add(item.key)
+    emitChange(resolveOrder(Array.from(nextKeys)))
+    leftChecked.value = leftChecked.value.filter(key => key !== item.key)
+    return
+  }
+  emitChange(resolveOrder((props.modelValue ?? []).filter(key => key !== item.key)))
+  rightChecked.value = rightChecked.value.filter(key => key !== item.key)
+}
+
+// Select-all covers what the panel currently shows: with a filter applied it
+// would otherwise check rows the user cannot see and did not ask for.
+const sourceSelectableKeys = computed(() =>
+  filteredSource.value.filter(item => !item.disabled).map(item => item.key),
+)
+const targetSelectableKeys = computed(() =>
+  filteredTarget.value.filter(item => !item.disabled).map(item => item.key),
+)
+
+function selectionState(keys: Array<string | number>, checked: Array<string | number>) {
+  if (keys.length === 0)
+    return { all: false, some: false }
+  const picked = keys.filter(key => checked.includes(key)).length
+  return { all: picked === keys.length, some: picked > 0 && picked < keys.length }
+}
+
+const sourceSelection = computed(() => selectionState(sourceSelectableKeys.value, leftChecked.value))
+const targetSelection = computed(() =>
+  selectionState(targetSelectableKeys.value, rightChecked.value),
+)
+
+function toggleSelectAll(side: 'source' | 'target', checked: boolean) {
+  const keys = side === 'source' ? sourceSelectableKeys.value : targetSelectableKeys.value
+  const current = side === 'source' ? leftChecked.value : rightChecked.value
+  const next = checked
+    ? Array.from(new Set([...current, ...keys]))
+    : current.filter(key => !keys.includes(key))
+  if (side === 'source')
+    leftChecked.value = next
+  else
+    rightChecked.value = next
+}
 </script>
 
 <template>
-  <div class="tx-transfer">
+  <div class="tx-transfer" :style="rootStyle">
     <div class="tx-transfer__panel">
       <div class="tx-transfer__panel-header">
+        <TxCheckbox
+          class="tx-transfer__select-all"
+          :model-value="sourceSelection.all"
+          :indeterminate="sourceSelection.some"
+          :disabled="sourceSelectableKeys.length === 0"
+          :aria-label="`${selectAllAriaLabel}: ${titles?.[0] ?? ''}`"
+          @update:model-value="(checked) => toggleSelectAll('source', checked)"
+        />
         <span class="tx-transfer__title">{{ titles?.[0] ?? '' }}</span>
         <span class="tx-transfer__count">{{ sourceItems.length }}</span>
       </div>
@@ -124,13 +228,14 @@ function handleRemove() {
       </div>
       <div class="tx-transfer__list">
         <div v-if="filteredSource.length === 0" class="tx-transfer__empty">
-          {{ emptyText }}
+          {{ sourceEmptyText }}
         </div>
         <label
           v-for="item in filteredSource"
           :key="item.key"
           class="tx-transfer__item"
           :class="{ 'is-disabled': item.disabled }"
+          @dblclick="moveOne(item, 'add')"
         >
           <TxCheckbox
             :model-value="leftChecked.includes(item.key)"
@@ -148,26 +253,42 @@ function handleRemove() {
     <div class="tx-transfer__actions">
       <TxButton
         variant="ghost"
-        size="sm"
+        class="tx-transfer__action-btn"
+        :class="{ 'is-armed': leftChecked.length > 0 }"
         :disabled="leftChecked.length === 0"
         :aria-label="addAriaLabel"
         @click="handleAdd"
       >
         <span class="i-carbon-chevron-right" />
+        <span v-if="leftChecked.length > 0" class="tx-transfer__action-count">{{
+          leftChecked.length
+        }}</span>
       </TxButton>
       <TxButton
         variant="ghost"
-        size="sm"
+        class="tx-transfer__action-btn"
+        :class="{ 'is-armed': rightChecked.length > 0 }"
         :disabled="rightChecked.length === 0"
         :aria-label="removeAriaLabel"
         @click="handleRemove"
       >
         <span class="i-carbon-chevron-left" />
+        <span v-if="rightChecked.length > 0" class="tx-transfer__action-count">{{
+          rightChecked.length
+        }}</span>
       </TxButton>
     </div>
 
     <div class="tx-transfer__panel">
       <div class="tx-transfer__panel-header">
+        <TxCheckbox
+          class="tx-transfer__select-all"
+          :model-value="targetSelection.all"
+          :indeterminate="targetSelection.some"
+          :disabled="targetSelectableKeys.length === 0"
+          :aria-label="`${selectAllAriaLabel}: ${titles?.[1] ?? ''}`"
+          @update:model-value="(checked) => toggleSelectAll('target', checked)"
+        />
         <span class="tx-transfer__title">{{ titles?.[1] ?? '' }}</span>
         <span class="tx-transfer__count">{{ targetItems.length }}</span>
       </div>
@@ -176,24 +297,48 @@ function handleRemove() {
       </div>
       <div class="tx-transfer__list">
         <div v-if="filteredTarget.length === 0" class="tx-transfer__empty">
-          {{ emptyText }}
+          {{ targetEmptyText }}
         </div>
-        <label
-          v-for="item in filteredTarget"
-          :key="item.key"
-          class="tx-transfer__item"
-          :class="{ 'is-disabled': item.disabled }"
-        >
-          <TxCheckbox
-            :model-value="rightChecked.includes(item.key)"
-            :disabled="item.disabled"
-            :aria-label="item.label"
-            @update:model-value="(checked) => (rightChecked = updateChecked(rightChecked, item.key, checked))"
-          />
-          <!-- The row text is exposed to AT through the checkbox's aria-label above;
-               hide the visible copy so screen readers don't announce it twice. -->
-          <span class="tx-transfer__label" aria-hidden="true">{{ item.label }}</span>
-        </label>
+        <div v-for="item in filteredTarget" :key="item.key" class="tx-transfer__row">
+          <label
+            class="tx-transfer__item"
+            :class="{ 'is-disabled': item.disabled }"
+            @dblclick="moveOne(item, 'remove')"
+          >
+            <TxCheckbox
+              :model-value="rightChecked.includes(item.key)"
+              :disabled="item.disabled"
+              :aria-label="item.label"
+              @update:model-value="(checked) => (rightChecked = updateChecked(rightChecked, item.key, checked))"
+            />
+            <span v-if="orderable" class="tx-transfer__order" aria-hidden="true">
+              {{ (targetIndexMap.get(item.key) ?? 0) + 1 }}
+            </span>
+            <!-- The row text is exposed to AT through the checkbox's aria-label above;
+                 hide the visible copy so screen readers don't announce it twice. -->
+            <span class="tx-transfer__label" aria-hidden="true">{{ item.label }}</span>
+          </label>
+          <div v-if="orderable" class="tx-transfer__row-actions">
+            <TxButton
+              variant="ghost"
+              size="sm"
+              :disabled="targetIndexMap.get(item.key) === 0"
+              :aria-label="`${moveUpAriaLabel}: ${item.label}`"
+              @click="moveTarget(item.key, -1)"
+            >
+              <span class="i-carbon-arrow-up" />
+            </TxButton>
+            <TxButton
+              variant="ghost"
+              size="sm"
+              :disabled="targetIndexMap.get(item.key) === targetCount - 1"
+              :aria-label="`${moveDownAriaLabel}: ${item.label}`"
+              @click="moveTarget(item.key, 1)"
+            >
+              <span class="i-carbon-arrow-down" />
+            </TxButton>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -202,7 +347,7 @@ function handleRemove() {
 <style scoped lang="scss">
 .tx-transfer {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 12px;
   width: 100%;
 }
@@ -216,13 +361,17 @@ function handleRemove() {
   display: flex;
   flex-direction: column;
   min-height: 240px;
+  /* Without a cap the panel grows with its content, the list never scrolls, and
+     the surrounding page or dialog becomes the scroll container instead. */
+  max-height: var(--tx-transfer-max-height, 320px);
   overflow: hidden;
 }
 
 .tx-transfer__panel-header {
+  flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--tx-border-color-lighter, #ebeef5);
   font-size: 13px;
@@ -230,18 +379,64 @@ function handleRemove() {
   color: var(--tx-text-color-primary, #303133);
 }
 
+.tx-transfer__select-all {
+  flex: none;
+}
+
+.tx-transfer__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tx-transfer__filter {
+  flex: none;
   padding: 8px 12px;
   border-bottom: 1px solid var(--tx-border-color-lighter, #ebeef5);
 }
 
 .tx-transfer__list {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 6px 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.tx-transfer__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tx-transfer__row .tx-transfer__item {
+  flex: 1;
+  min-width: 0;
+}
+
+.tx-transfer__row-actions {
+  flex: none;
+  display: flex;
+  gap: 2px;
+}
+
+.tx-transfer__order {
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--tx-fill-color-light, #f5f7fa);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tx-text-color-secondary, #909399);
 }
 
 .tx-transfer__item {
@@ -274,7 +469,38 @@ function handleRemove() {
 .tx-transfer__actions {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 8px;
+}
+
+/* Icon-only ghost buttons read as decoration between two bordered panels, so the
+   only control that moves anything looked like it did nothing. These carry their
+   own chrome and light up once there is a selection to move. */
+.tx-transfer__action-btn {
+  min-width: 40px;
+  height: 36px;
+  padding: 0 10px;
+  gap: 4px;
+  border: 1px solid var(--tx-border-color, #dcdfe6);
+  border-radius: 10px;
+  background: var(--tx-fill-color-blank, #ffffff);
+  color: var(--tx-text-color-regular, #606266);
+}
+
+.tx-transfer__action-btn.is-armed {
+  border-color: var(--tx-color-primary, #409eff);
+  background: var(--tx-color-primary, #409eff);
+  color: #ffffff;
+}
+
+.tx-transfer__action-btn:disabled {
+  opacity: 0.5;
+}
+
+.tx-transfer__action-count {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .tx-transfer__empty {

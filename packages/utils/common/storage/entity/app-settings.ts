@@ -176,9 +176,9 @@ const _appSettingOriginData = {
     enabled: false,
     defaultProvider: null as null | 'pi' | 'codex' | 'claude' | 'oh-my-pi',
     providers: {
-      'pi': { enabled: false, executableOverride: '' },
-      'codex': { enabled: false, executableOverride: '' },
-      'claude': { enabled: false, executableOverride: '' },
+      pi: { enabled: false, executableOverride: '' },
+      codex: { enabled: false, executableOverride: '' },
+      claude: { enabled: false, executableOverride: '' },
       'oh-my-pi': { enabled: false, executableOverride: '' },
     },
   },
@@ -199,6 +199,43 @@ const _appSettingOriginData = {
     continuous: true,
     cooldownMs: 2200,
     openPanelOnWake: true,
+  },
+  voiceInput: {
+    enabled: false,
+    language: 'zh-CN',
+  },
+  clipboard: {
+    /**
+     * 剪贴板内容分类与按类保留。
+     *
+     * 放在这里而不是隐私策略的类别表里：那张表同时也是数据域清单，每一项都要有自己的
+     * data owner（inspect / export / preview / delete）。而「剪贴板里的验证码」不是
+     * 独立数据域——它和普通剪贴板记录同表、同 owner、删除路径一样，为三个开关造两个
+     * 假数据域，代价和语义都不对。
+     */
+
+    /**
+     * 验证码的保留时长，毫秒。一次性码被粘贴的那一刻就作废了，留满类别的 90 天等于让
+     * 一个还能用的凭据在明文表里躺三个月。
+     */
+    verificationCodeRetentionMs: 60 * 60 * 1000,
+
+    /**
+     * 密钥类记录是否永不被自动清理。
+     *
+     * 关掉它，API key、私钥、连接串就和普通文本一样按类别策略过期——这是「我不想让
+     * 密钥永久留在库里」的合理选择，所以留了开关，但默认开着。
+     */
+    protectSecrets: true,
+
+    /**
+     * 额外的密钥前缀，用于自建网关下发的 key。
+     *
+     * 内置的通用规则只认「小写字母前缀 + 高熵体」的形状；自建网关（sub2api 之类）的
+     * 前缀是每个部署自己配的值，硬编码任何一个都既会漏又会误报。填进来的前缀会跳过
+     * 熵检查直接命中。
+     */
+    customKeyPrefixes: [] as string[],
   },
   beginner: {
     init: false,
@@ -267,9 +304,9 @@ const _appSettingOriginData = {
      * auto when it does not resolve, but never clear it — a provider that is temporarily
      * unavailable (the pi CLI not running) must not cost the user their choice.
      */
-    model: null as null | { providerId: string, model: string },
+    model: null as null | { providerId: string; model: string },
     /** Starred rows of the home model menu, in the order they were starred. */
-    favoriteModels: [] as Array<{ providerId: string, model: string }>,
+    favoriteModels: [] as Array<{ providerId: string; model: string }>,
   },
   dashboard: {
     enable: false,
@@ -470,4 +507,58 @@ export const appSettingOriginData = Object.freeze(_appSettingOriginData)
  */
 export type AppSetting = typeof _appSettingOriginData & {
   [key: string]: any
+}
+
+export interface VoiceInputSetting {
+  enabled: boolean
+  language: string
+  historyEnabled?: boolean
+}
+
+function isSettingRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Adds the dedicated dictation switch exactly once. Existing voiceInput data
+ * always wins, including an explicit false; only a missing field derives the
+ * prior combined voice gate.
+ */
+export function ensureVoiceInputSetting(setting: Record<string, unknown>): boolean {
+  const hasVoiceInput = Object.prototype.hasOwnProperty.call(setting, 'voiceInput')
+  const legacyAssistant = isSettingRecord(setting.assistant) ? setting.assistant : {}
+  const legacyVoiceWake = isSettingRecord(setting.voiceWake) ? setting.voiceWake : {}
+
+  if (!hasVoiceInput) {
+    setting.voiceInput = {
+      enabled: legacyAssistant.enabled === true && legacyVoiceWake.enabled === true,
+      language:
+        typeof legacyVoiceWake.language === 'string' && legacyVoiceWake.language.trim()
+          ? legacyVoiceWake.language
+          : 'zh-CN',
+    }
+    return true
+  }
+
+  const source = isSettingRecord(setting.voiceInput) ? setting.voiceInput : {}
+  const enabled = typeof source.enabled === 'boolean' ? source.enabled : false
+  const language = typeof source.language === 'string' && source.language.trim() ? source.language : 'zh-CN'
+  const hasHistory = Object.prototype.hasOwnProperty.call(source, 'historyEnabled')
+  const historyEnabled = source.historyEnabled === true
+  if (
+    isSettingRecord(setting.voiceInput) &&
+    source.enabled === enabled &&
+    source.language === language &&
+    (!hasHistory || source.historyEnabled === historyEnabled)
+  ) {
+    return false
+  }
+
+  setting.voiceInput = {
+    ...source,
+    enabled,
+    language,
+    ...(hasHistory ? { historyEnabled } : {}),
+  }
+  return true
 }

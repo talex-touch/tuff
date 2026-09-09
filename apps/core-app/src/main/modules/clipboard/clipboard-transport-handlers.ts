@@ -1,5 +1,7 @@
 import type {
   ClipboardActionResult,
+  ClipboardAnnotateRequest,
+  ClipboardAnnotateResponse,
   ClipboardApplyRequest,
   ClipboardChangePayload,
   ClipboardCopyAndPasteRequest,
@@ -7,6 +9,8 @@ import type {
   ClipboardGetLatestRequest,
   ClipboardGetImageUrlRequest,
   ClipboardGetImageUrlResponse,
+  ClipboardPreviewImageRequest,
+  ClipboardPreviewImageResponse,
   ClipboardItem,
   ClipboardMetaQueryRequest,
   ClipboardQueryRequest,
@@ -58,6 +62,8 @@ export interface ClipboardTransportHandlers {
     request: ClipboardQueryRequest | null | undefined
   ) => Promise<ClipboardTransportHistoryResult>
   getImageUrl: (request: ClipboardGetImageUrlRequest) => Promise<ClipboardGetImageUrlResponse>
+  previewImage: (request: ClipboardPreviewImageRequest) => Promise<ClipboardPreviewImageResponse>
+  annotate: (request: ClipboardAnnotateRequest) => Promise<ClipboardAnnotateResponse>
   queryHistoryByMeta: (request: ClipboardMetaQueryRequest) => Promise<IClipboardItem[]>
   apply: (request: ClipboardApplyRequest, context: HandlerContext) => Promise<ClipboardActionResult>
   deleteItem: (request: ClipboardDeleteRequest) => Promise<void>
@@ -183,6 +189,21 @@ export class ClipboardTransportHandlersRegistry {
     )
 
     this.disposers.push(
+      transport.on(
+        ClipboardEvents.previewImage,
+        async (
+          request: ClipboardPreviewImageRequest,
+          context: HandlerContext
+        ): Promise<ClipboardPreviewImageResponse> => {
+          // Same gate as reading the image: handing it to the OS previewer shows the same
+          // content, it just shows it somewhere this process does not draw.
+          handlers.enforcePermission(context.plugin?.name, 'clipboard:read', request)
+          return await handlers.previewImage(request)
+        }
+      )
+    )
+
+    this.disposers.push(
       transport.on(ClipboardEvents.queryMeta, async (payload, context) => {
         handlers.enforcePermission(context.plugin?.name, 'clipboard:read', payload)
         return await handlers.queryHistoryByMeta(payload ?? {})
@@ -206,6 +227,18 @@ export class ClipboardTransportHandlersRegistry {
         async (request: ClipboardDeleteRequest, context: HandlerContext) => {
           handlers.enforcePermission(context.plugin?.name, 'clipboard:write', request)
           await handlers.deleteItem(request)
+        }
+      ),
+      transport.on(
+        ClipboardEvents.annotate,
+        async (
+          request: ClipboardAnnotateRequest,
+          context: HandlerContext
+        ): Promise<ClipboardAnnotateResponse> => {
+          // Mutates a stored record, same as setFavorite — a plugin that may only read history
+          // should not be able to relabel it.
+          handlers.enforcePermission(context.plugin?.name, 'clipboard:write', request)
+          return await handlers.annotate(request)
         }
       ),
       transport.on(

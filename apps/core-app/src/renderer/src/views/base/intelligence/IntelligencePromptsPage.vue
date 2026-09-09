@@ -78,12 +78,13 @@ const testEnabledBindings = computed(() => {
 })
 
 async function handlePromptTest(options: {
-  providerId: string
+  providerId?: string
   model?: string
   promptVariables?: Record<string, unknown>
   userInput?: string
   promptTemplate?: string
 }): Promise<void> {
+  if (!options.providerId) return
   if (promptTesting.value) return
   promptTesting.value = true
   promptTestResult.value = null

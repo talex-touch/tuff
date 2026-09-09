@@ -7,6 +7,7 @@ const STABLE_STREAM_ERROR_CODE = /^[A-Z][A-Z0-9_]{2,127}$/;
 export interface StreamEventNames {
   start: string;
   cancel: string;
+  stop: string;
   data: (streamId: string) => string;
   end: (streamId: string) => string;
   error: (streamId: string) => string;
@@ -84,6 +85,7 @@ export function getStreamEventNames(eventName: string): StreamEventNames {
   return {
     start: `${eventName}${STREAM_SUFFIXES.START}`,
     cancel: `${eventName}${STREAM_SUFFIXES.CANCEL}`,
+    stop: `${eventName}${STREAM_SUFFIXES.STOP}`,
     data: (streamId) => `${eventName}${STREAM_SUFFIXES.DATA}:${streamId}`,
     end: (streamId) => `${eventName}${STREAM_SUFFIXES.END}:${streamId}`,
     error: (streamId) => `${eventName}${STREAM_SUFFIXES.ERROR}:${streamId}`,

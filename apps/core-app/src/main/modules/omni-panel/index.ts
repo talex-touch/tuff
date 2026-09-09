@@ -113,6 +113,27 @@ interface InputHookEvent {
   keycode?: number
 }
 
+export type OmniPanelGlobalKey = 'primary-modifier' | 'escape'
+export type OmniPanelGlobalOtherKey = 'other-key'
+
+export interface OmniPanelGlobalKeyEvent {
+  key: OmniPanelGlobalKey
+  keycode: number
+  /** True when another non-primary key participated in this gesture. */
+  hasOtherKeys?: boolean
+}
+
+export interface OmniPanelGlobalOtherKeyEvent {
+  key: OmniPanelGlobalOtherKey
+  keycode: number
+}
+
+export interface OmniPanelGlobalKeyListener {
+  onKeyDown?: (event: OmniPanelGlobalKeyEvent) => void
+  onKeyUp?: (event: OmniPanelGlobalKeyEvent) => void
+  onOtherKeyDown?: (event: OmniPanelGlobalOtherKeyEvent) => void
+}
+
 interface InputHookKeyMap {
   P: number
   Shift: number
@@ -121,6 +142,7 @@ interface InputHookKeyMap {
   CtrlRight: number
   Meta: number
   MetaRight: number
+  Escape: number
 }
 
 interface InputHookApi {
@@ -335,6 +357,21 @@ export class OmniPanelModule extends BaseModule {
     event: string
     callback: (event: InputHookEvent) => void
   }> = []
+  private globalKeyListeners = new Set<OmniPanelGlobalKeyListener>()
+  private pressedGlobalKeycodes = new Set<number>()
+  private primaryModifierHadOtherKeys = false
+
+  registerGlobalKeyListener(listener: OmniPanelGlobalKeyListener): () => void {
+    this.globalKeyListeners.add(listener)
+    if (this.touchApp) {
+      this.syncInputHookState()
+    }
+
+    return () => {
+      if (!this.globalKeyListeners.delete(listener)) return
+      this.syncInputHookState()
+    }
+  }
   private featureRegistry: OmniPanelFeatureRegistryItem[] = []
   private registryUpdatedAt = Date.now()
   private lastContext: OmniPanelContextPayload = {
@@ -707,7 +744,11 @@ export class OmniPanelModule extends BaseModule {
       this.cleanupInputHook()
       return
     }
-    if (!this.mouseLongPressEnabled && !this.shortcutHoldEnabled) {
+    if (
+      !this.mouseLongPressEnabled &&
+      !this.shortcutHoldEnabled &&
+      this.globalKeyListeners.size === 0
+    ) {
       this.clearLongPressTimer()
       this.clearShortcutHoldTimer()
       this.clearShortcutArmExpiryTimer()
@@ -1681,7 +1722,8 @@ export class OmniPanelModule extends BaseModule {
         hookKeys?.Ctrl !== undefined &&
         hookKeys?.CtrlRight !== undefined &&
         hookKeys?.Meta !== undefined &&
-        hookKeys?.MetaRight !== undefined
+        hookKeys?.MetaRight !== undefined &&
+        hookKeys?.Escape !== undefined
       ) {
         this.inputHookKeys = hookKeys as InputHookKeyMap
       } else {
@@ -1725,10 +1767,12 @@ export class OmniPanelModule extends BaseModule {
 
       const onKeyDown = (event: InputHookEvent) => {
         this.handleGlobalKeyDown(event)
+        this.dispatchGlobalKeyEvent('down', event)
       }
 
       const onKeyUp = (event: InputHookEvent) => {
         this.handleGlobalKeyUp(event)
+        this.dispatchGlobalKeyEvent('up', event)
       }
 
       hook.on('mousedown', onMouseDown)
@@ -1777,7 +1821,104 @@ export class OmniPanelModule extends BaseModule {
       this.inputHook = null
       this.inputHookKeys = null
       this.mouseHandlers = []
+      this.pressedGlobalKeycodes.clear()
+      this.primaryModifierHadOtherKeys = false
     }
+  }
+
+  private dispatchGlobalKeyEvent(direction: 'down' | 'up', event: InputHookEvent): void {
+    const keycode = Number(event.keycode)
+    const keys = this.inputHookKeys
+    if (!Number.isFinite(keycode) || !keys) return
+
+    const isMeta = keycode === keys.Meta || keycode === keys.MetaRight
+    const isCtrl = keycode === keys.Ctrl || keycode === keys.CtrlRight
+    const isPrimary = process.platform === 'darwin' ? isMeta : isCtrl
+    const isEscape = keycode === keys.Escape
+    const isPressedPrimary = (pressedKeycode: number): boolean =>
+      process.platform === 'darwin'
+        ? pressedKeycode === keys.Meta || pressedKeycode === keys.MetaRight
+        : pressedKeycode === keys.Ctrl || pressedKeycode === keys.CtrlRight
+
+    if (direction === 'down') {
+      if (isEscape) {
+        const payload: OmniPanelGlobalKeyEvent = { key: 'escape', keycode }
+        for (const listener of [...this.globalKeyListeners]) {
+          try {
+            listener.onKeyDown?.(payload)
+          } catch (error) {
+            omniPanelLog.warn('Global key listener failed', { error })
+          }
+        }
+        this.pressedGlobalKeycodes.add(keycode)
+        return
+      }
+      const hasOtherKeys = [...this.pressedGlobalKeycodes].some(
+        (pressedKeycode) => !isPressedPrimary(pressedKeycode)
+      )
+      if (isPrimary) {
+        this.primaryModifierHadOtherKeys ||= hasOtherKeys
+        const payload: OmniPanelGlobalKeyEvent = {
+          key: 'primary-modifier',
+          keycode,
+          hasOtherKeys: this.primaryModifierHadOtherKeys
+        }
+        for (const listener of [...this.globalKeyListeners]) {
+          try {
+            listener.onKeyDown?.(payload)
+          } catch (error) {
+            omniPanelLog.warn('Global key listener failed', { error })
+          }
+        }
+      } else if ([...this.pressedGlobalKeycodes].some(isPressedPrimary)) {
+        this.primaryModifierHadOtherKeys = true
+        const payload: OmniPanelGlobalOtherKeyEvent = { key: 'other-key', keycode }
+        for (const listener of [...this.globalKeyListeners]) {
+          try {
+            listener.onOtherKeyDown?.(payload)
+          } catch (error) {
+            omniPanelLog.warn('Global key listener failed', { error })
+          }
+        }
+      }
+      this.pressedGlobalKeycodes.add(keycode)
+      return
+    }
+
+    if (isEscape) {
+      const payload: OmniPanelGlobalKeyEvent = { key: 'escape', keycode }
+      for (const listener of [...this.globalKeyListeners]) {
+        try {
+          listener.onKeyUp?.(payload)
+        } catch (error) {
+          omniPanelLog.warn('Global key listener failed', { error })
+        }
+      }
+      this.pressedGlobalKeycodes.delete(keycode)
+      return
+    }
+
+    if (isPrimary) {
+      const hasOtherKeys =
+        this.primaryModifierHadOtherKeys ||
+        [...this.pressedGlobalKeycodes].some(
+          (pressedKeycode) => pressedKeycode !== keycode && !isPressedPrimary(pressedKeycode)
+        )
+      const payload: OmniPanelGlobalKeyEvent = {
+        key: 'primary-modifier',
+        keycode,
+        hasOtherKeys
+      }
+      for (const listener of [...this.globalKeyListeners]) {
+        try {
+          listener.onKeyUp?.(payload)
+        } catch (error) {
+          omniPanelLog.warn('Global key listener failed', { error })
+        }
+      }
+      this.primaryModifierHadOtherKeys = false
+    }
+    this.pressedGlobalKeycodes.delete(keycode)
   }
 
   private handleGlobalKeyDown(event: InputHookEvent): void {
@@ -1879,6 +2020,7 @@ export class OmniPanelModule extends BaseModule {
     this.clearShortcutHoldTimer()
     this.clearShortcutArmExpiryTimer()
     this.resetShortcutHoldState()
+    this.globalKeyListeners.clear()
     this.cleanupInputHook()
     shortcutModule.unregisterMainShortcut(OMNI_PANEL_SHORTCUT_ID)
     shortcutModule.unregisterMainTrigger(OMNI_PANEL_MOUSE_TRIGGER_ID)

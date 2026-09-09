@@ -260,6 +260,7 @@ Rich interaction, visual effects and low-level primitives, importable through th
 - [GlowText](./glow-text.en.mdc)
 - [KeyframeStrokeText](./keyframe-stroke-text.en.mdc)
 - [TuffLogoStroke](./tuff-logo-stroke.en.mdc)
+- [TextMorph](./text-morph.en.mdc)
 - [TextTransformer](./text-transformer.en.mdc)
 - [Transition](./transition.en.mdc)
 - [Stagger](./stagger.en.mdc)

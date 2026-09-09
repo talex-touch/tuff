@@ -1,5 +1,5 @@
 import type { PluginActivationIdentity } from '@talex-touch/utils/transport'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, type Mock, vi } from 'vitest'
 import { PluginHostCapabilityRegistry } from './plugin-host-capabilities'
 import { PluginHostResourceRegistry } from './plugin-host-resources'
 import {
@@ -187,6 +187,46 @@ describe('plugin voice capabilities', () => {
       expect.any(AbortSignal),
       'plugin:touch-dictation'
     )
+  })
+
+  it('returns the validated main-owned active-app delivery result without exposing a delivery primitive', async () => {
+    const { registry, service } = createHarness()
+    ;(service.dictate as Mock).mockResolvedValueOnce({
+      text: 'polished',
+      raw: 'raw',
+      source: 'native-cpal',
+      polished: true,
+      delivery: { method: 'autopaste' }
+    })
+
+    await expect(
+      registry.dispatch('voice.invoke', {
+        operation: 'dictate',
+        payload: { delivery: 'active-app' }
+      })
+    ).resolves.toEqual({
+      operation: 'dictate',
+      data: {
+        text: 'polished',
+        raw: 'raw',
+        source: 'native-cpal',
+        polished: true,
+        delivery: { method: 'autopaste' }
+      }
+    })
+    ;(service.dictate as Mock).mockResolvedValueOnce({
+      text: 'polished',
+      raw: 'raw',
+      source: 'native-cpal',
+      polished: true,
+      delivery: { method: 'clipboard' }
+    })
+    await expect(
+      registry.dispatch('voice.invoke', {
+        operation: 'dictate',
+        payload: { delivery: 'active-app' }
+      })
+    ).rejects.toMatchObject({ code: 'PLUGIN_HOST_CAPABILITY_INVALID_RESULT' })
   })
 
   it.each([

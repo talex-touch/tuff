@@ -15,6 +15,8 @@ import type {
   IntelligenceTranslatePayload,
   IntelligenceTTSPayload,
   IntelligenceTTSResult,
+  IntelligenceSTTPayload,
+  IntelligenceSTTResult,
   IntelligenceUsageInfo,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
@@ -28,6 +30,8 @@ import { COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID } from '../../../../shared/events
 import { getNetworkService } from '../../network'
 import { getRuntimeNexusBaseUrl } from '../../nexus/runtime-base'
 import { extractTranslatedImageFromSceneRun, runNexusScene } from '../../nexus/scene-client'
+import { transcribeNexusAudio } from '../../nexus/asr-client'
+import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
 import { normalizeIntelligenceError } from '../intelligence-error-normalizer'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
@@ -542,6 +546,24 @@ export class NexusProvider extends IntelligenceProvider {
       model: this.config.defaultModel || this.config.models?.[0] || 'nexus-image-translate',
       latency: Date.now() - startedAt,
       traceId: typeof run?.runId === 'string' ? run.runId : this.generateTraceId(),
+      provider: this.config.id
+    }
+  }
+  async stt(
+    payload: IntelligenceSTTPayload,
+    options: NexusProviderRuntimeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceSTTResult>> {
+    const startedAt = Date.now()
+    const result = await transcribeNexusAudio(payload, {
+      signal: options.signal,
+      timeout: options.timeout ?? this.config.timeout
+    })
+    return {
+      result,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      model: NEXUS_AUDIO_TRANSCRIBE_MODEL,
+      latency: Date.now() - startedAt,
+      traceId: result.billing?.requestId ?? this.generateTraceId(),
       provider: this.config.id
     }
   }

@@ -1,5 +1,5 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import ClipboardManagerView from './ClipboardManagerView.vue'
 
@@ -7,6 +7,7 @@ const sdkMocks = vi.hoisted(() => ({
   clipboard: {
     write: vi.fn(),
     getHistoryImageUrl: vi.fn(),
+    previewHistoryImage: vi.fn(),
     history: {
       getHistory: vi.fn(),
       onDidChange: vi.fn(),
@@ -21,6 +22,8 @@ const sdkMocks = vi.hoisted(() => ({
   },
   system: {
     resolveApplication: vi.fn(),
+    openExternal: vi.fn(),
+    showInFolder: vi.fn(),
   },
   box: {
     expand: vi.fn(),
@@ -45,6 +48,14 @@ vi.mock('@talex-touch/utils/plugin/sdk/system', () => ({
 }))
 
 describe('clipboardManagerView', () => {
+  /**
+   * 每个用例都 `mount(..., { attachTo: document.body })`，组件在 document 上挂了 keydown。
+   * 用例结尾的 `wrapper.unmount()` 在断言抛出时根本不会执行，于是那个组件继续活着，
+   * 后面用例的 `document.dispatchEvent` 会同时打到它身上——一个失败的用例因此能把
+   * 后面几个无关用例一起弄红，指向完全错误的地方。
+   */
+  enableAutoUnmount(afterEach)
+
   beforeEach(() => {
     vi.clearAllMocks()
     sdkMocks.clipboard.write.mockResolvedValue(undefined)
@@ -63,6 +74,8 @@ describe('clipboardManagerView', () => {
     sdkMocks.box.setInput.mockResolvedValue(undefined)
     sdkMocks.feature.onInputChange.mockReturnValue(vi.fn())
     sdkMocks.system.resolveApplication.mockResolvedValue(null)
+    sdkMocks.system.openExternal.mockResolvedValue(undefined)
+    sdkMocks.system.showInFolder.mockResolvedValue(undefined)
   })
 
   it('uses Enter to paste and Cmd/Ctrl+Enter to copy the selected item', async () => {
@@ -120,14 +133,36 @@ describe('clipboardManagerView', () => {
     })
     await flushPromises()
 
+    // 拆词，不是拆字：分词器认得中文的词边界，「你好」是一个词而不是两个字。
     expect(wrapper.get('.insight-title').text()).toContain('拆词')
-    expect(wrapper.findAll('.character-chip').map(node => node.text())).toEqual(
-      expect.arrayContaining(['你', '好', 'T', 'u', 'f']),
+    expect(wrapper.findAll('.word-chip').map(node => node.text())).toEqual(
+      expect.arrayContaining(['你好', 'Tuff']),
     )
 
-    await wrapper.get('.character-chip').trigger('click')
+    await wrapper.get('.word-chip').trigger('click')
 
-    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: '你' })
+    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: '你好' })
+
+    wrapper.unmount()
+  })
+
+  /**
+   * 拆字整档已经去掉。一个六位验证码拆词只会得到它自己，所以洞察区不出分区——
+   * 一个和原文一模一样的词块是纯噪音。
+   */
+  it('gives a spaceless short code no insight section at all', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 22, type: 'text', content: '679839' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.find('.insight-section').exists()).toBe(false)
+    expect(wrapper.find('.character-chip').exists()).toBe(false)
 
     wrapper.unmount()
   })
@@ -159,13 +194,21 @@ describe('clipboardManagerView', () => {
     })
     await flushPromises()
 
-    await wrapper.get('.ocr-text').trigger('click')
-    await wrapper.get('.keyword-chip').trigger('click')
-    await wrapper.get('.color-chip').trigger('click')
+    // 主题色由缩略图下方的色带承载（09-05-color-capability），不进洞察区。
+    expect(wrapper.find('.color-chip').exists()).toBe(false)
+    // OCR 正文有十几行，顶在图片上方会把图片挤出视野，所以它收在「更多信息」里。
+    expect(wrapper.find('.ocr-text').exists()).toBe(false)
+
+    await wrapper.get('.more-toggle').trigger('click')
+
+    // 按包含 .ocr-text 的那一块取词条：`.more-char` 也是拆词和调色板用的类名。
+    const ocrBlock = wrapper.findAll('.more-block').find(block => block.find('.ocr-text').exists())
+    expect(ocrBlock).toBeDefined()
+    await ocrBlock!.get('.ocr-text').trigger('click')
+    await ocrBlock!.get('.more-char').trigger('click')
 
     expect(sdkMocks.clipboard.write).toHaveBeenNthCalledWith(1, { text: 'Invoice total' })
     expect(sdkMocks.clipboard.write).toHaveBeenNthCalledWith(2, { text: 'invoice' })
-    expect(sdkMocks.clipboard.write).toHaveBeenNthCalledWith(3, { text: '#112233' })
 
     wrapper.unmount()
   })
@@ -260,7 +303,7 @@ describe('clipboardManagerView', () => {
     inputHandler('latest')
     await vi.advanceTimersByTimeAsync(180)
     await flushPromises()
-    expect(wrapper.get('.detail-heading h2').text()).toBe('latest result')
+    expect(wrapper.get('.text-preview').text()).toBe('latest result')
 
     oldResponse.resolve({
       history: [{ id: 11, type: 'text', content: 'stale result' }],
@@ -269,7 +312,7 @@ describe('clipboardManagerView', () => {
       pageSize: 50,
     })
     await flushPromises()
-    expect(wrapper.get('.detail-heading h2').text()).toBe('latest result')
+    expect(wrapper.get('.text-preview').text()).toBe('latest result')
 
     wrapper.unmount()
     vi.useRealTimers()
@@ -350,8 +393,445 @@ describe('clipboardManagerView', () => {
 
     expect(sdkMocks.system.resolveApplication).toHaveBeenCalledWith('com.example.source')
     expect(wrapper.get('.source-app-icon').attributes('src')).toBe('tfile:///tmp/source-app.png')
-    expect(wrapper.get('.info-value-copy').text()).toContain('Source App')
-    expect(wrapper.get('.info-secondary').text()).toBe('com.example.source')
+    expect(wrapper.get('.source-name').text()).toContain('Source App')
+    expect(wrapper.get('.source-bundle').text()).toBe('com.example.source')
+    wrapper.unmount()
+  })
+
+  it('offers every category once the content-shape classifier is wired', async () => {
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    const chips = wrapper.findAll('.category-chip')
+    expect(chips.map(chip => chip.text())).toEqual([
+      '全部',
+      '文本',
+      '链接',
+      '图片',
+      '视频',
+      '文件',
+      '颜色',
+      '命令',
+      '密钥',
+      '收藏',
+    ])
+    expect(chips.filter(chip => chip.attributes('disabled') !== undefined)).toHaveLength(0)
+
+    wrapper.unmount()
+  })
+
+  it('maps a ready category onto the existing history query', async () => {
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    await wrapper.findAll('.category-chip').find(chip => chip.text() === '图片')?.trigger('click')
+    await flushPromises()
+
+    expect(sdkMocks.clipboard.history.getHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'image', isFavorite: undefined }),
+    )
+
+    await wrapper.findAll('.category-chip').find(chip => chip.text() === '收藏')?.trigger('click')
+    await flushPromises()
+
+    expect(sdkMocks.clipboard.history.getHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: undefined, isFavorite: true }),
+    )
+
+    wrapper.unmount()
+  })
+
+  it('filters derived categories against the loaded page and says so in the count', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [
+        { id: 41, type: 'text', content: 'git push --force origin main' },
+        { id: 42, type: 'text', content: '这是一段普通的说明文字，没有命令。' },
+        { id: 43, type: 'text', content: 'https://dsh.tagzxia.com/dashboard' },
+      ],
+      total: 3,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+    expect(wrapper.get('.record-count').text()).toBe('3 条')
+
+    await wrapper.findAll('.category-chip').find(chip => chip.text() === '命令')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('.ClipboardItem')).toHaveLength(1)
+    // 派生分类只能过滤已加载的这一页，计数必须如实说明，不能伪装成全库结果。
+    expect(wrapper.get('.record-count').text()).toBe('1 / 3')
+
+    await wrapper.findAll('.category-chip').find(chip => chip.text() === '链接')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('.ClipboardItem')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it('turns a copied colour into a swatch preview with four formats and a contrast verdict', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 51, type: 'text', content: '#ABCDEE' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('.color-canvas').text()).toBe('#ABCDEE')
+    expect(wrapper.findAll('.kv-label').map(node => node.text())).toEqual([
+      'HEX',
+      'RGB',
+      'HSL',
+      'OKLCH',
+      '对比度',
+    ])
+    // 取色时就要知道能不能用，所以对比度结论进标题。
+    expect(wrapper.get('.insight-title').text()).toContain('AAA')
+
+    const rgbRow = wrapper.findAll('.kv-value')[1]
+    await rgbRow?.trigger('click')
+    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: 'rgb(171, 205, 238)' })
+
+    wrapper.unmount()
+  })
+
+  it('keeps secondary metadata behind a collapsed disclosure', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [
+        {
+          id: 61,
+          type: 'text',
+          content: 'hello',
+          timestamp: Date.parse('2026-09-05T03:49:00Z'),
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.find('.more-body').exists()).toBe(false)
+    // 摘要由实际会渲染的分区名拼出来，不是写死的文案。
+    const summary = wrapper.get('.more-summary').text()
+    expect(summary).toContain('MIME')
+    expect(summary).toContain('记录 ID')
+    expect(summary).toContain('拆词')
+
+    await wrapper.get('.more-toggle').trigger('click')
+
+    expect(wrapper.findAll('.more-label').map(node => node.text())).toEqual([
+      'MIME',
+      '记录时间',
+      '记录 ID',
+    ])
+
+    wrapper.unmount()
+  })
+
+  it('abbreviates the mime in the summary strip but spells it out in the disclosure', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 62, type: 'files', content: JSON.stringify(['/Users/demo/Downloads/a.pdf']) }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    // 全称在 720 宽下会撞上右对齐的时间戳，摘要条只放子类型。
+    expect(wrapper.get('.summary-mime').text()).toBe('x-tuff-files')
+
+    await wrapper.get('.more-toggle').trigger('click')
+    expect(wrapper.findAll('.more-value')[0]?.text()).toBe('application/x-tuff-files')
+
+    wrapper.unmount()
+  })
+
+  /**
+   * 掩码只在洞察区「值」那一行成立过，同一条记录的完整明文还同时出现在列表标题、
+   * 预览区和「更多信息 → 拆词」里。断言整棵 DOM 而不是逐个表面，
+   * 是因为下一个泄漏点多半出现在这条用例还没点名的第四个地方。
+   */
+  it('keeps a detected secret masked on every surface, including the character split', async () => {
+    const apiKey = `sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`
+
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 71, type: 'text', content: apiKey }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('.insight-title').text()).toContain('密钥')
+    expect(wrapper.html()).not.toContain(apiKey)
+    expect(wrapper.get('.item-preview').text()).not.toContain(apiKey)
+    expect(wrapper.get('.item-preview').attributes('title')).not.toContain(apiKey)
+    expect(wrapper.get('.text-preview').text()).not.toContain(apiKey)
+
+    // 拆词对密钥没有使用价值，只有把掩码拼回原文的泄漏面。
+    expect(wrapper.get('.more-summary').text()).not.toContain('拆词')
+    await wrapper.get('.more-toggle').trigger('click')
+    expect(wrapper.find('.more-chars').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('never renders private key material, not even a masked prefix', async () => {
+    const privateKey = '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAxLoNGoOfHm\n-----END RSA PRIVATE KEY-----'
+
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 72, type: 'text', content: privateKey }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.html()).not.toContain('MIIEowIBAAKCAQEAxLoNGoOfHm')
+    expect(wrapper.get('.text-preview').text()).toBe('私钥内容不予显示')
+    // 私钥没有显示开关；`getClipboardPreviewText` 那侧也会吞掉 reveal，两层都拦。
+    expect(wrapper.find('.reveal-toggle').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * 「看过一次」不能跟着列表往下走：换记录必须复位成掩码，否则用户按住方向键
+   * 划过一串密钥时，每一条都是打开状态。
+   */
+  it('reveals a secret on demand and re-masks it when the selection moves', async () => {
+    const first = `sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`
+    const second = `sk-${'ZZZZZZZZZZFAKEKEYFAKEKEYFORTESTS1FAKEKEY0'}`
+
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [
+        { id: 81, type: 'text', content: first },
+        { id: 82, type: 'text', content: second },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.html()).not.toContain(first)
+
+    await wrapper.get('.reveal-toggle').trigger('click')
+    expect(wrapper.get('.text-preview').text()).toBe(first)
+    // 洞察区「值」跟随同一个开关，不需要第二次点击。
+    expect(wrapper.findAll('.kv-text')[0]?.text()).toBe(first)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.get('.text-preview').text()).not.toBe(second)
+    expect(wrapper.html()).not.toContain(second)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * 分类是闭合的环：从「全部」往左要走到「收藏」，不是停在原地。
+   * 裸方向键仍归列表选择所有，只有带修饰键才归分类条。
+   */
+  it('cycles the category bar with Cmd/Ctrl and the arrow keys', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 91, type: 'text', content: 'hello' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('.category-chip.active').text()).toContain('全部')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.get('.category-chip.active').text()).toContain('文本')
+    expect(sdkMocks.clipboard.history.getHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'text' }),
+    )
+
+    // 从头往左回绕到末位，而不是卡在「全部」。
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', ctrlKey: true, bubbles: true }))
+    await flushPromises()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', ctrlKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.get('.category-chip.active').text()).toContain('收藏')
+
+    wrapper.unmount()
+  })
+
+  it('leaves the category bar alone while typing in an input', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 92, type: 'text', content: 'hello' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.get('.category-chip.active').text()).toContain('全部')
+
+    input.remove()
+    wrapper.unmount()
+  })
+
+  /**
+   * Cmd/Ctrl+Enter 以前对所有类型都只是复制。现在按内容类型分派，
+   * 所以底栏按钮的文案必须跟着走——「写着复制、实际打开浏览器」比没做还糟。
+   */
+  it('hands an image to the system previewer instead of copying it, and says so on the button', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 101, type: 'image', content: 'data:image/png;base64,AAA', thumbnail: 'data:image/png;base64,AAA' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+    sdkMocks.clipboard.previewHistoryImage.mockResolvedValue(true)
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="copy-button"]').text()).toContain('预览')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    // 记录 id，不是路径——宿主自己在剪贴板图片目录里找文件。
+    expect(sdkMocks.clipboard.previewHistoryImage).toHaveBeenCalledWith(101)
+    expect(sdkMocks.clipboard.write).not.toHaveBeenCalled()
+    // 不再自建浮层：Esc 归宿主，插件抢不到。
+    expect(wrapper.find('.image-viewer').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('says so when the record has no file left to preview', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 103, type: 'image', content: 'data:image/png;base64,AAA', thumbnail: 'data:image/png;base64,AAA' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+    sdkMocks.clipboard.previewHistoryImage.mockResolvedValue(false)
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.get('.inline-error').text()).toContain('没有可预览的原图')
+
+    wrapper.unmount()
+  })
+
+  it('still copies plain text under the same shortcut', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 102, type: 'text', content: 'just words' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="copy-button"]').text()).toContain('复制')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: 'just words', html: undefined })
+
+    wrapper.unmount()
+  })
+
+  /**
+   * `window.open` is denied outright for a plugin surface, so the old path could only ever
+   * fall through to a copy. Assert the host call, not the absence of a crash.
+   */
+  it('opens a link through the host instead of window.open', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 103, type: 'text', content: 'see https://example.com/docs for details' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="copy-button"]').text()).toContain('浏览器打开')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(sdkMocks.system.openExternal).toHaveBeenCalledWith('https://example.com/docs')
+    expect(sdkMocks.clipboard.write).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('reveals a copied file through the host, and falls back to its path when denied', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [
+        { id: 104, type: 'files', content: JSON.stringify(['/Users/demo/a.pdf', '/Users/demo/b.pdf']) },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="copy-button"]').text()).toContain('在访达中显示')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(sdkMocks.system.showInFolder).toHaveBeenCalledWith('/Users/demo/a.pdf')
+
+    // system.shell 在 manifest 里是可选权限，所以拒绝是正常结局，得说清是哪一种。
+    sdkMocks.system.showInFolder.mockRejectedValueOnce(
+      Object.assign(new Error('denied'), { code: 'SYSTEM_SHELL_PERMISSION_DENIED' }),
+    )
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: '/Users/demo/a.pdf' })
+    expect(wrapper.get('.error-banner').text()).toContain('未授予定位文件的权限')
+
     wrapper.unmount()
   })
 })

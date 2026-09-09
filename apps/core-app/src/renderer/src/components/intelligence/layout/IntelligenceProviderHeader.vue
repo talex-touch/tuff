@@ -13,7 +13,8 @@ import {
   isNexusManagedProvider as checkNexusManagedProvider,
   TUFF_NEXUS_PROVIDER_ICON
 } from '~/modules/intelligence/nexus-provider'
-import { providerIconFor } from '~/modules/intelligence/provider-icons'
+import { providerIconForChannel } from '~/modules/intelligence/provider-icons'
+import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
 
 enum IntelligenceProviderType {
   OPENAI = 'openai',
@@ -80,7 +81,7 @@ const providerIcon = computed<ITuffIcon>(() => {
   if (isNexusManagedProvider.value) {
     return TUFF_NEXUS_PROVIDER_ICON
   }
-  return providerIconFor(props.provider.type)
+  return providerIconForChannel(getProviderChannelType(props.provider), props.provider.type)
 })
 
 const deleteConfirmVisible = ref(false)
@@ -214,7 +215,7 @@ function closeDeleteConfirm() {
           </p>
         </div>
         <p id="provider-type" class="text-sm text-gray-600 dark:text-gray-400">
-          {{ provider.type }}
+          {{ t(`settings.intelligence.providerTypeOptions.${getProviderChannelType(provider)}`) }}
         </p>
       </div>
     </div>

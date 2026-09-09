@@ -74,6 +74,8 @@ import {
   toRuntimeCapabilityId
 } from '@talex-touch/tuff-intelligence'
 import { NetworkCooldownError } from '@talex-touch/utils/network'
+import { getVoiceAsrMetadata } from '@talex-touch/utils/intelligence/voice-asr'
+import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
 import { createLogger } from '../../utils/logger'
 import { enterPerfContext } from '../../utils/perf-context'
 import { agentManager } from './agents'
@@ -142,6 +144,13 @@ async function awaitIntelligenceBoundary<T>(
   })
 }
 
+/**
+ * 主进程内的调用选项。比 `IntelligenceInvokeOptions` 多一个 `signal`——那个类型是插件侧
+ * 经 IPC 发过来的载荷形状，AbortSignal 过不了结构化克隆，所以不能加在那边。
+ *
+ * `CANCELLABLE_CAPABILITIES` 里的能力，门面必须收这个类型，否则调用方拿着一个 `invoke`
+ * 明明支持、`assertCancellableCapability` 明明放行的 signal 却传不进去。
+ */
 type HostIntelligenceInvokeOptions = IntelligenceInvokeOptions & {
   readonly signal?: AbortSignal
 }
@@ -193,13 +202,17 @@ function logError(...args: unknown[]) {
 const MAX_EMBEDDING_TOTAL_CHARS = 32_000
 const EMBEDDING_CHUNK_CHARS = 2_000
 const MAX_EMBEDDING_CHUNKS = 16
-const CANCELLABLE_CAPABILITIES = new Set(['text.chat', 'vision.ocr'])
+const CANCELLABLE_CAPABILITIES: Readonly<Record<string, true>> = {
+  'text.chat': true,
+  'vision.ocr': true,
+  'audio.stt': true
+}
 const REDACTED_PROVIDER_FAILURE = 'INTELLIGENCE_PROVIDER_FAILED'
 const REDACTED_AUDIT_FAILURE = 'INTELLIGENCE_AUDIT_LOG_FAILED'
 const REDACTED_QUOTA_FAILURE = 'INTELLIGENCE_QUOTA_FAILED'
 
 function assertCancellableCapability(capabilityId: string, signal?: AbortSignal): void {
-  if (!signal || CANCELLABLE_CAPABILITIES.has(capabilityId)) return
+  if (!signal || Object.hasOwn(CANCELLABLE_CAPABILITIES, capabilityId)) return
   throw Object.assign(new Error('INTELLIGENCE_CANCELLATION_UNSUPPORTED'), {
     code: 'INTELLIGENCE_CANCELLATION_UNSUPPORTED'
   })
@@ -444,6 +457,20 @@ function providerDeclaresCapabilityOrFallback(
   )
 }
 
+function providerHasUsableAsrConfiguration(provider: IntelligenceProviderConfig): boolean {
+  if (
+    provider.type !== IntelligenceProviderType.CUSTOM ||
+    !provider.capabilities?.includes('audio.asr') ||
+    !getVoiceAsrMetadata(provider.metadata)
+  ) {
+    return false
+  }
+  return Boolean(
+    provider.models?.some((model) => typeof model === 'string' && Boolean(model.trim())) ||
+    (typeof provider.defaultModel === 'string' && provider.defaultModel.trim())
+  )
+}
+
 export function providerSupportsCapability(
   provider: IntelligenceProviderAdapter,
   capabilityId: string,
@@ -453,6 +480,10 @@ export function providerSupportsCapability(
   const config = provider.getConfig()
   if (!providerDeclaresCapabilityOrFallback(config, capabilityId, capabilityType)) {
     return false
+  }
+
+  if (capabilityType === 'asr') {
+    return providerHasUsableAsrConfiguration(config)
   }
 
   const methodInfo = resolveCapabilityMethod(capabilityType, stream)
@@ -666,6 +697,9 @@ export class TuffIntelligenceSDK {
       if (!capability) {
         throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
       }
+      if (capability.type === 'asr') {
+        throw new Error('INTELLIGENCE_ASR_STREAM_REQUIRED')
+      }
       logInfo(`invoke -> ${capabilityId}`)
 
       const caller = options.metadata?.caller
@@ -684,9 +718,13 @@ export class TuffIntelligenceSDK {
         options
       )
 
-      const cacheKey = this.getCacheKey(capabilityId, payload, runtimeOptions)
+      // STT receipts belong to one request; JSON also erases ArrayBuffer audio identity.
+      const cacheKey =
+        this.config.enableCache && capabilityId !== 'audio.stt'
+          ? this.getCacheKey(capabilityId, payload, runtimeOptions)
+          : null
       throwIfIntelligenceCancelled(signal)
-      if (this.config.enableCache && !runtimeOptions.stream) {
+      if (cacheKey !== null && !runtimeOptions.stream) {
         const cached = this.getFromCache<T>(cacheKey)
         throwIfIntelligenceCancelled(signal)
         if (cached) {
@@ -746,7 +784,7 @@ export class TuffIntelligenceSDK {
         // Commit point: once this gate passes, cache/audit/result complete as one logical success.
         throwIfIntelligenceCancelled(signal)
 
-        if (this.config.enableCache) {
+        if (cacheKey !== null) {
           this.setToCache(cacheKey, result)
         }
 
@@ -774,23 +812,25 @@ export class TuffIntelligenceSDK {
           throw new IntelligenceOperationCancelledError()
         }
 
-        const fallbackResult = hasExplicitProviderSelection(runtimeOptions)
-          ? null
-          : await this.tryFallbackProviders<T>({
-              capabilityId,
-              capabilityType: capability.type,
-              payload,
-              runtimeOptions: fallbackRuntimeOptions,
-              manager,
-              fallbackProviders: strategyResult.fallbackProviders,
-              promptTemplate,
-              promptVariables
-            })
+        const fallbackResult =
+          hasExplicitProviderSelection(runtimeOptions) ||
+          (capabilityId === 'audio.stt' && isNexusManagedProvider(strategyResult.selectedProvider))
+            ? null
+            : await this.tryFallbackProviders<T>({
+                capabilityId,
+                capabilityType: capability.type,
+                payload,
+                runtimeOptions: fallbackRuntimeOptions,
+                manager,
+                fallbackProviders: strategyResult.fallbackProviders,
+                promptTemplate,
+                promptVariables
+              })
         // Fallback success has the same logical commit point as primary success.
         throwIfIntelligenceCancelled(signal)
 
         if (fallbackResult) {
-          if (this.config.enableCache) {
+          if (cacheKey !== null) {
             this.setToCache(cacheKey, fallbackResult)
           }
           if (!outerGoverned) {
@@ -2185,6 +2225,10 @@ export class TuffIntelligenceSDK {
         if (signal?.aborted) {
           throw new IntelligenceOperationCancelledError()
         }
+        // The Nexus upload may already have reserved credits and dispatched its task.
+        if (capabilityId === 'audio.stt' && isNexusManagedProvider(fallbackConfig)) {
+          throw fallbackError
+        }
         // Downgrade to warn with concise message to reduce log noise.
         // Full error details are captured in the audit log.
         const msg = signal
@@ -2577,7 +2621,7 @@ export class TuffIntelligenceSDK {
   }
 
   text = {
-    chat: (payload: IntelligenceChatPayload, options?: IntelligenceInvokeOptions) =>
+    chat: (payload: IntelligenceChatPayload, options?: HostIntelligenceInvokeOptions) =>
       this.invoke<string>('text.chat', payload, options),
 
     chatStream: (payload: IntelligenceChatPayload, options?: IntelligenceInvokeOptions) =>
@@ -2668,7 +2712,7 @@ export class TuffIntelligenceSDK {
   }
 
   vision = {
-    ocr: (payload: IntelligenceVisionOcrPayload, options?: IntelligenceInvokeOptions) =>
+    ocr: (payload: IntelligenceVisionOcrPayload, options?: HostIntelligenceInvokeOptions) =>
       this.invoke<IntelligenceVisionOcrResult>('vision.ocr', payload, options),
 
     caption: (payload: IntelligenceImageCaptionPayload, options?: IntelligenceInvokeOptions) =>
@@ -2704,7 +2748,7 @@ export class TuffIntelligenceSDK {
     tts: (payload: IntelligenceTTSPayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<IntelligenceTTSResult>('audio.tts', payload, options),
 
-    stt: (payload: IntelligenceSTTPayload, options?: IntelligenceInvokeOptions) =>
+    stt: (payload: IntelligenceSTTPayload, options?: HostIntelligenceInvokeOptions) =>
       this.invoke<IntelligenceSTTResult>('audio.stt', payload, options),
 
     transcribe: (
@@ -2777,7 +2821,8 @@ export class TuffIntelligenceSDK {
         }
       }
 
-      // Create a temporary provider instance for testing
+      // Create a temporary provider instance for testing. Model selection is intentionally
+      // dynamic: public provider defaults do not carry a hard-coded model catalog anymore.
       const manager = ensureProviderManager()
       const provider = manager.createProviderInstance(providerConfig)
 
@@ -2807,10 +2852,31 @@ export class TuffIntelligenceSDK {
           timestamp
         }
       }
+      const configuredModel = providerConfig.defaultModel || providerConfig.models?.[0]
+      const availableModels = configuredModel
+        ? [configuredModel]
+        : await fetchProviderModels(providerConfig, {
+            allowStoredFallback: false,
+            skipCooldownCheck: true
+          })
+      const testModel = availableModels.find((model) => typeof model === 'string' && model.trim())
+      if (!testModel) {
+        return {
+          success: false,
+          message: 'No model configured; fetch or add a model first',
+          code: 'PROVIDER_MODEL_NOT_CONFIGURED',
+          latency: Date.now() - startTime,
+          timestamp
+        }
+      }
 
       // Test the provider with timeout
       await Promise.race([
-        provider.chat(testPayload, { timeout, testRun: true }),
+        provider.chat(testPayload, {
+          timeout,
+          testRun: true,
+          modelPreference: [testModel]
+        }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Request timeout')), timeout)
         )

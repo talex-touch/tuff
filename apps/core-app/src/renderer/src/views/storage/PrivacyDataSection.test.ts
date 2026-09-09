@@ -79,7 +79,8 @@ const initialSummary = PRIVACY_SETTINGS_DATA_CATEGORIES.map((category, index) =>
   category,
   itemCount: index + 3,
   byteCount: (index + 1) * 1024,
-  retentionMs: initialPolicy.categories[category].retentionMs,
+  retentionMs:
+    category === 'voice-insights' ? null : initialPolicy.categories[category].retentionMs,
   lastCleanupAt: '2026-07-30T08:00:00.000Z'
 }))
 

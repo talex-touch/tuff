@@ -57,6 +57,7 @@ function toggle() {
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <div style="font-size: 14px; font-weight: 700; line-height: 1.3;">
             <TxTextTransformer
+              mode="fade"
               :text="title"
               :duration-ms="duration"
               :blur-px="blurPx"
@@ -65,6 +66,7 @@ function toggle() {
           </div>
           <div style="font-size: 12px; opacity: 0.8; line-height: 1.4;">
             <TxTextTransformer
+              mode="fade"
               :text="subtitle"
               :duration-ms="duration"
               :blur-px="blurPx"

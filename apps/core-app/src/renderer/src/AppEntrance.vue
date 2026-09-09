@@ -13,11 +13,7 @@ import MetaOverlay from './views/meta/MetaOverlay.vue'
 import OmniPanel from './views/omni-panel/OmniPanel.vue'
 import { createRendererLogger } from './utils/renderer-log'
 
-const FloatingBall = defineAsyncComponent(() => import('./views/assistant/FloatingBall.vue'))
-const WhatsChangedDialog = defineAsyncComponent(
-  () => import('./components/update/WhatsChangedDialog.vue')
-)
-const VoicePanel = defineAsyncComponent(() => import('./views/assistant/VoicePanel.vue'))
+const VoiceDock = defineAsyncComponent(() => import('./views/assistant/VoiceDock.vue'))
 const ScreenshotOverlay = defineAsyncComponent(
   () => import('./views/screenshot/ScreenshotOverlay.vue')
 )
@@ -95,11 +91,8 @@ watchEffect(() => {
     <template v-if="appEntranceMode === 'MetaOverlay'">
       <MetaOverlay />
     </template>
-    <template v-else-if="appEntranceMode === 'AssistantFloatingBall'">
-      <FloatingBall />
-    </template>
-    <template v-else-if="appEntranceMode === 'AssistantVoicePanel'">
-      <VoicePanel />
+    <template v-else-if="appEntranceMode === 'AssistantVoiceDock'">
+      <VoiceDock />
     </template>
     <template v-else-if="appEntranceMode === 'ScreenshotOverlay'">
       <ScreenshotOverlay />

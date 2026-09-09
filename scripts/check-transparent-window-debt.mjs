@@ -28,8 +28,14 @@ import { fileURLToPath } from 'node:url'
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const WINDOW_CONFIG = path.join(REPO_ROOT, 'apps/core-app/src/main/config/default.ts')
 
-/** Window option sets that are transparent with no `backgroundColor`, by design (#806). */
-export const KNOWN_TRANSPARENT_WITHOUT_BACKGROUND = 6
+/**
+ * Window option sets that are transparent with no `backgroundColor`, by design (#806).
+ *
+ * Lowered from 6 when the floating ball and the voice panel were unified: two transparent
+ * option sets with nothing to fall back on became one `AssistantVoiceDockWindowOption` that
+ * declares `backgroundColor: '#00000000'`. Real repair, so the floor moves with it.
+ */
+export const KNOWN_TRANSPARENT_WITHOUT_BACKGROUND = 4
 
 /** Every exported `*WindowOption` in the config, with the two fields that matter. */
 export function readWindowOptions() {

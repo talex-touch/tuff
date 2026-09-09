@@ -1185,6 +1185,149 @@ export async function consumeCredits(
   }
 }
 
+/**
+ * Releases a prior server-owned reservation. This deliberately mirrors the
+ * team-and-user projection used by consumeCredits: a partial release would make
+ * an ASR request appear affordable in one balance while remaining held in the
+ * other. Callers must use one stable business idempotency key per release.
+ */
+export async function releaseConsumedCredits(
+  event: H3Event,
+  userId: string,
+  amount: number,
+  reason: string,
+  metadata?: Record<string, unknown>,
+  options: { idempotencyKey?: string } = {},
+): Promise<CreditConsumptionResult> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+  const activeCreditTeam = await resolveActiveCreditTeam(event, userId)
+  await ensureBalance(event, 'team', activeCreditTeam.teamId)
+  await ensureBalance(event, 'user', userId)
+
+  const numericAmount = Number(amount)
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0)
+    throw new Error('Invalid credit release amount.')
+
+  const normalizedAmount = Math.max(1, normalizeCreditAmount(numericAmount))
+  const month = getMonthKey()
+  const idempotencyKey = normalizeCreditIdempotencyKey(options.idempotencyKey)
+  const ledgerMetadata = metadata ? { ...metadata, userId } : { userId }
+  const idempotencyHash = idempotencyKey
+    ? digestCreditConsumptionPayload({
+        userId,
+        teamId: activeCreditTeam.teamId,
+        amount: normalizedAmount,
+        reason,
+        metadata: ledgerMetadata,
+      })
+    : null
+
+  if (idempotencyKey) {
+    const existing = await db.prepare(`
+      SELECT id, delta, created_at, metadata, idempotency_hash
+      FROM ${CREDIT_LEDGER_TABLE}
+      WHERE scope = 'team'
+        AND scope_id = ?
+        AND reason = ?
+        AND idempotency_key = ?
+      LIMIT 1
+    `).bind(activeCreditTeam.teamId, reason, idempotencyKey).first<{
+      id: string
+      delta: number
+      created_at: string
+      metadata?: string | null
+      idempotency_hash?: string | null
+    }>()
+
+    if (existing) {
+      if (existing.idempotency_hash && existing.idempotency_hash !== idempotencyHash)
+        throw new Error('Credit idempotency conflict.')
+
+      const existingMetadata = parseLedgerMetadata(existing.metadata ?? null)
+      return {
+        ledgerId: existing.id,
+        teamId: activeCreditTeam.teamId,
+        userId,
+        amount: Math.abs(resolveCreditAmount(existing.delta)),
+        reason,
+        createdAt: existing.created_at,
+        metadata: existingMetadata && Object.keys(existingMetadata).length ? existingMetadata : ledgerMetadata,
+        idempotencyKey,
+      }
+    }
+  }
+
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+  const batchResults = await db.batch([
+    db.prepare(`
+      INSERT INTO ${CREDIT_LEDGER_TABLE} (
+        id, scope, scope_id, delta, reason, created_at, metadata, idempotency_key, idempotency_hash
+      )
+      SELECT ?, 'team', ?, ?, ?, ?, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
+        WHERE scope = 'team' AND scope_id = ? AND month = ? AND used >= ?
+      )
+      AND EXISTS (
+        SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
+        WHERE scope = 'user' AND scope_id = ? AND month = ? AND used >= ?
+      )
+    `).bind(
+      id,
+      activeCreditTeam.teamId,
+      normalizedAmount,
+      reason,
+      now,
+      JSON.stringify(ledgerMetadata),
+      idempotencyKey,
+      idempotencyHash,
+      activeCreditTeam.teamId,
+      month,
+      normalizedAmount,
+      userId,
+      month,
+      normalizedAmount,
+    ),
+    db.prepare(`
+      UPDATE ${CREDIT_BALANCES_TABLE}
+      SET used = used - ?
+      WHERE scope = 'team'
+        AND scope_id = ?
+        AND month = ?
+        AND used >= ?
+        AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
+    `).bind(normalizedAmount, activeCreditTeam.teamId, month, normalizedAmount, id),
+    db.prepare(`
+      UPDATE ${CREDIT_BALANCES_TABLE}
+      SET used = used - ?
+      WHERE scope = 'user'
+        AND scope_id = ?
+        AND month = ?
+        AND used >= ?
+        AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
+    `).bind(normalizedAmount, userId, month, normalizedAmount, id),
+  ])
+
+  const insertedLedger = Number((batchResults[0] as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0)
+  const updatedTeam = Number((batchResults[1] as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0)
+  const updatedUser = Number((batchResults[2] as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0)
+  if (insertedLedger < 1 || updatedTeam < 1 || updatedUser < 1)
+    throw new Error('Credit release failed.')
+
+  return {
+    ledgerId: id,
+    teamId: activeCreditTeam.teamId,
+    userId,
+    amount: normalizedAmount,
+    reason,
+    createdAt: now,
+    metadata: ledgerMetadata,
+    idempotencyKey: idempotencyKey ?? undefined,
+  }
+}
+
 export async function listCreditLedger(event: H3Event, userId: string) {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)

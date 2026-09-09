@@ -222,6 +222,14 @@ describe("transport domain sdk mappings", () => {
       module: "voice-panel",
       action: "submit",
     });
+    expect(AssistantEvents.voice.panelClosed.toEventName()).toBe(
+      "assistant:voice-panel:closed",
+    );
+    expect(AssistantEvents.voice.panelClosed).toMatchObject({
+      namespace: "assistant",
+      module: "voice-panel",
+      action: "closed",
+    });
     expect(AssistantEvents.voice.captureScreenshot.toEventName()).toBe(
       "assistant:voice-panel:capture-screenshot",
     );

@@ -97,6 +97,23 @@ export interface PluginClipboardItem {
   sourceApp?: string | null;
   timestamp?: string | number | Date | null;
   isFavorite?: boolean | null;
+  /** The user's own note on this entry, or null when they have not written one. */
+  note?: string | null;
+  /**
+   * Tags the user typed. Separate from the classifier's `meta.tags`, which is recomputed on every
+   * capture and would overwrite anything a person put there.
+   */
+  userTags?: string[];
+  /**
+   * When this entry is expected to be deleted automatically, or null if it never will be.
+   *
+   * Computed by the host, because it depends on the retention policy currently in force and
+   * a plugin cannot see that. Recomputing it here would start lying the moment the user
+   * changes a setting.
+   */
+  retentionExpiresAt?: number | null;
+  /** Why that answer, so the UI can say "favourited" rather than just "never". */
+  retentionReason?: "favorite" | "protected" | "policy" | "disabled";
   metadata?: string | null;
   meta?: Record<string, unknown> | null;
 }

@@ -591,3 +591,124 @@ Rebuilt HomeModelMenu on TxDropdownMenu with a provider filter strip, cross-prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 66: 剪贴板历史：密钥掩码一致性、内容分类统一与按类保留
+
+**Date**: 2026-09-07
+**Task**: 剪贴板历史：密钥掩码一致性、内容分类统一与按类保留
+**Branch**: `feature/clipboard-layout-shell`
+
+### Summary
+
+把剪贴板历史的密钥掩码从「只有洞察区成立」修成全表面成立，并把主进程与插件两套互相打架的分类器合并成一份共享实现（带 span，因此正文里嵌的密钥也能掩码）。在此之上落地按内容类别的保留：密钥永不自动删除（retention_protected 列、索引与清理豁免早已存在但从未被写过）、验证码 1 小时过期（新增 per-item 列 + 1-hour 预设）、详情显示预计删除时间（清理条件的逆运算，有一条测试把两者绑死）、三档全部可配置，并回填历史记录的密钥保护。另修交互四项：拆词取代拆字、全局 user-select、Cmd+方向键切分类、Cmd+Enter 按内容类型分派动作。过程中放宽了插件通道白名单（openExternal/showInFolder）并给它们补上 system.shell 权限门。教训：CI 的 typecheck 带 --composite false 而我没带；一条「不写过期」的断言因为种子到不了被测分支而恒真；grep Tests 看不见整个文件加载失败。遗留：三处纯样式未在真实窗口验证；PR #1879 仍 BLOCKED（剩余红灯属并发 agent 的语音模块）；会话中我误把用户真 API key 当测试夹具并经并发推送进入公开仓库，已重写历史清除但 key 仍需吊销。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fbddec35d` | (see git log) |
+| `23c734c50` | (see git log) |
+| `e1796d4a9` | (see git log) |
+| `820ea3c78` | (see git log) |
+| `d848b0b74` | (see git log) |
+| `e2b7bc39a` | (see git log) |
+| `d160bdfcf` | (see git log) |
+| `67dd05a6a` | (see git log) |
+| `cdc705adf` | (see git log) |
+| `abd485732` | (see git log) |
+| `99f372f45` | (see git log) |
+| `98511ac2a` | (see git log) |
+| `b129f083e` | (see git log) |
+| `f0baca5f3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 67: 剪贴板历史：系统预览、快速标注、OCR 收纳
+
+**Date**: 2026-09-08
+**Task**: 剪贴板历史：系统预览、快速标注、OCR 收纳
+**Branch**: `master`
+
+### Summary
+
+图片预览改为交给系统预览器（Esc 被宿主 before-input-event 拦截，插件内浮层无法关闭；Quick Look 面板挂在 BrowserWindow 上会被 CoreBox 失焦隐藏一起带走，故全平台走 shell.openPath，请求只带记录 id 并在剪贴板图片目录内定界）。新增快速标注：备注 + 用户标签写入记录 metadata，因此立刻可被关键词搜索命中；与分类器产出的 tags 分开存，避免被下一次捕获覆盖；同时写 metadata 列和 clipboard_history_meta 表，因为 hydrateWithMeta 优先读后者。OCR 从详情区收进更多信息，标注排到最前。顺带修复三处失效的验证：clipboard-image-persistence.test.ts 因 electron mock 缺 app 而整文件不加载（7 条用例从未跑过）、renderer-csp.test.ts 仍在扒已迁移到响应头的 meta 标签、以及 tuff-cli 的 dashboard slug 归一化缺回归测试（该 bug 造出过重复插件条目）。发布 1.2.0-beta.5 到 Nexus。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7bad7935d` | (see git log) |
+| `e2eeac327` | (see git log) |
+| `d5a703d8e` | (see git log) |
+| `d5c10d261` | (see git log) |
+| `c9f42a721` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 68: 剪贴板识别 SSH 与主机端点
+
+**Date**: 2026-09-08
+**Task**: 剪贴板识别 SSH 与主机端点
+**Branch**: `master`
+
+### Summary
+
+识别 SSH 端点、主机 IP 与公钥，详情区拆成可单独复制的字段，主机 IP 默认掩码。前置改动是把掩码和保留期解耦：retentionClass 原本由 secrets.length > 0 推导，而 maskSecretSpans 只认 ClipboardSecretHit，所以任何为掩码而加入的东西都会顺带让记录永不自动删除；改为按 kind 查 RETENTION_PROTECTING_KINDS。动手前先发现保留期只有 2/7 个 kind 有断言，补齐后逐项注入验证。识别规则几乎全是「什么不算」：裸数字永不当端口（与验证码同一条纪律）、公网 IPv4 在散文中当版本号而私有段直接当主机、公钥 base64 下限 32、前导零不认；IP 命中排在扫描顺序最末，使连接串里的 IP 仍归连接串并保持凭据保护。实现暴露三处规划未预见的问题：邮箱与 user@host 同形（由既有 email 测试抓出）、掩码不能挂在 detectSecret 上（纯 IP 记录会完全不掩码）、Vue 把缺省 Boolean prop 铸成 false 导致掩码默认值失效。累计 29 处注入验证。发布 1.2.0-beta.6。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `49560c7cf` | (see git log) |
+| `ec081c9e8` | (see git log) |
+| `205190ed8` | (see git log) |
+| `8da78649b` | (see git log) |
+| `96e5f7894` | (see git log) |
+| `8b00fff05` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -381,6 +381,43 @@ describe('publish', () => {
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('was not found'))
   })
 
+  it('publishes to the plugin whose slug is the manifest id, not a punctuation-normalised copy of it', async () => {
+    // How the duplicate `com.tuffex.clipboard.history` listing came to exist: the resolver used to
+    // run `manifest.id` through the same slug normaliser as a fallback name, which turns every
+    // hyphen into a dot. The CLI then created and kept publishing to a plugin nobody had declared.
+    //
+    // Both listings are on the dashboard here because that is the state the bug leaves behind, and
+    // it is the state where getting it wrong is silent: with only the correct one present the
+    // manifest-id fallback in `findDashboardPlugin` rescues the lookup and the bug hides.
+    const request = vi.spyOn(networkClient, 'request').mockImplementation(async (options: NetworkRequestOptions) => {
+      if (options.method === 'GET' && options.url.includes('/api/dashboard/auth/publisher')) {
+        return textResponse(options, JSON.stringify({ ok: true, userId: 'user-1' }))
+      }
+
+      if (options.method === 'GET' && options.url.includes('/api/dashboard/plugins')) {
+        return textResponse(options, JSON.stringify({
+          total: 2,
+          plugins: [
+            { id: 'plugin-normalised', slug: 'com.tuffex.demo.plugin', name: 'demo-plugin' },
+            { id: 'plugin-declared', slug: 'com.tuffex.demo-plugin', name: 'demo-plugin' },
+          ],
+        }))
+      }
+
+      return textResponse(options, JSON.stringify({
+        version: { id: 'version-1', version: '1.0.0', status: 'pending', channel: 'RELEASE' },
+      }))
+    })
+
+    await withPluginFixture(async () => {
+      await publish({ notes: 'First release' })
+      expect(process.exitCode).toBeUndefined()
+    })
+
+    expect(request.mock.calls[2]?.[0].url).toContain('/api/dashboard/plugins/plugin-declared/versions')
+    expect(request.mock.calls[2]?.[0].url).not.toContain('plugin-normalised')
+  })
+
   it('fails before package resolution when auth token is rejected by Nexus', async () => {
     const request = vi.spyOn(networkClient, 'request').mockImplementation(async (options: NetworkRequestOptions) => {
       return textResponse(

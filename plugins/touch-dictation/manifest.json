@@ -13,13 +13,12 @@
   "main": "index.js",
   "permissions": {
     "required": ["voice.dictation", "search.root-results"],
-    "optional": ["clipboard.read", "clipboard.write"]
+    "optional": ["clipboard.read"]
   },
   "permissionReasons": {
-    "voice.dictation": "采集麦克风、将语音转写为文本并用 AI 润色",
+    "voice.dictation": "采集麦克风、将语音转写为文本并用 AI 润色后写入当前应用",
     "search.root-results": "在 CoreBox 根搜索结果中显示听写和朗读操作",
-    "clipboard.read": "读取剪贴板文字用于朗读",
-    "clipboard.write": "将听写结果写入并粘贴到当前应用"
+    "clipboard.read": "读取剪贴板文字用于朗读"
   },
   "searchProviders": [
     {

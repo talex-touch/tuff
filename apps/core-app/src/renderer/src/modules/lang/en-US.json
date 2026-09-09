@@ -258,6 +258,7 @@
       "memoryIndependent": "Explicit AI Memory follows its own TTL or user deletion and is not removed by audit retention.",
       "unsupportedSelection": "Choose a currently supported retention period for every category before saving.",
       "presets": {
+        "1-hour": "1 hour",
         "1-day": "1 day",
         "7-days": "7 days",
         "30-days": "30 days",
@@ -265,6 +266,21 @@
         "180-days": "180 days",
         "365-days": "365 days",
         "permanent": "Keep permanently"
+      }
+    },
+    "clipboardTiers": {
+      "title": "Clipboard content tiers",
+      "hint": "Verification codes and secrets share a table and a deletion path with ordinary clipboard entries, so their policies live here rather than as separate data categories.",
+      "verificationCode": "Keep verification codes for",
+      "protectSecrets": "Never auto-delete secrets",
+      "customPrefixes": "Custom key prefixes",
+      "customPrefixesPlaceholder": "e.g. cr_, zz- (comma separated)",
+      "durations": {
+        "300000": "5 minutes",
+        "900000": "15 minutes",
+        "3600000": "1 hour",
+        "21600000": "6 hours",
+        "86400000": "24 hours"
       }
     },
     "actions": {
@@ -355,6 +371,7 @@
       "intelligence-audit": "Intelligence audit metadata",
       "intelligence-context": "Intelligence context conversations",
       "diagnostics": "Diagnostics and telemetry metadata",
+      "voice-insights": "Voice insight aggregates",
       "intelligence-memory": "Explicit AI Memory",
       "plugin-data": "Plugin data"
     },
@@ -525,17 +542,42 @@
     "recommendationContextLocationDesc": "Use a hashed local timezone and network bucket instead of raw location data."
   },
   "settingAssistant": {
-    "groupTitle": "Assistant Floating Ball",
-    "groupDesc": "Enable a desktop floating entry that sends text commands to CoreBox.",
+    "groupTitle": "Assistant",
     "enableAssistant": "Enable Assistant",
-    "enableAssistantDesc": "Assistant entries such as the floating ball and voice panel only respond when this is enabled. It stays off by default.",
-    "floatingBall": "Show floating ball",
-    "floatingBallDesc": "Show a draggable desktop entry. Click it to open the text command panel.",
-    "voiceWake": "Voice wake",
-    "voiceWakeDesc": "When enabled, the floating ball and panel may request speech recognition. When disabled, only text input is used.",
-    "wakeWords": "Wake words",
-    "wakeWordsDesc": "Separate multiple wake words with commas.",
-    "wakeWordsPlaceholder": "Alo, aler"
+    "floatingBall": "Floating ball",
+    "floatingBallDesc": "Show the draggable Assistant entry on the desktop."
+  },
+  "settingSpeechRecognition": {
+    "title": "Speech recognition",
+    "description": "Manage voice entry, recognition history, and channel and model configuration.",
+    "refresh": "Try again",
+    "voiceInput": {
+      "title": "Voice input",
+      "description": "Briefly press Fn on macOS or Ctrl on Windows/Linux to start, then press again to finish. Hold and release to finish. The microphone is captured only while voice input is active."
+    },
+    "capabilities": {
+      "title": "Channel and model",
+      "description": "Set in Intelligence — binding and order are on that page.",
+      "action": "Open Intelligence"
+    },
+    "history": {
+      "title": "Keep recognition records",
+      "description": "Keeps source audio and transcripts; off keeps statistics only."
+    },
+    "unavailable": {
+      "title": "Recognition status could not be read",
+      "description": "Readiness could not be loaded. Try again."
+    },
+    "reasons": {
+      "credentialMissing": "The selected AI channel has no credential.",
+      "unavailable": "Recognition is unavailable right now."
+    },
+    "asr": {
+      "ready": "Speech recognition is ready",
+      "readyHint": "Hold ⌘ and speak; the text lands in the app you are in.",
+      "notReady": "Speech recognition is not set up",
+      "notConfigured": "No channel is bound to audio.asr, so holding ⌘ and speaking does nothing."
+    }
   },
   "settingLocalAiCli": {
     "groupTitle": "Local AI agents",
@@ -1011,6 +1053,7 @@
   "shell": {
     "search": "Search",
     "newChat": "New Chat",
+    "voiceInsights": "Voice Insights",
     "store": "Plugins",
     "setting": "Settings",
     "collapseSidebar": "Collapse sidebar",
@@ -1029,6 +1072,151 @@
       "earlier": "Earlier",
       "untitled": "New chat",
       "delete": "Delete conversation"
+    }
+  },
+  "voiceInsights": {
+    "headline": "Faster said than typed",
+    "subtitle": "See aggregate voice impact; when record keeping is enabled, inspect source audio, transcripts, and channel usage in Intelligence settings.",
+    "sectionTitle": "Insights",
+    "loading": "Loading voice insights...",
+    "actions": {
+      "refresh": "Refresh",
+      "share": "Share",
+      "clear": "Clear insights",
+      "retry": "Retry",
+      "showReport": "View report",
+      "hideReport": "Hide report",
+      "cancel": "Cancel"
+    },
+    "boundary": {
+      "notStarted": "Statistics begin with your first successful, non-empty voice capture.",
+      "since": "Recorded locally since {date}."
+    },
+    "metrics": {
+      "label": "Voice usage metrics",
+      "characters": "Dictated characters",
+      "saved": "Estimated time saved",
+      "rate": "Average dictation rate",
+      "duration": "Total dictation time",
+      "savedBasis": "Estimated against a {count} characters/minute typing baseline; not measured typing.",
+      "savedEquivalent": "{count} characters you did not type"
+    },
+    "units": {
+      "characters": "characters",
+      "charactersPerMinute": "characters/min",
+      "days": "days",
+      "zeroMinutes": "0 min",
+      "lessThanMinute": "< 1 min",
+      "minutes": "{count} min",
+      "hours": "{count} hr",
+      "hoursMinutes": "{hours} hr {minutes} min"
+    },
+    "streak": {
+      "title": "Activity — last 365 local days",
+      "windowNote": "Active-day and longest-streak values are limited to this rolling window.",
+      "label": "Voice activity streaks within the last 365 local days",
+      "activeDays": "Active days",
+      "current": "Current streak",
+      "longest": "Longest streak"
+    },
+    "heatmap": {
+      "title": "Last 365 local days",
+      "description": "Color reflects dictated character volume. Hatched days predate recording.",
+      "legend": "Activity volume legend",
+      "less": "Less",
+      "more": "More",
+      "accessibleLabel": "Voice activity calendar for the last 365 local days",
+      "scrollLabel": "Scrollable voice activity calendar; use horizontal scrolling to review all 365 days",
+      "beforeTracking": "{date}: statistics were not recording yet",
+      "noActivity": "{date}: no recorded voice activity",
+      "daySummary": "{date}: {characters} characters across {sessions} successful captures, {duration}"
+    },
+    "empty": {
+      "title": "Your voice history starts here",
+      "description": "Complete a successful, non-empty voice capture and this page will begin showing real totals, streaks, and daily activity.",
+      "privacy": "Only aggregate counts are kept. Raw audio, transcripts, app names, and paths are not part of voice insights."
+    },
+    "error": {
+      "title": "Voice insights could not be loaded",
+      "description": "Your existing statistics were not changed. Retry the local request."
+    },
+    "share": {
+      "title": "Tuff Voice Insights",
+      "copied": "Aggregate voice insights copied",
+      "copyFailed": "Could not copy the aggregate summary",
+      "unavailable": "not available yet",
+      "rateValue": "{count} characters/minute",
+      "characters": "Dictated characters: {count}",
+      "saved": "Estimated time saved: {duration}",
+      "rate": "Average dictation rate: {rate}",
+      "duration": "Total dictation time: {duration}",
+      "activeDays": "Active days in the last 365 local days: {count}",
+      "currentStreak": "Current streak in the last 365 local days: {count} days",
+      "longestStreak": "Longest streak in the last 365 local days: {count} days",
+      "sessions": "Successful captures: {count}",
+      "polishedSessions": "Polished captures: {count}",
+      "estimateBasis": "Time-saved estimate uses a {count} characters/minute typing baseline; it is not measured typing."
+    },
+    "clear": {
+      "title": "Clear voice insights?",
+      "description": "This permanently deletes the aggregate totals and daily activity shown here. Recording starts again after your next successful, non-empty voice capture.",
+      "confirm": "Clear all insights",
+      "success": "Voice insights cleared",
+      "failed": "Voice insights could not be cleared. Nothing shown here was changed.",
+      "refreshNeededTitle": "Insights were cleared",
+      "refreshNeededDescription": "The cleared state could not be refreshed yet. No previous statistics are being shown; refresh to load the current zero state."
+    },
+    "report": {
+      "title": "Aggregate report",
+      "description": "A transparent summary of what was counted and how cleanup usage is calculated.",
+      "successfulSessions": "Successful captures recorded",
+      "polishedSessions": "Captures polished",
+      "cleanupRate": "Cleanup rate",
+      "learningTitle": "Personalized learning is not enabled",
+      "learningUnavailable": "This report does not infer a learning score, vocabulary profile, or personal dictionary. It only displays real aggregate usage.",
+      "methodologyTitle": "How these numbers are calculated",
+      "successMethod": "Each successful, non-empty live capture is counted once, including a successful retry; uploads, TTS, and partial results are excluded.",
+      "characterMethod": "Characters are visible CJK and other characters after whitespace and punctuation are excluded. They are not English word counts.",
+      "savedMethod": "Estimated time saved is the non-negative difference between a {count} characters/minute typing baseline and recorded dictation duration. The baseline is an estimate, not measured typing.",
+      "rateMethod": "Average dictation rate is total counted characters divided by total recorded duration.",
+      "calendarMethod": "Active days and streaks use a rolling 365-day window of local calendar dates in {timezone}; future days are never included."
+    },
+    "records": {
+      "title": "Recognition records",
+      "description": "Inspect source audio, raw transcript, final text, duration, channel, and usage for each recognition.",
+      "empty": "No recognition records yet.",
+      "emptyText": "No text generated",
+      "clear": "Clear records",
+      "clearSuccess": "Recognition records cleared",
+      "clearFailed": "Recognition records could not be cleared",
+      "audioLabel": "Recognition source audio",
+      "audioUnavailable": "Source audio unavailable",
+      "audioMeta": "Audio {duration} · {bytes} bytes",
+      "rawText": "Raw transcript",
+      "finalText": "Final text",
+      "duration": "Recording duration",
+      "recognitionDuration": "Recognition time",
+      "tokens": "Tokens",
+      "tokensValue": "{count}",
+      "tokensSplit": "Input {input} · output {output}",
+      "tokensUnavailable": "Not returned by channel",
+      "channel": "Channel",
+      "error": "Error",
+      "status": {
+        "success": "Success",
+        "empty": "No content",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      }
+    },
+    "weeks": {
+      "title": "Last 12 weeks",
+      "note": "Bar height is that week’s dictated characters against the busiest week.",
+      "streak": "{current}-day streak · longest {longest} · {active} active days"
+    },
+    "tiers": {
+      "weeksPending": "After a week of records, the 12-week comparison appears here.",
+      "activityPending": "After a month of records, the year heatmap and report appear here."
     }
   },
   "home": {
@@ -1210,6 +1398,8 @@
     "back": "Back to Intelligence",
     "channels": "Channels",
     "channelsDesc": "Model providers, credentials and connectivity tests.",
+    "voice": "Audio Insights",
+    "voiceDesc": "Live dictation, audio transcription, recognition records, and audio insights",
     "prompts": "Prompts",
     "promptsDesc": "Prompt library, variables and versions.",
     "agents": "Agents",
@@ -2493,6 +2683,7 @@
     "homeConversation": "Conversation",
     "login": "Please login first!",
     "permission": "You don't have permission!",
+    "voiceInsights": "Voice Insights",
     "pluginStore": "Plugin Store",
     "installedPlugins": "Installed Plugins",
     "storeDocs": "Store Docs",
@@ -2508,6 +2699,7 @@
     "storagable": "Storagable",
     "intelligence": "Intelligence",
     "intelligenceChannels": "Intelligence Channels",
+    "intelligenceVoice": "Audio Insights",
     "intelligenceCapabilities": "Intelligence Capabilities",
     "intelligencePrompts": "Intelligence Prompts",
     "intelligenceAudit": "Intelligence Audit",
@@ -3787,7 +3979,17 @@
       "duplicateProvider": "Duplicate channel",
       "editProviderBasic": "Edit basic info",
       "providerNameHint": "Name shown in the list and details panel.",
-      "providerTypeHint": "Used to match built-in adapters; unknown types are handled as custom.",
+      "providerTypeHint": "Determines this channel's protocol and built-in adapter.",
+      "providerTypeOptions": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "deepseek": "DeepSeek",
+        "siliconflow": "SiliconFlow",
+        "local": "Local model (Ollama)",
+        "compatible": "Compatible",
+        "bailian": "Bailian",
+        "volcengine": "Volcengine"
+      },
       "deleteConfirmTitle": "Delete Provider",
       "deleteConfirmMessage": "Are you sure you want to delete provider \"{name}\"? This action cannot be undone.",
       "deleteConfirmButton": "Delete",
@@ -3832,6 +4034,7 @@
       "configuredModels": "Configured Models",
       "capabilityTestTitle": "Test Capability",
       "capabilityTestDesc": "Test if this capability works with current configuration",
+      "capabilityAsrBindingTestDesc": "This test uses the saved audio.asr capability binding and its configured model; provider and model overrides are unavailable.",
       "testProvider": "Select Test Provider",
       "testProviderDesc": "Choose an enabled provider for testing",
       "testInput": "Test Input",
@@ -3914,8 +4117,14 @@
       "autoSaveEnabled": "Auto-save enabled",
       "transferAvailableModels": "Available Models",
       "transferSelectedModels": "Selected Models",
+      "transferFilterPlaceholder": "Search models",
       "transferEmptyAvailable": "No available models. Sync from channel config first.",
       "transferEmptySelected": "No models selected. Add at least one model to use this capability.",
+      "transferAddAriaLabel": "Add checked models to the bound list",
+      "transferRemoveAriaLabel": "Remove checked models from the bound list",
+      "transferSelectAllAriaLabel": "Select all",
+      "transferMoveUpAriaLabel": "Move up",
+      "transferMoveDownAriaLabel": "Move down",
       "transferCustomPlaceholder": "Custom model ID",
       "transferAddButton": "Add",
       "agentsDescription": "Agent system for automated task execution",
@@ -4681,24 +4890,41 @@
   },
   "assistant": {
     "floatingBall": {
-      "voiceWakeOff": "Voice wake is off",
-      "listening": "Listening: {wakeWords}",
-      "clickToOpen": "Click to open Assistant",
-      "unsupported": "Speech recognition is not supported in this environment",
+      "voiceWakeOff": "Voice input is off",
+      "listening": "Voice input active",
+      "clickToOpen": "Click to open voice input",
+      "unsupported": "Voice input is not supported in this environment",
       "permissionDenied": "Microphone permission was not granted",
-      "recognitionError": "Speech recognition error: {error}"
+      "recognitionError": "Voice input error: {error}"
     },
     "voicePanel": {
-      "unsupported": "Speech recognition is not supported in this environment",
+      "unsupported": "Voice input is not supported in this environment",
       "permissionDenied": "Microphone permission was not granted",
-      "recognitionError": "Speech recognition error: {error}",
-      "voiceWakeDisabled": "Voice wake is off. You can type a text command directly.",
+      "recognitionError": "Voice input error: {error}",
+      "voiceInputDisabled": "Voice input is off — turn it on in Settings",
       "emptyInput": "Speak or enter something to execute first",
       "submitFailed": "Send failed. Please try again.",
       "listening": "Listening...",
       "waiting": "Waiting for voice input",
       "textOnly": "Text input mode",
       "close": "Close",
+      "cancelSession": "Cancel this session",
+      "cancelled": "Cancelled",
+      "capturingDevice": "Starting voice input…",
+      "microphoneUnresponsive": "The microphone is not responding",
+      "microphoneMissing": "No microphone available",
+      "microphoneDenied": "Microphone access not granted",
+      "holdToCancel": "Hold to cancel",
+      "stillWorking": "Still transcribing…",
+      "stillWorkingLong": "Longer than usual — hold Esc to cancel",
+      "recovering": "Recovering…",
+      "recoverCancelled": "You cancelled a recording",
+      "recoverFailed": "The last transcription failed",
+      "recoveryExpired": "That recording expired — say it again",
+      "undo": "Undo",
+      "retry": "Retry",
+      "quotaExhausted": "AI credits are used up — check Settings",
+      "serviceBusy": "The service is busy. Try again shortly.",
       "placeholder": "Speak or type what you want to do, for example: search my latest meeting notes",
       "startListening": "Start listening",
       "listeningAction": "Listening",
@@ -4707,18 +4933,19 @@
       "providerRecording": "Recording. Stop to transcribe (30 seconds maximum)",
       "stopAndTranscribe": "Stop and transcribe",
       "voiceTranscribing": "Transcribing with an AI provider...",
-      "voiceTranscribingShort": "Transcribing...",
+      "voiceTranscribingShort": "Transcribing…",
       "voiceTranscribed": "Voice transcription complete",
       "voiceTranscribedWithProvider": "Voice transcribed by {provider}",
-      "voiceBrowserFallback": "AI transcription is unavailable. Browser speech recognition is ready; speak again.",
-      "providerRecordingUnavailable": "Recording is unavailable. Trying browser speech recognition.",
-      "voiceTranscribeAssistantDisabled": "Assistant is disabled, so voice transcription is unavailable.",
       "voiceTranscribeInvalid": "The recording is invalid. Record it again.",
       "voiceTranscribeTooLarge": "The recording exceeds the 5 MiB limit. Shorten it and try again.",
       "voiceTranscribeTooLong": "The recording exceeds the 30-second limit. Shorten it and try again.",
       "voiceTranscribeUnavailable": "AI voice transcription is unavailable. Check login, quota, or provider status.",
+      "voiceRecognitionNotConfigured": "Speech recognition is not set up",
+      "voiceRecognitionUnavailable": "Speech recognition is unavailable",
       "voiceTranscribeEmpty": "No speech was detected. Record it again.",
-      "voiceTranscribeFailed": "Voice transcription failed. Try again.",
+      "voiceListening": "Listening…",
+      "voiceTranscribeFailed": "Voice transcription failed",
+      "voiceDeliveryFailed": "Could not insert text — focus the input first",
       "submitting": "Sending...",
       "sendToCoreBox": "Send to CoreBox",
       "translateClipboardImage": "Translate clipboard image",
@@ -4745,8 +4972,6 @@
       "screenshotTranslating": "Taking and translating a screenshot...",
       "screenshotTranslateReady": "Screenshot translation opened",
       "screenshotTextFallbackReady": "Image translation was unavailable. OCR text translation is shown below.",
-      "screenshotTextFallbackTitle": "OCR text translation",
-      "screenshotTextFallbackSource": "Detected text",
       "screenshotTextFallbackTarget": "Translation",
       "screenshotTextFallbackMetadata": "OCR: {ocr} · Translation: {translation}",
       "screenshotImageTranslateRouteTitle": "Image translation route",
@@ -4792,7 +5017,11 @@
       "screenshotTranslateUnavailable": "Screenshot is unavailable. Check screen recording permission or try again later.",
       "screenshotTranslateImageUnavailable": "The screenshot image is invalid. Take another screenshot and try again.",
       "imageTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status.",
-      "screenshotTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status."
+      "screenshotTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status.",
+      "openMicrophoneSettings": "Open microphone settings",
+      "microphoneSettingsUnavailable": "This system cannot open microphone settings",
+      "usingDevice": "Switched to {name}",
+      "openRecognitionSettings": "Open Intelligence settings"
     },
     "regionSelector": {
       "title": "Select a screenshot region",
@@ -4956,7 +5185,7 @@
       "providersCount": "providers"
     },
     "item": {
-      "configError": "Configuration incomplete or invalid",
+      "configError": "Setup needed",
       "nexusOfficial": "Official",
       "nexusAuthReady": "Nexus auth ready",
       "nexusAuthRequired": "Nexus sign-in required"
@@ -4976,6 +5205,17 @@
         "apiKey": "API Key",
         "apiKeyPlaceholder": "Enter your API key",
         "apiKeyRequired": "API key is required for enabled providers",
+        "apiKeySaving": "Saving API key…",
+        "apiKeySaved": "Saved",
+        "apiKeyReplacePlaceholder": "Saved — enter a new key to replace",
+        "apiKeySaveFailed": "Could not save the API key. Your input is retained; please retry.",
+        "apiKeyRevealFailed": "Could not reveal the saved API key.",
+        "apiKeyShow": "Show saved API key",
+        "apiKeyHide": "Hide API key",
+        "voiceAsrDoubaoResourceId": "Doubao resource ID",
+        "voiceAsrDoubaoResourceIdPlaceholder": "resource-id",
+        "voiceAsrIdentifierInvalid": "Enter the required public ASR identifier before saving.",
+        "dialogClose": "Close",
         "baseUrl": "Base URL",
         "baseUrlPlaceholder": "https://api.example.com/v1",
         "baseUrlHint": "Leave empty to use the default endpoint",
@@ -5015,6 +5255,11 @@
         "transferAll": "All Models",
         "transferEnabled": "Enabled Models",
         "transferFilterPlaceholder": "Search models",
+        "transferAddAriaLabel": "Enable checked models",
+        "transferRemoveAriaLabel": "Disable checked models",
+        "transferSelectAllAriaLabel": "Select all",
+        "transferEmptyAll": "No models yet. Use Fetch Models to sync from the provider, or add one by hand.",
+        "transferEmptyEnabled": "No models enabled yet. Pick them on the left and move them over.",
         "modelExists": "This model already exists",
         "addModelPlaceholder": "Type model name and press Enter",
         "defaultModel": "Default Model",

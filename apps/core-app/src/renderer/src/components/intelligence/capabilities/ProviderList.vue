@@ -1,11 +1,14 @@
 <script lang="ts" setup name="ProviderList">
 import type { CapabilityBinding } from './types'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
+import { getVoiceCapabilityRecommendedModels } from '@talex-touch/utils/intelligence/voice-asr'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
 
 const props = defineProps<{
+  capabilityId?: string
   enabledBindings: CapabilityBinding[]
   disabledBindings: CapabilityBinding[]
 }>()
@@ -52,6 +55,15 @@ function handleProviderToggle(providerId: string, enabled: boolean): void {
   const provider = allProviders.value.find((binding) => binding.providerId === providerId)
   if (!provider) return
 
+  const providerConfig = provider.provider
+  const recommendedModels = providerConfig
+    ? getVoiceCapabilityRecommendedModels(props.capabilityId ?? '', {
+        ...(providerConfig.metadata ?? {}),
+        baseUrl: providerConfig.baseUrl,
+        channelType: getProviderChannelType(providerConfig)
+      })
+    : []
+
   emits('reorder', [
     ...props.enabledBindings,
     {
@@ -59,7 +71,7 @@ function handleProviderToggle(providerId: string, enabled: boolean): void {
       provider: provider.provider,
       enabled: true,
       priority: props.enabledBindings.length + 1,
-      models: provider.models || []
+      models: provider.models?.length ? provider.models : recommendedModels
     }
   ])
   emits('focus', providerId)
@@ -71,8 +83,13 @@ function handleProviderToggle(providerId: string, enabled: boolean): void {
     <TuffBlockSlot
       v-for="provider in allProviders"
       :key="provider.providerId"
-      :title="provider.provider?.name || provider.providerId"
-      :description="provider.provider?.type || provider.providerId"
+      :description="
+        provider.provider
+          ? t(
+              `settings.intelligence.providerTypeOptions.${getProviderChannelType(provider.provider)}`
+            )
+          : provider.providerId
+      "
       default-icon="i-carbon-api-1"
       active-icon="i-carbon-api-1"
       :active="isProviderEnabled(provider.providerId)"

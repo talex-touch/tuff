@@ -91,7 +91,7 @@ registerLifecycleEvents()
 reportContentSecurityPolicyViolations()
 
 /**
- * Logs violations of the report-only CSP in index.html (#689).
+ * Logs violations of the report-only CSP that main attaches as a response header (#689).
  *
  * `default-src` and `connect-src` are still wildcards because narrowing them needs to know what the
  * renderer actually reaches, and a static reading cannot produce that — a dependency can ask for
@@ -100,7 +100,9 @@ reportContentSecurityPolicyViolations()
  * and the origin.
  *
  * When this stays quiet in real use, the candidate becomes the enforcing policy and the wildcards
- * go. Until then it is the only honest way to get from here to there.
+ * go. Until then it is the only honest way to get from here to there — and "quiet" only counts
+ * against a launch where main logged the header as attached, since the policy spent its first
+ * months in a `<meta>` element that Chromium ignored (see main/core/report-only-csp.ts).
  */
 function reportContentSecurityPolicyViolations(): void {
   document.addEventListener('securitypolicyviolation', (event) => {

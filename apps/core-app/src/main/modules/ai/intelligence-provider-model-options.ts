@@ -2,7 +2,10 @@ import type {
   IntelligenceProviderConfig,
   IntelligenceProviderModelOption
 } from '@talex-touch/tuff-intelligence'
-import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import {
+  IntelligenceProviderType,
+  NEXUS_AUDIO_TRANSCRIBE_MODEL
+} from '@talex-touch/tuff-intelligence'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import {
   ensureIntelligenceConfigLoaded,
@@ -10,6 +13,11 @@ import {
   getEffectiveCapabilityRoutingConfig
 } from './intelligence-config'
 import { getIntelligenceProviderManager, providerSupportsCapability } from './intelligence-sdk'
+import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
+import {
+  getVoiceAsrMetadata,
+  getVoiceCapabilityRecommendedModels
+} from '@talex-touch/utils/intelligence/voice-asr'
 import { getResolvedPiExecutable, isPiCliProviderConfig } from './providers/pi-cli-runtime'
 import { listPiCliModels } from './providers/pi-model-catalog'
 
@@ -37,6 +45,7 @@ const CAPABILITY_FALLBACK_MODELS: Record<
     [IntelligenceProviderType.OPENAI]: ['whisper-1', 'gpt-4o-transcribe'],
     [IntelligenceProviderType.SILICONFLOW]: ['FunAudioLLM/SenseVoiceSmall']
   },
+  'audio.asr': {},
   'audio.transcribe': {
     [IntelligenceProviderType.OPENAI]: ['whisper-1', 'gpt-4o-transcribe'],
     [IntelligenceProviderType.SILICONFLOW]: ['FunAudioLLM/SenseVoiceSmall']
@@ -74,8 +83,25 @@ function resolveDeclaredModels(
   if (fallbackModels.length > 0) {
     return fallbackModels
   }
+  return normalizeStringList([...(provider.models ?? []), defaultModel])
+}
 
-  return [...(provider.models ?? []), defaultModel].filter(Boolean) as string[]
+function resolveCapabilityModels(
+  capabilityId: string,
+  provider: IntelligenceProviderConfig,
+  capabilityModels: string[],
+  defaultModel: string | null
+): string[] {
+  if (capabilityModels.length > 0) return capabilityModels
+
+  const declaredModels = resolveDeclaredModels(provider, capabilityId, defaultModel)
+  const recommendedModels = getVoiceCapabilityRecommendedModels(capabilityId, provider.metadata)
+  if (recommendedModels.length === 0) return declaredModels
+
+  const declaredRecommendedModels = declaredModels.filter((model) =>
+    recommendedModels.includes(model)
+  )
+  return declaredRecommendedModels.length > 0 ? declaredRecommendedModels : recommendedModels
 }
 
 function normalizeString(value: unknown): string {
@@ -140,6 +166,9 @@ export function getProviderModelOptions(
     )
     .map((provider) => provider.getConfig())
     .filter((provider) => provider.enabled !== false)
+    .filter(
+      (provider) => capabilityId !== 'audio.asr' || Boolean(getVoiceAsrMetadata(provider.metadata))
+    )
     .filter((provider) => capability.supportedProviders.includes(provider.type))
     .filter((provider) => allowedProviderIds.size === 0 || allowedProviderIds.has(provider.id))
     .map((provider) => {
@@ -148,20 +177,27 @@ export function getProviderModelOptions(
           .filter((binding) => binding.providerId === provider.id && binding.enabled !== false)
           .flatMap((binding) => binding.models ?? [])
       )
+      const isNexusStt = capabilityId === 'audio.stt' && isNexusManagedProvider(provider)
       const configuredDefaultModel = normalizeString(provider.defaultModel)
       const fallbackModels = normalizeStringList(
         resolveCapabilityFallbackModels(capabilityId, provider.type)
       )
-      const defaultModel =
-        capabilityModels[0] ?? fallbackModels[0] ?? (configuredDefaultModel || null)
-      const models = sortModels(
-        normalizeStringList(
-          capabilityModels.length > 0
-            ? capabilityModels
-            : resolveDeclaredModels(provider, capabilityId, defaultModel)
-        ),
-        defaultModel
-      )
+      const recommendedModels = getVoiceCapabilityRecommendedModels(capabilityId, {
+        ...(provider.metadata ?? {}),
+        baseUrl: provider.baseUrl
+      })
+      const defaultModel = isNexusStt
+        ? NEXUS_AUDIO_TRANSCRIBE_MODEL
+        : (capabilityModels[0] ??
+          recommendedModels[0] ??
+          fallbackModels[0] ??
+          (configuredDefaultModel || null))
+      const models = isNexusStt
+        ? [NEXUS_AUDIO_TRANSCRIBE_MODEL]
+        : sortModels(
+            resolveCapabilityModels(capabilityId, provider, capabilityModels, defaultModel),
+            defaultModel
+          )
       const available = hasUsableRuntimeCredential(provider) && models.length > 0
 
       return {

@@ -1,0 +1,30 @@
+{
+  "id": "transfer-internal-scroll-search",
+  "name": "transfer-internal-scroll-search",
+  "title": "TxTransfer 面板内部滚动与双侧搜索",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-08",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "启动 CoreApp，以 249 个模型分别人工核验“模型优先级”和“管理模型”的双侧搜索、内部滚动、排序及 disabled 状态；读回存储链路问题继续按 PRD 既定边界另行处理。",
+    "blocker": "无代码阻塞；尚缺运行中 Electron 的长列表视觉证据。已记录的 bindings→focusedBinding→modelValue 读回异常不在本任务修复范围，不能把写入成功误作读回验收。",
+    "evidence": "packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue、transfer/__tests__/transfer.test.ts，以及 apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityModelTransfer.vue 和 config/IntelligenceModelConfig.vue 落地面板上限、双侧筛选与排序；父级记录的 focused tests、TuffEx/CoreApp 类型检查已通过。"
+  }
+}

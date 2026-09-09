@@ -7,9 +7,7 @@ export type AppEntranceMode =
   | 'MetaOverlay'
   | 'MainApp'
   | 'DivisionBox'
-  | 'Assistant'
-  | 'AssistantFloatingBall'
-  | 'AssistantVoicePanel'
+  | 'AssistantVoiceDock'
   | 'ScreenshotOverlay'
   | 'ScreenshotEditor'
 
@@ -34,11 +32,7 @@ function getModeStyle(mode: AppEntranceMode): string {
       return 'background:#a21caf;color:#f5d0fe;'
     case 'DivisionBox':
       return 'background:#f97316;color:#111827;'
-    case 'Assistant':
-      return 'background:#0ea5e9;color:#082f49;'
-    case 'AssistantFloatingBall':
-      return 'background:#06b6d4;color:#083344;'
-    case 'AssistantVoicePanel':
+    case 'AssistantVoiceDock':
       return 'background:#22d3ee;color:#083344;'
     case 'ScreenshotOverlay':
       return 'background:#0f766e;color:#ccfbf1;'

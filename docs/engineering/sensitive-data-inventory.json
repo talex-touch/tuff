@@ -1,8 +1,32 @@
 {
   "schema": "talex.touch.sensitive-data-inventory/v1",
-  "updatedAt": "2026-09-02",
+  "updatedAt": "2026-09-08",
   "verificationCommand": "corepack pnpm privacy:inventory:verify",
   "entries": [
+    {
+      "id": "voice-insights",
+      "classification": "behavioral-metadata",
+      "owner": "VoiceInsightsStore/VoiceInsightsPrivacyOwner",
+      "storageLocations": [
+        "auxiliary database: voice_insights_state, voice_insight_days, voice_insight_captures, voice_recognition_records",
+        "managed temp namespace: voice/recordings"
+      ],
+      "writers": [
+        "VoiceService successful aggregate finalization",
+        "VoiceService detailed capture lifecycle when voiceInput.historyEnabled is true"
+      ],
+      "readers": ["host Intelligence settings voice insights and recognition records", "main-owned Privacy export"],
+      "exportPolicy": "aggregate DTO only for insights; detailed transcript metadata stays host-only and source audio is excluded from ordinary Privacy export",
+      "deletionPolicy": "typed clearInsights or clearRecognitionRecords, or Privacy manual category deletion, removes aggregate rows, record rows, and owned audio with a generation/owner fence",
+      "retentionPolicy": "aggregates use 365-day daily buckets and opaque deduplication IDs; detailed history is disabled by default and bounded to 200 records when enabled",
+      "rendererExposure": "host-renderer-only aggregate and detailed record DTOs; source audio uses controlled tfile URLs; plugins denied",
+      "portable": false,
+      "migrationStatus": "additive-0042-and-0043-primary-and-aux-parity",
+      "evidence": [
+        "apps/core-app/src/main/modules/voice/voice-insights-store.ts#symbol=VoiceInsightsStore",
+        "apps/core-app/src/main/modules/privacy/owners/voice-insights-privacy-owner.ts#symbol=createVoiceInsightsPrivacyOwner"
+      ]
+    },
     {
       "id": "core-provider-credentials",
       "classification": "credential",

@@ -3,7 +3,9 @@ import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './intelligence-test-harness'
 import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/intelligence'
+import { IntelligenceCapabilityType } from '@talex-touch/tuff-intelligence'
 import { IntelligenceModule } from './intelligence-module'
+import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 
 vi.mock('../sentry/sentry-service', () => {
   class SentryServiceModule {
@@ -33,7 +35,7 @@ const adminOperationMocks = vi.hoisted(() => ({
   getIntelligenceLocalEnvironment: vi.fn()
 }))
 const discoveryMocks = vi.hoisted(() => ({
-  getCapabilityTestMeta: vi.fn(() => undefined),
+  getCapabilityTestMeta: vi.fn((): unknown => undefined),
   resolveCapabilityStatus: vi.fn((capabilityId: string) => ({
     capabilityId,
     available: true,
@@ -48,6 +50,15 @@ const discoveryMocks = vi.hoisted(() => ({
     }
   ])
 }))
+const capabilityTesterMocks = vi.hoisted(() => {
+  class AsrCapabilityTester {
+    formatStreamResult() {
+      return { success: true }
+    }
+  }
+  return { AsrCapabilityTester }
+})
+const voiceServiceMocks = vi.hoisted(() => ({ streamDictation: vi.fn() }))
 const intelligenceEventMocks = vi.hoisted(() => {
   // Any member the module registers resolves to a stub with an internally
   // consistent name. The previous hand-kept lists went stale every time the
@@ -86,6 +97,7 @@ vi.mock('./intelligence-local-environment', () => ({
   getIntelligenceLocalEnvironment: adminOperationMocks.getIntelligenceLocalEnvironment
 }))
 vi.mock('./capability-testers', () => ({
+  AsrCapabilityTester: capabilityTesterMocks.AsrCapabilityTester,
   capabilityTesterRegistry: {
     get: discoveryMocks.getCapabilityTestMeta
   }
@@ -95,6 +107,9 @@ vi.mock('./intelligence-capability-status', () => ({
 }))
 vi.mock('./intelligence-provider-model-options', () => ({
   getProviderModelOptions: discoveryMocks.getProviderModelOptions
+}))
+vi.mock('../voice/voice-service', () => ({
+  voiceService: { streamDictation: voiceServiceMocks.streamDictation }
 }))
 
 type AdminHandler = (payload: unknown, context: HandlerContext) => Promise<unknown> | unknown
@@ -270,6 +285,32 @@ describe('intelligenceModule admin surface boundary', () => {
     await expect(handler(null, {} as HandlerContext)).rejects.toThrow('Missing provider payload')
     expect(intelligenceSdkMocks.testProvider).not.toHaveBeenCalled()
   })
+
+  it.each([
+    { name: 'provider', override: { providerId: 'bypass-provider' } },
+    { name: 'model', override: { model: 'bypass-model' } }
+  ])(
+    'rejects an ASR test $name override before opening microphone capture',
+    async ({ override }) => {
+      intelligenceCapabilityRegistry.clear()
+      intelligenceCapabilityRegistry.register({
+        id: 'audio.asr',
+        type: IntelligenceCapabilityType.ASR,
+        name: 'Realtime Speech Recognition',
+        description: 'Test-only ASR registration',
+        supportedProviders: []
+      })
+      discoveryMocks.getCapabilityTestMeta.mockReturnValue(
+        new capabilityTesterMocks.AsrCapabilityTester()
+      )
+      const handler = getHandler(captureAdminHandlers(), 'testCapability')
+
+      await expect(
+        handler({ capabilityId: 'audio.asr', ...override }, {} as HandlerContext)
+      ).rejects.toThrow('INTELLIGENCE_ASR_TEST_USES_BOUND_ROUTE')
+      expect(voiceServiceMocks.streamDictation).not.toHaveBeenCalled()
+    }
+  )
 
   it('keeps host usage payload validation separate from the plugin-only boundary', async () => {
     const handler = getHandler(captureAdminHandlers(), 'getUsageStats')

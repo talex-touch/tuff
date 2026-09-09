@@ -6,6 +6,7 @@ import type {
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { getVoiceCapabilityRecommendedModels } from '@talex-touch/utils/intelligence/voice-asr'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
@@ -72,6 +73,12 @@ const selectedProviderIds = computed(() => {
 })
 
 const activeBindingCount = computed(() => selectedProviderIds.value.size)
+const isBindingOnlyTest = computed(() => props.capability.id === 'audio.asr')
+const testDescription = computed(() =>
+  isBindingOnlyTest.value
+    ? t('settings.intelligence.capabilityAsrBindingTestDesc')
+    : t('settings.intelligence.capabilityTestDesc')
+)
 
 const totalModelsCount = computed(() => {
   return (props.capability.providers || [])
@@ -130,6 +137,17 @@ const focusedProvider = computed(
 const focusedBinding = computed(() => {
   if (!focusedProviderId.value) return null
   return bindingMap.value.get(focusedProviderId.value) ?? null
+})
+
+const focusedProviderModels = computed(() => {
+  const provider = focusedProvider.value
+  if (!provider) return []
+  const recommendations = getVoiceCapabilityRecommendedModels(props.capability.id, {
+    ...(provider.metadata ?? {}),
+    baseUrl: provider.baseUrl
+  })
+  if (recommendations.length > 0) return recommendations
+  return provider.models?.length ? provider.models : []
 })
 
 const canEditModels = computed(() => {
@@ -311,16 +329,33 @@ onBeforeUnmount(() => {
     <template #header>
       <CapabilityHeader :capability="capability">
         <template #actions>
-          <TxButton
-            class="capability-info__test-button"
-            variant="flat"
-            type="primary"
-            :disabled="activeBindingCount === 0"
-            @click="openTestDrawer"
-          >
-            <i class="i-carbon-play-filled" aria-hidden="true" />
-            <span>{{ t('settings.intelligence.capabilityTest') }}</span>
-          </TxButton>
+          <div class="capability-info__header-actions">
+            <div class="capability-info__save-status" role="status" aria-live="polite">
+              <i :class="saveStatusIcon" aria-hidden="true" />
+              <span>{{ saveStatusText }}</span>
+            </div>
+            <TxButton
+              class="capability-info__save-button"
+              variant="flat"
+              type="primary"
+              :disabled="isSaving"
+              :aria-busy="isSaving"
+              @click="handleManualSave"
+            >
+              <i class="i-carbon-save" aria-hidden="true" />
+              <span>{{ t('settings.intelligence.capabilitySaveButton') }}</span>
+            </TxButton>
+            <TxButton
+              class="capability-info__test-button"
+              variant="flat"
+              type="primary"
+              :disabled="activeBindingCount === 0"
+              @click="openTestDrawer"
+            >
+              <i class="i-carbon-play-filled" aria-hidden="true" />
+              <span>{{ t('settings.intelligence.capabilityTest') }}</span>
+            </TxButton>
+          </div>
         </template>
       </CapabilityHeader>
     </template>
@@ -341,6 +376,7 @@ onBeforeUnmount(() => {
       >
         <template #default>
           <ProviderList
+            :capability-id="capability.id"
             :enabled-bindings="enabledBindings"
             :disabled-bindings="disabledProviders"
             @focus="handleProviderFocus"
@@ -396,23 +432,6 @@ onBeforeUnmount(() => {
           </TuffBlockSlot>
         </template>
       </TuffGroupBlock>
-
-      <div class="capability-info__save-bar" role="status">
-        <div class="capability-info__save-status">
-          <i :class="saveStatusIcon" aria-hidden="true" />
-          <span>{{ saveStatusText }}</span>
-        </div>
-        <TxButton
-          variant="flat"
-          type="primary"
-          :disabled="isSaving"
-          :aria-busy="isSaving"
-          @click="handleManualSave"
-        >
-          <i class="i-carbon-save" aria-hidden="true" />
-          <span>{{ t('settings.intelligence.capabilitySaveButton') }}</span>
-        </TxButton>
-      </div>
     </template>
   </TxScroll>
 
@@ -427,7 +446,7 @@ onBeforeUnmount(() => {
     <CapabilityModelTransfer
       :scope-key="focusedProviderId"
       :model-value="focusedBinding?.models || []"
-      :available-models="focusedProvider?.models || []"
+      :available-models="focusedProviderModels"
       :disabled="!canEditModels"
       @update:model-value="handleModelTransferUpdates"
     />
@@ -451,7 +470,7 @@ onBeforeUnmount(() => {
   >
     <div class="capability-info__drawer">
       <p class="capability-info__drawer-description">
-        {{ t('settings.intelligence.capabilityTestDesc') }}
+        {{ testDescription }}
       </p>
       <TestSection
         :capability-id="capability.id"
@@ -459,6 +478,7 @@ onBeforeUnmount(() => {
         :disabled="activeBindingCount === 0"
         :test-result="testResult"
         :enabled-bindings="enabledBindings"
+        :binding-only="isBindingOnlyTest"
         @test="handleTest"
       />
     </div>
@@ -490,6 +510,34 @@ onBeforeUnmount(() => {
   font-size: 1rem;
 }
 
+.capability-info__header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.capability-info__save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: 15rem;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.75rem;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.capability-info__save-button {
+  flex-shrink: 0;
+}
+
 .capability-info__test-button {
   min-width: 7.5rem;
 }
@@ -508,35 +556,5 @@ onBeforeUnmount(() => {
 
 .capability-info__drawer :deep(.FlatMarkdown-Container) {
   min-height: 280px;
-}
-
-.capability-info__save-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin: 1rem 0 0;
-  padding: 0.75rem 1rem;
-  border-top: 1px solid var(--tx-border-color-lighter);
-  background: color-mix(in srgb, var(--tx-bg-color) 92%, transparent);
-  backdrop-filter: blur(16px);
-}
-
-.capability-info__save-status {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  min-width: 0;
-  color: var(--tx-text-color-secondary);
-  font-size: 0.875rem;
-  line-height: 1.45;
-
-  span {
-    overflow: hidden;
-    overflow-wrap: anywhere;
-  }
 }
 </style>

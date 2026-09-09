@@ -11,7 +11,7 @@ const JSON_LIMIT_BYTES = 64 * 1024
 
 const initializedSchemas = new WeakSet<D1Database>()
 
-export const PROVIDER_REGISTRY_VENDORS = ['tencent-cloud', 'openai', 'deepseek', 'exchange-rate', 'custom'] as const
+export const PROVIDER_REGISTRY_VENDORS = ['tencent-cloud', 'openai', 'deepseek', 'dashscope', 'exchange-rate', 'custom'] as const
 export const PROVIDER_REGISTRY_STATUSES = ['enabled', 'disabled', 'degraded'] as const
 export const PROVIDER_REGISTRY_AUTH_TYPES = ['api_key', 'secret_pair', 'oauth', 'none'] as const
 export const PROVIDER_REGISTRY_OWNER_SCOPES = ['system', 'workspace', 'user'] as const

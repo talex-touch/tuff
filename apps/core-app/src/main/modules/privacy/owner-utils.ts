@@ -59,6 +59,14 @@ export interface PrivacyDeleteScope {
   readonly kind: 'eligible' | 'disabled' | 'invalid'
   readonly cutoffMs: number
   readonly includeProtected: boolean
+  /**
+   * The request's own clock, not the wall clock.
+   *
+   * Owners that compare against a per-item expiry need "now" as well as the cutoff, and
+   * reading `Date.now()` for it would make the same request answer differently depending on
+   * when each query ran — preview and delete could then disagree about the same row.
+   */
+  readonly nowMs: number
 }
 
 interface PrivacyOwnerRequestSnapshot {
@@ -177,25 +185,37 @@ export function resolvePrivacyDeleteScope(
 ): PrivacyDeleteScope {
   const snapshot = readPrivacyOwnerRequest(request)
   if (!snapshot || !snapshot.mode) {
-    return { kind: 'invalid', cutoffMs: 0, includeProtected: false }
+    return { kind: 'invalid', cutoffMs: 0, includeProtected: false, nowMs: 0 }
   }
   if (snapshot.mode === 'manual-delete') {
     if (destructive && snapshot.confirmation !== 'delete-selected-data') {
-      return { kind: 'invalid', cutoffMs: Number.MAX_SAFE_INTEGER, includeProtected: false }
+      return {
+        kind: 'invalid',
+        cutoffMs: Number.MAX_SAFE_INTEGER,
+        includeProtected: false,
+        nowMs: snapshot.nowMs
+      }
     }
     return {
       kind: 'eligible',
       cutoffMs: Number.MAX_SAFE_INTEGER,
-      includeProtected: snapshot.confirmation === 'delete-selected-data' || !destructive
+      includeProtected: snapshot.confirmation === 'delete-selected-data' || !destructive,
+      nowMs: snapshot.nowMs
     }
   }
   if (!snapshot.policy.enabled || snapshot.policy.retentionMs === null) {
-    return { kind: 'disabled', cutoffMs: snapshot.nowMs, includeProtected: false }
+    return {
+      kind: 'disabled',
+      cutoffMs: snapshot.nowMs,
+      includeProtected: false,
+      nowMs: snapshot.nowMs
+    }
   }
   return {
     kind: 'eligible',
     cutoffMs: snapshot.nowMs - snapshot.policy.retentionMs,
-    includeProtected: false
+    includeProtected: false,
+    nowMs: snapshot.nowMs
   }
 }
 

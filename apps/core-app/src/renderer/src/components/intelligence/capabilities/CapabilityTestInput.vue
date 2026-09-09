@@ -16,12 +16,13 @@ const props = defineProps<{
   }>
   promptTemplate?: string
   showPromptSelector?: boolean
+  bindingOnly?: boolean
 }>()
 
 const emits = defineEmits<{
   test: [
     options: {
-      providerId: string
+      providerId?: string
       model?: string
       promptTemplate?: string
       promptVariables?: Record<string, unknown>
@@ -39,6 +40,7 @@ const promptVariablesText = ref<string>('')
 const userInput = ref<string>('')
 
 const resolvedShowPromptSelector = computed(() => props.showPromptSelector !== false)
+const bindingOnly = computed(() => props.bindingOnly === true)
 
 const availableProviders = computed(() => props.enabledBindings || [])
 
@@ -49,7 +51,9 @@ const availableModels = computed(() => {
 })
 
 const canTest = computed(() => {
-  return !props.disabled && !props.isTesting && selectedProviderId.value
+  return (
+    !props.disabled && !props.isTesting && (bindingOnly.value || Boolean(selectedProviderId.value))
+  )
 })
 
 const testButtonText = computed(() => {
@@ -60,6 +64,11 @@ const testButtonText = computed(() => {
 
 function handleTest(): void {
   if (!canTest.value) return
+
+  if (bindingOnly.value) {
+    emits('test', {})
+    return
+  }
 
   let promptVariables: Record<string, unknown> | undefined
   const raw = promptVariablesText.value.trim()
@@ -93,7 +102,7 @@ if (availableProviders.value.length > 0) {
 
 <template>
   <div class="capability-test-input">
-    <div class="input-section">
+    <div v-if="!bindingOnly" class="input-section">
       <div v-if="resolvedShowPromptSelector" class="input-field">
         <label class="input-label">{{
           t('settings.intelligence.capabilityPromptSectionTitle')
@@ -124,7 +133,7 @@ if (availableProviders.value.length > 0) {
       </div>
     </div>
 
-    <div class="config-section">
+    <div v-if="!bindingOnly" class="config-section">
       <div class="input-field">
         <label class="input-label">{{ t('settings.intelligence.selectProvider') }}</label>
         <select v-model="selectedProviderId" class="input-select" :disabled="disabled || isTesting">

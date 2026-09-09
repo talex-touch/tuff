@@ -1163,7 +1163,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
 
   async stt(
     payload: IntelligenceSTTPayload,
-    options: IntelligenceInvokeOptions
+    options: IntelligenceInvokeOptions & { readonly signal?: AbortSignal }
   ): Promise<IntelligenceInvokeResult<IntelligenceSTTResult>> {
     const result = await this.invokeAudioTranscription(
       {
@@ -1225,7 +1225,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
 
   private async invokeAudioTranscription(
     payload: IntelligenceAudioTranscribePayload,
-    options: IntelligenceInvokeOptions
+    options: IntelligenceInvokeOptions & { readonly signal?: AbortSignal }
   ): Promise<{
     invokeResult: Omit<IntelligenceInvokeResult<unknown>, 'result'>
     raw: Record<string, unknown>
@@ -1258,6 +1258,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         Authorization: `Bearer ${this.resolveApiKey()}`
       },
       body: form,
+      signal: options.signal,
       timeoutMs: this.resolveRequestTimeout(options),
       retryPolicy: {
         maxRetries: 0,

@@ -431,6 +431,68 @@ describe('intelligence-config capability options', () => {
     })
   })
 
+  it('migrates persisted Qwen ASR models to the Qwen realtime protocol and model', () => {
+    const qwenAsrModels = [
+      'qwen-audio-3.0-asr-flash',
+      'qwen-audio-3.0-asr-flash-filetrans',
+      'qwen3-asr-flash-realtime'
+    ]
+    const persistedCapabilities = JSON.parse(JSON.stringify(DEFAULT_CAPABILITIES))
+
+    storageMocks.storedConfig = {
+      providers: [
+        {
+          id: 'dashscope-asr',
+          type: IntelligenceProviderType.CUSTOM,
+          name: 'DashScope Paraformer',
+          enabled: true,
+          priority: 1,
+          capabilities: ['audio.asr'],
+          metadata: { voiceAsr: { protocol: 'bailian-paraformer' } }
+        }
+      ],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false,
+        enableQuota: true
+      },
+      capabilities: {
+        ...persistedCapabilities,
+        'audio.asr': {
+          ...persistedCapabilities['audio.asr'],
+          providers: [
+            {
+              providerId: 'dashscope-asr',
+              priority: 1,
+              enabled: true,
+              models: qwenAsrModels
+            }
+          ]
+        }
+      },
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2
+    }
+
+    ensureIntelligenceConfigLoaded(true)
+
+    const savedConfig = storageMocks.saveMainConfig.mock.calls[0]?.[1] as {
+      providers: Array<{ id: string; metadata?: { voiceAsr?: { protocol?: string } } }>
+      capabilities: Record<string, { providers: Array<{ providerId: string; models?: string[] }> }>
+    }
+    const savedProvider = savedConfig.providers.find((provider) => provider.id === 'dashscope-asr')
+    const savedAsrBinding = savedConfig.capabilities['audio.asr']?.providers.find(
+      (binding) => binding.providerId === 'dashscope-asr'
+    )
+
+    expect(savedProvider?.metadata).toEqual({
+      voiceAsr: { protocol: 'dashscope-qwen-asr-realtime' }
+    })
+    expect(savedAsrBinding?.models).toEqual(['qwen3-asr-flash-realtime'])
+  })
+
   it('preserves quota enforcement when persisted global config is missing enableQuota', () => {
     storageMocks.storedConfig = {
       providers: [],

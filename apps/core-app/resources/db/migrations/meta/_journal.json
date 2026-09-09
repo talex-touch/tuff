@@ -295,6 +295,27 @@
       "when": 1785974400000,
       "tag": "0041_ai_orchestrator_run_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1786060800000,
+      "tag": "0042_voice_insights",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1786147200000,
+      "tag": "0043_voice_recognition_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1786233600000,
+      "tag": "0044_clipboard_retention_expiry",
+      "breakpoints": true
     }
   ]
 }

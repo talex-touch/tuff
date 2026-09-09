@@ -7,6 +7,7 @@ import type {
 } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -18,12 +19,20 @@ import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
+import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import { useKeyboardNavigation } from '~/composables/useKeyboardNavigation'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import {
   isNexusManagedProvider,
   TUFF_NEXUS_PROVIDER_ID
 } from '~/modules/intelligence/nexus-provider'
+import {
+  getProviderChannelType,
+  getRuntimeProviderType,
+  PROVIDER_CHANNEL_TYPE_OPTIONS,
+  ProviderChannelType,
+  type ProviderChannelKind
+} from '~/modules/intelligence/provider-channel-type'
 import { getRuntimeNexusBaseUrl } from '~/modules/nexus/runtime-base'
 import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
 
@@ -46,7 +55,11 @@ const isSyncingFromNexus = ref(false)
 const syncError = ref('')
 const syncMessage = ref('')
 const basicEditorVisible = ref(false)
-const basicDraft = ref({ id: '', name: '', type: IntelligenceProviderType.CUSTOM })
+const basicDraft = ref<{
+  id: string
+  name: string
+  channelType: ProviderChannelKind
+}>({ id: '', name: '', channelType: ProviderChannelType.COMPATIBLE })
 
 const canEditSelectedProvider = computed(
   () => !!selectedProvider.value && !isNexusManagedProvider(selectedProvider.value)
@@ -230,21 +243,29 @@ function handleDuplicateProvider(): void {
   testResult.value = null
 }
 
-function handleOpenBasicEditor(): void {
-  if (!selectedProvider.value || !canEditSelectedProvider.value) return
+function openBasicEditor(provider: IntelligenceProviderConfig): void {
   basicDraft.value = {
-    id: selectedProvider.value.id,
-    name: selectedProvider.value.name,
-    type: normalizeProviderType(selectedProvider.value.type)
+    id: provider.id,
+    name: provider.name,
+    channelType: getProviderChannelType(provider)
   }
   basicEditorVisible.value = true
+}
+
+function handleOpenBasicEditor(): void {
+  if (!selectedProvider.value || !canEditSelectedProvider.value) return
+  openBasicEditor(selectedProvider.value)
 }
 
 function handleSaveBasicEditor(): void {
   if (!selectedProvider.value || basicDraft.value.id !== selectedProvider.value.id) return
   updateProvider(selectedProvider.value.id, {
     name: basicDraft.value.name.trim() || selectedProvider.value.name,
-    type: basicDraft.value.type
+    type: getRuntimeProviderType(basicDraft.value.channelType),
+    metadata: {
+      ...(selectedProvider.value.metadata || {}),
+      channelType: basicDraft.value.channelType
+    }
   })
   basicEditorVisible.value = false
 }
@@ -252,7 +273,7 @@ function handleSaveBasicEditor(): void {
 function handleAddProvider(): void {
   const nextIndex = providers.value.length + 1
   const id = `custom-${Date.now()}`
-  addProvider({
+  const provider: IntelligenceProviderConfig = {
     id,
     type: IntelligenceProviderType.CUSTOM,
     name: `${t('settings.intelligence.providers')} ${nextIndex}`,
@@ -260,9 +281,12 @@ function handleAddProvider(): void {
     priority: 3,
     models: [],
     timeout: 30000,
-    rateLimit: {}
-  })
+    rateLimit: {},
+    metadata: { channelType: ProviderChannelType.COMPATIBLE }
+  }
+  addProvider(provider)
   selectedProviderId.value = id
+  openBasicEditor(provider)
 }
 
 function handleSelectProvider(id: string): void {
@@ -420,14 +444,17 @@ useKeyboardNavigation({
             default-icon="i-carbon-text-font"
             active-icon="i-carbon-text-font"
           />
-          <TuffBlockInput
-            v-model="basicDraft.type"
+          <TuffBlockSelect
+            v-model="basicDraft.channelType"
             :title="t('settings.intelligence.providerType')"
             :description="t('settings.intelligence.providerTypeHint')"
-            placeholder="custom"
             default-icon="i-carbon-api-1"
             active-icon="i-carbon-api-1"
-          />
+          >
+            <TxSelectItem v-for="type in PROVIDER_CHANNEL_TYPE_OPTIONS" :key="type" :value="type">
+              {{ t(`settings.intelligence.providerTypeOptions.${type}`) }}
+            </TxSelectItem>
+          </TuffBlockSelect>
           <div class="flex justify-end gap-2 pt-2">
             <TxButton variant="flat" @click="basicEditorVisible = false">
               {{ t('common.cancel') }}

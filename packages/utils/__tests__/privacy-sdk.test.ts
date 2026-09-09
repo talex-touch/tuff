@@ -474,6 +474,8 @@ describe('privacy typed transport contracts', () => {
 
   it('accepts only fixed retention presets and complete V1 category selections', () => {
     expect(PRIVACY_RETENTION_PRESETS).toEqual([
+      // 验证码那一档要 1 小时：一次性码留满一天，最短那一档本身就没意义了。
+      '1-hour',
       '1-day',
       '7-days',
       '30-days',

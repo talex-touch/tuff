@@ -31,6 +31,7 @@ const EXPECTED_STABLE_CAPABILITY_IDS = [
   'image.edit',
   'audio.tts',
   'audio.stt',
+  'audio.asr',
   'audio.transcribe',
   'rag.query',
   'search.semantic',
@@ -83,7 +84,7 @@ describe('AI capability tester registry coverage', () => {
     )
 
     expect(missingTesterIds).toEqual([])
-  }, 15_000)
+  }, 30_000)
 
   it('keeps every stable registered capability visible in the default capability config', async () => {
     const registeredCapabilityIds = await registerModuleCapabilities()

@@ -1,4 +1,6 @@
 import type {
+  ClipboardAnnotateRequest,
+  ClipboardAnnotateResponse,
   ClipboardDeleteRequest,
   ClipboardGetImageUrlRequest,
   ClipboardGetImageUrlResponse,
@@ -10,6 +12,13 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
 import type { ClipboardHistoryQueryInput } from './clipboard-request-normalizer'
 import { performance } from 'node:perf_hooks'
+import {
+  CLIPBOARD_NOTE_METADATA_KEY,
+  CLIPBOARD_TAGS_METADATA_KEY,
+  normalizeClipboardNote,
+  normalizeClipboardTags,
+  readClipboardAnnotation
+} from '@talex-touch/utils/clipboard'
 import { isHttpSource, resolveLocalFilePath } from '@talex-touch/utils/network'
 import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm'
 import { APP_TASK_GATE_STARTUP_WAIT_MS, appTaskGate } from '../../service/app-task-gate'
@@ -39,6 +48,10 @@ export interface IClipboardItem {
   sourceApp?: string | null
   timestamp?: Date
   isFavorite?: boolean | null
+  /** 密钥类，永不被自动清理。 */
+  retentionProtected?: boolean | null
+  /** 这条记录自己的过期时刻，比类别策略更早。验证码走这条。 */
+  retentionExpiresAt?: Date | null
   metadata?: string | null
   meta?: Record<string, unknown> | null
 }
@@ -699,6 +712,62 @@ export class ClipboardHistoryPersistence {
       cached.isFavorite = request.isFavorite
       this.notifyChange()
     }
+  }
+
+  /**
+   * 写入用户自己的备注和标签。
+   *
+   * 两个字段各自独立：`undefined` 表示不动，所以只改备注不用把标签一起回传（回传就意味着
+   * 一个只编辑备注的输入框必须始终持有最新标签，否则会静默清空别人刚打的标签）。
+   *
+   * 存进 metadata JSON 而不是新开列：那一列的 LIKE 已经在关键词搜索的 or 里，标签和备注
+   * 因此自动可搜——打标签的全部意义就是之后找得回来。
+   */
+  public async annotate(request: ClipboardAnnotateRequest): Promise<ClipboardAnnotateResponse> {
+    const id = Number(request?.id)
+    const empty: ClipboardAnnotateResponse = { updated: false, note: null, tags: [] }
+    if (!this.db || !Number.isFinite(id)) return empty
+
+    const [row] = await this.db
+      .select()
+      .from(clipboardHistory)
+      .where(eq(clipboardHistory.id, id))
+      .limit(1)
+    const current = row as unknown as IClipboardItem | undefined
+    if (!current) return empty
+
+    let meta: Record<string, unknown> = {}
+    if (typeof current.metadata === 'string' && current.metadata.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(current.metadata)
+        if (parsed && typeof parsed === 'object') meta = parsed as Record<string, unknown>
+      } catch {}
+    }
+    const existing = readClipboardAnnotation(meta)
+
+    const note = request.note === undefined ? existing.note : normalizeClipboardNote(request.note)
+    const tags = request.tags === undefined ? existing.tags : normalizeClipboardTags(request.tags)
+
+    // 清空时删键，而不是留下 null / [] 的空壳：metadata 整列都进关键词 LIKE，
+    // 被清过备注的记录不该因此永远命中「note」这个词。`clipboard_history_meta`
+    // 那一侧同样删行（见 clipboard.ts 的调用点），两个存储必须给出同一个答案。
+    const patch: Record<string, unknown> = {}
+    if (note === null) delete meta[CLIPBOARD_NOTE_METADATA_KEY]
+    else patch[CLIPBOARD_NOTE_METADATA_KEY] = note
+    if (tags.length === 0) delete meta[CLIPBOARD_TAGS_METADATA_KEY]
+    else patch[CLIPBOARD_TAGS_METADATA_KEY] = tags
+
+    const metadata = JSON.stringify({ ...meta, ...patch })
+    await this.db.update(clipboardHistory).set({ metadata }).where(eq(clipboardHistory.id, id))
+
+    const cached = this.memoryCache.find((item) => item.id === id)
+    if (cached) {
+      cached.metadata = metadata
+      cached.meta = { ...meta, ...patch }
+      this.notifyChange()
+    }
+
+    return { updated: true, note, tags }
   }
 
   public async deleteItem(request: ClipboardDeleteRequest): Promise<void> {

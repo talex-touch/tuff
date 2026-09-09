@@ -71,6 +71,7 @@ vi.mock('./eventbus/touch-event', async (importOriginal) => {
 })
 
 import { TouchWindow } from './touch-window'
+import { AssistantVoiceDockWindowOption } from '../config/default'
 
 function navigationListeners(): { event: string; listener: (...args: unknown[]) => void }[] {
   return windowMocks.webContentsListeners.filter((entry) => entry.event === 'will-navigate')
@@ -81,6 +82,7 @@ describe('the navigation guard does not wait for the first paint', () => {
     windowMocks.webContentsListeners.length = 0
     windowMocks.onceHandlers.clear()
     windowMocks.show.mockClear()
+    windowMocks.setVibrancy.mockClear()
     eventBus.emit.mockClear()
   })
 
@@ -99,6 +101,32 @@ describe('the navigation guard does not wait for the first paint', () => {
 
     expect(event.preventDefault).toHaveBeenCalled()
     expect(eventBus.emit).toHaveBeenCalled()
+  })
+
+  it('VoiceDock 的透明画布不继承 macOS vibrancy，其他透明窗口保留系统材质', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      value: 'darwin',
+      configurable: true
+    })
+
+    try {
+      new TouchWindow(AssistantVoiceDockWindowOption)
+
+      expect(windowMocks.setVibrancy).not.toHaveBeenCalled()
+
+      new TouchWindow({ transparent: true, disableVibrancy: false })
+      new TouchWindow({ transparent: true })
+
+      expect(windowMocks.setVibrancy).toHaveBeenCalledTimes(2)
+      expect(windowMocks.setVibrancy).toHaveBeenNthCalledWith(1, 'fullscreen-ui')
+      expect(windowMocks.setVibrancy).toHaveBeenNthCalledWith(2, 'fullscreen-ui')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true
+      })
+    }
   })
 
   it('ready-to-show 仍然负责 autoShow(否则上面两条会掩盖"把这个回调整个删掉")', () => {

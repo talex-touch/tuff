@@ -258,6 +258,7 @@
       "memoryIndependent": "显式 AI Memory 遵循自身 TTL 或用户删除，不受审计保留策略影响。",
       "unsupportedSelection": "保存前，请为每个类别选择当前支持的保留期限。",
       "presets": {
+        "1-hour": "1 小时",
         "1-day": "1 天",
         "7-days": "7 天",
         "30-days": "30 天",
@@ -265,6 +266,21 @@
         "180-days": "180 天",
         "365-days": "365 天",
         "permanent": "永久保留"
+      }
+    },
+    "clipboardTiers": {
+      "title": "剪贴板内容分档",
+      "hint": "验证码和密钥与普通剪贴内容同表，删除路径也一样，所以它们的策略挂在这里而不是单列成数据类别。",
+      "verificationCode": "验证码保留时长",
+      "protectSecrets": "密钥永不自动删除",
+      "customPrefixes": "自定义密钥前缀",
+      "customPrefixesPlaceholder": "如 cr_、zz-，用逗号分隔",
+      "durations": {
+        "300000": "5 分钟",
+        "900000": "15 分钟",
+        "3600000": "1 小时",
+        "21600000": "6 小时",
+        "86400000": "24 小时"
       }
     },
     "actions": {
@@ -355,6 +371,7 @@
       "intelligence-audit": "智能审计元数据",
       "intelligence-context": "智能上下文对话",
       "diagnostics": "诊断与遥测元数据",
+      "voice-insights": "语音洞察聚合数据",
       "intelligence-memory": "显式 AI Memory",
       "plugin-data": "插件数据"
     },
@@ -525,17 +542,42 @@
     "recommendationContextLocationDesc": "使用时区和网络脱敏桶生成粗粒度位置桶，不记录具体位置。"
   },
   "settingAssistant": {
-    "groupTitle": "Assistant 悬浮球",
-    "groupDesc": "开启桌面悬浮入口，点击后可把文本指令发送到 CoreBox。",
+    "groupTitle": "Assistant",
     "enableAssistant": "启用 Assistant",
-    "enableAssistantDesc": "启用后才会响应悬浮球、语音面板等 Assistant 入口。默认保持关闭。",
-    "floatingBall": "显示悬浮球",
-    "floatingBallDesc": "在桌面上显示可拖动的悬浮入口；点击后打开文本指令面板。",
-    "voiceWake": "语音唤醒",
-    "voiceWakeDesc": "开启后悬浮球和面板才会请求语音识别；关闭时只保留文本输入。",
-    "wakeWords": "唤醒词",
-    "wakeWordsDesc": "多个唤醒词用英文逗号分隔。",
-    "wakeWordsPlaceholder": "阿洛, aler"
+    "floatingBall": "悬浮球",
+    "floatingBallDesc": "在桌面显示可拖动的 Assistant 入口。"
+  },
+  "settingSpeechRecognition": {
+    "title": "语音识别",
+    "description": "管理语音入口、识别记录和渠道模型配置。",
+    "refresh": "重新读取",
+    "voiceInput": {
+      "title": "语音输入",
+      "description": "短按 macOS 的 Fn 或 Windows/Linux 的 Ctrl 开始，再按一次结束；长按后松开结束。仅在语音输入进行时采集麦克风。"
+    },
+    "capabilities": {
+      "title": "渠道与模型",
+      "description": "在「智能」里配，绑定和排序都在那一页。",
+      "action": "打开智能"
+    },
+    "history": {
+      "title": "保留识别记录",
+      "description": "留下源音频和转录；关掉只留统计。"
+    },
+    "unavailable": {
+      "title": "读不到识别状态",
+      "description": "没能读到识别是否就绪，重试一次。"
+    },
+    "reasons": {
+      "credentialMissing": "所选 AI 渠道还没有凭据。",
+      "unavailable": "识别暂时不可用。"
+    },
+    "asr": {
+      "ready": "语音识别已就绪",
+      "readyHint": "按住 ⌘ 说话，文字直接落进当前应用。",
+      "notReady": "语音识别还没配置",
+      "notConfigured": "还没有渠道绑定 audio.asr，所以按住 ⌘ 说话不会有反应。"
+    }
   },
   "settingLocalAiCli": {
     "groupTitle": "本机 AI 代理",
@@ -1011,6 +1053,7 @@
   "shell": {
     "search": "搜索",
     "newChat": "新建对话",
+    "voiceInsights": "语音洞察",
     "store": "插件",
     "setting": "设置",
     "collapseSidebar": "收起侧边栏",
@@ -1029,6 +1072,151 @@
       "earlier": "更早",
       "untitled": "新对话",
       "delete": "删除对话"
+    }
+  },
+  "voiceInsights": {
+    "headline": "嘴比手利索",
+    "subtitle": "查看语音输入聚合影响；开启记录后，还可在智能设置中查看源音频、转录和渠道用量。",
+    "sectionTitle": "洞察",
+    "loading": "正在加载语音洞察…",
+    "actions": {
+      "refresh": "刷新",
+      "share": "分享",
+      "clear": "清除洞察",
+      "retry": "重试",
+      "showReport": "查看报告",
+      "hideReport": "收起报告",
+      "cancel": "取消"
+    },
+    "boundary": {
+      "notStarted": "统计将从第一次成功且非空的语音输入开始。",
+      "since": "自 {date} 起在本机记录。"
+    },
+    "metrics": {
+      "label": "语音使用指标",
+      "characters": "口述字数",
+      "saved": "预计节省时间",
+      "rate": "平均口述速度",
+      "duration": "总口述时间",
+      "savedBasis": "按每分钟打字 {count} 字估算，并非实测打字速度。",
+      "savedEquivalent": "相当于少敲 {count} 个字"
+    },
+    "units": {
+      "characters": "字",
+      "charactersPerMinute": "字/分钟",
+      "days": "天",
+      "zeroMinutes": "0 分钟",
+      "lessThanMinute": "少于 1 分钟",
+      "minutes": "{count} 分钟",
+      "hours": "{count} 小时",
+      "hoursMinutes": "{hours} 小时 {minutes} 分钟"
+    },
+    "streak": {
+      "title": "最近 365 个本地自然日的活动",
+      "windowNote": "活跃天数与最长连续天数仅统计此滚动时间窗。",
+      "label": "最近 365 个本地自然日的语音连续记录",
+      "activeDays": "活跃天数",
+      "current": "当前连续天数",
+      "longest": "最长连续天数"
+    },
+    "heatmap": {
+      "title": "最近 365 个本地自然日",
+      "description": "颜色表示口述字数；斜纹日期早于统计启用时间。",
+      "legend": "活跃量图例",
+      "less": "更少",
+      "more": "更多",
+      "accessibleLabel": "最近 365 个本地自然日的语音活跃日历",
+      "scrollLabel": "可横向滚动的语音活动日历，滚动查看全部 365 天",
+      "beforeTracking": "{date}：当时尚未开始记录统计",
+      "noActivity": "{date}：没有记录到语音活动",
+      "daySummary": "{date}：{sessions} 次成功输入，共 {characters} 字，时长 {duration}"
+    },
+    "empty": {
+      "title": "从下一次语音输入开始",
+      "description": "完成一次成功且非空的语音输入后，这里会开始显示真实总量、连续天数与每日活动。",
+      "privacy": "只保留聚合计数；原始音频、转写文本、应用名称与路径不会进入语音洞察。"
+    },
+    "error": {
+      "title": "无法加载语音洞察",
+      "description": "已有统计未被更改，请重试本地请求。"
+    },
+    "share": {
+      "title": "Tuff 语音洞察",
+      "copied": "已复制聚合语音洞察",
+      "copyFailed": "无法复制聚合摘要",
+      "unavailable": "暂不可用",
+      "rateValue": "{count} 字/分钟",
+      "characters": "口述字数：{count}",
+      "saved": "预计节省时间：{duration}",
+      "rate": "平均口述速度：{rate}",
+      "duration": "总口述时间：{duration}",
+      "activeDays": "最近 365 个本地自然日的活跃天数：{count}",
+      "currentStreak": "最近 365 个本地自然日的当前连续：{count} 天",
+      "longestStreak": "最近 365 个本地自然日的最长连续：{count} 天",
+      "sessions": "成功输入：{count} 次",
+      "polishedSessions": "已润色输入：{count} 次",
+      "estimateBasis": "节省时间按每分钟打字 {count} 字估算，并非实测打字速度。"
+    },
+    "clear": {
+      "title": "清除语音洞察？",
+      "description": "这会永久删除此处显示的聚合总量与每日活动。下一次成功且非空的语音输入后将重新开始记录。",
+      "confirm": "清除全部洞察",
+      "success": "语音洞察已清除",
+      "failed": "无法清除语音洞察，此处显示的数据未被更改。",
+      "refreshNeededTitle": "语音洞察已清除",
+      "refreshNeededDescription": "暂时无法刷新清除后的状态。这里不会继续显示旧统计；请刷新以加载当前的零状态。"
+    },
+    "report": {
+      "title": "聚合报告",
+      "description": "透明说明统计范围，以及润色使用率的计算方式。",
+      "successfulSessions": "已记录的成功输入",
+      "polishedSessions": "已润色输入",
+      "cleanupRate": "润色使用率",
+      "learningTitle": "未启用个性化学习",
+      "learningUnavailable": "本报告不会虚构学习评分、词汇画像或个人词典，只展示真实聚合用量。",
+      "methodologyTitle": "这些数字如何计算",
+      "successMethod": "每次成功且非空的实时语音输入只计一次，成功重试同样只计一次；上传识别、朗读和中间结果不计入。",
+      "characterMethod": "字数统计会排除空白与标点，计算可见的中日韩文字及其他字符；它不是英文单词数。",
+      "savedMethod": "预计节省时间为每分钟打字 {count} 字的基线耗时减去口述时长，并保证不小于零；基线是估算值，并非实测打字速度。",
+      "rateMethod": "平均口述速度为总计数字数除以总记录时长。",
+      "calendarMethod": "活跃天数与连续记录按 {timezone} 的本地自然日滚动统计最近 365 天，未来日期不会计入。"
+    },
+    "records": {
+      "title": "识别记录",
+      "description": "查看每次语音识别的源音频、原始转录、最终文本、耗时、渠道和用量。",
+      "empty": "还没有可查看的识别记录。",
+      "emptyText": "未生成文本",
+      "clear": "清空记录",
+      "clearSuccess": "识别记录已清空",
+      "clearFailed": "识别记录清空失败",
+      "audioLabel": "识别源音频",
+      "audioUnavailable": "源音频不可用",
+      "audioMeta": "音频 {duration} · {bytes} 字节",
+      "rawText": "原始转录",
+      "finalText": "最终文本",
+      "duration": "录音时长",
+      "recognitionDuration": "识别耗时",
+      "tokens": "Tokens",
+      "tokensValue": "{count}",
+      "tokensSplit": "输入 {input} · 输出 {output}",
+      "tokensUnavailable": "渠道未返回",
+      "channel": "渠道",
+      "error": "错误",
+      "status": {
+        "success": "成功",
+        "empty": "无有效内容",
+        "failed": "失败",
+        "cancelled": "已取消"
+      }
+    },
+    "weeks": {
+      "title": "最近 12 周",
+      "note": "柱高按当周口述字数，与最忙的一周相比。",
+      "streak": "当前连续 {current} 天 · 最长 {longest} 天 · 活跃 {active} 天"
+    },
+    "tiers": {
+      "weeksPending": "再记满一周，这里会出现 12 周的对比。",
+      "activityPending": "再记满一个月，这里会出现全年热力图和报告。"
     }
   },
   "home": {
@@ -1210,6 +1398,8 @@
     "back": "返回智能",
     "channels": "模型渠道",
     "channelsDesc": "模型服务商、凭据与连通性测试。",
+    "voice": "音频洞察",
+    "voiceDesc": "实时听写、音频转写、识别记录与音频洞察",
     "prompts": "提示词",
     "promptsDesc": "提示词库、变量与版本。",
     "agents": "Agents",
@@ -2493,6 +2683,7 @@
     "homeConversation": "对话",
     "login": "请先登录!",
     "permission": "您没有权限!",
+    "voiceInsights": "语音洞察",
     "pluginStore": "插件市场",
     "installedPlugins": "已安装插件",
     "storeDocs": "市场文档",
@@ -2508,6 +2699,7 @@
     "storagable": "存储",
     "intelligence": "智能",
     "intelligenceChannels": "智能通道",
+    "intelligenceVoice": "音频洞察",
     "intelligenceCapabilities": "智能能力",
     "intelligencePrompts": "智能提示词",
     "intelligenceAudit": "智能审计",
@@ -3783,7 +3975,17 @@
       "duplicateProvider": "复制渠道",
       "editProviderBasic": "修改基本信息",
       "providerNameHint": "显示在列表和详情页中的名称。",
-      "providerTypeHint": "用于匹配内置适配器；未知类型会作为 custom 处理。",
+      "providerTypeHint": "决定此渠道使用的协议与内置适配器。",
+      "providerTypeOptions": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "deepseek": "DeepSeek",
+        "siliconflow": "SiliconFlow",
+        "local": "本地模型（Ollama）",
+        "compatible": "兼容",
+        "bailian": "百炼",
+        "volcengine": "火山引擎"
+      },
       "deleteConfirmTitle": "删除提供商",
       "deleteConfirmMessage": "确定要删除提供商「{name}」吗？此操作不可撤销。",
       "deleteConfirmButton": "删除",
@@ -3843,6 +4045,7 @@
       "capabilityTestHint": "使用内置示例图片随机执行测试",
       "capabilityTestTitle": "测试能力",
       "capabilityTestDesc": "使用当前配置测试该能力是否正常工作",
+      "capabilityAsrBindingTestDesc": "此测试使用已保存的 audio.asr 能力绑定及其配置模型；不可覆盖渠道或模型。",
       "testProvider": "选择测试渠道",
       "testProviderDesc": "选择一个已启用的渠道进行测试",
       "testInput": "测试输入",
@@ -3914,8 +4117,14 @@
       "autoSaveEnabled": "自动保存已启用",
       "transferAvailableModels": "可用模型",
       "transferSelectedModels": "已绑定模型",
+      "transferFilterPlaceholder": "搜索模型",
       "transferEmptyAvailable": "暂无可选模型，先在渠道配置里同步一下吧。",
       "transferEmptySelected": "右侧列表为空，至少加一个模型才能调用这个渠道。",
+      "transferAddAriaLabel": "把勾选的模型加入已绑定列表",
+      "transferRemoveAriaLabel": "把勾选的模型移出已绑定列表",
+      "transferSelectAllAriaLabel": "全选",
+      "transferMoveUpAriaLabel": "上移一位",
+      "transferMoveDownAriaLabel": "下移一位",
       "transferCustomPlaceholder": "自定义模型 ID",
       "transferAddButton": "添加",
       "agentsDescription": "智能体系统，自动化任务执行",
@@ -4681,24 +4890,41 @@
   },
   "assistant": {
     "floatingBall": {
-      "voiceWakeOff": "语音唤醒已关闭",
-      "listening": "监听中：{wakeWords}",
-      "clickToOpen": "点击打开 Assistant",
-      "unsupported": "当前环境不支持语音识别",
+      "voiceWakeOff": "语音输入已关闭",
+      "listening": "语音输入进行中",
+      "clickToOpen": "点击打开语音输入",
+      "unsupported": "当前环境不支持语音输入",
       "permissionDenied": "麦克风权限未授权",
-      "recognitionError": "语音识别异常：{error}"
+      "recognitionError": "语音输入异常：{error}"
     },
     "voicePanel": {
-      "unsupported": "当前环境不支持语音识别",
+      "unsupported": "当前环境不支持语音输入",
       "permissionDenied": "麦克风权限未授权",
-      "recognitionError": "语音识别异常：{error}",
-      "voiceWakeDisabled": "语音唤醒未开启，可直接输入文本指令",
+      "recognitionError": "语音输入异常：{error}",
+      "voiceInputDisabled": "语音输入已关闭，可在设置中开启",
       "emptyInput": "请先说出要执行的内容",
       "submitFailed": "发送失败，请重试",
       "listening": "正在聆听...",
       "waiting": "等待语音输入",
       "textOnly": "文本输入模式",
       "close": "关闭",
+      "cancelSession": "取消本次",
+      "cancelled": "已取消",
+      "capturingDevice": "正在启动语音输入…",
+      "microphoneUnresponsive": "麦克风没有响应",
+      "microphoneMissing": "找不到可用的麦克风",
+      "microphoneDenied": "麦克风权限未授权",
+      "holdToCancel": "按住…松开取消",
+      "stillWorking": "还在转写，稍等",
+      "stillWorkingLong": "比平时久，可按住 Esc 取消",
+      "recovering": "正在恢复…",
+      "recoverCancelled": "刚才取消了一段",
+      "recoverFailed": "上次转写失败了",
+      "recoveryExpired": "录音已过期，请重新说一次",
+      "undo": "撤销",
+      "retry": "重试",
+      "quotaExhausted": "AI 额度已用完，去设置查看",
+      "serviceBusy": "服务繁忙，请稍后重试",
       "placeholder": "说出或输入要执行的内容，例如：帮我搜索最近的会议记录",
       "startListening": "开始监听",
       "listeningAction": "监听中",
@@ -4707,18 +4933,19 @@
       "providerRecording": "正在录音，点击停止后转写（最长 30 秒）",
       "stopAndTranscribe": "停止并转写",
       "voiceTranscribing": "正在通过 AI Provider 转写...",
-      "voiceTranscribingShort": "转写中...",
+      "voiceTranscribingShort": "转写中…",
       "voiceTranscribed": "语音转写完成",
       "voiceTranscribedWithProvider": "语音已由 {provider} 转写",
-      "voiceBrowserFallback": "AI 转写不可用，已切换浏览器语音识别，请重新说一遍",
-      "providerRecordingUnavailable": "无法启动录音，正在尝试浏览器语音识别",
-      "voiceTranscribeAssistantDisabled": "Assistant 已关闭，无法转写语音",
       "voiceTranscribeInvalid": "录音数据无效，请重新录制",
       "voiceTranscribeTooLarge": "录音超过 5 MiB 限制，请缩短后重试",
       "voiceTranscribeTooLong": "录音超过 30 秒限制，请缩短后重试",
       "voiceTranscribeUnavailable": "AI 语音转写不可用，请检查登录、额度或 Provider 状态",
+      "voiceRecognitionNotConfigured": "尚未配置语音识别",
+      "voiceRecognitionUnavailable": "语音识别不可用",
       "voiceTranscribeEmpty": "未识别到语音内容，请重新录制",
-      "voiceTranscribeFailed": "语音转写失败，请重试",
+      "voiceListening": "正在聆听…",
+      "voiceTranscribeFailed": "语音转写失败",
+      "voiceDeliveryFailed": "未能写入，请先点一下输入框",
       "submitting": "发送中...",
       "sendToCoreBox": "发送到 CoreBox",
       "translateClipboardImage": "翻译剪贴板图片",
@@ -4745,8 +4972,6 @@
       "screenshotTranslating": "正在截图并翻译...",
       "screenshotTranslateReady": "截图翻译已打开",
       "screenshotTextFallbackReady": "图片翻译不可用，已改用 OCR 文本翻译，结果见下方",
-      "screenshotTextFallbackTitle": "OCR 文本翻译",
-      "screenshotTextFallbackSource": "识别文本",
       "screenshotTextFallbackTarget": "翻译结果",
       "screenshotTextFallbackMetadata": "OCR：{ocr} · 翻译：{translation}",
       "screenshotImageTranslateRouteTitle": "图片翻译路由",
@@ -4792,7 +5017,11 @@
       "screenshotTranslateUnavailable": "截图不可用，请检查系统录屏权限或稍后重试",
       "screenshotTranslateImageUnavailable": "截图图片无效，请重新截图后再试",
       "imageTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态",
-      "screenshotTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态"
+      "screenshotTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态",
+      "openMicrophoneSettings": "打开麦克风设置",
+      "microphoneSettingsUnavailable": "这个系统不能直接打开麦克风设置",
+      "usingDevice": "已切换到 {name}",
+      "openRecognitionSettings": "打开智能设置"
     },
     "regionSelector": {
       "title": "选择截图区域",
@@ -4956,7 +5185,7 @@
       "providersCount": "个提供商"
     },
     "item": {
-      "configError": "配置不完整或无效",
+      "configError": "待完成配置",
       "nexusOfficial": "官方",
       "nexusAuthReady": "Nexus 登录态就绪",
       "nexusAuthRequired": "Nexus 需登录"
@@ -4976,6 +5205,17 @@
         "apiKey": "API 密钥",
         "apiKeyPlaceholder": "输入您的 API 密钥",
         "apiKeyRequired": "已启用的提供商需要 API 密钥",
+        "apiKeySaving": "正在保存密钥…",
+        "apiKeySaved": "已保存",
+        "apiKeyReplacePlaceholder": "已保存，输入新密钥替换",
+        "apiKeySaveFailed": "密钥保存失败，输入已保留，请重试。",
+        "apiKeyRevealFailed": "无法显示已保存的 API 密钥。",
+        "apiKeyShow": "显示已保存的 API 密钥",
+        "apiKeyHide": "隐藏 API 密钥",
+        "voiceAsrDoubaoResourceId": "豆包资源 ID",
+        "voiceAsrDoubaoResourceIdPlaceholder": "resource-id",
+        "voiceAsrIdentifierInvalid": "请先填写所需的公开 ASR 标识，再保存。",
+        "dialogClose": "关闭",
         "baseUrl": "基础 URL",
         "baseUrlPlaceholder": "https://api.example.com/v1",
         "baseUrlHint": "留空以使用默认端点",
@@ -5015,6 +5255,11 @@
         "transferAll": "所有模型",
         "transferEnabled": "启用的模型",
         "transferFilterPlaceholder": "搜索模型",
+        "transferAddAriaLabel": "启用勾选的模型",
+        "transferRemoveAriaLabel": "停用勾选的模型",
+        "transferSelectAllAriaLabel": "全选",
+        "transferEmptyAll": "暂无模型，点「获取模型」从提供商同步，或手动添加。",
+        "transferEmptyEnabled": "还没有启用任何模型，从左侧选择后加进来。",
         "modelExists": "此模型已存在",
         "addModelPlaceholder": "输入模型名称并按 Enter",
         "defaultModel": "默认模型",

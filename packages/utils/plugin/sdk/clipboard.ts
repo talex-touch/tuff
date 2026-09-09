@@ -1,5 +1,6 @@
 import type {
   ClipboardActionResult,
+  ClipboardAnnotateResponse,
   ClipboardChangePayload,
   ClipboardCopyAndPasteRequest,
   ClipboardItem,
@@ -100,6 +101,10 @@ function toPluginClipboardItem(item: ClipboardItem | null): PluginClipboardItem 
     sourceApp: typeof item.source === 'string' ? item.source : null,
     timestamp: item.createdAt,
     isFavorite: item.isFavorite ?? null,
+    note: item.note ?? null,
+    userTags: Array.isArray(item.userTags) ? item.userTags : [],
+    retentionExpiresAt: item.retentionExpiresAt ?? null,
+    retentionReason: item.retentionReason,
     metadata: typeof item.metadata === 'string' ? item.metadata : null,
     meta: Object.keys(meta).length > 0 ? meta : null,
   })
@@ -256,6 +261,14 @@ export interface ClipboardDeleteOptions {
   id: number
 }
 
+export interface ClipboardAnnotateOptions {
+  id: number
+  /** Omit to leave the note alone; pass `null` or an empty string to clear it. */
+  note?: string | null
+  /** Omit to leave the tags alone; pass an empty array to clear them. */
+  tags?: string[]
+}
+
 export interface ClipboardApplyOptions {
   item?: PluginClipboardItem
   text?: string
@@ -285,6 +298,8 @@ export interface ClipboardCopyAndPasteOptions {
   delayMs?: number
   hideCoreBox?: boolean
 }
+
+export type ClipboardAnnotateResult = ClipboardAnnotateResponse
 
 export type ClipboardSearchOptions = PluginClipboardSearchOptions
 export type ClipboardSearchResponse = PluginClipboardSearchResponse
@@ -349,6 +364,25 @@ export function useClipboard() {
      */
     async deleteItem(options: ClipboardDeleteOptions): Promise<void> {
       await transport.send(ClipboardEvents.delete, withSdkApiPayload(options))
+    },
+
+    /**
+     * Writes the user's own note and tags onto a history item.
+     *
+     * The two fields are independent — sending only `note` leaves the tags untouched — so an
+     * inline editor does not have to hold the other one to avoid wiping it.
+     *
+     * Resolves with what was actually stored: the host trims, de-duplicates and caps both, and
+     * returning the result is what keeps the UI from showing text that is not in the database.
+     */
+    async annotate(options: ClipboardAnnotateOptions): Promise<ClipboardAnnotateResult> {
+      const response = await transport.send(ClipboardEvents.annotate, withSdkApiPayload(options))
+      assertClipboardTransportSuccess(response)
+      return {
+        updated: response?.updated === true,
+        note: typeof response?.note === 'string' ? response.note : null,
+        tags: Array.isArray(response?.tags) ? response.tags : [],
+      }
     },
 
     /**
@@ -500,6 +534,20 @@ export function useClipboard() {
     async getHistoryImageUrl(id: number): Promise<string | null> {
       const res = await transport.send(ClipboardEvents.getImageUrl, withSdkApiPayload({ id }))
       return typeof res?.url === 'string' ? res.url : null
+    },
+
+    /**
+     * Hands a stored clipboard image to the operating system's own previewer.
+     *
+     * Quick Look on macOS, the registered default application elsewhere. Takes a record id
+     * rather than a path — the host resolves the file and keeps the lookup inside its own
+     * clipboard image store, so this cannot be pointed at an arbitrary file.
+     *
+     * Resolves false when the record has no stored file to hand over.
+     */
+    async previewHistoryImage(id: number): Promise<boolean> {
+      const res = await transport.send(ClipboardEvents.previewImage, withSdkApiPayload({ id }))
+      return res?.opened === true
     },
 
     /**

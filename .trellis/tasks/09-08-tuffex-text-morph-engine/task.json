@@ -1,0 +1,30 @@
+{
+  "id": "tuffex-text-morph-engine",
+  "name": "tuffex-text-morph-engine",
+  "title": "tuffex 文本形变引擎（移植 torph）",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-08",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "在 Nexus 文档开发面实际查看 text-morph、text-transformer、badge、switch，并以 prefers-reduced-motion 复核直接换值；随后完成 TuffEx build/audit 与文档覆盖门禁。",
+    "blocker": "无代码阻塞；尚无 headless Chrome 的形变/版式/降级证据，也未把父级的 focused tests 和类型检查扩大解释为所有 package build/audit 门已完成。",
+    "evidence": "packages/tuffex/packages/components/src/text-morph/（引擎与 engine/component tests）、text-transformer/src/TxTextTransformer.vue、badge/src/TxBadge.vue 和 apps/nexus/app/components/content/demos/TextMorph*.vue 已提供实现与测试路径；父级记录的 440 focused tests、TuffEx/Nexus typecheck 及本 PR Nexus suite/workspace typecheck 已通过。"
+  }
+}

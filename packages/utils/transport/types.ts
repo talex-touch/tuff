@@ -174,6 +174,18 @@ export interface StreamController {
   cancel: () => void;
 
   /**
+   * Asks the producer to stop early and finish normally.
+   *
+   * Unlike {@link cancel}, the stream is *not* aborted: data/end callbacks keep
+   * firing, so a producer that is mid-flight can flush its final result. Only
+   * producers that read {@link StreamContext.stopSignal} react; for every other
+   * handler this is a no-op and the stream runs to its natural end.
+   *
+   * Optional so existing transport implementations stay assignable.
+   */
+  stop?: () => void;
+
+  /**
    * Whether the stream has been cancelled.
    */
   readonly cancelled: boolean;
@@ -217,6 +229,16 @@ export interface StreamContext<TChunk> {
    * Aborts when the client cancels this stream.
    */
   readonly signal: AbortSignal;
+
+  /**
+   * Aborts when the client asks the producer to stop early and finish normally.
+   *
+   * Distinct from {@link signal}: nothing is torn down, so the handler is still
+   * expected to emit its remaining chunks and call {@link end}. Handlers that
+   * never read this run to their natural end, which is why adding it is safe
+   * for every existing stream.
+   */
+  readonly stopSignal: AbortSignal;
 
   /**
    * Unique identifier for this stream.

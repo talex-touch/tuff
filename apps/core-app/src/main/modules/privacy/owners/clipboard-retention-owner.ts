@@ -40,6 +40,19 @@ import {
 
 const CATEGORY = 'clipboard-history' as const
 
+/**
+ * 一条记录到期的两种方式：类别策略的时间窗过了，或者它自己带着更早的过期时刻。
+ *
+ * 后者是验证码那一档——一次性码被粘贴的那一刻就作废了，留满类别的 90 天等于让一个
+ * 还能用的凭据在明文表里躺三个月。写成常量而不是在四处各抄一遍，是因为预览、
+ * 受保护计数、分页扫描和真正的 DELETE 必须问同一个问题：它们不一致的话，预览会说
+ * 要删 N 条、实际删掉另一批。
+ *
+ * 占位符顺序固定为 `[cutoff, now]`，两者都是 Unix 秒。
+ */
+const DUE_CLAUSE =
+  '(timestamp < ? OR (retention_expires_at IS NOT NULL AND retention_expires_at < ?))'
+
 export interface ClipboardImageRetentionResult {
   readonly deletedCount: number
   readonly deletedByteCount: number
@@ -160,6 +173,7 @@ export function createClipboardRetentionOwner(
     if (scope.kind === 'disabled') return privacyPreviewResult(CATEGORY)
 
     const cutoff = toUnixSeconds(scope.cutoffMs)
+    const nowSeconds = toUnixSeconds(scope.nowMs)
     const protectionClause = scope.includeProtected
       ? ''
       : 'AND COALESCE(is_favorite, 0) = 0 AND COALESCE(retention_protected, 0) = 0'
@@ -169,19 +183,19 @@ export function createClipboardRetentionOwner(
         `SELECT id AS owner_id,
                 CASE WHEN type = 'image' THEN 0 ELSE length(COALESCE(content, '')) END AS byte_count
            FROM clipboard_history
-          WHERE timestamp < ? ${protectionClause}
+          WHERE ${DUE_CLAUSE} ${protectionClause}
           ORDER BY timestamp, id
           LIMIT ?`,
-        [cutoff],
+        [cutoff, nowSeconds],
         limits.maxRows
       )
       const protectedRows = await queryPrivacyCount(
         client,
         `SELECT COUNT(*) AS item_count, 0 AS byte_count
            FROM clipboard_history
-          WHERE timestamp < ?
+          WHERE ${DUE_CLAUSE}
             AND (COALESCE(is_favorite, 0) = 1 OR COALESCE(retention_protected, 0) = 1)`,
-        [cutoff]
+        [cutoff, nowSeconds]
       )
       return privacyPreviewResult(CATEGORY, {
         eligibleItemCount: candidates.rows.length,
@@ -214,6 +228,7 @@ export function createClipboardRetentionOwner(
     const progress = emptyDeleteProgress()
     const startedAt = Date.now()
     const cutoff = toUnixSeconds(scope.cutoffMs)
+    const nowSeconds = toUnixSeconds(scope.nowMs)
     const protectionClause = scope.includeProtected
       ? ''
       : 'AND COALESCE(is_favorite, 0) = 0 AND COALESCE(retention_protected, 0) = 0'
@@ -232,9 +247,9 @@ export function createClipboardRetentionOwner(
           client,
           `SELECT COUNT(*) AS item_count, 0 AS byte_count
              FROM clipboard_history
-            WHERE timestamp < ?
+            WHERE ${DUE_CLAUSE}
               AND (COALESCE(is_favorite, 0) = 1 OR COALESCE(retention_protected, 0) = 1)`,
-          [cutoff]
+          [cutoff, nowSeconds]
         )
         progress.protectedItemCount = protectedRows.itemCount
       }
@@ -255,11 +270,11 @@ export function createClipboardRetentionOwner(
                   CASE WHEN type = 'image' THEN 0 ELSE length(COALESCE(content, '')) END AS byte_count,
                   CASE WHEN type = 'image' THEN content ELSE NULL END AS owner_reference
              FROM clipboard_history
-            WHERE timestamp < ? ${protectionClause}
+            WHERE ${DUE_CLAUSE} ${protectionClause}
               AND (timestamp > ? OR (timestamp = ? AND id > ?))
             ORDER BY timestamp, id
             LIMIT ?`,
-          [cutoff, cursorTimestamp, cursorTimestamp, cursorId],
+          [cutoff, nowSeconds, cursorTimestamp, cursorTimestamp, cursorId],
           pageSize
         )
         if (candidates.rows.length === 0) break
@@ -271,9 +286,9 @@ export function createClipboardRetentionOwner(
             client,
             `DELETE FROM clipboard_history
               WHERE id IN (${sqlPlaceholders(ids.length)})
-                AND timestamp < ? ${protectionClause}
+                AND ${DUE_CLAUSE} ${protectionClause}
               RETURNING id`,
-            [...ids, cutoff]
+            [...ids, cutoff, nowSeconds]
           )
         )
         const deletedIds = deletion.rows.map((row) => Number(row.id))
