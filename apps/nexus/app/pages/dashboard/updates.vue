@@ -46,7 +46,7 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t, locale } = useI18n()
-const { user } = useAuthUser()
+
 const toast = useToast()
 
 const { updates, pending: updatesPending, error: updatesError, refresh: refreshUpdates } = useDashboardUpdatesData()
@@ -74,7 +74,7 @@ const selectedSource = ref<UpdateSourceFilter>('all')
 const selectedDateRange = ref<UpdateDateRangeFilter>('all')
 const currentUpdatePage = ref(1)
 
-const isAdmin = computed(() => user.value?.role === 'admin')
+const { isAdmin } = useAccountRole()
 
 const typeOptions = computed(() => [
   { value: 'all', label: isZh.value ? '全部类型' : 'All types' },

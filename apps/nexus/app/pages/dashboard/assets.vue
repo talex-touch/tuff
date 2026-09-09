@@ -87,9 +87,7 @@ const toast = useToast()
 
 const { plugins, pending: pluginsPending, error: pluginsLoadError, refresh: refreshPlugins } = useDashboardPluginsData()
 
-const isAdmin = computed(() => {
-  return user.value?.role === 'admin'
-})
+const { isAdmin } = useAccountRole()
 
 const currentUserId = computed(() => user.value?.id ?? null)
 

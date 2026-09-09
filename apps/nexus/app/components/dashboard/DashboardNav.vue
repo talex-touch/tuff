@@ -91,15 +91,16 @@ watch(
   { immediate: true },
 )
 
-const isAdmin = computed(() => mounted.value && String(user.value?.role || '').toLowerCase() === 'admin')
-const isTeamAdmin = computed(() => {
-  if (!mounted.value)
-    return false
+/**
+ * Both gates wait for `mounted`: the admin sections are absent from the SSR
+ * markup (no user payload there), so rendering them on the first client tick
+ * would be a hydration mismatch.
+ */
+const { isAdmin: isAccountAdmin } = useAccountRole()
+const { isTeamAdmin: isTeamAdminRole } = useTeamRole(() => teamData.value?.team)
 
-  const team = teamData.value?.team
-  const role = String(team?.role || '').toLowerCase()
-  return team?.type === 'organization' && (role === 'owner' || role === 'admin')
-})
+const isAdmin = computed(() => mounted.value && isAccountAdmin.value)
+const isTeamAdmin = computed(() => mounted.value && isTeamAdminRole.value)
 const canManageOauthApps = computed(() => isAdmin.value || isTeamAdmin.value)
 const riskControlEnabled = computed(() => isFeatureFlagEnabled(runtimeConfig.public?.riskControl?.enabled))
 const notificationUnreadBadgeText = computed(() => notificationUnreadCount.value > 99 ? '99+' : String(notificationUnreadCount.value))

@@ -38,9 +38,7 @@ function resolveErrorMessage(err: unknown, fallback: string) {
 }
 
 // Admin check - redirect if not admin
-const isAdmin = computed(() => {
-  return user.value?.role === 'admin'
-})
+const { isAdmin } = useAccountRole()
 
 watch(isAdmin, (admin) => {
   if (user.value && !admin) {

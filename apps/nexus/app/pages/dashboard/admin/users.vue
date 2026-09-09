@@ -39,7 +39,7 @@ function resolveErrorMessage(err: unknown, fallback: string) {
   return typeof message === 'string' && message.trim() ? message.trim() : fallback
 }
 
-const isAdmin = computed(() => user.value?.role === 'admin')
+const { isAdmin } = useAccountRole()
 
 watch(isAdmin, (admin) => {
   if (user.value && !admin)
