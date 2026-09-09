@@ -487,7 +487,7 @@ watchEffect(() => {
 <template>
   <NexusPwaManifest />
   <NuxtLoadingIndicator color="#ffffff" />
-  <LazyToastContainer v-if="toastHostMounted" />
+  <LazyToastContainer v-if="toastHostMounted" :class="{ dark: isAuthShellRoute }" />
   <ClientOnly>
     <LazySearchGlobalSearch v-if="!isAuthShellRoute && globalSearchOpen" />
   </ClientOnly>
