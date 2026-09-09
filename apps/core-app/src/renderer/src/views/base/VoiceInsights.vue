@@ -363,9 +363,7 @@ const recordedDays = computed(() => {
  * a chart with nothing in it, and less is the honest amount here.
  */
 const WEEKS_TIER_DAYS = 7
-const ACTIVITY_TIER_DAYS = 30
 const showsWeeks = computed(() => recordedDays.value >= WEEKS_TIER_DAYS)
-const showsActivity = computed(() => recordedDays.value >= ACTIVITY_TIER_DAYS)
 
 /** The last 12 weeks of dictated characters, as a share of the busiest of them. */
 const recentWeeks = computed(() => {
@@ -697,11 +695,15 @@ onBeforeUnmount(() => {
     class="VoiceInsights"
     data-testid="voice-insights-page"
     :aria-busy="!hasLoaded || refreshing || clearing"
-    aria-labelledby="voice-insights-title"
+    :aria-label="t('voiceInsights.headline')"
   >
     <header class="VoiceInsights-Hero">
       <div class="VoiceInsights-HeroCopy">
-        <h1 id="voice-insights-title">{{ t('voiceInsights.headline') }}</h1>
+        <!--
+          The headline moved up to the page's title row — it was the page's line, not this card's,
+          and having it here made a second `<h1>` under the one the shell already renders. What
+          stays is the sentence that qualifies it.
+        -->
         <p>{{ t('voiceInsights.subtitle') }}</p>
       </div>
 
@@ -895,12 +897,8 @@ onBeforeUnmount(() => {
         Without it a shorter page is indistinguishable from a broken one, and the reader who saw
         a heatmap on someone else's screen has no way to tell which they are looking at.
       -->
-      <p v-if="!showsActivity" class="VoiceInsights-Tier" data-testid="voice-insights-tier-note">
-        {{
-          showsWeeks
-            ? t('voiceInsights.tiers.activityPending')
-            : t('voiceInsights.tiers.weeksPending')
-        }}
+      <p v-if="!showsWeeks" class="VoiceInsights-Tier" data-testid="voice-insights-tier-note">
+        {{ t('voiceInsights.tiers.weeksPending') }}
       </p>
 
       <article v-if="showsWeeks" class="VoiceInsights-Weeks" data-testid="voice-insights-weeks">
@@ -928,11 +926,7 @@ onBeforeUnmount(() => {
         </div>
       </article>
 
-      <article
-        v-if="showsActivity"
-        class="VoiceInsights-Activity"
-        data-testid="voice-insights-activity"
-      >
+      <article class="VoiceInsights-Activity" data-testid="voice-insights-activity">
         <header class="VoiceInsights-ActivityHeading">
           <h3>{{ t('voiceInsights.streak.title') }}</h3>
           <p>{{ t('voiceInsights.streak.windowNote') }}</p>
@@ -1009,11 +1003,7 @@ onBeforeUnmount(() => {
         </div>
       </article>
 
-      <article
-        v-if="showsActivity"
-        class="VoiceInsights-Report"
-        data-testid="voice-insights-report"
-      >
+      <article class="VoiceInsights-Report" data-testid="voice-insights-report">
         <div class="VoiceInsights-ReportIntro">
           <div>
             <span class="VoiceInsights-ReportIcon i-ri-file-chart-line" aria-hidden="true" />
@@ -1207,22 +1197,14 @@ onBeforeUnmount(() => {
   margin: 0 auto var(--shell-space-7);
 }
 
+/* The heading moved to the page title row; what is left is the sentence that qualifies it, and
+   it now leads the block rather than trailing a headline, so it has no top margin to close. */
 .VoiceInsights-HeroCopy {
   min-width: 0;
 
-  h1 {
-    margin: 0;
-    color: var(--shell-text-primary);
-    font-size: var(--shell-fs-display);
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    line-height: 1.12;
-    text-wrap: balance;
-  }
-
   p {
     max-width: 70ch;
-    margin: var(--shell-space-3) 0 0;
+    margin: 0;
     color: var(--shell-text-secondary);
     font-size: var(--shell-fs-md);
     line-height: 1.6;
