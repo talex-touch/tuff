@@ -1,11 +1,7 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, ref } from 'vue'
 
 const { locale } = useI18n()
-const NumberFlowComponent = import.meta.client
-  ? defineAsyncComponent(() => import('@number-flow/vue'))
-  : null
-
 const healthProgress = ref(78)
 const healthDelay = ref(2)
 
@@ -47,8 +43,7 @@ function bump() {
     >
       <template #value>
         <div style="display: flex; align-items: baseline; gap: 6px;">
-          <component :is="NumberFlowComponent" v-if="NumberFlowComponent" :value="healthProgress" />
-          <span v-else>{{ healthProgress }}</span>
+          <TxTextMorph :text="healthProgress" />
           <span style="font-size: 16px;">%</span>
         </div>
       </template>

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 import { ClipboardCapturePipeline } from './clipboard-capture-pipeline'
+import {
+  DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS,
+  type ClipboardClassificationSettings
+} from './clipboard-classification-settings'
 import { ClipboardHelper } from './clipboard-capture-freshness'
 import {
   resetClipboardCaptureSuppression,
@@ -43,7 +47,9 @@ const mocks = vi.hoisted(() => ({
   getAttachedPlugin: vi.fn(),
   shouldForwardClipboardChange: vi.fn(),
   schedule: vi.fn(async (_label: string, operation: () => Promise<unknown>) => await operation()),
-  values: vi.fn(() => ({
+  // 声明入参而不是留空：它替身的是 `db.insert().values(record)`，本来就收一个参数。
+  // 留空的话 `mock.calls` 的元组长度是 0，取 `[0]` 在 typecheck 下是错的。
+  values: vi.fn((_record?: Record<string, unknown>) => ({
     returning: vi.fn(async () => [
       {
         id: 11,
@@ -96,7 +102,7 @@ vi.mock('../../utils/perf-monitor', () => ({
   }
 }))
 
-function createPipeline() {
+function createPipeline(settingsOverride?: Partial<ClipboardClassificationSettings>) {
   const helper = new ClipboardHelper()
   const db = {
     insert: vi.fn(() => ({ values: mocks.values }))
@@ -122,6 +128,10 @@ function createPipeline() {
   let cooldownUntil = 0
 
   const pipeline = new ClipboardCapturePipeline({
+    getClassificationSettings: () => ({
+      ...DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS,
+      ...settingsOverride
+    }),
     getDatabase: () => db as never,
     getClipboardHelper: () => helper,
     getReader: () => ({
@@ -222,6 +232,81 @@ describe('clipboard-capture-pipeline', () => {
     expect(mocks.setTaskMeta).toHaveBeenCalledWith(
       expect.objectContaining({ durationMs: expect.any(Number) })
     )
+  })
+
+  /**
+   * `retention_protected` 的列、索引和清理侧的豁免条件在这之前就都存在了，但没有任何
+   * 代码写过它——所以密钥和普通文本一样会在 90 天后被清掉。清理侧不需要改动，
+   * 也就意味着这条链路只有"采集时写没写"这一个失败点，必须有测试盯着它。
+   */
+  it('marks a captured secret as retention protected, and ordinary text as not', async () => {
+    const context = createPipeline()
+    mocks.readText
+      .mockReturnValueOnce('previous')
+      .mockReturnValue(`sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`)
+
+    await context.pipeline.process('visible-poll')
+
+    expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ retentionProtected: true }))
+
+    mocks.values.mockClear()
+    const ordinary = createPipeline()
+    mocks.readText.mockReturnValueOnce('previous').mockReturnValue('今天下午三点开会')
+
+    await ordinary.pipeline.process('visible-poll')
+
+    expect(mocks.values).toHaveBeenCalledWith(
+      expect.objectContaining({ retentionProtected: false })
+    )
+  })
+
+  /**
+   * 主机 IP 要掩码，但它不是凭据。
+   *
+   * 掩码和保留期在 `49560c7cf` 之前是同一个开关（`secrets.length > 0`），所以「让 IP
+   * 被掩码」会顺带让每一条含 IP 的记录永不自动删除——一天复制几个 IP 就足以让历史
+   * 只增不减。这条测试盯的就是这两个轴没有重新粘回去。
+   */
+  it('does not protect a record just because it carries a host ip', async () => {
+    const context = createPipeline()
+    mocks.readText.mockReturnValueOnce('previous').mockReturnValue('ssh deploy@10.0.3.14 -p 2222')
+
+    await context.pipeline.process('visible-poll')
+
+    expect(mocks.values).toHaveBeenCalledWith(
+      expect.objectContaining({ retentionProtected: false })
+    )
+  })
+
+  /**
+   * 保护是可以关的——「我不想让密钥永久留在库里」是个合理选择。但它必须是显式关掉的
+   * 结果，而不是配置读不出来时的默认。
+   */
+  it('honours the setting that turns secret protection off', async () => {
+    const context = createPipeline({ protectSecrets: false })
+    mocks.readText
+      .mockReturnValueOnce('previous')
+      .mockReturnValue(`sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`)
+
+    await context.pipeline.process('visible-poll')
+
+    expect(mocks.values).toHaveBeenCalledWith(
+      expect.objectContaining({ retentionProtected: false })
+    )
+  })
+
+  it('uses the configured verification-code lifetime rather than a fixed hour', async () => {
+    const context = createPipeline({ verificationCodeRetentionMs: 15 * 60_000 })
+    const before = Date.now()
+    mocks.readText.mockReturnValueOnce('previous').mockReturnValue('G-123456')
+
+    await context.pipeline.process('visible-poll')
+
+    const record = mocks.values.mock.calls.at(-1)?.[0]
+    expect(record?.retentionExpiresAt).toBeInstanceOf(Date)
+    const lifetimeMs = (record?.retentionExpiresAt as Date).getTime() - before
+    expect(lifetimeMs).toBeGreaterThan(14 * 60_000)
+    expect(lifetimeMs).toBeLessThan(16 * 60_000)
   })
 
   it('persists WeChat aliases with their metadata search terms', async () => {

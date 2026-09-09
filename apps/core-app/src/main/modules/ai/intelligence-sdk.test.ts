@@ -1356,10 +1356,14 @@ describe('tuffIntelligenceSDK invoke', () => {
     const result = await sdk.testProvider(providerConfig)
 
     expect(result.success).toBe(true)
-    expect(chat).toHaveBeenCalledWith(expect.any(Object), {
-      timeout: 30000,
-      testRun: true
-    })
+    expect(chat).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        timeout: 30000,
+        testRun: true,
+        modelPreference: ['chat-local']
+      })
+    )
   })
 
   it('uses lightweight local model probe for local provider connection tests', async () => {
@@ -4138,6 +4142,204 @@ describe('tuffIntelligenceSDK invoke', () => {
     expect(sttInvoke.mock.calls[0]?.[1]).toMatchObject({
       metadata: { capabilityId: 'audio.stt' }
     })
+  })
+
+  it('does not cache repeated audio.stt submissions that carry distinct audio bytes', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'audio.stt',
+      type: IntelligenceCapabilityType.STT,
+      name: 'Speech-to-Text',
+      description: 'test uncached file transcription',
+      supportedProviders: [IntelligenceProviderType.LOCAL]
+    })
+
+    const sttInvoke = vi
+      .fn()
+      .mockResolvedValueOnce({
+        result: { text: 'first receipt' } satisfies IntelligenceSTTResult,
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        model: 'local-stt',
+        latency: 8,
+        traceId: 'trace-first',
+        provider: IntelligenceProviderType.LOCAL
+      })
+      .mockResolvedValueOnce({
+        result: { text: 'second receipt' } satisfies IntelligenceSTTResult,
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        model: 'local-stt',
+        latency: 9,
+        traceId: 'trace-second',
+        provider: IntelligenceProviderType.LOCAL
+      })
+    const provider = createProvider(
+      {
+        id: 'local-stt',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local STT',
+        enabled: true,
+        priority: 1,
+        models: ['local-stt'],
+        capabilities: ['audio.stt']
+      },
+      vi.fn()
+    )
+    provider.stt = sttInvoke
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: true
+    })
+    const payload = { audio: new ArrayBuffer(4), format: 'wav' as const }
+
+    await expect(sdk.audio.stt(payload)).resolves.toMatchObject({
+      result: { text: 'first receipt' }
+    })
+    await expect(sdk.audio.stt(payload)).resolves.toMatchObject({
+      result: { text: 'second receipt' }
+    })
+    expect(sttInvoke).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not replay Nexus audio.stt through another provider after its submission fails', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'audio.stt',
+      type: IntelligenceCapabilityType.STT,
+      name: 'Speech-to-Text',
+      description: 'test Nexus STT no replay',
+      supportedProviders: [IntelligenceProviderType.CUSTOM, IntelligenceProviderType.LOCAL]
+    })
+
+    const nexusStt = vi.fn().mockRejectedValue(new Error('NEXUS_STT_SUBMISSION_FAILED'))
+    const nexusProvider = createProvider(
+      {
+        id: 'tuff-nexus-default',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Tuff Nexus',
+        enabled: true,
+        priority: 1,
+        apiKey: 'nexus-token',
+        models: ['nexus-audio-transcribe'],
+        capabilities: ['audio.stt'],
+        metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
+      },
+      vi.fn()
+    )
+    nexusProvider.stt = nexusStt
+    const localStt = vi.fn().mockResolvedValue({
+      result: { text: 'must not duplicate the audio' } satisfies IntelligenceSTTResult,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      model: 'local-stt',
+      latency: 5,
+      traceId: 'trace-local',
+      provider: IntelligenceProviderType.LOCAL
+    })
+    const localProvider = createProvider(
+      {
+        id: 'local-stt',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local STT',
+        enabled: true,
+        priority: 2,
+        models: ['local-stt'],
+        capabilities: ['audio.stt']
+      },
+      vi.fn()
+    )
+    localProvider.stt = localStt
+    setIntelligenceProviderManager(new FakeProviderManager([nexusProvider, localProvider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false,
+      capabilities: {
+        'audio.stt': {
+          providers: [
+            { providerId: 'tuff-nexus-default', priority: 1, models: ['nexus-audio-transcribe'] },
+            { providerId: 'local-stt', priority: 2, models: ['local-stt'] }
+          ]
+        }
+      }
+    })
+
+    await expect(sdk.audio.stt({ audio: new ArrayBuffer(8), format: 'wav' })).rejects.toThrow(
+      'NEXUS_STT_SUBMISSION_FAILED'
+    )
+    expect(nexusStt).toHaveBeenCalledOnce()
+    expect(localStt).not.toHaveBeenCalled()
+  })
+
+  it('keeps ordinary audio.stt provider fallback when no Nexus submission was selected', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'audio.stt',
+      type: IntelligenceCapabilityType.STT,
+      name: 'Speech-to-Text',
+      description: 'test non-Nexus STT fallback',
+      supportedProviders: [IntelligenceProviderType.CUSTOM, IntelligenceProviderType.LOCAL]
+    })
+
+    const primaryStt = vi.fn().mockRejectedValue(new Error('CUSTOM_STT_UNAVAILABLE'))
+    const primaryProvider = createProvider(
+      {
+        id: 'custom-stt',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Custom STT',
+        enabled: true,
+        priority: 1,
+        apiKey: 'custom-key',
+        models: ['custom-stt'],
+        capabilities: ['audio.stt']
+      },
+      vi.fn()
+    )
+    primaryProvider.stt = primaryStt
+    const fallbackStt = vi.fn().mockResolvedValue({
+      result: { text: 'local recovery' } satisfies IntelligenceSTTResult,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      model: 'local-stt',
+      latency: 6,
+      traceId: 'trace-local-recovery',
+      provider: IntelligenceProviderType.LOCAL
+    })
+    const fallbackProvider = createProvider(
+      {
+        id: 'local-stt',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local STT',
+        enabled: true,
+        priority: 2,
+        models: ['local-stt'],
+        capabilities: ['audio.stt']
+      },
+      vi.fn()
+    )
+    fallbackProvider.stt = fallbackStt
+    setIntelligenceProviderManager(new FakeProviderManager([primaryProvider, fallbackProvider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false,
+      capabilities: {
+        'audio.stt': {
+          providers: [
+            { providerId: 'custom-stt', priority: 1, models: ['custom-stt'] },
+            { providerId: 'local-stt', priority: 2, models: ['local-stt'] }
+          ]
+        }
+      }
+    })
+
+    await expect(
+      sdk.audio.stt({ audio: new ArrayBuffer(8), format: 'wav' })
+    ).resolves.toMatchObject({
+      result: { text: 'local recovery' },
+      provider: IntelligenceProviderType.LOCAL
+    })
+    expect(primaryStt).toHaveBeenCalledOnce()
+    expect(fallbackStt).toHaveBeenCalledOnce()
   })
 
   it('dispatches audio.transcribe wrapper to provider audioTranscribe capability', async () => {

@@ -89,7 +89,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **148**.
+Current source-of-truth export modules: **149**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -117,7 +117,7 @@ Advanced interaction, visualization, effects and low-level primitives. Import fr
 
 - `Interaction (6)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `virtual-list`, `version-capsule`
 - `Visualization (4)`: `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
-- `Effects (16)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-transformer`, `transition`, `stagger`, `fusion`, `liquid`, `flip-overlay`
+- `Effects (17)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `liquid`, `flip-overlay`
 - `Primitives (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`
 
 ### ai — AI

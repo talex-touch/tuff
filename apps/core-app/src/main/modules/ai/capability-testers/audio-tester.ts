@@ -58,25 +58,64 @@ export class SttCapabilityTester extends BaseCapabilityTester<
 
   async generateTestPayload(): Promise<IntelligenceSTTPayload> {
     return {
-      audio: SAMPLE_WAV_BASE64,
+      audio: `data:audio/wav;base64,${SAMPLE_WAV_BASE64}`,
       language: 'en-US',
-      format: 'wav',
-      enableTimestamps: true,
-      enableSpeakerDiarization: false
+      format: 'wav'
     }
   }
 
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceSTTResult>) {
     const text = result.result?.text || ''
+    const confidence = result.result?.confidence
+    const confidenceLabel = typeof confidence === 'number' ? confidence.toFixed(2) : '未知'
 
     return this.buildTestResult(result, {
-      message: `语音识别完成，置信度 ${(result.result?.confidence ?? 0).toFixed(2)}`,
+      message: `语音识别完成，置信度 ${confidenceLabel}`,
       textPreview: text
     })
   }
 
   getDefaultInputHint(): string {
     return '使用内置短音频样本进行语音识别测试'
+  }
+
+  requiresUserInput(): boolean {
+    return false
+  }
+}
+
+/**
+ * Realtime ASR is exercised by the VoiceService stream, never by generic SDK invocation.
+ */
+export class AsrCapabilityTester extends BaseCapabilityTester<never, never> {
+  readonly capabilityType = 'asr'
+
+  async generateTestPayload(): Promise<never> {
+    throw new Error('INTELLIGENCE_ASR_STREAM_REQUIRED')
+  }
+
+  formatTestResult(): never {
+    throw new Error('INTELLIGENCE_ASR_STREAM_REQUIRED')
+  }
+
+  formatStreamResult(text: string, latency: number) {
+    const textPreview = text.trim()
+    return {
+      success: true,
+      message: textPreview ? '实时语音识别完成' : '实时语音识别完成，未检测到语音内容',
+      latency,
+      stability: {
+        status: textPreview ? ('stable' as const) : ('unknown' as const),
+        summary: textPreview
+          ? '已通过实际麦克风捕获和实时 ASR 通道完成识别。'
+          : '通道已完成实际麦克风捕获，但本次没有可展示的语音文本。'
+      },
+      ...(textPreview ? { textPreview } : {})
+    }
+  }
+
+  getDefaultInputHint(): string {
+    return '测试会打开麦克风并通过当前实时 ASR 能力绑定完成一次识别'
   }
 
   requiresUserInput(): boolean {

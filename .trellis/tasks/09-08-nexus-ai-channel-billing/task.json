@@ -1,0 +1,30 @@
+{
+  "id": "nexus-ai-channel-billing",
+  "name": "nexus-ai-channel-billing",
+  "title": "Nexus AI channel billing",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-08",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "合并后，仅在已获授权且已配置 DashScope 的 Nexus 环境，用受控的 ≤20 MiB WAV 走一次 submit→poll→settled 收据与同 key retry；不得自动发起付费请求。",
+    "blocker": "无代码阻塞；尚未取得部署或付费 DashScope Filetrans 的端到端证据，现有本地/CI 结果不能替代该受控验收。",
+    "evidence": "apps/nexus/server/utils/asrTranscriptionService.ts、asrTranscriptionStore.ts、dashscopeAsrProvider.ts 及其 focused tests 覆盖受控 handoff、单路由、预留/结算/释放与安全投影；父级记录的 440 focused tests、CoreApp/TuffEx/Nexus 本地 typecheck，以及本 PR Nexus suite/workspace typecheck 均已通过。"
+  }
+}

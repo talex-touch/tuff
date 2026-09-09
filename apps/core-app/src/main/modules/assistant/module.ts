@@ -14,8 +14,6 @@ import { StorageList } from '@talex-touch/utils'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type {
   AssistantClipboardImageTranslateResponse,
-  AssistantVoiceTranscribePayload,
-  AssistantVoiceTranscribeResponse,
   AssistantRuntimeConfig,
   AssistantScreenshotFallbackReason,
   AssistantScreenshotCapturePayload,
@@ -29,6 +27,10 @@ import type {
   AssistantScreenshotTranslateResponse
 } from '@talex-touch/utils/transport/events/assistant'
 import type {
+  AssistantVoiceCancelHoldPayload,
+  AssistantVoiceCommandPayload
+} from '@talex-touch/utils/transport/events/assistant'
+import type {
   IntelligenceErrorCode,
   NativeScreenshotCaptureRequest,
   NativeScreenshotRegion,
@@ -38,6 +40,7 @@ import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/typ
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
+import { setPlatformVoiceEscapeCapture } from '../voice/command-gesture'
 import {
   dialog,
   screen,
@@ -45,10 +48,7 @@ import {
   type Rectangle,
   type SaveDialogOptions
 } from 'electron'
-import {
-  AssistantFloatingBallWindowOption,
-  AssistantVoicePanelWindowOption
-} from '../../config/default'
+import { AssistantVoiceDockWindowOption } from '../../config/default'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
 import { createLogger } from '../../utils/logger'
@@ -77,13 +77,9 @@ interface FloatingBallSetting {
   position: FloatingBallPosition
 }
 
-interface VoiceWakeSetting {
+interface VoiceInputSetting {
   enabled: boolean
-  wakeWords: string[]
   language: string
-  continuous: boolean
-  cooldownMs: number
-  openPanelOnWake: boolean
 }
 
 type ScreenshotUnavailableCode =
@@ -93,22 +89,44 @@ type ScreenshotUnavailableCode =
 
 const assistantLog = createLogger('Assistant')
 const FLOATING_BALL_DEFAULT_SIZE = 56
+const FLOATING_BALL_MIN_SIZE = 48
+const FLOATING_BALL_MAX_SIZE = 72
 const FLOATING_BALL_DEFAULT_PADDING = 24
-const VOICE_PANEL_WIDTH = 420
-const VOICE_PANEL_HEIGHT = 260
-const ASSISTANT_DEFAULT_NAME = '阿洛 aler'
+/**
+ * The dock window is a transparent canvas, not the visible pill.
+ *
+ * The pill is 200x44 and animates its own width when a notice expands, so the window has to
+ * stay big enough for the widest notice without ever being resized mid-animation — window
+ * resizing has no system-level smoothing on Windows or Linux.
+ */
+const VOICE_DOCK_WIDTH = 360
+// 100, not 64: the pill grows to two lines when a message does not fit one, and a window sized
+// to the short pill would clip the taller one instead of showing the half that says what to do.
+// The slack over the 124px device card is the drop shadow and the breathing glow, which are
+// drawn outside the surface and would otherwise be cut off square by the window edge.
+const VOICE_DOCK_HEIGHT = 148
+/**
+ * Air between the dock *window* and the bottom of the work area.
+ *
+ * Not the gap anyone sees: the window is a transparent canvas taller than the pill, and the
+ * pill is centred in it, so what reads as the HUD's distance from the screen edge is this plus
+ * the canvas slack below the pill — 9 + 52 = 61 for the short pill. That total is the number to
+ * reason about; this constant is just the part main controls.
+ *
+ * No reserve for a bar that might slide in: the window sits at the `status` level, above the
+ * Dock and the taskbar, so a bar appearing under it cannot bury it. Reserving room for that
+ * instead pushed the HUD a Dock's height up the screen on every machine, whether or not one was
+ * ever going to appear.
+ */
+const VOICE_DOCK_EDGE_GAP = 9
 const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
 const DEFAULT_WAKE_COOLDOWN = 2200
 const ASSISTANT_SCREENSHOT_TRANSLATE_CALLER = 'core.assistant.screenshot-translate'
 const ASSISTANT_SCREENSHOT_FALLBACK_SOURCE = 'assistant-screenshot-ocr-fallback'
-const ASSISTANT_VOICE_TRANSCRIBE_CALLER = 'core.assistant.voice-transcribe'
-const ASSISTANT_VOICE_TRANSCRIBE_SOURCE = 'assistant-voice-panel-provider-asr'
-const MAX_VOICE_AUDIO_BYTES = 5 * 1024 * 1024
-const MAX_VOICE_AUDIO_DATA_URL_LENGTH = Math.ceil((MAX_VOICE_AUDIO_BYTES * 4) / 3) + 1024
-const MAX_VOICE_RECORDING_DURATION_MS = 31_000
 
+const ESCAPE_CANCEL_HOLD_MS = 600
 function clamp(value: number, min: number, max: number): number {
   if (value < min) return min
   if (value > max) return max
@@ -237,100 +255,6 @@ function normalizeScreenshotTarget(
   return { target: 'cursor-display' }
 }
 
-interface ValidatedVoiceAudio {
-  audioDataUrl: string
-  format: 'webm' | 'ogg' | 'wav' | 'mp3' | 'm4a'
-  language?: string
-}
-
-type VoiceAudioValidationResult =
-  | { valid: true; value: ValidatedVoiceAudio }
-  | { valid: false; response: AssistantVoiceTranscribeResponse }
-
-const VOICE_AUDIO_FORMAT_BY_MIME: ReadonlyMap<string, ValidatedVoiceAudio['format']> = new Map([
-  ['audio/webm', 'webm'],
-  ['audio/ogg', 'ogg'],
-  ['audio/wav', 'wav'],
-  ['audio/x-wav', 'wav'],
-  ['audio/wave', 'wav'],
-  ['audio/mpeg', 'mp3'],
-  ['audio/mp4', 'm4a'],
-  ['audio/x-m4a', 'm4a']
-])
-
-function invalidVoiceAudio(
-  code: 'AUDIO_INVALID' | 'AUDIO_TOO_LARGE' | 'AUDIO_TOO_LONG',
-  error: string
-): VoiceAudioValidationResult {
-  return { valid: false, response: { success: false, code, error } }
-}
-
-function normalizeVoiceAudioMime(value: unknown): string {
-  return typeof value === 'string' ? value.trim().toLowerCase().split(';', 1)[0] : ''
-}
-
-function validateVoiceAudio(payload?: AssistantVoiceTranscribePayload): VoiceAudioValidationResult {
-  if (!payload || typeof payload.audioDataUrl !== 'string') {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice audio payload is invalid.')
-  }
-
-  const audioDataUrl = payload.audioDataUrl.trim()
-  if (!audioDataUrl || audioDataUrl.length > MAX_VOICE_AUDIO_DATA_URL_LENGTH) {
-    return invalidVoiceAudio('AUDIO_TOO_LARGE', 'Voice audio exceeds the 5 MiB limit.')
-  }
-  if (
-    typeof payload.durationMs !== 'number' ||
-    !Number.isFinite(payload.durationMs) ||
-    payload.durationMs <= 0
-  ) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice recording duration is invalid.')
-  }
-  if (payload.durationMs > MAX_VOICE_RECORDING_DURATION_MS) {
-    return invalidVoiceAudio('AUDIO_TOO_LONG', 'Voice recording exceeds the 30 second limit.')
-  }
-
-  const dataUrlMatch = /^data:([^;,]+)(?:;[^,]*)*;base64,([A-Za-z0-9+/]+={0,2})$/i.exec(
-    audioDataUrl
-  )
-  if (!dataUrlMatch) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice audio must be a base64 audio data URL.')
-  }
-
-  const dataMime = normalizeVoiceAudioMime(dataUrlMatch[1])
-  const declaredMime = normalizeVoiceAudioMime(payload.mimeType)
-  const format = VOICE_AUDIO_FORMAT_BY_MIME.get(dataMime)
-  if (!format || declaredMime !== dataMime) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice audio format is unsupported or mismatched.')
-  }
-
-  const base64 = dataUrlMatch[2]
-  if (base64.length % 4 !== 0) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice audio encoding is invalid.')
-  }
-  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
-  const sizeBytes = (base64.length / 4) * 3 - padding
-  if (sizeBytes <= 0) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice audio is empty.')
-  }
-  if (sizeBytes > MAX_VOICE_AUDIO_BYTES) {
-    return invalidVoiceAudio('AUDIO_TOO_LARGE', 'Voice audio exceeds the 5 MiB limit.')
-  }
-
-  const language = typeof payload.language === 'string' ? payload.language.trim() : ''
-  if (language.length > 64) {
-    return invalidVoiceAudio('AUDIO_INVALID', 'Voice transcription language is invalid.')
-  }
-
-  return {
-    valid: true,
-    value: {
-      audioDataUrl,
-      format,
-      ...(language ? { language } : {})
-    }
-  }
-}
-
 export class AssistantModule extends BaseModule {
   static key: symbol = Symbol.for('Assistant')
   name: ModuleKey = AssistantModule.key
@@ -339,33 +263,37 @@ export class AssistantModule extends BaseModule {
   private mainWindow: BrowserWindow | null = null
   private transportDisposers: Array<() => void> = []
   private unsubscribeAppSetting: (() => void) | null = null
-  private floatingBallWindow: TouchWindow | null = null
-  private floatingBallWindowPending: Promise<TouchWindow> | null = null
-  private voicePanelWindow: TouchWindow | null = null
-  private voicePanelWindowPending: Promise<TouchWindow> | null = null
-  private voicePanelAutoHideSuppressionDepth = 0
-  private voicePanelAutoHideResumeTimer: NodeJS.Timeout | null = null
+  private voiceDockWindow: TouchWindow | null = null
+  private voiceDockWindowPending: Promise<TouchWindow> | null = null
+  private voiceDockExpanded = false
+  private voiceCommandStartPending: Promise<void> | null = null
+  private voiceCommandStopPending: AssistantVoiceCommandPayload | null = null
+  private escapeCancelTimer: NodeJS.Timeout | null = null
+  private escapeCancelHolding = false
+  private escapeCancelCommitted = false
   private pendingPosition: FloatingBallPosition | null = null
   private positionSaveTimer: NodeJS.Timeout | null = null
   private readonly handleDisplayTopologyChange = (): void => {
-    const floatingWindow = this.floatingBallWindow
-    if (!floatingWindow || floatingWindow.window.isDestroyed()) {
+    const dock = this.voiceDockWindow
+    if (!dock || dock.window.isDestroyed()) {
       return
     }
 
     const setting = this.readAppSetting()
+    if (this.voiceDockExpanded) {
+      if (!this.getVoiceInputSetting(setting).enabled || !dock.window.isVisible()) {
+        return
+      }
+      this.applyVoiceDockBounds(dock, dock.window.getBounds())
+      return
+    }
+
     const floatingSetting = this.getFloatingBallSetting(setting)
     if (!this.isAssistantEnabled(setting) || !floatingSetting.enabled) {
       return
     }
 
-    this.applyFloatingBallBounds(floatingWindow, floatingSetting)
-
-    const voiceWindow = this.voicePanelWindow
-    if (!voiceWindow || voiceWindow.window.isDestroyed() || !voiceWindow.window.isVisible()) {
-      return
-    }
-    this.applyVoicePanelBounds(voiceWindow, floatingWindow.window.getBounds())
+    this.applyFloatingBallBounds(dock, floatingSetting)
   }
 
   constructor() {
@@ -394,13 +322,11 @@ export class AssistantModule extends BaseModule {
       clearTimeout(this.positionSaveTimer)
       this.positionSaveTimer = null
     }
-    if (this.voicePanelAutoHideResumeTimer) {
-      clearTimeout(this.voicePanelAutoHideResumeTimer)
-      this.voicePanelAutoHideResumeTimer = null
-    }
-
+    this.resetEscapeCancelHold(false, true)
     this.pendingPosition = null
-    this.voicePanelAutoHideSuppressionDepth = 0
+    this.voiceDockExpanded = false
+    this.voiceCommandStartPending = null
+    this.voiceCommandStopPending = null
     this.unsubscribeAppSetting?.()
     this.unsubscribeAppSetting = null
 
@@ -415,8 +341,7 @@ export class AssistantModule extends BaseModule {
     this.transport = null
     this.mainWindow = null
 
-    this.destroyVoicePanelWindow()
-    this.destroyFloatingBallWindow()
+    this.destroyVoiceDockWindow()
   }
 
   private setupTransport(ctx: ModuleInitContext<TalexEvents>): void {
@@ -457,7 +382,7 @@ export class AssistantModule extends BaseModule {
 
     this.transportDisposers.push(
       this.transport.on(AssistantEvents.voice.closePanel, () => {
-        this.hideVoicePanel()
+        this.closeVoicePanel()
       })
     )
 
@@ -470,12 +395,6 @@ export class AssistantModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(AssistantEvents.voice.submitText, async (payload) => {
         return await this.handleVoiceSubmit(payload?.text, payload?.source)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.transcribeAudio, async (payload) => {
-        return await this.handleVoiceTranscribe(payload)
       })
     )
 
@@ -671,7 +590,7 @@ export class AssistantModule extends BaseModule {
     const position = source?.position
     return {
       enabled: source?.enabled === true,
-      size: Math.round(clamp(size, 48, 72)),
+      size: Math.round(clamp(size, FLOATING_BALL_MIN_SIZE, FLOATING_BALL_MAX_SIZE)),
       opacity: clamp(opacity, 0.5, 1),
       edgePadding: Math.round(clamp(edgePadding, 8, 64)),
       position: {
@@ -681,59 +600,52 @@ export class AssistantModule extends BaseModule {
     }
   }
 
-  private getVoiceWakeSetting(setting: AppSetting): VoiceWakeSetting {
-    const source = setting.voiceWake as Partial<VoiceWakeSetting> | undefined
-    const wakeWords = Array.isArray(source?.wakeWords) ? source.wakeWords.filter(Boolean) : []
+  private getVoiceInputSetting(setting: AppSetting): VoiceInputSetting {
+    const source = setting.voiceInput as Partial<VoiceInputSetting> | undefined
     return {
       enabled: source?.enabled === true,
-      wakeWords: wakeWords.length ? wakeWords : [...DEFAULT_WAKE_WORDS],
       language:
         typeof source?.language === 'string' && source.language.trim()
           ? source.language
-          : DEFAULT_WAKE_LANGUAGE,
-      continuous: source?.continuous !== false,
-      cooldownMs: Number.isFinite(source?.cooldownMs)
-        ? Math.max(500, Number(source?.cooldownMs))
-        : DEFAULT_WAKE_COOLDOWN,
-      openPanelOnWake: source?.openPanelOnWake !== false
+          : appSettingOriginData.voiceInput.language
     }
   }
 
   private buildRuntimeConfig(setting: AppSetting): AssistantRuntimeConfig {
-    const voiceWake = this.getVoiceWakeSetting(setting)
-    const assistantEnabled = this.isAssistantEnabled(setting)
-    const assistantName = ASSISTANT_DEFAULT_NAME
+    const voiceInput = this.getVoiceInputSetting(setting)
     return {
-      enabled: assistantEnabled && voiceWake.enabled,
-      language: voiceWake.language,
-      wakeWords: voiceWake.wakeWords,
-      cooldownMs: voiceWake.cooldownMs,
-      continuous: voiceWake.continuous,
-      assistantName,
-      openPanelOnWake: assistantEnabled && voiceWake.openPanelOnWake
+      enabled: voiceInput.enabled,
+      language: voiceInput.language
     }
   }
 
   private async applySettingSnapshot(setting: AppSetting): Promise<void> {
-    if (!this.isAssistantEnabled(setting)) {
-      this.hideVoicePanel()
-      this.destroyVoicePanelWindow()
-      this.destroyFloatingBallWindow()
-      return
-    }
-
+    const voiceInput = this.getVoiceInputSetting(setting)
     const floatingBall = this.getFloatingBallSetting(setting)
-    if (!floatingBall.enabled) {
-      this.hideVoicePanel()
-      this.destroyVoicePanelWindow()
-      this.destroyFloatingBallWindow()
+    const showFloatingBall = this.isAssistantEnabled(setting) && floatingBall.enabled
+
+    if (!voiceInput.enabled) {
+      this.stopActiveVoiceInput()
+      if (this.voiceDockExpanded) {
+        this.collapseVoicePanel()
+      }
+    }
+
+    if (!showFloatingBall) {
+      // A hidden assistant ball must not tear down an active dictation HUD. It is a separate
+      // temporary surface that can be opened by Fn even when the resting ball is disabled.
+      if (!this.voiceDockExpanded) {
+        this.hideVoicePanel()
+      }
       return
     }
 
-    const floatingWindow = await this.ensureFloatingBallWindow(floatingBall)
-    this.applyFloatingBallBounds(floatingWindow, floatingBall)
-    if (!floatingWindow.window.isVisible()) {
-      floatingWindow.window.showInactive()
+    const dock = await this.ensureVoiceDockWindow()
+    if (!this.voiceDockExpanded) {
+      this.applyFloatingBallBounds(dock, floatingBall)
+    }
+    if (!dock.window.isVisible()) {
+      dock.window.showInactive()
     }
   }
 
@@ -792,116 +704,74 @@ export class AssistantModule extends BaseModule {
         error: error instanceof Error ? error.message : 'Screenshot session is unavailable.'
       }
     } finally {
-      this.restoreVoicePanelWindow()
+      this.restoreVoiceDockWindow()
     }
   }
 
-  private restoreVoicePanelWindow(): void {
-    const voiceWindow = this.voicePanelWindow?.window
-    if (!voiceWindow || voiceWindow.isDestroyed()) return
-    if (!voiceWindow.isVisible()) voiceWindow.show()
-    voiceWindow.focus()
+  private restoreVoiceDockWindow(): void {
+    const dockWindow = this.voiceDockWindow?.window
+    if (!dockWindow || dockWindow.isDestroyed()) return
+    if (!dockWindow.isVisible()) dockWindow.show()
+    dockWindow.focus()
   }
 
-  private async ensureFloatingBallWindow(setting: FloatingBallSetting): Promise<TouchWindow> {
-    if (this.floatingBallWindow && !this.floatingBallWindow.window.isDestroyed()) {
-      return this.floatingBallWindow
+  private async ensureVoiceDockWindow(): Promise<TouchWindow> {
+    if (this.voiceDockWindow && !this.voiceDockWindow.window.isDestroyed()) {
+      return this.voiceDockWindow
     }
-    if (this.floatingBallWindowPending) {
-      return await this.floatingBallWindowPending
+    if (this.voiceDockWindowPending) {
+      return await this.voiceDockWindowPending
     }
 
-    const pending = this.createFloatingBallWindow(setting)
-    this.floatingBallWindowPending = pending
+    const pending = this.createVoiceDockWindow()
+    this.voiceDockWindowPending = pending
     try {
       return await pending
     } finally {
-      if (this.floatingBallWindowPending === pending) {
-        this.floatingBallWindowPending = null
+      if (this.voiceDockWindowPending === pending) {
+        this.voiceDockWindowPending = null
       }
     }
   }
 
-  private async createFloatingBallWindow(setting: FloatingBallSetting): Promise<TouchWindow> {
+  private async createVoiceDockWindow(): Promise<TouchWindow> {
+    // One window carries both the ball and the dock, so the bounds limits have to admit
+    // the union of the two: the ball's user-configurable 48..72 and the dock's 360x64.
     const touchWindow = new TouchWindow({
-      ...AssistantFloatingBallWindowOption,
-      width: setting.size,
-      height: setting.size,
-      minWidth: setting.size,
-      minHeight: setting.size,
-      maxWidth: setting.size,
-      maxHeight: setting.size
+      ...AssistantVoiceDockWindowOption,
+      width: VOICE_DOCK_WIDTH,
+      height: VOICE_DOCK_HEIGHT,
+      minWidth: FLOATING_BALL_MIN_SIZE,
+      minHeight: FLOATING_BALL_MIN_SIZE,
+      maxWidth: VOICE_DOCK_WIDTH,
+      maxHeight: Math.max(VOICE_DOCK_HEIGHT, FLOATING_BALL_MAX_SIZE)
     })
 
-    // Floating ball stays visible on every macOS Space and full-screen app
-    // so the voice assistant is always one click away regardless of context.
-    touchWindow.window.setAlwaysOnTop(true, 'floating')
+    /*
+     * `status`, not `floating`.
+     *
+     * The window is already an NSPanel; what kept the Dock on top of it was the level.
+     * `floating` is NSFloatingWindowLevel (3) and the Dock sits at kCGDockWindowLevel (20), so
+     * a Dock sliding in covered the HUD. `status` (25) clears it — the HUD draws over the bar
+     * instead of hiding from it, which is also why the bottom gap is a plain edge gap again
+     * rather than room reserved for a bar that might appear.
+     */
+    touchWindow.window.setAlwaysOnTop(true, 'status')
     touchWindow.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
     touchWindow.window.setFullScreenable(false)
     touchWindow.window.setSkipTaskbar(true)
 
     touchWindow.window.on('closed', () => {
-      if (this.floatingBallWindow === touchWindow) {
-        this.floatingBallWindow = null
-      }
-      this.hideVoicePanel()
-    })
-
-    await this.loadAssistantRenderer(touchWindow)
-    this.floatingBallWindow = touchWindow
-    return touchWindow
-  }
-
-  private async ensureVoicePanelWindow(): Promise<TouchWindow> {
-    if (this.voicePanelWindow && !this.voicePanelWindow.window.isDestroyed()) {
-      return this.voicePanelWindow
-    }
-    if (this.voicePanelWindowPending) {
-      return await this.voicePanelWindowPending
-    }
-
-    const pending = this.createVoicePanelWindow()
-    this.voicePanelWindowPending = pending
-    try {
-      return await pending
-    } finally {
-      if (this.voicePanelWindowPending === pending) {
-        this.voicePanelWindowPending = null
-      }
-    }
-  }
-
-  private async createVoicePanelWindow(): Promise<TouchWindow> {
-    const touchWindow = new TouchWindow({
-      ...AssistantVoicePanelWindowOption,
-      width: VOICE_PANEL_WIDTH,
-      height: VOICE_PANEL_HEIGHT
-    })
-
-    // Voice panel mirrors floating-ball visibility: always accessible across
-    // all Spaces and full-screen apps.
-    touchWindow.window.setAlwaysOnTop(true, 'floating')
-    touchWindow.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-    touchWindow.window.setFullScreenable(false)
-    touchWindow.window.setSkipTaskbar(true)
-
-    touchWindow.window.on('blur', () => {
-      if (this.voicePanelAutoHideSuppressionDepth > 0) {
-        return
-      }
-      if (!touchWindow.window.isDestroyed() && touchWindow.window.isVisible()) {
-        this.hideVoicePanel()
-      }
-    })
-
-    touchWindow.window.on('closed', () => {
-      if (this.voicePanelWindow === touchWindow) {
-        this.voicePanelWindow = null
+      if (this.voiceDockWindow === touchWindow) {
+        setPlatformVoiceEscapeCapture(false)
+        this.voiceDockWindow = null
+        this.resetEscapeCancelHold(false, true)
+        this.voiceDockExpanded = false
       }
     })
 
     await this.loadAssistantRenderer(touchWindow)
-    this.voicePanelWindow = touchWindow
+    this.voiceDockWindow = touchWindow
     return touchWindow
   }
 
@@ -941,38 +811,30 @@ export class AssistantModule extends BaseModule {
     window.window.setOpacity(setting.opacity)
   }
 
-  private applyVoicePanelBounds(window: TouchWindow, anchorBounds: Rectangle): void {
+  private applyVoiceDockBounds(window: TouchWindow, anchorBounds: Rectangle): void {
     const display = screen.getDisplayNearestPoint({
       x: anchorBounds.x + anchorBounds.width / 2,
       y: anchorBounds.y + anchorBounds.height / 2
     })
     const workArea = display.workArea
-    const x = clamp(
-      anchorBounds.x + anchorBounds.width + 12,
-      workArea.x,
-      workArea.x + workArea.width - VOICE_PANEL_WIDTH
-    )
-    const y = clamp(
-      anchorBounds.y - 24,
-      workArea.y,
-      workArea.y + workArea.height - VOICE_PANEL_HEIGHT
-    )
+    const x = Math.round(workArea.x + (workArea.width - VOICE_DOCK_WIDTH) / 2)
+    const y = workArea.y + workArea.height - VOICE_DOCK_HEIGHT - VOICE_DOCK_EDGE_GAP
 
     window.window.setBounds({
-      x,
-      y,
-      width: VOICE_PANEL_WIDTH,
-      height: VOICE_PANEL_HEIGHT
+      x: clamp(x, workArea.x, workArea.x + Math.max(0, workArea.width - VOICE_DOCK_WIDTH)),
+      y: clamp(y, workArea.y, workArea.y + Math.max(0, workArea.height - VOICE_DOCK_HEIGHT)),
+      width: VOICE_DOCK_WIDTH,
+      height: VOICE_DOCK_HEIGHT
     })
   }
 
   private updateFloatingBallPosition(x: number, y: number): void {
-    const floatingWindow = this.floatingBallWindow
-    if (!floatingWindow || floatingWindow.window.isDestroyed()) {
+    const dock = this.voiceDockWindow
+    if (!dock || dock.window.isDestroyed() || this.voiceDockExpanded) {
       return
     }
 
-    const bounds = floatingWindow.window.getBounds()
+    const bounds = dock.window.getBounds()
     const display = screen.getDisplayNearestPoint({ x: Math.round(x), y: Math.round(y) })
     const workArea = display.workArea
     const maxX = workArea.x + workArea.width - bounds.width
@@ -980,7 +842,7 @@ export class AssistantModule extends BaseModule {
     const nextX = clamp(Math.round(x), workArea.x, maxX)
     const nextY = clamp(Math.round(y), workArea.y, maxY)
 
-    floatingWindow.window.setPosition(nextX, nextY)
+    dock.window.setPosition(nextX, nextY)
     this.pendingPosition = { x: nextX, y: nextY }
     this.schedulePositionPersist()
   }
@@ -1007,47 +869,196 @@ export class AssistantModule extends BaseModule {
       })
     }, 220)
   }
+  /** True while the VoiceDock is open or its first renderer window is still being created. */
+  isVoiceCommandActive(): boolean {
+    return (
+      this.voiceDockExpanded ||
+      this.voiceDockWindowPending !== null ||
+      this.voiceCommandStartPending !== null
+    )
+  }
+
+  private stopActiveVoiceInput(): void {
+    this.resetEscapeCancelHold(false, true)
+    if (this.voiceCommandStartPending || this.voiceDockWindowPending) {
+      this.voiceCommandStopPending = { action: 'stop', mode: 'toggle', source: 'command' }
+    }
+    const dock = this.voiceDockWindow
+    if (!this.voiceDockExpanded || !dock || dock.window.isDestroyed() || !this.transport) {
+      return
+    }
+    this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, {
+      action: 'stop',
+      mode: 'toggle',
+      source: 'command'
+    })
+  }
+
+  async handleVoiceCommandGesture(payload: AssistantVoiceCommandPayload): Promise<void> {
+    if (payload.action === 'cancel') {
+      this.handleVoiceCancelGesture(payload.state)
+      return
+    }
+
+    const setting = this.readAppSetting()
+    if (!this.getVoiceInputSetting(setting).enabled) {
+      return
+    }
+    if (payload.action === 'toggle' && this.voiceCommandStartPending) {
+      this.voiceCommandStopPending = { action: 'stop', mode: 'toggle', source: 'command' }
+      return
+    }
+    if (payload.action === 'stop') {
+      if (!this.voiceDockExpanded) {
+        if (this.voiceCommandStartPending || this.voiceDockWindowPending) {
+          this.voiceCommandStopPending = payload
+        }
+        return
+      }
+      const dock = this.voiceDockWindow
+      if (!dock || dock.window.isDestroyed() || !this.transport) return
+      this.voiceCommandStopPending = null
+      this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, payload)
+      return
+    }
+
+    this.resetEscapeCancelHold(false, true)
+    // A compact dock has no mounted VoicePanel yet. `panelOpened` starts the session after the
+    // renderer has mounted; sending a second command here can race that handoff and leave the
+    // first session reset by `openPanel()`.
+    if (this.voiceCommandStartPending) return
+    if (!this.voiceDockExpanded) {
+      this.voiceCommandStopPending = null
+      const opening = this.showVoicePanel('command')
+      this.voiceCommandStartPending = opening
+      try {
+        await opening
+      } catch {
+        this.voiceCommandStopPending = null
+        return
+      } finally {
+        if (this.voiceCommandStartPending === opening) {
+          this.voiceCommandStartPending = null
+        }
+      }
+
+      if (this.escapeCancelCommitted) {
+        this.voiceCommandStopPending = null
+        return
+      }
+      if (this.voiceCommandStopPending) {
+        const stopPayload = this.voiceCommandStopPending
+        this.voiceCommandStopPending = null
+        const dock = this.voiceDockWindow
+        if (dock && !dock.window.isDestroyed() && this.transport) {
+          this.transport.broadcastToWindow(
+            dock.window.id,
+            AssistantEvents.voice.command,
+            stopPayload
+          )
+        }
+      }
+      return
+    }
+
+    const dock = this.voiceDockWindow
+    if (!dock || dock.window.isDestroyed() || !this.transport) return
+    this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.command, payload)
+  }
+
+  private handleVoiceCancelGesture(state: 'start' | 'reset'): void {
+    if (state === 'reset') {
+      this.resetEscapeCancelHold(true)
+      return
+    }
+    if (!this.isVoiceCommandActive() || this.escapeCancelHolding) return
+
+    this.escapeCancelHolding = true
+    this.broadcastVoiceCancelHold('start')
+    this.escapeCancelTimer = setTimeout(() => {
+      this.escapeCancelTimer = null
+      if (!this.escapeCancelHolding) return
+      this.escapeCancelHolding = false
+      this.escapeCancelCommitted = true
+      this.broadcastVoiceCancelHold('commit')
+    }, ESCAPE_CANCEL_HOLD_MS)
+  }
+
+  private resetEscapeCancelHold(notify: boolean, clearCommit = false): void {
+    const wasHolding = this.escapeCancelHolding || this.escapeCancelTimer !== null
+    if (this.escapeCancelTimer) {
+      clearTimeout(this.escapeCancelTimer)
+      this.escapeCancelTimer = null
+    }
+    this.escapeCancelHolding = false
+    if (clearCommit) this.escapeCancelCommitted = false
+    if (notify && wasHolding) this.broadcastVoiceCancelHold('reset')
+  }
+
+  private broadcastVoiceCancelHold(state: AssistantVoiceCancelHoldPayload['state']): void {
+    const dock = this.voiceDockWindow
+    if (!dock || dock.window.isDestroyed() || !this.transport) return
+    this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.cancelHold, { state })
+  }
 
   private async showVoicePanel(source: string): Promise<void> {
-    const setting = this.readAppSetting()
-    if (!this.isAssistantEnabled(setting)) {
+    if (!this.getVoiceInputSetting(this.readAppSetting()).enabled) {
       return
     }
 
-    const floatingSetting = this.getFloatingBallSetting(setting)
-    if (!floatingSetting.enabled) {
+    const dock = await this.ensureVoiceDockWindow()
+    if (!this.getVoiceInputSetting(this.readAppSetting()).enabled || this.escapeCancelCommitted) {
       return
     }
+    const anchorBounds = dock.window.getBounds()
 
-    const floatingWindow = await this.ensureFloatingBallWindow(floatingSetting)
-    const voiceWindow = await this.ensureVoicePanelWindow()
+    setPlatformVoiceEscapeCapture(true)
+    this.voiceDockExpanded = true
+    this.applyVoiceDockBounds(dock, anchorBounds)
+    if (!dock.window.isVisible()) {
+      dock.window.showInactive()
+    }
 
-    const anchorBounds = floatingWindow.window.getBounds()
-
-    this.beginVoicePanelAutoHideSuppression()
-    try {
-      this.applyVoicePanelBounds(voiceWindow, anchorBounds)
-
-      if (!voiceWindow.window.isVisible()) {
-        voiceWindow.window.show()
-      }
-      voiceWindow.window.focus()
-
-      if (this.transport) {
-        this.transport.broadcastToWindow(voiceWindow.window.id, AssistantEvents.voice.panelOpened, {
-          source
-        })
-      }
-    } finally {
-      this.releaseVoicePanelAutoHideSuppression()
+    if (this.transport) {
+      this.transport.broadcastToWindow(dock.window.id, AssistantEvents.voice.panelOpened, {
+        source
+      })
     }
   }
 
   private hideVoicePanel(): void {
-    if (!this.voicePanelWindow || this.voicePanelWindow.window.isDestroyed()) {
+    const dockWindow = this.voiceDockWindow?.window
+    if (!dockWindow || dockWindow.isDestroyed()) {
       return
     }
-    this.voicePanelWindow.window.hide()
+    dockWindow.hide()
+  }
+
+  private collapseVoicePanel(): void {
+    setPlatformVoiceEscapeCapture(false)
+    this.voiceCommandStopPending = null
+    this.resetEscapeCancelHold(false, true)
+    const dock = this.voiceDockWindow
+    if (!dock || dock.window.isDestroyed() || !this.voiceDockExpanded) {
+      return
+    }
+
+    this.voiceDockExpanded = false
+    const setting = this.readAppSetting()
+    const floatingBall = this.getFloatingBallSetting(setting)
+    if (this.isAssistantEnabled(setting) && floatingBall.enabled) {
+      this.applyFloatingBallBounds(dock, floatingBall)
+      if (!dock.window.isVisible()) {
+        dock.window.showInactive()
+      }
+    } else {
+      dock.window.hide()
+    }
+    this.transport?.broadcastToWindow(dock.window.id, AssistantEvents.voice.panelClosed, undefined)
+  }
+
+  private closeVoicePanel(): void {
+    this.collapseVoicePanel()
   }
 
   private async openIntelligenceSettings(): Promise<boolean> {
@@ -1066,33 +1077,12 @@ export class AssistantModule extends BaseModule {
       await transport.sendTo(mainWindow.webContents, AppEvents.window.navigate, {
         path: '/intelligence/channels'
       })
-      this.hideVoicePanel()
+      this.collapseVoicePanel()
       return true
     } catch (error) {
       assistantLog.warn('Failed to open Intelligence settings from Assistant', { error })
       return false
     }
-  }
-
-  private beginVoicePanelAutoHideSuppression(): void {
-    if (this.voicePanelAutoHideResumeTimer) {
-      clearTimeout(this.voicePanelAutoHideResumeTimer)
-      this.voicePanelAutoHideResumeTimer = null
-    }
-    this.voicePanelAutoHideSuppressionDepth += 1
-  }
-
-  private releaseVoicePanelAutoHideSuppression(): void {
-    if (this.voicePanelAutoHideResumeTimer) {
-      clearTimeout(this.voicePanelAutoHideResumeTimer)
-    }
-    this.voicePanelAutoHideResumeTimer = setTimeout(() => {
-      this.voicePanelAutoHideResumeTimer = null
-      this.voicePanelAutoHideSuppressionDepth = Math.max(
-        0,
-        this.voicePanelAutoHideSuppressionDepth - 1
-      )
-    }, 600)
   }
 
   private async handleVoiceSubmit(
@@ -1111,7 +1101,7 @@ export class AssistantModule extends BaseModule {
 
     const source = typeof rawSource === 'string' && rawSource.trim() ? rawSource.trim() : 'voice'
 
-    this.hideVoicePanel()
+    this.collapseVoicePanel()
     const curScreen = windowManager.getCurScreen()
     const currentWindow = windowManager.current
     if (currentWindow) {
@@ -1151,71 +1141,6 @@ export class AssistantModule extends BaseModule {
     return { accepted: true }
   }
 
-  private async handleVoiceTranscribe(
-    payload?: AssistantVoiceTranscribePayload
-  ): Promise<AssistantVoiceTranscribeResponse> {
-    const setting = this.readAppSetting()
-    if (!this.isAssistantEnabled(setting)) {
-      return {
-        success: false,
-        code: 'ASSISTANT_DISABLED',
-        error: 'Assistant is disabled.'
-      }
-    }
-
-    const validation = validateVoiceAudio(payload)
-    if (!validation.valid) {
-      return validation.response
-    }
-
-    try {
-      const response = await tuffIntelligence.audio.stt(
-        {
-          audio: validation.value.audioDataUrl,
-          format: validation.value.format,
-          ...(validation.value.language ? { language: validation.value.language } : {})
-        },
-        {
-          timeout: 30_000,
-          metadata: {
-            caller: ASSISTANT_VOICE_TRANSCRIBE_CALLER,
-            source: ASSISTANT_VOICE_TRANSCRIBE_SOURCE
-          }
-        }
-      )
-      const text = typeof response.result?.text === 'string' ? response.result.text.trim() : ''
-      if (!text) {
-        return {
-          success: false,
-          code: 'TRANSCRIPTION_EMPTY',
-          error: 'Voice transcription returned no text.'
-        }
-      }
-
-      const language =
-        typeof response.result.language === 'string' ? response.result.language.trim() : ''
-      const confidence = response.result.confidence
-      return {
-        success: true,
-        text,
-        ...(language ? { language } : {}),
-        ...(Number.isFinite(confidence) ? { confidence } : {}),
-        provider: response.provider,
-        model: response.model,
-        traceId: response.traceId,
-        latencyMs: response.latency
-      }
-    } catch (error) {
-      return {
-        success: false,
-        ...toAssistantIntelligenceFailure(error, 'audio.stt', {
-          code: 'ASR_UNAVAILABLE',
-          error: 'Voice transcription is unavailable.'
-        })
-      }
-    }
-  }
-
   private async handleClipboardImageTranslate(
     targetLang?: string
   ): Promise<AssistantClipboardImageTranslateResponse> {
@@ -1228,35 +1153,30 @@ export class AssistantModule extends BaseModule {
       }
     }
 
-    this.beginVoicePanelAutoHideSuppression()
-    try {
-      const result = await translateClipboardImage(targetLang || 'zh', {
-        openPinWindow: true
-      })
-      if (!result.success) {
-        const code = isIntelligenceErrorCode(result.code)
-          ? result.code
-          : result.code === 'SCENE_UNAVAILABLE'
-            ? 'SCENE_UNAVAILABLE'
-            : 'IMAGE_UNAVAILABLE'
-        return {
-          success: false,
-          code,
-          error: result.error,
-          reason: result.reason,
-          recovery: result.recovery
-        }
-      }
-
+    const result = await translateClipboardImage(targetLang || 'zh', {
+      openPinWindow: true
+    })
+    if (!result.success) {
+      const code = isIntelligenceErrorCode(result.code)
+        ? result.code
+        : result.code === 'SCENE_UNAVAILABLE'
+          ? 'SCENE_UNAVAILABLE'
+          : 'IMAGE_UNAVAILABLE'
       return {
-        success: true,
-        translatedImageBase64: result.translatedImageBase64,
-        sourceText: result.sourceText,
-        targetText: result.targetText,
-        metadata: result.metadata
+        success: false,
+        code,
+        error: result.error,
+        reason: result.reason,
+        recovery: result.recovery
       }
-    } finally {
-      this.releaseVoicePanelAutoHideSuppression()
+    }
+
+    return {
+      success: true,
+      translatedImageBase64: result.translatedImageBase64,
+      sourceText: result.sourceText,
+      targetText: result.targetText,
+      metadata: result.metadata
     }
   }
 
@@ -1272,7 +1192,6 @@ export class AssistantModule extends BaseModule {
       }
     }
 
-    this.beginVoicePanelAutoHideSuppression()
     try {
       const screenshotService = getNativeScreenshotService()
       let captureResult = managedCaptureResult(payload)
@@ -1319,8 +1238,6 @@ export class AssistantModule extends BaseModule {
         code: mapScreenshotUnavailableCode(error),
         error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
       }
-    } finally {
-      this.releaseVoicePanelAutoHideSuppression()
     }
   }
 
@@ -1336,7 +1253,6 @@ export class AssistantModule extends BaseModule {
       }
     }
 
-    this.beginVoicePanelAutoHideSuppression()
     let ownedTempArtifactUrl: string | undefined
     let ownsCaptureArtifact = false
     try {
@@ -1377,9 +1293,10 @@ export class AssistantModule extends BaseModule {
         ownedTempArtifactUrl = captureResult.tfileUrl
       }
 
-      const ownerWindow = this.voicePanelWindow?.window.isDestroyed()
-        ? undefined
-        : this.voicePanelWindow?.window
+      const ownerWindow =
+        this.voiceDockExpanded && this.voiceDockWindow && !this.voiceDockWindow.window.isDestroyed()
+          ? this.voiceDockWindow.window
+          : undefined
       const saveOptions: SaveDialogOptions = {
         title: 'Save Screenshot',
         defaultPath: `tuff-screenshot-${new Date().toISOString().replace(/[:.]/g, '-')}.png`,
@@ -1419,7 +1336,6 @@ export class AssistantModule extends BaseModule {
           // Scheduled retention remains the fallback if eager release fails.
         }
       }
-      this.releaseVoicePanelAutoHideSuppression()
     }
   }
 
@@ -1545,94 +1461,85 @@ export class AssistantModule extends BaseModule {
       }
     }
 
-    this.beginVoicePanelAutoHideSuppression()
+    let screenshotDataUrl = ''
+    let imageBase64 = ''
     try {
-      let screenshotDataUrl = ''
-      let imageBase64 = ''
-      try {
-        const screenshotService = getNativeScreenshotService()
-        const managed = managedCaptureResult(payload)
-        if (payload?.target === 'resource' && !managed) {
-          return {
-            success: false,
-            code: 'SCREENSHOT_UNAVAILABLE',
-            error: 'Screenshot resource is invalid.'
-          }
-        }
-        const captureResult =
-          managed ??
-          (await screenshotService.capture({
-            ...normalizeScreenshotTarget(payload),
-            writeClipboard: false
-          }))
-        const imageBuffer = await screenshotService.readCaptureResource(captureResult.tfileUrl)
-        imageBase64 = imageBuffer.toString('base64')
-        screenshotDataUrl = `data:${captureResult.mimeType};base64,${imageBase64}`
-      } catch (error) {
-        return {
-          success: false,
-          code: mapScreenshotUnavailableCode(error),
-          error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
-        }
-      }
-
-      if (!imageBase64) {
+      const screenshotService = getNativeScreenshotService()
+      const managed = managedCaptureResult(payload)
+      if (payload?.target === 'resource' && !managed) {
         return {
           success: false,
           code: 'SCREENSHOT_UNAVAILABLE',
-          error: 'Screenshot image is unavailable.'
+          error: 'Screenshot resource is invalid.'
         }
       }
-
-      const targetLang = payload?.targetLang?.trim() || 'zh'
-      const result = await translateImageBase64(imageBase64, targetLang, {
-        openPinWindow: true
-      })
-      if (!result.success) {
-        if (result.code === 'SCENE_UNAVAILABLE' || isIntelligenceErrorCode(result.code)) {
-          const degradedReason: AssistantScreenshotFallbackReason = `IMAGE_TRANSLATE_${result.code}`
-          return await this.translateScreenshotWithOcrFallback(
-            screenshotDataUrl,
-            targetLang,
-            degradedReason
-          )
-        }
-        return {
-          success: false,
-          code: 'IMAGE_UNAVAILABLE',
-          error: result.error,
-          reason: result.reason,
-          recovery: result.recovery
-        }
-      }
-
+      const captureResult =
+        managed ??
+        (await screenshotService.capture({
+          ...normalizeScreenshotTarget(payload),
+          writeClipboard: false
+        }))
+      const imageBuffer = await screenshotService.readCaptureResource(captureResult.tfileUrl)
+      imageBase64 = imageBuffer.toString('base64')
+      screenshotDataUrl = `data:${captureResult.mimeType};base64,${imageBase64}`
+    } catch (error) {
       return {
-        success: true,
-        mode: 'translated-image',
-        translatedImageBase64: result.translatedImageBase64,
-        sourceText: result.sourceText,
-        targetText: result.targetText,
-        metadata: result.metadata
+        success: false,
+        code: mapScreenshotUnavailableCode(error),
+        error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
       }
-    } finally {
-      this.releaseVoicePanelAutoHideSuppression()
+    }
+
+    if (!imageBase64) {
+      return {
+        success: false,
+        code: 'SCREENSHOT_UNAVAILABLE',
+        error: 'Screenshot image is unavailable.'
+      }
+    }
+
+    const targetLang = payload?.targetLang?.trim() || 'zh'
+    const result = await translateImageBase64(imageBase64, targetLang, {
+      openPinWindow: true
+    })
+    if (!result.success) {
+      if (result.code === 'SCENE_UNAVAILABLE' || isIntelligenceErrorCode(result.code)) {
+        const degradedReason: AssistantScreenshotFallbackReason = `IMAGE_TRANSLATE_${result.code}`
+        return await this.translateScreenshotWithOcrFallback(
+          screenshotDataUrl,
+          targetLang,
+          degradedReason
+        )
+      }
+      return {
+        success: false,
+        code: 'IMAGE_UNAVAILABLE',
+        error: result.error,
+        reason: result.reason,
+        recovery: result.recovery
+      }
+    }
+
+    return {
+      success: true,
+      mode: 'translated-image',
+      translatedImageBase64: result.translatedImageBase64,
+      sourceText: result.sourceText,
+      targetText: result.targetText,
+      metadata: result.metadata
     }
   }
 
-  private destroyFloatingBallWindow(): void {
-    if (!this.floatingBallWindow || this.floatingBallWindow.window.isDestroyed()) {
+  private destroyVoiceDockWindow(): void {
+    setPlatformVoiceEscapeCapture(false)
+    this.resetEscapeCancelHold(false, true)
+    this.voiceCommandStopPending = null
+    if (!this.voiceDockWindow || this.voiceDockWindow.window.isDestroyed()) {
       return
     }
-    this.floatingBallWindow.window.destroy()
-    this.floatingBallWindow = null
-  }
-
-  private destroyVoicePanelWindow(): void {
-    if (!this.voicePanelWindow || this.voicePanelWindow.window.isDestroyed()) {
-      return
-    }
-    this.voicePanelWindow.window.destroy()
-    this.voicePanelWindow = null
+    this.voiceDockWindow.window.destroy()
+    this.voiceDockWindow = null
+    this.voiceDockExpanded = false
   }
 }
 

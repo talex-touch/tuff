@@ -110,6 +110,29 @@ export class ClipboardMetaPersistence {
     )
   }
 
+  /**
+   * Removes specific meta keys for one clipboard item.
+   *
+   * `persistMetaEntries` cannot express "gone": it skips `undefined` and stores `null` as a row
+   * holding `"null"`, which still hydrates as a present key. Clearing a user's note has to be
+   * distinguishable from a note whose value is empty, because the JSON `metadata` column drops
+   * the key outright and the two stores answering differently is how a cleared note comes back.
+   */
+  public async deleteMetaEntries(clipboardId: number, keys: readonly string[]): Promise<void> {
+    if (!this.options.getDatabase() || keys.length === 0) return
+
+    await this.withDbWrite('clipboard.meta.delete', (db) =>
+      db
+        .delete(clipboardHistoryMeta)
+        .where(
+          and(
+            eq(clipboardHistoryMeta.clipboardId, clipboardId),
+            inArray(clipboardHistoryMeta.key, [...keys])
+          )
+        )
+    )
+  }
+
   public persistMetaEntriesSafely(
     clipboardId: number,
     meta: Record<string, unknown>,

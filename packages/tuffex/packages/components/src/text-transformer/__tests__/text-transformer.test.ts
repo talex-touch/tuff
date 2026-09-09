@@ -5,6 +5,20 @@ import TxTextTransformer from '../src/TxTextTransformer.vue'
 
 beforeEach(() => {
   vi.useFakeTimers()
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  })
 })
 
 afterEach(() => {
@@ -12,12 +26,78 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('txTextTransformer', () => {
+describe('txTextTransformer (morph, the default)', () => {
+  it('hands the value to the morph engine', async () => {
+    const wrapper = mount(TxTextTransformer, {
+      props: { text: 'Ready' },
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    expect(wrapper.attributes('aria-live')).toBe('polite')
+    expect(wrapper.classes()).toContain('tx-text-transformer')
+    expect(wrapper.classes()).toContain('is-morph')
+    expect(wrapper.find('.tx-text-transformer__morph').exists()).toBe(true)
+    expect(wrapper.find('[tx-morph-sr]').text()).toBe('Ready')
+    // The crossfade layers belong to the other mode and must not be built at all.
+    expect(wrapper.find('.tx-text-transformer__layer--current').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('rebuilds the segments when the value changes', async () => {
+    const wrapper = mount(TxTextTransformer, {
+      props: { text: 'Draft' },
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    await wrapper.setProps({ text: 'Published' })
+    await nextTick()
+
+    expect(wrapper.find('[tx-morph-sr]').text()).toBe('Published')
+
+    wrapper.unmount()
+  })
+
+  it('falls back to the crossfade when the default slot is in play', async () => {
+    const wrapper = mount(TxTextTransformer, {
+      props: { text: 'A' },
+      slots: { default: '<template #default="{ text }"><em>{{ text }}</em></template>' },
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    expect(wrapper.classes()).not.toContain('is-morph')
+    expect(wrapper.find('.tx-text-transformer__morph').exists()).toBe(false)
+
+    await wrapper.setProps({ text: 'B' })
+    await nextTick()
+
+    expect(wrapper.findAll('em').map(layer => layer.text())).toEqual(['B', 'A'])
+
+    wrapper.unmount()
+  })
+
+  it('falls back to the crossfade when wrapping is asked for', async () => {
+    const wrapper = mount(TxTextTransformer, {
+      props: { text: 'A long chapter', wrap: true },
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    expect(wrapper.classes()).toContain('is-wrap')
+    expect(wrapper.classes()).not.toContain('is-morph')
+    expect(wrapper.find('.tx-text-transformer__layer--current').text()).toBe('A long chapter')
+
+    wrapper.unmount()
+  })
+})
+
+describe('txTextTransformer (fade)', () => {
   it('renders the current text with default live region semantics', () => {
     const wrapper = mount(TxTextTransformer, {
-      props: {
-        text: 'Ready',
-      },
+      props: { text: 'Ready', mode: 'fade' },
     })
 
     expect(wrapper.element.tagName).toBe('SPAN')
@@ -31,6 +111,7 @@ describe('txTextTransformer', () => {
     const wrapper = mount(TxTextTransformer, {
       props: {
         text: 42,
+        mode: 'fade',
         tag: 'strong',
         durationMs: 360,
         blurPx: 12,
@@ -53,6 +134,7 @@ describe('txTextTransformer', () => {
     const wrapper = mount(TxTextTransformer, {
       props: {
         text: 'Draft',
+        mode: 'fade',
         durationMs: 120,
       },
     })
@@ -82,9 +164,7 @@ describe('txTextTransformer', () => {
 
   it('passes layer text to the default slot for both current and previous layers', async () => {
     const wrapper = mount(TxTextTransformer, {
-      props: {
-        text: 'A',
-      },
+      props: { text: 'A', mode: 'fade' },
       slots: {
         default: '<template #default="{ text }"><em>{{ text }}</em></template>',
       },

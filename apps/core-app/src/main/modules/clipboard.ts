@@ -1,6 +1,8 @@
 import type { AppSetting, MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type {
   ClipboardActionResult,
+  ClipboardAnnotateRequest,
+  ClipboardAnnotateResponse,
   ClipboardApplyRequest,
   ClipboardCaptureSource,
   ClipboardChangePayload,
@@ -8,6 +10,8 @@ import type {
   ClipboardDeleteRequest,
   ClipboardGetImageUrlRequest,
   ClipboardGetImageUrlResponse,
+  ClipboardPreviewImageRequest,
+  ClipboardPreviewImageResponse,
   ClipboardItem,
   ClipboardMetaQueryRequest,
   ClipboardQueryRequest,
@@ -28,7 +32,8 @@ import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
-import { clipboard, powerMonitor } from 'electron'
+import fs from 'node:fs'
+import { clipboard, powerMonitor, shell } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../db/db-write-scheduler'
 import { isStartupDegradeActive } from '../db/startup-degrade'
@@ -40,6 +45,14 @@ import { perfMonitor } from '../utils/perf-monitor'
 import { BaseModule } from './abstract-base-module'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
+import {
+  CLIPBOARD_NOTE_METADATA_KEY,
+  CLIPBOARD_TAGS_METADATA_KEY,
+  forecastClipboardRetention,
+  readClipboardAnnotation
+} from '@talex-touch/utils/clipboard'
+import { DEFAULT_PRIVACY_RETENTION_POLICY } from './privacy/retention-policy'
+import { createMainPrivacyRetentionPolicyStore } from './privacy/retention-policy-store'
 import { getPermissionModule } from './permission'
 import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
@@ -52,6 +65,12 @@ import {
 } from './clipboard/clipboard-freshness'
 import { ClipboardFreshnessStore, ClipboardHelper } from './clipboard/clipboard-capture-freshness'
 import { ClipboardCapturePipeline } from './clipboard/clipboard-capture-pipeline'
+import {
+  DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS,
+  resolveClipboardClassificationSettings,
+  type ClipboardClassificationSettings
+} from './clipboard/clipboard-classification-settings'
+import { backfillClipboardRetentionProtection } from './clipboard/clipboard-retention-backfill'
 import {
   normalizeClipboardWritePayload,
   type ClipboardHistoryQueryInput
@@ -126,6 +145,9 @@ const CLIPBOARD_META_LOG_THROTTLE_MS = 5_000
 const CLIPBOARD_STAGE_B_LOG_THROTTLE_MS = 5_000
 
 export class ClipboardModule extends BaseModule {
+  /** 当前生效的类别保留时长；null 表示永久保留或策略关闭。见 refreshRetentionPolicy。 */
+  private clipboardRetentionMs: number | null =
+    DEFAULT_PRIVACY_RETENTION_POLICY.categories['clipboard-history'].retentionMs
   private transport: ITuffTransportMain | null = null
   private clipboardHostServiceDisposer: (() => void) | null = null
   private readonly transportHandlers = new ClipboardTransportHandlersRegistry()
@@ -222,6 +244,7 @@ export class ClipboardModule extends BaseModule {
     }
   })
   private readonly stageBEnrichment = new ClipboardStageBEnrichment({
+    getClassificationSettings: () => this.readClassificationSettings(),
     getDatabase: () => this.db,
     getCachedItemById: (clipboardId) => this.historyPersistence.getCachedItemById(clipboardId),
     getActiveAppSnapshot: () => this.getActiveAppSnapshot(),
@@ -245,6 +268,7 @@ export class ClipboardModule extends BaseModule {
     }
   })
   private readonly capturePipeline = new ClipboardCapturePipeline({
+    getClassificationSettings: () => this.readClassificationSettings(),
     getDatabase: () => this.db,
     getClipboardHelper: () => this.clipboardHelper,
     getReader: () => this.resolveClipboardReader(),
@@ -652,6 +676,8 @@ export class ClipboardModule extends BaseModule {
 
     const value = item.type === 'image' ? (clientItem.content ?? '') : (item.content ?? '')
     const tags = this.extractTags(item)
+    // 用户标注单独取，不并进 `tags`：那份是分类器每次捕获重算的，混在一起下一次就没了。
+    const annotation = readClipboardAnnotation(item.meta)
     const meta: Record<string, unknown> = {}
     if (clientItem.meta && typeof clientItem.meta === 'object') {
       for (const key of [
@@ -676,6 +702,14 @@ export class ClipboardModule extends BaseModule {
       }
     }
 
+    const forecast = forecastClipboardRetention({
+      timestamp: createdAt,
+      isFavorite: item.isFavorite,
+      retentionProtected: item.retentionProtected,
+      retentionExpiresAt: item.retentionExpiresAt ? item.retentionExpiresAt.getTime() : null,
+      categoryRetentionMs: this.clipboardRetentionMs
+    })
+
     return {
       id: item.id,
       type,
@@ -689,6 +723,10 @@ export class ClipboardModule extends BaseModule {
       freshnessBaseAt: freshness.freshnessBaseAt,
       autoPasteEligible: freshness.eligible,
       isFavorite: item.isFavorite ?? undefined,
+      note: annotation.note,
+      userTags: annotation.tags,
+      retentionExpiresAt: forecast.expiresAt,
+      retentionReason: forecast.reason,
       tags,
       meta: Object.keys(meta).length > 0 ? meta : undefined
     }
@@ -1225,6 +1263,37 @@ export class ClipboardModule extends BaseModule {
     await this.historyPersistence.setFavorite(request)
   }
 
+  /**
+   * 写入用户自己的备注和标签。
+   *
+   * 两处存储都要写：`clipboard_history.metadata` 那一列是关键词搜索 LIKE 的对象（标签
+   * 因此立刻可搜），而 `hydrateWithMeta` 在 `clipboard_history_meta` 有行时优先读那张表、
+   * 完全忽略 JSON 列。只写其中一处的话，要么搜得到但显示不出来，要么反过来。
+   */
+  private async handleAnnotateRequest(
+    request: ClipboardAnnotateRequest
+  ): Promise<ClipboardAnnotateResponse> {
+    const result = await this.historyPersistence.annotate(request)
+    if (!result.updated) return result
+
+    const id = Number(request.id)
+    const setEntries: Array<{ key: string; value: unknown }> = []
+    const clearedKeys: string[] = []
+
+    if (result.note === null) clearedKeys.push(CLIPBOARD_NOTE_METADATA_KEY)
+    else setEntries.push({ key: CLIPBOARD_NOTE_METADATA_KEY, value: result.note })
+
+    if (result.tags.length === 0) clearedKeys.push(CLIPBOARD_TAGS_METADATA_KEY)
+    else setEntries.push({ key: CLIPBOARD_TAGS_METADATA_KEY, value: result.tags })
+
+    if (setEntries.length > 0) {
+      await this.metaPersistence.persistMetaEntries(id, {}, setEntries)
+    }
+    await this.metaPersistence.deleteMetaEntries(id, clearedKeys)
+
+    return result
+  }
+
   private async handleDeleteRequest(request: ClipboardDeleteRequest): Promise<void> {
     await this.historyPersistence.deleteItem(request)
   }
@@ -1233,6 +1302,41 @@ export class ClipboardModule extends BaseModule {
     request: ClipboardGetImageUrlRequest
   ): Promise<ClipboardGetImageUrlResponse> {
     return await this.historyPersistence.getImageUrl(request)
+  }
+
+  /**
+   * Hand a stored clipboard image to the operating system's previewer.
+   *
+   * Takes a record id, never a path: the caller cannot name a file, so it cannot ask this to
+   * open anything the clipboard store does not own. The path is bounded again on the way out.
+   *
+   * Deliberately `shell.openPath` on every platform, including macOS. `previewFile` (Quick
+   * Look) would be the more native answer, but its panel hangs off a BrowserWindow, and taking
+   * focus blurs CoreBox — which hides itself on blur in UI mode (`core-box/window.ts`). The
+   * preview would take the window it lives in down with it. A separate application does not
+   * care what CoreBox does next.
+   */
+  private async handlePreviewImageRequest(
+    request: ClipboardPreviewImageRequest
+  ): Promise<ClipboardPreviewImageResponse> {
+    const item = await this.getItemById(Number(request?.id))
+    if (!item || item.type !== 'image') return { opened: false }
+
+    const filePath = this.imagePersistence.resolveOwnedImagePath(item.content)
+    if (!filePath) return { opened: false }
+
+    try {
+      await fs.promises.access(filePath, fs.constants.R_OK)
+    } catch {
+      return { opened: false }
+    }
+
+    const error = await shell.openPath(filePath)
+    if (error) {
+      clipboardLog.warn('Failed to hand a clipboard image to the system', { meta: { error } })
+      return { opened: false }
+    }
+    return { opened: true }
   }
 
   private async handleApplyRequest(
@@ -1247,6 +1351,9 @@ export class ClipboardModule extends BaseModule {
     context: HandlerContext
   ): Promise<ClipboardActionResult> {
     return await this.autopasteAutomation.handleCopyAndPasteRequest(request, context)
+  }
+  public async applyVoiceText(text: string): Promise<ClipboardActionResult> {
+    return await this.autopasteAutomation.handleVoiceTextRequest(text)
   }
 
   private installClipboardHostService(): void {
@@ -1366,6 +1473,8 @@ export class ClipboardModule extends BaseModule {
       toTransportItem: (item) => this.toTransportItem(item),
       queryClipboardHistory: async (request) => await this.queryClipboardHistory(request),
       getImageUrl: async (request) => await this.handleGetImageUrlRequest(request),
+      previewImage: async (request) => await this.handlePreviewImageRequest(request),
+      annotate: async (request) => await this.handleAnnotateRequest(request),
       queryHistoryByMeta: async (request) => await this.queryHistoryByMeta(request),
       apply: async (request, context) => await this.handleApplyRequest(request, context),
       deleteItem: async (request) => {
@@ -1468,6 +1577,65 @@ export class ClipboardModule extends BaseModule {
         .catch((error) => clipboardLog.error('Failed to start OCR service', { error }))
     })
     ocrService.registerClipboardMetaListener(this.handleMetaPatch)
+    void this.refreshRetentionPolicy()
+    setImmediate(() => {
+      void this.waitForAppTasksBeforeStartupWork('clipboard-retention-backfill')
+        .then(() => this.runRetentionBackfill())
+        .catch((error) => clipboardLog.warn('Clipboard retention backfill failed', { error }))
+    })
+  }
+
+  /**
+   * 缓存当前生效的类别保留时长，用于算「这条记录什么时候会被删」。
+   *
+   * 缓存而不是每条记录去读一次：`toTransportItem` 在每次 getHistory 的每条记录上都跑，
+   * 而策略读取是异步的存储访问。策略变更时重新读一次即可——用户改设置到界面刷新之间
+   * 有一瞬间的旧值，代价远小于把一次分页查询变成 50 次存储读。
+   */
+  /**
+   * 给启用保留策略之前采集的记录补上密钥保护。
+   *
+   * `retention_protected` 从本次工作才开始写，所以库里已有的 API key、私钥、连接串
+   * 仍按普通文本的类别策略走——默认 90 天后被清掉。延迟到应用任务排空之后跑，
+   * 分批并在批间让出事件循环：这是一次全表扫描，不能挂在启动路径上。
+   */
+  private async runRetentionBackfill(): Promise<void> {
+    if (!this.db) return
+    const result = await backfillClipboardRetentionProtection({
+      db: this.db,
+      getClassificationSettings: () => this.readClassificationSettings(),
+      yieldBetweenBatches: () =>
+        new Promise<void>((resolve) => {
+          setImmediate(resolve)
+        }),
+      logInfo: (message, data) => clipboardLog.info(message, data),
+      logWarn: (message, data) => clipboardLog.warn(message, data)
+    })
+    if (!result.skipped) {
+      clipboardLog.info('Clipboard retention backfill pass finished', { meta: { ...result } })
+    }
+  }
+
+  /** 读用户设置里的剪贴板分类块。这里是唯一碰 storage 的地方，采集与 stage-B 只拿结果。 */
+  private readClassificationSettings(): ClipboardClassificationSettings {
+    try {
+      return resolveClipboardClassificationSettings(
+        getMainConfig(StorageList.APP_SETTING)?.clipboard
+      )
+    } catch {
+      return DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS
+    }
+  }
+
+  private async refreshRetentionPolicy(): Promise<void> {
+    try {
+      const policy = await createMainPrivacyRetentionPolicyStore().load()
+      this.clipboardRetentionMs = policy.categories['clipboard-history'].enabled
+        ? policy.categories['clipboard-history'].retentionMs
+        : null
+    } catch (error) {
+      clipboardLog.warn('Failed to read clipboard retention policy', { error })
+    }
   }
 
   onDestroy(): MaybePromise<void> {

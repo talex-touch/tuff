@@ -86,6 +86,8 @@ export namespace TalexTouch {
   export type TouchWindowConstructorOptions
     = BrowserWindowConstructorOptions & {
       autoShow?: boolean
+      /** Skip the app-wide macOS vibrancy layer for transparent canvas windows. */
+      disableVibrancy?: boolean
     }
 
   export type LoadFileOptions = Electron.LoadFileOptions & {

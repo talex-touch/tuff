@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { TuffListGroup } from '~/components/tuff/template/TuffListTemplate.vue'
 import TuffListTemplate from '~/components/tuff/template/TuffListTemplate.vue'
 import { useAuth } from '~/modules/auth/useAuth'
+import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
 import IntelligenceItem from './IntelligenceItem.vue'
 
 interface IntelligenceProviderConfig {
@@ -11,6 +12,7 @@ interface IntelligenceProviderConfig {
   type: string
   name: string
   enabled: boolean
+  metadata?: Record<string, unknown>
   apiKey?: string
   authRef?: string
   hasCredential?: boolean
@@ -41,35 +43,25 @@ const { isLoggedIn } = useAuth()
 const selectedId = ref<string | null>(props.selectedId || null)
 const normalizedQuery = computed(() => props.searchQuery?.trim().toLowerCase() ?? '')
 
-// Separate enabled and disabled providers
-const enabledProviders = computed(() => props.providers.filter((provider) => provider.enabled))
+const visibleProviders = computed(() => {
+  if (!normalizedQuery.value) return props.providers
 
-const disabledProviders = computed(() => props.providers.filter((provider) => !provider.enabled))
-
-// Filter providers based on search query
-const filteredEnabledProviders = computed(() => {
-  if (!normalizedQuery.value) {
-    return enabledProviders.value
-  }
-
-  return enabledProviders.value.filter(
-    (provider) =>
+  return props.providers.filter((provider) => {
+    const channelType = getProviderChannelType(provider)
+    return (
       provider.name.toLowerCase().includes(normalizedQuery.value) ||
-      provider.type.toLowerCase().includes(normalizedQuery.value)
-  )
+      provider.type.toLowerCase().includes(normalizedQuery.value) ||
+      channelType.includes(normalizedQuery.value)
+    )
+  })
 })
 
-const filteredDisabledProviders = computed(() => {
-  if (!normalizedQuery.value) {
-    return disabledProviders.value
-  }
-
-  return disabledProviders.value.filter(
-    (provider) =>
-      provider.name.toLowerCase().includes(normalizedQuery.value) ||
-      provider.type.toLowerCase().includes(normalizedQuery.value)
-  )
-})
+const enabledProviders = computed(() =>
+  visibleProviders.value.filter((provider) => provider.enabled)
+)
+const disabledProviders = computed(() =>
+  visibleProviders.value.filter((provider) => !provider.enabled)
+)
 
 // Watch for selection changes and emit
 watch(
@@ -94,8 +86,8 @@ const listGroups = computed<TuffListGroup<unknown>[]>(() => [
     id: 'enabled',
     title: t('intelligence.list.enabled'),
     icon: 'i-ri-check-line',
-    badgeText: String(filteredEnabledProviders.value.length),
-    items: filteredEnabledProviders.value,
+    badgeText: String(enabledProviders.value.length),
+    items: enabledProviders.value,
     collapsible: false,
     badgeVariant: 'success' as const,
     itemKey: (provider) => (provider as IntelligenceProviderConfig).id
@@ -104,8 +96,8 @@ const listGroups = computed<TuffListGroup<unknown>[]>(() => [
     id: 'disabled',
     title: t('intelligence.list.disabled'),
     icon: 'i-ri-close-line',
-    badgeText: String(filteredDisabledProviders.value.length),
-    items: filteredDisabledProviders.value,
+    badgeText: String(disabledProviders.value.length),
+    items: disabledProviders.value,
     collapsible: true,
     collapsed: false,
     badgeVariant: 'info' as const,

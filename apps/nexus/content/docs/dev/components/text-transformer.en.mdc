@@ -1,6 +1,6 @@
 ---
 title: "TextTransformer"
-description: "Short-text transition helper that crossfades text with blur, preserves outgoing color, exposes a scoped text slot, and pairs with TxAutoSizer for size-following changes."
+description: "Short-text transition helper: morphs per character through the text-morph engine by default (numbers roll by place value), and keeps the original whole-string blur crossfade as a mode, with a scoped text slot."
 category: Effects
 status: beta
 since: 1.0.0
@@ -11,6 +11,34 @@ verified: true
 # TextTransformer
 
 > Not recommended for high-frequency real-time updates (e.g., streaming text, per-frame state changes). Better for occasional state/title/chapter/short-text changes.
+
+## Morph and Fade
+
+`mode` defaults to `morph`: the value goes to the text-morph engine, shared words hold their position, only the changed characters move, and digits roll by place value. `fade` is the original whole-string blur crossfade, and the only mode `blurPx` applies to.
+
+Two situations override `mode` and force `fade`: the default slot being in play (a slot renders arbitrary nodes, and the engine has no plain-text segments to morph), and `wrap` being on (the engine lays its segments out on one nowrap line and animates the container's width, which a value reflowing inside a constrained box cannot be measured against).
+
+### Morph vs fade
+:::TuffDemoWrapper{demo="TextTransformerMorphVsFadeDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const stages = ['Connecting', 'Connected', 'Syncing 12 files', 'Syncing 148 files', 'Up to date']
+  const index = ref(0)
+  const stage = computed(() => stages[index.value] ?? '')
+  </script>
+
+  <template>
+    <!-- Default: per-character morph, digits rolling by place value -->
+    <TxTextTransformer :text="stage" :duration-ms="320" />
+
+    <!-- The original whole-string blur crossfade -->
+    <TxTextTransformer :text="stage" mode="fade" :duration-ms="320" :blur-px="10" />
+  </template>
+---
+:::
 
 ## Basic Usage
 
@@ -73,6 +101,7 @@ code: |
         <TxCard variant="plain" background="mask" :padding="12" :radius="14">
           <div style="font-size: 14px; font-weight: 600; line-height: 1.4;">
             <TxTextTransformer
+              mode="fade"
               :text="text"
               :duration-ms="duration"
               :blur-px="blurPx"
@@ -152,6 +181,7 @@ code: |
         <TxCard variant="plain" background="mask" :padding="12" :radius="14" style="max-width: 360px;">
           <div style="font-size: 13px; line-height: 1.4;">
             <TxTextTransformer
+              mode="fade"
               :text="label"
               :duration-ms="duration"
               :blur-px="blurPx"
@@ -304,6 +334,7 @@ code: |
           <div style="display: flex; flex-direction: column; gap: 6px;">
             <div style="font-size: 14px; font-weight: 700; line-height: 1.3;">
               <TxTextTransformer
+                mode="fade"
                 :text="title"
                 :duration-ms="duration"
                 :blur-px="blurPx"
@@ -312,6 +343,7 @@ code: |
             </div>
             <div style="font-size: 12px; opacity: 0.8; line-height: 1.4;">
               <TxTextTransformer
+                mode="fade"
                 :text="subtitle"
                 :duration-ms="duration"
                 :blur-px="blurPx"
@@ -400,6 +432,7 @@ code: |
               :style="{ background: color() }"
             />
             <TxTextTransformer
+              mode="fade"
               :text="label()"
               :duration-ms="duration"
               :blur-px="blurPx"
@@ -422,10 +455,11 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|------|
 | `text` | `string \| number` | - | Value rendered in the current layer and announced through the polite live region. |
-| `durationMs` | `number` | `240` | Transition duration in milliseconds; also controls when the previous layer is removed. |
-| `blurPx` | `number` | `8` | Blur distance applied to the outgoing and incoming layers during the transition. |
+| `mode` | `'morph' \| 'fade'` | `morph` | `morph` hands the value to the text-morph engine (per-character diff, place-value digit rolls); `fade` is the original whole-string blur crossfade. The default slot and `wrap` both force `fade`. |
+| `durationMs` | `number` | `240` | Transition duration in milliseconds; under `fade` it also controls when the previous layer is removed. |
+| `blurPx` | `number` | `8` | Blur distance applied to the outgoing and incoming layers during the transition. **`fade` only** — the morph engine has no blur stage. |
 | `tag` | `string` | `span` | Root HTML tag used for the transformer wrapper. |
-| `wrap` | `boolean` | `false` | Allows multi-line text by switching layer whitespace from ellipsis mode to `pre-line`. |
+| `wrap` | `boolean` | `false` | Allows multi-line text by switching layer whitespace from ellipsis mode to `pre-line`. **Forces `fade`**. |
 
 #### Slots
 
@@ -440,8 +474,9 @@ No Vue events are emitted. Drive state from the parent via the `text` prop.
 ## Interaction Contract
 
 - `text` is normalized with `String(...)`; numbers are displayed as their string form.
-- The root uses `aria-live="polite"`; the previous layer is `aria-hidden` so screen readers announce only the current text.
-- When `text` changes, the component snapshots the previous DOM color, renders both layers, starts animation on the next animation frame, then removes the previous layer after `durationMs + 34ms`.
+- Under `morph` the value goes to the engine: the whole value sits in a visually-hidden `[tx-morph-sr]` node and every segment is `aria-hidden`. The root's `overflow` opens back up to `visible`, or exiting segments would be cut in half — which is why `morph` does not ellipsise.
+- The root uses `aria-live="polite"`; under `fade` the previous layer is `aria-hidden` so screen readers announce only the current text.
+- Under `fade`, when `text` changes the component snapshots the previous DOM color, renders both layers, starts animation on the next animation frame, then removes the previous layer after `durationMs + 34ms`.
 - A newer text change cancels the previous timer/frame through an internal sequence guard, so stale transitions cannot remove the active layer.
 - `wrap=false` keeps one-line ellipsis behavior; `wrap=true` switches layers to `white-space: pre-line` for multiline or newline-delimited content.
 - The scoped slot is invoked for both current and previous text, so slot output should be deterministic from the provided `text` value.
@@ -449,22 +484,24 @@ No Vue events are emitted. Drive state from the parent via the `text` prop.
 ## Best Practices
 
 - Use it for labels, titles, badges, and occasional state changes; avoid streaming tokens or per-frame counters.
-- Keep `durationMs` aligned with the surrounding `TxAutoSizer` transaction when both are used together.
-- Prefer `wrap=false` inside compact buttons/badges to avoid vertical jumps; enable `wrap` only for paragraph or chapter transitions.
+- Reach for `TxTextMorph` directly when you want the morph without the `fade` compatibility layer — it exposes the full surface: springs, the place-value switch, `locale` and `cursorIndex`.
+- Keep `durationMs` aligned with the surrounding `TxAutoSizer` transaction when both are used together; the `morph` engine animates its own width and height, so an outer sizer is usually redundant.
+- Prefer `wrap=false` inside compact buttons/badges to avoid vertical jumps; enable `wrap` only for paragraph or chapter transitions (which fall back to `fade`).
 - Keep slot content inline and lightweight. Heavy components inside the slot are duplicated while the previous layer is visible.
-- If color changes with text, set color on the transformer root; the outgoing layer keeps the old computed color for a cleaner crossfade.
+- If color changes with text, set color on the transformer root; under `fade` the outgoing layer keeps the old computed color for a cleaner crossfade.
 
 ## Review Notes
 
 - **Live-region note:** The root always uses `aria-live="polite"`. Avoid placing multiple high-churn instances in the same dense region, or screen readers may announce more changes than users can consume.
 - **Transition note:** The outgoing layer is duplicated until `durationMs + 34ms`; slot content is rendered for both layers during that window. Keep slot renderers pure and cheap.
-- **Verified coverage:** `text-transformer.test.ts` checks default live-region semantics, custom root tag, CSS variable mapping for duration/blur, wrap class, numeric text normalization, previous/current layers, preserved previous color, `aria-hidden` on the outgoing layer, timer cleanup, and scoped slot props.
+- **Verified coverage:** `text-transformer.test.ts` checks the default morph path, the slot and `wrap` fallbacks to `fade`, and on the `fade` side: live-region semantics, custom root tag, CSS variable mapping for duration/blur, wrap class, numeric text normalization, previous/current layers, preserved previous color, `aria-hidden` on the outgoing layer, timer cleanup, and scoped slot props.
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/text-transformer/src/TxTextTransformer.vue`.
 - Types: `packages/tuffex/packages/components/src/text-transformer/src/types.ts` exports `TextTransformerProps`.
 - Export alias: `packages/tuffex/packages/components/src/text-transformer/index.ts` exports `TextTransformer`, `TxTextTransformer`, `TextTransformerProps`, and `TxTextTransformerInstance`.
-- Coverage: `packages/tuffex/packages/components/src/text-transformer/__tests__/text-transformer.test.ts` verifies live-region defaults, transitions, CSS variables, slots, and cleanup.
+- Coverage: `packages/tuffex/packages/components/src/text-transformer/__tests__/text-transformer.test.ts` verifies both modes, both forced fallbacks, live-region defaults, transitions, CSS variables, slots, and cleanup.
+- Engine: `morph` renders `TxTextMorph`; see [TextMorph](./text-morph.en.mdc) for the engine itself.
 
 <TuffDocSourceLink />

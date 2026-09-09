@@ -11,7 +11,8 @@ import {
   isNexusManagedProvider,
   TUFF_NEXUS_PROVIDER_ICON
 } from '~/modules/intelligence/nexus-provider'
-import { providerIconFor } from '~/modules/intelligence/provider-icons'
+import { providerIconForChannel } from '~/modules/intelligence/provider-icons'
+import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
 
 enum IntelligenceProviderType {
   OPENAI = 'openai',
@@ -88,19 +89,12 @@ const hasConfigError = computed(() => {
 
 const providerSubtitle = computed(() => {
   if (!isNexusManagedProvider(props.provider)) {
-    return props.provider.type
+    return t(`settings.intelligence.providerTypeOptions.${getProviderChannelType(props.provider)}`)
   }
   return props.isLoggedIn
     ? t('intelligence.item.nexusAuthReady')
     : t('intelligence.item.nexusAuthRequired')
 })
-
-// Error badge configuration
-const errorBadge = computed<TuffItemBadge>(() => ({
-  text: t('intelligence.item.configError'),
-  status: 'danger',
-  icon: 'i-ri-error-warning-line'
-}))
 
 const nexusBadge = computed<TuffItemBadge>(() => ({
   text: t('intelligence.item.nexusOfficial'),
@@ -120,7 +114,7 @@ function getProviderIcon(provider: IntelligenceProviderConfig): ITuffIcon {
   }
 
   return {
-    ...providerIconFor(provider.type),
+    ...providerIconForChannel(getProviderChannelType(provider), provider.type),
     status: 'normal' as const
   }
 }
@@ -135,12 +129,16 @@ function handleClick() {
     :title="provider.name"
     :subtitle="providerSubtitle"
     :icon="getProviderIcon(provider)"
-    :selected="isSelected"
-    :top-badge="hasConfigError ? errorBadge : undefined"
     :status-dot="statusDot"
     :aria-label="t('intelligence.item.selectProvider', { name: provider.name })"
     @click="handleClick"
   >
+    <template v-if="hasConfigError" #badge-top>
+      <span class="provider-config-warning" role="status">
+        <i class="i-ri-error-warning-line" aria-hidden="true" />
+        <span>{{ t('intelligence.item.configError') }}</span>
+      </span>
+    </template>
     <template v-if="isNexusManagedProvider(provider)" #title-badge>
       <span class="nexus-title-badge" :class="{ 'is-ready': isLoggedIn }" :title="nexusBadge.text">
         {{ nexusBadge.text }}
@@ -150,6 +148,26 @@ function handleClick() {
 </template>
 
 <style lang="scss" scoped>
+.provider-config-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  max-width: 8.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  color: var(--tx-color-danger);
+  background: color-mix(in srgb, var(--tx-color-danger) 10%, var(--tx-fill-color-blank));
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--tx-color-danger) 26%, transparent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+
+  > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
 .nexus-title-badge {
   flex: 0 0 auto;
   display: inline-flex;

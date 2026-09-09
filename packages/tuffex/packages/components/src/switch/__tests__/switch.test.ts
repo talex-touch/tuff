@@ -65,27 +65,31 @@ describe('txSwitch', () => {
       slots: { default: '<strong>Rich label</strong>' },
     })
 
-    // Arbitrary nodes cannot be crossfaded as text, so the slot wins outright.
+    // Arbitrary nodes cannot be morphed as text, so the slot wins outright.
     expect(wrapper.find('.tuff-switch__label strong').exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'TxTextTransformer' }).exists()).toBe(false)
   })
 
-  it('crossfades the old label text when the label changes', async () => {
+  it('morphs the label text when the label changes', async () => {
     const wrapper = mount(TxSwitch, {
       props: { label: 'Off' },
+      attachTo: document.body,
     })
+    await nextTick()
 
     await wrapper.setProps({ label: 'On' })
     await nextTick()
 
-    // Mid-transition the transformer keeps the outgoing text in a second,
-    // aria-hidden layer. Its presence is what proves the animation ran rather
-    // than the text being swapped in place.
-    const prev = wrapper.find('.tx-text-transformer__layer--prev')
-    expect(prev.exists()).toBe(true)
-    expect(prev.text()).toBe('Off')
-    expect(prev.attributes('aria-hidden')).toBe('true')
-    expect(wrapper.find('.tx-text-transformer__layer--current').text()).toBe('On')
+    // The transformer hands the label to the morph engine, which splits it into
+    // aria-hidden segments behind one readable copy. That copy carrying the new
+    // value is what proves the engine took the update rather than Vue re-rendering
+    // the text in place.
+    expect(wrapper.find('.tx-text-transformer__morph').exists()).toBe(true)
+    expect(wrapper.find('[tx-morph-sr]').text()).toBe('On')
+    expect(wrapper.findAll('[tx-morph-item]').length).toBeGreaterThan(0)
+    expect(wrapper.findAll('[tx-morph-item]').every(item => item.attributes('aria-hidden') === 'true')).toBe(true)
+
+    wrapper.unmount()
   })
 
   it('places the label before the track when labelPlacement is start', () => {

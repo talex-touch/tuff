@@ -182,12 +182,19 @@ export function useCoreType(): CoreType | undefined {
 }
 
 /**
- * Gets the assistant sub-type from command line arguments
- * @returns The assistant type ('floating-ball' | 'voice-panel') or undefined
+ * Gets the assistant window subtype from command line arguments
+ * @returns The assistant type ('voice-dock') or undefined
  */
 export function useAssistantType(): AssistantType | undefined {
   const argMapper = useArgMapper()
   return argMapper.assistantType
+}
+
+/**
+ * Checks if the current window is the unified VoiceDock assistant window
+ */
+export function isVoiceDockWindow() {
+  return isAssistantWindow() && useAssistantType() === 'voice-dock'
 }
 
 /**
@@ -213,22 +220,6 @@ export function isOmniPanel() {
 export function isMetaOverlay() {
   const argMapper = useArgMapper()
   return argMapper.metaOverlay === 'true'
-}
-
-/**
- * Checks if the current assistant window is a floating-ball window
- * @returns True if the current window is a floating-ball window
- */
-export function isFloatingBallWindow() {
-  return isAssistantWindow() && useAssistantType() === 'floating-ball'
-}
-
-/**
- * Checks if the current assistant window is a voice-panel window
- * @returns True if the current window is a voice-panel window
- */
-export function isVoicePanelWindow() {
-  return isAssistantWindow() && useAssistantType() === 'voice-panel'
 }
 
 export function useWindowRole(): WindowRole {

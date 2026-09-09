@@ -146,6 +146,57 @@ describe('clipboard-stage-b-enrichment', () => {
     )
   })
 
+  /**
+   * 采集时看到的只是一串数字，没有任何依据把它和订单号区分开——来源应用要到这一步
+   * 才解析出来。所以验证码的第三条判据只能在这里补判，而这是它唯一的机会。
+   */
+  describe('re-scoring once the source application is known', () => {
+    function runWith(bundleId: string, content: string) {
+      const db = createDb()
+      const enrichment = new ClipboardStageBEnrichment({
+        getDatabase: () => db as never,
+        getCachedItemById: () => createJob().item,
+        getActiveAppSnapshot: () => ({
+          bundleId,
+          identifier: null,
+          displayName: bundleId,
+          processId: 10,
+          executablePath: `/Applications/${bundleId}.app`,
+          icon: null
+        }),
+        getAppLanguageHint: () => 'zh-CN',
+        getLatestGeneration: () => 1,
+        enqueueOcr: vi.fn(async () => undefined),
+        patchCachedMeta: vi.fn(),
+        updateCachedSource: vi.fn(),
+        metaPersistence: {
+          withDbWrite: vi.fn(async (_label, operation) => await operation(db)),
+          persistMetaEntriesSafely: vi.fn()
+        } as never,
+        logWarn: vi.fn(),
+        logDebug: vi.fn()
+      })
+      const job = createJob({ item: { id: 7, type: 'text', content, metadata: null } })
+      return { db, run: () => enrichment.process(job) }
+    }
+
+    it('gives a digit run from a messaging app an expiry', async () => {
+      const { db, run } = runWith('com.apple.MobileSMS', '679839')
+      await run()
+      expect(db.set).toHaveBeenCalledWith(
+        expect.objectContaining({ retentionExpiresAt: expect.any(Date) })
+      )
+    })
+
+    it('leaves the same digits alone when they came from a browser', async () => {
+      const { db, run } = runWith('com.apple.Safari', '679839')
+      await run()
+      expect(db.set).toHaveBeenCalledWith(
+        expect.not.objectContaining({ retentionExpiresAt: expect.anything() })
+      )
+    })
+  })
+
   it('skips stale generation jobs before side effects', async () => {
     const enqueueOcr = vi.fn()
     const enrichment = new ClipboardStageBEnrichment({

@@ -68,7 +68,14 @@ function createHarness(options: { denyVoice?: boolean } = {}) {
           }
           const onEvent = (payload as { onEvent: (event: unknown) => Promise<unknown> }).onEvent
           await onEvent({ type: 'partial', text: 'partial words' })
-          await onEvent({ type: 'final', text: 'isolated final', language: 'en-US' })
+          // Delivery moved onto the final event in "unify dictation session delivery": the
+          // prelude now reports delivery-failed unless main says how the text was written.
+          await onEvent({
+            type: 'final',
+            text: 'isolated final',
+            language: 'en-US',
+            delivery: { method: 'autopaste' }
+          })
           await onEvent({ type: 'end' })
           return token
         }
@@ -113,7 +120,7 @@ function createHarness(options: { denyVoice?: boolean } = {}) {
 }
 
 describe('official stream Prelude isolation regression', () => {
-  it('touch-dictation triggers, streams, pastes and disposes its owner resource', async () => {
+  it('touch-dictation triggers, streams, reports main-owned delivery and disposes its owner resource', async () => {
     const harness = createHarness()
     await expect(
       harness.runtime.callLifecycle('onFeatureTriggered', [
@@ -129,7 +136,10 @@ describe('official stream Prelude isolation regression', () => {
       success: true,
       message: '已听写并粘贴：isolated final'
     })
-    expect(harness.state.pasted).toEqual(['isolated final'])
+    // Delivery is main-owned: the Voice Session contract says plugin callers "do not
+    // implement a second paste path". The prelude reports what main did with the text and
+    // must not reach for the clipboard itself, so an empty list here is the assertion.
+    expect(harness.state.pasted).toEqual([])
     expect(harness.disposeResource).toHaveBeenCalledTimes(1)
     expect(harness.invokeCapability.mock.calls.map(([capability]) => capability)).toContain(
       'voice.stream'

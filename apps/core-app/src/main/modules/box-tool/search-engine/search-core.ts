@@ -463,6 +463,34 @@ export class SearchEngineCore
       { once: true }
     )
   }
+  /**
+   * A hydrated app icon changes only presentation: application search-index records, their
+   * revision, and search-result cache entries remain valid. The existing commit stream is the
+   * renderer's bounded empty-query refresh channel, so use it for this explicit metadata-only
+   * invalidation rather than inventing an icon-only index mutation.
+   */
+  public invalidateAppRecommendationPresentation(): void {
+    if (!this.recommendationEngine) return
+
+    this.recommendationEngine.invalidateCache()
+    this.emitIndexCommit({
+      revision: searchIndexCommitHub.getRevision(),
+      providerIds: [],
+      sourceGenerations: {},
+      committedAt: Date.now(),
+      recommendationsInvalidated: true
+    })
+  }
+
+  private emitIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
+    for (const context of this.indexCommitStreams) {
+      if (context.isCancelled()) {
+        this.indexCommitStreams.delete(context)
+        continue
+      }
+      context.emit(payload)
+    }
+  }
 
   /**
    * An index commit no longer clears the cache eagerly (#346).
@@ -513,13 +541,7 @@ export class SearchEngineCore
       ...payload,
       recommendationsInvalidated
     }
-    for (const context of this.indexCommitStreams) {
-      if (context.isCancelled()) {
-        this.indexCommitStreams.delete(context)
-        continue
-      }
-      context.emit(enrichedPayload)
-    }
+    this.emitIndexCommit(enrichedPayload)
   }
 
   /**
@@ -2067,7 +2089,8 @@ export class SearchEngineCore
         await indexingRuntime.reconcileSource(APP_INDEXED_SOURCE_ID, { reason }),
       applyDelta: async (delta) => await indexingRuntime.applySourceDelta(delta),
       reset: async (request) =>
-        await indexingRuntime.resetSourceRuntimeState(APP_INDEXED_SOURCE_ID, request)
+        await indexingRuntime.resetSourceRuntimeState(APP_INDEXED_SOURCE_ID, request),
+      invalidateRecommendations: () => instance.invalidateAppRecommendationPresentation()
     })
     fileProvider.setIndexedSourceRuntimeMutationDelegate({
       applyBatch: async (batch) => await indexingRuntime.applySourceBatch(batch),

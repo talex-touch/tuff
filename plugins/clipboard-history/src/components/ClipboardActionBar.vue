@@ -1,9 +1,12 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import ClipboardGlyph from './ClipboardGlyph.vue'
 
 const props = defineProps<{
   item: PluginClipboardItem | null
+  /** Cmd/Ctrl+Enter 现在按内容类型分派，按钮文案必须跟着走，不能写死「复制」。 */
+  primaryActionLabel: string
   copyPending: boolean
   applyPending: boolean
   favoritePending: boolean
@@ -11,7 +14,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (event: 'copy'): void
+  (event: 'primary'): void
   (event: 'apply'): void
   (event: 'toggleFavorite'): void
   (event: 'delete'): void
@@ -30,6 +33,49 @@ const applyLabel = computed(() => {
   }
   return '粘贴到当前应用'
 })
+
+/**
+ * 删除要按两次。第一次把按钮变成「再按一次删除」，第二次才真删。
+ *
+ * 用按钮自己的状态而不是弹一个对话框：这是个键盘驱动的启动器面板，弹层会抢走焦点、
+ * 打断 Esc 关闭的肌肉记忆；而删除的代价是一条记录，不值得一个模态。
+ *
+ * 三秒内没有第二次点击就自己退回去——一个一直亮着「再按一次删除」的按钮，
+ * 下次误触时反而成了陷阱。
+ */
+const deleteArmed = ref(false)
+let disarmTimer: ReturnType<typeof setTimeout> | null = null
+
+const deleteLabel = computed(() => {
+  if (props.deletePending) {
+    return '删除中'
+  }
+  return deleteArmed.value ? '再按一次删除' : '删除'
+})
+
+function disarmDelete(): void {
+  if (disarmTimer) {
+    clearTimeout(disarmTimer)
+    disarmTimer = null
+  }
+  deleteArmed.value = false
+}
+
+function requestDelete(): void {
+  if (deleteArmed.value) {
+    disarmDelete()
+    emit('delete')
+    return
+  }
+
+  deleteArmed.value = true
+  disarmTimer = setTimeout(disarmDelete, 3000)
+}
+
+// 切换记录后待确认态必须清掉，否则下一条记录的第一次点击就直接删了。
+watch(() => props.item?.id, disarmDelete)
+
+onBeforeUnmount(disarmDelete)
 </script>
 
 <template>
@@ -39,9 +85,9 @@ const applyLabel = computed(() => {
       class="surface-button with-shortcut"
       type="button"
       :disabled="!hasItem || copyPending"
-      @click="emit('copy')"
+      @click="emit('primary')"
     >
-      <span class="button-text">{{ copyPending ? '复制中' : '复制' }}</span>
+      <span class="button-text">{{ copyPending ? '处理中' : props.primaryActionLabel }}</span>
       <span class="button-shortcut">Cmd/Ctrl + Enter</span>
     </button>
 
@@ -59,22 +105,30 @@ const applyLabel = computed(() => {
     <div class="footer-actions">
       <button
         data-testid="favorite-button"
-        class="surface-button"
+        class="icon-button"
         type="button"
+        :title="favoriteLabel"
+        :aria-label="favoriteLabel"
         :disabled="!hasItem || favoritePending"
         @click="emit('toggleFavorite')"
       >
-        <span class="button-text">{{ favoriteLabel }}</span>
+        <ClipboardGlyph name="star" />
+        <span class="button-text" :class="{ 'sr-only': !favoritePending }">{{ favoriteLabel }}</span>
       </button>
 
       <button
         data-testid="delete-button"
-        class="surface-button danger"
+        class="icon-button danger"
+        :class="{ armed: deleteArmed }"
         type="button"
+        :title="deleteLabel"
+        :aria-label="deleteLabel"
         :disabled="!hasItem || deletePending"
-        @click="emit('delete')"
+        @click="requestDelete"
+        @blur="disarmDelete"
       >
-        <span class="button-text">{{ deletePending ? '删除中' : '删除' }}</span>
+        <ClipboardGlyph name="trash" />
+        <span class="button-text" :class="{ 'sr-only': !deletePending && !deleteArmed }">{{ deleteLabel }}</span>
       </button>
     </div>
   </div>
@@ -149,6 +203,75 @@ const applyLabel = computed(() => {
 
 .surface-button.danger {
   color: var(--clipboard-color-danger);
+}
+
+.icon-button {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 60%, transparent);
+  background: color-mix(in srgb, var(--clipboard-surface-strong) 90%, transparent);
+  color: var(--clipboard-text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.icon-button:hover:enabled {
+  color: var(--clipboard-text-primary);
+  border-color: color-mix(in srgb, currentColor 45%, var(--clipboard-border-color));
+}
+
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.icon-button.danger {
+  color: var(--clipboard-color-danger);
+}
+
+/**
+ * 待确认态要一眼看得出来，否则「按两次」就成了「第一次没反应」。
+ * 图标按钮在这里撑开成带文字的胶囊，把它和旁边的收藏按钮明确区分开。
+ */
+.icon-button.danger.armed {
+  width: auto;
+  gap: 5px;
+  padding: 0 9px;
+  border-color: var(--clipboard-color-danger);
+  background: color-mix(in srgb, var(--clipboard-color-danger) 14%, transparent);
+}
+
+.icon-button.danger.armed .button-text {
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.icon-button .ClipboardGlyph {
+  width: 15px;
+  height: 15px;
+}
+
+/**
+ * 图标按钮仍要渲染文案节点：pending 态的「处理中 / 删除中」是既有的可访问性与测试契约，
+ * 非 pending 态只做视觉隐藏，不从 DOM 里摘掉。
+ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
 }
 
 .surface-button.with-shortcut {

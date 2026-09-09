@@ -124,6 +124,7 @@ vi.mock('@talex-touch/utils/transport/prelude', () => ({
 }))
 
 vi.mock('../../../config/default', () => ({
+  APP_FOLDER_NAME: 'tuff',
   BoxWindowOption: {}
 }))
 

@@ -38,7 +38,6 @@ code: |
 ---
 code: |
   <script setup lang="ts">
-  import NumberFlow from '@number-flow/vue'
   import { ref } from 'vue'
 
   const activeUsers = ref(18200)
@@ -103,7 +102,7 @@ code: |
         >
           <template #value>
             <div style="display: flex; align-items: baseline; gap: 6px;">
-              <NumberFlow :value="resourceLoad" />
+              <TxTextMorph :text="resourceLoad" />
               <span style="font-size: 16px;">%</span>
             </div>
           </template>
@@ -122,7 +121,6 @@ code: |
 ---
 code: |
   <script setup lang="ts">
-  import NumberFlow from '@number-flow/vue'
   import { computed, ref } from 'vue'
 
   const healthProgress = ref(78)
@@ -161,7 +159,7 @@ code: |
       >
         <template #value>
           <div style="display: flex; align-items: baseline; gap: 6px;">
-            <NumberFlow :value="healthProgress" />
+            <TxTextMorph :text="healthProgress" />
             <span style="font-size: 16px;">%</span>
           </div>
         </template>

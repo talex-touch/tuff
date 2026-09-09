@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import {
+  REPORT_ONLY_CSP,
+  REPORT_ONLY_CSP_HEADER,
+} from '../../../apps/core-app/src/main/core/report-only-csp'
 
 /**
  * The renderer CSP is the only barrier between injected content and `system.executeCommand` (#689).
@@ -16,8 +20,10 @@ import { describe, expect, it } from 'vitest'
  * code through `new Function`, so removing it would delete plugin widgets rather than harden
  * anything — a test that demanded its absence would be demanding a product change.
  *
- * Lives in packages/utils because `ci / CI - utils` is blocking, while `App suites (core-app)` is
- * continue-on-error and reports success however the suite does.
+ * The two policies are read from different places, and that asymmetry is the point. The enforcing
+ * one is a `<meta>` in renderer/index.html. The report-only one cannot be: Chromium discards a
+ * report-only policy delivered through `<meta>`, which is how it spent months reporting nothing
+ * while reading as installed. It is now a response header built in main/core/report-only-csp.ts.
  */
 
 const INDEX_HTML = readFileSync(
@@ -38,7 +44,7 @@ function policyFor(httpEquiv: string): string {
 }
 
 const csp = policyFor('Content-Security-Policy')
-const reportOnly = policyFor('Content-Security-Policy-Report-Only')
+const reportOnly = REPORT_ONLY_CSP.replace(/\s+/g, ' ').trim()
 
 function find(policy: string, name: string): string | undefined {
   return policy
@@ -99,7 +105,9 @@ describe('renderer Content-Security-Policy', () => {
 
 describe('the report-only candidate policy', () => {
   it('is present, and is the narrow one', () => {
-    // Positive control first: an empty match would satisfy "contains no wildcard" trivially.
+    // Positive control first: an empty policy would satisfy "contains no wildcard" trivially, and
+    // the header is built by joining a list — one that could be emptied without anything else here
+    // noticing.
     expect(reportOnly.length).toBeGreaterThan(80)
     expect(reportOnlyDirective('default-src')).toBe('default-src \'self\' blob: data: tfile: remix:')
   })
@@ -123,7 +131,15 @@ describe('the report-only candidate policy', () => {
   it('is reported rather than enforced, and the report is listened for', () => {
     // A report-only policy nobody listens to is decoration. The listener is what turns it into
     // the inventory that unblocks narrowing the real policy.
-    expect(INDEX_HTML).toContain('Content-Security-Policy-Report-Only')
+    expect(REPORT_ONLY_CSP_HEADER).toBe('Content-Security-Policy-Report-Only')
     expect(RENDERER_MAIN).toContain('addEventListener(\'securitypolicyviolation\'')
+  })
+
+  it('is not delivered through a <meta> element, where Chromium would discard it', () => {
+    // How this policy spent its first life: present in index.html, ignored by the engine, and
+    // therefore an empty violation log that read as a clean bill of health. Matching the
+    // `<meta http-equiv=` form rather than the header name, because index.html carries a comment
+    // saying exactly this and a bare substring check would pass on the comment.
+    expect(INDEX_HTML).not.toMatch(/http-equiv="Content-Security-Policy-Report-Only"/)
   })
 })

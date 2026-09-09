@@ -290,6 +290,7 @@ export default {
         'core-app': 'CoreApp',
         'custom': 'Custom',
         'deepseek': 'DeepSeek',
+        'dashscope': 'DashScope / Model Studio',
         'degraded': 'Degraded',
         'disabled': 'Disabled',
         'dry_run': 'Dry run',

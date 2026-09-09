@@ -19,6 +19,10 @@ import {
   providerCredentialSecureStoreKey,
   redactProviderConfigDocument
 } from './provider-credential-service'
+import {
+  normalizeIntelligenceProviderCredentialRevealRequest,
+  type IntelligenceProviderCredentialRevealRequest
+} from '@talex-touch/utils/transport/sdk/domains/intelligence'
 
 const providerCredentialLog = getLogger('provider-credential')
 const LEGACY_DB_PROVIDER_KEY = 'intelligence/providers'
@@ -181,6 +185,15 @@ export async function deleteProviderCredentialConfig(
   request: ProviderCredentialDeleteRequest
 ): Promise<{ deleted: boolean }> {
   return await getProductionService().deleteProvider(request)
+}
+
+export async function revealProviderCredential(
+  request: IntelligenceProviderCredentialRevealRequest
+): Promise<{ value: string }> {
+  const service = productionService
+  if (!service) throw new Error('PROVIDER_CREDENTIAL_SERVICE_NOT_INITIALIZED')
+  const { providerId } = normalizeIntelligenceProviderCredentialRevealRequest(request)
+  return { value: await service.revealCredential(providerId) }
 }
 
 export function projectIntelligenceConfigForRenderer(value: unknown): Record<string, unknown> {

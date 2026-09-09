@@ -46,6 +46,41 @@ code: |
 ---
 :::
 
+### 优先级排序
+`orderable` 把目标面板变成有序列表：每行显示名次，并带上移 / 下移。名次读自 `modelValue`，筛选时也不会串位；此时目标顺序就是 `modelValue` 顺序，`targetOrder` 不再参与。`maxHeight` 给面板封顶，长列表在列表内部滚动，而不是把外层弹窗撑开。
+
+:::TuffDemoWrapper{demo="TransferOrderableDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const selected = ref<Array<string | number>>(['gpt-1', 'gpt-3', 'gpt-2'])
+  const data = [
+    { key: 'gpt-1', label: '主模型 · 高质量' },
+    { key: 'gpt-2', label: '备用模型 · 均衡' },
+    { key: 'gpt-3', label: '快速模型 · 低延迟' },
+    { key: 'gpt-4', label: '长上下文模型' },
+  ]
+  </script>
+
+  <template>
+    <TxTransfer
+      v-model="selected"
+      :data="data"
+      :titles="['可用模型', '调用顺序']"
+      :empty-text="['没有更多模型', '还没有排序，先加一个模型']"
+      :max-height="260"
+      filterable
+      orderable
+      target-order="push"
+      move-up-aria-label="上移一位"
+      move-down-aria-label="下移一位"
+    />
+  </template>
+---
+:::
+
 ## 权限资源授权
 
 后台授权场景里，`TxTransfer` 只负责“可分配资源 ↔ 已授权资源”的受控移动；权限域由 `TxTree` 选择，归属团队由 `TxTreeSelect` 选择，审计进度由 `TxTimeline` 呈现，这样每个组件职责都更清晰。
@@ -109,9 +144,13 @@ rows:
     default: "''"
     description: 筛选输入占位文案
   - name: emptyText
-    type: string
+    type: "string | [string, string]"
     default: "'No data'"
-    description: 列表为空时的展示文案
+    description: 列表为空时的展示文案；传元组则左右面板各用一条
+  - name: maxHeight
+    type: "string | number"
+    default: "'320px'"
+    description: 面板高度上限，数字按 px 处理；也可直接设 --tx-transfer-max-height
   - name: addAriaLabel
     type: string
     default: "'Move selected items to target'"
@@ -120,10 +159,26 @@ rows:
     type: string
     default: "'Move selected items to source'"
     description: 移除按钮的无障碍标签
+  - name: selectAllAriaLabel
+    type: string
+    default: "'Select all'"
+    description: 面板全选框的无障碍标签，渲染时会拼上面板标题
+  - name: moveUpAriaLabel
+    type: string
+    default: "'Move item up'"
+    description: 上移按钮的无障碍标签，渲染时会拼上条目文本
+  - name: moveDownAriaLabel
+    type: string
+    default: "'Move item down'"
+    description: 下移按钮的无障碍标签，渲染时会拼上条目文本
   - name: targetOrder
     type: "'original' | 'push'"
     default: "'original'"
-    description: 目标列表按原始 data 顺序或追加顺序排序
+    description: 目标列表按原始 data 顺序或追加顺序排序；`orderable` 打开后不再生效
+  - name: orderable
+    type: boolean
+    default: false
+    description: 目标面板显示名次与上移/下移按钮，顺序即 modelValue 顺序
 ---
 ::
 
@@ -138,14 +193,25 @@ rows:
 
 `TxTransfer` 不提供自定义插槽。条目文本通过 `data[].label` 渲染，面板标题通过 `titles` 本地化，空态、筛选框和操作按钮文案通过 props 配置。
 
+## 交互契约
+
+- 每个面板头部有一个全选框，覆盖范围是**当前可见且未禁用**的行：筛选生效时只影响筛出来的那些，不会替用户勾上看不见的条目。部分选中时它报 `aria-checked="mixed"`。
+- 移动条目有两条路径：勾选后按中间按钮，或直接双击一行。双击禁用行不做任何事。
+- 中间按钮有边框和底色，勾选后变主色并显示待移动数量；没有勾选时禁用。纯图标、无边框的按钮夹在两个面板之间会被读成装饰，用户按了以为没反应。
+- `orderable` 时目标行显示名次与上移 / 下移按钮；名次取自 `modelValue`，与筛选状态无关。
+
 ## 最佳实践
 
 - `modelValue` 应始终由业务侧受控，并且只保存 item key，不保存完整 item 对象。
 - 保持每个 `data[].key` 唯一且稳定；重复 key 会让左右列表归属不可判断。
 - 目标列表需要保持原始数据顺序时使用 `targetOrder="original"`，选择顺序本身有意义时使用 `targetOrder="push"`。
+- 顺序需要由用户手动调整（优先级、回退链）时开 `orderable`，并把 `targetOrder` 设为 `"push"` 表明意图；此时组件只认 `modelValue` 顺序。
 - 禁用项应保留在 `data` 中展示，不要在外层过滤掉，避免用户误以为资源不存在。
-- 当中间操作按钮只有图标时，必须显式提供 `addAriaLabel` 和 `removeAriaLabel`。
+- 当中间操作按钮只有图标时，必须显式提供 `addAriaLabel` 和 `removeAriaLabel`；开了 `orderable` 就再补 `moveUpAriaLabel` 和 `moveDownAriaLabel`，本地化界面还要给 `selectAllAriaLabel`。
 - `filterable` 适合中大型列表；短权限列表不加双侧筛选框通常更容易扫读。
+- 需要一次性搬走整批时不要自己在外面加"全选"按钮，组件头部已经有了，且它只作用于筛选后的可见行。
+- 面板默认封顶 320px。放进弹窗或抽屉时用 `maxHeight` 贴合容器（如 `min(56dvh, 520px)`），保证滚动始终发生在列表内部，而不是把弹窗撑高。
+- 左右空态含义不同时（"没有可选项" vs "至少选一个才能用"）给 `emptyText` 传元组，不要用同一句话糊过去。
 
 ## Source
 
@@ -155,6 +221,8 @@ rows:
 
 - 组件源码：`packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue` 确认左右列表派生、筛选匹配、禁用项检查、`targetOrder` 和纯图标操作按钮标签。
 - 类型契约：`packages/tuffex/packages/components/src/transfer/src/types.ts` 导出 `TransferItem`、`TransferProps` 和 `TransferEmits`。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/transfer/__tests__/transfer.test.ts` 覆盖勾选项移动、自定义空态文案和可访问操作按钮标签。
+- 高度契约：面板读 `--tx-transfer-max-height`（默认 `320px`），`maxHeight` 只是写这个变量。默认值必须存在——没有上限时面板会随条目数一起长高，`.tx-transfer__list` 的 `overflow: auto` 永远不触发，滚动落到外层页面或弹窗上。
+- 排序契约：`orderable` 时 `targetItems` 与 `resolveOrder` 都短路 `targetOrder='original'`。曾经只改渲染顺序、留着 `resolveOrder` 按 `data` 重排，结果每次上移/下移都被立刻排回去，表现为按钮"没反应"。名次与首/末项判定都取自未过滤的 `modelValue`，用过滤后的下标会让搜索状态下的名次和禁用态一起算错。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/transfer/__tests__/transfer.test.ts` 覆盖勾选项移动、双击单条移动与禁用行不动、全选（跳过禁用行 / 只作用于筛选结果 / 部分选中报 mixed / 再次点击清空）、自定义空态文案（含左右分别配置）、可访问操作按钮标签、`maxHeight` 变量注入，以及 `orderable` 的名次渲染、上下移动、边界禁用、筛选状态下的名次与边界。
 - 截图：`.codex-screenshots/nexus-transfer-permission-orchestration-demo-playwright-2026-05-28.png`。
 

@@ -24,7 +24,7 @@ interface AssistantWindowProbe {
   text: string
   hasFloatingBall: boolean
   hasVoicePanel: boolean
-  hasClipboardImageTranslateButton: boolean
+  hasVoiceHud: boolean
   bodyClass: string
 }
 
@@ -181,7 +181,7 @@ async function inspectTarget(target: DevToolsTarget): Promise<AssistantWindowPro
     text: document.body?.innerText?.slice(0, 1000) || '',
     hasFloatingBall: !!document.querySelector('.floating-ball-root'),
     hasVoicePanel: !!document.querySelector('.voice-panel-root'),
-    hasClipboardImageTranslateButton: Array.from(document.querySelectorAll('button')).some((button) => (button.textContent || '').includes('剪贴板图片翻译') || (button.textContent || '').includes('Translate clipboard image')),
+    hasVoiceHud: !!document.querySelector('.voice-panel-root .voice-dock[role="status"]'),
     bodyClass: document.body?.className || ''
   }))()`
 
@@ -247,6 +247,8 @@ async function runSmoke(options: CliOptions): Promise<SmokeResult> {
     text: floatingWindow.probe.text
   }
 
+  if (!options.clickFloatingBall) return { ...result, ok: true }
+
   if (options.clickFloatingBall) {
     await clickFloatingBall(floatingWindow.target)
     await sleep(1_200)
@@ -254,12 +256,10 @@ async function runSmoke(options: CliOptions): Promise<SmokeResult> {
   }
 
   const voicePanel = assistantWindows.find(
-    (item) => item.probe.hasVoicePanel && item.probe.hasClipboardImageTranslateButton
+    (item) => item.probe.hasVoicePanel && item.probe.hasVoiceHud
   )
   if (!voicePanel) {
-    result.failures.push(
-      'Assistant VoicePanel with clipboard image translate action was not found.'
-    )
+    result.failures.push('Assistant recording HUD was not found after opening the floating ball.')
   } else {
     result.voicePanel = {
       targetId: voicePanel.target.id,

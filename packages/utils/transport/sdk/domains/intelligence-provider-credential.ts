@@ -1,11 +1,12 @@
 import type { IntelligenceProviderConfig } from '../../../types/intelligence'
+import { getVoiceAsrMetadata, normalizeVoiceAsrMetadata } from '../../../intelligence/voice-asr'
 
 export type IntelligenceProviderStoredConfig = Omit<IntelligenceProviderConfig, 'apiKey'>
 
-export type IntelligenceProviderCredentialMutation
-  = | { action: 'preserve' }
-    | { action: 'set', value: string }
-    | { action: 'clear' }
+export type IntelligenceProviderCredentialMutation =
+  | { action: 'preserve' }
+  | { action: 'set'; value: string }
+  | { action: 'clear' }
 
 export interface IntelligenceProviderConfigSaveRequest {
   provider: IntelligenceProviderStoredConfig
@@ -14,6 +15,14 @@ export interface IntelligenceProviderConfigSaveRequest {
 
 export interface IntelligenceProviderConfigDeleteRequest {
   providerId: string
+}
+
+export interface IntelligenceProviderCredentialRevealRequest {
+  providerId: string
+}
+
+export interface IntelligenceProviderCredentialRevealResult {
+  value: string
 }
 
 const PROVIDER_CONFIG_KEYS = new Set([
@@ -34,12 +43,7 @@ const PROVIDER_CONFIG_KEYS = new Set([
   'hasCredential',
 ])
 const PROVIDER_RUNTIME_CONFIG_KEYS = new Set([...PROVIDER_CONFIG_KEYS, 'apiKey'])
-const PROVIDER_RATE_LIMIT_KEYS = new Set([
-  'requestsPerMinute',
-  'requestsPerDay',
-  'tokensPerMinute',
-  'tokensPerDay',
-])
+const PROVIDER_RATE_LIMIT_KEYS = new Set(['requestsPerMinute', 'requestsPerDay', 'tokensPerMinute', 'tokensPerDay'])
 const PROVIDER_NESTED_CREDENTIAL_KEYS = new Set([
   'apiKey',
   'api_key',
@@ -63,14 +67,13 @@ const nodeIsProxy = (() => {
   try {
     const processLike = Reflect.get(globalThis, 'process') as
       | {
-        getBuiltinModule?: (name: string) => {
-          types?: { isProxy?: (value: unknown) => boolean }
+          getBuiltinModule?: (name: string) => {
+            types?: { isProxy?: (value: unknown) => boolean }
+          }
         }
-      }
       | undefined
     return processLike?.getBuiltinModule?.('node:util').types?.isProxy
-  }
-  catch {
+  } catch {
     return undefined
   }
 })()
@@ -85,33 +88,24 @@ function utf8Bytes(value: string): number {
 
 function snapshotProviderDto(
   value: unknown,
-  state: { entries: number, bytes: number, seen: WeakSet<object> },
+  state: { entries: number; bytes: number; seen: WeakSet<object> },
   depth = 0,
   rejectCredentialKeys = false,
 ): unknown {
-  if (value === null || typeof value === 'boolean')
-    return value
+  if (value === null || typeof value === 'boolean') return value
   if (typeof value === 'number') {
-    if (!Number.isFinite(value))
-      invalidProviderCredentialRequest()
+    if (!Number.isFinite(value)) invalidProviderCredentialRequest()
     return value
   }
   if (typeof value === 'string') {
     state.bytes += utf8Bytes(value)
-    if (state.bytes > PROVIDER_DTO_MAX_BYTES)
-      invalidProviderCredentialRequest()
+    if (state.bytes > PROVIDER_DTO_MAX_BYTES) invalidProviderCredentialRequest()
     return value
   }
-  if (
-    !value
-    || typeof value !== 'object'
-    || nodeIsProxy?.(value)
-    || depth >= PROVIDER_DTO_MAX_DEPTH
-  ) {
+  if (!value || typeof value !== 'object' || nodeIsProxy?.(value) || depth >= PROVIDER_DTO_MAX_DEPTH) {
     invalidProviderCredentialRequest()
   }
-  if (state.seen.has(value))
-    invalidProviderCredentialRequest()
+  if (state.seen.has(value)) invalidProviderCredentialRequest()
   state.seen.add(value)
 
   let prototype: object | null
@@ -119,50 +113,45 @@ function snapshotProviderDto(
   try {
     prototype = Object.getPrototypeOf(value)
     descriptors = Object.getOwnPropertyDescriptors(value)
-  }
-  catch {
+  } catch {
     invalidProviderCredentialRequest()
   }
   const keys = Reflect.ownKeys(descriptors)
   state.entries += keys.length
-  if (state.entries > PROVIDER_DTO_MAX_ENTRIES)
-    invalidProviderCredentialRequest()
+  if (state.entries > PROVIDER_DTO_MAX_ENTRIES) invalidProviderCredentialRequest()
 
   if (Array.isArray(value)) {
-    if (prototype !== Array.prototype)
-      invalidProviderCredentialRequest()
+    if (prototype !== Array.prototype) invalidProviderCredentialRequest()
     const length = descriptors.length?.value
     if (
-      !Number.isSafeInteger(length)
-      || length < 0
-      || length > PROVIDER_LIST_MAX_ENTRIES
-      || keys.length !== length + 1
+      !Number.isSafeInteger(length) ||
+      length < 0 ||
+      length > PROVIDER_LIST_MAX_ENTRIES ||
+      keys.length !== length + 1
     ) {
       invalidProviderCredentialRequest()
     }
     const result: unknown[] = []
     for (let index = 0; index < length; index += 1) {
       const descriptor = descriptors[String(index)]
-      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value'))
-        invalidProviderCredentialRequest()
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) invalidProviderCredentialRequest()
       result.push(snapshotProviderDto(descriptor.value, state, depth + 1, rejectCredentialKeys))
     }
     return result
   }
 
-  if (prototype !== Object.prototype && prototype !== null)
-    invalidProviderCredentialRequest()
+  if (prototype !== Object.prototype && prototype !== null) invalidProviderCredentialRequest()
   const result: Record<string, unknown> = Object.create(null)
   for (const key of keys) {
     const descriptor = typeof key === 'string' ? descriptors[key] : undefined
     if (
-      typeof key !== 'string'
-      || key === '__proto__'
-      || key === 'prototype'
-      || key === 'constructor'
-      || (rejectCredentialKeys && PROVIDER_NESTED_CREDENTIAL_KEYS.has(key))
-      || !descriptor?.enumerable
-      || !Object.hasOwn(descriptor, 'value')
+      typeof key !== 'string' ||
+      key === '__proto__' ||
+      key === 'prototype' ||
+      key === 'constructor' ||
+      (rejectCredentialKeys && PROVIDER_NESTED_CREDENTIAL_KEYS.has(key)) ||
+      !descriptor?.enumerable ||
+      !Object.hasOwn(descriptor, 'value')
     ) {
       invalidProviderCredentialRequest()
     }
@@ -180,62 +169,83 @@ function snapshotProviderCredentialDto(value: unknown): unknown {
   // The bounded walk caps work before this clone rejects transparent Proxy objects.
   try {
     structuredClone(value)
-  }
-  catch {
+  } catch {
     invalidProviderCredentialRequest()
   }
   return snapshot
 }
 
-function requireExactRecord(
-  value: unknown,
-  allowedKeys: ReadonlySet<string>,
-): Record<string, unknown> {
+function requireExactRecord(value: unknown, allowedKeys: ReadonlySet<string>): Record<string, unknown> {
   const record = snapshotProviderCredentialDto(value)
-  if (!record || typeof record !== 'object' || Array.isArray(record))
-    invalidProviderCredentialRequest()
+  if (!record || typeof record !== 'object' || Array.isArray(record)) invalidProviderCredentialRequest()
   const keys = Object.keys(record)
-  if (keys.some(key => !allowedKeys.has(key)))
-    invalidProviderCredentialRequest()
+  if (keys.some(key => !allowedKeys.has(key))) invalidProviderCredentialRequest()
   return record as Record<string, unknown>
 }
 
 function requireBoundedString(
   value: unknown,
   maxBytes: number,
-  options: { allowEmpty?: boolean, exactTrimmed?: boolean } = {},
+  options: { allowEmpty?: boolean; exactTrimmed?: boolean } = {},
 ): string {
-  if (typeof value !== 'string' || utf8Bytes(value) > maxBytes)
-    invalidProviderCredentialRequest()
-  if (!options.allowEmpty && !value.trim())
-    invalidProviderCredentialRequest()
-  if (options.exactTrimmed && value !== value.trim())
-    invalidProviderCredentialRequest()
+  if (typeof value !== 'string' || utf8Bytes(value) > maxBytes) invalidProviderCredentialRequest()
+  if (!options.allowEmpty && !value.trim()) invalidProviderCredentialRequest()
+  if (options.exactTrimmed && value !== value.trim()) invalidProviderCredentialRequest()
   return value
 }
 
 function requireStringArray(value: unknown, maxEntries: number): string[] {
-  if (!Array.isArray(value) || value.length > maxEntries)
-    invalidProviderCredentialRequest()
+  if (!Array.isArray(value) || value.length > maxEntries) invalidProviderCredentialRequest()
   const result = value.map(entry => requireBoundedString(entry, 512, { exactTrimmed: true }))
-  if (new Set(result).size !== result.length)
-    invalidProviderCredentialRequest()
+  if (new Set(result).size !== result.length) invalidProviderCredentialRequest()
   return result
 }
 
-export function normalizeIntelligenceProviderStoredConfig(
-  value: unknown,
-): IntelligenceProviderStoredConfig {
+function validateVoiceAsrChannel(provider: Record<string, unknown>): void {
+  const metadata = provider.metadata
+  if (metadata !== undefined) {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+      invalidProviderCredentialRequest()
+    }
+    const metadataRecord = metadata as Record<string, unknown>
+    if (Object.hasOwn(metadataRecord, 'voiceAsr')) {
+      const voiceAsr = normalizeVoiceAsrMetadata(metadataRecord.voiceAsr)
+      const allowedKeys =
+        voiceAsr?.protocol === 'bailian-paraformer'
+          ? ['protocol', 'workspaceId']
+          : voiceAsr?.protocol === 'doubao'
+            ? ['protocol', 'resourceId']
+            : ['protocol']
+      if (
+        !voiceAsr ||
+        Object.keys(metadataRecord.voiceAsr as Record<string, unknown>).some(key => !allowedKeys.includes(key))
+      ) {
+        invalidProviderCredentialRequest()
+      }
+    }
+  }
+
+  if (!Array.isArray(provider.capabilities) || !provider.capabilities.includes('audio.asr')) return
+  if (provider.type !== 'custom' || !getVoiceAsrMetadata(metadata)) {
+    invalidProviderCredentialRequest()
+  }
+  const models = Array.isArray(provider.models) ? provider.models : []
+  if (
+    !models.some(model => typeof model === 'string' && Boolean(model.trim())) &&
+    (typeof provider.defaultModel !== 'string' || !provider.defaultModel.trim())
+  ) {
+    invalidProviderCredentialRequest()
+  }
+}
+
+export function normalizeIntelligenceProviderStoredConfig(value: unknown): IntelligenceProviderStoredConfig {
   const provider = requireExactRecord(value, PROVIDER_CONFIG_KEYS)
   const id = requireBoundedString(provider.id, 128, { exactTrimmed: true })
   requireBoundedString(provider.type, 64, { exactTrimmed: true })
   requireBoundedString(provider.name, 512)
-  if (typeof provider.enabled !== 'boolean')
-    invalidProviderCredentialRequest()
-  if (provider.baseUrl !== undefined)
-    requireBoundedString(provider.baseUrl, 4_096)
-  if (provider.defaultModel !== undefined)
-    requireBoundedString(provider.defaultModel, 512, { exactTrimmed: true })
+  if (typeof provider.enabled !== 'boolean') invalidProviderCredentialRequest()
+  if (provider.baseUrl !== undefined) requireBoundedString(provider.baseUrl, 4_096)
+  if (provider.defaultModel !== undefined) requireBoundedString(provider.defaultModel, 512, { exactTrimmed: true })
   if (provider.instructions !== undefined) {
     requireBoundedString(provider.instructions, 64 * 1024, {
       allowEmpty: true,
@@ -243,102 +253,93 @@ export function normalizeIntelligenceProviderStoredConfig(
   }
   for (const field of ['timeout', 'priority'] as const) {
     const candidate = provider[field]
-    if (
-      candidate !== undefined
-      && (typeof candidate !== 'number' || !Number.isFinite(candidate))
-    ) {
+    if (candidate !== undefined && (typeof candidate !== 'number' || !Number.isFinite(candidate))) {
       invalidProviderCredentialRequest()
     }
   }
-  if (provider.models !== undefined)
-    requireStringArray(provider.models, PROVIDER_LIST_MAX_ENTRIES)
-  if (provider.capabilities !== undefined)
-    requireStringArray(provider.capabilities, PROVIDER_CAPABILITY_MAX_ENTRIES)
+  if (provider.models !== undefined) requireStringArray(provider.models, PROVIDER_LIST_MAX_ENTRIES)
+  if (provider.capabilities !== undefined) requireStringArray(provider.capabilities, PROVIDER_CAPABILITY_MAX_ENTRIES)
   if (provider.rateLimit !== undefined) {
     const rateLimit = requireExactRecord(provider.rateLimit, PROVIDER_RATE_LIMIT_KEYS)
     for (const candidate of Object.values(rateLimit)) {
-      if (
-        typeof candidate !== 'number'
-        || !Number.isFinite(candidate)
-        || candidate < 0
-      ) {
+      if (typeof candidate !== 'number' || !Number.isFinite(candidate) || candidate < 0) {
         invalidProviderCredentialRequest()
       }
     }
   }
   if (provider.metadata !== undefined) {
-    snapshotProviderDto(
-      provider.metadata,
-      { entries: 0, bytes: 0, seen: new WeakSet<object>() },
-      0,
-      true,
-    )
+    snapshotProviderDto(provider.metadata, { entries: 0, bytes: 0, seen: new WeakSet<object>() }, 0, true)
   }
-  if (
-    provider.authRef !== undefined
-    && provider.authRef !== `provider-credential:${id}`
-  ) {
+  if (provider.authRef !== undefined && provider.authRef !== `provider-credential:${id}`) {
+    invalidProviderCredentialRequest()
+  }
+  if (provider.hasCredential !== undefined && typeof provider.hasCredential !== 'boolean') {
     invalidProviderCredentialRequest()
   }
   if (
-    provider.hasCredential !== undefined
-    && typeof provider.hasCredential !== 'boolean'
+    (provider.authRef === undefined && provider.hasCredential === true) ||
+    (provider.authRef !== undefined && provider.hasCredential !== true)
   ) {
     invalidProviderCredentialRequest()
   }
-  if (
-    (provider.authRef === undefined && provider.hasCredential === true)
-    || (provider.authRef !== undefined && provider.hasCredential !== true)
-  ) {
-    invalidProviderCredentialRequest()
-  }
+  validateVoiceAsrChannel(provider)
   return provider as unknown as IntelligenceProviderStoredConfig
 }
 
-export function normalizeIntelligenceProviderRuntimeConfig(
-  value: unknown,
-): IntelligenceProviderConfig {
+export function normalizeIntelligenceProviderRuntimeConfig(value: unknown): IntelligenceProviderConfig {
   const runtimeProvider = requireExactRecord(value, PROVIDER_RUNTIME_CONFIG_KEYS)
   const { apiKey, ...storedProvider } = runtimeProvider
   const normalized = normalizeIntelligenceProviderStoredConfig(storedProvider)
-  if (apiKey === undefined)
-    return normalized as IntelligenceProviderConfig
+  if (apiKey === undefined) return normalized as IntelligenceProviderConfig
   return {
     ...normalized,
     apiKey: requireBoundedString(apiKey, PROVIDER_CREDENTIAL_MAX_BYTES),
   } as IntelligenceProviderConfig
 }
 
-export function normalizeIntelligenceProviderConfigSaveRequest(
-  value: unknown,
-): IntelligenceProviderConfigSaveRequest {
+export function normalizeIntelligenceProviderConfigSaveRequest(value: unknown): IntelligenceProviderConfigSaveRequest {
   const request = requireExactRecord(value, new Set(['provider', 'credential']))
-  if (!Object.hasOwn(request, 'provider') || !Object.hasOwn(request, 'credential'))
-    invalidProviderCredentialRequest()
+  if (!Object.hasOwn(request, 'provider') || !Object.hasOwn(request, 'credential')) invalidProviderCredentialRequest()
   const provider = normalizeIntelligenceProviderStoredConfig(request.provider)
   const credential = requireExactRecord(request.credential, new Set(['action', 'value']))
   if (credential.action === 'preserve' || credential.action === 'clear') {
-    if (Object.keys(credential).length !== 1)
-      invalidProviderCredentialRequest()
+    if (Object.keys(credential).length !== 1) invalidProviderCredentialRequest()
     return { provider, credential: { action: credential.action } }
   }
-  if (
-    credential.action !== 'set'
-    || Object.keys(credential).length !== 2
-    || !Object.hasOwn(credential, 'value')
-  ) {
+  if (credential.action !== 'set' || Object.keys(credential).length !== 2 || !Object.hasOwn(credential, 'value')) {
     invalidProviderCredentialRequest()
   }
   const rawCredential = requireBoundedString(credential.value, PROVIDER_CREDENTIAL_MAX_BYTES)
   return { provider, credential: { action: 'set', value: rawCredential } }
 }
 
+export function normalizeIntelligenceProviderCredentialRevealRequest(
+  value: unknown,
+): IntelligenceProviderCredentialRevealRequest {
+  const request = requireExactRecord(value, new Set(['providerId']))
+  if (Object.keys(request).length !== 1) invalidProviderCredentialRequest()
+  return {
+    providerId: requireBoundedString(request.providerId, 128, {
+      exactTrimmed: true,
+    }),
+  }
+}
+
+export function normalizeIntelligenceProviderCredentialRevealResult(
+  value: unknown,
+): IntelligenceProviderCredentialRevealResult {
+  const result = requireExactRecord(value, new Set(['value']))
+  if (Object.keys(result).length !== 1) invalidProviderCredentialRequest()
+  return {
+    value: requireBoundedString(result.value, PROVIDER_CREDENTIAL_MAX_BYTES),
+  }
+}
+
 export function normalizeIntelligenceProviderConfigDeleteRequest(
   value: unknown,
 ): IntelligenceProviderConfigDeleteRequest {
   const request = requireExactRecord(value, new Set(['providerId']))
-  if (Object.keys(request).length !== 1)
-    invalidProviderCredentialRequest()
+  if (Object.keys(request).length !== 1) invalidProviderCredentialRequest()
   return {
     providerId: requireBoundedString(request.providerId, 128, {
       exactTrimmed: true,
@@ -348,7 +349,6 @@ export function normalizeIntelligenceProviderConfigDeleteRequest(
 
 export function normalizeIntelligenceProviderDeleteResult(value: unknown): { deleted: boolean } {
   const result = requireExactRecord(value, new Set(['deleted']))
-  if (Object.keys(result).length !== 1 || typeof result.deleted !== 'boolean')
-    invalidProviderCredentialRequest()
+  if (Object.keys(result).length !== 1 || typeof result.deleted !== 'boolean') invalidProviderCredentialRequest()
   return { deleted: result.deleted }
 }

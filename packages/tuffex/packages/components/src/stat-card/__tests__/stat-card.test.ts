@@ -4,19 +4,6 @@ import { nextTick } from 'vue'
 import TxStatCard from '../src/TxStatCard.vue'
 import txStatCardSource from '../src/TxStatCard.vue?raw'
 
-vi.mock('@number-flow/vue', () => ({
-  __esModule: true,
-  __isTeleport: false,
-  __isSuspense: false,
-  default: {
-    name: 'NumberFlow',
-    props: {
-      value: { type: Number, default: 0 },
-    },
-    template: '<span class="number-flow">{{ value }}</span>',
-  },
-}))
-
 vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
   callback(0)
   return 0

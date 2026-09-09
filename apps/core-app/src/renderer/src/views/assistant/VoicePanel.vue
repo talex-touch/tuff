@@ -1,1185 +1,1456 @@
 <script lang="ts" setup name="VoicePanel">
 import type {
-  AssistantClipboardImageTranslateErrorCode,
   AssistantRuntimeConfig,
-  AssistantScreenshotCaptureErrorCode,
-  AssistantScreenshotCapturePayload,
-  AssistantScreenshotCaptureTarget,
-  AssistantScreenshotDisplay,
-  AssistantScreenshotSaveErrorCode,
-  AssistantScreenshotRegionSelectionErrorCode,
-  AssistantScreenshotTranslateErrorCode,
-  AssistantScreenshotFallbackStageMetadata,
-  AssistantScreenshotTextFallbackMetadata,
-  AssistantVoiceTranscribeErrorCode
+  AssistantVoiceCancelHoldPayload
 } from '@talex-touch/utils/transport/events/assistant'
-import type {
-  CoreBoxImageTranslateRouteMetadata,
-  IntelligenceErrorCode,
-  CoreBoxImageTranslateRouteStage
-} from '@talex-touch/utils/transport/events/types'
-import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
-import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import type { StreamController } from '@talex-touch/utils/transport/types'
+import type {
+  VoiceAsrStreamEvent,
+  VoiceDeliveryTiming
+} from '@talex-touch/utils/transport/sdk/domains/voice'
+import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
+import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
+import { ORB_STATES, TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { getPreloadProcessInfo } from '~/modules/preload/process-info'
 import { useI18n } from 'vue-i18n'
-import { resolveIntelligenceErrorRecovery } from '../../modules/intelligence/ai-error-recovery'
 
-type SpeechRecognitionLike = {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  onstart: (() => void) | null
-  onerror: ((event: { error?: string }) => void) | null
-  onend: (() => void) | null
-  onresult:
-    | ((event: {
-        resultIndex: number
-        results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>
-      }) => void)
-    | null
-  start: () => void
-  stop: () => void
+/**
+ * How long each notice stays before the dock collapses.
+ *
+ * Cancelling is the shortest on purpose: the user just did it, so telling them at length
+ * repeats what they already know. A failure they did not cause needs longer to be read.
+ */
+const NOTICE_HOLD_MS = {
+  muted: 900,
+  warning: 2100,
+  danger: 1200,
+  /** A notice carrying a button has to outlast the reflex to reach for it. */
+  action: 6500
+} as const
+
+/**
+ * Main owns the cancellation deadline. The HUD uses the same interval only to draw the charge
+ * that main has already accepted; reaching one is never a local cancellation decision.
+ */
+const CANCEL_HOLD_MS = 600
+const CHARGE_TICK_MS = 30
+
+/**
+ * When waiting stops being normal.
+ *
+ * Both are starting points, not measurements: nobody has p50/p90 for this path yet. They are
+ * named rather than inlined so the eventual real numbers replace something visible.
+ */
+const SLOW_AFTER_MS = 3000
+const VERY_SLOW_AFTER_MS = 8000
+
+/**
+ * How long the device gets to produce its first level frame before we stop saying "preparing".
+ *
+ * Breathing forever is its own kind of lie: after this the microphone is not slow, it is not
+ * answering, and the user needs to be told that instead of watched at.
+ */
+const CAPTURE_START_TIMEOUT_MS = 2000
+
+/**
+ * The recording budget, and the denominator the border draws against.
+ *
+ * Main stops the device itself at five minutes, so this is a real ceiling rather than a
+ * decoration. It is sent with the request instead of being left to main's default, because a
+ * fraction is only honest when this side knows the number it is dividing by — reading a cap off
+ * the other process's default is how a progress line ends up measuring the wrong thing.
+ */
+const MAX_RECORDING_MS = 300_000
+/**
+ * The line advances one three-hundredth per second, which is already finer than the screen can
+ * show; a CSS transition of the same length carries it between ticks so it reads as time passing
+ * rather than as a bar stepping.
+ */
+const RECORDING_TICK_MS = 1000
+/** Where the remaining budget stops being theoretical, and the line changes tone to say so. */
+const RECORDING_WARNING_MS = 30_000
+/** Thick enough to read as progress rather than as a recoloured border. */
+const RECORDING_STROKE = 2
+
+/**
+ * The send bar's nominal pace, and where it stops.
+ *
+ * Two of these three numbers are estimates and are named so the eventual real ones replace
+ * something visible — nobody has latency figures for this path, exactly as with `SLOW_AFTER_MS`.
+ * The scaling is the defensible part: a longer recording is a bigger request, so the bar paces
+ * itself against how much audio there is rather than against a constant.
+ *
+ * `UPLOAD_PARKED` is the honest part. The bar stops one percent short because the step it cannot
+ * see — the provider actually transcribing — has no measurable end, and a bar that reached 100%
+ * while nothing had come back would be claiming the work was done.
+ */
+const UPLOAD_BASE_MS = 900
+const UPLOAD_PER_AUDIO_SECOND_MS = 120
+const UPLOAD_TICK_MS = 60
+const UPLOAD_PARKED = 0.99
+
+/**
+ * How long one orb shape holds before another is rolled.
+ *
+ * The orb's own `random` picks a shape per mount, which meant one shape per session — a mark
+ * that never changed while the wait it stands for did. Rolling through the whole family instead
+ * makes the wait look like something turning over rather than a frozen glyph, and the interval
+ * is long enough to register as a change of mind rather than a flicker.
+ */
+const ORB_SWAP_MS = 1200
+
+type NoticeTone = keyof typeof NOTICE_HOLD_MS
+type NoticeAction = 'undo' | 'retry' | 'settings' | 'asrSettings'
+
+/**
+ * Where a microphone failure can actually be fixed — and only where such a pane exists.
+ *
+ * Linux has no equivalent that works across desktops, so there the notice keeps its sentence
+ * and no button: offering a control that opens nothing is worse than offering none.
+ */
+const MIC_SETTINGS_PLATFORMS = new Set(['darwin', 'win32'])
+type Notice = { message: string; tone: NoticeTone; action?: NoticeAction; icon?: string }
+
+/**
+ * The one failure class that has a picture worth drawing.
+ *
+ * A microphone with a line through it says "the device, not the words" before the sentence is
+ * read. It is deliberately not given to quota, congestion or the unclassified fallback: an icon
+ * of a microphone next to "out of credit" would name the wrong culprit.
+ */
+const MIC_FAILURE_ICON = 'i-carbon-microphone-off'
+/**
+ * The other failure that has a picture: nothing is wrong with the hardware, the feature simply
+ * has not been set up. A sliders icon says "this is a setting" before the sentence does, which
+ * is what lets the sentence stop carrying the instruction.
+ */
+const SETUP_ICON = 'i-carbon-settings-adjust'
+
+/**
+ * The device card is not measured — its copy is fixed and short.
+ *
+ * It is also the one notice with a picture, so it stacks instead of running in a line: the
+ * icon centred, the sentence under it, the two controls on the floor. A layout that says
+ * "the microphone" before it says anything else.
+ */
+const ICON_CARD_WIDTH = 264
+const ICON_CARD_HEIGHT = 124
+
+/**
+ * How much of each end of the live transcript is given over to the fade.
+ *
+ * It is padding and mask in one: the text runs into this band and dissolves rather than
+ * being cut off against the pill's edge, and the same band is why a settled sentence never
+ * touches the round controls. The offset below aims the tail at the inner edge of it, so
+ * the newest character is always fully lit rather than half-faded.
+ */
+const STREAM_FADE = 14
+
+/**
+ * The input meter's geometry.
+ *
+ * The bar count is derived from the room the pill actually has rather than fixed, so a
+ * sentence that grows the island grows the meter with it instead of leaving a band of
+ * empty pill either side of a stub of bars.
+ *
+ * That changes what the meter means, and the change is the point: each bar holds one
+ * 10Hz level frame, so the count IS the history in tenths of a second. The floor keeps
+ * the base-width pill at the 24 bars (2.4s) it has always shown; at full width it reaches
+ * roughly six seconds, which is the span of a long sentence.
+ */
+const WAVE_BAR_WIDTH = 2
+const WAVE_BAR_GAP = 2
+const WAVE_MIN_BARS = 24
+/**
+ * Breathing room between the meter and the round controls either side.
+ *
+ * Six is not a taste call: without it the base-width pill fits 27 bars and the meter runs
+ * edge to edge into the cancel and confirm circles. Six lands the base width back on the
+ * 24 bars this has always drawn, which keeps the change to what it claims to be — the
+ * meter growing with the island, not the island's resting state quietly redrawn.
+ */
+const WAVE_SIDE_INSET = 6
+const WAVE_BAR_MIN_HEIGHT = 3
+const WAVE_BAR_MAX_HEIGHT = 28
+
+/** How many bars fit a given centre column, floored at the historical count. */
+function barsForWidth(centreWidth: number): number {
+  const usable = centreWidth - WAVE_SIDE_INSET * 2
+  const fitted = Math.floor((usable + WAVE_BAR_GAP) / (WAVE_BAR_WIDTH + WAVE_BAR_GAP))
+  return Math.max(WAVE_MIN_BARS, fitted)
 }
 
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike
-
-type ProviderRecordingStartResult = 'started' | 'fallback' | 'denied'
-
-const MAX_PROVIDER_RECORDING_MS = 30_000
-const MAX_PROVIDER_AUDIO_BYTES = 5 * 1024 * 1024
-const PROVIDER_RECORDING_MIME_TYPES = [
-  'audio/webm;codecs=opus',
-  'audio/webm',
-  'audio/ogg;codecs=opus',
-  'audio/mp4',
-  'audio/wav'
-] as const
-
-const CLIPBOARD_IMAGE_TRANSLATE_ERROR_KEYS: Record<
-  Exclude<AssistantClipboardImageTranslateErrorCode, IntelligenceErrorCode>,
-  string
-> = {
-  ASSISTANT_DISABLED: 'assistant.voicePanel.imageTranslateAssistantDisabled',
-  IMAGE_UNAVAILABLE: 'assistant.voicePanel.clipboardImageTranslateImageUnavailable',
-  SCENE_UNAVAILABLE: 'assistant.voicePanel.imageTranslateProviderUnavailable'
+/**
+ * Re-fits the level history to a new bar count without inventing or reordering samples.
+ *
+ * Growing pads on the left because the left is the past: a wider meter has simply not
+ * been recording long enough to fill itself yet, and zeros there read as "before this
+ * started" rather than as silence in the middle of a word. Shrinking drops from the same
+ * end, so the newest frames — the ones next to the speaker's current syllable — survive.
+ */
+function refitLevels(levels: readonly number[], count: number): number[] {
+  if (levels.length === count) return [...levels]
+  if (levels.length > count) return levels.slice(levels.length - count)
+  return [...new Array(count - levels.length).fill(0), ...levels]
 }
 
-const VOICE_TRANSCRIBE_ERROR_KEYS: Record<
-  Exclude<AssistantVoiceTranscribeErrorCode, IntelligenceErrorCode>,
-  string
-> = {
-  ASSISTANT_DISABLED: 'assistant.voicePanel.voiceTranscribeAssistantDisabled',
-  AUDIO_INVALID: 'assistant.voicePanel.voiceTranscribeInvalid',
-  AUDIO_TOO_LARGE: 'assistant.voicePanel.voiceTranscribeTooLarge',
-  AUDIO_TOO_LONG: 'assistant.voicePanel.voiceTranscribeTooLong',
-  ASR_UNAVAILABLE: 'assistant.voicePanel.voiceTranscribeUnavailable',
-  TRANSCRIPTION_EMPTY: 'assistant.voicePanel.voiceTranscribeEmpty'
-}
+/**
+ * Auto-gain for the meter.
+ *
+ * Raw RMS from a normal speaking voice sits around 0.02–0.10, so drawing it directly gives a
+ * flat line with no legible difference between syllables. The meter instead normalizes against
+ * a reference that tracks the recent peak: it rises fast so a sudden shout does not clip, and
+ * falls slowly so the quiet words right after a loud one are still readable.
+ *
+ * `WAVE_NOISE_GATE` is what stops this from lying. Without it, dividing by a small reference
+ * would amplify room tone into a full-scale display — the meter would look alive in a silent
+ * room, which is exactly the fake animation this whole surface exists to avoid.
+ */
+const WAVE_NOISE_GATE = 0.012
+const WAVE_REF_FLOOR = 0.05
+const WAVE_REF_ATTACK = 0.6
+/**
+ * Release is the number that matters for the second half of the ask: after a loud burst the
+ * reference has to come back down fast enough that the next quiet sentence is legible again.
+ * At 10Hz this recovers from a shout to the floor in roughly 1.7s. Much slower (0.03 was the
+ * first guess) leaves nine seconds of near-flat meter; much faster makes it pump per syllable.
+ */
+const WAVE_REF_RELEASE = 0.15
 
-const SCREENSHOT_TRANSLATE_ERROR_KEYS: Record<
-  Exclude<AssistantScreenshotTranslateErrorCode, IntelligenceErrorCode>,
-  string
-> = {
-  ASSISTANT_DISABLED: 'assistant.voicePanel.imageTranslateAssistantDisabled',
-  IMAGE_UNAVAILABLE: 'assistant.voicePanel.screenshotTranslateImageUnavailable',
-  SCENE_UNAVAILABLE: 'assistant.voicePanel.imageTranslateProviderUnavailable',
-  SCREENSHOT_PERMISSION_DENIED: 'assistant.voicePanel.screenshotPermissionDenied',
-  SCREENSHOT_UNSUPPORTED: 'assistant.voicePanel.screenshotUnsupported',
-  SCREENSHOT_UNAVAILABLE: 'assistant.voicePanel.screenshotTranslateUnavailable',
-  OCR_UNAVAILABLE: 'assistant.voicePanel.screenshotOcrUnavailable',
-  TEXT_TRANSLATE_UNAVAILABLE: 'assistant.voicePanel.screenshotTextTranslateUnavailable'
-}
+const PILL_BASE_WIDTH = 200
+/**
+ * How wide the island is allowed to get before the text has to make do.
+ *
+ * 340 was set when the centre column only ever held a short status line, and it reads as
+ * oversized now that a live transcript fills it: the pill stops being a HUD hovering over
+ * the user's work and starts being a bar across it. 280 keeps a long sentence legible
+ * while leaving the surface something you look past rather than at.
+ *
+ * It also sets the meter's ceiling — `barsForWidth` divides whatever is left of this after
+ * `PILL_CHROME_WIDTH` — so moving this number moves how much level history is on screen.
+ */
+const PILL_MAX_WIDTH = 280
+const PILL_BASE_HEIGHT = 44
+/** The tallest the island ever gets: its padding, two clamped lines, the gap and one control. */
+const PILL_TALL_HEIGHT = 88
+/** One transcript row above the 24-bar live audio meter. */
+const PILL_LIVE_HEIGHT = 70
+/** Both paddings, and the gap between the text row and the control row. */
+const PILL_TALL_PADDING = 10
+const PILL_ROW_GAP = 4
+/**
+ * The shape changes with the height, not just the size.
+ *
+ * A pill radius is half its height by definition, so keeping `radius: full` at 88px turns the
+ * two ends into oversized semicircles and eats the room the second line needs. Expanding into
+ * a rounded rectangle is what the shape is actually doing — one line is a pill, two lines is a
+ * card — so the radius says so, and stays far below the 44 that would make it a pill again.
+ */
+const PILL_TALL_RADIUS = 24
+/**
+ * The round controls grow with the surface, but not in proportion to it.
+ *
+ * In the pill they are the height minus its padding — the control *is* the bar. A card is
+ * taller than any control should be, so there they match the two-line text block beside them
+ * instead: the control tracks the content, not the container.
+ */
+const CONTROL_BASE_SIZE = 34
+const CONTROL_TALL_SIZE = 40
+/** padding (10) + both round slots (68) + both gaps (16); the centre gets what is left. */
+const PILL_CHROME_WIDTH = 94
+/**
+ * Both paddings and both borders — the pill's width less its content box.
+ *
+ * The live transcript is not a centre-column citizen. While listening the pill is in its
+ * two-row layout, where the text row spans all three columns and the controls sit on the
+ * floor beneath it, so the room the sentence has is the whole content box.
+ */
+const PILL_EDGE_WIDTH = 12
+/**
+ * The per-character reveal.
+ *
+ * `CHAR_STAGGER_MS` is the gap between neighbours; `CHAR_STAGGER_TOTAL_MS` is the ceiling on the
+ * whole wave, so a long sentence tightens its spacing instead of taking a second and a half to
+ * finish arriving. The message is still one string to a screen reader — the spans are presentation.
+ */
+const CHAR_STAGGER_MS = 16
+const CHAR_STAGGER_TOTAL_MS = 240
+/**
+ * How far the shimmer's highlight is behind the character to its left.
+ *
+ * The wave is carried by the characters rather than by a gradient over the paragraph. That was
+ * not a style preference: `background-clip: text` on the paragraph stopped painting the moment
+ * the per-character reveal gave each span its own `filter`, because a filtered inline-block is
+ * composited on its own and drops out of the parent's text clip — while the transparent text
+ * fill kept inheriting into it. The sentence went invisible and no test could see it.
+ */
+const SHIMMER_STEP_MS = 45
 
-const SCREENSHOT_CAPTURE_ERROR_KEYS: Record<AssistantScreenshotCaptureErrorCode, string> = {
-  ASSISTANT_DISABLED: 'assistant.voicePanel.screenshotCaptureAssistantDisabled',
-  SCREENSHOT_PERMISSION_DENIED: 'assistant.voicePanel.screenshotPermissionDenied',
-  SCREENSHOT_UNSUPPORTED: 'assistant.voicePanel.screenshotUnsupported',
-  SCREENSHOT_UNAVAILABLE: 'assistant.voicePanel.screenshotCaptureUnavailable'
-}
+/**
+ * Slack for the pixel the measurement cannot see.
+ *
+ * `scrollWidth` is an integer and the text's real width is not, so a sentence measuring 145.7
+ * reports 145 and gets a 145-wide slot — a fraction too narrow, and it wraps. Every message
+ * short enough to fit on one line is a coin flip without this.
+ */
+const TEXT_WIDTH_SLACK = 2
 
-const SCREENSHOT_SAVE_ERROR_KEYS: Record<AssistantScreenshotSaveErrorCode, string> = {
-  ASSISTANT_DISABLED: 'assistant.voicePanel.screenshotCaptureAssistantDisabled',
-  SCREENSHOT_PERMISSION_DENIED: 'assistant.voicePanel.screenshotPermissionDenied',
-  SCREENSHOT_UNSUPPORTED: 'assistant.voicePanel.screenshotUnsupported',
-  SCREENSHOT_UNAVAILABLE: 'assistant.voicePanel.screenshotCaptureUnavailable',
-  SAVE_FAILED: 'assistant.voicePanel.screenshotSaveFailed'
-}
+const props = withDefaults(
+  defineProps<{
+    managedByDock?: boolean
+    generation?: number
+  }>(),
+  { managedByDock: false, generation: 0 }
+)
 
-const SCREENSHOT_REGION_SELECTION_ERROR_KEYS: Record<
-  AssistantScreenshotRegionSelectionErrorCode,
-  string
-> = {
-  ASSISTANT_DISABLED: 'assistant.voicePanel.screenshotCaptureAssistantDisabled',
-  SCREENSHOT_UNSUPPORTED: 'assistant.voicePanel.screenshotUnsupported',
-  REGION_SELECTION_UNAVAILABLE: 'assistant.voicePanel.screenshotRegionSelectionUnavailable'
-}
-
-function requiresIntelligenceSettingsRecovery(
-  code?: AssistantScreenshotTranslateErrorCode | AssistantVoiceTranscribeErrorCode
-): boolean {
-  if (isIntelligenceErrorCode(code)) {
-    return code !== 'INVALID_REQUEST' && code !== 'UNKNOWN'
-  }
-
-  return (
-    code === 'SCENE_UNAVAILABLE' ||
-    code === 'OCR_UNAVAILABLE' ||
-    code === 'TEXT_TRANSLATE_UNAVAILABLE' ||
-    code === 'ASR_UNAVAILABLE'
-  )
-}
-
-function formatIntelligenceError(code: IntelligenceErrorCode, fallback?: string): string {
-  const recovery = resolveIntelligenceErrorRecovery({ errorCode: code, error: fallback }, t)
-  return `${recovery.title}: ${recovery.detail}`
-}
-
-const systemPermissionRequestEvent = defineEvent('system')
-  .module('permission')
-  .event('request')
-  .define<'microphone' | 'screenRecording', boolean>()
+const emit = defineEmits<{
+  finished: [generation?: number]
+}>()
 
 const transport = useTuffTransport()
 const { t } = useI18n()
 const runtimeConfig = ref<AssistantRuntimeConfig>({
   enabled: false,
-  language: 'zh-CN',
-  wakeWords: ['阿洛', 'aler'],
-  cooldownMs: 2200,
-  continuous: true,
-  assistantName: '阿洛 aler',
-  openPanelOnWake: true
+  language: 'zh-CN'
 })
 
 const listening = ref(false)
-const transcribingVoice = ref(false)
+const transcribing = ref(false)
 const startingVoiceCapture = ref(false)
-const recordingWithProvider = ref(false)
-const submitting = ref(false)
-const closingPanel = ref(false)
-const translatingClipboardImage = ref(false)
-const translatingScreenshot = ref(false)
-const capturingScreenshot = ref(false)
-const savingScreenshot = ref(false)
-const openingScreenshotSettings = ref(false)
-const openingMicrophoneSettings = ref(false)
-const openingIntelligenceSettings = ref(false)
-const screenshotCaptureMode = ref<AssistantScreenshotCaptureTarget>('cursor-display')
-const screenshotDisplays = ref<AssistantScreenshotDisplay[]>([])
-const selectedScreenshotDisplayId = ref('')
-const selectedScreenshotRegionDisplayId = ref('')
-const inputArea = ref<HTMLTextAreaElement | null>(null)
-const inputText = ref('')
-const interimText = ref('')
-const hasVoiceInput = ref(false)
-const errorMessage = ref('')
-const screenshotPermissionDenied = ref(false)
-const microphonePermissionDenied = ref(false)
-const microphoneSettingsOpened = ref(false)
-const intelligenceSettingsRecoveryVisible = ref(false)
-const statusMessage = ref('')
-const sourceText = ref('')
-const screenshotPreview = ref<{
-  tfileUrl: string
-  width: number
-  height: number
-  displayName: string
-  wroteClipboard: boolean
-  saved: boolean
-} | null>(null)
-const screenshotTextFallback = ref<{
-  sourceText: string
-  targetText: string
-  metadata: AssistantScreenshotTextFallbackMetadata
-} | null>(null)
-const imageTranslateRoute = ref<CoreBoxImageTranslateRouteMetadata | null>(null)
+const notice = ref<Notice | null>(null)
+const transcriptPreview = ref('')
+const sessionSeq = ref(0)
+const levels = ref<number[]>(new Array(WAVE_MIN_BARS).fill(0))
+const centerTextRef = ref<HTMLElement | null>(null)
+const pillRef = ref<HTMLElement | null>(null)
+const pillWidth = ref(PILL_BASE_WIDTH)
+const pillHeight = ref(PILL_BASE_HEIGHT)
+/** Natural width of the live transcript, measured off the same pass that sizes the pill. */
+const streamTextWidth = ref(0)
 
-let recognition: SpeechRecognitionLike | null = null
-let restartTimer: number | null = null
-let providerRecorder: MediaRecorder | null = null
-let providerStream: MediaStream | null = null
-let providerChunks: Blob[] = []
-let providerRecordingStartedAt = 0
-let providerStopTimer: number | null = null
-let transcribeStoppedProviderRecording = false
-let startBrowserAfterProviderStop = false
-let preferBrowserSpeechFallback = false
-let voiceCaptureGeneration = 0
-let keepListening = false
-let disposePanelOpen: (() => void) | null = null
-
-const mergedText = computed(() => {
-  const finalText = inputText.value.trim()
-  const interim = interimText.value.trim()
-  return interim ? `${finalText} ${interim}`.trim() : finalText
-})
-const voiceWakeEnabled = computed(() => runtimeConfig.value.enabled)
-const screenshotActionBusy = computed(
-  () =>
-    translatingClipboardImage.value ||
-    translatingScreenshot.value ||
-    capturingScreenshot.value ||
-    savingScreenshot.value
+/**
+ * The window the transcript scrolls inside — the pill's content box less both fade bands.
+ *
+ * It used to subtract `PILL_CHROME_WIDTH`, which describes the column between the two round
+ * controls. The live row is not that column: it spans the pill. Aiming at a window 82px
+ * narrower than the real one put both branches in the wrong place — a short sentence sat left
+ * of centre under a meter that is centred, and a long one parked its newest word two thirds of
+ * the way across with a band of empty pill after it.
+ *
+ * Derived from `pillWidth` rather than read off the DOM on purpose. The pill takes 260ms
+ * to reach a new width, so measuring the element mid-transition would answer "how wide am
+ * I right now", aim the text at that, and then have to chase it. Both animate toward the
+ * settled number instead, and arrive together.
+ */
+const streamViewportWidth = computed(() =>
+  Math.max(0, pillWidth.value - PILL_EDGE_WIDTH - STREAM_FADE * 2)
 )
-const screenshotCapturePayload = computed<AssistantScreenshotCapturePayload>(() => {
-  const displayId = selectedScreenshotDisplayId.value.trim()
-  if (screenshotCaptureMode.value === 'display' && displayId) {
-    return { target: 'display', displayId }
-  }
-  return { target: 'cursor-display' }
-})
-const panelStatusText = computed(() => {
-  if (transcribingVoice.value) return t('assistant.voicePanel.voiceTranscribing')
-  if (recordingWithProvider.value) return t('assistant.voicePanel.providerRecording')
-  if (voiceWakeEnabled.value) {
-    return listening.value ? t('assistant.voicePanel.listening') : t('assistant.voicePanel.waiting')
-  }
-  return t('assistant.voicePanel.textOnly')
+
+/**
+ * Where the transcript sits, as one continuous function of how long it is.
+ *
+ * Short enough to fit, it is centred, which is what the pill has always done. Once it
+ * overflows, the tail is pinned to the right edge so the word being spoken is the word on
+ * screen — the reason this exists at all, since an ellipsis hides exactly the end the user
+ * is watching for.
+ *
+ * The two branches meet at zero when the text is exactly the width of the window, so
+ * crossing that point is not a jump. Writing it as `min` of the two would not: centring
+ * yields a positive number and following a negative one, and the handover has to be where
+ * they are both nought.
+ */
+const streamOffset = computed(() => {
+  const view = streamViewportWidth.value
+  const text = streamTextWidth.value
+  if (text <= view) return (view - text) / 2
+  return -(text - view)
 })
 
-function resolveSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
-  const target = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionCtor
-    webkitSpeechRecognition?: SpeechRecognitionCtor
-  }
-  return target.SpeechRecognition ?? target.webkitSpeechRecognition ?? null
+/** The centre column is what the meter gets: the pill minus its padding and both controls. */
+const waveBarCount = computed(() => barsForWidth(pillWidth.value - PILL_CHROME_WIDTH))
+// The meter's width follows the pill, so its history has to follow the meter. Rebuilding
+// the array instead would blank the wave every time the sentence grew the island by a bar.
+watch(waveBarCount, (count) => {
+  levels.value = refitLevels(levels.value, count)
+})
+const expanded = computed(() => pillHeight.value > PILL_BASE_HEIGHT)
+const pillRadius = computed(() =>
+  expanded.value ? PILL_TALL_RADIUS : Math.round(PILL_BASE_HEIGHT / 2)
+)
+const controlSize = computed(() => (expanded.value ? CONTROL_TALL_SIZE : CONTROL_BASE_SIZE))
+/** The card that leads with a picture: icon over sentence, controls on the floor. */
+const iconCard = computed(() => Boolean(notice.value?.icon))
+const ACTION_ICONS: Record<NoticeAction, string> = {
+  undo: 'i-carbon-undo',
+  retry: 'i-carbon-renew',
+  settings: 'i-carbon-settings',
+  asrSettings: 'i-carbon-settings'
+}
+const ACTION_LABELS: Record<NoticeAction, string> = {
+  undo: 'assistant.voicePanel.undo',
+  retry: 'assistant.voicePanel.retry',
+  settings: 'assistant.voicePanel.openMicrophoneSettings',
+  asrSettings: 'assistant.voicePanel.openRecognitionSettings'
+}
+const actionIcon = computed(() =>
+  notice.value?.action ? ACTION_ICONS[notice.value.action] : ACTION_ICONS.retry
+)
+const actionLabel = computed(() =>
+  t(notice.value?.action ? ACTION_LABELS[notice.value.action] : ACTION_LABELS.retry)
+)
+/** Script-owned rather than CSS: the size is a function of the surface, and tests read it. */
+const controlStyle = computed(() => ({
+  width: `${controlSize.value}px`,
+  height: `${controlSize.value}px`
+}))
+/** 0..1 while Escape is held; the border draws it so the commitment is visible. */
+const cancelCharge = ref(0)
+const waitedMs = ref(0)
+/** Milliseconds of audio this session has actually captured — see `startRecordClock`. */
+const recordedMs = ref(0)
+/** 0..`UPLOAD_PARKED` while the transcript is in flight — see `startUploadClock`. */
+const uploadProgress = ref(0)
+/** Which shape the thinking mark is wearing right now — see `rollOrbState`. */
+const orbState = ref<(typeof ORB_STATES)[number]>(ORB_STATES[0]!)
+const recovering = ref(false)
+/** False until the native capture stream is open; provider handshakes may continue afterward. */
+const hasCaptureReady = ref(false)
+/** False until the first level frame lands — see `preparing`. */
+const hasLevel = ref(false)
+
+const voiceSdk = createVoiceSdk(transport)
+const voiceInputEnabled = computed(() => runtimeConfig.value.enabled)
+const voiceActive = computed(
+  () => listening.value || transcribing.value || startingVoiceCapture.value
+)
+
+const hasNotice = computed(() => notice.value !== null)
+/**
+ * Cancel outlives the confirm action.
+ *
+ * While the transcript is in flight the session is still abortable — main checks its abort
+ * signal before polishing and before delivering — so Escape has to keep working right up to
+ * the moment the text lands.
+ */
+const canCancel = computed(() => listening.value || transcribing.value || hasNotice.value)
+const canConfirm = computed(() => listening.value && !hasNotice.value)
+/** The confirm slot stops being a button while transcribing — it becomes the progress mark. */
+const showsOrb = computed(() => (transcribing.value || recovering.value) && !hasNotice.value)
+/**
+ * Before the first level frame, the meter has nothing to draw.
+ *
+ * Drawing 24 bars at minimum height is not "empty": it is a working meter reporting silence,
+ * which is a claim we cannot make while the device is still opening. So the meter waits for
+ * data and the pill breathes instead.
+ */
+const preparing = computed(
+  () => listening.value && !hasLevel.value && !hasCaptureReady.value && !hasNotice.value
+)
+const holdingCancel = computed(() => cancelCharge.value > 0)
+/**
+ * What is left of the hold, as a width.
+ *
+ * The beam already says "something is charging", but a ring gives no sense of *how much longer*
+ * — it looks the same at 10% as at 90%. This drains 100% → 0% behind the content, so the surface
+ * being consumed is the countdown, and releasing early visibly gives it back.
+ */
+const cancelRemaining = computed(() => `${Math.max(0, 1 - cancelCharge.value) * 100}%`)
+/**
+ * The surface tightens as the hold fills, rather than stepping once when it starts.
+ *
+ * A fixed `scale(0.97)` was three percent — five pixels a side on a 340px card, which is
+ * present in the DOM and invisible on the screen. Tying it to the charge makes the last moment
+ * before the cancel the smallest the pill ever gets, so the shrink says the same thing the
+ * draining bar says.
+ */
+const cancelScale = computed(() => 1 - cancelCharge.value * 0.06)
+/**
+ * How much of the recording budget is gone.
+ *
+ * The second fraction on this surface with a real denominator — the Escape hold is the other —
+ * and the only one that can say *how much longer*. It is deliberately unremarkable for most of a
+ * dictation, because for most of a dictation there is nothing to warn about: five minutes is a
+ * ceiling almost nobody reaches, and a line that shouted about it at ten seconds would be
+ * claiming urgency it does not have.
+ */
+const recordingProgress = computed(() => Math.min(1, recordedMs.value / MAX_RECORDING_MS))
+/** The last stretch is the only part of the budget that is news rather than a fact about the cap. */
+const recordingEnding = computed(() => MAX_RECORDING_MS - recordedMs.value <= RECORDING_WARNING_MS)
+/**
+ * Drawn only while audio is provably flowing, and only once the cap is news.
+ *
+ * Not during `preparing` — there is no elapsed time to report before the first frame — and not
+ * under a notice or an Escape hold, both of which own the border for something more urgent.
+ *
+ * `recordingEnding` is the gate that matters. The budget used to take the border for the whole
+ * recording, which meant the beam — the thing that says "this is live" — never appeared during
+ * the one state where it is most true. For the first four and a half minutes the line is not
+ * news, it is a fact about a cap nobody is near; the beam is the better use of the same 1px.
+ */
+const showsRecordingBudget = computed(
+  () =>
+    listening.value &&
+    hasLevel.value &&
+    recordingEnding.value &&
+    !hasNotice.value &&
+    !holdingCancel.value
+)
+/**
+ * The send bar runs for as long as the words are out of the user's hands.
+ *
+ * Recovery is the same act with the audio main kept, so it gets the same bar. A notice or a held
+ * Escape takes the surface back — the same rule the budget line follows, for the same reason.
+ */
+const showsUpload = computed(
+  () => (transcribing.value || recovering.value) && !hasNotice.value && !holdingCancel.value
+)
+const uploadWidth = computed(() => `${uploadProgress.value * 100}%`)
+/**
+ * The stroke's own box, centred on the pill's border line.
+ *
+ * `stroke-dasharray` needs the length of the path being drawn, not of the pill: the stroke sits
+ * half its width inside the border box, so its corners run a smaller radius and its perimeter is
+ * shorter. Getting this wrong fails quietly — the line simply stops short of, or laps past, the
+ * corner it should have finished on.
+ */
+const budgetPath = computed(() => {
+  const inset = RECORDING_STROKE / 2
+  const width = Math.max(0, pillWidth.value - RECORDING_STROKE)
+  const height = Math.max(0, pillHeight.value - RECORDING_STROKE)
+  const radius = Math.max(0, Math.min(pillRadius.value - inset, width / 2, height / 2))
+  const length = 2 * (width - 2 * radius) + 2 * (height - 2 * radius) + 2 * Math.PI * radius
+  return { inset, width, height, radius, length }
+})
+const slowness = computed(() => {
+  if (!transcribing.value) return 'normal'
+  if (waitedMs.value >= VERY_SLOW_AFTER_MS) return 'very-slow'
+  if (waitedMs.value >= SLOW_AFTER_MS) return 'slow'
+  return 'normal'
+})
+
+/**
+ * The border is the only progress this surface can honestly draw.
+ *
+ * Once the words are in flight there is no percentage to show — the provider reports partials
+ * and a final, never a fraction — so the beam says "still running" and changes colour when that
+ * stops being routine. Recording is the exception: it has a cap, so it gets a real line instead
+ * (`budgetPath`). Holding Escape takes the border over entirely, because a charge that is about
+ * to throw away a sentence outranks both.
+ */
+const beamTone = computed(() => {
+  if (holdingCancel.value) return 'danger'
+  if (notice.value) return notice.value.tone === 'muted' ? 'muted' : notice.value.tone
+  if (slowness.value !== 'normal') return 'warning'
+  return 'accent'
+})
+/**
+ * The border carries one claim at a time.
+ *
+ * The beam means "still running, and there is no fraction to give you". While the budget line is
+ * up there is one, so the stronger statement takes the edge — two strokes chasing each other
+ * around the same 1px border read as neither.
+ *
+ * `preparing` is excluded for the opposite reason: there is nothing running yet. The device is
+ * still opening, the meter has no frame to draw, and the pill is already saying so by breathing.
+ * A beam on top of that claims a live session half a second before there is one.
+ */
+const beamActive = computed(
+  () =>
+    (voiceActive.value || holdingCancel.value || hasNotice.value) &&
+    !preparing.value &&
+    !showsRecordingBudget.value
+)
+/**
+ * Colour carries the same three-tone scale the notices use, so the border never says something
+ * the text contradicts. `mono` is the neutral one; the palettes are reserved for a live session.
+ */
+const beamVariant = computed<'colorful' | 'mono' | 'sunset'>(() => {
+  if (beamTone.value === 'danger' || beamTone.value === 'warning') return 'sunset'
+  if (beamTone.value === 'muted') return 'mono'
+  return 'colorful'
+})
+
+/** Faster while transcribing, slower when the wait stops being routine — the beam reads as pace. */
+const beamDurationSeconds = computed(() => {
+  if (holdingCancel.value) return 0.6
+  if (slowness.value === 'very-slow') return 12
+  if (transcribing.value || recovering.value) return 3
+  return 6
+})
+const centerText = computed(() => {
+  if (notice.value) return notice.value.message
+  if (holdingCancel.value) return t('assistant.voicePanel.holdToCancel')
+  if (recovering.value) return t('assistant.voicePanel.recovering')
+  if (listening.value && transcriptPreview.value) return transcriptPreview.value
+  if (preparing.value) return t('assistant.voicePanel.capturingDevice')
+  if (listening.value && hasCaptureReady.value) return t('assistant.voicePanel.voiceListening')
+  if (!transcribing.value) return ''
+  if (slowness.value === 'very-slow') return t('assistant.voicePanel.stillWorkingLong')
+  if (slowness.value === 'slow') return t('assistant.voicePanel.stillWorking')
+  return t('assistant.voicePanel.voiceTranscribingShort')
+})
+
+/**
+ * What counts as "different content" for the swap.
+ *
+ * Keyed on the sentence rather than on the phase, so slow → very-slow reads as a change too:
+ * the words are what the user is looking at, and swapping them in place under a still frame is
+ * the jarring part. The waveform is one identity for as long as it is the waveform — its bars
+ * animate on their own and must not be torn down every level frame.
+ */
+/** Split for the reveal only; `centerText` stays the single source of the sentence. */
+const centerChars = computed(() => Array.from(centerText.value))
+/**
+ * Two staggers on one span, in the order the `animation` list declares them.
+ *
+ * The first fires once and is what makes the sentence arrive; it tightens for a long message so
+ * the whole wave still lands inside `CHAR_STAGGER_TOTAL_MS`. The second runs forever and holds a
+ * fixed step per character, so the highlight crosses the sentence at one speed instead of
+ * sprinting through short messages and crawling through long ones.
+ *
+ * Extra values are ignored when only one animation is running, so the same string serves the
+ * plain reveal and the shimmering one.
+ */
+function charDelay(index: number): string {
+  const count = Math.max(1, centerChars.value.length)
+  const reveal = Math.round(index * Math.min(CHAR_STAGGER_MS, CHAR_STAGGER_TOTAL_MS / count))
+  return `${reveal}ms, ${index * SHIMMER_STEP_MS}ms`
 }
 
-async function loadRuntimeConfig(): Promise<void> {
+const centerKey = computed(() =>
+  centerText.value ? `text:${centerText.value}` : listening.value ? 'wave' : 'idle'
+)
+
+/**
+ * The text element of the slot that is arriving, not the one that is leaving.
+ *
+ * Both are in the DOM together for the length of the transition, and the outgoing one still
+ * carries the old sentence — measuring that would size the pill for the message it is in the
+ * middle of forgetting.
+ */
+function currentTextEl(): HTMLElement | null {
+  const root = pillRef.value
+  if (!root) return centerTextRef.value
+  return (
+    root.querySelector<HTMLElement>(
+      '.voice-dock__slot:not(.voice-swap-leave-active) .voice-dock__text'
+    ) ?? centerTextRef.value
+  )
+}
+
+let voiceStreamController: StreamController | null = null
+let committedVoiceText = ''
+let partialVoiceText = ''
+let activeVoiceGeneration: number | null = null
+let nextVoiceGeneration = 0
+let stopRequestedGeneration: number | null = null
+let panelGeneration = 0
+let panelTaskGeneration = 0
+let disposePanelOpen: (() => void) | null = null
+let disposeCancelHold: (() => void) | null = null
+let finishTimer: ReturnType<typeof setTimeout> | null = null
+let finished = false
+let waveReference = WAVE_REF_FLOOR
+let holdTimer: ReturnType<typeof setInterval> | null = null
+let waitTimer: ReturnType<typeof setInterval> | null = null
+let recordTimer: ReturnType<typeof setInterval> | null = null
+let recordStartedAt = 0
+let uploadTimer: ReturnType<typeof setInterval> | null = null
+let orbTimer: ReturnType<typeof setInterval> | null = null
+let captureStartTimer: ReturnType<typeof setTimeout> | null = null
+
+function stopCaptureStartTimer(): void {
+  if (captureStartTimer === null) return
+  clearTimeout(captureStartTimer)
+  captureStartTimer = null
+}
+
+function stopHold(): void {
+  if (holdTimer !== null) {
+    clearInterval(holdTimer)
+    holdTimer = null
+  }
+  cancelCharge.value = 0
+}
+
+function stopWaitClock(): void {
+  if (waitTimer !== null) {
+    clearInterval(waitTimer)
+    waitTimer = null
+  }
+  waitedMs.value = 0
+}
+
+function stopRecordClock(): void {
+  if (recordTimer !== null) {
+    clearInterval(recordTimer)
+    recordTimer = null
+  }
+  recordStartedAt = 0
+  recordedMs.value = 0
+}
+
+/**
+ * Started by the first level frame, not by the request.
+ *
+ * Opening an input can take seconds while a Bluetooth device reconnects, and on first use it
+ * waits on a consent sheet — so counting from the call would report time the microphone was not
+ * recording. The first frame is the earliest moment audio is provably flowing, which is the
+ * moment main's own budget starts being spent.
+ */
+function startRecordClock(): void {
+  stopRecordClock()
+  recordStartedAt = Date.now()
+  recordTimer = setInterval(() => {
+    // The wall clock, not an accumulator: a timer that fires a few milliseconds late every second
+    // drifts visibly over five minutes, and the end is the only part of this line anyone reads.
+    recordedMs.value = Date.now() - recordStartedAt
+  }, RECORDING_TICK_MS)
+}
+
+/** Clears the bar and its timer. Use `parkUpload` when the value has to survive. */
+function stopUploadClock(): void {
+  if (uploadTimer !== null) {
+    clearInterval(uploadTimer)
+    uploadTimer = null
+  }
+  uploadProgress.value = 0
+}
+
+/**
+ * Stop advancing, keep the bar where the last honest thing put it.
+ *
+ * Called when the provider first answers — the one moment on this path that is a fact rather
+ * than a projection. From here the bar holds: the remaining work has no end this side can see,
+ * and pretending otherwise is what a bar sliding to 100% would do.
+ */
+function parkUpload(): void {
+  if (uploadTimer !== null) {
+    clearInterval(uploadTimer)
+    uploadTimer = null
+  }
+  uploadProgress.value = UPLOAD_PARKED
+}
+
+/**
+ * Run the bar over an estimate scaled by `audioMs`, then hold at 99%.
+ *
+ * The estimate is the whole mechanism and it is not a measurement — see the constants. What
+ * keeps it from being a lie is where it stops and what can cut it short: the first word back
+ * from the provider parks it immediately, so the bar is never ahead of a real signal for long.
+ */
+function startUploadClock(audioMs: number): void {
+  stopUploadClock()
+  const span = UPLOAD_BASE_MS + (audioMs / 1000) * UPLOAD_PER_AUDIO_SECOND_MS
+  const startedAt = Date.now()
+  uploadTimer = setInterval(() => {
+    const ratio = Math.min(1, (Date.now() - startedAt) / span)
+    uploadProgress.value = ratio * UPLOAD_PARKED
+    if (ratio >= 1) parkUpload()
+  }, UPLOAD_TICK_MS)
+}
+
+/** Never twice in a row: the same shape returning reads as the mark having stopped. */
+function rollOrbState(): void {
+  const others = ORB_STATES.filter((state) => state !== orbState.value)
+  orbState.value = others[Math.floor(Math.random() * others.length)] ?? orbState.value
+}
+
+function stopOrbRoll(): void {
+  if (orbTimer === null) return
+  clearInterval(orbTimer)
+  orbTimer = null
+}
+
+function startOrbRoll(): void {
+  stopOrbRoll()
+  rollOrbState()
+  orbTimer = setInterval(rollOrbState, ORB_SWAP_MS)
+}
+
+// Driven by the mark being on screen rather than by each phase that puts it there: `showsOrb`
+// already knows about both transcribing and recovery, and about every way they end.
+watch(showsOrb, (visible) => {
+  if (visible) startOrbRoll()
+  else stopOrbRoll()
+})
+
+/**
+ * Map one raw RMS frame onto 0..1 against the running reference.
+ *
+ * The reference chases peaks quickly and decays slowly, so a whisper fills the meter and a
+ * shout does not clip — the visible difference between syllables survives either way. Below
+ * the noise gate the answer is a hard zero: room tone must read as silence, not as speech.
+ */
+function normalizeLevel(rms: number): number {
+  if (!Number.isFinite(rms) || rms < WAVE_NOISE_GATE) return 0
+
+  const rate = rms > waveReference ? WAVE_REF_ATTACK : WAVE_REF_RELEASE
+  waveReference = Math.max(WAVE_REF_FLOOR, waveReference + (rms - waveReference) * rate)
+
+  // Square root, not linear: loudness is perceptual, and the interesting detail lives low.
+  return Math.min(1, Math.sqrt(rms / waveReference))
+}
+
+function barHeight(level: number): number {
+  return WAVE_BAR_MIN_HEIGHT + Math.round(level * (WAVE_BAR_MAX_HEIGHT - WAVE_BAR_MIN_HEIGHT))
+}
+
+function clearFinishTimer(): void {
+  if (finishTimer === null) return
+  clearTimeout(finishTimer)
+  finishTimer = null
+}
+
+function emitFinished(): void {
+  if (finished) return
+  finished = true
+  emit('finished', props.generation)
+}
+
+/**
+ * The held recording outlives nothing but its own button.
+ *
+ * Main keeps the audio because there is an undo or a retry to press. The moment that notice
+ * leaves the screen — expired, replaced, or reset by the next session — the reason is gone, so
+ * main is told to drop it instead of being left to time it out. Ten megabytes of what the user
+ * just said is not something to keep for nobody; the timer over there is only the backstop for
+ * a renderer that never gets to say this.
+ */
+function endRecoveryOffer(): void {
+  // `recoverLast` clears the notice *before* it calls main, so spending an offer is already
+  // indistinguishable from not having one — which is what keeps a retry from deleting the very
+  // audio it is about to use. That ordering is load-bearing and is pinned by a test.
+  const action = notice.value?.action
+  if (action !== 'undo' && action !== 'retry') return
+  void voiceSdk.discardRecovery().catch(() => {
+    // Best effort: a failed discard must not surface as an error on a surface the user has
+    // already dismissed, and main's timer still closes the window.
+  })
+}
+
+function showNotice(message: string, tone: NoticeTone, action?: NoticeAction, icon?: string): void {
+  endRecoveryOffer()
+  notice.value = { message, tone, ...(action ? { action } : {}), ...(icon ? { icon } : {}) }
+  listening.value = false
+  transcribing.value = false
+  startingVoiceCapture.value = false
+  recovering.value = false
+  stopHold()
+  stopWaitClock()
+  stopRecordClock()
+  stopUploadClock()
+  stopCaptureStartTimer()
+  clearFinishTimer()
+  // A notice you can act on gets the long hold; one you can only read gets its own.
+  const hold = action ? NOTICE_HOLD_MS.action : NOTICE_HOLD_MS[tone]
+  finishTimer = setTimeout(() => {
+    finishTimer = null
+    // The surface is collapsing, so whatever it was offering stops being reachable here.
+    endRecoveryOffer()
+    emitFinished()
+  }, hold)
+}
+
+/**
+ * Sort a failure into the three tones.
+ *
+ * Quota and provider congestion are not failures of the user or of the app — they resolve on
+ * their own or in Settings, so they read as warnings rather than errors. Everything unclassified
+ * stays danger, because an unknown failure is the one worth interrupting for.
+ */
+function classifyFailure(error: unknown): Notice {
+  const raw = error instanceof Error ? `${error.name} ${error.message}` : String(error ?? '')
+  const code = ((error as { code?: unknown })?.code ?? '').toString()
+  const haystack = `${code} ${raw}`.toUpperCase()
+
+  // Device and permission failures are the ones the provider describes worst: its sentence is
+  // English, truncated by the width, and offers no way out. They are entirely classifiable, so
+  // they get our own copy and no retry — retrying finds the same missing microphone.
+  if (/PERMISSION|DENIED|NOT_?AUTHORIZ|UNAUTHORIZED/.test(haystack))
+    return {
+      message: t('assistant.voicePanel.microphoneDenied'),
+      tone: 'warning',
+      icon: MIC_FAILURE_ICON,
+      ...(canOpenMicSettings ? { action: 'settings' as const } : {})
+    }
+
+  const deviceMissing =
+    /CANNOT_?FIND|NO_?(INPUT_?)?DEVICE|DEVICE_?NOT_?FOUND|NO_?MICROPHONE|CAPTURE_?UNAVAILABLE|(?:MICROPHONE|INPUT|CAPTURE|AUDIO).{0,80}UNSUPPORTED|UNSUPPORTED.{0,80}(?:MICROPHONE|INPUT|CAPTURE|AUDIO)/
+  if (deviceMissing.test(haystack))
+    return {
+      message: t('assistant.voicePanel.microphoneMissing'),
+      tone: 'warning',
+      icon: MIC_FAILURE_ICON,
+      ...(canOpenMicSettings ? { action: 'settings' as const } : {})
+    }
+
+  // Same compact recovery shape as the microphone card: the status names the recognition issue,
+  // and the action opens the existing Intelligence channel and capability configuration.
+  if (/VOICE_ASR_NOT_CONFIGURED/.test(haystack)) {
+    return {
+      message: t('assistant.voicePanel.voiceRecognitionNotConfigured'),
+      tone: 'warning',
+      icon: SETUP_ICON,
+      action: 'asrSettings'
+    }
+  }
+
+  // The sibling of the branch above, and it was left behind when that one was fixed: same
+  // instruction inside the sentence, same 47 characters breaking the same card. Both routes end
+  // in the same place, so both offer the same button.
+  if (/VOICE_ASR_(?:PROVIDER|CREDENTIAL)_UNAVAILABLE/.test(haystack)) {
+    return {
+      message: t('assistant.voicePanel.voiceRecognitionUnavailable'),
+      tone: 'warning',
+      icon: SETUP_ICON,
+      action: 'asrSettings'
+    }
+  }
+
+  if (/QUOTA|CREDIT|INSUFFICIENT_BALANCE/.test(haystack))
+    return { message: t('assistant.voicePanel.quotaExhausted'), tone: 'warning' }
+
+  const congested =
+    /RATE_?LIMIT|TOO_?MANY_?REQUESTS|OVERLOAD|HIGH_?DEMAND|BUSY|\b429\b|\b503\b|\b529\b/
+  if (congested.test(haystack))
+    return { message: t('assistant.voicePanel.serviceBusy'), tone: 'warning' }
+
+  // The raw message goes to the console, not into the pill. A provider's own sentence is
+  // English, gets truncated by the width, and tells the user nothing they can act on.
+  // eslint-disable-next-line no-console
+  if (error) console.warn('[voice] unclassified failure', error)
+  return { message: t('assistant.voicePanel.voiceTranscribeFailed'), tone: 'danger' }
+}
+
+function appendTranscriptText(base: string, incoming: string): string {
+  const next = incoming.trim()
+  if (!next) return base
+  if (!base) return next
+  if (next === base || next.startsWith(base)) return next
+  if (base.startsWith(next)) return base
+
+  const overlapLimit = Math.min(base.length, next.length)
+  for (let size = overlapLimit; size > 0; size -= 1) {
+    if (base.slice(-size) === next.slice(0, size)) return `${base}${next.slice(size)}`
+  }
+
+  const last = Array.from(base).at(-1) ?? ''
+  const first = Array.from(next)[0] ?? ''
+  const cjk = /[\u3400-\u9fff]/
+  const separator =
+    /\s/.test(last) || /^\s/.test(next) || cjk.test(last) || cjk.test(first) ? '' : ' '
+  return `${base}${separator}${next}`
+}
+
+function updateLiveTranscript(next: string): void {
+  partialVoiceText = appendTranscriptText(partialVoiceText, next)
+  transcriptPreview.value = appendTranscriptText(committedVoiceText, partialVoiceText)
+}
+
+function commitLiveTranscript(next: string): string {
+  const finalText = appendTranscriptText(committedVoiceText, next || partialVoiceText)
+  committedVoiceText = finalText
+  partialVoiceText = ''
+  transcriptPreview.value = finalText
+  return finalText
+}
+
+function resetPanelState(): void {
+  endRecoveryOffer()
+  clearFinishTimer()
+  finished = false
+  notice.value = null
+  listening.value = false
+  transcribing.value = false
+  startingVoiceCapture.value = false
+  transcriptPreview.value = ''
+  committedVoiceText = ''
+  partialVoiceText = ''
+  levels.value = new Array(waveBarCount.value).fill(0)
+  hasCaptureReady.value = false
+  hasLevel.value = false
+  recovering.value = false
+  stopHold()
+  stopWaitClock()
+  stopRecordClock()
+  stopUploadClock()
+  stopCaptureStartTimer()
+}
+
+function isCurrentPanel(generation: number, taskGeneration?: number): boolean {
+  return (
+    panelGeneration === generation &&
+    (taskGeneration === undefined || panelTaskGeneration === taskGeneration)
+  )
+}
+function isCurrentVoiceSession(generation: number): boolean {
+  return activeVoiceGeneration === generation
+}
+
+function retireVoiceSession(generation: number): boolean {
+  if (!isCurrentVoiceSession(generation)) return false
+  activeVoiceGeneration = null
+  if (stopRequestedGeneration === generation) stopRequestedGeneration = null
+  voiceStreamController = null
+  return true
+}
+
+async function loadRuntimeConfig(
+  generation = panelGeneration,
+  taskGeneration = panelTaskGeneration
+): Promise<void> {
   try {
-    runtimeConfig.value = await transport.send(
+    const nextConfig = await transport.send(
       AssistantEvents.floatingBall.getRuntimeConfig,
       undefined
     )
+    if (isCurrentPanel(generation, taskGeneration)) runtimeConfig.value = nextConfig
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error)
-  }
-}
-
-function appendVoiceText(text: string): void {
-  const trimmed = text.trim()
-  if (!trimmed) return
-  inputText.value = [inputText.value.trim(), trimmed].filter(Boolean).join(' ')
-  interimText.value = ''
-  hasVoiceInput.value = true
-}
-
-function readBlobAsDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(reader.error || new Error('Failed to read voice audio.'))
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        resolve(reader.result)
-        return
-      }
-      reject(new Error('Voice audio data URL is unavailable.'))
+    // A late settings failure must not turn an already-running microphone session into a
+    // misleading error surface; the session can safely use the default language.
+    if (isCurrentPanel(generation, taskGeneration) && !voiceActive.value) {
+      showNotice(classifyFailure(error).message, 'danger')
     }
-    reader.readAsDataURL(blob)
-  })
+  }
 }
 
-function resolveProviderRecordingMimeType(): string {
-  if (typeof MediaRecorder === 'undefined') return ''
-  return (
-    PROVIDER_RECORDING_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) || ''
-  )
-}
-
-function releaseProviderRecordingResources(recorder: MediaRecorder | null): void {
-  if (providerStopTimer !== null) {
-    window.clearTimeout(providerStopTimer)
-    providerStopTimer = null
-  }
-  providerStream?.getTracks().forEach((track) => track.stop())
-  providerStream = null
-  if (!recorder || providerRecorder === recorder) {
-    providerRecorder = null
-  }
-  providerChunks = []
-  providerRecordingStartedAt = 0
-  recordingWithProvider.value = false
+function cancelVoiceSession(): void {
+  const controller = voiceStreamController
+  const generation = activeVoiceGeneration
+  if (generation !== null) retireVoiceSession(generation)
+  voiceStreamController = null
+  stopRequestedGeneration = null
   listening.value = false
-}
-
-function stopProviderRecording(shouldTranscribe: boolean): void {
-  const recorder = providerRecorder
-  transcribeStoppedProviderRecording = shouldTranscribe
-  if (!recorder) {
-    releaseProviderRecordingResources(null)
-    return
-  }
-
-  recordingWithProvider.value = false
-  listening.value = false
-  try {
-    if (recorder.state !== 'inactive') {
-      recorder.stop()
-      return
-    }
-  } catch {
-    // Recorder cleanup below remains authoritative.
-  }
-  releaseProviderRecordingResources(recorder)
-}
-
-function stopRecognition(): void {
-  voiceCaptureGeneration += 1
-  if (restartTimer !== null) {
-    window.clearTimeout(restartTimer)
-    restartTimer = null
-  }
-  startBrowserAfterProviderStop = false
-  stopProviderRecording(false)
-
-  if (!recognition) {
-    listening.value = false
-    return
-  }
-  const activeRecognition = recognition
-  recognition = null
-  listening.value = false
-  try {
-    activeRecognition.onstart = null
-    activeRecognition.onerror = null
-    activeRecognition.onresult = null
-    activeRecognition.onend = null
-    activeRecognition.stop()
-  } catch {
-    // Ignore browser recognizer stop errors.
-  }
-}
-
-function scheduleBrowserRecognitionRestart(): void {
-  if (!keepListening || !preferBrowserSpeechFallback) return
-  if (restartTimer !== null) window.clearTimeout(restartTimer)
-  restartTimer = window.setTimeout(() => {
-    restartTimer = null
-    startBrowserSpeechRecognition()
-  }, 400)
-}
-
-function startBrowserSpeechRecognition(): void {
-  if (!keepListening || recognition || providerRecorder || transcribingVoice.value) return
-
-  const SpeechRecognitionCtor = resolveSpeechRecognitionCtor()
-  if (!SpeechRecognitionCtor) {
-    errorMessage.value = t('assistant.voicePanel.unsupported')
-    listening.value = false
-    keepListening = false
-    return
-  }
-
-  microphonePermissionDenied.value = false
-  const instance = new SpeechRecognitionCtor()
-  recognition = instance
-  instance.lang = runtimeConfig.value.language
-  instance.continuous = true
-  instance.interimResults = true
-  instance.onstart = () => {
-    if (recognition === instance) listening.value = true
-  }
-  instance.onerror = (event) => {
-    const errorType = String(event?.error || 'unknown')
-    if (errorType === 'not-allowed' || errorType === 'service-not-allowed') {
-      errorMessage.value = t('assistant.voicePanel.permissionDenied')
-      microphonePermissionDenied.value = true
-      keepListening = false
-      stopRecognition()
-      return
-    }
-    errorMessage.value = t('assistant.voicePanel.recognitionError', { error: errorType })
-  }
-  instance.onresult = (event) => {
-    const finals: string[] = []
-    const interims: string[] = []
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const current = event.results[i]
-      const transcript = current?.[0]?.transcript
-      if (typeof transcript !== 'string') continue
-      const trimmed = transcript.trim()
-      if (!trimmed) continue
-      if (current.isFinal) finals.push(trimmed)
-      else interims.push(trimmed)
-    }
-    if (finals.length) appendVoiceText(finals.join(' '))
-    if (interims.length) hasVoiceInput.value = true
-    interimText.value = interims.join(' ')
-  }
-  instance.onend = () => {
-    if (recognition !== instance) return
-    recognition = null
-    listening.value = false
-    scheduleBrowserRecognitionRestart()
-  }
-
-  try {
-    instance.start()
-  } catch (error) {
-    if (recognition === instance) recognition = null
-    listening.value = false
-    if (
-      error instanceof Error &&
-      (error.name === 'NotAllowedError' || error.name === 'SecurityError')
-    ) {
-      errorMessage.value = t('assistant.voicePanel.permissionDenied')
-      microphonePermissionDenied.value = true
-      keepListening = false
-      return
-    }
-    errorMessage.value = error instanceof Error ? error.message : String(error)
-    scheduleBrowserRecognitionRestart()
-  }
-}
-
-async function transcribeProviderRecording(
-  blob: Blob,
-  durationMs: number,
-  captureGeneration: number
-): Promise<void> {
-  if (captureGeneration !== voiceCaptureGeneration) return
-  transcribingVoice.value = true
-  statusMessage.value = t('assistant.voicePanel.voiceTranscribing')
-  errorMessage.value = ''
-  intelligenceSettingsRecoveryVisible.value = false
-  let shouldStartBrowserFallback = false
-
-  try {
-    if (!blob.type.startsWith('audio/') || blob.size <= 0) {
-      errorMessage.value = t('assistant.voicePanel.voiceTranscribeInvalid')
-      shouldStartBrowserFallback = true
-      return
-    }
-    if (blob.size > MAX_PROVIDER_AUDIO_BYTES) {
-      errorMessage.value = t('assistant.voicePanel.voiceTranscribeTooLarge')
-      return
-    }
-
-    const audioDataUrl = await readBlobAsDataUrl(blob)
-    if (captureGeneration !== voiceCaptureGeneration) return
-    const response = await transport.send(AssistantEvents.voice.transcribeAudio, {
-      audioDataUrl,
-      mimeType: blob.type,
-      durationMs,
-      language: runtimeConfig.value.language
-    })
-    if (captureGeneration !== voiceCaptureGeneration) return
-    const text = typeof response?.text === 'string' ? response.text.trim() : ''
-    if (!response?.success || !text) {
-      intelligenceSettingsRecoveryVisible.value = requiresIntelligenceSettingsRecovery(
-        response?.code
-      )
-      errorMessage.value = formatVoiceTranscribeError(response?.code, response?.error)
-      shouldStartBrowserFallback = Boolean(resolveSpeechRecognitionCtor())
-      return
-    }
-
-    appendVoiceText(text)
-    keepListening = false
-    const providerLabel = [response.provider, response.model].filter(Boolean).join(' · ')
-    statusMessage.value = providerLabel
-      ? t('assistant.voicePanel.voiceTranscribedWithProvider', { provider: providerLabel })
-      : t('assistant.voicePanel.voiceTranscribed')
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error)
-    shouldStartBrowserFallback = Boolean(resolveSpeechRecognitionCtor())
-  } finally {
-    transcribingVoice.value = false
-    if (captureGeneration !== voiceCaptureGeneration) {
-      if (keepListening) void startRecognition()
-    } else if (shouldStartBrowserFallback) {
-      preferBrowserSpeechFallback = true
-      keepListening = true
-      statusMessage.value = t('assistant.voicePanel.voiceBrowserFallback')
-      startBrowserSpeechRecognition()
-    }
-  }
-}
-
-async function startProviderRecording(): Promise<ProviderRecordingStartResult> {
-  if (
-    typeof MediaRecorder === 'undefined' ||
-    !navigator.mediaDevices?.getUserMedia ||
-    !keepListening
-  ) {
-    return 'fallback'
-  }
-
-  startingVoiceCapture.value = true
-  microphonePermissionDenied.value = false
-  let stream: MediaStream
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      },
-      video: false
-    })
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      (error.name === 'NotAllowedError' || error.name === 'SecurityError')
-    ) {
-      errorMessage.value = t('assistant.voicePanel.permissionDenied')
-      microphonePermissionDenied.value = true
-      keepListening = false
-      startingVoiceCapture.value = false
-      return 'denied'
-    }
-    errorMessage.value = t('assistant.voicePanel.providerRecordingUnavailable')
-    startingVoiceCapture.value = false
-    return 'fallback'
-  }
-
-  if (!keepListening) {
-    stream.getTracks().forEach((track) => track.stop())
-    startingVoiceCapture.value = false
-    return 'denied'
-  }
-
-  const mimeType = resolveProviderRecordingMimeType()
-  let recorder: MediaRecorder
-  try {
-    recorder = new MediaRecorder(stream, {
-      ...(mimeType ? { mimeType } : {}),
-      audioBitsPerSecond: 64_000
-    })
-  } catch {
-    try {
-      recorder = new MediaRecorder(stream)
-    } catch {
-      stream.getTracks().forEach((track) => track.stop())
-      errorMessage.value = t('assistant.voicePanel.providerRecordingUnavailable')
-      startingVoiceCapture.value = false
-      return 'fallback'
-    }
-  }
-
-  providerStream = stream
-  providerRecorder = recorder
-  providerChunks = []
-  providerRecordingStartedAt = Date.now()
-  transcribeStoppedProviderRecording = false
-  startBrowserAfterProviderStop = false
-  preferBrowserSpeechFallback = false
-  const captureGeneration = voiceCaptureGeneration
-
-  recorder.ondataavailable = (event) => {
-    if (event.data.size > 0) providerChunks.push(event.data)
-  }
-  recorder.onerror = (event) => {
-    const recorderError = 'error' in event ? event.error : undefined
-    errorMessage.value =
-      recorderError instanceof Error
-        ? recorderError.message
-        : t('assistant.voicePanel.providerRecordingUnavailable')
-    startBrowserAfterProviderStop = Boolean(resolveSpeechRecognitionCtor())
-    keepListening = startBrowserAfterProviderStop
-    stopProviderRecording(false)
-  }
-  recorder.onstop = () => {
-    const shouldTranscribe = transcribeStoppedProviderRecording
-    const shouldStartBrowser = startBrowserAfterProviderStop
-    const durationMs = Math.max(1, Date.now() - providerRecordingStartedAt)
-    const chunks = providerChunks
-    const recordedMimeType = recorder.mimeType || chunks[0]?.type || mimeType
-    const blob = new Blob(chunks, { type: recordedMimeType })
-    transcribeStoppedProviderRecording = false
-    startBrowserAfterProviderStop = false
-    releaseProviderRecordingResources(recorder)
-
-    if (shouldTranscribe) {
-      void transcribeProviderRecording(blob, durationMs, captureGeneration)
-      return
-    }
-    if (shouldStartBrowser && keepListening) {
-      preferBrowserSpeechFallback = true
-      statusMessage.value = t('assistant.voicePanel.voiceBrowserFallback')
-      startBrowserSpeechRecognition()
-    }
-  }
-
-  try {
-    recorder.start(250)
-  } catch {
-    releaseProviderRecordingResources(recorder)
-    errorMessage.value = t('assistant.voicePanel.providerRecordingUnavailable')
-    startingVoiceCapture.value = false
-    return 'fallback'
-  }
-
-  recordingWithProvider.value = true
-  listening.value = true
-  errorMessage.value = ''
-  intelligenceSettingsRecoveryVisible.value = false
-  statusMessage.value = t('assistant.voicePanel.providerRecording')
-  providerStopTimer = window.setTimeout(() => {
-    keepListening = false
-    stopProviderRecording(true)
-  }, MAX_PROVIDER_RECORDING_MS)
+  transcribing.value = false
   startingVoiceCapture.value = false
-  return 'started'
+  transcriptPreview.value = ''
+  committedVoiceText = ''
+  partialVoiceText = ''
+  stopRecordClock()
+  stopUploadClock()
+  controller?.cancel()
 }
 
-async function startRecognition(): Promise<void> {
-  if (!voiceWakeEnabled.value) {
-    errorMessage.value = t('assistant.voicePanel.voiceWakeDisabled')
+/**
+ * Stop capturing but let the session finish.
+ *
+ * Deliberately not `cancel()`: cancelling aborts the whole session main-side, so the
+ * transcript is never delivered. When opening the stream is still pending, remember the stop
+ * and apply it as soon as its controller arrives instead of discarding that new session.
+ */
+function finishVoiceInput(): void {
+  const generation = activeVoiceGeneration
+  if (finished || generation === null || !listening.value) return
+  stopRequestedGeneration = generation
+  listening.value = false
+  transcribing.value = true
+  startingVoiceCapture.value = false
+
+  // Read the budget before it is cleared: the bar paces itself against how much audio there is.
+  startUploadClock(recordedMs.value)
+  // The budget belongs to the microphone, and the microphone is being stopped right here.
+  stopRecordClock()
+  stopWaitClock()
+  waitTimer = setInterval(() => {
+    waitedMs.value += 100
+  }, 100)
+
+  voiceStreamController?.stop?.()
+}
+
+function completeVoiceSession(generation: number): void {
+  if (!retireVoiceSession(generation)) return
+  listening.value = false
+  transcribing.value = false
+  startingVoiceCapture.value = false
+  stopWaitClock()
+  stopRecordClock()
+  stopUploadClock()
+  stopCaptureStartTimer()
+  if (notice.value) return
+  emitFinished()
+}
+
+function handleVoiceSessionEvent(generation: number, event: VoiceAsrStreamEvent): void {
+  if (!isCurrentVoiceSession(generation)) return
+  if (event.type === 'ready') {
+    hasCaptureReady.value = true
+    stopCaptureStartTimer()
     return
   }
-  if (
-    !keepListening ||
-    recognition ||
-    providerRecorder ||
-    startingVoiceCapture.value ||
-    transcribingVoice.value
-  ) {
+  if (event.type === 'device') {
+    // Said once, at the top of a session that opened different hardware than the last one did.
+    // Not a failure and not an instruction, so it takes the muted tone and its short hold; it
+    // replaces "opening the microphone" because naming the device answers that too.
+    showNotice(t('assistant.voicePanel.usingDevice', { name: event.name }), 'muted')
     return
   }
-  if (restartTimer !== null) {
-    window.clearTimeout(restartTimer)
-    restartTimer = null
-  }
-
-  if (preferBrowserSpeechFallback) {
-    startBrowserSpeechRecognition()
+  if (event.type === 'level') {
+    // The handover is the data arriving, not a timer: the meter takes over the moment it has
+    // something true to draw, and the budget starts counting from the same frame.
+    if (!hasLevel.value) startRecordClock()
+    hasLevel.value = true
+    stopCaptureStartTimer()
+    levels.value = [...levels.value.slice(1), normalizeLevel(event.rms)]
     return
   }
-
-  const result = await startProviderRecording()
-  if (result === 'started' || result === 'denied' || !keepListening) return
-
-  preferBrowserSpeechFallback = true
-  statusMessage.value = t('assistant.voicePanel.voiceBrowserFallback')
-  startBrowserSpeechRecognition()
-}
-
-function toggleVoiceInput(): void {
-  if (startingVoiceCapture.value || transcribingVoice.value) return
-  if (providerRecorder) {
-    keepListening = false
-    stopProviderRecording(true)
+  if (event.type === 'partial') {
+    updateLiveTranscript(event.text)
+    // The provider answering is the only fact available here: our audio landed and it is
+    // working on it. Everything before this was a projection, so it stops projecting.
+    parkUpload()
     return
   }
-  if (recognition) {
-    const shouldRestartProvider = !listening.value
-    keepListening = false
-    stopRecognition()
-    if (!shouldRestartProvider) return
+  if (event.type === 'final') {
+    const finalText = commitLiveTranscript(event.text)
+    if (!finalText) {
+      retireVoiceSession(generation)
+      showNotice(t('assistant.voicePanel.voiceTranscribeEmpty'), 'warning')
+    }
+    return
   }
-  if (restartTimer !== null) {
-    window.clearTimeout(restartTimer)
-    restartTimer = null
-  }
-
-  preferBrowserSpeechFallback = false
-  keepListening = true
-  void startRecognition()
+  completeVoiceSession(generation)
 }
 
-function formatVoiceTranscribeError(
-  code?: AssistantVoiceTranscribeErrorCode,
-  fallback?: string
-): string {
-  if (isIntelligenceErrorCode(code)) return formatIntelligenceError(code, fallback)
-  if (code) return t(VOICE_TRANSCRIBE_ERROR_KEYS[code])
-  return fallback || t('assistant.voicePanel.voiceTranscribeFailed')
-}
-
-function formatClipboardImageTranslateError(
-  code?: AssistantClipboardImageTranslateErrorCode,
-  fallback?: string
-): string {
-  if (isIntelligenceErrorCode(code)) return formatIntelligenceError(code, fallback)
-  if (code) {
-    return t(CLIPBOARD_IMAGE_TRANSLATE_ERROR_KEYS[code])
-  }
-  return fallback || t('assistant.voicePanel.clipboardImageTranslateFailed')
-}
-
-function formatScreenshotTranslateError(
-  code?: AssistantScreenshotTranslateErrorCode,
-  fallback?: string
-): string {
-  if (isIntelligenceErrorCode(code)) return formatIntelligenceError(code, fallback)
-  if (code) {
-    return t(SCREENSHOT_TRANSLATE_ERROR_KEYS[code])
-  }
-  return fallback || t('assistant.voicePanel.screenshotTranslateFailed')
-}
-
-function formatScreenshotCaptureError(
-  code?: AssistantScreenshotCaptureErrorCode,
-  fallback?: string
-): string {
-  if (code) {
-    return t(SCREENSHOT_CAPTURE_ERROR_KEYS[code])
-  }
-  return fallback || t('assistant.voicePanel.screenshotCaptureFailed')
-}
-
-function formatScreenshotSaveError(
-  code?: AssistantScreenshotSaveErrorCode,
-  fallback?: string
-): string {
-  if (code) {
-    return t(SCREENSHOT_SAVE_ERROR_KEYS[code])
-  }
-  return fallback || t('assistant.voicePanel.screenshotSaveFailed')
-}
-
-function formatScreenshotDisplayLabel(display: AssistantScreenshotDisplay): string {
-  const name = display.friendlyName?.trim() || display.name
-  const primary = display.isPrimary
-    ? ` · ${t('assistant.voicePanel.screenshotDisplayPrimary')}`
-    : ''
-  return `${name} · ${display.width} × ${display.height}${primary}`
-}
-
-function formatScreenshotRegionSelectionError(
-  code?: AssistantScreenshotRegionSelectionErrorCode,
-  fallback?: string
-): string {
-  if (code) return t(SCREENSHOT_REGION_SELECTION_ERROR_KEYS[code])
-  return fallback || t('assistant.voicePanel.screenshotRegionSelectionUnavailable')
-}
-
-function formatFallbackProvider(stage: AssistantScreenshotFallbackStageMetadata): string {
-  const provider = typeof stage.provider === 'string' ? stage.provider.trim() : ''
-  const model = typeof stage.model === 'string' ? stage.model.trim() : ''
-  return (
-    [provider, model].filter(Boolean).join(' / ') ||
-    t('assistant.voicePanel.screenshotFallbackProviderUnknown')
+function showVoiceSessionError(generation: number, error: unknown): void {
+  if (!retireVoiceSession(generation)) return
+  const classified = classifyFailure(error)
+  // Quota and congestion get no retry button: retrying is still out of credit, still busy.
+  // A classified failure knows better than the tone rule what can be done about it: a missing
+  // microphone is fixed in Settings, not by asking the same provider again.
+  const retryable = classified.tone === 'danger'
+  showNotice(
+    classified.message,
+    classified.tone,
+    classified.action ?? (retryable ? 'retry' : undefined),
+    classified.icon
   )
 }
 
-function formatImageTranslateRouteStage(stage: CoreBoxImageTranslateRouteStage): string {
-  const providerId = stage.providerId.trim()
-  const providerName = stage.providerName?.trim()
-  const provider =
-    providerName && providerName !== providerId ? `${providerName} (${providerId})` : providerId
-  const route = [provider, stage.model?.trim()].filter(Boolean).join(' / ')
-  const formatted = t('assistant.voicePanel.screenshotImageTranslateRouteStage', {
-    capability: stage.capability,
-    route
-  })
-  return typeof stage.latencyMs === 'number' && Number.isFinite(stage.latencyMs)
-    ? t('assistant.voicePanel.screenshotImageTranslateRouteStageLatency', {
-        stage: formatted,
-        latency: String(stage.latencyMs)
-      })
-    : formatted
-}
+/**
+ * The gesture decides when the words reach the target application.
+ *
+ * A tap starts a session the user will end with another tap, so the transcript arrives as
+ * one piece when they are done thinking. A hold is push-to-talk: the point is watching the
+ * text appear while speaking, so it is delivered as it is recognized. See
+ * `VoiceDeliveryTiming` for what `live` costs — a partial of latency, and no polish pass.
+ */
+async function startVoiceSession(timing: VoiceDeliveryTiming = 'final'): Promise<void> {
+  if (!voiceInputEnabled.value) {
+    showNotice(t('assistant.voicePanel.voiceInputDisabled'), 'warning')
+    return
+  }
+  if (activeVoiceGeneration !== null || startingVoiceCapture.value || transcribing.value) return
 
-async function resolveScreenshotActionPayload(): Promise<AssistantScreenshotCapturePayload | null> {
-  if (screenshotCaptureMode.value !== 'region') {
-    return screenshotCapturePayload.value
-  }
-
-  statusMessage.value = t('assistant.voicePanel.screenshotRegionSelecting')
-  const displayId = selectedScreenshotRegionDisplayId.value.trim()
-  const response = await transport.send(AssistantEvents.voice.selectScreenshotRegion, {
-    target: displayId ? 'display' : 'cursor-display',
-    ...(displayId ? { displayId } : {})
-  })
-  if (response?.canceled) {
-    statusMessage.value = ''
-    return null
-  }
-  if (!response?.success || !response.resource?.tfileUrl) {
-    statusMessage.value = ''
-    errorMessage.value = formatScreenshotRegionSelectionError(response?.code, response?.error)
-    return null
-  }
-  return {
-    target: 'resource',
-    tfileUrl: response.resource.tfileUrl,
-    resource: response.resource
-  }
-}
-async function loadScreenshotDisplays(): Promise<void> {
-  try {
-    const displays = await transport.send(AssistantEvents.voice.listScreenshotDisplays, undefined)
-    screenshotDisplays.value = Array.isArray(displays)
-      ? displays.filter((display) => typeof display?.id === 'string' && display.id.trim())
-      : []
-
-    const selectedExists = screenshotDisplays.value.some(
-      (display) => display.id === selectedScreenshotDisplayId.value
+  const owner = panelGeneration
+  panelTaskGeneration += 1
+  const generation = ++nextVoiceGeneration
+  activeVoiceGeneration = generation
+  clearFinishTimer()
+  finished = false
+  transcriptPreview.value = ''
+  committedVoiceText = ''
+  partialVoiceText = ''
+  levels.value = new Array(waveBarCount.value).fill(0)
+  startingVoiceCapture.value = true
+  listening.value = true
+  notice.value = null
+  hasCaptureReady.value = false
+  hasLevel.value = false
+  // No budget reset here: every path that ends a recording stops the clock, and `startRecordClock`
+  // zeroes it again on the first frame. Adding one more looked prudent and guarded nothing —
+  // deleting it left the suite green.
+  // A stale peak from the last session would flatten the first words of this one.
+  waveReference = WAVE_REF_FLOOR
+  stopCaptureStartTimer()
+  captureStartTimer = setTimeout(() => {
+    captureStartTimer = null
+    if (
+      !isCurrentPanel(owner) ||
+      !isCurrentVoiceSession(generation) ||
+      hasLevel.value ||
+      !listening.value
+    ) {
+      return
+    }
+    // Not slow — not answering. Breathing forever would be its own kind of lie.
+    cancelVoiceSession()
+    showNotice(
+      t('assistant.voicePanel.microphoneUnresponsive'),
+      'warning',
+      canOpenMicSettings ? 'settings' : undefined,
+      MIC_FAILURE_ICON
     )
-    if (!selectedExists) {
-      selectedScreenshotDisplayId.value =
-        screenshotDisplays.value.find((display) => display.isPrimary)?.id ||
-        screenshotDisplays.value[0]?.id ||
-        ''
+  }, CAPTURE_START_TIMEOUT_MS)
+  // The orb is re-rolled per session through this key; changing its `state` would not.
+  sessionSeq.value += 1
+  try {
+    const controller = await voiceSdk.asrStream(
+      {
+        language: runtimeConfig.value.language,
+        cleanup: true,
+        delivery: 'active-app',
+        deliveryTiming: timing,
+        emitLevel: true,
+        // Sent, not inherited: the border draws a fraction of this number, so it has to be the
+        // number main is actually enforcing rather than whatever its default happens to be.
+        maxDurationMs: MAX_RECORDING_MS
+      },
+      {
+        onData: (event) => handleVoiceSessionEvent(generation, event),
+        onError: (error) => showVoiceSessionError(generation, error),
+        onEnd: () => completeVoiceSession(generation)
+      }
+    )
+    if (!isCurrentPanel(owner) || !isCurrentVoiceSession(generation)) {
+      controller.cancel()
+      return
     }
-    if (!selectedScreenshotDisplayId.value && screenshotCaptureMode.value === 'display') {
-      screenshotCaptureMode.value = 'cursor-display'
-    }
-  } catch {
-    screenshotDisplays.value = []
-    selectedScreenshotDisplayId.value = ''
-    screenshotCaptureMode.value = 'cursor-display'
+    voiceStreamController = controller
+    if (stopRequestedGeneration === generation) controller.stop?.()
+  } catch (error) {
+    showVoiceSessionError(generation, error)
+  } finally {
+    if (isCurrentVoiceSession(generation)) startingVoiceCapture.value = false
   }
 }
 
-async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
-  stopRecognition()
-  preferBrowserSpeechFallback = false
-  sourceText.value = payload?.source || ''
-  inputText.value = ''
-  interimText.value = ''
-  hasVoiceInput.value = false
-  errorMessage.value = ''
-  statusMessage.value = ''
-  screenshotPreview.value = null
-  screenshotPermissionDenied.value = false
-  microphonePermissionDenied.value = false
-  microphoneSettingsOpened.value = false
-  intelligenceSettingsRecoveryVisible.value = false
-  screenshotTextFallback.value = null
-  imageTranslateRoute.value = null
-  selectedScreenshotRegionDisplayId.value = ''
+async function handlePanelOpened(): Promise<void> {
+  const generation = ++panelGeneration
+  const taskGeneration = ++panelTaskGeneration
+  cancelVoiceSession()
+  resetPanelState()
+  // The voice-input gate and language must be current before any entry can start capture.
+  await loadRuntimeConfig(generation, taskGeneration)
   await nextTick()
-  inputArea.value?.focus({ preventScroll: true })
-  await Promise.all([loadRuntimeConfig(), loadScreenshotDisplays()])
-  keepListening = voiceWakeEnabled.value
-  if (keepListening) void startRecognition()
 }
 
-async function submitText(): Promise<void> {
-  if (submitting.value) return
-  const content = mergedText.value.trim()
-  if (!content) {
-    errorMessage.value = t('assistant.voicePanel.emptyInput')
+/** Cancelling is the same act from Esc, the ✕ button, or a dock command. */
+function cancelSession(): void {
+  if (!canCancel.value) return
+  if (hasNotice.value) {
+    clearFinishTimer()
+    emitFinished()
+    return
+  }
+  const wasListening = listening.value
+  cancelVoiceSession()
+  // Undo restores the same words from the audio main kept. Offering it after the transcript
+  // may already have been delivered would be a promise this side cannot keep.
+  showNotice(t('assistant.voicePanel.cancelled'), 'muted', wasListening ? 'undo' : undefined)
+}
+
+function handleConfirm(): void {
+  if (!canConfirm.value) return
+  finishVoiceInput()
+}
+
+/**
+ * Undo and retry are the same call.
+ *
+ * Both mean "use the audio main is still holding": one because the user cancelled, one
+ * because transcription failed. The difference is the sentence shown, not the work done.
+ */
+const canOpenMicSettings = MIC_SETTINGS_PLATFORMS.has(getPreloadProcessInfo()?.platform ?? '')
+
+/**
+ * The one action on the pill that is not about the recording.
+ *
+ * Undo and retry both mean "use the audio main is still holding"; settings means "the audio was
+ * never going to arrive, go turn the microphone on". Routing them through one handler would put
+ * a recovery spinner on a button that recovers nothing.
+ */
+async function openMicSettings(): Promise<void> {
+  try {
+    await voiceSdk.openMicrophoneSettings()
+    clearFinishTimer()
+    emitFinished()
+  } catch {
+    showNotice(t('assistant.voicePanel.microphoneSettingsUnavailable'), 'warning')
+  }
+}
+
+async function handleNoticeAction(): Promise<void> {
+  if (notice.value?.action === 'settings') {
+    await openMicSettings()
+    return
+  }
+  if (notice.value?.action === 'asrSettings') {
+    // Main brings the settings window forward and collapses this surface; nothing to report
+    // back here, and a failure to open is not worth replacing the sentence that explains why
+    // the user is here in the first place.
+    void transport.send(AssistantEvents.voice.openIntelligenceSettings, undefined)
+    clearFinishTimer()
+    emitFinished()
+    return
+  }
+  await recoverLast()
+}
+
+async function recoverLast(): Promise<void> {
+  const action = notice.value?.action
+  if (!action || action === 'settings') return
+
+  const generation = panelGeneration
+  const taskGeneration = ++panelTaskGeneration
+  clearFinishTimer()
+  notice.value = null
+  recovering.value = true
+  sessionSeq.value += 1
+  // Retrying sends audio main is still holding — the same act, so the same bar. Its length is
+  // not known here, so it runs on the base estimate alone.
+  startUploadClock(0)
+
+  try {
+    const result = await voiceSdk.retryLastFailure({ delivery: 'active-app' })
+    if (!isCurrentPanel(generation, taskGeneration)) return
+    recovering.value = false
+    if (result.expired) {
+      // Say which thing failed. "Recording expired" and "transcription failed" send the
+      // user to different places, and only one of them is worth another button.
+      showNotice(t('assistant.voicePanel.recoveryExpired'), 'warning')
+      return
+    }
+    if (!result.text) {
+      showNotice(t('assistant.voicePanel.voiceTranscribeEmpty'), 'warning')
+      return
+    }
+    emitFinished()
+  } catch (error) {
+    if (!isCurrentPanel(generation, taskGeneration)) return
+    recovering.value = false
+    const classified = classifyFailure(error)
+    showNotice(classified.message, classified.tone, 'retry')
+  }
+}
+
+function beginCancelCharge(): void {
+  if (holdTimer !== null) return
+  const startedAt = Date.now()
+  holdTimer = setInterval(() => {
+    cancelCharge.value = Math.min(1, (Date.now() - startedAt) / CANCEL_HOLD_MS)
+  }, CHARGE_TICK_MS)
+}
+
+function handleCancelHold(state: AssistantVoiceCancelHoldPayload['state']): void {
+  if (state === 'start') {
+    beginCancelCharge()
+    return
+  }
+  stopHold()
+  if (state === 'commit') cancelSession()
+}
+
+/**
+ * How wide the text would be on one line — which is not what `scrollWidth` reports.
+ *
+ * The paragraph wraps inside a slot whose width comes from this very measurement, so reading
+ * it as it stands answers "how wide are you right now", not "how wide do you want to be": a
+ * short sentence that wrapped at the base width reports that it fits, and the pill never grows
+ * for it. Forcing one line for the duration of the read is what asks the second question.
+ */
+function measureNaturalWidth(element: HTMLElement): number {
+  const previous = element.style.whiteSpace
+  element.style.whiteSpace = 'nowrap'
+  const width = element.scrollWidth
+  element.style.whiteSpace = previous
+  return width
+}
+
+// Measured rather than expressed in CSS: `width: fit-content` is not animatable without
+// `interpolate-size`, and the window behind the pill deliberately never resizes.
+watch([centerText, showsOrb, () => notice.value?.icon, listening], async () => {
+  if (!centerText.value) {
+    streamTextWidth.value = 0
+    pillWidth.value = PILL_BASE_WIDTH
+    pillHeight.value = PILL_BASE_HEIGHT
+    return
+  }
+  // Fixed geometry, no measurement: this card's copy is short and constant, and it stacks
+  // rather than running in a line, so there is no natural width to ask about.
+  if (notice.value?.icon) {
+    pillWidth.value = ICON_CARD_WIDTH
+    pillHeight.value = ICON_CARD_HEIGHT
     return
   }
 
-  submitting.value = true
-  try {
-    const response = await transport.send(AssistantEvents.voice.submitText, {
-      text: content,
-      source: hasVoiceInput.value ? 'voice' : 'manual'
-    })
-    if (!response?.accepted) {
-      errorMessage.value = t('assistant.voicePanel.submitFailed')
-      return
-    }
-    keepListening = false
-    stopRecognition()
-    inputText.value = ''
-    interimText.value = ''
-    hasVoiceInput.value = false
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    submitting.value = false
-  }
-}
+  await nextTick()
+  const element = currentTextEl()
+  if (!element) return
+  const chrome = PILL_CHROME_WIDTH
+  const natural = measureNaturalWidth(element)
+  // One measurement, two consumers. The follow offset needs the same number the width
+  // does, and reading it twice would mean two forced layouts per partial rather than one.
+  streamTextWidth.value = natural
+  const needed = natural + TEXT_WIDTH_SLACK + chrome
+  pillWidth.value = Math.min(PILL_MAX_WIDTH, Math.max(PILL_BASE_WIDTH, needed))
 
-function handleInputKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
-
-  event.preventDefault()
-  void submitText()
-}
-
-async function translateClipboardImage(): Promise<void> {
-  if (screenshotActionBusy.value) return
-
-  keepListening = false
-  stopRecognition()
-  translatingClipboardImage.value = true
-  errorMessage.value = ''
-  intelligenceSettingsRecoveryVisible.value = false
-  imageTranslateRoute.value = null
-  statusMessage.value = t('assistant.voicePanel.clipboardImageTranslating')
-
-  try {
-    const response = await transport.send(AssistantEvents.voice.translateClipboardImage, {
-      targetLang: 'zh'
-    })
-    if (!response?.success) {
-      statusMessage.value = ''
-      intelligenceSettingsRecoveryVisible.value = requiresIntelligenceSettingsRecovery(
-        response?.code
-      )
-      errorMessage.value = formatClipboardImageTranslateError(
-        response?.code,
-        response?.reason || response?.error
-      )
-      return
-    }
-    imageTranslateRoute.value = response.metadata ?? null
-    statusMessage.value = t('assistant.voicePanel.clipboardImageTranslateReady')
-  } catch (error) {
-    statusMessage.value = ''
-    errorMessage.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    translatingClipboardImage.value = false
-  }
-}
-
-async function translateScreenshot(): Promise<void> {
-  if (screenshotActionBusy.value) return
-
-  keepListening = false
-  stopRecognition()
-  translatingScreenshot.value = true
-  errorMessage.value = ''
-  screenshotPermissionDenied.value = false
-  intelligenceSettingsRecoveryVisible.value = false
-  statusMessage.value = t('assistant.voicePanel.screenshotTranslating')
-  screenshotPreview.value = null
-  screenshotTextFallback.value = null
-  imageTranslateRoute.value = null
-
-  try {
-    const capturePayload = await resolveScreenshotActionPayload()
-    if (!capturePayload) return
-    statusMessage.value = t('assistant.voicePanel.screenshotTranslating')
-    const response = await transport.send(AssistantEvents.voice.translateScreenshot, {
-      targetLang: 'zh',
-      ...capturePayload
-    })
-    if (!response?.success) {
-      statusMessage.value = ''
-      screenshotPermissionDenied.value = response?.code === 'SCREENSHOT_PERMISSION_DENIED'
-      intelligenceSettingsRecoveryVisible.value = requiresIntelligenceSettingsRecovery(
-        response?.code
-      )
-      errorMessage.value = formatScreenshotTranslateError(
-        response?.code,
-        response?.reason || response?.error
-      )
-      return
-    }
-    if (response.mode === 'ocr-text') {
-      const source = response.sourceText?.trim()
-      const target = response.targetText?.trim()
-      if (!source || !target || !response.fallback) {
-        statusMessage.value = ''
-        intelligenceSettingsRecoveryVisible.value = true
-        errorMessage.value = t('assistant.voicePanel.screenshotTextTranslateUnavailable')
-        return
-      }
-      screenshotTextFallback.value = {
-        sourceText: source,
-        targetText: target,
-        metadata: response.fallback
-      }
-      statusMessage.value = t('assistant.voicePanel.screenshotTextFallbackReady')
-      return
-    }
-    imageTranslateRoute.value = response.metadata ?? null
-    statusMessage.value = t('assistant.voicePanel.screenshotTranslateReady')
-  } catch (error) {
-    statusMessage.value = ''
-    errorMessage.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    translatingScreenshot.value = false
-  }
-}
-
-async function captureScreenshot(): Promise<void> {
-  if (screenshotActionBusy.value) return
-
-  keepListening = false
-  stopRecognition()
-  capturingScreenshot.value = true
-  errorMessage.value = ''
-  screenshotPermissionDenied.value = false
-  intelligenceSettingsRecoveryVisible.value = false
-  statusMessage.value = t('assistant.voicePanel.screenshotCapturing')
-  screenshotPreview.value = null
-  screenshotTextFallback.value = null
-  imageTranslateRoute.value = null
-
-  try {
-    const capturePayload = await resolveScreenshotActionPayload()
-    if (!capturePayload) return
-    statusMessage.value = t('assistant.voicePanel.screenshotCapturing')
-    const response = await transport.send(AssistantEvents.voice.captureScreenshot, capturePayload)
-    if (!response?.success || !response.tfileUrl) {
-      statusMessage.value = ''
-      screenshotPermissionDenied.value = response?.code === 'SCREENSHOT_PERMISSION_DENIED'
-      errorMessage.value = formatScreenshotCaptureError(response?.code, response?.error)
-      return
-    }
-
-    screenshotPreview.value = {
-      tfileUrl: response.tfileUrl,
-      width: response.width ?? 0,
-      height: response.height ?? 0,
-      displayName: response.displayName || '',
-      wroteClipboard: response.wroteClipboard === true,
-      saved: false
-    }
-    statusMessage.value = t('assistant.voicePanel.screenshotCaptureReady')
-  } catch (error) {
-    statusMessage.value = ''
-    errorMessage.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    capturingScreenshot.value = false
-  }
-}
-
-async function saveScreenshot(): Promise<void> {
-  if (screenshotActionBusy.value) return
-
-  keepListening = false
-  stopRecognition()
-  savingScreenshot.value = true
-  errorMessage.value = ''
-  screenshotPermissionDenied.value = false
-  intelligenceSettingsRecoveryVisible.value = false
-  statusMessage.value = t('assistant.voicePanel.screenshotSaving')
-
-  try {
-    const capturePayload = await resolveScreenshotActionPayload()
-    if (!capturePayload) return
-    statusMessage.value = t('assistant.voicePanel.screenshotSaving')
-    const response = await transport.send(AssistantEvents.voice.saveScreenshot, capturePayload)
-    if (response?.canceled) {
-      statusMessage.value = ''
-      return
-    }
-    if (!response?.success) {
-      screenshotPermissionDenied.value = response?.code === 'SCREENSHOT_PERMISSION_DENIED'
-      statusMessage.value = ''
-      errorMessage.value = formatScreenshotSaveError(response?.code, response?.error)
-      return
-    }
-
-    if (screenshotPreview.value) {
-      screenshotPreview.value = {
-        ...screenshotPreview.value,
-        width: response.width ?? screenshotPreview.value.width,
-        height: response.height ?? screenshotPreview.value.height,
-        displayName: response.displayName || screenshotPreview.value.displayName,
-        saved: true
-      }
-    }
-    statusMessage.value = t('assistant.voicePanel.screenshotSaveReady')
-  } catch (error) {
-    statusMessage.value = ''
-    errorMessage.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    savingScreenshot.value = false
-  }
-}
-
-async function openScreenshotPermissionSettings(): Promise<void> {
-  if (openingScreenshotSettings.value) return
-
-  openingScreenshotSettings.value = true
-  statusMessage.value = ''
-  try {
-    const opened = await transport.send(systemPermissionRequestEvent, 'screenRecording')
-    if (!opened) {
-      errorMessage.value = t('assistant.voicePanel.screenshotPermissionSettingsUnavailable')
-      return
-    }
-
-    errorMessage.value = ''
-    statusMessage.value = t('assistant.voicePanel.screenshotPermissionSettingsOpened')
-  } catch {
-    errorMessage.value = t('assistant.voicePanel.screenshotPermissionSettingsUnavailable')
-  } finally {
-    openingScreenshotSettings.value = false
-  }
-}
-
-async function recoverMicrophonePermission(): Promise<void> {
-  if (openingMicrophoneSettings.value) return
-
-  if (microphoneSettingsOpened.value) {
-    statusMessage.value = ''
-    errorMessage.value = ''
-    microphonePermissionDenied.value = false
-    preferBrowserSpeechFallback = false
-    keepListening = true
-    void startRecognition()
+  // Width first, height second. Truncating at the cap loses the half of the sentence that
+  // says what to do — "Cannot find m…" is exactly the wrong half to drop — so only once one
+  // line cannot fit even at the cap does the island grow instead.
+  if (listening.value || needed <= PILL_MAX_WIDTH) {
+    pillHeight.value = listening.value ? PILL_LIVE_HEIGHT : PILL_BASE_HEIGHT
     return
   }
 
-  openingMicrophoneSettings.value = true
-  statusMessage.value = ''
-  try {
-    const opened = await transport.send(systemPermissionRequestEvent, 'microphone')
-    if (!opened) {
-      errorMessage.value = t('assistant.voicePanel.microphonePermissionSettingsUnavailable')
-      return
-    }
+  // Grow first, then measure what the text actually took. The card hands it the full width
+  // instead of the pill's middle column, so how many lines it needs is only knowable after the
+  // layout has already changed — and a card sized for two lines around one line of text is the
+  // same empty band as before, just turned on its side.
+  pillHeight.value = PILL_TALL_HEIGHT
+  await nextTick()
+  const textHeight = currentTextEl()?.scrollHeight ?? 0
+  pillHeight.value = Math.min(
+    PILL_TALL_HEIGHT,
+    Math.max(
+      PILL_BASE_HEIGHT + 1,
+      PILL_TALL_PADDING + textHeight + PILL_ROW_GAP + CONTROL_TALL_SIZE
+    )
+  )
+})
 
-    microphoneSettingsOpened.value = true
-    errorMessage.value = ''
-    statusMessage.value = t('assistant.voicePanel.microphonePermissionSettingsOpened')
-  } catch {
-    errorMessage.value = t('assistant.voicePanel.microphonePermissionSettingsUnavailable')
-  } finally {
-    openingMicrophoneSettings.value = false
-  }
-}
-
-async function openIntelligenceSettings(): Promise<void> {
-  if (openingIntelligenceSettings.value) return
-
-  openingIntelligenceSettings.value = true
-  statusMessage.value = ''
-  try {
-    const opened = await transport.send(AssistantEvents.voice.openIntelligenceSettings, undefined)
-    if (!opened) {
-      errorMessage.value = t('assistant.voicePanel.intelligenceSettingsUnavailable')
-      return
-    }
-
-    intelligenceSettingsRecoveryVisible.value = false
-    errorMessage.value = ''
-    statusMessage.value = t('assistant.voicePanel.intelligenceSettingsOpened')
-  } catch {
-    errorMessage.value = t('assistant.voicePanel.intelligenceSettingsUnavailable')
-  } finally {
-    openingIntelligenceSettings.value = false
-  }
-}
-
-async function closePanel(): Promise<void> {
-  if (closingPanel.value) return
-
-  closingPanel.value = true
-  keepListening = false
-  stopRecognition()
-  try {
-    await transport.send(AssistantEvents.voice.closePanel, undefined)
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    closingPanel.value = false
-  }
-}
-
-function handleWindowKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return
-
-  event.preventDefault()
-  void closePanel()
-}
+defineExpose({
+  openPanel: handlePanelOpened,
+  startVoiceInput: (timing: VoiceDeliveryTiming = 'final'): void => {
+    void startVoiceSession(timing)
+  },
+  stopVoiceInput: finishVoiceInput,
+  toggleVoiceInput: (timing: VoiceDeliveryTiming = 'final'): void => {
+    if (listening.value || startingVoiceCapture.value) finishVoiceInput()
+    else if (!transcribing.value && !recovering.value) void startVoiceSession(timing)
+  },
+  handleCancelHold
+})
 
 onMounted(() => {
-  disposePanelOpen = transport.on(AssistantEvents.voice.panelOpened, async (payload) => {
-    await handlePanelOpened(payload)
-  })
-  window.addEventListener('keydown', handleWindowKeydown)
-  void Promise.all([loadRuntimeConfig(), loadScreenshotDisplays()])
+  if (!props.managedByDock) {
+    disposePanelOpen = transport.on(AssistantEvents.voice.panelOpened, async () => {
+      await handlePanelOpened()
+    })
+    disposeCancelHold = transport.on(AssistantEvents.voice.cancelHold, (payload) => {
+      handleCancelHold(payload.state)
+    })
+    void loadRuntimeConfig()
+  }
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleWindowKeydown)
-  keepListening = false
-  stopRecognition()
+  panelGeneration += 1
+  panelTaskGeneration += 1
+  disposeCancelHold?.()
+  disposeCancelHold = null
+  stopHold()
+  stopWaitClock()
+  stopRecordClock()
+  stopUploadClock()
+  stopOrbRoll()
+  stopCaptureStartTimer()
+  clearFinishTimer()
+  cancelVoiceSession()
   disposePanelOpen?.()
   disposePanelOpen = null
 })
@@ -1187,554 +1458,957 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="voice-panel-root">
-    <div class="voice-panel">
-      <header class="voice-panel-header">
-        <div class="title-wrap">
-          <p class="title">{{ runtimeConfig.assistantName }}</p>
-          <p class="subtitle">
-            {{ panelStatusText }}
-            <span v-if="sourceText"> · {{ sourceText }}</span>
-          </p>
-        </div>
-        <button
-          class="close-btn"
-          type="button"
-          :disabled="closingPanel"
-          aria-keyshortcuts="Escape"
-          @click="closePanel"
-        >
-          {{ t('assistant.voicePanel.close') }}
-        </button>
-      </header>
+    <!--
+      The orb's colour, defined once for the window.
 
-      <main class="voice-panel-body">
-        <div class="screenshot-target-controls">
-          <label class="screenshot-target-field">
-            <span>{{ t('assistant.voicePanel.screenshotMode') }}</span>
-            <select v-model="screenshotCaptureMode" :disabled="screenshotActionBusy">
-              <option value="cursor-display">
-                {{ t('assistant.voicePanel.screenshotModeCursorDisplay') }}
-              </option>
-              <option value="display" :disabled="!screenshotDisplays.length">
-                {{ t('assistant.voicePanel.screenshotModeSelectedDisplay') }}
-              </option>
-              <option value="region" :disabled="!screenshotDisplays.length">
-                {{ t('assistant.voicePanel.screenshotModeRegion') }}
-              </option>
-            </select>
-          </label>
-          <label v-if="screenshotCaptureMode === 'display'" class="screenshot-target-field">
-            <span>{{ t('assistant.voicePanel.screenshotDisplay') }}</span>
-            <select v-model="selectedScreenshotDisplayId" :disabled="screenshotActionBusy">
-              <option v-for="display in screenshotDisplays" :key="display.id" :value="display.id">
-                {{ formatScreenshotDisplayLabel(display) }}
-              </option>
-            </select>
-          </label>
-          <label
-            v-if="screenshotCaptureMode === 'region'"
-            class="screenshot-target-field screenshot-region-display-field"
-          >
-            <span>{{ t('assistant.voicePanel.screenshotRegionDisplay') }}</span>
-            <select v-model="selectedScreenshotRegionDisplayId" :disabled="screenshotActionBusy">
-              <option value="">
-                {{ t('assistant.voicePanel.screenshotRegionDisplayCursor') }}
-              </option>
-              <option v-for="display in screenshotDisplays" :key="display.id" :value="display.id">
-                {{ formatScreenshotDisplayLabel(display) }}
-              </option>
-            </select>
-          </label>
-        </div>
-        <textarea
-          ref="inputArea"
-          v-model="inputText"
-          class="input-area"
-          :placeholder="t('assistant.voicePanel.placeholder')"
-          enterkeyhint="send"
-          aria-keyshortcuts="Enter"
-          @keydown="handleInputKeydown"
+      The orb paints a greyscale depth ramp — near dots one ink value, far dots another — so a
+      per-channel table remaps that ramp onto a gradient without touching alpha or the 3D reading
+      it carries. Blend modes cannot do this: they leak into the transparent square around the
+      sphere. Kept theme-agnostic on purpose (the ink ramp inverts on dark, which flips the
+      gradient's direction and nothing else), so there is still no hardcoded inverse branch.
+    -->
+    <svg class="voice-panel-defs" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="voice-orb-tint" color-interpolation-filters="sRGB">
+          <feComponentTransfer>
+            <feFuncR type="table" tableValues="0.16 0.45 0.90" />
+            <feFuncG type="table" tableValues="0.83 0.36 0.55" />
+            <feFuncB type="table" tableValues="0.85 0.95 0.35" />
+          </feComponentTransfer>
+        </filter>
+      </defs>
+    </svg>
+
+    <div
+      ref="pillRef"
+      class="voice-dock"
+      role="status"
+      aria-live="polite"
+      :aria-busy="voiceActive"
+      :class="[
+        notice ? `voice-dock--${notice.tone}` : null,
+        preparing ? 'voice-dock--preparing' : null,
+        expanded ? 'voice-dock--expanded' : null,
+        iconCard ? 'voice-dock--icon-card' : null,
+        holdingCancel ? 'voice-dock--holding' : null,
+        slowness !== 'normal' && !notice ? 'voice-dock--warning' : null
+      ]"
+      :style="{
+        width: `${pillWidth}px`,
+        height: `${pillHeight}px`,
+        borderRadius: `${pillRadius}px`,
+        ...(holdingCancel ? { transform: `scale(${cancelScale})` } : {})
+      }"
+    >
+      <div
+        v-if="holdingCancel"
+        class="voice-dock__charge"
+        :style="{ width: cancelRemaining }"
+        data-testid="voice-charge"
+        aria-hidden="true"
+      />
+
+      <!--
+        The same shape as the cancel charge and the opposite direction: that one is being spent,
+        this one is being earned. Both sit behind the content and are clipped to the pill.
+      -->
+      <div
+        v-if="showsUpload"
+        class="voice-dock__upload"
+        :style="{ width: uploadWidth }"
+        data-testid="voice-upload"
+        aria-hidden="true"
+      />
+
+      <!--
+        The recording budget, drawn on the pill's own border line. No viewBox on purpose: without
+        one the SVG's user units are CSS pixels, so the geometry computed in script lands on the
+        border unscaled instead of being stretched by a fitted viewport.
+      -->
+      <svg
+        v-if="showsRecordingBudget"
+        class="voice-dock__budget"
+        :class="{ 'voice-dock__budget--ending': recordingEnding }"
+        :style="{ '--voice-budget-tick': `${RECORDING_TICK_MS}ms` }"
+        data-testid="voice-budget"
+        aria-hidden="true"
+      >
+        <rect
+          :x="budgetPath.inset"
+          :y="budgetPath.inset"
+          :width="budgetPath.width"
+          :height="budgetPath.height"
+          :rx="budgetPath.radius"
+          fill="none"
+          :stroke-width="RECORDING_STROKE"
+          :stroke-dasharray="budgetPath.length"
+          :stroke-dashoffset="budgetPath.length * (1 - recordingProgress)"
         />
-        <p v-if="interimText" class="interim-text">{{ interimText }}</p>
-        <div v-if="screenshotPreview" class="screenshot-preview">
-          <img
-            class="screenshot-preview-image"
-            :src="screenshotPreview.tfileUrl"
-            :alt="t('assistant.voicePanel.screenshotPreviewAlt')"
+      </svg>
+
+      <button
+        class="voice-dock__btn voice-dock__btn--cancel"
+        type="button"
+        data-testid="voice-cancel"
+        :style="controlStyle"
+        :disabled="!canCancel"
+        :aria-label="t('assistant.voicePanel.cancelSession')"
+        @click="cancelSession"
+      >
+        <span class="i-carbon-close" aria-hidden="true" />
+      </button>
+
+      <TxBorderBeam
+        :active="beamActive"
+        :border-radius="pillRadius"
+        :duration="beamDurationSeconds"
+        :color-variant="beamVariant"
+        aria-hidden="true"
+      />
+
+      <Transition v-if="!listening" name="voice-swap">
+        <div :key="centerKey" class="voice-dock__slot">
+          <span
+            v-if="notice?.icon && centerText"
+            class="voice-dock__icon"
+            :class="notice.icon"
+            data-testid="voice-notice-icon"
+            aria-hidden="true"
           />
-          <p class="screenshot-preview-meta">
-            {{
-              t('assistant.voicePanel.screenshotPreviewMeta', {
-                width: screenshotPreview.width,
-                height: screenshotPreview.height,
-                display:
-                  screenshotPreview.displayName ||
-                  t('assistant.voicePanel.screenshotDisplayUnknown')
-              })
-            }}
-          </p>
-          <p v-if="screenshotPreview.wroteClipboard" class="screenshot-preview-copy">
-            {{ t('assistant.voicePanel.screenshotCopied') }}
-          </p>
-          <p v-if="screenshotPreview.saved" class="screenshot-preview-save">
-            {{ t('assistant.voicePanel.screenshotSavedPath') }}
+          <p
+            v-if="centerText"
+            ref="centerTextRef"
+            class="voice-dock__text"
+            :class="{ 'voice-dock__text--shimmer': showsOrb }"
+            :data-testid="notice ? 'voice-notice' : 'voice-hint'"
+          >
+            <span
+              v-for="(char, index) in centerChars"
+              :key="`${centerKey}:${index}`"
+              class="voice-dock__char"
+              :style="{ animationDelay: charDelay(index) }"
+              >{{ char }}</span
+            >
           </p>
         </div>
-        <section v-if="screenshotTextFallback" class="screenshot-text-fallback" aria-live="polite">
-          <p class="screenshot-text-fallback-title">
-            {{ t('assistant.voicePanel.screenshotTextFallbackTitle') }}
-          </p>
-          <div class="screenshot-text-fallback-row">
-            <span>{{ t('assistant.voicePanel.screenshotTextFallbackSource') }}</span>
-            <p>{{ screenshotTextFallback.sourceText }}</p>
-          </div>
-          <div class="screenshot-text-fallback-row">
-            <span>{{ t('assistant.voicePanel.screenshotTextFallbackTarget') }}</span>
-            <p>{{ screenshotTextFallback.targetText }}</p>
-          </div>
-          <p class="screenshot-text-fallback-meta">
-            {{
-              t('assistant.voicePanel.screenshotTextFallbackMetadata', {
-                ocr: formatFallbackProvider(screenshotTextFallback.metadata.ocr),
-                translation: formatFallbackProvider(screenshotTextFallback.metadata.translation)
-              })
-            }}
-          </p>
-        </section>
-        <section
-          v-if="imageTranslateRoute"
-          class="screenshot-image-translate-route"
-          aria-live="polite"
-        >
-          <p class="screenshot-image-translate-route-title">
-            {{ t('assistant.voicePanel.screenshotImageTranslateRouteTitle') }}
-          </p>
-          <ul
-            v-if="imageTranslateRoute.stages.length"
-            class="screenshot-image-translate-route-list"
+      </Transition>
+      <div v-else class="voice-dock__slot voice-dock__live-slot">
+        <div class="voice-dock__live">
+          <div
+            v-if="centerText"
+            class="voice-dock__stream"
+            :style="{ '--voice-stream-fade': `${STREAM_FADE}px` }"
           >
-            <li
-              v-for="stage in imageTranslateRoute.stages"
-              :key="`${stage.capability}:${stage.providerId}`"
+            <p
+              ref="centerTextRef"
+              class="voice-dock__text voice-dock__text--stream"
+              :style="{ transform: `translateX(${streamOffset}px)` }"
+              data-testid="voice-live-text"
             >
-              {{ formatImageTranslateRouteStage(stage) }}
-            </li>
-          </ul>
-          <p class="screenshot-image-translate-route-summary">
-            {{
-              t('assistant.voicePanel.screenshotImageTranslateRouteSummary', {
-                duration: String(imageTranslateRoute.durationMs),
-                runId: imageTranslateRoute.runId
-              })
-            }}
-          </p>
-        </section>
-        <p v-if="statusMessage" class="status-text">{{ statusMessage }}</p>
-        <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
-        <button
-          v-if="microphonePermissionDenied"
-          class="secondary-btn permission-recovery-btn"
-          type="button"
-          :disabled="openingMicrophoneSettings"
-          @click="recoverMicrophonePermission"
-        >
-          {{
-            openingMicrophoneSettings
-              ? t('assistant.voicePanel.openingMicrophonePermissionSettings')
-              : microphoneSettingsOpened
-                ? t('assistant.voicePanel.retryVoiceInput')
-                : t('assistant.voicePanel.openMicrophonePermissionSettings')
-          }}
-        </button>
-        <button
-          v-if="screenshotPermissionDenied"
-          class="secondary-btn permission-recovery-btn"
-          type="button"
-          :disabled="openingScreenshotSettings"
-          @click="openScreenshotPermissionSettings"
-        >
-          {{
-            openingScreenshotSettings
-              ? t('assistant.voicePanel.openingScreenshotPermissionSettings')
-              : t('assistant.voicePanel.openScreenshotPermissionSettings')
-          }}
-        </button>
-        <button
-          v-if="intelligenceSettingsRecoveryVisible"
-          class="secondary-btn intelligence-recovery-btn"
-          type="button"
-          :disabled="openingIntelligenceSettings"
-          @click="openIntelligenceSettings"
-        >
-          {{
-            openingIntelligenceSettings
-              ? t('assistant.voicePanel.openingIntelligenceSettings')
-              : t('assistant.voicePanel.openIntelligenceSettings')
-          }}
-        </button>
-      </main>
+              <span
+                v-for="(char, index) in centerChars"
+                :key="`live:${index}`"
+                class="voice-dock__char"
+                :style="{ animationDelay: charDelay(index) }"
+                >{{ char }}</span
+              >
+            </p>
+          </div>
+          <div
+            class="voice-dock__wave"
+            :class="{ 'voice-dock__wave--pending': !hasLevel }"
+            :style="{
+              '--voice-wave-bar': `${WAVE_BAR_WIDTH}px`,
+              '--voice-wave-gap': `${WAVE_BAR_GAP}px`
+            }"
+            data-testid="voice-wave"
+            aria-hidden="true"
+          >
+            <span
+              v-for="(level, index) in levels"
+              :key="index"
+              :style="{ height: `${barHeight(level)}px`, '--voice-wave-delay': `${index * 35}ms` }"
+            />
+          </div>
+        </div>
+      </div>
 
-      <footer class="voice-panel-footer">
-        <button
-          class="secondary-btn"
-          type="button"
-          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
-          @click="translateClipboardImage"
-        >
-          {{
-            translatingClipboardImage
-              ? t('assistant.voicePanel.imageTranslatingShort')
-              : t('assistant.voicePanel.translateClipboardImage')
-          }}
-        </button>
-        <button
-          class="secondary-btn"
-          type="button"
-          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
-          @click="translateScreenshot"
-        >
-          {{
-            translatingScreenshot
-              ? t('assistant.voicePanel.imageTranslatingShort')
-              : t('assistant.voicePanel.translateScreenshot')
-          }}
-        </button>
-        <button
-          class="secondary-btn"
-          type="button"
-          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
-          @click="captureScreenshot"
-        >
-          {{
-            capturingScreenshot
-              ? t('assistant.voicePanel.screenshotCapturingShort')
-              : t('assistant.voicePanel.captureScreenshot')
-          }}
-        </button>
-        <button
-          class="secondary-btn"
-          type="button"
-          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
-          @click="saveScreenshot"
-        >
-          {{
-            savingScreenshot
-              ? t('assistant.voicePanel.screenshotSavingShort')
-              : t('assistant.voicePanel.saveScreenshot')
-          }}
-        </button>
-        <button
-          class="secondary-btn"
-          type="button"
-          :disabled="!voiceWakeEnabled || startingVoiceCapture || transcribingVoice"
-          @click="toggleVoiceInput"
-        >
-          {{
-            startingVoiceCapture
-              ? t('assistant.voicePanel.voicePreparing')
-              : transcribingVoice
-                ? t('assistant.voicePanel.voiceTranscribingShort')
-                : recordingWithProvider
-                  ? t('assistant.voicePanel.stopAndTranscribe')
-                  : listening
-                    ? t('assistant.voicePanel.stopListening')
-                    : t('assistant.voicePanel.startListening')
-          }}
-        </button>
-        <button
-          class="primary-btn"
-          type="button"
-          :disabled="submitting || transcribingVoice || startingVoiceCapture"
-          @click="submitText"
-        >
-          {{
-            submitting
-              ? t('assistant.voicePanel.submitting')
-              : t('assistant.voicePanel.sendToCoreBox')
-          }}
-        </button>
-      </footer>
+      <!-- The confirm slot holds either an action or the progress mark, never both. -->
+      <!--
+        The hue lives on this wrapper, not on the canvas.
+
+        A `filter` list containing a `url()` is not interpolable, so animating
+        `filter: url(#tint) hue-rotate(…)` falls back to discrete and the colour never moves —
+        confirmed in headless Chrome, where five sampled phases came out identical. Split across
+        two elements each list is interpolable on its own and the drift is smooth.
+      -->
+      <span v-if="showsOrb" class="voice-dock__orb">
+        <TxThinkingOrb
+          :key="sessionSeq"
+          data-testid="voice-orb"
+          :size="64"
+          :display-size="controlSize"
+          :state="orbState"
+          theme="auto"
+          :label="t('assistant.voicePanel.voiceTranscribingShort')"
+        />
+      </span>
+      <!--
+        Icon only, and the same circle as the other two: the slot holds one round control
+        whatever it means, so a label here would be the only thing in the pill made of words
+        competing with the notice that is already saying something.
+      -->
+      <button
+        v-else-if="notice?.action"
+        class="voice-dock__btn voice-dock__btn--action"
+        type="button"
+        data-testid="voice-recover"
+        :style="controlStyle"
+        :aria-label="actionLabel"
+        @click="handleNoticeAction"
+      >
+        <span :class="actionIcon" aria-hidden="true" />
+      </button>
+      <button
+        v-else
+        class="voice-dock__btn voice-dock__btn--confirm"
+        type="button"
+        data-testid="voice-confirm"
+        :style="controlStyle"
+        :disabled="!canConfirm"
+        :aria-label="t('assistant.voicePanel.stopAndTranscribe')"
+        @click="handleConfirm"
+      >
+        <span class="i-carbon-checkmark" aria-hidden="true" />
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
 .voice-panel-root {
+  display: flex;
   width: 100%;
   height: 100%;
-  padding: 10px;
+  align-items: center;
+  justify-content: center;
   box-sizing: border-box;
 }
 
-.voice-panel {
+.voice-dock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px;
+  box-sizing: border-box;
+  border: 1px solid var(--shell-border);
+  /* Radius is inline: it tracks the height, so the shape and the size change together. */
+  background: var(--shell-surface);
+  box-shadow: 0 5px 12px var(--shell-shadow);
+  transition:
+    width 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 30ms linear,
+    box-shadow 600ms ease-out,
+    border-color 160ms ease-out;
+}
+
+/*
+ * Breathing, not a meter.
+ *
+ * Before the first level frame there is nothing true to draw, and 24 bars at minimum height
+ * would read as a working meter reporting silence. A soft pulse says "opening the device"
+ * without claiming to measure anything.
+ */
+.voice-dock--preparing {
+  animation: voice-dock-breathe 2000ms ease-in-out infinite;
+}
+
+@keyframes voice-dock-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 5px 12px var(--shell-shadow),
+      0 0 0 0 var(--shell-primary-soft);
+  }
+  50% {
+    box-shadow:
+      0 5px 12px var(--shell-shadow),
+      0 0 0 6px var(--shell-primary-soft);
+  }
+}
+
+/* Tone rides on the border only: the surface stays neutral so the text keeps its contrast. */
+.voice-dock--danger {
+  border-color: var(--shell-danger-border);
+}
+
+.voice-dock--warning {
+  border-color: var(--shell-warning-border);
+}
+
+.voice-dock--muted {
+  border-color: var(--shell-border);
+}
+
+/* Holding Escape outranks every other tone: it is about to discard what was just said. */
+/*
+ * Held: the surface tightens as it drains, so the shrink and the bar are one gesture.
+ *
+ * The scale itself is inline because it tracks the charge; this only stops the breathing pulse,
+ * which is about opening a microphone and has nothing to say once the user is discarding it.
+ */
+.voice-dock--holding {
+  border-color: var(--shell-danger-border);
+  animation: none;
+}
+
+/*
+ * Behind everything the pill draws, and clipped to its own corners.
+ *
+ * Width rather than `scaleX`: a scaled box distorts its border radius, and this one has to keep
+ * the pill's shape while it shortens. It is the only element in the surface that is allowed to
+ * report a fraction, because the hold is the only thing here with a known denominator.
+ */
+.voice-dock__charge {
+  position: absolute;
+  z-index: 0;
+  height: 100%;
+  border-radius: inherit;
+  /*
+   * Faded at the leading edge rather than cut off: a flat block ending mid-card reads as two
+   * differently coloured halves, not as something draining away.
+   */
+  background: linear-gradient(
+    90deg,
+    var(--shell-danger-soft) 0%,
+    var(--shell-danger-soft) 62%,
+    transparent 100%
+  );
+  inset: 0 auto 0 0;
+  pointer-events: none;
+  transition: width 30ms linear;
+}
+
+.voice-dock__btn,
+.voice-dock__slot {
+  z-index: 1;
+}
+
+/*
+ * The send bar: the cancel charge's shape, running the other way.
+ *
+ * Behind the content and clipped to the pill, like the charge, and faded at its leading edge for
+ * the same reason — a flat block ending mid-pill reads as two coloured halves rather than as
+ * something filling. It is the accent tone, not danger: this one is the words arriving.
+ */
+.voice-dock__upload {
+  position: absolute;
+  z-index: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--shell-primary-soft) 0%,
+    var(--shell-primary-soft) 62%,
+    transparent 100%
+  );
+  inset: 0 auto 0 0;
+  pointer-events: none;
+  transition: width 120ms ease-out;
+}
+
+/*
+ * The thinking mark's colour.
+ *
+ * The tint is a per-channel table over the orb's own greyscale depth ramp, so near dots land at
+ * one end of the gradient and far dots at the other — the 3D reading survives, and alpha is
+ * untouched, which is what keeps the transparent square around the sphere transparent. Blend
+ * modes cannot do that.
+ *
+ * `filter` here is safe where it was not on the text: the orb is a sibling of the slot, not a
+ * child of anything clipping a background to its glyphs.
+ */
+.voice-dock__orb {
+  display: flex;
+  flex: none;
+  animation: voice-orb-hue 9000ms linear infinite;
+}
+
+.voice-dock__orb :deep(.tx-thinking-orb) {
+  filter: url('#voice-orb-tint');
+}
+
+@keyframes voice-orb-hue {
+  from {
+    filter: hue-rotate(0deg);
+  }
+
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+
+/* Defs only — it paints nothing itself and must not take a flex slot. */
+.voice-panel-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/*
+ * The five-minute recording cap, drawn as the border being spent.
+ *
+ * It shares the edge with the beam, so the two never run at once (`beamActive`): a sweeping
+ * highlight crossing a static stroke reads as neither of them. It starts at the top-left corner
+ * and travels clockwise, which is the direction a clock face has already taught everyone.
+ */
+.voice-dock__budget {
+  position: absolute;
+  z-index: 0;
   width: 100%;
   height: 100%;
-  border-radius: 16px;
-  padding: 14px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  background: linear-gradient(165deg, rgba(255, 251, 235, 0.92), rgba(255, 237, 213, 0.92));
-  border: 1px solid rgba(251, 191, 36, 0.35);
-  box-shadow: 0 16px 36px rgba(124, 45, 18, 0.18);
+  inset: 0;
+  pointer-events: none;
 }
 
-.voice-panel-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
+.voice-dock__budget rect {
+  stroke: var(--shell-primary);
+  /* One tick long and linear: this has to look like time passing, not like a bar easing in. */
+  transition:
+    stroke-dashoffset var(--voice-budget-tick, 1000ms) linear,
+    stroke 400ms ease-out;
 }
 
-.title-wrap {
-  min-width: 0;
+/*
+ * The last half-minute is the only part of this that is news. Before it, the line is a fact
+ * about the ceiling; after it, the recording is about to be stopped for the user.
+ */
+.voice-dock__budget--ending rect {
+  stroke: var(--shell-warning-border);
 }
 
-.title {
-  margin: 0;
+.voice-dock {
+  position: relative;
+}
+
+/*
+ * TxBorderBeam is a wrapper: it draws the beam on its own border box and expects content in
+ * its slot. Used here as an empty sibling it collapsed to nothing and drew nothing — while
+ * still taking a flex slot and one 8px gap. Lifting it out of flow onto the pill's own box is
+ * what makes the beam exist at all, and it also makes PILL_CHROME_WIDTH's two-gap arithmetic
+ * true (in flow there were three).
+ */
+.voice-dock :deep([data-beam]) {
+  position: absolute;
+  border-radius: inherit;
+  inset: 0;
+  pointer-events: none;
+}
+
+/*
+ * The recovery action replaces the confirm button rather than joining it: a notice offers one
+ * thing to do, and a second circle in that slot would read as a choice that does not exist.
+ */
+/* Same circle as cancel and confirm — the trailing slot has exactly one shape. */
+.voice-dock__btn--action {
+  background: var(--shell-surface-2);
+  color: var(--shell-text-primary);
   font-size: 16px;
-  line-height: 1.2;
-  font-weight: 700;
-  color: #7c2d12;
 }
 
-.subtitle {
-  margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.3;
-  color: #9a3412;
+.voice-dock__btn--action:hover {
+  background: var(--shell-border);
 }
 
-.close-btn {
-  border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.8);
-  color: #9a3412;
-  font-size: 12px;
-  line-height: 1;
-  padding: 8px 10px;
+.voice-dock__btn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--shell-radius-full);
   cursor: pointer;
+  font-size: 15px;
+  transition:
+    width 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease-out,
+    background 160ms ease-out;
 }
 
-.voice-panel-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  margin-top: 10px;
+.voice-dock__btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.voice-dock__btn--cancel {
+  background: var(--shell-surface-2);
+  color: var(--shell-text-secondary);
+}
+
+.voice-dock__btn--confirm {
+  background: var(--shell-primary);
+  color: var(--shell-on-primary);
+  font-size: 17px;
+}
+
+.voice-dock__slot {
   display: flex;
+  min-width: 0;
+  overflow: hidden;
+  height: 34px;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+/*
+ * The card is two rows, not a row with the controls pushed down.
+ *
+ * Dropping the controls to the floor while the text stayed in the middle column left a 250px
+ * empty band across the bottom — the card was half air. Here the text takes the whole top row
+ * (330px instead of 234, so it needs fewer lines in the first place) and the controls own the
+ * bottom one. Top is what happened, bottom is what you can do about it.
+ *
+ * They stay circles at both ends: a control that changes shape or side along with its surface
+ * stops being recognisable as the same control.
+ */
+.voice-dock--expanded {
+  display: grid;
+  align-items: center;
+  column-gap: 8px;
+  grid-template-columns: auto 1fr auto;
+  /* Row 2 takes whatever is left, so the controls sit on the floor at any card height. */
+  grid-template-rows: auto 1fr;
+  row-gap: 4px;
+}
+
+.voice-dock--expanded .voice-dock__slot {
+  height: auto;
+  align-self: start;
+  grid-area: 1 / 1 / 2 / 4;
+  justify-content: flex-start;
+}
+
+.voice-dock--expanded .voice-dock__btn--cancel {
+  align-self: end;
+  grid-area: 2 / 1 / 3 / 2;
+}
+
+/* Whichever trailing control is rendered — confirm, recovery action, or the orb. */
+.voice-dock--expanded > *:last-child {
+  align-self: end;
+  grid-area: 2 / 3 / 3 / 4;
+}
+
+.voice-dock--expanded .voice-dock__text {
+  text-align: left;
+}
+
+/* Sized in em so it tracks the caption text it leads. */
+.voice-dock__icon {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  font-size: 1.35em;
+  color: currentcolor;
+}
+
+/*
+ * Pinned to the first line rather than centred on the block: an icon drifting to the vertical
+ * middle of a two-line paragraph reads as decoration instead of as the subject of the sentence.
+ * On one line there is no block to drift in, so it stays centred with the text.
+ */
+.voice-dock--expanded .voice-dock__icon {
+  align-self: flex-start;
+  margin-top: 1px;
+}
+
+/*
+ * The stack takes the flexible row here, not the controls.
+ *
+ * With `auto 1fr` every spare pixel collects under the text and the icon ends up pinned 5px
+ * below a 24px corner — it reads as crowded against the edge it is nearest. Flipping the rows
+ * lets the stack centre itself in the space above the controls, and the extra top padding
+ * keeps it clear of the curve rather than merely clear of the border.
+ */
+.voice-dock--icon-card {
+  padding-top: 16px;
+  grid-template-rows: 1fr auto;
+  row-gap: 6px;
+}
+
+/*
+ * The icon takes the board's warning hue rather than the shell's darkened one.
+ *
+ * `--shell-warning` is deliberately deepened for 11px chip ink — it has to clear AA on a soft
+ * surface — and at icon size that reads as brown rather than as a warning. An icon is a
+ * graphic, so the bar it has to clear is 3:1 rather than 4.5:1, which the lighter value passes
+ * comfortably. The sentence keeps the accessible ink but grows to 13px/500: the stack has the
+ * room, and the muddiness was as much 11px as it was hue.
+ */
+.voice-dock--icon-card .voice-dock__icon {
+  color: #b57a18;
+}
+
+.voice-dock--icon-card .voice-dock__text {
+  font-size: var(--shell-fs-body);
+  font-weight: 500;
+}
+
+/*
+ * The device card leads with the picture.
+ *
+ * A microphone with a line through it is the whole message; the sentence under it only names
+ * which microphone problem it is. So the icon goes on top at the centre, the sentence sits
+ * beneath it, and the two controls stay on the floor at either end — the same two circles in
+ * the same two corners as every other card, because they are still the same two controls.
+ */
+.voice-dock--icon-card .voice-dock__slot {
   flex-direction: column;
+  align-self: center;
+  justify-content: center;
   gap: 6px;
 }
 
-.screenshot-target-controls {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
+.voice-dock--icon-card .voice-dock__icon {
+  align-self: center;
+  margin: 0;
+  font-size: 1.9em;
 }
 
-.screenshot-target-field {
-  min-width: 0;
-  flex: 1;
+.voice-dock--icon-card .voice-dock__text {
+  -webkit-line-clamp: 1;
+  text-align: center;
+}
+
+.voice-dock--danger .voice-dock__icon {
+  color: var(--shell-danger);
+}
+
+.voice-dock--warning .voice-dock__icon {
+  color: var(--shell-warning);
+}
+
+/*
+ * Content changes as one piece, not element by element.
+ *
+ * The box is already animating its width, height and radius; letting the sentence inside it
+ * cut straight to the next one reads as two unrelated events happening at once. The outgoing
+ * content blurs and shrinks away, the incoming one blurs and grows in, and because the whole
+ * slot is the unit, the icon and its sentence move together rather than racing each other.
+ *
+ * The leaving copy is taken out of flow so it cannot push the arriving one around — in the
+ * card layouts both would otherwise claim the same grid cell.
+ */
+.voice-swap-enter-active,
+.voice-swap-leave-active {
+  transition:
+    opacity 170ms ease-out,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 220ms ease-out;
+}
+
+/*
+ * The leaving copy is clipped to its own box, and leaves faster than it used to.
+ *
+ * It holds the previous sentence at `nowrap`, so while the pill is shrinking from card width
+ * back to pill width that sentence is wider than the box it sits in — and with nothing clipping
+ * it, it painted *outside* the pill as a faint blurred line trailing the surface. Clipping is
+ * the fix; the shorter fade just narrows the window in which the two shapes overlap at all.
+ */
+.voice-swap-leave-active {
+  position: absolute;
+  overflow: hidden;
+  inset: 5px;
+  transition:
+    opacity 120ms ease-out,
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 160ms ease-out;
+}
+
+/*
+ * Only the leave blurs as a block now. The arriving content has its own wave of characters, and
+ * blurring the whole slot on top of that reads as two effects fighting for the same moment.
+ */
+.voice-swap-leave-to {
+  opacity: 0;
+  filter: blur(5px);
+  transform: scale(0.86);
+}
+
+/* Geometry comes from the script so the bar count and the bars agree by construction:
+   `barsForWidth` divides the centre column by exactly these two numbers. */
+.voice-dock__wave {
   display: flex;
+  align-items: center;
+  gap: var(--voice-wave-gap, 2px);
+}
+
+.voice-dock__wave span {
+  width: var(--voice-wave-bar, 2px);
+  border-radius: 1px;
+  background: var(--shell-primary);
+  /* Matches the 10Hz level cadence, so each bar lands exactly as the next frame arrives. */
+  transition: height 100ms linear;
+}
+/*
+ * The live transcript scrolls its own tail into view.
+ *
+ * A recognized sentence outgrows the pill within a few seconds, and the end of it is the
+ * part the speaker is watching for — an ellipsis hides exactly that. So the track slides
+ * left instead, by transform rather than `scrollLeft`: the offset is a number this
+ * component already computes, and a transform is composited rather than re-laying-out a
+ * paragraph of per-character spans ten times a second.
+ */
+.voice-dock__stream {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  /*
+   * Padding and mask over the same band. `overflow` clips at the padding box, so the text
+   * runs on into this strip and the mask dissolves it there — cutting it off against a
+   * hard edge is what makes a scrolling label look broken. A gradient overlay would not do:
+   * the pill's fill is translucent, so an opaque strip of "background" reads as a bright
+   * block sitting on top of whatever is behind the window.
+   */
+  padding-inline: var(--voice-stream-fade, 14px);
+  /*
+   * Stated rather than inherited from the global reset: `streamViewportWidth` subtracts both
+   * fade bands from the pill's width, which is only the box this row actually has if the
+   * padding is counted inside it. The number and the box that has to match it live together.
+   */
+  box-sizing: border-box;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--voice-stream-fade, 14px),
+    #000 calc(100% - var(--voice-stream-fade, 14px)),
+    transparent 100%
+  );
+}
+
+.voice-dock__text--stream {
+  display: inline-block;
+  width: max-content;
+  max-width: none;
+  overflow: visible;
+  white-space: nowrap;
+  text-overflow: clip;
+  /*
+   * Short on purpose. Partials land at 5-10Hz, so anything near the pill's own 260ms would
+   * spend its whole life being restarted and the text would crawl behind the voice. This is
+   * long enough to read as sliding rather than jumping, and over before the next word.
+   */
+  transition: transform 140ms cubic-bezier(0.2, 0, 0, 1);
+  will-change: transform;
+}
+
+.voice-dock__live {
+  display: flex;
+  width: 100%;
+  min-width: 0;
   flex-direction: column;
-  gap: 3px;
-  font-size: 10px;
-  color: #9a3412;
+  align-items: center;
+  gap: 4px;
 }
 
-.screenshot-target-field select {
-  min-width: 0;
-  width: 100%;
-  height: 28px;
-  border: 1px solid rgba(180, 83, 9, 0.25);
-  border-radius: 8px;
-  padding: 0 8px;
-  color: #7c2d12;
-  background: rgba(255, 255, 255, 0.85);
+.voice-dock__live .voice-dock__wave {
+  min-height: 28px;
 }
 
-.input-area {
-  flex: 1;
-  resize: none;
-  border: 1px solid rgba(180, 83, 9, 0.25);
-  border-radius: 10px;
-  padding: 10px;
-  line-height: 1.5;
-  font-size: 13px;
-  color: #431407;
-  background: rgba(255, 255, 255, 0.85);
-  outline: none;
+.voice-dock__wave--pending span {
+  animation: voice-wave-pending 900ms ease-in-out infinite;
+  animation-delay: var(--voice-wave-delay, 0ms);
+  transform-origin: center;
 }
 
-.input-area:focus {
-  border-color: rgba(249, 115, 22, 0.65);
+@keyframes voice-wave-pending {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scaleY(0.45);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scaleY(1.25);
+  }
 }
 
-.interim-text {
+/*
+ * Two lines, then ellipsis. `-webkit-line-clamp` is what allows the second line at all; the
+ * measurement in the script decides whether the island is tall enough for it to show.
+ */
+.voice-dock__text {
+  display: -webkit-box;
+  overflow: hidden;
   margin: 0;
-  font-size: 12px;
-  color: #9a3412;
-  opacity: 0.85;
+  -webkit-box-orient: vertical;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
+  -webkit-line-clamp: 2;
+  line-height: 1.4;
+  /* The pill is symmetric around its centre, so a line that does wrap wraps centred. Only the
+     card overrides this: two lines read as a paragraph, and paragraphs are ragged on one side. */
+  text-align: center;
+  /*
+   * One line for the whole width animation.
+   *
+   * The box takes 260ms to reach the width the text asked for, and until it gets there the text
+   * does not fit — so it wrapped, then snapped back onto one line when the box caught up. That
+   * flash was the whole "not smooth". Held to one line it simply reveals as the pill opens.
+   */
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.error-text {
-  margin: 0;
-  font-size: 12px;
-  color: #dc2626;
-}
-
-.status-text {
-  margin: 0;
-  font-size: 12px;
-  color: #047857;
-}
-
-.permission-recovery-btn {
-  align-self: flex-start;
-}
-
-.intelligence-recovery-btn {
-  align-self: flex-start;
-}
-
-.screenshot-preview {
-  border: 1px solid rgba(180, 83, 9, 0.22);
-  border-radius: 10px;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.82);
-}
-
-.screenshot-preview-image {
-  display: block;
-  width: 100%;
-  max-height: 82px;
-  object-fit: contain;
-  border-radius: 7px;
-  background: rgba(67, 20, 7, 0.06);
-}
-
-.screenshot-preview-meta,
-.screenshot-preview-copy,
-.screenshot-preview-save {
-  margin: 6px 0 0;
-  font-size: 11px;
-  line-height: 1.3;
-  color: #9a3412;
-}
-
-.screenshot-preview-copy {
-  color: #047857;
-}
-
-.screenshot-preview-save {
-  word-break: break-all;
-}
-
-.screenshot-text-fallback,
-.screenshot-image-translate-route {
-  max-height: 132px;
-  overflow: auto;
-  border: 1px solid rgba(180, 83, 9, 0.22);
-  border-radius: 10px;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.82);
-}
-
-.screenshot-text-fallback-title,
-.screenshot-text-fallback-row p,
-.screenshot-text-fallback-meta {
-  margin: 0;
-}
-
-.screenshot-text-fallback-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #7c2d12;
-}
-
-.screenshot-text-fallback-row {
-  margin-top: 6px;
-}
-
-.screenshot-text-fallback-row span,
-.screenshot-text-fallback-meta {
-  font-size: 10px;
-  color: #9a3412;
-}
-
-.screenshot-text-fallback-row p {
-  margin-top: 2px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-size: 11px;
-  line-height: 1.35;
-  color: #431407;
-}
-
-.screenshot-text-fallback-meta {
-  margin-top: 7px;
-  line-height: 1.3;
-}
-
-.screenshot-image-translate-route-title,
-.screenshot-image-translate-route-list,
-.screenshot-image-translate-route-summary {
-  margin: 0;
-}
-
-.screenshot-image-translate-route-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #7c2d12;
-}
-
-.screenshot-image-translate-route-list {
-  padding: 0;
-  list-style: none;
-}
-
-.screenshot-image-translate-route-list li,
-.screenshot-image-translate-route-summary {
-  margin-top: 6px;
-  font-size: 10px;
-  line-height: 1.3;
-  color: #9a3412;
-}
-
-.voice-panel-footer {
-  margin-top: 12px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.secondary-btn,
-.primary-btn {
-  border: none;
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-size: 12px;
-  line-height: 1.2;
-  cursor: pointer;
-  min-height: 32px;
-  max-width: 150px;
+/* The card is where wrapping is the point, so it is the card that turns it back on. */
+.voice-dock--expanded .voice-dock__text {
   white-space: normal;
 }
-
-.secondary-btn {
-  background: rgba(255, 255, 255, 0.82);
-  color: #9a3412;
+/*
+ * Characters arrive in a wave rather than the sentence appearing at once.
+ *
+ * `inline-block` is what makes each one animatable, and `pre` keeps the spaces between words
+ * from collapsing now that every character is its own box.
+ */
+.voice-dock__char {
+  display: inline-block;
+  animation: voice-char-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  white-space: pre;
 }
 
-.primary-btn {
-  background: #ea580c;
-  color: #fff;
+@keyframes voice-char-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(3px) scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
 }
 
-.secondary-btn:disabled,
-.primary-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.voice-dock--danger .voice-dock__text {
+  color: var(--shell-danger);
+}
+
+.voice-dock--warning .voice-dock__text {
+  color: var(--shell-warning);
+}
+
+.voice-dock--muted .voice-dock__text {
+  color: var(--shell-text-muted);
+}
+
+/*
+ * Only the waiting hint shimmers. A notice is a result, and results should hold still.
+ *
+ * The highlight is a per-character colour wave, not a gradient clipped to the paragraph's text.
+ * The gradient version drew nothing at all once the reveal gave each character a `filter`: a
+ * filtered inline-block composites on its own and leaves the parent's `background-clip: text`
+ * shape, while `-webkit-text-fill-color: transparent` still inherits into it. Every glyph was
+ * transparent with no gradient behind it, so the pill widened around a sentence nobody could see.
+ */
+.voice-dock__text--shimmer {
+  color: var(--shell-text-muted);
+}
+
+.voice-dock__text--shimmer .voice-dock__char {
+  animation:
+    voice-char-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both,
+    voice-char-shimmer 1400ms linear infinite;
+}
+
+@keyframes voice-char-shimmer {
+  0%,
+  100% {
+    color: var(--shell-text-muted);
+  }
+
+  50% {
+    color: var(--shell-text-primary);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-dock {
+    animation: none;
+    transition: border-color 160ms ease-out;
+  }
+
+  .voice-dock__wave span,
+  .voice-dock__wave--pending span {
+    animation: none;
+    transition: none;
+  }
+
+  /* The bar still drains — it is information, not decoration — it just stops easing between ticks. */
+  .voice-dock__charge {
+    transition: none;
+  }
+
+  /* Same rule again: the tail still has to be the part you can see, so the track still
+     moves — it just arrives rather than slides. */
+  .voice-dock__text--stream {
+    transition: none;
+  }
+
+  /* Same rule as the charge: the budget line still advances, it just steps once per tick. */
+  .voice-dock__budget rect {
+    transition: none;
+  }
+
+  /* The send bar keeps its meaning and loses its easing, like the other two. */
+  .voice-dock__upload {
+    transition: none;
+  }
+
+  /* The orb keeps its colour and stops drifting through hues. */
+  .voice-dock__orb {
+    animation: none;
+  }
+
+  .voice-dock--holding {
+    transform: none;
+  }
+
+  /* No blur, no scale — the swap becomes a plain cut, which is what reduced motion asks for. */
+  .voice-swap-enter-active,
+  .voice-swap-leave-active {
+    transition: opacity 100ms ease-out;
+  }
+
+  .voice-swap-leave-to {
+    filter: none;
+    transform: none;
+  }
+
+  /* The sentence arrives all at once, with no delay to stagger and nothing to blur through. */
+  .voice-dock__char {
+    animation: none;
+  }
+
+  /* The controls resize with the surface, so they follow the same rule the surface does. */
+  .voice-dock__btn {
+    transition:
+      opacity 160ms ease-out,
+      background 160ms ease-out;
+  }
+
+  /* Still legible, just not travelling: the wave was the only motion it had. */
+  .voice-dock__text--shimmer,
+  .voice-dock__text--shimmer .voice-dock__char {
+    color: var(--shell-text-secondary);
+    animation: none;
+  }
 }
 </style>

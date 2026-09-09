@@ -1,7 +1,28 @@
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import type { ResolvedApplication } from '@talex-touch/utils/transport/events/types'
 
-export type ClipboardFilter = 'all' | 'text' | 'image' | 'files' | 'favorite'
+/**
+ * 分类条的取值。`link` / `video` / `color` / `command` / `secret` 依赖 C2 的内容形态分类器，
+ * 在它接入前这些分类没有判定依据，UI 侧渲染为禁用而不是临时写一套会和分类器打架的规则。
+ */
+export type ClipboardFilter =
+  | 'all'
+  | 'text'
+  | 'link'
+  | 'image'
+  | 'video'
+  | 'files'
+  | 'color'
+  | 'command'
+  | 'secret'
+  | 'favorite'
+
+/** 目前真正能落到 `getHistory` 查询上的分类。 */
+export type ClipboardQueryableType = 'text' | 'image' | 'files'
+
+export function toHistoryQueryType(filter: ClipboardFilter): ClipboardQueryableType | undefined {
+  return filter === 'text' || filter === 'image' || filter === 'files' ? filter : undefined
+}
 
 export interface ClipboardSection {
   key: string
@@ -10,17 +31,32 @@ export interface ClipboardSection {
   items: PluginClipboardItem[]
 }
 
-export interface ClipboardInfoRow {
-  label: string
-  value: string
-  secondaryValue?: string
-  icon?: string | null
+export interface ClipboardSummary {
+  typeLabel: string
+  mime: string
+  metrics: string[]
+  timeLabel: string
+}
+
+export interface ClipboardSourceInfo {
+  displayName: string
+  bundleId: string | null
+  icon: string | null
+}
+
+export interface ClipboardFileNode {
+  name: string
+  path: string
+  dir: string
+}
+
+export interface ClipboardFileGroup {
+  dir: string
+  files: ClipboardFileNode[]
 }
 
 export interface ClipboardTextInsight {
-  characterTokens: string[]
   wordTokens: string[]
-  characterCount: number
   wordCount: number
   lineCount: number
 }
@@ -147,6 +183,10 @@ function getMeta(item: PluginClipboardItem): Record<string, unknown> {
 
 const CLIPBOARD_TAG_LABELS: Record<string, string> = {
   api_key: 'API 密钥',
+  private_key: '私钥',
+  jwt: 'JWT',
+  connection_string: '连接串',
+  verification_code: '验证码',
   github: 'GitHub',
   npm: 'npm',
   openai: 'OpenAI',
@@ -160,6 +200,16 @@ const CLIPBOARD_TAG_LABELS: Record<string, string> = {
   account: '账号',
   email: '邮箱',
   url: '链接',
+}
+
+/** 原始 tag 值（未本地化），供内容形态分类器使用。 */
+export function getClipboardRawTags(item: PluginClipboardItem): string[] {
+  const tags = getMeta(item).tags
+  if (!Array.isArray(tags)) {
+    return []
+  }
+
+  return tags.filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
 }
 
 export function getClipboardTagLabels(item: PluginClipboardItem): string[] {
@@ -451,10 +501,15 @@ export function getClipboardSizeLabel(item: PluginClipboardItem | null | undefin
   return `${item.content.length} 字符`
 }
 
+function getImageDimensionLabel(item: PluginClipboardItem): string | null {
+  const imageSize = getImageSize(item)
+  return imageSize ? `${imageSize.width}×${imageSize.height}` : null
+}
+
 export function getClipboardTitle(item: PluginClipboardItem): string {
   if (item.type === 'image') {
-    const imageSize = getClipboardSizeLabel(item)
-    return `${inferClipboardMime(item)}${imageSize !== '未知' ? ` · ${imageSize}` : ''}`
+    const dimensions = getImageDimensionLabel(item)
+    return `${inferClipboardMime(item)}${dimensions ? ` · ${dimensions}` : ''}`
   }
 
   if (item.type === 'files') {
@@ -475,59 +530,186 @@ export function getClipboardTitle(item: PluginClipboardItem): string {
   return text.length > 72 ? `${text.slice(0, 71)}…` : text
 }
 
+export function getClipboardKindLabel(item: PluginClipboardItem | null | undefined): string {
+  if (!item) {
+    return '未知'
+  }
+
+  if (item.type === 'image') {
+    return '图片'
+  }
+
+  if (item.type === 'files') {
+    return '文件'
+  }
+
+  return item.rawContent ? '富文本' : '文本'
+}
+
 export function getClipboardSubtitle(item: PluginClipboardItem): string {
   const time = normalizeTimestamp(item.timestamp)
   const timeLabel = time ? formatDate(time) : '刚刚'
 
-  if (item.type === 'text') {
-    const lines = item.content
-      .split(/\r?\n/)
-      .map(line => line.trim())
-      .filter(Boolean)
+  if (item.type === 'image') {
+    const fileSize = getImageFileSize(item)
+    return fileSize ? `图片 · ${formatBytes(fileSize)} · ${timeLabel}` : `图片 · ${timeLabel}`
+  }
 
-    const preview = lines[1] ?? lines[0] ?? '文本内容'
-    return `${preview.slice(0, 40)}${preview.length > 40 ? '…' : ''} · ${timeLabel}`
+  return `${getClipboardKindLabel(item)} · ${timeLabel}`
+}
+
+export function getClipboardMetrics(item: PluginClipboardItem): string[] {
+  if (item.type === 'image') {
+    const imageSize = getImageSize(item)
+    const fileSize = getImageFileSize(item)
+    return [
+      imageSize ? `${imageSize.width} × ${imageSize.height}` : null,
+      fileSize ? formatBytes(fileSize) : null,
+    ].filter((value): value is string => Boolean(value))
   }
 
   if (item.type === 'files') {
-    return `${getClipboardSizeLabel(item)} · ${timeLabel}`
+    return [`${parseFileList(item.content).length} 个文件`]
   }
 
-  return timeLabel
+  const content = item.content ?? ''
+  const lineCount = content.length > 0 ? content.split(/\r\n|\r|\n/).length : 0
+  return [`${content.length} 字符`, `${lineCount} 行`]
 }
 
-export function getClipboardInfoRows(
-  item: PluginClipboardItem,
-  sourceApplication?: ResolvedApplication | null,
-): ClipboardInfoRow[] {
-  const timestamp = normalizeTimestamp(item.timestamp)
-  const sourceId = item.sourceApp || ''
+/**
+ * `application/x-tuff-files` 在 720 宽下会和右对齐的时间戳挤在一起，摘要条只显示子类型。
+ */
+function getSummaryMime(item: PluginClipboardItem): string {
+  const mime = inferClipboardMime(item)
+  return mime.startsWith('application/x-') ? mime.slice('application/'.length) : mime
+}
 
-  return [
-    {
-      label: '来源应用',
-      value: sourceApplication?.displayName || sourceId || '未知来源',
-      secondaryValue:
-        sourceApplication && sourceId && sourceApplication.displayName !== sourceId ? sourceId : undefined,
-      icon: sourceApplication?.icon,
-    },
-    {
-      label: '内容类型',
-      value: getClipboardTypeLabel(item),
-    },
-    {
-      label: '大小',
-      value: getClipboardSizeLabel(item),
-    },
-    {
-      label: 'MIME',
-      value: inferClipboardMime(item),
-    },
-    {
-      label: '记录时间',
-      value: timestamp ? formatDate(timestamp) : '未知',
-    },
-  ]
+export function getClipboardSummary(item: PluginClipboardItem): ClipboardSummary {
+  const timestamp = normalizeTimestamp(item.timestamp)
+
+  return {
+    typeLabel: getClipboardKindLabel(item),
+    mime: getSummaryMime(item),
+    metrics: getClipboardMetrics(item),
+    timeLabel: timestamp ? formatDate(timestamp) : '未知',
+  }
+}
+
+/**
+ * 「这条什么时候会被删」。相对时间给的是量级判断，绝对时间给的是确凿answer——
+ * 只给「2 天后」的话，用户没法知道到底是明天下班前还是后天早上。
+ */
+export function getClipboardRetentionLabel(item: PluginClipboardItem | null | undefined): string | null {
+  if (!item) {
+    return null
+  }
+
+  if (item.retentionReason === 'favorite') {
+    return '永不自动删除（已收藏）'
+  }
+  if (item.retentionReason === 'protected') {
+    return '永不自动删除（密钥）'
+  }
+
+  const expiresAt = item.retentionExpiresAt
+  if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) {
+    return item.retentionReason === 'disabled' ? '永不自动删除' : null
+  }
+
+  const remainingMs = expiresAt - Date.now()
+  const absolute = new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(expiresAt)
+
+  if (remainingMs <= 0) {
+    // 到期了但还在库里：清理是周期性跑的，不是到点就删。说「已过期」而不是「0 天后」。
+    return `已过期，待清理（${absolute}）`
+  }
+
+  return `${formatRemaining(remainingMs)}（${absolute}）`
+}
+
+function formatRemaining(ms: number): string {
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 1) {
+    return '不到 1 分钟后'
+  }
+  if (minutes < 60) {
+    return `${minutes} 分钟后`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return `${hours} 小时后`
+  }
+
+  return `${Math.floor(hours / 24)} 天后`
+}
+
+export function getClipboardSourceInfo(  item: PluginClipboardItem,
+  sourceApplication?: ResolvedApplication | null,
+): ClipboardSourceInfo {
+  const sourceId = item.sourceApp?.trim() || ''
+  const displayName = sourceApplication?.displayName || sourceId || '未知来源'
+
+  return {
+    displayName,
+    bundleId: sourceId && sourceId !== displayName ? sourceId : null,
+    icon: sourceApplication?.icon ?? null,
+  }
+}
+
+function shortenDirectory(dir: string): string {
+  const match = dir.match(/^\/Users\/[^/]+(\/.*)?$/)
+  if (!match) {
+    return dir || '/'
+  }
+  return `~${match[1] ?? ''}`
+}
+
+export function groupFilesByDirectory(content: string | null | undefined): ClipboardFileGroup[] {
+  const groups = new Map<string, ClipboardFileGroup>()
+
+  for (const filePath of parseFileList(content)) {
+    const separatorIndex = filePath.lastIndexOf('/')
+    const rawDir = separatorIndex > 0 ? filePath.slice(0, separatorIndex) : '/'
+    const name = separatorIndex >= 0 ? filePath.slice(separatorIndex + 1) : filePath
+    const dir = shortenDirectory(rawDir)
+
+    const group = groups.get(dir) ?? { dir, files: [] }
+    group.files.push({ name: name || filePath, path: filePath, dir })
+    groups.set(dir, group)
+  }
+
+  return Array.from(groups.values())
+}
+
+/**
+ * 分词。`selectClipboardInsight` 的「值不值得拆」判定和这里的渲染必须用同一个实现——
+ * 用一条更便宜的正则近似它，中文连写会被整段当成一个词，于是整段中文再也拿不到拆词分区。
+ */
+export function splitWordTokens(content: string): string[] {
+  if (!content) {
+    return []
+  }
+
+  const SegmenterCtor =
+    typeof Intl !== 'undefined' && 'Segmenter' in Intl ? (Intl as IntlWithSegmenter).Segmenter : null
+  const wordSegmenter = SegmenterCtor ? new SegmenterCtor('zh-CN', { granularity: 'word' }) : null
+
+  return wordSegmenter
+    ? Array.from(wordSegmenter.segment(content) as Iterable<{ segment: string; isWordLike?: boolean }>)
+        .filter(segment => segment.isWordLike === true || /[\p{L}\p{N}_-]/u.test(segment.segment))
+        .map(segment => segment.segment.trim())
+        .filter(Boolean)
+    : (content.match(/[\p{L}\p{N}_-]+/gu) ?? [])
 }
 
 export function getClipboardTextInsight(item: PluginClipboardItem | null | undefined): ClipboardTextInsight | null {
@@ -538,34 +720,17 @@ export function getClipboardTextInsight(item: PluginClipboardItem | null | undef
   const content = item.content ?? ''
   if (!content) {
     return {
-      characterTokens: [],
       wordTokens: [],
-      characterCount: 0,
       wordCount: 0,
       lineCount: 0,
     }
   }
 
-  const SegmenterCtor =
-    typeof Intl !== 'undefined' && 'Segmenter' in Intl ? (Intl as IntlWithSegmenter).Segmenter : null
-  const characterSegmenter = SegmenterCtor ? new SegmenterCtor('zh-CN', { granularity: 'grapheme' }) : null
-  const wordSegmenter = SegmenterCtor ? new SegmenterCtor('zh-CN', { granularity: 'word' }) : null
-  const characters = characterSegmenter
-    ? Array.from(characterSegmenter.segment(content), segment => segment.segment)
-    : Array.from(content)
-  const characterTokens = characters.filter(char => char.trim().length > 0)
-  const words = wordSegmenter
-    ? Array.from(wordSegmenter.segment(content) as Iterable<{ segment: string; isWordLike?: boolean }>)
-        .filter(segment => segment.isWordLike === true || /[\p{L}\p{N}_-]/u.test(segment.segment))
-        .map(segment => segment.segment.trim())
-        .filter(Boolean)
-    : (content.match(/[\p{L}\p{N}_-]+/gu) ?? [])
+  const words = splitWordTokens(content)
   const lines = content.length > 0 ? content.split(/\r\n|\r|\n/).length : 0
 
   return {
-    characterTokens: characterTokens.slice(0, 80),
     wordTokens: unique(words, word => word.toLowerCase()).slice(0, 40),
-    characterCount: characters.length,
     wordCount: words.length,
     lineCount: lines,
   }
@@ -580,10 +745,13 @@ export function getClipboardColorTokens(item: PluginClipboardItem | null | undef
   const tokens: ClipboardColorToken[] = []
 
   if (item.type === 'text') {
+    // 只看可见文本，不看 `rawContent`。
+    //
+    // 富文本的 HTML 里带着它的排版：从控制台复制一行日志，标记里就有语法高亮的
+    // `color: #767676`。扫它等于把「这段文字长什么样」当成了「这段文字是什么」，
+    // 于是一个时间戳被归进了「颜色」分类。而 `content` 本身就是富文本的纯文本形式，
+    // 正文里真写了色值的情况它已经覆盖。
     tokens.push(...extractColorTokensFromText(item.content ?? ''))
-    if (item.rawContent) {
-      tokens.push(...extractColorTokensFromText(item.rawContent))
-    }
   }
 
   const likelyColorKeys = [

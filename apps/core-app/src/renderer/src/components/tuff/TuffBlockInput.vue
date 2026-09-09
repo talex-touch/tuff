@@ -14,11 +14,13 @@ const props = withDefaults(
     modelValue: string | number
     defaultIcon?: string | ITuffIcon
     activeIcon?: string | ITuffIcon
+    inputType?: 'text' | 'password' | 'textarea' | 'date' | 'email' | 'number'
     disabled?: boolean
     placeholder?: string
     clearable?: boolean
   }>(),
   {
+    inputType: 'text',
     description: '',
     disabled: false,
     placeholder: '',
@@ -90,7 +92,10 @@ function updateValue(val: string | number) {
         <div class="TuffBlockInput-Control">
           <TxInput
             v-model="inputValue"
+            :type="inputType"
             :placeholder="placeholder"
+            :disabled="disabled"
+            :clearable="clearable"
             @focus="handleFocus"
             @blur="handleBlur"
           />
@@ -102,7 +107,7 @@ function updateValue(val: string | number) {
 
 <style lang="scss" scoped>
 .TuffBlockInput-Control {
-  width: 180px;
+  width: 234px;
   max-width: 100%;
   min-width: 120px;
   margin-left: auto;

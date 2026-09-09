@@ -64,15 +64,18 @@ export const PLUGIN_FACING_INTELLIGENCE_EVENTS = [
  * `context.plugin` checks still apply.
  */
 export const PLUGIN_FACING_EVENTS = [
-  // AppEvents — 6
+  // AppEvents — 8
   AppEvents.fileIndex.batteryLevel,
   AppEvents.power.batteryStatus,
   AppEvents.system.captureSelection,
   AppEvents.system.getActiveApp,
+  AppEvents.system.openExternal,
   AppEvents.system.resolveApplication,
+  AppEvents.system.showInFolder,
   AppEvents.window.show,
 
-  // ClipboardEvents — 15
+  // ClipboardEvents — 17
+  ClipboardEvents.annotate,
   ClipboardEvents.apply,
   ClipboardEvents.change,
   ClipboardEvents.clear,
@@ -81,6 +84,7 @@ export const PLUGIN_FACING_EVENTS = [
   ClipboardEvents.delete,
   ClipboardEvents.getHistory,
   ClipboardEvents.getImageUrl,
+  ClipboardEvents.previewImage,
   ClipboardEvents.getLatest,
   ClipboardEvents.getStatus,
   ClipboardEvents.read,

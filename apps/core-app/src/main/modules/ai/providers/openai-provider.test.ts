@@ -47,6 +47,7 @@ interface ProviderRequest {
   url?: string
   headers?: Record<string, string>
   body?: unknown
+  signal?: AbortSignal
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -371,6 +372,31 @@ describe('OpenAIProvider audio transcription capabilities', () => {
       model: 'whisper-1',
       provider: IntelligenceProviderType.OPENAI
     })
+  })
+
+  it('rejects the STT operation when the network aborts, even if a late response tries to arrive', async () => {
+    const response = Promise.withResolvers<{ data: { text: string } }>()
+    let lateNetworkResponse: (() => void) | undefined
+    networkMocks.request.mockImplementation((request: ProviderRequest) => {
+      request.signal?.addEventListener(
+        'abort',
+        () => response.reject(new Error('network request aborted')),
+        { once: true }
+      )
+      lateNetworkResponse = () =>
+        response.resolve({ data: { text: 'must not surface after cancellation' } })
+      return response.promise
+    })
+    const controller = new AbortController()
+    const pending = createProvider().stt(
+      { audio: 'data:audio/wav;base64,ZmFrZS13YXY=', format: 'wav' },
+      { metadata: { capabilityId: 'audio.stt' }, signal: controller.signal }
+    )
+
+    controller.abort()
+    lateNetworkResponse?.()
+
+    await expect(pending).rejects.toThrow('network request aborted')
   })
 
   it.each([

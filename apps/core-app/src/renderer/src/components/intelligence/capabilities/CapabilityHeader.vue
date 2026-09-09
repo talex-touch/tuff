@@ -39,11 +39,15 @@ const capabilityType = computed(() => {
 
 <style lang="scss" scoped>
 .capability-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   padding: 0.875rem 1.25rem 0.75rem;
-  background: linear-gradient(180deg, var(--tx-fill-color-blank) 0%, transparent 100%);
+  background: var(--tx-bg-color);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
   -webkit-app-region: drag;
 }
 

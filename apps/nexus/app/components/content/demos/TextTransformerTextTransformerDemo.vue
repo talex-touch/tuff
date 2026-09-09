@@ -48,6 +48,7 @@ const toggle = () => {
           <TxCard variant="plain" background="mask" :padding="12" :radius="14">
             <div style="font-size: 14px; font-weight: 600; line-height: 1.4;">
               <TxTextTransformer
+                mode="fade"
                 :text="text"
                 :duration-ms="duration"
                 :blur-px="blurPx"
@@ -97,6 +98,7 @@ const toggle = () => {
           <TxCard variant="plain" background="mask" :padding="12" :radius="14">
             <div style="font-size: 14px; font-weight: 600; line-height: 1.4;">
               <TxTextTransformer
+                mode="fade"
                 :text="text"
                 :duration-ms="duration"
                 :blur-px="blurPx"

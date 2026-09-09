@@ -6,7 +6,6 @@ import SettingsPage from '~/components/settings/SettingsPage.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { settingCategoryChildren } from '~/modules/settings/categories'
 import SettingAssistant from '../SettingAssistant.vue'
-import SettingLocalAiCli from '../SettingLocalAiCli.vue'
 import SettingSkillsMcp from '../SettingSkillsMcp.vue'
 
 const { t } = useI18n()
@@ -18,8 +17,8 @@ const subPages = settingCategoryChildren('intelligence').filter((subPage) => !su
 
 <template>
   <SettingsPage :title="t('settingsNav.category.intelligence')">
-    <!-- One shared group: the master switch and its floating/voice options belong together. -->
-    <SettingAssistant mode="all" />
+    <!-- Assistant and floating-ball controls stay together; voice input lives in Audio Insights. -->
+    <SettingAssistant />
 
     <!-- What the home conversation can reach beyond the model: skills and MCP servers. -->
     <SettingSkillsMcp />

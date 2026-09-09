@@ -26,6 +26,7 @@ export {
   INTELLIGENCE_HOME_SURFACE,
   IntelligenceCapabilityType,
   IntelligenceProviderType,
+  NEXUS_AUDIO_TRANSCRIBE_MODEL,
   TUFF_INTELLIGENCE_AGENT_TRACE_CONTRACT_VERSION,
   TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION
 } from "@talex-touch/utils/types/intelligence";

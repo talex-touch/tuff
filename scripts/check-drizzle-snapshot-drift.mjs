@@ -44,8 +44,16 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * `0041_ai_orchestrator_run_retention` migrations in the intentionally snapshotless 0015+ range.
  * This records the three known additions explicitly without pretending the broken snapshot chain
  * has been repaired.
+ *
+ * Raised 28 → 30 on 2026-09-08 for the hand-written voice insight and detailed recognition
+ * record migrations `0042` and `0043`; the snapshot chain remains intentionally untouched.
+ *
+ * Raised 30 → 31 on 2026-09-09 for `0044_clipboard_retention_expiry`, the hand-written
+ * upgrade that adds the expiry column already used by clipboard capture. Its full-chain
+ * SQLite regression is in clipboard-retention-expiry-schema.test.ts. This records only
+ * that migration's known gap; it does not regenerate or claim to repair snapshot history.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 28
+export const KNOWN_MISSING_SNAPSHOTS = 31
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))

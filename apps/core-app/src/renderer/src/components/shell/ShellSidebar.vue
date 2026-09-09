@@ -7,6 +7,7 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
 import { groupedSettingNavigation } from '~/modules/settings/categories'
+import { appSetting } from '~/modules/storage/app-storage'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import ShellBackRow from './ShellBackRow.vue'
 import ShellChromeBar from './ShellChromeBar.vue'
@@ -65,7 +66,9 @@ const contextTransition = computed(() =>
 )
 
 const searchKbd = computed(() => (isMac.value ? '⌘E' : 'Ctrl+E'))
-const settingGroups = groupedSettingNavigation()
+const settingGroups = computed(() =>
+  groupedSettingNavigation(Boolean(appSetting?.dev?.developerMode))
+)
 const appVersion = computed(() =>
   packageJson.value?.version ? `v${packageJson.value.version}` : ''
 )
@@ -107,6 +110,7 @@ function openCoreBox(): void {
             :icon="item.icon"
             :label="t(item.labelKey)"
             :to="item.path"
+            :badge="item.beta ? t('settings.platformTags.beta') : undefined"
             :active="item.activeExact ? route.path === item.path : undefined"
           />
         </ShellNavGroup>

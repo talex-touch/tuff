@@ -293,6 +293,10 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   }
 
   async function saveSettings(): Promise<void> {
+    // A save requested during renderer-storage hydration is only queued by TouchStorage. Awaiting
+    // hydration first prevents the UI from reporting "saved" while the main process still tests
+    // the previous capability routing snapshot.
+    await intelligenceSettings.whenHydrated()
     await intelligenceSettings.saveToRemote({ force: true })
   }
 

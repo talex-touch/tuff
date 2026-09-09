@@ -50,7 +50,7 @@ import {
   registerBuiltinAgents,
   registerBuiltinTools
 } from './agents'
-import { capabilityTesterRegistry } from './capability-testers'
+import { AsrCapabilityTester, capabilityTesterRegistry } from './capability-testers'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import { resolveCapabilityStatus } from './intelligence-capability-status'
 import {
@@ -87,6 +87,7 @@ import { normalizeProviderForRuntime } from './provider-runtime'
 import {
   deleteProviderCredentialConfig,
   initializeProviderCredentialLifecycle,
+  revealProviderCredential,
   saveProviderCredentialConfig,
   shutdownProviderCredentialLifecycle
 } from './provider-credential-runtime'
@@ -322,6 +323,39 @@ function normalizeCapabilityInvokeError(capabilityId: string, error: unknown): E
     Object.assign(baseError, { code: 'INTELLIGENCE_CAPABILITY_UNSUPPORTED' }),
     { capabilityId }
   )
+}
+
+function formatAsrCapabilityTestFailure(error: unknown): {
+  success: false
+  message: string
+  timestamp: number
+} {
+  const rawMessage = error instanceof Error ? error.message : String(error ?? '')
+  const rawCode =
+    error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
+      ? String((error as { code: string }).code)
+      : ''
+  const messageCode = rawMessage.match(/^(?:VOICE|BAILIAN|DOUBAO)_[A-Z0-9_]+$/)?.[0] || ''
+  const normalized = normalizeIntelligenceError(error, { capabilityId: 'audio.asr' })
+  const code = rawCode || messageCode || normalized.code || 'UNKNOWN'
+  let message = `实时语音识别测试失败（${code}）`
+
+  if (code === 'VOICE_ASR_NOT_CONFIGURED') {
+    message = '实时语音识别测试失败：请先保存 audio.asr 的百炼渠道和模型绑定。'
+  } else if (code === 'VOICE_ASR_PROVIDER_UNAVAILABLE') {
+    message =
+      '实时语音识别测试失败：已保存的 ASR 渠道当前不可用，请检查渠道类型、ASR 协议和模型绑定。'
+  } else if (/MODEL_NOT_FOUND|MODELNOTFOUND/i.test(code)) {
+    message = '实时语音识别测试失败：当前绑定模型不是百炼实时 ASR 模型，请选择实时模型。'
+  } else if (normalized.code === 'MODEL_UNSUPPORTED') {
+    message = '实时语音识别测试失败：当前模型不支持实时 ASR，请选择实时模型。'
+  } else if (normalized.code === 'NETWORK_FAILURE') {
+    message = '实时语音识别测试失败：百炼连接失败，请检查网络、Base URL 和业务空间。'
+  } else if (rawMessage) {
+    message = `${message}。请检查麦克风权限、渠道凭据和模型配置。`
+  }
+
+  return { success: false, message, timestamp: Date.now() }
 }
 
 function assertHostOwnedIntelligenceControlPlane(context: HandlerContext): void {
@@ -1141,6 +1175,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     })
 
     intelligenceCapabilityRegistry.register({
+      id: 'audio.asr',
+      type: IntelligenceCapabilityType.ASR,
+      name: 'Realtime Speech Recognition',
+      description: 'Convert live microphone audio to text',
+      supportedProviders: [IntelligenceProviderType.CUSTOM]
+    })
+
+    intelligenceCapabilityRegistry.register({
       id: 'audio.transcribe',
       type: IntelligenceCapabilityType.AUDIO_TRANSCRIBE,
       name: 'Audio Transcription',
@@ -1687,6 +1729,15 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
+    registerSafe(
+      intelligenceApiEvents.revealProviderCredential,
+      'Reveal provider credential',
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return await revealProviderCredential(data)
+      }
+    )
+
     registerSafe(intelligenceApiEvents.testProvider, 'Provider test', async (data, context) => {
       assertHostOwnedIntelligenceControlPlane(context)
       if (!data || typeof data !== 'object' || !data.provider) {
@@ -1780,6 +1831,23 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       const tester = capabilityTesterRegistry.get(capabilityId)
       if (!tester) {
         throw new Error(`No tester registered for capability ${capabilityId}`)
+      }
+
+      if (tester instanceof AsrCapabilityTester) {
+        if (providerId || model) throw new Error('INTELLIGENCE_ASR_TEST_USES_BOUND_ROUTE')
+        const { voiceService } = await import('../voice/voice-service')
+        const startedAt = Date.now()
+        try {
+          let finalText = ''
+          for await (const event of voiceService.streamDictation({}, undefined, {
+            caller: 'core.intelligence.capability-test'
+          })) {
+            if (event.type === 'final') finalText = event.text
+          }
+          return tester.formatStreamResult(finalText, Date.now() - startedAt)
+        } catch (error) {
+          return formatAsrCapabilityTestFailure(error)
+        }
       }
 
       ensureIntelligenceConfigLoaded()

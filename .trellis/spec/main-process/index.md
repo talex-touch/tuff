@@ -14,6 +14,7 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   `classify`), MCP risk mapping, home skills-injection surface marker,
   degrade-not-abort rules, opt-in live smoke.
 
+- [voice-session-contracts.md](voice-session-contracts.md) — single main-owned dictation session, Rust audio boundary, active-target delivery, clipboard recovery, and plugin/renderer reuse.
 - [database-write-contracts.md](database-write-contracts.md) — single-writer-per-file
   topology, `scheduleDbWrite`/`scheduleAuxWrite` call-site convention, scheduler
   busy-retry semantics (never sleep holding the queue), live home resolution,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { BadgeProps } from './types'
-import NumberFlow from '@number-flow/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
+import { computed, ref, useSlots, watch } from 'vue'
+import TxTextMorph from '../../text-morph/src/TxTextMorph.vue'
 
 defineOptions({
   name: 'TxBadge',
@@ -24,44 +24,20 @@ const customStyle = computed(() => {
   return {}
 })
 
-// Numeric values animate through NumberFlow; strings render as plain text.
+/*
+  Numeric values roll through the text-morph engine — digits slide by place value,
+  so 8 -> 9 moves one column and 9 -> 10 grows the number rather than swapping it.
+  Strings render as plain text.
+
+  This used to be `@number-flow/vue` plus a ResizeObserver that measured
+  `.tx-badge__number` and wrote the result back as an inline width, with a
+  separate `width 180ms` transition to smooth it. All three are gone: the engine
+  animates its own container on the same curve as the digits, so the pill follows
+  it for free and the measurement round-trip has nothing left to do.
+*/
 const slots = useSlots()
 const numericValue = computed(() => (typeof props.value === 'number' ? props.value : null))
 const isNumeric = computed(() => numericValue.value !== null && !slots.default)
-const numericContentRef = ref<HTMLElement | null>(null)
-const numericWidth = ref<number | undefined>()
-let numericWidthObserver: ResizeObserver | null = null
-
-const numericStyle = computed(() => numericWidth.value === undefined
-  ? {}
-  : { width: `${numericWidth.value}px` })
-
-function measureNumericWidth() {
-  const width = numericContentRef.value?.getBoundingClientRect().width
-  if (width)
-    numericWidth.value = width
-}
-
-function observeNumericWidth() {
-  if (!isNumeric.value || !numericContentRef.value || typeof ResizeObserver === 'undefined')
-    return
-
-  numericWidthObserver = new ResizeObserver(entries => {
-    const width = entries[0]?.contentRect.width
-    if (width)
-      numericWidth.value = width
-  })
-  numericWidthObserver.observe(numericContentRef.value)
-  measureNumericWidth()
-}
-
-watch(numericValue, async () => {
-  await nextTick()
-  measureNumericWidth()
-})
-
-onMounted(observeNumericWidth)
-onBeforeUnmount(() => numericWidthObserver?.disconnect())
 
 // The slide-in entrance only plays on real open/close toggles — never on
 // first mount — so always-open badges stay visually unchanged.
@@ -85,13 +61,16 @@ watch(
         'is-closed': !open,
       },
     ]"
-    :style="[customStyle, numericStyle]"
+    :style="customStyle"
   >
     <span v-if="dot" class="tx-badge__dot" />
     <slot v-else>
-      <span v-if="numericValue !== null" ref="numericContentRef" class="tx-badge__number">
-        <NumberFlow :value="numericValue" />
-      </span>
+      <TxTextMorph
+        v-if="numericValue !== null"
+        class="tx-badge__number"
+        :text="numericValue"
+        :duration-ms="260"
+      />
       <template v-else>
         {{ value }}
       </template>
@@ -155,20 +134,18 @@ watch(
   --tx-badge-border: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 32%, transparent);
 }
 
+/* The engine animates the number's own container on the morph curve, so the pill
+   only has to keep its shape while that happens — no width transition of its own,
+   and no `box-sizing: content-box`, both of which existed for the measured inline
+   width this no longer writes. */
 .tx-badge--numeric {
-  box-sizing: content-box;
   overflow: clip;
-  transition:
-    width 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform var(--tx-badge-pop-dur, 500ms) var(--tx-badge-pop-ease, cubic-bezier(0.34, 1.36, 0.64, 1)),
-    opacity var(--tx-badge-fade-dur, 400ms) var(--tx-badge-pop-ease, cubic-bezier(0.34, 1.36, 0.64, 1)),
-    filter var(--tx-badge-pop-dur, 500ms) var(--tx-badge-pop-ease, cubic-bezier(0.34, 1.36, 0.64, 1));
 }
 
-.tx-badge__number {
-  display: block;
-  min-width: max-content;
-}
+/* `.tx-badge__number` is now the morph root and carries no rules of its own on
+   purpose. The old `display: block; min-width: max-content` pair propped up the
+   measured-width scheme, and `min-width: max-content` in particular would pin the
+   root to its content and stop the engine ever animating the width down. */
 
 .tx-badge--dot {
   width: 8px;

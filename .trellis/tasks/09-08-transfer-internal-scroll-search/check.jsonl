@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "收尾校验口径：跑最小相关测试 + git diff --check"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "验收组件文档是否与源码一致、demo 是否孤儿"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对语义控件、键盘与 aria-label 要求"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "核对硬规则是否被违反（私有原语、缺文档、div@click）"}

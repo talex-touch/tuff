@@ -11,12 +11,18 @@ import {
   DEFAULT_GLOBAL_CONFIG,
   DEFAULT_PROVIDERS,
   IntelligenceProviderType,
+  NEXUS_AUDIO_TRANSCRIBE_MODEL,
   resolveIntelligencePromptTemplate,
   toRuntimeCapabilityId
 } from '@talex-touch/tuff-intelligence'
 import { StorageList } from '@talex-touch/utils'
+import {
+  DASHSCOPE_QWEN_ASR_REALTIME_MODELS,
+  getVoiceCapabilityRecommendedModels
+} from '@talex-touch/utils/intelligence/voice-asr'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
+import { subscribeAuthState } from '../auth'
 import { tuffIntelligence } from './intelligence-sdk'
 import { normalizeProviderForRuntime, TUFF_NEXUS_PROVIDER_ID } from './provider-runtime'
 import {
@@ -88,6 +94,7 @@ const PI_CLI_PROVIDER: IntelligenceProviderConfig = {
 
 let lastAppliedRuntimeConfigSignature: string | null = null
 let teardownConfigUpdateListener: (() => void) | null = null
+let teardownAuthStateListener: (() => void) | null = null
 
 function normalizeStrategyId(value?: string) {
   if (!value) return undefined
@@ -355,6 +362,52 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
       changed = true
     }
   }
+  for (const capabilityId of ['audio.asr', 'audio.stt']) {
+    const capability = config.capabilities[capabilityId]
+    if (!Array.isArray(capability?.providers)) continue
+
+    for (const binding of capability.providers) {
+      if (binding.enabled === false) continue
+      const provider = config.providers.find((candidate) => candidate.id === binding.providerId)
+      if (!provider) continue
+      const currentVoiceProtocol =
+        provider.metadata?.voiceAsr &&
+        typeof provider.metadata.voiceAsr === 'object' &&
+        !Array.isArray(provider.metadata.voiceAsr)
+          ? (provider.metadata.voiceAsr as Record<string, unknown>).protocol
+          : undefined
+      const hasQwenRealtimeModel = (binding.models ?? []).some((model) =>
+        DASHSCOPE_QWEN_ASR_REALTIME_MODELS.includes(
+          model as (typeof DASHSCOPE_QWEN_ASR_REALTIME_MODELS)[number]
+        )
+      )
+      if (hasQwenRealtimeModel && currentVoiceProtocol !== 'dashscope-qwen-asr-realtime') {
+        provider.metadata = {
+          ...(provider.metadata ?? {}),
+          voiceAsr: { protocol: 'dashscope-qwen-asr-realtime' }
+        }
+        changed = true
+      }
+      const recommendations = getVoiceCapabilityRecommendedModels(capabilityId, {
+        ...(provider.metadata ?? {}),
+        baseUrl: provider.baseUrl
+      })
+      if (!recommendations.length) continue
+
+      const supportedModels = (binding.models ?? []).filter((model) =>
+        recommendations.includes(model)
+      )
+      const nextModels = supportedModels.length > 0 ? supportedModels : [recommendations[0]]
+      if (
+        nextModels.length === (binding.models ?? []).length &&
+        nextModels.every((model, index) => model === binding.models?.[index])
+      ) {
+        continue
+      }
+      binding.models = nextModels
+      changed = true
+    }
+  }
 
   const ttsCapability = config.capabilities['audio.tts']
   if (Array.isArray(ttsCapability?.providers)) {
@@ -393,6 +446,33 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
       enabled: false
     })
     changed = true
+  }
+
+  const sttCapability = config.capabilities['audio.stt']
+  if (sttCapability && !Array.isArray(sttCapability.providers)) {
+    sttCapability.providers = []
+    changed = true
+  }
+  if (Array.isArray(sttCapability?.providers)) {
+    const nexusBinding = sttCapability.providers.find(
+      (binding) => binding.providerId === TUFF_NEXUS_PROVIDER_ID
+    )
+    if (!nexusBinding) {
+      sttCapability.providers.push({
+        providerId: TUFF_NEXUS_PROVIDER_ID,
+        models: [NEXUS_AUDIO_TRANSCRIBE_MODEL],
+        priority: 3,
+        enabled: false
+      })
+      changed = true
+    } else if (
+      !Array.isArray(nexusBinding.models) ||
+      nexusBinding.models.length !== 1 ||
+      nexusBinding.models[0] !== NEXUS_AUDIO_TRANSCRIBE_MODEL
+    ) {
+      nexusBinding.models = [NEXUS_AUDIO_TRANSCRIBE_MODEL]
+      changed = true
+    }
   }
 
   if (process.env.TUFF_DISABLE_NATIVE_OCR !== '1') {
@@ -646,17 +726,25 @@ export function getCapabilitiesMap(): Record<string, IntelligenceCapabilityRouti
  * Setup storage update listener to reload config when it changes
  */
 export function setupConfigUpdateListener(): void {
-  if (teardownConfigUpdateListener) {
-    return
+  if (!teardownConfigUpdateListener) {
+    teardownConfigUpdateListener = subscribeMainConfig(StorageList.IntelligenceConfig, () => {
+      try {
+        ensureIntelligenceConfigLoaded()
+      } catch {
+        // ignore transient storage readiness issues during startup
+      }
+    })
   }
 
-  teardownConfigUpdateListener = subscribeMainConfig(StorageList.IntelligenceConfig, () => {
-    try {
-      ensureIntelligenceConfigLoaded()
-    } catch {
-      // ignore transient storage readiness issues during startup
-    }
-  })
+  if (!teardownAuthStateListener) {
+    teardownAuthStateListener = subscribeAuthState(() => {
+      try {
+        ensureIntelligenceConfigLoaded()
+      } catch {
+        // ignore transient storage readiness issues during auth transitions
+      }
+    })
+  }
 }
 
 /**

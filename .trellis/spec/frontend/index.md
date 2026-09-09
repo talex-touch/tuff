@@ -33,6 +33,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Hook Guidelines](./hook-guidelines.md)                       | Custom composables, lifecycle, data access                                           | Filled |
 | [State Management](./state-management.md)                     | Local state, Pinia, host/server state                                                | Filled |
 | [TuffEx Charts Package](./tuffex-charts-package.md)           | tuffex-charts contracts: no echarts, CSS-var theming, kumo divergences               | Filled |
+| [TuffEx Text Motion](./tuffex-text-motion.md)                 | One text-morph engine: torph port, the shared spring, unscoped styles, mode fallbacks | Filled |
 | [TuffEx Docs Sync](./tuffex-docs-sync.md)                     | Component change → Nexus docs: wrapper blast radius, placement, demos, gate traps    | Filled |
 | [Quality Guidelines](./quality-guidelines.md)                 | Code standards, forbidden patterns, verification                                     | Filled |
 | [Type Safety](./type-safety.md)                               | TypeScript, runtime guards, typed transport                                          | Filled |
@@ -40,6 +41,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Privacy Data Lifecycle](./privacy-data-lifecycle.md)         | Typed Privacy transport, retention/export, and main-owned credential transactions    | Filled |
 | [Nexus Preview Secrets](./nexus-preview-secret-deployment.md) | Cloudflare Preview Secret inventory, deploy preflight, runtime policy, and evidence  | Filled |
 | [Nexus Docs Rendering](./nexus-docs-rendering-contract.md)    | Docs HTML always embeds the body; payload-key agreement, body-fetch retry rules       | Filled |
+| [Nexus DashScope Filetrans](./nexus-dashscope-filetrans-contract.md) | Nexus-owned DashScope ASR handoff, routing, reservation, and disclosure rules | Filled |
 | [Release Acceptance Testing](./release-testing.md)            | Downloaded release, integrity, trust, and isolated packaged-runtime gates            | Filled |
 | [Native Resource Protocols](./native-resource-protocols.md)   | Protocol data-plane rules, path-only native callbacks, and macOS app-icon extraction | Filled |
 

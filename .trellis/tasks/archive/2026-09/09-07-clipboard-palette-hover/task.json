@@ -1,0 +1,33 @@
+{
+  "id": "clipboard-palette-hover",
+  "name": "clipboard-palette-hover",
+  "title": "剪贴板图片主题色带悬浮交互",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-07",
+  "completedAt": "2026-09-08",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "plugins/clipboard-history/src/components/ClipboardDetail.vue",
+    "plugins/clipboard-history/src/components/ClipboardDetail.test.ts"
+  ],
+  "notes": "",
+  "meta": {
+    "blocker": null,
+    "evidence": "插件 133 测试 / typecheck / lint 全绿；文字色、title 移除、点击回执、切记录清回执 四处各跑过负控制并确认会红。已发布 1.2.0-beta.2 到 Nexus（pending）。",
+    "nextAction": "AC1/AC2/AC4/AC5 四条纯 CSS 行为需在真实窗口人工确认（本机插件已同步到 1.2.0-beta.2）。Nexus 上 beta.2 待审。"
+  }
+}

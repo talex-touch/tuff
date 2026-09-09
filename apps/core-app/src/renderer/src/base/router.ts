@@ -112,6 +112,10 @@ function createSettingCategoryRoutes(withPerf: typeof withRouteComponentPerf): R
       name: '$I18n:router.intelligenceAudit',
       load: () => import('../views/base/intelligence/IntelligenceAuditPage.vue')
     },
+    'intelligence/voice': {
+      name: '$I18n:router.intelligenceVoice',
+      load: () => import('../views/base/intelligence/IntelligenceVoicePage.vue')
+    },
     'intelligence/capabilities': {
       name: '$I18n:router.intelligenceCapabilities',
       load: () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue')
@@ -211,6 +215,13 @@ const routes: RouteRecordRaw[] = [
       keepAlive: true,
       keepAliveKey: HOME_ROUTE_CACHE_KEY
     }
+  },
+  {
+    // Voice insights now live with the Intelligence voice pipeline; retain the old URL as a
+    // stable redirect for bookmarks and older plugin navigation payloads.
+    path: '/voice-insights',
+    name: '$I18n:router.voiceInsights',
+    redirect: '/setting/intelligence'
   },
   {
     path: '/store',

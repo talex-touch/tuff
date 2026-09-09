@@ -186,6 +186,26 @@ export class ClipboardImagePersistence {
     tempFileService.startCleanup()
   }
 
+  /**
+   * The stored file behind an image record, or null when there is none.
+   *
+   * Resolves and bounds the path against the clipboard image namespace before returning it.
+   * A record's `content` is data this process wrote, but it round-trips through a database a
+   * plugin can write to, so it is treated as untrusted on the way back out.
+   */
+  public resolveOwnedImagePath(reference: string | null | undefined): string | null {
+    if (!reference || !isLikelyLocalPath(reference)) return null
+
+    const namespaceRoot = path.resolve(
+      tempFileService.resolveNamespaceDir(CLIPBOARD_IMAGE_NAMESPACE)
+    )
+    const resolved = path.resolve(reference)
+    if (resolved !== namespaceRoot && !resolved.startsWith(namespaceRoot + path.sep)) {
+      return null
+    }
+    return resolved
+  }
+
   public async deleteOwnedImageReferences(
     references: readonly string[],
     signal?: AbortSignal

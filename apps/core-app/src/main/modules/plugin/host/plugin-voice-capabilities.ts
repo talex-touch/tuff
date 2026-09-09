@@ -1,3 +1,7 @@
+import type {
+  VoiceDeliveryMode,
+  VoiceDeliveryResult
+} from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-touch/utils/transport'
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { types as utilTypes } from 'node:util'
@@ -6,7 +10,12 @@ import type { PluginHostCapabilityResourceContext } from './plugin-host-resource
 
 export type PluginVoiceStreamEvent =
   | { readonly type: 'partial'; readonly text: string }
-  | { readonly type: 'final'; readonly text: string; readonly language?: string }
+  | {
+      readonly type: 'final'
+      readonly text: string
+      readonly language?: string
+      readonly delivery?: VoiceDeliveryResult
+    }
   | { readonly type: 'end' }
   | { readonly type: 'error'; readonly code: 'VOICE_STREAM_FAILED' }
 
@@ -15,6 +24,7 @@ export interface PluginVoiceDictateRequest {
   readonly language?: string
   readonly maxDurationMs?: number
   readonly silenceStopMs?: number
+  readonly delivery?: VoiceDeliveryMode
 }
 
 export interface PluginVoiceSpeakRequest {
@@ -32,6 +42,7 @@ export interface PluginVoiceDictateResult {
   readonly language?: string
   readonly durationMs?: number
   readonly stoppedReason?: string
+  readonly delivery?: VoiceDeliveryResult
 }
 
 export interface PluginVoiceSpeakResult {
@@ -165,7 +176,14 @@ function optionalBoolean(record: Record<string, unknown>, key: string): boolean 
   if (typeof record[key] !== 'boolean') invalid()
   return record[key]
 }
-
+function optionalDelivery(record: Record<string, unknown>): VoiceDeliveryResult | undefined {
+  if (!Object.hasOwn(record, 'delivery')) return undefined
+  const delivery = exactRecord(record.delivery, ['method', 'reason'], ['method'])
+  const method = delivery.method
+  if (method !== 'native' && method !== 'autopaste' && method !== 'none') invalid()
+  const reason = optionalString(delivery, 'reason', MAX_STOP_REASON_BYTES)
+  return Object.freeze({ method, ...(reason === undefined ? {} : { reason }) })
+}
 function optionalInteger(
   record: Record<string, unknown>,
   key: string,
@@ -179,16 +197,25 @@ function optionalInteger(
 }
 
 function validateDictatePayload(value: unknown): PluginVoiceDictateRequest {
-  const record = exactRecord(value, ['cleanup', 'language', 'maxDurationMs', 'silenceStopMs'])
+  const record = exactRecord(value, [
+    'cleanup',
+    'language',
+    'maxDurationMs',
+    'silenceStopMs',
+    'delivery'
+  ])
   const cleanup = optionalBoolean(record, 'cleanup')
   const language = optionalString(record, 'language', MAX_LANGUAGE_BYTES)
   const maxDurationMs = optionalInteger(record, 'maxDurationMs', MIN_CAPTURE_MS, MAX_CAPTURE_MS)
   const silenceStopMs = optionalInteger(record, 'silenceStopMs', MIN_SILENCE_MS, MAX_SILENCE_MS)
+  const delivery = optionalString(record, 'delivery', 32)
+  if (delivery !== undefined && delivery !== 'none' && delivery !== 'active-app') invalid()
   return Object.freeze({
     ...(cleanup === undefined ? {} : { cleanup }),
     ...(language === undefined ? {} : { language }),
     ...(maxDurationMs === undefined ? {} : { maxDurationMs }),
-    ...(silenceStopMs === undefined ? {} : { silenceStopMs })
+    ...(silenceStopMs === undefined ? {} : { silenceStopMs }),
+    ...(delivery === undefined ? {} : { delivery })
   })
 }
 
@@ -221,7 +248,7 @@ function validateInvokeRequest(value: unknown): VoiceInvokeRequest {
 function validateDictateResult(value: unknown): PluginVoiceDictateResult {
   const record = exactRecord(
     value,
-    ['text', 'raw', 'source', 'polished', 'language', 'durationMs', 'stoppedReason'],
+    ['text', 'raw', 'source', 'polished', 'language', 'durationMs', 'stoppedReason', 'delivery'],
     ['text', 'raw', 'source', 'polished']
   )
   const text = boundedString(required(record, 'text'), MAX_TEXT_BYTES, true)
@@ -231,6 +258,7 @@ function validateDictateResult(value: unknown): PluginVoiceDictateResult {
   const language = optionalString(record, 'language', MAX_LANGUAGE_BYTES)
   const durationMs = optionalInteger(record, 'durationMs', 0, MAX_CAPTURE_MS + 10_000)
   const stoppedReason = optionalString(record, 'stoppedReason', MAX_STOP_REASON_BYTES)
+  const delivery = optionalDelivery(record)
   return Object.freeze({
     text,
     raw,
@@ -238,7 +266,8 @@ function validateDictateResult(value: unknown): PluginVoiceDictateResult {
     polished: record.polished,
     ...(language === undefined ? {} : { language }),
     ...(durationMs === undefined ? {} : { durationMs }),
-    ...(stoppedReason === undefined ? {} : { stoppedReason })
+    ...(stoppedReason === undefined ? {} : { stoppedReason }),
+    ...(delivery === undefined ? {} : { delivery })
   })
 }
 
@@ -289,7 +318,7 @@ function validateStreamRequest(value: unknown): VoiceStreamRequest {
 }
 
 function validateStreamEvent(value: unknown): PluginVoiceStreamEvent {
-  const typeRecord = exactRecord(value, ['type', 'text', 'language', 'code'], ['type'])
+  const typeRecord = exactRecord(value, ['type', 'text', 'language', 'code', 'delivery'], ['type'])
   switch (typeRecord.type) {
     case 'partial':
       return Object.freeze({
@@ -298,10 +327,12 @@ function validateStreamEvent(value: unknown): PluginVoiceStreamEvent {
       })
     case 'final': {
       const language = optionalString(typeRecord, 'language', MAX_LANGUAGE_BYTES)
+      const delivery = optionalDelivery(typeRecord)
       return Object.freeze({
         type: 'final',
         text: boundedString(required(typeRecord, 'text'), MAX_TEXT_BYTES, true),
-        ...(language === undefined ? {} : { language })
+        ...(language === undefined ? {} : { language }),
+        ...(delivery === undefined ? {} : { delivery })
       })
     }
     case 'end':

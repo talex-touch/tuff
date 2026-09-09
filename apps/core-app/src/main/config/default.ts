@@ -1,4 +1,5 @@
 import path from 'node:path'
+import type { TalexTouch } from '@talex-touch/utils'
 import { app } from 'electron'
 import { buildWindowArgs } from '@talex-touch/utils/renderer/window-role'
 import { buildWindowWebPreferences } from '../core/window-security-profile'
@@ -87,53 +88,30 @@ export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions =
     additionalArguments: buildWindowArgs({ touchType: 'core-box', coreType: 'division-box' })
   })
 }
-
-export const AssistantFloatingBallWindowOption: Electron.BrowserWindowConstructorOptions = {
-  title: `${AppName} Assistant`,
+export const AssistantVoiceDockWindowOption: TalexTouch.TouchWindowConstructorOptions = {
+  title: `${AppName} Assistant VoiceDock`,
+  type: 'panel',
+  acceptFirstMouse: true,
   frame: false,
-  width: 56,
-  height: 56,
+  width: 520,
+  height: 300,
   minWidth: 56,
   minHeight: 56,
-  maxWidth: 72,
-  maxHeight: 72,
   resizable: false,
   movable: false,
   skipTaskbar: true,
   autoHideMenuBar: true,
   show: false,
   transparent: true,
-  hasShadow: true,
+  disableVibrancy: true,
+  backgroundColor: '#00000000',
+  hasShadow: false,
   webPreferences: buildWindowWebPreferences('app', {
     preload: CORE_APP_PRELOAD_PATH,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({
       touchType: 'assistant',
-      assistantType: 'floating-ball'
-    })
-  })
-}
-
-export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorOptions = {
-  title: `${AppName} Voice Panel`,
-  frame: false,
-  width: 420,
-  height: 260,
-  minWidth: 360,
-  minHeight: 220,
-  resizable: false,
-  movable: false,
-  skipTaskbar: true,
-  autoHideMenuBar: true,
-  show: false,
-  transparent: true,
-  hasShadow: true,
-  webPreferences: buildWindowWebPreferences('app', {
-    preload: CORE_APP_PRELOAD_PATH,
-    scrollBounce: true,
-    additionalArguments: buildWindowArgs({
-      touchType: 'assistant',
-      assistantType: 'voice-panel'
+      assistantType: 'voice-dock'
     })
   })
 }

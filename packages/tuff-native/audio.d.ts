@@ -19,6 +19,14 @@ export interface AudioCaptureOptions {
 
 export interface AudioCaptureStart {
   sessionId: string
+  /**
+   * Name of the input device this session opened, as the OS reports it.
+   *
+   * Empty string where the platform will not name it. Read once at start: the device a session
+   * records on cannot change under it, so callers compare consecutive sessions to notice a
+   * switch rather than polling this.
+   */
+  deviceName: string
 }
 
 export type AudioStoppedReason = 'manual' | 'max-duration' | 'silence' | 'cancelled'
@@ -69,6 +77,28 @@ export interface TypeTextResult {
   reason?: string
 }
 
+export type FunctionKeyEvent
+  = | { type: 'down', hasOtherKeys: boolean }
+    | { type: 'up' }
+    | { type: 'other-key-down' }
+  /** Native monitor fault/backpressure reset; discard pending Fn and Escape holds. */
+    | { type: 'reset' }
+  /** Global Escape transition. It is observed but never consumed. */
+    | { type: 'escape-down' }
+  /** Global Escape transition. It is observed but never consumed. */
+    | { type: 'escape-up' }
+
+export interface FunctionKeyMonitorStart {
+  /**
+   * `true` proves a main-thread, Accessibility-authorized native tap was enabled.
+   * It does not prove a physical key reached the Quartz stream; hardware behavior
+   * must be checked with an external downstream probe.
+   */
+  active: boolean
+  /** Stable availability reason when `active` is false. */
+  reason?: string
+}
+
 export declare function getNativeAudioSupport(): NativeAudioSupport
 /**
  * Opens the input stream and resolves once the capture thread confirms it is live.
@@ -102,3 +132,15 @@ export declare function stopPlayback(playbackId?: string): void
 export declare function isAccessibilityTrusted(): boolean
 /** Type `text` into the frontmost app (unicode-safe). On macOS without AX trust returns `{ ok:false, reason:'accessibility-required' }`. Never throws. */
 export declare function typeText(text: string): TypeTextResult
+/**
+ * macOS-only active, head-inserted HID event tap. Standalone Fn edges are
+ * delivered to the listener and then removed from the OS stream so the default
+ * Globe/Emoji action cannot run. Combination-key events pass through and
+ * invalidate the Fn gesture. Escape is observed globally; callers may explicitly
+ * capture it only while a voice session owns cancellation. No system preferences are changed.
+ */
+export declare function startFunctionKeyMonitor(listener: (event: FunctionKeyEvent) => void): FunctionKeyMonitorStart
+/** Capture or release global Escape down/up while the native Fn monitor is active. */
+export declare function setFunctionKeyMonitorEscapeCapture(enabled: boolean): boolean
+/** Stop the active Fn monitor. Safe when no monitor exists. */
+export declare function stopFunctionKeyMonitor(): void

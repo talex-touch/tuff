@@ -1,0 +1,147 @@
+---
+title: "TextMorph"
+description: "Cuts a string into segments with identity, diffs it, and animates only what actually changed; numbers roll by place value, the container transitions on the same curve, and springs and mid-flight interruption are supported."
+category: Effects
+status: beta
+since: 2.4.14
+tags: [text, morph, number, spring, live-region]
+syncStatus: reviewed
+verified: true
+---
+# TextMorph
+
+> Unlike `TxTextTransformer`'s whole-string crossfade, the unit of motion here is the **character segment**. Surviving segments FLIP to their new position, arriving ones fade in from the nearest anchor, exiting ones leave the flow and fade out, and numbers additionally slide along the block axis by place value.
+
+## Basic Usage
+
+### TextMorph
+:::TuffDemoWrapper{demo="TextMorphTextMorphDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const phrases = [
+    'Hello world',
+    'Hello there',
+    'Goodbye there',
+    'Goodbye and thanks for all the fish',
+  ]
+
+  const index = ref(0)
+  const durationMs = ref(400)
+  const phrase = computed(() => phrases[index.value] ?? '')
+
+  function next() {
+    index.value = (index.value + 1) % phrases.length
+  }
+  </script>
+
+  <template>
+    <TxTextMorph :text="phrase" :duration-ms="durationMs" />
+  </template>
+---
+:::
+
+## Numeric Place-Value Roll
+
+Digits are matched by **place value** rather than left to right: `1,204 → 1,318` rolls the hundreds and the tens and leaves the thousands alone, and the grouping comma travels with the magnitude, sliding a whole group along on `999,999 → 1,000,000`.
+
+Once the magnitude jumps by three places or more nothing carries across — at that point the digits overlap into a smear and a replacement is the honest reading.
+
+Turn `numbers` off to fall back to the character-level morph.
+
+### Number place value
+:::TuffDemoWrapper{demo="TextMorphNumberPlaceValueDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const total = ref(1204)
+  </script>
+
+  <template>
+    <!-- 1,204 -> 1,318 rolls the hundreds and tens; the thousands stay put -->
+    <TxTextMorph :text="`$${total.toLocaleString('en')}`" />
+
+    <!-- Pass a number directly and locale + decimals do the formatting -->
+    <TxTextMorph :text="total" locale="en" :decimals="2" />
+  </template>
+---
+:::
+
+## Spring Easing
+
+`spring` takes a preset name or physical coefficients, and runs on the same spring compiler `TxLiquid` and `TxSlider` use, so the whole library shares one motion vocabulary. A spring supplies both the curve and the duration, so `durationMs` and `easing` are ignored while one is set.
+
+### Spring presets
+:::TuffDemoWrapper{demo="TextMorphSpringDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTextMorph text="Settling" spring="snappy" />
+    <TxTextMorph text="Settling" spring="smooth" />
+    <TxTextMorph text="Settling" spring="bouncy" />
+    <TxTextMorph text="Settling" :spring="{ stiffness: 200, damping: 20 }" />
+  </template>
+---
+:::
+
+## API
+
+### TxTextMorph Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `text` | `string \| number` | - | The value to render. Numbers are formatted with `locale` + `decimals` first. |
+| `tag` | `string` | `span` | Root element tag. |
+| `durationMs` | `number` | `400` | Morph duration in ms. Ignored when `spring` is set. |
+| `easing` | `string` | `cubic-bezier(0.19, 1, 0.22, 1)` | CSS timing function. Ignored when `spring` is set. |
+| `spring` | `'snappy' \| 'smooth' \| 'bouncy' \| { stiffness?, damping?, mass? }` | - | Spring physics. Supplies both the curve and the duration. |
+| `scale` | `boolean` | `true` | Scale exiting segments as they leave. |
+| `numbers` | `boolean` | `true` | Roll numeric words by place value; off falls back to the character morph. |
+| `decimals` | `number` | - | Fraction digits. Only applied when `text` is a number. |
+| `locale` | `string` | `en` | Used for segmentation and number formatting. |
+| `cursorIndex` | `number` | - | Caret position. Switches a single-number value from place matching to caret matching, for fields the user types into. |
+| `disabled` | `boolean` | `false` | Skip the animation and write the value straight in. |
+| `respectReducedMotion` | `boolean` | `true` | Treat `prefers-reduced-motion: reduce` as `disabled`. |
+| `debug` | `boolean` | `false` | Outline the root and every segment, for working out why a morph looks wrong. |
+
+### TxTextMorph Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `animation-start` | - | A morph began. Never fires for the first render. |
+| `animation-complete` | - | The morph ran to its end. |
+| `animation-cancel` | - | The morph was interrupted by the next update. |
+
+> Exactly one of `animation-complete` and `animation-cancel` runs per morph.
+
+## Behaviour Contract
+
+- The whole value lives in one visually-hidden but readable `[tx-morph-sr]` node; every segment element is `aria-hidden`, so a screen reader announces the value once and never the fragments.
+- Segments are created imperatively by the engine, so the component's styles are **not scoped** — containment comes from the `tx-morph-*` attribute names instead.
+- Vue stops rendering the children after mount: the engine owns them. The first-paint plain text exists only so hydration matches.
+- Under `prefers-reduced-motion: reduce` or `disabled` the value is written straight to `textContent` and the internal segment record is cleared, so re-enabling motion never FLIPs against elements that have already left the DOM.
+- An update mid-morph reads the velocity the box is travelling at and carries it into the new curve, so a fast run of updates does not leave every curve stalled in its opening sliver.
+- The root is `white-space: nowrap`. Line breaks come from `\n` in the value, which becomes a `<br>`; it does not soft-wrap and it does not ellipsise.
+- `cursorIndex` is honoured only when the value holds exactly one number.
+
+## Best Practices
+
+- Reach for it where the same quantity is changing — counters, totals, percentages. Place-value matching was written for exactly that.
+- Pass `cursorIndex` for a number the user is typing, or inserting a digit before `20` reads as renumbering the whole column.
+- Use `TxTextTransformer` with `mode="fade"` where the text has to soft-wrap or ellipsise; the engine cannot express either.
+- Keep the number of high-frequency instances on one screen down: every character is an element carrying `will-change`.
+- Let it size its own container — the engine animates width and height itself, so wrapping it in `TxAutoSizer` is redundant.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/text-morph/src/TxTextMorph.vue`.
+- Engine: `packages/tuffex/packages/components/src/text-morph/src/engine/`, ported from [lochie/torph](https://github.com/lochie/torph) (MIT), with the spring layer replaced by TuffEx's own `liquid/src/spring.ts`.
+- Types: `packages/tuffex/packages/components/src/text-morph/src/types.ts` exports `TextMorphProps`.
+- Export alias: `packages/tuffex/packages/components/src/text-morph/index.ts` exports `TextMorph`, `TxTextMorph`, `TextMorphProps`, `TxTextMorphInstance`, plus the engine's `TextMorphEngine` / `MorphController`.
+- Coverage: `engine.test.ts` and `text-morph.test.ts` under `packages/tuffex/packages/components/src/text-morph/__tests__/` cover segmentation, diff pairing, place-value matching, the spring fusion and the reduced-motion fallback.
+
+<TuffDocSourceLink />
