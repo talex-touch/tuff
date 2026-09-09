@@ -136,32 +136,44 @@ describe('VoiceService.dictate', () => {
     expect(polishSignal?.aborted).toBe(true)
   })
 
-  it('returns raw recognized text when polish reaches its bounded timeout', async () => {
+  it('returns raw recognized text at the 300 ms polish deadline', async () => {
     vi.useFakeTimers()
-    stt.mockResolvedValue({ result: { text: 'raw text' } })
-    let polishSignal: AbortSignal | undefined
-    invoke.mockImplementation(
-      (_capability: unknown, _payload: unknown, options: { signal?: AbortSignal }) =>
-        new Promise<never>((_resolve, reject) => {
-          polishSignal = options.signal
-          options.signal?.addEventListener('abort', () => reject(new Error('polish deadline')), {
-            once: true
+    try {
+      stt.mockResolvedValue({ result: { text: 'raw text' } })
+      let polishSignal: AbortSignal | undefined
+      let resolvePolishStarted: (() => void) | undefined
+      const polishStarted = new Promise<void>((resolve) => {
+        resolvePolishStarted = resolve
+      })
+      invoke.mockImplementation(
+        (_capability: unknown, _payload: unknown, options: { signal?: AbortSignal }) =>
+          new Promise<never>((_resolve, reject) => {
+            polishSignal = options.signal
+            resolvePolishStarted?.()
+            options.signal?.addEventListener('abort', () => reject(new Error('polish deadline')), {
+              once: true
+            })
           })
-        })
-    )
-    const pending = new VoiceService().dictate({ cleanup: true })
+      )
+      const pending = new VoiceService().dictate({ cleanup: true })
 
-    await vi.waitFor(() => expect(polishSignal).toBeDefined())
-    expect(polishSignal?.aborted).toBe(false)
-    await vi.advanceTimersByTimeAsync(1_500)
+      await polishStarted
+      expect(polishSignal).toBeDefined()
+      expect(polishSignal?.aborted).toBe(false)
 
-    await expect(pending).resolves.toMatchObject({
-      raw: 'raw text',
-      text: 'raw text',
-      polished: false
-    })
-    expect(polishSignal?.aborted).toBe(true)
-    vi.useRealTimers()
+      await vi.advanceTimersByTimeAsync(299)
+      expect(polishSignal?.aborted).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(polishSignal?.aborted).toBe(true)
+
+      await expect(pending).resolves.toMatchObject({
+        raw: 'raw text',
+        text: 'raw text',
+        polished: false
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('skips polish when cleanup is false', async () => {

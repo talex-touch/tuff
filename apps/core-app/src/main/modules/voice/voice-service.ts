@@ -64,7 +64,7 @@ const DEFAULT_SILENCE_STOP_MS = 1_500
 const DEFAULT_ASR_SAMPLE_RATE = 16_000
 const POLL_INTERVAL_MS = 40
 const CAPTURE_HARD_TIMEOUT_GRACE_MS = 2_000
-const POLISH_TIMEOUT_MS = 1_500
+const POLISH_TIMEOUT_MS = 300
 const CAPABILITY_TIMEOUT_MS = 30_000
 const TRANSCRIPTION_TIMEOUT_MS = 600_000
 
@@ -1390,7 +1390,11 @@ export class VoiceService {
   ): Promise<string | null> {
     const polishController = new AbortController()
     const abortPolish = (): void => polishController.abort()
-    const timeout = setTimeout(() => polishController.abort(), POLISH_TIMEOUT_MS)
+    let polishTimedOut = false
+    const timeout = setTimeout(() => {
+      polishTimedOut = true
+      polishController.abort()
+    }, POLISH_TIMEOUT_MS)
     signal?.addEventListener('abort', abortPolish, { once: true })
     try {
       throwIfCancelled(signal)
@@ -1416,9 +1420,11 @@ export class VoiceService {
       return cleaned || null
     } catch (error) {
       if (signal?.aborted) throw voiceCancellationError()
-      // A polish timeout must not hide an otherwise valid transcript. The raw ASR
-      // result is the user-visible fallback, not an empty recognition.
-      voiceLog.debug('Polish pass unavailable; falling back to raw transcript', { error })
+      // Cleanup is bounded and optional. Its deadline is a normal raw-transcript path, not a
+      // user-visible failure: logging it redraws the developer console precisely as the text lands.
+      if (!polishTimedOut) {
+        voiceLog.debug('Polish pass unavailable; falling back to raw transcript', { error })
+      }
       return null
     } finally {
       clearTimeout(timeout)
