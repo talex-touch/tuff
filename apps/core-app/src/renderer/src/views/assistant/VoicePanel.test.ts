@@ -5,6 +5,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, getCurrentInstance, h, nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
+import { ORB_STATES } from '@talex-touch/tuffex/thinking-orb'
 import {
   voiceApiEvents,
   type VoiceAsrStreamEvent
@@ -52,7 +53,14 @@ vi.mock('@talex-touch/tuffex/border-beam', () => ({
   })
 }))
 
-vi.mock('@talex-touch/tuffex/thinking-orb', () => ({
+vi.mock('@talex-touch/tuffex/thinking-orb', async () => ({
+  // The real list, not a copy: the panel's job is to roll through every shape the package
+  // publishes, so a hand-written nine here would keep passing after a tenth was added.
+  ORB_STATES: (
+    await vi.importActual<typeof import('@talex-touch/tuffex/thinking-orb')>(
+      '@talex-touch/tuffex/thinking-orb'
+    )
+  ).ORB_STATES,
   TxThinkingOrb: defineComponent({
     name: 'TxThinkingOrb',
     props: {
@@ -633,7 +641,7 @@ describe('VoicePanel session control', () => {
     wrapper.unmount()
   })
 
-  it('remounts the orb with a fresh key and random state for every session', async () => {
+  it('remounts the orb with a fresh key for every session', async () => {
     const wrapper = await mountVoicePanel()
     const panel = exposed(wrapper)
 
@@ -643,7 +651,9 @@ describe('VoicePanel session control', () => {
     await nextTick()
     const firstOrb = orbMounts.records.at(-1)
 
-    expect(firstOrb?.state).toBe('random')
+    // The panel now owns the roll, so the orb is told a concrete shape rather than 'random' —
+    // its own per-mount roll would have pinned one shape for the whole wait.
+    expect(ORB_STATES).toContain(firstOrb?.state)
 
     callbacksOrThrow().onEnd?.()
     await nextTick()
@@ -653,9 +663,49 @@ describe('VoicePanel session control', () => {
     await nextTick()
     const secondOrb = orbMounts.records.at(-1)
 
-    expect(secondOrb?.state).toBe('random')
+    expect(ORB_STATES).toContain(secondOrb?.state)
     expect(secondOrb?.key).not.toBe(firstOrb?.key)
 
+    wrapper.unmount()
+  })
+
+  /**
+   * The mark has to keep turning over while the wait does.
+   *
+   * `state="random"` rolls once per mount, so one session got one shape for its whole wait — a
+   * frozen glyph standing in for something still moving. `Math.random` is pinned to a walking
+   * sequence here so "every shape is reachable" is an exact claim rather than a likely one.
+   */
+  it('rolls the thinking mark through the whole orb family while it waits', async () => {
+    const steps = ORB_STATES.length - 1
+    let call = 0
+    const random = vi.spyOn(Math, 'random').mockImplementation(() => (call++ % steps) / steps)
+
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    exposed(wrapper).stopVoiceInput()
+    await nextTick()
+
+    const shapeNow = (): string =>
+      wrapper.find('[data-testid="voice-orb"]').attributes('data-orb-state') ?? ''
+    const seen = [shapeNow()]
+    for (let tick = 0; tick < ORB_STATES.length; tick += 1) {
+      vi.advanceTimersByTime(1200)
+      await nextTick()
+      seen.push(shapeNow())
+    }
+
+    expect(new Set(seen)).toEqual(new Set(ORB_STATES))
+    // Never twice running: a repeat reads as the mark having stopped rather than changed.
+    expect(seen.every((shape, index) => index === 0 || shape !== seen[index - 1])).toBe(true)
+
+    // And it stops when the wait does — a loose interval outlives the pill that justified it.
+    callbacksOrThrow().onEnd?.()
+    await nextTick()
+    expect(vi.getTimerCount()).toBe(0)
+
+    random.mockRestore()
     wrapper.unmount()
   })
 
@@ -1666,6 +1716,118 @@ describe('VoicePanel recording budget', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="voice-budget"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+})
+
+describe('VoicePanel send progress', () => {
+  /** The bar's width, as a fraction. */
+  function sent(wrapper: VueWrapper): number {
+    const style = wrapper.find('[data-testid="voice-upload"]').attributes('style') ?? ''
+    return Number(/width: ([\d.]+)%/.exec(style)?.[1] ?? -1) / 100
+  }
+
+  async function sendingPanel(audioSeconds = 0): Promise<VueWrapper> {
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onData?.({ type: 'level', rms: 0.4 })
+    await nextTick()
+    if (audioSeconds > 0) {
+      vi.advanceTimersByTime(audioSeconds * 1000)
+      await nextTick()
+    }
+    exposed(wrapper).stopVoiceInput()
+    await nextTick()
+    return wrapper
+  }
+
+  it('fills while the transcript is in flight and stops one percent short', async () => {
+    const wrapper = await sendingPanel()
+    expect(sent(wrapper)).toBeCloseTo(0, 2)
+
+    vi.advanceTimersByTime(450)
+    await nextTick()
+    const half = sent(wrapper)
+    expect(half).toBeGreaterThan(0)
+    expect(half).toBeLessThan(0.99)
+
+    // Long past the estimate: it parks rather than completing. The step it cannot see — the
+    // provider actually transcribing — has no end, and 100% would say the work was done.
+    vi.advanceTimersByTime(30_000)
+    await nextTick()
+    expect(sent(wrapper)).toBeCloseTo(0.99, 3)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The estimate is not a measurement, but its shape is defensible: a longer recording is a
+   * bigger request. If the pace ignored that, a one-second clip and a one-minute one would report
+   * the same progress at the same moment, and one of them would be badly wrong.
+   *
+   * Measured one panel at a time. Two mounted at once share the fake clock, so setting up the
+   * long one runs the short one's bar to its park — after which `short > long` holds no matter
+   * what the pace does, and the test passes on the very bug it is named after.
+   */
+  async function progressAfter(audioSeconds: number, waitMs: number): Promise<number> {
+    const wrapper = await sendingPanel(audioSeconds)
+    vi.advanceTimersByTime(waitMs)
+    await nextTick()
+    const value = sent(wrapper)
+    wrapper.unmount()
+    return value
+  }
+
+  it('paces itself against how much audio there is', async () => {
+    const short = await progressAfter(1, 600)
+    const long = await progressAfter(60, 600)
+
+    expect(short).toBeGreaterThan(long)
+    // Not merely slower: a minute of audio is still nowhere near parking after 600ms.
+    expect(long).toBeLessThan(0.5)
+  })
+
+  /**
+   * The one fact on this path. Everything before the provider answers is a projection; the first
+   * word back proves the audio landed, so the bar stops projecting and holds there.
+   */
+  it('parks early the moment the provider answers', async () => {
+    const wrapper = await sendingPanel(60)
+
+    vi.advanceTimersByTime(300)
+    await nextTick()
+    expect(sent(wrapper)).toBeLessThan(0.5)
+
+    callbacksOrThrow().onData?.({ type: 'partial', text: 'hello' })
+    await nextTick()
+    expect(sent(wrapper)).toBeCloseTo(0.99, 3)
+
+    // Parked means parked: no further advance, and nothing left ticking for it.
+    vi.advanceTimersByTime(10_000)
+    await nextTick()
+    expect(sent(wrapper)).toBeCloseTo(0.99, 3)
+
+    wrapper.unmount()
+  })
+
+  it('yields the surface to a hold and to a notice, and clears when the session ends', async () => {
+    const wrapper = await sendingPanel()
+    expect(wrapper.find('[data-testid="voice-upload"]').exists()).toBe(true)
+
+    hold(wrapper, 'start')
+    vi.advanceTimersByTime(150)
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-upload"]').exists()).toBe(false)
+
+    hold(wrapper, 'release')
+    await nextTick()
+    expect(wrapper.find('[data-testid="voice-upload"]').exists()).toBe(true)
+
+    callbacksOrThrow().onError?.(new Error('stream unavailable'))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="voice-upload"]').exists()).toBe(false)
 
     wrapper.unmount()
   })
