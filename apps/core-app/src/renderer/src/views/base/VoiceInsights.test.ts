@@ -24,11 +24,16 @@ import VoiceInsights from './VoiceInsights.vue'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/** 90 days of activity, so the 12-week strip has real weeks behind every bar. */
-function summary(): unknown {
+/**
+ * `recordedFor` is how long counting has been running, which is what decides how much of the
+ * page renders — not how much was said. Defaults to 90 days so the existing cases keep the whole
+ * layout.
+ */
+function summary(recordedFor = 90): unknown {
   const today = Date.now()
-  const days = Array.from({ length: 90 }, (_, index) => {
-    const date = new Date(today - (89 - index) * DAY_MS)
+  const span = Math.max(1, Math.min(recordedFor, 90))
+  const days = Array.from({ length: span }, (_, index) => {
+    const date = new Date(today - (span - 1 - index) * DAY_MS)
     return {
       date: date.toISOString().slice(0, 10),
       characters: 400 + index * 12,
@@ -37,7 +42,7 @@ function summary(): unknown {
     }
   })
   return {
-    startedAt: today - 90 * DAY_MS,
+    startedAt: today - recordedFor * DAY_MS,
     updatedAt: today,
     timezone: 'UTC',
     totalCharacters: 128_540,
@@ -119,6 +124,30 @@ describe('VoiceInsights page composition', () => {
       if (event?.toEventName?.() === voiceApiEvents.getInsights.toEventName()) {
         return { ok: true, result: summary() }
       }
+      if (event?.toEventName?.() === voiceApiEvents.getRecognitionRecords.toEventName()) {
+        return {
+          ok: true,
+          result: [
+            {
+              id: 'record-1',
+              capturedAt: Date.UTC(2026, 8, 8, 12, 30),
+              source: 'microphone',
+              status: 'success',
+              audioUrl: 'tfile://voice/record-1.wav',
+              audioBytes: 2048,
+              audioDurationMs: 120_000,
+              recognitionDurationMs: 1500,
+              rawText: ' um raw words ',
+              text: 'Final words.',
+              providerId: 'provider-bailian',
+              model: 'paraformer-realtime-v2',
+              channel: 'Bailian workspace',
+              totalTokens: 12,
+              deliveryMethod: 'native'
+            }
+          ]
+        }
+      }
       return { ok: true }
     })
   })
@@ -148,15 +177,40 @@ describe('VoiceInsights page composition', () => {
   })
 
   /**
-   * The number is derived from a typing baseline nobody measured. It is also now the largest
-   * thing on the page, which is exactly why the sentence saying so has to live inside the same
-   * card — a basis note further down is a note the reader scrolls past on their way somewhere.
+   * The number is derived from a typing baseline nobody measured, so the caveat has to stay
+   * inside the card — a basis note further down is a note the reader scrolls past.
+   *
+   * It rides the label rather than the body: it is a caveat about how the number was reached,
+   * not a second number, and printing it under the value made the one card carrying a caveat
+   * taller than the ones that do not. Hover reaches it in one gesture; the row stops being ragged.
    */
-  it('keeps the estimate basis inside the card that shows the estimate', async () => {
+  it('keeps the estimate basis on the label of the card that shows the estimate', async () => {
     const wrapper = await mountPage()
 
     const hero = wrapper.find('[data-testid="voice-insights-hero-metric"]')
-    expect(hero.find('small').text()).toContain('voiceInsights.metrics.savedBasis')
+    const basis = hero.find('[data-testid="voice-insights-saved-basis"]')
+    expect(basis.exists()).toBe(true)
+    // Reachable without the pointer: the caveat is the whole reason the icon is there.
+    expect(basis.attributes('aria-label')).toContain('voiceInsights.metrics.savedBasis')
+    expect(basis.attributes('tabindex')).toBe('0')
+
+    // Not printed in the body any more — that is what made this card taller than its siblings.
+    expect(hero.find('small').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The four figures are the page's whole payload, and they change under the reader when a
+   * refresh lands. Morphing them by place value shows which digits moved; swapping the string
+   * shows only that something did.
+   */
+  it('morphs every figure instead of swapping the text', async () => {
+    const wrapper = await mountPage()
+
+    const morphs = wrapper.findAllComponents({ name: 'TxTextMorph' })
+    expect(morphs).toHaveLength(4)
+    for (const morph of morphs) expect(String(morph.props('text'))).not.toBe('')
 
     wrapper.unmount()
   })
@@ -169,6 +223,121 @@ describe('VoiceInsights page composition', () => {
     // A silent week still gets a sliver: an empty column and a missing column look the same,
     // and only one of them is true.
     expect(bars.every((bar) => /height: \d+%/.test(bar.attributes('style') ?? ''))).toBe(true)
+
+    wrapper.unmount()
+  })
+  it('loads host recognition records with aggregates and renders audio, transcript, and metadata', async () => {
+    const wrapper = await mountPage()
+
+    expect(transportSendMock).toHaveBeenCalledWith(voiceApiEvents.getInsights, undefined)
+    expect(transportSendMock).toHaveBeenCalledWith(voiceApiEvents.getRecognitionRecords, undefined)
+
+    const record = wrapper.find('.VoiceInsights-Record')
+    expect(record.exists()).toBe(true)
+    expect(record.find('audio').attributes('src')).toBe('tfile://voice/record-1.wav')
+    expect(record.text()).toContain('um raw words')
+    expect(record.text()).toContain('Final words.')
+    expect(record.text()).toContain('paraformer-realtime-v2')
+    expect(record.text()).toContain('Bailian workspace')
+    expect(record.find('[data-status="success"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+})
+
+/**
+ * The page was laid out for a year of data and shipped showing it on day one: twelve bars with
+ * one value between them, three hundred and sixty-five cells with two coloured. Neither chart
+ * was comparing or showing anything — they just looked broken.
+ *
+ * The gate is how long counting has been running, not how much was said. Three months of record
+ * with two spoken days has eleven genuinely empty weeks, and that emptiness is the finding; one
+ * day of record has eleven weeks that never happened, which is the same picture meaning the
+ * opposite thing.
+ */
+describe('VoiceInsights progressive disclosure', () => {
+  function mockDays(recordedFor: number): void {
+    transportSendMock.mockReset()
+    transportSendMock.mockImplementation(async (event: { toEventName: () => string }) => {
+      if (event?.toEventName?.() === voiceApiEvents.getInsights.toEventName()) {
+        return { ok: true, result: summary(recordedFor) }
+      }
+      return { ok: true, result: [] }
+    })
+  }
+
+  function blocks(wrapper: Awaited<ReturnType<typeof mountPage>>) {
+    return {
+      metrics: wrapper.findAll('.VoiceInsights-Metric').length,
+      weeks: wrapper.find('[data-testid="voice-insights-weeks"]').exists(),
+      activity: wrapper.find('[data-testid="voice-insights-activity"]').exists(),
+      report: wrapper.find('[data-testid="voice-insights-report"]').exists(),
+      note: wrapper.find('[data-testid="voice-insights-tier-note"]').text()
+    }
+  }
+
+  it('shows the figures alone on day one, and says what is still coming', async () => {
+    mockDays(1)
+    const wrapper = await mountPage()
+
+    const state = blocks(wrapper)
+    expect(state.metrics).toBe(3)
+    expect(state.weeks).toBe(false)
+    expect(state.activity).toBe(false)
+    expect(state.report).toBe(false)
+    // Not rendered, not greyed: a chart with nothing in it says less than no chart.
+    expect(state.note).toContain('voiceInsights.tiers.weeksPending')
+
+    wrapper.unmount()
+  })
+
+  it('adds the 12-week comparison once there are weeks to compare', async () => {
+    mockDays(8)
+    const wrapper = await mountPage()
+
+    const state = blocks(wrapper)
+    expect(state.weeks).toBe(true)
+    expect(state.activity).toBe(false)
+    expect(state.report).toBe(false)
+    expect(state.note).toContain('voiceInsights.tiers.activityPending')
+
+    wrapper.unmount()
+  })
+
+  it('adds the year heatmap and the report at a month, and drops the note', async () => {
+    mockDays(31)
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="voice-insights-weeks"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-insights-activity"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-insights-report"]').exists()).toBe(true)
+    // Nothing is pending any more, so nothing says so.
+    expect(wrapper.find('[data-testid="voice-insights-tier-note"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * A record that has run for months shows its whole shape even when most of it is empty —
+   * that is the chart working, not the chart failing.
+   */
+  it('keeps the charts for a long but quiet record', async () => {
+    transportSendMock.mockReset()
+    transportSendMock.mockImplementation(async (event: { toEventName: () => string }) => {
+      if (event?.toEventName?.() === voiceApiEvents.getInsights.toEventName()) {
+        const quiet = summary(90) as { days: Array<{ characters: number; sessions: number }> }
+        for (const day of quiet.days.slice(0, -2)) {
+          day.characters = 0
+          day.sessions = 0
+        }
+        return { ok: true, result: quiet }
+      }
+      return { ok: true, result: [] }
+    })
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="voice-insights-weeks"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-insights-activity"]').exists()).toBe(true)
 
     wrapper.unmount()
   })

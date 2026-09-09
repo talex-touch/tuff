@@ -1,10 +1,15 @@
 <script setup lang="ts" name="VoiceInsights">
-import type { VoiceInsights } from '@talex-touch/utils/transport/sdk/domains/voice'
+import type {
+  VoiceInsights,
+  VoiceRecognitionRecord
+} from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { CSSProperties } from 'vue'
 import type { DialogButton } from '@talex-touch/tuffex/dialog'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
+import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
@@ -145,6 +150,8 @@ const transport = useTuffTransport()
 const voiceSdk = createVoiceSdk(transport)
 
 const insights = ref<VoiceInsights | null>(null)
+const records = ref<VoiceRecognitionRecord[]>([])
+const recordsClearing = ref(false)
 const hasLoaded = ref(false)
 const refreshing = ref(false)
 const loadFailed = ref(false)
@@ -333,6 +340,33 @@ const streaks = computed(() => {
 const heroMetric = computed(() => metrics.value.find((metric) => metric.key === 'saved') ?? null)
 const supportMetrics = computed(() => metrics.value.filter((metric) => metric.key !== 'saved'))
 
+/**
+ * How much of the record exists, in days.
+ *
+ * Measured from when counting started, not from how often it was used. A person who started
+ * three months ago and spoke twice has eleven genuinely empty weeks, and that emptiness is the
+ * chart's finding. A person who started yesterday has eleven weeks that never happened — the
+ * same picture, meaning the opposite thing.
+ */
+const recordedDays = computed(() => {
+  const startedAt = insights.value?.startedAt
+  if (!startedAt) return 0
+  return Math.max(0, Math.floor((Date.now() - startedAt) / DAY_MS))
+})
+
+/**
+ * A block appears once the span it charts is actually covered by the record.
+ *
+ * The page was laid out for a year of data and shipped showing it on day one: twelve bars where
+ * only one had a value, three hundred and sixty-five cells where two were coloured. Neither was
+ * comparing or showing anything — they just looked broken. Not rendering a chart says less than
+ * a chart with nothing in it, and less is the honest amount here.
+ */
+const WEEKS_TIER_DAYS = 7
+const ACTIVITY_TIER_DAYS = 30
+const showsWeeks = computed(() => recordedDays.value >= WEEKS_TIER_DAYS)
+const showsActivity = computed(() => recordedDays.value >= ACTIVITY_TIER_DAYS)
+
 /** The last 12 weeks of dictated characters, as a share of the busiest of them. */
 const recentWeeks = computed(() => {
   const weeks = heatmapWeeks.value.slice(-WEEKLY_BAR_COUNT)
@@ -509,9 +543,13 @@ async function loadInsights(background = false): Promise<void> {
   copyFailed.value = false
 
   try {
-    const next = await voiceSdk.getInsights()
+    const [next, nextRecords] = await Promise.all([
+      voiceSdk.getInsights(),
+      voiceSdk.getRecognitionRecords()
+    ])
     if (revision !== loadRevision || disposed) return
     insights.value = next
+    records.value = nextRecords ?? []
     hasLoaded.value = true
     loadFailed.value = false
     postClearRefreshFailed.value = false
@@ -595,6 +633,49 @@ async function confirmClear(): Promise<boolean> {
   }
 
   return true
+}
+async function clearRecords(): Promise<void> {
+  if (recordsClearing.value || clearing.value) return
+  recordsClearing.value = true
+  try {
+    await voiceSdk.clearRecognitionRecords()
+    records.value = []
+    toast.success(t('voiceInsights.records.clearSuccess'))
+  } catch {
+    toast.error(t('voiceInsights.records.clearFailed'))
+  } finally {
+    if (!disposed) recordsClearing.value = false
+  }
+}
+function recordDateLabel(timestamp: number): string {
+  return new Intl.DateTimeFormat(locale.value, {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(new Date(timestamp))
+}
+
+function recordStatusLabel(status: VoiceRecognitionRecord['status']): string {
+  return t(`voiceInsights.records.status.${status}`)
+}
+
+function recordTokenLabel(record: VoiceRecognitionRecord): string {
+  const total = record.totalTokens
+  if (total !== undefined) return t('voiceInsights.records.tokensValue', { count: total })
+  if (record.inputTokens !== undefined || record.outputTokens !== undefined) {
+    return t('voiceInsights.records.tokensSplit', {
+      input: record.inputTokens ?? 0,
+      output: record.outputTokens ?? 0
+    })
+  }
+  return t('voiceInsights.records.tokensUnavailable')
+}
+
+function recordAudioLabel(record: VoiceRecognitionRecord): string {
+  if (!record.audioUrl) return t('voiceInsights.records.audioUnavailable')
+  return t('voiceInsights.records.audioMeta', {
+    duration: record.audioDurationMs ? formatDuration(record.audioDurationMs) : '—',
+    bytes: record.audioBytes ?? 0
+  })
 }
 
 onMounted(() => {
@@ -725,7 +806,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div
-      v-else-if="!loadFailed && !hasData"
+      v-else-if="!loadFailed && !hasData && records.length === 0"
       class="VoiceInsights-Canvas VoiceInsights-Empty"
       data-testid="voice-insights-empty"
     >
@@ -765,16 +846,32 @@ onBeforeUnmount(() => {
           data-testid="voice-insights-hero-metric"
           :data-metric="heroMetric.key"
         >
-          <p class="VoiceInsights-Hero2Label">{{ heroMetric.label }}</p>
+          <p class="VoiceInsights-Hero2Label">
+            {{ heroMetric.label }}
+            <!--
+              The basis rides the label, not the body.
+              It is a caveat about how the number was derived, not a second number, and printing
+              it under the value made the one card that carries a caveat taller than the ones that
+              do not. On hover it is still one gesture away, and the row stops being ragged.
+            -->
+            <TxTooltip v-if="heroMetric.note" :content="heroMetric.note">
+              <span
+                class="VoiceInsights-Hero2Basis i-carbon-information"
+                data-testid="voice-insights-saved-basis"
+                role="img"
+                :aria-label="heroMetric.note"
+                tabindex="0"
+              />
+            </TxTooltip>
+          </p>
           <div class="VoiceInsights-Hero2Value">
-            <strong>{{ heroMetric.value }}</strong>
+            <strong><TxTextMorph :text="heroMetric.value" /></strong>
             <span v-if="insights">{{
               t('voiceInsights.metrics.savedEquivalent', {
                 count: numberFormatter.format(insights.totalCharacters)
               })
             }}</span>
           </div>
-          <small v-if="heroMetric.note">{{ heroMetric.note }}</small>
         </article>
 
         <div class="VoiceInsights-Metrics">
@@ -785,16 +882,28 @@ onBeforeUnmount(() => {
             :data-metric="metric.key"
           >
             <div class="VoiceInsights-MetricValue">
-              <strong>{{ metric.value }}</strong>
+              <strong><TxTextMorph :text="metric.value" /></strong>
               <span v-if="metric.unit">{{ metric.unit }}</span>
             </div>
             <p>{{ metric.label }}</p>
-            <small v-if="metric.note">{{ metric.note }}</small>
           </article>
         </div>
       </section>
 
-      <article class="VoiceInsights-Weeks" data-testid="voice-insights-weeks">
+      <!--
+        Says the charts are coming, not that they are missing.
+        Without it a shorter page is indistinguishable from a broken one, and the reader who saw
+        a heatmap on someone else's screen has no way to tell which they are looking at.
+      -->
+      <p v-if="!showsActivity" class="VoiceInsights-Tier" data-testid="voice-insights-tier-note">
+        {{
+          showsWeeks
+            ? t('voiceInsights.tiers.activityPending')
+            : t('voiceInsights.tiers.weeksPending')
+        }}
+      </p>
+
+      <article v-if="showsWeeks" class="VoiceInsights-Weeks" data-testid="voice-insights-weeks">
         <header class="VoiceInsights-WeeksHeading">
           <div>
             <h3>{{ t('voiceInsights.weeks.title') }}</h3>
@@ -819,7 +928,11 @@ onBeforeUnmount(() => {
         </div>
       </article>
 
-      <article class="VoiceInsights-Activity" data-testid="voice-insights-activity">
+      <article
+        v-if="showsActivity"
+        class="VoiceInsights-Activity"
+        data-testid="voice-insights-activity"
+      >
         <header class="VoiceInsights-ActivityHeading">
           <h3>{{ t('voiceInsights.streak.title') }}</h3>
           <p>{{ t('voiceInsights.streak.windowNote') }}</p>
@@ -896,7 +1009,11 @@ onBeforeUnmount(() => {
         </div>
       </article>
 
-      <article class="VoiceInsights-Report" data-testid="voice-insights-report">
+      <article
+        v-if="showsActivity"
+        class="VoiceInsights-Report"
+        data-testid="voice-insights-report"
+      >
         <div class="VoiceInsights-ReportIntro">
           <div>
             <span class="VoiceInsights-ReportIcon i-ri-file-chart-line" aria-hidden="true" />
@@ -966,6 +1083,93 @@ onBeforeUnmount(() => {
               {{ t('voiceInsights.report.calendarMethod', { timezone: insights.timezone }) }}
             </li>
           </ul>
+        </div>
+      </article>
+      <article class="VoiceInsights-Records" data-testid="voice-insights-records">
+        <header class="VoiceInsights-RecordsHeading">
+          <div>
+            <h3>{{ t('voiceInsights.records.title') }}</h3>
+            <p>{{ t('voiceInsights.records.description') }}</p>
+          </div>
+          <TxButton
+            variant="bare"
+            type="danger"
+            size="sm"
+            :loading="recordsClearing"
+            :disabled="records.length === 0 || recordsClearing || clearing"
+            data-testid="voice-insights-records-clear"
+            @click="clearRecords"
+          >
+            {{ t('voiceInsights.records.clear') }}
+          </TxButton>
+        </header>
+
+        <div v-if="records.length === 0" class="VoiceInsights-RecordsEmpty">
+          {{ t('voiceInsights.records.empty') }}
+        </div>
+        <div v-else class="VoiceInsights-RecordList">
+          <details v-for="record in records" :key="record.id" class="VoiceInsights-Record">
+            <summary>
+              <span class="VoiceInsights-RecordSummaryMain">
+                <strong>{{
+                  record.text || record.rawText || t('voiceInsights.records.emptyText')
+                }}</strong>
+                <small>{{ recordDateLabel(record.capturedAt) }}</small>
+              </span>
+              <span class="VoiceInsights-RecordSummaryMeta">
+                <span :data-status="record.status">{{ recordStatusLabel(record.status) }}</span>
+                <span>{{ record.model || record.channel || '—' }}</span>
+              </span>
+            </summary>
+            <div class="VoiceInsights-RecordDetails">
+              <audio
+                v-if="record.audioUrl"
+                controls
+                preload="none"
+                :src="record.audioUrl"
+                :aria-label="t('voiceInsights.records.audioLabel')"
+              />
+              <p class="VoiceInsights-RecordAudioMeta">{{ recordAudioLabel(record) }}</p>
+              <dl>
+                <div>
+                  <dt>{{ t('voiceInsights.records.rawText') }}</dt>
+                  <dd>{{ record.rawText || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('voiceInsights.records.finalText') }}</dt>
+                  <dd>{{ record.text || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('voiceInsights.records.duration') }}</dt>
+                  <dd>
+                    {{ record.audioDurationMs ? formatDuration(record.audioDurationMs) : '—' }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ t('voiceInsights.records.recognitionDuration') }}</dt>
+                  <dd>
+                    {{
+                      record.recognitionDurationMs
+                        ? formatDuration(record.recognitionDurationMs)
+                        : '—'
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ t('voiceInsights.records.tokens') }}</dt>
+                  <dd>{{ recordTokenLabel(record) }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('voiceInsights.records.channel') }}</dt>
+                  <dd>{{ record.channel || record.providerId || '—' }}</dd>
+                </div>
+                <div v-if="record.errorCode">
+                  <dt>{{ t('voiceInsights.records.error') }}</dt>
+                  <dd>{{ record.errorCode }}</dd>
+                </div>
+              </dl>
+            </div>
+          </details>
         </div>
       </article>
     </main>
@@ -1120,18 +1324,24 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--shell-space-2);
-
-  small {
-    color: var(--shell-warning);
-    font-size: var(--shell-fs-caption);
-    line-height: 1.4;
-  }
 }
 
 .VoiceInsights-Hero2Label {
+  display: flex;
   margin: 0;
+  align-items: center;
   color: var(--shell-text-secondary);
   font-size: var(--shell-fs-sm);
+  gap: var(--shell-space-2);
+}
+
+/* Warning-coloured because the caveat is the point: the number under it is an estimate. */
+.VoiceInsights-Hero2Basis {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--shell-warning);
+  cursor: help;
 }
 
 .VoiceInsights-Hero2Value {
@@ -1140,14 +1350,14 @@ onBeforeUnmount(() => {
   align-items: baseline;
   flex-wrap: wrap;
 
-  strong {
+  > strong {
     color: var(--shell-text-primary);
     font-size: var(--shell-fs-display);
     font-weight: 600;
     line-height: 1.1;
   }
 
-  span {
+  > span {
     color: var(--shell-text-secondary);
     font-size: var(--shell-fs-sm);
   }
@@ -1233,6 +1443,14 @@ onBeforeUnmount(() => {
   }
 }
 
+/* Quiet on purpose: it explains an absence, and an absence should not shout. */
+.VoiceInsights-Tier {
+  margin: 0;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  line-height: 1.5;
+}
+
 .VoiceInsights-MetricValue {
   display: flex;
   flex-wrap: wrap;
@@ -1241,7 +1459,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   font-variant-numeric: tabular-nums;
 
-  strong {
+  > strong {
     min-width: 0;
     color: var(--shell-text-primary);
     font-size: var(--shell-fs-display);
@@ -1251,11 +1469,28 @@ onBeforeUnmount(() => {
     overflow-wrap: anywhere;
   }
 
-  span {
+  > span {
     color: var(--shell-text-regular);
     font-size: var(--shell-fs-md);
     font-weight: 600;
   }
+}
+
+/*
+ * The morph renders its own element inside the value, and it needs two things back.
+ *
+ * The rules above were descendant selectors, so `span` reached the morph's root and dressed the
+ * figure in the unit's size, weight and colour — the number shrank to look like "字". And the
+ * engine sets `vertical-align: top` on that root, which moves the row's baseline to the bottom
+ * of an inline-block and drops the unit onto what looks like a second line. Both are only
+ * visible in a browser: jsdom computes no layout, so nothing in the suite could see either.
+ */
+.VoiceInsights-MetricValue .tx-text-morph,
+.VoiceInsights-Hero2Value .tx-text-morph {
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  vertical-align: baseline;
 }
 
 .VoiceInsights-Activity,
@@ -1620,6 +1855,154 @@ onBeforeUnmount(() => {
   height: var(--shell-space-7);
   color: var(--shell-primary);
   font-size: var(--shell-space-7);
+}
+
+.VoiceInsights-Records {
+  margin-top: var(--shell-space-5);
+  padding: var(--shell-space-6);
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-xl);
+  background: var(--shell-bg);
+}
+
+.VoiceInsights-RecordsHeading {
+  display: flex;
+  gap: var(--shell-space-4);
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+
+  h3 {
+    margin: 0;
+    font-size: var(--shell-fs-lg);
+  }
+
+  p {
+    max-width: 65ch;
+    margin: var(--shell-space-1) 0 0;
+    color: var(--shell-text-secondary);
+    font-size: var(--shell-fs-body);
+  }
+}
+
+.VoiceInsights-RecordsEmpty {
+  margin-top: var(--shell-space-4);
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-body);
+}
+
+.VoiceInsights-RecordList {
+  display: grid;
+  gap: var(--shell-space-2);
+  margin-top: var(--shell-space-4);
+}
+
+.VoiceInsights-Record {
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-surface);
+
+  summary {
+    display: flex;
+    gap: var(--shell-space-4);
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--shell-space-3) var(--shell-space-4);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+.VoiceInsights-RecordSummaryMain,
+.VoiceInsights-RecordSummaryMeta {
+  display: flex;
+  min-width: 0;
+  gap: var(--shell-space-2);
+  align-items: baseline;
+}
+
+.VoiceInsights-RecordSummaryMain {
+  flex: 1 1 auto;
+  flex-direction: column;
+
+  strong {
+    overflow: hidden;
+    max-width: 100%;
+    color: var(--shell-text-primary);
+    font-size: var(--shell-fs-body);
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    color: var(--shell-text-muted);
+    font-size: var(--shell-fs-caption);
+  }
+}
+
+.VoiceInsights-RecordSummaryMeta {
+  flex: 0 0 auto;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
+}
+
+.VoiceInsights-RecordDetails {
+  display: grid;
+  gap: var(--shell-space-3);
+  padding: 0 var(--shell-space-4) var(--shell-space-4);
+
+  audio {
+    width: min(100%, 520px);
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--shell-space-3) var(--shell-space-5);
+    margin: 0;
+  }
+
+  dl > div {
+    min-width: 0;
+  }
+
+  dt {
+    color: var(--shell-text-muted);
+    font-size: var(--shell-fs-caption);
+  }
+
+  dd {
+    margin: var(--shell-space-1) 0 0;
+    color: var(--shell-text-primary);
+    font-size: var(--shell-fs-body);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+}
+
+.VoiceInsights-RecordAudioMeta {
+  margin: 0;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+}
+
+@media (max-width: 680px) {
+  .VoiceInsights-Records {
+    padding: var(--shell-space-5);
+  }
+
+  .VoiceInsights-RecordSummaryMeta {
+    display: none;
+  }
+
+  .VoiceInsights-RecordDetails dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .VoiceInsights-Loading {

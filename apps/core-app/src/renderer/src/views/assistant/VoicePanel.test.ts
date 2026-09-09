@@ -171,9 +171,9 @@ async function mountVoicePanel() {
 function exposed(wrapper: VueWrapper) {
   return wrapper.vm as unknown as {
     openPanel: () => Promise<void>
-    startVoiceInput: () => void
+    startVoiceInput: (timing?: 'final' | 'live') => void
     stopVoiceInput: () => void
-    toggleVoiceInput: () => void
+    toggleVoiceInput: (timing?: 'final' | 'live') => void
   }
 }
 
@@ -234,6 +234,13 @@ afterEach(() => {
   vi.clearAllTimers()
   vi.useRealTimers()
 })
+
+/**
+ * Mirrors `PILL_MAX_WIDTH` in VoicePanel.vue. The component's constants live inside the
+ * SFC, so this cannot import them; naming it here at least makes the next change one edit
+ * rather than a hunt for every literal.
+ */
+const PILL_MAX_WIDTH = 280
 
 describe('VoicePanel dock surface', () => {
   it('renders the two actions and no text, and never names the assistant', async () => {
@@ -372,11 +379,87 @@ describe('VoicePanel dock surface', () => {
       language: 'en-US',
       cleanup: true,
       delivery: 'active-app',
+      deliveryTiming: 'final',
       emitLevel: true,
       // The cap the border divides by, sent rather than inherited from main's default.
       maxDurationMs: 300_000
     })
 
+    wrapper.unmount()
+  })
+
+  /**
+   * The gesture is the only thing that distinguishes the two dictation styles, so the
+   * request has to carry it. Asserting the default alone would pass even if the panel had
+   * stopped forwarding the caller's choice entirely.
+   */
+  it('asks for live delivery when the gesture was a hold', async () => {
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput('live')
+    await flushPromises()
+
+    expect((streamRequest?.payload as { deliveryTiming?: string })?.deliveryTiming).toBe('live')
+
+    wrapper.unmount()
+  })
+})
+
+/**
+ * The live transcript follows its own tail.
+ *
+ * jsdom has no layout, so the natural width is stubbed on the prototype exactly as the
+ * pill-sizing tests do. What is being pinned is the arithmetic, which is the part that can
+ * silently invert: an offset of the wrong sign scrolls the sentence off the far side.
+ *
+ * The window is `pillWidth - PILL_CHROME_WIDTH - 2 * STREAM_FADE`, i.e. `pillWidth - 122`,
+ * and `pillWidth` is `clamp(natural + 2 + 94, 200, 280)`.
+ */
+describe('VoicePanel live transcript follow', () => {
+  function offset(wrapper: VueWrapper): number {
+    const style = wrapper.find('[data-testid="voice-live-text"]').attributes('style') ?? ''
+    const match = /translateX\((-?[\d.]+)px\)/.exec(style)
+    if (!match) throw new Error(`no translateX in style: ${style}`)
+    return Number(match[1])
+  }
+
+  async function panelWithNaturalWidth(natural: number): Promise<VueWrapper> {
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(natural)
+    const wrapper = await mountVoicePanel()
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onData?.({ type: 'partial', text: 'anything' })
+    await flushPromises()
+    await nextTick()
+    return wrapper
+  }
+
+  it('centres a transcript that fits', async () => {
+    // 60 wide in a 200px pill: window is 78, so 9px of slack either side.
+    const wrapper = await panelWithNaturalWidth(60)
+    expect(offset(wrapper)).toBeCloseTo(9, 5)
+    wrapper.unmount()
+  })
+
+  it('pins the tail once the transcript overflows', async () => {
+    // 400 wide against the 280px cap: window is 158, so the track slides 242 left and the
+    // newest character sits at the right edge. A positive number here would push the start
+    // of the sentence off screen and show the part nobody is waiting for.
+    const wrapper = await panelWithNaturalWidth(400)
+    expect(offset(wrapper)).toBeCloseTo(-242, 5)
+    wrapper.unmount()
+  })
+
+  /**
+   * The handover between the two branches has to be silent.
+   *
+   * They are written as separate cases, so nothing structural stops one from being off by a
+   * few pixels at the boundary — which would read as the sentence flinching the moment it
+   * outgrows the pill. At exactly the window width both must be nought.
+   */
+  it('crosses from centred to following without a jump', async () => {
+    const wrapper = await panelWithNaturalWidth(78)
+    expect(offset(wrapper)).toBeCloseTo(0, 5)
     wrapper.unmount()
   })
 })
@@ -618,7 +701,7 @@ describe('VoicePanel session control', () => {
       /width:\s*(\d+)px/.exec(wrapper.find('.voice-dock').attributes('style') ?? '')?.[1]
     )
     expect(width).toBeGreaterThanOrEqual(200)
-    expect(width).toBeLessThanOrEqual(340)
+    expect(width).toBeLessThanOrEqual(PILL_MAX_WIDTH)
 
     await exposed(wrapper).openPanel()
     await flushPromises()
@@ -1055,7 +1138,7 @@ describe('VoicePanel device readiness and long messages', () => {
     const style = wrapper.find('.voice-dock').attributes('style') ?? ''
     expect(style).toContain('height: 88px')
     // Width goes to the cap first; only then does the island grow.
-    expect(style).toContain('width: 340px')
+    expect(style).toContain(`width: ${PILL_MAX_WIDTH}px`)
     // And it stops being a pill: a pill's radius is half its height, so at 88 the ends would
     // swallow the room the second line needs. One line is a pill, two lines is a card.
     expect(style).toContain('border-radius: 24px')
@@ -1272,7 +1355,7 @@ describe('VoicePanel device readiness and long messages', () => {
     )
     const style = wrapper.find('.voice-dock').attributes('style') ?? ''
     const height = Number(/height: (\d+)px/.exec(style)?.[1] ?? 0)
-    expect(style).toContain('width: 340px')
+    expect(style).toContain(`width: ${PILL_MAX_WIDTH}px`)
     expect(height).toBeGreaterThan(44)
     expect(wrapper.find('.voice-dock--expanded').exists()).toBe(true)
 
@@ -1339,7 +1422,7 @@ describe('VoicePanel device readiness and long messages', () => {
     expect(started).toBeGreaterThan(0)
 
     // The surface tightens with the bar: one gesture, not two effects. A fixed step was three
-    // percent, which is present in the DOM and invisible on a 340px card.
+    // percent, which is present in the DOM and invisible on a capped-width card.
     const scaleAt = (): number => {
       const style = wrapper.find('.voice-dock').attributes('style') ?? ''
       return Number(/scale\(([\d.]+)\)/.exec(style)?.[1] ?? -1)

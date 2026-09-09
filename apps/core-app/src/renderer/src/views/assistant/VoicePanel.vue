@@ -6,7 +6,10 @@ import type {
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import type { StreamController } from '@talex-touch/utils/transport/types'
-import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domains/voice'
+import type {
+  VoiceAsrStreamEvent,
+  VoiceDeliveryTiming
+} from '@talex-touch/utils/transport/sdk/domains/voice'
 import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { ORB_STATES, TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
@@ -137,6 +140,16 @@ const ICON_CARD_WIDTH = 264
 const ICON_CARD_HEIGHT = 124
 
 /**
+ * How much of each end of the live transcript is given over to the fade.
+ *
+ * It is padding and mask in one: the text runs into this band and dissolves rather than
+ * being cut off against the pill's edge, and the same band is why a settled sentence never
+ * touches the round controls. The offset below aims the tail at the inner edge of it, so
+ * the newest character is always fully lit rather than half-faded.
+ */
+const STREAM_FADE = 14
+
+/**
  * The input meter's geometry.
  *
  * The bar count is derived from the room the pill actually has rather than fixed, so a
@@ -208,7 +221,18 @@ const WAVE_REF_ATTACK = 0.6
 const WAVE_REF_RELEASE = 0.15
 
 const PILL_BASE_WIDTH = 200
-const PILL_MAX_WIDTH = 340
+/**
+ * How wide the island is allowed to get before the text has to make do.
+ *
+ * 340 was set when the centre column only ever held a short status line, and it reads as
+ * oversized now that a live transcript fills it: the pill stops being a HUD hovering over
+ * the user's work and starts being a bar across it. 280 keeps a long sentence legible
+ * while leaving the surface something you look past rather than at.
+ *
+ * It also sets the meter's ceiling — `barsForWidth` divides whatever is left of this after
+ * `PILL_CHROME_WIDTH` — so moving this number moves how much level history is on screen.
+ */
+const PILL_MAX_WIDTH = 280
 const PILL_BASE_HEIGHT = 44
 /** The tallest the island ever gets: its padding, two clamped lines, the gap and one control. */
 const PILL_TALL_HEIGHT = 88
@@ -296,6 +320,41 @@ const centerTextRef = ref<HTMLElement | null>(null)
 const pillRef = ref<HTMLElement | null>(null)
 const pillWidth = ref(PILL_BASE_WIDTH)
 const pillHeight = ref(PILL_BASE_HEIGHT)
+/** Natural width of the live transcript, measured off the same pass that sizes the pill. */
+const streamTextWidth = ref(0)
+
+/**
+ * The window the transcript scrolls inside — the centre column less both fade bands.
+ *
+ * Derived from `pillWidth` rather than read off the DOM on purpose. The pill takes 260ms
+ * to reach a new width, so measuring the element mid-transition would answer "how wide am
+ * I right now", aim the text at that, and then have to chase it. Both animate toward the
+ * settled number instead, and arrive together.
+ */
+const streamViewportWidth = computed(() =>
+  Math.max(0, pillWidth.value - PILL_CHROME_WIDTH - STREAM_FADE * 2)
+)
+
+/**
+ * Where the transcript sits, as one continuous function of how long it is.
+ *
+ * Short enough to fit, it is centred, which is what the pill has always done. Once it
+ * overflows, the tail is pinned to the right edge so the word being spoken is the word on
+ * screen — the reason this exists at all, since an ellipsis hides exactly the end the user
+ * is watching for.
+ *
+ * The two branches meet at zero when the text is exactly the width of the window, so
+ * crossing that point is not a jump. Writing it as `min` of the two would not: centring
+ * yields a positive number and following a negative one, and the handover has to be where
+ * they are both nought.
+ */
+const streamOffset = computed(() => {
+  const view = streamViewportWidth.value
+  const text = streamTextWidth.value
+  if (text <= view) return (view - text) / 2
+  return -(text - view)
+})
+
 /** The centre column is what the meter gets: the pill minus its padding and both controls. */
 const waveBarCount = computed(() => barsForWidth(pillWidth.value - PILL_CHROME_WIDTH))
 // The meter's width follows the pill, so its history has to follow the meter. Rebuilding
@@ -1058,7 +1117,15 @@ function showVoiceSessionError(generation: number, error: unknown): void {
   )
 }
 
-async function startVoiceSession(): Promise<void> {
+/**
+ * The gesture decides when the words reach the target application.
+ *
+ * A tap starts a session the user will end with another tap, so the transcript arrives as
+ * one piece when they are done thinking. A hold is push-to-talk: the point is watching the
+ * text appear while speaking, so it is delivered as it is recognized. See
+ * `VoiceDeliveryTiming` for what `live` costs — a partial of latency, and no polish pass.
+ */
+async function startVoiceSession(timing: VoiceDeliveryTiming = 'final'): Promise<void> {
   if (!voiceInputEnabled.value) {
     showNotice(t('assistant.voicePanel.voiceInputDisabled'), 'warning')
     return
@@ -1113,6 +1180,7 @@ async function startVoiceSession(): Promise<void> {
         language: runtimeConfig.value.language,
         cleanup: true,
         delivery: 'active-app',
+        deliveryTiming: timing,
         emitLevel: true,
         // Sent, not inherited: the border draws a fraction of this number, so it has to be the
         // number main is actually enforcing rather than whatever its default happens to be.
@@ -1283,6 +1351,7 @@ function measureNaturalWidth(element: HTMLElement): number {
 // `interpolate-size`, and the window behind the pill deliberately never resizes.
 watch([centerText, showsOrb, () => notice.value?.icon, listening], async () => {
   if (!centerText.value) {
+    streamTextWidth.value = 0
     pillWidth.value = PILL_BASE_WIDTH
     pillHeight.value = PILL_BASE_HEIGHT
     return
@@ -1299,7 +1368,11 @@ watch([centerText, showsOrb, () => notice.value?.icon, listening], async () => {
   const element = currentTextEl()
   if (!element) return
   const chrome = PILL_CHROME_WIDTH
-  const needed = measureNaturalWidth(element) + TEXT_WIDTH_SLACK + chrome
+  const natural = measureNaturalWidth(element)
+  // One measurement, two consumers. The follow offset needs the same number the width
+  // does, and reading it twice would mean two forced layouts per partial rather than one.
+  streamTextWidth.value = natural
+  const needed = natural + TEXT_WIDTH_SLACK + chrome
   pillWidth.value = Math.min(PILL_MAX_WIDTH, Math.max(PILL_BASE_WIDTH, needed))
 
   // Width first, height second. Truncating at the cap loses the half of the sentence that
@@ -1328,13 +1401,13 @@ watch([centerText, showsOrb, () => notice.value?.icon, listening], async () => {
 
 defineExpose({
   openPanel: handlePanelOpened,
-  startVoiceInput: (): void => {
-    void startVoiceSession()
+  startVoiceInput: (timing: VoiceDeliveryTiming = 'final'): void => {
+    void startVoiceSession(timing)
   },
   stopVoiceInput: finishVoiceInput,
-  toggleVoiceInput: (): void => {
+  toggleVoiceInput: (timing: VoiceDeliveryTiming = 'final'): void => {
     if (listening.value || startingVoiceCapture.value) finishVoiceInput()
-    else if (!transcribing.value && !recovering.value) void startVoiceSession()
+    else if (!transcribing.value && !recovering.value) void startVoiceSession(timing)
   },
   handleCancelHold
 })
@@ -1507,20 +1580,26 @@ onBeforeUnmount(() => {
       </Transition>
       <div v-else class="voice-dock__slot voice-dock__live-slot">
         <div class="voice-dock__live">
-          <p
+          <div
             v-if="centerText"
-            ref="centerTextRef"
-            class="voice-dock__text"
-            data-testid="voice-live-text"
+            class="voice-dock__stream"
+            :style="{ '--voice-stream-fade': `${STREAM_FADE}px` }"
           >
-            <span
-              v-for="(char, index) in centerChars"
-              :key="`live:${index}`"
-              class="voice-dock__char"
-              :style="{ animationDelay: charDelay(index) }"
-              >{{ char }}</span
+            <p
+              ref="centerTextRef"
+              class="voice-dock__text voice-dock__text--stream"
+              :style="{ transform: `translateX(${streamOffset}px)` }"
+              data-testid="voice-live-text"
             >
-          </p>
+              <span
+                v-for="(char, index) in centerChars"
+                :key="`live:${index}`"
+                class="voice-dock__char"
+                :style="{ animationDelay: charDelay(index) }"
+                >{{ char }}</span
+              >
+            </p>
+          </div>
           <div
             class="voice-dock__wave"
             :class="{ 'voice-dock__wave--pending': !hasLevel }"
@@ -2062,6 +2141,53 @@ onBeforeUnmount(() => {
   /* Matches the 10Hz level cadence, so each bar lands exactly as the next frame arrives. */
   transition: height 100ms linear;
 }
+/*
+ * The live transcript scrolls its own tail into view.
+ *
+ * A recognized sentence outgrows the pill within a few seconds, and the end of it is the
+ * part the speaker is watching for — an ellipsis hides exactly that. So the track slides
+ * left instead, by transform rather than `scrollLeft`: the offset is a number this
+ * component already computes, and a transform is composited rather than re-laying-out a
+ * paragraph of per-character spans ten times a second.
+ */
+.voice-dock__stream {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  /*
+   * Padding and mask over the same band. `overflow` clips at the padding box, so the text
+   * runs on into this strip and the mask dissolves it there — cutting it off against a
+   * hard edge is what makes a scrolling label look broken. A gradient overlay would not do:
+   * the pill's fill is translucent, so an opaque strip of "background" reads as a bright
+   * block sitting on top of whatever is behind the window.
+   */
+  padding-inline: var(--voice-stream-fade, 14px);
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--voice-stream-fade, 14px),
+    #000 calc(100% - var(--voice-stream-fade, 14px)),
+    transparent 100%
+  );
+}
+
+.voice-dock__text--stream {
+  display: inline-block;
+  width: max-content;
+  max-width: none;
+  overflow: visible;
+  white-space: nowrap;
+  text-overflow: clip;
+  /*
+   * Short on purpose. Partials land at 5-10Hz, so anything near the pill's own 260ms would
+   * spend its whole life being restarted and the text would crawl behind the voice. This is
+   * long enough to read as sliding rather than jumping, and over before the next word.
+   */
+  transition: transform 140ms cubic-bezier(0.2, 0, 0, 1);
+  will-change: transform;
+}
+
 .voice-dock__live {
   display: flex;
   width: 100%;
@@ -2069,12 +2195,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-}
-
-.voice-dock__live .voice-dock__text {
-  width: 100%;
-  max-width: 100%;
-  text-align: center;
 }
 
 .voice-dock__live .voice-dock__wave {
@@ -2131,10 +2251,6 @@ onBeforeUnmount(() => {
 .voice-dock--expanded .voice-dock__text {
   white-space: normal;
 }
-.voice-dock__live .voice-dock__text {
-  white-space: nowrap;
-}
-
 /*
  * Characters arrive in a wave rather than the sentence appearing at once.
  *
@@ -2217,6 +2333,12 @@ onBeforeUnmount(() => {
 
   /* The bar still drains — it is information, not decoration — it just stops easing between ticks. */
   .voice-dock__charge {
+    transition: none;
+  }
+
+  /* Same rule again: the tail still has to be the part you can see, so the track still
+     moves — it just arrives rather than slides. */
+  .voice-dock__text--stream {
     transition: none;
   }
 
