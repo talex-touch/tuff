@@ -263,6 +263,9 @@ code: |
 
 ## 交互契约
 
+- 滑块颜色由文字色混入浮层色调出，因此在明暗两种主题下都比轨道更"抬起"。只用 `--tx-bg-color-overlay` 时，浅色下是白色、深色下却比轨道更暗，滑块会陷进凹槽里，位移也就看不见了。
+- 选项自带键盘焦点环，浏览器默认的 outline 不会再压在滑块上面。
+
 - 单选模式下 `TxFlatRadio` 使用 `role="radiogroup"`，每个 item 使用 `role="radio"`。
 - 多选模式下容器使用 `role="group"`，每个 item 使用 `role="checkbox"`，并隐藏滑动指示器。
 - item 按钮保持 `tabindex="-1"`；焦点停留在容器上，由方向键驱动整组选择。

@@ -15,12 +15,20 @@ export interface SliderProps {
   showValue?: boolean
   formatValue?: (value: number) => string
   /**
-   * Refractive disc rendered behind the thumb: it blurs and saturates whatever the slider
-   * sits on, so the handle reads as a piece of glass rather than a flat dot. Fades in on
-   * hover and swells while dragging. Pass `false` for a flat thumb (and to skip the
-   * `backdrop-filter` layer entirely).
+   * The capsule thumb — the Radio button-group indicator borrowed whole: the same
+   * 28px capsule, the same fill / rim / highlight recipe, and the same jelly (a pop
+   * on grab, stretch with speed, a squash on a reversal, at the track ends and on a
+   * fast release). The native thumb becomes a bare hit area. Pass `false` for the
+   * flat native disc.
    */
   thumbSurface?: boolean
+  /**
+   * The capsule's body — the Radio button group's three `indicatorVariant`s. `solid` is
+   * the plain 88% overlay fill. `blur` (default) thins the fill to 22% and frosts the
+   * track and fill under it, at rest and while dragging. `glass` keeps the solid capsule
+   * at rest and swaps in the indicator's refractive `TxGlassSurface` while the thumb is held.
+   */
+  thumbVariant?: 'solid' | 'blur' | 'glass'
   showTooltip?: boolean
   tooltipTrigger?: 'drag' | 'hover' | 'always'
   tooltipFormatter?: (value: number) => string

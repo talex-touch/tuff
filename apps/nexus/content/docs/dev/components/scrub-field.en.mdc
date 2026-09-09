@@ -77,6 +77,8 @@ Pressing **Escape during a drag abandons the gesture**, returning to the value t
 
 ## Interaction Contract
 
+- The chip carries horizontal padding on both sides so the handle glyph and the value clear its edge; flush against it the field read as clipped rather than compact.
+
 - The handle is a `role="slider"` with `aria-valuenow` / `aria-valuemin` / `aria-valuemax` / `aria-orientation`, plus `aria-valuetext` (`100%`) when a suffix is set. The input is a **second** control with its own accessible name — that two-control shape is deliberate.
 - What gets quantised is the **travel**, not the result: `round(distance / pixelsPerStep) * step`. That is what makes fractional steps work and stops an off-grid starting value from being snapped onto the grid.
 - The drag runs under pointer capture, and both `pointercancel` and `lostpointercapture` end it. Upstream listens for neither, so a system gesture stealing the pointer leaves a live drag behind.

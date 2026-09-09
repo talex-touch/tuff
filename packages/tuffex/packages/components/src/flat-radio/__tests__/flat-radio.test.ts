@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxFlatRadio from '../src/TxFlatRadio.vue'
+import flatRadioSource from '../src/TxFlatRadio.vue?raw'
 import TxFlatRadioItem from '../src/TxFlatRadioItem.vue'
 
 function mountSingleFlatRadio(options: { disabled?: boolean, initial?: string } = {}) {
@@ -111,5 +112,18 @@ describe('txFlatRadio', () => {
     // The container announces the same item through aria-activedescendant.
     expect(container.attributes('aria-activedescendant')).toBe(id)
     expect(items[0].classes()).not.toContain('is-focused')
+  })
+})
+
+describe('txFlatRadio indicator contrast', () => {
+  it('lifts the sliding indicator off the track in both themes', () => {
+    // `--tx-bg-color-overlay` is white on light but darker than the track on
+    // dark, so the indicator sank into the groove and its travel was invisible.
+    const rule = flatRadioSource.slice(flatRadioSource.indexOf('.tx-flat-radio__indicator {'))
+    const body = rule.slice(0, rule.indexOf('}'))
+
+    expect(body).toContain('color-mix(in srgb, var(--tx-text-color-primary')
+    expect(body).toContain('var(--tx-bg-color-overlay')
+    expect(body).toMatch(/transform 0\.25s/)
   })
 })

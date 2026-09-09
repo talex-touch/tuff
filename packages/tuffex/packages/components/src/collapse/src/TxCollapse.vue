@@ -98,10 +98,16 @@ provide<CollapseContext>('collapse', {
   </div>
 </template>
 
-<style scoped>
+<style lang="scss" scoped>
+// A grouped list in a frame, on the same rim as the menu and dialog panels:
+// 12px radius, a 1px rim from the light border family, the overlay surface.
+// `--tx-collapse-radius` is read by the items so the first and last headers
+// can nest their corners into this one (see TxCollapseItem).
 .tx-collapse {
-  border: 1px solid var(--tx-collapse-border, var(--tx-border-color-lighter, #e5e7eb));
-  border-radius: 8px;
+  --tx-collapse-radius: 10px;
+
+  border: 1px solid var(--tx-collapse-border, color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent));
+  border-radius: var(--tx-collapse-radius);
   background: var(--tx-collapse-bg, var(--tx-bg-color-overlay, #ffffff));
   overflow: hidden;
 }

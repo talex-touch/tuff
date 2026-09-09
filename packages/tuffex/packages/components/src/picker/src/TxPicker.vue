@@ -42,8 +42,6 @@ const visibleCount = computed(() => {
   return Math.max(3, n % 2 === 0 ? n + 1 : n)
 })
 
-const paddingY = computed(() => (visibleCount.value - 1) / 2 * itemHeightPx.value)
-
 const localValue = ref<PickerValue>([])
 
 function normalizeValue(v: PickerValue): PickerValue {
@@ -101,21 +99,54 @@ watch(
   { flush: 'sync' },
 )
 
-const colRefs = ref<Array<HTMLElement | null>>([])
-const isDragging = ref(false)
+/*
+ * The column is a drum turned by hand, not a scroller with a wheel painted on
+ * it.
+ *
+ * The painted version rotated rows that were still laid out and still had to be
+ * clickable where they sat: a row's hit area travels with its transform, so the
+ * centre row — pushed toward the viewer and enlarged by the perspective —
+ * covered its neighbours and swallowed their clicks. Here the rows are stacked
+ * on the centre line and carry no hit area at all; the column owns the pointer,
+ * the wheel and the clicks, and reads a row back out of the geometry.
+ *
+ * Everything is driven by one number per column: `offset`, the position in rows,
+ * fractional while it turns.
+ */
+const WHEEL_STEP_DEG = 18
 
-interface ScrollState {
+/** r = (itemHeight / 2) / tan(step / 2) puts a row's arc length at its height. */
+const wheelRadiusPx = computed(() => {
+  const half = (WHEEL_STEP_DEG / 2) * (Math.PI / 180)
+  return Math.round(itemHeightPx.value / 2 / Math.tan(half))
+})
+
+/**
+ * Rows past a quarter turn face away, so only the ones within that are worth
+ * rendering. A year column runs 1970..2100; drawing all 131 of them to show
+ * eleven is what made the wheel stutter.
+ */
+const WHEEL_WINDOW = Math.ceil(90 / WHEEL_STEP_DEG)
+
+/** How far a flick coasts: velocity in rows/ms times this, in rows. */
+const MOMENTUM_MS = 260
+
+const colRefs = ref<Array<HTMLElement | null>>([])
+const offsets = ref<number[]>([])
+
+interface WheelState {
   rafId: number | null
-  debounceId: number | null
+  settleId: number | null
 }
 
-const scrollStates = ref<ScrollState[]>([])
+const wheelStates = ref<WheelState[]>([])
 
 function ensureStates() {
   const n = columns.value.length
-  if (scrollStates.value.length === n)
-    return
-  scrollStates.value = Array.from({ length: n }).map(() => ({ rafId: null, debounceId: null }))
+  if (wheelStates.value.length !== n)
+    wheelStates.value = Array.from({ length: n }).map(() => ({ rafId: null, settleId: null }))
+  if (offsets.value.length !== n)
+    offsets.value = Array.from({ length: n }).map((_, i) => offsets.value[i] ?? 0)
 }
 
 function getIndexForValue(colIndex: number, v: any): number {
@@ -131,47 +162,42 @@ function clampIndex(colIndex: number, idx: number): number {
   return Math.min(len - 1, Math.max(0, idx))
 }
 
-function scrollToIndex(colIndex: number, idx: number, behavior: ScrollBehavior = 'auto') {
-  const el = colRefs.value[colIndex]
-  if (!el)
-    return
-  const top = idx * itemHeightPx.value
-  el.scrollTo({ top, behavior })
+function offsetOf(colIndex: number): number {
+  return offsets.value[colIndex] ?? 0
 }
 
-function pickIndexFromScroll(colIndex: number) {
-  const el = colRefs.value[colIndex]
-  if (!el)
-    return
+function setOffset(colIndex: number, value: number) {
+  ensureStates()
+  const next = offsets.value.slice()
+  next[colIndex] = value
+  offsets.value = next
+}
 
-  const raw = el.scrollTop / itemHeightPx.value
-  const idx = clampIndex(colIndex, Math.round(raw))
-  const opts = columns.value[colIndex]?.options ?? []
-  const option = opts[idx]
-
-  if (option?.disabled) {
-    const next = opts.findIndex((o, i) => i >= idx && !o.disabled)
-    const prev = [...opts].reverse().findIndex(o => !o.disabled)
-    const prevIdx = prev >= 0 ? opts.length - 1 - prev : -1
-
-    const fallback = next >= 0 ? next : prevIdx
-    if (fallback >= 0 && fallback !== idx) {
-      scrollToIndex(colIndex, fallback, 'smooth')
-      setValueAt(colIndex, opts[fallback]?.value)
-      return
-    }
+function stopWheel(colIndex: number) {
+  const state = wheelStates.value[colIndex]
+  if (state?.rafId != null) {
+    cancelAnimationFrame(state.rafId)
+    state.rafId = null
   }
-
-  setValueAt(colIndex, option?.value)
 }
 
-function settleScroll(colIndex: number) {
-  const el = colRefs.value[colIndex]
-  if (!el)
-    return
-
-  const idx = clampIndex(colIndex, Math.round(el.scrollTop / itemHeightPx.value))
-  scrollToIndex(colIndex, idx, 'smooth')
+/** Nearest enabled option to `idx`, searching outward; -1 when a column has none. */
+function nearestEnabledIndex(colIndex: number, idx: number): number {
+  const opts = columns.value[colIndex]?.options ?? []
+  if (opts.length === 0)
+    return -1
+  const start = clampIndex(colIndex, idx)
+  if (!opts[start]?.disabled)
+    return start
+  for (let step = 1; step < opts.length; step++) {
+    const after = start + step
+    if (after < opts.length && !opts[after]?.disabled)
+      return after
+    const before = start - step
+    if (before >= 0 && !opts[before]?.disabled)
+      return before
+  }
+  return -1
 }
 
 function setValueAt(colIndex: number, v: any) {
@@ -179,10 +205,236 @@ function setValueAt(colIndex: number, v: any) {
     return
   const next = localValue.value.slice()
   next[colIndex] = v
-  localValue.value = normalizeValue(next)
+  const normalized = normalizeValue(next)
+  if (valuesEqual(normalized, localValue.value))
+    return
+  localValue.value = normalized
 
   emit('update:modelValue', localValue.value)
   emit('change', localValue.value)
+}
+
+/**
+ * Eases to a row and settles there. Cubic ease-out: quick to leave, slow to
+ * arrive, which is the deceleration a flick is supposed to have.
+ */
+function goToIndex(colIndex: number, idx: number, animated = true) {
+  ensureStates()
+  const state = wheelStates.value[colIndex]
+  if (!state)
+    return
+
+  stopWheel(colIndex)
+  const to = clampIndex(colIndex, idx)
+  const from = offsetOf(colIndex)
+
+  if (!animated || Math.abs(to - from) < 0.001) {
+    setOffset(colIndex, to)
+    return
+  }
+
+  const distance = Math.abs(to - from)
+  const duration = Math.min(620, 220 + distance * 55)
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
+  const startedAt = now()
+
+  const step = () => {
+    const t = Math.min(1, (now() - startedAt) / duration)
+    const eased = 1 - (1 - t) ** 3
+    setOffset(colIndex, from + (to - from) * eased)
+
+    if (t < 1) {
+      state.rafId = requestAnimationFrame(step)
+      return
+    }
+    state.rafId = null
+    setOffset(colIndex, to)
+  }
+
+  state.rafId = requestAnimationFrame(step)
+}
+
+/** Reads the row under the centre line and makes it the value. */
+function commitOffset(colIndex: number) {
+  const opts = columns.value[colIndex]?.options ?? []
+  if (opts.length === 0)
+    return
+  const idx = nearestEnabledIndex(colIndex, Math.round(offsetOf(colIndex)))
+  if (idx < 0)
+    return
+  setValueAt(colIndex, opts[idx]?.value)
+}
+
+/** Lands on the nearest enabled row once a turn stops. */
+function settleWheel(colIndex: number) {
+  const opts = columns.value[colIndex]?.options ?? []
+  const idx = nearestEnabledIndex(colIndex, Math.round(offsetOf(colIndex)))
+  if (idx < 0)
+    return
+  goToIndex(colIndex, idx)
+  setValueAt(colIndex, opts[idx]?.value)
+}
+
+function scheduleSettle(colIndex: number, delay = 120) {
+  ensureStates()
+  const state = wheelStates.value[colIndex]
+  if (!state)
+    return
+  if (state.settleId != null)
+    window.clearTimeout(state.settleId)
+  state.settleId = window.setTimeout(() => {
+    state.settleId = null
+    settleWheel(colIndex)
+  }, delay)
+}
+
+interface DragState {
+  pointerId: number
+  startY: number
+  startOffset: number
+  lastY: number
+  lastAt: number
+  /** Rows per millisecond; positive means the column is travelling upward. */
+  velocity: number
+  moved: boolean
+}
+
+const drags = new Map<number, DragState>()
+const isDragging = ref(false)
+
+function onPointerDown(colIndex: number, event: PointerEvent) {
+  if (props.disabled)
+    return
+  ensureStates()
+  stopWheel(colIndex)
+
+  const target = event.currentTarget as HTMLElement | null
+  target?.setPointerCapture?.(event.pointerId)
+
+  drags.set(colIndex, {
+    pointerId: event.pointerId,
+    startY: event.clientY,
+    startOffset: offsetOf(colIndex),
+    lastY: event.clientY,
+    lastAt: event.timeStamp,
+    velocity: 0,
+    moved: false,
+  })
+  isDragging.value = true
+}
+
+function onPointerMove(colIndex: number, event: PointerEvent) {
+  const drag = drags.get(colIndex)
+  if (!drag || drag.pointerId !== event.pointerId)
+    return
+
+  const dy = event.clientY - drag.startY
+  if (Math.abs(dy) > 2)
+    drag.moved = true
+
+  setOffset(colIndex, clampIndex(colIndex, drag.startOffset - dy / itemHeightPx.value))
+
+  const dt = event.timeStamp - drag.lastAt
+  if (dt > 0)
+    drag.velocity = -(event.clientY - drag.lastY) / itemHeightPx.value / dt
+  drag.lastY = event.clientY
+  drag.lastAt = event.timeStamp
+
+  commitOffset(colIndex)
+}
+
+/**
+ * Which row sits under a point on the drum.
+ *
+ * A row is drawn `radius * sin(angle)` from the centre line, so the angle — and
+ * from it the row — comes back with `asin`. Reading the geometry is what lets
+ * the rows stay inert: the column hit-tests against what it drew, instead of
+ * against transformed boxes that overlap each other.
+ */
+function pickFromPoint(colIndex: number, event: { clientY: number, currentTarget: EventTarget | null }) {
+  if (props.disabled)
+    return
+  const el = event.currentTarget as HTMLElement | null
+  if (typeof el?.getBoundingClientRect !== 'function')
+    return
+
+  const rect = el.getBoundingClientRect()
+  const dy = event.clientY - (rect.top + rect.height / 2)
+  const ratio = Math.max(-1, Math.min(1, dy / wheelRadiusPx.value))
+  const rows = (Math.asin(ratio) * 180) / (Math.PI * WHEEL_STEP_DEG)
+
+  const opts = columns.value[colIndex]?.options ?? []
+  const idx = nearestEnabledIndex(colIndex, Math.round(offsetOf(colIndex) + rows))
+  if (idx < 0)
+    return
+  goToIndex(colIndex, idx)
+  setValueAt(colIndex, opts[idx]?.value)
+}
+
+function onPointerUp(colIndex: number, event: PointerEvent) {
+  const drag = drags.get(colIndex)
+  if (!drag || drag.pointerId !== event.pointerId)
+    return
+  drags.delete(colIndex)
+  isDragging.value = drags.size > 0
+
+  const target = event.currentTarget as HTMLElement | null
+  target?.releasePointerCapture?.(event.pointerId)
+
+  if (!drag.moved) {
+    // A tap rather than a drag: the row under the finger is the one being asked for.
+    pickFromPoint(colIndex, event)
+    return
+  }
+
+  const opts = columns.value[colIndex]?.options ?? []
+  const coasted = offsetOf(colIndex) + drag.velocity * MOMENTUM_MS
+  const idx = nearestEnabledIndex(colIndex, Math.round(coasted))
+  if (idx < 0)
+    return
+  goToIndex(colIndex, idx)
+  setValueAt(colIndex, opts[idx]?.value)
+}
+
+function onWheelEvent(colIndex: number, event: WheelEvent) {
+  if (props.disabled)
+    return
+  ensureStates()
+  stopWheel(colIndex)
+
+  setOffset(colIndex, clampIndex(colIndex, offsetOf(colIndex) + event.deltaY / itemHeightPx.value))
+  commitOffset(colIndex)
+  scheduleSettle(colIndex)
+}
+
+function onColumnClick(colIndex: number, event: MouseEvent) {
+  // A drag finishes through pointerup; only a plain click reaches here.
+  if (isDragging.value)
+    return
+  pickFromPoint(colIndex, event)
+}
+
+/**
+ * The rows worth drawing, each carrying its real index so the transform and the
+ * ARIA position stay true to the whole column.
+ */
+function visibleRows(colIndex: number) {
+  const opts = columns.value[colIndex]?.options ?? []
+  const offset = offsetOf(colIndex)
+  const first = Math.max(0, Math.floor(offset) - WHEEL_WINDOW)
+  const last = Math.min(opts.length - 1, Math.ceil(offset) + WHEEL_WINDOW)
+
+  const rows: Array<{ option: PickerColumn['options'][number], index: number }> = []
+  for (let i = first; i <= last; i++) {
+    const option = opts[i]
+    if (option)
+      rows.push({ option, index: i })
+  }
+  return rows
+}
+
+function columnStyle(colIndex: number) {
+  return { '--tx-picker-offset': String(offsetOf(colIndex)) }
 }
 
 // --- Accessibility: listbox keyboard contract ---
@@ -248,56 +500,18 @@ function onKeydown(colIndex: number, event: KeyboardEvent) {
   if (target < 0 || target === current)
     return
 
-  scrollToIndex(colIndex, target, 'smooth')
+  goToIndex(colIndex, target)
   setValueAt(colIndex, opts[target]?.value)
 }
 
-function onScroll(colIndex: number) {
-  if (props.disabled)
-    return
-  ensureStates()
-  const state = scrollStates.value[colIndex]
-  if (!state)
-    return
-
-  if (state.rafId != null)
-    cancelAnimationFrame(state.rafId)
-  state.rafId = requestAnimationFrame(() => {
-    state.rafId = null
-    pickIndexFromScroll(colIndex)
-  })
-
-  if (state.debounceId != null)
-    window.clearTimeout(state.debounceId)
-  state.debounceId = window.setTimeout(() => {
-    state.debounceId = null
-    if (!isDragging.value)
-      settleScroll(colIndex)
-  }, 120)
-}
-
-function onPointerDown() {
-  if (props.disabled)
-    return
-  isDragging.value = true
-}
-
-function onPointerUp() {
-  if (!isDragging.value)
-    return
-  isDragging.value = false
-  for (let i = 0; i < columns.value.length; i++) settleScroll(i)
-}
-
-async function syncScrollPositions(behavior: ScrollBehavior = 'auto') {
+/** Puts every column on its selected row. */
+async function syncOffsets(animated = false) {
   await nextTick()
   ensureStates()
 
   const v = localValue.value
-  for (let i = 0; i < columns.value.length; i++) {
-    const idx = getIndexForValue(i, v[i])
-    scrollToIndex(i, idx, behavior)
-  }
+  for (let i = 0; i < columns.value.length; i++)
+    goToIndex(i, getIndexForValue(i, v[i]), animated)
 }
 
 watch(
@@ -308,7 +522,7 @@ watch(
         popupZIndex.value = zIndexAllocator.next()
       emit('open')
       mountedOnce.value = true
-      await syncScrollPositions('auto')
+      await syncOffsets()
       return
     }
 
@@ -322,7 +536,7 @@ watch(
   () => {
     if (!open.value && props.popup)
       return
-    syncScrollPositions('auto')
+    syncOffsets()
   },
 )
 
@@ -331,7 +545,7 @@ watch(
   () => {
     if (!open.value && props.popup)
       return
-    syncScrollPositions('auto')
+    syncOffsets()
   },
 )
 
@@ -366,16 +580,17 @@ onMounted(() => {
   // trigger, so a picker mounted with a non-first modelValue would render the
   // highlight over the wrong option without this initial sync.
   if (!props.popup)
-    syncScrollPositions('auto')
+    syncOffsets()
 })
 
 onBeforeUnmount(() => {
-  for (const s of scrollStates.value) {
-    if (s.rafId != null)
-      cancelAnimationFrame(s.rafId)
-    if (s.debounceId != null)
-      window.clearTimeout(s.debounceId)
+  for (const state of wheelStates.value) {
+    if (state.rafId != null)
+      cancelAnimationFrame(state.rafId)
+    if (state.settleId != null)
+      window.clearTimeout(state.settleId)
   }
+  drags.clear()
 })
 </script>
 
@@ -393,41 +608,40 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px`, '--tx-picker-visible-count': `${visibleCount}` }">
+    <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-visible-count': `${visibleCount}`, '--tx-picker-radius': `${wheelRadiusPx}px`, '--tx-picker-step': `${WHEEL_STEP_DEG}` }">
       <div class="tx-picker__highlight" aria-hidden="true" />
 
       <div v-for="(col, colIndex) in columns" :key="col.key ?? colIndex" class="tx-picker__col">
         <div
           :ref="(el) => (colRefs[colIndex] = el as HTMLElement)"
-          class="tx-picker__scroller"
+          class="tx-picker__wheel"
           role="listbox"
           :tabindex="disabled ? -1 : 0"
           :aria-activedescendant="activeDescendant(colIndex)"
-          @scroll.passive="onScroll(colIndex)"
+          :style="columnStyle(colIndex)"
           @keydown="onKeydown(colIndex, $event)"
-          @pointerdown="onPointerDown"
-          @pointerup="onPointerUp"
-          @pointercancel="onPointerUp"
+          @pointerdown="onPointerDown(colIndex, $event)"
+          @pointermove="onPointerMove(colIndex, $event)"
+          @pointerup="onPointerUp(colIndex, $event)"
+          @pointercancel="onPointerUp(colIndex, $event)"
+          @wheel.prevent="onWheelEvent(colIndex, $event)"
+          @click="onColumnClick(colIndex, $event)"
         >
-          <div class="tx-picker__pad" aria-hidden="true" />
-
-          <button
-            v-for="(opt, optIndex) in col.options"
-            :id="optionId(colIndex, optIndex)"
-            :key="String(opt.value)"
-            type="button"
+          <div
+            v-for="row in visibleRows(colIndex)"
+            :id="optionId(colIndex, row.index)"
+            :key="String(row.option.value)"
             class="tx-picker__item"
             role="option"
-            tabindex="-1"
-            :aria-selected="localValue[colIndex] === opt.value"
-            :class="{ 'is-disabled': !!opt.disabled, 'is-selected': localValue[colIndex] === opt.value }"
-            :disabled="disabled || !!opt.disabled"
-            @click="scrollToIndex(colIndex, clampIndex(colIndex, col.options.findIndex(o => o.value === opt.value)), 'smooth')"
+            :aria-selected="localValue[colIndex] === row.option.value"
+            :aria-disabled="row.option.disabled || undefined"
+            :aria-setsize="col.options.length"
+            :aria-posinset="row.index + 1"
+            :class="{ 'is-disabled': !!row.option.disabled, 'is-selected': localValue[colIndex] === row.option.value }"
+            :style="{ '--tx-picker-index': row.index }"
           >
-            {{ opt.label }}
-          </button>
-
-          <div class="tx-picker__pad" aria-hidden="true" />
+            {{ row.option.label }}
+          </div>
         </div>
       </div>
     </div>
@@ -435,7 +649,7 @@ onBeforeUnmount(() => {
 
   <Teleport v-else to="body">
     <Transition name="tx-picker-popup">
-      <div v-if="open && (!lazyMount || mountedOnce)" class="tx-picker-popup" :style="{ zIndex: popupZIndex }" @pointerup="onPointerUp">
+      <div v-if="open && (!lazyMount || mountedOnce)" class="tx-picker-popup" :style="{ zIndex: popupZIndex }">
         <div class="tx-picker-popup__mask" @click="onMaskClick" />
 
         <div class="tx-picker-popup__panel" :class="{ 'is-disabled': disabled }">
@@ -451,41 +665,40 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px`, '--tx-picker-visible-count': `${visibleCount}` }">
+          <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-visible-count': `${visibleCount}`, '--tx-picker-radius': `${wheelRadiusPx}px`, '--tx-picker-step': `${WHEEL_STEP_DEG}` }">
             <div class="tx-picker__highlight" aria-hidden="true" />
 
             <div v-for="(col, colIndex) in columns" :key="col.key ?? colIndex" class="tx-picker__col">
               <div
                 :ref="(el) => (colRefs[colIndex] = el as HTMLElement)"
-                class="tx-picker__scroller"
+                class="tx-picker__wheel"
                 role="listbox"
                 :tabindex="disabled ? -1 : 0"
                 :aria-activedescendant="activeDescendant(colIndex)"
-                @scroll.passive="onScroll(colIndex)"
+                :style="columnStyle(colIndex)"
                 @keydown="onKeydown(colIndex, $event)"
-                @pointerdown="onPointerDown"
-                @pointerup="onPointerUp"
-                @pointercancel="onPointerUp"
+                @pointerdown="onPointerDown(colIndex, $event)"
+                @pointermove="onPointerMove(colIndex, $event)"
+                @pointerup="onPointerUp(colIndex, $event)"
+                @pointercancel="onPointerUp(colIndex, $event)"
+                @wheel.prevent="onWheelEvent(colIndex, $event)"
+                @click="onColumnClick(colIndex, $event)"
               >
-                <div class="tx-picker__pad" aria-hidden="true" />
-
-                <button
-                  v-for="(opt, optIndex) in col.options"
-                  :id="optionId(colIndex, optIndex)"
-                  :key="String(opt.value)"
-                  type="button"
+                <div
+                  v-for="row in visibleRows(colIndex)"
+                  :id="optionId(colIndex, row.index)"
+                  :key="String(row.option.value)"
                   class="tx-picker__item"
                   role="option"
-                  tabindex="-1"
-                  :aria-selected="localValue[colIndex] === opt.value"
-                  :class="{ 'is-disabled': !!opt.disabled, 'is-selected': localValue[colIndex] === opt.value }"
-                  :disabled="disabled || !!opt.disabled"
-                  @click="scrollToIndex(colIndex, clampIndex(colIndex, col.options.findIndex(o => o.value === opt.value)), 'smooth')"
+                  :aria-selected="localValue[colIndex] === row.option.value"
+                  :aria-disabled="row.option.disabled || undefined"
+                  :aria-setsize="col.options.length"
+                  :aria-posinset="row.index + 1"
+                  :class="{ 'is-disabled': !!row.option.disabled, 'is-selected': localValue[colIndex] === row.option.value }"
+                  :style="{ '--tx-picker-index': row.index }"
                 >
-                  {{ opt.label }}
-                </button>
-
-                <div class="tx-picker__pad" aria-hidden="true" />
+                  {{ row.option.label }}
+                </div>
               </div>
             </div>
           </div>
@@ -498,7 +711,6 @@ onBeforeUnmount(() => {
 <style lang="scss" scoped>
 .tx-picker {
   --tx-picker-item-height: 36px;
-  --tx-picker-padding-y: 72px;
 
   width: 100%;
   border-radius: 16px;
@@ -561,37 +773,61 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.tx-picker__scroller {
+/*
+ * The drum. It owns the pointer, the wheel and the clicks, so `touch-action`
+ * hands the vertical axis over completely — the page must not scroll while a
+ * column is being turned.
+ */
+.tx-picker__wheel {
+  position: relative;
   height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scroll-snap-type: y mandatory;
-  -webkit-overflow-scrolling: touch;
-  padding: var(--tx-picker-padding-y) 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  perspective: calc(var(--tx-picker-radius, 114px) * 9);
+  perspective-origin: 50% 50%;
+  // Rows fade as they roll away, which is what reads as a curved surface
+  // rather than a stack of tilted rows.
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 24%,
+    #000 76%,
+    transparent 100%
+  );
 
-  &::-webkit-scrollbar {
-    width: 0;
-    height: 0;
+  &:active {
+    cursor: grabbing;
   }
 }
 
-.tx-picker__pad {
-  height: 0;
-}
-
+/*
+ * Rows are stacked on the centre line and placed on the drum from there, so
+ * none of them carries a layout offset that a rotation would swing it away
+ * from. `pointer-events: none` is the other half of the fix: transformed rows
+ * overlap, and the enlarged centre row used to swallow the clicks meant for its
+ * neighbours. The column hit-tests against the geometry instead.
+ */
 .tx-picker__item {
-  scroll-snap-align: center;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
   height: var(--tx-picker-item-height);
-  width: 100%;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 14px;
-  color: var(--tx-text-color-secondary, #909399);
+  margin-top: calc(var(--tx-picker-item-height) / -2);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0 10px;
+  font-size: 14px;
+  color: var(--tx-text-color-secondary, #909399);
+  pointer-events: none;
+  user-select: none;
+  backface-visibility: hidden;
+  transform:
+    rotateX(calc((var(--tx-picker-offset, 0) - var(--tx-picker-index, 0)) * var(--tx-picker-step, 18) * 1deg))
+    translateZ(var(--tx-picker-radius, 114px));
+  transition: color 0.18s ease, font-weight 0.18s ease;
 
   &.is-selected {
     color: var(--tx-text-color-primary, #303133);
@@ -599,8 +835,13 @@ onBeforeUnmount(() => {
   }
 
   &.is-disabled {
-    cursor: not-allowed;
     opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-picker__item {
+    transition: none;
   }
 }
 
@@ -665,8 +906,8 @@ onBeforeUnmount(() => {
   opacity: 0.7;
 }
 
-.is-disabled .tx-picker__scroller {
+.is-disabled .tx-picker__wheel {
   pointer-events: none;
-  overflow: hidden;
+  cursor: not-allowed;
 }
 </style>

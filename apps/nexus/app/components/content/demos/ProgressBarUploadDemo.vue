@@ -72,12 +72,23 @@ defineExpose({ replayDemo: start })
       show-text
       text-placement="top"
       height="6px"
+      flow-effect="stardust"
+    />
+    <TxProgressBar
+      :percentage="percentage"
+      :aria-label="copy.aria"
+      height="6px"
+      color="linear-gradient(90deg, #3b82f6, #a855f7)"
+      flow-effect="stardust"
     />
   </div>
 </template>
 
 <style scoped>
 .progress-bar-upload-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   width: min(100%, 360px);
 }
 </style>

@@ -1,0 +1,28 @@
+---
+title: Data Suite
+description: "Visualization and charts: in-package data displays plus the standalone charts package"
+category: DataSuite
+status: beta
+since: 0.4.0
+tags: [data, charts, visualization, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## Positioning
+
+The Data suite is where numbers become a picture, and it is the one suite that spans two packages. **Visualization** (SparkChart, AllocationBar, DiffTable, SignalMeter) are compact, in-line data displays that ship inside the main package and import through the `@talex-touch/tuffex/pro` entry. **Charts** is the standalone `@talex-touch/tuffex-charts` package — a kumo-shaped API over Vue-rendered SVG, with no echarts dependency — installed separately from the main package. Start from the [Charts overview](./charts.en.mdc) for the chart family, and reach for a Visualization component when a full chart would be too much for the space you have.
+
+## Preview
+
+Every cell is a live, interactive component; click the name in the top-left corner to open its documentation.
+
+::DocsComponentsGallery{suite="data"}
+::
+
+## Groups at a Glance
+
+Every component in the suite, grouped by category. The list is read from each doc's `category` frontmatter, so new components appear on their own.
+
+::DocsSuiteCatalog{suite="data"}
+::
