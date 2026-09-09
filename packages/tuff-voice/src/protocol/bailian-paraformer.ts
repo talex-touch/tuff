@@ -25,7 +25,8 @@ export interface BailianRequestOptions {
 
 export function buildBailianWebSocketUrl(workspaceId?: string, region = BAILIAN_PARAFORMER_DEFAULT_REGION): string {
   const workspace = workspaceId?.trim()
-  if (!workspace) return 'wss://dashscope.aliyuncs.com/api-ws/v1/inference'
+  if (!workspace)
+    return 'wss://dashscope.aliyuncs.com/api-ws/v1/inference'
   if (!/^[\w-]+$/.test(workspace)) {
     throw new VoiceProviderError('BAILIAN_WORKSPACE_INVALID', 'Bailian workspace id is invalid.')
   }
@@ -34,12 +35,14 @@ export function buildBailianWebSocketUrl(workspaceId?: string, region = BAILIAN_
 
 export function buildBailianHeaders(credentials: BailianCredentials, userAgent = 'tuff-voice'): Record<string, string> {
   const apiKey = credentials.apiKey.trim()
-  if (!apiKey) throw new VoiceProviderError('BAILIAN_CREDENTIALS_MISSING', 'Bailian API key is missing.')
+  if (!apiKey)
+    throw new VoiceProviderError('BAILIAN_CREDENTIALS_MISSING', 'Bailian API key is missing.')
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
+    'Authorization': `Bearer ${apiKey}`,
     'user-agent': userAgent,
   }
-  if (credentials.workspaceId?.trim()) headers['X-DashScope-WorkSpace'] = credentials.workspaceId.trim()
+  if (credentials.workspaceId?.trim())
+    headers['X-DashScope-WorkSpace'] = credentials.workspaceId.trim()
   return headers
 }
 
@@ -95,20 +98,20 @@ function toBailianLanguage(language: string): string {
   const normalized = language.trim().toLowerCase()
   const aliases: Record<string, string> = {
     'zh-cn': 'zh',
-    zh: 'zh',
+    'zh': 'zh',
     'en-us': 'en',
-    en: 'en',
+    'en': 'en',
     'ja-jp': 'ja',
-    ja: 'ja',
+    'ja': 'ja',
     'yue-cn': 'yue',
-    yue: 'yue',
+    'yue': 'yue',
     'ko-kr': 'ko',
-    ko: 'ko',
+    'ko': 'ko',
     'de-de': 'de',
-    de: 'de',
+    'de': 'de',
     'fr-fr': 'fr',
-    fr: 'fr',
-    ru: 'ru',
+    'fr': 'fr',
+    'ru': 'ru',
   }
   return aliases[normalized] ?? normalized
 }
@@ -126,7 +129,8 @@ export function isBailianTaskStarted(data: string | Uint8Array): boolean {
   try {
     const root = asRecord(JSON.parse(raw))
     return readText(asRecord(root?.header)?.event) === 'task-started'
-  } catch {
+  }
+  catch {
     return false
   }
 }
@@ -136,14 +140,16 @@ function readNumber(value: unknown): number | undefined {
 }
 
 function parseWords(value: unknown) {
-  if (!Array.isArray(value)) return undefined
-  const words = value.flatMap(item => {
+  if (!Array.isArray(value))
+    return undefined
+  const words = value.flatMap((item) => {
     const row = asRecord(item)
 
     const text = readText(row?.text)
     const startMs = readNumber(row?.start_time)
     const endMs = readNumber(row?.end_time)
-    if (!text || startMs === undefined || endMs === undefined) return []
+    if (!text || startMs === undefined || endMs === undefined)
+      return []
     return [{ text, startMs, endMs }]
   })
   return words.length > 0 ? words : undefined
@@ -151,9 +157,11 @@ function parseWords(value: unknown) {
 
 function parseSentence(value: unknown): VoiceSegment | undefined {
   const sentence = asRecord(value)
-  if (!sentence) return undefined
+  if (!sentence)
+    return undefined
   const text = readText(sentence.text)
-  if (!text) return undefined
+  if (!text)
+    return undefined
   const startMs = readNumber(sentence.begin_time) ?? 0
   const endMs = readNumber(sentence.end_time) ?? startMs
   const words = parseWords(sentence.words)
@@ -173,7 +181,8 @@ export function parseBailianEvent(data: string | Uint8Array): VoiceProviderEvent
   let message: unknown
   try {
     message = JSON.parse(raw)
-  } catch {
+  }
+  catch {
     return null
   }
   const root = asRecord(message)
@@ -181,7 +190,8 @@ export function parseBailianEvent(data: string | Uint8Array): VoiceProviderEvent
   const payload = asRecord(root?.payload)
   const event = readText(header?.event)
   const requestId = readText(header?.task_id) || undefined
-  if (event === 'task-started') return null
+  if (event === 'task-started')
+    return null
   if (event === 'task-failed') {
     return {
       type: 'error',
@@ -191,12 +201,15 @@ export function parseBailianEvent(data: string | Uint8Array): VoiceProviderEvent
       ...(requestId ? { requestId } : {}),
     }
   }
-  if (event === 'task-finished') return { type: 'end', ...(requestId ? { requestId } : {}) }
-  if (event !== 'result-generated') return null
+  if (event === 'task-finished')
+    return { type: 'end', ...(requestId ? { requestId } : {}) }
+  if (event !== 'result-generated')
+    return null
 
   const output = asRecord(payload?.output)
   const sentence = parseSentence(output?.sentence)
-  if (!sentence) return null
+  if (!sentence)
+    return null
   const sentenceEnd = sentence.definite === true
   const usageRecord = asRecord(output?.usage)
   const duration = readNumber(usageRecord?.duration)
@@ -229,8 +242,8 @@ export function normalizeBailianUploadResult(body: unknown): VoiceRecognitionRes
   const text = readText(first?.text) || readText(first?.transcript) || readText(first?.transcription)
   const language = readText(first?.language) || undefined
   const durationSeconds = readNumber(first?.duration)
-  const durationMs =
-    durationSeconds === undefined
+  const durationMs
+    = durationSeconds === undefined
       ? (readNumber(first?.content_duration) ?? readNumber(first?.original_duration))
       : durationSeconds * 1000
   const segments = parseUploadSegments(first?.sentences ?? first?.segments ?? first?.utterances)
@@ -247,11 +260,13 @@ export function normalizeBailianUploadResult(body: unknown): VoiceRecognitionRes
 }
 
 function parseUploadSegments(value: unknown): VoiceSegment[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap(item => {
+  if (!Array.isArray(value))
+    return []
+  return value.flatMap((item) => {
     const row = asRecord(item)
     const text = readText(row?.text)
-    if (!text) return []
+    if (!text)
+      return []
     return [
       {
         text,

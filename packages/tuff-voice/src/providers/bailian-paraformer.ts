@@ -27,8 +27,8 @@ import {
 import { VoiceSocketSession } from '../socket-session'
 import { withResolvedUploadSource } from '../upload-source'
 
-const DEFAULT_TRANSCRIPTION_URL =
-  'https://{workspace}.cn-beijing.maas.aliyuncs.com/api/v1/services/audio/asr/transcription'
+const DEFAULT_TRANSCRIPTION_URL
+  = 'https://{workspace}.cn-beijing.maas.aliyuncs.com/api/v1/services/audio/asr/transcription'
 const DEFAULT_POLL_INTERVAL_MS = 500
 const DEFAULT_UPLOAD_TIMEOUT_MS = 120_000
 
@@ -81,7 +81,7 @@ export class BailianParaformerVoiceProvider implements VoiceProviderAdapter {
       url: buildBailianWebSocketUrl(this.options.credentials.workspaceId, this.options.region),
       headers: buildBailianHeaders(this.options.credentials, this.options.userAgent),
       maxPcmChunkBytes: 16 * 1024,
-      onOpen: socket => {
+      onOpen: (socket) => {
         socket.send(
           JSON.stringify(
             buildBailianRunTask(request, {
@@ -114,9 +114,10 @@ export class BailianParaformerVoiceProvider implements VoiceProviderAdapter {
           controls.end()
           return
         }
-        if (event) controls.emit(event)
+        if (event)
+          controls.emit(event)
       },
-      onEnd: socket => {
+      onEnd: (socket) => {
         socket.send(JSON.stringify(buildBailianFinishTask(request.requestId)))
       },
     })
@@ -145,8 +146,8 @@ export class BailianParaformerVoiceProvider implements VoiceProviderAdapter {
       )
     }
     const endpoint = assertProviderOptionUrl(
-      (request.providerOptions?.submitUrl as string | undefined) ??
-        DEFAULT_TRANSCRIPTION_URL.replace('{workspace}', workspace),
+      (request.providerOptions?.submitUrl as string | undefined)
+      ?? DEFAULT_TRANSCRIPTION_URL.replace('{workspace}', workspace),
       'Bailian transcription URL',
     )
     const headers = {
@@ -182,8 +183,8 @@ export class BailianParaformerVoiceProvider implements VoiceProviderAdapter {
 
     const deadline = Date.now() + (request.timeoutMs ?? this.options.uploadTimeoutMs ?? DEFAULT_UPLOAD_TIMEOUT_MS)
     const queryUrl = assertProviderOptionUrl(
-      (request.providerOptions?.queryUrl as string | undefined) ??
-        `${new URL(endpoint).origin}/api/v1/tasks/${encodeURIComponent(taskId)}`,
+      (request.providerOptions?.queryUrl as string | undefined)
+      ?? `${new URL(endpoint).origin}/api/v1/tasks/${encodeURIComponent(taskId)}`,
       'Bailian task query URL',
     )
     for (;;) {

@@ -81,7 +81,9 @@ function getRuntimePluginResourceRoots(): string[] {
   try {
     return readdirSync(runtimePluginRoot, { withFileTypes: true }).flatMap((entry) => {
       if (!entry.isDirectory() || entry.name.startsWith('.')) return []
-      return ['assets', 'public'].map((directory) => path.join(runtimePluginRoot, entry.name, directory))
+      return ['assets', 'public'].map((directory) =>
+        path.join(runtimePluginRoot, entry.name, directory)
+      )
     })
   } catch {
     return []

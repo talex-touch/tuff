@@ -337,9 +337,7 @@ async function useGitHubSource(): Promise<void> {
   })
 }
 
-
 describe('UpdateServiceModule facade', () => {
-
   beforeEach(() => {
     Object.defineProperty(process, 'resourcesPath', {
       configurable: true,

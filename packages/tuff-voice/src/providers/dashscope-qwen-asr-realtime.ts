@@ -10,17 +10,17 @@ import type {
 import type { DashscopeCredentials, DashscopeQwenAsrRealtimeRequestOptions } from '../protocol/qwen-asr-realtime'
 import { Buffer } from 'node:buffer'
 import { assertVoiceProviderRequestId, VoiceProviderError } from '../contracts'
-import { VoiceSocketSession } from '../socket-session'
 import {
-  DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_MODEL,
   buildDashscopeQwenAsrRealtimeAudioAppend,
   buildDashscopeQwenAsrRealtimeFinish,
   buildDashscopeQwenAsrRealtimeHeaders,
   buildDashscopeQwenAsrRealtimeSessionUpdate,
   buildDashscopeQwenAsrRealtimeWebSocketUrl,
+  DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_MODEL,
   isDashscopeQwenAsrRealtimeReadyEvent,
   parseDashscopeQwenAsrRealtimeEvent,
 } from '../protocol/qwen-asr-realtime'
+import { VoiceSocketSession } from '../socket-session'
 
 export interface DashscopeQwenAsrRealtimeVoiceProviderOptions {
   credentials: DashscopeCredentials
@@ -75,7 +75,7 @@ export class DashscopeQwenAsrRealtimeVoiceProvider implements VoiceProviderAdapt
           ),
           'utf8',
         ),
-      onOpen: socket => {
+      onOpen: (socket) => {
         socket.send(
           JSON.stringify(
             buildDashscopeQwenAsrRealtimeSessionUpdate(request, {
@@ -93,7 +93,8 @@ export class DashscopeQwenAsrRealtimeVoiceProvider implements VoiceProviderAdapt
           return
         }
         const event = parseDashscopeQwenAsrRealtimeEvent(data instanceof Uint8Array ? data : Buffer.from(data))
-        if (!event) return
+        if (!event)
+          return
         const normalized = event.requestId ? event : { ...event, requestId }
         if (normalized.type === 'error') {
           controls.fail(
@@ -111,7 +112,7 @@ export class DashscopeQwenAsrRealtimeVoiceProvider implements VoiceProviderAdapt
         }
         controls.emit(normalized)
       },
-      onEnd: socket => {
+      onEnd: (socket) => {
         socket.send(JSON.stringify(buildDashscopeQwenAsrRealtimeFinish({ eventId: requestId })))
       },
     })
@@ -160,7 +161,8 @@ function withModelQuery(endpoint: string, model: string): string {
   let url: URL
   try {
     url = new URL(endpoint)
-  } catch (error) {
+  }
+  catch (error) {
     throw new VoiceProviderError('DASHSCOPE_ENDPOINT_INVALID', 'DashScope WebSocket endpoint is invalid.', {
       cause: error,
     })
