@@ -230,6 +230,7 @@ code: |
 - [GlowText 扫光](./glow-text.zh.mdc)
 - [KeyframeStrokeText 关键帧描边](./keyframe-stroke-text.zh.mdc)
 - [TuffLogoStroke Logo 描边](./tuff-logo-stroke.zh.mdc)
+- [TextMorph 文本形变](./text-morph.zh.mdc)
 - [TextTransformer 文本变换](./text-transformer.zh.mdc)
 - [Transition 动效](./transition.zh.mdc)
 - [Stagger 依次进入](./stagger.zh.mdc)

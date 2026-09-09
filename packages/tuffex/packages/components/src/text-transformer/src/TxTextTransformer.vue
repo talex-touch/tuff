@@ -1,17 +1,33 @@
 <script setup lang="ts">
 import type { TextTransformerProps } from './types'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useSlots, watch } from 'vue'
+import TxTextMorph from '../../text-morph/src/TxTextMorph.vue'
 
 defineOptions({
   name: 'TxTextTransformer',
 })
 
 const props = withDefaults(defineProps<TextTransformerProps>(), {
+  mode: 'morph',
   durationMs: 240,
   blurPx: 8,
   tag: 'span',
   wrap: false,
 })
+
+const slots = useSlots()
+
+/*
+  Two escape hatches, both structural rather than stylistic:
+
+  - the default slot renders arbitrary nodes per layer, and the engine owns plain
+    text segments it builds itself, so there is nothing for it to morph;
+  - `wrap` asks for a value that reflows, and the engine lays out one nowrap line
+    and animates the container's width around it.
+
+  Neither is a preference the caller can override, so `mode` does not get a say.
+*/
+const usesMorph = computed(() => props.mode === 'morph' && !slots.default && !props.wrap)
 
 const currentText = ref(String(props.text))
 const prevText = ref<string | null>(null)
@@ -93,6 +109,12 @@ watch(
     const nextText = String(v)
     if (nextText === currentText.value)
       return
+    // The engine keeps its own record of what is on screen; running the crossfade
+    // alongside it would leave a stale second copy behind when the mode flips back.
+    if (usesMorph.value) {
+      currentText.value = nextText
+      return
+    }
     void runTransition(nextText)
   },
 )
@@ -114,22 +136,36 @@ onBeforeUnmount(() => {
     :is="tag"
     ref="rootRef"
     class="tx-text-transformer"
-    :class="{ 'is-animating': animating, 'has-prev': showPrev, 'is-wrap': wrap }"
+    :class="{
+      'is-animating': animating,
+      'has-prev': showPrev,
+      'is-wrap': wrap,
+      'is-morph': usesMorph,
+    }"
     :style="styleVars"
     aria-live="polite"
   >
-    <span class="tx-text-transformer__layer tx-text-transformer__layer--current">
-      <slot :text="currentText">{{ currentText }}</slot>
-    </span>
+    <TxTextMorph
+      v-if="usesMorph"
+      class="tx-text-transformer__morph"
+      :text="text"
+      :duration-ms="durationMs"
+    />
 
-    <span
-      v-if="showPrev && prevText != null"
-      class="tx-text-transformer__layer tx-text-transformer__layer--prev"
-      :style="prevColor ? { color: prevColor } : undefined"
-      aria-hidden="true"
-    >
-      <slot :text="prevText">{{ prevText }}</slot>
-    </span>
+    <template v-else>
+      <span class="tx-text-transformer__layer tx-text-transformer__layer--current">
+        <slot :text="currentText">{{ currentText }}</slot>
+      </span>
+
+      <span
+        v-if="showPrev && prevText != null"
+        class="tx-text-transformer__layer tx-text-transformer__layer--prev"
+        :style="prevColor ? { color: prevColor } : undefined"
+        aria-hidden="true"
+      >
+        <slot :text="prevText">{{ prevText }}</slot>
+      </span>
+    </template>
   </component>
 </template>
 
@@ -149,6 +185,28 @@ onBeforeUnmount(() => {
   align-items: center;
   overflow: hidden;
   max-width: 100%;
+}
+
+/*
+  The morph root is `inline-block` and sizes itself, so as a flex item it needs
+  the same floor-at-content override the fade layers get, and nothing else: the
+  engine animates its own width and clipping it here would shear the exit.
+*/
+.tx-text-transformer__morph {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/*
+  The `overflow: hidden` above exists for the fade path's ellipsis truncation and
+  to keep its absolutely-positioned previous layer inside the box. A morph has
+  neither: its exiting segments are also absolute, and they sit wherever the old
+  value put them, which is routinely past the new width. Clipping there cuts the
+  exit in half. Truncation is the trade — a value that has to be ellipsised wants
+  `mode="fade"`.
+*/
+.tx-text-transformer.is-morph {
+  overflow: visible;
 }
 
 .tx-text-transformer__layer {

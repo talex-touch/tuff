@@ -3,7 +3,8 @@ export type BadgeVariant = 'default' | 'primary' | 'success' | 'warning' | 'erro
 export interface BadgeProps {
   variant?: BadgeVariant
   /** Badge text when no default slot is given and `dot` is false. Numeric
-   *  values render through NumberFlow, so count changes animate per digit. */
+   *  values roll through the text-morph engine, so a count change slides only
+   *  the digit columns that actually moved. */
   value?: number | string
   color?: string
   dot?: boolean

@@ -641,9 +641,6 @@ importers:
       '@langchain/openai':
         specifier: 'catalog:'
         version: 0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.4.3))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(encoding@0.1.13)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
-      '@number-flow/vue':
-        specifier: ^0.5.1
-        version: 0.5.1(vue@3.5.39(typescript@5.9.3))
       '@nuxtjs/mdc':
         specifier: ^0.22.2
         version: 0.22.2(magicast@0.5.4)(supports-color@10.2.2)
@@ -1198,9 +1195,6 @@ importers:
       '@lezer/highlight':
         specifier: ^1.2.3
         version: 1.2.3
-      '@number-flow/vue':
-        specifier: ^0.5.1
-        version: 0.5.1(vue@3.5.39(typescript@5.9.3))
       '@shikijs/engine-javascript':
         specifier: ^4.4.2
         version: 4.4.2
@@ -1374,9 +1368,6 @@ importers:
 
   packages/tuffex/packages/components:
     dependencies:
-      '@number-flow/vue':
-        specifier: ^0.5.1
-        version: 0.5.1(vue@3.5.39(typescript@5.9.3))
       v-wave:
         specifier: ^3.1.1
         version: 3.1.1(magicast@0.5.4)(vue@3.5.39(typescript@5.9.3))
@@ -4144,11 +4135,6 @@ packages:
   '@npmcli/fs@4.0.0':
     resolution: {integrity: sha512-/xGlezI6xfGO9NwuJlnwz/K14qD1kCSAGtacBHnGzeAIuJGazcp45KP5NuyARXoKb7cwulAGWVsbeSxdG/cb0Q==}
     engines: {node: ^18.17.0 || >=20.5.0}
-
-  '@number-flow/vue@0.5.1':
-    resolution: {integrity: sha512-vgdL092up7XdvSy33AR0AyNFfBtJHTx/TLRMEGqzSJ0KkYLJxFDby0nfHr9RvmMc7NH0Vu2g49tSUAxtY18tzw==}
-    peerDependencies:
-      vue: ^3
 
   '@nuxt/cli@3.37.0':
     resolution: {integrity: sha512-Zj9NwHjEBzVrgezsgMFjpMhNqwNgROk9DzNi/dyfk1mCbXIRigV11br2xOl0Satek30bmv7oZAfMtCnDe6Ip0Q==}
@@ -9027,9 +9013,6 @@ packages:
       jiti:
         optional: true
 
-  esm-env@1.2.2:
-    resolution: {integrity: sha512-Epxrv+Nr/CaL4ZcFGPJIYLWFom+YeV1DqMLHJoEd9SYRxNbaFruBwfEX/kkHUJf55j2+TUbmDcmuilbP1TmXHA==}
-
   esno@4.8.0:
     resolution: {integrity: sha512-acMtooReAQGzLU0zcuEDHa8S62meh5aIyi8jboYxyvAePdmuWx2Mpwmt0xjwO0bs9/SXf+dvXJ0QJoDWw814Iw==}
     hasBin: true
@@ -11246,9 +11229,6 @@ packages:
 
   nth-check@2.1.1:
     resolution: {integrity: sha512-lqjrjmaOoAnWfMmBPL+XNnynZh2+swxiX3WUE0s4yEHI6m+AwrK2UZOimIRl3X/4QctVqS8AiZjFqyOGrMXb/w==}
-
-  number-flow@0.6.1:
-    resolution: {integrity: sha512-5NUCwZA6J/kZeEzqApOyq7KOf1Wu/oxjpp/95HB0NBNBFlpK/Pp7i4jH8h0LIXyRDKSTewDAUaYHL7IBrk19Ew==}
 
   nuxt-component-meta@0.17.2:
     resolution: {integrity: sha512-2/mSSqutOX8t+r8cAX1yUYwAPBqicPO5Rfum3XaHVszxKCF4tXEXBiPGfJY9Zn69x/CIeOdw+aM9wmHzQ5Q+lA==}
@@ -17335,12 +17315,6 @@ snapshots:
     dependencies:
       semver: 7.8.5
 
-  '@number-flow/vue@0.5.1(vue@3.5.39(typescript@5.9.3))':
-    dependencies:
-      esm-env: 1.2.2
-      number-flow: 0.6.1
-      vue: 3.5.39(typescript@5.9.3)
-
   '@nuxt/cli@3.37.0(@nuxt/schema@4.4.8)(cac@6.7.14)(commander@14.0.3)(magicast@0.5.4)(supports-color@10.2.2)':
     dependencies:
       '@bomb.sh/tab': 0.0.19(cac@6.7.14)(citty@0.2.2)(commander@14.0.3)
@@ -22847,8 +22821,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  esm-env@1.2.2: {}
-
   esno@4.8.0:
     dependencies:
       tsx: 4.21.0
@@ -25528,10 +25500,6 @@ snapshots:
   nth-check@2.1.1:
     dependencies:
       boolbase: 1.0.0
-
-  number-flow@0.6.1:
-    dependencies:
-      esm-env: 1.2.2
 
   nuxt-component-meta@0.17.2(magicast@0.5.4):
     dependencies:

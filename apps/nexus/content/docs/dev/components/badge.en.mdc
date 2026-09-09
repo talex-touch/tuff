@@ -51,7 +51,7 @@ code: |
 
 ### Pop Motion
 
-`open` drives the badge in and out: entering slides from the anchor offset with a scale/blur pop, closing pops out quickly while keeping the layout box. Numeric content renders through NumberFlow, so count changes roll per digit.
+`open` drives the badge in and out: entering slides from the anchor offset with a scale/blur pop, closing pops out quickly while keeping the layout box. Numeric content renders through `TxTextMorph`, so count changes roll by place value — only the columns that actually moved animate.
 
 :::TuffDemoWrapper{demo="BadgeBadgeMotionDemo" code-lang="vue"}
 ---
@@ -122,9 +122,9 @@ code: |
 - When `dot=true`, the component renders `.tx-badge__dot`, adds `tx-badge--dot`, and does not render `value` or default slot text.
 - When `dot=false`, the default slot takes priority over `value`.
 - `value` defaults to `0`, so an empty badge still renders `0` unless a slot or `dot` is used.
-- Numeric `value` renders through NumberFlow and rolls per digit on change; strings and slot content render as-is.
+- Numeric `value` renders through `TxTextMorph` and rolls by place value on change (9 → 10 grows the number rather than replacing it); strings and slot content render as-is. The pill's width follows the morph engine's own container animation, so nothing measures it separately.
 - Toggling `open` plays the pop motion: entering slides in with a scale/blur pop, closing pops out quickly while keeping the layout box; the entrance never plays on first mount.
-- Under `prefers-reduced-motion: reduce` the pop motion is disabled, and NumberFlow honors the same preference.
+- Under `prefers-reduced-motion: reduce` the pop motion is disabled, and the morph engine honors the same preference by writing the new value straight in.
 - `TxBadge` has no click event, positioning logic, overflow truncation, or target anchoring behavior.
 
 ## API
@@ -134,7 +134,7 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `variant` | `'default' \| 'primary' \| 'success' \| 'warning' \| 'error'` | `'default'` | Color preset. |
-| `value` | `number \| string` | `0` | Badge text content when the default slot is not used and `dot=false`. |
+| `value` | `number \| string` | `0` | Badge text content when the default slot is not used and `dot=false`. Numbers roll by place value through `TxTextMorph`. |
 | `color` | `string` | - | Custom background color. Also sets text color to white. |
 | `dot` | `boolean` | `false` | Render a compact dot and hide text content. |
 | `open` | `boolean` | `true` | Presence switch; toggling plays the slide/pop motion, and the closed badge keeps its layout box. |
@@ -175,7 +175,7 @@ code: |
 ## Review Notes
 
 - Source: `packages/tuffex/packages/components/src/badge/src/TxBadge.vue` confirms inline span rendering, `variant` classes, custom color CSS variables, dot mode, and default-slot precedence over `value`.
-- Type contracts: `packages/tuffex/packages/components/src/badge/src/types.ts` defines `BadgeVariant` and `BadgeProps` (including `open`). Numeric values render through `@number-flow/vue`.
+- Type contracts: `packages/tuffex/packages/components/src/badge/src/types.ts` defines `BadgeVariant` and `BadgeProps` (including `open`). Numeric values render through `TxTextMorph`.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/badge/__tests__/badge.test.ts` covers value rendering, slot content, dot mode, and custom color variables.
 - Export: `packages/tuffex/packages/components/src/badge/index.ts` wraps the component with `withInstall` and exports `TxBadgeInstance`.
 

@@ -51,6 +51,7 @@ function toggle() {
           <TxCard variant="plain" background="mask" :padding="12" :radius="14" style="max-width: 360px;">
             <div style="font-size: 13px; line-height: 1.4;">
               <TxTextTransformer
+                mode="fade"
                 :text="label"
                 :duration-ms="duration"
                 :blur-px="blurPx"
@@ -95,6 +96,7 @@ function toggle() {
           <TxCard variant="plain" background="mask" :padding="12" :radius="14" style="max-width: 360px;">
             <div style="font-size: 13px; line-height: 1.4;">
               <TxTextTransformer
+                mode="fade"
                 :text="label"
                 :duration-ms="duration"
                 :blur-px="blurPx"
