@@ -176,6 +176,7 @@ TAXONOMY: dict[str, list[str]] = {
         "glow-text",
         "keyframe-stroke-text",
         "tuff-logo-stroke",
+        "text-morph",
         "text-transformer",
         "transition",
         "stagger",

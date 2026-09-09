@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端硬规则：新原语行为归 TuffEx，组件改动必须同提交带 zh/en 文档与 demo"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "改 Vue SFC / props 契约 / 无障碍 / i18n 前必读"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "TxTransfer 源码改动的文档同步范围：本体页 + 包装组件页 + demo 注册"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "TransferProps 联合类型放宽与新增 prop 的类型契约"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "把 CoreApp 自写穿梭框收敛到通用原语，避免重复实现"}

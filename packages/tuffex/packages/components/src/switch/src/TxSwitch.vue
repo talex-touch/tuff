@@ -13,7 +13,7 @@ const props = withDefaults(
     /** Pending async commit: morphs the thumb into a spinning ring and blocks toggling. */
     loading?: boolean
     size?: 'small' | 'default' | 'large'
-    /** Visible text beside the track. Changes crossfade through `TxTextTransformer`. */
+    /** Visible text beside the track. Changes morph through `TxTextTransformer`. */
     label?: string
     /** Which side the label sits on. */
     labelPlacement?: 'start' | 'end'

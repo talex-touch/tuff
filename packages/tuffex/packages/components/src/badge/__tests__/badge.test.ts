@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxBadge from '../src/TxBadge.vue'
 
@@ -32,9 +32,27 @@ function installResizeObserver(): ResizeObserverControl {
 }
 
 describe('txBadge', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
   })
+
   it('renders value and variant class', () => {
     const wrapper = mount(TxBadge, {
       props: {
@@ -102,33 +120,48 @@ describe('txBadge', () => {
     expect(wrapper.find('.tx-badge__dot').exists()).toBe(true)
   })
 
-  it('renders numeric values through NumberFlow and strings as plain text', async () => {
-    const NumberFlow = (await import('@number-flow/vue')).default
-    const numeric = mount(TxBadge, { props: { value: 8 } })
-    expect(numeric.findComponent(NumberFlow).exists()).toBe(true)
+  it('rolls numeric values through the morph engine and renders strings as plain text', async () => {
+    const numeric = mount(TxBadge, { props: { value: 8 }, attachTo: document.body })
+    await nextTick()
+
+    expect(numeric.find('.tx-badge__number').exists()).toBe(true)
+    expect(numeric.find('[tx-morph-sr]').text()).toBe('8')
+    // A digit gets the nested slot it slides inside; that is what distinguishes a
+    // place-value roll from a plain character swap.
+    expect(numeric.find('[tx-morph-slot][tx-morph-kind="digit"]').exists()).toBe(true)
 
     const text = mount(TxBadge, { props: { value: 'New' } })
-    expect(text.findComponent(NumberFlow).exists()).toBe(false)
+    expect(text.find('.tx-badge__number').exists()).toBe(false)
     expect(text.text()).toBe('New')
+
+    numeric.unmount()
   })
 
-  it('marks numeric badges and binds their measured width after ResizeObserver reports it', async () => {
+  it('grows the number in place rather than swapping it when the value gains a digit', async () => {
+    const wrapper = mount(TxBadge, { props: { value: 9 }, attachTo: document.body })
+    await nextTick()
+
+    await wrapper.setProps({ value: 10 })
+    await nextTick()
+
+    expect(wrapper.find('[tx-morph-sr]').text()).toBe('10')
+    expect(wrapper.findAll('[tx-morph-slot]')).toHaveLength(2)
+
+    wrapper.unmount()
+  })
+
+  it('sizes numeric badges from the engine rather than a measured inline width', async () => {
     const observer = installResizeObserver()
-    const wrapper = mount(TxBadge, { props: { value: 8 } })
+    const wrapper = mount(TxBadge, { props: { value: 8 }, attachTo: document.body })
     await nextTick()
 
     expect(wrapper.classes()).toContain('tx-badge--numeric')
-    expect(observer.ResizeObserverMock).toHaveBeenCalledTimes(1)
-    expect(observer.observe).toHaveBeenCalledWith(wrapper.find('.tx-badge__number').element)
+    // The pill follows the morph root's own width animation, so nothing measures
+    // the number and nothing writes a width back onto the badge.
     expect(wrapper.element.style.width).toBe('')
-
-    observer.emitWidth(42)
-    await nextTick()
-
-    expect(wrapper.element.style.width).toBe('42px')
+    expect(observer.ResizeObserverMock).not.toHaveBeenCalled()
 
     wrapper.unmount()
-    expect(observer.disconnect).toHaveBeenCalledTimes(1)
   })
 
   it('keeps text, slotted, and dot badges intrinsically sized', async () => {
