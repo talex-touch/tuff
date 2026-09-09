@@ -166,6 +166,10 @@ mod function_key_monitor {
     }
 
     pub fn stop() {}
+
+    pub fn set_escape_capture(_enabled: bool) -> bool {
+        false
+    }
 }
 fn start_capture_blocking(options: Option<AudioCaptureOptions>) -> Result<(String, String)> {
     if !platform_supported() {

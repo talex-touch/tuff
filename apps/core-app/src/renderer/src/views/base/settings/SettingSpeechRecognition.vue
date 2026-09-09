@@ -1,34 +1,41 @@
 <script setup lang="ts" name="SettingSpeechRecognition">
 import { TxButton } from '@talex-touch/tuffex/button'
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import {
   ensureVoiceInputSetting,
   type VoiceInputSetting
 } from '@talex-touch/utils/common/storage/entity/app-settings'
+import { computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { appSetting } from '~/modules/storage/app-storage'
 
 /**
- * Everything on this page the user can change, which is two things.
- *
- * It used to be six rows: a toggle, three separate trips into Intelligence, and two status
- * readouts. The three trips were one sentence said three times — channels, capability bindings
- * and channel order all live on the same screen, and none of them is an action this page
- * performs. They are now one row, which is what they always were.
- *
- * Status moved out entirely: it is not something you set, and reporting it in the same row shape
- * as a setting is what made a failure look like a preference. See `VoiceRecognitionStatus`.
+ * Voice entry, recognition history, and the route to channel/model configuration live here.
+ * Runtime readiness remains in `VoiceRecognitionStatus` because status is not a preference.
  */
 
 const { t } = useI18n()
 const router = useRouter()
 
+watch(
+  () => appSetting.voiceInput,
+  () => ensureVoiceInputSetting(appSetting as Record<string, unknown>),
+  { immediate: true }
+)
+
+const voiceInputEnabled = computed({
+  get: () => appSetting.voiceInput?.enabled === true,
+  set: (value: boolean) => {
+    ensureVoiceInputSetting(appSetting as Record<string, unknown>)
+    ;(appSetting.voiceInput as VoiceInputSetting).enabled = value
+  }
+})
+
 const historyEnabled = computed({
-  get: () => (appSetting.voiceInput as VoiceInputSetting).historyEnabled === true,
+  get: () => (appSetting.voiceInput as VoiceInputSetting)?.historyEnabled === true,
   set: (value: boolean) => {
     ensureVoiceInputSetting(appSetting as Record<string, unknown>)
     ;(appSetting.voiceInput as VoiceInputSetting).historyEnabled = value
@@ -47,6 +54,14 @@ function openCapabilities(): void {
     default-icon="i-carbon-microphone"
     active-icon="i-carbon-microphone-filled"
   >
+    <TuffBlockSwitch
+      v-model="voiceInputEnabled"
+      :title="t('settingSpeechRecognition.voiceInput.title')"
+      :description="t('settingSpeechRecognition.voiceInput.description')"
+      default-icon="i-carbon-microphone"
+      active-icon="i-carbon-microphone-filled"
+    />
+
     <TuffBlockSwitch
       v-model="historyEnabled"
       :title="t('settingSpeechRecognition.history.title')"

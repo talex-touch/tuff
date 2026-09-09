@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
+import type { AppSetting } from '@talex-touch/utils'
+import type * as VueModule from 'vue'
+import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SettingSpeechRecognition from './SettingSpeechRecognition.vue'
 
+type SpeechSettingsFixture = Pick<AppSetting, 'assistant' | 'floatingBall' | 'voiceWake'> & {
+  voiceInput?: { enabled: boolean; language: string; historyEnabled?: boolean }
+}
+
 const router = vi.hoisted(() => ({ push: vi.fn() }))
-const settings = vi.hoisted(() => ({ voiceInput: { historyEnabled: false } }))
+const settings = vi.hoisted(() => {
+  const { reactive } = require('vue') as typeof VueModule
+  return reactive({} as SpeechSettingsFixture)
+})
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key })
@@ -18,6 +28,26 @@ vi.mock('~/modules/storage/app-storage', () => ({
   appSetting: settings
 }))
 
+function resetSettings(): void {
+  settings.assistant = { enabled: false }
+  settings.floatingBall = {
+    enabled: false,
+    size: 56,
+    opacity: 1,
+    edgePadding: 24,
+    position: { x: -1, y: -1 }
+  }
+  settings.voiceWake = {
+    enabled: false,
+    wakeWords: ['Alo'],
+    language: 'en-US',
+    continuous: true,
+    cooldownMs: 2200,
+    openPanelOnWake: true
+  }
+  settings.voiceInput = { enabled: false, language: 'en-US', historyEnabled: false }
+}
+
 function mountSettings(): VueWrapper {
   return mount(SettingSpeechRecognition, {
     global: {
@@ -25,67 +55,104 @@ function mountSettings(): VueWrapper {
         TuffGroupBlock: { template: '<section><slot /></section>' },
         TuffBlockSlot: {
           props: ['title', 'description'],
-          template: '<section>{{ title }}{{ description }}<slot /></section>'
+          template: '<section><slot /></section>'
         },
         TuffBlockSwitch: {
-          name: 'TuffBlockSwitch',
           props: ['modelValue', 'title'],
           emits: ['update:modelValue'],
-          template: '<section>{{ title }}</section>'
+          template:
+            '<label><span>{{ title }}</span><input type="checkbox" :aria-label="title" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" /></label>'
         },
         TxButton: {
-          name: 'TxButton',
           props: ['disabled'],
           emits: ['click'],
           template:
-            '<button :disabled="disabled" @click="$emit(\'click\', $event)"><slot /></button>'
+            '<button v-bind="$attrs" :disabled="disabled" @click="$emit(\'click\', $event)"><slot /></button>'
         }
       }
     }
   })
 }
 
+function switchControl(wrapper: VueWrapper, title: string) {
+  return wrapper.get<HTMLInputElement>(`input[aria-label="${title}"]`)
+}
+
 describe('SettingSpeechRecognition', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    settings.voiceInput = { historyEnabled: false }
+    resetSettings()
   })
 
-  /**
-   * Three rows used to send the user to Intelligence: AI channels, capability bindings and
-   * channel order. They are one screen and one sentence, so they are one row — and the page has
-   * exactly two things left that it can actually change.
-   */
-  it('offers the toggle and exactly one way into Intelligence', async () => {
+  it('migrates missing voice input from enabled legacy settings', async () => {
+    settings.assistant.enabled = true
+    settings.voiceWake.enabled = true
+    settings.voiceWake.language = 'fr-FR'
+    delete settings.voiceInput
+
     const wrapper = mountSettings()
-    await flushPromises()
+    await nextTick()
 
-    expect(wrapper.findComponent({ name: 'TuffBlockSwitch' }).exists()).toBe(true)
-
-    const doors = wrapper.findAllComponents({ name: 'TxButton' })
-    expect(doors).toHaveLength(1)
-
-    await doors[0]!.trigger('click')
-    expect(router.push).toHaveBeenCalledTimes(1)
-    expect(router.push).toHaveBeenCalledWith('/setting/intelligence/capabilities')
+    expect(settings.voiceInput).toEqual({ enabled: true, language: 'fr-FR' })
+    expect(
+      switchControl(wrapper, 'settingSpeechRecognition.voiceInput.title').element.checked
+    ).toBe(true)
 
     wrapper.unmount()
   })
 
-  /**
-   * Status is not a setting. Reporting it in the same row shape as one is what let "已就绪" and
-   * "识别暂不可用。" look equally important while asking for entirely different things; it now
-   * lives in `VoiceRecognitionStatus`, above the page's content rather than inside its settings.
-   */
-  it('reports no status and asks main for none', async () => {
-    const wrapper = mountSettings()
-    await flushPromises()
+  it('keeps an explicitly disabled voice input disabled despite enabled legacy settings', async () => {
+    settings.assistant.enabled = true
+    settings.floatingBall.enabled = true
+    settings.voiceWake.enabled = true
+    settings.voiceWake.language = 'en-US'
+    settings.voiceInput = { enabled: false, language: 'fr-FR', historyEnabled: true }
 
-    const text = wrapper.text()
-    expect(text).not.toContain('settingSpeechRecognition.asr.ready')
-    expect(text).not.toContain('settingSpeechRecognition.reasons')
-    // Nothing on this card depends on readiness, so nothing here should be disabled by it.
-    expect(wrapper.findAll('button[disabled]')).toHaveLength(0)
+    const wrapper = mountSettings()
+    await nextTick()
+
+    expect(
+      switchControl(wrapper, 'settingSpeechRecognition.voiceInput.title').element.checked
+    ).toBe(false)
+    expect(settings.voiceInput).toEqual({ enabled: false, language: 'fr-FR', historyEnabled: true })
+
+    wrapper.unmount()
+  })
+
+  it('changes voice input without changing Assistant, floating ball, legacy wake, language, or history', async () => {
+    settings.voiceWake.enabled = true
+    settings.voiceInput = { enabled: false, language: 'fr-FR', historyEnabled: true }
+
+    const wrapper = mountSettings()
+    await switchControl(wrapper, 'settingSpeechRecognition.voiceInput.title').setValue(true)
+
+    expect(settings.voiceInput).toEqual({ enabled: true, language: 'fr-FR', historyEnabled: true })
+    expect(settings.assistant).toEqual({ enabled: false })
+    expect(settings.floatingBall).toEqual({
+      enabled: false,
+      size: 56,
+      opacity: 1,
+      edgePadding: 24,
+      position: { x: -1, y: -1 }
+    })
+    expect(settings.voiceWake).toEqual({
+      enabled: true,
+      wakeWords: ['Alo'],
+      language: 'en-US',
+      continuous: true,
+      cooldownMs: 2200,
+      openPanelOnWake: true
+    })
+
+    wrapper.unmount()
+  })
+
+  it('opens the existing capability configuration route', async () => {
+    const wrapper = mountSettings()
+
+    await wrapper.get('[data-testid="voice-open-capabilities"]').trigger('click')
+
+    expect(router.push).toHaveBeenCalledWith('/setting/intelligence/capabilities')
 
     wrapper.unmount()
   })
