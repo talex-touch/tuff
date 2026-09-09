@@ -39,11 +39,12 @@ GET /api/v1/ai/audio/handoff/{requestId}?token={opaque delivery token}
 | Missing/invalid app access token | reject before audio read |
 | Non-WAV, empty, >20 MiB, invalid/over-10-minute WAV | stable 4xx before private storage or provider call |
 | Missing/ambiguous/uncredentialed DashScope capability | `ASR_ROUTE_UNAVAILABLE` or stable provider configuration failure; no reservation |
-| Insufficient credits | reservation rejects; no provider task |
+| Insufficient credits / reservation debit rejects | release request without refunding an unconsumed hold; no provider task; retain `ASR_REQUEST_FAILED` and rethrow original error |
+| Reservation debit succeeds but reserved-state persistence fails | compensate the full hold once, release request and invalidate/delete handoff; retain `ASR_REQUEST_FAILED` and rethrow original error |
 | Replayed idempotency key, same WAV | return persisted ASR request state; no second dispatch or debit |
 | Replayed key, different WAV | `409` conflict |
 | Handoff wrong/expired token, terminal request, or unknown ID | `404`; no object/key disclosure |
-| DashScope rejects submission | release entire hold, invalidate/delete handoff |
+| DashScope rejects submission | release entire hold, invalidate/delete handoff; retain the safe `DashScopeAsrError.code` and rethrow original error |
 | DashScope task succeeds | settle exactly once, release unused hold, return direct transcript |
 | Accepted task response cannot be normalized or exceeds hold | stable failed state; no fabricated retry or refund |
 
@@ -59,6 +60,7 @@ GET /api/v1/ai/audio/handoff/{requestId}?token={opaque delivery token}
 - WAV tests cover valid PCM duration and malformed/unsupported containers before storage.
 - Adapter tests use injected fetch: submit URL/body, pending/failed/success normalization, malformed response, and credential non-disclosure.
 - Credit tests prove one reservation release decrements both team/user balances once and idempotent retry cannot release twice.
+- Pre-acceptance service regressions cover rejected debit, failed reservation-state persistence after debit, and typed provider submit rejection; all preserve original error identity and safe terminal codes without refunding unconsumed or accepted-task reservations.
 - Run focused Vitest, Nexus typecheck, `check:api-routes`, scoped ESLint, and `git diff --check`.
 
 ### 7. Wrong vs Correct

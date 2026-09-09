@@ -161,6 +161,7 @@ export async function startAsrTranscription(
     return asClientResponse(request)
   }
   catch (error) {
+    const failureCode = error instanceof DashScopeAsrError ? error.code : 'ASR_REQUEST_FAILED'
     if (providerAccepted) {
       if (request.status === 'reserved' || request.status === 'dispatching') {
         const failed = await failAcceptedRequest(event, request, 'ASR_DISPATCH_STATE_UNCERTAIN')
