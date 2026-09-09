@@ -363,7 +363,7 @@ useHead(() => ({
       <span class="dashboard-nav-summary-chevron i-carbon-chevron-down text-[15px]" aria-hidden="true" />
     </summary>
     <nav class="relative p-4" aria-label="Dashboard workspace sections">
-      <p class="apple-section-title mb-4 px-3">
+      <p class="dashboard-nav-section-title mb-4 px-3">
         {{ t('dashboard.sections.menu.workspaceTitle', '工作台') }}
       </p>
       <ul class="flex flex-col list-none gap-1 p-0 text-sm" role="listbox" aria-label="Dashboard workspace panels">
@@ -387,7 +387,7 @@ useHead(() => ({
     <div class="mx-4 border-t border-black/[0.04] dark:border-white/[0.06]" />
 
     <nav class="relative p-4 pt-0" aria-label="Account settings">
-      <p class="apple-section-title mb-4 px-3">
+      <p class="dashboard-nav-section-title mb-4 px-3">
         {{ t('dashboard.sections.menu.accountTitle', '账户') }}
       </p>
       <ul class="flex flex-col list-none gap-1 p-0 text-sm" role="listbox" aria-label="Account panels">
@@ -418,7 +418,7 @@ useHead(() => ({
     <div v-show="adminMenuItems.length > 0" class="mx-4 border-t border-black/[0.04] dark:border-white/[0.06]" />
 
     <nav v-show="adminMenuItems.length > 0" class="relative p-4 pt-0" aria-label="Admin panels">
-      <p class="apple-section-title mb-4 px-3">
+      <p class="dashboard-nav-section-title mb-4 px-3">
         {{ t('dashboard.sections.menu.adminTitle', '管理员') }}
       </p>
       <ul class="flex flex-col list-none gap-1 p-0 text-sm" role="listbox" aria-label="Admin panels">
@@ -481,6 +481,14 @@ useHead(() => ({
   }
 }
 
+.dashboard-nav-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--tx-text-color-secondary, rgba(0, 0, 0, 0.45));
+  opacity: 0.75;
+}
+
 .dashboard-nav-link {
   color: var(--tx-text-color-secondary, rgba(0, 0, 0, 0.55));
 }
@@ -501,17 +509,22 @@ useHead(() => ({
   background: rgba(255, 255, 255, 0.05);
 }
 
+/**
+ * The active row is a neutral pill, not a tinted one: with three groups open at
+ * once a coloured fill on the selected row competed with the status colours in
+ * the panel beside it. The accent survives on the icon alone.
+ */
 .dashboard-nav-link--active,
 .dashboard-nav-link--active:hover,
 .dashboard-nav-link--active:focus-visible {
-  color: var(--tx-color-primary, #1BB5F4);
-  background: rgba(27, 181, 244, 0.06);
-  font-weight: 500;
+  color: var(--tx-text-color-primary, #000);
+  background: rgba(0, 0, 0, 0.05);
+  font-weight: 600;
 }
 
 :root.dark .dashboard-nav-link--active,
 :root.dark .dashboard-nav-link--active:hover {
-  background: rgba(27, 181, 244, 0.1);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .dashboard-nav-link--active .dashboard-nav-icon {
