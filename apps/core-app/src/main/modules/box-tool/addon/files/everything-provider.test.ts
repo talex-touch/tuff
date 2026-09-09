@@ -38,6 +38,21 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+    getAppPath: vi.fn(() => '/tmp/tuff-core-app'),
+    getPath: vi.fn((name: string) => {
+      const roots: Record<string, string> = {
+        home: '/tmp/tuff-home',
+        userData: '/tmp/tuff-user-data',
+        temp: '/tmp/tuff-temp',
+        cache: '/tmp/tuff-cache'
+      }
+      const resolved = roots[name]
+      if (!resolved) throw new Error(`Unexpected Electron app path: ${name}`)
+      return resolved
+    })
+  },
   shell: {
     openPath: shellOpenPathMock
   }

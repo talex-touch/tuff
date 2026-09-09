@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "在不含 TUFF_VOICE_* 的受控本地应用中，经 Channels 保存一个凭据化 Bailian 配置并重启，人工核验 realtime 与文件转写；未获授权前不调用真实 Provider。",
+    "blocker": "无代码阻塞；持久化配置、重启后的运行时解析和真实 Provider 识别尚无端到端证据，不能以本地 mock/类型检查替代。",
+    "evidence": "apps/core-app/src/main/modules/voice/voice-provider-runtime.ts 与 voice-provider-runtime.test.ts 覆盖 capability-bound 安全凭据解析和 fail-closed 路由；IntelligenceApiConfig.vue/test 覆盖安全 voiceAsr 元数据与凭据 mutation，父级记录的 440 focused tests 和本地 CoreApp typecheck 已通过。"
+  }
 }

@@ -104,16 +104,29 @@ describe('the navigation guard does not wait for the first paint', () => {
   })
 
   it('VoiceDock 的透明画布不继承 macOS vibrancy，其他透明窗口保留系统材质', () => {
-    new TouchWindow(AssistantVoiceDockWindowOption)
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      value: 'darwin',
+      configurable: true
+    })
 
-    expect(windowMocks.setVibrancy).not.toHaveBeenCalled()
+    try {
+      new TouchWindow(AssistantVoiceDockWindowOption)
 
-    new TouchWindow({ transparent: true, disableVibrancy: false })
-    new TouchWindow({ transparent: true })
+      expect(windowMocks.setVibrancy).not.toHaveBeenCalled()
 
-    expect(windowMocks.setVibrancy).toHaveBeenCalledTimes(2)
-    expect(windowMocks.setVibrancy).toHaveBeenNthCalledWith(1, 'fullscreen-ui')
-    expect(windowMocks.setVibrancy).toHaveBeenNthCalledWith(2, 'fullscreen-ui')
+      new TouchWindow({ transparent: true, disableVibrancy: false })
+      new TouchWindow({ transparent: true })
+
+      expect(windowMocks.setVibrancy).toHaveBeenCalledTimes(2)
+      expect(windowMocks.setVibrancy).toHaveBeenNthCalledWith(1, 'fullscreen-ui')
+      expect(windowMocks.setVibrancy).toHaveBeenNthCalledWith(2, 'fullscreen-ui')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true
+      })
+    }
   })
 
   it('ready-to-show 仍然负责 autoShow(否则上面两条会掩盖"把这个回调整个删掉")', () => {
