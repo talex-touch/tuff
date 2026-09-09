@@ -402,6 +402,12 @@ const summary = computed(() => {
 
 .more-body {
   display: grid;
+  /*
+   * grid 项的 `min-width` 默认是 `auto`，也就是"不得窄于内容的最小宽度"。OCR 正文、
+   * 长标签、长元数据值都会因此把整块顶宽，外层再一 `overflow: auto` 就成了横向滚动。
+   * `minmax(0, 1fr)` 是让 grid 项可以真正收缩的那一下。
+   */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding: 0 14px 12px;
 }
@@ -443,6 +449,7 @@ const summary = computed(() => {
 
 .more-block {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 

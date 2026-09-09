@@ -805,8 +805,15 @@ function readableTextOn(color: string): string {
 
 .info-surface {
   flex: 1 1 auto;
+  /*
+   * 两个轴都要压：`min-height: 0` 让它在 flex 列里能收缩，`min-width: 0` 让它别被
+   * 内容顶宽。少了后者，里面任何一段长内容都会把面板撑出容器，而 `overflow: auto`
+   * 会把它变成一条横向滚动条——看起来像"文本没截断"，其实是整个面板变宽了。
+   */
+  min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 0 0 12px;
   background: var(--clipboard-surface-base);
 }

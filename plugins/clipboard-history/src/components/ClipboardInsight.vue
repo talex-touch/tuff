@@ -401,6 +401,8 @@ function maskParamValue(value: string): string {
 <style scoped>
 .insight-section {
   display: grid;
+  /* 同 `.more-body`：不给 minmax(0, …) 的话，长主机名 / 长 token 会把整块顶宽。 */
+  grid-template-columns: minmax(0, 1fr);
   gap: 7px;
   padding: 10px 14px 0;
   margin-top: 8px;
