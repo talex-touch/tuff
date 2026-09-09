@@ -64,7 +64,7 @@ const showRetry = computed(() => isError.value)
     </div>
 
     <div v-if="showRetry" class="auth-oauth-actions">
-      <TxButton class="auth-button auth-button--primary" size="lg" block @click="emit('retry')">
+      <TxButton variant="primary" class="auth-button auth-button--primary" size="lg" block @click="emit('retry')">
         {{ t('auth.oauthRetry', '重新尝试') }}
       </TxButton>
       <TxButton variant="ghost" size="sm" class="auth-text-button auth-oauth-back" @click="emit('back')">

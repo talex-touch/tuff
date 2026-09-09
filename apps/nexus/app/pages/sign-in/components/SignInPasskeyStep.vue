@@ -50,7 +50,7 @@ const showRetry = computed(() => isError.value)
     </div>
 
     <div class="auth-passkey-actions" :class="{ 'is-visible': showRetry }">
-      <TxButton class="auth-button auth-button--primary" size="lg" block @click="emit('retry')">
+      <TxButton variant="primary" class="auth-button auth-button--primary" size="lg" block @click="emit('retry')">
         {{ t('auth.passkeyRetry', '重新尝试') }}
       </TxButton>
     </div>
