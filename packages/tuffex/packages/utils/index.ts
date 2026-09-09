@@ -1,6 +1,7 @@
 export * from './anchor-delay'
 export * from './animation/auto-resize'
 export * from './animation/flip'
+export * from './animation/jelly'
 export * from './dialog-manager'
 export * from './env'
 export * from './toast'

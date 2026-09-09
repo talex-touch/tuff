@@ -1,6 +1,7 @@
 import type { ComputedRef, Ref } from 'vue'
 import type { TxRadioGroupProps, TxRadioType } from './types'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { JELLY, jellyScale } from '../../../../utils/animation/jelly'
 import { hasWindow } from '../../../../utils/env'
 
 type IndicatorRect = {
@@ -61,11 +62,12 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
   let cleanupDarkMode: (() => void) | undefined
 
   const motionActive = computed(() => isDragging.value || isAnimating.value)
-  // Fallbacks match TxRadioGroup's withDefaults (110/12); the group always passes
-  // defaulted props so these never fire at runtime, but the `?? ` keeps the idle
-  // spring typed `number` against the optional prop type.
-  const stiffnessIdle = computed(() => props.stiffness ?? 110)
-  const dampingIdle = computed(() => props.damping ?? 12)
+  // Fallbacks match TxRadioGroup's withDefaults (110/12, the shared `JELLY`
+  // spring); the group always passes defaulted props so these never fire at
+  // runtime, but the `?? ` keeps the idle spring typed `number` against the
+  // optional prop type.
+  const stiffnessIdle = computed(() => props.stiffness ?? JELLY.stiffness)
+  const dampingIdle = computed(() => props.damping ?? JELLY.damping)
 
   function updateDarkMode(): (() => void) | undefined {
     if (!hasWindow()) {
@@ -85,10 +87,10 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
       return 1.0
     }
     if (motionPhase.value === 'emerge') {
-      return 1.08
+      return JELLY.emergeScale
     }
     if (motionPhase.value === 'sink') {
-      return 0.97
+      return JELLY.sinkScale
     }
     return 1.0
   })
@@ -98,7 +100,7 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
       return 1
     }
     if (isDragging.value) {
-      return 1.08
+      return JELLY.heldScale
     }
     if (motionPhase.value === 'emerge') {
       return 1.06
@@ -109,39 +111,20 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
     return 1
   })
 
+  // The deformation itself is `jellyScale`, shared with the slider thumb so the
+  // two controls squash and stretch as one material.
   function getElasticScale(enableElastic: boolean) {
     const v = velocity.value
-    const speed = Math.hypot(v.x, v.y)
-    const imp = impact.value
-
-    let stretchX = 1
-    let stretchY = 1
-
-    if (enableElastic && motionActive.value && speed > 3) {
-      const dragBoost = isDragging.value ? 1.8 : 1.0
-      const stretch = Math.min(speed / 100, 0.6) * dragBoost
-      stretchX = 1 - stretch * 0.35
-      stretchY = 1 + stretch * 0.6
-    }
-
-    if (enableElastic && imp > 0.01) {
-      const squash = imp * 0.7
-      if (impactAxis.value === 'x') {
-        stretchX = stretchX * (1 + squash * 0.5)
-        stretchY = stretchY * (1 - squash * 0.4)
-      }
-      else {
-        stretchY = stretchY * (1 + squash * 0.5)
-        stretchX = stretchX * (1 - squash * 0.4)
-      }
-    }
-
-    const phaseScale = enableElastic ? glassPhaseScale.value : 1
-    const baseScale = activeScale.value
-    return {
-      scaleX: Math.max(0, Math.min(2, baseScale * phaseScale * stretchX)),
-      scaleY: Math.max(0, Math.min(2, baseScale * phaseScale * stretchY)),
-    }
+    return jellyScale({
+      speed: Math.hypot(v.x, v.y),
+      impact: impact.value,
+      impactAxis: impactAxis.value,
+      elastic: enableElastic,
+      moving: motionActive.value,
+      dragBoost: isDragging.value ? JELLY.heldStretchBoost : 1,
+      baseScale: activeScale.value,
+      phaseScale: glassPhaseScale.value,
+    })
   }
 
   const outlineStyle = computed<Record<string, string>>(() => {
@@ -369,12 +352,12 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
     const dh = t.height - c.height
 
     if (isDragging.value) {
-      v.x *= Math.exp(-dt * 6)
-      v.y *= Math.exp(-dt * 6)
+      v.x *= Math.exp(-dt * JELLY.velocityDecay)
+      v.y *= Math.exp(-dt * JELLY.velocityDecay)
       v.w += (dw * stiffnessDrag * 1.12 - v.w * dampingDrag) * dt
       v.h += (dh * stiffnessDrag * 1.12 - v.h * dampingDrag) * dt
       velocity.value = { ...v }
-      impact.value *= Math.exp(-dt * 7.4)
+      impact.value *= Math.exp(-dt * JELLY.impactDecayHeld)
       motionRaf = requestAnimationFrame(stepMotion)
       return
     }
@@ -436,32 +419,32 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
 
     if ((prevDx > 0 && nextDx < 0) || (prevDx < 0 && nextDx > 0) || (prevDy > 0 && nextDy < 0) || (prevDy < 0 && nextDy > 0)) {
       const speed = Math.hypot(v.x, v.y)
-      if (speed > 30) {
+      if (speed > JELLY.reversalSpeed) {
         impactAxis.value = Math.abs(v.x) >= Math.abs(v.y) ? 'x' : 'y'
-        impact.value = Math.min(1, Math.max(impact.value, speed / 300))
+        impact.value = Math.min(1, Math.max(impact.value, speed / JELLY.reversalImpactScale))
       }
     }
 
-    impact.value *= Math.exp(-dt * 4)
+    impact.value *= Math.exp(-dt * JELLY.impactDecayFree)
 
     currentRect.value = { x: nx, y: ny, width: nw, height: nh }
     velocity.value = { ...v }
 
     const settled
-      = Math.abs(nextDx) < 0.25
-        && Math.abs(nextDy) < 0.25
-        && Math.abs(dw) < 0.25
-        && Math.abs(dh) < 0.25
-        && Math.abs(v.x) < 8
-        && Math.abs(v.y) < 8
-        && Math.abs(v.w) < 8
-        && Math.abs(v.h) < 8
+      = Math.abs(nextDx) < JELLY.settleDistance
+        && Math.abs(nextDy) < JELLY.settleDistance
+        && Math.abs(dw) < JELLY.settleDistance
+        && Math.abs(dh) < JELLY.settleDistance
+        && Math.abs(v.x) < JELLY.settleSpeed
+        && Math.abs(v.y) < JELLY.settleSpeed
+        && Math.abs(v.w) < JELLY.settleSpeed
+        && Math.abs(v.h) < JELLY.settleSpeed
 
     if (settled) {
       currentRect.value = { ...t }
       velocity.value = { x: 0, y: 0, w: 0, h: 0 }
       impact.value = 0
-      settleMotion(32)
+      settleMotion(JELLY.sinkMs)
       return
     }
 
@@ -483,10 +466,13 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
       return
     }
 
+    // The indicator is absolutely positioned inside the group's *padding* box,
+    // but both rects here are border boxes. The group's 1px border would
+    // otherwise push the indicator 1px down and right of the button it covers.
     const rootRect = root.getBoundingClientRect()
     const rect = checked.getBoundingClientRect()
-    const left = rect.left - rootRect.left
-    const top = rect.top - rootRect.top
+    const left = rect.left - rootRect.left - root.clientLeft
+    const top = rect.top - rootRect.top - root.clientTop
 
     indicatorVisible.value = true
     const next = {
@@ -531,11 +517,13 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
     const width = currentRect.value.width || targetRect.value.width || 0
     const height = currentRect.value.height || targetRect.value.height || 0
 
-    const maxX = Math.max(0, r.width - width)
-    const unclampedX = e.clientX - r.left - width / 2
+    // Padding-box coordinates, like `updateIndicator`: the origin sits inside
+    // the border and the travel is the client box, not the border box.
+    const maxX = Math.max(0, root.clientWidth - width)
+    const unclampedX = e.clientX - (r.left + root.clientLeft) - width / 2
     const px = Math.min(Math.max(unclampedX, 0), maxX)
     const baseY = dragLockY.value ?? (currentRect.value.y || targetRect.value.y || 0)
-    const py = Math.min(Math.max(baseY, 0), Math.max(0, r.height - height))
+    const py = Math.min(Math.max(baseY, 0), Math.max(0, root.clientHeight - height))
     const next = { x: px, y: py, width: Math.max(0, width), height: Math.max(0, height) }
     targetRect.value = next
 
@@ -553,9 +541,9 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
       y: 0,
     }
 
-    if ((px === 0 || px === maxX) && Math.abs(lastPointerVelocity.x) > 520) {
+    if ((px === 0 || px === maxX) && Math.abs(lastPointerVelocity.x) > JELLY.edgeSpeed) {
       impactAxis.value = 'x'
-      impact.value = Math.max(impact.value, 0.92)
+      impact.value = Math.max(impact.value, JELLY.edgeImpact)
     }
   }
 
@@ -579,7 +567,8 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
       const rootRect = root.getBoundingClientRect()
       for (const radio of radios) {
         const rect = radio.getBoundingClientRect()
-        const centerX = rect.left - rootRect.left + rect.width / 2
+        // Same padding-box origin as the indicator's own x.
+        const centerX = rect.left - rootRect.left - root.clientLeft + rect.width / 2
         const dist = Math.abs(centerX - currentX)
         if (dist < minDist) {
           minDist = dist
@@ -594,7 +583,7 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
     const v = velocity.value
     velocity.value = {
       ...v,
-      x: v.x + lastPointerVelocity.x * 0.14,
+      x: v.x + lastPointerVelocity.x * JELLY.releaseKick,
       y: v.y,
     }
 
@@ -627,7 +616,7 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
     target.setPointerCapture?.(e.pointerId)
     isDragging.value = true
     dragLockY.value = currentRect.value.y || targetRect.value.y || 0
-    setMotionPhase('emerge', 110)
+    setMotionPhase('emerge', JELLY.emergeMs)
 
     const now = performance.now()
     lastPointer = { x: e.clientX, y: e.clientY, ts: now }

@@ -104,6 +104,9 @@ const osIconClass = computed(() => {
   }
 })
 
+/** Whether the pill opens with a glyph — that side then takes the concentric padding, see the style block. */
+const hasIcon = computed(() => Boolean(osIconClass.value || (!props.osOnly && iconClass.value)))
+
 /**
  * Handles click events on the badge.
  * @param event - The mouse event
@@ -134,7 +137,7 @@ function handleKeydown(event: KeyboardEvent): void {
 <template>
   <div
     class="tx-status-badge"
-    :class="[`tx-status-badge--${size}`]"
+    :class="[`tx-status-badge--${size}`, { 'has-icon': hasIcon }]"
     :style="styleVars"
     :role="interactive ? 'button' : 'status'"
     :tabindex="interactive ? 0 : undefined"
@@ -153,13 +156,11 @@ function handleKeydown(event: KeyboardEvent): void {
 </template>
 
 <style lang="scss">
-/*
- * A pill at TxBadge weight. The 8px radius + visible border + 600 weight it used to carry
- * was indistinguishable from a quiet TxButton; the 999px cap and 500 weight put it back
- * in the badge family. The 12% fill / 32% border recipe is shared with TxBadge / TxTag /
- * TxAlert and must not drift here — dark-mode muddiness is a token problem (see the
- * `.dark` block in style/variables.scss), not a recipe problem.
- */
+// A pill at TxBadge weight. The 8px radius + visible border + 600 weight it used to carry
+// was indistinguishable from a quiet TxButton; the 999px cap and 500 weight put it back
+// in the badge family. The 12% fill / 32% border recipe is shared with TxBadge / TxTag /
+// TxAlert and must not drift here — dark-mode muddiness is a token problem (see the
+// `.dark` block in style/variables.scss), not a recipe problem.
 .tx-status-badge {
   display: inline-flex;
   align-items: center;
@@ -173,12 +174,10 @@ function handleKeydown(event: KeyboardEvent): void {
   border: 1px solid var(--tx-status-border, color-mix(in srgb, currentColor 32%, transparent));
   transition: background-color 0.25s ease;
 
-  /*
-   * Keyed off the role rather than a class: `interactive` is derived from
-   * whether the host attached a click listener, and that is exactly what
-   * already switches the role between `button` and `status`. A badge that is
-   * only reporting state keeps the default cursor.
-   */
+  // Keyed off the role rather than a class: `interactive` is derived from
+  // whether the host attached a click listener, and that is exactly what
+  // already switches the role between `button` and `status`. A badge that is
+  // only reporting state keeps the default cursor.
   &[role='button'] {
     cursor: pointer;
   }
@@ -188,14 +187,23 @@ function handleKeydown(event: KeyboardEvent): void {
     outline-offset: 2px;
   }
 
-  /*
-   * Sized with the text rather than a fixed 14px: hosts that scale icon utilities
-   * (nexus runs presetIcons at 1.2) otherwise render the glyph a third larger than
-   * the 12px label and it fills the whole badge height while the text floats.
-   */
+  // Sized with the text rather than a fixed 14px, and boxed at exactly one em:
+  // icon presets draw the glyph in a 1.2× box (nexus runs presetIcons at 1.2),
+  // which put a 14.4px circle beside 12px letters — a third taller than the
+  // capitals, 3px off the top and bottom edges while the text sat 4px in, and the
+  // first thing the eye landed on. At one em the glyph's circle is about a fifth
+  // over cap height, where an inline icon reads as part of the word rather than a
+  // badge on the badge. The `[class]` hook outranks the preset's own box at any
+  // stylesheet order.
   &__icon {
+    flex: none;
     font-size: 1em;
     line-height: 1;
+
+    &[class] {
+      width: 1em;
+      height: 1em;
+    }
   }
 
   &__text {
@@ -209,6 +217,24 @@ function handleKeydown(event: KeyboardEvent): void {
   // Horizontal padding stays >= 10px so the pill's round end caps clear the icon.
   &--md {
     padding: 3px 10px;
+  }
+
+  // A pill that opens with a glyph puts the glyph concentric with its round end
+  // cap: the cap is a circle of radius height/2 centred height/2 in from the
+  // edge, so a leading padding equal to the vertical padding puts the one-em
+  // icon's centre exactly on that circle's centre and the gap between glyph and
+  // edge is the same all the way round — the left and the top read as one
+  // distance. The text side then matches it rather than keeping the 10px of a
+  // text-only pill: letters get two more px than the glyph, because their
+  // square corners meet the cap's curve where a circle's do not.
+  &--sm.has-icon {
+    padding-left: 2px;
+    padding-right: 4px;
+  }
+
+  &--md.has-icon {
+    padding-left: 3px;
+    padding-right: 5px;
   }
 }
 </style>

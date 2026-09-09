@@ -119,6 +119,13 @@ onBeforeUnmount(() => {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent);
   }
 
+  // Without this the UA's own outline lands on the pressed item, a hard
+  // rectangle sitting on top of the sliding indicator.
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 45%, transparent);
+  }
+
   &.is-disabled {
     opacity: 0.4;
     cursor: not-allowed;

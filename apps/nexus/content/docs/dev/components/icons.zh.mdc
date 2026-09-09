@@ -1,0 +1,96 @@
+---
+title: 图标体系
+description: TxIcon 如何解析 name，以及应用如何教它加载自己的图标
+category: Foundations
+status: beta
+since: 0.4.0
+tags: [icon, svg, resolver, iconify]
+syncStatus: reviewed
+verified: false
+---
+
+## 一个 prop，五种来源
+
+图标以 `name` 字符串的形式传进组件，由 `TxIcon` 判断这个字符串**是什么**，而不需要调用方声明。判断顺序固定，先命中先生效：
+
+| `name` 形态 | 解析为 | 渲染方式 |
+|-------------|--------|----------|
+| `i-carbon-search` | `class` | 带该 class 的 `<i>`——Iconify / UnoCSS 预设图标 |
+| `chevron-down` | `builtin` | Tuffex 自带表里的内联 `<svg>` |
+| 其他 | `emoji` | 按文本直接输出 |
+| — | `url` | 拉取后绘制（见下） |
+| — | `file` | 同上，先套本地文件协议 |
+
+`url` 和 `file` 永远不会从裸字符串推断出来：它们通过 `icon` prop 显式传入来源。
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <!-- class：构建里带的任意 Iconify 图标集 -->
+    <TxIcon name="i-carbon-search" />
+
+    <!-- builtin：不需要任何图标集 -->
+    <TxIcon name="chevron-down" />
+
+    <!-- emoji：兜底，也常常正是想要的效果 -->
+    <TxIcon name="🚀" />
+
+    <!-- 显式来源 -->
+    <TxIcon :icon="{ type: 'url', value: '/icons/plugin.svg' }" />
+    <TxIcon :icon="{ type: 'file', value: '/Users/me/icon.png', colorful: true }" />
+  </template>
+---
+:::
+
+## 内置图标表
+
+组件内置了七个字形，让核心交互不依赖「装没装图标集」：`check`、`chevron-down`、`close`、`search`、`user`、`star`、`star-half`。
+
+数量刻意保持很少。这张表的存在只是为了让折叠箭头、评分星星在一个完全没配置图标集的应用里也能渲染出来，它不是一个通用图标库。七个之外的图标应当来自 Iconify class 或显式来源。
+
+表里的条目要么画成实心剪影，要么画成开放描边路径。`chevron-down` 走描边：它是折叠、下拉、子菜单里 12–14px 的展开指示，实心楔形在那个尺寸下会在标签旁边糊成一团。
+
+## 颜色、蒙版与 `colorful`
+
+可寻址图标（`url` / `file`）有两种渲染方式：
+
+- **单色（默认）。** 单色 SVG 以 CSS mask 绘制，因此取 `currentColor`、继承周围文字颜色——切换主题时也跟随。
+- **`colorful: true`。** 文件以 `<img>` 渲染，保留自身颜色。Logo、应用图标用这种，重新着色反而是错的。
+
+来源上的 `color` 可以覆盖单色渲染时的墨色。
+
+## 让它加载你的图标
+
+应用的图标往往放在 `<img src>` 直接够不到的地方——自定义协议后面、需要鉴权的接口、或者某个传输层。与其在每个组件里特判，不如 provide 一次配置，其下所有 `TxIcon` 都会读到：
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TX_ICON_CONFIG_KEY } from '@talex-touch/tuffex/icon'
+
+  app.provide(TX_ICON_CONFIG_KEY, {
+    // 把原始值改写成浏览器能取到的地址
+    urlResolver: (url, type) => (type === 'file' ? `tfile://${url}` : url),
+    // 自己接管抓取：重试、鉴权头、IPC 传输……
+    svgFetcher: async url => (await fetch(url)).text(),
+    // 没有 resolver 时，给 `file` 来源加的协议前缀
+    fileProtocol: 'tfile://',
+  })
+---
+:::
+
+单个 `TxIcon` 也可以用自己的 `urlResolver` / `svgFetcher` prop 覆盖注入的配置——某一块界面的图标来自另一个源时很有用。
+
+## 相关组件
+
+| 组件 | 用途 |
+|------|------|
+| 《[Icon 图标](./icon.zh.mdc)》 | 通用场景与完整 prop 列表 |
+| 《[IconChip 图标徽标](./icon-chip.zh.mdc)》 | 承载字形或短标签的小色块 |
+| Status icon | 成功 / 警告 / 错误状态的语义色字形 |
+
+## 源码
+
+- 解析与渲染：`packages/tuffex/packages/components/src/icon/src/TxIcon.vue`。
+- 配置契约：`packages/tuffex/packages/components/src/icon/src/types.ts`（`TxIconSource`、`TxIconConfig`、`TX_ICON_CONFIG_KEY`）。

@@ -1,0 +1,126 @@
+---
+title: Installation
+description: Installing Tuffex and the three shapes an import can take
+category: Foundations
+status: beta
+since: 0.4.0
+tags: [install, imports, entries, styles]
+syncStatus: reviewed
+verified: false
+---
+
+## Install
+
+Tuffex ships as `@talex-touch/tuffex`. Vue 3 is a peer dependency, so the app owns the Vue version.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # pnpm (recommended)
+  pnpm add @talex-touch/tuffex
+
+  # npm
+  npm install @talex-touch/tuffex
+
+  # yarn
+  yarn add @talex-touch/tuffex
+---
+:::
+
+The chart family is a **separate package** — installing Tuffex does not bring it in:
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex-charts
+---
+:::
+
+## Three ways to import
+
+The package exposes a root entry, three suite barrels, and one subpath per component. Which one you reach for is a bundle-size decision, not a feature one — the components are identical through all three.
+
+| Shape | Import | Use it when |
+|-------|--------|-------------|
+| Per component | `@talex-touch/tuffex/button` | New code. Only what you name is bundled. |
+| Suite barrel | `@talex-touch/tuffex/base` | A screen leans on most of one suite. |
+| Root | `@talex-touch/tuffex` | Migration only — pulls the whole library. |
+
+### Per component (recommended)
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createApp } from 'vue'
+  import TxButton from '@talex-touch/tuffex/button'
+  import TxSwitch from '@talex-touch/tuffex/switch'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/button/style.css'
+  import '@talex-touch/tuffex/switch/style.css'
+
+  const app = createApp(App)
+  app.use(TxButton)
+  app.use(TxSwitch)
+---
+:::
+
+### Suite barrel
+
+The `base`, `pro` and `ai` entries mirror the suite tabs in this sidebar. They **partition the library exactly**: every component belongs to one barrel and no barrel overlaps another — a rule the `suite-barrels` test enforces on every run, so a component can never silently drop out of its entry.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import TuffBase from '@talex-touch/tuffex/base'
+  import '@talex-touch/tuffex/base.css'
+
+  app.use(TuffBase)
+---
+:::
+
+Visualization components (SparkChart, AllocationBar, DiffTable, SignalMeter) import from the `pro` barrel even though the docs file them under the [Data Suite](./data-suite.en.mdc): the suite split is a documentation shape, and the runtime entries stay `base` / `pro` / `ai`.
+
+### Root entry (migration)
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import TuffUI from '@talex-touch/tuffex'
+  import '@talex-touch/tuffex/style.css'
+
+  app.use(TuffUI)
+---
+:::
+
+Use this only where an application already expects every component style to be present. New pages should not.
+
+## Styles
+
+Styles are not injected by the JavaScript — you import them.
+
+| Stylesheet | Contains | Needed |
+|------------|----------|--------|
+| `@talex-touch/tuffex/base.css` | `--tx-*` tokens, resets, theme selectors | Always, exactly once |
+| `@talex-touch/tuffex/<name>/style.css` | One component's CSS | Per component you import |
+| `@talex-touch/tuffex/style.css` | Every component's CSS | Root-entry migrations only |
+
+`base.css` is what defines the design tokens the components read, so it is the one import that is never optional. See [Theming](./theming.en.mdc) for what it puts on the page and how to override it.
+
+## Utils
+
+The helper layer the components themselves use is exported from both the root entry and a `./utils` subpath:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { nextZIndex, toast } from '@talex-touch/tuffex/utils'
+---
+:::
+
+The full API is in [Utils](./utils.en.mdc).
+
+## Source
+
+- Entry map: `packages/tuffex/package.json` (`exports`) — `.`, `./utils`, `./base.css`, `./style.css`, `./*`, `./*/style.css`.
+- Suite barrels: `packages/tuffex/packages/components/src/{base,pro,ai}/index.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/__tests__/suite-barrels.test.ts` asserts the three barrels partition `components.ts` exactly; `global-install.test.ts` covers the root-entry install path.

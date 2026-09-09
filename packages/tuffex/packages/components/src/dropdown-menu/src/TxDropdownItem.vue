@@ -32,6 +32,7 @@ function onClick() {
 <template>
   <TxCardItem
     class="tx-dropdown-item"
+    align="center"
     :class="{ 'is-disabled': disabled, 'is-danger': danger }"
     role="menuitem"
     :clickable="true"
@@ -56,6 +57,15 @@ function onClick() {
   --tx-card-item-padding: 8px 10px;
   --tx-card-item-radius: 10px;
   --tx-card-item-gap: 10px;
+}
+
+// Menu rows wear the same outlined hover and active states as every other
+// list row in the library. They used to opt out for a translucent veil, on the
+// grounds that a hairline border reads as a box drawn around the row on a dark
+// panel; that made a menu the one list that highlighted differently from a
+// select, a tree or a cascader, which is the more confusing of the two.
+.tx-dropdown-item.tx-dropdown-item:not(.is-disabled):focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 22%, transparent);
 }
 
 .tx-dropdown-item :deep(.tx-card-item__title) {

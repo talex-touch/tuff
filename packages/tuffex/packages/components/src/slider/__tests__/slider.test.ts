@@ -1,7 +1,9 @@
 import { mount } from '@vue/test-utils'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { resolveTransition } from '../../liquid/src/spring'
+import { JELLY } from '../../../../utils/animation/jelly'
+import txRadioGroupSource from '../../radio/src/TxRadioGroup.vue?raw'
+import txRadioSource from '../../radio/src/TxRadio.vue?raw'
 import TxSlider from '../src/TxSlider.vue'
 import txSliderSource from '../src/TxSlider.vue?raw'
 
@@ -13,9 +15,9 @@ function setMainMetrics(wrapper: ReturnType<typeof mount>) {
     left: 0,
     top: 0,
     right: 200,
-    bottom: 24,
+    bottom: 28,
     width: 200,
-    height: 24,
+    height: 28,
     toJSON: () => ({}),
   } as DOMRect)
 }
@@ -98,7 +100,8 @@ describe('txSlider', () => {
     expect(tooltip.attributes('data-motion')).toBe('blur')
     expect(tooltip.attributes('style')).toContain('--tx-slider-tooltip-motion-duration: 0ms')
     expect(tooltip.attributes('style')).toContain('--tx-slider-tooltip-motion-blur: 0px')
-    expect(tooltip.attributes('style')).toContain('translateY(28px)')
+    // 36px, not the old 28: the pill is 28px tall now and the tooltip must clear it.
+    expect(tooltip.attributes('style')).toContain('translateY(36px)')
 
     await wrapper.find('.tx-slider__main').trigger('pointerleave')
     await nextTick()
@@ -238,9 +241,9 @@ describe('txSlider', () => {
 })
 
 /**
- * The refractive slab's state channel is a stylesheet contract, and jsdom never
- * applies an SFC's `<style>` block — a mounted component cannot see it. So these
- * read the source and assert on the parsed rule bodies instead.
+ * The pill's look is a stylesheet contract, and jsdom never applies an SFC's
+ * `<style>` block — a mounted component cannot see it. So these read the source
+ * and assert on the parsed rule bodies instead.
  *
  * `ruleBody` matches braces rather than running a regex across the file: an
  * unanchored `[\s\S]*` would happily walk past the rule it names and into the
@@ -249,7 +252,7 @@ describe('txSlider', () => {
 function ruleBody(source: string, selector: string): string {
   const start = source.indexOf(selector)
   if (start === -1)
-    throw new Error(`selector not found in TxSlider.vue: ${selector}`)
+    throw new Error(`selector not found in source: ${selector}`)
 
   const open = source.indexOf('{', start)
   if (open === -1)
@@ -268,102 +271,164 @@ function ruleBody(source: string, selector: string): string {
   throw new Error(`unbalanced block for selector: ${selector}`)
 }
 
-describe('txSlider refractive slab sizing', () => {
+/** Value of a custom property inside a rule body, or null when it is not set there. */
+function varIn(block: string, name: string): string | null {
+  const match = block.match(new RegExp(`${name.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}:\\s*([^;]+);`))
+  return match ? match[1]!.trim() : null
+}
+
+/** Top-level entries of a `box-shadow` list: the ring's fallback is a nested color-mix(). */
+function shadowListOf(block: string): string[] {
+  const list = block.match(/box-shadow:([^;]+);/)?.[1] ?? ''
+  const items: string[] = []
+  let depth = 0
+  let current = ''
+  for (const ch of list) {
+    if (ch === '(')
+      depth++
+    else if (ch === ')')
+      depth--
+    if (ch === ',' && depth === 0) {
+      items.push(current.trim())
+      current = ''
+    }
+    else {
+      current += ch
+    }
+  }
+  items.push(current.trim())
+  return items.filter(Boolean)
+}
+
+/**
+ * The pill thumb (2026-09-06): the Radio button-group indicator borrowed whole.
+ * Geometry and recipe are asserted against the indicator's *source*, not
+ * against literals copied into the test, so the two cannot drift apart without
+ * one of these failing.
+ */
+describe('txSlider pill thumb', () => {
   const source = txSliderSource
+  const base = () => ruleBody(source, '.tx-slider {')
 
   it('extracts the rules it claims to test', () => {
     // Positive control. Every assertion below is about what a block does *not*
     // contain or does contain; if the extractor silently returned nothing they
     // would all pass vacuously.
+    expect(base().length).toBeGreaterThan(0)
     expect(ruleBody(source, '&__surface').length).toBeGreaterThan(0)
-    expect(ruleBody(source, '&.is-dragging').length).toBeGreaterThan(0)
-    expect(ruleBody(source, '@supports (transition-timing-function: linear(0, 1))').length).toBeGreaterThan(0)
+    expect(ruleBody(source, '&.is-dragging {').length).toBeGreaterThan(0)
+    expect(ruleBody(txRadioSource, '&--button').length).toBeGreaterThan(0)
+    expect(ruleBody(txRadioGroupSource, '.tx-radio-group__indicator-plain {').length).toBeGreaterThan(0)
   })
 
-  it('drives the slab through its own box, not a transform scale', () => {
-    const surface = ruleBody(source, '&__surface')
+  it('is as tall as a Radio button and as tall as its own row', () => {
+    const radioButton = ruleBody(txRadioSource, '&--button')
+    const radioHeight = radioButton.match(/height:\s*(\d+px);/)?.[1]
+    expect(radioHeight).toBe('28px')
 
-    // The whole point: scaling dragged the corner radius and the 1px rim along
-    // with the box, so at rest the slab read as a shrunken sticker.
-    expect(surface).not.toContain('scale(')
-    expect(surface).toContain('transform: translate(-50%, -50%);')
-
-    expect(surface).toContain('width: calc(var(--tx-slider-surface-width) * var(--tx-slider-surface-extent))')
-    expect(surface).toContain('height: calc(var(--tx-slider-surface-size) * var(--tx-slider-surface-extent))')
-
-    // Radius and rim are authored values now, never multiplied.
-    expect(surface).toContain('border-radius: var(--tx-slider-surface-radius);')
-    expect(surface).toContain('box-shadow:')
-    expect(surface).toContain('inset 0 0 0 1px')
+    expect(varIn(base(), '--tx-slider-surface-size')).toBe(radioHeight)
+    expect(varIn(base(), '--tx-slider-height')).toBe(radioHeight)
+    expect(varIn(base(), '--tx-slider-surface-radius')).toBe('999px')
+    // A capsule, not a bar: wider than tall, but not by much.
+    const width = Number.parseFloat(varIn(base(), '--tx-slider-surface-width') ?? '0')
+    expect(width).toBeGreaterThan(28)
+    expect(width).toBeLessThanOrEqual(40)
   })
 
-  it('transitions the size channel and walls the layout pass in', () => {
-    const surface = ruleBody(source, '&__surface')
+  it('wears the Radio indicator recipe: 88% overlay fill, 50% rim, 17% top highlight, the same shadow', () => {
+    const indicator = ruleBody(txRadioGroupSource, '.tx-radio-group__indicator-plain {')
 
-    expect(surface).toMatch(/transition:[^;]*\bwidth\b/)
-    expect(surface).toMatch(/transition:[^;]*\bheight\b/)
-    expect(surface).not.toMatch(/transition:[^;]*\btransform\b/)
-
-    // Without containment the size write is free to escape this leaf.
-    expect(surface).toContain('contain: layout;')
-  })
-})
-
-/**
- * The pill thumb (2026-09-01). One visual object in all three states, sized
- * like the Radio button-group indicator, with the press bounce compiled into
- * the transition curve itself rather than layered on as keyframes.
- */
-describe('txSlider pill thumb', () => {
-  const source = txSliderSource
-
-  /** Value of a custom property inside a rule body, or null when it is not set there. */
-  const varIn = (block: string, name: string): string | null => {
-    const match = block.match(new RegExp(`${name.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}:\\s*([^;]+);`))
-    return match ? match[1]!.trim() : null
-  }
-
-  it('keeps the pill at one size across rest and hover, and grows it at most 10% on drag', () => {
-    const rest = Number(varIn(ruleBody(source, '.tx-slider {'), '--tx-slider-surface-extent'))
-    const hover = varIn(ruleBody(source, '&.is-hovering,'), '--tx-slider-surface-extent')
-    const drag = Number(varIn(ruleBody(source, '&.is-dragging {'), '--tx-slider-surface-extent'))
-
-    expect(rest).toBe(1)
-    // Hover must not re-declare the extent: rest and hover are the same box.
-    expect(hover).toBeNull()
-    expect(drag).toBeGreaterThan(rest)
-    expect(drag).toBeLessThanOrEqual(rest * 1.1)
-  })
-
-  it('keeps the pill visible in every state', () => {
-    // Pre-change the slab was opacity 0 at rest and the native white disc did
-    // the resting job; now the pill is the only thumb there is.
-    expect(varIn(ruleBody(source, '.tx-slider {'), '--tx-slider-surface-opacity')).toBe('1')
-    expect(varIn(ruleBody(source, '&.is-hovering,'), '--tx-slider-surface-opacity')).toBeNull()
-    expect(varIn(ruleBody(source, '&.is-dragging {'), '--tx-slider-surface-opacity')).toBeNull()
-  })
-
-  it('draws a capsule with the Radio indicator recipe: rim, top highlight, drop shadow', () => {
-    expect(varIn(ruleBody(source, '.tx-slider {'), '--tx-slider-surface-radius')).toBe('999px')
-
-    const surface = ruleBody(source, '&__surface')
-    const shadow = surface.match(/box-shadow:([^;]+);/)?.[1] ?? ''
-    expect(shadow).toContain('inset 0 0 0 1px var(--tx-slider-surface-rim)')
-    expect(shadow).toContain('inset 0 1px 0 var(--tx-slider-surface-highlight)')
-    expect(shadow).toContain('0 2px 8px')
-
-    // Neutral glass, not a primary-tinted sticker: the tint mixes the overlay
-    // surface token, and the blue comes from the fill refracting through it.
-    const tint = varIn(ruleBody(source, '.tx-slider {'), '--tx-slider-surface-tint') ?? ''
+    // Fill: the overlay surface at the indicator's opacity, never a primary tint.
+    const indicatorFill = indicator.match(/background:\s*color-mix\(in srgb, var\(--tx-bg-color-overlay[^)]*\)\s*(\d+)%/)?.[1]
+    const tint = varIn(base(), '--tx-slider-surface-tint') ?? ''
+    expect(indicatorFill).toBe('88')
     expect(tint).toContain('--tx-bg-color-overlay')
+    expect(tint).toMatch(new RegExp(`\\b${indicatorFill}%`))
     expect(tint).not.toContain('--tx-color-primary')
+
+    // Rim: the light border family at the indicator's opacity.
+    const indicatorRim = indicator.match(/border:\s*1px solid color-mix\(in srgb, var\(--tx-border-color-light[^)]*\)\s*(\d+)%/)?.[1]
+    const rim = varIn(base(), '--tx-slider-surface-rim') ?? ''
+    expect(indicatorRim).toBe('50')
+    expect(rim).toContain('--tx-border-color-light')
+    expect(rim).toMatch(new RegExp(`\\b${indicatorRim}%`))
+
+    // Highlight and shadow: the indicator writes them as literals, the slider as tokens.
+    expect(indicator).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.17)')
+    expect(varIn(base(), '--tx-slider-surface-highlight')).toContain('17%')
+    expect(indicator).toContain('0 2px 8px rgba(15, 23, 42, 0.08)')
+    expect(varIn(base(), '--tx-slider-surface-shadow')).toBe('0 2px 8px rgba(15, 23, 42, 0.08)')
+
+    // The three-part list, in the indicator's order.
+    const surface = shadowListOf(ruleBody(source, '&__surface'))
+    expect(surface).toEqual([
+      'inset 0 0 0 1px var(--tx-slider-surface-rim)',
+      'inset 0 1px 0 var(--tx-slider-surface-highlight)',
+      'var(--tx-slider-surface-shadow)',
+    ])
+  })
+
+  it('is one body per variant: the solid capsule carries no blur, no size channel, no keyframes', () => {
+    // The 2026-09-01 CSS size spring is gone with everything that served it.
+    expect(source).not.toContain('--tx-slider-surface-extent')
+    expect(source).not.toContain('--tx-slider-state-duration')
+    expect(source).not.toContain('@supports')
+    expect(source).not.toContain('linear(')
+    expect(source).not.toContain('@keyframes')
+    expect(source).not.toContain('animation:')
+
+    const surface = ruleBody(source, '&__surface')
+    expect(surface).not.toContain('backdrop-filter')
+    expect(surface).toContain('width: var(--tx-slider-surface-width);')
+    expect(surface).toContain('height: var(--tx-slider-surface-size);')
+    expect(surface).not.toMatch(/transition:[^;]*\b(width|height|transform)\b/)
+  })
+
+  it('offers the Radio indicator\'s three bodies and defaults to the frosted one', () => {
+    // The blur variant thins the fill and frosts the track under it, at rest
+    // as well as on drag — the fill refracting through the pill is what it is for.
+    const blur = ruleBody(source, '&.is-thumb-blur {')
+    expect(varIn(blur, '--tx-slider-surface-tint')).toContain('22%')
+    expect(varIn(blur, '--tx-slider-surface-blur')).toBe('8px')
+    const blurSurface = ruleBody(source, '&.is-thumb-blur .tx-slider__surface')
+    expect(blurSurface).toContain('backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));')
+
+    // Glass: the capsule goes clear under the glass body while held.
+    expect(varIn(ruleBody(source, '&.is-thumb-glass.is-dragging'), '--tx-slider-surface-tint')).toBe('transparent')
+
+    expect(mount(TxSlider, { props: { modelValue: 40 } }).classes()).toContain('is-thumb-blur')
+    expect(mount(TxSlider, { props: { modelValue: 40, thumbVariant: 'solid' } }).classes()).toContain('is-thumb-solid')
+    expect(mount(TxSlider, { props: { modelValue: 40, thumbVariant: 'glass' } }).classes()).toContain('is-thumb-glass')
+    // The flat path has no body to vary.
+    const flat = mount(TxSlider, { props: { modelValue: 40, thumbSurface: false } })
+    expect(flat.classes().some(name => name.startsWith('is-thumb-'))).toBe(false)
+  })
+
+  it('keeps the pill at one size across every state in the stylesheet', () => {
+    // The size steps are the jelly's, written per frame; hover and drag only
+    // touch rim, shadow and track.
+    for (const selector of ['&.is-hovering,', '&.is-dragging {']) {
+      const block = ruleBody(source, selector)
+      expect(varIn(block, '--tx-slider-surface-size')).toBeNull()
+      expect(varIn(block, '--tx-slider-surface-width')).toBeNull()
+      expect(varIn(block, '--tx-slider-surface-opacity')).toBeNull()
+    }
+    expect(varIn(base(), '--tx-slider-surface-opacity')).toBe('1')
+  })
+
+  it('holds the stylesheet transform at a bare translate so the resting pill is exact', () => {
+    // The jelly's `scale()` is an inline style that exists only while it runs;
+    // once it stops the property is dropped and this rule is what the pill
+    // renders with, radius and rim unscaled.
+    const surface = ruleBody(source, '&__surface')
+    expect(surface).toContain('transform: translate(-50%, -50%);')
+    expect(surface).not.toContain('scale(')
   })
 
   it('sizes the native hit area to the pill so the fill lands on its centre', () => {
     // `refreshMetrics()` reads `--tx-slider-thumb-size`; making it equal the
     // pill width is what keeps the pill inside the track at 0 and 100.
-    const base = ruleBody(source, '.tx-slider {')
-    expect(varIn(base, '--tx-slider-thumb-size')).toBe('var(--tx-slider-surface-width)')
+    expect(varIn(base(), '--tx-slider-thumb-size')).toBe('var(--tx-slider-surface-width)')
 
     const flat = ruleBody(source, '&:not(.has-surface) {')
     expect(varIn(flat, '--tx-slider-thumb-size')).toBe('18px')
@@ -379,68 +444,20 @@ describe('txSlider pill thumb', () => {
   })
 
   it('appends the keyboard focus ring to the pill without dropping its rim', () => {
-    const shadowListOf = (selector: string) => {
-      const list = ruleBody(source, selector).match(/box-shadow:([^;]+);/)?.[1] ?? ''
-      // Split on top-level commas only: the ring's fallback is a nested color-mix().
-      const items: string[] = []
-      let depth = 0
-      let current = ''
-      for (const ch of list) {
-        if (ch === '(')
-          depth++
-        else if (ch === ')')
-          depth--
-        if (ch === ',' && depth === 0) {
-          items.push(current.trim())
-          current = ''
-        }
-        else {
-          current += ch
-        }
-      }
-      items.push(current.trim())
-      return items.filter(Boolean)
-    }
-
-    const base = shadowListOf('&__surface')
-    const focused = shadowListOf('&.is-focused:not(.is-dragging) .tx-slider__surface')
+    const surface = shadowListOf(ruleBody(source, '&__surface'))
+    const focused = shadowListOf(ruleBody(source, '&.is-focused:not(.is-dragging) .tx-slider__surface'))
 
     // Positive control: the base list is the three-part Radio recipe.
-    expect(base).toHaveLength(3)
+    expect(surface).toHaveLength(3)
     // Appended to the base list, not a replacement — otherwise the rim and the
     // highlight vanish the moment the slider gains keyboard focus.
-    expect(focused.slice(0, base.length)).toEqual(base)
-    expect(focused).toHaveLength(base.length + 1)
+    expect(focused.slice(0, surface.length)).toEqual(surface)
+    expect(focused).toHaveLength(surface.length + 1)
     expect(focused.at(-1)).toMatch(/^0 0 0 3px var\(--tx-focus-ring-color\b/)
   })
 
-  it('no longer carries the press keyframes or the thumb dissolve', () => {
-    // The 08-31 bounce was four keyframes each on its own overshooting bezier,
-    // reversing velocity at every boundary. The bounce is now the transition.
-    expect(source).not.toContain('tx-slider-thumb-press')
-    expect(source).not.toContain('tx-slider-surface-press')
-    expect(source).not.toContain('@keyframes')
-    expect(source).not.toContain('animation:')
-
-    // The dissolve served the white disc, which no longer exists.
-    expect(source).not.toContain('--tx-slider-thumb-blur')
-    expect(source).not.toContain('--tx-slider-thumb-opacity')
-    expect(source).not.toContain('--tx-slider-dissolve-duration')
-    expect(source).not.toContain('--tx-slider-press-duration')
-  })
-
-  it('bounces on the state transition itself, timed by the state duration', () => {
-    const surface = ruleBody(source, '&__surface')
-    const transition = surface.match(/transition:([^;]+);/)?.[1] ?? ''
-    expect(transition).toMatch(/\bwidth var\(--tx-slider-state-duration\) var\(--tx-slider-ease\)/)
-    expect(transition).toMatch(/\bheight var\(--tx-slider-state-duration\) var\(--tx-slider-ease\)/)
-    // Rim / highlight / blur changes on hover ride the non-overshooting clock.
-    expect(transition).toMatch(/\bbox-shadow var\(--tx-slider-hover-duration\) var\(--tx-slider-hover-ease\)/)
-  })
-
   it('does not let hover in/out overshoot', () => {
-    const base = ruleBody(source, '.tx-slider {')
-    const hoverEase = varIn(base, '--tx-slider-hover-ease') ?? ''
+    const hoverEase = varIn(base(), '--tx-slider-hover-ease') ?? ''
     const bezier = hoverEase.match(/cubic-bezier\(([^)]+)\)/)
     expect(bezier).not.toBeNull()
     const [, y1, , y2] = bezier![1]!.split(',').map(Number)
@@ -448,77 +465,138 @@ describe('txSlider pill thumb', () => {
     expect(y2!).toBeLessThanOrEqual(1)
   })
 
-  it('falls back to a non-overshooting ease-out where linear() is unsupported', () => {
-    const base = ruleBody(source, '.tx-slider {')
-    const ease = varIn(base, '--tx-slider-ease') ?? ''
-    const bezier = ease.match(/^cubic-bezier\(([^)]+)\)$/)
-    expect(bezier).not.toBeNull()
-    const [, y1, , y2] = bezier![1]!.split(',').map(Number)
-    expect(y1!).toBeLessThanOrEqual(1)
-    expect(y2!).toBeLessThanOrEqual(1)
-  })
-
-  it('zeroes every clock under reduced motion', () => {
+  it('zeroes the hover clock under reduced motion', () => {
     const reduced = ruleBody(source, '@media (prefers-reduced-motion: reduce)')
-    expect(reduced).toContain('--tx-slider-state-duration: 0ms;')
     expect(reduced).toContain('--tx-slider-hover-duration: 0ms;')
-    // Nothing left to switch off: there are no keyframes.
-    expect(reduced).not.toContain('animation')
   })
 })
 
 /**
- * The spring is compiled once, by hand, into a static `linear()` string in the
- * SCSS. This locks that string to the compiler's output so the two cannot drift.
+ * The jelly: the indicator's motion driven by the slider's events. Frames are
+ * faked so a press, a drag and a release can be walked through deterministically.
  */
-describe('txSlider spring curve', () => {
-  const source = txSliderSource
-  const STIFFNESS = 560
-  const DAMPING = 34
+describe('txSlider thumb jelly', () => {
+  const surfaceStyle = (wrapper: ReturnType<typeof mount>) => wrapper.find('.tx-slider__surface').attributes('style') ?? ''
+  const scaleOf = (style: string) => {
+    const match = style.match(/scale\(([\d.]+), ([\d.]+)\)/)
+    return match ? { x: Number(match[1]), y: Number(match[2]) } : null
+  }
 
-  beforeAll(() => {
-    // `spring.ts` caches the `CSS.supports` probe module-wide on first call, so
-    // the stub has to be in place before any `resolveTransition` call in this
-    // process. jsdom has no `CSS` global, so without it we would get the
-    // bezier fallback and the equality below would be meaningless.
-    vi.stubGlobal('CSS', { supports: () => true })
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    })
   })
 
-  it('locks the authored linear() curve to resolveTransition output', () => {
-    const resolved = resolveTransition({ stiffness: STIFFNESS, damping: DAMPING })
-    // Positive control: the stub took, we are looking at a compiled spring.
-    expect(resolved.easing.startsWith('linear(')).toBe(true)
-
-    const supports = ruleBody(source, '@supports (transition-timing-function: linear(0, 1))')
-    const authored = supports.match(/--tx-slider-ease:\s*(linear\([^)]*\));/)?.[1]
-    expect(authored).toBe(resolved.easing)
-
-    const duration = supports.match(/--tx-slider-state-duration:\s*(\d+)ms;/)?.[1]
-    expect(Number(duration)).toBe(resolved.duration)
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
-  it('overshoots 2–5% and reverses once', () => {
-    const resolved = resolveTransition({ stiffness: STIFFNESS, damping: DAMPING })
-    const values = resolved.easing.slice('linear('.length, -1).split(',').map(Number)
+  it('scales the pill through an inline transform from press to settled release, then lets go of it', async () => {
+    const wrapper = mount(TxSlider, { props: { modelValue: 40, showTooltip: false } })
+    expect(surfaceStyle(wrapper)).not.toContain('scale(')
 
-    const peak = Math.max(...values)
-    expect(peak - 1).toBeGreaterThanOrEqual(0.02)
-    expect(peak - 1).toBeLessThanOrEqual(0.05)
-    expect(resolved.duration).toBeLessThanOrEqual(420)
+    await wrapper.find('input').trigger('pointerdown')
+    vi.advanceTimersByTime(48)
+    await nextTick()
 
-    // Count sign changes of the sampled velocity outside the ±0.1% settle band —
-    // the compiler forces the last sample to exactly 1, which manufactures a
-    // sub-visible wiggle at the tail that a raw count would report.
-    let reversals = 0
-    let previous = 0
-    for (let i = 1; i < values.length; i++) {
-      const delta = values[i]! - values[i - 1]!
-      const sign = delta > 0 ? 1 : delta < 0 ? -1 : 0
-      if (sign !== 0 && previous !== 0 && sign !== previous && Math.abs(values[i - 1]! - 1) >= 0.001)
-        reversals++
-      if (sign !== 0)
-        previous = sign
+    // The grab pop plus the held scale rising on the spring: bigger than rest on both axes.
+    const held = scaleOf(surfaceStyle(wrapper))
+    expect(held).not.toBeNull()
+    expect(held!.x).toBeGreaterThan(1)
+    expect(held!.y).toBeGreaterThan(1)
+    // Still a translate underneath, so the pill's centre stays on the thumb.
+    expect(surfaceStyle(wrapper)).toContain('translate(-50%, -50%)')
+
+    window.dispatchEvent(new Event('pointerup'))
+    await nextTick()
+    expect(wrapper.classes()).not.toContain('is-dragging')
+    // The release does not snap: the spring is still carrying the scale home.
+    vi.advanceTimersByTime(16)
+    await nextTick()
+    expect(surfaceStyle(wrapper)).toContain('scale(')
+
+    // Settled: the inline transform is gone and the stylesheet's own holds again.
+    vi.advanceTimersByTime(3000)
+    await nextTick()
+    expect(surfaceStyle(wrapper)).not.toContain('scale(')
+    expect(surfaceStyle(wrapper)).not.toContain('transform')
+  })
+
+  it('holds the pill at the indicator\'s held scale while a still drag goes on', async () => {
+    const wrapper = mount(TxSlider, { props: { modelValue: 40, showTooltip: false } })
+
+    await wrapper.find('input').trigger('pointerdown')
+    // Past the emerge pop and the spring's settling: what is left is the held scale.
+    vi.advanceTimersByTime(1500)
+    await nextTick()
+
+    const held = scaleOf(surfaceStyle(wrapper))
+    expect(held!.x).toBeCloseTo(JELLY.heldScale, 2)
+    expect(held!.y).toBeCloseTo(JELLY.heldScale, 2)
+
+    window.dispatchEvent(new Event('pointerup'))
+    vi.advanceTimersByTime(3000)
+    await nextTick()
+  })
+
+  it('never deforms under reduced motion', async () => {
+    const matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+    vi.stubGlobal('matchMedia', matchMedia)
+
+    try {
+      const wrapper = mount(TxSlider, { props: { modelValue: 40, showTooltip: false } })
+      await wrapper.find('input').trigger('pointerdown')
+      vi.advanceTimersByTime(200)
+      await nextTick()
+
+      expect(wrapper.classes()).toContain('is-dragging')
+      expect(surfaceStyle(wrapper)).not.toContain('scale(')
+
+      window.dispatchEvent(new Event('pointerup'))
+      await nextTick()
     }
-    expect(reversals).toBe(1)
+    finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('stops its frame loop on unmount', async () => {
+    const wrapper = mount(TxSlider, { props: { modelValue: 40, showTooltip: false } })
+    await wrapper.find('input').trigger('pointerdown')
+    vi.advanceTimersByTime(32)
+
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame')
+    wrapper.unmount()
+    expect(cancelSpy).toHaveBeenCalled()
+    cancelSpy.mockRestore()
+  })
+
+  it('mounts the Radio glass body only while the thumb is held or settling', async () => {
+    const wrapper = mount(TxSlider, { props: { modelValue: 40, showTooltip: false, thumbVariant: 'glass' } })
+    expect(wrapper.find('.tx-slider__glass').exists()).toBe(false)
+
+    await wrapper.find('input').trigger('pointerdown')
+    await nextTick()
+    const glass = wrapper.find('.tx-slider__glass')
+    expect(glass.exists()).toBe(true)
+    expect(glass.classes()).toContain('is-active')
+    // Inside the capsule, so it rides the jelly transform.
+    expect(wrapper.find('.tx-slider__surface .tx-slider__glass').exists()).toBe(true)
+
+    window.dispatchEvent(new Event('pointerup'))
+    await nextTick()
+    // Fading out, still mounted while the release settles.
+    expect(wrapper.find('.tx-slider__glass').exists()).toBe(true)
+    expect(wrapper.find('.tx-slider__glass').classes()).not.toContain('is-active')
+
+    vi.advanceTimersByTime(3000)
+    await nextTick()
+    expect(wrapper.find('.tx-slider__glass').exists()).toBe(false)
   })
 })

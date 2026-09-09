@@ -330,8 +330,7 @@ watch(() => props.indicator, () => void nextTick(() => place(false)))
   }
 }
 
-.tx-bui-filter-chips__chip {
-  display: inline-flex;
+.tx-bui-filter-chips__chip {  display: inline-flex;
   position: relative;
   flex: 0 0 auto;
   align-items: center;
@@ -405,6 +404,15 @@ watch(() => props.indicator, () => void nextTick(() => place(false)))
   padding: 0;
   justify-content: center;
   font-size: 15px;
+}
+
+// The scope mixin resets `button { padding: 0 }` under the root, and that
+// compound selector outranks the bare class above, so a chip rendered with its
+// label flush against the pill edge. Only the padding needs the extra weight —
+// lifting the whole rule would also rewrite the parent of every `&` nested
+// inside it.
+.tx-bui-filter-chips .tx-bui-filter-chips__chip {
+  padding: 0 10px;
 }
 
 .tx-bui-filter-chips__dot {

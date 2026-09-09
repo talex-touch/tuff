@@ -71,6 +71,8 @@ code: |
 
 ## 交互契约
 
+- `align="center"` 让行内各列对齐到同一条中线，这正是单行列表项需要的：左侧更高的一列（折叠箭头、复选框、头像）否则会把文字顶到行的上边。默认仍是 `start`，因为多行文字的卡片应当与媒体列顶部对齐。
+
 - 未提供 `avatar` 插槽、`avatarUrl`、`iconClass`、`avatarText` 时，左侧媒体列会被省略。
 - 生成头像优先级为 `avatarUrl`、`iconClass`、`avatarText`。
 - 只有 `clickable=true` 且 `disabled=false` 时才会应用 `tabindex="0"`。
@@ -78,6 +80,7 @@ code: |
 - `disabled=true` 会添加禁用 class、移除焦点能力，并阻止鼠标和 Enter 激活。
 - hover 底色读 `--tx-card-item-hover-bg`，选中底色读 `--tx-card-item-active-bg`；两者的默认值分别是 `--tx-bg-color-overlay` 的 18% 与 `--tx-color-primary` 的 8%，未覆写时渲染结果与以往逐像素一致。边框色不参与覆写，仍由 `--tx-border-color-light` / `--tx-color-primary` 决定。
 - `title` 与 `subtitle` 使用单行省略；`description` 可以换行。
+- 悬停 `active` 行时会加深其强调色，而不是替换成中性的悬停底色：悬停规则本身优先级高于激活规则，此前选中行在指针下会丢失高亮。
 
 ## 最佳实践
 

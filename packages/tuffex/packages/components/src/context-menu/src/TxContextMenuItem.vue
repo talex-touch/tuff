@@ -44,6 +44,7 @@ function onClick() {
 <template>
   <TxCardItem
     class="tx-context-menu-item"
+    align="center"
     :class="{ 'is-disabled': disabled, 'is-danger': danger, 'has-custom-color': !!color }"
     :style="itemStyle"
     role="menuitem"

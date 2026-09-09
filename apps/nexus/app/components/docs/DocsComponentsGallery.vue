@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import './DocsComponentsGallery.css'
 import {
   ChartPalette,
@@ -32,15 +32,11 @@ import { useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
 import { toast } from '@talex-touch/tuffex/utils'
 import tuffexPkg from '../../../../../packages/tuffex/package.json'
 
-// Optional suite filter: suite overview pages embed only their own band and
-// hide the cross-band jump tabs; without it the full hub grid renders.
-const props = defineProps<{ suite?: 'base' | 'pro' | 'ai' | 'data' }>()
+// One band per render: every suite has its own overview page, so the gallery
+// only ever shows that page's suite. There is no cross-suite hub grid.
+const props = defineProps<{ suite: 'base' | 'pro' | 'ai' | 'data' }>()
 
 const { locale } = useI18n()
-
-function bandVisible(key: 'base' | 'pro' | 'ai' | 'data') {
-  return !props.suite || props.suite === key
-}
 
 const localeKey = computed(() => (locale.value === 'zh' ? 'zh' : 'en'))
 
@@ -226,6 +222,62 @@ const avatarVariants = [
   { name: 'Ame', shape: 'square' as const, tone: 'var(--tx-text-color-secondary)' },
 ]
 
+/*
+ * ProgressBar specimen. A pinned percentage is a screenshot of a progress bar,
+ * not a progress bar: the fill never eases, the tip glow never travels and the
+ * shimmer has nothing to run over. The determinate bar walks a short loop
+ * instead. Wrapping remounts it through `progressCycle`, because a fresh
+ * element starts at its width rather than easing all the way back down — the
+ * loop must never play in reverse.
+ */
+const PROGRESS_STEPS = [8, 26, 44, 63, 81, 94, 100]
+const progressStep = ref(0)
+const progressCycle = ref(0)
+const progressPercent = computed(() => PROGRESS_STEPS[progressStep.value] ?? 0)
+const progressDetail = computed(() => `${(progressPercent.value * 0.024).toFixed(1)} MB / 2.4 MB`)
+const progressSegments = computed(() => [
+  { value: 56, color: 'var(--tx-color-success)', label: copy.value.channels[0]?.label },
+  { value: 30, color: 'var(--tx-color-primary)', label: copy.value.channels[1]?.label },
+  { value: 14, color: 'var(--tx-color-warning)', label: copy.value.channels[2]?.label },
+])
+let progressTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  // A bar that never settles is exactly what reduced motion asks us not to
+  // ship, so those viewers get one mid-run frame and no timer.
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    progressStep.value = 3
+    return
+  }
+
+  progressTimer = setInterval(() => {
+    const next = progressStep.value + 1
+    if (next >= PROGRESS_STEPS.length) {
+      progressStep.value = 0
+      progressCycle.value += 1
+    }
+    else {
+      progressStep.value = next
+    }
+  }, 1000)
+})
+
+onBeforeUnmount(() => {
+  if (progressTimer)
+    clearInterval(progressTimer)
+})
+
+/* IconChip specimen: the full tone ramp in both variants, so the cell shows
+   what the tone/variant pair does rather than four chips of one kind. */
+const iconChipTones = [
+  { tone: 'red' as const, label: 'PDF' },
+  { tone: 'orange' as const, label: 'ZIP' },
+  { tone: 'green' as const, label: 'CSV' },
+  { tone: 'accent' as const, label: 'DOC' },
+  { tone: 'ink' as const, label: 'TS' },
+  { tone: 'neutral' as const, label: 'TXT' },
+]
+
 /* ── Form band state. Every specimen is live, so each needs its own model. ── */
 const cascaderValue = ref<string[]>([])
 const cascaderOptions = [
@@ -249,12 +301,18 @@ const flatSelectValue = ref('json')
 const flatInputValue = ref('')
 const numberValue = ref(60)
 const pickerValue = ref<(string | number)[]>(['beta'])
+// A drum needs rows above and below the centre to actually read as one; three
+// options only ever showed a flat, full list.
 const pickerColumns = [{
   key: 'channel',
   options: [
     { value: 'stable', label: 'Stable' },
     { value: 'beta', label: 'Beta' },
     { value: 'snapshot', label: 'Snapshot' },
+    { value: 'nightly', label: 'Nightly' },
+    { value: 'canary', label: 'Canary' },
+    { value: 'lts', label: 'LTS' },
+    { value: 'edge', label: 'Edge' },
   ],
 }]
 const scrubWidth = ref(324)
@@ -299,8 +357,7 @@ const blockSwitch = ref(true)
 
 /* ── Navigation + feedback band. Overlay components have no resting appearance,
    so those specimens show the trigger and open for real on click — the same
-   shape the Dialog cell above already uses. ── */
-const navTab = ref('home')
+   shape the Dialog cell above already uses. ── */const navTab = ref('home')
 const tabBarItems = computed(() => [
   { value: 'home', label: copy.value.suiteBase, iconClass: 'i-carbon-home' },
   { value: 'search', label: copy.value.searching, iconClass: 'i-carbon-search', badge: 3 },
@@ -555,17 +612,6 @@ async function copyInstall() {
     clearTimeout(copyTimer)
   copyTimer = setTimeout(() => (copied.value = false), 1600)
 }
-
-const suites = computed(() => [
-  { key: 'base', label: copy.value.suiteBase },
-  { key: 'pro', label: copy.value.suitePro },
-  { key: 'ai', label: copy.value.suiteAi },
-  { key: 'data', label: copy.value.suiteData },
-])
-
-function scrollToSuite(key: string) {
-  document.getElementById(`docs-gallery-suite-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
 </script>
 
 <template>
@@ -584,20 +630,7 @@ function scrollToSuite(key: string) {
       <span class="docs-gallery__version">v{{ tuffexPkg.version }}</span>
     </div>
 
-    <nav v-if="!props.suite" id="docs-gallery-suite-base" class="docs-gallery__suite" :aria-label="copy.suiteBase">
-      <button
-        v-for="suiteTab in suites"
-        :key="suiteTab.key"
-        type="button"
-        class="docs-gallery__suite-tab"
-        :class="{ 'is-active': suiteTab.key === 'base' }"
-        @click="scrollToSuite(suiteTab.key)"
-      >
-        {{ suiteTab.label }}
-      </button>
-    </nav>
-
-    <div v-if="bandVisible('base')" class="docs-gallery__grid">
+    <div v-if="props.suite === 'base'" class="docs-gallery__grid">
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('button')">
           {{ cellLabel('Button', '按钮') }}
@@ -828,9 +861,21 @@ function scrollToSuite(key: string) {
         </NuxtLink>
         <div class="docs-gallery__stage">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__stack">
-              <TxProgressBar :percentage="62" />
-              <TxProgressBar indeterminate />
+            <div class="docs-gallery__block docs-gallery__block--wide docs-gallery__stack">
+              <!-- Live, so the specimen shows the easing fill, the tip glow
+                   riding it and the stardust drifting over the filled part. -->
+              <TxProgressBar
+                :key="progressCycle"
+                :percentage="progressPercent"
+                :detail="progressDetail"
+                text-placement="top"
+                flow-effect="stardust"
+                show-text
+              />
+              <TxProgressBar :percentage="100" status="success" />
+              <TxProgressBar :percentage="38" status="error" />
+              <TxProgressBar :segments="progressSegments" />
+              <TxProgressBar indeterminate indeterminate-variant="elastic" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -1077,11 +1122,34 @@ function scrollToSuite(key: string) {
         </NuxtLink>
         <div class="docs-gallery__stage">
           <ClientOnly>
-            <div class="docs-gallery__row">
-              <TxIconChip :size="14" tone="red" label="PDF" />
-              <TxIconChip :size="14" tone="green" label="CSV" />
-              <TxIconChip :size="14" tone="accent" label="DOC" />
-              <TxIconChip :size="14" tone="neutral" variant="soft" label="TXT" />
+            <div class="docs-gallery__stack docs-gallery__stack--center">
+              <div class="docs-gallery__row">
+                <TxIconChip
+                  v-for="chip in iconChipTones"
+                  :key="`solid-${chip.tone}`"
+                  :size="26"
+                  :tone="chip.tone"
+                  :label="chip.label"
+                />
+              </div>
+              <div class="docs-gallery__row">
+                <TxIconChip
+                  v-for="chip in iconChipTones"
+                  :key="`soft-${chip.tone}`"
+                  :size="26"
+                  :tone="chip.tone"
+                  :label="chip.label"
+                  variant="soft"
+                />
+              </div>
+              <!-- The size ladder and the circle shape, which the two tone rows
+                   above hold constant. -->
+              <div class="docs-gallery__row">
+                <TxIconChip :size="14" tone="accent" label="v4" />
+                <TxIconChip :size="20" tone="ink" label="TS" />
+                <TxIconChip :size="32" shape="circle" tone="accent" label="AI" />
+                <TxIconChip :size="32" shape="circle" tone="green" variant="soft" label="OK" />
+              </div>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -1271,9 +1339,11 @@ function scrollToSuite(key: string) {
         </NuxtLink>
         <div class="docs-gallery__stage">
           <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxImageUploader v-model="uploadImages" :max="3" accept="image/png,image/jpeg" />
-            </div>
+            <!-- No fixed-width block here: the uploader's grid is `auto-fill`, so a
+                 240px block gives it two tracks and parks the lone add tile in the
+                 left one, off the centre of the stage. Letting it size to its own
+                 content puts the tile where every other specimen sits. -->
+            <TxImageUploader v-model="uploadImages" :max="3" accept="image/png,image/jpeg" />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -1311,7 +1381,7 @@ function scrollToSuite(key: string) {
                 :columns="pickerColumns"
                 :popup="false"
                 :show-toolbar="false"
-                :visible-item-count="3"
+                :visible-item-count="5"
               />
             </div>
             <template #fallback>
@@ -2174,20 +2244,7 @@ function scrollToSuite(key: string) {
       </section>
     </div>
 
-    <nav v-if="!props.suite" id="docs-gallery-suite-pro" class="docs-gallery__suite" :aria-label="copy.suitePro">
-      <button
-        v-for="suiteTab in suites"
-        :key="suiteTab.key"
-        type="button"
-        class="docs-gallery__suite-tab"
-        :class="{ 'is-active': suiteTab.key === 'pro' }"
-        @click="scrollToSuite(suiteTab.key)"
-      >
-        {{ suiteTab.label }}
-      </button>
-    </nav>
-
-    <div v-if="bandVisible('pro')" class="docs-gallery__grid">
+    <div v-if="props.suite === 'pro'" class="docs-gallery__grid">
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('version-capsule')">
           {{ cellLabel('VersionCapsule', '版本胶囊') }}
@@ -2687,20 +2744,7 @@ function scrollToSuite(key: string) {
       </section>
     </div>
 
-    <nav v-if="!props.suite" id="docs-gallery-suite-ai" class="docs-gallery__suite" :aria-label="copy.suiteAi">
-      <button
-        v-for="suiteTab in suites"
-        :key="suiteTab.key"
-        type="button"
-        class="docs-gallery__suite-tab"
-        :class="{ 'is-active': suiteTab.key === 'ai' }"
-        @click="scrollToSuite(suiteTab.key)"
-      >
-        {{ suiteTab.label }}
-      </button>
-    </nav>
-
-    <div v-if="bandVisible('ai')" class="docs-gallery__grid">
+    <div v-if="props.suite === 'ai'" class="docs-gallery__grid">
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('thinking-orb')">
           {{ cellLabel('ThinkingOrb', '思考指示球') }}
@@ -3197,20 +3241,7 @@ function scrollToSuite(key: string) {
       </section>
     </div>
 
-    <nav v-if="!props.suite" id="docs-gallery-suite-data" class="docs-gallery__suite" :aria-label="copy.suiteData">
-      <button
-        v-for="suiteTab in suites"
-        :key="suiteTab.key"
-        type="button"
-        class="docs-gallery__suite-tab"
-        :class="{ 'is-active': suiteTab.key === 'data' }"
-        @click="scrollToSuite(suiteTab.key)"
-      >
-        {{ suiteTab.label }}
-      </button>
-    </nav>
-
-    <div v-if="bandVisible('data')" class="docs-gallery__grid">
+    <div v-if="props.suite === 'data'" class="docs-gallery__grid">
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('spark-chart')">
           {{ cellLabel('SparkChart', '迷你折线图') }}
