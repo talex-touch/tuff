@@ -412,8 +412,9 @@ describe('VoicePanel dock surface', () => {
  * pill-sizing tests do. What is being pinned is the arithmetic, which is the part that can
  * silently invert: an offset of the wrong sign scrolls the sentence off the far side.
  *
- * The window is `pillWidth - PILL_CHROME_WIDTH - 2 * STREAM_FADE`, i.e. `pillWidth - 122`,
- * and `pillWidth` is `clamp(natural + 2 + 94, 200, 280)`.
+ * The window is `pillWidth - PILL_EDGE_WIDTH - 2 * STREAM_FADE`, i.e. `pillWidth - 40` — the
+ * pill's whole content box, because the live row spans all three columns rather than sitting
+ * in the centre one — and `pillWidth` is `clamp(natural + 2 + 94, 200, 280)`.
  */
 describe('VoicePanel live transcript follow', () => {
   function offset(wrapper: VueWrapper): number {
@@ -434,19 +435,27 @@ describe('VoicePanel live transcript follow', () => {
     return wrapper
   }
 
+  // The stub is on the prototype, so leaving it up hands the next describe a paragraph that
+  // measures however wide this block's last case happened to need — every pill-sizing spy in
+  // this file restores its own for that reason, and this one used to be the exception.
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('centres a transcript that fits', async () => {
-    // 60 wide in a 200px pill: window is 78, so 9px of slack either side.
+    // 60 wide in a 200px pill: window is 160, so 50px of slack either side. Centred in the
+    // window is centred in the pill, which is what puts the sentence over the meter below it.
     const wrapper = await panelWithNaturalWidth(60)
-    expect(offset(wrapper)).toBeCloseTo(9, 5)
+    expect(offset(wrapper)).toBeCloseTo(50, 5)
     wrapper.unmount()
   })
 
   it('pins the tail once the transcript overflows', async () => {
-    // 400 wide against the 280px cap: window is 158, so the track slides 242 left and the
+    // 400 wide against the 280px cap: window is 240, so the track slides 160 left and the
     // newest character sits at the right edge. A positive number here would push the start
     // of the sentence off screen and show the part nobody is waiting for.
     const wrapper = await panelWithNaturalWidth(400)
-    expect(offset(wrapper)).toBeCloseTo(-242, 5)
+    expect(offset(wrapper)).toBeCloseTo(-160, 5)
     wrapper.unmount()
   })
 
@@ -458,7 +467,7 @@ describe('VoicePanel live transcript follow', () => {
    * outgrows the pill. At exactly the window width both must be nought.
    */
   it('crosses from centred to following without a jump', async () => {
-    const wrapper = await panelWithNaturalWidth(78)
+    const wrapper = await panelWithNaturalWidth(240)
     expect(offset(wrapper)).toBeCloseTo(0, 5)
     wrapper.unmount()
   })
