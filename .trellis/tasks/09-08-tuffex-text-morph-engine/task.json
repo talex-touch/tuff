@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "在 Nexus 文档开发面实际查看 text-morph、text-transformer、badge、switch，并以 prefers-reduced-motion 复核直接换值；随后完成 TuffEx build/audit 与文档覆盖门禁。",
+    "blocker": "无代码阻塞；尚无 headless Chrome 的形变/版式/降级证据，也未把父级的 focused tests 和类型检查扩大解释为所有 package build/audit 门已完成。",
+    "evidence": "packages/tuffex/packages/components/src/text-morph/（引擎与 engine/component tests）、text-transformer/src/TxTextTransformer.vue、badge/src/TxBadge.vue 和 apps/nexus/app/components/content/demos/TextMorph*.vue 已提供实现与测试路径；父级记录的 440 focused tests、TuffEx/Nexus typecheck 及本 PR Nexus suite/workspace typecheck 已通过。"
+  }
 }

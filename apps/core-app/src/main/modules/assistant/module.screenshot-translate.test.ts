@@ -179,8 +179,26 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
     sendTo: mocks.sendTo
   }))
 }))
+vi.mock('../voice/command-gesture', () => ({
+  setPlatformVoiceEscapeCapture: vi.fn()
+}))
 
 vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+    getAppPath: vi.fn(() => '/tmp/tuff-core-app'),
+    getPath: vi.fn((name: string) => {
+      const roots: Record<string, string> = {
+        home: '/tmp/tuff-home',
+        userData: '/tmp/tuff-user-data',
+        temp: '/tmp/tuff-temp',
+        cache: '/tmp/tuff-cache'
+      }
+      const resolved = roots[name]
+      if (!resolved) throw new Error(`Unexpected Electron app path: ${name}`)
+      return resolved
+    })
+  },
   dialog: {
     showSaveDialog: mocks.showSaveDialog
   },
@@ -240,6 +258,7 @@ vi.mock('../../core/touch-window', () => ({
 }))
 
 vi.mock('../../config/default', () => ({
+  APP_FOLDER_NAME: 'tuff',
   AssistantVoiceDockWindowOption: {}
 }))
 
@@ -259,6 +278,7 @@ vi.mock('../screenshot-session', () => ({
 
 vi.mock('../storage', () => ({
   getMainConfig: mocks.getMainConfig,
+  isMainStorageReady: vi.fn(() => true),
   persistMainConfig: mocks.persistMainConfig,
   saveMainConfig: mocks.saveMainConfig,
   subscribeMainConfig: mocks.subscribeMainConfig

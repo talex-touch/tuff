@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "先用已构建原生绑定量测 50/100/200/400 字 typeText 耗时，再据结果完成非阻塞投递策略；随后在真机采集探针间隔统计并复核长句尾随、波形与粘贴后 Fn 停止。",
+    "blocker": "无代码阻塞；R3 的原生投递耗时与策略尚未量测，R5 尚无真机探针样本，因而不能声称 200+ 字不卡顿或真实 Fn 回归已验收。",
+    "evidence": "apps/core-app/src/renderer/src/views/assistant/VoicePanel.vue 已含动态波形与尾随实现，packages/tuff-native/native-audio/src/function_key_monitor.rs 过滤合成键并在 Fn 抬起清空集合，function_key_monitor_tests.rs 保留失配 KeyUp 回归覆盖；父级记录的 focused tests 与 CoreApp typecheck 已通过。"
+  }
 }
