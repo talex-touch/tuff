@@ -6,6 +6,7 @@ import {
   assertHttpSuccess,
   BAILIAN_PARAFORMER_DEFAULT_MODEL,
   DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_MODEL,
+  DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_VAD_THRESHOLD,
   bailianAudioSpec,
   BailianParaformerVoiceProvider,
   buildBailianFinishTask,
@@ -352,6 +353,27 @@ describe('tuff-voice provider protocol contracts', () => {
     })
   })
 
+  it('defaults DashScope server_vad to a real threshold while still honouring an explicit zero', () => {
+    const qwenRequest: VoiceStreamRequest = {
+      ...request,
+      model: DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_MODEL,
+      language: 'zh-CN',
+    }
+
+    // A zero threshold does not make server_vad lenient, it disables it: with no VAD anywhere
+    // else in the dictation path, room tone alone kept the turn open.
+    const turnDetection = (options?: Parameters<typeof buildDashscopeQwenAsrRealtimeSessionUpdate>[1]) =>
+      (buildDashscopeQwenAsrRealtimeSessionUpdate(qwenRequest, options).session as {
+        turn_detection: { threshold: number }
+      }).turn_detection
+
+    expect(DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_VAD_THRESHOLD).toBeGreaterThan(0)
+    expect(turnDetection().threshold).toBe(DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_VAD_THRESHOLD)
+    expect(turnDetection({ vad: {} }).threshold).toBe(DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_VAD_THRESHOLD)
+    // `??`, not `||` — a caller that means zero has to be able to say so.
+    expect(turnDetection({ vad: { threshold: 0 } }).threshold).toBe(0)
+    expect(turnDetection({ vad: { threshold: 0.7 } }).threshold).toBe(0.7)
+  })
 
   it('resolves HTTPS URLs and byte sources, and always releases resolver-owned sources', async () => {
     const url = await resolveUploadSource({ model: 'm', source: { kind: 'url', url: 'https://example.test/audio.wav' }, requestId: 'u1' })
