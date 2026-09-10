@@ -1209,9 +1209,6 @@
       "title": "最近 12 周",
       "note": "柱子越高那周说得越多，跟你最能说的一周比。",
       "streak": "当前连续 {current} 天 · 最长 {longest} 天 · 活跃 {active} 天"
-    },
-    "tiers": {
-      "weeksPending": "再攒一周，这儿就看得出哪周话多了。"
     }
   },
   "home": {

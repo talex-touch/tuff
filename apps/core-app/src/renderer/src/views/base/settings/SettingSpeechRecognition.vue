@@ -57,8 +57,6 @@ function openCapabilities(): void {
 
 <template>
   <TuffGroupBlock
-    data-voice-settings
-    :name="t('settingSpeechRecognition.title')"
     :description="t('settingSpeechRecognition.description')"
     default-icon="i-carbon-microphone"
     active-icon="i-carbon-microphone-filled"

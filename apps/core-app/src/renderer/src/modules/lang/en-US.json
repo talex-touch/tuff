@@ -1209,9 +1209,6 @@
       "title": "The last 12 weeks",
       "note": "Taller means more said that week, against your busiest one.",
       "streak": "{current}-day streak · longest {longest} · {active} active days"
-    },
-    "tiers": {
-      "weeksPending": "Another week of records and you will see which weeks were louder."
     }
   },
   "home": {

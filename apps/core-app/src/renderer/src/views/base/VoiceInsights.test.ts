@@ -79,6 +79,21 @@ async function mountPage(props: Record<string, unknown> = {}) {
         // real popover open; what is being checked is which items exist, not how they appear.
         TxPopover: {
           template: '<div><slot name="reference" /><div class="stub-menu"><slot /></div></div>'
+        },
+        // Contents rendered inline and `visible` echoed: what matters is which section is in
+        // which drawer and whether it is open, not the panel's own animation.
+        TxDrawer: {
+          props: ['visible', 'title'],
+          inheritAttrs: true,
+          template: '<div :data-open="String(visible)" :data-title="title"><slot /></div>'
+        },
+        TxPagination: {
+          props: ['currentPage', 'pageSize', 'total'],
+          emits: ['update:currentPage'],
+          inheritAttrs: true,
+          // Clickable so a test can move off page one and check what reopening does.
+          template:
+            '<nav :data-page="currentPage" :data-total="total" @click="$emit(\'update:currentPage\', currentPage + 1)" />'
         }
       }
     }
@@ -239,10 +254,12 @@ describe('VoiceInsights page composition', () => {
     expect(header.find('h1').text()).toContain('voiceInsights.headline')
     expect(header.find('.VoiceInsights-Boundary').text()).toContain('voiceInsights.boundary')
 
-    // Refresh, a jump to the records, and the menu. Nothing else earns a place in a title row.
-    for (const action of ['refresh', 'records-jump', 'more']) {
+    // A jump to the log, and the menu. Nothing else earns a place in a title row — refresh
+    // least of all, on a page that reloads itself after everything it offers.
+    for (const action of ['records-jump', 'more']) {
       expect(header.find(`[data-testid="voice-insights-${action}"]`).exists()).toBe(true)
     }
+    expect(header.find('[data-testid="voice-insights-refresh"]').exists()).toBe(false)
     // And the group header that used to carry the clear button is gone entirely.
     expect(wrapper.find('.VoiceInsights-SectionHeader').exists()).toBe(false)
 
@@ -287,6 +304,108 @@ describe('VoiceInsights page composition', () => {
     // Not in the row itself: that is the point of moving them.
     const header = wrapper.find('.VoiceInsights-Hero > .VoiceInsights-HeroActions > *')
     expect(header.attributes('data-testid')).not.toBe('voice-insights-clear')
+
+    wrapper.unmount()
+  })
+
+  /**
+   * A year of charts is what the page is for. The log and the settings are two more screens'
+   * worth of content underneath it that most visits scroll straight past, so both are drawers:
+   * they cost nothing until asked for, and closing one puts the reader back where they were.
+   */
+  it('keeps the log in a drawer that starts closed', async () => {
+    const wrapper = await mountPage()
+
+    const drawer = wrapper.find('[data-testid="voice-insights-records"]')
+    expect(drawer.exists()).toBe(true)
+    expect(drawer.attributes('data-open')).toBe('false')
+    // The list is inside it, not loose on the page.
+    expect(wrapper.find('.VoiceInsights-RecordList').exists()).toBe(true)
+    expect(drawer.find('.VoiceInsights-RecordList').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
+    expect(wrapper.find('[data-testid="voice-insights-records"]').attributes('data-open')).toBe(
+      'true'
+    )
+
+    wrapper.unmount()
+  })
+
+  /** Settings belong to the page, so opening them is a request this component makes, not an act. */
+  it('asks the page to open settings rather than scrolling to them', async () => {
+    const wrapper = await mountPage()
+
+    await wrapper.find('[data-testid="voice-insights-settings"]').trigger('click')
+    expect(wrapper.emitted('open-settings')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * A wall of a hundred transcripts has no top and no bottom. Paging gives it both, and keeps the
+   * drawer from growing a scrollbar that fights the page's.
+   */
+  async function mountManyRecords() {
+    transportSendMock.mockReset()
+    transportSendMock.mockImplementation(async (event: { toEventName: () => string }) => {
+      if (event?.toEventName?.() === voiceApiEvents.getInsights.toEventName()) {
+        return { ok: true, result: summary() }
+      }
+      if (event?.toEventName?.() === voiceApiEvents.getRecognitionRecords.toEventName()) {
+        return {
+          ok: true,
+          result: Array.from({ length: 30 }, (_, index) => ({
+            id: `record-${index}`,
+            capturedAt: Date.UTC(2026, 8, 8, 12, index),
+            source: 'microphone',
+            status: 'success',
+            text: `记录 ${index}`
+          }))
+        }
+      }
+      return { ok: true }
+    })
+    return mountPage()
+  }
+
+  it('pages the log', async () => {
+    const wrapper = await mountManyRecords()
+
+    expect(wrapper.findAll('.VoiceInsights-Record')).toHaveLength(12)
+    const pager = wrapper.find('[data-testid="voice-insights-records-pagination"]')
+    expect(pager.exists()).toBe(true)
+    expect(pager.attributes('data-total')).toBe('30')
+    expect(pager.attributes('data-page')).toBe('1')
+
+    wrapper.unmount()
+  })
+
+  /**
+   * Reopening on page 4 of a log last read yesterday is a state nobody asked to be remembered —
+   * and the top of the list is where the newest entries are, which is why anyone opens it.
+   */
+  it('reopens the log at the first page', async () => {
+    const wrapper = await mountManyRecords()
+
+    await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
+    await wrapper.find('[data-testid="voice-insights-records-pagination"]').trigger('click')
+    expect(
+      wrapper.find('[data-testid="voice-insights-records-pagination"]').attributes('data-page')
+    ).toBe('2')
+
+    await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
+    expect(
+      wrapper.find('[data-testid="voice-insights-records-pagination"]').attributes('data-page')
+    ).toBe('1')
+
+    wrapper.unmount()
+  })
+
+  /** Twelve or fewer is one page, and one page needs no pager. */
+  it('shows no pager when the log fits on a page', async () => {
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="voice-insights-records-pagination"]').exists()).toBe(false)
 
     wrapper.unmount()
   })
@@ -459,15 +578,16 @@ describe('VoiceInsights progressive disclosure', () => {
     }
   }
 
-  it('withholds only the week bars on day one, and says when they arrive', async () => {
+  it('withholds only the week bars on day one', async () => {
     mockDays(1)
     const wrapper = await mountPage()
 
     const state = blocks(wrapper)
     expect(state.metrics).toBe(3)
+    // Not rendered, not greyed, and not explained: a chart with nothing in it says less than no
+    // chart, and a line apologising for its absence is one more thing to read.
     expect(state.weeks).toBe(false)
-    // Not rendered, not greyed: a chart with nothing in it says less than no chart.
-    expect(state.note.text()).toContain('voiceInsights.tiers.weeksPending')
+    expect(state.note.exists()).toBe(false)
 
     // The year stays from the first day — an empty grid is a true picture of an empty record,
     // and it is the one chart that explains its own blank cells.
@@ -477,7 +597,7 @@ describe('VoiceInsights progressive disclosure', () => {
     wrapper.unmount()
   })
 
-  it('adds the week bars once there are weeks to compare, and drops the note', async () => {
+  it('adds the week bars once there are weeks to compare', async () => {
     mockDays(8)
     const wrapper = await mountPage()
 
