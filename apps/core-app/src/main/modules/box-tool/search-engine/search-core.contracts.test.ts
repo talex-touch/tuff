@@ -41,6 +41,7 @@ const state = vi.hoisted(() => {
     indexingRuntimeSetWriterRouter: vi.fn(),
     invalidateRecommendationCache: vi.fn(),
     invalidateUsageStatsCache: vi.fn(),
+    readWorkerClose: vi.fn(async () => undefined),
     registerCoreIndexedSources: vi.fn(),
     sendToWindow: vi.fn((_windowId: unknown, event: { toEventName: () => string }) => {
       if (event.toEventName() === CoreBoxEvents.search.update.toEventName()) {
@@ -271,6 +272,12 @@ vi.mock('./search-index-service', () => ({
   SearchIndexService: class {
     preloadPinyin = vi.fn()
     warmup = vi.fn(async () => undefined)
+    waitUntilReadable = vi.fn(async () => undefined)
+  }
+}))
+vi.mock('./workers/search-index-read-worker-client', () => ({
+  SearchIndexReadWorkerClient: class {
+    close = state.readWorkerClose
   }
 }))
 vi.mock('./search-logger', () => ({

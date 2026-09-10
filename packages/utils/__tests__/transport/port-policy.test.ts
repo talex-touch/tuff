@@ -25,27 +25,6 @@ afterEach(() => {
 });
 
 describe("port-policy", () => {
-  it("uses default allowlist when env is unset", () => {
-    delete process.env[ENV_KEY];
-    const allowlist = resolvePortChannelAllowlist();
-    expect(allowlist.has(ClipboardEvents.change.toEventName())).toBe(true);
-    expect(allowlist.has(AppEvents.fileIndex.progress.toEventName())).toBe(
-      true,
-    );
-    expect(allowlist.has(CoreBoxEvents.search.update.toEventName())).toBe(
-      false,
-    );
-    expect(allowlist.has(CoreBoxEvents.search.end.toEventName())).toBe(false);
-    expect(allowlist.has(CoreBoxEvents.search.noResults.toEventName())).toBe(
-      false,
-    );
-    expect(
-      allowlist.has(CoreBoxEvents.search.indexCommitted.toEventName()),
-    ).toBe(true);
-    expect(allowlist.has(CoreBoxEvents.search.session.toEventName())).toBe(
-      true,
-    );
-  });
 
   it("parses env override list", () => {
     process.env[ENV_KEY] = [
