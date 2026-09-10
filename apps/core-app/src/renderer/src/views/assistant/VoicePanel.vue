@@ -451,13 +451,13 @@ const preparing = computed(
 )
 const holdingCancel = computed(() => cancelCharge.value > 0)
 /**
- * What is left of the hold, as a width.
+ * How much of the hold is already done, as a width.
  *
  * The beam already says "something is charging", but a ring gives no sense of *how much longer*
- * — it looks the same at 10% as at 90%. This drains 100% → 0% behind the content, so the surface
- * being consumed is the countdown, and releasing early visibly gives it back.
+ * — it looks the same at 10% as at 90%. This fills 0% → 100% behind the content, so the surface
+ * being covered is the progress toward the cancel, and releasing early visibly takes it back.
  */
-const cancelRemaining = computed(() => `${Math.max(0, 1 - cancelCharge.value) * 100}%`)
+const cancelFill = computed(() => `${Math.min(1, Math.max(0, cancelCharge.value)) * 100}%`)
 /**
  * The surface tightens as the hold fills, rather than stepping once when it starts.
  *
@@ -1503,14 +1503,14 @@ onBeforeUnmount(() => {
       <div
         v-if="holdingCancel"
         class="voice-dock__charge"
-        :style="{ width: cancelRemaining }"
+        :style="{ width: cancelFill }"
         data-testid="voice-charge"
         aria-hidden="true"
       />
 
       <!--
-        The same shape as the cancel charge and the opposite direction: that one is being spent,
-        this one is being earned. Both sit behind the content and are clipped to the pill.
+        The same shape as the cancel charge and the same direction: both fill as their own
+        fraction completes. Both sit behind the content and are clipped to the pill.
       -->
       <div
         v-if="showsUpload"
@@ -1768,7 +1768,7 @@ onBeforeUnmount(() => {
  * Behind everything the pill draws, and clipped to its own corners.
  *
  * Width rather than `scaleX`: a scaled box distorts its border radius, and this one has to keep
- * the pill's shape while it shortens. It is the only element in the surface that is allowed to
+ * the pill's shape while it grows. It is the only element in the surface that is allowed to
  * report a fraction, because the hold is the only thing here with a known denominator.
  */
 .voice-dock__charge {
@@ -1778,7 +1778,7 @@ onBeforeUnmount(() => {
   border-radius: inherit;
   /*
    * Faded at the leading edge rather than cut off: a flat block ending mid-card reads as two
-   * differently coloured halves, not as something draining away.
+   * differently coloured halves, not as something advancing across the pill.
    */
   background: linear-gradient(
     90deg,
