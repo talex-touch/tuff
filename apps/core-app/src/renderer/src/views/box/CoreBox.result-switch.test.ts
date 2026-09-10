@@ -3,7 +3,7 @@ import type { TuffContainerLayout, TuffItem } from '@talex-touch/utils'
 import type { IBoxOptions } from '../../modules/box/adapter'
 import type * as VueUse from '@vueuse/core'
 import type * as Vue from 'vue'
-import { mount } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick, type Ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
@@ -11,7 +11,7 @@ const router = createRouter({
   history: createMemoryHistory(),
   routes: [{ path: '/', component: { template: '<div />' } }]
 })
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CoreBox from './CoreBox.vue'
 
 const state = vi.hoisted(() => ({
@@ -67,7 +67,7 @@ vi.mock('~/modules/hooks/core-box', () => ({
 
 vi.mock('~/modules/hooks/useBatteryOptimizer', async () => {
   const { ref } = await vi.importActual<typeof Vue>('vue')
-  state.lowBatteryMode = ref(true)
+  state.lowBatteryMode = ref(false)
   return { useBatteryOptimizer: () => ({ lowBatteryMode: state.lowBatteryMode }) }
 })
 
@@ -210,9 +210,13 @@ const stubs = {
   BoxGrid: {
     props: ['items', 'layout'],
     template:
-      '<section v-if="layout.sections.length" class="recommendation-grid"><div v-for="item in items" :key="item.id" class="recommendation-grid-row">{{ item.render.basic.title }}</div></section>'
+      '<section class="recommendation-grid" :data-layout-mode="layout?.mode ?? \'none\'"><div v-for="item in items" :key="item.id" class="recommendation-grid-row">{{ item.render.basic.title }}</div></section>'
   },
-  CoreBoxFooter: { template: '<footer />' },
+  CoreBoxFooter: {
+    props: ['display', 'item', 'resultCount'],
+    template:
+      '<footer v-if="display" aria-label="selected-result">{{ item?.render?.basic?.title }} · {{ resultCount }}</footer>'
+  },
   CoreBoxRender: {
     props: ['item'],
     template: '<div class="normal-list-row">{{ item.render.basic.title }}</div>'
@@ -226,23 +230,136 @@ const stubs = {
   teleport: true
 }
 
-describe('CoreBox low-power result switching', () => {
+const pendingAnimationFrames = new Map<number, FrameRequestCallback>()
+
+let wrapper: VueWrapper | null = null
+
+function mountCoreBox({ realTransition = false } = {}) {
+  const mounted = mount(CoreBox, {
+    global: {
+      plugins: [router],
+      stubs: realTransition ? { ...stubs, transition: false } : stubs
+    }
+  })
+  wrapper = mounted
+  return mounted
+}
+
+function holdAnimationFrames(): void {
+  let nextFrameId = 1
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    vi.fn((callback: FrameRequestCallback) => {
+      const frameId = nextFrameId++
+      pendingAnimationFrames.set(frameId, callback)
+      return frameId
+    })
+  )
+  vi.stubGlobal(
+    'cancelAnimationFrame',
+    vi.fn((frameId: number) => {
+      pendingAnimationFrames.delete(frameId)
+    })
+  )
+}
+
+beforeEach(() => {
+  state.layout = undefined
+  state.results.value = []
+  state.searchVal.value = ''
+  state.activeActivations.value = null
+  state.lowBatteryMode.value = false
+})
+
+afterEach(() => {
+  wrapper?.unmount()
+  wrapper = null
+  pendingAnimationFrames.clear()
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+  document.body.replaceChildren()
+})
+
+describe('CoreBox result switching', () => {
+  it('keeps a ready wx list result and its selected footer visible when the recommendation grid exit receives no frame', async () => {
+    state.layout = sectionedRecommendationLayout
+    state.results.value = [item('recommended-result', 'Recommended app')]
+
+    const coreBox = mountCoreBox({ realTransition: true })
+    await nextTick()
+
+    expect(coreBox.get('.recommendation-grid-row').text()).toBe('Recommended app')
+
+    holdAnimationFrames()
+    ;(state.boxOptions as IBoxOptions).layout = { mode: 'list' } as TuffContainerLayout
+    state.searchVal.value = 'wx'
+    state.results.value = [item('wechat', '微信')]
+    await nextTick()
+
+    expect(coreBox.findAll('.normal-list-row').map((row) => row.text())).toEqual(['微信'])
+    expect(coreBox.get('footer[aria-label="selected-result"]').text()).toBe('微信 · 1')
+    expect(coreBox.find('.recommendation-grid').exists()).toBe(false)
+  })
+
+  it('shows only the latest normal-search replacement while the prior grid transition has no frame', async () => {
+    state.layout = sectionedRecommendationLayout
+    state.results.value = [item('recommended-result', 'Recommended app')]
+
+    const coreBox = mountCoreBox({ realTransition: true })
+    await nextTick()
+
+    holdAnimationFrames()
+    ;(state.boxOptions as IBoxOptions).layout = { mode: 'list' } as TuffContainerLayout
+    state.searchVal.value = 'wx'
+    state.results.value = [item('wechat', '微信')]
+    await nextTick()
+
+    state.searchVal.value = 'wechat'
+    state.results.value = [item('wechat-desktop', 'WeChat')]
+    await nextTick()
+
+    expect(coreBox.findAll('.normal-list-row').map((row) => row.text())).toEqual(['WeChat'])
+    expect(coreBox.get('footer[aria-label="selected-result"]').text()).toBe('WeChat · 1')
+  })
+
+  it('keeps a replacement recommendation grid and footer visible when a normal list exit has no frame', async () => {
+    state.layout = { mode: 'list' } as TuffContainerLayout
+    state.searchVal.value = 'wechat'
+    state.results.value = [item('wechat-desktop', 'WeChat')]
+
+    const coreBox = mountCoreBox({ realTransition: true })
+    await nextTick()
+
+    expect(coreBox.get('.normal-list-row').text()).toBe('WeChat')
+
+    holdAnimationFrames()
+    ;(state.boxOptions as IBoxOptions).layout = sectionedRecommendationLayout
+    state.searchVal.value = ''
+    state.results.value = [item('recommended-result', 'Recommended app')]
+    await nextTick()
+
+    expect(coreBox.findAll('.recommendation-grid-row').map((row) => row.text())).toEqual([
+      'Recommended app'
+    ])
+    expect(coreBox.get('footer[aria-label="selected-result"]').text()).toBe('Recommended app · 1')
+    expect(coreBox.find('.normal-list-row').exists()).toBe(false)
+  })
+
   it('replaces a sectioned recommendation grid with the next list result immediately when low power disables result transitions', async () => {
     const results = state.results
+    state.lowBatteryMode.value = true
     state.layout = sectionedRecommendationLayout
     results.value = [item('recommended-result', 'Recommended app')]
 
-    const wrapper = mount(CoreBox, { global: { plugins: [router], stubs } })
+    const coreBox = mountCoreBox()
     await nextTick()
 
-    expect(wrapper.get('.recommendation-grid-row').text()).toBe('Recommended app')
+    expect(coreBox.get('.recommendation-grid-row').text()).toBe('Recommended app')
     ;(state.boxOptions as IBoxOptions).layout = { mode: 'list' } as TuffContainerLayout
     results.value = [item('search-result', 'Search result')]
     await nextTick()
 
-    expect(wrapper.get('.normal-list-row').text()).toBe('Search result')
-    expect(wrapper.find('.recommendation-grid').exists()).toBe(false)
-
-    wrapper.unmount()
+    expect(coreBox.get('.normal-list-row').text()).toBe('Search result')
+    expect(coreBox.find('.recommendation-grid').exists()).toBe(false)
   })
 })
