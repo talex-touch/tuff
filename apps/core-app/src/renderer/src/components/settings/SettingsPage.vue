@@ -8,6 +8,14 @@ const props = withDefaults(
     /** Omit when a full-canvas child owns the drag-safe title-bar inset. */
     title?: string
     /**
+     * Small line above the title, for a page whose heading is not its nav label.
+     *
+     * The sidebar already names the section, so a page that repeats it and *then* says what it is
+     * about announces itself twice. The eyebrow keeps the sense of place at the size a sense of
+     * place is worth, and lets the heading carry the sentence people are actually here for.
+     */
+    eyebrow?: string
+    /**
      * Renders a way back to the page that links here, above the title. Sub-pages are siblings of
      * their category route, so the sidebar shows no trail into them.
      */
@@ -28,6 +36,7 @@ const props = withDefaults(
   }>(),
   {
     title: undefined,
+    eyebrow: undefined,
     backTo: undefined,
     backLabel: undefined,
     fill: false,
@@ -90,9 +99,12 @@ function goBack(): void {
           a flex row for the sake of one that needs it would move the other pages' headings by
           whatever the row's alignment decided.
         -->
-        <div v-if="title && $slots.titleAside" class="SettingsPage-TitleRow">
-          <h1 class="SettingsPage-Title">{{ title }}</h1>
-          <div class="SettingsPage-TitleAside">
+        <div v-if="title && ($slots.titleAside || eyebrow)" class="SettingsPage-TitleRow">
+          <div class="SettingsPage-TitleCopy">
+            <p v-if="eyebrow" class="SettingsPage-Eyebrow">{{ eyebrow }}</p>
+            <h1 class="SettingsPage-Title">{{ title }}</h1>
+          </div>
+          <div v-if="$slots.titleAside" class="SettingsPage-TitleAside">
             <slot name="titleAside" />
           </div>
         </div>
@@ -225,11 +237,22 @@ function goBack(): void {
   align-items: center;
   gap: var(--shell-space-4, 16px);
   justify-content: space-between;
+}
 
-  /* The heading never gives way; whatever is beside it shrinks or truncates first. */
-  .SettingsPage-Title {
-    flex: none;
-  }
+/* The heading never gives way; whatever is beside it shrinks or truncates first. */
+.SettingsPage-TitleCopy {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.SettingsPage-Eyebrow {
+  margin: 0;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-sm);
+  font-weight: 600;
+  user-select: none;
 }
 
 /* Right-aligned and allowed to shrink: the title is the thing that must never be cut. */
