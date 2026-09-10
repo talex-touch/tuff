@@ -119,11 +119,14 @@ Changes to native Fn capture, voice gestures, HUD open/stop/close, or audio addo
 - The tap cannot stop the system's Globe/Emoji action, and no tap-level policy will. Both were tried
   physically on this machine and both failed: dropping the event (`753f75df0`, downstream measured 0 Fn
   events, panel still opened) and forwarding it with `MaskSecondaryFn` cleared (`8a7987d30` / `19febfb49`,
-  panel still opened). The Globe action is fired by WindowServer below the tap. The only supported fix is the
-  user preference `com.apple.HIToolbox AppleFnUsageType` ("Press 🌐 key to" -> Do Nothing); the System
-  Settings toggle applies immediately, a `defaults write` only after logout. Do not change it silently for
-  the user. Do not claim Fn interception from a downstream event probe reading zero — that probe cannot see
-  this action; only looking at the panel can.
+  panel still opened). The Globe action is fired by WindowServer below the tap. The switch is the user
+  preference `com.apple.HIToolbox AppleFnUsageType` ("Press 🌐 key to" -> Do Nothing), and writing it with
+  `defaults` **applies immediately** — no logout, no agent restart, verified on macOS 26 by writing it and
+  pressing the key. nix-darwin and two other Fn-triggered dictation apps all state that a logout is
+  required; they are repeating each other, not reporting a test. Write it only on an explicit user click,
+  and report status from a fresh read rather than from the write's exit code. Do not claim Fn interception
+  from a downstream event probe reading zero — that probe cannot see this action; only looking at the
+  panel can.
 - Failed HID tap creation is explicitly unavailable; do not silently fall back to Session-level
   interception or change the user's global Fn preference. Native loader requires the current monitor ABI marker.
 - Escape is observed globally but passes through to other applications. Assistant main owns the 600ms
