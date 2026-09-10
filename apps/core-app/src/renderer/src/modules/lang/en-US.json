@@ -1084,7 +1084,10 @@
       "retry": "Retry",
       "showReport": "View report",
       "hideReport": "Hide report",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "records": "Records",
+      "more": "More",
+      "settings": "Settings"
     },
     "boundary": {
       "notStarted": "Not counting yet",
@@ -1176,7 +1179,7 @@
     },
     "records": {
       "title": "Recognition records",
-      "description": "Inspect source audio, raw transcript, final text, duration, channel, and usage for each recognition.",
+      "description": "What you said, what it heard, and what it finally wrote — each one kept here.",
       "empty": "No recognition records yet.",
       "emptyText": "No text generated",
       "clear": "Clear records",
