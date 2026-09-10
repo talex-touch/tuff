@@ -7,6 +7,7 @@ import type { CSSProperties } from 'vue'
 import type { DialogButton } from '@talex-touch/tuffex/dialog'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCard } from '@talex-touch/tuffex/card'
+import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
@@ -172,6 +173,7 @@ const clearConfirmVisible = ref(false)
 const reportExpanded = ref(false)
 const postClearRefreshFailed = ref(false)
 const heatmapScroller = ref<HTMLElement | null>(null)
+const menuOpen = ref(false)
 const showSkeleton = useDeferredLoading(() => !hasLoaded.value && !loadFailed.value)
 let loadRevision = 0
 let disposed = false
@@ -702,6 +704,33 @@ onMounted(() => {
   void loadInsights()
 })
 
+/**
+ * Both of these are sections of this page, not other screens.
+ *
+ * Records and the recognition settings sit below a year's worth of charts, which is a long way to
+ * scroll past on the way to a toggle. The header jumps instead of navigating: leaving the page to
+ * come back to the same page is the worse of the two.
+ */
+function scrollTo(target: HTMLElement | null): void {
+  // Queried rather than held in a `ref`: one of these is another component's card, and a template
+  // ref on a component yields its instance, not the element `scrollIntoView` needs.
+  target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function scrollToRecords(): void {
+  scrollTo(document.querySelector<HTMLElement>('[data-testid="voice-insights-records"]'))
+}
+
+function scrollToSettings(): void {
+  scrollTo(document.querySelector<HTMLElement>('[data-voice-settings]'))
+}
+
+/** A menu item closes the menu, then acts. Leaving it open over a dialog is its own bug. */
+function runFromMenu(action: () => void | Promise<void>): void {
+  menuOpen.value = false
+  void action()
+}
+
 onBeforeUnmount(() => {
   disposed = true
   loadRevision += 1
@@ -744,24 +773,63 @@ onBeforeUnmount(() => {
         </TxButton>
         <TxButton
           variant="flat"
-          :loading="copyPending"
-          :disabled="!hasData || refreshing || clearing"
-          data-testid="voice-insights-share"
-          @click="copyShareSummary"
+          :disabled="records.length === 0"
+          data-testid="voice-insights-records-jump"
+          @click="scrollToRecords"
         >
-          <span class="i-ri-share-forward-line" aria-hidden="true" />
-          <span>{{ t('voiceInsights.actions.share') }}</span>
+          <span class="i-ri-history-line" aria-hidden="true" />
+          <span>{{ t('voiceInsights.actions.records') }}</span>
         </TxButton>
-        <TxButton
-          variant="bare"
-          type="danger"
-          :disabled="!hasData || refreshing || copyPending || clearing"
-          data-testid="voice-insights-clear"
-          @click="requestClear"
-        >
-          <span class="i-ri-delete-bin-6-line" aria-hidden="true" />
-          <span>{{ t('voiceInsights.actions.clear') }}</span>
-        </TxButton>
+        <!--
+          Share, settings and delete live behind the dots.
+
+          Delete especially: clearing every number on the page is not undoable, and it used to sit
+          one stray click from the refresh button. Opening a menu first is the whole safeguard.
+        -->
+        <TxPopover v-model="menuOpen" placement="bottom-end" :offset="6" :min-width="176">
+          <template #reference>
+            <TxButton
+              variant="flat"
+              :aria-label="t('voiceInsights.actions.more')"
+              data-testid="voice-insights-more"
+            >
+              <span class="i-ri-more-fill" aria-hidden="true" />
+            </TxButton>
+          </template>
+          <div class="VoiceInsights-Menu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              :disabled="!hasData || refreshing || clearing || copyPending"
+              data-testid="voice-insights-share"
+              @click="runFromMenu(copyShareSummary)"
+            >
+              <span class="i-ri-share-forward-line" aria-hidden="true" />
+              <span>{{ t('voiceInsights.actions.share') }}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="voice-insights-settings"
+              @click="runFromMenu(scrollToSettings)"
+            >
+              <span class="i-ri-settings-3-line" aria-hidden="true" />
+              <span>{{ t('voiceInsights.actions.settings') }}</span>
+            </button>
+            <div class="VoiceInsights-MenuRule" role="separator" />
+            <button
+              type="button"
+              role="menuitem"
+              class="is-danger"
+              :disabled="!hasData || refreshing || copyPending || clearing"
+              data-testid="voice-insights-clear"
+              @click="runFromMenu(requestClear)"
+            >
+              <span class="i-ri-delete-bin-6-line" aria-hidden="true" />
+              <span>{{ t('voiceInsights.actions.clear') }}</span>
+            </button>
+          </div>
+        </TxPopover>
       </div>
     </header>
 
@@ -1087,7 +1155,7 @@ onBeforeUnmount(() => {
           </ul>
         </div>
       </TxCard>
-      <article class="VoiceInsights-Records" data-testid="voice-insights-records">
+      <TxCard class="VoiceInsights-Records" shadow="none" data-testid="voice-insights-records">
         <header class="VoiceInsights-RecordsHeading">
           <div>
             <h3>{{ t('voiceInsights.records.title') }}</h3>
@@ -1173,7 +1241,7 @@ onBeforeUnmount(() => {
             </div>
           </details>
         </div>
-      </article>
+      </TxCard>
     </main>
 
     <TxBottomDialog
@@ -1812,12 +1880,50 @@ onBeforeUnmount(() => {
   font-size: var(--shell-space-7);
 }
 
+/* The menu behind the dots. Plain buttons: a list of three needs no widget. */
+.VoiceInsights-Menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  button {
+    display: flex;
+    align-items: center;
+    padding: var(--shell-space-2) var(--shell-space-3);
+    border: none;
+    border-radius: var(--shell-radius-md);
+    background: transparent;
+    color: var(--shell-text-primary);
+    font-family: inherit;
+    font-size: var(--shell-fs-body);
+    gap: var(--shell-space-3);
+    cursor: pointer;
+    text-align: left;
+
+    &:hover:not(:disabled) {
+      background: var(--shell-surface);
+    }
+
+    &:disabled {
+      color: var(--shell-text-muted);
+      cursor: not-allowed;
+    }
+
+    &.is-danger {
+      color: var(--shell-danger);
+    }
+  }
+}
+
+/* The one irreversible item is fenced off from the two that are not. */
+.VoiceInsights-MenuRule {
+  height: 1px;
+  margin: var(--shell-space-1) 0;
+  background: var(--shell-border);
+}
+
 .VoiceInsights-Records {
-  margin-top: var(--shell-space-5);
   padding: var(--shell-space-6);
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-xl);
-  background: var(--shell-bg);
 }
 
 .VoiceInsights-RecordsHeading {
@@ -1846,13 +1952,23 @@ onBeforeUnmount(() => {
   font-size: var(--shell-fs-body);
 }
 
+/*
+ * `minmax(0, 1fr)`, not `1fr`.
+ *
+ * A grid item's default `min-width: auto` is its content's, and each record's title is a single
+ * nowrap line. One long sentence pushed the track wider than the card and the whole list hung out
+ * past its right edge — the ellipsis further down never got a chance, because nothing above it
+ * was ever narrow enough to need one.
+ */
 .VoiceInsights-RecordList {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--shell-space-2);
   margin-top: var(--shell-space-4);
 }
 
 .VoiceInsights-Record {
+  min-width: 0;
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-md);
   background: var(--shell-surface);

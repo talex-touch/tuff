@@ -74,6 +74,11 @@ async function mountPage(props: Record<string, unknown> = {}) {
           props: ['shadow'],
           inheritAttrs: true,
           template: '<div :data-shadow="shadow"><slot /></div>'
+        },
+        // Both slots rendered inline so the menu's contents are inspectable without driving a
+        // real popover open; what is being checked is which items exist, not how they appear.
+        TxPopover: {
+          template: '<div><slot name="reference" /><div class="stub-menu"><slot /></div></div>'
         }
       }
     }
@@ -234,7 +239,8 @@ describe('VoiceInsights page composition', () => {
     expect(header.find('h1').text()).toContain('voiceInsights.headline')
     expect(header.find('.VoiceInsights-Boundary').text()).toContain('voiceInsights.boundary')
 
-    for (const action of ['refresh', 'share', 'clear']) {
+    // Refresh, a jump to the records, and the menu. Nothing else earns a place in a title row.
+    for (const action of ['refresh', 'records-jump', 'more']) {
       expect(header.find(`[data-testid="voice-insights-${action}"]`).exists()).toBe(true)
     }
     // And the group header that used to carry the clear button is gone entirely.
@@ -254,6 +260,33 @@ describe('VoiceInsights page composition', () => {
     const cards = wrapper.findAll('[data-shadow]')
     expect(cards.length).toBeGreaterThanOrEqual(4)
     expect(cards.every((card) => card.attributes('data-shadow') === 'none')).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * Clearing every number on the page cannot be undone, and it used to sit one stray click from
+   * the refresh button. Opening a menu first is the whole safeguard, so the destructive item has
+   * to be behind the dots and separated from the two that are reversible.
+   */
+  it('keeps share, settings and delete behind the dots', async () => {
+    const wrapper = await mountPage()
+
+    const menu = wrapper.find('.VoiceInsights-Menu')
+    expect(menu.exists()).toBe(true)
+
+    const items = menu.findAll('[role="menuitem"]')
+    expect(items.map((item) => item.attributes('data-testid'))).toEqual([
+      'voice-insights-share',
+      'voice-insights-settings',
+      'voice-insights-clear'
+    ])
+    expect(menu.find('[data-testid="voice-insights-clear"]').classes()).toContain('is-danger')
+    expect(menu.find('[role="separator"]').exists()).toBe(true)
+
+    // Not in the row itself: that is the point of moving them.
+    const header = wrapper.find('.VoiceInsights-Hero > .VoiceInsights-HeroActions > *')
+    expect(header.attributes('data-testid')).not.toBe('voice-insights-clear')
 
     wrapper.unmount()
   })

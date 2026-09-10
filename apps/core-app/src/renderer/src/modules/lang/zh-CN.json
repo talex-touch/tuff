@@ -1084,7 +1084,10 @@
       "retry": "重试",
       "showReport": "查看报告",
       "hideReport": "收起报告",
-      "cancel": "取消"
+      "cancel": "取消",
+      "records": "记录",
+      "more": "更多",
+      "settings": "设置"
     },
     "boundary": {
       "notStarted": "还没开始记",
@@ -1176,7 +1179,7 @@
     },
     "records": {
       "title": "识别记录",
-      "description": "查看每次语音识别的源音频、原始转录、最终文本、耗时、渠道和用量。",
+      "description": "每次说了什么、机器听成了什么、最后写出去的是什么，都在这儿。",
       "empty": "还没有可查看的识别记录。",
       "emptyText": "未生成文本",
       "clear": "清空记录",
