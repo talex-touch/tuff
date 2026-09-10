@@ -112,10 +112,13 @@ Changes to native Fn capture, voice gestures, HUD open/stop/close, or audio addo
 ### Contracts
 
 - macOS Fn requires a main-thread active HID-level CGEventTap and Accessibility permission. Physical keycode63,
-  not the Function flag alone, identifies Fn. Project standalone Fn down/up to the Voice controller, then
-  remove those original standalone `FlagsChanged` events from the OS stream so macOS cannot execute its
-  default Globe/Emoji action. Combination-key events are forwarded unchanged. A stale/old addon that still
-  forwards the standalone event is not considered suppression evidence.
+  not the Function flag alone, identifies Fn. Read/project original Fn down/up first, then clear only
+  `MaskSecondaryFn` on standalone-owned Fn transitions and forward the original event. Preserve
+  other flags and combination-key events. Do not return null: physical testing still opened Emoji
+  with dropped events, whereas the user confirmed flag-neutralized forwarding prevented it. This was
+  reverted to dropping once (`753f75df0`) and immediately stopped intercepting Fn again; treat any
+  future `null` return on a standalone Fn transition as a regression, not a simplification. A stale/old
+  addon that still forwards the untouched standalone event is not considered interception evidence.
 - Failed HID tap creation is explicitly unavailable; do not silently fall back to Session-level
   interception or change the user's global Fn preference. Native loader requires the current monitor ABI marker.
 - Escape is observed globally but passes through to other applications. Assistant main owns the 600ms

@@ -1,8 +1,9 @@
 use crate::function_key_monitor::{
     EVENT_DOWN, EVENT_DOWN_WITH_OTHER_KEYS, EVENT_ESCAPE_DOWN, EVENT_ESCAPE_UP,
-    EVENT_OTHER_KEY_DOWN, EVENT_UP, GestureState, MonitorInput, process_event, reduce_gesture,
-    should_suppress_escape, should_suppress_function_event,
+    EVENT_OTHER_KEY_DOWN, EVENT_UP, GestureState, MonitorInput, forwarded_event_flags,
+    process_event, reduce_gesture, should_suppress_escape,
 };
+use objc2_core_graphics::CGEventFlags;
 
 #[test]
 fn standalone_fn_emits_a_tap_pair() {
@@ -108,47 +109,62 @@ fn other_key_during_fn_stops_the_gesture_and_the_next_fn_press_is_clean() {
     );
 }
 
+/// The standalone Fn edges must reach macOS with the Fn bit cleared, never as a
+/// dropped event: physical testing showed a dropped `FlagsChanged` still opened the
+/// Character Viewer, and only the flag-neutralized forward prevented it.
 #[test]
-fn standalone_fn_transitions_are_removed_from_the_os_after_voice_projection() {
+fn standalone_fn_transitions_are_forwarded_with_only_the_fn_flag_cleared() {
+    let preserved_flags =
+        CGEventFlags::MaskAlphaShift | CGEventFlags::MaskShift | CGEventFlags::MaskCommand;
     let mut standalone = GestureState::default();
     let standalone_down = MonitorInput::FunctionFlagsChanged {
         function_down: true,
         has_other_keys: false,
     };
-    let (down_events, suppress_down) = process_event(&mut standalone, standalone_down);
+    let (down_events, neutralize_down) = process_event(&mut standalone, standalone_down);
     assert_eq!(down_events, [Some(EVENT_DOWN), None]);
-    assert!(should_suppress_function_event(
-        standalone_down,
-        suppress_down
-    ));
+    assert!(neutralize_down);
+    assert_eq!(
+        forwarded_event_flags(
+            preserved_flags | CGEventFlags::MaskSecondaryFn,
+            neutralize_down
+        ),
+        preserved_flags,
+    );
 
     assert_eq!(
         process_event(&mut standalone, MonitorInput::KeyDown { key_code: 12 }),
         ([Some(EVENT_OTHER_KEY_DOWN), None], false),
     );
 
-    // A matching Fn up remains removed after a later key invalidates the Voice
+    // A matching Fn up stays neutralized after a later key invalidates the Voice
     // gesture. Both original standalone Fn edges must stay out of macOS's
     // Globe/Emoji path after their typed Voice projections are emitted.
     let standalone_up = MonitorInput::FunctionFlagsChanged {
         function_down: false,
         has_other_keys: false,
     };
-    let (up_events, suppress_up) = process_event(&mut standalone, standalone_up);
+    let (up_events, neutralize_up) = process_event(&mut standalone, standalone_up);
     assert_eq!(up_events, [Some(EVENT_UP), None]);
-    assert!(should_suppress_function_event(standalone_up, suppress_up));
+    assert!(neutralize_up);
+    assert_eq!(
+        forwarded_event_flags(preserved_flags, neutralize_up),
+        preserved_flags,
+    );
 
     let mut combo = GestureState::default();
     let combo_down = MonitorInput::FunctionFlagsChanged {
         function_down: true,
         has_other_keys: true,
     };
-    let (combo_events, suppress_combo_down) = process_event(&mut combo, combo_down);
+    let (combo_events, neutralize_combo_down) = process_event(&mut combo, combo_down);
     assert_eq!(combo_events, [Some(EVENT_DOWN_WITH_OTHER_KEYS), None]);
-    assert!(!should_suppress_function_event(
-        combo_down,
-        suppress_combo_down
-    ));
+    assert!(!neutralize_combo_down);
+    let combo_flags = preserved_flags | CGEventFlags::MaskSecondaryFn;
+    assert_eq!(
+        forwarded_event_flags(combo_flags, neutralize_combo_down),
+        combo_flags,
+    );
     assert_eq!(
         process_event(&mut combo, MonitorInput::KeyDown { key_code: 12 }),
         ([None, None], false),
@@ -158,9 +174,13 @@ fn standalone_fn_transitions_are_removed_from_the_os_after_voice_projection() {
         function_down: false,
         has_other_keys: false,
     };
-    let (combo_up_events, suppress_combo_up) = process_event(&mut combo, combo_up);
+    let (combo_up_events, neutralize_combo_up) = process_event(&mut combo, combo_up);
     assert_eq!(combo_up_events, [Some(EVENT_UP), None]);
-    assert!(!should_suppress_function_event(combo_up, suppress_combo_up));
+    assert!(!neutralize_combo_up);
+    assert_eq!(
+        forwarded_event_flags(combo_flags, neutralize_combo_up),
+        combo_flags
+    );
 }
 
 #[test]
@@ -187,12 +207,14 @@ fn escape_projects_down_up_and_invalidates_fn_before_its_own_projection() {
         ([Some(EVENT_DOWN), None], true),
     );
     let escape_down = MonitorInput::KeyDown { key_code: 53 };
-    let (escape_events, _) = process_event(&mut fn_then_escape, escape_down);
+    let (escape_events, neutralize_escape) = process_event(&mut fn_then_escape, escape_down);
     assert_eq!(
         escape_events,
         [Some(EVENT_OTHER_KEY_DOWN), Some(EVENT_ESCAPE_DOWN)],
     );
-    assert!(!should_suppress_function_event(escape_down, true));
+    // Escape arrives mid-gesture, but it is not an Fn transition: its own flags are
+    // forwarded untouched even while the standalone Fn edges are being neutralized.
+    assert!(!neutralize_escape);
     assert_eq!(
         process_event(&mut fn_then_escape, MonitorInput::KeyUp { key_code: 53 }),
         ([None, Some(EVENT_ESCAPE_UP)], false),
