@@ -84,6 +84,13 @@ export interface VoiceDictatePayload {
   cleanup?: boolean
   /** Editing strength, snapshotted at capture start. Defaults to the saved voice input setting. */
   polishStrength?: VoicePolishStrength
+  /**
+   * Run RNNoise over the capture. Defaults to the saved voice input setting, which is off.
+   *
+   * Overriding it here scopes the change to one capture, which is what an A/B comparison
+   * needs; it does not write the preference.
+   */
+  noiseSuppression?: boolean
   /** Hard cap on capture length in ms (native auto-stops at this). */
   maxDurationMs?: number
   /** Auto-stop after this much trailing silence in ms. */
@@ -159,6 +166,8 @@ export interface VoiceAsrStreamPayload {
   cleanup?: boolean
   /** Editing strength, snapshotted with the session and retained for recovery. */
   polishStrength?: VoicePolishStrength
+  /** Run RNNoise over the capture for this session only. Defaults to the saved setting (off). */
+  noiseSuppression?: boolean
   maxDurationMs?: number
   silenceStopMs?: number
   delivery?: VoiceDeliveryMode
