@@ -46,9 +46,25 @@ async function getLangChainOpenAiModule(): Promise<LangChainOpenAiModule> {
   return langChainOpenAiModulePromise
 }
 
+interface OpenAiChatModelCallOptions {
+  readonly signal?: AbortSignal
+}
+
 interface OpenAiChatModelLike {
-  invoke: (messages: BaseMessage[]) => Promise<unknown>
-  stream: (messages: BaseMessage[]) => Promise<AsyncIterable<unknown>>
+  invoke: (messages: BaseMessage[], options?: OpenAiChatModelCallOptions) => Promise<unknown>
+  stream: (
+    messages: BaseMessage[],
+    options?: OpenAiChatModelCallOptions
+  ) => Promise<AsyncIterable<unknown>>
+}
+
+type CancellableIntelligenceInvokeOptions = IntelligenceInvokeOptions & {
+  readonly signal?: AbortSignal
+}
+function createOpenAiChatModelCallOptions(
+  options: CancellableIntelligenceInvokeOptions
+): OpenAiChatModelCallOptions | undefined {
+  return options.signal ? { signal: options.signal } : undefined
 }
 
 type OpenAiClientFetch = NonNullable<import('openai').ClientOptions['fetch']>
@@ -668,7 +684,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
 
   private async createChatModel(params: {
     model: string
-    options: IntelligenceInvokeOptions
+    options: CancellableIntelligenceInvokeOptions
     temperature?: number
     maxTokens?: number
     streaming?: boolean
@@ -690,7 +706,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
 
   async chat(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions
+    options: CancellableIntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<string>> {
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -703,7 +719,10 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       maxTokens: payload.maxTokens
     })
 
-    const response = await model.invoke(toLangChainMessages(payload.messages))
+    const response = await model.invoke(
+      toLangChainMessages(payload.messages),
+      createOpenAiChatModelCallOptions(options)
+    )
     const rawMessage = asRecord(response)
     const content = extractTextContent(rawMessage.content)
     const usage = extractUsageInfo(rawMessage)
@@ -721,7 +740,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
 
   async *chatStream(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions
+    options: CancellableIntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
     const modelName = this.resolveChatModel(options)
     const model = await this.createChatModel({
@@ -732,7 +751,10 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       streaming: true
     })
 
-    const stream = await model.stream(toLangChainMessages(payload.messages))
+    const stream = await model.stream(
+      toLangChainMessages(payload.messages),
+      createOpenAiChatModelCallOptions(options)
+    )
     for await (const chunk of stream) {
       const text = extractTextContent(asRecord(chunk).content)
       if (!text) continue
@@ -817,7 +839,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
   private async invokeVisionImage(
     source: IntelligenceVisionImageSource,
     prompt: string,
-    options: IntelligenceInvokeOptions,
+    options: CancellableIntelligenceInvokeOptions,
     maxTokens?: number
   ): Promise<{
     rawMessage: Record<string, unknown>
@@ -845,15 +867,18 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
 
     const imageDataUrl = await toVisionDataUrl(source)
     const model = await this.createChatModel({ model: modelName, options, maxTokens })
-    const response = await model.invoke([
-      new SystemMessage(prompt),
-      new HumanMessage({
-        content: [
-          { type: 'text', text: 'Analyze the supplied image according to the instructions.' },
-          { type: 'image_url', image_url: { url: imageDataUrl } }
-        ] as unknown as string
-      })
-    ])
+    const response = await model.invoke(
+      [
+        new SystemMessage(prompt),
+        new HumanMessage({
+          content: [
+            { type: 'text', text: 'Analyze the supplied image according to the instructions.' },
+            { type: 'image_url', image_url: { url: imageDataUrl } }
+          ] as unknown as string
+        })
+      ],
+      createOpenAiChatModelCallOptions(options)
+    )
     const rawMessage = asRecord(response)
 
     return {
