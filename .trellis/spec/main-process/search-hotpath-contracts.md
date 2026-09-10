@@ -37,6 +37,43 @@ must stay non-mutating; no main-process code may write to
 `item.meta.extension.searchTokens`. Cache is LRU-bounded
 (`APP_SEARCH_DERIVED_CACHE_LIMIT = 512`).
 
+### 4. Runtime index reads belong to the dedicated read worker
+
+Local libSQL's Promise API executes native SQLite synchronously. `Promise.all`
+does not move queries off Electron's main thread. Runtime SearchIndexService
+receives a SearchIndexReadExecutor owned by SearchEngineCore; FTS, exact/prefix,
+ngram/subsequence, counts and commit-visibility reads use that executor. Keep SQL
+construction and result semantics in SearchIndexService, not a second worker query
+implementation. Writer-side services retain their existing local connection.
+
+The reader opens the same `getSearchDatabaseFilePath()` selected for the writer,
+requires an existing regular database and enables `PRAGMA query_only`. It never
+migrates, repairs or writes the index. Main still awaits writer readiness before
+prewarming the reader; the visibility barrier observes commits on the read
+connection. Never hold a long-lived read transaction across searches.
+
+The parent owns a bounded queue and one physical native read at a time. Pass the
+provider AbortSignal through every candidate lookup. A queued abort removes the
+work; an active abort rejects its caller but retains the physical slot until the
+worker replies or times out. Failure, premature exit, timeout and close settle
+every pending caller without replay or a synchronous main-thread fallback. Core
+closes the reader from its shutdown finally path, after normal writer drains.
+
+### 5. Measure input delivery separately from SQL wall time
+
+Short-lived search sessions use typed IPC by default, not a fresh MessagePort
+handshake. Keep the 80ms input debounce and existing ranking policy independent
+from that transport decision. SearchIndex duration includes readiness, queueing
+and return scheduling; it is not isolated native SQL time. For runtime UI timing,
+identify the owned native CoreBox window and its foreground state. Background
+timer/animation-frame throttling must not be reported as foreground search latency.
+
+The read-worker integration accepts `TUFF_SEARCH_READ_WORKER_TEST_PATH` for an
+isolated build. On macOS canonicalize a temporary build root before electron-vite
+build (`/var` can resolve to `/private/var`); relative asset locators otherwise
+acquire the wrong parent depth. Use a script file rather than `node --input-type`
+for ad-hoc native worker probes, whose child inherits Node loader arguments.
+
 ## Verification
 
 ```bash

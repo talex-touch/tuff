@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ClipboardEvents } from '../../transport/events'
+import { ClipboardEvents, CoreBoxEvents } from '../../transport/events'
 import { startClientStream } from '../../transport/sdk/stream/client-runtime'
 import {
   buildStreamDataEnvelope,
@@ -231,6 +231,48 @@ describe('startClientStream', () => {
 
     expect(onData).not.toHaveBeenCalled()
     expect(onEnd).not.toHaveBeenCalled()
+  })
+
+  it('starts a search session and delivers its snapshot over the channel when the default policy never opens a port', async () => {
+    const { adapter, handlers } = createAdapter()
+    const eventName = CoreBoxEvents.search.session.toEventName()
+    const originalPortChannels = process.env.TALEX_TRANSPORT_PORT_CHANNELS
+    const openPort = vi.fn(
+      () => new Promise<never>(() => undefined)
+    )
+    const snapshots: unknown[] = []
+    let ended = false
+
+    try {
+      delete process.env.TALEX_TRANSPORT_PORT_CHANNELS
+      const controller = await startClientStream(
+        { ...adapter, openPort },
+        eventName,
+        { query: { text: 'unicode_測試', inputs: [] }, surface: 'core-box' },
+        {
+          onData: (snapshot) => snapshots.push(snapshot),
+          onEnd: () => {
+            ended = true
+          },
+        },
+      )
+
+      handlers.get(`${eventName}:stream:data:${controller.streamId}`)?.({
+        header: { status: 'request' },
+        data: { chunk: { items: [{ id: 'first-result' }] } },
+      })
+      handlers.get(`${eventName}:stream:end:${controller.streamId}`)?.({})
+
+      expect(snapshots).toEqual([{ items: [{ id: 'first-result' }] }])
+      expect(ended).toBe(true)
+      expect(openPort).not.toHaveBeenCalled()
+    } finally {
+      if (originalPortChannels === undefined) {
+        delete process.env.TALEX_TRANSPORT_PORT_CHANNELS
+      } else {
+        process.env.TALEX_TRANSPORT_PORT_CHANNELS = originalPortChannels
+      }
+    }
   })
 
   it('cleans MessagePort error state even when onError throws and preserves code', async () => {

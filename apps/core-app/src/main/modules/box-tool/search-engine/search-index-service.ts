@@ -1,4 +1,5 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type { SQL } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { and, eq, inArray, sql } from 'drizzle-orm'
@@ -137,12 +138,17 @@ export interface SearchIndexReadinessGate {
   waitUntilReady(): Promise<void>
 }
 
+export interface SearchIndexReadExecutor {
+  all<T>(query: SQL, signal?: AbortSignal): Promise<T[]>
+}
+
 export interface SearchIndexServiceOptions {
   /** Bypass the main-thread write scheduler on the dedicated writer thread. */
   directMode?: boolean
   logger?: SearchIndexRuntimeLogger
   initializationMode?: SearchIndexInitializationMode
   readiness?: SearchIndexReadinessGate
+  readExecutor?: SearchIndexReadExecutor
 }
 
 export class SearchIndexService {
@@ -154,6 +160,7 @@ export class SearchIndexService {
   private readonly runtimeLogger: SearchIndexRuntimeLogger
   private readonly initializationMode: SearchIndexInitializationMode
   private readonly readiness?: SearchIndexReadinessGate
+  private readonly readExecutor?: SearchIndexReadExecutor
   private readonly zeroResultDiagnosticAt = new Map<string, number>()
   private readonly logWindowMs = 12_000
   private readonly slowLogThresholdMs = 1_500
@@ -181,6 +188,7 @@ export class SearchIndexService {
     this.runtimeLogger = options?.logger ?? noopSearchIndexRuntimeLogger
     this.initializationMode = options?.initializationMode ?? 'writer'
     this.readiness = options?.readiness
+    this.readExecutor = options?.readExecutor
   }
 
   async warmup(): Promise<void> {
@@ -191,9 +199,20 @@ export class SearchIndexService {
     await this.scheduleWrite('search-index.warmup', () => this.ensureInitialized())
   }
 
-  async waitUntilReadable(): Promise<void> {
+  async waitUntilReadable(signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
     await this.ensureInitialized()
-    await this.db.all(sql`SELECT item_id FROM search_index LIMIT 1`)
+    signal?.throwIfAborted()
+    await this.readAll(sql`SELECT item_id FROM search_index LIMIT 1`, signal)
+  }
+
+  private async readAll<T>(query: SQL, signal?: AbortSignal): Promise<T[]> {
+    signal?.throwIfAborted()
+    const rows = this.readExecutor
+      ? await this.readExecutor.all<T>(query, signal)
+      : await this.db.all<T>(query)
+    signal?.throwIfAborted()
+    return rows
   }
 
   async repair(): Promise<void> {
@@ -642,11 +661,15 @@ export class SearchIndexService {
    * Returns the number of rows in the FTS5 index for a given provider.
    * Useful for detecting an empty index after a failed migration.
    */
-  async countByProvider(providerId: string): Promise<number> {
+  async countByProvider(providerId: string, signal?: AbortSignal): Promise<number> {
+    signal?.throwIfAborted()
     await this.ensureInitialized()
-    const rows = await this.db.all<{ cnt: number }>(
-      sql`SELECT count(*) as cnt FROM search_index WHERE provider = ${providerId}`
+    signal?.throwIfAborted()
+    const rows = await this.readAll<{ cnt: number }>(
+      sql`SELECT count(*) as cnt FROM search_index WHERE provider = ${providerId}`,
+      signal
     )
+    signal?.throwIfAborted()
     return rows[0]?.cnt ?? 0
   }
 
@@ -677,34 +700,37 @@ export class SearchIndexService {
   async search(
     providerId: string,
     ftsQuery: string,
-    limit = 50
+    limit = 50,
+    signal?: AbortSignal
   ): Promise<Array<{ itemId: string; score: number }>> {
+    signal?.throwIfAborted()
     const searchLogger = this.runtimeLogger
     searchLogger.logSearchPhase('FTS Search', `Provider: ${providerId}, Query: "${ftsQuery}"`)
     searchLogger.indexSearchStart(providerId, ftsQuery, limit)
     const start = performance.now()
     await this.ensureInitialized()
+    signal?.throwIfAborted()
     const trimmed = ftsQuery.trim()
     if (!trimmed) {
       searchLogger.indexSearchEmpty()
       return []
     }
 
-    // Build optimized FTS5 query based on query length
     const ftsMatchExpr = this.buildFtsMatchExpr(trimmed)
-
     searchLogger.indexSearchExecuting()
-    const rows = await this.db.all<{ item_id: string; score: number }>(
-      sql`SELECT item_id, bm25(search_index) as score FROM search_index WHERE provider = ${providerId} AND search_index MATCH ${ftsMatchExpr} ORDER BY score LIMIT ${limit}`
+    const rows = await this.readAll<{ item_id: string; score: number }>(
+      sql`SELECT item_id, bm25(search_index) as score FROM search_index WHERE provider = ${providerId} AND search_index MATCH ${ftsMatchExpr} ORDER BY score LIMIT ${limit}`,
+      signal
     )
-
+    signal?.throwIfAborted()
     const results = rows.map((row) => ({ itemId: row.item_id, score: row.score }))
+    signal?.throwIfAborted()
     searchLogger.indexSearchComplete(results.length, performance.now() - start)
 
     if (results.length === 0 && this.shouldEmitZeroResultDiagnostic(providerId)) {
-      // Diagnostic: check if FTS5 table has any data at all for this provider
-      const totalRows = await this.db.all<{ cnt: number }>(
-        sql`SELECT count(*) as cnt FROM search_index WHERE provider = ${providerId}`
+      const totalRows = await this.readAll<{ cnt: number }>(
+        sql`SELECT count(*) as cnt FROM search_index WHERE provider = ${providerId}`,
+        signal
       )
       searchIndexLog.warn('FTS search returned zero results', {
         meta: {
@@ -744,25 +770,26 @@ export class SearchIndexService {
   async lookupByKeywords(
     providerId: string,
     keywords: string[],
-    limit = 200
+    limit = 200,
+    signal?: AbortSignal
   ): Promise<Map<string, Array<{ itemId: string; priority: number }>>> {
+    signal?.throwIfAborted()
     if (keywords.length === 0) return new Map()
     await this.ensureInitialized()
+    signal?.throwIfAborted()
 
-    const rows = await this.db
-      .select({
-        keyword: schema.keywordMappings.keyword,
-        itemId: schema.keywordMappings.itemId,
-        priority: schema.keywordMappings.priority
-      })
-      .from(schema.keywordMappings)
-      .where(
-        and(
-          inArray(schema.keywordMappings.keyword, keywords),
-          eq(schema.keywordMappings.providerId, providerId)
-        )
-      )
-      .limit(limit)
+    const rows = await this.readAll<{ keyword: string; itemId: string; priority: number }>(
+      sql`SELECT keyword AS keyword, item_id AS itemId, priority AS priority
+          FROM keyword_mappings
+          WHERE keyword IN (${sql.join(
+            keywords.map((keyword) => sql`${keyword}`),
+            sql`, `
+          )})
+            AND provider_id = ${providerId}
+          LIMIT ${limit}`,
+      signal
+    )
+    signal?.throwIfAborted()
 
     const result = new Map<string, Array<{ itemId: string; priority: number }>>()
     for (const row of rows) {
@@ -773,6 +800,7 @@ export class SearchIndexService {
         result.set(row.keyword, [{ itemId: row.itemId, priority: row.priority }])
       }
     }
+    signal?.throwIfAborted()
     return result
   }
 
@@ -784,29 +812,31 @@ export class SearchIndexService {
   async lookupByKeywordPrefix(
     providerId: string,
     prefix: string,
-    limit = 200
+    limit = 200,
+    signal?: AbortSignal
   ): Promise<Array<{ itemId: string; keyword: string; priority: number }>> {
+    signal?.throwIfAborted()
     if (!prefix) return []
     await this.ensureInitialized()
+    signal?.throwIfAborted()
 
     // Escaped like the subsequence sibling below. Concatenating raw user text let
     // '%' and '_' through as wildcards: typing '%' produced '%%' and matched every
     // keyword row for the provider (#663).
     const likePattern = `${escapeLikeWildcards(prefix)}%`
-    const rows = await this.db.all<{ item_id: string; keyword: string; priority: number }>(
-      sql`SELECT km.item_id, km.keyword, km.priority
+    const rows = await this.readAll<{ itemId: string; keyword: string; priority: number }>(
+      sql`SELECT km.item_id AS itemId, km.keyword AS keyword, km.priority AS priority
           FROM keyword_mappings km
           WHERE km.keyword LIKE ${likePattern} ESCAPE ${SUBSEQUENCE_LIKE_ESCAPE_CHAR}
             AND km.provider_id = ${providerId}
             AND km.keyword NOT LIKE 'ng:%'
-          LIMIT ${limit}`
+          LIMIT ${limit}`,
+      signal
     )
 
-    return rows.map((row) => ({
-      itemId: row.item_id,
-      keyword: row.keyword,
-      priority: row.priority
-    }))
+    signal?.throwIfAborted()
+
+    return rows
   }
 
   /**
@@ -820,13 +850,16 @@ export class SearchIndexService {
     providerId: string,
     query: string,
     limit = 100,
-    scanLimit = SUBSEQUENCE_SCAN_LIMIT_DEFAULT
+    scanLimit = SUBSEQUENCE_SCAN_LIMIT_DEFAULT,
+    signal?: AbortSignal
   ): Promise<Array<{ itemId: string; keyword: string; priority: number }>> {
+    signal?.throwIfAborted()
     const lowerQuery = query.trim().toLowerCase()
     const resultLimit = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 100
     if (resultLimit === 0) return []
     if (lowerQuery.length < 2) return []
     await this.ensureInitialized()
+    signal?.throwIfAborted()
 
     const requestedScanLimit = Number.isFinite(scanLimit)
       ? Math.max(0, Math.floor(scanLimit))
@@ -837,7 +870,7 @@ export class SearchIndexService {
     )
     const likePattern = buildSubsequenceLikePattern(lowerQuery)
 
-    const rows = await this.db.all<{ item_id: string; keyword: string; priority: number }>(
+    const rows = await this.readAll<{ item_id: string; keyword: string; priority: number }>(
       sql`SELECT item_id, keyword, priority
           FROM keyword_mappings
           WHERE provider_id = ${providerId}
@@ -845,8 +878,11 @@ export class SearchIndexService {
             AND length(keyword) >= ${lowerQuery.length}
             AND keyword LIKE ${likePattern} ESCAPE ${SUBSEQUENCE_LIKE_ESCAPE_CHAR}
           ORDER BY length(keyword) ASC, priority DESC, keyword ASC
-          LIMIT ${effectiveScanLimit}`
+          LIMIT ${effectiveScanLimit}`,
+      signal
     )
+
+    signal?.throwIfAborted()
 
     const matches: Array<{ itemId: string; keyword: string; priority: number; score: number }> = []
     for (const row of rows) {
@@ -860,6 +896,7 @@ export class SearchIndexService {
         })
       }
     }
+    signal?.throwIfAborted()
 
     matches.sort(
       (a, b) =>
@@ -868,11 +905,13 @@ export class SearchIndexService {
         a.keyword.length - b.keyword.length ||
         a.keyword.localeCompare(b.keyword)
     )
-    return matches.slice(0, resultLimit).map(({ itemId, keyword, priority }) => ({
+    const results = matches.slice(0, resultLimit).map(({ itemId, keyword, priority }) => ({
       itemId,
       keyword,
       priority
     }))
+    signal?.throwIfAborted()
+    return results
   }
 
   /**
@@ -883,34 +922,37 @@ export class SearchIndexService {
   async lookupByNgrams(
     providerId: string,
     query: string,
-    limit = 50
+    limit = 50,
+    signal?: AbortSignal
   ): Promise<Array<{ itemId: string; overlapCount: number }>> {
+    signal?.throwIfAborted()
     const queryNgrams = generateNgrams(query.toLowerCase(), 2)
     if (queryNgrams.length === 0) return []
 
     await this.ensureInitialized()
+    signal?.throwIfAborted()
 
-    const rows = await this.db
-      .select({
-        itemId: schema.keywordMappings.itemId,
-        count: sql<number>`count(DISTINCT ${schema.keywordMappings.keyword})`
-      })
-      .from(schema.keywordMappings)
-      .where(
-        and(
-          inArray(schema.keywordMappings.keyword, queryNgrams),
-          eq(schema.keywordMappings.providerId, providerId)
-        )
-      )
-      .groupBy(schema.keywordMappings.itemId)
-      .orderBy(sql`count(DISTINCT ${schema.keywordMappings.keyword}) DESC`)
-      .limit(limit)
+    const rows = await this.readAll<{ itemId: string; count: number }>(
+      sql`SELECT item_id AS itemId, count(DISTINCT keyword) AS count
+          FROM keyword_mappings
+          WHERE keyword IN (${sql.join(
+            queryNgrams.map((ngram) => sql`${ngram}`),
+            sql`, `
+          )})
+            AND provider_id = ${providerId}
+          GROUP BY item_id
+          ORDER BY count(DISTINCT keyword) DESC
+          LIMIT ${limit}`,
+      signal
+    )
+    signal?.throwIfAborted()
 
-    // Filter: require at least 40% n-gram overlap for relevance
     const minOverlap = Math.max(1, Math.floor(queryNgrams.length * 0.4))
-    return rows
+    const results = rows
       .filter((row) => row.count >= minOverlap)
       .map((row) => ({ itemId: row.itemId, overlapCount: row.count }))
+    signal?.throwIfAborted()
+    return results
   }
 
   /**
