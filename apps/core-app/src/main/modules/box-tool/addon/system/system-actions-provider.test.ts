@@ -441,6 +441,43 @@ describe('SystemActionsProvider app index actions', () => {
   })
 })
 
+describe('SystemActionsProvider file index actions', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+    vi.restoreAllMocks()
+  })
+
+  it('indexes copied directories without probing them for a plugin manifest', async () => {
+    const directoryPath = await fs.mkdtemp(path.join(os.tmpdir(), 'system-actions-directory-'))
+    const { SystemActionsProvider } = await import('./system-actions-provider')
+    const provider = new SystemActionsProvider()
+    const readFileSpy = vi.spyOn(fs, 'readFile')
+
+    try {
+      const result = await provider.onSearch(
+        {
+          text: '',
+          inputs: [
+            {
+              type: TuffInputType.Files,
+              content: JSON.stringify([directoryPath])
+            }
+          ]
+        },
+        new AbortController().signal
+      )
+
+      expect(getSystemAction(expectFirstItem(result.items))).toEqual({
+        action: 'file-index',
+        path: directoryPath
+      })
+      expect(readFileSpy).not.toHaveBeenCalled()
+    } finally {
+      await fs.rm(directoryPath, { recursive: true, force: true })
+    }
+  })
+})
+
 /*
  * Three `加入文件索引：…` cards were sitting in the CoreBox empty state on ⌘7–⌘9, badged 常用.
  *
