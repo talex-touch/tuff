@@ -1411,10 +1411,10 @@ describe('VoicePanel device readiness and long messages', () => {
 
   /**
    * The beam says something is charging; it cannot say how much longer, because a ring looks the
-   * same at 10% as at 90%. The bar drains 100% → 0% behind the content, so the surface being
-   * consumed *is* the countdown — and releasing early gives it back rather than leaving a stub.
+   * same at 10% as at 90%. The bar fills 0% → 100% behind the content, so the surface being
+   * covered *is* the progress — and releasing early takes it back rather than leaving a stub.
    */
-  it('drains a width behind the content while Escape is held, and restores it on release', async () => {
+  it('fills a width behind the content while Escape is held, and clears it on release', async () => {
     const wrapper = await listeningPanel()
     expect(wrapper.find('[data-testid="voice-charge"]').exists()).toBe(false)
 
@@ -1447,7 +1447,7 @@ describe('VoicePanel device readiness and long messages', () => {
         wrapper.find('[data-testid="voice-charge"]').attributes('style') ?? ''
       )?.[1] ?? -1
     )
-    expect(later).toBeLessThan(started)
+    expect(later).toBeGreaterThan(started)
 
     // Released before the hold completes: the charge unwinds and nothing is cancelled.
     hold(wrapper, 'release')
