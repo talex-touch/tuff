@@ -64,6 +64,45 @@ describe('main storage app settings normalization', () => {
     })
   })
 
+  it('keeps noise suppression off unless the stored value says otherwise', () => {
+    // Suppression changes what the recogniser hears, so anything unreadable has to land on
+    // off rather than on the more "helpful" interpretation.
+    const absent = resolveMainStorageValue(StorageList.APP_SETTING, {
+      voiceInput: { enabled: true, language: 'fr-FR', polishEnabled: true, polishStrength: 'deep' }
+    })
+    const enabled = resolveMainStorageValue(StorageList.APP_SETTING, {
+      voiceInput: {
+        enabled: true,
+        language: 'fr-FR',
+        polishEnabled: true,
+        polishStrength: 'deep',
+        noiseSuppression: true
+      }
+    })
+    const malformed = resolveMainStorageValue(StorageList.APP_SETTING, {
+      voiceInput: {
+        enabled: true,
+        language: 'fr-FR',
+        polishEnabled: false,
+        polishStrength: 'natural',
+        historyEnabled: true,
+        noiseSuppression: 'yes',
+        customLegacyField: 'kept'
+      }
+    })
+
+    expect(absent.voiceInput.noiseSuppression).not.toBe(true)
+    expect(enabled.voiceInput.noiseSuppression).toBe(true)
+    expect(malformed.voiceInput).toMatchObject({
+      noiseSuppression: false,
+      // Failing closed on one field must not disturb any of its neighbours.
+      polishEnabled: false,
+      polishStrength: 'natural',
+      historyEnabled: true,
+      customLegacyField: 'kept'
+    })
+  })
+
   it('removes legacy auth preference overrides while retaining the main-owned marker', () => {
     const normalized = resolveMainStorageValue(StorageList.APP_SETTING, {
       auth: {

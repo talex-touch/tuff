@@ -177,6 +177,31 @@ describe('SettingSpeechRecognition', () => {
     wrapper.unmount()
   })
 
+  it('turns noise suppression on without disturbing the other voice preferences', async () => {
+    const wrapper = mountSettings()
+    await flushPromises()
+
+    const control = controlByTitle(wrapper, 'settingSpeechRecognition.noiseSuppression.title')
+    // Absent in storage has to read as off, not as "unset" that the switch renders however.
+    expect(control.props('modelValue')).toBe(false)
+
+    await control.vm.$emit('update:modelValue', true)
+
+    expect(settings.voiceInput).toMatchObject({
+      noiseSuppression: true,
+      enabled: false,
+      language: 'fr-FR',
+      historyEnabled: true,
+      polishEnabled: true,
+      polishStrength: 'structured'
+    })
+
+    await control.vm.$emit('update:modelValue', false)
+    expect(settings.voiceInput).toMatchObject({ noiseSuppression: false })
+
+    wrapper.unmount()
+  })
+
   it('opens Intelligence capabilities from the speech settings surface', async () => {
     const wrapper = mountSettings()
     await flushPromises()

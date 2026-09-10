@@ -215,6 +215,16 @@ const _appSettingOriginData = {
     language: 'zh-CN',
     polishEnabled: true,
     polishStrength: DEFAULT_VOICE_POLISH_STRENGTH as VoicePolishStrength,
+
+    /**
+     * 采集时是否运行 RNNoise 谱降噪。
+     *
+     * 默认关闭：云端识别模型本身就是在带噪语音上训练的，降噪引入的频谱失真有可能比它
+     * 去掉的噪声更伤准确率。这个取舍能测，所以做成带默认值的偏好，而不是写死在链路里。
+     *
+     * 与它无关的是采集链路里常开的高通与抗混叠滤波——那两个是缺陷修复，不是偏好。
+     */
+    noiseSuppression: false,
   },
   clipboard: {
     /**
@@ -529,6 +539,7 @@ export interface VoiceInputSetting {
   polishEnabled: boolean
   polishStrength: VoicePolishStrength
   historyEnabled?: boolean
+  noiseSuppression?: boolean
 }
 
 function isSettingRecord(value: unknown): value is Record<string, unknown> {
@@ -565,6 +576,10 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
   const polishStrength = normalizeVoicePolishStrength(source.polishStrength)
   const hasHistory = Object.prototype.hasOwnProperty.call(source, 'historyEnabled')
   const historyEnabled = source.historyEnabled === true
+  const hasNoiseSuppression = Object.prototype.hasOwnProperty.call(source, 'noiseSuppression')
+  // `=== true` rather than `!== false`: an unreadable value has to land on off. Turning
+  // suppression on by accident changes what the recogniser hears, and the user never asked.
+  const noiseSuppression = source.noiseSuppression === true
   if (
     isSettingRecord(setting.voiceInput)
     && source.enabled === enabled
@@ -572,6 +587,7 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
     && source.polishEnabled === polishEnabled
     && source.polishStrength === polishStrength
     && (!hasHistory || source.historyEnabled === historyEnabled)
+    && (!hasNoiseSuppression || source.noiseSuppression === noiseSuppression)
   ) {
     return false
   }
@@ -583,6 +599,7 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
     polishEnabled,
     polishStrength,
     ...(hasHistory ? { historyEnabled } : {}),
+    ...(hasNoiseSuppression ? { noiseSuppression } : {}),
   }
   return true
 }

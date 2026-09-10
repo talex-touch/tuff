@@ -574,6 +574,10 @@
       "title": "Keep recognition records",
       "description": "Keeps source audio and transcripts; off keeps statistics only."
     },
+    "noiseSuppression": {
+      "title": "Noise suppression",
+      "description": "Suppresses steady background noise such as fans and air conditioning. Off by default: cloud recognisers are trained on noisy speech, so suppression can cost accuracy. Anti-alias and low-frequency filtering are always on and unaffected by this switch."
+    },
     "polish": {
       "title": "Audio tidy-up",
       "description": "Tidy and write once you stop when a Chat channel is ready; otherwise, raw words type as you speak."

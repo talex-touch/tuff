@@ -425,6 +425,31 @@ describe('VoiceService canonical session', () => {
     expect(getVoicePolishPrompt).toHaveBeenCalledWith('structured')
   })
 
+  it('resolves noise suppression once at capture start and defaults it to off', async () => {
+    stt.mockResolvedValue({ result: { text: 'hello' } })
+
+    const service = new VoiceService()
+    const defaulted = await service.startSession({ delivery: 'active-app' })
+    expect(startCapture).toHaveBeenLastCalledWith(
+      expect.objectContaining({ noiseSuppression: false })
+    )
+
+    await service.stopSession(defaulted, { cleanup: false })
+    // Stopping must not reopen the question: the audio in hand was captured one way, and
+    // re-reading the preference here would describe it as something it is not.
+    expect(startCapture).toHaveBeenCalledOnce()
+
+    const overridden = await service.startSession({
+      delivery: 'active-app',
+      noiseSuppression: true
+    })
+    expect(startCapture).toHaveBeenLastCalledWith(
+      expect.objectContaining({ noiseSuppression: true })
+    )
+    await service.stopSession(overridden, { cleanup: false })
+    expect(startCapture).toHaveBeenCalledTimes(2)
+  })
+
   it('falls back to main-owned auto-paste when native injection is unavailable', async () => {
     stt.mockResolvedValue({ result: { text: 'hello' } })
     isAccessibilityTrusted.mockReturnValue(false)

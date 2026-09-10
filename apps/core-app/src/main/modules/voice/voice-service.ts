@@ -70,6 +70,25 @@ function resolvePolishStrength(requested: unknown): VoicePolishStrength {
   }
 }
 
+/**
+ * Whether this capture runs RNNoise, resolved the same way the polish strength is: once, from
+ * the caller's override or the saved preference, before capture has an asynchronous boundary
+ * to read a changed setting across.
+ */
+function resolveNoiseSuppression(requested: unknown): boolean {
+  if (requested !== undefined) return requested === true
+  try {
+    const setting = getMainConfig(StorageList.APP_SETTING) as
+      | {
+          voiceInput?: { noiseSuppression?: unknown }
+        }
+      | undefined
+    return setting?.voiceInput?.noiseSuppression === true
+  } catch {
+    return false
+  }
+}
+
 const voiceLog = createLogger('Voice')
 
 /**
@@ -456,6 +475,7 @@ export class VoiceService {
     if (this.disposed) throw new Error('VOICE_SESSION_SERVICE_DISPOSED')
     this.assertSupported()
     const polishStrength = resolvePolishStrength(payload.polishStrength)
+    const noiseSuppression = resolveNoiseSuppression(payload.noiseSuppression)
 
     const targetPromise =
       payload.delivery === 'active-app'
@@ -464,7 +484,8 @@ export class VoiceService {
     const capturePromise = nativeAudio.startCapture({
       maxDurationMs: payload.maxDurationMs,
       silenceStopMs: payload.silenceStopMs,
-      sampleRate
+      sampleRate,
+      noiseSuppression
     })
     const [targetOutcome, captureOutcome] = await Promise.allSettled([
       targetPromise,

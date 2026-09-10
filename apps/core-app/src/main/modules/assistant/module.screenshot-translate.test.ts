@@ -511,7 +511,8 @@ describe('AssistantModule screenshot translation', () => {
         enabled: false,
         language: 'fr-FR',
         polishEnabled: true,
-        polishStrength: 'natural'
+        polishStrength: 'natural',
+        noiseSuppression: false
       }
     })
     mocks.getMainConfig.mockReturnValue(setting)
@@ -571,7 +572,8 @@ describe('AssistantModule screenshot translation', () => {
           enabled: true,
           language: 'fr-FR',
           polishEnabled: true,
-          polishStrength: 'deep'
+          polishStrength: 'deep',
+          noiseSuppression: false
         }
       })
     )
@@ -606,7 +608,13 @@ describe('AssistantModule screenshot translation', () => {
         edgePadding: 24,
         position: { x: -1, y: -1 }
       },
-      voiceInput: { enabled: true, language: 'fr-FR', polishEnabled: true, polishStrength: 'deep' }
+      voiceInput: {
+        enabled: true,
+        language: 'fr-FR',
+        polishEnabled: true,
+        polishStrength: 'deep',
+        noiseSuppression: false
+      }
     })
     mocks.getMainConfig.mockReturnValue(setting)
     const { module } = await createInitializedModule()

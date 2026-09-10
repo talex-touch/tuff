@@ -63,6 +63,14 @@ const polishStrengthDescription = computed(() =>
   t(`settingSpeechRecognition.polishStrength.options.${polishStrength.value}.description`)
 )
 
+const noiseSuppression = computed({
+  get: () => (appSetting.voiceInput as VoiceInputSetting).noiseSuppression === true,
+  set: (value: boolean) => {
+    ensureVoiceInputSetting(appSetting as Record<string, unknown>)
+    ;(appSetting.voiceInput as VoiceInputSetting).noiseSuppression = value
+  }
+})
+
 watch(
   () => appSetting.voiceInput,
   () => ensureVoiceInputSetting(appSetting as Record<string, unknown>),
@@ -182,6 +190,14 @@ function openCapabilities(): void {
       :description="t('settingSpeechRecognition.history.description')"
       default-icon="i-carbon-document-view"
       active-icon="i-carbon-document-view"
+    />
+    <TuffBlockSwitch
+      v-model="noiseSuppression"
+      data-testid="voice-noise-suppression"
+      :title="t('settingSpeechRecognition.noiseSuppression.title')"
+      :description="t('settingSpeechRecognition.noiseSuppression.description')"
+      default-icon="i-carbon-waveform"
+      active-icon="i-carbon-waveform"
     />
     <TuffBlockSlot
       :title="t('settingSpeechRecognition.capabilities.title')"
