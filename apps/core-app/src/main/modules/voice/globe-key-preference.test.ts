@@ -6,7 +6,11 @@ vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({ execFileSafe: moc
 vi.mock('electron', () => ({ shell: { openExternal: mocks.openExternal } }))
 vi.mock('../../utils/logger', () => ({ createLogger: () => ({ warn: vi.fn() }) }))
 
-import { openKeyboardSettings, readGlobeKeyStatus } from './globe-key-preference'
+import {
+  disableGlobeKeyAction,
+  openKeyboardSettings,
+  readGlobeKeyStatus
+} from './globe-key-preference'
 
 describe('readGlobeKeyStatus', () => {
   beforeEach(() => {
@@ -50,6 +54,53 @@ describe('readGlobeKeyStatus', () => {
     mocks.execFileSafe.mockResolvedValue({ stdout: 'nonsense\n', stderr: '' })
 
     await expect(readGlobeKeyStatus()).resolves.toEqual({
+      applies: true,
+      systemActionActive: true
+    })
+  })
+})
+
+describe('disableGlobeKeyAction', () => {
+  beforeEach(() => {
+    mocks.execFileSafe.mockReset()
+  })
+
+  /**
+   * The write takes effect immediately on macOS 26 — no logout, no agent restart. Three separate
+   * documents say otherwise and all of them are repeating each other; pressing the key is what
+   * settled it. This pins the shape that discovery bought: write, then re-read.
+   */
+  it('writes Do Nothing and reports what the system says afterwards', async () => {
+    mocks.execFileSafe.mockImplementation(async (_command: string, args: string[]) => {
+      if (args[0] === 'write') return { stdout: '', stderr: '' }
+      return { stdout: '0\n', stderr: '' }
+    })
+
+    await expect(disableGlobeKeyAction()).resolves.toEqual({
+      applies: true,
+      systemActionActive: false
+    })
+    expect(mocks.execFileSafe).toHaveBeenCalledWith('defaults', [
+      'write',
+      'com.apple.HIToolbox',
+      'AppleFnUsageType',
+      '-int',
+      '0'
+    ])
+  })
+
+  /**
+   * A write that fails, or that succeeds and changes nothing, must leave the row on screen. The
+   * status comes from re-reading the preference, never from the write's own exit code, so the
+   * user keeps the manual route instead of being told it is handled.
+   */
+  it('keeps reporting the system as active when the write does not stick', async () => {
+    mocks.execFileSafe.mockImplementation(async (_command: string, args: string[]) => {
+      if (args[0] === 'write') throw new Error('write refused')
+      return { stdout: '2\n', stderr: '' }
+    })
+
+    await expect(disableGlobeKeyAction()).resolves.toEqual({
       applies: true,
       systemActionActive: true
     })
