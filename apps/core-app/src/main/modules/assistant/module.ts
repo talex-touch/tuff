@@ -637,11 +637,25 @@ export class AssistantModule extends BaseModule {
 
   private buildRuntimeConfig(setting: AppSetting): AssistantRuntimeConfig {
     const voiceInput = this.getVoiceInputSetting(setting)
+    const chatStatus = resolveCapabilityStatus('text.chat')
+    // `polishAvailable` is what decides between final and live delivery in the HUD, and a
+    // false here silently turns tidy-up off entirely. Record the capability it was derived
+    // from, so "tidy-up never runs" can be traced to a routing gap rather than guessed at.
+    assistantLog.info('Assistant voice runtime config', {
+      meta: {
+        enabled: voiceInput.enabled,
+        polishEnabled: voiceInput.polishEnabled,
+        polishAvailable: chatStatus.available,
+        polishStrength: voiceInput.polishStrength,
+        chatProviders: chatStatus.providerIds.join(',') || '(none)',
+        chatReason: chatStatus.reason ?? '(ok)'
+      }
+    })
     return {
       enabled: voiceInput.enabled,
       language: voiceInput.language,
       polishEnabled: voiceInput.polishEnabled,
-      polishAvailable: resolveCapabilityStatus('text.chat').available,
+      polishAvailable: chatStatus.available,
       polishStrength: voiceInput.polishStrength
     }
   }
