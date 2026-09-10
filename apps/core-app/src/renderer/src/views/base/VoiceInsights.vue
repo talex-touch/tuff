@@ -318,17 +318,6 @@ const metrics = computed(() => {
   ]
 })
 
-const streaks = computed(() => {
-  const value = insights.value
-  if (!value) return []
-
-  return [
-    { key: 'active', value: value.activeDays, label: t('voiceInsights.streak.activeDays') },
-    { key: 'current', value: value.currentStreak, label: t('voiceInsights.streak.current') },
-    { key: 'longest', value: value.longestStreak, label: t('voiceInsights.streak.longest') }
-  ]
-})
-
 /**
  * One number leads, the rest support it.
  *
@@ -698,11 +687,13 @@ onBeforeUnmount(() => {
     :aria-label="t('voiceInsights.headline')"
   >
     <!--
-      Actions only. The headline moved up to the page's title row, and the sentence that used to
-      qualify it is gone — the page is short enough now that a line explaining what it is sat
-      between the reader and the numbers it was explaining.
+      One row: when counting started on the left, what you can do about it on the right.
+      The headline moved up to the page's title row, and the "洞察" group header that used to sit
+      below this one was the third thing on the page naming itself — its boundary line moved here
+      and its clear button joined the group, which is what closed the empty band between them.
     -->
     <header class="VoiceInsights-Hero">
+      <p v-if="insights" class="VoiceInsights-Boundary">{{ boundaryLabel }}</p>
       <div class="VoiceInsights-HeroActions shell-chrome-safe-inline-end">
         <TxButton
           variant="secondary"
@@ -723,6 +714,16 @@ onBeforeUnmount(() => {
         >
           <span class="i-ri-share-forward-line" aria-hidden="true" />
           <span>{{ t('voiceInsights.actions.share') }}</span>
+        </TxButton>
+        <TxButton
+          variant="bare"
+          type="danger"
+          :disabled="!hasData || refreshing || copyPending || clearing"
+          data-testid="voice-insights-clear"
+          @click="requestClear"
+        >
+          <span class="i-ri-delete-bin-6-line" aria-hidden="true" />
+          <span>{{ t('voiceInsights.actions.clear') }}</span>
         </TxButton>
       </div>
     </header>
@@ -777,25 +778,17 @@ onBeforeUnmount(() => {
     >
       <span class="VoiceInsights-SrOnly">{{ t('voiceInsights.loading') }}</span>
       <template v-if="showSkeleton">
-        <div class="VoiceInsights-SectionHeader" aria-hidden="true">
-          <TxSkeleton :width="116" :height="24" :radius="4" />
-          <TxSkeleton :width="164" :height="12" :radius="4" />
-        </div>
         <div class="VoiceInsights-Metrics" aria-hidden="true">
-          <article v-for="index in 4" :key="index" class="VoiceInsights-Metric">
+          <article v-for="index in 3" :key="index" class="VoiceInsights-Metric">
             <TxSkeleton :width="148" :height="28" :radius="4" />
             <TxSkeleton :width="92" :height="12" :radius="4" />
           </article>
         </div>
         <article class="VoiceInsights-Activity" aria-hidden="true">
-          <header class="VoiceInsights-ActivityHeading">
-            <TxSkeleton :width="184" :height="16" :radius="4" />
-            <TxSkeleton :width="248" :height="11" :radius="4" />
-          </header>
-          <div class="VoiceInsights-Streaks">
-            <div v-for="index in 3" :key="index" class="VoiceInsights-Streak">
-              <TxSkeleton :width="68" :height="26" :radius="4" />
-              <TxSkeleton :width="96" :height="12" :radius="4" />
+          <div class="VoiceInsights-HeatmapHeader">
+            <div>
+              <TxSkeleton :width="96" :height="16" :radius="4" />
+              <TxSkeleton :width="248" :height="11" :radius="4" />
             </div>
           </div>
           <TxSkeleton width="100%" :height="156" :radius="10" />
@@ -819,24 +812,6 @@ onBeforeUnmount(() => {
     </div>
 
     <main v-else-if="insights" class="VoiceInsights-Canvas" data-testid="voice-insights-data">
-      <div class="VoiceInsights-SectionHeader">
-        <div>
-          <h2>{{ t('voiceInsights.sectionTitle') }}</h2>
-          <p>{{ boundaryLabel }}</p>
-        </div>
-        <TxButton
-          variant="bare"
-          type="danger"
-          size="sm"
-          :disabled="refreshing || copyPending || clearing"
-          data-testid="voice-insights-clear"
-          @click="requestClear"
-        >
-          <span class="i-ri-delete-bin-6-line" aria-hidden="true" />
-          <span>{{ t('voiceInsights.actions.clear') }}</span>
-        </TxButton>
-      </div>
-
       <section class="VoiceInsights-Headline" :aria-label="t('voiceInsights.metrics.label')">
         <article
           v-if="heroMetric"
@@ -923,25 +898,24 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="VoiceInsights-Activity" data-testid="voice-insights-activity">
-        <header class="VoiceInsights-ActivityHeading">
-          <h3>{{ t('voiceInsights.streak.title') }}</h3>
-          <p>{{ t('voiceInsights.streak.windowNote') }}</p>
-        </header>
-
-        <div class="VoiceInsights-Streaks" :aria-label="t('voiceInsights.streak.label')">
-          <div v-for="streak in streaks" :key="streak.key" class="VoiceInsights-Streak">
-            <div>
-              <strong>{{ numberFormatter.format(streak.value) }}</strong>
-              <span>{{ t('voiceInsights.units.days') }}</span>
-            </div>
-            <p>{{ streak.label }}</p>
-          </div>
-        </div>
-
+        <!--
+          One heading. This card used to carry two, four words apart — "最近 365 个本地自然日的活动"
+          over three streak tiles, then "最近 365 个本地自然日" over the calendar those tiles were
+          counted from. The three tiles said the same number three times on a short record; they
+          are one line now, under the one title.
+        -->
         <div class="VoiceInsights-HeatmapHeader">
           <div>
             <h3>{{ t('voiceInsights.heatmap.title') }}</h3>
-            <p>{{ t('voiceInsights.heatmap.description') }}</p>
+            <p v-if="insights" class="VoiceInsights-StreakLine">
+              {{
+                t('voiceInsights.streak.summary', {
+                  current: numberFormatter.format(insights.currentStreak),
+                  longest: numberFormatter.format(insights.longestStreak),
+                  active: numberFormatter.format(insights.activeDays)
+                })
+              }}
+            </p>
           </div>
           <div class="VoiceInsights-Legend" :aria-label="t('voiceInsights.heatmap.legend')">
             <span>{{ t('voiceInsights.heatmap.less') }}</span>
@@ -1184,14 +1158,25 @@ onBeforeUnmount(() => {
 }
 
 /* Only the actions live here now, so they sit at the end rather than opposite a copy block. */
+/*
+ * The header row. It used to hold nothing but the buttons, right-aligned against an empty half —
+ * which is what put a band of blank page between the title and the first number.
+ */
 .VoiceInsights-Hero {
   display: flex;
   gap: var(--shell-space-5);
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: space-between;
   max-width: 1440px;
-  margin: 0 auto var(--shell-space-5);
+  margin: 0 auto var(--shell-space-4);
+}
+
+.VoiceInsights-Boundary {
+  min-width: 0;
+  margin: 0;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-sm);
 }
 
 .VoiceInsights-HeroActions {
@@ -1247,29 +1232,6 @@ onBeforeUnmount(() => {
   background-color: var(--shell-surface);
   background-image: radial-gradient(circle, var(--shell-border) 1px, transparent 1px);
   background-size: var(--shell-space-3) var(--shell-space-3);
-}
-
-.VoiceInsights-SectionHeader {
-  display: flex;
-  gap: var(--shell-space-4);
-  align-items: flex-start;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  margin-bottom: var(--shell-space-5);
-
-  h2 {
-    margin: 0;
-    color: var(--shell-text-secondary);
-    font-size: var(--shell-fs-title);
-    font-weight: 600;
-    line-height: 1.2;
-  }
-
-  p {
-    margin: var(--shell-space-2) 0 0;
-    color: var(--shell-text-muted);
-    font-size: var(--shell-fs-body);
-  }
 }
 
 .VoiceInsights-Headline {
@@ -1463,57 +1425,11 @@ onBeforeUnmount(() => {
   padding: var(--shell-space-6);
 }
 
-.VoiceInsights-ActivityHeading {
-  margin-bottom: var(--shell-space-5);
-
-  h3 {
-    margin: 0;
-    font-size: var(--shell-fs-lg);
-    line-height: 1.3;
-  }
-
-  p {
-    margin: var(--shell-space-1) 0 0;
-    color: var(--shell-text-muted);
-    font-size: var(--shell-fs-body);
-    line-height: 1.5;
-  }
-}
-
-.VoiceInsights-Streaks {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--shell-space-5);
-  margin-bottom: var(--shell-space-6);
-}
-
-.VoiceInsights-Streak {
-  min-width: 0;
-
-  > div {
-    display: flex;
-    gap: var(--shell-space-2);
-    align-items: baseline;
-    font-variant-numeric: tabular-nums;
-  }
-
-  strong {
-    color: var(--shell-text-primary);
-    font-size: var(--shell-fs-display);
-    line-height: 1.1;
-  }
-
-  span {
-    color: var(--shell-text-regular);
-    font-size: var(--shell-fs-body);
-    font-weight: 600;
-  }
-
-  p {
-    margin: var(--shell-space-2) 0 0;
-    color: var(--shell-text-secondary);
-    font-size: var(--shell-fs-md);
-  }
+/* One line where three tiles used to be — on a short record all three read the same number. */
+.VoiceInsights-StreakLine {
+  margin: var(--shell-space-1) 0 0;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
 }
 
 .VoiceInsights-HeatmapHeader {
@@ -2008,7 +1924,6 @@ onBeforeUnmount(() => {
 
 @media (max-width: 680px) {
   .VoiceInsights-Hero,
-  .VoiceInsights-SectionHeader,
   .VoiceInsights-HeatmapHeader,
   .VoiceInsights-ReportIntro {
     flex-direction: column;
@@ -2026,14 +1941,6 @@ onBeforeUnmount(() => {
   .VoiceInsights-Metrics {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--shell-space-4);
-  }
-
-  .VoiceInsights-Streaks {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-
-    .VoiceInsights-Streak:first-child {
-      grid-column: 1 / -1;
-    }
   }
 
   .VoiceInsights-Legend {

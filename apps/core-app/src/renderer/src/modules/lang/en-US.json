@@ -1075,30 +1075,29 @@
     }
   },
   "voiceInsights": {
-    "headline": "Faster said than typed",
-    "sectionTitle": "Insights",
+    "headline": "Faster spoken than typed",
     "loading": "Loading voice insights...",
     "actions": {
       "refresh": "Refresh",
       "share": "Share",
-      "clear": "Clear insights",
+      "clear": "Clear records",
       "retry": "Retry",
       "showReport": "View report",
       "hideReport": "Hide report",
       "cancel": "Cancel"
     },
     "boundary": {
-      "notStarted": "Statistics begin with your first successful, non-empty voice capture.",
-      "since": "Recorded locally since {date}."
+      "notStarted": "Not counting yet",
+      "since": "Counting since {date}, on this machine only"
     },
     "metrics": {
       "label": "Voice usage metrics",
-      "characters": "Dictated characters",
-      "saved": "Estimated time saved",
-      "rate": "Average dictation rate",
-      "duration": "Total dictation time",
-      "savedBasis": "Estimated against a {count} characters/minute typing baseline; not measured typing.",
-      "savedEquivalent": "{count} characters you did not type"
+      "characters": "Characters said",
+      "saved": "Roughly saved",
+      "rate": "How fast you talk",
+      "duration": "Time spent talking",
+      "savedBasis": "Estimated against {count} characters a minute of typing — not measured",
+      "savedEquivalent": "That is {count} characters you never typed"
     },
     "units": {
       "characters": "characters",
@@ -1111,16 +1110,11 @@
       "hoursMinutes": "{hours} hr {minutes} min"
     },
     "streak": {
-      "title": "Activity — last 365 local days",
-      "windowNote": "Active-day and longest-streak values are limited to this rolling window.",
-      "label": "Voice activity streaks within the last 365 local days",
-      "activeDays": "Active days",
-      "current": "Current streak",
-      "longest": "Longest streak"
+      "summary": "{current} days running · longest {longest} · {active} days with anything said"
     },
     "heatmap": {
-      "title": "Last 365 local days",
-      "description": "Color reflects dictated character volume. Hatched days predate recording.",
+      "title": "The past year",
+      "description": "Darker means more said that day. Pale outlines are days before counting started — not silence, just no record.",
       "legend": "Activity volume legend",
       "less": "Less",
       "more": "More",
@@ -1209,12 +1203,12 @@
       }
     },
     "weeks": {
-      "title": "Last 12 weeks",
-      "note": "Bar height is that week’s dictated characters against the busiest week.",
+      "title": "The last 12 weeks",
+      "note": "Taller means more said that week, against your busiest one.",
       "streak": "{current}-day streak · longest {longest} · {active} active days"
     },
     "tiers": {
-      "weeksPending": "After a week of records, the 12-week comparison appears here."
+      "weeksPending": "Another week of records and you will see which weeks were louder."
     }
   },
   "home": {

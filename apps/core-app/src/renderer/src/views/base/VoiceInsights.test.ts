@@ -201,20 +201,44 @@ describe('VoiceInsights page composition', () => {
   })
 
   /**
-   * The header holds actions and nothing else.
+   * The header is one row: when counting started, and what you can do about it.
    *
-   * The headline moved to the page's title row, and the sentence that qualified it is gone: on a
-   * page this short, a line explaining what the page is sat between the reader and the numbers it
-   * was explaining. Same rule the empty state already follows.
+   * It used to be three stacked blocks — the page title, a row holding only buttons, and a group
+   * header named "洞察" that repeated the page. The middle one left a band of blank page between
+   * the title and the first number; the third was the page naming itself a third time. Its
+   * boundary line moved up here and its clear button joined the group.
    */
-  it('leaves no copy in the header, only the actions', async () => {
+  it('puts the boundary line and every action in one header row', async () => {
     const wrapper = await mountPage()
 
     const header = wrapper.find('.VoiceInsights-Hero')
     expect(header.exists()).toBe(true)
-    expect(header.findAll('p')).toHaveLength(0)
+    expect(header.find('.VoiceInsights-Boundary').text()).toContain('voiceInsights.boundary')
+    // Still no heading here: that belongs to the page's title row, once.
     expect(header.findAll('h1, h2, h3')).toHaveLength(0)
-    expect(header.find('[data-testid="voice-insights-refresh"]').exists()).toBe(true)
+
+    for (const action of ['refresh', 'share', 'clear']) {
+      expect(header.find(`[data-testid="voice-insights-${action}"]`).exists()).toBe(true)
+    }
+    // And the group header that used to carry the clear button is gone entirely.
+    expect(wrapper.find('.VoiceInsights-SectionHeader').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The year card carried two headings four words apart, and three streak tiles that all read the
+   * same number on a short record. One heading, one line.
+   */
+  it('gives the year one heading and one streak line', async () => {
+    const wrapper = await mountPage()
+
+    const activity = wrapper.find('[data-testid="voice-insights-activity"]')
+    expect(activity.findAll('h3')).toHaveLength(1)
+    expect(activity.find('.VoiceInsights-StreakLine').text()).toContain(
+      'voiceInsights.streak.summary'
+    )
+    expect(activity.find('.VoiceInsights-Streaks').exists()).toBe(false)
 
     wrapper.unmount()
   })

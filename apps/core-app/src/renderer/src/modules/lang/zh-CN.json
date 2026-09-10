@@ -1076,29 +1076,28 @@
   },
   "voiceInsights": {
     "headline": "嘴比手利索",
-    "sectionTitle": "洞察",
     "loading": "正在加载语音洞察…",
     "actions": {
       "refresh": "刷新",
       "share": "分享",
-      "clear": "清除洞察",
+      "clear": "清空记录",
       "retry": "重试",
       "showReport": "查看报告",
       "hideReport": "收起报告",
       "cancel": "取消"
     },
     "boundary": {
-      "notStarted": "统计将从第一次成功且非空的语音输入开始。",
-      "since": "自 {date} 起在本机记录。"
+      "notStarted": "还没开始记",
+      "since": "{date} 开始记的，只记在这台电脑上"
     },
     "metrics": {
       "label": "语音使用指标",
-      "characters": "口述字数",
-      "saved": "预计节省时间",
-      "rate": "平均口述速度",
-      "duration": "总口述时间",
-      "savedBasis": "按每分钟打字 {count} 字估算，并非实测打字速度。",
-      "savedEquivalent": "相当于少敲 {count} 个字"
+      "characters": "说了多少字",
+      "saved": "大概省下",
+      "rate": "说得多快",
+      "duration": "一共说了多久",
+      "savedBasis": "按每分钟打字 {count} 字估的，不是真量出来的",
+      "savedEquivalent": "这些字你没动手敲：{count} 个"
     },
     "units": {
       "characters": "字",
@@ -1111,16 +1110,11 @@
       "hoursMinutes": "{hours} 小时 {minutes} 分钟"
     },
     "streak": {
-      "title": "最近 365 个本地自然日的活动",
-      "windowNote": "活跃天数与最长连续天数仅统计此滚动时间窗。",
-      "label": "最近 365 个本地自然日的语音连续记录",
-      "activeDays": "活跃天数",
-      "current": "当前连续天数",
-      "longest": "最长连续天数"
+      "summary": "连着说了 {current} 天 · 最长连过 {longest} 天 · 一共 {active} 天开过口"
     },
     "heatmap": {
-      "title": "最近 365 个本地自然日",
-      "description": "颜色表示口述字数；斜纹日期早于统计启用时间。",
+      "title": "过去一年",
+      "description": "颜色越深，那天说得越多。描边浅的日子是开始记之前的——不是你没说话，是还没开始数。",
       "legend": "活跃量图例",
       "less": "更少",
       "more": "更多",
@@ -1210,11 +1204,11 @@
     },
     "weeks": {
       "title": "最近 12 周",
-      "note": "柱高按当周口述字数，与最忙的一周相比。",
+      "note": "柱子越高那周说得越多，跟你最能说的一周比。",
       "streak": "当前连续 {current} 天 · 最长 {longest} 天 · 活跃 {active} 天"
     },
     "tiers": {
-      "weeksPending": "再记满一周，这里会出现 12 周的对比。"
+      "weeksPending": "再攒一周，这儿就看得出哪周话多了。"
     }
   },
   "home": {
