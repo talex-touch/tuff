@@ -11,6 +11,8 @@ import { useElementSize } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
+import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -87,6 +89,7 @@ const {
   select,
   res,
   loading,
+  searchError,
   activeItem,
   activeActivations,
   replaceSearchResults,
@@ -97,6 +100,12 @@ const {
   deactivateAllProviders
   // cancelSearch
 } = useSearch(boxOptions, clipboardOptions)
+
+const showSearchProgress = useDeferredLoading(loading, { delay: 600, minDuration: 0 })
+
+function handleRetrySearch(): void {
+  void handleSearchImmediate({ force: true })
+}
 
 const { lowBatteryMode } = useBatteryOptimizer()
 
@@ -959,6 +968,29 @@ const customCss = computed(() => {
           :class="{ 'CoreBox-Configure--input-hidden': !shouldShowInput }"
           :style="getCanvasAreaStyle('actions')"
         >
+          <div
+            v-if="shouldShowInput && searchError"
+            class="CoreBox-SearchStatus CoreBox-SearchStatus--error"
+          >
+            <span class="sr-only" role="alert">{{ t('corebox.searchFailed') }}</span>
+            <button
+              class="CoreBox-SearchRetry"
+              type="button"
+              :aria-label="t('corebox.retrySearch')"
+              :title="t('corebox.retrySearch')"
+              @click.stop="handleRetrySearch"
+            >
+              <TuffIcon :icon="{ type: 'class', value: 'i-carbon-renew' }" />
+              <span>{{ t('corebox.searchFailed') }}</span>
+            </button>
+          </div>
+          <div
+            v-else-if="shouldShowInput && showSearchProgress"
+            class="CoreBox-SearchStatus CoreBox-SearchStatus--progress"
+          >
+            <TxSpinner :size="14" :label="t('corebox.searching')" />
+            <span>{{ t('corebox.searching') }}</span>
+          </div>
           <button
             v-if="isSendModeActive"
             class="CoreBox-SendButton"
@@ -998,6 +1030,7 @@ const customCss = computed(() => {
         'CoreBoxRes--widget': isWidgetMode,
         'CoreBoxRes--visible': shouldShowResultArea
       }"
+      :aria-busy="loading ? 'true' : undefined"
       @contextmenu="previewHistory.handleContextMenu"
     >
       <!-- Hide result area when plugin UI view is attached -->
@@ -1254,6 +1287,48 @@ const customCss = computed(() => {
 
   &.CoreBox-Configure--input-hidden {
     margin-inline-start: auto;
+  }
+
+  .CoreBox-SearchStatus {
+    flex: 0 0 auto;
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--shell-space-1);
+    color: var(--shell-text-secondary);
+    font-size: var(--shell-fs-sm);
+    white-space: nowrap;
+    cursor: default;
+  }
+
+  .CoreBox-SearchStatus--progress {
+    padding-inline: var(--shell-space-1);
+  }
+
+  .CoreBox-SearchRetry {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--shell-space-1);
+    padding: var(--shell-space-1) var(--shell-space-2);
+    border: 1px solid var(--shell-danger-border);
+    border-radius: var(--shell-radius-full);
+    background: var(--shell-danger-soft);
+    color: var(--shell-danger);
+    font: inherit;
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease;
+
+    &:hover {
+      background: color-mix(in srgb, var(--shell-danger) 12%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--shell-danger);
+      outline-offset: 2px;
+    }
   }
 
   .CoreBox-SendButton {
