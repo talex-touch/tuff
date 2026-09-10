@@ -1078,7 +1078,6 @@
   },
   "voiceInsights": {
     "headline": "Faster said than typed",
-    "subtitle": "Counted on this machine only. Nothing is uploaded.",
     "sectionTitle": "Insights",
     "loading": "Loading voice insights...",
     "actions": {
