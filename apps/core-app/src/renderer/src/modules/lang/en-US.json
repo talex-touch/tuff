@@ -568,17 +568,15 @@
     },
     "unavailable": {
       "title": "Recognition status could not be read",
-      "description": "Readiness could not be loaded. Try again."
+      "description": ""
     },
     "reasons": {
-      "credentialMissing": "The selected AI channel has no credential.",
-      "unavailable": "Recognition is unavailable right now."
+      "credentialMissing": "The selected channel has no credential",
+      "unavailable": "Recognition is unavailable right now"
     },
     "asr": {
-      "ready": "Speech recognition is ready",
-      "readyHint": "Hold ⌘ and speak; the text lands in the app you are in.",
       "notReady": "Speech recognition is not set up",
-      "notConfigured": "No channel is bound to audio.asr, so holding ⌘ and speaking does nothing."
+      "notConfigured": "No channel is bound to audio.asr"
     }
   },
   "settingLocalAiCli": {

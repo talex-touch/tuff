@@ -568,17 +568,15 @@
     },
     "unavailable": {
       "title": "读不到识别状态",
-      "description": "没能读到识别是否就绪，重试一次。"
+      "description": ""
     },
     "reasons": {
-      "credentialMissing": "所选 AI 渠道还没有凭据。",
-      "unavailable": "识别暂时不可用。"
+      "credentialMissing": "所选渠道没有凭据",
+      "unavailable": "识别暂时不可用"
     },
     "asr": {
-      "ready": "语音识别已就绪",
-      "readyHint": "按住 ⌘ 说话，文字直接落进当前应用。",
       "notReady": "语音识别还没配置",
-      "notConfigured": "还没有渠道绑定 audio.asr，所以按住 ⌘ 说话不会有反应。"
+      "notConfigured": "没有渠道绑定 audio.asr"
     }
   },
   "settingLocalAiCli": {
