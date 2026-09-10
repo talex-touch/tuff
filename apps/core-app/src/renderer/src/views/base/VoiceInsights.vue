@@ -285,7 +285,8 @@ const metrics = computed(() => {
     {
       key: 'characters',
       value: compactNumberFormatter.value.format(value.totalCharacters),
-      unit: t('voiceInsights.units.characters'),
+      // No unit: the label under it already says 字, and a card should not say it twice.
+      unit: '',
       label: t('voiceInsights.metrics.characters'),
       note: ''
     },
@@ -326,6 +327,28 @@ const metrics = computed(() => {
  * The estimate basis rides with the headline number rather than sitting in a footnote, because
  * a figure this prominent is exactly the one that must not be mistaken for a measurement.
  */
+/**
+ * The equivalent sentence, split so its figure can carry weight.
+ *
+ * Interpolating through `t` yields one string, and the number is the only part of it worth
+ * reading — the rest is scaffolding. Rendering the message once with a sentinel in place of the
+ * count and splitting on that keeps a single translatable string and works whichever side of the
+ * number a language puts its words on.
+ */
+const EQUIVALENT_SLOT = '\u0000'
+const savedEquivalent = computed(() => {
+  const value = insights.value
+  if (!value) return null
+  const [before, after] = t('voiceInsights.metrics.savedEquivalent', {
+    count: EQUIVALENT_SLOT
+  }).split(EQUIVALENT_SLOT)
+  return {
+    before: before ?? '',
+    count: numberFormatter.value.format(value.totalCharacters),
+    after: after ?? ''
+  }
+})
+
 const heroMetric = computed(() => metrics.value.find((metric) => metric.key === 'saved') ?? null)
 const supportMetrics = computed(() => metrics.value.filter((metric) => metric.key !== 'saved'))
 
@@ -839,11 +862,10 @@ onBeforeUnmount(() => {
           </p>
           <div class="VoiceInsights-Hero2Value">
             <strong><TxTextMorph :text="heroMetric.value" /></strong>
-            <span v-if="insights">{{
-              t('voiceInsights.metrics.savedEquivalent', {
-                count: numberFormatter.format(insights.totalCharacters)
-              })
-            }}</span>
+            <span v-if="savedEquivalent" class="VoiceInsights-Hero2Equivalent"
+              >{{ savedEquivalent.before }}<strong>{{ savedEquivalent.count }}</strong
+              >{{ savedEquivalent.after }}</span
+            >
           </div>
         </article>
 
@@ -948,7 +970,7 @@ onBeforeUnmount(() => {
                 {{ month.label }}
               </span>
             </div>
-            <div class="VoiceInsights-Weeks" :style="heatmapStyle">
+            <div class="VoiceInsights-HeatWeeks" :style="heatmapStyle">
               <div
                 v-for="(week, weekIndex) in heatmapWeeks"
                 :key="weekIndex"
@@ -1287,6 +1309,12 @@ onBeforeUnmount(() => {
     color: var(--shell-text-secondary);
     font-size: var(--shell-fs-sm);
   }
+
+  /* The figure is the only part of the sentence anyone reads; the rest is scaffolding. */
+  .VoiceInsights-Hero2Equivalent strong {
+    color: var(--shell-text-primary);
+    font-weight: 600;
+  }
 }
 
 .VoiceInsights-Metrics {
@@ -1504,7 +1532,14 @@ onBeforeUnmount(() => {
 }
 
 .VoiceInsights-Months,
-.VoiceInsights-Weeks {
+/*
+ * Renamed away from `VoiceInsights-Weeks`, which was also the 12-week bar card.
+ *
+ * One class, two unrelated things: the card picked up this grid — with a column count only the
+ * calendar ever defines — and the calendar picked up the card's background, radius and shadow.
+ * Both were wrong and neither looked like a typo.
+ */
+.VoiceInsights-HeatWeeks {
   display: grid;
   grid-template-columns: repeat(var(--voice-heatmap-week-count), var(--shell-space-4));
   gap: var(--shell-space-1);

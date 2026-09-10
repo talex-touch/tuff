@@ -244,6 +244,68 @@ describe('VoiceInsights page composition', () => {
   })
 
   /**
+   * Two unrelated things shared the class `VoiceInsights-Weeks`: the 12-week bar card, and the
+   * grid of week columns inside the year calendar. Each picked up the other's rules — the card
+   * got a grid whose column count only the calendar defines, the calendar got the card's
+   * background, radius and shadow. Nothing about it read as a typo.
+   *
+   * jsdom computes no CSS, so what this pins is the collision itself: one class, one owner.
+   */
+  it('does not let the week card and the calendar grid share a class', async () => {
+    const wrapper = await mountPage()
+
+    const card = wrapper.find('[data-testid="voice-insights-weeks"]')
+    expect(card.exists()).toBe(true)
+    expect(card.classes()).toContain('VoiceInsights-Weeks')
+
+    const heatmap = wrapper.find('[data-testid="voice-insights-heatmap"]')
+    expect(heatmap.find('.VoiceInsights-HeatWeeks').exists()).toBe(true)
+    expect(heatmap.find('.VoiceInsights-Weeks').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The card is labelled 说了多少字, so a 字 unit beside the figure says it twice. Its siblings
+   * keep theirs — 字/分钟 is not in their label.
+   */
+  it('drops the unit from the card whose label already carries it', async () => {
+    const wrapper = await mountPage()
+
+    const cards = wrapper.findAll('.VoiceInsights-Metric')
+    // Direct children only: the morph renders its own span inside the <strong>, and a descendant
+    // selector counts that as the unit — the same trap that once made the figure invisible.
+    const characters = cards.find((card) => card.attributes('data-metric') === 'characters')!
+    expect(characters.find('.VoiceInsights-MetricValue > span').exists()).toBe(false)
+
+    const rate = cards.find((card) => card.attributes('data-metric') === 'rate')!
+    expect(rate.find('.VoiceInsights-MetricValue > span').text()).toContain(
+      'voiceInsights.units.charactersPerMinute'
+    )
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The figure is the only part of the equivalent sentence worth reading. Splitting the rendered
+   * message on a sentinel keeps one translatable string and works whichever side of the number a
+   * language puts its words on.
+   */
+  it('gives the equivalent sentence its figure in bold', async () => {
+    const wrapper = await mountPage()
+
+    const equivalent = wrapper.find('.VoiceInsights-Hero2Equivalent')
+    expect(equivalent.exists()).toBe(true)
+    const bold = equivalent.find('strong')
+    expect(bold.exists()).toBe(true)
+    expect(bold.text()).toBe('128,540')
+    // The scaffolding stays outside it, or the whole line would read as the number.
+    expect(equivalent.text()).not.toBe(bold.text())
+
+    wrapper.unmount()
+  })
+
+  /**
    * The four figures are the page's whole payload, and they change under the reader when a
    * refresh lands. Morphing them by place value shows which digits moved; swapping the string
    * shows only that something did.
