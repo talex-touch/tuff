@@ -1075,7 +1075,6 @@
     }
   },
   "voiceInsights": {
-    "headline": "嘴比手利索",
     "loading": "正在加载语音洞察…",
     "actions": {
       "refresh": "刷新",
@@ -1091,7 +1090,7 @@
     },
     "boundary": {
       "notStarted": "还没开始记",
-      "since": "{date} 开始记的，只记在这台电脑上"
+      "since": "{date} 起"
     },
     "metrics": {
       "label": "语音使用指标",
@@ -1099,8 +1098,7 @@
       "saved": "大概省下",
       "rate": "说得多快",
       "duration": "一共说了多久",
-      "savedBasis": "按每分钟打字 {count} 字估的，不是真量出来的",
-      "savedEquivalent": "这些字你没动手敲：{count} 个"
+      "savedBasis": "按每分钟打字 {count} 字估的，不是真量出来的"
     },
     "units": {
       "characters": "字",
