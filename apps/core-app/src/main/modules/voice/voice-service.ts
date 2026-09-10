@@ -102,7 +102,21 @@ const DEFAULT_SILENCE_STOP_MS = 1_500
 const DEFAULT_ASR_SAMPLE_RATE = 16_000
 const POLL_INTERVAL_MS = 40
 const CAPTURE_HARD_TIMEOUT_GRACE_MS = 2_000
-const POLISH_TIMEOUT_MS = 300
+/**
+ * How long the tidy-up pass may take before delivery gives up and ships the raw transcript.
+ *
+ * This was 300ms, which is not a tight budget — it is an unreachable one, and it turned the
+ * feature off without saying so. Measured against the configured endpoint, the TLS handshake
+ * alone takes 85-358ms before a byte of the request is sent, and that is for an unauthenticated
+ * rejection with no inference behind it. A real pass then has to upload, queue, prefill and
+ * generate a whole rewritten paragraph. Every call aborted, every call fell back to raw text,
+ * and the one log line that would have said so was explicitly skipped on the timeout branch.
+ *
+ * 8s is a ceiling for a slow provider, not the expected wait — a short paragraph on a normal
+ * chat model lands in one to three. It is exported so the deadline test asserts against the
+ * shipped value instead of a literal that silently stops matching it.
+ */
+export const POLISH_TIMEOUT_MS = 8_000
 const CAPABILITY_TIMEOUT_MS = 30_000
 const TRANSCRIPTION_TIMEOUT_MS = 600_000
 
@@ -958,6 +972,21 @@ export class VoiceService {
     const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
     const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
     const cleanup = payload.cleanup !== false && payload.deliveryTiming !== 'live'
+    // Live delivery skips tidy-up by design — the raw words are already typed, so a polished
+    // version would duplicate them. That is invisible from the outside, and indistinguishable
+    // from tidy-up being broken, so say which branch was taken and why.
+    voiceLog.info('Voice stream tidy-up decision', {
+      meta: {
+        cleanup,
+        deliveryTiming: payload.deliveryTiming ?? 'final',
+        requestedCleanup: payload.cleanup ?? true,
+        skippedBecause: cleanup
+          ? 'not-skipped'
+          : payload.deliveryTiming === 'live'
+            ? 'live-delivery'
+            : 'caller-disabled'
+      }
+    })
     const pollCapture = getPollCapture()
     const requestId = nextVoiceSessionId()
     const request: VoiceStreamRequest = {
@@ -1459,6 +1488,10 @@ export class VoiceService {
     caller = VOICE_CALLER
   ): Promise<string | null> {
     if (!transcript.trim()) return null
+    const startedAt = Date.now()
+    voiceLog.info('Polish pass starting', {
+      meta: { strength, transcriptChars: transcript.length, budgetMs: POLISH_TIMEOUT_MS }
+    })
     const polishController = new AbortController()
     const abortPolish = (): void => polishController.abort()
     let polishTimedOut = false
@@ -1488,13 +1521,41 @@ export class VoiceService {
       )
       throwIfCancelled(signal)
       const cleaned = typeof response.result === 'string' ? response.result.trim() : ''
-      return cleaned || null
+      if (!cleaned) {
+        voiceLog.warn('Polish pass returned nothing; delivering the raw transcript', {
+          meta: { elapsedMs: Date.now() - startedAt }
+        })
+        return null
+      }
+      voiceLog.info('Polish pass applied', {
+        meta: {
+          elapsedMs: Date.now() - startedAt,
+          transcriptChars: transcript.length,
+          polishedChars: cleaned.length
+        }
+      })
+      return cleaned
     } catch (error) {
       if (signal?.aborted) throw voiceCancellationError()
-      // Cleanup is bounded and optional. Its deadline is a normal raw-transcript path, not a
-      // user-visible failure: logging it redraws the developer console precisely as the text lands.
-      if (!polishTimedOut) {
-        voiceLog.debug('Polish pass unavailable; falling back to raw transcript', { error })
+      // Cleanup is bounded and optional, so a deadline is a normal raw-transcript path rather
+      // than a user-visible failure. It still has to be visible *somewhere*: this used to log
+      // nothing at all on the timeout branch, which is precisely the branch that fires, and
+      // "tidy-up silently never happens" is indistinguishable from "tidy-up is switched off"
+      // when the only record of it is absent.
+      if (polishTimedOut) {
+        voiceLog.warn('Polish pass hit its deadline; delivering the raw transcript', {
+          meta: {
+            elapsedMs: Date.now() - startedAt,
+            budgetMs: POLISH_TIMEOUT_MS,
+            strength,
+            transcriptChars: transcript.length
+          }
+        })
+      } else {
+        voiceLog.warn('Polish pass unavailable; delivering the raw transcript', {
+          meta: { elapsedMs: Date.now() - startedAt },
+          error
+        })
       }
       return null
     } finally {

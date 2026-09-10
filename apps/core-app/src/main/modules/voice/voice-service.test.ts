@@ -54,7 +54,7 @@ import { clipboardModule } from '../clipboard'
 import { activeAppService } from '../system/active-app'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { intelligenceTtsService } from '../ai/intelligence-tts-service'
-import { VoiceService } from './voice-service'
+import { POLISH_TIMEOUT_MS, VoiceService } from './voice-service'
 
 const support = nativeAudio.getNativeAudioSupport as unknown as ReturnType<typeof vi.fn>
 const startCapture = nativeAudio.startCapture as unknown as ReturnType<typeof vi.fn>
@@ -146,7 +146,7 @@ describe('VoiceService.dictate', () => {
     expect(polishSignal?.aborted).toBe(true)
   })
 
-  it('returns raw recognized text at the 300 ms polish deadline', async () => {
+  it('returns raw recognized text at the shipped polish deadline', async () => {
     vi.useFakeTimers()
     try {
       stt.mockResolvedValue({ result: { text: 'raw text' } })
@@ -171,7 +171,9 @@ describe('VoiceService.dictate', () => {
       expect(polishSignal).toBeDefined()
       expect(polishSignal?.aborted).toBe(false)
 
-      await vi.advanceTimersByTimeAsync(299)
+      // Asserted against the shipped constant, not a copy of it. The literal this replaces
+      // was 299/300, which kept passing after the budget it described became unreachable.
+      await vi.advanceTimersByTimeAsync(POLISH_TIMEOUT_MS - 1)
       expect(polishSignal?.aborted).toBe(false)
       await vi.advanceTimersByTimeAsync(1)
       expect(polishSignal?.aborted).toBe(true)
