@@ -201,6 +201,25 @@ describe('VoiceInsights page composition', () => {
   })
 
   /**
+   * The header holds actions and nothing else.
+   *
+   * The headline moved to the page's title row, and the sentence that qualified it is gone: on a
+   * page this short, a line explaining what the page is sat between the reader and the numbers it
+   * was explaining. Same rule the empty state already follows.
+   */
+  it('leaves no copy in the header, only the actions', async () => {
+    const wrapper = await mountPage()
+
+    const header = wrapper.find('.VoiceInsights-Hero')
+    expect(header.exists()).toBe(true)
+    expect(header.findAll('p')).toHaveLength(0)
+    expect(header.findAll('h1, h2, h3')).toHaveLength(0)
+    expect(header.find('[data-testid="voice-insights-refresh"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  /**
    * The four figures are the page's whole payload, and they change under the reader when a
    * refresh lands. Morphing them by place value shows which digits moved; swapping the string
    * shows only that something did.
