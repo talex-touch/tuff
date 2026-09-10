@@ -13,6 +13,10 @@ const nativeAudioMock = vi.hoisted(() => ({
   isAccessibilityTrusted: vi.fn()
 }))
 
+const polishPromptMocks = vi.hoisted(() => ({
+  getVoicePolishPrompt: vi.fn((strength: string) => strength)
+}))
+
 vi.mock('@talex-touch/tuff-native/audio', () => nativeAudioMock)
 
 vi.mock('../clipboard', () => ({
@@ -40,6 +44,11 @@ vi.mock('./voice-provider-runtime', () => ({
   getConfiguredAsrProvider: vi.fn()
 }))
 
+vi.mock('./polish-prompt', () => ({
+  getVoicePolishPrompt: polishPromptMocks.getVoicePolishPrompt,
+  wrapTranscription: (transcript: string) => JSON.stringify({ transcription: transcript })
+}))
+
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
 import { clipboardModule } from '../clipboard'
 import { activeAppService } from '../system/active-app'
@@ -62,6 +71,7 @@ const applyVoiceText = clipboardModule.applyVoiceText as unknown as ReturnType<t
 const getActiveApp = activeAppService.getActiveApp as unknown as ReturnType<typeof vi.fn>
 const stt = tuffIntelligence.audio.stt as unknown as ReturnType<typeof vi.fn>
 const invoke = tuffIntelligence.invoke as unknown as ReturnType<typeof vi.fn>
+const getVoicePolishPrompt = polishPromptMocks.getVoicePolishPrompt
 function wav(bytes = 200): Buffer {
   return Buffer.alloc(bytes)
 }
@@ -396,6 +406,23 @@ describe('VoiceService canonical session', () => {
     expect(result.delivery).toEqual({ method: 'native' })
     expect(typeText).toHaveBeenCalledWith('Raw dictation.')
     expect(applyVoiceText).not.toHaveBeenCalled()
+  })
+
+  it('keeps the strength chosen before recording when the caller object later changes', async () => {
+    stt.mockResolvedValue({ result: { text: 'raw dictation', language: 'en' } })
+    invoke.mockResolvedValue({ result: 'Raw dictation.' })
+    const payload: { delivery: 'active-app'; polishStrength: 'natural' | 'structured' | 'deep' } = {
+      delivery: 'active-app',
+      polishStrength: 'structured'
+    }
+    const service = new VoiceService()
+    const sessionId = await service.startSession(payload)
+    payload.polishStrength = 'natural'
+
+    await service.stopSession(sessionId, { cleanup: true })
+
+    expect(getVoicePolishPrompt).toHaveBeenCalledOnce()
+    expect(getVoicePolishPrompt).toHaveBeenCalledWith('structured')
   })
 
   it('falls back to main-owned auto-paste when native injection is unavailable', async () => {

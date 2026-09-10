@@ -11,7 +11,11 @@ import type {
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { StorageList } from '@talex-touch/utils'
-import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
+import {
+  appSettingOriginData,
+  normalizeVoicePolishStrength,
+  type VoiceInputSetting
+} from '@talex-touch/utils/common/storage/entity/app-settings'
 import type {
   AssistantClipboardImageTranslateResponse,
   AssistantRuntimeConfig,
@@ -80,11 +84,6 @@ interface FloatingBallSetting {
   opacity: number
   edgePadding: number
   position: FloatingBallPosition
-}
-
-interface VoiceInputSetting {
-  enabled: boolean
-  language: string
 }
 
 type ScreenshotUnavailableCode =
@@ -630,7 +629,9 @@ export class AssistantModule extends BaseModule {
       language:
         typeof source?.language === 'string' && source.language.trim()
           ? source.language
-          : appSettingOriginData.voiceInput.language
+          : appSettingOriginData.voiceInput.language,
+      polishEnabled: source?.polishEnabled !== false,
+      polishStrength: normalizeVoicePolishStrength(source?.polishStrength)
     }
   }
 
@@ -638,7 +639,9 @@ export class AssistantModule extends BaseModule {
     const voiceInput = this.getVoiceInputSetting(setting)
     return {
       enabled: voiceInput.enabled,
-      language: voiceInput.language
+      language: voiceInput.language,
+      polishEnabled: voiceInput.polishEnabled,
+      polishStrength: voiceInput.polishStrength
     }
   }
 

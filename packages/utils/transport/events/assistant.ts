@@ -1,32 +1,35 @@
+import type { VoicePolishStrength } from '../../common/storage/entity/app-settings'
+import type { ScreenshotManagedResource } from './screenshot-session'
 import type {
   CoreBoxImageTranslateRouteMetadata,
   IntelligenceErrorCode,
   NativeScreenshotDisplay,
   NativeScreenshotRegion,
 } from './types'
-import type { ScreenshotManagedResource } from './screenshot-session'
 import { defineEvent } from '../event/builder'
 
 export interface AssistantRuntimeConfig {
   enabled: boolean
   language: string
+  polishEnabled: boolean
+  polishStrength: VoicePolishStrength
 }
 
 export interface AssistantOpenVoicePanelPayload {
   source?: 'click' | 'wake-word'
 }
 
-export type AssistantVoiceCommandPayload =
+export type AssistantVoiceCommandPayload
+  = | {
+    action: 'start' | 'stop' | 'toggle'
+    mode: 'hold' | 'toggle'
+    source: 'command'
+  }
   | {
-      action: 'start' | 'stop' | 'toggle'
-      mode: 'hold' | 'toggle'
-      source: 'command'
-    }
-  | {
-      action: 'cancel'
-      state: 'start' | 'reset'
-      source: 'command'
-    }
+    action: 'cancel'
+    state: 'start' | 'reset'
+    source: 'command'
+  }
 
 export interface AssistantVoiceCancelHoldPayload {
   state: 'start' | 'reset' | 'commit'
@@ -56,25 +59,25 @@ export interface AssistantVoiceSubmitPayload {
   source?: 'voice' | 'manual'
 }
 
-export type AssistantClipboardImageTranslateErrorCode =
-  | 'ASSISTANT_DISABLED'
-  | 'IMAGE_UNAVAILABLE'
-  | 'SCENE_UNAVAILABLE'
-  | IntelligenceErrorCode
+export type AssistantClipboardImageTranslateErrorCode
+  = | 'ASSISTANT_DISABLED'
+    | 'IMAGE_UNAVAILABLE'
+    | 'SCENE_UNAVAILABLE'
+    | IntelligenceErrorCode
 
-export type AssistantScreenshotTranslateErrorCode =
-  | AssistantClipboardImageTranslateErrorCode
-  | 'SCREENSHOT_PERMISSION_DENIED'
-  | 'SCREENSHOT_UNSUPPORTED'
-  | 'SCREENSHOT_UNAVAILABLE'
-  | 'OCR_UNAVAILABLE'
-  | 'TEXT_TRANSLATE_UNAVAILABLE'
+export type AssistantScreenshotTranslateErrorCode
+  = | AssistantClipboardImageTranslateErrorCode
+    | 'SCREENSHOT_PERMISSION_DENIED'
+    | 'SCREENSHOT_UNSUPPORTED'
+    | 'SCREENSHOT_UNAVAILABLE'
+    | 'OCR_UNAVAILABLE'
+    | 'TEXT_TRANSLATE_UNAVAILABLE'
 
-export type AssistantScreenshotCaptureErrorCode =
-  | 'ASSISTANT_DISABLED'
-  | 'SCREENSHOT_PERMISSION_DENIED'
-  | 'SCREENSHOT_UNSUPPORTED'
-  | 'SCREENSHOT_UNAVAILABLE'
+export type AssistantScreenshotCaptureErrorCode
+  = | 'ASSISTANT_DISABLED'
+    | 'SCREENSHOT_PERMISSION_DENIED'
+    | 'SCREENSHOT_UNSUPPORTED'
+    | 'SCREENSHOT_UNAVAILABLE'
 
 export type AssistantScreenshotSaveErrorCode = AssistantScreenshotCaptureErrorCode | 'SAVE_FAILED'
 
@@ -105,16 +108,16 @@ export interface AssistantScreenshotTargetPayload {
   resource?: ScreenshotManagedResource
 }
 
-export type AssistantScreenshotTranslatePayload = AssistantClipboardImageTranslatePayload &
-  AssistantScreenshotTargetPayload
+export type AssistantScreenshotTranslatePayload = AssistantClipboardImageTranslatePayload
+  & AssistantScreenshotTargetPayload
 
 export type AssistantScreenshotCapturePayload = AssistantScreenshotTargetPayload
 export type AssistantScreenshotSavePayload = AssistantScreenshotTargetPayload
 
-export type AssistantScreenshotRegionSelectionErrorCode =
-  | 'ASSISTANT_DISABLED'
-  | 'SCREENSHOT_UNSUPPORTED'
-  | 'REGION_SELECTION_UNAVAILABLE'
+export type AssistantScreenshotRegionSelectionErrorCode
+  = | 'ASSISTANT_DISABLED'
+    | 'SCREENSHOT_UNSUPPORTED'
+    | 'REGION_SELECTION_UNAVAILABLE'
 
 export interface AssistantScreenshotRegionSelectionPayload {
   target?: 'cursor-display' | 'display'
