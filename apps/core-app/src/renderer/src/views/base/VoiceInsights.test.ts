@@ -247,8 +247,11 @@ describe('VoiceInsights page composition', () => {
 
 /**
  * The page was laid out for a year of data and shipped showing it on day one: twelve bars with
- * one value between them, three hundred and sixty-five cells with two coloured. Neither chart
- * was comparing or showing anything — they just looked broken.
+ * one value between them. That chart was not comparing anything — it just looked broken.
+ *
+ * Only the week bars are withheld. The year heatmap stays: an empty grid of days is a true
+ * picture of a record with nothing in it yet, and it already carries the note explaining that a
+ * pale cell before the start date is "not yet counting" rather than "said nothing".
  *
  * The gate is how long counting has been running, not how much was said. Three months of record
  * with two spoken days has eleven genuinely empty weeks, and that emptiness is the finding; one
@@ -272,47 +275,37 @@ describe('VoiceInsights progressive disclosure', () => {
       weeks: wrapper.find('[data-testid="voice-insights-weeks"]').exists(),
       activity: wrapper.find('[data-testid="voice-insights-activity"]').exists(),
       report: wrapper.find('[data-testid="voice-insights-report"]').exists(),
-      note: wrapper.find('[data-testid="voice-insights-tier-note"]').text()
+      note: wrapper.find('[data-testid="voice-insights-tier-note"]')
     }
   }
 
-  it('shows the figures alone on day one, and says what is still coming', async () => {
+  it('withholds only the week bars on day one, and says when they arrive', async () => {
     mockDays(1)
     const wrapper = await mountPage()
 
     const state = blocks(wrapper)
     expect(state.metrics).toBe(3)
     expect(state.weeks).toBe(false)
-    expect(state.activity).toBe(false)
-    expect(state.report).toBe(false)
     // Not rendered, not greyed: a chart with nothing in it says less than no chart.
-    expect(state.note).toContain('voiceInsights.tiers.weeksPending')
+    expect(state.note.text()).toContain('voiceInsights.tiers.weeksPending')
+
+    // The year stays from the first day — an empty grid is a true picture of an empty record,
+    // and it is the one chart that explains its own blank cells.
+    expect(state.activity).toBe(true)
+    expect(state.report).toBe(true)
 
     wrapper.unmount()
   })
 
-  it('adds the 12-week comparison once there are weeks to compare', async () => {
+  it('adds the week bars once there are weeks to compare, and drops the note', async () => {
     mockDays(8)
     const wrapper = await mountPage()
 
     const state = blocks(wrapper)
     expect(state.weeks).toBe(true)
-    expect(state.activity).toBe(false)
-    expect(state.report).toBe(false)
-    expect(state.note).toContain('voiceInsights.tiers.activityPending')
-
-    wrapper.unmount()
-  })
-
-  it('adds the year heatmap and the report at a month, and drops the note', async () => {
-    mockDays(31)
-    const wrapper = await mountPage()
-
-    expect(wrapper.find('[data-testid="voice-insights-weeks"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="voice-insights-activity"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="voice-insights-report"]').exists()).toBe(true)
-    // Nothing is pending any more, so nothing says so.
-    expect(wrapper.find('[data-testid="voice-insights-tier-note"]').exists()).toBe(false)
+    expect(state.activity).toBe(true)
+    expect(state.report).toBe(true)
+    expect(state.note.exists()).toBe(false)
 
     wrapper.unmount()
   })
