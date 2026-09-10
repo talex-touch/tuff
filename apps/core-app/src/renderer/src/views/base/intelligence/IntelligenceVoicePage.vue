@@ -6,27 +6,26 @@ import VoiceRecognitionStatus from '../settings/VoiceRecognitionStatus.vue'
 import SettingSpeechRecognition from '../settings/SettingSpeechRecognition.vue'
 
 /**
- * Whether it works, then how much it has been used, then where to change it.
+ * How much it has been used, then where to change it.
  *
- * The configuration card used to come first, so a page called 音频洞察 opened on plumbing and
- * pushed the insight below the fold. Settings go last because nobody arrives here to change them.
+ * The insight owns the page's header rather than the shell, because this header is a heading, the
+ * date counting started, three actions and a status alert — more than a title row was built to
+ * hold. Splitting it across two owners is what kept leaving a band of blank between the title and
+ * the buttons, and it made the page name itself twice into the bargain.
  *
- * The heading is the page's, not the insight card's. It used to be two stacked headings — the
- * nav label, then the page's own line, with a gap between them — which is a page introducing
- * itself twice. The nav label is now the eyebrow above the line that says what the page is for.
- *
- * Status rides the same row: it says nothing at all while dictation works, and a band that is
- * empty most of the time is a gap in the page that only makes sense on the days it is filled.
+ * Settings go last: nobody arrives here to change one.
  */
 const { t } = useI18n()
 </script>
 
 <template>
-  <SettingsPage :eyebrow="t('settingsIntelligenceHub.voice')" :title="t('voiceInsights.headline')">
-    <template #titleAside>
-      <VoiceRecognitionStatus />
-    </template>
-    <VoiceInsights />
+  <SettingsPage>
+    <VoiceInsights :eyebrow="t('settingsIntelligenceHub.voice')">
+      <!-- Status rides the header row. It says nothing at all while dictation works. -->
+      <template #status>
+        <VoiceRecognitionStatus />
+      </template>
+    </VoiceInsights>
     <SettingSpeechRecognition />
   </SettingsPage>
 </template>

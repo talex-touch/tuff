@@ -6,6 +6,7 @@ import type {
 import type { CSSProperties } from 'vue'
 import type { DialogButton } from '@talex-touch/tuffex/dialog'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCard } from '@talex-touch/tuffex/card'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
@@ -144,6 +145,15 @@ interface HeatmapMonth {
   label: string
   weekIndex: number
 }
+
+/**
+ * The nav label, shown small above the heading.
+ *
+ * Passed in rather than read here: the sidebar owns that word, and a page that hardcodes its own
+ * breadcrumb drifts from the menu that leads to it.
+ */
+const props = defineProps<{ eyebrow?: string }>()
+const eyebrow = computed(() => props.eyebrow)
 
 const { locale, t } = useI18n()
 const transport = useTuffTransport()
@@ -707,17 +717,21 @@ onBeforeUnmount(() => {
     class="VoiceInsights"
     data-testid="voice-insights-page"
     :aria-busy="!hasLoaded || refreshing || clearing"
-    :aria-label="t('voiceInsights.headline')"
   >
     <!--
-      One row: when counting started on the left, what you can do about it on the right.
-      The headline moved up to the page's title row, and the "洞察" group header that used to sit
-      below this one was the third thing on the page naming itself — its boundary line moved here
-      and its clear button joined the group, which is what closed the empty band between them.
+      The whole header, in one row, owned by the content rather than the shell.
+      The shell's title row could hold a heading and one thing beside it; this page's header is a
+      heading, the date counting started, three actions and a status alert. Splitting it across
+      two owners is what kept leaving a band of blank between the title and the buttons.
     -->
     <header class="VoiceInsights-Hero">
-      <p v-if="insights" class="VoiceInsights-Boundary">{{ boundaryLabel }}</p>
+      <div class="VoiceInsights-HeroCopy">
+        <p v-if="eyebrow" class="VoiceInsights-Eyebrow">{{ eyebrow }}</p>
+        <h1>{{ t('voiceInsights.headline') }}</h1>
+        <p v-if="insights" class="VoiceInsights-Boundary">{{ boundaryLabel }}</p>
+      </div>
       <div class="VoiceInsights-HeroActions shell-chrome-safe-inline-end">
+        <slot name="status" />
         <TxButton
           variant="secondary"
           :loading="refreshing"
@@ -802,12 +816,12 @@ onBeforeUnmount(() => {
       <span class="VoiceInsights-SrOnly">{{ t('voiceInsights.loading') }}</span>
       <template v-if="showSkeleton">
         <div class="VoiceInsights-Metrics" aria-hidden="true">
-          <article v-for="index in 3" :key="index" class="VoiceInsights-Metric">
+          <TxCard v-for="index in 3" :key="index" class="VoiceInsights-Metric" shadow="none">
             <TxSkeleton :width="148" :height="28" :radius="4" />
             <TxSkeleton :width="92" :height="12" :radius="4" />
-          </article>
+          </TxCard>
         </div>
-        <article class="VoiceInsights-Activity" aria-hidden="true">
+        <TxCard class="VoiceInsights-Activity" shadow="none" aria-hidden="true">
           <div class="VoiceInsights-HeatmapHeader">
             <div>
               <TxSkeleton :width="96" :height="16" :radius="4" />
@@ -815,7 +829,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <TxSkeleton width="100%" :height="156" :radius="10" />
-        </article>
+        </TxCard>
       </template>
     </div>
 
@@ -870,10 +884,11 @@ onBeforeUnmount(() => {
         </article>
 
         <div class="VoiceInsights-Metrics">
-          <article
+          <TxCard
             v-for="metric in supportMetrics"
             :key="metric.key"
             class="VoiceInsights-Metric"
+            shadow="none"
             :data-metric="metric.key"
           >
             <div class="VoiceInsights-MetricValue">
@@ -881,7 +896,7 @@ onBeforeUnmount(() => {
               <span v-if="metric.unit">{{ metric.unit }}</span>
             </div>
             <p>{{ metric.label }}</p>
-          </article>
+          </TxCard>
         </div>
       </section>
 
@@ -894,7 +909,12 @@ onBeforeUnmount(() => {
         {{ t('voiceInsights.tiers.weeksPending') }}
       </p>
 
-      <article v-if="showsWeeks" class="VoiceInsights-Weeks" data-testid="voice-insights-weeks">
+      <TxCard
+        v-if="showsWeeks"
+        class="VoiceInsights-Weeks"
+        shadow="none"
+        data-testid="voice-insights-weeks"
+      >
         <header class="VoiceInsights-WeeksHeading">
           <div>
             <h3>{{ t('voiceInsights.weeks.title') }}</h3>
@@ -917,9 +937,9 @@ onBeforeUnmount(() => {
             :style="{ height: `${Math.round(week.ratio * 100)}%` }"
           />
         </div>
-      </article>
+      </TxCard>
 
-      <article class="VoiceInsights-Activity" data-testid="voice-insights-activity">
+      <TxCard class="VoiceInsights-Activity" shadow="none" data-testid="voice-insights-activity">
         <!--
           One heading. This card used to carry two, four words apart — "最近 365 个本地自然日的活动"
           over three streak tiles, then "最近 365 个本地自然日" over the calendar those tiles were
@@ -993,9 +1013,9 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
-      </article>
+      </TxCard>
 
-      <article class="VoiceInsights-Report" data-testid="voice-insights-report">
+      <TxCard class="VoiceInsights-Report" shadow="none" data-testid="voice-insights-report">
         <div class="VoiceInsights-ReportIntro">
           <div>
             <span class="VoiceInsights-ReportIcon i-ri-file-chart-line" aria-hidden="true" />
@@ -1066,7 +1086,7 @@ onBeforeUnmount(() => {
             </li>
           </ul>
         </div>
-      </article>
+      </TxCard>
       <article class="VoiceInsights-Records" data-testid="voice-insights-records">
         <header class="VoiceInsights-RecordsHeading">
           <div>
@@ -1189,11 +1209,38 @@ onBeforeUnmount(() => {
 .VoiceInsights-Hero {
   display: flex;
   gap: var(--shell-space-5);
-  align-items: center;
+  align-items: flex-end;
   flex-wrap: wrap;
   justify-content: space-between;
   max-width: 1440px;
-  margin: 0 auto var(--shell-space-4);
+  margin: 0 auto var(--shell-space-5);
+}
+
+/* The heading never gives way; the row beside it wraps or truncates first. */
+.VoiceInsights-HeroCopy {
+  display: flex;
+  min-width: 0;
+  flex: none;
+  flex-direction: column;
+  gap: var(--shell-space-1);
+
+  h1 {
+    margin: 0;
+    font-size: var(--shell-fs-h1);
+    font-weight: 600;
+    line-height: 1.2;
+    /* Chrome, and it sits in the window's drag strip where a stray selection is the usual result
+       of trying to move the window. */
+    user-select: none;
+  }
+}
+
+.VoiceInsights-Eyebrow {
+  margin: 0;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-sm);
+  font-weight: 600;
+  user-select: none;
 }
 
 .VoiceInsights-Boundary {
@@ -1206,6 +1253,7 @@ onBeforeUnmount(() => {
 .VoiceInsights-HeroActions {
   display: flex;
   flex: 0 0 auto;
+  align-items: center;
   gap: var(--shell-space-2);
 }
 
@@ -1368,15 +1416,6 @@ onBeforeUnmount(() => {
     background: var(--shell-primary);
     flex: 1;
   }
-}
-
-.VoiceInsights-Metric,
-.VoiceInsights-Weeks,
-.VoiceInsights-Activity,
-.VoiceInsights-Report {
-  border-radius: var(--shell-radius-xl);
-  background: var(--shell-bg);
-  box-shadow: 0 var(--shell-space-1) var(--shell-space-2) var(--shell-shadow);
 }
 
 .VoiceInsights-Metric {

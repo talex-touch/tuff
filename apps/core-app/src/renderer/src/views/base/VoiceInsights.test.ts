@@ -59,9 +59,24 @@ function summary(recordedFor = 90): unknown {
   }
 }
 
-async function mountPage() {
+async function mountPage(props: Record<string, unknown> = {}) {
   const wrapper = mount(VoiceInsights, {
-    global: { stubs: { TxButton: true, TxBottomDialog: true, TxSkeleton: true } }
+    props,
+    global: {
+      stubs: {
+        TxButton: true,
+        TxBottomDialog: true,
+        TxSkeleton: true,
+        // Not stubbed away: the cards' classes and data attributes fall through to its root, and
+        // half these assertions find elements by them. `shadow` is echoed because its effect is
+        // pure CSS — jsdom would let a shadow creep back with every test still green.
+        TxCard: {
+          props: ['shadow'],
+          inheritAttrs: true,
+          template: '<div :data-shadow="shadow"><slot /></div>'
+        }
+      }
+    }
   })
   await flushPromises()
   await flushPromises()
@@ -201,27 +216,54 @@ describe('VoiceInsights page composition', () => {
   })
 
   /**
-   * The header is one row: when counting started, and what you can do about it.
+   * The whole header is one row, and the content owns it.
    *
-   * It used to be three stacked blocks — the page title, a row holding only buttons, and a group
-   * header named "洞察" that repeated the page. The middle one left a band of blank page between
-   * the title and the first number; the third was the page naming itself a third time. Its
-   * boundary line moved up here and its clear button joined the group.
+   * It was split across two owners — the shell drew a title, this drew a row of buttons under it —
+   * and the seam between them kept reappearing as a band of blank. A heading, the date counting
+   * started, three actions and a status alert is more than a shell title row was built to hold, so
+   * it all lives here now.
    */
-  it('puts the boundary line and every action in one header row', async () => {
-    const wrapper = await mountPage()
+  it('puts the heading, the boundary line and every action in one header row', async () => {
+    const wrapper = await mountPage({ eyebrow: '音频洞察' })
 
     const header = wrapper.find('.VoiceInsights-Hero')
     expect(header.exists()).toBe(true)
+    expect(header.find('.VoiceInsights-Eyebrow').text()).toBe('音频洞察')
+    // Exactly one, here and on the page: the shell no longer draws a second.
+    expect(wrapper.findAll('h1')).toHaveLength(1)
+    expect(header.find('h1').text()).toContain('voiceInsights.headline')
     expect(header.find('.VoiceInsights-Boundary').text()).toContain('voiceInsights.boundary')
-    // Still no heading here: that belongs to the page's title row, once.
-    expect(header.findAll('h1, h2, h3')).toHaveLength(0)
 
     for (const action of ['refresh', 'share', 'clear']) {
       expect(header.find(`[data-testid="voice-insights-${action}"]`).exists()).toBe(true)
     }
     // And the group header that used to carry the clear button is gone entirely.
     expect(wrapper.find('.VoiceInsights-SectionHeader').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * Every card is tuffex's, and none of them casts a shadow — the page is a stack of surfaces on
+   * one plane, not a pile of floating tiles. The prop is echoed by the stub because its effect is
+   * CSS, which a jsdom test cannot otherwise see.
+   */
+  it('draws every card flat', async () => {
+    const wrapper = await mountPage()
+
+    const cards = wrapper.findAll('[data-shadow]')
+    expect(cards.length).toBeGreaterThanOrEqual(4)
+    expect(cards.every((card) => card.attributes('data-shadow') === 'none')).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  /** No nav label passed, none drawn — the sidebar's word is the page's to supply, not ours. */
+  it('draws no eyebrow when the page does not name one', async () => {
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('.VoiceInsights-Eyebrow').exists()).toBe(false)
+    expect(wrapper.find('.VoiceInsights-Hero h1').exists()).toBe(true)
 
     wrapper.unmount()
   })
