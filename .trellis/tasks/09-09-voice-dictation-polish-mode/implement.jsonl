@@ -1,0 +1,2 @@
+{"file":".trellis/spec/main-process/voice-session-contracts.md","reason":"Single main-owned dictation session, delivery, cancellation and privacy boundaries"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Existing settings components, visible feedback and lifecycle-safe motion"}
