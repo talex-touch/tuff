@@ -196,6 +196,27 @@ A skeleton is the default loading state, not an optional polish pass. Ship it wi
 - Skeletons are decorative: mark them `aria-hidden="true"` and keep focusable elements out of them.
 - Animation must respect `prefers-reduced-motion: reduce`. The shared mixin already drops the motion while keeping the placeholder, since the placeholder is what holds the layout steady.
 
+### Ready results must not wait for reveal motion
+
+CoreBox's recommendation grid and search list must patch in the same Vue update
+as the selected-result footer. Do not wrap that branch switch in
+`<Transition mode="out-in">`: it defers mounting the next branch until the old
+one's animation frames/end callback complete, while the footer can already show
+the new item. Chromium frame throttling then looks like slow search rendering.
+
+Render the current grid/list branch directly. Optional `.result-layout-motion`
+and per-item stagger effects are transform-only on already-opaque rows; neither
+`opacity: 0` keyframes nor a delayed reveal class may gate ready content. Keep
+low-battery and `prefers-reduced-motion` behavior without a readiness callback.
+
+Regression: mount CoreBox with VTU's Transition stub disabled, hold all
+requestAnimationFrame callbacks, replace a sectioned recommendation grid with a
+ready wx result and compare the list against its footer after nextTick. Cover
+rapid replacement and the reverse layout change. Real acceptance additionally
+pauses CSS animations at currentTime=0 and inspects visible pixels, ancestor
+opacity/geometry and reduced-motion; DOM text or provider duration alone is not
+proof that the result appeared.
+
 ---
 
 ## Accessibility
