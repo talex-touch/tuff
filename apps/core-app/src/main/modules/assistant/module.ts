@@ -641,6 +641,7 @@ export class AssistantModule extends BaseModule {
       enabled: voiceInput.enabled,
       language: voiceInput.language,
       polishEnabled: voiceInput.polishEnabled,
+      polishAvailable: resolveCapabilityStatus('text.chat').available,
       polishStrength: voiceInput.polishStrength
     }
   }

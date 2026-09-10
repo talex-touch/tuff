@@ -523,7 +523,26 @@ describe('AssistantModule screenshot translation', () => {
       enabled: false,
       language: 'fr-FR',
       polishEnabled: true,
+      polishAvailable: true,
       polishStrength: 'natural'
+    })
+
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+  it('projects an unavailable text chat runtime as polish unavailable', async () => {
+    mocks.resolveCapabilityStatus.mockImplementation((capabilityId: string) => ({
+      capabilityId,
+      available: capabilityId !== 'text.chat',
+      providerIds: capabilityId === 'text.chat' ? [] : ['unrelated-provider']
+    }))
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.floatingBall.getRuntimeConfig.toEventName()
+    )
+
+    expect(handler(undefined, {} as HandlerContext)).toMatchObject({
+      enabled: true,
+      polishEnabled: true,
+      polishAvailable: false
     })
 
     await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])

@@ -576,7 +576,7 @@
     },
     "polish": {
       "title": "Audio tidy-up",
-      "description": "Tidy and write once you stop; off types the raw words as you speak."
+      "description": "Tidy and write once you stop when a Chat channel is ready; otherwise, raw words type as you speak."
     },
     "polishStrength": {
       "title": "Tidy-up level",

@@ -217,7 +217,13 @@ beforeEach(() => {
   )
   transportSendMock.mockImplementation(async (event: unknown) => {
     if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
-      return { enabled: true, language: 'en-US', polishEnabled: true, polishStrength: 'structured' }
+      return {
+        enabled: true,
+        language: 'en-US',
+        polishEnabled: true,
+        polishAvailable: true,
+        polishStrength: 'structured'
+      }
     }
     if (eventName(event) === voiceApiEvents.recoveryStatus.toEventName()) {
       return { ok: true, result: recoveryStatusResult }
@@ -268,12 +274,14 @@ describe('VoicePanel dock surface', () => {
       enabled: boolean
       language: string
       polishEnabled: boolean
+      polishAvailable: boolean
       polishStrength: 'natural' | 'structured' | 'deep'
     }) => void
     const configRequest = new Promise<{
       enabled: boolean
       language: string
       polishEnabled: boolean
+      polishAvailable: boolean
       polishStrength: 'natural' | 'structured' | 'deep'
     }>((resolve) => {
       resolveConfig = resolve
@@ -305,6 +313,7 @@ describe('VoicePanel dock surface', () => {
       enabled: true,
       language: 'en-US',
       polishEnabled: true,
+      polishAvailable: true,
       polishStrength: 'structured'
     })
     await opening
@@ -317,7 +326,13 @@ describe('VoicePanel dock surface', () => {
   it('does not start recognition when runtime voice input is disabled', async () => {
     transportSendMock.mockImplementation(async (event: unknown) => {
       if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
-        return { enabled: false, language: 'fr-FR', polishEnabled: true, polishStrength: 'deep' }
+        return {
+          enabled: false,
+          language: 'fr-FR',
+          polishEnabled: true,
+          polishAvailable: true,
+          polishStrength: 'deep'
+        }
       }
       throw new Error(`Unexpected transport event: ${eventName(event)}`)
     })
@@ -413,7 +428,36 @@ describe('VoicePanel dock surface', () => {
   it('uses raw live delivery only when the persisted polish preference is disabled', async () => {
     transportSendMock.mockImplementation(async (event: unknown) => {
       if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
-        return { enabled: true, language: 'en-US', polishEnabled: false, polishStrength: 'natural' }
+        return {
+          enabled: true,
+          language: 'en-US',
+          polishEnabled: false,
+          polishAvailable: true,
+          polishStrength: 'natural'
+        }
+      }
+      throw new Error(`Unexpected transport event: ${eventName(event)}`)
+    })
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    expect(requestedDeliveryTiming()).toBe('live')
+
+    wrapper.unmount()
+  })
+
+  it('uses raw live delivery when enabled polish has no chat runtime', async () => {
+    transportSendMock.mockImplementation(async (event: unknown) => {
+      if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+        return {
+          enabled: true,
+          language: 'en-US',
+          polishEnabled: true,
+          polishAvailable: false,
+          polishStrength: 'natural'
+        }
       }
       throw new Error(`Unexpected transport event: ${eventName(event)}`)
     })

@@ -12,6 +12,8 @@ export interface AssistantRuntimeConfig {
   enabled: boolean
   language: string
   polishEnabled: boolean
+  /** Whether an enabled Intelligence `text.chat` runtime can perform optional cleanup. */
+  polishAvailable: boolean
   polishStrength: VoicePolishStrength
 }
 
