@@ -712,3 +712,42 @@ Rebuilt HomeModelMenu on TxDropdownMenu with a provider filter strip, cross-prov
 ### Next Steps
 
 - None - task complete
+
+
+## Session 69: Batch voice input and search fixes
+
+**Date**: 2026-09-10
+**Task**: Batch voice input and search fixes
+**Branch**: `master`
+
+### Summary
+
+Grouped signed local commits: model cancellation; unified Voice Input settings/naming and nonterminal device hints; worker-backed index reads; immediately visible CoreBox results; directory-probe fix; OpenCode retirement; marketing assets. 380 main + 131 renderer + 55 shared tests passed, node/web types and scoped lint/build passed. Real CoreBox pixel/worker probes and renderer-only voice settings/device notice smoke completed. Preserved eight existing staged snapshots; no push/release or physical microphone hot-unplug claim.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `de408cb71e3a39fdcdcc1474b6229545c90462dc` | (see git log) |
+| `cb0f0628adcc41b4ab50fe8409c157d5c8a4a7ad` | (see git log) |
+| `dd4ac7f4b5e935e06f3710b393b03b9dfa32552a` | (see git log) |
+| `1a23015e93f7828b06117ee6ea3bfa131fcdbe37` | (see git log) |
+| `72c7202b3e2fa914e925ac3e9cb4cc9b11a0165c` | (see git log) |
+| `5efe674e95704cddf8d7e598dfd6541a83dabe31` | (see git log) |
+| `ead4fd2c9dc2428873587da667281288c78f5272` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
