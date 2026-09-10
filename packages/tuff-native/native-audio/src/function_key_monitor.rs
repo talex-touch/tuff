@@ -389,14 +389,16 @@ pub(crate) fn process_input(state: &mut GestureState, input: MonitorInput) -> (O
     };
     (output, suppress)
 }
-/// Clears only the Fn bit on the transitions the standalone gesture owns, so macOS
-/// cannot run its default Globe/Emoji action. Every other flag is preserved and the
-/// event itself is always forwarded.
+/// Clears only the Fn bit on the transitions the standalone gesture owns, so an
+/// application we borrowed the key from does not also see a stray Fn modifier.
+/// Every other flag is preserved and the event itself is always forwarded.
 ///
-/// Dropping the event instead — returning null from the tap — was tried and physically
-/// disproved: the Character Viewer still opened, because deleting the transition leaves
-/// the system's own Fn accounting with nothing to contradict it. Overwriting the flags
-/// is what was confirmed to prevent it. Do not go back to returning null here.
+/// This does NOT stop macOS's Globe/Emoji action, and nothing at this layer can.
+/// Both policies were tried physically: dropping the whole standalone `FlagsChanged`
+/// event (downstream measured zero Fn events) and forwarding it with this bit cleared.
+/// The panel opened either way, because the Globe action is fired by WindowServer
+/// below the tap. The only supported way to silence it is the user's own
+/// `AppleFnUsageType` preference — do not spend another round trying to win it here.
 pub(crate) fn forwarded_event_flags(flags: CGEventFlags, neutralize_fn: bool) -> CGEventFlags {
     if neutralize_fn {
         flags & !CGEventFlags::MaskSecondaryFn
