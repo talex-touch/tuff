@@ -228,6 +228,10 @@ export const AssistantEvents = {
       .module('voice-panel')
       .event('get-globe-key-status')
       .define<void, AssistantGlobeKeyStatus>(),
+    disableGlobeKeyAction: defineEvent('assistant')
+      .module('voice-panel')
+      .event('disable-globe-key-action')
+      .define<void, AssistantGlobeKeyStatus>(),
     openKeyboardSettings: defineEvent('assistant')
       .module('voice-panel')
       .event('open-keyboard-settings')
