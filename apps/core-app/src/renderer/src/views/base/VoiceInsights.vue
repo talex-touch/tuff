@@ -364,27 +364,6 @@ const metrics = computed(() => {
  * The estimate basis rides with the headline number rather than sitting in a footnote, because
  * a figure this prominent is exactly the one that must not be mistaken for a measurement.
  */
-/**
- * The equivalent sentence, split so its figure can carry weight.
- *
- * Interpolating through `t` yields one string, and the number is the only part of it worth
- * reading — the rest is scaffolding. Rendering the message once with a sentinel in place of the
- * count and splitting on that keeps a single translatable string and works whichever side of the
- * number a language puts its words on.
- */
-const EQUIVALENT_SLOT = '\u0000'
-const savedEquivalent = computed(() => {
-  const value = insights.value
-  if (!value) return null
-  const [before, after] = t('voiceInsights.metrics.savedEquivalent', {
-    count: EQUIVALENT_SLOT
-  }).split(EQUIVALENT_SLOT)
-  return {
-    before: before ?? '',
-    count: numberFormatter.value.format(value.totalCharacters),
-    after: after ?? ''
-  }
-})
 
 const heroMetric = computed(() => metrics.value.find((metric) => metric.key === 'saved') ?? null)
 const supportMetrics = computed(() => metrics.value.filter((metric) => metric.key !== 'saved'))
@@ -771,14 +750,16 @@ onBeforeUnmount(() => {
     -->
     <header class="VoiceInsights-Hero">
       <div class="VoiceInsights-HeroCopy">
-        <p v-if="eyebrow" class="VoiceInsights-Eyebrow">{{ eyebrow }}</p>
-        <h1>{{ t('voiceInsights.headline') }}</h1>
-        <p v-if="insights" class="VoiceInsights-Boundary">{{ boundaryLabel }}</p>
+        <!--
+          The nav label is the heading. It carried a slogan under it for a while, which meant the
+          page said where you were and then said something else about itself in a bigger size —
+          two headings for one screen.
+        -->
+        <h1 v-if="eyebrow">{{ eyebrow }}</h1>
       </div>
       <div class="VoiceInsights-HeroActions shell-chrome-safe-inline-end">
         <slot name="status" />
         <TxButton
-          variant="flat"
           :disabled="records.length === 0"
           data-testid="voice-insights-records-jump"
           @click="openRecords"
@@ -795,7 +776,6 @@ onBeforeUnmount(() => {
         <TxPopover v-model="menuOpen" placement="bottom-end" :offset="6" :min-width="176">
           <template #reference>
             <TxButton
-              variant="flat"
               :aria-label="t('voiceInsights.actions.more')"
               data-testid="voice-insights-more"
             >
@@ -950,10 +930,6 @@ onBeforeUnmount(() => {
           </p>
           <div class="VoiceInsights-Hero2Value">
             <strong><TxTextMorph :text="heroMetric.value" /></strong>
-            <span v-if="savedEquivalent" class="VoiceInsights-Hero2Equivalent"
-              >{{ savedEquivalent.before }}<strong>{{ savedEquivalent.count }}</strong
-              >{{ savedEquivalent.after }}</span
-            >
           </div>
         </article>
 
@@ -1018,7 +994,13 @@ onBeforeUnmount(() => {
         -->
         <div class="VoiceInsights-HeatmapHeader">
           <div>
-            <h3>{{ t('voiceInsights.heatmap.title') }}</h3>
+            <h3>
+              {{ t('voiceInsights.heatmap.title')
+              }}<!--
+                The chart is the only thing the start date qualifies: the page begins before the
+                record does, and saying so up in the header made it read as a fact about the page.
+              --><small v-if="insights">{{ boundaryLabel }}</small>
+            </h3>
             <p v-if="insights" class="VoiceInsights-StreakLine">
               {{
                 t('voiceInsights.streak.summary', {
@@ -1259,6 +1241,7 @@ onBeforeUnmount(() => {
       <TxPagination
         v-if="recordPageCount > 1"
         v-model:current-page="recordPage"
+        class="VoiceInsights-RecordsPager"
         :page-size="RECORDS_PER_PAGE"
         :total="records.length"
         data-testid="voice-insights-records-pagination"
@@ -1324,19 +1307,11 @@ onBeforeUnmount(() => {
   }
 }
 
-.VoiceInsights-Eyebrow {
-  margin: 0;
+.VoiceInsights-HeatmapHeader h3 small {
+  margin-left: var(--shell-space-2);
   color: var(--shell-text-muted);
-  font-size: var(--shell-fs-sm);
-  font-weight: 600;
-  user-select: none;
-}
-
-.VoiceInsights-Boundary {
-  min-width: 0;
-  margin: 0;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-sm);
+  font-size: var(--shell-fs-caption);
+  font-weight: normal;
 }
 
 .VoiceInsights-HeroActions {
@@ -1450,12 +1425,6 @@ onBeforeUnmount(() => {
   > span {
     color: var(--shell-text-secondary);
     font-size: var(--shell-fs-sm);
-  }
-
-  /* The figure is the only part of the sentence anyone reads; the rest is scaffolding. */
-  .VoiceInsights-Hero2Equivalent strong {
-    color: var(--shell-text-primary);
-    font-weight: 600;
   }
 }
 
@@ -1957,6 +1926,13 @@ onBeforeUnmount(() => {
     color: var(--shell-text-secondary);
     font-size: var(--shell-fs-body);
   }
+}
+
+/* It was sitting on the last record. A pager is a separate thing from the list it pages. */
+.VoiceInsights-RecordsPager {
+  display: flex;
+  margin-top: var(--shell-space-5);
+  justify-content: center;
 }
 
 .VoiceInsights-RecordsEmpty {

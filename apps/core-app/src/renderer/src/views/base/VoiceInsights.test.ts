@@ -248,11 +248,11 @@ describe('VoiceInsights page composition', () => {
 
     const header = wrapper.find('.VoiceInsights-Hero')
     expect(header.exists()).toBe(true)
-    expect(header.find('.VoiceInsights-Eyebrow').text()).toBe('音频洞察')
-    // Exactly one, here and on the page: the shell no longer draws a second.
+    // The nav label *is* the heading. Exactly one, here and on the page.
     expect(wrapper.findAll('h1')).toHaveLength(1)
-    expect(header.find('h1').text()).toContain('voiceInsights.headline')
-    expect(header.find('.VoiceInsights-Boundary').text()).toContain('voiceInsights.boundary')
+    expect(header.find('h1').text()).toBe('音频洞察')
+    // The start date bounds the chart, not the page, so it is not up here.
+    expect(header.find('.VoiceInsights-Boundary').exists()).toBe(false)
 
     // A jump to the log, and the menu. Nothing else earns a place in a title row — refresh
     // least of all, on a page that reloads itself after everything it offers.
@@ -410,12 +410,11 @@ describe('VoiceInsights page composition', () => {
     wrapper.unmount()
   })
 
-  /** No nav label passed, none drawn — the sidebar's word is the page's to supply, not ours. */
-  it('draws no eyebrow when the page does not name one', async () => {
+  /** No nav label passed, no heading drawn — the sidebar's word is the page's to supply. */
+  it('draws no heading when the page does not name one', async () => {
     const wrapper = await mountPage()
 
-    expect(wrapper.find('.VoiceInsights-Eyebrow').exists()).toBe(false)
-    expect(wrapper.find('.VoiceInsights-Hero h1').exists()).toBe(true)
+    expect(wrapper.find('.VoiceInsights-Hero h1').exists()).toBe(false)
 
     wrapper.unmount()
   })
@@ -432,6 +431,8 @@ describe('VoiceInsights page composition', () => {
     expect(activity.find('.VoiceInsights-StreakLine').text()).toContain(
       'voiceInsights.streak.summary'
     )
+    // The date the record starts sits beside the title of the year it bounds.
+    expect(activity.find('h3 small').text()).toContain('voiceInsights.boundary')
     expect(activity.find('.VoiceInsights-Streaks').exists()).toBe(false)
 
     wrapper.unmount()
@@ -476,25 +477,6 @@ describe('VoiceInsights page composition', () => {
     expect(rate.find('.VoiceInsights-MetricValue > span').text()).toContain(
       'voiceInsights.units.charactersPerMinute'
     )
-
-    wrapper.unmount()
-  })
-
-  /**
-   * The figure is the only part of the equivalent sentence worth reading. Splitting the rendered
-   * message on a sentinel keeps one translatable string and works whichever side of the number a
-   * language puts its words on.
-   */
-  it('gives the equivalent sentence its figure in bold', async () => {
-    const wrapper = await mountPage()
-
-    const equivalent = wrapper.find('.VoiceInsights-Hero2Equivalent')
-    expect(equivalent.exists()).toBe(true)
-    const bold = equivalent.find('strong')
-    expect(bold.exists()).toBe(true)
-    expect(bold.text()).toBe('128,540')
-    // The scaffolding stays outside it, or the whole line would read as the number.
-    expect(equivalent.text()).not.toBe(bold.text())
 
     wrapper.unmount()
   })

@@ -1075,7 +1075,6 @@
     }
   },
   "voiceInsights": {
-    "headline": "Faster spoken than typed",
     "loading": "Loading voice insights...",
     "actions": {
       "refresh": "Refresh",
@@ -1090,8 +1089,8 @@
       "settings": "Settings"
     },
     "boundary": {
-      "notStarted": "Not counting yet",
-      "since": "Counting since {date}, on this machine only"
+      "notStarted": "not counting yet",
+      "since": "since {date}"
     },
     "metrics": {
       "label": "Voice usage metrics",
@@ -1099,8 +1098,7 @@
       "saved": "Roughly saved",
       "rate": "How fast you talk",
       "duration": "Time spent talking",
-      "savedBasis": "Estimated against {count} characters a minute of typing — not measured",
-      "savedEquivalent": "That is {count} characters you never typed"
+      "savedBasis": "Estimated against {count} characters a minute of typing — not measured"
     },
     "units": {
       "characters": "characters",
