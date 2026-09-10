@@ -32,6 +32,20 @@ export interface AssistantVoiceCancelHoldPayload {
   state: 'start' | 'reset' | 'commit'
 }
 
+/**
+ * Whether macOS still owns a lone Fn press.
+ *
+ * Nothing in the app can take it: the Globe action is fired by WindowServer below our event tap,
+ * so the only switch is the user's own "Press the Globe key to" preference. This reports what
+ * that preference currently says so the settings page can ask for it — it never changes it.
+ */
+export interface AssistantGlobeKeyStatus {
+  /** False off macOS, where a lone Fn press has no system action to compete with. */
+  applies: boolean
+  /** The system opens Emoji / switches input source on a lone Fn press. */
+  systemActionActive: boolean
+}
+
 export interface AssistantFloatingBallPositionPayload {
   x: number
   y: number
@@ -209,6 +223,14 @@ export const AssistantEvents = {
     openIntelligenceSettings: defineEvent('assistant')
       .module('voice-panel')
       .event('open-intelligence-settings')
+      .define<void, boolean>(),
+    getGlobeKeyStatus: defineEvent('assistant')
+      .module('voice-panel')
+      .event('get-globe-key-status')
+      .define<void, AssistantGlobeKeyStatus>(),
+    openKeyboardSettings: defineEvent('assistant')
+      .module('voice-panel')
+      .event('open-keyboard-settings')
       .define<void, boolean>(),
     submitText: defineEvent('assistant')
       .module('voice-panel')

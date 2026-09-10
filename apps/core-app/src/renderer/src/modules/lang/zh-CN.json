@@ -550,6 +550,9 @@
     "floatingBallDesc": "在桌面显示可拖动的语音输入入口和状态；隐藏后 Fn/Ctrl 快捷键仍可使用。",
     "voiceInput": "语音输入",
     "voiceInputDesc": "短按 macOS 的 Fn 或 Windows/Linux 的 Ctrl 开始，再按一次结束；长按后松开结束。仅在语音输入进行时采集麦克风。",
+    "globeKey": "Fn 键仍归系统占用",
+    "globeKeyDesc": "系统会在单独按 Fn 时弹出表情面板或切换输入法，这个动作在应用之外触发，应用拦不住。在「键盘 → 按下 🌐 键时」选择「不执行任何操作」即可，Fn 的其他功能不受影响。",
+    "globeKeyAction": "打开键盘设置",
     "voiceWake": "唤醒词唤醒",
     "voiceWakeDesc": "唤醒词唤醒暂不可用。"
   },

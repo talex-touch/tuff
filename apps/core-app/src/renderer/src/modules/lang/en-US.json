@@ -550,6 +550,9 @@
     "floatingBallDesc": "Show a draggable voice-input entry and status on the desktop. Hiding it does not affect the Fn/Ctrl shortcut.",
     "voiceInput": "Voice input",
     "voiceInputDesc": "Briefly press Fn on macOS or Ctrl on Windows/Linux to start, then press again to finish. Hold and release to finish. The microphone is captured only while voice input is active.",
+    "globeKey": "The system still owns the Fn key",
+    "globeKeyDesc": "A lone Fn press opens the Emoji panel or switches input source. macOS fires that outside the app, where no app can stop it. Choose \"Do Nothing\" under Keyboard → Press the Globe key to; the rest of what Fn does is unaffected.",
+    "globeKeyAction": "Open Keyboard settings",
     "voiceWake": "Wake-word activation",
     "voiceWakeDesc": "Wake-word activation is not available yet."
   },

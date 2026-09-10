@@ -41,6 +41,7 @@ import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { setPlatformVoiceEscapeCapture } from '../voice/command-gesture'
+import { openKeyboardSettings, readGlobeKeyStatus } from '../voice/globe-key-preference'
 import {
   dialog,
   screen,
@@ -389,6 +390,18 @@ export class AssistantModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(AssistantEvents.voice.openIntelligenceSettings, async () => {
         return await this.openIntelligenceSettings()
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(AssistantEvents.voice.getGlobeKeyStatus, async () => {
+        return await readGlobeKeyStatus()
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(AssistantEvents.voice.openKeyboardSettings, async () => {
+        return await openKeyboardSettings()
       })
     )
 
