@@ -7,6 +7,8 @@ import type { CSSProperties } from 'vue'
 import type { DialogButton } from '@talex-touch/tuffex/dialog'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCard } from '@talex-touch/tuffex/card'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import { TxPagination } from '@talex-touch/tuffex/pagination'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
@@ -154,6 +156,8 @@ interface HeatmapMonth {
  * breadcrumb drifts from the menu that leads to it.
  */
 const props = defineProps<{ eyebrow?: string }>()
+/** Settings are the page's card, not this one's, so opening them is a request rather than an act. */
+const emit = defineEmits<{ 'open-settings': [] }>()
 const eyebrow = computed(() => props.eyebrow)
 
 const { locale, t } = useI18n()
@@ -173,7 +177,28 @@ const clearConfirmVisible = ref(false)
 const reportExpanded = ref(false)
 const postClearRefreshFailed = ref(false)
 const heatmapScroller = ref<HTMLElement | null>(null)
+/**
+ * A page of the log.
+ *
+ * Twelve is what fits a drawer without its own scrollbar fighting the page's. The list is short
+ * enough that this is about reading position, not performance: a wall of a hundred transcripts
+ * has no top and no bottom, and paging gives it both.
+ */
+const RECORDS_PER_PAGE = 12
+
 const menuOpen = ref(false)
+const recordsOpen = ref(false)
+const recordPage = ref(1)
+const recordPageCount = computed(() =>
+  Math.max(1, Math.ceil(records.value.length / RECORDS_PER_PAGE))
+)
+const pagedRecords = computed(() => {
+  // Clamped rather than trusted: clearing the log while page 4 is open would otherwise leave the
+  // drawer showing a slice past the end of the array.
+  const page = Math.min(Math.max(1, recordPage.value), recordPageCount.value)
+  const start = (page - 1) * RECORDS_PER_PAGE
+  return records.value.slice(start, start + RECORDS_PER_PAGE)
+})
 const showSkeleton = useDeferredLoading(() => !hasLoaded.value && !loadFailed.value)
 let loadRevision = 0
 let disposed = false
@@ -704,25 +729,11 @@ onMounted(() => {
   void loadInsights()
 })
 
-/**
- * Both of these are sections of this page, not other screens.
- *
- * Records and the recognition settings sit below a year's worth of charts, which is a long way to
- * scroll past on the way to a toggle. The header jumps instead of navigating: leaving the page to
- * come back to the same page is the worse of the two.
- */
-function scrollTo(target: HTMLElement | null): void {
-  // Queried rather than held in a `ref`: one of these is another component's card, and a template
-  // ref on a component yields its instance, not the element `scrollIntoView` needs.
-  target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
-
-function scrollToRecords(): void {
-  scrollTo(document.querySelector<HTMLElement>('[data-testid="voice-insights-records"]'))
-}
-
-function scrollToSettings(): void {
-  scrollTo(document.querySelector<HTMLElement>('[data-voice-settings]'))
+function openRecords(): void {
+  // Back to the first page each time. Reopening on page 7 of a log you last read yesterday is a
+  // state nobody asked to be remembered.
+  recordPage.value = 1
+  recordsOpen.value = true
 }
 
 /** A menu item closes the menu, then acts. Leaving it open over a dialog is its own bug. */
@@ -753,6 +764,11 @@ onBeforeUnmount(() => {
       heading, the date counting started, three actions and a status alert. Splitting it across
       two owners is what kept leaving a band of blank between the title and the buttons.
     -->
+    <!--
+      No refresh button. The page loads on mount and reloads itself after the only two actions
+      that change anything, so the button served a case that does not arise — except a failed
+      load, and that notice already carries its own retry.
+    -->
     <header class="VoiceInsights-Hero">
       <div class="VoiceInsights-HeroCopy">
         <p v-if="eyebrow" class="VoiceInsights-Eyebrow">{{ eyebrow }}</p>
@@ -762,20 +778,10 @@ onBeforeUnmount(() => {
       <div class="VoiceInsights-HeroActions shell-chrome-safe-inline-end">
         <slot name="status" />
         <TxButton
-          variant="secondary"
-          :loading="refreshing"
-          :disabled="!hasLoaded || clearing"
-          data-testid="voice-insights-refresh"
-          @click="loadInsights(true)"
-        >
-          <span class="i-ri-refresh-line" aria-hidden="true" />
-          <span>{{ t('voiceInsights.actions.refresh') }}</span>
-        </TxButton>
-        <TxButton
           variant="flat"
           :disabled="records.length === 0"
           data-testid="voice-insights-records-jump"
-          @click="scrollToRecords"
+          @click="openRecords"
         >
           <span class="i-ri-history-line" aria-hidden="true" />
           <span>{{ t('voiceInsights.actions.records') }}</span>
@@ -811,7 +817,7 @@ onBeforeUnmount(() => {
               type="button"
               role="menuitem"
               data-testid="voice-insights-settings"
-              @click="runFromMenu(scrollToSettings)"
+              @click="runFromMenu(() => emit('open-settings'))"
             >
               <span class="i-ri-settings-3-line" aria-hidden="true" />
               <span>{{ t('voiceInsights.actions.settings') }}</span>
@@ -973,10 +979,6 @@ onBeforeUnmount(() => {
         Without it a shorter page is indistinguishable from a broken one, and the reader who saw
         a heatmap on someone else's screen has no way to tell which they are looking at.
       -->
-      <p v-if="!showsWeeks" class="VoiceInsights-Tier" data-testid="voice-insights-tier-note">
-        {{ t('voiceInsights.tiers.weeksPending') }}
-      </p>
-
       <TxCard
         v-if="showsWeeks"
         class="VoiceInsights-Weeks"
@@ -1155,94 +1157,113 @@ onBeforeUnmount(() => {
           </ul>
         </div>
       </TxCard>
-      <TxCard class="VoiceInsights-Records" shadow="none" data-testid="voice-insights-records">
-        <header class="VoiceInsights-RecordsHeading">
-          <div>
-            <h3>{{ t('voiceInsights.records.title') }}</h3>
-            <p>{{ t('voiceInsights.records.description') }}</p>
-          </div>
-          <TxButton
-            variant="bare"
-            type="danger"
-            size="sm"
-            :loading="recordsClearing"
-            :disabled="records.length === 0 || recordsClearing || clearing"
-            data-testid="voice-insights-records-clear"
-            @click="clearRecords"
-          >
-            {{ t('voiceInsights.records.clear') }}
-          </TxButton>
-        </header>
-
-        <div v-if="records.length === 0" class="VoiceInsights-RecordsEmpty">
-          {{ t('voiceInsights.records.empty') }}
-        </div>
-        <div v-else class="VoiceInsights-RecordList">
-          <details v-for="record in records" :key="record.id" class="VoiceInsights-Record">
-            <summary>
-              <span class="VoiceInsights-RecordSummaryMain">
-                <strong>{{
-                  record.text || record.rawText || t('voiceInsights.records.emptyText')
-                }}</strong>
-                <small>{{ recordDateLabel(record.capturedAt) }}</small>
-              </span>
-              <span class="VoiceInsights-RecordSummaryMeta">
-                <span :data-status="record.status">{{ recordStatusLabel(record.status) }}</span>
-                <span>{{ record.model || record.channel || '—' }}</span>
-              </span>
-            </summary>
-            <div class="VoiceInsights-RecordDetails">
-              <audio
-                v-if="record.audioUrl"
-                controls
-                preload="none"
-                :src="record.audioUrl"
-                :aria-label="t('voiceInsights.records.audioLabel')"
-              />
-              <p class="VoiceInsights-RecordAudioMeta">{{ recordAudioLabel(record) }}</p>
-              <dl>
-                <div>
-                  <dt>{{ t('voiceInsights.records.rawText') }}</dt>
-                  <dd>{{ record.rawText || '—' }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.finalText') }}</dt>
-                  <dd>{{ record.text || '—' }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.duration') }}</dt>
-                  <dd>
-                    {{ record.audioDurationMs ? formatDuration(record.audioDurationMs) : '—' }}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.recognitionDuration') }}</dt>
-                  <dd>
-                    {{
-                      record.recognitionDurationMs
-                        ? formatDuration(record.recognitionDurationMs)
-                        : '—'
-                    }}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.tokens') }}</dt>
-                  <dd>{{ recordTokenLabel(record) }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.channel') }}</dt>
-                  <dd>{{ record.channel || record.providerId || '—' }}</dd>
-                </div>
-                <div v-if="record.errorCode">
-                  <dt>{{ t('voiceInsights.records.error') }}</dt>
-                  <dd>{{ record.errorCode }}</dd>
-                </div>
-              </dl>
-            </div>
-          </details>
-        </div>
-      </TxCard>
     </main>
+
+    <!--
+      Records and settings are drawers, not sections.
+
+      A year of charts is what this page is for; a transcript log and a settings card underneath
+      it are two more screens' worth of content that most visits scroll straight past. Behind a
+      drawer they cost nothing until asked for, and closing one puts the reader back where they
+      were rather than somewhere down a long page.
+    -->
+    <TxDrawer
+      v-model:visible="recordsOpen"
+      :title="t('voiceInsights.records.title')"
+      size="560px"
+      data-testid="voice-insights-records"
+    >
+      <header class="VoiceInsights-RecordsHeading">
+        <p>{{ t('voiceInsights.records.description') }}</p>
+        <TxButton
+          variant="bare"
+          type="danger"
+          size="sm"
+          :loading="recordsClearing"
+          :disabled="records.length === 0 || recordsClearing || clearing"
+          data-testid="voice-insights-records-clear"
+          @click="clearRecords"
+        >
+          {{ t('voiceInsights.records.clear') }}
+        </TxButton>
+      </header>
+
+      <div v-if="records.length === 0" class="VoiceInsights-RecordsEmpty">
+        {{ t('voiceInsights.records.empty') }}
+      </div>
+      <div v-else class="VoiceInsights-RecordList">
+        <details v-for="record in pagedRecords" :key="record.id" class="VoiceInsights-Record">
+          <summary>
+            <span class="VoiceInsights-RecordSummaryMain">
+              <strong>{{
+                record.text || record.rawText || t('voiceInsights.records.emptyText')
+              }}</strong>
+              <small>{{ recordDateLabel(record.capturedAt) }}</small>
+            </span>
+            <span class="VoiceInsights-RecordSummaryMeta">
+              <span :data-status="record.status">{{ recordStatusLabel(record.status) }}</span>
+              <span>{{ record.model || record.channel || '—' }}</span>
+            </span>
+          </summary>
+          <div class="VoiceInsights-RecordDetails">
+            <audio
+              v-if="record.audioUrl"
+              controls
+              preload="none"
+              :src="record.audioUrl"
+              :aria-label="t('voiceInsights.records.audioLabel')"
+            />
+            <p class="VoiceInsights-RecordAudioMeta">{{ recordAudioLabel(record) }}</p>
+            <dl>
+              <div>
+                <dt>{{ t('voiceInsights.records.rawText') }}</dt>
+                <dd>{{ record.rawText || '—' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('voiceInsights.records.finalText') }}</dt>
+                <dd>{{ record.text || '—' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('voiceInsights.records.duration') }}</dt>
+                <dd>
+                  {{ record.audioDurationMs ? formatDuration(record.audioDurationMs) : '—' }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t('voiceInsights.records.recognitionDuration') }}</dt>
+                <dd>
+                  {{
+                    record.recognitionDurationMs
+                      ? formatDuration(record.recognitionDurationMs)
+                      : '—'
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t('voiceInsights.records.tokens') }}</dt>
+                <dd>{{ recordTokenLabel(record) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('voiceInsights.records.channel') }}</dt>
+                <dd>{{ record.channel || record.providerId || '—' }}</dd>
+              </div>
+              <div v-if="record.errorCode">
+                <dt>{{ t('voiceInsights.records.error') }}</dt>
+                <dd>{{ record.errorCode }}</dd>
+              </div>
+            </dl>
+          </div>
+        </details>
+      </div>
+
+      <TxPagination
+        v-if="recordPageCount > 1"
+        v-model:current-page="recordPage"
+        :page-size="RECORDS_PER_PAGE"
+        :total="records.length"
+        data-testid="voice-insights-records-pagination"
+      />
+    </TxDrawer>
 
     <TxBottomDialog
       v-if="clearConfirmVisible"
@@ -1507,14 +1528,6 @@ onBeforeUnmount(() => {
     font-size: var(--shell-fs-caption);
     line-height: 1.4;
   }
-}
-
-/* Quiet on purpose: it explains an absence, and an absence should not shout. */
-.VoiceInsights-Tier {
-  margin: 0;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
-  line-height: 1.5;
 }
 
 .VoiceInsights-MetricValue {
