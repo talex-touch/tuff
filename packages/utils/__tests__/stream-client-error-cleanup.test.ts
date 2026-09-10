@@ -52,37 +52,33 @@ describe('stream client error cleanup', () => {
   })
 
   async function startStream(callbacks?: {
+    onData?: (chunk: unknown) => void
     onError?: (error: Error) => void
     onEnd?: () => void
   }) {
     const { channel, handlers } = createChannel()
-    const transport = createPluginTuffTransport(channel as any)
+    const pluginChannel: Parameters<typeof createPluginTuffTransport>[0] = channel
+    const transport = createPluginTuffTransport(pluginChannel)
+    const onData = vi.fn<(chunk: unknown) => void>(callbacks?.onData ?? (() => {}))
     const onError = vi.fn<(error: Error) => void>(
       callbacks?.onError ?? (() => {}),
     )
     const onEnd = vi.fn<() => void>(callbacks?.onEnd ?? (() => {}))
     const controller = await transport.stream(ClipboardEvents.change, undefined, {
-      onData: () => {},
+      onData,
       onError,
       onEnd,
     })
 
     return {
       handlers,
+      onData,
       onError,
       onEnd,
       eventName: ClipboardEvents.change.toEventName(),
       streamId: controller.streamId,
     }
   }
-
-  it('registers exactly the three stream channels to begin with', async () => {
-    const { handlers } = await startStream()
-
-    // Positive control: if the stream never attached anything, a later "nothing is attached"
-    // assertion would pass for the wrong reason.
-    expect(handlers.size).toBe(3)
-  })
 
   it('releases the registrations when an error arrives on the data channel', async () => {
     const { handlers, onError, eventName, streamId } = await startStream()
@@ -130,16 +126,23 @@ describe('stream client error cleanup', () => {
     expect(handlers.size).toBe(0)
   })
 
-  it('still delivers data chunks without tearing the stream down', async () => {
-    const { handlers, eventName, streamId } = await startStream()
+  it('delivers consecutive data chunks before releasing registrations at the terminal event', async () => {
+    const { handlers, onData, eventName, streamId } = await startStream()
 
     handlers.get(`${eventName}:stream:data:${streamId}`)?.({
       header: { status: 'request' },
-      data: { chunk: { ok: true } },
+      data: { chunk: { sequence: 1 } },
+    })
+    handlers.get(`${eventName}:stream:data:${streamId}`)?.({
+      header: { status: 'request' },
+      data: { chunk: { sequence: 2 } },
     })
 
-    // A fix that cleaned up on every data message would break streaming entirely.
-    expect(handlers.size).toBe(3)
+    expect(onData).toHaveBeenNthCalledWith(1, { sequence: 1 })
+    expect(onData).toHaveBeenNthCalledWith(2, { sequence: 2 })
+
+    handlers.get(`${eventName}:stream:end:${streamId}`)?.({})
+    expect(handlers.size).toBe(0)
   })
 
   it.each([

@@ -1076,7 +1076,7 @@
   },
   "voiceInsights": {
     "headline": "Faster said than typed",
-    "subtitle": "See aggregate voice impact; when record keeping is enabled, inspect source audio, transcripts, and channel usage in Intelligence settings.",
+    "subtitle": "Counted on this machine only. Nothing is uploaded.",
     "sectionTitle": "Insights",
     "loading": "Loading voice insights...",
     "actions": {
@@ -1215,8 +1215,7 @@
       "streak": "{current}-day streak · longest {longest} · {active} active days"
     },
     "tiers": {
-      "weeksPending": "After a week of records, the 12-week comparison appears here.",
-      "activityPending": "After a month of records, the year heatmap and report appear here."
+      "weeksPending": "After a week of records, the 12-week comparison appears here."
     }
   },
   "home": {
@@ -5782,6 +5781,9 @@
     "unpinned": "Unpinned",
     "pinFailed": "Pin failed",
     "send": "Send",
+    "searching": "Searching…",
+    "searchFailed": "Search failed",
+    "retrySearch": "Search failed. Retry search",
     "copied": "Copied",
     "flowSent": "Sent to target plugin",
     "flowFailed": "Flow transfer failed",
