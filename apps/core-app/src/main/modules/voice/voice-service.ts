@@ -1,4 +1,9 @@
 import { StorageList } from '@talex-touch/utils'
+import {
+  DEFAULT_VOICE_POLISH_STRENGTH,
+  normalizeVoicePolishStrength,
+  type VoicePolishStrength
+} from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type {
   VoiceAsrStreamEvent,
@@ -32,7 +37,7 @@ import { clipboardModule } from '../clipboard'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { intelligenceTtsService } from '../ai/intelligence-tts-service'
 import { activeAppService, type ActiveAppInfo } from '../system/active-app'
-import { POLISH_SYSTEM_PROMPT, withLanguageDirective, wrapTranscription } from './polish-prompt'
+import { getVoicePolishPrompt, wrapTranscription } from './polish-prompt'
 import { createLiveDelivery } from './voice-live-delivery'
 import { getConfiguredAsrProvider } from './voice-provider-runtime'
 import { selectVoiceFile } from './voice-file-transcription'
@@ -48,6 +53,20 @@ function isVoiceHistoryEnabled(): boolean {
     return setting.voiceInput?.historyEnabled === true
   } catch {
     return false
+  }
+}
+
+function resolvePolishStrength(requested: unknown): VoicePolishStrength {
+  if (requested !== undefined) return normalizeVoicePolishStrength(requested)
+  try {
+    const setting = getMainConfig(StorageList.APP_SETTING) as
+      | {
+          voiceInput?: { polishStrength?: unknown }
+        }
+      | undefined
+    return normalizeVoicePolishStrength(setting?.voiceInput?.polishStrength)
+  } catch {
+    return DEFAULT_VOICE_POLISH_STRENGTH
   }
 }
 
@@ -154,6 +173,8 @@ interface RetryBuffer {
   /** Exact main-owned adapter snapshot from the failed stream; never re-resolved from settings. */
   provider: VoiceProviderAdapter
   model: string
+  polishStrength: VoicePolishStrength
+  cleanup: boolean
   /** Set once the session ends abnormally; until then the buffer belongs to a live session. */
   expiresAt: number | null
   kind: VoiceRecoveryKind | null
@@ -168,6 +189,7 @@ interface VoiceSessionRecord {
   readonly deviceChanged: boolean
   readonly caller: string
   readonly delivery: VoiceDictatePayload['delivery']
+  readonly polishStrength: VoicePolishStrength
   readonly targetKey: string | null
   readonly startedAt: number
   readonly abortSignal?: AbortSignal
@@ -327,6 +349,8 @@ export class VoiceService {
     sampleRate: number,
     provider: VoiceProviderAdapter,
     model: string,
+    polishStrength: VoicePolishStrength,
+    cleanup: boolean,
     language?: string
   ): void {
     this.clearRetryBuffer()
@@ -337,6 +361,8 @@ export class VoiceService {
       sampleRate,
       provider,
       model,
+      polishStrength,
+      cleanup,
       ...(language ? { language } : {}),
       expiresAt: null,
       kind: null,
@@ -429,6 +455,7 @@ export class VoiceService {
     throwIfCancelled(signal)
     if (this.disposed) throw new Error('VOICE_SESSION_SERVICE_DISPOSED')
     this.assertSupported()
+    const polishStrength = resolvePolishStrength(payload.polishStrength)
 
     const targetPromise =
       payload.delivery === 'active-app'
@@ -472,6 +499,7 @@ export class VoiceService {
       deviceChanged,
       caller,
       delivery: payload.delivery ?? 'none',
+      polishStrength,
       targetKey,
       startedAt: Date.now(),
       ...(signal ? { abortSignal: signal } : {}),
@@ -517,7 +545,12 @@ export class VoiceService {
     }
     const result = await this.finalizeCapture(
       capture,
-      { cleanup: options.cleanup, language: options.language, delivery: record.delivery },
+      {
+        cleanup: options.cleanup,
+        language: options.language,
+        delivery: record.delivery,
+        polishStrength: record.polishStrength
+      },
       record.abortSignal,
       record.caller
     )
@@ -613,7 +646,12 @@ export class VoiceService {
 
     const cleanup = payload.cleanup ?? true
     const polishedText = cleanup
-      ? await this.polish(transcript.text, payload.language, signal, caller)
+      ? await this.polish(
+          transcript.text,
+          normalizeVoicePolishStrength(payload.polishStrength),
+          signal,
+          caller
+        )
       : null
     throwIfCancelled(signal)
     return {
@@ -898,6 +936,7 @@ export class VoiceService {
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
     const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
+    const cleanup = payload.cleanup !== false && payload.deliveryTiming !== 'live'
     const pollCapture = getPollCapture()
     const requestId = nextVoiceSessionId()
     const request: VoiceStreamRequest = {
@@ -965,7 +1004,15 @@ export class VoiceService {
     let hasFinal = false
     let lastPartialText = ''
     // A new session owns the single retry slot; whatever the last one left is dropped here.
-    this.beginRetryBuffer(sessionId, DEFAULT_ASR_SAMPLE_RATE, provider, model, payload.language)
+    this.beginRetryBuffer(
+      sessionId,
+      DEFAULT_ASR_SAMPLE_RATE,
+      provider,
+      model,
+      session.polishStrength,
+      cleanup,
+      payload.language
+    )
     try {
       // The pump cannot `yield` — it is a detached task, while the generator is parked on
       // `connection.events`. Merging both into one queue is what lets input levels interleave
@@ -1024,7 +1071,7 @@ export class VoiceService {
       void forwarder.catch((error: unknown) => push({ kind: 'error', error }))
 
       /*
-       * Push-to-talk types as it recognizes; tap-to-toggle delivers once at the end.
+       * The live preference types as it recognizes; final delivery waits until the end.
        *
        * Only the live path gets a stable-prefix committer, and only when there is
        * somewhere to deliver to. Its presence is also what turns the polish pass off
@@ -1044,10 +1091,9 @@ export class VoiceService {
         usage?: VoiceUsage
       ): Promise<{ text: string; language?: string; delivery?: VoiceDeliveryResult }> => {
         const normalized = rawText.trim()
-        const polishedText =
-          payload.cleanup === false || live
-            ? null
-            : await this.polish(normalized, payload.language, signal, caller)
+        const polishedText = cleanup
+          ? await this.polish(normalized, session.polishStrength, signal, caller)
+          : null
         throwIfCancelled(signal)
         const text = polishedText ?? normalized
         const delivery = live
@@ -1294,7 +1340,10 @@ export class VoiceService {
     throwIfCancelled(signal)
     const recognized = text.trim()
     if (!recognized) return { text: '' }
-    const polishedText = await this.polish(recognized, language, signal, caller)
+    const polishedText = buffer.cleanup
+      ? await this.polish(recognized, buffer.polishStrength, signal, caller)
+      : null
+    throwIfCancelled(signal)
     const deliveredText = polishedText ?? recognized
     const delivery =
       payload.delivery === 'active-app'
@@ -1384,10 +1433,11 @@ export class VoiceService {
   /** AI polish via the intelligence `text.chat` capability. Returns null on failure. */
   private async polish(
     transcript: string,
-    language?: string,
+    strength: VoicePolishStrength,
     signal?: AbortSignal,
     caller = VOICE_CALLER
   ): Promise<string | null> {
+    if (!transcript.trim()) return null
     const polishController = new AbortController()
     const abortPolish = (): void => polishController.abort()
     let polishTimedOut = false
@@ -1403,7 +1453,7 @@ export class VoiceService {
           'text.chat',
           {
             messages: [
-              { role: 'system', content: withLanguageDirective(POLISH_SYSTEM_PROMPT, language) },
+              { role: 'system', content: getVoicePolishPrompt(strength) },
               { role: 'user', content: wrapTranscription(transcript) }
             ]
           },

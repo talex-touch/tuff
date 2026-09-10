@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import type { AppSetting } from '@talex-touch/utils'
+import type { VoiceInputSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
+import type * as VueModule from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SettingSpeechRecognition from './SettingSpeechRecognition.vue'
 
+type SpeechSettingsFixture = Pick<AppSetting, 'assistant' | 'floatingBall' | 'voiceWake'> & {
+  voiceInput?: VoiceInputSetting
+}
+
 const router = vi.hoisted(() => ({ push: vi.fn() }))
-const settings = vi.hoisted(() => ({ voiceInput: { historyEnabled: false } }))
+const settings = vi.hoisted(() => {
+  const { reactive } = require('vue') as typeof VueModule
+  return reactive({} as SpeechSettingsFixture)
+})
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key })
@@ -33,6 +43,17 @@ function mountSettings(): VueWrapper {
           emits: ['update:modelValue'],
           template: '<section>{{ title }}</section>'
         },
+        TuffBlockSelect: {
+          name: 'TuffBlockSelect',
+          props: ['modelValue', 'title', 'description'],
+          emits: ['update:modelValue'],
+          template: '<section><span>{{ title }}</span><slot /></section>'
+        },
+        TuffSelectItem: {
+          name: 'TuffSelectItem',
+          props: ['value'],
+          template: '<option :value="value"><slot /></option>'
+        },
         TxButton: {
           name: 'TxButton',
           props: ['disabled'],
@@ -45,48 +66,124 @@ function mountSettings(): VueWrapper {
   })
 }
 
+function controlByTitle(wrapper: VueWrapper, title: string) {
+  const control = wrapper
+    .findAllComponents({ name: 'TuffBlockSwitch' })
+    .find((candidate) => candidate.props('title') === title)
+  if (!control) throw new Error(`Switch ${title} was not rendered`)
+  return control
+}
+
+function resetSettings(): void {
+  settings.assistant = { enabled: false }
+  settings.floatingBall = {
+    enabled: false,
+    size: 56,
+    opacity: 1,
+    edgePadding: 24,
+    position: { x: -1, y: -1 }
+  }
+  settings.voiceWake = {
+    enabled: false,
+    wakeWords: ['Alo'],
+    language: 'en-US',
+    continuous: true,
+    cooldownMs: 2200,
+    openPanelOnWake: true
+  }
+  settings.voiceInput = {
+    enabled: false,
+    language: 'fr-FR',
+    historyEnabled: true,
+    polishEnabled: true,
+    polishStrength: 'structured'
+  }
+}
+
 describe('SettingSpeechRecognition', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    settings.voiceInput = { historyEnabled: false }
+    resetSettings()
   })
 
-  /**
-   * Three rows used to send the user to Intelligence: AI channels, capability bindings and
-   * channel order. They are one screen and one sentence, so they are one row — and the page has
-   * exactly two things left that it can actually change.
-   */
-  it('offers the toggle and exactly one way into Intelligence', async () => {
+  it('normalizes a legacy enabled voice setting into the independent Voice Input control', async () => {
+    settings.assistant.enabled = true
+    settings.voiceWake.enabled = true
+    settings.voiceWake.language = 'fr-FR'
+    delete settings.voiceInput
+
     const wrapper = mountSettings()
     await flushPromises()
 
-    expect(wrapper.findComponent({ name: 'TuffBlockSwitch' }).exists()).toBe(true)
-
-    const doors = wrapper.findAllComponents({ name: 'TxButton' })
-    expect(doors).toHaveLength(1)
-
-    await doors[0]!.trigger('click')
-    expect(router.push).toHaveBeenCalledTimes(1)
-    expect(router.push).toHaveBeenCalledWith('/setting/intelligence/capabilities')
+    expect(
+      controlByTitle(wrapper, 'settingSpeechRecognition.input.title').props('modelValue')
+    ).toBe(true)
+    expect(settings.voiceInput).toMatchObject({ enabled: true, language: 'fr-FR' })
 
     wrapper.unmount()
   })
 
-  /**
-   * Status is not a setting. Reporting it in the same row shape as one is what let "已就绪" and
-   * "识别暂不可用。" look equally important while asking for entirely different things; it now
-   * lives in `VoiceRecognitionStatus`, above the page's content rather than inside its settings.
-   */
-  it('reports no status and asks main for none', async () => {
+  it('toggles Voice Input without changing assistant, floating-ball, strength, or history settings', async () => {
     const wrapper = mountSettings()
     await flushPromises()
 
-    const text = wrapper.text()
-    expect(text).not.toContain('settingSpeechRecognition.asr.ready')
-    expect(text).not.toContain('settingSpeechRecognition.reasons')
-    // Nothing on this card depends on readiness, so nothing here should be disabled by it.
-    expect(wrapper.findAll('button[disabled]')).toHaveLength(0)
+    await controlByTitle(wrapper, 'settingSpeechRecognition.input.title').vm.$emit(
+      'update:modelValue',
+      true
+    )
 
+    expect(settings.voiceInput).toMatchObject({
+      enabled: true,
+      language: 'fr-FR',
+      historyEnabled: true,
+      polishEnabled: true,
+      polishStrength: 'structured'
+    })
+    expect(settings.assistant.enabled).toBe(false)
+    expect(settings.floatingBall.enabled).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('keeps the selected polish strength when polish is hidden and enabled again', async () => {
+    const wrapper = mountSettings()
+    await flushPromises()
+
+    const select = wrapper.getComponent({ name: 'TuffBlockSelect' })
+    expect(select.props('modelValue')).toBe('structured')
+    expect(wrapper.findAll('option').map((option) => option.attributes('value'))).toEqual([
+      'natural',
+      'structured',
+      'deep'
+    ])
+
+    await select.vm.$emit('update:modelValue', 'natural')
+    await controlByTitle(wrapper, 'settingSpeechRecognition.polish.title').vm.$emit(
+      'update:modelValue',
+      false
+    )
+    await flushPromises()
+
+    expect(wrapper.findComponent({ name: 'TuffBlockSelect' }).exists()).toBe(false)
+    expect(settings.voiceInput?.polishStrength).toBe('natural')
+
+    await controlByTitle(wrapper, 'settingSpeechRecognition.polish.title').vm.$emit(
+      'update:modelValue',
+      true
+    )
+    await flushPromises()
+
+    expect(wrapper.getComponent({ name: 'TuffBlockSelect' }).props('modelValue')).toBe('natural')
+    wrapper.unmount()
+  })
+
+  it('opens Intelligence capabilities from the speech settings surface', async () => {
+    const wrapper = mountSettings()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="voice-open-capabilities"]').trigger('click')
+
+    expect(router.push).toHaveBeenCalledWith('/setting/intelligence/capabilities')
     wrapper.unmount()
   })
 })

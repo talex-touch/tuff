@@ -46,6 +46,20 @@ identity, and plugin permissions remain in main.
 - Delivery results expose only `native`, `autopaste`, or `none` plus a bounded
   stable reason. Paths, window titles, native errors, and transcript content do
   not enter diagnostics.
+- Live delivery's acknowledged text is exactly the concatenation of successful native
+  writes. Never rewind that text to a revised ASR common prefix: the target buffer has
+  not been rewound. Both partial and final paths reconcile Unicode punctuation in
+  order and append only the uncommitted suffix. Letters, numbers, symbols, and whitespace
+  remain exact; an unalignable lexical final returns `none / transcript-revised`, not a
+  guessed suffix or an edit to the user's earlier text. Preserve a prior native failure.
+- Native input completion and visible input are separate boundaries: await `typeText`
+  and observe the task-owned target's actual value before claiming delivery. Repeated
+  final events must neither retype text nor change the acknowledged byte history.
+- The polish deadline must reach the provider's actual request, not only the outer
+  promise. OpenAI-compatible chat, stream, and shared vision calls pass the host-only
+  AbortSignal into LangChain call options; healthy retry policy stays unchanged. Verify
+  pre-abort zero requests, in-flight socket close, no delayed retry, and cancellation
+  while awaiting an SSE delta with the installed client against loopback HTTP.
 
 ## Plugin and UI invariants
 
@@ -171,3 +185,67 @@ Changes to native Fn capture, voice gestures, HUD open/stop/close, or audio addo
 - Correct: record a generation-owned stop request and call the arriving handle's `stop()`.
 - Wrong: package-manager install silently deletes audio, then runtime loads an arbitrary old fallback.
 - Correct: preserve independent C++/Rust products and prepare the canonical addon before Electron caches its loader result.
+
+## Scenario: Dictation polish strength
+
+### Scope / Trigger
+
+Changes to Voice Input preferences, Assistant runtime configuration, dictation prompts, or recovery.
+
+### Signatures
+
+- `VoicePolishStrength = 'natural' | 'structured' | 'deep'` and `normalizeVoicePolishStrength(unknown)` live in the shared app-settings module; `DEFAULT_VOICE_POLISH_STRENGTH` is `deep`.
+- `voiceInput.polishEnabled` selects live/final delivery; `voiceInput.polishStrength` selects editing scope. `AssistantRuntimeConfig` projects both through the existing transport.
+- `VoiceDictatePayload.polishStrength` and `VoiceAsrStreamPayload.polishStrength` optionally override the saved preference for one session; no new provider or prompt-routing table is introduced.
+
+### Contracts
+
+- Missing/invalid strength normalizes to deep without overwriting explicit polish disablement, language, history, or unrelated settings. Hiding the selector when polish is off never clears its value.
+- VoicePanel supplies its runtime snapshot. VoiceService resolves omitted strength from main storage before capture's first asynchronous boundary, stores it on the session, and retains it with the retry buffer. Do not reread preferences while finalizing or replaying old audio.
+- One shared fidelity policy plus three precomposed editing directives owns the prompt. Natural preserves sequence, structured groups related points, and deep rewrites the draft assertively. All preserve independent requirements, qualifiers, negations, conditions, numbers, language and tone. ASR language is not a polish translation instruction.
+- Live/cleanup-disabled recordings and their recovery skip the polish pass. Cancellation still prevents late delivery; the existing 300 ms best-effort polish timeout returns raw text without claiming it was polished.
+
+### Validation & Error Matrix
+
+- Missing/invalid stored strength -> deep; valid stored choice -> unchanged across normalization and reload.
+- Settings change during capture startup/recording -> next session only; retained-audio retry -> original strength and cleanup policy.
+- Polish timeout/failure/empty response -> raw-final fallback; caller cancellation -> no late result delivery.
+
+### Good / Base / Bad Cases
+
+- Good: choose structured, start recording, switch to natural, and finish/retry using structured.
+- Base: historical profile keeps polish disabled while acquiring the deep default; enabling polish restores its saved selection.
+- Bad: rebuild the prompt from current settings at stop, infer that repeated sentence patterns cancel earlier list items, or force a translation from the recognition language hint.
+
+### Tests Required
+
+- Main-storage migration preserves disabled state and unrelated fields; real settings interactions hide/re-enable and reload without losing strength.
+- VoiceService one-shot/startup/retry regressions defend session snapshots and no-cleanup replay. Existing live-delivery and cancellation tests continue to pass.
+- UI smoke uses the actual settings SFC and TuffEx controls with isolated storage. Mocked prompt selection proves session policy, not linguistic quality; real-provider editing quality requires a separate coordinated run.
+
+### Wrong vs Correct
+
+- Wrong: resolve `getMainConfig(...).voiceInput.polishStrength` inside final polish or retry.
+- Correct: resolve once in `startSession`, then use `session.polishStrength` and the retained retry snapshot.
+
+## Voice Input settings and informational device changes
+
+- The Intelligence voice page is named Voice Input / 语音输入. Its existing settings drawer
+  owns `voiceInput.enabled`, polish/history choices and the macOS Globe guidance; Assistant
+  settings own only the floating entry. Reuse `ensureVoiceInputSetting` and the typed
+  `AssistantEvents.voice` status/action APIs. Keep manual System Settings access and refresh
+  the reported preference on focus return; never infer a successful preference write.
+- Settings rows inside the 560px drawer must grow with wrapped descriptions. A fixed 56px
+  height lets the Fn explanation overlap subsequent controls; scope the auto-height treatment
+  to VoiceInputSettings rather than changing every business settings row.
+- `VoiceAsrStreamEvent` with `type: 'device'` is informational, not terminal. VoicePanel
+  keeps `listening`, the waveform, stop controls and transcript accumulation active. A separate
+  900ms hint timer clears only the device hint and reveals the latest transcript; it never
+  stops/restarts the stream, emits `finished`, or discards recovery audio.
+- Clear the hint timer on session start, stop, cancel, end/error, reset and unmount. Old
+  session timers cannot clear a newer hint. Real terminal failures retain their existing
+  notice and recovery behavior.
+- Required verification: device → partial/level → hint expiry leaves one stream alive and
+  preserves text; explicit stop still reaches that stream once; stale timer/new-session and
+  terminal-error cases remain isolated. Renderer-only visual smoke proves HUD continuity,
+  not physical microphone hot-unplug recovery or provider reconnection.

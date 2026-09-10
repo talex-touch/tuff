@@ -244,13 +244,13 @@ describe('VoiceInsights page composition', () => {
    * it all lives here now.
    */
   it('puts the heading, the boundary line and every action in one header row', async () => {
-    const wrapper = await mountPage({ eyebrow: '音频洞察' })
+    const wrapper = await mountPage({ eyebrow: '语音输入' })
 
     const header = wrapper.find('.VoiceInsights-Hero')
     expect(header.exists()).toBe(true)
     // The nav label *is* the heading. Exactly one, here and on the page.
     expect(wrapper.findAll('h1')).toHaveLength(1)
-    expect(header.find('h1').text()).toBe('音频洞察')
+    expect(header.find('h1').text()).toBe('语音输入')
     // The start date bounds the chart, not the page, so it is not up here.
     expect(header.find('.VoiceInsights-Boundary').exists()).toBe(false)
 
