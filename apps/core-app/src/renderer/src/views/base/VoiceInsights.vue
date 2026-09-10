@@ -1167,15 +1167,17 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
+/*
+ * A section on a settings page, not a page.
+ *
+ * It kept the chrome from when it was one: its own scroll container, a full page's padding, and a
+ * top inset for the window controls. Inside `SettingsPage` all three are already provided, so the
+ * padding doubled into a band of blank above the first row and the second scroller clipped the
+ * bottom of the page against a scrollbar nobody could see.
+ */
 .VoiceInsights {
   width: 100%;
-  height: 100%;
   min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  box-sizing: border-box;
-  padding: calc(var(--shell-space-7) + var(--shell-window-controls-height)) var(--shell-space-7)
-    var(--shell-space-7);
   color: var(--shell-text-primary);
 }
 
@@ -1245,15 +1247,18 @@ onBeforeUnmount(() => {
   }
 }
 
+/*
+ * The stack the sections sit in. It used to be a dotted panel wrapping all of them — a card
+ * holding cards, which is what put a second inset inside the page's own and left the metrics
+ * floating on a texture while the calendar below them had a card of its own.
+ */
 .VoiceInsights-Canvas {
-  max-width: 1440px;
+  display: flex;
   min-width: 0;
+  max-width: 1440px;
+  flex-direction: column;
   margin: 0 auto;
-  padding: var(--shell-space-6);
-  border-radius: var(--shell-radius-2xl);
-  background-color: var(--shell-surface);
-  background-image: radial-gradient(circle, var(--shell-border) 1px, transparent 1px);
-  background-size: var(--shell-space-3) var(--shell-space-3);
+  gap: var(--shell-space-5);
 }
 
 .VoiceInsights-Headline {
@@ -1449,7 +1454,6 @@ onBeforeUnmount(() => {
 
 .VoiceInsights-Activity,
 .VoiceInsights-Report {
-  margin-top: var(--shell-space-5);
   padding: var(--shell-space-6);
 }
 
@@ -1466,9 +1470,6 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  padding-top: var(--shell-space-5);
-  border-top: 1px solid var(--shell-border);
-
   h3 {
     margin: 0;
     font-size: var(--shell-fs-lg);
@@ -1937,20 +1938,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
-  .VoiceInsights {
-    padding-right: var(--shell-space-5);
-    padding-bottom: var(--shell-space-6);
-    padding-left: var(--shell-space-5);
-  }
-
-  .VoiceInsights-Hero {
-    margin-bottom: var(--shell-space-6);
-  }
-
-  .VoiceInsights-Canvas {
-    padding: var(--shell-space-5);
-  }
-
   .VoiceInsights-Activity,
   .VoiceInsights-Report {
     padding: var(--shell-space-5);
@@ -1992,11 +1979,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 480px) {
-  .VoiceInsights {
-    padding-right: var(--shell-space-4);
-    padding-left: var(--shell-space-4);
-  }
-
   .VoiceInsights-HeroActions,
   .VoiceInsights-Notice,
   .VoiceInsights-ReportStats {
