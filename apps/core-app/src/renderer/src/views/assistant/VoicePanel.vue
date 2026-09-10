@@ -314,6 +314,7 @@ const runtimeConfig = ref<AssistantRuntimeConfig>({
   enabled: false,
   language: 'zh-CN',
   polishEnabled: true,
+  polishAvailable: false,
   polishStrength: DEFAULT_VOICE_POLISH_STRENGTH
 })
 
@@ -1207,7 +1208,8 @@ async function startVoiceSession(): Promise<void> {
   // The orb is re-rolled per session through this key; changing its `state` would not.
   sessionSeq.value += 1
   try {
-    const deliveryTiming = runtimeConfig.value.polishEnabled ? 'final' : 'live'
+    const deliveryTiming =
+      runtimeConfig.value.polishEnabled && runtimeConfig.value.polishAvailable ? 'final' : 'live'
     const controller = await voiceSdk.asrStream(
       {
         language: runtimeConfig.value.language,

@@ -576,7 +576,7 @@
     },
     "polish": {
       "title": "音频梳理",
-      "description": "说完再统一梳理并写入；关掉就边说边写原文。"
+      "description": "已配置 Chat 渠道时，说完再统一梳理并写入；否则边说边写原文。"
     },
     "polishStrength": {
       "title": "梳理档位",
