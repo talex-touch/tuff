@@ -697,16 +697,12 @@ onBeforeUnmount(() => {
     :aria-busy="!hasLoaded || refreshing || clearing"
     :aria-label="t('voiceInsights.headline')"
   >
+    <!--
+      Actions only. The headline moved up to the page's title row, and the sentence that used to
+      qualify it is gone — the page is short enough now that a line explaining what it is sat
+      between the reader and the numbers it was explaining.
+    -->
     <header class="VoiceInsights-Hero">
-      <div class="VoiceInsights-HeroCopy">
-        <!--
-          The headline moved up to the page's title row — it was the page's line, not this card's,
-          and having it here made a second `<h1>` under the one the shell already renders. What
-          stays is the sentence that qualifies it.
-        -->
-        <p>{{ t('voiceInsights.subtitle') }}</p>
-      </div>
-
       <div class="VoiceInsights-HeroActions shell-chrome-safe-inline-end">
         <TxButton
           variant="secondary"
@@ -1187,29 +1183,15 @@ onBeforeUnmount(() => {
   color: var(--shell-text-primary);
 }
 
+/* Only the actions live here now, so they sit at the end rather than opposite a copy block. */
 .VoiceInsights-Hero {
   display: flex;
   gap: var(--shell-space-5);
   align-items: flex-start;
   flex-wrap: wrap;
-  justify-content: space-between;
+  justify-content: flex-end;
   max-width: 1440px;
-  margin: 0 auto var(--shell-space-7);
-}
-
-/* The heading moved to the page title row; what is left is the sentence that qualifies it, and
-   it now leads the block rather than trailing a headline, so it has no top margin to close. */
-.VoiceInsights-HeroCopy {
-  min-width: 0;
-
-  p {
-    max-width: 70ch;
-    margin: 0;
-    color: var(--shell-text-secondary);
-    font-size: var(--shell-fs-md);
-    line-height: 1.6;
-    text-wrap: pretty;
-  }
+  margin: 0 auto var(--shell-space-5);
 }
 
 .VoiceInsights-HeroActions {
