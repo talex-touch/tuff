@@ -117,8 +117,10 @@
 - 隔离真实 Electron + 合成 HID 输入：native 收到 Fn down/up 和 Esc down/up；独立 Session 下游观察到 Fn 0 条、Esc down/up 各 1 条。
 - Finder 前台时，隔离胶囊保留；短 Esc 收到 start/reset 不取消，长 Esc 约 600ms 收到 start/commit 并显示“已取消”。错误胶囊再次注入 Fn 收到 toggle，进入新录音，无旧错误提示。
 - 旧“丢弃事件”方案实体验收失败：4 组 Fn HID down/up、Session 下游 0 条，用户仍确认表情面板弹出。该结果说明仅靠下游事件观察不能证明 macOS 默认动作已停止。
-- 当前修复：先向 Voice controller 投影 standalone Fn down/up，再把同一个事件清掉 `MaskSecondaryFn` 后原样放行；其余 flags 与组合键事件保持不变，任何 standalone Fn 分支都不得 `return null`。
-- 09-09 `753f75df0` 曾把上面这条改回“从 OS event stream 移除事件”，实机随即恢复弹表情——这与第 119 行记录的失败结论是同一个方案，只是换了措辞。Rust 单测当时同步改成断言“丢弃”，所以全绿也没拦住。恢复 flag 中和后，单测改回断言转发 flags 不含 `MaskSecondaryFn`，并跑过负控制。
+- 当前实现：先向 Voice controller 投影 standalone Fn down/up，再把同一个事件清掉 `MaskSecondaryFn` 后原样放行；其余 flags 与组合键事件保持不变，standalone Fn 分支不 `return null`。
+- 09-09 `753f75df0` 曾把上面这条改成「从 OS event stream 移除事件」，Rust 单测同步改成断言「丢弃」，所以全绿也没拦住。09-10 `19febfb49` 恢复 flag 中和并把单测改回断言转发 flags。
+- **结论：tap 层根本拦不住系统的 Globe/表情动作。** 两种策略都实机试过：丢事件（下游实测 0 条 Fn，面板照弹）和清 flag 转发（面板照弹）。该动作由 WindowServer 在 tap 之下触发，事件流层面的任何处理都影响不到它。唯一受支持的关闭方式是用户偏好 `com.apple.HIToolbox AppleFnUsageType`（系统设置「按下 🌐 键时」→ 不执行任何操作），系统设置里改立即生效，`defaults write` 要重新登录才生效。同类产品（parrot 等 Fn 触发的听写工具）也是引导用户改这个设置，或改用右 Command 作为触发键。
+- 由此作废一条旧证据口径：「下游收到 0 条 Fn 事件」不能证明系统默认动作已停止，只有看面板本身能证明。
 - native release build/load 与 Rust focused tests 必须绑定同一份 addon；ABI marker 继续阻止旧实现被误加载。
 
 ## ASR 现状与落地结论
