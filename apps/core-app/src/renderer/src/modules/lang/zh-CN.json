@@ -1076,7 +1076,6 @@
   },
   "voiceInsights": {
     "headline": "嘴比手利索",
-    "subtitle": "只在本机统计，不上传。",
     "sectionTitle": "洞察",
     "loading": "正在加载语音洞察…",
     "actions": {
