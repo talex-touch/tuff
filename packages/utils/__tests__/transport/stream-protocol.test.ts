@@ -1,3 +1,4 @@
+import type { TransportPortHandle } from '../../transport/types'
 import { describe, expect, it, vi } from 'vitest'
 import { ClipboardEvents } from '../../transport/events'
 import { startClientStream } from '../../transport/sdk/stream/client-runtime'
@@ -179,7 +180,9 @@ describe('startClientStream', () => {
   function createAdapter() {
     const handlers = new Map<string, (raw: unknown) => void>()
     const streamControllers = new Map()
-    const send = vi.fn(async (_eventName: string, _payload?: unknown) => undefined)
+    const send = vi.fn<(eventName: string, payload?: unknown) => Promise<unknown>>(
+      async (_eventName: string, _payload?: unknown) => undefined,
+    )
 
     return {
       handlers,
@@ -231,6 +234,126 @@ describe('startClientStream', () => {
 
     expect(onData).not.toHaveBeenCalled()
     expect(onEnd).not.toHaveBeenCalled()
+  })
+
+  it('does not dispatch start when abort wins the port-open microtask race', async () => {
+    const { adapter, handlers, send } = createAdapter()
+    const eventName = ClipboardEvents.change.toEventName()
+    const abortController = new AbortController()
+    const close = vi.fn(async () => undefined)
+    const port = { start: vi.fn() }
+
+    const opening = Promise.withResolvers<TransportPortHandle>()
+    const startup = startClientStream(
+      {
+        ...adapter,
+        openPort: () => opening.promise,
+      },
+      eventName,
+      { privatePayload: 'must-not-dispatch' },
+      { onData: vi.fn(), signal: abortController.signal },
+    )
+    queueMicrotask(() => {
+      opening.resolve({
+        portId: 'late-port',
+        channel: eventName,
+        port: port as unknown as MessagePort,
+        close,
+      })
+      abortController.abort()
+    })
+
+    await expect(startup).rejects.toMatchObject({ name: 'AbortError' })
+    await Promise.resolve()
+
+    expect(send).not.toHaveBeenCalled()
+    expect(handlers.size).toBe(0)
+    expect(close).toHaveBeenCalledWith('stream_cleanup')
+  })
+
+  it('aborts a dispatched stream awaiting its start acknowledgement exactly once', async () => {
+    const { adapter, handlers, send, streamControllers } = createAdapter()
+    const eventName = ClipboardEvents.change.toEventName()
+    const abortController = new AbortController()
+    const startAck = Promise.withResolvers<void>()
+    send.mockImplementation((channel: string) =>
+      channel.endsWith(':stream:start') ? startAck.promise : Promise.resolve(undefined),
+    )
+    const onData = vi.fn()
+    const onError = vi.fn()
+    const onEnd = vi.fn()
+
+    const startup = startClientStream(adapter, eventName, { query: 'abort-pending-ack' }, {
+      onData,
+      onError,
+      onEnd,
+      signal: abortController.signal,
+    })
+    await Promise.resolve()
+
+    const startCall = send.mock.calls.find(([channel]) => channel.endsWith(':stream:start'))
+    const streamId = (startCall?.[1] as { streamId: string } | undefined)?.streamId
+    const dataHandler = streamId ? handlers.get(`${eventName}:stream:data:${streamId}`) : undefined
+    const errorHandler = streamId ? handlers.get(`${eventName}:stream:error:${streamId}`) : undefined
+    const endHandler = streamId ? handlers.get(`${eventName}:stream:end:${streamId}`) : undefined
+    expect(startCall?.[1]).toEqual({ query: 'abort-pending-ack', streamId })
+
+    abortController.abort()
+    await expect(startup).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(send.mock.calls.filter(([channel]) => channel.endsWith(':stream:cancel'))).toHaveLength(1)
+    expect(handlers.size).toBe(0)
+    expect(streamControllers.size).toBe(0)
+
+    dataHandler?.({ header: { status: 'request' }, data: { chunk: { leaked: true } } })
+    errorHandler?.({ header: { status: 'request' }, data: { error: 'late error' } })
+    endHandler?.({})
+    expect(onData).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+    expect(onEnd).not.toHaveBeenCalled()
+
+    startAck.resolve()
+  })
+
+  it('settles startup from a terminal chunk before the start acknowledgement and cleans listeners', async () => {
+    const { adapter, handlers, send, streamControllers } = createAdapter()
+    const eventName = ClipboardEvents.change.toEventName()
+    const startAck = Promise.withResolvers<void>()
+    send.mockImplementation((channel: string) =>
+      channel.endsWith(':stream:start') ? startAck.promise : Promise.resolve(undefined),
+    )
+    const onEnd = vi.fn()
+
+    const startup = startClientStream(adapter, eventName, undefined, { onData: vi.fn(), onEnd })
+    await Promise.resolve()
+
+    const startCall = send.mock.calls.find(([channel]) => channel.endsWith(':stream:start'))
+    const streamId = (startCall?.[1] as { streamId: string } | undefined)?.streamId
+    expect(streamId).toBeTruthy()
+    handlers.get(`${eventName}:stream:end:${streamId}`)?.({})
+
+    await expect(startup).resolves.toMatchObject({ streamId, cancelled: false })
+    expect(onEnd).toHaveBeenCalledTimes(1)
+    expect(handlers.size).toBe(0)
+    expect(streamControllers.size).toBe(0)
+
+    startAck.resolve()
+  })
+
+  it('cleans terminal registrations when stream startup is rejected', async () => {
+    const { adapter, handlers, send, streamControllers } = createAdapter()
+    const eventName = ClipboardEvents.change.toEventName()
+    send.mockImplementation((channel: string) =>
+      channel.endsWith(':stream:start')
+        ? Promise.reject(new Error('start acknowledgement rejected'))
+        : Promise.resolve(undefined),
+    )
+
+    await expect(startClientStream(adapter, eventName, undefined, { onData: vi.fn() })).rejects.toThrow(
+      'start acknowledgement rejected',
+    )
+    expect(handlers.size).toBe(0)
+    expect(streamControllers.size).toBe(0)
   })
 
   it('cleans MessagePort error state even when onError throws and preserves code', async () => {

@@ -431,6 +431,7 @@ export function useSearch(
   const searchResult = ref<TuffSearchResult | null>(null)
   const contextActionRequest = shallowRef<CoreBoxContextActionsOpenRequest | null>(null)
   const loading = ref(false)
+  const searchError = ref(false)
   const recommendationPending = ref(false)
   const activeActivations = ref<IProviderActivate[] | null>(null)
   const currentSearchId = ref<string | null>(null)
@@ -589,7 +590,9 @@ export function useSearch(
   }
 
   let searchSequence = 0
+  let searchDisposed = false
   let activeSearchStreamController: StreamController | null = null
+  let activeSearchAbortController: AbortController | null = null
   let cancelPendingSearchSnapshot: (() => void) | null = null
   const searchStreamSupersededError = new Error('Search stream superseded')
   let recommendationTimeoutId: ReturnType<typeof setTimeout> | null = null
@@ -805,6 +808,8 @@ export function useSearch(
   }
 
   function cancelActiveSearchStream(): void {
+    activeSearchAbortController?.abort()
+    activeSearchAbortController = null
     activeSearchStreamController?.cancel()
     activeSearchStreamController = null
     cancelPendingSearchSnapshot?.()
@@ -823,6 +828,7 @@ export function useSearch(
     const currentSequence = ++searchSequence
     clearRecommendationTimeout()
     recommendationPending.value = false
+    searchError.value = false
 
     logDebug('[useSearch] executeSearch start:', {
       sequence: currentSequence,
@@ -881,6 +887,7 @@ export function useSearch(
     activeActivations.value = null
     boxOptions.layout = undefined
     loading.value = false
+    searchError.value = false
     recommendationPending.value = false
     window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
   }
@@ -928,6 +935,43 @@ export function useSearch(
       .catch(() => {})
   }
 
+  function applySearchSnapshot(
+    initialResult: TuffSearchResult,
+    options: ExecuteSearchOptions,
+    selectedItemId: string | null
+  ): void {
+    // Only when the snapshot actually carries an id. `sessionId` is optional on
+    // TuffSearchResult, and the unconditional `|| null` threw away the identity the `session`
+    // chunk had already established - after which every later update/no-results/complete chunk
+    // failed its session guard, applySearchEnd never ran, and the spinner stayed up forever
+    // (#830). The snapshot handler has already proven the ids match, so this is at most a
+    // no-op reassignment and never a downgrade.
+    if (initialResult.sessionId) currentSearchId.value = initialResult.sessionId
+    // The snapshot arrives ranked, so the quota only decides which of the
+    // overflow survives — a cache hit (which carries the whole accumulated
+    // set) then shows what the live run ended with instead of a plain top cut.
+    const filteredItems = applyRenderedItemQuota(filterDetachedItems(initialResult.items))
+    searchResult.value = isDetachedDivisionMode()
+      ? { ...initialResult, items: filteredItems }
+      : initialResult
+
+    activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
+
+    searchResults.value = filteredItems
+    if (options.preserveSelection) {
+      const preservedIndex = selectedItemId
+        ? res.value.findIndex((item) => item.id === selectedItemId)
+        : -1
+      boxOptions.focus = preservedIndex >= 0 ? preservedIndex : res.value.length > 0 ? 0 : -1
+    }
+    logDebug('[useSearch] searchResults updated:', searchResults.value.length, 'items')
+
+    boxOptions.layout = undefined
+    nextTick(() => {
+      window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
+    })
+  }
+
   const applyRecommendationResult = (initialResult: TuffSearchResult): void => {
     // A sectioned grid numbers focus by section order, so the list must follow the sections or
     // `res[focus]` (preview pane, footer, ⌘-digits) resolves to a different item than the
@@ -936,7 +980,7 @@ export function useSearch(
       limitRenderedItems(filterDetachedItems(initialResult.items)),
       initialResult.containerLayout
     )
-    currentSearchId.value = initialResult.sessionId || null
+    if (initialResult.sessionId) currentSearchId.value = initialResult.sessionId
     searchResult.value = isDetachedDivisionMode()
       ? { ...initialResult, items: filteredItems }
       : initialResult
@@ -953,7 +997,8 @@ export function useSearch(
   }
   async function requestSearchSnapshot(
     query: TuffQuery,
-    currentSequence: number
+    currentSequence: number,
+    applySnapshot: (result: TuffSearchResult) => void
   ): Promise<TuffSearchResult> {
     let snapshotSettled = false
     let streamEnded = false
@@ -963,6 +1008,8 @@ export function useSearch(
       resolveSnapshot = resolve
       rejectSnapshot = reject
     })
+    const abortController = new AbortController()
+    activeSearchAbortController = abortController
     const rejectBeforeSnapshot = (error: unknown): void => {
       if (snapshotSettled) return
       snapshotSettled = true
@@ -970,99 +1017,135 @@ export function useSearch(
     }
     const supersede = (): void => {
       rejectBeforeSnapshot(searchStreamSupersededError)
+      abortController.abort()
     }
     cancelPendingSearchSnapshot = supersede
 
     let controller: StreamController | null = null
-    try {
-      controller = await transport.stream(
-        CoreBoxEvents.search.session,
-        {
-          query,
-          activations: activeActivations.value,
-          surface: isDetachedDivisionMode() ? 'division-box' : 'core-box'
-        },
-        {
-          onData: (chunk: CoreBoxSearchSessionChunk) => {
-            if (currentSequence !== searchSequence) return
-
-            switch (chunk.type) {
-              case 'session':
-                currentSearchId.value = chunk.sessionId
-                return
-              case 'snapshot':
-                if (currentSearchId.value !== chunk.sessionId) {
-                  rejectBeforeSnapshot(new Error('Search snapshot arrived before session identity'))
-                  return
-                }
-                if (!snapshotSettled) {
-                  snapshotSettled = true
-                  cancelPendingSearchSnapshot = null
-                  resolveSnapshot(chunk.result)
-                }
-                return
-              case 'update': {
-                if (currentSearchId.value !== chunk.sessionId) return
-                const items = limitIncomingBatchItems(filterDetachedItems(chunk.items))
-                if (items.length === 0) return
-                const focusedItemId = res.value[boxOptions.focus]?.id ?? null
-                searchResults.value = mergeRenderedItems(searchResults.value, items)
-                restoreFocusedItem(focusedItemId)
-                activeActivations.value = refreshActiveWidgetFeature(activeActivations.value, items)
-                return
-              }
-              case 'no-results':
-                if (currentSearchId.value === chunk.sessionId && chunk.shouldShrink) {
-                  applyNoResults()
-                }
-                return
-              case 'complete':
-                if (currentSearchId.value === chunk.sessionId) {
-                  applySearchEnd({
-                    searchId: chunk.sessionId,
-                    cancelled: chunk.cancelled,
-                    activate: chunk.activate,
-                    sources: chunk.sources
-                  })
-                }
-            }
-          },
-          onError: (error) => {
-            streamEnded = true
-            if (activeSearchStreamController === controller) {
-              activeSearchStreamController = null
-            }
-            if (currentSequence !== searchSequence) return
-            if (!snapshotSettled) {
-              rejectBeforeSnapshot(error)
-              return
-            }
-            loading.value = false
-            recommendationPending.value = false
-            devLog('Search stream failed:', error)
-          },
-          onEnd: () => {
-            streamEnded = true
-            if (activeSearchStreamController === controller) {
-              activeSearchStreamController = null
-            }
-            if (currentSequence === searchSequence && !snapshotSettled) {
-              rejectBeforeSnapshot(new Error('Search stream ended before its snapshot'))
-            }
-          }
-        }
-      )
-    } catch (error) {
-      rejectBeforeSnapshot(error)
+    const finishStream = (): void => {
+      streamEnded = true
+      if (activeSearchStreamController === controller) {
+        activeSearchStreamController = null
+      }
+      if (activeSearchAbortController === abortController) {
+        activeSearchAbortController = null
+      }
+    }
+    const failStream = (error: unknown): void => {
+      if (streamEnded) return
+      finishStream()
+      if (currentSequence !== searchSequence || abortController.signal.aborted) {
+        rejectBeforeSnapshot(searchStreamSupersededError)
+        return
+      }
+      if (!snapshotSettled) {
+        rejectBeforeSnapshot(error)
+        return
+      }
+      loading.value = false
+      recommendationPending.value = false
+      searchError.value = true
+      devLog('Search stream failed:', error)
     }
 
-    if (controller) {
-      if (currentSequence !== searchSequence) {
-        controller.cancel()
-        rejectBeforeSnapshot(searchStreamSupersededError)
-      } else if (!streamEnded) {
-        activeSearchStreamController = controller
-      }
+    try {
+      void transport
+        .stream(
+          CoreBoxEvents.search.session,
+          {
+            query,
+            activations: activeActivations.value,
+            surface: isDetachedDivisionMode() ? 'division-box' : 'core-box'
+          },
+          {
+            signal: abortController.signal,
+            onData: (chunk: CoreBoxSearchSessionChunk) => {
+              if (
+                streamEnded ||
+                currentSequence !== searchSequence ||
+                abortController.signal.aborted
+              )
+                return
+
+              switch (chunk.type) {
+                case 'session':
+                  currentSearchId.value = chunk.sessionId
+                  return
+                case 'snapshot':
+                  if (currentSearchId.value !== chunk.sessionId) {
+                    rejectBeforeSnapshot(
+                      new Error('Search snapshot arrived before session identity')
+                    )
+                    abortController.abort()
+                    return
+                  }
+                  if (!snapshotSettled) {
+                    try {
+                      // Port chunks can precede the start ACK. Apply the snapshot before the next
+                      // update/complete callback, rather than overwriting those chunks after await.
+                      applySnapshot(chunk.result)
+                      snapshotSettled = true
+                      cancelPendingSearchSnapshot = null
+                      resolveSnapshot(chunk.result)
+                    } catch (error) {
+                      rejectBeforeSnapshot(error)
+                      abortController.abort()
+                    }
+                  }
+                  return
+                case 'update': {
+                  if (currentSearchId.value !== chunk.sessionId) return
+                  const items = limitIncomingBatchItems(filterDetachedItems(chunk.items))
+                  if (items.length === 0) return
+                  const focusedItemId = res.value[boxOptions.focus]?.id ?? null
+                  searchResults.value = mergeRenderedItems(searchResults.value, items)
+                  restoreFocusedItem(focusedItemId)
+                  activeActivations.value = refreshActiveWidgetFeature(
+                    activeActivations.value,
+                    items
+                  )
+                  return
+                }
+                case 'no-results':
+                  if (currentSearchId.value === chunk.sessionId && chunk.shouldShrink) {
+                    applyNoResults()
+                  }
+                  return
+                case 'complete':
+                  if (currentSearchId.value === chunk.sessionId) {
+                    applySearchEnd({
+                      searchId: chunk.sessionId,
+                      cancelled: chunk.cancelled,
+                      activate: chunk.activate,
+                      sources: chunk.sources
+                    })
+                  }
+              }
+            },
+            onError: failStream,
+            onEnd: () => {
+              if (streamEnded) return
+              finishStream()
+              if (currentSequence !== searchSequence || abortController.signal.aborted) return
+              if (!snapshotSettled) {
+                rejectBeforeSnapshot(new Error('Search stream ended before its snapshot'))
+                return
+              }
+              loading.value = false
+              recommendationPending.value = false
+            }
+          }
+        )
+        .then((nextController) => {
+          controller = nextController
+          if (currentSequence !== searchSequence || abortController.signal.aborted) {
+            controller.cancel()
+          } else if (!streamEnded) {
+            activeSearchStreamController = controller
+          }
+        }, failStream)
+    } catch (error) {
+      failStream(error)
     }
 
     try {
@@ -1075,9 +1158,12 @@ export function useSearch(
   }
 
   async function executeSearch(options: ExecuteSearchOptions = {}): Promise<void> {
+    if (searchDisposed) return
+    if (options.force) searchError.value = false
     if (options.refreshClipboard !== false) {
       await refreshClipboardBeforeInputBuild()
     }
+    if (searchDisposed) return
     const inputs = buildQueryInputs()
     const queryContext = oneShotQueryContext
     const queryKey = buildQueryKey(searchVal.value, inputs, activeActivations.value)
@@ -1122,7 +1208,8 @@ export function useSearch(
       recommendationTimeoutId = setTimeout(() => {
         if (recommendationTimeoutSequence !== currentSequence) return
         if (recommendationPending.value && searchResults.value.length === 0) {
-          resetSearchState()
+          recommendationPending.value = false
+          window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
         }
         recommendationTimeoutId = null
         recommendationTimeoutSequence = null
@@ -1139,7 +1226,11 @@ export function useSearch(
         })
 
         const requestStartedAt = performance.now()
-        const initialResult = await requestSearchSnapshot(query, currentSequence)
+        const initialResult = await requestSearchSnapshot(query, currentSequence, (result) => {
+          applyRecommendationResult(result)
+          loading.value = false
+          recommendationPending.value = false
+        })
         logDebug('[useSearch] Recommendation stream snapshot duration:', {
           ms: Math.round(performance.now() - requestStartedAt),
           sessionId: initialResult?.sessionId
@@ -1160,15 +1251,13 @@ export function useSearch(
           sessionId: initialResult?.sessionId,
           itemCount: initialResult?.items?.length || 0
         })
-        applyRecommendationResult(initialResult)
-        loading.value = false
-        recommendationPending.value = false
       } catch (error) {
         clearRecommendationTimeout(currentSequence)
         clearInFlightQuery(queryKey, currentSequence)
-        if (error === searchStreamSupersededError) return
+        if (error === searchStreamSupersededError || currentSequence !== searchSequence) return
         devLog('Recommendation search failed:', error)
         resetSearchState()
+        searchError.value = true
       }
       return
     }
@@ -1214,7 +1303,9 @@ export function useSearch(
       })
 
       const requestStartedAt = performance.now()
-      const initialResult = await requestSearchSnapshot(query, currentSequence)
+      const initialResult = await requestSearchSnapshot(query, currentSequence, (result) => {
+        applySearchSnapshot(result, options, selectedItemId)
+      })
       logDebug('[useSearch] Search stream snapshot duration:', {
         ms: Math.round(performance.now() - requestStartedAt),
         sessionId: initialResult?.sessionId
@@ -1237,46 +1328,16 @@ export function useSearch(
         })
         return
       }
-
-      // Only when the snapshot actually carries an id. `sessionId` is optional on
-      // TuffSearchResult, and the unconditional `|| null` threw away the identity the `session`
-      // chunk had already established - after which every later update/no-results/complete chunk
-      // failed its session guard, applySearchEnd never ran, and the spinner stayed up forever
-      // (#830). The snapshot handler has already proven the ids match, so this is at most a
-      // no-op reassignment and never a downgrade.
-      if (initialResult.sessionId) currentSearchId.value = initialResult.sessionId
-      // The snapshot arrives ranked, so the quota only decides which of the
-      // overflow survives — a cache hit (which carries the whole accumulated
-      // set) then shows what the live run ended with instead of a plain top cut.
-      const filteredItems = applyRenderedItemQuota(filterDetachedItems(initialResult.items))
-      searchResult.value = isDetachedDivisionMode()
-        ? { ...initialResult, items: filteredItems }
-        : initialResult
-
-      activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
-
-      searchResults.value = filteredItems
-      if (options.preserveSelection) {
-        const preservedIndex = selectedItemId
-          ? res.value.findIndex((item) => item.id === selectedItemId)
-          : -1
-        boxOptions.focus = preservedIndex >= 0 ? preservedIndex : res.value.length > 0 ? 0 : -1
-      }
-      logDebug('[useSearch] searchResults updated:', searchResults.value.length, 'items')
-
-      boxOptions.layout = undefined
-      nextTick(() => {
-        window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
-      })
     } catch (error) {
       clearInFlightQuery(queryKey, currentSequence)
-      if (error === searchStreamSupersededError) return
+      if (error === searchStreamSupersededError || currentSequence !== searchSequence) return
       devLog('Search initiation failed:', error)
       searchResults.value = []
       searchResult.value = null
       currentSearchId.value = null
       boxOptions.layout = undefined
       loading.value = false
+      searchError.value = true
     }
   }
 
@@ -1862,6 +1923,9 @@ export function useSearch(
   })
 
   onBeforeUnmount(() => {
+    searchDisposed = true
+    const cancelable = debouncedSearch as unknown as { cancel?: () => void }
+    cancelable.cancel?.()
     cancelActiveSearchStream()
     stopIndexCommitStream()
     unregContextActionsOpen()
@@ -1920,6 +1984,7 @@ export function useSearch(
     select,
     res,
     loading,
+    searchError,
     recommendationPending,
     activeItem,
     activeActivations,

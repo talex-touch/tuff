@@ -38,6 +38,14 @@ const state = vi.hoisted(() => ({
   /** Hold back `complete`/`onEnd` so a test can drive the updates that stream in before it. */
   deferCompletion: false,
   releaseCompletion: null as null | (() => void),
+  /** Hold the transport start Promise after it has delivered stream chunks. */
+  deferStreamStartup: false,
+  releaseStreamStartup: null as null | (() => void),
+  rejectStreamStartup: null as null | ((error: Error) => void),
+  /** Delivers a newer row between the snapshot and complete chunks. */
+  updateBeforeCompletion: null as TuffItem[] | null,
+  /** Makes the selected search session fail before its snapshot. */
+  searchErrorForRequest: null as null | ((payload: unknown, requestIndex: number) => Error | null),
   streamCancel: vi.fn(),
   beforeUnmountCallbacks: [] as Array<() => void>,
   send: vi.fn(),
@@ -78,6 +86,7 @@ vi.mock('@talex-touch/utils/transport', () => ({
         onData: (payload: unknown) => void
         onError?: (error: unknown) => void
         onEnd?: () => void
+        signal?: AbortSignal
       }
     ) => {
       const key = typeof event === 'string' ? event : event.toEventName?.() || String(event)
@@ -94,6 +103,11 @@ vi.mock('@talex-touch/utils/transport', () => ({
       const sessionId = `stream-session-${requestIndex}`
       state.searchRequests.push({ payload, options })
       options.onData({ type: 'session', sessionId })
+      const requestError = state.searchErrorForRequest?.(payload, requestIndex)
+      if (requestError) {
+        options.onError?.(requestError)
+        return controller
+      }
       const result =
         state.searchResultForRequest?.(payload, requestIndex) ??
         createSearchResult(getSearchQueryText(payload), requestIndex)
@@ -107,6 +121,9 @@ vi.mock('@talex-touch/utils/transport', () => ({
           sessionId,
           result: state.snapshotOmitsSessionId ? withoutSessionId : { ...snapshot, sessionId }
         })
+        if (state.updateBeforeCompletion) {
+          options.onData({ type: 'update', sessionId, items: state.updateBeforeCompletion })
+        }
         const complete = (): void => {
           options.onData({ type: 'complete', sessionId, sources: snapshot.sources })
           options.onEnd?.()
@@ -114,6 +131,12 @@ vi.mock('@talex-touch/utils/transport', () => ({
         if (state.deferCompletion) state.releaseCompletion = complete
         else complete()
       })
+      if (state.deferStreamStartup) {
+        const startup = Promise.withResolvers<void>()
+        state.releaseStreamStartup = startup.resolve
+        state.rejectStreamStartup = startup.reject
+        await startup.promise
+      }
       return controller
     },
     send: state.send
@@ -264,6 +287,11 @@ describe('useSearch CoreBox reopen behavior', () => {
     state.snapshotOmitsSessionId = false
     state.deferCompletion = false
     state.releaseCompletion = null
+    state.deferStreamStartup = false
+    state.releaseStreamStartup = null
+    state.rejectStreamStartup = null
+    state.updateBeforeCompletion = null
+    state.searchErrorForRequest = null
     state.streamCancel.mockClear()
     state.beforeUnmountCallbacks.length = 0
     state.boxItems = []
@@ -1256,6 +1284,7 @@ describe('useSearch CoreBox reopen behavior', () => {
       if (eventName.includes('provider')) return []
       return undefined
     })
+    state.deferCompletion = true
 
     const hook = useSearch(createBoxOptions(), createClipboardOptions())
     await flushPromises()
@@ -1346,6 +1375,8 @@ describe('useSearch CoreBox reopen behavior', () => {
     await flushPromises()
 
     expect(state.searchRequests).toHaveLength(requestsBeforeFollowUp)
+    state.releaseCompletion?.()
+    await flushPromises()
   })
   it('renders custom widget data pushed by the BoxItem SDK', async () => {
     state.send.mockImplementation(async (event: unknown) => {
@@ -1509,6 +1540,114 @@ describe('useSearch CoreBox reopen behavior', () => {
     expect(hook.res.value.map((item) => item.id)).toEqual(['item-100'])
   })
 
+  it('retains stream updates and clears loading when terminal chunks precede startup resolution', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.deferStreamStartup = true
+    state.updateBeforeCompletion = [
+      {
+        id: 'stream-update',
+        kind: 'app',
+        source: { id: 'test-source', type: 'system' },
+        render: { mode: 'default', basic: { title: 'stream-update' } }
+      } as TuffItem
+    ]
+    hook.searchVal.value = 'startup-ordering'
+    await nextTick()
+    await flushPromises()
+
+    const requestIndex = state.searchRequests.length
+    expect(hook.res.value.map((item) => item.id)).toEqual([`item-${requestIndex}`, 'stream-update'])
+    expect(hook.loading.value).toBe(false)
+
+    state.releaseStreamStartup?.()
+    await flushPromises()
+  })
+
+  it('keeps the newer result and clear error state when a superseded startup fails late', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.deferCompletion = true
+    state.deferStreamStartup = true
+    hook.searchVal.value = 'superseded-startup'
+    await nextTick()
+    await flushPromises()
+
+    state.deferCompletion = false
+    state.deferStreamStartup = false
+    hook.searchVal.value = 'current-search'
+    await nextTick()
+    await flushPromises()
+
+    const currentRequestIndex = state.searchRequests.length
+    expect(hook.res.value.map((item) => item.id)).toEqual([`item-${currentRequestIndex}`])
+    expect(hook.searchError.value).toBe(false)
+
+    state.rejectStreamStartup?.(new Error('late startup rejection'))
+    await flushPromises()
+
+    expect(hook.res.value.map((item) => item.id)).toEqual([`item-${currentRequestIndex}`])
+    expect(hook.loading.value).toBe(false)
+    expect(hook.searchError.value).toBe(false)
+  })
+
+  it('clears a current search failure before a forced same-query retry succeeds', async () => {
+    let shouldFail = true
+    state.searchErrorForRequest = (payload) => {
+      return getSearchQueryText(payload) === 'retry-current-search' && shouldFail
+        ? new Error('upstream unavailable')
+        : null
+    }
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    hook.searchVal.value = 'retry-current-search'
+    await nextTick()
+    await flushPromises()
+    expect(hook.searchError.value).toBe(true)
+
+    shouldFail = false
+    const retry = hook.handleSearchImmediate({ force: true })
+    expect(hook.searchError.value).toBe(false)
+    await retry
+    await flushPromises()
+
+    expect(hook.res.value).toHaveLength(1)
+    expect(hook.res.value[0]?.render.basic?.title).toBe(
+      `retry-current-search-${state.searchRequests.length}`
+    )
+    expect(hook.loading.value).toBe(false)
+  })
+
+  it('delivers an empty-query recommendation snapshot after its presentation timer expires', async () => {
+    vi.useFakeTimers()
+    const recommendation = Promise.withResolvers<TuffSearchResult>()
+    state.searchResultForRequest = (payload, requestIndex) => {
+      if (getSearchQueryText(payload) !== '')
+        return createSearchResult(getSearchQueryText(payload), requestIndex)
+      return recommendation.promise
+    }
+
+    try {
+      const hook = useSearch(createBoxOptions(), createClipboardOptions())
+      await flushPromises()
+
+      await vi.advanceTimersByTimeAsync(401)
+      expect(hook.recommendationPending.value).toBe(false)
+
+      recommendation.resolve(createSearchResult('', 77))
+      await flushPromises()
+
+      expect(hook.res.value.map((item) => item.id)).toEqual(['item-77'])
+      expect(hook.loading.value).toBe(false)
+      expect(hook.searchError.value).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   /**
    * The `session` chunk establishes the search identity and the snapshot handler already proves the
    * ids match. The caller then reassigned `currentSearchId` from `initialResult.sessionId`, which is
@@ -1571,22 +1710,6 @@ describe('useSearch CoreBox reopen behavior', () => {
       expect(hook.res.value.some((item) => item.id === 'late-item')).toBe(true)
       state.releaseCompletion?.()
       await flushPromises()
-    })
-
-    it('快照自带 sessionId 时行为不变(否则上面两条会掩盖"干脆不再赋值")', async () => {
-      state.deferCompletion = true
-      const hook = useSearch(createBoxOptions(), createClipboardOptions())
-      await flushPromises()
-
-      hook.searchVal.value = 'with-id'
-      await nextTick()
-      await flushPromises()
-
-      expect(hook.loading.value).toBe(true)
-      state.releaseCompletion?.()
-      await flushPromises()
-
-      expect(hook.loading.value).toBe(false)
     })
   })
 })

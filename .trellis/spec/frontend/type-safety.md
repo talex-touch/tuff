@@ -193,6 +193,13 @@ interface StreamContext<TChunk> {
   readonly sender?: Electron.WebContents;
 }
 
+interface StreamOptions<TChunk> {
+  onData: (chunk: TChunk) => void;
+  onError?: (error: Error) => void;
+  onEnd?: () => void;
+  signal?: AbortSignal; // Client-local; never included in an IPC payload.
+}
+
 type CoreBoxSearchSessionChunk =
   | { type: "session"; sessionId: string }
   | { type: "snapshot"; sessionId: string; result: TuffSearchResult }
@@ -209,9 +216,19 @@ type CoreBoxSearchSessionChunk =
   the pipeline must not read mutable current-window activation state afterward.
 - The first stream chunk is `session`; `snapshot` precedes buffered updates, and
   `complete` or `error` is terminal. Sink callbacks are serialized.
-- Renderer callers own one `StreamController` per request and cancel only that
-  controller on replacement or unmount. Server handlers link
-  `StreamContext.signal` to that exact `SearchExecution.cancel()`.
+- Renderer callers own an AbortController before awaiting stream startup and cancel
+  only their request on replacement or unmount. A pending port handoff or start ACK
+  must not delay cancellation; late ports close without dispatching a new request.
+  Server handlers link `StreamContext.signal` to that exact `SearchExecution.cancel()`.
+- Apply each snapshot synchronously in its `onData` callback, before the next update
+  or complete callback. The start ACK may arrive after all of those chunks; awaiting
+  it first must never overwrite newer rows or strand the snapshot promise.
+- A terminal chunk settles pending client startup even before its ACK. The ACK
+  remains observed, terminal cleanup is idempotent, and synchronous setup failures
+  release partially registered listeners without a second unhandled rejection.
+- Recommendation presentation timeouts may release a height hold, but do not cancel
+  data delivery. Only current failures set `searchError`; a forced same-query retry
+  clears the error immediately. Debounced/clipboard work cannot start after unmount.
 - UI caller identity comes from `context.sender`. AI/background callers use a
   collecting or callback sink and never emit renderer traffic.
 - Port-capable stream events must be added to the transport port allowlist and
@@ -243,8 +260,12 @@ type CoreBoxSearchSessionChunk =
   pre-snapshot buffering, terminal idempotence, and awaited destroy.
 - Transport tests: two senders observe disjoint chunks; cancellation aborts only
   the matching server signal on both MessagePort and channel fallback paths.
-- Renderer tests: replacement/unmount cancel only the owned controller and stale
-  streams cannot mutate the current result.
+- Renderer tests: early snapshot/update/complete preserve final rows and loading;
+  superseded startup errors cannot replace current state; forced retries clear real
+  errors; recommendations arriving after the presentation timeout remain visible.
+- Client transport tests: abort during port opening or pending ACK, late-port close,
+  terminal-before-ACK settlement, and partial-start cleanup. Replacement/unmount
+  cancels only owned work; terminal streams cannot mutate the current result.
 - Integration test: concurrent UI-sink and collecting AI searches both complete
   without cross-cancellation or renderer leakage.
 
