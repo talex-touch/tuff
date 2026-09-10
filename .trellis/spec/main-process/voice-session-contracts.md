@@ -99,6 +99,69 @@ identity, and plugin permissions remain in main.
   Local file transcription is host-owned, bounded, cancellable through the network layer, and returns text
   without active-app delivery. Raw paths, bytes, and credentials do not cross into the renderer.
 
+## Capture signal chain
+
+`CaptureFrontend` in Rust `native-audio` owns everything between the device callback and the
+target-rate mono buffer: downmix, non-finite sanitisation, optional RNNoise, high-pass,
+anti-alias low-pass, resampling and speech detection. It is one struct behind one lock; do not
+reintroduce a second processing site in the audio callback.
+
+- Downsampling must band-limit first. Linear interpolation does not attenuate above the output
+  Nyquist, so without a low-pass the 8-24 kHz half of a 48 kHz capture folds into the speech
+  band — measured at -1.26 dB for 10 kHz landing on 6 kHz. The cascade is engaged only when the
+  target rate is below the source rate, and must hold for non-integer ratios (44.1 kHz is real
+  hardware, not a hypothetical). Band-limiting the existing resampler is the contract; replacing
+  it with a polyphase design is not required and costs the tests that pin its behaviour.
+- Filter coefficients and biquad state are `f64` while the signal stays `f32`. An 80 Hz corner
+  against 48 kHz puts the poles within 0.01 rad of z=1, which single precision cannot hold.
+- A non-finite input sample must be zeroed before it reaches any cascade. The sections are
+  recursive: one NaN in their state is not one bad sample, it is silence to the end of the
+  session.
+- Trailing-silence detection runs on the chain's *output*, against a noise floor estimated from
+  the signal — the minimum window RMS over a recent sliding window, plus an absolute guard.
+  A fixed absolute threshold is wrong in both directions and was measured wrong on real
+  hardware: at -40 dBFS it sat 3.7 dB under an ordinary quiet room's median noise, 18% of
+  windows crossed it, the longest quiet gap was 500 ms against a 1500 ms requirement, and
+  trailing-silence auto-stop therefore never fired at all.
+- Do not estimate that floor with an exponential average. It forces a choice about whether to
+  keep adapting while speech is believed present, and both answers fail: adapting lets a long
+  utterance drag the floor to its own level, and freezing deadlocks, because the state that
+  would release the freeze is gated on the frozen estimate. A minimum cannot be pushed up by
+  loud input and has no feedback path.
+- `should_stop_for_silence`, `SilenceState` and the silence-window semantics are unchanged by
+  any of this. Only how a window is classified as speech changed.
+
+## Noise suppression preference
+
+- `voiceInput.noiseSuppression` is a preference defaulting to **off**, normalised `=== true`
+  so an unreadable value fails closed. It is independent of the high-pass and anti-alias
+  filtering, which are defect fixes and have no switch.
+- Off by default because cloud recognisers are trained on noisy speech and spectral distortion
+  can cost more accuracy than the noise removed. Changing that default requires a real-provider
+  recognition A/B on real noisy audio. Objective dB reductions from synthetic signals prove the
+  suppressor works; they are not evidence about recognition accuracy and must not be presented
+  as such.
+- Resolved exactly once, in `startSession`, before the first asynchronous boundary — the same
+  contract as `polishStrength`. Never re-read while finalising or replaying retained audio: the
+  audio in hand was captured one way, and re-reading describes it as something it is not.
+  A payload field overrides for one capture and does not write the preference.
+- RNNoise is defined only at 48 kHz. The stage converts to that rate rather than feeding the
+  model a rate it was never trained on, and **keeps emitting 48 kHz after a failure**, because
+  everything downstream is configured against it. Frame blocking must not shorten the recording;
+  the model's fade-in frame emits its input rather than being dropped, which would shift the
+  whole recording 10 ms earlier.
+- A suppressor that fails degrades to a rate converter and the session keeps recording. Losing
+  suppression is recoverable; losing the dictation is not.
+
+## Provider VAD defaults
+
+- A zero `server_vad` threshold is not a lenient setting, it is no detection at all. DashScope
+  realtime shipped with `?? 0.0`, which disabled the only real voice-activity detection in the
+  dictation path. Defaults use `??` so an explicit `0` from a caller remains distinguishable
+  from an absent value.
+- Do not invent VAD parameters for providers whose protocols do not expose them, and do not
+  create a Voice-specific provider catalog to hold them.
+
 ## Required checks
 
 - VoiceService and GlobalDictation focused Vitest.
@@ -106,6 +169,8 @@ identity, and plugin permissions remain in main.
 - Plugin voice/child/runtime and clipboard AutoPaste focused tests.
 - Shared Voice SDK tests and plugin manifest validation.
 - Rust `native-audio` tests, release addon build, and headless addon load check.
+- DSP assertions carry a control that fails when the stage under test is removed. A suppression
+  measurement that reports silence because the generator broke passes a naive threshold.
 - CoreApp Web typecheck and Node typecheck; a missing unrelated workspace type
   dependency must be reported separately rather than bypassed in source.
 - Packaged Electron/plugin isolation smoke and explicit real-app injection
@@ -195,15 +260,15 @@ Changes to Voice Input preferences, Assistant runtime configuration, dictation p
 ### Signatures
 
 - `VoicePolishStrength = 'natural' | 'structured' | 'deep'` and `normalizeVoicePolishStrength(unknown)` live in the shared app-settings module; `DEFAULT_VOICE_POLISH_STRENGTH` is `deep`.
-- `voiceInput.polishEnabled` selects live/final delivery; `voiceInput.polishStrength` selects editing scope. `AssistantRuntimeConfig` projects both through the existing transport.
+- `voiceInput.polishEnabled` stores the user's cleanup preference; `AssistantRuntimeConfig.polishAvailable` projects the configured, enabled `text.chat` capability. VoicePanel selects final delivery only when both are true; otherwise it selects live raw delivery. `voiceInput.polishStrength` selects editing scope.
 - `VoiceDictatePayload.polishStrength` and `VoiceAsrStreamPayload.polishStrength` optionally override the saved preference for one session; no new provider or prompt-routing table is introduced.
 
 ### Contracts
 
 - Missing/invalid strength normalizes to deep without overwriting explicit polish disablement, language, history, or unrelated settings. Hiding the selector when polish is off never clears its value.
-- VoicePanel supplies its runtime snapshot. VoiceService resolves omitted strength from main storage before capture's first asynchronous boundary, stores it on the session, and retains it with the retry buffer. Do not reread preferences while finalizing or replaying old audio.
+- VoicePanel snapshots both the persisted cleanup preference and `text.chat` availability before capture. `VoiceService` resolves omitted strength from main storage before capture's first asynchronous boundary, stores it on the session, and retains it with the retry buffer. Do not reread preferences while finalizing or replaying old audio.
 - One shared fidelity policy plus three precomposed editing directives owns the prompt. Natural preserves sequence, structured groups related points, and deep rewrites the draft assertively. All preserve independent requirements, qualifiers, negations, conditions, numbers, language and tone. ASR language is not a polish translation instruction.
-- Live/cleanup-disabled recordings and their recovery skip the polish pass. Cancellation still prevents late delivery; the existing 300 ms best-effort polish timeout returns raw text without claiming it was polished.
+- Live/cleanup-disabled recordings and their recovery skip the polish pass. A user who enables cleanup without a ready Chat capability still gets live raw dictation rather than an avoidable final-mode delay. Cancellation still prevents late delivery; the existing 300 ms best-effort polish timeout returns raw text without claiming it was polished.
 
 ### Validation & Error Matrix
 
