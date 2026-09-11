@@ -8,6 +8,13 @@ export interface TabBarItem {
   disabled?: boolean
 }
 
+/**
+ * `pill` slides a raised surface behind the active item, the way TxFlatRadio's
+ * thumb does; `line` slides a rule along the bar's top edge. `none` is the
+ * colour-only bar this component used to be.
+ */
+export type TabBarIndicator = 'none' | 'pill' | 'line'
+
 export interface TabBarProps {
   modelValue?: TabBarValue
   items?: TabBarItem[]
@@ -15,6 +22,7 @@ export interface TabBarProps {
   safeAreaBottom?: boolean
   disabled?: boolean
   zIndex?: number
+  indicator?: TabBarIndicator
 }
 
 export interface TabBarEmits {
