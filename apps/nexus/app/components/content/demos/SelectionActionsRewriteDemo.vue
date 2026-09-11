@@ -47,7 +47,7 @@ const copy = computed(() => {
 
 const articleRef = ref<HTMLElement | null>(null)
 const targetRef = ref<HTMLElement | null>(null)
-const barRef = ref<{ updatePosition: () => void } | null>(null)
+const barRef = ref<{ updatePosition: () => void, el: HTMLElement | null } | null>(null)
 
 const state = ref<'idle' | 'thinking' | 'streaming' | 'result'>('idle')
 const activeActionId = ref<string | undefined>()
@@ -60,7 +60,7 @@ watch(copy, () => { shownText.value = copy.value.picked }, { immediate: true })
 // listing the bar here keeps that from reading as "the reader deselected".
 const { selection, clear } = useSelectionAnchor({
   root: articleRef,
-  ignore: () => [document.querySelector('.tx-bui-selection-actions')],
+  ignore: () => [barRef.value?.el ?? null],
 })
 
 // While a rewrite runs the live selection is gone, so the host supplies the

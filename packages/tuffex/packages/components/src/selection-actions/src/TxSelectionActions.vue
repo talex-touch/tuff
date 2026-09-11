@@ -182,6 +182,20 @@ function updatePosition(): void {
   anchorRef.value?.updatePosition()
 }
 
+// Holding the selection is what lets an action operate on it, so the bar
+// suppresses the default mousedown that would collapse it. But that default is
+// also what focuses a text field, so suppressing it everywhere left the prompt
+// unfocusable — clicking it moved focus to `<body>` and typing went nowhere.
+// The previous shape put `.prevent` on the root and `.stop` on the input, which
+// only works while the input is the exact event target; anything the field is
+// wrapped in, and the root's blanket prevent wins again.
+function onBarPointerDown(event: PointerEvent): void {
+  const target = event.target as HTMLElement | null
+  if (target?.closest('input, textarea, [contenteditable="true"]'))
+    return
+  event.preventDefault()
+}
+
 defineExpose({
   /**
    * Reposition against the current selection rects. A streaming host must call
@@ -190,6 +204,17 @@ defineExpose({
    */
   updatePosition,
   focusInput: () => inputRef.value?.focus(),
+  /**
+   * The bar's root element. Hand it to `useSelectionAnchor`'s `ignore` so a
+   * collapse caused by the bar taking focus — clicking into the prompt field —
+   * is not mistaken for the reader clearing their selection. Without it the
+   * snapshot drops and the bar dismisses itself the moment it is used.
+   *
+   * Prefer this over `document.querySelector('.tx-bui-selection-actions')`:
+   * that returns the *first* bar in the document, which is the wrong one as
+   * soon as a page has more than one.
+   */
+  el: barRef,
 })
 </script>
 
@@ -222,7 +247,7 @@ defineExpose({
       class="tx-bui-selection-actions"
       role="group"
       :aria-label="ariaLabel"
-      @pointerdown.prevent
+      @pointerdown="onBarPointerDown"
     >
       <div ref="contentRef" class="tx-bui-selection-actions__content">
         <template v-if="isBusy">
@@ -280,7 +305,6 @@ defineExpose({
                 :placeholder="placeholder"
                 :aria-label="placeholder"
                 @input="onInput"
-                @pointerdown.stop
               >
             </form>
           </div>

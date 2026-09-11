@@ -392,7 +392,15 @@ const popoverOpen = ref(false)
 const overlayLoading = ref(true)
 const tabsActive = ref('')
 const selectionRootRef = ref<HTMLElement | null>(null)
-const { selection: selectionPayload } = useSelectionAnchor({ root: selectionRootRef })
+const selectionBarRef = ref<{ el: HTMLElement | null } | null>(null)
+// `ignore` is not optional in practice: clicking into the bar's own prompt field
+// collapses the document selection, and without this the anchor reads that as
+// the reader clearing their selection and drops the snapshot — so the bar
+// dismissed itself the moment anyone tried to use it.
+const { selection: selectionPayload } = useSelectionAnchor({
+  root: selectionRootRef,
+  ignore: () => [selectionBarRef.value?.el ?? null],
+})
 
 function fireToast() {
   toast({ title: copy.value.toastSaved, description: copy.value.aboutBody })
@@ -2066,7 +2074,7 @@ async function copyInstall() {
               <p class="docs-gallery__muted">
                 {{ copy.selectionHint }}
               </p>
-              <TxSelectionActions :selection="selectionPayload" />
+              <TxSelectionActions ref="selectionBarRef" :selection="selectionPayload" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
