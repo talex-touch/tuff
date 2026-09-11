@@ -40,6 +40,12 @@ export interface SettingCategory {
   group: SettingGroupKey
   /** Pages the category links out to. Only `intelligence` has any. */
   children?: SettingSubPage[]
+  /**
+   * Advanced pages stay out of normal navigation until Developer Mode is enabled, and the router
+   * refuses to open one by direct link either — a hidden page that still answers to a bookmark
+   * is not hidden, it is just harder to find.
+   */
+  advanced?: boolean
 }
 
 export const SETTING_GROUP_ORDER: SettingGroupKey[] = [
@@ -166,14 +172,16 @@ export const SETTING_CATEGORIES: SettingCategory[] = [
     path: '/setting/download',
     icon: 'i-ri-download-2-line',
     labelKey: 'download',
-    group: 'system'
+    group: 'system',
+    advanced: true
   },
   {
     key: 'storage-usage',
     path: '/setting/storage-usage',
     icon: 'i-ri-hard-drive-2-line',
     labelKey: 'storage',
-    group: 'system'
+    group: 'system',
+    advanced: true
   },
   {
     key: 'about',
@@ -218,33 +226,41 @@ export interface SettingNavItem {
   activeExact: boolean
 }
 
-export function groupedSettingNavigation(includeBeta = true): {
+/**
+ * The sidebar's item list.
+ *
+ * `includeRestricted` follows Developer Mode: beta sub-pages and advanced categories are held
+ * back when it is off, while their routes stay registered so nothing 404s on the way in.
+ */
+export function groupedSettingNavigation(includeRestricted = true): {
   group: SettingGroupKey
   items: SettingNavItem[]
 }[] {
   return groupedSettingCategories().map(({ group, items }) => ({
     group,
-    items: items.flatMap((category) => {
-      const promotedChildren = (category.children ?? []).filter(
-        (child) => child.navIcon && (includeBeta || !child.beta)
-      )
-      return [
-        {
-          key: category.key,
-          path: category.path,
-          icon: category.icon,
-          labelKey: `settingsNav.category.${category.labelKey}`,
-          activeExact: promotedChildren.length > 0
-        },
-        ...promotedChildren.map((child) => ({
-          key: `${category.key}-${child.key}`,
-          path: child.path,
-          icon: child.navIcon ?? category.icon,
-          labelKey: child.labelKey,
-          beta: child.beta,
-          activeExact: false
-        }))
-      ]
-    })
+    items: items
+      .filter((category) => includeRestricted || !category.advanced)
+      .flatMap((category) => {
+        const promotedChildren = (category.children ?? []).filter(
+          (child) => child.navIcon && (includeRestricted || !child.beta)
+        )
+        return [
+          {
+            key: category.key,
+            path: category.path,
+            icon: category.icon,
+            labelKey: `settingsNav.category.${category.labelKey}`,
+            activeExact: promotedChildren.length > 0
+          },
+          ...promotedChildren.map((child) => ({
+            key: `${category.key}-${child.key}`,
+            path: child.path,
+            icon: child.navIcon ?? category.icon,
+            labelKey: child.labelKey,
+            beta: child.beta,
+            activeExact: false
+          }))
+        ]
+      })
   }))
 }
