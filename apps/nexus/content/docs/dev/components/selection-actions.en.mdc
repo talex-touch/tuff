@@ -135,6 +135,7 @@ Returns `{ selection, clear }`: `selection` is a `Ref<SelectionPayload | null>`,
 |------|-------------|
 | `updatePosition()` | Reposition against the current `selection.rects`. **A streaming host must call it — see below.** |
 | `focusInput()` | Focus the free-text field. |
+| `el` | The bar's root element. Pass it to `useSelectionAnchor`'s `ignore`. |
 
 ## Interaction Contract
 
@@ -142,7 +143,8 @@ Returns `{ selection, clear }`: `selection` is a `Ref<SelectionPayload | null>`,
 - **The anchor is the bottom of the selection's last line, centred on the whole selection.** For a selection spanning three lines the bar lands under where the reader stopped, not under the block's midpoint.
 - **The bar does not flip.** It passes `disableFlip` to `TxBaseAnchor`: near the bottom of the viewport it will not jump above the selection, because changing sides mid-rewrite reads as a different control. `shift` still applies, so it is pushed back horizontally.
 - **`selection` is a snapshot, not the live selection.** Focusing the bar's text field clears the browser selection; the component holds the payload it was given, so the action still has a target. That is also why `useSelectionAnchor` calls `range.cloneRange()`.
-- The bar's root swallows `pointerdown` (`preventDefault`), so pressing a button neither moves focus nor destroys the selection. The text field re-enables it explicitly, or it could never take focus.
+- The bar's root swallows `pointerdown` (`preventDefault`), so pressing a button neither moves focus nor destroys the selection. The handler exempts anything inside an `input`, `textarea` or `contenteditable`, matched with `closest()` rather than by exact target: the field sits inside a `<form>`, so an identity check misses as soon as the pointer lands a pixel off the input and the prompt becomes unfocusable — clicking it sent focus to `<body>` and typing went nowhere.
+- **Wire `ignore` or the bar dismisses itself.** Focusing the prompt collapses the document selection, and `useSelectionAnchor` reads a collapse as the reader clearing their selection unless the bar holds focus. Pass the instance's `el`: `ignore: () => [barRef.value?.el ?? null]`. Do not reach for `document.querySelector('.tx-bui-selection-actions')` — it returns the first bar in the document, which is the wrong one as soon as a page has two.
 - Folded actions carry `tabindex="-1"` while collapsed and stay out of the tab order; so does the send control while `prompt` is empty.
 - The bar is `role="group"`, not `role="toolbar"`: it contains a text field, and the arrow keys belong to the caret.
 - `thinking` and `streaming` differ in exactly one way — the former's label shimmers, the latter's is plain text.
