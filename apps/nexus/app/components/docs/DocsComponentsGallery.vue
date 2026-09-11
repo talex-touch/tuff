@@ -1858,6 +1858,7 @@ async function copyInstall() {
             <div class="docs-gallery__block docs-gallery__framed docs-gallery__chrome docs-gallery__chrome--bottom">
               <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" />
               <div class="docs-gallery__chrome-body" />
+              <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" indicator="line" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
