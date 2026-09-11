@@ -1612,7 +1612,7 @@ async function copyInstall() {
         <div class="docs-gallery__stage">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxFlex :gap="8" wrap="wrap">
+              <TxFlex :gap="8" wrap="wrap" justify="center">
                 <div v-for="tile in layoutTiles" :key="tile" class="docs-gallery__tile">
                   {{ tile }}
                 </div>
