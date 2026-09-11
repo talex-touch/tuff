@@ -311,10 +311,11 @@ const CREDITS_EXCEEDED_MESSAGES = new Set([
  * Quantity held before dispatch when the caller declares no output cap of its own.
  *
  * Sized against the smallest plan tier rather than against the largest possible reply:
- * a FREE account holds 1,000 credits for the month, so a hold above that would make
- * every call unaffordable for exactly the accounts this is meant to serve. The hold
- * only has to stop a caller who cannot pay at all from reaching the provider; a reply
- * longer than the hold settles the difference afterwards (see
+ * a FREE account holds 20,000 credits for the month, so a hold sized to the longest
+ * reply (4,096 tokens ≈ 4,096 credits) would take a fifth of it before any work
+ * happened, and an account with a spent balance would be unable to call at all. The
+ * hold only has to stop a caller who cannot pay at all from reaching the provider; a
+ * reply longer than the hold settles the difference afterwards (see
  * `settleIntelligenceInvokeCredits`). Callers that declare their own output cap
  * (maxTokens/maxOutputTokens/max_tokens) get a hold sized to that cap instead.
  */

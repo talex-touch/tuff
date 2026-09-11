@@ -32,13 +32,14 @@
 | `transcript_unit` | 每转写单位（CJK 逐字、拉丁词按 2 计，沿用 ASR 既有定义） |
 | `image` | 每张图 |
 
-种子（**精确复刻上线价格，引入定价表本身不是价格变更**）：
+种子（文本与 ASR **精确复刻上线价格**；两个图片能力此前完全不计费，价格是**新定的**，见"免费额度与价格锚"）：
 
 | capability | unit | credits/unit | 次级基准 | reserve× |
 | ---------- | ---- | ------------ | -------- | -------- |
 | `text.chat` 等 11 个文本/代码能力 | `1k_tokens` | 1000 | – | 1 |
-| `vision.ocr` | `image` | 10 | – | 1 |
-| `image.translate.e2e` | `image` | 10 | – | 1 |
+| `vision.ocr` | `image` | 2000 | – | 1 |
+| `image.translate` | `image` | 3000 | – | 1 |
+| `image.translate.e2e` | `image` | 4000 | – | 1 |
 | `audio.transcribe` / `audio.stt` | `audio_second` | 4 | `transcript_unit` 1 | 2.5 |
 
 对照既有实现：
@@ -51,6 +52,23 @@
 `PATCH /api/admin/credits/pricing` 调整并留审计；**单位基准不可在线改**，因为它属于能力契约。
 
 面向用户的价目表：`GET /api/credits/pricing`（不含上游成本与预留系数）。
+
+## 免费额度与价格锚
+
+**锚点：1 credit = 1 chat token**（chat 1,000 credits / 1K tokens）。选它而不是"1 credit = 1 次调用"，因为每一分已发放的额度都按这个口径计价：换锚点等于把用户余额与 PLUS/PRO/TEAM 台阶整体缩放 1,000 倍，属于追溯性重新估值。上线价本来就是 1 credit/token（旧路径直接按 `totalTokens` 扣），ASR 的 4 credits/秒 ≈ 每秒 4 tokens 也落在同一锚点上 —— 所以**只有图片能力与免费额度是例外**，它们改的是各自那一处错，而不是动锚点。
+
+| 常量 | 改前 | 改后 | 不变量 |
+| ---- | ---- | ---- | ------ |
+| FREE 月额度 | 1,000 | **20,000** | 读作调用：≈ 20 次 1K-token 对话，或 10 张 `vision.ocr`，可混用 |
+| 完成资料后的 FREE 额度 | 5,000 | **40,000** | = 2× FREE，且严格低于最便宜付费档 PLUS 100,000 |
+| 每日签到奖励 | 1 | **500** | 整月签到 30 × 500 = 15,000 < FREE 20,000 |
+| `vision.ocr` | 10 credits/张 | **2,000 credits/张** | ≈ 2 次对话：1024² 图片按 512 像素切片计 765 image tokens + prompt + completion |
+| `image.translate` | 无价格行（fallback 读不到 `image` → **静默免费**） | **3,000 credits/张** | 识别 + 翻译文字，不重绘图片，落在 OCR 与 e2e 之间 |
+| `image.translate.e2e` | 10 credits/张 | **4,000 credits/张** | 识别 + 翻译 + 重排 ≈ 4 次对话 |
+
+付费台阶（PLUS 100,000 / PRO 240,000 / TEAM|ENTERPRISE 1,000,000）不动：FREE:PLUS 从 1:100 变成 1:5，这才是"免费档"该有的比例；改前的 1,000 只够一次短对话，等于没有免费档。
+
+上游成本不进价格表：Nexus 自身采购价没有记录在本仓库，`upstreamCostUsdPerUnit` 保持 null，**不编造**。价格只按"这份工作量 ≈ 几次对话"推导，管理员可用 `PATCH /api/admin/credits/pricing` 按真实成本再调。
 
 ## 结算流程
 
@@ -83,6 +101,6 @@ computeCreditReservation(rule, estimate)         ← 派发前
 ## 风险
 
 - **预留额度**：chat 的预留上限依赖输出上限估算，估得过高会误伤余额紧张的用户（表现为提前被拒而不是事后 402）。估算常量与依据必须写在代码注释里。
-- **价格变更**：`vision.ocr` 与 `image.translate.e2e` 从 0 变成 10 credits/张，是**真实的价格变更**（此前是漏洞）。历史账本不追溯。
+- **价格变更**：三个图片能力此前都不收费，现在分别是 `vision.ocr` 2,000、`image.translate` 3,000、`image.translate.e2e` 4,000 credits/张（推导见"免费额度与价格锚"）。其中 `vision.ocr` 与 `image.translate.e2e` 是**真实的价格变更**（此前是漏洞：provider 已按 `{unit:'image',quantity:1,billable:true}` 上报，被硬编码成 0 token 丢掉），`image.translate` 则是**从来没有价格行**：它的 usage 是 `image`，而 fallback 规则按 tokens 计价，读不到 images 就等于按 0 结算 —— 注册过的能力反而不在价目表里，属于定价表自身要防的那类静默免费。FREE 月额度 1,000 → 20,000、签到 1 → 500 属于赠额放大，同样不追溯历史账本。
 - **ASR 结算恒等式**：`credits_per_unit`/`secondary`/`reserve_multiplier` 三个数只要改动就会改变 ASR 收费，改动必须同时核对 `ASR_RESERVATION_EXCEEDED` 分支。
 - **自定义地址**：换地址必须清登录态，否则旧 AK 会被带到新端点。

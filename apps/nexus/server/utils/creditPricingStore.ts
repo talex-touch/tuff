@@ -13,8 +13,18 @@ import { requireDatabase } from './creditsStore'
  *
  * The seeded defaults reproduce the prices that were already shipped before this
  * table existed (see `DEFAULT_CREDIT_PRICING`), so introducing it is not a price
- * change. `upstreamCostUsdPerUnit` is margin/reconciliation evidence only; it is
- * never charged to a user and never exposed on a user-facing surface.
+ * change — with one deliberate exception: `vision.ocr` and `image.translate.e2e`
+ * were priced at a tenth of a chat turn while they do several turns' worth of work,
+ * and they are the two capabilities whose price is derived rather than inherited
+ * (see the seed comment).
+ *
+ * The anchor is chat: 1,000 credits per 1K tokens, i.e. one credit per token. Every
+ * other capability is priced by expressing its upstream workload in that same unit,
+ * so a price list reads as "this call costs about as much as N chat replies" and the
+ * free allowance (`creditsStore.ts`) can be read in calls. Nothing here is priced in
+ * money: `upstreamCostUsdPerUnit` is reconciliation evidence only, it is never
+ * charged to a user and never exposed on a user-facing surface, and it stays null
+ * wherever Nexus's own upstream rate is not recorded in this repository.
  */
 
 export const CREDIT_PRICING_TABLE = 'credit_pricing'
@@ -65,7 +75,17 @@ export const FALLBACK_CREDIT_PRICING: Omit<CreditPricingRule, 'capability' | 'up
   active: true
 }
 
-const SEEDED_AT = '2026-09-10T00:00:00.000Z'
+/** Stamp the current seed writes into `updated_at`. */
+const SEEDED_AT = '2026-09-11T00:00:00.000Z'
+
+/**
+ * Stamps earlier versions wrote. A row still carrying one has never been edited by an
+ * operator — `updateCreditPricing` always stamps a real timestamp — so it is still the
+ * shipped default and has to move with the code when a default changes. Without this a
+ * price fix would only ever reach databases that had not been seeded yet: seeding is
+ * additive per capability, so an existing row keeps its superseded price forever.
+ */
+const SUPERSEDED_SEED_STAMPS = new Set(['2026-09-10T00:00:00.000Z'])
 
 function rule(
   capability: string,
@@ -106,12 +126,31 @@ const CHAT_CAPABILITIES = [
  * `1k_tokens` at 1,000 credits/1k reproduces the shipped one-credit-per-token chat
  * price exactly; `audio_second` at 4 with a `transcript_unit` secondary of 1
  * reproduces the shipped `max(transcriptUnits, billedSeconds * 4)`, and a 2.5
- * reserve multiplier reproduces the shipped 10-credits-per-second hold.
+ * reserve multiplier reproduces the shipped 10-credits-per-second hold — a second of
+ * speech is about four tokens, so ASR already sat on the same one-credit-per-token
+ * anchor as chat.
+ *
+ * The two image capabilities do not inherit a price, because before this table they
+ * were not billed at all. They are derived from the same anchor by their upstream
+ * workload instead: one `vision.ocr` call sends a picture plus a prompt and a
+ * completion, and the vision tokenizer bills a 1024×1024 image as 765 tokens at
+ * 512-pixel tiling, so ~2,000 credits (about two chat replies); `image.translate.e2e`
+ * chains recognition, translation and re-render, so ~4,000 credits. Both were seeded
+ * at 10 credits — a hundredth of a chat reply for work that costs several — which is
+ * the price bug this table was meant to make visible, not a price to preserve.
+ *
+ * `image.translate` is the recognize-and-translate sibling of the e2e pipeline (it
+ * returns the source and target text without re-rendering the picture), so it sits
+ * between OCR and e2e at 3,000. It needs a row of its own for a second reason: the
+ * fallback prices in tokens, so a capability that reports `{unit:'image'}` and has no
+ * row settles at zero — the exact "served at zero cost by accident" case the fallback
+ * exists to prevent.
  */
 export const DEFAULT_CREDIT_PRICING: readonly CreditPricingRule[] = [
   ...CHAT_CAPABILITIES.map(capability => rule(capability, '1k_tokens', 1000)),
-  rule('vision.ocr', 'image', 10),
-  rule('image.translate.e2e', 'image', 10),
+  rule('vision.ocr', 'image', 2000),
+  rule('image.translate', 'image', 3000),
+  rule('image.translate.e2e', 'image', 4000),
   rule('audio.transcribe', 'audio_second', 4, {
     secondaryUnit: 'transcript_unit',
     secondaryCreditsPerUnit: 1,
@@ -270,11 +309,14 @@ export async function ensureCreditPricingSchema(
 }
 
 /**
- * Reads the effective price list, seeding any capability that has no row yet.
+ * Reads the effective price list, seeding any capability that has no row yet and moving
+ * never-edited rows onto the shipped defaults.
  *
  * Seeding is additive and per capability: an operator who tuned a price keeps that
  * price across deploys, and a newly shipped capability picks up its default without
- * touching the rows around it.
+ * touching the rows around it. The one exception is a row that still carries a
+ * superseded seed stamp (see `SUPERSEDED_SEED_STAMPS`): that row is a shipped default
+ * nobody has edited, so it follows the default.
  */
 export async function listCreditPricing(
   event: H3Event | D1Database
@@ -311,12 +353,57 @@ export async function listCreditPricing(
     await db.batch(statements)
   }
 
-  const stored = missing.length
+  const reseeded = await reseedSupersededDefaults(db, rows)
+  const stored = missing.length || reseeded
     ? ((await db.prepare(`SELECT * FROM ${CREDIT_PRICING_TABLE}`).all())?.results ?? [])
     : rows
   return (stored as Array<Record<string, unknown>>)
     .map(normalizeRule)
     .sort((a, b) => a.capability.localeCompare(b.capability))
+}
+
+/**
+ * Writes the shipped default over rows that still carry a superseded seed stamp, and
+ * returns whether anything changed so the caller re-reads instead of trusting the
+ * snapshot it took before the update. The new stamp is the current one, so a second
+ * read converges: this rewrites a row at most once per seed version.
+ */
+async function reseedSupersededDefaults(
+  db: D1Database,
+  rows: Array<Record<string, unknown>>
+): Promise<boolean> {
+  if (!rows.length) return false
+  const defaults = new Map(DEFAULT_CREDIT_PRICING.map(item => [item.capability, item]))
+  const statements = rows.flatMap((row) => {
+    if (!SUPERSEDED_SEED_STAMPS.has(String(row.updated_at ?? ''))) return []
+    const item = defaults.get(String(row.capability))
+    if (!item) return []
+    return [
+      db
+        .prepare(
+          `UPDATE ${CREDIT_PRICING_TABLE}
+             SET unit = ?, credits_per_unit = ?, secondary_unit = ?, secondary_credits_per_unit = ?,
+                 min_credits = ?, reserve_multiplier = ?, upstream_cost_usd_per_unit = ?, active = ?,
+                 updated_at = ?
+           WHERE capability = ?`
+        )
+        .bind(
+          item.unit,
+          item.creditsPerUnit,
+          item.secondaryUnit,
+          item.secondaryCreditsPerUnit,
+          item.minCredits,
+          item.reserveMultiplier,
+          item.upstreamCostUsdPerUnit,
+          item.active ? 1 : 0,
+          item.updatedAt,
+          item.capability
+        )
+    ]
+  })
+  if (!statements.length) return false
+  await db.batch(statements)
+  return true
 }
 
 function isDatabase(value: unknown): value is D1Database {

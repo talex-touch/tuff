@@ -1,6 +1,7 @@
 import type { IntelligenceProviderRecord } from './intelligenceStore'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CREDIT_PRICING, selectCreditPricingRule } from './creditPricingStore'
+import type { CreditPricingRule } from './creditPricingStore'
 import {
   listPlatformGovernanceEvents,
   recordPlatformGovernanceEvent,
@@ -119,6 +120,23 @@ function ledgerEntry(amount: number, reason: string) {
     createdAt: '2026-05-12T00:00:00.000Z',
     metadata: {},
   }
+}
+
+/**
+ * A capability the price list sells per image. The capability under test reports tokens,
+ * so the meters disagree however the shipped price list happens to be priced.
+ */
+const IMAGE_PRICED_RULE: CreditPricingRule = {
+  capability: 'vision.ocr',
+  unit: 'image',
+  creditsPerUnit: 250,
+  secondaryUnit: null,
+  secondaryCreditsPerUnit: null,
+  minCredits: 1,
+  reserveMultiplier: 1,
+  upstreamCostUsdPerUnit: null,
+  active: true,
+  updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
 describe('invokeIntelligenceCapability', () => {
@@ -558,7 +576,7 @@ describe('invokeIntelligenceCapability', () => {
 
   it('价格表不售卖 provider 上报的单位时保留预扣而不是免费放行', async () => {
     pricingMocks.resolveCreditPricingRule.mockImplementationOnce(
-      async () => selectCreditPricingRule('vision.ocr', DEFAULT_CREDIT_PRICING),
+      async () => IMAGE_PRICED_RULE,
     )
     langchainMocks.invoke.mockResolvedValueOnce({
       content: 'ok',
@@ -580,12 +598,12 @@ describe('invokeIntelligenceCapability', () => {
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      10,
+      250,
       'intelligence-invoke-reserve',
       expect.objectContaining({
         capabilityId: 'text.chat',
         unit: 'image',
-        reservedCredits: 10,
+        reservedCredits: 250,
       }),
       { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
     )
@@ -594,11 +612,11 @@ describe('invokeIntelligenceCapability', () => {
       result: 'ok',
       metadata: {
         billing: {
-          ledgerId: 'ledger_intelligence-invoke-reserve_10',
-          chargedCredits: 10,
+          ledgerId: 'ledger_intelligence-invoke-reserve_250',
+          chargedCredits: 250,
           unit: 'image',
           quantity: 0,
-          reservedCredits: 10,
+          reservedCredits: 250,
           billable: true,
           reason: 'intelligence-invoke',
         },

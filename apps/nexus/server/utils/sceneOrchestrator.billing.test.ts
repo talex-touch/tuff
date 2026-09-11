@@ -4,7 +4,8 @@ import type { SceneRegistryRecord } from './sceneRegistryStore'
 import type { SceneRunResult, SceneRunUsage } from './sceneOrchestrator'
 import type * as CreditPricingStoreModule from './creditPricingStore'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_CREDIT_PRICING, selectCreditPricingRule } from './creditPricingStore'
+import { selectCreditPricingRule } from './creditPricingStore'
+import type { CreditPricingRule } from './creditPricingStore'
 import {
   clearSceneCapabilityAdaptersForTest,
   registerSceneCapabilityAdapter,
@@ -79,7 +80,9 @@ function isSceneRunFailure(value: unknown): value is SceneRunFailure {
   if (!value || typeof value !== 'object' || !('data' in value))
     return false
   const data = value.data
-  return Boolean(data) && typeof data === 'object' && 'run' in data && 'code' in data
+  if (!data || typeof data !== 'object')
+    return false
+  return 'run' in data && 'code' in data
 }
 
 function capability(name: string, unit = 'character') {
@@ -201,6 +204,39 @@ async function runExpectingFailure(request: Parameters<typeof runSceneOrchestrat
 /** `{ text: 'hello' }` is five characters, and chat text is priced at 1 credit per token. */
 const TEXT_HOLD = 5
 
+/**
+ * The prices this suite meters against, held here rather than read from the shipped
+ * table: what is under test is the orchestrator's algebra — one hold per capability
+ * before dispatch, settlement of the reported quantity, release of the difference —
+ * not the price of any capability. The shipped list has its own test.
+ */
+const SCENE_PRICING: readonly CreditPricingRule[] = [
+  {
+    capability: 'text.translate',
+    unit: '1k_tokens',
+    creditsPerUnit: 1000,
+    secondaryUnit: null,
+    secondaryCreditsPerUnit: null,
+    minCredits: 1,
+    reserveMultiplier: 1,
+    upstreamCostUsdPerUnit: null,
+    active: true,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    capability: 'vision.ocr',
+    unit: 'image',
+    creditsPerUnit: 20,
+    secondaryUnit: null,
+    secondaryCreditsPerUnit: null,
+    minCredits: 1,
+    reserveMultiplier: 1,
+    upstreamCostUsdPerUnit: null,
+    active: true,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+]
+
 describe('runSceneOrchestrator credit metering', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -212,7 +248,7 @@ describe('runSceneOrchestrator credit metering', () => {
     healthMocks.getLatestProviderHealthChecks.mockResolvedValue(new Map())
     credentialMocks.getProviderCredential.mockResolvedValue({ apiKey: 'sk-test' })
     pricingMocks.resolveCreditPricingRule.mockImplementation(async (_event, capabilityName: string) =>
-      selectCreditPricingRule(capabilityName, DEFAULT_CREDIT_PRICING),
+      selectCreditPricingRule(capabilityName, SCENE_PRICING),
     )
     creditsMocks.consumeCredits.mockImplementation(async (_event, userId, amount, reason, metadata) => ({
       ledgerId: `ledger_${++ledgerSeq}`,
@@ -373,9 +409,9 @@ describe('runSceneOrchestrator credit metering', () => {
       data: { code: 'PROVIDER_ADAPTER_FAILED' },
     })
     expect(failure.data.run.billing).toEqual({
-      reservedCredits: 12,
+      reservedCredits: 22,
       chargedCredits: 0,
-      releasedCredits: 12,
+      releasedCredits: 22,
       ledgerId: 'ledger_1',
       settlementLedgerId: null,
       settleFailed: false,
@@ -383,7 +419,7 @@ describe('runSceneOrchestrator credit metering', () => {
     expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith(
       expect.anything(),
       OWNER_ID,
-      12,
+      22,
       'scene-run-release',
       expect.objectContaining({
         sceneId: SCENE_ID,
@@ -437,14 +473,14 @@ describe('runSceneOrchestrator credit metering', () => {
       1,
       expect.anything(),
       OWNER_ID,
-      12,
+      22,
       'scene-run-reserve',
       expect.anything(),
       { idempotencyKey: `scene-run-reserve:${run.runId}` },
     )
     expect(run.billing).toEqual({
-      reservedCredits: 12,
-      chargedCredits: 2010,
+      reservedCredits: 22,
+      chargedCredits: 2020,
       releasedCredits: 0,
       ledgerId: 'ledger_1',
       settlementLedgerId: 'ledger_2',
@@ -476,8 +512,8 @@ describe('runSceneOrchestrator credit metering', () => {
 
     expect(run).toMatchObject({ status: 'completed' })
     expect(run.billing).toEqual({
-      reservedCredits: 10,
-      chargedCredits: 20,
+      reservedCredits: 20,
+      chargedCredits: 40,
       releasedCredits: 0,
       ledgerId: 'ledger_1',
       settlementLedgerId: 'ledger_2',

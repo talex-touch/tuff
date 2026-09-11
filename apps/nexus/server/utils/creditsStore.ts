@@ -22,9 +22,28 @@ const PASSKEYS_TABLE = 'auth_passkeys'
 let creditsSchemaInitialized = false
 
 const DEFAULT_TEAM_QUOTA = 2000000
-const DEFAULT_PERSONAL_QUOTA = 1000
-const BOOSTED_PERSONAL_QUOTA = 5000
-const CHECKIN_REWARD = 1
+/**
+ * Free monthly allowance, in credits. The credit is anchored to chat tokens — one
+ * credit buys one token (`creditPricingStore.ts`) — so this number only means
+ * something read in calls: a 1,000-token reply costs 1,000 credits, so 20,000 covers
+ * about twenty replies, or ten `vision.ocr` images, in any mix. The shipped 1,000
+ * bought a single short conversation, which made the free tier unusable rather than
+ * cheap; the ladder above it (PLUS 100,000 = 10×, PRO 240,000 = 12×) was already
+ * shaped for this size.
+ */
+const DEFAULT_PERSONAL_QUOTA = 20000
+/**
+ * Allowance for a FREE account that verified its email and bound OAuth/passkey.
+ * Twice the free allowance, and deliberately below the cheapest paid tier (PLUS,
+ * 100,000): completing a profile must not hand out a paid plan.
+ */
+const BOOSTED_PERSONAL_QUOTA = 40000
+/**
+ * Daily check-in top-up, added on top of the month's quota. A whole month of
+ * check-ins stays inside the allowance it supplements: 30 × 500 = 15,000 < 20,000.
+ * The shipped 1 credit — one token — was invisible next to any real call.
+ */
+const CHECKIN_REWARD = 500
 const TEAM_BASE_SEATS = 5
 const TEAM_POOL_PER_SEAT = 400000
 const DEFAULT_PLAN_ID = 'default'
