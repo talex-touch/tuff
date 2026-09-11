@@ -61,7 +61,7 @@ describe('docs prerender routes', () => {
     ])
   })
 
-  it('keeps docs page API responses dynamic during prerender', () => {
+  it('prerenders a path-shaped JSON twin of every docs page in both locales and body modes', () => {
     const root = mkdtempSync(join(tmpdir(), 'nexus-docs-page-api-routes-'))
     const docsDir = join(root, 'content/docs/dev/components')
     mkdirSync(docsDir, { recursive: true })
@@ -69,7 +69,18 @@ describe('docs prerender routes', () => {
     writeFileSync(join(docsDir, 'tabs.zh.mdc'), '# Tabs 标签页')
     writeFileSync(join(docsDir, 'button.en.mdc'), '# Button')
 
-    expect(createDocsPageApiPrerenderRoutes(root)).toEqual([])
+    // Locale variants of one page collapse to one set of routes; a page with a single
+    // locale file still gets both locales because the resolver falls back across them.
+    expect(createDocsPageApiPrerenderRoutes(root)).toEqual([
+      '/api/docs/page/en/body/dev/components/button.json',
+      '/api/docs/page/en/body/dev/components/tabs.json',
+      '/api/docs/page/en/meta/dev/components/button.json',
+      '/api/docs/page/en/meta/dev/components/tabs.json',
+      '/api/docs/page/zh/body/dev/components/button.json',
+      '/api/docs/page/zh/body/dev/components/tabs.json',
+      '/api/docs/page/zh/meta/dev/components/button.json',
+      '/api/docs/page/zh/meta/dev/components/tabs.json',
+    ])
   })
 
   it('combines public pages, docs APIs, and scanned docs into Nexus prerender routes', () => {
@@ -112,7 +123,12 @@ describe('docs prerender routes', () => {
     const evidence = createNexusPrerenderEvidence(root)
 
     expect(evidence.docsApiRoutes).toEqual([...docsApiPrerenderRoutes])
-    expect(evidence.docsPageApiRoutes).toEqual([])
+    expect(evidence.docsPageApiRoutes).toEqual(expect.arrayContaining([
+      '/api/docs/page/en/body/index.json',
+      '/api/docs/page/en/meta/dev/getting-started/quickstart.json',
+      '/api/docs/page/zh/body/guide/start.json',
+    ]))
+    expect(evidence.docsPageApiRoutes.every(route => /^\/api\/docs\/page\/(?:en|zh)\/(?:meta|body)\/[^?]+\.json$/.test(route))).toBe(true)
     expect(evidence.missingRequiredDocsRoutes).toEqual([])
     expect(evidence.requiredDocsRoutes).toEqual(expect.arrayContaining([
       '/en/docs',
@@ -161,7 +177,15 @@ describe('docs prerender routes', () => {
       '/en/docs/dev/components',
       '/zh/docs/dev/components',
     ]))
-    expect(evidence.docsPageApiRoutes).toEqual([])
+    // One JSON twin per docs route per mode; none may carry a query string, which is what
+    // made the earlier prerender attempt unbuildable on Pages.
+    expect(evidence.docsPageApiRoutes.length).toBe(evidence.docsRoutes.length * 2)
+    expect(evidence.docsPageApiRoutes.some(route => route.includes('?'))).toBe(false)
+    expect(evidence.docsPageApiRoutes).toEqual(expect.arrayContaining([
+      '/api/docs/page/en/body/dev/components/tabs.json',
+      '/api/docs/page/zh/meta/dev/components/tabs.json',
+      '/api/docs/page/en/body/index.json',
+    ]))
     expect(evidence.docsRoutes).not.toEqual(expect.arrayContaining([
       '/docs',
       '/docs/dev/getting-started/quickstart',

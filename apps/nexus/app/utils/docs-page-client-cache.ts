@@ -1,4 +1,5 @@
 import { requestJson } from '~/utils/request'
+import { toStaticDocsPageJsonPath } from '#shared/utils/docs-page-json'
 import { canonicalDocsPageIdentity, normalizeDocsPagePath } from '#shared/utils/docs-path'
 
 type DocsPageBodyMode = '0' | '1'
@@ -151,6 +152,33 @@ export function primeDocsPageRequestCache(input: DocsPageRequestInput, value: Do
   return value
 }
 
+/**
+ * Reads the document from its prerendered static twin first and falls back to the Worker route
+ * only when that read fails.
+ *
+ * The static file is what makes page-to-page navigation cheap: it is served by Cloudflare Pages
+ * with the docs cache window, so it costs an edge hit rather than a Worker round trip (1–2 s
+ * from CN). A document that is not on the prerender list (a route added between deploys, a dev
+ * server with no prerender at all) answers 404 there, and the query route still knows how to
+ * resolve it — including the development Markdown fallback — so the reader never sees the gap.
+ * A rejected static read is retried exactly once through the query route, never looped.
+ */
+async function fetchDocsPageRecord(input: DocsPageRequestInput): Promise<DocsPageRecord> {
+  const { path, locale, body } = input
+  try {
+    return await requestJson<DocsPageRecord>(toStaticDocsPageJsonPath(path, locale, body === '1' ? 'body' : 'meta'))
+  }
+  catch {
+    return await requestJson<DocsPageRecord>('/api/docs/page', {
+      query: {
+        path,
+        locale,
+        body,
+      },
+    })
+  }
+}
+
 export function requestDocsPage(input: DocsPageRequestInput) {
   const path = normalizeDocsPagePath(input.path)
   const { locale, body } = input
@@ -165,13 +193,7 @@ export function requestDocsPage(input: DocsPageRequestInput) {
       return pending
   }
 
-  const request = requestJson<DocsPageRecord>('/api/docs/page', {
-    query: {
-      path,
-      locale,
-      body,
-    },
-  }).then((value) => {
+  const request = fetchDocsPageRecord({ path, locale, body }).then((value) => {
     primeDocsPageRequestCache({ path, locale, body }, value)
     return value
   }).finally(() => {

@@ -65,6 +65,7 @@ export const docsStaticHtmlHeaderRoutes = ['/en/docs/**', '/zh/docs/**']
  * the explicit content-type is part of the same rule.
  */
 export const docsStaticJsonHeaderRoutes = [
+  '/api/docs/page/**',
   '/api/docs/navigation/**',
   '/api/docs/search/**',
   '/api/docs/sidebar-components/**',
