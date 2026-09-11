@@ -35,7 +35,19 @@ vi.mock('./intelligenceStore', async () => {
   return { ...actual, createAudit: storeMocks.createAudit, getSettings: storeMocks.getSettings }
 })
 vi.mock('./intelligenceProviderRegistryBridge', () => providerBridgeMocks)
-vi.mock('./creditsStore', () => creditStoreMocks)
+vi.mock('./creditsStore', async () => {
+  // The price table is a database read even when these tests price with the shipped rules,
+  // and the credits fake above never supplies a binding — so the D1 handle is the in-memory
+  // pricing fake, which seeds itself with the shipped table on first use. The helper is
+  // loaded lazily because a `vi.mock` factory is hoisted above this file's imports.
+  const { MockCreditPricingD1Database } = await import('../../test/helpers/credit-pricing-test-utils')
+  const pricingDb = new MockCreditPricingD1Database()
+  return {
+    consumeCredits: creditStoreMocks.consumeCredits,
+    releaseConsumedCredits: creditStoreMocks.releaseConsumedCredits,
+    requireDatabase: () => pricingDb,
+  }
+})
 vi.mock('./providerUsageLedgerStore', () => usageLedgerMocks)
 
 // The price list is a database read; the rule lookup over it is not. Keeping the real
@@ -134,16 +146,19 @@ describe('Nexus provider adapter boundary', () => {
       messages: [{ role: 'user', content: 'hello' }],
     }))
     expect(langchainMocks.invoke).not.toHaveBeenCalled()
+    // The hold covers the prompt as well as the reply: 'hello' estimates to 2 tokens and the
+    // server's own output cap is 512, so the reservation is 514 and the release is the
+    // unspent part of it (514 - the 3 tokens the provider reported).
     expect(result).toMatchObject({
       result: 'adapter:hello',
       traceId: 'trace_adapter_1',
       metadata: {
         billing: {
-          ledgerId: 'ledger_intelligence-invoke-reserve_512',
+          ledgerId: 'ledger_intelligence-invoke-reserve_514',
           chargedCredits: 3,
           unit: '1k_tokens',
           quantity: 3,
-          reservedCredits: 512,
+          reservedCredits: 514,
           reserveId: expect.any(String),
           billable: true,
           reason: 'intelligence-invoke',
@@ -154,21 +169,21 @@ describe('Nexus provider adapter boundary', () => {
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      512,
+      514,
       'intelligence-invoke-reserve',
-      expect.objectContaining({ capabilityId: 'text.chat', unit: '1k_tokens', reservedCredits: 512 }),
+      expect.objectContaining({ capabilityId: 'text.chat', unit: '1k_tokens', reservedCredits: 514 }),
       { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
     )
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      509,
+      511,
       'intelligence-invoke-release',
       expect.objectContaining({
         capabilityId: 'text.chat',
         traceId: 'trace_adapter_1',
-        reservedCredits: 512,
-        releasedCredits: 509,
+        reservedCredits: 514,
+        releasedCredits: 511,
       }),
       { idempotencyKey: 'intelligence-invoke-release:trace_adapter_1' },
     )
@@ -259,11 +274,11 @@ describe('Nexus provider adapter boundary', () => {
         fallbackCount: 0,
         attemptedProviders: ['ip_adapter'],
         billing: {
-          ledgerId: 'ledger_intelligence-invoke-reserve_512',
+          ledgerId: 'ledger_intelligence-invoke-reserve_514',
           chargedCredits: 3,
           unit: '1k_tokens',
           quantity: 3,
-          reservedCredits: 512,
+          reservedCredits: 514,
           reserveId: expect.any(String),
           billable: true,
           reason: 'intelligence-invoke',
@@ -279,15 +294,15 @@ describe('Nexus provider adapter boundary', () => {
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      512,
+      514,
       'intelligence-invoke-reserve',
-      expect.objectContaining({ capabilityId: 'text.chat', unit: '1k_tokens', reservedCredits: 512 }),
+      expect.objectContaining({ capabilityId: 'text.chat', unit: '1k_tokens', reservedCredits: 514 }),
       { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
     )
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      509,
+      511,
       'intelligence-invoke-release',
       expect.objectContaining({ capabilityId: 'text.chat', traceId: 'trace_stream_1' }),
       { idempotencyKey: 'intelligence-invoke-release:trace_stream_1' },
@@ -346,7 +361,7 @@ describe('Nexus provider adapter boundary', () => {
         attemptedProviders: ['ip_primary', 'ip_fallback'],
         billing: {
           chargedCredits: 2,
-          reservedCredits: 512,
+          reservedCredits: 514,
           unit: '1k_tokens',
           quantity: 2,
         },
@@ -359,7 +374,7 @@ describe('Nexus provider adapter boundary', () => {
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      510,
+      512,
       'intelligence-invoke-release',
       expect.objectContaining({ traceId: 'trace_fallback_1' }),
       { idempotencyKey: 'intelligence-invoke-release:trace_fallback_1' },
@@ -409,11 +424,11 @@ describe('Nexus provider adapter boundary', () => {
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      512,
+      514,
       'intelligence-invoke-release',
       expect.objectContaining({
-        reservedCredits: 512,
-        releasedCredits: 512,
+        reservedCredits: 514,
+        releasedCredits: 514,
         traceOutcome: 'dispatch-failed',
       }),
       { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },

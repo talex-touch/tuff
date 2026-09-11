@@ -26,11 +26,18 @@ vi.mock('./intelligenceStore', async () => {
   return { ...actual, createAudit: storeMocks.createAudit, getSettings: storeMocks.getSettings }
 })
 vi.mock('./intelligenceProviderRegistryBridge', () => providerBridgeMocks)
-vi.mock('./creditsStore', () => ({
-  consumeCredits: creditMocks.consumeCredits,
-  releaseConsumedCredits: creditMocks.releaseConsumedCredits,
-  requireDatabase: vi.fn(),
-}))
+vi.mock('./creditsStore', async () => {
+  // Same shape as the adapter boundary suite: the price table needs a D1 handle, and the
+  // in-memory pricing fake seeds itself with the shipped table. Loaded lazily because a
+  // `vi.mock` factory is hoisted above this file's imports.
+  const { MockCreditPricingD1Database } = await import('../../test/helpers/credit-pricing-test-utils')
+  const pricingDb = new MockCreditPricingD1Database()
+  return {
+    consumeCredits: creditMocks.consumeCredits,
+    releaseConsumedCredits: creditMocks.releaseConsumedCredits,
+    requireDatabase: () => pricingDb,
+  }
+})
 /**
  * The price table is stored in the database, but the rules it resolves are pure constants. These
  * tests resolve against the shipped table instead of a fake connection: every invoke now takes its
