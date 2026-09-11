@@ -5,8 +5,6 @@ import { describe, expect, it } from 'vitest'
 import {
   assertHttpSuccess,
   BAILIAN_PARAFORMER_DEFAULT_MODEL,
-  DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_MODEL,
-  DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_VAD_THRESHOLD,
   bailianAudioSpec,
   BailianParaformerVoiceProvider,
   buildBailianFinishTask,
@@ -21,6 +19,7 @@ import {
   buildDoubaoStreamPayload,
   createVoiceProviderRegistry,
   DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_MODEL,
+  DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_VAD_THRESHOLD,
   decodeDoubaoFrame,
   doubaoAudioSpec,
   DoubaoVoiceProvider,
