@@ -151,6 +151,7 @@ code: |
 - 根节点由 `tag` 控制；文本保持默认 `span`，卡片、图片或徽章容器使用 `div`。
 - `active=false` 只隐藏扫光层，插槽内容仍正常渲染。
 - `repeat=false` 只运行动画一次并保留最终帧；可结合 `delayMs` 做一次性功能提示徽章。
+- `mode="adaptive"` 使用 `screen`（支持时为 `plus-lighter`）混合，而它只提亮。因此在浅色表面上，浅色的 `color` 什么都不会改变——组件照常渲染、照常播放动画，就是看不见，而且没有任何报错可循。adaptive 适用于深色卡片、图片和缩略图；浅色页面上的文字应当使用 `text-clip`，浅色卡片则应配 `blendMode="soft-light"` 与更深的 `color`。
 - `mode="text-clip"` 会在挂载后及文本变更时读取插槽文本；适合简单文本，不适合包裹复杂交互内容。
 - 用户启用 `prefers-reduced-motion: reduce` 时组件会停止扫动动画，只保留静态高光。
 

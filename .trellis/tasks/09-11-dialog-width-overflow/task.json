@@ -1,9 +1,9 @@
 {
-  "id": "glow-text-light-surface",
-  "name": "glow-text-light-surface",
-  "title": "GlowText must read on light surfaces",
+  "id": "dialog-width-overflow",
+  "name": "dialog-width-overflow",
+  "title": "Dialog width, long-string clipping and body scroll",
   "description": "",
-  "status": "in_progress",
+  "status": "planning",
   "dev_type": null,
   "scope": null,
   "package": null,

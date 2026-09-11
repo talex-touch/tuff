@@ -2297,9 +2297,32 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage">
           <ClientOnly>
-            <TxGlowText class="docs-gallery__glow" tag="span">
-              Tuffex
-            </TxGlowText>
+            <!-- text-clip, not the default adaptive. adaptive is a container
+                 shimmer for images and cards: it blends with `screen`, which is
+                 lighten-only, so a white band over a light page changes nothing
+                 and the cell rendered as plain bold text. The component's own
+                 docs say to use text-clip for text. -->
+            <div class="docs-gallery__stack docs-gallery__stack--center">
+              <TxGlowText
+                class="docs-gallery__glow"
+                tag="span"
+                mode="text-clip"
+                :duration-ms="2600"
+                :band-size="30"
+                :opacity="1"
+                color="var(--docs-accent)"
+              >
+                Tuffex
+              </TxGlowText>
+              <TxGlowText
+                class="docs-gallery__glow-card"
+                tag="div"
+                :duration-ms="2600"
+                :band-size="40"
+              >
+                {{ copy.installBody }}
+              </TxGlowText>
+            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>

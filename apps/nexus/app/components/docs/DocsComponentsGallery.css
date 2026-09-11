@@ -343,6 +343,18 @@
   letter-spacing: 0.01em;
 }
 
+/* The adaptive mode's other half: a dark card is the surface `screen` was
+   designed for, so the same component that reads as nothing on the page reads
+   as a sweep here. Showing both is the point — the cell used to show neither. */
+.docs-gallery__glow-card {
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #1f2124;
+  color: #f2f3f5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
 .docs-gallery__beam-card {
   padding: 14px 22px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
