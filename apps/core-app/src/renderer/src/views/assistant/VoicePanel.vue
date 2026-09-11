@@ -6,11 +6,9 @@ import type {
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import type { StreamController } from '@talex-touch/utils/transport/types'
-import type {
-  VoiceAsrStreamEvent,
-  VoiceDeliveryTiming
-} from '@talex-touch/utils/transport/sdk/domains/voice'
+import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
+import { DEFAULT_VOICE_POLISH_STRENGTH } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { ORB_STATES, TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -314,13 +312,17 @@ const transport = useTuffTransport()
 const { t } = useI18n()
 const runtimeConfig = ref<AssistantRuntimeConfig>({
   enabled: false,
-  language: 'zh-CN'
+  language: 'zh-CN',
+  polishEnabled: true,
+  polishAvailable: false,
+  polishStrength: DEFAULT_VOICE_POLISH_STRENGTH
 })
 
 const listening = ref(false)
 const transcribing = ref(false)
 const startingVoiceCapture = ref(false)
 const notice = ref<Notice | null>(null)
+const deviceNotice = ref<string | null>(null)
 const transcriptPreview = ref('')
 const sessionSeq = ref(0)
 const levels = ref<number[]>(new Array(WAVE_MIN_BARS).fill(0))
@@ -451,13 +453,13 @@ const preparing = computed(
 )
 const holdingCancel = computed(() => cancelCharge.value > 0)
 /**
- * What is left of the hold, as a width.
+ * How much of the hold is already done, as a width.
  *
  * The beam already says "something is charging", but a ring gives no sense of *how much longer*
- * — it looks the same at 10% as at 90%. This drains 100% → 0% behind the content, so the surface
- * being consumed is the countdown, and releasing early visibly gives it back.
+ * — it looks the same at 10% as at 90%. This fills 0% → 100% behind the content, so the surface
+ * being covered is the progress toward the cancel, and releasing early visibly takes it back.
  */
-const cancelRemaining = computed(() => `${Math.max(0, 1 - cancelCharge.value) * 100}%`)
+const cancelFill = computed(() => `${Math.min(1, Math.max(0, cancelCharge.value)) * 100}%`)
 /**
  * The surface tightens as the hold fills, rather than stepping once when it starts.
  *
@@ -583,6 +585,7 @@ const beamDurationSeconds = computed(() => {
 const centerText = computed(() => {
   if (notice.value) return notice.value.message
   if (holdingCancel.value) return t('assistant.voicePanel.holdToCancel')
+  if (listening.value && deviceNotice.value) return deviceNotice.value
   if (recovering.value) return t('assistant.voicePanel.recovering')
   if (listening.value && transcriptPreview.value) return transcriptPreview.value
   if (preparing.value) return t('assistant.voicePanel.capturingDevice')
@@ -652,6 +655,7 @@ let panelTaskGeneration = 0
 let disposePanelOpen: (() => void) | null = null
 let disposeCancelHold: (() => void) | null = null
 let finishTimer: ReturnType<typeof setTimeout> | null = null
+let deviceNoticeTimer: ReturnType<typeof setTimeout> | null = null
 let finished = false
 let waveReference = WAVE_REF_FLOOR
 let holdTimer: ReturnType<typeof setInterval> | null = null
@@ -805,6 +809,19 @@ function clearFinishTimer(): void {
   finishTimer = null
 }
 
+function clearDeviceNotice(): void {
+  if (deviceNoticeTimer !== null) clearTimeout(deviceNoticeTimer)
+  deviceNoticeTimer = null
+  deviceNotice.value = null
+}
+
+function showDeviceNotice(name: string): void {
+  if (!listening.value || !name.trim()) return
+  clearDeviceNotice()
+  deviceNotice.value = t('assistant.voicePanel.usingDevice', { name })
+  deviceNoticeTimer = setTimeout(clearDeviceNotice, NOTICE_HOLD_MS.muted)
+}
+
 function emitFinished(): void {
   if (finished) return
   finished = true
@@ -833,6 +850,7 @@ function endRecoveryOffer(): void {
 }
 
 function showNotice(message: string, tone: NoticeTone, action?: NoticeAction, icon?: string): void {
+  clearDeviceNotice()
   endRecoveryOffer()
   notice.value = { message, tone, ...(action ? { action } : {}), ...(icon ? { icon } : {}) }
   listening.value = false
@@ -962,6 +980,7 @@ function commitLiveTranscript(next: string): string {
 function resetPanelState(): void {
   endRecoveryOffer()
   clearFinishTimer()
+  clearDeviceNotice()
   finished = false
   notice.value = null
   listening.value = false
@@ -1019,6 +1038,7 @@ async function loadRuntimeConfig(
 }
 
 function cancelVoiceSession(): void {
+  clearDeviceNotice()
   const controller = voiceStreamController
   const generation = activeVoiceGeneration
   if (generation !== null) retireVoiceSession(generation)
@@ -1045,6 +1065,7 @@ function cancelVoiceSession(): void {
 function finishVoiceInput(): void {
   const generation = activeVoiceGeneration
   if (finished || generation === null || !listening.value) return
+  clearDeviceNotice()
   stopRequestedGeneration = generation
   listening.value = false
   transcribing.value = true
@@ -1064,6 +1085,7 @@ function finishVoiceInput(): void {
 
 function completeVoiceSession(generation: number): void {
   if (!retireVoiceSession(generation)) return
+  clearDeviceNotice()
   listening.value = false
   transcribing.value = false
   startingVoiceCapture.value = false
@@ -1083,10 +1105,9 @@ function handleVoiceSessionEvent(generation: number, event: VoiceAsrStreamEvent)
     return
   }
   if (event.type === 'device') {
-    // Said once, at the top of a session that opened different hardware than the last one did.
-    // Not a failure and not an instruction, so it takes the muted tone and its short hold; it
-    // replaces "opening the microphone" because naming the device answers that too.
-    showNotice(t('assistant.voicePanel.usingDevice', { name: event.name }), 'muted')
+    // Informational only: keep the same capture, waveform and transcript running.
+    // The hint timer never finishes or restarts the session.
+    showDeviceNotice(event.name)
     return
   }
   if (event.type === 'level') {
@@ -1132,14 +1153,11 @@ function showVoiceSessionError(generation: number, error: unknown): void {
 }
 
 /**
- * The gesture decides when the words reach the target application.
- *
- * A tap starts a session the user will end with another tap, so the transcript arrives as
- * one piece when they are done thinking. A hold is push-to-talk: the point is watching the
- * text appear while speaking, so it is delivered as it is recognized. See
- * `VoiceDeliveryTiming` for what `live` costs — a partial of latency, and no polish pass.
+ * The persisted input preference decides delivery timing for the entire session.
+ * Raw live delivery cannot be polished later without duplicating text already written to the
+ * active application, so snapshot the policy before opening the shared ASR stream.
  */
-async function startVoiceSession(timing: VoiceDeliveryTiming = 'final'): Promise<void> {
+async function startVoiceSession(): Promise<void> {
   if (!voiceInputEnabled.value) {
     showNotice(t('assistant.voicePanel.voiceInputDisabled'), 'warning')
     return
@@ -1151,6 +1169,7 @@ async function startVoiceSession(timing: VoiceDeliveryTiming = 'final'): Promise
   const generation = ++nextVoiceGeneration
   activeVoiceGeneration = generation
   clearFinishTimer()
+  clearDeviceNotice()
   finished = false
   transcriptPreview.value = ''
   committedVoiceText = ''
@@ -1189,12 +1208,15 @@ async function startVoiceSession(timing: VoiceDeliveryTiming = 'final'): Promise
   // The orb is re-rolled per session through this key; changing its `state` would not.
   sessionSeq.value += 1
   try {
+    const deliveryTiming =
+      runtimeConfig.value.polishEnabled && runtimeConfig.value.polishAvailable ? 'final' : 'live'
     const controller = await voiceSdk.asrStream(
       {
         language: runtimeConfig.value.language,
         cleanup: true,
+        polishStrength: runtimeConfig.value.polishStrength,
         delivery: 'active-app',
-        deliveryTiming: timing,
+        deliveryTiming,
         emitLevel: true,
         // Sent, not inherited: the border draws a fraction of this number, so it has to be the
         // number main is actually enforcing rather than whatever its default happens to be.
@@ -1415,13 +1437,13 @@ watch([centerText, showsOrb, () => notice.value?.icon, listening], async () => {
 
 defineExpose({
   openPanel: handlePanelOpened,
-  startVoiceInput: (timing: VoiceDeliveryTiming = 'final'): void => {
-    void startVoiceSession(timing)
+  startVoiceInput: (): void => {
+    void startVoiceSession()
   },
   stopVoiceInput: finishVoiceInput,
-  toggleVoiceInput: (timing: VoiceDeliveryTiming = 'final'): void => {
+  toggleVoiceInput: (): void => {
     if (listening.value || startingVoiceCapture.value) finishVoiceInput()
-    else if (!transcribing.value && !recovering.value) void startVoiceSession(timing)
+    else if (!transcribing.value && !recovering.value) void startVoiceSession()
   },
   handleCancelHold
 })
@@ -1503,14 +1525,14 @@ onBeforeUnmount(() => {
       <div
         v-if="holdingCancel"
         class="voice-dock__charge"
-        :style="{ width: cancelRemaining }"
+        :style="{ width: cancelFill }"
         data-testid="voice-charge"
         aria-hidden="true"
       />
 
       <!--
-        The same shape as the cancel charge and the opposite direction: that one is being spent,
-        this one is being earned. Both sit behind the content and are clipped to the pill.
+        The same shape as the cancel charge and the same direction: both fill as their own
+        fraction completes. Both sit behind the content and are clipped to the pill.
       -->
       <div
         v-if="showsUpload"
@@ -1768,7 +1790,7 @@ onBeforeUnmount(() => {
  * Behind everything the pill draws, and clipped to its own corners.
  *
  * Width rather than `scaleX`: a scaled box distorts its border radius, and this one has to keep
- * the pill's shape while it shortens. It is the only element in the surface that is allowed to
+ * the pill's shape while it grows. It is the only element in the surface that is allowed to
  * report a fraction, because the hold is the only thing here with a known denominator.
  */
 .voice-dock__charge {
@@ -1778,7 +1800,7 @@ onBeforeUnmount(() => {
   border-radius: inherit;
   /*
    * Faded at the leading edge rather than cut off: a flat block ending mid-card reads as two
-   * differently coloured halves, not as something draining away.
+   * differently coloured halves, not as something advancing across the pill.
    */
   background: linear-gradient(
     90deg,

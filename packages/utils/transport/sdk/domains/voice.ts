@@ -10,12 +10,13 @@
  * Every voice input caller uses this contract; capture and platform injection remain main-owned.
  * Modeled on the `intelligence` domain SDK.
  */
+import type { VoicePolishStrength } from '../../../common/storage/entity/app-settings'
 import type { IntelligenceSTTBilling } from '../../../types/intelligence'
 import type { ITuffTransport, StreamController, StreamOptions } from '../../types'
 import { defineEvent } from '../../event/builder'
 
 /** Standard envelope returned by voice API handlers. */
-export type VoiceApiResponse<T = undefined> = { ok: true; result?: T } | { ok: false; error: string }
+export type VoiceApiResponse<T = undefined> = { ok: true, result?: T } | { ok: false, error: string }
 
 /** Where the canonical session should deliver its final text. */
 export type VoiceDeliveryMode = 'none' | 'active-app'
@@ -48,7 +49,7 @@ export interface VoiceInsights {
   currentStreak: number
   /** Longest streak inside the returned rolling 365-local-day day series. */
   longestStreak: number
-  days: Array<{ date: string; characters: number; durationMs: number; sessions: number }>
+  days: Array<{ date: string, characters: number, durationMs: number, sessions: number }>
 }
 
 export type VoiceRecognitionRecordStatus = 'success' | 'empty' | 'failed' | 'cancelled'
@@ -81,6 +82,15 @@ export interface VoiceDictatePayload {
   language?: string
   /** Run the AI cleanup/polish pass over the raw transcript. Default `true`. */
   cleanup?: boolean
+  /** Editing strength, snapshotted at capture start. Defaults to the saved voice input setting. */
+  polishStrength?: VoicePolishStrength
+  /**
+   * Run RNNoise over the capture. Defaults to the saved voice input setting, which is off.
+   *
+   * Overriding it here scopes the change to one capture, which is what an A/B comparison
+   * needs; it does not write the preference.
+   */
+  noiseSuppression?: boolean
   /** Hard cap on capture length in ms (native auto-stops at this). */
   maxDurationMs?: number
   /** Auto-stop after this much trailing silence in ms. */
@@ -138,14 +148,10 @@ export interface VoiceSpeakResult {
 /**
  * When a delivered transcript reaches the target application.
  *
- * `final` waits for the whole recognition and delivers it once — the tap-to-start,
- * tap-to-stop gesture, where the user is composing a thought and wants it to land as
- * one piece.
- *
- * `live` delivers as the words are recognized — the push-to-talk gesture, where the
- * point is watching the text appear while speaking. It carries two consequences the
- * caller has to accept, because neither can be undone once a character is in somebody
- * else's text field:
+ * `final` waits for the whole recognition, optionally polishes it, and delivers it once.
+ * `live` delivers stable recognized text during capture. The user's dictation setting,
+ * not the hold/toggle gesture, selects timing. Live delivery carries two consequences
+ * because neither can be undone once a character is in somebody else's text field:
  *
  * - Only the part of the transcript that consecutive partials agree on is delivered,
  *   so text lands roughly one partial behind the voice rather than instantly.
@@ -158,6 +164,10 @@ export type VoiceDeliveryTiming = 'final' | 'live'
 export interface VoiceAsrStreamPayload {
   language?: string
   cleanup?: boolean
+  /** Editing strength, snapshotted with the session and retained for recovery. */
+  polishStrength?: VoicePolishStrength
+  /** Run RNNoise over the capture for this session only. Defaults to the saved setting (off). */
+  noiseSuppression?: boolean
   maxDurationMs?: number
   silenceStopMs?: number
   delivery?: VoiceDeliveryMode
@@ -256,19 +266,19 @@ export interface VoiceRecognitionStatusSnapshot {
 }
 
 /** Main-owned local-file transcription lifecycle. No path or provider override leaves main. */
-export type VoiceFileTranscriptionEvent =
-  | { type: 'selected'; name: string }
-  | { type: 'result'; text: string; billing?: IntelligenceSTTBilling }
-  | { type: 'cancelled' }
+export type VoiceFileTranscriptionEvent
+  = | { type: 'selected', name: string }
+    | { type: 'result', text: string, billing?: IntelligenceSTTBilling }
+    | { type: 'cancelled' }
 
 /** Streaming ASR event. */
-export type VoiceAsrStreamEvent =
+export type VoiceAsrStreamEvent
   /**
    * The native capture stream is open. This arrives before the provider handshake finishes, so
    * the HUD can stop calling the microphone slow while audio is already being buffered.
    */
-  | { type: 'ready' }
-  | { type: 'partial'; text: string }
+  = | { type: 'ready' }
+    | { type: 'partial', text: string }
   /**
    * The capture opened a different input device than the last one did.
    *
@@ -276,7 +286,7 @@ export type VoiceAsrStreamEvent =
    * run has nothing to have switched from, so it says nothing. Carries the name the OS gave the
    * device so the surface can say which one rather than only that it moved.
    */
-  | { type: 'device'; name: string }
+    | { type: 'device', name: string }
   /**
    * Captured input level, normalized to 0..1, roughly 10Hz.
    *
@@ -284,14 +294,14 @@ export type VoiceAsrStreamEvent =
    * transcript and must never be treated as progress: it is the measured
    * amplitude of what the microphone just heard, nothing more.
    */
-  | { type: 'level'; rms: number }
-  | {
+    | { type: 'level', rms: number }
+    | {
       type: 'final'
       text: string
       language?: string
       delivery?: VoiceDeliveryResult
     }
-  | { type: 'end' }
+    | { type: 'end' }
 
 /**
  * Voice domain events. Event names resolve to `voice:api:<action>`.

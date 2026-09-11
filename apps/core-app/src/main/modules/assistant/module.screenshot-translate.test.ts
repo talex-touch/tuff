@@ -80,7 +80,9 @@ const mocks = vi.hoisted(() => ({
       },
       voiceInput: {
         enabled: true,
-        language: 'zh-CN'
+        language: 'zh-CN',
+        polishEnabled: true,
+        polishStrength: 'deep'
       },
       setup: {
         microphone: false
@@ -505,7 +507,13 @@ describe('AssistantModule screenshot translation', () => {
         cooldownMs: 2200,
         openPanelOnWake: true
       },
-      voiceInput: { enabled: false, language: 'fr-FR' }
+      voiceInput: {
+        enabled: false,
+        language: 'fr-FR',
+        polishEnabled: true,
+        polishStrength: 'natural',
+        noiseSuppression: false
+      }
     })
     mocks.getMainConfig.mockReturnValue(setting)
     const { handler, module } = await createInitializedModuleWithHandler(
@@ -514,7 +522,28 @@ describe('AssistantModule screenshot translation', () => {
 
     expect(await handler(undefined, {} as HandlerContext)).toEqual({
       enabled: false,
-      language: 'fr-FR'
+      language: 'fr-FR',
+      polishEnabled: true,
+      polishAvailable: true,
+      polishStrength: 'natural'
+    })
+
+    await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
+  })
+  it('projects an unavailable text chat runtime as polish unavailable', async () => {
+    mocks.resolveCapabilityStatus.mockImplementation((capabilityId: string) => ({
+      capabilityId,
+      available: capabilityId !== 'text.chat',
+      providerIds: capabilityId === 'text.chat' ? [] : ['unrelated-provider']
+    }))
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.floatingBall.getRuntimeConfig.toEventName()
+    )
+
+    expect(handler(undefined, {} as HandlerContext)).toMatchObject({
+      enabled: true,
+      polishEnabled: true,
+      polishAvailable: false
     })
 
     await module.onDestroy({} as Parameters<typeof module.onDestroy>[0])
@@ -539,7 +568,13 @@ describe('AssistantModule screenshot translation', () => {
           cooldownMs: 2200,
           openPanelOnWake: true
         },
-        voiceInput: { enabled: true, language: 'fr-FR' }
+        voiceInput: {
+          enabled: true,
+          language: 'fr-FR',
+          polishEnabled: true,
+          polishStrength: 'deep',
+          noiseSuppression: false
+        }
       })
     )
     const { module } = await createInitializedModule()
@@ -573,7 +608,13 @@ describe('AssistantModule screenshot translation', () => {
         edgePadding: 24,
         position: { x: -1, y: -1 }
       },
-      voiceInput: { enabled: true, language: 'fr-FR' }
+      voiceInput: {
+        enabled: true,
+        language: 'fr-FR',
+        polishEnabled: true,
+        polishStrength: 'deep',
+        noiseSuppression: false
+      }
     })
     mocks.getMainConfig.mockReturnValue(setting)
     const { module } = await createInitializedModule()

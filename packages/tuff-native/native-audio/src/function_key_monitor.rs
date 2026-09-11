@@ -387,11 +387,22 @@ pub(crate) fn process_input(state: &mut GestureState, input: MonitorInput) -> (O
     };
     (output, suppress)
 }
-/// Returns true only for a standalone Fn transition that must not reach macOS's
-/// default Globe/Emoji action. The JavaScript projection has already happened;
-/// this controls the OS event stream separately.
-pub(crate) fn should_suppress_function_event(input: MonitorInput, suppress: bool) -> bool {
-    suppress && matches!(input, MonitorInput::FunctionFlagsChanged { .. })
+/// Clears only the Fn bit on the transitions the standalone gesture owns, so an
+/// application we borrowed the key from does not also see a stray Fn modifier.
+/// Every other flag is preserved and the event itself is always forwarded.
+///
+/// This does NOT stop macOS's Globe/Emoji action, and nothing at this layer can.
+/// Both policies were tried physically: dropping the whole standalone `FlagsChanged`
+/// event (downstream measured zero Fn events) and forwarding it with this bit cleared.
+/// The panel opened either way, because the Globe action is fired by WindowServer
+/// below the tap. The only supported way to silence it is the user's own
+/// `AppleFnUsageType` preference — do not spend another round trying to win it here.
+pub(crate) fn forwarded_event_flags(flags: CGEventFlags, neutralize_fn: bool) -> CGEventFlags {
+    if neutralize_fn {
+        flags & !CGEventFlags::MaskSecondaryFn
+    } else {
+        flags
+    }
 }
 
 /// Reduces one native event to its ordered JavaScript projections without
@@ -505,7 +516,7 @@ unsafe extern "C-unwind" fn handle_event(
         CGEventType::KeyUp => MonitorInput::KeyUp { key_code },
         _ => return event.as_ptr(),
     };
-    let (outputs, suppress) = process_event(&mut state.gesture.borrow_mut(), input);
+    let (outputs, neutralize_fn) = process_event(&mut state.gesture.borrow_mut(), input);
     let can_project_escape = match outputs[0] {
         Some(output) => state.emit(output),
         None => true,
@@ -516,14 +527,15 @@ unsafe extern "C-unwind" fn handle_event(
     if can_project_escape && let Some(escape_event) = outputs[1] {
         let _ = state.emit(escape_event);
     }
-    // Project the original Fn edge to the Voice controller, then remove only
-    // standalone Fn transitions from the OS event stream. Combination Fn events
-    // are forwarded unchanged so the user's normal shortcut semantics survive.
-    if should_suppress_function_event(input, suppress) {
-        return null_mut();
-    }
     if should_suppress_escape(state.escape_capture_enabled.load(Ordering::Acquire), input) {
         return null_mut();
+    }
+    // The original Fn edge has been projected above. Forward that same event with
+    // only its Fn bit cleared, which is what stops the system's Globe/Emoji action;
+    // combination Fn events keep every flag so normal shortcuts still work.
+    let forwarded_flags = forwarded_event_flags(flags, neutralize_fn);
+    if forwarded_flags != flags {
+        CGEvent::set_flags(Some(event_ref), forwarded_flags);
     }
     event.as_ptr()
 }
@@ -568,7 +580,7 @@ pub fn start(env: Env, callback: Function<'_, u32, ()>) -> Result<FunctionKeyMon
         })?;
     // IOHID is an enhancement for keys held before startup, not a prerequisite for
     // the event tap. Some macOS launches cannot open IOHIDManager immediately; the
-    // event tap still sees all key edges after startup and must suppress standalone Fn.
+    // event tap still sees all key edges after startup and must neutralize standalone Fn.
     let physical_keyboard = PhysicalKeyboardState::new(&run_loop);
     let gesture = GestureState::default();
     let mut state = Box::new(MonitorState {

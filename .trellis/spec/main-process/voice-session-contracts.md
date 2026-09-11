@@ -46,6 +46,20 @@ identity, and plugin permissions remain in main.
 - Delivery results expose only `native`, `autopaste`, or `none` plus a bounded
   stable reason. Paths, window titles, native errors, and transcript content do
   not enter diagnostics.
+- Live delivery's acknowledged text is exactly the concatenation of successful native
+  writes. Never rewind that text to a revised ASR common prefix: the target buffer has
+  not been rewound. Both partial and final paths reconcile Unicode punctuation in
+  order and append only the uncommitted suffix. Letters, numbers, symbols, and whitespace
+  remain exact; an unalignable lexical final returns `none / transcript-revised`, not a
+  guessed suffix or an edit to the user's earlier text. Preserve a prior native failure.
+- Native input completion and visible input are separate boundaries: await `typeText`
+  and observe the task-owned target's actual value before claiming delivery. Repeated
+  final events must neither retype text nor change the acknowledged byte history.
+- The polish deadline must reach the provider's actual request, not only the outer
+  promise. OpenAI-compatible chat, stream, and shared vision calls pass the host-only
+  AbortSignal into LangChain call options; healthy retry policy stays unchanged. Verify
+  pre-abort zero requests, in-flight socket close, no delayed retry, and cancellation
+  while awaiting an SSE delta with the installed client against loopback HTTP.
 
 ## Plugin and UI invariants
 
@@ -85,6 +99,69 @@ identity, and plugin permissions remain in main.
   Local file transcription is host-owned, bounded, cancellable through the network layer, and returns text
   without active-app delivery. Raw paths, bytes, and credentials do not cross into the renderer.
 
+## Capture signal chain
+
+`CaptureFrontend` in Rust `native-audio` owns everything between the device callback and the
+target-rate mono buffer: downmix, non-finite sanitisation, optional RNNoise, high-pass,
+anti-alias low-pass, resampling and speech detection. It is one struct behind one lock; do not
+reintroduce a second processing site in the audio callback.
+
+- Downsampling must band-limit first. Linear interpolation does not attenuate above the output
+  Nyquist, so without a low-pass the 8-24 kHz half of a 48 kHz capture folds into the speech
+  band — measured at -1.26 dB for 10 kHz landing on 6 kHz. The cascade is engaged only when the
+  target rate is below the source rate, and must hold for non-integer ratios (44.1 kHz is real
+  hardware, not a hypothetical). Band-limiting the existing resampler is the contract; replacing
+  it with a polyphase design is not required and costs the tests that pin its behaviour.
+- Filter coefficients and biquad state are `f64` while the signal stays `f32`. An 80 Hz corner
+  against 48 kHz puts the poles within 0.01 rad of z=1, which single precision cannot hold.
+- A non-finite input sample must be zeroed before it reaches any cascade. The sections are
+  recursive: one NaN in their state is not one bad sample, it is silence to the end of the
+  session.
+- Trailing-silence detection runs on the chain's *output*, against a noise floor estimated from
+  the signal — the minimum window RMS over a recent sliding window, plus an absolute guard.
+  A fixed absolute threshold is wrong in both directions and was measured wrong on real
+  hardware: at -40 dBFS it sat 3.7 dB under an ordinary quiet room's median noise, 18% of
+  windows crossed it, the longest quiet gap was 500 ms against a 1500 ms requirement, and
+  trailing-silence auto-stop therefore never fired at all.
+- Do not estimate that floor with an exponential average. It forces a choice about whether to
+  keep adapting while speech is believed present, and both answers fail: adapting lets a long
+  utterance drag the floor to its own level, and freezing deadlocks, because the state that
+  would release the freeze is gated on the frozen estimate. A minimum cannot be pushed up by
+  loud input and has no feedback path.
+- `should_stop_for_silence`, `SilenceState` and the silence-window semantics are unchanged by
+  any of this. Only how a window is classified as speech changed.
+
+## Noise suppression preference
+
+- `voiceInput.noiseSuppression` is a preference defaulting to **off**, normalised `=== true`
+  so an unreadable value fails closed. It is independent of the high-pass and anti-alias
+  filtering, which are defect fixes and have no switch.
+- Off by default because cloud recognisers are trained on noisy speech and spectral distortion
+  can cost more accuracy than the noise removed. Changing that default requires a real-provider
+  recognition A/B on real noisy audio. Objective dB reductions from synthetic signals prove the
+  suppressor works; they are not evidence about recognition accuracy and must not be presented
+  as such.
+- Resolved exactly once, in `startSession`, before the first asynchronous boundary — the same
+  contract as `polishStrength`. Never re-read while finalising or replaying retained audio: the
+  audio in hand was captured one way, and re-reading describes it as something it is not.
+  A payload field overrides for one capture and does not write the preference.
+- RNNoise is defined only at 48 kHz. The stage converts to that rate rather than feeding the
+  model a rate it was never trained on, and **keeps emitting 48 kHz after a failure**, because
+  everything downstream is configured against it. Frame blocking must not shorten the recording;
+  the model's fade-in frame emits its input rather than being dropped, which would shift the
+  whole recording 10 ms earlier.
+- A suppressor that fails degrades to a rate converter and the session keeps recording. Losing
+  suppression is recoverable; losing the dictation is not.
+
+## Provider VAD defaults
+
+- A zero `server_vad` threshold is not a lenient setting, it is no detection at all. DashScope
+  realtime shipped with `?? 0.0`, which disabled the only real voice-activity detection in the
+  dictation path. Defaults use `??` so an explicit `0` from a caller remains distinguishable
+  from an absent value.
+- Do not invent VAD parameters for providers whose protocols do not expose them, and do not
+  create a Voice-specific provider catalog to hold them.
+
 ## Required checks
 
 - VoiceService and GlobalDictation focused Vitest.
@@ -92,6 +169,8 @@ identity, and plugin permissions remain in main.
 - Plugin voice/child/runtime and clipboard AutoPaste focused tests.
 - Shared Voice SDK tests and plugin manifest validation.
 - Rust `native-audio` tests, release addon build, and headless addon load check.
+- DSP assertions carry a control that fails when the stage under test is removed. A suppression
+  measurement that reports silence because the generator broke passes a naive threshold.
 - CoreApp Web typecheck and Node typecheck; a missing unrelated workspace type
   dependency must be reported separately rather than bypassed in source.
 - Packaged Electron/plugin isolation smoke and explicit real-app injection
@@ -112,10 +191,21 @@ Changes to native Fn capture, voice gestures, HUD open/stop/close, or audio addo
 ### Contracts
 
 - macOS Fn requires a main-thread active HID-level CGEventTap and Accessibility permission. Physical keycode63,
-  not the Function flag alone, identifies Fn. Project standalone Fn down/up to the Voice controller, then
-  remove those original standalone `FlagsChanged` events from the OS stream so macOS cannot execute its
-  default Globe/Emoji action. Combination-key events are forwarded unchanged. A stale/old addon that still
-  forwards the standalone event is not considered suppression evidence.
+  not the Function flag alone, identifies Fn. Read/project original Fn down/up first, then clear only
+  `MaskSecondaryFn` on standalone-owned Fn transitions and forward the original event. Preserve other flags
+  and combination-key events, and do not return null for a standalone Fn transition: dropping it removes an
+  edge other applications may need and buys nothing.
+- The tap cannot stop the system's Globe/Emoji action, and no tap-level policy will. Both were tried
+  physically on this machine and both failed: dropping the event (`753f75df0`, downstream measured 0 Fn
+  events, panel still opened) and forwarding it with `MaskSecondaryFn` cleared (`8a7987d30` / `19febfb49`,
+  panel still opened). The Globe action is fired by WindowServer below the tap. The switch is the user
+  preference `com.apple.HIToolbox AppleFnUsageType` ("Press 🌐 key to" -> Do Nothing), and writing it with
+  `defaults` **applies immediately** — no logout, no agent restart, verified on macOS 26 by writing it and
+  pressing the key. nix-darwin and two other Fn-triggered dictation apps all state that a logout is
+  required; they are repeating each other, not reporting a test. Write it only on an explicit user click,
+  and report status from a fresh read rather than from the write's exit code. Do not claim Fn interception
+  from a downstream event probe reading zero — that probe cannot see this action; only looking at the
+  panel can.
 - Failed HID tap creation is explicitly unavailable; do not silently fall back to Session-level
   interception or change the user's global Fn preference. Native loader requires the current monitor ABI marker.
 - Escape is observed globally but passes through to other applications. Assistant main owns the 600ms
@@ -160,3 +250,67 @@ Changes to native Fn capture, voice gestures, HUD open/stop/close, or audio addo
 - Correct: record a generation-owned stop request and call the arriving handle's `stop()`.
 - Wrong: package-manager install silently deletes audio, then runtime loads an arbitrary old fallback.
 - Correct: preserve independent C++/Rust products and prepare the canonical addon before Electron caches its loader result.
+
+## Scenario: Dictation polish strength
+
+### Scope / Trigger
+
+Changes to Voice Input preferences, Assistant runtime configuration, dictation prompts, or recovery.
+
+### Signatures
+
+- `VoicePolishStrength = 'natural' | 'structured' | 'deep'` and `normalizeVoicePolishStrength(unknown)` live in the shared app-settings module; `DEFAULT_VOICE_POLISH_STRENGTH` is `deep`.
+- `voiceInput.polishEnabled` stores the user's cleanup preference; `AssistantRuntimeConfig.polishAvailable` projects the configured, enabled `text.chat` capability. VoicePanel selects final delivery only when both are true; otherwise it selects live raw delivery. `voiceInput.polishStrength` selects editing scope.
+- `VoiceDictatePayload.polishStrength` and `VoiceAsrStreamPayload.polishStrength` optionally override the saved preference for one session; no new provider or prompt-routing table is introduced.
+
+### Contracts
+
+- Missing/invalid strength normalizes to deep without overwriting explicit polish disablement, language, history, or unrelated settings. Hiding the selector when polish is off never clears its value.
+- VoicePanel snapshots both the persisted cleanup preference and `text.chat` availability before capture. `VoiceService` resolves omitted strength from main storage before capture's first asynchronous boundary, stores it on the session, and retains it with the retry buffer. Do not reread preferences while finalizing or replaying old audio.
+- One shared fidelity policy plus three precomposed editing directives owns the prompt. Natural preserves sequence, structured groups related points, and deep rewrites the draft assertively. All preserve independent requirements, qualifiers, negations, conditions, numbers, language and tone. ASR language is not a polish translation instruction.
+- Live/cleanup-disabled recordings and their recovery skip the polish pass. A user who enables cleanup without a ready Chat capability still gets live raw dictation rather than an avoidable final-mode delay. Cancellation still prevents late delivery; the existing 300 ms best-effort polish timeout returns raw text without claiming it was polished.
+
+### Validation & Error Matrix
+
+- Missing/invalid stored strength -> deep; valid stored choice -> unchanged across normalization and reload.
+- Settings change during capture startup/recording -> next session only; retained-audio retry -> original strength and cleanup policy.
+- Polish timeout/failure/empty response -> raw-final fallback; caller cancellation -> no late result delivery.
+
+### Good / Base / Bad Cases
+
+- Good: choose structured, start recording, switch to natural, and finish/retry using structured.
+- Base: historical profile keeps polish disabled while acquiring the deep default; enabling polish restores its saved selection.
+- Bad: rebuild the prompt from current settings at stop, infer that repeated sentence patterns cancel earlier list items, or force a translation from the recognition language hint.
+
+### Tests Required
+
+- Main-storage migration preserves disabled state and unrelated fields; real settings interactions hide/re-enable and reload without losing strength.
+- VoiceService one-shot/startup/retry regressions defend session snapshots and no-cleanup replay. Existing live-delivery and cancellation tests continue to pass.
+- UI smoke uses the actual settings SFC and TuffEx controls with isolated storage. Mocked prompt selection proves session policy, not linguistic quality; real-provider editing quality requires a separate coordinated run.
+
+### Wrong vs Correct
+
+- Wrong: resolve `getMainConfig(...).voiceInput.polishStrength` inside final polish or retry.
+- Correct: resolve once in `startSession`, then use `session.polishStrength` and the retained retry snapshot.
+
+## Voice Input settings and informational device changes
+
+- The Intelligence voice page is named Voice Input / 语音输入. Its existing settings drawer
+  owns `voiceInput.enabled`, polish/history choices and the macOS Globe guidance; Assistant
+  settings own only the floating entry. Reuse `ensureVoiceInputSetting` and the typed
+  `AssistantEvents.voice` status/action APIs. Keep manual System Settings access and refresh
+  the reported preference on focus return; never infer a successful preference write.
+- Settings rows inside the 560px drawer must grow with wrapped descriptions. A fixed 56px
+  height lets the Fn explanation overlap subsequent controls; scope the auto-height treatment
+  to VoiceInputSettings rather than changing every business settings row.
+- `VoiceAsrStreamEvent` with `type: 'device'` is informational, not terminal. VoicePanel
+  keeps `listening`, the waveform, stop controls and transcript accumulation active. A separate
+  900ms hint timer clears only the device hint and reveals the latest transcript; it never
+  stops/restarts the stream, emits `finished`, or discards recovery audio.
+- Clear the hint timer on session start, stop, cancel, end/error, reset and unmount. Old
+  session timers cannot clear a newer hint. Real terminal failures retain their existing
+  notice and recovery behavior.
+- Required verification: device → partial/level → hint expiry leaves one stream alive and
+  preserves text; explicit stop still reaches that stream once; stale timer/new-session and
+  terminal-error cases remain isolated. Renderer-only visual smoke proves HUD continuity,
+  not physical microphone hot-unplug recovery or provider reconnection.

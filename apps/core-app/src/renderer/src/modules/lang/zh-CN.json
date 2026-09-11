@@ -371,7 +371,7 @@
       "intelligence-audit": "智能审计元数据",
       "intelligence-context": "智能上下文对话",
       "diagnostics": "诊断与遥测元数据",
-      "voice-insights": "语音洞察聚合数据",
+      "voice-insights": "语音输入统计",
       "intelligence-memory": "显式 AI Memory",
       "plugin-data": "插件数据"
     },
@@ -542,18 +542,28 @@
     "recommendationContextLocationDesc": "使用时区和网络脱敏桶生成粗粒度位置桶，不记录具体位置。"
   },
   "settingAssistant": {
-    "groupTitle": "Assistant",
+    "groupTitle": "Assistant 悬浮入口",
+    "groupDesc": "管理 Assistant 与桌面悬浮入口。",
     "enableAssistant": "启用 Assistant",
-    "floatingBall": "悬浮球",
-    "floatingBallDesc": "在桌面显示可拖动的 Assistant 入口。"
+    "enableAssistantDesc": "仅控制 Assistant 悬浮入口，不影响语音输入。",
+    "floatingBall": "显示语音输入浮球",
+    "floatingBallDesc": "在桌面显示可拖动的语音输入入口和状态；隐藏后 Fn/Ctrl 快捷键仍可使用。",
+    "voiceWake": "唤醒词唤醒",
+    "voiceWakeDesc": "唤醒词唤醒暂不可用。"
   },
   "settingSpeechRecognition": {
-    "title": "语音识别",
-    "description": "管理语音入口、识别记录和渠道模型配置。",
+    "title": "语音输入设置",
+    "description": "记录与配置去处。",
     "refresh": "重新读取",
-    "voiceInput": {
+    "input": {
       "title": "语音输入",
       "description": "短按 macOS 的 Fn 或 Windows/Linux 的 Ctrl 开始，再按一次结束；长按后松开结束。仅在语音输入进行时采集麦克风。"
+    },
+    "globeKey": {
+      "title": "Fn 键仍归系统占用",
+      "description": "单独按 Fn 会弹出系统表情面板或切换输入法。这个动作在应用之外触发，拦不住，但可以关掉：关掉后 Fn 归语音输入，F 键层和其他 Fn 组合都不受影响，表情面板仍可用 Ctrl+Cmd+Space 调出。",
+      "action": "关掉它",
+      "manual": "去系统设置"
     },
     "capabilities": {
       "title": "渠道与模型",
@@ -563,6 +573,31 @@
     "history": {
       "title": "保留识别记录",
       "description": "留下源音频和转录；关掉只留统计。"
+    },
+    "noiseSuppression": {
+      "title": "谱降噪",
+      "description": "录音时抑制风扇、空调这类持续底噪。默认关闭：云端识别模型本身在带噪语音上训练，降噪有可能反而降准。抗混叠与低频滤除始终开启，不受这个开关影响。"
+    },
+    "polish": {
+      "title": "音频梳理",
+      "description": "已配置 Chat 渠道时，说完再统一梳理并写入；否则边说边写原文。"
+    },
+    "polishStrength": {
+      "title": "梳理档位",
+      "options": {
+        "natural": {
+          "label": "自然",
+          "description": "去掉口头填充词，处理明确的改口，保留原来的表达顺序。"
+        },
+        "structured": {
+          "label": "结构",
+          "description": "把相关内容归拢，需要时整理成段落或列表。"
+        },
+        "deep": {
+          "label": "深度",
+          "description": "通篇编辑得更清晰精炼；不改原意，也不会自动转成正式语气。"
+        }
+      }
     },
     "unavailable": {
       "title": "读不到识别状态",
@@ -1083,7 +1118,7 @@
   "shell": {
     "search": "搜索",
     "newChat": "新建对话",
-    "voiceInsights": "语音洞察",
+    "voiceInsights": "语音输入",
     "store": "插件",
     "setting": "设置",
     "collapseSidebar": "收起侧边栏",
@@ -1105,11 +1140,11 @@
     }
   },
   "voiceInsights": {
-    "loading": "正在加载语音洞察…",
+    "loading": "正在加载语音输入统计…",
     "actions": {
       "refresh": "刷新",
       "share": "分享",
-      "clear": "清除洞察",
+      "clear": "清除统计",
       "retry": "重试",
       "showReport": "查看报告",
       "hideReport": "收起报告",
@@ -1158,15 +1193,15 @@
     "empty": {
       "title": "从下一次语音输入开始",
       "description": "完成一次成功且非空的语音输入后，这里会开始显示真实总量、连续天数与每日活动。",
-      "privacy": "只保留聚合计数；原始音频、转写文本、应用名称与路径不会进入语音洞察。"
+      "privacy": "只保留聚合计数；原始音频、转写文本、应用名称与路径不会进入语音输入统计。"
     },
     "error": {
-      "title": "无法加载语音洞察",
+      "title": "无法加载语音输入统计",
       "description": "已有统计未被更改，请重试本地请求。"
     },
     "share": {
-      "title": "Tuff 语音洞察",
-      "copied": "已复制聚合语音洞察",
+      "title": "Tuff 语音输入统计",
+      "copied": "已复制语音输入统计",
       "copyFailed": "无法复制聚合摘要",
       "unavailable": "暂不可用",
       "rateValue": "{count} 字/分钟",
@@ -1182,12 +1217,12 @@
       "estimateBasis": "节省时间按每分钟打字 {count} 字估算，并非实测打字速度。"
     },
     "clear": {
-      "title": "清除语音洞察？",
+      "title": "清除语音输入统计？",
       "description": "这会永久删除此处显示的聚合总量与每日活动。下一次成功且非空的语音输入后将重新开始记录。",
-      "confirm": "清除全部洞察",
-      "success": "语音洞察已清除",
-      "failed": "无法清除语音洞察，此处显示的数据未被更改。",
-      "refreshNeededTitle": "语音洞察已清除",
+      "confirm": "清除全部统计",
+      "success": "语音输入统计已清除",
+      "failed": "无法清除语音输入统计，此处显示的数据未被更改。",
+      "refreshNeededTitle": "语音输入统计已清除",
       "refreshNeededDescription": "暂时无法刷新清除后的状态。这里不会继续显示旧统计；请刷新以加载当前的零状态。"
     },
     "report": {
@@ -1418,8 +1453,8 @@
     "back": "返回智能",
     "channels": "模型渠道",
     "channelsDesc": "模型服务商、凭据与连通性测试。",
-    "voice": "音频洞察",
-    "voiceDesc": "实时听写、音频转写、识别记录与音频洞察",
+    "voice": "语音输入",
+    "voiceDesc": "实时听写、音频转写、识别记录与使用统计",
     "prompts": "提示词",
     "promptsDesc": "提示词库、变量与版本。",
     "agents": "Agents",
@@ -2703,7 +2738,7 @@
     "homeConversation": "对话",
     "login": "请先登录!",
     "permission": "您没有权限!",
-    "voiceInsights": "语音洞察",
+    "voiceInsights": "语音输入",
     "pluginStore": "插件市场",
     "installedPlugins": "已安装插件",
     "storeDocs": "市场文档",
@@ -2719,7 +2754,7 @@
     "storagable": "存储",
     "intelligence": "智能",
     "intelligenceChannels": "智能通道",
-    "intelligenceVoice": "音频洞察",
+    "intelligenceVoice": "语音输入",
     "intelligenceCapabilities": "智能能力",
     "intelligencePrompts": "智能提示词",
     "intelligenceAudit": "智能审计",

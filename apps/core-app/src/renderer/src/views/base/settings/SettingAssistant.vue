@@ -1,12 +1,19 @@
 <script setup lang="ts" name="SettingAssistant">
-import { ensureVoiceInputSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { appSetting } from '~/modules/storage/app-storage'
 
 const { t } = useI18n()
+
+const props = withDefaults(
+  defineProps<{
+    mode?: 'standard' | 'advanced' | 'all'
+  }>(),
+  { mode: 'standard' }
+)
 
 const assistantEnabled = computed({
   get: () => appSetting.assistant?.enabled === true,
@@ -29,7 +36,6 @@ const floatingBallEnabled = computed({
 })
 
 function ensureAssistantSettings(): void {
-  ensureVoiceInputSetting(appSetting as Record<string, unknown>)
   if (!appSetting.assistant || typeof appSetting.assistant !== 'object') {
     appSetting.assistant = {
       enabled: false
@@ -72,7 +78,7 @@ function ensureAssistantSettings(): void {
 }
 
 watch(
-  () => [appSetting.assistant, appSetting.floatingBall, appSetting.voiceInput],
+  () => [appSetting.assistant, appSetting.floatingBall],
   () => ensureAssistantSettings(),
   { immediate: true }
 )
@@ -81,24 +87,35 @@ watch(
 <template>
   <TuffGroupBlock
     :name="t('settingAssistant.groupTitle')"
+    :description="t('settingAssistant.groupDesc')"
     default-icon="i-carbon-chat-bot"
     active-icon="i-carbon-chat-bot"
     memory-name="setting-assistant"
   >
     <TuffBlockSwitch
+      v-if="props.mode !== 'advanced'"
       v-model="assistantEnabled"
       :title="t('settingAssistant.enableAssistant')"
-      description=""
+      :description="t('settingAssistant.enableAssistantDesc')"
       default-icon="i-carbon-ai"
       active-icon="i-carbon-ai"
     />
 
     <TuffBlockSwitch
+      v-if="props.mode !== 'standard'"
       v-model="floatingBallEnabled"
       :title="t('settingAssistant.floatingBall')"
       :description="t('settingAssistant.floatingBallDesc')"
       default-icon="i-carbon-dot-mark"
       active-icon="i-carbon-dot-mark"
+    />
+
+    <TuffBlockSlot
+      v-if="props.mode !== 'standard'"
+      :title="t('settingAssistant.voiceWake')"
+      :description="t('settingAssistant.voiceWakeDesc')"
+      :disabled="true"
+      default-icon="i-carbon-microphone-off"
     />
   </TuffGroupBlock>
 </template>

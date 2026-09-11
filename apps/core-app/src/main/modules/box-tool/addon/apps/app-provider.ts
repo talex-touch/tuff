@@ -3537,11 +3537,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const ftsStart = startTiming()
 
     const [preciseResultMap, prefixResults, ftsMatches] = await Promise.all([
-      this.searchIndex.lookupByKeywords(this.id, preciseLookupTerms, preciseSearchLimit),
+      this.searchIndex.lookupByKeywords(this.id, preciseLookupTerms, preciseSearchLimit, signal),
       shouldLookupPrefix
-        ? this.searchIndex.lookupByKeywordPrefix(this.id, cleanedQuery || normalizedQuery, 200)
+        ? this.searchIndex.lookupByKeywordPrefix(
+            this.id,
+            cleanedQuery || normalizedQuery,
+            200,
+            signal
+          )
         : Promise.resolve([]),
-      ftsQuery ? this.searchIndex.search(this.id, ftsQuery, 150) : Promise.resolve([])
+      ftsQuery ? this.searchIndex.search(this.id, ftsQuery, 150, signal) : Promise.resolve([])
     ])
 
     if (signal?.aborted) {
@@ -3643,7 +3648,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const NGRAM_RECALL_THRESHOLD = 5
     if (candidateIds.size < NGRAM_RECALL_THRESHOLD && normalizedQuery.length >= 3) {
       const ngramStart = startTiming()
-      const ngramCandidates = await this.searchIndex.lookupByNgrams(this.id, normalizedQuery, 30)
+      const ngramCandidates = await this.searchIndex.lookupByNgrams(
+        this.id,
+        normalizedQuery,
+        30,
+        signal
+      )
       if (signal?.aborted) {
         return new TuffSearchResultBuilder(query).build()
       }
@@ -3672,7 +3682,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const SUBSEQ_RECALL_THRESHOLD = 5
     if (candidateIds.size < SUBSEQ_RECALL_THRESHOLD && normalizedQuery.length >= 2) {
       const subseqStart = startTiming()
-      const subseqResults = await this.searchIndex.lookupBySubsequence(this.id, normalizedQuery, 50)
+      const subseqResults = await this.searchIndex.lookupBySubsequence(
+        this.id,
+        normalizedQuery,
+        50,
+        undefined,
+        signal
+      )
       if (signal?.aborted) {
         return new TuffSearchResultBuilder(query).build()
       }

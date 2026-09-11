@@ -9,11 +9,10 @@ import type { VoiceDeliveryResult } from '@talex-touch/utils/transport/sdk/domai
  * taken back from — backspacing is not an option, because nothing here knows whether the
  * user moved the caret in between, and a stray backspace deletes their work.
  *
- * So only the part two consecutive partials agree on is ever typed. A revision changes
- * the tail, and the tail is exactly what has not been committed yet, so the correction
- * lands before the characters do. The cost is one partial of latency — the text trails
- * the voice by roughly 200-300ms instead of appearing instantly, which is the trade the
- * feature is worth making and the one thing this file exists to enforce.
+ * Only the part two consecutive partials agree on is typed. This reduces unstable
+ * guesses, but even that prefix can later change. Reconcile punctuation without
+ * rewinding the acknowledged text; a lexical conflict must not replay an already
+ * typed suffix or guess how to edit the user's buffer.
  */
 
 /** Code points, not UTF-16 units: slicing mid-surrogate would emit half a character. */
@@ -31,6 +30,35 @@ export function commonPrefix(a: string, b: string): string {
   return left.slice(0, shared).join('')
 }
 
+/** Locate the committed prefix in a revised hypothesis without changing typed text. */
+function committedPrefixEnd(committed: string, target: string): number {
+  if (target.startsWith(committed)) return committed.length
+
+  let typedOffset = 0
+  let targetOffset = 0
+  while (typedOffset < committed.length) {
+    const typedPoint = committed.codePointAt(typedOffset)!
+    const targetPoint = target.codePointAt(targetOffset)
+    const typedWidth = typedPoint > 0xffff ? 2 : 1
+    const targetWidth = targetPoint !== undefined && targetPoint > 0xffff ? 2 : 1
+    if (typedPoint === targetPoint) {
+      typedOffset += typedWidth
+      targetOffset += targetWidth
+      continue
+    }
+
+    // Match punctuation revisions in order, never by a repeated suffix elsewhere
+    // in the sentence. Letters, numbers, symbols and whitespace must still match.
+    const typedPunctuation = /\p{P}/u.test(String.fromCodePoint(typedPoint))
+    const targetPunctuation =
+      targetPoint !== undefined && /\p{P}/u.test(String.fromCodePoint(targetPoint))
+    if (!typedPunctuation && !targetPunctuation) return -1
+    if (typedPunctuation) typedOffset += typedWidth
+    if (targetPunctuation) targetOffset += targetWidth
+  }
+  return targetOffset
+}
+
 export interface LiveDeliverySink {
   /** Types one delta. Never pastes: a paste per partial would thrash the clipboard. */
   (delta: string): Promise<VoiceDeliveryResult>
@@ -41,7 +69,7 @@ export interface LiveDelivery {
   offerPartial: (partial: string) => Promise<void>
   /** Deliver the remainder of a finished segment and report how the last write went. */
   finish: (finalText: string) => Promise<VoiceDeliveryResult>
-  /** What has actually been typed so far — the tests assert against this. */
+  /** The exact concatenation of successfully typed deltas. Never rewinds. */
   delivered: () => string
 }
 
@@ -52,10 +80,12 @@ export function createLiveDelivery(send: LiveDeliverySink): LiveDelivery {
   /** One failed write stops the session: past that point the target is not listening. */
   let broken = false
 
-  async function advanceTo(target: string): Promise<void> {
-    if (broken || !target.startsWith(delivered)) return
-    const delta = target.slice(delivered.length)
-    if (!delta) return
+  async function advanceTo(target: string): Promise<VoiceDeliveryResult> {
+    if (broken) return lastResult
+    const offset = committedPrefixEnd(delivered, target)
+    if (offset < 0) return { method: 'none', reason: 'transcript-revised' }
+    const delta = target.slice(offset)
+    if (!delta) return lastResult
 
     lastResult = await send(delta)
     if (lastResult.method === 'none') {
@@ -63,9 +93,10 @@ export function createLiveDelivery(send: LiveDeliverySink): LiveDelivery {
       // as typed, and stop — retrying every partial into a target that is not accepting
       // keystrokes just repeats the failure at 10Hz.
       broken = true
-      return
+      return lastResult
     }
-    delivered = target
+    delivered += delta
+    return lastResult
   }
 
   return {
@@ -77,23 +108,7 @@ export function createLiveDelivery(send: LiveDeliverySink): LiveDelivery {
 
     async finish(finalText: string): Promise<VoiceDeliveryResult> {
       previousPartial = finalText
-      if (finalText.startsWith(delivered)) {
-        await advanceTo(finalText)
-        return lastResult
-      }
-
-      /*
-       * The recognizer changed its mind about something already typed.
-       *
-       * Rare, because only agreed-on text is ever sent, but not impossible: a provider
-       * can revise across a segment boundary. Those characters are gone — they are in
-       * another application's buffer. Rewinding the bookkeeping to the shared prefix at
-       * least appends the rest, so the user loses the correction rather than the whole
-       * tail of their sentence.
-       */
-      delivered = commonPrefix(delivered, finalText)
-      await advanceTo(finalText)
-      return lastResult
+      return advanceTo(finalText)
     },
 
     delivered: () => delivered

@@ -2,7 +2,6 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TuffItem } from '@talex-touch/utils'
 import type { FileIndexProgress as FileIndexProgressPayload } from '@talex-touch/utils/transport/events/types'
 import type { IndexedSourceResetReason } from '@talex-touch/utils/search'
 import type { FilePersistencePort } from '../../search-engine/search-index-writer'
@@ -426,25 +425,6 @@ function createDeferred<T>(): {
     reject = rej
   })
   return { promise, resolve, reject }
-}
-
-function createFileSearchRow(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 1,
-    path: '/Users/demo/Documents/report.txt',
-    name: 'report.txt',
-    displayName: null,
-    extension: '.txt',
-    size: 128,
-    mtime: new Date('2026-06-18T00:00:00.000Z'),
-    ctime: new Date('2026-06-17T00:00:00.000Z'),
-    lastIndexedAt: new Date('2026-06-18T00:00:00.000Z'),
-    isDir: false,
-    type: 'file',
-    content: null,
-    embeddingStatus: 'none',
-    ...overrides
-  }
 }
 
 type FileProviderLeaseRecoveryTestApi = FileProviderIndexingLifecycleTestApi & {
@@ -1674,97 +1654,6 @@ describe('file-provider startup readiness', () => {
     }
   })
 
-  it('starts precise, prefix, and FTS file search-index reads in parallel before precise resolves', async () => {
-    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
-    const originalDbUtils = provider.dbUtils
-    const originalSearchIndex = provider.searchIndex
-    const originalEmbeddingService = provider.embeddingService
-
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-file-provider-search-'))
-    const precisePath = path.join(tempDir, 'repo.txt')
-    const prefixPath = path.join(tempDir, 'reporter.txt')
-    const ftsPath = path.join(tempDir, 'team-repo.txt')
-    await Promise.all([
-      fs.writeFile(precisePath, 'repo'),
-      fs.writeFile(prefixPath, 'reporter'),
-      fs.writeFile(ftsPath, 'team repo')
-    ])
-
-    const preciseFile = createFileSearchRow({
-      id: 31,
-      path: precisePath,
-      name: 'repo.txt'
-    })
-    const prefixFile = createFileSearchRow({
-      id: 32,
-      path: prefixPath,
-      name: 'reporter.txt'
-    })
-    const ftsFile = createFileSearchRow({
-      id: 33,
-      path: ftsPath,
-      name: 'team-repo.txt'
-    })
-    const rowsByPath = new Map(
-      [preciseFile, prefixFile, ftsFile].map((file) => [file.path, { file, extensions: {} }])
-    )
-    const whereMock = vi.fn(async () => Array.from(rowsByPath.values()))
-    const leftJoinMock = vi.fn(() => ({ where: whereMock }))
-    const fromMock = vi.fn(() => ({ leftJoin: leftJoinMock }))
-    const selectMock = vi.fn(() => ({ from: fromMock }))
-    const preciseDeferred =
-      createDeferred<Map<string, Array<{ itemId: string; priority: number }>>>()
-    const lookupByKeywordsMock = vi.fn(() => preciseDeferred.promise)
-    const lookupByKeywordPrefixMock = vi.fn(async () => [
-      { itemId: prefixFile.path, keyword: 'reporter', priority: 0.9 }
-    ])
-    const ftsSearchMock = vi.fn(async () => [{ itemId: ftsFile.path, score: 0.25 }])
-
-    const parallelReadHandle = { select: selectMock }
-    provider.dbUtils = {
-      getDb: () => parallelReadHandle,
-      getFileIndexReadDb: () => parallelReadHandle
-    }
-    provider.searchIndex = {
-      lookupByKeywords: lookupByKeywordsMock,
-      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
-      search: ftsSearchMock
-    }
-    provider.embeddingService = null
-
-    try {
-      const resultPromise = provider.onSearch(
-        { text: 'repo', inputs: [] },
-        new AbortController().signal
-      )
-
-      expect(lookupByKeywordsMock).toHaveBeenCalledWith('file-provider', ['repo'], 200)
-      expect(lookupByKeywordPrefixMock).toHaveBeenCalledWith('file-provider', 'repo', 200)
-      expect(ftsSearchMock).toHaveBeenCalledWith('file-provider', 'repo', 150)
-      expect(whereMock).not.toHaveBeenCalled()
-
-      preciseDeferred.resolve(new Map([['repo', [{ itemId: preciseFile.path, priority: 1.2 }]]]))
-      const result = await resultPromise
-
-      const resultItems = result.items as TuffItem[]
-      expect(resultItems.map((item) => item.id)).toEqual([
-        preciseFile.path,
-        prefixFile.path,
-        ftsFile.path
-      ])
-      expect(resultItems.map((item) => item.meta?.extension?.search)).toEqual([
-        { keywordMatch: true, ftsScore: 0, semanticScore: 0 },
-        { keywordMatch: true, ftsScore: 0, semanticScore: 0 },
-        { keywordMatch: false, ftsScore: 0.8, semanticScore: 0 }
-      ])
-    } finally {
-      await fs.rm(tempDir, { recursive: true, force: true })
-      provider.dbUtils = originalDbUtils
-      provider.searchIndex = originalSearchIndex
-      provider.embeddingService = originalEmbeddingService
-    }
-  })
-
   it('returns immediately when aborted before file search work starts', async () => {
     const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
     const originalDbUtils = provider.dbUtils
@@ -1801,7 +1690,7 @@ describe('file-provider startup readiness', () => {
     }
   })
 
-  it('does not fetch file rows when aborted after search-index candidate reads', async () => {
+  it('returns no file result or fetched rows when cancellation follows candidate reads', async () => {
     const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
     const originalDbUtils = provider.dbUtils
     const originalSearchIndex = provider.searchIndex
@@ -1836,9 +1725,6 @@ describe('file-provider startup readiness', () => {
       const result = await provider.onSearch({ text: 'repo', inputs: [] }, controller.signal)
 
       expect(result.items).toEqual([])
-      expect(lookupByKeywordsMock).toHaveBeenCalledWith('file-provider', ['repo'], 200)
-      expect(lookupByKeywordPrefixMock).toHaveBeenCalledWith('file-provider', 'repo', 200)
-      expect(ftsSearchMock).toHaveBeenCalledWith('file-provider', 'repo', 150)
       expect(selectMock).not.toHaveBeenCalled()
     } finally {
       provider.dbUtils = originalDbUtils

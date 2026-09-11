@@ -247,7 +247,7 @@ describe('VoiceDock renderer contract', () => {
     { action: 'stop' as const, mode: 'toggle' as const, expected: panelStopMock },
     { action: 'toggle' as const, mode: 'toggle' as const, expected: panelToggleMock }
   ])(
-    'routes Command voice $action to the managed VoicePanel handle',
+    'routes Command voice $action to the managed VoicePanel without selecting a delivery policy',
     async ({ action, mode, expected }) => {
       const wrapper = mount(VoiceDock)
       await openPanel()
@@ -260,6 +260,7 @@ describe('VoiceDock renderer contract', () => {
       await nextTick()
 
       expect(expected).toHaveBeenCalledTimes(1)
+      if (action !== 'stop') expect(expected).toHaveBeenCalledWith()
       wrapper.unmount()
     }
   )

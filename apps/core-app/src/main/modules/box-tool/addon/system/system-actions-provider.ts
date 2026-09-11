@@ -678,9 +678,7 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
     let manifestPath: string | null = null
     let sourceDir = candidate
 
-    if (stats.isDirectory()) {
-      manifestPath = path.join(candidate, 'manifest.json')
-    } else if (stats.isFile() && path.basename(candidate).toLowerCase() === 'manifest.json') {
+    if (stats.isFile() && path.basename(candidate).toLowerCase() === 'manifest.json') {
       manifestPath = candidate
       sourceDir = path.dirname(candidate)
     }
