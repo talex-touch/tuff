@@ -3,6 +3,7 @@ import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { consumeCredits, releaseConsumedCredits } from './creditsStore'
+import { resolveCreditPricingRule } from './creditPricingStore'
 import { DashScopeAsrError, createDashScopeFiletransAdapter, assertDashScopeProvider, type DashScopeFiletransAdapter } from './dashscopeAsrProvider'
 import { getProviderRegistryEntry, listProviderRegistryEntries } from './providerRegistryStore'
 import {
@@ -125,6 +126,7 @@ export async function startAsrTranscription(
   const durationSeconds = parseWavDurationSeconds(input.audio)
   const idempotencyKey = normalizeAsrIdempotencyKey(input.idempotencyKey)
   const provider = await resolveDashScopeAsrProvider(event)
+  const pricing = await resolveCreditPricingRule(event, 'audio.transcribe')
   const created = await createAsrRequest(event, {
     userId,
     providerId: provider.id,
@@ -132,6 +134,7 @@ export async function startAsrTranscription(
     audio: input.audio,
     contentType,
     durationSeconds,
+    pricing,
   })
   if (!created.created)
     return asClientResponse(created.request)
@@ -221,7 +224,8 @@ export async function pollAsrTranscription(
       return asClientResponse(failed)
     }
 
-    const chargedCredits = calculateFiletransCredits(task.transcript, task.billedSeconds)
+    const pricing = await resolveCreditPricingRule(event, request.capability)
+    const chargedCredits = calculateFiletransCredits(pricing, task.transcript, task.billedSeconds)
     if (chargedCredits > request.reservedCredits) {
       const failed = await markAsrFailed(event, request.id, 'ASR_RESERVATION_EXCEEDED')
       try {

@@ -144,6 +144,12 @@ const _appSettingOriginData = {
     deviceId: '',
     deviceName: '',
     devicePlatform: '',
+    /**
+     * User-chosen Nexus base URL. Empty follows the Nexus runtime server mode; only an explicit
+     * build-time `TUFF_NEXUS_BASE_URL` outranks it. Changing it drops the stored account
+     * credential, because a token issued by one Nexus origin is not valid at another.
+     */
+    nexusBaseUrl: '',
   },
   dev: {
     autoCloseDev: true,

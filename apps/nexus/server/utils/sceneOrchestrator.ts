@@ -19,6 +19,14 @@ import { buildCapabilityMessages } from './tuffIntelligenceCapabilityMessages'
 import { buildOpenAiCompatBaseUrls, resolveProviderBaseUrl } from './intelligenceModels'
 import { invokeTencentImageTranslate, invokeTencentTextTranslate } from './tencentMachineTranslationProvider'
 import { convertUsd, getUsdRates } from './exchangeRateService'
+import { consumeCredits, releaseConsumedCredits } from './creditsStore'
+import {
+  computeCreditCharge,
+  computeCreditReservation,
+  resolveCreditPricingRule,
+  type CreditPricingRule,
+  type CreditPricingUsage,
+} from './creditPricingStore'
 import {
   clearSceneCapabilityAdapterRegistryForTest,
   registerSceneCapabilityAdapterRegistryEntry,
@@ -37,6 +45,7 @@ export type SceneRunErrorCode =
   | 'PROVIDER_UNAVAILABLE'
   | 'PROVIDER_ADAPTER_UNAVAILABLE'
   | 'PROVIDER_ADAPTER_FAILED'
+  | 'CREDITS_EXCEEDED'
 
 export interface SceneRunUsage {
   unit: string
@@ -90,6 +99,28 @@ export interface SceneRunFallbackTrailItem {
   reason?: string
 }
 
+/**
+ * Credits a scene run actually moved. A run holds the estimated price of every
+ * capability it is about to dispatch, settles against the usage the provider
+ * reported, and hands the unused part of the hold back. It is reported on the run
+ * so a failed settlement can be reconciled from the response instead of only from
+ * the ledger.
+ */
+export interface SceneRunBilling {
+  /** Credits held before upstream dispatch; 0 when nothing was billable. */
+  reservedCredits: number
+  /** What the recorded provider usage costs. Kept for `settleFailed` runs. */
+  chargedCredits: number
+  /** Unused hold returned to the user. */
+  releasedCredits: number
+  /** Ledger entry of the hold. */
+  ledgerId: string | null
+  /** Ledger entry of the difference when the charge exceeded the hold. */
+  settlementLedgerId: string | null
+  /** True when the charge could not be fully consumed; reconcile from the ledger. */
+  settleFailed: boolean
+}
+
 export interface SceneRunResult {
   runId: string
   sceneId: string
@@ -103,6 +134,7 @@ export interface SceneRunResult {
   trace: SceneRunTraceStep[]
   usage: SceneRunUsage[]
   output: unknown
+  billing?: SceneRunBilling
   error?: {
     code: SceneRunErrorCode
     message: string
@@ -1742,6 +1774,281 @@ async function recordPlatformGovernanceUsage(
   })
 }
 
+/**
+ * Why a scene run moved credits. The three stages are separate ledger reasons with
+ * one stable key per run, so a replayed run cannot charge, settle or release twice.
+ */
+const SCENE_RUN_RESERVE_REASON = 'scene-run-reserve'
+const SCENE_RUN_SETTLE_REASON = 'scene-run-settle'
+const SCENE_RUN_RELEASE_REASON = 'scene-run-release'
+
+/** Raised by `creditsStore` when a scope cannot afford the amount. */
+const CREDITS_EXCEEDED_MESSAGES: Record<string, true> = {
+  'Team credits exceeded.': true,
+  'User credits exceeded.': true,
+  'Credits exceeded.': true,
+}
+
+/**
+ * Input keys that carry media rather than prose. A base64 screenshot is not prompt
+ * text, and counting it as tokens would hold a fortune for a capability priced per
+ * image, so the estimate walks past them.
+ */
+const SCENE_RUN_MEDIA_INPUT_KEYS: Record<string, true> = {
+  asset: true,
+  assets: true,
+  audio: true,
+  audiobase64: true,
+  base64: true,
+  data: true,
+  dataurl: true,
+  file: true,
+  files: true,
+  image: true,
+  imagebase64: true,
+  imagedata: true,
+  imageurl: true,
+  url: true,
+  urls: true,
+  video: true,
+  videobase64: true,
+}
+
+interface SceneRunCreditContext {
+  ownerId: string
+  sceneId: string
+  runId: string
+}
+
+interface SceneRunCreditReservation {
+  context: SceneRunCreditContext
+  /** The price list every dispatched capability was quoted from, reused at settlement. */
+  rules: Map<string, CreditPricingRule>
+  billing: SceneRunBilling
+}
+
+function estimateSceneInputCharacters(value: unknown, depth = 0): number {
+  // The body is caller-supplied, so the walk is bounded: a deeply nested payload must
+  // not turn a price estimate into a stack overflow.
+  if (depth > 8)
+    return 0
+  if (typeof value === 'string')
+    return value.length
+  if (Array.isArray(value))
+    return value.reduce((total, item) => total + estimateSceneInputCharacters(item, depth + 1), 0)
+  if (!isRecord(value))
+    return 0
+
+  let total = 0
+  for (const [key, entry] of Object.entries(value)) {
+    if (Object.hasOwn(SCENE_RUN_MEDIA_INPUT_KEYS, normalizeConfigKey(key)))
+      continue
+    total += estimateSceneInputCharacters(entry, depth + 1)
+  }
+  return total
+}
+
+/**
+ * Pre-dispatch usage estimate for one capability. Only the basis the capability is
+ * priced on is estimated: text capabilities from the request prose, media-priced
+ * capabilities per invocation. Anything else has no honest estimate before the
+ * provider answers, so the rule's floor is held instead of a guess.
+ *
+ * The prose is estimated as one token per character, the same basis a character-metered
+ * adapter settles on. That keeps the hold from being systematically cheaper than the
+ * charge it stands in for, and it is the accurate ratio for the Chinese-first text this
+ * product translates.
+ */
+function estimateSceneCapabilityUsage(rule: CreditPricingRule, input: unknown): CreditPricingUsage {
+  if (rule.unit === 'image')
+    return { images: 1 }
+  if (rule.unit === 'audio_second' || rule.unit === 'transcript_unit')
+    return {}
+
+  const characters = estimateSceneInputCharacters(input)
+  if (characters <= 0)
+    return {}
+  return { tokens: characters }
+}
+
+/** Provider-reported usage, translated into the basis the price list reads. */
+function toCreditPricingUsage(usage: SceneRunUsage): CreditPricingUsage | null {
+  const quantity = Number(usage.quantity)
+  if (!Number.isFinite(quantity) || quantity <= 0)
+    return null
+
+  switch (usage.unit) {
+    case 'image':
+      return { images: quantity }
+    case 'second':
+    case 'audio_second':
+      return { seconds: quantity }
+    case 'transcript_unit':
+    case 'unit':
+      return { units: quantity }
+    default:
+      // Tokens and characters both land here: pricing an unrecognized provider unit at
+      // zero would let a priced capability settle for free.
+      return { tokens: quantity }
+  }
+}
+
+/**
+ * Holds the estimated price of every capability the run is about to dispatch. The
+ * hold must clear before the provider is called, otherwise the upstream cost is
+ * already spent by the time we learn the caller cannot pay.
+ */
+async function reserveSceneRunCredits(
+  event: H3Event,
+  context: SceneRunCreditContext,
+  request: { capabilities: string[], requestInput: unknown },
+): Promise<SceneRunCreditReservation> {
+  const rules = new Map<string, CreditPricingRule>()
+  let estimatedCredits = 0
+  for (const capability of request.capabilities) {
+    const rule = await resolveCreditPricingRule(event, capability)
+    rules.set(capability, rule)
+    estimatedCredits += computeCreditReservation(rule, estimateSceneCapabilityUsage(rule, request.requestInput))
+  }
+
+  const billing: SceneRunBilling = {
+    reservedCredits: 0,
+    chargedCredits: 0,
+    releasedCredits: 0,
+    ledgerId: null,
+    settlementLedgerId: null,
+    settleFailed: false,
+  }
+  if (estimatedCredits > 0) {
+    const consumption = await consumeCredits(event, context.ownerId, estimatedCredits, SCENE_RUN_RESERVE_REASON, {
+      sceneId: context.sceneId,
+      runId: context.runId,
+      capabilities: request.capabilities,
+    }, { idempotencyKey: `scene-run-reserve:${context.runId}` })
+    billing.reservedCredits = consumption.amount
+    billing.ledgerId = consumption.ledgerId
+  }
+
+  return { context, rules, billing }
+}
+
+/** What the run owes, summed from the usage the providers reported. */
+async function computeSceneRunChargeCredits(
+  event: H3Event,
+  usage: readonly SceneRunUsage[],
+  rules: Map<string, CreditPricingRule>,
+): Promise<number> {
+  let total = 0
+  for (const item of usage) {
+    if (item.billable === false)
+      continue
+    const pricingUsage = toCreditPricingUsage(item)
+    if (!pricingUsage)
+      continue
+
+    const capability = readOptionalString(item.capability, 180) ?? ''
+    let rule = rules.get(capability)
+    if (!rule) {
+      // An adapter may report under a capability the plan did not name; price it from
+      // the same table rather than treating it as unpriced.
+      rule = await resolveCreditPricingRule(event, capability)
+      rules.set(capability, rule)
+    }
+    total += computeCreditCharge(rule, pricingUsage)
+  }
+  return total
+}
+
+/**
+ * Settles a completed run: consumes the difference when the real charge outgrew the
+ * hold, and returns the rest. Never throws into the caller — the result is already
+ * in the user's hands, so a failed settlement is an operator problem, not a failed run.
+ */
+async function settleSceneRunCredits(
+  event: H3Event,
+  reservation: SceneRunCreditReservation,
+  usage: readonly SceneRunUsage[],
+): Promise<void> {
+  const { billing, context, rules } = reservation
+
+  try {
+    billing.chargedCredits = await computeSceneRunChargeCredits(event, usage, rules)
+  }
+  catch (error) {
+    // The charge cannot be derived, so the whole hold is kept: keeping a hold is
+    // reconcilable from the ledger, giving the provider's work away is not.
+    billing.chargedCredits = billing.reservedCredits
+    billing.settleFailed = true
+    console.warn('[sceneOrchestrator] Failed to derive credit charge; reservation kept (metering integrity)', error)
+    return
+  }
+
+  if (billing.chargedCredits <= billing.reservedCredits) {
+    const releaseCredits = billing.reservedCredits - billing.chargedCredits
+    if (releaseCredits <= 0)
+      return
+    try {
+      const released = await releaseConsumedCredits(event, context.ownerId, releaseCredits, SCENE_RUN_RELEASE_REASON, {
+        sceneId: context.sceneId,
+        runId: context.runId,
+        chargedCredits: billing.chargedCredits,
+      }, { idempotencyKey: `scene-run-release:${context.runId}` })
+      billing.releasedCredits = released.amount
+    }
+    catch (error) {
+      billing.settleFailed = true
+      console.warn('[sceneOrchestrator] Failed to release unused credit reservation (metering integrity)', error)
+    }
+    return
+  }
+
+  try {
+    const consumption = await consumeCredits(
+      event,
+      context.ownerId,
+      billing.chargedCredits - billing.reservedCredits,
+      SCENE_RUN_SETTLE_REASON,
+      {
+        sceneId: context.sceneId,
+        runId: context.runId,
+        chargedCredits: billing.chargedCredits,
+      },
+      { idempotencyKey: `scene-run-settle:${context.runId}` },
+    )
+    billing.settlementLedgerId = consumption.ledgerId
+  }
+  catch (error) {
+    // The user already has the result: a failed top-up is a metering-integrity problem
+    // for the operator, never a reason to fail a call that succeeded upstream.
+    billing.settleFailed = true
+    console.warn('[sceneOrchestrator] Credit settlement top-up failed (metering integrity)', error)
+  }
+}
+
+/** Returns the unused hold of a run that never produced a settlement. */
+async function releaseSceneRunCredits(
+  event: H3Event,
+  reservation: SceneRunCreditReservation,
+  failureCode: string,
+): Promise<void> {
+  const { billing, context } = reservation
+  const remaining = billing.reservedCredits - billing.chargedCredits - billing.releasedCredits
+  if (remaining <= 0)
+    return
+
+  try {
+    const released = await releaseConsumedCredits(event, context.ownerId, remaining, SCENE_RUN_RELEASE_REASON, {
+      sceneId: context.sceneId,
+      runId: context.runId,
+      failureCode,
+    }, { idempotencyKey: `scene-run-release:${context.runId}` })
+    billing.releasedCredits += released.amount
+  }
+  catch (error) {
+    console.warn('[sceneOrchestrator] Failed to release credit reservation', error)
+  }
+}
+
 async function throwRunError(
   event: H3Event,
   statusCode: number,
@@ -1875,6 +2182,8 @@ export async function runSceneOrchestrator(
   })
 
   if (dryRun) {
+    // A dry run calls no provider, so it holds and charges nothing: the credit
+    // reservation below is deliberately after this return.
     addTrace(trace, 'adapter.dispatch', 'skipped', 'Dry run requested; provider adapters were not invoked.')
     return await finalizeSceneRun(event, {
       ...baseRun,
@@ -1883,115 +2192,176 @@ export async function runSceneOrchestrator(
     })
   }
 
-  const outputs: Record<string, unknown> = {}
-  for (const plan of capabilityPlans) {
-    let completed = false
-    let selectedPlan: SceneRunSelection | null = null
-    let lastFailure: SceneRunFailure = {
-      statusCode: 500,
-      code: 'PROVIDER_UNAVAILABLE',
-      message: 'Selected provider path is incomplete.',
-    }
-
-    for (const { candidate, provider, binding } of plan.candidates) {
-      const selection = toSelection(candidate, provider)
-      const adapter = resolveAdapter(provider, plan.capability)
-      const adapterConfig = resolveSceneAdapterMergedConfig(scene, provider, binding, plan.capability)
-      fallbackTrail.push({
-        providerId: provider.id,
-        capability: plan.capability,
-        status: 'selected',
+  // Same shape as an intelligence invoke: hold the estimated price of every capability
+  // before the provider is called, settle against the usage the provider reported and
+  // hand the unused part back. A dry run returned above and never reaches this block.
+  const ownerId = readOptionalString(request.ownerId, 180)
+  const creditContext = ownerId ? { ownerId, sceneId: scene.id, runId } : null
+  let reservation: SceneRunCreditReservation | null = null
+  if (creditContext) {
+    try {
+      reservation = await reserveSceneRunCredits(event, creditContext, {
+        capabilities: capabilityPlans.map(plan => plan.capability),
+        requestInput: request.input,
       })
-
-      if (!adapter) {
-        const message = `No provider adapter registered for ${provider.vendor}:${plan.capability}.`
-        lastFailure = {
-          statusCode: 501,
-          code: 'PROVIDER_ADAPTER_UNAVAILABLE',
-          message,
-        }
-        fallbackTrail.push({
-          providerId: provider.id,
-          capability: plan.capability,
-          status: 'failed',
-          reason: 'provider_adapter_unavailable',
-        })
-        addTrace(trace, 'adapter.dispatch', 'failed', message, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig))
-        if (scene.fallback !== 'enabled')
-          break
-        continue
-      }
-
-      try {
-        await assertIntelligenceProviderQuota(event, provider.id, plan.capability)
-        await recordIntelligenceProviderRequest(event, provider.id, plan.capability)
-        const adapterInput = buildCapabilityInput(plan.capability, request.input, outputs)
-        const result = await adapter({
-          event,
-          runId,
-          scene,
-          provider,
-          capability: plan.capability,
-          input: adapterInput,
-          originalInput: request.input,
-          outputs,
-          adapterConfig,
-        })
-        const assetResult = await uploadSceneAdapterAssets({
-          event,
-          runId,
-          ownerId: request.ownerId,
-          sceneId: scene.id,
-          providerId: provider.id,
-          capability: plan.capability,
-          output: result.output,
-          resultAssets: result.assets,
-          adapterConfig,
-        })
-        outputs[plan.capability] = assetResult.output
-        usage.push(...(result.usage ?? []))
-        addTrace(trace, 'adapter.dispatch', 'success', `Provider adapter completed ${plan.capability}.`, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig, {
-          providerRequestId: result.providerRequestId ?? null,
-          latencyMs: result.latencyMs ?? null,
-          uploadedAssets: assetResult.uploadedAssets,
-        }))
-        selectedPlan = selection
-        completed = true
-        break
-      }
-      catch (error) {
-        const message = error && typeof error === 'object' && 'statusMessage' in error && typeof error.statusMessage === 'string'
-          ? error.statusMessage
-          : error instanceof Error ? error.message : 'Provider adapter failed.'
-        lastFailure = {
-          statusCode: 502,
-          code: 'PROVIDER_ADAPTER_FAILED',
-          message,
-        }
-        fallbackTrail.push({
-          providerId: provider.id,
-          capability: plan.capability,
-          status: 'failed',
-          reason: message,
-        })
-        addTrace(trace, 'adapter.dispatch', 'failed', `Provider adapter failed ${plan.capability}.`, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig))
-        if (scene.fallback !== 'enabled')
-          break
-      }
     }
-
-    if (!completed) {
-      const run = createFailedRun(baseRun, outputs, lastFailure)
-      await throwRunError(event, lastFailure.statusCode, lastFailure.code, lastFailure.message, run)
+    catch (error) {
+      if (!(error instanceof Error) || !Object.hasOwn(CREDITS_EXCEEDED_MESSAGES, error.message))
+        throw error
+      // A hold the caller cannot afford must be declined before the provider is called,
+      // otherwise the upstream cost is already spent.
+      const denied = error.message
+      addTrace(trace, 'adapter.dispatch', 'failed', 'Credit reservation was declined before provider dispatch.', {
+        capabilities: capabilityPlans.length,
+      })
+      const run: SceneRunResult = {
+        ...baseRun,
+        status: 'failed',
+        output: null,
+        error: {
+          code: 'CREDITS_EXCEEDED',
+          message: denied,
+        },
+      }
+      throw createError({
+        statusCode: 402,
+        statusMessage: 'CREDITS_EXCEEDED',
+        data: {
+          code: 'CREDITS_EXCEEDED',
+          reason: denied,
+          run,
+        },
+      })
     }
-    if (selectedPlan)
-      selected.push(selectedPlan)
+    // The result shares this object, so a release that lands after a failure run was
+    // built is still what the caller sees.
+    baseRun.billing = reservation.billing
   }
 
-  const firstCapability = requestedCapabilities[0]
-  return await finalizeSceneRun(event, {
-    ...baseRun,
-    status: 'completed',
-    output: requestedCapabilities.length === 1 && firstCapability ? outputs[firstCapability] : outputs,
-  })
+  try {
+    const outputs: Record<string, unknown> = {}
+    for (const plan of capabilityPlans) {
+      let completed = false
+      let selectedPlan: SceneRunSelection | null = null
+      let lastFailure: SceneRunFailure = {
+        statusCode: 500,
+        code: 'PROVIDER_UNAVAILABLE',
+        message: 'Selected provider path is incomplete.',
+      }
+
+      for (const { candidate, provider, binding } of plan.candidates) {
+        const selection = toSelection(candidate, provider)
+        const adapter = resolveAdapter(provider, plan.capability)
+        const adapterConfig = resolveSceneAdapterMergedConfig(scene, provider, binding, plan.capability)
+        fallbackTrail.push({
+          providerId: provider.id,
+          capability: plan.capability,
+          status: 'selected',
+        })
+
+        if (!adapter) {
+          const message = `No provider adapter registered for ${provider.vendor}:${plan.capability}.`
+          lastFailure = {
+            statusCode: 501,
+            code: 'PROVIDER_ADAPTER_UNAVAILABLE',
+            message,
+          }
+          fallbackTrail.push({
+            providerId: provider.id,
+            capability: plan.capability,
+            status: 'failed',
+            reason: 'provider_adapter_unavailable',
+          })
+          addTrace(trace, 'adapter.dispatch', 'failed', message, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig))
+          if (scene.fallback !== 'enabled')
+            break
+          continue
+        }
+
+        try {
+          await assertIntelligenceProviderQuota(event, provider.id, plan.capability)
+          await recordIntelligenceProviderRequest(event, provider.id, plan.capability)
+          const adapterInput = buildCapabilityInput(plan.capability, request.input, outputs)
+          const result = await adapter({
+            event,
+            runId,
+            scene,
+            provider,
+            capability: plan.capability,
+            input: adapterInput,
+            originalInput: request.input,
+            outputs,
+            adapterConfig,
+          })
+          const assetResult = await uploadSceneAdapterAssets({
+            event,
+            runId,
+            ownerId: request.ownerId,
+            sceneId: scene.id,
+            providerId: provider.id,
+            capability: plan.capability,
+            output: result.output,
+            resultAssets: result.assets,
+            adapterConfig,
+          })
+          outputs[plan.capability] = assetResult.output
+          usage.push(...(result.usage ?? []))
+          addTrace(trace, 'adapter.dispatch', 'success', `Provider adapter completed ${plan.capability}.`, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig, {
+            providerRequestId: result.providerRequestId ?? null,
+            latencyMs: result.latencyMs ?? null,
+            uploadedAssets: assetResult.uploadedAssets,
+          }))
+          selectedPlan = selection
+          completed = true
+          break
+        }
+        catch (error) {
+          const message = error && typeof error === 'object' && 'statusMessage' in error && typeof error.statusMessage === 'string'
+            ? error.statusMessage
+            : error instanceof Error ? error.message : 'Provider adapter failed.'
+          lastFailure = {
+            statusCode: 502,
+            code: 'PROVIDER_ADAPTER_FAILED',
+            message,
+          }
+          fallbackTrail.push({
+            providerId: provider.id,
+            capability: plan.capability,
+            status: 'failed',
+            reason: message,
+          })
+          addTrace(trace, 'adapter.dispatch', 'failed', `Provider adapter failed ${plan.capability}.`, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig))
+          if (scene.fallback !== 'enabled')
+            break
+        }
+      }
+
+      if (!completed) {
+        const run = createFailedRun(baseRun, outputs, lastFailure)
+        await throwRunError(event, lastFailure.statusCode, lastFailure.code, lastFailure.message, run)
+      }
+      if (selectedPlan)
+        selected.push(selectedPlan)
+    }
+
+    if (reservation)
+      await settleSceneRunCredits(event, reservation, usage)
+
+    const firstCapability = requestedCapabilities[0]
+    return await finalizeSceneRun(event, {
+      ...baseRun,
+      status: 'completed',
+      output: requestedCapabilities.length === 1 && firstCapability ? outputs[firstCapability] : outputs,
+    })
+  }
+  catch (error) {
+    // The run failed after the hold: return it before projecting the failure. A run that
+    // was already settled releases nothing, so this is correct on every path.
+    if (reservation) {
+      const errorData = error && typeof error === 'object' && 'data' in error ? readRecord(error.data) : null
+      const failureCode = readOptionalString(errorData?.code, 60) ?? 'SCENE_RUN_UNSETTLED'
+      await releaseSceneRunCredits(event, reservation, failureCode)
+    }
+    throw error
+  }
 }

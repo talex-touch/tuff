@@ -22,7 +22,7 @@ import {
 } from '@talex-touch/utils/intelligence/voice-asr'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
-import { subscribeAuthState } from '../auth'
+import { getSanitizedAuthSessionState, subscribeAuthState } from '../auth'
 import { tuffIntelligence } from './intelligence-sdk'
 import { normalizeProviderForRuntime, TUFF_NEXUS_PROVIDER_ID } from './provider-runtime'
 import {
@@ -95,6 +95,15 @@ const PI_CLI_PROVIDER: IntelligenceProviderConfig = {
 let lastAppliedRuntimeConfigSignature: string | null = null
 let teardownConfigUpdateListener: (() => void) | null = null
 let teardownAuthStateListener: (() => void) | null = null
+
+/**
+ * Signed-in value this module last acted on, or `null` before the first observation.
+ *
+ * Auth notifications also fire for token refreshes and profile updates that leave `isSignedIn`
+ * unchanged, so Nexus enablement keys off transitions only: a refresh must never reopen a provider
+ * the user just turned off mid-session.
+ */
+let lastAppliedAuthSignedIn: boolean | null = null
 
 function normalizeStrategyId(value?: string) {
   if (!value) return undefined
@@ -723,6 +732,77 @@ export function getCapabilitiesMap(): Record<string, IntelligenceCapabilityRouti
 }
 
 /**
+ * Mirrors a sign-in transition onto the Nexus provider flag.
+ *
+ * Signing in is what makes the injected access token usable, so the provider the user never
+ * explicitly trusted gets enabled for them. Signing out takes it back off, which is also why the
+ * seeded default stays `enabled: false`: a guest machine must not advertise a Nexus route.
+ *
+ * Only the Nexus provider is touched. Bindings for other providers keep their flags and priorities,
+ * so Nexus (already priority 1 in `text.chat`) simply becomes the preferred route whenever nothing
+ * else the user configured is enabled.
+ */
+function applyNexusProviderAuthState(signedIn: boolean): boolean {
+  const stored = getLatestConfig()
+  if (!stored) return false
+
+  const provider = (stored.providers ?? []).find(
+    (candidate) => candidate.id === TUFF_NEXUS_PROVIDER_ID
+  )
+  if (!provider) return false
+
+  if (!signedIn) {
+    const providerChanged = provider.enabled !== false
+    provider.enabled = false
+    // Disabling Nexus is mirrored onto every Nexus binding by the patch pass, so the per-binding
+    // flags stay owned by one place instead of being flipped twice.
+    const changed = patchStoredConfigDefaults(stored) || providerChanged
+    if (!changed) return false
+    saveMainConfig(StorageList.IntelligenceConfig, stored)
+    return true
+  }
+
+  // Patch before enabling: the patch pass seeds the `text.chat` / `audio.stt` Nexus bindings with
+  // `enabled: false`, which would otherwise undo the enablement below on the next reload.
+  let changed = patchStoredConfigDefaults(stored)
+
+  if (provider.enabled !== true) {
+    provider.enabled = true
+    changed = true
+  }
+
+  for (const capability of Object.values(stored.capabilities ?? {})) {
+    for (const binding of capability.providers ?? []) {
+      if (binding.providerId === TUFF_NEXUS_PROVIDER_ID && binding.enabled === false) {
+        binding.enabled = true
+        changed = true
+      }
+    }
+  }
+
+  if (!changed) return false
+  saveMainConfig(StorageList.IntelligenceConfig, stored)
+  return true
+}
+
+/**
+ * Applies a sign-in state change once, recording it so repeat notifications stay inert.
+ *
+ * Cold start can finish auth initialization before this listener exists, so the caller also feeds
+ * the startup session state through here rather than waiting for the next transition.
+ */
+function applyAuthSignedInTransition(signedIn: boolean): void {
+  if (lastAppliedAuthSignedIn === signedIn) return
+  lastAppliedAuthSignedIn = signedIn
+
+  const persisted = applyNexusProviderAuthState(signedIn)
+  intelligenceConfigLog.info('Nexus provider auth transition applied', {
+    enabled: signedIn,
+    persisted
+  })
+}
+
+/**
  * Setup storage update listener to reload config when it changes
  */
 export function setupConfigUpdateListener(): void {
@@ -737,8 +817,13 @@ export function setupConfigUpdateListener(): void {
   }
 
   if (!teardownAuthStateListener) {
-    teardownAuthStateListener = subscribeAuthState(() => {
+    // Auth initialization is fire-and-forget, so its first notification can land before this
+    // listener is registered. Adopt the session state already in place as the baseline.
+    applyAuthSignedInTransition(getSanitizedAuthSessionState().isSignedIn)
+
+    teardownAuthStateListener = subscribeAuthState((state) => {
       try {
+        applyAuthSignedInTransition(state.isSignedIn === true)
         ensureIntelligenceConfigLoaded()
       } catch {
         // ignore transient storage readiness issues during auth transitions

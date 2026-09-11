@@ -4,14 +4,17 @@ import { Buffer } from 'node:buffer'
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import {
+  computeCreditCharge,
+  computeCreditReservation,
+  type CreditPricingRule
+} from './creditPricingStore'
 import { deleteStorageObject, getStorageObject, putStorageObject, type StorageObjectMemory } from './storageObjectStore'
 
 const ASR_REQUESTS_TABLE = 'asr_transcription_requests'
 const ASR_HANDOFF_TTL_MS = 15 * 60 * 1000
 export const ASR_AUDIO_MAX_BYTES = 20 * 1024 * 1024
 export const ASR_MAX_DURATION_SECONDS = 10 * 60
-const ASR_RESERVATION_CREDITS_PER_SECOND = 10
-const FILETRANS_FLOOR_CREDITS_PER_SECOND = 4
 const FILETRANS_INPUT_UNIT_PRICE_CNY_PER_SECOND = 0.00022
 
 const memoryStorage: StorageObjectMemory = new Map()
@@ -74,6 +77,8 @@ export interface CreateAsrRequestInput {
   audio: Buffer
   contentType: string
   durationSeconds: number
+  /** Effective price for this capability; resolved by the caller from the pricing table. */
+  pricing: CreditPricingRule
 }
 
 export interface CreatedAsrRequest {
@@ -217,16 +222,23 @@ export function countTranscriptUnits(transcript: string): number {
   return units
 }
 
-export function calculateFiletransCredits(transcript: string, billedSeconds: number): number {
+export function calculateFiletransCredits(
+  pricing: CreditPricingRule,
+  transcript: string,
+  billedSeconds: number
+): number {
   if (!Number.isFinite(billedSeconds) || billedSeconds <= 0)
     throw new Error('ASR_PROVIDER_METERING_INVALID')
-  return Math.ceil(Math.max(countTranscriptUnits(transcript), billedSeconds * FILETRANS_FLOOR_CREDITS_PER_SECOND))
+  return computeCreditCharge(pricing, {
+    seconds: billedSeconds,
+    units: countTranscriptUnits(transcript)
+  })
 }
 
-export function calculateFiletransReservation(durationSeconds: number): number {
+export function calculateFiletransReservation(pricing: CreditPricingRule, durationSeconds: number): number {
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > ASR_MAX_DURATION_SECONDS)
     throw createError({ statusCode: 400, statusMessage: 'Audio duration is invalid.' })
-  return Math.ceil(durationSeconds * ASR_RESERVATION_CREDITS_PER_SECOND)
+  return computeCreditReservation(pricing, { seconds: durationSeconds })
 }
 
 export function calculateFiletransProviderCost(billedSeconds: number): number {
@@ -298,7 +310,7 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
   }
 
   const durationSeconds = Number(input.durationSeconds)
-  const reservedCredits = calculateFiletransReservation(durationSeconds)
+  const reservedCredits = calculateFiletransReservation(input.pricing, durationSeconds)
   const id = `asr_${randomUUID()}`
   const deliveryToken = randomBytes(32).toString('base64url')
   const now = new Date()

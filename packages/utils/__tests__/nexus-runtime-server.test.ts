@@ -3,7 +3,14 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   migrateTuffNexusRuntimeServer,
-  normalizeTuffNexusRuntimeServer
+  NEXUS_BASE_URL,
+  NEXUS_LOCAL_BASE_URL,
+  normalizeTuffNexusRuntimeServer,
+  resolveTuffNexusBaseUrl,
+  resolveTuffNexusBaseUrlDetail,
+  TUFF_NEXUS_BASE_URL_ENV,
+  validateNexusBaseUrl,
+  type TuffNexusBaseUrlOptions
 } from '../env'
 
 /**
@@ -73,6 +80,163 @@ describe('migrateTuffNexusRuntimeServer', () => {
     migrateTuffNexusRuntimeServer(dev)
 
     expect(dev).toEqual({ runtimeServer: 'local', autoCloseDev: true })
+  })
+})
+
+/**
+ * Which origin a signed request is sent to.
+ *
+ * Three inputs compete for it — the build/CI override, the address the user saved, and the runtime
+ * server mode — and the winner is reported so the settings page can explain a saved address that
+ * is not in effect. Precedence is `env > custom > runtime-server`, and a saved address only counts
+ * while it still validates: a hand-edited config or a rule tightened by a later version must not
+ * steer authenticated traffic at an origin the settings page itself rejects.
+ */
+describe('validateNexusBaseUrl', () => {
+  it('accepts an https address and trims the trailing slash it was typed with', () => {
+    expect(validateNexusBaseUrl('https://custom.example.test/')).toEqual({
+      ok: true,
+      value: 'https://custom.example.test'
+    })
+  })
+
+  it('keeps a path but still trims the trailing slash', () => {
+    expect(validateNexusBaseUrl('https://custom.example.test/nexus/')).toEqual({
+      ok: true,
+      value: 'https://custom.example.test/nexus'
+    })
+  })
+
+  it('accepts cleartext http on a loopback host', () => {
+    // A local Nexus is the development backend; it has no certificate and never carries a token
+    // off the machine.
+    for (const host of ['localhost:3200', '127.0.0.1:3200', '[::1]:3200']) {
+      expect(validateNexusBaseUrl(`http://${host}`)).toEqual({
+        ok: true,
+        value: `http://${host}`
+      })
+    }
+  })
+
+  it('rejects cleartext http on any other host', () => {
+    // Requests to this origin carry the account bearer token, so cleartext to a remote host is a
+    // credential handed to the network, not a style preference.
+    for (const input of [
+      'http://custom.example.test',
+      'http://custom.example.test:3200',
+      'http://192.168.1.10:3200',
+      'http://custom.example.test/nexus'
+    ]) {
+      expect(validateNexusBaseUrl(input), input).toEqual({
+        ok: false,
+        error: 'insecure-transport'
+      })
+    }
+  })
+
+  it('rejects schemes that are not http(s)', () => {
+    for (const input of [
+      'ftp://custom.example.test',
+      'file:///etc/hosts',
+      'ws://custom.example.test',
+      'tuff://custom.example.test'
+    ]) {
+      expect(validateNexusBaseUrl(input), input).toEqual({
+        ok: false,
+        error: 'unsupported-protocol'
+      })
+    }
+  })
+
+  it('rejects an address carrying a query or a fragment', () => {
+    // Neither can be composed into the request paths built from this base: `/api/…?tenant=1` is a
+    // different route, and silently dropping the suffix would target the wrong deployment.
+    for (const input of [
+      'https://custom.example.test?tenant=1',
+      'https://custom.example.test#frag',
+      'https://custom.example.test/nexus?tenant=1'
+    ]) {
+      expect(validateNexusBaseUrl(input), input).toEqual({ ok: false, error: 'invalid-url' })
+    }
+  })
+
+  it('distinguishes empty input from input that is not a URL', () => {
+    for (const input of ['', '   ', null, undefined, 42, {}]) {
+      expect(validateNexusBaseUrl(input), String(input)).toEqual({ ok: false, error: 'empty' })
+    }
+    expect(validateNexusBaseUrl('custom.example.test')).toEqual({
+      ok: false,
+      error: 'invalid-url'
+    })
+  })
+})
+
+describe('resolveTuffNexusBaseUrlDetail', () => {
+  it('reports the build-time override as the env source, outranking a saved address', () => {
+    expect(
+      resolveTuffNexusBaseUrlDetail({
+        customBaseUrl: 'https://custom.example.test',
+        env: { [TUFF_NEXUS_BASE_URL_ENV]: 'https://runtime.example.test/' }
+      })
+    ).toEqual({ baseUrl: 'https://runtime.example.test', source: 'env' })
+  })
+
+  it('reports a valid saved address as the custom source', () => {
+    expect(
+      resolveTuffNexusBaseUrlDetail({ customBaseUrl: 'https://custom.example.test/' })
+    ).toEqual({ baseUrl: 'https://custom.example.test', source: 'custom' })
+  })
+
+  it('falls back to the runtime server when the saved address is absent or unusable', () => {
+    for (const customBaseUrl of [
+      undefined,
+      null,
+      '',
+      '   ',
+      'custom.example.test',
+      'http://custom.example.test',
+      'ftp://custom.example.test',
+      'https://custom.example.test?tenant=1'
+    ]) {
+      expect(resolveTuffNexusBaseUrlDetail({ customBaseUrl, env: {} }), String(customBaseUrl))
+        .toEqual({ baseUrl: NEXUS_BASE_URL, source: 'runtime-server' })
+    }
+  })
+
+  it('falls back to the local runtime server when that is the selected backend', () => {
+    expect(
+      resolveTuffNexusBaseUrlDetail({
+        runtimeServer: 'local',
+        customBaseUrl: 'http://custom.example.test',
+        env: {}
+      })
+    ).toEqual({ baseUrl: NEXUS_LOCAL_BASE_URL, source: 'runtime-server' })
+  })
+
+  it('ignores a declared but blank env override', () => {
+    expect(
+      resolveTuffNexusBaseUrlDetail({
+        customBaseUrl: 'https://custom.example.test',
+        env: { [TUFF_NEXUS_BASE_URL_ENV]: '   ' }
+      })
+    ).toEqual({ baseUrl: 'https://custom.example.test', source: 'custom' })
+  })
+
+  it('agrees with resolveTuffNexusBaseUrl on the address it picked', () => {
+    const cases: TuffNexusBaseUrlOptions[] = [
+      { env: {} },
+      { runtimeServer: 'local', env: {} },
+      { customBaseUrl: 'https://custom.example.test/', env: {} },
+      { customBaseUrl: 'http://custom.example.test', env: {} },
+      {
+        customBaseUrl: 'https://custom.example.test',
+        env: { [TUFF_NEXUS_BASE_URL_ENV]: 'https://runtime.example.test' }
+      }
+    ]
+
+    for (const options of cases) {
+      expect(resolveTuffNexusBaseUrl(options)).toBe(resolveTuffNexusBaseUrlDetail(options).baseUrl)
+    }
   })
 })
 
