@@ -51,6 +51,8 @@ const {
   key: computed(() => `docs-navigation:${docsLocale.value}:${docsNavigationScope.value ?? 'all'}`),
   server: false,
   lazy: true,
+  // Shares the request the docs page starts with the same key; see the page for why.
+  dedupe: 'defer',
   responseType: 'json',
   default: () => [],
 })
