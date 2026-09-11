@@ -1,6 +1,6 @@
 import type { H3Event } from 'h3'
 import { networkClient } from '@talex-touch/utils/network'
-import { defineEventHandler, getRequestURL, setCookie, setResponseStatus } from 'h3'
+import { defineEventHandler, getRequestURL, getResponseHeader, setCookie, setResponseStatus } from 'h3'
 import { NuxtAuthHandler } from '#auth'
 import { useRuntimeConfig } from '#imports'
 import type { Account, AuthOptions, Profile, Session, User } from 'next-auth'
@@ -20,6 +20,12 @@ import { resolveSessionAuthSecret } from '../../utils/sessionAuthSecret'
 import { sendEmail } from '../../utils/email'
 import { normalizeAuthOrigin, shouldTrustForwardedAuthHost } from '../../utils/authOrigin'
 import { oauthEmailProvesMailboxControl, selectVerifiedGitHubEmail } from '../../utils/oauthEmailTrust'
+import {
+  SESSION_HINT_COOKIE,
+  SESSION_HINT_MAX_AGE_SECONDS,
+  SESSION_HINT_VALUE,
+  resolveSessionHintChange,
+} from '#shared/utils/session-hint'
 
 const CredentialsProvider = (Credentials as any).default ?? Credentials
 const GitHubProvider = (GitHub as any).default ?? GitHub
@@ -756,6 +762,30 @@ function markSessionError(event: H3Event) {
   })
 }
 
+function setSessionHintCookie(event: H3Event, present: boolean) {
+  setCookie(event, SESSION_HINT_COOKIE, present ? SESSION_HINT_VALUE : '', {
+    path: '/',
+    maxAge: present ? SESSION_HINT_MAX_AGE_SECONDS : 0,
+    sameSite: 'lax',
+    secure: getRequestURL(event).protocol === 'https:',
+  })
+}
+
+/**
+ * Auth.js applies its cookies to the event before we see the result, so whether a session
+ * token was just issued or cleared is readable from the outgoing `Set-Cookie` headers. The hint
+ * cookie follows it either way; nothing else about the response changes.
+ */
+function syncSessionHintCookie(event: H3Event) {
+  const header = getResponseHeader(event, 'set-cookie')
+  const setCookies = Array.isArray(header) ? header.map(String) : header ? [String(header)] : []
+  const change = resolveSessionHintChange(setCookies)
+  if (change === 'set')
+    setSessionHintCookie(event, true)
+  else if (change === 'clear')
+    setSessionHintCookie(event, false)
+}
+
 let cachedAuthHandler: ReturnType<typeof NuxtAuthHandler> | null = null
 
 function getCachedAuthHandler(event: H3Event) {
@@ -768,10 +798,12 @@ export default defineEventHandler(async event => {
   const authHandler = getCachedAuthHandler(event)
   try {
     const result = await authHandler(event)
+    syncSessionHintCookie(event)
     return await normalizeAuthResponseResult(result, event, baseUrl)
   } catch (error) {
     if (isJwtSessionError(error) && isSessionRequest(event)) {
       clearAuthCookies(event)
+      setSessionHintCookie(event, false)
       markSessionError(event)
       setResponseStatus(event, 401)
       return { error: SESSION_ERROR_VALUE }

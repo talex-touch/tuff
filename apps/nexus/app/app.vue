@@ -25,7 +25,7 @@ const isAuthShellRoute = computed(() => {
 })
 const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearchState()
 const { initLocale, reconcileClientLocale, setLocaleSerial, syncFromProfileOnAuth } = useLocaleOrchestrator()
-const { status, getSession } = useNexusAuth()
+const { status, getSession, settleAnonymousSession } = useNexusAuth()
 
 useHead(() => {
   if (!isProtectedRoute.value)
@@ -188,8 +188,15 @@ function mountToastHost() {
 
 onMounted(() => {
   mounted.value = true
-  if (status.value === 'loading')
-    void getSession()
+  if (status.value === 'loading') {
+    // A public page for a reader with no session-hint cookie is the common case, and the
+    // request it used to make here only ever came back empty. Protected routes and the auth
+    // shell still verify with the server; everything else settles as signed-out for free.
+    if (!isProtectedRoute.value && !isAuthShellRoute.value && !hasSessionHint())
+      settleAnonymousSession()
+    else
+      void getSession()
+  }
   closeSearch()
   window.addEventListener('keydown', handleGlobalSearchShortcut)
   window.addEventListener(toastHostRequestedEvent, mountToastHost)
