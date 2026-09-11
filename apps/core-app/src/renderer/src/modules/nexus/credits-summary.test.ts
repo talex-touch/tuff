@@ -196,6 +196,29 @@ describe('useCreditsSummary pricing', () => {
     })
   })
 
+  it('clears a stale price list when a later pricing request cannot be served', async () => {
+    serve({
+      '/api/credits/summary': () => nexusResponse(200, SUMMARY),
+      '/api/credits/pricing': () => nexusResponse(200, { rules: PRICE_LIST })
+    })
+
+    const credits = useCreditsSummary()
+    authState.isLoggedIn.value = true
+    await vi.waitFor(() => expect(credits.pricing.value).toHaveLength(2))
+
+    // The next refresh reads a fresh balance but cannot read the price list any more. Leaving the
+    // obsolete list in place would quote a price beside a balance it no longer belongs to.
+    serve({
+      '/api/credits/summary': () => nexusResponse(200, SUMMARY),
+      '/api/credits/pricing': () => nexusResponse(502, { message: 'bad gateway' }, 'Bad Gateway')
+    })
+
+    await credits.refresh()
+
+    await vi.waitFor(() => expect(credits.pricing.value).toEqual([]))
+    expect(credits.summary.value?.user.remaining).toBe(750)
+  })
+
   it('clears the price list when the account signs out', async () => {
     serve({
       '/api/credits/summary': () => nexusResponse(200, SUMMARY),

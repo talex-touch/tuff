@@ -28,26 +28,25 @@ const notice = computed(() =>
     'Nexus 官方能力按能力自身的计价单位扣费：文本按 1K tokens、图片按张、语音转写按音频秒（长静音与密集语音取较高者）。调用前会先占用一笔预留额度，结算后自动退回多占部分。'
   )
 )
-const PRICED_UNIT_LABELS: Record<string, string> = {
-  '1k_tokens': 'credits / 1K tokens',
-  audio_second: 'credits / 音频秒',
-  transcript_unit: 'credits / 转写单位',
-  image: 'credits / 张'
-}
-const PRICED_CAPABILITY_LABELS: Record<string, string> = {
-  'text.chat': '文本对话',
-  'vision.ocr': '图片文字识别',
-  'image.translate.e2e': '图片翻译',
-  'audio.transcribe': '语音转写',
-  'audio.stt': '语音转写'
-}
+/**
+ * Capabilities the panel quotes a price for. The labels come from the message catalog, so an
+ * English UI does not show Chinese capability names next to English units.
+ */
+const PRICED_CAPABILITY_KEYS: readonly string[] = [
+  'text.chat',
+  'vision.ocr',
+  'image.translate.e2e',
+  'audio.transcribe',
+  'audio.stt'
+]
 const pricedCapabilities = computed(() =>
   credits.pricing.value
-    .filter((rule) => PRICED_CAPABILITY_LABELS[rule.capability])
+    .filter((rule) => PRICED_CAPABILITY_KEYS.includes(rule.capability))
     .map((rule) => ({
       key: rule.capability,
-      label: PRICED_CAPABILITY_LABELS[rule.capability],
-      price: `${formatCredits(rule.creditsPerUnit)} ${PRICED_UNIT_LABELS[rule.unit] ?? rule.unit}`
+      label: t(`creditsSummary.capabilities.${rule.capability}`),
+      // A unit the catalog does not name is shown as the raw unit rather than dropped.
+      price: `${formatCredits(rule.creditsPerUnit)} ${t(`creditsSummary.units.${rule.unit}`, rule.unit)}`
     }))
 )
 const statusDescription = computed(() => {
