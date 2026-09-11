@@ -516,6 +516,15 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
   line-height: 1.5;
 }
 
+// The shell rounds its corners and clips, so a separator on the final row runs
+// straight into the curve and reads as a stray line under the table. `> :last-child`
+// is whichever section actually ends the table, so a summary `tfoot` keeps the
+// separator that divides it from the body.
+.tx-data-table__table > :last-child > tr:last-child > td,
+.tx-data-table__table > :last-child > tr:last-child > th {
+  border-bottom: 0;
+}
+
 .tx-data-table__th.is-nowrap,
 .tx-data-table__cell.is-nowrap,
 .tx-data-table.is-nowrap .tx-data-table__th,

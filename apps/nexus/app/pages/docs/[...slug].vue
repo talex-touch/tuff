@@ -2602,7 +2602,7 @@ a.docs-hero-crumb:hover {
   color: var(--docs-ink);
 }
 
-:deep(.docs-prose h1) {
+:deep(.docs-prose h1:not(:where(.not-prose, .not-prose *))) {
   font-size: 2.5rem;
   font-weight: 600;
   margin-bottom: 1.5rem;
@@ -2612,7 +2612,7 @@ a.docs-hero-crumb:hover {
 }
 
 /* Sections breathe: a wide gap above each h2 is what creates the reading rhythm. */
-:deep(.docs-prose h2) {
+:deep(.docs-prose h2:not(:where(.not-prose, .not-prose *))) {
   font-size: 1.875rem;
   font-weight: 600;
   margin-top: 3.75rem;
@@ -2623,7 +2623,7 @@ a.docs-hero-crumb:hover {
 }
 
 /* Whitespace separates sections here, so drop the github-markdown heading rules. */
-:deep(.docs-prose :is(h1, h2)) {
+:deep(.docs-prose :is(h1, h2):not(:where(.not-prose, .not-prose *))) {
   border-bottom: 0;
 }
 
@@ -2631,7 +2631,7 @@ a.docs-hero-crumb:hover {
   margin-top: 0;
 }
 
-:deep(.docs-prose h3) {
+:deep(.docs-prose h3:not(:where(.not-prose, .not-prose *))) {
   font-size: 1.3125rem;
   font-weight: 600;
   margin-top: 2.25rem;
@@ -2644,7 +2644,7 @@ a.docs-hero-crumb:hover {
  * Headings wrap their text in an anchor for deep links. That anchor is a handle,
  * not a link to read — it must not inherit the accent-coloured link treatment.
  */
-:deep(.docs-prose :is(h1, h2, h3, h4, h5, h6) a) {
+:deep(.docs-prose :is(h1, h2, h3, h4, h5, h6) a:not(:where(.not-prose, .not-prose *))) {
   color: inherit;
   font: inherit;
   letter-spacing: 0;
@@ -2653,30 +2653,30 @@ a.docs-hero-crumb:hover {
   transition: color 0.16s ease;
 }
 
-:deep(.docs-prose :is(h1, h2, h3, h4, h5, h6) a:hover) {
+:deep(.docs-prose :is(h1, h2, h3, h4, h5, h6) a:hover:not(:where(.not-prose, .not-prose *))) {
   color: var(--docs-accent);
 }
 
-:deep(.docs-prose p),
-:deep(.docs-prose ul),
-:deep(.docs-prose ol),
-:deep(.docs-prose li) {
+:deep(.docs-prose p:not(:where(.not-prose, .not-prose *))),
+:deep(.docs-prose ul:not(:where(.not-prose, .not-prose *))),
+:deep(.docs-prose ol:not(:where(.not-prose, .not-prose *))),
+:deep(.docs-prose li:not(:where(.not-prose, .not-prose *))) {
   font-size: 1.0625rem;
   line-height: 1.7;
   margin-bottom: 0.9rem;
   color: var(--docs-ink);
 }
 
-:deep(.docs-prose strong) {
+:deep(.docs-prose strong:not(:where(.not-prose, .not-prose *))) {
   color: var(--docs-ink);
 }
 
-:deep(.docs-prose del) {
+:deep(.docs-prose del:not(:where(.not-prose, .not-prose *))) {
   color: var(--docs-muted);
   text-decoration-color: currentColor;
 }
 
-:deep(.docs-prose code) {
+:deep(.docs-prose code:not(:where(.not-prose, .not-prose *))) {
   font-family: var(--tx-font-family-mono, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
   font-size: 0.875em;
   border-radius: 4px;
@@ -2686,8 +2686,8 @@ a.docs-hero-crumb:hover {
   color: var(--docs-ink);
 }
 
-:deep(.docs-prose code::before),
-:deep(.docs-prose code::after) {
+:deep(.docs-prose code:not(:where(.not-prose, .not-prose *))::before),
+:deep(.docs-prose code:not(:where(.not-prose, .not-prose *))::after) {
   content: none !important;
 }
 
@@ -2712,7 +2712,7 @@ a.docs-hero-crumb:hover {
   color: var(--docs-ink);
 }
 
-:deep(.docs-prose pre:not(.tuff-code-block__pre)) {
+:deep(.docs-prose pre:not(.tuff-code-block__pre):not(:where(.not-prose, .not-prose *))) {
   position: relative;
   margin: 1.2rem 0;
   padding: 2.2rem 1rem 1rem;
@@ -2722,7 +2722,7 @@ a.docs-hero-crumb:hover {
   overflow-x: auto;
 }
 
-:deep(.docs-prose pre:not(.tuff-code-block__pre) code) {
+:deep(.docs-prose pre:not(.tuff-code-block__pre) code:not(:where(.not-prose, .not-prose *))) {
   background-color: transparent !important;
   padding: 0;
   border-radius: 0;
@@ -2801,7 +2801,7 @@ a.docs-hero-crumb:hover {
 }
 
 /* Callout: a filled note block rather than a quote bar. */
-:deep(.docs-prose blockquote) {
+:deep(.docs-prose blockquote:not(:where(.not-prose, .not-prose *))) {
   border: 0;
   border-radius: 12px;
   background: var(--docs-code-bg);
@@ -2813,32 +2813,32 @@ a.docs-hero-crumb:hover {
   color: var(--docs-muted);
 }
 
-:deep(.docs-prose blockquote > :last-child) {
+:deep(.docs-prose blockquote > :last-child:not(:where(.not-prose, .not-prose *))) {
   margin-bottom: 0;
 }
 
-:deep(.docs-prose blockquote p) {
+:deep(.docs-prose blockquote p:not(:where(.not-prose, .not-prose *))) {
   font-size: inherit;
   line-height: inherit;
 }
 
-:deep(.docs-prose ul),
-:deep(.docs-prose ol) {
+:deep(.docs-prose ul:not(:where(.not-prose, .not-prose *))),
+:deep(.docs-prose ol:not(:where(.not-prose, .not-prose *))) {
   padding-left: 1.6rem;
 }
 
-:deep(.docs-prose ul li::marker),
-:deep(.docs-prose ol li::marker) {
+:deep(.docs-prose ul li:not(:where(.not-prose, .not-prose *))::marker),
+:deep(.docs-prose ol li:not(:where(.not-prose, .not-prose *))::marker) {
   color: var(--docs-accent);
 }
 
-:deep(.docs-prose a) {
+:deep(.docs-prose a:not(:where(.not-prose, .not-prose *))) {
   color: var(--docs-accent);
   text-decoration: none;
   border-bottom: 1px solid color-mix(in srgb, var(--docs-accent) 40%, transparent);
 }
 
-:deep(.docs-prose hr) {
+:deep(.docs-prose hr:not(:where(.not-prose, .not-prose *))) {
   border: 0;
   height: 1px;
   margin: 2rem 0;
@@ -2848,7 +2848,7 @@ a.docs-hero-crumb:hover {
   opacity: 0.6;
 }
 
-:deep(.docs-prose table) {
+:deep(.docs-prose table:not(:where(.not-prose, .not-prose *))) {
   width: 100%;
   border-collapse: collapse;
   border: none;
@@ -2856,29 +2856,29 @@ a.docs-hero-crumb:hover {
   overflow: hidden;
 }
 
-:deep(.docs-prose table th),
-:deep(.docs-prose table td) {
+:deep(.docs-prose table th:not(:where(.not-prose, .not-prose *))),
+:deep(.docs-prose table td:not(:where(.not-prose, .not-prose *))) {
   padding: 0.5rem 0.8rem;
   border: none;
   text-align: left;
   color: var(--docs-ink);
 }
 
-:deep(.docs-prose table tr) {
+:deep(.docs-prose table tr:not(:where(.not-prose, .not-prose *))) {
   border-top: none;
 }
 
-:deep(.docs-prose table tr:last-child td) {
+:deep(.docs-prose table tr:last-child td:not(:where(.not-prose, .not-prose *))) {
   border-bottom: 0;
 }
 
-:deep(.docs-prose table th) {
+:deep(.docs-prose table th:not(:where(.not-prose, .not-prose *))) {
   background: color-mix(in srgb, var(--tx-fill-color) 70%, transparent);
   color: var(--docs-ink);
   font-weight: 600;
 }
 
-:deep(.docs-prose table tbody tr:nth-child(2n)) {
+:deep(.docs-prose table tbody tr:nth-child(2n):not(:where(.not-prose, .not-prose *))) {
   background: color-mix(in srgb, var(--tx-fill-color) 45%, transparent);
 }
 
@@ -2895,7 +2895,7 @@ a.docs-hero-crumb:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :deep(.docs-prose hr) {
+  :deep(.docs-prose hr:not(:where(.not-prose, .not-prose *))) {
     animation: none;
   }
 }
