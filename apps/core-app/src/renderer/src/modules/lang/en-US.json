@@ -566,17 +566,15 @@
     },
     "unavailable": {
       "title": "Recognition status could not be read",
-      "description": "Readiness could not be loaded. Try again."
+      "description": ""
     },
     "reasons": {
-      "credentialMissing": "The selected AI channel has no credential.",
-      "unavailable": "Recognition is unavailable right now."
+      "credentialMissing": "The selected channel has no credential",
+      "unavailable": "Recognition is unavailable right now"
     },
     "asr": {
-      "ready": "Speech recognition is ready",
-      "readyHint": "Hold ⌘ and speak; the text lands in the app you are in.",
       "notReady": "Speech recognition is not set up",
-      "notConfigured": "No channel is bound to audio.asr, so holding ⌘ and speaking does nothing."
+      "notConfigured": "No channel is bound to audio.asr"
     }
   },
   "settingLocalAiCli": {
@@ -1075,30 +1073,30 @@
     }
   },
   "voiceInsights": {
-    "headline": "Faster said than typed",
-    "sectionTitle": "Insights",
     "loading": "Loading voice insights...",
     "actions": {
       "refresh": "Refresh",
       "share": "Share",
-      "clear": "Clear insights",
+      "clear": "Clear records",
       "retry": "Retry",
       "showReport": "View report",
       "hideReport": "Hide report",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "records": "Records",
+      "more": "More",
+      "settings": "Settings"
     },
     "boundary": {
-      "notStarted": "Statistics begin with your first successful, non-empty voice capture.",
-      "since": "Recorded locally since {date}."
+      "notStarted": "not counting yet",
+      "since": "since {date}"
     },
     "metrics": {
       "label": "Voice usage metrics",
-      "characters": "Dictated characters",
-      "saved": "Estimated time saved",
-      "rate": "Average dictation rate",
-      "duration": "Total dictation time",
-      "savedBasis": "Estimated against a {count} characters/minute typing baseline; not measured typing.",
-      "savedEquivalent": "{count} characters you did not type"
+      "characters": "Characters said",
+      "saved": "Roughly saved",
+      "rate": "How fast you talk",
+      "duration": "Time spent talking",
+      "savedBasis": "Estimated against {count} characters a minute of typing — not measured"
     },
     "units": {
       "characters": "characters",
@@ -1111,16 +1109,11 @@
       "hoursMinutes": "{hours} hr {minutes} min"
     },
     "streak": {
-      "title": "Activity — last 365 local days",
-      "windowNote": "Active-day and longest-streak values are limited to this rolling window.",
-      "label": "Voice activity streaks within the last 365 local days",
-      "activeDays": "Active days",
-      "current": "Current streak",
-      "longest": "Longest streak"
+      "summary": "{current} days running · longest {longest} · {active} days with anything said"
     },
     "heatmap": {
-      "title": "Last 365 local days",
-      "description": "Color reflects dictated character volume. Hatched days predate recording.",
+      "title": "The past year",
+      "description": "Darker means more said that day. Pale outlines are days before counting started — not silence, just no record.",
       "legend": "Activity volume legend",
       "less": "Less",
       "more": "More",
@@ -1182,7 +1175,7 @@
     },
     "records": {
       "title": "Recognition records",
-      "description": "Inspect source audio, raw transcript, final text, duration, channel, and usage for each recognition.",
+      "description": "What you said, what it heard, and what it finally wrote — each one kept here.",
       "empty": "No recognition records yet.",
       "emptyText": "No text generated",
       "clear": "Clear records",
@@ -1209,12 +1202,9 @@
       }
     },
     "weeks": {
-      "title": "Last 12 weeks",
-      "note": "Bar height is that week’s dictated characters against the busiest week.",
+      "title": "The last 12 weeks",
+      "note": "Taller means more said that week, against your busiest one.",
       "streak": "{current}-day streak · longest {longest} · {active} active days"
-    },
-    "tiers": {
-      "weeksPending": "After a week of records, the 12-week comparison appears here."
     }
   },
   "home": {
