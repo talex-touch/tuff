@@ -379,9 +379,9 @@ const activeDescendantId = computed(() =>
   height: calc(100% - var(--tx-flat-radio-padding, 3px) * 2);
   border-radius: var(--tx-flat-radio-item-radius, 6px);
   background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 10%, var(--tx-bg-color-overlay, #fff));
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.16),
-    0 1px 2px rgba(0, 0, 0, 0.08);
+  // Was two stacked straight-down layers totalling ~0.24 alpha, which read as
+  // heavy once the xl tier made the thumb large. One directional layer instead.
+  box-shadow: var(--tx-elevation-2, 1px 2px 4px rgba(0, 0, 0, 0.06));
   pointer-events: none;
   z-index: 0;
   will-change: transform, width;

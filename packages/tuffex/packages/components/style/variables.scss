@@ -213,12 +213,29 @@
   --tx-surface-refraction-mask-blend-mode: screen;
 
   // Box Shadow
-  --tx-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.04),
-    0px 8px 20px rgba(0, 0, 0, 0.08);
-  --tx-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.12);
-  --tx-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.12);
-  --tx-box-shadow-dark: 0px 16px 48px 16px rgba(0, 0, 0, 0.08),
-    0px 12px 32px rgba(0, 0, 0, 0.12), 0px 8px 16px -8px rgba(0, 0, 0, 0.16);
+  //
+  // One light source for the whole system: high and to the left of the screen,
+  // casting down and to the right. Every drop layer keeps x:y at 1:2, so a
+  // shadow's direction never depends on which component drew it. Blur and
+  // density grow with the step; the geometry does not change.
+  //
+  // --tx-elevation-* is the canonical scale for new code. The four
+  // --tx-box-shadow* names below stay as the compatibility aliases the
+  // elevation() mixin and existing components already read.
+  --tx-elevation-1: 1px 2px 2px rgba(0, 0, 0, 0.05);
+  --tx-elevation-2: 1px 2px 4px rgba(0, 0, 0, 0.06);
+  --tx-elevation-3: 2px 4px 10px rgba(0, 0, 0, 0.07);
+  --tx-elevation-4: 4px 8px 20px rgba(0, 0, 0, 0.09);
+  --tx-elevation-5: 6px 14px 36px rgba(0, 0, 0, 0.12);
+
+  --tx-box-shadow: 6px 12px 32px 4px rgba(0, 0, 0, 0.04),
+    4px 8px 20px rgba(0, 0, 0, 0.08);
+  // -light and -lighter used to be 0 0 — omnidirectional glows, which is the
+  // absence of a light source rather than a soft one. They cast like the rest now.
+  --tx-box-shadow-light: 2px 4px 12px rgba(0, 0, 0, 0.12);
+  --tx-box-shadow-lighter: 1px 2px 6px rgba(0, 0, 0, 0.12);
+  --tx-box-shadow-dark: 8px 16px 48px 16px rgba(0, 0, 0, 0.08),
+    6px 12px 32px rgba(0, 0, 0, 0.12), 4px 8px 16px -8px rgba(0, 0, 0, 0.16);
 
   // Transition
   --tx-transition-duration: 0.3s;
@@ -378,12 +395,20 @@
   --tx-surface-refraction-mask-rgb: 0 0 0;
   --tx-surface-refraction-mask-blend-mode: multiply;
 
-  --tx-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.36),
-    0px 8px 20px rgba(0, 0, 0, 0.72);
-  --tx-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.72);
-  --tx-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.72);
-  --tx-box-shadow-dark: 0px 16px 48px 16px rgba(0, 0, 0, 0.72),
-    0px 12px 32px rgba(0, 0, 0, 0.72), 0px 8px 16px -8px rgba(0, 0, 0, 0.72);
+  // Same geometry as light, denser: a shadow on a dark ground needs more alpha
+  // to read at all. Only the density differs — never the direction.
+  --tx-elevation-1: 1px 2px 2px rgba(0, 0, 0, 0.28);
+  --tx-elevation-2: 1px 2px 4px rgba(0, 0, 0, 0.34);
+  --tx-elevation-3: 2px 4px 10px rgba(0, 0, 0, 0.4);
+  --tx-elevation-4: 4px 8px 20px rgba(0, 0, 0, 0.48);
+  --tx-elevation-5: 6px 14px 36px rgba(0, 0, 0, 0.58);
+
+  --tx-box-shadow: 6px 12px 32px 4px rgba(0, 0, 0, 0.36),
+    4px 8px 20px rgba(0, 0, 0, 0.72);
+  --tx-box-shadow-light: 2px 4px 12px rgba(0, 0, 0, 0.72);
+  --tx-box-shadow-lighter: 1px 2px 6px rgba(0, 0, 0, 0.72);
+  --tx-box-shadow-dark: 8px 16px 48px 16px rgba(0, 0, 0, 0.72),
+    6px 12px 32px rgba(0, 0, 0, 0.72), 4px 8px 16px -8px rgba(0, 0, 0, 0.72);
 
   --tx-color-white: #ffffff;
   --tx-color-primary-rgb: 64 158 255;

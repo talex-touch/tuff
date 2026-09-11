@@ -121,10 +121,23 @@ function handleInput(val: string | number) {
 
 <style lang="scss">
 .tx-block-input {
+  /* TxBlockSlot pins every control slot at flex-shrink: 0 so fixed-size
+     controls (a switch, a chevron) never squash. A text field is the one
+     control that should give way instead of eating its own row, so the rule is
+     lifted here and nowhere else. */
+  .tx-block-slot__slot {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
   .tx-block-input__input {
     width: 180px;
     min-width: 120px;
-    flex-shrink: 0;
+    /* flex-shrink was 0, which made the min-width below it unreachable: the
+       field held 180px in any container and the title was squeezed to whatever
+       was left — 10px in a 238px row. Shrinking down to min-width is the whole
+       point of having one. */
+    flex-shrink: 1;
   }
 }
 </style>

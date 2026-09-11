@@ -186,8 +186,44 @@
   border: 1px solid var(--docs-gallery-line);
 }
 
+/* A bar sitting flush against the frame had its own full-bleed divider clipped
+   by the 12px rounded corners, so the line stopped ~12px short at both ends and
+   read as a rendering fault. The body strip moves that divider into the middle
+   of the frame where nothing clips it, and shows the bar as what it is: chrome
+   over content. --bottom is for TabBar, which belongs at the foot of a screen. */
+.docs-gallery__chrome {
+  display: flex;
+  flex-direction: column;
+  background: var(--docs-gallery-bg, var(--tx-bg-color, #fff));
+}
+
+.docs-gallery__chrome--bottom {
+  flex-direction: column-reverse;
+}
+
+.docs-gallery__chrome-body {
+  flex: 1;
+  min-height: 58px;
+  background: var(--docs-inline-code-bg);
+}
+
+/* TxTabs defaults to placement="left" with navMinWidth 220. In the old 240px
+   block that left the panel 20px, which is the "proportions are wrong" the
+   cell showed. The gallery drives it from the top instead. */
 .docs-gallery__tabs {
-  height: 132px;
+  height: 150px;
+}
+
+/* Transfer is two full panels; left to itself it ran 240px tall and stretched
+   its cell past every neighbour. */
+.docs-gallery__transfer {
+  height: 190px;
+}
+
+.docs-gallery__sidebar {
+  width: min(320px, 100%);
+  max-height: 150px;
+  overflow: hidden;
 }
 
 .docs-gallery__context-target {
@@ -269,12 +305,16 @@
   box-shadow: 0 0 0 2px var(--docs-gallery-bg, var(--tx-bg-color, #fff));
 }
 
+/* 240px was phone-narrow inside a 363px stage: every one of the ~60 cells that
+   uses this class filled exactly 0.66 of the room it had, and the components
+   that refuse to shrink (Transfer's two panels, BlockInput's 180px field)
+   collapsed their own labels rather than the stage giving them width. */
 .docs-gallery__block {
-  width: min(240px, 100%);
+  width: min(320px, 100%);
 }
 
 .docs-gallery__block--wide {
-  width: min(300px, 100%);
+  width: min(360px, 100%);
 }
 
 .docs-gallery__spark {

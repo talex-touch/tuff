@@ -127,9 +127,9 @@ onBeforeUnmount(() => {
 
   &.is-multiple-selected {
     background: var(--tx-bg-color-overlay, #fff);
-    box-shadow:
-      0 1px 3px rgba(0, 0, 0, 0.08),
-      0 1px 2px rgba(0, 0, 0, 0.04);
+    // Same light as the single-select thumb: a multi-select chip is the same
+    // raised surface, so it cannot cast in a different direction.
+    box-shadow: var(--tx-elevation-1, 1px 2px 2px rgba(0, 0, 0, 0.05));
   }
 
   &.is-focused {
