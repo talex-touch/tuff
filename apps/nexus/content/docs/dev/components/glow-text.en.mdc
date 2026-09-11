@@ -154,6 +154,7 @@ code: |
 - `mode="adaptive"` blends with `screen` (`plus-lighter` where supported), which is lighten-only. On a light surface a light `color` therefore changes nothing at all — the component renders, animates, and stays invisible, with no error to go on. Adaptive is for dark cards, images and thumbnails; text on a light page wants `text-clip`, and a light card wants `blendMode="soft-light"` with a darker `color`.
 - `mode="text-clip"` reads the rendered slot text after mount and on text mutations; it is best for simple text nodes, not large nested interactive content.
 - The band travels at a constant speed and then waits off-stage: both sweeps are `linear` and finish their travel at 65% of the cycle, holding still for the rest. Easing the travel instead made the band decelerate just before it left and then restart instantly, which reads as a hesitation rather than a pass. `--tx-glow-ease` still overrides it.
+- `opacity` holds for the whole travel rather than fading in and out along it. Both endpoints already sit outside the root, which is `overflow: hidden`, so there is nothing to fade — the old mid-travel fade dissolved the band while it was still over the element and it never appeared to leave. Opacity only hides the layer during the off-stage hold.
 - Reduced-motion users get a static highlight because the component disables sweep animation under `prefers-reduced-motion: reduce`.
 
 ## Best Practices
