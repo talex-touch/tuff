@@ -327,6 +327,24 @@
    collapsed their own labels rather than the stage giving them width. */
 .docs-gallery__block {
   width: min(320px, 100%);
+  /* Places inline-level children — TxFlatSelect is a 120px inline-block — in
+     the middle instead of hard left. Children reset it below so no component
+     inherits centred prose. A flex column with align-items: center was tried
+     first and collapsed 19 of the 60 specimens, the chrome body strips to zero
+     among them: most of these fill the block by stretching, not by asking. */
+  text-align: center;
+}
+
+.docs-gallery__block > * {
+  text-align: initial;
+}
+
+/* TxSelect is a block box at a fixed 240px, so text-align cannot place it —
+   it needs auto margins. Named rather than applied to every child: on a flex
+   item an auto inline margin overrides cross-axis stretch, and a blanket rule
+   took NavBar's and TabBar's body strips to zero width. */
+.docs-gallery__block > .tuff-select {
+  margin-inline: auto;
 }
 
 .docs-gallery__block--wide {
