@@ -182,6 +182,8 @@ export type NexusBaseUrlValidationError =
   | 'empty'
   | 'invalid-url'
   | 'unsupported-protocol'
+  | 'embedded-credentials'
+  | 'unsupported-path'
   | 'insecure-transport'
 
 export type NexusBaseUrlValidation
@@ -192,9 +194,11 @@ export type NexusBaseUrlValidation
  * Validates a Nexus base URL a user typed into settings.
  *
  * Plain `http` is only accepted for loopback hosts: every Nexus request may carry the account
- * bearer token, so cleartext to a remote host would hand it to the network. The address is reduced
- * to scheme/host/port/path because a query or fragment suffix cannot be composed into request
- * paths; that normalized form is what callers persist and compare.
+ * bearer token, so cleartext to a remote host would hand it to the network. The address must be a
+ * bare origin — no path, query, fragment or embedded credentials — because the rest of the client
+ * composes request URLs from it with `new URL('/api/…', base)`, which discards any base path and
+ * would silently target a different deployment than the one that was configured. The normalized
+ * form is what callers persist and compare.
  */
 export function validateNexusBaseUrl(input: unknown): NexusBaseUrlValidation {
   const raw = typeof input === 'string' ? input.trim() : ''
@@ -213,6 +217,12 @@ export function validateNexusBaseUrl(input: unknown): NexusBaseUrlValidation {
     return { ok: false, error: 'unsupported-protocol' }
   }
 
+  if (parsed.username || parsed.password) {
+    // `https://user:secret@host` would be written to settings — and to the synced settings
+    // document — in cleartext, and this client authenticates with a bearer token instead.
+    return { ok: false, error: 'embedded-credentials' }
+  }
+
   const loopback =
     parsed.hostname === 'localhost'
     || parsed.hostname === '127.0.0.1'
@@ -226,21 +236,35 @@ export function validateNexusBaseUrl(input: unknown): NexusBaseUrlValidation {
     return { ok: false, error: 'invalid-url' }
   }
 
+  if (parsed.pathname.replace(/\/+$/, '')) {
+    // A path cannot be honoured: request paths are absolute (`/api/…`), so the base path would be
+    // dropped and the request would go to the origin root — a different deployment than the user
+    // configured, with no visible symptom until something 404s.
+    return { ok: false, error: 'unsupported-path' }
+  }
+
   return { ok: true, value: normalizeBaseUrl(parsed.toString()) }
 }
 
 /**
  * Resolves the base URL together with which input produced it.
  *
- * `TUFF_NEXUS_BASE_URL` stays unvalidated and first in line: it is the build/CI override that must
- * keep pointing a packaged app at an arbitrary host, including plain-http test servers.
+ * `TUFF_NEXUS_BASE_URL` is the build/CI override that lets a packaged app or the CLI point at an
+ * arbitrary host, including plain-http test servers, so it may name a host the settings page would
+ * never accept. It is not trusted blindly: it reaches the same request composition as a saved
+ * address, so it is held to the same transport rule — an `http://` override would attach the
+ * account token to a cleartext request. An override that does not validate is ignored rather than
+ * fatal, which keeps the app on an origin it can trust instead of failing to start.
  */
 export function resolveTuffNexusBaseUrlDetail(
   options: TuffNexusBaseUrlOptions = {}
 ): TuffNexusBaseUrlResolution {
   const explicit = readEnvValue(options.env, TUFF_NEXUS_BASE_URL_ENV)?.trim()
   if (explicit) {
-    return { baseUrl: normalizeBaseUrl(explicit), source: 'env' }
+    const validation = validateNexusBaseUrl(explicit)
+    if (validation.ok) {
+      return { baseUrl: validation.value, source: 'env' }
+    }
   }
 
   const custom = options.customBaseUrl
