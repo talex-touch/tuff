@@ -240,6 +240,7 @@ code: |
 - `padding` presets map to 12 / 16 / 24 px and numeric padding is clamped at zero.
 - `margin="auto"` centers the container; string or numeric margins are applied horizontally as `0 <value>`.
 - `TxRow` computes one gutter per active breakpoint and exposes it as `--tx-row-gutter`; columns split that gutter into left/right padding.
+- The row cancels that padding at both outer edges with negative margins, and its width is `calc(100% + var(--tx-row-gutter))` to pay for them. A plain `100%` resolves against the containing block's *content* width, so the negative margins shifted the row left without widening it and it finished a full gutter short on the right — inside a padded `TxContainer` that showed up as 16px of inset on the left against 24px on the right at an 8px gutter.
 - `TxCol` clamps `span` and `offset` to the 0–24 grid, falling back to `span` when a breakpoint-specific prop is not provided.
 ## Responsive Breakpoints
 

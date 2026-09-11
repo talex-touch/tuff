@@ -117,7 +117,14 @@ const cls = computed(() => {
 <style scoped lang="scss">
 .tx-row {
   display: flex;
-  width: 100%;
+  // `100%` resolves against the containing block's *content* width, so the two
+  // negative margins below shifted the row left without widening it: the row
+  // ended a full gutter short on the right, and every grid inside a padded
+  // container came out asymmetric — 16px in on the left, 24px on the right at
+  // an 8px gutter. Adding the gutter back is what makes the compensation
+  // symmetric, and unlike `width: auto` it holds whether the row is a block or
+  // a flex item.
+  width: calc(100% + var(--tx-row-gutter, 0px));
   min-width: 0;
   margin-left: calc(var(--tx-row-gutter, 0px) / -2);
   margin-right: calc(var(--tx-row-gutter, 0px) / -2);
