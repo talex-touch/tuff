@@ -578,6 +578,7 @@ None. Use props, `update:expanded`, `toggle`, and the row-specific events instea
 - Set `collapsible=false` for always-visible status or form sections to avoid implying hidden state.
 - Use `TxBlockLine` for read-only values and lightweight navigation links, `TxBlockSlot` for custom controls, `TxBlockInput` / `TxBlockSelect` for standard form rows, and `TxBlockSwitch` for booleans or guidance rows.
 - Keep row labels short; move long explanations to the description line or a nearby help pattern instead of adding nested layouts inside rows.
+- Rows inside a group are flattened by the group, not by themselves: `TxGroupBlock` resets each row's `--fake-radius` and margin so only the group card is rounded. A row keeps its own 12px radius when used standalone, so do not copy a group's flat look by hard-coding `border-radius: 0` on the row.
 
 ## Review Notes
 
@@ -586,6 +587,7 @@ None. Use props, `update:expanded`, `toggle`, and the row-specific events instea
 - `TxBlockSwitch` loading mode blocks mutation, while guidance mode emits only `click` and should be documented as navigation, not a boolean toggle.
 - **Busy-state ownership:** the loading visual belongs to the inner `TuffSwitch` (`is-loading` + `aria-busy`); `TxBlockSwitch` only owns the row shimmer and the un-dimming. Changing the switch's loading treatment means updating both components' docs.
 - Collapsed demos intentionally use `:default-expand="false"`; current source watches `collapsed` only before storage or user interaction changes the group state.
+- **Flattening selector:** the reset that squares off rows is a plain descendant selector. `TxGroupBlock`'s `<style>` is *unscoped*, where `:deep()` is passed through untransformed and the browser discards the rule — a package-wide test now fails on `:deep()` in any unscoped block.
 - **Verified coverage:** persisted expansion, static-group behavior, semantic link rows, disabled slot-click blocking, guidance mode, loading-state value-change guards, and that a loading row carries `is-loading` / `aria-busy` on the switch itself with no second spinner.
 
 ## Source
