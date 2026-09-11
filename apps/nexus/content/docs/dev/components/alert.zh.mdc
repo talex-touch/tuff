@@ -78,7 +78,11 @@ code: |
 - 只有存在 `title` 或 `title` 插槽时才渲染标题行。
 - 默认插槽会替换 `.tx-alert__message` 内的 `message`。
 - `closable=true` 会渲染关闭按钮，添加 `tx-alert--closable`，并预留右侧 padding。
-- 点击关闭按钮会发出 `close`；组件不会自动隐藏自己。
+- 点击关闭按钮会发出 `close`**并且**隐藏自身，离场动画因此才有可播放的对象。宿主仍可继续用 `v-if` 驱动，但不再是必须的。
+- 根节点是 `<Transition name="tx-alert" appear>`：挂载时以 0.26s 淡入并轻微上移，离场为 0.16s。透传属性仍然落在 `.tx-alert` 上，渲染出的根元素也仍是该 div。
+- 实例上暴露 `open()` 与 `close()`，可以把已关闭的警示恢复回来——文档组件库页面的重置按钮就是用 `open()` 实现的。
+- 只动画 opacity 与 transform。根节点是 `display: flex`，高度塌缩会在动画途中接管布局、把图标/正文/关闭按钮重新堆叠。若需要收拢留下的空位，请把一组警示包进 `<TransitionGroup>`。
+- 在 `prefers-reduced-motion: reduce` 下改为 0.01s 纯淡入淡出，不做位移。
 - 关闭按钮只有图标文本，并使用 `aria-label="Close"`。
 
 ## API
@@ -118,7 +122,7 @@ code: |
 ## 审阅说明
 
 - 已核对 `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`、`types.ts` 与 `alert.test.ts`。
-- **实测覆盖:** `alert.test.ts` 覆盖语义 alert role、type class、标题/消息渲染、图标可见性、标题/默认插槽、关闭按钮隐藏与 `close` 事件行为。
+- **实测覆盖:** `alert.test.ts` 覆盖语义 alert role、type class、标题/消息渲染、图标可见性、标题/默认插槽、关闭按钮隐藏、`close` 事件行为，以及每种 `type` 都能解析到真实的 `builtin` 图标、关闭后隐藏且 `open()` 可恢复、透传属性落在 `.tx-alert` 而非 transition 上。
 - 可访问性说明：`role="alert"` 会强提示读屏器。文案应短、可执行，并避免一次性挂载多个新 alert。
 
 ## Source

@@ -75,6 +75,27 @@ const builtinIcons = {
     viewBox: '0 0 24 24',
     path: 'M12 2v15.77L6.08 21l1.82-7.03L2 9.24l7.19-.62L12 2z',
   },
+  // Status glyphs for TxAlert and anything else reporting an outcome. Drawn as
+  // rings rather than solid discs so they sit at the same visual weight as the
+  // 500-weight title beside them instead of becoming the loudest thing in the
+  // row. The hole is the two-subpath trick already used by 'search': the inner
+  // arc runs the opposite sweep, so the nonzero fill rule punches it out.
+  'info': {
+    viewBox: '0 0 24 24',
+    path: 'M12 2a10 10 0 100 20 10 10 0 000-20zm0 2a8 8 0 110 16 8 8 0 010-16zm-1 3h2v2h-2V7zm0 4h2v6h-2v-6z',
+  },
+  'check-circle': {
+    viewBox: '0 0 24 24',
+    path: 'M12 2a10 10 0 100 20 10 10 0 000-20zm0 2a8 8 0 110 16 8 8 0 010-16zm-1.3 12.3L6.4 12l1.4-1.4 2.9 2.9 5.6-5.6 1.4 1.4z',
+  },
+  'x-circle': {
+    viewBox: '0 0 24 24',
+    path: 'M12 2a10 10 0 100 20 10 10 0 000-20zm0 2a8 8 0 110 16 8 8 0 010-16zm3.5 4.1L12 11.6 8.5 8.1 7.1 9.5l3.5 3.5-3.5 3.5 1.4 1.4 3.5-3.5 3.5 3.5 1.4-1.4-3.5-3.5 3.5-3.5z',
+  },
+  'alert-triangle': {
+    viewBox: '0 0 24 24',
+    path: 'M12 2 1.5 20.5h21zm0 4.2L19 18.5H5zm-1 3.8h2v4.5h-2zm0 5.8h2v2h-2z',
+  },
 } as const
 
 const safeIcon = computed<TxIconSource>(() => {
