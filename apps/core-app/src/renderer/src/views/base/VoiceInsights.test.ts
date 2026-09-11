@@ -59,9 +59,44 @@ function summary(recordedFor = 90): unknown {
   }
 }
 
-async function mountPage() {
+async function mountPage(props: Record<string, unknown> = {}) {
   const wrapper = mount(VoiceInsights, {
-    global: { stubs: { TxButton: true, TxBottomDialog: true, TxSkeleton: true } }
+    props,
+    global: {
+      stubs: {
+        TxButton: true,
+        TxBottomDialog: true,
+        TxSkeleton: true,
+        // Not stubbed away: the cards' classes and data attributes fall through to its root, and
+        // half these assertions find elements by them. `shadow` is echoed because its effect is
+        // pure CSS — jsdom would let a shadow creep back with every test still green.
+        TxCard: {
+          props: ['shadow'],
+          inheritAttrs: true,
+          template: '<div :data-shadow="shadow"><slot /></div>'
+        },
+        // Both slots rendered inline so the menu's contents are inspectable without driving a
+        // real popover open; what is being checked is which items exist, not how they appear.
+        TxPopover: {
+          template: '<div><slot name="reference" /><div class="stub-menu"><slot /></div></div>'
+        },
+        // Contents rendered inline and `visible` echoed: what matters is which section is in
+        // which drawer and whether it is open, not the panel's own animation.
+        TxDrawer: {
+          props: ['visible', 'title'],
+          inheritAttrs: true,
+          template: '<div :data-open="String(visible)" :data-title="title"><slot /></div>'
+        },
+        TxPagination: {
+          props: ['currentPage', 'pageSize', 'total'],
+          emits: ['update:currentPage'],
+          inheritAttrs: true,
+          // Clickable so a test can move off page one and check what reopening does.
+          template:
+            '<nav :data-page="currentPage" :data-total="total" @click="$emit(\'update:currentPage\', currentPage + 1)" />'
+        }
+      }
+    }
   })
   await flushPromises()
   await flushPromises()
@@ -201,6 +236,252 @@ describe('VoiceInsights page composition', () => {
   })
 
   /**
+   * The whole header is one row, and the content owns it.
+   *
+   * It was split across two owners — the shell drew a title, this drew a row of buttons under it —
+   * and the seam between them kept reappearing as a band of blank. A heading, the date counting
+   * started, three actions and a status alert is more than a shell title row was built to hold, so
+   * it all lives here now.
+   */
+  it('puts the heading, the boundary line and every action in one header row', async () => {
+    const wrapper = await mountPage({ eyebrow: '音频洞察' })
+
+    const header = wrapper.find('.VoiceInsights-Hero')
+    expect(header.exists()).toBe(true)
+    // The nav label *is* the heading. Exactly one, here and on the page.
+    expect(wrapper.findAll('h1')).toHaveLength(1)
+    expect(header.find('h1').text()).toBe('音频洞察')
+    // The start date bounds the chart, not the page, so it is not up here.
+    expect(header.find('.VoiceInsights-Boundary').exists()).toBe(false)
+
+    // A jump to the log, and the menu. Nothing else earns a place in a title row — refresh
+    // least of all, on a page that reloads itself after everything it offers.
+    for (const action of ['records-jump', 'more']) {
+      expect(header.find(`[data-testid="voice-insights-${action}"]`).exists()).toBe(true)
+    }
+    expect(header.find('[data-testid="voice-insights-refresh"]').exists()).toBe(false)
+    // And the group header that used to carry the clear button is gone entirely.
+    expect(wrapper.find('.VoiceInsights-SectionHeader').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * Every card is tuffex's, and none of them casts a shadow — the page is a stack of surfaces on
+   * one plane, not a pile of floating tiles. The prop is echoed by the stub because its effect is
+   * CSS, which a jsdom test cannot otherwise see.
+   */
+  it('draws every card flat', async () => {
+    const wrapper = await mountPage()
+
+    const cards = wrapper.findAll('[data-shadow]')
+    expect(cards.length).toBeGreaterThanOrEqual(4)
+    expect(cards.every((card) => card.attributes('data-shadow') === 'none')).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * Clearing every number on the page cannot be undone, and it used to sit one stray click from
+   * the refresh button. Opening a menu first is the whole safeguard, so the destructive item has
+   * to be behind the dots and separated from the two that are reversible.
+   */
+  it('keeps share, settings and delete behind the dots', async () => {
+    const wrapper = await mountPage()
+
+    const menu = wrapper.find('.VoiceInsights-Menu')
+    expect(menu.exists()).toBe(true)
+
+    const items = menu.findAll('[role="menuitem"]')
+    expect(items.map((item) => item.attributes('data-testid'))).toEqual([
+      'voice-insights-share',
+      'voice-insights-settings',
+      'voice-insights-clear'
+    ])
+    expect(menu.find('[data-testid="voice-insights-clear"]').classes()).toContain('is-danger')
+    expect(menu.find('[role="separator"]').exists()).toBe(true)
+
+    // Not in the row itself: that is the point of moving them.
+    const header = wrapper.find('.VoiceInsights-Hero > .VoiceInsights-HeroActions > *')
+    expect(header.attributes('data-testid')).not.toBe('voice-insights-clear')
+
+    wrapper.unmount()
+  })
+
+  /**
+   * A year of charts is what the page is for. The log and the settings are two more screens'
+   * worth of content underneath it that most visits scroll straight past, so both are drawers:
+   * they cost nothing until asked for, and closing one puts the reader back where they were.
+   */
+  it('keeps the log in a drawer that starts closed', async () => {
+    const wrapper = await mountPage()
+
+    const drawer = wrapper.find('[data-testid="voice-insights-records"]')
+    expect(drawer.exists()).toBe(true)
+    expect(drawer.attributes('data-open')).toBe('false')
+    // The list is inside it, not loose on the page.
+    expect(wrapper.find('.VoiceInsights-RecordList').exists()).toBe(true)
+    expect(drawer.find('.VoiceInsights-RecordList').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
+    expect(wrapper.find('[data-testid="voice-insights-records"]').attributes('data-open')).toBe(
+      'true'
+    )
+
+    wrapper.unmount()
+  })
+
+  /** Settings belong to the page, so opening them is a request this component makes, not an act. */
+  it('asks the page to open settings rather than scrolling to them', async () => {
+    const wrapper = await mountPage()
+
+    await wrapper.find('[data-testid="voice-insights-settings"]').trigger('click')
+    expect(wrapper.emitted('open-settings')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * A wall of a hundred transcripts has no top and no bottom. Paging gives it both, and keeps the
+   * drawer from growing a scrollbar that fights the page's.
+   */
+  async function mountManyRecords() {
+    transportSendMock.mockReset()
+    transportSendMock.mockImplementation(async (event: { toEventName: () => string }) => {
+      if (event?.toEventName?.() === voiceApiEvents.getInsights.toEventName()) {
+        return { ok: true, result: summary() }
+      }
+      if (event?.toEventName?.() === voiceApiEvents.getRecognitionRecords.toEventName()) {
+        return {
+          ok: true,
+          result: Array.from({ length: 30 }, (_, index) => ({
+            id: `record-${index}`,
+            capturedAt: Date.UTC(2026, 8, 8, 12, index),
+            source: 'microphone',
+            status: 'success',
+            text: `记录 ${index}`
+          }))
+        }
+      }
+      return { ok: true }
+    })
+    return mountPage()
+  }
+
+  it('pages the log', async () => {
+    const wrapper = await mountManyRecords()
+
+    expect(wrapper.findAll('.VoiceInsights-Record')).toHaveLength(12)
+    const pager = wrapper.find('[data-testid="voice-insights-records-pagination"]')
+    expect(pager.exists()).toBe(true)
+    expect(pager.attributes('data-total')).toBe('30')
+    expect(pager.attributes('data-page')).toBe('1')
+
+    wrapper.unmount()
+  })
+
+  /**
+   * Reopening on page 4 of a log last read yesterday is a state nobody asked to be remembered —
+   * and the top of the list is where the newest entries are, which is why anyone opens it.
+   */
+  it('reopens the log at the first page', async () => {
+    const wrapper = await mountManyRecords()
+
+    await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
+    await wrapper.find('[data-testid="voice-insights-records-pagination"]').trigger('click')
+    expect(
+      wrapper.find('[data-testid="voice-insights-records-pagination"]').attributes('data-page')
+    ).toBe('2')
+
+    await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
+    expect(
+      wrapper.find('[data-testid="voice-insights-records-pagination"]').attributes('data-page')
+    ).toBe('1')
+
+    wrapper.unmount()
+  })
+
+  /** Twelve or fewer is one page, and one page needs no pager. */
+  it('shows no pager when the log fits on a page', async () => {
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="voice-insights-records-pagination"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /** No nav label passed, no heading drawn — the sidebar's word is the page's to supply. */
+  it('draws no heading when the page does not name one', async () => {
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('.VoiceInsights-Hero h1').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The year card carried two headings four words apart, and three streak tiles that all read the
+   * same number on a short record. One heading, one line.
+   */
+  it('gives the year one heading and one streak line', async () => {
+    const wrapper = await mountPage()
+
+    const activity = wrapper.find('[data-testid="voice-insights-activity"]')
+    expect(activity.findAll('h3')).toHaveLength(1)
+    expect(activity.find('.VoiceInsights-StreakLine').text()).toContain(
+      'voiceInsights.streak.summary'
+    )
+    // The date the record starts sits beside the title of the year it bounds.
+    expect(activity.find('h3 small').text()).toContain('voiceInsights.boundary')
+    expect(activity.find('.VoiceInsights-Streaks').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * Two unrelated things shared the class `VoiceInsights-Weeks`: the 12-week bar card, and the
+   * grid of week columns inside the year calendar. Each picked up the other's rules — the card
+   * got a grid whose column count only the calendar defines, the calendar got the card's
+   * background, radius and shadow. Nothing about it read as a typo.
+   *
+   * jsdom computes no CSS, so what this pins is the collision itself: one class, one owner.
+   */
+  it('does not let the week card and the calendar grid share a class', async () => {
+    const wrapper = await mountPage()
+
+    const card = wrapper.find('[data-testid="voice-insights-weeks"]')
+    expect(card.exists()).toBe(true)
+    expect(card.classes()).toContain('VoiceInsights-Weeks')
+
+    const heatmap = wrapper.find('[data-testid="voice-insights-heatmap"]')
+    expect(heatmap.find('.VoiceInsights-HeatWeeks').exists()).toBe(true)
+    expect(heatmap.find('.VoiceInsights-Weeks').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The card is labelled 说了多少字, so a 字 unit beside the figure says it twice. Its siblings
+   * keep theirs — 字/分钟 is not in their label.
+   */
+  it('drops the unit from the card whose label already carries it', async () => {
+    const wrapper = await mountPage()
+
+    const cards = wrapper.findAll('.VoiceInsights-Metric')
+    // Direct children only: the morph renders its own span inside the <strong>, and a descendant
+    // selector counts that as the unit — the same trap that once made the figure invisible.
+    const characters = cards.find((card) => card.attributes('data-metric') === 'characters')!
+    expect(characters.find('.VoiceInsights-MetricValue > span').exists()).toBe(false)
+
+    const rate = cards.find((card) => card.attributes('data-metric') === 'rate')!
+    expect(rate.find('.VoiceInsights-MetricValue > span').text()).toContain(
+      'voiceInsights.units.charactersPerMinute'
+    )
+
+    wrapper.unmount()
+  })
+
+  /**
    * The four figures are the page's whole payload, and they change under the reader when a
    * refresh lands. Morphing them by place value shows which digits moved; swapping the string
    * shows only that something did.
@@ -279,15 +560,16 @@ describe('VoiceInsights progressive disclosure', () => {
     }
   }
 
-  it('withholds only the week bars on day one, and says when they arrive', async () => {
+  it('withholds only the week bars on day one', async () => {
     mockDays(1)
     const wrapper = await mountPage()
 
     const state = blocks(wrapper)
     expect(state.metrics).toBe(3)
+    // Not rendered, not greyed, and not explained: a chart with nothing in it says less than no
+    // chart, and a line apologising for its absence is one more thing to read.
     expect(state.weeks).toBe(false)
-    // Not rendered, not greyed: a chart with nothing in it says less than no chart.
-    expect(state.note.text()).toContain('voiceInsights.tiers.weeksPending')
+    expect(state.note.exists()).toBe(false)
 
     // The year stays from the first day — an empty grid is a true picture of an empty record,
     // and it is the one chart that explains its own blank cells.
@@ -297,7 +579,7 @@ describe('VoiceInsights progressive disclosure', () => {
     wrapper.unmount()
   })
 
-  it('adds the week bars once there are weeks to compare, and drops the note', async () => {
+  it('adds the week bars once there are weeks to compare', async () => {
     mockDays(8)
     const wrapper = await mountPage()
 

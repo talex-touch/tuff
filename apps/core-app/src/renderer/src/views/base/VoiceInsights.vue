@@ -6,6 +6,10 @@ import type {
 import type { CSSProperties } from 'vue'
 import type { DialogButton } from '@talex-touch/tuffex/dialog'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCard } from '@talex-touch/tuffex/card'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import { TxPagination } from '@talex-touch/tuffex/pagination'
+import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
@@ -145,6 +149,17 @@ interface HeatmapMonth {
   weekIndex: number
 }
 
+/**
+ * The nav label, shown small above the heading.
+ *
+ * Passed in rather than read here: the sidebar owns that word, and a page that hardcodes its own
+ * breadcrumb drifts from the menu that leads to it.
+ */
+const props = defineProps<{ eyebrow?: string }>()
+/** Settings are the page's card, not this one's, so opening them is a request rather than an act. */
+const emit = defineEmits<{ 'open-settings': [] }>()
+const eyebrow = computed(() => props.eyebrow)
+
 const { locale, t } = useI18n()
 const transport = useTuffTransport()
 const voiceSdk = createVoiceSdk(transport)
@@ -162,6 +177,28 @@ const clearConfirmVisible = ref(false)
 const reportExpanded = ref(false)
 const postClearRefreshFailed = ref(false)
 const heatmapScroller = ref<HTMLElement | null>(null)
+/**
+ * A page of the log.
+ *
+ * Twelve is what fits a drawer without its own scrollbar fighting the page's. The list is short
+ * enough that this is about reading position, not performance: a wall of a hundred transcripts
+ * has no top and no bottom, and paging gives it both.
+ */
+const RECORDS_PER_PAGE = 12
+
+const menuOpen = ref(false)
+const recordsOpen = ref(false)
+const recordPage = ref(1)
+const recordPageCount = computed(() =>
+  Math.max(1, Math.ceil(records.value.length / RECORDS_PER_PAGE))
+)
+const pagedRecords = computed(() => {
+  // Clamped rather than trusted: clearing the log while page 4 is open would otherwise leave the
+  // drawer showing a slice past the end of the array.
+  const page = Math.min(Math.max(1, recordPage.value), recordPageCount.value)
+  const start = (page - 1) * RECORDS_PER_PAGE
+  return records.value.slice(start, start + RECORDS_PER_PAGE)
+})
 const showSkeleton = useDeferredLoading(() => !hasLoaded.value && !loadFailed.value)
 let loadRevision = 0
 let disposed = false
@@ -285,7 +322,8 @@ const metrics = computed(() => {
     {
       key: 'characters',
       value: compactNumberFormatter.value.format(value.totalCharacters),
-      unit: t('voiceInsights.units.characters'),
+      // No unit: the label under it already says 字, and a card should not say it twice.
+      unit: '',
       label: t('voiceInsights.metrics.characters'),
       note: ''
     },
@@ -318,17 +356,6 @@ const metrics = computed(() => {
   ]
 })
 
-const streaks = computed(() => {
-  const value = insights.value
-  if (!value) return []
-
-  return [
-    { key: 'active', value: value.activeDays, label: t('voiceInsights.streak.activeDays') },
-    { key: 'current', value: value.currentStreak, label: t('voiceInsights.streak.current') },
-    { key: 'longest', value: value.longestStreak, label: t('voiceInsights.streak.longest') }
-  ]
-})
-
 /**
  * One number leads, the rest support it.
  *
@@ -337,6 +364,7 @@ const streaks = computed(() => {
  * The estimate basis rides with the headline number rather than sitting in a footnote, because
  * a figure this prominent is exactly the one that must not be mistaken for a measurement.
  */
+
 const heroMetric = computed(() => metrics.value.find((metric) => metric.key === 'saved') ?? null)
 const supportMetrics = computed(() => metrics.value.filter((metric) => metric.key !== 'saved'))
 
@@ -680,6 +708,19 @@ onMounted(() => {
   void loadInsights()
 })
 
+function openRecords(): void {
+  // Back to the first page each time. Reopening on page 7 of a log you last read yesterday is a
+  // state nobody asked to be remembered.
+  recordPage.value = 1
+  recordsOpen.value = true
+}
+
+/** A menu item closes the menu, then acts. Leaving it open over a dialog is its own bug. */
+function runFromMenu(action: () => void | Promise<void>): void {
+  menuOpen.value = false
+  void action()
+}
+
 onBeforeUnmount(() => {
   disposed = true
   loadRevision += 1
@@ -695,35 +736,86 @@ onBeforeUnmount(() => {
     class="VoiceInsights"
     data-testid="voice-insights-page"
     :aria-busy="!hasLoaded || refreshing || clearing"
-    :aria-label="t('voiceInsights.headline')"
   >
     <!--
-      Actions only. The headline moved up to the page's title row, and the sentence that used to
-      qualify it is gone — the page is short enough now that a line explaining what it is sat
-      between the reader and the numbers it was explaining.
+      The whole header, in one row, owned by the content rather than the shell.
+      The shell's title row could hold a heading and one thing beside it; this page's header is a
+      heading, the date counting started, three actions and a status alert. Splitting it across
+      two owners is what kept leaving a band of blank between the title and the buttons.
+    -->
+    <!--
+      No refresh button. The page loads on mount and reloads itself after the only two actions
+      that change anything, so the button served a case that does not arise — except a failed
+      load, and that notice already carries its own retry.
     -->
     <header class="VoiceInsights-Hero">
+      <div class="VoiceInsights-HeroCopy">
+        <!--
+          The nav label is the heading. It carried a slogan under it for a while, which meant the
+          page said where you were and then said something else about itself in a bigger size —
+          two headings for one screen.
+        -->
+        <h1 v-if="eyebrow">{{ eyebrow }}</h1>
+      </div>
       <div class="VoiceInsights-HeroActions shell-chrome-safe-inline-end">
+        <slot name="status" />
         <TxButton
-          variant="secondary"
-          :loading="refreshing"
-          :disabled="!hasLoaded || clearing"
-          data-testid="voice-insights-refresh"
-          @click="loadInsights(true)"
+          :disabled="records.length === 0"
+          data-testid="voice-insights-records-jump"
+          @click="openRecords"
         >
-          <span class="i-ri-refresh-line" aria-hidden="true" />
-          <span>{{ t('voiceInsights.actions.refresh') }}</span>
+          <span class="i-ri-history-line" aria-hidden="true" />
+          <span>{{ t('voiceInsights.actions.records') }}</span>
         </TxButton>
-        <TxButton
-          variant="flat"
-          :loading="copyPending"
-          :disabled="!hasData || refreshing || clearing"
-          data-testid="voice-insights-share"
-          @click="copyShareSummary"
-        >
-          <span class="i-ri-share-forward-line" aria-hidden="true" />
-          <span>{{ t('voiceInsights.actions.share') }}</span>
-        </TxButton>
+        <!--
+          Share, settings and delete live behind the dots.
+
+          Delete especially: clearing every number on the page is not undoable, and it used to sit
+          one stray click from the refresh button. Opening a menu first is the whole safeguard.
+        -->
+        <TxPopover v-model="menuOpen" placement="bottom-end" :offset="6" :min-width="176">
+          <template #reference>
+            <TxButton
+              :aria-label="t('voiceInsights.actions.more')"
+              data-testid="voice-insights-more"
+            >
+              <span class="i-ri-more-fill" aria-hidden="true" />
+            </TxButton>
+          </template>
+          <div class="VoiceInsights-Menu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              :disabled="!hasData || refreshing || clearing || copyPending"
+              data-testid="voice-insights-share"
+              @click="runFromMenu(copyShareSummary)"
+            >
+              <span class="i-ri-share-forward-line" aria-hidden="true" />
+              <span>{{ t('voiceInsights.actions.share') }}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="voice-insights-settings"
+              @click="runFromMenu(() => emit('open-settings'))"
+            >
+              <span class="i-ri-settings-3-line" aria-hidden="true" />
+              <span>{{ t('voiceInsights.actions.settings') }}</span>
+            </button>
+            <div class="VoiceInsights-MenuRule" role="separator" />
+            <button
+              type="button"
+              role="menuitem"
+              class="is-danger"
+              :disabled="!hasData || refreshing || copyPending || clearing"
+              data-testid="voice-insights-clear"
+              @click="runFromMenu(requestClear)"
+            >
+              <span class="i-ri-delete-bin-6-line" aria-hidden="true" />
+              <span>{{ t('voiceInsights.actions.clear') }}</span>
+            </button>
+          </div>
+        </TxPopover>
       </div>
     </header>
 
@@ -777,29 +869,21 @@ onBeforeUnmount(() => {
     >
       <span class="VoiceInsights-SrOnly">{{ t('voiceInsights.loading') }}</span>
       <template v-if="showSkeleton">
-        <div class="VoiceInsights-SectionHeader" aria-hidden="true">
-          <TxSkeleton :width="116" :height="24" :radius="4" />
-          <TxSkeleton :width="164" :height="12" :radius="4" />
-        </div>
         <div class="VoiceInsights-Metrics" aria-hidden="true">
-          <article v-for="index in 4" :key="index" class="VoiceInsights-Metric">
+          <TxCard v-for="index in 3" :key="index" class="VoiceInsights-Metric" shadow="none">
             <TxSkeleton :width="148" :height="28" :radius="4" />
             <TxSkeleton :width="92" :height="12" :radius="4" />
-          </article>
+          </TxCard>
         </div>
-        <article class="VoiceInsights-Activity" aria-hidden="true">
-          <header class="VoiceInsights-ActivityHeading">
-            <TxSkeleton :width="184" :height="16" :radius="4" />
-            <TxSkeleton :width="248" :height="11" :radius="4" />
-          </header>
-          <div class="VoiceInsights-Streaks">
-            <div v-for="index in 3" :key="index" class="VoiceInsights-Streak">
-              <TxSkeleton :width="68" :height="26" :radius="4" />
-              <TxSkeleton :width="96" :height="12" :radius="4" />
+        <TxCard class="VoiceInsights-Activity" shadow="none" aria-hidden="true">
+          <div class="VoiceInsights-HeatmapHeader">
+            <div>
+              <TxSkeleton :width="96" :height="16" :radius="4" />
+              <TxSkeleton :width="248" :height="11" :radius="4" />
             </div>
           </div>
           <TxSkeleton width="100%" :height="156" :radius="10" />
-        </article>
+        </TxCard>
       </template>
     </div>
 
@@ -819,24 +903,6 @@ onBeforeUnmount(() => {
     </div>
 
     <main v-else-if="insights" class="VoiceInsights-Canvas" data-testid="voice-insights-data">
-      <div class="VoiceInsights-SectionHeader">
-        <div>
-          <h2>{{ t('voiceInsights.sectionTitle') }}</h2>
-          <p>{{ boundaryLabel }}</p>
-        </div>
-        <TxButton
-          variant="bare"
-          type="danger"
-          size="sm"
-          :disabled="refreshing || copyPending || clearing"
-          data-testid="voice-insights-clear"
-          @click="requestClear"
-        >
-          <span class="i-ri-delete-bin-6-line" aria-hidden="true" />
-          <span>{{ t('voiceInsights.actions.clear') }}</span>
-        </TxButton>
-      </div>
-
       <section class="VoiceInsights-Headline" :aria-label="t('voiceInsights.metrics.label')">
         <article
           v-if="heroMetric"
@@ -864,19 +930,15 @@ onBeforeUnmount(() => {
           </p>
           <div class="VoiceInsights-Hero2Value">
             <strong><TxTextMorph :text="heroMetric.value" /></strong>
-            <span v-if="insights">{{
-              t('voiceInsights.metrics.savedEquivalent', {
-                count: numberFormatter.format(insights.totalCharacters)
-              })
-            }}</span>
           </div>
         </article>
 
         <div class="VoiceInsights-Metrics">
-          <article
+          <TxCard
             v-for="metric in supportMetrics"
             :key="metric.key"
             class="VoiceInsights-Metric"
+            shadow="none"
             :data-metric="metric.key"
           >
             <div class="VoiceInsights-MetricValue">
@@ -884,7 +946,7 @@ onBeforeUnmount(() => {
               <span v-if="metric.unit">{{ metric.unit }}</span>
             </div>
             <p>{{ metric.label }}</p>
-          </article>
+          </TxCard>
         </div>
       </section>
 
@@ -893,11 +955,12 @@ onBeforeUnmount(() => {
         Without it a shorter page is indistinguishable from a broken one, and the reader who saw
         a heatmap on someone else's screen has no way to tell which they are looking at.
       -->
-      <p v-if="!showsWeeks" class="VoiceInsights-Tier" data-testid="voice-insights-tier-note">
-        {{ t('voiceInsights.tiers.weeksPending') }}
-      </p>
-
-      <article v-if="showsWeeks" class="VoiceInsights-Weeks" data-testid="voice-insights-weeks">
+      <TxCard
+        v-if="showsWeeks"
+        class="VoiceInsights-Weeks"
+        shadow="none"
+        data-testid="voice-insights-weeks"
+      >
         <header class="VoiceInsights-WeeksHeading">
           <div>
             <h3>{{ t('voiceInsights.weeks.title') }}</h3>
@@ -920,28 +983,33 @@ onBeforeUnmount(() => {
             :style="{ height: `${Math.round(week.ratio * 100)}%` }"
           />
         </div>
-      </article>
+      </TxCard>
 
-      <article class="VoiceInsights-Activity" data-testid="voice-insights-activity">
-        <header class="VoiceInsights-ActivityHeading">
-          <h3>{{ t('voiceInsights.streak.title') }}</h3>
-          <p>{{ t('voiceInsights.streak.windowNote') }}</p>
-        </header>
-
-        <div class="VoiceInsights-Streaks" :aria-label="t('voiceInsights.streak.label')">
-          <div v-for="streak in streaks" :key="streak.key" class="VoiceInsights-Streak">
-            <div>
-              <strong>{{ numberFormatter.format(streak.value) }}</strong>
-              <span>{{ t('voiceInsights.units.days') }}</span>
-            </div>
-            <p>{{ streak.label }}</p>
-          </div>
-        </div>
-
+      <TxCard class="VoiceInsights-Activity" shadow="none" data-testid="voice-insights-activity">
+        <!--
+          One heading. This card used to carry two, four words apart — "最近 365 个本地自然日的活动"
+          over three streak tiles, then "最近 365 个本地自然日" over the calendar those tiles were
+          counted from. The three tiles said the same number three times on a short record; they
+          are one line now, under the one title.
+        -->
         <div class="VoiceInsights-HeatmapHeader">
           <div>
-            <h3>{{ t('voiceInsights.heatmap.title') }}</h3>
-            <p>{{ t('voiceInsights.heatmap.description') }}</p>
+            <h3>
+              {{ t('voiceInsights.heatmap.title')
+              }}<!--
+                The chart is the only thing the start date qualifies: the page begins before the
+                record does, and saying so up in the header made it read as a fact about the page.
+              --><small v-if="insights">{{ boundaryLabel }}</small>
+            </h3>
+            <p v-if="insights" class="VoiceInsights-StreakLine">
+              {{
+                t('voiceInsights.streak.summary', {
+                  current: numberFormatter.format(insights.currentStreak),
+                  longest: numberFormatter.format(insights.longestStreak),
+                  active: numberFormatter.format(insights.activeDays)
+                })
+              }}
+            </p>
           </div>
           <div class="VoiceInsights-Legend" :aria-label="t('voiceInsights.heatmap.legend')">
             <span>{{ t('voiceInsights.heatmap.less') }}</span>
@@ -974,7 +1042,7 @@ onBeforeUnmount(() => {
                 {{ month.label }}
               </span>
             </div>
-            <div class="VoiceInsights-Weeks" :style="heatmapStyle">
+            <div class="VoiceInsights-HeatWeeks" :style="heatmapStyle">
               <div
                 v-for="(week, weekIndex) in heatmapWeeks"
                 :key="weekIndex"
@@ -997,9 +1065,9 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
-      </article>
+      </TxCard>
 
-      <article class="VoiceInsights-Report" data-testid="voice-insights-report">
+      <TxCard class="VoiceInsights-Report" shadow="none" data-testid="voice-insights-report">
         <div class="VoiceInsights-ReportIntro">
           <div>
             <span class="VoiceInsights-ReportIcon i-ri-file-chart-line" aria-hidden="true" />
@@ -1070,95 +1138,115 @@ onBeforeUnmount(() => {
             </li>
           </ul>
         </div>
-      </article>
-      <article class="VoiceInsights-Records" data-testid="voice-insights-records">
-        <header class="VoiceInsights-RecordsHeading">
-          <div>
-            <h3>{{ t('voiceInsights.records.title') }}</h3>
-            <p>{{ t('voiceInsights.records.description') }}</p>
-          </div>
-          <TxButton
-            variant="bare"
-            type="danger"
-            size="sm"
-            :loading="recordsClearing"
-            :disabled="records.length === 0 || recordsClearing || clearing"
-            data-testid="voice-insights-records-clear"
-            @click="clearRecords"
-          >
-            {{ t('voiceInsights.records.clear') }}
-          </TxButton>
-        </header>
-
-        <div v-if="records.length === 0" class="VoiceInsights-RecordsEmpty">
-          {{ t('voiceInsights.records.empty') }}
-        </div>
-        <div v-else class="VoiceInsights-RecordList">
-          <details v-for="record in records" :key="record.id" class="VoiceInsights-Record">
-            <summary>
-              <span class="VoiceInsights-RecordSummaryMain">
-                <strong>{{
-                  record.text || record.rawText || t('voiceInsights.records.emptyText')
-                }}</strong>
-                <small>{{ recordDateLabel(record.capturedAt) }}</small>
-              </span>
-              <span class="VoiceInsights-RecordSummaryMeta">
-                <span :data-status="record.status">{{ recordStatusLabel(record.status) }}</span>
-                <span>{{ record.model || record.channel || '—' }}</span>
-              </span>
-            </summary>
-            <div class="VoiceInsights-RecordDetails">
-              <audio
-                v-if="record.audioUrl"
-                controls
-                preload="none"
-                :src="record.audioUrl"
-                :aria-label="t('voiceInsights.records.audioLabel')"
-              />
-              <p class="VoiceInsights-RecordAudioMeta">{{ recordAudioLabel(record) }}</p>
-              <dl>
-                <div>
-                  <dt>{{ t('voiceInsights.records.rawText') }}</dt>
-                  <dd>{{ record.rawText || '—' }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.finalText') }}</dt>
-                  <dd>{{ record.text || '—' }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.duration') }}</dt>
-                  <dd>
-                    {{ record.audioDurationMs ? formatDuration(record.audioDurationMs) : '—' }}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.recognitionDuration') }}</dt>
-                  <dd>
-                    {{
-                      record.recognitionDurationMs
-                        ? formatDuration(record.recognitionDurationMs)
-                        : '—'
-                    }}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.tokens') }}</dt>
-                  <dd>{{ recordTokenLabel(record) }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.channel') }}</dt>
-                  <dd>{{ record.channel || record.providerId || '—' }}</dd>
-                </div>
-                <div v-if="record.errorCode">
-                  <dt>{{ t('voiceInsights.records.error') }}</dt>
-                  <dd>{{ record.errorCode }}</dd>
-                </div>
-              </dl>
-            </div>
-          </details>
-        </div>
-      </article>
+      </TxCard>
     </main>
+
+    <!--
+      Records and settings are drawers, not sections.
+
+      A year of charts is what this page is for; a transcript log and a settings card underneath
+      it are two more screens' worth of content that most visits scroll straight past. Behind a
+      drawer they cost nothing until asked for, and closing one puts the reader back where they
+      were rather than somewhere down a long page.
+    -->
+    <TxDrawer
+      v-model:visible="recordsOpen"
+      :title="t('voiceInsights.records.title')"
+      size="560px"
+      data-testid="voice-insights-records"
+    >
+      <header class="VoiceInsights-RecordsHeading">
+        <p>{{ t('voiceInsights.records.description') }}</p>
+        <TxButton
+          variant="bare"
+          type="danger"
+          size="sm"
+          :loading="recordsClearing"
+          :disabled="records.length === 0 || recordsClearing || clearing"
+          data-testid="voice-insights-records-clear"
+          @click="clearRecords"
+        >
+          {{ t('voiceInsights.records.clear') }}
+        </TxButton>
+      </header>
+
+      <div v-if="records.length === 0" class="VoiceInsights-RecordsEmpty">
+        {{ t('voiceInsights.records.empty') }}
+      </div>
+      <div v-else class="VoiceInsights-RecordList">
+        <details v-for="record in pagedRecords" :key="record.id" class="VoiceInsights-Record">
+          <summary>
+            <span class="VoiceInsights-RecordSummaryMain">
+              <strong>{{
+                record.text || record.rawText || t('voiceInsights.records.emptyText')
+              }}</strong>
+              <small>{{ recordDateLabel(record.capturedAt) }}</small>
+            </span>
+            <span class="VoiceInsights-RecordSummaryMeta">
+              <span :data-status="record.status">{{ recordStatusLabel(record.status) }}</span>
+              <span>{{ record.model || record.channel || '—' }}</span>
+            </span>
+          </summary>
+          <div class="VoiceInsights-RecordDetails">
+            <audio
+              v-if="record.audioUrl"
+              controls
+              preload="none"
+              :src="record.audioUrl"
+              :aria-label="t('voiceInsights.records.audioLabel')"
+            />
+            <p class="VoiceInsights-RecordAudioMeta">{{ recordAudioLabel(record) }}</p>
+            <dl>
+              <div>
+                <dt>{{ t('voiceInsights.records.rawText') }}</dt>
+                <dd>{{ record.rawText || '—' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('voiceInsights.records.finalText') }}</dt>
+                <dd>{{ record.text || '—' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('voiceInsights.records.duration') }}</dt>
+                <dd>
+                  {{ record.audioDurationMs ? formatDuration(record.audioDurationMs) : '—' }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t('voiceInsights.records.recognitionDuration') }}</dt>
+                <dd>
+                  {{
+                    record.recognitionDurationMs
+                      ? formatDuration(record.recognitionDurationMs)
+                      : '—'
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t('voiceInsights.records.tokens') }}</dt>
+                <dd>{{ recordTokenLabel(record) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('voiceInsights.records.channel') }}</dt>
+                <dd>{{ record.channel || record.providerId || '—' }}</dd>
+              </div>
+              <div v-if="record.errorCode">
+                <dt>{{ t('voiceInsights.records.error') }}</dt>
+                <dd>{{ record.errorCode }}</dd>
+              </div>
+            </dl>
+          </div>
+        </details>
+      </div>
+
+      <TxPagination
+        v-if="recordPageCount > 1"
+        v-model:current-page="recordPage"
+        class="VoiceInsights-RecordsPager"
+        :page-size="RECORDS_PER_PAGE"
+        :total="records.length"
+        data-testid="voice-insights-records-pagination"
+      />
+    </TxDrawer>
 
     <TxBottomDialog
       v-if="clearConfirmVisible"
@@ -1171,32 +1259,65 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
+/*
+ * A section on a settings page, not a page.
+ *
+ * It kept the chrome from when it was one: its own scroll container, a full page's padding, and a
+ * top inset for the window controls. Inside `SettingsPage` all three are already provided, so the
+ * padding doubled into a band of blank above the first row and the second scroller clipped the
+ * bottom of the page against a scrollbar nobody could see.
+ */
 .VoiceInsights {
   width: 100%;
-  height: 100%;
   min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  box-sizing: border-box;
-  padding: calc(var(--shell-space-7) + var(--shell-window-controls-height)) var(--shell-space-7)
-    var(--shell-space-7);
   color: var(--shell-text-primary);
 }
 
 /* Only the actions live here now, so they sit at the end rather than opposite a copy block. */
+/*
+ * The header row. It used to hold nothing but the buttons, right-aligned against an empty half —
+ * which is what put a band of blank page between the title and the first number.
+ */
 .VoiceInsights-Hero {
   display: flex;
   gap: var(--shell-space-5);
-  align-items: flex-start;
+  align-items: flex-end;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: space-between;
   max-width: 1440px;
   margin: 0 auto var(--shell-space-5);
+}
+
+/* The heading never gives way; the row beside it wraps or truncates first. */
+.VoiceInsights-HeroCopy {
+  display: flex;
+  min-width: 0;
+  flex: none;
+  flex-direction: column;
+  gap: var(--shell-space-1);
+
+  h1 {
+    margin: 0;
+    font-size: var(--shell-fs-h1);
+    font-weight: 600;
+    line-height: 1.2;
+    /* Chrome, and it sits in the window's drag strip where a stray selection is the usual result
+       of trying to move the window. */
+    user-select: none;
+  }
+}
+
+.VoiceInsights-HeatmapHeader h3 small {
+  margin-left: var(--shell-space-2);
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  font-weight: normal;
 }
 
 .VoiceInsights-HeroActions {
   display: flex;
   flex: 0 0 auto;
+  align-items: center;
   gap: var(--shell-space-2);
 }
 
@@ -1238,38 +1359,18 @@ onBeforeUnmount(() => {
   }
 }
 
+/*
+ * The stack the sections sit in. It used to be a dotted panel wrapping all of them — a card
+ * holding cards, which is what put a second inset inside the page's own and left the metrics
+ * floating on a texture while the calendar below them had a card of its own.
+ */
 .VoiceInsights-Canvas {
-  max-width: 1440px;
-  min-width: 0;
-  margin: 0 auto;
-  padding: var(--shell-space-6);
-  border-radius: var(--shell-radius-2xl);
-  background-color: var(--shell-surface);
-  background-image: radial-gradient(circle, var(--shell-border) 1px, transparent 1px);
-  background-size: var(--shell-space-3) var(--shell-space-3);
-}
-
-.VoiceInsights-SectionHeader {
   display: flex;
-  gap: var(--shell-space-4);
-  align-items: flex-start;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  margin-bottom: var(--shell-space-5);
-
-  h2 {
-    margin: 0;
-    color: var(--shell-text-secondary);
-    font-size: var(--shell-fs-title);
-    font-weight: 600;
-    line-height: 1.2;
-  }
-
-  p {
-    margin: var(--shell-space-2) 0 0;
-    color: var(--shell-text-muted);
-    font-size: var(--shell-fs-body);
-  }
+  min-width: 0;
+  max-width: 1440px;
+  flex-direction: column;
+  margin: 0 auto;
+  gap: var(--shell-space-5);
 }
 
 .VoiceInsights-Headline {
@@ -1375,15 +1476,6 @@ onBeforeUnmount(() => {
   }
 }
 
-.VoiceInsights-Metric,
-.VoiceInsights-Weeks,
-.VoiceInsights-Activity,
-.VoiceInsights-Report {
-  border-radius: var(--shell-radius-xl);
-  background: var(--shell-bg);
-  box-shadow: 0 var(--shell-space-1) var(--shell-space-2) var(--shell-shadow);
-}
-
 .VoiceInsights-Metric {
   display: flex;
   min-width: 0;
@@ -1405,14 +1497,6 @@ onBeforeUnmount(() => {
     font-size: var(--shell-fs-caption);
     line-height: 1.4;
   }
-}
-
-/* Quiet on purpose: it explains an absence, and an absence should not shout. */
-.VoiceInsights-Tier {
-  margin: 0;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
-  line-height: 1.5;
 }
 
 .VoiceInsights-MetricValue {
@@ -1459,61 +1543,14 @@ onBeforeUnmount(() => {
 
 .VoiceInsights-Activity,
 .VoiceInsights-Report {
-  margin-top: var(--shell-space-5);
   padding: var(--shell-space-6);
 }
 
-.VoiceInsights-ActivityHeading {
-  margin-bottom: var(--shell-space-5);
-
-  h3 {
-    margin: 0;
-    font-size: var(--shell-fs-lg);
-    line-height: 1.3;
-  }
-
-  p {
-    margin: var(--shell-space-1) 0 0;
-    color: var(--shell-text-muted);
-    font-size: var(--shell-fs-body);
-    line-height: 1.5;
-  }
-}
-
-.VoiceInsights-Streaks {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--shell-space-5);
-  margin-bottom: var(--shell-space-6);
-}
-
-.VoiceInsights-Streak {
-  min-width: 0;
-
-  > div {
-    display: flex;
-    gap: var(--shell-space-2);
-    align-items: baseline;
-    font-variant-numeric: tabular-nums;
-  }
-
-  strong {
-    color: var(--shell-text-primary);
-    font-size: var(--shell-fs-display);
-    line-height: 1.1;
-  }
-
-  span {
-    color: var(--shell-text-regular);
-    font-size: var(--shell-fs-body);
-    font-weight: 600;
-  }
-
-  p {
-    margin: var(--shell-space-2) 0 0;
-    color: var(--shell-text-secondary);
-    font-size: var(--shell-fs-md);
-  }
+/* One line where three tiles used to be — on a short record all three read the same number. */
+.VoiceInsights-StreakLine {
+  margin: var(--shell-space-1) 0 0;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
 }
 
 .VoiceInsights-HeatmapHeader {
@@ -1522,9 +1559,6 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  padding-top: var(--shell-space-5);
-  border-top: 1px solid var(--shell-border);
-
   h3 {
     margin: 0;
     font-size: var(--shell-fs-lg);
@@ -1588,7 +1622,14 @@ onBeforeUnmount(() => {
 }
 
 .VoiceInsights-Months,
-.VoiceInsights-Weeks {
+/*
+ * Renamed away from `VoiceInsights-Weeks`, which was also the 12-week bar card.
+ *
+ * One class, two unrelated things: the card picked up this grid — with a column count only the
+ * calendar ever defines — and the calendar picked up the card's background, radius and shadow.
+ * Both were wrong and neither looked like a typo.
+ */
+.VoiceInsights-HeatWeeks {
   display: grid;
   grid-template-columns: repeat(var(--voice-heatmap-week-count), var(--shell-space-4));
   gap: var(--shell-space-1);
@@ -1821,12 +1862,50 @@ onBeforeUnmount(() => {
   font-size: var(--shell-space-7);
 }
 
+/* The menu behind the dots. Plain buttons: a list of three needs no widget. */
+.VoiceInsights-Menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  button {
+    display: flex;
+    align-items: center;
+    padding: var(--shell-space-2) var(--shell-space-3);
+    border: none;
+    border-radius: var(--shell-radius-md);
+    background: transparent;
+    color: var(--shell-text-primary);
+    font-family: inherit;
+    font-size: var(--shell-fs-body);
+    gap: var(--shell-space-3);
+    cursor: pointer;
+    text-align: left;
+
+    &:hover:not(:disabled) {
+      background: var(--shell-surface);
+    }
+
+    &:disabled {
+      color: var(--shell-text-muted);
+      cursor: not-allowed;
+    }
+
+    &.is-danger {
+      color: var(--shell-danger);
+    }
+  }
+}
+
+/* The one irreversible item is fenced off from the two that are not. */
+.VoiceInsights-MenuRule {
+  height: 1px;
+  margin: var(--shell-space-1) 0;
+  background: var(--shell-border);
+}
+
 .VoiceInsights-Records {
-  margin-top: var(--shell-space-5);
   padding: var(--shell-space-6);
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-xl);
-  background: var(--shell-bg);
 }
 
 .VoiceInsights-RecordsHeading {
@@ -1849,19 +1928,36 @@ onBeforeUnmount(() => {
   }
 }
 
+/* It was sitting on the last record. A pager is a separate thing from the list it pages. */
+.VoiceInsights-RecordsPager {
+  display: flex;
+  margin-top: var(--shell-space-5);
+  justify-content: center;
+}
+
 .VoiceInsights-RecordsEmpty {
   margin-top: var(--shell-space-4);
   color: var(--shell-text-muted);
   font-size: var(--shell-fs-body);
 }
 
+/*
+ * `minmax(0, 1fr)`, not `1fr`.
+ *
+ * A grid item's default `min-width: auto` is its content's, and each record's title is a single
+ * nowrap line. One long sentence pushed the track wider than the card and the whole list hung out
+ * past its right edge — the ellipsis further down never got a chance, because nothing above it
+ * was ever narrow enough to need one.
+ */
 .VoiceInsights-RecordList {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--shell-space-2);
   margin-top: var(--shell-space-4);
 }
 
 .VoiceInsights-Record {
+  min-width: 0;
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-md);
   background: var(--shell-surface);
@@ -1986,20 +2082,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
-  .VoiceInsights {
-    padding-right: var(--shell-space-5);
-    padding-bottom: var(--shell-space-6);
-    padding-left: var(--shell-space-5);
-  }
-
-  .VoiceInsights-Hero {
-    margin-bottom: var(--shell-space-6);
-  }
-
-  .VoiceInsights-Canvas {
-    padding: var(--shell-space-5);
-  }
-
   .VoiceInsights-Activity,
   .VoiceInsights-Report {
     padding: var(--shell-space-5);
@@ -2008,7 +2090,6 @@ onBeforeUnmount(() => {
 
 @media (max-width: 680px) {
   .VoiceInsights-Hero,
-  .VoiceInsights-SectionHeader,
   .VoiceInsights-HeatmapHeader,
   .VoiceInsights-ReportIntro {
     flex-direction: column;
@@ -2028,14 +2109,6 @@ onBeforeUnmount(() => {
     gap: var(--shell-space-4);
   }
 
-  .VoiceInsights-Streaks {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-
-    .VoiceInsights-Streak:first-child {
-      grid-column: 1 / -1;
-    }
-  }
-
   .VoiceInsights-Legend {
     align-self: flex-start;
   }
@@ -2050,11 +2123,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 480px) {
-  .VoiceInsights {
-    padding-right: var(--shell-space-4);
-    padding-left: var(--shell-space-4);
-  }
-
   .VoiceInsights-HeroActions,
   .VoiceInsights-Notice,
   .VoiceInsights-ReportStats {
