@@ -16,13 +16,36 @@ const langchainMocks = vi.hoisted(() => ({
 const usageLedgerMocks = vi.hoisted(() => ({
   recordProviderUsageLedger: vi.fn(),
 }))
+const creditMocks = vi.hoisted(() => ({
+  consumeCredits: vi.fn(),
+  releaseConsumedCredits: vi.fn(),
+}))
 
 vi.mock('./intelligenceStore', async () => {
   const actual = await vi.importActual<typeof import('./intelligenceStore')>('./intelligenceStore')
   return { ...actual, createAudit: storeMocks.createAudit, getSettings: storeMocks.getSettings }
 })
 vi.mock('./intelligenceProviderRegistryBridge', () => providerBridgeMocks)
-vi.mock('./creditsStore', () => ({ consumeCredits: vi.fn() }))
+vi.mock('./creditsStore', () => ({
+  consumeCredits: creditMocks.consumeCredits,
+  releaseConsumedCredits: creditMocks.releaseConsumedCredits,
+  requireDatabase: vi.fn(),
+}))
+/**
+ * The price table is stored in the database, but the rules it resolves are pure constants. These
+ * tests resolve against the shipped table instead of a fake connection: every invoke now takes its
+ * credit hold before it reaches the model, so without this the dispatch under test never happens.
+ */
+vi.mock('./creditPricingStore', async () => {
+  const actual
+    = await vi.importActual<typeof import('./creditPricingStore')>('./creditPricingStore')
+  return {
+    ...actual,
+    resolveCreditPricingRule: vi.fn(async (_event: unknown, capability: string) =>
+      actual.selectCreditPricingRule(capability, actual.DEFAULT_CREDIT_PRICING)
+    ),
+  }
+})
 vi.mock('./providerUsageLedgerStore', () => usageLedgerMocks)
 vi.mock('@langchain/openai', () => ({
   ChatOpenAI: class {
@@ -66,6 +89,18 @@ describe('Nexus intelligence ability aggregation', () => {
     storeMocks.getSettings.mockResolvedValue({ defaultStrategy: 'priority', enableAudit: false })
     providerBridgeMocks.getIntelligenceProviderApiKeyWithRegistryFallback.mockResolvedValue('sk-test')
     usageLedgerMocks.recordProviderUsageLedger.mockResolvedValue([])
+    creditMocks.consumeCredits.mockImplementation(
+      async (_event: unknown, _userId: unknown, amount: number) => ({
+        amount,
+        ledgerId: 'ledger_reserve',
+      })
+    )
+    creditMocks.releaseConsumedCredits.mockImplementation(
+      async (_event: unknown, _userId: unknown, amount: number) => ({
+        amount,
+        ledgerId: 'ledger_release',
+      })
+    )
     langchainMocks.invoke.mockResolvedValue({ content: '{"keywords":["tuff"]}', usage_metadata: { total_tokens: 0 } })
   })
 
