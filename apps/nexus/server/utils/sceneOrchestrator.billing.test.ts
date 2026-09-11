@@ -3,7 +3,7 @@ import type { ProviderRegistryRecord } from './providerRegistryStore'
 import type { SceneRegistryRecord } from './sceneRegistryStore'
 import type { SceneRunResult, SceneRunUsage } from './sceneOrchestrator'
 import type * as CreditPricingStoreModule from './creditPricingStore'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { selectCreditPricingRule } from './creditPricingStore'
 import type { CreditPricingRule } from './creditPricingStore'
 import {
@@ -227,6 +227,33 @@ const SCENE_PRICING: readonly CreditPricingRule[] = [
     capability: 'vision.ocr',
     unit: 'image',
     creditsPerUnit: 20,
+    secondaryUnit: null,
+    secondaryCreditsPerUnit: null,
+    minCredits: 1,
+    reserveMultiplier: 1,
+    upstreamCostUsdPerUnit: null,
+    active: true,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  // The two non-token bases, so the settle-time unit check is exercised against every
+  // unit a rule can sell rather than only against tokens and images. `audio.stt` carries
+  // the secondary basis the shipped ASR rows have (transcript units alongside seconds).
+  {
+    capability: 'audio.stt',
+    unit: 'audio_second',
+    creditsPerUnit: 4,
+    secondaryUnit: 'transcript_unit',
+    secondaryCreditsPerUnit: 1,
+    minCredits: 1,
+    reserveMultiplier: 1,
+    upstreamCostUsdPerUnit: null,
+    active: true,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    capability: 'audio.transcribe',
+    unit: 'transcript_unit',
+    creditsPerUnit: 1,
     secondaryUnit: null,
     secondaryCreditsPerUnit: null,
     minCredits: 1,
@@ -518,6 +545,227 @@ describe('runSceneOrchestrator credit metering', () => {
       ledgerId: 'ledger_1',
       settlementLedgerId: 'ledger_2',
       settleFailed: false,
+    })
+  })
+
+  describe('scene run unit guard', () => {
+    // The guard is expected to warn on the mismatch cases; capture it so the suite's
+    // output stays readable and the payload is available to assert on.
+    let warnSpy: MockInstance<typeof console.warn>
+
+    beforeEach(() => {
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    /** One capability against one price row: enough to settle a run on a single basis. */
+    function pricedScene(capabilityName: string): SceneRegistryRecord {
+      return scene({
+        requiredCapabilities: [capabilityName],
+        bindings: [binding(capabilityName, 10)],
+      })
+    }
+
+    function pricedProvider(capabilityName: string, meteringUnit: string): ProviderRegistryRecord {
+      return provider({ capabilities: [capability(capabilityName, meteringUnit)] })
+    }
+
+    /** The orchestrator attributes a usage item to its capability by this field. */
+    function reportUsage(sceneCapability: string, overrides: Partial<SceneRunUsage>): SceneRunUsage {
+      return usage({ capability: sceneCapability, ...overrides })
+    }
+
+    it('上报单位无法被价格行换算时保留整笔预留，不按 0 结算也不退回', async () => {
+      // `vision.detect` has no price row, so it prices off the token fallback row; the
+      // adapter metered per image, which that row cannot convert.
+      storeMocks.getSceneRegistryEntry.mockResolvedValue(pricedScene('vision.detect'))
+      storeMocks.getProviderRegistryEntry.mockResolvedValue(pricedProvider('vision.detect', 'image'))
+      registerSceneCapabilityAdapter('tencent-cloud:vision.detect', async ({ provider: sceneProvider, capability: sceneCapability }) => ({
+        output: { detections: [] },
+        usage: [reportUsage(sceneCapability, {
+          unit: 'image',
+          quantity: 1,
+          providerId: sceneProvider.id,
+        })],
+      }))
+
+      const run = await runSceneOrchestrator(makeEvent(), SCENE_ID, {
+        input: { text: 'hello' },
+        ownerId: OWNER_ID,
+      })
+
+      expect(run).toMatchObject({ status: 'completed' })
+      expect(run.billing).toEqual({
+        reservedCredits: 5,
+        chargedCredits: 5,
+        releasedCredits: 0,
+        ledgerId: 'ledger_1',
+        settlementLedgerId: null,
+        settleFailed: true,
+      })
+      // The hold is a single ledger amount that was already taken; handing the unused part
+      // back would be a release entry the operator could no longer reconcile.
+      expect(creditsMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+      expect(creditsMocks.consumeCredits).toHaveBeenCalledTimes(1)
+    })
+
+    it('同一 run 里只有一项单位不匹配时也保留整笔预留，而不是按匹配项结算差额', async () => {
+      storeMocks.getSceneRegistryEntry.mockResolvedValue(chainedScene())
+      storeMocks.getProviderRegistryEntry.mockResolvedValue(provider({
+        capabilities: [capability('vision.ocr', 'image'), capability('text.translate')],
+      }))
+      // Matched basis: one image against the 20-credit image row.
+      registerSceneCapabilityAdapter('tencent-cloud:vision.ocr', async ({ capability: sceneCapability }) => ({
+        output: { text: 'recognized' },
+        usage: [reportUsage(sceneCapability, { unit: 'image', quantity: 1 })],
+      }))
+      // Mismatched basis: the translate row sells tokens, the adapter metered seconds.
+      registerSceneCapabilityAdapter('tencent-cloud:text.translate', async ({ capability: sceneCapability }) => ({
+        output: { translatedText: 'translated' },
+        usage: [reportUsage(sceneCapability, { unit: 'audio_second', quantity: 30 })],
+      }))
+
+      const run = await runSceneOrchestrator(makeEvent(), SCENE_ID, {
+        input: { imageBase64: 'aGVsbG8=', text: 'ok' },
+        ownerId: OWNER_ID,
+      })
+
+      expect(run).toMatchObject({ status: 'completed' })
+      expect(run.billing).toEqual({
+        reservedCredits: 22,
+        chargedCredits: 22,
+        releasedCredits: 0,
+        ledgerId: 'ledger_1',
+        settlementLedgerId: null,
+        settleFailed: true,
+      })
+      expect(creditsMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+
+      const mismatchPayload = warnSpy.mock.calls
+        .map(call => call[1])
+        .find(payload => Boolean(payload) && typeof payload === 'object' && 'unitMismatches' in payload)
+      expect(mismatchPayload).toMatchObject({
+        sceneId: SCENE_ID,
+        runId: run.runId,
+        reservedCredits: 22,
+        unitMismatches: [{
+          capability: 'text.translate',
+          reportedUnit: 'audio_second',
+          ruleUnit: '1k_tokens',
+        }],
+      })
+    })
+
+    it.each([
+      { label: 'second 对 audio_second', capabilityName: 'audio.stt', meteringUnit: 'audio_second', reportedUnit: 'second', quantity: 4, reserved: 1, charged: 16 },
+      { label: 'unit 对 transcript_unit', capabilityName: 'audio.transcribe', meteringUnit: 'transcript_unit', reportedUnit: 'unit', quantity: 3, reserved: 1, charged: 3 },
+      { label: 'character 对 1k_tokens', capabilityName: 'text.translate', meteringUnit: 'character', reportedUnit: 'character', quantity: 500, reserved: 5, charged: 500 },
+    ])('$label 是同一计价基础，正常结算而不是保留预留', async ({ capabilityName, meteringUnit, reportedUnit, quantity, reserved, charged }) => {
+      storeMocks.getSceneRegistryEntry.mockResolvedValue(pricedScene(capabilityName))
+      storeMocks.getProviderRegistryEntry.mockResolvedValue(pricedProvider(capabilityName, meteringUnit))
+      registerSceneCapabilityAdapter(`tencent-cloud:${capabilityName}`, async ({ capability: sceneCapability }) => ({
+        output: { text: 'done' },
+        usage: [reportUsage(sceneCapability, { unit: reportedUnit, quantity })],
+      }))
+
+      const run = await runSceneOrchestrator(makeEvent(), SCENE_ID, {
+        input: { text: 'hello' },
+        ownerId: OWNER_ID,
+      })
+
+      // A raw string comparison between the reported unit and the row's unit would hold
+      // the reservation instead of charging the provider's quantity.
+      expect(run.billing).toEqual({
+        reservedCredits: reserved,
+        chargedCredits: charged,
+        releasedCredits: 0,
+        ledgerId: 'ledger_1',
+        settlementLedgerId: 'ledger_2',
+        settleFailed: false,
+      })
+    })
+
+    it('价格行的次基准同样可换算，按次基准结算而不是保留预留', async () => {
+      // `audio.stt` sells seconds with a transcript-unit secondary basis (the shipped ASR
+      // shape). Comparing the reported unit against the primary unit alone would call this
+      // sellable report a mismatch and keep the 1-credit floor instead of charging 3.
+      storeMocks.getSceneRegistryEntry.mockResolvedValue(pricedScene('audio.stt'))
+      storeMocks.getProviderRegistryEntry.mockResolvedValue(pricedProvider('audio.stt', 'audio_second'))
+      registerSceneCapabilityAdapter('tencent-cloud:audio.stt', async ({ capability: sceneCapability }) => ({
+        output: { text: 'done' },
+        usage: [reportUsage(sceneCapability, { unit: 'unit', quantity: 3 })],
+      }))
+
+      const run = await runSceneOrchestrator(makeEvent(), SCENE_ID, {
+        input: { text: 'hello' },
+        ownerId: OWNER_ID,
+      })
+
+      expect(run.billing).toEqual({
+        reservedCredits: 1,
+        chargedCredits: 3,
+        releasedCredits: 0,
+        ledgerId: 'ledger_1',
+        settlementLedgerId: 'ledger_2',
+        settleFailed: false,
+      })
+      expect(creditsMocks.consumeCredits).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        OWNER_ID,
+        2,
+        'scene-run-settle',
+        expect.objectContaining({ chargedCredits: 3 }),
+        { idempotencyKey: `scene-run-settle:${run.runId}` },
+      )
+    })
+
+    it('未识别单位仍按 token 兜底计费，不被 unit guard 拦下', async () => {
+      registerSceneCapabilityAdapter('tencent-cloud:text.translate', async ({ capability: sceneCapability }) => ({
+        output: { translatedText: 'translated' },
+        usage: [reportUsage(sceneCapability, { unit: 'megapixel', quantity: 100 })],
+      }))
+
+      const run = await runSceneOrchestrator(makeEvent(), SCENE_ID, {
+        input: { text: 'hello' },
+        ownerId: OWNER_ID,
+      })
+
+      expect(run.billing).toEqual({
+        reservedCredits: 5,
+        chargedCredits: 100,
+        releasedCredits: 0,
+        ledgerId: 'ledger_1',
+        settlementLedgerId: 'ledger_2',
+        settleFailed: false,
+      })
+    })
+
+    it('不可计费的条目即使单位不匹配也不触发 unit guard', async () => {
+      registerSceneCapabilityAdapter('tencent-cloud:text.translate', async ({ capability: sceneCapability }) => ({
+        output: { translatedText: 'translated' },
+        usage: [
+          reportUsage(sceneCapability, { unit: 'image', quantity: 1, billable: false }),
+          reportUsage(sceneCapability, { unit: 'token', quantity: 40 }),
+        ],
+      }))
+
+      const run = await runSceneOrchestrator(makeEvent(), SCENE_ID, {
+        input: { text: 'hello' },
+        ownerId: OWNER_ID,
+      })
+
+      expect(run.billing).toEqual({
+        reservedCredits: 5,
+        chargedCredits: 40,
+        releasedCredits: 0,
+        ledgerId: 'ledger_1',
+        settlementLedgerId: 'ledger_2',
+        settleFailed: false,
+      })
     })
   })
 })
