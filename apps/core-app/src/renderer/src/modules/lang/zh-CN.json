@@ -1077,7 +1077,7 @@
     "actions": {
       "refresh": "刷新",
       "share": "分享",
-      "clear": "清空记录",
+      "clear": "清除洞察",
       "retry": "重试",
       "showReport": "查看报告",
       "hideReport": "收起报告",
@@ -5321,15 +5321,7 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": [
-        "日",
-        "一",
-        "二",
-        "三",
-        "四",
-        "五",
-        "六"
-      ]
+      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
     },
     "memoryReview": {
       "title": "记忆审核",

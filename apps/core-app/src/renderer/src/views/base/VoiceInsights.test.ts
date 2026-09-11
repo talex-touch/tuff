@@ -292,7 +292,7 @@ describe('VoiceInsights page composition', () => {
     const menu = wrapper.find('.VoiceInsights-Menu')
     expect(menu.exists()).toBe(true)
 
-    const items = menu.findAll('[role="menuitem"]')
+    const items = menu.findAll('button')
     expect(items.map((item) => item.attributes('data-testid'))).toEqual([
       'voice-insights-share',
       'voice-insights-settings',
