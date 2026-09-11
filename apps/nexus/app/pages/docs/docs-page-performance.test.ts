@@ -181,7 +181,7 @@ describe('docs page performance boundaries', () => {
     expect.soft(nuxtConfig).toMatch(/'app:resolve'\(app\) \{[\s\S]*removeSidebaseAuthAppRuntime\(app\)/)
     expect.soft(nuxtConfig).toMatch(/'app:templates'\(app\) \{[\s\S]*removeSidebaseAuthAppRuntime\(app\)/)
 
-    expect.soft(appRoot).toContain('const { status, getSession } = useNexusAuth()')
+    expect.soft(appRoot).toContain('const { status, getSession, settleAnonymousSession } = useNexusAuth()')
     expect.soft(theHeader).toContain('const { status } = useNexusAuth()')
     expect.soft(appRoot).not.toContain('useAuth()')
     expect.soft(theHeader).not.toContain('useAuth()')
