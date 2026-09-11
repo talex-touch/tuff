@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { toLocalizedDocsPaths } from '../shared/utils/docs-path'
+import { normalizeDocsPagePath, toLocalizedDocsPaths } from '../shared/utils/docs-path'
+import { toStaticDocsPageJsonPaths } from '../shared/utils/docs-page-json'
 
 const DOC_FILE_PATTERN = /\.(md|mdc)$/i
 const LOCALE_SUFFIX_PATTERN = /\.(en|zh)$/i
@@ -55,7 +56,20 @@ export function createDocsPrerenderRoutes(nexusRoot: string) {
   return [...routes].sort((a, b) => a.localeCompare(b))
 }
 
+/**
+ * The static JSON twin of every docs page: `/api/docs/page/<locale>/<mode>/<path>.json` for
+ * both locales and both body modes. Path-shaped on purpose — a query-string route cannot be a
+ * file on Cloudflare Pages, which is what sank the earlier attempt (`af99441e0`). With these
+ * prerendered, client-side navigation between docs pages reads a static asset instead of
+ * asking the Worker.
+ */
 export function createDocsPageApiPrerenderRoutes(nexusRoot: string) {
-  void nexusRoot
-  return []
+  const routes = new Set<string>()
+
+  for (const route of createDocsPrerenderRoutes(nexusRoot)) {
+    for (const jsonRoute of toStaticDocsPageJsonPaths(normalizeDocsPagePath(route)))
+      routes.add(jsonRoute)
+  }
+
+  return [...routes].sort((a, b) => a.localeCompare(b))
 }
