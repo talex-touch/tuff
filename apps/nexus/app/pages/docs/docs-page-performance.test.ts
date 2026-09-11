@@ -52,6 +52,8 @@ const tuffCodeBlockRenderer = readFileSync(new URL('../../components/content/Tuf
 const tuffPropsTable = readFileSync(new URL('../../components/content/TuffPropsTable.vue', import.meta.url), 'utf8')
 const mermaidRenderer = readFileSync(new URL('../../utils/mermaid-renderer.ts', import.meta.url), 'utf8')
 const i18nConfig = readFileSync(new URL('../../i18n.config.ts', import.meta.url), 'utf8')
+const i18nPreloadPlugin = readFileSync(new URL('../../plugins/i18n-preload-hydration.client.ts', import.meta.url), 'utf8')
+const i18nPreloadHydration = readFileSync(new URL('../../utils/i18n-preload-hydration.ts', import.meta.url), 'utf8')
 const i18nEn = readFileSync(new URL('../../../i18n/locales/en.ts', import.meta.url), 'utf8')
 const i18nZh = readFileSync(new URL('../../../i18n/locales/zh.ts', import.meta.url), 'utf8')
 const routeLocaleChunks = readFileSync(new URL('../../utils/route-locale-chunks.ts', import.meta.url), 'utf8')
@@ -594,6 +596,19 @@ describe('docs page performance boundaries', () => {
     expect.soft(i18nConfig).not.toContain('../i18n/locales/zh')
     expect.soft(i18nConfig).not.toMatch(/\bmessages\s*:/)
     expect.soft(nuxtConfig).toMatch(/i18n: \{[\s\S]*locales: \[[\s\S]*\{ code: 'en', file: 'en\.ts' \}[\s\S]*\{ code: 'zh', file: 'zh\.ts' \}[\s\S]*langDir: 'locales'[\s\S]*defaultLocale: 'en'/)
+  })
+
+  it('preloads the rendered locale keys into the SSR HTML instead of a blocking client fetch', () => {
+    // Without preload the client fetched `/_i18n/<hash>/<locale>/messages.json` after
+    // DOMContentLoaded and hydration waited on it. Strip keeps the payload to the keys the
+    // render used rather than shipping both whole locales.
+    expect.soft(nuxtConfig).toMatch(/i18n: \{[\s\S]*experimental: \{[\s\S]*preload: true,[\s\S]*stripMessagesPayload: true,/)
+    // nuxt-i18n still awaits its own messages fetch before mounting even when the payload is
+    // preloaded; the pre-enforced client plugin is what takes that fetch off the critical path.
+    expect.soft(i18nPreloadPlugin).toContain("enforce: 'pre'")
+    expect.soft(i18nPreloadPlugin).toContain("Object.defineProperty(holder, '_nuxtI18n'")
+    expect.soft(i18nPreloadPlugin).toContain('installHydrationAwareMessageLoader(nuxtApp, value)')
+    expect.soft(i18nPreloadHydration).toContain('if (nuxtApp.isHydrating && ctx.preloaded)')
   })
 
   it('keeps the browser title reactive when a reused docs route changes', () => {
