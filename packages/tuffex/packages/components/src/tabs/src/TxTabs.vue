@@ -418,8 +418,20 @@ export default defineComponent({
       const navInnerRect = navInnerEl.getBoundingClientRect()
       const diff = props.offset || 0
 
-      if (options.reveal)
+      if (options.reveal) {
         indicatorRevealed.value = true
+      }
+      else if (!indicatorRevealed.value && nodeRect.width > 0 && nodeRect.height > 0) {
+        // Reveal on the first real measurement, not on the first click. `reveal:
+        // true` is only ever passed from a tab's own click handler, so a freshly
+        // mounted TxTabs — including one whose active tab comes from `v-model`
+        // or `activation` — painted its indicator at opacity 0 and kept it there
+        // until someone clicked. Every path that lands here passes
+        // `animate: false`, so the indicator appears where it belongs instead of
+        // sliding in from the nav's edge; the zero-size guard keeps it hidden
+        // until layout has actually happened.
+        indicatorRevealed.value = true
+      }
 
       pointerEl.style.opacity = indicatorRevealed.value ? '1' : '0'
 
