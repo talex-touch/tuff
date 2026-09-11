@@ -17,16 +17,25 @@ describe('Tuff demo client boundary', () => {
   it('keeps the generated demo registry out of the SSR wrapper', () => {
     const wrapper = readComponent('./TuffDemoWrapper.vue')
 
-    expect(wrapper).not.toContain('./demo-registry')
+    // The wrapper may *start* the registry download on activation, but only through the
+    // shared loader's dynamic import — a static import here would pull 370+ demo entries
+    // into the server graph of every docs page.
+    expect(wrapper).not.toMatch(/from ['"]\.\/demo-registry['"]/)
+    expect(wrapper).toContain("from './demo-registry-loader'")
+    expect(wrapper).toMatch(/if \(import\.meta\.client\)\s*\n\s*void loadDemoRegistry\(\)/)
     expect(wrapper).toContain('<LazyTuffDemoClientRenderer')
     expect(wrapper).not.toContain('<TuffDemoClientRenderer')
   })
 
-  it('loads the generated demo registry only from the client renderer', () => {
+  it('loads the generated demo registry through one shared dynamic import', () => {
+    const loader = readComponent('./demo-registry-loader.ts')
     const renderer = readComponent('./TuffDemoClientRenderer.client.vue')
 
-    expect(renderer).not.toContain("import { createAsyncDemo, demoLoaders } from './demo-registry'")
-    expect(renderer).toContain("import('./demo-registry')")
+    expect(loader).toContain("import('./demo-registry')")
+    expect(loader).not.toMatch(/from ['"]\.\/demo-registry['"]/)
+    expect(renderer).toContain("from './demo-registry-loader'")
+    expect(renderer).not.toContain("import('./demo-registry')")
+    expect(renderer).not.toMatch(/from ['"]\.\/demo-registry['"]/)
   })
 
   it('keeps the client renderer behind viewport-driven demo activation', () => {
@@ -63,6 +72,7 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain('/app/components/content/demo-registry.ts')
     expect(config).toContain('/app/components/content/demo-loader.ts')
     expect(config).toContain('/app/components/content/demo-lazy.ts')
+    expect(config).toContain('/app/components/content/demo-registry-loader.ts')
     expect(config).toContain('/app/components/content/TuffCodeBlockRenderer.vue')
   })
 
@@ -180,6 +190,7 @@ describe('Tuff demo client boundary', () => {
 
     expect(generatedComponents).not.toContain('content/demos')
     expect(generatedComponents).not.toContain('demo-registry')
+    expect(generatedComponents).not.toContain('demo-registry-loader')
     expect(generatedComponents).not.toContain('demo-loader')
     expect(generatedComponents).not.toContain('demo-lazy')
   })
