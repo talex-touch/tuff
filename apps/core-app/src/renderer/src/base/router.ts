@@ -134,7 +134,10 @@ function createSettingCategoryRoutes(withPerf: typeof withRouteComponentPerf): R
         index: 1,
         keepAlive: true,
         // Per-category cache keys keep each page's scroll position across category switches.
-        keepAliveKey: `setting-${category.key}`
+        keepAliveKey: `setting-${category.key}`,
+        // Advanced categories are openable only while Developer Mode is on; the guard below
+        // sends a direct hit back to the default category instead of rendering the page.
+        ...(category.advanced ? { requiresAdvanced: true } : {})
       }
     },
     ...(category.children ?? []).map((child) => {
@@ -400,6 +403,19 @@ router.beforeEach((to, _from, next) => {
 router.beforeEach((to, _from, next) => {
   if (to.meta?.requiresDashboard && !appSetting.dashboard.enable) {
     next('/home')
+  } else {
+    next()
+  }
+})
+
+/**
+ * Advanced categories (download, storage usage) open only while Developer Mode is on — the
+ * sidebar already hides them, and this keeps a bookmark, a restored session or a stray deep link
+ * from rendering a page the user has no item for.
+ */
+router.beforeEach((to, _from, next) => {
+  if (to.meta?.requiresAdvanced && !appSetting.dev?.developerMode) {
+    next(DEFAULT_SETTING_PATH)
   } else {
     next()
   }

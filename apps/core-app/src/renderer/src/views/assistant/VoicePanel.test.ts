@@ -162,6 +162,12 @@ function emitTransport(event: { toEventName: () => string }, payload?: unknown):
   transportHandlers.get(event.toEventName())?.(payload)
 }
 
+function requestedDeliveryTiming(): string | undefined {
+  const payload = streamRequest?.payload
+  if (!payload || typeof payload !== 'object' || !('deliveryTiming' in payload)) return undefined
+  return typeof payload.deliveryTiming === 'string' ? payload.deliveryTiming : undefined
+}
+
 async function mountVoicePanel() {
   const wrapper = mount(VoicePanel)
   await flushPromises()
@@ -171,9 +177,9 @@ async function mountVoicePanel() {
 function exposed(wrapper: VueWrapper) {
   return wrapper.vm as unknown as {
     openPanel: () => Promise<void>
-    startVoiceInput: (timing?: 'final' | 'live') => void
+    startVoiceInput: () => void
     stopVoiceInput: () => void
-    toggleVoiceInput: (timing?: 'final' | 'live') => void
+    toggleVoiceInput: () => void
   }
 }
 
@@ -211,7 +217,13 @@ beforeEach(() => {
   )
   transportSendMock.mockImplementation(async (event: unknown) => {
     if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
-      return { enabled: true, language: 'en-US' }
+      return {
+        enabled: true,
+        language: 'en-US',
+        polishEnabled: true,
+        polishAvailable: true,
+        polishStrength: 'structured'
+      }
     }
     if (eventName(event) === voiceApiEvents.recoveryStatus.toEventName()) {
       return { ok: true, result: recoveryStatusResult }
@@ -258,8 +270,20 @@ describe('VoicePanel dock surface', () => {
     wrapper.unmount()
   })
   it('waits for runtime voice input configuration before starting recognition', async () => {
-    let resolveConfig!: (config: { enabled: boolean; language: string }) => void
-    const configRequest = new Promise<{ enabled: boolean; language: string }>((resolve) => {
+    let resolveConfig!: (config: {
+      enabled: boolean
+      language: string
+      polishEnabled: boolean
+      polishAvailable: boolean
+      polishStrength: 'natural' | 'structured' | 'deep'
+    }) => void
+    const configRequest = new Promise<{
+      enabled: boolean
+      language: string
+      polishEnabled: boolean
+      polishAvailable: boolean
+      polishStrength: 'natural' | 'structured' | 'deep'
+    }>((resolve) => {
       resolveConfig = resolve
     })
     transportSendMock.mockImplementation(async (event: unknown) => {
@@ -285,7 +309,13 @@ describe('VoicePanel dock surface', () => {
     expect(panelOpened).toBe(false)
     expect(transportStreamMock).not.toHaveBeenCalled()
 
-    resolveConfig({ enabled: true, language: 'en-US' })
+    resolveConfig({
+      enabled: true,
+      language: 'en-US',
+      polishEnabled: true,
+      polishAvailable: true,
+      polishStrength: 'structured'
+    })
     await opening
     exposed(wrapper).startVoiceInput()
     await flushPromises()
@@ -296,7 +326,13 @@ describe('VoicePanel dock surface', () => {
   it('does not start recognition when runtime voice input is disabled', async () => {
     transportSendMock.mockImplementation(async (event: unknown) => {
       if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
-        return { enabled: false, language: 'fr-FR' }
+        return {
+          enabled: false,
+          language: 'fr-FR',
+          polishEnabled: true,
+          polishAvailable: true,
+          polishStrength: 'deep'
+        }
       }
       throw new Error(`Unexpected transport event: ${eventName(event)}`)
     })
@@ -378,6 +414,7 @@ describe('VoicePanel dock surface', () => {
     expect(streamRequest?.payload).toEqual({
       language: 'en-US',
       cleanup: true,
+      polishStrength: 'structured',
       delivery: 'active-app',
       deliveryTiming: 'final',
       emitLevel: true,
@@ -388,18 +425,48 @@ describe('VoicePanel dock surface', () => {
     wrapper.unmount()
   })
 
-  /**
-   * The gesture is the only thing that distinguishes the two dictation styles, so the
-   * request has to carry it. Asserting the default alone would pass even if the panel had
-   * stopped forwarding the caller's choice entirely.
-   */
-  it('asks for live delivery when the gesture was a hold', async () => {
+  it('uses raw live delivery only when the persisted polish preference is disabled', async () => {
+    transportSendMock.mockImplementation(async (event: unknown) => {
+      if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+        return {
+          enabled: true,
+          language: 'en-US',
+          polishEnabled: false,
+          polishAvailable: true,
+          polishStrength: 'natural'
+        }
+      }
+      throw new Error(`Unexpected transport event: ${eventName(event)}`)
+    })
     const wrapper = await mountVoicePanel()
 
-    exposed(wrapper).startVoiceInput('live')
+    exposed(wrapper).startVoiceInput()
     await flushPromises()
 
-    expect((streamRequest?.payload as { deliveryTiming?: string })?.deliveryTiming).toBe('live')
+    expect(requestedDeliveryTiming()).toBe('live')
+
+    wrapper.unmount()
+  })
+
+  it('uses raw live delivery when enabled polish has no chat runtime', async () => {
+    transportSendMock.mockImplementation(async (event: unknown) => {
+      if (eventName(event) === AssistantEvents.floatingBall.getRuntimeConfig.toEventName()) {
+        return {
+          enabled: true,
+          language: 'en-US',
+          polishEnabled: true,
+          polishAvailable: false,
+          polishStrength: 'natural'
+        }
+      }
+      throw new Error(`Unexpected transport event: ${eventName(event)}`)
+    })
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+
+    expect(requestedDeliveryTiming()).toBe('live')
 
     wrapper.unmount()
   })
@@ -1236,20 +1303,67 @@ describe('VoicePanel device readiness and long messages', () => {
   })
 
   /**
-   * A device switch is the one thing the HUD says that is neither a failure nor an instruction,
-   * so it takes the muted tone — and it names the device, because "the microphone changed" and
-   * "you are on the AirPods now" answer different questions.
+   * Device selection is an informational interruption, not a terminal session state: the user
+   * needs to know which microphone won without losing the recording already in progress.
    */
-  it('names the microphone when the session opened a different one', async () => {
+  it('keeps dictation running through a device switch and resumes transcript display after its hint', async () => {
     const wrapper = await listeningPanel()
+    const callbacks = callbacksOrThrow()
 
-    callbacksOrThrow().onData?.({ type: 'device', name: 'AirPods Pro' })
+    callbacks.onData?.({ type: 'device', name: 'AirPods Pro' })
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="voice-notice"]').text()).toBe('Switched to AirPods Pro')
-    expect(wrapper.find('.voice-dock--muted').exists()).toBe(true)
-    // Nothing to act on, so no button — and the wave is gone with the session state.
-    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-live-text"]').text()).toBe('Switched to AirPods Pro')
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-confirm"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="voice-notice"]').exists()).toBe(false)
+    expect(streamCancelMock).not.toHaveBeenCalled()
+    expect(streamStopMock).not.toHaveBeenCalled()
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    callbacks.onData?.({ type: 'partial', text: 'continue speaking' })
+    await nextTick()
+    vi.advanceTimersByTime(900)
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-live-text"]').text()).toContain('continue speaking')
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+    expect(transportStreamMock).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('finished')).toBeUndefined()
+
+    exposed(wrapper).stopVoiceInput()
+    await nextTick()
+    expect(streamStopMock).toHaveBeenCalledTimes(1)
+    expect(streamCancelMock).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('does not let a prior device-hint timer erase a new session hint', async () => {
+    const wrapper = await listeningPanel()
+    const panel = exposed(wrapper)
+    const priorCallbacks = callbacksOrThrow()
+
+    priorCallbacks.onData?.({ type: 'device', name: 'Studio Microphone' })
+    await flushPromises()
+    vi.advanceTimersByTime(450)
+    priorCallbacks.onEnd?.()
+    await flushPromises()
+
+    await panel.openPanel()
+    panel.startVoiceInput()
+    await flushPromises()
+    const currentCallbacks = callbacksOrThrow()
+    currentCallbacks.onData?.({ type: 'device', name: 'AirPods Pro' })
+    await flushPromises()
+
+    // At t=900 the old timer would fire if it crossed the session boundary.
+    vi.advanceTimersByTime(450)
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="voice-live-text"]').text()).toBe('Switched to AirPods Pro')
+    expect(wrapper.find('[data-testid="voice-wave"]').exists()).toBe(true)
+    expect(wrapper.emitted('finished')).toHaveLength(1)
 
     wrapper.unmount()
   })
@@ -1411,10 +1525,10 @@ describe('VoicePanel device readiness and long messages', () => {
 
   /**
    * The beam says something is charging; it cannot say how much longer, because a ring looks the
-   * same at 10% as at 90%. The bar drains 100% → 0% behind the content, so the surface being
-   * consumed *is* the countdown — and releasing early gives it back rather than leaving a stub.
+   * same at 10% as at 90%. The bar fills 0% → 100% behind the content, so the surface being
+   * covered *is* the progress — and releasing early takes it back rather than leaving a stub.
    */
-  it('drains a width behind the content while Escape is held, and restores it on release', async () => {
+  it('fills a width behind the content while Escape is held, and clears it on release', async () => {
     const wrapper = await listeningPanel()
     expect(wrapper.find('[data-testid="voice-charge"]').exists()).toBe(false)
 
@@ -1447,7 +1561,7 @@ describe('VoicePanel device readiness and long messages', () => {
         wrapper.find('[data-testid="voice-charge"]').attributes('style') ?? ''
       )?.[1] ?? -1
     )
-    expect(later).toBeLessThan(started)
+    expect(later).toBeGreaterThan(started)
 
     // Released before the hold completes: the charge unwinds and nothing is cancelled.
     hold(wrapper, 'release')

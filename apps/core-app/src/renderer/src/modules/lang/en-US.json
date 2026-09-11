@@ -371,7 +371,7 @@
       "intelligence-audit": "Intelligence audit metadata",
       "intelligence-context": "Intelligence context conversations",
       "diagnostics": "Diagnostics and telemetry metadata",
-      "voice-insights": "Voice insight aggregates",
+      "voice-insights": "Voice input statistics",
       "intelligence-memory": "Explicit AI Memory",
       "plugin-data": "Plugin data"
     },
@@ -542,18 +542,28 @@
     "recommendationContextLocationDesc": "Use a hashed local timezone and network bucket instead of raw location data."
   },
   "settingAssistant": {
-    "groupTitle": "Assistant",
+    "groupTitle": "Assistant entry",
+    "groupDesc": "Manage the Assistant and its desktop floating entry.",
     "enableAssistant": "Enable Assistant",
-    "floatingBall": "Floating ball",
-    "floatingBallDesc": "Show the draggable Assistant entry on the desktop."
+    "enableAssistantDesc": "Controls only the Assistant floating entry; it does not affect voice input.",
+    "floatingBall": "Show voice-input floating ball",
+    "floatingBallDesc": "Show a draggable voice-input entry and status on the desktop. Hiding it does not affect the Fn/Ctrl shortcut.",
+    "voiceWake": "Wake-word activation",
+    "voiceWakeDesc": "Wake-word activation is not available yet."
   },
   "settingSpeechRecognition": {
-    "title": "Speech recognition",
-    "description": "Manage voice entry, recognition history, and channel and model configuration.",
+    "title": "Voice Input Settings",
+    "description": "Records, and where the settings live.",
     "refresh": "Try again",
-    "voiceInput": {
+    "input": {
       "title": "Voice input",
       "description": "Briefly press Fn on macOS or Ctrl on Windows/Linux to start, then press again to finish. Hold and release to finish. The microphone is captured only while voice input is active."
+    },
+    "globeKey": {
+      "title": "The system still owns the Fn key",
+      "description": "A lone Fn press opens the Emoji panel or switches input source. macOS fires that outside the app, so no app can intercept it — but it can be turned off. Fn then belongs to voice input, the F-key layer and every other Fn combination are untouched, and the Emoji panel is still on Ctrl+Cmd+Space.",
+      "action": "Turn it off",
+      "manual": "System Settings"
     },
     "capabilities": {
       "title": "Channel and model",
@@ -563,6 +573,31 @@
     "history": {
       "title": "Keep recognition records",
       "description": "Keeps source audio and transcripts; off keeps statistics only."
+    },
+    "noiseSuppression": {
+      "title": "Noise suppression",
+      "description": "Suppresses steady background noise such as fans and air conditioning. Off by default: cloud recognisers are trained on noisy speech, so suppression can cost accuracy. Anti-alias and low-frequency filtering are always on and unaffected by this switch."
+    },
+    "polish": {
+      "title": "Audio tidy-up",
+      "description": "Tidy and write once you stop when a Chat channel is ready; otherwise, raw words type as you speak."
+    },
+    "polishStrength": {
+      "title": "Tidy-up level",
+      "options": {
+        "natural": {
+          "label": "Natural",
+          "description": "Drops filler words and clear self-corrections, keeping your order."
+        },
+        "structured": {
+          "label": "Structured",
+          "description": "Groups related points, reshaping into paragraphs or lists when useful."
+        },
+        "deep": {
+          "label": "Deep",
+          "description": "Edits throughout for clarity; never changes the meaning or the register."
+        }
+      }
     },
     "unavailable": {
       "title": "Recognition status could not be read",
@@ -1083,7 +1118,7 @@
   "shell": {
     "search": "Search",
     "newChat": "New Chat",
-    "voiceInsights": "Voice Insights",
+    "voiceInsights": "Voice Input",
     "store": "Plugins",
     "setting": "Settings",
     "collapseSidebar": "Collapse sidebar",
@@ -1105,11 +1140,11 @@
     }
   },
   "voiceInsights": {
-    "loading": "Loading voice insights...",
+    "loading": "Loading voice input statistics...",
     "actions": {
       "refresh": "Refresh",
       "share": "Share",
-      "clear": "Clear insights",
+      "clear": "Clear statistics",
       "retry": "Retry",
       "showReport": "View report",
       "hideReport": "Hide report",
@@ -1158,15 +1193,15 @@
     "empty": {
       "title": "Your voice history starts here",
       "description": "Complete a successful, non-empty voice capture and this page will begin showing real totals, streaks, and daily activity.",
-      "privacy": "Only aggregate counts are kept. Raw audio, transcripts, app names, and paths are not part of voice insights."
+      "privacy": "Only aggregate counts are kept. Raw audio, transcripts, app names, and paths are not part of voice input statistics."
     },
     "error": {
-      "title": "Voice insights could not be loaded",
+      "title": "Voice input statistics could not be loaded",
       "description": "Your existing statistics were not changed. Retry the local request."
     },
     "share": {
-      "title": "Tuff Voice Insights",
-      "copied": "Aggregate voice insights copied",
+      "title": "Tuff Voice Input Statistics",
+      "copied": "Voice input statistics copied",
       "copyFailed": "Could not copy the aggregate summary",
       "unavailable": "not available yet",
       "rateValue": "{count} characters/minute",
@@ -1182,12 +1217,12 @@
       "estimateBasis": "Time-saved estimate uses a {count} characters/minute typing baseline; it is not measured typing."
     },
     "clear": {
-      "title": "Clear voice insights?",
+      "title": "Clear voice input statistics?",
       "description": "This permanently deletes the aggregate totals and daily activity shown here. Recording starts again after your next successful, non-empty voice capture.",
-      "confirm": "Clear all insights",
-      "success": "Voice insights cleared",
-      "failed": "Voice insights could not be cleared. Nothing shown here was changed.",
-      "refreshNeededTitle": "Insights were cleared",
+      "confirm": "Clear all statistics",
+      "success": "Voice input statistics cleared",
+      "failed": "Voice input statistics could not be cleared. Nothing shown here was changed.",
+      "refreshNeededTitle": "Voice input statistics were cleared",
       "refreshNeededDescription": "The cleared state could not be refreshed yet. No previous statistics are being shown; refresh to load the current zero state."
     },
     "report": {
@@ -1418,8 +1453,8 @@
     "back": "Back to Intelligence",
     "channels": "Channels",
     "channelsDesc": "Model providers, credentials and connectivity tests.",
-    "voice": "Audio Insights",
-    "voiceDesc": "Live dictation, audio transcription, recognition records, and audio insights",
+    "voice": "Voice Input",
+    "voiceDesc": "Live dictation, audio transcription, recognition records, and usage statistics",
     "prompts": "Prompts",
     "promptsDesc": "Prompt library, variables and versions.",
     "agents": "Agents",
@@ -2703,7 +2738,7 @@
     "homeConversation": "Conversation",
     "login": "Please login first!",
     "permission": "You don't have permission!",
-    "voiceInsights": "Voice Insights",
+    "voiceInsights": "Voice Input",
     "pluginStore": "Plugin Store",
     "installedPlugins": "Installed Plugins",
     "storeDocs": "Store Docs",
@@ -2719,7 +2754,7 @@
     "storagable": "Storagable",
     "intelligence": "Intelligence",
     "intelligenceChannels": "Intelligence Channels",
-    "intelligenceVoice": "Audio Insights",
+    "intelligenceVoice": "Voice Input",
     "intelligenceCapabilities": "Intelligence Capabilities",
     "intelligencePrompts": "Intelligence Prompts",
     "intelligenceAudit": "Intelligence Audit",

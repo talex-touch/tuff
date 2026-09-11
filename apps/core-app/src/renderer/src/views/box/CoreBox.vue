@@ -1069,44 +1069,44 @@ const customCss = computed(() => {
               class="CoreBoxRes-ScrollContent"
               :class="{ 'has-footer': !!res.length }"
             >
-              <Transition
-                name="result-switch"
-                :css="resultTransitionEnabled"
-                :mode="resultTransitionEnabled ? 'out-in' : undefined"
+              <BoxGrid
+                v-if="isGridMode"
+                key="grid"
+                :class="{ 'result-layout-motion': resultTransitionEnabled }"
+                :items="res"
+                :layout="boxOptions.layout"
+                :focus="boxOptions.focus"
+                :compact="!!addon"
+                :available-width="gridAvailableWidth"
+                :register-item="setItemRef"
+                @select="handleGridSelect"
+                @update:visible-columns="handleGridColumnsChange"
+              />
+              <div
+                v-else
+                key="list"
+                class="item-list"
+                :class="{ 'result-layout-motion': resultTransitionEnabled }"
               >
-                <BoxGrid
-                  v-if="isGridMode"
-                  key="grid"
-                  :items="res"
-                  :layout="boxOptions.layout"
-                  :focus="boxOptions.focus"
-                  :compact="!!addon"
-                  :available-width="gridAvailableWidth"
-                  :register-item="setItemRef"
-                  @select="handleGridSelect"
-                  @update:visible-columns="handleGridColumnsChange"
+                <CoreBoxRender
+                  v-for="(item, index) in res"
+                  :key="item.id || index"
+                  :ref="(el) => setItemRef(el, index)"
+                  :active="boxOptions.focus === index"
+                  :item="item"
+                  :index="index"
+                  :class="{
+                    'is-new-item':
+                      appSetting.animation?.listItemStagger === true &&
+                      !lowBatteryMode &&
+                      newItemIds.has(item.id)
+                  }"
+                  :style="{
+                    '--stagger-delay': `${getStaggerDelay(index, res.length)}s`
+                  }"
+                  @trigger="handleItemTrigger(index, item)"
                 />
-                <div v-else key="list" class="item-list">
-                  <CoreBoxRender
-                    v-for="(item, index) in res"
-                    :key="item.id || index"
-                    :ref="(el) => setItemRef(el, index)"
-                    :active="boxOptions.focus === index"
-                    :item="item"
-                    :index="index"
-                    :class="{
-                      'is-new-item':
-                        appSetting.animation?.listItemStagger === true &&
-                        !lowBatteryMode &&
-                        newItemIds.has(item.id)
-                    }"
-                    :style="{
-                      '--stagger-delay': `${getStaggerDelay(index, res.length)}s`
-                    }"
-                    @trigger="handleItemTrigger(index, item)"
-                  />
-                </div>
-              </Transition>
+              </div>
             </div>
           </TxScroll>
           <CoreBoxFooter
@@ -1467,36 +1467,18 @@ div.CoreBoxRes.CoreBoxRes--widget {
   padding-bottom: 72px;
 }
 
-// Result switch animation (list <-> grid, or new results)
-.result-switch-enter-active {
-  animation: result-enter 0.12s ease-out;
+// Current results mount with the footer; motion never gates content visibility.
+.result-layout-motion {
+  animation: result-layout-in 0.12s ease-out;
   animation-fill-mode: both;
 }
 
-.result-switch-leave-active {
-  animation: result-leave 0.08s ease-in;
-  animation-fill-mode: both;
-}
-
-@keyframes result-enter {
+@keyframes result-layout-in {
   0% {
-    opacity: 0;
     transform: translateY(8px);
   }
   100% {
-    opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes result-leave {
-  0% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-6px);
   }
 }
 
@@ -1514,12 +1496,17 @@ div.CoreBoxRes.CoreBoxRes--widget {
 
 @keyframes item-stagger-in {
   0% {
-    opacity: 0;
     transform: translateY(10px);
   }
   100% {
-    opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-layout-motion,
+  .item-list > .CoreBoxRender.is-new-item {
+    animation: none;
   }
 }
 

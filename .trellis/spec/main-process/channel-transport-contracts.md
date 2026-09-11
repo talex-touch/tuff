@@ -31,8 +31,12 @@ transport.broadcastToWindow(windowId, event, payload): void
 - Renderer side needs no changes when switching: `__handle_main` dispatches non-reply
   envelopes purely by event name to the same `transport.on(event, …)` listener.
 - Port channel is not a fork: only the allowlist in `transport/sdk/port-policy.ts`
-  (clipboard change, file-index progress, search indexCommitted/session) rides
-  MessagePorts; everything else uses the bridge in both modes.
+  (clipboard change, file-index progress, search indexCommitted by default) rides
+  MessagePorts; everything else uses the bridge in both modes. Short-lived
+  `core-box:search:session` streams default to typed channel transport so a new
+  query never waits for an optional Port upgrade. Explicit environment allowlists
+  remain supported; do not add the search session back to the default set merely
+  because its output is streamed.
 - `broadcastToWindow` throws synchronously if the window id is gone (`sendTo` rejected
   instead) — validate the window (`isDestroyed()`) before sending, as `show()` does.
 - A broadcast to a still-loading webContents is dropped, same as an unanswered `sendTo`

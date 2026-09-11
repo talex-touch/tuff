@@ -15,6 +15,14 @@ export interface AudioCaptureOptions {
   silenceStopMs?: number
   /** Requested capture sample rate; falls back to the device default when omitted. */
   sampleRate?: number
+  /**
+   * Run RNNoise over the capture before it is band-limited. Default `false`.
+   *
+   * Off by default because cloud recognisers are trained on noisy speech: the spectral
+   * distortion a suppressor introduces can cost more accuracy than the noise it removes.
+   * Independent of the always-on high-pass and anti-alias filtering, which are not optional.
+   */
+  noiseSuppression?: boolean
 }
 
 export interface AudioCaptureStart {

@@ -1,5 +1,15 @@
 import type { CoreBoxCanvasConfig, CoreBoxThemeConfig, LayoutAtomConfig, LayoutCanvasConfig } from './layout-atom-types'
 
+export const VOICE_POLISH_STRENGTHS = ['natural', 'structured', 'deep'] as const
+export type VoicePolishStrength = typeof VOICE_POLISH_STRENGTHS[number]
+export const DEFAULT_VOICE_POLISH_STRENGTH: VoicePolishStrength = 'deep'
+
+export function normalizeVoicePolishStrength(value: unknown): VoicePolishStrength {
+  return value === 'natural' || value === 'structured' || value === 'deep'
+    ? value
+    : DEFAULT_VOICE_POLISH_STRENGTH
+}
+
 /** Default layout atom for 'simple' preset */
 const defaultLayoutAtomSimple: LayoutAtomConfig = {
   preset: 'simple',
@@ -182,9 +192,9 @@ const _appSettingOriginData = {
     enabled: false,
     defaultProvider: null as null | 'pi' | 'codex' | 'claude' | 'oh-my-pi',
     providers: {
-      pi: { enabled: false, executableOverride: '' },
-      codex: { enabled: false, executableOverride: '' },
-      claude: { enabled: false, executableOverride: '' },
+      'pi': { enabled: false, executableOverride: '' },
+      'codex': { enabled: false, executableOverride: '' },
+      'claude': { enabled: false, executableOverride: '' },
       'oh-my-pi': { enabled: false, executableOverride: '' },
     },
   },
@@ -209,6 +219,18 @@ const _appSettingOriginData = {
   voiceInput: {
     enabled: false,
     language: 'zh-CN',
+    polishEnabled: true,
+    polishStrength: DEFAULT_VOICE_POLISH_STRENGTH as VoicePolishStrength,
+
+    /**
+     * 采集时是否运行 RNNoise 谱降噪。
+     *
+     * 默认关闭：云端识别模型本身就是在带噪语音上训练的，降噪引入的频谱失真有可能比它
+     * 去掉的噪声更伤准确率。这个取舍能测，所以做成带默认值的偏好，而不是写死在链路里。
+     *
+     * 与它无关的是采集链路里常开的高通与抗混叠滤波——那两个是缺陷修复，不是偏好。
+     */
+    noiseSuppression: false,
   },
   clipboard: {
     /**
@@ -310,9 +332,9 @@ const _appSettingOriginData = {
      * auto when it does not resolve, but never clear it — a provider that is temporarily
      * unavailable (the pi CLI not running) must not cost the user their choice.
      */
-    model: null as null | { providerId: string; model: string },
+    model: null as null | { providerId: string, model: string },
     /** Starred rows of the home model menu, in the order they were starred. */
-    favoriteModels: [] as Array<{ providerId: string; model: string }>,
+    favoriteModels: [] as Array<{ providerId: string, model: string }>,
   },
   dashboard: {
     enable: false,
@@ -458,8 +480,10 @@ const _appSettingOriginData = {
     startSilent: true,
   },
   shell: {
-    /** Sidebar width in px while expanded. Clamped on read — a hand-edited config or a
-     * cross-version rollback can carry a value outside the range the UI allows. */
+    /**
+     * Sidebar width in px while expanded. Clamped on read — a hand-edited config or a
+     * cross-version rollback can carry a value outside the range the UI allows.
+     */
     sidebarWidth: 260,
     /** Whether the sidebar is collapsed to the icon-only rail. */
     sidebarCollapsed: false,
@@ -518,7 +542,10 @@ export type AppSetting = typeof _appSettingOriginData & {
 export interface VoiceInputSetting {
   enabled: boolean
   language: string
+  polishEnabled: boolean
+  polishStrength: VoicePolishStrength
   historyEnabled?: boolean
+  noiseSuppression?: boolean
 }
 
 function isSettingRecord(value: unknown): value is Record<string, unknown> {
@@ -542,6 +569,8 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
         typeof legacyVoiceWake.language === 'string' && legacyVoiceWake.language.trim()
           ? legacyVoiceWake.language
           : 'zh-CN',
+      polishEnabled: true,
+      polishStrength: DEFAULT_VOICE_POLISH_STRENGTH,
     }
     return true
   }
@@ -549,13 +578,22 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
   const source = isSettingRecord(setting.voiceInput) ? setting.voiceInput : {}
   const enabled = typeof source.enabled === 'boolean' ? source.enabled : false
   const language = typeof source.language === 'string' && source.language.trim() ? source.language : 'zh-CN'
+  const polishEnabled = source.polishEnabled !== false
+  const polishStrength = normalizeVoicePolishStrength(source.polishStrength)
   const hasHistory = Object.prototype.hasOwnProperty.call(source, 'historyEnabled')
   const historyEnabled = source.historyEnabled === true
+  const hasNoiseSuppression = Object.prototype.hasOwnProperty.call(source, 'noiseSuppression')
+  // `=== true` rather than `!== false`: an unreadable value has to land on off. Turning
+  // suppression on by accident changes what the recogniser hears, and the user never asked.
+  const noiseSuppression = source.noiseSuppression === true
   if (
-    isSettingRecord(setting.voiceInput) &&
-    source.enabled === enabled &&
-    source.language === language &&
-    (!hasHistory || source.historyEnabled === historyEnabled)
+    isSettingRecord(setting.voiceInput)
+    && source.enabled === enabled
+    && source.language === language
+    && source.polishEnabled === polishEnabled
+    && source.polishStrength === polishStrength
+    && (!hasHistory || source.historyEnabled === historyEnabled)
+    && (!hasNoiseSuppression || source.noiseSuppression === noiseSuppression)
   ) {
     return false
   }
@@ -564,7 +602,10 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
     ...source,
     enabled,
     language,
+    polishEnabled,
+    polishStrength,
     ...(hasHistory ? { historyEnabled } : {}),
+    ...(hasNoiseSuppression ? { noiseSuppression } : {}),
   }
   return true
 }

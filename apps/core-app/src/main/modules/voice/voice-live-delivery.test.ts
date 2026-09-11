@@ -87,32 +87,71 @@ describe('createLiveDelivery', () => {
     expect(live.delivered()).toBe('one two three four')
   })
 
-  it('appends the tail when a final contradicts what was already typed', async () => {
+  it('appends only the new Chinese suffix when a final adds punctuation inside typed text', async () => {
+    const sink = typist()
+    const live = createLiveDelivery(sink.send)
+    const partial = '明天去超市带上苹果、香蕉和菠萝'
+    const finalText = '明天去超市，带上苹果、香蕉和菠萝，这三样都要'
+
+    await live.offerPartial(partial)
+    await live.offerPartial(partial)
+    await live.finish(finalText)
+
+    // The first comma is inside text already delivered to another app and cannot be inserted.
+    // The suffix must nevertheless be based on the reconciled transcript, not on a rewound
+    // bookkeeping prefix that would type the fruit list twice.
+    expect(sink.calls).toEqual([partial, '，这三样都要'])
+    expect(sink.typed()).toBe('明天去超市带上苹果、香蕉和菠萝，这三样都要')
+    expect(live.delivered()).toBe(sink.typed())
+
+    await live.finish(finalText)
+    expect(sink.calls).toEqual([partial, '，这三样都要'])
+  })
+
+  it('continues after a punctuation-revised partial without replaying its committed prefix', async () => {
+    const sink = typist()
+    const live = createLiveDelivery(sink.send)
+    const committed = '请带上苹果、香蕉和菠萝'
+    const revised = '请带上苹果，香蕉和菠萝这三样都要'
+    const continued = `${revised}还有牛奶`
+
+    await live.offerPartial(committed)
+    await live.offerPartial(committed)
+    await live.offerPartial(revised)
+    await live.offerPartial(continued)
+    await live.finish(continued)
+
+    expect(sink.calls).toEqual([committed, '这三样都要', '还有牛奶'])
+    expect(sink.typed()).toBe('请带上苹果、香蕉和菠萝这三样都要还有牛奶')
+    expect(live.delivered()).toBe(sink.typed())
+  })
+
+  it('does not append after a final lexically revises committed text', async () => {
     const sink = typist()
     const live = createLiveDelivery(sink.send)
 
-    await live.offerPartial('hello wor')
-    await live.offerPartial('hello wor')
-    expect(sink.typed()).toBe('hello wor')
+    await live.offerPartial('请带上苹果、香蕉和菠萝')
+    await live.offerPartial('请带上苹果、香蕉和菠萝')
 
-    // A segment boundary rewrote text that is already in somebody else's buffer. The
-    // characters cannot be recalled, so the tail is appended rather than lost as well —
-    // the user keeps their sentence and loses the correction.
-    const result = await live.finish('hello world')
-    expect(result.method).toBe('native')
-    expect(sink.typed()).toBe('hello world')
+    await expect(live.finish('请带上苹果、梨和菠萝')).resolves.toEqual({
+      method: 'none',
+      reason: 'transcript-revised'
+    })
+    expect(sink.calls).toEqual(['请带上苹果、香蕉和菠萝'])
+    expect(live.delivered()).toBe('请带上苹果、香蕉和菠萝')
   })
 
   /** A target that stops accepting keystrokes must not be hammered at the partial rate. */
-  it('stops after a failed write instead of retrying every partial', async () => {
-    const send = vi.fn(async () => ({ method: 'none' as const, reason: 'target-changed' }))
+  it('keeps a failed sink terminal and preserves its original delivery failure', async () => {
+    const failure = { method: 'none' as const, reason: 'target-changed' }
+    const send = vi.fn(async () => failure)
     const live = createLiveDelivery(send)
 
     await live.offerPartial('one')
     await live.offerPartial('one two')
     await live.offerPartial('one two three')
-    await live.finish('one two three four')
 
+    await expect(live.finish('one two three four')).resolves.toEqual(failure)
     expect(send).toHaveBeenCalledTimes(1)
     expect(live.delivered()).toBe('')
   })

@@ -11,7 +11,11 @@ import type {
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { StorageList } from '@talex-touch/utils'
-import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
+import {
+  appSettingOriginData,
+  normalizeVoicePolishStrength,
+  type VoiceInputSetting
+} from '@talex-touch/utils/common/storage/entity/app-settings'
 import type {
   AssistantClipboardImageTranslateResponse,
   AssistantRuntimeConfig,
@@ -41,6 +45,11 @@ import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { setPlatformVoiceEscapeCapture } from '../voice/command-gesture'
+import {
+  disableGlobeKeyAction,
+  openKeyboardSettings,
+  readGlobeKeyStatus
+} from '../voice/globe-key-preference'
 import {
   dialog,
   screen,
@@ -75,11 +84,6 @@ interface FloatingBallSetting {
   opacity: number
   edgePadding: number
   position: FloatingBallPosition
-}
-
-interface VoiceInputSetting {
-  enabled: boolean
-  language: string
 }
 
 type ScreenshotUnavailableCode =
@@ -393,6 +397,24 @@ export class AssistantModule extends BaseModule {
     )
 
     this.transportDisposers.push(
+      this.transport.on(AssistantEvents.voice.getGlobeKeyStatus, async () => {
+        return await readGlobeKeyStatus()
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(AssistantEvents.voice.disableGlobeKeyAction, async () => {
+        return await disableGlobeKeyAction()
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(AssistantEvents.voice.openKeyboardSettings, async () => {
+        return await openKeyboardSettings()
+      })
+    )
+
+    this.transportDisposers.push(
       this.transport.on(AssistantEvents.voice.submitText, async (payload) => {
         return await this.handleVoiceSubmit(payload?.text, payload?.source)
       })
@@ -607,15 +629,34 @@ export class AssistantModule extends BaseModule {
       language:
         typeof source?.language === 'string' && source.language.trim()
           ? source.language
-          : appSettingOriginData.voiceInput.language
+          : appSettingOriginData.voiceInput.language,
+      polishEnabled: source?.polishEnabled !== false,
+      polishStrength: normalizeVoicePolishStrength(source?.polishStrength)
     }
   }
 
   private buildRuntimeConfig(setting: AppSetting): AssistantRuntimeConfig {
     const voiceInput = this.getVoiceInputSetting(setting)
+    const chatStatus = resolveCapabilityStatus('text.chat')
+    // `polishAvailable` is what decides between final and live delivery in the HUD, and a
+    // false here silently turns tidy-up off entirely. Record the capability it was derived
+    // from, so "tidy-up never runs" can be traced to a routing gap rather than guessed at.
+    assistantLog.info('Assistant voice runtime config', {
+      meta: {
+        enabled: voiceInput.enabled,
+        polishEnabled: voiceInput.polishEnabled,
+        polishAvailable: chatStatus.available,
+        polishStrength: voiceInput.polishStrength,
+        chatProviders: chatStatus.providerIds.join(',') || '(none)',
+        chatReason: chatStatus.reason ?? '(ok)'
+      }
+    })
     return {
       enabled: voiceInput.enabled,
-      language: voiceInput.language
+      language: voiceInput.language,
+      polishEnabled: voiceInput.polishEnabled,
+      polishAvailable: chatStatus.available,
+      polishStrength: voiceInput.polishStrength
     }
   }
 

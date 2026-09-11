@@ -71,6 +71,7 @@ import {
   SourceScopedIndexWriterRouter,
   searchIndexWriter
 } from './search-index-writer'
+import { SearchIndexReadWorkerClient } from './workers/search-index-read-worker-client'
 import { searchLogger } from './search-logger'
 import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
@@ -189,6 +190,7 @@ export class SearchEngineCore
   private dbUtils: DbUtils | null = null
   private indexWriterRouter: SourceScopedIndexWriterRouter | null = null
   private searchIndexService: SearchIndexService | null = null
+  private searchIndexReadWorker: SearchIndexReadWorkerClient | null = null
   private usageSummaryService: UsageSummaryService | null = null
   private queryCompletionService: QueryCompletionService | null = null
   private recommendationEngine: RecommendationEngine | null = null
@@ -303,6 +305,7 @@ export class SearchEngineCore
       beforeProvidersLoad: async () => {
         await searchIndexWriter.initialize(databaseModule.getSearchDatabaseFilePath())
         await this.searchIndexService?.warmup()
+        await this.searchIndexService?.waitUntilReadable()
       },
       onProvidersReady: () => this.startRuntimeServicesOnce(),
       onProviderDeactivated: (key, isPluginFeature, allDeactivated) => {
@@ -2033,10 +2036,14 @@ export class SearchEngineCore
     instance.indexCommitUnsubscribe = searchIndexCommitHub.subscribe((payload) => {
       instance.handleSearchIndexCommit(payload)
     })
+    instance.searchIndexReadWorker = new SearchIndexReadWorkerClient(
+      databaseModule.getSearchDatabaseFilePath()
+    )
     instance.searchIndexService = new SearchIndexService(searchDb, {
       logger: searchLogger,
       initializationMode: 'reader',
-      readiness: searchIndexWriter
+      readiness: searchIndexWriter,
+      readExecutor: instance.searchIndexReadWorker
     })
     instance.searchIndexService.preloadPinyin()
     instance.indexWriterRouter = new SourceScopedIndexWriterRouter({
@@ -2265,92 +2272,97 @@ export class SearchEngineCore
 
   async destroy(): Promise<void> {
     this.destroying = true
-    const runtime = this.indexingRuntime
-    runtime?.beginShutdown()
-    if (searchLogger.isEnabled()) {
-      searchLogger.logSearchPhase(
-        'Destroy',
-        'Destroying SearchEngineCore and aborting live search sessions'
-      )
-    }
-    await this.sessionRegistry.destroy()
-    this.usageSummaryService?.stop()
-    this.stopMaintenance()
-    await this.indexedSourceEventRouter.unsubscribe()
-    const drainFailures: Error[] = []
-    const recordDrainFailure = (message: string, error: unknown): void => {
-      searchEngineLog.error(message, { error })
-      drainFailures.push(error instanceof Error ? error : new Error(String(error)))
-    }
-    const appProducerDrain = appProvider.prepareForSearchIndexShutdown()
-    const initialAppScanDrain = this.initialAppScanPromise
-    this.initialAppScanController?.abort(new Error('SEARCH_CORE_DESTROYED'))
-    const appRuntimeDrain = runtime?.abortAndDrainSourceScans(APP_INDEXED_SOURCE_ID)
-    const fileRuntimeDrain = runtime?.abortAndDrainSourceScans(FILE_INDEXED_SOURCE_ID)
-    const fileDrain = fileProvider.prepareForSearchIndexShutdown()
-    const admittedTaskDrain = runtime?.drainAdmittedTasks()
-    await appProducerDrain.catch((error) => {
-      recordDrainFailure('Failed to stop AppProvider producers before writer shutdown', error)
-    })
-    await appRuntimeDrain?.catch((error) => {
-      recordDrainFailure('Failed to drain active Runtime AppProvider scans', error)
-    })
-    await initialAppScanDrain?.catch((error) => {
-      recordDrainFailure('Failed to drain initial AppProvider scan retry', error)
-    })
-    await fileRuntimeDrain?.catch((error) => {
-      recordDrainFailure('Failed to drain active Runtime FileProvider scans', error)
-    })
-    await admittedTaskDrain?.catch((error) => {
-      recordDrainFailure('Failed to drain admitted Runtime indexing tasks', error)
-    })
-    await fileDrain.catch((error) => {
-      recordDrainFailure('Failed to drain FileProvider before writer shutdown', error)
-    })
-    const appMutationDrain = runtime?.drainSourceMutations(APP_INDEXED_SOURCE_ID)
-    const fileMutationDrain = runtime?.drainSourceMutations(FILE_INDEXED_SOURCE_ID)
-    await appMutationDrain?.catch((error) => {
-      recordDrainFailure(
-        'Failed to drain AppProvider Runtime mutations before writer shutdown',
-        error
-      )
-    })
-    await fileMutationDrain?.catch((error) => {
-      recordDrainFailure(
-        'Failed to drain FileProvider Runtime mutations before writer shutdown',
-        error
-      )
-    })
-    if (drainFailures.length > 0) {
-      throw new AggregateError(drainFailures, 'SEARCH_CORE_INDEX_DRAIN_FAILED')
-    }
-    await this.providerRegistry.destroy()
-    this.indexCommitUnsubscribe?.()
-    this.indexCommitUnsubscribe = null
-    for (const context of this.indexCommitStreams) {
-      if (!context.isCancelled()) {
-        context.end()
-      }
-    }
-    this.indexCommitStreams.clear()
-
-    appProvider.setIndexedSourceRuntimeDelegate(null)
-    fileProvider.setIndexedSourceRuntimeResetDelegate(null)
-    fileProvider.setIndexedSourceRuntimeMutationDelegate(null)
-    fileProvider.setFilePersistencePort(null)
-    this.indexingRuntime?.clear()
-    this.indexingRuntime = null
-    this.indexWriterRouter = null
     try {
-      await searchIndexWriter.shutdown()
-    } catch (error) {
-      searchEngineLog.error('Failed to drain search index writer on destroy', { error })
-      throw error
-    }
+      const runtime = this.indexingRuntime
+      runtime?.beginShutdown()
+      if (searchLogger.isEnabled()) {
+        searchLogger.logSearchPhase(
+          'Destroy',
+          'Destroying SearchEngineCore and aborting live search sessions'
+        )
+      }
+      await this.sessionRegistry.destroy()
+      this.usageSummaryService?.stop()
+      this.stopMaintenance()
+      await this.indexedSourceEventRouter.unsubscribe()
+      const drainFailures: Error[] = []
+      const recordDrainFailure = (message: string, error: unknown): void => {
+        searchEngineLog.error(message, { error })
+        drainFailures.push(error instanceof Error ? error : new Error(String(error)))
+      }
+      const appProducerDrain = appProvider.prepareForSearchIndexShutdown()
+      const initialAppScanDrain = this.initialAppScanPromise
+      this.initialAppScanController?.abort(new Error('SEARCH_CORE_DESTROYED'))
+      const appRuntimeDrain = runtime?.abortAndDrainSourceScans(APP_INDEXED_SOURCE_ID)
+      const fileRuntimeDrain = runtime?.abortAndDrainSourceScans(FILE_INDEXED_SOURCE_ID)
+      const fileDrain = fileProvider.prepareForSearchIndexShutdown()
+      const admittedTaskDrain = runtime?.drainAdmittedTasks()
+      await appProducerDrain.catch((error) => {
+        recordDrainFailure('Failed to stop AppProvider producers before writer shutdown', error)
+      })
+      await appRuntimeDrain?.catch((error) => {
+        recordDrainFailure('Failed to drain active Runtime AppProvider scans', error)
+      })
+      await initialAppScanDrain?.catch((error) => {
+        recordDrainFailure('Failed to drain initial AppProvider scan retry', error)
+      })
+      await fileRuntimeDrain?.catch((error) => {
+        recordDrainFailure('Failed to drain active Runtime FileProvider scans', error)
+      })
+      await admittedTaskDrain?.catch((error) => {
+        recordDrainFailure('Failed to drain admitted Runtime indexing tasks', error)
+      })
+      await fileDrain.catch((error) => {
+        recordDrainFailure('Failed to drain FileProvider before writer shutdown', error)
+      })
+      const appMutationDrain = runtime?.drainSourceMutations(APP_INDEXED_SOURCE_ID)
+      const fileMutationDrain = runtime?.drainSourceMutations(FILE_INDEXED_SOURCE_ID)
+      await appMutationDrain?.catch((error) => {
+        recordDrainFailure(
+          'Failed to drain AppProvider Runtime mutations before writer shutdown',
+          error
+        )
+      })
+      await fileMutationDrain?.catch((error) => {
+        recordDrainFailure(
+          'Failed to drain FileProvider Runtime mutations before writer shutdown',
+          error
+        )
+      })
+      if (drainFailures.length > 0) {
+        throw new AggregateError(drainFailures, 'SEARCH_CORE_INDEX_DRAIN_FAILED')
+      }
+      await this.providerRegistry.destroy()
+      this.indexCommitUnsubscribe?.()
+      this.indexCommitUnsubscribe = null
+      for (const context of this.indexCommitStreams) {
+        if (!context.isCancelled()) {
+          context.end()
+        }
+      }
+      this.indexCommitStreams.clear()
 
-    await this.searchUsageService.flush().catch((error) => {
-      searchEngineLog.error('Failed to flush usage stats queue on destroy', { error })
-    })
+      appProvider.setIndexedSourceRuntimeDelegate(null)
+      fileProvider.setIndexedSourceRuntimeResetDelegate(null)
+      fileProvider.setIndexedSourceRuntimeMutationDelegate(null)
+      fileProvider.setFilePersistencePort(null)
+      this.indexingRuntime?.clear()
+      this.indexingRuntime = null
+      this.indexWriterRouter = null
+      try {
+        await searchIndexWriter.shutdown()
+      } catch (error) {
+        searchEngineLog.error('Failed to drain search index writer on destroy', { error })
+        throw error
+      }
+
+      await this.searchUsageService.flush().catch((error) => {
+        searchEngineLog.error('Failed to flush usage stats queue on destroy', { error })
+      })
+    } finally {
+      await this.searchIndexReadWorker?.close()
+      this.searchIndexReadWorker = null
+    }
   }
 }
 

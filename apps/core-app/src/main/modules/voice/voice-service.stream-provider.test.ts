@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const voiceInsightsMocks = vi.hoisted(() => ({ recordSuccess: vi.fn(async () => undefined) }))
 
+const polishPromptMocks = vi.hoisted(() => ({
+  getVoicePolishPrompt: vi.fn((strength: string) => strength)
+}))
+
+const storageMocks = vi.hoisted(() => ({ getMainConfig: vi.fn() }))
+
 vi.mock('@talex-touch/tuff-native/audio', () => ({
   getNativeAudioSupport: vi.fn(),
   startCapture: vi.fn(),
@@ -18,6 +24,13 @@ vi.mock('@talex-touch/tuff-native/audio', () => ({
 vi.mock('./voice-provider-runtime', () => ({
   getConfiguredAsrProvider: vi.fn()
 }))
+
+vi.mock('./polish-prompt', () => ({
+  getVoicePolishPrompt: polishPromptMocks.getVoicePolishPrompt,
+  wrapTranscription: (transcript: string) => JSON.stringify({ transcription: transcript })
+}))
+
+vi.mock('../storage', () => ({ getMainConfig: storageMocks.getMainConfig }))
 
 vi.mock('../clipboard', () => ({
   clipboardModule: { applyVoiceText: vi.fn() }
@@ -43,7 +56,10 @@ vi.mock('./voice-insights-store', () => ({
 
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
 import type { VoiceProviderEvent } from '@talex-touch/tuff-voice'
-import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domains/voice'
+import type {
+  VoiceAsrStreamEvent,
+  VoiceAsrStreamPayload
+} from '@talex-touch/utils/transport/sdk/domains/voice'
 import { clipboardModule } from '../clipboard'
 import { activeAppService } from '../system/active-app'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
@@ -65,6 +81,8 @@ const applyVoiceText = clipboardModule.applyVoiceText as unknown as ReturnType<t
 const invoke = tuffIntelligence.invoke as unknown as ReturnType<typeof vi.fn>
 const stt = tuffIntelligence.audio.stt as unknown as ReturnType<typeof vi.fn>
 const resolveAsrProvider = getConfiguredAsrProvider as unknown as ReturnType<typeof vi.fn>
+const getVoicePolishPrompt = polishPromptMocks.getVoicePolishPrompt
+const getMainConfig = storageMocks.getMainConfig
 
 async function drainStream(
   gen: AsyncGenerator<VoiceAsrStreamEvent>
@@ -175,6 +193,7 @@ describe('VoiceService.streamDictation via provider', () => {
     })
     isAccessibilityTrusted.mockReturnValue(true)
     typeText.mockReturnValue({ ok: true })
+    getMainConfig.mockReturnValue({ voiceInput: { polishStrength: 'deep' } })
 
     fake = createFakeConnection()
     resolveAsrProvider.mockReturnValue({
@@ -316,15 +335,7 @@ describe('VoiceService.streamDictation via provider', () => {
     }
   })
 
-  /**
-   * Push-to-talk, end to end: the words reach the target while the speaker is still
-   * talking, one agreed-on delta at a time, and the polish pass never runs.
-   *
-   * Polish is the subtle half. It rewrites the sentence, and in live mode the raw words
-   * are already in somebody's editor — delivering the polished version afterwards would
-   * type the whole thing a second time.
-   */
-  it('types the stable prefix as it recognizes, and skips polish, in live mode', async () => {
+  it('delivers a punctuation-revised live final without duplicate native text or polish', async () => {
     vi.clearAllMocks()
     isAccessibilityTrusted.mockReturnValue(true)
     typeText.mockResolvedValue({ ok: true })
@@ -338,9 +349,11 @@ describe('VoiceService.streamDictation via provider', () => {
       windowTitle: null,
       lastUpdated: Date.now()
     })
-    drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16000, channels: 1 })
+    drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16_000, channels: 1 })
     pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
-    fake = createFakeConnection('one two three')
+    const partial = '明天去超市带上苹果、香蕉和菠萝'
+    const finalText = '明天去超市，带上苹果、香蕉和菠萝，这三样都要'
+    fake = createFakeConnection(finalText)
     resolveAsrProvider.mockReturnValue({
       model: 'fake-model',
       provider: {
@@ -360,18 +373,16 @@ describe('VoiceService.streamDictation via provider', () => {
     )
     await Promise.resolve()
 
-    // "one" alone is a guess with nothing to agree with, so it waits. Each later partial
-    // confirms the one before it and releases exactly that much.
-    fake.push({ type: 'partial', text: 'one' })
-    fake.push({ type: 'partial', text: 'one two' })
-    fake.push({ type: 'partial', text: 'one two three' })
+    fake.push({ type: 'partial', text: partial })
+    fake.push({ type: 'partial', text: partial })
     controller.abort()
-    await collected
+    const events = await collected
 
-    expect(typeText.mock.calls.map((call) => call[0])).toEqual(['one', ' two', ' three'])
-    // The spaces are the assertion above's real point: a trimmed delta would type
-    // "onetwothree" and lose every word boundary in the sentence.
-    expect(typeText.mock.calls.map((call) => call[0]).join('')).toBe('one two three')
+    expect(events.find((event) => event.type === 'final')).toMatchObject({ text: finalText })
+    expect(typeText.mock.calls.map((call) => call[0])).toEqual([partial, '，这三样都要'])
+    expect(typeText.mock.calls.map((call) => call[0]).join('')).toBe(
+      '明天去超市带上苹果、香蕉和菠萝，这三样都要'
+    )
     expect(invoke).not.toHaveBeenCalled()
     expect(applyVoiceText).not.toHaveBeenCalled()
   })
@@ -418,6 +429,25 @@ describe('VoiceService.streamDictation via provider', () => {
     // Nothing was typed while the partials arrived; the polished sentence landed once.
     expect(typeText.mock.calls.map((call) => call[0])).toEqual(['One two three.'])
     expect(invoke).toHaveBeenCalled()
+  })
+
+  it('freezes the saved polish strength while capture is still opening', async () => {
+    const captureOpening = Promise.withResolvers<{ sessionId: string }>()
+    startCapture.mockReturnValueOnce(captureOpening.promise)
+    pollCapture.mockReturnValue({ active: false, durationMs: 200, stoppedReason: 'silence' })
+    getMainConfig.mockReturnValue({ voiceInput: { polishStrength: 'structured' } })
+    const generator = new VoiceService().streamDictation({})
+    const ready = generator.next()
+
+    await Promise.resolve()
+    expect(startCapture).toHaveBeenCalledOnce()
+    getMainConfig.mockReturnValue({ voiceInput: { polishStrength: 'deep' } })
+    captureOpening.resolve({ sessionId: 's1' })
+    await ready
+    await collect(generator)
+
+    expect(getVoicePolishPrompt).toHaveBeenCalledOnce()
+    expect(getVoicePolishPrompt).toHaveBeenCalledWith('structured')
   })
 
   it('emits normalized levels only when the caller opts in', async () => {
@@ -570,6 +600,7 @@ describe('VoiceService.streamDictation via provider', () => {
       { type: 'final', text: 'partial transcript' },
       { type: 'end' }
     ])
+    expect(invoke).not.toHaveBeenCalled()
   })
 })
 
@@ -608,6 +639,7 @@ describe('VoiceService retry buffer retention', () => {
     })
     isAccessibilityTrusted.mockReturnValue(true)
     typeText.mockReturnValue({ ok: true })
+    getMainConfig.mockReturnValue({ voiceInput: { polishStrength: 'deep' } })
     fake = createFakeConnection()
     provider = {
       createStream: vi.fn(async () => fake.connection)
@@ -626,9 +658,12 @@ describe('VoiceService retry buffer retention', () => {
     vi.useRealTimers()
   })
 
-  async function runUntilFailure(service: VoiceService): Promise<void> {
+  async function runUntilFailure(
+    service: VoiceService,
+    payload: VoiceAsrStreamPayload = { emitLevel: false }
+  ): Promise<void> {
     pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
-    const generator = service.streamDictation({ emitLevel: false })
+    const generator = service.streamDictation(payload)
     const drained = (async () => {
       try {
         for await (const _event of generator) {
@@ -671,6 +706,33 @@ describe('VoiceService retry buffer retention', () => {
       expect.objectContaining({ model: 'fake-model' })
     )
     expect(stt).not.toHaveBeenCalled()
+  })
+
+  it('uses the failed session strength rather than a later caller mutation on retry', async () => {
+    const payload: VoiceAsrStreamPayload = { emitLevel: false, polishStrength: 'structured' }
+    const service = new VoiceService()
+    await runUntilFailure(service, payload)
+    payload.polishStrength = 'natural'
+    const retry = createFakeConnection('buffered words')
+    provider.createStream.mockResolvedValueOnce(retry.connection)
+    getVoicePolishPrompt.mockClear()
+
+    await service.retryLastFailure()
+
+    expect(getVoicePolishPrompt).toHaveBeenCalledOnce()
+    expect(getVoicePolishPrompt).toHaveBeenCalledWith('structured')
+  })
+
+  it('does not add polishing when retrying a cleanup-disabled recording', async () => {
+    const service = new VoiceService()
+    await runUntilFailure(service, { emitLevel: false, cleanup: false, polishStrength: 'natural' })
+    const retry = createFakeConnection('buffered words')
+    provider.createStream.mockResolvedValueOnce(retry.connection)
+    invoke.mockClear()
+
+    await service.retryLastFailure()
+
+    expect(invoke).not.toHaveBeenCalled()
   })
 
   it('reports expiry instead of pretending, once the grace window closes', async () => {
@@ -835,6 +897,7 @@ describe('VoiceService recovery status', () => {
     drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16000, channels: 1 })
     pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
     invoke.mockResolvedValue({ result: 'Hello world.' })
+    getMainConfig.mockReturnValue({ voiceInput: { polishStrength: 'deep' } })
     fake = createFakeConnection()
     resolveAsrProvider.mockReturnValue({
       model: 'fake-model',
