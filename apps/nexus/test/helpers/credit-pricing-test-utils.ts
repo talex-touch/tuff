@@ -66,6 +66,11 @@ export class MockCreditPricingD1Database {
    * rewrites a row on every call looks identical to one that rewrites it once.
    */
   pricingUpdates = 0
+  /**
+   * Runs once, just before an `UPDATE credit_pricing` is applied — the window in which
+   * another operator's write lands between this caller's read and its write.
+   */
+  onBeforeUpdate?: () => void
 
   prepare(sql: string) {
     return new MockStatement(this, sql)
@@ -112,6 +117,11 @@ export class MockCreditPricingD1Database {
 
     if (sql.includes('UPDATE credit_pricing')) {
       this.pricingUpdates += 1
+      if (this.onBeforeUpdate) {
+        const hook = this.onBeforeUpdate
+        this.onBeforeUpdate = undefined
+        hook()
+      }
       const setClause = /SET ([\s\S]*?) WHERE /i.exec(sql)?.[1]
       const whereClause = /WHERE ([\s\S]*)$/i.exec(sql)?.[1]
       if (!setClause || !whereClause)
