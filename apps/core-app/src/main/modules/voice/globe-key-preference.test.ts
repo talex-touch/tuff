@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ execFileSafe: vi.fn(), openExternal: vi.fn() }))
 
@@ -12,8 +12,25 @@ import {
   readGlobeKeyStatus
 } from './globe-key-preference'
 
+/**
+ * The preference this module writes only exists on macOS, and every macOS assertion below is
+ * unreachable on a Linux runner unless the platform is pinned. Leaving it to the host made the
+ * suite green on a developer Mac and 7-failed on the Ubuntu CI runner, so the platform is part of
+ * the fixture instead of the environment — and the non-macOS contract gets its own cases.
+ */
+const originalPlatform = process.platform
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+}
+
+afterEach(() => {
+  setPlatform(originalPlatform)
+})
+
 describe('readGlobeKeyStatus', () => {
   beforeEach(() => {
+    setPlatform('darwin')
     mocks.execFileSafe.mockReset()
     mocks.openExternal.mockReset()
   })
@@ -58,10 +75,21 @@ describe('readGlobeKeyStatus', () => {
       systemActionActive: true
     })
   })
+
+  it('claims nothing on a platform that has no Globe key preference', async () => {
+    setPlatform('linux')
+
+    await expect(readGlobeKeyStatus()).resolves.toEqual({
+      applies: false,
+      systemActionActive: false
+    })
+    expect(mocks.execFileSafe).not.toHaveBeenCalled()
+  })
 })
 
 describe('disableGlobeKeyAction', () => {
   beforeEach(() => {
+    setPlatform('darwin')
     mocks.execFileSafe.mockReset()
   })
 
@@ -105,10 +133,21 @@ describe('disableGlobeKeyAction', () => {
       systemActionActive: true
     })
   })
+
+  it('writes nothing where there is no such preference to write', async () => {
+    setPlatform('win32')
+
+    await expect(disableGlobeKeyAction()).resolves.toEqual({
+      applies: false,
+      systemActionActive: false
+    })
+    expect(mocks.execFileSafe).not.toHaveBeenCalled()
+  })
 })
 
 describe('openKeyboardSettings', () => {
   beforeEach(() => {
+    setPlatform('darwin')
     mocks.openExternal.mockReset()
   })
 
@@ -125,5 +164,12 @@ describe('openKeyboardSettings', () => {
     mocks.openExternal.mockRejectedValue(new Error('no handler'))
 
     await expect(openKeyboardSettings()).resolves.toBe(false)
+  })
+
+  it('reports no pane to open away from macOS', async () => {
+    setPlatform('linux')
+
+    await expect(openKeyboardSettings()).resolves.toBe(false)
+    expect(mocks.openExternal).not.toHaveBeenCalled()
   })
 })
