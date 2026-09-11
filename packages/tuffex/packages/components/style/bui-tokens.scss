@@ -63,11 +63,11 @@
   // border without taking layout space. Components use the ring INSTEAD of
   // `border`, never both (double-line trap).
   --tx-bui-shadow-hairline: 0 0 0 1px var(--tx-bui-line);
-  --tx-bui-shadow-btn: 0 0 0 1px var(--tx-bui-line-strong), 0 1px 2px #1018280d;
-  --tx-bui-shadow-card: 0 0 0 1px var(--tx-bui-line), 0 1px 2px #1018280a, 0 2px 6px #10182808;
-  --tx-bui-shadow-raised: 0 0 0 1px var(--tx-bui-line), 0 2px 10px #0000000b;
-  --tx-bui-shadow-overlay: 0 0 0 1px var(--tx-bui-line), 0 8px 28px #0001;
-  --tx-bui-shadow-inset-field: inset 0 1px 2px #0000001f;
+  --tx-bui-shadow-btn: 0 0 0 1px var(--tx-bui-line-strong), 1px 2px 2px #1018280d;
+  --tx-bui-shadow-card: 0 0 0 1px var(--tx-bui-line), 1px 2px 2px #1018280a, 2px 4px 6px #10182808;
+  --tx-bui-shadow-raised: 0 0 0 1px var(--tx-bui-line), 2px 4px 10px #0000000b;
+  --tx-bui-shadow-overlay: 0 0 0 1px var(--tx-bui-line), 4px 8px 28px #0001;
+  --tx-bui-shadow-inset-field: inset 1px 2px 2px #0000001f;
 
   // Radius ladder (chip / control / card) + mono face — theme-invariant
   --tx-bui-radius-chip: 6px;
@@ -117,9 +117,9 @@
   // Overlay swaps its ring to line-strong in dark — the one structural (not
   // just numeric) light/dark difference in the shadow set. Keep it explicit.
   --tx-bui-shadow-hairline: 0 0 0 1px var(--tx-bui-line);
-  --tx-bui-shadow-btn: 0 0 0 1px var(--tx-bui-line-strong), 0 1px 2px #0000004d;
-  --tx-bui-shadow-card: 0 0 0 1px var(--tx-bui-line), 0 1px 2px #0003, 0 2px 6px #0003;
-  --tx-bui-shadow-raised: 0 0 0 1px var(--tx-bui-line), 0 2px 10px #00000038;
-  --tx-bui-shadow-overlay: 0 0 0 1px var(--tx-bui-line-strong), 0 8px 28px #00000057;
-  --tx-bui-shadow-inset-field: inset 0 1px 2px #0006;
+  --tx-bui-shadow-btn: 0 0 0 1px var(--tx-bui-line-strong), 1px 2px 2px #0000004d;
+  --tx-bui-shadow-card: 0 0 0 1px var(--tx-bui-line), 1px 2px 2px #0003, 2px 4px 6px #0003;
+  --tx-bui-shadow-raised: 0 0 0 1px var(--tx-bui-line), 2px 4px 10px #00000038;
+  --tx-bui-shadow-overlay: 0 0 0 1px var(--tx-bui-line-strong), 4px 8px 28px #00000057;
+  --tx-bui-shadow-inset-field: inset 1px 2px 2px #0006;
 }

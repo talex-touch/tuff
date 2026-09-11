@@ -65,6 +65,7 @@ const copy = computed(() => (localeKey.value === 'zh'
         { value: 'snapshot', label: '快照版' },
       ],
       autoSync: '自动同步',
+      autoSyncDesc: '有新版本时自动拉取插件更新',
       partial: '部分选中',
       syncing: '同步中',
       dividerSection: '分组',
@@ -139,6 +140,7 @@ const copy = computed(() => (localeKey.value === 'zh'
         { value: 'snapshot', label: 'Snapshot' },
       ],
       autoSync: 'Auto sync',
+      autoSyncDesc: 'Pull plugin updates as they are released',
       partial: 'Partial',
       syncing: 'Syncing',
       dividerSection: 'Section',
@@ -1673,8 +1675,10 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxGroupBlock :name="copy.dividerSection">
-                <TxBlockSwitch v-model="blockSwitch" :title="copy.autoSync" :description="copy.installBody" />
-                <TxBlockLine />
+                <TxBlockSwitch v-model="blockSwitch" :title="copy.autoSync" :description="copy.autoSyncDesc" />
+                <!-- TxBlockLine is a title+description row, not a separator.
+                     Propless it rendered as an empty band. -->
+                <TxBlockLine :title="copy.installTitle" :description="copy.installBody" />
                 <TxBlockInput v-model="flatInputValue" :title="copy.formName" :placeholder="copy.typeSomething" />
               </TxGroupBlock>
             </div>
@@ -1818,8 +1822,9 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__framed">
+            <div class="docs-gallery__block docs-gallery__framed docs-gallery__chrome">
               <TxNavBar :title="copy.suiteBase" show-back />
+              <div class="docs-gallery__chrome-body" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -1834,7 +1839,9 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage">
           <ClientOnly>
-            <TxSidebarNav v-model="navTab" :items="tabBarItems" />
+            <div class="docs-gallery__sidebar">
+              <TxSidebarNav v-model="navTab" :items="tabBarItems" />
+            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -1848,8 +1855,9 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__framed">
+            <div class="docs-gallery__block docs-gallery__framed docs-gallery__chrome docs-gallery__chrome--bottom">
               <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" />
+              <div class="docs-gallery__chrome-body" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -1865,7 +1873,7 @@ async function copyInstall() {
         <div class="docs-gallery__stage">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__tabs">
-              <TxTabs v-model="tabsActive">
+              <TxTabs v-model="tabsActive" placement="top">
                 <!-- `:activation="true"`, not the `activation` shorthand: TxTabs
                      picks the initial tab off the raw vnode props, where the
                      shorthand is the empty string and reads as false. -->
@@ -2224,7 +2232,7 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage">
           <ClientOnly>
-            <div class="docs-gallery__block">
+            <div class="docs-gallery__block docs-gallery__transfer">
               <TxTransfer v-model="transferValue" :data="transferData" />
             </div>
             <template #fallback>
@@ -2241,7 +2249,7 @@ async function copyInstall() {
         <div class="docs-gallery__stage">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxTree :nodes="treeNodes" />
+              <TxTree :nodes="treeNodes" :default-expanded-keys="['plugins']" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
