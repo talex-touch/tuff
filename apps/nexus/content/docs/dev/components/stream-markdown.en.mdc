@@ -43,6 +43,7 @@ code: |
 - `renderers` are matched by fence language — the first word, lowercased. Unregistered languages fall back to the default code block.
 - A registered renderer receives `StreamMarkdownBlockContext` as props, including `fenceClosed`, so it can show a placeholder until the block completes.
 - `theme` accepts `light`, `dark` or `auto`, with `auto` following the environment.
+- The bundled GitHub-Markdown stylesheet is a *global* import, so every rule in it is scoped to `:where(.tx-markdown-view, .tx-stream-md)`. `.markdown-body` is a very generic class name — before the scope, importing this component restyled any host page that used it for its own prose. `:where()` adds no specificity, so the scope confines the sheet without changing how its rules compete with each other.
 
 ## API
 

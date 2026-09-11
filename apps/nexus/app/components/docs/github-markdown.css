@@ -1,3 +1,13 @@
+/* Every bare-element rule below carries `:not(:where(.not-prose, .not-prose *))`.
+   The docs body is `.markdown-body`, and the component gallery renders live
+   specimens *inside* it — so rules written for prose (`a`, `li`, `table td`,
+   `[type=button]`, ...) were landing on component internals and reading as
+   component bugs. `:where()` contributes zero specificity, so the guard removes
+   the declaration inside a `.not-prose` subtree without shifting the cascade
+   anywhere else; each component then styles itself at its own specificity.
+   `app/pages/docs/[...slug].vue` guards its `:deep(.docs-prose ...)` rules the
+   same way. If you re-vendor this file, re-run the guard rather than dropping it. */
+
 .markdown-body {
   --base-size-4: 0.25rem;
   --base-size-8: 0.5rem;
@@ -320,42 +330,42 @@ body[data-theme="dark"] .markdown-body {
   mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path fill-rule='evenodd' d='M7.775 3.275a.75.75 0 001.06 1.06l1.25-1.25a2 2 0 112.83 2.83l-2.5 2.5a2 2 0 01-2.83 0 .75.75 0 00-1.06 1.06 3.5 3.5 0 004.95 0l2.5-2.5a3.5 3.5 0 00-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 010-2.83l2.5-2.5a2 2 0 012.83 0 .75.75 0 001.06-1.06 3.5 3.5 0 00-4.95 0l-2.5 2.5a3.5 3.5 0 004.95 4.95l1.25-1.25a.75.75 0 00-1.06-1.06l-1.25 1.25a2 2 0 01-2.83 0z'></path></svg>");
 }
 
-.markdown-body details,
-.markdown-body figcaption,
-.markdown-body figure {
+.markdown-body details:not(:where(.not-prose, .not-prose *)),
+.markdown-body figcaption:not(:where(.not-prose, .not-prose *)),
+.markdown-body figure:not(:where(.not-prose, .not-prose *)) {
   display: block;
 }
 
-.markdown-body summary {
+.markdown-body summary:not(:where(.not-prose, .not-prose *)) {
   display: list-item;
 }
 
-.markdown-body [hidden] {
+.markdown-body [hidden]:not(:where(.not-prose, .not-prose *)) {
   display: none !important;
 }
 
-.markdown-body a {
+.markdown-body a:not(:where(.not-prose, .not-prose *)) {
   background-color: transparent;
   color: var(--fgColor-accent);
   text-decoration: none;
 }
 
-.markdown-body abbr[title] {
+.markdown-body abbr[title]:not(:where(.not-prose, .not-prose *)) {
   border-bottom: none;
   -webkit-text-decoration: underline dotted;
   text-decoration: underline dotted;
 }
 
-.markdown-body b,
-.markdown-body strong {
+.markdown-body b:not(:where(.not-prose, .not-prose *)),
+.markdown-body strong:not(:where(.not-prose, .not-prose *)) {
   font-weight: var(--base-text-weight-semibold, 600);
 }
 
-.markdown-body dfn {
+.markdown-body dfn:not(:where(.not-prose, .not-prose *)) {
   font-style: italic;
 }
 
-.markdown-body h1 {
+.markdown-body h1:not(:where(.not-prose, .not-prose *)) {
   margin: .67em 0;
   font-weight: var(--base-text-weight-semibold, 600);
   padding-bottom: .3em;
@@ -363,50 +373,50 @@ body[data-theme="dark"] .markdown-body {
   border-bottom: 1px solid var(--borderColor-muted);
 }
 
-.markdown-body mark {
+.markdown-body mark:not(:where(.not-prose, .not-prose *)) {
   background-color: var(--bgColor-attention-muted);
   color: var(--fgColor-default);
 }
 
-.markdown-body small {
+.markdown-body small:not(:where(.not-prose, .not-prose *)) {
   font-size: 90%;
 }
 
-.markdown-body sub,
-.markdown-body sup {
+.markdown-body sub:not(:where(.not-prose, .not-prose *)),
+.markdown-body sup:not(:where(.not-prose, .not-prose *)) {
   font-size: 75%;
   line-height: 0;
   position: relative;
   vertical-align: baseline;
 }
 
-.markdown-body sub {
+.markdown-body sub:not(:where(.not-prose, .not-prose *)) {
   bottom: -0.25em;
 }
 
-.markdown-body sup {
+.markdown-body sup:not(:where(.not-prose, .not-prose *)) {
   top: -0.5em;
 }
 
-.markdown-body img {
+.markdown-body img:not(:where(.not-prose, .not-prose *)) {
   border-style: none;
   max-width: 100%;
   box-sizing: content-box;
 }
 
-.markdown-body code,
-.markdown-body kbd,
-.markdown-body pre,
-.markdown-body samp {
+.markdown-body code:not(:where(.not-prose, .not-prose *)),
+.markdown-body kbd:not(:where(.not-prose, .not-prose *)),
+.markdown-body pre:not(:where(.not-prose, .not-prose *)),
+.markdown-body samp:not(:where(.not-prose, .not-prose *)) {
   font-family: monospace;
   font-size: 1em;
 }
 
-.markdown-body figure {
+.markdown-body figure:not(:where(.not-prose, .not-prose *)) {
   margin: 1em var(--base-size-40);
 }
 
-.markdown-body hr {
+.markdown-body hr:not(:where(.not-prose, .not-prose *)) {
   box-sizing: content-box;
   overflow: hidden;
   background: transparent;
@@ -418,7 +428,7 @@ body[data-theme="dark"] .markdown-body {
   border: 0;
 }
 
-.markdown-body input {
+.markdown-body input:not(:where(.not-prose, .not-prose *)) {
   font: inherit;
   margin: 0;
   overflow: visible;
@@ -427,26 +437,26 @@ body[data-theme="dark"] .markdown-body {
   line-height: inherit;
 }
 
-.markdown-body [type=button],
-.markdown-body [type=reset],
-.markdown-body [type=submit] {
+.markdown-body [type=button]:not(:where(.not-prose, .not-prose *)),
+.markdown-body [type=reset]:not(:where(.not-prose, .not-prose *)),
+.markdown-body [type=submit]:not(:where(.not-prose, .not-prose *)) {
   -webkit-appearance: button;
   appearance: button;
 }
 
-.markdown-body [type=checkbox],
-.markdown-body [type=radio] {
+.markdown-body [type=checkbox]:not(:where(.not-prose, .not-prose *)),
+.markdown-body [type=radio]:not(:where(.not-prose, .not-prose *)) {
   box-sizing: border-box;
   padding: 0;
 }
 
-.markdown-body [type=number]::-webkit-inner-spin-button,
-.markdown-body [type=number]::-webkit-outer-spin-button {
+.markdown-body [type=number]:not(:where(.not-prose, .not-prose *))::-webkit-inner-spin-button,
+.markdown-body [type=number]:not(:where(.not-prose, .not-prose *))::-webkit-outer-spin-button {
   height: auto;
 }
 
-.markdown-body [type=search]::-webkit-search-cancel-button,
-.markdown-body [type=search]::-webkit-search-decoration {
+.markdown-body [type=search]:not(:where(.not-prose, .not-prose *))::-webkit-search-cancel-button,
+.markdown-body [type=search]:not(:where(.not-prose, .not-prose *))::-webkit-search-decoration {
   -webkit-appearance: none;
   appearance: none;
 }
@@ -462,7 +472,7 @@ body[data-theme="dark"] .markdown-body {
   font: inherit;
 }
 
-.markdown-body a:hover {
+.markdown-body a:hover:not(:where(.not-prose, .not-prose *)) {
   text-decoration: underline;
 }
 
@@ -471,18 +481,18 @@ body[data-theme="dark"] .markdown-body {
   opacity: 1;
 }
 
-.markdown-body hr::before {
+.markdown-body hr:not(:where(.not-prose, .not-prose *))::before {
   display: table;
   content: "";
 }
 
-.markdown-body hr::after {
+.markdown-body hr:not(:where(.not-prose, .not-prose *))::after {
   display: table;
   clear: both;
   content: "";
 }
 
-.markdown-body table {
+.markdown-body table:not(:where(.not-prose, .not-prose *)) {
   border-spacing: 0;
   border-collapse: collapse;
   display: block;
@@ -494,50 +504,50 @@ body[data-theme="dark"] .markdown-body {
   font-variant: tabular-nums;
 }
 
-.markdown-body td,
-.markdown-body th {
+.markdown-body td:not(:where(.not-prose, .not-prose *)),
+.markdown-body th:not(:where(.not-prose, .not-prose *)) {
   padding: 0;
 }
 
-.markdown-body details summary {
+.markdown-body details summary:not(:where(.not-prose, .not-prose *)) {
   cursor: pointer;
 }
 
-.markdown-body a:focus,
-.markdown-body [role=button]:focus,
-.markdown-body input[type=radio]:focus,
-.markdown-body input[type=checkbox]:focus {
+.markdown-body a:focus:not(:where(.not-prose, .not-prose *)),
+.markdown-body [role=button]:focus:not(:where(.not-prose, .not-prose *)),
+.markdown-body input[type=radio]:focus:not(:where(.not-prose, .not-prose *)),
+.markdown-body input[type=checkbox]:focus:not(:where(.not-prose, .not-prose *)) {
   outline: 2px solid var(--focus-outlineColor);
   outline-offset: -2px;
   box-shadow: none;
 }
 
-.markdown-body a:focus:not(:focus-visible),
-.markdown-body [role=button]:focus:not(:focus-visible),
-.markdown-body input[type=radio]:focus:not(:focus-visible),
-.markdown-body input[type=checkbox]:focus:not(:focus-visible) {
+.markdown-body a:focus:not(:focus-visible):not(:where(.not-prose, .not-prose *)),
+.markdown-body [role=button]:focus:not(:focus-visible):not(:where(.not-prose, .not-prose *)),
+.markdown-body input[type=radio]:focus:not(:focus-visible):not(:where(.not-prose, .not-prose *)),
+.markdown-body input[type=checkbox]:focus:not(:focus-visible):not(:where(.not-prose, .not-prose *)) {
   outline: solid 1px transparent;
 }
 
-.markdown-body a:focus-visible,
-.markdown-body [role=button]:focus-visible,
-.markdown-body input[type=radio]:focus-visible,
-.markdown-body input[type=checkbox]:focus-visible {
+.markdown-body a:focus-visible:not(:where(.not-prose, .not-prose *)),
+.markdown-body [role=button]:focus-visible:not(:where(.not-prose, .not-prose *)),
+.markdown-body input[type=radio]:focus-visible:not(:where(.not-prose, .not-prose *)),
+.markdown-body input[type=checkbox]:focus-visible:not(:where(.not-prose, .not-prose *)) {
   outline: 2px solid var(--focus-outlineColor);
   outline-offset: -2px;
   box-shadow: none;
 }
 
-.markdown-body a:not([class]):focus,
-.markdown-body a:not([class]):focus-visible,
-.markdown-body input[type=radio]:focus,
-.markdown-body input[type=radio]:focus-visible,
-.markdown-body input[type=checkbox]:focus,
-.markdown-body input[type=checkbox]:focus-visible {
+.markdown-body a:not([class]):focus:not(:where(.not-prose, .not-prose *)),
+.markdown-body a:not([class]):focus-visible:not(:where(.not-prose, .not-prose *)),
+.markdown-body input[type=radio]:focus:not(:where(.not-prose, .not-prose *)),
+.markdown-body input[type=radio]:focus-visible:not(:where(.not-prose, .not-prose *)),
+.markdown-body input[type=checkbox]:focus:not(:where(.not-prose, .not-prose *)),
+.markdown-body input[type=checkbox]:focus-visible:not(:where(.not-prose, .not-prose *)) {
   outline-offset: 0;
 }
 
-.markdown-body kbd {
+.markdown-body kbd:not(:where(.not-prose, .not-prose *)) {
   display: inline-block;
   padding: var(--base-size-4);
   font: 11px var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
@@ -551,89 +561,89 @@ body[data-theme="dark"] .markdown-body {
   box-shadow: inset 0 -1px 0 var(--borderColor-neutral-muted);
 }
 
-.markdown-body h1,
-.markdown-body h2,
-.markdown-body h3,
-.markdown-body h4,
-.markdown-body h5,
-.markdown-body h6 {
+.markdown-body h1:not(:where(.not-prose, .not-prose *)),
+.markdown-body h2:not(:where(.not-prose, .not-prose *)),
+.markdown-body h3:not(:where(.not-prose, .not-prose *)),
+.markdown-body h4:not(:where(.not-prose, .not-prose *)),
+.markdown-body h5:not(:where(.not-prose, .not-prose *)),
+.markdown-body h6:not(:where(.not-prose, .not-prose *)) {
   margin-top: var(--base-size-24);
   margin-bottom: var(--base-size-16);
   font-weight: var(--base-text-weight-semibold, 600);
   line-height: 1.25;
 }
 
-.markdown-body h2 {
+.markdown-body h2:not(:where(.not-prose, .not-prose *)) {
   font-weight: var(--base-text-weight-semibold, 600);
   padding-bottom: .3em;
   font-size: 1.5em;
   /* border-bottom: 1px solid var(--borderColor-muted); */
 }
 
-.markdown-body h3 {
+.markdown-body h3:not(:where(.not-prose, .not-prose *)) {
   font-weight: var(--base-text-weight-semibold, 600);
   font-size: 1.25em;
 }
 
-.markdown-body h4 {
+.markdown-body h4:not(:where(.not-prose, .not-prose *)) {
   font-weight: var(--base-text-weight-semibold, 600);
   font-size: 1em;
 }
 
-.markdown-body h5 {
+.markdown-body h5:not(:where(.not-prose, .not-prose *)) {
   font-weight: var(--base-text-weight-semibold, 600);
   font-size: .875em;
 }
 
-.markdown-body h6 {
+.markdown-body h6:not(:where(.not-prose, .not-prose *)) {
   font-weight: var(--base-text-weight-semibold, 600);
   font-size: .85em;
   color: var(--fgColor-muted);
 }
 
-.markdown-body p {
+.markdown-body p:not(:where(.not-prose, .not-prose *)) {
   margin-top: 0;
   margin-bottom: 10px;
 }
 
-.markdown-body blockquote {
+.markdown-body blockquote:not(:where(.not-prose, .not-prose *)) {
   margin: 0;
   padding: 0 1em;
   color: var(--fgColor-muted);
   border-left: .25em solid var(--borderColor-default);
 }
 
-.markdown-body ul,
-.markdown-body ol {
+.markdown-body ul:not(:where(.not-prose, .not-prose *)),
+.markdown-body ol:not(:where(.not-prose, .not-prose *)) {
   margin-top: 0;
   margin-bottom: 0;
   padding-left: 2em;
 }
 
-.markdown-body ol ol,
-.markdown-body ul ol {
+.markdown-body ol ol:not(:where(.not-prose, .not-prose *)),
+.markdown-body ul ol:not(:where(.not-prose, .not-prose *)) {
   list-style-type: lower-roman;
 }
 
-.markdown-body ul ul ol,
-.markdown-body ul ol ol,
-.markdown-body ol ul ol,
-.markdown-body ol ol ol {
+.markdown-body ul ul ol:not(:where(.not-prose, .not-prose *)),
+.markdown-body ul ol ol:not(:where(.not-prose, .not-prose *)),
+.markdown-body ol ul ol:not(:where(.not-prose, .not-prose *)),
+.markdown-body ol ol ol:not(:where(.not-prose, .not-prose *)) {
   list-style-type: lower-alpha;
 }
 
-.markdown-body dd {
+.markdown-body dd:not(:where(.not-prose, .not-prose *)) {
   margin-left: 0;
 }
 
-.markdown-body tt,
-.markdown-body code,
-.markdown-body samp {
+.markdown-body tt:not(:where(.not-prose, .not-prose *)),
+.markdown-body code:not(:where(.not-prose, .not-prose *)),
+.markdown-body samp:not(:where(.not-prose, .not-prose *)) {
   font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
   font-size: 12px;
 }
 
-.markdown-body pre {
+.markdown-body pre:not(:where(.not-prose, .not-prose *)) {
   margin-top: 0;
   margin-bottom: 0;
   font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
@@ -648,8 +658,8 @@ body[data-theme="dark"] .markdown-body {
   fill: currentColor;
 }
 
-.markdown-body input::-webkit-outer-spin-button,
-.markdown-body input::-webkit-inner-spin-button {
+.markdown-body input:not(:where(.not-prose, .not-prose *))::-webkit-outer-spin-button,
+.markdown-body input:not(:where(.not-prose, .not-prose *))::-webkit-inner-spin-button {
   margin: 0;
   appearance: none;
 }
@@ -669,15 +679,15 @@ body[data-theme="dark"] .markdown-body {
   content: "";
 }
 
-.markdown-body>*:first-child {
+.markdown-body>*:first-child:not(:where(.not-prose, .not-prose *)) {
   margin-top: 0 !important;
 }
 
-.markdown-body>*:last-child {
+.markdown-body>*:last-child:not(:where(.not-prose, .not-prose *)) {
   margin-bottom: 0 !important;
 }
 
-.markdown-body a:not([href]) {
+.markdown-body a:not([href]):not(:where(.not-prose, .not-prose *)) {
   color: inherit;
   text-decoration: none;
 }
@@ -697,23 +707,23 @@ body[data-theme="dark"] .markdown-body {
   outline: none;
 }
 
-.markdown-body p,
-.markdown-body blockquote,
-.markdown-body ul,
-.markdown-body ol,
-.markdown-body dl,
-.markdown-body table,
-.markdown-body pre,
-.markdown-body details {
+.markdown-body p:not(:where(.not-prose, .not-prose *)),
+.markdown-body blockquote:not(:where(.not-prose, .not-prose *)),
+.markdown-body ul:not(:where(.not-prose, .not-prose *)),
+.markdown-body ol:not(:where(.not-prose, .not-prose *)),
+.markdown-body dl:not(:where(.not-prose, .not-prose *)),
+.markdown-body table:not(:where(.not-prose, .not-prose *)),
+.markdown-body pre:not(:where(.not-prose, .not-prose *)),
+.markdown-body details:not(:where(.not-prose, .not-prose *)) {
   margin-top: 0;
   margin-bottom: var(--base-size-16);
 }
 
-.markdown-body blockquote>:first-child {
+.markdown-body blockquote>:first-child:not(:where(.not-prose, .not-prose *)) {
   margin-top: 0;
 }
 
-.markdown-body blockquote>:last-child {
+.markdown-body blockquote>:last-child:not(:where(.not-prose, .not-prose *)) {
   margin-bottom: 0;
 }
 
@@ -746,28 +756,28 @@ body[data-theme="dark"] .markdown-body {
   visibility: visible;
 }
 
-.markdown-body h1 tt,
-.markdown-body h1 code,
-.markdown-body h2 tt,
-.markdown-body h2 code,
-.markdown-body h3 tt,
-.markdown-body h3 code,
-.markdown-body h4 tt,
-.markdown-body h4 code,
-.markdown-body h5 tt,
-.markdown-body h5 code,
-.markdown-body h6 tt,
-.markdown-body h6 code {
+.markdown-body h1 tt:not(:where(.not-prose, .not-prose *)),
+.markdown-body h1 code:not(:where(.not-prose, .not-prose *)),
+.markdown-body h2 tt:not(:where(.not-prose, .not-prose *)),
+.markdown-body h2 code:not(:where(.not-prose, .not-prose *)),
+.markdown-body h3 tt:not(:where(.not-prose, .not-prose *)),
+.markdown-body h3 code:not(:where(.not-prose, .not-prose *)),
+.markdown-body h4 tt:not(:where(.not-prose, .not-prose *)),
+.markdown-body h4 code:not(:where(.not-prose, .not-prose *)),
+.markdown-body h5 tt:not(:where(.not-prose, .not-prose *)),
+.markdown-body h5 code:not(:where(.not-prose, .not-prose *)),
+.markdown-body h6 tt:not(:where(.not-prose, .not-prose *)),
+.markdown-body h6 code:not(:where(.not-prose, .not-prose *)) {
   padding: 0 .2em;
   font-size: inherit;
 }
 
-.markdown-body summary h1,
-.markdown-body summary h2,
-.markdown-body summary h3,
-.markdown-body summary h4,
-.markdown-body summary h5,
-.markdown-body summary h6 {
+.markdown-body summary h1:not(:where(.not-prose, .not-prose *)),
+.markdown-body summary h2:not(:where(.not-prose, .not-prose *)),
+.markdown-body summary h3:not(:where(.not-prose, .not-prose *)),
+.markdown-body summary h4:not(:where(.not-prose, .not-prose *)),
+.markdown-body summary h5:not(:where(.not-prose, .not-prose *)),
+.markdown-body summary h6:not(:where(.not-prose, .not-prose *)) {
   display: inline-block;
 }
 
@@ -780,8 +790,8 @@ body[data-theme="dark"] .markdown-body {
   margin-left: -40px;
 }
 
-.markdown-body summary h1,
-.markdown-body summary h2 {
+.markdown-body summary h1:not(:where(.not-prose, .not-prose *)),
+.markdown-body summary h2:not(:where(.not-prose, .not-prose *)) {
   padding-bottom: 0;
   border-bottom: 0;
 }
@@ -792,51 +802,51 @@ body[data-theme="dark"] .markdown-body {
   list-style-type: none;
 }
 
-.markdown-body ol[type="a s"] {
+.markdown-body ol[type="a s"]:not(:where(.not-prose, .not-prose *)) {
   list-style-type: lower-alpha;
 }
 
-.markdown-body ol[type="A s"] {
+.markdown-body ol[type="A s"]:not(:where(.not-prose, .not-prose *)) {
   list-style-type: upper-alpha;
 }
 
-.markdown-body ol[type="i s"] {
+.markdown-body ol[type="i s"]:not(:where(.not-prose, .not-prose *)) {
   list-style-type: lower-roman;
 }
 
-.markdown-body ol[type="I s"] {
+.markdown-body ol[type="I s"]:not(:where(.not-prose, .not-prose *)) {
   list-style-type: upper-roman;
 }
 
-.markdown-body ol[type="1"] {
+.markdown-body ol[type="1"]:not(:where(.not-prose, .not-prose *)) {
   list-style-type: decimal;
 }
 
-.markdown-body div>ol:not([type]) {
+.markdown-body div>ol:not([type]):not(:where(.not-prose, .not-prose *)) {
   list-style-type: decimal;
 }
 
-.markdown-body ul ul,
-.markdown-body ul ol,
-.markdown-body ol ol,
-.markdown-body ol ul {
+.markdown-body ul ul:not(:where(.not-prose, .not-prose *)),
+.markdown-body ul ol:not(:where(.not-prose, .not-prose *)),
+.markdown-body ol ol:not(:where(.not-prose, .not-prose *)),
+.markdown-body ol ul:not(:where(.not-prose, .not-prose *)) {
   margin-top: 0;
   margin-bottom: 0;
 }
 
-.markdown-body li>p {
+.markdown-body li>p:not(:where(.not-prose, .not-prose *)) {
   margin-top: var(--base-size-16);
 }
 
-.markdown-body li+li {
+.markdown-body li+li:not(:where(.not-prose, .not-prose *)) {
   margin-top: .25em;
 }
 
-.markdown-body dl {
+.markdown-body dl:not(:where(.not-prose, .not-prose *)) {
   padding: 0;
 }
 
-.markdown-body dl dt {
+.markdown-body dl dt:not(:where(.not-prose, .not-prose *)) {
   padding: 0;
   margin-top: var(--base-size-16);
   font-size: 1em;
@@ -844,44 +854,44 @@ body[data-theme="dark"] .markdown-body {
   font-weight: var(--base-text-weight-semibold, 600);
 }
 
-.markdown-body dl dd {
+.markdown-body dl dd:not(:where(.not-prose, .not-prose *)) {
   padding: 0 var(--base-size-16);
   margin-bottom: var(--base-size-16);
 }
 
-.markdown-body table th {
+.markdown-body table th:not(:where(.not-prose, .not-prose *)) {
   font-weight: var(--base-text-weight-semibold, 600);
   background-color: transparent;
 }
 
-.markdown-body table th,
-.markdown-body table td {
+.markdown-body table th:not(:where(.not-prose, .not-prose *)),
+.markdown-body table td:not(:where(.not-prose, .not-prose *)) {
   padding: 6px 13px;
   border: 1px solid var(--borderColor-default);
 }
 
-.markdown-body table td>:last-child {
+.markdown-body table td>:last-child:not(:where(.not-prose, .not-prose *)) {
   margin-bottom: 0;
 }
 
-.markdown-body table tr {
+.markdown-body table tr:not(:where(.not-prose, .not-prose *)) {
   background-color: transparent;
   border-top: 1px solid var(--borderColor-muted);
 }
 
-.markdown-body table tr:nth-child(2n) {
+.markdown-body table tr:nth-child(2n):not(:where(.not-prose, .not-prose *)) {
   background-color: transparent;
 }
 
-.markdown-body table img {
+.markdown-body table img:not(:where(.not-prose, .not-prose *)) {
   background-color: transparent;
 }
 
-.markdown-body img[align=right] {
+.markdown-body img[align=right]:not(:where(.not-prose, .not-prose *)) {
   padding-left: 20px;
 }
 
-.markdown-body img[align=left] {
+.markdown-body img[align=left]:not(:where(.not-prose, .not-prose *)) {
   padding-right: 20px;
 }
 
@@ -979,8 +989,8 @@ body[data-theme="dark"] .markdown-body {
   text-align: right;
 }
 
-.markdown-body code,
-.markdown-body tt {
+.markdown-body code:not(:where(.not-prose, .not-prose *)),
+.markdown-body tt:not(:where(.not-prose, .not-prose *)) {
   padding: .2em .4em;
   margin: 0;
   font-size: 85%;
@@ -989,24 +999,24 @@ body[data-theme="dark"] .markdown-body {
   border-radius: 6px;
 }
 
-.markdown-body code br,
-.markdown-body tt br {
+.markdown-body code br:not(:where(.not-prose, .not-prose *)),
+.markdown-body tt br:not(:where(.not-prose, .not-prose *)) {
   display: none;
 }
 
-.markdown-body del code {
+.markdown-body del code:not(:where(.not-prose, .not-prose *)) {
   text-decoration: inherit;
 }
 
-.markdown-body samp {
+.markdown-body samp:not(:where(.not-prose, .not-prose *)) {
   font-size: 85%;
 }
 
-.markdown-body pre code {
+.markdown-body pre code:not(:where(.not-prose, .not-prose *)) {
   font-size: 100%;
 }
 
-.markdown-body pre>code {
+.markdown-body pre>code:not(:where(.not-prose, .not-prose *)) {
   padding: 0;
   margin: 0;
   word-break: normal;
@@ -1025,7 +1035,7 @@ body[data-theme="dark"] .markdown-body {
 }
 
 .markdown-body .highlight pre,
-.markdown-body pre {
+.markdown-body pre:not(:where(.not-prose, .not-prose *)) {
   padding: var(--base-size-16);
   overflow: auto;
   font-size: 85%;
@@ -1035,8 +1045,8 @@ body[data-theme="dark"] .markdown-body {
   border-radius: 6px;
 }
 
-.markdown-body pre code,
-.markdown-body pre tt {
+.markdown-body pre code:not(:where(.not-prose, .not-prose *)),
+.markdown-body pre tt:not(:where(.not-prose, .not-prose *)) {
   display: inline;
   max-width: auto;
   padding: 0;
@@ -1075,11 +1085,11 @@ body[data-theme="dark"] .markdown-body {
   border-top: 0;
 }
 
-.markdown-body [data-footnote-ref]::before {
+.markdown-body [data-footnote-ref]:not(:where(.not-prose, .not-prose *))::before {
   content: "[";
 }
 
-.markdown-body [data-footnote-ref]::after {
+.markdown-body [data-footnote-ref]:not(:where(.not-prose, .not-prose *))::after {
   content: "]";
 }
 
@@ -1123,7 +1133,7 @@ body[data-theme="dark"] .markdown-body {
   font-family: monospace;
 }
 
-.markdown-body body:has(:modal) {
+.markdown-body body:has(:modal):not(:where(.not-prose, .not-prose *)) {
   padding-right: var(--dialog-scrollgutter) !important;
 }
 
@@ -1247,21 +1257,21 @@ body[data-theme="dark"] .markdown-body {
   color: var(--color-prettylights-syntax-constant-other-reference-link);
 }
 
-.markdown-body [role=button]:focus:not(:focus-visible),
-.markdown-body [role=tabpanel][tabindex="0"]:focus:not(:focus-visible),
-.markdown-body button:focus:not(:focus-visible),
-.markdown-body summary:focus:not(:focus-visible),
-.markdown-body a:focus:not(:focus-visible) {
+.markdown-body [role=button]:focus:not(:focus-visible):not(:where(.not-prose, .not-prose *)),
+.markdown-body [role=tabpanel][tabindex="0"]:focus:not(:focus-visible):not(:where(.not-prose, .not-prose *)),
+.markdown-body button:focus:not(:focus-visible):not(:where(.not-prose, .not-prose *)),
+.markdown-body summary:focus:not(:focus-visible):not(:where(.not-prose, .not-prose *)),
+.markdown-body a:focus:not(:focus-visible):not(:where(.not-prose, .not-prose *)) {
   outline: none;
   box-shadow: none;
 }
 
-.markdown-body [tabindex="0"]:focus:not(:focus-visible),
-.markdown-body details-dialog:focus:not(:focus-visible) {
+.markdown-body [tabindex="0"]:focus:not(:focus-visible):not(:where(.not-prose, .not-prose *)),
+.markdown-body details-dialog:focus:not(:focus-visible):not(:where(.not-prose, .not-prose *)) {
   outline: none;
 }
 
-.markdown-body g-emoji {
+.markdown-body g-emoji:not(:where(.not-prose, .not-prose *)) {
   display: inline-block;
   min-width: 1ch;
   font-family: "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol";
@@ -1272,7 +1282,7 @@ body[data-theme="dark"] .markdown-body {
   vertical-align: -0.075em;
 }
 
-.markdown-body g-emoji img {
+.markdown-body g-emoji img:not(:where(.not-prose, .not-prose *)) {
   width: 1em;
   height: 1em;
 }
