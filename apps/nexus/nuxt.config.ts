@@ -407,11 +407,17 @@ export default defineNuxtConfig({
     },
     prerender: disablePrerender
       ? {
+          autoSubfolderIndex: false,
           crawlLinks: false,
           ignore: ['/**'],
           routes: [],
         }
       : {
+          // Emit `<route>.html`, not `<route>/index.html`. Cloudflare Pages serves the
+          // subfolder form only at `/route/` and answers the slash-less URL — the one
+          // every in-app link, canonical and alternate tag uses — with a 308. Measured
+          // from CN that redirect alone cost 1.8s before the first byte of a docs page.
+          autoSubfolderIndex: false,
           crawlLinks: false,
           routes: nexusPrerenderRoutes,
           ignore: ['/hi'],

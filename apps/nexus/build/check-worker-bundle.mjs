@@ -149,8 +149,8 @@ const forbiddenLandingDeferredImagePattern = /\/_nuxt\/(?:calendar|notion|spotif
 const forbiddenLandingShowcaseVideoPattern = /\/shots\/(?:SearchApp|SearchFileImmediately|PluginTranslate)\.mp4/g
 const landingInitialHtmlFiles = [
   'index.html',
-  'new/index.html',
-  'next/index.html',
+  'new.html',
+  'next.html',
 ]
 const requiredContentCollections = ['app', 'docs', 'guides']
 const requiredWorkerRouteChunks = [
@@ -271,29 +271,29 @@ const htmlBoundaryChecks = [
   },
   {
     label: 'store HTML pulled docs/dashboard/landing CSS',
-    routePattern: /^store\/index\.html$/,
+    routePattern: /^store\.html$/,
     cssPattern: /docs\.|(?:^|\.)(?:dashboard)\.|ProviderRegistry|governance|TuffLanding|AuthVisualShell|AuthLegalFooter/i,
   },
   {
     label: 'landing HTML pulled docs/store/dashboard CSS',
-    routePattern: /^(?:index\.html|new\/index\.html|next\/index\.html)$/,
+    routePattern: /^(?:index|new|next)\.html$/,
     cssPattern: /docs\.|(?:^|\.)store\.|(?:^|\.)dashboard\.|ProviderRegistry|governance|PluginMetaHeader|AuthVisualShell|AuthLegalFooter/i,
   },
   {
     label: 'public info HTML pulled app-surface CSS',
-    routePattern: /^(?:pricing|license|privacy|protocol|updates)\/index\.html$/,
+    routePattern: /^(?:pricing|license|privacy|protocol|updates)\.html$/,
     cssPattern: /(?:^|\.)store\.|(?:^|\.)dashboard\.|ProviderRegistry|governance|PluginMetaHeader|AuthVisualShell|AuthLegalFooter|TuffLanding|TuffHome|CoreBoxMock|TuffShowcase/i,
   },
   {
     label: 'auth HTML pulled docs/store/dashboard/landing CSS',
-    routePattern: /^(?:login|sign-in|verify-waiting|device-auth)\/index\.html$/,
+    routePattern: /^(?:login|sign-in|verify-waiting|device-auth)\.html$/,
     cssPattern: /docs\.|(?:^|\.)store\.|(?:^|\.)dashboard\.|ProviderRegistry|governance|TuffLanding|PluginMetaHeader/i,
   },
 ]
 const htmlInitialAssetBudgets = [
   {
     label: 'docs initial assets',
-    routePattern: /^(?:en|zh)\/docs\/.+\/index\.html$/,
+    routePattern: /^(?:en|zh)\/docs\/.+\.html$/,
     maxJsCount: 16,
     maxJsBytes: 620 * 1024,
     maxJsGzipBytes: 205 * 1024,
@@ -303,7 +303,7 @@ const htmlInitialAssetBudgets = [
   },
   {
     label: 'store initial assets',
-    routePattern: /^store\/index\.html$/,
+    routePattern: /^store\.html$/,
     maxJsCount: 42,
     maxJsBytes: 820 * 1024,
     maxJsGzipBytes: 260 * 1024,
@@ -313,7 +313,7 @@ const htmlInitialAssetBudgets = [
   },
   {
     label: 'landing initial assets',
-    routePattern: /^(?:index\.html|new\/index\.html|next\/index\.html)$/,
+    routePattern: /^(?:index|new|next)\.html$/,
     maxJsCount: 38,
     maxJsBytes: 860 * 1024,
     maxJsGzipBytes: 285 * 1024,
@@ -323,7 +323,7 @@ const htmlInitialAssetBudgets = [
   },
   {
     label: 'public info initial assets',
-    routePattern: /^(?:pricing|license|privacy|protocol|updates)\/index\.html$/,
+    routePattern: /^(?:pricing|license|privacy|protocol|updates)\.html$/,
     maxJsCount: 20,
     maxJsBytes: 560 * 1024,
     maxJsGzipBytes: 195 * 1024,
@@ -333,7 +333,7 @@ const htmlInitialAssetBudgets = [
   },
   {
     label: 'auth initial assets',
-    routePattern: /^(?:login|sign-in|verify-waiting|device-auth)\/index\.html$/,
+    routePattern: /^(?:login|sign-in|verify-waiting|device-auth)\.html$/,
     maxJsCount: 26,
     maxJsBytes: 720 * 1024,
     maxJsGzipBytes: 235 * 1024,
@@ -377,12 +377,17 @@ function readRoutesJson() {
   return JSON.parse(readFileSync(routesJsonPath, 'utf8'))
 }
 
+/**
+ * Prerendered HTML lands at `<route>.html` (`prerender.autoSubfolderIndex: false`): Cloudflare
+ * Pages serves that file at the slash-less URL with no redirect, whereas `<route>/index.html`
+ * is only served at `<route>/` and costs every direct visitor a 308 first. `/` stays `index.html`.
+ */
 function routeToDistPath(route) {
   if (route === '/')
     return 'index.html'
   if (route.startsWith('/api/'))
     return route.slice(1)
-  return `${route.replace(/^\//, '').replace(/\/$/, '')}/index.html`
+  return `${route.replace(/^\//, '').replace(/\/$/, '')}.html`
 }
 
 function analyzeWorkerFiles() {
@@ -765,11 +770,11 @@ function checkRequiredWorkerRouteChunks(files) {
 }
 
 function isDocsRootHtml(relativePath) {
-  return /^(?:en|zh)\/docs\/(?:index\/)?index\.html$/.test(relativePath)
+  return /^(?:en|zh)\/docs(?:\/index)?\.html$/.test(relativePath)
 }
 
 function isDocsDetailHtml(relativePath) {
-  return /^(?:en|zh)\/docs\/.+\/index\.html$/.test(relativePath) && !isDocsRootHtml(relativePath)
+  return /^(?:en|zh)\/docs\/.+\.html$/.test(relativePath) && !isDocsRootHtml(relativePath)
 }
 
 function checkDocsDetailHtmlPayload(distFiles) {
