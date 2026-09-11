@@ -18,6 +18,20 @@ export interface CreditPricingRow {
   updated_at: string
 }
 
+/** Columns the store is allowed to name. A new one must be taught to the fake. */
+const CREDIT_PRICING_COLUMNS = new Set<keyof CreditPricingRow>([
+  'capability',
+  'unit',
+  'credits_per_unit',
+  'secondary_unit',
+  'secondary_credits_per_unit',
+  'min_credits',
+  'reserve_multiplier',
+  'upstream_cost_usd_per_unit',
+  'active',
+  'updated_at',
+])
+
 class MockStatement {
   args: unknown[] = []
 
@@ -98,53 +112,51 @@ export class MockCreditPricingD1Database {
 
     if (sql.includes('UPDATE credit_pricing')) {
       this.pricingUpdates += 1
-      const isReseed = sql.includes('SET unit = ?')
-      // The bind order below mirrors the shipped UPDATEs. A column change must fail loudly
-      // here rather than let the fake write shifted values into the wrong columns.
-      const isOperatorEdit = sql.includes('SET credits_per_unit = ?, min_credits = ?, reserve_multiplier = ?')
-      if (!isReseed && !isOperatorEdit)
-        throw new Error('MockCreditPricingD1Database: credit_pricing UPDATE columns changed; update the fake.')
+      const setClause = /SET ([\s\S]*?) WHERE /i.exec(sql)?.[1]
+      const whereClause = /WHERE ([\s\S]*)$/i.exec(sql)?.[1]
+      if (!setClause || !whereClause)
+        throw new Error('MockCreditPricingD1Database: credit_pricing UPDATE shape changed; update the fake.')
 
-      // Both shapes end their bind list with the capability.
-      const row = this.rows.get(String(args[args.length - 1]))
+      const readColumns = (clause: string, separator: RegExp) =>
+        clause.split(separator).map((part) => {
+          const column = part.split('=')[0]?.trim() ?? ''
+          if (!CREDIT_PRICING_COLUMNS.has(column))
+            throw new Error(`MockCreditPricingD1Database: unknown credit_pricing column "${column}"; update the fake.`)
+          return column
+        })
+
+      // A SET list is comma-separated; a WHERE list joins its conditions with AND.
+      const setColumns = readColumns(setClause, /\s*,\s*/)
+      const whereColumns = readColumns(whereClause, /\s+AND\s+/i)
+      // Bind order mirrors the shipped UPDATEs: every SET value, then every WHERE value.
+      const setValues = args.slice(0, setColumns.length)
+      const whereValues = args.slice(setColumns.length)
+      if (args.length !== setColumns.length + whereColumns.length)
+        throw new Error(`MockCreditPricingD1Database: credit_pricing UPDATE bind count changed; update the fake. sql=${sql} args=${args.length} set=${setColumns.join('|')} where=${whereColumns.join('|')}`)
+
+      const capability = String(whereValues[whereColumns.indexOf('capability')] ?? '')
+      const row = this.rows.get(capability)
       if (!row)
         return { meta: { changes: 0 } }
 
-      // Re-seed shape: a row still carrying a superseded seed stamp is rewritten to
-      // the shipped default, unit included, because nobody has edited it.
-      if (isReseed) {
-        const [
-          unit,
-          creditsPerUnit,
-          secondaryUnit,
-          secondaryCreditsPerUnit,
-          minCredits,
-          reserveMultiplier,
-          upstreamCostUsdPerUnit,
-          active,
-          updatedAt,
-        ] = args
-        row.unit = String(unit)
-        row.credits_per_unit = Number(creditsPerUnit)
-        row.secondary_unit = secondaryUnit == null ? null : String(secondaryUnit)
-        row.secondary_credits_per_unit = secondaryCreditsPerUnit == null ? null : Number(secondaryCreditsPerUnit)
-        row.min_credits = Number(minCredits)
-        row.reserve_multiplier = Number(reserveMultiplier)
-        row.upstream_cost_usd_per_unit = upstreamCostUsdPerUnit == null ? null : Number(upstreamCostUsdPerUnit)
-        row.active = Number(active)
-        row.updated_at = String(updatedAt)
-        return { meta: { changes: 1 } }
-      }
+      // Compare-and-swap: the row only moves when the columns the WHERE named still
+      // hold the values that were read.
+      const matches = whereColumns.every((column, index) =>
+        String(row[column]) === String(whereValues[index]))
+      if (!matches)
+        return { meta: { changes: 0 } }
 
-      // Operator edit: only the price fields move, the unit basis stays put.
-      const [creditsPerUnit, minCredits, reserveMultiplier, upstreamCostUsdPerUnit, active, updatedAt] = args
-
-      row.credits_per_unit = Number(creditsPerUnit)
-      row.min_credits = Number(minCredits)
-      row.reserve_multiplier = Number(reserveMultiplier)
-      row.upstream_cost_usd_per_unit = upstreamCostUsdPerUnit == null ? null : Number(upstreamCostUsdPerUnit)
-      row.active = Number(active)
-      row.updated_at = String(updatedAt)
+      setColumns.forEach((column, index) => {
+        const value = setValues[index]
+        if (column === 'capability' || column === 'unit' || column === 'secondary_unit')
+          row[column] = value == null ? null : String(value)
+        else if (column === 'updated_at')
+          row.updated_at = String(value)
+        else if (column === 'active')
+          row.active = Number(value)
+        else
+          row[column] = value == null ? null : Number(value)
+      })
       return { meta: { changes: 1 } }
     }
 

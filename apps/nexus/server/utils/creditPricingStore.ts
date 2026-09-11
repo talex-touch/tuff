@@ -1,5 +1,6 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
+import { createError } from 'h3'
 import { requireDatabase } from './creditsStore'
 
 /**
@@ -264,6 +265,54 @@ export function selectCreditPricingRule(
   }
 }
 
+/** Priced units, as a runtime guard for values that came back from storage. */
+const CREDIT_PRICING_UNITS: readonly CreditPricingUnit[] = [
+  '1k_tokens',
+  'audio_second',
+  'transcript_unit',
+  'image'
+]
+
+function isCreditPricingUnit(value: unknown): value is CreditPricingUnit {
+  return typeof value === 'string' && (CREDIT_PRICING_UNITS as readonly string[]).includes(value)
+}
+
+/**
+ * The stored rule for a capability, plus whether an operator disabled it.
+ *
+ * `selectCreditPricingRule` cannot express that difference: it answers "what does this
+ * cost" with the fallback for both a capability nobody registered and one an operator
+ * turned off. The fallback prices tokens, so a capability that reports `{unit:'image'}`
+ * or seconds would settle at zero — the work would be served for free. Callers that
+ * must charge for the work resolve through this entry (or
+ * `resolveSellableCreditPricingRule`) and refuse a disabled capability instead of
+ * pricing it as something it is not.
+ */
+export interface CreditPricingResolution {
+  rule: CreditPricingRule
+  /** A row exists for the capability but `active` is false: it is not for sale. */
+  disabled: boolean
+}
+
+export function resolveCreditPricingEntry(
+  capability: string,
+  rules: readonly CreditPricingRule[]
+): CreditPricingResolution {
+  const normalized = typeof capability === 'string' ? capability.trim() : ''
+  const stored = rules.find(item => item.capability === normalized)
+  if (!stored) {
+    return {
+      rule: {
+        capability: normalized,
+        ...FALLBACK_CREDIT_PRICING,
+        updatedAt: SEEDED_AT
+      },
+      disabled: false
+    }
+  }
+  return { rule: stored, disabled: !stored.active }
+}
+
 function normalizeRule(row: Record<string, unknown>): CreditPricingRule {
   return {
     capability: String(row.capability ?? ''),
@@ -374,8 +423,9 @@ async function reseedSupersededDefaults(
 ): Promise<boolean> {
   if (!rows.length) return false
   const defaults = new Map(DEFAULT_CREDIT_PRICING.map(item => [item.capability, item]))
-  const statements = rows.flatMap((row) => {
-    if (!SUPERSEDED_SEED_STAMPS.has(String(row.updated_at ?? ''))) return []
+  const statements: D1PreparedStatement[] = rows.flatMap((row) => {
+    const stamp = String(row.updated_at ?? '')
+    if (!SUPERSEDED_SEED_STAMPS.has(stamp)) return []
     const item = defaults.get(String(row.capability))
     if (!item) return []
     return [
@@ -385,7 +435,7 @@ async function reseedSupersededDefaults(
              SET unit = ?, credits_per_unit = ?, secondary_unit = ?, secondary_credits_per_unit = ?,
                  min_credits = ?, reserve_multiplier = ?, upstream_cost_usd_per_unit = ?, active = ?,
                  updated_at = ?
-           WHERE capability = ?`
+           WHERE capability = ? AND updated_at = ?`
         )
         .bind(
           item.unit,
@@ -397,13 +447,17 @@ async function reseedSupersededDefaults(
           item.upstreamCostUsdPerUnit,
           item.active ? 1 : 0,
           item.updatedAt,
-          item.capability
+          item.capability,
+          // Compare-and-swap on the stamp this row carried when it was read: an
+          // operator who edited the row in the meantime stamped a real timestamp, so
+          // the reseed must not overwrite their price with the shipped default.
+          stamp
         )
     ]
   })
   if (!statements.length) return false
-  await db.batch(statements)
-  return true
+  const results = await db.batch(statements)
+  return results.some(result => Number(result.meta?.changes ?? 0) > 0)
 }
 
 function isDatabase(value: unknown): value is D1Database {
@@ -420,9 +474,102 @@ export async function resolveCreditPricingRule(
 }
 
 /**
+ * The rule to charge a capability with, refusing one an operator disabled.
+ *
+ * A disabled capability is not sold, so the call must be refused *before* upstream
+ * dispatch: falling back to the token price would bill a per-image or per-second
+ * capability at zero and spend provider cost on work nobody pays for.
+ */
+export async function resolveSellableCreditPricingRule(
+  event: H3Event | D1Database,
+  capability: string
+): Promise<CreditPricingRule> {
+  const rules = await listCreditPricing(event)
+  const entry = resolveCreditPricingEntry(capability, rules)
+  if (entry.disabled) {
+    throw createError({
+      statusCode: 503,
+      statusMessage: 'CAPABILITY_DISABLED',
+      data: { code: 'CAPABILITY_DISABLED', capability: entry.rule.capability }
+    })
+  }
+  return entry.rule
+}
+
+/**
+ * The rule a call was admitted under, serialized for the record that will settle it.
+ *
+ * A hold is a quote: it is taken at the price the caller was quoted, so settlement has
+ * to read that price back instead of the price in force when the provider finished.
+ */
+export function serializeCreditPricingRule(rule: CreditPricingRule): string {
+  return JSON.stringify({
+    capability: rule.capability,
+    unit: rule.unit,
+    creditsPerUnit: rule.creditsPerUnit,
+    secondaryUnit: rule.secondaryUnit,
+    secondaryCreditsPerUnit: rule.secondaryCreditsPerUnit,
+    minCredits: rule.minCredits,
+    reserveMultiplier: rule.reserveMultiplier,
+    active: rule.active,
+    updatedAt: rule.updatedAt
+  })
+}
+
+/**
+ * Reads a snapshot back, or null when it is missing or not trustworthy: a malformed
+ * snapshot must never become a price, because the settlement it stands in for would
+ * then charge the wrong amount instead of the amount that was quoted.
+ */
+export function parseCreditPricingRuleSnapshot(value: unknown): CreditPricingRule | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const raw = parsed as Record<string, unknown>
+  const unit = raw.unit
+  if (!isCreditPricingUnit(unit)) return null
+  const creditsPerUnit = Number(raw.creditsPerUnit)
+  const minCredits = Number(raw.minCredits)
+  const reserveMultiplier = Number(raw.reserveMultiplier)
+  if (!Number.isFinite(creditsPerUnit) || creditsPerUnit <= 0) return null
+  if (!Number.isFinite(minCredits) || minCredits < 0) return null
+  if (!Number.isFinite(reserveMultiplier) || reserveMultiplier <= 0) return null
+
+  const secondaryUnit = raw.secondaryUnit ?? null
+  const secondaryRaw = raw.secondaryCreditsPerUnit ?? null
+  if (secondaryUnit !== null && !isCreditPricingUnit(secondaryUnit)) return null
+  if (secondaryUnit === null && secondaryRaw !== null) return null
+  const secondaryCreditsPerUnit = secondaryRaw === null ? null : Number(secondaryRaw)
+  if (secondaryCreditsPerUnit !== null && (!Number.isFinite(secondaryCreditsPerUnit) || secondaryCreditsPerUnit <= 0)) return null
+
+  return {
+    capability: String(raw.capability ?? ''),
+    unit,
+    creditsPerUnit,
+    secondaryUnit: secondaryUnit === null ? null : secondaryUnit,
+    secondaryCreditsPerUnit,
+    minCredits,
+    reserveMultiplier,
+    upstreamCostUsdPerUnit: null,
+    active: raw.active === true,
+    updatedAt: String(raw.updatedAt ?? SEEDED_AT)
+  }
+}
+
+/**
  * Operator-facing price change. Only the price fields are writable: the unit basis
  * of a capability is part of its contract and is changed in code, with the
  * reconciliation it implies.
+ *
+ * Only the fields named in `patch` are written. Reading the row, rebuilding every
+ * field from it and writing them all back would make two operators editing different
+ * fields of the same capability overwrite each other: the second write would restore
+ * whatever the first one's read saw.
  */
 export async function updateCreditPricing(
   event: H3Event | D1Database,
@@ -437,47 +584,50 @@ export async function updateCreditPricing(
 ): Promise<CreditPricingRule | null> {
   const db = isDatabase(event) ? event : requireDatabase(event as H3Event)
   await ensureCreditPricingSchema(db)
-  const current = await db
+  const existing = await db
     .prepare(`SELECT * FROM ${CREDIT_PRICING_TABLE} WHERE capability = ?`)
     .bind(capability)
     .first<Record<string, unknown>>()
-  if (!current) return null
+  if (!existing) return null
 
-  const next = {
-    creditsPerUnit: patch.creditsPerUnit ?? Number(current.credits_per_unit),
-    minCredits: patch.minCredits ?? Number(current.min_credits),
-    reserveMultiplier: patch.reserveMultiplier ?? Number(current.reserve_multiplier),
-    upstreamCostUsdPerUnit:
-      patch.upstreamCostUsdPerUnit === undefined
-        ? (current.upstream_cost_usd_per_unit as number | null)
-        : patch.upstreamCostUsdPerUnit,
-    active: patch.active ?? (current.active === 1 || current.active === true)
+  const assignments: string[] = []
+  const values: unknown[] = []
+  if (patch.creditsPerUnit !== undefined) {
+    assignments.push('credits_per_unit = ?')
+    values.push(patch.creditsPerUnit)
   }
+  if (patch.minCredits !== undefined) {
+    assignments.push('min_credits = ?')
+    values.push(patch.minCredits)
+  }
+  if (patch.reserveMultiplier !== undefined) {
+    assignments.push('reserve_multiplier = ?')
+    values.push(patch.reserveMultiplier)
+  }
+  if (patch.upstreamCostUsdPerUnit !== undefined) {
+    assignments.push('upstream_cost_usd_per_unit = ?')
+    values.push(patch.upstreamCostUsdPerUnit)
+  }
+  if (patch.active !== undefined) {
+    assignments.push('active = ?')
+    values.push(patch.active ? 1 : 0)
+  }
+  if (!assignments.length) return normalizeRule(existing)
+
+  assignments.push('updated_at = ?')
+  values.push(new Date().toISOString())
+  values.push(capability)
 
   await db
-    .prepare(
-      `UPDATE ${CREDIT_PRICING_TABLE}
-         SET credits_per_unit = ?, min_credits = ?, reserve_multiplier = ?,
-             upstream_cost_usd_per_unit = ?, active = ?, updated_at = ?
-       WHERE capability = ?`
-    )
-    .bind(
-      next.creditsPerUnit,
-      next.minCredits,
-      next.reserveMultiplier,
-      next.upstreamCostUsdPerUnit,
-      next.active ? 1 : 0,
-      new Date().toISOString(),
-      capability
-    )
+    .prepare(`UPDATE ${CREDIT_PRICING_TABLE} SET ${assignments.join(', ')} WHERE capability = ?`)
+    .bind(...values)
     .run()
 
-  return normalizeRule({
-    ...current,
-    credits_per_unit: next.creditsPerUnit,
-    min_credits: next.minCredits,
-    reserve_multiplier: next.reserveMultiplier,
-    upstream_cost_usd_per_unit: next.upstreamCostUsdPerUnit,
-    active: next.active ? 1 : 0
-  })
+  // Re-read rather than patching the snapshot taken before the write: a concurrent
+  // change to another field belongs in what the operator is told they now have.
+  const updated = await db
+    .prepare(`SELECT * FROM ${CREDIT_PRICING_TABLE} WHERE capability = ?`)
+    .bind(capability)
+    .first<Record<string, unknown>>()
+  return updated ? normalizeRule(updated) : null
 }

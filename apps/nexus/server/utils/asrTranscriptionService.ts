@@ -3,7 +3,7 @@ import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { consumeCredits, releaseConsumedCredits } from './creditsStore'
-import { resolveCreditPricingRule } from './creditPricingStore'
+import { resolveCreditPricingRule, resolveSellableCreditPricingRule } from './creditPricingStore'
 import { DashScopeAsrError, createDashScopeFiletransAdapter, assertDashScopeProvider, type DashScopeFiletransAdapter } from './dashscopeAsrProvider'
 import { getProviderRegistryEntry, listProviderRegistryEntries } from './providerRegistryStore'
 import {
@@ -126,7 +126,7 @@ export async function startAsrTranscription(
   const durationSeconds = parseWavDurationSeconds(input.audio)
   const idempotencyKey = normalizeAsrIdempotencyKey(input.idempotencyKey)
   const provider = await resolveDashScopeAsrProvider(event)
-  const pricing = await resolveCreditPricingRule(event, 'audio.transcribe')
+  const pricing = await resolveSellableCreditPricingRule(event, 'audio.transcribe')
   const created = await createAsrRequest(event, {
     userId,
     providerId: provider.id,
@@ -224,7 +224,11 @@ export async function pollAsrTranscription(
       return asClientResponse(failed)
     }
 
-    const pricing = await resolveCreditPricingRule(event, request.capability)
+    // Settle at the price this request was admitted under. Re-resolving would re-price
+    // work the provider has already done: a price rise would fail a finished
+    // transcription as ASR_RESERVATION_EXCEEDED, and a cut would refund the difference.
+    // The fallback only covers requests admitted before the snapshot was persisted.
+    const pricing = request.pricing ?? await resolveCreditPricingRule(event, request.capability)
     const chargedCredits = calculateFiletransCredits(pricing, task.transcript, task.billedSeconds)
     if (chargedCredits > request.reservedCredits) {
       const failed = await markAsrFailed(event, request.id, 'ASR_RESERVATION_EXCEEDED')

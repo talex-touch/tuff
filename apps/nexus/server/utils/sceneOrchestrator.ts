@@ -24,6 +24,7 @@ import {
   computeCreditCharge,
   computeCreditReservation,
   resolveCreditPricingRule,
+  resolveSellableCreditPricingRule,
   type CreditPricingRule,
   type CreditPricingUnit,
   type CreditPricingUsage,
@@ -1939,7 +1940,7 @@ async function reserveSceneRunCredits(
   const rules = new Map<string, CreditPricingRule>()
   let estimatedCredits = 0
   for (const capability of request.capabilities) {
-    const rule = await resolveCreditPricingRule(event, capability)
+    const rule = await resolveSellableCreditPricingRule(event, capability)
     rules.set(capability, rule)
     estimatedCredits += computeCreditReservation(rule, estimateSceneCapabilityUsage(rule, request.requestInput))
   }
