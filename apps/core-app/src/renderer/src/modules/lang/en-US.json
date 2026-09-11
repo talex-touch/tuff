@@ -1077,7 +1077,7 @@
     "actions": {
       "refresh": "Refresh",
       "share": "Share",
-      "clear": "Clear records",
+      "clear": "Clear insights",
       "retry": "Retry",
       "showReport": "View report",
       "hideReport": "Hide report",
@@ -5321,15 +5321,7 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": [
-        "Sun",
-        "Mon",
-        "Tue",
-        "Wed",
-        "Thu",
-        "Fri",
-        "Sat"
-      ]
+      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     },
     "memoryReview": {
       "title": "Memory Review",

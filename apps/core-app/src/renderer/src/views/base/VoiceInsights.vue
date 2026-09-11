@@ -782,10 +782,9 @@ onBeforeUnmount(() => {
               <span class="i-ri-more-fill" aria-hidden="true" />
             </TxButton>
           </template>
-          <div class="VoiceInsights-Menu" role="menu">
+          <div class="VoiceInsights-Menu">
             <button
               type="button"
-              role="menuitem"
               :disabled="!hasData || refreshing || clearing || copyPending"
               data-testid="voice-insights-share"
               @click="runFromMenu(copyShareSummary)"
@@ -795,7 +794,6 @@ onBeforeUnmount(() => {
             </button>
             <button
               type="button"
-              role="menuitem"
               data-testid="voice-insights-settings"
               @click="runFromMenu(() => emit('open-settings'))"
             >
@@ -805,7 +803,6 @@ onBeforeUnmount(() => {
             <div class="VoiceInsights-MenuRule" role="separator" />
             <button
               type="button"
-              role="menuitem"
               class="is-danger"
               :disabled="!hasData || refreshing || copyPending || clearing"
               data-testid="voice-insights-clear"
@@ -1155,97 +1152,99 @@ onBeforeUnmount(() => {
       size="560px"
       data-testid="voice-insights-records"
     >
-      <header class="VoiceInsights-RecordsHeading">
-        <p>{{ t('voiceInsights.records.description') }}</p>
-        <TxButton
-          variant="bare"
-          type="danger"
-          size="sm"
-          :loading="recordsClearing"
-          :disabled="records.length === 0 || recordsClearing || clearing"
-          data-testid="voice-insights-records-clear"
-          @click="clearRecords"
-        >
-          {{ t('voiceInsights.records.clear') }}
-        </TxButton>
-      </header>
+      <div class="VoiceInsights-Records">
+        <header class="VoiceInsights-RecordsHeading">
+          <p>{{ t('voiceInsights.records.description') }}</p>
+          <TxButton
+            variant="bare"
+            type="danger"
+            size="sm"
+            :loading="recordsClearing"
+            :disabled="records.length === 0 || recordsClearing || clearing"
+            data-testid="voice-insights-records-clear"
+            @click="clearRecords"
+          >
+            {{ t('voiceInsights.records.clear') }}
+          </TxButton>
+        </header>
 
-      <div v-if="records.length === 0" class="VoiceInsights-RecordsEmpty">
-        {{ t('voiceInsights.records.empty') }}
-      </div>
-      <div v-else class="VoiceInsights-RecordList">
-        <details v-for="record in pagedRecords" :key="record.id" class="VoiceInsights-Record">
-          <summary>
-            <span class="VoiceInsights-RecordSummaryMain">
-              <strong>{{
-                record.text || record.rawText || t('voiceInsights.records.emptyText')
-              }}</strong>
-              <small>{{ recordDateLabel(record.capturedAt) }}</small>
-            </span>
-            <span class="VoiceInsights-RecordSummaryMeta">
-              <span :data-status="record.status">{{ recordStatusLabel(record.status) }}</span>
-              <span>{{ record.model || record.channel || '—' }}</span>
-            </span>
-          </summary>
-          <div class="VoiceInsights-RecordDetails">
-            <audio
-              v-if="record.audioUrl"
-              controls
-              preload="none"
-              :src="record.audioUrl"
-              :aria-label="t('voiceInsights.records.audioLabel')"
-            />
-            <p class="VoiceInsights-RecordAudioMeta">{{ recordAudioLabel(record) }}</p>
-            <dl>
-              <div>
-                <dt>{{ t('voiceInsights.records.rawText') }}</dt>
-                <dd>{{ record.rawText || '—' }}</dd>
-              </div>
-              <div>
-                <dt>{{ t('voiceInsights.records.finalText') }}</dt>
-                <dd>{{ record.text || '—' }}</dd>
-              </div>
-              <div>
-                <dt>{{ t('voiceInsights.records.duration') }}</dt>
-                <dd>
-                  {{ record.audioDurationMs ? formatDuration(record.audioDurationMs) : '—' }}
-                </dd>
-              </div>
-              <div>
-                <dt>{{ t('voiceInsights.records.recognitionDuration') }}</dt>
-                <dd>
-                  {{
-                    record.recognitionDurationMs
-                      ? formatDuration(record.recognitionDurationMs)
-                      : '—'
-                  }}
-                </dd>
-              </div>
-              <div>
-                <dt>{{ t('voiceInsights.records.tokens') }}</dt>
-                <dd>{{ recordTokenLabel(record) }}</dd>
-              </div>
-              <div>
-                <dt>{{ t('voiceInsights.records.channel') }}</dt>
-                <dd>{{ record.channel || record.providerId || '—' }}</dd>
-              </div>
-              <div v-if="record.errorCode">
-                <dt>{{ t('voiceInsights.records.error') }}</dt>
-                <dd>{{ record.errorCode }}</dd>
-              </div>
-            </dl>
-          </div>
-        </details>
-      </div>
+        <div v-if="records.length === 0" class="VoiceInsights-RecordsEmpty">
+          {{ t('voiceInsights.records.empty') }}
+        </div>
+        <div v-else class="VoiceInsights-RecordList">
+          <details v-for="record in pagedRecords" :key="record.id" class="VoiceInsights-Record">
+            <summary>
+              <span class="VoiceInsights-RecordSummaryMain">
+                <strong>{{
+                  record.text || record.rawText || t('voiceInsights.records.emptyText')
+                }}</strong>
+                <small>{{ recordDateLabel(record.capturedAt) }}</small>
+              </span>
+              <span class="VoiceInsights-RecordSummaryMeta">
+                <span :data-status="record.status">{{ recordStatusLabel(record.status) }}</span>
+                <span>{{ record.model || record.channel || '—' }}</span>
+              </span>
+            </summary>
+            <div class="VoiceInsights-RecordDetails">
+              <audio
+                v-if="record.audioUrl"
+                controls
+                preload="none"
+                :src="record.audioUrl"
+                :aria-label="t('voiceInsights.records.audioLabel')"
+              />
+              <p class="VoiceInsights-RecordAudioMeta">{{ recordAudioLabel(record) }}</p>
+              <dl>
+                <div>
+                  <dt>{{ t('voiceInsights.records.rawText') }}</dt>
+                  <dd>{{ record.rawText || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('voiceInsights.records.finalText') }}</dt>
+                  <dd>{{ record.text || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('voiceInsights.records.duration') }}</dt>
+                  <dd>
+                    {{ record.audioDurationMs ? formatDuration(record.audioDurationMs) : '—' }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ t('voiceInsights.records.recognitionDuration') }}</dt>
+                  <dd>
+                    {{
+                      record.recognitionDurationMs
+                        ? formatDuration(record.recognitionDurationMs)
+                        : '—'
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ t('voiceInsights.records.tokens') }}</dt>
+                  <dd>{{ recordTokenLabel(record) }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('voiceInsights.records.channel') }}</dt>
+                  <dd>{{ record.channel || record.providerId || '—' }}</dd>
+                </div>
+                <div v-if="record.errorCode">
+                  <dt>{{ t('voiceInsights.records.error') }}</dt>
+                  <dd>{{ record.errorCode }}</dd>
+                </div>
+              </dl>
+            </div>
+          </details>
+        </div>
 
-      <TxPagination
-        v-if="recordPageCount > 1"
-        v-model:current-page="recordPage"
-        class="VoiceInsights-RecordsPager"
-        :page-size="RECORDS_PER_PAGE"
-        :total="records.length"
-        data-testid="voice-insights-records-pagination"
-      />
+        <TxPagination
+          v-if="recordPageCount > 1"
+          v-model:current-page="recordPage"
+          class="VoiceInsights-RecordsPager"
+          :page-size="RECORDS_PER_PAGE"
+          :total="records.length"
+          data-testid="voice-insights-records-pagination"
+        />
+      </div>
     </TxDrawer>
 
     <TxBottomDialog
