@@ -25,6 +25,7 @@ import {
   computeCreditReservation,
   resolveCreditPricingRule,
   type CreditPricingRule,
+  type CreditPricingUnit,
   type CreditPricingUsage,
 } from './creditPricingStore'
 import {
@@ -1871,26 +1872,58 @@ function estimateSceneCapabilityUsage(rule: CreditPricingRule, input: unknown): 
   return { tokens: characters }
 }
 
-/** Provider-reported usage, translated into the basis the price list reads. */
-function toCreditPricingUsage(usage: SceneRunUsage): CreditPricingUsage | null {
+/**
+ * Provider-reported usage, translated into the basis the price list reads, together with
+ * the price-list unit it is metered in. Unrecognized units price as tokens — the same
+ * fallback the estimate path uses — because reading them as zero would let a priced
+ * capability settle for free. The unit travels with the basis so a caller can tell
+ * whether the capability's own rule is able to read what the provider reported.
+ */
+function toCreditPricingUsage(
+  usage: SceneRunUsage,
+): { unit: CreditPricingUnit, usage: CreditPricingUsage } | null {
   const quantity = Number(usage.quantity)
   if (!Number.isFinite(quantity) || quantity <= 0)
     return null
 
   switch (usage.unit) {
     case 'image':
-      return { images: quantity }
+      return { unit: 'image', usage: { images: quantity } }
     case 'second':
     case 'audio_second':
-      return { seconds: quantity }
+      return { unit: 'audio_second', usage: { seconds: quantity } }
     case 'transcript_unit':
     case 'unit':
-      return { units: quantity }
+      return { unit: 'transcript_unit', usage: { units: quantity } }
     default:
-      // Tokens and characters both land here: pricing an unrecognized provider unit at
-      // zero would let a priced capability settle for free.
-      return { tokens: quantity }
+      return { unit: '1k_tokens', usage: { tokens: quantity } }
   }
+}
+
+/** A billable item the run reported in a unit its capability's price row cannot convert. */
+interface SceneRunUnitMismatch {
+  capability: string
+  providerId: string | null
+  reportedUnit: string
+  pricedUnit: CreditPricingUnit
+  ruleUnit: CreditPricingUnit
+}
+
+/**
+ * The price-list units a row converts. A row reads its primary basis and, when it carries
+ * one, its secondary basis too — the ASR rows price both seconds and transcript units — so
+ * comparing the reported unit against the primary alone would call a perfectly sellable
+ * report a mismatch and keep the whole hold instead of charging it.
+ */
+function convertiblePricingUnits(rule: CreditPricingRule): CreditPricingUnit[] {
+  return rule.secondaryUnit && rule.secondaryCreditsPerUnit !== null
+    ? [rule.unit, rule.secondaryUnit]
+    : [rule.unit]
+}
+
+interface SceneRunCharge {
+  credits: number
+  unitMismatches: SceneRunUnitMismatch[]
 }
 
 /**
@@ -1937,13 +1970,14 @@ async function computeSceneRunChargeCredits(
   event: H3Event,
   usage: readonly SceneRunUsage[],
   rules: Map<string, CreditPricingRule>,
-): Promise<number> {
+): Promise<SceneRunCharge> {
   let total = 0
+  const unitMismatches: SceneRunUnitMismatch[] = []
   for (const item of usage) {
     if (item.billable === false)
       continue
-    const pricingUsage = toCreditPricingUsage(item)
-    if (!pricingUsage)
+    const reported = toCreditPricingUsage(item)
+    if (!reported)
       continue
 
     const capability = readOptionalString(item.capability, 180) ?? ''
@@ -1954,9 +1988,25 @@ async function computeSceneRunChargeCredits(
       rule = await resolveCreditPricingRule(event, capability)
       rules.set(capability, rule)
     }
-    total += computeCreditCharge(rule, pricingUsage)
+
+    if (!convertiblePricingUnits(rule).includes(reported.unit)) {
+      // The row cannot read the basis the provider metered in, so this item converts to no
+      // amount at all. Summing it as zero would settle the run for free; the caller keeps
+      // the hold instead (see settleSceneRunCredits), exactly as the invoke path does for
+      // its own unit mismatch.
+      unitMismatches.push({
+        capability,
+        providerId: readOptionalString(item.providerId, 180) ?? null,
+        reportedUnit: item.unit,
+        pricedUnit: reported.unit,
+        ruleUnit: rule.unit,
+      })
+      continue
+    }
+
+    total += computeCreditCharge(rule, reported.usage)
   }
-  return total
+  return { credits: total, unitMismatches }
 }
 
 /**
@@ -1971,8 +2021,9 @@ async function settleSceneRunCredits(
 ): Promise<void> {
   const { billing, context, rules } = reservation
 
+  let charge: SceneRunCharge
   try {
-    billing.chargedCredits = await computeSceneRunChargeCredits(event, usage, rules)
+    charge = await computeSceneRunChargeCredits(event, usage, rules)
   }
   catch (error) {
     // The charge cannot be derived, so the whole hold is kept: keeping a hold is
@@ -1982,6 +2033,26 @@ async function settleSceneRunCredits(
     console.warn('[sceneOrchestrator] Failed to derive credit charge; reservation kept (metering integrity)', error)
     return
   }
+
+  if (charge.unitMismatches.length > 0) {
+    // Same fault the invoke path refuses to settle: a billable item metered in a unit its
+    // capability's price row cannot convert. The amount is not derivable from what the
+    // provider reported, so the whole hold is kept rather than zeroing the item —
+    // refunding it would turn a metering fault into free provider spend. A partial sum is
+    // deliberately discarded too: the hold is one amount, and an under-charge here is
+    // unrecoverable from the ledger.
+    billing.chargedCredits = billing.reservedCredits
+    billing.settleFailed = true
+    console.warn('[sceneOrchestrator] Scene run reported usage in an unsellable unit; keeping the reservation', {
+      sceneId: context.sceneId,
+      runId: context.runId,
+      reservedCredits: billing.reservedCredits,
+      unitMismatches: charge.unitMismatches,
+    })
+    return
+  }
+
+  billing.chargedCredits = charge.credits
 
   if (billing.chargedCredits <= billing.reservedCredits) {
     const releaseCredits = billing.reservedCredits - billing.chargedCredits
