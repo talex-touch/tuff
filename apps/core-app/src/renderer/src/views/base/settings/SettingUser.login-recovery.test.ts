@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import type * as VueModule from 'vue'
@@ -14,6 +14,17 @@ const toastMock = vi.hoisted(() => ({
 const loginWithBrowserMock = vi.hoisted(() => vi.fn())
 const reopenBrowserLoginMock = vi.hoisted(() => vi.fn())
 const cancelPendingBrowserLoginMock = vi.hoisted(() => vi.fn())
+const signOutMock = vi.hoisted(() => vi.fn())
+
+/**
+ * The Nexus address the renderer resolves, plus the two save entry points the settings block calls.
+ * `effectiveUrl` is what the page must show as in effect, whichever address is stored.
+ */
+const nexusBaseUrlMock = vi.hoisted(() => ({
+  effectiveUrl: 'https://example.test',
+  setUserNexusBaseUrl: vi.fn(),
+  resetUserNexusBaseUrl: vi.fn()
+}))
 
 const authStateMock = vi.hoisted(() => {
   const { computed, reactive, ref } = require('vue') as typeof VueModule
@@ -48,6 +59,7 @@ const authStateMock = vi.hoisted(() => {
       loginWithBrowser: loginWithBrowserMock,
       reopenBrowserLogin: reopenBrowserLoginMock,
       cancelPendingBrowserLogin: cancelPendingBrowserLoginMock,
+      signOut: signOutMock,
       logout: vi.fn(),
       runSyncBootstrap: vi.fn(),
       authLoadingState
@@ -64,6 +76,9 @@ const appSettingMock = vi.hoisted(() => {
     },
     dev: {
       advancedSettings: false
+    },
+    auth: {
+      nexusBaseUrl: ''
     }
   })
 })
@@ -175,9 +190,11 @@ vi.mock('~/modules/auth/sync-preferences', () => ({
 }))
 
 vi.mock('~/modules/nexus/runtime-base', () => ({
-  getRuntimeNexusBaseUrl: () => 'https://example.test',
+  getRuntimeNexusBaseUrl: () => nexusBaseUrlMock.effectiveUrl,
   getRuntimeServerMode: () => 'production',
-  setRuntimeServerMode: vi.fn()
+  setRuntimeServerMode: vi.fn(),
+  setUserNexusBaseUrl: nexusBaseUrlMock.setUserNexusBaseUrl,
+  resetUserNexusBaseUrl: nexusBaseUrlMock.resetUserNexusBaseUrl
 }))
 
 vi.mock('~/modules/sync', () => ({
@@ -374,5 +391,182 @@ describe('SettingUser login recovery', () => {
     expect(text).not.toContain('阻塞：鉴权异常')
     expect(text).not.toContain('队列：7')
     expect(text).not.toContain('错误：E_SYNC')
+  })
+})
+
+/**
+ * The "Nexus 服务地址" block: what the user saves, and what happens to the account session when the
+ * address under it changes.
+ *
+ * A credential is issued by one origin and cannot be replayed at another, so a change that lands
+ * has to drop the session — while a save that changed nothing, or one the validator rejected, must
+ * not. The block also has to admit when the address it stores is not the one in effect, because the
+ * build-time `TUFF_NEXUS_BASE_URL` outranks it and the renderer cannot read that variable.
+ */
+describe('SettingUser nexus base url', () => {
+  beforeEach(() => {
+    nexusBaseUrlMock.effectiveUrl = 'https://example.test'
+    nexusBaseUrlMock.setUserNexusBaseUrl.mockReset()
+    nexusBaseUrlMock.resetUserNexusBaseUrl.mockReset()
+    signOutMock.mockReset()
+    signOutMock.mockResolvedValue(undefined)
+    toastMock.success.mockReset()
+    toastMock.error.mockReset()
+    toastMock.info.mockReset()
+    appSettingMock.auth.nexusBaseUrl = ''
+    authStateMock.isLoggedIn.value = false
+  })
+
+  function mountNexusBlock() {
+    const wrapper = mountSettingUser()
+    const endpoint = wrapper.get('.nexus-endpoint')
+    const block = endpoint.element.parentElement
+    if (!block) {
+      throw new Error('nexus endpoint is not inside a settings block')
+    }
+    const buttons = endpoint.findAll('.nexus-endpoint__actions button')
+    return {
+      input: endpoint.get('input'),
+      saveButton: buttons[0]!,
+      resetButton: buttons[1]!,
+      warns: block.querySelector('.nexus-endpoint__warning') !== null,
+      description: block.querySelector('[data-testid="slot-description"]')?.textContent ?? '',
+      ruleLine: endpoint.text()
+    }
+  }
+
+  it('applies the address and signs out so the old credential cannot be replayed', async () => {
+    nexusBaseUrlMock.setUserNexusBaseUrl.mockResolvedValue({
+      ok: true,
+      value: 'https://custom.example.test',
+      changed: true
+    })
+    const block = mountNexusBlock()
+
+    await block.input.setValue('https://custom.example.test/')
+    await block.saveButton.trigger('click')
+    await flushPromises()
+
+    expect(signOutMock).toHaveBeenCalledTimes(1)
+    expect(toastMock.success).toHaveBeenCalledTimes(1)
+    expect(toastMock.error).not.toHaveBeenCalled()
+    expect((block.input.element as HTMLInputElement).value).toBe('https://custom.example.test')
+  })
+
+  it('keeps the session when the saved address did not change', async () => {
+    appSettingMock.auth.nexusBaseUrl = 'https://custom.example.test'
+    nexusBaseUrlMock.effectiveUrl = 'https://custom.example.test'
+    nexusBaseUrlMock.setUserNexusBaseUrl.mockResolvedValue({
+      ok: true,
+      value: 'https://custom.example.test',
+      changed: false
+    })
+    const block = mountNexusBlock()
+
+    await block.saveButton.trigger('click')
+    await flushPromises()
+
+    expect(signOutMock).not.toHaveBeenCalled()
+    expect(toastMock.info).toHaveBeenCalledTimes(1)
+    expect(toastMock.success).not.toHaveBeenCalled()
+  })
+
+  it('reports a rejected address and keeps the session', async () => {
+    nexusBaseUrlMock.setUserNexusBaseUrl.mockResolvedValue({
+      ok: false,
+      error: 'insecure-transport'
+    })
+    const block = mountNexusBlock()
+
+    await block.input.setValue('http://custom.example.test')
+    await block.saveButton.trigger('click')
+    await flushPromises()
+
+    expect(signOutMock).not.toHaveBeenCalled()
+    expect(toastMock.success).not.toHaveBeenCalled()
+    expect(toastMock.error).toHaveBeenCalledTimes(1)
+    // The transport rule is the actionable half of the message; the generic save failure would
+    // leave the user with nothing to fix.
+    expect(String(toastMock.error.mock.calls[0]?.[0] ?? '')).toContain('https')
+  })
+
+  it('names the rule that rejected a malformed address instead of a generic failure', async () => {
+    // Both members were added to the shared validation union for this panel to explain; a missing
+    // case would fall through to "saving failed", which tells the user nothing they can fix.
+    const messages: string[] = []
+    for (const error of ['embedded-credentials', 'unsupported-path'] as const) {
+      toastMock.error.mockClear()
+      nexusBaseUrlMock.setUserNexusBaseUrl.mockResolvedValue({ ok: false, error })
+      const block = mountNexusBlock()
+
+      await block.input.setValue('https://custom.example.test/nexus')
+      await block.saveButton.trigger('click')
+      await flushPromises()
+
+      expect(toastMock.error, error).toHaveBeenCalledTimes(1)
+      messages.push(String(toastMock.error.mock.calls[0]?.[0] ?? ''))
+    }
+
+    expect(messages[0]).toBeTruthy()
+    expect(messages[1]).toBeTruthy()
+    expect(messages[0]).not.toBe(messages[1])
+    for (const message of messages) {
+      expect(message).not.toContain('保存失败')
+      expect(message).not.toContain('Saving failed')
+    }
+  })
+
+  it('clears the address and signs out when the default is restored', async () => {
+    appSettingMock.auth.nexusBaseUrl = 'https://custom.example.test'
+    nexusBaseUrlMock.resetUserNexusBaseUrl.mockResolvedValue({
+      ok: true,
+      value: '',
+      changed: true
+    })
+    const block = mountNexusBlock()
+
+    await block.resetButton.trigger('click')
+    await flushPromises()
+
+    expect(signOutMock).toHaveBeenCalledTimes(1)
+    expect(toastMock.success).toHaveBeenCalledTimes(1)
+    expect((block.input.element as HTMLInputElement).value).toBe('')
+  })
+
+  it('tells the user when the sign-out after an address change failed', async () => {
+    nexusBaseUrlMock.setUserNexusBaseUrl.mockResolvedValue({
+      ok: true,
+      value: 'https://custom.example.test',
+      changed: true
+    })
+    signOutMock.mockRejectedValue(new Error('ipc unavailable'))
+    const block = mountNexusBlock()
+
+    await block.input.setValue('https://custom.example.test')
+    await block.saveButton.trigger('click')
+    await flushPromises()
+
+    expect(toastMock.success).not.toHaveBeenCalled()
+    expect(toastMock.error).toHaveBeenCalledTimes(1)
+    expect(String(toastMock.error.mock.calls[0]?.[0] ?? '').length).toBeGreaterThan(0)
+  })
+
+  it('warns and shows the effective origin when the saved address is not in effect', () => {
+    appSettingMock.auth.nexusBaseUrl = 'https://saved.example.test'
+    nexusBaseUrlMock.effectiveUrl = 'https://example.test'
+    const block = mountNexusBlock()
+
+    expect(block.warns).toBe(true)
+    expect(block.description).toContain('https://example.test')
+    expect(block.description).not.toContain('saved.example.test')
+  })
+
+  it('does not warn when the saved address is the one in effect', () => {
+    appSettingMock.auth.nexusBaseUrl = 'https://example.test'
+    nexusBaseUrlMock.effectiveUrl = 'https://example.test'
+    const block = mountNexusBlock()
+
+    expect(block.warns).toBe(false)
+    expect(block.ruleLine).toContain('TUFF_NEXUS_BASE_URL')
   })
 })

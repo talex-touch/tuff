@@ -22,9 +22,28 @@ const PASSKEYS_TABLE = 'auth_passkeys'
 let creditsSchemaInitialized = false
 
 const DEFAULT_TEAM_QUOTA = 2000000
-const DEFAULT_PERSONAL_QUOTA = 1000
-const BOOSTED_PERSONAL_QUOTA = 5000
-const CHECKIN_REWARD = 1
+/**
+ * Free monthly allowance, in credits. The credit is anchored to chat tokens — one
+ * credit buys one token (`creditPricingStore.ts`) — so this number only means
+ * something read in calls: a 1,000-token reply costs 1,000 credits, so 20,000 covers
+ * about twenty replies, or ten `vision.ocr` images, in any mix. The shipped 1,000
+ * bought a single short conversation, which made the free tier unusable rather than
+ * cheap; the ladder above it (PLUS 100,000 = 10×, PRO 240,000 = 12×) was already
+ * shaped for this size.
+ */
+const DEFAULT_PERSONAL_QUOTA = 20000
+/**
+ * Allowance for a FREE account that verified its email and bound OAuth/passkey.
+ * Twice the free allowance, and deliberately below the cheapest paid tier (PLUS,
+ * 100,000): completing a profile must not hand out a paid plan.
+ */
+const BOOSTED_PERSONAL_QUOTA = 40000
+/**
+ * Daily check-in top-up, added on top of the month's quota. A whole month of
+ * check-ins stays inside the allowance it supplements: 30 × 500 = 15,000 < 20,000.
+ * The shipped 1 credit — one token — was invisible next to any real call.
+ */
+const CHECKIN_REWARD = 500
 const TEAM_BASE_SEATS = 5
 const TEAM_POOL_PER_SEAT = 400000
 const DEFAULT_PLAN_ID = 'default'
@@ -149,7 +168,7 @@ function getD1Database(event: H3Event): D1Database | null {
   return bindings?.DB ?? null
 }
 
-function requireDatabase(event: H3Event): D1Database {
+export function requireDatabase(event: H3Event): D1Database {
   const db = getD1Database(event)
   if (!db)
     throw new Error('Cloudflare D1 database is not available.')
@@ -1555,6 +1574,17 @@ export interface CreditLedgerAuditEntry {
   metadata: Record<string, any> | null
 }
 
+/**
+ * Ledger rows one invoke can leave behind: the hold, the settled remainder, and the
+ * release of whatever the hold over-covered.
+ *
+ * The row cap is derived from the trace count rather than fixed. A fixed cap carries no
+ * headroom — one more row per invoke than it was sized for silently drops the oldest
+ * rows of the page — and the netting below needs every row of a trace to report what the
+ * invoke cost instead of reporting its hold.
+ */
+const CREDIT_LEDGER_ROWS_PER_TRACE = 4
+
 export async function listCreditLedgerByTraceIds(
   event: H3Event,
   traceIds: string[],
@@ -1590,13 +1620,13 @@ export async function listCreditLedgerByTraceIds(
     LEFT JOIN ${TEAMS_TABLE} t ON t.id = l.scope_id
     LEFT JOIN ${USERS_TABLE} u ON u.id = t.owner_user_id
     WHERE l.scope = 'team'
-      AND l.reason = 'intelligence-invoke'
+      AND (l.reason = 'intelligence-invoke' OR l.reason LIKE 'intelligence-invoke-%')
       AND json_extract(l.metadata, '$.traceId') IN (${placeholders})
     ORDER BY l.created_at DESC
-    LIMIT 200
+    LIMIT ${uniqueTraceIds.length * CREDIT_LEDGER_ROWS_PER_TRACE}
   `).bind(...uniqueTraceIds).all<Record<string, any>>()
 
-  return (results ?? [])
+  const rows = (results ?? [])
     .map((row) => {
       const metadata = parseLedgerMetadata(row.metadata ?? null)
       const traceId = typeof metadata?.traceId === 'string' ? metadata.traceId : ''
@@ -1607,6 +1637,7 @@ export async function listCreditLedgerByTraceIds(
         : (row.owner_user_id ?? null)
       return {
         id: row.id,
+        traceId,
         teamId: row.team_id ?? row.scope_id,
         teamType: row.team_type ?? null,
         userId: resolvedUserId,
@@ -1618,7 +1649,47 @@ export async function listCreditLedgerByTraceIds(
         metadata,
       }
     })
-    .filter((entry): entry is CreditLedgerAuditEntry => Boolean(entry))
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+
+  // One invoke now debits more than one row: a hold before dispatch, then the settled
+  // remainder and the release of whatever the hold over-covered. Auditing reports what
+  // the invoke actually cost, so the rows must be netted per trace — returning any
+  // single row would report the hold as the charge, or nothing at all.
+  const byTraceId = new Map<string, NonNullable<(typeof rows)[number]>>()
+  for (const row of rows) {
+    const current = byTraceId.get(row.traceId)
+    if (!current) {
+      byTraceId.set(row.traceId, { ...row })
+      continue
+    }
+    const preferred = pickBillingTruthRow(current, row)
+    const other = preferred === current ? row : current
+    byTraceId.set(row.traceId, {
+      ...preferred,
+      delta: resolveCreditAmount(preferred.delta + other.delta)
+    })
+  }
+
+  return [...byTraceId.values()].map(entry => ({
+    id: entry.id,
+    teamId: entry.teamId,
+    teamType: entry.teamType,
+    userId: entry.userId,
+    userEmail: entry.userEmail,
+    userName: entry.userName,
+    delta: entry.delta,
+    reason: entry.reason,
+    createdAt: entry.createdAt,
+    metadata: entry.metadata,
+  }))
+}
+
+/** The row carrying the settled charge: the settle row when present, else the newest. */
+function pickBillingTruthRow<T extends { reason: string; createdAt: string }>(a: T, b: T): T {
+  const isSettle = (row: T) => row.reason === 'intelligence-invoke-settle'
+  if (isSettle(a) !== isSettle(b))
+    return isSettle(a) ? a : b
+  return a.createdAt >= b.createdAt ? a : b
 }
 
 export async function listCreditTrendByUsers(

@@ -13,7 +13,15 @@ import {
 } from "./tuffIntelligenceCapabilityMessages";
 import { createError, type H3Event } from "h3";
 import { getUserById } from "./authStore";
-import { consumeCredits } from "./creditsStore";
+import { consumeCredits, releaseConsumedCredits } from "./creditsStore";
+import {
+  computeCreditCharge,
+  computeCreditReservation,
+  resolveSellableCreditPricingRule,
+  type CreditPricingRule,
+  type CreditPricingUnit,
+  type CreditPricingUsage,
+} from "./creditPricingStore";
 import { resolveProviderBaseUrl } from "./intelligenceModels";
 import {
   resolveIntelligenceProviderAdapter,
@@ -123,6 +131,8 @@ interface InvokeModelOptions {
   sessionId?: string;
   modelPreference?: string[];
   allowedProviderIds?: string[];
+  /** Output cap handed to the provider, when the caller declared one. */
+  maxTokens?: number;
 }
 
 interface NexusInvokeOptions extends InvokeModelOptions {
@@ -140,6 +150,31 @@ interface NexusInvokeAuditContext {
   workflowName?: string;
   workflowRunId?: string;
   workflowStepId?: string;
+}
+
+/** Provider-reported consumption of one capability invoke, in its priced unit. */
+interface IntelligenceInvokeMeter {
+  unit: CreditPricingUnit;
+  /** Native quantity in `unit` that the provider reported. */
+  quantity: number;
+  billable: boolean;
+  /** True when the quantity is our own count rather than provider-reported usage. */
+  estimated: boolean;
+  /**
+   * The provider reported against a unit the price list does not sell. The quantity
+   * cannot be converted, so this is an integrity fault the settlement keeps the hold
+   * for rather than a zero the settlement refunds.
+   */
+  unitMismatch?: boolean;
+}
+
+interface IntelligenceInvokeReservation {
+  reserveId: string;
+  rule: CreditPricingRule;
+  /** Credits actually held before dispatch. */
+  reservedCredits: number;
+  /** Ledger entry of the hold, so a settlement can point at the money it kept. */
+  ledgerId?: string;
 }
 
 interface InvokeModelAttemptError {
@@ -270,7 +305,39 @@ const STREAM_ENGINE = "intelligence";
 const CREDITS_EXCEEDED_MESSAGES = new Set([
   "Team credits exceeded.",
   "User credits exceeded.",
+  // Raised by the atomic balance guard inside consumeCredits when the balance moved
+  // between its pre-check and the debit. It is still an affordability failure.
+  "Credits exceeded.",
 ]);
+/**
+ * Quantity held before dispatch when the caller declares no output cap of its own.
+ *
+ * Sized against the smallest plan tier rather than against the largest possible reply:
+ * a FREE account holds 20,000 credits for the month, so a hold sized to the longest
+ * reply (4,096 tokens ≈ 4,096 credits) would take a fifth of it before any work
+ * happened, and an account with a spent balance would be unable to call at all. The
+ * hold only has to stop a caller who cannot pay at all from reaching the provider; a
+ * reply longer than the hold settles the difference afterwards (see
+ * `settleIntelligenceInvokeCredits`). A caller that declares its own output cap
+ * (maxTokens/maxOutputTokens/max_tokens) has that cap handed to the provider and held on
+ * top of the prompt's own tokens (see `estimateInvokeUsage`).
+ */
+const INVOKE_RESERVE_TOKEN_ESTIMATE = 512;
+/** Vision tokens a tiled 1024×1024 image costs, used to bound a prompted image. */
+const VISION_IMAGE_TOKEN_ESTIMATE = 765;
+/** Characters whose tokenizers emit about one token each. */
+const CJK_CHARACTER = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+/**
+ * Reserved quantity per priced unit for capabilities that do not sell tokens. Only
+ * images (`vision.ocr`) are reachable today; the remaining units exist so an unexpected
+ * capability reserves something instead of dispatching unbacked.
+ */
+const INVOKE_RESERVE_UNIT_ESTIMATE: Record<CreditPricingUnit, number> = {
+  "1k_tokens": INVOKE_RESERVE_TOKEN_ESTIMATE,
+  image: 1,
+  audio_second: 60,
+  transcript_unit: 60,
+};
 const SUPPORTED_CAPABILITY_IDS = ["text.chat", "content.extract"] as const;
 const AGENT_PROMPT_CAPABILITY = {
   intent: "agent.intent",
@@ -860,6 +927,7 @@ async function invokeModel(
         const result = await invokeWithResolvedContext(
           context,
           payload.messages,
+          payload.maxTokens,
         );
         if (settings.enableAudit) {
           await createAudit(event, {
@@ -1026,6 +1094,7 @@ async function invokeModelStream(
         const result = await streamWithResolvedContext(
           context,
           payload.messages,
+          payload.maxTokens,
           {
             ...hooks,
             onDelta: async (delta, meta) => {
@@ -1219,13 +1288,14 @@ export async function probeIntelligenceLabProvider(
 async function invokeWithResolvedContext(
   context: ResolvedProviderContext,
   messages: IntelligenceMessage[],
+  maxTokens?: number,
 ): Promise<InvokeModelResult> {
   try {
     const adapter = resolveIntelligenceProviderAdapter(context.provider.type);
     if (!adapter) {
       throw new Error(`Unsupported provider type: ${context.provider.type}`);
     }
-    return await adapter({ context, messages });
+    return await adapter({ context, messages, maxTokens });
   } catch (error) {
     const normalized =
       error instanceof Error ? error : new Error(String(error));
@@ -1245,6 +1315,7 @@ async function invokeWithResolvedContext(
 async function streamWithResolvedContext(
   context: ResolvedProviderContext,
   messages: IntelligenceMessage[],
+  maxTokens: number | undefined,
   hooks: NexusIntelligenceStreamHooks & { capabilityId: string },
 ): Promise<InvokeModelResult> {
   try {
@@ -1262,6 +1333,7 @@ async function streamWithResolvedContext(
     for await (const chunk of adapter({
       context,
       messages,
+      maxTokens,
       signal: hooks.signal,
     })) {
       finalChunk = chunk;
@@ -1476,8 +1548,8 @@ async function recordIntelligenceInvokeUsageLedger(
   event: H3Event,
   invocation: NexusIntelligenceInvokeResult,
   audit: NexusInvokeAuditContext,
+  meter: IntelligenceInvokeMeter,
 ): Promise<string[]> {
-  const usage = normalizeUsage(invocation.usage);
   const createdAt = new Date().toISOString();
   const governanceProviderId =
     resolveInvocationGovernanceProviderId(invocation);
@@ -1513,14 +1585,14 @@ async function recordIntelligenceInvokeUsageLedger(
     trace: buildInvokeTrace(invocation, audit, createdAt),
     usage: [
       {
-        unit: "token",
-        quantity: usage.totalTokens,
-        billable: usage.totalTokens > 0,
+        unit: meter.unit,
+        quantity: meter.quantity,
+        billable: meter.billable,
         providerId: governanceProviderId,
         capability: invocation.capabilityId,
         model: invocation.model,
         providerType: invocation.metadata.providerType,
-        estimated: false,
+        estimated: meter.estimated,
         providerUsageRef: invocation.traceId,
       },
     ],
@@ -1545,15 +1617,19 @@ async function recordIntelligenceInvokeUsageLedger(
       resourceType: "provider",
       resourceId: governanceProviderId,
       channel: invocation.capabilityId,
-      unit: "token",
-      quantity: usage.totalTokens,
+      unit: meter.unit,
+      quantity: meter.quantity,
       metadata: {
-        billable: usage.totalTokens > 0,
-        estimated: false,
+        billable: meter.billable,
+        estimated: meter.estimated,
         model: invocation.model,
         providerType: invocation.metadata.providerType ?? null,
         providerUsageRef: invocation.traceId,
         source: audit.source,
+        // A hold that could not collect the provider's full bill is an accounting
+        // integrity signal, so it is recorded with the usage it belongs to.
+        settleFailed: invocation.metadata.billing?.settleFailed === true,
+        unsettledCredits: invocation.metadata.billing?.unsettledCredits ?? 0,
       },
     });
   } catch (error) {
@@ -1569,38 +1645,155 @@ function isCreditsExceededError(error: unknown): error is Error {
   return error instanceof Error && CREDITS_EXCEEDED_MESSAGES.has(error.message);
 }
 
-async function consumeIntelligenceInvokeCredits(
-  event: H3Event,
-  userId: string,
-  invocation: NexusIntelligenceInvokeResult,
-  audit: NexusInvokeAuditContext,
-): Promise<NexusIntelligenceInvokeResult["metadata"]["billing"]> {
-  const usage = normalizeUsage(invocation.usage);
-  const tokens = usage.totalTokens;
-  if (!Number.isFinite(tokens) || tokens <= 0) {
+/** Output cap the caller asked for, if it asked for one. */
+function readDeclaredOutputTokens(
+  options: NexusInvokeOptions,
+): number | undefined {
+  const declared =
+    readOptionalNumber(options.metadata?.maxTokens) ??
+    readOptionalNumber(options.metadata?.maxOutputTokens) ??
+    readOptionalNumber(options.metadata?.max_tokens);
+  return declared !== undefined && declared > 0 ? declared : undefined;
+}
+
+/**
+ * Tokens the provider will bill for the prompt, as a cheap upper bound. CJK is about
+ * one token per character and Latin text about one per four, so counting CJK per
+ * character and everything else per four keeps the hold from under-covering the part of
+ * the bill that is already fixed before the model answers. An attached image is billed
+ * as vision tokens (a 1024×1024 image tiles to ~765), so each one is counted too. The
+ * provider's own usage number is what settles the call.
+ */
+function estimatePromptTokens(messages: IntelligenceMessage[]): number {
+  let tokens = 0;
+  for (const message of messages) {
+    let latin = 0;
+    for (const character of message.content) {
+      if (CJK_CHARACTER.test(character)) {
+        tokens += 1 + Math.ceil(latin / 4);
+        latin = 0;
+        continue;
+      }
+      latin += 1;
+    }
+    tokens += Math.ceil(latin / 4);
+    tokens += (message.attachments?.length ?? 0) * VISION_IMAGE_TOKEN_ESTIMATE;
+  }
+  return tokens;
+}
+
+/**
+ * Upper bound of a call's billed quantity, in the unit its pricing rule sells.
+ *
+ * A token-priced call is billed for the prompt *and* the reply, so the hold covers both:
+ * the prompt this service is about to send (estimated above) plus the output cap. Only a
+ * cap that is actually handed to the provider bounds the reply — an unenforced number
+ * taken from caller metadata would let a caller hold almost nothing (`maxTokens: 1`) and
+ * then owe the real bill, so an undeclared cap falls back to the server's own bound.
+ */
+function estimateInvokeUsage(
+  rule: CreditPricingRule,
+  options: NexusInvokeOptions,
+  messages: IntelligenceMessage[],
+): CreditPricingUsage {
+  if (rule.unit === "1k_tokens") {
+    const outputTokens =
+      readDeclaredOutputTokens(options) ?? INVOKE_RESERVE_UNIT_ESTIMATE["1k_tokens"];
     return {
-      chargedCredits: 0,
-      unit: "token",
-      billable: false,
-      reason: "intelligence-invoke",
+      tokens: estimatePromptTokens(messages) + outputTokens,
     };
   }
+  if (rule.unit === "image")
+    return { images: INVOKE_RESERVE_UNIT_ESTIMATE.image };
+  if (rule.unit === "audio_second")
+    return { seconds: INVOKE_RESERVE_UNIT_ESTIMATE.audio_second };
+  return { units: INVOKE_RESERVE_UNIT_ESTIMATE.transcript_unit };
+}
+
+/**
+ * Aligns what a capability reported with what its price list sells. The two agree in
+ * practice (tokens for chat, images for `vision.ocr`); a reporter that disagrees is
+ * flagged so the settlement keeps the hold, because a mismatch is a metering fault and
+ * a metering fault must never become a free call.
+ */
+function resolveInvokeMeter(
+  rule: CreditPricingRule,
+  reported: IntelligenceInvokeMeter,
+): IntelligenceInvokeMeter {
+  const quantity =
+    Number.isFinite(reported.quantity) && reported.quantity > 0
+      ? reported.quantity
+      : 0;
+  if (reported.unit !== rule.unit) {
+    return {
+      unit: rule.unit,
+      quantity: 0,
+      billable: reported.billable,
+      estimated: reported.estimated,
+      unitMismatch: true,
+    };
+  }
+  return { ...reported, quantity };
+}
+
+/** The meter as the pricing table reads it. */
+function toCreditPricingUsage(
+  meter: IntelligenceInvokeMeter,
+): CreditPricingUsage {
+  const quantity = meter.quantity > 0 ? meter.quantity : null;
+  switch (meter.unit) {
+    case "1k_tokens":
+      return { tokens: quantity };
+    case "image":
+      return { images: quantity };
+    case "audio_second":
+      return { seconds: quantity };
+    case "transcript_unit":
+      return { units: quantity };
+  }
+}
+
+/**
+ * Takes the pre-dispatch hold. The hold is the settled price of an upper-bound estimate,
+ * so a user who can afford it can always afford the call; provider cost must not be
+ * spent before we know they can pay, which is why an unaffordable call never dispatches.
+ */
+async function reserveIntelligenceInvokeCredits(
+  event: H3Event,
+  userId: string,
+  capabilityId: string,
+  audit: NexusInvokeAuditContext,
+  options: NexusInvokeOptions,
+  messages: IntelligenceMessage[],
+): Promise<IntelligenceInvokeReservation> {
+  const rule = await resolveSellableCreditPricingRule(event, capabilityId);
+  const estimate = estimateInvokeUsage(rule, options, messages);
+  const reservedCredits = computeCreditReservation(rule, estimate);
+  const reserveId = createId("reserve");
 
   try {
     const consumption = await consumeCredits(
       event,
       userId,
-      tokens,
-      "intelligence-invoke",
-      buildInvokeCreditMetadata(invocation, usage, audit),
-      { idempotencyKey: `intelligence-invoke:${invocation.traceId}` },
+      reservedCredits,
+      "intelligence-invoke-reserve",
+      {
+        reserveId,
+        capabilityId,
+        unit: rule.unit,
+        reservedCredits,
+        estimatedUsage: estimate,
+        source: audit.source,
+        caller: audit.caller,
+        sessionId: audit.sessionId,
+      },
+      { idempotencyKey: `intelligence-invoke-reserve:${reserveId}` },
     );
     return {
+      reserveId,
+      rule,
+      reservedCredits: consumption.amount,
       ledgerId: consumption.ledgerId,
-      chargedCredits: consumption.amount,
-      unit: "token",
-      billable: true,
-      reason: "intelligence-invoke",
     };
   } catch (error) {
     if (isCreditsExceededError(error)) {
@@ -1609,12 +1802,240 @@ async function consumeIntelligenceInvokeCredits(
         statusMessage: "CREDITS_EXCEEDED",
         data: {
           code: "CREDITS_EXCEEDED",
+          capabilityId,
           reason: error.message,
         },
       });
     }
     throw error;
   }
+}
+
+/**
+ * Returns the unspent part of a hold. Keyed by the invoke's trace so a retried dispatch
+ * of the same call cannot refund it twice; a dispatch that failed before it produced a
+ * trace falls back to the reservation's own id, which is unique per hold.
+ */
+async function releaseIntelligenceInvokeCredits(
+  event: H3Event,
+  userId: string,
+  capabilityId: string,
+  reservation: IntelligenceInvokeReservation,
+  amount: number,
+  traceId: string | undefined,
+  metadata: Record<string, unknown>,
+): Promise<void> {
+  if (amount <= 0) return;
+  await releaseConsumedCredits(
+    event,
+    userId,
+    amount,
+    "intelligence-invoke-release",
+    {
+      ...metadata,
+      traceId,
+      reserveId: reservation.reserveId,
+      capabilityId,
+      reservedCredits: reservation.reservedCredits,
+      releasedCredits: amount,
+    },
+    {
+      idempotencyKey: `intelligence-invoke-release:${traceId ?? reservation.reserveId}`,
+    },
+  );
+}
+
+/**
+ * Releases without masking the reason the call is unwinding. A stuck refund is an
+ * accounting problem to reconcile from the ledger, never a reason to hide the provider
+ * error or to fail a result the user already received.
+ */
+async function releaseIntelligenceInvokeCreditsQuietly(
+  event: H3Event,
+  userId: string,
+  capabilityId: string,
+  reservation: IntelligenceInvokeReservation,
+  amount: number,
+  traceId: string | undefined,
+  metadata: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await releaseIntelligenceInvokeCredits(
+      event,
+      userId,
+      capabilityId,
+      reservation,
+      amount,
+      traceId,
+      metadata,
+    );
+  } catch (error) {
+    console.warn(
+      "[tuffIntelligenceLabService] Failed to release an intelligence invoke credit reservation",
+      {
+        ...metadata,
+        traceId,
+        reserveId: reservation.reserveId,
+        capabilityId,
+        amount,
+        error,
+      },
+    );
+  }
+}
+
+/**
+ * Runs one provider dispatch behind its credit hold: the hold exists before the call,
+ * and a call that never yields a settleable result gives the whole hold back.
+ */
+async function withInvokeReservation<T>(
+  event: H3Event,
+  userId: string,
+  capabilityId: string,
+  audit: NexusInvokeAuditContext,
+  options: NexusInvokeOptions,
+  messages: IntelligenceMessage[],
+  dispatch: (reservation: IntelligenceInvokeReservation) => Promise<T>,
+): Promise<T> {
+  const reservation = await reserveIntelligenceInvokeCredits(
+    event,
+    userId,
+    capabilityId,
+    audit,
+    options,
+    messages,
+  );
+  try {
+    return await dispatch(reservation);
+  } catch (error) {
+    await releaseIntelligenceInvokeCreditsQuietly(
+      event,
+      userId,
+      capabilityId,
+      reservation,
+      reservation.reservedCredits,
+      undefined,
+      { traceOutcome: "dispatch-failed" },
+    );
+    throw error;
+  }
+}
+
+/**
+ * Settles a completed dispatch against its hold, using only the quantity the provider
+ * reported. A charge below the hold releases the difference; a charge above it is
+ * debited as a supplement that must not fail the response the user already has.
+ */
+async function settleIntelligenceInvokeCredits(
+  event: H3Event,
+  userId: string,
+  invocation: NexusIntelligenceInvokeResult,
+  audit: NexusInvokeAuditContext,
+  reservation: IntelligenceInvokeReservation,
+  meter: IntelligenceInvokeMeter,
+): Promise<NexusIntelligenceInvokeResult["metadata"]["billing"]> {
+  const charge = computeCreditCharge(
+    reservation.rule,
+    toCreditPricingUsage(meter),
+  );
+  const billing = {
+    chargedCredits: charge,
+    unit: reservation.rule.unit,
+    quantity: meter.quantity,
+    reservedCredits: reservation.reservedCredits,
+    reserveId: reservation.reserveId,
+    billable: meter.billable && charge > 0,
+    reason: "intelligence-invoke" as const,
+  };
+
+  if (meter.unitMismatch) {
+    // The provider metered in a unit this capability does not sell, so the quantity
+    // cannot be converted into credits. Keep the hold: refunding it would turn a
+    // metering fault into free provider spend.
+    console.warn(
+      "[tuffIntelligenceLabService] Intelligence invoke reported usage in an unsellable unit; keeping the reservation",
+      {
+        traceId: invocation.traceId,
+        capabilityId: invocation.capabilityId,
+        providerId: invocation.provider,
+        reportedUnit: meter.unit,
+        reservedCredits: reservation.reservedCredits,
+      },
+    );
+    return {
+      ...billing,
+      chargedCredits: reservation.reservedCredits,
+      billable: true,
+      ledgerId: reservation.ledgerId,
+    };
+  }
+
+  if (charge <= 0) {
+    // The provider reported nothing billable: hand the whole hold back instead of
+    // charging the rule's floor for work that was never metered.
+    await releaseIntelligenceInvokeCreditsQuietly(
+      event,
+      userId,
+      invocation.capabilityId,
+      reservation,
+      reservation.reservedCredits,
+      invocation.traceId,
+      { traceOutcome: "unmetered" },
+    );
+    return billing;
+  }
+
+  if (charge > reservation.reservedCredits) {
+    try {
+      const consumption = await consumeCredits(
+        event,
+        userId,
+        charge - reservation.reservedCredits,
+        "intelligence-invoke-settle",
+        buildInvokeCreditMetadata(
+          invocation,
+          normalizeUsage(invocation.usage),
+          audit,
+        ),
+        { idempotencyKey: `intelligence-invoke-settle:${invocation.traceId}` },
+      );
+      return { ...billing, ledgerId: consumption.ledgerId };
+    } catch (error) {
+      console.warn(
+        "[tuffIntelligenceLabService] Intelligence invoke settlement exceeded its reservation and could not be settled",
+        {
+          traceId: invocation.traceId,
+          capabilityId: invocation.capabilityId,
+          providerId: invocation.provider,
+          reservedCredits: reservation.reservedCredits,
+          chargedCredits: charge,
+          error,
+        },
+      );
+      return {
+        ...billing,
+        ledgerId: reservation.ledgerId,
+        // The provider billed more than the hold and the difference is still owed. The
+        // result the user already has is not revoked, but the shortfall is reported on
+        // the response (and on the usage ledger) instead of vanishing into this log.
+        settleFailed: true,
+        unsettledCredits: charge - reservation.reservedCredits,
+      };
+    }
+  }
+
+  if (charge < reservation.reservedCredits) {
+    await releaseIntelligenceInvokeCreditsQuietly(
+      event,
+      userId,
+      invocation.capabilityId,
+      reservation,
+      reservation.reservedCredits - charge,
+      invocation.traceId,
+      { chargedCredits: charge },
+    );
+  }
+  return { ...billing, ledgerId: reservation.ledgerId };
 }
 
 function providerHasRegistryCapability(
@@ -1697,8 +2118,23 @@ export interface NexusIntelligenceInvokeResult {
     billing?: {
       ledgerId?: string;
       chargedCredits: number;
-      unit: "token";
+      /** Priced unit of the capability, as sold by the credit price list. */
+      unit: CreditPricingUnit;
+      /** Quantity the provider reported, in `unit`. */
+      quantity: number;
+      /** Credits held before dispatch for this invoke. */
+      reservedCredits: number;
+      /** Identifies the hold so its reserve/settle/release ledger rows can be traced. */
+      reserveId: string;
       billable: boolean;
+      /**
+       * The provider billed more than the hold and the difference could not be debited.
+       * The amount stays owed: the response is the user's, but the shortfall must not
+       * disappear into a log line.
+       */
+      settleFailed?: boolean;
+      /** Credits billed beyond the hold that the settlement could not collect. */
+      unsettledCredits?: number;
       reason: "intelligence-invoke";
     };
     providerUsageLedgerIds?: string[];
@@ -1770,14 +2206,29 @@ export async function invokeIntelligenceCapability(
       capabilityId,
     );
     const startedAt = now();
-    const ocr = await invokeIntelligenceVisionOcr(
+    const { reservation, ocr } = await withInvokeReservation(
       event,
-      provider,
-      normalizedRequest.payload,
+      userId,
+      capabilityId,
+      audit,
+      options,
+      // The OCR capability is sold per image, so the prompt's tokens are not the basis
+      // the hold is computed on.
+      [],
+      async (reservation) => ({
+        reservation,
+        ocr: await invokeIntelligenceVisionOcr(
+          event,
+          provider,
+          normalizedRequest.payload,
+        ),
+      }),
     );
     const result: NexusIntelligenceInvokeResult = {
       capabilityId,
       result: ocr.output,
+      // OCR is sold per image; the token carrier stays zero because the provider
+      // reports images, and billing reads that quantity below.
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       model:
         readOptionalString(provider.metadata?.defaultModel) || "vision-ocr",
@@ -1805,14 +2256,22 @@ export async function invokeIntelligenceCapability(
         providerGovernanceId: governanceProviderId,
       },
     };
-    result.metadata.billing = await consumeIntelligenceInvokeCredits(
+    const meter = resolveInvokeMeter(reservation.rule, {
+      unit: "image",
+      quantity: ocr.usage.quantity,
+      billable: ocr.usage.billable,
+      estimated: ocr.usage.estimated,
+    });
+    result.metadata.billing = await settleIntelligenceInvokeCredits(
       event,
       userId,
       result,
       audit,
+      reservation,
+      meter,
     );
     result.metadata.providerUsageLedgerIds =
-      await recordIntelligenceInvokeUsageLedger(event, result, audit);
+      await recordIntelligenceInvokeUsageLedger(event, result, audit, meter);
     return result;
   }
 
@@ -1820,18 +2279,30 @@ export async function invokeIntelligenceCapability(
     capabilityId,
     normalizedRequest.payload,
   );
-  const invocation = await invokeModel(event, userId, {
+  const { reservation, invocation } = await withInvokeReservation(
+    event,
+    userId,
     capabilityId,
-    providerId,
-    model,
-    timeoutMs,
-    modelPreference: options.modelPreference,
-    allowedProviderIds: options.allowedProviderIds,
+    audit,
+    options,
     messages,
-    source: audit.source,
-    stage: `capability:${capabilityId}`,
-    sessionId: audit.sessionId,
-  });
+    async (reservation) => ({
+      reservation,
+      invocation: await invokeModel(event, userId, {
+        capabilityId,
+        providerId,
+        model,
+        timeoutMs,
+        maxTokens: readDeclaredOutputTokens(options),
+        modelPreference: options.modelPreference,
+        allowedProviderIds: options.allowedProviderIds,
+        messages,
+        source: audit.source,
+        stage: `capability:${capabilityId}`,
+        sessionId: audit.sessionId,
+      }),
+    }),
+  );
 
   const result: NexusIntelligenceInvokeResult = {
     capabilityId,
@@ -1860,14 +2331,22 @@ export async function invokeIntelligenceCapability(
       ),
     },
   };
-  result.metadata.billing = await consumeIntelligenceInvokeCredits(
+  const meter = resolveInvokeMeter(reservation.rule, {
+    unit: "1k_tokens",
+    quantity: result.usage.totalTokens,
+    billable: result.usage.totalTokens > 0,
+    estimated: false,
+  });
+  result.metadata.billing = await settleIntelligenceInvokeCredits(
     event,
     userId,
     result,
     audit,
+    reservation,
+    meter,
   );
   result.metadata.providerUsageLedgerIds =
-    await recordIntelligenceInvokeUsageLedger(event, result, audit);
+    await recordIntelligenceInvokeUsageLedger(event, result, audit, meter);
   return result;
 }
 
@@ -1895,25 +2374,38 @@ export async function streamIntelligenceCapability(
     options.providerId || options.preferredProviderId || undefined;
   const timeoutMs =
     options.timeoutMs || readOptionalNumber(options.metadata?.timeout);
-  const invocation = await invokeModelStream(
+  const messages = buildCapabilityMessages(
+    capabilityId,
+    normalizedRequest.payload,
+  );
+  const { reservation, invocation } = await withInvokeReservation(
     event,
     userId,
-    {
-      capabilityId,
-      providerId,
-      model: options.model,
-      timeoutMs,
-      modelPreference: options.modelPreference,
-      allowedProviderIds: options.allowedProviderIds,
-      messages: buildCapabilityMessages(
-        capabilityId,
-        normalizedRequest.payload,
+    capabilityId,
+    audit,
+    options,
+    messages,
+    async (reservation) => ({
+      reservation,
+      invocation: await invokeModelStream(
+        event,
+        userId,
+        {
+          capabilityId,
+          providerId,
+          model: options.model,
+          timeoutMs,
+          maxTokens: readDeclaredOutputTokens(options),
+          modelPreference: options.modelPreference,
+          allowedProviderIds: options.allowedProviderIds,
+          messages,
+          source: audit.source,
+          stage: `capability:${capabilityId}`,
+          sessionId: audit.sessionId,
+        },
+        { ...hooks, capabilityId },
       ),
-      source: audit.source,
-      stage: `capability:${capabilityId}`,
-      sessionId: audit.sessionId,
-    },
-    { ...hooks, capabilityId },
+    }),
   );
 
   const result: NexusIntelligenceInvokeResult = {
@@ -1943,14 +2435,22 @@ export async function streamIntelligenceCapability(
       ),
     },
   };
-  result.metadata.billing = await consumeIntelligenceInvokeCredits(
+  const meter = resolveInvokeMeter(reservation.rule, {
+    unit: "1k_tokens",
+    quantity: result.usage.totalTokens,
+    billable: result.usage.totalTokens > 0,
+    estimated: false,
+  });
+  result.metadata.billing = await settleIntelligenceInvokeCredits(
     event,
     userId,
     result,
     audit,
+    reservation,
+    meter,
   );
   result.metadata.providerUsageLedgerIds =
-    await recordIntelligenceInvokeUsageLedger(event, result, audit);
+    await recordIntelligenceInvokeUsageLedger(event, result, audit, meter);
   return result;
 }
 

@@ -33,6 +33,7 @@ import {
   normalizeBaseUrl,
   setRuntimeEnv,
   TUFF_NEXUS_BASE_URL_ENV,
+  validateNexusBaseUrl,
 } from '@talex-touch/utils/env'
 import { networkClient } from '@talex-touch/utils/network'
 import { runCreate } from '../cli/commands'
@@ -1675,9 +1676,15 @@ async function main() {
 
   const hasCustomBase = Boolean(apiBase) || local
   if (apiBase) {
-    const normalized = normalizeBaseUrl(apiBase)
+    // The shared resolver ignores an override it cannot trust (a remote cleartext origin would put
+    // the account token on the wire), and carrying on would send every later request at the
+    // production backend instead of the one just asked for — so validate here and say so.
+    const validation = validateNexusBaseUrl(apiBase)
+    if (!validation.ok) {
+      throw new Error(`Invalid --api-base (${validation.error}): ${apiBase}`)
+    }
     setRuntimeEnv({
-      [TUFF_NEXUS_BASE_URL_ENV]: normalized,
+      [TUFF_NEXUS_BASE_URL_ENV]: validation.value,
     })
   }
   else if (local) {

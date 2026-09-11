@@ -4,14 +4,19 @@ import { Buffer } from 'node:buffer'
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import {
+  computeCreditCharge,
+  computeCreditReservation,
+  parseCreditPricingRuleSnapshot,
+  serializeCreditPricingRule,
+  type CreditPricingRule
+} from './creditPricingStore'
 import { deleteStorageObject, getStorageObject, putStorageObject, type StorageObjectMemory } from './storageObjectStore'
 
 const ASR_REQUESTS_TABLE = 'asr_transcription_requests'
 const ASR_HANDOFF_TTL_MS = 15 * 60 * 1000
 export const ASR_AUDIO_MAX_BYTES = 20 * 1024 * 1024
 export const ASR_MAX_DURATION_SECONDS = 10 * 60
-const ASR_RESERVATION_CREDITS_PER_SECOND = 10
-const FILETRANS_FLOOR_CREDITS_PER_SECOND = 4
 const FILETRANS_INPUT_UNIT_PRICE_CNY_PER_SECOND = 0.00022
 
 const memoryStorage: StorageObjectMemory = new Map()
@@ -39,6 +44,12 @@ export interface AsrRequestRecord {
   billedSeconds: number | null
   providerCostCny: number | null
   failureCode: string | null
+  /**
+   * The price this request was admitted under. The hold is a quote, so settlement
+   * reads this instead of the price in force when the provider finished; null only for
+   * requests that were already in flight when the column shipped.
+   */
+  pricing: CreditPricingRule | null
   createdAt: string
   updatedAt: string
 }
@@ -63,6 +74,7 @@ interface AsrRequestRow {
   billed_seconds: number | null
   provider_cost_cny: number | null
   failure_code: string | null
+  pricing_snapshot: string | null
   created_at: string
   updated_at: string
 }
@@ -74,6 +86,8 @@ export interface CreateAsrRequestInput {
   audio: Buffer
   contentType: string
   durationSeconds: number
+  /** Effective price for this capability; resolved by the caller from the pricing table. */
+  pricing: CreditPricingRule
 }
 
 export interface CreatedAsrRequest {
@@ -119,6 +133,7 @@ async function ensureAsrSchema(database: D1Database) {
       billed_seconds INTEGER,
       provider_cost_cny REAL,
       failure_code TEXT,
+      pricing_snapshot TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       UNIQUE(user_id, idempotency_key)
@@ -126,6 +141,15 @@ async function ensureAsrSchema(database: D1Database) {
   `).run()
   await database.prepare(`CREATE INDEX IF NOT EXISTS idx_asr_transcription_handoff ON ${ASR_REQUESTS_TABLE}(id, status, delivery_expires_at);`).run()
   await database.prepare(`CREATE INDEX IF NOT EXISTS idx_asr_transcription_provider_task ON ${ASR_REQUESTS_TABLE}(provider_task_id);`).run()
+
+  // Added after the table shipped: a request admitted before this column existed has no
+  // quote to settle against and falls back to the live price list, which the handoff
+  // TTL bounds to the 15 minutes it can stay in flight.
+  const columns = await database.prepare(`PRAGMA table_info(${ASR_REQUESTS_TABLE});`).all<{ name: string }>()
+  const columnNames = new Set((columns?.results ?? []).map(column => String(column.name)))
+  if (!columnNames.has('pricing_snapshot'))
+    await database.prepare(`ALTER TABLE ${ASR_REQUESTS_TABLE} ADD COLUMN pricing_snapshot TEXT;`).run()
+
   initializedSchemas.add(database)
 }
 
@@ -154,6 +178,7 @@ function mapRequest(row: AsrRequestRow): AsrRequestRecord {
     billedSeconds: row.billed_seconds == null ? null : Number(row.billed_seconds),
     providerCostCny: row.provider_cost_cny == null ? null : Number(row.provider_cost_cny),
     failureCode: row.failure_code,
+    pricing: parseCreditPricingRuleSnapshot(row.pricing_snapshot),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -217,16 +242,23 @@ export function countTranscriptUnits(transcript: string): number {
   return units
 }
 
-export function calculateFiletransCredits(transcript: string, billedSeconds: number): number {
+export function calculateFiletransCredits(
+  pricing: CreditPricingRule,
+  transcript: string,
+  billedSeconds: number
+): number {
   if (!Number.isFinite(billedSeconds) || billedSeconds <= 0)
     throw new Error('ASR_PROVIDER_METERING_INVALID')
-  return Math.ceil(Math.max(countTranscriptUnits(transcript), billedSeconds * FILETRANS_FLOOR_CREDITS_PER_SECOND))
+  return computeCreditCharge(pricing, {
+    seconds: billedSeconds,
+    units: countTranscriptUnits(transcript)
+  })
 }
 
-export function calculateFiletransReservation(durationSeconds: number): number {
+export function calculateFiletransReservation(pricing: CreditPricingRule, durationSeconds: number): number {
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > ASR_MAX_DURATION_SECONDS)
     throw createError({ statusCode: 400, statusMessage: 'Audio duration is invalid.' })
-  return Math.ceil(durationSeconds * ASR_RESERVATION_CREDITS_PER_SECOND)
+  return computeCreditReservation(pricing, { seconds: durationSeconds })
 }
 
 export function calculateFiletransProviderCost(billedSeconds: number): number {
@@ -298,7 +330,7 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
   }
 
   const durationSeconds = Number(input.durationSeconds)
-  const reservedCredits = calculateFiletransReservation(durationSeconds)
+  const reservedCredits = calculateFiletransReservation(input.pricing, durationSeconds)
   const id = `asr_${randomUUID()}`
   const deliveryToken = randomBytes(32).toString('base64url')
   const now = new Date()
@@ -324,6 +356,7 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
     billedSeconds: null,
     providerCostCny: null,
     failureCode: null,
+    pricing: input.pricing,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
   }
@@ -332,13 +365,15 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
     INSERT INTO ${ASR_REQUESTS_TABLE} (
       id, user_id, provider_id, capability, idempotency_key, request_hash, object_key, content_type,
       byte_size, duration_seconds, delivery_token_hash, delivery_expires_at, provider_task_id, status,
-      reserved_credits, charged_credits, billed_seconds, provider_cost_cny, failure_code, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      reserved_credits, charged_credits, billed_seconds, provider_cost_cny, failure_code, created_at, updated_at,
+      pricing_snapshot
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     record.id, record.userId, record.providerId, record.capability, record.idempotencyKey, record.requestHash,
     record.objectKey, record.contentType, record.byteSize, record.durationSeconds, record.deliveryTokenHash,
     record.deliveryExpiresAt, record.providerTaskId, record.status, record.reservedCredits, record.chargedCredits,
     record.billedSeconds, record.providerCostCny, record.failureCode, record.createdAt, record.updatedAt,
+    serializeCreditPricingRule(input.pricing),
   ).run()
   if (Number(insert.meta?.changes ?? 0) !== 1)
     throw createError({ statusCode: 500, statusMessage: 'ASR request could not be created.' })

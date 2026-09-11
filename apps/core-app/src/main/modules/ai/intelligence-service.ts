@@ -55,7 +55,6 @@ export function initIntelligenceSdkService(): void {
   if (!transport) {
     throw new Error('[Intelligence] Touch channel not ready')
   }
-  initialized = true
 
   const manager = new IntelligenceProviderManager()
   manager.registerFactory(IntelligenceProviderType.OPENAI, (config) => new OpenAIProvider(config))
@@ -81,6 +80,11 @@ export function initIntelligenceSdkService(): void {
 
   // Load initial config
   ensureIntelligenceConfigLoaded()
+
+  // Claimed only once the config wiring landed: with the flag set before it, a storage-readiness
+  // failure here left the service marked initialized with no listener registered, and every later
+  // call returned early instead of retrying.
+  initialized = true
 
   transport.on(intelligenceApiEvents.invoke, async (data, _context) => {
     try {

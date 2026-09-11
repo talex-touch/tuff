@@ -1881,6 +1881,7 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
           evidenceRunCreate: '发布证据运行创建',
           evidenceItemUpsert: '发布证据条目保存',
           evidenceDocGuard: '发布文档守卫记录',
+          creditsPricingUpdate: '计价规则更新',
         },
         export: {
           label: '导出 CSV',

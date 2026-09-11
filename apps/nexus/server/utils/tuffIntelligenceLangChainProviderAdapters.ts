@@ -258,6 +258,7 @@ export async function invokeOpenAiCompatibleProviderAdapter(
     model: context.model,
     temperature: 0.2,
     timeout: context.timeoutMs,
+    maxTokens: payload.maxTokens,
     configuration: { baseURL: baseUrl },
   });
   return normalizeResponse(
@@ -289,7 +290,7 @@ export async function invokeAnthropicProviderAdapter(
   const runner = new ChatAnthropic({
     anthropicApiKey: context.apiKey || "",
     model: context.model,
-    maxTokens: 1200,
+    maxTokens: payload.maxTokens ?? 1200,
     anthropicApiUrl: baseUrl,
     clientOptions: { baseURL: baseUrl },
   });
@@ -324,6 +325,7 @@ export async function* streamOpenAiCompatibleProviderAdapter(
     timeout: context.timeoutMs,
     streaming: true,
     streamUsage: true,
+    maxTokens: payload.maxTokens,
     configuration: { baseURL: baseUrl },
   });
   yield* streamProviderResponse(
@@ -348,7 +350,7 @@ export async function* streamAnthropicProviderAdapter(
   const runner = new ChatAnthropic({
     anthropicApiKey: context.apiKey || "",
     model: context.model,
-    maxTokens: 1200,
+    maxTokens: payload.maxTokens ?? 1200,
     streaming: true,
     streamUsage: true,
     anthropicApiUrl: baseUrl,

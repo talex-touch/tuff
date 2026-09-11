@@ -33,8 +33,8 @@
 
 - 当前公开口径：Pioneer 阶段全量开放，价格为 `0 元 / $0`。
 - 现有 `FREE / PRO / PLUS / TEAM / ENTERPRISE` 仅是计划分层与权限模型，不代表正式金额已确定。
-- 当前没有正式 credits 单价、团队席位价、超额计费或 GA 后价格表；这些不得在 roadmap 中写成已定。
-- 当前 pricing SoT 已补在 `Pricing-SoT-2026-06-18.md`；Pioneer 免费期边界、GA 后候选价格、AI credits 赠送/超额策略、Team seat 计费方式、Pioneer 保价范围仍是待决策项。
+- 对外仍没有正式 credits 单价、团队席位价、超额计费或 GA 后价格表；这些不得在 roadmap 中写成已定。服务端内部记账口径（单价快照、月度赠额、提交前预留）见 `Pricing-SoT-2026-06-18.md` §3.1，它不改变本行结论。
+- 当前 pricing SoT 已补在 `Pricing-SoT-2026-06-18.md`；Pioneer 免费期边界、GA 后候选价格、AI credits 对外赠送/超额策略、Team seat 计费方式、Pioneer 保价范围仍是待决策项。
 
 ## 5. 文档清理策略
 
