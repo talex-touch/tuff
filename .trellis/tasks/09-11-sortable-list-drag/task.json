@@ -1,9 +1,9 @@
 {
-  "id": "sliding-indicator-extraction",
-  "name": "sliding-indicator-extraction",
-  "title": "Shared sliding-indicator composable for FlatRadio, TabBar and Tabs",
+  "id": "sortable-list-drag",
+  "name": "sortable-list-drag",
+  "title": "SortableList drag behaviour",
   "description": "",
-  "status": "in_progress",
+  "status": "planning",
   "dev_type": null,
   "scope": null,
   "package": null,

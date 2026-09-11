@@ -25,7 +25,10 @@
     "09-11-glow-text-light-surface",
     "09-11-alert-toast-redesign",
     "09-11-selection-actions-anchor",
-    "09-11-gallery-cell-redesigns"
+    "09-11-gallery-cell-redesigns",
+    "09-11-shadow-light-source",
+    "09-11-datepicker-affordance",
+    "09-11-sortable-list-drag"
   ],
   "parent": null,
   "relatedFiles": [],
