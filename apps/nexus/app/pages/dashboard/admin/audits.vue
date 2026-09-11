@@ -98,6 +98,7 @@ const actionLabels = computed<Record<string, string>>(() => ({
   'release.evidence.run.create': t('dashboard.sections.audits.actions.evidenceRunCreate', 'Release evidence run created'),
   'release.evidence.item.upsert': t('dashboard.sections.audits.actions.evidenceItemUpsert', 'Release evidence item saved'),
   'release.evidence.doc-guard.record': t('dashboard.sections.audits.actions.evidenceDocGuard', 'Release doc guard recorded'),
+  'credits.pricing.update': t('dashboard.sections.audits.actions.creditsPricingUpdate', 'Credit price updated'),
 }))
 
 const actionOptions = computed(() => ([

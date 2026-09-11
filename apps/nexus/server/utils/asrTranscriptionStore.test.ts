@@ -4,10 +4,13 @@ import { Socket } from 'node:net'
 import { H3Event, type H3Event as H3EventType } from 'h3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  ASR_MAX_DURATION_SECONDS,
   calculateFiletransCredits,
+  calculateFiletransReservation,
   countTranscriptUnits,
   parseWavDurationSeconds,
 } from './asrTranscriptionStore'
+import { DEFAULT_CREDIT_PRICING, selectCreditPricingRule } from './creditPricingStore'
 import {
   createDashScopeFiletransAdapter,
   DashScopeAsrError,
@@ -16,6 +19,9 @@ import type { ProviderCredentialPayload } from './providerCredentialStore'
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 
 const testApiKey = 'test-dashscope-api-key-must-not-escape'
+
+/** The shipped Filetrans price the service resolves from the pricing table at runtime. */
+const asrPricing = selectCreditPricingRule('audio.transcribe', DEFAULT_CREDIT_PRICING)
 
 const credentialMocks = vi.hoisted(() => ({
   getProviderCredential: vi.fn<(event: H3EventType, authRef: string) => Promise<ProviderCredentialPayload | null>>(),
@@ -103,7 +109,20 @@ describe('Filetrans transcript and WAV boundaries', () => {
     { name: 'charges the audio-duration floor for a short transcript', transcript: '好', billedSeconds: 1.01, credits: 5 },
     { name: 'charges the larger transcript-unit value when speech is dense', transcript: '一二三四五六七八九', billedSeconds: 1, credits: 9 },
   ])('calculates Filetrans credits from the $name', ({ transcript, billedSeconds, credits }) => {
-    expect(calculateFiletransCredits(transcript, billedSeconds)).toBe(credits)
+    expect(calculateFiletransCredits(asrPricing, transcript, billedSeconds)).toBe(credits)
+  })
+
+  it.each([
+    { name: 'holds ten credits for the first audio second', durationSeconds: 1, credits: 10 },
+    { name: 'rounds a fractional hold up exactly once', durationSeconds: 0.1, credits: 1 },
+  ])('$name', ({ durationSeconds, credits }) => {
+    expect(calculateFiletransReservation(asrPricing, durationSeconds)).toBe(credits)
+  })
+
+  it('rejects a clip longer than the admission cap instead of holding credits for it', () => {
+    expect(() => calculateFiletransReservation(asrPricing, ASR_MAX_DURATION_SECONDS + 0.1)).toThrowError(
+      expect.objectContaining({ statusCode: 400 }),
+    )
   })
 
   it('parses duration from a canonical PCM WAV data chunk', () => {

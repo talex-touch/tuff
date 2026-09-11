@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  AUTH_TOKEN_BASE_URL_FIELD,
+  omitMainOwnedAuthSettings,
+  preserveMainOwnedAuthSettings
+} from '../storage/main-storage-registry'
 import type * as AuthModule from './index'
 
 const {
@@ -14,7 +19,8 @@ const {
   transportBroadcastMock,
   openExternalMock,
   authLoggerMock,
-  resolveMainRuntimeMock
+  resolveMainRuntimeMock,
+  runtimeBaseUrlState
 } = vi.hoisted(() => ({
   getMainConfigMock: vi.fn(),
   saveMainConfigMock: vi.fn(),
@@ -33,7 +39,9 @@ const {
     debug: vi.fn(),
     error: vi.fn()
   },
-  resolveMainRuntimeMock: vi.fn((ctx: unknown) => ctx)
+  resolveMainRuntimeMock: vi.fn((ctx: unknown) => ctx),
+  /** Nexus origin the module resolves; mutable so a case can change it mid-flight. */
+  runtimeBaseUrlState: { baseUrl: 'https://example.test' }
 }))
 
 vi.mock('@talex-touch/utils', () => ({
@@ -132,7 +140,7 @@ vi.mock('../network', () => ({
 }))
 
 vi.mock('../nexus/runtime-base', () => ({
-  getRuntimeNexusBaseUrl: vi.fn(() => 'https://example.test'),
+  getRuntimeNexusBaseUrl: vi.fn(() => runtimeBaseUrlState.baseUrl),
   getRuntimeServerMode: vi.fn(() => 'production')
 }))
 
@@ -150,6 +158,7 @@ type MockAppSetting = {
     devicePlatform: string
     requiresReauthenticationOnNextStartup?: boolean
     cachedUser?: unknown
+    nexusTokenBaseUrl?: string
   }
   security: {
     machineCodeHash: string
@@ -195,6 +204,7 @@ describe('forced auth credential persistence', () => {
     vi.resetModules()
     vi.clearAllMocks()
     resolveMainRuntimeMock.mockImplementation((ctx: unknown) => ctx)
+    runtimeBaseUrlState.baseUrl = 'https://example.test'
 
     appSettingState = createAppSetting()
     getMainConfigMock.mockImplementation(() => appSettingState)
@@ -902,6 +912,249 @@ describe('forced auth credential persistence', () => {
       accessTokenExpiresAt: null
     })
     expect(authModule.getAuthToken()).toBeNull()
+  })
+
+  describe('Nexus origin binding for the stored credential', () => {
+    it('discards the stored credential when the app restarts against another Nexus origin', async () => {
+      runtimeBaseUrlState.baseUrl = 'https://origin-a.test'
+
+      const authModule = await importAuthModule()
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+      await authModule.__test__.setAuthToken('origin-a-token')
+      const persistedCredential = setSecureStoreValueMock.mock.calls.at(-1)?.[2]
+      expect(persistedCredential).toBeTypeOf('string')
+
+      // Restart: memory is empty, the protected credential is still on disk.
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+      runtimeBaseUrlState.baseUrl = 'https://origin-b.test'
+      getSecureStoreValueStrictMock.mockResolvedValue(persistedCredential)
+      setSecureStoreValueMock.mockClear()
+
+      await authModule.__test__.loadAuthToken()
+
+      expect(authModule.getAuthToken()).toBeNull()
+      expect(setSecureStoreValueMock).toHaveBeenCalledWith(
+        '/tmp/tuff',
+        'auth.token',
+        null,
+        'auth-token',
+        expect.any(Function)
+      )
+      expect(appSettingState.auth?.nexusTokenBaseUrl).toBe('https://origin-b.test')
+    })
+
+    it('keeps the credential when the resolved origin still matches', async () => {
+      runtimeBaseUrlState.baseUrl = 'https://origin-a.test'
+      appSettingState.auth![AUTH_TOKEN_BASE_URL_FIELD] = '  https://origin-a.test/ '
+      getSecureStoreValueStrictMock.mockResolvedValue('persisted-token')
+
+      const authModule = await importAuthModule()
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+      await authModule.__test__.loadAuthToken()
+
+      expect(authModule.getAuthToken()).toBe('persisted-token')
+      expect(setSecureStoreValueMock).not.toHaveBeenCalled()
+
+      // Same origin again with the trailing slash on the other side of the comparison.
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+      runtimeBaseUrlState.baseUrl = 'https://origin-a.test/'
+      appSettingState.auth![AUTH_TOKEN_BASE_URL_FIELD] = 'https://origin-a.test'
+
+      await authModule.__test__.loadAuthToken()
+
+      expect(authModule.getAuthToken()).toBe('persisted-token')
+      expect(setSecureStoreValueMock).not.toHaveBeenCalled()
+    })
+
+    it('adopts a credential with no recorded origin and catches a later origin change', async () => {
+      runtimeBaseUrlState.baseUrl = 'https://origin-a.test'
+      getSecureStoreValueStrictMock.mockResolvedValue('legacy-token')
+
+      const authModule = await importAuthModule()
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+      await authModule.__test__.loadAuthToken()
+
+      expect(authModule.getAuthToken()).toBe('legacy-token')
+      expect(appSettingState.auth?.nexusTokenBaseUrl).toBe('https://origin-a.test')
+
+      runtimeBaseUrlState.baseUrl = 'https://origin-b.test'
+
+      expect(authModule.getAuthToken()).toBeNull()
+      await vi.waitFor(() => {
+        expect(appSettingState.auth?.nexusTokenBaseUrl).toBe('https://origin-b.test')
+      })
+      expect(setSecureStoreValueMock).toHaveBeenCalledWith(
+        '/tmp/tuff',
+        'auth.token',
+        null,
+        'auth-token',
+        expect.any(Function)
+      )
+    })
+
+    it('records the issuing origin and refuses the credential at any other origin', async () => {
+      runtimeBaseUrlState.baseUrl = 'https://origin-b.test'
+
+      const authModule = await importAuthModule()
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+      await authModule.__test__.setAuthToken('origin-b-token')
+
+      expect(appSettingState.auth?.nexusTokenBaseUrl).toBe('https://origin-b.test')
+      expect(authModule.getAuthToken()).toBe('origin-b-token')
+
+      runtimeBaseUrlState.baseUrl = 'https://origin-a.test'
+      setSecureStoreValueMock.mockClear()
+
+      expect(authModule.getAuthToken()).toBeNull()
+      await vi.waitFor(() => {
+        expect(setSecureStoreValueMock).toHaveBeenCalledWith(
+          '/tmp/tuff',
+          'auth.token',
+          null,
+          'auth-token',
+          expect.any(Function)
+        )
+        expect(appSettingState.auth?.nexusTokenBaseUrl).toBe('https://origin-a.test')
+      })
+      expect(authModule.__test__.getCredentialState()).toEqual({
+        accessToken: '',
+        refreshToken: null,
+        accessTokenExpiresAt: null
+      })
+    })
+
+    it('never sends the credential to a Nexus origin that did not issue it', async () => {
+      runtimeBaseUrlState.baseUrl = 'https://origin-a.test'
+
+      const authModule = await importAuthModule()
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+      await authModule.__test__.setAuthToken('origin-a-token')
+
+      runtimeBaseUrlState.baseUrl = 'https://origin-b.test'
+      networkRequestMock.mockClear()
+
+      await expect(
+        authModule.__test__.performNexusRequest({
+          method: 'GET',
+          path: '/api/business',
+          context: 'plugin-business'
+        })
+      ).resolves.toBeNull()
+
+      expect(networkRequestMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps the recorded origin out of renderer and sync projections and survives an external write', async () => {
+      runtimeBaseUrlState.baseUrl = 'https://origin-a.test'
+
+      const authModule = await importAuthModule()
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+      await authModule.__test__.setAuthToken('origin-a-token')
+
+      const projection = omitMainOwnedAuthSettings(appSettingState) as {
+        auth?: Record<string, unknown>
+      }
+      expect(projection.auth).toHaveProperty('deviceId')
+      expect(projection.auth).not.toHaveProperty(AUTH_TOKEN_BASE_URL_FIELD)
+
+      // A remote-sync document arrives without the main-owned field.
+      appSettingState = preserveMainOwnedAuthSettings(
+        { ...appSettingState, auth: { deviceId: 'device-from-sync' } },
+        appSettingState
+      ) as MockAppSetting
+      expect(appSettingState.auth?.nexusTokenBaseUrl).toBe('https://origin-a.test')
+
+      runtimeBaseUrlState.baseUrl = 'https://origin-b.test'
+
+      expect(authModule.getAuthToken()).toBeNull()
+      await vi.waitFor(() => {
+        expect(appSettingState.auth?.nexusTokenBaseUrl).toBe('https://origin-b.test')
+      })
+    })
+
+    it('never sends a memory-only credential to a Nexus origin that did not issue it', async () => {
+      runtimeBaseUrlState.baseUrl = 'https://origin-a.test'
+      // Protected storage cannot write, so this credential only ever lives in memory and the
+      // durable origin record is never written.
+      setSecureStoreValueMock.mockResolvedValue(false)
+
+      const authModule = await importAuthModule()
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+      await authModule.__test__.setAuthToken('memory-only-token')
+      expect(authModule.getAuthToken()).toBe('memory-only-token')
+      expect(appSettingState.auth?.nexusTokenBaseUrl).toBeUndefined()
+
+      // The user points the app at another Nexus origin while the token is still in memory.
+      runtimeBaseUrlState.baseUrl = 'https://origin-b.test'
+      networkRequestMock.mockClear()
+
+      expect(authModule.getAuthToken()).toBeNull()
+      await expect(
+        authModule.__test__.performNexusRequest({
+          method: 'GET',
+          path: '/api/business',
+          context: 'plugin-business'
+        })
+      ).resolves.toBeNull()
+
+      expect(networkRequestMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps a credential that a login wrote while the origin cleanup was awaiting storage', async () => {
+      runtimeBaseUrlState.baseUrl = 'https://origin-a.test'
+
+      const authModule = await importAuthModule()
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+      await authModule.__test__.setAuthToken('origin-a-token')
+
+      // Park the cleanup inside its first durable write: this is the window a login can land in.
+      let releaseCleanup!: () => void
+      const cleanupGate = new Promise<void>((resolve) => {
+        releaseCleanup = resolve
+      })
+      saveMainConfigDurableMock.mockImplementationOnce(async () => {
+        await cleanupGate
+        return { success: true, version: 1 }
+      })
+      runtimeBaseUrlState.baseUrl = 'https://origin-b.test'
+      setSecureStoreValueMock.mockClear()
+
+      // The cleanup `getAuthToken()` triggers for the now-foreign credential, awaited directly so
+      // the assertion below is not racing it.
+      const cleanup = authModule.__test__.dropCredentialIssuedByAnotherOrigin()
+
+      await authModule.__test__.setAuthToken('origin-b-fresh-token')
+      releaseCleanup()
+      await cleanup
+
+      // The cleanup was aimed at the credential it replaced, so it deletes nothing.
+      expect(authModule.getAuthToken()).toBe('origin-b-fresh-token')
+      expect(setSecureStoreValueMock).not.toHaveBeenCalledWith(
+        '/tmp/tuff',
+        'auth.token',
+        null,
+        'auth-token',
+        expect.any(Function)
+      )
+    })
   })
 })
 

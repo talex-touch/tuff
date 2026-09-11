@@ -1885,6 +1885,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           evidenceRunCreate: 'Release evidence run created',
           evidenceItemUpsert: 'Release evidence item saved',
           evidenceDocGuard: 'Release doc guard recorded',
+          creditsPricingUpdate: 'Credit price updated',
         },
         export: {
           label: 'Export CSV',

@@ -1,5 +1,7 @@
 import type { IntelligenceProviderRecord } from './intelligenceStore'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_CREDIT_PRICING, selectCreditPricingRule } from './creditPricingStore'
+import type { CreditPricingRule } from './creditPricingStore'
 import {
   listPlatformGovernanceEvents,
   recordPlatformGovernanceEvent,
@@ -19,6 +21,11 @@ const providerBridgeMocks = vi.hoisted(() => ({
 
 const creditStoreMocks = vi.hoisted(() => ({
   consumeCredits: vi.fn(),
+  releaseConsumedCredits: vi.fn(),
+}))
+
+const pricingMocks = vi.hoisted(() => ({
+  resolveCreditPricingRule: vi.fn(),
 }))
 
 const usageLedgerMocks = vi.hoisted(() => ({
@@ -43,6 +50,19 @@ vi.mock('./intelligenceProviderRegistryBridge', () => providerBridgeMocks)
 
 vi.mock('./creditsStore', () => creditStoreMocks)
 vi.mock('./providerUsageLedgerStore', () => usageLedgerMocks)
+
+// The price list itself is a database read; the rule it resolves is not. Keeping the real
+// pure lookup means these tests assert the shipped prices rather than a hand-rolled table.
+vi.mock('./creditPricingStore', async () => {
+  const actual = await vi.importActual<typeof import('./creditPricingStore')>('./creditPricingStore')
+  return {
+    ...actual,
+    resolveCreditPricingRule: pricingMocks.resolveCreditPricingRule,
+    // Reservation charges through the sellable lookup, which resolves the same stubbed
+    // rule; a disabled capability is refused by the store itself, not here.
+    resolveSellableCreditPricingRule: pricingMocks.resolveCreditPricingRule,
+  }
+})
 
 vi.mock('@langchain/openai', () => ({
   ChatOpenAI: class {
@@ -93,6 +113,47 @@ function provider(overrides: Partial<IntelligenceProviderRecord> = {}): Intellig
   }
 }
 
+function ledgerEntry(amount: number, reason: string) {
+  return {
+    ledgerId: `ledger_${reason}_${amount}`,
+    teamId: 'team_user_1',
+    userId: 'user_1',
+    amount,
+    reason,
+    createdAt: '2026-05-12T00:00:00.000Z',
+    metadata: {},
+  }
+}
+
+/**
+ * A capability the price list sells per image. The capability under test reports tokens,
+ * so the meters disagree however the shipped price list happens to be priced.
+ */
+const IMAGE_PRICED_RULE: CreditPricingRule = {
+  capability: 'vision.ocr',
+  unit: 'image',
+  creditsPerUnit: 250,
+  secondaryUnit: null,
+  secondaryCreditsPerUnit: null,
+  minCredits: 1,
+  reserveMultiplier: 1,
+  upstreamCostUsdPerUnit: null,
+  active: true,
+  updatedAt: '2026-01-01T00:00:00.000Z',
+}
+
+/**
+ * Credits the service asked the credit store to hold before dispatch. The amount is
+ * sized from the prompt plus the reply bound, so its exact value belongs to the
+ * estimator: these tests assert what a hold must satisfy — taken before dispatch,
+ * covering the reply, settled to the provider's report — rather than pinning it.
+ */
+function requestedHold(): number {
+  const call = creditStoreMocks.consumeCredits.mock.calls[0]
+  if (!call) throw new Error('no credit hold was requested')
+  return Number(call[2])
+}
+
 describe('invokeIntelligenceCapability', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -108,15 +169,20 @@ describe('invokeIntelligenceCapability', () => {
       provider(),
     ])
     providerBridgeMocks.getIntelligenceProviderApiKeyWithRegistryFallback.mockResolvedValue('sk-test')
-    creditStoreMocks.consumeCredits.mockResolvedValue({
-      ledgerId: 'credit_ledger_1',
-      teamId: 'team_user_1',
-      userId: 'user_1',
-      amount: 7,
-      reason: 'intelligence-invoke',
-      createdAt: '2026-05-12T00:00:00.000Z',
-      metadata: {},
-    })
+    pricingMocks.resolveCreditPricingRule.mockImplementation(
+      async (_event: unknown, capability: string) =>
+        selectCreditPricingRule(capability, DEFAULT_CREDIT_PRICING),
+    )
+    // consumeCredits reports back what it actually moved, so the reserve the service
+    // holds is the amount it asked for; releaseConsumedCredits mirrors it as a refund.
+    creditStoreMocks.consumeCredits.mockImplementation(
+      async (_event: unknown, _userId: string, amount: number, reason: string) =>
+        ledgerEntry(amount, reason),
+    )
+    creditStoreMocks.releaseConsumedCredits.mockImplementation(
+      async (_event: unknown, _userId: string, amount: number, reason: string) =>
+        ledgerEntry(amount, reason),
+    )
     usageLedgerMocks.recordProviderUsageLedger.mockResolvedValue([{ id: 'provider_usage_1' }])
     langchainMocks.invoke.mockResolvedValue({
       content: 'translated text',
@@ -185,30 +251,50 @@ describe('invokeIntelligenceCapability', () => {
     }))
     expect(JSON.stringify(storeMocks.createAudit.mock.calls[0]?.[1])).not.toContain('hello')
     expect(JSON.stringify(storeMocks.createAudit.mock.calls[0]?.[1])).not.toContain('translated text')
+
+    // The hold is taken before the provider is called: provider cost must not be spent
+    // before the account is known to afford the call.
+    expect(creditStoreMocks.consumeCredits).toHaveBeenCalledTimes(1)
+    const hold = requestedHold()
+    // The reply bound alone is 512 credits; the prompt's own tokens are held on top.
+    expect(hold).toBeGreaterThanOrEqual(512)
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      7,
-      'intelligence-invoke',
+      hold,
+      'intelligence-invoke-reserve',
       expect.objectContaining({
         capabilityId: 'text.translate',
-        providerId: 'ip_nexus_text',
-        providerName: 'Nexus OpenAI',
-        providerType: 'openai',
-        model: 'gpt-4o-mini',
-        tokens: 7,
-        promptTokens: 3,
-        completionTokens: 4,
+        unit: '1k_tokens',
+        reservedCredits: hold,
+        estimatedUsage: { tokens: hold },
         source: 'core-app',
         caller: 'workflow.use-model',
         sessionId: 'session_1',
-        workflowId: 'workflow_1',
-        workflowName: 'Meeting Summary',
-        workflowRunId: 'run_1',
-        workflowStepId: 'step_1',
       }),
-      { idempotencyKey: `intelligence-invoke:${result.traceId}` },
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
     )
+    expect(creditStoreMocks.consumeCredits.mock.invocationCallOrder[0])
+      .toBeLessThan(langchainMocks.invoke.mock.invocationCallOrder[0]!)
+
+    // The provider reported 7 tokens against the hold, so 7 is the charge and the rest
+    // of the hold goes back.
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledTimes(1)
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      hold - 7,
+      'intelligence-invoke-release',
+      expect.objectContaining({
+        traceId: result.traceId,
+        capabilityId: 'text.translate',
+        reservedCredits: hold,
+        releasedCredits: hold - 7,
+        chargedCredits: 7,
+      }),
+      { idempotencyKey: `intelligence-invoke-release:${result.traceId}` },
+    )
+
     const creditMetadata = JSON.stringify(creditStoreMocks.consumeCredits.mock.calls[0]?.[4])
     expect(creditMetadata).not.toContain('hello')
     expect(creditMetadata).not.toContain('translated text')
@@ -221,7 +307,7 @@ describe('invokeIntelligenceCapability', () => {
         requestedCapabilities: ['text.translate'],
         usage: [
           expect.objectContaining({
-            unit: 'token',
+            unit: '1k_tokens',
             quantity: 7,
             billable: true,
             providerId: 'ip_nexus_text',
@@ -258,9 +344,12 @@ describe('invokeIntelligenceCapability', () => {
         workflowRunId: 'run_1',
         workflowStepId: 'step_1',
         billing: {
-          ledgerId: 'credit_ledger_1',
+          ledgerId: `ledger_intelligence-invoke-reserve_${hold}`,
           chargedCredits: 7,
-          unit: 'token',
+          unit: '1k_tokens',
+          quantity: 7,
+          reservedCredits: hold,
+          reserveId: expect.any(String),
           billable: true,
           reason: 'intelligence-invoke',
         },
@@ -326,7 +415,7 @@ describe('invokeIntelligenceCapability', () => {
     }))
   })
 
-  it('totalTokens 为 0 时不扣 credits', async () => {
+  it('totalTokens 为 0 时预扣全额释放且不计费', async () => {
     langchainMocks.invoke.mockResolvedValueOnce({
       content: 'ok',
       usage_metadata: {
@@ -336,14 +425,36 @@ describe('invokeIntelligenceCapability', () => {
       },
     })
 
-    await invokeIntelligenceCapability(h3Event(), 'user_1', {
+    const result = await invokeIntelligenceCapability(h3Event(), 'user_1', {
       capabilityId: 'text.chat',
       payload: {
         messages: [{ role: 'user', content: 'hello' }],
       },
     })
 
-    expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(creditStoreMocks.consumeCredits).toHaveBeenCalledTimes(1)
+    const hold = requestedHold()
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      hold,
+      'intelligence-invoke-release',
+      expect.objectContaining({
+        traceId: result.traceId,
+        reservedCredits: hold,
+        releasedCredits: hold,
+        traceOutcome: 'unmetered',
+      }),
+      { idempotencyKey: `intelligence-invoke-release:${result.traceId}` },
+    )
+    expect(result.metadata.billing).toMatchObject({
+      chargedCredits: 0,
+      unit: '1k_tokens',
+      quantity: 0,
+      reservedCredits: hold,
+      billable: false,
+      reason: 'intelligence-invoke',
+    })
     expect(usageLedgerMocks.recordProviderUsageLedger).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -357,7 +468,7 @@ describe('invokeIntelligenceCapability', () => {
     )
   })
 
-  it('provider 调用失败时不扣 credits', async () => {
+  it('provider 调用失败时释放全部预扣且错误原样抛出', async () => {
     langchainMocks.invoke.mockRejectedValue(new Error('provider failed'))
 
     await expect(invokeIntelligenceCapability(h3Event(), 'user_1', {
@@ -367,13 +478,177 @@ describe('invokeIntelligenceCapability', () => {
       },
     })).rejects.toThrow('provider failed')
 
-    expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledTimes(1)
+    const hold = requestedHold()
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      hold,
+      'intelligence-invoke-release',
+      expect.objectContaining({
+        reserveId: expect.stringMatching(/^reserve_/),
+        reservedCredits: hold,
+        releasedCredits: hold,
+        traceOutcome: 'dispatch-failed',
+      }),
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },
+    )
     expect(storeMocks.createAudit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       success: false,
       metadata: expect.objectContaining({
         errorCode: 'UNKNOWN',
       }),
     }))
+  })
+
+  it('provider 报告超过预扣的用量时补扣差额并仍返回结果', async () => {
+    langchainMocks.invoke.mockResolvedValueOnce({
+      content: 'long answer',
+      usage_metadata: {
+        input_tokens: 100,
+        output_tokens: 5000,
+        total_tokens: 5100,
+      },
+    })
+
+    const result = await invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+    })
+
+    const hold = requestedHold()
+    expect(hold).toBeGreaterThan(0)
+    expect(hold).toBeLessThan(5100)
+    expect(creditStoreMocks.consumeCredits).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      'user_1',
+      hold,
+      'intelligence-invoke-reserve',
+      expect.anything(),
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
+    )
+    expect(creditStoreMocks.consumeCredits).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      'user_1',
+      5100 - hold,
+      'intelligence-invoke-settle',
+      expect.objectContaining({
+        capabilityId: 'text.chat',
+        traceId: result.traceId,
+        tokens: 5100,
+        promptTokens: 100,
+        completionTokens: 5000,
+      }),
+      { idempotencyKey: `intelligence-invoke-settle:${result.traceId}` },
+    )
+    expect(creditStoreMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      result: 'long answer',
+      usage: { promptTokens: 100, completionTokens: 5000, totalTokens: 5100 },
+      metadata: {
+        billing: {
+          ledgerId: `ledger_intelligence-invoke-settle_${5100 - hold}`,
+          chargedCredits: 5100,
+          unit: '1k_tokens',
+          quantity: 5100,
+          reservedCredits: hold,
+          reserveId: expect.any(String),
+          billable: true,
+          reason: 'intelligence-invoke',
+        },
+      },
+    })
+  })
+
+  it('补扣差额失败不影响已经返回的结果', async () => {
+    langchainMocks.invoke.mockResolvedValueOnce({
+      content: 'long answer',
+      usage_metadata: {
+        input_tokens: 100,
+        output_tokens: 600,
+        total_tokens: 700,
+      },
+    })
+    creditStoreMocks.consumeCredits
+      .mockResolvedValueOnce(ledgerEntry(512, 'intelligence-invoke-reserve'))
+      .mockRejectedValueOnce(new Error('User credits exceeded.'))
+
+    const result = await invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+    })
+
+    expect(result).toMatchObject({
+      result: 'long answer',
+      metadata: {
+        billing: {
+          ledgerId: 'ledger_intelligence-invoke-reserve_512',
+          chargedCredits: 700,
+          reservedCredits: 512,
+          billable: true,
+          // The shortfall is owed, so it must be visible on the response instead of
+          // surviving only as a log line.
+          settleFailed: true,
+          unsettledCredits: 188,
+        },
+      },
+    })
+  })
+
+  it('价格表不售卖 provider 上报的单位时保留预扣而不是免费放行', async () => {
+    pricingMocks.resolveCreditPricingRule.mockImplementationOnce(
+      async () => IMAGE_PRICED_RULE,
+    )
+    langchainMocks.invoke.mockResolvedValueOnce({
+      content: 'ok',
+      usage_metadata: {
+        input_tokens: 2,
+        output_tokens: 3,
+        total_tokens: 5,
+      },
+    })
+
+    const result = await invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+    })
+
+    expect(creditStoreMocks.consumeCredits).toHaveBeenCalledTimes(1)
+    expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      250,
+      'intelligence-invoke-reserve',
+      expect.objectContaining({
+        capabilityId: 'text.chat',
+        unit: 'image',
+        reservedCredits: 250,
+      }),
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
+    )
+    expect(creditStoreMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      result: 'ok',
+      metadata: {
+        billing: {
+          ledgerId: 'ledger_intelligence-invoke-reserve_250',
+          chargedCredits: 250,
+          unit: 'image',
+          quantity: 0,
+          reservedCredits: 250,
+          billable: true,
+          reason: 'intelligence-invoke',
+        },
+      },
+    })
   })
 
   it('direct invoke 在进入模型前按 Provider Registry governance id 拦截 provider request quota', async () => {
@@ -410,7 +685,27 @@ describe('invokeIntelligenceCapability', () => {
     })
 
     expect(langchainMocks.invoke).not.toHaveBeenCalled()
-    expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    const hold = requestedHold()
+    expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      hold,
+      'intelligence-invoke-reserve',
+      expect.anything(),
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
+    )
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      hold,
+      'intelligence-invoke-release',
+      expect.objectContaining({
+        reservedCredits: hold,
+        releasedCredits: hold,
+        traceOutcome: 'dispatch-failed',
+      }),
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },
+    )
     expect(usageLedgerMocks.recordProviderUsageLedger).not.toHaveBeenCalled()
     expect(storeMocks.createAudit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       status: 429,
@@ -485,7 +780,27 @@ describe('invokeIntelligenceCapability', () => {
     })
 
     expect(langchainMocks.invoke).not.toHaveBeenCalled()
-    expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    const hold = requestedHold()
+    expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      hold,
+      'intelligence-invoke-reserve',
+      expect.anything(),
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
+    )
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      hold,
+      'intelligence-invoke-release',
+      expect.objectContaining({
+        reservedCredits: hold,
+        releasedCredits: hold,
+        traceOutcome: 'dispatch-failed',
+      }),
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },
+    )
     expect(usageLedgerMocks.recordProviderUsageLedger).not.toHaveBeenCalled()
     const requestEvents = await listPlatformGovernanceEvents(event, {
       scope: 'intelligence',
@@ -515,7 +830,7 @@ describe('invokeIntelligenceCapability', () => {
     })
   })
 
-  it('credits 不足时返回明确的 402 错误', async () => {
+  it('credits 不足时返回明确的 402 错误且不调用模型', async () => {
     creditStoreMocks.consumeCredits.mockRejectedValueOnce(new Error('User credits exceeded.'))
 
     await expect(invokeIntelligenceCapability(h3Event(), 'user_1', {
@@ -528,8 +843,69 @@ describe('invokeIntelligenceCapability', () => {
       statusMessage: 'CREDITS_EXCEEDED',
       data: {
         code: 'CREDITS_EXCEEDED',
+        capabilityId: 'text.chat',
         reason: 'User credits exceeded.',
       },
     })
+
+    expect(langchainMocks.invoke).not.toHaveBeenCalled()
+    expect(creditStoreMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+  })
+
+  it('refuses a disabled capability without holding credits or calling the model', async () => {
+    // The operator switched the capability off. Its row still exists, and the token
+    // fallback would price a request that reports no tokens at 0 credits, so the invoke
+    // has to be declined before any spend.
+    pricingMocks.resolveCreditPricingRule.mockRejectedValueOnce(Object.assign(
+      new Error('CAPABILITY_DISABLED'),
+      { statusCode: 503, statusMessage: 'CAPABILITY_DISABLED', data: { code: 'CAPABILITY_DISABLED' } },
+    ))
+
+    await expect(invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+    })).rejects.toMatchObject({ statusCode: 503, data: { code: 'CAPABILITY_DISABLED' } })
+
+    expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(langchainMocks.invoke).not.toHaveBeenCalled()
+  })
+
+  it('pre-holds the prompt tokens a small declared output cap would otherwise hide', async () => {
+    // Chinese text tokenizes at about one token per character. A caller that declares a
+    // one-token reply must still hold the prompt: the provider bills it either way, and
+    // the hold is the only thing standing between an unaffordable call and provider cost.
+    const prompt = '这是一段很长的中文提示'.repeat(200)
+
+    await invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: prompt }],
+      },
+      options: {
+        metadata: { maxTokens: 1 },
+      },
+    })
+
+    expect(requestedHold()).toBeGreaterThanOrEqual(prompt.length + 1)
+  })
+
+  it('hands a declared output cap to the provider and holds for it', async () => {
+    await invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      options: {
+        metadata: { maxTokens: 4000 },
+      },
+    })
+
+    // A cap the provider never receives is not a bound, so it must be handed over.
+    expect(langchainMocks.constructorArgs).toHaveBeenCalledWith(
+      expect.objectContaining({ maxTokens: 4000 }),
+    )
+    expect(requestedHold()).toBeGreaterThanOrEqual(4000)
   })
 })

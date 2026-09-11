@@ -25,6 +25,14 @@ import { redactProviderConfigDocument } from '../ai/provider-credential-service'
 import { normalizeLocalSkillConfig } from '../ai/skill-local-sources'
 
 export const AUTH_REAUTHENTICATION_REQUIRED_FIELD = 'requiresReauthenticationOnNextStartup'
+/**
+ * Nexus origin that issued the stored account credential.
+ *
+ * A bearer token is only meaningful at the server that minted it, so the origin is recorded next
+ * to the settings instead of inside the versioned credential bundle: that bundle validates an
+ * exact key set, so extending it would clear every existing credential on upgrade.
+ */
+export const AUTH_TOKEN_BASE_URL_FIELD = 'nexusTokenBaseUrl'
 export const LEGACY_AUTH_PROTECTION_FIELDS = [
   'useSecureStorage',
   'secureStorageUserOverridden',
@@ -103,6 +111,10 @@ function isAuthReauthenticationRequired(value: unknown): boolean {
 /**
  * Keep the recovery marker out of renderer and sync projections. It is only
  * meaningful to the main-owned AuthModule and must never become a user setting.
+ *
+ * The recorded credential origin is projected away for the same reason plus one more: it is
+ * per-install bookkeeping, and syncing it to another machine would invalidate that machine's
+ * own credential.
  */
 export function omitMainOwnedAuthSettings(value: object): object {
   if (!isPlainObject(value)) return value
@@ -111,6 +123,7 @@ export function omitMainOwnedAuthSettings(value: object): object {
 
   const projectedAuth = omitLegacyAuthProtectionFields(auth)
   delete projectedAuth[AUTH_REAUTHENTICATION_REQUIRED_FIELD]
+  delete projectedAuth[AUTH_TOKEN_BASE_URL_FIELD]
   return { ...value, auth: projectedAuth }
 }
 
@@ -124,8 +137,13 @@ export function preserveMainOwnedAuthSettings(value: unknown, current: unknown):
   const incomingAuth = getAuthSettings(value)
   const nextAuth = incomingAuth ? omitLegacyAuthProtectionFields(incomingAuth) : {}
   delete nextAuth[AUTH_REAUTHENTICATION_REQUIRED_FIELD]
+  delete nextAuth[AUTH_TOKEN_BASE_URL_FIELD]
   if (isAuthReauthenticationRequired(current)) {
     nextAuth[AUTH_REAUTHENTICATION_REQUIRED_FIELD] = true
+  }
+  const currentTokenBaseUrl = getAuthSettings(current)?.[AUTH_TOKEN_BASE_URL_FIELD]
+  if (typeof currentTokenBaseUrl === 'string' && currentTokenBaseUrl) {
+    nextAuth[AUTH_TOKEN_BASE_URL_FIELD] = currentTokenBaseUrl
   }
   return { ...value, auth: nextAuth }
 }

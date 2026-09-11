@@ -38,6 +38,12 @@ export interface IntelligenceProviderAdapterResult {
 export interface IntelligenceProviderAdapterPayload {
   context: IntelligenceProviderAdapterContext;
   messages: IntelligenceMessage[];
+  /**
+   * Output cap the caller asked for. Forwarded to the provider so the reply cannot
+   * outrun the credit hold that was sized from it; absent means the provider's own
+   * default applies.
+   */
+  maxTokens?: number;
   signal?: AbortSignal;
 }
 

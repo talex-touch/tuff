@@ -3,10 +3,16 @@ import { useAppSdk } from '@talex-touch/utils/renderer'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { useAuth } from '~/modules/auth/useAuth'
 import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
-import { normalizeCreditSummary, type CreditSummary } from './credits-summary-normalizer'
+import {
+  normalizeCreditPricing,
+  normalizeCreditSummary,
+  type CreditPricingEntry,
+  type CreditSummary
+} from './credits-summary-normalizer'
 
 export interface CreditSummaryState {
   summary: ComputedRef<CreditSummary | null>
+  pricing: ComputedRef<CreditPricingEntry[]>
   loading: ComputedRef<boolean>
   error: ComputedRef<string>
   isLoggedIn: ComputedRef<boolean>
@@ -29,9 +35,36 @@ function resolveCreditsError(status: number, statusText: string): string {
 }
 
 const rawSummary = ref<CreditSummary | null>(null)
+const pricing = ref<CreditPricingEntry[]>([])
 const loading = ref(false)
 const error = ref('')
 let activeRequestId = 0
+
+/**
+ * The published price list is fetched alongside the balance so a user never has to
+ * guess what a capability costs: the balance alone says how much is left, not what
+ * spending it buys.
+ */
+async function refreshPricing(requestId: number): Promise<void> {
+  try {
+    const response = await fetchNexusWithAuth('/api/credits/pricing', {}, 'credits-pricing')
+    if (requestId !== activeRequestId) return
+    if (!response?.ok) {
+      // The list this panel is showing is the one it read last, and it is quoted beside a balance
+      // that has just been re-read. Keeping a price list the gateway can no longer serve would
+      // quote a cost the user may not be charged, so it goes rather than ages.
+      pricing.value = []
+      return
+    }
+    pricing.value = normalizeCreditPricing(await response.json())
+  } catch {
+    // A missing price list must never block the balance itself. An older request must not clear a
+    // newer list either, so the guard is the request id and not the failure.
+    if (requestId === activeRequestId) {
+      pricing.value = []
+    }
+  }
+}
 
 export function useCreditsSummary(): CreditSummaryState {
   const { isLoggedIn } = useAuth()
@@ -77,6 +110,7 @@ export function useCreditsSummary(): CreditSummaryState {
         return
       }
       rawSummary.value = normalizeCreditSummary(await response.json())
+      void refreshPricing(requestId)
     } catch (err) {
       if (requestId !== activeRequestId) return
       rawSummary.value = null
@@ -102,12 +136,14 @@ export function useCreditsSummary(): CreditSummaryState {
       }
       rawSummary.value = null
       error.value = ''
+      pricing.value = []
     },
     { immediate: true }
   )
 
   return {
     summary,
+    pricing: computed(() => pricing.value),
     loading: computed(() => loading.value),
     error: computed(() => error.value),
     isLoggedIn,

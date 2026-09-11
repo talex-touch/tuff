@@ -1,8 +1,11 @@
 import { Buffer } from 'node:buffer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DashScopeAsrError, type DashScopeFiletransAdapter, type DashScopeFiletransTask } from './dashscopeAsrProvider'
 import { pollAsrTranscription, startAsrTranscription } from './asrTranscriptionService'
+import { DEFAULT_CREDIT_PRICING, selectCreditPricingRule } from './creditPricingStore'
+import { DashScopeAsrError, type DashScopeFiletransAdapter, type DashScopeFiletransTask } from './dashscopeAsrProvider'
 import type { AsrRequestRecord } from './asrTranscriptionStore'
+import type * as AsrTranscriptionStoreModule from './asrTranscriptionStore'
+import type * as CreditPricingStoreModule from './creditPricingStore'
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 
 const runtimeConfig = vi.hoisted(() => ({
@@ -19,10 +22,12 @@ const registryMocks = vi.hoisted(() => ({
   listProviderRegistryEntries: vi.fn(),
 }))
 
+const pricingMocks = vi.hoisted(() => ({
+  resolveCreditPricingRule: vi.fn(),
+}))
+
 const storeMocks = vi.hoisted(() => ({
   ASR_AUDIO_MAX_BYTES: 20 * 1024 * 1024,
-  calculateFiletransCredits: vi.fn(() => 2),
-  calculateFiletransProviderCost: vi.fn(() => 0.001),
   createAsrRequest: vi.fn(),
   deleteAsrHandoffObject: vi.fn(),
   getAsrRequest: vi.fn(),
@@ -48,7 +53,26 @@ vi.mock('#imports', () => ({
 }))
 vi.mock('./creditsStore', () => creditsMocks)
 vi.mock('./providerRegistryStore', () => registryMocks)
-vi.mock('./asrTranscriptionStore', () => storeMocks)
+// Only the stored price list needs a database; the pricing math stays real so the
+// settled credits are the shipped ASR price rather than a fixture.
+vi.mock('./creditPricingStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof CreditPricingStoreModule>()
+  return {
+    ...actual,
+    resolveCreditPricingRule: pricingMocks.resolveCreditPricingRule,
+    // Admission charges through the sellable lookup; "the row is disabled" is refused by
+    // the store itself, so here it resolves to the same stubbed rule.
+    resolveSellableCreditPricingRule: pricingMocks.resolveCreditPricingRule,
+  }
+})
+vi.mock('./asrTranscriptionStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof AsrTranscriptionStoreModule>()
+  return {
+    ...storeMocks,
+    calculateFiletransCredits: actual.calculateFiletransCredits,
+    calculateFiletransProviderCost: actual.calculateFiletransProviderCost,
+  }
+})
 
 const provider: ProviderRegistryRecord = {
   id: 'dashscope-provider',
@@ -101,6 +125,8 @@ function request(overrides: Partial<AsrRequestRecord> = {}): AsrRequestRecord {
     billedSeconds: null,
     providerCostCny: null,
     failureCode: null,
+    // Every admitted request carries the price it was quoted, so the fixture does too.
+    pricing: selectCreditPricingRule('audio.transcribe', DEFAULT_CREDIT_PRICING),
     createdAt: '2026-09-08T00:00:00.000Z',
     updatedAt: '2026-09-08T00:00:00.000Z',
     ...overrides,
@@ -120,6 +146,9 @@ function adapter(task: DashScopeFiletransTask | Error): DashScopeFiletransAdapte
 
 beforeEach(() => {
   vi.clearAllMocks()
+  pricingMocks.resolveCreditPricingRule.mockImplementation(async (_event, capability: string) =>
+    selectCreditPricingRule(capability, DEFAULT_CREDIT_PRICING),
+  )
   registryMocks.listProviderRegistryEntries.mockResolvedValue([provider])
   registryMocks.getProviderRegistryEntry.mockResolvedValue(provider)
   storeMocks.createAsrRequest.mockResolvedValue({
@@ -139,7 +168,14 @@ beforeEach(() => {
     status: 'failed',
     failureCode,
   }))
-  storeMocks.markAsrSettled.mockResolvedValue(request({ status: 'settled', chargedCredits: 2, billedSeconds: 1 }))
+  storeMocks.markAsrSettled.mockImplementation(
+    async (_event, requestId: string, chargedCredits: number, billedSeconds: number) => request({
+      id: requestId,
+      status: 'settled',
+      chargedCredits,
+      billedSeconds,
+    }),
+  )
   storeMocks.getAsrRequest.mockResolvedValue(request())
 })
 
@@ -274,5 +310,80 @@ describe('ASR pre-acceptance rollback', () => {
       status: 'released',
       failureCode: 'ASR_PROVIDER_REJECTED',
     }))
+  })
+})
+
+describe('ASR settlement accounting', () => {
+  it('settles the larger of transcript units and billed seconds and returns the unused hold', async () => {
+    const result = await pollAsrTranscription(
+      {} as never,
+      'user-1',
+      'asr-request-1',
+      { adapter: adapter({ status: 'succeeded', transcript: '一二三四五六七八九', billedSeconds: 1 }) },
+    )
+
+    // Nine transcript units beat the four credits a single billed second would charge;
+    // the ten-credit hold covered them, so exactly one credit goes back.
+    expect(storeMocks.markAsrSettled).toHaveBeenCalledWith({}, 'asr-request-1', 9, 1, expect.any(Number))
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledTimes(1)
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      {},
+      'user-1',
+      1,
+      'asr-reservation-release',
+      expect.objectContaining({ requestId: 'asr-request-1' }),
+      { idempotencyKey: 'asr-release:asr-request-1:9' },
+    )
+    expect(result).toMatchObject({ status: 'settled', creditsCharged: 9, billedSeconds: 1 })
+  })
+
+  it('fails a transcription whose transcript costs more than the hold instead of over-charging', async () => {
+    const result = await pollAsrTranscription(
+      {} as never,
+      'user-1',
+      'asr-request-1',
+      { adapter: adapter({ status: 'succeeded', transcript: '一二三四五六七八九十一二三四五六七八九十', billedSeconds: 0.1 }) },
+    )
+
+    expect(storeMocks.markAsrFailed).toHaveBeenCalledWith({}, 'asr-request-1', 'ASR_RESERVATION_EXCEEDED')
+    expect(storeMocks.markAsrSettled).not.toHaveBeenCalled()
+    expect(creditsMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ status: 'failed', failureCode: 'ASR_RESERVATION_EXCEEDED' })
+  })
+
+  it('settles at the price the request was admitted under, not a price changed mid-flight', async () => {
+    const admitted = selectCreditPricingRule('audio.transcribe', DEFAULT_CREDIT_PRICING)
+    // The operator raises the price while the provider is still transcribing. Re-pricing
+    // finished work would fail the request as ASR_RESERVATION_EXCEEDED; the hold is a
+    // quote, so the settlement has to read the price it was quoted.
+    pricingMocks.resolveCreditPricingRule.mockResolvedValue({ ...admitted, creditsPerUnit: 400 })
+    storeMocks.getAsrRequest.mockResolvedValue(request({ pricing: admitted }))
+
+    const result = await pollAsrTranscription(
+      {} as never,
+      'user-1',
+      'asr-request-1',
+      { adapter: adapter({ status: 'succeeded', transcript: '一二三四五六七八九', billedSeconds: 1 }) },
+    )
+
+    // Nine transcript units at the admitted price; one billed second at the new price
+    // would have cost 400 and overrun the hold.
+    expect(storeMocks.markAsrSettled).toHaveBeenCalledWith({}, 'asr-request-1', 9, 1, expect.any(Number))
+    expect(result).toMatchObject({ status: 'settled', creditsCharged: 9 })
+  })
+
+  it('falls back to the live price list only for a request admitted before the quote was stored', async () => {
+    // Legacy in-flight requests carry no snapshot; they settle at the current price
+    // rather than failing the transcription outright.
+    storeMocks.getAsrRequest.mockResolvedValue(request({ pricing: null }))
+
+    const result = await pollAsrTranscription(
+      {} as never,
+      'user-1',
+      'asr-request-1',
+      { adapter: adapter({ status: 'succeeded', transcript: '一二三四五六七八九', billedSeconds: 1 }) },
+    )
+
+    expect(result).toMatchObject({ status: 'settled', creditsCharged: 9 })
   })
 })
