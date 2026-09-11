@@ -1,0 +1,30 @@
+{
+  "id": "voice-capture-audio-frontend",
+  "name": "voice-capture-audio-frontend",
+  "title": "语音采集前端链路：抗混叠、自适应静音判定与 VAD 修正",
+  "description": "修复 native-audio 采集链路缺陷：48k→16k 无抗混叠低通导致高频折返进语音带；静音判定为硬编码全带 RMS 绝对阈值；DashScope 实时 ASR server_vad 阈值默认 0.0 等同关闭。",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-10",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "evidence": "AC1-AC9/AC11/AC12 由 Rust 自动化测量、release addon headless 加载与聚焦 Vitest 守住：抗混叠在 12 kHz 折返处 -46.9 dB、50 Hz 高通 -16.4 dB、自适应静音在 42~4 dB SNR 全检出，真机冒烟字节数校验 660 ms x 16000 Hz x 2 B + 44 B = 21164 通过，全部数字见 evidence.md（含负控制与改前/改后对照）。",
+    "blocker": "AC10 识别率 A/B 未做：需要真实 ASR 凭据跑两次付费请求和一段真实带噪人声录音，本次未调用任何 provider，因此 noiseSuppression 保持默认关闭仅由技术判断支撑。",
+    "nextAction": "补 AC10：同一段带噪人声在 denoise on/off 下各跑一次真实 ASR，把识别文本与字错率写进 evidence.md，再决定 noiseSuppression 的默认值。"
+  }
+}

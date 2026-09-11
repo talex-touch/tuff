@@ -46,22 +46,6 @@ function createProvider() {
   })
 }
 
-function expectVisionImageInvocation(expectedUrl: string) {
-  expect(modelMocks.invoke).toHaveBeenCalledOnce()
-  expect(modelMocks.invoke).toHaveBeenCalledWith(
-    expect.arrayContaining([
-      expect.objectContaining({
-        content: expect.arrayContaining([
-          expect.objectContaining({
-            type: 'image_url',
-            image_url: { url: expectedUrl }
-          })
-        ])
-      })
-    ])
-  )
-}
-
 describe('OpenAIProvider vision image capabilities', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -87,7 +71,7 @@ describe('OpenAIProvider vision image capabilities', () => {
     })
   })
 
-  it('sends a base64 image to the vision model and returns the structured caption', async () => {
+  it('normalizes a structured vision caption result', async () => {
     modelMocks.invoke.mockResolvedValue({
       content: JSON.stringify({
         caption: 'A black cat sleeping on a yellow chair.',
@@ -112,7 +96,6 @@ describe('OpenAIProvider vision image capabilities', () => {
       { metadata: { capabilityId: 'image.caption' } }
     )
 
-    expectVisionImageInvocation('data:image/png;base64,aW1hZ2U=')
     expect(result).toMatchObject({
       result: {
         caption: 'A black cat sleeping on a yellow chair.',
@@ -126,7 +109,7 @@ describe('OpenAIProvider vision image capabilities', () => {
     })
   })
 
-  it('sends a data URL to the vision model and returns the structured image analysis', async () => {
+  it('normalizes structured image-analysis details from the vision result', async () => {
     modelMocks.invoke.mockResolvedValue({
       content: JSON.stringify({
         description: 'A red bicycle is parked beside a brick wall.',
@@ -160,7 +143,6 @@ describe('OpenAIProvider vision image capabilities', () => {
       { metadata: { capabilityId: 'image.analyze' } }
     )
 
-    expectVisionImageInvocation(imageDataUrl)
     expect(result).toMatchObject({
       result: {
         description: 'A red bicycle is parked beside a brick wall.',

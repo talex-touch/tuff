@@ -254,6 +254,12 @@ vi.mock('./search-index-service', () => ({
   SearchIndexService: class {
     warmup = vi.fn(async () => {})
     preloadPinyin = vi.fn()
+    waitUntilReadable = vi.fn(async () => {})
+  }
+}))
+vi.mock('./workers/search-index-read-worker-client', () => ({
+  SearchIndexReadWorkerClient: class {
+    close = vi.fn(async () => undefined)
   }
 }))
 

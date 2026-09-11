@@ -1,35 +1,54 @@
+import type { VoicePolishStrength } from '../../common/storage/entity/app-settings'
+import type { ScreenshotManagedResource } from './screenshot-session'
 import type {
   CoreBoxImageTranslateRouteMetadata,
   IntelligenceErrorCode,
   NativeScreenshotDisplay,
   NativeScreenshotRegion,
 } from './types'
-import type { ScreenshotManagedResource } from './screenshot-session'
 import { defineEvent } from '../event/builder'
 
 export interface AssistantRuntimeConfig {
   enabled: boolean
   language: string
+  polishEnabled: boolean
+  /** Whether an enabled Intelligence `text.chat` runtime can perform optional cleanup. */
+  polishAvailable: boolean
+  polishStrength: VoicePolishStrength
 }
 
 export interface AssistantOpenVoicePanelPayload {
   source?: 'click' | 'wake-word'
 }
 
-export type AssistantVoiceCommandPayload =
+export type AssistantVoiceCommandPayload
+  = | {
+    action: 'start' | 'stop' | 'toggle'
+    mode: 'hold' | 'toggle'
+    source: 'command'
+  }
   | {
-      action: 'start' | 'stop' | 'toggle'
-      mode: 'hold' | 'toggle'
-      source: 'command'
-    }
-  | {
-      action: 'cancel'
-      state: 'start' | 'reset'
-      source: 'command'
-    }
+    action: 'cancel'
+    state: 'start' | 'reset'
+    source: 'command'
+  }
 
 export interface AssistantVoiceCancelHoldPayload {
   state: 'start' | 'reset' | 'commit'
+}
+
+/**
+ * Whether macOS still owns a lone Fn press.
+ *
+ * Nothing in the app can take it: the Globe action is fired by WindowServer below our event tap,
+ * so the only switch is the user's own "Press the Globe key to" preference. This reports what
+ * that preference currently says so the settings page can ask for it — it never changes it.
+ */
+export interface AssistantGlobeKeyStatus {
+  /** False off macOS, where a lone Fn press has no system action to compete with. */
+  applies: boolean
+  /** The system opens Emoji / switches input source on a lone Fn press. */
+  systemActionActive: boolean
 }
 
 export interface AssistantFloatingBallPositionPayload {
@@ -42,25 +61,25 @@ export interface AssistantVoiceSubmitPayload {
   source?: 'voice' | 'manual'
 }
 
-export type AssistantClipboardImageTranslateErrorCode =
-  | 'ASSISTANT_DISABLED'
-  | 'IMAGE_UNAVAILABLE'
-  | 'SCENE_UNAVAILABLE'
-  | IntelligenceErrorCode
+export type AssistantClipboardImageTranslateErrorCode
+  = | 'ASSISTANT_DISABLED'
+    | 'IMAGE_UNAVAILABLE'
+    | 'SCENE_UNAVAILABLE'
+    | IntelligenceErrorCode
 
-export type AssistantScreenshotTranslateErrorCode =
-  | AssistantClipboardImageTranslateErrorCode
-  | 'SCREENSHOT_PERMISSION_DENIED'
-  | 'SCREENSHOT_UNSUPPORTED'
-  | 'SCREENSHOT_UNAVAILABLE'
-  | 'OCR_UNAVAILABLE'
-  | 'TEXT_TRANSLATE_UNAVAILABLE'
+export type AssistantScreenshotTranslateErrorCode
+  = | AssistantClipboardImageTranslateErrorCode
+    | 'SCREENSHOT_PERMISSION_DENIED'
+    | 'SCREENSHOT_UNSUPPORTED'
+    | 'SCREENSHOT_UNAVAILABLE'
+    | 'OCR_UNAVAILABLE'
+    | 'TEXT_TRANSLATE_UNAVAILABLE'
 
-export type AssistantScreenshotCaptureErrorCode =
-  | 'ASSISTANT_DISABLED'
-  | 'SCREENSHOT_PERMISSION_DENIED'
-  | 'SCREENSHOT_UNSUPPORTED'
-  | 'SCREENSHOT_UNAVAILABLE'
+export type AssistantScreenshotCaptureErrorCode
+  = | 'ASSISTANT_DISABLED'
+    | 'SCREENSHOT_PERMISSION_DENIED'
+    | 'SCREENSHOT_UNSUPPORTED'
+    | 'SCREENSHOT_UNAVAILABLE'
 
 export type AssistantScreenshotSaveErrorCode = AssistantScreenshotCaptureErrorCode | 'SAVE_FAILED'
 
@@ -91,16 +110,16 @@ export interface AssistantScreenshotTargetPayload {
   resource?: ScreenshotManagedResource
 }
 
-export type AssistantScreenshotTranslatePayload = AssistantClipboardImageTranslatePayload &
-  AssistantScreenshotTargetPayload
+export type AssistantScreenshotTranslatePayload = AssistantClipboardImageTranslatePayload
+  & AssistantScreenshotTargetPayload
 
 export type AssistantScreenshotCapturePayload = AssistantScreenshotTargetPayload
 export type AssistantScreenshotSavePayload = AssistantScreenshotTargetPayload
 
-export type AssistantScreenshotRegionSelectionErrorCode =
-  | 'ASSISTANT_DISABLED'
-  | 'SCREENSHOT_UNSUPPORTED'
-  | 'REGION_SELECTION_UNAVAILABLE'
+export type AssistantScreenshotRegionSelectionErrorCode
+  = | 'ASSISTANT_DISABLED'
+    | 'SCREENSHOT_UNSUPPORTED'
+    | 'REGION_SELECTION_UNAVAILABLE'
 
 export interface AssistantScreenshotRegionSelectionPayload {
   target?: 'cursor-display' | 'display'
@@ -209,6 +228,18 @@ export const AssistantEvents = {
     openIntelligenceSettings: defineEvent('assistant')
       .module('voice-panel')
       .event('open-intelligence-settings')
+      .define<void, boolean>(),
+    getGlobeKeyStatus: defineEvent('assistant')
+      .module('voice-panel')
+      .event('get-globe-key-status')
+      .define<void, AssistantGlobeKeyStatus>(),
+    disableGlobeKeyAction: defineEvent('assistant')
+      .module('voice-panel')
+      .event('disable-globe-key-action')
+      .define<void, AssistantGlobeKeyStatus>(),
+    openKeyboardSettings: defineEvent('assistant')
+      .module('voice-panel')
+      .event('open-keyboard-settings')
       .define<void, boolean>(),
     submitText: defineEvent('assistant')
       .module('voice-panel')

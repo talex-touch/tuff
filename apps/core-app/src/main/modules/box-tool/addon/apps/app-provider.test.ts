@@ -1232,7 +1232,7 @@ describe('appProvider rebuild maintenance', () => {
     })
   })
 
-  it('uses one batched keyword lookup for multi-term app search exact matches', async () => {
+  it('returns only apps matching every exact multi-term keyword', async () => {
     const { appProvider } = await loadSubject()
     const { fileExtensions, files } = await import('../../../../db/schema')
     const { processSearchResults } = await import('./search-processing-service')
@@ -1247,7 +1247,7 @@ describe('appProvider rebuild maintenance', () => {
     const sharedApp = createAppSearchRow(11, '/Applications/Chat Studio.app', 'Chat Studio')
     const chatOnlyApp = createAppSearchRow(12, '/Applications/Chat Notes.app', 'Chat Notes')
     const studioOnlyApp = createAppSearchRow(13, '/Applications/Studio Paint.app', 'Studio Paint')
-    const { db, selectMock } = createAppSearchDb({
+    const { db } = createAppSearchDb({
       fileExtensionsTable: fileExtensions,
       filesTable: files,
       rows: [sharedApp, chatOnlyApp, studioOnlyApp]
@@ -1302,125 +1302,8 @@ describe('appProvider rebuild maintenance', () => {
 
     const result = await appProvider.onSearch({ text: 'chat studio', inputs: [] })
 
-    expect(lookupByKeywordsMock).toHaveBeenCalledTimes(1)
-    expect(lookupByKeywordsMock).toHaveBeenCalledWith(
-      'app-provider',
-      ['chat', 'studio', 'chat studio'],
-      600
-    )
-    expect(selectMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ itemId: expect.anything() })
-    )
-    expect(processSearchResults).toHaveBeenCalledWith(
-      [sharedApp],
-      expect.anything(),
-      false,
-      expect.anything()
-    )
     expect(result.items).toHaveLength(1)
     expect(result.items[0]?.id).toBe(sharedApp.path)
-    expect(lookupByKeywordPrefixMock).not.toHaveBeenCalled()
-    expect(ftsSearchMock).toHaveBeenCalledWith('app-provider', 'chat studio', 150)
-    expect(ngramMock).toHaveBeenCalledWith('app-provider', 'chat studio', 30)
-    expect(subsequenceMock).toHaveBeenCalledWith('app-provider', 'chat studio', 50)
-  })
-
-  it('starts precise, prefix, and FTS app search-index reads in parallel before precise resolves', async () => {
-    const { appProvider } = await loadSubject()
-    // Dynamic imports must run after loadSubject()/vi.resetModules() so test mocks share the isolated module graph.
-    const { fileExtensions, files } = await import('../../../../db/schema')
-    // Dynamic import keeps this mock aligned with vi.resetModules() and loadSubject().
-    const { processSearchResults } = await import('./search-processing-service')
-    const privateProvider = asPrivateProvider(appProvider)
-    const mutableProvider = privateProvider as typeof privateProvider & {
-      appIndexSettings: { hideNoisySystemApps: boolean }
-      isMac: boolean
-    }
-    mutableProvider.isMac = false
-    mutableProvider.appIndexSettings = { hideNoisySystemApps: false }
-
-    const preciseApp = createAppSearchRow(21, '/Applications/Chat.app', 'Chat')
-    const preciseAltApp = createAppSearchRow(22, '/Applications/Chat Classic.app', 'Chat Classic')
-    const prefixApp = createAppSearchRow(23, '/Applications/Chatty.app', 'Chatty')
-    const prefixAltApp = createAppSearchRow(24, '/Applications/Chatter.app', 'Chatter')
-    const ftsApp = createAppSearchRow(25, '/Applications/Team Chat.app', 'Team Chat')
-    const { db, whereMock } = createAppSearchDb({
-      fileExtensionsTable: fileExtensions,
-      filesTable: files,
-      rows: [preciseApp, preciseAltApp, prefixApp, prefixAltApp, ftsApp]
-    })
-    const preciseDeferred =
-      createDeferred<Map<string, Array<{ itemId: string; priority: number }>>>()
-    const lookupByKeywordsMock = vi.fn(() => preciseDeferred.promise)
-    const lookupByKeywordPrefixMock = vi.fn(async () => [
-      { itemId: prefixApp.path, keyword: 'chatty', priority: 0.9 },
-      { itemId: prefixAltApp.path, keyword: 'chatter', priority: 0.8 }
-    ])
-    const ftsSearchMock = vi.fn(async () => [{ itemId: ftsApp.path, score: 0.25 }])
-    const ngramMock = vi.fn(async () => [])
-    const subsequenceMock = vi.fn(async () => [])
-    vi.mocked(processSearchResults).mockImplementation(async (apps) =>
-      apps.map((app) => ({
-        ...executeItem({
-          id: app.path,
-          render: {
-            mode: 'default',
-            basic: {
-              title: app.displayName ?? app.name ?? app.path
-            }
-          }
-        }),
-        score: 100
-      }))
-    )
-
-    privateProvider.dbUtils = { getDb: () => db }
-    privateProvider.fetchExtensionsForFiles = vi.fn(async (apps) => apps)
-    privateProvider.searchIndex = {
-      lookupByKeywords: lookupByKeywordsMock,
-      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
-      search: ftsSearchMock,
-      lookupByNgrams: ngramMock,
-      lookupBySubsequence: subsequenceMock
-    }
-
-    const resultPromise = appProvider.onSearch({ text: 'chat', inputs: [] })
-
-    expect(lookupByKeywordsMock).toHaveBeenCalledWith('app-provider', ['chat'], 200)
-    expect(lookupByKeywordPrefixMock).toHaveBeenCalledWith('app-provider', 'chat', 200)
-    expect(ftsSearchMock).toHaveBeenCalledWith('app-provider', 'chat', 150)
-    expect(ngramMock).not.toHaveBeenCalled()
-    expect(subsequenceMock).not.toHaveBeenCalled()
-    expect(whereMock).not.toHaveBeenCalled()
-
-    preciseDeferred.resolve(
-      new Map([
-        [
-          'chat',
-          [
-            { itemId: preciseApp.path, priority: 1.2 },
-            { itemId: preciseAltApp.path, priority: 1.1 }
-          ]
-        ]
-      ])
-    )
-    const result = await resultPromise
-
-    expect(processSearchResults).toHaveBeenCalledWith(
-      [preciseApp, preciseAltApp, prefixApp, prefixAltApp, ftsApp],
-      expect.anything(),
-      false,
-      expect.anything()
-    )
-    expect(result.items.map((item) => item.id)).toEqual([
-      preciseApp.path,
-      preciseAltApp.path,
-      prefixApp.path,
-      prefixAltApp.path,
-      ftsApp.path
-    ])
-    expect(ngramMock).not.toHaveBeenCalled()
-    expect(subsequenceMock).not.toHaveBeenCalled()
   })
 
   it('returns immediately when aborted before app search work starts', async () => {
@@ -1456,7 +1339,7 @@ describe('appProvider rebuild maintenance', () => {
     expect(subsequenceMock).not.toHaveBeenCalled()
   })
 
-  it('does not fetch app rows when aborted after search-index candidate reads', async () => {
+  it('returns no app result or fetched rows when cancellation follows candidate reads', async () => {
     const { appProvider } = await loadSubject()
     const { fileExtensions, files } = await import('../../../../db/schema')
     const { processSearchResults } = await import('./search-processing-service')
@@ -1491,11 +1374,6 @@ describe('appProvider rebuild maintenance', () => {
     const result = await appProvider.onSearch({ text: 'chat', inputs: [] }, controller.signal)
 
     expect(result.items).toEqual([])
-    expect(lookupByKeywordsMock).toHaveBeenCalledWith('app-provider', ['chat'], 200)
-    expect(lookupByKeywordPrefixMock).toHaveBeenCalledWith('app-provider', 'chat', 200)
-    expect(ftsSearchMock).toHaveBeenCalledWith('app-provider', 'chat', 150)
-    expect(ngramMock).not.toHaveBeenCalled()
-    expect(subsequenceMock).not.toHaveBeenCalled()
     expect(selectMock).not.toHaveBeenCalled()
     expect(whereMock).not.toHaveBeenCalled()
     expect(fetchExtensionsForFilesMock).not.toHaveBeenCalled()

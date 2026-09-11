@@ -58,6 +58,21 @@ describe('settings category table', () => {
     expect(system).toEqual(['update', 'network', 'download', 'storage-usage', 'about'])
   })
 
+  it('opens the two advanced pages only in Developer Mode', () => {
+    const normalKeys = groupedSettingNavigation(false).flatMap((group) =>
+      group.items.map((item) => item.key)
+    )
+    const developerKeys = groupedSettingNavigation(true).flatMap((group) =>
+      group.items.map((item) => item.key)
+    )
+
+    expect(normalKeys).not.toContain('download')
+    expect(normalKeys).not.toContain('storage-usage')
+    expect(developerKeys).toEqual(expect.arrayContaining(['download', 'storage-usage']))
+    // The gate only ever adds: every destination a user has today survives Developer Mode.
+    expect(developerKeys).toEqual(expect.arrayContaining(normalKeys))
+  })
+
   it('has a page file for every category', () => {
     for (const category of SETTING_CATEGORIES) {
       const stem = pageStem(category.key)

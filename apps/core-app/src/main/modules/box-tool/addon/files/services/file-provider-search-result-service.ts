@@ -166,15 +166,23 @@ export class FileProviderSearchResultService {
     const prefixStart = this.now()
     const ftsStart = this.now()
     const [preciseResultMap, prefixResults, ftsMatches] = await Promise.all([
-      searchIndex.lookupByKeywords(this.deps.providerId, preciseLookupTerms, preciseSearchLimit),
+      searchIndex.lookupByKeywords(
+        this.deps.providerId,
+        preciseLookupTerms,
+        preciseSearchLimit,
+        signal
+      ),
       shouldLookupPrefix
         ? searchIndex.lookupByKeywordPrefix(
             this.deps.providerId,
             cleanedQuery || normalizedQuery,
-            200
+            200,
+            signal
           )
         : Promise.resolve([]),
-      ftsQuery ? searchIndex.search(this.deps.providerId, ftsQuery, 150) : Promise.resolve([])
+      ftsQuery
+        ? searchIndex.search(this.deps.providerId, ftsQuery, 150, signal)
+        : Promise.resolve([])
     ])
     if (signal.aborted) return this.empty(query)
 
