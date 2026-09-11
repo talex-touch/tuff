@@ -11,6 +11,8 @@ import {
   computeCreditReservation,
   DEFAULT_CREDIT_PRICING,
   listCreditPricing,
+  resolveCreditPricingEntry,
+  resolveSellableCreditPricingRule,
   selectCreditPricingRule,
 } from './creditPricingStore'
 
@@ -259,5 +261,44 @@ describe('listCreditPricing reconciliation', () => {
     expect(db.pricingUpdates).toBe(1)
     expect(computeCreditCharge(second.find(rule => rule.capability === 'vision.ocr')!, { images: 1 }))
       .toBe(computeCreditCharge(first.find(rule => rule.capability === 'vision.ocr')!, { images: 1 }))
+  })
+})
+
+describe('sellable pricing', () => {
+  const EDITED_STAMP = '2026-09-10T08:15:00.000Z'
+  const OCR_DEFAULT = DEFAULT_CREDIT_PRICING.find(item => item.capability === 'vision.ocr')!
+
+  it('tells a disabled row apart from a capability that was never priced', () => {
+    const disabled = resolveCreditPricingEntry('vision.ocr', [pricingRule({ capability: 'vision.ocr', active: false })])
+    const priced = resolveCreditPricingEntry('vision.ocr', [pricingRule({ capability: 'vision.ocr' })])
+    const unregistered = resolveCreditPricingEntry('vision.ocr', [])
+
+    // An operator switching a capability off is a decision; no row at all is a gap. The
+    // two must not collapse into the same answer, or refusing one refuses the other.
+    expect(disabled).toMatchObject({ disabled: true })
+    expect(priced).toMatchObject({ disabled: false })
+    expect(unregistered).toMatchObject({ disabled: false })
+  })
+
+  it('refuses a disabled capability instead of selling it at the token fallback', async () => {
+    const db = new MockCreditPricingD1Database()
+    db.rows.set('vision.ocr', storedRow(OCR_DEFAULT, { active: 0, updated_at: EDITED_STAMP }))
+
+    // The fallback prices tokens, and an image request reports none — settling a disabled
+    // capability through it would hand the generation over for 0 credits.
+    await expect(resolveSellableCreditPricingRule(makeCreditPricingEvent(db), 'vision.ocr'))
+      .rejects.toMatchObject({
+        statusCode: 503,
+        data: { code: 'CAPABILITY_DISABLED', capability: 'vision.ocr' },
+      })
+  })
+
+  it('serves a capability with no price row on the token fallback', async () => {
+    const db = new MockCreditPricingD1Database()
+
+    const rule = await resolveSellableCreditPricingRule(makeCreditPricingEvent(db), 'test.unregistered')
+
+    expect(rule.unit).toBe('1k_tokens')
+    expect(rule.active).toBe(true)
   })
 })

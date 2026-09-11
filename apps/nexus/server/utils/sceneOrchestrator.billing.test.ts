@@ -57,7 +57,13 @@ vi.mock('./creditsStore', () => creditsMocks)
 // reserved and settled credits are the shipped price rather than a fixture.
 vi.mock('./creditPricingStore', async (importOriginal) => {
   const actual = await importOriginal<typeof CreditPricingStoreModule>()
-  return { ...actual, resolveCreditPricingRule: pricingMocks.resolveCreditPricingRule }
+  return {
+    ...actual,
+    resolveCreditPricingRule: pricingMocks.resolveCreditPricingRule,
+    // The scene path charges through the sellable lookup; its "the row is disabled"
+    // refusal is a separate case, so it resolves to the same stubbed rule here.
+    resolveSellableCreditPricingRule: pricingMocks.resolveCreditPricingRule,
+  }
 })
 
 const SCENE_ID = 'corebox.selection.translate'
@@ -767,5 +773,24 @@ describe('runSceneOrchestrator credit metering', () => {
         settleFailed: false,
       })
     })
+  })
+
+  it('拒绝被停用的能力，不占用额度也不调用 provider', async () => {
+    const adapter = vi.fn(async () => ({ output: { translatedText: 'translated' } }))
+    registerSceneCapabilityAdapter('tencent-cloud:text.translate', adapter)
+    // 运营把能力停用后，价格行仍然存在但它已不再售卖：必须在任何上游花费之前停下，
+    // 而不是回落到 token 兜底价把这次生成免费送出去。
+    pricingMocks.resolveCreditPricingRule.mockRejectedValueOnce(Object.assign(
+      new Error('CAPABILITY_DISABLED'),
+      { statusCode: 503, statusMessage: 'CAPABILITY_DISABLED', data: { code: 'CAPABILITY_DISABLED' } },
+    ))
+
+    await expect(runSceneOrchestrator(makeEvent(), SCENE_ID, {
+      input: { text: 'hello' },
+      ownerId: OWNER_ID,
+    })).rejects.toMatchObject({ statusCode: 503 })
+
+    expect(creditsMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(adapter).not.toHaveBeenCalled()
   })
 })

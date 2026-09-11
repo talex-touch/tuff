@@ -17,7 +17,7 @@ import { consumeCredits, releaseConsumedCredits } from "./creditsStore";
 import {
   computeCreditCharge,
   computeCreditReservation,
-  resolveCreditPricingRule,
+  resolveSellableCreditPricingRule,
   type CreditPricingRule,
   type CreditPricingUnit,
   type CreditPricingUsage,
@@ -131,6 +131,8 @@ interface InvokeModelOptions {
   sessionId?: string;
   modelPreference?: string[];
   allowedProviderIds?: string[];
+  /** Output cap handed to the provider, when the caller declared one. */
+  maxTokens?: number;
 }
 
 interface NexusInvokeOptions extends InvokeModelOptions {
@@ -316,10 +318,15 @@ const CREDITS_EXCEEDED_MESSAGES = new Set([
  * happened, and an account with a spent balance would be unable to call at all. The
  * hold only has to stop a caller who cannot pay at all from reaching the provider; a
  * reply longer than the hold settles the difference afterwards (see
- * `settleIntelligenceInvokeCredits`). Callers that declare their own output cap
- * (maxTokens/maxOutputTokens/max_tokens) get a hold sized to that cap instead.
+ * `settleIntelligenceInvokeCredits`). A caller that declares its own output cap
+ * (maxTokens/maxOutputTokens/max_tokens) has that cap handed to the provider and held on
+ * top of the prompt's own tokens (see `estimateInvokeUsage`).
  */
 const INVOKE_RESERVE_TOKEN_ESTIMATE = 512;
+/** Vision tokens a tiled 1024×1024 image costs, used to bound a prompted image. */
+const VISION_IMAGE_TOKEN_ESTIMATE = 765;
+/** Characters whose tokenizers emit about one token each. */
+const CJK_CHARACTER = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 /**
  * Reserved quantity per priced unit for capabilities that do not sell tokens. Only
  * images (`vision.ocr`) are reachable today; the remaining units exist so an unexpected
@@ -920,6 +927,7 @@ async function invokeModel(
         const result = await invokeWithResolvedContext(
           context,
           payload.messages,
+          payload.maxTokens,
         );
         if (settings.enableAudit) {
           await createAudit(event, {
@@ -1086,6 +1094,7 @@ async function invokeModelStream(
         const result = await streamWithResolvedContext(
           context,
           payload.messages,
+          payload.maxTokens,
           {
             ...hooks,
             onDelta: async (delta, meta) => {
@@ -1279,13 +1288,14 @@ export async function probeIntelligenceLabProvider(
 async function invokeWithResolvedContext(
   context: ResolvedProviderContext,
   messages: IntelligenceMessage[],
+  maxTokens?: number,
 ): Promise<InvokeModelResult> {
   try {
     const adapter = resolveIntelligenceProviderAdapter(context.provider.type);
     if (!adapter) {
       throw new Error(`Unsupported provider type: ${context.provider.type}`);
     }
-    return await adapter({ context, messages });
+    return await adapter({ context, messages, maxTokens });
   } catch (error) {
     const normalized =
       error instanceof Error ? error : new Error(String(error));
@@ -1305,6 +1315,7 @@ async function invokeWithResolvedContext(
 async function streamWithResolvedContext(
   context: ResolvedProviderContext,
   messages: IntelligenceMessage[],
+  maxTokens: number | undefined,
   hooks: NexusIntelligenceStreamHooks & { capabilityId: string },
 ): Promise<InvokeModelResult> {
   try {
@@ -1322,6 +1333,7 @@ async function streamWithResolvedContext(
     for await (const chunk of adapter({
       context,
       messages,
+      maxTokens,
       signal: hooks.signal,
     })) {
       finalChunk = chunk;
@@ -1614,6 +1626,10 @@ async function recordIntelligenceInvokeUsageLedger(
         providerType: invocation.metadata.providerType ?? null,
         providerUsageRef: invocation.traceId,
         source: audit.source,
+        // A hold that could not collect the provider's full bill is an accounting
+        // integrity signal, so it is recorded with the usage it belongs to.
+        settleFailed: invocation.metadata.billing?.settleFailed === true,
+        unsettledCredits: invocation.metadata.billing?.unsettledCredits ?? 0,
       },
     });
   } catch (error) {
@@ -1629,21 +1645,62 @@ function isCreditsExceededError(error: unknown): error is Error {
   return error instanceof Error && CREDITS_EXCEEDED_MESSAGES.has(error.message);
 }
 
-/** Upper bound of a call's billed quantity, in the unit its pricing rule sells. */
+/** Output cap the caller asked for, if it asked for one. */
+function readDeclaredOutputTokens(
+  options: NexusInvokeOptions,
+): number | undefined {
+  const declared =
+    readOptionalNumber(options.metadata?.maxTokens) ??
+    readOptionalNumber(options.metadata?.maxOutputTokens) ??
+    readOptionalNumber(options.metadata?.max_tokens);
+  return declared !== undefined && declared > 0 ? declared : undefined;
+}
+
+/**
+ * Tokens the provider will bill for the prompt, as a cheap upper bound. CJK is about
+ * one token per character and Latin text about one per four, so counting CJK per
+ * character and everything else per four keeps the hold from under-covering the part of
+ * the bill that is already fixed before the model answers. An attached image is billed
+ * as vision tokens (a 1024×1024 image tiles to ~765), so each one is counted too. The
+ * provider's own usage number is what settles the call.
+ */
+function estimatePromptTokens(messages: IntelligenceMessage[]): number {
+  let tokens = 0;
+  for (const message of messages) {
+    let latin = 0;
+    for (const character of message.content) {
+      if (CJK_CHARACTER.test(character)) {
+        tokens += 1 + Math.ceil(latin / 4);
+        latin = 0;
+        continue;
+      }
+      latin += 1;
+    }
+    tokens += Math.ceil(latin / 4);
+    tokens += (message.attachments?.length ?? 0) * VISION_IMAGE_TOKEN_ESTIMATE;
+  }
+  return tokens;
+}
+
+/**
+ * Upper bound of a call's billed quantity, in the unit its pricing rule sells.
+ *
+ * A token-priced call is billed for the prompt *and* the reply, so the hold covers both:
+ * the prompt this service is about to send (estimated above) plus the output cap. Only a
+ * cap that is actually handed to the provider bounds the reply — an unenforced number
+ * taken from caller metadata would let a caller hold almost nothing (`maxTokens: 1`) and
+ * then owe the real bill, so an undeclared cap falls back to the server's own bound.
+ */
 function estimateInvokeUsage(
   rule: CreditPricingRule,
   options: NexusInvokeOptions,
+  messages: IntelligenceMessage[],
 ): CreditPricingUsage {
   if (rule.unit === "1k_tokens") {
-    const declared =
-      readOptionalNumber(options.metadata?.maxTokens) ??
-      readOptionalNumber(options.metadata?.maxOutputTokens) ??
-      readOptionalNumber(options.metadata?.max_tokens);
+    const outputTokens =
+      readDeclaredOutputTokens(options) ?? INVOKE_RESERVE_UNIT_ESTIMATE["1k_tokens"];
     return {
-      tokens:
-        declared !== undefined && declared > 0
-          ? declared
-          : INVOKE_RESERVE_UNIT_ESTIMATE["1k_tokens"],
+      tokens: estimatePromptTokens(messages) + outputTokens,
     };
   }
   if (rule.unit === "image")
@@ -1707,9 +1764,10 @@ async function reserveIntelligenceInvokeCredits(
   capabilityId: string,
   audit: NexusInvokeAuditContext,
   options: NexusInvokeOptions,
+  messages: IntelligenceMessage[],
 ): Promise<IntelligenceInvokeReservation> {
-  const rule = await resolveCreditPricingRule(event, capabilityId);
-  const estimate = estimateInvokeUsage(rule, options);
+  const rule = await resolveSellableCreditPricingRule(event, capabilityId);
+  const estimate = estimateInvokeUsage(rule, options, messages);
   const reservedCredits = computeCreditReservation(rule, estimate);
   const reserveId = createId("reserve");
 
@@ -1836,6 +1894,7 @@ async function withInvokeReservation<T>(
   capabilityId: string,
   audit: NexusInvokeAuditContext,
   options: NexusInvokeOptions,
+  messages: IntelligenceMessage[],
   dispatch: (reservation: IntelligenceInvokeReservation) => Promise<T>,
 ): Promise<T> {
   const reservation = await reserveIntelligenceInvokeCredits(
@@ -1844,6 +1903,7 @@ async function withInvokeReservation<T>(
     capabilityId,
     audit,
     options,
+    messages,
   );
   try {
     return await dispatch(reservation);
@@ -1952,7 +2012,15 @@ async function settleIntelligenceInvokeCredits(
           error,
         },
       );
-      return { ...billing, ledgerId: reservation.ledgerId };
+      return {
+        ...billing,
+        ledgerId: reservation.ledgerId,
+        // The provider billed more than the hold and the difference is still owed. The
+        // result the user already has is not revoked, but the shortfall is reported on
+        // the response (and on the usage ledger) instead of vanishing into this log.
+        settleFailed: true,
+        unsettledCredits: charge - reservation.reservedCredits,
+      };
     }
   }
 
@@ -2059,6 +2127,14 @@ export interface NexusIntelligenceInvokeResult {
       /** Identifies the hold so its reserve/settle/release ledger rows can be traced. */
       reserveId: string;
       billable: boolean;
+      /**
+       * The provider billed more than the hold and the difference could not be debited.
+       * The amount stays owed: the response is the user's, but the shortfall must not
+       * disappear into a log line.
+       */
+      settleFailed?: boolean;
+      /** Credits billed beyond the hold that the settlement could not collect. */
+      unsettledCredits?: number;
       reason: "intelligence-invoke";
     };
     providerUsageLedgerIds?: string[];
@@ -2136,6 +2212,9 @@ export async function invokeIntelligenceCapability(
       capabilityId,
       audit,
       options,
+      // The OCR capability is sold per image, so the prompt's tokens are not the basis
+      // the hold is computed on.
+      [],
       async (reservation) => ({
         reservation,
         ocr: await invokeIntelligenceVisionOcr(
@@ -2206,6 +2285,7 @@ export async function invokeIntelligenceCapability(
     capabilityId,
     audit,
     options,
+    messages,
     async (reservation) => ({
       reservation,
       invocation: await invokeModel(event, userId, {
@@ -2213,6 +2293,7 @@ export async function invokeIntelligenceCapability(
         providerId,
         model,
         timeoutMs,
+        maxTokens: readDeclaredOutputTokens(options),
         modelPreference: options.modelPreference,
         allowedProviderIds: options.allowedProviderIds,
         messages,
@@ -2293,12 +2374,17 @@ export async function streamIntelligenceCapability(
     options.providerId || options.preferredProviderId || undefined;
   const timeoutMs =
     options.timeoutMs || readOptionalNumber(options.metadata?.timeout);
+  const messages = buildCapabilityMessages(
+    capabilityId,
+    normalizedRequest.payload,
+  );
   const { reservation, invocation } = await withInvokeReservation(
     event,
     userId,
     capabilityId,
     audit,
     options,
+    messages,
     async (reservation) => ({
       reservation,
       invocation: await invokeModelStream(
@@ -2309,12 +2395,10 @@ export async function streamIntelligenceCapability(
           providerId,
           model: options.model,
           timeoutMs,
+          maxTokens: readDeclaredOutputTokens(options),
           modelPreference: options.modelPreference,
           allowedProviderIds: options.allowedProviderIds,
-          messages: buildCapabilityMessages(
-            capabilityId,
-            normalizedRequest.payload,
-          ),
+          messages,
           source: audit.source,
           stage: `capability:${capabilityId}`,
           sessionId: audit.sessionId,

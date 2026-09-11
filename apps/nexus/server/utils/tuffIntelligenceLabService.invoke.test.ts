@@ -58,6 +58,9 @@ vi.mock('./creditPricingStore', async () => {
   return {
     ...actual,
     resolveCreditPricingRule: pricingMocks.resolveCreditPricingRule,
+    // Reservation charges through the sellable lookup, which resolves the same stubbed
+    // rule; a disabled capability is refused by the store itself, not here.
+    resolveSellableCreditPricingRule: pricingMocks.resolveCreditPricingRule,
   }
 })
 
@@ -137,6 +140,18 @@ const IMAGE_PRICED_RULE: CreditPricingRule = {
   upstreamCostUsdPerUnit: null,
   active: true,
   updatedAt: '2026-01-01T00:00:00.000Z',
+}
+
+/**
+ * Credits the service asked the credit store to hold before dispatch. The amount is
+ * sized from the prompt plus the reply bound, so its exact value belongs to the
+ * estimator: these tests assert what a hold must satisfy — taken before dispatch,
+ * covering the reply, settled to the provider's report — rather than pinning it.
+ */
+function requestedHold(): number {
+  const call = creditStoreMocks.consumeCredits.mock.calls[0]
+  if (!call) throw new Error('no credit hold was requested')
+  return Number(call[2])
 }
 
 describe('invokeIntelligenceCapability', () => {
@@ -240,16 +255,19 @@ describe('invokeIntelligenceCapability', () => {
     // The hold is taken before the provider is called: provider cost must not be spent
     // before the account is known to afford the call.
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledTimes(1)
+    const hold = requestedHold()
+    // The reply bound alone is 512 credits; the prompt's own tokens are held on top.
+    expect(hold).toBeGreaterThanOrEqual(512)
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      512,
+      hold,
       'intelligence-invoke-reserve',
       expect.objectContaining({
         capabilityId: 'text.translate',
         unit: '1k_tokens',
-        reservedCredits: 512,
-        estimatedUsage: { tokens: 512 },
+        reservedCredits: hold,
+        estimatedUsage: { tokens: hold },
         source: 'core-app',
         caller: 'workflow.use-model',
         sessionId: 'session_1',
@@ -259,19 +277,19 @@ describe('invokeIntelligenceCapability', () => {
     expect(creditStoreMocks.consumeCredits.mock.invocationCallOrder[0])
       .toBeLessThan(langchainMocks.invoke.mock.invocationCallOrder[0]!)
 
-    // The provider reported 7 tokens against a 512-credit hold, so 7 is the charge and
-    // the 505 the hold over-covered goes back.
+    // The provider reported 7 tokens against the hold, so 7 is the charge and the rest
+    // of the hold goes back.
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledTimes(1)
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      505,
+      hold - 7,
       'intelligence-invoke-release',
       expect.objectContaining({
         traceId: result.traceId,
         capabilityId: 'text.translate',
-        reservedCredits: 512,
-        releasedCredits: 505,
+        reservedCredits: hold,
+        releasedCredits: hold - 7,
         chargedCredits: 7,
       }),
       { idempotencyKey: `intelligence-invoke-release:${result.traceId}` },
@@ -326,11 +344,11 @@ describe('invokeIntelligenceCapability', () => {
         workflowRunId: 'run_1',
         workflowStepId: 'step_1',
         billing: {
-          ledgerId: 'ledger_intelligence-invoke-reserve_512',
+          ledgerId: `ledger_intelligence-invoke-reserve_${hold}`,
           chargedCredits: 7,
           unit: '1k_tokens',
           quantity: 7,
-          reservedCredits: 512,
+          reservedCredits: hold,
           reserveId: expect.any(String),
           billable: true,
           reason: 'intelligence-invoke',
@@ -415,15 +433,16 @@ describe('invokeIntelligenceCapability', () => {
     })
 
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledTimes(1)
+    const hold = requestedHold()
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      512,
+      hold,
       'intelligence-invoke-release',
       expect.objectContaining({
         traceId: result.traceId,
-        reservedCredits: 512,
-        releasedCredits: 512,
+        reservedCredits: hold,
+        releasedCredits: hold,
         traceOutcome: 'unmetered',
       }),
       { idempotencyKey: `intelligence-invoke-release:${result.traceId}` },
@@ -432,7 +451,7 @@ describe('invokeIntelligenceCapability', () => {
       chargedCredits: 0,
       unit: '1k_tokens',
       quantity: 0,
-      reservedCredits: 512,
+      reservedCredits: hold,
       billable: false,
       reason: 'intelligence-invoke',
     })
@@ -460,15 +479,16 @@ describe('invokeIntelligenceCapability', () => {
     })).rejects.toThrow('provider failed')
 
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledTimes(1)
+    const hold = requestedHold()
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      512,
+      hold,
       'intelligence-invoke-release',
       expect.objectContaining({
         reserveId: expect.stringMatching(/^reserve_/),
-        reservedCredits: 512,
-        releasedCredits: 512,
+        reservedCredits: hold,
+        releasedCredits: hold,
         traceOutcome: 'dispatch-failed',
       }),
       { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },
@@ -486,8 +506,8 @@ describe('invokeIntelligenceCapability', () => {
       content: 'long answer',
       usage_metadata: {
         input_tokens: 100,
-        output_tokens: 600,
-        total_tokens: 700,
+        output_tokens: 5000,
+        total_tokens: 5100,
       },
     })
 
@@ -498,11 +518,14 @@ describe('invokeIntelligenceCapability', () => {
       },
     })
 
+    const hold = requestedHold()
+    expect(hold).toBeGreaterThan(0)
+    expect(hold).toBeLessThan(5100)
     expect(creditStoreMocks.consumeCredits).toHaveBeenNthCalledWith(
       1,
       expect.anything(),
       'user_1',
-      512,
+      hold,
       'intelligence-invoke-reserve',
       expect.anything(),
       { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
@@ -511,28 +534,28 @@ describe('invokeIntelligenceCapability', () => {
       2,
       expect.anything(),
       'user_1',
-      188,
+      5100 - hold,
       'intelligence-invoke-settle',
       expect.objectContaining({
         capabilityId: 'text.chat',
         traceId: result.traceId,
-        tokens: 700,
+        tokens: 5100,
         promptTokens: 100,
-        completionTokens: 600,
+        completionTokens: 5000,
       }),
       { idempotencyKey: `intelligence-invoke-settle:${result.traceId}` },
     )
     expect(creditStoreMocks.releaseConsumedCredits).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       result: 'long answer',
-      usage: { promptTokens: 100, completionTokens: 600, totalTokens: 700 },
+      usage: { promptTokens: 100, completionTokens: 5000, totalTokens: 5100 },
       metadata: {
         billing: {
-          ledgerId: 'ledger_intelligence-invoke-settle_188',
-          chargedCredits: 700,
+          ledgerId: `ledger_intelligence-invoke-settle_${5100 - hold}`,
+          chargedCredits: 5100,
           unit: '1k_tokens',
-          quantity: 700,
-          reservedCredits: 512,
+          quantity: 5100,
+          reservedCredits: hold,
           reserveId: expect.any(String),
           billable: true,
           reason: 'intelligence-invoke',
@@ -569,6 +592,10 @@ describe('invokeIntelligenceCapability', () => {
           chargedCredits: 700,
           reservedCredits: 512,
           billable: true,
+          // The shortfall is owed, so it must be visible on the response instead of
+          // surviving only as a log line.
+          settleFailed: true,
+          unsettledCredits: 188,
         },
       },
     })
@@ -658,10 +685,11 @@ describe('invokeIntelligenceCapability', () => {
     })
 
     expect(langchainMocks.invoke).not.toHaveBeenCalled()
+    const hold = requestedHold()
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      512,
+      hold,
       'intelligence-invoke-reserve',
       expect.anything(),
       { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
@@ -669,11 +697,11 @@ describe('invokeIntelligenceCapability', () => {
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      512,
+      hold,
       'intelligence-invoke-release',
       expect.objectContaining({
-        reservedCredits: 512,
-        releasedCredits: 512,
+        reservedCredits: hold,
+        releasedCredits: hold,
         traceOutcome: 'dispatch-failed',
       }),
       { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },
@@ -752,10 +780,11 @@ describe('invokeIntelligenceCapability', () => {
     })
 
     expect(langchainMocks.invoke).not.toHaveBeenCalled()
+    const hold = requestedHold()
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      512,
+      hold,
       'intelligence-invoke-reserve',
       expect.anything(),
       { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
@@ -763,11 +792,11 @@ describe('invokeIntelligenceCapability', () => {
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      512,
+      hold,
       'intelligence-invoke-release',
       expect.objectContaining({
-        reservedCredits: 512,
-        releasedCredits: 512,
+        reservedCredits: hold,
+        releasedCredits: hold,
         traceOutcome: 'dispatch-failed',
       }),
       { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },
@@ -821,5 +850,62 @@ describe('invokeIntelligenceCapability', () => {
 
     expect(langchainMocks.invoke).not.toHaveBeenCalled()
     expect(creditStoreMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+  })
+
+  it('refuses a disabled capability without holding credits or calling the model', async () => {
+    // The operator switched the capability off. Its row still exists, and the token
+    // fallback would price a request that reports no tokens at 0 credits, so the invoke
+    // has to be declined before any spend.
+    pricingMocks.resolveCreditPricingRule.mockRejectedValueOnce(Object.assign(
+      new Error('CAPABILITY_DISABLED'),
+      { statusCode: 503, statusMessage: 'CAPABILITY_DISABLED', data: { code: 'CAPABILITY_DISABLED' } },
+    ))
+
+    await expect(invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+    })).rejects.toMatchObject({ statusCode: 503, data: { code: 'CAPABILITY_DISABLED' } })
+
+    expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(langchainMocks.invoke).not.toHaveBeenCalled()
+  })
+
+  it('pre-holds the prompt tokens a small declared output cap would otherwise hide', async () => {
+    // Chinese text tokenizes at about one token per character. A caller that declares a
+    // one-token reply must still hold the prompt: the provider bills it either way, and
+    // the hold is the only thing standing between an unaffordable call and provider cost.
+    const prompt = '这是一段很长的中文提示'.repeat(200)
+
+    await invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: prompt }],
+      },
+      options: {
+        metadata: { maxTokens: 1 },
+      },
+    })
+
+    expect(requestedHold()).toBeGreaterThanOrEqual(prompt.length + 1)
+  })
+
+  it('hands a declared output cap to the provider and holds for it', async () => {
+    await invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      options: {
+        metadata: { maxTokens: 4000 },
+      },
+    })
+
+    // A cap the provider never receives is not a bound, so it must be handed over.
+    expect(langchainMocks.constructorArgs).toHaveBeenCalledWith(
+      expect.objectContaining({ maxTokens: 4000 }),
+    )
+    expect(requestedHold()).toBeGreaterThanOrEqual(4000)
   })
 })

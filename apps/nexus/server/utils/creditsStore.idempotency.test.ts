@@ -63,6 +63,23 @@ class MockD1Database {
   checkins = new Map<string, string>()
   /** The `auth_users` row a FREE boost check reads; absent means "no profile". */
   userRecord: { id: string, email_state: string, email_verified: string } | null = null
+  /**
+   * Rows the invoke-audit join returns. The netting it feeds reads every row of a trace,
+   * so a test needs to control how many rows exist per trace.
+   */
+  invokeLedgerRows: Array<{
+    id: string
+    scope_id: string
+    delta: number
+    reason: string
+    created_at: string
+    metadata: string
+    team_id: string
+    owner_user_id: string
+    team_type: string
+    email: string
+    name: string
+  }> = []
   accountCount = 0
   passkeyCount = 0
   linkedAt = '2020-01-01T00:00:00.000Z'
@@ -270,6 +287,15 @@ class MockD1Database {
       ]
     }
 
+    // The invoke-audit join. The fake applies the statement's own LIMIT to its rows, so a
+    // row cap that is too small drops rows exactly as D1 would.
+    if (sql.includes('FROM credit_ledger l') && sql.includes('json_extract')) {
+      const limit = Number(/LIMIT\s+(\d+)/i.exec(sql)?.[1] ?? this.invokeLedgerRows.length)
+      return [...this.invokeLedgerRows]
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+        .slice(0, limit)
+    }
+
     if (sql.includes('FROM team_members')) {
       return [...this.members.values()].map(member => ({
         id: member.teamId,
@@ -418,5 +444,47 @@ describe('credit allowance policy', () => {
     const summary = await getCreditSummary(createEvent(db), 'user_1')
 
     expect(checkin.reward * 30).toBeLessThan(Number(summary.user!.quota))
+  })
+})
+
+describe('invoke audit ledger netting', () => {
+  it('nets every row of a full page of traces instead of truncating its oldest rows', async () => {
+    const { listCreditLedgerByTraceIds } = await import('./creditsStore')
+    const db = new MockD1Database()
+    const traceIds = Array.from({ length: 200 }, (_, index) => `trace_${index}`)
+
+    // Four rows per invoke — hold, two partial releases, final release — is 800 rows for
+    // a full page, more than a fixed 600-row cap could hold. The rows such a cap drops are
+    // the oldest ones, which here are the holds: the netting would then report a refund in
+    // place of the 7 credits each invoke actually cost.
+    traceIds.forEach((traceId, traceIndex) => {
+      const at = (offset: number) =>
+        new Date(Date.UTC(2026, 8, 9, 0, traceIndex, offset)).toISOString()
+      const row = (delta: number, reason: string, offset: number) => ({
+        id: `ledger_${traceId}_${offset}`,
+        scope_id: 'team_1',
+        delta,
+        reason,
+        created_at: at(offset),
+        metadata: JSON.stringify({ traceId, userId: 'user_1' }),
+        team_id: 'team_1',
+        owner_user_id: 'user_1',
+        team_type: 'personal',
+        email: 'owner@example.com',
+        name: 'Owner',
+      })
+      db.invokeLedgerRows.push(
+        row(512, 'intelligence-invoke-reserve', 0),
+        row(-300, 'intelligence-invoke-release', 1),
+        row(-100, 'intelligence-invoke-release', 2),
+        row(-105, 'intelligence-invoke-release', 3),
+      )
+    })
+
+    const entries = await listCreditLedgerByTraceIds(createEvent(db), traceIds)
+
+    expect(entries).toHaveLength(200)
+    expect(entries.map(entry => entry.metadata?.traceId).sort()).toEqual([...traceIds].sort())
+    expect(entries.every(entry => entry.delta === 7)).toBe(true)
   })
 })

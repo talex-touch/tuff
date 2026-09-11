@@ -1574,6 +1574,17 @@ export interface CreditLedgerAuditEntry {
   metadata: Record<string, any> | null
 }
 
+/**
+ * Ledger rows one invoke can leave behind: the hold, the settled remainder, and the
+ * release of whatever the hold over-covered.
+ *
+ * The row cap is derived from the trace count rather than fixed. A fixed cap carries no
+ * headroom — one more row per invoke than it was sized for silently drops the oldest
+ * rows of the page — and the netting below needs every row of a trace to report what the
+ * invoke cost instead of reporting its hold.
+ */
+const CREDIT_LEDGER_ROWS_PER_TRACE = 4
+
 export async function listCreditLedgerByTraceIds(
   event: H3Event,
   traceIds: string[],
@@ -1612,7 +1623,7 @@ export async function listCreditLedgerByTraceIds(
       AND (l.reason = 'intelligence-invoke' OR l.reason LIKE 'intelligence-invoke-%')
       AND json_extract(l.metadata, '$.traceId') IN (${placeholders})
     ORDER BY l.created_at DESC
-    LIMIT 600
+    LIMIT ${uniqueTraceIds.length * CREDIT_LEDGER_ROWS_PER_TRACE}
   `).bind(...uniqueTraceIds).all<Record<string, any>>()
 
   const rows = (results ?? [])
