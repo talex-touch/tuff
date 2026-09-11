@@ -41,6 +41,7 @@ import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from '../network'
 import {
   AUTH_REAUTHENTICATION_REQUIRED_FIELD,
+  AUTH_TOKEN_BASE_URL_FIELD,
   LEGACY_AUTH_PROTECTION_FIELDS
 } from '../storage/main-storage-registry'
 import { getRuntimeNexusBaseUrl, getRuntimeServerMode } from '../nexus/runtime-base'
@@ -223,6 +224,10 @@ export function subscribeAuthState(listener: AuthStateListener): () => void {
 }
 
 export function getAuthToken(): string | null {
+  if (authToken && isAuthTokenBaseUrlStale()) {
+    void dropCredentialIssuedByAnotherOrigin()
+    return null
+  }
   if (
     authRefreshToken &&
     (authAccessTokenExpiresAt === null ||
@@ -267,6 +272,56 @@ export function getDevicePlatform(): string | null {
 
 function resolveAuthBaseUrl(): string {
   return getRuntimeNexusBaseUrl()
+}
+
+function normalizeAuthBaseUrl(value: string): string {
+  return value.trim().replace(/\/+$/, '')
+}
+
+/**
+ * The Nexus origin the stored credential was issued by, or '' when nothing recorded it yet.
+ *
+ * Main-owned: the renderer and remote sync never see this field, so two installs sharing an
+ * account cannot invalidate each other.
+ */
+function readAuthTokenBaseUrl(): string {
+  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
+  const authSettings = appSettings.auth
+  if (typeof authSettings !== 'object' || authSettings === null || Array.isArray(authSettings)) {
+    return ''
+  }
+  const value = (authSettings as Record<string, unknown>)[AUTH_TOKEN_BASE_URL_FIELD]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function persistAuthTokenBaseUrl(baseUrl: string): void {
+  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
+  ensureAuthSettings(appSettings)
+  ;(appSettings.auth as Record<string, unknown>)[AUTH_TOKEN_BASE_URL_FIELD] = baseUrl
+  saveMainConfig(StorageList.APP_SETTING, appSettings)
+}
+
+/**
+ * Whether the credential in hand was issued by the origin currently being talked to.
+ *
+ * A user-chosen Nexus address is persisted and can also change out of band (config file, synced
+ * settings), so the UI cannot be the only thing that clears the credential: an unchanged token
+ * must never be replayed at a different origin.
+ */
+function isAuthTokenBaseUrlStale(): boolean {
+  const recorded = normalizeAuthBaseUrl(readAuthTokenBaseUrl())
+  if (!recorded) return false
+  return recorded !== normalizeAuthBaseUrl(resolveAuthBaseUrl())
+}
+
+async function dropCredentialIssuedByAnotherOrigin(): Promise<void> {
+  const current = normalizeAuthBaseUrl(resolveAuthBaseUrl())
+  const recorded = readAuthTokenBaseUrl()
+  await clearAuthToken()
+  persistAuthTokenBaseUrl(current)
+  authLog.warn('Stored auth credential discarded because the Nexus origin changed', {
+    meta: { reason: 'base-url-changed', recordedBaseUrl: recorded, currentBaseUrl: current }
+  })
 }
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
@@ -498,6 +553,14 @@ async function loadAuthToken(): Promise<void> {
     return
   }
 
+  if (isAuthTokenBaseUrlStale()) {
+    await dropCredentialIssuedByAnotherOrigin()
+    authLog.info('Auth token load skipped because the credential belongs to another Nexus origin', {
+      meta: { reason: 'base-url-changed' }
+    })
+    return
+  }
+
   let secureStoreHealth = UNAVAILABLE_SECURE_STORE_HEALTH
   let secureStoreHealthCheckFailed = false
   try {
@@ -531,6 +594,11 @@ async function loadAuthToken(): Promise<void> {
           })
         } else {
           applyAuthCredentialState(credential)
+          if (!readAuthTokenBaseUrl()) {
+            // A credential stored before the origin was recorded belongs to the origin resolved
+            // right now, so it is adopted rather than treated as foreign and signed out.
+            persistAuthTokenBaseUrl(normalizeAuthBaseUrl(resolveAuthBaseUrl()))
+          }
         }
       }
     } catch {
@@ -623,6 +691,11 @@ async function setAuthToken(
     meta: { credentialProtectionEnabled: true, hasRefreshCredential: Boolean(refreshToken) }
   })
   const persisted = await persistAuthToken(serializeAuthCredential(credentialState))
+  if (persisted) {
+    // Recorded only after the credential itself is durable: the reverse order would leave a
+    // stale token looking like it belongs to the origin just recorded.
+    persistAuthTokenBaseUrl(normalizeAuthBaseUrl(resolveAuthBaseUrl()))
+  }
   if (!persisted) {
     authLog.warn('Secure auth persistence write failed; login state can only remain in memory', {
       meta: { reason: 'secure-store-write-failed' }
@@ -1086,6 +1159,10 @@ async function refreshAccessToken(reason: string): Promise<AccessTokenRefreshRes
 }
 
 async function ensureFreshAccessToken(reason: string): Promise<string | null> {
+  if (isAuthTokenBaseUrlStale()) {
+    await dropCredentialIssuedByAnotherOrigin()
+    return null
+  }
   if (!authRefreshToken) {
     return authToken
   }

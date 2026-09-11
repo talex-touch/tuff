@@ -4,6 +4,13 @@ export const TUFF_NEXUS_BASE_URL_ENV = 'TUFF_NEXUS_BASE_URL'
 
 export type TuffNexusRuntimeServer = 'production' | 'local'
 
+/**
+ * Which input won the base-URL resolution, in the order they are consulted.
+ *
+ * Reported to the settings page so it can explain why a saved address is not the one in effect.
+ */
+export type TuffNexusBaseUrlSource = 'env' | 'custom' | 'runtime-server'
+
 export interface EnvLike {
   [key: string]: unknown
 }
@@ -161,17 +168,102 @@ function readEnvValue(env: EnvLike | undefined, key: string): string | undefined
 
 export interface TuffNexusBaseUrlOptions {
   runtimeServer?: TuffNexusRuntimeServer
+  /** User-chosen Nexus base URL from settings; ignored when it no longer validates. */
+  customBaseUrl?: string | null
   env?: EnvLike
 }
 
-export function resolveTuffNexusBaseUrl(options: TuffNexusBaseUrlOptions = {}): string {
-  const explicit = readEnvValue(options.env, TUFF_NEXUS_BASE_URL_ENV)?.trim()
-  if (explicit)
-    return normalizeBaseUrl(explicit)
+export interface TuffNexusBaseUrlResolution {
+  baseUrl: string
+  source: TuffNexusBaseUrlSource
+}
 
-  return options.runtimeServer === 'local'
-    ? normalizeBaseUrl(NEXUS_LOCAL_BASE_URL)
-    : normalizeBaseUrl(NEXUS_BASE_URL)
+export type NexusBaseUrlValidationError =
+  | 'empty'
+  | 'invalid-url'
+  | 'unsupported-protocol'
+  | 'insecure-transport'
+
+export type NexusBaseUrlValidation
+  = | { ok: true; value: string }
+    | { ok: false; error: NexusBaseUrlValidationError }
+
+/**
+ * Validates a Nexus base URL a user typed into settings.
+ *
+ * Plain `http` is only accepted for loopback hosts: every Nexus request may carry the account
+ * bearer token, so cleartext to a remote host would hand it to the network. The address is reduced
+ * to scheme/host/port/path because a query or fragment suffix cannot be composed into request
+ * paths; that normalized form is what callers persist and compare.
+ */
+export function validateNexusBaseUrl(input: unknown): NexusBaseUrlValidation {
+  const raw = typeof input === 'string' ? input.trim() : ''
+  if (!raw) {
+    return { ok: false, error: 'empty' }
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return { ok: false, error: 'invalid-url' }
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return { ok: false, error: 'unsupported-protocol' }
+  }
+
+  const loopback =
+    parsed.hostname === 'localhost'
+    || parsed.hostname === '127.0.0.1'
+    || parsed.hostname === '::1'
+    || parsed.hostname === '[::1]'
+  if (parsed.protocol === 'http:' && !loopback) {
+    return { ok: false, error: 'insecure-transport' }
+  }
+
+  if (parsed.search || parsed.hash) {
+    return { ok: false, error: 'invalid-url' }
+  }
+
+  return { ok: true, value: normalizeBaseUrl(parsed.toString()) }
+}
+
+/**
+ * Resolves the base URL together with which input produced it.
+ *
+ * `TUFF_NEXUS_BASE_URL` stays unvalidated and first in line: it is the build/CI override that must
+ * keep pointing a packaged app at an arbitrary host, including plain-http test servers.
+ */
+export function resolveTuffNexusBaseUrlDetail(
+  options: TuffNexusBaseUrlOptions = {}
+): TuffNexusBaseUrlResolution {
+  const explicit = readEnvValue(options.env, TUFF_NEXUS_BASE_URL_ENV)?.trim()
+  if (explicit) {
+    return { baseUrl: normalizeBaseUrl(explicit), source: 'env' }
+  }
+
+  const custom = options.customBaseUrl
+  if (typeof custom === 'string' && custom.trim()) {
+    const validation = validateNexusBaseUrl(custom)
+    // A stored value that no longer validates must not steer the app: reaching an origin the
+    // settings page itself rejects is worse than silently falling back (hand-edited config, or
+    // rules tightened by a later version).
+    if (validation.ok) {
+      return { baseUrl: validation.value, source: 'custom' }
+    }
+  }
+
+  return {
+    baseUrl: normalizeBaseUrl(
+      options.runtimeServer === 'local' ? NEXUS_LOCAL_BASE_URL : NEXUS_BASE_URL
+    ),
+    source: 'runtime-server'
+  }
+}
+
+export function resolveTuffNexusBaseUrl(options: TuffNexusBaseUrlOptions = {}): string {
+  return resolveTuffNexusBaseUrlDetail(options).baseUrl
 }
 
 export function getTuffBaseUrl(): string {
