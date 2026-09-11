@@ -107,6 +107,34 @@ vi.mock('./intelligence-sdk', () => ({
   }
 }))
 
+const authMocks = vi.hoisted(() => {
+  const session = { isSignedIn: false }
+  const listeners = new Set<(state: { isSignedIn: boolean }) => void>()
+  return {
+    session,
+    listeners,
+    subscribeAuthState: vi.fn(),
+    getSanitizedAuthSessionState: vi.fn(() => ({
+      isLoaded: true,
+      isSignedIn: session.isSignedIn,
+      user: null
+    })),
+    /** Delivers one auth notification the way the real auth module does. */
+    emitSignedIn(isSignedIn: boolean): void {
+      session.isSignedIn = isSignedIn
+      for (const listener of [...listeners]) {
+        listener({ isSignedIn })
+      }
+    }
+  }
+})
+
+vi.mock('../auth', () => ({
+  subscribeAuthState: authMocks.subscribeAuthState,
+  getSanitizedAuthSessionState: authMocks.getSanitizedAuthSessionState,
+  getAuthToken: vi.fn(() => (authMocks.session.isSignedIn ? 'nexus-access-token' : null))
+}))
+
 describe('intelligence-config capability options', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -727,5 +755,264 @@ describe('intelligence-config capability options', () => {
       allowedProviderIds: ['local-system-ocr'],
       modelPreference: ['system-ocr']
     })
+  })
+})
+
+const NEXUS_PROVIDER_ID = 'tuff-nexus-default'
+
+type StoredBinding = {
+  providerId: string
+  enabled?: boolean
+  priority?: number
+  models?: string[]
+}
+
+type StoredProvider = {
+  id: string
+  enabled?: boolean
+  priority?: number
+  capabilities?: string[]
+}
+
+type StoredConfig = {
+  providers: StoredProvider[]
+  capabilities: Record<string, { providers?: StoredBinding[] }>
+}
+
+/**
+ * A guest machine: the user configured a local channel but never signed in to Nexus, so the
+ * built-in Nexus provider arrives with `enabled: false` on the sign-in state, not on the fixture.
+ */
+function createGuestConfig() {
+  return {
+    providers: [
+      {
+        id: 'local-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local Model',
+        enabled: false,
+        priority: 9,
+        capabilities: ['text.chat']
+      }
+    ],
+    globalConfig: {
+      defaultStrategy: 'adaptive-default',
+      enableAudit: true,
+      enableCache: false,
+      enableQuota: true
+    },
+    capabilities: {
+      'text.chat': {
+        id: 'text.chat',
+        name: 'Chat',
+        type: 'chat',
+        providers: [
+          { providerId: 'local-default', priority: 9, enabled: false, models: ['llama3.1'] }
+        ]
+      }
+    },
+    promptRegistry: [],
+    promptBindings: [],
+    version: 2
+  }
+}
+
+function storedConfig(): StoredConfig {
+  return storageMocks.storedConfig as StoredConfig
+}
+
+/** Every Nexus binding in the persisted config, with the capability it routes. */
+function nexusBindings(): Array<{ capabilityId: string; enabled?: boolean }> {
+  const config = storedConfig()
+  return Object.entries(config.capabilities).flatMap(([capabilityId, capability]) =>
+    (capability.providers ?? [])
+      .filter((binding) => binding.providerId === NEXUS_PROVIDER_ID)
+      .map((binding) => ({ capabilityId, enabled: binding.enabled }))
+  )
+}
+
+function nexusProviderEnabled(): boolean | undefined {
+  return storedConfig().providers.find((provider) => provider.id === NEXUS_PROVIDER_ID)?.enabled
+}
+
+/**
+ * Re-imports the module under test so each case owns the module-level auth baseline
+ * (`lastAppliedAuthSignedIn` and the listener teardown) instead of inheriting the previous
+ * case's. A static import cannot be reset between cases, so the import is dynamic on purpose.
+ */
+async function importFreshConfigModule() {
+  vi.resetModules()
+  const config = await import('./intelligence-config')
+  const sdk = await import('./intelligence-sdk')
+  return { config, updateConfig: vi.mocked(sdk.tuffIntelligence.updateConfig) }
+}
+
+describe('intelligence-config Nexus sign-in activation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    authMocks.session.isSignedIn = false
+    authMocks.listeners.clear()
+    authMocks.subscribeAuthState.mockImplementation(
+      (listener: (state: { isSignedIn: boolean }) => void) => {
+        authMocks.listeners.add(listener)
+        return () => authMocks.listeners.delete(listener)
+      }
+    )
+    storageMocks.storedConfig = createGuestConfig()
+  })
+
+  it('leaves the Nexus provider and its bindings disabled on a signed-out cold start', async () => {
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+
+    expect(nexusBindings().map((binding) => binding.capabilityId)).toEqual(
+      expect.arrayContaining(['text.chat', 'audio.stt'])
+    )
+
+    storageMocks.saveMainConfig.mockClear()
+    config.setupConfigUpdateListener()
+
+    expect(nexusProviderEnabled()).toBe(false)
+    expect(nexusBindings().filter((binding) => binding.enabled !== false)).toEqual([])
+    expect(storageMocks.saveMainConfig).not.toHaveBeenCalled()
+  })
+
+  it('enables the Nexus provider and its bindings when the user signs in', async () => {
+    const { config, updateConfig } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+    config.setupConfigUpdateListener()
+    storageMocks.saveMainConfig.mockClear()
+    updateConfig.mockClear()
+
+    authMocks.emitSignedIn(true)
+
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: NEXUS_PROVIDER_ID, enabled: true })
+        ]),
+        capabilities: expect.objectContaining({
+          'text.chat': expect.objectContaining({
+            providers: expect.arrayContaining([
+              expect.objectContaining({ providerId: NEXUS_PROVIDER_ID, enabled: true })
+            ])
+          }),
+          'audio.stt': expect.objectContaining({
+            providers: expect.arrayContaining([
+              expect.objectContaining({ providerId: NEXUS_PROVIDER_ID, enabled: true })
+            ])
+          })
+        })
+      })
+    )
+    expect(nexusProviderEnabled()).toBe(true)
+    expect(nexusBindings().filter((binding) => binding.enabled !== true)).toEqual([])
+
+    expect(updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: NEXUS_PROVIDER_ID, enabled: true })
+        ])
+      })
+    )
+  })
+
+  it('applies enablement from the startup session state without a transition notification', async () => {
+    authMocks.session.isSignedIn = true
+
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+    storageMocks.saveMainConfig.mockClear()
+
+    config.setupConfigUpdateListener()
+
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: NEXUS_PROVIDER_ID, enabled: true })
+        ])
+      })
+    )
+    expect(nexusProviderEnabled()).toBe(true)
+    expect(nexusBindings().filter((binding) => binding.enabled !== true)).toEqual([])
+  })
+
+  it('takes the Nexus route back off when the user signs out', async () => {
+    authMocks.session.isSignedIn = true
+
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+    config.setupConfigUpdateListener()
+    expect(nexusProviderEnabled()).toBe(true)
+
+    storageMocks.saveMainConfig.mockClear()
+
+    authMocks.emitSignedIn(false)
+
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: NEXUS_PROVIDER_ID, enabled: false })
+        ])
+      })
+    )
+    expect(nexusProviderEnabled()).toBe(false)
+    expect(nexusBindings().filter((binding) => binding.enabled !== false)).toEqual([])
+  })
+
+  it('ignores a repeat auth notification so a manually disabled Nexus channel stays off', async () => {
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+    config.setupConfigUpdateListener()
+    authMocks.emitSignedIn(true)
+    expect(nexusProviderEnabled()).toBe(true)
+
+    // The user turns the Nexus channel off from the channels page in this session.
+    const persisted = storedConfig()
+    const nexusProvider = persisted.providers.find((provider) => provider.id === NEXUS_PROVIDER_ID)
+    if (nexusProvider) nexusProvider.enabled = false
+    for (const capability of Object.values(persisted.capabilities)) {
+      for (const binding of capability.providers ?? []) {
+        if (binding.providerId === NEXUS_PROVIDER_ID) binding.enabled = false
+      }
+    }
+    storageMocks.saveMainConfig.mockClear()
+
+    // A token refresh / profile update repeats the same sign-in state.
+    authMocks.emitSignedIn(true)
+
+    expect(storageMocks.saveMainConfig).not.toHaveBeenCalled()
+    expect(nexusProviderEnabled()).toBe(false)
+  })
+
+  it('leaves other providers and their bindings untouched when Nexus is enabled', async () => {
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+
+    const localProviderBefore = structuredClone(
+      storedConfig().providers.find((provider) => provider.id === 'local-default')
+    )
+    const localBindingBefore = structuredClone(
+      storedConfig().capabilities['text.chat']?.providers?.find(
+        (binding) => binding.providerId === 'local-default'
+      )
+    )
+    expect(localProviderBefore).toMatchObject({ enabled: false, priority: 9 })
+    expect(localBindingBefore).toMatchObject({ enabled: false, priority: 9 })
+
+    config.setupConfigUpdateListener()
+    authMocks.emitSignedIn(true)
+
+    expect(storedConfig().providers.find((provider) => provider.id === 'local-default')).toEqual(
+      localProviderBefore
+    )
+    expect(
+      storedConfig().capabilities['text.chat']?.providers?.find(
+        (binding) => binding.providerId === 'local-default'
+      )
+    ).toEqual(localBindingBefore)
   })
 })

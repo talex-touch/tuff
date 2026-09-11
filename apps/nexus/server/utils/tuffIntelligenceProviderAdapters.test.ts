@@ -1,5 +1,6 @@
 import type { IntelligenceProviderRecord } from './intelligenceStore'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_CREDIT_PRICING, selectCreditPricingRule } from './creditPricingStore'
 import { invokeIntelligenceCapability, streamIntelligenceCapability } from './tuffIntelligenceLabService'
 import {
   clearIntelligenceProviderAdaptersForTest,
@@ -17,6 +18,10 @@ const providerBridgeMocks = vi.hoisted(() => ({
 }))
 const creditStoreMocks = vi.hoisted(() => ({
   consumeCredits: vi.fn(),
+  releaseConsumedCredits: vi.fn(),
+}))
+const pricingMocks = vi.hoisted(() => ({
+  resolveCreditPricingRule: vi.fn(),
 }))
 const usageLedgerMocks = vi.hoisted(() => ({
   recordProviderUsageLedger: vi.fn(),
@@ -32,6 +37,14 @@ vi.mock('./intelligenceStore', async () => {
 vi.mock('./intelligenceProviderRegistryBridge', () => providerBridgeMocks)
 vi.mock('./creditsStore', () => creditStoreMocks)
 vi.mock('./providerUsageLedgerStore', () => usageLedgerMocks)
+
+// The price list is a database read; the rule lookup over it is not. Keeping the real
+// pure lookup means the metering asserted here is the shipped price table.
+vi.mock('./creditPricingStore', async () => {
+  const actual = await vi.importActual<typeof import('./creditPricingStore')>('./creditPricingStore')
+  return { ...actual, resolveCreditPricingRule: pricingMocks.resolveCreditPricingRule }
+})
+
 vi.mock('@langchain/openai', () => ({
   ChatOpenAI: class {
     invoke(messages: unknown) { return langchainMocks.invoke(messages) }
@@ -65,6 +78,18 @@ function provider(overrides: Partial<IntelligenceProviderRecord> = {}): Intellig
   }
 }
 
+function ledgerEntry(amount: number, reason: string) {
+  return {
+    ledgerId: `ledger_${reason}_${amount}`,
+    teamId: 'team_user_1',
+    userId: 'user_1',
+    amount,
+    reason,
+    createdAt: '2026-05-12T00:00:00.000Z',
+    metadata: {},
+  }
+}
+
 describe('Nexus provider adapter boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -72,15 +97,18 @@ describe('Nexus provider adapter boundary', () => {
     storeMocks.getSettings.mockResolvedValue({ defaultStrategy: 'priority', enableAudit: true })
     providerBridgeMocks.getIntelligenceProviderApiKeyWithRegistryFallback.mockResolvedValue('sk-test')
     providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValue([provider()])
-    creditStoreMocks.consumeCredits.mockResolvedValue({
-      ledgerId: 'credit_1',
-      teamId: 'team_user_1',
-      userId: 'user_1',
-      amount: 3,
-      reason: 'intelligence-invoke',
-      createdAt: '2026-05-12T00:00:00.000Z',
-      metadata: {},
-    })
+    pricingMocks.resolveCreditPricingRule.mockImplementation(
+      async (_event: unknown, capability: string) =>
+        selectCreditPricingRule(capability, DEFAULT_CREDIT_PRICING),
+    )
+    creditStoreMocks.consumeCredits.mockImplementation(
+      async (_event: unknown, _userId: string, amount: number, reason: string) =>
+        ledgerEntry(amount, reason),
+    )
+    creditStoreMocks.releaseConsumedCredits.mockImplementation(
+      async (_event: unknown, _userId: string, amount: number, reason: string) =>
+        ledgerEntry(amount, reason),
+    )
     usageLedgerMocks.recordProviderUsageLedger.mockResolvedValue([{ id: 'usage_1' }])
   })
 
@@ -109,16 +137,65 @@ describe('Nexus provider adapter boundary', () => {
     expect(result).toMatchObject({
       result: 'adapter:hello',
       traceId: 'trace_adapter_1',
-      metadata: { providerUsageLedgerIds: ['usage_1'] },
+      metadata: {
+        billing: {
+          ledgerId: 'ledger_intelligence-invoke-reserve_512',
+          chargedCredits: 3,
+          unit: '1k_tokens',
+          quantity: 3,
+          reservedCredits: 512,
+          reserveId: expect.any(String),
+          billable: true,
+          reason: 'intelligence-invoke',
+        },
+        providerUsageLedgerIds: ['usage_1'],
+      },
     })
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      3,
-      'intelligence-invoke',
-      expect.objectContaining({ providerId: 'ip_adapter', traceId: 'trace_adapter_1' }),
-      { idempotencyKey: 'intelligence-invoke:trace_adapter_1' },
+      512,
+      'intelligence-invoke-reserve',
+      expect.objectContaining({ capabilityId: 'text.chat', unit: '1k_tokens', reservedCredits: 512 }),
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
     )
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      509,
+      'intelligence-invoke-release',
+      expect.objectContaining({
+        capabilityId: 'text.chat',
+        traceId: 'trace_adapter_1',
+        reservedCredits: 512,
+        releasedCredits: 509,
+      }),
+      { idempotencyKey: 'intelligence-invoke-release:trace_adapter_1' },
+    )
+  })
+
+  it('rejects an unaffordable dispatch before the provider adapter is reached', async () => {
+    const adapter = vi.fn()
+    registerIntelligenceProviderAdapterForTest('openai', adapter)
+    creditStoreMocks.consumeCredits.mockRejectedValueOnce(new Error('User credits exceeded.'))
+
+    await expect(invokeIntelligenceCapability(event(), 'user_1', {
+      capabilityId: 'text.chat',
+      payload: { messages: [{ role: 'user', content: 'hello' }] },
+    })).rejects.toMatchObject({
+      statusCode: 402,
+      statusMessage: 'CREDITS_EXCEEDED',
+      data: {
+        code: 'CREDITS_EXCEEDED',
+        capabilityId: 'text.chat',
+        reason: 'User credits exceeded.',
+      },
+    })
+
+    expect(adapter).not.toHaveBeenCalled()
+    expect(langchainMocks.invoke).not.toHaveBeenCalled()
+    expect(creditStoreMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+    expect(usageLedgerMocks.recordProviderUsageLedger).not.toHaveBeenCalled()
   })
 
   it('forwards ordered provider deltas and finalizes the same governed, billed, audited result', async () => {
@@ -182,10 +259,14 @@ describe('Nexus provider adapter boundary', () => {
         fallbackCount: 0,
         attemptedProviders: ['ip_adapter'],
         billing: {
-          ledgerId: 'credit_1',
+          ledgerId: 'ledger_intelligence-invoke-reserve_512',
           chargedCredits: 3,
-          unit: 'token',
+          unit: '1k_tokens',
+          quantity: 3,
+          reservedCredits: 512,
+          reserveId: expect.any(String),
           billable: true,
+          reason: 'intelligence-invoke',
         },
         providerUsageLedgerIds: ['usage_1'],
       },
@@ -198,10 +279,18 @@ describe('Nexus provider adapter boundary', () => {
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      3,
-      'intelligence-invoke',
-      expect.objectContaining({ providerId: 'ip_adapter', tokens: 3, traceId: 'trace_stream_1' }),
-      { idempotencyKey: 'intelligence-invoke:trace_stream_1' },
+      512,
+      'intelligence-invoke-reserve',
+      expect.objectContaining({ capabilityId: 'text.chat', unit: '1k_tokens', reservedCredits: 512 }),
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-reserve:reserve_/) },
+    )
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      509,
+      'intelligence-invoke-release',
+      expect.objectContaining({ capabilityId: 'text.chat', traceId: 'trace_stream_1' }),
+      { idempotencyKey: 'intelligence-invoke-release:trace_stream_1' },
     )
     expect(usageLedgerMocks.recordProviderUsageLedger).toHaveBeenCalledWith(
       expect.anything(),
@@ -255,8 +344,26 @@ describe('Nexus provider adapter boundary', () => {
       metadata: {
         fallbackCount: 1,
         attemptedProviders: ['ip_primary', 'ip_fallback'],
+        billing: {
+          chargedCredits: 2,
+          reservedCredits: 512,
+          unit: '1k_tokens',
+          quantity: 2,
+        },
       },
     })
+    // Falling back to a second provider must not take a second hold, and the charge
+    // still settles on the fallback's reported usage.
+    expect(creditStoreMocks.consumeCredits).toHaveBeenCalledTimes(1)
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledTimes(1)
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      510,
+      'intelligence-invoke-release',
+      expect.objectContaining({ traceId: 'trace_fallback_1' }),
+      { idempotencyKey: 'intelligence-invoke-release:trace_fallback_1' },
+    )
   })
 
   it('fails after the first delta rather than replaying output through a fallback provider', async () => {
@@ -296,5 +403,20 @@ describe('Nexus provider adapter boundary', () => {
       provider: 'ip_primary',
       traceId: 'trace_partial_1',
     }))
+    // An interrupted stream yields no settleable usage, so the whole hold goes back.
+    expect(creditStoreMocks.consumeCredits).toHaveBeenCalledTimes(1)
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledTimes(1)
+    expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      512,
+      'intelligence-invoke-release',
+      expect.objectContaining({
+        reservedCredits: 512,
+        releasedCredits: 512,
+        traceOutcome: 'dispatch-failed',
+      }),
+      { idempotencyKey: expect.stringMatching(/^intelligence-invoke-release:reserve_/) },
+    )
   })
 })

@@ -71,3 +71,36 @@ export function normalizeCreditSummary(value: unknown): CreditSummary {
     teamContext: normalizeCreditTeamContext(source.teamContext)
   }
 }
+
+/** One published capability price. `unit` is what the user is quoted in, e.g. 1k_tokens. */
+export interface CreditPricingEntry {
+  capability: string
+  unit: string
+  creditsPerUnit: number
+  secondaryUnit: string | null
+  secondaryCreditsPerUnit: number | null
+  minCredits: number
+}
+
+export function normalizeCreditPricing(value: unknown): CreditPricingEntry[] {
+  const source = isRecord(value) ? value : {}
+  const rules = Array.isArray(source.rules) ? source.rules : []
+  return rules
+    .map((rule) => {
+      if (!isRecord(rule) || typeof rule.capability !== 'string' || !rule.capability) return null
+      const creditsPerUnit = normalizeCreditAmount(rule.creditsPerUnit)
+      if (creditsPerUnit <= 0) return null
+      return {
+        capability: rule.capability,
+        unit: typeof rule.unit === 'string' ? rule.unit : '',
+        creditsPerUnit,
+        secondaryUnit: typeof rule.secondaryUnit === 'string' ? rule.secondaryUnit : null,
+        secondaryCreditsPerUnit:
+          rule.secondaryCreditsPerUnit === null || rule.secondaryCreditsPerUnit === undefined
+            ? null
+            : normalizeCreditAmount(rule.secondaryCreditsPerUnit),
+        minCredits: normalizeCreditAmount(rule.minCredits)
+      }
+    })
+    .filter((entry): entry is CreditPricingEntry => Boolean(entry))
+}

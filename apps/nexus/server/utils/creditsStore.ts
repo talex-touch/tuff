@@ -149,7 +149,7 @@ function getD1Database(event: H3Event): D1Database | null {
   return bindings?.DB ?? null
 }
 
-function requireDatabase(event: H3Event): D1Database {
+export function requireDatabase(event: H3Event): D1Database {
   const db = getD1Database(event)
   if (!db)
     throw new Error('Cloudflare D1 database is not available.')
@@ -1590,13 +1590,13 @@ export async function listCreditLedgerByTraceIds(
     LEFT JOIN ${TEAMS_TABLE} t ON t.id = l.scope_id
     LEFT JOIN ${USERS_TABLE} u ON u.id = t.owner_user_id
     WHERE l.scope = 'team'
-      AND l.reason = 'intelligence-invoke'
+      AND (l.reason = 'intelligence-invoke' OR l.reason LIKE 'intelligence-invoke-%')
       AND json_extract(l.metadata, '$.traceId') IN (${placeholders})
     ORDER BY l.created_at DESC
-    LIMIT 200
+    LIMIT 600
   `).bind(...uniqueTraceIds).all<Record<string, any>>()
 
-  return (results ?? [])
+  const rows = (results ?? [])
     .map((row) => {
       const metadata = parseLedgerMetadata(row.metadata ?? null)
       const traceId = typeof metadata?.traceId === 'string' ? metadata.traceId : ''
@@ -1607,6 +1607,7 @@ export async function listCreditLedgerByTraceIds(
         : (row.owner_user_id ?? null)
       return {
         id: row.id,
+        traceId,
         teamId: row.team_id ?? row.scope_id,
         teamType: row.team_type ?? null,
         userId: resolvedUserId,
@@ -1618,7 +1619,47 @@ export async function listCreditLedgerByTraceIds(
         metadata,
       }
     })
-    .filter((entry): entry is CreditLedgerAuditEntry => Boolean(entry))
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+
+  // One invoke now debits more than one row: a hold before dispatch, then the settled
+  // remainder and the release of whatever the hold over-covered. Auditing reports what
+  // the invoke actually cost, so the rows must be netted per trace — returning any
+  // single row would report the hold as the charge, or nothing at all.
+  const byTraceId = new Map<string, NonNullable<(typeof rows)[number]>>()
+  for (const row of rows) {
+    const current = byTraceId.get(row.traceId)
+    if (!current) {
+      byTraceId.set(row.traceId, { ...row })
+      continue
+    }
+    const preferred = pickBillingTruthRow(current, row)
+    const other = preferred === current ? row : current
+    byTraceId.set(row.traceId, {
+      ...preferred,
+      delta: resolveCreditAmount(preferred.delta + other.delta)
+    })
+  }
+
+  return [...byTraceId.values()].map(entry => ({
+    id: entry.id,
+    teamId: entry.teamId,
+    teamType: entry.teamType,
+    userId: entry.userId,
+    userEmail: entry.userEmail,
+    userName: entry.userName,
+    delta: entry.delta,
+    reason: entry.reason,
+    createdAt: entry.createdAt,
+    metadata: entry.metadata,
+  }))
+}
+
+/** The row carrying the settled charge: the settle row when present, else the newest. */
+function pickBillingTruthRow<T extends { reason: string; createdAt: string }>(a: T, b: T): T {
+  const isSettle = (row: T) => row.reason === 'intelligence-invoke-settle'
+  if (isSettle(a) !== isSettle(b))
+    return isSettle(a) ? a : b
+  return a.createdAt >= b.createdAt ? a : b
 }
 
 export async function listCreditTrendByUsers(
