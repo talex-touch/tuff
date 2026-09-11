@@ -285,16 +285,21 @@ onBeforeUnmount(() => {
 // The band travels at a constant speed through the first 65% and then waits
 // off-stage. Holding the rest still is what separates one pass from the next;
 // easing the travel instead made the band slow down before it had left.
+//
+// Opacity holds through the whole travel. It used to fade out from 53%, so the
+// band dissolved while still over the element and never appeared to leave —
+// the root is `overflow: hidden` and both endpoints are already outside it, so
+// there is nothing to fade. Opacity only hides the layer during the hold.
 @keyframes tx-glow-sweep {
   0% {
     transform: translateX(-160%);
-    opacity: 0;
-  }
-  12%,
-  53% {
     opacity: var(--tx-glow-opacity, 0.75);
   }
-  65%,
+  65% {
+    transform: translateX(160%);
+    opacity: var(--tx-glow-opacity, 0.75);
+  }
+  65.01%,
   100% {
     transform: translateX(160%);
     opacity: 0;
