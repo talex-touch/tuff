@@ -39,5 +39,9 @@
     "packages/utils/env/index.ts"
   ],
   "notes": "Four decisions were taken on a timed-out prompt and defaulted to the recommendation: sign-in activates Nexus; billing moves to a capability-level price table; scene runs and vision.ocr are billed too; the Nexus address is user-configurable. The shipped prices reproduce the previous chat (1 credit/token) and ASR (max(transcriptUnits, seconds*4), held at 10 credits/second) amounts exactly. Two things still need the owner: the published chat price of 1,000 credits per 1K tokens against FREE's 1,000-credit monthly quota (see design.md), and the vision.ocr / image.translate.e2e change from free to 10 credits per image.",
-  "meta": {}
+  "meta": {
+    "nextAction": "Land PR #1899 after its required checks pass, then close the two pricing questions recorded in notes: the chat anchor of 1,000 credits per 1K tokens against FREE's 1,000-credit monthly quota, and the new 10-credit-per-image price for vision.ocr and image.translate.e2e.",
+    "blocker": "No engineering blocker. Two product decisions are still open with the owner (see notes). The first CI run failed on an admin audit action (credits.pricing.update) that had no label, a creditsStore mock that did not export requireDatabase, and 17 settingUser.nexusBaseUrl keys missing from both core-app locales; all three were fixed on feat/nexus-credits-billing and pass locally.",
+    "evidence": "Focused runs on feat/nexus-credits-billing: apps/nexus server/utils/tuffIntelligenceAbilityAggregation.test.ts, app/pages/dashboard/admin/admin-page-layout-contracts.test.ts and test/guards/i18n-key-existence.test.ts pass 20/20; apps/core-app src/renderer/src/modules/lang/translation-coverage.test.ts passes 4/4. Gates: docs:verify, check:doc-metadata, check:build-allowlist and privacy:inventory:verify exit 0; Nexus server tsc, CoreApp main tsc and vue-tsc are clean."
+  }
 }
