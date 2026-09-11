@@ -16,7 +16,6 @@ import { appSetting } from '~/modules/storage/app-storage'
  * Voice entry, recognition history, and the route to channel/model configuration live here.
  * Runtime readiness remains in `VoiceRecognitionStatus` because status is not a preference.
  */
-
 const { t } = useI18n()
 const router = useRouter()
 
@@ -49,7 +48,6 @@ function openCapabilities(): void {
 
 <template>
   <TuffGroupBlock
-    :name="t('settingSpeechRecognition.title')"
     :description="t('settingSpeechRecognition.description')"
     default-icon="i-carbon-microphone"
     active-icon="i-carbon-microphone-filled"

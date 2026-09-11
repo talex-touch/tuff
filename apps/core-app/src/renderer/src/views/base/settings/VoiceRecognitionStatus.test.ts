@@ -7,7 +7,11 @@ const router = vi.hoisted(() => ({ push: vi.fn() }))
 const voiceSdk = vi.hoisted(() => ({ getRecognitionStatus: vi.fn() }))
 
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key })
+  useI18n: () => ({
+    // Keys echo back, except the ones that are deliberately empty in the locale files. An
+    // identity mock would render a blank line as a non-blank one and hide the whole rule.
+    t: (key: string) => (key === 'settingSpeechRecognition.unavailable.description' ? '' : key)
+  })
 }))
 
 vi.mock('vue-router', () => ({
@@ -109,7 +113,10 @@ describe('VoiceRecognitionStatus', () => {
     voiceSdk.getRecognitionStatus.mockRejectedValue(new Error('transport down'))
     const wrapper = await mountStatus()
 
-    expect(alert(wrapper).text()).toContain('settingSpeechRecognition.unavailable.description')
+    // Title and button only: "could not read the status" needs no second sentence, and one
+    // restating the title is what made this pill too long to take in at a glance.
+    expect(alert(wrapper).text()).toContain('settingSpeechRecognition.unavailable.title')
+    expect(alert(wrapper).find('.VoiceRecognitionStatus-Message').exists()).toBe(false)
     expect(wrapper.find('[data-testid="voice-status-configure"]').exists()).toBe(false)
 
     voiceSdk.getRecognitionStatus.mockResolvedValue({ asr: { ready: true }, stt: { ready: true } })

@@ -89,7 +89,12 @@ onBeforeUnmount(() => {
   <div v-if="visible" class="VoiceRecognitionStatus" data-testid="voice-status-alert" role="alert">
     <span class="VoiceRecognitionStatus-Icon i-carbon-warning-filled" aria-hidden="true" />
     <span class="VoiceRecognitionStatus-Title">{{ title }}</span>
-    <span class="VoiceRecognitionStatus-Message">{{ message }}</span>
+    <!--
+      Only when it adds something. "Could not read the status" needs no second sentence — the
+      title says what happened and the button says what to do, and a line restating the title in
+      between is the thing that made this pill too long to read at a glance.
+    -->
+    <span v-if="message" class="VoiceRecognitionStatus-Message">{{ message }}</span>
     <!--
       One button, and it does the thing the sentence names. An unreadable status is retried here;
       a missing binding is fixed where bindings live.
