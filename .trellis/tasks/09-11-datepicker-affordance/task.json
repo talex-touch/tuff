@@ -1,9 +1,9 @@
 {
-  "id": "sliding-indicator-extraction",
-  "name": "sliding-indicator-extraction",
-  "title": "Shared sliding-indicator composable for FlatRadio, TabBar and Tabs",
+  "id": "datepicker-affordance",
+  "name": "datepicker-affordance",
+  "title": "DatePicker day-cell affordance and style alignment",
   "description": "",
-  "status": "in_progress",
+  "status": "planning",
   "dev_type": null,
   "scope": null,
   "package": null,
