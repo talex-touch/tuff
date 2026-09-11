@@ -579,12 +579,17 @@ const viewState = computed(() => {
 if (import.meta.server && viewState.value === 'not-found')
   setResponseStatus(404)
 
+// DocsSidebar asks for the same key. Nuxt's default dedupe ('cancel') aborts the first
+// promise and starts a second request when two subscribers mount in one tick, so the
+// navigation tree left the browser twice per page (measured in production). 'defer'
+// makes the second subscriber await the request already in flight.
 const { data: navigationTreePayload } = await useTypedFetch<unknown>(
   docsNavigationEndpoint,
   {
     key: computed(() => `docs-navigation:${docsLocale.value}:${docsNavigationScope.value ?? 'all'}`),
     server: false,
     lazy: true,
+    dedupe: 'defer',
     responseType: 'json',
     default: () => [],
   },

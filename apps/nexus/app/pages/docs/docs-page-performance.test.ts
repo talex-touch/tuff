@@ -697,6 +697,13 @@ describe('docs page performance boundaries', () => {
     expect.soft(docsSidebar).toMatch(/useTypedFetch<unknown>\([\s\S]*docsNavigationEndpoint,[\s\S]*server: false,[\s\S]*lazy: true,[\s\S]*responseType: 'json'/)
   })
 
+  it('shares one in-flight navigation request between the page pager and the sidebar', () => {
+    // Both subscribe under the same key; Nuxt's default `dedupe: 'cancel'` restarted the
+    // request for the second subscriber, so the tree left the browser twice per page.
+    expect.soft(page).toMatch(/key: computed\(\(\) => `docs-navigation:[\s\S]*?dedupe: 'defer',/)
+    expect.soft(docsSidebar).toMatch(/key: computed\(\(\) => `docs-navigation:[\s\S]*?dedupe: 'defer',/)
+  })
+
   it('warms component docs links on sidebar intent without enabling bulk NuxtLink prefetch', () => {
     expect.soft(docsSidebar).toContain("import { requestDocsPage } from '~/utils/docs-page-client-cache'")
     expect.soft(docsSidebar).toContain("import { useTypedFetch } from '~/utils/request'")
