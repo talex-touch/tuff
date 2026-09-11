@@ -152,6 +152,27 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain('__SENTRY_EXCLUDE_REPLAY_WORKER__: true')
   })
 
+  it('loads the Sentry client after mount instead of before hydration', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+    const plugin = readProjectFile('../../plugins/sentry-deferred.client.ts')
+    const clientConfig = readProjectFile('../../../sentry.client.config.ts')
+
+    // The module's two client plugins awaited the SDK download in the plugin phase, so it sat
+    // on the hydration critical path of every page. They are removed and replaced by a plugin
+    // that loads on the first idle slot after mount and replays anything caught in between.
+    expect(config).toContain('function removeSentryClientPlugins(')
+    expect(config).toMatch(/'app:resolve'\(app\) \{[\s\S]*removeSentryClientPlugins\(app\)/)
+    expect(config).toContain('sentryClientEnabled: !disableSentry')
+    expect(plugin).toContain("nuxtApp.hook('app:mounted'")
+    expect(plugin).toContain('installErrorBuffer(window)')
+    expect(plugin).toContain('buffer.flush(')
+    expect(plugin).toContain("import('@sentry/nuxt')")
+    // Importing the config file must stay side-effect free: the module still `await import`s
+    // it if its plugin ever comes back, and a top-level init would undo the deferral.
+    expect(clientConfig).not.toMatch(/^Sentry\.init\(/m)
+    expect(clientConfig).toContain('export function initSentryClient(')
+  })
+
   it('only retains Nitro source maps for explicit diagnostics and lets Sentry own upload maps', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 

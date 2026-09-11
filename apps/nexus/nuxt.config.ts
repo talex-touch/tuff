@@ -144,6 +144,30 @@ function isEnvFlagEnabled(value?: string) {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
 }
 
+/**
+ * The two client plugins `@sentry/nuxt` registers: a template that `await import`s
+ * `sentry.client.config.ts`, and the integrations plugin that depends on it. Both run before
+ * the app mounts, which put the SDK download on the hydration critical path of every page.
+ * `app/plugins/sentry-deferred.client.ts` does their job after mount instead, so they are
+ * dropped here. Server-side Sentry (source maps, request handler) is untouched.
+ */
+function isSentryClientPlugin(file: string | undefined) {
+  if (!file)
+    return false
+
+  const normalized = file.replace(/\\/g, '/').replace(/\.m?js$/, '')
+  return normalized.endsWith('/sentry-client-config')
+    || normalized.endsWith('/@sentry/nuxt/build/module/runtime/plugins/sentry.client')
+    || (normalized.includes('/@sentry+nuxt') && normalized.endsWith('/runtime/plugins/sentry.client'))
+}
+
+function removeSentryClientPlugins(app: { plugins: Array<{ src?: string }> }) {
+  for (let index = app.plugins.length - 1; index >= 0; index -= 1) {
+    if (isSentryClientPlugin(app.plugins[index]?.src))
+      app.plugins.splice(index, 1)
+  }
+}
+
 const riskControlFeatureEnabled = isEnvFlagEnabled(
   process.env.NUXT_PUBLIC_RISK_CONTROL_ENABLED || process.env.NEXUS_EXPERIMENTAL_RISK_ENABLED,
 )
@@ -310,6 +334,10 @@ export default defineNuxtConfig({
       defaultDefenseMode: process.env.ADMIN_DEFAULT_DEFENSE_MODE || 'NORMAL',
     },
     public: {
+      // Read by `app/plugins/sentry-deferred.client.ts`: the module's own client plugins are
+      // removed in `app:resolve`, so this is what tells the deferred loader whether Sentry is
+      // on for this build at all.
+      sentryClientEnabled: !disableSentry,
       docs: {
         asideCardChrome: process.env.NUXT_PUBLIC_DOCS_ASIDE_CARD_CHROME,
       },
@@ -512,9 +540,11 @@ export default defineNuxtConfig({
   hooks: {
     'app:resolve'(app) {
       removeSidebaseAuthAppRuntime(app)
+      removeSentryClientPlugins(app)
     },
     'app:templates'(app) {
       removeSidebaseAuthAppRuntime(app)
+      removeSentryClientPlugins(app)
     },
     'components:extend'(components) {
       const ignoredContentComponentPatterns = [
