@@ -1,5 +1,6 @@
 <script setup lang="ts" name="SettingUser">
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { TxModal as TModal } from '@talex-touch/tuffex/modal'
 import { formatCompactAccountLabel, formatCompactEmail } from '@talex-touch/utils/account'
 import { isDevEnv } from '@talex-touch/utils/env'
@@ -19,7 +20,10 @@ import { useAuth } from '~/modules/auth/useAuth'
 import {
   getRuntimeNexusBaseUrl,
   getRuntimeServerMode,
-  setRuntimeServerMode
+  resetUserNexusBaseUrl,
+  setRuntimeServerMode,
+  setUserNexusBaseUrl,
+  type NexusBaseUrlSaveError
 } from '~/modules/nexus/runtime-base'
 import { appSetting } from '~/modules/storage/app-storage'
 import { resolveLoginManualHint } from './login-recovery-display'
@@ -31,6 +35,7 @@ const {
   reopenBrowserLogin,
   cancelPendingBrowserLogin,
   logout,
+  signOut,
   runSyncBootstrap,
   authLoadingState
 } = useAuth()
@@ -88,6 +93,34 @@ const useLocalServer = computed({
 })
 
 const runtimeServerDescription = computed(() => getRuntimeNexusBaseUrl())
+
+/**
+ * What the renderer can tell about the stored address: it either is the one in effect, or it is
+ * not. `TUFF_NEXUS_BASE_URL` is resolved inside the main process, so the page cannot observe it and
+ * states its precedence as a rule instead of claiming to have detected it.
+ */
+const nexusBaseUrlStored = computed(() => {
+  const stored = appSetting.auth?.nexusBaseUrl
+  return typeof stored === 'string' ? stored.trim() : ''
+})
+const nexusBaseUrlSource = computed<'custom' | 'stale' | 'default'>(() => {
+  if (!nexusBaseUrlStored.value) {
+    return 'default'
+  }
+  return nexusBaseUrlStored.value === runtimeServerDescription.value ? 'custom' : 'stale'
+})
+const nexusBaseUrlInput = ref(nexusBaseUrlStored.value)
+const nexusBaseUrlSaving = ref(false)
+const nexusBaseUrlDescription = computed(() => {
+  const source =
+    nexusBaseUrlSource.value === 'custom'
+      ? t('settingUser.nexusBaseUrlSourceCustom', '自定义地址')
+      : nexusBaseUrlSource.value === 'stale'
+        ? t('settingUser.nexusBaseUrlSourceStale', '已保存的地址未生效')
+        : t('settingUser.nexusBaseUrlSourceDefault', '运行时服务地址')
+  return `${source} · ${runtimeServerDescription.value}`
+})
+
 const loginDialogTitle = computed(() => {
   if (authLoadingState.loginStage === 'failed') {
     return t('settingUser.loginDialogFailedTitle')
@@ -202,6 +235,67 @@ async function handleLogout() {
   }
 }
 
+function resolveNexusBaseUrlError(error: NexusBaseUrlSaveError): string {
+  switch (error) {
+    case 'empty':
+      return t('settingUser.nexusBaseUrlErrorEmpty', '请输入 Nexus 服务地址')
+    case 'invalid-url':
+      return t('settingUser.nexusBaseUrlErrorInvalid', '地址格式无效，请填写完整的 http(s) 地址')
+    case 'unsupported-protocol':
+      return t('settingUser.nexusBaseUrlErrorProtocol', '仅支持 http(s) 协议')
+    case 'insecure-transport':
+      return t(
+        'settingUser.nexusBaseUrlErrorInsecure',
+        '远程地址必须使用 https（http 仅限 localhost/127.0.0.1）'
+      )
+    default:
+      return t('settingUser.nexusBaseUrlErrorSave', '保存失败，请重试')
+  }
+}
+
+/**
+ * Applies a base-URL change, or `null` for "restore default".
+ *
+ * A changed address must invalidate the stored account credential: the tokens were issued by the
+ * old origin and cannot be replayed at the new one. The sign-out goes through the shared auth
+ * channel instead of a local `isLoggedIn` check, because main can still hold a session the renderer
+ * has already forgotten about.
+ */
+async function applyNexusBaseUrl(input: string | null): Promise<void> {
+  if (nexusBaseUrlSaving.value) {
+    return
+  }
+  nexusBaseUrlSaving.value = true
+  try {
+    const result = input === null ? await resetUserNexusBaseUrl() : await setUserNexusBaseUrl(input)
+    if (!result.ok) {
+      toast.error(resolveNexusBaseUrlError(result.error))
+      return
+    }
+
+    nexusBaseUrlInput.value = result.value
+    if (!result.changed) {
+      toast.info(t('settingUser.nexusBaseUrlUnchanged', '当前生效地址未变化'))
+      return
+    }
+
+    try {
+      await signOut()
+    } catch {
+      toast.error(
+        t(
+          'settingUser.nexusBaseUrlSignOutFailed',
+          '地址已更新，但退出登录失败，请手动退出后重新登录'
+        )
+      )
+      return
+    }
+    toast.success(t('settingUser.nexusBaseUrlUpdated', '服务地址已更新，请重新登录'))
+  } finally {
+    nexusBaseUrlSaving.value = false
+  }
+}
+
 function openProfileEditor() {
   profileEditorVisible.value = true
 }
@@ -289,6 +383,55 @@ function openProfileEditor() {
       default-icon="i-carbon-development"
       active-icon="i-carbon-development"
     />
+
+    <TuffBlockSlot
+      :title="t('settingUser.nexusBaseUrlTitle', 'Nexus 服务地址')"
+      :description="nexusBaseUrlDescription"
+      default-icon="i-carbon-network-4"
+      active-icon="i-carbon-network-4"
+    >
+      <div class="nexus-endpoint">
+        <TxInput
+          v-model="nexusBaseUrlInput"
+          class="nexus-endpoint__input"
+          :disabled="nexusBaseUrlSaving"
+          :placeholder="t('settingUser.nexusBaseUrlPlaceholder', 'https://tuff.tagzxia.com')"
+        />
+        <div class="nexus-endpoint__actions">
+          <TxButton
+            variant="flat"
+            type="primary"
+            size="sm"
+            :loading="nexusBaseUrlSaving"
+            :disabled="nexusBaseUrlSaving"
+            @click="applyNexusBaseUrl(nexusBaseUrlInput)"
+          >
+            {{ t('settingUser.nexusBaseUrlSave', '保存') }}
+          </TxButton>
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="nexusBaseUrlSaving"
+            @click="applyNexusBaseUrl(null)"
+          >
+            {{ t('settingUser.nexusBaseUrlReset', '恢复默认') }}
+          </TxButton>
+        </div>
+        <p class="nexus-endpoint__hint">
+          {{
+            t(
+              'settingUser.nexusBaseUrlEnvHint',
+              '构建期环境变量 TUFF_NEXUS_BASE_URL 优先级最高，存在时会覆盖此处设置。'
+            )
+          }}
+        </p>
+        <p v-if="nexusBaseUrlSource === 'stale'" class="nexus-endpoint__warning">
+          {{
+            t('settingUser.nexusBaseUrlStaleHint', '已保存的地址当前未生效，请重新保存或恢复默认。')
+          }}
+        </p>
+      </div>
+    </TuffBlockSlot>
   </TuffGroupBlock>
 
   <CreditsSummaryBlock context="settings" />
@@ -461,5 +604,35 @@ function openProfileEditor() {
   font-size: 12px;
   line-height: 1.5;
   color: var(--tx-text-color-placeholder);
+}
+
+.nexus-endpoint {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.nexus-endpoint__input {
+  width: 100%;
+}
+
+.nexus-endpoint__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.nexus-endpoint__hint,
+.nexus-endpoint__warning {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tx-text-color-placeholder);
+}
+
+.nexus-endpoint__warning {
+  color: var(--tx-color-warning);
 }
 </style>
