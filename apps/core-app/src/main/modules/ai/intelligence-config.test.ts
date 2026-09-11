@@ -5,9 +5,16 @@ import { tuffIntelligence } from './intelligence-sdk'
 
 const storageMocks = vi.hoisted(() => ({
   storedConfig: undefined as unknown,
+  configListeners: new Set<() => void>(),
   getMainConfig: vi.fn(() => storageMocks.storedConfig),
   saveMainConfig: vi.fn(),
-  subscribeMainConfig: vi.fn()
+  subscribeMainConfig: vi.fn(),
+  /** Delivers one config-write notification the way the real storage layer does. */
+  emitConfigChanged(): void {
+    for (const listener of [...storageMocks.configListeners]) {
+      listener()
+    }
+  }
 }))
 
 vi.mock('electron', () => {
@@ -97,7 +104,10 @@ vi.mock('../../core/precore', () => ({
 vi.mock('../storage', () => ({
   getMainConfig: storageMocks.getMainConfig,
   saveMainConfig: storageMocks.saveMainConfig,
-  subscribeMainConfig: storageMocks.subscribeMainConfig,
+  subscribeMainConfig: (_key: unknown, listener: () => void) => {
+    storageMocks.configListeners.add(listener)
+    return () => storageMocks.configListeners.delete(listener)
+  },
   isMainStorageReady: vi.fn(() => false)
 }))
 
@@ -769,9 +779,12 @@ type StoredBinding = {
 
 type StoredProvider = {
   id: string
+  type?: IntelligenceProviderType
+  name?: string
   enabled?: boolean
   priority?: number
   capabilities?: string[]
+  metadata?: Record<string, unknown>
 }
 
 type StoredConfig = {
@@ -784,17 +797,18 @@ type StoredConfig = {
  * built-in Nexus provider arrives with `enabled: false` on the sign-in state, not on the fixture.
  */
 function createGuestConfig() {
+  const providers: StoredProvider[] = [
+    {
+      id: 'local-default',
+      type: IntelligenceProviderType.LOCAL,
+      name: 'Local Model',
+      enabled: false,
+      priority: 9,
+      capabilities: ['text.chat']
+    }
+  ]
   return {
-    providers: [
-      {
-        id: 'local-default',
-        type: IntelligenceProviderType.LOCAL,
-        name: 'Local Model',
-        enabled: false,
-        priority: 9,
-        capabilities: ['text.chat']
-      }
-    ],
+    providers,
     globalConfig: {
       defaultStrategy: 'adaptive-default',
       enableAudit: true,
@@ -835,6 +849,28 @@ function nexusProviderEnabled(): boolean | undefined {
   return storedConfig().providers.find((provider) => provider.id === NEXUS_PROVIDER_ID)?.enabled
 }
 
+/** The persisted override: absent whenever the user never closed the Nexus route. */
+function nexusRouteDisabledByUser(): boolean {
+  const provider = storedConfig().providers.find((candidate) => candidate.id === NEXUS_PROVIDER_ID)
+  return provider?.metadata?.nexusRouteUserDisabled === true
+}
+
+/**
+ * The user toggles the Nexus channel on the channels page: the provider flag and every Nexus
+ * binding move together, and storage announces the write the way the real layer does.
+ */
+function toggleNexusRouteFromChannelsPage(enabled: boolean, notify = true): void {
+  const config = storedConfig()
+  const provider = config.providers.find((candidate) => candidate.id === NEXUS_PROVIDER_ID)
+  if (provider) provider.enabled = enabled
+  for (const capability of Object.values(config.capabilities)) {
+    for (const binding of capability.providers ?? []) {
+      if (binding.providerId === NEXUS_PROVIDER_ID) binding.enabled = enabled
+    }
+  }
+  if (notify) storageMocks.emitConfigChanged()
+}
+
 /**
  * Re-imports the module under test so each case owns the module-level auth baseline
  * (`lastAppliedAuthSignedIn` and the listener teardown) instead of inheriting the previous
@@ -852,6 +888,7 @@ describe('intelligence-config Nexus sign-in activation', () => {
     vi.clearAllMocks()
     authMocks.session.isSignedIn = false
     authMocks.listeners.clear()
+    storageMocks.configListeners.clear()
     authMocks.subscribeAuthState.mockImplementation(
       (listener: (state: { isSignedIn: boolean }) => void) => {
         authMocks.listeners.add(listener)
@@ -1014,5 +1051,125 @@ describe('intelligence-config Nexus sign-in activation', () => {
         (binding) => binding.providerId === 'local-default'
       )
     ).toEqual(localBindingBefore)
+  })
+
+  it('records the user closing the route and keeps it closed across sign-out and sign-in', async () => {
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+    config.setupConfigUpdateListener()
+    authMocks.emitSignedIn(true)
+    expect(nexusProviderEnabled()).toBe(true)
+
+    toggleNexusRouteFromChannelsPage(false)
+    expect(nexusRouteDisabledByUser()).toBe(true)
+
+    authMocks.emitSignedIn(false)
+    storageMocks.saveMainConfig.mockClear()
+    authMocks.emitSignedIn(true)
+
+    // Signing in is what makes the injected token usable; it is not consent to reopen a route the
+    // user closed, which is what a plain `enabled: true` on sign-in used to assume.
+    expect(nexusProviderEnabled()).toBe(false)
+    expect(nexusBindings().filter((binding) => binding.enabled !== false)).toEqual([])
+  })
+
+  it('keeps a user-closed route closed when the app restarts signed in', async () => {
+    const seeded = createGuestConfig()
+    seeded.providers.push({
+      id: NEXUS_PROVIDER_ID,
+      enabled: false,
+      priority: 1,
+      capabilities: ['text.chat'],
+      metadata: { nexusRouteUserDisabled: true }
+    })
+    storageMocks.storedConfig = seeded
+    authMocks.session.isSignedIn = true
+
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+    storageMocks.saveMainConfig.mockClear()
+
+    config.setupConfigUpdateListener()
+
+    expect(nexusProviderEnabled()).toBe(false)
+    expect(nexusBindings().filter((binding) => binding.enabled !== false)).toEqual([])
+    expect(storageMocks.saveMainConfig).not.toHaveBeenCalled()
+  })
+
+  it('reopens the route after the user turns it back on', async () => {
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+    config.setupConfigUpdateListener()
+    authMocks.emitSignedIn(true)
+
+    toggleNexusRouteFromChannelsPage(false)
+    expect(nexusRouteDisabledByUser()).toBe(true)
+
+    toggleNexusRouteFromChannelsPage(true)
+    expect(nexusRouteDisabledByUser()).toBe(false)
+
+    authMocks.emitSignedIn(false)
+    authMocks.emitSignedIn(true)
+
+    expect(nexusProviderEnabled()).toBe(true)
+    expect(nexusBindings().filter((binding) => binding.enabled !== true)).toEqual([])
+  })
+})
+
+describe('intelligence-config auth listener wiring', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    authMocks.session.isSignedIn = false
+    authMocks.listeners.clear()
+    storageMocks.configListeners.clear()
+    authMocks.subscribeAuthState.mockImplementation(
+      (listener: (state: { isSignedIn: boolean }) => void) => {
+        authMocks.listeners.add(listener)
+        return () => authMocks.listeners.delete(listener)
+      }
+    )
+    storageMocks.storedConfig = createGuestConfig()
+  })
+
+  it('registers the auth listener before reconciling the startup session state', async () => {
+    authMocks.session.isSignedIn = true
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+    storageMocks.saveMainConfig.mockClear()
+    // Storage is not ready yet, so the startup reconciliation cannot even read the config.
+    storageMocks.getMainConfig.mockImplementationOnce(() => {
+      throw new Error('main storage is not ready')
+    })
+
+    expect(() => config.setupConfigUpdateListener()).not.toThrow()
+    expect(authMocks.listeners.size).toBe(1)
+
+    // The transition was never committed, so the next notification retries it instead of the
+    // module sitting without a listener and without an applied sign-in.
+    authMocks.emitSignedIn(true)
+
+    expect(nexusProviderEnabled()).toBe(true)
+    expect(nexusBindings().filter((binding) => binding.enabled !== true)).toEqual([])
+  })
+
+  it('does not re-enable the route after a failed reconciliation is retried', async () => {
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+    config.setupConfigUpdateListener()
+    storageMocks.getMainConfig.mockImplementationOnce(() => {
+      throw new Error('main storage is not ready')
+    })
+    // A signed-out session that cannot be reconciled yet.
+    authMocks.emitSignedIn(false)
+    storageMocks.saveMainConfig.mockClear()
+
+    authMocks.emitSignedIn(true)
+    toggleNexusRouteFromChannelsPage(false)
+
+    authMocks.emitSignedIn(false)
+    authMocks.emitSignedIn(true)
+
+    expect(nexusRouteDisabledByUser()).toBe(true)
+    expect(nexusProviderEnabled()).toBe(false)
   })
 })

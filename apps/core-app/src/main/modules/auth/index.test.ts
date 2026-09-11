@@ -1085,6 +1085,76 @@ describe('forced auth credential persistence', () => {
         expect(appSettingState.auth?.nexusTokenBaseUrl).toBe('https://origin-b.test')
       })
     })
+
+    it('never sends a memory-only credential to a Nexus origin that did not issue it', async () => {
+      runtimeBaseUrlState.baseUrl = 'https://origin-a.test'
+      // Protected storage cannot write, so this credential only ever lives in memory and the
+      // durable origin record is never written.
+      setSecureStoreValueMock.mockResolvedValue(false)
+
+      const authModule = await importAuthModule()
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+      await authModule.__test__.setAuthToken('memory-only-token')
+      expect(authModule.getAuthToken()).toBe('memory-only-token')
+      expect(appSettingState.auth?.nexusTokenBaseUrl).toBeUndefined()
+
+      // The user points the app at another Nexus origin while the token is still in memory.
+      runtimeBaseUrlState.baseUrl = 'https://origin-b.test'
+      networkRequestMock.mockClear()
+
+      expect(authModule.getAuthToken()).toBeNull()
+      await expect(
+        authModule.__test__.performNexusRequest({
+          method: 'GET',
+          path: '/api/business',
+          context: 'plugin-business'
+        })
+      ).resolves.toBeNull()
+
+      expect(networkRequestMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps a credential that a login wrote while the origin cleanup was awaiting storage', async () => {
+      runtimeBaseUrlState.baseUrl = 'https://origin-a.test'
+
+      const authModule = await importAuthModule()
+      authModule.__test__.resetState()
+      authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+      await authModule.__test__.setAuthToken('origin-a-token')
+
+      // Park the cleanup inside its first durable write: this is the window a login can land in.
+      let releaseCleanup!: () => void
+      const cleanupGate = new Promise<void>((resolve) => {
+        releaseCleanup = resolve
+      })
+      saveMainConfigDurableMock.mockImplementationOnce(async () => {
+        await cleanupGate
+        return { success: true, version: 1 }
+      })
+      runtimeBaseUrlState.baseUrl = 'https://origin-b.test'
+      setSecureStoreValueMock.mockClear()
+
+      // The cleanup `getAuthToken()` triggers for the now-foreign credential, awaited directly so
+      // the assertion below is not racing it.
+      const cleanup = authModule.__test__.dropCredentialIssuedByAnotherOrigin()
+
+      await authModule.__test__.setAuthToken('origin-b-fresh-token')
+      releaseCleanup()
+      await cleanup
+
+      // The cleanup was aimed at the credential it replaced, so it deletes nothing.
+      expect(authModule.getAuthToken()).toBe('origin-b-fresh-token')
+      expect(setSecureStoreValueMock).not.toHaveBeenCalledWith(
+        '/tmp/tuff',
+        'auth.token',
+        null,
+        'auth-token',
+        expect.any(Function)
+      )
+    })
   })
 })
 

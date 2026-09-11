@@ -48,10 +48,21 @@ let activeRequestId = 0
 async function refreshPricing(requestId: number): Promise<void> {
   try {
     const response = await fetchNexusWithAuth('/api/credits/pricing', {}, 'credits-pricing')
-    if (requestId !== activeRequestId || !response?.ok) return
+    if (requestId !== activeRequestId) return
+    if (!response?.ok) {
+      // The list this panel is showing is the one it read last, and it is quoted beside a balance
+      // that has just been re-read. Keeping a price list the gateway can no longer serve would
+      // quote a cost the user may not be charged, so it goes rather than ages.
+      pricing.value = []
+      return
+    }
     pricing.value = normalizeCreditPricing(await response.json())
   } catch {
-    // A missing price list must never block the balance itself.
+    // A missing price list must never block the balance itself. An older request must not clear a
+    // newer list either, so the guard is the request id and not the failure.
+    if (requestId === activeRequestId) {
+      pricing.value = []
+    }
   }
 }
 

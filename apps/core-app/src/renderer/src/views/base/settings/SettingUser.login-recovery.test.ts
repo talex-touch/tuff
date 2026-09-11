@@ -490,6 +490,32 @@ describe('SettingUser nexus base url', () => {
     expect(String(toastMock.error.mock.calls[0]?.[0] ?? '')).toContain('https')
   })
 
+  it('names the rule that rejected a malformed address instead of a generic failure', async () => {
+    // Both members were added to the shared validation union for this panel to explain; a missing
+    // case would fall through to "saving failed", which tells the user nothing they can fix.
+    const messages: string[] = []
+    for (const error of ['embedded-credentials', 'unsupported-path'] as const) {
+      toastMock.error.mockClear()
+      nexusBaseUrlMock.setUserNexusBaseUrl.mockResolvedValue({ ok: false, error })
+      const block = mountNexusBlock()
+
+      await block.input.setValue('https://custom.example.test/nexus')
+      await block.saveButton.trigger('click')
+      await flushPromises()
+
+      expect(toastMock.error, error).toHaveBeenCalledTimes(1)
+      messages.push(String(toastMock.error.mock.calls[0]?.[0] ?? ''))
+    }
+
+    expect(messages[0]).toBeTruthy()
+    expect(messages[1]).toBeTruthy()
+    expect(messages[0]).not.toBe(messages[1])
+    for (const message of messages) {
+      expect(message).not.toContain('保存失败')
+      expect(message).not.toContain('Saving failed')
+    }
+  })
+
   it('clears the address and signs out when the default is restored', async () => {
     appSettingMock.auth.nexusBaseUrl = 'https://custom.example.test'
     nexusBaseUrlMock.resetUserNexusBaseUrl.mockResolvedValue({

@@ -294,6 +294,25 @@ function readAuthTokenBaseUrl(): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+/**
+ * Issuing origin of a credential that protected storage could not persist, or '' when the
+ * credential in hand is either durable or absent.
+ *
+ * The persisted field is written only once the credential itself is durable, so a memory-only
+ * credential has no recorded origin at all. Reading "nothing recorded" as "not stale" would then
+ * replay that token at whatever Nexus origin the address changes to.
+ */
+let inMemoryCredentialBaseUrl = ''
+
+/**
+ * Bumped every time a credential is accepted.
+ *
+ * A cleanup captures the value it started under and abandons itself once it moved. Clearing is
+ * destructive and awaits storage twice, so a login or a refresh that lands in that window would
+ * otherwise have its fresh credential deleted by a cleanup aimed at the credential it replaced.
+ */
+let authCredentialGeneration = 0
+
 function persistAuthTokenBaseUrl(baseUrl: string): void {
   const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
   ensureAuthSettings(appSettings)
@@ -309,15 +328,36 @@ function persistAuthTokenBaseUrl(baseUrl: string): void {
  * must never be replayed at a different origin.
  */
 function isAuthTokenBaseUrlStale(): boolean {
-  const recorded = normalizeAuthBaseUrl(readAuthTokenBaseUrl())
+  const recorded = resolveCredentialIssuerBaseUrl()
   if (!recorded) return false
   return recorded !== normalizeAuthBaseUrl(resolveAuthBaseUrl())
 }
 
+/**
+ * Origin that issued the credential in hand: what this process recorded when it accepted the
+ * credential, else what the durable record says. The in-memory value is the more recent fact, and
+ * it is the only one that exists when persistence failed.
+ */
+function resolveCredentialIssuerBaseUrl(): string {
+  return normalizeAuthBaseUrl(inMemoryCredentialBaseUrl || readAuthTokenBaseUrl())
+}
+
 async function dropCredentialIssuedByAnotherOrigin(): Promise<void> {
   const current = normalizeAuthBaseUrl(resolveAuthBaseUrl())
-  const recorded = readAuthTokenBaseUrl()
-  await clearAuthToken()
+  const recorded = resolveCredentialIssuerBaseUrl()
+  const generation = authCredentialGeneration
+
+  await clearAuthToken(generation)
+
+  if (authCredentialGeneration !== generation) {
+    // A login or refresh landed while the credential was being cleared. That credential was issued
+    // by the origin being resolved now, so both it and its own origin record stay untouched.
+    authLog.warn('Abandoned credential cleanup: a newer credential arrived', {
+      meta: { reason: 'credential-superseded' }
+    })
+    return
+  }
+
   persistAuthTokenBaseUrl(current)
   authLog.warn('Stored auth credential discarded because the Nexus origin changed', {
     meta: { reason: 'base-url-changed', recordedBaseUrl: recorded, currentBaseUrl: current }
@@ -474,6 +514,8 @@ function applyAuthCredentialState(state: AuthCredentialState | null): void {
   authToken = state?.accessToken ?? null
   authRefreshToken = state?.refreshToken ?? null
   authAccessTokenExpiresAt = state?.accessTokenExpiresAt ?? null
+  // No credential in hand means nothing for an issuing origin to belong to.
+  if (!state) inMemoryCredentialBaseUrl = ''
   scheduleAccessTokenRefresh()
 }
 
@@ -686,6 +728,9 @@ async function setAuthToken(
     refreshToken,
     accessTokenExpiresAt: refreshToken ? resolveAccessTokenExpiresAt(options?.ttlSeconds) : null
   }
+  // Bumped before the first await: a cleanup already in flight has to see that the credential it
+  // was clearing has just been replaced.
+  authCredentialGeneration += 1
   applyAuthCredentialState(credentialState)
   authLog.info('Auth token accepted', {
     meta: { credentialProtectionEnabled: true, hasRefreshCredential: Boolean(refreshToken) }
@@ -695,8 +740,10 @@ async function setAuthToken(
     // Recorded only after the credential itself is durable: the reverse order would leave a
     // stale token looking like it belongs to the origin just recorded.
     persistAuthTokenBaseUrl(normalizeAuthBaseUrl(resolveAuthBaseUrl()))
-  }
-  if (!persisted) {
+  } else {
+    // Persistence failed, so the durable record cannot carry the origin and this credential is
+    // memory-only. The issuing origin has to be remembered here instead.
+    inMemoryCredentialBaseUrl = normalizeAuthBaseUrl(resolveAuthBaseUrl())
     authLog.warn('Secure auth persistence write failed; login state can only remain in memory', {
       meta: { reason: 'secure-store-write-failed' }
     })
@@ -706,14 +753,31 @@ async function setAuthToken(
   })
 }
 
-async function clearAuthToken(): Promise<void> {
+/**
+ * Clears the credential in memory and on disk.
+ *
+ * A caller that passes the `generation` it observed only wants the credential it saw cleared. That
+ * caller is the origin-drop cleanup, which starts from a read rather than from a user action and can
+ * be overtaken by a login or a refresh whose credential must survive.
+ */
+async function clearAuthToken(generation?: number): Promise<void> {
+  const superseded = (): boolean =>
+    generation !== undefined && authCredentialGeneration !== generation
+
+  if (superseded()) return
+
   const hadToken = Boolean(authToken || authRefreshToken)
   applyAuthCredentialState(null)
   authLog.info('Clearing auth token', {
     meta: { hadToken, credentialProtectionEnabled: true }
   })
+
+  if (superseded()) return
   await persistAuthReauthenticationRequired(true)
+
+  if (superseded()) return
   if (await deletePersistedAuthToken()) {
+    if (superseded()) return
     await persistAuthReauthenticationRequired(false)
   }
 }
@@ -2189,6 +2253,8 @@ function resetAuthModuleTestState(): void {
   authToken = null
   authRefreshToken = null
   authAccessTokenExpiresAt = null
+  inMemoryCredentialBaseUrl = ''
+  authCredentialGeneration += 1
   replaceAuthRequestIdentity('')
   authRefreshInFlight = null
   stepUpToken = null
@@ -2229,6 +2295,8 @@ export const __test__ = {
     activeDeviceAuthCode = code
   },
   clearAuthToken,
+  /** Lets a test await the origin cleanup that `getAuthToken()` starts without awaiting. */
+  dropCredentialIssuedByAnotherOrigin,
   initializeAuthState,
   getCachedAuthUser,
   getCredentialState: (): AuthCredentialState => ({

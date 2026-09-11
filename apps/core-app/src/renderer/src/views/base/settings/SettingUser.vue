@@ -248,6 +248,16 @@ function resolveNexusBaseUrlError(error: NexusBaseUrlSaveError): string {
         'settingUser.nexusBaseUrlErrorInsecure',
         '远程地址必须使用 https（http 仅限 localhost/127.0.0.1）'
       )
+    case 'embedded-credentials':
+      return t(
+        'settingUser.nexusBaseUrlErrorCredentials',
+        '地址中不能包含用户名或密码，请只填写服务地址'
+      )
+    case 'unsupported-path':
+      return t(
+        'settingUser.nexusBaseUrlErrorPath',
+        '地址不能带路径，请填写到域名（含端口），例如 https://tuff.tagzxia.com'
+      )
     default:
       return t('settingUser.nexusBaseUrlErrorSave', '保存失败，请重试')
   }

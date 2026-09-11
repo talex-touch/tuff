@@ -102,8 +102,83 @@ let teardownAuthStateListener: (() => void) | null = null
  * Auth notifications also fire for token refreshes and profile updates that leave `isSignedIn`
  * unchanged, so Nexus enablement keys off transitions only: a refresh must never reopen a provider
  * the user just turned off mid-session.
+ *
+ * Committed only after the reconciliation write landed, so a storage failure leaves it unset and
+ * the next notification retries the transition instead of being treated as already applied.
  */
 let lastAppliedAuthSignedIn: boolean | null = null
+
+/**
+ * Key under the Nexus provider's `metadata` recording that the user switched the route off.
+ *
+ * The provider's `enabled` flag cannot tell a click on the channels page apart from this module's
+ * auth-managed writes: both persist the same boolean, and sign-out writes `false` on its own. The
+ * override is stored beside the flag so a restart or a re-login cannot reopen a route the user
+ * closed, while a route that was only auth-managed still comes back on the next sign-in.
+ */
+const NEXUS_ROUTE_USER_DISABLED_KEY = 'nexusRouteUserDisabled'
+
+/**
+ * The persisted Nexus `enabled` value this module last knew about: the value it wrote itself, the
+ * value it read on the last load, or `null` before the config was read. A move away from it is the
+ * user's own decision, because nothing else writes this flag.
+ */
+let observedNexusEnabled: boolean | null = null
+
+function findNexusProvider(
+  config: IntelligenceSDKPersistedConfig
+): IntelligenceProviderConfig | undefined {
+  return (config.providers ?? []).find((provider) => provider.id === TUFF_NEXUS_PROVIDER_ID)
+}
+
+function isNexusRouteDisabledByUser(config: IntelligenceSDKPersistedConfig): boolean {
+  return findNexusProvider(config)?.metadata?.[NEXUS_ROUTE_USER_DISABLED_KEY] === true
+}
+
+/** Records (or clears) the user's override, returning whether the persisted metadata changed. */
+function setNexusRouteDisabledByUser(
+  config: IntelligenceSDKPersistedConfig,
+  disabled: boolean
+): boolean {
+  const provider = findNexusProvider(config)
+  if (!provider) return false
+
+  const metadata = { ...(provider.metadata ?? {}) }
+  if (disabled) {
+    if (metadata[NEXUS_ROUTE_USER_DISABLED_KEY] === true) return false
+    metadata[NEXUS_ROUTE_USER_DISABLED_KEY] = true
+  } else {
+    if (!(NEXUS_ROUTE_USER_DISABLED_KEY in metadata)) return false
+    delete metadata[NEXUS_ROUTE_USER_DISABLED_KEY]
+  }
+
+  provider.metadata = metadata
+  return true
+}
+
+/**
+ * Records the user's decision when the persisted flag moved without this module writing it.
+ *
+ * Called from the config listener before the reload refreshes `observedNexusEnabled`, so the
+ * comparison still sees the value from before the change.
+ */
+function applyNexusRouteUserPreference(): boolean {
+  const stored = getLatestConfig()
+  if (!stored) return false
+
+  const provider = findNexusProvider(stored)
+  if (!provider) return false
+
+  const enabled = provider.enabled === true
+  const previous = observedNexusEnabled
+  observedNexusEnabled = enabled
+  if (previous === null || previous === enabled) return false
+
+  if (!setNexusRouteDisabledByUser(stored, !enabled)) return false
+  saveMainConfig(StorageList.IntelligenceConfig, stored)
+  intelligenceConfigLog.info('Nexus route preference recorded', { enabled })
+  return true
+}
 
 function normalizeStrategyId(value?: string) {
   if (!value) return undefined
@@ -580,6 +655,10 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
     return
   }
 
+  // Refresh the baseline the user-preference check compares against. The listener calls that check
+  // before this reload precisely because this line moves it.
+  observedNexusEnabled = findNexusProvider(stored)?.enabled === true
+
   const patched = patchStoredConfigDefaults(stored)
   if (patched) {
     saveMainConfig(StorageList.IntelligenceConfig, stored)
@@ -746,9 +825,7 @@ function applyNexusProviderAuthState(signedIn: boolean): boolean {
   const stored = getLatestConfig()
   if (!stored) return false
 
-  const provider = (stored.providers ?? []).find(
-    (candidate) => candidate.id === TUFF_NEXUS_PROVIDER_ID
-  )
+  const provider = findNexusProvider(stored)
   if (!provider) return false
 
   if (!signedIn) {
@@ -757,31 +834,52 @@ function applyNexusProviderAuthState(signedIn: boolean): boolean {
     // Disabling Nexus is mirrored onto every Nexus binding by the patch pass, so the per-binding
     // flags stay owned by one place instead of being flipped twice.
     const changed = patchStoredConfigDefaults(stored) || providerChanged
-    if (!changed) return false
+    if (!changed) {
+      observedNexusEnabled = false
+      return false
+    }
     saveMainConfig(StorageList.IntelligenceConfig, stored)
+    observedNexusEnabled = false
     return true
+  }
+
+  // A route the user closed stays closed. Signing in is what makes the injected token usable, not
+  // a reason to overrule the channels page; only an explicit re-enable clears the override, and
+  // the config listener records that.
+  const userDisabled = isNexusRouteDisabledByUser(stored)
+  let changed = false
+  if (userDisabled && provider.enabled !== false) {
+    provider.enabled = false
+    changed = true
   }
 
   // Patch before enabling: the patch pass seeds the `text.chat` / `audio.stt` Nexus bindings with
   // `enabled: false`, which would otherwise undo the enablement below on the next reload.
-  let changed = patchStoredConfigDefaults(stored)
+  if (patchStoredConfigDefaults(stored)) changed = true
 
-  if (provider.enabled !== true) {
-    provider.enabled = true
-    changed = true
-  }
+  if (!userDisabled) {
+    if (provider.enabled !== true) {
+      provider.enabled = true
+      changed = true
+    }
 
-  for (const capability of Object.values(stored.capabilities ?? {})) {
-    for (const binding of capability.providers ?? []) {
-      if (binding.providerId === TUFF_NEXUS_PROVIDER_ID && binding.enabled === false) {
-        binding.enabled = true
-        changed = true
+    for (const capability of Object.values(stored.capabilities ?? {})) {
+      for (const binding of capability.providers ?? []) {
+        if (binding.providerId === TUFF_NEXUS_PROVIDER_ID && binding.enabled === false) {
+          binding.enabled = true
+          changed = true
+        }
       }
     }
   }
 
-  if (!changed) return false
+  if (!changed) {
+    observedNexusEnabled = provider.enabled === true
+    return false
+  }
+
   saveMainConfig(StorageList.IntelligenceConfig, stored)
+  observedNexusEnabled = provider.enabled === true
   return true
 }
 
@@ -793,9 +891,9 @@ function applyNexusProviderAuthState(signedIn: boolean): boolean {
  */
 function applyAuthSignedInTransition(signedIn: boolean): void {
   if (lastAppliedAuthSignedIn === signedIn) return
-  lastAppliedAuthSignedIn = signedIn
 
   const persisted = applyNexusProviderAuthState(signedIn)
+  lastAppliedAuthSignedIn = signedIn
   intelligenceConfigLog.info('Nexus provider auth transition applied', {
     enabled: signedIn,
     persisted
@@ -809,6 +907,9 @@ export function setupConfigUpdateListener(): void {
   if (!teardownConfigUpdateListener) {
     teardownConfigUpdateListener = subscribeMainConfig(StorageList.IntelligenceConfig, () => {
       try {
+        // Before the reload refreshes the observed value: this is what tells the user's own
+        // on/off click apart from a config write of ours.
+        applyNexusRouteUserPreference()
         ensureIntelligenceConfigLoaded()
       } catch {
         // ignore transient storage readiness issues during startup
@@ -817,10 +918,9 @@ export function setupConfigUpdateListener(): void {
   }
 
   if (!teardownAuthStateListener) {
-    // Auth initialization is fire-and-forget, so its first notification can land before this
-    // listener is registered. Adopt the session state already in place as the baseline.
-    applyAuthSignedInTransition(getSanitizedAuthSessionState().isSignedIn)
-
+    // Subscribe before reconciling. The startup reconciliation below writes config, and with the
+    // subscription last a storage failure left this module without a listener, so every later
+    // transition went unnoticed until the next restart.
     teardownAuthStateListener = subscribeAuthState((state) => {
       try {
         applyAuthSignedInTransition(state.isSignedIn === true)
@@ -829,6 +929,15 @@ export function setupConfigUpdateListener(): void {
         // ignore transient storage readiness issues during auth transitions
       }
     })
+
+    // Auth initialization is fire-and-forget, so its first notification can land before this
+    // listener is registered. Adopt the session state already in place as the baseline. A failure
+    // here is not fatal: `lastAppliedAuthSignedIn` stays unset, so the next notification retries.
+    try {
+      applyAuthSignedInTransition(getSanitizedAuthSessionState().isSignedIn)
+    } catch (error) {
+      intelligenceConfigLog.warn('Nexus auth reconciliation deferred', { error })
+    }
   }
 }
 
