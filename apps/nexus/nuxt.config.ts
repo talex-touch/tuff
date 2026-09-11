@@ -585,6 +585,15 @@ export default defineNuxtConfig({
     defaultLocale: 'en',
     strategy: 'no_prefix',
     detectBrowserLanguage: false,
+    experimental: {
+      // Without preload the client fetched `/_i18n/<hash>/<locale>/messages.json` after
+      // DOMContentLoaded and hydration waited for it — one full round trip on the critical
+      // path of every page, and a second, identical fetch followed from the locale
+      // orchestrator. Preloading puts the keys the SSR render used into the HTML instead;
+      // stripping keeps that payload to those keys rather than both whole locales.
+      preload: true,
+      stripMessagesPayload: true,
+    },
   },
 
   pwa,
