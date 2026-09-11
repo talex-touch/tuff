@@ -9,6 +9,7 @@ import { remarkMermaid } from './app/utils/remark-mermaid'
 import { nexusPageMetaFastPathPlugin } from './build/nexus-page-meta-fast-path'
 import { removeRouteLocalPageComponents } from './build/nexus-page-routes'
 import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
+import { createStaticCacheRouteRules } from './build/nexus-static-routes.mjs'
 import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
 
 loadEnv({ path: '.env' })
@@ -342,6 +343,9 @@ export default defineNuxtConfig({
     '/terms': { redirect: '/license' },
     '/updates': { disableServerSideAuth: true },
     '/updates/**': { disableServerSideAuth: true },
+    // Edge cache headers for prerendered docs HTML/JSON and i18n messages; see the
+    // constants for the window and why. Static responses only — the Worker keeps its own.
+    ...createStaticCacheRouteRules(),
   } as Record<string, Record<string, unknown>>,
 
   future: {
