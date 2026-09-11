@@ -14,6 +14,7 @@ import {
   resolveCreditPricingEntry,
   resolveSellableCreditPricingRule,
   selectCreditPricingRule,
+  updateCreditPricing,
 } from './creditPricingStore'
 
 /** Sells images at 7 credits each unless a case says otherwise. */
@@ -300,5 +301,31 @@ describe('sellable pricing', () => {
 
     expect(rule.unit).toBe('1k_tokens')
     expect(rule.active).toBe(true)
+  })
+})
+
+describe('operator price updates', () => {
+  it('writes only the field the operator named, so a concurrent edit to another survives', async () => {
+    const db = new MockCreditPricingD1Database()
+    db.rows.set('text.chat', storedRow(pricingRule({
+      capability: 'text.chat',
+      unit: '1k_tokens',
+      creditsPerUnit: 1000,
+      minCredits: 1
+    })))
+
+    // A second operator raises the floor between this caller's read and its write. Writing
+    // the whole row back from the snapshot would undo that edit without either operator
+    // seeing a conflict.
+    db.onBeforeUpdate = () => {
+      const row = db.rows.get('text.chat')
+      if (row)
+        row.min_credits = 99
+    }
+
+    const updated = await updateCreditPricing(db, 'text.chat', { creditsPerUnit: 42 })
+
+    expect(updated?.creditsPerUnit).toBe(42)
+    expect(updated?.minCredits).toBe(99)
   })
 })
