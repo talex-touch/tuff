@@ -48,7 +48,7 @@ code: |
 
 ## 组成
 
-布局分段复用 **`TxFlatRadio`**：因此它是一个真正的 `radiogroup`，方向键可以在三个选项间移动、只占一个 Tab 停靠点——上游那里是三个各自带 `aria-pressed` 的独立按钮。几何尺寸（28px 高、8px 外圆角、6px 滑块圆角）通过 `--tx-flat-radio-*` 变量覆写到 BUI 的刻度上。
+布局分段复用 **`TxFlatRadio`**：因此它是一个真正的 `radiogroup`，方向键可以在三个选项间移动、只占一个 Tab 停靠点——上游那里是三个各自带 `aria-pressed` 的独立按钮。几何尺寸（28px 高、8px 外圆角、6px 滑块圆角）通过 `--tx-flat-radio-*` 变量覆写到 BUI 的刻度上。选项内边距和图标间距是这张卡片**没有**覆写的两个变量，因此保持梯度里的 `0 8px` / `4px`。滑块动效来自 `TxFlatRadio` 自身：位移与改变宽度共用一条曲线、几何尺寸从带小数的 rect 读取、`prefers-reduced-motion` 下去掉位移——这些这张卡片都没有覆写。
 
 四个数值域是 **`TxScrubField`**：标签即手柄，可拖、可键盘、可键入，详见它自己的文档。
 

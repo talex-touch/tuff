@@ -87,7 +87,7 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--tx-flat-radio-item-gap, 4px);
   border: none;
   background: transparent;
   color: var(--tx-text-color-secondary, #606266);
@@ -95,6 +95,14 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   flex-shrink: 0;
   font-family: inherit;
+  // The weight is on every item, not on `.is-selected`. Selecting used to take
+  // that item from 400 to 500, which reflowed it, shoved its siblings, and moved
+  // the indicator's width target while the indicator was still animating toward
+  // the old one — the single largest source of the jitter, and one no easing
+  // curve can hide. A hidden bold sizer would have kept the old look, but it
+  // only works for the `label` prop, and the two call sites that matter
+  // (StoreHeader, TxFineTuneCard) both pass slot content.
+  font-weight: 500;
   line-height: 1;
   transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
   box-sizing: border-box;
@@ -105,7 +113,16 @@ onBeforeUnmount(() => {
 
   &.is-selected {
     color: var(--tx-text-color-primary, #303133);
-    font-weight: 500;
+  }
+
+  // Press feedback rides on the label and the icon, never on the item box: the
+  // box is what readGeometry() measures, so scaling it would hand the indicator
+  // a moving target and bring the reflow back through another door.
+  &:active:not(.is-disabled) {
+    .tx-flat-radio-item__icon,
+    .tx-flat-radio-item__label {
+      transform: scale(0.94);
+    }
   }
 
   &.is-multiple-selected {
@@ -136,11 +153,29 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: center;
     font-size: 1em;
+    transition: transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
   }
 
   &__label {
     display: inline-flex;
     align-items: center;
+    transition: transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-flat-radio-item {
+    &__icon,
+    &__label {
+      transition: none;
+    }
+
+    &:active:not(.is-disabled) {
+      .tx-flat-radio-item__icon,
+      .tx-flat-radio-item__label {
+        transform: none;
+      }
+    }
   }
 }
 </style>

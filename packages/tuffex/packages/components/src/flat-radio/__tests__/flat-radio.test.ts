@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import TxFlatRadio from '../src/TxFlatRadio.vue'
 import flatRadioSource from '../src/TxFlatRadio.vue?raw'
 import TxFlatRadioItem from '../src/TxFlatRadioItem.vue'
+import flatRadioItemSource from '../src/TxFlatRadioItem.vue?raw'
 
 function mountSingleFlatRadio(options: { disabled?: boolean, initial?: string } = {}) {
   return mount({
@@ -115,15 +116,133 @@ describe('txFlatRadio', () => {
   })
 })
 
+function indicatorRuleBody(): string {
+  const rule = flatRadioSource.slice(flatRadioSource.indexOf('.tx-flat-radio__indicator {'))
+  return rule.slice(0, rule.indexOf('}'))
+}
+
+// `transition` values nest commas inside `var(...)` and `cubic-bezier(...)`, so
+// a plain split tears the curves apart.
+function splitTopLevel(value: string): string[] {
+  const out: string[] = []
+  let depth = 0
+  let current = ''
+
+  for (const ch of value) {
+    if (ch === '(') depth += 1
+    else if (ch === ')') depth -= 1
+
+    if (ch === ',' && depth === 0) {
+      out.push(current.trim())
+      current = ''
+    }
+    else {
+      current += ch
+    }
+  }
+
+  if (current.trim()) out.push(current.trim())
+  return out
+}
+
 describe('txFlatRadio indicator contrast', () => {
   it('lifts the sliding indicator off the track in both themes', () => {
     // `--tx-bg-color-overlay` is white on light but darker than the track on
     // dark, so the indicator sank into the groove and its travel was invisible.
-    const rule = flatRadioSource.slice(flatRadioSource.indexOf('.tx-flat-radio__indicator {'))
-    const body = rule.slice(0, rule.indexOf('}'))
+    const body = indicatorRuleBody()
 
     expect(body).toContain('color-mix(in srgb, var(--tx-text-color-primary')
     expect(body).toContain('var(--tx-bg-color-overlay')
-    expect(body).toMatch(/transform 0\.25s/)
+  })
+})
+
+describe('txFlatRadio motion', () => {
+  it('travels and resizes on one duration and one curve', () => {
+    // Previously `transform` ran a 0.25s overshoot while `width` ran a 0.2s
+    // ease, so on labels of unequal width the thumb arrived and only then
+    // finished growing. Pinning the numbers here would churn on every retune;
+    // the contract is that the two segments agree.
+    const body = indicatorRuleBody().replace(/\s+/g, ' ')
+    const declaration = body.slice(body.indexOf('transition:'))
+    const value = declaration.slice('transition:'.length, declaration.indexOf(';'))
+
+    const segments = splitTopLevel(value)
+    const transform = segments.find(segment => segment.startsWith('transform '))
+    const width = segments.find(segment => segment.startsWith('width '))
+
+    expect(transform).toBeTruthy()
+    expect(width).toBeTruthy()
+    expect(transform!.replace(/^transform /, '')).toBe(width!.replace(/^width /, ''))
+  })
+
+  it('keeps item width independent of selection', () => {
+    // `.is-selected { font-weight: 500 }` reflowed the selected item, shoved its
+    // siblings, and moved the indicator's width target mid-flight. jsdom runs no
+    // layout, so the guard is that the weight lives on every item instead.
+    const styleBlock = flatRadioItemSource.slice(flatRadioItemSource.indexOf('.tx-flat-radio-item {'))
+    const baseDeclarations = styleBlock.slice(0, styleBlock.indexOf('&:hover'))
+
+    const selectedRule = flatRadioItemSource.slice(flatRadioItemSource.indexOf('&.is-selected {'))
+    const selectedBody = selectedRule.slice(0, selectedRule.indexOf('}'))
+
+    expect(baseDeclarations).toMatch(/font-weight:\s*500/)
+    expect(selectedBody).not.toMatch(/font-weight/)
+  })
+
+  it('measures the indicator from fractional rects', () => {
+    // `offsetWidth` survives as the denominator that normalises an ancestor
+    // transform; `offsetLeft` was the rounded read and is gone.
+    expect(flatRadioSource).toContain('getBoundingClientRect()')
+    expect(flatRadioSource).not.toMatch(/\.offsetLeft/)
+  })
+
+  it('gives the press a target that is not the measured box', () => {
+    const pressRule = flatRadioItemSource.slice(flatRadioItemSource.indexOf('&:active:not(.is-disabled) {'))
+    const pressBody = pressRule.slice(0, pressRule.indexOf('}'))
+
+    expect(pressBody).toContain('.tx-flat-radio-item__label')
+    expect(pressBody).toContain('.tx-flat-radio-item__icon')
+  })
+
+  it('drops travel and press motion under prefers-reduced-motion', () => {
+    expect(flatRadioSource).toContain('@media (prefers-reduced-motion: reduce)')
+    expect(flatRadioItemSource).toContain('@media (prefers-reduced-motion: reduce)')
+  })
+})
+
+describe('txFlatRadio size ladder', () => {
+  function mountSized(size: string) {
+    return mount({
+      components: { TxFlatRadio, TxFlatRadioItem },
+      data: () => ({ value: 'a' }),
+      template: `
+        <TxFlatRadio v-model="value" size="${size}">
+          <TxFlatRadioItem value="a" label="Option A" />
+          <TxFlatRadioItem value="b" label="Option B" />
+        </TxFlatRadio>
+      `,
+    })
+  }
+
+  it('renders the xl tier', () => {
+    const style = mountSized('xl').find('.tx-flat-radio').attributes('style') ?? ''
+
+    expect(style).toContain('--tx-flat-radio-height: 44px')
+    expect(style).toContain('--tx-flat-radio-font-size: 15px')
+    expect(style).toContain('--tx-flat-radio-item-padding: 0 16px')
+  })
+
+  it('leaves the existing tiers where they were', () => {
+    const md = mountSized('md').find('.tx-flat-radio').attributes('style') ?? ''
+    const sm = mountSized('sm').find('.tx-flat-radio').attributes('style') ?? ''
+    const lg = mountSized('lg').find('.tx-flat-radio').attributes('style') ?? ''
+
+    expect(md).toContain('--tx-flat-radio-height: 30px')
+    expect(sm).toContain('--tx-flat-radio-height: 24px')
+    expect(lg).toContain('--tx-flat-radio-height: 36px')
+    // The two variables that were hard-coded before xl keep their old values,
+    // which is what lets TxFineTuneCard's inline pin stay untouched.
+    expect(md).toContain('--tx-flat-radio-item-padding: 0 8px')
+    expect(md).toContain('--tx-flat-radio-item-gap: 4px')
   })
 })

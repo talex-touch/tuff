@@ -36,7 +36,7 @@ code: |
 
 ## 尺寸
 
-支持 `sm`、`md`（默认）、`lg` 三种尺寸。
+支持 `sm`、`md`（默认）、`lg`、`xl` 四种尺寸。
 
 ### FlatRadio (sizes)
 :::TuffDemoWrapper{demo="FlatRadioSizesDemo" code-lang="vue"}
@@ -48,6 +48,7 @@ code: |
   const sm = ref('a')
   const md = ref('a')
   const lg = ref('a')
+  const xl = ref('a')
   </script>
 
   <template>
@@ -64,6 +65,12 @@ code: |
     </TxFlatRadio>
 
     <TxFlatRadio v-model="lg" size="lg">
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+
+    <TxFlatRadio v-model="xl" size="xl">
       <TxFlatRadioItem value="a" label="Option A" />
       <TxFlatRadioItem value="b" label="Option B" />
       <TxFlatRadioItem value="c" label="Option C" />
@@ -227,7 +234,7 @@ code: |
 | `modelValue` / `v-model` | 单选时为单值，多选时为值数组。 | `string \| number \| (string \| number)[]` | *必填* |
 | `multiple` | 启用类似复选框的多选行为；开启后隐藏单选滑动指示器。 | `boolean` | `false` |
 | `disabled` | 禁用整组，移除容器焦点并阻止点击/键盘变化。 | `boolean` | `false` |
-| `size` | 尺寸变体。 | `'sm' \| 'md' \| 'lg'` | `'md'` |
+| `size` | 尺寸变体。 | `'sm' \| 'md' \| 'lg' \| 'xl'` | `'md'` |
 | `bordered` | 为选择器添加外边框。 | `boolean` | `false` |
 
 #### Events
@@ -264,6 +271,11 @@ code: |
 ## 交互契约
 
 - 滑块颜色由文字色混入浮层色调出，因此在明暗两种主题下都比轨道更"抬起"。只用 `--tx-bg-color-overlay` 时，浅色下是白色、深色下却比轨道更暗，滑块会陷进凹槽里，位移也就看不见了。
+- 滑块的位移和改变宽度共用同一个时长和同一条曲线。过去是两条（0.25s 回弹对 0.2s 缓动），标签宽度不等时滑块会先到位、再慢慢补完宽度。
+- 选项几何尺寸从带小数的 rect 读取，不再用 `offsetLeft` / `offsetWidth` —— 后者取整到整像素，滑块最多偏 1px，而且每一项偏的量还不一样。
+- 选中字重挂在每一个选项上，所以选中不会改变任何一项的实测宽度。把字重挂在选中态上会让该项重排、挤动兄弟项，并在滑块飞行途中改掉它的目标宽度。
+- 按压缩放的是标签和图标，不是选项盒子 —— 盒子正是滑块用来测量的那个。
+- `prefers-reduced-motion: reduce` 下去掉滑块位移和按压缩放；透明度淡入保留，让它仍然是"显现"而不是"弹出"。
 - 选项自带键盘焦点环，浏览器默认的 outline 不会再压在滑块上面。
 
 - 单选模式下 `TxFlatRadio` 使用 `role="radiogroup"`，每个 item 使用 `role="radio"`。
@@ -278,13 +290,16 @@ code: |
 - FlatRadio 适合 2 到 5 个短选项，且用户需要直接比较选项的场景；更长列表使用 `TxSelect`。
 - 标签尽量保持单行；item 布局有意使用 `white-space: nowrap`。
 - 在紧凑 `sm` 尺寸中避免混用过长自定义插槽内容和图标。
+- 设置页、落地页里这个控件是当前屏幕的主选择时用 `xl`；行内和工具栏仍然用默认的 `md`。
+- 不要在自定义插槽内容里恢复"仅选中时加粗"的写法 —— 那会把组件刚修掉的重排又带回来。
 - 只有当多个值是彼此独立的开关项时才使用 `multiple`；否则用独立开关或复选框表达更清晰。
 - `value` 应在渲染间保持稳定，因为父级会按 value 注册 item DOM，用于指示器和键盘顺序。
 
 ## 审阅说明
 
 - **可访问性说明：** 整组只有容器进入 Tab 顺序；item 按钮保持 `tabindex="-1"`，从而集中处理方向键。需要用邻近字段文案或外部 label 为整组命名。
-- **实测覆盖:** `flat-radio.test.ts` 覆盖单选 `radiogroup`/`radio` 语义、item 禁用态、禁用整组时移除焦点、方向键循环并跳过禁用项、Home/End 选择，以及 `multiple` 模式下 Enter/Space 切换。
+- **动效说明：** 先试过用隐藏的加粗副本撑住选中宽度，被否掉了：它只对 `label` prop 有效，而真正要紧的调用点传的是插槽内容；为撑宽度把插槽渲染两遍则会让用户内容挂载两次。
+- **实测覆盖:** `flat-radio.test.ts` 覆盖单选 `radiogroup`/`radio` 语义、item 禁用态、禁用整组时移除焦点、方向键循环并跳过禁用项、Home/End 选择、`multiple` 模式下 Enter/Space 切换，以及共享过渡曲线、选中无关的选项宽度、小数级滑块几何、减弱动效路径和 `sm`/`md`/`lg`/`xl` 尺寸梯度。
 
 ## Source
 

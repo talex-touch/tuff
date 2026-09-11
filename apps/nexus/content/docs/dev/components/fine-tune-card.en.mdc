@@ -48,7 +48,7 @@ All six fields (`layout` / `width` / `height` / `radius` / `opacity` / `type`) t
 
 ## What It Is Made Of
 
-The layout segment reuses **`TxFlatRadio`**, so it is a genuine `radiogroup`: the arrow keys move between the three options and the whole group is one tab stop. Upstream has three independent `aria-pressed` buttons there. The geometry (28px shell, 8px outer radius, 6px thumb) is overridden onto the BUI ladder through the `--tx-flat-radio-*` variables.
+The layout segment reuses **`TxFlatRadio`**, so it is a genuine `radiogroup`: the arrow keys move between the three options and the whole group is one tab stop. Upstream has three independent `aria-pressed` buttons there. The geometry (28px shell, 8px outer radius, 6px thumb) is overridden onto the BUI ladder through the `--tx-flat-radio-*` variables. Item padding and the icon gap are the two variables this card does *not* override, so they stay at the ladder's `0 8px` / `4px`. The thumb's motion comes from `TxFlatRadio` itself: travel and resize share one curve, the geometry is read from fractional rects, and `prefers-reduced-motion` drops the travel — none of which this card overrides.
 
 The four numeric fields are **`TxScrubField`** — caption-as-handle, draggable, keyboard-steppable and typeable, documented on its own page.
 
