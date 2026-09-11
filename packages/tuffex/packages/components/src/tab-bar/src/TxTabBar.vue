@@ -1,18 +1,28 @@
 <script setup lang="ts">
-import type { TabBarEmits, TabBarProps, TabBarValue } from './types'
+import type { PropType } from 'vue'
+import type { TabBarEmits, TabBarIndicator, TabBarItem, TabBarSize, TabBarValue } from './types'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useIndicatorBox } from '../../../../utils/use-indicator-box'
 
 defineOptions({ name: 'TxTabBar' })
 
-const props = withDefaults(defineProps<TabBarProps>(), {
-  modelValue: '',
-  items: () => [],
-  fixed: true,
-  safeAreaBottom: true,
-  disabled: false,
-  zIndex: 2000,
-  indicator: 'pill',
+// A runtime props object, not `defineProps<TabBarProps>()`. The SFC compiler
+// resolves an imported props interface by reading the sibling module, and that
+// resolution does not pick up fields added to `types.ts` afterwards — a cold dev
+// server with every cache cleared still emitted the previous prop list, so a new
+// prop silently arrived as a fallthrough attribute and read as `undefined`. The
+// build output was correct the whole time, which is what makes it so easy to
+// miss. `TxTabs` declares its props the same way. `TabBarProps` stays exported
+// for callers; it is just not the source of the runtime list.
+const props = defineProps({
+  modelValue: { type: [String, Number] as PropType<TabBarValue>, default: '' },
+  items: { type: Array as PropType<TabBarItem[]>, default: () => [] },
+  fixed: { type: Boolean, default: true },
+  safeAreaBottom: { type: Boolean, default: true },
+  disabled: { type: Boolean, default: false },
+  zIndex: { type: Number, default: 2000 },
+  indicator: { type: String as PropType<TabBarIndicator>, default: 'pill' },
+  size: { type: String as PropType<TabBarSize>, default: 'md' },
 })
 
 const emit = defineEmits<TabBarEmits>()
@@ -25,9 +35,40 @@ const value = computed({
   },
 })
 
+interface TabBarGeometry {
+  /** Bar height. The indicator measures the item box, so this drives it too. */
+  height: string
+  iconSize: string
+  labelSize: string
+  /** Gap between the icon row and the label. */
+  gap: string
+  pillRadius: string
+  /** How far the pill is inset from the item box, per axis. */
+  insetX: number
+  insetY: number
+}
+
+// Geometry is delivered as inline CSS variables rather than size classes, the
+// same contract TxFlatRadio holds: a caller that wants one value different
+// overrides that variable instead of having to restate the whole tier.
+const sizeConfig = computed<TabBarGeometry>(() => {
+  const map: Record<TabBarSize, TabBarGeometry> = {
+    sm: { height: '44px', iconSize: '17px', labelSize: '10px', gap: '1px', pillRadius: '10px', insetX: 6, insetY: 4 },
+    md: { height: '56px', iconSize: '20px', labelSize: '11px', gap: '2px', pillRadius: '14px', insetX: 8, insetY: 6 },
+    lg: { height: '64px', iconSize: '23px', labelSize: '12px', gap: '3px', pillRadius: '16px', insetX: 10, insetY: 7 },
+  }
+  return map[props.size as TabBarSize] ?? map.md
+})
+
 const rootStyle = computed<Record<string, string>>(() => {
+  const g = sizeConfig.value
   return {
     '--tx-tab-bar-z-index': String(props.zIndex ?? 2000),
+    '--tx-tab-bar-height': g.height,
+    '--tx-tab-bar-icon-size': g.iconSize,
+    '--tx-tab-bar-label-size': g.labelSize,
+    '--tx-tab-bar-item-gap': g.gap,
+    '--tx-tab-bar-pill-radius': g.pillRadius,
   }
 })
 
@@ -53,31 +94,41 @@ const { box, revealed } = useIndicatorBox({
 
 const showIndicator = computed(() => props.indicator !== 'none' && box.value != null)
 
-const PILL_INSET_X = 8
-const PILL_INSET_Y = 6
+const DOT_SIZE = 6
 
 const indicatorStyle = computed<Record<string, string>>(() => {
   const b = box.value
   if (!b)
     return { opacity: '0' }
 
-  // A pill wraps the item's box; a line is a rule the item's width, pinned to
-  // the bar's top edge. Both travel on the same x, so switching variant never
-  // changes where the indicator is, only what it looks like.
+  // Every variant travels on the same x, so switching one never changes where
+  // the indicator is, only what it looks like.
   const style: Record<string, string> = { opacity: '1' }
 
   if (props.indicator === 'line') {
+    // A rule the item's width, pinned to the bar's top edge.
     style.transform = `translateX(${b.left}px)`
     style.width = `${b.width}px`
     return style
   }
 
+  if (props.indicator === 'dot') {
+    // Centred under the item rather than filling it, so a dense bar stays quiet.
+    style.transform = `translate(${b.left + (b.width - DOT_SIZE) / 2}px, ${b.top + b.height - DOT_SIZE - 6}px)`
+    style.width = `${DOT_SIZE}px`
+    style.height = `${DOT_SIZE}px`
+    return style
+  }
+
+  // `pill` and `block` share the inset box and differ only in paint.
+  //
   // The inset is arithmetic, not margin: an absolutely positioned box with an
   // explicit width and height ignores margin for sizing, so a CSS margin left
-  // the pill at the item's full 56px and hanging 6px out of the bar.
-  style.transform = `translate(${b.left + PILL_INSET_X}px, ${b.top + PILL_INSET_Y}px)`
-  style.width = `${Math.max(0, b.width - PILL_INSET_X * 2)}px`
-  style.height = `${Math.max(0, b.height - PILL_INSET_Y * 2)}px`
+  // the pill at the item's full height and hanging out of the bar.
+  const { insetX, insetY } = sizeConfig.value
+  style.transform = `translate(${b.left + insetX}px, ${b.top + insetY}px)`
+  style.width = `${Math.max(0, b.width - insetX * 2)}px`
+  style.height = `${Math.max(0, b.height - insetY * 2)}px`
   return style
 })
 
@@ -131,7 +182,6 @@ function onPick(v: TabBarValue, disabled?: boolean) {
 
 <style scoped lang="scss">
 .tx-tab-bar {
-  --tx-tab-bar-height: 56px;
 
   width: 100%;
   background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 70%, transparent);
@@ -154,7 +204,7 @@ function onPick(v: TabBarValue, disabled?: boolean) {
 
 .tx-tab-bar__inner {
   position: relative;
-  height: var(--tx-tab-bar-height);
+  height: var(--tx-tab-bar-height, 56px);
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
@@ -185,13 +235,26 @@ function onPick(v: TabBarValue, disabled?: boolean) {
   // rather than replacing the row.
   &.is-pill {
     box-sizing: border-box;
-    border-radius: 14px;
+    border-radius: var(--tx-tab-bar-pill-radius, 14px);
     background: var(--tx-surface-raised, #fff);
     box-shadow: var(--tx-elevation-1, 1px 2px 4px rgba(0, 0, 0, 0.04));
   }
 
+  // Same box as the pill, but a tint rather than a raised surface — for a bar
+  // sitting on a card, where another shadow would just add noise.
+  &.is-block {
+    box-sizing: border-box;
+    border-radius: var(--tx-tab-bar-pill-radius, 14px);
+    background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
+  }
+
   &.is-line {
     height: 2px;
+    border-radius: 999px;
+    background: var(--tx-color-primary, #409eff);
+  }
+
+  &.is-dot {
     border-radius: 999px;
     background: var(--tx-color-primary, #409eff);
   }
@@ -211,7 +274,7 @@ function onPick(v: TabBarValue, disabled?: boolean) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: calc(var(--tx-tab-bar-item-gap, 2px) + 2px);
   border: none;
   background: transparent;
   cursor: pointer;
@@ -229,14 +292,14 @@ function onPick(v: TabBarValue, disabled?: boolean) {
 
 .tx-tab-bar__icon {
   position: relative;
-  width: 22px;
-  height: 22px;
+  width: calc(var(--tx-tab-bar-icon-size, 20px) + 2px);
+  height: calc(var(--tx-tab-bar-icon-size, 20px) + 2px);
   display: flex;
   align-items: center;
   justify-content: center;
 
   i {
-    font-size: 20px;
+    font-size: var(--tx-tab-bar-icon-size, 20px);
   }
 }
 
@@ -257,7 +320,7 @@ function onPick(v: TabBarValue, disabled?: boolean) {
 }
 
 .tx-tab-bar__label {
-  font-size: 12px;
+  font-size: var(--tx-tab-bar-label-size, 11px);
   line-height: 1.1;
 }
 

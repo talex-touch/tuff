@@ -36,7 +36,9 @@ code: |
 
 ## Indicator
 
-`indicator` slides one surface behind the active destination instead of relying on colour alone. `pill` raises a surface the way `TxFlatRadio`'s thumb does; `line` runs a rule along the bar's top edge; `none` is the colour-only bar.
+`indicator` slides one surface behind the active destination instead of relying on colour alone. `pill` raises a surface the way `TxFlatRadio`'s thumb does; `block` fills the same box with a tint instead, for a bar on a card where another shadow would only add noise; `line` runs a rule along the bar's top edge; `dot` marks the item with a small centred dot; `none` is the colour-only bar. The names match `TxTabs`' `indicatorVariant` so the two read as one family.
+
+`size` is the same three-step ladder `TxFlatRadio` uses, for the same reason: a bar inside a compact panel and a bar at the bottom of a phone screen are not the same control at the same size.
 
 ### TabBar (indicator)
 :::TuffDemoWrapper{demo="TabBarIndicatorDemo" code-lang="vue"}
@@ -67,7 +69,8 @@ code: |
 |------|------|---------|-------------|
 | `modelValue` | `string \| number` | `''` | Active tab value used by `v-model`. |
 | `items` | `TabBarItem[]` | `[]` | Tabs rendered from left to right. |
-| `indicator` | `'none' \| 'pill' \| 'line'` | `'pill'` | Sliding indicator behind the active item. `pill` raises a surface, `line` runs a rule along the top edge, `none` is colour only. |
+| `indicator` | `'none' \| 'pill' \| 'line' \| 'block' \| 'dot'` | `'pill'` | Sliding indicator behind the active item. `pill` raises a surface, `block` tints the same box, `line` runs a rule along the top edge, `dot` marks the item, `none` is colour only. |
+| `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | Geometry tier. Drives bar height, icon size, label size and the pill inset, delivered as inline CSS variables. |
 | `fixed` | `boolean` | `true` | Fixes the bar to the viewport bottom with `position: fixed`. |
 | `safeAreaBottom` | `boolean` | `true` | Renders an `env(safe-area-inset-bottom)` spacer below the tab row. |
 | `disabled` | `boolean` | `false` | Disables all tab buttons and suppresses value updates. |
@@ -99,7 +102,9 @@ No slots. Render tabs through `items`.
 - The root is a `nav` landmark; it is site navigation, not a tab widget, so there is no `role="tablist"`. Each item is a `button`, and the active destination carries `aria-current="page"` derived from `modelValue`.
 - The indicator measures through the shared `useIndicatorBox`, the same reading `TxSidebarNav` uses: fractional rects rather than `offsetLeft`, the container's border removed because an absolutely positioned indicator resolves against the padding box, and an ancestor transform normalised out. A `ResizeObserver` re-measures, so the indicator does not strand after a resize or a font swap.
 - Travel and resize share one duration and one curve, so the indicator reads as one body rather than arriving and then growing. `prefers-reduced-motion: reduce` drops the travel and keeps the fade.
-- The `pill` inset is arithmetic on the measured box, not a CSS margin: an absolutely positioned box with an explicit width and height ignores margin for sizing, which left the pill at the item's full height and hanging out of the bar.
+- The `pill` inset is arithmetic on the measured box, not a CSS margin: an absolutely positioned box with an explicit width and height ignores margin for sizing, which left the pill at the item's full height and hanging out of the bar. `block` shares that box and differs only in paint; `dot` is centred on it.
+- Every variant travels on the same x, so changing `indicator` never moves the indicator, only changes what it looks like.
+- `size` ships as inline CSS variables rather than size classes, so a caller can override one value — say `--tx-tab-bar-height` — without restating a tier. The bar height in particular has to be a variable: the indicator measures the item box, so a class-based height would move the indicator through a path that never reads it. An unrecognised `size` falls back to `md`.
 - Selecting a disabled item, or selecting any item while `disabled=true`, emits nothing.
 - Selecting the already-active item still emits `update:modelValue` and `change`; debounce duplicate handling in the caller if needed.
 - `safeAreaBottom` only controls the spacer node. It can be used with both fixed and non-fixed layouts.
@@ -118,12 +123,13 @@ No slots. Render tabs through `items`.
 - **Model contract:** `TxTabBar` emits `update:modelValue` and `change` only when an enabled item is picked while the bar itself is enabled. Disabled items render native disabled buttons.
 - **Layout note:** `fixed=true` pins the bar to the viewport and `safeAreaBottom=true` adds an `env(safe-area-inset-bottom)` spacer. Turn both off inside previews, modals, and embedded shells.
 - **Indicator note:** the bar deliberately shares `useIndicatorBox` with `TxSidebarNav` and does not grow its own measurement. A bar that travels must not drift from the controls that travel beside it.
-- **Verified coverage:** `tab-bar.test.ts` covers navigation semantics (nav landmark with no `role`), the `aria-current="page"` active item, icons, badges, z-index CSS variable, fixed/safe-area toggles, enabled emissions, and disabled bar/item blocking.
+- **Props are declared as a runtime object, not `defineProps<TabBarProps>()`.** The SFC compiler resolves an imported props interface by reading the sibling module, and it does not pick up fields added to `types.ts` afterwards — a cold dev server with every cache cleared still emitted the previous prop list, so `size` arrived as a fallthrough attribute and read as `undefined`. Build output was correct throughout, which is what makes it easy to miss. `TabBarProps` is still exported for callers; it is just not the source of the runtime list. `TxTabs` declares its props the same way.
+- **Verified coverage:** `tab-bar.test.ts` covers navigation semantics (nav landmark with no `role`), the `aria-current="page"` active item, icons, badges, z-index CSS variable, fixed/safe-area toggles, enabled emissions, disabled bar/item blocking, each size tier's inline CSS variables with an unknown-size fallback, every indicator variant's class, and that `none` renders no indicator node.
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/tab-bar/src/TxTabBar.vue`.
-- Types: `packages/tuffex/packages/components/src/tab-bar/src/types.ts` exports `TabBarItem`, `TabBarProps`, `TabBarEmits`, and `TabBarValue`.
+- Types: `packages/tuffex/packages/components/src/tab-bar/src/types.ts` exports `TabBarItem`, `TabBarProps`, `TabBarEmits`, `TabBarValue`, `TabBarIndicator`, and `TabBarSize`.
 - Export entry: `packages/tuffex/packages/components/src/tab-bar/index.ts` exports `TabBar`, `TxTabBar`, props/emits/item types, and `TxTabBarInstance`.
 - Coverage: `packages/tuffex/packages/components/src/tab-bar/__tests__/tab-bar.test.ts` verifies rendering semantics, badges/icons, layout toggles, emissions, and disabled behavior.
 
