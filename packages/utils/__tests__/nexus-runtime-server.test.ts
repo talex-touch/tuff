@@ -100,11 +100,42 @@ describe('validateNexusBaseUrl', () => {
     })
   })
 
-  it('keeps a path but still trims the trailing slash', () => {
-    expect(validateNexusBaseUrl('https://custom.example.test/nexus/')).toEqual({
-      ok: true,
-      value: 'https://custom.example.test/nexus'
-    })
+  it('rejects an address that carries a path', () => {
+    // Requests are composed as `new URL('/api/…', base)`, which drops the base path and would send
+    // the request to the origin root — a different deployment than the one that was configured.
+    for (const input of [
+      'https://custom.example.test/nexus',
+      'https://custom.example.test/nexus/',
+      'http://localhost:3200/nexus'
+    ]) {
+      expect(validateNexusBaseUrl(input), input).toEqual({ ok: false, error: 'unsupported-path' })
+    }
+  })
+
+  it('accepts a bare origin written with a trailing slash', () => {
+    for (const [input, value] of [
+      ['https://custom.example.test', 'https://custom.example.test'],
+      ['https://custom.example.test/', 'https://custom.example.test'],
+      ['https://custom.example.test///', 'https://custom.example.test'],
+      ['http://localhost:3200/', 'http://localhost:3200']
+    ]) {
+      expect(validateNexusBaseUrl(input), input).toEqual({ ok: true, value })
+    }
+  })
+
+  it('rejects an address carrying embedded credentials', () => {
+    // The credential would be persisted in settings, and in the synced settings document, in
+    // cleartext; this client authenticates with a bearer token instead.
+    for (const input of [
+      'https://user:secret@custom.example.test',
+      'https://token@custom.example.test',
+      'http://user:secret@localhost:3200'
+    ]) {
+      expect(validateNexusBaseUrl(input), input).toEqual({
+        ok: false,
+        error: 'embedded-credentials'
+      })
+    }
   })
 
   it('accepts cleartext http on a loopback host', () => {
@@ -220,6 +251,27 @@ describe('resolveTuffNexusBaseUrlDetail', () => {
         env: { [TUFF_NEXUS_BASE_URL_ENV]: '   ' }
       })
     ).toEqual({ baseUrl: 'https://custom.example.test', source: 'custom' })
+  })
+
+  it('ignores an env override that would send the account token in cleartext', () => {
+    // The override may name a host the settings page would never accept, but it reaches the same
+    // request composition, so a remote cleartext origin is refused rather than trusted.
+    expect(
+      resolveTuffNexusBaseUrlDetail({
+        customBaseUrl: 'https://custom.example.test',
+        env: { [TUFF_NEXUS_BASE_URL_ENV]: 'http://runtime.example.test' }
+      })
+    ).toEqual({ baseUrl: 'https://custom.example.test', source: 'custom' })
+
+    expect(
+      resolveTuffNexusBaseUrlDetail({ env: { [TUFF_NEXUS_BASE_URL_ENV]: 'http://10.0.0.7:3200' } })
+    ).toEqual({ baseUrl: NEXUS_BASE_URL, source: 'runtime-server' })
+  })
+
+  it('keeps the cleartext env override a local test server needs', () => {
+    expect(
+      resolveTuffNexusBaseUrlDetail({ env: { [TUFF_NEXUS_BASE_URL_ENV]: 'http://127.0.0.1:3200' } })
+    ).toEqual({ baseUrl: 'http://127.0.0.1:3200', source: 'env' })
   })
 
   it('agrees with resolveTuffNexusBaseUrl on the address it picked', () => {
