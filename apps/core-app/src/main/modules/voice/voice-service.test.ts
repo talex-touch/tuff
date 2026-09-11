@@ -13,6 +13,10 @@ const nativeAudioMock = vi.hoisted(() => ({
   isAccessibilityTrusted: vi.fn()
 }))
 
+const polishPromptMocks = vi.hoisted(() => ({
+  getVoicePolishPrompt: vi.fn((strength: string) => strength)
+}))
+
 vi.mock('@talex-touch/tuff-native/audio', () => nativeAudioMock)
 
 vi.mock('../clipboard', () => ({
@@ -40,12 +44,17 @@ vi.mock('./voice-provider-runtime', () => ({
   getConfiguredAsrProvider: vi.fn()
 }))
 
+vi.mock('./polish-prompt', () => ({
+  getVoicePolishPrompt: polishPromptMocks.getVoicePolishPrompt,
+  wrapTranscription: (transcript: string) => JSON.stringify({ transcription: transcript })
+}))
+
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
 import { clipboardModule } from '../clipboard'
 import { activeAppService } from '../system/active-app'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { intelligenceTtsService } from '../ai/intelligence-tts-service'
-import { VoiceService } from './voice-service'
+import { POLISH_TIMEOUT_MS, VoiceService } from './voice-service'
 
 const support = nativeAudio.getNativeAudioSupport as unknown as ReturnType<typeof vi.fn>
 const startCapture = nativeAudio.startCapture as unknown as ReturnType<typeof vi.fn>
@@ -62,6 +71,7 @@ const applyVoiceText = clipboardModule.applyVoiceText as unknown as ReturnType<t
 const getActiveApp = activeAppService.getActiveApp as unknown as ReturnType<typeof vi.fn>
 const stt = tuffIntelligence.audio.stt as unknown as ReturnType<typeof vi.fn>
 const invoke = tuffIntelligence.invoke as unknown as ReturnType<typeof vi.fn>
+const getVoicePolishPrompt = polishPromptMocks.getVoicePolishPrompt
 function wav(bytes = 200): Buffer {
   return Buffer.alloc(bytes)
 }
@@ -136,7 +146,7 @@ describe('VoiceService.dictate', () => {
     expect(polishSignal?.aborted).toBe(true)
   })
 
-  it('returns raw recognized text at the 300 ms polish deadline', async () => {
+  it('returns raw recognized text at the shipped polish deadline', async () => {
     vi.useFakeTimers()
     try {
       stt.mockResolvedValue({ result: { text: 'raw text' } })
@@ -161,7 +171,9 @@ describe('VoiceService.dictate', () => {
       expect(polishSignal).toBeDefined()
       expect(polishSignal?.aborted).toBe(false)
 
-      await vi.advanceTimersByTimeAsync(299)
+      // Asserted against the shipped constant, not a copy of it. The literal this replaces
+      // was 299/300, which kept passing after the budget it described became unreachable.
+      await vi.advanceTimersByTimeAsync(POLISH_TIMEOUT_MS - 1)
       expect(polishSignal?.aborted).toBe(false)
       await vi.advanceTimersByTimeAsync(1)
       expect(polishSignal?.aborted).toBe(true)
@@ -396,6 +408,48 @@ describe('VoiceService canonical session', () => {
     expect(result.delivery).toEqual({ method: 'native' })
     expect(typeText).toHaveBeenCalledWith('Raw dictation.')
     expect(applyVoiceText).not.toHaveBeenCalled()
+  })
+
+  it('keeps the strength chosen before recording when the caller object later changes', async () => {
+    stt.mockResolvedValue({ result: { text: 'raw dictation', language: 'en' } })
+    invoke.mockResolvedValue({ result: 'Raw dictation.' })
+    const payload: { delivery: 'active-app'; polishStrength: 'natural' | 'structured' | 'deep' } = {
+      delivery: 'active-app',
+      polishStrength: 'structured'
+    }
+    const service = new VoiceService()
+    const sessionId = await service.startSession(payload)
+    payload.polishStrength = 'natural'
+
+    await service.stopSession(sessionId, { cleanup: true })
+
+    expect(getVoicePolishPrompt).toHaveBeenCalledOnce()
+    expect(getVoicePolishPrompt).toHaveBeenCalledWith('structured')
+  })
+
+  it('resolves noise suppression once at capture start and defaults it to off', async () => {
+    stt.mockResolvedValue({ result: { text: 'hello' } })
+
+    const service = new VoiceService()
+    const defaulted = await service.startSession({ delivery: 'active-app' })
+    expect(startCapture).toHaveBeenLastCalledWith(
+      expect.objectContaining({ noiseSuppression: false })
+    )
+
+    await service.stopSession(defaulted, { cleanup: false })
+    // Stopping must not reopen the question: the audio in hand was captured one way, and
+    // re-reading the preference here would describe it as something it is not.
+    expect(startCapture).toHaveBeenCalledOnce()
+
+    const overridden = await service.startSession({
+      delivery: 'active-app',
+      noiseSuppression: true
+    })
+    expect(startCapture).toHaveBeenLastCalledWith(
+      expect.objectContaining({ noiseSuppression: true })
+    )
+    await service.stopSession(overridden, { cleanup: false })
+    expect(startCapture).toHaveBeenCalledTimes(2)
   })
 
   it('falls back to main-owned auto-paste when native injection is unavailable', async () => {

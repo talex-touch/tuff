@@ -1,0 +1,30 @@
+{
+  "id": "voice-dictation-polish-mode",
+  "name": "voice-dictation-polish-mode",
+  "title": "Voice dictation polish mode",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-09",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "Three strengths implemented. Repair follow-up completed: live Unicode-punctuation revisions preserve monotonic actual native writes and no longer duplicate final suffixes; lexical conflicts fail without rewriting the target. Shared LangChain chat/stream/vision calls now receive caller AbortSignal. Seven suites/105 tests, node TypeScript, scoped lint/format and isolated Electron-to-Electron Rust native input replay passed. Actual LangChain loopback cancellation closes requests, emits no delayed retry through four seconds, and interrupts a pending SSE delta. Original real linguistic-quality gate remains open: observed cloud outputs take 5.053-11.233s, while the unchanged approved polish budget is 300ms. Persisted route availability beyond isolated cloud bindings remains unestablished. No new cloud/microphone/Fn/profile test, config changes, commit or release in this repair turn.",
+  "meta": {
+    "evidence": "prd.md \"Verification evidence and limits\" records the grouped-commit runs (31 main suites/380 tests, 7 renderer suites/131 tests, 3 transport suites/55 tests, plus both CoreApp typechecks) and the isolated SFC/device-notice smokes; the restored live-delta, punctuation-revision, cancellation and transcript-privacy contracts stay green in the same focused suites.",
+    "blocker": "The last acceptance item still needs a physical device run: final-mode correction text on a real microphone/Fn session and a packaged-profile pass, neither of which the isolated host-adapter smoke can stand in for.",
+    "nextAction": "Run the final-mode correction transcript and the packaged-profile pass on real hardware, then close or archive this task; long-input gating is already tracked separately by 09-10-voice-polish-length-gate."
+  }
+}

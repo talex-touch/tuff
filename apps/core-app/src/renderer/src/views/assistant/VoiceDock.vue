@@ -7,14 +7,13 @@ import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import FloatingBall from './FloatingBall.vue'
-import type { VoiceDeliveryTiming } from '@talex-touch/utils/transport/sdk/domains/voice'
 import VoicePanel from './VoicePanel.vue'
 
 type VoicePanelHandle = {
   openPanel: (source?: string) => Promise<void>
-  startVoiceInput: (timing?: VoiceDeliveryTiming) => void
+  startVoiceInput: () => void
   stopVoiceInput: () => void
-  toggleVoiceInput: (timing?: VoiceDeliveryTiming) => void
+  toggleVoiceInput: () => void
   handleCancelHold: (state: AssistantVoiceCancelHoldPayload['state']) => void
 }
 
@@ -52,24 +51,18 @@ function whenPanelReady(): Promise<VoicePanelHandle | null> {
   })
 }
 
-function startVoiceInputOnce(timing: VoiceDeliveryTiming = 'final'): void {
+function startVoiceInputOnce(): void {
   const voicePanel = panel.value
   if (!expanded.value || !voicePanel || voiceStartIssued || pendingStop) return
   voiceStartIssued = true
-  voicePanel.startVoiceInput(timing)
+  voicePanel.startVoiceInput()
 }
 
-/**
- * The gesture's shape decides how the transcript is delivered, so it has to survive the
- * open. A hold is push-to-talk — the user is watching the words land in their editor while
- * they speak — and a tap is a session they will end themselves, delivered in one piece.
- * Losing the mode here would silently make every push-to-talk behave like a tap.
- */
+/** Opens the recording HUD; VoicePanel snapshots the persisted delivery policy. */
 async function handlePanelOpened(payload?: {
   source?: string
   mode?: 'hold' | 'toggle'
 }): Promise<void> {
-  const timing: VoiceDeliveryTiming = payload?.mode === 'hold' ? 'live' : 'final'
   if (expanded.value && (panel.value || panelReady)) return
   cancelPendingClose()
   const generation = ++dockGeneration
@@ -106,7 +99,7 @@ async function handlePanelOpened(payload?: {
     handlePanelFinished(generation)
     return
   }
-  startVoiceInputOnce(timing)
+  startVoiceInputOnce()
 }
 
 // No intermediate spinner: the panel owns the whole session now, including the wait for the
@@ -214,9 +207,8 @@ async function handleCommand(payload: AssistantVoiceCommandPayload): Promise<voi
   if (ready) await ready
   if (generation !== dockGeneration || !expanded.value) return
   voiceStartIssued = true
-  const timing: VoiceDeliveryTiming = payload.mode === 'hold' ? 'live' : 'final'
-  if (payload.action === 'toggle') panel.value?.toggleVoiceInput(timing)
-  else panel.value?.startVoiceInput(timing)
+  if (payload.action === 'toggle') panel.value?.toggleVoiceInput()
+  else panel.value?.startVoiceInput()
 }
 
 onMounted(() => {

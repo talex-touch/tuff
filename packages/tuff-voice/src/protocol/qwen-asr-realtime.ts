@@ -5,6 +5,16 @@ import { VoiceProviderError } from '../contracts'
 export const DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_MODEL = 'qwen3-asr-flash-realtime'
 export const DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_REGION = 'cn-beijing'
 
+/**
+ * Default `server_vad` sensitivity.
+ *
+ * This used to default to `0`, which is not a lenient threshold — it is no threshold, and it
+ * turned off the only real voice-activity detection anywhere in the dictation path: every
+ * fan, keystroke and room tone counted as speech. Callers can still pass their own value,
+ * including an explicit `0`, which is why the fallback is `??` rather than `||`.
+ */
+export const DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_VAD_THRESHOLD = 0.3
+
 export interface DashscopeCredentials {
   apiKey: string
   workspaceId?: string
@@ -116,7 +126,7 @@ export function buildDashscopeQwenAsrRealtimeSessionUpdate(
     ...(language ? { input_audio_transcription: { language } } : { input_audio_transcription: {} }),
     turn_detection: {
       type: 'server_vad',
-      threshold: vad.threshold ?? 0.0,
+      threshold: vad.threshold ?? DASHSCOPE_QWEN_ASR_REALTIME_DEFAULT_VAD_THRESHOLD,
       silence_duration_ms: vad.silenceDurationMs ?? 400,
       prefix_padding_ms: vad.prefixPaddingMs ?? 300,
     },

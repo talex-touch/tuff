@@ -1,0 +1,4 @@
+{"file":".trellis/spec/main-process/voice-session-contracts.md","reason":"采集所有权、startSession 单点解析偏好的既有契约（polishStrength 同形）、addon 构建与 required checks"}
+{"file":".trellis/spec/guides/guard-thinking-guide.md","reason":"新增 DSP 断言必须带负控制，避免恒真断言"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"改动跨 Rust addon / 主进程 / 设置实体 / 渲染层设置页四层"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"语音输入设置抽屉新增开关行的既有版式与自动高度约束"}

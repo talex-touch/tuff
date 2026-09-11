@@ -17,8 +17,8 @@ const subPages = settingCategoryChildren('intelligence').filter((subPage) => !su
 
 <template>
   <SettingsPage :title="t('settingsNav.category.intelligence')">
-    <!-- Assistant and floating-ball controls stay together; voice input lives in Audio Insights. -->
-    <SettingAssistant />
+    <!-- One shared group: the master switch, its floating entry, and the wake-word placeholder. -->
+    <SettingAssistant mode="all" />
 
     <!-- What the home conversation can reach beyond the model: skills and MCP servers. -->
     <SettingSkillsMcp />

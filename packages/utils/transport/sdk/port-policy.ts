@@ -3,11 +3,12 @@ import { AppEvents, ClipboardEvents, CoreBoxEvents } from "../events";
 
 const PORT_CHANNELS_ENV = "TALEX_TRANSPORT_PORT_CHANNELS";
 
+// Reserve default Port upgrades for long-lived subscriptions. Short search
+// sessions use typed IPC immediately instead of waiting for a fresh handshake.
 const DEFAULT_PORT_CHANNELS = new Set<string>([
   ClipboardEvents.change.toEventName(),
   AppEvents.fileIndex.progress.toEventName(),
   CoreBoxEvents.search.indexCommitted.toEventName(),
-  CoreBoxEvents.search.session.toEventName(),
 ]);
 
 let cachedRaw: string | undefined;
