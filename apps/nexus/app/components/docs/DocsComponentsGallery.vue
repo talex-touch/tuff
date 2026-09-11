@@ -297,6 +297,8 @@ const cascaderOptions = [
 ]
 const dateValue = ref('2026-02-16')
 const flatRadioValue = ref('auto')
+const flatRadioViewValue = ref('grid')
+const flatRadioAlertValues = ref(['mention', 'reply'])
 const flatSelectValue = ref('json')
 const flatInputValue = ref('')
 const numberValue = ref(60)
@@ -1278,11 +1280,32 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage">
           <ClientOnly>
-            <TxFlatRadio v-model="flatRadioValue">
-              <TxFlatRadioItem value="light" label="Light" />
-              <TxFlatRadioItem value="dark" label="Dark" />
-              <TxFlatRadioItem value="auto" label="Auto" />
-            </TxFlatRadio>
+            <div class="docs-gallery__stack docs-gallery__stack--center">
+              <!-- The xl tier leads: one specimen at the size the control is
+                   actually meant to be read at, then the range below it. -->
+              <div class="docs-gallery__row">
+                <TxFlatRadio v-model="flatRadioValue" size="xl">
+                  <TxFlatRadioItem value="light" label="Light" />
+                  <TxFlatRadioItem value="dark" label="Dark" />
+                  <TxFlatRadioItem value="auto" label="Auto" />
+                </TxFlatRadio>
+              </div>
+              <div class="docs-gallery__row">
+                <TxFlatRadio v-model="flatRadioViewValue">
+                  <TxFlatRadioItem value="grid" icon="i-carbon-grid" label="Grid" />
+                  <TxFlatRadioItem value="list" icon="i-carbon-list" label="List" />
+                  <TxFlatRadioItem value="kanban" icon="i-carbon-column" label="Kanban" />
+                </TxFlatRadio>
+              </div>
+              <div class="docs-gallery__row">
+                <TxFlatRadio v-model="flatRadioAlertValues" size="sm" multiple>
+                  <TxFlatRadioItem value="mention" icon="i-carbon-at" />
+                  <TxFlatRadioItem value="reply" icon="i-carbon-reply" />
+                  <TxFlatRadioItem value="archive" icon="i-carbon-archive" />
+                  <TxFlatRadioItem value="mute" icon="i-carbon-volume-mute" />
+                </TxFlatRadio>
+              </div>
+            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>

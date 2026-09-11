@@ -1,6 +1,6 @@
 <script lang="ts" name="TuffBlockFlatRadio" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
-import type { TxFlatRadioValue } from '@talex-touch/tuffex/flat-radio'
+import type { TxFlatRadioSize, TxFlatRadioValue } from '@talex-touch/tuffex/flat-radio'
 import { TxFlatRadio } from '@talex-touch/tuffex/flat-radio'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import type { WritableComputedRef } from 'vue'
@@ -16,7 +16,7 @@ const props = withDefaults(
     activeIcon?: string | ITuffIcon
     disabled?: boolean
     multiple?: boolean
-    radioSize?: 'sm' | 'md' | 'lg'
+    radioSize?: TxFlatRadioSize
   }>(),
   {
     disabled: false,

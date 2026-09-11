@@ -2,7 +2,7 @@ import type { InjectionKey, Ref } from 'vue'
 
 export type TxFlatRadioValue = string | number
 
-export type TxFlatRadioSize = 'sm' | 'md' | 'lg'
+export type TxFlatRadioSize = 'sm' | 'md' | 'lg' | 'xl'
 
 export interface TxFlatRadioProps {
   modelValue: TxFlatRadioValue | TxFlatRadioValue[]
