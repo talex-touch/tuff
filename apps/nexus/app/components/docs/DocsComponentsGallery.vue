@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import './DocsComponentsGallery.css'
 import {
   ChartPalette,
@@ -66,6 +66,7 @@ const copy = computed(() => (localeKey.value === 'zh'
       ],
       autoSync: '自动同步',
       autoSyncDesc: '有新版本时自动拉取插件更新',
+      resetAlerts: '恢复已关闭的警示',
       partial: '部分选中',
       syncing: '同步中',
       dividerSection: '分组',
@@ -141,6 +142,7 @@ const copy = computed(() => (localeKey.value === 'zh'
       ],
       autoSync: 'Auto sync',
       autoSyncDesc: 'Pull plugin updates as they are released',
+      resetAlerts: 'Restore the dismissed alerts',
       partial: 'Partial',
       syncing: 'Syncing',
       dividerSection: 'Section',
@@ -301,6 +303,18 @@ const dateValue = ref('2026-02-16')
 const flatRadioValue = ref('auto')
 const flatRadioViewValue = ref('grid')
 const flatRadioAlertValues = ref(['mention', 'reply'])
+
+// The Alert specimen is dismissible, so the cell needs a way back — otherwise a
+// visitor who tries the close button is left with an empty cell for the rest of
+// the session.
+const alertsVisible = reactive({ success: true, error: true })
+const alertsDismissed = computed(() =>
+  Number(!alertsVisible.success) + Number(!alertsVisible.error))
+
+function resetAlerts(): void {
+  alertsVisible.success = true
+  alertsVisible.error = true
+}
 const flatSelectValue = ref('json')
 const flatInputValue = ref('')
 const numberValue = ref(60)
@@ -1903,9 +1917,35 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__stack">
-              <TxAlert :title="copy.online" :message="copy.aboutBody" type="success" />
-              <TxAlert :title="copy.failed" :message="copy.dialogMessage" type="error" />
+            <div class="docs-gallery__block docs-gallery__stack docs-gallery__alerts">
+              <button
+                v-show="alertsDismissed > 0"
+                class="docs-gallery__reset"
+                type="button"
+                :aria-label="copy.resetAlerts"
+                :title="copy.resetAlerts"
+                @click="resetAlerts"
+              >
+                <span class="i-carbon-reset" aria-hidden="true" />
+              </button>
+              <TransitionGroup name="docs-gallery-alert">
+                <TxAlert
+                  v-if="alertsVisible.success"
+                  key="success"
+                  :title="copy.online"
+                  :message="copy.aboutBody"
+                  type="success"
+                  @close="alertsVisible.success = false"
+                />
+                <TxAlert
+                  v-if="alertsVisible.error"
+                  key="error"
+                  :title="copy.failed"
+                  :message="copy.dialogMessage"
+                  type="error"
+                  @close="alertsVisible.error = false"
+                />
+              </TransitionGroup>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />

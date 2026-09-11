@@ -291,7 +291,8 @@ rows:
 
 ## Rendering Contract
 
-- `name` values starting with `i-` render as icon classes; known built-in names render as `builtin` SVG.
+- `name` values starting with `i-` render as icon classes; known built-in names render as `builtin` SVG. An **unknown** name silently falls back to an icon class, which renders nothing when no such class exists — add the glyph to `builtinIcons` rather than assuming a name resolves.
+- Built-in names: `check`, `chevron-down`, `close`, `search`, `user`, `star`, `star-half`, plus the status glyphs `info`, `check-circle`, `x-circle`, and `alert-triangle` used by `TxAlert`. The status glyphs are drawn as rings, with the hole punched by a reversed inner arc under the nonzero fill rule.
 - `file` and local absolute `url` values can be transformed by injected `fileProtocol` or `urlResolver`.
 - SVG uses a `currentColor` mask when `colorful=false`; `colorful=true` or `icon.colorful=true` renders the original image.
 - `status='loading' | 'error'` takes precedence over normal icon rendering.

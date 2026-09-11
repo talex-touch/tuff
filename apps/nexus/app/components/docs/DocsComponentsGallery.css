@@ -436,3 +436,40 @@
     padding: 52px 20px 32px;
   }
 }
+
+/* Alert specimens can be dismissed, so the cell offers a way back. The button
+   sits in the stage's top-right corner rather than in the flow, so restoring an
+   alert does not shift the alerts themselves. */
+.docs-gallery__alerts {
+  position: relative;
+}
+
+.docs-gallery__reset {
+  position: absolute;
+  top: -30px;
+  right: 0;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--tx-border-color-lighter, #ebeef5);
+  border-radius: 8px;
+  background: var(--tx-fill-color-light, #f5f7fa);
+  color: var(--docs-muted, #8a8f98);
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.docs-gallery__reset:hover {
+  border-color: var(--docs-accent);
+  color: var(--docs-accent);
+}
+
+/* TransitionGroup moves the surviving alert up rather than letting it jump the
+   gap left by the dismissed one. */
+.docs-gallery-alert-move {
+  transition: transform 0.26s cubic-bezier(0.32, 0.72, 0.35, 1);
+}
