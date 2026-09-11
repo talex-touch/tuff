@@ -207,7 +207,7 @@ onBeforeUnmount(() => {
 
   transform: translateX(-160%);
   filter: blur(0.4px);
-  animation: tx-glow-sweep var(--tx-glow-duration, 1400ms) var(--tx-glow-ease, cubic-bezier(0.4, 0, 0.2, 1)) infinite;
+  animation: tx-glow-sweep var(--tx-glow-duration, 1400ms) var(--tx-glow-ease, linear) infinite;
   animation-delay: var(--tx-glow-delay, 0ms);
   will-change: transform, opacity, filter;
 }
@@ -245,7 +245,7 @@ onBeforeUnmount(() => {
   background-size: 300% 100%;
   background-position: 0 0;
   opacity: var(--tx-glow-opacity, 0.75);
-  animation: tx-glow-text-sweep var(--tx-glow-duration, 2000ms) var(--tx-glow-ease, ease) infinite;
+  animation: tx-glow-text-sweep var(--tx-glow-duration, 2000ms) var(--tx-glow-ease, linear) infinite;
   animation-delay: var(--tx-glow-delay, 0ms);
   will-change: background-position;
 }
@@ -282,15 +282,19 @@ onBeforeUnmount(() => {
   }
 }
 
+// The band travels at a constant speed through the first 65% and then waits
+// off-stage. Holding the rest still is what separates one pass from the next;
+// easing the travel instead made the band slow down before it had left.
 @keyframes tx-glow-sweep {
   0% {
     transform: translateX(-160%);
     opacity: 0;
   }
-  20%,
-  80% {
+  12%,
+  53% {
     opacity: var(--tx-glow-opacity, 0.75);
   }
+  65%,
   100% {
     transform: translateX(160%);
     opacity: 0;
@@ -301,6 +305,7 @@ onBeforeUnmount(() => {
   0% {
     background-position: 100% 0;
   }
+  65%,
   100% {
     background-position: 0 0;
   }
