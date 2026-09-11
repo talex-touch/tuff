@@ -341,7 +341,7 @@ const activeDescendantId = computed(() =>
   gap: var(--tx-flat-radio-gap, 4px);
   font-size: var(--tx-flat-radio-font-size, 13px);
   border-radius: var(--tx-flat-radio-radius, 8px);
-  background: var(--tx-fill-color, #f0f2f5);
+  background: var(--tx-flat-radio-track-bg, var(--tx-fill-color, #f0f2f5));
   box-sizing: border-box;
   outline: none;
   user-select: none;
@@ -367,21 +367,25 @@ const activeDescendantId = computed(() =>
   }
 }
 
-// The indicator has to sit *above* the track it slides on. `--tx-bg-color-overlay`
-// is white on light but darker than the track on dark (#1d1e1f against #303030),
-// so the slider disappeared into the groove and the movement read as no
-// movement at all. Mixing the text colour into the overlay lifts it in both
-// themes, because that pair is the one that actually inverts.
+// The indicator has to sit *above* the track it slides on, and the only
+// comparison a viewer makes is thumb against track. Two earlier attempts were
+// anchored to the wrong thing: `--tx-bg-color-overlay` alone is white on light
+// but *darker* than the track on dark (#1d1e1f against #303030), and mixing the
+// text colour into it lifted the thumb relative to the overlay while landing it
+// within four RGB steps of the track in both themes — measured rgb(49,50,52)
+// against a rgb(48,48,48) track. `--tx-surface-raised` is defined against
+// --tx-fill-color, which is the track itself, so the lift cannot invert.
 .tx-flat-radio__indicator {
   position: absolute;
   top: var(--tx-flat-radio-padding, 3px);
   left: 0;
   height: calc(100% - var(--tx-flat-radio-padding, 3px) * 2);
   border-radius: var(--tx-flat-radio-item-radius, 6px);
-  background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 10%, var(--tx-bg-color-overlay, #fff));
+  background: var(--tx-flat-radio-indicator-bg, var(--tx-surface-raised, #fff));
   // Was two stacked straight-down layers totalling ~0.24 alpha, which read as
-  // heavy once the xl tier made the thumb large. One directional layer instead.
-  box-shadow: var(--tx-elevation-2, 1px 2px 4px rgba(0, 0, 0, 0.06));
+  // heavy once the xl tier made the thumb large. One soft directional layer now
+  // — and it no longer has to stand in for a missing thumb/track contrast.
+  box-shadow: var(--tx-flat-radio-indicator-shadow, var(--tx-elevation-2, 1px 2px 8px rgba(0, 0, 0, 0.05)));
   pointer-events: none;
   z-index: 0;
   will-change: transform, width;
