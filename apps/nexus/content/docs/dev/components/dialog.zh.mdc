@@ -261,6 +261,8 @@ code: |
 - Escape 会在离场动画后关闭当前 dialog；`TxBottomDialog`、`TxBlowDialog`、`TxPopperDialog` 与 `TxTouchTip` 卸载时恢复之前的焦点元素。
 - `TxBottomDialog`、`TxTouchTip` 与 `TxBlowDialog` 都用 `useId()` 生成实例级标题 / 描述 id；`TxPopperDialog` 对默认标题 / 内容区域使用稳定内部 id。
 - 普通 `message` 按文本渲染并保留换行。只有调用方完成清洗并通过 `asTrustedDialogHtml()` 标记后，才使用 `messageHtml`。
+- 每个变体的正文都设置了 `overflow-wrap: anywhere`。哈希、id 或 URL 没有任何断行机会，纵向滚动救不了它——token 会直接越过面板，而面板把它裁掉。用 `anywhere` 而不是 `break-word`，是因为只有前者允许该 token 缩小内容的 min-content 宽度，长值因此也不会再把面板撑宽。
+- 每个变体的正文都自行限高并滚动。面板是 `overflow: hidden`，所以正文没有自己的高度上限时会被裁切而不是滚动：`TxBottomDialog` 限到 `46vh`，`TxTouchTip` 在其固定高度内滚动，与 `TxBlowDialog`、`TxPopperDialog` 早已使用的 `300px` 对齐。
 - `DialogButton.onClick()` / `TouchTipButton.onClick()` resolve `true` 时关闭，resolve `false` 时保持打开。
 
 ## 最佳实践
