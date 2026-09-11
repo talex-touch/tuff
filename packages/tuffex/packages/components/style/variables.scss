@@ -212,6 +212,13 @@
   --tx-surface-refraction-mask-rgb: 255 255 255;
   --tx-surface-refraction-mask-blend-mode: screen;
 
+  // A surface that sits *above* --tx-fill-color. Segmented thumbs, chips and any
+  // control that has to read as lifted out of a recessed track use this rather
+  // than --tx-bg-color-overlay: overlay is defined against the page, so on light
+  // it matched the track and on dark it sat below it. Raised is defined against
+  // the track, which is the only comparison a viewer actually makes.
+  --tx-surface-raised: #ffffff;
+
   // Box Shadow
   //
   // One light source for the whole system: high and to the left of the screen,
@@ -222,11 +229,11 @@
   // --tx-elevation-* is the canonical scale for new code. The four
   // --tx-box-shadow* names below stay as the compatibility aliases the
   // elevation() mixin and existing components already read.
-  --tx-elevation-1: 1px 2px 2px rgba(0, 0, 0, 0.05);
-  --tx-elevation-2: 1px 2px 4px rgba(0, 0, 0, 0.06);
-  --tx-elevation-3: 2px 4px 10px rgba(0, 0, 0, 0.07);
-  --tx-elevation-4: 4px 8px 20px rgba(0, 0, 0, 0.09);
-  --tx-elevation-5: 6px 14px 36px rgba(0, 0, 0, 0.12);
+  --tx-elevation-1: 1px 2px 4px rgba(0, 0, 0, 0.04);
+  --tx-elevation-2: 1px 2px 8px rgba(0, 0, 0, 0.05);
+  --tx-elevation-3: 2px 4px 14px rgba(0, 0, 0, 0.06);
+  --tx-elevation-4: 4px 8px 24px rgba(0, 0, 0, 0.08);
+  --tx-elevation-5: 6px 14px 40px rgba(0, 0, 0, 0.11);
 
   --tx-box-shadow: 6px 12px 32px 4px rgba(0, 0, 0, 0.04),
     4px 8px 20px rgba(0, 0, 0, 0.08);
@@ -395,13 +402,15 @@
   --tx-surface-refraction-mask-rgb: 0 0 0;
   --tx-surface-refraction-mask-blend-mode: multiply;
 
+  --tx-surface-raised: color-mix(in srgb, #ffffff 14%, var(--tx-fill-color, #303030));
+
   // Same geometry as light, denser: a shadow on a dark ground needs more alpha
   // to read at all. Only the density differs — never the direction.
-  --tx-elevation-1: 1px 2px 2px rgba(0, 0, 0, 0.28);
-  --tx-elevation-2: 1px 2px 4px rgba(0, 0, 0, 0.34);
-  --tx-elevation-3: 2px 4px 10px rgba(0, 0, 0, 0.4);
-  --tx-elevation-4: 4px 8px 20px rgba(0, 0, 0, 0.48);
-  --tx-elevation-5: 6px 14px 36px rgba(0, 0, 0, 0.58);
+  --tx-elevation-1: 1px 2px 4px rgba(0, 0, 0, 0.24);
+  --tx-elevation-2: 1px 2px 8px rgba(0, 0, 0, 0.3);
+  --tx-elevation-3: 2px 4px 14px rgba(0, 0, 0, 0.36);
+  --tx-elevation-4: 4px 8px 24px rgba(0, 0, 0, 0.44);
+  --tx-elevation-5: 6px 14px 40px rgba(0, 0, 0, 0.54);
 
   --tx-box-shadow: 6px 12px 32px 4px rgba(0, 0, 0, 0.36),
     4px 8px 20px rgba(0, 0, 0, 0.72);

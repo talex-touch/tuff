@@ -108,6 +108,6 @@ code: |
 
 ## 审阅说明
 
-- **`TxFlatRadio` 的复用边界:** 行为与语义直接可用，视觉需要覆写。几何尺寸是变量驱动的（干净），但轨道底色、滑块底色/阴影/缓动、选项配色都写死在它的 scoped 样式里（`.tx-flat-radio[data-v-hash]`，特异度 0,2,0）。这里通过重复一次包裹类名拿到确定的 0,3,0 优先级，而不是用 `!important`。后续若给 `TxFlatRadio` 补上 `--tx-flat-radio-track-bg` / `-indicator-bg` / `-indicator-shadow` 这类变量，这段覆写就可以删掉。
+- **`TxFlatRadio` 的复用边界:** 行为与语义直接可用，视觉需要覆写。几何尺寸是变量驱动的（干净），但轨道底色、滑块底色/阴影/缓动、选项配色都写死在它的 scoped 样式里（`.tx-flat-radio[data-v-hash]`，特异度 0,2,0）。这里通过重复一次包裹类名拿到确定的 0,3,0 优先级，而不是用 `!important`。`--tx-flat-radio-track-bg`、`--tx-flat-radio-indicator-bg`、`--tx-flat-radio-indicator-shadow` 现已存在，轨道底色、滑块底色与滑块阴影不再需要打特异度战争，只剩写死的选项配色还需要覆写。
 - **类型选择器不导出:** 它只服务这张卡；等真的出现第二个用例再考虑抽成独立组件。
 - **微光的渐变是手写的:** 共享的 `bui-shimmer-text` 混入扫的是墨色阶梯，这里扫的是强调色，所以渐变写在组件里，但共用同一份 keyframes。

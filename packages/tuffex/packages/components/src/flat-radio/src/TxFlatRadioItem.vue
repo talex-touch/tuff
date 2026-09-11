@@ -126,10 +126,11 @@ onBeforeUnmount(() => {
   }
 
   &.is-multiple-selected {
-    background: var(--tx-bg-color-overlay, #fff);
-    // Same light as the single-select thumb: a multi-select chip is the same
-    // raised surface, so it cannot cast in a different direction.
-    box-shadow: var(--tx-elevation-1, 1px 2px 2px rgba(0, 0, 0, 0.05));
+    // The same anchor as the single-select thumb, for the same reason:
+    // --tx-bg-color-overlay is #1d1e1f on dark and sat *below* the #303030
+    // track, so a selected chip read as a hole rather than a raised surface.
+    background: var(--tx-flat-radio-indicator-bg, var(--tx-surface-raised, #fff));
+    box-shadow: var(--tx-elevation-1, 1px 2px 4px rgba(0, 0, 0, 0.04));
   }
 
   &.is-focused {

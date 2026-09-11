@@ -146,13 +146,24 @@ function splitTopLevel(value: string): string[] {
 }
 
 describe('txFlatRadio indicator contrast', () => {
-  it('lifts the sliding indicator off the track in both themes', () => {
-    // `--tx-bg-color-overlay` is white on light but darker than the track on
-    // dark, so the indicator sank into the groove and its travel was invisible.
+  it('lifts the sliding indicator off the track, not off the page', () => {
+    // Two earlier anchors both failed: --tx-bg-color-overlay sank below the
+    // track on dark, and mixing the text colour into it landed the thumb within
+    // four RGB steps of the track in both themes. --tx-surface-raised is defined
+    // against --tx-fill-color, which is the track.
     const body = indicatorRuleBody()
 
-    expect(body).toContain('color-mix(in srgb, var(--tx-text-color-primary')
-    expect(body).toContain('var(--tx-bg-color-overlay')
+    expect(body).toContain('var(--tx-surface-raised')
+    expect(body).not.toContain('var(--tx-bg-color-overlay')
+    expect(body).not.toContain('color-mix(in srgb, var(--tx-text-color-primary')
+  })
+
+  it('exposes the track, thumb and shadow as override points', () => {
+    // fine-tune-card's docs named these three as the variables that would let
+    // its specificity-war override block go away.
+    expect(flatRadioSource).toContain('--tx-flat-radio-track-bg')
+    expect(flatRadioSource).toContain('--tx-flat-radio-indicator-bg')
+    expect(flatRadioSource).toContain('--tx-flat-radio-indicator-shadow')
   })
 })
 

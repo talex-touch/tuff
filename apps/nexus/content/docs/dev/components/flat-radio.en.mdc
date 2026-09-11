@@ -270,7 +270,8 @@ When the container is focused:
 
 ## Interaction Contract
 
-- The sliding indicator is mixed from the text colour into the overlay colour so it reads as raised in both themes. `--tx-bg-color-overlay` alone is white on light but darker than the track on dark, which sank the indicator into the groove and made its travel invisible.
+- The sliding indicator and the multi-select chip both fill from `--tx-surface-raised`, which is defined against `--tx-fill-color` — the track itself. Anchors defined against the page failed twice: `--tx-bg-color-overlay` alone is white on light but darker than the track on dark, and mixing the text colour into it landed the thumb within four RGB steps of the track in both themes.
+- `--tx-flat-radio-track-bg`, `--tx-flat-radio-indicator-bg` and `--tx-flat-radio-indicator-shadow` override the three in turn, so a host does not have to out-specify the scoped styles.
 - The indicator travels and resizes on one duration and one curve. They used to be two (a 0.25s overshoot against a 0.2s ease), so on labels of unequal width the thumb arrived and only then finished growing.
 - Item geometry is read from fractional rects rather than `offsetLeft` / `offsetWidth`, which rounded to whole pixels and left the thumb up to 1px off its item, by a different amount per item.
 - Every item carries the selected font weight, so selecting one never changes its measured width. Moving the weight on selection reflowed the item, shifted its siblings, and moved the indicator's target mid-flight.
