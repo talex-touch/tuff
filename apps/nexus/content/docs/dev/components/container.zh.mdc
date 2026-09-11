@@ -240,6 +240,7 @@ code: |
 - `padding` 预设分别映射为 12 / 16 / 24 px，数字 padding 会被限制为不小于 0。
 - `margin="auto"` 会水平居中；字符串或数字 margin 会按 `0 <value>` 应用到左右两侧。
 - `TxRow` 会按当前断点计算单一 gutter，并通过 `--tx-row-gutter` 暴露；列组件会把 gutter 均分到左右 padding。
+- 行通过负外边距抵消两侧最外缘的这份 padding，并用 `calc(100% + var(--tx-row-gutter))` 为其买单。单纯写 `100%` 是相对包含块的**内容**宽度解析的，负外边距只会把行整体左移而不加宽，导致右侧正好少一个 gutter——在有 padding 的 `TxContainer` 里，8px gutter 下就表现为左侧内缩 16px、右侧 24px。
 - `TxCol` 会把 `span` 和 `offset` 限制在 0–24 栅格内，断点 prop 未提供时回退到 `span`。
 ## 响应式断点
 
