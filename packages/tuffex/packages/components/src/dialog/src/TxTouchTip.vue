@@ -228,9 +228,17 @@ onUnmounted(() => {
   }
 
   &__content {
+    // A hash, an id or a URL has no break opportunity, so a vertical scroll
+    // cannot save it: the token runs past the panel and the panel clips it.
+    // `anywhere` also lets the token shrink the content's min-content width,
+    // which `break-word` does not, so the panel stops being widened by it.
+    overflow-wrap: anywhere;
     position: relative;
     width: 80%;
     height: calc(100% - 30px);
+    // Fixed height plus a clipping panel meant a long body simply vanished
+    // below the fold with nothing to reach it.
+    overflow-y: auto;
     text-align: center;
     color: var(--tx-text-color-secondary, #909399);
     white-space: pre-line;
