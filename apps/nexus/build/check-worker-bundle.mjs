@@ -1,15 +1,24 @@
 import { Buffer } from 'node:buffer'
 import { gzipSync } from 'node:zlib'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { docsApiPrerenderRoutes, publicPrerenderRoutes } from './nexus-static-routes.mjs'
+import {
+  DOCS_STATIC_CACHE_CONTROL,
+  I18N_MESSAGES_CACHE_CONTROL,
+  docsApiPrerenderRoutes,
+  docsStaticHtmlHeaderRoutes,
+  docsStaticJsonHeaderRoutes,
+  i18nMessagesHeaderRoutes,
+  publicPrerenderRoutes,
+} from './nexus-static-routes.mjs'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const nexusRoot = join(currentDir, '..')
 const distRoot = join(nexusRoot, 'dist')
 const workerRoot = join(distRoot, '_worker.js')
 const routesJsonPath = join(distRoot, '_routes.json')
+const headersFilePath = join(distRoot, '_headers')
 const serviceWorkerPath = join(distRoot, 'sw.js')
 const authHandlerPath = join(nexusRoot, 'server/api/auth/[...].ts')
 const authUtilityPath = join(nexusRoot, 'server/utils/auth.ts')
@@ -548,6 +557,77 @@ function checkRoutes() {
       ? `Missing static route exclusions: ${[...missing, ...missingPatterns].join(', ')}`
       : `Static route exclusions verified: ${expectedStaticRoutes.length} routes + ${expectedStaticRoutePatterns.length} patterns`,
   }
+}
+
+/**
+ * Parses a Cloudflare Pages `_headers` file into `{ pattern, headers }` blocks. Header lines
+ * are indented; a non-indented line starts a new block.
+ */
+export function parseCloudflareHeadersFile(source) {
+  const blocks = []
+  for (const rawLine of source.split(/\r?\n/)) {
+    if (!rawLine.trim())
+      continue
+    if (/^\s/.test(rawLine)) {
+      const current = blocks[blocks.length - 1]
+      if (!current)
+        continue
+      const separator = rawLine.indexOf(':')
+      if (separator === -1)
+        continue
+      current.headers[rawLine.slice(0, separator).trim().toLowerCase()] = rawLine.slice(separator + 1).trim()
+      continue
+    }
+    blocks.push({ pattern: rawLine.trim(), headers: {} })
+  }
+  return blocks
+}
+
+/**
+ * Every static docs response must be edge-cacheable. Nitro writes `routeRules[*].headers` into
+ * `_headers` with `/**` folded to `/*`; a rule that silently stops being emitted would put the
+ * whole docs site back on `max-age=0, must-revalidate` (`DYNAMIC` at the edge) without any
+ * test noticing — which is exactly how it shipped before.
+ */
+export function checkStaticCacheHeaders(headersSource) {
+  const findings = []
+  if (headersSource === null) {
+    findings.push('_headers is missing')
+    return { findings, verified: 0 }
+  }
+
+  const blocks = parseCloudflareHeadersFile(headersSource)
+  const byPattern = new Map(blocks.map(block => [block.pattern, block.headers]))
+  const expectations = [
+    ...docsStaticHtmlHeaderRoutes.map(route => ({ route, cacheControl: DOCS_STATIC_CACHE_CONTROL, contentType: null })),
+    ...docsStaticJsonHeaderRoutes.map(route => ({ route, cacheControl: DOCS_STATIC_CACHE_CONTROL, contentType: 'application/json' })),
+    ...i18nMessagesHeaderRoutes.map(route => ({ route, cacheControl: I18N_MESSAGES_CACHE_CONTROL, contentType: null })),
+  ]
+
+  let verified = 0
+  for (const expectation of expectations) {
+    const pattern = expectation.route.replace('/**', '/*')
+    const headers = byPattern.get(pattern)
+    if (!headers) {
+      findings.push(`${pattern}: no _headers block`)
+      continue
+    }
+    const cacheControl = headers['cache-control'] ?? ''
+    if (cacheControl !== expectation.cacheControl)
+      findings.push(`${pattern}: cache-control is "${cacheControl}", expected "${expectation.cacheControl}"`)
+    else if (!/s-maxage=[1-9]/.test(cacheControl))
+      findings.push(`${pattern}: cache-control has no positive s-maxage`)
+    if (expectation.contentType && !(headers['content-type'] ?? '').includes(expectation.contentType))
+      findings.push(`${pattern}: content-type is "${headers['content-type'] ?? ''}", expected ${expectation.contentType}`)
+    if (!findings.some(finding => finding.startsWith(`${pattern}:`)))
+      verified += 1
+  }
+
+  return { findings, verified, expected: expectations.length }
+}
+
+function readHeadersFile() {
+  return existsSync(headersFilePath) ? readFileSync(headersFilePath, 'utf8') : null
 }
 
 function checkStaticRouteFiles() {
@@ -1108,6 +1188,11 @@ function countHtmlInitialAssetBudgetRoutes(distFiles) {
     .length
 }
 
+/**
+ * The report is only produced when this file is run directly, so the pure checks above can be
+ * imported by tests without a built `dist/`.
+ */
+function main() {
 if (!existsSync(workerRoot)) {
   console.error('[nexus-worker-bundle] dist/_worker.js is missing. Run `pnpm -C "apps/nexus" run build` first.')
   process.exit(1)
@@ -1117,6 +1202,7 @@ const { executableFiles, totalBytes } = analyzeWorkerFiles()
 const workerGzipBytes = getWorkerGzipBytes(executableFiles)
 const { files: distFiles, totalBytes: distTotalBytes } = analyzeDistFiles()
 const routeCheck = checkRoutes()
+const staticCacheHeaderCheck = checkStaticCacheHeaders(readHeadersFile())
 const missingStaticRouteFiles = checkStaticRouteFiles()
 const workerOwnedAppRouteFindings = checkWorkerOwnedAppRoutes()
 const suspiciousFindings = checkSuspiciousPatterns(executableFiles)
@@ -1155,6 +1241,7 @@ for (const file of distFiles.slice(0, 10))
   console.log(`  ${formatBytes(file.bytes).padStart(10)}  ${file.relativePath}`)
 
 console.log(`[nexus-worker-bundle] ${routeCheck.message}`)
+console.log(`[nexus-dist-budget] Static cache headers verified: ${staticCacheHeaderCheck.verified}/${staticCacheHeaderCheck.expected ?? 0}`)
 console.log(`[nexus-dist-budget] Static route files verified: ${expectedStaticRoutes.length - missingStaticRouteFiles.length}/${expectedStaticRoutes.length}`)
 console.log(`[nexus-dist-budget] Worker-owned app routes verified: ${workerOwnedAppRoutes.length - workerOwnedAppRouteFindings.length}/${workerOwnedAppRoutes.length}`)
 console.log('[nexus-dist-budget] Auth handler singleton verified')
@@ -1315,5 +1402,15 @@ if (sizeFindings.length) {
     console.error(`  ${finding}`)
 }
 
-if (!routeCheck.ok || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || remoteFontReferenceFindings.length || unprefixedAttributifyFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || workerSourceMapCheck.findings.length || clientContentDatabaseRuntimeFindings.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sharedEntryCssCheck.findings.length || landingImagePrefetchFindings.length || landingDeferredImageFindings.length || landingShowcaseVideoFindings.length || clientChunkCheck.findings.length || sizeFindings.length)
+if (staticCacheHeaderCheck.findings.length) {
+  console.error('[nexus-dist-budget] static cache header violations:')
+  for (const finding of staticCacheHeaderCheck.findings)
+    console.error(`  ${finding}`)
+}
+
+if (!routeCheck.ok || staticCacheHeaderCheck.findings.length || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || remoteFontReferenceFindings.length || unprefixedAttributifyFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || workerSourceMapCheck.findings.length || clientContentDatabaseRuntimeFindings.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sharedEntryCssCheck.findings.length || landingImagePrefetchFindings.length || landingDeferredImageFindings.length || landingShowcaseVideoFindings.length || clientChunkCheck.findings.length || sizeFindings.length)
   process.exit(1)
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  main()
