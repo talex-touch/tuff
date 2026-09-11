@@ -6,6 +6,9 @@ import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { appName, toastHostRequestedEvent } from '~/constants'
 
 const LazyToastContainer = defineAsyncComponent(() => import('~/components/ToastContainer.vue'))
+// Only protected routes ever render the two auth gates below, but a static TxEmptyState here
+// put it — and the seven tuffex primitives it builds on — into the entry chunk of every page.
+const LazyAuthGateState = defineAsyncComponent(() => import('@talex-touch/tuffex/empty-state').then(module => module.TxEmptyState))
 
 useHead({
   title: appName,
@@ -510,7 +513,7 @@ watchEffect(() => {
       v-if="isAuthLoading"
       class="grid h-screen w-screen place-content-center"
     >
-      <TxEmptyState
+      <LazyAuthGateState
         variant="loading"
         :title="t('auth.checkingSession')"
         size="small"
@@ -521,7 +524,7 @@ watchEffect(() => {
       v-else-if="!isAuthenticated"
       class="grid h-screen w-screen place-content-center"
     >
-      <TxEmptyState
+      <LazyAuthGateState
         variant="loading"
         :title="t('auth.redirecting')"
         size="small"
