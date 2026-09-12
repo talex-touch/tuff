@@ -75,6 +75,10 @@ const copy = computed(() => (localeKey.value === 'zh'
       contextHint: '右键此处',
       selectionHint: '选中这段文字试试。',
       toastSaved: '已保存',
+      toastSavedBody: '草稿已同步到云端。',
+      toastStack: '堆三条',
+      toastUndo: '撤销',
+      toastDeleted: '已删除 1 项',
       add: '添加',
       translate: '翻译',
       newPlugin: '新建插件',
@@ -151,6 +155,10 @@ const copy = computed(() => (localeKey.value === 'zh'
       contextHint: 'Right-click here',
       selectionHint: 'Select this text to see the actions.',
       toastSaved: 'Saved',
+      toastSavedBody: 'Your draft is synced to the cloud.',
+      toastStack: 'Stack 3',
+      toastUndo: 'Undo',
+      toastDeleted: 'Deleted 1 item',
       add: 'Add',
       translate: 'Translate',
       newPlugin: 'New plugin',
@@ -402,8 +410,26 @@ const { selection: selectionPayload } = useSelectionAnchor({
   ignore: () => [selectionBarRef.value?.el ?? null],
 })
 
+const TOAST_VARIANTS = ['success', 'warning', 'danger'] as const
+
 function fireToast() {
-  toast({ title: copy.value.toastSaved, description: copy.value.aboutBody })
+  toast({ title: copy.value.toastSaved, description: copy.value.toastSavedBody, variant: 'success' })
+}
+
+function fireToastStack() {
+  TOAST_VARIANTS.forEach((variant, i) => {
+    globalThis.setTimeout(() => {
+      toast({ title: copy.value.toastSaved, description: copy.value.toastSavedBody, variant })
+    }, i * 140)
+  })
+}
+
+function fireToastAction() {
+  toast({
+    title: copy.value.toastDeleted,
+    variant: 'default',
+    action: { label: copy.value.toastUndo },
+  })
 }
 
 /* ── Data band. ── */
@@ -2106,9 +2132,17 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxButton @click="fireToast">
-              {{ copy.confirm }}
-            </TxButton>
+            <div class="docs-gallery__row">
+              <TxButton size="small" @click="fireToast">
+                {{ copy.toastSaved }}
+              </TxButton>
+              <TxButton size="small" variant="ghost" @click="fireToastStack">
+                {{ copy.toastStack }}
+              </TxButton>
+              <TxButton size="small" variant="ghost" @click="fireToastAction">
+                {{ copy.toastUndo }}
+              </TxButton>
+            </div>
             <TxToastHost />
             <template #fallback>
               <div class="docs-gallery__ph" />

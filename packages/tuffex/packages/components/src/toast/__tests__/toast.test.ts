@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TxToastHost from '../src/TxToastHost.vue'
-import { clearToasts, dismissToast, toast, toastStore } from '../../../../utils/toast'
+import { clearToasts, dismissToast, pauseToasts, resumeToasts, toast, toastsPaused, toastStore } from '../../../../utils/toast'
 
 describe('toast', () => {
   beforeEach(() => {
@@ -69,6 +69,47 @@ describe('toast', () => {
     expect(toastStore.items).toHaveLength(0)
   })
 
+  it('holds a countdown while paused and resumes from what was left', () => {
+    toast({ id: 'hold', title: 'Hold', duration: 1000 })
+    vi.advanceTimersByTime(400)
+
+    pauseToasts()
+    vi.advanceTimersByTime(5000)
+    expect(toastStore.items).toHaveLength(1)
+
+    resumeToasts()
+    // 600ms was owed when the hold started, not the full 1000.
+    vi.advanceTimersByTime(599)
+    expect(toastStore.items).toHaveLength(1)
+    vi.advanceTimersByTime(1)
+    expect(toastStore.items).toHaveLength(0)
+  })
+
+  it('does not start the countdown for a toast raised while paused', () => {
+    pauseToasts()
+    toast({ id: 'late', title: 'Late', duration: 500 })
+
+    vi.advanceTimersByTime(5000)
+    expect(toastStore.items).toHaveLength(1)
+
+    resumeToasts()
+    vi.advanceTimersByTime(500)
+    expect(toastStore.items).toHaveLength(0)
+  })
+
+  it('lifts the hold when the queue is cleared', () => {
+    pauseToasts()
+    expect(toastsPaused()).toBe(true)
+
+    clearToasts()
+    expect(toastsPaused()).toBe(false)
+
+    // A hold left behind by a torn-down host would strand every later toast.
+    toast({ id: 'after', title: 'After', duration: 100 })
+    vi.advanceTimersByTime(100)
+    expect(toastStore.items).toHaveLength(0)
+  })
+
   it('does not auto dismiss persistent toasts', () => {
     toast({
       id: 'persistent',
@@ -91,10 +132,13 @@ describe('toast', () => {
     expect(toastStore.items).toHaveLength(0)
   })
 
-  it('escalates danger toasts to an assertive alert role', () => {
+  it('escalates danger toasts to an assertive alert role', async () => {
     toast({ id: 'err', title: 'Failed', variant: 'danger', duration: 0 })
 
     const wrapper = mount(TxToastHost, { attachTo: document.body })
+    // The host claims the queue in `onMounted`, so the toasts land on the tick
+    // after mount rather than in the first render.
+    await wrapper.vm.$nextTick()
     const item = document.body.querySelector('.tx-toast')
 
     expect(item?.getAttribute('role')).toBe('alert')
@@ -114,6 +158,7 @@ describe('toast', () => {
     const wrapper = mount(TxToastHost, {
       attachTo: document.body,
     })
+    await wrapper.vm.$nextTick()
 
     const host = document.body.querySelector('.tx-toast-host')
     const item = document.body.querySelector('.tx-toast')

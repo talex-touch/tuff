@@ -14,7 +14,7 @@ verified: true
 ## Basic Usage
 
 ### Toast
-Mount host once, then trigger toasts.
+Mount host once, then trigger toasts. Several at once collapse into a stack; hovering it fans the stack out and holds every countdown until the pointer leaves.
 :::TuffDemoWrapper{demo="ToastToastDemo" code-lang="vue"}
 ---
 code: |
@@ -23,7 +23,7 @@ code: |
   </script>
 
   <template>
-    <TxToastHost />
+    <TxToastHost position="bottom-right" />
     <TxButton @click="toast({ title: 'Saved', description: 'Your changes have been saved.' })">
       Show toast
     </TxButton>
@@ -32,6 +32,12 @@ code: |
       @click="toast({ title: 'Success', description: 'Done', variant: 'success' })"
     >
       Success
+    </TxButton>
+    <TxButton
+      style="margin-left: 8px;"
+      @click="toast({ title: 'Deleted 1 item', action: { label: 'Undo', onClick: restore } })"
+    >
+      With action
     </TxButton>
   </template>
 ---
@@ -42,7 +48,14 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| - | - | - | `TxToastHost` has no props. Mount one host near the app root. |
+| position | `'top-left' \| 'top-center' \| 'top-right' \| 'bottom-left' \| 'bottom-center' \| 'bottom-right'` | `'bottom-right'` | Corner (or edge centre) the stack grows from. |
+| visibleToasts | `number` | `3` | How many toasts stay on screen. The rest wait behind, fully transparent, and move up as the front ones leave. |
+| expand | `boolean` | `false` | Keep the stack fanned out instead of collapsing it when the pointer leaves. |
+| gap | `number` | `14` | Pixels between toasts — both the expanded gap and the collapsed peek. |
+| offset | `number` | `16` | Distance from the viewport edges. |
+| swipeToDismiss | `boolean` | `true` | Let a pointer drag flick a toast off toward its own edge. |
+
+Mount one host near the app root. A second host renders its container (so server markup still hydrates) but draws nothing, and warns in development — see [Interaction Contract](#interaction-contract).
 
 ### toast(options)
 
@@ -55,8 +68,13 @@ code: |
     id?: string
     title?: string
     description?: string
-    variant?: 'default' | 'success' | 'warning' | 'danger'
+    variant?: 'default' | 'info' | 'success' | 'warning' | 'danger'
     duration?: number // default: 2600, 0 = no auto dismiss
+    action?: {
+      label: string
+      onClick?: (id: string) => void
+      dismiss?: boolean // default: true — close the toast after onClick
+    }
   }): string
 ---
 :::
@@ -71,6 +89,21 @@ code: |
   const id = toast({ title: 'Queued', duration: 0 })
   dismissToast(id)
   clearToasts()
+---
+:::
+
+### pauseToasts / resumeToasts / toastsPaused
+
+`TxToastHost` calls these itself on pointer and focus entry, so you rarely need them. They are exported for hosts that hold the stack for their own reason — a modal opening over it, a long read.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { pauseToasts, resumeToasts, toastsPaused } from '@talex-touch/tuffex/utils'
+
+  pauseToasts()   // every countdown freezes where it is; idempotent
+  toastsPaused()  // => true
+  resumeToasts()  // each toast resumes from the time it had left, not from the top
 ---
 :::
 
@@ -93,6 +126,11 @@ code: |
 - `toast()` returns the resolved id. Passing the same `id` replaces the existing toast, preventing duplicate stacked notifications for the same operation.
 - `duration > 0` auto-dismisses the toast; `duration: 0` keeps it visible until `dismissToast(id)` or `clearToasts()` is called.
 - Every call raises the host z-index via the shared z-index manager so new notifications sit above the current interaction layer.
+- **Stacking.** The newest toast is in front. Each one behind sits back by `gap` pixels and 5% of scale, so their top edges peek out; anything past `visibleToasts` is transparent and not clickable. Only the front toast takes pointer events while the stack is collapsed.
+- **Hovering holds the stack.** Pointer or keyboard focus entering the region fans it out to full height and calls `pauseToasts()`; leaving collapses it and calls `resumeToasts()`, which continues each countdown from the time it had left. Collapsed, the host itself is `pointer-events: none`, so the empty column above the front toast stays clickable.
+- **Swipe.** Dragging a toast toward the edge it is anchored to dismisses it past 45px, or past 12px if the flick is faster than 0.32px/ms. Dragging the other way moves a fifth of the distance and springs back. A drag that starts on a button is left to the button. Set `swipeToDismiss: false` to turn this off.
+- **One host draws the queue.** Every host reads the same global store, so two would paint each toast twice in the same corner. The first to mount claims it; later hosts keep their container — server markup still hydrates cleanly — and draw nothing, warning once in development. If the owner unmounts, the next host takes over. The claim happens in `onMounted`, so toasts arrive on the tick after mount rather than in the first render.
+- **Motion.** A toast arrives and leaves along the axis of its position over 0.4s; `prefers-reduced-motion: reduce` drops that to a plain opacity change.
 
 ## Dashboard Feedback Center
 
@@ -143,7 +181,7 @@ code: |
 
 ## Best Practices
 
-- Mount one host. Multiple hosts render the same global store and can duplicate notification regions.
+- Mount one host near the app root and pass `position` — do not mount a host per corner. Extra hosts stand down rather than duplicating the queue, but they still cost a container and a development warning.
 - Use stable ids for task, save, sync, and retry notifications so repeated state updates replace the previous toast.
 - Keep descriptions short; long progress, errors with recovery, or forms belong in panels, drawers, or pages.
 - Clear persistent toasts when leaving the owning page or when the underlying task resolves.
@@ -151,14 +189,16 @@ code: |
 ## Review Notes
 
 - **Accessibility note:** The host is a labeled `role="region"` that is also a polite `aria-live` region, so a toast appearing while focus is elsewhere is announced; `danger` toasts escalate to `role="alert"`. Still use persistent visible copy or page-level status text for critical failures and long-running operations.
+- **Single-host note:** A second `TxToastHost` renders an empty container and logs a warning in development builds. Rendering nothing at all would change the server markup and break hydration, so the container stays.
 - **Timer note:** Reusing an `id` replaces the store item and first cancels that id's pending auto-dismiss timer (`clearDismissTimer`); the replacement toast restarts timing from its own `duration`. Use `duration: 0` for persistent task toasts.
-- **Verified coverage:** `toast.test.ts` checks id replacement, returned ids, auto-dismiss, persistent toasts, dismiss/clear helpers, host region semantics, variant classes, rendered title/description, accessible close buttons, and close-button dismissal.
+- **Verified coverage:** `toast.test.ts` checks id replacement, returned ids, auto-dismiss, persistent toasts, pause/resume from the remaining time, dismiss/clear helpers, host region semantics, variant classes, rendered title/description, accessible close buttons, and close-button dismissal. `toast-host.test.ts` covers stack order and offsets, top/bottom growth, `visibleToasts`, hover expansion and the hold it takes, swipe thresholds and edge resistance, action buttons, and the single-host claim.
 
 ## Source
 
 - Host source: `packages/tuffex/packages/components/src/toast/src/TxToastHost.vue`.
-- Utility source: `packages/tuffex/packages/utils/toast.ts` exports `toast`, `dismissToast`, `clearToasts`, `toastStore`, `TxToastOptions`, `TxToastItem`, and `TxToastVariant`.
-- Export alias: `packages/tuffex/packages/components/src/toast/index.ts` exports installable `ToastHost`, `TxToastHost`, and `TxToastHostInstance`.
-- Coverage: `packages/tuffex/packages/components/src/toast/__tests__/toast.test.ts` verifies store behavior, timers, host rendering, and dismissal.
+- Utility source: `packages/tuffex/packages/utils/toast.ts` exports `toast`, `dismissToast`, `clearToasts`, `pauseToasts`, `resumeToasts`, `toastsPaused`, `toastStore`, `TxToastOptions`, `TxToastItem`, `TxToastAction`, and `TxToastVariant`.
+- Export alias: `packages/tuffex/packages/components/src/toast/index.ts` exports installable `ToastHost`, `TxToastHost`, `TxToastHostInstance`, `TxToastHostProps`, and `TxToastPosition`.
+- Single-host registry: `packages/tuffex/packages/components/src/toast/src/host-registry.ts`.
+- Coverage: `packages/tuffex/packages/components/src/toast/__tests__/toast.test.ts` (store, timers, holds) and `toast-host.test.ts` (stacking, hover, swipe, actions, single host).
 
 <TuffDocSourceLink />
