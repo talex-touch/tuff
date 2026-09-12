@@ -70,7 +70,8 @@ export default defineConfig({
        * server-rendered page an `i-*` element has no rule of its own yet. This gives every such
        * box the size the icon rule will give it (`scale: 1.2` below → 1.2em), so the glyphs paint
        * in without shifting the layout around them. Explicit `w-*`/`h-*` utilities still win:
-       * they live in a later layer.
+       * they live in a later layer, and the icon rules themselves carry no specificity (see
+       * `postprocess` below).
        */
       getCSS: () => `[class^="i-"],[class*=" i-"]{width:1.2em;height:1.2em}`,
     },
@@ -86,6 +87,23 @@ export default defineConfig({
           }
         }
       `,
+    },
+  ],
+  /*
+   * Icon rules carry no specificity. The icons layer ships as its own stylesheet, appended to
+   * `<head>` once the app has mounted, so in the cascade it comes after every other sheet. At
+   * class specificity that let an icon rule's `color:inherit` and `width:1.2em` beat the
+   * `text-amber-600` or `w-4` on the same element — utilities the single-sheet order used to
+   * let win, because `icons` sorts before `default`. `:where()` settles it for good: any classed
+   * rule on the host wins, whichever sheet arrives last. Both output modes are covered: mask
+   * icons carry `--un-icon`, multi-colour ones (`i-logos-*`) an SVG `background`.
+   */
+  postprocess: [
+    (util) => {
+      const isIcon = util.entries.some(([property, value]) => property === '--un-icon'
+        || (property === 'background' && typeof value === 'string' && value.startsWith('url("data:image/svg+xml')))
+      if (isIcon)
+        util.selector = `:where(${util.selector})`
     },
   ],
   presets: [

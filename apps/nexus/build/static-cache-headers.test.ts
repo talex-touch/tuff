@@ -65,6 +65,23 @@ describe('static cache headers guard', () => {
     )
   })
 
+  it('joins a header named twice in one block the way Pages sends it', () => {
+    const source = [
+      '/',
+      '  Link: </_nuxt/e.js>; rel=modulepreload; crossorigin',
+      '  Link: </_nuxt/entry.css>; rel=preload; as=style; crossorigin',
+    ].join('\n')
+
+    expect(parseCloudflareHeadersFile(source)).toEqual([{
+      pattern: '/',
+      headers: { link: '</_nuxt/e.js>; rel=modulepreload; crossorigin, </_nuxt/entry.css>; rel=preload; as=style; crossorigin' },
+    }])
+    // …so the early-hints guard sees both targets, not just the last line's.
+    expect(checkEarlyHints(source, target => target === '/_nuxt/e.js').findings).toContain(
+      '/: Link targets missing from dist: /_nuxt/entry.css',
+    )
+  })
+
   it('accepts the _headers file the shared route rules produce', () => {
     const result = checkStaticCacheHeaders(renderHeadersFile(createStaticCacheRouteRules()))
 
