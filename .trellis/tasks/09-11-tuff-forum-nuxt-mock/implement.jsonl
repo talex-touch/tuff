@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/09-11-tuff-forum-nuxt-mock/research/tuffex-0.5.0-inventory.md", "reason": "Verified facts about the published @talex-touch/tuffex@0.5.0 package: exports, missing ./vite plugin, barrel shapes for auto-registration, the 39 internal icon classes, SSR hazards, and a props/slots/emits cheat-sheet for every component the forum uses."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Props/emits conventions, Loading States (skeleton via TxRowSkeleton + useDeferredLoading is mandatory for first-load views), accessibility expectations."}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "When to use Pinia vs local state; keep view state local, forum data in stores."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Forbidden patterns (no div/span @click when a native/TuffEx control exists; no SSR output depending on localStorage/time/random; mock evidence must not be reported as production completion)."}
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "scripts/check-styles.mjs must fail when the thing it protects breaks; design its --self-test accordingly."}
