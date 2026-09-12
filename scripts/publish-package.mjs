@@ -209,7 +209,9 @@ export function verifyRegistryManifest(packageInfo, version, readField = readReg
      * The throw below is unchanged and deliberate (#560): an unreadable
      * manifest must never be reported as clean.
      */
-    let waitMs = delayMs
+    // Clamped up front too: maxDelayMs is a ceiling on every wait, including a
+    // caller that configures it below delayMs.
+    let waitMs = Math.min(delayMs, maxDelayMs)
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
         value = readField(packageInfo.name, version, field)
