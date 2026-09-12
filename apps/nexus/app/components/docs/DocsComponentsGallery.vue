@@ -447,14 +447,26 @@ const filterChipItems = computed(() => [
   { value: 'all', label: copy.value.suiteBase, count: 91 },
   { value: 'beta', label: copy.value.reviewing, count: 12, dot: 'var(--tx-color-warning)' },
 ])
-/* Inline SVG so the gallery never waits on (or fails) a network image. */
-function tileImage(hex: string) {
-  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="90"><rect width="120" height="90" fill="${hex}"/></svg>`)}`
+/* Inline SVG so the gallery never waits on (or fails) a network image. Three
+   flat swatches read as colour chips, not as photographs, which made the cell
+   look like the wrong component; a gradient with a horizon and a light source
+   is enough for a thumbnail grid to read as one. */
+function tileImage(from: string, to: string, sun: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120">`
+    + `<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/>`
+    + `</linearGradient></defs>`
+    + `<rect width="160" height="120" fill="url(#s)"/>`
+    + `<circle cx="38" cy="34" r="16" fill="${sun}" opacity="0.85"/>`
+    + `<path d="M0 92 L46 62 L84 86 L118 60 L160 88 L160 120 L0 120 Z" fill="#0f172a" opacity="0.42"/>`
+    + `<path d="M0 104 L54 78 L96 100 L134 80 L160 96 L160 120 L0 120 Z" fill="#0f172a" opacity="0.62"/>`
+    + `</svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 const galleryItems = [
-  { id: 'a', url: tileImage('#3b82f6'), name: 'Blue' },
-  { id: 'b', url: tileImage('#22c55e'), name: 'Green' },
-  { id: 'c', url: tileImage('#f59e0b'), name: 'Amber' },
+  { id: 'a', url: tileImage('#1e3a8a', '#60a5fa', '#e0f2fe'), name: 'Dawn ridge' },
+  { id: 'b', url: tileImage('#064e3b', '#4ade80', '#fef9c3'), name: 'Pine valley' },
+  { id: 'c', url: tileImage('#7c2d12', '#fbbf24', '#fff7ed'), name: 'Dune pass' },
 ]
 const sortableItems = ref([
   { id: 'clipboard', label: 'Clipboard' },
