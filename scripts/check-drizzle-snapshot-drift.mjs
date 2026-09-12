@@ -52,8 +52,13 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * upgrade that adds the expiry column already used by clipboard capture. Its full-chain
  * SQLite regression is in clipboard-retention-expiry-schema.test.ts. This records only
  * that migration's known gap; it does not regenerate or claim to repair snapshot history.
+ *
+ * Raised 31 → 32 on 2026-09-11 for `0045_voice_polish_telemetry`, the hand-written upgrade that
+ * adds the content-free tidy-up telemetry table. Its full-chain SQLite regression is in
+ * voice-polish-telemetry-schema.test.ts. This records only that migration's known gap; it does
+ * not regenerate or claim to repair snapshot history.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 31
+export const KNOWN_MISSING_SNAPSHOTS = 32
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))

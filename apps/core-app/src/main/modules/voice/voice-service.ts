@@ -43,7 +43,7 @@ import { getConfiguredAsrProvider } from './voice-provider-runtime'
 import { selectVoiceFile } from './voice-file-transcription'
 import { voiceRecognitionStore, type VoiceRecognitionRecordInput } from './voice-recognition-store'
 import { getMainConfig } from '../storage'
-import { voiceInsightsStore } from './voice-insights-store'
+import { voiceInsightsStore, type VoicePolishOutcome } from './voice-insights-store'
 
 function isVoiceHistoryEnabled(): boolean {
   try {
@@ -90,6 +90,69 @@ function resolveNoiseSuppression(requested: unknown): boolean {
 }
 
 const voiceLog = createLogger('Voice')
+
+/**
+ * Where a transcript falls relative to the tidy-up length gate: `short` runs no pass at all,
+ * `light` runs the natural editing scope, `full` runs the scope the user asked for.
+ */
+export type VoicePolishTierDecision = 'short' | 'light' | 'full'
+
+/**
+ * The polish length gate.
+ *
+ * A tidy-up pass is not free: measured on this machine's configured route the fixed cost alone is
+ * 0.67-0.88s for a 7-24 character transcript, because the system prompt is ~2.6KB against an
+ * average dictated message of ~20 characters. What that money buys on a short utterance is
+ * nothing, or worse than nothing: a 7-character transcript came back as 3 characters, and an
+ * 11-character one came back byte-identical after 834ms. The two sessions that gained nothing are
+ * exactly the two this gate now skips.
+ *
+ * Sizes are counted in language-neutral units (CJK characters + words in every other script), so
+ * one pair of thresholds holds for Chinese and English. 12 units is deliberately close to the
+ * only hard number any shipping competitor publishes — Wispr Flow's iOS Polish requires 10
+ * words — and 60 units is where a dictated message stops being one short sentence; deep/structured
+ * rewriting only pays for itself past that, which is why the `light` band is capped to natural
+ * editing regardless of the saved strength.
+ */
+const POLISH_MIN_UNITS = 12
+const POLISH_FULL_UNITS = 60
+const CJK_CHARACTER = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu
+
+/**
+ * Word counting for everything that is not CJK, via ICU rather than a letter-run regex.
+ *
+ * Thai, Lao, Khmer and Myanmar write without spaces, so `/[\p{L}]+/` reads a whole sentence as
+ * one word and the gate would skip the pass on exactly the long transcripts it exists for.
+ * `Intl.Segmenter`'s dictionary segmentation is the only word boundary those scripts publish;
+ * it also keeps combining marks inside their word, which a regex splits — `e` + U+0301 + `clair`
+ * is one French word, not two. The segmenter is language-neutral on purpose: the transcript's
+ * language is not known before it exists, and ICU applies the right dictionary from the script.
+ *
+ * CJK keeps its character count below instead of ICU's word segmentation: 26 Chinese characters
+ * are ~10 ICU words, which would push the primary dictation language under the gate.
+ */
+let polishWordSegmenter: Intl.Segmenter | undefined
+
+function countPolishWords(text: string): number {
+  polishWordSegmenter ??= new Intl.Segmenter(undefined, { granularity: 'word' })
+  let words = 0
+  for (const segment of polishWordSegmenter.segment(text)) {
+    if (segment.isWordLike) words += 1
+  }
+  return words
+}
+
+/** CJK characters plus words in every other script: the size a transcript is gated on. */
+export function countPolishUnits(text: string): number {
+  const cjk = text.match(CJK_CHARACTER)?.length ?? 0
+  return cjk + countPolishWords(text.replace(CJK_CHARACTER, ' '))
+}
+
+export function resolvePolishTier(text: string): VoicePolishTierDecision {
+  const units = countPolishUnits(text)
+  if (units < POLISH_MIN_UNITS) return 'short'
+  return units < POLISH_FULL_UNITS ? 'light' : 'full'
+}
 
 /**
  * The recording cap, and the denominator the HUD's progress ring is drawn against.
@@ -1480,7 +1543,15 @@ export class VoiceService {
     }
   }
 
-  /** AI polish via the intelligence `text.chat` capability. Returns null on failure. */
+  /**
+   * AI polish via the intelligence `text.chat` capability. Returns null when the gate skips the
+   * pass or the pass fails; the caller then delivers the raw transcript.
+   *
+   * The length gate lives here, at the single choke point every caller (stream, one-shot,
+   * retained-audio retry) already goes through, so a short utterance costs no provider call
+   * anywhere. It is a property of the transcript, which does not exist when the stream's
+   * tidy-up decision is logged, so the decision is recorded here rather than there.
+   */
   private async polish(
     transcript: string,
     strength: VoicePolishStrength,
@@ -1488,9 +1559,62 @@ export class VoiceService {
     caller = VOICE_CALLER
   ): Promise<string | null> {
     if (!transcript.trim()) return null
+    const tier = resolvePolishTier(transcript)
+    const units = countPolishUnits(transcript)
+    const telemetryId = nextVoiceSessionId()
+    const recordTelemetry = async (
+      outcome: VoicePolishOutcome,
+      effectiveStrength: VoicePolishStrength | null,
+      latencyMs: number,
+      polishedCharacters: number
+    ): Promise<void> => {
+      try {
+        await voiceInsightsStore.recordPolishPass({
+          id: telemetryId,
+          capturedAt: Date.now(),
+          tier,
+          units,
+          characters: transcript.length,
+          outcome,
+          strength: effectiveStrength,
+          requestedStrength: strength,
+          latencyMs,
+          polishedCharacters
+        })
+      } catch (error) {
+        voiceLog.warn('Voice polish telemetry persistence failed; the pass result is unaffected', {
+          error
+        })
+      }
+    }
+
+    if (tier === 'short') {
+      voiceLog.info('Polish pass skipped: transcript below the length gate', {
+        meta: {
+          reason: 'too-short',
+          tier,
+          units,
+          transcriptChars: transcript.length,
+          strength
+        }
+      })
+      await recordTelemetry('skipped-short', null, 0, 0)
+      return null
+    }
+
+    // Below the full-length tier the pass is capped to natural editing: grouping and reordering a
+    // couple of sentences is where polish starts inventing structure the speaker never had.
+    const effectiveStrength: VoicePolishStrength = tier === 'light' ? 'natural' : strength
     const startedAt = Date.now()
     voiceLog.info('Polish pass starting', {
-      meta: { strength, transcriptChars: transcript.length, budgetMs: POLISH_TIMEOUT_MS }
+      meta: {
+        strength: effectiveStrength,
+        requestedStrength: strength,
+        tier,
+        units,
+        transcriptChars: transcript.length,
+        budgetMs: POLISH_TIMEOUT_MS
+      }
     })
     const polishController = new AbortController()
     const abortPolish = (): void => polishController.abort()
@@ -1507,7 +1631,7 @@ export class VoiceService {
           'text.chat',
           {
             messages: [
-              { role: 'system', content: getVoicePolishPrompt(strength) },
+              { role: 'system', content: getVoicePolishPrompt(effectiveStrength) },
               { role: 'user', content: wrapTranscription(transcript) }
             ]
           },
@@ -1523,17 +1647,23 @@ export class VoiceService {
       const cleaned = typeof response.result === 'string' ? response.result.trim() : ''
       if (!cleaned) {
         voiceLog.warn('Polish pass returned nothing; delivering the raw transcript', {
-          meta: { elapsedMs: Date.now() - startedAt }
+          meta: { elapsedMs: Date.now() - startedAt, tier }
         })
+        await recordTelemetry('empty', effectiveStrength, Date.now() - startedAt, 0)
         return null
       }
+      const outcome: VoicePolishOutcome = cleaned === transcript ? 'unchanged' : 'applied'
       voiceLog.info('Polish pass applied', {
         meta: {
+          outcome,
           elapsedMs: Date.now() - startedAt,
+          tier,
+          strength: effectiveStrength,
           transcriptChars: transcript.length,
           polishedChars: cleaned.length
         }
       })
+      await recordTelemetry(outcome, effectiveStrength, Date.now() - startedAt, cleaned.length)
       return cleaned
     } catch (error) {
       if (signal?.aborted) throw voiceCancellationError()
@@ -1542,21 +1672,24 @@ export class VoiceService {
       // nothing at all on the timeout branch, which is precisely the branch that fires, and
       // "tidy-up silently never happens" is indistinguishable from "tidy-up is switched off"
       // when the only record of it is absent.
+      const elapsedMs = Date.now() - startedAt
       if (polishTimedOut) {
         voiceLog.warn('Polish pass hit its deadline; delivering the raw transcript', {
           meta: {
-            elapsedMs: Date.now() - startedAt,
+            elapsedMs,
             budgetMs: POLISH_TIMEOUT_MS,
-            strength,
+            strength: effectiveStrength,
+            tier,
             transcriptChars: transcript.length
           }
         })
       } else {
         voiceLog.warn('Polish pass unavailable; delivering the raw transcript', {
-          meta: { elapsedMs: Date.now() - startedAt },
+          meta: { elapsedMs, tier },
           error
         })
       }
+      await recordTelemetry(polishTimedOut ? 'timeout' : 'failed', effectiveStrength, elapsedMs, 0)
       return null
     } finally {
       clearTimeout(timeout)
