@@ -470,6 +470,20 @@ export default defineNuxtConfig({
     },
     build: {
       chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          // A docs page preloaded 61 chunks, about twenty of them under 1 KB; each is a request
+          // and, on HTTP/1.1, a queue slot. Rollup folds chunks below this size into an importer
+          // when doing so cannot make any entry load more than it needs. Measured: 1157 → 952
+          // client chunks, 61 → 50 preloads on a component page, bytes unchanged.
+          //
+          // Nuxt's SFC style inlining (`features.inlineStyles`) was tried alongside this and
+          // reverted: tuffex ships its styles as `.css` files that the on-demand style plugin
+          // imports from inside SFCs, so Nuxt inlined them *and* kept them linked — 78 KB of
+          // duplicated CSS and +10 KB gzip on every docs page for no fewer requests.
+          experimentalMinChunkSize: 4096,
+        },
+      },
     },
     optimizeDeps: {
       include: [
