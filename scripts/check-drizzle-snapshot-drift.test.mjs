@@ -72,5 +72,6 @@ describe('drizzle snapshot drift', () => {
     assert.ok(gap.missing.includes('0039'))
     assert.ok(gap.missing.includes('0040'))
     assert.ok(gap.missing.includes('0041'))
+    assert.ok(gap.missing.includes('0045'))
   })
 })
