@@ -2,6 +2,71 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-12
+
+### ✨ 组件增强
+
+- 新增 `TxTextMorph`：按字符粒度在旧值与新值之间做形变过渡，并导出 `TextMorphEngine` / `MorphController` / `MORPH_DEFAULTS` 供 `TxTextTransformer`、`TxBadge` 等自带形变面的组件复用；`@number-flow/vue` 依赖随之移除，Nexus 侧 demo 与文档从 AutoSizer 数字滚动切到新组件。
+- `TxToastHost` 重做为可堆叠通知栈：最新的在最前，后面的按 `gap` 与 5% 缩放露出顶边，超过 `visibleToasts` 的完全透明等待；悬停整栈展开并暂停所有倒计时，移开后各自从中断处继续而不是从头计时；收起时宿主 `pointer-events: none`，空列不再吞点击。新增 `position` / `expand` / `gap` / `offset` / `swipeToDismiss`，退场动画补齐（此前只有 0.16s 淡入，退场元素直接消失）。
+- `TxSortableList` 拖拽可预期：列表随指针跨越实时重排（预览由组件自己保有，宿主未回写 `modelValue` 时行也会动，拖拽结束后所有权交还宿主），新增握柄与键盘排序路径，`reorder` 仍只在结束时触发一次并携带原始与最终下标。
+- `TxTree` 无 `v-model` 时也能选中：内部选中状态与展开同构，新增 `defaultSelectedKeys` 作为种子，`modelValue` 绑定期间忽略种子。
+- `TxTransfer` 新增 `minHeight` prop（写入 `--tx-transfer-min-height`），不再被 240px 硬下限撑出容器；行标签改用 `overflow-wrap: anywhere`，不再把 "Quick actions" 断成 "Quick actio / ns"。
+- `TxDatePicker` 增加月/年视图、区间选择与过渡动画；`TxCascader` 每一级使用各自锚定的浮层面板；`TxProgressBar` 增加星尘流动与可悬停分段。
+- `TxTabBar` 补齐与 `TxFlatRadio` 一致的 variant / size 组合，滑动指示器改由一份共享测量驱动（首次点击前就位）；`TxFlatRadio` 增加 `xl` 档位。
+- `TxAlert` 增加状态图标、入场动画与可关闭回退。
+
+### 🎨 外观与主题
+
+- 所有阴影回到同一光源；抬升面锚定到轨道并压柔阴影，画廊单元格不再挤压自身。
+- BUI 深色 ramp 回归中性灰：每档保留原有绿色通道（亮度不变），只去掉原先 +3..+5 的蓝偏，`--tx-bui-line` 与 `--tx-fill-color` 对齐；浅色 token 不动。
+- 列表行统一 hover / active / 对齐；下拉项 hover 改为面板式；折叠头重绘为描边 chevron，折叠框架重新设计。
+- 步骤条标记与连接线重绘并补过渡动画；BlowDialog 卡片重建；头像跟随主题取色；状态徽标图标归位到端帽。
+- 自适应带与 GlowText 的离场改为真正离开，而不是在原处溶解或犹豫。
+
+### 🐛 组件修复
+
+- BUI 组件的 `bui-scope` reset 改由 `:where()` 包裹，组件自己写的 `&__name` 按钮样式不再被 `.tx-bui-x button` 的 (0,1,1) 静默压过（`TxSidebarNav` 行高回到 31.5px，`TxSearchPanel` 选项恢复内边距/字号/颜色）。
+- `TxGroupBlock` 的行扁平化选择器实际命中；`TxRow` 负 gutter 的成因补齐，网格恢复方正。
+- 对话框不再裁切长 token，内容体可滚动；`TxSelectionActions` 不再在用户操作时把自己关掉；`TxTabs` 指示器首次点击前可见。
+- Picker 行标签不再重复渲染、滚轮不再卡顿、能滚到最后一行。3D 鼓形方案落地后因命中区随 transform 迁移（居中行挡住相邻行）而整体回退，最终保留平铺列，以及两个与鼓面无关的修复。
+- `TxSlider` 分段停点变圆且可命中；滑块拇指沿用 radio 指示器的果冻感，radio 指示器收进组边框。
+- 浮层面板锚定到文档而非视口；Nexus 文档的 prose 样式不再渗进组件 specimens。
+- `TxStreamMarkdown` 不再重复内联 GitHub markdown 样式表（SFC `@import` 与按 chunk 去重导致 103.3 KiB 表发两遍）。
+
+### ⚡ 性能优化
+
+- 组件样式不再把依赖 CSS 复制进每个 `style.css`：依赖改为 emit 共享样式的一次引用，发布集 2.2 MiB → 743 KiB。
+- 共享样式通过 `style-deps.json` 展开为「每个样式表一次 import」，同一份 base-surface 规则只加载一次：五个组件的页面 208 KiB → 104 KiB。
+- 导出 CSS 开启 `cssMinify`（JS 仍保持未压缩，便于依赖方调试与自行打包）：`components.css` 663.5 → 541.2 KiB，`base.css` 34.2 → 29.3 KiB；`audit:size` 的完整 CSS 预算以 664 KiB 重新基线。
+
+### 🧩 组件导出
+
+- 新增 `@talex-touch/tuffex/vite`（按需样式注入插件）与 `@talex-touch/tuffex/package.json` 导出。
+- 新增 `TxTextMorph` 及其引擎导出；移除 `@number-flow/vue` 依赖。
+
+## [0.5.0] - 2026-09-07
+
+### ✨ 组件增强
+
+- `TxFilterChips` 增加滑动填充、图标与 icon-only 模式。
+- `TxCardItem` 宿主可重新指向 hover / active 填充。
+- `TxDropdown` 可承载文本输入框，锚定面板的背景在滚动行之下保持不透明。
+
+### ⚡ 性能优化
+
+- 锚定面板改用 transform 定位，`max-height` 保留 size middleware 写入的值。
+
+### 🐛 组件修复
+
+- 交互组件打磨收口：每个交互控件都有 cursor，`TxSlider` 的折射 slab 按尺寸计算而不是缩放。
+- `TxStreamMarkdown` 的 PostCSS 产物保持 pack 可解析，构建期剥离非法律注释。
+
+### 🧪 内部
+
+- 类型审计可从 workspace 解析同级包（#1841）；补齐 spring / fill 契约与视觉任务证据文档。
+
+## [0.4.0] - 2026-09-01
+
 ### 💥 破坏性变更
 
 - 收拢 button / icon 组件族：`TxIconButton`、`TxCopyButton` 移入 `@talex-touch/tuffex/button`，`TxOsIcon` 移入 `@talex-touch/tuffex/icon`；深子路径 `./flat-button`、`./icon-button`、`./copy-button`、`./os-icon`（含各自 `style.css`）随之移除。根入口导出的组件名与类型不变，仅深子路径消费方需要改导入来源。
@@ -11,6 +76,8 @@
 
 - TuffEx 包移除本地 VitePress `docs:*` / playground 展示入口，源码包只保留 build、watch、lint、test、typecheck 与 package audit 脚本。
 - 运行时 Demo 与公开文档统一迁移到 Nexus 承载，本地预览改为 `pnpm -C "apps/nexus" run dev`。
+
+## [0.3.9] - 2026-06-12
 
 ### 🧩 组件导出
 
