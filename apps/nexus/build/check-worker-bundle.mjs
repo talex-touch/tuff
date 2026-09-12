@@ -79,7 +79,7 @@ const expectedStaticRoutes = [
   '/zh/docs/guide/start',
   ...docsApiPrerenderRoutes,
 ]
-const expectedStaticRoutePatterns = ['/en/docs/*', '/zh/docs/*']
+const expectedStaticRoutePatterns = ['/en/docs/*', '/zh/docs/*', '/api/docs/page/*']
 const workerOwnedAppRoutes = [
   '/dashboard',
   '/dashboard/team',

@@ -420,7 +420,10 @@ export default defineNuxtConfig({
     cloudflare: {
       pages: {
         routes: {
-          exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*'],
+          // Pages caps _routes.json at 100 entries and nitro fills it with one entry per
+          // prerendered file; the static docs JSON twins alone are over a thousand, so they
+          // must be covered by a pattern or most of them silently fall back to the Worker.
+          exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*', '/api/docs/page/*'],
         },
       },
     },
