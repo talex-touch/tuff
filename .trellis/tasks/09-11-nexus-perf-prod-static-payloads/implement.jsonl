@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/nexus-docs-static-delivery.md", "reason": "Static delivery contract this task extends"}
+{"file": ".trellis/spec/frontend/nexus-docs-rendering-contract.md", "reason": "Body-in-HTML contract and the reverted query-string prerender"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend checklist"}
+{"file": "apps/nexus/AGENTS.md", "reason": "Nexus SSR/i18n/SEO constraints"}
