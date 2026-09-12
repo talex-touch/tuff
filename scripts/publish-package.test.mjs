@@ -51,6 +51,57 @@ describe('verifyRegistryManifest', () => {
     assert.ok(calls >= 3, 'expected the read to be retried')
   })
 
+  it('widens the wait between attempts and stops at the cap', () => {
+    // A fixed 6 x 5 s (30 s) was narrower than the registry's own "being
+    // processed and may take a few minutes", so the waits double. The schedule
+    // the caller observes is the whole point: a fixed delay or growth that
+    // ignores `maxDelayMs` gives a release less time than it was promised.
+    let calls = 0
+    const readField = () => {
+      calls += 1
+      throw new Error('npm error code E404 No match found for version 0.6.0')
+    }
+    const waits = []
+
+    assert.throws(
+      () =>
+        verifyRegistryManifest(pkg, '0.6.0', readField, {
+          attempts: 6,
+          delayMs: 5_000,
+          maxDelayMs: 60_000,
+          sleep: ms => waits.push(ms),
+        }),
+      /after 6 attempt\(s\)/,
+    )
+
+    assert.deepEqual(waits, [5_000, 10_000, 20_000, 40_000, 60_000])
+    assert.equal(calls, 6)
+  })
+
+  it('clamps even the first wait when maxDelayMs is below delayMs', () => {
+    // `maxDelayMs` is a ceiling on every wait, not just on the doubled ones. If
+    // the first wait were initialized from `delayMs` alone, a caller that asked
+    // for 4 s max would still be put to sleep for the full 10 s before any
+    // retry — the cap would only start applying from the second wait on.
+    let calls = 0
+    const readField = () => {
+      calls += 1
+      throw new Error('npm error code E404 No match found for version 0.7.0')
+    }
+    const waits = []
+
+    assert.throws(() =>
+      verifyRegistryManifest(pkg, '0.7.0', readField, {
+        attempts: 4,
+        delayMs: 10_000,
+        maxDelayMs: 4_000,
+        sleep: ms => waits.push(ms),
+      }))
+
+    assert.deepEqual(waits, [4_000, 4_000, 4_000])
+    assert.equal(calls, 4)
+  })
+
   it('refuses a non-positive attempt count instead of passing without reading', () => {
     // With attempts <= 0 the loop never runs, so nothing is read and the
     // forbidden-protocol regex would test `undefined` and find it clean.
