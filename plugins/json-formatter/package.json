@@ -26,7 +26,7 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "^5.4.1",
-    "@iconify-json/carbon": "^1.2.24",
+    "@iconify-json/carbon": "^1.2.26",
     "@talex-touch/tuff-cli": "workspace:^",
     "@types/node": "catalog:dev",
     "@types/nprogress": "^0.2.3",
