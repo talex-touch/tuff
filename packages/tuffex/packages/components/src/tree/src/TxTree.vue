@@ -1,21 +1,36 @@
 <script setup lang="ts">
-import type { ComponentPublicInstance } from 'vue'
+import type { ComponentPublicInstance, PropType } from 'vue'
 import type { TxIconSource } from '../../icon'
-import type { TreeEmits, TreeKey, TreeNode, TreeProps, TreeValue } from './types'
+import type { TreeEmits, TreeKey, TreeNode, TreeValue } from './types'
 import { computed, nextTick, ref, watch } from 'vue'
 import { TxCheckbox } from '../../checkbox'
 import { TxIcon } from '../../icon'
 
 defineOptions({ name: 'TxTree' })
 
-const props = withDefaults(defineProps<TreeProps>(), {
-  nodes: () => [],
-  multiple: false,
-  selectable: true,
-  checkable: false,
-  disabled: false,
-  defaultExpandedKeys: () => [],
-  indent: 16,
+/**
+ * Declared as a runtime object rather than `defineProps<TreeProps>()`. The SFC
+ * compiler resolves the sibling `types.ts` once and does not redo it when that
+ * file changes, so a prop added to the interface ships as an unknown attribute —
+ * silently, with vitest and the built `dist` both still correct. `TreeProps`
+ * stays the public type; this is the wiring.
+ *
+ * `modelValue` and `expandedKeys` default to `undefined` on purpose: that is how
+ * the component tells "the host is driving this" from "nothing bound".
+ */
+const props = defineProps({
+  nodes: { type: Array as PropType<TreeNode[]>, default: () => [] },
+  modelValue: { type: [String, Number, Array] as PropType<TreeValue>, default: undefined },
+  multiple: { type: Boolean, default: false },
+  selectable: { type: Boolean, default: true },
+  checkable: { type: Boolean, default: false },
+  disabled: { type: Boolean, default: false },
+  defaultExpandedKeys: { type: Array as PropType<TreeKey[]>, default: () => [] },
+  defaultSelectedKeys: { type: Array as PropType<TreeKey[]>, default: undefined },
+  expandedKeys: { type: Array as PropType<TreeKey[]>, default: undefined },
+  indent: { type: Number, default: 16 },
+  filterText: { type: String, default: undefined },
+  filterMethod: { type: Function as PropType<(node: TreeNode, query: string) => boolean>, default: undefined },
 })
 
 const emit = defineEmits<TreeEmits>()
@@ -41,8 +56,41 @@ const expandedSet = computed(() => {
   return internalExpanded.value
 })
 
+/**
+ * Selection mirrors the expansion state above: the tree keeps its own unless the
+ * host is driving it with `v-model`. Without this the set was derived purely
+ * from `props.modelValue`, so a `<TxTree :nodes="…" />` with no binding emitted
+ * `update:modelValue` into nothing and never showed a selection — the rows were
+ * clickable and inert. `defaultSelectedKeys` seeds it, the way
+ * `defaultExpandedKeys` seeds the other.
+ */
+const internalSelection = ref<TreeValue | undefined>(
+  props.defaultSelectedKeys === undefined
+    ? undefined
+    : props.multiple
+      ? [...props.defaultSelectedKeys]
+      : props.defaultSelectedKeys[0],
+)
+
+watch(
+  // Same array-identity hazard as `defaultExpandedKeys`: an inline literal is a
+  // new array on every parent render, and a reference watcher would wipe the
+  // user's selection on an unrelated re-render.
+  () => JSON.stringify(props.defaultSelectedKeys ?? null),
+  () => {
+    if (props.modelValue !== undefined)
+      return
+    const seed = props.defaultSelectedKeys
+    internalSelection.value = seed === undefined
+      ? undefined
+      : props.multiple
+        ? [...seed]
+        : seed[0]
+  },
+)
+
 const selectedSet = computed(() => {
-  const v = props.modelValue
+  const v = props.modelValue === undefined ? internalSelection.value : props.modelValue
   if (props.multiple) {
     const list = Array.isArray(v) ? v : []
     return new Set(list)
@@ -81,6 +129,8 @@ function toggleExpand(node: TreeNode) {
 }
 
 function emitSelection(value: TreeValue, node: TreeNode) {
+  if (props.modelValue === undefined)
+    internalSelection.value = value
   emit('update:modelValue', value)
   emit('select', { key: node.key, node })
 }
@@ -412,8 +462,16 @@ function itemPadding(level: number): string {
   cursor: not-allowed;
 }
 
-.tx-tree__row:hover:not(.is-disabled) {
+/* `:hover:not(.is-disabled)` is (0,3,0) and `.is-selected` is (0,2,0), so
+   hovering a selected row used to swap its accent for the neutral hover grey —
+   the row looked deselected exactly while you were pointing at it. Excluding
+   the selected row here, and giving it its own hover shade, keeps the accent. */
+.tx-tree__row:hover:not(.is-disabled):not(.is-selected) {
   background: color-mix(in srgb, var(--tx-fill-color, #f5f7fa) 70%, transparent);
+}
+
+.tx-tree__row.is-selected:hover:not(.is-disabled) {
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 20%, transparent);
 }
 
 .tx-tree__caret {
