@@ -160,7 +160,7 @@ onUnmounted(() => {
   background: var(--tx-bg-color, #fff);
   border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  box-shadow: 12px 24px 80px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   width: min(90vw, 560px);
   color: var(--tx-text-color-primary, #303133);
 }

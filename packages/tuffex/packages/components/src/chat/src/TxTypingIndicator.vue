@@ -265,7 +265,7 @@ const circleDashStyle = computed(() => ({
   transform-origin: center;
   box-shadow:
     0 0 25px 0 var(--tx-typing-ai-color-three),
-    0 20px 50px 0 var(--tx-typing-ai-color-four);
+    10px 20px 50px 0 var(--tx-typing-ai-color-four);
   animation: tx-typing-ai-colorize calc(var(--tx-typing-ai-time) * 3) ease-in-out infinite;
 }
 

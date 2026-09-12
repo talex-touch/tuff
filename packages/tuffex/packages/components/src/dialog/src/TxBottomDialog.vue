@@ -255,7 +255,7 @@ async function forClose(): Promise<void> {
   max-width: 480px;
   min-height: 200px;
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  box-shadow: 4px 8px 32px rgba(0, 0, 0, 0.15);
   background: var(--tx-bg-color, #fff);
   backdrop-filter: blur(18px) saturate(180%);
   transform: translateX(-50%);

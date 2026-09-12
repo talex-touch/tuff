@@ -321,7 +321,7 @@ onUnmounted(() => {
       right: 0;
       bottom: 0;
       transform: translate3d(100%, 0, 0);
-      box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
+      box-shadow: -8px 4px 32px rgba(0, 0, 0, 0.18);
     }
   }
 
@@ -331,7 +331,7 @@ onUnmounted(() => {
       bottom: 0;
       left: 0;
       transform: translate3d(-100%, 0, 0);
-      box-shadow: 8px 0 32px rgba(0, 0, 0, 0.18);
+      box-shadow: 8px 4px 32px rgba(0, 0, 0, 0.18);
     }
   }
 
@@ -341,7 +341,7 @@ onUnmounted(() => {
       right: 0;
       left: 0;
       transform: translate3d(0, -100%, 0);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+      box-shadow: 4px 8px 32px rgba(0, 0, 0, 0.18);
     }
   }
 
@@ -351,7 +351,7 @@ onUnmounted(() => {
       bottom: 0;
       left: 0;
       transform: translate3d(0, 100%, 0);
-      box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
+      box-shadow: 4px -8px 32px rgba(0, 0, 0, 0.18);
     }
   }
 

@@ -396,7 +396,7 @@ function onKeydown(e: KeyboardEvent) {
   width: min(90vw, 560px);
   background: var(--tx-bg-color, #fff);
   border-radius: 18px;
-  box-shadow: 0 20px 70px rgba(15, 23, 42, 0.28);
+  box-shadow: 10px 20px 70px rgba(15, 23, 42, 0.28);
   border: 1px solid color-mix(in srgb, var(--tx-border-color, #e5e7eb) 50%, transparent);
   overflow: hidden;
 }

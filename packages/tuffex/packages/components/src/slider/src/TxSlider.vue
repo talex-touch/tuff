@@ -667,7 +667,7 @@ onBeforeUnmount(() => {
   --tx-slider-surface-tint: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 88%, transparent);
   --tx-slider-surface-rim: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 50%, transparent);
   --tx-slider-surface-highlight: color-mix(in srgb, var(--tx-color-white, #fff) 17%, transparent);
-  --tx-slider-surface-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  --tx-slider-surface-shadow: 1px 2px 8px rgba(15, 23, 42, 0.08);
 
   // Flat-path thumb (`thumbSurface: false`): the native disc, visible, growing
   // and ringing to separate its states. All of this is inert on the surface path.
@@ -736,7 +736,7 @@ onBeforeUnmount(() => {
     --tx-slider-track-height: 8px;
     --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 20%, transparent);
     --tx-slider-surface-rim: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 75%, transparent);
-    --tx-slider-thumb-shadow: 0 2px 6px color-mix(in srgb, #000 22%, transparent);
+    --tx-slider-thumb-shadow: 1px 2px 6px color-mix(in srgb, #000 22%, transparent);
   }
 
   // Dragging: thicker track, darker rail, a rim that picks up the accent and a
@@ -747,8 +747,8 @@ onBeforeUnmount(() => {
     --tx-slider-track-height: 10px;
     --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 26%, transparent);
     --tx-slider-surface-rim: color-mix(in srgb, var(--tx-color-primary, #409eff) 30%, color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 75%, transparent));
-    --tx-slider-surface-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
-    --tx-slider-thumb-shadow: 0 4px 12px color-mix(in srgb, #000 30%, transparent);
+    --tx-slider-surface-shadow: 3px 6px 16px rgba(15, 23, 42, 0.14);
+    --tx-slider-thumb-shadow: 2px 4px 12px color-mix(in srgb, #000 30%, transparent);
   }
 
   // With the pill on, a ring around the native thumb would sit inside an
@@ -893,7 +893,7 @@ onBeforeUnmount(() => {
     backdrop-filter: blur(18px) saturate(150%);
     -webkit-backdrop-filter: blur(18px) saturate(150%);
     border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.14);
+    box-shadow: 5px 10px 26px rgba(0, 0, 0, 0.14);
     white-space: nowrap;
     z-index: 2;
   }

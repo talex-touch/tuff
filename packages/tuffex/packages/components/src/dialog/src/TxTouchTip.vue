@@ -207,7 +207,7 @@ onUnmounted(() => {
     width: min(420px, 88vw);
     color: var(--tx-text-color-primary, #303133);
     border-radius: 12px;
-    box-shadow: 0 18px 65px rgba(0, 0, 0, 0.25);
+    box-shadow: 9px 18px 65px rgba(0, 0, 0, 0.25);
     transform: translate(-50%, -50%);
     animation: tx-touch-tip-enter 0.25s ease;
     backdrop-filter: blur(16px) saturate(150%) brightness(1.2);
