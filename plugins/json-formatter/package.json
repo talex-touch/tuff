@@ -30,7 +30,7 @@
     "@talex-touch/tuff-cli": "workspace:^",
     "@types/node": "catalog:dev",
     "@types/nprogress": "^0.2.3",
-    "@unocss/eslint-config": "^66.7.5",
+    "@unocss/eslint-config": "^66.8.1",
     "@unocss/reset": "^66.7.5",
     "@vitejs/plugin-vue": "^6.0.7",
     "eslint": "^9.39.4",
