@@ -82,3 +82,75 @@ later caller for the same locale reuses the deferred promise instead of fetching
 import) the moment a demo activates, so the registry chunk downloads in parallel with the client
 renderer chunk instead of after it. The registry must never be a static import of the wrapper —
 it is 370+ dynamic imports and would enter the SSR graph of every docs page.
+
+## Client-side navigation reads static JSON twins
+
+Every docs page is also prerendered as `/api/docs/page/<locale>/<meta|body>/<path>.json`
+(`build/docs-prerender-routes.ts::createDocsPageApiPrerenderRoutes`, ~1 100 files). The client
+(`app/utils/docs-page-client-cache.ts::requestDocsPage`) reads that twin first and falls back
+exactly once to `/api/docs/page?path=…`, the Worker route that also serves development and any
+document outside the list. The resolver behind both fronts is `server/utils/docsPageResolver.ts`.
+
+- The route is path-shaped because a query string never becomes a file on Pages (why
+  `af99441e0` was reverted). The `.json` suffix keeps the MIME guess right on its own.
+- Pages caps `_routes.json` at 100 entries and nitro fills it one prerendered file at a time;
+  the twins are covered by the `/api/docs/page/*` pattern in `cloudflare.pages.routes.exclude`
+  or most of them silently fall back to the Worker. The guard checks the pattern is present.
+- `docsStaticJsonHeaderRoutes` includes `/api/docs/page/**`, so the twins carry the docs cache
+  window and `application/json`.
+
+## Sentry loads after mount
+
+`@sentry/nuxt` registers two client plugins that run before the app mounts and `await` the SDK
+import (~140 KB gzip, one round trip). `nuxt.config.ts` removes them in `app:resolve`
+(`removeSentryClientPlugins`) and `app/plugins/sentry-deferred.client.ts` loads the SDK on the
+first idle slot after `app:mounted`, with `app/utils/sentry-deferred.ts` buffering `error` /
+`unhandledrejection` events in the gap and replaying them once the SDK is up.
+`sentry.client.config.ts` exports `initSentryClient()` and must stay side-effect free on
+import. `runtimeConfig.public.sentryClientEnabled` is what the deferred loader reads, since the
+module's own client plugins are gone.
+
+## The icons layer loads after mount
+
+`app/plugins/unocss-icons.client.ts` imports `uno:icons.css` on `app:mounted`. UnoCSS then
+leaves the icons layer out of the `uno.css` entry, so the render-blocking shared stylesheet drops
+from 68 KB to 29 KB gzip and the 184 KB of inline SVG arrive as a separate, cacheable asset once
+the page is interactive. A preflight in `uno.config.ts` sizes every `i-*` box at its final
+1.2em so glyphs paint in without moving anything. The guard requires the entry CSS to carry no
+`--un-icon:` rule and applies the per-glyph budgets to the icons sheet instead.
+
+## Chunk floor, and why styles are not inlined
+
+`vite.build.rollupOptions.output.experimentalMinChunkSize: 4096` folds sub-4 KB chunks into an
+importer (1157 → 952 client chunks, 61 → 50 preloads on a component page, bytes unchanged).
+Nuxt's `features.inlineStyles` was tried with it and reverted: tuffex ships its styles as `.css`
+files imported from inside SFCs by the on-demand style plugin, so Nuxt inlined them *and* kept
+them linked — 78 KB of duplicated CSS and +10 KB gzip per docs page for no fewer requests. Do
+not re-enable it without first making the tuffex sheets inline-only or link-only.
+
+## Early Hints
+
+`build/write-early-hints.mjs` runs after the alias step and gives each route family (`/`, each
+public route, `/en/docs/*`, `/zh/docs/*`) a `Link` header naming the entry script
+(`rel=modulepreload`) and the stylesheets every sample page of that family shares
+(`rel=preload; as=style`). Pages turns `preload`/`preconnect` `Link` headers in `_headers` into
+`103 Early Hints`, so the browser fetches the entry CSS during the HTML round trip. Names are
+read from the built HTML, never written into config.
+
+Three facts about `_headers` shape the output; the guard (`checkEarlyHints`,
+`checkHeadersFileLimits`) fails the build when any is violated:
+
+- Pages keys rules by pattern, so a second `/en/docs/*` block *replaces* the first — the first
+  attempt lost the docs cache window that way. The `Link` line is merged into the block nitro
+  wrote for the pattern; only patterns nitro did not write get a block of their own, under the
+  marker. `parseCloudflareHeadersFile` mirrors that reading (comments skipped, last block wins).
+- Every entry carries `crossorigin`, because Nuxt renders every `<link>` and `<script>` with it.
+  A preload whose credentials mode differs is never matched to the tag: on the first attempt
+  Chrome downloaded every hinted stylesheet twice and logged "request credentials mode does not
+  match".
+- Lines over 2 000 characters and rules past the 100th are dropped, with a warning only in
+  wrangler's output. `formatLinkHeader` adds entries in document order and stops before the cap,
+  so the landing page's thirty-odd sheets lose the tail of the list, never the entry.
+
+`wrangler pages dev` does not emit 103 responses, so the gain is only measurable on a deploy;
+locally the guard and the absence of duplicate downloads are the evidence.
