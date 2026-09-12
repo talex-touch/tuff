@@ -1,4 +1,0 @@
-{"file": ".trellis/tasks/09-11-tuff-forum-nuxt-mock/research/tuffex-0.5.0-inventory.md", "reason": "Ground truth for Tuffex component APIs; reject props/slots/events that are not in this inventory unless verified against node_modules/@talex-touch/tuffex/dist/es/*/index.d.ts."}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Forbidden patterns and the evidence-boundary rule for reporting completion."}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Loading-state and accessibility bar to check pages against."}
-{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "Verify check-styles.mjs and smoke-routes.mjs actually fail on violations (self-test), not just pass on the happy path."}

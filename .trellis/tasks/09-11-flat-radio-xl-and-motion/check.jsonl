@@ -1,4 +1,0 @@
-{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "The doc-parity / placement / rendered-page rules the review must verify, not just the three build:check scripts."}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Code standards, forbidden patterns, and the verification bar for declaring the change done."}
-{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "Whether the new contracts (one-curve transition, no selection-driven font-weight, no offsetLeft geometry) are actually guarded by a test or only asserted in prose."}
-{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "TuffBlockFlatRadio hand-copied the size union; the check should confirm the duplication is removed rather than widened in two places."}
