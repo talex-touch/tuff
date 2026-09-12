@@ -31,11 +31,10 @@ describe('docs page request path', () => {
     await expect(requestDocsPage({ path: '/docs/dev/components/ghost', locale: 'zh', body: '0' }))
       .resolves.toMatchObject({ title: 'Ghost' })
 
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/docs/page/zh/meta/dev/components/ghost.json')
-    expect(fetchMock.mock.calls[1]).toEqual(['/api/docs/page', {
-      query: { path: '/docs/dev/components/ghost', locale: 'zh', body: '0' },
-    }])
+    expect(fetchMock.mock.calls).toEqual([
+      ['/api/docs/page/zh/meta/dev/components/ghost.json', undefined],
+      ['/api/docs/page', { query: { path: '/docs/dev/components/ghost', locale: 'zh', body: '0' } }],
+    ])
   })
 
   it('surfaces the query route failure when both reads fail', async () => {
