@@ -12,11 +12,11 @@
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-09-10",
   "completedAt": null,
-  "branch": null,
+  "branch": "feat/voice-polish-length-gate",
   "base_branch": "master",
   "worktree_path": null,
-  "commit": null,
-  "pr_url": null,
+  "commit": "ac95cfa99",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/1902",
   "subtasks": [],
   "children": [],
   "parent": "voice-dictation-polish-mode",
@@ -27,5 +27,9 @@
     "apps/core-app/resources/db/migrations/0045_voice_polish_telemetry.sql"
   ],
   "notes": "Derived from the 2026-09-10 market research in research.md. Gate: short (<12 units) runs no provider call, light (12-59) is capped to the natural prompt, full (>=60) uses the session strength. Telemetry rows are content-free (sizes, tier, outcome, latency, scope) so they can be reported anonymously later.",
-  "meta": {}
+  "meta": {
+    "evidence": "提交 ac95cfa99 同时落地门槛与遥测，并更新全部六处注册点（drizzle schema、0045_voice_polish_telemetry.sql + journal idx 45、aux 旧 DDL、AUX_COPY_TABLES、storage-usage 目录、clearInsights）；证据为 `vitest run src/main/modules/voice src/main/modules/database/voice-polish-telemetry-schema.test.ts` 13 文件/131 测试通过，以及 `tsc --noEmit -p tsconfig.node.json --composite false` 无输出。PR #1902 的 App suites (core-app)、Typecheck (workspace) 与 Integration suite 均通过。",
+    "blocker": "真人使用分布尚未取得：design.md 的手工验收要求连续使用一天后 summarizePolishTelemetry(30) 出现与门槛相符的非零 skipped-short，且 latencyMs.ran 等于日志中真正调用 provider 的会话数。本机没有真实语音会话样本，提交前无法复现该分布，因此门槛数值仍只有研究与单元测试支撑。",
+    "nextAction": "等 PR #1902 通过必需检查并合并 master 后，在真机使用一天，用 summarizePolishTelemetry(30) 核对 skipped-short 计数、light 降级次数与 latency 对齐；数据符合预期则归档本任务，若分布偏离 12/60 边界则据实调整常量。"
+  }
 }

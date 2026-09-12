@@ -18,7 +18,9 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "voice-polish-length-gate"
+  ],
   "parent": null,
   "relatedFiles": [],
   "notes": "Three strengths implemented. Repair follow-up completed: live Unicode-punctuation revisions preserve monotonic actual native writes and no longer duplicate final suffixes; lexical conflicts fail without rewriting the target. Shared LangChain chat/stream/vision calls now receive caller AbortSignal. Seven suites/105 tests, node TypeScript, scoped lint/format and isolated Electron-to-Electron Rust native input replay passed. Actual LangChain loopback cancellation closes requests, emits no delayed retry through four seconds, and interrupts a pending SSE delta. Original real linguistic-quality gate remains open: observed cloud outputs take 5.053-11.233s, while the unchanged approved polish budget is 300ms. Persisted route availability beyond isolated cloud bindings remains unestablished. No new cloud/microphone/Fn/profile test, config changes, commit or release in this repair turn.",
