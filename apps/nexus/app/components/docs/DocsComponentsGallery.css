@@ -202,9 +202,34 @@
 }
 
 .docs-gallery__chrome-body {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
   min-height: 58px;
+  padding: 0 14px;
   background: var(--docs-inline-code-bg);
+}
+
+/* The strip was a blank slab taller than the bar above it, so the NavBar cell
+   read as a component that had failed to render rather than as chrome over a
+   screen. Two content lines cost no markup — both cells share this class — and
+   give the bar something to be chrome *for*. */
+.docs-gallery__chrome-body::before,
+.docs-gallery__chrome-body::after {
+  content: "";
+  height: 8px;
+  border-radius: 999px;
+  background: var(--docs-gallery-line);
+}
+
+.docs-gallery__chrome-body::before {
+  width: 62%;
+}
+
+.docs-gallery__chrome-body::after {
+  width: 38%;
 }
 
 /* TxTabs defaults to placement="left" with navMinWidth 220. In the old 240px
@@ -223,8 +248,12 @@
 /* No max-height here. Capping it clipped TxSidebarNav's last 9px instead of
    fitting it — the stage grows for taller specimens, which is what the other
    over-tall cells already do. */
+/* `width` here left the 240px nav flush against the left edge of a 320px box,
+   so the specimen sat ~40px left of the cell's centre while the box around it
+   was perfectly centred. A max-width bounds it just the same and lets the flex
+   stage centre what is actually there. */
 .docs-gallery__sidebar {
-  width: min(320px, 100%);
+  max-width: min(320px, 100%);
 }
 
 /* Same fight the label anchors above already had to pick: the docs prose
