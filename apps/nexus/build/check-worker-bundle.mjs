@@ -971,6 +971,18 @@ function getAssetStats(assets) {
   }
 }
 
+/**
+ * The UnoCSS icons layer is loaded after mount as its own asset (`app/plugins/unocss-icons.client.ts`);
+ * it is the one non-entry stylesheet whose rules carry `--un-icon:`.
+ */
+function findIconsStylesheet(distFiles) {
+  return distFiles.find((file) => {
+    if (!/^_nuxt\/[^/]+\.css$/.test(file.relativePath) || /^_nuxt\/entry\./.test(file.relativePath))
+      return false
+    return readFileSync(join(distRoot, file.relativePath), 'utf8').includes('--un-icon:')
+  }) ?? null
+}
+
 function checkSharedEntryCssBudget(distFiles) {
   const entryFiles = distFiles.filter(file => /^_nuxt\/entry\.[^/]+\.css$/.test(file.relativePath))
   const findings = []
@@ -983,29 +995,41 @@ function checkSharedEntryCssBudget(distFiles) {
   const entry = entryFiles[0]
   const stats = getAssetStat(entry.relativePath.replace(/^_nuxt\//, ''))
   const source = readFileSync(join(distRoot, entry.relativePath), 'utf8')
-  const rules = source.match(/[^{}]+\{[^{}]*\}/g) ?? []
 
   if (stats.bytes > sharedEntryCssBudget.maxBytes)
     findings.push(`shared entry CSS ${formatBytes(stats.bytes)} > ${formatBytes(sharedEntryCssBudget.maxBytes)}`)
   if (stats.gzipBytes > sharedEntryCssBudget.maxGzipBytes)
     findings.push(`shared entry CSS gzip ${formatBytes(stats.gzipBytes)} > ${formatBytes(sharedEntryCssBudget.maxGzipBytes)}`)
-  for (const token of forbiddenSharedEntryIconTokens) {
-    if (source.includes(token))
-      findings.push(`oversized icon selector returned to shared entry CSS: ${token}`)
+  // Icon SVGs are the single largest thing that ever sat in this render-blocking file (184 KB
+  // raw, 38 KB gzip on 2026-09-11); the layer now loads after mount and must stay out.
+  if (source.includes('--un-icon:'))
+    findings.push('icon rules returned to the shared entry CSS; the icons layer must load after mount')
+
+  const iconsSheet = findIconsStylesheet(distFiles)
+  if (!iconsSheet) {
+    findings.push('icons stylesheet not found: no non-entry CSS asset carries --un-icon rules')
   }
-  for (const { token, maxRuleBytes } of sharedEntryAliasedIconBudgets) {
-    const rule = rules.find((candidate) => {
-      const selector = candidate.slice(0, candidate.indexOf('{'))
-      return candidate.includes('--un-icon:')
-        && selector.split(',').some(part => part.trim() === `.${token}`)
-    })
-    if (!rule) {
-      findings.push(`aliased icon selector missing from shared entry CSS: ${token}`)
-      continue
+  else {
+    const iconsSource = readFileSync(join(distRoot, iconsSheet.relativePath), 'utf8')
+    const rules = iconsSource.match(/[^{}]+\{[^{}]*\}/g) ?? []
+    for (const token of forbiddenSharedEntryIconTokens) {
+      if (iconsSource.includes(token))
+        findings.push(`oversized icon selector returned to the icons stylesheet: ${token}`)
     }
-    const ruleBytes = Buffer.byteLength(rule)
-    if (ruleBytes > maxRuleBytes)
-      findings.push(`aliased icon selector ${token} is ${formatBytes(ruleBytes)} > ${formatBytes(maxRuleBytes)}`)
+    for (const { token, maxRuleBytes } of sharedEntryAliasedIconBudgets) {
+      const rule = rules.find((candidate) => {
+        const selector = candidate.slice(0, candidate.indexOf('{'))
+        return candidate.includes('--un-icon:')
+          && selector.split(',').some(part => part.trim() === `.${token}`)
+      })
+      if (!rule) {
+        findings.push(`aliased icon selector missing from the icons stylesheet: ${token}`)
+        continue
+      }
+      const ruleBytes = Buffer.byteLength(rule)
+      if (ruleBytes > maxRuleBytes)
+        findings.push(`aliased icon selector ${token} is ${formatBytes(ruleBytes)} > ${formatBytes(maxRuleBytes)}`)
+    }
   }
 
   return {
@@ -1013,6 +1037,7 @@ function checkSharedEntryCssBudget(distFiles) {
       asset: entry.relativePath,
       ...stats,
     },
+    icons: iconsSheet ? { asset: iconsSheet.relativePath, ...getAssetStat(iconsSheet.relativePath.replace(/^_nuxt\//, '')) } : null,
     findings,
   }
 }
@@ -1252,6 +1277,8 @@ console.log(`[nexus-dist-budget] Docs initial lifecycle blockers verified: ${doc
 console.log(`[nexus-dist-budget] Initial asset budgets verified: ${htmlInitialAssetBudgetRouteCount} routes / ${htmlInitialAssetBudgets.length} families`)
 if (sharedEntryCssCheck.entry) {
   console.log(`[nexus-dist-budget] Shared entry CSS verified: ${formatBytes(sharedEntryCssCheck.entry.bytes)} / ${formatBytes(sharedEntryCssCheck.entry.gzipBytes)} gzip`)
+if (sharedEntryCssCheck.icons)
+  console.log(`[nexus-dist-budget] Icons stylesheet verified: ${sharedEntryCssCheck.icons.asset} ${formatBytes(sharedEntryCssCheck.icons.bytes)} / ${formatBytes(sharedEntryCssCheck.icons.gzipBytes)} gzip (loaded after mount)`)
 }
 console.log(`[nexus-dist-budget] Landing image prefetch hints verified: ${landingInitialHtmlFiles.length - landingImagePrefetchFindings.length}/${landingInitialHtmlFiles.length}`)
 console.log(`[nexus-dist-budget] Landing deferred image references verified: ${landingInitialHtmlFiles.length - landingDeferredImageFindings.length}/${landingInitialHtmlFiles.length}`)
