@@ -268,7 +268,7 @@ Changes to Voice Input preferences, Assistant runtime configuration, dictation p
 - Missing/invalid strength normalizes to deep without overwriting explicit polish disablement, language, history, or unrelated settings. Hiding the selector when polish is off never clears its value.
 - VoicePanel snapshots both the persisted cleanup preference and `text.chat` availability before capture. `VoiceService` resolves omitted strength from main storage before capture's first asynchronous boundary, stores it on the session, and retains it with the retry buffer. Do not reread preferences while finalizing or replaying old audio.
 - One shared fidelity policy plus three precomposed editing directives owns the prompt. Natural preserves sequence, structured groups related points, and deep rewrites the draft assertively. All preserve independent requirements, qualifiers, negations, conditions, numbers, language and tone. ASR language is not a polish translation instruction.
-- Live/cleanup-disabled recordings and their recovery skip the polish pass. A user who enables cleanup without a ready Chat capability still gets live raw dictation rather than an avoidable final-mode delay. Cancellation still prevents late delivery; the existing 300 ms best-effort polish timeout returns raw text without claiming it was polished.
+- Live/cleanup-disabled recordings and their recovery skip the polish pass. A user who enables cleanup without a ready Chat capability still gets live raw dictation rather than an avoidable final-mode delay. Cancellation still prevents late delivery; the shipped `POLISH_TIMEOUT_MS` (8s, exported) returns raw text without claiming it was polished.
 
 ### Validation & Error Matrix
 
@@ -292,6 +292,70 @@ Changes to Voice Input preferences, Assistant runtime configuration, dictation p
 
 - Wrong: resolve `getMainConfig(...).voiceInput.polishStrength` inside final polish or retry.
 - Correct: resolve once in `startSession`, then use `session.polishStrength` and the retained retry snapshot.
+
+## Scenario: Dictation polish length gate and telemetry
+
+### Scope / Trigger
+
+Changes to when the tidy-up pass runs at all, its per-length editing scope, or the polish telemetry
+table/summary. Rationale and market evidence: `.trellis/tasks/09-10-voice-polish-length-gate/research.md`.
+
+### Signatures
+
+- `countPolishUnits(text): number` — CJK characters plus Latin words.
+- `resolvePolishTier(text): 'short' | 'light' | 'full'` — `< 12` units short, `< 60` light, else full.
+- `VoiceInsightsStore.recordPolishPass(input)` / `summarizePolishTelemetry(windowDays, now)`.
+- Table `voice_polish_telemetry` (aux); migration `0045_voice_polish_telemetry`; schema export
+  `schema.voicePolishTelemetry`.
+
+### Contracts
+
+- The gate is applied inside `polish()`, never in a caller. One-shot, streaming final and
+  retained-audio retry all obey it, and a below-gate pass issues no intelligence request at all.
+- `short` delivers the raw transcript with `polished: false`; it is not a failure and must not be
+  logged as one. `light` requests the `natural` directive regardless of the session strength;
+  `full` uses the session strength. A cap never rewrites the saved preference or the frozen session
+  strength — `requestedStrength` exists only to make the cap observable.
+- The transcript length is not known when `Voice stream tidy-up decision` is logged, so that log keeps
+  only `live-delivery` / `caller-disabled` / `not-skipped`; the length decision is recorded by the
+  polish pass (`reason: 'too-short'`) and by the telemetry row.
+- Telemetry is content-free by construction: sizes, tier, outcome, effective/requested scope and
+  latency. Never the transcript, the polished text, the audio path, the active-app identity, the
+  provider id or any credential. A test must prove a sentinel transcript cannot appear in a row.
+- Telemetry writes are best-effort and cannot change delivery; `clearInsights` deletes rows and
+  advances the durable generation, and reads ignore rows from a superseded generation or outside the
+  window. Retention matches the insights window (365 days).
+- Adding the table is not optional bookkeeping: `AUX_COPY_TABLES`, the legacy DDL block in
+  `modules/database/index.ts` and `utils/storage-usage.ts` must all list it, or the table is absent
+  on the paths those lists own.
+
+### Validation & Error Matrix
+
+| Condition | Outcome |
+|---|---|
+| units < 12 | no request; raw delivered; one `skipped-short` row |
+| 12 ≤ units < 60, strength deep | `natural` prompt; row records strength `natural`, requested `deep` |
+| units ≥ 60 | configured strength; `applied` / `unchanged` recorded |
+| provider deadline | raw delivered; `timeout` row with elapsed latency |
+| provider error | raw delivered; `failed` row |
+| user clears insights | rows deleted; summary returns zero |
+| telemetry write fails | logged only; delivery unchanged |
+
+### Tests Required
+
+- Tier boundaries (11/12/59/60), CJK vs Latin unit counting, punctuation not inflating the count.
+- No-provider-call assertion for below-gate input on dictation and on retry; `natural` prompt
+  assertion for a light-tier transcript with a `deep` session.
+- Telemetry: one row per decision, idempotent id, generation/window filtering, delete on clear,
+  and the no-content assertion.
+- Migration chain applies; `pragma_table_info('voice_polish_telemetry')` exposes the columns.
+
+### Wrong vs Correct
+
+- Wrong: hide the gate behind a settings toggle or a feature flag for tests.
+- Correct: constants with measured rationale; tests drive real transcript lengths.
+- Wrong: keep the transcript in the row to "analyse the distribution later".
+- Correct: sizes and outcomes are the distribution; text is never needed and never stored.
 
 ## Voice Input settings and informational device changes
 

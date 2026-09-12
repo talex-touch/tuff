@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const voiceInsightsMocks = vi.hoisted(() => ({ recordSuccess: vi.fn(async () => undefined) }))
+const voiceInsightsMocks = vi.hoisted(() => ({
+  recordSuccess: vi.fn(async () => undefined),
+  recordPolishPass: vi.fn(async () => undefined)
+}))
 
 const polishPromptMocks = vi.hoisted(() => ({
   getVoicePolishPrompt: vi.fn((strength: string) => strength)
@@ -51,7 +54,10 @@ vi.mock('../ai/intelligence-tts-service', () => ({
   intelligenceTtsService: { speak: vi.fn() }
 }))
 vi.mock('./voice-insights-store', () => ({
-  voiceInsightsStore: { recordSuccess: voiceInsightsMocks.recordSuccess }
+  voiceInsightsStore: {
+    recordSuccess: voiceInsightsMocks.recordSuccess,
+    recordPolishPass: voiceInsightsMocks.recordPolishPass
+  }
 }))
 
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
@@ -104,6 +110,17 @@ function pcm(amplitude: number, samples = 160): Buffer {
   }
   return buffer
 }
+
+/**
+ * Above the 12-unit polish gate. A shorter transcript is now delivered raw with no provider
+ * call, so every test below that asserts a polished delivery — or that cleanup alone explains a
+ * missing call — has to use a sentence the gate will actually send.
+ */
+const POLISHABLE_TRANSCRIPT =
+  'please tidy up this long dictated sentence and deliver it to the active app for me'
+/** 70 units: past the 60-unit threshold, where the saved strength is used rather than natural. */
+const FULL_TIER_TRANSCRIPT =
+  '明天上午十点我们开一个短会，先把这周的进度过一遍，然后确定下周每个模块的具体负责人和交付时间，最后把会议纪要和行动项发到群里，大家记得提前看一下文档'
 
 /**
  * A provider connection whose transcript events are pushed by the test.
@@ -223,6 +240,8 @@ describe('VoiceService.streamDictation via provider', () => {
   // The two halves belong together: `stop` only means anything as the opposite of `cancel`,
   // and asserting either one alone lets it quietly become the other.
   it('finalizes and delivers on stop, but delivers nothing on cancel', async () => {
+    // The stop half asserts a polished delivery, which the gate only allows above 12 units.
+    fake = createFakeConnection(POLISHABLE_TRANSCRIPT)
     pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
 
     const stopController = new AbortController()
@@ -299,7 +318,7 @@ describe('VoiceService.streamDictation via provider', () => {
       })
       drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16000, channels: 1 })
       pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
-      fake = createFakeConnection()
+      fake = createFakeConnection(POLISHABLE_TRANSCRIPT)
       resolveAsrProvider.mockReturnValue({
         model: 'fake-model',
         provider: {
@@ -404,7 +423,9 @@ describe('VoiceService.streamDictation via provider', () => {
     })
     drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16000, channels: 1 })
     pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
-    fake = createFakeConnection('one two three')
+    fake = createFakeConnection(
+      'one two three four five six seven eight nine ten eleven twelve thirteen fourteen'
+    )
     resolveAsrProvider.mockReturnValue({
       model: 'fake-model',
       provider: {
@@ -432,6 +453,9 @@ describe('VoiceService.streamDictation via provider', () => {
   })
 
   it('freezes the saved polish strength while capture is still opening', async () => {
+    // 70 units, so the pass runs in the `full` band and uses the frozen strength rather than
+    // the natural scope the gate imposes on shorter transcripts.
+    fake = createFakeConnection(FULL_TIER_TRANSCRIPT)
     const captureOpening = Promise.withResolvers<{ sessionId: string }>()
     startCapture.mockReturnValueOnce(captureOpening.promise)
     pollCapture.mockReturnValue({ active: false, durationMs: 200, stoppedReason: 'silence' })
@@ -684,7 +708,7 @@ describe('VoiceService retry buffer retention', () => {
   it('replays retained PCM through the frozen failed ASR adapter without falling back to STT', async () => {
     const service = new VoiceService()
     await runUntilFailure(service)
-    const retry = createFakeConnection('buffered words')
+    const retry = createFakeConnection(POLISHABLE_TRANSCRIPT)
     provider.createStream.mockResolvedValueOnce(retry.connection)
     resolveAsrProvider.mockReturnValue({
       model: 'replacement-model',
@@ -713,7 +737,8 @@ describe('VoiceService retry buffer retention', () => {
     const service = new VoiceService()
     await runUntilFailure(service, payload)
     payload.polishStrength = 'natural'
-    const retry = createFakeConnection('buffered words')
+    // 70 units: the `full` band, where the stored strength is the one that gets used.
+    const retry = createFakeConnection(FULL_TIER_TRANSCRIPT)
     provider.createStream.mockResolvedValueOnce(retry.connection)
     getVoicePolishPrompt.mockClear()
 
@@ -726,12 +751,29 @@ describe('VoiceService retry buffer retention', () => {
   it('does not add polishing when retrying a cleanup-disabled recording', async () => {
     const service = new VoiceService()
     await runUntilFailure(service, { emitLevel: false, cleanup: false, polishStrength: 'natural' })
-    const retry = createFakeConnection('buffered words')
+    // Long enough for the gate to have allowed a pass: cleanup alone must explain the absence.
+    const retry = createFakeConnection(POLISHABLE_TRANSCRIPT)
     provider.createStream.mockResolvedValueOnce(retry.connection)
     invoke.mockClear()
 
     await service.retryLastFailure()
 
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('performs no polish request when the retained transcript is below the gate', async () => {
+    const service = new VoiceService()
+    await runUntilFailure(service)
+    const retry = createFakeConnection('buffered words')
+    provider.createStream.mockResolvedValueOnce(retry.connection)
+    invoke.mockClear()
+
+    const result = await service.retryLastFailure({ delivery: 'active-app' })
+
+    // The replay path is the third caller of the same choke point: the gate is a property of
+    // the transcript, so a short recording is re-delivered raw rather than re-polished.
+    expect(result.text).toBe('buffered words')
+    expect(typeText).toHaveBeenCalledWith('buffered words')
     expect(invoke).not.toHaveBeenCalled()
   })
 
@@ -798,7 +840,7 @@ describe('VoiceService retry buffer retention', () => {
     await drained
 
     expect(heldAudioBytes(service)).toBeGreaterThan(0)
-    const retry = createFakeConnection('cancelled words')
+    const retry = createFakeConnection(POLISHABLE_TRANSCRIPT)
     provider.createStream.mockResolvedValueOnce(retry.connection)
     const restored = await service.retryLastFailure()
     expect(restored.expired).toBeUndefined()

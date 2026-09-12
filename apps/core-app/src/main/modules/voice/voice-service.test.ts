@@ -38,7 +38,10 @@ vi.mock('../ai/intelligence-tts-service', () => ({
   intelligenceTtsService: { speak: vi.fn() }
 }))
 vi.mock('./voice-insights-store', () => ({
-  voiceInsightsStore: { recordSuccess: vi.fn(async () => undefined) }
+  voiceInsightsStore: {
+    recordSuccess: vi.fn(async () => undefined),
+    recordPolishPass: vi.fn(async () => undefined)
+  }
 }))
 vi.mock('./voice-provider-runtime', () => ({
   getConfiguredAsrProvider: vi.fn()
@@ -54,7 +57,12 @@ import { clipboardModule } from '../clipboard'
 import { activeAppService } from '../system/active-app'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { intelligenceTtsService } from '../ai/intelligence-tts-service'
-import { POLISH_TIMEOUT_MS, VoiceService } from './voice-service'
+import {
+  countPolishUnits,
+  POLISH_TIMEOUT_MS,
+  resolvePolishTier,
+  VoiceService
+} from './voice-service'
 
 const support = nativeAudio.getNativeAudioSupport as unknown as ReturnType<typeof vi.fn>
 const startCapture = nativeAudio.startCapture as unknown as ReturnType<typeof vi.fn>
@@ -76,6 +84,18 @@ function wav(bytes = 200): Buffer {
   return Buffer.alloc(bytes)
 }
 
+/**
+ * A transcript under the 12-unit polish gate is delivered raw and costs no provider call, so
+ * every test below that asserts a polish ran — or a polish failure, deadline or cancellation —
+ * needs a sentence the gate will actually send. Sizes are counted by `countPolishUnits`.
+ */
+const DICTATED_SENTENCE = 'the raw transcript that the polish pass cannot improve right now at all'
+/** 26 units: the `light` band, where the scope is capped to natural editing. */
+const LIGHT_TIER_SENTENCE = '明天上午十点我们开一个短会讨论这周的进度和下周的安排'
+/** 70 units: the `full` band, where the caller's saved strength is used instead of natural. */
+const FULL_TIER_SENTENCE =
+  '明天上午十点我们开一个短会，先把这周的进度过一遍，然后确定下周每个模块的具体负责人和交付时间，最后把会议纪要和行动项发到群里，大家记得提前看一下文档'
+
 describe('VoiceService.dictate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -93,13 +113,15 @@ describe('VoiceService.dictate', () => {
   })
 
   it('captures, transcribes, and polishes', async () => {
-    stt.mockResolvedValue({ result: { text: 'um hello  world', language: 'en' } })
-    invoke.mockResolvedValue({ result: 'Hello world' })
+    const spoken = 'um hello world please tidy this whole dictated sentence up for me'
+    const cleaned = 'Hello world, please tidy this whole dictated sentence up for me.'
+    stt.mockResolvedValue({ result: { text: spoken, language: 'en' } })
+    invoke.mockResolvedValue({ result: cleaned })
 
     const result = await new VoiceService().dictate({ cleanup: true })
 
-    expect(result.raw).toBe('um hello  world')
-    expect(result.text).toBe('Hello world')
+    expect(result.raw).toBe(spoken)
+    expect(result.text).toBe(cleaned)
     expect(result.polished).toBe(true)
     expect(result.source).toBe('native-cpal')
     expect(result.language).toBe('en')
@@ -111,16 +133,16 @@ describe('VoiceService.dictate', () => {
   })
 
   it('falls back to the raw transcript when polish fails', async () => {
-    stt.mockResolvedValue({ result: { text: 'raw text' } })
+    stt.mockResolvedValue({ result: { text: DICTATED_SENTENCE } })
     invoke.mockRejectedValue(new Error('no provider'))
 
     const result = await new VoiceService().dictate({ cleanup: true })
 
-    expect(result.text).toBe('raw text')
+    expect(result.text).toBe(DICTATED_SENTENCE)
     expect(result.polished).toBe(false)
   })
   it('propagates caller cancellation into an in-flight polish request', async () => {
-    stt.mockResolvedValue({ result: { text: 'raw text' } })
+    stt.mockResolvedValue({ result: { text: DICTATED_SENTENCE } })
     const polishRequest = Promise.withResolvers<never>()
     let polishSignal: AbortSignal | undefined
     invoke.mockImplementation(
@@ -149,7 +171,7 @@ describe('VoiceService.dictate', () => {
   it('returns raw recognized text at the shipped polish deadline', async () => {
     vi.useFakeTimers()
     try {
-      stt.mockResolvedValue({ result: { text: 'raw text' } })
+      stt.mockResolvedValue({ result: { text: DICTATED_SENTENCE } })
       let polishSignal: AbortSignal | undefined
       let resolvePolishStarted: (() => void) | undefined
       const polishStarted = new Promise<void>((resolve) => {
@@ -179,8 +201,8 @@ describe('VoiceService.dictate', () => {
       expect(polishSignal?.aborted).toBe(true)
 
       await expect(pending).resolves.toMatchObject({
-        raw: 'raw text',
-        text: 'raw text',
+        raw: DICTATED_SENTENCE,
+        text: DICTATED_SENTENCE,
         polished: false
       })
     } finally {
@@ -189,17 +211,52 @@ describe('VoiceService.dictate', () => {
   })
 
   it('skips polish when cleanup is false', async () => {
-    stt.mockResolvedValue({ result: { text: 'raw text' } })
+    // Long enough that the length gate would have sent it: cleanup alone must explain the
+    // missing provider call, or this passes for the wrong reason.
+    stt.mockResolvedValue({ result: { text: DICTATED_SENTENCE } })
 
     const result = await new VoiceService().dictate({ cleanup: false })
 
-    expect(result.text).toBe('raw text')
+    expect(result.text).toBe(DICTATED_SENTENCE)
     expect(result.polished).toBe(false)
     expect(invoke).not.toHaveBeenCalled()
   })
 
+  it('delivers a below-gate transcript raw without asking the provider to polish it', async () => {
+    const spoken = 'thanks, see you tomorrow'
+    stt.mockResolvedValue({ result: { text: spoken } })
+
+    const result = await new VoiceService().dictate({ cleanup: true })
+
+    expect(result.raw).toBe(spoken)
+    expect(result.text).toBe(spoken)
+    expect(result.polished).toBe(false)
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('caps a light-tier transcript to the natural scope even when the saved strength is deep', async () => {
+    stt.mockResolvedValue({ result: { text: LIGHT_TIER_SENTENCE } })
+    invoke.mockResolvedValue({ result: '明天上午十点我们开一个短会，讨论这周的进度和下周的安排。' })
+
+    const result = await new VoiceService().dictate({ cleanup: true, polishStrength: 'deep' })
+
+    // The pass ran, and it ran in the scope the gate allows — not the one the caller saved.
+    expect(result.polished).toBe(true)
+    expect(getVoicePolishPrompt).toHaveBeenCalledWith('natural')
+  })
+
+  it('keeps the requested scope for a full-tier transcript', async () => {
+    stt.mockResolvedValue({ result: { text: FULL_TIER_SENTENCE } })
+    invoke.mockResolvedValue({ result: 'A polished paragraph.' })
+
+    const result = await new VoiceService().dictate({ cleanup: true, polishStrength: 'deep' })
+
+    expect(result.polished).toBe(true)
+    expect(getVoicePolishPrompt).toHaveBeenCalledWith('deep')
+  })
+
   it('attributes STT and polish to the trusted plugin caller', async () => {
-    stt.mockResolvedValue({ result: { text: 'raw text' } })
+    stt.mockResolvedValue({ result: { text: DICTATED_SENTENCE } })
     invoke.mockResolvedValue({ result: 'Raw text.' })
 
     await new VoiceService().dictate(
@@ -397,7 +454,7 @@ describe('VoiceService canonical session', () => {
   })
 
   it('keeps one owner id across start and stop and delivers natively', async () => {
-    stt.mockResolvedValue({ result: { text: 'raw dictation', language: 'en' } })
+    stt.mockResolvedValue({ result: { text: DICTATED_SENTENCE, language: 'en' } })
     invoke.mockResolvedValue({ result: 'Raw dictation.' })
 
     const service = new VoiceService()
@@ -411,7 +468,7 @@ describe('VoiceService canonical session', () => {
   })
 
   it('keeps the strength chosen before recording when the caller object later changes', async () => {
-    stt.mockResolvedValue({ result: { text: 'raw dictation', language: 'en' } })
+    stt.mockResolvedValue({ result: { text: FULL_TIER_SENTENCE, language: 'zh' } })
     invoke.mockResolvedValue({ result: 'Raw dictation.' })
     const payload: { delivery: 'active-app'; polishStrength: 'natural' | 'structured' | 'deep' } = {
       delivery: 'active-app',
@@ -505,5 +562,41 @@ describe('VoiceService canonical session', () => {
 
     expect(cancelCapture).toHaveBeenCalledWith('native-session')
     await expect(service.startSession()).rejects.toThrow('VOICE_SESSION_SERVICE_DISPOSED')
+  })
+})
+
+/**
+ * The gate decides whether a dictation costs a provider call at all, so its thresholds and its
+ * unit are the contract, not an implementation detail: one pair of numbers has to hold for a
+ * Chinese sentence and an English one, and punctuation must not buy an utterance a pass.
+ */
+describe('polish length gate', () => {
+  it.each([
+    ['', 0],
+    ['   \n\t ', 0],
+    ['你好世界', 4],
+    ['I will send the report tomorrow morning.', 7],
+    ['明天把 report 发出去', 7],
+    ['Hello, world!!! 🎉🎉', 2],
+    ["I can't re-run it", 4]
+  ] as const)('counts %j as %i units', (text, expected) => {
+    expect(countPolishUnits(text)).toBe(expected)
+  })
+
+  it.each([
+    [11, 'short'],
+    [12, 'light'],
+    [59, 'light'],
+    [60, 'full']
+  ] as const)('classifies %i units as %s', (units, tier) => {
+    // Both languages, because the thresholds are only language-neutral if the two counts
+    // share one unit space.
+    expect(resolvePolishTier('明'.repeat(units))).toBe(tier)
+    expect(resolvePolishTier(Array.from({ length: units }, () => 'word').join(' '))).toBe(tier)
+  })
+
+  it('treats an empty or whitespace-only transcript as short', () => {
+    expect(resolvePolishTier('')).toBe('short')
+    expect(resolvePolishTier('  \n ')).toBe('short')
   })
 })
