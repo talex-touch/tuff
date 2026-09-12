@@ -127,14 +127,35 @@ export function collectCssAssets(result: Awaited<ReturnType<typeof build>>, comp
     }
   }
 
-  function cssOf(chunk: ComponentStyleOutput): string[] {
+  /**
+   * `seenCss` is keyed on the emitted asset, not the chunk that pulled it in.
+   * Two chunks inside one component can import the same stylesheet — the
+   * vendored `github-markdown.css` reaches `stream-markdown` through both its
+   * index and its block renderers — and walking by chunk alone appended the
+   * whole sheet twice: 628 scoped selectors in a file that has 314, ~44 KiB of
+   * exact duplicate in one on-demand stylesheet.
+   */
+  function cssOf(chunk: ComponentStyleOutput, seenCss: Set<string>): string[] {
     return Array.from(chunk.viteMetadata?.importedCss ?? [])
       .filter((fileName): fileName is string => typeof fileName === 'string')
+      .filter((fileName) => {
+        if (seenCss.has(fileName))
+          return false
+        seenCss.add(fileName)
+        return true
+      })
       .map(fileName => cssAssets.get(fileName))
       .filter((source): source is string => typeof source === 'string' && source.trim().length > 0)
   }
 
-  function walk(componentName: string, fileName: string, own: string[], deps: Set<string>, visited: Set<string>) {
+  function walk(
+    componentName: string,
+    fileName: string,
+    own: string[],
+    deps: Set<string>,
+    visited: Set<string>,
+    seenCss: Set<string>,
+  ) {
     if (visited.has(fileName))
       return
     visited.add(fileName)
@@ -151,9 +172,9 @@ export function collectCssAssets(result: Awaited<ReturnType<typeof build>>, comp
       return
     }
 
-    own.push(...cssOf(chunk))
+    own.push(...cssOf(chunk, seenCss))
     for (const importedFileName of chunk.imports ?? [])
-      walk(componentName, importedFileName, own, deps, visited)
+      walk(componentName, importedFileName, own, deps, visited, seenCss)
   }
 
   for (const output of outputs) {
@@ -164,7 +185,7 @@ export function collectCssAssets(result: Awaited<ReturnType<typeof build>>, comp
 
     const own: string[] = []
     const deps = new Set<string>()
-    walk(output.name, output.fileName, own, deps, new Set())
+    walk(output.name, output.fileName, own, deps, new Set(), new Set())
     entryCss.set(output.name, { own, deps: [...deps].sort() })
   }
 
