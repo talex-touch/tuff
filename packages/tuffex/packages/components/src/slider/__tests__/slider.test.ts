@@ -356,8 +356,11 @@ describe('txSlider pill thumb', () => {
     // Highlight and shadow: the indicator writes them as literals, the slider as tokens.
     expect(indicator).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.17)')
     expect(varIn(base(), '--tx-slider-surface-highlight')).toContain('17%')
-    expect(indicator).toContain('0 2px 8px rgba(15, 23, 42, 0.08)')
-    expect(varIn(base(), '--tx-slider-surface-shadow')).toBe('0 2px 8px rgba(15, 23, 42, 0.08)')
+    // `1px 2px` and not `0 2px`: every shadow in the library casts from the same
+    // top-left light. What this test is really pinning is that both write the
+    // *same* one, so the two controls read as lit alike.
+    expect(indicator).toContain('1px 2px 8px rgba(15, 23, 42, 0.08)')
+    expect(varIn(base(), '--tx-slider-surface-shadow')).toBe('1px 2px 8px rgba(15, 23, 42, 0.08)')
 
     // The three-part list, in the indicator's order.
     const surface = shadowListOf(ruleBody(source, '&__surface'))

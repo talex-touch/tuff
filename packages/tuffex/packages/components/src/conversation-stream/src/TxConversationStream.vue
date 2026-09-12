@@ -646,7 +646,7 @@ defineExpose({
   border-radius: 999px;
   background: var(--tx-fill-color-blank, #fff);
   color: var(--tx-text-color-primary, #303133);
-  box-shadow: 0 2px 10px color-mix(in srgb, #000 12%, transparent);
+  box-shadow: 1px 2px 10px color-mix(in srgb, #000 12%, transparent);
   cursor: pointer;
   transform: translateX(-50%);
   animation: tx-conversation-stream-pill-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;

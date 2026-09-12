@@ -256,8 +256,8 @@ provide('destroy', destroy)
     background: var(--tx-bg-color-overlay, #fff);
     box-shadow:
       inset 0 1px 0 color-mix(in srgb, var(--tx-color-white, #fff) 10%, transparent),
-      0 24px 64px -20px rgba(15, 23, 42, 0.45),
-      0 2px 8px rgba(15, 23, 42, 0.08);
+      12px 24px 64px -20px rgba(15, 23, 42, 0.45),
+      1px 2px 8px rgba(15, 23, 42, 0.08);
     box-sizing: border-box;
     transition: transform 0.5s, opacity 0.5s;
     animation: tx-blow-dialog-scale 0.5s;

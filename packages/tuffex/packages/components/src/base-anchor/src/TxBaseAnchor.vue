@@ -1434,7 +1434,7 @@ onBeforeUnmount(() => {
 .tx-base-anchor__liquid-shadow {
   position: absolute;
   opacity: 0;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.14);
+  box-shadow: 5px 10px 26px rgba(0, 0, 0, 0.14);
 }
 
 .tx-base-anchor__liquid-panel {
