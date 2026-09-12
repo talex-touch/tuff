@@ -20,8 +20,8 @@ const SENTRY_DEFERRED_INIT_TIMEOUT_MS = 2000
  *
  * Nothing is lost in the gap: a tiny listener pair buffers `error` and `unhandledrejection`
  * events from the moment this plugin runs, and the buffer is flushed into `captureException`
- * once the SDK is up. The Vue integration still attaches to the app instance, and the same
- * `app:error` / `vue:error` hooks the module used are registered here.
+ * once the SDK is up, and the same `app:error` / `vue:error` hooks the module used are
+ * registered here.
  */
 export default defineNuxtPlugin({
   name: 'nexus:sentry-deferred',
@@ -44,14 +44,10 @@ export default defineNuxtPlugin({
 
         initSentryClient(Sentry)
 
-        const client = Sentry.getClient()
-        if (client) {
-          client.addIntegration(Sentry.vueIntegration({
-            app: nuxtApp.vueApp,
-            attachErrorHandler: false,
-          }))
-        }
-
+        // The module's plugin also attached @sentry/vue's integration with
+        // `attachErrorHandler: false`. Under that option it only installs component-tracing
+        // mixins, and tracing is compiled out of this build (`__SENTRY_TRACING__: false`), so
+        // it contributed nothing here; the two Nuxt hooks below are what actually report.
         nuxtApp.hook('app:error', (error) => {
           const statusCode = (error as { statusCode?: number } | null)?.statusCode
           if (typeof statusCode === 'number' && statusCode >= 300 && statusCode < 500)
