@@ -1,9 +1,11 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 // `nuxt/kit`, not `@nuxt/kit`: the latter is only a transitive dependency here,
 // so its types do not resolve without adding a direct dependency.
 import { addComponent, defineNuxtModule } from 'nuxt/kit'
+import { isTuffexSourceRequested } from '../build/tuffex-dev-mode'
 
 /**
  * Registers every tuffex component with Nuxt's own component system.
@@ -85,7 +87,13 @@ function readBarrelExports(barrel: string, followStar = true): string[] {
 
 export default defineNuxtModule({
   meta: { name: 'tuffex-components' },
-  setup() {
+  setup(_options, nuxt) {
+    const useTuffexSource = nuxt.options.dev !== true
+      || isTuffexSourceRequested(
+        nuxt.options.dev === true && process.env.NODE_ENV !== 'test',
+        process.env,
+      )
+    const componentSpecifierPrefix = useTuffexSource ? '@tuffex-components' : '@talex-touch/tuffex'
     const directories = readdirSync(COMPONENTS_SRC).filter((entry) => {
       if (AGGREGATE_DIRECTORIES.has(entry))
         return false
@@ -115,9 +123,10 @@ export default defineNuxtModule({
 
         addComponent({
           name,
-          // Always the source alias — it is the one specifier that resolves the
-          // same way in dev and in a production build.
-          filePath: `@tuffex-components/${directory}`,
+          // Source mode keeps the live workspace alias for component editing. Dist mode
+          // points at the same built subpath as explicit TuffEx imports, avoiding a second
+          // copy of the component in the dev module graph.
+          filePath: `${componentSpecifierPrefix}/${directory}`,
           export: name,
         })
       }

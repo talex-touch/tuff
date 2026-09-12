@@ -129,6 +129,23 @@ describe('Nexus deploy asset budget', () => {
     expect(uninstalled.css.length, 'i-ri-settings-line should not resolve — ri is not a dependency').toBe(0)
   })
 
+  /*
+   * The icons layer is a separate stylesheet appended after every other sheet once the app has
+   * mounted, so its rules come last in the cascade. At class specificity they would beat the
+   * `text-*` / `w-*` utilities on the same element (`color:inherit`, `width:1.2em`), which the
+   * old single-sheet order let the utilities win. `uno.config.ts` wraps every icon selector in
+   * `:where()` so load order cannot decide that again; both output modes must be covered.
+   */
+  it('emits icon rules at zero specificity so host utilities win whichever sheet lands last', async () => {
+    const uno = await createGenerator(unoConfig)
+    const { css } = await uno.generate('i-carbon-settings i-logos-vue text-amber-600 w-4', { preflights: false })
+
+    expect(css).toMatch(/:where\(\.i-carbon-settings\)\{[^}]*--un-icon:/)
+    expect(css).toMatch(/:where\(\.i-logos-vue\)\{[^}]*background:url\("data:image\/svg\+xml/)
+    expect(css).toMatch(/(?:^|\n)\.text-amber-600\{/)
+    expect(css).toMatch(/(?:^|\n)\.w-4\{/)
+  })
+
   it('keeps oversized route-local icon paths out of the shared entry CSS', () => {
     const unoSource = readFileSync(unoConfigPath, 'utf8')
     const guardSource = readFileSync(workerBundleGuardPath, 'utf8')

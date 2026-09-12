@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
@@ -6,6 +7,7 @@ import { config as loadEnv } from 'dotenv'
 import { pwa } from './app/config/pwa'
 import { appDescription } from './app/constants/index'
 import { remarkMermaid } from './app/utils/remark-mermaid'
+import { resolveTuffexDevMode } from './build/tuffex-dev-mode'
 import { nexusPageMetaFastPathPlugin } from './build/nexus-page-meta-fast-path'
 import { removeRouteLocalPageComponents } from './build/nexus-page-routes'
 import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
@@ -20,7 +22,6 @@ loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}.local`, override:
 
 const isDev = process.env.NODE_ENV !== 'production'
 const useCloudflareDev = isDev && (process.env.NUXT_USE_CLOUDFLARE_DEV === 'true' || process.env.NITRO_PRESET === 'cloudflare-pages')
-const useWorkspaceSource = isDev
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const workspaceRoot = resolve(currentDir, '../..')
 const tuffBusinessSourceEntry = resolve(currentDir, '../../packages/tuff-business/src/index.ts')
@@ -28,24 +29,35 @@ const tuffBusinessSourceEntry = resolve(currentDir, '../../packages/tuff-busines
 const tuffexChartsSourceEntry = resolve(currentDir, '../../packages/tuffex-charts/src/index.ts')
 const tuffexComponentsSourceRoot = resolve(currentDir, '../../packages/tuffex/packages/components/src')
 const tuffexDistRoot = resolve(currentDir, '../../packages/tuffex/dist/es')
-const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/components/src/index.ts')
 const tuffexDistEntry = resolve(tuffexDistRoot, 'index.js')
-const tuffexStyleEntry = resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
-const tuffexBaseStyleEntry = useWorkspaceSource
-  ? tuffexStyleEntry
+const tuffexDevMode = resolveTuffexDevMode({
+  // Vitest imports nuxt.config.ts for static config assertions without starting a dev server;
+  // do not make those config-only tests depend on an ignored build artifact.
+  isDev: isDev && process.env.NODE_ENV !== 'test',
+  env: process.env,
+  distEntryExists: existsSync(tuffexDistEntry),
+})
+const useTuffexSource = tuffexDevMode === 'source'
+const useTuffexDistComponentStyleMode = isDev && tuffexDevMode === 'dist'
+const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/components/src/index.ts')
+const tuffexBaseStyleEntry = useTuffexSource
+  ? resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
   : resolve(tuffexDistRoot, 'base.css')
-const tuffexComponentEntry = useWorkspaceSource
-  ? `${tuffexComponentsSourceRoot}/$1/index.ts`
-  : `${tuffexDistRoot}/$1/index.js`
 const tuffexComponentSourceEntry = `${tuffexComponentsSourceRoot}/$1/index.ts`
+const tuffexComponentDistEntry = `${tuffexDistRoot}/$1/index.js`
+const tuffexComponentEntry = useTuffexSource ? tuffexComponentSourceEntry : tuffexComponentDistEntry
+const tuffexComponentAutoImportEntry = isDev ? tuffexComponentEntry : tuffexComponentSourceEntry
 const tuffexComponentStyleEntry = resolve(tuffexDistRoot, '$1/style.css')
-const tuffexComponentTypePathEntry = useWorkspaceSource
-  ? `${tuffexComponentsSourceRoot}/*/index.ts`
-  : `${tuffexDistRoot}/*/index.d.ts`
 const tuffexComponentSourceTypePathEntry = `${tuffexComponentsSourceRoot}/*/index.ts`
+const tuffexComponentDistTypePathEntry = `${tuffexDistRoot}/*/index.d.ts`
+const tuffexComponentTypePathEntry = !isDev
+  ? tuffexComponentSourceTypePathEntry
+  : useTuffexSource
+    ? tuffexComponentSourceTypePathEntry
+    : tuffexComponentDistTypePathEntry
 const tuffexComponentStyleTypePathEntry = resolve(tuffexDistRoot, '*/style.css')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
-const tuffexDistUtilsEntry = useWorkspaceSource
+const tuffexDistUtilsEntry = useTuffexSource
   ? tuffexUtilsEntry
   : resolve(tuffexDistRoot, 'utils/index.js')
 const requireFromConfig = createRequire(import.meta.url)
@@ -493,16 +505,24 @@ export default defineNuxtConfig({
         'gsap/ScrollToPlugin',
         'theme-colors',
         'simplex-noise',
-        'path-browserify',
         '@vueuse/core',
         'marked',
         'echarts/core',
         'echarts/charts',
         'echarts/components',
         'echarts/renderers',
-        'dompurify',
+        '@talex-touch/tuffex > shiki',
+        '@talex-touch/tuffex > shiki > @shikijs/core',
+        '@talex-touch/tuffex > @shikijs/engine-javascript',
+        '@talex-touch/tuffex > shiki > @shikijs/langs',
+        '@talex-touch/tuffex > shiki > @shikijs/themes',
+        '@talex-touch/tuffex > @better-scroll/core',
+        '@talex-touch/tuffex > @better-scroll/scroll-bar',
+        '@talex-touch/tuffex > @better-scroll/pull-down',
+        '@talex-touch/tuffex > @better-scroll/pull-up',
+        '@talex-touch/tuffex > dompurify',
         '@floating-ui/vue',
-        'v-wave',
+        '@talex-touch/tuffex > v-wave',
         'ogl',
       ],
     },
@@ -513,8 +533,8 @@ export default defineNuxtConfig({
         ...(useVueDevtoolsApiNoop ? [{ find: /^@vue\/devtools-api$/, replacement: vueDevtoolsApiNoopEntry }] : []),
         { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
         { find: /^@talex-touch\/tuffex-charts$/, replacement: tuffexChartsSourceEntry },
-        { find: /^@tuffex-components\/(.+)$/, replacement: tuffexComponentSourceEntry },
-        { find: /^@talex-touch\/tuffex$/, replacement: useWorkspaceSource ? tuffexSourceEntry : tuffexDistEntry },
+        { find: /^@tuffex-components\/(.+)$/, replacement: tuffexComponentAutoImportEntry },
+        { find: /^@talex-touch\/tuffex$/, replacement: useTuffexSource ? tuffexSourceEntry : tuffexDistEntry },
         { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexDistUtilsEntry },
         { find: /^@talex-touch\/tuffex\/base\.css$/, replacement: tuffexBaseStyleEntry },
         { find: /^@talex-touch\/tuffex\/([^/]+)\/style\.css$/, replacement: tuffexComponentStyleEntry },
@@ -523,7 +543,10 @@ export default defineNuxtConfig({
     },
     plugins: [
       nexusPageMetaFastPathPlugin(resolve(currentDir, 'app/pages')),
-      tuffexOnDemandStylePlugin({ enabled: !useWorkspaceSource }),
+      tuffexOnDemandStylePlugin({
+        enabled: tuffexDevMode === 'dist',
+        componentDistRoot: useTuffexDistComponentStyleMode ? tuffexDistRoot : undefined,
+      }),
     ],
     server: {
       fs: {
@@ -541,11 +564,11 @@ export default defineNuxtConfig({
         paths: {
           '@talex-touch/tuff-business': [tuffBusinessSourceEntry],
           '@talex-touch/tuffex-charts': [tuffexChartsSourceEntry],
-          '@tuffex-components/*': [tuffexComponentSourceTypePathEntry],
-          '@talex-touch/tuffex': [useWorkspaceSource ? tuffexSourceEntry : tuffexDistEntry],
+          '@tuffex-components/*': [tuffexComponentTypePathEntry],
+          '@talex-touch/tuffex': [useTuffexSource ? tuffexSourceEntry : tuffexDistEntry],
           '@talex-touch/tuffex/base.css': [tuffexBaseStyleEntry],
           '@talex-touch/tuffex/*/style.css': [tuffexComponentStyleTypePathEntry],
-          '@talex-touch/tuffex/utils': [tuffexUtilsEntry],
+          '@talex-touch/tuffex/utils': [tuffexDistUtilsEntry],
           '@talex-touch/tuffex/*': [tuffexComponentTypePathEntry],
         },
       },

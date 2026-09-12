@@ -15,6 +15,12 @@ export interface TuffexOnDemandStylePluginOptions {
    * `style-deps.json`. Injectable for tests.
    */
   styleDeps?: Record<string, string[]>
+  /**
+   * Built component root used by consumers that register every component through
+   * a generated lazy registry. Styles are injected into each component entry so
+   * the registry itself does not eagerly load the whole stylesheet set.
+   */
+  componentDistRoot?: string
 }
 
 function isComponentSubpath(componentName: string) {
@@ -45,6 +51,32 @@ function hasStyleImport(code: string, componentName: string) {
   const specifier = `@talex-touch/tuffex/${componentName}/style.css`
   return code.includes(`'${specifier}'`) || code.includes(`"${specifier}"`)
 }
+
+function createStyleImports(
+  componentNames: string[],
+  styleDeps: Record<string, string[]>,
+  code: string,
+): string {
+  return expandStyleClosure(componentNames, styleDeps)
+    .filter(componentName => !hasStyleImport(code, componentName))
+    .map(componentName => `import '@talex-touch/tuffex/${componentName}/style.css';`)
+    .join('\n')
+}
+
+function componentNameFromDistEntry(id: string, root: string | undefined): string | undefined {
+  if (!root)
+    return undefined
+
+  const normalizedId = id.split('?')[0]?.replace(/\\/g, '/')
+  const normalizedRoot = resolve(root).replace(/\\/g, '/')
+  if (!normalizedId?.startsWith(`${normalizedRoot}/`))
+    return undefined
+
+  const relativeId = normalizedId.slice(normalizedRoot.length + 1)
+  const componentName = /^([a-z0-9-]+)\/index\.js$/.exec(relativeId)?.[1]
+  return componentName && isComponentSubpath(componentName) ? componentName : undefined
+}
+
 
 /**
  * Baked in when this file is built for publishing, so the shipped plugin needs
@@ -159,6 +191,22 @@ export function tuffexOnDemandStylePlugin(options: TuffexOnDemandStylePluginOpti
         return null
       if (!SUPPORTED_CODE_ID_RE.test(id))
         return null
+
+      if (options.componentDistRoot) {
+        const distComponentName = componentNameFromDistEntry(id, options.componentDistRoot)
+        if (!distComponentName)
+          return null
+
+        const styleImports = createStyleImports([distComponentName], styleDeps, code)
+        if (!styleImports)
+          return null
+
+        return {
+          code: `${styleImports}\n${code}`,
+          map: null,
+        }
+      }
+
       if (!code.includes('@talex-touch/tuffex/'))
         return null
 
@@ -166,10 +214,7 @@ export function tuffexOnDemandStylePlugin(options: TuffexOnDemandStylePluginOpti
       if (componentNames.length === 0)
         return null
 
-      const styleImports = expandStyleClosure(componentNames, styleDeps)
-        .filter(componentName => !hasStyleImport(code, componentName))
-        .map(componentName => `import '@talex-touch/tuffex/${componentName}/style.css';`)
-        .join('\n')
+      const styleImports = createStyleImports(componentNames, styleDeps, code)
       if (!styleImports)
         return null
 
