@@ -207,7 +207,7 @@ onUnmounted(() => {
     width: min(420px, 88vw);
     color: var(--tx-text-color-primary, #303133);
     border-radius: 12px;
-    box-shadow: 0 18px 65px rgba(0, 0, 0, 0.25);
+    box-shadow: 9px 18px 65px rgba(0, 0, 0, 0.25);
     transform: translate(-50%, -50%);
     animation: tx-touch-tip-enter 0.25s ease;
     backdrop-filter: blur(16px) saturate(150%) brightness(1.2);
@@ -228,9 +228,17 @@ onUnmounted(() => {
   }
 
   &__content {
+    // A hash, an id or a URL has no break opportunity, so a vertical scroll
+    // cannot save it: the token runs past the panel and the panel clips it.
+    // `anywhere` also lets the token shrink the content's min-content width,
+    // which `break-word` does not, so the panel stops being widened by it.
+    overflow-wrap: anywhere;
     position: relative;
     width: 80%;
     height: calc(100% - 30px);
+    // Fixed height plus a clipping panel meant a long body simply vanished
+    // below the fold with nothing to reach it.
+    overflow-y: auto;
     text-align: center;
     color: var(--tx-text-color-secondary, #909399);
     white-space: pre-line;

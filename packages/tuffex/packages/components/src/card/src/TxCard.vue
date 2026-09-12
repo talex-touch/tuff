@@ -561,11 +561,11 @@ function onKeydown(ev: KeyboardEvent) {
   }
 
   &.is-shadow-soft {
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.14);
+    box-shadow: 5px 10px 26px rgba(0, 0, 0, 0.14);
   }
 
   &.is-shadow-medium {
-    box-shadow: 0 22px 56px rgba(0, 0, 0, 0.18);
+    box-shadow: 11px 22px 56px rgba(0, 0, 0, 0.18);
   }
 
   &:hover:not(.is-disabled):not(.is-plain) {

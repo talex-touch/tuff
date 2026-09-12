@@ -418,8 +418,20 @@ export default defineComponent({
       const navInnerRect = navInnerEl.getBoundingClientRect()
       const diff = props.offset || 0
 
-      if (options.reveal)
+      if (options.reveal) {
         indicatorRevealed.value = true
+      }
+      else if (!indicatorRevealed.value && nodeRect.width > 0 && nodeRect.height > 0) {
+        // Reveal on the first real measurement, not on the first click. `reveal:
+        // true` is only ever passed from a tab's own click handler, so a freshly
+        // mounted TxTabs — including one whose active tab comes from `v-model`
+        // or `activation` — painted its indicator at opacity 0 and kept it there
+        // until someone clicked. Every path that lands here passes
+        // `animate: false`, so the indicator appears where it belongs instead of
+        // sliding in from the nav's edge; the zero-size guard keeps it hidden
+        // until layout has actually happened.
+        indicatorRevealed.value = true
+      }
 
       pointerEl.style.opacity = indicatorRevealed.value ? '1' : '0'
 
@@ -995,7 +1007,7 @@ export default defineComponent({
   border-radius: inherit;
   background: linear-gradient(180deg, var(--tx-color-primary, #409eff), color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, white));
   box-shadow:
-    0 2px 8px color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, transparent),
+    1px 2px 8px color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, transparent),
     0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
   transform: scale(1);
   transform-origin: center;
@@ -1072,7 +1084,7 @@ export default defineComponent({
   background: color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 20%, transparent),
-    0 6px 18px color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);
+    3px 6px 18px color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);
 }
 
 .tx-tabs__pointer-inner.tx-tabs__pointer--motion-stretch-x {

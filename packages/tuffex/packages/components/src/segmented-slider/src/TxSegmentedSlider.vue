@@ -236,7 +236,7 @@ onMounted(() => {
         height: var(--tx-segmented-slider-dot-active-size);
         background: var(--tx-color-primary, #409eff);
         border-color: var(--tx-color-primary, #409eff);
-        box-shadow: 0 4px 12px color-mix(in srgb, var(--tx-color-primary, #409eff) 35%, transparent);
+        box-shadow: 2px 4px 12px color-mix(in srgb, var(--tx-color-primary, #409eff) 35%, transparent);
       }
 
       .tx-segmented-slider__label {

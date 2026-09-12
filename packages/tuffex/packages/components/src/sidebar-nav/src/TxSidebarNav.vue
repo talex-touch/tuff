@@ -3,7 +3,7 @@
 import type { SidebarNavEmits, SidebarNavGroup, SidebarNavItem, SidebarNavProps, SidebarNavValue } from './types'
 import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { TxIconChip } from '../../icon-chip'
-import { useIndicatorBox } from './use-indicator-box'
+import { useIndicatorBox } from '../../../../utils/use-indicator-box'
 
 defineOptions({ name: 'TxSidebarNav' })
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import './DocsComponentsGallery.css'
 import {
   ChartPalette,
@@ -65,6 +65,8 @@ const copy = computed(() => (localeKey.value === 'zh'
         { value: 'snapshot', label: '快照版' },
       ],
       autoSync: '自动同步',
+      autoSyncDesc: '有新版本时自动拉取插件更新',
+      resetAlerts: '恢复已关闭的警示',
       partial: '部分选中',
       syncing: '同步中',
       dividerSection: '分组',
@@ -73,6 +75,10 @@ const copy = computed(() => (localeKey.value === 'zh'
       contextHint: '右键此处',
       selectionHint: '选中这段文字试试。',
       toastSaved: '已保存',
+      toastSavedBody: '草稿已同步到云端。',
+      toastStack: '堆三条',
+      toastUndo: '撤销',
+      toastDeleted: '已删除 1 项',
       add: '添加',
       translate: '翻译',
       newPlugin: '新建插件',
@@ -139,6 +145,8 @@ const copy = computed(() => (localeKey.value === 'zh'
         { value: 'snapshot', label: 'Snapshot' },
       ],
       autoSync: 'Auto sync',
+      autoSyncDesc: 'Pull plugin updates as they are released',
+      resetAlerts: 'Restore the dismissed alerts',
       partial: 'Partial',
       syncing: 'Syncing',
       dividerSection: 'Section',
@@ -147,6 +155,10 @@ const copy = computed(() => (localeKey.value === 'zh'
       contextHint: 'Right-click here',
       selectionHint: 'Select this text to see the actions.',
       toastSaved: 'Saved',
+      toastSavedBody: 'Your draft is synced to the cloud.',
+      toastStack: 'Stack 3',
+      toastUndo: 'Undo',
+      toastDeleted: 'Deleted 1 item',
       add: 'Add',
       translate: 'Translate',
       newPlugin: 'New plugin',
@@ -297,6 +309,20 @@ const cascaderOptions = [
 ]
 const dateValue = ref('2026-02-16')
 const flatRadioValue = ref('auto')
+const flatRadioViewValue = ref('grid')
+const flatRadioAlertValues = ref(['mention', 'reply'])
+
+// The Alert specimen is dismissible, so the cell needs a way back — otherwise a
+// visitor who tries the close button is left with an empty cell for the rest of
+// the session.
+const alertsVisible = reactive({ success: true, error: true })
+const alertsDismissed = computed(() =>
+  Number(!alertsVisible.success) + Number(!alertsVisible.error))
+
+function resetAlerts(): void {
+  alertsVisible.success = true
+  alertsVisible.error = true
+}
 const flatSelectValue = ref('json')
 const flatInputValue = ref('')
 const numberValue = ref(60)
@@ -374,10 +400,36 @@ const popoverOpen = ref(false)
 const overlayLoading = ref(true)
 const tabsActive = ref('')
 const selectionRootRef = ref<HTMLElement | null>(null)
-const { selection: selectionPayload } = useSelectionAnchor({ root: selectionRootRef })
+const selectionBarRef = ref<{ el: HTMLElement | null } | null>(null)
+// `ignore` is not optional in practice: clicking into the bar's own prompt field
+// collapses the document selection, and without this the anchor reads that as
+// the reader clearing their selection and drops the snapshot — so the bar
+// dismissed itself the moment anyone tried to use it.
+const { selection: selectionPayload } = useSelectionAnchor({
+  root: selectionRootRef,
+  ignore: () => [selectionBarRef.value?.el ?? null],
+})
+
+const TOAST_VARIANTS = ['success', 'warning', 'danger'] as const
 
 function fireToast() {
-  toast({ title: copy.value.toastSaved, description: copy.value.aboutBody })
+  toast({ title: copy.value.toastSaved, description: copy.value.toastSavedBody, variant: 'success' })
+}
+
+function fireToastStack() {
+  TOAST_VARIANTS.forEach((variant, i) => {
+    globalThis.setTimeout(() => {
+      toast({ title: copy.value.toastSaved, description: copy.value.toastSavedBody, variant })
+    }, i * 140)
+  })
+}
+
+function fireToastAction() {
+  toast({
+    title: copy.value.toastDeleted,
+    variant: 'default',
+    action: { label: copy.value.toastUndo },
+  })
 }
 
 /* ── Data band. ── */
@@ -395,14 +447,26 @@ const filterChipItems = computed(() => [
   { value: 'all', label: copy.value.suiteBase, count: 91 },
   { value: 'beta', label: copy.value.reviewing, count: 12, dot: 'var(--tx-color-warning)' },
 ])
-/* Inline SVG so the gallery never waits on (or fails) a network image. */
-function tileImage(hex: string) {
-  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="90"><rect width="120" height="90" fill="${hex}"/></svg>`)}`
+/* Inline SVG so the gallery never waits on (or fails) a network image. Three
+   flat swatches read as colour chips, not as photographs, which made the cell
+   look like the wrong component; a gradient with a horizon and a light source
+   is enough for a thumbnail grid to read as one. */
+function tileImage(from: string, to: string, sun: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120">`
+    + `<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/>`
+    + `</linearGradient></defs>`
+    + `<rect width="160" height="120" fill="url(#s)"/>`
+    + `<circle cx="38" cy="34" r="16" fill="${sun}" opacity="0.85"/>`
+    + `<path d="M0 92 L46 62 L84 86 L118 60 L160 88 L160 120 L0 120 Z" fill="#0f172a" opacity="0.42"/>`
+    + `<path d="M0 104 L54 78 L96 100 L134 80 L160 96 L160 120 L0 120 Z" fill="#0f172a" opacity="0.62"/>`
+    + `</svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 const galleryItems = [
-  { id: 'a', url: tileImage('#3b82f6'), name: 'Blue' },
-  { id: 'b', url: tileImage('#22c55e'), name: 'Green' },
-  { id: 'c', url: tileImage('#f59e0b'), name: 'Amber' },
+  { id: 'a', url: tileImage('#1e3a8a', '#60a5fa', '#e0f2fe'), name: 'Dawn ridge' },
+  { id: 'b', url: tileImage('#064e3b', '#4ade80', '#fef9c3'), name: 'Pine valley' },
+  { id: 'c', url: tileImage('#7c2d12', '#fbbf24', '#fff7ed'), name: 'Dune pass' },
 ]
 const sortableItems = ref([
   { id: 'clipboard', label: 'Clipboard' },
@@ -635,7 +699,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('button')">
           {{ cellLabel('Button', '按钮') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack">
               <TxButton icon="i-carbon-add">
@@ -659,7 +723,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('input')">
           {{ cellLabel('Input', '输入') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__stack">
               <TuffInput v-model="inputValue" :placeholder="copy.typeSomething" />
@@ -677,7 +741,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('select')">
           {{ cellLabel('Select', '选择器') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__stack">
               <TuffSelect v-model="channel" :placeholder="copy.selectChannel">
@@ -708,7 +772,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('switch')">
           {{ cellLabel('Switch', '开关') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <TuffSwitch v-model="switchOn" />
@@ -728,7 +792,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('checkbox')">
           {{ cellLabel('Checkbox', '复选框') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <TxCheckbox v-model="syncChecked" :label="copy.autoSync" />
@@ -748,7 +812,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('slider')">
           {{ cellLabel('Slider', '滑块') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSlider v-model="sliderValue" :min="0" :max="100" :step="1" />
@@ -764,7 +828,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('tooltip')">
           {{ cellLabel('Tooltip', '提示') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <!--
@@ -793,7 +857,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('dropdown-menu')">
           {{ cellLabel('DropdownMenu', '下拉菜单') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxDropdownMenu>
               <template #trigger>
@@ -818,7 +882,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('dialog')">
           {{ cellLabel('Dialog', '弹窗') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxButton @click="deleteOpen = true">
               {{ copy.delete }}
@@ -841,7 +905,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('status-badge')">
           {{ cellLabel('StatusBadge', '状态徽标') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <TxStatusBadge :text="copy.online" status="success" />
@@ -859,7 +923,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('progress-bar')">
           {{ cellLabel('ProgressBar', '进度条') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__block--wide docs-gallery__stack">
               <!-- Live, so the specimen shows the easing fill, the tip glow
@@ -888,7 +952,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('collapse')">
           {{ cellLabel('Collapse', '折叠') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxCollapse v-model="aboutOpen">
@@ -911,7 +975,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('radio')">
           {{ cellLabel('Radio', '单选') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack docs-gallery__stack--center">
               <TxRadioGroup v-model="period" type="button">
@@ -943,7 +1007,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('rating')">
           {{ cellLabel('Rating', '评分') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack docs-gallery__stack--center">
               <TxRating v-model="rating" />
@@ -960,7 +1024,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('tag')">
           {{ cellLabel('Tag', '标签') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <TxTag
@@ -983,7 +1047,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('badge')">
           {{ cellLabel('Badge', '徽标') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <TxBadge variant="error" :value="3" />
@@ -1001,7 +1065,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('avatar')">
           {{ cellLabel('Avatar', '头像') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack docs-gallery__stack--center">
               <TxAvatarGroup :max="3">
@@ -1024,7 +1088,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('steps')">
           {{ cellLabel('Steps', '步骤条') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxSteps :active="1" size="small">
               <TxStep
@@ -1045,7 +1109,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('pagination')">
           {{ cellLabel('Pagination', '分页') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxPagination v-model:current-page="page" :total-pages="5" />
             <template #fallback>
@@ -1059,7 +1123,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('skeleton')">
           {{ cellLabel('Skeleton', '骨架屏') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__stack">
               <div class="docs-gallery__row">
@@ -1081,7 +1145,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('divider')">
           {{ cellLabel('Divider', '分割线') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__stack">
               <TxDivider />
@@ -1101,7 +1165,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('icon')">
           {{ cellLabel('Icon', '图标') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <TxStatusIcon name="i-carbon-cloud-upload" :size="24" tone="info" />
@@ -1120,7 +1184,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('icon-chip')">
           {{ cellLabel('IconChip', '图标徽标') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack docs-gallery__stack--center">
               <div class="docs-gallery__row">
@@ -1162,7 +1226,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('kbd')">
           {{ cellLabel('Kbd', '按键') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <TxKbd tone="primary">
@@ -1185,7 +1249,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('avatar-variants')">
           {{ cellLabel('AvatarVariants', '头像变体') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <TxCornerOverlay
@@ -1212,7 +1276,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('cascader')">
           {{ cellLabel('Cascader', '级联选择') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxCascader v-model="cascaderValue" :options="cascaderOptions" :placeholder="copy.selectChannel" />
@@ -1228,7 +1292,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('date-picker')">
           {{ cellLabel('DatePicker', '日期选择') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxDatePicker v-model="dateValue" variant="field" :popup="false" />
@@ -1244,7 +1308,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('file-uploader')">
           {{ cellLabel('FileUploader', '文件上传') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxFileUploader v-model="uploadFiles" accept=".pdf,.png" :max="3" />
@@ -1260,7 +1324,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('flat-input')">
           {{ cellLabel('FlatInput', '扁平输入') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxFlatInput v-model="flatInputValue" :placeholder="copy.typeSomething" />
@@ -1276,13 +1340,34 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('flat-radio')">
           {{ cellLabel('FlatRadio', '扁平单选') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxFlatRadio v-model="flatRadioValue">
-              <TxFlatRadioItem value="light" label="Light" />
-              <TxFlatRadioItem value="dark" label="Dark" />
-              <TxFlatRadioItem value="auto" label="Auto" />
-            </TxFlatRadio>
+            <div class="docs-gallery__stack docs-gallery__stack--center">
+              <!-- The xl tier leads: one specimen at the size the control is
+                   actually meant to be read at, then the range below it. -->
+              <div class="docs-gallery__row">
+                <TxFlatRadio v-model="flatRadioValue" size="xl">
+                  <TxFlatRadioItem value="light" label="Light" />
+                  <TxFlatRadioItem value="dark" label="Dark" />
+                  <TxFlatRadioItem value="auto" label="Auto" />
+                </TxFlatRadio>
+              </div>
+              <div class="docs-gallery__row">
+                <TxFlatRadio v-model="flatRadioViewValue">
+                  <TxFlatRadioItem value="grid" icon="i-carbon-grid" label="Grid" />
+                  <TxFlatRadioItem value="list" icon="i-carbon-list" label="List" />
+                  <TxFlatRadioItem value="kanban" icon="i-carbon-column" label="Kanban" />
+                </TxFlatRadio>
+              </div>
+              <div class="docs-gallery__row">
+                <TxFlatRadio v-model="flatRadioAlertValues" size="sm" multiple>
+                  <TxFlatRadioItem value="mention" icon="i-carbon-at" />
+                  <TxFlatRadioItem value="reply" icon="i-carbon-reply" />
+                  <TxFlatRadioItem value="archive" icon="i-carbon-archive" />
+                  <TxFlatRadioItem value="mute" icon="i-carbon-volume-mute" />
+                </TxFlatRadio>
+              </div>
+            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -1294,7 +1379,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('flat-select')">
           {{ cellLabel('FlatSelect', '扁平选择') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxFlatSelect v-model="flatSelectValue">
@@ -1314,7 +1399,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('form')">
           {{ cellLabel('Form', '表单') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxForm :model="formModel" label-width="64px">
@@ -1337,7 +1422,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('image-uploader')">
           {{ cellLabel('ImageUploader', '图片上传') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <!-- No fixed-width block here: the uploader's grid is `auto-fill`, so a
                  240px block gives it two tracks and parks the lone add tile in the
@@ -1355,7 +1440,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('number-input')">
           {{ cellLabel('NumberInput', '数字输入') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxNumberInput v-model="numberValue" :min="0" :max="100" :step="5" :precision="0" />
@@ -1371,7 +1456,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('picker')">
           {{ cellLabel('Picker', '滚动选择') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <!-- Toolbar off: with no popup to confirm into, Cancel/Confirm are
@@ -1395,7 +1480,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('scrub-field')">
           {{ cellLabel('ScrubField', '拖拽数值') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxScrubField v-model="scrubWidth" label="W" :min="40" :max="999" />
@@ -1411,7 +1496,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('search-input')">
           {{ cellLabel('SearchInput', '搜索输入') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSearchInput v-model="searchText" :placeholder="copy.searchPlugins" />
@@ -1427,7 +1512,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('search-select')">
           {{ cellLabel('SearchSelect', '搜索选择') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSearchSelect v-model="searchSelectValue" :options="searchSelectOptions" :placeholder="copy.searchPlugins" />
@@ -1443,7 +1528,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('segmented-slider')">
           {{ cellLabel('SegmentedSlider', '分段滑块') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSegmentedSlider v-model="segmentValue" :segments="segments" />
@@ -1459,7 +1544,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('tag-input')">
           {{ cellLabel('TagInput', '标签输入') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxTagInput v-model="tagValues" :placeholder="copy.typeSomething" />
@@ -1475,7 +1560,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('textarea')">
           {{ cellLabel('Textarea', '多行输入') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxTextarea v-model="textareaValue" :placeholder="copy.typeSomething" :max-length="120" show-count />
@@ -1491,7 +1576,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('tree-select')">
           {{ cellLabel('TreeSelect', '树选择') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxTreeSelect v-model="treeSelectValue" :nodes="treeSelectNodes" :placeholder="copy.selectChannel" />
@@ -1507,7 +1592,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('card')">
           {{ cellLabel('Card', '卡片') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxCard :padding="14" :radius="14">
@@ -1528,7 +1613,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('card-item')">
           {{ cellLabel('CardItem', '卡片条目') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__stack">
               <TxCardItem title="Clipboard" subtitle="com.talex.clipboard" avatar-text="C" />
@@ -1545,7 +1630,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('container')">
           {{ cellLabel('Container', '容器') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxContainer>
@@ -1584,10 +1669,10 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('flex')">
           {{ cellLabel('Flex', '弹性布局') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxFlex :gap="8" wrap="wrap">
+              <TxFlex :gap="8" wrap="wrap" justify="center">
                 <div v-for="tile in layoutTiles" :key="tile" class="docs-gallery__tile">
                   {{ tile }}
                 </div>
@@ -1604,7 +1689,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('grid')">
           {{ cellLabel('Grid', '栅格') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxGrid :cols="3" :gap="8">
@@ -1626,7 +1711,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('grid-layout')">
           {{ cellLabel('GridLayout', '网格布局') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxGridLayout>
@@ -1646,12 +1731,14 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('group-block')">
           {{ cellLabel('GroupBlock', '设置分组') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxGroupBlock :name="copy.dividerSection">
-                <TxBlockSwitch v-model="blockSwitch" :title="copy.autoSync" :description="copy.installBody" />
-                <TxBlockLine />
+                <TxBlockSwitch v-model="blockSwitch" :title="copy.autoSync" :description="copy.autoSyncDesc" />
+                <!-- TxBlockLine is a title+description row, not a separator.
+                     Propless it rendered as an empty band. -->
+                <TxBlockLine :title="copy.installTitle" :description="copy.installBody" />
                 <TxBlockInput v-model="flatInputValue" :title="copy.formName" :placeholder="copy.typeSomething" />
               </TxGroupBlock>
             </div>
@@ -1666,7 +1753,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('scroll')">
           {{ cellLabel('Scroll', '滚动容器') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxScroll class="docs-gallery__scroll">
@@ -1686,7 +1773,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('splitter')">
           {{ cellLabel('Splitter', '分栏') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__splitter">
               <TxSplitter v-model="splitRatio" :min="0.25" :max="0.75">
@@ -1713,7 +1800,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('stack')">
           {{ cellLabel('Stack', '堆叠') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxStack direction="vertical" :gap="8">
@@ -1733,7 +1820,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('breadcrumb')">
           {{ cellLabel('Breadcrumb', '面包屑') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxBreadcrumb :items="breadcrumbItems" />
             <template #fallback>
@@ -1747,7 +1834,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('context-menu')">
           {{ cellLabel('ContextMenu', '右键菜单') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxContextMenu>
               <template #default>
@@ -1771,7 +1858,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('flat-dropdown')">
           {{ cellLabel('FlatDropdown', '扁平下拉') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxFlatDropdown trigger="hover" placement="bottom-start" :offset="10" close-on-content-click>
               <template #trigger="{ open }">
@@ -1793,10 +1880,11 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('nav-bar')">
           {{ cellLabel('NavBar', '导航栏') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__framed">
+            <div class="docs-gallery__block docs-gallery__framed docs-gallery__chrome">
               <TxNavBar :title="copy.suiteBase" show-back />
+              <div class="docs-gallery__chrome-body" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -1809,9 +1897,11 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('sidebar-nav')">
           {{ cellLabel('SidebarNav', '侧边导航') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxSidebarNav v-model="navTab" :items="tabBarItems" />
+            <div class="docs-gallery__sidebar">
+              <TxSidebarNav v-model="navTab" :items="tabBarItems" />
+            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -1823,10 +1913,12 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('tab-bar')">
           {{ cellLabel('TabBar', '标签栏') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__framed">
+            <div class="docs-gallery__block docs-gallery__framed docs-gallery__chrome docs-gallery__chrome--bottom">
               <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" />
+              <div class="docs-gallery__chrome-body" />
+              <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" indicator="line" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -1839,10 +1931,10 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('tabs')">
           {{ cellLabel('Tabs', '标签页') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__tabs">
-              <TxTabs v-model="tabsActive">
+              <TxTabs v-model="tabsActive" placement="top">
                 <!-- `:activation="true"`, not the `activation` shorthand: TxTabs
                      picks the initial tab off the raw vnode props, where the
                      shorthand is the empty string and reads as false. -->
@@ -1869,11 +1961,37 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('alert')">
           {{ cellLabel('Alert', '警示') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__stack">
-              <TxAlert :title="copy.online" :message="copy.aboutBody" type="success" />
-              <TxAlert :title="copy.failed" :message="copy.dialogMessage" type="error" />
+            <div class="docs-gallery__block docs-gallery__stack docs-gallery__alerts">
+              <button
+                v-show="alertsDismissed > 0"
+                class="docs-gallery__reset"
+                type="button"
+                :aria-label="copy.resetAlerts"
+                :title="copy.resetAlerts"
+                @click="resetAlerts"
+              >
+                <span class="i-carbon-reset" aria-hidden="true" />
+              </button>
+              <TransitionGroup name="docs-gallery-alert">
+                <TxAlert
+                  v-if="alertsVisible.success"
+                  key="success"
+                  :title="copy.online"
+                  :message="copy.aboutBody"
+                  type="success"
+                  @close="alertsVisible.success = false"
+                />
+                <TxAlert
+                  v-if="alertsVisible.error"
+                  key="error"
+                  :title="copy.failed"
+                  :message="copy.dialogMessage"
+                  type="error"
+                  @close="alertsVisible.error = false"
+                />
+              </TransitionGroup>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -1886,7 +2004,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('drawer')">
           {{ cellLabel('Drawer', '抽屉') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxButton @click="drawerOpen = true">
               {{ copy.dividerSection }}
@@ -1907,7 +2025,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('loading-overlay')">
           {{ cellLabel('LoadingOverlay', '加载遮罩') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxLoadingOverlay :loading="overlayLoading" :text="copy.working">
@@ -1927,7 +2045,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('modal')">
           {{ cellLabel('Modal', '模态框') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxButton variant="primary" @click="modalOpen = true">
               {{ copy.aboutTitle }}
@@ -1948,7 +2066,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('popover')">
           {{ cellLabel('Popover', '气泡卡片') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxPopover v-model="popoverOpen" trigger="click">
               <template #reference>
@@ -1969,7 +2087,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('progress')">
           {{ cellLabel('Progress', '进度') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__stack">
               <TuffProgress :percentage="60" />
@@ -1986,7 +2104,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('selection-actions')">
           {{ cellLabel('SelectionActions', '选区操作') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <!-- The bar has no resting form: it anchors to a live text
                  selection, so the specimen is the passage you select in. -->
@@ -1994,7 +2112,7 @@ async function copyInstall() {
               <p class="docs-gallery__muted">
                 {{ copy.selectionHint }}
               </p>
-              <TxSelectionActions :selection="selectionPayload" />
+              <TxSelectionActions ref="selectionBarRef" :selection="selectionPayload" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2007,7 +2125,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('spinner')">
           {{ cellLabel('Spinner', '加载指示') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <TxSpinner />
@@ -2024,11 +2142,19 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('toast')">
           {{ cellLabel('Toast', '轻提示') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxButton @click="fireToast">
-              {{ copy.confirm }}
-            </TxButton>
+            <div class="docs-gallery__row">
+              <TxButton size="small" @click="fireToast">
+                {{ copy.toastSaved }}
+              </TxButton>
+              <TxButton size="small" variant="ghost" @click="fireToastStack">
+                {{ copy.toastStack }}
+              </TxButton>
+              <TxButton size="small" variant="ghost" @click="fireToastAction">
+                {{ copy.toastUndo }}
+              </TxButton>
+            </div>
             <TxToastHost />
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2041,7 +2167,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('cell-link')">
           {{ cellLabel('CellLink', '单元链接') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__stack">
               <TxCellLink href="https://www.npmjs.com/package/@talex-touch/tuffex" label="@talex-touch/tuffex" external />
@@ -2058,7 +2184,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('data-table')">
           {{ cellLabel('DataTable', '数据表') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxDataTable :columns="tableColumns" :data="tableRows" row-key="id" hover />
@@ -2074,7 +2200,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('dot-indicator')">
           {{ cellLabel('DotIndicator', '状态点') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack">
               <TxDotIndicator color="var(--tx-color-success)" :label="copy.online" />
@@ -2092,7 +2218,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('filter-chips')">
           {{ cellLabel('FilterChips', '筛选标签') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxFilterChips v-model="filterChip" :items="filterChipItems" />
             <template #fallback>
@@ -2106,7 +2232,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('image-gallery')">
           {{ cellLabel('ImageGallery', '图片画廊') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxImageGallery :items="galleryItems" />
@@ -2122,7 +2248,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('markdown-view')">
           {{ cellLabel('MarkdownView', 'Markdown 视图') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxMarkdownView :content="markdownSample" />
@@ -2138,12 +2264,19 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('sortable-list')">
           {{ cellLabel('SortableList', '可排序列表') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxSortableList v-model="sortableItems">
-                <template #item="{ item }">
-                  <div class="docs-gallery__scroll-row">
+              <!-- Without `item-label` the live region announces the raw id. -->
+              <TxSortableList
+                v-model="sortableItems"
+                handle
+                :item-label="(item) => item.label"
+                :aria-label="cellLabel('SortableList', '可排序列表')"
+              >
+                <template #item="{ item, handleAttrs }">
+                  <div class="docs-gallery__scroll-row docs-gallery__sort-row">
+                    <span class="docs-gallery__grip i-carbon-draggable" v-bind="handleAttrs" />
                     {{ item.label }}
                   </div>
                 </template>
@@ -2160,7 +2293,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('stat-card')">
           {{ cellLabel('StatCard', '指标卡') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxStatCard
@@ -2181,7 +2314,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('timeline')">
           {{ cellLabel('Timeline', '时间线') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxTimeline>
@@ -2199,10 +2332,12 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('transfer')">
           {{ cellLabel('Transfer', '穿梭框') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxTransfer v-model="transferValue" :data="transferData" />
+            <div class="docs-gallery__block docs-gallery__transfer">
+              <!-- The panel's own floor is 240px; the cell is 190. Without this the
+                   specimen laid out past its stage instead of inside it. -->
+              <TxTransfer v-model="transferValue" :data="transferData" min-height="140px" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2215,10 +2350,16 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('tree')">
           {{ cellLabel('Tree', '树形控件') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxTree :nodes="treeNodes" />
+              <!-- Selection is on by default but was invisible here: the tree kept
+                   no state of its own, so an unbound specimen never lit a row. -->
+              <TxTree
+                :nodes="treeNodes"
+                :default-expanded-keys="['plugins']"
+                :default-selected-keys="['clipboard']"
+              />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2231,7 +2372,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath(state.slug)">
           {{ cellLabel(state.en, state.zh) }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <component :is="state.is" :title="state.en" :description="copy.aboutBody" />
@@ -2249,7 +2390,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('version-capsule')">
           {{ cellLabel('VersionCapsule', '版本胶囊') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxVersionCapsule :version="`v${tuffexPkg.version}`" channel="BETA" tone="preview" />
             <template #fallback>
@@ -2263,11 +2404,34 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('glow-text')">
           {{ cellLabel('GlowText', '扫光') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxGlowText class="docs-gallery__glow" tag="span">
-              Tuffex
-            </TxGlowText>
+            <!-- text-clip, not the default adaptive. adaptive is a container
+                 shimmer for images and cards: it blends with `screen`, which is
+                 lighten-only, so a white band over a light page changes nothing
+                 and the cell rendered as plain bold text. The component's own
+                 docs say to use text-clip for text. -->
+            <div class="docs-gallery__stack docs-gallery__stack--center">
+              <TxGlowText
+                class="docs-gallery__glow"
+                tag="span"
+                mode="text-clip"
+                :duration-ms="2600"
+                :band-size="30"
+                :opacity="1"
+                color="var(--docs-accent)"
+              >
+                Tuffex
+              </TxGlowText>
+              <TxGlowText
+                class="docs-gallery__glow-card"
+                tag="div"
+                :duration-ms="2600"
+                :band-size="40"
+              >
+                {{ copy.installBody }}
+              </TxGlowText>
+            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2279,7 +2443,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('border-beam')">
           {{ cellLabel('BorderBeam', '流光边框') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxBorderBeam size="md" color-variant="ocean" theme="auto">
               <div class="docs-gallery__beam-card">
@@ -2297,7 +2461,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('code-editor')">
           {{ cellLabel('CodeEditor', '代码编辑器') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__code">
               <TxCodeEditor :model-value="codeSample" language="javascript" read-only line-numbers />
@@ -2313,7 +2477,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('command-palette')">
           {{ cellLabel('CommandPalette', '命令面板') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxButton icon="i-carbon-search" @click="paletteOpen = true">
               ⌘K
@@ -2330,7 +2494,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('markdown-editor')">
           {{ cellLabel('MarkdownEditor', 'Markdown 编辑器') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__code">
               <TxMarkdownEditor v-model="markdownDraft" />
@@ -2346,7 +2510,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('search-panel')">
           {{ cellLabel('SearchPanel', '搜索面板') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSearchPanel v-model="searchPanelValue" :items="searchPanelItems" />
@@ -2362,7 +2526,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('virtual-list')">
           {{ cellLabel('VirtualList', '虚拟列表') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxVirtualList :items="virtualRows" :item-height="32" :height="104" item-key="id">
@@ -2384,7 +2548,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('corner-overlay')">
           {{ cellLabel('CornerOverlay', '角标叠层') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
               <TxAvatar name="Talex" shape="rounded" />
@@ -2403,7 +2567,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('edge-fade-mask')">
           {{ cellLabel('EdgeFadeMask', '边缘渐隐') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxEdgeFadeMask axis="horizontal" :size="32">
@@ -2425,7 +2589,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('flip-overlay')">
           {{ cellLabel('FlipOverlay', '翻转叠层') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxButton ref="flipTriggerRef" @click="flipped = true">
               {{ copy.aboutTitle }}
@@ -2450,7 +2614,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('fusion')">
           {{ cellLabel('Fusion', '融合') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxFusion v-model="fusionOpen" trigger="hover">
               <template #a>
@@ -2471,7 +2635,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('glass-surface')">
           {{ cellLabel('GlassSurface', '玻璃表面') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxGlassSurface>
@@ -2491,7 +2655,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('gradient-border')">
           {{ cellLabel('GradientBorder', '渐变描边') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxGradientBorder :padding="14" border-radius="14px">
@@ -2509,7 +2673,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('gradual-blur')">
           {{ cellLabel('GradualBlur', '渐进模糊') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__blur-stage">
               <div class="docs-gallery__fade-row">
@@ -2530,7 +2694,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('keyframe-stroke-text')">
           {{ cellLabel('KeyframeStrokeText', '描边文字') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxKeyframeStrokeText text="Tuffex" :font-size="34" />
             <template #fallback>
@@ -2544,7 +2708,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('liquid')">
           {{ cellLabel('Liquid', '液态') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxLiquid>
               <TxLiquidItem v-for="tileIndex in 3" :key="tileIndex">
@@ -2564,7 +2728,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('outline-border')">
           {{ cellLabel('OutlineBorder', '描边边框') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxOutlineBorder border-radius="14px">
@@ -2584,7 +2748,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('stagger')">
           {{ cellLabel('Stagger', '错峰入场') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxStagger appear :delay-step="80">
               <div v-for="tileIndex in 3" :key="tileIndex" class="docs-gallery__tile">
@@ -2602,7 +2766,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('text-transformer')">
           {{ cellLabel('TextTransformer', '文字变换') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack docs-gallery__stack--center">
               <TxTextTransformer :text="switchOn ? copy.online : copy.failed" />
@@ -2619,7 +2783,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('transition')">
           {{ cellLabel('Transition', '过渡') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack docs-gallery__stack--center">
               <TxTransitionFade>
@@ -2640,7 +2804,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('tuff-logo-stroke')">
           {{ cellLabel('TuffLogoStroke', 'Logo 描边') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxTuffLogoStroke :size="72" />
             <template #fallback>
@@ -2654,7 +2818,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('auto-sizer')">
           {{ cellLabel('AutoSizer', '尺寸感知') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__autosizer">
               <TxAutoSizer ref="autoSizerRef">
@@ -2674,7 +2838,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('base-anchor')">
           {{ cellLabel('BaseAnchor', '锚点基座') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxTooltip :content="copy.aboutTitle" trigger="click">
               <TxButton>{{ copy.dividerSection }}</TxButton>
@@ -2690,7 +2854,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('base-surface')">
           {{ cellLabel('BaseSurface', '表面基座') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxBaseSurface preset="card" background="refraction">
@@ -2710,7 +2874,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('floating')">
           {{ cellLabel('Floating', '浮动') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxFloating>
               <TxButton circle icon="i-carbon-add" />
@@ -2726,7 +2890,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('resize-box')">
           {{ cellLabel('ResizeBox', '尺寸过渡') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack docs-gallery__stack--center">
               <TxResizeBox :width="resizeWide ? 200 : 110">
@@ -2749,7 +2913,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('thinking-orb')">
           {{ cellLabel('ThinkingOrb', '思考指示球') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row docs-gallery__row--loose">
               <TxThinkingOrb
@@ -2771,7 +2935,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('working-indicator')">
           {{ cellLabel('WorkingIndicator', '工作指示器') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack docs-gallery__stack--center">
               <TxWorkingIndicator :label="copy.working" variant="drive" />
@@ -2788,7 +2952,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('typing-indicator')">
           {{ cellLabel('TypingIndicator', '打字中') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row docs-gallery__row--loose">
               <TxTypingIndicator variant="dots" :text="copy.typing" />
@@ -2805,7 +2969,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('suggestion-chips')">
           {{ cellLabel('SuggestionChips', '建议胶囊') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSuggestionChips :suggestions="copy.suggestions" layout="list" />
@@ -2821,7 +2985,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('tool-chips')">
           {{ cellLabel('ToolChips', '工具调用流') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__block--wide">
               <TxToolChips
@@ -2841,7 +3005,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('inline-citation')">
           {{ cellLabel('InlineCitation', '行内引用') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <TxInlineCitation
@@ -2862,7 +3026,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('attachment-tray')">
           {{ cellLabel('AttachmentTray', '附件托盘') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxAttachmentTray :attachments="aiAttachments" removable />
@@ -2878,7 +3042,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('chat')">
           {{ cellLabel('Chat', '对话') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxChatList :messages="chatListMessages" markdown />
@@ -2894,7 +3058,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('chat-composer')">
           {{ cellLabel('ChatComposer', '对话输入') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxChatComposer v-model="chatDraft" :min-rows="1" :max-rows="3" :placeholder="copy.typeSomething" />
@@ -2910,7 +3074,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('conversation-stream')">
           {{ cellLabel('ConversationStream', '对话流') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__stream">
               <TxConversationStream :items="chatMessages" :item-key="(item: AiElementMessage) => item.id">
@@ -2932,7 +3096,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('message-actions')">
           {{ cellLabel('MessageActions', '消息操作') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxMessageActions :copy-text="copy.installBody" regenerable />
             <template #fallback>
@@ -2946,7 +3110,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('prompt-bar')">
           {{ cellLabel('PromptBar', '提示栏') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxPromptBar v-model="promptDraft" :placeholder="copy.typeSomething" />
@@ -2962,7 +3126,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('agent-trace')">
           {{ cellLabel('AgentTrace', '智能体轨迹') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxAgentTrace :rows="traceRows" working default-open />
@@ -2978,7 +3142,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('agents')">
           {{ cellLabel('Agents', '智能体列表') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxAgentsList :agents="aiAgents" />
@@ -2994,7 +3158,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('approval-card')">
           {{ cellLabel('ApprovalCard', '审批卡') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxApprovalCard
@@ -3017,7 +3181,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('task-rows')">
           {{ cellLabel('TaskRows', '任务行') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxTaskRows :rows="taskRowItems" />
@@ -3033,7 +3197,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('tool-call-card')">
           {{ cellLabel('ToolCallCard', '工具调用卡') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxToolCallCard :tool-call="toolCall" default-expanded />
@@ -3049,7 +3213,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('tool-confirmation')">
           {{ cellLabel('ToolConfirmation', '工具确认') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxToolConfirmation
@@ -3070,7 +3234,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('ai-elements')">
           {{ cellLabel('AiElements', 'AI 元件') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxAiMessage :message="aiSampleMessage" :show-avatar="false" compact />
@@ -3086,7 +3250,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('chain-of-thought')">
           {{ cellLabel('ChainOfThought', '思维链') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxChainOfThought :steps="cotSteps" default-open />
@@ -3102,7 +3266,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('code-stream')">
           {{ cellLabel('CodeStream', '代码流') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__code">
               <TxCodeStream :code="codeSample" lang="ts" filename="greet.ts" lang-label="TypeScript" />
@@ -3118,7 +3282,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('reasoning-disclosure')">
           {{ cellLabel('ReasoningDisclosure', '推理折叠') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxReasoningDisclosure :text="copy.aboutBody" :duration-ms="2400" default-open />
@@ -3134,7 +3298,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('sources')">
           {{ cellLabel('Sources', '来源') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSources :sources="aiSources" variant="stack" />
@@ -3150,7 +3314,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('stream-markdown')">
           {{ cellLabel('StreamMarkdown', '流式 Markdown') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxStreamMarkdown :content="markdownSample" />
@@ -3166,7 +3330,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('context-cards')">
           {{ cellLabel('ContextCards', '上下文卡') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxContextCards :chunks="contextChunks" :total="32" />
@@ -3182,7 +3346,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('context-indicator')">
           {{ cellLabel('ContextIndicator', '上下文用量') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <TxContextIndicator :used-tokens="48000" :max-tokens="128000" />
             <template #fallback>
@@ -3196,7 +3360,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('fine-tune-card')">
           {{ cellLabel('FineTuneCard', '微调卡') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxFineTuneCard :values="fineTuneValues" />
@@ -3212,7 +3376,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('insight-cards')">
           {{ cellLabel('InsightCards', '洞察卡') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxInsightCards :pages="insightPages" :title="copy.suiteAi" />
@@ -3228,7 +3392,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('recommendation-card')">
           {{ cellLabel('RecommendationCard', '推荐卡') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxRecommendationCard :title="copy.aboutTitle" :options="recommendationOptions" />
@@ -3246,7 +3410,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('spark-chart')">
           {{ cellLabel('SparkChart', '迷你折线图') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__spark">
               <TxSparkChart :series="sparkSeries" grid />
@@ -3262,7 +3426,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('allocation-bar')">
           {{ cellLabel('AllocationBar', '占比条') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxAllocationBar :segments="copy.allocation" />
@@ -3278,7 +3442,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('signal-meter')">
           {{ cellLabel('SignalMeter', '信号量表') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row docs-gallery__row--loose">
               <div v-for="level in copy.confidence" :key="level.value" class="docs-gallery__meter">
@@ -3297,7 +3461,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('chart-colors')">
           {{ cellLabel('ChartColors', '图表配色') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
               <span
@@ -3318,7 +3482,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('charts')">
           {{ cellLabel('Charts', '图表基础') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__stack">
               <TxChartLegendItem name="Installs" :color="ChartPalette.categoricalVar(0)" value="4,820" />
@@ -3335,7 +3499,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('custom-chart')">
           {{ cellLabel('CustomChart', '自定义图表') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxChart :height="150" :padding="8">
@@ -3353,7 +3517,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('maps')">
           {{ cellLabel('Maps', '地图') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxChoroplethMap :geo-json="miniGeoJson" :data="miniGeoData" name="country" value="share" :height="140" />
@@ -3369,7 +3533,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('sankey-chart')">
           {{ cellLabel('SankeyChart', '桑基图') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSankeyChart :nodes="sankeyNodes" :links="sankeyLinks" :height="150" />
@@ -3385,7 +3549,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('timeseries-chart')">
           {{ cellLabel('TimeseriesChart', '时序图') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxTimeseriesChart type="bar" :data="timeseriesData" :height="150" />
@@ -3401,7 +3565,7 @@ async function copyInstall() {
         <NuxtLink class="docs-gallery__label" :to="docPath('diff-table')">
           {{ cellLabel('DiffTable', '差异表') }}
         </NuxtLink>
-        <div class="docs-gallery__stage">
+        <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxDiffTable :columns="diffColumns" :rows="diffRows" play="auto" />

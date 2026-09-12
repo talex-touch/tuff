@@ -177,6 +177,11 @@ provide('destroy', destroy)
   }
 
   &__content {
+    // A hash, an id or a URL has no break opportunity, so a vertical scroll
+    // cannot save it: the token runs past the panel and the panel clips it.
+    // `anywhere` also lets the token shrink the content's min-content width,
+    // which `break-word` does not, so the panel stops being widened by it.
+    overflow-wrap: anywhere;
     position: relative;
     margin-top: 12px;
     margin-bottom: 60px;

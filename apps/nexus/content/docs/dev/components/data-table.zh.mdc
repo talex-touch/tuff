@@ -230,17 +230,18 @@ code: |
 - 需要吸顶表头或吸底汇总行时必须给 `maxHeight`（或确保外层已有滚动祖先），否则没有可吸附的对象；滚动容器不能是 transform 位移式的（如默认模式的 `TxScroll`），那会让 sticky 整体失效。
 - 排序请基于时间戳、序号这类可比较字段，不要对格式化后的相对时间文本排序。
 - 自定义单元格要保留可读文本或状态徽标文本，因为可排序表头会通过 `aria-sort` 暴露状态。
+- 外壳按圆角裁切，因此组件会去掉表格最后一段末行的下边框；带汇总 `tfoot` 时，分隔正文与汇总的那条线仍然保留。自定义单元格边框时请一并处理，否则表格底部会多出一条横线。
 
 ## 审阅说明
 
 - **可访问性说明：**`TxDataTable` 渲染原生表格；可排序表头使用 `scope="col"`、`aria-sort`、键盘焦点，以及 Enter/Space 处理器。
 - **类型：**`rowKey` 声明为 `keyof T` 或返回字符串/数字的回调；`sortChange` 可触发 `DataTableSortState` 或 `null`。
-- **实测覆盖:** 组件测试覆盖表头和行渲染、指针排序与键盘 `aria-sort` 状态切换、选择事件，以及 layout/nowrap/auto/固定列样式。
+- **实测覆盖:** 组件测试覆盖表头和行渲染、指针排序与键盘 `aria-sort` 状态切换、选择事件，以及 layout/nowrap/auto/固定列样式；末行分隔线的重置直接针对 SFC 源码断言，因为 vitest 不会执行 `<style>` 块。
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`。
 - Type contracts: `packages/tuffex/packages/components/src/data-table/src/types.ts` 导出 `DataTableProps`、`DataTableColumn`、排序状态、行 key 与 emit 类型。
-- Coverage: `packages/tuffex/packages/components/src/data-table/__tests__/data-table.test.ts` 覆盖表头和行渲染、指针与键盘排序（包括 `aria-sort`）、选择事件，以及 layout/nowrap/auto/固定列样式。
+- Coverage: `packages/tuffex/packages/components/src/data-table/__tests__/data-table.test.ts` 覆盖表头和行渲染、指针与键盘排序（包括 `aria-sort`）、选择事件、layout/nowrap/auto/固定列样式，以及末行分隔线的重置。
 
 <TuffDocSourceLink />

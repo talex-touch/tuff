@@ -36,7 +36,7 @@ code: |
 
 ## Sizes
 
-Supports `sm`, `md` (default), and `lg` sizes.
+Supports `sm`, `md` (default), `lg`, and `xl` sizes.
 
 ### FlatRadio (sizes)
 :::TuffDemoWrapper{demo="FlatRadioSizesDemo" code-lang="vue"}
@@ -48,6 +48,7 @@ code: |
   const sm = ref('a')
   const md = ref('a')
   const lg = ref('a')
+  const xl = ref('a')
   </script>
 
   <template>
@@ -64,6 +65,12 @@ code: |
     </TxFlatRadio>
 
     <TxFlatRadio v-model="lg" size="lg">
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+
+    <TxFlatRadio v-model="xl" size="xl">
       <TxFlatRadioItem value="a" label="Option A" />
       <TxFlatRadioItem value="b" label="Option B" />
       <TxFlatRadioItem value="c" label="Option C" />
@@ -227,7 +234,7 @@ When the container is focused:
 | `modelValue` / `v-model` | Selected value in single mode, or selected value array in `multiple` mode. | `string \| number \| (string \| number)[]` | *required* |
 | `multiple` | Enables checkbox-like multi-select behavior. The sliding single-select indicator is hidden in this mode. | `boolean` | `false` |
 | `disabled` | Disables the entire group, removes focusability, and blocks click / keyboard changes. | `boolean` | `false` |
-| `size` | Size variant. | `'sm' \| 'md' \| 'lg'` | `'md'` |
+| `size` | Size variant. | `'sm' \| 'md' \| 'lg' \| 'xl'` | `'md'` |
 | `bordered` | Adds an outer border around the selector. | `boolean` | `false` |
 
 #### Events
@@ -263,7 +270,13 @@ When the container is focused:
 
 ## Interaction Contract
 
-- The sliding indicator is mixed from the text colour into the overlay colour so it reads as raised in both themes. `--tx-bg-color-overlay` alone is white on light but darker than the track on dark, which sank the indicator into the groove and made its travel invisible.
+- The sliding indicator and the multi-select chip both fill from `--tx-surface-raised`, which is defined against `--tx-fill-color` — the track itself. Anchors defined against the page failed twice: `--tx-bg-color-overlay` alone is white on light but darker than the track on dark, and mixing the text colour into it landed the thumb within four RGB steps of the track in both themes.
+- `--tx-flat-radio-track-bg`, `--tx-flat-radio-indicator-bg` and `--tx-flat-radio-indicator-shadow` override the three in turn, so a host does not have to out-specify the scoped styles.
+- The indicator travels and resizes on one duration and one curve. They used to be two (a 0.25s overshoot against a 0.2s ease), so on labels of unequal width the thumb arrived and only then finished growing.
+- Item geometry is read from fractional rects rather than `offsetLeft` / `offsetWidth`, which rounded to whole pixels and left the thumb up to 1px off its item, by a different amount per item.
+- Every item carries the selected font weight, so selecting one never changes its measured width. Moving the weight on selection reflowed the item, shifted its siblings, and moved the indicator's target mid-flight.
+- Pressing an item scales its label and icon, never the item box: the box is what the indicator measures.
+- Under `prefers-reduced-motion: reduce` the indicator's travel and the press scale are dropped; the opacity fade stays so it still resolves rather than popping in.
 - Items carry their own keyboard focus ring, so the UA's default outline never lands on top of the indicator.
 
 - Single-select mode uses `role="radiogroup"` on `TxFlatRadio` and `role="radio"` on each item.
@@ -278,13 +291,16 @@ When the container is focused:
 - Use FlatRadio for two to five short options where immediate comparison matters. Prefer `TxSelect` for longer option lists.
 - Keep labels short enough to stay on one line; the item layout intentionally uses `white-space: nowrap`.
 - Avoid mixing long custom slot content with icons in compact `sm` size.
+- Reach for `xl` on settings surfaces and landing pages where the control is the primary choice on screen; `md` remains the default for inline and toolbar use.
+- Do not restore a selection-only font weight in custom slot content — it reintroduces the reflow the component was fixed to avoid.
 - Use `multiple` only when the selected values are independent toggles; otherwise use separate switches or checkboxes with clearer labels.
 - Keep `value` stable across renders because the parent registers item DOM by value for indicator and keyboard ordering.
 
 ## Review Notes
 
 - **Accessibility note:** The group is the only tabbable element; item buttons are kept at `tabindex="-1"` so arrow-key handling stays centralized. Use nearby field text or an external label to name the group.
-- **Verified coverage:** `flat-radio.test.ts` covers single-select `radiogroup`/`radio` semantics, item disabled state, disabled group focus removal, arrow-key wrapping while skipping disabled items, Home/End selection, and Enter/Space toggling in `multiple` mode.
+- **Motion note:** A hidden bold sizer reserving the selected width was tried first and rejected: it only works for the `label` prop, and the call sites that matter pass slot content. Duplicating the slot to size it would mount user content twice.
+- **Verified coverage:** `flat-radio.test.ts` covers single-select `radiogroup`/`radio` semantics, item disabled state, disabled group focus removal, arrow-key wrapping while skipping disabled items, Home/End selection, Enter/Space toggling in `multiple` mode, the shared transition curve, selection-independent item width, fractional indicator geometry, the reduced-motion path, and the `sm`/`md`/`lg`/`xl` geometry ladder.
 
 ## Source
 

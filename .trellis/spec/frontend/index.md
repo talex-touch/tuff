@@ -41,6 +41,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Privacy Data Lifecycle](./privacy-data-lifecycle.md)         | Typed Privacy transport, retention/export, and main-owned credential transactions    | Filled |
 | [Nexus Preview Secrets](./nexus-preview-secret-deployment.md) | Cloudflare Preview Secret inventory, deploy preflight, runtime policy, and evidence  | Filled |
 | [Nexus Docs Rendering](./nexus-docs-rendering-contract.md)    | Docs HTML always embeds the body; payload-key agreement, body-fetch retry rules       | Filled |
+| [Nexus Docs Static Delivery](./nexus-docs-static-delivery.md) | `<route>.html` layout, `_headers` edge cache windows, i18n preload off the hydration path, one nav request | Filled |
 | [Nexus DashScope Filetrans](./nexus-dashscope-filetrans-contract.md) | Nexus-owned DashScope ASR handoff, routing, reservation, and disclosure rules | Filled |
 | [Release Acceptance Testing](./release-testing.md)            | Downloaded release, integrity, trust, and isolated packaged-runtime gates            | Filled |
 | [Native Resource Protocols](./native-resource-protocols.md)   | Protocol data-plane rules, path-only native callbacks, and macOS app-icon extraction | Filled |
@@ -55,16 +56,17 @@ Before editing frontend code:
 2. Read [Directory Structure](./directory-structure.md) to place files in the existing ownership boundary.
 3. Read [Component Guidelines](./component-guidelines.md) before changing Vue SFCs, UI primitives, accessibility, or i18n.
 4. Read the [Loading States](./component-guidelines.md#loading-states) section before adding or changing a view that waits on data; a skeleton mirroring the loaded layout is the default, not an optional follow-up.
-5. Read [TuffEx Docs Sync](./tuffex-docs-sync.md) before changing any component under `packages/tuffex/packages/components/src/`; the change is not done until the Nexus docs that display it — and the docs of every wrapper component — say what the source now does.
-6. Read [Hook Guidelines](./hook-guidelines.md) before adding or changing a `use*` composable or browser lifecycle code.
-7. Read [State Management](./state-management.md) before adding Pinia state, SDK subscriptions, caches, or host/server data mirrors.
-8. Read [Type Safety](./type-safety.md) before changing payloads, event kinds, SDK domains, manifest shapes, or JSON evidence.
-9. Read [Plugin Runtime Security](./plugin-runtime-security.md) before changing plugin windows, hosted plugin views, permission handlers, preload bridges, or plugin Electron preferences.
-10. Read [Privacy Data Lifecycle](./privacy-data-lifecycle.md) before changing Privacy SDK payloads, retention/export owners, Provider or Plugin credential persistence/runtime resolution, Secret backup envelopes, portable credential catalogs, secure-store batch mutation, the sensitive-data inventory, or the isolated Privacy lifecycle smoke.
-11. Read [Nexus Preview Secrets](./nexus-preview-secret-deployment.md) before changing Preview variables, Cloudflare Pages credentials, auth/emergency runtime secrets, deployment commands, or Preview evidence.
-12. Read [Native Resource Protocols](./native-resource-protocols.md) before adding native media/file callbacks, worker/IPC byte payloads, custom protocol consumers, or macOS application-icon extraction.
-13. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
-14. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance.
+5. Read [Nexus Docs Static Delivery](./nexus-docs-static-delivery.md) before touching prerender layout, `routeRules` headers, nuxt-i18n options, or anything on the docs hydration path; each rule there removes a measured round trip.
+6. Read [TuffEx Docs Sync](./tuffex-docs-sync.md) before changing any component under `packages/tuffex/packages/components/src/`; the change is not done until the Nexus docs that display it — and the docs of every wrapper component — say what the source now does.
+7. Read [Hook Guidelines](./hook-guidelines.md) before adding or changing a `use*` composable or browser lifecycle code.
+8. Read [State Management](./state-management.md) before adding Pinia state, SDK subscriptions, caches, or host/server data mirrors.
+9. Read [Type Safety](./type-safety.md) before changing payloads, event kinds, SDK domains, manifest shapes, or JSON evidence.
+10. Read [Plugin Runtime Security](./plugin-runtime-security.md) before changing plugin windows, hosted plugin views, permission handlers, preload bridges, or plugin Electron preferences.
+11. Read [Privacy Data Lifecycle](./privacy-data-lifecycle.md) before changing Privacy SDK payloads, retention/export owners, Provider or Plugin credential persistence/runtime resolution, Secret backup envelopes, portable credential catalogs, secure-store batch mutation, the sensitive-data inventory, or the isolated Privacy lifecycle smoke.
+12. Read [Nexus Preview Secrets](./nexus-preview-secret-deployment.md) before changing Preview variables, Cloudflare Pages credentials, auth/emergency runtime secrets, deployment commands, or Preview evidence.
+13. Read [Native Resource Protocols](./native-resource-protocols.md) before adding native media/file callbacks, worker/IPC byte payloads, custom protocol consumers, or macOS application-icon extraction.
+14. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
+15. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance.
 
 Also read shared thinking guides when the trigger applies:
 

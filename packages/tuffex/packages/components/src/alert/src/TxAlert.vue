@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AlertProps } from './types'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { TxIcon } from '../../icon'
 
 interface Emits {
@@ -25,13 +25,28 @@ const iconComponent = computed(() => {
   return iconMap[props.type]
 })
 
+// The alert owns its own visibility so dismissing it can animate. A host that
+// drives it with `v-if` still works — that just unmounts a already-hidden node —
+// but it no longer has to, and `close` fires either way.
+const visible = ref(true)
+
 function handleClose() {
+  visible.value = false
   emit('close')
 }
+
+/** Bring a dismissed alert back, e.g. from a "reset" control. */
+function open() {
+  visible.value = true
+}
+
+defineExpose({ open, close: handleClose, visible })
 </script>
 
 <template>
+  <Transition name="tx-alert" appear>
   <div
+    v-if="visible"
     class="tx-alert" :class="[
       `tx-alert--${type}`,
       { 'tx-alert--closable': closable },
@@ -63,6 +78,7 @@ function handleClose() {
       <TxIcon name="close" />
     </button>
   </div>
+  </Transition>
 </template>
 
 <style scoped>
@@ -149,5 +165,43 @@ function handleClose() {
   position: absolute;
   top: 12px;
   right: 12px;
+}
+
+/* Enter and leave are deliberately asymmetric: arriving is an announcement, so
+   it settles in over 0.26s with a slight rise; leaving is an acknowledgement,
+   so it gets out of the way in 0.16s.
+
+   Only opacity and transform are animated. The root is `display: flex`, and a
+   height-collapse trick (`grid-template-rows: 0fr`, `max-height`) would have to
+   take that over mid-flight and re-stack the icon, body and close button while
+   the alert is still on screen. A stack that needs the gap to close should wrap
+   its alerts in `<TransitionGroup>`, which moves the survivors instead. */
+.tx-alert-enter-active,
+.tx-alert-leave-active {
+  transition:
+    opacity 0.26s cubic-bezier(0.32, 0.72, 0.35, 1),
+    transform 0.26s cubic-bezier(0.32, 0.72, 0.35, 1);
+}
+
+.tx-alert-leave-active {
+  transition-duration: 0.16s;
+}
+
+.tx-alert-enter-from,
+.tx-alert-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.985);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-alert-enter-active,
+  .tx-alert-leave-active {
+    transition: opacity 0.01s linear;
+  }
+
+  .tx-alert-enter-from,
+  .tx-alert-leave-to {
+    transform: none;
+  }
 }
 </style>

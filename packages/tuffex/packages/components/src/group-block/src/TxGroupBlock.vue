@@ -393,8 +393,14 @@ onMounted(() => {
     padding: 0;
     overflow: visible;
 
-    :deep(.tx-block-slot),
-    :deep(.tx-block-switch) {
+    // NOT `:deep()`: this <style> block is unscoped, so Vue leaves `:deep(...)`
+    // in the output verbatim and the browser drops the whole rule as an unknown
+    // pseudo-class. That silently un-did every reset below — rows kept the 12px
+    // `--fake-radius` they set on themselves, which showed up as stray rounded
+    // corners inside a group. `.tx-block-slot` covers switch/input/select too,
+    // since each of those renders a TxBlockSlot carrying both class names.
+    .tx-block-slot,
+    .tx-block-switch {
       margin: 0;
       border-radius: 0 !important;
       --fake-radius: 0 !important;
@@ -419,8 +425,8 @@ onMounted(() => {
   }
 }
 
-.touch-blur .tx-group-block__body :deep(.tx-block-slot),
-.touch-blur .tx-group-block__body :deep(.tx-block-switch) {
+.touch-blur .tx-group-block__body .tx-block-slot,
+.touch-blur .tx-group-block__body .tx-block-switch {
   &:hover {
     --fake-color: var(--tx-fill-color-light, #f5f7fa) !important;
   }

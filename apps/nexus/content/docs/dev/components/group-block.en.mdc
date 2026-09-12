@@ -556,6 +556,7 @@ None. Use props, `update:expanded`, `toggle`, and the row-specific events instea
 - After the user toggles a group, later `collapsed` / `defaultExpand` prop changes no longer overwrite the chosen state.
 - Group bodies stay mounted; expansion only animates height, opacity, and display.
 - `TxBlockLine` renders a non-interactive `div` by default and a native `button type="button"` only when `link=true`.
+- `TxBlockSlot` pins every control slot at `flex-shrink: 0` so fixed-size controls never squash. `TxBlockInput` lifts that for itself: its field shrinks toward `min-width: 120px` instead of holding 180px and squeezing the row's title, which in a 240px container left the title 10px.
 - `TxBlockSlot` blocks click emits when disabled; `TxBlockSwitch` freezes the whole row's pointer events while `loading=true` too, but the row is not dimmed — `tx-block-switch--loading:not(.tx-block-switch--disabled)` takes back the slot's `opacity: .5` so busy and disabled stay visually distinct.
 - `TxBlockSwitch` shows the busy cue in exactly one place: `loading` is forwarded to the inner `TuffSwitch`, whose thumb becomes a spinning ring. The row only adds a shimmer and no longer renders a separate spinner.
 - `TxBlockSwitch` guidance mode replaces the switch with a chevron and only emits `click`; it does not mutate `modelValue`.
@@ -577,6 +578,7 @@ None. Use props, `update:expanded`, `toggle`, and the row-specific events instea
 - Set `collapsible=false` for always-visible status or form sections to avoid implying hidden state.
 - Use `TxBlockLine` for read-only values and lightweight navigation links, `TxBlockSlot` for custom controls, `TxBlockInput` / `TxBlockSelect` for standard form rows, and `TxBlockSwitch` for booleans or guidance rows.
 - Keep row labels short; move long explanations to the description line or a nearby help pattern instead of adding nested layouts inside rows.
+- Rows inside a group are flattened by the group, not by themselves: `TxGroupBlock` resets each row's `--fake-radius` and margin so only the group card is rounded. A row keeps its own 12px radius when used standalone, so do not copy a group's flat look by hard-coding `border-radius: 0` on the row.
 
 ## Review Notes
 
@@ -585,6 +587,7 @@ None. Use props, `update:expanded`, `toggle`, and the row-specific events instea
 - `TxBlockSwitch` loading mode blocks mutation, while guidance mode emits only `click` and should be documented as navigation, not a boolean toggle.
 - **Busy-state ownership:** the loading visual belongs to the inner `TuffSwitch` (`is-loading` + `aria-busy`); `TxBlockSwitch` only owns the row shimmer and the un-dimming. Changing the switch's loading treatment means updating both components' docs.
 - Collapsed demos intentionally use `:default-expand="false"`; current source watches `collapsed` only before storage or user interaction changes the group state.
+- **Flattening selector:** the reset that squares off rows is a plain descendant selector. `TxGroupBlock`'s `<style>` is *unscoped*, where `:deep()` is passed through untransformed and the browser discards the rule — a package-wide test now fails on `:deep()` in any unscoped block.
 - **Verified coverage:** persisted expansion, static-group behavior, semantic link rows, disabled slot-click blocking, guidance mode, loading-state value-change guards, and that a loading row carries `is-loading` / `aria-busy` on the switch itself with no second spinner.
 
 ## Source

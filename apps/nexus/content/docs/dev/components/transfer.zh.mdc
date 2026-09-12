@@ -47,7 +47,7 @@ code: |
 :::
 
 ### 优先级排序
-`orderable` 把目标面板变成有序列表：每行显示名次，并带上移 / 下移。名次读自 `modelValue`，筛选时也不会串位；此时目标顺序就是 `modelValue` 顺序，`targetOrder` 不再参与。`maxHeight` 给面板封顶，长列表在列表内部滚动，而不是把外层弹窗撑开。
+`orderable` 把目标面板变成有序列表：每行显示名次，并带上移 / 下移。名次读自 `modelValue`，筛选时也不会串位；此时目标顺序就是 `modelValue` 顺序，`targetOrder` 不再参与。`maxHeight` 给面板封顶，长列表在列表内部滚动，而不是把外层弹窗撑开；`minHeight` 是与之对应的下限，放进紧凑容器时需要调低它。
 
 :::TuffDemoWrapper{demo="TransferOrderableDemo" code-lang="vue"}
 ---
@@ -151,6 +151,10 @@ rows:
     type: "string | number"
     default: "'320px'"
     description: 面板高度上限，数字按 px 处理；也可直接设 --tx-transfer-max-height
+  - name: minHeight
+    type: "string | number"
+    default: "'240px'"
+    description: 面板高度下限；数字按 px 处理，也可直接设 --tx-transfer-min-height
   - name: addAriaLabel
     type: string
     default: "'Move selected items to target'"
@@ -211,6 +215,7 @@ rows:
 - `filterable` 适合中大型列表；短权限列表不加双侧筛选框通常更容易扫读。
 - 需要一次性搬走整批时不要自己在外面加"全选"按钮，组件头部已经有了，且它只作用于筛选后的可见行。
 - 面板默认封顶 320px。放进弹窗或抽屉时用 `maxHeight` 贴合容器（如 `min(56dvh, 520px)`），保证滚动始终发生在列表内部，而不是把弹窗撑高。
+- 面板同时有 240px 的下限，而且是硬下限：放进比它更矮的容器时，面板仍按自己的高度排版并溢出容器。放在紧凑位置时记得调低 `minHeight`。
 - 左右空态含义不同时（"没有可选项" vs "至少选一个才能用"）给 `emptyText` 传元组，不要用同一句话糊过去。
 
 ## Source
@@ -221,8 +226,10 @@ rows:
 
 - 组件源码：`packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue` 确认左右列表派生、筛选匹配、禁用项检查、`targetOrder` 和纯图标操作按钮标签。
 - 类型契约：`packages/tuffex/packages/components/src/transfer/src/types.ts` 导出 `TransferItem`、`TransferProps` 和 `TransferEmits`。
-- 高度契约：面板读 `--tx-transfer-max-height`（默认 `320px`），`maxHeight` 只是写这个变量。默认值必须存在——没有上限时面板会随条目数一起长高，`.tx-transfer__list` 的 `overflow: auto` 永远不触发，滚动落到外层页面或弹窗上。
+- 高度契约：面板读 `--tx-transfer-max-height`（默认 `320px`）与 `--tx-transfer-min-height`（默认 `240px`），两个 prop 只是写这两个变量。上限必须存在——没有上限时面板会随条目数一起长高，`.tx-transfer__list` 的 `overflow: auto` 永远不触发，滚动落到外层页面或弹窗上。下限原先是硬编码的，因此无法被容器压过：放进 190px 的盒子里仍按 240px 排版并溢出 50px。
+- 行标签用 `overflow-wrap: anywhere` 换行，而不是 `word-break: break-all`。`break-all` 在哪个字符放不下就从哪里断，"Quick actions" 会断成 "Quick actio / ns"；`anywhere` 优先在空格处断，只有单个词实在放不下才会断进词内。
+- Props 用运行时对象声明，而不是 `defineProps<TransferProps>()`。SFC 编译器只解析一次同目录的 `types.ts`，该文件变化时不会重做，因此接口上新增的 prop 会以未知属性的形式发出去——而 vitest 和构建产物 `dist` 都是正确的。
 - 排序契约：`orderable` 时 `targetItems` 与 `resolveOrder` 都短路 `targetOrder='original'`。曾经只改渲染顺序、留着 `resolveOrder` 按 `data` 重排，结果每次上移/下移都被立刻排回去，表现为按钮"没反应"。名次与首/末项判定都取自未过滤的 `modelValue`，用过滤后的下标会让搜索状态下的名次和禁用态一起算错。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/transfer/__tests__/transfer.test.ts` 覆盖勾选项移动、双击单条移动与禁用行不动、全选（跳过禁用行 / 只作用于筛选结果 / 部分选中报 mixed / 再次点击清空）、自定义空态文案（含左右分别配置）、可访问操作按钮标签、`maxHeight` 变量注入，以及 `orderable` 的名次渲染、上下移动、边界禁用、筛选状态下的名次与边界。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/transfer/__tests__/transfer.test.ts` 覆盖勾选项移动、双击单条移动与禁用行不动、全选（跳过禁用行 / 只作用于筛选结果 / 部分选中报 mixed / 再次点击清空）、自定义空态文案（含左右分别配置）、可访问操作按钮标签、`maxHeight` 与 `minHeight` 变量注入（单独设置与同时设置），以及 `orderable` 的名次渲染、上下移动、边界禁用、筛选状态下的名次与边界。
 - 截图：`.codex-screenshots/nexus-transfer-permission-orchestration-demo-playwright-2026-05-28.png`。
 

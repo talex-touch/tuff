@@ -25,8 +25,8 @@ export interface UseIndicatorBoxReturn {
   box: Readonly<Ref<IndicatorBox | null>>
   /**
    * `false` for the first measurement so the caller can suppress its
-   * transition — otherwise the indicator slides in from the container's top
-   * edge on mount. Mirrors `TxTabs`' `indicatorRevealed`.
+   * transition — otherwise the indicator slides in from the container's edge
+   * on mount. Mirrors `TxTabs`' `indicatorRevealed`.
    */
   revealed: Readonly<Ref<boolean>>
   measure: () => void
@@ -37,8 +37,21 @@ export interface UseIndicatorBoxReturn {
  * element can travel between siblings instead of every sibling painting its own
  * background.
  *
- * Both axes are reported. `TxSidebarNav` animates `top`/`height`; a horizontal
- * segmented control animates `left`/`width` from the same reading.
+ * Both axes are reported. `TxSidebarNav` animates `top`/`height`; `TxFlatRadio`
+ * and `TxTabBar` animate `left`/`width` from the same reading.
+ *
+ * Three things this does that a naive `offsetLeft` / `offsetTop` read does not:
+ *
+ * - **Fractional geometry.** The offset properties round to whole pixels, so an
+ *   indicator lands up to 1px off its target and by a different amount per
+ *   target, which reads as wobble rather than as an offset.
+ * - **Padding-box origin.** An absolutely positioned indicator resolves `left`
+ *   and `top` against its container's *padding* box, while a rect delta starts
+ *   at the border box. The border widths come back off, so a `bordered`
+ *   container does not shift the indicator by its border.
+ * - **Scale normalisation.** Rects are visual pixels, so an ancestor transform
+ *   or browser zoom scales them while the caller's `translate` is in the
+ *   container's own coordinate space.
  *
  * Upstream measures only when the hovered/active key changes, which leaves the
  * indicator stranded after a container resize, a font swap or an item being
@@ -62,11 +75,17 @@ export function useIndicatorBox(options: UseIndicatorBoxOptions): UseIndicatorBo
 
     const containerRect = container.getBoundingClientRect()
     const targetRect = target.getBoundingClientRect()
+
+    // offsetWidth is layout pixels and the rect is visual pixels, so their
+    // ratio is whatever an ancestor transform or zoom is doing to us.
+    const ratio = container.offsetWidth > 0 ? containerRect.width / container.offsetWidth : 1
+    const scale = Number.isFinite(ratio) && ratio > 0 ? ratio : 1
+
     box.value = {
-      top: targetRect.top - containerRect.top,
-      left: targetRect.left - containerRect.left,
-      width: targetRect.width,
-      height: targetRect.height,
+      top: (targetRect.top - containerRect.top) / scale - container.clientTop,
+      left: (targetRect.left - containerRect.left) / scale - container.clientLeft,
+      width: targetRect.width / scale,
+      height: targetRect.height / scale,
     }
   }
 

@@ -726,6 +726,7 @@
     "groupDesc": "Manage your account information and login status.",
     "nexusBaseUrlTitle": "Nexus service address",
     "nexusBaseUrlPlaceholder": "https://tuff.tagzxia.com",
+    "nexusBaseUrlEdit": "Change",
     "nexusBaseUrlSave": "Save",
     "nexusBaseUrlReset": "Restore default",
     "nexusBaseUrlEnvHint": "The build-time TUFF_NEXUS_BASE_URL variable has the highest priority and overrides this setting when present (a remote address must be https, http is accepted for local addresses only, anything else is ignored).",

@@ -63,11 +63,11 @@
   // border without taking layout space. Components use the ring INSTEAD of
   // `border`, never both (double-line trap).
   --tx-bui-shadow-hairline: 0 0 0 1px var(--tx-bui-line);
-  --tx-bui-shadow-btn: 0 0 0 1px var(--tx-bui-line-strong), 0 1px 2px #1018280d;
-  --tx-bui-shadow-card: 0 0 0 1px var(--tx-bui-line), 0 1px 2px #1018280a, 0 2px 6px #10182808;
-  --tx-bui-shadow-raised: 0 0 0 1px var(--tx-bui-line), 0 2px 10px #0000000b;
-  --tx-bui-shadow-overlay: 0 0 0 1px var(--tx-bui-line), 0 8px 28px #0001;
-  --tx-bui-shadow-inset-field: inset 0 1px 2px #0000001f;
+  --tx-bui-shadow-btn: 0 0 0 1px var(--tx-bui-line-strong), 1px 2px 2px #1018280d;
+  --tx-bui-shadow-card: 0 0 0 1px var(--tx-bui-line), 1px 2px 2px #1018280a, 2px 4px 6px #10182808;
+  --tx-bui-shadow-raised: 0 0 0 1px var(--tx-bui-line), 2px 4px 10px #0000000b;
+  --tx-bui-shadow-overlay: 0 0 0 1px var(--tx-bui-line), 4px 8px 28px #0001;
+  --tx-bui-shadow-inset-field: inset 1px 2px 2px #0000001f;
 
   // Radius ladder (chip / control / card) + mono face — theme-invariant
   --tx-bui-radius-chip: 6px;
@@ -78,24 +78,38 @@
 
 [data-theme='dark'],
 .dark {
-  --tx-bui-page: #17181a;
-  --tx-bui-canvas: #1c1d1f;
-  --tx-bui-surface: #232427;
-  --tx-bui-inset: #1f2022;
-  --tx-bui-hover: #2a2b2e;
-  --tx-bui-hover-2: #313236;
+  /**
+   * Neutral greys, not the vendored palette's cool ones. Upstream shipped this
+   * ramp with a +3..+5 blue lift per step (`#232427` is 35/36/39), which is in
+   * family with tuffex's *light* mode — `--tx-fill-color: #f3f4f6`,
+   * `--tx-border-color-light: #e4e7ed` are cool too — but not with its dark
+   * `.dark` ramp, which is deliberately neutral: `#141414` page, `#1d1e1f`
+   * overlay, `#303030 / #262727 / #1d1d1d` fills, all within 0-2 of grey.
+   *
+   * Side by side that read as a blue-tinted card floating on a neutral page:
+   * TxSidebarNav's surface measured 35/36/39 against a 20/20/20 gallery frame.
+   * Each value below keeps its original green channel, so every step holds the
+   * lightness it was tuned for and only the hue moves. `--tx-bui-line` lands on
+   * `#303030`, which is exactly `--tx-fill-color`. Light mode is untouched.
+   */
+  --tx-bui-page: #181818;
+  --tx-bui-canvas: #1d1d1d;
+  --tx-bui-surface: #242424;
+  --tx-bui-inset: #202020;
+  --tx-bui-hover: #2b2b2b;
+  --tx-bui-hover-2: #323232;
 
-  --tx-bui-ink: #f2f3f4;
-  --tx-bui-ink-2: #a5a8ad;
-  --tx-bui-ink-3: #6c6f75;
+  --tx-bui-ink: #f3f3f3;
+  --tx-bui-ink-2: #a8a8a8;
+  --tx-bui-ink-3: #6f6f6f;
 
-  --tx-bui-line: #2e3033;
-  --tx-bui-line-strong: #3a3c40;
+  --tx-bui-line: #303030;
+  --tx-bui-line-strong: #3c3c3c;
 
-  --tx-bui-field: #2b2c2f;
+  --tx-bui-field: #2c2c2c;
 
   --tx-bui-stripe: #ffffff0e;
-  --tx-bui-stripe-bg: #1b1c1e;
+  --tx-bui-stripe-bg: #1c1c1c;
 
   --tx-bui-accent: #3d9aff;
   --tx-bui-accent-ink: #7ec0ff;
@@ -109,17 +123,17 @@
   --tx-bui-red: #ee5c61;
   --tx-bui-red-tint: #ee5c6124;
 
-  --tx-bui-tooltip-bg: #111214;
-  --tx-bui-tooltip-fg: #f2f3f4;
-  --tx-bui-tooltip-muted: #a5a8ad;
-  --tx-bui-tooltip-border: #2e3033;
+  --tx-bui-tooltip-bg: #121212;
+  --tx-bui-tooltip-fg: #f3f3f3;
+  --tx-bui-tooltip-muted: #a8a8a8;
+  --tx-bui-tooltip-border: #303030;
 
   // Overlay swaps its ring to line-strong in dark — the one structural (not
   // just numeric) light/dark difference in the shadow set. Keep it explicit.
   --tx-bui-shadow-hairline: 0 0 0 1px var(--tx-bui-line);
-  --tx-bui-shadow-btn: 0 0 0 1px var(--tx-bui-line-strong), 0 1px 2px #0000004d;
-  --tx-bui-shadow-card: 0 0 0 1px var(--tx-bui-line), 0 1px 2px #0003, 0 2px 6px #0003;
-  --tx-bui-shadow-raised: 0 0 0 1px var(--tx-bui-line), 0 2px 10px #00000038;
-  --tx-bui-shadow-overlay: 0 0 0 1px var(--tx-bui-line-strong), 0 8px 28px #00000057;
-  --tx-bui-shadow-inset-field: inset 0 1px 2px #0006;
+  --tx-bui-shadow-btn: 0 0 0 1px var(--tx-bui-line-strong), 1px 2px 2px #0000004d;
+  --tx-bui-shadow-card: 0 0 0 1px var(--tx-bui-line), 1px 2px 2px #0003, 2px 4px 6px #0003;
+  --tx-bui-shadow-raised: 0 0 0 1px var(--tx-bui-line), 2px 4px 10px #00000038;
+  --tx-bui-shadow-overlay: 0 0 0 1px var(--tx-bui-line-strong), 4px 8px 28px #00000057;
+  --tx-bui-shadow-inset-field: inset 1px 2px 2px #0006;
 }

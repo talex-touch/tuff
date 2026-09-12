@@ -20,6 +20,32 @@ function asset(fileName: string, source: string) {
 describe('collectCssAssets', () => {
   const names = new Set(['progress-bar', 'tooltip'])
 
+  it('collects a stylesheet once even when two chunks import it', () => {
+    // `stream-markdown` reaches the vendored `github-markdown.css` from both its
+    // index and its block renderers. Walking by chunk alone appended the whole
+    // sheet twice — 628 scoped selectors in a file that has 314.
+    const parts = collectCssAssets(
+      output(
+        asset('vendored.css', '.markdown-body{}'),
+        asset('own.css', '.tx-stream-md{}'),
+        chunk('stream-markdown.js', {
+          isEntry: true,
+          name: 'stream-markdown',
+          modules: { '/x/src/stream-markdown/index.ts': {} },
+          viteMetadata: { importedCss: ['vendored.css'] },
+          imports: ['assets/TxStreamMarkdown.js'],
+        }),
+        chunk('assets/TxStreamMarkdown.js', {
+          modules: { '/x/src/stream-markdown/src/TxStreamMarkdown.vue': {} },
+          viteMetadata: { importedCss: ['vendored.css', 'own.css'] },
+        }),
+      ),
+      new Set(['stream-markdown']),
+    )
+
+    expect(parts.get('stream-markdown')?.own).toEqual(['.markdown-body{}', '.tx-stream-md{}'])
+  })
+
   it('keeps a component to its own rules and names the siblings it leans on', () => {
     const parts = collectCssAssets(
       output(

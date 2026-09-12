@@ -323,6 +323,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   SwitchSettingsRowDemo: () => import('./demos/SwitchSettingsRowDemo.vue'),
   SwitchSizesDemo: () => import('./demos/SwitchSizesDemo.vue'),
   SwitchToggleStateDemo: () => import('./demos/SwitchToggleStateDemo.vue'),
+  TabBarIndicatorDemo: () => import('./demos/TabBarIndicatorDemo.vue'),
   TabBarTabBarDemo: () => import('./demos/TabBarTabBarDemo.vue'),
   TabsAutoSizeContentScrollableFalseDemo: () => import('./demos/TabsAutoSizeContentScrollableFalseDemo.vue'),
   TabsDisableAnimationsDemo: () => import('./demos/TabsDisableAnimationsDemo.vue'),

@@ -230,17 +230,18 @@ The row hover and selection fills are exposed as CSS variables, so a paper-like 
 - A pinned header or footer needs `maxHeight` (or an ancestor that already scrolls), otherwise there is nothing to stick to; and that scroll container must not scroll by transform, as `TxScroll` does in its default mode, which disables sticky entirely.
 - Sort on comparable fields such as timestamps or ranks, never on formatted relative-time text.
 - Custom cells should preserve readable text or status-badge labels because sortable headers expose state through `aria-sort`.
+- The shell clips to a rounded corner, so the component drops the bottom separator on the last row of whichever section ends the table; a summary `tfoot` keeps the rule that divides it from the body. Reproduce that if you restyle cell borders, otherwise a stray line sits under the table.
 
 ## Review Notes
 
 - **Accessibility note:** `TxDataTable` renders a native table and gives sortable header cells `scope="col"`, `aria-sort`, keyboard focus, and Enter/Space handlers.
 - **Types:** `rowKey` is declared as `keyof T` or a callback that returns a string or number; `sortChange` may emit a `DataTableSortState` or `null`.
-- **Verified coverage:** The component test renders headers and rows, checks pointer sorting plus keyboard `aria-sort` transitions, selection emission, and layout/nowrap/auto/fixed-column styles.
+- **Verified coverage:** The component test renders headers and rows, checks pointer sorting plus keyboard `aria-sort` transitions, selection emission, and layout/nowrap/auto/fixed-column styles. The last-row separator reset is asserted against the SFC source, because vitest never evaluates a `<style>` block.
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`.
 - Type contracts: `packages/tuffex/packages/components/src/data-table/src/types.ts` exports `DataTableProps`, `DataTableColumn`, sort state, row-key, and emit types.
-- Coverage: `packages/tuffex/packages/components/src/data-table/__tests__/data-table.test.ts` verifies header and row rendering, pointer and keyboard sorting (including `aria-sort`), selection emission, and layout/nowrap/auto/fixed-column styles.
+- Coverage: `packages/tuffex/packages/components/src/data-table/__tests__/data-table.test.ts` verifies header and row rendering, pointer and keyboard sorting (including `aria-sort`), selection emission, layout/nowrap/auto/fixed-column styles, and the last-row separator reset.
 
 <TuffDocSourceLink />

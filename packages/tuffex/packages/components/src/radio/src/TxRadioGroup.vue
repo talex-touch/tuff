@@ -294,11 +294,11 @@ provide('tx-radio-group', ctx)
   transition: opacity 40ms ease, box-shadow 40ms ease, backdrop-filter 55ms ease, -webkit-backdrop-filter 55ms ease;
   background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 40%, transparent);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 1px 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .tx-radio-group__indicator-blur.is-active {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .tx-radio-group__indicator-plain {
@@ -313,7 +313,7 @@ provide('tx-radio-group', ctx)
   background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 88%, transparent);
   border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 50%, transparent);
   box-shadow:
-    0 2px 8px rgba(15, 23, 42, 0.08),
+    1px 2px 8px rgba(15, 23, 42, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.17);
 }
 

@@ -291,7 +291,8 @@ rows:
 
 ## 渲染契约
 
-- `name` 以 `i-` 开头时按图标 class 渲染；命中内置名时按 `builtin` SVG 渲染。
+- `name` 以 `i-` 开头时按图标 class 渲染；命中内置名时按 `builtin` SVG 渲染。**未命中**的名称会静默回退为图标 class，若并不存在该 class 就什么都不显示——需要新图标时请加进 `builtinIcons`，不要假设某个名字能解析。
+- 内置名称：`check`、`chevron-down`、`close`、`search`、`user`、`star`、`star-half`，以及 `TxAlert` 使用的状态图标 `info`、`check-circle`、`x-circle`、`alert-triangle`。状态图标画成圆环，中空部分由反向绘制的内圈弧在 nonzero 填充规则下挖出。
 - `file` 与本地绝对 `url` 可通过注入的 `fileProtocol` 或 `urlResolver` 转换。
 - SVG 在 `colorful=false` 时通过 mask 使用 `currentColor`；`colorful=true` 或 `icon.colorful=true` 时渲染为原图。
 - `status='loading' | 'error'` 会优先展示加载或错误状态。

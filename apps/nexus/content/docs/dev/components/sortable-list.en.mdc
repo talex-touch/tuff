@@ -41,14 +41,15 @@ code: |
 
 ### Drag Handle Mode
 
-When `handle=true`, drag must start from an element inside `[data-tx-sort-handle="true"]`.
+When `handle=true`, a drag must start from an element inside `[data-tx-sort-handle="true"]`. The default row rendering grows a grip carrying that attribute, so `handle` works on its own; a custom `item` slot spreads the slot's `handleAttrs` onto whatever it wants to be the grip.
 
 ```vue
 <template>
   <TxSortableList v-model="steps" handle @reorder="saveOrder">
     <template #item="{ item }">
+    <template #item="{ item, handleAttrs }">
       <div class="flex items-center gap-2 p-3">
-        <button type="button" data-tx-sort-handle="true" aria-label="Drag item">☰</button>
+        <button type="button" v-bind="handleAttrs" aria-label="Drag item">☰</button>
         <span>{{ item.title }}</span>
       </div>
     </template>
@@ -80,11 +81,20 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 - Items are draggable unless `disabled=true`. Disabled mode also blocks drag start, drag over, drop reordering, and emitted reorder events.
 - `handle=false` allows drag start from anywhere inside the item.
 - `handle=true` requires the drag event target or one of its ancestors to match `[data-tx-sort-handle="true"]`.
-- Drag start stores the item id in `dataTransfer`, uses an empty drag image, and marks the item as dragging.
-- Drag over marks the hovered item and calls `preventDefault()` only during an active drag.
-- Drop clears drag state, ignores missing ids and same-index drops, then emits `update:modelValue` and `reorder` with the reordered copy.
-- `dragend` always clears drag and hover state.
+- Drag start stores the item id in `dataTransfer` and marks the item as dragging.
+- **The list reorders as the pointer crosses, not on drop.** Each `dragover` over a different row moves the dragged row there and emits `update:modelValue`. That preview *is* the drag feedback: before it, the only thing that changed on screen for the whole drag was a 0.65 opacity on the source row.
+- The preview is held inside the component, so the rows move whether or not the host writes `modelValue` back. Ownership returns to the host the moment the interaction ends.
+- `reorder` fires **once**, when the drag ends, with the original index and the final one — not once per row crossed.
+- A drop outside the list still counts. `dragend` settles whatever the preview last showed rather than snapping the rows back to an order the user watched change.
+- `dragend` and `drop` both clear drag state; whichever runs first reports the move.
 - Reordering uses shallow array copies; item objects are preserved.
+
+### Keyboard
+
+- The list is one tab stop. Tab lands on the last focused row, or the first; the arrow keys move between rows.
+- Space or Enter picks a row up; the arrows then move the row itself, Space or Enter puts it down, and Escape abandons the reorder and restores the order it started from.
+- Blurring a held row puts it down rather than stranding it.
+- Every step is announced through a visually hidden `role="status"` live region. `labels` supplies the templates (`{item}`, `{position}`, `{size}`) and `itemLabel` supplies the item's name, which otherwise falls back to its `id`.
 
 ## API
 
@@ -94,7 +104,10 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 |------|------|---------|-------------|
 | `modelValue` | `SortableListItem[]` | required | Ordered list data. Every item must provide a stable string `id`. |
 | `disabled` | `boolean` | `false` | Disables drag interactions and reorder emits. |
-| `handle` | `boolean` | `false` | Requires drag start from `[data-tx-sort-handle="true"]`. |
+| `handle` | `boolean` | `false` | Requires drag start from `[data-tx-sort-handle="true"]`. The default row rendering grows one. |
+| `ariaLabel` | `string` | - | Accessible name for the list. |
+| `itemLabel` | `(item) => string` | - | Item name used in announcements. Defaults to the item's `id`. |
+| `labels` | `SortableListLabels` | - | Announcement templates for `grabbed`, `moved`, `dropped`, `cancelled` and the built-in `handle`. `{item}`, `{position}` and `{size}` are substituted. |
 
 ### SortableListItem
 
@@ -106,14 +119,14 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `update:modelValue` | `SortableListItem[]` | Emitted with the reordered array after a valid drop. |
-| `reorder` | `{ from: number, to: number, items: SortableListItem[] }` | Emitted after a valid reorder with source index, target index, and reordered items. |
+| `update:modelValue` | `SortableListItem[]` | Emitted on every step of a reorder — each row a pointer drag crosses, and each keyboard move — so the host can paint the preview. |
+| `reorder` | `{ from: number, to: number, items: SortableListItem[] }` | Emitted once, when the interaction ends, with the index it started at and the index it landed on. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
-| `item` | `{ item, dragging }` | Custom renderer for each item. Falls back to the item `id`. |
+| `item` | `{ item, dragging, grabbed, index, handleAttrs }` | Custom renderer for each item. Falls back to a row with the item `id` (and a grip when `handle` is set). Spread `handleAttrs` onto the element that should start a drag. |
 
 ## Best Practices
 
@@ -121,19 +134,19 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 - Update the bound array from `v-model` and persist from `reorder` when server order matters.
 - Use `handle` for rows that contain buttons, links, inputs, or selectable text.
 - Keep list sizes modest. For very long lists, combine a different drag strategy with virtualization instead of rendering every row draggable.
-- Provide visible drag affordances in the item slot; the component does not inject a handle UI.
-- Do not use this component for keyboard-only sortable flows without adding a separate accessible reorder control.
+- Rows show a `grab` cursor and lift while dragging; in `handle` mode the cursor affordance moves to the grip. A custom slot should still make its grip look like one.
+- Pass `itemLabel` whenever ids are not human-readable, or the live region will announce "plugin-a1b3" to a screen reader.
 
 ## Review Notes
 
-- **Accessibility note:** The component exposes list/listitem semantics but native drag-and-drop is pointer-centric. Provide a separate keyboard-accessible reorder flow for settings screens, command palettes, or enterprise forms where keyboard-only use is required.
+- **Accessibility note:** Reordering is available from the keyboard — one tab stop, Space to pick up, arrows to move, Escape to cancel — and every step goes through a polite live region. Native drag-and-drop remains pointer-only and is the secondary path, not the only one.
 - **Data note:** Reorder emits a shallow copied array and preserves item object references. Persist by stable `id`, not by index or object identity.
-- **Verified coverage:** `sortable-list.test.ts` checks list semantics, slot props, fallback item ids, reorder emits, same-item drop suppression, disabled blocking, handle-only drag start, and dragend state cleanup.
+- **Verified coverage:** `sortable-list.test.ts` checks list semantics, slot props, fallback item ids, reorder emits, same-item drop suppression, disabled blocking, handle-only drag start, dragend state cleanup, the live preview during `dragover` (and that `reorder` does not fire per row crossed), a drag that ends outside the list, the built-in grip and the `handleAttrs` a slot receives, and the whole keyboard path: grab, move, drop, Escape, both list ends, focus movement without a grab, the single tab stop, announcements, `labels` overrides, and disabled.
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/sortable-list/src/TxSortableList.vue`.
-- Types: `packages/tuffex/packages/components/src/sortable-list/src/types.ts` exports `SortableListItem`, `SortableListProps`, and `SortableListEmits`.
+- Types: `packages/tuffex/packages/components/src/sortable-list/src/types.ts` exports `SortableListItem`, `SortableListProps`, `SortableListLabels`, and `SortableListEmits`.
 - Export alias: `packages/tuffex/packages/components/src/sortable-list/index.ts` exports `SortableList`, `TxSortableList`, sortable types, and `TxSortableListInstance`.
 - Coverage: `packages/tuffex/packages/components/src/sortable-list/__tests__/sortable-list.test.ts` verifies drag state, handle mode, events, slots, and disabled behavior.
 

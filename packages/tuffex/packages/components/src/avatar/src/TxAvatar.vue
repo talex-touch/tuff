@@ -259,7 +259,7 @@ function handleKeydown(ev: KeyboardEvent) {
   transform: scale(1.05);
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 60%, transparent),
-    0 4px 12px color-mix(in srgb, #000 15%, transparent);
+    2px 4px 12px color-mix(in srgb, #000 15%, transparent);
 }
 
 .tx-avatar__image {

@@ -43,6 +43,7 @@ code: |
 - `renderers` 按围栏语言（首个单词、转小写）匹配；未注册的语言走默认代码块渲染。
 - 注册的渲染器组件会收到 `StreamMarkdownBlockContext` 作为 props，其中包含 `fenceClosed`，可据此在未闭合时显示占位。
 - `theme` 支持 `light` / `dark` / `auto`，`auto` 跟随环境主题。
+- 随组件打包的 GitHub-Markdown 样式表是 *全局* 引入的，因此其中每条规则都被限定在 `:where(.tx-markdown-view, .tx-stream-md)` 下。`.markdown-body` 是一个非常通用的类名——加限定之前，只要引入本组件，宿主页面自己用该类名承载的正文也会被重新设置样式。`:where()` 不增加特异度，所以这层限定只收窄作用范围，不改变这些规则彼此之间的优先级关系。
 
 ## API
 

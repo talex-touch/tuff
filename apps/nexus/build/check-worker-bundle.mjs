@@ -1,15 +1,26 @@
 import { Buffer } from 'node:buffer'
 import { gzipSync } from 'node:zlib'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { docsApiPrerenderRoutes, publicPrerenderRoutes } from './nexus-static-routes.mjs'
+import {
+  CLOUDFLARE_HEADERS_MAX_LINE_LENGTH,
+  CLOUDFLARE_HEADERS_MAX_RULES,
+  DOCS_STATIC_CACHE_CONTROL,
+  I18N_MESSAGES_CACHE_CONTROL,
+  docsApiPrerenderRoutes,
+  docsStaticHtmlHeaderRoutes,
+  docsStaticJsonHeaderRoutes,
+  i18nMessagesHeaderRoutes,
+  publicPrerenderRoutes,
+} from './nexus-static-routes.mjs'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const nexusRoot = join(currentDir, '..')
 const distRoot = join(nexusRoot, 'dist')
 const workerRoot = join(distRoot, '_worker.js')
 const routesJsonPath = join(distRoot, '_routes.json')
+const headersFilePath = join(distRoot, '_headers')
 const serviceWorkerPath = join(distRoot, 'sw.js')
 const authHandlerPath = join(nexusRoot, 'server/api/auth/[...].ts')
 const authUtilityPath = join(nexusRoot, 'server/utils/auth.ts')
@@ -70,7 +81,7 @@ const expectedStaticRoutes = [
   '/zh/docs/guide/start',
   ...docsApiPrerenderRoutes,
 ]
-const expectedStaticRoutePatterns = ['/en/docs/*', '/zh/docs/*']
+const expectedStaticRoutePatterns = ['/en/docs/*', '/zh/docs/*', '/api/docs/page/*']
 const workerOwnedAppRoutes = [
   '/dashboard',
   '/dashboard/team',
@@ -149,8 +160,8 @@ const forbiddenLandingDeferredImagePattern = /\/_nuxt\/(?:calendar|notion|spotif
 const forbiddenLandingShowcaseVideoPattern = /\/shots\/(?:SearchApp|SearchFileImmediately|PluginTranslate)\.mp4/g
 const landingInitialHtmlFiles = [
   'index.html',
-  'new/index.html',
-  'next/index.html',
+  'new.html',
+  'next.html',
 ]
 const requiredContentCollections = ['app', 'docs', 'guides']
 const requiredWorkerRouteChunks = [
@@ -271,29 +282,29 @@ const htmlBoundaryChecks = [
   },
   {
     label: 'store HTML pulled docs/dashboard/landing CSS',
-    routePattern: /^store\/index\.html$/,
+    routePattern: /^store\.html$/,
     cssPattern: /docs\.|(?:^|\.)(?:dashboard)\.|ProviderRegistry|governance|TuffLanding|AuthVisualShell|AuthLegalFooter/i,
   },
   {
     label: 'landing HTML pulled docs/store/dashboard CSS',
-    routePattern: /^(?:index\.html|new\/index\.html|next\/index\.html)$/,
+    routePattern: /^(?:index|new|next)\.html$/,
     cssPattern: /docs\.|(?:^|\.)store\.|(?:^|\.)dashboard\.|ProviderRegistry|governance|PluginMetaHeader|AuthVisualShell|AuthLegalFooter/i,
   },
   {
     label: 'public info HTML pulled app-surface CSS',
-    routePattern: /^(?:pricing|license|privacy|protocol|updates)\/index\.html$/,
+    routePattern: /^(?:pricing|license|privacy|protocol|updates)\.html$/,
     cssPattern: /(?:^|\.)store\.|(?:^|\.)dashboard\.|ProviderRegistry|governance|PluginMetaHeader|AuthVisualShell|AuthLegalFooter|TuffLanding|TuffHome|CoreBoxMock|TuffShowcase/i,
   },
   {
     label: 'auth HTML pulled docs/store/dashboard/landing CSS',
-    routePattern: /^(?:login|sign-in|verify-waiting|device-auth)\/index\.html$/,
+    routePattern: /^(?:login|sign-in|verify-waiting|device-auth)\.html$/,
     cssPattern: /docs\.|(?:^|\.)store\.|(?:^|\.)dashboard\.|ProviderRegistry|governance|TuffLanding|PluginMetaHeader/i,
   },
 ]
 const htmlInitialAssetBudgets = [
   {
     label: 'docs initial assets',
-    routePattern: /^(?:en|zh)\/docs\/.+\/index\.html$/,
+    routePattern: /^(?:en|zh)\/docs\/.+\.html$/,
     maxJsCount: 16,
     maxJsBytes: 620 * 1024,
     maxJsGzipBytes: 205 * 1024,
@@ -303,7 +314,7 @@ const htmlInitialAssetBudgets = [
   },
   {
     label: 'store initial assets',
-    routePattern: /^store\/index\.html$/,
+    routePattern: /^store\.html$/,
     maxJsCount: 42,
     maxJsBytes: 820 * 1024,
     maxJsGzipBytes: 260 * 1024,
@@ -313,7 +324,7 @@ const htmlInitialAssetBudgets = [
   },
   {
     label: 'landing initial assets',
-    routePattern: /^(?:index\.html|new\/index\.html|next\/index\.html)$/,
+    routePattern: /^(?:index|new|next)\.html$/,
     maxJsCount: 38,
     maxJsBytes: 860 * 1024,
     maxJsGzipBytes: 285 * 1024,
@@ -323,7 +334,7 @@ const htmlInitialAssetBudgets = [
   },
   {
     label: 'public info initial assets',
-    routePattern: /^(?:pricing|license|privacy|protocol|updates)\/index\.html$/,
+    routePattern: /^(?:pricing|license|privacy|protocol|updates)\.html$/,
     maxJsCount: 20,
     maxJsBytes: 560 * 1024,
     maxJsGzipBytes: 195 * 1024,
@@ -333,7 +344,7 @@ const htmlInitialAssetBudgets = [
   },
   {
     label: 'auth initial assets',
-    routePattern: /^(?:login|sign-in|verify-waiting|device-auth)\/index\.html$/,
+    routePattern: /^(?:login|sign-in|verify-waiting|device-auth)\.html$/,
     maxJsCount: 26,
     maxJsBytes: 720 * 1024,
     maxJsGzipBytes: 235 * 1024,
@@ -377,12 +388,17 @@ function readRoutesJson() {
   return JSON.parse(readFileSync(routesJsonPath, 'utf8'))
 }
 
+/**
+ * Prerendered HTML lands at `<route>.html` (`prerender.autoSubfolderIndex: false`): Cloudflare
+ * Pages serves that file at the slash-less URL with no redirect, whereas `<route>/index.html`
+ * is only served at `<route>/` and costs every direct visitor a 308 first. `/` stays `index.html`.
+ */
 function routeToDistPath(route) {
   if (route === '/')
     return 'index.html'
   if (route.startsWith('/api/'))
     return route.slice(1)
-  return `${route.replace(/^\//, '').replace(/\/$/, '')}/index.html`
+  return `${route.replace(/^\//, '').replace(/\/$/, '')}.html`
 }
 
 function analyzeWorkerFiles() {
@@ -543,6 +559,167 @@ function checkRoutes() {
       ? `Missing static route exclusions: ${[...missing, ...missingPatterns].join(', ')}`
       : `Static route exclusions verified: ${expectedStaticRoutes.length} routes + ${expectedStaticRoutePatterns.length} patterns`,
   }
+}
+
+/**
+ * Mirrors how Pages reads `_headers`: `#` lines are comments, indented lines are headers of the
+ * block above, and a pattern that appears twice keeps only its last block — the rules are keyed
+ * by pattern, so the second block replaces the first rather than adding to it.
+ */
+export function parseCloudflareHeadersFile(source) {
+  const blocks = []
+  const byPattern = new Map()
+  let current = null
+  for (const rawLine of source.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#'))
+      continue
+    if (/^\s/.test(rawLine)) {
+      if (!current)
+        continue
+      const separator = line.indexOf(':')
+      if (separator === -1)
+        continue
+      current.headers[line.slice(0, separator).trim().toLowerCase()] = line.slice(separator + 1).trim()
+      continue
+    }
+    current = { pattern: line, headers: {} }
+    const previous = byPattern.get(line)
+    if (previous)
+      blocks.splice(blocks.indexOf(previous), 1)
+    byPattern.set(line, current)
+    blocks.push(current)
+  }
+  return blocks
+}
+
+/**
+ * The documented `_headers` limits (100 rules, 2 000 characters per line) are enforced by
+ * dropping the offending line or the rest of the file, with a warning only in wrangler's
+ * output; a duplicated pattern likewise loses its first block. Each is a header that quietly
+ * stops being sent.
+ */
+export function checkHeadersFileLimits(headersSource) {
+  const findings = []
+  if (headersSource === null)
+    return { findings: ['_headers is missing'], rules: 0 }
+
+  const patterns = []
+  headersSource.split(/\r?\n/).forEach((rawLine, index) => {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#'))
+      return
+    if (line.length > CLOUDFLARE_HEADERS_MAX_LINE_LENGTH)
+      findings.push(`line ${index + 1} is ${line.length} chars > ${CLOUDFLARE_HEADERS_MAX_LINE_LENGTH}; Pages ignores it`)
+    if (!/^\s/.test(rawLine))
+      patterns.push(line)
+  })
+  if (patterns.length > CLOUDFLARE_HEADERS_MAX_RULES)
+    findings.push(`${patterns.length} rules > ${CLOUDFLARE_HEADERS_MAX_RULES}; Pages drops the rest`)
+
+  const counts = new Map()
+  for (const pattern of patterns)
+    counts.set(pattern, (counts.get(pattern) ?? 0) + 1)
+  for (const [pattern, count] of counts) {
+    if (count > 1)
+      findings.push(`${pattern} appears ${count} times; Pages keeps only the last block`)
+  }
+  return { findings, rules: patterns.length }
+}
+
+/**
+ * Every static docs response must be edge-cacheable. Nitro writes `routeRules[*].headers` into
+ * `_headers` with `/**` folded to `/*`; a rule that silently stops being emitted would put the
+ * whole docs site back on `max-age=0, must-revalidate` (`DYNAMIC` at the edge) without any
+ * test noticing — which is exactly how it shipped before.
+ */
+export function checkStaticCacheHeaders(headersSource) {
+  const findings = []
+  if (headersSource === null) {
+    findings.push('_headers is missing')
+    return { findings, verified: 0 }
+  }
+
+  const blocks = parseCloudflareHeadersFile(headersSource)
+  const byPattern = new Map(blocks.map(block => [block.pattern, block.headers]))
+  const expectations = [
+    ...docsStaticHtmlHeaderRoutes.map(route => ({ route, cacheControl: DOCS_STATIC_CACHE_CONTROL, contentType: null })),
+    ...docsStaticJsonHeaderRoutes.map(route => ({ route, cacheControl: DOCS_STATIC_CACHE_CONTROL, contentType: 'application/json' })),
+    ...i18nMessagesHeaderRoutes.map(route => ({ route, cacheControl: I18N_MESSAGES_CACHE_CONTROL, contentType: null })),
+  ]
+
+  let verified = 0
+  for (const expectation of expectations) {
+    const pattern = expectation.route.replace('/**', '/*')
+    const headers = byPattern.get(pattern)
+    if (!headers) {
+      findings.push(`${pattern}: no _headers block`)
+      continue
+    }
+    const cacheControl = headers['cache-control'] ?? ''
+    if (cacheControl !== expectation.cacheControl)
+      findings.push(`${pattern}: cache-control is "${cacheControl}", expected "${expectation.cacheControl}"`)
+    else if (!/s-maxage=[1-9]/.test(cacheControl))
+      findings.push(`${pattern}: cache-control has no positive s-maxage`)
+    if (expectation.contentType && !(headers['content-type'] ?? '').includes(expectation.contentType))
+      findings.push(`${pattern}: content-type is "${headers['content-type'] ?? ''}", expected ${expectation.contentType}`)
+    if (!findings.some(finding => finding.startsWith(`${pattern}:`)))
+      verified += 1
+  }
+
+  return { findings, verified, expected: expectations.length }
+}
+
+function readHeadersFile() {
+  return existsSync(headersFilePath) ? readFileSync(headersFilePath, 'utf8') : null
+}
+
+/**
+ * Every `Link` target the early-hints step wrote must be a real asset in `dist/_nuxt/`, every
+ * entry must carry `crossorigin`, and the docs families must have a block at all. A hint for a
+ * missing file is a wasted 103 on every page; a hint without `crossorigin` has a different
+ * credentials mode from the tag Nuxt renders, is never matched to it, and makes the browser
+ * download the file twice; a missing block silently returns the docs first paint to one more
+ * round trip.
+ */
+export function checkEarlyHints(headersSource, assetExists) {
+  const findings = []
+  if (headersSource === null)
+    return { findings: ['_headers is missing'], verified: 0 }
+
+  const blocks = parseCloudflareHeadersFile(headersSource).filter(block => 'link' in block.headers)
+  const byPattern = new Map(blocks.map(block => [block.pattern, block.headers.link]))
+  for (const required of ['/en/docs/*', '/zh/docs/*', '/']) {
+    if (!byPattern.has(required))
+      findings.push(`${required}: no Link block for early hints`)
+  }
+
+  let verified = 0
+  for (const [pattern, link] of byPattern) {
+    const entries = link.split(/,\s*(?=<)/).map(entry => ({
+      target: entry.match(/^<([^>]+)>/)?.[1] ?? null,
+      crossorigin: /;\s*crossorigin\b/.test(entry),
+    }))
+    const targets = entries.map(entry => entry.target).filter(Boolean)
+    if (!targets.length) {
+      findings.push(`${pattern}: Link header names no target`)
+      continue
+    }
+    const missing = targets.filter(target => !assetExists(target))
+    if (missing.length)
+      findings.push(`${pattern}: Link targets missing from dist: ${missing.join(', ')}`)
+    const anonymous = entries.filter(entry => entry.target && !entry.crossorigin).map(entry => entry.target)
+    if (anonymous.length)
+      findings.push(`${pattern}: Link entries without crossorigin: ${anonymous.join(', ')}`)
+    if (!missing.length && !anonymous.length)
+      verified += 1
+  }
+
+  return { findings, verified, blocks: blocks.length }
+}
+
+function earlyHintAssetExists(target) {
+  return target.startsWith('/_nuxt/') && existsSync(join(distRoot, target.slice(1)))
 }
 
 function checkStaticRouteFiles() {
@@ -765,11 +942,11 @@ function checkRequiredWorkerRouteChunks(files) {
 }
 
 function isDocsRootHtml(relativePath) {
-  return /^(?:en|zh)\/docs\/(?:index\/)?index\.html$/.test(relativePath)
+  return /^(?:en|zh)\/docs(?:\/index)?\.html$/.test(relativePath)
 }
 
 function isDocsDetailHtml(relativePath) {
-  return /^(?:en|zh)\/docs\/.+\/index\.html$/.test(relativePath) && !isDocsRootHtml(relativePath)
+  return /^(?:en|zh)\/docs\/.+\.html$/.test(relativePath) && !isDocsRootHtml(relativePath)
 }
 
 function checkDocsDetailHtmlPayload(distFiles) {
@@ -886,6 +1063,18 @@ function getAssetStats(assets) {
   }
 }
 
+/**
+ * The UnoCSS icons layer is loaded after mount as its own asset (`app/plugins/unocss-icons.client.ts`);
+ * it is the one non-entry stylesheet whose rules carry `--un-icon:`.
+ */
+function findIconsStylesheet(distFiles) {
+  return distFiles.find((file) => {
+    if (!/^_nuxt\/[^/]+\.css$/.test(file.relativePath) || /^_nuxt\/entry\./.test(file.relativePath))
+      return false
+    return readFileSync(join(distRoot, file.relativePath), 'utf8').includes('--un-icon:')
+  }) ?? null
+}
+
 function checkSharedEntryCssBudget(distFiles) {
   const entryFiles = distFiles.filter(file => /^_nuxt\/entry\.[^/]+\.css$/.test(file.relativePath))
   const findings = []
@@ -898,29 +1087,41 @@ function checkSharedEntryCssBudget(distFiles) {
   const entry = entryFiles[0]
   const stats = getAssetStat(entry.relativePath.replace(/^_nuxt\//, ''))
   const source = readFileSync(join(distRoot, entry.relativePath), 'utf8')
-  const rules = source.match(/[^{}]+\{[^{}]*\}/g) ?? []
 
   if (stats.bytes > sharedEntryCssBudget.maxBytes)
     findings.push(`shared entry CSS ${formatBytes(stats.bytes)} > ${formatBytes(sharedEntryCssBudget.maxBytes)}`)
   if (stats.gzipBytes > sharedEntryCssBudget.maxGzipBytes)
     findings.push(`shared entry CSS gzip ${formatBytes(stats.gzipBytes)} > ${formatBytes(sharedEntryCssBudget.maxGzipBytes)}`)
-  for (const token of forbiddenSharedEntryIconTokens) {
-    if (source.includes(token))
-      findings.push(`oversized icon selector returned to shared entry CSS: ${token}`)
+  // Icon SVGs are the single largest thing that ever sat in this render-blocking file (184 KB
+  // raw, 38 KB gzip on 2026-09-11); the layer now loads after mount and must stay out.
+  if (source.includes('--un-icon:'))
+    findings.push('icon rules returned to the shared entry CSS; the icons layer must load after mount')
+
+  const iconsSheet = findIconsStylesheet(distFiles)
+  if (!iconsSheet) {
+    findings.push('icons stylesheet not found: no non-entry CSS asset carries --un-icon rules')
   }
-  for (const { token, maxRuleBytes } of sharedEntryAliasedIconBudgets) {
-    const rule = rules.find((candidate) => {
-      const selector = candidate.slice(0, candidate.indexOf('{'))
-      return candidate.includes('--un-icon:')
-        && selector.split(',').some(part => part.trim() === `.${token}`)
-    })
-    if (!rule) {
-      findings.push(`aliased icon selector missing from shared entry CSS: ${token}`)
-      continue
+  else {
+    const iconsSource = readFileSync(join(distRoot, iconsSheet.relativePath), 'utf8')
+    const rules = iconsSource.match(/[^{}]+\{[^{}]*\}/g) ?? []
+    for (const token of forbiddenSharedEntryIconTokens) {
+      if (iconsSource.includes(token))
+        findings.push(`oversized icon selector returned to the icons stylesheet: ${token}`)
     }
-    const ruleBytes = Buffer.byteLength(rule)
-    if (ruleBytes > maxRuleBytes)
-      findings.push(`aliased icon selector ${token} is ${formatBytes(ruleBytes)} > ${formatBytes(maxRuleBytes)}`)
+    for (const { token, maxRuleBytes } of sharedEntryAliasedIconBudgets) {
+      const rule = rules.find((candidate) => {
+        const selector = candidate.slice(0, candidate.indexOf('{'))
+        return candidate.includes('--un-icon:')
+          && selector.split(',').some(part => part.trim() === `.${token}`)
+      })
+      if (!rule) {
+        findings.push(`aliased icon selector missing from the icons stylesheet: ${token}`)
+        continue
+      }
+      const ruleBytes = Buffer.byteLength(rule)
+      if (ruleBytes > maxRuleBytes)
+        findings.push(`aliased icon selector ${token} is ${formatBytes(ruleBytes)} > ${formatBytes(maxRuleBytes)}`)
+    }
   }
 
   return {
@@ -928,6 +1129,7 @@ function checkSharedEntryCssBudget(distFiles) {
       asset: entry.relativePath,
       ...stats,
     },
+    icons: iconsSheet ? { asset: iconsSheet.relativePath, ...getAssetStat(iconsSheet.relativePath.replace(/^_nuxt\//, '')) } : null,
     findings,
   }
 }
@@ -1103,6 +1305,11 @@ function countHtmlInitialAssetBudgetRoutes(distFiles) {
     .length
 }
 
+/**
+ * The report is only produced when this file is run directly, so the pure checks above can be
+ * imported by tests without a built `dist/`.
+ */
+function main() {
 if (!existsSync(workerRoot)) {
   console.error('[nexus-worker-bundle] dist/_worker.js is missing. Run `pnpm -C "apps/nexus" run build` first.')
   process.exit(1)
@@ -1112,6 +1319,9 @@ const { executableFiles, totalBytes } = analyzeWorkerFiles()
 const workerGzipBytes = getWorkerGzipBytes(executableFiles)
 const { files: distFiles, totalBytes: distTotalBytes } = analyzeDistFiles()
 const routeCheck = checkRoutes()
+const staticCacheHeaderCheck = checkStaticCacheHeaders(readHeadersFile())
+const earlyHintCheck = checkEarlyHints(readHeadersFile(), earlyHintAssetExists)
+const headersFileLimitCheck = checkHeadersFileLimits(readHeadersFile())
 const missingStaticRouteFiles = checkStaticRouteFiles()
 const workerOwnedAppRouteFindings = checkWorkerOwnedAppRoutes()
 const suspiciousFindings = checkSuspiciousPatterns(executableFiles)
@@ -1150,6 +1360,9 @@ for (const file of distFiles.slice(0, 10))
   console.log(`  ${formatBytes(file.bytes).padStart(10)}  ${file.relativePath}`)
 
 console.log(`[nexus-worker-bundle] ${routeCheck.message}`)
+console.log(`[nexus-dist-budget] Static cache headers verified: ${staticCacheHeaderCheck.verified}/${staticCacheHeaderCheck.expected ?? 0}`)
+console.log(`[nexus-dist-budget] Early hint Link blocks verified: ${earlyHintCheck.verified}/${earlyHintCheck.blocks ?? 0}`)
+console.log(`[nexus-dist-budget] _headers limits verified: ${headersFileLimitCheck.rules} rules`)
 console.log(`[nexus-dist-budget] Static route files verified: ${expectedStaticRoutes.length - missingStaticRouteFiles.length}/${expectedStaticRoutes.length}`)
 console.log(`[nexus-dist-budget] Worker-owned app routes verified: ${workerOwnedAppRoutes.length - workerOwnedAppRouteFindings.length}/${workerOwnedAppRoutes.length}`)
 console.log('[nexus-dist-budget] Auth handler singleton verified')
@@ -1160,6 +1373,8 @@ console.log(`[nexus-dist-budget] Docs initial lifecycle blockers verified: ${doc
 console.log(`[nexus-dist-budget] Initial asset budgets verified: ${htmlInitialAssetBudgetRouteCount} routes / ${htmlInitialAssetBudgets.length} families`)
 if (sharedEntryCssCheck.entry) {
   console.log(`[nexus-dist-budget] Shared entry CSS verified: ${formatBytes(sharedEntryCssCheck.entry.bytes)} / ${formatBytes(sharedEntryCssCheck.entry.gzipBytes)} gzip`)
+if (sharedEntryCssCheck.icons)
+  console.log(`[nexus-dist-budget] Icons stylesheet verified: ${sharedEntryCssCheck.icons.asset} ${formatBytes(sharedEntryCssCheck.icons.bytes)} / ${formatBytes(sharedEntryCssCheck.icons.gzipBytes)} gzip (loaded after mount)`)
 }
 console.log(`[nexus-dist-budget] Landing image prefetch hints verified: ${landingInitialHtmlFiles.length - landingImagePrefetchFindings.length}/${landingInitialHtmlFiles.length}`)
 console.log(`[nexus-dist-budget] Landing deferred image references verified: ${landingInitialHtmlFiles.length - landingDeferredImageFindings.length}/${landingInitialHtmlFiles.length}`)
@@ -1310,5 +1525,27 @@ if (sizeFindings.length) {
     console.error(`  ${finding}`)
 }
 
-if (!routeCheck.ok || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || remoteFontReferenceFindings.length || unprefixedAttributifyFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || workerSourceMapCheck.findings.length || clientContentDatabaseRuntimeFindings.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sharedEntryCssCheck.findings.length || landingImagePrefetchFindings.length || landingDeferredImageFindings.length || landingShowcaseVideoFindings.length || clientChunkCheck.findings.length || sizeFindings.length)
+if (staticCacheHeaderCheck.findings.length) {
+  console.error('[nexus-dist-budget] static cache header violations:')
+  for (const finding of staticCacheHeaderCheck.findings)
+    console.error(`  ${finding}`)
+}
+
+if (earlyHintCheck.findings.length) {
+  console.error('[nexus-dist-budget] early hint violations:')
+  for (const finding of earlyHintCheck.findings)
+    console.error(`  ${finding}`)
+}
+
+if (headersFileLimitCheck.findings.length) {
+  console.error('[nexus-dist-budget] _headers limit violations:')
+  for (const finding of headersFileLimitCheck.findings)
+    console.error(`  ${finding}`)
+}
+
+if (!routeCheck.ok || staticCacheHeaderCheck.findings.length || earlyHintCheck.findings.length || headersFileLimitCheck.findings.length || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || remoteFontReferenceFindings.length || unprefixedAttributifyFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || workerSourceMapCheck.findings.length || clientContentDatabaseRuntimeFindings.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sharedEntryCssCheck.findings.length || landingImagePrefetchFindings.length || landingDeferredImageFindings.length || landingShowcaseVideoFindings.length || clientChunkCheck.findings.length || sizeFindings.length)
   process.exit(1)
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  main()

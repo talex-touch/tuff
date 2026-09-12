@@ -117,6 +117,26 @@ const indicatorStyle = ref<Record<string, string>>({
 })
 const indicatorTransition = ref(true)
 
+// `offsetLeft` / `offsetWidth` round to whole pixels, so the thumb landed up to
+// 1px off its item and by a different amount per item, which reads as wobble
+// rather than as an offset. Rects are fractional.
+function readGeometry(el: HTMLElement, root: HTMLElement): { left: number, width: number } {
+  const item = el.getBoundingClientRect()
+  const box = root.getBoundingClientRect()
+
+  // Rects are visual pixels: an ancestor transform or browser zoom scales them,
+  // while the translateX below is in the container's own coordinate space.
+  const ratio = root.offsetWidth > 0 ? box.width / root.offsetWidth : 1
+  const scale = Number.isFinite(ratio) && ratio > 0 ? ratio : 1
+
+  // The indicator's `left: 0` resolves against the padding box; a rect delta
+  // starts at the border box, so the border has to come back off.
+  return {
+    left: (item.left - box.left) / scale - root.clientLeft,
+    width: item.width / scale,
+  }
+}
+
 function updateIndicator(animate: boolean) {
   if (props.multiple) {
     indicatorStyle.value = { ...indicatorStyle.value, opacity: '0' }
@@ -130,8 +150,7 @@ function updateIndicator(animate: boolean) {
     return
   }
 
-  const left = el.offsetLeft
-  const width = el.offsetWidth
+  const { left, width } = readGeometry(el, containerRef.value)
 
   indicatorTransition.value = animate
   indicatorStyle.value = {
@@ -243,11 +262,27 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 // --- Size config ---
+// `itemPadding` and `itemGap` were hard-coded (0 8px / 4px) until xl arrived:
+// at 15px type those two values are what read as cramped, and they are the two
+// TxFineTuneCard does *not* override, so widening the ladder here leaves its
+// inline pin intact.
+interface FlatRadioGeometry {
+  height: string
+  padding: string
+  fontSize: string
+  gap: string
+  radius: string
+  itemRadius: string
+  itemPadding: string
+  itemGap: string
+}
+
 const sizeConfig = computed(() => {
-  const map: Record<TxFlatRadioSize, { height: string, padding: string, fontSize: string, gap: string, radius: string, itemRadius: string }> = {
-    sm: { height: '24px', padding: '2px', fontSize: '12px', gap: '2px', radius: '6px', itemRadius: '4px' },
-    md: { height: '30px', padding: '3px', fontSize: '13px', gap: '4px', radius: '8px', itemRadius: '6px' },
-    lg: { height: '36px', padding: '4px', fontSize: '14px', gap: '4px', radius: '10px', itemRadius: '8px' },
+  const map: Record<TxFlatRadioSize, FlatRadioGeometry> = {
+    sm: { height: '24px', padding: '2px', fontSize: '12px', gap: '2px', radius: '6px', itemRadius: '4px', itemPadding: '0 8px', itemGap: '4px' },
+    md: { height: '30px', padding: '3px', fontSize: '13px', gap: '4px', radius: '8px', itemRadius: '6px', itemPadding: '0 8px', itemGap: '4px' },
+    lg: { height: '36px', padding: '4px', fontSize: '14px', gap: '4px', radius: '10px', itemRadius: '8px', itemPadding: '0 8px', itemGap: '4px' },
+    xl: { height: '44px', padding: '5px', fontSize: '15px', gap: '6px', radius: '14px', itemRadius: '10px', itemPadding: '0 16px', itemGap: '6px' },
   }
   return map[props.size as TxFlatRadioSize] ?? map.md
 })
@@ -259,6 +294,8 @@ const cssVars = computed(() => ({
   '--tx-flat-radio-gap': sizeConfig.value.gap,
   '--tx-flat-radio-radius': sizeConfig.value.radius,
   '--tx-flat-radio-item-radius': sizeConfig.value.itemRadius,
+  '--tx-flat-radio-item-padding': sizeConfig.value.itemPadding,
+  '--tx-flat-radio-item-gap': sizeConfig.value.itemGap,
 }))
 
 // Announce the multi-select virtual-focus cursor to assistive tech.
@@ -304,7 +341,7 @@ const activeDescendantId = computed(() =>
   gap: var(--tx-flat-radio-gap, 4px);
   font-size: var(--tx-flat-radio-font-size, 13px);
   border-radius: var(--tx-flat-radio-radius, 8px);
-  background: var(--tx-fill-color, #f0f2f5);
+  background: var(--tx-flat-radio-track-bg, var(--tx-fill-color, #f0f2f5));
   box-sizing: border-box;
   outline: none;
   user-select: none;
@@ -324,37 +361,55 @@ const activeDescendantId = computed(() =>
 
   :deep(.tx-flat-radio-item) {
     height: 100%;
-    padding: 0 8px;
+    padding: var(--tx-flat-radio-item-padding, 0 8px);
     border-radius: var(--tx-flat-radio-item-radius, 6px);
     font-size: inherit;
   }
 }
 
-// The indicator has to sit *above* the track it slides on. `--tx-bg-color-overlay`
-// is white on light but darker than the track on dark (#1d1e1f against #303030),
-// so the slider disappeared into the groove and the movement read as no
-// movement at all. Mixing the text colour into the overlay lifts it in both
-// themes, because that pair is the one that actually inverts.
+// The indicator has to sit *above* the track it slides on, and the only
+// comparison a viewer makes is thumb against track. Two earlier attempts were
+// anchored to the wrong thing: `--tx-bg-color-overlay` alone is white on light
+// but *darker* than the track on dark (#1d1e1f against #303030), and mixing the
+// text colour into it lifted the thumb relative to the overlay while landing it
+// within four RGB steps of the track in both themes — measured rgb(49,50,52)
+// against a rgb(48,48,48) track. `--tx-surface-raised` is defined against
+// --tx-fill-color, which is the track itself, so the lift cannot invert.
 .tx-flat-radio__indicator {
   position: absolute;
   top: var(--tx-flat-radio-padding, 3px);
   left: 0;
   height: calc(100% - var(--tx-flat-radio-padding, 3px) * 2);
   border-radius: var(--tx-flat-radio-item-radius, 6px);
-  background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 10%, var(--tx-bg-color-overlay, #fff));
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.16),
-    0 1px 2px rgba(0, 0, 0, 0.08);
+  background: var(--tx-flat-radio-indicator-bg, var(--tx-surface-raised, #fff));
+  // Was two stacked straight-down layers totalling ~0.24 alpha, which read as
+  // heavy once the xl tier made the thumb large. One soft directional layer now
+  // — and it no longer has to stand in for a missing thumb/track contrast.
+  box-shadow: var(--tx-flat-radio-indicator-shadow, var(--tx-elevation-2, 1px 2px 8px rgba(0, 0, 0, 0.05)));
   pointer-events: none;
   z-index: 0;
+  will-change: transform, width;
 
+  // Travel and resize used to run on two different curves (0.25s overshoot
+  // against a 0.2s ease), so on labels of unequal width the thumb arrived and
+  // *then* finished growing. One duration and one curve for both makes it read
+  // as a single body; the overshoot applies to width on purpose, because the
+  // slight stretch past the target and back is the part that feels physical.
   transition:
-    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
-    width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform var(--tx-flat-radio-duration, 0.26s) var(--tx-flat-radio-ease, cubic-bezier(0.32, 1.28, 0.5, 1)),
+    width var(--tx-flat-radio-duration, 0.26s) var(--tx-flat-radio-ease, cubic-bezier(0.32, 1.28, 0.5, 1)),
     opacity 0.15s ease;
 
   &.no-transition {
     transition: none !important;
+  }
+}
+
+// The fade stays so the thumb still resolves rather than popping in; only the
+// travel and the stretch go.
+@media (prefers-reduced-motion: reduce) {
+  .tx-flat-radio__indicator {
+    transition: opacity 0.15s ease;
   }
 }
 </style>

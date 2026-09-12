@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxDataTable from '../src/TxDataTable.vue'
+
+const here = dirname(fileURLToPath(import.meta.url))
 
 describe('txDataTable', () => {
   const columns = [
@@ -209,5 +214,22 @@ describe('txDataTable', () => {
     expect(headers[1].attributes('style')).toContain('width: auto')
     expect(headers[2].classes()).toEqual(expect.arrayContaining(['is-fixed', 'is-fixed-right']))
     expect(headers[2].attributes('style')).toContain('right: 0px')
+  })
+
+  // vitest never evaluates an SFC's <style>, so the rule is asserted against the
+  // source. The shell clips to a 12px radius: a separator on the table's final
+  // row runs into that curve and reads as a stray line underneath. The docs page
+  // used to mask this with its own prose table rules, which hid it in review.
+  it('drops the separator on the last row of whichever section ends the table', () => {
+    const sfc = readFileSync(resolve(here, '../src/TxDataTable.vue'), 'utf8')
+    const rule = sfc.match(
+      /\.tx-data-table__table > :last-child > tr:last-child > td,\s*\.tx-data-table__table > :last-child > tr:last-child > th \{([^}]*)\}/,
+    )
+
+    expect(rule, 'last-row separator reset is missing').not.toBeNull()
+    expect(rule![1]).toMatch(/border-bottom:\s*0/)
+    // `> :last-child` rather than `tbody`: with a summary tfoot the body still
+    // needs the separator that divides it from the footer.
+    expect(sfc).not.toMatch(/tbody tr:last-child > td\s*\{[^}]*border-bottom:\s*0/)
   })
 })

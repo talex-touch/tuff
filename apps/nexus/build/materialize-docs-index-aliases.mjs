@@ -20,6 +20,16 @@ function walkFiles(dir) {
   return files
 }
 
+/**
+ * A directory route (`/en/docs/dev`) and its index document (`/en/docs/dev/index`) are the
+ * same page, but only the latter is a prerender input. With `autoSubfolderIndex: false` nitro
+ * writes it to `en/docs/dev/index.html`, which Cloudflare Pages serves at `/en/docs/dev/index`
+ * and `/en/docs/dev/` — never at `/en/docs/dev`. Copying it to `en/docs/dev.html` gives the
+ * slash-less directory route a static file of its own, so it is served without a redirect and
+ * without falling through to the Worker.
+ *
+ * The docs root is the one exception: `en/docs/index.html` aliases to `en/docs.html`.
+ */
 export function materializeDocsIndexAliases(distRoot) {
   const aliases = []
 
@@ -30,13 +40,13 @@ export function materializeDocsIndexAliases(distRoot) {
 
     for (const sourcePath of walkFiles(docsRoot)) {
       const relativePath = relative(docsRoot, sourcePath).replace(/\\/g, '/')
-      if (relativePath !== 'index/index.html' && !relativePath.endsWith('/index/index.html'))
+      if (relativePath !== 'index.html' && !relativePath.endsWith('/index.html'))
         continue
 
-      const targetPath = sourcePath.slice(0, -'index/index.html'.length) + 'index.html'
+      const targetPath = `${sourcePath.slice(0, -'/index.html'.length)}.html`
       const targetRoute = `/${relative(distRoot, targetPath)
         .replace(/\\/g, '/')
-        .replace(/\/index\.html$/, '')}`
+        .replace(/\.html$/, '')}`
       copyFileSync(sourcePath, targetPath)
       aliases.push({
         route: targetRoute,

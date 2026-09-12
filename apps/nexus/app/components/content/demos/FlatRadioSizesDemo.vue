@@ -4,6 +4,7 @@ import { ref } from 'vue'
 const sm = ref<'a' | 'b' | 'c'>('a')
 const md = ref<'a' | 'b' | 'c'>('a')
 const lg = ref<'a' | 'b' | 'c'>('a')
+const xl = ref<'a' | 'b' | 'c'>('a')
 </script>
 
 <template>
@@ -35,6 +36,17 @@ const lg = ref<'a' | 'b' | 'c'>('a')
         lg
       </div>
       <TxFlatRadio v-model="lg" size="lg">
+        <TxFlatRadioItem value="a" label="Option A" />
+        <TxFlatRadioItem value="b" label="Option B" />
+        <TxFlatRadioItem value="c" label="Option C" />
+      </TxFlatRadio>
+    </div>
+
+    <div class="tx-demo__col" style="gap: 6px;">
+      <div class="tx-demo__label">
+        xl
+      </div>
+      <TxFlatRadio v-model="xl" size="xl">
         <TxFlatRadioItem value="a" label="Option A" />
         <TxFlatRadioItem value="b" label="Option B" />
         <TxFlatRadioItem value="c" label="Option C" />

@@ -112,14 +112,35 @@ const LIMITS = {
   // per-component stylesheets. It is a ceiling on the library's total surface,
   // not a measure of what any page downloads — `onDemandCssBytes` below is the
   // one that tracks a real cost.
-  fullCssBytes: 552 * 1024,
+  // 552 -> 560 on 2026-09-12: the vendored GitHub markdown sheet is now scoped
+  // (`:where(.tx-md) ` on each of its 314 selectors) because, imported as a
+  // global stylesheet, its `.markdown-body` rules were landing on any host page
+  // that uses that very generic class — the Nexus docs body does. The scope is
+  // 15 bytes x 320 selectors = 4.7 KiB and cannot be backed out without
+  // restoring the leak; `:where()` is already the cheapest form that keeps every
+  // rule's original specificity, and the marker class is what makes it short
+  // (naming both component roots cost 24 bytes more per selector). Toast's
+  // stacking and swipe styles add the rest. Measured 556.2 KiB. Same contract as
+  // every note above: actuals plus minimal headroom, growth from here fails.
+  fullCssBytes: 560 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
   // stopped being copied into every package that imports them, and it climbs
   // again the moment one starts inlining another's rules.
-  onDemandCssBytes: 580 * 1024,
-  componentCssBytes: 96 * 1024,
+  // 580 -> 568 on 2026-09-12: `stream-markdown` was shipping the whole vendored
+  // markdown sheet twice — once through `index.ts`'s module import and again
+  // through an SFC `@import` that `collectCssAssets` counted as separate CSS
+  // (it deduped by chunk, not by emitted stylesheet). Both are fixed, and the
+  // total fell from 613.5 KiB to 555.3 with `stream-markdown/style.css` going
+  // 103.3 -> 50.1. Re-baselined against the smaller artifact so the saving
+  // cannot be quietly spent, same as the `fullCssBytes` note above.
+  onDemandCssBytes: 568 * 1024,
+  // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
+  // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
+  // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
+  // minimal headroom, as above.
+  componentCssBytes: 56 * 1024,
   componentJsBytes: 48 * 1024,
   // Per-file exceptions to `componentJsBytes`, keyed by the path under `dist/es`.
   // A global raise was the wrong lever here: border-beam is a lone outlier at

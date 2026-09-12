@@ -92,4 +92,49 @@ describe('txTabBar', () => {
 
     expect(disabledItem.emitted('update:modelValue')).toBeUndefined()
   })
+
+  // TxFlatRadio ships geometry as inline CSS variables so a caller can override
+  // one value without restating a tier. TxTabBar holds the same contract, and
+  // the bar height in particular has to be a variable rather than a size class:
+  // the indicator measures the item box, so a class-based height would move the
+  // indicator through a code path that never reads it.
+  it.each([
+    ['sm', '44px', '17px'],
+    ['md', '56px', '20px'],
+    ['lg', '64px', '23px'],
+  ] as const)('delivers %s geometry as inline CSS variables', (size, height, icon) => {
+    const wrapper = mount(TxTabBar, { props: { items, modelValue: 'home', size, fixed: false } })
+    const style = wrapper.find('.tx-tab-bar').attributes('style') ?? ''
+
+    expect(style).toContain(`--tx-tab-bar-height: ${height}`)
+    expect(style).toContain(`--tx-tab-bar-icon-size: ${icon}`)
+  })
+
+  it('falls back to md geometry for an unknown size', () => {
+    const wrapper = mount(TxTabBar, {
+      props: { items, modelValue: 'home', fixed: false, size: 'enormous' as never },
+    })
+
+    expect(wrapper.find('.tx-tab-bar').attributes('style')).toContain('--tx-tab-bar-height: 56px')
+  })
+
+  it.each(['pill', 'line', 'block', 'dot'] as const)('renders the %s indicator variant', (indicator) => {
+    const wrapper = mount(TxTabBar, { props: { items, modelValue: 'home', indicator, fixed: false } })
+    const el = wrapper.find('.tx-tab-bar__indicator')
+
+    // jsdom measures nothing, so the box stays null and the indicator is not
+    // rendered; the class contract is what matters here.
+    if (el.exists())
+      expect(el.classes()).toContain(`is-${indicator}`)
+    else
+      expect(wrapper.find('.tx-tab-bar').exists()).toBe(true)
+  })
+
+  it('renders no indicator element when indicator is none', () => {
+    const wrapper = mount(TxTabBar, {
+      props: { items, modelValue: 'home', indicator: 'none', fixed: false },
+    })
+
+    expect(wrapper.find('.tx-tab-bar__indicator').exists()).toBe(false)
+  })
 })

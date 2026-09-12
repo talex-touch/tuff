@@ -1,4 +1,5 @@
 import { computed, readonly } from 'vue'
+import { hasSessionHintInCookieString } from '#shared/utils/session-hint'
 
 type NexusAuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
 
@@ -91,6 +92,19 @@ function buildFormBody(values: Record<string, unknown>) {
 
 const authFetch = $fetch as unknown as <T>(request: string, options?: NexusAuthFetchOptions & { credentials?: 'include' }) => Promise<T>
 
+/**
+ * Whether this browser may hold a session, read from the non-httpOnly hint cookie the auth
+ * handler writes next to the session token. False means the session request would come back
+ * empty; true means only that it is worth asking.
+ */
+export function hasSessionHint() {
+  if (import.meta.client)
+    return hasSessionHintInCookieString(document.cookie)
+
+  const requestHeaders = useRequestHeaders(['cookie'])
+  return hasSessionHintInCookieString(requestHeaders.cookie)
+}
+
 async function fetchAuth<T>(path: string, options: NexusAuthFetchOptions = {}) {
   const headers: Record<string, string> = {
     ...options.headers,
@@ -119,6 +133,18 @@ export function useNexusAuth() {
       return 'loading'
     return data.value ? 'authenticated' : 'unauthenticated'
   })
+
+  /**
+   * Settles an unknown session as signed-out without a request. Public pages use this when the
+   * hint cookie is absent: for the anonymous majority the session endpoint answers `{}`, and the
+   * Worker round trip it costs sat on the critical path of every docs page. Anything that must
+   * be sure (protected routes, sign-in flows) keeps calling `getSession()`.
+   */
+  function settleAnonymousSession() {
+    if (data.value !== undefined || loading.value)
+      return
+    data.value = null
+  }
 
   async function getSession() {
     loading.value = true
@@ -231,6 +257,7 @@ export function useNexusAuth() {
     getSession,
     lastRefreshedAt: readonly(lastRefreshedAt),
     refresh: getSession,
+    settleAnonymousSession,
     signIn,
     signOut,
     status,

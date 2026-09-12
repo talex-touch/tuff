@@ -556,6 +556,7 @@ code: |
 - 用户手动切换分组后，后续 `collapsed` / `defaultExpand` prop 变化不再覆盖当前选择。
 - 分组内容始终保持挂载；展开/折叠只改变高度、透明度和 display。
 - `TxBlockLine` 默认渲染非交互 `div`，仅在 `link=true` 时渲染 `button type="button"`。
+- `TxBlockSlot` 把每个控件槽固定为 `flex-shrink: 0`，让定宽控件永远不会被压扁。`TxBlockInput` 单独解除了这条：它的输入框会向 `min-width: 120px` 收缩，而不是死守 180px 去挤掉本行标题——在 240px 容器里那会让标题只剩 10px。
 - `TxBlockSlot` 禁用时不触发点击；`TxBlockSwitch` 在 `loading=true` 时同样冻结整行的指针事件，但行不会被压暗——`tx-block-switch--loading:not(.tx-block-switch--disabled)` 会把 slot 的 `opacity: .5` 收回来，让忙碌态和禁用态在视觉上分开。
 - `TxBlockSwitch` 的忙碌提示只有一处：`loading` 透传给内部 `TuffSwitch`，由滑块变成旋转环；行本身只叠加 shimmer，不再额外渲染 spinner。
 - `TxBlockSwitch` 的 guidance 模式只显示箭头并触发 `click`，不会改写 `modelValue`。
@@ -577,6 +578,7 @@ code: |
 - 永远可见的状态或表单段落应设置 `collapsible=false`，避免暗示存在隐藏状态。
 - 只读值和轻量跳转用 `TxBlockLine`，自定义控件用 `TxBlockSlot`，标准表单行用 `TxBlockInput` / `TxBlockSelect`，布尔值或导航引导用 `TxBlockSwitch`。
 - 行标题保持简短；长说明放在描述行或相邻帮助模式中，不要在行内嵌套复杂布局。
+- 组内行的直角由分组负责，而不是行自己：`TxGroupBlock` 会重置每一行的 `--fake-radius` 与外边距，让圆角只出现在分组卡片上。行单独使用时仍保留自身的 12px 圆角，因此不要通过在行上硬写 `border-radius: 0` 来复刻分组里的扁平外观。
 
 ## 审阅说明
 
@@ -585,6 +587,7 @@ code: |
 - `TxBlockSwitch` 的 loading 模式会阻止值变更；guidance 模式只触发 `click`，应按导航行说明，而不是布尔开关。
 - **忙碌态归属:** loading 的视觉由内部 `TuffSwitch` 承担（`is-loading` + `aria-busy`），`TxBlockSwitch` 自己只负责行级 shimmer 和取消压暗。改动开关的加载表现时，两个组件的文档都要同步。
 - 折叠示例刻意使用 `:default-expand="false"`；当前源码中 `collapsed` 仅在持久化状态或用户交互接管前被监听。
+- **拉平所用的选择器:** 把行拉成直角的那条重置使用普通后代选择器。`TxGroupBlock` 的 `<style>` 是*非 scoped* 的，其中的 `:deep()` 会原样输出、被浏览器当作未知伪类整条丢弃——现已有包级测试，对任何非 scoped 块里的 `:deep()` 直接失败。
 - **实测覆盖:** 展开状态持久化、静态分组行为、语义化链接行、禁用 slot 点击阻断、guidance 模式、loading 状态下的值变更守卫，以及 loading 行内只有开关自身携带 `is-loading` / `aria-busy`、不存在第二个 spinner。
 
 ## Source

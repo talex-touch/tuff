@@ -279,7 +279,7 @@ function isSuppressedFence(block: StreamBlock): boolean {
 <template>
   <div
     ref="rootRef"
-    class="tx-stream-md"
+    class="tx-md tx-stream-md"
     :class="[resolvedTheme, { 'is-streaming': streaming }]"
     :data-theme="resolvedTheme"
   >
@@ -322,9 +322,14 @@ function isSuppressedFence(block: StreamBlock): boolean {
  * the fonts — every formula then renders in a fallback face, which is visibly
  * wrong because KaTeX positions glyphs against its own metrics. The host app
  * must include `katex/dist/katex.min.css` so its own bundler emits the fonts.
+ *
+ * The vendored GitHub sheet is not `@import`-ed here either. `index.ts` imports
+ * it as a module specifier, which the bundler loads exactly once; an SFC
+ * `@import` is inlined into this component's own CSS *as well*, and the
+ * on-demand `stream-markdown/style.css` shipped the whole 314-selector sheet
+ * twice (#1555 fixed the same thing for `markdown-view`, and it crept back in
+ * here).
  */
-
-@import '../../markdown-view/src/github-markdown.css';
 
 .tx-stream-md {
   font-size: 14px;

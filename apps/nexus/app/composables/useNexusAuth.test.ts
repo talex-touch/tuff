@@ -16,6 +16,11 @@ interface NexusAuth {
   status: Readonly<RefLike<NexusAuthStatus>>
 }
 
+interface NexusAuthModule {
+  hasSessionHint: () => boolean
+  useNexusAuth: () => NexusAuth
+}
+
 interface AppRootModule {
   initializeApp: (dependencies: Record<string, unknown>) => Promise<void>
 }
@@ -41,7 +46,7 @@ function isAppRootModule(value: unknown): value is AppRootModule {
     && typeof value.initializeApp === 'function'
 }
 
-async function loadAuth(): Promise<{ useNexusAuth: () => NexusAuth }> {
+async function loadAuth(): Promise<NexusAuthModule> {
   return await import('~/composables/useNexusAuth')
 }
 
@@ -59,6 +64,7 @@ export async function initializeApp(dependencies) {
   const { sanitizeRedirect } = dependencies.oauth
   const { appName, toastHostRequestedEvent } = dependencies.constants
   const {
+    hasSessionHint,
     useCookie,
     useGlobalSearchState,
     useHead,
@@ -87,17 +93,22 @@ ${scriptWithoutImports}
 beforeAll(() => {
   vi.stubGlobal('$fetch', fetchSession)
   vi.stubGlobal('useRequestEvent', () => ({ path: '/' }))
-  vi.stubGlobal('useRequestHeaders', () => ({}))
+  // Vitest has no `import.meta.client`, so `hasSessionHint()` takes its server branch and
+  // reads the request cookie header; mirror `document.cookie` into it so one assignment
+  // drives both branches.
+  vi.stubGlobal('useRequestHeaders', () => ({ cookie: (globalThis as { document: { cookie: string } }).document.cookie }))
   vi.stubGlobal('useState', useTestState)
   vi.stubGlobal('window', {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   })
+  vi.stubGlobal('document', { cookie: '' })
 })
 
 beforeEach(() => {
   nuxtState.clear()
   fetchSession.mockReset()
+  ;(globalThis as { document: { cookie: string } }).document.cookie = ''
 })
 
 afterAll(() => {
@@ -111,10 +122,111 @@ describe('Nexus public-session lifecycle', () => {
     expect(useNexusAuth().status.value).toBe('loading')
   })
 
+  async function mountAppRoot(options: { hasSessionHint: boolean, routeMeta?: Record<string, unknown>, path?: string }) {
+    const { useNexusAuth, hasSessionHint } = await loadAuth()
+    const auth = useNexusAuth()
+    const mountedCallbacks: Array<() => void> = []
+    ;(globalThis as { document: { cookie: string } }).document.cookie = options.hasSessionHint ? 'nexus_session_hint=1' : ''
+
+    initializeApp ??= await compileAppInitializer()
+    await initializeApp({
+      constants: {
+        appName: 'Tuff',
+        toastHostRequestedEvent: 'nexus:toast-host',
+      },
+      docs: {
+        resolveDocsLocaleFromRoute: () => null,
+      },
+      nuxt: {
+        hasSessionHint,
+        useCookie: () => ref(null),
+        useGlobalSearchState: () => ({
+          closeSearch: () => undefined,
+          open: ref(false),
+          summonSearch: () => undefined,
+        }),
+        useHead: () => undefined,
+        useI18n: () => ({ t: (key: string) => key }),
+        useLocaleOrchestrator: () => ({
+          initLocale: async () => undefined,
+          reconcileClientLocale: async () => undefined,
+          setLocaleSerial: async () => undefined,
+          syncFromProfileOnAuth: async () => undefined,
+        }),
+        useNexusAuth,
+        useRoute: () => ({
+          fullPath: options.path ?? '/',
+          meta: options.routeMeta ?? {},
+          path: options.path ?? '/',
+          query: {},
+        }),
+        useRouter: () => ({ replace: vi.fn() }),
+        useState: useTestState,
+      },
+      oauth: {
+        sanitizeRedirect: (_value: unknown, fallback: string) => fallback,
+      },
+      vue: {
+        computed,
+        defineAsyncComponent: () => ({}),
+        onBeforeUnmount: () => undefined,
+        onMounted: (callback: () => void) => mountedCallbacks.push(callback),
+        ref,
+        watch: () => () => undefined,
+        watchEffect: () => undefined,
+      },
+    })
+
+    for (const callback of mountedCallbacks)
+      callback()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    return auth
+  }
+
+  it('settles a public page as signed out without a session request when no hint cookie is present', async () => {
+    const auth = await mountAppRoot({ hasSessionHint: false })
+
+    expect(fetchSession).not.toHaveBeenCalled()
+    expect(auth.status.value).toBe('unauthenticated')
+    expect(auth.data.value).toBe(null)
+  })
+
+  it('still asks the server on a protected route even without a hint cookie', async () => {
+    fetchSession.mockResolvedValue({})
+
+    const auth = await mountAppRoot({ hasSessionHint: false, routeMeta: { requiresAuth: true }, path: '/dashboard' })
+
+    expect(fetchSession).toHaveBeenCalledOnce()
+    expect(auth.status.value).toBe('unauthenticated')
+  })
+
+  it('still asks the server on the auth shell even without a hint cookie', async () => {
+    fetchSession.mockResolvedValue({})
+
+    await mountAppRoot({ hasSessionHint: false, path: '/sign-in' })
+
+    expect(fetchSession).toHaveBeenCalledOnce()
+  })
+
+  it('reconciles a valid browser session from the root mount when the hint cookie is present', async () => {
+    fetchSession.mockResolvedValue({
+      user: { email: 'member@example.com' },
+    })
+
+    const auth = await mountAppRoot({ hasSessionHint: true })
+
+    expect(fetchSession).toHaveBeenCalledOnce()
+    expect(auth.status.value).toBe('authenticated')
+    expect(auth.data.value?.user?.email).toBe('member@example.com')
+  })
+
   it('reconciles a valid browser session from the root mount and exposes it as authenticated', async () => {
     const { useNexusAuth } = await loadAuth()
     const auth = useNexusAuth()
     const mountedCallbacks: Array<() => void> = []
+    ;(globalThis as { document: { cookie: string } }).document.cookie = 'nexus_session_hint=1'
     fetchSession.mockResolvedValue({
       user: { email: 'member@example.com' },
     })
@@ -129,6 +241,7 @@ describe('Nexus public-session lifecycle', () => {
         resolveDocsLocaleFromRoute: () => null,
       },
       nuxt: {
+        hasSessionHint: () => true,
         useCookie: () => ref(null),
         useGlobalSearchState: () => ({
           closeSearch: () => undefined,
