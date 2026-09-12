@@ -65,6 +65,16 @@ export default defineConfig({
    */
   preflights: [
     {
+      /*
+       * The icons layer loads after mount (`app/plugins/unocss-icons.client.ts`), so on the
+       * server-rendered page an `i-*` element has no rule of its own yet. This gives every such
+       * box the size the icon rule will give it (`scale: 1.2` below → 1.2em), so the glyphs paint
+       * in without shifting the layout around them. Explicit `w-*`/`h-*` utilities still win:
+       * they live in a later layer.
+       */
+      getCSS: () => `[class^="i-"],[class*=" i-"]{width:1.2em;height:1.2em}`,
+    },
+    {
       getCSS: () => `
         html.contrast .text-primary,
         html.dark.contrast .text-primary {
