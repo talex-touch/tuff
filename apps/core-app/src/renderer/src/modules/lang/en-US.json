@@ -854,11 +854,13 @@
       "image": "credits / image"
     },
     "capabilities": {
-      "text.chat": "Text chat",
-      "vision.ocr": "Image text recognition",
-      "image.translate.e2e": "Image translation",
-      "audio.transcribe": "Speech transcription",
-      "audio.stt": "Speech transcription"
+      "text": { "chat": "Text chat" },
+      "vision": { "ocr": "Image text recognition" },
+      "image": { "translate": { "e2e": "Image translation" } },
+      "audio": {
+        "transcribe": "Speech transcription",
+        "stt": "Speech transcription"
+      }
     },
     "loginRequired": "Sign in to view remaining credits and usage.",
     "loading": "Loading credits information.",

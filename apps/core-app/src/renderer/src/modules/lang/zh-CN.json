@@ -854,11 +854,13 @@
       "image": "credits / 张"
     },
     "capabilities": {
-      "text.chat": "文本对话",
-      "vision.ocr": "图片文字识别",
-      "image.translate.e2e": "图片翻译",
-      "audio.transcribe": "语音转写",
-      "audio.stt": "语音转写"
+      "text": { "chat": "文本对话" },
+      "vision": { "ocr": "图片文字识别" },
+      "image": { "translate": { "e2e": "图片翻译" } },
+      "audio": {
+        "transcribe": "语音转写",
+        "stt": "语音转写"
+      }
     },
     "loginRequired": "登录后可查看 credits 剩余和消耗。",
     "loading": "正在获取 credits 信息。",
