@@ -302,7 +302,9 @@ table/summary. Rationale and market evidence: `.trellis/tasks/09-10-voice-polish
 
 ### Signatures
 
-- `countPolishUnits(text): number` — CJK characters plus Latin words.
+- `countPolishUnits(text): number` — CJK characters plus words in every other script, counted by
+  ICU word segmentation (`Intl.Segmenter`) rather than a letter-run regex, because Thai/Lao/
+  Khmer/Myanmar separate no words with spaces and combining marks must stay inside their word.
 - `resolvePolishTier(text): 'short' | 'light' | 'full'` — `< 12` units short, `< 60` light, else full.
 - `VoiceInsightsStore.recordPolishPass(input)` / `summarizePolishTelemetry(windowDays, now)`.
 - Table `voice_polish_telemetry` (aux); migration `0045_voice_polish_telemetry`; schema export
@@ -343,7 +345,8 @@ table/summary. Rationale and market evidence: `.trellis/tasks/09-10-voice-polish
 
 ### Tests Required
 
-- Tier boundaries (11/12/59/60), CJK vs Latin unit counting, punctuation not inflating the count.
+- Tier boundaries (11/12/59/60), CJK vs non-CJK unit counting (including no-space Thai/Lao/Khmer
+  text and combining marks), punctuation not inflating the count.
 - No-provider-call assertion for below-gate input on dictation and on retry; `natural` prompt
   assertion for a light-tier transcript with a `deep` session.
 - Telemetry: one row per decision, idempotent id, generation/window filtering, delete on clear,

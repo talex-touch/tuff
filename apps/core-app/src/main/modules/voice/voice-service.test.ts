@@ -578,9 +578,16 @@ describe('polish length gate', () => {
     ['I will send the report tomorrow morning.', 7],
     ['明天把 report 发出去', 7],
     ['Hello, world!!! 🎉🎉', 2],
-    ["I can't re-run it", 4]
+    ["I can't run it", 4]
   ] as const)('counts %j as %i units', (text, expected) => {
     expect(countPolishUnits(text)).toBe(expected)
+  })
+
+  it('follows ICU word boundaries for apostrophes and hyphens', () => {
+    // The two spellings ICU treats differently, pinned so the unit is not silently redefined:
+    // the apostrophe stays inside the contraction, the hyphen separates the compound.
+    expect(countPolishUnits("can't")).toBe(1)
+    expect(countPolishUnits('re-run')).toBe(2)
   })
 
   it.each([
@@ -598,5 +605,23 @@ describe('polish length gate', () => {
   it('treats an empty or whitespace-only transcript as short', () => {
     expect(resolvePolishTier('')).toBe('short')
     expect(resolvePolishTier('  \n ')).toBe('short')
+  })
+
+  it.each([
+    ['Thai', 'ภาษาไทยไม่มีช่องว่าง'.repeat(4)],
+    ['Lao', 'ພາສາລາວບໍ່ມີຊ່ອງຫວ່າງ'.repeat(4)],
+    ['Khmer', 'ភាសាខ្មែរគ្មានចន្លោះ'.repeat(6)]
+  ] as const)('reaches the gate on %s, which separates no words with spaces', (_script, text) => {
+    // A letter-run regex reads each of these as one word, so a long sentence lands in `short`
+    // and the provider call the user asked for never happens. 12 is the first tier that runs a
+    // pass, and the exact count is left to ICU's dictionary rather than pinned here.
+    expect(countPolishUnits(text)).toBeGreaterThanOrEqual(12)
+    expect(resolvePolishTier(text)).not.toBe('short')
+  })
+
+  it('keeps a combining mark inside its word instead of counting it as a break', () => {
+    // `e` + U+0301 + `clair`: one word. A letter-run regex matched two, which inflated the
+    // count of any accented text and could buy it a pass it did not need.
+    expect(countPolishUnits('e\u0301clair')).toBe(1)
   })
 })
