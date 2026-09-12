@@ -353,9 +353,9 @@ describe('Nexus deploy asset budget', () => {
     const guardSource = readFileSync(workerBundleGuardPath, 'utf8')
     const nuxtSource = readFileSync(nuxtConfigPath, 'utf8')
 
-    expect(nuxtSource).toContain("exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*']")
+    expect(nuxtSource).toContain("exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*', '/api/docs/page/*']")
     expect(guardSource).toContain('expectedStaticRoutePatterns')
-    expect(guardSource).toContain("['/en/docs/*', '/zh/docs/*']")
+    expect(guardSource).toContain("['/en/docs/*', '/zh/docs/*', '/api/docs/page/*']")
     expect(guardSource).toContain('expectedStaticRoutePatterns.length} patterns')
   })
 
