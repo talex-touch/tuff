@@ -113,6 +113,7 @@ code: |
 - `sanitize=false` 时，`marked` 输出会直接通过 `v-html` 写入；只适用于可信 Markdown。
 - `theme="auto"` 会读取 `html` / `body` 的 `data-theme` 以及 `light` / `dark` class，并监听 `html` 的 class 与 `data-theme` 变化。
 - 外层容器会带上解析后的 `light` 或 `dark` class，以及同值的 `data-theme` 属性。
+- 随组件打包的 GitHub-Markdown 样式表是 *全局* 引入的，因此其中每条规则都被限定在 `:where(.tx-markdown-view, .tx-stream-md)` 下。`.markdown-body` 是一个非常通用的类名——加限定之前，只要引入本组件，宿主页面自己用该类名承载的正文也会被重新设置样式。`:where()` 不增加特异度，所以这层限定只收窄作用范围，不改变这些规则彼此之间的优先级关系。
 
 ## 最佳实践
 
@@ -131,7 +132,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/markdown-view/src/TxMarkdownView.vue`。
 - Types: `packages/tuffex/packages/components/src/markdown-view/src/types.ts` 导出 `MarkdownViewProps`。
-- Styles: `packages/tuffex/packages/components/src/markdown-view/src/github-markdown.css` 由组件样式导入。
+- Styles: `packages/tuffex/packages/components/src/markdown-view/src/github-markdown.css` 由组件样式导入，`TxStreamMarkdown` 也引入同一个文件。其中每条规则都限定在 `:where(.tx-markdown-view, .tx-stream-md)` 下——重新引入上游版本时请保留这层限定。
 - Export alias: `packages/tuffex/packages/components/src/markdown-view/index.ts` 导出 `MarkdownView`、`TxMarkdownView`、`MarkdownViewProps` 与 `TxMarkdownViewInstance`。
 - Coverage: `packages/tuffex/packages/components/src/markdown-view/__tests__/markdown-view.test.ts` 覆盖 sanitize 与主题行为。
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { type Component, type ComponentPublicInstance, computed, h, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { createAsyncDemo, type DemoLoader } from './demo-loader'
+import { loadDemoRegistry } from './demo-registry-loader'
 
 interface DemoClientRendererProps {
   demo: string
@@ -28,18 +29,6 @@ const props = defineProps<DemoClientRendererProps>()
 const emit = defineEmits<{
   (event: 'instance-change', instance: DemoResetController | null): void
 }>()
-let sharedDemoLoaders: DemoRegistry | null = null
-let sharedRegistryPromise: Promise<DemoRegistry> | null = null
-
-async function loadDemoRegistry() {
-  if (sharedDemoLoaders)
-    return sharedDemoLoaders
-
-  sharedRegistryPromise ??= import('./demo-registry').then(module => module.demoLoaders)
-  sharedDemoLoaders = await sharedRegistryPromise
-  return sharedDemoLoaders
-}
-
 const demoInstanceRef = ref<DemoResetController | null>(null)
 const demoLoaders = shallowRef<DemoRegistry | null>(null)
 const registryState = ref<RegistryState>('idle')

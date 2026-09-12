@@ -14,6 +14,12 @@ export interface TransferProps {
   emptyText?: string | [string, string]
   /** Caps each panel so long lists scroll inside the list instead of growing the page. */
   maxHeight?: string | number
+  /**
+   * Floor for each panel. The default keeps a filterable panel from collapsing
+   * to a sliver, but it is a hard floor: without this prop a transfer inside a
+   * 190px box still laid out at 240px and overflowed it.
+   */
+  minHeight?: string | number
   addAriaLabel?: string
   removeAriaLabel?: string
   moveUpAriaLabel?: string

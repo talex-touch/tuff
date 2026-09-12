@@ -19,6 +19,7 @@ if (!window.matchMedia) {
 // jsdom lacks ResizeObserver; TxChart measures its container with it.
 if (!('ResizeObserver' in globalThis)) {
   class ResizeObserverStub {
+    constructor(_callback: ResizeObserverCallback) {}
     observe(): void {}
     unobserve(): void {}
     disconnect(): void {}

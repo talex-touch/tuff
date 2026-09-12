@@ -212,13 +212,37 @@
   --tx-surface-refraction-mask-rgb: 255 255 255;
   --tx-surface-refraction-mask-blend-mode: screen;
 
+  // A surface that sits *above* --tx-fill-color. Segmented thumbs, chips and any
+  // control that has to read as lifted out of a recessed track use this rather
+  // than --tx-bg-color-overlay: overlay is defined against the page, so on light
+  // it matched the track and on dark it sat below it. Raised is defined against
+  // the track, which is the only comparison a viewer actually makes.
+  --tx-surface-raised: #ffffff;
+
   // Box Shadow
-  --tx-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.04),
-    0px 8px 20px rgba(0, 0, 0, 0.08);
-  --tx-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.12);
-  --tx-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.12);
-  --tx-box-shadow-dark: 0px 16px 48px 16px rgba(0, 0, 0, 0.08),
-    0px 12px 32px rgba(0, 0, 0, 0.12), 0px 8px 16px -8px rgba(0, 0, 0, 0.16);
+  //
+  // One light source for the whole system: high and to the left of the screen,
+  // casting down and to the right. Every drop layer keeps x:y at 1:2, so a
+  // shadow's direction never depends on which component drew it. Blur and
+  // density grow with the step; the geometry does not change.
+  //
+  // --tx-elevation-* is the canonical scale for new code. The four
+  // --tx-box-shadow* names below stay as the compatibility aliases the
+  // elevation() mixin and existing components already read.
+  --tx-elevation-1: 1px 2px 4px rgba(0, 0, 0, 0.04);
+  --tx-elevation-2: 1px 2px 8px rgba(0, 0, 0, 0.05);
+  --tx-elevation-3: 2px 4px 14px rgba(0, 0, 0, 0.06);
+  --tx-elevation-4: 4px 8px 24px rgba(0, 0, 0, 0.08);
+  --tx-elevation-5: 6px 14px 40px rgba(0, 0, 0, 0.11);
+
+  --tx-box-shadow: 6px 12px 32px 4px rgba(0, 0, 0, 0.04),
+    4px 8px 20px rgba(0, 0, 0, 0.08);
+  // -light and -lighter used to be 0 0 — omnidirectional glows, which is the
+  // absence of a light source rather than a soft one. They cast like the rest now.
+  --tx-box-shadow-light: 2px 4px 12px rgba(0, 0, 0, 0.12);
+  --tx-box-shadow-lighter: 1px 2px 6px rgba(0, 0, 0, 0.12);
+  --tx-box-shadow-dark: 8px 16px 48px 16px rgba(0, 0, 0, 0.08),
+    6px 12px 32px rgba(0, 0, 0, 0.12), 4px 8px 16px -8px rgba(0, 0, 0, 0.16);
 
   // Transition
   --tx-transition-duration: 0.3s;
@@ -378,12 +402,22 @@
   --tx-surface-refraction-mask-rgb: 0 0 0;
   --tx-surface-refraction-mask-blend-mode: multiply;
 
-  --tx-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.36),
-    0px 8px 20px rgba(0, 0, 0, 0.72);
-  --tx-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.72);
-  --tx-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.72);
-  --tx-box-shadow-dark: 0px 16px 48px 16px rgba(0, 0, 0, 0.72),
-    0px 12px 32px rgba(0, 0, 0, 0.72), 0px 8px 16px -8px rgba(0, 0, 0, 0.72);
+  --tx-surface-raised: color-mix(in srgb, #ffffff 14%, var(--tx-fill-color, #303030));
+
+  // Same geometry as light, denser: a shadow on a dark ground needs more alpha
+  // to read at all. Only the density differs — never the direction.
+  --tx-elevation-1: 1px 2px 4px rgba(0, 0, 0, 0.24);
+  --tx-elevation-2: 1px 2px 8px rgba(0, 0, 0, 0.3);
+  --tx-elevation-3: 2px 4px 14px rgba(0, 0, 0, 0.36);
+  --tx-elevation-4: 4px 8px 24px rgba(0, 0, 0, 0.44);
+  --tx-elevation-5: 6px 14px 40px rgba(0, 0, 0, 0.54);
+
+  --tx-box-shadow: 6px 12px 32px 4px rgba(0, 0, 0, 0.36),
+    4px 8px 20px rgba(0, 0, 0, 0.72);
+  --tx-box-shadow-light: 2px 4px 12px rgba(0, 0, 0, 0.72);
+  --tx-box-shadow-lighter: 1px 2px 6px rgba(0, 0, 0, 0.72);
+  --tx-box-shadow-dark: 8px 16px 48px 16px rgba(0, 0, 0, 0.72),
+    6px 12px 32px rgba(0, 0, 0, 0.72), 4px 8px 16px -8px rgba(0, 0, 0, 0.72);
 
   --tx-color-white: #ffffff;
   --tx-color-primary-rgb: 64 158 255;

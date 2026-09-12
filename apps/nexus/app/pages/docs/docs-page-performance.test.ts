@@ -52,6 +52,8 @@ const tuffCodeBlockRenderer = readFileSync(new URL('../../components/content/Tuf
 const tuffPropsTable = readFileSync(new URL('../../components/content/TuffPropsTable.vue', import.meta.url), 'utf8')
 const mermaidRenderer = readFileSync(new URL('../../utils/mermaid-renderer.ts', import.meta.url), 'utf8')
 const i18nConfig = readFileSync(new URL('../../i18n.config.ts', import.meta.url), 'utf8')
+const i18nPreloadPlugin = readFileSync(new URL('../../plugins/i18n-preload-hydration.client.ts', import.meta.url), 'utf8')
+const i18nPreloadHydration = readFileSync(new URL('../../utils/i18n-preload-hydration.ts', import.meta.url), 'utf8')
 const i18nEn = readFileSync(new URL('../../../i18n/locales/en.ts', import.meta.url), 'utf8')
 const i18nZh = readFileSync(new URL('../../../i18n/locales/zh.ts', import.meta.url), 'utf8')
 const routeLocaleChunks = readFileSync(new URL('../../utils/route-locale-chunks.ts', import.meta.url), 'utf8')
@@ -62,7 +64,7 @@ const nexusAuth = readFileSync(new URL('../../composables/useNexusAuth.ts', impo
 const authApi = readFileSync(new URL('../../../server/api/auth/[...].ts', import.meta.url), 'utf8')
 const sessionAuthSecret = readFileSync(new URL('../../../server/utils/sessionAuthSecret.ts', import.meta.url), 'utf8')
 const vueDevtoolsApiNoop = readFileSync(new URL('../../utils/vue-devtools-api-noop.ts', import.meta.url), 'utf8')
-const docsPageApi = readFileSync(new URL('../../../server/api/docs/page.get.ts', import.meta.url), 'utf8')
+const docsPageApi = readFileSync(new URL('../../../server/utils/docsPageResolver.ts', import.meta.url), 'utf8')
 const nuxtConfig = readFileSync(new URL('../../../nuxt.config.ts', import.meta.url), 'utf8')
 const packageJson = readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')
 const licensePage = readFileSync(new URL('../license.vue', import.meta.url), 'utf8')
@@ -179,7 +181,7 @@ describe('docs page performance boundaries', () => {
     expect.soft(nuxtConfig).toMatch(/'app:resolve'\(app\) \{[\s\S]*removeSidebaseAuthAppRuntime\(app\)/)
     expect.soft(nuxtConfig).toMatch(/'app:templates'\(app\) \{[\s\S]*removeSidebaseAuthAppRuntime\(app\)/)
 
-    expect.soft(appRoot).toContain('const { status, getSession } = useNexusAuth()')
+    expect.soft(appRoot).toContain('const { status, getSession, settleAnonymousSession } = useNexusAuth()')
     expect.soft(theHeader).toContain('const { status } = useNexusAuth()')
     expect.soft(appRoot).not.toContain('useAuth()')
     expect.soft(theHeader).not.toContain('useAuth()')
@@ -596,6 +598,19 @@ describe('docs page performance boundaries', () => {
     expect.soft(nuxtConfig).toMatch(/i18n: \{[\s\S]*locales: \[[\s\S]*\{ code: 'en', file: 'en\.ts' \}[\s\S]*\{ code: 'zh', file: 'zh\.ts' \}[\s\S]*langDir: 'locales'[\s\S]*defaultLocale: 'en'/)
   })
 
+  it('preloads the rendered locale keys into the SSR HTML instead of a blocking client fetch', () => {
+    // Without preload the client fetched `/_i18n/<hash>/<locale>/messages.json` after
+    // DOMContentLoaded and hydration waited on it. Strip keeps the payload to the keys the
+    // render used rather than shipping both whole locales.
+    expect.soft(nuxtConfig).toMatch(/i18n: \{[\s\S]*experimental: \{[\s\S]*preload: true,[\s\S]*stripMessagesPayload: true,/)
+    // nuxt-i18n still awaits its own messages fetch before mounting even when the payload is
+    // preloaded; the pre-enforced client plugin is what takes that fetch off the critical path.
+    expect.soft(i18nPreloadPlugin).toContain("enforce: 'pre'")
+    expect.soft(i18nPreloadPlugin).toContain("Object.defineProperty(holder, '_nuxtI18n'")
+    expect.soft(i18nPreloadPlugin).toContain('installHydrationAwareMessageLoader(nuxtApp, value)')
+    expect.soft(i18nPreloadHydration).toContain('if (nuxtApp.isHydrating && ctx.preloaded)')
+  })
+
   it('keeps the browser title reactive when a reused docs route changes', () => {
     expect.soft(page).toMatch(/useHead\(\(\) => \(\{[\s\S]*title: docSeoHead\.value\.pageTitle[\s\S]*\}\)\)/)
   })
@@ -680,6 +695,13 @@ describe('docs page performance boundaries', () => {
     expect.soft(docsSidebar).toMatch(/key: computed\(\(\) => `docs-navigation:\$\{docsLocale\.value\}:\$\{docsNavigationScope\.value \?\? 'all'\}`\)/)
     expect.soft(page).toMatch(/useTypedFetch<unknown>\([\s\S]*docsNavigationEndpoint,[\s\S]*server: false,[\s\S]*lazy: true,[\s\S]*responseType: 'json'/)
     expect.soft(docsSidebar).toMatch(/useTypedFetch<unknown>\([\s\S]*docsNavigationEndpoint,[\s\S]*server: false,[\s\S]*lazy: true,[\s\S]*responseType: 'json'/)
+  })
+
+  it('shares one in-flight navigation request between the page pager and the sidebar', () => {
+    // Both subscribe under the same key; Nuxt's default `dedupe: 'cancel'` restarted the
+    // request for the second subscriber, so the tree left the browser twice per page.
+    expect.soft(page).toMatch(/key: computed\(\(\) => `docs-navigation:[\s\S]*?dedupe: 'defer',/)
+    expect.soft(docsSidebar).toMatch(/key: computed\(\(\) => `docs-navigation:[\s\S]*?dedupe: 'defer',/)
   })
 
   it('warms component docs links on sidebar intent without enabling bulk NuxtLink prefetch', () => {

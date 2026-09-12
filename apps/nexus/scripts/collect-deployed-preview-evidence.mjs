@@ -30,6 +30,7 @@ const routeBudgets = [
 
 const apiProbes = [
   { name: 'docs page full body', path: '/api/docs/page?path=/docs/dev/components/tabs&locale=en&body=1', expected: [200] },
+  { name: 'docs page static body', path: '/api/docs/page/en/body/dev/components/tabs.json', expected: [200] },
   { name: 'docs navigation', path: '/api/docs/navigation?locale=en', expected: [200] },
   { name: 'docs sidebar components', path: '/api/docs/sidebar-components?locale=en', expected: [200] },
   { name: 'docs view unauth read', path: '/api/docs/view?path=/docs/dev/components/tabs&locale=en', expected: [200] },

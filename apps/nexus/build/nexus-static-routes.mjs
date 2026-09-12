@@ -43,3 +43,57 @@ export const docsPrerenderEvidenceRoutes = [
   '/docs/guide/start',
 ]
 
+
+/**
+ * `cache-control` for prerendered docs output on Cloudflare Pages. Pages emits
+ * `max-age=0, must-revalidate` for every static file unless `_headers` says otherwise, so
+ * each docs visit re-fetched HTML and JSON that only change on deploy — from CN a 1–2 s
+ * round trip apiece. Nitro writes these route rules into `dist/_headers`.
+ *
+ * Browser window (`max-age`) matches the dynamic docs API's 5 minutes; the edge (`s-maxage`)
+ * may keep a copy for an hour and serve it stale while it revalidates for a day. A deploy
+ * changes the hashed asset names inside the HTML, so an hour-old edge copy still points at
+ * assets that exist (immutable, kept alongside). `/_i18n/**` is hash-versioned in the path, so
+ * it can be held longer.
+ */
+export const DOCS_STATIC_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400'
+export const I18N_MESSAGES_CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
+
+export const docsStaticHtmlHeaderRoutes = ['/en/docs/**', '/zh/docs/**']
+/**
+ * Prerendered JSON has no file extension, so Pages served it as `application/octet-stream`;
+ * the explicit content-type is part of the same rule.
+ */
+export const docsStaticJsonHeaderRoutes = [
+  '/api/docs/page/**',
+  '/api/docs/navigation/**',
+  '/api/docs/search/**',
+  '/api/docs/sidebar-components/**',
+  '/api/docs/component-sync',
+]
+export const i18nMessagesHeaderRoutes = ['/_i18n/**']
+
+/**
+ * Documented Cloudflare Pages limits for `_headers`. Past them a line, or the rest of the file,
+ * is dropped with a warning only in wrangler's output — every header past the limit quietly
+ * stops being sent.
+ */
+export const CLOUDFLARE_HEADERS_MAX_RULES = 100
+export const CLOUDFLARE_HEADERS_MAX_LINE_LENGTH = 2000
+
+export function createStaticCacheRouteRules() {
+  const rules = {}
+  for (const route of docsStaticHtmlHeaderRoutes)
+    rules[route] = { headers: { 'cache-control': DOCS_STATIC_CACHE_CONTROL } }
+  for (const route of docsStaticJsonHeaderRoutes) {
+    rules[route] = {
+      headers: {
+        'cache-control': DOCS_STATIC_CACHE_CONTROL,
+        'content-type': 'application/json; charset=utf-8',
+      },
+    }
+  }
+  for (const route of i18nMessagesHeaderRoutes)
+    rules[route] = { headers: { 'cache-control': I18N_MESSAGES_CACHE_CONTROL } }
+  return rules
+}

@@ -41,6 +41,90 @@ describe('txTree', () => {
     expect(emitted?.[0][0]).toBe('b')
   })
 
+  describe('selection without a v-model', () => {
+    it('selects the clicked row when nothing is bound', async () => {
+      // The selected set used to read `props.modelValue` alone, so an unbound
+      // tree emitted into nothing and never showed a selection at all.
+      const wrapper = mount(TxTree, { props: { nodes } })
+
+      await wrapper.findAll('.tx-tree__row')[1]!.trigger('click')
+
+      expect(wrapper.findAll('.tx-tree__row')[1]!.classes()).toContain('is-selected')
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['b'])
+    })
+
+    it('collects keys in multiple mode and drops one on a second click', async () => {
+      const wrapper = mount(TxTree, { props: { nodes, multiple: true, defaultExpandedKeys: ['a'] } })
+      const rows = () => wrapper.findAll('.tx-tree__row')
+
+      await rows()[0]!.trigger('click')
+      await rows()[2]!.trigger('click')
+      expect(rows().filter(r => r.classes().includes('is-selected'))).toHaveLength(2)
+
+      await rows()[0]!.trigger('click')
+      expect(rows().filter(r => r.classes().includes('is-selected'))).toHaveLength(1)
+    })
+
+    it('seeds from defaultSelectedKeys', () => {
+      const single = mount(TxTree, { props: { nodes, defaultSelectedKeys: ['b'] } })
+      expect(single.findAll('.tx-tree__row')[1]!.classes()).toContain('is-selected')
+
+      const many = mount(TxTree, { props: { nodes, multiple: true, defaultSelectedKeys: ['a', 'b'] } })
+      expect(many.findAll('.tx-tree__row').filter(r => r.classes().includes('is-selected'))).toHaveLength(2)
+    })
+
+    it('keeps the user selection when the parent re-renders an equal literal', async () => {
+      const wrapper = mount(TxTree, { props: { nodes, defaultSelectedKeys: ['a'] } })
+
+      await wrapper.findAll('.tx-tree__row')[1]!.trigger('click')
+      expect(wrapper.findAll('.tx-tree__row')[1]!.classes()).toContain('is-selected')
+
+      // Same contents, new array — what an inline `:default-selected-keys="['a']"`
+      // produces on any unrelated parent render.
+      await wrapper.setProps({ defaultSelectedKeys: ['a'] })
+      expect(wrapper.findAll('.tx-tree__row')[1]!.classes()).toContain('is-selected')
+    })
+
+    it('hands control to the host the moment modelValue is bound', async () => {
+      const wrapper = mount(TxTree, { props: { nodes, modelValue: 'a' } })
+
+      await wrapper.findAll('.tx-tree__row')[1]!.trigger('click')
+
+      // The host said 'a' and never updated it, so 'a' is what stays selected.
+      expect(wrapper.findAll('.tx-tree__row')[0]!.classes()).toContain('is-selected')
+      expect(wrapper.findAll('.tx-tree__row')[1]!.classes()).not.toContain('is-selected')
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['b'])
+    })
+
+    it('does not let a seed change behind the host become the fallback', async () => {
+      const wrapper = mount(TxTree, { props: { nodes, modelValue: 'a', defaultSelectedKeys: ['a'] } })
+      const rows = () => wrapper.findAll('.tx-tree__row')
+
+      // The seed moves while the host owns the selection; the tree must not
+      // quietly adopt it, the same way `defaultExpandedKeys` is ignored while
+      // `expandedKeys` is bound.
+      await wrapper.setProps({ defaultSelectedKeys: ['b'] })
+      expect(rows()[0]!.classes()).toContain('is-selected')
+
+      // Handing control back falls through to what the tree already had, not to
+      // the seed that changed in the meantime.
+      await wrapper.setProps({ modelValue: undefined })
+      expect(rows()[0]!.classes()).toContain('is-selected')
+      expect(rows()[1]!.classes()).not.toContain('is-selected')
+    })
+
+    it('leaves a disabled row unselectable', async () => {
+      const wrapper = mount(TxTree, {
+        props: { nodes: [{ key: 'a', label: 'Alpha', disabled: true }] },
+      })
+
+      await wrapper.findAll('.tx-tree__row')[0]!.trigger('click')
+
+      expect(wrapper.findAll('.tx-tree__row')[0]!.classes()).not.toContain('is-selected')
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    })
+  })
+
   it('uses one roving tab stop and skips disabled items during keyboard navigation', async () => {
     const wrapper = mount(TxTree, {
       attachTo: document.body,

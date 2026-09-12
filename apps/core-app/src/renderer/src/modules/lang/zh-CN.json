@@ -726,6 +726,7 @@
     "groupDesc": "管理您的账户信息和登录状态。",
     "nexusBaseUrlTitle": "Nexus 服务地址",
     "nexusBaseUrlPlaceholder": "https://tuff.tagzxia.com",
+    "nexusBaseUrlEdit": "修改",
     "nexusBaseUrlSave": "保存",
     "nexusBaseUrlReset": "恢复默认",
     "nexusBaseUrlEnvHint": "构建期环境变量 TUFF_NEXUS_BASE_URL 优先级最高，存在时会覆盖此处设置（远程地址必须是 https，http 仅限本机地址，否则会被忽略）。",

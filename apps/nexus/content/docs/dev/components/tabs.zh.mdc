@@ -629,6 +629,7 @@ code: |
 - 默认插槽只收集 `TxTabItem`、`TxTabItemGroup` 与 `TxTabHeader`；支持 Fragment，但会忽略任意包装组件。
 - `TxTabItemGroup` 只是导航分组标记；真实面板内容仍来自子级 `TxTabItem`。
 - `showIndicator=false` 会移除指示器 DOM 和指示器动画；尺寸动画启用时仍会观察内容与导航区域。
+- 指示器在首屏即可见，激活项来自 `modelValue`、`defaultValue` 或 `activation` 都一样，无需先点击一次才会出现。只有在激活项尚未获得非零尺寸之前才保持 `opacity: 0`，这样它会直接出现在正确位置，而不是从导航边缘滑入；根节点上的 `tx-tabs--indicator-pending` 正对应这段时间。
 - 高度动画会移除内部滚动容器，让 AutoSizer 直接测量面板高度；手动直测布局可使用 `contentScrollable=false`。
 - 未激活 tab 的面板不会挂载。需要跨切换保留的状态应放在面板子树之外。
 
@@ -665,6 +666,6 @@ code: |
 
 - Component sources: `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, and `TxTabItemGroup.vue`.
 - Types: `packages/tuffex/packages/components/src/tabs/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` 覆盖 activation 渲染、可用与禁用 tab 切换、受控更新、fragment、异步 tab item、分组、内容动效变体、隐藏指示器、视觉 prop 归一化，以及暴露的 AutoSizer 方法。
+- **实测覆盖:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` 覆盖 activation 渲染、可用与禁用 tab 切换、受控更新、fragment、异步 tab item、分组、内容动效变体、隐藏指示器、视觉 prop 归一化、暴露的 AutoSizer 方法，以及指示器在首次布局时显现、在尚无真实尺寸前保持隐藏。
 
 <TuffDocSourceLink />

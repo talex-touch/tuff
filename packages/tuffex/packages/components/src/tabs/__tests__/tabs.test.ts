@@ -431,4 +431,45 @@ describe('txTabs', () => {
         (globalThis as any).CSS = originalCss
     }
   })
+
+  // The indicator used to be revealed only from a tab's own click handler:
+  // `applyPointerFor({ reveal: true })` is called from `onClick` and nowhere
+  // else, while every mount and layout path passes `reveal: false`. A freshly
+  // mounted TxTabs therefore painted its pointer at opacity 0 and left it there,
+  // so tabs whose active item comes from `v-model` or `activation` showed no
+  // indicator at all until something was clicked.
+  it('reveals the indicator on first layout, without waiting for a click', async () => {
+    // jsdom reports every rect as 0x0, and the reveal is guarded on a non-zero
+    // measurement so it cannot fire before layout exists. Give it a real size.
+    const proto = Element.prototype as unknown as { getBoundingClientRect: () => DOMRect }
+    const original = proto.getBoundingClientRect
+    proto.getBoundingClientRect = function (): DOMRect {
+      return { x: 0, y: 0, top: 0, left: 0, right: 80, bottom: 32, width: 80, height: 32, toJSON: () => ({}) } as DOMRect
+    }
+
+    try {
+      const wrapper = mountTabs()
+      await nextTick()
+      await flushPromises()
+      await nextTick()
+
+      const pointer = wrapper.find('.tx-tabs__pointer')
+      expect(pointer.exists()).toBe(true)
+      expect((pointer.element as HTMLElement).style.opacity).toBe('1')
+      expect(wrapper.find('.tx-tabs').classes()).not.toContain('tx-tabs--indicator-pending')
+    }
+    finally {
+      proto.getBoundingClientRect = original
+    }
+  })
+
+  it('keeps the indicator hidden while nothing has been laid out yet', async () => {
+    // Default jsdom: every rect is 0x0, so the guard must hold the pointer back
+    // rather than parking it at the nav's origin.
+    const wrapper = mountTabs()
+    await nextTick()
+    await flushPromises()
+
+    expect((wrapper.find('.tx-tabs__pointer').element as HTMLElement).style.opacity).toBe('0')
+  })
 })

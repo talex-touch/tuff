@@ -256,7 +256,7 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 74%, transparent);
   backdrop-filter: blur(14px) saturate(150%);
   -webkit-backdrop-filter: blur(14px) saturate(150%);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 5px 10px 24px rgba(0, 0, 0, 0.12);
 }
 
 .tx-splitter.is-disabled {

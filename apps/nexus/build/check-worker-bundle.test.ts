@@ -193,8 +193,12 @@ describe('Nexus deploy asset budget', () => {
     expect(guardSource).toContain("candidate.includes('--un-icon:')")
     expect(guardSource).toContain('checkSharedEntryCssBudget')
     expect(guardSource).toContain('shared entry CSS budget violations')
-    expect(guardSource).toContain('oversized icon selector returned to shared entry CSS')
-    expect(guardSource).toContain('aliased icon selector missing from shared entry CSS')
+    // The icons layer loads after mount as its own stylesheet; the entry must carry no icon
+    // rule at all, and the per-icon budgets apply to that sheet instead.
+    expect(guardSource).toContain('function findIconsStylesheet(')
+    expect(guardSource).toContain('icon rules returned to the shared entry CSS; the icons layer must load after mount')
+    expect(guardSource).toContain('oversized icon selector returned to the icons stylesheet')
+    expect(guardSource).toContain('aliased icon selector missing from the icons stylesheet')
     expect(guardSource).toContain(`aliased icon selector ${'$'}{token} is`)
     expect(guardSource).toContain('Shared entry CSS verified')
   })
@@ -353,9 +357,9 @@ describe('Nexus deploy asset budget', () => {
     const guardSource = readFileSync(workerBundleGuardPath, 'utf8')
     const nuxtSource = readFileSync(nuxtConfigPath, 'utf8')
 
-    expect(nuxtSource).toContain("exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*']")
+    expect(nuxtSource).toContain("exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*', '/api/docs/page/*']")
     expect(guardSource).toContain('expectedStaticRoutePatterns')
-    expect(guardSource).toContain("['/en/docs/*', '/zh/docs/*']")
+    expect(guardSource).toContain("['/en/docs/*', '/zh/docs/*', '/api/docs/page/*']")
     expect(guardSource).toContain('expectedStaticRoutePatterns.length} patterns')
   })
 

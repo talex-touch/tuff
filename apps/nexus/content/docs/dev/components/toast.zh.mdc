@@ -14,7 +14,7 @@ verified: true
 ## 基础用法
 
 ### Toast
-挂载 host 后触发提示。
+挂载 host 后触发提示。多条会叠成一摞；把指针移上去会展开，并把所有倒计时停住，直到指针离开。
 :::TuffDemoWrapper{demo="ToastToastDemo" code-lang="vue"}
 ---
 code: |
@@ -23,7 +23,7 @@ code: |
   </script>
 
   <template>
-    <TxToastHost />
+    <TxToastHost position="bottom-right" />
     <TxButton @click="toast({ title: 'Saved', description: 'Your changes have been saved.' })">
       Show toast
     </TxButton>
@@ -32,6 +32,12 @@ code: |
       @click="toast({ title: 'Success', description: 'Done', variant: 'success' })"
     >
       Success
+    </TxButton>
+    <TxButton
+      style="margin-left: 8px;"
+      @click="toast({ title: '已删除 1 项', action: { label: '撤销', onClick: restore } })"
+    >
+      With action
     </TxButton>
   </template>
 ---
@@ -42,7 +48,14 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| - | - | - | `TxToastHost` 没有 props，建议只在应用根部附近挂载一次。 |
+| position | `'top-left' \| 'top-center' \| 'top-right' \| 'bottom-left' \| 'bottom-center' \| 'bottom-right'` | `'bottom-right'` | 这摞通知从哪个角（或哪条边的中间）长出来。 |
+| visibleToasts | `number` | `3` | 同时留在屏幕上的条数，超出的完全透明地排在后面，等前面的离场再补位。 |
+| expand | `boolean` | `false` | 常驻展开，指针离开也不收拢。 |
+| gap | `number` | `14` | 通知之间的像素间距：展开时的间隙和收拢时露出的边都用它。 |
+| offset | `number` | `16` | 距视口边缘的距离。 |
+| swipeToDismiss | `boolean` | `true` | 允许指针把一条通知朝它所靠的边甩出去。 |
+
+只在应用根部附近挂一个 host。第二个 host 仍会渲染容器（保证 SSR 标记能正常 hydrate）但不画任何内容，并在开发构建下告警 —— 见[交互契约](#交互契约)。
 
 ### toast(options)
 
@@ -55,8 +68,13 @@ code: |
     id?: string
     title?: string
     description?: string
-    variant?: 'default' | 'success' | 'warning' | 'danger'
+    variant?: 'default' | 'info' | 'success' | 'warning' | 'danger'
     duration?: number // 默认 2600，0 = 不自动关闭
+    action?: {
+      label: string
+      onClick?: (id: string) => void
+      dismiss?: boolean // 默认 true —— onClick 执行完就关掉这条
+    }
   }): string
 ---
 :::
@@ -71,6 +89,21 @@ code: |
   const id = toast({ title: '已排队', duration: 0 })
   dismissToast(id)
   clearToasts()
+---
+:::
+
+### pauseToasts / resumeToasts / toastsPaused
+
+`TxToastHost` 在指针进入和获得焦点时会自己调用，通常不需要你操心。导出它们是给那些有自己理由要按住这摞通知的场景 —— 比如弹出的对话框盖在上面，或者内容需要慢慢读。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { pauseToasts, resumeToasts, toastsPaused } from '@talex-touch/tuffex/utils'
+
+  pauseToasts()   // 所有倒计时就地冻结；可重复调用
+  toastsPaused()  // => true
+  resumeToasts()  // 每条从剩下的时间继续，而不是重新从头计时
 ---
 :::
 
@@ -93,6 +126,11 @@ code: |
 - `toast()` 返回最终 id；传入相同 `id` 会替换现有 toast，避免同一业务提示重复堆叠。
 - `duration > 0` 时自动关闭，`duration: 0` 时保持显示直到调用 `dismissToast(id)` 或 `clearToasts()`。
 - 每次调用都会通过共享 z-index 管理器提升 host 层级，让新通知位于当前交互层之上。
+- **堆叠。** 最新的一条在最前面，后面每一条后退 `gap` 像素、缩小 5%，所以只露出顶边；超过 `visibleToasts` 的完全透明且不可点。收拢状态下只有最前面那条接收指针事件。
+- **悬停会按住这摞通知。** 指针或键盘焦点进入该区域会把它展开到完整高度并调用 `pauseToasts()`；离开时收拢并调用 `resumeToasts()`，每条从剩余时间继续。收拢时 host 自身是 `pointer-events: none`，所以最前面那条上方的空白区域仍然可以点到页面。
+- **滑动。** 朝它所靠的那条边拖动超过 45px 就关闭；如果甩动速度超过 0.32px/ms，超过 12px 即可。往反方向拖只会移动五分之一的距离并回弹。从按钮上开始的拖动让给按钮。设 `swipeToDismiss: false` 可关闭此行为。
+- **只有一个 host 负责绘制。** 所有 host 读同一个全局 store，两个就会在同一个角落把每条通知画两遍。第一个挂载的 host 认领绘制权；后来的保留容器（保证 SSR 标记正常 hydrate）但不画内容，开发构建下告警一次。持有者卸载后由下一个接手。认领发生在 `onMounted`，所以通知出现在挂载后的下一个 tick，而不是首次渲染里。
+- **动效。** 通知沿着自身位置的轴向进出，时长 0.4s；`prefers-reduced-motion: reduce` 下退化为纯透明度变化。
 
 ## 后台反馈中心
 
@@ -143,7 +181,7 @@ code: |
 
 ## 最佳实践
 
-- 只挂载一个 host。多个 host 会读取同一个全局 store，可能重复渲染通知区域。
+- 只在应用根部附近挂一个 host，用 `position` 控制方位，不要每个角落各挂一个。多余的 host 会自动让位而不会重复渲染队列，但仍然要付出一个容器和一条开发告警。
 - 任务、保存、同步、重试类通知使用稳定 id，让重复状态更新替换上一条 toast。
 - 描述保持简短；长进度、带恢复动作的错误或表单应放到面板、抽屉或页面里。
 - 离开所属页面或底层任务结束时，清理常驻 toast。
@@ -151,14 +189,16 @@ code: |
 ## 审阅说明
 
 - **可访问性说明:** Host 是带标签的 `role="region"`，同时是 polite 的 `aria-live` 区域，焦点在别处时新 toast 也会被播报；`danger` toast 会升级为 `role="alert"`。关键失败或长任务仍建议用持久可见文案或页面级状态文本补充。
+- **单 host 说明:** 第二个 `TxToastHost` 会渲染一个空容器，并在开发构建下打印一条告警。之所以不是完全不渲染，是因为那会改变服务端产出的标记并破坏 hydrate。
 - **计时器说明:** 复用 `id` 会替换 store item，并先取消该 id 上已有的自动关闭定时器（`clearDismissTimer`），替换后的 toast 按自己的 `duration` 重新计时。常驻任务 toast 用 `duration: 0`。
-- **实测覆盖:** `toast.test.ts` 覆盖 id 替换、返回 id、自动关闭、常驻 toast、dismiss/clear 辅助函数、host region 语义、variant class、标题/描述渲染、可访问关闭按钮，以及关闭按钮移除。
+- **实测覆盖:** `toast.test.ts` 覆盖 id 替换、返回 id、自动关闭、常驻 toast、按剩余时间暂停/恢复、dismiss/clear 辅助函数、host region 语义、variant class、标题/描述渲染、可访问关闭按钮，以及关闭按钮移除。`toast-host.test.ts` 覆盖堆叠顺序与偏移、上下方向生长、`visibleToasts`、悬停展开及其暂停、滑动阈值与反向阻尼、操作按钮，以及单 host 认领。
 
 ## Source
 
 - Host source: `packages/tuffex/packages/components/src/toast/src/TxToastHost.vue`。
-- Utility source: `packages/tuffex/packages/utils/toast.ts` 导出 `toast`、`dismissToast`、`clearToasts`、`toastStore`、`TxToastOptions`、`TxToastItem` 与 `TxToastVariant`。
-- Export alias: `packages/tuffex/packages/components/src/toast/index.ts` 导出可安装的 `ToastHost`、`TxToastHost` 与 `TxToastHostInstance`。
-- Coverage: `packages/tuffex/packages/components/src/toast/__tests__/toast.test.ts` 覆盖 store 行为、计时器、host 渲染与移除。
+- Utility source: `packages/tuffex/packages/utils/toast.ts` 导出 `toast`、`dismissToast`、`clearToasts`、`pauseToasts`、`resumeToasts`、`toastsPaused`、`toastStore`、`TxToastOptions`、`TxToastItem`、`TxToastAction` 与 `TxToastVariant`。
+- Export alias: `packages/tuffex/packages/components/src/toast/index.ts` 导出可安装的 `ToastHost`、`TxToastHost`、`TxToastHostInstance`、`TxToastHostProps` 与 `TxToastPosition`。
+- Single-host registry: `packages/tuffex/packages/components/src/toast/src/host-registry.ts`。
+- Coverage: `packages/tuffex/packages/components/src/toast/__tests__/toast.test.ts`（store、计时器、暂停）与 `toast-host.test.ts`（堆叠、悬停、滑动、操作、单 host）。
 
 <TuffDocSourceLink />

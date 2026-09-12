@@ -9,6 +9,7 @@ import { remarkMermaid } from './app/utils/remark-mermaid'
 import { nexusPageMetaFastPathPlugin } from './build/nexus-page-meta-fast-path'
 import { removeRouteLocalPageComponents } from './build/nexus-page-routes'
 import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
+import { createStaticCacheRouteRules } from './build/nexus-static-routes.mjs'
 import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
 
 loadEnv({ path: '.env' })
@@ -143,6 +144,30 @@ function isEnvFlagEnabled(value?: string) {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
 }
 
+/**
+ * The two client plugins `@sentry/nuxt` registers: a template that `await import`s
+ * `sentry.client.config.ts`, and the integrations plugin that depends on it. Both run before
+ * the app mounts, which put the SDK download on the hydration critical path of every page.
+ * `app/plugins/sentry-deferred.client.ts` does their job after mount instead, so they are
+ * dropped here. Server-side Sentry (source maps, request handler) is untouched.
+ */
+function isSentryClientPlugin(file: string | undefined) {
+  if (!file)
+    return false
+
+  const normalized = file.replace(/\\/g, '/').replace(/\.m?js$/, '')
+  return normalized.endsWith('/sentry-client-config')
+    || normalized.endsWith('/@sentry/nuxt/build/module/runtime/plugins/sentry.client')
+    || (normalized.includes('/@sentry+nuxt') && normalized.endsWith('/runtime/plugins/sentry.client'))
+}
+
+function removeSentryClientPlugins(app: { plugins: Array<{ src?: string }> }) {
+  for (let index = app.plugins.length - 1; index >= 0; index -= 1) {
+    if (isSentryClientPlugin(app.plugins[index]?.src))
+      app.plugins.splice(index, 1)
+  }
+}
+
 const riskControlFeatureEnabled = isEnvFlagEnabled(
   process.env.NUXT_PUBLIC_RISK_CONTROL_ENABLED || process.env.NEXUS_EXPERIMENTAL_RISK_ENABLED,
 )
@@ -180,6 +205,7 @@ export default defineNuxtConfig({
           'content/demo-registry.ts',
           'content/demo-loader.ts',
           'content/demo-lazy.ts',
+          'content/demo-registry-loader.ts',
           'content/TuffCodeBlockRenderer.vue',
         ],
       },
@@ -308,6 +334,10 @@ export default defineNuxtConfig({
       defaultDefenseMode: process.env.ADMIN_DEFAULT_DEFENSE_MODE || 'NORMAL',
     },
     public: {
+      // Read by `app/plugins/sentry-deferred.client.ts`: the module's own client plugins are
+      // removed in `app:resolve`, so this is what tells the deferred loader whether Sentry is
+      // on for this build at all.
+      sentryClientEnabled: !disableSentry,
       docs: {
         asideCardChrome: process.env.NUXT_PUBLIC_DOCS_ASIDE_CARD_CHROME,
       },
@@ -342,6 +372,9 @@ export default defineNuxtConfig({
     '/terms': { redirect: '/license' },
     '/updates': { disableServerSideAuth: true },
     '/updates/**': { disableServerSideAuth: true },
+    // Edge cache headers for prerendered docs HTML/JSON and i18n messages; see the
+    // constants for the window and why. Static responses only — the Worker keeps its own.
+    ...createStaticCacheRouteRules(),
   } as Record<string, Record<string, unknown>>,
 
   future: {
@@ -387,7 +420,10 @@ export default defineNuxtConfig({
     cloudflare: {
       pages: {
         routes: {
-          exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*'],
+          // Pages caps _routes.json at 100 entries and nitro fills it with one entry per
+          // prerendered file; the static docs JSON twins alone are over a thousand, so they
+          // must be covered by a pattern or most of them silently fall back to the Worker.
+          exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*', '/api/docs/page/*'],
         },
       },
     },
@@ -407,11 +443,17 @@ export default defineNuxtConfig({
     },
     prerender: disablePrerender
       ? {
+          autoSubfolderIndex: false,
           crawlLinks: false,
           ignore: ['/**'],
           routes: [],
         }
       : {
+          // Emit `<route>.html`, not `<route>/index.html`. Cloudflare Pages serves the
+          // subfolder form only at `/route/` and answers the slash-less URL — the one
+          // every in-app link, canonical and alternate tag uses — with a 308. Measured
+          // from CN that redirect alone cost 1.8s before the first byte of a docs page.
+          autoSubfolderIndex: false,
           crawlLinks: false,
           routes: nexusPrerenderRoutes,
           ignore: ['/hi'],
@@ -428,6 +470,20 @@ export default defineNuxtConfig({
     },
     build: {
       chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          // A docs page preloaded 61 chunks, about twenty of them under 1 KB; each is a request
+          // and, on HTTP/1.1, a queue slot. Rollup folds chunks below this size into an importer
+          // when doing so cannot make any entry load more than it needs. Measured: 1157 → 952
+          // client chunks, 61 → 50 preloads on a component page, bytes unchanged.
+          //
+          // Nuxt's SFC style inlining (`features.inlineStyles`) was tried alongside this and
+          // reverted: tuffex ships its styles as `.css` files that the on-demand style plugin
+          // imports from inside SFCs, so Nuxt inlined them *and* kept them linked — 78 KB of
+          // duplicated CSS and +10 KB gzip on every docs page for no fewer requests.
+          experimentalMinChunkSize: 4096,
+        },
+      },
     },
     optimizeDeps: {
       include: [
@@ -501,9 +557,11 @@ export default defineNuxtConfig({
   hooks: {
     'app:resolve'(app) {
       removeSidebaseAuthAppRuntime(app)
+      removeSentryClientPlugins(app)
     },
     'app:templates'(app) {
       removeSidebaseAuthAppRuntime(app)
+      removeSentryClientPlugins(app)
     },
     'components:extend'(components) {
       const ignoredContentComponentPatterns = [
@@ -511,6 +569,7 @@ export default defineNuxtConfig({
         '/app/components/content/demo-registry.ts',
         '/app/components/content/demo-loader.ts',
         '/app/components/content/demo-lazy.ts',
+        '/app/components/content/demo-registry-loader.ts',
         '/app/components/content/TuffCodeBlockRenderer.vue',
         '/app/components/store/',
         '/app/components/tuff/',
@@ -575,6 +634,15 @@ export default defineNuxtConfig({
     defaultLocale: 'en',
     strategy: 'no_prefix',
     detectBrowserLanguage: false,
+    experimental: {
+      // Without preload the client fetched `/_i18n/<hash>/<locale>/messages.json` after
+      // DOMContentLoaded and hydration waited for it — one full round trip on the critical
+      // path of every page, and a second, identical fetch followed from the locale
+      // orchestrator. Preloading puts the keys the SSR render used into the HTML instead;
+      // stripping keeps that payload to those keys rather than both whole locales.
+      preload: true,
+      stripMessagesPayload: true,
+    },
   },
 
   pwa,

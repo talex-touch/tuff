@@ -34,6 +34,7 @@ const CONFIGURED_EXCLUSIONS = [
   '/app/components/content/demo-registry.ts',
   '/app/components/content/demo-loader.ts',
   '/app/components/content/demo-lazy.ts',
+  '/app/components/content/demo-registry-loader.ts',
   '/app/components/content/TuffCodeBlockRenderer.vue',
   '/app/components/store/',
   '/app/components/tuff/',

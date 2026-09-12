@@ -79,6 +79,29 @@ describe('txTransfer', () => {
     )
   })
 
+  it('exposes minHeight as the panel floor variable', () => {
+    // The floor used to be hardcoded at 240px, which beat the host's own box:
+    // a transfer in a 190px cell still laid out at 240 and spilled past it.
+    const numeric = mount(TxTransfer, { props: { data, minHeight: 150 } })
+    expect(numeric.find('.tx-transfer').attributes('style')).toContain(
+      '--tx-transfer-min-height: 150px',
+    )
+
+    const css = mount(TxTransfer, { props: { data, minHeight: '10rem' } })
+    expect(css.find('.tx-transfer').attributes('style')).toContain(
+      '--tx-transfer-min-height: 10rem',
+    )
+  })
+
+  it('sets both height bounds together without dropping either', () => {
+    const wrapper = mount(TxTransfer, { props: { data, minHeight: 150, maxHeight: 300 } })
+    const style = wrapper.find('.tx-transfer').attributes('style')
+
+    expect(style).toContain('--tx-transfer-min-height: 150px')
+    expect(style).toContain('--tx-transfer-max-height: 300px')
+  })
+
+
   it('labels icon-only action buttons', () => {
     const wrapper = mount(TxTransfer, {
       props: {

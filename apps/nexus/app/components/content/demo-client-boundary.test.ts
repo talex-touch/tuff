@@ -17,16 +17,25 @@ describe('Tuff demo client boundary', () => {
   it('keeps the generated demo registry out of the SSR wrapper', () => {
     const wrapper = readComponent('./TuffDemoWrapper.vue')
 
-    expect(wrapper).not.toContain('./demo-registry')
+    // The wrapper may *start* the registry download on activation, but only through the
+    // shared loader's dynamic import — a static import here would pull 370+ demo entries
+    // into the server graph of every docs page.
+    expect(wrapper).not.toMatch(/from ['"]\.\/demo-registry['"]/)
+    expect(wrapper).toContain("from './demo-registry-loader'")
+    expect(wrapper).toMatch(/if \(import\.meta\.client\)\s*\n\s*void loadDemoRegistry\(\)/)
     expect(wrapper).toContain('<LazyTuffDemoClientRenderer')
     expect(wrapper).not.toContain('<TuffDemoClientRenderer')
   })
 
-  it('loads the generated demo registry only from the client renderer', () => {
+  it('loads the generated demo registry through one shared dynamic import', () => {
+    const loader = readComponent('./demo-registry-loader.ts')
     const renderer = readComponent('./TuffDemoClientRenderer.client.vue')
 
-    expect(renderer).not.toContain("import { createAsyncDemo, demoLoaders } from './demo-registry'")
-    expect(renderer).toContain("import('./demo-registry')")
+    expect(loader).toContain("import('./demo-registry')")
+    expect(loader).not.toMatch(/from ['"]\.\/demo-registry['"]/)
+    expect(renderer).toContain("from './demo-registry-loader'")
+    expect(renderer).not.toContain("import('./demo-registry')")
+    expect(renderer).not.toMatch(/from ['"]\.\/demo-registry['"]/)
   })
 
   it('keeps the client renderer behind viewport-driven demo activation', () => {
@@ -63,6 +72,7 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain('/app/components/content/demo-registry.ts')
     expect(config).toContain('/app/components/content/demo-loader.ts')
     expect(config).toContain('/app/components/content/demo-lazy.ts')
+    expect(config).toContain('/app/components/content/demo-registry-loader.ts')
     expect(config).toContain('/app/components/content/TuffCodeBlockRenderer.vue')
   })
 
@@ -142,6 +152,27 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain('__SENTRY_EXCLUDE_REPLAY_WORKER__: true')
   })
 
+  it('loads the Sentry client after mount instead of before hydration', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+    const plugin = readProjectFile('../../plugins/sentry-deferred.client.ts')
+    const clientConfig = readProjectFile('../../../sentry.client.config.ts')
+
+    // The module's two client plugins awaited the SDK download in the plugin phase, so it sat
+    // on the hydration critical path of every page. They are removed and replaced by a plugin
+    // that loads on the first idle slot after mount and replays anything caught in between.
+    expect(config).toContain('function removeSentryClientPlugins(')
+    expect(config).toMatch(/'app:resolve'\(app\) \{[\s\S]*removeSentryClientPlugins\(app\)/)
+    expect(config).toContain('sentryClientEnabled: !disableSentry')
+    expect(plugin).toContain("nuxtApp.hook('app:mounted'")
+    expect(plugin).toContain('installErrorBuffer(window)')
+    expect(plugin).toContain('buffer.flush(')
+    expect(plugin).toContain("import('@sentry/nuxt')")
+    // Importing the config file must stay side-effect free: the module still `await import`s
+    // it if its plugin ever comes back, and a top-level init would undo the deferral.
+    expect(clientConfig).not.toMatch(/^Sentry\.init\(/m)
+    expect(clientConfig).toContain('export function initSentryClient(')
+  })
+
   it('only retains Nitro source maps for explicit diagnostics and lets Sentry own upload maps', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 
@@ -180,6 +211,7 @@ describe('Tuff demo client boundary', () => {
 
     expect(generatedComponents).not.toContain('content/demos')
     expect(generatedComponents).not.toContain('demo-registry')
+    expect(generatedComponents).not.toContain('demo-registry-loader')
     expect(generatedComponents).not.toContain('demo-loader')
     expect(generatedComponents).not.toContain('demo-lazy')
   })

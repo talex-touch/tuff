@@ -21,6 +21,11 @@ export interface TreeProps {
   checkable?: boolean
   disabled?: boolean
   defaultExpandedKeys?: TreeKey[]
+  /**
+   * Seeds the selection the tree keeps for itself. Ignored while `modelValue`
+   * is bound — then the host owns it, the same split `expandedKeys` has.
+   */
+  defaultSelectedKeys?: TreeKey[]
   expandedKeys?: TreeKey[]
   indent?: number
   filterText?: string

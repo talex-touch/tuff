@@ -186,8 +186,103 @@
   border: 1px solid var(--docs-gallery-line);
 }
 
+/* A bar sitting flush against the frame had its own full-bleed divider clipped
+   by the 12px rounded corners, so the line stopped ~12px short at both ends and
+   read as a rendering fault. The body strip moves that divider into the middle
+   of the frame where nothing clips it, and shows the bar as what it is: chrome
+   over content. --bottom is for TabBar, which belongs at the foot of a screen. */
+.docs-gallery__chrome {
+  display: flex;
+  flex-direction: column;
+  background: var(--docs-gallery-bg, var(--tx-bg-color, #fff));
+}
+
+.docs-gallery__chrome--bottom {
+  flex-direction: column-reverse;
+}
+
+.docs-gallery__chrome-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  min-height: 58px;
+  padding: 0 14px;
+  background: var(--docs-inline-code-bg);
+}
+
+/* The strip was a blank slab taller than the bar above it, so the NavBar cell
+   read as a component that had failed to render rather than as chrome over a
+   screen. Two content lines cost no markup — both cells share this class — and
+   give the bar something to be chrome *for*. */
+.docs-gallery__chrome-body::before,
+.docs-gallery__chrome-body::after {
+  content: "";
+  height: 8px;
+  border-radius: 999px;
+  background: var(--docs-gallery-line);
+}
+
+.docs-gallery__chrome-body::before {
+  width: 62%;
+}
+
+.docs-gallery__chrome-body::after {
+  width: 38%;
+}
+
+/* The rows are the specimen for a drag control, so the cell shows the grip the
+   component now grows rather than the bare labels it had. */
+.docs-gallery__sort-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.docs-gallery__grip {
+  flex: none;
+  color: var(--docs-muted);
+  cursor: grab;
+}
+
+/* TxTabs defaults to placement="left" with navMinWidth 220. In the old 240px
+   block that left the panel 20px, which is the "proportions are wrong" the
+   cell showed. The gallery drives it from the top instead. */
 .docs-gallery__tabs {
-  height: 132px;
+  height: 150px;
+}
+
+/* Transfer is two full panels; left to itself it ran 240px tall and stretched
+   its cell past every neighbour. */
+.docs-gallery__transfer {
+  height: 190px;
+}
+
+/* No max-height here. Capping it clipped TxSidebarNav's last 9px instead of
+   fitting it — the stage grows for taller specimens, which is what the other
+   over-tall cells already do. */
+/* `width` here left the 240px nav flush against the left edge of a 320px box,
+   so the specimen sat ~40px left of the cell's centre while the box around it
+   was perfectly centred. A max-width bounds it just the same and lets the flex
+   stage centre what is actually there. */
+.docs-gallery__sidebar {
+  max-width: min(320px, 100%);
+}
+
+/* Same fight the label anchors above already had to pick: the docs prose
+   typography styles bare ul/ol inside the content area, so any component that
+   renders a list inherits its indent and block margins. TxSidebarNav's nav list
+   was picking up 25.6px of phantom left padding and 14.4px of bottom margin,
+   which is what made its rows look adrift and pushed the card past its stage. */
+/* Two class names, not one: `.markdown-body ul` is also (0,1,1), so a single
+   `.docs-gallery ul` only wins if it happens to load later. Scoped to the stage
+   so real prose in the gallery's own bar keeps its typography. */
+.docs-gallery .docs-gallery__stage ul,
+.docs-gallery .docs-gallery__stage ol,
+.docs-gallery .docs-gallery__stage li {
+  margin: 0;
+  padding: 0;
 }
 
 .docs-gallery__context-target {
@@ -269,12 +364,34 @@
   box-shadow: 0 0 0 2px var(--docs-gallery-bg, var(--tx-bg-color, #fff));
 }
 
+/* 240px was phone-narrow inside a 363px stage: every one of the ~60 cells that
+   uses this class filled exactly 0.66 of the room it had, and the components
+   that refuse to shrink (Transfer's two panels, BlockInput's 180px field)
+   collapsed their own labels rather than the stage giving them width. */
 .docs-gallery__block {
-  width: min(240px, 100%);
+  width: min(320px, 100%);
+  /* Places inline-level children — TxFlatSelect is a 120px inline-block — in
+     the middle instead of hard left. Children reset it below so no component
+     inherits centred prose. A flex column with align-items: center was tried
+     first and collapsed 19 of the 60 specimens, the chrome body strips to zero
+     among them: most of these fill the block by stretching, not by asking. */
+  text-align: center;
+}
+
+.docs-gallery__block > * {
+  text-align: initial;
+}
+
+/* TxSelect is a block box at a fixed 240px, so text-align cannot place it —
+   it needs auto margins. Named rather than applied to every child: on a flex
+   item an auto inline margin overrides cross-axis stretch, and a blanket rule
+   took NavBar's and TabBar's body strips to zero width. */
+.docs-gallery__block > .tuff-select {
+  margin-inline: auto;
 }
 
 .docs-gallery__block--wide {
-  width: min(300px, 100%);
+  width: min(360px, 100%);
 }
 
 .docs-gallery__spark {
@@ -285,6 +402,18 @@
   font-size: 24px;
   font-weight: 650;
   letter-spacing: 0.01em;
+}
+
+/* The adaptive mode's other half: a dark card is the surface `screen` was
+   designed for, so the same component that reads as nothing on the page reads
+   as a sweep here. Showing both is the point — the cell used to show neither. */
+.docs-gallery__glow-card {
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #1f2124;
+  color: #f2f3f5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
 }
 
 .docs-gallery__beam-card {
@@ -349,4 +478,41 @@
     min-height: 196px;
     padding: 52px 20px 32px;
   }
+}
+
+/* Alert specimens can be dismissed, so the cell offers a way back. The button
+   sits in the stage's top-right corner rather than in the flow, so restoring an
+   alert does not shift the alerts themselves. */
+.docs-gallery__alerts {
+  position: relative;
+}
+
+.docs-gallery__reset {
+  position: absolute;
+  top: -30px;
+  right: 0;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--tx-border-color-lighter, #ebeef5);
+  border-radius: 8px;
+  background: var(--tx-fill-color-light, #f5f7fa);
+  color: var(--docs-muted, #8a8f98);
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.docs-gallery__reset:hover {
+  border-color: var(--docs-accent);
+  color: var(--docs-accent);
+}
+
+/* TransitionGroup moves the surviving alert up rather than letting it jump the
+   gap left by the dismissed one. */
+.docs-gallery-alert-move {
+  transition: transform 0.26s cubic-bezier(0.32, 0.72, 0.35, 1);
 }

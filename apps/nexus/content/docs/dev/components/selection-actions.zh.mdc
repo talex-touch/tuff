@@ -135,6 +135,7 @@ const { selection, clear } = useSelectionAnchor({
 |------|------|
 | `updatePosition()` | 按当前 `selection.rects` 重新定位。**流式宿主必须调用，见下。** |
 | `focusInput()` | 聚焦自由指令输入框。 |
+| `el` | 工具条根元素。传给 `useSelectionAnchor` 的 `ignore`。 |
 
 ## 交互契约
 
@@ -142,7 +143,8 @@ const { selection, clear } = useSelectionAnchor({
 - **锚点是选区最后一行的底边，水平居中于整段选区。** 跨三行的选区，工具条落在读者停下的那一行下面，而不是整块的中点。
 - **工具条不翻面。** 它给 `TxBaseAnchor` 传了 `disableFlip`：靠近视口底部时不跳到选区上方，因为改写途中换边会被读成另一个控件。`shift` 仍在，横向会被推回视口内。
 - **`selection` 是快照，不是实时选区。** 聚焦工具条的输入框会清掉浏览器选区；组件持有的是传进来那一份，所以动作仍有目标。`useSelectionAnchor` 内部用 `range.cloneRange()` 也是这个原因。
-- 工具条根节点吞掉 `pointerdown`（`preventDefault`），按按钮不会转移焦点、不会毁掉选区；输入框显式放行，否则它无法聚焦。
+- 工具条根节点吞掉 `pointerdown`（`preventDefault`），按按钮不会转移焦点、不会毁掉选区。处理函数会放行 `input`、`textarea`、`contenteditable` 内部的按下，并且用 `closest()` 判定而不是比对事件目标本身：输入框外面套着 `<form>`，一旦指针落在输入框边缘一像素之外，按目标比对就会漏判、输入框随之无法聚焦——点它焦点会跑到 `<body>`，打字也没有任何反应。
+- **必须接上 `ignore`，否则工具条会自己消失。** 聚焦输入框会让文档选区塌缩，而 `useSelectionAnchor` 在工具条未持有焦点时会把塌缩当成读者清除了选区。请传入实例的 `el`：`ignore: () => [barRef.value?.el ?? null]`。不要用 `document.querySelector('.tx-bui-selection-actions')`——它返回文档中第一个工具条，页面上只要有两个就会取错。
 - 折叠的动作在收起时 `tabindex="-1"`，不出现在 Tab 序列里；发送键在 `prompt` 为空时同样如此。
 - 整条是 `role="group"` 而不是 `role="toolbar"`：里面有文本输入框，方向键要留给光标。
 - `thinking` 与 `streaming` 的区别只有一处——前者的文案带微光，后者是普通文本。
@@ -163,7 +165,7 @@ const { selection, clear } = useSelectionAnchor({
 - Component source: `packages/tuffex/packages/components/src/selection-actions/src/TxSelectionActions.vue`。
 - Composable: `packages/tuffex/packages/components/src/selection-actions/src/use-selection-anchor.ts`。
 - Types: `packages/tuffex/packages/components/src/selection-actions/src/types.ts`。
-- **实测覆盖:** `selection-actions.test.ts`（21 项）验证按选区显隐、`role="group"`、锚点取最后一行底边与整段水平范围、`disableFlip`、折叠组的 `tabindex` 与 `aria-expanded`、Explain 也派发事件、`prompt` 门控与 trim、忙碌文案与微光分支、结果态三个动作、`pointerdown` 在条上被吞而在输入框放行；`selection-actions-position.test.ts`（2 项）从组件一路断言到 `floating-ui` 的 `update` 确实被调用；`use-selection-anchor.test.ts`（9 项）覆盖空选区、最小长度、折叠 range、`root` 限定与零尺寸 rect 过滤。
+- **实测覆盖:** `selection-actions.test.ts`（23 项）验证按选区显隐、`role="group"`、锚点取最后一行底边与整段水平范围、`disableFlip`、折叠组的 `tabindex` 与 `aria-expanded`、Explain 也派发事件、`prompt` 门控与 trim、忙碌文案与微光分支、结果态三个动作、`pointerdown` 在条上被吞而在输入框放行、根元素被暴露以便宿主把工具条排除在选区塌缩之外；`selection-actions-position.test.ts`（2 项）从组件一路断言到 `floating-ui` 的 `update` 确实被调用；`use-selection-anchor.test.ts`（9 项）覆盖空选区、最小长度、折叠 range、`root` 限定与零尺寸 rect 过滤。
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />

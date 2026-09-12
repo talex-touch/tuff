@@ -629,6 +629,7 @@ code: |
 - Only `TxTabItem`, `TxTabItemGroup`, and `TxTabHeader` nodes are collected from the default slot; fragments are supported, arbitrary wrappers are ignored.
 - `TxTabItemGroup` is a navigation grouping marker; panel content still comes from each child `TxTabItem`.
 - `showIndicator=false` removes the pointer DOM and pointer animation work. Size animation still observes content/nav when enabled.
+- The indicator is visible from first paint, including when the active tab comes from `modelValue`, `defaultValue` or `activation` — no click is needed to bring it out. It is held at `opacity: 0` only until the active tab has a non-zero measurement, so it appears in place rather than sliding in from the nav's edge, and the root carries `tx-tabs--indicator-pending` for exactly that window.
 - Height animation removes the internal scroll wrapper so AutoSizer can measure panel height directly; use `contentScrollable=false` for manual direct-measurement layouts.
 - Inactive tab panels are not mounted. Store persistent panel state outside the panel subtree when it must survive switching.
 
@@ -665,7 +666,7 @@ code: |
 
 - Component sources: `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, and `TxTabItemGroup.vue`.
 - Types: `packages/tuffex/packages/components/src/tabs/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` covers activation rendering, enabled and disabled switching, controlled updates, fragments, async tab items, groups, content-animation variants, hidden indicators, visual-prop normalization, and exposed AutoSizer methods.
+- **Verified coverage:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` covers activation rendering, enabled and disabled switching, controlled updates, fragments, async tab items, groups, content-animation variants, hidden indicators, visual-prop normalization, exposed AutoSizer methods, and that the indicator reveals on first layout while staying hidden until a real measurement exists.
 
 <TuffDocSourceLink />
 

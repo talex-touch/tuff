@@ -113,6 +113,7 @@ No component events.
 - With `sanitize=false`, `marked` output is written directly with `v-html`; only use this for trusted Markdown.
 - `theme="auto"` checks `html` / `body` `data-theme` and `light` / `dark` classes, then observes `html` class and `data-theme` changes.
 - The public wrapper receives `class="light"` or `class="dark"` and a matching `data-theme` attribute.
+- The bundled GitHub-Markdown stylesheet is a *global* import, so every rule in it is scoped to `:where(.tx-markdown-view, .tx-stream-md)`. `.markdown-body` is a very generic class name — before the scope, importing this component restyled any host page that used it for its own prose. `:where()` adds no specificity, so the scope confines the sheet without changing how its rules compete with each other.
 
 ## Best Practices
 
@@ -131,7 +132,7 @@ No component events.
 
 - Component source: `packages/tuffex/packages/components/src/markdown-view/src/TxMarkdownView.vue`.
 - Types: `packages/tuffex/packages/components/src/markdown-view/src/types.ts` exports `MarkdownViewProps`.
-- Styles: `packages/tuffex/packages/components/src/markdown-view/src/github-markdown.css` is imported by the component stylesheet.
+- Styles: `packages/tuffex/packages/components/src/markdown-view/src/github-markdown.css` is imported by the component stylesheet, and `TxStreamMarkdown` imports the same file. Every rule in it is scoped to `:where(.tx-markdown-view, .tx-stream-md)` — keep the scope if you re-vendor it.
 - Export alias: `packages/tuffex/packages/components/src/markdown-view/index.ts` exports `MarkdownView`, `TxMarkdownView`, `MarkdownViewProps`, and `TxMarkdownViewInstance`.
 - Coverage: `packages/tuffex/packages/components/src/markdown-view/__tests__/markdown-view.test.ts` verifies sanitization and theme behavior.
 

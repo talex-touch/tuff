@@ -48,7 +48,7 @@ All six fields (`layout` / `width` / `height` / `radius` / `opacity` / `type`) t
 
 ## What It Is Made Of
 
-The layout segment reuses **`TxFlatRadio`**, so it is a genuine `radiogroup`: the arrow keys move between the three options and the whole group is one tab stop. Upstream has three independent `aria-pressed` buttons there. The geometry (28px shell, 8px outer radius, 6px thumb) is overridden onto the BUI ladder through the `--tx-flat-radio-*` variables.
+The layout segment reuses **`TxFlatRadio`**, so it is a genuine `radiogroup`: the arrow keys move between the three options and the whole group is one tab stop. Upstream has three independent `aria-pressed` buttons there. The geometry (28px shell, 8px outer radius, 6px thumb) is overridden onto the BUI ladder through the `--tx-flat-radio-*` variables. Item padding and the icon gap are the two variables this card does *not* override, so they stay at the ladder's `0 8px` / `4px`. The thumb's motion comes from `TxFlatRadio` itself: travel and resize share one curve, the geometry is read from fractional rects, and `prefers-reduced-motion` drops the travel — none of which this card overrides.
 
 The four numeric fields are **`TxScrubField`** — caption-as-handle, draggable, keyboard-steppable and typeable, documented on its own page.
 
@@ -108,6 +108,6 @@ Default ranges: `width` 40–999, `height` 24–999, `radius` 0–64, `opacity` 
 
 ## Review Notes
 
-- **How far `TxFlatRadio` reuse goes:** behaviour and semantics are usable as-is; the visuals need overriding. Geometry is variable-driven (clean), but the track fill, the thumb's fill, shadow and easing, and the option colours are hard-coded inside its scoped styles (`.tx-flat-radio[data-v-hash]`, specificity 0,2,0). Repeating the wrapper class here buys a deterministic 0,3,0 instead of reaching for `!important`. Give `TxFlatRadio` variables such as `--tx-flat-radio-track-bg` / `-indicator-bg` / `-indicator-shadow` later and this override block can go.
+- **How far `TxFlatRadio` reuse goes:** behaviour and semantics are usable as-is; the visuals need overriding. Geometry is variable-driven (clean), but the track fill, the thumb's fill, shadow and easing, and the option colours are hard-coded inside its scoped styles (`.tx-flat-radio[data-v-hash]`, specificity 0,2,0). Repeating the wrapper class here buys a deterministic 0,3,0 instead of reaching for `!important`. `--tx-flat-radio-track-bg`, `--tx-flat-radio-indicator-bg` and `--tx-flat-radio-indicator-shadow` now exist, so the track fill, thumb fill and thumb shadow no longer need the specificity war — only the remaining hard-coded option colours do.
 - **The type picker is not exported:** it serves this card alone. A second use case is the point at which it should become its own component.
 - **The shimmer gradient is written out:** the shared `bui-shimmer-text` mixin sweeps the ink ramp while this sweeps the accent, so the gradient lives in the component even though the keyframes are shared.

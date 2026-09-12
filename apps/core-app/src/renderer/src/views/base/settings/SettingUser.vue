@@ -43,6 +43,7 @@ const { isLoggedIn, displayName, displayEmail, avatarUrl, displayInitial } = use
 
 const profileEditorVisible = ref(false)
 const loginDialogVisible = ref(false)
+const nexusBaseUrlDialogVisible = ref(false)
 const loginErrorMessage = ref('')
 const loginLinkCopyState = ref<'idle' | 'pending' | 'success' | 'failed'>('idle')
 const loginCodeCopyState = ref<'idle' | 'pending' | 'success' | 'failed'>('idle')
@@ -271,22 +272,22 @@ function resolveNexusBaseUrlError(error: NexusBaseUrlSaveError): string {
  * channel instead of a local `isLoggedIn` check, because main can still hold a session the renderer
  * has already forgotten about.
  */
-async function applyNexusBaseUrl(input: string | null): Promise<void> {
+async function applyNexusBaseUrl(input: string | null): Promise<boolean> {
   if (nexusBaseUrlSaving.value) {
-    return
+    return false
   }
   nexusBaseUrlSaving.value = true
   try {
     const result = input === null ? await resetUserNexusBaseUrl() : await setUserNexusBaseUrl(input)
     if (!result.ok) {
       toast.error(resolveNexusBaseUrlError(result.error))
-      return
+      return false
     }
 
     nexusBaseUrlInput.value = result.value
     if (!result.changed) {
       toast.info(t('settingUser.nexusBaseUrlUnchanged', '当前生效地址未变化'))
-      return
+      return true
     }
 
     try {
@@ -298,11 +299,26 @@ async function applyNexusBaseUrl(input: string | null): Promise<void> {
           '地址已更新，但退出登录失败，请手动退出后重新登录'
         )
       )
-      return
+      // The address did land; only the session teardown did not. Keeping the dialog open would
+      // invite a second save that changes nothing.
+      return true
     }
     toast.success(t('settingUser.nexusBaseUrlUpdated', '服务地址已更新，请重新登录'))
+    return true
   } finally {
     nexusBaseUrlSaving.value = false
+  }
+}
+
+/** Opens the editor on the stored address, so an abandoned edit does not survive the close. */
+function openNexusBaseUrlDialog(): void {
+  nexusBaseUrlInput.value = nexusBaseUrlStored.value
+  nexusBaseUrlDialogVisible.value = true
+}
+
+async function submitNexusBaseUrl(input: string | null): Promise<void> {
+  if (await applyNexusBaseUrl(input)) {
+    nexusBaseUrlDialogVisible.value = false
   }
 }
 
@@ -400,47 +416,14 @@ function openProfileEditor() {
       default-icon="i-carbon-network-4"
       active-icon="i-carbon-network-4"
     >
-      <div class="nexus-endpoint">
-        <TxInput
-          v-model="nexusBaseUrlInput"
-          class="nexus-endpoint__input"
-          :disabled="nexusBaseUrlSaving"
-          :placeholder="t('settingUser.nexusBaseUrlPlaceholder', 'https://tuff.tagzxia.com')"
-        />
-        <div class="nexus-endpoint__actions">
-          <TxButton
-            variant="flat"
-            type="primary"
-            size="sm"
-            :loading="nexusBaseUrlSaving"
-            :disabled="nexusBaseUrlSaving"
-            @click="applyNexusBaseUrl(nexusBaseUrlInput)"
-          >
-            {{ t('settingUser.nexusBaseUrlSave', '保存') }}
-          </TxButton>
-          <TxButton
-            variant="flat"
-            size="sm"
-            :disabled="nexusBaseUrlSaving"
-            @click="applyNexusBaseUrl(null)"
-          >
-            {{ t('settingUser.nexusBaseUrlReset', '恢复默认') }}
-          </TxButton>
-        </div>
-        <p class="nexus-endpoint__hint">
-          {{
-            t(
-              'settingUser.nexusBaseUrlEnvHint',
-              '构建期环境变量 TUFF_NEXUS_BASE_URL 优先级最高，存在时会覆盖此处设置。'
-            )
-          }}
-        </p>
-        <p v-if="nexusBaseUrlSource === 'stale'" class="nexus-endpoint__warning">
-          {{
-            t('settingUser.nexusBaseUrlStaleHint', '已保存的地址当前未生效，请重新保存或恢复默认。')
-          }}
-        </p>
-      </div>
+      <TxButton
+        variant="flat"
+        size="sm"
+        data-testid="nexus-base-url-edit"
+        @click="openNexusBaseUrlDialog"
+      >
+        {{ t('settingUser.nexusBaseUrlEdit', '修改') }}
+      </TxButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
 
@@ -515,6 +498,60 @@ function openProfileEditor() {
       </TxButton>
       <TxButton v-else variant="ghost" @click="loginDialogVisible = false">
         {{ t('common.close') }}
+      </TxButton>
+    </template>
+  </TModal>
+
+  <TModal
+    v-model="nexusBaseUrlDialogVisible"
+    :title="t('settingUser.nexusBaseUrlTitle', 'Nexus 服务地址')"
+  >
+    <div class="nexus-endpoint">
+      <TxInput
+        v-model="nexusBaseUrlInput"
+        class="nexus-endpoint__input"
+        :disabled="nexusBaseUrlSaving"
+        :placeholder="t('settingUser.nexusBaseUrlPlaceholder', 'https://tuff.tagzxia.com')"
+      />
+      <p class="nexus-endpoint__hint">
+        {{
+          t(
+            'settingUser.nexusBaseUrlEnvHint',
+            '构建期环境变量 TUFF_NEXUS_BASE_URL 优先级最高，存在时会覆盖此处设置。'
+          )
+        }}
+      </p>
+      <p v-if="nexusBaseUrlSource === 'stale'" class="nexus-endpoint__warning">
+        {{
+          t('settingUser.nexusBaseUrlStaleHint', '已保存的地址当前未生效，请重新保存或恢复默认。')
+        }}
+      </p>
+    </div>
+    <template #footer>
+      <TxButton
+        variant="ghost"
+        :disabled="nexusBaseUrlSaving"
+        @click="nexusBaseUrlDialogVisible = false"
+      >
+        {{ t('common.cancel') }}
+      </TxButton>
+      <TxButton
+        variant="ghost"
+        data-testid="nexus-base-url-reset"
+        :disabled="nexusBaseUrlSaving"
+        @click="submitNexusBaseUrl(null)"
+      >
+        {{ t('settingUser.nexusBaseUrlReset', '恢复默认') }}
+      </TxButton>
+      <TxButton
+        variant="flat"
+        type="primary"
+        data-testid="nexus-base-url-save"
+        :loading="nexusBaseUrlSaving"
+        :disabled="nexusBaseUrlSaving"
+        @click="submitNexusBaseUrl(nexusBaseUrlInput)"
+      >
+        {{ t('settingUser.nexusBaseUrlSave', '保存') }}
       </TxButton>
     </template>
   </TModal>
@@ -621,17 +658,11 @@ function openProfileEditor() {
   flex-direction: column;
   gap: 8px;
   width: 100%;
+  min-width: 0;
 }
 
 .nexus-endpoint__input {
   width: 100%;
-}
-
-.nexus-endpoint__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
 }
 
 .nexus-endpoint__hint,
@@ -639,6 +670,7 @@ function openProfileEditor() {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
   color: var(--tx-text-color-placeholder);
 }
 

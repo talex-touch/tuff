@@ -29,8 +29,10 @@ export { SidebarNav, TxSidebarNav }
 // Exported for other moving-indicator surfaces (a horizontal segmented control
 // reads `left`/`width` from the same measurement) — same shape as
 // conversation-stream re-exporting `useStickToBottom`.
-export { useIndicatorBox } from './src/use-indicator-box'
-export type { IndicatorBox, UseIndicatorBoxOptions, UseIndicatorBoxReturn } from './src/use-indicator-box'
+// Promoted to packages/utils so TxFlatRadio and TxTabBar can share it; the
+// export stays here so `@talex-touch/tuffex/sidebar-nav` keeps working.
+export { useIndicatorBox } from '../../../utils/use-indicator-box'
+export type { IndicatorBox, UseIndicatorBoxOptions, UseIndicatorBoxReturn } from '../../../utils/use-indicator-box'
 export type {
   SidebarNavEmits,
   SidebarNavGroup,

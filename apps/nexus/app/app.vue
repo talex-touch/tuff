@@ -6,6 +6,9 @@ import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { appName, toastHostRequestedEvent } from '~/constants'
 
 const LazyToastContainer = defineAsyncComponent(() => import('~/components/ToastContainer.vue'))
+// Only protected routes ever render the two auth gates below, but a static TxEmptyState here
+// put it — and the seven tuffex primitives it builds on — into the entry chunk of every page.
+const LazyAuthGateState = defineAsyncComponent(() => import('@talex-touch/tuffex/empty-state').then(module => module.TxEmptyState))
 
 useHead({
   title: appName,
@@ -25,7 +28,7 @@ const isAuthShellRoute = computed(() => {
 })
 const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearchState()
 const { initLocale, reconcileClientLocale, setLocaleSerial, syncFromProfileOnAuth } = useLocaleOrchestrator()
-const { status, getSession } = useNexusAuth()
+const { status, getSession, settleAnonymousSession } = useNexusAuth()
 
 useHead(() => {
   if (!isProtectedRoute.value)
@@ -188,8 +191,15 @@ function mountToastHost() {
 
 onMounted(() => {
   mounted.value = true
-  if (status.value === 'loading')
-    void getSession()
+  if (status.value === 'loading') {
+    // A public page for a reader with no session-hint cookie is the common case, and the
+    // request it used to make here only ever came back empty. Protected routes and the auth
+    // shell still verify with the server; everything else settles as signed-out for free.
+    if (!isProtectedRoute.value && !isAuthShellRoute.value && !hasSessionHint())
+      settleAnonymousSession()
+    else
+      void getSession()
+  }
   closeSearch()
   window.addEventListener('keydown', handleGlobalSearchShortcut)
   window.addEventListener(toastHostRequestedEvent, mountToastHost)
@@ -503,7 +513,7 @@ watchEffect(() => {
       v-if="isAuthLoading"
       class="grid h-screen w-screen place-content-center"
     >
-      <TxEmptyState
+      <LazyAuthGateState
         variant="loading"
         :title="t('auth.checkingSession')"
         size="small"
@@ -514,7 +524,7 @@ watchEffect(() => {
       v-else-if="!isAuthenticated"
       class="grid h-screen w-screen place-content-center"
     >
-      <TxEmptyState
+      <LazyAuthGateState
         variant="loading"
         :title="t('auth.redirecting')"
         size="small"

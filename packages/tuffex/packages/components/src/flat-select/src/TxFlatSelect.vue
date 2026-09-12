@@ -400,8 +400,8 @@ onBeforeUnmount(() => {
     border: 1px solid var(--tx-border-color-lighter, #ebeef5);
     border-radius: 10px;
     box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.08),
-      0 2px 4px rgba(0, 0, 0, 0.04);
+      2px 4px 16px rgba(0, 0, 0, 0.08),
+      1px 2px 4px rgba(0, 0, 0, 0.04);
     box-sizing: border-box;
     gap: 2px;
 

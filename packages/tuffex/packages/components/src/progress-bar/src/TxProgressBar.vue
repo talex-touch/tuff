@@ -846,7 +846,7 @@ watch(
 .tx-progress-bar__segment:hover .tx-progress-bar__segment-fill {
   border-radius: 999px;
   transform: scaleY(1.7);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  box-shadow: 1px 2px 10px rgba(0, 0, 0, 0.18);
   z-index: 1;
 }
 
@@ -1052,7 +1052,7 @@ watch(
 .tx-progress-bar-wrapper--hover-glow:hover .tx-progress-bar {
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--tx-progress-color, var(--tx-color-primary, #409eff)) 35%, transparent),
-    0 18px 48px color-mix(in srgb, var(--tx-progress-color, var(--tx-color-primary, #409eff)) 30%, transparent);
+    9px 18px 48px color-mix(in srgb, var(--tx-progress-color, var(--tx-color-primary, #409eff)) 30%, transparent);
 }
 
 .tx-progress-bar-wrapper--hover-glow:hover .tx-progress-bar__indicator--sparkle::before {

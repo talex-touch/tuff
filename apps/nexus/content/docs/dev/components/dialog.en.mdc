@@ -261,6 +261,8 @@ code: |
 - Escape closes the active dialog after its leave animation; `TxBottomDialog`, `TxBlowDialog`, `TxPopperDialog`, and `TxTouchTip` restore the previously focused element on unmount.
 - `TxBottomDialog`, `TxTouchTip`, and `TxBlowDialog` all derive instance-level title/description ids via `useId()`; `TxPopperDialog` uses stable internal ids for its default title/content regions.
 - Plain `message` renders as text and preserves line breaks. Use `messageHtml` only with `asTrustedDialogHtml()` after sanitizing internal content.
+- Every variant's body sets `overflow-wrap: anywhere`. A hash, an id or a URL offers no break opportunity, so a vertical scroll cannot rescue it — the token runs past the panel, which clips it. `anywhere` rather than `break-word` because only `anywhere` lets the token shrink the content's min-content width, so a long value stops widening the panel as well.
+- Every variant's body caps its own height and scrolls. The panels are `overflow: hidden`, so a body without a cap of its own is cut rather than scrolled: `TxBottomDialog` caps at `46vh` and `TxTouchTip` scrolls inside its fixed height, matching the `300px` that `TxBlowDialog` and `TxPopperDialog` already used.
 - `DialogButton.onClick()` / `TouchTipButton.onClick()` closes when it resolves `true` and keeps the dialog open when it resolves `false`.
 
 ## Best Practices

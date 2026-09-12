@@ -255,7 +255,7 @@ async function forClose(): Promise<void> {
   max-width: 480px;
   min-height: 200px;
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  box-shadow: 4px 8px 32px rgba(0, 0, 0, 0.15);
   background: var(--tx-bg-color, #fff);
   backdrop-filter: blur(18px) saturate(180%);
   transform: translateX(-50%);
@@ -282,6 +282,15 @@ async function forClose(): Promise<void> {
   }
 
   &__content {
+    // A hash, an id or a URL has no break opportunity, so a vertical scroll
+    // cannot save it: the token runs past the panel and the panel clips it.
+    // `anywhere` also lets the token shrink the content's min-content width,
+    // which `break-word` does not, so the panel stops being widened by it.
+    overflow-wrap: anywhere;
+    // The panel is overflow: hidden, so without a cap of its own a long body
+    // was cut rather than scrolled. Matches Blow/Popper.
+    max-height: 46vh;
+    overflow-y: auto;
     margin-bottom: 24px;
     text-align: center;
     font-size: 14px;

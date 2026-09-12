@@ -277,4 +277,45 @@ describe('txSelectionActions', () => {
     expect(document.querySelector('.tx-bui-selection-actions__send')).toBeNull()
     expect(document.querySelectorAll('.tx-bui-selection-actions__control').length).toBeGreaterThan(0)
   })
+
+  // Clicking into the prompt field collapses the document selection, which the
+  // anchor otherwise reads as the reader clearing it — the snapshot drops and
+  // the bar dismisses itself the instant anyone tries to use it. The guard in
+  // `useSelectionAnchor` needs the bar's element to spot that, and hosts were
+  // reaching for `document.querySelector('.tx-bui-selection-actions')`, which
+  // returns the first bar on the page and is the wrong one as soon as there are
+  // two. Exposing the node is what makes the guard wirable.
+  it('exposes its root element so a host can exempt it from selection collapse', async () => {
+    const wrapper = mountBar()
+    await wrapper.vm.$nextTick()
+
+    const exposed = (wrapper.vm as unknown as { el: HTMLElement | null }).el
+    const bar = document.querySelector('.tx-bui-selection-actions')
+
+    expect(exposed).not.toBeNull()
+    expect(exposed).toBe(bar)
+    expect(exposed!.contains(document.querySelector('.tx-bui-selection-actions__input'))).toBe(true)
+  })
+
+  // The bar suppresses the mousedown default so the selection survives long
+  // enough for an action to run on it. That same default is what focuses a text
+  // field, so a blanket `preventDefault` left the prompt unfocusable: clicking
+  // it sent focus to `<body>` and typing went nowhere. The suppression has to
+  // skip text inputs, and by `closest()` rather than by exact target — the field
+  // sits inside a <form>, so a target-identity check misses the moment the
+  // pointer lands a pixel off the input itself.
+  it('suppresses the selection-collapsing default, except over a text field', () => {
+    mountBar()
+
+    const bar = document.querySelector('.tx-bui-selection-actions')!
+    const input = document.querySelector('.tx-bui-selection-actions__input')!
+
+    const onBar = new MouseEvent('pointerdown', { bubbles: true, cancelable: true })
+    bar.dispatchEvent(onBar)
+    expect(onBar.defaultPrevented, 'a press on the bar must hold the selection').toBe(true)
+
+    const onInput = new MouseEvent('pointerdown', { bubbles: true, cancelable: true })
+    input.dispatchEvent(onInput)
+    expect(onInput.defaultPrevented, 'a press on the prompt must still focus it').toBe(false)
+  })
 })

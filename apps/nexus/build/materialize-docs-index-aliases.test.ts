@@ -5,12 +5,13 @@ import { describe, expect, it } from 'vitest'
 import { materializeDocsIndexAliases } from './materialize-docs-index-aliases.mjs'
 
 describe('materialize docs index aliases', () => {
-  it('copies localized index documents to Cloudflare directory targets', () => {
+  it('copies localized index documents to slash-less directory targets', () => {
     const distRoot = mkdtempSync(join(tmpdir(), 'nexus-docs-aliases-'))
+    // The `<route>.html` layout produced by `prerender.autoSubfolderIndex: false`.
     const fixtures = [
-      ['en/docs/index/index.html', '<html>English docs</html>'],
-      ['en/docs/dev/index/index.html', '<html>Developer docs</html>'],
-      ['zh/docs/dev/components/index/index.html', '<html>组件文档</html>'],
+      ['en/docs/index.html', '<html>English docs</html>'],
+      ['en/docs/dev/index.html', '<html>Developer docs</html>'],
+      ['zh/docs/dev/components/index.html', '<html>组件文档</html>'],
     ] as const
 
     for (const [file, content] of fixtures) {
@@ -19,7 +20,7 @@ describe('materialize docs index aliases', () => {
       writeFileSync(filePath, content)
     }
 
-    const ordinaryDoc = join(distRoot, 'en/docs/dev/components/button/index.html')
+    const ordinaryDoc = join(distRoot, 'en/docs/dev/components/button.html')
     mkdirSync(join(ordinaryDoc, '..'), { recursive: true })
     writeFileSync(ordinaryDoc, '<html>Button</html>')
 
@@ -32,16 +33,18 @@ describe('materialize docs index aliases', () => {
       '/zh/docs/dev/components',
     ])
     expect(repeatedAliases).toEqual(aliases)
-    expect(readFileSync(join(distRoot, 'en/docs/index.html'), 'utf8')).toBe('<html>English docs</html>')
-    expect(readFileSync(join(distRoot, 'en/docs/dev/index.html'), 'utf8')).toBe('<html>Developer docs</html>')
-    expect(readFileSync(join(distRoot, 'zh/docs/dev/components/index.html'), 'utf8')).toBe('<html>组件文档</html>')
+    expect(readFileSync(join(distRoot, 'en/docs.html'), 'utf8')).toBe('<html>English docs</html>')
+    expect(readFileSync(join(distRoot, 'en/docs/dev.html'), 'utf8')).toBe('<html>Developer docs</html>')
+    expect(readFileSync(join(distRoot, 'zh/docs/dev/components.html'), 'utf8')).toBe('<html>组件文档</html>')
     expect(readFileSync(ordinaryDoc, 'utf8')).toBe('<html>Button</html>')
-    expect(existsSync(join(distRoot, 'en/docs/dev/components/button.html'))).toBe(false)
+    // An ordinary document is not an index and must not be aliased anywhere.
+    expect(existsSync(join(distRoot, 'en/docs/dev/components/button/index.html'))).toBe(false)
+    expect(existsSync(join(distRoot, 'en/docs/dev/components.html'))).toBe(false)
   })
 
   it('fails closed when localized docs output is missing', () => {
     const distRoot = mkdtempSync(join(tmpdir(), 'nexus-docs-aliases-missing-'))
-    const englishIndex = join(distRoot, 'en/docs/index/index.html')
+    const englishIndex = join(distRoot, 'en/docs/index.html')
     mkdirSync(join(englishIndex, '..'), { recursive: true })
     writeFileSync(englishIndex, '<html>English docs</html>')
 

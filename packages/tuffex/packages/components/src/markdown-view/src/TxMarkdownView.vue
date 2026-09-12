@@ -149,7 +149,7 @@ const resolvedTheme = computed<'light' | 'dark'>(() => {
 </script>
 
 <template>
-  <div class="tx-markdown-view" :class="resolvedTheme" :data-theme="resolvedTheme">
+  <div class="tx-md tx-markdown-view" :class="resolvedTheme" :data-theme="resolvedTheme">
     <div class="markdown-body" v-html="safeHtml" />
   </div>
 </template>

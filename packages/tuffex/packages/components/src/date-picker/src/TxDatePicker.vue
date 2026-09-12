@@ -1060,14 +1060,14 @@ function onCancel() {
 .tx-date-picker-calendar__cell.is-selected {
   color: var(--tx-color-on-primary, #fff);
   background: linear-gradient(135deg, var(--tx-color-primary, #409eff), color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, #111827));
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
+  box-shadow: 4px 8px 18px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
   // Landing on a day is the moment the picker answers, so the cell settles
   // into place rather than appearing fully formed.
   animation: tx-date-pick 260ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
 }
 
 .tx-date-picker-calendar__cell.is-selected:hover:not(:disabled) {
-  box-shadow: 0 10px 22px color-mix(in srgb, var(--tx-color-primary, #409eff) 40%, transparent);
+  box-shadow: 5px 10px 22px color-mix(in srgb, var(--tx-color-primary, #409eff) 40%, transparent);
 }
 
 @keyframes tx-date-pick {
@@ -1158,7 +1158,7 @@ function onCancel() {
 .tx-date-picker-calendar__tile.is-selected {
   color: var(--tx-color-on-primary, #fff);
   background: linear-gradient(135deg, var(--tx-color-primary, #409eff), color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, #111827));
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
+  box-shadow: 4px 8px 18px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
 }
 
 .tx-date-picker-calendar__tile:disabled {
