@@ -316,6 +316,13 @@
       "when": 1786233600000,
       "tag": "0044_clipboard_retention_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1786320000000,
+      "tag": "0045_voice_polish_telemetry",
+      "breakpoints": true
     }
   ]
 }

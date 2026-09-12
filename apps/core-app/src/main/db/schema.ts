@@ -697,6 +697,40 @@ export const voiceInsightCaptures = sqliteTable(
 )
 
 /**
+ * Content-free tidy-up telemetry: one row per polish decision (including the decisions that ran
+ * no pass at all). It exists so the length gate can be re-tuned from real usage instead of
+ * opinion, and so that usage can be reported anonymously later: sizes, the chosen tier, the
+ * outcome and the provider latency only. No transcript, no polished text, no audio, no
+ * active-app identity, no provider credential — the raw and polished character counts are the
+ * whole signal.
+ */
+export const voicePolishTelemetry = sqliteTable(
+  'voice_polish_telemetry',
+  {
+    id: text('id').primaryKey(),
+    day: text('day').notNull(),
+    capturedAt: integer('captured_at').notNull(),
+    /** `short` = below the gate, `light` = capped to natural editing, `full` = the user's choice. */
+    tier: text('tier').notNull(),
+    /** CJK characters plus Latin words: the language-neutral size the gate is measured in. */
+    units: integer('units').notNull(),
+    characters: integer('characters').notNull(),
+    outcome: text('outcome').notNull(),
+    /** Effective editing scope of the pass that ran, or null when the gate skipped it. */
+    strength: text('strength'),
+    /** The scope the caller asked for, so a gate downgrade is visible rather than inferred. */
+    requestedStrength: text('requested_strength'),
+    latencyMs: integer('latency_ms').notNull().default(0),
+    polishedCharacters: integer('polished_characters').notNull().default(0),
+    generation: integer('generation').notNull()
+  },
+  (table) => ({
+    dayIdx: index('idx_voice_polish_telemetry_day').on(table.day),
+    capturedAtIdx: index('idx_voice_polish_telemetry_captured_at').on(table.capturedAt)
+  })
+)
+
+/**
  * Detailed host-only voice recognition records. Audio remains in the main-owned
  * temp namespace; the table stores only its opaque path and bounded metadata.
  */

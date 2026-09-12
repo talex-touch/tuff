@@ -1,0 +1,31 @@
+{
+  "id": "voice-polish-length-gate",
+  "name": "voice-polish-length-gate",
+  "title": "Voice polish length gate and content-free telemetry",
+  "description": "Gate the dictation tidy-up pass by transcript length, cap mid-length editing to natural, and record content-free polish telemetry for tuning and later anonymous reporting.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-10",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "voice-dictation-polish-mode",
+  "relatedFiles": [
+    "apps/core-app/src/main/modules/voice/voice-service.ts",
+    "apps/core-app/src/main/modules/voice/voice-insights-store.ts",
+    "apps/core-app/src/main/db/schema.ts",
+    "apps/core-app/resources/db/migrations/0045_voice_polish_telemetry.sql"
+  ],
+  "notes": "Derived from the 2026-09-10 market research in research.md. Gate: short (<12 units) runs no provider call, light (12-59) is capped to the natural prompt, full (>=60) uses the session strength. Telemetry rows are content-free (sizes, tier, outcome, latency, scope) so they can be reported anonymously later.",
+  "meta": {}
+}
