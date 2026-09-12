@@ -1,3 +1,4 @@
+import type { TuffexOnDemandStylePluginOptions } from '../on-demand-style-plugin'
 import { describe, expect, it } from 'vitest'
 import { expandStyleClosure, tuffexOnDemandStylePlugin } from '../on-demand-style-plugin'
 
@@ -8,10 +9,25 @@ const styleDeps = {
   'dialog': ['base-surface'],
 }
 
-function transform(code: string, id = '/app/src/page.vue') {
-  const plugin = tuffexOnDemandStylePlugin({ styleDeps })
+function transform(
+  code: string,
+  id = '/app/src/page.vue',
+  options: TuffexOnDemandStylePluginOptions = {},
+) {
+  const plugin = tuffexOnDemandStylePlugin({ styleDeps, ...options })
   const handler = typeof plugin.transform === 'function' ? plugin.transform : plugin.transform?.handler
   return (handler as (code: string, id: string) => { code: string } | null)?.call({}, code, id) ?? null
+}
+
+/**
+ * Every TuffEx stylesheet the transform emitted, in the order it emitted them.
+ * Matches the specifier rather than the whole statement, so a formatting change
+ * cannot make a suppression assertion pass for the wrong reason.
+ */
+function injectedStyleComponents(result: { code: string } | null): string[] {
+  return [...(result?.code ?? '').matchAll(/@talex-touch\/tuffex\/([a-z0-9-]+)\/style\.css/g)]
+    .map(match => match[1])
+    .filter((name): name is string => Boolean(name))
 }
 
 describe('expandStyleClosure', () => {
@@ -87,5 +103,85 @@ describe('tuffexOnDemandStylePlugin', () => {
       .call({}, `import { TxProgressBar } from '@talex-touch/tuffex/progress-bar'\n`, '/app/src/page.vue')
 
     expect(result).toBeNull()
+  })
+})
+
+describe('tuffexOnDemandStylePlugin with componentDistRoot', () => {
+  const componentDistRoot = '/workspace/packages/tuffex/dist/es'
+
+  // A real built entry (`dist/es/progress-bar/index.js`) imports its neighbours
+  // relatively and never names `@talex-touch/tuffex/...`, so the entry has to be
+  // recognised by its path — otherwise no built component would get its styles.
+  const builtEntry = [
+    `import { withInstall } from '../utils/withInstall.js'`,
+    `import _sfc_main from './src/TxProgressBar.vue.js'`,
+    ``,
+    `export default withInstall(_sfc_main)`,
+    ``,
+  ].join('\n')
+
+  // What a generated Nuxt registry does: one dynamic import per component.
+  const nuxtRegistry = [
+    `export default {`,
+    `  TxProgressBar: () => import('@talex-touch/tuffex/progress-bar'),`,
+    `  TxTooltip: () => import('@talex-touch/tuffex/tooltip'),`,
+    `  TxDialog: () => import('@talex-touch/tuffex/dialog'),`,
+    `}`,
+    ``,
+  ].join('\n')
+
+  it('injects the complete closure into a built component entry', () => {
+    const result = transform(builtEntry, `${componentDistRoot}/progress-bar/index.js`, { componentDistRoot })
+
+    expect(injectedStyleComponents(result)).toEqual([
+      'base-surface',
+      'base-anchor',
+      'tooltip',
+      'spinner',
+      'progress-bar',
+    ])
+  })
+
+  it('leaves a generated .nuxt module to load styles with each component chunk', () => {
+    const result = transform(nuxtRegistry, '/workspace/app/.nuxt/components.plugin.mjs', { componentDistRoot })
+
+    expect(injectedStyleComponents(result)).toEqual([])
+  })
+
+  it('leaves a Nuxt app runtime module to load styles with each component chunk', () => {
+    const result = transform(
+      nuxtRegistry,
+      '/workspace/app/node_modules/nuxt/dist/app/components.plugin.mjs',
+      { componentDistRoot },
+    )
+
+    expect(injectedStyleComponents(result)).toEqual([])
+  })
+
+  it('keeps fanning out for a Nuxt module when no dist root is configured', () => {
+    // The control for the two suppression cases above: the same registry does get
+    // the global fan-out unless `componentDistRoot` opts into the split.
+    const result = transform(nuxtRegistry, '/workspace/app/.nuxt/components.plugin.mjs')
+
+    expect(injectedStyleComponents(result)).toEqual([
+      'base-surface',
+      'dialog',
+      'base-anchor',
+      'tooltip',
+      'spinner',
+      'progress-bar',
+    ])
+  })
+
+  it('leaves an ordinary importer untouched in component-entry mode', () => {
+    // With `componentDistRoot` set the plugin is component-entry-only: a page that
+    // names a dozen components must not drag the whole closure into the entry chunk.
+    const result = transform(
+      `import { TxDialog } from '@talex-touch/tuffex/dialog'\n`,
+      '/app/src/page.vue',
+      { componentDistRoot },
+    )
+
+    expect(injectedStyleComponents(result)).toEqual([])
   })
 })

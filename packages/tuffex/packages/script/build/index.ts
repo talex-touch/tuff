@@ -123,6 +123,7 @@ export const buildVitePlugin = async () => {
       `export interface TuffexOnDemandStylePluginOptions {`,
       `  enabled?: boolean`,
       `  styleDeps?: Record<string, string[]>`,
+      `  componentDistRoot?: string`,
       `}`,
       ``,
       `export declare function expandStyleClosure(componentNames: string[], styleDeps: Record<string, string[]>): string[]`,

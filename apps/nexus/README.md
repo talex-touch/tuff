@@ -16,6 +16,13 @@ pnpm run dev
 
 The site will be available at `http://localhost:3200`.
 
+Nexus consumes the built TuffEx package by default, which keeps the docs dev graph small:
+
+- `pnpm run dev` uses `packages/tuffex/dist/es` (build it first with `pnpm -C packages/tuffex run build`).
+- `NUXT_TUFFEX_SOURCE=true pnpm run dev` uses `packages/tuffex/packages/components/src` for live TuffEx component editing.
+
+If the dist entry is missing, dev startup fails with the build command above; use source mode deliberately when working on TuffEx itself.
+
 ## Docs SEO and prerender evidence
 
 Docs pages are rendered through `app/pages/docs/[...slug].vue`. The page derives title/description from Nuxt Content, synchronizes the route locale for `/en/docs/**` and `/zh/docs/**` while the app still uses Nuxt i18n `no_prefix`, and emits canonical and localized alternate links, `robots`, Open Graph/Twitter metadata, and `TechArticle` JSON-LD.
