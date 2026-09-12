@@ -180,7 +180,12 @@ function readRegistryField(packageName, version, field) {
  * `readField` is injectable so the failure path can be tested without a registry.
  */
 export function verifyRegistryManifest(packageInfo, version, readField = readRegistryField, options = {}) {
-  const { attempts = 6, delayMs = 5_000, sleep: sleepFn = sleep } = options
+  /*
+   * Waits double up to `maxDelayMs`, so the published version has roughly four
+   * minutes — 5 + 10 + 20 + 40 + 60 + 60 + 60 s — to become readable instead of
+   * the 30 s a fixed 6 × 5 s allowed.
+   */
+  const { attempts = 8, delayMs = 5_000, maxDelayMs = 60_000, sleep: sleepFn = sleep } = options
 
   // A non-positive `attempts` would skip the loop entirely, leaving `value`
   // undefined and `lastError` unset — and the regex below would then test the
@@ -197,10 +202,14 @@ export function verifyRegistryManifest(packageInfo, version, readField = readReg
      * Retried because this runs immediately after `npm publish` and the version
      * is not always queryable yet: tuffex@0.4.0 published correctly and then
      * failed here seconds later with `404 No match found for version 0.4.0`,
-     * marking a good release red. Retrying only widens the window — the throw
-     * below is unchanged and deliberate (#560): an unreadable manifest must
-     * never be reported as clean.
+     * marking a good release red, and tuffex@0.6.0 was still 404 five minutes
+     * after npm answered the publish with `+ @talex-touch/tuffex@0.6.0` — a
+     * fixed 6 × 5 s was still narrower than the registry's own
+     * "being processed and may take a few minutes". The waits therefore double.
+     * The throw below is unchanged and deliberate (#560): an unreadable
+     * manifest must never be reported as clean.
      */
+    let waitMs = delayMs
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
         value = readField(packageInfo.name, version, field)
@@ -209,8 +218,10 @@ export function verifyRegistryManifest(packageInfo, version, readField = readReg
       }
       catch (error) {
         lastError = error
-        if (attempt < attempts)
-          sleepFn(delayMs)
+        if (attempt < attempts) {
+          sleepFn(waitMs)
+          waitMs = Math.min(waitMs * 2, maxDelayMs)
+        }
       }
     }
 
