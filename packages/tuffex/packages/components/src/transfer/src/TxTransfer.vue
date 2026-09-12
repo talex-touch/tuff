@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { TransferEmits, TransferItem, TransferProps } from './types'
+import type { PropType } from 'vue'
+import type { TransferEmits, TransferItem } from './types'
 import { computed, ref, watch } from 'vue'
 import { TxButton } from '../../button'
 import { TxCheckbox } from '../../checkbox'
@@ -7,20 +8,32 @@ import { TxInput } from '../../input'
 
 defineOptions({ name: 'TxTransfer' })
 
-const props = withDefaults(defineProps<TransferProps>(), {
-  modelValue: () => [],
-  data: () => [],
-  titles: () => ['Source', 'Target'],
-  filterable: false,
-  filterPlaceholder: '',
-  emptyText: 'No data',
-  addAriaLabel: 'Move selected items to target',
-  removeAriaLabel: 'Move selected items to source',
-  moveUpAriaLabel: 'Move item up',
-  moveDownAriaLabel: 'Move item down',
-  selectAllAriaLabel: 'Select all',
-  targetOrder: 'original',
-  orderable: false,
+/**
+ * Declared as a runtime object rather than `defineProps<TransferProps>()`. The
+ * SFC compiler resolves a sibling `types.ts` once and does not redo it when
+ * that file changes, so a prop added to the interface ships as an unknown
+ * attribute — silently, with vitest and the built `dist` both still correct.
+ * `TransferProps` stays the public type; this is the wiring.
+ */
+const props = defineProps({
+  modelValue: { type: Array as PropType<Array<string | number>>, default: () => [] },
+  data: { type: Array as PropType<TransferItem[]>, default: () => [] },
+  // `ArrayConstructor` cannot be narrowed straight to a tuple — TS rejects the
+  // cast because `any[]` may hold fewer than two entries — but the tuple is the
+  // contract worth publishing, so it goes through `unknown`.
+  titles: { type: Array as unknown as PropType<[string, string]>, default: () => ['Source', 'Target'] },
+  filterable: { type: Boolean, default: false },
+  filterPlaceholder: { type: String, default: '' },
+  emptyText: { type: [String, Array] as PropType<string | [string, string]>, default: 'No data' },
+  maxHeight: { type: [String, Number] as PropType<string | number>, default: undefined },
+  minHeight: { type: [String, Number] as PropType<string | number>, default: undefined },
+  addAriaLabel: { type: String, default: 'Move selected items to target' },
+  removeAriaLabel: { type: String, default: 'Move selected items to source' },
+  moveUpAriaLabel: { type: String, default: 'Move item up' },
+  moveDownAriaLabel: { type: String, default: 'Move item down' },
+  selectAllAriaLabel: { type: String, default: 'Select all' },
+  targetOrder: { type: String as PropType<'original' | 'push'>, default: 'original' },
+  orderable: { type: Boolean, default: false },
 })
 
 const emit = defineEmits<TransferEmits>()
@@ -39,8 +52,14 @@ function toCssUnit(value: string | number | undefined): string | undefined {
 }
 
 const rootStyle = computed(() => {
+  const style: Record<string, string> = {}
   const maxHeight = toCssUnit(props.maxHeight)
-  return maxHeight ? { '--tx-transfer-max-height': maxHeight } : undefined
+  const minHeight = toCssUnit(props.minHeight)
+  if (maxHeight)
+    style['--tx-transfer-max-height'] = maxHeight
+  if (minHeight)
+    style['--tx-transfer-min-height'] = minHeight
+  return Object.keys(style).length > 0 ? style : undefined
 })
 
 const sourceEmptyText = computed(() =>
@@ -360,7 +379,10 @@ function toggleSelectAll(side: 'source' | 'target', checked: boolean) {
   background: var(--tx-fill-color-blank, #ffffff);
   display: flex;
   flex-direction: column;
-  min-height: 240px;
+  /* A floor, so a filterable panel with two rows in it is still a panel — but a
+     settable one. Hardcoded, it beat the host's own box: a transfer dropped into
+     a 190px cell still laid out at 240px and spilled 50px past it. */
+  min-height: var(--tx-transfer-min-height, 240px);
   /* Without a cap the panel grows with its content, the list never scrolls, and
      the surrounding page or dialog becomes the scroll container instead. */
   max-height: var(--tx-transfer-max-height, 320px);
@@ -463,7 +485,10 @@ function toggleSelectAll(side: 'source' | 'target', checked: boolean) {
   flex: 1;
   min-width: 0;
   font-size: 13px;
-  word-break: break-all;
+  /* `break-all` split at whatever character ran out of room — "Quick actions"
+     wrapped as "Quick actio / ns". `anywhere` takes the space first and only
+     breaks inside a word when a single word genuinely cannot fit. */
+  overflow-wrap: anywhere;
 }
 
 .tx-transfer__actions {

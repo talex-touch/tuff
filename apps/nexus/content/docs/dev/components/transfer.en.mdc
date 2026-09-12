@@ -47,7 +47,7 @@ code: |
 :::
 
 ### Ranked target list
-`orderable` turns the target panel into an ordered list: every row shows its rank and carries move up / move down. The rank is read from `modelValue`, so filtering never shifts it, and the target order *is* the `modelValue` order — `targetOrder` no longer applies. `maxHeight` caps each panel so a long list scrolls inside the list instead of stretching the surrounding dialog.
+`orderable` turns the target panel into an ordered list: every row shows its rank and carries move up / move down. The rank is read from `modelValue`, so filtering never shifts it, and the target order *is* the `modelValue` order — `targetOrder` no longer applies. `maxHeight` caps each panel so a long list scrolls inside the list instead of stretching the surrounding dialog; `minHeight` is the matching floor, which a compact host needs to lower.
 
 :::TuffDemoWrapper{demo="TransferOrderableDemo" code-lang="vue"}
 ---
@@ -151,6 +151,10 @@ rows:
     type: "string | number"
     default: "'320px'"
     description: Panel height cap; numbers are treated as px, or set --tx-transfer-max-height directly
+  - name: minHeight
+    type: "string | number"
+    default: "'240px'"
+    description: Panel height floor; numbers are treated as px, or set --tx-transfer-min-height directly
   - name: addAriaLabel
     type: string
     default: "'Move selected items to target'"
@@ -211,6 +215,7 @@ rows:
 - Use `filterable` only for medium or large lists; short permission lists are faster to scan without two filter inputs.
 - Do not add your own "select all" control outside the component: each panel header already has one, and it is correctly scoped to the filtered rows.
 - Panels cap at 320px by default. Inside a dialog or drawer, set `maxHeight` to match the container (e.g. `min(56dvh, 520px)`) so scrolling always happens inside the list rather than growing the dialog.
+- Panels also have a 240px floor, which is a hard one: in a box shorter than that the panel keeps its own height and spills past the container. Lower `minHeight` whenever the transfer sits somewhere compact.
 - Pass a tuple to `emptyText` when the two sides mean different things ("nothing left to assign" vs "pick at least one to enable this"), instead of reusing one sentence.
 
 ## Source
@@ -221,8 +226,10 @@ rows:
 
 - Source: `packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue` confirms source/target derivation, filter matching, disabled item checks, `targetOrder`, and icon-only action labels.
 - Type contracts: `packages/tuffex/packages/components/src/transfer/src/types.ts` exports `TransferItem`, `TransferProps`, and `TransferEmits`.
-- Height contract: panels read `--tx-transfer-max-height` (default `320px`); `maxHeight` only writes that variable. The default has to exist — with no cap the panel grows with its content, `.tx-transfer__list`'s `overflow: auto` never triggers, and the surrounding page or dialog becomes the scroll container.
+- Height contract: panels read `--tx-transfer-max-height` (default `320px`) and `--tx-transfer-min-height` (default `240px`); the props only write those variables. The cap has to exist — with no cap the panel grows with its content, `.tx-transfer__list`'s `overflow: auto` never triggers, and the surrounding page or dialog becomes the scroll container. The floor used to be hardcoded, which made it unbeatable: a transfer inside a 190px box still laid out at 240px and overflowed it.
+- Row labels wrap with `overflow-wrap: anywhere`, not `word-break: break-all`. `break-all` broke at whatever character ran out of room, so "Quick actions" wrapped as "Quick actio / ns"; `anywhere` takes the space first and only splits a word that genuinely cannot fit.
+- Props are declared as a runtime object, not `defineProps<TransferProps>()`. The SFC compiler resolves the sibling `types.ts` once and does not redo it when that file changes, so a prop added to the interface ships as an unknown attribute while both vitest and the built `dist` stay correct.
 - Ordering contract: with `orderable`, both `targetItems` and `resolveOrder` short-circuit `targetOrder='original'`. Changing only the render order and leaving `resolveOrder` re-deriving from `data` was tried first: every move was re-sorted away on the next emit, which reads as "the button does nothing". Rank and first/last checks come from the unfiltered `modelValue`; using the filtered index gets both the rank and the disabled state wrong while a filter is applied.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/transfer/__tests__/transfer.test.ts` covers checked item movement, double-click single-row movement and the disabled-row refusal, select-all (skipping disabled rows, filter scoping, mixed reporting, and clearing on a second press), custom empty text (including per-panel copy), accessible action labels, `maxHeight` variable injection, and `orderable` rank rendering, move up/down, boundary disabling, and rank/bounds under an active filter.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/transfer/__tests__/transfer.test.ts` covers checked item movement, double-click single-row movement and the disabled-row refusal, select-all (skipping disabled rows, filter scoping, mixed reporting, and clearing on a second press), custom empty text (including per-panel copy), accessible action labels, `maxHeight` and `minHeight` variable injection (separately and together), and `orderable` rank rendering, move up/down, boundary disabling, and rank/bounds under an active filter.
 - Screenshot: `.codex-screenshots/nexus-transfer-permission-orchestration-demo-playwright-2026-05-28.png`.
 
