@@ -98,12 +98,13 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|------|------|
 | `nodes` | `TreeNode[]` | `[]` | 树形数据源；组件会按展开状态和当前过滤结果展平成可见行。 |
-| `modelValue` | `string \| number \| Array<string \| number>` | - | 单选时为选中 key；`multiple=true` 时为选中 key 数组。 |
+| `modelValue` | `string \| number \| Array<string \| number>` | - | 单选时为选中 key；`multiple=true` 时为选中 key 数组。绑定它即把选中态交给宿主；不绑定时由树自己维护。 |
 | `multiple` | `boolean` | `false` | 以数组形式切换多个选中 key，而不是替换为单个 key。 |
 | `selectable` | `boolean` | `true` | 是否允许行和 checkbox 选择；关闭选择后展开控件仍可用。 |
 | `checkable` | `boolean` | `false` | 为每个可见节点显示 checkbox。checkbox 状态映射 `modelValue`，不会向子孙级联。 |
 | `disabled` | `boolean` | `false` | 禁用整棵树的选择能力并应用禁用样式；展开仍可用。 |
 | `defaultExpandedKeys` | `Array<string \| number>` | `[]` | 非受控初始展开 key；仅在未使用 `expandedKeys` 时，后续 prop 变化会重置内部展开状态。 |
+| `defaultSelectedKeys` | `Array<string \| number>` | - | 非受控初始选中态。绑定 `modelValue` 时完全忽略——与 `defaultExpandedKeys` / `expandedKeys` 是同一套分工。 |
 | `expandedKeys` | `Array<string \| number>` | - | 受控展开 key。父级需要在 `update:expandedKeys` 后回传新数组。 |
 | `indent` | `number` | `16` | 每级左侧缩进像素。 |
 | `filterText` | `string` | `''` | 过滤文本；非空时匹配分支会临时自动展开。 |
@@ -144,6 +145,9 @@ code: |
 
 - 传入 `expandedKeys` 后展开状态受控。组件仍会触发 `update:expandedKeys`，但只有父级回传新数组后视图才更新。
 - `defaultExpandedKeys` 用于初始化非受控展开；没有 `expandedKeys` 时，后续变化也会重置内部展开状态。
+- 选中态同理：不绑定 `modelValue` 时由树自己维护，`defaultSelectedKeys` 用于初始化。此前选中集合只从 `modelValue` 推导，因此 `<TxTree :nodes="…" />` 不绑定时点击只会把 `update:modelValue` 发到空处，永远不会有行亮起——看起来可点，实际是死的。
+- 绑定 `modelValue` 期间发生的 seed 变化会被忽略，避免宿主之后放手时它变成回落值。
+- 悬停选中行会保留强调色。`:hover:not(.is-disabled)` 是 (0,3,0)，`.is-selected` 是 (0,2,0)，所以中性的 hover 底色恰好在指针停在该行时替换掉强调色；现在 hover 规则排除了选中行，选中行有自己更浓的一档。
 - 过滤不会改写展开状态。`filterText` 非空时，匹配节点的祖先只会通过 `effectiveExpanded` 临时展开。
 - 默认过滤逻辑是 `node.label.toLowerCase().includes(query.toLowerCase())`；自定义 `filterMethod` 收到 trim 后的原始查询。
 - 选择模型是扁平的。`checkable` 只改变控件形态，不提供父子半选或子孙级联。
