@@ -23,12 +23,17 @@ by `polish()` itself.
 ## Tier resolution
 
 ```ts
-countPolishUnits(text) = CJK characters + Latin words   // language-neutral, punctuation-free
+countPolishUnits(text) = CJK characters + words in every other script   // ICU segmentation, punctuation-free
 resolvePolishTier(text) = units < 12 ? 'short' : units < 60 ? 'light' : 'full'
 ```
 
 - One pair of thresholds holds for Chinese and English; a word-count-only rule mis-sizes Chinese and
   a character-count-only rule mis-sizes English ("I'll ship it Monday" is 4 units, 18 characters).
+- The non-CJK half is ICU word segmentation, not `/[\p{L}]+/`: Thai, Lao, Khmer and Myanmar separate
+  no words with spaces, so a letter-run regex reads a whole sentence as one unit and the gate would
+  skip the pass on exactly the long transcripts it exists for. ICU also keeps combining marks inside
+  their word, which the regex splits. CJK keeps its character count, because ICU's ~10 words for 26
+  Chinese characters would push the primary dictation language under the gate.
 - Both numbers are documented against evidence in `research.md` §3 rather than being taste.
 - Boundary behaviour is asserted (11/12/59/60), because an off-by-one here silently changes cost
   and perceived quality at the most common input size.
@@ -83,6 +88,8 @@ failure must never change what the user hears, the same rule `recordInsightSucce
 
 ## Wrong vs correct
 
+- Wrong: count words with a letter-run regex. Correct: ICU word segmentation, because Thai/Lao/
+  Khmer/Myanmar write without spaces and a regex counts a sentence as one unit.
 - Wrong: gate inside `streamDictation` only. Correct: gate inside `polish()`.
 - Wrong: a settings knob for the threshold. Correct: constants with measured rationale; a user-facing
   "polish length" control is a second decision nobody asked for.

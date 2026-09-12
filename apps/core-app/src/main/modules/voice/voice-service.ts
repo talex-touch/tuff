@@ -107,23 +107,45 @@ export type VoicePolishTierDecision = 'short' | 'light' | 'full'
  * 11-character one came back byte-identical after 834ms. The two sessions that gained nothing are
  * exactly the two this gate now skips.
  *
- * Sizes are counted in language-neutral units (CJK characters + Latin words), so one pair of
- * thresholds holds for Chinese and English. 12 units is deliberately close to the only hard
- * number any shipping competitor publishes — Wispr Flow's iOS Polish requires 10 words — and 60
- * units is where a dictated message stops being one short sentence; deep/structured rewriting
- * only pays for itself past that, which is why the `light` band is capped to natural editing
- * regardless of the saved strength.
+ * Sizes are counted in language-neutral units (CJK characters + words in every other script), so
+ * one pair of thresholds holds for Chinese and English. 12 units is deliberately close to the
+ * only hard number any shipping competitor publishes — Wispr Flow's iOS Polish requires 10
+ * words — and 60 units is where a dictated message stops being one short sentence; deep/structured
+ * rewriting only pays for itself past that, which is why the `light` band is capped to natural
+ * editing regardless of the saved strength.
  */
 const POLISH_MIN_UNITS = 12
 const POLISH_FULL_UNITS = 60
 const CJK_CHARACTER = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu
-const LATIN_WORD = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu
 
-/** CJK characters plus Latin words: the size a transcript is gated on. */
+/**
+ * Word counting for everything that is not CJK, via ICU rather than a letter-run regex.
+ *
+ * Thai, Lao, Khmer and Myanmar write without spaces, so `/[\p{L}]+/` reads a whole sentence as
+ * one word and the gate would skip the pass on exactly the long transcripts it exists for.
+ * `Intl.Segmenter`'s dictionary segmentation is the only word boundary those scripts publish;
+ * it also keeps combining marks inside their word, which a regex splits — `e` + U+0301 + `clair`
+ * is one French word, not two. The segmenter is language-neutral on purpose: the transcript's
+ * language is not known before it exists, and ICU applies the right dictionary from the script.
+ *
+ * CJK keeps its character count below instead of ICU's word segmentation: 26 Chinese characters
+ * are ~10 ICU words, which would push the primary dictation language under the gate.
+ */
+let polishWordSegmenter: Intl.Segmenter | undefined
+
+function countPolishWords(text: string): number {
+  polishWordSegmenter ??= new Intl.Segmenter(undefined, { granularity: 'word' })
+  let words = 0
+  for (const segment of polishWordSegmenter.segment(text)) {
+    if (segment.isWordLike) words += 1
+  }
+  return words
+}
+
+/** CJK characters plus words in every other script: the size a transcript is gated on. */
 export function countPolishUnits(text: string): number {
   const cjk = text.match(CJK_CHARACTER)?.length ?? 0
-  const words = text.replace(CJK_CHARACTER, ' ').match(LATIN_WORD)?.length ?? 0
-  return cjk + words
+  return cjk + countPolishWords(text.replace(CJK_CHARACTER, ' '))
 }
 
 export function resolvePolishTier(text: string): VoicePolishTierDecision {
