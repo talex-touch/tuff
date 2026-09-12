@@ -13,6 +13,16 @@ function readNuxtFile(file: string) {
   return readFileSync(new URL(`../../../.nuxt/${file}`, import.meta.url), 'utf8')
 }
 
+/**
+ * Vite discovers a dependency imported through a package entry as a nested id
+ * (`owner > dep`), which changes the `optimizeDeps.include` spelling. Accept either the
+ * bare or the nested entry so this test keeps asserting the pre-bundle, not the id shape.
+ */
+function preBundlesDependency(config: string, dependency: string): boolean {
+  const escaped = dependency.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')
+  return new RegExp(`['"](?:[^'"]* > )?${escaped}['"]`).test(config)
+}
+
 describe('Tuff demo client boundary', () => {
   it('keeps the generated demo registry out of the SSR wrapper', () => {
     const wrapper = readComponent('./TuffDemoWrapper.vue')
@@ -99,22 +109,41 @@ describe('Tuff demo client boundary', () => {
     expect(adminBootstrapPage).toContain('const toast = useToast()')
   })
 
-  it('normalizes TuffEx dev component aliases to one source module id', () => {
+  it('normalizes TuffEx dev component aliases to one mode-selected module id', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 
+    // Source mode remains an explicit escape hatch, so its component targets must survive.
     expect(config).toContain('const tuffexComponentSourceEntry = ')
     expect(config).toContain('const tuffexComponentSourceTypePathEntry = ')
     expect(config).toContain('tuffexComponentsSourceRoot')
     expect(config).toContain('/$1/index.ts')
-    expect(config).toContain('{ find: /^@tuffex-components\\/(.+)$/, replacement: tuffexComponentSourceEntry }')
-    expect(config).toContain("'@tuffex-components/*': [tuffexComponentSourceTypePathEntry]")
+    expect(config).toMatch(/\$\{tuffexComponentsSourceRoot\}\/\*\/index\.ts/)
+
+    // Dist mode is the dev default, so its component targets must exist to be selected.
+    expect(config).toContain('const tuffexComponentDistEntry = ')
+    expect(config).toContain('const tuffexComponentDistTypePathEntry = ')
+    expect(config).toContain('/$1/index.js')
+    expect(config).toContain('/*/index.d.ts')
+
+    // Dev picks the entry from the resolved mode, while production keeps the source registry
+    // that the generated demo module auto-imports against.
+    expect(config).toContain('const tuffexComponentEntry = useTuffexSource ? tuffexComponentSourceEntry : tuffexComponentDistEntry')
+    expect(config).toContain('const tuffexComponentAutoImportEntry = isDev ? tuffexComponentEntry : tuffexComponentSourceEntry')
+    expect(config.replace(/\s+/g, ' ')).toContain('const tuffexComponentTypePathEntry = !isDev ? tuffexComponentSourceTypePathEntry : useTuffexSource ? tuffexComponentSourceTypePathEntry : tuffexComponentDistTypePathEntry')
+
+    // The auto-import alias keeps its module id stable in production; the package-subpath alias
+    // and both type paths stay mode-selected in dev.
+    expect(config).toContain('{ find: /^@tuffex-components\\/(.+)$/, replacement: tuffexComponentAutoImportEntry }')
+    expect(config).toContain('{ find: /^@talex-touch\\/tuffex\\/([a-z0-9-]+)$/, replacement: tuffexComponentEntry }')
+    expect(config).toContain("'@tuffex-components/*': [tuffexComponentTypePathEntry]")
+    expect(config).toContain("'@talex-touch/tuffex/*': [tuffexComponentTypePathEntry]")
   })
 
   it('pre-bundles TuffEx runtime dependencies used by docs chrome', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 
-    expect(config).toContain("'@floating-ui/vue'")
-    expect(config).toContain("'v-wave'")
+    expect(preBundlesDependency(config, '@floating-ui/vue')).toBe(true)
+    expect(preBundlesDependency(config, 'v-wave')).toBe(true)
   })
 
   it('pre-bundles WebGL background dependencies used by Nexus visual routes', () => {
@@ -132,7 +161,7 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain("'echarts/charts'")
     expect(config).toContain("'echarts/components'")
     expect(config).toContain("'echarts/renderers'")
-    expect(config).toContain("'dompurify'")
+    expect(preBundlesDependency(config, 'dompurify')).toBe(true)
   })
 
   it('keeps Sentry out of local dev startup unless explicitly enabled', () => {

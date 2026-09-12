@@ -563,8 +563,9 @@ function checkRoutes() {
 
 /**
  * Mirrors how Pages reads `_headers`: `#` lines are comments, indented lines are headers of the
- * block above, and a pattern that appears twice keeps only its last block — the rules are keyed
- * by pattern, so the second block replaces the first rather than adding to it.
+ * block above, a header named twice in one block is joined with `, ` (as HTTP folds repeated
+ * fields), and a pattern that appears twice keeps only its last block — the rules are keyed by
+ * pattern, so the second block replaces the first rather than adding to it.
  */
 export function parseCloudflareHeadersFile(source) {
   const blocks = []
@@ -580,7 +581,9 @@ export function parseCloudflareHeadersFile(source) {
       const separator = line.indexOf(':')
       if (separator === -1)
         continue
-      current.headers[line.slice(0, separator).trim().toLowerCase()] = line.slice(separator + 1).trim()
+      const name = line.slice(0, separator).trim().toLowerCase()
+      const value = line.slice(separator + 1).trim()
+      current.headers[name] = name in current.headers ? `${current.headers[name]}, ${value}` : value
       continue
     }
     current = { pattern: line, headers: {} }
@@ -1075,6 +1078,14 @@ function findIconsStylesheet(distFiles) {
   }) ?? null
 }
 
+/**
+ * `uno.config.ts` wraps every icon selector in `:where()` so the after-mount sheet cannot outrank
+ * host utilities; the per-glyph budgets are keyed by the bare class.
+ */
+function unwrapIconSelector(selector) {
+  return selector.match(/^:where\((.+)\)$/)?.[1] ?? selector
+}
+
 function checkSharedEntryCssBudget(distFiles) {
   const entryFiles = distFiles.filter(file => /^_nuxt\/entry\.[^/]+\.css$/.test(file.relativePath))
   const findings = []
@@ -1112,7 +1123,7 @@ function checkSharedEntryCssBudget(distFiles) {
       const rule = rules.find((candidate) => {
         const selector = candidate.slice(0, candidate.indexOf('{'))
         return candidate.includes('--un-icon:')
-          && selector.split(',').some(part => part.trim() === `.${token}`)
+          && selector.split(',').some(part => unwrapIconSelector(part.trim()) === `.${token}`)
       })
       if (!rule) {
         findings.push(`aliased icon selector missing from the icons stylesheet: ${token}`)
@@ -1373,8 +1384,8 @@ console.log(`[nexus-dist-budget] Docs initial lifecycle blockers verified: ${doc
 console.log(`[nexus-dist-budget] Initial asset budgets verified: ${htmlInitialAssetBudgetRouteCount} routes / ${htmlInitialAssetBudgets.length} families`)
 if (sharedEntryCssCheck.entry) {
   console.log(`[nexus-dist-budget] Shared entry CSS verified: ${formatBytes(sharedEntryCssCheck.entry.bytes)} / ${formatBytes(sharedEntryCssCheck.entry.gzipBytes)} gzip`)
-if (sharedEntryCssCheck.icons)
-  console.log(`[nexus-dist-budget] Icons stylesheet verified: ${sharedEntryCssCheck.icons.asset} ${formatBytes(sharedEntryCssCheck.icons.bytes)} / ${formatBytes(sharedEntryCssCheck.icons.gzipBytes)} gzip (loaded after mount)`)
+  if (sharedEntryCssCheck.icons)
+    console.log(`[nexus-dist-budget] Icons stylesheet verified: ${sharedEntryCssCheck.icons.asset} ${formatBytes(sharedEntryCssCheck.icons.bytes)} / ${formatBytes(sharedEntryCssCheck.icons.gzipBytes)} gzip (loaded after mount)`)
 }
 console.log(`[nexus-dist-budget] Landing image prefetch hints verified: ${landingInitialHtmlFiles.length - landingImagePrefetchFindings.length}/${landingInitialHtmlFiles.length}`)
 console.log(`[nexus-dist-budget] Landing deferred image references verified: ${landingInitialHtmlFiles.length - landingDeferredImageFindings.length}/${landingInitialHtmlFiles.length}`)
