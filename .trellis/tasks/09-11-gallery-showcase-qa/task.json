@@ -28,7 +28,8 @@
     "09-11-gallery-cell-redesigns",
     "09-11-shadow-light-source",
     "09-11-datepicker-affordance",
-    "09-11-sortable-list-drag"
+    "09-11-sortable-list-drag",
+    "09-11-dialog-width-overflow"
   ],
   "parent": null,
   "relatedFiles": [],
