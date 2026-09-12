@@ -417,21 +417,34 @@ describe('SettingUser nexus base url', () => {
     authStateMock.isLoggedIn.value = false
   })
 
-  function mountNexusBlock() {
+  /**
+   * The settings row carries only the summary; the editor lives in a dialog behind it. The row is
+   * read before opening so the summary is asserted where the user actually reads it.
+   */
+  async function mountNexusBlock() {
     const wrapper = mountSettingUser()
-    const endpoint = wrapper.get('.nexus-endpoint')
-    const block = endpoint.element.parentElement
-    if (!block) {
-      throw new Error('nexus endpoint is not inside a settings block')
+    const row = wrapper
+      .findAll('[data-testid="slot-title"]')
+      .find((title) => title.text() === 'Nexus 服务地址')?.element.parentElement
+    if (!row) {
+      throw new Error(`nexus settings row not found in wrapper: ${wrapper.text()}`)
     }
-    const buttons = endpoint.findAll('.nexus-endpoint__actions button')
+    const description = row.querySelector('[data-testid="slot-description"]')?.textContent ?? ''
+    const inlineForm = row.querySelector('.nexus-endpoint') !== null
+
+    await wrapper.get('[data-testid="nexus-base-url-edit"]').trigger('click')
+    await nextTick()
+
+    const endpoint = wrapper.get('.nexus-endpoint')
     return {
       input: endpoint.get('input'),
-      saveButton: buttons[0]!,
-      resetButton: buttons[1]!,
-      warns: block.querySelector('.nexus-endpoint__warning') !== null,
-      description: block.querySelector('[data-testid="slot-description"]')?.textContent ?? '',
-      ruleLine: endpoint.text()
+      saveButton: wrapper.get('[data-testid="nexus-base-url-save"]'),
+      resetButton: wrapper.get('[data-testid="nexus-base-url-reset"]'),
+      warns: endpoint.find('.nexus-endpoint__warning').exists(),
+      description,
+      ruleLine: endpoint.text(),
+      inlineForm,
+      isOpen: () => wrapper.find('.nexus-endpoint').exists()
     }
   }
 
@@ -441,7 +454,7 @@ describe('SettingUser nexus base url', () => {
       value: 'https://custom.example.test',
       changed: true
     })
-    const block = mountNexusBlock()
+    const block = await mountNexusBlock()
 
     await block.input.setValue('https://custom.example.test/')
     await block.saveButton.trigger('click')
@@ -461,7 +474,7 @@ describe('SettingUser nexus base url', () => {
       value: 'https://custom.example.test',
       changed: false
     })
-    const block = mountNexusBlock()
+    const block = await mountNexusBlock()
 
     await block.saveButton.trigger('click')
     await flushPromises()
@@ -476,7 +489,7 @@ describe('SettingUser nexus base url', () => {
       ok: false,
       error: 'insecure-transport'
     })
-    const block = mountNexusBlock()
+    const block = await mountNexusBlock()
 
     await block.input.setValue('http://custom.example.test')
     await block.saveButton.trigger('click')
@@ -497,7 +510,7 @@ describe('SettingUser nexus base url', () => {
     for (const error of ['embedded-credentials', 'unsupported-path'] as const) {
       toastMock.error.mockClear()
       nexusBaseUrlMock.setUserNexusBaseUrl.mockResolvedValue({ ok: false, error })
-      const block = mountNexusBlock()
+      const block = await mountNexusBlock()
 
       await block.input.setValue('https://custom.example.test/nexus')
       await block.saveButton.trigger('click')
@@ -523,7 +536,7 @@ describe('SettingUser nexus base url', () => {
       value: '',
       changed: true
     })
-    const block = mountNexusBlock()
+    const block = await mountNexusBlock()
 
     await block.resetButton.trigger('click')
     await flushPromises()
@@ -540,7 +553,7 @@ describe('SettingUser nexus base url', () => {
       changed: true
     })
     signOutMock.mockRejectedValue(new Error('ipc unavailable'))
-    const block = mountNexusBlock()
+    const block = await mountNexusBlock()
 
     await block.input.setValue('https://custom.example.test')
     await block.saveButton.trigger('click')
@@ -551,20 +564,58 @@ describe('SettingUser nexus base url', () => {
     expect(String(toastMock.error.mock.calls[0]?.[0] ?? '').length).toBeGreaterThan(0)
   })
 
-  it('warns and shows the effective origin when the saved address is not in effect', () => {
+  it('keeps the editor out of the settings row and behind the dialog', async () => {
+    // The row is a fixed-height single line; an inline form overflowed it onto its neighbours.
+    const block = await mountNexusBlock()
+
+    expect(block.inlineForm).toBe(false)
+    expect(block.isOpen()).toBe(true)
+  })
+
+  it('closes the dialog once the address is applied', async () => {
+    nexusBaseUrlMock.setUserNexusBaseUrl.mockResolvedValue({
+      ok: true,
+      value: 'https://custom.example.test',
+      changed: true
+    })
+    const block = await mountNexusBlock()
+
+    await block.input.setValue('https://custom.example.test')
+    await block.saveButton.trigger('click')
+    await flushPromises()
+
+    expect(block.isOpen()).toBe(false)
+  })
+
+  it('holds the dialog open on a rejected address so the value can be corrected', async () => {
+    nexusBaseUrlMock.setUserNexusBaseUrl.mockResolvedValue({
+      ok: false,
+      error: 'insecure-transport'
+    })
+    const block = await mountNexusBlock()
+
+    await block.input.setValue('http://custom.example.test')
+    await block.saveButton.trigger('click')
+    await flushPromises()
+
+    expect(block.isOpen()).toBe(true)
+    expect((block.input.element as HTMLInputElement).value).toBe('http://custom.example.test')
+  })
+
+  it('warns and shows the effective origin when the saved address is not in effect', async () => {
     appSettingMock.auth.nexusBaseUrl = 'https://saved.example.test'
     nexusBaseUrlMock.effectiveUrl = 'https://example.test'
-    const block = mountNexusBlock()
+    const block = await mountNexusBlock()
 
     expect(block.warns).toBe(true)
     expect(block.description).toContain('https://example.test')
     expect(block.description).not.toContain('saved.example.test')
   })
 
-  it('does not warn when the saved address is the one in effect', () => {
+  it('does not warn when the saved address is the one in effect', async () => {
     appSettingMock.auth.nexusBaseUrl = 'https://example.test'
     nexusBaseUrlMock.effectiveUrl = 'https://example.test'
-    const block = mountNexusBlock()
+    const block = await mountNexusBlock()
 
     expect(block.warns).toBe(false)
     expect(block.ruleLine).toContain('TUFF_NEXUS_BASE_URL')
