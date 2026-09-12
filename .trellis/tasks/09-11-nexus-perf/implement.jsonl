@@ -1,4 +1,0 @@
-{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend guideline index; Nexus rules and pre-dev checklist"}
-{"file": ".trellis/spec/frontend/nexus-docs-rendering-contract.md", "reason": "Prerendered docs HTML must embed the body; payload-key agreement"}
-{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Demo/registry/docs coupling and gate traps"}
-{"file": "apps/nexus/AGENTS.md", "reason": "Nexus-specific SSR/i18n/SEO constraints"}

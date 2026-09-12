@@ -1,3 +1,0 @@
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality gates for frontend changes"}
-{"file": ".trellis/spec/frontend/nexus-docs-rendering-contract.md", "reason": "Verify prerender/body contract still holds"}
-{"file": ".trellis/tasks/09-11-nexus-perf/prd.md", "reason": "Parent baseline numbers and cross-child acceptance"}
