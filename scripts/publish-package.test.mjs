@@ -78,6 +78,30 @@ describe('verifyRegistryManifest', () => {
     assert.equal(calls, 6)
   })
 
+  it('clamps even the first wait when maxDelayMs is below delayMs', () => {
+    // `maxDelayMs` is a ceiling on every wait, not just on the doubled ones. If
+    // the first wait were initialized from `delayMs` alone, a caller that asked
+    // for 4 s max would still be put to sleep for the full 10 s before any
+    // retry — the cap would only start applying from the second wait on.
+    let calls = 0
+    const readField = () => {
+      calls += 1
+      throw new Error('npm error code E404 No match found for version 0.7.0')
+    }
+    const waits = []
+
+    assert.throws(() =>
+      verifyRegistryManifest(pkg, '0.7.0', readField, {
+        attempts: 4,
+        delayMs: 10_000,
+        maxDelayMs: 4_000,
+        sleep: ms => waits.push(ms),
+      }))
+
+    assert.deepEqual(waits, [4_000, 4_000, 4_000])
+    assert.equal(calls, 4)
+  })
+
   it('refuses a non-positive attempt count instead of passing without reading', () => {
     // With attempts <= 0 the loop never runs, so nothing is read and the
     // forbidden-protocol regex would test `undefined` and find it clean.
