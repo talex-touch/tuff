@@ -232,6 +232,20 @@
   width: 38%;
 }
 
+/* The rows are the specimen for a drag control, so the cell shows the grip the
+   component now grows rather than the bare labels it had. */
+.docs-gallery__sort-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.docs-gallery__grip {
+  flex: none;
+  color: var(--docs-muted);
+  cursor: grab;
+}
+
 /* TxTabs defaults to placement="left" with navMinWidth 220. In the old 240px
    block that left the panel 20px, which is the "proportions are wrong" the
    cell showed. The gallery drives it from the top instead. */

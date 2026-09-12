@@ -2255,9 +2255,16 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxSortableList v-model="sortableItems">
-                <template #item="{ item }">
-                  <div class="docs-gallery__scroll-row">
+              <!-- Without `item-label` the live region announces the raw id. -->
+              <TxSortableList
+                v-model="sortableItems"
+                handle
+                :item-label="(item) => item.label"
+                :aria-label="cellLabel('SortableList', '可排序列表')"
+              >
+                <template #item="{ item, handleAttrs }">
+                  <div class="docs-gallery__scroll-row docs-gallery__sort-row">
+                    <span class="docs-gallery__grip i-carbon-draggable" v-bind="handleAttrs" />
                     {{ item.label }}
                   </div>
                 </template>
@@ -2316,7 +2323,9 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__transfer">
-              <TxTransfer v-model="transferValue" :data="transferData" />
+              <!-- The panel's own floor is 240px; the cell is 190. Without this the
+                   specimen laid out past its stage instead of inside it. -->
+              <TxTransfer v-model="transferValue" :data="transferData" min-height="140px" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2332,7 +2341,13 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxTree :nodes="treeNodes" :default-expanded-keys="['plugins']" />
+              <!-- Selection is on by default but was invisible here: the tree kept
+                   no state of its own, so an unbound specimen never lit a row. -->
+              <TxTree
+                :nodes="treeNodes"
+                :default-expanded-keys="['plugins']"
+                :default-selected-keys="['clipboard']"
+              />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
