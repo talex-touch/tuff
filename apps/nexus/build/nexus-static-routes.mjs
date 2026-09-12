@@ -73,6 +73,14 @@ export const docsStaticJsonHeaderRoutes = [
 ]
 export const i18nMessagesHeaderRoutes = ['/_i18n/**']
 
+/**
+ * Documented Cloudflare Pages limits for `_headers`. Past them a line, or the rest of the file,
+ * is dropped with a warning only in wrangler's output — every header past the limit quietly
+ * stops being sent.
+ */
+export const CLOUDFLARE_HEADERS_MAX_RULES = 100
+export const CLOUDFLARE_HEADERS_MAX_LINE_LENGTH = 2000
+
 export function createStaticCacheRouteRules() {
   const rules = {}
   for (const route of docsStaticHtmlHeaderRoutes)

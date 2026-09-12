@@ -4,6 +4,8 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  CLOUDFLARE_HEADERS_MAX_LINE_LENGTH,
+  CLOUDFLARE_HEADERS_MAX_RULES,
   DOCS_STATIC_CACHE_CONTROL,
   I18N_MESSAGES_CACHE_CONTROL,
   docsApiPrerenderRoutes,
@@ -560,27 +562,69 @@ function checkRoutes() {
 }
 
 /**
- * Parses a Cloudflare Pages `_headers` file into `{ pattern, headers }` blocks. Header lines
- * are indented; a non-indented line starts a new block.
+ * Mirrors how Pages reads `_headers`: `#` lines are comments, indented lines are headers of the
+ * block above, and a pattern that appears twice keeps only its last block — the rules are keyed
+ * by pattern, so the second block replaces the first rather than adding to it.
  */
 export function parseCloudflareHeadersFile(source) {
   const blocks = []
+  const byPattern = new Map()
+  let current = null
   for (const rawLine of source.split(/\r?\n/)) {
-    if (!rawLine.trim())
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#'))
       continue
     if (/^\s/.test(rawLine)) {
-      const current = blocks[blocks.length - 1]
       if (!current)
         continue
-      const separator = rawLine.indexOf(':')
+      const separator = line.indexOf(':')
       if (separator === -1)
         continue
-      current.headers[rawLine.slice(0, separator).trim().toLowerCase()] = rawLine.slice(separator + 1).trim()
+      current.headers[line.slice(0, separator).trim().toLowerCase()] = line.slice(separator + 1).trim()
       continue
     }
-    blocks.push({ pattern: rawLine.trim(), headers: {} })
+    current = { pattern: line, headers: {} }
+    const previous = byPattern.get(line)
+    if (previous)
+      blocks.splice(blocks.indexOf(previous), 1)
+    byPattern.set(line, current)
+    blocks.push(current)
   }
   return blocks
+}
+
+/**
+ * The documented `_headers` limits (100 rules, 2 000 characters per line) are enforced by
+ * dropping the offending line or the rest of the file, with a warning only in wrangler's
+ * output; a duplicated pattern likewise loses its first block. Each is a header that quietly
+ * stops being sent.
+ */
+export function checkHeadersFileLimits(headersSource) {
+  const findings = []
+  if (headersSource === null)
+    return { findings: ['_headers is missing'], rules: 0 }
+
+  const patterns = []
+  headersSource.split(/\r?\n/).forEach((rawLine, index) => {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#'))
+      return
+    if (line.length > CLOUDFLARE_HEADERS_MAX_LINE_LENGTH)
+      findings.push(`line ${index + 1} is ${line.length} chars > ${CLOUDFLARE_HEADERS_MAX_LINE_LENGTH}; Pages ignores it`)
+    if (!/^\s/.test(rawLine))
+      patterns.push(line)
+  })
+  if (patterns.length > CLOUDFLARE_HEADERS_MAX_RULES)
+    findings.push(`${patterns.length} rules > ${CLOUDFLARE_HEADERS_MAX_RULES}; Pages drops the rest`)
+
+  const counts = new Map()
+  for (const pattern of patterns)
+    counts.set(pattern, (counts.get(pattern) ?? 0) + 1)
+  for (const [pattern, count] of counts) {
+    if (count > 1)
+      findings.push(`${pattern} appears ${count} times; Pages keeps only the last block`)
+  }
+  return { findings, rules: patterns.length }
 }
 
 /**
@@ -628,6 +672,54 @@ export function checkStaticCacheHeaders(headersSource) {
 
 function readHeadersFile() {
   return existsSync(headersFilePath) ? readFileSync(headersFilePath, 'utf8') : null
+}
+
+/**
+ * Every `Link` target the early-hints step wrote must be a real asset in `dist/_nuxt/`, every
+ * entry must carry `crossorigin`, and the docs families must have a block at all. A hint for a
+ * missing file is a wasted 103 on every page; a hint without `crossorigin` has a different
+ * credentials mode from the tag Nuxt renders, is never matched to it, and makes the browser
+ * download the file twice; a missing block silently returns the docs first paint to one more
+ * round trip.
+ */
+export function checkEarlyHints(headersSource, assetExists) {
+  const findings = []
+  if (headersSource === null)
+    return { findings: ['_headers is missing'], verified: 0 }
+
+  const blocks = parseCloudflareHeadersFile(headersSource).filter(block => 'link' in block.headers)
+  const byPattern = new Map(blocks.map(block => [block.pattern, block.headers.link]))
+  for (const required of ['/en/docs/*', '/zh/docs/*', '/']) {
+    if (!byPattern.has(required))
+      findings.push(`${required}: no Link block for early hints`)
+  }
+
+  let verified = 0
+  for (const [pattern, link] of byPattern) {
+    const entries = link.split(/,\s*(?=<)/).map(entry => ({
+      target: entry.match(/^<([^>]+)>/)?.[1] ?? null,
+      crossorigin: /;\s*crossorigin\b/.test(entry),
+    }))
+    const targets = entries.map(entry => entry.target).filter(Boolean)
+    if (!targets.length) {
+      findings.push(`${pattern}: Link header names no target`)
+      continue
+    }
+    const missing = targets.filter(target => !assetExists(target))
+    if (missing.length)
+      findings.push(`${pattern}: Link targets missing from dist: ${missing.join(', ')}`)
+    const anonymous = entries.filter(entry => entry.target && !entry.crossorigin).map(entry => entry.target)
+    if (anonymous.length)
+      findings.push(`${pattern}: Link entries without crossorigin: ${anonymous.join(', ')}`)
+    if (!missing.length && !anonymous.length)
+      verified += 1
+  }
+
+  return { findings, verified, blocks: blocks.length }
+}
+
+function earlyHintAssetExists(target) {
+  return target.startsWith('/_nuxt/') && existsSync(join(distRoot, target.slice(1)))
 }
 
 function checkStaticRouteFiles() {
@@ -1228,6 +1320,8 @@ const workerGzipBytes = getWorkerGzipBytes(executableFiles)
 const { files: distFiles, totalBytes: distTotalBytes } = analyzeDistFiles()
 const routeCheck = checkRoutes()
 const staticCacheHeaderCheck = checkStaticCacheHeaders(readHeadersFile())
+const earlyHintCheck = checkEarlyHints(readHeadersFile(), earlyHintAssetExists)
+const headersFileLimitCheck = checkHeadersFileLimits(readHeadersFile())
 const missingStaticRouteFiles = checkStaticRouteFiles()
 const workerOwnedAppRouteFindings = checkWorkerOwnedAppRoutes()
 const suspiciousFindings = checkSuspiciousPatterns(executableFiles)
@@ -1267,6 +1361,8 @@ for (const file of distFiles.slice(0, 10))
 
 console.log(`[nexus-worker-bundle] ${routeCheck.message}`)
 console.log(`[nexus-dist-budget] Static cache headers verified: ${staticCacheHeaderCheck.verified}/${staticCacheHeaderCheck.expected ?? 0}`)
+console.log(`[nexus-dist-budget] Early hint Link blocks verified: ${earlyHintCheck.verified}/${earlyHintCheck.blocks ?? 0}`)
+console.log(`[nexus-dist-budget] _headers limits verified: ${headersFileLimitCheck.rules} rules`)
 console.log(`[nexus-dist-budget] Static route files verified: ${expectedStaticRoutes.length - missingStaticRouteFiles.length}/${expectedStaticRoutes.length}`)
 console.log(`[nexus-dist-budget] Worker-owned app routes verified: ${workerOwnedAppRoutes.length - workerOwnedAppRouteFindings.length}/${workerOwnedAppRoutes.length}`)
 console.log('[nexus-dist-budget] Auth handler singleton verified')
@@ -1435,7 +1531,19 @@ if (staticCacheHeaderCheck.findings.length) {
     console.error(`  ${finding}`)
 }
 
-if (!routeCheck.ok || staticCacheHeaderCheck.findings.length || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || remoteFontReferenceFindings.length || unprefixedAttributifyFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || workerSourceMapCheck.findings.length || clientContentDatabaseRuntimeFindings.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sharedEntryCssCheck.findings.length || landingImagePrefetchFindings.length || landingDeferredImageFindings.length || landingShowcaseVideoFindings.length || clientChunkCheck.findings.length || sizeFindings.length)
+if (earlyHintCheck.findings.length) {
+  console.error('[nexus-dist-budget] early hint violations:')
+  for (const finding of earlyHintCheck.findings)
+    console.error(`  ${finding}`)
+}
+
+if (headersFileLimitCheck.findings.length) {
+  console.error('[nexus-dist-budget] _headers limit violations:')
+  for (const finding of headersFileLimitCheck.findings)
+    console.error(`  ${finding}`)
+}
+
+if (!routeCheck.ok || staticCacheHeaderCheck.findings.length || earlyHintCheck.findings.length || headersFileLimitCheck.findings.length || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || remoteFontReferenceFindings.length || unprefixedAttributifyFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || workerSourceMapCheck.findings.length || clientContentDatabaseRuntimeFindings.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sharedEntryCssCheck.findings.length || landingImagePrefetchFindings.length || landingDeferredImageFindings.length || landingShowcaseVideoFindings.length || clientChunkCheck.findings.length || sizeFindings.length)
   process.exit(1)
 }
 
