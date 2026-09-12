@@ -1,13 +1,20 @@
-/* Every rule here is scoped to `:where(.tx-markdown-view, .tx-stream-md)`.
-   `index.ts` imports this file as a *global* stylesheet, so unscoped
-   `.markdown-body` rules landed on any host that happens to use that very
-   generic class name — the Nexus docs body does, which meant importing
-   TxMarkdownView restyled every docs page and every component specimen in the
-   gallery. `:where()` contributes zero specificity, so the scope confines the
-   sheet to the two components that render `.markdown-body` without changing how
-   any rule here competes with any other. Keep the scope when re-vendoring. */
+/* Every rule here is scoped to `:where(.tx-md)`. `index.ts` imports this file as
+   a *global* stylesheet, so unscoped `.markdown-body` rules landed on any host
+   that happens to use that very generic class name — the Nexus docs body does,
+   which meant importing TxMarkdownView restyled every docs page and every
+   component specimen in the gallery. `:where()` contributes zero specificity, so
+   the scope confines the sheet without changing how any rule here competes with
+   any other.
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body {
+   `tx-md` is a marker class that `TxMarkdownView` and `TxStreamMarkdown` both
+   put on their root alongside their own. The scope first spelled out both roots,
+   which cost 24 bytes on each of 314 selectors — ~7.5 KiB per copy, minified,
+   and that alone pushed `stream-markdown/style.css` past its size budget.
+
+   Keep the scope when re-vendoring, and keep `tx-md` on both roots:
+   `markdown-scope.test.ts` fails if either drifts. */
+
+:where(.tx-md) .markdown-body {
   --base-size-4: 0.25rem;
   --base-size-8: 0.5rem;
   --base-size-16: 1rem;
@@ -127,10 +134,10 @@
 }
 
 .tx-markdown-view.dark .markdown-body,
-.dark :where(.tx-markdown-view, .tx-stream-md) .markdown-body,
-[data-theme="dark"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body,
-html[data-theme="dark"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body,
-body[data-theme="dark"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body {
+.dark :where(.tx-md) .markdown-body,
+[data-theme="dark"] :where(.tx-md) .markdown-body,
+html[data-theme="dark"] :where(.tx-md) .markdown-body,
+body[data-theme="dark"] :where(.tx-md) .markdown-body {
   /* dark */
   color-scheme: dark;
   --focus-outlineColor: #1f6feb;
@@ -186,10 +193,10 @@ body[data-theme="dark"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body 
 }
 
 .tx-markdown-view.light .markdown-body,
-.light :where(.tx-markdown-view, .tx-stream-md) .markdown-body,
-[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body,
-html[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body,
-body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body {
+.light :where(.tx-md) .markdown-body,
+[data-theme="light"] :where(.tx-md) .markdown-body,
+html[data-theme="light"] :where(.tx-md) .markdown-body,
+body[data-theme="light"] :where(.tx-md) .markdown-body {
   /* light */
   color-scheme: light;
   --focus-outlineColor: #0969da;
@@ -300,7 +307,7 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   }
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body {
+:where(.tx-md) .markdown-body {
   -ms-text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
   margin: 0;
@@ -312,18 +319,18 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   word-wrap: break-word;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .octicon {
+:where(.tx-md) .markdown-body .octicon {
   display: inline-block;
   fill: currentColor;
   vertical-align: text-bottom;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h1:hover .anchor .octicon-link:before,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h2:hover .anchor .octicon-link:before,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h3:hover .anchor .octicon-link:before,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h4:hover .anchor .octicon-link:before,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h5:hover .anchor .octicon-link:before,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h6:hover .anchor .octicon-link:before {
+:where(.tx-md) .markdown-body h1:hover .anchor .octicon-link:before,
+:where(.tx-md) .markdown-body h2:hover .anchor .octicon-link:before,
+:where(.tx-md) .markdown-body h3:hover .anchor .octicon-link:before,
+:where(.tx-md) .markdown-body h4:hover .anchor .octicon-link:before,
+:where(.tx-md) .markdown-body h5:hover .anchor .octicon-link:before,
+:where(.tx-md) .markdown-body h6:hover .anchor .octicon-link:before {
   width: 16px;
   height: 16px;
   content: ' ';
@@ -333,42 +340,42 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path fill-rule='evenodd' d='M7.775 3.275a.75.75 0 001.06 1.06l1.25-1.25a2 2 0 112.83 2.83l-2.5 2.5a2 2 0 01-2.83 0 .75.75 0 00-1.06 1.06 3.5 3.5 0 004.95 0l2.5-2.5a3.5 3.5 0 00-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 010-2.83l2.5-2.5a2 2 0 012.83 0 .75.75 0 001.06-1.06 3.5 3.5 0 00-4.95 0l-2.5 2.5a3.5 3.5 0 004.95 4.95l1.25-1.25a.75.75 0 00-1.06-1.06l-1.25 1.25a2 2 0 01-2.83 0z'></path></svg>");
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body details,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body figcaption,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body figure {
+:where(.tx-md) .markdown-body details,
+:where(.tx-md) .markdown-body figcaption,
+:where(.tx-md) .markdown-body figure {
   display: block;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary {
+:where(.tx-md) .markdown-body summary {
   display: list-item;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [hidden] {
+:where(.tx-md) .markdown-body [hidden] {
   display: none !important;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body a {
+:where(.tx-md) .markdown-body a {
   background-color: transparent;
   color: var(--fgColor-accent);
   text-decoration: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body abbr[title] {
+:where(.tx-md) .markdown-body abbr[title] {
   border-bottom: none;
   -webkit-text-decoration: underline dotted;
   text-decoration: underline dotted;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body b,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body strong {
+:where(.tx-md) .markdown-body b,
+:where(.tx-md) .markdown-body strong {
   font-weight: var(--base-text-weight-semibold, 600);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body dfn {
+:where(.tx-md) .markdown-body dfn {
   font-style: italic;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h1 {
+:where(.tx-md) .markdown-body h1 {
   margin: .67em 0;
   font-weight: var(--base-text-weight-semibold, 600);
   padding-bottom: .3em;
@@ -376,50 +383,50 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   border-bottom: 1px solid var(--borderColor-muted);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body mark {
+:where(.tx-md) .markdown-body mark {
   background-color: var(--bgColor-attention-muted);
   color: var(--fgColor-default);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body small {
+:where(.tx-md) .markdown-body small {
   font-size: 90%;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body sub,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body sup {
+:where(.tx-md) .markdown-body sub,
+:where(.tx-md) .markdown-body sup {
   font-size: 75%;
   line-height: 0;
   position: relative;
   vertical-align: baseline;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body sub {
+:where(.tx-md) .markdown-body sub {
   bottom: -0.25em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body sup {
+:where(.tx-md) .markdown-body sup {
   top: -0.5em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body img {
+:where(.tx-md) .markdown-body img {
   border-style: none;
   max-width: 100%;
   box-sizing: content-box;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body code,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body kbd,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body pre,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body samp {
+:where(.tx-md) .markdown-body code,
+:where(.tx-md) .markdown-body kbd,
+:where(.tx-md) .markdown-body pre,
+:where(.tx-md) .markdown-body samp {
   font-family: monospace;
   font-size: 1em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body figure {
+:where(.tx-md) .markdown-body figure {
   margin: 1em var(--base-size-40);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body hr {
+:where(.tx-md) .markdown-body hr {
   box-sizing: content-box;
   overflow: hidden;
   background: transparent;
@@ -431,7 +438,7 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   border: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input {
+:where(.tx-md) .markdown-body input {
   font: inherit;
   margin: 0;
   overflow: visible;
@@ -440,62 +447,62 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   line-height: inherit;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [type=button],
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [type=reset],
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [type=submit] {
+:where(.tx-md) .markdown-body [type=button],
+:where(.tx-md) .markdown-body [type=reset],
+:where(.tx-md) .markdown-body [type=submit] {
   -webkit-appearance: button;
   appearance: button;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [type=checkbox],
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [type=radio] {
+:where(.tx-md) .markdown-body [type=checkbox],
+:where(.tx-md) .markdown-body [type=radio] {
   box-sizing: border-box;
   padding: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [type=number]::-webkit-inner-spin-button,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [type=number]::-webkit-outer-spin-button {
+:where(.tx-md) .markdown-body [type=number]::-webkit-inner-spin-button,
+:where(.tx-md) .markdown-body [type=number]::-webkit-outer-spin-button {
   height: auto;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [type=search]::-webkit-search-cancel-button,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [type=search]::-webkit-search-decoration {
+:where(.tx-md) .markdown-body [type=search]::-webkit-search-cancel-button,
+:where(.tx-md) .markdown-body [type=search]::-webkit-search-decoration {
   -webkit-appearance: none;
   appearance: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ::-webkit-input-placeholder {
+:where(.tx-md) .markdown-body ::-webkit-input-placeholder {
   color: inherit;
   opacity: .54;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ::-webkit-file-upload-button {
+:where(.tx-md) .markdown-body ::-webkit-file-upload-button {
   -webkit-appearance: button;
   appearance: button;
   font: inherit;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body a:hover {
+:where(.tx-md) .markdown-body a:hover {
   text-decoration: underline;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ::placeholder {
+:where(.tx-md) .markdown-body ::placeholder {
   color: var(--fgColor-muted);
   opacity: 1;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body hr::before {
+:where(.tx-md) .markdown-body hr::before {
   display: table;
   content: "";
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body hr::after {
+:where(.tx-md) .markdown-body hr::after {
   display: table;
   clear: both;
   content: "";
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body table {
+:where(.tx-md) .markdown-body table {
   border-spacing: 0;
   border-collapse: collapse;
   display: block;
@@ -507,50 +514,50 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   font-variant: tabular-nums;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body td,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body th {
+:where(.tx-md) .markdown-body td,
+:where(.tx-md) .markdown-body th {
   padding: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body details summary {
+:where(.tx-md) .markdown-body details summary {
   cursor: pointer;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body a:focus,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [role=button]:focus,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input[type=radio]:focus,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input[type=checkbox]:focus {
+:where(.tx-md) .markdown-body a:focus,
+:where(.tx-md) .markdown-body [role=button]:focus,
+:where(.tx-md) .markdown-body input[type=radio]:focus,
+:where(.tx-md) .markdown-body input[type=checkbox]:focus {
   outline: 2px solid var(--focus-outlineColor);
   outline-offset: -2px;
   box-shadow: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body a:focus:not(:focus-visible),
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [role=button]:focus:not(:focus-visible),
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input[type=radio]:focus:not(:focus-visible),
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input[type=checkbox]:focus:not(:focus-visible) {
+:where(.tx-md) .markdown-body a:focus:not(:focus-visible),
+:where(.tx-md) .markdown-body [role=button]:focus:not(:focus-visible),
+:where(.tx-md) .markdown-body input[type=radio]:focus:not(:focus-visible),
+:where(.tx-md) .markdown-body input[type=checkbox]:focus:not(:focus-visible) {
   outline: solid 1px transparent;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body a:focus-visible,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [role=button]:focus-visible,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input[type=radio]:focus-visible,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input[type=checkbox]:focus-visible {
+:where(.tx-md) .markdown-body a:focus-visible,
+:where(.tx-md) .markdown-body [role=button]:focus-visible,
+:where(.tx-md) .markdown-body input[type=radio]:focus-visible,
+:where(.tx-md) .markdown-body input[type=checkbox]:focus-visible {
   outline: 2px solid var(--focus-outlineColor);
   outline-offset: -2px;
   box-shadow: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body a:not([class]):focus,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body a:not([class]):focus-visible,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input[type=radio]:focus,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input[type=radio]:focus-visible,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input[type=checkbox]:focus,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input[type=checkbox]:focus-visible {
+:where(.tx-md) .markdown-body a:not([class]):focus,
+:where(.tx-md) .markdown-body a:not([class]):focus-visible,
+:where(.tx-md) .markdown-body input[type=radio]:focus,
+:where(.tx-md) .markdown-body input[type=radio]:focus-visible,
+:where(.tx-md) .markdown-body input[type=checkbox]:focus,
+:where(.tx-md) .markdown-body input[type=checkbox]:focus-visible {
   outline-offset: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body kbd {
+:where(.tx-md) .markdown-body kbd {
   display: inline-block;
   padding: var(--base-size-4);
   font: 11px var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
@@ -564,89 +571,89 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   box-shadow: inset 0 -1px 0 var(--borderColor-neutral-muted);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h1,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h2,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h3,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h4,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h5,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h6 {
+:where(.tx-md) .markdown-body h1,
+:where(.tx-md) .markdown-body h2,
+:where(.tx-md) .markdown-body h3,
+:where(.tx-md) .markdown-body h4,
+:where(.tx-md) .markdown-body h5,
+:where(.tx-md) .markdown-body h6 {
   margin-top: var(--base-size-24);
   margin-bottom: var(--base-size-16);
   font-weight: var(--base-text-weight-semibold, 600);
   line-height: 1.25;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h2 {
+:where(.tx-md) .markdown-body h2 {
   font-weight: var(--base-text-weight-semibold, 600);
   padding-bottom: .3em;
   font-size: 1.5em;
   /* border-bottom: 1px solid var(--borderColor-muted); */
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h3 {
+:where(.tx-md) .markdown-body h3 {
   font-weight: var(--base-text-weight-semibold, 600);
   font-size: 1.25em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h4 {
+:where(.tx-md) .markdown-body h4 {
   font-weight: var(--base-text-weight-semibold, 600);
   font-size: 1em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h5 {
+:where(.tx-md) .markdown-body h5 {
   font-weight: var(--base-text-weight-semibold, 600);
   font-size: .875em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h6 {
+:where(.tx-md) .markdown-body h6 {
   font-weight: var(--base-text-weight-semibold, 600);
   font-size: .85em;
   color: var(--fgColor-muted);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body p {
+:where(.tx-md) .markdown-body p {
   margin-top: 0;
   margin-bottom: 10px;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body blockquote {
+:where(.tx-md) .markdown-body blockquote {
   margin: 0;
   padding: 0 1em;
   color: var(--fgColor-muted);
   border-left: .25em solid var(--borderColor-default);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ul,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol {
+:where(.tx-md) .markdown-body ul,
+:where(.tx-md) .markdown-body ol {
   margin-top: 0;
   margin-bottom: 0;
   padding-left: 2em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol ol,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ul ol {
+:where(.tx-md) .markdown-body ol ol,
+:where(.tx-md) .markdown-body ul ol {
   list-style-type: lower-roman;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ul ul ol,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ul ol ol,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol ul ol,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol ol ol {
+:where(.tx-md) .markdown-body ul ul ol,
+:where(.tx-md) .markdown-body ul ol ol,
+:where(.tx-md) .markdown-body ol ul ol,
+:where(.tx-md) .markdown-body ol ol ol {
   list-style-type: lower-alpha;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body dd {
+:where(.tx-md) .markdown-body dd {
   margin-left: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body tt,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body code,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body samp {
+:where(.tx-md) .markdown-body tt,
+:where(.tx-md) .markdown-body code,
+:where(.tx-md) .markdown-body samp {
   font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
   font-size: 12px;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body pre {
+:where(.tx-md) .markdown-body pre {
   margin-top: 0;
   margin-bottom: 0;
   font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
@@ -654,202 +661,202 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   word-wrap: normal;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .octicon {
+:where(.tx-md) .markdown-body .octicon {
   display: inline-block;
   overflow: visible !important;
   vertical-align: text-bottom;
   fill: currentColor;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input::-webkit-outer-spin-button,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body input::-webkit-inner-spin-button {
+:where(.tx-md) .markdown-body input::-webkit-outer-spin-button,
+:where(.tx-md) .markdown-body input::-webkit-inner-spin-button {
   margin: 0;
   appearance: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .mr-2 {
+:where(.tx-md) .markdown-body .mr-2 {
   margin-right: var(--base-size-8, 8px) !important;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body::before {
+:where(.tx-md) .markdown-body::before {
   display: table;
   content: "";
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body::after {
+:where(.tx-md) .markdown-body::after {
   display: table;
   clear: both;
   content: "";
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body>*:first-child {
+:where(.tx-md) .markdown-body>*:first-child {
   margin-top: 0 !important;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body>*:last-child {
+:where(.tx-md) .markdown-body>*:last-child {
   margin-bottom: 0 !important;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body a:not([href]) {
+:where(.tx-md) .markdown-body a:not([href]) {
   color: inherit;
   text-decoration: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .absent {
+:where(.tx-md) .markdown-body .absent {
   color: var(--fgColor-danger);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .anchor {
+:where(.tx-md) .markdown-body .anchor {
   float: left;
   padding-right: var(--base-size-4);
   margin-left: -20px;
   line-height: 1;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .anchor:focus {
+:where(.tx-md) .markdown-body .anchor:focus {
   outline: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body p,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body blockquote,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ul,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body dl,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body table,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body pre,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body details {
+:where(.tx-md) .markdown-body p,
+:where(.tx-md) .markdown-body blockquote,
+:where(.tx-md) .markdown-body ul,
+:where(.tx-md) .markdown-body ol,
+:where(.tx-md) .markdown-body dl,
+:where(.tx-md) .markdown-body table,
+:where(.tx-md) .markdown-body pre,
+:where(.tx-md) .markdown-body details {
   margin-top: 0;
   margin-bottom: var(--base-size-16);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body blockquote>:first-child {
+:where(.tx-md) .markdown-body blockquote>:first-child {
   margin-top: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body blockquote>:last-child {
+:where(.tx-md) .markdown-body blockquote>:last-child {
   margin-bottom: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h1 .octicon-link,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h2 .octicon-link,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h3 .octicon-link,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h4 .octicon-link,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h5 .octicon-link,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h6 .octicon-link {
+:where(.tx-md) .markdown-body h1 .octicon-link,
+:where(.tx-md) .markdown-body h2 .octicon-link,
+:where(.tx-md) .markdown-body h3 .octicon-link,
+:where(.tx-md) .markdown-body h4 .octicon-link,
+:where(.tx-md) .markdown-body h5 .octicon-link,
+:where(.tx-md) .markdown-body h6 .octicon-link {
   color: var(--fgColor-default);
   vertical-align: middle;
   visibility: hidden;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h1:hover .anchor,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h2:hover .anchor,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h3:hover .anchor,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h4:hover .anchor,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h5:hover .anchor,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h6:hover .anchor {
+:where(.tx-md) .markdown-body h1:hover .anchor,
+:where(.tx-md) .markdown-body h2:hover .anchor,
+:where(.tx-md) .markdown-body h3:hover .anchor,
+:where(.tx-md) .markdown-body h4:hover .anchor,
+:where(.tx-md) .markdown-body h5:hover .anchor,
+:where(.tx-md) .markdown-body h6:hover .anchor {
   text-decoration: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h1:hover .anchor .octicon-link,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h2:hover .anchor .octicon-link,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h3:hover .anchor .octicon-link,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h4:hover .anchor .octicon-link,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h5:hover .anchor .octicon-link,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h6:hover .anchor .octicon-link {
+:where(.tx-md) .markdown-body h1:hover .anchor .octicon-link,
+:where(.tx-md) .markdown-body h2:hover .anchor .octicon-link,
+:where(.tx-md) .markdown-body h3:hover .anchor .octicon-link,
+:where(.tx-md) .markdown-body h4:hover .anchor .octicon-link,
+:where(.tx-md) .markdown-body h5:hover .anchor .octicon-link,
+:where(.tx-md) .markdown-body h6:hover .anchor .octicon-link {
   visibility: visible;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h1 tt,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h1 code,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h2 tt,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h2 code,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h3 tt,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h3 code,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h4 tt,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h4 code,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h5 tt,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h5 code,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h6 tt,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body h6 code {
+:where(.tx-md) .markdown-body h1 tt,
+:where(.tx-md) .markdown-body h1 code,
+:where(.tx-md) .markdown-body h2 tt,
+:where(.tx-md) .markdown-body h2 code,
+:where(.tx-md) .markdown-body h3 tt,
+:where(.tx-md) .markdown-body h3 code,
+:where(.tx-md) .markdown-body h4 tt,
+:where(.tx-md) .markdown-body h4 code,
+:where(.tx-md) .markdown-body h5 tt,
+:where(.tx-md) .markdown-body h5 code,
+:where(.tx-md) .markdown-body h6 tt,
+:where(.tx-md) .markdown-body h6 code {
   padding: 0 .2em;
   font-size: inherit;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h1,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h2,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h3,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h4,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h5,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h6 {
+:where(.tx-md) .markdown-body summary h1,
+:where(.tx-md) .markdown-body summary h2,
+:where(.tx-md) .markdown-body summary h3,
+:where(.tx-md) .markdown-body summary h4,
+:where(.tx-md) .markdown-body summary h5,
+:where(.tx-md) .markdown-body summary h6 {
   display: inline-block;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h1 .anchor,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h2 .anchor,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h3 .anchor,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h4 .anchor,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h5 .anchor,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h6 .anchor {
+:where(.tx-md) .markdown-body summary h1 .anchor,
+:where(.tx-md) .markdown-body summary h2 .anchor,
+:where(.tx-md) .markdown-body summary h3 .anchor,
+:where(.tx-md) .markdown-body summary h4 .anchor,
+:where(.tx-md) .markdown-body summary h5 .anchor,
+:where(.tx-md) .markdown-body summary h6 .anchor {
   margin-left: -40px;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h1,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary h2 {
+:where(.tx-md) .markdown-body summary h1,
+:where(.tx-md) .markdown-body summary h2 {
   padding-bottom: 0;
   border-bottom: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ul.no-list,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol.no-list {
+:where(.tx-md) .markdown-body ul.no-list,
+:where(.tx-md) .markdown-body ol.no-list {
   padding: 0;
   list-style-type: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol[type="a s"] {
+:where(.tx-md) .markdown-body ol[type="a s"] {
   list-style-type: lower-alpha;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol[type="A s"] {
+:where(.tx-md) .markdown-body ol[type="A s"] {
   list-style-type: upper-alpha;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol[type="i s"] {
+:where(.tx-md) .markdown-body ol[type="i s"] {
   list-style-type: lower-roman;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol[type="I s"] {
+:where(.tx-md) .markdown-body ol[type="I s"] {
   list-style-type: upper-roman;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol[type="1"] {
+:where(.tx-md) .markdown-body ol[type="1"] {
   list-style-type: decimal;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body div>ol:not([type]) {
+:where(.tx-md) .markdown-body div>ol:not([type]) {
   list-style-type: decimal;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ul ul,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ul ol,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol ol,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol ul {
+:where(.tx-md) .markdown-body ul ul,
+:where(.tx-md) .markdown-body ul ol,
+:where(.tx-md) .markdown-body ol ol,
+:where(.tx-md) .markdown-body ol ul {
   margin-top: 0;
   margin-bottom: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body li>p {
+:where(.tx-md) .markdown-body li>p {
   margin-top: var(--base-size-16);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body li+li {
+:where(.tx-md) .markdown-body li+li {
   margin-top: .25em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body dl {
+:where(.tx-md) .markdown-body dl {
   padding: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body dl dt {
+:where(.tx-md) .markdown-body dl dt {
   padding: 0;
   margin-top: var(--base-size-16);
   font-size: 1em;
@@ -857,59 +864,59 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   font-weight: var(--base-text-weight-semibold, 600);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body dl dd {
+:where(.tx-md) .markdown-body dl dd {
   padding: 0 var(--base-size-16);
   margin-bottom: var(--base-size-16);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body table th {
+:where(.tx-md) .markdown-body table th {
   font-weight: var(--base-text-weight-semibold, 600);
   background-color: transparent;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body table th,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body table td {
+:where(.tx-md) .markdown-body table th,
+:where(.tx-md) .markdown-body table td {
   padding: 6px 13px;
   border: 1px solid var(--borderColor-default);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body table td>:last-child {
+:where(.tx-md) .markdown-body table td>:last-child {
   margin-bottom: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body table tr {
+:where(.tx-md) .markdown-body table tr {
   background-color: transparent;
   border-top: 1px solid var(--borderColor-muted);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body table tr:nth-child(2n) {
+:where(.tx-md) .markdown-body table tr:nth-child(2n) {
   background-color: transparent;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body table img {
+:where(.tx-md) .markdown-body table img {
   background-color: transparent;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body img[align=right] {
+:where(.tx-md) .markdown-body img[align=right] {
   padding-left: 20px;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body img[align=left] {
+:where(.tx-md) .markdown-body img[align=left] {
   padding-right: 20px;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .emoji {
+:where(.tx-md) .markdown-body .emoji {
   max-width: none;
   vertical-align: text-top;
   background-color: transparent;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.frame {
+:where(.tx-md) .markdown-body span.frame {
   display: block;
   overflow: hidden;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.frame>span {
+:where(.tx-md) .markdown-body span.frame>span {
   display: block;
   float: left;
   width: auto;
@@ -919,81 +926,81 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   border: 1px solid var(--borderColor-default);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.frame span img {
+:where(.tx-md) .markdown-body span.frame span img {
   display: block;
   float: left;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.frame span span {
+:where(.tx-md) .markdown-body span.frame span span {
   display: block;
   padding: 5px 0 0;
   clear: both;
   color: var(--fgColor-default);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.align-center {
+:where(.tx-md) .markdown-body span.align-center {
   display: block;
   overflow: hidden;
   clear: both;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.align-center>span {
+:where(.tx-md) .markdown-body span.align-center>span {
   display: block;
   margin: 13px auto 0;
   overflow: hidden;
   text-align: center;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.align-center span img {
+:where(.tx-md) .markdown-body span.align-center span img {
   margin: 0 auto;
   text-align: center;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.align-right {
+:where(.tx-md) .markdown-body span.align-right {
   display: block;
   overflow: hidden;
   clear: both;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.align-right>span {
+:where(.tx-md) .markdown-body span.align-right>span {
   display: block;
   margin: 13px 0 0;
   overflow: hidden;
   text-align: right;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.align-right span img {
+:where(.tx-md) .markdown-body span.align-right span img {
   margin: 0;
   text-align: right;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.float-left {
+:where(.tx-md) .markdown-body span.float-left {
   display: block;
   float: left;
   margin-right: 13px;
   overflow: hidden;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.float-left span {
+:where(.tx-md) .markdown-body span.float-left span {
   margin: 13px 0 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.float-right {
+:where(.tx-md) .markdown-body span.float-right {
   display: block;
   float: right;
   margin-left: 13px;
   overflow: hidden;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body span.float-right>span {
+:where(.tx-md) .markdown-body span.float-right>span {
   display: block;
   margin: 13px auto 0;
   overflow: hidden;
   text-align: right;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body code,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body tt {
+:where(.tx-md) .markdown-body code,
+:where(.tx-md) .markdown-body tt {
   padding: .2em .4em;
   margin: 0;
   font-size: 85%;
@@ -1002,24 +1009,24 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   border-radius: 6px;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body code br,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body tt br {
+:where(.tx-md) .markdown-body code br,
+:where(.tx-md) .markdown-body tt br {
   display: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body del code {
+:where(.tx-md) .markdown-body del code {
   text-decoration: inherit;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body samp {
+:where(.tx-md) .markdown-body samp {
   font-size: 85%;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body pre code {
+:where(.tx-md) .markdown-body pre code {
   font-size: 100%;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body pre>code {
+:where(.tx-md) .markdown-body pre>code {
   padding: 0;
   margin: 0;
   word-break: normal;
@@ -1028,17 +1035,17 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   border: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .highlight {
+:where(.tx-md) .markdown-body .highlight {
   margin-bottom: var(--base-size-16);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .highlight pre {
+:where(.tx-md) .markdown-body .highlight pre {
   margin-bottom: 0;
   word-break: normal;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .highlight pre,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body pre {
+:where(.tx-md) .markdown-body .highlight pre,
+:where(.tx-md) .markdown-body pre {
   padding: var(--base-size-16);
   overflow: auto;
   font-size: 85%;
@@ -1048,8 +1055,8 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   border-radius: 6px;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body pre code,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body pre tt {
+:where(.tx-md) .markdown-body pre code,
+:where(.tx-md) .markdown-body pre tt {
   display: inline;
   max-width: auto;
   padding: 0;
@@ -1061,8 +1068,8 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   border: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .csv-data td,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .csv-data th {
+:where(.tx-md) .markdown-body .csv-data td,
+:where(.tx-md) .markdown-body .csv-data th {
   padding: 5px;
   overflow: hidden;
   font-size: 12px;
@@ -1071,52 +1078,52 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   white-space: nowrap;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .csv-data .blob-num {
+:where(.tx-md) .markdown-body .csv-data .blob-num {
   padding: 10px var(--base-size-8) 9px;
   text-align: right;
   background: var(--bgColor-default);
   border: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .csv-data tr {
+:where(.tx-md) .markdown-body .csv-data tr {
   border-top: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .csv-data th {
+:where(.tx-md) .markdown-body .csv-data th {
   font-weight: var(--base-text-weight-semibold, 600);
   background: var(--bgColor-muted);
   border-top: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [data-footnote-ref]::before {
+:where(.tx-md) .markdown-body [data-footnote-ref]::before {
   content: "[";
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [data-footnote-ref]::after {
+:where(.tx-md) .markdown-body [data-footnote-ref]::after {
   content: "]";
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .footnotes {
+:where(.tx-md) .markdown-body .footnotes {
   font-size: 12px;
   color: var(--fgColor-muted);
   border-top: 1px solid var(--borderColor-default);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .footnotes ol {
+:where(.tx-md) .markdown-body .footnotes ol {
   padding-left: var(--base-size-16);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .footnotes ol ul {
+:where(.tx-md) .markdown-body .footnotes ol ul {
   display: inline-block;
   padding-left: var(--base-size-16);
   margin-top: var(--base-size-16);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .footnotes li {
+:where(.tx-md) .markdown-body .footnotes li {
   position: relative;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .footnotes li:target::before {
+:where(.tx-md) .markdown-body .footnotes li:target::before {
   position: absolute;
   top: calc(var(--base-size-8)*-1);
   right: calc(var(--base-size-8)*-1);
@@ -1128,153 +1135,153 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   border-radius: 6px;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .footnotes li:target {
+:where(.tx-md) .markdown-body .footnotes li:target {
   color: var(--fgColor-default);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .footnotes .data-footnote-backref g-emoji {
+:where(.tx-md) .markdown-body .footnotes .data-footnote-backref g-emoji {
   font-family: monospace;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body body:has(:modal) {
+:where(.tx-md) .markdown-body body:has(:modal) {
   padding-right: var(--dialog-scrollgutter) !important;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-c {
+:where(.tx-md) .markdown-body .pl-c {
   color: var(--color-prettylights-syntax-comment);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-c1,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-s .pl-v {
+:where(.tx-md) .markdown-body .pl-c1,
+:where(.tx-md) .markdown-body .pl-s .pl-v {
   color: var(--color-prettylights-syntax-constant);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-e,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-en {
+:where(.tx-md) .markdown-body .pl-e,
+:where(.tx-md) .markdown-body .pl-en {
   color: var(--color-prettylights-syntax-entity);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-smi,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-s .pl-s1 {
+:where(.tx-md) .markdown-body .pl-smi,
+:where(.tx-md) .markdown-body .pl-s .pl-s1 {
   color: var(--color-prettylights-syntax-storage-modifier-import);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-ent {
+:where(.tx-md) .markdown-body .pl-ent {
   color: var(--color-prettylights-syntax-entity-tag);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-k {
+:where(.tx-md) .markdown-body .pl-k {
   color: var(--color-prettylights-syntax-keyword);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-s,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-pds,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-s .pl-pse .pl-s1,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-sr,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-sr .pl-cce,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-sr .pl-sre,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-sr .pl-sra {
+:where(.tx-md) .markdown-body .pl-s,
+:where(.tx-md) .markdown-body .pl-pds,
+:where(.tx-md) .markdown-body .pl-s .pl-pse .pl-s1,
+:where(.tx-md) .markdown-body .pl-sr,
+:where(.tx-md) .markdown-body .pl-sr .pl-cce,
+:where(.tx-md) .markdown-body .pl-sr .pl-sre,
+:where(.tx-md) .markdown-body .pl-sr .pl-sra {
   color: var(--color-prettylights-syntax-string);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-v,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-smw {
+:where(.tx-md) .markdown-body .pl-v,
+:where(.tx-md) .markdown-body .pl-smw {
   color: var(--color-prettylights-syntax-variable);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-bu {
+:where(.tx-md) .markdown-body .pl-bu {
   color: var(--color-prettylights-syntax-brackethighlighter-unmatched);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-ii {
+:where(.tx-md) .markdown-body .pl-ii {
   color: var(--color-prettylights-syntax-invalid-illegal-text);
   background-color: var(--color-prettylights-syntax-invalid-illegal-bg);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-c2 {
+:where(.tx-md) .markdown-body .pl-c2 {
   color: var(--color-prettylights-syntax-carriage-return-text);
   background-color: var(--color-prettylights-syntax-carriage-return-bg);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-sr .pl-cce {
+:where(.tx-md) .markdown-body .pl-sr .pl-cce {
   font-weight: bold;
   color: var(--color-prettylights-syntax-string-regexp);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-ml {
+:where(.tx-md) .markdown-body .pl-ml {
   color: var(--color-prettylights-syntax-markup-list);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-mh,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-mh .pl-en,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-ms {
+:where(.tx-md) .markdown-body .pl-mh,
+:where(.tx-md) .markdown-body .pl-mh .pl-en,
+:where(.tx-md) .markdown-body .pl-ms {
   font-weight: bold;
   color: var(--color-prettylights-syntax-markup-heading);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-mi {
+:where(.tx-md) .markdown-body .pl-mi {
   font-style: italic;
   color: var(--color-prettylights-syntax-markup-italic);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-mb {
+:where(.tx-md) .markdown-body .pl-mb {
   font-weight: bold;
   color: var(--color-prettylights-syntax-markup-bold);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-md {
+:where(.tx-md) .markdown-body .pl-md {
   color: var(--color-prettylights-syntax-markup-deleted-text);
   background-color: var(--color-prettylights-syntax-markup-deleted-bg);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-mi1 {
+:where(.tx-md) .markdown-body .pl-mi1 {
   color: var(--color-prettylights-syntax-markup-inserted-text);
   background-color: var(--color-prettylights-syntax-markup-inserted-bg);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-mc {
+:where(.tx-md) .markdown-body .pl-mc {
   color: var(--color-prettylights-syntax-markup-changed-text);
   background-color: var(--color-prettylights-syntax-markup-changed-bg);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-mi2 {
+:where(.tx-md) .markdown-body .pl-mi2 {
   color: var(--color-prettylights-syntax-markup-ignored-text);
   background-color: var(--color-prettylights-syntax-markup-ignored-bg);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-mdr {
+:where(.tx-md) .markdown-body .pl-mdr {
   font-weight: bold;
   color: var(--color-prettylights-syntax-meta-diff-range);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-ba {
+:where(.tx-md) .markdown-body .pl-ba {
   color: var(--color-prettylights-syntax-brackethighlighter-angle);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-sg {
+:where(.tx-md) .markdown-body .pl-sg {
   color: var(--color-prettylights-syntax-sublimelinter-gutter-mark);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .pl-corl {
+:where(.tx-md) .markdown-body .pl-corl {
   text-decoration: underline;
   color: var(--color-prettylights-syntax-constant-other-reference-link);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [role=button]:focus:not(:focus-visible),
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [role=tabpanel][tabindex="0"]:focus:not(:focus-visible),
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body button:focus:not(:focus-visible),
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body summary:focus:not(:focus-visible),
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body a:focus:not(:focus-visible) {
+:where(.tx-md) .markdown-body [role=button]:focus:not(:focus-visible),
+:where(.tx-md) .markdown-body [role=tabpanel][tabindex="0"]:focus:not(:focus-visible),
+:where(.tx-md) .markdown-body button:focus:not(:focus-visible),
+:where(.tx-md) .markdown-body summary:focus:not(:focus-visible),
+:where(.tx-md) .markdown-body a:focus:not(:focus-visible) {
   outline: none;
   box-shadow: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body [tabindex="0"]:focus:not(:focus-visible),
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body details-dialog:focus:not(:focus-visible) {
+:where(.tx-md) .markdown-body [tabindex="0"]:focus:not(:focus-visible),
+:where(.tx-md) .markdown-body details-dialog:focus:not(:focus-visible) {
   outline: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body g-emoji {
+:where(.tx-md) .markdown-body g-emoji {
   display: inline-block;
   min-width: 1ch;
   font-family: "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol";
@@ -1285,46 +1292,46 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   vertical-align: -0.075em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body g-emoji img {
+:where(.tx-md) .markdown-body g-emoji img {
   width: 1em;
   height: 1em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .task-list-item {
+:where(.tx-md) .markdown-body .task-list-item {
   list-style-type: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .task-list-item label {
+:where(.tx-md) .markdown-body .task-list-item label {
   font-weight: var(--base-text-weight-normal, 400);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .task-list-item.enabled label {
+:where(.tx-md) .markdown-body .task-list-item.enabled label {
   cursor: pointer;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .task-list-item+.task-list-item {
+:where(.tx-md) .markdown-body .task-list-item+.task-list-item {
   margin-top: var(--base-size-4);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .task-list-item .handle {
+:where(.tx-md) .markdown-body .task-list-item .handle {
   display: none;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .task-list-item-checkbox {
+:where(.tx-md) .markdown-body .task-list-item-checkbox {
   margin: 0 .2em .25em -1.4em;
   vertical-align: middle;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ul:dir(rtl) .task-list-item-checkbox {
+:where(.tx-md) .markdown-body ul:dir(rtl) .task-list-item-checkbox {
   margin: 0 -1.6em .25em .2em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ol:dir(rtl) .task-list-item-checkbox {
+:where(.tx-md) .markdown-body ol:dir(rtl) .task-list-item-checkbox {
   margin: 0 -1.6em .25em .2em;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .contains-task-list:hover .task-list-item-convert-container,
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .contains-task-list:focus-within .task-list-item-convert-container {
+:where(.tx-md) .markdown-body .contains-task-list:hover .task-list-item-convert-container,
+:where(.tx-md) .markdown-body .contains-task-list:focus-within .task-list-item-convert-container {
   display: block;
   width: auto;
   height: 24px;
@@ -1332,77 +1339,77 @@ body[data-theme="light"] :where(.tx-markdown-view, .tx-stream-md) .markdown-body
   clip: auto;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body ::-webkit-calendar-picker-indicator {
+:where(.tx-md) .markdown-body ::-webkit-calendar-picker-indicator {
   filter: invert(50%);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert {
+:where(.tx-md) .markdown-body .markdown-alert {
   padding: var(--base-size-8) var(--base-size-16);
   margin-bottom: var(--base-size-16);
   color: inherit;
   border-left: .25em solid var(--borderColor-default);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert>:first-child {
+:where(.tx-md) .markdown-body .markdown-alert>:first-child {
   margin-top: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert>:last-child {
+:where(.tx-md) .markdown-body .markdown-alert>:last-child {
   margin-bottom: 0;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert .markdown-alert-title {
+:where(.tx-md) .markdown-body .markdown-alert .markdown-alert-title {
   display: flex;
   font-weight: var(--base-text-weight-medium, 500);
   align-items: center;
   line-height: 1;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert.markdown-alert-note {
+:where(.tx-md) .markdown-body .markdown-alert.markdown-alert-note {
   border-left-color: var(--borderColor-accent-emphasis);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert.markdown-alert-note .markdown-alert-title {
+:where(.tx-md) .markdown-body .markdown-alert.markdown-alert-note .markdown-alert-title {
   color: var(--fgColor-accent);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert.markdown-alert-important {
+:where(.tx-md) .markdown-body .markdown-alert.markdown-alert-important {
   border-left-color: var(--borderColor-done-emphasis);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert.markdown-alert-important .markdown-alert-title {
+:where(.tx-md) .markdown-body .markdown-alert.markdown-alert-important .markdown-alert-title {
   color: var(--fgColor-done);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert.markdown-alert-warning {
+:where(.tx-md) .markdown-body .markdown-alert.markdown-alert-warning {
   border-left-color: var(--borderColor-attention-emphasis);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert.markdown-alert-warning .markdown-alert-title {
+:where(.tx-md) .markdown-body .markdown-alert.markdown-alert-warning .markdown-alert-title {
   color: var(--fgColor-attention);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert.markdown-alert-tip {
+:where(.tx-md) .markdown-body .markdown-alert.markdown-alert-tip {
   border-left-color: var(--borderColor-success-emphasis);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert.markdown-alert-tip .markdown-alert-title {
+:where(.tx-md) .markdown-body .markdown-alert.markdown-alert-tip .markdown-alert-title {
   color: var(--fgColor-success);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert.markdown-alert-caution {
+:where(.tx-md) .markdown-body .markdown-alert.markdown-alert-caution {
   border-left-color: var(--borderColor-danger-emphasis);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .markdown-alert.markdown-alert-caution .markdown-alert-title {
+:where(.tx-md) .markdown-body .markdown-alert.markdown-alert-caution .markdown-alert-title {
   color: var(--fgColor-danger);
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body>*:first-child>.heading-element:first-child {
+:where(.tx-md) .markdown-body>*:first-child>.heading-element:first-child {
   margin-top: 0 !important;
 }
 
-:where(.tx-markdown-view, .tx-stream-md) .markdown-body .highlight pre:has(+.zeroclipboard-container) {
+:where(.tx-md) .markdown-body .highlight pre:has(+.zeroclipboard-container) {
   min-height: 52px;
 }
 
