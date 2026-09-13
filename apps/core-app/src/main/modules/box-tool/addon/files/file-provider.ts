@@ -43,11 +43,7 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { StorageList, timingLogger, TuffInputType } from '@talex-touch/utils'
-import {
-  fileFilterService,
-  type FileFilterReason
-} from '@talex-touch/utils/common/file-filter-service'
-import { CONTEXT_DEPENDENT_BLACKLISTED_DIRS } from '@talex-touch/utils/common/file-scan-constants'
+import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -96,6 +92,7 @@ import { getMainConfig, saveMainConfig } from '../../../storage'
 import { getTypeTagsForExtension, KEYWORD_MAP, WHITELISTED_EXTENSIONS } from './constants'
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import {
+  getFileTraversalExclusionReason,
   isValidBase64DataUrl,
   mapFileToTuffItem,
   scanDirectoryBatches as scanDirectoryBatchesDirect
@@ -3636,33 +3633,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  private async getIncrementalTraversalExclusionReason(
-    filePath: string
-  ): Promise<FileFilterReason | null> {
-    let directoryPath = path.dirname(filePath)
-    while (true) {
-      const directoryName = path.basename(directoryPath).toLowerCase()
-      let siblingNames: string[] | undefined = []
-      if (CONTEXT_DEPENDENT_BLACKLISTED_DIRS.has(directoryName)) {
-        try {
-          siblingNames = await fs.readdir(path.dirname(directoryPath))
-        } catch {
-          // Unknown project context keeps the stricter historical exclusion instead of admitting
-          // a build/cache subtree that the snapshot scanner could not classify either.
-          siblingNames = undefined
-        }
-      }
-      const reason = fileFilterService.getTraversalExclusionReason(directoryPath, undefined, {
-        siblingNames
-      })
-      if (reason) return reason
-
-      const parent = path.dirname(directoryPath)
-      if (parent === directoryPath) return null
-      directoryPath = parent
-    }
-  }
-
   private async buildFileRecord(
     rawPath: string,
     options?: { manualForce?: boolean }
@@ -3680,7 +3650,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         : !WHITELISTED_EXTENSIONS.has(extension)
           ? 'unsupported-extension'
           : (fileFilterService.getManualIndexExclusionReason(target) ??
-            (await this.getIncrementalTraversalExclusionReason(rawPath)))
+            (await getFileTraversalExclusionReason(rawPath)))
 
       if (exclusionReason) {
         this.logDebug('Skipped incremental file by unified filter', {
