@@ -35,8 +35,20 @@ const historyRemoveMock = vi.hoisted(() => vi.fn(async () => undefined))
 const listState = vi.hoisted(() => ({
   projects: [] as ProjectRecord[],
   sessions: [] as LocalAiCliSessionSummary[],
-  picked: null as ProjectRecord | null
+  picked: null as ProjectRecord | null,
+  discoveryResult: { discovered: 0, skipped: 0, incomplete: false },
+  discoveryError: null as Error | null,
+  discoveryRows: [] as LocalAiCliSessionSummary[]
 }))
+
+const toastMock = vi.hoisted(() => ({
+  success: vi.fn(),
+  warning: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn()
+}))
+
+vi.mock('vue-sonner', () => ({ toast: toastMock }))
 
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
@@ -239,6 +251,18 @@ function sidebarNav(wrapper: VueWrapper, label: string) {
   return button
 }
 
+function sentCalls(event: unknown) {
+  return transportSendMock.mock.calls.filter(([sent]) => sent === event)
+}
+
+function discoverItem(wrapper: VueWrapper) {
+  const item = wrapper
+    .findAll('.tx-dropdown-item')
+    .find((candidate) => candidate.text() === 'shell.projects.discoverSessions')
+  if (!item) throw new Error('Missing Discover Local Sessions action')
+  return item
+}
+
 beforeEach(() => {
   routeState.path = '/home'
   routeState.params = {}
@@ -248,6 +272,13 @@ beforeEach(() => {
   listState.projects = []
   listState.sessions = []
   listState.picked = null
+  listState.discoveryResult = { discovered: 0, skipped: 0, incomplete: false }
+  listState.discoveryError = null
+  listState.discoveryRows = []
+  toastMock.success.mockReset()
+  toastMock.warning.mockReset()
+  toastMock.error.mockReset()
+  toastMock.info.mockReset()
   historyHolder.conversations!.value = []
   historyHolder.loading!.value = false
   historyRefreshMock.mockClear()
@@ -258,6 +289,11 @@ beforeEach(() => {
     if (event === ProjectEvents.list) return listState.projects
     if (event === LocalAiCliEvents.session.list) return listState.sessions
     if (event === ProjectEvents.selectDirectory) return listState.picked
+    if (event === LocalAiCliEvents.session.discover) {
+      if (listState.discoveryError) throw listState.discoveryError
+      listState.sessions = [...listState.sessions, ...listState.discoveryRows]
+      return listState.discoveryResult
+    }
     if (event === LocalAiCliEvents.session.forget) return { forgotten: true }
     if (event === omniPanelShowEvent) return undefined
     throw new Error('Unexpected transport event from the shell sidebar')
@@ -408,5 +444,81 @@ describe('shellSidebar project picker', () => {
     await sidebarNav(wrapper, 'shell.newChat').trigger('click')
 
     expect(store.pendingProjectId).toBeNull()
+  })
+})
+
+describe('shellConversationList session discovery', () => {
+  it('does not scan provider archives until the user asks for this project', async () => {
+    listState.projects = [project({ id: 'p1' })]
+    await mountList()
+
+    expect(sentCalls(LocalAiCliEvents.session.discover)).toEqual([])
+  })
+
+  it('adopts discovered sessions for the requested project, refreshes rows, and reports the count', async () => {
+    listState.projects = [project({ id: 'p1' })]
+    listState.discoveryResult = { discovered: 1, skipped: 0, incomplete: false }
+    listState.discoveryRows = [
+      session({
+        sessionRef: 'ref-adopted',
+        projectId: 'p1',
+        title: 'adopted',
+        origin: 'discovered'
+      })
+    ]
+    const wrapper = await mountList()
+    const listCallsBefore = sentCalls(LocalAiCliEvents.session.list).length
+
+    await discoverItem(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(sentCalls(LocalAiCliEvents.session.discover)).toEqual([
+      [LocalAiCliEvents.session.discover, { projectId: 'p1' }]
+    ])
+    expect(sentCalls(LocalAiCliEvents.session.list).length).toBeGreaterThan(listCallsBefore)
+    expect(wrapper.text()).toContain('adopted')
+    expect(toastMock.success).toHaveBeenCalledWith('shell.projects.discoveryComplete')
+  })
+
+  it('maps empty, bounded, and failed scans to distinct feedback without adding rows', async () => {
+    const scenarios = [
+      {
+        result: { discovered: 0, skipped: 0, incomplete: false },
+        method: 'info' as const,
+        key: 'shell.projects.discoveryEmpty'
+      },
+      {
+        result: { discovered: 3, skipped: 0, incomplete: true },
+        method: 'warning' as const,
+        key: 'shell.projects.discoveryPartial'
+      }
+    ]
+
+    for (const scenario of scenarios) {
+      toastMock.success.mockReset()
+      toastMock.warning.mockReset()
+      toastMock.error.mockReset()
+      toastMock.info.mockReset()
+      listState.projects = [project({ id: 'p1' })]
+      listState.discoveryResult = scenario.result
+      const wrapper = await mountList()
+
+      await discoverItem(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(toastMock[scenario.method]).toHaveBeenCalledWith(scenario.key)
+      expect(wrapper.findAll('.ShellProjectRows-Session')).toHaveLength(0)
+      wrapper.unmount()
+    }
+
+    toastMock.error.mockReset()
+    listState.discoveryError = new Error('discovery failed')
+    const wrapper = await mountList()
+
+    await discoverItem(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(toastMock.error).toHaveBeenCalledWith('shell.projects.discoveryFailed')
+    expect(wrapper.findAll('.ShellProjectRows-Session')).toHaveLength(0)
   })
 })

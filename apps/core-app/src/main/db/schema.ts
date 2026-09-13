@@ -1904,6 +1904,7 @@ export const localAiCliSessions = sqliteTable(
   'local_ai_cli_sessions',
   {
     id: text('id').primaryKey(),
+    conversationId: text('conversation_id'),
     projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
     provider: text('provider').notNull(),
     projectRoot: text('project_root').notNull(),
@@ -1921,6 +1922,9 @@ export const localAiCliSessions = sqliteTable(
       table.provider,
       table.projectRoot,
       table.nativeSessionId
+    ),
+    conversationUnique: uniqueIndex('uniq_local_ai_cli_sessions_conversation').on(
+      table.conversationId
     ),
     projectRecentIdx: index('idx_local_ai_cli_sessions_project_recent').on(
       table.projectId,

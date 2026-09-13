@@ -33,3 +33,5 @@ export class NativeSessionLeaseRegistry {
     this.active.clear()
   }
 }
+
+export const nativeSessionLeaseRegistry = new NativeSessionLeaseRegistry()

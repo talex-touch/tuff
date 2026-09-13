@@ -4,6 +4,7 @@ import {
   conversationMessages,
   conversations,
   conversationSyncState,
+  localAiCliSessions,
   projects
 } from '../../db/schema'
 import { databaseModule } from '../database'
@@ -259,6 +260,7 @@ export async function deleteConversation(id: string): Promise<{ deleted: boolean
   const deletedAt = Date.now()
   await scheduleDbWrite('conversation.delete', async () => {
     await db.transaction(async (tx) => {
+      await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
       await tx.delete(conversations).where(eq(conversations.id, id))
       await tx
         .insert(conversationSyncState)
@@ -359,6 +361,7 @@ export async function applyConversationSyncDeletion(id: string, deletedAt: numbe
   const db = databaseModule.getDb()
   await scheduleDbWrite('conversation.sync-delete', async () => {
     await db.transaction(async (tx) => {
+      await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
       await tx.delete(conversations).where(eq(conversations.id, id))
       await tx.delete(conversationSyncState).where(eq(conversationSyncState.conversationId, id))
     })

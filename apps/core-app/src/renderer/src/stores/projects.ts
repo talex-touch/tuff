@@ -74,6 +74,12 @@ export const useProjectStore = defineStore('projects', () => {
     return project
   }
 
+  async function discoverSessions(projectId: string) {
+    const result = await localAiSdk.session.discover(projectId)
+    await refresh()
+    return result
+  }
+
   async function forgetSession(sessionRef: string): Promise<boolean> {
     const result = await localAiSdk.session.forget(sessionRef)
     if (result.forgotten) await refresh()
@@ -109,6 +115,7 @@ export const useProjectStore = defineStore('projects', () => {
     rename,
     setPinned,
     setArchived,
+    discoverSessions,
     forgetSession,
     beginConversation,
     consumePendingProjectId,

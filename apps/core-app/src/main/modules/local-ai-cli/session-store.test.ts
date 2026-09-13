@@ -15,7 +15,11 @@
  */
 import type { Client } from '@libsql/client'
 import type { MainDatabase } from '../../db/db-write'
-import type { StoredLocalAiCliSession, UpsertLocalAiCliSessionInput } from './session-store'
+import type {
+  StoredLocalAiCliSession,
+  UpsertDiscoveredLocalAiCliSessionInput,
+  UpsertLocalAiCliSessionInput
+} from './session-store'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -28,9 +32,11 @@ import * as schema from '../../db/schema'
 import {
   forgetLocalAiCliSession,
   getLocalAiCliSession,
+  getLocalAiCliSessionForConversation,
   listLocalAiCliSessions,
   markLocalAiCliSessionState,
   touchLocalAiCliSession,
+  upsertDiscoveredLocalAiCliSessions,
   upsertLocalAiCliSession
 } from './session-store'
 
@@ -195,5 +201,156 @@ describe('local AI CLI session pointer store', () => {
     expect(home.map((session) => session.nativeSessionId)).toEqual(['native-home'])
 
     expect(await listLocalAiCliSessions()).toHaveLength(2)
+  })
+
+  it('binds a pointer to its conversation and hides it from the shell list', async () => {
+    const bound = await upsert({
+      conversationId: 'home-conversation-1',
+      provider: 'pi',
+      projectRoot: '/projects/one',
+      nativeSessionId: 'native-bound',
+      prompt: 'bound title'
+    })
+    const unbound = await upsert({
+      provider: 'pi',
+      projectRoot: '/projects/one',
+      nativeSessionId: 'native-free',
+      prompt: 'free title'
+    })
+
+    // Raw lookup by conversation is how the Pi provider recovers its own native id before a resume.
+    const found = await getLocalAiCliSessionForConversation('home-conversation-1')
+    expect(found?.id).toBe(bound.id)
+    expect(found?.nativeSessionId).toBe('native-bound')
+    expect(await getLocalAiCliSessionForConversation('home-conversation-2')).toBeNull()
+
+    // The shell rows are pointers a user can open directly; a conversation-bound pointer is already
+    // represented by its conversation, so listing it too would duplicate the row.
+    const listed = await listLocalAiCliSessions()
+    expect(listed.map((session) => session.id)).toEqual([unbound.id])
+    expect((await listLocalAiCliSessions(null)).map((session) => session.id)).toEqual([unbound.id])
+  })
+
+  it('preserves an established conversation binding when a sighting omits it', async () => {
+    const first = await upsert({
+      conversationId: 'home-conversation-3',
+      provider: 'pi',
+      projectRoot: '/projects/one',
+      nativeSessionId: 'native-keep-binding',
+      prompt: 'title'
+    })
+    const refreshed = await upsert({
+      provider: 'pi',
+      projectRoot: '/projects/one',
+      nativeSessionId: 'native-keep-binding',
+      prompt: 'ignored title'
+    })
+
+    expect(refreshed.id).toBe(first.id)
+    expect(refreshed.conversationId).toBe('home-conversation-3')
+    expect((await getLocalAiCliSessionForConversation('home-conversation-3'))?.id).toBe(first.id)
+  })
+
+  it('marks adopted rows as discovered and only revives a missing pointer on rescan', async () => {
+    await client.execute({
+      sql: `INSERT INTO projects (id, root_path, name, pinned, archived, created_at, updated_at, last_opened_at) VALUES ('project-x', '/projects/x', 'x', 0, 0, 1, 1, 1)`
+    })
+    const candidate = {
+      projectId: 'project-x',
+      provider: 'pi' as const,
+      projectRoot: '/projects/x',
+      nativeSessionId: 'native-discovered',
+      title: 'Discovered title',
+      expectedHeadId: 'head-1',
+      createdAt: 10,
+      updatedAt: 20
+    }
+
+    const first = await upsertDiscoveredLocalAiCliSessions([candidate])
+    expect(first.created).toBe(1)
+    expect(first.sessions[0]).toMatchObject({
+      origin: 'discovered',
+      state: 'available',
+      nativeSessionId: 'native-discovered',
+      title: 'Discovered title',
+      expectedHeadId: 'head-1'
+    })
+    const ref = first.sessions[0]!.id
+
+    // A rescan reuses the opaque row, keeps the established title, and must not clear a conflict.
+    await markLocalAiCliSessionState(ref, 'conflict')
+    const rescanned = await upsertDiscoveredLocalAiCliSessions([candidate])
+    expect(rescanned.created).toBe(0)
+    expect(rescanned.sessions[0]!.id).toBe(ref)
+    expect(rescanned.sessions[0]!.state).toBe('conflict')
+    expect(rescanned.sessions[0]!.title).toBe('Discovered title')
+
+    // Only `missing` is a state discovery is allowed to revive.
+    await markLocalAiCliSessionState(ref, 'missing')
+    const revived = await upsertDiscoveredLocalAiCliSessions([candidate])
+    expect(revived.created).toBe(0)
+    expect(revived.sessions[0]!.id).toBe(ref)
+    expect(revived.sessions[0]!.state).toBe('available')
+
+    expect(await listLocalAiCliSessions()).toHaveLength(1)
+  })
+
+  it('will not take over a Tuff-created pointer or its title during rescan', async () => {
+    await client.execute({
+      sql: `INSERT INTO projects (id, root_path, name, pinned, archived, created_at, updated_at, last_opened_at) VALUES ('project-y', '/projects/y', 'y', 0, 0, 1, 1, 1)`
+    })
+    const created = await upsert({
+      projectId: 'project-y',
+      provider: 'pi',
+      projectRoot: '/projects/y',
+      nativeSessionId: 'native-tuff',
+      prompt: 'Tuff title'
+    })
+
+    const adopted = await upsertDiscoveredLocalAiCliSessions([
+      {
+        projectId: 'project-y',
+        provider: 'pi',
+        projectRoot: '/projects/y',
+        nativeSessionId: 'native-tuff',
+        title: 'Archive title',
+        expectedHeadId: 'archive-head',
+        createdAt: 1,
+        updatedAt: 2
+      }
+    ])
+
+    expect(adopted.created).toBe(0)
+    expect(adopted.sessions[0]).toMatchObject({
+      id: created.id,
+      origin: 'tuff',
+      title: 'Tuff title'
+    })
+  })
+
+  it('rolls back the entire batch when one adopted candidate cannot be written', async () => {
+    await client.execute({
+      sql: `INSERT INTO projects (id, root_path, name, pinned, archived, created_at, updated_at, last_opened_at) VALUES ('project-z', '/projects/z', 'z', 0, 0, 1, 1, 1)`
+    })
+    const good = {
+      projectId: 'project-z',
+      provider: 'pi' as const,
+      projectRoot: '/projects/z',
+      nativeSessionId: 'native-good',
+      title: 'good',
+      expectedHeadId: null,
+      createdAt: 1,
+      updatedAt: 2
+    }
+
+    await expect(
+      upsertDiscoveredLocalAiCliSessions([
+        good,
+        null as unknown as UpsertDiscoveredLocalAiCliSessionInput
+      ])
+    ).rejects.toThrow()
+
+    // A partially committed batch would leave `native-good` behind.
+    expect(await listLocalAiCliSessions()).toHaveLength(0)
   })
 })

@@ -5,6 +5,7 @@ import type {
   LocalAiCliPasteBackResult,
   LocalAiCliProviderStatus,
   LocalAiCliSessionChanged,
+  LocalAiCliSessionDiscoveryResult,
   LocalAiCliSessionSummary,
   LocalAiCliStartRequest,
   LocalAiCliStatus,
@@ -33,6 +34,7 @@ export interface LocalAiCliSdk {
   pasteBack: (request: LocalAiCliPasteBackRequest) => Promise<LocalAiCliPasteBackResult>
   session: {
     list: (projectId?: string | null) => Promise<LocalAiCliSessionSummary[]>
+    discover: (projectId: string) => Promise<LocalAiCliSessionDiscoveryResult>
     forget: (sessionRef: string) => Promise<{ forgotten: boolean }>
     onChanged: (listener: (payload: LocalAiCliSessionChanged) => void) => () => void
   }
@@ -61,6 +63,7 @@ export function createLocalAiCliSdk(transport: ITuffTransport): LocalAiCliSdk {
           LocalAiCliEvents.session.list,
           projectId === undefined ? undefined : { projectId },
         ),
+      discover: projectId => transport.send(LocalAiCliEvents.session.discover, { projectId }),
       forget: sessionRef => transport.send(LocalAiCliEvents.session.forget, { sessionRef }),
       onChanged: listener => transport.on(LocalAiCliEvents.session.changed, listener),
     },

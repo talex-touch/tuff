@@ -254,3 +254,109 @@ const tolerance =
   Number.EPSILON * Math.max(1, Math.abs(usage.totalCost), Math.abs(audit.estimatedCost)) * 16
 const costMatches = Math.abs(usage.totalCost - audit.estimatedCost) <= tolerance
 ```
+
+## 9. Scenario: Home conversations use provider-owned native Pi sessions
+
+### 1. Scope / Trigger
+
+- Trigger: changing `PiCliProvider`, Home conversation identity metadata,
+  `local_ai_cli_sessions`, native session discovery, or Pi session-file checks.
+- This applies only to host Home `text.chat` turns. Title generation,
+  translation, capability probes, and other non-Home Pi calls remain ephemeral.
+
+### 2. Signatures
+
+```ts
+IntelligenceHomeSurfaceMetadata {
+  surface: 'home-conversation'
+  conversationId?: string
+  projectId?: string | null
+}
+
+local_ai_cli_sessions.conversation_id TEXT NULL UNIQUE
+
+buildPiArgs(..., {
+  session?: { id: string; create: boolean }
+})
+```
+
+### 3. Contracts
+
+- The renderer sends only Tuff `conversationId` / `projectId`. The native id,
+  expected head and JSONL path stay main-only and never enter conversation DTOs,
+  sync, ordinary exports, or logs.
+- A trusted Home invocation requires an opaque conversation id and explicit
+  nullable project id. Plugin-authored Home markers fail closed. Project turns
+  resolve the canonical Project root; Home turns use the same stable isolated
+  workspace as Local AI.
+- First local use generates a UUID, holds a conversation guard, starts Pi with
+  `--session-id`, validates the version-3 session record, acquires the shared
+  native tuple lease, then binds the pointer before output. Existing bindings
+  hold both guards and use `--session`.
+- Normal continuation sends only the newest user turn. A legacy or synced Home
+  conversation without a device-local pointer may seed its visible bounded
+  transcript once; later turns never replay it.
+- Before resume, locate the exact native JSONL without storing its path, validate
+  header id/canonical cwd, and compare its last head to `expected_head_id`.
+  After success, appended entries must be one linear parent chain containing
+  exactly one user message and at least one assistant message. Head drift,
+  siblings, truncation, replacement, malformed JSONL, or more than 1 MiB of
+  appended bytes marks the pointer `conflict`.
+- Home and OmniPanel use the same process-wide `(provider, root, native id)`
+  lease. A second writer fails `NATIVE_SESSION_BUSY` before spawn. Every process,
+  parser, cancellation, consumer-return, and verification exit releases once.
+- Once the renderer receives a native Pi provider start event, it never retries
+  the same turn through the non-streaming fallback: session persistence can make
+  a no-delta failure billable and replaying would append the prompt twice.
+- Home messages remain the rendered/encrypted-sync record; Pi's transcript is
+  the inference-context authority. Deleting a conversation transactionally
+  removes its local pointer only, never the provider transcript.
+
+### 4. Validation Matrix
+
+| Condition | Result |
+| --- | --- |
+| First Home Pi turn | `--session-id`; pointer binds after exact session line |
+| Existing binding | `--session`; newest user turn only |
+| Legacy/synced thread without pointer | One bounded bootstrap, then native continuation |
+| Non-Home Pi invocation | `--no-session`; no durable pointer |
+| Project/root/provider mismatch | `NATIVE_SESSION_CONFLICT`; no spawn |
+| Missing session file/provider response | mark `missing`; no fresh fallback |
+| Head drift/sibling/JSONL replacement | mark `conflict`; no later resume |
+| Second Home/OmniPanel writer | `NATIVE_SESSION_BUSY`; first writer remains healthy |
+
+### 5. Tests Required
+
+- Full migration chain and real SQLite store tests cover nullable uniqueness,
+  hidden conversation-bound rows, local/sync deletion, and no foreign-key race
+  before the first conversation snapshot.
+- Pi argument/prompt tests cover fresh/resume/non-Home selectors, newest-turn
+  continuation, and one-time bounded bootstrap.
+- Process tests use a throwaway Pi JSONL writer and prove exact id/cwd, restart
+  continuation, shared leases, every release path, missing state, linear head
+  updates, sibling conflict, attachment/tool behavior, and no prompt replay.
+- Renderer tests prove Home identity metadata and the no-fallback-after-native-
+  start rule while retaining fallback for a transport failure before start.
+
+## 10. Scenario: Explicit project-scoped native session discovery
+
+- Discovery is a host-only `local-ai-cli:session:discover` action for one opaque
+  existing Project id. It never runs on startup/list refresh and never accepts a
+  renderer path or creates a Project.
+- Main scans fixed Pi, OMP, Claude Code and Codex archive roots with bounded
+  directory/file/byte budgets, no-follow opens, stable inode/size checks, and
+  canonical containment. A present archive that cannot be completely inspected
+  returns `incomplete: true`; an absent archive is normal.
+- A candidate is adopted only when its provider-recorded cwd resolves exactly to
+  the selected canonical Project root. Main retains native id/path only while
+  upserting the pointer and exposes only the existing `LocalAiCliSessionSummary`.
+- New rows use `origin='discovered'`. Rescan is atomic/idempotent by provider,
+  canonical root and native id; it preserves opaque id, established title,
+  Tuff origin and conflict state, while a physically rediscovered missing row
+  may return to available.
+- The stored title is only the first sanitized nonblank line, bounded to 120
+  Unicode code points. Prompt remainder, output, tool data, native errors and
+  transcript paths never enter SQLite, renderer events, sync, exports or logs.
+- Discovered Pi pointers capture the current last entry id as their expected
+  head, so first continuation applies the same branch-drift guard as a
+  Tuff-created pointer. Forget removes only the pointer.

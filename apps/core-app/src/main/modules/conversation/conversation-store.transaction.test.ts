@@ -53,6 +53,25 @@ async function seedProject(id: string, rootPath = `/projects/${id}`): Promise<vo
   })
 }
 
+async function insertPointer(
+  id: string,
+  conversationId: string | null,
+  projectId: string,
+  nativeId = `native-${id}`
+): Promise<void> {
+  await client.execute({
+    sql: `INSERT INTO local_ai_cli_sessions (id, conversation_id, project_id, provider, project_root, native_session_id, title, state, origin, expected_head_id, created_at, updated_at, last_seen_at) VALUES (?, ?, ?, 'pi', ?, ?, '', 'available', 'tuff', NULL, 1, 1, 1)`,
+    args: [id, conversationId, projectId, `/projects/${projectId}`, nativeId]
+  })
+}
+
+async function countPointers(where: string): Promise<number> {
+  const result = await client.execute(
+    `SELECT COUNT(*) AS n FROM local_ai_cli_sessions WHERE ${where}`
+  )
+  return Number(result.rows[0]?.n ?? 0)
+}
+
 describe('saveConversation rolls back a failed replace-all', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'conversation-store-'))
@@ -291,5 +310,78 @@ describe('conversation project ownership across local writes and sync', () => {
     })
 
     expect((await getConversation('thread-remote'))?.projectId).toBeNull()
+  })
+})
+
+/**
+ * A Home thread lives in two tables: the conversation row the shell renders and the native pointer
+ * the Pi provider resumes. Deleting the thread must remove only its own pointer — a broad delete
+ * would orphan every other session's continuation, and a pointer left behind would let a deleted
+ * thread's native transcript be resumed from the shell.
+ */
+describe('conversation deletion clears only its own native pointer', () => {
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'conversation-pointer-'))
+    client = createClient({ url: `file:${join(tempDir, 'test.db')}` })
+    db = drizzle(client)
+    await migrate(db, { migrationsFolder })
+  })
+
+  afterEach(async () => {
+    client.close()
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('本地删除会话只移除指向它的指针', async () => {
+    await seedProject('project-del')
+    const { deleteConversation, getConversation, saveConversation } = await loadStore()
+    await saveConversation({
+      id: 'thread-doomed',
+      projectId: 'project-del',
+      title: 'doomed',
+      messages: []
+    })
+    await saveConversation({
+      id: 'thread-kept',
+      projectId: 'project-del',
+      title: 'kept',
+      messages: []
+    })
+    await insertPointer('ptr-doomed', 'thread-doomed', 'project-del')
+    await insertPointer('ptr-kept', 'thread-kept', 'project-del')
+    await insertPointer('ptr-unbound', null, 'project-del')
+
+    await deleteConversation('thread-doomed')
+
+    expect(await getConversation('thread-doomed')).toBeNull()
+    expect(await countPointers(`conversation_id = 'thread-doomed'`)).toBe(0)
+    expect(await countPointers(`id = 'ptr-kept'`)).toBe(1)
+    // An unbound pointer (quick invoke) must never be swept up by a conversation deletion.
+    expect(await countPointers(`id = 'ptr-unbound'`)).toBe(1)
+  })
+
+  it('远端同步删除同样只移除指向该会话的指针', async () => {
+    await seedProject('project-sync-del')
+    const { applyConversationSyncDeletion, getConversation, saveConversation } = await loadStore()
+    await saveConversation({
+      id: 'thread-remote-gone',
+      projectId: 'project-sync-del',
+      title: 'gone elsewhere',
+      messages: []
+    })
+    await saveConversation({
+      id: 'thread-remote-kept',
+      projectId: 'project-sync-del',
+      title: 'kept elsewhere',
+      messages: []
+    })
+    await insertPointer('ptr-remote-gone', 'thread-remote-gone', 'project-sync-del')
+    await insertPointer('ptr-remote-kept', 'thread-remote-kept', 'project-sync-del')
+
+    await applyConversationSyncDeletion('thread-remote-gone', 4242)
+
+    expect(await getConversation('thread-remote-gone')).toBeNull()
+    expect(await countPointers(`conversation_id = 'thread-remote-gone'`)).toBe(0)
+    expect(await countPointers(`id = 'ptr-remote-kept'`)).toBe(1)
   })
 })

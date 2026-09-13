@@ -192,6 +192,12 @@ export interface LocalAiCliSessionChanged {
   type: 'upsert' | 'forget'
 }
 
+export interface LocalAiCliSessionDiscoveryResult {
+  discovered: number
+  skipped: number
+  incomplete: boolean
+}
+
 const PROVIDERS = new Set<LocalAiCliProviderId>(['pi', 'codex', 'claude', 'oh-my-pi'])
 const ACCESS = new Set<LocalAiCliAccess>(['answer-only', 'workspace-read', 'workspace-write'])
 const CONTEXT_KINDS = new Set<LocalAiCliContextKind>(['selection', 'clipboard', 'active-app', 'active-window'])
@@ -323,6 +329,10 @@ export const LocalAiCliEvents = {
       .module('session')
       .event('list')
       .define<{ projectId?: string | null } | undefined, LocalAiCliSessionSummary[]>(),
+    discover: defineEvent('local-ai-cli')
+      .module('session')
+      .event('discover')
+      .define<{ projectId: string }, LocalAiCliSessionDiscoveryResult>(),
     forget: defineEvent('local-ai-cli')
       .module('session')
       .event('forget')
