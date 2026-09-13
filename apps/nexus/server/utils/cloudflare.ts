@@ -11,6 +11,7 @@ const LOCAL_CLOUDFLARE_DEV_CREDENTIAL_BINDINGS = [
   'PLUGIN_ATTESTATION_PRIVATE_KEY_PEM',
   'PROVIDER_REGISTRY_SECURE_STORE_KEY',
   'STORAGE_SECURE_STORE_KEY',
+  'VOICE_PROVIDER_CATALOG_KEYS',
 ] as const satisfies readonly (keyof TuffCloudflareBindings)[]
 
 let hasLoggedBindings = false

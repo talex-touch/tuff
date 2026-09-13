@@ -225,7 +225,7 @@ const answer = await intelligence.rag.query({
 
 OpenAI-compatible provider 已实现 `audio.tts`、`audio.stt`、`audio.transcribe`、`image.generate` 和 `image.edit`，分别调用 `/audio/speech`、`/audio/transcriptions`、`/audio/translations`、`/images/generations` 与 `/images/edits`；自定义厂商若不兼容这些 OpenAI 端点，仍需要 custom/provider plugin 实现相应 runtime method。当前 Nexus server 对 non-chat provider shape 明确 fail-closed，因此 `tuff-nexus-default` 不再声明或绑定 `audio.tts`；已存配置会移除该 stale capability/binding，OpenAI/SiliconFlow TTS 不受影响。
 
-`tuff-nexus-default` 的 `audio.stt` 是独立的 Nexus 批量能力：只接受 CoreApp 主进程校验后的 WAV，使用 `nexus-audio-transcribe` 产品别名，经 `/api/v1/ai/audio/transcribe` 提交并轮询同一请求；它不参与 `audio.asr` 实时流、不读取本地 Provider 密钥，也不经过通用 STT 缓存或失败 fallback。
+`tuff-nexus-default` 的 `audio.stt` 是独立 Nexus 批量能力：只接受 CoreApp 主进程校验后的 WAV，使用 `nexus-audio-transcribe` 产品别名。main runtime 为该 Nexus-owned provider 注入不可由 renderer 保存的 `metadata.voiceAsr.protocol = 'nexus-pack'`；若有 active、已验签解密的 voice catalog，采集前冻结同 provider id 的 descriptor/model，用其同源 submit/poll paths、allowlisted headers 与 `min(pack, local hard cap)` 限额；没有 active pack 时继续内置 `/api/v1/ai/audio/transcribe` 路径。远程 check/sync 与实际 Nexus 请求都要求登录，未登录在网络前 fail-closed；pack 或登录都不能开启默认关闭的 `voiceInput.enabled`，只能由用户在 Settings 手动切换。该路径不读取本地第三方 Provider 密钥，也不经过通用 STT cache/fallback。
 
 `search.semantic` 优先使用 provider 的 `semanticSearch` runtime method；未实现时 SDK 使用 `embedding` runtime method 和本地余弦排序作为 fallback。语义搜索和重排序 fallback 分别优先采用 `search.semantic` / `search.rerank` binding；对应能力没有启用 binding 时继承 `embedding.generate` 的 provider 与模型 binding。
 

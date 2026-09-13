@@ -4,6 +4,7 @@ import {
   AgentsEvents,
   AppEvents,
   AuthEvents,
+  CatalogEvents,
   ClipboardEvents,
   CoreBoxEvents,
   NativeEvents,
@@ -202,6 +203,41 @@ describe("transport domain sdk mappings", () => {
       {
         providers: [{ providerId: "file-provider", enabled: true, order: 20 }],
       },
+    );
+  });
+
+  it("settings sdk maps catalog voice provider controls to typed events and normalizes rollback payload", async () => {
+    const transport = createTransportMock();
+    const sdk = createSettingsSdk(transport as any);
+
+    await sdk.catalog.getStatus();
+    await sdk.catalog.checkUpdates();
+    await sdk.catalog.sync();
+    await sdk.catalog.rollback();
+    await sdk.catalog.rollback({ reason: "manual" });
+
+    expect(transport.send).toHaveBeenCalledTimes(5);
+    expect(transport.send).toHaveBeenNthCalledWith(
+      1,
+      CatalogEvents.voiceProvider.getStatus,
+    );
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      CatalogEvents.voiceProvider.checkUpdates,
+    );
+    expect(transport.send).toHaveBeenNthCalledWith(
+      3,
+      CatalogEvents.voiceProvider.sync,
+    );
+    expect(transport.send).toHaveBeenNthCalledWith(
+      4,
+      CatalogEvents.voiceProvider.rollback,
+      {},
+    );
+    expect(transport.send).toHaveBeenNthCalledWith(
+      5,
+      CatalogEvents.voiceProvider.rollback,
+      { reason: "manual" },
     );
   });
 

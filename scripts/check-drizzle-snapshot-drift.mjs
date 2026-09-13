@@ -57,8 +57,13 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * adds the content-free tidy-up telemetry table. Its full-chain SQLite regression is in
  * voice-polish-telemetry-schema.test.ts. This records only that migration's known gap; it does
  * not regenerate or claim to repair snapshot history.
+ *
+ * Raised 32 → 33 on 2026-09-13 for `0046_voice_provider_entries`, the hand-written upgrade that
+ * adds the voice provider catalog pack table. Its full-chain SQLite regression is in
+ * voice-provider-entries-schema.test.ts. This records only that migration's known gap; it does
+ * not regenerate or claim to repair snapshot history.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 32
+export const KNOWN_MISSING_SNAPSHOTS = 33
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))

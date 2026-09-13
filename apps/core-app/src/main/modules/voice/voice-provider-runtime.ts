@@ -1,4 +1,8 @@
-import { resolveFirstIntelligenceProviderRoute } from '@talex-touch/tuff-intelligence'
+import {
+  resolveFirstIntelligenceProviderRoute,
+  type IntelligenceProviderConfig,
+  type IntelligenceProviderRoute
+} from '@talex-touch/tuff-intelligence'
 import type {
   VoiceRecognitionStatus,
   VoiceRecognitionStatusSnapshot
@@ -10,6 +14,7 @@ import {
   createNodeVoiceSocketFactory,
   DashscopeQwenAsrRealtimeVoiceProvider,
   DoubaoVoiceProvider,
+  VoiceProviderError,
   type VoiceProviderAdapter
 } from '@talex-touch/tuff-voice'
 import {
@@ -19,6 +24,13 @@ import {
 } from '@talex-touch/utils/intelligence/voice-asr'
 import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
 import {
+  CATALOG_CLIENT_SDKAPI,
+  CATALOG_ERROR_CODES,
+  type CatalogStatus,
+  type VoiceProviderDescriptorV1,
+  type VoiceProviderRegistry
+} from '@talex-touch/utils/i18n'
+import {
   ensureIntelligenceConfigLoaded,
   getCapabilityOptions,
   getEffectiveCapabilityRoutingConfig
@@ -26,6 +38,8 @@ import {
 import { getIntelligenceProviderManager, providerSupportsCapability } from '../ai/intelligence-sdk'
 import { createBufferedSttVoiceProvider } from './buffered-stt-provider'
 import { getAuthToken, getSanitizedAuthSessionState } from '../auth'
+import { getCatalogService } from '../catalog'
+import { transcribeNexusAudio } from '../nexus/asr-client'
 import { resolveProviderCredential } from '../ai/provider-credential-runtime'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 
@@ -103,28 +117,186 @@ function capabilityStatus(
   if (!resolveCapabilityProvider(capabilityId, capabilityType)) {
     return { ready: false, reason: `${prefix}_PROVIDER_UNAVAILABLE` }
   }
-  if (!resolveCapabilityProvider(capabilityId, capabilityType, true)) {
+  const route = resolveCapabilityProvider(capabilityId, capabilityType, true)
+  if (!route) {
     return { ready: false, reason: `${prefix}_CREDENTIAL_UNAVAILABLE` }
+  }
+  const metadata = getVoiceAsrMetadata(route.provider.metadata)
+  if (capabilityType === 'asr' && metadata?.protocol === 'nexus-pack') {
+    try {
+      resolveNexusPackRoute(route, true)
+      return { ready: true, mode: 'buffered' }
+    } catch (error) {
+      return recognitionFailure(error)
+    }
   }
   return { ready: true }
 }
 
+type CapabilityRoute = IntelligenceProviderRoute<IntelligenceProviderConfig>
+
+interface ResolvedNexusPackRoute {
+  readonly descriptor: VoiceProviderDescriptorV1
+  readonly model: string
+  readonly packId: string
+  readonly version: string
+}
+
+function packFailure(code: string): VoiceProviderError {
+  return new VoiceProviderError(code, 'The signed voice provider catalog route is unavailable.')
+}
+
+function catalogFailure(status: CatalogStatus | null): VoiceProviderError {
+  switch (status?.lastErrorCode) {
+    case CATALOG_ERROR_CODES.packExpired:
+      return packFailure('VOICE_ASR_PACK_EXPIRED')
+    case CATALOG_ERROR_CODES.sdkIncompatible:
+    case CATALOG_ERROR_CODES.schemaUnsupported:
+    case CATALOG_ERROR_CODES.typeUnsupported:
+      return packFailure('VOICE_ASR_PACK_UNSUPPORTED')
+    case CATALOG_ERROR_CODES.signatureInvalid:
+    case CATALOG_ERROR_CODES.hashMismatch:
+      return packFailure('VOICE_ASR_PACK_SIGNATURE_INVALID')
+    case CATALOG_ERROR_CODES.manifestInvalid:
+    case CATALOG_ERROR_CODES.packInvalid:
+    case CATALOG_ERROR_CODES.activePackInvalid:
+    case CATALOG_ERROR_CODES.payloadEnvelopeInvalid:
+    case CATALOG_ERROR_CODES.payloadDecryptFailed:
+      return packFailure('VOICE_ASR_PACK_SCHEMA_INVALID')
+    default:
+      return packFailure('VOICE_ASR_PACK_NOT_CONFIGURED')
+  }
+}
+
+function resolveNexusPackRoute(
+  route: CapabilityRoute,
+  required: boolean
+): ResolvedNexusPackRoute | null {
+  let registry: VoiceProviderRegistry | null
+  let status: CatalogStatus | null = null
+  try {
+    const catalog = getCatalogService()
+    registry = catalog.getVoiceProviderRegistry()
+    status = catalog.getVoiceProviderStatus()
+  } catch {
+    registry = null
+  }
+  if (!registry) {
+    if (required) throw catalogFailure(status)
+    return null
+  }
+  if (registry.minSdkApi > CATALOG_CLIENT_SDKAPI) {
+    throw packFailure('VOICE_ASR_PACK_UNSUPPORTED')
+  }
+  if (registry.expiry && Date.parse(registry.expiry) <= Date.now()) {
+    throw packFailure('VOICE_ASR_PACK_EXPIRED')
+  }
+  if (!isNexusManagedProvider(route.provider)) {
+    throw packFailure('VOICE_ASR_PACK_UNSUPPORTED')
+  }
+
+  const descriptor = registry.get(route.provider.id)
+  if (!descriptor) throw packFailure('VOICE_ASR_PACK_NOT_CONFIGURED')
+  if (
+    descriptor.protocol !== 'nexus-pack' ||
+    descriptor.transport !== 'http-upload' ||
+    descriptor.auth.mode !== 'nexus-session' ||
+    descriptor.request.body !== 'raw-bytes' ||
+    descriptor.request.contentTypePolicy !== 'audio/*' ||
+    !descriptor.request.idempotencyHeader ||
+    !descriptor.endpoint.pollPath ||
+    descriptor.limits.maxBytes <= 44 ||
+    descriptor.limits.maxDurationSec <= 0 ||
+    descriptor.limits.timeoutMs < 100
+  ) {
+    throw packFailure('VOICE_ASR_PACK_UNSUPPORTED')
+  }
+
+  try {
+    if (new URL(descriptor.endpoint.baseUrl).origin !== new URL(getRuntimeNexusBaseUrl()).origin) {
+      throw packFailure('VOICE_ASR_PACK_UNSUPPORTED')
+    }
+  } catch (error) {
+    if (error instanceof VoiceProviderError) throw error
+    throw packFailure('VOICE_ASR_PACK_UNSUPPORTED')
+  }
+
+  const model = descriptor.models.some((candidate) => candidate.id === route.model)
+    ? route.model
+    : undefined
+  if (!model) throw packFailure('VOICE_ASR_PACK_UNSUPPORTED')
+  return { descriptor, model, packId: registry.packId, version: registry.version }
+}
+
+function createNexusPackBufferedProvider(
+  route: CapabilityRoute,
+  resolved: ResolvedNexusPackRoute,
+  authorityCheck: () => boolean
+): ConfiguredAsrProvider {
+  const { descriptor, model, packId, version } = resolved
+  return {
+    model,
+    mode: 'buffered',
+    provider: createBufferedSttVoiceProvider({
+      providerId: route.provider.id,
+      model,
+      authorityCheck,
+      maxBufferBytes: descriptor.limits.maxBytes - 44,
+      maxDurationSec: descriptor.limits.maxDurationSec,
+      timeoutMs: descriptor.limits.timeoutMs,
+      invoke: async (payload, options) => {
+        const startedAt = Date.now()
+        const idempotencyKey = options?.metadata?.idempotencyKey
+        const result = await transcribeNexusAudio(payload, {
+          signal: options?.signal,
+          timeout: options?.timeout,
+          idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : undefined,
+          route: descriptor
+        })
+        return {
+          result,
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          model,
+          latency: Date.now() - startedAt,
+          traceId: result.billing?.requestId ?? `${packId}:${version}`,
+          provider: route.provider.id
+        }
+      }
+    })
+  }
+}
+
+function recognitionFailure(error: unknown): VoiceRecognitionStatus {
+  return {
+    ready: false,
+    reason:
+      error instanceof VoiceProviderError && /^VOICE_ASR_[A-Z0-9_:-]{3,120}$/.test(error.code)
+        ? error.code
+        : 'VOICE_ASR_PROVIDER_UNAVAILABLE'
+  }
+}
+
 function resolveNexusBufferedSttProvider(): ConfiguredAsrProvider | null {
   const route = resolveCapabilityProvider(STT_CAPABILITY_ID, 'stt', true)
-  if (route?.model !== NEXUS_AUDIO_TRANSCRIBE_MODEL || !isNexusManagedProvider(route.provider))
-    return null
+  if (!route?.model || !isNexusManagedProvider(route.provider)) return null
   const expectedUserId = getSanitizedAuthSessionState().user?.id
   if (!expectedUserId) return null
   const expectedBaseUrl = getRuntimeNexusBaseUrl()
+  const authorityCheck = () =>
+    getSanitizedAuthSessionState().user?.id === expectedUserId &&
+    getRuntimeNexusBaseUrl() === expectedBaseUrl
+  if (getVoiceAsrMetadata(route.provider.metadata)?.protocol === 'nexus-pack') {
+    const resolved = resolveNexusPackRoute(route, false)
+    if (resolved) return createNexusPackBufferedProvider(route, resolved, authorityCheck)
+  }
+  if (route.model !== NEXUS_AUDIO_TRANSCRIBE_MODEL) return null
   return {
     model: route.model,
     mode: 'buffered',
     provider: createBufferedSttVoiceProvider({
       providerId: route.provider.id,
       model: route.model,
-      authorityCheck: () =>
-        getSanitizedAuthSessionState().user?.id === expectedUserId &&
-        getRuntimeNexusBaseUrl() === expectedBaseUrl
+      authorityCheck
     })
   }
 }
@@ -132,12 +304,23 @@ function resolveNexusBufferedSttProvider(): ConfiguredAsrProvider | null {
 /** Read-only projection for the voice UI; Intelligence capability bindings remain the route owner. */
 export function getRecognitionStatus(): VoiceRecognitionStatusSnapshot {
   const asr = capabilityStatus(ASR_CAPABILITY_ID, 'asr', 'VOICE_ASR')
-  const buffered =
-    asr.reason === 'VOICE_ASR_NOT_CONFIGURED' ? resolveNexusBufferedSttProvider() : null
-  return {
-    asr: buffered ? { ready: true, mode: 'buffered' } : asr,
-    stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT')
+  if (asr.reason === 'VOICE_ASR_NOT_CONFIGURED') {
+    try {
+      const buffered = resolveNexusBufferedSttProvider()
+      if (buffered) {
+        return {
+          asr: { ready: true, mode: 'buffered' },
+          stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT')
+        }
+      }
+    } catch (error) {
+      return {
+        asr: recognitionFailure(error),
+        stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT')
+      }
+    }
   }
+  return { asr, stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT') }
 }
 
 /** Resolves and freezes the shared route resolver's live-ASR adapter before microphone capture. */
@@ -169,9 +352,21 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
     ? recommendedModels.find((candidate) => route.bindingModels.includes(candidate))
     : route.model
   if (!model) throw new Error('VOICE_ASR_MODEL_UNSUPPORTED')
-  const socketFactory = createNodeVoiceSocketFactory()
-  const httpClient = createFetchHttpClient()
   switch (metadata.protocol) {
+    case 'nexus-pack': {
+      const resolved = resolveNexusPackRoute(route, true)
+      if (!resolved) throw packFailure('VOICE_ASR_PACK_NOT_CONFIGURED')
+      const expectedUserId = getSanitizedAuthSessionState().user?.id
+      if (!expectedUserId) throw new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
+      const expectedBaseUrl = getRuntimeNexusBaseUrl()
+      return createNexusPackBufferedProvider(
+        route,
+        resolved,
+        () =>
+          getSanitizedAuthSessionState().user?.id === expectedUserId &&
+          getRuntimeNexusBaseUrl() === expectedBaseUrl
+      )
+    }
     case 'bailian-paraformer': {
       const endpoints = resolveBailianVoiceEndpoints(route.provider.baseUrl)
       return {
@@ -179,8 +374,8 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
         mode: 'realtime',
         provider: new BailianParaformerVoiceProvider({
           credentials: { apiKey: credential, workspaceId: endpoints.workspaceId },
-          socketFactory,
-          httpClient,
+          socketFactory: createNodeVoiceSocketFactory(),
+          httpClient: createFetchHttpClient(),
           streamOptions: { model }
         })
       }
@@ -192,7 +387,7 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
         mode: 'realtime',
         provider: new DashscopeQwenAsrRealtimeVoiceProvider({
           credentials: { apiKey: credential, workspaceId: endpoints.workspaceId },
-          socketFactory,
+          socketFactory: createNodeVoiceSocketFactory(),
           streamOptions: { model }
         })
       }
@@ -203,8 +398,8 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
         mode: 'realtime',
         provider: new DoubaoVoiceProvider({
           credentials: { apiKey: credential, resourceId: metadata.resourceId! },
-          socketFactory,
-          httpClient,
+          socketFactory: createNodeVoiceSocketFactory(),
+          httpClient: createFetchHttpClient(),
           streamOptions: { model }
         })
       }

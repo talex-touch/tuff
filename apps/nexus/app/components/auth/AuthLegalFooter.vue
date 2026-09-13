@@ -24,7 +24,7 @@ function goTo(path: string) {
             {{ t('auth.privacyPolicy', 'Privacy Policy') }}
           </TxButton>
           <span class="text-white/20">·</span>
-          <TxButton variant="ghost" size="sm" @click="goTo('/protocol')">
+          <TxButton variant="ghost" size="sm" @click="goTo('/license')">
             {{ t('auth.termsOfService', 'Terms of Service') }}
           </TxButton>
         </div>
@@ -35,7 +35,7 @@ function goTo(path: string) {
         </div>
         <div v-if="props.showAgreement" class="auth-legal">
           <span>{{ t('auth.loginAgreementPrefix', 'By logging in, you agree to') }}</span>
-          <TxButton variant="ghost" size="sm" @click="goTo('/protocol')">
+          <TxButton variant="ghost" size="sm" @click="goTo('/license')">
             {{ t('auth.termsOfService', 'Terms of Service') }}
           </TxButton>
           <span>{{ t('auth.loginAgreementAnd', 'and') }}</span>
