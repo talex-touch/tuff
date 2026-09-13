@@ -16,7 +16,7 @@ import type { ITuffTransport, StreamController, StreamOptions } from '../../type
 import { defineEvent } from '../../event/builder'
 
 /** Standard envelope returned by voice API handlers. */
-export type VoiceApiResponse<T = undefined> = { ok: true, result?: T } | { ok: false, error: string }
+export type VoiceApiResponse<T = undefined> = { ok: true; result?: T } | { ok: false; error: string }
 
 /** Where the canonical session should deliver its final text. */
 export type VoiceDeliveryMode = 'none' | 'active-app'
@@ -49,7 +49,7 @@ export interface VoiceInsights {
   currentStreak: number
   /** Longest streak inside the returned rolling 365-local-day day series. */
   longestStreak: number
-  days: Array<{ date: string, characters: number, durationMs: number, sessions: number }>
+  days: Array<{ date: string; characters: number; durationMs: number; sessions: number }>
 }
 
 export type VoiceRecognitionRecordStatus = 'success' | 'empty' | 'failed' | 'cancelled'
@@ -257,6 +257,8 @@ export interface VoiceRecognitionStatus {
   ready: boolean
   /** Stable non-secret reason code. Omitted only when ready. */
   reason?: string
+  /** `buffered` means final-only recorded-audio recognition, not realtime partials. */
+  mode?: 'realtime' | 'buffered'
 }
 
 /** Read-only availability projection; routing remains in Intelligence configuration. */
@@ -266,19 +268,19 @@ export interface VoiceRecognitionStatusSnapshot {
 }
 
 /** Main-owned local-file transcription lifecycle. No path or provider override leaves main. */
-export type VoiceFileTranscriptionEvent
-  = | { type: 'selected', name: string }
-    | { type: 'result', text: string, billing?: IntelligenceSTTBilling }
-    | { type: 'cancelled' }
+export type VoiceFileTranscriptionEvent =
+  | { type: 'selected'; name: string }
+  | { type: 'result'; text: string; billing?: IntelligenceSTTBilling }
+  | { type: 'cancelled' }
 
 /** Streaming ASR event. */
-export type VoiceAsrStreamEvent
+export type VoiceAsrStreamEvent =
   /**
    * The native capture stream is open. This arrives before the provider handshake finishes, so
    * the HUD can stop calling the microphone slow while audio is already being buffered.
    */
-  = | { type: 'ready' }
-    | { type: 'partial', text: string }
+  | { type: 'ready' }
+  | { type: 'partial'; text: string }
   /**
    * The capture opened a different input device than the last one did.
    *
@@ -286,7 +288,7 @@ export type VoiceAsrStreamEvent
    * run has nothing to have switched from, so it says nothing. Carries the name the OS gave the
    * device so the surface can say which one rather than only that it moved.
    */
-    | { type: 'device', name: string }
+  | { type: 'device'; name: string }
   /**
    * Captured input level, normalized to 0..1, roughly 10Hz.
    *
@@ -294,14 +296,14 @@ export type VoiceAsrStreamEvent
    * transcript and must never be treated as progress: it is the measured
    * amplitude of what the microphone just heard, nothing more.
    */
-    | { type: 'level', rms: number }
-    | {
+  | { type: 'level'; rms: number }
+  | {
       type: 'final'
       text: string
       language?: string
       delivery?: VoiceDeliveryResult
     }
-    | { type: 'end' }
+  | { type: 'end' }
 
 /**
  * Voice domain events. Event names resolve to `voice:api:<action>`.

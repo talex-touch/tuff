@@ -4,7 +4,19 @@ import { createError } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { consumeCredits, releaseConsumedCredits } from './creditsStore'
 import { resolveCreditPricingRule, resolveSellableCreditPricingRule } from './creditPricingStore'
-import { DashScopeAsrError, createDashScopeFiletransAdapter, assertDashScopeProvider, type DashScopeFiletransAdapter } from './dashscopeAsrProvider'
+import {
+  assertDashScopeProvider,
+  DashScopeAsrError,
+  createDashScopeFiletransAdapter,
+  createDashScopeQwenAudioAsrAdapter,
+  QWEN_AUDIO_ASR_MAX_DURATION_SECONDS,
+  QWEN_AUDIO_ASR_TRANSPORT,
+  resolveDashScopeAsrModel,
+  resolveDashScopeAsrTransport,
+  type DashScopeFiletransAdapter,
+  type DashScopeQwenAudioAsrAdapter,
+  type DashScopeQwenAudioAsrTranscription,
+} from './dashscopeAsrProvider'
 import { getProviderRegistryEntry, listProviderRegistryEntries } from './providerRegistryStore'
 import {
   ASR_AUDIO_MAX_BYTES,
@@ -12,15 +24,19 @@ import {
   calculateFiletransProviderCost,
   createAsrRequest,
   deleteAsrHandoffObject,
+  deleteAsrResultObject,
   getAsrRequest,
+  getAsrResultObject,
   markAsrDispatching,
   markAsrFailed,
   markAsrReleased,
   markAsrReserved,
   markAsrSettled,
+  markAsrSettledFromReserved,
   normalizeAsrContentType,
   normalizeAsrIdempotencyKey,
   parseWavDurationSeconds,
+  putAsrResultObject,
   toAsrSafeStatus,
   type AsrRequestRecord,
 } from './asrTranscriptionStore'
@@ -42,6 +58,7 @@ export interface AsrTranscriptionResponse {
 
 interface AsrServiceOptions {
   adapter?: DashScopeFiletransAdapter
+  qwenAdapter?: DashScopeQwenAudioAsrAdapter
 }
 
 function createAsrServiceError(code: string, statusCode: number): Error {
@@ -57,13 +74,21 @@ function asClientResponse(request: AsrRequestRecord, transcript?: string): AsrTr
 
 async function resolveDashScopeAsrProvider(event: H3Event) {
   const providers = await listProviderRegistryEntries(event, { vendor: 'dashscope', status: 'enabled' })
-  const candidates = providers.filter(provider => provider.authType === 'api_key' && Boolean(provider.authRef) && provider.capabilities.some(capability => capability.capability === 'audio.transcribe'))
+  const candidates = providers.filter(
+    provider =>
+      provider.authType === 'api_key' &&
+      Boolean(provider.authRef) &&
+      provider.capabilities.some(capability => capability.capability === 'audio.transcribe'),
+  )
   const [candidate] = candidates
-  if (candidates.length !== 1 || !candidate)
-    throw createAsrServiceError('ASR_ROUTE_UNAVAILABLE', 503)
-  return assertDashScopeProvider(candidate)
+  if (candidates.length !== 1 || !candidate) throw createAsrServiceError('ASR_ROUTE_UNAVAILABLE', 503)
+  const provider = assertDashScopeProvider(candidate)
+  const transport = resolveDashScopeAsrTransport(provider)
+  if (!transport) throw createAsrServiceError('ASR_PROVIDER_CONFIGURATION_INVALID', 503)
+  const model = resolveDashScopeAsrModel(provider, transport)
+  if (!model) throw createAsrServiceError('ASR_PROVIDER_CONFIGURATION_INVALID', 503)
+  return { provider, transport, model }
 }
-
 function resolveHandoffUrl(event: H3Event, requestId: string, deliveryToken: string): string {
   const configuredOrigin = useRuntimeConfig(event).auth?.origin
   if (typeof configuredOrigin !== 'string' || !configuredOrigin.trim())
@@ -72,11 +97,16 @@ function resolveHandoffUrl(event: H3Event, requestId: string, deliveryToken: str
   let origin: URL
   try {
     origin = new URL(configuredOrigin)
-  }
-  catch {
+  } catch {
     throw createAsrServiceError('ASR_PUBLIC_ORIGIN_UNAVAILABLE', 503)
   }
-  if (origin.username || origin.password || origin.search || origin.hash || (process.env.NODE_ENV === 'production' && origin.protocol !== 'https:')) {
+  if (
+    origin.username ||
+    origin.password ||
+    origin.search ||
+    origin.hash ||
+    (process.env.NODE_ENV === 'production' && origin.protocol !== 'https:')
+  ) {
     throw createAsrServiceError('ASR_PUBLIC_ORIGIN_UNAVAILABLE', 503)
   }
 
@@ -85,31 +115,46 @@ function resolveHandoffUrl(event: H3Event, requestId: string, deliveryToken: str
   return origin.toString()
 }
 
-async function releaseReservation(event: H3Event, request: AsrRequestRecord, failureCode: string): Promise<AsrRequestRecord> {
-  await releaseConsumedCredits(event, request.userId, request.reservedCredits, 'asr-reservation-release', {
-    requestId: request.id,
-    providerId: request.providerId,
-    capability: request.capability,
-    failureCode,
-  }, { idempotencyKey: `asr-release:${request.id}:0` })
+async function releaseReservation(
+  event: H3Event,
+  request: AsrRequestRecord,
+  failureCode: string,
+): Promise<AsrRequestRecord> {
+  await releaseConsumedCredits(
+    event,
+    request.userId,
+    request.reservedCredits,
+    'asr-reservation-release',
+    {
+      requestId: request.id,
+      providerId: request.providerId,
+      capability: request.capability,
+      failureCode,
+    },
+    { idempotencyKey: `asr-release:${request.id}:0` },
+  )
   const released = await markAsrReleased(event, request.id, failureCode)
   try {
     await deleteAsrHandoffObject(event, released)
-  }
-  catch {
+  } catch {
     // The terminal state invalidates the handoff token before cleanup; the object stays private.
   }
+  await deleteAsrResultObject(event, released).catch(() => {})
   return released
 }
 
-async function failAcceptedRequest(event: H3Event, request: AsrRequestRecord, failureCode: string): Promise<AsrRequestRecord> {
+async function failAcceptedRequest(
+  event: H3Event,
+  request: AsrRequestRecord,
+  failureCode: string,
+): Promise<AsrRequestRecord> {
   const failed = await markAsrFailed(event, request.id, failureCode)
   try {
     await deleteAsrHandoffObject(event, failed)
-  }
-  catch {
+  } catch {
     // The failed terminal state invalidates the handoff even if object cleanup is delayed.
   }
+  await deleteAsrResultObject(event, failed).catch(() => {})
   return failed
 }
 
@@ -125,70 +170,136 @@ export async function startAsrTranscription(
 
   const durationSeconds = parseWavDurationSeconds(input.audio)
   const idempotencyKey = normalizeAsrIdempotencyKey(input.idempotencyKey)
-  const provider = await resolveDashScopeAsrProvider(event)
+  const route = await resolveDashScopeAsrProvider(event)
+  if (route.transport === QWEN_AUDIO_ASR_TRANSPORT && durationSeconds > QWEN_AUDIO_ASR_MAX_DURATION_SECONDS)
+    throw createAsrServiceError('ASR_AUDIO_DURATION_UNSUPPORTED', 400)
+
   const pricing = await resolveSellableCreditPricingRule(event, 'audio.transcribe')
   const created = await createAsrRequest(event, {
     userId,
-    providerId: provider.id,
+    providerId: route.provider.id,
     idempotencyKey,
     audio: input.audio,
     contentType,
     durationSeconds,
     pricing,
   })
-  if (!created.created)
+  if (!created.created) {
+    if (created.request.status === 'settled' && !created.request.providerTaskId) {
+      const result = await getAsrResultObject(event, created.request)
+      return asClientResponse(created.request, result?.transcript)
+    }
     return asClientResponse(created.request)
-  if (!created.deliveryToken)
-    throw createAsrServiceError('ASR_REQUEST_INVALID', 500)
+  }
+  if (!created.deliveryToken) throw createAsrServiceError('ASR_REQUEST_INVALID', 500)
 
   let request = created.request
   let reservationConsumed = false
   let providerAccepted = false
   try {
-    await consumeCredits(event, userId, request.reservedCredits, 'asr-reservation', {
-      requestId: request.id,
-      providerId: provider.id,
-      capability: request.capability,
-      reservedCredits: request.reservedCredits,
-    }, { idempotencyKey: `asr-reserve:${request.id}` })
+    await consumeCredits(
+      event,
+      userId,
+      request.reservedCredits,
+      'asr-reservation',
+      {
+        requestId: request.id,
+        providerId: route.provider.id,
+        capability: request.capability,
+        reservedCredits: request.reservedCredits,
+      },
+      { idempotencyKey: `asr-reserve:${request.id}` },
+    )
     reservationConsumed = true
     request = await markAsrReserved(event, request.id)
 
+    if (route.transport === QWEN_AUDIO_ASR_TRANSPORT) {
+      const qwenAdapter = options.qwenAdapter ?? createDashScopeQwenAudioAsrAdapter()
+      let result: DashScopeQwenAudioAsrTranscription
+      try {
+        result = await qwenAdapter.transcribe(event, route.provider, input.audio, {
+          model: route.model,
+          durationSeconds,
+        })
+      } catch (error) {
+        if (error instanceof DashScopeAsrError && error.accepted) providerAccepted = true
+        throw error
+      }
+      // A valid response means DashScope may have charged it. Never replay or refund after this point.
+      providerAccepted = true
+      const chargedCredits = calculateFiletransCredits(pricing, result.transcript, result.billedSeconds)
+      if (chargedCredits > request.reservedCredits) {
+        const failed = await markAsrFailed(event, request.id, 'ASR_RESERVATION_EXCEEDED')
+        await deleteAsrHandoffObject(event, failed).catch(() => {})
+        await deleteAsrResultObject(event, failed).catch(() => {})
+        return asClientResponse(failed)
+      }
+
+      await putAsrResultObject(event, request, {
+        transcript: result.transcript,
+        billedSeconds: result.billedSeconds,
+      })
+      const releaseCredits = request.reservedCredits - chargedCredits
+      if (releaseCredits > 0) {
+        await releaseConsumedCredits(
+          event,
+          request.userId,
+          releaseCredits,
+          'asr-reservation-release',
+          {
+            requestId: request.id,
+            providerId: request.providerId,
+            capability: request.capability,
+          },
+          { idempotencyKey: `asr-release:${request.id}:${chargedCredits}` },
+        )
+      }
+      const settled = await markAsrSettledFromReserved(
+        event,
+        request.id,
+        chargedCredits,
+        result.billedSeconds,
+        calculateFiletransProviderCost(result.billedSeconds),
+      )
+      await deleteAsrHandoffObject(event, settled).catch(() => {})
+      return asClientResponse(settled, result.transcript)
+    }
+
     const submission = await (options.adapter ?? createDashScopeFiletransAdapter()).submit(
       event,
-      provider,
+      route.provider,
       resolveHandoffUrl(event, request.id, created.deliveryToken),
     )
     providerAccepted = true
     request = await markAsrDispatching(event, request.id, submission.taskId)
     return asClientResponse(request)
-  }
-  catch (error) {
+  } catch (error) {
     const failureCode = error instanceof DashScopeAsrError ? error.code : 'ASR_REQUEST_FAILED'
     if (providerAccepted) {
       if (request.status === 'reserved' || request.status === 'dispatching') {
         const failed = await failAcceptedRequest(event, request, 'ASR_DISPATCH_STATE_UNCERTAIN')
         return asClientResponse(failed)
       }
-    }
-    else if (request.status === 'pending') {
+    } else if (request.status === 'pending') {
       if (reservationConsumed) {
-        await releaseConsumedCredits(event, request.userId, request.reservedCredits, 'asr-reservation-release', {
-          requestId: request.id,
-          providerId: request.providerId,
-          capability: request.capability,
-          failureCode,
-        }, { idempotencyKey: `asr-release:${request.id}:0` })
+        await releaseConsumedCredits(
+          event,
+          request.userId,
+          request.reservedCredits,
+          'asr-reservation-release',
+          {
+            requestId: request.id,
+            providerId: request.providerId,
+            capability: request.capability,
+            failureCode,
+          },
+          { idempotencyKey: `asr-release:${request.id}:0` },
+        )
       }
       const released = await markAsrReleased(event, request.id, failureCode)
-      try {
-        await deleteAsrHandoffObject(event, released)
-      }
-      catch {
-        // The released state prevents the handoff route from serving the object.
-      }
-    }
-    else if (request.status === 'reserved') {
+      await deleteAsrHandoffObject(event, released).catch(() => {})
+      await deleteAsrResultObject(event, released).catch(() => {})
+    } else if (request.status === 'reserved') {
       await releaseReservation(event, request, failureCode)
     }
     throw error
@@ -202,10 +313,15 @@ export async function pollAsrTranscription(
   options: AsrServiceOptions = {},
 ): Promise<AsrTranscriptionResponse> {
   const request = await getAsrRequest(event, requestId)
-  if (!request || request.userId !== userId)
-    throw createAsrServiceError('ASR_REQUEST_NOT_FOUND', 404)
-  if (request.status !== 'dispatching' && request.status !== 'settled')
-    return asClientResponse(request)
+  if (!request || request.userId !== userId) throw createAsrServiceError('ASR_REQUEST_NOT_FOUND', 404)
+  if (request.status !== 'dispatching' && request.status !== 'settled') return asClientResponse(request)
+
+  if (request.status === 'settled' && !request.providerTaskId) {
+    const result = await getAsrResultObject(event, request)
+    if (!result) throw createAsrServiceError('ASR_RESULT_UNAVAILABLE', 503)
+    return asClientResponse(request, result.transcript)
+  }
+  if (!request.providerTaskId) throw createAsrServiceError('ASR_RESULT_UNAVAILABLE', 503)
 
   const provider = await getProviderRegistryEntry(event, request.providerId)
   const adapter = options.adapter ?? createDashScopeFiletransAdapter()
@@ -213,12 +329,10 @@ export async function pollAsrTranscription(
     const task = await adapter.getTask(event, assertDashScopeProvider(provider), request.providerTaskId ?? '')
     // Re-read the original task after a lost terminal response; never re-bill or persist text.
     if (request.status === 'settled') {
-      if (task.status !== 'succeeded')
-        throw createAsrServiceError('ASR_RESULT_UNAVAILABLE', 503)
+      if (task.status !== 'succeeded') throw createAsrServiceError('ASR_RESULT_UNAVAILABLE', 503)
       return asClientResponse(request, task.transcript)
     }
-    if (task.status === 'pending')
-      return asClientResponse(request)
+    if (task.status === 'pending') return asClientResponse(request)
     if (task.status === 'failed') {
       const failed = await failAcceptedRequest(event, request, 'ASR_PROVIDER_FAILED')
       return asClientResponse(failed)
@@ -228,14 +342,13 @@ export async function pollAsrTranscription(
     // work the provider has already done: a price rise would fail a finished
     // transcription as ASR_RESERVATION_EXCEEDED, and a cut would refund the difference.
     // The fallback only covers requests admitted before the snapshot was persisted.
-    const pricing = request.pricing ?? await resolveCreditPricingRule(event, request.capability)
+    const pricing = request.pricing ?? (await resolveCreditPricingRule(event, request.capability))
     const chargedCredits = calculateFiletransCredits(pricing, task.transcript, task.billedSeconds)
     if (chargedCredits > request.reservedCredits) {
       const failed = await markAsrFailed(event, request.id, 'ASR_RESERVATION_EXCEEDED')
       try {
         await deleteAsrHandoffObject(event, failed)
-      }
-      catch {
+      } catch {
         // The failed terminal state invalidates the handoff even if object cleanup is delayed.
       }
       return asClientResponse(failed)
@@ -243,28 +356,38 @@ export async function pollAsrTranscription(
 
     const releaseCredits = request.reservedCredits - chargedCredits
     if (releaseCredits > 0) {
-      await releaseConsumedCredits(event, request.userId, releaseCredits, 'asr-reservation-release', {
-        requestId: request.id,
-        providerId: request.providerId,
-        capability: request.capability,
-      }, { idempotencyKey: `asr-release:${request.id}:${chargedCredits}` })
+      await releaseConsumedCredits(
+        event,
+        request.userId,
+        releaseCredits,
+        'asr-reservation-release',
+        {
+          requestId: request.id,
+          providerId: request.providerId,
+          capability: request.capability,
+        },
+        { idempotencyKey: `asr-release:${request.id}:${chargedCredits}` },
+      )
     }
-    const settled = await markAsrSettled(event, request.id, chargedCredits, task.billedSeconds, calculateFiletransProviderCost(task.billedSeconds))
+    const settled = await markAsrSettled(
+      event,
+      request.id,
+      chargedCredits,
+      task.billedSeconds,
+      calculateFiletransProviderCost(task.billedSeconds),
+    )
     try {
       await deleteAsrHandoffObject(event, settled)
-    }
-    catch {
+    } catch {
       // The settled terminal state invalidates the handoff even if object cleanup is delayed.
     }
     return asClientResponse(settled, task.transcript)
-  }
-  catch (error) {
+  } catch (error) {
     if (request.status === 'dispatching' && error instanceof DashScopeAsrError && error.accepted) {
       const failed = await failAcceptedRequest(event, request, error.code)
       return asClientResponse(failed)
     }
-    if (request.status === 'settled')
-      throw createAsrServiceError('ASR_RESULT_UNAVAILABLE', 503)
+    if (request.status === 'settled') throw createAsrServiceError('ASR_RESULT_UNAVAILABLE', 503)
     throw error
   }
 }

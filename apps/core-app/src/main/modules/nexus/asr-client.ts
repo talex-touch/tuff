@@ -307,6 +307,8 @@ export async function transcribeNexusAudio(
     const initial = parseResponse(submit.body)
     const requestId = normalizeRequestId(initial.requestId)
     let state = normalizeState(initial.status)
+    if (state === 'settled' && typeof initial.transcript === 'string' && initial.transcript.trim())
+      return settledResult(initial, requestId)
     if (state === 'released' || state === 'failed') terminalFailure(initial, state)
     while (true) {
       await waitForPoll(signal, POLL_INTERVAL_MS)

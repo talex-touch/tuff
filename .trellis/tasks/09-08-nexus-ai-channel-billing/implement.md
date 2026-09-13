@@ -31,3 +31,10 @@ git diff --check
 3. Propagate optional billing to file-transcription settings; classify stable errors and explicitly describe batch limits/cancellation semantics.
 4. Integrate voice-service signal/deadline and SDK non-caching/non-replay boundaries; make terminal Nexus polls recoverable without another charge.
 5. Run focused tests and type/lint checks, then exercise the actual CoreApp surface and local protocol smoke. Do not deploy or spend production quota without a separately verified authorized target.
+## User-directed Qwen Audio Flash implementation
+
+8. Add an explicit DashScope Qwen Audio Flash synchronous adapter. Build the model-specific generation payload, Base64 WAV input, bounded response normalizer, cancellation/timeout handling, and stable pre-acceptance errors without exposing provider details.
+9. Keep the existing Filetrans adapter for its explicit model, add a Qwen Audio Flash provider template, and resolve the selected server-side model/transport from registry metadata with fail-closed validation.
+10. Extend the ASR request lifecycle for a synchronous `reserved -> settled` result. Store only a private owner-bound, TTL-bounded normalized result object for same-key recovery; never add transcript or audio to D1 request/ledger projections.
+11. Update the CoreApp Nexus STT client to accept an already-settled response and use the existing authenticated `audio.stt` route. Add the main Voice Session's final-only buffered stream fallback only when `audio.asr` has no enabled binding and `audio.stt` resolves to a ready Nexus route.
+12. Configure the local Nexus registry with the exact `qwen-audio-3.0-asr-flash` model through the existing secure credential form, then run a single authorized local smoke. Do not send or log an API key from the browser or renderer.

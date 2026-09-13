@@ -91,6 +91,60 @@ describe('transcribeNexusAudio', () => {
     ).toBe(true)
   })
 
+  it('returns a synchronously settled result from the initial response without polling', async () => {
+    auth.performNexusRequestWithAuth.mockResolvedValueOnce(
+      nexusResponse({
+        requestId: 'asr_sync',
+        status: 'settled',
+        transcript: 'buffered note',
+        creditsCharged: 5,
+        billedSeconds: 2
+      })
+    )
+
+    const transcription = transcribeNexusAudio({ audio: wavBytes() })
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    await expect(transcription).resolves.toEqual({
+      text: 'buffered note',
+      billing: { requestId: 'asr_sync', creditsCharged: 5, billedSeconds: 2 }
+    })
+
+    const calls = auth.performNexusRequestWithAuth.mock.calls
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.[0]).toMatchObject({
+      method: 'POST',
+      path: '/api/v1/ai/audio/transcribe'
+    })
+  })
+
+  it('polls when the initial response settles without a transcript to recover', async () => {
+    auth.performNexusRequestWithAuth
+      .mockResolvedValueOnce(nexusResponse({ requestId: 'asr_partial', status: 'settled' }))
+      .mockResolvedValueOnce(
+        nexusResponse({
+          requestId: 'asr_partial',
+          status: 'settled',
+          transcript: 'recovered',
+          creditsCharged: 3,
+          billedSeconds: 1
+        })
+      )
+
+    const transcription = transcribeNexusAudio({ audio: wavBytes() })
+    await vi.advanceTimersByTimeAsync(600)
+
+    await expect(transcription).resolves.toEqual({
+      text: 'recovered',
+      billing: { requestId: 'asr_partial', creditsCharged: 3, billedSeconds: 1 }
+    })
+
+    expect(auth.performNexusRequestWithAuth.mock.calls.map(([request]) => request.method)).toEqual([
+      'POST',
+      'GET'
+    ])
+  })
+
   it('retrieves an already-settled idempotency replay through its request status without a second submission', async () => {
     auth.performNexusRequestWithAuth
       .mockResolvedValueOnce(nexusResponse({ requestId: 'asr_existing', status: 'settled' }))
