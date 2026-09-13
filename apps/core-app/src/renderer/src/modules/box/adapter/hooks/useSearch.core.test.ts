@@ -495,6 +495,86 @@ describe('useSearch CoreBox reopen behavior', () => {
     vi.useRealTimers()
   })
 
+  it('returns focus to a selected file when its deferred update lands after an index-commit refresh', async () => {
+    vi.useFakeTimers()
+    const appItem = {
+      id: 'app-row',
+      kind: 'app',
+      source: { id: 'app-provider', type: 'application' },
+      render: { mode: 'default', basic: { title: 'App row' } }
+    } as TuffItem
+    const fileItem = {
+      id: '/Users/demo/Workspace/report.md',
+      kind: 'file',
+      source: { id: 'file-provider', type: 'file' },
+      render: { mode: 'default', basic: { title: 'report.md' } },
+      meta: { file: { path: '/Users/demo/Workspace/report.md' } }
+    } as TuffItem
+    let servedInitialSnapshot = false
+    state.searchResultForRequest = (payload) => {
+      const query = getSearchQueryText(payload)
+      const result = createSearchResult(query)
+      if (query !== 'commit-file') return result
+      // The forced refresh's fast-provider snapshot omits the just-indexed file; it only arrives
+      // on the deferred progressive update that follows.
+      if (!servedInitialSnapshot) {
+        servedInitialSnapshot = true
+        return { ...result, items: [appItem, fileItem] }
+      }
+      return { ...result, items: [appItem] }
+    }
+
+    try {
+      const boxOptions = createBoxOptions()
+      const hook = useSearch(boxOptions, createClipboardOptions())
+      await flushPromises()
+
+      hook.searchVal.value = 'commit-file'
+      await nextTick()
+      await flushPromises()
+
+      expect(hook.res.value.map((item) => item.id)).toEqual([appItem.id, fileItem.id])
+      // The user has selected the file, so its preview is on screen.
+      boxOptions.focus = 1
+
+      const commitStream = Array.from(state.streams.entries()).find(([name]) =>
+        name.includes('index-committed')
+      )?.[1]
+      expect(commitStream).toBeDefined()
+
+      // The refresh snapshot is the fast-provider view: it omits the not-yet-committed file, which
+      // only arrives on the deferred progressive update. Hold the stream open so that update is
+      // still accepted instead of being ignored after `complete`.
+      state.deferCompletion = true
+      commitStream?.onData({ revision: 1, providerIds: ['file-provider'], committedAt: 1 })
+
+      await vi.advanceTimersByTimeAsync(500)
+      await flushPromises()
+
+      // The fast snapshot dropped the file, so focus lands on the app row.
+      expect(hook.activeItem.value?.id).toBe(appItem.id)
+
+      state.searchRequests.at(-1)?.options.onData({
+        type: 'update',
+        sessionId: `stream-session-${state.searchRequests.length}`,
+        items: [fileItem]
+      })
+      await flushPromises()
+
+      // The deferred row must win the focus back, not leave the app selected.
+      expect(hook.res.value.map((item) => item.id)).toEqual([appItem.id, fileItem.id])
+      expect(hook.activeItem.value?.id).toBe(fileItem.id)
+      expect(boxOptions.focus).toBe(hook.res.value.findIndex((item) => item.id === fileItem.id))
+
+      state.releaseCompletion?.()
+      await flushPromises()
+    } finally {
+      state.releaseCompletion?.()
+      for (const callback of state.beforeUnmountCallbacks) callback()
+      vi.useRealTimers()
+    }
+  })
+
   it('refreshes the empty-query grid only when main flags the commit as recommendation-relevant', async () => {
     // The empty query is the recommendation grid. Refreshing it on every commit would re-query
     // continuously while a file index builds; never refreshing it (the behaviour before

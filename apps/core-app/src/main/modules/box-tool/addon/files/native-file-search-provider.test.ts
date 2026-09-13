@@ -102,6 +102,7 @@ describe('native-file-search-provider', () => {
     getMainConfigMock.mockReturnValue({ extraPaths: [] })
     getPathMock.mockImplementation((name: string) => {
       const pathByName: Record<string, string> = {
+        home: '/Users/demo',
         documents: '/Users/demo/Documents',
         downloads: '/Users/demo/Downloads',
         desktop: '/Users/demo/Desktop',
@@ -142,12 +143,7 @@ describe('native-file-search-provider', () => {
     ])
     expect(execFileMock).toHaveBeenCalledWith(
       'mdfind',
-      expect.arrayContaining([
-        '-onlyin',
-        '/Users/demo/Documents',
-        '-onlyin',
-        '/Users/demo/Downloads'
-      ]),
+      expect.arrayContaining(['-onlyin', '/Users/demo']),
       expect.objectContaining({ timeout: 1200 }),
       expect.any(Function)
     )
@@ -157,7 +153,7 @@ describe('native-file-search-provider', () => {
     )
   })
 
-  it('includes deduped file index extra paths in Spotlight search roots', async () => {
+  it('subsumes persisted extra paths under the home Spotlight root', async () => {
     getMainConfigMock.mockReturnValue({
       extraPaths: ['/Users/demo/Projects', '/users/demo/projects', '  /Users/demo/Notes  ']
     })
@@ -177,9 +173,13 @@ describe('native-file-search-provider', () => {
     const results = await provider.searchNative('readme', new AbortController().signal)
     const args = execFileMock.mock.calls[0]?.[1] as string[]
 
-    expect(args).toContain('/Users/demo/Projects')
-    expect(args).toContain('/Users/demo/Notes')
-    expect(args.filter((arg) => arg.toLowerCase() === '/users/demo/projects')).toHaveLength(1)
+    // The home root already covers every in-home extra path, so mdfind is handed exactly one
+    // `-onlyin` root instead of a duplicate or nested set.
+    const onlyInRoots = args.reduce<string[]>((roots, arg, index) => {
+      if (arg === '-onlyin') roots.push(args[index + 1]!)
+      return roots
+    }, [])
+    expect(onlyInRoots).toEqual(['/Users/demo'])
     expect(results.map((result) => result.path)).toEqual([
       '/Users/demo/Projects/readme.md',
       '/Users/demo/Notes/todo.md'
@@ -336,7 +336,8 @@ describe('native-file-search-provider', () => {
     const roots = __test__.createMacSpotlightSearchRoots([
       '/Users/demo/Documents',
       '/users/demo/documents/',
-      '/Users/demo/Projects'
+      '/Users/demo/Projects',
+      '/Users/demo/Projects/2026'
     ])
 
     expect(roots.map((root) => root.path)).toEqual([

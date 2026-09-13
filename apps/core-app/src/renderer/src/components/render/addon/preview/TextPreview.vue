@@ -28,10 +28,9 @@ const READ_TIMEOUT_MS = 3000
 
 const canPreview = computed(() => {
   const fileSize = props.item.meta?.file?.size
-  // If size is explicitly 0, the file is empty
-  if (fileSize === 0) return false
-  // If size is unknown (undefined/null), still attempt to fetch
-  if (fileSize == null) return true
+  // A zero size can be stale while a filesystem change is still propagating. Read the live file
+  // before declaring it empty; the read result remains the authority for the empty-file message.
+  if (fileSize === 0 || fileSize == null) return true
   return fileSize <= MAX_PREVIEW_SIZE
 })
 
@@ -103,10 +102,7 @@ async function loadContent() {
   }
 
   if (!canPreview.value) {
-    error.value =
-      props.item.meta?.file?.size === 0
-        ? t('textPreview.error.emptyFile')
-        : t('textPreview.error.fileTooLarge', { size: fileSizeDescription.value })
+    error.value = t('textPreview.error.fileTooLarge', { size: fileSizeDescription.value })
     return
   }
 
@@ -120,6 +116,9 @@ async function loadContent() {
       })
     } else {
       textContent.value = await networkClient.readText(resourceUrl)
+    }
+    if (textContent.value.length === 0) {
+      error.value = t('textPreview.error.emptyFile')
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : ''

@@ -1,7 +1,10 @@
 import type { ModuleKey } from '@talex-touch/utils'
 import fs from 'node:fs/promises'
 import process from 'node:process'
+import path from 'node:path'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { FILE_SCAN_MAX_DEPTH } from '@talex-touch/utils/common/file-scan-constants'
+import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import * as chokidar from 'chokidar'
 import * as chokidarFsevents from 'chokidar-fsevents'
@@ -23,11 +26,31 @@ import {
 
 const isMac = process.platform === 'darwin'
 const MAC_PHOTOS_LIBRARY_MARKER = 'Photos Library.photoslibrary'
+export const FILE_WATCH_STABILITY_THRESHOLD_MS = 500
+export const FILE_WATCH_POLL_INTERVAL_MS = 100
 const fileSystemWatcherLog = getLogger('file-system-watcher')
 
 interface PendingPath {
   path: string
   depth: number
+}
+
+function isExcludedFileWatchPath(watchPath: string): boolean {
+  let candidate = path.resolve(watchPath)
+  while (true) {
+    // An event backend may ask only about the leaf even when an excluded ancestor was never
+    // surfaced to the callback. Walk upward so node_modules/.git/Library remain closed subtrees.
+    if (
+      fileFilterService.getTraversalExclusionReason(candidate, undefined, {
+        siblingNames: []
+      }) !== null
+    ) {
+      return true
+    }
+    const parent = path.dirname(candidate)
+    if (parent === candidate) return false
+    candidate = parent
+  }
 }
 
 /**
@@ -86,10 +109,19 @@ export class FileSystemWatcherModule extends BaseModule {
       persistent: true,
       ignoreInitial: true,
       depth,
-      ignored: (watchPath: string) => isMac && watchPath.includes(MAC_PHOTOS_LIBRARY_MARKER),
+      ignored: (watchPath: string) => {
+        if (isMac && watchPath.includes(MAC_PHOTOS_LIBRARY_MARKER)) return true
+        if (!isMac || depth !== FILE_SCAN_MAX_DEPTH) return false
+        // A whole-home FSEvents root must not forward private/cache/dependency churn. Supplying an
+        // empty sibling list applies only unconditional traversal exclusions; project-dependent
+        // names such as a personal `build` folder remain observable and are decided downstream.
+        return isExcludedFileWatchPath(watchPath)
+      },
+      // File updates should become searchable promptly. The queue and parser still provide
+      // downstream coalescing; this window only waits for an editor to finish its current write.
       awaitWriteFinish: {
-        stabilityThreshold: 2000,
-        pollInterval: 100
+        stabilityThreshold: FILE_WATCH_STABILITY_THRESHOLD_MS,
+        pollInterval: FILE_WATCH_POLL_INTERVAL_MS
       }
     }
     // Chokidar 4 removed its FSEvents backend and opens one fs.watch descriptor per discovered
