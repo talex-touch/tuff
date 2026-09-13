@@ -32,6 +32,32 @@ vi.mock('../../nexus/scene-client', () => ({
   extractTranslatedImageFromSceneRun: sceneMocks.extractTranslatedImageFromSceneRun
 }))
 
+// The ASR path (NexusProvider.stt -> transcribeNexusAudio) reaches Nexus through the shared
+// authenticated transport, so the header it actually sends is observable at this seam.
+const authMocks = vi.hoisted(() => ({ performNexusRequestWithAuth: vi.fn() }))
+
+vi.mock('../../auth', () => authMocks)
+
+/** A minimal valid RIFF/WAVE PCM16 body for the real WAV admission check in the ASR client. */
+function wavAudio(): ArrayBuffer {
+  const bytes = new Uint8Array(48)
+  const view = new DataView(bytes.buffer)
+  bytes.set([0x52, 0x49, 0x46, 0x46], 0) // RIFF
+  view.setUint32(4, 40, true)
+  bytes.set([0x57, 0x41, 0x56, 0x45], 8) // WAVE
+  bytes.set([0x66, 0x6d, 0x74, 0x20], 12) // fmt
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, 16_000, true)
+  view.setUint32(28, 32_000, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  bytes.set([0x64, 0x61, 0x74, 0x61], 36) // data
+  view.setUint32(40, 4, true)
+  return bytes.buffer
+}
+
 function createPendingStreamResponse(
   stream: Readable,
   hooks: { onComplete?: () => void; onCancel?: () => void } = {}
@@ -73,6 +99,7 @@ async function settleWithin<T>(
 describe('nexusProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    authMocks.performNexusRequestWithAuth.mockReset()
     networkMocks.request.mockResolvedValue({
       data: {
         invocation: {
@@ -672,5 +699,45 @@ describe('nexusProvider', () => {
       traceId: 'run_image_1',
       provider: 'tuff-nexus-default'
     })
+  })
+
+  it('forwards a main-owned idempotency identity into the Nexus transcription header', async () => {
+    const idempotencyKey = '11111111-2222-4333-8444-555555555555'
+    authMocks.performNexusRequestWithAuth.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      body: JSON.stringify({
+        requestId: 'asr_sync',
+        status: 'settled',
+        transcript: '会议纪要',
+        creditsCharged: 5,
+        billedSeconds: 2
+      })
+    })
+    const provider = new NexusProvider({
+      id: 'tuff-nexus-default',
+      type: IntelligenceProviderType.CUSTOM,
+      name: 'Tuff Nexus',
+      enabled: true,
+      apiKey: 'app-token',
+      priority: 1,
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
+    })
+
+    const result = await provider.stt(
+      { audio: wavAudio(), format: 'wav' },
+      { metadata: { idempotencyKey } }
+    )
+
+    // The identity the main process chose must reach the wire, otherwise a retry is a new
+    // submission the server bills again instead of an idempotent replay.
+    const request = authMocks.performNexusRequestWithAuth.mock.calls[0]?.[0]
+    expect(request).toMatchObject({
+      method: 'POST',
+      path: '/api/v1/ai/audio/transcribe',
+      headers: { 'X-Idempotency-Key': idempotencyKey }
+    })
+    expect(result.result).toMatchObject({ text: '会议纪要' })
   })
 })

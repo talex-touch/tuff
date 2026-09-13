@@ -85,8 +85,7 @@ async function expectDashScopeError(
     },
     (error: unknown) => {
       expect(error).toBeInstanceOf(DashScopeAsrError)
-      if (!(error instanceof DashScopeAsrError))
-        return
+      if (!(error instanceof DashScopeAsrError)) return
       expect(error.code).toBe(expected.code)
       expect(error.accepted).toBe(expected.accepted)
       expect(error.message).toBe(expected.code)
@@ -106,8 +105,18 @@ describe('Filetrans transcript and WAV boundaries', () => {
   })
 
   it.each([
-    { name: 'charges the audio-duration floor for a short transcript', transcript: '好', billedSeconds: 1.01, credits: 5 },
-    { name: 'charges the larger transcript-unit value when speech is dense', transcript: '一二三四五六七八九', billedSeconds: 1, credits: 9 },
+    {
+      name: 'charges the audio-duration floor for a short transcript',
+      transcript: '好',
+      billedSeconds: 1.01,
+      credits: 5,
+    },
+    {
+      name: 'charges the larger transcript-unit value when speech is dense',
+      transcript: '一二三四五六七八九',
+      billedSeconds: 1,
+      credits: 9,
+    },
   ])('calculates Filetrans credits from the $name', ({ transcript, billedSeconds, credits }) => {
     expect(calculateFiletransCredits(asrPricing, transcript, billedSeconds)).toBe(credits)
   })
@@ -145,10 +154,88 @@ describe('Filetrans transcript and WAV boundaries', () => {
       statusMessage: 'Audio WAV format is unsupported.',
     },
   ])('rejects $name before accepting audio', ({ audio, statusMessage }) => {
-    expect(() => parseWavDurationSeconds(audio)).toThrowError(expect.objectContaining({
-      statusCode: 400,
-      statusMessage,
-    }))
+    expect(() => parseWavDurationSeconds(audio)).toThrowError(
+      expect.objectContaining({
+        statusCode: 400,
+        statusMessage,
+      }),
+    )
+  })
+
+  /** Rewrites one header field of a canonical clip to model a hand-forged container. */
+  function wavWith(mutate: (audio: Buffer) => void): Buffer {
+    const audio = pcmWav(16_000)
+    mutate(audio)
+    return audio
+  }
+
+  function resealRiffSize(audio: Buffer): Buffer {
+    audio.writeUInt32LE(audio.byteLength - 8, 4)
+    return audio
+  }
+
+  /** 65 zero-length chunks: only the first 64 can be scanned before the bound trips. */
+  function manyChunks(count: number): Buffer {
+    const chunks = Buffer.alloc(count * 8)
+    for (let index = 0; index < count; index += 1) {
+      chunks.write('junk', index * 8, 'ascii')
+      chunks.writeUInt32LE(0, index * 8 + 4)
+    }
+    return resealRiffSize(Buffer.concat([pcmWav(0).subarray(0, 12), chunks]))
+  }
+
+  it.each([
+    {
+      name: 'a byteRate that disagrees with sampleRate × blockAlign',
+      audio: wavWith((audio) => audio.writeUInt32LE(15_000, 28)),
+      statusMessage: 'Audio WAV format is unsupported.',
+    },
+    {
+      name: 'a blockAlign that disagrees with channels × bytes per sample',
+      audio: wavWith((audio) => audio.writeUInt16LE(4, 32)),
+      statusMessage: 'Audio WAV format is unsupported.',
+    },
+    {
+      name: 'a sampleRate that disagrees with the declared byteRate',
+      audio: wavWith((audio) => audio.writeUInt32LE(7_000, 24)),
+      statusMessage: 'Audio WAV format is unsupported.',
+    },
+    {
+      name: 'a RIFF size that disagrees with the payload length',
+      audio: wavWith((audio) => audio.writeUInt32LE(12, 4)),
+      statusMessage: 'Audio must be a valid WAV container.',
+    },
+    {
+      name: 'a second format chunk',
+      audio: resealRiffSize(
+        Buffer.concat([pcmWav(0).subarray(0, 36), pcmWav(0).subarray(12, 36), pcmWav(0).subarray(36)]),
+      ),
+      statusMessage: 'Audio WAV format is ambiguous.',
+    },
+    {
+      name: 'a second data chunk',
+      audio: resealRiffSize(Buffer.concat([pcmWav(0), pcmWav(16).subarray(36)])),
+      statusMessage: 'Audio WAV data is ambiguous.',
+    },
+    {
+      name: 'a data chunk whose declared length runs past the payload',
+      audio: wavWith((audio) => audio.writeUInt32LE(64_000, 40)),
+      statusMessage: 'Audio WAV chunks are invalid.',
+    },
+    {
+      name: 'trailing bytes that no chunk accounts for',
+      audio: resealRiffSize(Buffer.concat([pcmWav(16_000), Buffer.from([0x00])])),
+      statusMessage: 'Audio WAV chunks are incomplete or excessive.',
+    },
+    {
+      name: 'more chunk headers than the bounded scan accepts',
+      audio: manyChunks(65),
+      statusMessage: 'Audio WAV chunks are incomplete or excessive.',
+    },
+  ])('rejects $name', ({ audio, statusMessage }) => {
+    expect(() => parseWavDurationSeconds(audio)).toThrowError(
+      expect.objectContaining({ statusCode: 400, statusMessage }),
+    )
   })
 })
 
@@ -159,7 +246,7 @@ describe('DashScope Filetrans adapter', () => {
   })
 
   it('submits the Filetrans task and returns only the provider task identifier', async () => {
-    const requests: Array<{ method: string, url: string, authorization: string | null, body: string | null }> = []
+    const requests: Array<{ method: string; url: string; authorization: string | null; body: string | null }> = []
     const fetcher: typeof fetch = async (input, init) => {
       const headers = new Headers(init?.headers)
       requests.push({
@@ -179,35 +266,43 @@ describe('DashScope Filetrans adapter', () => {
 
     expect(submission).toEqual({ taskId: 'task-123' })
     expect(JSON.stringify(submission)).not.toContain(testApiKey)
-    expect(requests).toEqual([{
-      method: 'POST',
-      url: 'https://dashscope.example.com/api/v1/services/audio/asr/transcription',
-      authorization: `Bearer ${testApiKey}`,
-      body: JSON.stringify({
-        model: 'qwen-audio-3.0-asr-flash-filetrans',
-        input: { file_urls: ['https://controlled.example.com/handoff.wav'] },
-        parameters: { channel_id: [0] },
-      }),
-    }])
+    expect(requests).toEqual([
+      {
+        method: 'POST',
+        url: 'https://dashscope.example.com/api/v1/services/audio/asr/transcription',
+        authorization: `Bearer ${testApiKey}`,
+        body: JSON.stringify({
+          model: 'qwen-audio-3.0-asr-flash-filetrans',
+          input: { file_urls: ['https://controlled.example.com/handoff.wav'] },
+          parameters: { channel_id: [0] },
+        }),
+      },
+    ])
   })
 
   it('normalizes a successful poll and transcript document into the Filetrans task result', async () => {
-    const requests: Array<{ method: string, url: string }> = []
+    const requests: Array<{ method: string; url: string }> = []
     const fetcher: typeof fetch = async (input, init) => {
       const url = String(input)
       requests.push({ method: init?.method ?? 'GET', url })
       if (url.endsWith('/tasks/task-123')) {
-        return new Response(JSON.stringify({
-          output: {
-            task_status: 'SUCCEEDED',
-            results: [{ transcription_url: 'https://results.example.com/task-123.json' }],
-          },
-        }), { status: 200 })
+        return new Response(
+          JSON.stringify({
+            output: {
+              task_status: 'SUCCEEDED',
+              results: [{ transcription_url: 'https://results.example.com/task-123.json' }],
+            },
+          }),
+          { status: 200 },
+        )
       }
-      return new Response(JSON.stringify({
-        properties: { original_duration_in_milliseconds: 2_500 },
-        transcripts: [{ text: ' 第一行 ' }, { text: '第二行' }],
-      }), { status: 200 })
+      return new Response(
+        JSON.stringify({
+          properties: { original_duration_in_milliseconds: 2_500 },
+          transcripts: [{ text: ' 第一行 ' }, { text: '第二行' }],
+        }),
+        { status: 200 },
+      )
     }
 
     const result = await createDashScopeFiletransAdapter({ fetch: fetcher }).getTask(
@@ -233,23 +328,23 @@ describe('DashScope Filetrans adapter', () => {
       return new Response(JSON.stringify({ output: { task_status: 'FAILED' } }), { status: 200 })
     })
 
-    await expect(createDashScopeFiletransAdapter({ fetch: fetcher }).getTask(
-      createEvent(),
-      dashScopeProvider(),
-      'task-123',
-    )).resolves.toEqual({ status: 'failed' })
+    await expect(
+      createDashScopeFiletransAdapter({ fetch: fetcher }).getTask(createEvent(), dashScopeProvider(), 'task-123'),
+    ).resolves.toEqual({ status: 'failed' })
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
 
   it('maps malformed submission payloads to a safe stable provider error', async () => {
-    const fetcher: typeof fetch = async () => new Response(JSON.stringify({ output: { task_id: 'not a valid task id' } }), { status: 200 })
+    const fetcher: typeof fetch = async () =>
+      new Response(JSON.stringify({ output: { task_id: 'not a valid task id' } }), { status: 200 })
 
     await expectDashScopeError(
-      () => createDashScopeFiletransAdapter({ fetch: fetcher }).submit(
-        createEvent(),
-        dashScopeProvider(),
-        'https://controlled.example.com/handoff.wav',
-      ),
+      () =>
+        createDashScopeFiletransAdapter({ fetch: fetcher }).submit(
+          createEvent(),
+          dashScopeProvider(),
+          'https://controlled.example.com/handoff.wav',
+        ),
       { code: 'ASR_PROVIDER_RESPONSE_INVALID', accepted: false },
     )
   })
@@ -258,11 +353,7 @@ describe('DashScope Filetrans adapter', () => {
     const fetcher: typeof fetch = async () => new Response('provider upstream failure', { status: 503 })
 
     await expectDashScopeError(
-      () => createDashScopeFiletransAdapter({ fetch: fetcher }).getTask(
-        createEvent(),
-        dashScopeProvider(),
-        'task-123',
-      ),
+      () => createDashScopeFiletransAdapter({ fetch: fetcher }).getTask(createEvent(), dashScopeProvider(), 'task-123'),
       { code: 'ASR_PROVIDER_UNAVAILABLE', accepted: true },
     )
   })

@@ -9,7 +9,7 @@ import {
   computeCreditReservation,
   parseCreditPricingRuleSnapshot,
   serializeCreditPricingRule,
-  type CreditPricingRule
+  type CreditPricingRule,
 } from './creditPricingStore'
 import { deleteStorageObject, getStorageObject, putStorageObject, type StorageObjectMemory } from './storageObjectStore'
 
@@ -17,10 +17,18 @@ const ASR_REQUESTS_TABLE = 'asr_transcription_requests'
 const ASR_HANDOFF_TTL_MS = 15 * 60 * 1000
 export const ASR_AUDIO_MAX_BYTES = 20 * 1024 * 1024
 export const ASR_MAX_DURATION_SECONDS = 10 * 60
+export const ASR_RESULT_MAX_BYTES = 2 * 1024 * 1024
+const ASR_RESULT_OBJECT_PREFIX = 'asr-result'
 const FILETRANS_INPUT_UNIT_PRICE_CNY_PER_SECOND = 0.00022
+const ASR_RESULT_CLEANUP_BATCH_LIMIT = 100
+const ASR_RESULT_CLEANUP_MAX_BATCH_LIMIT = 500
+const ASR_RESULT_CLEANUP_THROTTLE_MS = 60 * 1000
+const CREDIT_LEDGER_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const memoryStorage: StorageObjectMemory = new Map()
 const initializedSchemas = new WeakSet<D1Database>()
+let nextAsrResultCleanupAt = 0
+let asrResultCleanupScheduled = false
 
 export type AsrRequestStatus = 'pending' | 'reserved' | 'dispatching' | 'settled' | 'released' | 'failed'
 
@@ -40,7 +48,9 @@ export interface AsrRequestRecord {
   providerTaskId: string | null
   status: AsrRequestStatus
   reservedCredits: number
+  reservationLedgerId: string | null
   chargedCredits: number | null
+  creditsReleasedAt: string | null
   billedSeconds: number | null
   providerCostCny: number | null
   failureCode: string | null
@@ -52,6 +62,24 @@ export interface AsrRequestRecord {
   pricing: CreditPricingRule | null
   createdAt: string
   updatedAt: string
+}
+
+/** Normalized sync-provider result kept in a private TTL-bounded object, never in D1. */
+export interface AsrSynchronousResult {
+  transcript: string
+  billedSeconds: number
+}
+
+export interface AsrResultCleanupSummary {
+  scanned: number
+  deleted: number
+  failed: number
+}
+
+export interface AsrRequestCleanupSummary {
+  scanned: number
+  deleted: number
+  failed: number
 }
 
 interface AsrRequestRow {
@@ -70,24 +98,32 @@ interface AsrRequestRow {
   provider_task_id: string | null
   status: string
   reserved_credits: number
+  reservation_ledger_id: string | null
   charged_credits: number | null
+  credits_released_at: string | null
   billed_seconds: number | null
   provider_cost_cny: number | null
   failure_code: string | null
   pricing_snapshot: string | null
+  result_deleted_at: string | null
   created_at: string
   updated_at: string
 }
 
-export interface CreateAsrRequestInput {
+export interface AsrRequestIdentityInput {
   userId: string
-  providerId: string
   idempotencyKey: string
   audio: Buffer
   contentType: string
+}
+
+export interface CreateAsrRequestInput extends AsrRequestIdentityInput {
+  providerId: string
   durationSeconds: number
   /** Effective price for this capability; resolved by the caller from the pricing table. */
   pricing: CreditPricingRule
+  /** Synchronous providers consume the request body directly and must not persist a source copy. */
+  storeHandoff?: boolean
 }
 
 export interface CreatedAsrRequest {
@@ -98,8 +134,7 @@ export interface CreatedAsrRequest {
 
 function getD1Database(event: H3Event): D1Database {
   const database = readCloudflareBindings(event)?.DB
-  if (!database)
-    throw createError({ statusCode: 500, statusMessage: 'ASR storage is unavailable.' })
+  if (!database) throw createError({ statusCode: 500, statusMessage: 'ASR storage is unavailable.' })
   return database
 }
 
@@ -108,11 +143,30 @@ function getAsrBucket(event: H3Event): R2Bucket | null {
   return bindings?.ASSETS ?? bindings?.R2 ?? null
 }
 
-async function ensureAsrSchema(database: D1Database) {
-  if (initializedSchemas.has(database))
-    return
+function requireAsrResultBucket(event: H3Event): R2Bucket {
+  const bucket = getAsrBucket(event)
+  if (!bucket) throw createError({ statusCode: 503, statusMessage: 'ASR result storage is unavailable.' })
+  return bucket
+}
 
-  await database.prepare(`
+function getWaitUntil(event: H3Event): ((promise: Promise<unknown>) => void) | null {
+  const context = event.context as Record<string, any>
+  if (typeof context.waitUntil === 'function') return context.waitUntil.bind(context)
+  const cloudflareContext = context.cloudflare?.context
+  if (typeof cloudflareContext?.waitUntil === 'function')
+    return cloudflareContext.waitUntil.bind(cloudflareContext)
+  const platformContext = context._platform?.cloudflare?.context
+  if (typeof platformContext?.waitUntil === 'function')
+    return platformContext.waitUntil.bind(platformContext)
+  return null
+}
+
+async function ensureAsrSchema(database: D1Database) {
+  if (initializedSchemas.has(database)) return
+
+  await database
+    .prepare(
+      `
     CREATE TABLE IF NOT EXISTS ${ASR_REQUESTS_TABLE} (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -129,18 +183,31 @@ async function ensureAsrSchema(database: D1Database) {
       provider_task_id TEXT,
       status TEXT NOT NULL,
       reserved_credits INTEGER NOT NULL DEFAULT 0,
+      reservation_ledger_id TEXT,
       charged_credits INTEGER,
+      credits_released_at TEXT,
       billed_seconds INTEGER,
       provider_cost_cny REAL,
       failure_code TEXT,
       pricing_snapshot TEXT,
+      result_deleted_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       UNIQUE(user_id, idempotency_key)
     );
-  `).run()
-  await database.prepare(`CREATE INDEX IF NOT EXISTS idx_asr_transcription_handoff ON ${ASR_REQUESTS_TABLE}(id, status, delivery_expires_at);`).run()
-  await database.prepare(`CREATE INDEX IF NOT EXISTS idx_asr_transcription_provider_task ON ${ASR_REQUESTS_TABLE}(provider_task_id);`).run()
+  `,
+    )
+    .run()
+  await database
+    .prepare(
+      `CREATE INDEX IF NOT EXISTS idx_asr_transcription_handoff ON ${ASR_REQUESTS_TABLE}(id, status, delivery_expires_at);`,
+    )
+    .run()
+  await database
+    .prepare(
+      `CREATE INDEX IF NOT EXISTS idx_asr_transcription_provider_task ON ${ASR_REQUESTS_TABLE}(provider_task_id);`,
+    )
+    .run()
 
   // Added after the table shipped: a request admitted before this column existed has no
   // quote to settle against and falls back to the live price list, which the handoff
@@ -149,13 +216,45 @@ async function ensureAsrSchema(database: D1Database) {
   const columnNames = new Set((columns?.results ?? []).map(column => String(column.name)))
   if (!columnNames.has('pricing_snapshot'))
     await database.prepare(`ALTER TABLE ${ASR_REQUESTS_TABLE} ADD COLUMN pricing_snapshot TEXT;`).run()
+  if (!columnNames.has('result_deleted_at'))
+    await database.prepare(`ALTER TABLE ${ASR_REQUESTS_TABLE} ADD COLUMN result_deleted_at TEXT;`).run()
+  if (!columnNames.has('reservation_ledger_id'))
+    await database.prepare(`ALTER TABLE ${ASR_REQUESTS_TABLE} ADD COLUMN reservation_ledger_id TEXT;`).run()
+  if (!columnNames.has('credits_released_at'))
+    await database.prepare(`ALTER TABLE ${ASR_REQUESTS_TABLE} ADD COLUMN credits_released_at TEXT;`).run()
+  // Before this marker existed, every settled transition happened only after the remainder
+  // release completed. Backfill only those legacy rows; new requests persist a reservation ledger.
+  await database
+    .prepare(
+      `UPDATE ${ASR_REQUESTS_TABLE}
+       SET credits_released_at = COALESCE(credits_released_at, updated_at)
+       WHERE status = 'settled' AND credits_released_at IS NULL AND reservation_ledger_id IS NULL`,
+    )
+    .run()
+  await database
+    .prepare(
+      `CREATE INDEX IF NOT EXISTS idx_asr_settlement_maintenance ON ${ASR_REQUESTS_TABLE}(status, credits_released_at, delivery_expires_at);`,
+    )
+    .run()
+  await database
+    .prepare(
+      `CREATE INDEX IF NOT EXISTS idx_asr_result_cleanup ON ${ASR_REQUESTS_TABLE}(status, provider_task_id, result_deleted_at, delivery_expires_at);`,
+    )
+    .run()
 
   initializedSchemas.add(database)
 }
 
 function mapRequest(row: AsrRequestRow): AsrRequestRecord {
   const status = row.status
-  if (status !== 'pending' && status !== 'reserved' && status !== 'dispatching' && status !== 'settled' && status !== 'released' && status !== 'failed')
+  if (
+    status !== 'pending' &&
+    status !== 'reserved' &&
+    status !== 'dispatching' &&
+    status !== 'settled' &&
+    status !== 'released' &&
+    status !== 'failed'
+  )
     throw new Error('ASR_REQUEST_STATE_INVALID')
 
   return {
@@ -174,7 +273,9 @@ function mapRequest(row: AsrRequestRow): AsrRequestRecord {
     providerTaskId: row.provider_task_id,
     status,
     reservedCredits: Number(row.reserved_credits),
+    reservationLedgerId: row.reservation_ledger_id,
     chargedCredits: row.charged_credits == null ? null : Number(row.charged_credits),
+    creditsReleasedAt: row.credits_released_at,
     billedSeconds: row.billed_seconds == null ? null : Number(row.billed_seconds),
     providerCostCny: row.provider_cost_cny == null ? null : Number(row.provider_cost_cny),
     failureCode: row.failure_code,
@@ -199,7 +300,7 @@ export function normalizeAsrIdempotencyKey(value: unknown): string {
 export function normalizeAsrContentType(value: unknown): string {
   const mediaType = typeof value === 'string' ? value.split(';', 1)[0]?.trim().toLowerCase() : ''
   if (mediaType !== 'audio/wav') {
-    throw createError({ statusCode: 415, statusMessage: 'Only audio/wav is supported for Filetrans admission.' })
+    throw createError({ statusCode: 415, statusMessage: 'Only audio/wav is supported for ASR admission.' })
   }
   return 'audio/wav'
 }
@@ -237,21 +338,19 @@ export function countTranscriptUnits(transcript: string): number {
       latinWord = false
     }
   }
-  if (latinWord)
-    units += 2
+  if (latinWord) units += 2
   return units
 }
 
 export function calculateFiletransCredits(
   pricing: CreditPricingRule,
   transcript: string,
-  billedSeconds: number
+  billedSeconds: number,
 ): number {
-  if (!Number.isFinite(billedSeconds) || billedSeconds <= 0)
-    throw new Error('ASR_PROVIDER_METERING_INVALID')
+  if (!Number.isFinite(billedSeconds) || billedSeconds <= 0) throw new Error('ASR_PROVIDER_METERING_INVALID')
   return computeCreditCharge(pricing, {
     seconds: billedSeconds,
-    units: countTranscriptUnits(transcript)
+    units: countTranscriptUnits(transcript),
   })
 }
 
@@ -262,72 +361,152 @@ export function calculateFiletransReservation(pricing: CreditPricingRule, durati
 }
 
 export function calculateFiletransProviderCost(billedSeconds: number): number {
-  if (!Number.isFinite(billedSeconds) || billedSeconds <= 0)
-    throw new Error('ASR_PROVIDER_METERING_INVALID')
+  if (!Number.isFinite(billedSeconds) || billedSeconds <= 0) throw new Error('ASR_PROVIDER_METERING_INVALID')
   return Number((billedSeconds * FILETRANS_INPUT_UNIT_PRICE_CNY_PER_SECOND).toFixed(8))
 }
 
+export interface ParsedWavMetadata {
+  durationSeconds: number
+  encoding: number
+  channels: number
+  sampleRate: number
+  byteRate: number
+  blockAlign: number
+  bits: number
+}
+
 /** Parses only canonical RIFF/WAVE PCM-style headers; compressed/unknown input is rejected before storage. */
-export function parseWavDurationSeconds(audio: Buffer): number {
-  if (audio.byteLength < 44 || audio.toString('ascii', 0, 4) !== 'RIFF' || audio.toString('ascii', 8, 12) !== 'WAVE') {
+export function parseWavMetadata(audio: Buffer): ParsedWavMetadata {
+  if (
+    audio.byteLength < 44 ||
+    audio.toString('ascii', 0, 4) !== 'RIFF' ||
+    audio.toString('ascii', 8, 12) !== 'WAVE' ||
+    audio.readUInt32LE(4) !== audio.byteLength - 8
+  ) {
     throw createError({ statusCode: 400, statusMessage: 'Audio must be a valid WAV container.' })
   }
 
   let offset = 12
-  let byteRate: number | null = null
-  let dataBytes: number | null = null
-  while (offset + 8 <= audio.byteLength) {
+  let format: {
+    encoding: number
+    channels: number
+    sampleRate: number
+    byteRate: number
+    blockAlign: number
+    bits: number
+  } | null = null
+  let dataBytes = 0
+  let seenData = false
+  let chunks = 0
+  while (offset + 8 <= audio.byteLength && chunks < 64) {
+    chunks += 1
     const chunkId = audio.toString('ascii', offset, offset + 4)
     const chunkLength = audio.readUInt32LE(offset + 4)
     const valueOffset = offset + 8
-    if (valueOffset + chunkLength > audio.byteLength)
+    const paddedLength = chunkLength + (chunkLength & 1)
+    if (paddedLength > audio.byteLength - valueOffset)
       throw createError({ statusCode: 400, statusMessage: 'Audio WAV chunks are invalid.' })
-    if (chunkId === 'fmt ' && chunkLength >= 16) {
-      const format = audio.readUInt16LE(valueOffset)
-      const channels = audio.readUInt16LE(valueOffset + 2)
-      byteRate = audio.readUInt32LE(valueOffset + 8)
-      if ((format !== 1 && format !== 3) || channels < 1 || channels > 2 || !byteRate) {
-        throw createError({ statusCode: 400, statusMessage: 'Audio WAV format is unsupported.' })
+    if (chunkId === 'fmt ') {
+      if (format || chunkLength < 16)
+        throw createError({ statusCode: 400, statusMessage: 'Audio WAV format is ambiguous.' })
+      format = {
+        encoding: audio.readUInt16LE(valueOffset),
+        channels: audio.readUInt16LE(valueOffset + 2),
+        sampleRate: audio.readUInt32LE(valueOffset + 4),
+        byteRate: audio.readUInt32LE(valueOffset + 8),
+        blockAlign: audio.readUInt16LE(valueOffset + 12),
+        bits: audio.readUInt16LE(valueOffset + 14),
       }
-    }
-    if (chunkId === 'data')
+    } else if (chunkId === 'data') {
+      if (seenData)
+        throw createError({ statusCode: 400, statusMessage: 'Audio WAV data is ambiguous.' })
+      seenData = true
       dataBytes = chunkLength
-    offset = valueOffset + chunkLength + (chunkLength % 2)
+    }
+    offset = valueOffset + paddedLength
+  }
+  if (offset !== audio.byteLength)
+    throw createError({ statusCode: 400, statusMessage: 'Audio WAV chunks are incomplete or excessive.' })
+  if (
+    !format ||
+    !seenData ||
+    dataBytes <= 0 ||
+    (format.encoding !== 1 && format.encoding !== 3) ||
+    format.channels < 1 ||
+    format.channels > 2 ||
+    format.sampleRate < 1 ||
+    format.sampleRate > 192_000 ||
+    ![8, 16, 24, 32].includes(format.bits) ||
+    format.blockAlign !== format.channels * (format.bits / 8) ||
+    format.byteRate !== format.sampleRate * format.blockAlign ||
+    dataBytes % format.blockAlign !== 0
+  ) {
+    throw createError({ statusCode: 400, statusMessage: 'Audio WAV format is unsupported.' })
   }
 
-  if (!byteRate || !dataBytes)
-    throw createError({ statusCode: 400, statusMessage: 'Audio WAV duration is unavailable.' })
-
-  const durationSeconds = dataBytes / byteRate
+  const durationSeconds = dataBytes / format.byteRate
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > ASR_MAX_DURATION_SECONDS) {
-    throw createError({ statusCode: 400, statusMessage: 'Audio duration exceeds the Filetrans limit.' })
+    throw createError({ statusCode: 400, statusMessage: 'Audio duration exceeds the ASR admission limit.' })
   }
-  return durationSeconds
+  return { durationSeconds, ...format }
+}
+
+export function parseWavDurationSeconds(audio: Buffer): number {
+  return parseWavMetadata(audio).durationSeconds
 }
 
 export async function getAsrRequest(event: H3Event, requestId: string): Promise<AsrRequestRecord | null> {
   const database = getD1Database(event)
   await ensureAsrSchema(database)
-  const row = await database.prepare(`SELECT * FROM ${ASR_REQUESTS_TABLE} WHERE id = ?`).bind(assertAsrId(requestId)).first<AsrRequestRow>()
+  const row = await database
+    .prepare(`SELECT * FROM ${ASR_REQUESTS_TABLE} WHERE id = ?`)
+    .bind(assertAsrId(requestId))
+    .first<AsrRequestRow>()
   return row ? mapRequest(row) : null
+}
+
+function hashAsrRequest(input: AsrRequestIdentityInput): string {
+  return createHash('sha256').update(input.contentType).update(input.audio).digest('hex')
+}
+
+async function readExistingAsrRequest(
+  database: D1Database,
+  input: AsrRequestIdentityInput,
+): Promise<AsrRequestRecord | null> {
+  const idempotencyKey = normalizeAsrIdempotencyKey(input.idempotencyKey)
+  const requestHash = hashAsrRequest(input)
+  const row = await database
+    .prepare(
+      `SELECT * FROM ${ASR_REQUESTS_TABLE}
+       WHERE user_id = ? AND idempotency_key = ?
+       LIMIT 1`,
+    )
+    .bind(input.userId, idempotencyKey)
+    .first<AsrRequestRow>()
+  if (!row) return null
+  const request = mapRequest(row)
+  if (request.requestHash !== requestHash)
+    throw createError({ statusCode: 409, statusMessage: 'ASR idempotency key conflicts with another audio payload.' })
+  return request
+}
+
+/** Finds a same-audio replay before current Provider or pricing availability is consulted. */
+export async function getAsrRequestByIdempotency(
+  event: H3Event,
+  input: AsrRequestIdentityInput,
+): Promise<AsrRequestRecord | null> {
+  const database = getD1Database(event)
+  await ensureAsrSchema(database)
+  return await readExistingAsrRequest(database, input)
 }
 
 export async function createAsrRequest(event: H3Event, input: CreateAsrRequestInput): Promise<CreatedAsrRequest> {
   const database = getD1Database(event)
   await ensureAsrSchema(database)
   const idempotencyKey = normalizeAsrIdempotencyKey(input.idempotencyKey)
-  const requestHash = hashHex(Buffer.concat([Buffer.from(input.contentType), input.audio]))
-  const existing = await database.prepare(`
-    SELECT * FROM ${ASR_REQUESTS_TABLE}
-    WHERE user_id = ? AND idempotency_key = ?
-    LIMIT 1
-  `).bind(input.userId, idempotencyKey).first<AsrRequestRow>()
-  if (existing) {
-    const request = mapRequest(existing)
-    if (request.requestHash !== requestHash)
-      throw createError({ statusCode: 409, statusMessage: 'ASR idempotency key conflicts with another audio payload.' })
-    return { request, deliveryToken: null, created: false }
-  }
+  const requestHash = hashAsrRequest(input)
+  const existing = await readExistingAsrRequest(database, input)
+  if (existing) return { request: existing, deliveryToken: null, created: false }
 
   const durationSeconds = Number(input.durationSeconds)
   const reservedCredits = calculateFiletransReservation(input.pricing, durationSeconds)
@@ -352,7 +531,9 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
     providerTaskId: null,
     status: 'pending' as const,
     reservedCredits,
+    reservationLedgerId: null,
     chargedCredits: null,
+    creditsReleasedAt: null,
     billedSeconds: null,
     providerCostCny: null,
     failureCode: null,
@@ -361,69 +542,193 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
     updatedAt: now.toISOString(),
   }
 
-  const insert = await database.prepare(`
+  const insert = await database
+    .prepare(
+      `
     INSERT INTO ${ASR_REQUESTS_TABLE} (
       id, user_id, provider_id, capability, idempotency_key, request_hash, object_key, content_type,
       byte_size, duration_seconds, delivery_token_hash, delivery_expires_at, provider_task_id, status,
-      reserved_credits, charged_credits, billed_seconds, provider_cost_cny, failure_code, created_at, updated_at,
-      pricing_snapshot
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    record.id, record.userId, record.providerId, record.capability, record.idempotencyKey, record.requestHash,
-    record.objectKey, record.contentType, record.byteSize, record.durationSeconds, record.deliveryTokenHash,
-    record.deliveryExpiresAt, record.providerTaskId, record.status, record.reservedCredits, record.chargedCredits,
-    record.billedSeconds, record.providerCostCny, record.failureCode, record.createdAt, record.updatedAt,
-    serializeCreditPricingRule(input.pricing),
-  ).run()
+      reserved_credits, reservation_ledger_id, charged_credits, credits_released_at, billed_seconds,
+      provider_cost_cny, failure_code, created_at, updated_at, pricing_snapshot
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+    )
+    .bind(
+      record.id,
+      record.userId,
+      record.providerId,
+      record.capability,
+      record.idempotencyKey,
+      record.requestHash,
+      record.objectKey,
+      record.contentType,
+      record.byteSize,
+      record.durationSeconds,
+      record.deliveryTokenHash,
+      record.deliveryExpiresAt,
+      record.providerTaskId,
+      record.status,
+      record.reservedCredits,
+      record.reservationLedgerId,
+      record.chargedCredits,
+      record.creditsReleasedAt,
+      record.billedSeconds,
+      record.providerCostCny,
+      record.failureCode,
+      record.createdAt,
+      record.updatedAt,
+      serializeCreditPricingRule(input.pricing),
+    )
+    .run()
   if (Number(insert.meta?.changes ?? 0) !== 1)
     throw createError({ statusCode: 500, statusMessage: 'ASR request could not be created.' })
 
-  try {
-    await putStorageObject({
-      event,
-      bucket: getAsrBucket(event),
-      memoryStorage,
-      key: objectKey,
-      data: input.audio,
-      contentType: input.contentType,
-      actorId: input.userId,
-      ownerId: input.userId,
-      resourceType: 'asr-handoff',
-    })
-  }
-  catch (error) {
-    await database.prepare(`DELETE FROM ${ASR_REQUESTS_TABLE} WHERE id = ?`).bind(id).run()
-    throw error
+  if (input.storeHandoff !== false) {
+    try {
+      await putStorageObject({
+        event,
+        bucket: getAsrBucket(event),
+        memoryStorage,
+        externalStorage: null,
+        key: objectKey,
+        data: input.audio,
+        contentType: input.contentType,
+        actorId: input.userId,
+        ownerId: input.userId,
+        resourceType: 'asr-handoff',
+      })
+    } catch (error) {
+      await database.prepare(`DELETE FROM ${ASR_REQUESTS_TABLE} WHERE id = ?`).bind(id).run()
+      throw error
+    }
   }
 
   return { request: record, deliveryToken, created: true }
 }
 
-export async function markAsrReserved(event: H3Event, requestId: string): Promise<AsrRequestRecord> {
-  return await transitionAsrRequest(event, requestId, ['pending'], 'reserved')
+export async function markAsrReserved(
+  event: H3Event,
+  requestId: string,
+  reservationLedgerId: string,
+): Promise<AsrRequestRecord> {
+  if (!CREDIT_LEDGER_ID_PATTERN.test(reservationLedgerId))
+    throw new Error('ASR_RESERVATION_LEDGER_ID_INVALID')
+  return await transitionAsrRequest(event, requestId, ['pending'], 'reserved', { reservationLedgerId })
 }
 
-export async function markAsrDispatching(event: H3Event, requestId: string, providerTaskId: string): Promise<AsrRequestRecord> {
-  if (!/^[A-Za-z0-9._:-]{1,255}$/.test(providerTaskId))
-    throw new Error('ASR_PROVIDER_TASK_ID_INVALID')
+export async function setAsrReservationLedgerId(
+  event: H3Event,
+  requestId: string,
+  reservationLedgerId: string,
+): Promise<AsrRequestRecord> {
+  if (!CREDIT_LEDGER_ID_PATTERN.test(reservationLedgerId))
+    throw new Error('ASR_RESERVATION_LEDGER_ID_INVALID')
+  const database = getD1Database(event)
+  await ensureAsrSchema(database)
+  const id = assertAsrId(requestId)
+  await database
+    .prepare(
+      `UPDATE ${ASR_REQUESTS_TABLE}
+       SET reservation_ledger_id = ?, updated_at = ?
+       WHERE id = ? AND status IN ('reserved', 'dispatching') AND reservation_ledger_id IS NULL`,
+    )
+    .bind(reservationLedgerId, new Date().toISOString(), id)
+    .run()
+  const request = await getAsrRequest(event, id)
+  if (!request || request.reservationLedgerId !== reservationLedgerId)
+    throw new Error('ASR_REQUEST_STATE_CONFLICT')
+  return request
+}
+
+export async function markAsrDispatching(
+  event: H3Event,
+  requestId: string,
+  providerTaskId: string,
+): Promise<AsrRequestRecord> {
+  if (!/^[A-Za-z0-9._:-]{1,255}$/.test(providerTaskId)) throw new Error('ASR_PROVIDER_TASK_ID_INVALID')
   return await transitionAsrRequest(event, requestId, ['reserved'], 'dispatching', { providerTaskId })
 }
 
-export async function markAsrSettled(event: H3Event, requestId: string, chargedCredits: number, billedSeconds: number, providerCostCny: number): Promise<AsrRequestRecord> {
-  if (!Number.isInteger(chargedCredits) || chargedCredits <= 0 || !Number.isFinite(billedSeconds) || billedSeconds <= 0 || !Number.isFinite(providerCostCny) || providerCostCny < 0)
+export async function markAsrSettled(
+  event: H3Event,
+  requestId: string,
+  chargedCredits: number,
+  billedSeconds: number,
+  providerCostCny: number,
+): Promise<AsrRequestRecord> {
+  if (
+    !Number.isInteger(chargedCredits) ||
+    chargedCredits <= 0 ||
+    !Number.isFinite(billedSeconds) ||
+    billedSeconds <= 0 ||
+    !Number.isFinite(providerCostCny) ||
+    providerCostCny < 0
+  )
     throw new Error('ASR_SETTLEMENT_INVALID')
-  return await transitionAsrRequest(event, requestId, ['dispatching'], 'settled', { chargedCredits, billedSeconds, providerCostCny })
+  return await transitionAsrRequest(event, requestId, ['dispatching'], 'settled', {
+    chargedCredits,
+    billedSeconds,
+    providerCostCny,
+  })
 }
 
-export async function markAsrReleased(event: H3Event, requestId: string, failureCode: string): Promise<AsrRequestRecord> {
-  if (!/^[A-Z0-9_]{3,120}$/.test(failureCode))
-    throw new Error('ASR_FAILURE_CODE_INVALID')
-  return await transitionAsrRequest(event, requestId, ['pending', 'reserved', 'dispatching'], 'released', { failureCode })
+/** Settles a provider result that completed inside the initial request, before dispatching exists. */
+export async function markAsrSettledFromReserved(
+  event: H3Event,
+  requestId: string,
+  chargedCredits: number,
+  billedSeconds: number,
+  providerCostCny: number,
+): Promise<AsrRequestRecord> {
+  if (
+    !Number.isInteger(chargedCredits) ||
+    chargedCredits <= 0 ||
+    !Number.isFinite(billedSeconds) ||
+    billedSeconds <= 0 ||
+    !Number.isFinite(providerCostCny) ||
+    providerCostCny < 0
+  )
+    throw new Error('ASR_SETTLEMENT_INVALID')
+  return await transitionAsrRequest(event, requestId, ['reserved'], 'settled', {
+    chargedCredits,
+    billedSeconds,
+    providerCostCny,
+  })
+}
+
+export async function markAsrCreditsReleased(event: H3Event, requestId: string): Promise<AsrRequestRecord> {
+  const database = getD1Database(event)
+  await ensureAsrSchema(database)
+  const id = assertAsrId(requestId)
+  const releasedAt = new Date().toISOString()
+  const result = await database
+    .prepare(
+      `UPDATE ${ASR_REQUESTS_TABLE}
+       SET credits_released_at = ?, updated_at = ?
+       WHERE id = ? AND status = 'settled' AND credits_released_at IS NULL`,
+    )
+    .bind(releasedAt, releasedAt, id)
+    .run()
+  const request = await getAsrRequest(event, id)
+  if (!request || request.status !== 'settled') throw new Error('ASR_REQUEST_STATE_CONFLICT')
+  if (Number(result.meta?.changes ?? 0) !== 1 && !request.creditsReleasedAt)
+    throw new Error('ASR_REQUEST_STATE_CONFLICT')
+  return request
+}
+
+export async function markAsrReleased(
+  event: H3Event,
+  requestId: string,
+  failureCode: string,
+): Promise<AsrRequestRecord> {
+  if (!/^[A-Z0-9_]{3,120}$/.test(failureCode)) throw new Error('ASR_FAILURE_CODE_INVALID')
+  return await transitionAsrRequest(event, requestId, ['pending', 'reserved', 'dispatching'], 'released', {
+    failureCode,
+  })
 }
 
 export async function markAsrFailed(event: H3Event, requestId: string, failureCode: string): Promise<AsrRequestRecord> {
-  if (!/^[A-Z0-9_]{3,120}$/.test(failureCode))
-    throw new Error('ASR_FAILURE_CODE_INVALID')
+  if (!/^[A-Z0-9_]{3,120}$/.test(failureCode)) throw new Error('ASR_FAILURE_CODE_INVALID')
   return await transitionAsrRequest(event, requestId, ['reserved', 'dispatching'], 'failed', { failureCode })
 }
 
@@ -432,31 +737,57 @@ async function transitionAsrRequest(
   requestId: string,
   from: readonly AsrRequestStatus[],
   to: AsrRequestStatus,
-  fields: { providerTaskId?: string, chargedCredits?: number, billedSeconds?: number, providerCostCny?: number, failureCode?: string } = {},
+  fields: {
+    providerTaskId?: string
+    reservationLedgerId?: string
+    chargedCredits?: number
+    billedSeconds?: number
+    providerCostCny?: number
+    failureCode?: string
+  } = {},
 ): Promise<AsrRequestRecord> {
   const database = getD1Database(event)
   await ensureAsrSchema(database)
   const id = assertAsrId(requestId)
   const now = new Date().toISOString()
   const placeholders = from.map(() => '?').join(', ')
-  const result = await database.prepare(`
+  const result = await database
+    .prepare(
+      `
     UPDATE ${ASR_REQUESTS_TABLE}
-    SET status = ?, provider_task_id = COALESCE(?, provider_task_id), charged_credits = COALESCE(?, charged_credits),
-      billed_seconds = COALESCE(?, billed_seconds), provider_cost_cny = COALESCE(?, provider_cost_cny), failure_code = COALESCE(?, failure_code), updated_at = ?
+    SET status = ?, provider_task_id = COALESCE(?, provider_task_id),
+      reservation_ledger_id = COALESCE(?, reservation_ledger_id), charged_credits = COALESCE(?, charged_credits),
+      billed_seconds = COALESCE(?, billed_seconds), provider_cost_cny = COALESCE(?, provider_cost_cny),
+      failure_code = COALESCE(?, failure_code), updated_at = ?
     WHERE id = ? AND status IN (${placeholders})
-  `).bind(to, fields.providerTaskId ?? null, fields.chargedCredits ?? null, fields.billedSeconds ?? null, fields.providerCostCny ?? null, fields.failureCode ?? null, now, id, ...from).run()
-  if (Number(result.meta?.changes ?? 0) !== 1)
-    throw new Error('ASR_REQUEST_STATE_CONFLICT')
+  `,
+    )
+    .bind(
+      to,
+      fields.providerTaskId ?? null,
+      fields.reservationLedgerId ?? null,
+      fields.chargedCredits ?? null,
+      fields.billedSeconds ?? null,
+      fields.providerCostCny ?? null,
+      fields.failureCode ?? null,
+      now,
+      id,
+      ...from,
+    )
+    .run()
+  if (Number(result.meta?.changes ?? 0) !== 1) throw new Error('ASR_REQUEST_STATE_CONFLICT')
   const request = await getAsrRequest(event, id)
-  if (!request)
-    throw new Error('ASR_REQUEST_MISSING')
+  if (!request) throw new Error('ASR_REQUEST_MISSING')
   return request
 }
 
-export async function getAsrHandoffObject(event: H3Event, requestId: string, token: string): Promise<{ data: Buffer, contentType: string } | null> {
+export async function getAsrHandoffObject(
+  event: H3Event,
+  requestId: string,
+  token: string,
+): Promise<{ data: Buffer; contentType: string } | null> {
   const request = await getAsrRequest(event, requestId)
-  if (!request || (request.status !== 'reserved' && request.status !== 'dispatching'))
-    return null
+  if (!request || (request.status !== 'reserved' && request.status !== 'dispatching')) return null
   if (Date.parse(request.deliveryExpiresAt) <= Date.now() || !compareToken(token, request.deliveryTokenHash))
     return null
 
@@ -464,11 +795,11 @@ export async function getAsrHandoffObject(event: H3Event, requestId: string, tok
     event,
     bucket: getAsrBucket(event),
     memoryStorage,
+    externalStorage: null,
     key: request.objectKey,
     resourceType: 'asr-handoff',
   })
-  if (!object || !object.storesOwnership || object.ownerId !== request.userId)
-    return null
+  if (!object || !object.storesOwnership || object.ownerId !== request.userId) return null
   return { data: object.data, contentType: request.contentType }
 }
 
@@ -477,10 +808,245 @@ export async function deleteAsrHandoffObject(event: H3Event, request: AsrRequest
     event,
     bucket: getAsrBucket(event),
     memoryStorage,
+    externalStorage: null,
     key: request.objectKey,
     actorId: request.userId,
     resourceType: 'asr-handoff',
   })
+}
+
+function asrResultObjectKey(requestId: string): string {
+  return `${ASR_RESULT_OBJECT_PREFIX}/${assertAsrId(requestId)}.json`
+}
+
+function normalizeSynchronousResult(value: unknown): AsrSynchronousResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('ASR_RESULT_INVALID')
+  if (!('transcript' in value) || typeof value.transcript !== 'string') throw new Error('ASR_RESULT_INVALID')
+  const transcript = value.transcript.trim()
+  const billedSeconds = 'billedSeconds' in value ? value.billedSeconds : undefined
+  if (!transcript || transcript.length > 1_000_000) throw new Error('ASR_RESULT_INVALID')
+  if (typeof billedSeconds !== 'number' || !Number.isFinite(billedSeconds) || billedSeconds <= 0)
+    throw new Error('ASR_RESULT_INVALID')
+  return { transcript, billedSeconds }
+}
+
+/** Writes only the normalized transcript needed for same-key sync-result recovery. */
+export async function putAsrResultObject(
+  event: H3Event,
+  request: AsrRequestRecord,
+  value: AsrSynchronousResult,
+): Promise<void> {
+  const normalized = normalizeSynchronousResult(value)
+  const data = Buffer.from(JSON.stringify(normalized), 'utf8')
+  if (data.byteLength > ASR_RESULT_MAX_BYTES) throw new Error('ASR_RESULT_INVALID')
+  await putStorageObject({
+    event,
+    bucket: requireAsrResultBucket(event),
+    memoryStorage,
+    externalStorage: null,
+    key: asrResultObjectKey(request.id),
+    data,
+    contentType: 'application/json',
+    actorId: request.userId,
+    ownerId: request.userId,
+    resourceType: 'asr-result',
+  })
+}
+
+export async function getAsrResultObject(
+  event: H3Event,
+  request: AsrRequestRecord,
+  options: { settlementRecovery?: boolean; allowExpiredSettlement?: boolean } = {},
+): Promise<AsrSynchronousResult | null> {
+  const readableStatus =
+    request.status === 'settled' || (options.settlementRecovery === true && request.status === 'reserved')
+  const expired = Date.parse(request.deliveryExpiresAt) <= Date.now()
+  if (!readableStatus) return null
+  if (expired && options.allowExpiredSettlement !== true) {
+    if (request.status === 'settled') await deleteAsrResultObject(event, request).catch(() => {})
+    return null
+  }
+  const object = await getStorageObject({
+    event,
+    bucket: requireAsrResultBucket(event),
+    memoryStorage,
+    externalStorage: null,
+    key: asrResultObjectKey(request.id),
+    resourceType: 'asr-result',
+    defaultContentType: 'application/json',
+  })
+  if (
+    !object ||
+    !object.storesOwnership ||
+    object.ownerId !== request.userId ||
+    object.data.byteLength > ASR_RESULT_MAX_BYTES
+  )
+    return null
+  try {
+    const parsed: unknown = JSON.parse(object.data.toString('utf8'))
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    return normalizeSynchronousResult(parsed)
+  } catch {
+    return null
+  }
+}
+
+export async function deleteAsrResultObject(event: H3Event, request: AsrRequestRecord): Promise<void> {
+  await deleteStorageObject({
+    event,
+    bucket: requireAsrResultBucket(event),
+    memoryStorage,
+    externalStorage: null,
+    key: asrResultObjectKey(request.id),
+    resourceType: 'asr-result',
+  })
+}
+
+/** Finds expired rows whose accounting must converge before result deletion can proceed. */
+export async function listAsrSettlementMaintenanceRequests(
+  event: H3Event,
+  options: { now?: Date; batchLimit?: number } = {},
+): Promise<AsrRequestRecord[]> {
+  const database = getD1Database(event)
+  await ensureAsrSchema(database)
+  const now = options.now ?? new Date()
+  const batchLimit =
+    Number.isInteger(options.batchLimit) && (options.batchLimit ?? 0) > 0
+      ? Math.min(options.batchLimit!, ASR_RESULT_CLEANUP_MAX_BATCH_LIMIT)
+      : ASR_RESULT_CLEANUP_BATCH_LIMIT
+  const rows = await database
+    .prepare(
+      `SELECT * FROM ${ASR_REQUESTS_TABLE}
+       WHERE delivery_expires_at <= ?
+         AND (
+           (status = 'reserved' AND provider_task_id IS NULL AND result_deleted_at IS NULL)
+           OR (status = 'settled' AND credits_released_at IS NULL)
+         )
+       ORDER BY delivery_expires_at ASC
+       LIMIT ?`,
+    )
+    .bind(now.toISOString(), batchLimit)
+    .all<AsrRequestRow>()
+  return (rows.results ?? []).map(mapRequest)
+}
+
+/** Deletes expired private transcripts in bounded pages without removing their billing rows. */
+export async function cleanupExpiredAsrResultObjects(
+  event: H3Event,
+  options: { now?: Date; batchLimit?: number } = {},
+): Promise<AsrResultCleanupSummary> {
+  const database = getD1Database(event)
+  await ensureAsrSchema(database)
+  const now = options.now ?? new Date()
+  const batchLimit =
+    Number.isInteger(options.batchLimit) && (options.batchLimit ?? 0) > 0
+      ? Math.min(options.batchLimit!, ASR_RESULT_CLEANUP_MAX_BATCH_LIMIT)
+      : ASR_RESULT_CLEANUP_BATCH_LIMIT
+  const rows = await database
+    .prepare(
+      `SELECT * FROM ${ASR_REQUESTS_TABLE}
+       WHERE status IN ('settled', 'failed')
+         AND provider_task_id IS NULL
+         AND result_deleted_at IS NULL
+         AND delivery_expires_at <= ?
+       ORDER BY delivery_expires_at ASC
+       LIMIT ?`,
+    )
+    .bind(now.toISOString(), batchLimit)
+    .all<AsrRequestRow>()
+
+  let deleted = 0
+  let failed = 0
+  for (const row of rows.results ?? []) {
+    try {
+      await deleteAsrResultObject(event, mapRequest(row))
+      const deletedAt = now.toISOString()
+      await database
+        .prepare(
+          `UPDATE ${ASR_REQUESTS_TABLE}
+           SET result_deleted_at = ?, updated_at = ?
+           WHERE id = ? AND result_deleted_at IS NULL`,
+        )
+        .bind(deletedAt, deletedAt, row.id)
+        .run()
+      deleted += 1
+    } catch {
+      failed += 1
+    }
+  }
+  return { scanned: rows.results?.length ?? 0, deleted, failed }
+}
+
+/** Removes expired pre-acceptance tombstones after their bounded idempotency window. */
+export async function cleanupExpiredReleasedAsrRequests(
+  event: H3Event,
+  options: { now?: Date; batchLimit?: number } = {},
+): Promise<AsrRequestCleanupSummary> {
+  const database = getD1Database(event)
+  await ensureAsrSchema(database)
+  const now = options.now ?? new Date()
+  const batchLimit =
+    Number.isInteger(options.batchLimit) && (options.batchLimit ?? 0) > 0
+      ? Math.min(options.batchLimit!, ASR_RESULT_CLEANUP_MAX_BATCH_LIMIT)
+      : ASR_RESULT_CLEANUP_BATCH_LIMIT
+  const rows = await database
+    .prepare(
+      `SELECT * FROM ${ASR_REQUESTS_TABLE}
+       WHERE status = 'released' AND delivery_expires_at <= ?
+       ORDER BY delivery_expires_at ASC
+       LIMIT ?`,
+    )
+    .bind(now.toISOString(), batchLimit)
+    .all<AsrRequestRow>()
+
+  let deleted = 0
+  let failed = 0
+  for (const row of rows.results ?? []) {
+    const request = mapRequest(row)
+    try {
+      await deleteAsrHandoffObject(event, request)
+      await deleteAsrResultObject(event, request)
+      const result = await database
+        .prepare(`DELETE FROM ${ASR_REQUESTS_TABLE} WHERE id = ? AND status = 'released'`)
+        .bind(request.id)
+        .run()
+      if (Number(result.meta?.changes ?? 0) === 1) deleted += 1
+    } catch {
+      failed += 1
+    }
+  }
+  return { scanned: rows.results?.length ?? 0, deleted, failed }
+}
+
+/** Schedules bounded retention work from ordinary Nexus traffic without extending request latency. */
+export function scheduleExpiredAsrResultCleanup(
+  event: H3Event,
+  reconcileSettlements?: () => Promise<unknown>,
+): void {
+  const now = Date.now()
+  if (asrResultCleanupScheduled || now < nextAsrResultCleanupAt) return
+  asrResultCleanupScheduled = true
+  nextAsrResultCleanupAt = now + ASR_RESULT_CLEANUP_THROTTLE_MS
+
+  const cleanup = Promise.resolve()
+    .then(() => reconcileSettlements?.())
+    .then(() => Promise.all([
+      cleanupExpiredAsrResultObjects(event),
+      cleanupExpiredReleasedAsrRequests(event),
+    ]))
+    .then(() => undefined)
+    .catch(() => {
+      console.warn('[asr-result-cleanup] scheduled cleanup failed')
+    })
+    .finally(() => {
+      asrResultCleanupScheduled = false
+    })
+  const waitUntil = getWaitUntil(event)
+  if (waitUntil) {
+    waitUntil(cleanup)
+    return
+  }
+  void cleanup
 }
 
 export function toAsrSafeStatus(request: AsrRequestRecord) {

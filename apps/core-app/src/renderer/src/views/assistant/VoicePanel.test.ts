@@ -960,9 +960,12 @@ describe('VoicePanel recovery and pacing', () => {
     await wrapper.find('[data-testid="voice-recover"]').trigger('click')
     await flushPromises()
 
+    // Retry replays a buffered clip into the provider, which is slower than a normal control
+    // call; the transport must be told so rather than falling back to its default deadline.
     expect(transportSendMock).toHaveBeenCalledWith(
       voiceApiEvents.retryLastFailure,
-      expect.objectContaining({ delivery: 'active-app' })
+      expect.objectContaining({ delivery: 'active-app' }),
+      { timeout: 180_000 }
     )
     expect(wrapper.emitted('finished')).toHaveLength(1)
 

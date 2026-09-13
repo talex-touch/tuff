@@ -554,9 +554,14 @@ export class NexusProvider extends IntelligenceProvider {
     options: NexusProviderRuntimeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceSTTResult>> {
     const startedAt = Date.now()
+    const idempotencyKey =
+      typeof options.metadata?.idempotencyKey === 'string'
+        ? options.metadata.idempotencyKey
+        : undefined
     const result = await transcribeNexusAudio(payload, {
       signal: options.signal,
-      timeout: options.timeout ?? this.config.timeout
+      timeout: options.timeout ?? this.config.timeout,
+      idempotencyKey
     })
     return {
       result,

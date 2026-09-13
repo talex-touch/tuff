@@ -178,6 +178,28 @@ describe("voice domain sdk", () => {
     }, options);
   });
 
+  it("gives retryLastFailure a long transport deadline while sibling calls keep the default", async () => {
+    const transport = createTransportMock(async () => ({
+      ok: true,
+      result: { text: "retried words" },
+    }));
+    const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport);
+
+    await sdk.retryLastFailure({ delivery: "none" });
+    await sdk.recoveryStatus();
+
+    // A buffered provider legitimately holds one request for its whole 150s deadline; the
+    // transport must outlast it or the retry is cancelled while the provider still works.
+    expect(transport.send).toHaveBeenCalledWith(
+      voiceApiEvents.retryLastFailure,
+      { delivery: "none" },
+      { timeout: 180_000 },
+    );
+    // Every other voice call is short: a shared long deadline would make a hung status read
+    // wait three minutes instead of failing fast.
+    expect(transport.send).toHaveBeenCalledWith(voiceApiEvents.recoveryStatus, undefined);
+  });
+
   it("voice event names resolve to voice:api:<action>", () => {
     expect(voiceApiEvents.dictate.toEventName()).toBe("voice:api:dictate");
     expect(voiceApiEvents.speak.toEventName()).toBe("voice:api:speak");
