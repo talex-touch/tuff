@@ -1,11 +1,12 @@
 import { Buffer } from 'node:buffer'
 import type { H3Event } from 'h3'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ASR_RESULT_MAX_BYTES,
   cleanupExpiredAsrResultObjects,
   cleanupExpiredReleasedAsrRequests,
   deleteAsrHandoffObject,
+  deleteAsrResultObject,
   getAsrResultObject,
   putAsrResultObject,
   scheduleExpiredAsrResultCleanup,
@@ -74,6 +75,39 @@ const storage = vi.hoisted(() => {
 })
 
 vi.mock('./storageObjectStore', () => storage)
+
+/**
+ * A real in-memory R2 binding.
+ *
+ * Every private result write, read and delete now demands an R2 binding before it will touch
+ * storage at all: the store refuses rather than quietly degrading to per-process memory. The
+ * success-path events therefore have to carry one. It round-trips bytes so that a fixture can
+ * never be the reason a write silently lands somewhere else.
+ */
+function createFakeR2Bucket() {
+  const objects = new Map<string, Uint8Array>()
+  return {
+    put: vi.fn(async (key: string, value: Uint8Array) => {
+      objects.set(key, value)
+      return { key, size: value.byteLength }
+    }),
+    get: vi.fn(async (key: string) => {
+      const value = objects.get(key)
+      if (!value) return null
+      return {
+        arrayBuffer: async () =>
+          value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength),
+        httpMetadata: {},
+        customMetadata: {},
+      }
+    }),
+    delete: vi.fn(async (key: string) => {
+      objects.delete(key)
+    }),
+  }
+}
+
+const r2Bucket = createFakeR2Bucket()
 
 const REQUEST_ID = 'asr_11111111-2222-4333-8444-555555555555'
 
@@ -146,12 +180,19 @@ class CleanupDatabase {
 }
 
 function event(): H3Event {
+  return {
+    context: { cloudflare: { env: { ASSETS: r2Bucket } } },
+    path: '/test/asr-result',
+  } as unknown as H3Event
+}
+
+function eventWithoutStorage(): H3Event {
   return { context: {}, path: '/test/asr-result' } as unknown as H3Event
 }
 
 function cleanupEvent(database: CleanupDatabase): H3Event {
   return {
-    context: { cloudflare: { env: { DB: database } } },
+    context: { cloudflare: { env: { DB: database, ASSETS: r2Bucket } } },
     path: '/test/asr-result-cleanup',
   } as unknown as H3Event
 }
@@ -241,6 +282,30 @@ describe('ASR synchronous result object storage', () => {
       transcript: '会议纪要',
       billedSeconds: 2.5,
     })
+  })
+
+  /**
+   * The result store has no safe fallback.
+   *
+   * Without an R2 binding the previous behaviour was to route the object into the store's
+   * per-process memory map: the synchronous request then settled as if the transcript were
+   * durable while nothing ever left the worker. Every private operation must fail closed
+   * instead — before settlement, and without the backend ever being reached.
+   */
+  it('refuses to write, read, or delete a result without an R2 binding instead of routing it to memory', async () => {
+    const bare = eventWithoutStorage()
+
+    await expect(
+      putAsrResultObject(bare, request(), { transcript: 'must not be held in memory', billedSeconds: 1 }),
+    ).rejects.toMatchObject({ statusCode: 503 })
+    await expect(getAsrResultObject(bare, request())).rejects.toMatchObject({ statusCode: 503 })
+    await expect(deleteAsrResultObject(bare, request())).rejects.toMatchObject({ statusCode: 503 })
+
+    // Reaching the backend at all would mean it had accepted a null bucket, which is the
+    // memory/external fallback this contract exists to forbid.
+    expect(storage.putStorageObject).not.toHaveBeenCalled()
+    expect(storage.getStorageObject).not.toHaveBeenCalled()
+    expect(storage.deleteStorageObject).not.toHaveBeenCalled()
   })
 
   it('refuses to read the result for a user other than the writer', async () => {
@@ -524,7 +589,7 @@ describe('ASR result cleanup scheduling', () => {
     })
     const target = {
       context: {
-        cloudflare: { env: { DB: database } },
+        cloudflare: { env: { DB: database, ASSETS: r2Bucket } },
         waitUntil: (promise: Promise<unknown>) => {
           scheduled = promise
         },
@@ -568,5 +633,102 @@ describe('ASR private object backend pinning', () => {
     expect(storage.deleteStorageObject).toHaveBeenLastCalledWith(
       expect.objectContaining({ externalStorage: null }),
     )
+  })
+})
+
+/**
+ * The cleanup task is handed to whichever platform context actually owns it.
+ *
+ * `waitUntil` is not a bare function — it is a method on the context object, and a worker
+ * runtime may legitimately use `this` (a private field, a bound lifecycle queue). Resolving the
+ * method from one object and invoking it with another receiver detaches it: it either throws or
+ * schedules on the wrong lifecycle. Each owner records the receiver it was actually called with;
+ * precedence is asserted next to it because there are three possible owners.
+ */
+describe('ASR cleanup waitUntil ownership', () => {
+  interface WaiterCall {
+    name: string
+    receiver: unknown
+    promise: Promise<unknown>
+  }
+
+  let clock = Date.UTC(2030, 0, 1)
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    // The scheduler throttles itself for a minute for the whole module; each case jumps past the
+    // previous window so it exercises owner resolution rather than the throttle.
+    clock += 61_000
+    vi.setSystemTime(clock)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function createOwner(name: string, calls: WaiterCall[]) {
+    return {
+      name,
+      waitUntil(this: unknown, promise: Promise<unknown>) {
+        calls.push({ name, receiver: this, promise })
+      },
+    }
+  }
+
+  function scheduleWithOwners(owners: { root?: boolean; cloudflare?: boolean; platform?: boolean }) {
+    const calls: WaiterCall[] = []
+    const context: Record<string, unknown> = {}
+    let expected: unknown = null
+    if (owners.root) {
+      const root = createOwner('root', calls)
+      context.waitUntil = root.waitUntil
+      // A method lifted off the context and bound back to it: the receiver is the context itself.
+      expected = context
+    }
+    if (owners.cloudflare) {
+      const cloudflare = createOwner('cloudflare.context', calls)
+      context.cloudflare = { context: cloudflare }
+      if (!owners.root) expected = cloudflare
+    }
+    if (owners.platform) {
+      const platform = createOwner('platform.cloudflare.context', calls)
+      context._platform = { cloudflare: { context: platform } }
+      if (!owners.root && !owners.cloudflare) expected = platform
+    }
+    const target = { context, path: '/test/asr-result-cleanup-owners' } as unknown as H3Event
+    scheduleExpiredAsrResultCleanup(target)
+    return { calls, expected, context }
+  }
+
+  it('prefers the root context owner and invokes it with the context as receiver', async () => {
+    const { calls, expected, context } = scheduleWithOwners({
+      root: true,
+      cloudflare: true,
+      platform: true,
+    })
+
+    expect(calls.map((call) => call.name)).toEqual(['root'])
+    expect(calls[0]?.receiver).toBe(expected)
+    expect(calls[0]?.receiver).toBe(context)
+    await calls[0]?.promise
+  })
+
+  it('binds a nested cloudflare.context waitUntil to that context, not the root event', async () => {
+    const { calls, expected, context } = scheduleWithOwners({ cloudflare: true, platform: true })
+
+    // `cloudflare.context` outranks the platform fallback and must keep its own `this`.
+    expect(calls.map((call) => call.name)).toEqual(['cloudflare.context'])
+    expect(calls[0]?.receiver).toBe(expected)
+    expect(calls[0]?.receiver).not.toBe(context)
+    await calls[0]?.promise
+  })
+
+  it('binds a platform-context waitUntil to that context when it is the only owner', async () => {
+    const { calls, expected, context } = scheduleWithOwners({ platform: true })
+
+    expect(calls.map((call) => call.name)).toEqual(['platform.cloudflare.context'])
+    expect(calls[0]?.receiver).toBe(expected)
+    expect(calls[0]?.receiver).not.toBe(context)
+    await calls[0]?.promise
   })
 })

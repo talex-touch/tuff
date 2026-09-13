@@ -281,6 +281,12 @@ interface RetryBuffer {
   kind: VoiceRecoveryKind | null
   overflowed: boolean
 }
+
+interface ActiveVoiceRetry {
+  captureId: string | null
+  controller: AbortController
+  promise: Promise<VoiceRetryResult>
+}
 interface VoiceSessionRecord {
   readonly id: string
   readonly nativeSessionId: string
@@ -409,10 +415,11 @@ export class VoiceService {
   private disposed = false
   /** See RECOVERY_GRACE_MS: one slot, memory only, dropped as soon as its reason disappears. */
   private retryBuffer: RetryBuffer | null = null
+  private retryInFlight: ActiveVoiceRetry | null = null
+  private retryBufferGeneration = 0
   /** The last input device that named itself; `null` until one does. See `noteCaptureDevice`. */
   private lastDeviceName: string | null = null
   private retryExpiryTimer: ReturnType<typeof setTimeout> | null = null
-
   /**
    * Drop the held audio because the affordance that could spend it is gone.
    *
@@ -421,7 +428,12 @@ export class VoiceService {
    * nobody. Idempotent — a UI that reports the same dismissal twice is not an error.
    */
   discardRecovery(): void {
+    this.cancelRetryInFlight('Voice recovery discarded')
     this.clearRetryBuffer()
+  }
+
+  private cancelRetryInFlight(reason: string): void {
+    this.retryInFlight?.controller.abort(reason)
   }
 
   /**
@@ -438,7 +450,8 @@ export class VoiceService {
     return changed
   }
 
-  private clearRetryBuffer(): void {
+  private clearRetryBuffer(captureId?: string): void {
+    if (captureId && this.retryBuffer?.captureId !== captureId) return
     if (this.retryExpiryTimer) {
       clearTimeout(this.retryExpiryTimer)
       this.retryExpiryTimer = null
@@ -447,6 +460,7 @@ export class VoiceService {
   }
   private beginRetryBuffer(
     captureId: string,
+    generation: number,
     providerRequestId: string,
     reuseProviderRequestId: boolean,
     sampleRate: number,
@@ -457,6 +471,7 @@ export class VoiceService {
     cleanup: boolean,
     language?: string
   ): void {
+    if (generation !== this.retryBufferGeneration) return
     this.clearRetryBuffer()
     this.retryBuffer = {
       captureId,
@@ -477,9 +492,9 @@ export class VoiceService {
     }
   }
 
-  private appendRetryBuffer(chunk: Buffer): void {
+  private appendRetryBuffer(captureId: string, chunk: Buffer): void {
     const buffer = this.retryBuffer
-    if (!buffer || buffer.overflowed) return
+    if (!buffer || buffer.captureId !== captureId || buffer.overflowed) return
     if (buffer.bytes + chunk.length > MAX_RETRY_BUFFER_BYTES) {
       // Degrade to "no retry" rather than growing without bound. Dropping the partial audio
       // is deliberate: a truncated retry would transcribe half a sentence and look like a bug.
@@ -493,19 +508,17 @@ export class VoiceService {
   }
 
   /** Success is the only path that drops audio immediately; the rest get a recovery window. */
-  private armRetryBuffer(kind: VoiceRecoveryKind): void {
+  private armRetryBuffer(captureId: string, kind: VoiceRecoveryKind): void {
     const buffer = this.retryBuffer
-    if (!buffer || buffer.overflowed || buffer.bytes === 0) {
-      this.clearRetryBuffer()
+    if (!buffer || buffer.captureId !== captureId) return
+    if (buffer.overflowed || buffer.bytes === 0) {
+      this.clearRetryBuffer(captureId)
       return
     }
     buffer.kind = kind
     buffer.expiresAt = Date.now() + RECOVERY_GRACE_MS
     if (this.retryExpiryTimer) clearTimeout(this.retryExpiryTimer)
-    this.retryExpiryTimer = setTimeout(() => {
-      this.retryExpiryTimer = null
-      this.retryBuffer = null
-    }, RECOVERY_GRACE_MS)
+    this.retryExpiryTimer = setTimeout(() => this.clearRetryBuffer(captureId), RECOVERY_GRACE_MS)
     this.retryExpiryTimer.unref?.()
   }
 
@@ -714,6 +727,8 @@ export class VoiceService {
   /** Cancels all sessions before module teardown. */
   dispose(): void {
     this.disposed = true
+    this.retryBufferGeneration += 1
+    this.cancelRetryInFlight('Voice service disposed')
     this.clearRetryBuffer()
     for (const sessionId of Array.from(this.sessions.keys())) {
       this.cancelSession(sessionId)
@@ -1001,6 +1016,9 @@ export class VoiceService {
     options: { stopSignal?: AbortSignal; caller?: string } = {}
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const { stopSignal, caller = VOICE_CALLER } = options
+    this.retryBufferGeneration += 1
+    const retryGeneration = this.retryBufferGeneration
+    this.cancelRetryInFlight('Voice recovery superseded by a new session')
     this.clearRetryBuffer()
     throwIfCancelled(signal)
     const drainCapture = getDrainCapture()
@@ -1015,7 +1033,8 @@ export class VoiceService {
       caller,
       configured.model,
       configured.mode === 'buffered' ? BUFFERED_TRANSCRIPTION_TIMEOUT_MS : CAPABILITY_TIMEOUT_MS,
-      configured.mode === 'buffered'
+      configured.mode === 'buffered',
+      retryGeneration
     )
   }
 
@@ -1045,7 +1064,8 @@ export class VoiceService {
     caller = VOICE_CALLER,
     model = provider.defaultStreamModel ?? 'default',
     requestTimeoutMs = CAPABILITY_TIMEOUT_MS,
-    reuseProviderRequestId = false
+    reuseProviderRequestId = false,
+    retryGeneration = this.retryBufferGeneration
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
     const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
@@ -1134,6 +1154,7 @@ export class VoiceService {
     // A new session owns the single retry slot; whatever the last one left is dropped here.
     this.beginRetryBuffer(
       sessionId,
+      retryGeneration,
       requestId,
       reuseProviderRequestId,
       DEFAULT_ASR_SAMPLE_RATE,
@@ -1180,7 +1201,7 @@ export class VoiceService {
           if (chunk.length > 0) {
             capturedBytes += chunk.length
             if (payload.emitLevel) push({ kind: 'level', rms: pcmRms(chunk) })
-            this.appendRetryBuffer(chunk)
+            this.appendRetryBuffer(session.id, chunk)
             await connection!.writePcm(chunk)
           }
           if (!active) break
@@ -1359,7 +1380,7 @@ export class VoiceService {
           channel: provider.id
         })
       }
-      this.clearRetryBuffer()
+      this.clearRetryBuffer(session.id)
       if (!hasFinal) yield { type: 'final', text: '' }
       yield { type: 'end' }
     } catch (error) {
@@ -1392,8 +1413,8 @@ export class VoiceService {
         channel: provider.id,
         errorCode
       })
-      if (retryable) this.armRetryBuffer(cancelled ? 'cancelled' : 'failed')
-      else this.clearRetryBuffer()
+      if (retryable) this.armRetryBuffer(session.id, cancelled ? 'cancelled' : 'failed')
+      else this.clearRetryBuffer(session.id)
       throw error
     } finally {
       if (connection) await connection.abort('Voice session ended').catch(() => {})
@@ -1406,7 +1427,7 @@ export class VoiceService {
     if (!buffer || buffer.expiresAt === null || buffer.bytes === 0) return { available: false }
     const remaining = buffer.expiresAt - Date.now()
     if (remaining <= 0) {
-      this.clearRetryBuffer()
+      this.clearRetryBuffer(buffer.captureId)
       return { available: false }
     }
     return {
@@ -1423,6 +1444,32 @@ export class VoiceService {
     caller = VOICE_CALLER
   ): Promise<VoiceRetryResult> {
     throwIfCancelled(signal)
+    const captureId = this.retryBuffer?.captureId ?? null
+    if (this.retryInFlight) {
+      if (this.retryInFlight.captureId === captureId) return await this.retryInFlight.promise
+      throw Object.assign(new Error('VOICE_RECOVERY_IN_PROGRESS'), {
+        code: 'VOICE_RECOVERY_IN_PROGRESS',
+        retryable: true
+      })
+    }
+    const controller = new AbortController()
+    const retrySignal = AbortSignal.any([...(signal ? [signal] : []), controller.signal])
+    const operation = this.retryLastFailureOnce(payload, retrySignal, caller)
+    const active: ActiveVoiceRetry = { captureId, controller, promise: operation }
+    this.retryInFlight = active
+    try {
+      return await operation
+    } finally {
+      if (this.retryInFlight === active) this.retryInFlight = null
+    }
+  }
+
+  private async retryLastFailureOnce(
+    payload: VoiceRetryPayload,
+    signal: AbortSignal | undefined,
+    caller: string
+  ): Promise<VoiceRetryResult> {
+    throwIfCancelled(signal)
     const buffer = this.retryBuffer
     if (
       !buffer ||
@@ -1430,7 +1477,7 @@ export class VoiceService {
       buffer.bytes === 0 ||
       Date.now() > buffer.expiresAt
     ) {
-      this.clearRetryBuffer()
+      this.clearRetryBuffer(buffer?.captureId)
       return { text: '', expired: true }
     }
 
@@ -1450,11 +1497,14 @@ export class VoiceService {
       timeoutMs: buffer.requestTimeoutMs,
       enableDdc: true
     }
-    const targetKey = activeAppKey(await activeAppService.getActiveApp())
-    const connection = await buffer.provider.createStream(request)
+    let targetKey: string | null = null
+    let connection: VoiceStreamConnection | null = null
     let text = ''
     let detectedLanguage: string | undefined
     try {
+      targetKey = activeAppKey(await activeAppService.getActiveApp())
+      throwIfCancelled(signal)
+      connection = await buffer.provider.createStream(request)
       for (const chunk of buffer.chunks) {
         throwIfCancelled(signal)
         await connection.writePcm(chunk)
@@ -1463,13 +1513,22 @@ export class VoiceService {
       await connection.end()
       for await (const event of connection.events) {
         throwIfCancelled(signal)
-        if (event.type === 'error') throw new Error(event.code || 'VOICE_ASR_RETRY_FAILED')
+        if (event.type === 'error') {
+          throw Object.assign(new Error(event.code || 'VOICE_ASR_RETRY_FAILED'), {
+            code: event.code || 'VOICE_ASR_RETRY_FAILED',
+            retryable: event.retryable
+          })
+        }
         if (event.type !== 'final' || !event.text.trim()) continue
         text += event.text
         if (event.language) detectedLanguage = event.language
       }
+    } catch (error) {
+      if (error && typeof error === 'object' && 'retryable' in error && error.retryable === false)
+        this.clearRetryBuffer(buffer.captureId)
+      throw error
     } finally {
-      await connection.abort('Voice retry ended').catch(() => {})
+      if (connection) await connection.abort('Voice retry ended').catch(() => {})
     }
 
     throwIfCancelled(signal)
@@ -1492,7 +1551,7 @@ export class VoiceService {
         polishedText !== null
       )
     }
-    this.clearRetryBuffer()
+    this.clearRetryBuffer(buffer.captureId)
     return {
       text: deliveredText,
       ...(detectedLanguage ? { language: detectedLanguage } : {}),

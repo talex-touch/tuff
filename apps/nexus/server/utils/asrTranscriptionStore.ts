@@ -143,13 +143,22 @@ function getAsrBucket(event: H3Event): R2Bucket | null {
   return bindings?.ASSETS ?? bindings?.R2 ?? null
 }
 
+function requireAsrResultBucket(event: H3Event): R2Bucket {
+  const bucket = getAsrBucket(event)
+  if (!bucket) throw createError({ statusCode: 503, statusMessage: 'ASR result storage is unavailable.' })
+  return bucket
+}
+
 function getWaitUntil(event: H3Event): ((promise: Promise<unknown>) => void) | null {
   const context = event.context as Record<string, any>
-  const waitUntil =
-    context.waitUntil ??
-    context.cloudflare?.context?.waitUntil ??
-    context._platform?.cloudflare?.context?.waitUntil
-  return typeof waitUntil === 'function' ? waitUntil.bind(context) : null
+  if (typeof context.waitUntil === 'function') return context.waitUntil.bind(context)
+  const cloudflareContext = context.cloudflare?.context
+  if (typeof cloudflareContext?.waitUntil === 'function')
+    return cloudflareContext.waitUntil.bind(cloudflareContext)
+  const platformContext = context._platform?.cloudflare?.context
+  if (typeof platformContext?.waitUntil === 'function')
+    return platformContext.waitUntil.bind(platformContext)
+  return null
 }
 
 async function ensureAsrSchema(database: D1Database) {
@@ -832,7 +841,7 @@ export async function putAsrResultObject(
   if (data.byteLength > ASR_RESULT_MAX_BYTES) throw new Error('ASR_RESULT_INVALID')
   await putStorageObject({
     event,
-    bucket: getAsrBucket(event),
+    bucket: requireAsrResultBucket(event),
     memoryStorage,
     externalStorage: null,
     key: asrResultObjectKey(request.id),
@@ -859,7 +868,7 @@ export async function getAsrResultObject(
   }
   const object = await getStorageObject({
     event,
-    bucket: getAsrBucket(event),
+    bucket: requireAsrResultBucket(event),
     memoryStorage,
     externalStorage: null,
     key: asrResultObjectKey(request.id),
@@ -885,11 +894,10 @@ export async function getAsrResultObject(
 export async function deleteAsrResultObject(event: H3Event, request: AsrRequestRecord): Promise<void> {
   await deleteStorageObject({
     event,
-    bucket: getAsrBucket(event),
+    bucket: requireAsrResultBucket(event),
     memoryStorage,
     externalStorage: null,
     key: asrResultObjectKey(request.id),
-    actorId: request.userId,
     resourceType: 'asr-result',
   })
 }
