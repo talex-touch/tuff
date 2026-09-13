@@ -14,8 +14,7 @@ import { VoiceProviderError } from '@talex-touch/tuff-voice'
 import { Buffer } from 'node:buffer'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 
-const MAX_BUFFER_BYTES = 7_500_000
-const DEFAULT_SAMPLE_RATE = 16_000
+export const BUFFERED_STT_MAX_PCM_BYTES = 10 * 1024 * 1024
 
 type SttInvoker = (
   payload: IntelligenceSTTPayload,
@@ -26,6 +25,7 @@ export interface BufferedSttProviderOptions {
   providerId: string
   model: string
   invoke?: SttInvoker
+  authorityCheck?: () => boolean
 }
 
 class EventQueue<T> implements AsyncIterableIterator<T> {
@@ -64,10 +64,6 @@ class EventQueue<T> implements AsyncIterableIterator<T> {
 }
 
 function encodePcm16Wav(pcm: Buffer, sampleRate: number): Buffer {
-  const rate =
-    Number.isInteger(sampleRate) && sampleRate > 0 && sampleRate <= 192_000
-      ? sampleRate
-      : DEFAULT_SAMPLE_RATE
   const output = Buffer.allocUnsafe(44 + pcm.byteLength)
   output.write('RIFF', 0, 'ascii')
   output.writeUInt32LE(36 + pcm.byteLength, 4)
@@ -76,8 +72,8 @@ function encodePcm16Wav(pcm: Buffer, sampleRate: number): Buffer {
   output.writeUInt32LE(16, 16)
   output.writeUInt16LE(1, 20)
   output.writeUInt16LE(1, 22)
-  output.writeUInt32LE(rate, 24)
-  output.writeUInt32LE(rate * 2, 28)
+  output.writeUInt32LE(sampleRate, 24)
+  output.writeUInt32LE(sampleRate * 2, 28)
   output.writeUInt16LE(2, 32)
   output.writeUInt16LE(16, 34)
   output.write('data', 36, 'ascii')
@@ -132,6 +128,7 @@ class BufferedSttConnection implements VoiceStreamConnection {
   private readonly providerId: string
   private readonly model: string
   private readonly invoke: SttInvoker
+  private readonly authorityCheck?: () => boolean
   private readonly abortController = new AbortController()
   private totalBytes = 0
   private terminal: Promise<void> | null = null
@@ -142,7 +139,16 @@ class BufferedSttConnection implements VoiceStreamConnection {
     this.providerId = options.providerId
     this.model = options.model
     this.invoke = options.invoke ?? invokeDefaultStt
+    this.authorityCheck = options.authorityCheck
     this.events = this.queue
+  }
+
+  private hasCurrentAuthority(): boolean {
+    try {
+      return this.authorityCheck?.() !== false
+    } catch {
+      return false
+    }
   }
 
   async writePcm(chunk: Buffer | Uint8Array): Promise<void> {
@@ -155,7 +161,7 @@ class BufferedSttConnection implements VoiceStreamConnection {
       throw new VoiceProviderError('VOICE_STREAM_ENDED', 'Buffered speech recognition has ended.')
     const copy = Buffer.from(chunk)
     if (copy.byteLength === 0) return
-    if (this.totalBytes + copy.byteLength > MAX_BUFFER_BYTES) {
+    if (this.totalBytes + copy.byteLength > BUFFERED_STT_MAX_PCM_BYTES) {
       throw new VoiceProviderError(
         'VOICE_AUDIO_TOO_LARGE',
         'Buffered speech recognition audio exceeds its bounded limit.'
@@ -187,6 +193,12 @@ class BufferedSttConnection implements VoiceStreamConnection {
         this.queue.push({ type: 'end', requestId: this.request.requestId })
         return
       }
+      if (!this.hasCurrentAuthority()) {
+        throw new VoiceProviderError(
+          'VOICE_ASR_AUTHORITY_CHANGED',
+          'Buffered speech recognition authority changed before upload.'
+        )
+      }
       const pcm = Buffer.concat(this.chunks, this.totalBytes)
       const wav = encodePcm16Wav(pcm, this.request.audio.sampleRate)
       const response = await this.invoke(
@@ -203,9 +215,18 @@ class BufferedSttConnection implements VoiceStreamConnection {
             this.abortController.signal
           ]),
           timeout: this.request.timeoutMs,
-          metadata: { caller: 'core.voice.buffered-asr' }
+          metadata: {
+            caller: 'core.voice.buffered-asr',
+            idempotencyKey: this.request.requestId
+          }
         }
       )
+      if (!this.hasCurrentAuthority()) {
+        throw new VoiceProviderError(
+          'VOICE_ASR_AUTHORITY_CHANGED',
+          'Buffered speech recognition authority changed before delivery.'
+        )
+      }
       if (this.aborted) return
       const text = readResultText(response)
       if (text) {
@@ -227,11 +248,13 @@ class BufferedSttConnection implements VoiceStreamConnection {
           type: 'error',
           code: /^[A-Z0-9_:-]{3,120}$/.test(code) ? code : 'VOICE_STT_FAILED',
           message: 'Buffered speech recognition failed.',
-          retryable: false,
+          retryable: code !== 'VOICE_ASR_AUTHORITY_CHANGED',
           requestId: this.request.requestId
         })
       }
     } finally {
+      this.chunks.length = 0
+      this.totalBytes = 0
       this.queue.close()
     }
   }
@@ -258,6 +281,16 @@ export function createBufferedSttVoiceProvider(
         throw new VoiceProviderError(
           'VOICE_AUDIO_FORMAT_UNSUPPORTED',
           'Buffered speech recognition requires mono 16-bit PCM.'
+        )
+      }
+      if (
+        !Number.isInteger(request.audio.sampleRate) ||
+        request.audio.sampleRate <= 0 ||
+        request.audio.sampleRate > 192_000
+      ) {
+        throw new VoiceProviderError(
+          'VOICE_AUDIO_SAMPLE_RATE_INVALID',
+          'Buffered speech recognition requires a valid PCM sample rate.'
         )
       }
       return new BufferedSttConnection(request, options)

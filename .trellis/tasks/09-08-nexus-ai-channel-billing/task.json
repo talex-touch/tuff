@@ -12,19 +12,19 @@
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-09-08",
   "completedAt": null,
-  "branch": null,
+  "branch": "feat/qwen-audio-sync-asr",
   "base_branch": "master",
   "worktree_path": null,
   "commit": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/talex-touch/tuff/pull/1912",
   "subtasks": [],
   "children": [],
   "parent": null,
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "提交并合入 Qwen Audio Flash 同步 ASR 代码，等待 Nexus 生产部署后配置同一专用 DashScope 凭据，再以真实生产 App Token 跑一次 final-only Voice Session 验收。",
-    "blocker": "生产 Provider 配置必须等新 Qwen adapter 部署后再启用，避免旧 Filetrans 代码接收该路由；本地代码、凭据和真实 Provider 调用均已跑通。",
-    "evidence": "2026-09-13 本地 Nexus 通过加密 Provider Registry 保存专用 DashScope 凭据与 qwen-audio-3.0-asr-flash；CoreApp 无 audio.asr 绑定时解析为 buffered audio.stt，真实 16 kHz PCM 会话得到 ready→final→end。D1 请求 asr_64ae95a5-eb3d-484f-8b38-eaeb81f91b8f 已 settled，chargedCredits=80、billedSeconds=20；CoreApp 日志确认 tuff-nexus-default / nexus-audio-transcribe 成功，未记录密钥、音频或 transcript。"
+    "nextAction": "等待 PR #1912 的 required CI 与审阅完成；合并并部署 Nexus 后，再配置生产专用 Qwen Provider，并以真实生产 App Token 做一次 final-only Voice Session 验收。",
+    "blocker": "生产 Provider 必须等 PR #1912 合并且新 Qwen adapter 部署后再启用，避免旧 Filetrans 代码接收该路由；本地代码、授权凭据、真实 Provider 调用与安全回归均已完成。",
+    "evidence": "2026-09-13 本地真实 16 kHz Voice Session 经 CoreApp -> Nexus -> qwen-audio-3.0-asr-flash 得到 ready -> final -> end；D1 请求 asr_64ae95a5-eb3d-484f-8b38-eaeb81f91b8f settled（80 credits / 20s），无密钥、音频或 transcript 入 D1。三轮审阅后的最终回归：Nexus Qwen/存储/结算/限流/API 154 tests、CoreApp 93 tests、Voice SDK 11 tests、共享 credits 46 tests 均通过；CoreApp Node/Web 与 Nexus typecheck、scoped ESLint、两端 production build、docs、privacy、API route、release notes、Drizzle 与 diff gates 均通过。真实本地维护 smoke 已删除过期私有 result，并写入 result_deleted_at/credits_released_at。"
   }
 }

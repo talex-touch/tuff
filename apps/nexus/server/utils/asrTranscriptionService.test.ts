@@ -1,15 +1,21 @@
 import { Buffer } from 'node:buffer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { pollAsrTranscription, startAsrTranscription } from './asrTranscriptionService'
+import {
+  pollAsrTranscription,
+  reconcileExpiredAsrSettlements,
+  startAsrTranscription,
+} from './asrTranscriptionService'
 import { DEFAULT_CREDIT_PRICING, selectCreditPricingRule } from './creditPricingStore'
 import {
   DashScopeAsrError,
   QWEN_AUDIO_ASR_MAX_DURATION_SECONDS,
+  QWEN_AUDIO_ASR_MAX_RAW_BYTES,
   type DashScopeFiletransAdapter,
   type DashScopeFiletransTask,
   type DashScopeQwenAudioAsrAdapter,
 } from './dashscopeAsrProvider'
-import type { AsrRequestRecord } from './asrTranscriptionStore'
+import { calculateFiletransCredits, calculateFiletransProviderCost } from './asrTranscriptionStore'
+import type { AsrRequestRecord, ParsedWavMetadata } from './asrTranscriptionStore'
 import type * as AsrTranscriptionStoreModule from './asrTranscriptionStore'
 import type * as CreditPricingStoreModule from './creditPricingStore'
 import type { ProviderRegistryRecord } from './providerRegistryStore'
@@ -20,6 +26,7 @@ const runtimeConfig = vi.hoisted(() => ({
 
 const creditsMocks = vi.hoisted(() => ({
   consumeCredits: vi.fn(),
+  findCreditReservationLedgerId: vi.fn(),
   releaseConsumedCredits: vi.fn(),
 }))
 
@@ -38,17 +45,21 @@ const storeMocks = vi.hoisted(() => ({
   deleteAsrHandoffObject: vi.fn(),
   deleteAsrResultObject: vi.fn(),
   getAsrRequest: vi.fn(),
+  getAsrRequestByIdempotency: vi.fn(),
   getAsrResultObject: vi.fn(),
+  listAsrSettlementMaintenanceRequests: vi.fn(),
   markAsrDispatching: vi.fn(),
   markAsrFailed: vi.fn(),
+  markAsrCreditsReleased: vi.fn(),
   markAsrReleased: vi.fn(),
   markAsrReserved: vi.fn(),
   markAsrSettled: vi.fn(),
   markAsrSettledFromReserved: vi.fn(),
   putAsrResultObject: vi.fn(),
+  setAsrReservationLedgerId: vi.fn(),
   normalizeAsrContentType: vi.fn(() => 'audio/wav'),
   normalizeAsrIdempotencyKey: vi.fn(() => 'idempotency-key'),
-  parseWavDurationSeconds: vi.fn(() => 1),
+  parseWavMetadata: vi.fn(),
   toAsrSafeStatus: vi.fn((request: AsrRequestRecord) => ({
     requestId: request.id,
     status: request.status,
@@ -116,6 +127,9 @@ const provider: ProviderRegistryRecord = {
   updatedAt: '2026-09-08T00:00:00.000Z',
 }
 
+/** The team-scoped ledger entry `consumeCredits` writes for this request's hold. */
+const RESERVATION_LEDGER_ID = '11111111-2222-4333-8444-555555555555'
+
 function request(overrides: Partial<AsrRequestRecord> = {}): AsrRequestRecord {
   return {
     id: 'asr-request-1',
@@ -133,7 +147,9 @@ function request(overrides: Partial<AsrRequestRecord> = {}): AsrRequestRecord {
     providerTaskId: 'task-1',
     status: 'dispatching',
     reservedCredits: 10,
+    reservationLedgerId: null,
     chargedCredits: null,
+    creditsReleasedAt: null,
     billedSeconds: null,
     providerCostCny: null,
     failureCode: null,
@@ -177,6 +193,20 @@ function qwenAdapter(
   } as unknown as DashScopeQwenAudioAsrAdapter
 }
 
+/** A canonical 16 kHz mono PCM16 clip: the only shape the synchronous Qwen route admits. */
+function wavMetadata(overrides: Partial<ParsedWavMetadata> = {}): ParsedWavMetadata {
+  return {
+    durationSeconds: 1,
+    encoding: 1,
+    channels: 1,
+    sampleRate: 16_000,
+    byteRate: 32_000,
+    blockAlign: 2,
+    bits: 16,
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   pricingMocks.resolveCreditPricingRule.mockImplementation(async (_event, capability: string) =>
@@ -184,12 +214,29 @@ beforeEach(() => {
   )
   registryMocks.listProviderRegistryEntries.mockResolvedValue([provider])
   registryMocks.getProviderRegistryEntry.mockResolvedValue(provider)
+  // `consumeCredits` returns the team ledger row the hold was written to; the service persists
+  // its id on the request and releases against it later.
+  creditsMocks.consumeCredits.mockResolvedValue({ ledgerId: RESERVATION_LEDGER_ID })
+  // A request reserved before the ledger id was persisted has to recover it from the hold itself;
+  // by default the hold written by `consumeCredits` is the one found.
+  creditsMocks.findCreditReservationLedgerId.mockResolvedValue(RESERVATION_LEDGER_ID)
+  storeMocks.setAsrReservationLedgerId.mockImplementation(
+    async (_event, requestId: string, reservationLedgerId: string) =>
+      request({ id: requestId, status: 'reserved', providerTaskId: null, reservationLedgerId }),
+  )
+  storeMocks.getAsrRequestByIdempotency.mockResolvedValue(null)
+  storeMocks.listAsrSettlementMaintenanceRequests.mockResolvedValue([])
+  storeMocks.markAsrCreditsReleased.mockResolvedValue(undefined)
+  storeMocks.parseWavMetadata.mockReturnValue(wavMetadata())
   storeMocks.createAsrRequest.mockResolvedValue({
     created: true,
     deliveryToken: 'opaque-delivery-token',
     request: request({ status: 'pending', providerTaskId: null }),
   })
-  storeMocks.markAsrReserved.mockResolvedValue(request({ status: 'reserved', providerTaskId: null }))
+  storeMocks.markAsrReserved.mockImplementation(
+    async (_event, _requestId: string, reservationLedgerId: string) =>
+      request({ status: 'reserved', providerTaskId: null, reservationLedgerId }),
+  )
   storeMocks.markAsrDispatching.mockResolvedValue(request())
   storeMocks.markAsrReleased.mockImplementation(async (_event, requestId: string, failureCode: string) =>
     request({
@@ -212,6 +259,7 @@ beforeEach(() => {
         status: 'settled',
         chargedCredits,
         billedSeconds,
+        reservationLedgerId: RESERVATION_LEDGER_ID,
       }),
   )
   storeMocks.markAsrSettledFromReserved.mockImplementation(
@@ -222,6 +270,7 @@ beforeEach(() => {
         providerTaskId: null,
         chargedCredits,
         billedSeconds,
+        reservationLedgerId: RESERVATION_LEDGER_ID,
       }),
   )
   // The store deletes resolve to promises; the service chains `.catch` on them.
@@ -229,7 +278,6 @@ beforeEach(() => {
   storeMocks.deleteAsrResultObject.mockResolvedValue(undefined)
   storeMocks.putAsrResultObject.mockResolvedValue(undefined)
   storeMocks.getAsrResultObject.mockResolvedValue(null)
-  storeMocks.parseWavDurationSeconds.mockReturnValue(1)
   storeMocks.getAsrRequest.mockResolvedValue(request())
 })
 
@@ -340,7 +388,7 @@ describe('ASR pre-acceptance rollback', () => {
         requestId: 'asr-request-1',
         failureCode: 'ASR_REQUEST_FAILED',
       }),
-      { idempotencyKey: 'asr-release:asr-request-1:0' },
+      { idempotencyKey: 'asr-release:asr-request-1:0', reservationLedgerId: RESERVATION_LEDGER_ID },
     )
     expect(storeMocks.markAsrReleased).toHaveBeenCalledWith({}, 'asr-request-1', 'ASR_REQUEST_FAILED')
     expect(storeMocks.deleteAsrHandoffObject).toHaveBeenCalledWith(
@@ -377,7 +425,7 @@ describe('ASR pre-acceptance rollback', () => {
         requestId: 'asr-request-1',
         failureCode: 'ASR_PROVIDER_REJECTED',
       }),
-      { idempotencyKey: 'asr-release:asr-request-1:0' },
+      { idempotencyKey: 'asr-release:asr-request-1:0', reservationLedgerId: RESERVATION_LEDGER_ID },
     )
     expect(storeMocks.markAsrReleased).toHaveBeenCalledWith({}, 'asr-request-1', 'ASR_PROVIDER_REJECTED')
     expect(storeMocks.deleteAsrHandoffObject).toHaveBeenCalledWith(
@@ -406,7 +454,7 @@ describe('ASR settlement accounting', () => {
       1,
       'asr-reservation-release',
       expect.objectContaining({ requestId: 'asr-request-1' }),
-      { idempotencyKey: 'asr-release:asr-request-1:9' },
+      { idempotencyKey: 'asr-release:asr-request-1:9', reservationLedgerId: RESERVATION_LEDGER_ID },
     )
     expect(result).toMatchObject({ status: 'settled', creditsCharged: 9, billedSeconds: 1 })
   })
@@ -463,10 +511,11 @@ describe('ASR Qwen Audio Flash synchronous path', () => {
     registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
     creditsMocks.consumeCredits.mockImplementationOnce(async () => {
       order.push('reserve')
+      return { ledgerId: RESERVATION_LEDGER_ID }
     })
-    storeMocks.markAsrReserved.mockImplementationOnce(async () => {
+    storeMocks.markAsrReserved.mockImplementationOnce(async (_event, _requestId, reservationLedgerId: string) => {
       order.push('reserved')
-      return request({ status: 'reserved', providerTaskId: null })
+      return request({ status: 'reserved', providerTaskId: null, reservationLedgerId })
     })
     const qwen = qwenAdapter({ transcript: 'alpha beta', billedSeconds: 2 })
     vi.mocked(qwen.transcribe).mockImplementationOnce(async () => {
@@ -482,8 +531,14 @@ describe('ASR Qwen Audio Flash synchronous path', () => {
     )
 
     expect(order).toEqual(['reserve', 'reserved', 'dispatch'])
+    // The hold's ledger row is persisted on the request, so the later release binds to the
+    // exact team/month the credits were taken from rather than whichever team is active then.
+    expect(storeMocks.markAsrReserved).toHaveBeenCalledWith({}, 'asr-request-1', RESERVATION_LEDGER_ID)
     // Two audio seconds at four credits each beat the four transcript units.
     expect(storeMocks.markAsrSettledFromReserved).toHaveBeenCalledWith({}, 'asr-request-1', 8, 2, expect.any(Number))
+    expect(storeMocks.markAsrSettledFromReserved.mock.invocationCallOrder[0]).toBeLessThan(
+      creditsMocks.releaseConsumedCredits.mock.invocationCallOrder[0]!,
+    )
     expect(storeMocks.putAsrResultObject).toHaveBeenCalledWith(
       {},
       expect.objectContaining({ id: 'asr-request-1', status: 'reserved' }),
@@ -495,7 +550,7 @@ describe('ASR Qwen Audio Flash synchronous path', () => {
       2,
       'asr-reservation-release',
       expect.objectContaining({ requestId: 'asr-request-1' }),
-      { idempotencyKey: 'asr-release:asr-request-1:8' },
+      { idempotencyKey: 'asr-release:asr-request-1:8', reservationLedgerId: RESERVATION_LEDGER_ID },
     )
     expect(storeMocks.markAsrDispatching).not.toHaveBeenCalled()
     expect(result).toEqual({
@@ -512,7 +567,13 @@ describe('ASR Qwen Audio Flash synchronous path', () => {
     registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
     storeMocks.createAsrRequest.mockResolvedValue({
       created: false,
-      request: request({ status: 'settled', providerTaskId: null, chargedCredits: 8, billedSeconds: 2 }),
+      request: request({
+        status: 'settled',
+        providerTaskId: null,
+        chargedCredits: 8,
+        billedSeconds: 2,
+        reservationLedgerId: RESERVATION_LEDGER_ID,
+      }),
     })
     storeMocks.getAsrResultObject.mockResolvedValue({ transcript: 'alpha beta', billedSeconds: 2 })
     const qwen = qwenAdapter({ transcript: 'must not be requested', billedSeconds: 1 })
@@ -537,6 +598,92 @@ describe('ASR Qwen Audio Flash synchronous path', () => {
     expect(storeMocks.markAsrReserved).not.toHaveBeenCalled()
   })
 
+  it('keeps a normalized result settled and resumes an interrupted credit release on replay', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
+    const qwen = qwenAdapter({ transcript: 'recoverable result', billedSeconds: 2 })
+    creditsMocks.releaseConsumedCredits.mockRejectedValueOnce(new Error('release persistence unavailable'))
+
+    await expect(
+      startAsrTranscription(
+        {} as never,
+        'user-1',
+        { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+        { qwenAdapter: qwen },
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      data: { errorCode: 'ASR_SETTLEMENT_INCOMPLETE' },
+    })
+
+    const settled = request({
+      status: 'settled',
+      providerTaskId: null,
+      chargedCredits: 8,
+      billedSeconds: 2,
+      reservationLedgerId: RESERVATION_LEDGER_ID,
+    })
+    storeMocks.createAsrRequest.mockResolvedValueOnce({ created: false, request: settled })
+    storeMocks.getAsrResultObject.mockResolvedValueOnce({ transcript: 'recoverable result', billedSeconds: 2 })
+
+    await expect(
+      startAsrTranscription(
+        {} as never,
+        'user-1',
+        { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+        { qwenAdapter: qwen },
+      ),
+    ).resolves.toMatchObject({ status: 'settled', transcript: 'recoverable result' })
+
+    expect(qwen.transcribe).toHaveBeenCalledTimes(1)
+    expect(storeMocks.markAsrFailed).not.toHaveBeenCalled()
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledTimes(2)
+    expect(creditsMocks.releaseConsumedCredits.mock.calls.map(call => call[5])).toEqual([
+      { idempotencyKey: 'asr-release:asr-request-1:8', reservationLedgerId: RESERVATION_LEDGER_ID },
+      { idempotencyKey: 'asr-release:asr-request-1:8', reservationLedgerId: RESERVATION_LEDGER_ID },
+    ])
+  })
+
+  it('settles a stored-but-unsettled result on a same-key replay without dispatching Qwen again', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
+    // The previous attempt stored the provider result but died before the settlement row was
+    // written, so the request is still held as `reserved` with no provider task.
+    storeMocks.createAsrRequest.mockResolvedValue({
+      created: false,
+      request: request({ status: 'reserved', providerTaskId: null, reservationLedgerId: RESERVATION_LEDGER_ID }),
+    })
+    storeMocks.getAsrResultObject.mockResolvedValue({ transcript: 'stored but unsettled', billedSeconds: 2 })
+    const qwen = qwenAdapter({ transcript: 'must not be requested', billedSeconds: 1 })
+
+    const result = await startAsrTranscription(
+      {} as never,
+      'user-1',
+      { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+      { qwenAdapter: qwen },
+    )
+
+    expect(result).toMatchObject({ status: 'settled', transcript: 'stored but unsettled' })
+    expect(qwen.transcribe).not.toHaveBeenCalled()
+    expect(creditsMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(storeMocks.putAsrResultObject).not.toHaveBeenCalled()
+    expect(storeMocks.markAsrSettledFromReserved).toHaveBeenCalledWith(
+      {},
+      'asr-request-1',
+      expect.any(Number),
+      2,
+      expect.any(Number),
+    )
+    // The recovered settlement must still hand the unused part of the hold back on the ledger
+    // that took it, exactly like a first-time settlement.
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      {},
+      'user-1',
+      2,
+      'asr-reservation-release',
+      expect.objectContaining({ requestId: 'asr-request-1' }),
+      { idempotencyKey: 'asr-release:asr-request-1:8', reservationLedgerId: RESERVATION_LEDGER_ID },
+    )
+  })
+
   it('serves a settled synchronous transcript from the private result object without polling the provider', async () => {
     storeMocks.getAsrRequest.mockResolvedValue(
       request({
@@ -544,6 +691,7 @@ describe('ASR Qwen Audio Flash synchronous path', () => {
         providerTaskId: null,
         chargedCredits: 8,
         billedSeconds: 2,
+        reservationLedgerId: RESERVATION_LEDGER_ID,
       }),
     )
     storeMocks.getAsrResultObject.mockResolvedValue({ transcript: 'alpha beta', billedSeconds: 2 })
@@ -562,14 +710,73 @@ describe('ASR Qwen Audio Flash synchronous path', () => {
     expect(filetrans.getTask).not.toHaveBeenCalled()
   })
 
-  it('fails closed when a settled synchronous result object is no longer recoverable', async () => {
-    storeMocks.getAsrRequest.mockResolvedValue(request({ status: 'settled', providerTaskId: null }))
+  it('releases a settled reservation before returning missing-result 503', async () => {
+    storeMocks.getAsrRequest.mockResolvedValue(
+      request({
+        status: 'settled',
+        providerTaskId: null,
+        chargedCredits: 8,
+        billedSeconds: 2,
+        reservationLedgerId: RESERVATION_LEDGER_ID,
+      }),
+    )
     storeMocks.getAsrResultObject.mockResolvedValue(null)
 
     await expect(pollAsrTranscription({} as never, 'user-1', 'asr-request-1')).rejects.toMatchObject({
       statusCode: 503,
       data: { errorCode: 'ASR_RESULT_UNAVAILABLE' },
     })
+
+    // The unspent hold is returned even though the transcript is gone: a 503 that left the
+    // credits held would charge the user for a result they can no longer read.
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      {},
+      'user-1',
+      2,
+      'asr-reservation-release',
+      expect.objectContaining({ requestId: 'asr-request-1' }),
+      { idempotencyKey: 'asr-release:asr-request-1:8', reservationLedgerId: RESERVATION_LEDGER_ID },
+    )
+  })
+
+  it('rejects a same-key settled replay when its private result is unavailable', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
+    storeMocks.createAsrRequest.mockResolvedValue({
+      created: false,
+      request: request({
+        status: 'settled',
+        providerTaskId: null,
+        chargedCredits: 8,
+        billedSeconds: 2,
+        reservationLedgerId: RESERVATION_LEDGER_ID,
+      }),
+    })
+    storeMocks.getAsrResultObject.mockResolvedValue(null)
+    const qwen = qwenAdapter({ transcript: 'must not be requested', billedSeconds: 1 })
+
+    await expect(
+      startAsrTranscription(
+        {} as never,
+        'user-1',
+        { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+        { qwenAdapter: qwen },
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      data: { errorCode: 'ASR_RESULT_UNAVAILABLE' },
+    })
+
+    expect(qwen.transcribe).not.toHaveBeenCalled()
+    // The replay returns the unused hold before reporting the missing result, so a retry
+    // cannot strand it.
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      {},
+      'user-1',
+      2,
+      'asr-reservation-release',
+      expect.objectContaining({ requestId: 'asr-request-1' }),
+      { idempotencyKey: 'asr-release:asr-request-1:8', reservationLedgerId: RESERVATION_LEDGER_ID },
+    )
   })
 
   it.each([
@@ -605,7 +812,9 @@ describe('ASR Qwen Audio Flash synchronous path', () => {
 
   it('refuses a clip longer than the synchronous cap before creating a request or holding credits', async () => {
     registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
-    storeMocks.parseWavDurationSeconds.mockReturnValue(QWEN_AUDIO_ASR_MAX_DURATION_SECONDS + 0.1)
+    storeMocks.parseWavMetadata.mockReturnValue(
+      wavMetadata({ durationSeconds: QWEN_AUDIO_ASR_MAX_DURATION_SECONDS + 0.1 }),
+    )
     const qwen = qwenAdapter({ transcript: 'must not be requested', billedSeconds: 1 })
 
     await expect(
@@ -627,7 +836,9 @@ describe('ASR Qwen Audio Flash synchronous path', () => {
 
   it('admits a clip exactly at the synchronous cap', async () => {
     registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
-    storeMocks.parseWavDurationSeconds.mockReturnValue(QWEN_AUDIO_ASR_MAX_DURATION_SECONDS)
+    storeMocks.parseWavMetadata.mockReturnValue(
+      wavMetadata({ durationSeconds: QWEN_AUDIO_ASR_MAX_DURATION_SECONDS }),
+    )
 
     const result = await startAsrTranscription(
       {} as never,
@@ -684,7 +895,7 @@ describe('ASR Qwen Audio Flash synchronous path', () => {
       10,
       'asr-reservation-release',
       expect.objectContaining({ requestId: 'asr-request-1', failureCode: 'ASR_PROVIDER_REJECTED' }),
-      { idempotencyKey: 'asr-release:asr-request-1:0' },
+      { idempotencyKey: 'asr-release:asr-request-1:0', reservationLedgerId: RESERVATION_LEDGER_ID },
     )
     expect(storeMocks.markAsrReleased).toHaveBeenCalledWith({}, 'asr-request-1', 'ASR_PROVIDER_REJECTED')
     expect(storeMocks.putAsrResultObject).not.toHaveBeenCalled()
@@ -709,5 +920,388 @@ describe('ASR Qwen Audio Flash synchronous path', () => {
     expect(creditsMocks.releaseConsumedCredits).not.toHaveBeenCalled()
     expect(storeMocks.markAsrReleased).not.toHaveBeenCalled()
     expect(storeMocks.putAsrResultObject).not.toHaveBeenCalled()
+  })
+
+  /**
+   * A request reserved by an older deploy carries no ledger id, so the hold can only be found by
+   * the business key it was taken under. Releasing against a transient id would leave the real
+   * hold stranded the next time the same request is refunded.
+   */
+  it('recovers and persists the original reservation ledger of a legacy reserved request before releasing it', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
+    storeMocks.markAsrReserved.mockResolvedValue(request({ status: 'reserved', providerTaskId: null }))
+    creditsMocks.findCreditReservationLedgerId.mockResolvedValue('ledger-recovered-1')
+    const rejected = new DashScopeAsrError('ASR_PROVIDER_REJECTED', false)
+
+    await expect(
+      startAsrTranscription(
+        {} as never,
+        'user-1',
+        { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+        { qwenAdapter: qwenAdapter(rejected) },
+      ),
+    ).rejects.toBe(rejected)
+
+    expect(creditsMocks.findCreditReservationLedgerId).toHaveBeenCalledWith(
+      {},
+      'user-1',
+      'asr-reserve:asr-request-1',
+    )
+    expect(storeMocks.setAsrReservationLedgerId).toHaveBeenCalledWith({}, 'asr-request-1', 'ledger-recovered-1')
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      {},
+      'user-1',
+      10,
+      'asr-reservation-release',
+      expect.objectContaining({ requestId: 'asr-request-1', failureCode: 'ASR_PROVIDER_REJECTED' }),
+      { idempotencyKey: 'asr-release:asr-request-1:0', reservationLedgerId: 'ledger-recovered-1' },
+    )
+    // The id must be durable before it is used to move money.
+    expect(storeMocks.setAsrReservationLedgerId.mock.invocationCallOrder[0]).toBeLessThan(
+      creditsMocks.releaseConsumedCredits.mock.invocationCallOrder[0]!,
+    )
+  })
+
+  it('refuses to release a legacy reservation whose original hold cannot be found', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
+    storeMocks.markAsrReserved.mockResolvedValue(request({ status: 'reserved', providerTaskId: null }))
+    creditsMocks.findCreditReservationLedgerId.mockResolvedValue(null)
+    const rejected = new DashScopeAsrError('ASR_PROVIDER_REJECTED', false)
+
+    await expect(
+      startAsrTranscription(
+        {} as never,
+        'user-1',
+        { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+        { qwenAdapter: qwenAdapter(rejected) },
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      data: { errorCode: 'ASR_SETTLEMENT_INCOMPLETE' },
+    })
+
+    // Releasing without a ledger would refund an unrelated bucket, so nothing may move.
+    expect(creditsMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+    expect(storeMocks.setAsrReservationLedgerId).not.toHaveBeenCalled()
+    expect(storeMocks.markAsrReleased).not.toHaveBeenCalled()
+  })
+})
+
+describe('ASR same-key recovery precedence', () => {
+  const pricing = selectCreditPricingRule('audio.transcribe', DEFAULT_CREDIT_PRICING)
+
+  it('finishes a reserved request from its stored result without touching provider or admission gates', async () => {
+    // Both gates a brand-new request would need are made to explode, so this can only pass if
+    // the idempotent recovery is resolved before either is consulted.
+    registryMocks.listProviderRegistryEntries.mockRejectedValue(new Error('registry unavailable'))
+    pricingMocks.resolveCreditPricingRule.mockRejectedValue(new Error('pricing unavailable'))
+    storeMocks.getAsrRequestByIdempotency.mockResolvedValue(
+      request({ status: 'reserved', providerTaskId: null, reservationLedgerId: RESERVATION_LEDGER_ID }),
+    )
+    storeMocks.getAsrResultObject.mockResolvedValue({ transcript: 'recovered words', billedSeconds: 2 })
+    const qwen = qwenAdapter({ transcript: 'must not be requested', billedSeconds: 1 })
+
+    const result = await startAsrTranscription(
+      {} as never,
+      'user-1',
+      { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+      { qwenAdapter: qwen },
+    )
+
+    expect(result).toMatchObject({ status: 'settled', transcript: 'recovered words' })
+    expect(storeMocks.createAsrRequest).not.toHaveBeenCalled()
+    expect(creditsMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(registryMocks.listProviderRegistryEntries).not.toHaveBeenCalled()
+    expect(pricingMocks.resolveCreditPricingRule).not.toHaveBeenCalled()
+    expect(qwen.transcribe).not.toHaveBeenCalled()
+    // The stored result settles at the price quoted on the original admission.
+    expect(storeMocks.markAsrSettledFromReserved).toHaveBeenCalledWith(
+      {},
+      'asr-request-1',
+      calculateFiletransCredits(pricing, 'recovered words', 2),
+      2,
+      expect.any(Number),
+    )
+  })
+
+  it('returns a settled replay from its private result without re-releasing a released hold', async () => {
+    storeMocks.getAsrRequestByIdempotency.mockResolvedValue(
+      request({
+        status: 'settled',
+        providerTaskId: null,
+        chargedCredits: 8,
+        creditsReleasedAt: '2026-09-08T00:05:00.000Z',
+      }),
+    )
+    storeMocks.getAsrResultObject.mockResolvedValue({ transcript: 'stored transcript', billedSeconds: 2 })
+
+    const result = await startAsrTranscription({} as never, 'user-1', {
+      audio: Buffer.from('wav'),
+      contentType: 'audio/wav',
+      idempotencyKey: 'idempotency-key',
+    })
+
+    expect(result).toMatchObject({ status: 'settled', transcript: 'stored transcript' })
+    expect(creditsMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+    expect(storeMocks.markAsrCreditsReleased).not.toHaveBeenCalled()
+  })
+})
+
+describe('ASR synchronous admission gates', () => {
+  it('rejects an encoded body past the synchronous byte cap before creating a request or holding credits', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
+    // A canonical WAV header on a body that clears the generic 20 MiB cap but not the
+    // 14 MiB data-URI ceiling DashScope actually accepts.
+    const audio = Buffer.alloc(QWEN_AUDIO_ASR_MAX_RAW_BYTES + 1)
+    const qwen = qwenAdapter({ transcript: 'must not be requested', billedSeconds: 1 })
+
+    await expect(
+      startAsrTranscription(
+        {} as never,
+        'user-1',
+        { audio, contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+        { qwenAdapter: qwen },
+      ),
+    ).rejects.toMatchObject({ statusCode: 413, data: { errorCode: 'ASR_AUDIO_TOO_LARGE' } })
+
+    expect(storeMocks.createAsrRequest).not.toHaveBeenCalled()
+    expect(creditsMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(qwen.transcribe).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { name: 'a float encoding', metadata: wavMetadata({ encoding: 3 }) },
+    { name: 'stereo channels', metadata: wavMetadata({ channels: 2, byteRate: 64_000, blockAlign: 4 }) },
+    { name: 'a 44.1 kHz rate', metadata: wavMetadata({ sampleRate: 44_100, byteRate: 88_200 }) },
+    { name: '24-bit samples', metadata: wavMetadata({ bits: 24, byteRate: 48_000, blockAlign: 3 }) },
+  ])('refuses $name on the synchronous route before creating a request', async ({ metadata }) => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
+    storeMocks.parseWavMetadata.mockReturnValue(metadata)
+    const qwen = qwenAdapter({ transcript: 'must not be requested', billedSeconds: 1 })
+
+    await expect(
+      startAsrTranscription(
+        {} as never,
+        'user-1',
+        { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+        { qwenAdapter: qwen },
+      ),
+    ).rejects.toMatchObject({ statusCode: 400, data: { errorCode: 'ASR_AUDIO_FORMAT_UNSUPPORTED' } })
+
+    expect(storeMocks.createAsrRequest).not.toHaveBeenCalled()
+    expect(creditsMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(qwen.transcribe).not.toHaveBeenCalled()
+  })
+
+  it('forwards the validated sample rate and duration to the synchronous adapter', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
+    storeMocks.parseWavMetadata.mockReturnValue(wavMetadata({ durationSeconds: 12.5 }))
+    const qwen = qwenAdapter({ transcript: 'ok', billedSeconds: 12.5 })
+
+    await startAsrTranscription(
+      {} as never,
+      'user-1',
+      { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+      { qwenAdapter: qwen },
+    )
+
+    expect(qwen.transcribe).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ id: provider.id }),
+      expect.any(Buffer),
+      { model: 'qwen-audio-3.0-asr-flash', durationSeconds: 12.5, sampleRate: 16_000 },
+    )
+  })
+
+  it('asks the store to persist no source handoff on the synchronous route', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
+
+    await startAsrTranscription(
+      {} as never,
+      'user-1',
+      { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+      { qwenAdapter: qwenAdapter({ transcript: 'ok', billedSeconds: 1 }) },
+    )
+
+    // The synchronous route hands the bytes straight to the provider, so a stored WAV would be
+    // an unreferenced private object that only the TTL sweep could ever reclaim.
+    expect(storeMocks.createAsrRequest).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ storeHandoff: false }),
+    )
+  })
+
+  it('keeps the source handoff on the asynchronous Filetrans route', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([provider])
+
+    await startAsrTranscription(
+      {} as never,
+      'user-1',
+      { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+      { adapter: adapter({ status: 'pending' }) },
+    )
+
+    // The provider pulls the audio from a delivery URL later, so the source must exist until
+    // the request reaches a terminal state.
+    expect(storeMocks.createAsrRequest).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ storeHandoff: true }),
+    )
+  })
+
+  it('accepts a conflicting settle when the competing winner recorded identical accounting', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
+    storeMocks.markAsrSettledFromReserved.mockRejectedValueOnce(new Error('ASR_REQUEST_STATE_CONFLICT'))
+    const pricing = selectCreditPricingRule('audio.transcribe', DEFAULT_CREDIT_PRICING)
+    const charged = calculateFiletransCredits(pricing, 'alpha beta', 2)
+    storeMocks.getAsrRequest.mockResolvedValue(
+      request({
+        status: 'settled',
+        providerTaskId: null,
+        chargedCredits: charged,
+        billedSeconds: 2,
+        providerCostCny: calculateFiletransProviderCost(2),
+        reservationLedgerId: RESERVATION_LEDGER_ID,
+      }),
+    )
+
+    const result = await startAsrTranscription(
+      {} as never,
+      'user-1',
+      { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+      { qwenAdapter: qwenAdapter({ transcript: 'alpha beta', billedSeconds: 2 }) },
+    )
+
+    // A duplicate delivery of the same result is benign: the outside writer settled to the same
+    // numbers, so the response is that settled record rather than a spurious conflict.
+    expect(result).toMatchObject({ status: 'settled', creditsCharged: charged, billedSeconds: 2 })
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      {},
+      'user-1',
+      10 - charged,
+      'asr-reservation-release',
+      expect.objectContaining({ requestId: 'asr-request-1' }),
+      { idempotencyKey: `asr-release:asr-request-1:${charged}`, reservationLedgerId: RESERVATION_LEDGER_ID },
+    )
+  })
+
+  it('rejects a conflicting settle when the competing winner charged a different amount', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([qwenProvider()])
+    storeMocks.markAsrSettledFromReserved.mockRejectedValueOnce(new Error('ASR_REQUEST_STATE_CONFLICT'))
+    const pricing = selectCreditPricingRule('audio.transcribe', DEFAULT_CREDIT_PRICING)
+    const charged = calculateFiletransCredits(pricing, 'alpha beta', 2)
+    storeMocks.getAsrRequest.mockResolvedValue(
+      request({
+        status: 'settled',
+        providerTaskId: null,
+        chargedCredits: charged + 1,
+        billedSeconds: 2,
+        providerCostCny: calculateFiletransProviderCost(2),
+      }),
+    )
+
+    await expect(
+      startAsrTranscription(
+        {} as never,
+        'user-1',
+        { audio: Buffer.from('wav'), contentType: 'audio/wav', idempotencyKey: 'idempotency-key' },
+        { qwenAdapter: qwenAdapter({ transcript: 'alpha beta', billedSeconds: 2 }) },
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      data: { errorCode: 'ASR_SETTLEMENT_INCOMPLETE' },
+    })
+
+    // Two different charges for one request is exactly the over-charge this guard exists to stop:
+    // the conflict is surfaced instead of silently returning the other writer's settlement.
+    expect(creditsMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+  })
+})
+
+describe('ASR settlement maintenance', () => {
+  it('settles an expired reserved request from its result before the retention sweep deletes it', async () => {
+    storeMocks.listAsrSettlementMaintenanceRequests.mockResolvedValue([
+      request({ status: 'reserved', providerTaskId: null, reservationLedgerId: RESERVATION_LEDGER_ID }),
+    ])
+    storeMocks.getAsrResultObject.mockResolvedValue({ transcript: 'late result', billedSeconds: 2 })
+
+    const summary = await reconcileExpiredAsrSettlements({} as never)
+
+    expect(summary).toEqual({ scanned: 1, reconciled: 1, failed: 0 })
+    // Reading a result whose delivery window has passed is the whole point of this maintenance
+    // pass; without the override the store would hide it and the hold would stay stranded.
+    expect(storeMocks.getAsrResultObject).toHaveBeenCalledWith({}, expect.anything(), {
+      settlementRecovery: true,
+      allowExpiredSettlement: true,
+    })
+    expect(storeMocks.markAsrSettledFromReserved).toHaveBeenCalled()
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalled()
+  })
+
+  it('retries the release for a settled request whose result object is already gone', async () => {
+    storeMocks.listAsrSettlementMaintenanceRequests.mockResolvedValue([
+      request({
+        status: 'settled',
+        providerTaskId: null,
+        chargedCredits: 8,
+        billedSeconds: 2,
+        reservationLedgerId: RESERVATION_LEDGER_ID,
+      }),
+    ])
+    storeMocks.getAsrResultObject.mockResolvedValue(null)
+
+    const summary = await reconcileExpiredAsrSettlements({} as never)
+
+    expect(summary).toEqual({ scanned: 1, reconciled: 1, failed: 0 })
+    expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith(
+      {},
+      'user-1',
+      2,
+      'asr-reservation-release',
+      expect.objectContaining({ requestId: 'asr-request-1' }),
+      { idempotencyKey: 'asr-release:asr-request-1:8', reservationLedgerId: RESERVATION_LEDGER_ID },
+    )
+    expect(storeMocks.markAsrCreditsReleased).toHaveBeenCalledWith({}, 'asr-request-1')
+  })
+
+  it('leaves a settled request whose hold was already released alone', async () => {
+    storeMocks.listAsrSettlementMaintenanceRequests.mockResolvedValue([
+      request({
+        status: 'settled',
+        providerTaskId: null,
+        chargedCredits: 8,
+        creditsReleasedAt: '2026-09-08T00:05:00.000Z',
+      }),
+    ])
+
+    const summary = await reconcileExpiredAsrSettlements({} as never)
+
+    expect(summary).toEqual({ scanned: 1, reconciled: 1, failed: 0 })
+    expect(creditsMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+    expect(storeMocks.markAsrCreditsReleased).not.toHaveBeenCalled()
+  })
+
+  it('keeps reconciling after one request fails', async () => {
+    storeMocks.listAsrSettlementMaintenanceRequests.mockResolvedValue([
+      request({
+        id: 'asr-request-1',
+        status: 'settled',
+        providerTaskId: null,
+        chargedCredits: 8,
+        reservationLedgerId: RESERVATION_LEDGER_ID,
+      }),
+      request({
+        id: 'asr-request-2',
+        status: 'settled',
+        providerTaskId: null,
+        chargedCredits: 8,
+        reservationLedgerId: RESERVATION_LEDGER_ID,
+      }),
+    ])
+    creditsMocks.releaseConsumedCredits.mockRejectedValueOnce(new Error('ledger unavailable'))
+
+    const summary = await reconcileExpiredAsrSettlements({} as never)
+
+    expect(summary).toEqual({ scanned: 2, reconciled: 1, failed: 1 })
   })
 })

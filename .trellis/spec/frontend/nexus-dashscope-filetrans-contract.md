@@ -98,23 +98,23 @@ DashScope
 
 ### 3. Contracts
 
-- CoreApp sends validated WAV bytes and one opaque idempotency key only. Provider identity, model, endpoint, credential, pricing, and charge remain Nexus-owned.
-- Nexus encodes the WAV as a bounded `data:audio/wav;base64,...` input, uses the workspace-specific HTTPS `/api/v1` base when configured, and disables SSE. The synchronous route is capped at five minutes and at the adapter's encoded-input ceiling before credential resolution or network I/O.
-- Credits are reserved before dispatch. A normalized response is written to a private owner-bound result object, unused credits are released, and the request transitions directly from `reserved` to `settled`.
-- D1 request and credit rows never contain transcript text, audio bytes, the API key, endpoint, or native Provider errors. The private result object expires with the 15-minute request TTL and exists only for same-key/status recovery.
-- A missing response or malformed successful response is accepted-uncertain: fail terminally and do not retry or refund. A definitive Provider rejection before acceptance releases the hold.
-- When `audio.asr` has no enabled binding, a ready Nexus `audio.stt` route may back Voice Session through a bounded PCM buffer. It emits `ready`, one `final`, then `end`; it emits no synthetic partials and never replaces an explicitly configured but broken realtime binding.
+- CoreApp sends validated WAV bytes and one opaque idempotency key only. Buffered recovery reuses that key for the same audio. Capture snapshots the signed-in user and Nexus origin; a change before upload or delivery aborts and purges recoverable audio while same-user token refresh remains valid.
+- Nexus accepts the Qwen route only as canonical 16 kHz mono PCM16, rejects malformed/ambiguous RIFF chunks and encoded overflow before request creation or reservation, and sends the validated sample rate. CoreApp’s 10 MiB PCM bound covers five minutes; the 150-second client and 120-second Provider deadlines remain separate and bounded.
+- Credits are reserved before dispatch and the reservation ledger identity is persisted with the request. A normalized response is written to a private owner-bound result object, the final charge and `settled` state are persisted, then unused credits are released against the original team/month. `credits_released_at` is written only after the idempotent release succeeds.
+- Private result objects are pinned to the R2/memory backend and never share mutable external-storage governance. At expiry, background maintenance reconciles reserved result evidence and incomplete settled releases before deletion; this expiry bypass is never available to POST/GET clients. Cleanup durably marks result deletion, removes expired pre-acceptance `released` tombstones, and retains billing rows.
+- A missing response, HTTP 408/5xx, or malformed successful response is accepted-uncertain: fail terminally and do not retry or refund. Only definitive 4xx Provider rejection is pre-acceptance. Once a normalized result exists, interrupted settlement/release and concurrent CAS losers converge without another Provider call.
+- When `audio.asr` has no enabled binding, only the exact built-in Nexus `audio.stt` product alias may back Voice Session through the final-only buffer. It emits `ready`, one `final`, then `end`; it never replaces an explicitly configured broken realtime binding. Authenticated submissions are atomically rate-limited before their streaming 20 MiB body read.
 
 ### 4. Validation & Error Matrix
 
 | Condition | Result |
 | --- | --- |
 | Registry declarations disagree or name another model | `ASR_PROVIDER_CONFIGURATION_INVALID` before request creation |
-| WAV exceeds five minutes or encoded-input limit | stable 4xx / `ASR_AUDIO_TOO_LARGE`; no credential read, reservation, or Provider call |
+| WAV is non-canonical, not 16 kHz mono PCM16, exceeds five minutes, or exceeds encoded/body limits | stable 4xx before request creation, credential read, reservation, or Provider call |
 | Missing encrypted credential or invalid HTTPS `/api/v1` endpoint | stable configuration failure before network I/O |
-| Definitive non-2xx Provider response | release reservation once; no replay |
-| Transport outcome or 2xx response is unnormalizable | `ASR_DISPATCH_STATE_UNCERTAIN`; retain hold; no replay |
-| Settled result object is missing, foreign-owned, malformed, oversized, or expired | `ASR_RESULT_UNAVAILABLE`; never fabricate an empty transcript |
+| Definitive Provider 4xx response | release reservation once; no replay |
+| Transport failure, HTTP 408/5xx, or unnormalizable 2xx | `ASR_DISPATCH_STATE_UNCERTAIN`; retain hold; no Provider replay |
+| Settled result is unavailable or expired | finish any pending idempotent credit release, then return `ASR_RESULT_UNAVAILABLE`; never expose expiry-only reconciliation or fabricate an empty transcript |
 | Existing enabled `audio.asr` binding is unavailable | surface its stable error; do not fall back to buffered STT |
 
 ### 5. Good / Base / Bad Cases

@@ -55,64 +55,50 @@ export async function enforceAdminRateLimit(
 ) {
   const db = requireDb(event)
   await ensureSchema(db)
+  if (!Number.isInteger(input.limit) || input.limit <= 0 || !Number.isFinite(input.windowMs) || input.windowMs <= 0)
+    throw new Error('Invalid rate limit configuration.')
 
   const now = Date.now()
   const windowStart = Math.floor(now / input.windowMs) * input.windowMs
   const blockMs = input.blockMs ?? input.windowMs
-
+  if (!Number.isFinite(blockMs) || blockMs <= 0) throw new Error('Invalid rate limit configuration.')
+  const blockedUntil = now + blockMs
   const row = await db.prepare(`
-    SELECT key, window_start, count, blocked_until
-    FROM ${RATE_LIMIT_TABLE}
-    WHERE key = ?1
-    LIMIT 1;
-  `).bind(input.key).first<{
+    INSERT INTO ${RATE_LIMIT_TABLE} (
+      key, window_start, count, blocked_until, updated_at
+    ) VALUES (?1, ?2, 1, NULL, ?3)
+    ON CONFLICT(key) DO UPDATE SET
+      window_start = CASE
+        WHEN ${RATE_LIMIT_TABLE}.blocked_until > ?3 THEN ${RATE_LIMIT_TABLE}.window_start
+        ELSE ?2
+      END,
+      count = CASE
+        WHEN ${RATE_LIMIT_TABLE}.blocked_until > ?3 THEN ${RATE_LIMIT_TABLE}.count
+        WHEN ${RATE_LIMIT_TABLE}.window_start = ?2 THEN ${RATE_LIMIT_TABLE}.count + 1
+        ELSE 1
+      END,
+      blocked_until = CASE
+        WHEN ${RATE_LIMIT_TABLE}.blocked_until > ?3 THEN ${RATE_LIMIT_TABLE}.blocked_until
+        WHEN (
+          CASE
+            WHEN ${RATE_LIMIT_TABLE}.window_start = ?2 THEN ${RATE_LIMIT_TABLE}.count + 1
+            ELSE 1
+          END
+        ) > ?4 THEN ?5
+        ELSE NULL
+      END,
+      updated_at = ?3
+    RETURNING key, window_start, count, blocked_until;
+  `).bind(input.key, windowStart, now, input.limit, blockedUntil).first<{
     key: string
     window_start: number
     count: number
     blocked_until: number | null
   }>()
-
-  if (row?.blocked_until && row.blocked_until > now) {
+  if (!row) throw new Error('Rate limit update failed.')
+  if (row.blocked_until && row.blocked_until > now) {
     const retryAfterSeconds = Math.ceil((row.blocked_until - now) / 1000)
     setRateLimitHeaders(event, retryAfterSeconds)
-    throw createError({
-      statusCode: 429,
-      statusMessage: 'Rate limited',
-    })
+    throw createError({ statusCode: 429, statusMessage: 'Rate limited' })
   }
-
-  const sameWindow = row?.window_start === windowStart
-  const nextCount = sameWindow ? Number(row?.count ?? 0) + 1 : 1
-
-  if (nextCount > input.limit) {
-    const blockedUntil = now + blockMs
-    await db.prepare(`
-      INSERT INTO ${RATE_LIMIT_TABLE} (
-        key, window_start, count, blocked_until, updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5)
-      ON CONFLICT(key) DO UPDATE SET
-        window_start = excluded.window_start,
-        count = excluded.count,
-        blocked_until = excluded.blocked_until,
-        updated_at = excluded.updated_at;
-    `).bind(input.key, windowStart, nextCount, blockedUntil, now).run()
-
-    const retryAfterSeconds = Math.ceil(blockMs / 1000)
-    setRateLimitHeaders(event, retryAfterSeconds)
-    throw createError({
-      statusCode: 429,
-      statusMessage: 'Rate limited',
-    })
-  }
-
-  await db.prepare(`
-    INSERT INTO ${RATE_LIMIT_TABLE} (
-      key, window_start, count, blocked_until, updated_at
-    ) VALUES (?1, ?2, ?3, NULL, ?4)
-    ON CONFLICT(key) DO UPDATE SET
-      window_start = excluded.window_start,
-      count = excluded.count,
-      blocked_until = NULL,
-      updated_at = excluded.updated_at;
-  `).bind(input.key, windowStart, nextCount, now).run()
 }

@@ -3,8 +3,12 @@ import type { H3Event } from 'h3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ASR_RESULT_MAX_BYTES,
+  cleanupExpiredAsrResultObjects,
+  cleanupExpiredReleasedAsrRequests,
+  deleteAsrHandoffObject,
   getAsrResultObject,
   putAsrResultObject,
+  scheduleExpiredAsrResultCleanup,
   type AsrRequestRecord,
   type AsrSynchronousResult,
 } from './asrTranscriptionStore'
@@ -77,8 +81,79 @@ function resultObjectKey(id: string = REQUEST_ID): string {
   return `asr-result/${id}.json`
 }
 
+class CleanupStatement {
+  constructor(
+    private readonly database: CleanupDatabase,
+    private readonly sql: string,
+    private readonly args: unknown[] = [],
+  ) {}
+
+  bind(...args: unknown[]) {
+    return new CleanupStatement(this.database, this.sql, args)
+  }
+
+  async run() {
+    if (this.sql.includes('SET result_deleted_at = ?')) {
+      const [deletedAt, , id] = this.args
+      const row = this.database.rows.find(candidate => String(candidate.id) === String(id))
+      if (!row || row.result_deleted_at != null) return { meta: { changes: 0 } }
+      row.result_deleted_at = deletedAt
+      row.updated_at = deletedAt
+      return { meta: { changes: 1 } }
+    }
+    if (this.sql.includes('DELETE FROM') && this.sql.includes("status = 'released'")) {
+      const [id] = this.args
+      const index = this.database.rows.findIndex(
+        row => String(row.id) === String(id) && row.status === 'released',
+      )
+      if (index < 0) return { meta: { changes: 0 } }
+      this.database.rows.splice(index, 1)
+      return { meta: { changes: 1 } }
+    }
+    return { meta: { changes: 0 } }
+  }
+
+  async all<T>() {
+    if (this.sql.includes('PRAGMA table_info')) {
+      return { results: [{ name: 'pricing_snapshot' }] as T[] }
+    }
+    if (!this.sql.includes('delivery_expires_at <= ?')) return { results: [] as T[] }
+    const cutoff = String(this.args[0] ?? '')
+    const limit = Number(this.args[1] ?? 0)
+    const releasedSweep = this.sql.includes("status = 'released'")
+    const results = this.database.rows
+      .filter((row) => {
+        if (String(row.delivery_expires_at) > cutoff) return false
+        if (releasedSweep) return row.status === 'released'
+        return (
+          (row.status === 'settled' || row.status === 'failed') &&
+          row.provider_task_id === null &&
+          (row.result_deleted_at === null || row.result_deleted_at === undefined)
+        )
+      })
+      .sort((left, right) => String(left.delivery_expires_at).localeCompare(String(right.delivery_expires_at)))
+      .slice(0, limit)
+    return { results: results as T[] }
+  }
+}
+
+class CleanupDatabase {
+  constructor(readonly rows: Array<Record<string, unknown>>) {}
+
+  prepare(sql: string) {
+    return new CleanupStatement(this, sql)
+  }
+}
+
 function event(): H3Event {
   return { context: {}, path: '/test/asr-result' } as unknown as H3Event
+}
+
+function cleanupEvent(database: CleanupDatabase): H3Event {
+  return {
+    context: { cloudflare: { env: { DB: database } } },
+    path: '/test/asr-result-cleanup',
+  } as unknown as H3Event
 }
 
 function request(overrides: Partial<AsrRequestRecord> = {}): AsrRequestRecord {
@@ -98,7 +173,9 @@ function request(overrides: Partial<AsrRequestRecord> = {}): AsrRequestRecord {
     providerTaskId: null,
     status: 'settled',
     reservedCredits: 20,
+    reservationLedgerId: null,
     chargedCredits: 8,
+    creditsReleasedAt: null,
     billedSeconds: 2,
     providerCostCny: 0.00044,
     failureCode: null,
@@ -109,8 +186,38 @@ function request(overrides: Partial<AsrRequestRecord> = {}): AsrRequestRecord {
   }
 }
 
-function seed(overrides: Partial<StoredObject> = {}) {
-  storage.objects.set(resultObjectKey(), {
+function requestRow(value: AsrRequestRecord): Record<string, unknown> {
+  return {
+    id: value.id,
+    user_id: value.userId,
+    provider_id: value.providerId,
+    capability: value.capability,
+    idempotency_key: value.idempotencyKey,
+    request_hash: value.requestHash,
+    object_key: value.objectKey,
+    content_type: value.contentType,
+    byte_size: value.byteSize,
+    duration_seconds: value.durationSeconds,
+    delivery_token_hash: value.deliveryTokenHash,
+    delivery_expires_at: value.deliveryExpiresAt,
+    provider_task_id: value.providerTaskId,
+    status: value.status,
+    reserved_credits: value.reservedCredits,
+    reservation_ledger_id: value.reservationLedgerId,
+    charged_credits: value.chargedCredits,
+    billed_seconds: value.billedSeconds,
+    provider_cost_cny: value.providerCostCny,
+    failure_code: value.failureCode,
+    pricing_snapshot: null,
+    // Rows seeded here are the not-yet-swept ones; the sweep's own UPDATE is what stamps this.
+    result_deleted_at: null,
+    created_at: value.createdAt,
+    updated_at: value.updatedAt,
+  }
+}
+
+function seed(overrides: Partial<StoredObject> = {}, requestId: string = REQUEST_ID) {
+  storage.objects.set(resultObjectKey(requestId), {
     data: Buffer.from(JSON.stringify({ transcript: 'stored', billedSeconds: 1 }), 'utf8'),
     contentType: 'application/json',
     ownerId: 'user-a',
@@ -205,5 +312,261 @@ describe('ASR synchronous result object storage', () => {
     await expect(getAsrResultObject(event(), request({ status: 'reserved' }))).resolves.toBeNull()
 
     expect(storage.objects.has(resultObjectKey())).toBe(true)
+  })
+
+  it('sweeps expired settled and failed results while preserving future, dispatched, and reserved work', async () => {
+    const now = new Date('2026-09-13T01:00:00.000Z')
+    const expiredSettled = request({
+      id: 'asr_11111111-2222-4333-8444-555555555551',
+      deliveryExpiresAt: '2026-09-13T00:59:00.000Z',
+    })
+    const future = request({
+      id: 'asr_11111111-2222-4333-8444-555555555552',
+      deliveryExpiresAt: '2026-09-13T01:01:00.000Z',
+    })
+    const dispatched = request({
+      id: 'asr_11111111-2222-4333-8444-555555555553',
+      status: 'dispatching',
+      providerTaskId: 'task-1',
+      deliveryExpiresAt: '2026-09-13T00:58:00.000Z',
+    })
+    // A reserved row's result is private recovery state: the settlement reconciler owns it, since
+    // only it can decide whether the hold becomes a charge or a release. The retention sweep must
+    // not reclaim its evidence out from under that pass.
+    const expiredReserved = request({
+      id: 'asr_11111111-2222-4333-8444-555555555554',
+      status: 'reserved',
+      chargedCredits: null,
+      deliveryExpiresAt: '2026-09-13T00:59:00.000Z',
+    })
+    // A failure that stored its diagnostic result before dying is still a private object; if the
+    // sweep only matched settled rows it would retain that transcript forever.
+    const expiredFailed = request({
+      id: 'asr_11111111-2222-4333-8444-555555555555',
+      status: 'failed',
+      chargedCredits: null,
+      failureCode: 'ASR_PROVIDER_REJECTED',
+      deliveryExpiresAt: '2026-09-13T00:59:00.000Z',
+    })
+    for (const item of [expiredSettled, future, dispatched, expiredReserved, expiredFailed])
+      seed({}, item.id)
+    const database = new CleanupDatabase([
+      requestRow(expiredSettled),
+      requestRow(future),
+      requestRow(dispatched),
+      requestRow(expiredReserved),
+      requestRow(expiredFailed),
+    ])
+
+    await expect(cleanupExpiredAsrResultObjects(cleanupEvent(database), { now })).resolves.toEqual({
+      scanned: 2,
+      deleted: 2,
+      failed: 0,
+    })
+    expect(storage.objects.has(resultObjectKey(expiredSettled.id))).toBe(false)
+    expect(storage.objects.has(resultObjectKey(expiredFailed.id))).toBe(false)
+    expect(storage.objects.has(resultObjectKey(future.id))).toBe(true)
+    expect(storage.objects.has(resultObjectKey(dispatched.id))).toBe(true)
+    // Still held for the reconciler despite being long past its delivery TTL.
+    expect(storage.objects.has(resultObjectKey(expiredReserved.id))).toBe(true)
+  })
+
+  /**
+   * Without the `result_deleted_at` marker every bounded sweep re-selects the same oldest row,
+   * so a backlog behind it is never reached. Two page-sized sweeps must each make progress.
+   */
+  it('marks each swept row so a later page reclaims the next expired result', async () => {
+    const now = new Date('2026-09-13T01:00:00.000Z')
+    const first = request({
+      id: 'asr_11111111-2222-4333-8444-555555555561',
+      deliveryExpiresAt: '2026-09-13T00:58:00.000Z',
+    })
+    const second = request({
+      id: 'asr_11111111-2222-4333-8444-555555555562',
+      deliveryExpiresAt: '2026-09-13T00:59:00.000Z',
+    })
+    for (const item of [first, second]) seed({}, item.id)
+    const database = new CleanupDatabase([requestRow(first), requestRow(second)])
+    const target = cleanupEvent(database)
+
+    await expect(cleanupExpiredAsrResultObjects(target, { now, batchLimit: 1 })).resolves.toEqual({
+      scanned: 1,
+      deleted: 1,
+      failed: 0,
+    })
+    await expect(cleanupExpiredAsrResultObjects(target, { now, batchLimit: 1 })).resolves.toEqual({
+      scanned: 1,
+      deleted: 1,
+      failed: 0,
+    })
+
+    expect(storage.objects.has(resultObjectKey(first.id))).toBe(false)
+    expect(storage.objects.has(resultObjectKey(second.id))).toBe(false)
+    expect(database.rows.every((row) => typeof row.result_deleted_at === 'string')).toBe(true)
+  })
+
+  it('reports a failed deletion so a later sweep retries the same row', async () => {
+    const expired = request({ deliveryExpiresAt: '2026-09-13T00:59:00.000Z' })
+    seed()
+    storage.deleteStorageObject.mockRejectedValueOnce(new Error('storage unavailable'))
+    const database = new CleanupDatabase([requestRow(expired)])
+    const target = cleanupEvent(database)
+    const now = new Date('2026-09-13T01:00:00.000Z')
+
+    await expect(cleanupExpiredAsrResultObjects(target, { now })).resolves.toEqual({
+      scanned: 1,
+      deleted: 0,
+      failed: 1,
+    })
+    expect(storage.objects.has(resultObjectKey())).toBe(true)
+    expect(database.rows[0]?.result_deleted_at).toBeNull()
+
+    // A row is only marked swept after its object is gone, so the next sweep must pick it up.
+    await expect(cleanupExpiredAsrResultObjects(target, { now })).resolves.toEqual({
+      scanned: 1,
+      deleted: 1,
+      failed: 0,
+    })
+    expect(storage.objects.has(resultObjectKey())).toBe(false)
+  })
+})
+
+describe('ASR released tombstone cleanup', () => {
+  beforeEach(() => {
+    storage.objects.clear()
+    storage.deleteStorageObject.mockClear()
+  })
+
+  const now = new Date('2026-09-13T01:00:00.000Z')
+
+  function released(overrides: Partial<AsrRequestRecord> = {}): AsrRequestRecord {
+    return request({
+      status: 'released',
+      chargedCredits: null,
+      billedSeconds: null,
+      providerCostCny: null,
+      failureCode: 'ASR_PROVIDER_REJECTED',
+      deliveryExpiresAt: '2026-09-13T00:59:00.000Z',
+      ...overrides,
+    })
+  }
+
+  function seedHandoff(item: AsrRequestRecord): void {
+    storage.objects.set(item.objectKey, {
+      data: Buffer.from('raw audio', 'utf8'),
+      contentType: 'audio/wav',
+      ownerId: item.userId,
+      storesOwnership: true,
+    })
+  }
+
+  it('deletes an expired released row and both of its private objects', async () => {
+    const tombstone = released()
+    seed({}, tombstone.id)
+    seedHandoff(tombstone)
+    const database = new CleanupDatabase([requestRow(tombstone)])
+
+    await expect(
+      cleanupExpiredReleasedAsrRequests(cleanupEvent(database), { now }),
+    ).resolves.toEqual({ scanned: 1, deleted: 1, failed: 0 })
+
+    // Reclaiming the row is what frees its idempotency key; reclaiming the objects is what
+    // removes the raw audio from the private bucket. Zero-credit key abuse depends on both.
+    expect(database.rows).toHaveLength(0)
+    expect(storage.objects.has(resultObjectKey(tombstone.id))).toBe(false)
+    expect(storage.objects.has(tombstone.objectKey)).toBe(false)
+  })
+
+  it('keeps a released row that is still inside its idempotency window', async () => {
+    const live = released({ deliveryExpiresAt: '2026-09-13T02:00:00.000Z' })
+    seed({}, live.id)
+    seedHandoff(live)
+    const database = new CleanupDatabase([requestRow(live)])
+
+    await expect(
+      cleanupExpiredReleasedAsrRequests(cleanupEvent(database), { now }),
+    ).resolves.toEqual({ scanned: 0, deleted: 0, failed: 0 })
+
+    expect(database.rows).toHaveLength(1)
+    expect(storage.objects.has(resultObjectKey(live.id))).toBe(true)
+    expect(storage.objects.has(live.objectKey)).toBe(true)
+  })
+
+  it('leaves expired non-released rows for the result sweep', async () => {
+    const settled = request({
+      id: 'asr_11111111-2222-4333-8444-555555555571',
+      deliveryExpiresAt: '2026-09-13T00:59:00.000Z',
+    })
+    seed({}, settled.id)
+    const database = new CleanupDatabase([requestRow(settled)])
+
+    await expect(
+      cleanupExpiredReleasedAsrRequests(cleanupEvent(database), { now }),
+    ).resolves.toEqual({ scanned: 0, deleted: 0, failed: 0 })
+
+    expect(database.rows).toHaveLength(1)
+    expect(storage.objects.has(resultObjectKey(settled.id))).toBe(true)
+  })
+})
+
+describe('ASR result cleanup scheduling', () => {
+  it('reconciles expired settlements before the retention sweep deletes their evidence', async () => {
+    storage.objects.clear()
+    const expired = request({ deliveryExpiresAt: '2026-09-13T00:59:00.000Z' })
+    seed({}, expired.id)
+    const database = new CleanupDatabase([requestRow(expired)])
+
+    let scheduled: Promise<unknown> | null = null
+    const reconcile = vi.fn(async () => {
+      // The reconciliation pass is the only thing that can still settle this row, and it needs
+      // the private result to do it. If the sweep went first, this assertion is what fails.
+      expect(storage.objects.has(resultObjectKey(expired.id))).toBe(true)
+    })
+    const target = {
+      context: {
+        cloudflare: { env: { DB: database } },
+        waitUntil: (promise: Promise<unknown>) => {
+          scheduled = promise
+        },
+      },
+      path: '/test/asr-result-cleanup-schedule',
+    } as unknown as H3Event
+
+    scheduleExpiredAsrResultCleanup(target, reconcile)
+    expect(scheduled).not.toBeNull()
+    await scheduled!
+
+    expect(reconcile).toHaveBeenCalledTimes(1)
+    expect(storage.objects.has(resultObjectKey(expired.id))).toBe(false)
+  })
+})
+
+describe('ASR private object backend pinning', () => {
+  beforeEach(() => {
+    storage.objects.clear()
+    storage.putStorageObject.mockClear()
+    storage.getStorageObject.mockClear()
+    storage.deleteStorageObject.mockClear()
+  })
+
+  it('pins every private handoff and result object to the in-app backend', async () => {
+    // `externalStorage: null` is a deliberate override, not a default: leaving it undefined lets
+    // the store resolve an operator-configured storage channel and route raw audio and
+    // transcripts into a third-party bucket. Asserting the boundary receives an explicit null is
+    // asserting that decision; the external-resolution path is covered by storageObjectStore.
+    await putAsrResultObject(event(), request(), { transcript: 'ok', billedSeconds: 1 })
+    expect(storage.putStorageObject).toHaveBeenLastCalledWith(
+      expect.objectContaining({ externalStorage: null }),
+    )
+
+    await getAsrResultObject(event(), request())
+    expect(storage.getStorageObject).toHaveBeenLastCalledWith(
+      expect.objectContaining({ externalStorage: null }),
+    )
+
+    await deleteAsrHandoffObject(event(), request())
+    expect(storage.deleteStorageObject).toHaveBeenLastCalledWith(
+      expect.objectContaining({ externalStorage: null }),
+    )
   })
 })

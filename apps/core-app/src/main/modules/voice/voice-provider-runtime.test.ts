@@ -5,7 +5,11 @@ const runtime = vi.hoisted(() => ({
   providers: {} as Record<string, { getConfig: () => Record<string, unknown> }>,
   credentials: {} as Record<string, string>,
   ensureLoaded: vi.fn(),
-  supportsCapability: vi.fn()
+  supportsCapability: vi.fn(),
+  stt: vi.fn(),
+  authToken: 'nexus-session-token' as string | null,
+  authUserId: 'user-1' as string | null,
+  nexusBaseUrl: 'https://nexus.example.com'
 }))
 const adapterOptions = vi.hoisted(() => ({
   bailian: [] as Array<Record<string, unknown>>,
@@ -26,14 +30,25 @@ vi.mock('../ai/intelligence-sdk', () => ({
   getIntelligenceProviderManager: () => ({
     get: (providerId: string) => runtime.providers[providerId]
   }),
-  providerSupportsCapability: runtime.supportsCapability
+  providerSupportsCapability: runtime.supportsCapability,
+  tuffIntelligence: { audio: { stt: runtime.stt } }
 }))
 vi.mock('../ai/provider-credential-runtime', () => ({
   resolveProviderCredential: (provider: { id: string }) => runtime.credentials[provider.id]
 }))
 // The Nexus-managed route is authorised by the signed-in session token rather than a per-provider
 // credential, so the fallback path is only reachable with a token present.
-vi.mock('../auth', () => ({ getAuthToken: () => 'nexus-session-token' }))
+vi.mock('../auth', () => ({
+  getAuthToken: () => runtime.authToken,
+  getSanitizedAuthSessionState: () => ({
+    isLoaded: true,
+    isSignedIn: runtime.authUserId !== null,
+    user: runtime.authUserId ? { id: runtime.authUserId } : null
+  })
+}))
+vi.mock('../nexus/runtime-base', () => ({
+  getRuntimeNexusBaseUrl: () => runtime.nexusBaseUrl
+}))
 vi.mock('@talex-touch/tuff-voice', () => ({
   createFetchHttpClient: vi.fn(() => ({ request: vi.fn() })),
   createNodeVoiceSocketFactory: vi.fn(() => ({ connect: vi.fn() })),
@@ -74,6 +89,11 @@ vi.mock('@talex-touch/tuff-voice', () => ({
 }))
 
 import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
+import type {
+  VoiceProviderAdapter,
+  VoiceProviderEvent,
+  VoiceStreamRequest
+} from '@talex-touch/tuff-voice'
 import { getConfiguredAsrProvider, getRecognitionStatus } from './voice-provider-runtime'
 
 function channel(
@@ -138,6 +158,10 @@ describe('capability-bound voice ASR provider resolution', () => {
     runtime.bindings = {}
     runtime.providers = {}
     runtime.credentials = {}
+    runtime.authToken = 'nexus-session-token'
+    runtime.authUserId = 'user-1'
+    runtime.nexusBaseUrl = 'https://nexus.example.com'
+    runtime.stt.mockReset()
     adapterOptions.bailian = []
     adapterOptions.qwen = []
     adapterOptions.doubao = []
@@ -407,5 +431,70 @@ describe('capability-bound voice ASR provider resolution', () => {
     expect(getRecognitionStatus().asr).toEqual({ ready: false, reason })
     expect(() => getConfiguredAsrProvider()).toThrow(reason)
     expect(adapterOptions.bailian).toEqual([])
+  })
+
+  function bufferedRequest(): VoiceStreamRequest {
+    return {
+      model: NEXUS_AUDIO_TRANSCRIBE_MODEL,
+      requestId: 'req-buffered-1',
+      audio: { format: 'pcm', sampleRate: 16_000, channels: 1, bitsPerSample: 16 }
+    }
+  }
+
+  async function collect(events: AsyncIterable<VoiceProviderEvent>): Promise<VoiceProviderEvent[]> {
+    const out: VoiceProviderEvent[] = []
+    for await (const event of events) out.push(event)
+    return out
+  }
+
+  async function recordClip(provider: VoiceProviderAdapter): Promise<VoiceProviderEvent[]> {
+    const stream = await provider.createStream(bufferedRequest())
+    await stream.writePcm(new Uint8Array([0x01, 0x02]))
+    await stream.end()
+    return await collect(stream.events)
+  }
+
+  it('freezes the capture-start account so a later switch aborts the recording without calling STT', async () => {
+    configure({ 'tuff-nexus-default': nexusSttChannel() }, { 'audio.stt': [nexusSttBinding()] })
+    // Resolving before capture is what fixes user-1 as the owner of this recording; later
+    // attempts must reuse that provider rather than re-resolving under the new account.
+    const provider = getConfiguredAsrProvider().provider
+    runtime.authUserId = 'user-2'
+
+    const events = await recordClip(provider)
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      type: 'error',
+      code: 'VOICE_ASR_AUTHORITY_CHANGED',
+      retryable: false
+    })
+    // The upload is what must not happen: a switched account must not bill or leak the audio.
+    expect(runtime.stt).not.toHaveBeenCalled()
+  })
+
+  it('freezes the capture-start Nexus origin so a later origin switch aborts without calling STT', async () => {
+    configure({ 'tuff-nexus-default': nexusSttChannel() }, { 'audio.stt': [nexusSttBinding()] })
+    const provider = getConfiguredAsrProvider().provider
+    runtime.nexusBaseUrl = 'https://attacker.example.com'
+
+    const events = await recordClip(provider)
+
+    expect(events[0]).toMatchObject({ type: 'error', code: 'VOICE_ASR_AUTHORITY_CHANGED' })
+    expect(runtime.stt).not.toHaveBeenCalled()
+  })
+
+  it('keeps the frozen recording usable across a same-account token refresh', async () => {
+    configure({ 'tuff-nexus-default': nexusSttChannel() }, { 'audio.stt': [nexusSttBinding()] })
+    runtime.stt.mockResolvedValueOnce({ result: { text: 'hello' } })
+    const provider = getConfiguredAsrProvider().provider
+    // A re-issued access token is the same principal and origin; it must not invalidate the hold.
+    runtime.authToken = 'refreshed-session-token'
+
+    const events = await recordClip(provider)
+
+    expect(events.map((event) => event.type)).toEqual(['final', 'end'])
+    expect(events[0]).toMatchObject({ type: 'final', text: 'hello' })
+    expect(runtime.stt).toHaveBeenCalledTimes(1)
   })
 })

@@ -7,8 +7,13 @@ import { Buffer } from 'node:buffer'
 const FILETRANS_MODEL = 'qwen-audio-3.0-asr-flash-filetrans'
 export const QWEN_AUDIO_ASR_MODEL = 'qwen-audio-3.0-asr-flash'
 export const QWEN_AUDIO_ASR_TRANSPORT = 'qwen-audio-sync'
-const QWEN_AUDIO_ASR_MAX_DATA_URI_BYTES = 10 * 1024 * 1024
+const QWEN_AUDIO_ASR_MAX_DATA_URI_BYTES = 14 * 1024 * 1024
+const QWEN_AUDIO_ASR_DATA_URI_PREFIX = 'data:audio/wav;base64,'
+export const QWEN_AUDIO_ASR_MAX_RAW_BYTES =
+  Math.floor((QWEN_AUDIO_ASR_MAX_DATA_URI_BYTES - Buffer.byteLength(QWEN_AUDIO_ASR_DATA_URI_PREFIX)) / 4) * 3
 export const QWEN_AUDIO_ASR_MAX_DURATION_SECONDS = 5 * 60
+const QWEN_AUDIO_ASR_DEFAULT_TIMEOUT_MS = 120_000
+const QWEN_AUDIO_ASR_MAX_TIMEOUT_MS = 5 * 60 * 1000
 
 export type DashScopeAsrTransport = 'filetrans' | typeof QWEN_AUDIO_ASR_TRANSPORT
 
@@ -46,6 +51,7 @@ export type DashScopeFiletransTask =
 export interface DashScopeQwenAudioAsrAdapterOptions {
   fetch?: typeof fetch
   maxDataUriBytes?: number
+  requestTimeoutMs?: number
 }
 
 export interface DashScopeQwenAudioAsrTranscription {
@@ -283,6 +289,7 @@ export interface DashScopeQwenAudioAsrTranscribeOptions {
 export class DashScopeQwenAudioAsrAdapter {
   private readonly fetcher: typeof fetch
   private readonly maxDataUriBytes: number
+  private readonly requestTimeoutMs: number
 
   constructor(options: DashScopeQwenAudioAsrAdapterOptions = {}) {
     this.fetcher = options.fetch ?? fetch
@@ -290,6 +297,10 @@ export class DashScopeQwenAudioAsrAdapter {
       Number.isFinite(options.maxDataUriBytes) && (options.maxDataUriBytes ?? 0) > 0
         ? Math.floor(options.maxDataUriBytes!)
         : QWEN_AUDIO_ASR_MAX_DATA_URI_BYTES
+    this.requestTimeoutMs =
+      Number.isFinite(options.requestTimeoutMs) && (options.requestTimeoutMs ?? 0) > 0
+        ? Math.min(Math.floor(options.requestTimeoutMs!), QWEN_AUDIO_ASR_MAX_TIMEOUT_MS)
+        : QWEN_AUDIO_ASR_DEFAULT_TIMEOUT_MS
   }
 
   async transcribe(
@@ -313,8 +324,9 @@ export class DashScopeQwenAudioAsrAdapter {
       throw new DashScopeAsrError('ASR_PROVIDER_CONFIGURATION_INVALID', false)
     }
 
-    const dataPrefix = 'data:audio/wav;base64,'
-    const maxRawBytes = Math.floor(((this.maxDataUriBytes - Buffer.byteLength(dataPrefix)) * 3) / 4)
+    const dataPrefix = QWEN_AUDIO_ASR_DATA_URI_PREFIX
+    const maxRawBytes =
+      Math.floor((this.maxDataUriBytes - Buffer.byteLength(dataPrefix)) / 4) * 3
     if (maxRawBytes <= 0 || audio.byteLength > maxRawBytes) {
       throw new DashScopeAsrError('ASR_AUDIO_TOO_LARGE', false)
     }
@@ -327,6 +339,10 @@ export class DashScopeQwenAudioAsrAdapter {
     const credential = await getProviderCredential(event, provider.authRef!)
     const apiKey = readProviderApiKey(credential)
     const language = normalizeQwenLanguageHint(options.language)
+    const deadlineSignal = AbortSignal.timeout(this.requestTimeoutMs)
+    const requestSignal = options.signal
+      ? AbortSignal.any([options.signal, deadlineSignal])
+      : deadlineSignal
     const response = await this.fetcher(resolveTaskUrl(baseUrl, 'services/aigc/multimodal-generation/generation'), {
       method: 'POST',
       headers: {
@@ -355,7 +371,7 @@ export class DashScopeQwenAudioAsrAdapter {
           ...(language ? { language_hints: [language] } : {}),
         },
       }),
-      signal: options.signal,
+      signal: requestSignal,
     }).catch(() => {
       // A missing response may still mean DashScope accepted the request. The caller must not
       // replay it automatically, so this is marked accepted for the request state machine.
@@ -363,7 +379,13 @@ export class DashScopeQwenAudioAsrAdapter {
     })
 
     const body = await readJson(response)
-    if (!response.ok) throw new DashScopeAsrError('ASR_PROVIDER_REJECTED', false)
+    if (!response.ok) {
+      const accepted = response.status === 408 || response.status >= 500
+      throw new DashScopeAsrError(
+        accepted ? 'ASR_PROVIDER_UNAVAILABLE' : 'ASR_PROVIDER_REJECTED',
+        accepted,
+      )
+    }
     const transcript = extractQwenAudioTranscript(body)
     if (!transcript) throw new DashScopeAsrError('ASR_PROVIDER_RESPONSE_INVALID', true)
 

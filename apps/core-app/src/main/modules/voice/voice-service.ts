@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { StorageList } from '@talex-touch/utils'
 import {
   DEFAULT_VOICE_POLISH_STRENGTH,
@@ -181,6 +182,7 @@ const CAPTURE_HARD_TIMEOUT_GRACE_MS = 2_000
  */
 export const POLISH_TIMEOUT_MS = 8_000
 const CAPABILITY_TIMEOUT_MS = 30_000
+const BUFFERED_TRANSCRIPTION_TIMEOUT_MS = 150_000
 const TRANSCRIPTION_TIMEOUT_MS = 600_000
 
 function pcmRms(chunk: Buffer): number {
@@ -262,6 +264,8 @@ type MergedStreamItem =
 
 interface RetryBuffer {
   captureId: string
+  providerRequestId: string
+  reuseProviderRequestId: boolean
   chunks: Buffer[]
   bytes: number
   sampleRate: number
@@ -269,6 +273,7 @@ interface RetryBuffer {
   /** Exact main-owned adapter snapshot from the failed stream; never re-resolved from settings. */
   provider: VoiceProviderAdapter
   model: string
+  requestTimeoutMs: number
   polishStrength: VoicePolishStrength
   cleanup: boolean
   /** Set once the session ends abnormally; until then the buffer belongs to a live session. */
@@ -442,9 +447,12 @@ export class VoiceService {
   }
   private beginRetryBuffer(
     captureId: string,
+    providerRequestId: string,
+    reuseProviderRequestId: boolean,
     sampleRate: number,
     provider: VoiceProviderAdapter,
     model: string,
+    requestTimeoutMs: number,
     polishStrength: VoicePolishStrength,
     cleanup: boolean,
     language?: string
@@ -452,11 +460,14 @@ export class VoiceService {
     this.clearRetryBuffer()
     this.retryBuffer = {
       captureId,
+      providerRequestId,
+      reuseProviderRequestId,
       chunks: [],
       bytes: 0,
       sampleRate,
       provider,
       model,
+      requestTimeoutMs,
       polishStrength,
       cleanup,
       ...(language ? { language } : {}),
@@ -1002,7 +1013,9 @@ export class VoiceService {
       signal,
       stopSignal,
       caller,
-      configured.model
+      configured.model,
+      configured.mode === 'buffered' ? BUFFERED_TRANSCRIPTION_TIMEOUT_MS : CAPABILITY_TIMEOUT_MS,
+      configured.mode === 'buffered'
     )
   }
 
@@ -1030,7 +1043,9 @@ export class VoiceService {
     signal?: AbortSignal,
     stopSignal?: AbortSignal,
     caller = VOICE_CALLER,
-    model = provider.defaultStreamModel ?? 'default'
+    model = provider.defaultStreamModel ?? 'default',
+    requestTimeoutMs = CAPABILITY_TIMEOUT_MS,
+    reuseProviderRequestId = false
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
     const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
@@ -1051,7 +1066,7 @@ export class VoiceService {
       }
     })
     const pollCapture = getPollCapture()
-    const requestId = nextVoiceSessionId()
+    const requestId = reuseProviderRequestId ? randomUUID() : nextVoiceSessionId()
     const request: VoiceStreamRequest = {
       model,
       audio: {
@@ -1064,7 +1079,7 @@ export class VoiceService {
       ...(payload.language ? { language: payload.language } : {}),
       requestId,
       signal,
-      timeoutMs: CAPABILITY_TIMEOUT_MS,
+      timeoutMs: requestTimeoutMs,
       enableDdc: payload.cleanup ?? true
     }
     // Open the native capture and provider connection together. Yielding capture readiness before
@@ -1119,9 +1134,12 @@ export class VoiceService {
     // A new session owns the single retry slot; whatever the last one left is dropped here.
     this.beginRetryBuffer(
       sessionId,
+      requestId,
+      reuseProviderRequestId,
       DEFAULT_ASR_SAMPLE_RATE,
       provider,
       model,
+      requestTimeoutMs,
       session.polishStrength,
       cleanup,
       payload.language
@@ -1355,6 +1373,9 @@ export class VoiceService {
           : error instanceof Error
             ? error.name
             : 'VOICE_RECOGNITION_FAILED'
+      const retryable =
+        !error || typeof error !== 'object' || !('retryable' in error) || error.retryable !== false
+      const preserveFailureAudio = errorCode !== 'VOICE_ASR_AUTHORITY_CHANGED'
       await this.recordRecognitionDetail({
         id: session.id,
         capturedAt: Date.now(),
@@ -1362,7 +1383,7 @@ export class VoiceService {
         status: cancelled ? 'cancelled' : 'failed',
         audioFormat: 'pcm',
         audioSampleRate: 16_000,
-        audio: this.snapshotRetryAudio(session.id),
+        audio: preserveFailureAudio ? this.snapshotRetryAudio(session.id) : undefined,
         audioBytes: capturedBytes,
         audioDurationMs: Math.round(capturedBytes / 32),
         recognitionDurationMs: Math.max(0, Date.now() - session.startedAt),
@@ -1371,7 +1392,8 @@ export class VoiceService {
         channel: provider.id,
         errorCode
       })
-      this.armRetryBuffer(cancelled ? 'cancelled' : 'failed')
+      if (retryable) this.armRetryBuffer(cancelled ? 'cancelled' : 'failed')
+      else this.clearRetryBuffer()
       throw error
     } finally {
       if (connection) await connection.abort('Voice session ended').catch(() => {})
@@ -1423,9 +1445,9 @@ export class VoiceService {
         codec: 'raw'
       },
       ...(language ? { language } : {}),
-      requestId: nextVoiceSessionId(),
+      requestId: buffer.reuseProviderRequestId ? buffer.providerRequestId : nextVoiceSessionId(),
       signal,
-      timeoutMs: CAPABILITY_TIMEOUT_MS,
+      timeoutMs: buffer.requestTimeoutMs,
       enableDdc: true
     }
     const targetKey = activeAppKey(await activeAppService.getActiveApp())
