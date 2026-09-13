@@ -1,0 +1,40 @@
+{
+  "id": "comet-native-migration",
+  "name": "comet-native-migration",
+  "title": "Migrate repository workflow from Trellis to Comet Native",
+  "description": "Retire the repository-managed Trellis workflow without losing project engineering knowledge, CI contract coverage, or safe multi-session recovery; adopt Comet Native as the default workflow after a controlled pilot.",
+  "status": "planning",
+  "dev_type": "tooling",
+  "scope": "repository",
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-12",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "AGENTS.md",
+    ".agents/skills/",
+    "scripts/docs/verify-docs.mjs",
+    "scripts/docs.test.mjs",
+    "scripts/check-audit-report-claims.mjs",
+    "apps/core-app/src/main/roadmap-task-links.test.ts",
+    "ROADMAP.md",
+    "docs/engineering/",
+    ".gitignore"
+  ],
+  "notes": "Follow-up PRD only; no migration has been executed. Preferred direction is Comet Native, project artifact root docs, oh-my-pi platform only, and an explicit CI-safe Trellis cutover. Preserve the current voice worktree, untracked build output, and existing stashes.",
+  "meta": {
+    "evidence": "Planning is based on Comet 0.4.0 documentation and npm metadata, plus repository measurements collected on 2026-09-12. Comet oh-my-pi Skill, Rule, and Hook paths were independently probed against omp v18.1.16 in /tmp.",
+    "blocker": "Migration scope and five product/repository decisions remain unapproved: audit-claim task source, ROADMAP active-task table treatment, spec destination and lint policy, PluginAiSessionsPlatform trellis vocabulary, and whether the cutover is split into pilot/change commits.",
+    "nextAction": "After the beta release, review this PRD and approve the first migration preflight; do not install Comet or delete Trellis as part of this planning record."
+  }
+}
