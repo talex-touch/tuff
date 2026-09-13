@@ -18,6 +18,7 @@ const serviceMocks = vi.hoisted(() => ({
 
 const h3Mocks = vi.hoisted(() => ({
   getHeader: vi.fn(),
+  getRequestWebStream: vi.fn(),
   setResponseStatus: vi.fn(),
 }))
 
@@ -26,6 +27,7 @@ vi.mock('h3', async () => {
   return {
     ...actual,
     getHeader: h3Mocks.getHeader,
+    getRequestWebStream: h3Mocks.getRequestWebStream,
     setResponseStatus: h3Mocks.setResponseStatus,
   }
 })
@@ -57,12 +59,19 @@ function unreadableBody() {
   return { getReader }
 }
 
-function eventWithBody(body: unknown, headers: Record<string, string> = {}): H3Event {
+function eventWithBody(
+  body: unknown,
+  headers: Record<string, string> = {},
+  options: { omitWeb?: boolean } = {},
+): H3Event {
   h3Mocks.getHeader.mockImplementation((_event: H3Event, name: string) => headers[name])
+  // The route reads its body through H3's canonical `getRequestWebStream(event)`, not by reaching
+  // into `event.web`. The mock has to route the event's stream through that same accessor.
+  h3Mocks.getRequestWebStream.mockReturnValue(body as ReadableStream<Uint8Array>)
   return {
     context: { cloudflare: { env: {} } },
-    web: { request: { body } },
     node: { req: [] },
+    ...(options.omitWeb ? {} : { web: { request: { body } } }),
   } as unknown as H3Event
 }
 
@@ -161,6 +170,34 @@ describe('POST /api/v1/ai/audio/transcribe request admission', () => {
   it('rejects an empty body without reaching the transcription service', async () => {
     await expect(
       handler(eventWithBody(streamOf([]), { 'content-type': 'audio/wav' })),
+    ).rejects.toMatchObject({ statusCode: 400, data: { errorCode: 'ASR_AUDIO_INVALID' } })
+
+    expect(serviceMocks.startAsrTranscription).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Production 500ed here before any request row existed because the route reached into
+   * `event.web` itself. The body must be read through H3's accessor, so an event that only
+   * exposes the stream that way still has to be admitted byte-for-byte.
+   */
+  it('admits the exact bytes of a body reachable only through the canonical accessor', async () => {
+    const result = await handler(
+      eventWithBody(
+        streamOf([new Uint8Array([1, 2]), new Uint8Array([3])]),
+        { 'content-type': 'audio/wav', 'x-idempotency-key': 'idempotency-key' },
+        { omitWeb: true },
+      ),
+    )
+
+    const audio = serviceMocks.startAsrTranscription.mock.calls[0]![2].audio as Buffer
+    expect([...audio]).toEqual([1, 2, 3])
+    expect(h3Mocks.setResponseStatus).toHaveBeenCalledWith(expect.anything(), 200)
+    expect(result).toMatchObject({ requestId: 'asr-request-1', status: 'settled' })
+  })
+
+  it('rejects an empty body carried only by the canonical accessor', async () => {
+    await expect(
+      handler(eventWithBody(streamOf([]), { 'content-type': 'audio/wav' }, { omitWeb: true })),
     ).rejects.toMatchObject({ statusCode: 400, data: { errorCode: 'ASR_AUDIO_INVALID' } })
 
     expect(serviceMocks.startAsrTranscription).not.toHaveBeenCalled()
