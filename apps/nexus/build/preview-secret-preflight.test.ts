@@ -40,6 +40,7 @@ const EXPECTED_PREVIEW_CREDENTIALS = [
   'RELEASE_DOWNLOAD_SIGNING_SECRET',
   'SENTRY_AUTH_TOKEN',
   'STORAGE_SECURE_STORE_KEY',
+  'VOICE_PROVIDER_CATALOG_KEYS',
 ].sort()
 
 function projectPayload(previewEnvVars: Record<string, unknown>) {
@@ -197,6 +198,37 @@ describe('Preview Secret deployment preflight', () => {
       featureGated: [],
       optional: [],
     })
+  })
+
+  it('classifies the voice provider catalog key map as a feature-gated secret_text binding', () => {
+    const requiredBindings = Object.fromEntries(
+      REQUIRED_PREVIEW_SECRETS.map(name => [name, { type: 'secret_text' }]),
+    )
+    const secretBindings = parsePreviewBindingMetadata(
+      projectPayload({
+        ...requiredBindings,
+        VOICE_PROVIDER_CATALOG_KEYS: { type: 'secret_text' },
+      }),
+    )
+    expect(assertPreviewCredentialBindings(secretBindings)).toEqual({
+      required: REQUIRED_PREVIEW_SECRETS,
+      featureGated: ['VOICE_PROVIDER_CATALOG_KEYS'],
+      optional: [],
+    })
+
+    const plainBindings = parsePreviewBindingMetadata(
+      projectPayload({
+        ...requiredBindings,
+        VOICE_PROVIDER_CATALOG_KEYS: { type: 'plain_text', value: 'must-not-be-read' },
+      }),
+    )
+    expect(() => assertPreviewCredentialBindings(plainBindings)).toThrowError(
+      expect.objectContaining({
+        code: PREVIEW_SECRET_ERROR_CODES.invalidBindingType,
+        exitCode: PREVIEW_SECRET_EXIT_CODES.invalidBindingType,
+        invalidTypeNames: ['VOICE_PROVIDER_CATALOG_KEYS'],
+      }),
+    )
   })
 
   it('fails closed with a stable code when required Preview names are missing', () => {

@@ -210,6 +210,7 @@ function validateVoiceAsrChannel(provider: Record<string, unknown>): void {
     const metadataRecord = metadata as Record<string, unknown>
     if (Object.hasOwn(metadataRecord, 'voiceAsr')) {
       const voiceAsr = normalizeVoiceAsrMetadata(metadataRecord.voiceAsr)
+      if (voiceAsr?.protocol === 'nexus-pack') invalidProviderCredentialRequest()
       const allowedKeys =
         voiceAsr?.protocol === 'bailian-paraformer'
           ? ['protocol', 'workspaceId']

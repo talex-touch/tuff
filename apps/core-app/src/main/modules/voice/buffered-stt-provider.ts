@@ -15,6 +15,7 @@ import { Buffer } from 'node:buffer'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 
 export const BUFFERED_STT_MAX_PCM_BYTES = 10 * 1024 * 1024
+const DEFAULT_SAMPLE_RATE = 16_000
 
 type SttInvoker = (
   payload: IntelligenceSTTPayload,
@@ -26,6 +27,12 @@ export interface BufferedSttProviderOptions {
   model: string
   invoke?: SttInvoker
   authorityCheck?: () => boolean
+  /** PCM bytes accepted before WAV framing; always capped by the local hard limit. */
+  maxBufferBytes?: number
+  /** Maximum PCM duration accepted for the frozen stream route. */
+  maxDurationSec?: number
+  /** Provider deadline; a shorter session deadline still wins. */
+  timeoutMs?: number
 }
 
 class EventQueue<T> implements AsyncIterableIterator<T> {
@@ -63,7 +70,14 @@ class EventQueue<T> implements AsyncIterableIterator<T> {
   }
 }
 
+function normalizeSampleRate(sampleRate: number): number {
+  return Number.isInteger(sampleRate) && sampleRate > 0 && sampleRate <= 192_000
+    ? sampleRate
+    : DEFAULT_SAMPLE_RATE
+}
+
 function encodePcm16Wav(pcm: Buffer, sampleRate: number): Buffer {
+  const rate = normalizeSampleRate(sampleRate)
   const output = Buffer.allocUnsafe(44 + pcm.byteLength)
   output.write('RIFF', 0, 'ascii')
   output.writeUInt32LE(36 + pcm.byteLength, 4)
@@ -72,8 +86,8 @@ function encodePcm16Wav(pcm: Buffer, sampleRate: number): Buffer {
   output.writeUInt32LE(16, 16)
   output.writeUInt16LE(1, 20)
   output.writeUInt16LE(1, 22)
-  output.writeUInt32LE(sampleRate, 24)
-  output.writeUInt32LE(sampleRate * 2, 28)
+  output.writeUInt32LE(rate, 24)
+  output.writeUInt32LE(rate * 2, 28)
   output.writeUInt16LE(2, 32)
   output.writeUInt16LE(16, 34)
   output.write('data', 36, 'ascii')
@@ -118,6 +132,16 @@ function invokeDefaultStt(
   return tuffIntelligence.audio.stt(payload, options)
 }
 
+function positiveInteger(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : undefined
+}
+
+function minimumTimeout(first: number | undefined, second: number | undefined): number | undefined {
+  const values = [positiveInteger(first), positiveInteger(second)].filter(
+    (value): value is number => value !== undefined
+  )
+  return values.length ? Math.min(...values) : undefined
+}
 class BufferedSttConnection implements VoiceStreamConnection {
   readonly ready = Promise.resolve()
   readonly events: AsyncIterable<VoiceProviderEvent>
@@ -130,6 +154,8 @@ class BufferedSttConnection implements VoiceStreamConnection {
   private readonly invoke: SttInvoker
   private readonly authorityCheck?: () => boolean
   private readonly abortController = new AbortController()
+  private readonly maxBufferBytes: number
+  private readonly timeoutMs?: number
   private totalBytes = 0
   private terminal: Promise<void> | null = null
   private aborted = false
@@ -140,6 +166,18 @@ class BufferedSttConnection implements VoiceStreamConnection {
     this.model = options.model
     this.invoke = options.invoke ?? invokeDefaultStt
     this.authorityCheck = options.authorityCheck
+    const configuredBytes = positiveInteger(options.maxBufferBytes) ?? BUFFERED_STT_MAX_PCM_BYTES
+    const configuredDuration = positiveInteger(options.maxDurationSec)
+    const durationBytes = configuredDuration
+      ? Math.floor(
+          configuredDuration *
+            normalizeSampleRate(request.audio.sampleRate) *
+            request.audio.channels *
+            2
+        )
+      : BUFFERED_STT_MAX_PCM_BYTES
+    this.maxBufferBytes = Math.min(BUFFERED_STT_MAX_PCM_BYTES, configuredBytes, durationBytes)
+    this.timeoutMs = positiveInteger(options.timeoutMs)
     this.events = this.queue
   }
 
@@ -150,7 +188,6 @@ class BufferedSttConnection implements VoiceStreamConnection {
       return false
     }
   }
-
   async writePcm(chunk: Buffer | Uint8Array): Promise<void> {
     if (this.aborted)
       throw new VoiceProviderError(
@@ -161,7 +198,7 @@ class BufferedSttConnection implements VoiceStreamConnection {
       throw new VoiceProviderError('VOICE_STREAM_ENDED', 'Buffered speech recognition has ended.')
     const copy = Buffer.from(chunk)
     if (copy.byteLength === 0) return
-    if (this.totalBytes + copy.byteLength > BUFFERED_STT_MAX_PCM_BYTES) {
+    if (this.totalBytes + copy.byteLength > this.maxBufferBytes) {
       throw new VoiceProviderError(
         'VOICE_AUDIO_TOO_LARGE',
         'Buffered speech recognition audio exceeds its bounded limit.'
@@ -214,7 +251,7 @@ class BufferedSttConnection implements VoiceStreamConnection {
             ...(this.request.signal ? [this.request.signal] : []),
             this.abortController.signal
           ]),
-          timeout: this.request.timeoutMs,
+          timeout: minimumTimeout(this.request.timeoutMs, this.timeoutMs),
           metadata: {
             caller: 'core.voice.buffered-asr',
             idempotencyKey: this.request.requestId
