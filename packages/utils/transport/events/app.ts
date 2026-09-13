@@ -166,6 +166,16 @@ export const AppEvents = {
     navigate: defineEvent('app').module('window').event('navigate').define<NavigateRequest, void>(),
 
     /**
+     * Sent by the main renderer once its destination navigation listener is registered.
+     *
+     * The preload `system.startup` handshake is metadata collection that runs before the
+     * renderer's router exists, so main cannot use it to know when a queued destination may
+     * be delivered without being dropped. The sender's WebContents id comes from the
+     * transport handler context, not the payload.
+     */
+    rendererReady: defineEvent('app').module('window').event('renderer-ready').define<void, void>(),
+
+    /**
      * Request renderer to open download center.
      */
     openDownloadCenter: defineEvent('app').module('window').event('open-download-center').define<void, void>(),

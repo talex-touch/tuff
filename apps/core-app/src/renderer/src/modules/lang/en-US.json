@@ -5783,6 +5783,21 @@
     "confirmAndSend": "Authorize and send"
   },
   "corebox": {
+    "destinations": {
+      "commonSettings": "Common settings",
+      "settingsTitle": "Tuff Settings",
+      "mainWindowSubtitle": "Show and focus the main window",
+      "homeSubtitle": "Open the Tuff home surface",
+      "overviewSubtitle": "All settings at a glance",
+      "generalSubtitle": "Startup, language and app behavior",
+      "appearanceSubtitle": "Theme, layout and visual effects",
+      "intelligenceSubtitle": "Intelligence hub, workflows and permissions",
+      "pluginsSubtitle": "Installed plugins, store and application tools",
+      "fileIndexSubtitle": "Search index scope and indexing status",
+      "networkSubtitle": "Proxy, connectivity and network diagnostics",
+      "updateSubtitle": "Version, update channel and release notes",
+      "aboutSubtitle": "Version, credits and open-source licenses"
+    },
     "reason": {
       "pinned": "Pinned",
       "frequent": "Frequently used",

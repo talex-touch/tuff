@@ -1,0 +1,8 @@
+{"file":".trellis/spec/main-process/channel-transport-contracts.md","reason":"Verify route delivery uses notification semantics and never creates request timeouts."}
+{"file":".trellis/spec/main-process/search-hotpath-contracts.md","reason":"Verify exact matching stays bounded and does not mutate shared search token state."}
+{"file":".trellis/spec/main-process/recommendation-source-registry-contracts.md","reason":"Verify deterministic source registration/rebuild behavior after provider replacement."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify destination, action, icon, and transport payload boundaries."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Apply focused tests, typechecks, lint, and real-surface verification requirements."}
+{"file":".trellis/spec/guides/guard-thinking-guide.md","reason":"Write behavioral guards with positive and negative controls rather than source-text assertions."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check complete query-to-window-to-router behavior and failure states."}
+{"file":".trellis/spec/guides/multi-session-collab-guide.md","reason":"Review parallel changes against exact ownership and shared contracts."}

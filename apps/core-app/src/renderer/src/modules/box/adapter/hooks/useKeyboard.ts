@@ -40,7 +40,6 @@ type ClipboardOptions = {
 type TuffActionLike = TuffAction & {
   title?: string
   subtitle?: string
-  group?: string
 }
 
 const rendererPlatformState = getCurrentRendererPlatformState()

@@ -5,12 +5,11 @@ const SOURCE_ID = 'plugin-features'
 const FEATURE_ID = 'system-actions'
 const RUN_ACTION_ID = 'run-action'
 const ICON = { type: 'class', value: 'i-ri-shut-down-line' }
-const GROUP_ORDER = ['power', 'audio', 'display', 'window']
+const GROUP_ORDER = ['power', 'audio', 'display']
 const GROUP_META = {
   power: { title: '电源操作', subtitle: '关机 / 重启 / 锁屏' },
   audio: { title: '音量操作', subtitle: '音量+ / 音量- / 静音' },
   display: { title: '显示操作', subtitle: '亮度+ / 亮度-' },
-  window: { title: '窗口操作', subtitle: '主窗口控制' },
 }
 const ACTIONS = [
   {
@@ -76,14 +75,6 @@ const ACTIONS = [
     keywords: ['亮度', '降低亮度', 'brightness down', '亮度-'],
     group: 'display',
     platforms: ['darwin'],
-  },
-  {
-    id: 'open-main-window',
-    name: '打开主窗口',
-    description: '显示并激活 Tuff 主窗口',
-    keywords: ['主窗口', '打开', 'main window', 'show window', '显示窗口', 'tuff', '窗口'],
-    group: 'window',
-    platforms: ['darwin', 'win32'],
   },
 ]
 const ACTION_IDS = new Set(ACTIONS.map(action => action.id))
@@ -193,15 +184,16 @@ async function runAction(actionId) {
     }
     if (result?.status === 'blocked') {
       const reason = normalizeText(result.reason) || 'blocked'
-      const message = reason === 'confirmation-denied'
-        ? '操作已取消'
-        : reason === 'permission-denied'
-          ? '缺少 system.shell 权限'
-          : reason === 'permission-unavailable'
-            ? '权限系统不可用'
-            : reason === 'platform-unsupported'
-              ? '当前平台暂不支持该系统操作'
-              : '系统操作不可用'
+      const message
+        = reason === 'confirmation-denied'
+          ? '操作已取消'
+          : reason === 'permission-denied'
+            ? '缺少 system.shell 权限'
+            : reason === 'permission-unavailable'
+              ? '权限系统不可用'
+              : reason === 'platform-unsupported'
+                ? '当前平台暂不支持该系统操作'
+                : '系统操作不可用'
       return blocked(reason, message, reason === 'confirmation-denied' ? 'cancelled' : 'blocked')
     }
     return blocked('execution-failed', '系统操作执行失败', 'failed')
@@ -276,7 +268,7 @@ const pluginLifecycle = {
           id: `${featureId}-empty`,
           featureId,
           title: '没有匹配的系统操作',
-          subtitle: '可尝试输入：关机 / 重启 / 锁屏 / 音量 / 亮度 / 主窗口',
+          subtitle: '可尝试输入：关机 / 重启 / 锁屏 / 音量 / 亮度',
         }),
       )
     }

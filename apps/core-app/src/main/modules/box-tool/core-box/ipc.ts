@@ -601,6 +601,18 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
+      transport.on(MetaOverlayEvents.ui.ready, (_payload, context: HandlerContext) => {
+        const senderId = context.sender?.id
+        const accepted =
+          typeof senderId === 'number' && metaOverlayManager.markRendererReady(senderId)
+        metaOverlayIpcLog.debug('ui.ready received', {
+          meta: { senderId: senderId ?? null, accepted }
+        })
+        return { accepted }
+      })
+    )
+
+    this.transportDisposers.push(
       transport.on(MetaOverlayEvents.ui.show, (request: MetaShowRequest) => {
         metaOverlayIpcLog.info('ui.show received', {
           meta: {
@@ -613,6 +625,7 @@ export class IpcManager {
         const pluginActions = metaOverlayManager.getPluginActions()
         request.pluginActions = pluginActions
         metaOverlayManager.show(request)
+        return { accepted: true }
       })
     )
 
@@ -632,13 +645,9 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
-      transport.on(MetaOverlayEvents.action.execute, async (request, context) => {
+      transport.on(MetaOverlayEvents.action.execute, async (request) => {
         const payload = request as MetaActionExecuteRequest & { item?: TuffItem }
-        return await metaOverlayManager.executeAction(
-          payload.actionId,
-          payload.item,
-          context.sender
-        )
+        return await metaOverlayManager.executeAction(payload.actionId, payload.item)
       })
     )
 

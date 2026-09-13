@@ -1,0 +1,9 @@
+{"file":".trellis/spec/main-process/app-semantic-catalog-contracts.md","reason":"Use locale-structured aliases, exact token semantics, and collision-focused behavior for the destination catalog."}
+{"file":".trellis/spec/main-process/channel-transport-contracts.md","reason":"Deliver void route notifications with broadcastToWindow and respect renderer readiness."}
+{"file":".trellis/spec/main-process/search-hotpath-contracts.md","reason":"Keep destination matching O(1), immutable, and safe on the fast per-keystroke path."}
+{"file":".trellis/spec/main-process/recommendation-source-registry-contracts.md","reason":"Preserve deterministic rebuild behavior and remove the documented main-window provider duplication."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Keep cross-layer destination and icon payloads typed at the producer boundary."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Use typed transport, localized copy, focused verification, and real Electron behavior proof."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace query, provider, main navigation, renderer readiness, and router delivery end to end."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Consolidate duplicated show/focus/navigation logic behind one owner."}
+{"file":".trellis/spec/guides/multi-session-collab-guide.md","reason":"Honor the frozen contract and non-overlapping file ownership during parallel implementation."}

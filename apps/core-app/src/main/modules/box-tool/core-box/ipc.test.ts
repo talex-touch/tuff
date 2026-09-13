@@ -53,6 +53,7 @@ const mocks = vi.hoisted(() => ({
   })),
   setPinned: vi.fn(),
   isPinned: vi.fn(() => false),
+  executeMetaOverlayAction: vi.fn(),
   isCollapsed: false,
   currentWindow: null as null | {
     isDestroyed: () => boolean
@@ -168,7 +169,7 @@ vi.mock('./meta-overlay', () => ({
     show: vi.fn(),
     hide: vi.fn(),
     getVisible: vi.fn(() => false),
-    executeAction: vi.fn(),
+    executeAction: mocks.executeMetaOverlayAction,
     registerPluginAction: vi.fn(),
     unregisterPluginAction: vi.fn(),
     unregisterPluginActions: vi.fn()
@@ -197,6 +198,7 @@ vi.mock('../../../../shared/events/corebox-scenes', () => ({
 }))
 
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { OnboardingGateError } from '../../storage'
 import { ipcManager } from './ipc'
 
@@ -589,5 +591,21 @@ describe('CoreBox IPC hide transport', () => {
 
     expect(mocks.expand).toHaveBeenCalledWith({ forceMax: true })
     expect(mocks.shrink).not.toHaveBeenCalled()
+  })
+
+  it('forwards overlay action requests to the manager without consulting the caller sender', async () => {
+    const handler = soleHandler(MetaOverlayEvents.action.execute)
+    const item = { id: 'item-1', kind: 'app' }
+
+    expect(handler).toBeTypeOf('function')
+    await handler?.({ actionId: 'copy-answer', item }, { sender: { id: 71 } })
+    // The overlay parent window is the only valid target, so a caller-supplied sender must not
+    // reach the manager; the item must survive too, or the manager falls back to its own
+    // (already dismissed) current item and relays the wrong one.
+    expect(mocks.executeMetaOverlayAction).toHaveBeenCalledExactlyOnceWith('copy-answer', item)
+
+    mocks.executeMetaOverlayAction.mockClear()
+    await handler?.({ actionId: 'copy-answer', item })
+    expect(mocks.executeMetaOverlayAction).toHaveBeenCalledExactlyOnceWith('copy-answer', item)
   })
 })

@@ -36,7 +36,7 @@ recommendationSourceRegistry.resolve(sourceId): RecommendationSourceEntry | unde
 - **Registration is always pushed in by the source.** Neither the registry nor `item-rebuilder`
   may import a concrete provider. Five of the six former `await import()` calls in
   `item-rebuilder` resolve back through `<provider> → search-core → recommendation-engine →
-  item-rebuilder`; a reverse import turns that dynamic cycle into a static one, and the symptom is
+item-rebuilder`; a reverse import turns that dynamic cycle into a static one, and the symptom is
   a boot-time `Cannot access '...' before initialization`, not a type error.
   `import-direction.test.ts` guards this — `core-box/core-box-import-cycle.test.ts` covers a
   different directory and will not catch it.
@@ -62,15 +62,15 @@ recommendationSourceRegistry.resolve(sourceId): RecommendationSourceEntry | unde
 
 ### 4. Validation & error matrix
 
-| Condition | Outcome |
-|---|---|
-| Provider without the capability passed to `registerProviderSource` | returns `null`; not an error (most providers never recommend) |
-| Duplicate `sourceId` | throws; the incumbent keeps answering |
-| Alias claimed by another source, or colliding with a registered id | throws; registry unchanged (no partial alias claim) |
-| Source throws during rebuild | error logged, that group yields `[]`, other groups unaffected |
-| `sourceId` with no registration | warn logged, group skipped, rest of the batch returned |
-| Registry or rebuilder imports a provider | `import-direction.test.ts` fails |
-| Engine reconstructed | it unregisters its own standalone ids first, then re-registers; nothing else writes those ids |
+| Condition                                                          | Outcome                                                                                       |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Provider without the capability passed to `registerProviderSource` | returns `null`; not an error (most providers never recommend)                                 |
+| Duplicate `sourceId`                                               | throws; the incumbent keeps answering                                                         |
+| Alias claimed by another source, or colliding with a registered id | throws; registry unchanged (no partial alias claim)                                           |
+| Source throws during rebuild                                       | error logged, that group yields `[]`, other groups unaffected                                 |
+| `sourceId` with no registration                                    | warn logged, group skipped, rest of the batch returned                                        |
+| Registry or rebuilder imports a provider                           | `import-direction.test.ts` fails                                                              |
+| Engine reconstructed                                               | it unregisters its own standalone ids first, then re-registers; nothing else writes those ids |
 
 ### 5. Tests required
 
@@ -92,7 +92,7 @@ discriminating fixtures. Nothing in the type system protects them, and the failu
   `clipboard-<id>` while the stored candidate id is the bare number, and there is no clipboard
   branch in `findScoredByPartialMatch`. Unreachable today because nothing writes
   `sourceId: 'clipboard-history'` usage stats.
-- Built-in `main-window-provider` duplicates `plugins/touch-system-actions`' `open-main-window`;
-  its `MAIN_WINDOW_PHRASE_TOKENS` literally contains that action's name. The built-in
-  `system-actions-provider` is *not* a duplicate of that plugin — it covers file/index/screenshot
-  actions, not power control.
+
+### 7. Resolved destination boundary
+
+- 2026-09-12: `app-destination-provider` replaced the built-in `main-window-provider` and owns the sole CoreBox result for main-window/home/Tuff settings destinations. `plugins/touch-system-actions` no longer publishes `open-main-window`; the host capability ID remains for already-installed plugin compatibility and delegates to the shared navigation service. The built-in `system-actions-provider` remains distinct because it covers file/index/screenshot actions, not power control.

@@ -31,7 +31,9 @@ const {
   setLocaleMock,
   touchEventBusEmitMock,
   getMainConfigMock,
-  saveMainConfigMock
+  saveMainConfigMock,
+  getAppDestinationNavigationServiceMock,
+  markPrimaryRendererReadyMock
 } = vi.hoisted(() => ({
   fsReadFileMock: vi.fn(),
   execFileMock: vi.fn(
@@ -71,7 +73,9 @@ const {
   pluginManagerPluginsMock: new Map<string, Record<string, unknown>>(),
   boxItemManagerHandleSyncRequestMock: vi.fn(),
   getMainConfigMock: vi.fn(() => ({})),
-  saveMainConfigMock: vi.fn()
+  saveMainConfigMock: vi.fn(),
+  getAppDestinationNavigationServiceMock: vi.fn(),
+  markPrimaryRendererReadyMock: vi.fn()
 }))
 
 vi.mock('@talex-touch/utils', async (importOriginal) => {
@@ -274,6 +278,10 @@ vi.mock('../modules/analytics', () => ({
   getStartupAnalytics: vi.fn(() => ({
     setRendererProcessMetrics: vi.fn()
   }))
+}))
+
+vi.mock('../modules/app-destination/app-destination-navigation', () => ({
+  getAppDestinationNavigationService: getAppDestinationNavigationServiceMock
 }))
 
 vi.mock('../modules/box-tool/addon/apps/app-provider', () => ({
@@ -501,7 +509,7 @@ vi.mock('../utils/storage-usage', () => ({
   getStorageUsageReport: vi.fn(async () => ({}))
 }))
 
-import { dialog, powerMonitor, shell } from 'electron'
+import { app, dialog, powerMonitor, shell } from 'electron'
 import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { CommonChannelModule } from './common'
 
@@ -531,6 +539,11 @@ type CommonChannelModuleTestInstance = {
       window: { window: { isVisible: () => boolean } }
     }
   ) => { hideDock: boolean }
+  registerSystemTransportHandlers: (
+    transport: unknown,
+    touchApp: unknown,
+    registerSafeHandler: unknown
+  ) => void
 }
 
 afterEach(() => {
@@ -2371,5 +2384,85 @@ describe('CommonChannelModule battery broadcaster lifecycle', () => {
     await module.onDestroy()
 
     expect(pollingInstanceMock.unregister).toHaveBeenCalled()
+  })
+})
+
+/**
+ * Readiness is announced by `AppEvents.window.rendererReady` once the renderer has registered its
+ * navigate listener — the preload `system.startup` invoke runs before that, so treating it as
+ * readiness would deliver a queued route into a page with no listener. Only the primary renderer
+ * may release a route, and a plugin view must not be able to declare itself ready at all.
+ */
+describe('CommonChannelModule destination readiness handshake', () => {
+  it('releases a queued route for the primary renderer and refuses everyone else', async () => {
+    const module = new CommonChannelModule() as unknown as CommonChannelModuleTestInstance
+    const handlers = new Map<
+      string,
+      (payload: unknown, context: unknown) => Promise<unknown> | unknown
+    >()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown> | unknown
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      sendTo: vi.fn(async () => undefined)
+    }
+    const primaryWebContents = { id: 42 }
+    // The packaged runtime patches this clock onto `process`; plain Node has no such function.
+    Object.defineProperty(process, 'getCreationTime', {
+      configurable: true,
+      writable: true,
+      value: () => 1_000
+    })
+    const touchApp = {
+      app,
+      version: '2.4.9-test',
+      rootPath: '/tmp/tuff-root',
+      window: {
+        window: { webContents: primaryWebContents },
+        onMaximizedChanged: vi.fn(() => () => {})
+      }
+    }
+
+    module.registerSystemTransportHandlers(transport, touchApp, vi.fn())
+
+    try {
+      const rendererReady = handlers.get(AppEvents.window.rendererReady.toEventName())
+      const startup = handlers.get(AppEvents.system.startup.toEventName())
+      expect(rendererReady).toBeTypeOf('function')
+      getAppDestinationNavigationServiceMock.mockReturnValue({
+        markPrimaryRendererReady: markPrimaryRendererReadyMock
+      })
+
+      await rendererReady!(undefined, { sender: primaryWebContents })
+      expect(markPrimaryRendererReadyMock).toHaveBeenCalledExactlyOnceWith(42)
+
+      // The preload startup invoke must no longer release a route on its own.
+      markPrimaryRendererReadyMock.mockClear()
+      await startup!(undefined, { sender: primaryWebContents })
+      expect(markPrimaryRendererReadyMock).not.toHaveBeenCalled()
+
+      // No sender id means no reliable identity, so nothing is released.
+      await rendererReady!(undefined, {})
+      expect(markPrimaryRendererReadyMock).not.toHaveBeenCalled()
+
+      await rendererReady!(undefined, { sender: { id: 7 } })
+      expect(markPrimaryRendererReadyMock).toHaveBeenCalledExactlyOnceWith(7)
+
+      await expect(
+        Promise.resolve().then(() =>
+          rendererReady!(undefined, { plugin: { name: 'hostile' }, sender: primaryWebContents })
+        )
+      ).rejects.toThrow('HOST_ONLY_HANDLER')
+      expect(markPrimaryRendererReadyMock).toHaveBeenCalledTimes(1)
+    } finally {
+      Reflect.deleteProperty(process, 'getCreationTime')
+    }
   })
 })
