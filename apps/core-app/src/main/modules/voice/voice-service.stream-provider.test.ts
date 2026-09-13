@@ -102,6 +102,27 @@ async function drainStream(
   return events
 }
 
+/**
+ * Runs a generator to completion in the background.
+ *
+ * Overlapping sessions are the point of several recovery tests, so both streams have to be
+ * alive at once; `drainStream` would await the first one instead. Failures are swallowed here
+ * because the session under test is expected to fail or be cancelled; the assertions read the
+ * externally observable buffer state, not the generator's rejections.
+ */
+function pumpInBackground(gen: AsyncGenerator<VoiceAsrStreamEvent>): { done: Promise<void> } {
+  const done = (async () => {
+    try {
+      for await (const _event of gen) {
+        // drain; the session state is what the tests assert
+      }
+    } catch {
+      // the failure or cancellation under test
+    }
+  })()
+  return { done }
+}
+
 /** 16-bit LE mono PCM at a constant amplitude, so the expected RMS is exact. */
 function pcm(amplitude: number, samples = 160): Buffer {
   const buffer = Buffer.alloc(samples * 2)
@@ -160,7 +181,7 @@ function createFakeConnection(finalText = 'hello world', emitFinal = true) {
   let failure: Error | null = null
   const connection = {
     events,
-    writePcm: vi.fn(async () => {
+    writePcm: vi.fn(async (_chunk: Buffer) => {
       if (failure) throw failure
     }),
     end: vi.fn(async () => {
@@ -178,6 +199,20 @@ function createFakeConnection(finalText = 'hello world', emitFinal = true) {
   }
 
   return { connection, push, fail }
+}
+
+/**
+ * The connection the fake provider returns, named as the tests build it.
+ *
+ * It intentionally omits `VoiceStreamConnection.ready`: the real contract gates writes behind a
+ * handshake, while a fake connection is writable immediately. Importing the production type here
+ * would describe something these fixtures never produce.
+ */
+interface FakeVoiceConnection {
+  events: AsyncIterable<VoiceProviderEvent>
+  writePcm: (chunk: Buffer) => Promise<void>
+  end: () => Promise<void>
+  abort: (reason?: string) => Promise<void>
 }
 
 describe('VoiceService.streamDictation via provider', () => {
@@ -1003,6 +1038,356 @@ describe('VoiceService retry buffer retention', () => {
     await runUntilFailure(service)
 
     expect(await service.retryLastFailure()).toEqual({ text: '', expired: true })
+  })
+
+  /**
+   * One recovery slot, owned by the session that claimed it last.
+   *
+   * A superseded capture keeps running: its pump is detached and its connection can fail long
+   * after the mic moved on. Those late callbacks are fenced by capture id, so they cannot grow,
+   * arm or clear the buffer the new session owns — and the new session must still replay only
+   * its own audio.
+   */
+  it('fences a superseded session so its late audio and failure cannot reach the new session buffer', async () => {
+    const service = new VoiceService()
+    const stopA = new AbortController()
+    const bController = new AbortController()
+
+    startCapture
+      .mockResolvedValueOnce({ sessionId: 'sA' })
+      .mockResolvedValueOnce({ sessionId: 'sB' })
+    let bDrained = false
+    drainCapture.mockImplementation((id: string) => {
+      if (id !== 'sA' && bDrained) return { pcm: Buffer.alloc(0), sampleRate: 16000, channels: 1 }
+      if (id !== 'sA') bDrained = true
+      return { pcm: id === 'sA' ? pcm(8, 100) : pcm(9, 300), sampleRate: 16000, channels: 1 }
+    })
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+
+    const fakeB = createFakeConnection('b words')
+    const connections = [fake.connection, fakeB.connection]
+    provider.createStream.mockImplementation(async () => connections.shift()!)
+
+    const a = pumpInBackground(
+      service.streamDictation({ emitLevel: false }, undefined, { stopSignal: stopA.signal })
+    )
+    await vi.advanceTimersByTimeAsync(150)
+    expect(heldAudioBytes(service)).toBe(pcm(8, 100).length)
+
+    const b = pumpInBackground(service.streamDictation({ emitLevel: false }, bController.signal))
+    await vi.advanceTimersByTimeAsync(150)
+    const bBytes = pcm(9, 300).length
+    expect(heldAudioBytes(service)).toBe(bBytes)
+
+    // A's next tick appends and then fails on the wire; its catch arms the buffer. Both acts
+    // belong to A, but the slot now belongs to B, so neither may touch B.
+    fake.fail(new Error('provider socket closed'))
+    await vi.advanceTimersByTimeAsync(300)
+    await a.done
+
+    expect(heldAudioBytes(service)).toBe(bBytes)
+    expect(service.getRecoveryStatus()).toEqual({ available: false })
+
+    // A's grace timer, had it been armed against B, would drop B's audio here.
+    await vi.advanceTimersByTimeAsync(15_001)
+    expect(heldAudioBytes(service)).toBe(bBytes)
+    expect(service.getRecoveryStatus()).toEqual({ available: false })
+
+    bController.abort()
+    await vi.advanceTimersByTimeAsync(300)
+    await b.done
+    expect(service.getRecoveryStatus().kind).toBe('cancelled')
+
+    const retry = createFakeConnection('b words')
+    provider.createStream.mockResolvedValueOnce(retry.connection)
+    expect((await service.retryLastFailure()).text).toBe('b words')
+    const replayed = retry.connection.writePcm.mock.calls.reduce(
+      (total, [chunk]) => total + chunk.length,
+      0
+    )
+    expect(replayed).toBe(bBytes)
+  })
+
+  /**
+   * The complement of the failure case: a superseded session that finishes *successfully* is the
+   * one path allowed to drop audio immediately, and it must drop only its own. Wiring that clear
+   * to the slot instead of the session lets a late success erase the recovery still on screen.
+   */
+  it('fences a superseded success so it cannot clear the new session buffer', async () => {
+    const service = new VoiceService()
+    const stopA = new AbortController()
+    const bController = new AbortController()
+
+    startCapture
+      .mockResolvedValueOnce({ sessionId: 'sA' })
+      .mockResolvedValueOnce({ sessionId: 'sB' })
+    let bDrained = false
+    drainCapture.mockImplementation((id: string) => {
+      if (id !== 'sA' && bDrained) return { pcm: Buffer.alloc(0), sampleRate: 16000, channels: 1 }
+      if (id !== 'sA') bDrained = true
+      return { pcm: id === 'sA' ? pcm(8, 100) : pcm(9, 300), sampleRate: 16000, channels: 1 }
+    })
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+
+    const fakeB = createFakeConnection('b words')
+    const connections = [fake.connection, fakeB.connection]
+    provider.createStream.mockImplementation(async () => connections.shift()!)
+
+    const a = pumpInBackground(
+      service.streamDictation({ emitLevel: false }, undefined, { stopSignal: stopA.signal })
+    )
+    await vi.advanceTimersByTimeAsync(150)
+    const b = pumpInBackground(service.streamDictation({ emitLevel: false }, bController.signal))
+    await vi.advanceTimersByTimeAsync(150)
+    const bBytes = pcm(9, 300).length
+    expect(heldAudioBytes(service)).toBe(bBytes)
+
+    // A stops and finishes cleanly through the success path, whose `clearRetryBuffer` names A.
+    stopA.abort()
+    await vi.advanceTimersByTimeAsync(300)
+    await a.done
+
+    expect(heldAudioBytes(service)).toBe(bBytes)
+
+    bController.abort()
+    await vi.advanceTimersByTimeAsync(300)
+    await b.done
+    expect(service.getRecoveryStatus().kind).toBe('cancelled')
+
+    const retry = createFakeConnection('b words')
+    provider.createStream.mockResolvedValueOnce(retry.connection)
+    expect((await service.retryLastFailure()).text).toBe('b words')
+  })
+
+  /**
+   * Two callers can press recovery before the first replay finishes — the HUD button plus an
+   * imperative caller, say. They must share one in-flight replay, or the same audio is uploaded
+   * twice, delivered twice and recorded twice.
+   */
+  it('collapses overlapping recovery calls into one replay, one delivery, and one success record', async () => {
+    const service = new VoiceService()
+    await runUntilFailure(service)
+    const retry = createFakeConnection(POLISHABLE_TRANSCRIPT)
+    provider.createStream.mockClear()
+    provider.createStream.mockResolvedValueOnce(retry.connection)
+
+    const first = service.retryLastFailure({ delivery: 'active-app' })
+    const second = service.retryLastFailure({ delivery: 'active-app' })
+    const [firstResult, secondResult] = await Promise.all([first, second])
+
+    expect(provider.createStream).toHaveBeenCalledOnce()
+    expect(retry.connection.end).toHaveBeenCalledOnce()
+    expect(typeText).toHaveBeenCalledTimes(1)
+    expect(typeText).toHaveBeenCalledWith('Hello world.')
+    expect(voiceInsightsMocks.recordSuccess).toHaveBeenCalledTimes(1)
+    // The second caller observes the first replay's result, not a fresh one.
+    expect(secondResult).toBe(firstResult)
+  })
+
+  /**
+   * A retry the provider refuses as non-retryable is terminal: the audio cannot be replayed
+   * against a principal, or over a transport, that just rejected it, and the thrown error must
+   * keep the provider's code and retryable flag so the HUD can tell the two apart. A retryable
+   * refusal leaves the same recording in place for another attempt.
+   */
+  it('clears the held audio when the retry is refused as non-retryable, and keeps it otherwise', async () => {
+    const service = new VoiceService()
+    await runUntilFailure(service)
+    const held = heldAudioBytes(service)
+    expect(held).toBeGreaterThan(0)
+
+    const refused = createFakeConnection('ignored', false)
+    refused.push({
+      type: 'error',
+      code: 'VOICE_ASR_AUTHORITY_CHANGED',
+      message: 'authority changed',
+      retryable: false
+    })
+    provider.createStream.mockResolvedValueOnce(refused.connection)
+
+    await expect(service.retryLastFailure()).rejects.toMatchObject({
+      code: 'VOICE_ASR_AUTHORITY_CHANGED',
+      retryable: false
+    })
+
+    expect(heldAudioBytes(service)).toBe(0)
+    expect(service.getRecoveryStatus()).toEqual({ available: false })
+  })
+
+  it('keeps the same held audio when the retry failure is retryable', async () => {
+    const service = new VoiceService()
+    await runUntilFailure(service)
+    const held = heldAudioBytes(service)
+
+    const dropped = createFakeConnection('ignored', false)
+    dropped.push({
+      type: 'error',
+      code: 'VOICE_ASR_RETRY_TRANSPORT',
+      message: 'socket closed',
+      retryable: true
+    })
+    provider.createStream.mockResolvedValueOnce(dropped.connection)
+
+    await expect(service.retryLastFailure()).rejects.toMatchObject({ retryable: true })
+
+    expect(heldAudioBytes(service)).toBe(held)
+    expect(service.getRecoveryStatus().available).toBe(true)
+  })
+
+  /**
+   * A session's claim on the recovery slot is fenced by generation, not by arrival order.
+   *
+   * The provider handshake can settle long after the user started a second recording: session A
+   * opened first but its connection arrives last. Without the fence, A's `beginRetryBuffer` runs
+   * after B has already armed its own buffer, silently clearing B and installing an empty slot.
+   */
+  it('fences a superseded generation so a late-connecting session cannot claim the newer buffer', async () => {
+    const service = new VoiceService()
+    const stopA = new AbortController()
+    const bController = new AbortController()
+
+    startCapture
+      .mockResolvedValueOnce({ sessionId: 'sA' })
+      .mockResolvedValueOnce({ sessionId: 'sB' })
+    let bDrained = false
+    drainCapture.mockImplementation((id: string) => {
+      if (id !== 'sA' && bDrained) return { pcm: Buffer.alloc(0), sampleRate: 16000, channels: 1 }
+      if (id !== 'sA') bDrained = true
+      return { pcm: id === 'sA' ? pcm(8, 100) : pcm(9, 300), sampleRate: 16000, channels: 1 }
+    })
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+
+    const fakeA = createFakeConnection()
+    const fakeB = createFakeConnection('b words')
+    let releaseA!: (connection: FakeVoiceConnection) => void
+    const aConnection = new Promise<FakeVoiceConnection>((resolve) => {
+      releaseA = resolve
+    })
+    provider.createStream
+      .mockImplementationOnce(() => aConnection)
+      .mockImplementationOnce(async () => fakeB.connection)
+
+    const a = pumpInBackground(
+      service.streamDictation({ emitLevel: false }, undefined, { stopSignal: stopA.signal })
+    )
+    await vi.advanceTimersByTimeAsync(0)
+
+    const b = pumpInBackground(service.streamDictation({ emitLevel: false }, bController.signal))
+    await vi.advanceTimersByTimeAsync(150)
+    bController.abort()
+    await vi.advanceTimersByTimeAsync(300)
+    await b.done
+    const bBytes = pcm(9, 300).length
+    expect(service.getRecoveryStatus().kind).toBe('cancelled')
+    expect(heldAudioBytes(service)).toBe(bBytes)
+
+    // A's connection finally arrives. Its generation is stale, so it must not clear or claim B.
+    releaseA(fakeA.connection)
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(service.getRecoveryStatus().kind).toBe('cancelled')
+    expect(heldAudioBytes(service)).toBe(bBytes)
+
+    const retry = createFakeConnection('b words')
+    provider.createStream.mockResolvedValueOnce(retry.connection)
+    expect((await service.retryLastFailure()).text).toBe('b words')
+    const replayed = retry.connection.writePcm.mock.calls.reduce(
+      (total, [chunk]) => total + chunk.length,
+      0
+    )
+    expect(replayed).toBe(bBytes)
+
+    stopA.abort()
+    await vi.advanceTimersByTimeAsync(300)
+    await a.done
+  })
+
+  /**
+   * An in-flight replay owns the slot, not the next caller.
+   *
+   * A second capture's recovery must never be handed the first capture's promise — that would
+   * deliver the wrong audio under the wrong identity. Until the first replay settles (here, by
+   * the cancellation a new session triggers), the caller is told explicitly to come back.
+   */
+  it('refuses a new recovery while another capture replay is in flight, then serves it once cancelled', async () => {
+    const service = new VoiceService()
+    await runUntilFailure(service)
+
+    const fakeA = createFakeConnection('a retry')
+    let releaseARetry!: (connection: FakeVoiceConnection) => void
+    const aGate = new Promise<FakeVoiceConnection>((resolve) => {
+      releaseARetry = resolve
+    })
+    provider.createStream.mockImplementationOnce(() => aGate)
+    const aRetry = service.retryLastFailure({ delivery: 'active-app' })
+    const aRetrySettled = aRetry.catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(0)
+
+    // B starts and is cancelled while A's replay is still parked on its connection.
+    const fakeB = createFakeConnection('b words')
+    provider.createStream.mockImplementationOnce(async () => fakeB.connection)
+    const bController = new AbortController()
+    const b = pumpInBackground(service.streamDictation({ emitLevel: false }, bController.signal))
+    await vi.advanceTimersByTimeAsync(150)
+    bController.abort()
+    await vi.advanceTimersByTimeAsync(300)
+    await b.done
+    expect(service.getRecoveryStatus().kind).toBe('cancelled')
+
+    // B has recoverable audio, but A's replay still owns the in-flight slot.
+    await expect(service.retryLastFailure()).rejects.toMatchObject({
+      code: 'VOICE_RECOVERY_IN_PROGRESS'
+    })
+    expect(typeText).not.toHaveBeenCalled()
+
+    // Cancelling A settles it; only then may B's own audio be replayed.
+    releaseARetry(fakeA.connection)
+    await aRetrySettled
+
+    const retryB = createFakeConnection('b words')
+    provider.createStream.mockResolvedValueOnce(retryB.connection)
+    expect((await service.retryLastFailure({ delivery: 'active-app' })).text).toBe('b words')
+    expect(typeText).toHaveBeenCalledWith('b words')
+  })
+
+  it('purges the capture when the retry connection refuses as non-retryable', async () => {
+    const service = new VoiceService()
+    await runUntilFailure(service)
+    expect(heldAudioBytes(service)).toBeGreaterThan(0)
+
+    provider.createStream.mockRejectedValueOnce(
+      Object.assign(new Error('VOICE_ASR_AUTHORITY_CHANGED'), {
+        code: 'VOICE_ASR_AUTHORITY_CHANGED',
+        retryable: false
+      })
+    )
+
+    await expect(service.retryLastFailure()).rejects.toMatchObject({
+      code: 'VOICE_ASR_AUTHORITY_CHANGED',
+      retryable: false
+    })
+    expect(heldAudioBytes(service)).toBe(0)
+    expect(service.getRecoveryStatus()).toEqual({ available: false })
+  })
+
+  it('retains the capture when the retry connection fails retryably', async () => {
+    const service = new VoiceService()
+    await runUntilFailure(service)
+    const held = heldAudioBytes(service)
+
+    provider.createStream.mockRejectedValueOnce(
+      Object.assign(new Error('VOICE_ASR_RETRY_TRANSPORT'), {
+        code: 'VOICE_ASR_RETRY_TRANSPORT',
+        retryable: true
+      })
+    )
+
+    await expect(service.retryLastFailure()).rejects.toMatchObject({
+      code: 'VOICE_ASR_RETRY_TRANSPORT',
+      retryable: true
+    })
+    expect(heldAudioBytes(service)).toBe(held)
+    expect(service.getRecoveryStatus().available).toBe(true)
   })
 })
 

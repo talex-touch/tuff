@@ -46,3 +46,4 @@ git diff --check
 18. Replace unbounded body buffering with auth-first atomic rate limiting plus byte-, fragment-, RIFF-, format-, duration-, and Base64-bounded admission. Qwen accepts only 16 kHz mono PCM16 and writes no source handoff object.
 19. Add durable `credits_released_at` and `result_deleted_at` markers. Reconcile expired reserved evidence and incomplete settled releases before object deletion, then TTL-delete pre-acceptance released request rows.
 20. Resolve/persist original reservation ledgers for legacy in-flight rows, backfill only provably old settled rows, and accept only the exact old release hash that differs by the newly added reservation-ledger metadata.
+21. Require R2 before result settlement, bind each `waitUntil` to its owning execution context, fence retry-buffer mutations by capture ID, serialize concurrent recovery, and preserve non-retryable error metadata while purging its PCM.
