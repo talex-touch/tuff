@@ -20,7 +20,7 @@ verified: true
 ---
 code: |
   <script setup lang="ts">
-  import { TxTimeseriesChart } from '@talex-touch/tuffex-charts'
+  import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
 
   const data = [
     { name: 'Requests', data: requests },
@@ -35,6 +35,31 @@ code: |
       y-axis-name="Count"
       :x-axis-tick-format="(ts) => new Date(ts).toLocaleTimeString()"
       :tooltip-value-format="(v) => `${v} req/s`"
+    />
+  </template>
+---
+:::
+
+### 整数刻度 + tooltip 页脚
+
+`yAxisMinInterval` 丢掉比间隔更近的刻度，适合离散计数；`tooltipFooter` 在 tooltip 行列表下方追加一行说明。
+
+:::TuffDemoWrapper{demo="TimeseriesChartAxisDemo" code-lang="vue" title="Integer ticks + tooltip footer" description="yAxisMinInterval 1 只留下整数刻度，tooltipFooter 补一行说明。"}
+---
+code: |
+  <script setup lang="ts">
+  const data = [
+    { name: 'Retries', data: retries },
+  ]
+  </script>
+
+  <template>
+    <TxTimeseriesChart
+      :data="data"
+      :y-axis-min-interval="1"
+      :y-axis-tick-count="5"
+      tooltip-footer="Sampled hourly · retries only"
+      :x-axis-tick-format="(ts) => new Date(ts).toLocaleTimeString()"
     />
   </template>
 ---
@@ -102,7 +127,7 @@ code: |
 
 ## 刷选时间范围
 
-监听 `time-range-change` 即自动启用横向刷选：在绘图区拖拽出选区，松手回调 `(from, to)` 毫秒时间戳并清除选区。太短的拖拽（< 3px）视为点击不触发。
+监听 `time-range-change` 即自动启用横向刷选：在绘图区拖拽出选区，松手回调 `(from, to)` 毫秒时间戳并清除选区。太短的拖拽（< 3px）视为点击不触发。选区矩形填充 `rgba(120, 140, 180, 0.3)`、1px 描边 `rgba(120, 140, 180, 0.8)`。拖拽过程中选区外的绘图区同步变淡：一层覆盖整个绘图区的亮度 `<mask>`（白色绘图区矩形加两条 `#4D4D4D` 条带）把选区外压到 30%，每条序列因此只挂载一次 —— 与 ECharts `outOfBrush.colorAlpha: 0.3` 等价。
 
 ### 拖拽选段
 
@@ -117,7 +142,7 @@ code: |
 
 ## 图例联动
 
-`v-model:hidden-series` 双向绑定被隐藏的序列名数组：隐藏的序列不画、tooltip 也跳过。`highlighted-series` 高亮一条序列，其余降到 30% 不透明度。两者配合 `TxChartLegendItem` 即得可点击、可悬停高亮的图例。
+`v-model:hidden-series` 双向绑定被隐藏的序列名数组：隐藏的序列不画、tooltip 也跳过。`highlighted-series` 高亮一条序列，其余降到 10% 不透明度（对应 ECharts blur 的 `fromState.opacity * 0.1`）。两者配合 `TxChartLegendItem` 即得可点击、可悬停高亮的图例。
 
 ### 点击隐藏 + 悬停高亮
 
@@ -156,6 +181,21 @@ code: |
 ---
 :::
 
+## 动画与交互
+
+图表沿用 ECharts 的默认时序（kumo pin `echarts ^6.0.0`）：
+
+- 首绘：折线/面积是从左到右的裁剪揭示，1000ms `easings.linear`；柱状从基线长出（y 由 `baseY` 插值到目标值、高度 0 → 目标）、散点由 0 缩放到半径并淡入，都是 1000ms cubicInOut。
+- 数据更新：几何形变 500ms cubicInOut。
+- 状态切换（emphasis / blur）：300ms cubicOut。
+- `animationThreshold` 2000：单序列点数超过它时直接渲染终态几何，不播动画。
+- tooltip：隐藏前先延迟 100ms，再用 200ms 淡出并移除 DOM，短暂划过不会闪烁；位置通过 `transform: translate3d()` 交给浏览器插值出 400ms 位移（`cubic-bezier(0.23, 1, 0.32, 1)`）；指针跟踪按 50ms 节流，取 leading + trailing 两个采样。
+- 刷选拖拽期间选区外变淡，松手立即恢复，见上节的单层 `<mask>`。
+- 悬停绘图区时，除最接近光标所在时间戳取值的那条序列外，其余序列都降到 10% 不透明度；这是 ECharts `emphasis.focus: 'series'`（只在真正命中数据项时强调）的文档化近似。
+- `prefers-reduced-motion: reduce` 下所有补间直接落到终态，CSS 过渡统一包在 `@media (prefers-reduced-motion: no-preference)` 内。
+
+`@talex-touch/tuffex/charts` 入口同时导出动画原语，便于在自有图表里复用同一套时序：`easings`（`linear | cubicIn | cubicOut | cubicInOut`）、`cubicBezier(x1, y1, x2, y2)`、`tween({ duration, easing, delay, onUpdate, onComplete })`、`useEnterProgress(options)`、`useTweenedNumbers(source, options)`、`prefersReducedMotion()`，以及常量 `ENTER_DURATION` 1000、`UPDATE_DURATION` 500、`STATE_DURATION` 300、`ANIMATION_THRESHOLD` 2000。tooltip 时序常量（`TOOLTIP_FADE_DURATION` 200、`TOOLTIP_MOVE_DURATION` 400、`TOOLTIP_HIDE_DELAY` 100、`TOOLTIP_TRACK_THROTTLE` 50、`tooltipMoveEasing`）由图表入口内的 `core/animate` 提供。
+
 ## API
 
 ### TimeseriesChart Props
@@ -169,14 +209,17 @@ code: |
 | `xAxisName` / `yAxisName` | `string` | — | 轴名。 |
 | `xAxisTickCount` / `yAxisTickCount` | `number` | `5` | 建议刻度数。 |
 | `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | 刻度格式化。 |
+| `yAxisMinInterval` | `number` | — | y 轴刻度最小间隔（ECharts `yAxis.minInterval`）：更近的刻度被丢弃，最低与最高刻度始终保留；设 `1` 时整数刻度不会再打印成 `1.0`。 |
 | `tooltipValueFormat` | `(v: number) => string` | 原值 | tooltip 数值格式化。 |
 | `tooltipMode` | `'all' \| 'single'` | `'all'` | `single` 只显示离光标 y 值最近的一条。 |
 | `tooltipMaxItems` | `number` | `10` | 超出折叠为「+N more」。 |
 | `tooltipFollowCursor` | `'both' \| 'x'` | `'both'` | `x` 时垂直位置固定，避免抖动。 |
+| `tooltipFooter` | `string` | — | 在 tooltip 行列表下方追加一行文本。 |
+| `tooltipBoundary` | `TimeseriesTooltipBoundary` | `'clipping-ancestors'` | tooltip 碰撞边界；默认沿裁剪祖先（`overflow` 非 `visible` 的 offsetParent）与视口求交后翻转。类型 `TimeseriesTooltipBoundary` 从 `@talex-touch/tuffex/charts` 入口导出。 |
 | `incomplete` | `{ before?, after? }` | — | 不完整周期（仅 line）。 |
 | `gradient` | `boolean` | `false` | 折线渐变填充。 |
 | `loading` | `boolean` | `false` | 骨架态。 |
-| `highlightedSeries` | `string \| null` | — | 高亮序列，其余 30% 不透明度。 |
+| `highlightedSeries` | `string \| null` | — | 高亮序列，其余降到 10% 不透明度。 |
 | `height` | `number` | `350` | 像素高度。 |
 | `width` | `number` | 容器实测 | 显式宽度（SSR/测试用）。 |
 | `ariaDescription` | `string` | — | 无障碍描述（svg `role="img"`）。 |
@@ -193,6 +236,8 @@ code: |
 ## 与 kumo 的差异
 
 - `enableLegendSelection` + echarts 命令式 action → `v-model:hidden-series` 声明式绑定；高亮用 `highlighted-series`。
-- `tooltipBoundary`（clipping-ancestors 碰撞）简化为容器钳制 + 视口翻转。
-- 刷选拖拽过程中不做选区外 30% 变淡（kumo 的 outOfBrush 瞬态），只画选区矩形。
+- `tooltipBoundary` 走真实的 clipping-ancestors 碰撞：沿裁剪祖先（`overflow` 非 `visible` 的 offsetParent）与视口求交，越界时翻转，默认 `'clipping-ancestors'`。
+- 刷选拖拽过程中选区外不再只是画矩形：单层亮度 `<mask>` 把选区外压到 30%，序列仍只挂载一次。
+- 几何动画与 ECharts 对齐：饼图用 `animationType: 'expansion'` 角向生长、悬停外推 `scaleSize` 5px；sankey 与地图没有几何动画（`SankeyView` 无 `initProps`/`updateProps`，地图 `animationDurationUpdate: 0`），不是缺口。
+- 绘图区悬停的系列级强调是近似：ECharts 只在真正命中数据项时 blur 其余序列，这里按光标时间戳取最近的一条。
 - 建议每条序列 ≤ 5k 点：SVG 渲染在万点级会出现掉帧。

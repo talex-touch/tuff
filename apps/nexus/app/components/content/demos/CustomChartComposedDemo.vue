@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxAxis, TxBarSeries, TxChart, TxGrid, TxLineSeries } from '@talex-touch/tuffex-charts'
+import { TxAxis, TxBarSeries, TxChart, TxChartGrid, TxLineSeries } from '@talex-touch/tuffex/charts'
 
 interface Row { month: string, revenue: number, growth: number }
 
@@ -15,7 +15,7 @@ const rows: Row[] = [
 
 <template>
   <TxChart x-type="band" :height="280" :padding="{ top: 24, right: 24, bottom: 36, left: 56 }">
-    <TxGrid y />
+    <TxChartGrid y />
     <TxAxis position="bottom" />
     <TxAxis position="left" :format="(v: number | Date | string) => `${v}k`" />
     <TxBarSeries :data="rows" x="month" y="revenue" :radius="3" />

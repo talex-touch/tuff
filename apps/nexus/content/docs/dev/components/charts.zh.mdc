@@ -1,6 +1,6 @@
 ---
 title: "Charts 图表"
-description: "@talex-touch/tuffex-charts 总览：kumo 同构的 API 面，Vue 直渲 SVG，无 echarts。"
+description: "@talex-touch/tuffex/charts 总览：kumo 同构的 API 面，Vue 直渲 SVG，无 echarts。"
 category: Charts
 status: beta
 since: 0.1.0
@@ -12,15 +12,15 @@ verified: true
 
 ## 安装与引入
 
-图表家族在独立包 `@talex-touch/tuffex-charts` 里，API 面对标 Cloudflare kumo 的 Charts 族，但渲染层是 Vue 直出的 SVG——不依赖 echarts，也不依赖任何整图表框架，数学只用可摇树的 d3 微模块（`d3-scale` / `d3-shape` / `d3-sankey` / `d3-geo`）。
+图表家族与主包同源，走独立子路径 `@talex-touch/tuffex/charts`，API 面对标 Cloudflare kumo 的 Charts 族，但渲染层是 Vue 直出的 SVG——不依赖 echarts，也不依赖任何整图表框架，数学只用可摇树的 d3 微模块（`d3-scale` / `d3-shape` / `d3-sankey` / `d3-geo`）。本族没覆盖的图表类型、以及想直接用 ECharts 配置面时，用 [ECharts 图表家族](/docs/dev/components/echart-charts)：它读同一套颜色 token，以可选 `echarts` peer 的形式提供。
 
 ```bash
-pnpm add @talex-touch/tuffex-charts
+pnpm add @talex-touch/tuffex
 ```
 
 ```ts
-import { TxTimeseriesChart } from '@talex-touch/tuffex-charts'
-import '@talex-touch/tuffex-charts/style.css'
+import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
+import '@talex-touch/tuffex/charts/style.css'
 ```
 
 ## 可用图表
@@ -42,15 +42,15 @@ import '@talex-touch/tuffex-charts/style.css'
 
 ## 图例
 
-`TxChartLegendItem` 提供两种图例项版式：`small` 单行（多序列图例），`large` 堆叠大数值（仪表卡单指标）。`loading` 渲染骨架占位；挂了 `click` 监听时它会渲染成原生 `button`，回车/空格开箱可用。
+`TxChartLegendItem` 提供两种图例项版式：`small` 单行（多序列图例），`large` 堆叠大数值——多个 `large` 并排即组成仪表卡的指标带。`loading` 渲染骨架占位；挂了 `click` 监听时它会渲染成原生 `button`，回车/空格开箱可用。
 
 ### 图例项
 
-:::TuffDemoWrapper{demo="ChartsLegendItemsDemo" code-lang="vue" title="Small / Large / Loading" description="点击第一项切换第二项的 inactive 态。"}
+:::TuffDemoWrapper{demo="ChartsLegendItemsDemo" code-lang="vue" title="Small / Loading" description="点击第一项切换第二项的 inactive 态。"}
 ---
 code: |
   <script setup lang="ts">
-  import { ChartPalette, TxChartLegendItem } from '@talex-touch/tuffex-charts'
+  import { ChartPalette, TxChartLegendItem } from '@talex-touch/tuffex/charts'
   import { ref } from 'vue'
 
   const inactive = ref(false)
@@ -60,10 +60,60 @@ code: |
     <TxChartLegendItem name="Requests" :color="ChartPalette.categoricalVar(0)" value="1,234" @click="inactive = !inactive" />
     <TxChartLegendItem name="Errors" :color="ChartPalette.categoricalVar(2)" value="87" :inactive="inactive" />
     <TxChartLegendItem loading />
-    <TxChartLegendItem variant="large" name="Latency" :color="ChartPalette.categoricalVar(3)" value="42" unit="ms" />
   </template>
 ---
 :::
+
+### 仪表指标带
+
+四个 `large` 图例项并排就是仪表卡的指标带：上方是色点加名称，下方是数值与单位，列与列之间用发丝线分隔，整条指标带铺满卡片宽度。它下面可以接任意图表——这里是四序列 `TxTimeseriesChart`，悬停即可读出同一时间戳上的四个百分位。
+
+:::TuffDemoWrapper{demo="ChartsLegendDashboardDemo" code-lang="vue" title="仪表卡中的 large 指标行" description="把鼠标移到图表上：tooltip 会列出该时间戳下全部百分位。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette, TxChartLegendItem, TxTimeseriesChart } from '@talex-touch/tuffex/charts'
+
+  const percentiles = [
+    { name: 'P99', reading: '124', slot: 0 },
+    { name: 'P95', reading: '76', slot: 1 },
+    { name: 'P75', reading: '32', slot: 2 },
+    { name: 'P50', reading: '10', slot: 3 },
+  ]
+  </script>
+
+  <template>
+    <div class="metrics">
+      <div v-for="item in percentiles" :key="item.name" class="metrics__column">
+        <TxChartLegendItem
+          variant="large"
+          :name="item.name"
+          :color="ChartPalette.categoricalVar(item.slot)"
+          :value="item.reading"
+          unit="ms"
+        />
+      </div>
+    </div>
+    <TxTimeseriesChart
+      :data="data"
+      :height="300"
+      x-axis-name="Time (UTC)"
+      :x-axis-tick-format="formatTime"
+      :timestamp-format="formatStamp"
+      :tooltip-value-format="formatValue"
+      tooltip-footer="Percentiles use a five-minute rolling window."
+    />
+  </template>
+---
+:::
+
+## 动画
+
+图表沿用 ECharts 的默认时序：首绘入场 1000ms `cubicInOut`，数据更新几何形变 500ms `cubicInOut`，悬停/聚焦状态 300ms `cubicOut`；单个序列超过 2000 个点时跳过动画、直接渲染终态。折线/面积的首绘是例外——按 ECharts 折线序列的默认值走 `linear`，从左到右裁剪揭示。
+
+这些默认值抄自 kumo 锁定的 `echarts ^6.0.0`（`src/model/globalDefault.ts`，折线序列与 tooltip 另有各自的默认值）。本包没有 ECharts 运行时，于是把它们固化成导出常量：`ENTER_DURATION`（1000）、`UPDATE_DURATION`（500）、`STATE_DURATION`（300）、`ANIMATION_THRESHOLD`（2000）。宿主声明 `prefers-reduced-motion: reduce` 时所有动画直接落到终帧，CSS 过渡也整体包在 `@media (prefers-reduced-motion: no-preference)` 内。
+
+各图表自己的入场与交互形态（柱从基轴长出、散点缩放、环形按角展开、tooltip 位移与碰撞边界、桑基与地图没有几何动画）写在对应的图表页（Timeseries、Maps、Sankey、Custom Chart），这里不重复。
 
 ## API
 
@@ -71,7 +121,7 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `variant` | `'small' \| 'large'` | `'small'` | 单行 / 堆叠大数值两种版式。 |
+| `variant` | `'small' \| 'large'` | `'small'` | 单行，或可并排进仪表指标带的堆叠大数值。 |
 | `name` | `string` | — | 序列名。`loading` 时可省略。 |
 | `color` | `string` | — | 色点颜色，接受任意 CSS 颜色（含 `var()`）。 |
 | `value` | `string` | — | 已格式化的数值文本。 |

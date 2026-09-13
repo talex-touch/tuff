@@ -25,8 +25,6 @@ const useCloudflareDev = isDev && (process.env.NUXT_USE_CLOUDFLARE_DEV === 'true
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const workspaceRoot = resolve(currentDir, '../..')
 const tuffBusinessSourceEntry = resolve(currentDir, '../../packages/tuff-business/src/index.ts')
-// Always source (like tuff-business): no dist build-ordering dependency.
-const tuffexChartsSourceEntry = resolve(currentDir, '../../packages/tuffex-charts/src/index.ts')
 const tuffexComponentsSourceRoot = resolve(currentDir, '../../packages/tuffex/packages/components/src')
 const tuffexDistRoot = resolve(currentDir, '../../packages/tuffex/dist/es')
 const tuffexDistEntry = resolve(tuffexDistRoot, 'index.js')
@@ -532,7 +530,6 @@ export default defineNuxtConfig({
         { find: /^next-auth\/core$/, replacement: nextAuthCoreEntry },
         ...(useVueDevtoolsApiNoop ? [{ find: /^@vue\/devtools-api$/, replacement: vueDevtoolsApiNoopEntry }] : []),
         { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
-        { find: /^@talex-touch\/tuffex-charts$/, replacement: tuffexChartsSourceEntry },
         { find: /^@tuffex-components\/(.+)$/, replacement: tuffexComponentAutoImportEntry },
         { find: /^@talex-touch\/tuffex$/, replacement: useTuffexSource ? tuffexSourceEntry : tuffexDistEntry },
         { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexDistUtilsEntry },
@@ -563,7 +560,6 @@ export default defineNuxtConfig({
       compilerOptions: {
         paths: {
           '@talex-touch/tuff-business': [tuffBusinessSourceEntry],
-          '@talex-touch/tuffex-charts': [tuffexChartsSourceEntry],
           '@tuffex-components/*': [tuffexComponentTypePathEntry],
           '@talex-touch/tuffex': [useTuffexSource ? tuffexSourceEntry : tuffexDistEntry],
           '@talex-touch/tuffex/base.css': [tuffexBaseStyleEntry],

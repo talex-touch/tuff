@@ -20,7 +20,7 @@ verified: true
 ---
 code: |
   <script setup lang="ts">
-  import { TxTimeseriesChart } from '@talex-touch/tuffex-charts'
+  import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
 
   const data = [
     { name: 'Requests', data: requests },
@@ -35,6 +35,31 @@ code: |
       y-axis-name="Count"
       :x-axis-tick-format="(ts) => new Date(ts).toLocaleTimeString()"
       :tooltip-value-format="(v) => `${v} req/s`"
+    />
+  </template>
+---
+:::
+
+### Integer ticks + tooltip footer
+
+`yAxisMinInterval` drops ticks closer together than the interval, which suits discrete counts; `tooltipFooter` appends one line of text below the tooltip rows.
+
+:::TuffDemoWrapper{demo="TimeseriesChartAxisDemo" code-lang="vue" title="Integer ticks + tooltip footer" description="yAxisMinInterval 1 keeps integer ticks only; tooltipFooter adds a footer row."}
+---
+code: |
+  <script setup lang="ts">
+  const data = [
+    { name: 'Retries', data: retries },
+  ]
+  </script>
+
+  <template>
+    <TxTimeseriesChart
+      :data="data"
+      :y-axis-min-interval="1"
+      :y-axis-tick-count="5"
+      tooltip-footer="Sampled hourly · retries only"
+      :x-axis-tick-format="(ts) => new Date(ts).toLocaleTimeString()"
     />
   </template>
 ---
@@ -102,7 +127,7 @@ code: |
 
 ## Time Range Selection
 
-Attaching a `time-range-change` listener enables horizontal brushing: drag on the plot to draw a selection; releasing emits `(from, to)` in milliseconds and clears the selection. Drags under 3px count as clicks and do nothing.
+Attaching a `time-range-change` listener enables horizontal brushing: drag on the plot to draw a selection; releasing emits `(from, to)` in milliseconds and clears the selection. Drags under 3px count as clicks and do nothing. The selection rectangle fills with `rgba(120, 140, 180, 0.3)` and strokes 1px `rgba(120, 140, 180, 0.8)`. While dragging, the plot outside the selection dims too: one luminance `<mask>` spanning the plot (a white plot rect plus two `#4D4D4D` strips) presses everything outside the selection to 30%, so each series stays mounted exactly once — equivalent to ECharts `outOfBrush.colorAlpha: 0.3`.
 
 ### Drag to select
 
@@ -117,7 +142,7 @@ code: |
 
 ## Legend Interplay
 
-`v-model:hidden-series` two-way binds the hidden series names: hidden series neither render nor appear in tooltips. `highlighted-series` emphasizes one series and dims the rest to 30% opacity. Combine both with `TxChartLegendItem` for a clickable, hover-highlighting legend.
+`v-model:hidden-series` two-way binds the hidden series names: hidden series neither render nor appear in tooltips. `highlighted-series` emphasizes one series and dims the rest to 10% opacity (ECharts blur's `fromState.opacity * 0.1`). Combine both with `TxChartLegendItem` for a clickable, hover-highlighting legend.
 
 ### Click to hide + hover to highlight
 
@@ -156,6 +181,21 @@ code: |
 ---
 :::
 
+## Animation & Interaction
+
+The chart reuses ECharts' default timings (kumo pins `echarts ^6.0.0`):
+
+- First render: lines/areas reveal left to right through a clip, 1000ms `easings.linear`; bars grow out of the base axis (y lerps from `baseY` to the target, height 0 → target) and scatter symbols scale 0 → radius while fading in, all 1000ms cubicInOut.
+- Data updates: geometry morphs over 500ms cubicInOut.
+- State switches (emphasis / blur): 300ms cubicOut.
+- `animationThreshold` 2000: a series with more points than that renders its final geometry with no animation.
+- Tooltip: closing waits 100ms, then fades out over 200ms and removes the DOM, so brief pointer excursions do not flicker; the position travels via `transform: translate3d()` and lets the browser interpolate the 400ms move (`cubic-bezier(0.23, 1, 0.32, 1)`); pointer tracking is throttled to 50ms, taking one leading and one trailing sample.
+- The plot outside the brush selection dims while dragging and restores on release — see the single `<mask>` above.
+- Hovering the plot dims every series except the one nearest the cursor's value at that timestamp to 10% opacity; this is a documented approximation of ECharts `emphasis.focus: 'series'`, which only emphasizes over an actual item.
+- Under `prefers-reduced-motion: reduce` every tween lands on its final frame immediately, and all CSS transitions sit inside `@media (prefers-reduced-motion: no-preference)`.
+
+The `@talex-touch/tuffex/charts` entry also exports the animation primitives, so bespoke charts can reuse the same timings: `easings` (`linear | cubicIn | cubicOut | cubicInOut`), `cubicBezier(x1, y1, x2, y2)`, `tween({ duration, easing, delay, onUpdate, onComplete })`, `useEnterProgress(options)`, `useTweenedNumbers(source, options)`, `prefersReducedMotion()`, plus the constants `ENTER_DURATION` 1000, `UPDATE_DURATION` 500, `STATE_DURATION` 300 and `ANIMATION_THRESHOLD` 2000. The tooltip timing constants (`TOOLTIP_FADE_DURATION` 200, `TOOLTIP_MOVE_DURATION` 400, `TOOLTIP_HIDE_DELAY` 100, `TOOLTIP_TRACK_THROTTLE` 50, `tooltipMoveEasing`) live in the charts entry's `core/animate`.
+
 ## API
 
 ### TimeseriesChart Props
@@ -169,14 +209,17 @@ code: |
 | `xAxisName` / `yAxisName` | `string` | — | Axis names. |
 | `xAxisTickCount` / `yAxisTickCount` | `number` | `5` | Suggested tick counts. |
 | `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | Tick formatters. |
+| `yAxisMinInterval` | `number` | — | Minimum interval between y-axis ticks (ECharts `yAxis.minInterval`): closer ticks drop, the lowest and highest always stay, and integer ticks stop printing as `1.0` when set to `1`. |
 | `tooltipValueFormat` | `(v: number) => string` | raw value | Tooltip value formatter. |
 | `tooltipMode` | `'all' \| 'single'` | `'all'` | `single` shows only the series closest to the cursor's y value. |
 | `tooltipMaxItems` | `number` | `10` | Overflow folds into "+N more". |
 | `tooltipFollowCursor` | `'both' \| 'x'` | `'both'` | `x` pins the vertical position to avoid jitter. |
+| `tooltipFooter` | `string` | — | Extra line of text appended below the tooltip rows. |
+| `tooltipBoundary` | `TimeseriesTooltipBoundary` | `'clipping-ancestors'` | Tooltip collision boundary; by default it walks clipping ancestors (offsetParents whose `overflow` is not `visible`) and intersects them with the viewport before flipping. The `TimeseriesTooltipBoundary` type is exported from the `@talex-touch/tuffex/charts` entry. |
 | `incomplete` | `{ before?, after? }` | — | Incomplete periods (line type only). |
 | `gradient` | `boolean` | `false` | Gradient fill under lines. |
 | `loading` | `boolean` | `false` | Skeleton state. |
-| `highlightedSeries` | `string \| null` | — | Emphasized series; the rest dim to 30% opacity. |
+| `highlightedSeries` | `string \| null` | — | Emphasized series; the rest dim to 10% opacity. |
 | `height` | `number` | `350` | Pixel height. |
 | `width` | `number` | measured | Explicit width (SSR/tests). |
 | `ariaDescription` | `string` | — | Accessible description (svg `role="img"`). |
@@ -193,6 +236,8 @@ code: |
 ## Differences from kumo
 
 - `enableLegendSelection` + imperative echarts actions → declarative `v-model:hidden-series`; highlighting via `highlighted-series`.
-- `tooltipBoundary` (clipping-ancestors collision) is simplified to container clamping + viewport flipping.
-- No 30% out-of-brush dimming during the drag (kumo's transient outOfBrush) — only the selection rectangle renders.
+- `tooltipBoundary` performs the real clipping-ancestors collision walk: it intersects clipping ancestors (offsetParents whose `overflow` is not `visible`) with the viewport, flips on overflow, and defaults to `'clipping-ancestors'`.
+- The brush no longer just draws the rectangle during a drag: one luminance `<mask>` presses everything outside the selection to 30% while each series stays mounted exactly once.
+- Geometry animation matches ECharts: the pie grows angularly via `animationType: 'expansion'` and highlights displace a slice by `scaleSize` 5px; sankey and maps have no geometry animation (`SankeyView` has no `initProps`/`updateProps`, maps set `animationDurationUpdate: 0`) — parity, not a gap.
+- Series-level hover emphasis is an approximation: ECharts blurs the other series only over an actual item, while this picks the nearest series at the cursor's timestamp.
 - Keep each series under ~5k points: SVG rendering degrades in the tens of thousands.

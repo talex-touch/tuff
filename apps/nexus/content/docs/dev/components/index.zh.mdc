@@ -13,10 +13,10 @@ verified: true
 
 ## Tuffex Components 组件库
 
-Tuffex（`@talex-touch/tuffex`）是服务 Talex Touch 生态的 Vue 3 组件库：同一套组件覆盖桌面端 CoreBox、插件 Surface 与本文档站。组件按套件划分——**基础**承载日常界面主体、**进阶**承载高级交互与视觉表达、**AI** 承载 AI 原生界面、**数据**承载可视化与独立图表包——侧边栏顶部的套件切换在这四个组件套件之外，另设「理念」作为第五个纯文档页签；点哪个页签就直接进入该套件的总览页。
+Tuffex（`@talex-touch/tuffex`）是服务 Talex Touch 生态的 Vue 3 组件库：同一套组件覆盖桌面端 CoreBox、插件 Surface 与本文档站。组件按套件划分——**基础**承载日常界面主体、**进阶**承载高级交互与视觉表达、**AI** 承载 AI 原生界面、**数据**承载可视化与图表家族——侧边栏顶部的套件切换在这四个组件套件之外，另设「理念」作为第五个纯文档页签；点哪个页签就直接进入该套件的总览页。
 
 - 交互标本：每个套件页开头都有一块组件预览——《[基础套件](./base-suite.zh.mdc)》《[进阶套件](./pro-suite.zh.mdc)》《[AI 套件](./ai-suite.zh.mdc)》《[数据套件](./data-suite.zh.mdc)》——每个格子都是可交互的真实组件，点名称直达文档。
-- 分套件引入：`@talex-touch/tuffex/base`、`/pro`、`/ai` 三个分类入口按需加载；图表族在独立包 `@talex-touch/tuffex-charts`。
+- 分套件引入：`@talex-touch/tuffex/base`、`/pro`、`/ai` 三个分类入口按需加载；图表族在同包的 `@talex-touch/tuffex/charts` 子路径下。
 
 ## 安装与引入
 
@@ -115,7 +115,7 @@ code: |
 | [基础套件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 91 | `@talex-touch/tuffex/base` |
 | [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 27 | `@talex-touch/tuffex/pro` |
 | [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 29 | `@talex-touch/tuffex/ai` |
-| [数据套件](./data-suite.zh.mdc) | 图表 / 可视化 | 10 | `@talex-touch/tuffex/pro`（可视化）+ `@talex-touch/tuffex-charts`（图表） |
+| [数据套件](./data-suite.zh.mdc) | 图表 / 可视化 | 10 | `@talex-touch/tuffex/pro`（可视化 + 图表）+ `@talex-touch/tuffex/charts`（图表族入口） |
 
 理念是第五个套件页签——纯文档性质、不对应组件入口。本页就是这个页签的总览：上半是组件库定位、设计基础与工具函数，下半是完整组件索引。
 
@@ -323,11 +323,11 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 
 ## 数据
 
-数据可视化与图表：tuffex 主包的可视化组件（经 `@talex-touch/tuffex/pro` 引入）+ 独立图表包 `@talex-touch/tuffex-charts`（kumo 同构、无 echarts）。套件页见《[数据套件](./data-suite.zh.mdc)》。
+数据可视化与图表：tuffex 主包的可视化组件（经 `@talex-touch/tuffex/pro` 引入）+ 同包 `@talex-touch/tuffex/charts` 子路径下的图表家族（kumo 同构、无 echarts）。套件页见《[数据套件](./data-suite.zh.mdc)》。
 
 ### 图表
 
-独立图表包 `@talex-touch/tuffex-charts`（kumo）的文档，与 tuffex 主包分开安装。
+同包 `@talex-touch/tuffex/charts` 子路径下图表家族（kumo）的文档，随 tuffex 主包一起发布。
 
 - [Charts 图表](./charts.zh.mdc)
 - [Chart Colors 图表色板](./chart-colors.zh.mdc)

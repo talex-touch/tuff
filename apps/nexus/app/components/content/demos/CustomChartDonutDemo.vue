@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxArcSeries, TxChart } from '@talex-touch/tuffex-charts'
+import { TxArcSeries, TxChart } from '@talex-touch/tuffex/charts'
 import { ref } from 'vue'
 
 interface Slice { label: string, count: number }

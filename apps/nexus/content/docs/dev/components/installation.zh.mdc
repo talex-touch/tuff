@@ -27,12 +27,13 @@ code: |
 ---
 :::
 
-图表族是**独立的包**，装 Tuffex 不会顺带装上它：
+图表族与主包同源，经子路径 `@talex-touch/tuffex/charts` 引入，不需要额外安装：
 
-:::TuffCodeBlock{lang="bash"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  pnpm add @talex-touch/tuffex-charts
+  import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
+  import '@talex-touch/tuffex/charts/style.css'
 ---
 :::
 
@@ -78,7 +79,7 @@ code: |
 ---
 :::
 
-可视化组件（SparkChart、AllocationBar、DiffTable、SignalMeter）在文档里归入《[数据套件](./data-suite.zh.mdc)》，但运行时仍从 `pro` 入口引入：套件拆分是文档层面的组织方式，运行时入口始终是 `base` / `pro` / `ai`。
+可视化组件（SparkChart、AllocationBar、DiffTable、SignalMeter）与图表族在文档里归入《[数据套件](./data-suite.zh.mdc)》，但运行时都从 `pro` 入口引入：套件拆分是文档层面的组织方式，运行时入口始终是 `base` / `pro` / `ai`。图表族另有专属的 `@talex-touch/tuffex/charts` 入口，按族整体引入时用它。
 
 ### 根入口（迁移用）
 

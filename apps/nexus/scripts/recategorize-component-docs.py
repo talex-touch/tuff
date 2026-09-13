@@ -14,15 +14,15 @@ Categories roll up into five suites via DocsSidebar's CATEGORY_SUITE_MAP:
 
 The suite assignment table lives in .trellis/tasks/08-30-docs-suite-split/prd.md;
 keep this file and DocsSidebar.vue in sync. The tuffex entry barrels stay
-base/pro/ai: 'data' is a docs-level split (Visualization components import from
-the pro barrel; the chart family is the standalone @talex-touch/tuffex-charts
-package).
+base/pro/ai: 'data' is a docs-level split (Visualization components and the
+chart family both import from the pro barrel; the chart family also ships
+behind the @talex-touch/tuffex/charts subpath).
 
 `Foundations`, `BaseSuite`, `ProSuite` and `AiSuite` are special cases: the
 sidebar renders their pages as standalone links (suite overview first) rather
 than as collapsible groups.
 
-Chart docs (standalone @talex-touch/tuffex-charts package) live in data / "Charts";
+Chart docs (the @talex-touch/tuffex/charts subpath) live in data / "Charts";
 data-suite.mdc is the data suite's overview page.
 """
 
@@ -239,8 +239,8 @@ TAXONOMY: dict[str, list[str]] = {
     ],
     # ── suite: data 数据 ─────────────────────────────────────────────────
     # Suite overview page: rendered as the suite's first standalone link. The
-    # Charts group below documents the standalone @talex-touch/tuffex-charts
-    # package (kumo).
+    # Charts group below documents the @talex-touch/tuffex/charts
+    # subpath (kumo).
     "DataSuite": [
         "data-suite",
     ],
