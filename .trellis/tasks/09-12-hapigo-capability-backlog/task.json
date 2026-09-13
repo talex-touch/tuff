@@ -1,0 +1,35 @@
+{
+  "id": "hapigo-capability-backlog",
+  "name": "hapigo-capability-backlog",
+  "title": "HapiGo capability parity backlog",
+  "description": "Plan HapiGo-derived content sources, live tabs, file and clipboard workflows, plus a unified Tuff destination alias catalog and offline-first image asset delivery.",
+  "status": "planning",
+  "dev_type": "feature",
+  "scope": "repository",
+  "package": "core-app",
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-12",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": ["09-12-unified-app-destinations"],
+  "parent": null,
+  "relatedFiles": [
+    "apps/core-app/src/main/modules/box-tool/addon/system/main-window-provider.ts",
+    "apps/core-app/src/renderer/src/modules/settings/categories.ts",
+    "apps/core-app/src/renderer/src/modules/hooks/useSvgContent.ts",
+    "packages/tuffex/packages/components/src/icon/src/TxIcon.vue",
+    "plugins/clipboard-history/",
+    ".trellis/tasks/07-29-screenshot-ocr-qr-color/prd.md"
+  ],
+  "notes": "Planning only. First implementation slice should establish the typed destination catalog/navigation service and replace the remote main-window favicon with a bundled or class icon.",
+  "meta": {
+    "nextAction": "Review and approve the first implementation slice; do not start HapiGo source adapters before the destination and asset foundations are scheduled."
+  }
+}
