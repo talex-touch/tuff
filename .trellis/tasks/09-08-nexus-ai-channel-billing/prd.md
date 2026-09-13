@@ -57,3 +57,9 @@ The user approved continuing with built-in CoreApp Nexus calls. Extend the exist
 - [ ] Fresh and existing settings expose the built-in speech capability without overriding explicit disabled providers/bindings; login-required and credit errors are actionable.
 - [ ] The file-transcription UI shows the server's billed credits and duration. Filetrans remains batch-only; live `audio.asr` and upstream credentials remain unchanged.
 - [ ] Verify focused CoreApp runtime/auth/routing regressions and the real settings surface; distinguish local protocol evidence from a paid live DashScope run.
+## User-directed Qwen Audio Flash continuation (2026-09-13)
+
+- The exact selected model is `qwen-audio-3.0-asr-flash`, not the separate Filetrans or realtime model. The official DashScope contract is synchronous HTTP through `services/aigc/multimodal-generation/generation`; it accepts a bounded WAV as a Base64 Data URI and returns the final transcript.
+- Nexus remains the sole credential and provider-routing owner. CoreApp sends bounded captured WAV bytes through the existing authenticated `audio.stt` path; it never receives or forwards the DashScope API key.
+- The existing request/credit/idempotency boundary remains authoritative. A synchronous result is settled before the request response and retained only in a private, TTL-bounded result object so a same-key retry can recover the transcript without a second provider call. The transcript never enters D1 request/ledger projections.
+- The shared Voice Session may expose this route as final-only buffered input when no realtime `audio.asr` binding exists. It must not fabricate partial events or claim realtime latency for this non-realtime model.

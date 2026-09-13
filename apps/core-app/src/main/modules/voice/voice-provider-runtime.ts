@@ -23,6 +23,7 @@ import {
   getEffectiveCapabilityRoutingConfig
 } from '../ai/intelligence-config'
 import { getIntelligenceProviderManager, providerSupportsCapability } from '../ai/intelligence-sdk'
+import { createBufferedSttVoiceProvider } from './buffered-stt-provider'
 import { getAuthToken } from '../auth'
 import { resolveProviderCredential } from '../ai/provider-credential-runtime'
 
@@ -32,6 +33,7 @@ const STT_CAPABILITY_ID = 'audio.stt'
 export interface ConfiguredAsrProvider {
   provider: VoiceProviderAdapter
   model: string
+  mode?: 'realtime' | 'buffered'
 }
 
 function hasEnabledCapabilityBinding(capabilityId: string): boolean {
@@ -105,10 +107,26 @@ function capabilityStatus(
   return { ready: true }
 }
 
+function resolveNexusBufferedSttProvider(): ConfiguredAsrProvider | null {
+  const route = resolveCapabilityProvider(STT_CAPABILITY_ID, 'stt', true)
+  if (!route?.model || !isNexusManagedProvider(route.provider)) return null
+  return {
+    model: route.model,
+    mode: 'buffered',
+    provider: createBufferedSttVoiceProvider({
+      providerId: route.provider.id,
+      model: route.model
+    })
+  }
+}
+
 /** Read-only projection for the voice UI; Intelligence capability bindings remain the route owner. */
 export function getRecognitionStatus(): VoiceRecognitionStatusSnapshot {
+  const asr = capabilityStatus(ASR_CAPABILITY_ID, 'asr', 'VOICE_ASR')
+  const buffered =
+    asr.reason === 'VOICE_ASR_NOT_CONFIGURED' ? resolveNexusBufferedSttProvider() : null
   return {
-    asr: capabilityStatus(ASR_CAPABILITY_ID, 'asr', 'VOICE_ASR'),
+    asr: buffered ? { ready: true, mode: 'buffered' } : asr,
     stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT')
   }
 }
@@ -116,6 +134,8 @@ export function getRecognitionStatus(): VoiceRecognitionStatusSnapshot {
 /** Resolves and freezes the shared route resolver's live-ASR adapter before microphone capture. */
 export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
   if (!hasEnabledCapabilityBinding(ASR_CAPABILITY_ID)) {
+    const buffered = resolveNexusBufferedSttProvider()
+    if (buffered) return buffered
     throw new Error('VOICE_ASR_NOT_CONFIGURED')
   }
   const route = resolveCapabilityProvider(ASR_CAPABILITY_ID, 'asr', true)
@@ -126,7 +146,9 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
         : 'VOICE_ASR_PROVIDER_UNAVAILABLE'
     )
   }
-  const credential = resolveProviderCredential(route.provider)
+  const credential = isNexusManagedProvider(route.provider)
+    ? getAuthToken()
+    : resolveProviderCredential(route.provider)
   if (!credential) throw new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
   const metadata = getVoiceAsrMetadata(route.provider.metadata)
   if (!metadata) throw new Error('VOICE_ASR_PROVIDER_UNAVAILABLE')
@@ -145,6 +167,7 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
       const endpoints = resolveBailianVoiceEndpoints(route.provider.baseUrl)
       return {
         model,
+        mode: 'realtime',
         provider: new BailianParaformerVoiceProvider({
           credentials: { apiKey: credential, workspaceId: endpoints.workspaceId },
           socketFactory,
@@ -157,6 +180,7 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
       const endpoints = resolveBailianVoiceEndpoints(route.provider.baseUrl)
       return {
         model,
+        mode: 'realtime',
         provider: new DashscopeQwenAsrRealtimeVoiceProvider({
           credentials: { apiKey: credential, workspaceId: endpoints.workspaceId },
           socketFactory,
@@ -167,6 +191,7 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
     case 'doubao':
       return {
         model,
+        mode: 'realtime',
         provider: new DoubaoVoiceProvider({
           credentials: { apiKey: credential, resourceId: metadata.resourceId! },
           socketFactory,

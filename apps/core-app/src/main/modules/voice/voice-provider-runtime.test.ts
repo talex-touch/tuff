@@ -31,9 +31,22 @@ vi.mock('../ai/intelligence-sdk', () => ({
 vi.mock('../ai/provider-credential-runtime', () => ({
   resolveProviderCredential: (provider: { id: string }) => runtime.credentials[provider.id]
 }))
+// The Nexus-managed route is authorised by the signed-in session token rather than a per-provider
+// credential, so the fallback path is only reachable with a token present.
+vi.mock('../auth', () => ({ getAuthToken: () => 'nexus-session-token' }))
 vi.mock('@talex-touch/tuff-voice', () => ({
   createFetchHttpClient: vi.fn(() => ({ request: vi.fn() })),
   createNodeVoiceSocketFactory: vi.fn(() => ({ connect: vi.fn() })),
+  VoiceProviderError: class VoiceProviderError extends Error {
+    readonly code: string
+    readonly retryable = false
+
+    constructor(code: string, message: string) {
+      super(message)
+      this.name = 'VoiceProviderError'
+      this.code = code
+    }
+  },
   BailianParaformerVoiceProvider: class {
     readonly id = 'bailian-paraformer'
     readonly capabilities = { stream: true, upload: true, formats: [] }
@@ -60,6 +73,7 @@ vi.mock('@talex-touch/tuff-voice', () => ({
   }
 }))
 
+import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
 import { getConfiguredAsrProvider, getRecognitionStatus } from './voice-provider-runtime'
 
 function channel(
@@ -99,6 +113,24 @@ function configure(
 const BAILIAN_WORKSPACE_BASE_URL =
   'https://workspace-1.cn-beijing.maas.aliyuncs.com/compatible-mode/v1'
 const BAILIAN_PUBLIC_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+
+/** The Nexus-managed audio.stt route: batch transcription, never a realtime ASR socket. */
+function nexusSttChannel() {
+  return channel('tuff-nexus-default', {
+    capabilities: ['audio.stt'],
+    models: [NEXUS_AUDIO_TRANSCRIBE_MODEL],
+    metadata: { origin: 'tuff-nexus' }
+  })
+}
+
+function nexusSttBinding() {
+  return {
+    providerId: 'tuff-nexus-default',
+    enabled: true,
+    priority: 1,
+    models: [NEXUS_AUDIO_TRANSCRIBE_MODEL]
+  }
+}
 
 describe('capability-bound voice ASR provider resolution', () => {
   beforeEach(() => {
@@ -321,5 +353,59 @@ describe('capability-bound voice ASR provider resolution', () => {
     expect(() => getConfiguredAsrProvider()).toThrow(reason)
     expect(adapterOptions.bailian).toEqual([])
     expect(adapterOptions.doubao).toEqual([])
+  })
+
+  it('falls back to the ready Nexus audio.stt route as a buffered stream when audio.asr is unbound', () => {
+    configure({ 'tuff-nexus-default': nexusSttChannel() }, { 'audio.stt': [nexusSttBinding()] })
+
+    expect(getRecognitionStatus().asr).toEqual({ ready: true, mode: 'buffered' })
+
+    const configured = getConfiguredAsrProvider()
+
+    expect(configured.mode).toBe('buffered')
+    expect(configured.model).toBe(NEXUS_AUDIO_TRANSCRIBE_MODEL)
+    expect(configured.provider.id).toBe('nexus-audio-stt-buffered')
+    expect(adapterOptions.bailian).toEqual([])
+    expect(adapterOptions.qwen).toEqual([])
+    expect(adapterOptions.doubao).toEqual([])
+  })
+
+  it.each([
+    {
+      name: 'the bound channel no longer implements audio.asr',
+      asr: channel('degraded-asr', {
+        baseUrl: BAILIAN_WORKSPACE_BASE_URL,
+        capabilities: ['audio.stt'],
+        models: ['paraformer-realtime-v2']
+      }),
+      credential: 'secure-asr-credential',
+      reason: 'VOICE_ASR_PROVIDER_UNAVAILABLE'
+    },
+    {
+      name: 'the bound channel has no secure credential',
+      asr: channel('uncredentialed-asr', {
+        baseUrl: BAILIAN_WORKSPACE_BASE_URL,
+        models: ['paraformer-realtime-v2'],
+        metadata: { voiceAsr: { protocol: 'bailian-paraformer' } }
+      }),
+      credential: undefined,
+      reason: 'VOICE_ASR_CREDENTIAL_UNAVAILABLE'
+    }
+  ])('does not fall back to buffered audio.stt when $name', ({ asr, credential, reason }) => {
+    const providerId = asr.getConfig().id
+    configure(
+      { [providerId]: asr, 'tuff-nexus-default': nexusSttChannel() },
+      {
+        'audio.asr': [
+          { providerId, enabled: true, priority: 1, models: ['paraformer-realtime-v2'] }
+        ],
+        'audio.stt': [nexusSttBinding()]
+      },
+      credential ? { [providerId]: credential } : {}
+    )
+
+    expect(getRecognitionStatus().asr).toEqual({ ready: false, reason })
+    expect(() => getConfiguredAsrProvider()).toThrow(reason)
+    expect(adapterOptions.bailian).toEqual([])
   })
 })

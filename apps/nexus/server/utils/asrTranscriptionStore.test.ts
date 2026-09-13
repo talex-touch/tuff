@@ -85,8 +85,7 @@ async function expectDashScopeError(
     },
     (error: unknown) => {
       expect(error).toBeInstanceOf(DashScopeAsrError)
-      if (!(error instanceof DashScopeAsrError))
-        return
+      if (!(error instanceof DashScopeAsrError)) return
       expect(error.code).toBe(expected.code)
       expect(error.accepted).toBe(expected.accepted)
       expect(error.message).toBe(expected.code)
@@ -106,8 +105,18 @@ describe('Filetrans transcript and WAV boundaries', () => {
   })
 
   it.each([
-    { name: 'charges the audio-duration floor for a short transcript', transcript: '好', billedSeconds: 1.01, credits: 5 },
-    { name: 'charges the larger transcript-unit value when speech is dense', transcript: '一二三四五六七八九', billedSeconds: 1, credits: 9 },
+    {
+      name: 'charges the audio-duration floor for a short transcript',
+      transcript: '好',
+      billedSeconds: 1.01,
+      credits: 5,
+    },
+    {
+      name: 'charges the larger transcript-unit value when speech is dense',
+      transcript: '一二三四五六七八九',
+      billedSeconds: 1,
+      credits: 9,
+    },
   ])('calculates Filetrans credits from the $name', ({ transcript, billedSeconds, credits }) => {
     expect(calculateFiletransCredits(asrPricing, transcript, billedSeconds)).toBe(credits)
   })
@@ -145,10 +154,12 @@ describe('Filetrans transcript and WAV boundaries', () => {
       statusMessage: 'Audio WAV format is unsupported.',
     },
   ])('rejects $name before accepting audio', ({ audio, statusMessage }) => {
-    expect(() => parseWavDurationSeconds(audio)).toThrowError(expect.objectContaining({
-      statusCode: 400,
-      statusMessage,
-    }))
+    expect(() => parseWavDurationSeconds(audio)).toThrowError(
+      expect.objectContaining({
+        statusCode: 400,
+        statusMessage,
+      }),
+    )
   })
 })
 
@@ -159,7 +170,7 @@ describe('DashScope Filetrans adapter', () => {
   })
 
   it('submits the Filetrans task and returns only the provider task identifier', async () => {
-    const requests: Array<{ method: string, url: string, authorization: string | null, body: string | null }> = []
+    const requests: Array<{ method: string; url: string; authorization: string | null; body: string | null }> = []
     const fetcher: typeof fetch = async (input, init) => {
       const headers = new Headers(init?.headers)
       requests.push({
@@ -179,35 +190,43 @@ describe('DashScope Filetrans adapter', () => {
 
     expect(submission).toEqual({ taskId: 'task-123' })
     expect(JSON.stringify(submission)).not.toContain(testApiKey)
-    expect(requests).toEqual([{
-      method: 'POST',
-      url: 'https://dashscope.example.com/api/v1/services/audio/asr/transcription',
-      authorization: `Bearer ${testApiKey}`,
-      body: JSON.stringify({
-        model: 'qwen-audio-3.0-asr-flash-filetrans',
-        input: { file_urls: ['https://controlled.example.com/handoff.wav'] },
-        parameters: { channel_id: [0] },
-      }),
-    }])
+    expect(requests).toEqual([
+      {
+        method: 'POST',
+        url: 'https://dashscope.example.com/api/v1/services/audio/asr/transcription',
+        authorization: `Bearer ${testApiKey}`,
+        body: JSON.stringify({
+          model: 'qwen-audio-3.0-asr-flash-filetrans',
+          input: { file_urls: ['https://controlled.example.com/handoff.wav'] },
+          parameters: { channel_id: [0] },
+        }),
+      },
+    ])
   })
 
   it('normalizes a successful poll and transcript document into the Filetrans task result', async () => {
-    const requests: Array<{ method: string, url: string }> = []
+    const requests: Array<{ method: string; url: string }> = []
     const fetcher: typeof fetch = async (input, init) => {
       const url = String(input)
       requests.push({ method: init?.method ?? 'GET', url })
       if (url.endsWith('/tasks/task-123')) {
-        return new Response(JSON.stringify({
-          output: {
-            task_status: 'SUCCEEDED',
-            results: [{ transcription_url: 'https://results.example.com/task-123.json' }],
-          },
-        }), { status: 200 })
+        return new Response(
+          JSON.stringify({
+            output: {
+              task_status: 'SUCCEEDED',
+              results: [{ transcription_url: 'https://results.example.com/task-123.json' }],
+            },
+          }),
+          { status: 200 },
+        )
       }
-      return new Response(JSON.stringify({
-        properties: { original_duration_in_milliseconds: 2_500 },
-        transcripts: [{ text: ' 第一行 ' }, { text: '第二行' }],
-      }), { status: 200 })
+      return new Response(
+        JSON.stringify({
+          properties: { original_duration_in_milliseconds: 2_500 },
+          transcripts: [{ text: ' 第一行 ' }, { text: '第二行' }],
+        }),
+        { status: 200 },
+      )
     }
 
     const result = await createDashScopeFiletransAdapter({ fetch: fetcher }).getTask(
@@ -233,23 +252,23 @@ describe('DashScope Filetrans adapter', () => {
       return new Response(JSON.stringify({ output: { task_status: 'FAILED' } }), { status: 200 })
     })
 
-    await expect(createDashScopeFiletransAdapter({ fetch: fetcher }).getTask(
-      createEvent(),
-      dashScopeProvider(),
-      'task-123',
-    )).resolves.toEqual({ status: 'failed' })
+    await expect(
+      createDashScopeFiletransAdapter({ fetch: fetcher }).getTask(createEvent(), dashScopeProvider(), 'task-123'),
+    ).resolves.toEqual({ status: 'failed' })
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
 
   it('maps malformed submission payloads to a safe stable provider error', async () => {
-    const fetcher: typeof fetch = async () => new Response(JSON.stringify({ output: { task_id: 'not a valid task id' } }), { status: 200 })
+    const fetcher: typeof fetch = async () =>
+      new Response(JSON.stringify({ output: { task_id: 'not a valid task id' } }), { status: 200 })
 
     await expectDashScopeError(
-      () => createDashScopeFiletransAdapter({ fetch: fetcher }).submit(
-        createEvent(),
-        dashScopeProvider(),
-        'https://controlled.example.com/handoff.wav',
-      ),
+      () =>
+        createDashScopeFiletransAdapter({ fetch: fetcher }).submit(
+          createEvent(),
+          dashScopeProvider(),
+          'https://controlled.example.com/handoff.wav',
+        ),
       { code: 'ASR_PROVIDER_RESPONSE_INVALID', accepted: false },
     )
   })
@@ -258,11 +277,7 @@ describe('DashScope Filetrans adapter', () => {
     const fetcher: typeof fetch = async () => new Response('provider upstream failure', { status: 503 })
 
     await expectDashScopeError(
-      () => createDashScopeFiletransAdapter({ fetch: fetcher }).getTask(
-        createEvent(),
-        dashScopeProvider(),
-        'task-123',
-      ),
+      () => createDashScopeFiletransAdapter({ fetch: fetcher }).getTask(createEvent(), dashScopeProvider(), 'task-123'),
       { code: 'ASR_PROVIDER_UNAVAILABLE', accepted: true },
     )
   })

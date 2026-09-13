@@ -266,7 +266,10 @@ describe('provider registry quota helpers', () => {
 
 describe('provider registry quota UI contract', () => {
   it('renders multi-channel provider quota summaries in the admin panel', () => {
-    const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
+    const panel = readFileSync(
+      new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url),
+      'utf8',
+    )
 
     expect(panel).toContain('getProviderQuotaList')
     expect(panel).toContain('getProviderQuotaList(selectedProvider.id)')
@@ -280,7 +283,10 @@ describe('provider registry quota UI contract', () => {
 
 describe('provider registry observability UI contract', () => {
   it('renders provider, scene, usage, and health next-action hints in the admin panel', () => {
-    const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
+    const panel = readFileSync(
+      new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url),
+      'utf8',
+    )
 
     expect(panel).toContain('getProviderObservabilityActionHint(provider.id)')
     expect(panel).toContain('getSceneObservabilityActionHint(scene.id)')
@@ -296,7 +302,10 @@ describe('provider registry observability UI contract', () => {
 
 describe('provider registry capability template UI contract', () => {
   it('uses a compact table for adapter-scoped capability rows without exposing schema refs', () => {
-    const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
+    const panel = readFileSync(
+      new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url),
+      'utf8',
+    )
 
     expect(panel).toContain('providerCapabilityTemplateOptions')
     expect(panel).toContain('applyProviderCapabilityTemplate(row, $event)')
@@ -316,17 +325,12 @@ describe('provider registry provider templates', () => {
     const aiTemplates = providerRegistryTemplates.filter(template => template.metadata.source === 'intelligence')
     const chatAbility = getTuffIntelligenceBuiltinAbility('text.chat')
 
-    expect(aiTemplates.map(template => template.id)).toEqual(expect.arrayContaining([
-      'openai-compatible-ai',
-      'openai-responses-ai',
-      'deepseek-ai',
-    ]))
-    expect(aiTemplates.flatMap(template => template.capabilities.map(row => row.capability))).toEqual(expect.arrayContaining([
-      'chat.completion',
-      'text.summarize',
-      'content.extract',
-      'vision.ocr',
-    ]))
+    expect(aiTemplates.map(template => template.id)).toEqual(
+      expect.arrayContaining(['openai-compatible-ai', 'openai-responses-ai', 'deepseek-ai']),
+    )
+    expect(aiTemplates.flatMap(template => template.capabilities.map(row => row.capability))).toEqual(
+      expect.arrayContaining(['chat.completion', 'text.summarize', 'content.extract', 'vision.ocr']),
+    )
     expect(aiTemplates[0]?.capabilities.find(row => row.capability === 'chat.completion')).toEqual({
       capability: chatAbility?.id,
       schemaRef: chatAbility?.schemaRef,
@@ -348,23 +352,45 @@ describe('provider registry provider templates', () => {
 
   it('groups provider templates by service category before adapter selection', () => {
     expect(providerServiceCategoryOptions).toEqual(['ai', 'exchange', 'screenshot', 'translation'])
-    expect(providerRegistryTemplates.map(template => template.serviceCategory)).toEqual(expect.arrayContaining([
-      'ai',
-      'exchange',
-      'screenshot',
-      'translation',
-    ]))
-    expect(providerRegistryTemplates.find(template => template.id === 'exchange-rate')?.capabilities.map(row => row.capability)).toEqual([
-      'fx.rate.latest',
-      'fx.convert',
-    ])
-    expect(providerRegistryTemplates.find(template => template.id === 'screenshot-overlay')?.capabilities.map(row => row.capability)).toEqual([
-      'overlay.render',
-    ])
+    expect(providerRegistryTemplates.map(template => template.serviceCategory)).toEqual(
+      expect.arrayContaining(['ai', 'exchange', 'screenshot', 'translation']),
+    )
+    expect(
+      providerRegistryTemplates
+        .find(template => template.id === 'exchange-rate')
+        ?.capabilities.map(row => row.capability),
+    ).toEqual(['fx.rate.latest', 'fx.convert'])
+    expect(
+      providerRegistryTemplates
+        .find(template => template.id === 'screenshot-overlay')
+        ?.capabilities.map(row => row.capability),
+    ).toEqual(['overlay.render'])
+  })
+
+  it('registers the Qwen Audio Flash synchronous ASR template with the exact model and transport', () => {
+    const template = providerRegistryTemplates.find(candidate => candidate.id === 'dashscope-qwen-audio-asr')
+
+    expect(template).toMatchObject({
+      serviceCategory: 'ai',
+      vendor: 'dashscope',
+      authType: 'api_key',
+      models: ['qwen-audio-3.0-asr-flash'],
+      defaultModel: 'qwen-audio-3.0-asr-flash',
+    })
+    expect(template?.capabilities.map(row => row.capability)).toEqual(['audio.transcribe'])
+    expect(template?.metadata).toMatchObject({
+      adapter: 'dashscope-qwen-audio-asr',
+      transport: 'qwen-audio-sync',
+      defaultModel: 'qwen-audio-3.0-asr-flash',
+      maxDurationSeconds: 300,
+    })
   })
 
   it('renders service category and adapter selectors in the admin panel', () => {
-    const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
+    const panel = readFileSync(
+      new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url),
+      'utf8',
+    )
 
     expect(panel).toContain('providerServiceCategoryOptions')
     expect(panel).toContain('applyProviderServiceCategory')
@@ -393,10 +419,12 @@ describe('provider registry provider templates', () => {
       tags: ['summary', 'entities', 'actions', 'keywords'],
     })
 
-    const panel = createSceneRunPanel(sceneRecord({
-      requiredCapabilities: ['text.summarize'],
-      bindings: [],
-    }))
+    const panel = createSceneRunPanel(
+      sceneRecord({
+        requiredCapabilities: ['text.summarize'],
+        bindings: [],
+      }),
+    )
     expect(JSON.parse(panel.inputText)).toMatchObject({
       text: expect.stringContaining('Provider Registry'),
       style: 'concise',
@@ -404,7 +432,10 @@ describe('provider registry provider templates', () => {
   })
 
   it('keeps run drawer wired to capability-specific samples and failed run hints', () => {
-    const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
+    const panel = readFileSync(
+      new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url),
+      'utf8',
+    )
 
     expect(panel).toContain('applySceneRunCapabilitySample')
     expect(panel).toContain('selectSceneRunCapability')
@@ -437,26 +468,30 @@ function sceneRecord(overrides: Partial<SceneRegistryRecord>): SceneRegistryReco
 
 describe('provider registry observability summaries', () => {
   it('uses latest provider health as the provider status source', () => {
-    const summary = resolveProviderObservability('provider-a', [
-      healthEntry({
-        id: 'older-health',
-        status: 'healthy',
-        capability: 'text.summarize',
-        checkedAt: '2026-05-17T01:00:00.000Z',
-      }),
-      healthEntry({
-        id: 'latest-health',
-        status: 'degraded',
-        capability: 'chat.completion',
-        checkedAt: '2026-05-17T02:00:00.000Z',
-      }),
-    ], [
-      usageEntry({
-        id: 'latest-usage',
-        status: 'failed',
-        createdAt: '2026-05-17T03:00:00.000Z',
-      }),
-    ])
+    const summary = resolveProviderObservability(
+      'provider-a',
+      [
+        healthEntry({
+          id: 'older-health',
+          status: 'healthy',
+          capability: 'text.summarize',
+          checkedAt: '2026-05-17T01:00:00.000Z',
+        }),
+        healthEntry({
+          id: 'latest-health',
+          status: 'degraded',
+          capability: 'chat.completion',
+          checkedAt: '2026-05-17T02:00:00.000Z',
+        }),
+      ],
+      [
+        usageEntry({
+          id: 'latest-usage',
+          status: 'failed',
+          createdAt: '2026-05-17T03:00:00.000Z',
+        }),
+      ],
+    )
 
     expect(summary.latestHealth?.id).toBe('latest-health')
     expect(summary.latestUsage?.id).toBe('latest-usage')
@@ -464,13 +499,17 @@ describe('provider registry observability summaries', () => {
   })
 
   it('marks provider unhealthy when usage failed and no health check exists', () => {
-    const summary = resolveProviderObservability('provider-a', [], [
-      usageEntry({
-        id: 'failed-usage',
-        status: 'failed',
-        errorCode: 'PROVIDER_TIMEOUT',
-      }),
-    ])
+    const summary = resolveProviderObservability(
+      'provider-a',
+      [],
+      [
+        usageEntry({
+          id: 'failed-usage',
+          status: 'failed',
+          errorCode: 'PROVIDER_TIMEOUT',
+        }),
+      ],
+    )
 
     expect(summary.latestHealth).toBeNull()
     expect(summary.latestUsage?.id).toBe('failed-usage')
@@ -478,11 +517,11 @@ describe('provider registry observability summaries', () => {
   })
 
   it('marks provider unknown when there is no observability data', () => {
-    const summary = resolveProviderObservability('provider-a', [
-      healthEntry({ providerId: 'provider-b' }),
-    ], [
-      usageEntry({ providerId: 'provider-b' }),
-    ])
+    const summary = resolveProviderObservability(
+      'provider-a',
+      [healthEntry({ providerId: 'provider-b' })],
+      [usageEntry({ providerId: 'provider-b' })],
+    )
 
     expect(summary).toEqual({
       latestHealth: null,
@@ -522,9 +561,7 @@ describe('provider registry observability summaries', () => {
   })
 
   it('marks scene unknown when it has no usage ledger rows', () => {
-    const summary = resolveSceneObservability('scene-a', [
-      usageEntry({ sceneId: 'scene-b' }),
-    ])
+    const summary = resolveSceneObservability('scene-a', [usageEntry({ sceneId: 'scene-b' })])
 
     expect(summary).toEqual({
       latestUsage: null,
@@ -608,11 +645,13 @@ describe('provider registry observability action hints', () => {
 
 describe('provider registry ledger action hints', () => {
   it('returns trace guidance for failed usage rows', () => {
-    const hint = resolveUsageLedgerActionHint(usageEntry({
-      status: 'failed',
-      errorCode: 'NO_PROVIDER',
-      errorMessage: 'No provider can satisfy the scene.',
-    }))
+    const hint = resolveUsageLedgerActionHint(
+      usageEntry({
+        status: 'failed',
+        errorCode: 'NO_PROVIDER',
+        errorMessage: 'No provider can satisfy the scene.',
+      }),
+    )
 
     expect(hint).toEqual({
       tone: 'danger',
@@ -623,10 +662,12 @@ describe('provider registry ledger action hints', () => {
   })
 
   it('distinguishes planned usage from executed evidence', () => {
-    const hint = resolveUsageLedgerActionHint(usageEntry({
-      status: 'planned',
-      runId: 'run-planned',
-    }))
+    const hint = resolveUsageLedgerActionHint(
+      usageEntry({
+        status: 'planned',
+        runId: 'run-planned',
+      }),
+    )
 
     expect(hint).toEqual({
       tone: 'warning',
@@ -637,11 +678,13 @@ describe('provider registry ledger action hints', () => {
   })
 
   it('flags estimated completed usage until billing reference is confirmed', () => {
-    const hint = resolveUsageLedgerActionHint(usageEntry({
-      status: 'completed',
-      estimated: true,
-      providerUsageRef: 'provider-usage-1',
-    }))
+    const hint = resolveUsageLedgerActionHint(
+      usageEntry({
+        status: 'completed',
+        estimated: true,
+        providerUsageRef: 'provider-usage-1',
+      }),
+    )
 
     expect(hint).toEqual({
       tone: 'warning',
@@ -649,19 +692,25 @@ describe('provider registry ledger action hints', () => {
       fallback: 'Usage is estimated. Confirm provider billing reference before using it as final evidence.',
       detail: 'provider-usage-1',
     })
-    expect(resolveUsageLedgerReference(usageEntry({
-      providerUsageRef: 'provider-usage-1',
-      pricingRef: 'pricing-1',
-      runId: 'run-1',
-    }))).toBe('provider-usage-1')
+    expect(
+      resolveUsageLedgerReference(
+        usageEntry({
+          providerUsageRef: 'provider-usage-1',
+          pricingRef: 'pricing-1',
+          runId: 'run-1',
+        }),
+      ),
+    ).toBe('provider-usage-1')
   })
 
   it('marks completed non-estimated usage as ready for evidence review', () => {
-    const hint = resolveUsageLedgerActionHint(usageEntry({
-      status: 'completed',
-      estimated: false,
-      pricingRef: 'pricing-1',
-    }))
+    const hint = resolveUsageLedgerActionHint(
+      usageEntry({
+        status: 'completed',
+        estimated: false,
+        pricingRef: 'pricing-1',
+      }),
+    )
 
     expect(hint).toEqual({
       tone: 'success',
@@ -672,21 +721,29 @@ describe('provider registry ledger action hints', () => {
   })
 
   it('returns health guidance for unhealthy and degraded checks', () => {
-    expect(resolveHealthCheckActionHint(healthEntry({
-      status: 'unhealthy',
-      errorCode: 'AUTH_FAILED',
-      errorMessage: 'Invalid key',
-    }))).toEqual({
+    expect(
+      resolveHealthCheckActionHint(
+        healthEntry({
+          status: 'unhealthy',
+          errorCode: 'AUTH_FAILED',
+          errorMessage: 'Invalid key',
+        }),
+      ),
+    ).toEqual({
       tone: 'danger',
       labelKey: 'dashboard.providerRegistry.observability.actions.healthUnhealthy',
       fallback: 'Health check failed. Verify credentials, endpoint, and provider availability.',
       detail: 'AUTH_FAILED',
     })
 
-    expect(resolveHealthCheckActionHint(healthEntry({
-      status: 'degraded',
-      degradedReason: 'LATENCY_HIGH',
-    }))).toEqual({
+    expect(
+      resolveHealthCheckActionHint(
+        healthEntry({
+          status: 'degraded',
+          degradedReason: 'LATENCY_HIGH',
+        }),
+      ),
+    ).toEqual({
       tone: 'warning',
       labelKey: 'dashboard.providerRegistry.observability.actions.healthDegraded',
       fallback: 'Provider is degraded. Review the reason and rerun health check before routing traffic.',
@@ -799,9 +856,7 @@ describe('provider registry observability filters', () => {
       'usage-planned',
       'usage-failed',
     ])
-    expect(filterUsageLedgerEntries(entries, 'estimated').map(item => item.id)).toEqual([
-      'usage-estimated',
-    ])
+    expect(filterUsageLedgerEntries(entries, 'estimated').map(item => item.id)).toEqual(['usage-estimated'])
     expect(filterUsageLedgerEntries(entries, 'completed').map(item => item.id)).toEqual([
       'usage-completed',
       'usage-estimated',
@@ -819,12 +874,8 @@ describe('provider registry observability filters', () => {
       'health-degraded',
       'health-unhealthy',
     ])
-    expect(filterHealthCheckEntries(entries, 'healthy').map(item => item.id)).toEqual([
-      'health-healthy',
-    ])
-    expect(filterHealthCheckEntries(entries, 'unhealthy').map(item => item.id)).toEqual([
-      'health-unhealthy',
-    ])
+    expect(filterHealthCheckEntries(entries, 'healthy').map(item => item.id)).toEqual(['health-healthy'])
+    expect(filterHealthCheckEntries(entries, 'unhealthy').map(item => item.id)).toEqual(['health-unhealthy'])
   })
 })
 
@@ -950,9 +1001,7 @@ describe('provider registry observability empty states', () => {
   })
 
   it('uses positive usage copy when no usage rows need attention', () => {
-    const entries = [
-      usageEntry({ id: 'usage-completed', status: 'completed', estimated: false }),
-    ]
+    const entries = [usageEntry({ id: 'usage-completed', status: 'completed', estimated: false })]
 
     expect(resolveUsageLedgerEmptyState(entries, 'attention')).toMatchObject({
       tone: 'success',
@@ -970,9 +1019,7 @@ describe('provider registry observability empty states', () => {
   })
 
   it('uses positive health copy when no health checks need attention', () => {
-    const entries = [
-      healthEntry({ id: 'health-healthy', status: 'healthy' }),
-    ]
+    const entries = [healthEntry({ id: 'health-healthy', status: 'healthy' })]
 
     expect(resolveHealthCheckEmptyState(entries, 'attention')).toMatchObject({
       tone: 'success',

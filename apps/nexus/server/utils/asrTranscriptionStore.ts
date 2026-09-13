@@ -9,7 +9,7 @@ import {
   computeCreditReservation,
   parseCreditPricingRuleSnapshot,
   serializeCreditPricingRule,
-  type CreditPricingRule
+  type CreditPricingRule,
 } from './creditPricingStore'
 import { deleteStorageObject, getStorageObject, putStorageObject, type StorageObjectMemory } from './storageObjectStore'
 
@@ -17,6 +17,8 @@ const ASR_REQUESTS_TABLE = 'asr_transcription_requests'
 const ASR_HANDOFF_TTL_MS = 15 * 60 * 1000
 export const ASR_AUDIO_MAX_BYTES = 20 * 1024 * 1024
 export const ASR_MAX_DURATION_SECONDS = 10 * 60
+export const ASR_RESULT_MAX_BYTES = 2 * 1024 * 1024
+const ASR_RESULT_OBJECT_PREFIX = 'asr-result'
 const FILETRANS_INPUT_UNIT_PRICE_CNY_PER_SECOND = 0.00022
 
 const memoryStorage: StorageObjectMemory = new Map()
@@ -52,6 +54,12 @@ export interface AsrRequestRecord {
   pricing: CreditPricingRule | null
   createdAt: string
   updatedAt: string
+}
+
+/** Normalized sync-provider result kept in a private TTL-bounded object, never in D1. */
+export interface AsrSynchronousResult {
+  transcript: string
+  billedSeconds: number
 }
 
 interface AsrRequestRow {
@@ -98,8 +106,7 @@ export interface CreatedAsrRequest {
 
 function getD1Database(event: H3Event): D1Database {
   const database = readCloudflareBindings(event)?.DB
-  if (!database)
-    throw createError({ statusCode: 500, statusMessage: 'ASR storage is unavailable.' })
+  if (!database) throw createError({ statusCode: 500, statusMessage: 'ASR storage is unavailable.' })
   return database
 }
 
@@ -109,10 +116,11 @@ function getAsrBucket(event: H3Event): R2Bucket | null {
 }
 
 async function ensureAsrSchema(database: D1Database) {
-  if (initializedSchemas.has(database))
-    return
+  if (initializedSchemas.has(database)) return
 
-  await database.prepare(`
+  await database
+    .prepare(
+      `
     CREATE TABLE IF NOT EXISTS ${ASR_REQUESTS_TABLE} (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -138,9 +146,19 @@ async function ensureAsrSchema(database: D1Database) {
       updated_at TEXT NOT NULL,
       UNIQUE(user_id, idempotency_key)
     );
-  `).run()
-  await database.prepare(`CREATE INDEX IF NOT EXISTS idx_asr_transcription_handoff ON ${ASR_REQUESTS_TABLE}(id, status, delivery_expires_at);`).run()
-  await database.prepare(`CREATE INDEX IF NOT EXISTS idx_asr_transcription_provider_task ON ${ASR_REQUESTS_TABLE}(provider_task_id);`).run()
+  `,
+    )
+    .run()
+  await database
+    .prepare(
+      `CREATE INDEX IF NOT EXISTS idx_asr_transcription_handoff ON ${ASR_REQUESTS_TABLE}(id, status, delivery_expires_at);`,
+    )
+    .run()
+  await database
+    .prepare(
+      `CREATE INDEX IF NOT EXISTS idx_asr_transcription_provider_task ON ${ASR_REQUESTS_TABLE}(provider_task_id);`,
+    )
+    .run()
 
   // Added after the table shipped: a request admitted before this column existed has no
   // quote to settle against and falls back to the live price list, which the handoff
@@ -155,7 +173,14 @@ async function ensureAsrSchema(database: D1Database) {
 
 function mapRequest(row: AsrRequestRow): AsrRequestRecord {
   const status = row.status
-  if (status !== 'pending' && status !== 'reserved' && status !== 'dispatching' && status !== 'settled' && status !== 'released' && status !== 'failed')
+  if (
+    status !== 'pending' &&
+    status !== 'reserved' &&
+    status !== 'dispatching' &&
+    status !== 'settled' &&
+    status !== 'released' &&
+    status !== 'failed'
+  )
     throw new Error('ASR_REQUEST_STATE_INVALID')
 
   return {
@@ -199,7 +224,7 @@ export function normalizeAsrIdempotencyKey(value: unknown): string {
 export function normalizeAsrContentType(value: unknown): string {
   const mediaType = typeof value === 'string' ? value.split(';', 1)[0]?.trim().toLowerCase() : ''
   if (mediaType !== 'audio/wav') {
-    throw createError({ statusCode: 415, statusMessage: 'Only audio/wav is supported for Filetrans admission.' })
+    throw createError({ statusCode: 415, statusMessage: 'Only audio/wav is supported for ASR admission.' })
   }
   return 'audio/wav'
 }
@@ -237,21 +262,19 @@ export function countTranscriptUnits(transcript: string): number {
       latinWord = false
     }
   }
-  if (latinWord)
-    units += 2
+  if (latinWord) units += 2
   return units
 }
 
 export function calculateFiletransCredits(
   pricing: CreditPricingRule,
   transcript: string,
-  billedSeconds: number
+  billedSeconds: number,
 ): number {
-  if (!Number.isFinite(billedSeconds) || billedSeconds <= 0)
-    throw new Error('ASR_PROVIDER_METERING_INVALID')
+  if (!Number.isFinite(billedSeconds) || billedSeconds <= 0) throw new Error('ASR_PROVIDER_METERING_INVALID')
   return computeCreditCharge(pricing, {
     seconds: billedSeconds,
-    units: countTranscriptUnits(transcript)
+    units: countTranscriptUnits(transcript),
   })
 }
 
@@ -262,8 +285,7 @@ export function calculateFiletransReservation(pricing: CreditPricingRule, durati
 }
 
 export function calculateFiletransProviderCost(billedSeconds: number): number {
-  if (!Number.isFinite(billedSeconds) || billedSeconds <= 0)
-    throw new Error('ASR_PROVIDER_METERING_INVALID')
+  if (!Number.isFinite(billedSeconds) || billedSeconds <= 0) throw new Error('ASR_PROVIDER_METERING_INVALID')
   return Number((billedSeconds * FILETRANS_INPUT_UNIT_PRICE_CNY_PER_SECOND).toFixed(8))
 }
 
@@ -290,8 +312,7 @@ export function parseWavDurationSeconds(audio: Buffer): number {
         throw createError({ statusCode: 400, statusMessage: 'Audio WAV format is unsupported.' })
       }
     }
-    if (chunkId === 'data')
-      dataBytes = chunkLength
+    if (chunkId === 'data') dataBytes = chunkLength
     offset = valueOffset + chunkLength + (chunkLength % 2)
   }
 
@@ -300,7 +321,7 @@ export function parseWavDurationSeconds(audio: Buffer): number {
 
   const durationSeconds = dataBytes / byteRate
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > ASR_MAX_DURATION_SECONDS) {
-    throw createError({ statusCode: 400, statusMessage: 'Audio duration exceeds the Filetrans limit.' })
+    throw createError({ statusCode: 400, statusMessage: 'Audio duration exceeds the ASR admission limit.' })
   }
   return durationSeconds
 }
@@ -308,7 +329,10 @@ export function parseWavDurationSeconds(audio: Buffer): number {
 export async function getAsrRequest(event: H3Event, requestId: string): Promise<AsrRequestRecord | null> {
   const database = getD1Database(event)
   await ensureAsrSchema(database)
-  const row = await database.prepare(`SELECT * FROM ${ASR_REQUESTS_TABLE} WHERE id = ?`).bind(assertAsrId(requestId)).first<AsrRequestRow>()
+  const row = await database
+    .prepare(`SELECT * FROM ${ASR_REQUESTS_TABLE} WHERE id = ?`)
+    .bind(assertAsrId(requestId))
+    .first<AsrRequestRow>()
   return row ? mapRequest(row) : null
 }
 
@@ -317,11 +341,16 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
   await ensureAsrSchema(database)
   const idempotencyKey = normalizeAsrIdempotencyKey(input.idempotencyKey)
   const requestHash = hashHex(Buffer.concat([Buffer.from(input.contentType), input.audio]))
-  const existing = await database.prepare(`
+  const existing = await database
+    .prepare(
+      `
     SELECT * FROM ${ASR_REQUESTS_TABLE}
     WHERE user_id = ? AND idempotency_key = ?
     LIMIT 1
-  `).bind(input.userId, idempotencyKey).first<AsrRequestRow>()
+  `,
+    )
+    .bind(input.userId, idempotencyKey)
+    .first<AsrRequestRow>()
   if (existing) {
     const request = mapRequest(existing)
     if (request.requestHash !== requestHash)
@@ -361,20 +390,42 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
     updatedAt: now.toISOString(),
   }
 
-  const insert = await database.prepare(`
+  const insert = await database
+    .prepare(
+      `
     INSERT INTO ${ASR_REQUESTS_TABLE} (
       id, user_id, provider_id, capability, idempotency_key, request_hash, object_key, content_type,
       byte_size, duration_seconds, delivery_token_hash, delivery_expires_at, provider_task_id, status,
       reserved_credits, charged_credits, billed_seconds, provider_cost_cny, failure_code, created_at, updated_at,
       pricing_snapshot
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    record.id, record.userId, record.providerId, record.capability, record.idempotencyKey, record.requestHash,
-    record.objectKey, record.contentType, record.byteSize, record.durationSeconds, record.deliveryTokenHash,
-    record.deliveryExpiresAt, record.providerTaskId, record.status, record.reservedCredits, record.chargedCredits,
-    record.billedSeconds, record.providerCostCny, record.failureCode, record.createdAt, record.updatedAt,
-    serializeCreditPricingRule(input.pricing),
-  ).run()
+  `,
+    )
+    .bind(
+      record.id,
+      record.userId,
+      record.providerId,
+      record.capability,
+      record.idempotencyKey,
+      record.requestHash,
+      record.objectKey,
+      record.contentType,
+      record.byteSize,
+      record.durationSeconds,
+      record.deliveryTokenHash,
+      record.deliveryExpiresAt,
+      record.providerTaskId,
+      record.status,
+      record.reservedCredits,
+      record.chargedCredits,
+      record.billedSeconds,
+      record.providerCostCny,
+      record.failureCode,
+      record.createdAt,
+      record.updatedAt,
+      serializeCreditPricingRule(input.pricing),
+    )
+    .run()
   if (Number(insert.meta?.changes ?? 0) !== 1)
     throw createError({ statusCode: 500, statusMessage: 'ASR request could not be created.' })
 
@@ -390,8 +441,7 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
       ownerId: input.userId,
       resourceType: 'asr-handoff',
     })
-  }
-  catch (error) {
+  } catch (error) {
     await database.prepare(`DELETE FROM ${ASR_REQUESTS_TABLE} WHERE id = ?`).bind(id).run()
     throw error
   }
@@ -403,27 +453,75 @@ export async function markAsrReserved(event: H3Event, requestId: string): Promis
   return await transitionAsrRequest(event, requestId, ['pending'], 'reserved')
 }
 
-export async function markAsrDispatching(event: H3Event, requestId: string, providerTaskId: string): Promise<AsrRequestRecord> {
-  if (!/^[A-Za-z0-9._:-]{1,255}$/.test(providerTaskId))
-    throw new Error('ASR_PROVIDER_TASK_ID_INVALID')
+export async function markAsrDispatching(
+  event: H3Event,
+  requestId: string,
+  providerTaskId: string,
+): Promise<AsrRequestRecord> {
+  if (!/^[A-Za-z0-9._:-]{1,255}$/.test(providerTaskId)) throw new Error('ASR_PROVIDER_TASK_ID_INVALID')
   return await transitionAsrRequest(event, requestId, ['reserved'], 'dispatching', { providerTaskId })
 }
 
-export async function markAsrSettled(event: H3Event, requestId: string, chargedCredits: number, billedSeconds: number, providerCostCny: number): Promise<AsrRequestRecord> {
-  if (!Number.isInteger(chargedCredits) || chargedCredits <= 0 || !Number.isFinite(billedSeconds) || billedSeconds <= 0 || !Number.isFinite(providerCostCny) || providerCostCny < 0)
+export async function markAsrSettled(
+  event: H3Event,
+  requestId: string,
+  chargedCredits: number,
+  billedSeconds: number,
+  providerCostCny: number,
+): Promise<AsrRequestRecord> {
+  if (
+    !Number.isInteger(chargedCredits) ||
+    chargedCredits <= 0 ||
+    !Number.isFinite(billedSeconds) ||
+    billedSeconds <= 0 ||
+    !Number.isFinite(providerCostCny) ||
+    providerCostCny < 0
+  )
     throw new Error('ASR_SETTLEMENT_INVALID')
-  return await transitionAsrRequest(event, requestId, ['dispatching'], 'settled', { chargedCredits, billedSeconds, providerCostCny })
+  return await transitionAsrRequest(event, requestId, ['dispatching'], 'settled', {
+    chargedCredits,
+    billedSeconds,
+    providerCostCny,
+  })
 }
 
-export async function markAsrReleased(event: H3Event, requestId: string, failureCode: string): Promise<AsrRequestRecord> {
-  if (!/^[A-Z0-9_]{3,120}$/.test(failureCode))
-    throw new Error('ASR_FAILURE_CODE_INVALID')
-  return await transitionAsrRequest(event, requestId, ['pending', 'reserved', 'dispatching'], 'released', { failureCode })
+/** Settles a provider result that completed inside the initial request, before dispatching exists. */
+export async function markAsrSettledFromReserved(
+  event: H3Event,
+  requestId: string,
+  chargedCredits: number,
+  billedSeconds: number,
+  providerCostCny: number,
+): Promise<AsrRequestRecord> {
+  if (
+    !Number.isInteger(chargedCredits) ||
+    chargedCredits <= 0 ||
+    !Number.isFinite(billedSeconds) ||
+    billedSeconds <= 0 ||
+    !Number.isFinite(providerCostCny) ||
+    providerCostCny < 0
+  )
+    throw new Error('ASR_SETTLEMENT_INVALID')
+  return await transitionAsrRequest(event, requestId, ['reserved'], 'settled', {
+    chargedCredits,
+    billedSeconds,
+    providerCostCny,
+  })
+}
+
+export async function markAsrReleased(
+  event: H3Event,
+  requestId: string,
+  failureCode: string,
+): Promise<AsrRequestRecord> {
+  if (!/^[A-Z0-9_]{3,120}$/.test(failureCode)) throw new Error('ASR_FAILURE_CODE_INVALID')
+  return await transitionAsrRequest(event, requestId, ['pending', 'reserved', 'dispatching'], 'released', {
+    failureCode,
+  })
 }
 
 export async function markAsrFailed(event: H3Event, requestId: string, failureCode: string): Promise<AsrRequestRecord> {
-  if (!/^[A-Z0-9_]{3,120}$/.test(failureCode))
-    throw new Error('ASR_FAILURE_CODE_INVALID')
+  if (!/^[A-Z0-9_]{3,120}$/.test(failureCode)) throw new Error('ASR_FAILURE_CODE_INVALID')
   return await transitionAsrRequest(event, requestId, ['reserved', 'dispatching'], 'failed', { failureCode })
 }
 
@@ -432,31 +530,53 @@ async function transitionAsrRequest(
   requestId: string,
   from: readonly AsrRequestStatus[],
   to: AsrRequestStatus,
-  fields: { providerTaskId?: string, chargedCredits?: number, billedSeconds?: number, providerCostCny?: number, failureCode?: string } = {},
+  fields: {
+    providerTaskId?: string
+    chargedCredits?: number
+    billedSeconds?: number
+    providerCostCny?: number
+    failureCode?: string
+  } = {},
 ): Promise<AsrRequestRecord> {
   const database = getD1Database(event)
   await ensureAsrSchema(database)
   const id = assertAsrId(requestId)
   const now = new Date().toISOString()
   const placeholders = from.map(() => '?').join(', ')
-  const result = await database.prepare(`
+  const result = await database
+    .prepare(
+      `
     UPDATE ${ASR_REQUESTS_TABLE}
     SET status = ?, provider_task_id = COALESCE(?, provider_task_id), charged_credits = COALESCE(?, charged_credits),
       billed_seconds = COALESCE(?, billed_seconds), provider_cost_cny = COALESCE(?, provider_cost_cny), failure_code = COALESCE(?, failure_code), updated_at = ?
     WHERE id = ? AND status IN (${placeholders})
-  `).bind(to, fields.providerTaskId ?? null, fields.chargedCredits ?? null, fields.billedSeconds ?? null, fields.providerCostCny ?? null, fields.failureCode ?? null, now, id, ...from).run()
-  if (Number(result.meta?.changes ?? 0) !== 1)
-    throw new Error('ASR_REQUEST_STATE_CONFLICT')
+  `,
+    )
+    .bind(
+      to,
+      fields.providerTaskId ?? null,
+      fields.chargedCredits ?? null,
+      fields.billedSeconds ?? null,
+      fields.providerCostCny ?? null,
+      fields.failureCode ?? null,
+      now,
+      id,
+      ...from,
+    )
+    .run()
+  if (Number(result.meta?.changes ?? 0) !== 1) throw new Error('ASR_REQUEST_STATE_CONFLICT')
   const request = await getAsrRequest(event, id)
-  if (!request)
-    throw new Error('ASR_REQUEST_MISSING')
+  if (!request) throw new Error('ASR_REQUEST_MISSING')
   return request
 }
 
-export async function getAsrHandoffObject(event: H3Event, requestId: string, token: string): Promise<{ data: Buffer, contentType: string } | null> {
+export async function getAsrHandoffObject(
+  event: H3Event,
+  requestId: string,
+  token: string,
+): Promise<{ data: Buffer; contentType: string } | null> {
   const request = await getAsrRequest(event, requestId)
-  if (!request || (request.status !== 'reserved' && request.status !== 'dispatching'))
-    return null
+  if (!request || (request.status !== 'reserved' && request.status !== 'dispatching')) return null
   if (Date.parse(request.deliveryExpiresAt) <= Date.now() || !compareToken(token, request.deliveryTokenHash))
     return null
 
@@ -467,8 +587,7 @@ export async function getAsrHandoffObject(event: H3Event, requestId: string, tok
     key: request.objectKey,
     resourceType: 'asr-handoff',
   })
-  if (!object || !object.storesOwnership || object.ownerId !== request.userId)
-    return null
+  if (!object || !object.storesOwnership || object.ownerId !== request.userId) return null
   return { data: object.data, contentType: request.contentType }
 }
 
@@ -480,6 +599,87 @@ export async function deleteAsrHandoffObject(event: H3Event, request: AsrRequest
     key: request.objectKey,
     actorId: request.userId,
     resourceType: 'asr-handoff',
+  })
+}
+
+function asrResultObjectKey(requestId: string): string {
+  return `${ASR_RESULT_OBJECT_PREFIX}/${assertAsrId(requestId)}.json`
+}
+
+function normalizeSynchronousResult(value: unknown): AsrSynchronousResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('ASR_RESULT_INVALID')
+  if (!('transcript' in value) || typeof value.transcript !== 'string') throw new Error('ASR_RESULT_INVALID')
+  const transcript = value.transcript.trim()
+  const billedSeconds = 'billedSeconds' in value ? value.billedSeconds : undefined
+  if (!transcript || transcript.length > 1_000_000) throw new Error('ASR_RESULT_INVALID')
+  if (typeof billedSeconds !== 'number' || !Number.isFinite(billedSeconds) || billedSeconds <= 0)
+    throw new Error('ASR_RESULT_INVALID')
+  return { transcript, billedSeconds }
+}
+
+/** Writes only the normalized transcript needed for same-key sync-result recovery. */
+export async function putAsrResultObject(
+  event: H3Event,
+  request: AsrRequestRecord,
+  value: AsrSynchronousResult,
+): Promise<void> {
+  const normalized = normalizeSynchronousResult(value)
+  const data = Buffer.from(JSON.stringify(normalized), 'utf8')
+  if (data.byteLength > ASR_RESULT_MAX_BYTES) throw new Error('ASR_RESULT_INVALID')
+  await putStorageObject({
+    event,
+    bucket: getAsrBucket(event),
+    memoryStorage,
+    key: asrResultObjectKey(request.id),
+    data,
+    contentType: 'application/json',
+    actorId: request.userId,
+    ownerId: request.userId,
+    resourceType: 'asr-result',
+  })
+}
+
+/** Reads a sync result only while its request-owned TTL is still active. */
+export async function getAsrResultObject(
+  event: H3Event,
+  request: AsrRequestRecord,
+): Promise<AsrSynchronousResult | null> {
+  if (request.status !== 'settled' || Date.parse(request.deliveryExpiresAt) <= Date.now()) {
+    if (request.status === 'settled') await deleteAsrResultObject(event, request).catch(() => {})
+    return null
+  }
+  const object = await getStorageObject({
+    event,
+    bucket: getAsrBucket(event),
+    memoryStorage,
+    key: asrResultObjectKey(request.id),
+    resourceType: 'asr-result',
+    defaultContentType: 'application/json',
+  })
+  if (
+    !object ||
+    !object.storesOwnership ||
+    object.ownerId !== request.userId ||
+    object.data.byteLength > ASR_RESULT_MAX_BYTES
+  )
+    return null
+  try {
+    const parsed: unknown = JSON.parse(object.data.toString('utf8'))
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    return normalizeSynchronousResult(parsed)
+  } catch {
+    return null
+  }
+}
+
+export async function deleteAsrResultObject(event: H3Event, request: AsrRequestRecord): Promise<void> {
+  await deleteStorageObject({
+    event,
+    bucket: getAsrBucket(event),
+    memoryStorage,
+    key: asrResultObjectKey(request.id),
+    actorId: request.userId,
+    resourceType: 'asr-result',
   })
 }
 
