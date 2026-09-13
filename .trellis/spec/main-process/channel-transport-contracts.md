@@ -42,33 +42,41 @@ transport.broadcastToWindow(windowId, event, payload): void
 - A broadcast to a still-loading webContents is dropped, same as an unanswered `sendTo`
   minus the hang. If delivery must be guaranteed, queue on the renderer-ready signal —
   do not "fix" it by switching back to request-response.
+- A short-lived `WebContentsView` that cannot use `broadcastToWindow` must pair request-style
+  `sendTo` with a real response and an explicit renderer-ready handshake. Document load,
+  `isLoading() === false`, `dom-ready`, and `did-finish-load` do not prove that the route component
+  registered its transport listeners.
+- Derive the ready sender from `HandlerContext`; never trust a renderer-authored id. Accept only
+  the current owned WebContents, keep at most the latest pending payload, keep the view hidden until
+  readiness, and clear pending/ready state on hide, destruction, or renderer loss.
+- `MetaOverlayEvents.ui.show` is the concrete bidirectional example: CoreBox → main and main → the
+  MetaOverlay renderer each return `{ accepted: true }`; `MetaOverlayEvents.ui.ready` releases the
+  current manager's pending show exactly once.
+- Renderer transport payloads must remain structured-cloneable. Storing an incoming IPC object in a
+  deep Vue `ref` turns it into a Proxy that Electron cannot clone on the return trip; use
+  `shallowRef` (or an explicitly reconstructed plain DTO) for opaque transport records and defend
+  the outbound payload with a real `structuredClone` regression.
 
 ### 4. Validation & error matrix
 
-| Condition | Outcome |
-|---|---|
+| Condition                                                | Outcome                                          |
+| -------------------------------------------------------- | ------------------------------------------------ |
 | `sendTo` a void event, renderer listener not yet mounted | silent 60s hang → WARN in channel-core, per send |
-| `broadcastToWindow` with destroyed window id | synchronous throw at call site |
-| Broadcast before renderer registers listener | event dropped (pre-existing semantics) |
+| `broadcastToWindow` with destroyed window id             | synchronous throw at call site                   |
+| Broadcast before renderer registers listener             | event dropped (pre-existing semantics)           |
 
 ### 5. Wrong vs Correct
 
 #### Wrong
 
 ```ts
-void transport
-  .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
-  .catch(() => {}) // swallows the rejection, NOT the channel-core timeout WARN
+void transport.sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined).catch(() => {}) // swallows the rejection, NOT the channel-core timeout WARN
 ```
 
 #### Correct
 
 ```ts
-this.getTransport().broadcastToWindow(
-  window.window.id,
-  CoreBoxEvents.ui.shortcutTriggered,
-  undefined
-)
+this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.shortcutTriggered, undefined)
 ```
 
 ### 6. Tests required
@@ -123,13 +131,13 @@ reportPerfToMain(report: RendererPerfReport): void
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required outcome |
-|---|---|
-| Renderer acknowledges | Flush/destroy completes before storage/analytics handlers unload |
-| Renderer hangs or already died | 1.5s bound expires; main continues shutdown |
-| Debounced save fires after destroy | Reject locally with transport-destroyed error; no main IPC |
-| Perf-report send itself fails | No recursive performance report |
-| Permission request arrives after quit begins | Deny silently; no shutdown-noise warning |
+| Condition                                    | Required outcome                                                 |
+| -------------------------------------------- | ---------------------------------------------------------------- |
+| Renderer acknowledges                        | Flush/destroy completes before storage/analytics handlers unload |
+| Renderer hangs or already died               | 1.5s bound expires; main continues shutdown                      |
+| Debounced save fires after destroy           | Reject locally with transport-destroyed error; no main IPC       |
+| Perf-report send itself fails                | No recursive performance report                                  |
+| Permission request arrives after quit begins | Deny silently; no shutdown-noise warning                         |
 
 ### 5. Good / Base / Bad Cases
 

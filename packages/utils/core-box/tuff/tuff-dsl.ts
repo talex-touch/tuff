@@ -18,14 +18,6 @@
 
 // import { TalexTouch } from "packages/utils/types";
 
-import type { RecommendationEvidence, RecommendationSource } from '../recommendation'
-
-/**
- * 定义高亮范围
- * @description 右开区间 [start, end)
- */
-// ==================== 核心数据结构 ====================
-
 /**
  * TuffItem - 系统核心数据单元
  *
@@ -45,6 +37,14 @@ import type { RecommendationEvidence, RecommendationSource } from '../recommenda
  * ```
  */
 import type { ITuffIcon } from '../../types/icon'
+
+/**
+ * 定义高亮范围
+ * @description 右开区间 [start, end)
+ */
+// ==================== 核心数据结构 ====================
+
+import type { RecommendationEvidence, RecommendationSource } from '../recommendation'
 
 export interface TuffItem {
   /**
@@ -336,7 +336,6 @@ export interface TuffBasicRender {
    * @description 显示在项目右侧的辅助信息，如快捷键、时间等
    */
   accessory?: string
-
 }
 
 /**
@@ -553,6 +552,12 @@ export interface TuffAction {
    * @description 触发该行为的键盘快捷键
    */
   shortcut?: string
+
+  /**
+   * 操作面板分组
+   * @description 将相关的次级行为归入同一可见分组
+   */
+  group?: string
 
   /**
    * 行为参数
@@ -834,7 +839,6 @@ export interface TuffContext {
   tags?: string[]
   /** Trusted host entrypoint metadata propagated to providers and plugin features. */
   entrypoint?: TuffEntrypointContext
-
 }
 
 // ==================== Footer Hints 配置 ====================
@@ -1709,7 +1713,7 @@ export interface RecommendationRebuildCapable {
    * is gone (uninstalled app, deleted file) are omitted, not reported — disappearing from the grid
    * is the correct outcome and is not an error.
    */
-  rebuildRecommendationItems(itemIds: readonly string[]): Promise<TuffItem[]>
+  rebuildRecommendationItems: (itemIds: readonly string[]) => Promise<TuffItem[]>
 }
 
 // ==================== 插件接口预览 ====================

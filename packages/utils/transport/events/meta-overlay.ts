@@ -7,7 +7,9 @@ import type {
   MetaActionExecuteRequest,
   MetaActionExecuteResponse,
   MetaRegisterActionRequest,
+  MetaRendererReadyResponse,
   MetaShowRequest,
+  MetaShowResponse,
   MetaUnregisterActionsRequest,
   MetaVisibilityResponse,
 } from './types/meta-overlay'
@@ -25,26 +27,22 @@ export const MetaOverlayEvents = {
     /**
      * Show MetaOverlay
      */
-    show: defineEvent('meta-overlay')
-      .module('ui')
-      .event('show')
-      .define<MetaShowRequest, void>(),
+    show: defineEvent('meta-overlay').module('ui').event('show').define<MetaShowRequest, MetaShowResponse>(),
+
+    /**
+     * Announce that the current MetaOverlay renderer has mounted its transport listeners.
+     */
+    ready: defineEvent('meta-overlay').module('ui').event('ready').define<void, MetaRendererReadyResponse>(),
 
     /**
      * Hide MetaOverlay
      */
-    hide: defineEvent('meta-overlay')
-      .module('ui')
-      .event('hide')
-      .define<void, void>(),
+    hide: defineEvent('meta-overlay').module('ui').event('hide').define<void, void>(),
 
     /**
      * Check visibility
      */
-    isVisible: defineEvent('meta-overlay')
-      .module('ui')
-      .event('is-visible')
-      .define<void, MetaVisibilityResponse>(),
+    isVisible: defineEvent('meta-overlay').module('ui').event('is-visible').define<void, MetaVisibilityResponse>(),
   },
 
   // ============================================================================
@@ -63,10 +61,7 @@ export const MetaOverlayEvents = {
     /**
      * Register a plugin action
      */
-    register: defineEvent('meta-overlay')
-      .module('action')
-      .event('register')
-      .define<MetaRegisterActionRequest, void>(),
+    register: defineEvent('meta-overlay').module('action').event('register').define<MetaRegisterActionRequest, void>(),
 
     /**
      * Unregister all actions for a plugin

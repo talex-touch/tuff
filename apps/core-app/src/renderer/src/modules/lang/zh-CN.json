@@ -5783,6 +5783,21 @@
     "confirmAndSend": "授权并发送"
   },
   "corebox": {
+    "destinations": {
+      "commonSettings": "常用设置",
+      "settingsTitle": "Tuff 设置",
+      "mainWindowSubtitle": "显示并聚焦主窗口",
+      "homeSubtitle": "打开塔芙首页",
+      "overviewSubtitle": "一览全部设置",
+      "generalSubtitle": "启动、语言与应用行为",
+      "appearanceSubtitle": "主题、布局与视觉效果",
+      "intelligenceSubtitle": "智能中心、工作流与权限",
+      "pluginsSubtitle": "已安装插件、插件市场与应用工具",
+      "fileIndexSubtitle": "搜索索引范围与索引状态",
+      "networkSubtitle": "代理、连通性与网络诊断",
+      "updateSubtitle": "版本、更新通道与更新日志",
+      "aboutSubtitle": "版本、致谢与开源许可"
+    },
     "reason": {
       "pinned": "已固定",
       "frequent": "常用",

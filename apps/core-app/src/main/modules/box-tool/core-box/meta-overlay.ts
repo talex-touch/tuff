@@ -35,8 +35,8 @@ const resolveKeyManager = (channel: unknown): unknown =>
 const getCoreBoxRuntimeOrNull = () => maybeGetRegisteredMainRuntime('core-box')
 
 /**
- * Manages the MetaOverlay WebContentsView in persistent mode.
- * The view is created with the CoreBox window and shown/hidden as needed.
+ * Manages the lazily created MetaOverlay view attached above the current CoreBox window.
+ * The renderer is released on hide and must handshake again before another show is delivered.
  */
 export class MetaOverlayManager {
   private static instance: MetaOverlayManager
@@ -47,6 +47,8 @@ export class MetaOverlayManager {
   private currentItem: TuffItem | null = null
   private pluginActions: Map<string, MetaAction[]> = new Map()
   private heightSyncTimer: NodeJS.Timeout | null = null
+  private pendingShowRequest: MetaShowRequest | null = null
+  private rendererReadyWebContentsId: number | null = null
 
   private getAliveMetaWebContents(): Electron.WebContents | null {
     return useAliveWebContents(this.metaView)
@@ -54,28 +56,6 @@ export class MetaOverlayManager {
 
   private getAliveParentWindow(): BrowserWindow | null {
     return useAliveTarget(this.parentWindow)
-  }
-
-  private isMetaOverlayWebContents(webContents: Electron.WebContents | null | undefined): boolean {
-    if (!webContents) return false
-    return webContents === this.getAliveMetaWebContents()
-  }
-
-  private resolveCoreBoxRendererWebContents(
-    sender?: Electron.WebContents | null
-  ): Electron.WebContents | null {
-    const senderWebContents = useAliveWebContents(sender ?? null)
-    if (senderWebContents && !this.isMetaOverlayWebContents(senderWebContents)) {
-      return senderWebContents
-    }
-
-    const parentWebContents = useAliveWebContents(this.parentWindow ?? null)
-    if (parentWebContents) {
-      return parentWebContents
-    }
-
-    const coreBoxWindow = getCoreBoxWindow()
-    return useAliveWebContents(coreBoxWindow?.window ?? null)
   }
 
   /**
@@ -91,8 +71,7 @@ export class MetaOverlayManager {
   }
 
   /**
-   * Initializes MetaOverlay in persistent mode.
-   * Creates the WebContentsView but keeps it hidden initially.
+   * Initializes a fresh MetaOverlay renderer and keeps it hidden until its ready handshake.
    *
    * @param parentWindow - The parent BrowserWindow to attach to
    */
@@ -111,6 +90,8 @@ export class MetaOverlayManager {
     }
 
     this.parentWindow = parentWindow
+    this.pendingShowRequest = null
+    this.rendererReadyWebContentsId = null
 
     const preloadPath = BoxWindowOption.webPreferences?.preload
     if (!preloadPath) {
@@ -151,6 +132,13 @@ export class MetaOverlayManager {
         })
       }
     )
+
+    const ownedMetaView = this.metaView
+    ownedMetaView.webContents.on('render-process-gone', () => {
+      if (this.metaView !== ownedMetaView) return
+      metaOverlayLog.warn('MetaOverlay renderer exited; releasing stale view')
+      this.destroyRenderer()
+    })
 
     // Handle ESC key to close MetaOverlay
     this.metaView.webContents.on('before-input-event', (event, input) => {
@@ -239,7 +227,9 @@ export class MetaOverlayManager {
   }
 
   /**
-   * Shows MetaOverlay with merged actions.
+   * Queues the latest MetaOverlay contents and releases them only after the current renderer has
+   * mounted its transport listeners. `webContents.isLoading() === false` is not sufficient: the
+   * async renderer bootstrap can still be between document load and component mount.
    *
    * @param request - The show request containing item and actions
    */
@@ -249,15 +239,9 @@ export class MetaOverlayManager {
       return
     }
 
-    // Merge actions: plugin (priority 100) > item (priority 50) > builtin (priority 0)
-    const allActions: MetaAction[] = [
-      ...(request.pluginActions || []),
-      ...(request.itemActions || []),
-      ...request.builtinActions
-    ].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+    this.pendingShowRequest = request
     this.currentItem = request.item
 
-    // Update bounds
     const bounds = this.parentWindow.getBounds()
     this.metaView.setBounds({
       x: 0,
@@ -265,63 +249,78 @@ export class MetaOverlayManager {
       width: bounds.width,
       height: bounds.height
     })
-
     this.ensureOnTop()
+    this.flushPendingShow()
+  }
 
-    // Wait for content to be loaded before showing
-    const waitForContent = () => {
-      const metaWebContents = this.getAliveMetaWebContents()
-      if (!this.metaView || !metaWebContents) {
-        return
-      }
-
-      // Check if content is loaded
-      const isLoading = metaWebContents.isLoading()
-      if (isLoading) {
-        metaOverlayLog.debug('MetaOverlay still loading, waiting...')
-        setTimeout(waitForContent, 50)
-        return
-      }
-
-      const runtime = getCoreBoxRuntimeOrNull()
-      if (!runtime) {
-        metaOverlayLog.debug('Skip MetaOverlay show sync: CoreBox runtime unavailable')
-        return
-      }
-
-      const tx = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
-
-      tx.sendTo(metaWebContents, MetaOverlayEvents.ui.show, {
-        item: request.item,
-        builtinActions: request.builtinActions,
-        itemActions: request.itemActions,
-        pluginActions: request.pluginActions
-      }).catch(() => {})
-
-      metaOverlayLog.debug('Sent show message to MetaOverlay renderer')
-
-      // Show the view
-      this.metaView.setVisible(true)
-      this.isVisible = true
-      this.scheduleHeightSync()
-      const afterVisible = this.metaView.getVisible()
-
-      metaOverlayLog.debug(
-        `MetaOverlay shown with ${allActions.length} actions, visible: ${afterVisible}, bounds: ${bounds.width}x${bounds.height}, loading: ${metaWebContents.isLoading()}`
-      )
-
-      // Focus after a short delay to ensure DOM is ready
-      setTimeout(() => {
-        const focusTarget = this.getAliveMetaWebContents()
-        if (focusTarget) {
-          focusTarget.focus()
-          metaOverlayLog.debug('MetaOverlay focused')
+  /**
+   * Accepts readiness only from the WebContents currently owned by this manager.
+   *
+   * @returns `true` when the sender is the active MetaOverlay renderer.
+   */
+  public markRendererReady(webContentsId: number): boolean {
+    const metaWebContents = this.getAliveMetaWebContents()
+    if (!metaWebContents || metaWebContents.id !== webContentsId) {
+      metaOverlayLog.warn('Ignored MetaOverlay readiness from a stale renderer', {
+        meta: {
+          senderId: webContentsId,
+          activeRendererId: metaWebContents?.id ?? null
         }
-      }, 100)
+      })
+      return false
     }
 
-    // Start waiting for content
-    waitForContent()
+    this.rendererReadyWebContentsId = webContentsId
+    this.flushPendingShow()
+    return true
+  }
+
+  private flushPendingShow(): void {
+    const request = this.pendingShowRequest
+    const metaView = this.metaView
+    const metaWebContents = this.getAliveMetaWebContents()
+    const parentWindow = this.getAliveParentWindow()
+
+    if (!request || !metaView || !metaWebContents || !parentWindow) return
+    if (this.rendererReadyWebContentsId !== metaWebContents.id) {
+      metaOverlayLog.debug('MetaOverlay show queued until renderer readiness')
+      return
+    }
+
+    const runtime = getCoreBoxRuntimeOrNull()
+    if (!runtime) {
+      metaOverlayLog.debug('Skip MetaOverlay show sync: CoreBox runtime unavailable')
+      return
+    }
+
+    this.pendingShowRequest = null
+    const tx = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
+    void tx
+      .sendTo(metaWebContents, MetaOverlayEvents.ui.show, request)
+      .catch((error) =>
+        metaOverlayLog.error('Failed to deliver MetaOverlay show request', { error })
+      )
+
+    const bounds = parentWindow.getBounds()
+    metaView.setVisible(true)
+    this.isVisible = true
+    this.scheduleHeightSync()
+
+    const actionCount =
+      (request.pluginActions?.length ?? 0) +
+      (request.itemActions?.length ?? 0) +
+      request.builtinActions.length
+    metaOverlayLog.debug(
+      `MetaOverlay shown with ${actionCount} actions, visible: ${metaView.getVisible()}, bounds: ${bounds.width}x${bounds.height}`
+    )
+
+    const rendererId = metaWebContents.id
+    setTimeout(() => {
+      const focusTarget = this.getAliveMetaWebContents()
+      if (!this.isVisible || focusTarget?.id !== rendererId) return
+      focusTarget.focus()
+      metaOverlayLog.debug('MetaOverlay focused')
+    }, 100)
   }
 
   private scheduleHeightSync(): void {
@@ -432,8 +431,7 @@ export class MetaOverlayManager {
    */
   public async executeAction(
     actionId: string,
-    item?: TuffItem,
-    sender?: Electron.WebContents | null
+    item?: TuffItem
   ): Promise<{ success: boolean; error?: string }> {
     const targetItem = item ?? this.currentItem
     if (!targetItem) {
@@ -487,17 +485,18 @@ export class MetaOverlayManager {
           metaOverlayLog.error(`Failed to notify plugin ${pluginId} of action execution`, { error })
         })
     } else {
-      // Built-in and item actions are handled by the CoreBox renderer action pipeline.
-      const coreBoxWebContents = this.resolveCoreBoxRendererWebContents(sender)
-      if (coreBoxWebContents) {
+      // Item actions are notifications back to the CoreBox renderer that owns this overlay.
+      // Target the attached parent window, never a caller-supplied sender: the overlay is a
+      // WebContentsView and the parent is the sole renderer with the action-panel listener.
+      // `broadcastToWindow` avoids the 60-second request timeout a void `sendTo` creates.
+      const coreBoxWindow = this.getAliveParentWindow()
+      if (coreBoxWindow) {
         const channel = touchApp.channel
         const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
-        void transport
-          .sendTo(coreBoxWebContents, CoreBoxEvents.metaOverlay.itemAction, {
-            actionId,
-            item: targetItem
-          })
-          .catch(() => {})
+        transport.broadcastToWindow(coreBoxWindow.id, CoreBoxEvents.metaOverlay.itemAction, {
+          actionId,
+          item: targetItem
+        })
       }
     }
 
@@ -527,6 +526,8 @@ export class MetaOverlayManager {
    */
   private destroyRenderer(): void {
     this.clearHeightSyncTimer()
+    this.pendingShowRequest = null
+    this.rendererReadyWebContentsId = null
     const parentWindow = this.getAliveParentWindow()
     if (this.metaView) {
       const metaWebContents = this.getAliveMetaWebContents()

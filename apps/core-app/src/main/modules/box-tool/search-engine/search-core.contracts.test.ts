@@ -201,12 +201,12 @@ vi.mock('../addon/preview', () => ({
     type: 'preview'
   }
 }))
-vi.mock('../addon/system/main-window-provider', () => ({
-  mainWindowProvider: {
-    id: 'main-window-provider',
+vi.mock('../addon/system/app-destination-provider', () => ({
+  appDestinationProvider: {
+    id: 'app-destination-provider',
     onSearch: vi.fn(),
     supportedInputTypes: ['text'],
-    type: 'command'
+    type: 'system'
   }
 }))
 vi.mock('../addon/system/system-actions-provider', () => ({

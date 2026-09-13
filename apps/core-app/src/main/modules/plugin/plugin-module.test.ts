@@ -148,6 +148,7 @@ const mocks = vi.hoisted(() => {
     devWatcherRemovePlugin: vi.fn(),
     dialogShowMessageBox: vi.fn(),
     dialogShowSaveDialog: vi.fn(),
+    destinationOpen: vi.fn(),
     imageToolsInspect: vi.fn(),
     imageToolsRender: vi.fn(),
     disposers,
@@ -452,6 +453,9 @@ vi.mock('./host/plugin-intelligence-context-stream-host-service', () => ({
     })
 }))
 vi.mock('../network', () => ({ getNetworkService: mocks.getNetworkService }))
+vi.mock('../app-destination/app-destination-navigation', () => ({
+  getAppDestinationNavigationService: vi.fn(() => ({ open: mocks.destinationOpen }))
+}))
 vi.mock('../permission', () => ({
   createProtectedRegister:
     (transport: {
@@ -768,6 +772,8 @@ describe('PluginModule facade', () => {
     mocks.ensureDir.mockResolvedValue(undefined)
     mocks.buildPluginManagerRuntime.mockClear()
     mocks.browserWindowFromId.mockReset()
+    mocks.destinationOpen.mockReset()
+    mocks.destinationOpen.mockReturnValue({ status: 'opened', destinationId: 'main-window' })
     mocks.dialogShowMessageBox.mockReset()
     mocks.dialogShowSaveDialog.mockReset()
     mocks.dialogShowSaveDialog.mockResolvedValue({ canceled: true, filePath: undefined })
@@ -1521,15 +1527,23 @@ describe('PluginModule facade', () => {
       )
     ).resolves.toEqual({ actionId: 'open-main-window', status: 'started' })
     expect(mocks.permissionHasPermission).not.toHaveBeenCalled()
-    expect(mocks.browserWindowFromId).toHaveBeenCalledExactlyOnceWith(42)
-    expect(mocks.mainBrowserWindow.restore).toHaveBeenCalledOnce()
-    expect(mocks.mainBrowserWindow.show).toHaveBeenCalledOnce()
-    expect(mocks.mainBrowserWindow.focus).toHaveBeenCalledOnce()
+    // The plugin delegates to the shared destination service; it no longer sequences the window.
+    // The generation guard is handed over as `beforeEffect`, and it is clean while the identity
+    // still resolves to this activation.
+    expect(mocks.destinationOpen).toHaveBeenCalledExactlyOnceWith('main-window', {
+      beforeEffect: expect.any(Function)
+    })
+    const options = mocks.destinationOpen.mock.calls[0]?.[1]
+    expect(() => options?.beforeEffect?.()).not.toThrow()
+    expect(mocks.browserWindowFromId).not.toHaveBeenCalled()
+    expect(mocks.mainBrowserWindow.restore).not.toHaveBeenCalled()
+    expect(mocks.mainBrowserWindow.show).not.toHaveBeenCalled()
+    expect(mocks.mainBrowserWindow.focus).not.toHaveBeenCalled()
 
     await module.onDestroy()
   })
 
-  it('stops synchronous main-window mutations when the host generation rotates', async () => {
+  it('fails the plugin main-window action when the host generation rotates during the reveal', async () => {
     const module = new PluginModule()
     mocks.manager.getPluginByName.mockReturnValue(mocks.plugin)
     mocks.plugin.declaredPermissions = {
@@ -1546,10 +1560,14 @@ describe('PluginModule facade', () => {
     })
     mocks.keyResolveCurrentIdentity.mockReturnValue(activation)
     mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 9 } })
-    mocks.browserWindowFromId.mockReturnValue(mocks.mainBrowserWindow)
-    mocks.mainBrowserWindow.isMinimized.mockReturnValue(true)
-    mocks.mainBrowserWindow.restore.mockImplementationOnce(() => {
+    // The rotation happens inside the delegated reveal, so the guard the plugin handed over is
+    // the only thing that can still stop the effects that follow it.
+    const guardCalls: number[] = []
+    mocks.destinationOpen.mockImplementationOnce((_destinationId, options) => {
       mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 10 } })
+      options?.beforeEffect?.()
+      guardCalls.push(1)
+      return { status: 'opened', destinationId: 'main-window' }
     })
     const factory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.systemAction as
       | ((input: typeof activation) => {
@@ -1580,9 +1598,11 @@ describe('PluginModule facade', () => {
       status: 'failed',
       reason: 'execution-failed'
     })
-    expect(mocks.mainBrowserWindow.restore).toHaveBeenCalledOnce()
-    expect(mocks.mainBrowserWindow.show).not.toHaveBeenCalled()
-    expect(mocks.mainBrowserWindow.focus).not.toHaveBeenCalled()
+    expect(mocks.destinationOpen).toHaveBeenCalledExactlyOnceWith('main-window', {
+      beforeEffect: expect.any(Function)
+    })
+    // The guard threw before the mock could return, so the action never looked successful.
+    expect(guardCalls).toEqual([])
 
     await module.onDestroy()
   })

@@ -42,6 +42,23 @@ export interface MetaShowRequest {
 }
 
 /**
+ * Acknowledges that a show request was accepted by its next hop.
+ *
+ * The same event is used from CoreBox to main and from main to the overlay renderer; both legs
+ * must answer so request-style transport calls do not remain pending until their timeout.
+ */
+export interface MetaShowResponse {
+  accepted: boolean
+}
+
+/**
+ * Acknowledges whether main accepted a renderer-ready signal for the current MetaOverlay view.
+ */
+export interface MetaRendererReadyResponse {
+  accepted: boolean
+}
+
+/**
  * Request to execute an action
  */
 export interface MetaActionExecuteRequest {
