@@ -48,7 +48,7 @@ describe('GET /api/credits/pricing', () => {
     expect(result.rules.find(rule => rule.capability === 'text.translate')).toEqual({
       capability: 'text.translate',
       unit: '1k_tokens',
-      creditsPerUnit: 1000,
+      creditsPerUnit: 100,
       secondaryUnit: null,
       secondaryCreditsPerUnit: null,
       minCredits: 1,

@@ -102,6 +102,35 @@ describe('text.chat continuity', () => {
   )
 })
 
+/**
+ * The seeded table, read through the lookup every caller uses. Translation shares
+ * chat's token unit but not its price, so both have to be read from rows that the
+ * seeder wrote: a capability folded back into `CHAT_CAPABILITIES` still looks right
+ * against the fallback, which is priced exactly like chat.
+ */
+describe('text pricing defaults', () => {
+  it('seeds translation at 100 credits per 1k tokens with a double hold, leaving chat at one credit per token', async () => {
+    const db = new MockCreditPricingD1Database()
+
+    const rules = await listCreditPricing(makeCreditPricingEvent(db))
+    const translate = rules.find(rule => rule.capability === 'text.translate')!
+    const chat = rules.find(rule => rule.capability === 'text.chat')!
+
+    expect(translate.unit).toBe('1k_tokens')
+    expect(translate.reserveMultiplier).toBe(2)
+    // A blended upstream cost would be a number no single route can be attributed to.
+    expect(translate.upstreamCostUsdPerUnit).toBeNull()
+    expect(computeCreditCharge(translate, { tokens: 1000 })).toBe(100)
+    expect(computeCreditCharge(translate, { tokens: 1 })).toBe(1)
+    expect(computeCreditReservation(translate, { tokens: 1000 })).toBe(200)
+
+    // Read from chat's own seeded row, not the fallback: dropping or mispricing that
+    // row while restructuring the list would otherwise be invisible here.
+    expect(computeCreditCharge(chat, { tokens: 1000 })).toBe(1000)
+    expect(computeCreditReservation(chat, { tokens: 1000 })).toBe(1000)
+  })
+})
+
 describe('computeCreditReservation', () => {
   it.each([
     { seconds: 0.1, credits: 1 },
@@ -222,6 +251,7 @@ describe('listCreditPricing reconciliation', () => {
   /** The stamp the previous seed wrote; a row still carrying it has never been edited. */
   const SUPERSEDED_STAMP = '2026-09-10T00:00:00.000Z'
   const OCR_DEFAULT = DEFAULT_CREDIT_PRICING.find(item => item.capability === 'vision.ocr')!
+  const TRANSLATE_DEFAULT = DEFAULT_CREDIT_PRICING.find(item => item.capability === 'text.translate')!
 
   it('moves a never-edited row onto the shipped default', async () => {
     const db = new MockCreditPricingD1Database()
@@ -247,6 +277,42 @@ describe('listCreditPricing reconciliation', () => {
     // A real timestamp means a human chose this price. The value matching the old seed
     // is a coincidence, not evidence that nobody touched the row.
     expect(computeCreditCharge(kept, { images: 1 })).toBe(10)
+    expect(kept.updatedAt).toBe(editedStamp)
+  })
+
+  it('moves a never-edited translation row off the old per-token chat price and hold', async () => {
+    const db = new MockCreditPricingD1Database()
+    // What the previous seed wrote for translation: chat's 1 credit per token, no
+    // reserve multiplier. Seeding is additive, so without the reseed it survives.
+    db.rows.set('text.translate', storedRow(TRANSLATE_DEFAULT, {
+      credits_per_unit: 1000,
+      reserve_multiplier: 1,
+      updated_at: SUPERSEDED_STAMP,
+    }))
+
+    const rules = await listCreditPricing(makeCreditPricingEvent(db))
+    const reconciled = rules.find(rule => rule.capability === 'text.translate')!
+
+    expect(computeCreditCharge(reconciled, { tokens: 1000 })).toBe(100)
+    expect(computeCreditReservation(reconciled, { tokens: 1000 })).toBe(200)
+  })
+
+  it('keeps both the translation price and reserve multiplier an operator set', async () => {
+    const db = new MockCreditPricingD1Database()
+    const editedStamp = '2026-09-12T09:30:00.000Z'
+    db.rows.set('text.translate', storedRow(TRANSLATE_DEFAULT, {
+      credits_per_unit: 250,
+      reserve_multiplier: 3,
+      updated_at: editedStamp,
+    }))
+
+    const rules = await listCreditPricing(makeCreditPricingEvent(db))
+    const kept = rules.find(rule => rule.capability === 'text.translate')!
+
+    // A real stamp is a human decision, and a value that differs from the new default
+    // is evidence of curation, not of a stale seed.
+    expect(computeCreditCharge(kept, { tokens: 1000 })).toBe(250)
+    expect(computeCreditReservation(kept, { tokens: 1000 })).toBe(750)
     expect(kept.updatedAt).toBe(editedStamp)
   })
 

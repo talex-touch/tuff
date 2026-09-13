@@ -14,10 +14,10 @@ import { requireDatabase } from './creditsStore'
  *
  * The seeded defaults reproduce the prices that were already shipped before this
  * table existed (see `DEFAULT_CREDIT_PRICING`), so introducing it is not a price
- * change — with one deliberate exception: `vision.ocr` and `image.translate.e2e`
- * were priced at a tenth of a chat turn while they do several turns' worth of work,
- * and they are the two capabilities whose price is derived rather than inherited
- * (see the seed comment).
+ * change — with deliberate exceptions: `vision.ocr`, `image.translate` and
+ * `image.translate.e2e` are derived rather than inherited, and `text.translate`
+ * ships at a tenth of the chat price rather than the chat price itself (see the
+ * seed comment).
  *
  * The anchor is chat: 1,000 credits per 1K tokens, i.e. one credit per token. Every
  * other capability is priced by expressing its upstream workload in that same unit,
@@ -77,7 +77,7 @@ export const FALLBACK_CREDIT_PRICING: Omit<CreditPricingRule, 'capability' | 'up
 }
 
 /** Stamp the current seed writes into `updated_at`. */
-const SEEDED_AT = '2026-09-11T00:00:00.000Z'
+const SEEDED_AT = '2026-09-13T00:00:00.000Z'
 
 /**
  * Stamps earlier versions wrote. A row still carrying one has never been edited by an
@@ -85,8 +85,16 @@ const SEEDED_AT = '2026-09-11T00:00:00.000Z'
  * shipped default and has to move with the code when a default changes. Without this a
  * price fix would only ever reach databases that had not been seeded yet: seeding is
  * additive per capability, so an existing row keeps its superseded price forever.
+ *
+ * Advance `SEEDED_AT` and add the stamp it replaces here whenever any default changes
+ * in a way that must reach already-seeded databases. Every row still on a listed stamp
+ * is rewritten to the current default, which is a no-op for capabilities whose default
+ * did not move.
  */
-const SUPERSEDED_SEED_STAMPS = new Set(['2026-09-10T00:00:00.000Z'])
+const SUPERSEDED_SEED_STAMPS: Record<string, true> = {
+  '2026-09-10T00:00:00.000Z': true,
+  '2026-09-11T00:00:00.000Z': true
+}
 
 function rule(
   capability: string,
@@ -111,7 +119,6 @@ function rule(
 
 const CHAT_CAPABILITIES = [
   'text.chat',
-  'text.translate',
   'text.summarize',
   'text.rewrite',
   'text.grammar',
@@ -131,6 +138,15 @@ const CHAT_CAPABILITIES = [
  * speech is about four tokens, so ASR already sat on the same one-credit-per-token
  * anchor as chat.
  *
+ * `text.translate` is the one chat-shaped capability that does not inherit the chat
+ * price. It is a narrow, high-volume call — one short prompt and one short completion
+ * per chunk — served by a dedicated machine-translation route, so it ships at 100
+ * credits/1k, a tenth of a chat turn, which is what makes Lexi-sized translation
+ * affordable. It reserves twice its estimate because translation is admitted on an
+ * estimated token count before the provider reports real usage, and `minCredits`
+ * stays 1 so a trivial chunk still bills. It needs a row of its own rather than a
+ * parameter on the chat spread so the two prices can move independently.
+ *
  * The two image capabilities do not inherit a price, because before this table they
  * were not billed at all. They are derived from the same anchor by their upstream
  * workload instead: one `vision.ocr` call sends a picture plus a prompt and a
@@ -149,6 +165,7 @@ const CHAT_CAPABILITIES = [
  */
 export const DEFAULT_CREDIT_PRICING: readonly CreditPricingRule[] = [
   ...CHAT_CAPABILITIES.map(capability => rule(capability, '1k_tokens', 1000)),
+  rule('text.translate', '1k_tokens', 100, { reserveMultiplier: 2 }),
   rule('vision.ocr', 'image', 2000),
   rule('image.translate', 'image', 3000),
   rule('image.translate.e2e', 'image', 4000),
@@ -425,7 +442,7 @@ async function reseedSupersededDefaults(
   const defaults = new Map(DEFAULT_CREDIT_PRICING.map(item => [item.capability, item]))
   const statements: D1PreparedStatement[] = rows.flatMap((row) => {
     const stamp = String(row.updated_at ?? '')
-    if (!SUPERSEDED_SEED_STAMPS.has(stamp)) return []
+    if (SUPERSEDED_SEED_STAMPS[stamp] !== true) return []
     const item = defaults.get(String(row.capability))
     if (!item) return []
     return [
