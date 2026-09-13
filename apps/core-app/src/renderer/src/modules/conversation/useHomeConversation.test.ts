@@ -8,7 +8,10 @@ import type {
 } from '@talex-touch/utils/types/intelligence'
 import type { StreamController } from '@talex-touch/utils/transport'
 import type { ConversationIntelligenceSdk } from './useHomeConversation'
-import { INTELLIGENCE_HOME_SURFACE } from '@talex-touch/utils/types/intelligence'
+import {
+  INTELLIGENCE_HOME_SURFACE,
+  PI_CLI_PROVIDER_ID
+} from '@talex-touch/utils/types/intelligence'
 import { describe, expect, it, vi } from 'vitest'
 import { useHomeConversation } from './useHomeConversation'
 
@@ -292,6 +295,77 @@ describe('useHomeConversation', () => {
       status: 'failed',
       error: { code: 'NETWORK_FAILURE', detail: 'socket hang up' },
       meta: { promptTokens: 7, completionTokens: 0, totalTokens: 7 }
+    })
+  })
+
+  it('does not fall back once Pi has started a native Home session', async () => {
+    // The Pi provider binds the conversation's native transcript on its first protocol line. A
+    // non-streaming retry would run the same prompt against that transcript outside the stream
+    // protocol, so the turn must fail instead of silently forking it and billing twice.
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({
+      sdk: double.sdk,
+      identity: () => ({ conversationId: 'home-1', projectId: null })
+    })
+
+    const turn = conversation.send('hello')
+    await flush()
+    double
+      .emit()
+      .onStart?.({ type: 'start', capabilityId: 'text.chat', provider: PI_CLI_PROVIDER_ID })
+    double.emit().onError?.(new Error('[NATIVE_SESSION_BUSY:text.chat] native session is busy'))
+    await turn
+
+    expect(double.chatPayloads).toHaveLength(0)
+    expect(conversation.messages.value[1]).toMatchObject({ status: 'failed' })
+  })
+
+  it('does not fall back when the transport rejects after Pi started', async () => {
+    const chatPayloads: IntelligenceChatPayload[] = []
+    const sdk: ConversationIntelligenceSdk = {
+      stream: async (_capabilityId, _payload, options) => {
+        options.onStart?.({
+          type: 'start',
+          capabilityId: 'text.chat',
+          provider: PI_CLI_PROVIDER_ID
+        })
+        throw new Error('stream transport dropped')
+      },
+      text: {
+        chat: async (payload) => {
+          chatPayloads.push(payload)
+          return invokeResult('fallback reply')
+        }
+      }
+    }
+    const conversation = useHomeConversation({
+      sdk,
+      identity: () => ({ conversationId: 'home-2', projectId: null })
+    })
+
+    await conversation.send('hello')
+
+    expect(chatPayloads).toHaveLength(0)
+    expect(conversation.messages.value[1]).toMatchObject({ status: 'failed' })
+  })
+
+  it('still falls back when a Home turn fails before Pi starts', async () => {
+    // Counterpart to the guard above: a failure before the provider named itself has no native
+    // session to protect, so the plain non-streaming call remains safe.
+    const double = createSdkDouble({
+      startStream: () => Promise.reject(new TypeError('stream-capable transport required'))
+    })
+    const conversation = useHomeConversation({
+      sdk: double.sdk,
+      identity: () => ({ conversationId: 'home-3', projectId: null })
+    })
+
+    await conversation.send('hello')
+
+    expect(double.chatPayloads).toHaveLength(1)
+    expect(conversation.messages.value[1]).toMatchObject({
+      content: 'fallback reply',
+      status: 'complete'
     })
   })
 
@@ -585,6 +659,52 @@ describe('routing', () => {
         autoContext: true
       }
     })
+  })
+})
+
+/**
+ * The native session belongs to main: the renderer names the conversation and project it is writing
+ * into, and main resolves the provider's raw ids from that. The exact shape asserted here is the
+ * guard — a raw native id or transcript path added to the metadata would fail this equality.
+ */
+describe('home identity', () => {
+  it('carries the live conversation and project owner on every turn', async () => {
+    const double = createSdkDouble()
+    let identity: { conversationId: string; projectId: string | null } = {
+      conversationId: 'home-1',
+      projectId: 'project-1'
+    }
+    const conversation = useHomeConversation({ sdk: double.sdk, identity: () => identity })
+
+    const first = conversation.send('first')
+    await flush()
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await first
+
+    identity = { conversationId: 'home-2', projectId: null }
+    const second = conversation.send('second')
+    await flush()
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await second
+
+    expect(
+      double.invokeOptions.map((options) => (options as IntelligenceInvokeOptions).metadata)
+    ).toEqual([
+      {
+        surface: INTELLIGENCE_HOME_SURFACE,
+        operation: INTELLIGENCE_HOME_SURFACE,
+        autoContext: true,
+        conversationId: 'home-1',
+        projectId: 'project-1'
+      },
+      {
+        surface: INTELLIGENCE_HOME_SURFACE,
+        operation: INTELLIGENCE_HOME_SURFACE,
+        autoContext: true,
+        conversationId: 'home-2',
+        projectId: null
+      }
+    ])
   })
 })
 

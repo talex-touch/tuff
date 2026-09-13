@@ -51,7 +51,9 @@ import {
   resolveAllLocalAiCliProviderStatuses,
   resolveLocalAiCliProviderStatus
 } from './executable-resolver'
-import { NativeSessionLeaseRegistry } from './native-session-lease'
+import { nativeSessionLeaseRegistry } from './native-session-lease'
+import { isNativeSessionMissingError } from './native-session-errors'
+import { scanNativeSessionsForProject } from './native-session-discovery'
 import {
   capturePiSessionFile,
   parsePiEntriesResponse,
@@ -72,8 +74,10 @@ import {
   markLocalAiCliSessionState,
   subscribeLocalAiCliSessionMutations,
   touchLocalAiCliSession,
+  upsertDiscoveredLocalAiCliSessions,
   upsertLocalAiCliSession
 } from './session-store'
+import { setLocalAiCliWorkspaceRoot } from './workspace-root'
 
 const localAiCliLog = createLogger('LocalAiCli')
 const DEFAULT_COLS = 100
@@ -230,11 +234,6 @@ function taskFailureCode(error: unknown): LocalAiCliErrorCode {
   return message === 'PROCESS_START_FAILED' ? 'PROCESS_START_FAILED' : 'PROTOCOL_INVALID'
 }
 
-function isNativeSessionMissingError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return /(?:session|thread).*(?:not found|does not exist|invalid|unknown)/i.test(message)
-}
-
 export class LocalAiCliModule extends BaseModule {
   static key = Symbol.for('local-ai-cli')
   name: ModuleKey = LocalAiCliModule.key
@@ -245,7 +244,7 @@ export class LocalAiCliModule extends BaseModule {
   private readonly approvals = new LocalAiCliApprovalBroker()
   private readonly taskProcesses = new Map<string, TaskProcessSession>()
   private readonly terminalSessions = new Map<string, TerminalSession>()
-  private readonly nativeSessionLeases = new NativeSessionLeaseRegistry()
+  private readonly nativeSessionLeases = nativeSessionLeaseRegistry
   private workspacePath = ''
   private pendingPanelReturnUntil = 0
 
@@ -262,6 +261,7 @@ export class LocalAiCliModule extends BaseModule {
     this.mainWindow = runtime.app.window.window
     this.workspacePath = join(this.requireDirPath(ctx), 'workspace')
     await mkdir(this.workspacePath, { recursive: true })
+    setLocalAiCliWorkspaceRoot(this.workspacePath)
     this.registerHandlers()
     if (isLocalAiCliBetaAvailable()) {
       shortcutModule.registerMainShortcut(
@@ -322,6 +322,27 @@ export class LocalAiCliModule extends BaseModule {
           if (!projectId) throw new Error('LOCAL_AI_CLI_PROJECT_INVALID')
         }
         return (await listLocalAiCliSessions(projectId)).map(toSessionSummary)
+      }),
+      transport.on(LocalAiCliEvents.session.discover, async (payload, context) => {
+        assertHostContext(context)
+        const projectId = normalizeLocalAiCliProjectId(payload?.projectId)
+        if (!projectId) throw new Error('LOCAL_AI_CLI_PROJECT_INVALID')
+        const project = await getProject(projectId)
+        if (!project) throw new Error('LOCAL_AI_CLI_PROJECT_INVALID')
+        if (project.archived) throw new Error('LOCAL_AI_CLI_PROJECT_ARCHIVED')
+        const scan = await scanNativeSessionsForProject(project.rootPath)
+        const persisted = await upsertDiscoveredLocalAiCliSessions(
+          scan.candidates.map((candidate) => ({
+            projectId,
+            ...candidate
+          }))
+        )
+        if (persisted.sessions.length > 0) await touchProject(projectId)
+        return {
+          discovered: persisted.created,
+          skipped: scan.skipped + persisted.sessions.length - persisted.created,
+          incomplete: scan.incomplete
+        }
       }),
       transport.on(LocalAiCliEvents.session.forget, async (payload, context) => {
         assertHostContext(context)
@@ -1382,7 +1403,6 @@ export class LocalAiCliModule extends BaseModule {
     const session = this.terminalSessions.get(sessionId)
     if (!session) return
     session.dataSubscription.dispose()
-    session.exitSubscription.dispose()
     session.sender.removeListener('destroyed', session.senderDestroyed)
     session.releaseLease?.()
     this.terminalSessions.delete(sessionId)
@@ -1405,7 +1425,7 @@ export class LocalAiCliModule extends BaseModule {
       session.process.kill()
       this.disposeTerminalSession(sessionId)
     }
-    this.nativeSessionLeases.clear()
+    setLocalAiCliWorkspaceRoot(null)
     this.transport = null
     this.mainWindow = null
     localAiCliLog.info('Local AI CLI runtime destroyed')

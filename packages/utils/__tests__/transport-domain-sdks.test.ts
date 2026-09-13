@@ -2259,6 +2259,25 @@ describe('local ai cli session sdk mappings', () => {
     expect(dispose).toHaveBeenCalledTimes(1)
   })
 
+  it('maps explicit session discovery onto the scan event with the owning project', async () => {
+    const transport = createTransportMock()
+    const sdk = createLocalAiCliSdk(transport as unknown as ITuffTransport)
+
+    await sdk.session.discover('p1')
+
+    expect(LocalAiCliEvents.session.discover.toEventName()).toBe(
+      'local-ai-cli:session:discover',
+    )
+    expect(LocalAiCliEvents.session.discover).toMatchObject({
+      namespace: 'local-ai-cli',
+      module: 'session',
+      action: 'discover',
+    })
+    expect(transport.send).toHaveBeenCalledWith(LocalAiCliEvents.session.discover, {
+      projectId: 'p1',
+    })
+  })
+
   it('drops a raw native id or transcript path smuggled into a task or terminal request', () => {
     // The renderer only ever holds opaque ids. Main normalizes renderer input, so a field it does
     // not know about must not survive into the request that reaches the provider process.

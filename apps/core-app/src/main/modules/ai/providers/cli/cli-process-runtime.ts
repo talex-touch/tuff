@@ -82,6 +82,10 @@ export interface CliRunSpec {
    * pi, a flag for others) and the files only exist once the run has begun.
    */
   args: string[] | ((attachmentPaths: string[]) => string[])
+  /** Canonical working root selected by the host. */
+  cwd?: string
+  /** Ordered protocol observation before a line can produce renderer-visible chunks. */
+  onLine?: (line: string) => void | Promise<void>
   /** Extra environment on top of the inherited one. PATH is handled here. */
   env?: Readonly<Record<string, string>>
   parseLine: (line: string) => CliLineEvent | null
@@ -135,6 +139,7 @@ export async function* runCliChat(
   let child: ChildProcessByStdio<null, Readable, Readable>
   try {
     child = spawn(spec.executable, resolveArgs(spec, attachments.paths), {
+      ...(spec.cwd ? { cwd: spec.cwd } : {}),
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
@@ -241,6 +246,7 @@ export async function* runCliChat(
   try {
     for await (const line of lines) {
       if (signal?.aborted) return
+      await spec.onLine?.(line)
       const event = spec.parseLine(line)
       if (!event) continue
 

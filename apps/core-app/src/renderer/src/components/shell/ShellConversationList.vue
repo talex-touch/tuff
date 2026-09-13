@@ -26,6 +26,7 @@ const archivedOpen = ref(false)
 const renamingProjectId = ref<string | null>(null)
 const renameValue = ref('')
 const openProjectMenuId = ref<string | null>(null)
+const discoveringProjectId = ref<string | null>(null)
 
 onMounted(() => {
   void Promise.all([history.refresh(), projectStore.initialize()])
@@ -124,6 +125,25 @@ async function toggleArchived(project: ProjectRecord): Promise<void> {
   }
 }
 
+async function discoverSessions(project: ProjectRecord): Promise<void> {
+  if (discoveringProjectId.value) return
+  discoveringProjectId.value = project.id
+  try {
+    const result = await projectStore.discoverSessions(project.id)
+    if (result.incomplete) {
+      toast.warning(t('shell.projects.discoveryPartial', { count: result.discovered }))
+    } else if (result.discovered > 0) {
+      toast.success(t('shell.projects.discoveryComplete', { count: result.discovered }))
+    } else {
+      toast.info(t('shell.projects.discoveryEmpty'))
+    }
+  } catch {
+    toast.error(t('shell.projects.discoveryFailed'))
+  } finally {
+    discoveringProjectId.value = null
+  }
+}
+
 async function forgetSession(sessionRef: string): Promise<void> {
   try {
     await projectStore.forgetSession(sessionRef)
@@ -202,6 +222,16 @@ function setProjectMenu(projectId: string, open: boolean): void {
             </TxDropdownItem>
             <TxDropdownItem @select="openProjectAgent(group.project.id)">
               {{ t('shell.projects.runLocalAgent') }}
+            </TxDropdownItem>
+            <TxDropdownItem
+              :disabled="discoveringProjectId !== null"
+              @select="discoverSessions(group.project)"
+            >
+              {{
+                discoveringProjectId === group.project.id
+                  ? t('shell.projects.discoveringSessions')
+                  : t('shell.projects.discoverSessions')
+              }}
             </TxDropdownItem>
             <TxDropdownItem @select="beginRename(group.project)">
               {{ t('shell.projects.rename') }}

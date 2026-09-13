@@ -198,6 +198,7 @@ describe('folder projects / native session schema', () => {
         ])
       )
     ).toEqual({
+      conversation_id: { type: 'text', notnull: 0, dflt: null },
       created_at: { type: 'integer', notnull: 1, dflt: null },
       expected_head_id: { type: 'text', notnull: 0, dflt: null },
       id: { type: 'text', notnull: 1, dflt: null },
@@ -244,6 +245,11 @@ describe('folder projects / native session schema', () => {
       name: 'idx_local_ai_cli_sessions_project_recent',
       unique: 0,
       columns: ['project_id', 'last_seen_at']
+    })
+    expect(await readIndexes(client!, 'local_ai_cli_sessions')).toContainEqual({
+      name: 'uniq_local_ai_cli_sessions_conversation',
+      unique: 1,
+      columns: ['conversation_id']
     })
 
     expect(await readIndexes(client!, 'conversations')).toContainEqual({
@@ -360,5 +366,48 @@ describe('folder projects / native session schema', () => {
     const filePath = join(directory, 'not-a-folder')
     await writeFile(filePath, 'plain file')
     await expect(createOrRestoreProject(filePath)).rejects.toThrow('PROJECT_PATH_INVALID')
+  })
+
+  it('adds a nullable, FK-free conversation pointer with a unique index', async () => {
+    await applyChain(client!)
+
+    const conversationId = (await readColumns(client!, 'local_ai_cli_sessions')).find(
+      (column) => column.name === 'conversation_id'
+    )
+    // Nullable: every pointer written before this slice, and every quick-invoke pointer, has no
+    // conversation. A NOT NULL column would have demanded a backfill the chain cannot produce.
+    expect(conversationId).toMatchObject({ type: 'text', notnull: 0, dflt_value: null })
+
+    expect(await readIndexes(client!, 'local_ai_cli_sessions')).toContainEqual({
+      name: 'uniq_local_ai_cli_sessions_conversation',
+      unique: 1,
+      columns: ['conversation_id']
+    })
+
+    // No FK on purpose: the pointer is written when the first stream line names the native id,
+    // which can precede the conversation row's own persistence. A FK would reject that bind.
+    expect(await readForeignKeys(client!, 'local_ai_cli_sessions')).toEqual([
+      { table: 'projects', from: 'project_id', to: 'id', onDelete: 'SET NULL' }
+    ])
+  })
+
+  it('keeps every unbound pointer but rejects a second pointer for one conversation', async () => {
+    await applyChain(client!)
+    await seedProject(client!, 'project-1')
+
+    const insert = (id: string, conversationId: string | null) =>
+      client!.execute({
+        sql: `INSERT INTO local_ai_cli_sessions (id, conversation_id, project_id, provider, project_root, native_session_id, title, state, origin, expected_head_id, created_at, updated_at, last_seen_at) VALUES (?, ?, 'project-1', 'pi', '/projects/project-1', ?, '', 'available', 'tuff', NULL, 1, 1, 1)`,
+        args: [id, conversationId, `native-${id}`]
+      })
+
+    await insert('session-1', null)
+    await insert('session-2', null)
+    await insert('session-3', 'conversation-1')
+    // SQLite treats every NULL as distinct, so the unique index must not collapse unbound rows.
+    await expect(insert('session-4', 'conversation-1')).rejects.toThrow(/UNIQUE/i)
+
+    expect(await countRows(client!, 'local_ai_cli_sessions', 'conversation_id IS NULL')).toBe(2)
+    expect(await countRows(client!, 'local_ai_cli_sessions', '1=1')).toBe(3)
   })
 })

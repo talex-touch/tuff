@@ -330,6 +330,13 @@
       "when": 1786406400000,
       "tag": "0046_folder_projects_native_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1786492800000,
+      "tag": "0047_home_pi_native_sessions",
+      "breakpoints": true
     }
   ]
 }

@@ -119,7 +119,12 @@ const conversation = useHomeConversation({
   // A getter, not a snapshot: switching model mid-conversation must apply to the next send.
   routing: () => modelRouting.value,
   // Likewise for Auto Context, which the settings page owns — each send reads its current value.
-  autoContext: () => autoContext.value
+  autoContext: () => autoContext.value,
+  identity: () => {
+    const id = conversationId.value
+    if (!id) throw new Error('HOME_CONVERSATION_ID_MISSING')
+    return { conversationId: id, projectId: projectId.value }
+  }
 })
 const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
 
