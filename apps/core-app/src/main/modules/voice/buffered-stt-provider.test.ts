@@ -18,7 +18,7 @@ vi.mock('../ai/intelligence-sdk', () => ({
   }
 }))
 
-import { createBufferedSttVoiceProvider } from './buffered-stt-provider'
+import { BUFFERED_STT_MAX_PCM_BYTES, createBufferedSttVoiceProvider } from './buffered-stt-provider'
 
 type SttInvokeOptions = IntelligenceInvokeOptions & { readonly signal?: AbortSignal }
 type SttInvoker = (
@@ -33,7 +33,6 @@ interface InvokeCall {
 
 const PROVIDER_ID = 'tuff-nexus-default'
 const FROZEN_MODEL = 'nexus-audio-transcribe'
-const MAX_BUFFER_BYTES = 7_500_000
 const WAV_DATA_URI_PREFIX = 'data:audio/wav;base64,'
 
 function invokeResult(
@@ -69,8 +68,16 @@ function request(overrides: Partial<VoiceStreamRequest> = {}): VoiceStreamReques
   }
 }
 
-function providerWith(invoke: SttInvoker): VoiceProviderAdapter {
-  return createBufferedSttVoiceProvider({ providerId: PROVIDER_ID, model: FROZEN_MODEL, invoke })
+function providerWith(
+  invoke: SttInvoker,
+  options: { authorityCheck?: () => boolean } = {}
+): VoiceProviderAdapter {
+  return createBufferedSttVoiceProvider({
+    providerId: PROVIDER_ID,
+    model: FROZEN_MODEL,
+    invoke,
+    ...options
+  })
 }
 
 async function collect(events: AsyncIterable<VoiceProviderEvent>): Promise<VoiceProviderEvent[]> {
@@ -164,11 +171,58 @@ describe('createBufferedSttVoiceProvider', () => {
     const stream = await providerWith(invoke).createStream(request())
 
     // Exactly at the limit is still a valid buffer; the byte past it is not.
-    await expect(stream.writePcm(Buffer.alloc(MAX_BUFFER_BYTES))).resolves.toBeUndefined()
+    await expect(stream.writePcm(Buffer.alloc(BUFFERED_STT_MAX_PCM_BYTES))).resolves.toBeUndefined()
     await expectProviderError(stream.writePcm(Buffer.alloc(1)), 'VOICE_AUDIO_TOO_LARGE')
 
     expect(calls).toEqual([])
   })
+
+  it('buffers a full five minutes of 16 kHz mono PCM16 and rejects only the byte past the bound', async () => {
+    const { invoke, calls } = recordingInvoker()
+    const stream = await providerWith(invoke).createStream(request())
+
+    // 300s * 16000 Hz * 2 bytes is ~9.6 MB, the longest clip the synchronous provider accepts.
+    const fiveMinutes = 300 * 16_000 * 2
+    await expect(stream.writePcm(Buffer.alloc(fiveMinutes))).resolves.toBeUndefined()
+    // Filling exactly up to the byte cap is still valid; one more byte is over.
+    await expectProviderError(
+      stream.writePcm(Buffer.alloc(BUFFERED_STT_MAX_PCM_BYTES - fiveMinutes + 1)),
+      'VOICE_AUDIO_TOO_LARGE'
+    )
+
+    expect(calls).toEqual([])
+  })
+
+  it('forwards the stream request id verbatim as the Nexus idempotency key', async () => {
+    const requestId = '11111111-2222-4333-8444-555555555555'
+    const { invoke, calls } = recordingInvoker()
+    const stream = await providerWith(invoke).createStream(request({ requestId }))
+
+    await stream.writePcm(Buffer.from([0x01, 0x02]))
+    await stream.end()
+    await collect(stream.events)
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.options?.metadata).toMatchObject({
+      caller: 'core.voice.buffered-asr',
+      idempotencyKey: requestId
+    })
+  })
+
+  it.each([0, -1, 1.5, 192_001, Number.NaN])(
+    'rejects malformed PCM sample rate %s before buffering audio',
+    async (sampleRate) => {
+      const provider = providerWith(recordingInvoker().invoke)
+      await expectProviderError(
+        provider.createStream(
+          request({
+            audio: { ...request().audio, sampleRate }
+          })
+        ),
+        'VOICE_AUDIO_SAMPLE_RATE_INVALID'
+      )
+    }
+  )
 
   it.each([
     {
@@ -200,7 +254,9 @@ describe('createBufferedSttVoiceProvider', () => {
         type: 'error',
         code,
         message: 'Buffered speech recognition failed.',
-        retryable: false,
+        // Only a lost authority is permanent; a transient provider failure stays retryable so the
+        // retained audio can be replayed through the same adapter.
+        retryable: true,
         requestId: 'req-buffered-1'
       })
       expect(JSON.stringify(events)).not.toContain('sk-live-secret')
@@ -241,5 +297,61 @@ describe('createBufferedSttVoiceProvider', () => {
       }),
       'VOICE_UPLOAD_UNSUPPORTED'
     )
+  })
+
+  it.each([
+    ['reports a changed authority', () => false],
+    [
+      'fails closed when the authority check itself throws',
+      () => {
+        throw new Error('session store unavailable')
+      }
+    ]
+  ])(
+    'drops the buffered clip without calling STT when the hold %s',
+    async (_name, authorityCheck) => {
+      const { invoke, calls } = recordingInvoker()
+      const stream = await providerWith(invoke, { authorityCheck }).createStream(request())
+
+      await stream.writePcm(Buffer.from([0x01, 0x02]))
+      await stream.end()
+
+      // The recording belongs to the account that started it; once the hold is gone the audio must
+      // not be uploaded at all, and the null result must not be offered as a retryable failure.
+      expect(await collect(stream.events)).toEqual([
+        {
+          type: 'error',
+          code: 'VOICE_ASR_AUTHORITY_CHANGED',
+          message: 'Buffered speech recognition failed.',
+          retryable: false,
+          requestId: 'req-buffered-1'
+        }
+      ])
+      expect(calls).toEqual([])
+    }
+  )
+
+  it('discards a transcript that arrives after the authority changed mid-upload', async () => {
+    let current = true
+    const { invoke, calls } = recordingInvoker(async () => {
+      current = false
+      return invokeResult({ text: 'transcript that belonged to the previous account' })
+    })
+    const stream = await providerWith(invoke, { authorityCheck: () => current }).createStream(
+      request()
+    )
+
+    await stream.writePcm(Buffer.from([0x01, 0x02]))
+    await stream.end()
+
+    const events = await collect(stream.events)
+    expect(events.map((event) => event.type)).toEqual(['error'])
+    expect(events[0]).toMatchObject({
+      type: 'error',
+      code: 'VOICE_ASR_AUTHORITY_CHANGED',
+      retryable: false
+    })
+    expect(JSON.stringify(events)).not.toContain('previous account')
+    expect(calls).toHaveLength(1)
   })
 })

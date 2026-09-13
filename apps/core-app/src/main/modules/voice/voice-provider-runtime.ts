@@ -3,6 +3,7 @@ import type {
   VoiceRecognitionStatus,
   VoiceRecognitionStatusSnapshot
 } from '@talex-touch/utils/transport/sdk/domains/voice'
+import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
 import {
   BailianParaformerVoiceProvider,
   createFetchHttpClient,
@@ -24,8 +25,9 @@ import {
 } from '../ai/intelligence-config'
 import { getIntelligenceProviderManager, providerSupportsCapability } from '../ai/intelligence-sdk'
 import { createBufferedSttVoiceProvider } from './buffered-stt-provider'
-import { getAuthToken } from '../auth'
+import { getAuthToken, getSanitizedAuthSessionState } from '../auth'
 import { resolveProviderCredential } from '../ai/provider-credential-runtime'
+import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 
 const ASR_CAPABILITY_ID = 'audio.asr'
 const STT_CAPABILITY_ID = 'audio.stt'
@@ -109,13 +111,20 @@ function capabilityStatus(
 
 function resolveNexusBufferedSttProvider(): ConfiguredAsrProvider | null {
   const route = resolveCapabilityProvider(STT_CAPABILITY_ID, 'stt', true)
-  if (!route?.model || !isNexusManagedProvider(route.provider)) return null
+  if (route?.model !== NEXUS_AUDIO_TRANSCRIBE_MODEL || !isNexusManagedProvider(route.provider))
+    return null
+  const expectedUserId = getSanitizedAuthSessionState().user?.id
+  if (!expectedUserId) return null
+  const expectedBaseUrl = getRuntimeNexusBaseUrl()
   return {
     model: route.model,
     mode: 'buffered',
     provider: createBufferedSttVoiceProvider({
       providerId: route.provider.id,
-      model: route.model
+      model: route.model,
+      authorityCheck: () =>
+        getSanitizedAuthSessionState().user?.id === expectedUserId &&
+        getRuntimeNexusBaseUrl() === expectedBaseUrl
     })
   }
 }

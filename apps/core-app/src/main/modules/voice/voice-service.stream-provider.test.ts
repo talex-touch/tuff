@@ -626,6 +626,25 @@ describe('VoiceService.streamDictation via provider', () => {
     ])
     expect(invoke).not.toHaveBeenCalled()
   })
+
+  it.each([
+    { mode: 'buffered' as const, deadlineMs: 150_000 },
+    { mode: 'realtime' as const, deadlineMs: 30_000 }
+  ])('gives a $mode provider a $deadlineMs ms streaming deadline', async ({ mode, deadlineMs }) => {
+    const createStream = vi.fn(async () => fake.connection)
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      mode,
+      provider: { id: 'fake', defaultStreamModel: 'fake-model', createStream }
+    })
+    pollCapture.mockReturnValue({ active: false, durationMs: 100, stoppedReason: 'silence' })
+
+    await collect(new VoiceService().streamDictation({}))
+
+    // A recorded endpoint is one long call, not a stream of partials: it needs the wider
+    // deadline, while realtime ASR keeps the tighter capability budget.
+    expect(createStream).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: deadlineMs }))
+  })
 })
 
 /**
@@ -730,6 +749,38 @@ describe('VoiceService retry buffer retention', () => {
       expect.objectContaining({ model: 'fake-model' })
     )
     expect(stt).not.toHaveBeenCalled()
+  })
+
+  it('reuses the buffered submission identity and deadline on retry', async () => {
+    const requests: Array<{ requestId: string; timeoutMs: number }> = []
+    let nextConnection = fake.connection
+    const createStream = vi.fn(async (request: { requestId: string; timeoutMs: number }) => {
+      requests.push(request)
+      const connection = nextConnection
+      nextConnection = fake.connection
+      return connection
+    })
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      mode: 'buffered',
+      provider: { id: 'fake', defaultStreamModel: 'fake-model', createStream }
+    })
+
+    const service = new VoiceService()
+    await runUntilFailure(service)
+    // The buffered route mints a real UUID because it doubles as the Nexus idempotency key.
+    expect(requests[0]?.requestId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    )
+
+    const retry = createFakeConnection('retry words')
+    nextConnection = retry.connection
+    await service.retryLastFailure()
+
+    // Retrying replays the same submission; a fresh id would be billed as a second one.
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.requestId).toBe(requests[0]?.requestId)
+    expect(requests[1]?.timeoutMs).toBe(requests[0]?.timeoutMs)
   })
 
   it('uses the failed session strength rather than a later caller mutation on retry', async () => {
@@ -878,6 +929,39 @@ describe('VoiceService retry buffer retention', () => {
 
     await vi.advanceTimersByTimeAsync(30_001)
     expect(heldAudioBytes(service)).toBe(0)
+  })
+
+  it('drops the audio when the provider declares the failure not retryable', async () => {
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+    const service = new VoiceService()
+    const generator = service.streamDictation({ emitLevel: false })
+    const drained = (async () => {
+      try {
+        for await (const _event of generator) {
+          // drain
+        }
+      } catch {
+        // the permanent failure under test
+      }
+    })()
+
+    // Let real audio accumulate first, so a no-op retention path cannot pass by having nothing
+    // to hold in the first place.
+    await vi.advanceTimersByTimeAsync(400)
+    // An authority change is terminal: replaying the audio would upload it under a principal
+    // that no longer owns it, so the buffer must not survive to arm a retry.
+    fake.push({
+      type: 'error',
+      code: 'VOICE_ASR_AUTHORITY_CHANGED',
+      message: 'Buffered speech recognition authority changed.',
+      retryable: false
+    })
+    await vi.advanceTimersByTimeAsync(500)
+    await drained
+
+    expect(heldAudioBytes(service)).toBe(0)
+    expect(service.getRecoveryStatus()).toEqual({ available: false })
+    expect(await service.retryLastFailure()).toEqual({ text: '', expired: true })
   })
 
   it('holds no audio after dispose', async () => {

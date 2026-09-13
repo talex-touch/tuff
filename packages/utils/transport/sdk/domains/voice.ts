@@ -15,6 +15,9 @@ import type { IntelligenceSTTBilling } from '../../../types/intelligence'
 import type { ITuffTransport, StreamController, StreamOptions } from '../../types'
 import { defineEvent } from '../../event/builder'
 
+/** Outlasts the 150s buffered Provider deadline plus polish and active-target delivery. */
+const VOICE_RETRY_TRANSPORT_TIMEOUT_MS = 180_000
+
 /** Standard envelope returned by voice API handlers. */
 export type VoiceApiResponse<T = undefined> = { ok: true; result?: T } | { ok: false; error: string }
 
@@ -474,7 +477,9 @@ export function createVoiceSdk(transport: VoiceSdkTransport): VoiceSdk {
     },
 
     async retryLastFailure(payload = {}) {
-      const response = await transport.send(voiceApiEvents.retryLastFailure, payload)
+      const response = await transport.send(voiceApiEvents.retryLastFailure, payload, {
+        timeout: VOICE_RETRY_TRANSPORT_TIMEOUT_MS,
+      })
       return assertVoiceApiResponse(response, 'Voice retry failed')
     },
 

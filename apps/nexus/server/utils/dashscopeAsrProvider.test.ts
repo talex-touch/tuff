@@ -253,6 +253,36 @@ describe('DashScope Qwen Audio Flash adapter transport uncertainty', () => {
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
 
+  it('aborts an unresponsive provider at the adapter-owned deadline', async () => {
+    let observedSignal: AbortSignal | null = null
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      observedSignal = init?.signal ?? null
+      return await new Promise<Response>((_resolve, reject) => {
+        if (!observedSignal) {
+          reject(new Error('request signal missing'))
+          return
+        }
+        observedSignal.addEventListener('abort', () => reject(new Error('deadline reached')), {
+          once: true,
+        })
+      })
+    })
+
+    await expectDashScopeError(
+      () =>
+        createDashScopeQwenAudioAsrAdapter({ fetch: fetcher, requestTimeoutMs: 5 }).transcribe(
+          createEvent(),
+          dashScopeProvider(),
+          Buffer.from('synthetic-pcm-audio-bytes'),
+          { durationSeconds: 1 },
+        ),
+      { code: 'ASR_PROVIDER_UNAVAILABLE', accepted: true },
+    )
+
+    expect(observedSignal?.aborted).toBe(true)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
   it.each([
     { name: 'a non-JSON body', body: '<html>upstream gateway</html>', contentType: 'text/html' },
     { name: 'a JSON array body', body: '[]', contentType: 'application/json' },
@@ -467,6 +497,32 @@ describe('DashScope Qwen Audio Flash synchronous adapter', () => {
           { durationSeconds: 1 },
         ),
       { code: 'ASR_PROVIDER_REJECTED', accepted: false },
+    )
+  })
+
+  it.each([
+    // A timeout or a server-side failure leaves the provider's outcome unknown: it may have
+    // accepted and charged the request, so the caller must treat it as accepted-uncertain and
+    // never refund or replay.
+    { status: 408, accepted: true, code: 'ASR_PROVIDER_UNAVAILABLE' },
+    { status: 500, accepted: true, code: 'ASR_PROVIDER_UNAVAILABLE' },
+    { status: 503, accepted: true, code: 'ASR_PROVIDER_UNAVAILABLE' },
+    // Definitive client errors are pre-acceptance: nothing was charged, so the hold is refunded.
+    { status: 429, accepted: false, code: 'ASR_PROVIDER_REJECTED' },
+    { status: 400, accepted: false, code: 'ASR_PROVIDER_REJECTED' },
+    { status: 401, accepted: false, code: 'ASR_PROVIDER_REJECTED' },
+  ])('maps HTTP $status to accepted=$accepted', async ({ status, accepted, code }) => {
+    const fetcher: typeof fetch = async () => new Response(JSON.stringify({ code: 'ProviderError' }), { status })
+
+    await expectDashScopeError(
+      () =>
+        createDashScopeQwenAudioAsrAdapter({ fetch: fetcher }).transcribe(
+          createEvent(),
+          dashScopeProvider(),
+          pcmWav(1_600),
+          { durationSeconds: 1 },
+        ),
+      { code, accepted },
     )
   })
 
