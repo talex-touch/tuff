@@ -751,3 +751,36 @@ Grouped signed local commits: model cancellation; unified Voice Input settings/n
 ### Next Steps
 
 - None - task complete
+
+
+## Session 70: Folder projects and native CLI sessions
+
+**Date**: 2026-09-13
+**Task**: Folder projects and native CLI sessions
+**Branch**: `pi-desktop-analysis`
+
+### Summary
+
+Added canonical folder projects, project-owned Home threads, opaque native session pointers, provider-native Pi/OMP/Codex/Claude continuation with leases and Pi conflict detection, shell/OmniPanel flows, privacy gates, and isolated Electron acceptance.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fb2351a4419625fad8908a62b4dfc806775099e5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
