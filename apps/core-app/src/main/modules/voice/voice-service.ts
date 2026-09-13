@@ -1446,22 +1446,23 @@ export class VoiceService {
     throwIfCancelled(signal)
     const captureId = this.retryBuffer?.captureId ?? null
     if (this.retryInFlight) {
-      if (this.retryInFlight.captureId === captureId) return await this.retryInFlight.promise
+      if (this.retryInFlight.captureId === captureId) {
+        return await awaitWithAbort(this.retryInFlight.promise, signal)
+      }
       throw Object.assign(new Error('VOICE_RECOVERY_IN_PROGRESS'), {
         code: 'VOICE_RECOVERY_IN_PROGRESS',
         retryable: true
       })
     }
     const controller = new AbortController()
-    const retrySignal = AbortSignal.any([...(signal ? [signal] : []), controller.signal])
-    const operation = this.retryLastFailureOnce(payload, retrySignal, caller)
+    const operation = this.retryLastFailureOnce(payload, controller.signal, caller)
     const active: ActiveVoiceRetry = { captureId, controller, promise: operation }
     this.retryInFlight = active
-    try {
-      return await operation
-    } finally {
+    const release = (): void => {
       if (this.retryInFlight === active) this.retryInFlight = null
     }
+    void operation.then(release, release)
+    return await awaitWithAbort(operation, signal)
   }
 
   private async retryLastFailureOnce(
