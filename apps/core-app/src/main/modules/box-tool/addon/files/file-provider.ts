@@ -43,7 +43,11 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { StorageList, timingLogger, TuffInputType } from '@talex-touch/utils'
-import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
+import {
+  fileFilterService,
+  type FileFilterReason
+} from '@talex-touch/utils/common/file-filter-service'
+import { CONTEXT_DEPENDENT_BLACKLISTED_DIRS } from '@talex-touch/utils/common/file-scan-constants'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -92,7 +96,6 @@ import { getMainConfig, saveMainConfig } from '../../../storage'
 import { getTypeTagsForExtension, KEYWORD_MAP, WHITELISTED_EXTENSIONS } from './constants'
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import {
-  isIndexableFile,
   isValidBase64DataUrl,
   mapFileToTuffItem,
   scanDirectoryBatches as scanDirectoryBatchesDirect
@@ -342,7 +345,10 @@ function createFileIndexSyncStats(): FileIndexSyncStats {
 
 export function resolveFileProviderBaseWatchPaths(input: {
   envValue?: string
-  getPath: (name: 'documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos') => string
+  platform?: NodeJS.Platform
+  getPath: (
+    name: 'home' | 'documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos'
+  ) => string
   onPathError?: (name: string, error: unknown) => void
 }): string[] {
   const envPaths =
@@ -357,14 +363,15 @@ export function resolveFileProviderBaseWatchPaths(input: {
     return [...new Set(envPaths)]
   }
 
-  const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
-    'documents',
-    'downloads',
-    'desktop',
-    'music',
-    'pictures',
-    'videos'
-  ]
+  // macOS gets one broad user-space root. Traversal filters prune hidden, system, development,
+  // cache and temporary subtrees. Other platforms retain their existing roots until realtime
+  // watch depth and permission behavior are proven against a whole-home default there.
+  const pathNames: Array<
+    'home' | 'documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos'
+  > =
+    (input.platform ?? process.platform) === 'darwin'
+      ? ['home']
+      : ['documents', 'downloads', 'desktop', 'music', 'pictures', 'videos']
   const paths = pathNames.map((name) => {
     try {
       return input.getPath(name)
@@ -373,7 +380,7 @@ export function resolveFileProviderBaseWatchPaths(input: {
       return null
     }
   })
-  return [...new Set(paths.filter((p): p is string => !!p))]
+  return [...new Set(paths.filter((value): value is string => Boolean(value)))]
 }
 
 class FileProvider implements ISearchProvider<ProviderContext> {
@@ -3629,6 +3636,33 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
+  private async getIncrementalTraversalExclusionReason(
+    filePath: string
+  ): Promise<FileFilterReason | null> {
+    let directoryPath = path.dirname(filePath)
+    while (true) {
+      const directoryName = path.basename(directoryPath).toLowerCase()
+      let siblingNames: string[] | undefined = []
+      if (CONTEXT_DEPENDENT_BLACKLISTED_DIRS.has(directoryName)) {
+        try {
+          siblingNames = await fs.readdir(path.dirname(directoryPath))
+        } catch {
+          // Unknown project context keeps the stricter historical exclusion instead of admitting
+          // a build/cache subtree that the snapshot scanner could not classify either.
+          siblingNames = undefined
+        }
+      }
+      const reason = fileFilterService.getTraversalExclusionReason(directoryPath, undefined, {
+        siblingNames
+      })
+      if (reason) return reason
+
+      const parent = path.dirname(directoryPath)
+      if (parent === directoryPath) return null
+      directoryPath = parent
+    }
+  }
+
   private async buildFileRecord(
     rawPath: string,
     options?: { manualForce?: boolean }
@@ -3640,15 +3674,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       const manualForce = options?.manualForce === true
       const name = path.basename(rawPath)
       const extension = path.extname(name).toLowerCase()
+      const target = { path: rawPath, name, extension }
       const exclusionReason = manualForce
-        ? fileFilterService.getManualIndexExclusionReason({
-            path: rawPath,
-            name,
-            extension
-          })
-        : isIndexableFile(rawPath, extension, name)
-          ? null
-          : 'unsupported-extension'
+        ? fileFilterService.getManualIndexExclusionReason(target)
+        : !WHITELISTED_EXTENSIONS.has(extension)
+          ? 'unsupported-extension'
+          : (fileFilterService.getManualIndexExclusionReason(target) ??
+            (await this.getIncrementalTraversalExclusionReason(rawPath)))
 
       if (exclusionReason) {
         this.logDebug('Skipped incremental file by unified filter', {

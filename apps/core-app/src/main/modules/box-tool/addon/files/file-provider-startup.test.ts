@@ -597,6 +597,68 @@ describe('file-provider startup readiness', () => {
     ])
   })
 
+  it('falls back to the home directory as the base watch root when no override is set', () => {
+    const roots = resolveFileProviderBaseWatchPaths({
+      platform: 'darwin',
+      getPath: (name) => {
+        if (name !== 'home') throw new Error(`unexpected path lookup: ${name}`)
+        return '/Users/demo'
+      }
+    })
+
+    expect(roots).toEqual(['/Users/demo'])
+  })
+
+  it('keeps the six per-folder roots on non-macOS platforms and never asks for home', () => {
+    const requested: string[] = []
+    const roots = resolveFileProviderBaseWatchPaths({
+      platform: 'linux',
+      getPath: (name) => {
+        requested.push(name)
+        if (name === 'home') throw new Error('home is a mac-only default root')
+        return `/home/demo/${name}`
+      }
+    })
+
+    expect(roots).toEqual([
+      '/home/demo/documents',
+      '/home/demo/downloads',
+      '/home/demo/desktop',
+      '/home/demo/music',
+      '/home/demo/pictures',
+      '/home/demo/videos'
+    ])
+    expect(requested).not.toContain('home')
+  })
+
+  it('matches the full scan when a personal build directory gains a project marker', async () => {
+    // Deliberately not os.tmpdir(): /tmp and /var are unconditional system paths, so a temp fixture
+    // would be rejected for the wrong reason and never exercise the context-dependent `build` rule
+    // that the realtime record builder must share with the snapshot scanner.
+    const fixtureRoot = await fs.mkdtemp(path.join(os.homedir(), 'tuff-file-record-parity-'))
+    const buildDir = path.join(fixtureRoot, 'build')
+    const filePath = path.join(buildDir, 'note.txt')
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+
+    try {
+      await fs.mkdir(buildDir, { recursive: true })
+      await fs.writeFile(filePath, 'meeting notes')
+
+      // No project marker beside `build`: the file is ordinary user content and must be indexed.
+      expect(await provider.buildFileRecord(filePath)).toMatchObject({
+        path: filePath,
+        name: 'note.txt'
+      })
+
+      await fs.writeFile(path.join(fixtureRoot, 'package.json'), '{}')
+
+      // Same file, same automatic path: `build` is now a project directory and must be excluded.
+      expect(await provider.buildFileRecord(filePath)).toBeNull()
+    } finally {
+      await fs.rm(fixtureRoot, { recursive: true, force: true })
+    }
+  })
+
   it('registers channels without blocking on search-index worker or filesystem watcher roots', async () => {
     const provider = fileProvider as unknown as MutableFileProvider
     resetProviderState(provider)

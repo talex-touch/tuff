@@ -33,21 +33,43 @@ export interface IndexedWatchPathBasenameMatchInput {
 export function resolveIndexedWatchRootSet(
   input: ResolveIndexedWatchRootSetInput,
 ): IndexedWatchRootSet {
-  const paths: string[] = [];
-  const normalizedPaths: string[] = [];
-  const seen = new Set<string>();
+  const entries: Array<{ path: string; normalized: string }> = [];
 
   for (const candidate of [...input.basePaths, ...(input.extraPaths ?? [])]) {
     if (!candidate) continue;
     const normalized = input.normalizePath(candidate);
     if (!normalized) continue;
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    paths.push(candidate);
-    normalizedPaths.push(normalized);
+
+    const coveredByExistingRoot = entries.some((entry) =>
+      isIndexedWatchPathOwned({
+        rawPath: normalized,
+        normalizedWatchPaths: [entry.normalized],
+        normalizePath: input.normalizePath,
+      }),
+    );
+    if (coveredByExistingRoot) continue;
+
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry = entries[index];
+      if (
+        entry &&
+        isIndexedWatchPathOwned({
+          rawPath: entry.normalized,
+          normalizedWatchPaths: [normalized],
+          normalizePath: input.normalizePath,
+        })
+      ) {
+        entries.splice(index, 1);
+      }
+    }
+
+    entries.push({ path: candidate, normalized });
   }
 
-  return { paths, normalizedPaths };
+  return {
+    paths: entries.map((entry) => entry.path),
+    normalizedPaths: entries.map((entry) => entry.normalized),
+  };
 }
 
 export function isIndexedWatchPathOwned(
