@@ -92,7 +92,7 @@ import { getMainConfig, saveMainConfig } from '../../../storage'
 import { getTypeTagsForExtension, KEYWORD_MAP, WHITELISTED_EXTENSIONS } from './constants'
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import {
-  isIndexableFile,
+  getFileTraversalExclusionReason,
   isValidBase64DataUrl,
   mapFileToTuffItem,
   scanDirectoryBatches as scanDirectoryBatchesDirect
@@ -342,7 +342,10 @@ function createFileIndexSyncStats(): FileIndexSyncStats {
 
 export function resolveFileProviderBaseWatchPaths(input: {
   envValue?: string
-  getPath: (name: 'documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos') => string
+  platform?: NodeJS.Platform
+  getPath: (
+    name: 'home' | 'documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos'
+  ) => string
   onPathError?: (name: string, error: unknown) => void
 }): string[] {
   const envPaths =
@@ -357,14 +360,15 @@ export function resolveFileProviderBaseWatchPaths(input: {
     return [...new Set(envPaths)]
   }
 
-  const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
-    'documents',
-    'downloads',
-    'desktop',
-    'music',
-    'pictures',
-    'videos'
-  ]
+  // macOS gets one broad user-space root. Traversal filters prune hidden, system, development,
+  // cache and temporary subtrees. Other platforms retain their existing roots until realtime
+  // watch depth and permission behavior are proven against a whole-home default there.
+  const pathNames: Array<
+    'home' | 'documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos'
+  > =
+    (input.platform ?? process.platform) === 'darwin'
+      ? ['home']
+      : ['documents', 'downloads', 'desktop', 'music', 'pictures', 'videos']
   const paths = pathNames.map((name) => {
     try {
       return input.getPath(name)
@@ -373,7 +377,7 @@ export function resolveFileProviderBaseWatchPaths(input: {
       return null
     }
   })
-  return [...new Set(paths.filter((p): p is string => !!p))]
+  return [...new Set(paths.filter((value): value is string => Boolean(value)))]
 }
 
 class FileProvider implements ISearchProvider<ProviderContext> {
@@ -3640,15 +3644,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       const manualForce = options?.manualForce === true
       const name = path.basename(rawPath)
       const extension = path.extname(name).toLowerCase()
+      const target = { path: rawPath, name, extension }
       const exclusionReason = manualForce
-        ? fileFilterService.getManualIndexExclusionReason({
-            path: rawPath,
-            name,
-            extension
-          })
-        : isIndexableFile(rawPath, extension, name)
-          ? null
-          : 'unsupported-extension'
+        ? fileFilterService.getManualIndexExclusionReason(target)
+        : !WHITELISTED_EXTENSIONS.has(extension)
+          ? 'unsupported-extension'
+          : (fileFilterService.getManualIndexExclusionReason(target) ??
+            (await getFileTraversalExclusionReason(rawPath)))
 
       if (exclusionReason) {
         this.logDebug('Skipped incremental file by unified filter', {

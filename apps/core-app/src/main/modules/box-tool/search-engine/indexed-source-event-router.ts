@@ -19,7 +19,7 @@ const log = getLogger('search-engine')
  * install emits ~16 watcher events and each one used to run the full ~1.5s resolve/upsert chain
  * behind the per-source mutation gate; coalescing trades a fixed delay for dropping that serial
  * tail. The app window is the wider of the two because a bundle copy spreads over more events than
- * a plain file write, which chokidar's 2000ms awaitWriteFinish has already absorbed.
+ * a plain file write, while the watcher stability window remains bounded for prompt file updates.
  */
 export const APP_WATCH_COALESCE_WINDOW_MS = 400
 export const FILE_WATCH_COALESCE_WINDOW_MS = 300

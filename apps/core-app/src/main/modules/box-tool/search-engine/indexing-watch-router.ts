@@ -67,12 +67,14 @@ export class WatchEventRouter {
     diagnostics: IndexingRuntimeDiagnostics
   ): Promise<WatchEventRouteResult> {
     const rootRoute = event.sourceId
-      ? { sources: this.getSourceById(event.sourceId, sources), skipped: [] }
+      ? this.getSourceByIdAndRoot(event, sources, diagnostics)
       : this.getSourcesByRoot(event, sources, diagnostics)
+    const rootEligibleSourceIds = new Set(rootRoute.sources.map((source) => source.descriptor.id))
     const { sources: eligibleSources, skipped } = this.getEligibleSources(
       rootRoute.sources,
       diagnostics,
-      rootRoute.skipped
+      rootRoute.skipped,
+      rootEligibleSourceIds
     )
 
     const sourceResults = await Promise.all(
@@ -205,7 +207,8 @@ export class WatchEventRouter {
   private getEligibleSources(
     sources: IndexedSource[],
     diagnostics: IndexingRuntimeDiagnostics,
-    initialSkipped: WatchEventRouteSkippedSource[] = []
+    initialSkipped: WatchEventRouteSkippedSource[] = [],
+    rootEligibleSourceIds: ReadonlySet<string> = new Set()
   ): {
     sources: IndexedSource[]
     skipped: WatchEventRouteSkippedSource[]
@@ -223,6 +226,14 @@ export class WatchEventRouter {
         task: 'watch'
       })
       if (!eligibility.eligible && eligibility.reason) {
+        const canWatchGrantedRoot =
+          rootEligibleSourceIds.has(source.descriptor.id) &&
+          (eligibility.reason === 'health:permission-required' ||
+            eligibility.reason === 'permission:promptable')
+        if (canWatchGrantedRoot) {
+          eligibleSources.push(source)
+          continue
+        }
         skipped.push({
           sourceId: source.descriptor.id,
           reason: eligibility.reason
@@ -242,6 +253,54 @@ export class WatchEventRouter {
     const source = sources.get(sourceId)
     if (!source?.handleWatchEvent) return []
     return [source]
+  }
+
+  private getSourceByIdAndRoot(
+    event: IndexedSourceWatchEvent,
+    sources: Map<string, IndexedSource>,
+    diagnostics: IndexingRuntimeDiagnostics
+  ): {
+    sources: IndexedSource[]
+    skipped: WatchEventRouteSkippedSource[]
+  } {
+    const sourceId = event.sourceId
+    if (!sourceId) return { sources: [], skipped: [] }
+
+    const matchedSources = this.getSourceById(sourceId, sources)
+    if (matchedSources.length === 0) return { sources: [], skipped: [] }
+
+    const sourceDiagnostics = diagnostics.sources.find(
+      (source) => source.descriptor.id === sourceId
+    )
+    if (!sourceDiagnostics) {
+      return { sources: matchedSources, skipped: [] }
+    }
+
+    const route = resolveIndexedSourceWatchRootRoute(event, sourceDiagnostics.roots, {
+      platform: process.platform
+    })
+    if (!route) {
+      return {
+        sources: [],
+        skipped: [{ sourceId, reason: 'source-watch-filtered' }]
+      }
+    }
+    if (!route.eligible && route.reason) {
+      const healthStatus = sourceDiagnostics.health.status
+      if (
+        healthStatus === 'disabled' ||
+        healthStatus === 'unsupported' ||
+        healthStatus === 'error'
+      ) {
+        return { sources: matchedSources, skipped: [] }
+      }
+      return {
+        sources: [],
+        skipped: [{ sourceId, reason: route.reason }]
+      }
+    }
+
+    return { sources: matchedSources, skipped: [] }
   }
 
   private getSourcesByRoot(
