@@ -784,3 +784,36 @@ Added canonical folder projects, project-owned Home threads, opaque native sessi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 71: PI Desktop native session convergence
+
+**Date**: 2026-09-14
+**Task**: PI Desktop native session convergence
+**Branch**: `pi-desktop-analysis`
+
+### Summary
+
+Adopted explicit external Pi, OMP, Claude, and Codex native sessions per existing canonical Project; cut Home Pi to provider-owned --session-id/--session continuation with opaque local pointers, head/cwd conflict guards, and shared leases. Updated the PI-Desktop audit with corrected Tuff capability overlap and ordered Plan/Goal artifact, local MCP, durable workspace, review rollback, fork, and compaction candidates. Focused suites, typechecks, utils build, privacy inventory, lint, audit-claim check, diff check, and PTY smoke passed.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `59d7d6aaf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
