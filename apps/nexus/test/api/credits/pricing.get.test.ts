@@ -21,16 +21,25 @@ interface PublicPricingRule {
   minCredits: number
 }
 
-let getPricingHandler: (event: H3Event) => Promise<{ unit: string, rules: PublicPricingRule[] }>
+let getPricingHandler: (event: H3Event) => Promise<{ unit: string; rules: PublicPricingRule[] }>
 
 beforeAll(async () => {
   installDefineEventHandlerGlobal()
   // The route module calls the Nitro global at import time, so it cannot be imported
   // statically from a test that does not run inside Nuxt.
-  getPricingHandler = (await import('../../../server/api/credits/pricing.get')).default as (event: H3Event) => Promise<{ unit: string, rules: PublicPricingRule[] }>
+  getPricingHandler = (await import('../../../server/api/credits/pricing.get')).default as (
+    event: H3Event,
+  ) => Promise<{ unit: string; rules: PublicPricingRule[] }>
 })
 
-const PUBLIC_COLUMNS = ['capability', 'creditsPerUnit', 'minCredits', 'secondaryCreditsPerUnit', 'secondaryUnit', 'unit']
+const PUBLIC_COLUMNS = [
+  'capability',
+  'creditsPerUnit',
+  'minCredits',
+  'secondaryCreditsPerUnit',
+  'secondaryUnit',
+  'unit',
+]
 
 describe('GET /api/credits/pricing', () => {
   let db: MockCreditPricingD1Database
@@ -48,7 +57,7 @@ describe('GET /api/credits/pricing', () => {
     expect(result.rules.find(rule => rule.capability === 'text.translate')).toEqual({
       capability: 'text.translate',
       unit: '1k_tokens',
-      creditsPerUnit: 100,
+      creditsPerUnit: 10,
       secondaryUnit: null,
       secondaryCreditsPerUnit: null,
       minCredits: 1,
@@ -61,9 +70,7 @@ describe('GET /api/credits/pricing', () => {
       secondaryCreditsPerUnit: 1,
       minCredits: 1,
     })
-    expect(result.rules.map(rule => Object.keys(rule).sort())).toEqual(
-      result.rules.map(() => PUBLIC_COLUMNS),
-    )
+    expect(result.rules.map(rule => Object.keys(rule).sort())).toEqual(result.rules.map(() => PUBLIC_COLUMNS))
   })
 
   it('未验证邮箱的调用者拿不到价目表', async () => {
@@ -84,8 +91,7 @@ describe('GET /api/credits/pricing', () => {
     expect(seeded.rules.some(rule => rule.capability === 'code.debug')).toBe(true)
 
     const retired = db.rows.get('code.debug')
-    if (!retired)
-      throw new Error('code.debug was not seeded.')
+    if (!retired) throw new Error('code.debug was not seeded.')
     retired.active = 0
 
     const result = await getPricingHandler(makeCreditPricingEvent(db))

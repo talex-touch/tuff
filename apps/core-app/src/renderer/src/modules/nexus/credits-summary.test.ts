@@ -1,17 +1,17 @@
 /**
- * The signed-in account's credit state has two halves, and the published price list must never be
- * able to take the balance down with it.
+ * The signed-in account's credit state is the balance alone: what was granted, what has been
+ * spent, and what is left.
  *
- * The balance says how much is left; the price list says what spending it buys, which is why it is
- * fetched alongside rather than behind a click. But they fail independently: the pricing endpoint
- * can reject, return nothing, or hand back a rule set whose rows are not quotable, and in every one
- * of those cases the user still has to see their remaining credits and no error that suggests the
- * balance itself was lost. The composable keeps module-scope state, so each test drives it through
- * a fresh sign-in and asserts the state a consumer would render.
+ * Prices are not part of it. The published rate card lives on the Nexus dashboard, so the
+ * composable must never ask for one — a second request here would re-introduce the half-fetched
+ * state where a balance renders beside a price list that failed to arrive — and its public state
+ * must not carry a price list at all.
+ *
+ * The composable keeps module-scope state, so each test drives it through a fresh sign-in and
+ * asserts the state a consumer would render.
  */
 import type * as VueModule from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
 import { useCreditsSummary } from './credits-summary'
 
 const authState = vi.hoisted(() => {
@@ -61,7 +61,10 @@ function nexusResponse(status: number, body: unknown, statusText = ''): FakeNexu
 
 type Route = () => unknown
 
-/** Every request the composable makes has to be one of the routes a test declared. */
+/**
+ * Every request the composable makes has to be one of the routes a test declared, so a
+ * request for a path no test knows about fails the test rather than being answered.
+ */
 function serve(routes: Record<string, Route>): void {
   fetchNexusWithAuthMock.mockImplementation(async (path: string) => {
     const route = routes[path]
@@ -79,159 +82,102 @@ const SUMMARY = {
   teamContext: null
 }
 
-const PRICE_LIST = [
-  { capability: 'text.chat', unit: '1k_tokens', creditsPerUnit: 2, minCredits: 1 },
-  {
-    capability: 'audio.stt',
-    unit: 'minute',
-    creditsPerUnit: 5,
-    secondaryUnit: 'second',
-    secondaryCreditsPerUnit: 0.1,
-    minCredits: 1
-  }
-]
-
-const EXPECTED_PRICES = [
-  {
-    capability: 'text.chat',
-    unit: '1k_tokens',
-    creditsPerUnit: 2,
-    secondaryUnit: null,
-    secondaryCreditsPerUnit: null,
-    minCredits: 1
-  },
-  {
-    capability: 'audio.stt',
-    unit: 'minute',
-    creditsPerUnit: 5,
-    secondaryUnit: 'second',
-    secondaryCreditsPerUnit: 0.1,
-    minCredits: 1
-  }
-]
-
 beforeEach(() => {
   fetchNexusWithAuthMock.mockReset()
   authState.isLoggedIn.value = false
 })
 
-describe('useCreditsSummary pricing', () => {
-  it('publishes the normalized price list next to the balance', async () => {
-    serve({
-      '/api/credits/summary': () => nexusResponse(200, SUMMARY),
-      '/api/credits/pricing': () => nexusResponse(200, { rules: PRICE_LIST })
-    })
+describe('useCreditsSummary', () => {
+  it('reads the balance from the summary endpoint and never asks for a price list', async () => {
+    serve({ '/api/credits/summary': () => nexusResponse(200, SUMMARY) })
 
     const credits = useCreditsSummary()
     authState.isLoggedIn.value = true
 
-    await vi.waitFor(() => expect(credits.pricing.value).toEqual(EXPECTED_PRICES))
-    expect(credits.summary.value?.user.remaining).toBe(750)
+    await vi.waitFor(() => expect(credits.summary.value?.user.remaining).toBe(750))
+    expect(credits.personalQuota.value).toBe(1000)
+    expect(credits.personalUsed.value).toBe(250)
     expect(credits.error.value).toBe('')
-    expect(fetchNexusWithAuthMock.mock.calls.map(([path]) => path)).toContain(
-      '/api/credits/pricing'
-    )
+
+    // Every request went to the summary endpoint. `serve` also refuses undeclared paths, so a
+    // resurrected price-list read fails the balance assertions above instead of being answered.
+    expect(
+      fetchNexusWithAuthMock.mock.calls.every(([path]) => path === '/api/credits/summary')
+    ).toBe(true)
+    expect('pricing' in credits).toBe(false)
   })
 
-  it('leaves the balance usable with an empty price list when pricing is unusable', async () => {
-    const unusablePricing: Array<[string, Route]> = [
-      ['transport returned nothing', () => null],
-      [
-        'transport rejected',
-        () => {
-          throw new Error('pricing unreachable')
-        }
-      ],
-      ['gateway error', () => nexusResponse(502, { message: 'bad gateway' }, 'Bad Gateway')],
-      ['rules are not a list', () => nexusResponse(200, { rules: 'not-a-list' })],
-      ['payload is empty', () => nexusResponse(200, {})]
-    ]
+  /**
+   * A balance read that cannot be served must say so and leave no balance behind: a number
+   * left over from an earlier read would look like a fresh one next to the error.
+   */
+  const FAILED_SUMMARY: Array<{ name: string; route: Route; error: string }> = [
+    {
+      name: 'an expired session',
+      route: () => nexusResponse(401, { message: 'unauthenticated' }, 'Unauthorized'),
+      error: '登录状态已失效，请重新登录后刷新。'
+    },
+    {
+      name: 'a forbidden session',
+      route: () => nexusResponse(403, { message: 'forbidden' }, 'Forbidden'),
+      error: '登录状态已失效，请重新登录后刷新。'
+    },
+    {
+      name: 'a gateway failure',
+      route: () => nexusResponse(502, { message: 'bad gateway' }, 'Bad Gateway'),
+      error: 'Credits 信息获取失败：502 Bad Gateway'
+    },
+    {
+      name: 'an unreachable endpoint',
+      route: () => {
+        throw new Error('summary unreachable')
+      },
+      error: 'summary unreachable'
+    }
+  ]
 
-    for (const [name, priceRoute] of unusablePricing) {
-      authState.isLoggedIn.value = false
-      await nextTick()
-
-      serve({
-        '/api/credits/summary': () => nexusResponse(200, SUMMARY),
-        '/api/credits/pricing': priceRoute
-      })
+  it.each(FAILED_SUMMARY)(
+    'reports $name as an error and no balance at all',
+    async ({ route, error }) => {
+      serve({ '/api/credits/summary': route })
 
       const credits = useCreditsSummary()
       authState.isLoggedIn.value = true
 
-      await vi.waitFor(() => expect(credits.summary.value?.user.remaining, name).toBe(750))
-      expect(credits.error.value, name).toBe('')
-      expect(credits.pricing.value, name).toEqual([])
+      await vi.waitFor(() => expect(credits.error.value).toBe(error))
+      expect(credits.summary.value).toBeNull()
     }
-  })
+  )
 
-  it('filters unquotable price rows instead of exposing them', async () => {
-    serve({
-      '/api/credits/summary': () => nexusResponse(200, SUMMARY),
-      '/api/credits/pricing': () =>
-        nexusResponse(200, {
-          rules: [
-            { unit: '1k_tokens', creditsPerUnit: 2 },
-            { capability: '', creditsPerUnit: 2 },
-            { capability: 'text.chat', creditsPerUnit: 0 },
-            { capability: 'audio.stt', creditsPerUnit: -3 },
-            { capability: 'image.edit', creditsPerUnit: 'free' },
-            { capability: 'video.gen', creditsPerUnit: 9 },
-            'not-a-row'
-          ]
-        })
-    })
+  it('clears a stale balance when a later refresh cannot be served', async () => {
+    serve({ '/api/credits/summary': () => nexusResponse(200, SUMMARY) })
 
     const credits = useCreditsSummary()
     authState.isLoggedIn.value = true
+    await vi.waitFor(() => expect(credits.summary.value?.user.remaining).toBe(750))
 
-    await vi.waitFor(() => expect(credits.pricing.value).toHaveLength(1))
-    expect(credits.pricing.value[0]).toEqual({
-      capability: 'video.gen',
-      unit: '',
-      creditsPerUnit: 9,
-      secondaryUnit: null,
-      secondaryCreditsPerUnit: null,
-      minCredits: 0
-    })
-  })
-
-  it('clears a stale price list when a later pricing request cannot be served', async () => {
+    // The next refresh loses the endpoint. Keeping the previous number would show a balance
+    // the account may already have spent, beside an error that says the read failed.
     serve({
-      '/api/credits/summary': () => nexusResponse(200, SUMMARY),
-      '/api/credits/pricing': () => nexusResponse(200, { rules: PRICE_LIST })
-    })
-
-    const credits = useCreditsSummary()
-    authState.isLoggedIn.value = true
-    await vi.waitFor(() => expect(credits.pricing.value).toHaveLength(2))
-
-    // The next refresh reads a fresh balance but cannot read the price list any more. Leaving the
-    // obsolete list in place would quote a price beside a balance it no longer belongs to.
-    serve({
-      '/api/credits/summary': () => nexusResponse(200, SUMMARY),
-      '/api/credits/pricing': () => nexusResponse(502, { message: 'bad gateway' }, 'Bad Gateway')
+      '/api/credits/summary': () => nexusResponse(502, { message: 'bad gateway' }, 'Bad Gateway')
     })
 
     await credits.refresh()
 
-    await vi.waitFor(() => expect(credits.pricing.value).toEqual([]))
-    expect(credits.summary.value?.user.remaining).toBe(750)
+    await vi.waitFor(() => expect(credits.summary.value).toBeNull())
+    expect(credits.error.value).toBe('Credits 信息获取失败：502 Bad Gateway')
   })
 
-  it('clears the price list when the account signs out', async () => {
-    serve({
-      '/api/credits/summary': () => nexusResponse(200, SUMMARY),
-      '/api/credits/pricing': () => nexusResponse(200, { rules: PRICE_LIST })
-    })
+  it('clears the balance and the error when the account signs out', async () => {
+    serve({ '/api/credits/summary': () => nexusResponse(200, SUMMARY) })
 
     const credits = useCreditsSummary()
     authState.isLoggedIn.value = true
-    await vi.waitFor(() => expect(credits.pricing.value).toHaveLength(2))
+    await vi.waitFor(() => expect(credits.summary.value?.user.remaining).toBe(750))
 
     authState.isLoggedIn.value = false
 
-    await vi.waitFor(() => expect(credits.pricing.value).toEqual([]))
-    expect(credits.summary.value).toBeNull()
+    await vi.waitFor(() => expect(credits.summary.value).toBeNull())
+    expect(credits.error.value).toBe('')
   })
 })
