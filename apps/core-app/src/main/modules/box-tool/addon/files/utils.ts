@@ -1,11 +1,15 @@
 import type { TuffItem } from '@core-box/tuff'
 import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-constants'
+import type { FileFilterReason } from '@talex-touch/utils/common/file-filter-service'
 import type { ScanDirectoryStats } from '@talex-touch/utils/common/file-scan-utils'
 import type { files as filesSchema } from '../../../../db/schema'
 import type { ScannedFileInfo } from './types'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { toTfileUrl } from '@talex-touch/utils/network'
+import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
+import { CONTEXT_DEPENDENT_BLACKLISTED_DIRS } from '@talex-touch/utils/common/file-scan-constants'
 import {
   isIndexableFile as globalIsIndexableFile,
   scanDirectory as globalScanDirectory,
@@ -48,6 +52,32 @@ export function isIndexableFile(
   }
 
   return true
+}
+export async function getFileTraversalExclusionReason(
+  filePath: string
+): Promise<FileFilterReason | null> {
+  let directoryPath = path.dirname(filePath)
+  while (true) {
+    const directoryName = path.basename(directoryPath).toLowerCase()
+    let siblingNames: string[] | undefined = []
+    if (CONTEXT_DEPENDENT_BLACKLISTED_DIRS.has(directoryName)) {
+      try {
+        siblingNames = await fs.readdir(path.dirname(directoryPath))
+      } catch {
+        // Unknown project context keeps the stricter historical exclusion instead of admitting
+        // a build/cache subtree that the snapshot scanner could not classify either.
+        siblingNames = undefined
+      }
+    }
+    const reason = fileFilterService.getTraversalExclusionReason(directoryPath, undefined, {
+      siblingNames
+    })
+    if (reason) return reason
+
+    const parent = path.dirname(directoryPath)
+    if (parent === directoryPath) return null
+    directoryPath = parent
+  }
 }
 
 export async function scanDirectory(
