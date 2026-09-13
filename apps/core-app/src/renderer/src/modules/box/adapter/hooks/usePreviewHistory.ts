@@ -1,3 +1,4 @@
+import type { CoreBoxPreviewCopyRequest } from '@talex-touch/utils/transport/events/types'
 import type { Ref } from 'vue'
 import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -169,8 +170,18 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   // Channel listeners
   const unregShow = transport.on(CoreBoxEvents.previewHistory.show, () => open())
   const unregHide = transport.on(CoreBoxEvents.previewHistory.hide, () => close())
-  const copyPreviewHandler = async (payload: { value?: string }) => {
-    if (!payload?.value) return
+  const copyPreviewHandler = async (payload: CoreBoxPreviewCopyRequest) => {
+    if (payload.item) {
+      try {
+        await transport.send(CoreBoxEvents.item.execute, { item: payload.item })
+        toast.success('结果已复制')
+      } catch {
+        toast.error('复制失败')
+      }
+      return
+    }
+
+    if (!payload.value) return
     try {
       await transport.send(ClipboardEvents.write, { text: payload.value })
       toast.success('结果已复制')
