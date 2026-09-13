@@ -382,7 +382,17 @@ export class DashScopeQwenAudioAsrAdapter {
       })
       body = await readJson(response)
     }
-    catch {
+    catch (error) {
+      const cause = error instanceof Error && error.cause && typeof error.cause === 'object'
+        ? error.cause as Record<string, unknown>
+        : null
+      console.warn('[dashscope-qwen-asr] Provider fetch failed before a response', {
+        name: error instanceof Error ? error.name : typeof error,
+        message: error instanceof Error ? error.message.slice(0, 256) : null,
+        causeName: typeof cause?.name === 'string' ? cause.name.slice(0, 128) : null,
+        causeCode: typeof cause?.code === 'string' ? cause.code.slice(0, 128) : null,
+        causeMessage: typeof cause?.message === 'string' ? cause.message.slice(0, 256) : null,
+      })
       // A missing response may still mean DashScope accepted the request. The caller must not
       // replay it automatically, so this is marked accepted for the request state machine.
       throw new DashScopeAsrError('ASR_PROVIDER_UNAVAILABLE', true)
