@@ -1389,6 +1389,54 @@ describe('VoiceService retry buffer retention', () => {
     expect(heldAudioBytes(service)).toBe(held)
     expect(service.getRecoveryStatus().available).toBe(true)
   })
+
+  /**
+   * A joined caller's abort cancels only its own await.
+   *
+   * The replay is one shared operation, but a caller's `signal` is caller-scoped: aborting it
+   * must not tear down a replay another caller is still awaiting. The slot also stays owned until
+   * the shared operation settles, so an aborting caller cannot free the audio for a second
+   * provider upload.
+   */
+  it('cancels only the aborting caller while the shared replay still delivers to the other', async () => {
+    const service = new VoiceService()
+    await runUntilFailure(service)
+
+    const firstController = new AbortController()
+    const fakeRetry = createFakeConnection('retry words')
+    let releaseConnection!: (connection: FakeVoiceConnection) => void
+    const gate = new Promise<FakeVoiceConnection>((resolve) => {
+      releaseConnection = resolve
+    })
+    provider.createStream.mockClear()
+    provider.createStream.mockImplementationOnce(() => gate)
+
+    const first = service.retryLastFailure({ delivery: 'active-app' }, firstController.signal)
+    const second = service.retryLastFailure({ delivery: 'active-app' })
+    // The shared replay is parked on its connection gate, so it cannot have delivered yet.
+    await vi.advanceTimersByTimeAsync(0)
+
+    firstController.abort()
+    await expect(first).rejects.toThrow('VOICE_OPERATION_CANCELLED')
+
+    // The slot is still owned by the live shared replay: a later caller joins it rather than
+    // starting a second provider upload.
+    const third = service.retryLastFailure({ delivery: 'active-app' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.createStream).toHaveBeenCalledOnce()
+
+    releaseConnection(fakeRetry.connection)
+    const secondResult = await second
+    const thirdResult = await third
+
+    // The aborting caller never took the replay down with it: one upload, one delivery.
+    expect(secondResult.text).toBe('retry words')
+    expect(thirdResult).toBe(secondResult)
+    expect(provider.createStream).toHaveBeenCalledOnce()
+    expect(fakeRetry.connection.end).toHaveBeenCalledOnce()
+    expect(typeText).toHaveBeenCalledTimes(1)
+    expect(typeText).toHaveBeenCalledWith('retry words')
+  })
 })
 
 /**
