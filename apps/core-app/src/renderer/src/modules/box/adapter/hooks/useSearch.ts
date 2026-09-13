@@ -998,10 +998,13 @@ export function useSearch(
   async function requestSearchSnapshot(
     query: TuffQuery,
     currentSequence: number,
-    applySnapshot: (result: TuffSearchResult) => void
+    applySnapshot: (result: TuffSearchResult) => void,
+    preferredItemId: string | null = null
   ): Promise<TuffSearchResult> {
     let snapshotSettled = false
     let streamEnded = false
+    let pendingPreferredItemId = preferredItemId
+    let preferredFallbackItemId: string | null = null
     let resolveSnapshot!: (result: TuffSearchResult) => void
     let rejectSnapshot!: (error: unknown) => void
     const snapshotPromise = new Promise<TuffSearchResult>((resolve, reject) => {
@@ -1084,6 +1087,13 @@ export function useSearch(
                       // Port chunks can precede the start ACK. Apply the snapshot before the next
                       // update/complete callback, rather than overwriting those chunks after await.
                       applySnapshot(chunk.result)
+                      if (pendingPreferredItemId) {
+                        if (res.value.some((item) => item.id === pendingPreferredItemId)) {
+                          pendingPreferredItemId = null
+                        } else {
+                          preferredFallbackItemId = res.value[boxOptions.focus]?.id ?? null
+                        }
+                      }
                       snapshotSettled = true
                       cancelPendingSearchSnapshot = null
                       resolveSnapshot(chunk.result)
@@ -1098,8 +1108,29 @@ export function useSearch(
                   const items = limitIncomingBatchItems(filterDetachedItems(chunk.items))
                   if (items.length === 0) return
                   const focusedItemId = res.value[boxOptions.focus]?.id ?? null
+                  if (
+                    pendingPreferredItemId &&
+                    preferredFallbackItemId &&
+                    focusedItemId &&
+                    focusedItemId !== preferredFallbackItemId
+                  ) {
+                    // The user moved focus after the refresh snapshot; their newer intent wins.
+                    pendingPreferredItemId = null
+                  }
                   searchResults.value = mergeRenderedItems(searchResults.value, items)
-                  restoreFocusedItem(focusedItemId)
+                  if (
+                    pendingPreferredItemId &&
+                    res.value.some((item) => item.id === pendingPreferredItemId)
+                  ) {
+                    restoreFocusedItem(pendingPreferredItemId)
+                    pendingPreferredItemId = null
+                    preferredFallbackItemId = null
+                  } else {
+                    restoreFocusedItem(focusedItemId)
+                    if (pendingPreferredItemId) {
+                      preferredFallbackItemId = res.value[boxOptions.focus]?.id ?? null
+                    }
+                  }
                   activeActivations.value = refreshActiveWidgetFeature(
                     activeActivations.value,
                     items
@@ -1303,9 +1334,14 @@ export function useSearch(
       })
 
       const requestStartedAt = performance.now()
-      const initialResult = await requestSearchSnapshot(query, currentSequence, (result) => {
-        applySearchSnapshot(result, options, selectedItemId)
-      })
+      const initialResult = await requestSearchSnapshot(
+        query,
+        currentSequence,
+        (result) => {
+          applySearchSnapshot(result, options, selectedItemId)
+        },
+        selectedItemId
+      )
       logDebug('[useSearch] Search stream snapshot duration:', {
         ms: Math.round(performance.now() - requestStartedAt),
         sessionId: initialResult?.sessionId

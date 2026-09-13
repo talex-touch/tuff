@@ -34,10 +34,8 @@ onMounted(async () => {
   }
 
   const fileSize = props.item.meta?.file?.size
-  if (fileSize === 0) {
-    error.value = t('textPreview.error.emptyFile')
-    return
-  }
+  // A zero size can be stale while a filesystem change is still propagating. Read the live file
+  // before declaring it empty; the read result remains the authority for the empty-file message.
   if (fileSize && fileSize > MAX_MD_SIZE) {
     error.value = t('textPreview.error.fileTooLarge', {
       size: `${(fileSize / (1024 * 1024)).toFixed(1)} MB`
@@ -55,6 +53,9 @@ onMounted(async () => {
       })
     } else {
       content.value = await networkClient.readText(resourceUrl)
+    }
+    if (content.value.length === 0) {
+      error.value = t('textPreview.error.emptyFile')
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : ''

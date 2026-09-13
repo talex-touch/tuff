@@ -562,6 +562,83 @@ describe('indexingRuntime', () => {
     })
   })
 
+  it('resolves a source-scoped watch event against its own root before global health filtering', async () => {
+    const handleWatchEvent = vi.fn(async () => [
+      { sourceId: 'partial-permission', action: 'change' as const, path: '/tmp/granted/report.md' }
+    ])
+    runtime.registerSource(
+      buildSource({
+        descriptor: { ...descriptor, id: 'partial-permission' },
+        health: {
+          status: 'permission-required',
+          permissionState: 'promptable',
+          itemCount: 0,
+          watchState: 'pending-permission',
+          reconcileState: 'idle'
+        },
+        roots: [
+          {
+            sourceId: 'partial-permission',
+            path: '/tmp/granted',
+            permissionState: 'granted'
+          },
+          {
+            sourceId: 'partial-permission',
+            path: '/tmp/pending',
+            permissionState: 'promptable'
+          }
+        ],
+        handleWatchEvent
+      })
+    )
+
+    const granted = await runtime.routeWatchEventWithResult({
+      sourceId: 'partial-permission',
+      action: 'change',
+      path: '/tmp/granted/report.md',
+      occurredAt: 1700000000000
+    })
+
+    expect(handleWatchEvent).toHaveBeenCalledTimes(1)
+    expect(store.applyDelta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'partial-permission',
+        path: '/tmp/granted/report.md'
+      })
+    )
+    expect(granted).toMatchObject({
+      handledSources: 1,
+      appliedDeltas: 1,
+      skippedSources: 0,
+      skipped: [],
+      deltas: [{ sourceId: 'partial-permission', path: '/tmp/granted/report.md' }]
+    })
+
+    handleWatchEvent.mockClear()
+    store.applyDelta.mockClear()
+
+    const pending = await runtime.routeWatchEventWithResult({
+      sourceId: 'partial-permission',
+      action: 'change',
+      path: '/tmp/pending/report.md',
+      occurredAt: 1700000000000
+    })
+
+    expect(handleWatchEvent).not.toHaveBeenCalled()
+    expect(store.applyDelta).not.toHaveBeenCalled()
+    expect(pending).toMatchObject({
+      handledSources: 0,
+      skippedSources: 1,
+      skipped: [
+        {
+          sourceId: 'partial-permission',
+          reason: 'root-permission:promptable'
+        }
+      ],
+      deltas: []
+    })
+  })
+
   it('applies watch deltas and drains the same mutation lease through the index store adapter', async () => {
     const delta: IndexedSourceDelta = {
       sourceId: 'test-source',
