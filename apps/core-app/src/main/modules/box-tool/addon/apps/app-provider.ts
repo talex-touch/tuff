@@ -349,8 +349,8 @@ const WINDOWS_REALTIME_APP_EXTENSIONS = new Set(['.lnk', '.exe', '.appref-ms'])
 // + stability wait     0.55s    (APP_STABILITY_PROBE_INTERVAL_MS + APP_STABILITY_SETTLE_MS)
 // + app info + upsert  ~0.35s
 //   = 1.5-2.5s against a 10s target.
-// chokidar already applies a 2000ms awaitWriteFinish threshold upstream, so the probe pair here
-// only has to catch a bundle still being copied in, not debounce the write burst itself.
+// The shared watcher now uses a bounded 500ms write-settle window; the probe pair still catches a
+// bundle that is being copied in after the first stable filesystem notification.
 const APP_STABILITY_PROBE_INTERVAL_MS = 300
 const APP_STABILITY_SETTLE_MS = 250
 

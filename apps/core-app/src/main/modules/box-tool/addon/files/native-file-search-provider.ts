@@ -10,6 +10,7 @@ import { execFile } from 'node:child_process'
 import { StorageList, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { resolveIndexedWatchRootSet } from '@talex-touch/utils/search'
 import { app, shell } from 'electron'
 import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
 import { formatDuration } from '../../../../utils/logger'
@@ -48,14 +49,7 @@ const nativeFileSearchLog = getLogger('file-provider').child('Native')
 const execFileAsync = promisify(execFile)
 const NATIVE_SEARCH_MAX_RESULTS = 50
 const NATIVE_ICON_WARMUP_LIMIT = 12
-const MAC_SPOTLIGHT_DEFAULT_PATH_NAMES = [
-  'documents',
-  'downloads',
-  'desktop',
-  'music',
-  'pictures',
-  'videos'
-] as const
+const MAC_SPOTLIGHT_DEFAULT_PATH_NAMES = ['home'] as const
 
 interface MacSpotlightSearchRoot {
   path: string
@@ -69,22 +63,16 @@ function normalizeMacSpotlightPathKey(filePath: string): string {
 }
 
 function createMacSpotlightSearchRoots(candidates: string[]): MacSpotlightSearchRoot[] {
-  const roots: MacSpotlightSearchRoot[] = []
-  const seen = new Set<string>()
-
-  for (const candidate of candidates) {
-    const trimmed = typeof candidate === 'string' ? candidate.trim() : ''
-    if (!trimmed) continue
-
-    const resolved = path.resolve(trimmed)
-    const key = normalizeMacSpotlightPathKey(resolved)
-    if (seen.has(key)) continue
-
-    seen.add(key)
-    roots.push({ path: resolved, key })
-  }
-
-  return roots
+  const rootSet = resolveIndexedWatchRootSet({
+    basePaths: candidates.map((candidate) =>
+      typeof candidate === 'string' && candidate.trim() ? path.resolve(candidate.trim()) : ''
+    ),
+    normalizePath: normalizeMacSpotlightPathKey
+  })
+  return rootSet.paths.map((rootPath, index) => ({
+    path: rootPath,
+    key: rootSet.normalizedPaths[index]!
+  }))
 }
 
 function readFileIndexExtraPaths(): string[] {

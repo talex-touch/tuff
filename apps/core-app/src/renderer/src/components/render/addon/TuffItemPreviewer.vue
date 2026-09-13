@@ -125,8 +125,13 @@ const previewResourceReady = ref(false)
 let previewRequestVersion = 0
 
 watch(
-  () => props.item.meta?.file?.path,
-  async (filePath) => {
+  () =>
+    [
+      props.item.meta?.file?.path,
+      props.item.meta?.file?.modified_at,
+      props.item.meta?.file?.size
+    ] as const,
+  async ([filePath]) => {
     const requestVersion = ++previewRequestVersion
     previewResourceUrl.value = ''
     previewResourceReady.value = false
@@ -166,7 +171,7 @@ watch(
         <component
           :is="previewComponent"
           v-else-if="previewResourceReady && previewResourceUrl"
-          :key="`${item.id}:${previewResourceUrl}`"
+          :key="`${item.id}:${previewResourceUrl}:${item.meta?.file?.modified_at ?? ''}:${item.meta?.file?.size ?? ''}`"
           :item="item"
           :resource-url="previewResourceUrl"
           :search-query="searchQuery"

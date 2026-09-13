@@ -29,6 +29,30 @@ describe("indexing watch root policy", () => {
     ]);
   });
 
+  it("collapses nested roots under an ancestor while keeping sibling prefixes", () => {
+    const rootSet = resolveIndexedWatchRootSet({
+      basePaths: ["/Users/demo"],
+      extraPaths: [
+        "/Users/demo/Workspace",
+        "/Users/demo/Workspace/Projects",
+        "/Users/demo2",
+        "/Users/other",
+      ],
+      normalizePath: normalizeCaseInsensitive,
+    });
+
+    expect(rootSet.paths).toEqual([
+      "/Users/demo",
+      "/Users/demo2",
+      "/Users/other",
+    ]);
+    expect(rootSet.normalizedPaths).toEqual([
+      "/users/demo",
+      "/users/demo2",
+      "/users/other",
+    ]);
+  });
+
   it("ignores roots rejected by the watch path normalizer", () => {
     const rootSet = resolveIndexedWatchRootSet({
       basePaths: ["/Users/demo/Documents", "/ignored"],
