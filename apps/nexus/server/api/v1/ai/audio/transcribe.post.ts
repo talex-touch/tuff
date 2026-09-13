@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { createError, getHeader, setResponseStatus, type H3Event } from 'h3'
+import { createError, getHeader, getRequestWebStream, setResponseStatus, type H3Event } from 'h3'
 import { requireAppAuth } from '../../../../utils/auth'
 import { enforceAdminRateLimit } from '../../../../utils/adminRateLimitStore'
 import { startAsrTranscription } from '../../../../utils/asrTranscriptionService'
@@ -47,25 +47,22 @@ async function readBoundedAudioBody(event: H3Event): Promise<Buffer | null> {
     }
   }
 
-  const webBody = event.web?.request?.body
-  if (webBody) {
-    const reader = webBody.getReader()
-    try {
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        try {
-          append(value)
-        } catch (error) {
-          await reader.cancel().catch(() => {})
-          throw error
-        }
+  const webBody = getRequestWebStream(event)
+  if (!webBody) return null
+  const reader = webBody.getReader()
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      try {
+        append(value)
+      } catch (error) {
+        await reader.cancel().catch(() => {})
+        throw error
       }
-    } finally {
-      reader.releaseLock()
     }
-  } else {
-    for await (const value of event.node.req) append(Buffer.isBuffer(value) ? value : Buffer.from(value))
+  } finally {
+    reader.releaseLock()
   }
   if (byteLength === 0) return null
   if (blockBytes > 0) blocks.push(block.subarray(0, blockBytes))
