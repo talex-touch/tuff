@@ -339,46 +339,58 @@ export class DashScopeQwenAudioAsrAdapter {
     const credential = await getProviderCredential(event, provider.authRef!)
     const apiKey = readProviderApiKey(credential)
     const language = normalizeQwenLanguageHint(options.language)
-    const deadlineSignal = AbortSignal.timeout(this.requestTimeoutMs)
-    const requestSignal = options.signal
-      ? AbortSignal.any([options.signal, deadlineSignal])
-      : deadlineSignal
-    const response = await this.fetcher(resolveTaskUrl(baseUrl, 'services/aigc/multimodal-generation/generation'), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'X-DashScope-SSE': 'disable',
-      },
-      body: JSON.stringify({
-        model,
-        input: {
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'input_audio',
-                  input_audio: { data },
-                },
-              ],
-            },
-          ],
+    const requestController = new AbortController()
+    const callerSignal = options.signal
+    const abortFromCaller = (): void => requestController.abort()
+    if (callerSignal) {
+      callerSignal.addEventListener('abort', abortFromCaller, { once: true })
+      if (callerSignal.aborted) abortFromCaller()
+    }
+    const deadlineTimer = setTimeout(() => requestController.abort(), this.requestTimeoutMs)
+    let response: Response
+    let body: RecordValue | null
+    try {
+      response = await this.fetcher(resolveTaskUrl(baseUrl, 'services/aigc/multimodal-generation/generation'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'X-DashScope-SSE': 'disable',
         },
-        parameters: {
-          format: 'wav',
-          sample_rate: options.sampleRate ?? 16_000,
-          ...(language ? { language_hints: [language] } : {}),
-        },
-      }),
-      signal: requestSignal,
-    }).catch(() => {
+        body: JSON.stringify({
+          model,
+          input: {
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'input_audio',
+                    input_audio: { data },
+                  },
+                ],
+              },
+            ],
+          },
+          parameters: {
+            format: 'wav',
+            sample_rate: options.sampleRate ?? 16_000,
+            ...(language ? { language_hints: [language] } : {}),
+          },
+        }),
+        signal: requestController.signal,
+      })
+      body = await readJson(response)
+    }
+    catch {
       // A missing response may still mean DashScope accepted the request. The caller must not
       // replay it automatically, so this is marked accepted for the request state machine.
       throw new DashScopeAsrError('ASR_PROVIDER_UNAVAILABLE', true)
-    })
-
-    const body = await readJson(response)
+    }
+    finally {
+      clearTimeout(deadlineTimer)
+      callerSignal?.removeEventListener('abort', abortFromCaller)
+    }
     if (!response.ok) {
       const accepted = response.status === 408 || response.status >= 500
       throw new DashScopeAsrError(
