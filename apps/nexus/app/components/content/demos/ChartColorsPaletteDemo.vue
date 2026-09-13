@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { ChartSemanticColorName } from '@talex-touch/tuffex-charts'
-import { ChartPalette } from '@talex-touch/tuffex-charts'
+import type { ChartSemanticColorName } from '@talex-touch/tuffex/charts'
+import { ChartPalette } from '@talex-touch/tuffex/charts'
 
 const semanticNames: ChartSemanticColorName[] = ['Attention', 'Warning', 'Success', 'Neutral', 'Disabled', 'Skeleton']
 const sequential = ChartPalette.sequential('blues')

@@ -1,6 +1,6 @@
 ---
 title: Data Suite
-description: "Visualization and charts: in-package data displays plus the standalone charts package"
+description: "Visualization and charts: in-package data displays plus the charts subpath"
 category: DataSuite
 status: beta
 since: 0.4.0
@@ -11,7 +11,7 @@ verified: false
 
 ## Positioning
 
-The Data suite is where numbers become a picture, and it is the one suite that spans two packages. **Visualization** (SparkChart, AllocationBar, DiffTable, SignalMeter) are compact, in-line data displays that ship inside the main package and import through the `@talex-touch/tuffex/pro` entry. **Charts** is the standalone `@talex-touch/tuffex-charts` package — a kumo-shaped API over Vue-rendered SVG, with no echarts dependency — installed separately from the main package. Start from the [Charts overview](./charts.en.mdc) for the chart family, and reach for a Visualization component when a full chart would be too much for the space you have.
+The Data suite is where numbers become a picture, and it gathers everything Tuffex ships for it. **Visualization** (SparkChart, AllocationBar, DiffTable, SignalMeter) are compact, in-line data displays; **Charts** is the full chart family behind the `@talex-touch/tuffex/charts` subpath — a kumo-shaped API over Vue-rendered SVG, with no echarts dependency. Both live in the main package and import through the `@talex-touch/tuffex/pro` entry, or through `@talex-touch/tuffex/charts` for the family as a whole. Start from the [Charts overview](./charts.en.mdc) for the chart family, and reach for a Visualization component when a full chart would be too much for the space you have. It animates on ECharts' default timings — 1000ms enter, 500ms data update, 300ms state switch — and under `prefers-reduced-motion: reduce` every animation lands on its final frame instead.
 
 ## Preview
 

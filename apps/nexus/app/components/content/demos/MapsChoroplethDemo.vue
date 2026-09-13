@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import type { MapGeoJson } from '@talex-touch/tuffex-charts'
-import { TxChoroplethMap } from '@talex-touch/tuffex-charts'
+import type { MapGeoJson } from '@talex-touch/tuffex/charts'
+import { TxChoroplethMap } from '@talex-touch/tuffex/charts'
 import { onMounted, ref, shallowRef } from 'vue'
 
 interface Row { country: string, share: number }
 
-// Typed `string` so Nitro's typed-route inference short-circuits.
-const WORLD_URL: string = 'https://cdn.jsdelivr.net/gh/johan/world.geo.json/countries.geo.json'
+// Typed `string` so Nitro's typed-route inference short-circuits. Served from
+// `public/geo` (vendored copy of johan/world.geo.json) rather than the CDN, so
+// the demo never depends on a third-party origin to render.
+const WORLD_URL: string = '/geo/world-countries.geo.json'
 
 const world = shallowRef<MapGeoJson | null>(null)
 const failed = ref(false)

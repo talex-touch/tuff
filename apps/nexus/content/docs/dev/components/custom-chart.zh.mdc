@@ -12,7 +12,7 @@ verified: true
 
 ## 基础用法
 
-kumo 的逃生舱是把原始 echarts options 透传给低层 `Chart`；这里没有 echarts，逃生舱是**组合**：`TxChart` 建立坐标系（测量容器、推导比例尺、分配色板），轴/网格/系列作为子组件挂进它的默认插槽。系列统一 accessor 取数（key 或 `(d, i) => v`），不给 `color` 时按挂载顺序取分类色。x/y 值域缺省由所有系列的数据并集推导，`xDomain`/`yDomain` 可显式覆盖。
+kumo 的逃生舱是把原始 echarts options 透传给低层 `Chart`；这一职责在这里由 [ECharts 图表家族](/docs/dev/components/echart-charts) 承担（`TxEChart` 加类型化封装），本页则是**组合**逃生舱：`TxChart` 建立坐标系（测量容器、推导比例尺、分配色板），轴/网格/系列作为子组件挂进它的默认插槽。系列统一 accessor 取数（key 或 `(d, i) => v`），不给 `color` 时按挂载顺序取分类色。x/y 值域缺省由所有系列的数据并集推导，`xDomain`/`yDomain` 可显式覆盖。
 
 ### 柱线复合
 
@@ -21,7 +21,7 @@ kumo 的逃生舱是把原始 echarts options 透传给低层 `Chart`；这里�
 code: |
   <template>
     <TxChart x-type="band" :height="280" :padding="{ top: 24, right: 24, bottom: 36, left: 56 }">
-      <TxGrid y />
+      <TxChartGrid y />
       <TxAxis position="bottom" />
       <TxAxis position="left" :format="(v) => `${v}k`" />
       <TxBarSeries :data="rows" x="month" y="revenue" :radius="3" />
@@ -72,6 +72,40 @@ code: |
 - `#overlay` 插槽是 SVG 之上的 DOM 层（`pointer-events: none`），放提示框与标注。
 - 深度定制可 `useChartContext()` 自写图层，或从 `TxChart` 实例的 `context` 暴露读取比例尺。
 
+## 动画
+
+自定义图层不会自动动画：`TxChart` 只负责坐标系，动画由系列共享的导出原语提供。首绘入场用 `useEnterProgress()`（返回 0 → 1 的 `Ref<number>`），数据更新用 `useTweenedNumbers(source)`（把数值数组平滑追到最新值），要自定节奏就用 `tween()` 配 `easings` / `cubicBezier()`。时长与阈值同样导出：`ENTER_DURATION`（1000）、`UPDATE_DURATION`（500）、`STATE_DURATION`（300）、`ANIMATION_THRESHOLD`（2000）；超过阈值的序列不做动画，`prefers-reduced-motion: reduce` 下所有补间直接落到终帧。
+
+```vue
+<script setup lang="ts">
+import { ANIMATION_THRESHOLD, ENTER_DURATION, easings, useChartContext, useEnterProgress } from '@talex-touch/tuffex/charts'
+import { computed } from 'vue'
+
+const props = defineProps<{ pointCount: number }>()
+const ctx = useChartContext('MyLayer')
+const plot = computed(() => ctx.plot.value)
+
+// 0 → 1 的入场进度；超阈值或 reduced-motion 时直接停在 1
+const enter = useEnterProgress({
+  duration: ENTER_DURATION,
+  easing: easings.linear,
+  enabled: () => props.pointCount <= ANIMATION_THRESHOLD,
+})
+const enterWidth = computed(() => plot.value.width * enter.value)
+</script>
+
+<template>
+  <defs>
+    <clipPath id="my-layer-enter">
+      <rect :x="plot.x" :y="plot.y" :width="enterWidth" :height="plot.height" />
+    </clipPath>
+  </defs>
+  <g :clip-path="'url(#my-layer-enter)'">
+    <slot />
+  </g>
+</template>
+```
+
 ## API
 
 ### Chart Props
@@ -95,7 +129,7 @@ code: |
 | `x` / `y` | `keyof T \| (d, i) => v` | accessor。 |
 | `color` | `string` | 缺省按挂载顺序取分类色。 |
 
-`TxLineSeries` 另有 `curve`（`linear/monotone/natural/step`）、`strokeWidth`、`showSymbol`、`dashed`；`TxAreaSeries` 有 `gradient`（默认开）与 `fillOpacity`；`TxBarSeries` 有 `stack`、`barWidth`、`radius`；`TxScatterSeries` 有 `r`（常量或 accessor）；`TxArcSeries` 用 `value/name?/color?` accessor 加 `innerRadius/padAngle/cornerRadius`，点击发 `slice-click`。
+`TxLineSeries` 另有 `curve`（`linear/monotone/natural/step`）、`strokeWidth`、`showSymbol`、`dashed`；`TxAreaSeries` 有 `gradient`（默认开）与 `fillOpacity`；`TxBarSeries` 有 `stack`、`barWidth`、`radius`；`TxScatterSeries` 有 `r`（常量或 accessor）；`TxArcSeries` 用 `value/name?/color?` accessor 加 `innerRadius/padAngle/cornerRadius`，点击发 `slice-click`，悬停发 `slice-hover`（带 `{ datum, index, name, value }`，指针移出弧形时为 `null`）——无轴弧形没有坐标系可读，`#overlay` 里的 `<TxChartTooltip>` 就靠它取数。
 
 ### ChartTooltip Props
 
@@ -104,4 +138,8 @@ code: |
 | `open` | `boolean \| 'auto'` | `'auto'` | `'auto'` 指针在图内即显示；布尔为受控。 |
 | `follow` | `'both' \| 'x'` | `'both'` | `x` 固定垂直位置。 |
 | `offset` | `number` | `12` | 指针与提示框间距。 |
+| `footer` | `string` | — | 行列表下方追加的一行文本（对应 kumo 的 `tooltipFooter`）。 |
+| `boundary` | `'clipping-ancestors' \| Element \| Element[]` | `'clipping-ancestors'` | 碰撞边界（对应 ECharts `confine`）：默认沿裁剪祖先与视口求交后翻转。 |
 | `title` / `rows` / `hiddenCount` | — | — | 默认内容；插槽整体替换。 |
+
+提示框的节奏同样对齐 ECharts：`hideDelay` 100ms 之后才开始 200ms 淡出并移除 DOM，指针短暂划出图表不会闪断；位移交给 `transform: translate3d()` 的 400ms 过渡由浏览器补间；指针追踪按 50ms 节流（首次与最后一次各补一次采样）。

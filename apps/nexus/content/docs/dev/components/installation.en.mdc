@@ -27,12 +27,13 @@ code: |
 ---
 :::
 
-The chart family is a **separate package** — installing Tuffex does not bring it in:
+The chart family ships inside the same package behind the `@talex-touch/tuffex/charts` subpath, so there is nothing extra to install:
 
-:::TuffCodeBlock{lang="bash"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  pnpm add @talex-touch/tuffex-charts
+  import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
+  import '@talex-touch/tuffex/charts/style.css'
 ---
 :::
 
@@ -78,7 +79,7 @@ code: |
 ---
 :::
 
-Visualization components (SparkChart, AllocationBar, DiffTable, SignalMeter) import from the `pro` barrel even though the docs file them under the [Data Suite](./data-suite.en.mdc): the suite split is a documentation shape, and the runtime entries stay `base` / `pro` / `ai`.
+Visualization components (SparkChart, AllocationBar, DiffTable, SignalMeter) and the chart family import from the `pro` barrel even though the docs file them under the [Data Suite](./data-suite.en.mdc): the suite split is a documentation shape, and the runtime entries stay `base` / `pro` / `ai`. The chart family also has a dedicated `@talex-touch/tuffex/charts` entry for pulling the whole family in at once.
 
 ### Root entry (migration)
 

@@ -23,13 +23,19 @@ code: |
   const nodes = [
     { name: 'Organic', value: 5200 },
     { name: 'Referral', value: 2100 },
-    { name: 'Landing', value: 8700, tooltipData: { Sessions: 8700, 'Bounce rate': '32%' } },
+    { name: 'Ads', value: 1400 },
+    { name: 'Landing', value: 8700, tooltipData: { Sessions: 8700, 'Bounce rate': '34%' } },
     { name: 'Signup', value: 2600, isDrillable: true, childCount: 4 },
+    { name: 'Docs', value: 3100 },
+    { name: 'Bounce', value: 3000 },
   ]
   const links = [
-    { source: 0, target: 2, value: 5200 },
-    { source: 1, target: 2, value: 2100 },
-    { source: 2, target: 3, value: 2600, isDrillable: true },
+    { source: 0, target: 3, value: 5200 },
+    { source: 1, target: 3, value: 2100 },
+    { source: 2, target: 3, value: 1400 },
+    { source: 3, target: 4, value: 2600, isDrillable: true },
+    { source: 3, target: 5, value: 3100 },
+    { source: 3, target: 6, value: 3000 },
   ]
   </script>
 
@@ -59,6 +65,12 @@ code: |
 ## 容错
 
 环形连接会让 d3-sankey 抛错——组件捕获后渲染空态并在控制台给出 dev 警告，不会拖垮宿主页面。
+
+## 悬停高亮
+
+悬停节点或连线时，只有邻接元素保持原样：节点、连线与标签里不相邻的部分一起降到 10% 不透明度，对应 ECharts 的 `emphasis.focus: 'adjacency'`（blur 取 `fromState.opacity * 0.1`），切换走 300ms `cubicOut`。节点的邻域是它自己、所有与它相连的连线和这些连线另一端的节点；连线的邻域是它自己、两端节点以及触及任一端点的所有连线。
+
+桑基图**没有几何动画**，这一点与 kumo 一致而非缺失：ECharts 的 `SankeyView` 既没有 `initProps` 也没有 `updateProps`，所以 d3-sankey 布局变化时节点与连线直接落到新位置，不做补间。`prefers-reduced-motion: reduce` 下 300ms 过渡被去掉，高亮瞬时切换。
 
 ## API
 
