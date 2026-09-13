@@ -630,7 +630,8 @@
       "taskApproval": "Per-task approval",
       "terminal": "Interactive terminal",
       "terminalApproval": "Per-terminal approval",
-      "resume": "Resume session",
+      "taskResume": "Resume tasks",
+      "terminalResume": "Resume terminals",
       "unavailable": "No capability is available for this version"
     },
     "messages": {
@@ -650,9 +651,10 @@
     "provider": "Agent",
     "access": "Access mode",
     "answerOnly": "Answer only",
-    "workspaceRead": "Read isolated workspace",
-    "workspaceWriteApproval": "Write isolated workspace (approve each tool)",
+    "workspaceRead": "Read workspace",
+    "workspaceWriteApproval": "Write workspace (approve each tool)",
     "placeholder": "Describe the task for the local agent…",
+    "newTask": "New Task",
     "run": "Run",
     "stop": "Stop",
     "copy": "Copy result",
@@ -1121,6 +1123,7 @@
   "shell": {
     "search": "Search",
     "newChat": "New Chat",
+    "newProject": "New Project",
     "voiceInsights": "Voice Input",
     "store": "Plugins",
     "setting": "Settings",
@@ -1140,6 +1143,28 @@
       "earlier": "Earlier",
       "untitled": "New chat",
       "delete": "Delete conversation"
+    },
+    "projects": {
+      "home": "Home",
+      "archived": "Archived projects",
+      "newChat": "New Chat",
+      "runLocalAgent": "Run Local Agent",
+      "rename": "Rename",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "continue": "Continue",
+      "forgetPointer": "Forget Pointer",
+      "projectActions": "Project actions",
+      "sessionActions": "Session actions",
+      "untitledSession": "Local agent session",
+      "sessionMissing": "The provider session is missing. Forget this pointer or restore it in the provider.",
+      "sessionArchived": "Unarchive this project before continuing its local agent session.",
+      "sessionConflict": "This session has a conflicting branch and cannot be continued safely.",
+      "sessionBusy": "This native session is already running.",
+      "renameFailed": "Project name must contain 1–80 characters.",
+      "actionFailed": "The project action could not be completed."
     }
   },
   "voiceInsights": {

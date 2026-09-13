@@ -1,44 +1,26 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
   EvictedDeviceInfo,
   SyncItemInput,
   SyncItemOutput
 } from '@talex-touch/utils/types/cloud-sync'
-import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
-import type { TalexEvents } from '../../core/eventbus/touch-event'
+import type { PluginStorageUpdatedEvent, TalexEvents } from '../../core/eventbus/touch-event'
+import type { TouchPlugin } from '../plugin/plugin'
+import type { StorageSyncSnapshot } from './sync-payload-wire'
 import { createHash } from 'node:crypto'
 import { CloudSyncError, CloudSyncSDK, StorageList } from '@talex-touch/utils'
-import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { SyncEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
+import { touchEventBus, TalexEvents as TouchEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { getAuthToken, getDeviceId, subscribeAuthState } from '../auth'
-import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
-import { operationalErrorService } from '../observability'
-import {
-  getConfig as getMainStorageConfig,
-  getMainConfig,
-  storageModule,
-  saveConfig,
-  saveMainConfig,
-  subscribeMainConfig
-} from '../storage'
-import { pluginModule } from '../plugin/plugin-module'
-import { TouchPlugin } from '../plugin/plugin'
-import {
-  omitMainOwnedAuthSettings,
-  preserveMainOwnedAuthSettings
-} from '../storage/main-storage-registry'
-import {
-  PluginStorageUpdatedEvent,
-  TalexEvents as TouchEvents,
-  touchEventBus
-} from '../../core/eventbus/touch-event'
 import {
   applyConversationSyncDeletion,
   applyConversationSyncSnapshot,
@@ -48,8 +30,24 @@ import {
   listConversationIdsForSync,
   listConversationSyncStates,
   normalizeConversationSyncSnapshot,
-  subscribeConversationMutations
+  subscribeConversationMutations,
+  toConversationSyncSnapshot
 } from '../conversation/conversation-store'
+import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
+import { operationalErrorService } from '../observability'
+import { pluginModule } from '../plugin/plugin-module'
+import {
+  getMainConfig,
+  getConfig as getMainStorageConfig,
+  saveConfig,
+  saveMainConfig,
+  storageModule,
+  subscribeMainConfig
+} from '../storage'
+import {
+  omitMainOwnedAuthSettings,
+  preserveMainOwnedAuthSettings
+} from '../storage/main-storage-registry'
 import {
   encryptSyncPayload,
   getSyncPayloadKeyRegistration,
@@ -64,8 +62,7 @@ import {
   extractQualifiedName,
   resolveEncryptedPayloadText,
   STORAGE_ITEM_PREFIX,
-  STORAGE_ITEM_TYPE,
-  type StorageSyncSnapshot
+  STORAGE_ITEM_TYPE
 } from './sync-payload-wire'
 
 const syncLog = getLogger('sync')
@@ -781,7 +778,7 @@ async function collectStorageSnapshots(
     const snapshot = await getConversation(conversationId)
     if (!snapshot) continue
     const qualifiedName = buildConversationQualifiedName(conversationId)
-    const rawText = JSON.stringify(snapshot)
+    const rawText = JSON.stringify(toConversationSyncSnapshot(snapshot))
     const encrypted = await encryptSyncPayload(rawText)
     snapshots.push({
       qualifiedName,

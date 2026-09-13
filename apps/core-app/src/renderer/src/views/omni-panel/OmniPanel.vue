@@ -417,11 +417,18 @@ function handleContext(payload: OmniPanelContextPayload): void {
   selectionIssueMessage.value = payload.selectionIssueMessage || ''
   contextCapsule.value = payload.capsule
   clearAiPreview()
-  if (payload.source === 'corebox-local-ai' || payload.source === 'local-ai-shortcut') {
+  if (
+    payload.source === 'corebox-local-ai' ||
+    payload.source === 'local-ai-shortcut' ||
+    payload.source === 'project-local-ai'
+  ) {
     void nextTick(() =>
       localAiPanelRef.value?.open({
         prompt: payload.text || '',
-        capsule: payload.capsule
+        capsule: payload.capsule,
+        projectId: payload.localAi?.projectId,
+        sessionRef: payload.localAi?.sessionRef,
+        provider: payload.localAi?.provider
       })
     )
   }
