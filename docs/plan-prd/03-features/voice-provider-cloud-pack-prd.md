@@ -2,7 +2,7 @@
 
 > 更新时间：2026-09-13
 > 状态：**v1 / 代码与本地验证完成**（P1-P5 + D3 envelope 均有 focused evidence；Production 签名/存储配置与付费真实 Provider 验收未执行）
-> 任务记录：[`.trellis/tasks/09-13-voice-provider-cloud-pack/`](../../../.trellis/tasks/09-13-voice-provider-cloud-pack/)（prd.md / design.md / implement.md）
+> 任务记录：[`.trellis/tasks/09-13-voice-provider-cloud-pack/prd.md`](../../../.trellis/tasks/09-13-voice-provider-cloud-pack/prd.md)（关联 design.md / implement.md）
 > 目标版本：待定（建议 2.6.x 或独立 R8-G）
 > 质量口径：遵循 [`../PRD-QUALITY-BASELINE.md`](../PRD-QUALITY-BASELINE.md)
 
