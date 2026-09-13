@@ -74,3 +74,29 @@ source workaround was added.
 - This remains local release preflight evidence only. It does not prove
   production Gate E, deployed Cloudflare Preview, post-fix macOS N/N+1 OTA, or
   Windows/Linux runtime acceptance.
+
+## Rerun 2026-09-13 On Clean Committed HEAD
+
+- Observed window: 05:43-05:53 PDT.
+- Repository HEAD: `55da5867d` (`chore(repo): ignore root node-gyp build scratch`),
+  branch `master`.
+- Worktree state: clean (`git status --porcelain` empty, including untracked).
+- Every `quality:release` stage was run as its own foreground command rather
+  than as the single composite script, to attribute each exit code:
+
+| Stage | Command | Exit | Duration |
+| --- | --- | --- | --- |
+| Repository lint | `pnpm lint` | 0 | 18s |
+| Workspace typecheck | `pnpm typecheck:all` | 0 | 117s |
+| Targeted tests | `pnpm test:targeted` | 0 | 6s |
+| Packaging preflight | `pnpm -C apps/core-app exec electron-builder --version` | 0 | 1s |
+| CoreApp production build | `pnpm -F @talex-touch/core-app run build` | 0 | 96s |
+
+- Targeted tests observed `3 files / 64 tests` for CoreApp plus `2 tests` for
+  Nexus; Electron Builder resolved `26.15.3`; the CoreApp renderer build
+  finished with `built in 25.00s`.
+- This is the first recorded `quality:release` pass on a fully committed,
+  clean worktree rather than the earlier uncommitted multi-task batch.
+- This remains local release preflight evidence only. It does not prove
+  production Gate E, deployed Cloudflare Preview, post-fix macOS N/N+1 OTA, or
+  Windows/Linux runtime acceptance.
