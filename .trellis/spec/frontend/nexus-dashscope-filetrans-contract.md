@@ -105,6 +105,7 @@ DashScope
 - A missing response, HTTP 408/5xx, or malformed successful response is accepted-uncertain: fail terminally and do not retry or refund. Only definitive 4xx Provider rejection is pre-acceptance. Once a normalized result exists, interrupted settlement/release and concurrent CAS losers converge without another Provider call.
 - When `audio.asr` has no enabled binding, only the exact built-in Nexus `audio.stt` product alias may back Voice Session through the final-only buffer. It emits `ready`, one `final`, then `end`; it never replaces an explicitly configured broken realtime binding. Authenticated submissions are atomically rate-limited before their streaming 20 MiB body read.
 - The API route must obtain the upload through H3 `getRequestWebStream(event)`. Never reach into `event.web` or async-iterate `event.node.req` directly: Cloudflare/Nitro may expose an already-buffered `_requestBody`, `rawBody`, `body`, or `__unenv__` request shape. The content-length gate, 20 MiB byte cap, and transport-chunk cap still run before or during that canonical stream read.
+- Cloudflare Workers Web APIs are receiver-sensitive. Wrap a selected `fetch` in an arrow before storing it on an adapter; calling a raw global `fetch` as `this.fetcher(...)` supplies the adapter as `this` and fails with `TypeError: Illegal invocation` before any outbound request. Injected Node test doubles do not prove this boundary, so production acceptance must include a real Workers invocation.
 
 ### 4. Validation & Error Matrix
 
