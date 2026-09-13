@@ -96,6 +96,7 @@ export type ProviderRegistryTemplateId =
   | 'openai-responses-ai'
   | 'deepseek-ai'
   | 'dashscope-filetrans-asr'
+  | 'dashscope-qwen-audio-asr'
   | 'exchange-rate'
   | 'screenshot-overlay'
 
@@ -505,6 +506,28 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
       transport: 'filetrans',
       defaultModel: 'qwen-audio-3.0-asr-flash-filetrans',
       inputUnit: 'audio_second',
+    },
+  },
+  {
+    id: 'dashscope-qwen-audio-asr',
+    serviceCategory: 'ai',
+    vendor: 'dashscope',
+    name: 'dashscope-qwen-audio-asr-main',
+    displayName: 'DashScope Qwen Audio ASR',
+    authType: 'api_key',
+    authRef: 'secure://providers/dashscope-qwen-audio-asr-main',
+    endpoint: 'https://dashscope.aliyuncs.com/api/v1',
+    region: 'cn-beijing',
+    models: ['qwen-audio-3.0-asr-flash'],
+    defaultModel: 'qwen-audio-3.0-asr-flash',
+    capabilities: builtinCapabilityRows(['audio.transcribe']),
+    metadata: {
+      source: 'provider-registry',
+      adapter: 'dashscope-qwen-audio-asr',
+      transport: 'qwen-audio-sync',
+      defaultModel: 'qwen-audio-3.0-asr-flash',
+      inputUnit: 'audio_second',
+      maxDurationSeconds: 300,
     },
   },
   {

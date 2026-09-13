@@ -1204,6 +1204,30 @@ export async function consumeCredits(
   }
 }
 
+/** Resolves an old in-flight reservation without consulting the user's current team. */
+export async function findCreditReservationLedgerId(
+  event: H3Event,
+  userId: string,
+  idempotencyKeyInput: string,
+): Promise<string | null> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+  const idempotencyKey = normalizeCreditIdempotencyKey(idempotencyKeyInput)
+  if (!idempotencyKey) return null
+  const rows = await db
+    .prepare(
+      `SELECT id, metadata
+       FROM ${CREDIT_LEDGER_TABLE}
+       WHERE scope = 'team' AND reason = 'asr-reservation' AND idempotency_key = ?
+       ORDER BY created_at ASC
+       LIMIT 3`,
+    )
+    .bind(idempotencyKey)
+    .all<{ id: string; metadata?: string | null }>()
+  const matches = (rows.results ?? []).filter((row) => parseLedgerMetadata(row.metadata ?? null)?.userId === userId)
+  return matches.length === 1 ? matches[0]!.id : null
+}
+
 /**
  * Releases a prior server-owned reservation. This deliberately mirrors the
  * team-and-user projection used by consumeCredits: a partial release would make
@@ -1216,32 +1240,78 @@ export async function releaseConsumedCredits(
   amount: number,
   reason: string,
   metadata?: Record<string, unknown>,
-  options: { idempotencyKey?: string } = {},
+  options: { idempotencyKey?: string; reservationLedgerId?: string } = {},
 ): Promise<CreditConsumptionResult> {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
-  const activeCreditTeam = await resolveActiveCreditTeam(event, userId)
-  await ensureBalance(event, 'team', activeCreditTeam.teamId)
-  await ensureBalance(event, 'user', userId)
 
   const numericAmount = Number(amount)
   if (!Number.isFinite(numericAmount) || numericAmount <= 0)
     throw new Error('Invalid credit release amount.')
-
   const normalizedAmount = Math.max(1, normalizeCreditAmount(numericAmount))
-  const month = getMonthKey()
+  const reservationLedgerId = options.reservationLedgerId?.trim() || null
+
+  let teamId: string
+  let month: string
+  if (reservationLedgerId) {
+    const reservation = await db.prepare(`
+      SELECT scope_id, delta, created_at, metadata
+      FROM ${CREDIT_LEDGER_TABLE}
+      WHERE id = ? AND scope = 'team'
+      LIMIT 1
+    `).bind(reservationLedgerId).first<{
+      scope_id: string
+      delta: number
+      created_at: string
+      metadata?: string | null
+    }>()
+    const reservationMetadata = parseLedgerMetadata(reservation?.metadata ?? null)
+    const reservationDate = new Date(reservation?.created_at ?? '')
+    const reservedAmount = Math.abs(resolveCreditAmount(reservation?.delta ?? 0))
+    if (
+      !reservation ||
+      resolveCreditAmount(reservation.delta) >= 0 ||
+      reservationMetadata?.userId !== userId ||
+      !Number.isFinite(reservationDate.getTime()) ||
+      reservedAmount < normalizedAmount
+    ) {
+      throw new Error('Credit reservation is unavailable for release.')
+    }
+    teamId = reservation.scope_id
+    month = getMonthKey(reservationDate)
+  } else {
+    const activeCreditTeam = await resolveActiveCreditTeam(event, userId)
+    await ensureBalance(event, 'team', activeCreditTeam.teamId)
+    await ensureBalance(event, 'user', userId)
+    teamId = activeCreditTeam.teamId
+    month = getMonthKey()
+  }
+
   const idempotencyKey = normalizeCreditIdempotencyKey(options.idempotencyKey)
-  const ledgerMetadata = metadata ? { ...metadata, userId } : { userId }
+  const ledgerMetadata = {
+    ...(metadata ?? {}),
+    userId,
+    ...(reservationLedgerId ? { reservationLedgerId } : {}),
+  }
   const idempotencyHash = idempotencyKey
     ? digestCreditConsumptionPayload({
         userId,
-        teamId: activeCreditTeam.teamId,
+        teamId,
         amount: normalizedAmount,
         reason,
         metadata: ledgerMetadata,
       })
     : null
-
+  const legacyIdempotencyHash =
+    idempotencyKey && reservationLedgerId
+      ? digestCreditConsumptionPayload({
+          userId,
+          teamId,
+          amount: normalizedAmount,
+          reason,
+          metadata: { ...(metadata ?? {}), userId },
+        })
+      : null
   if (idempotencyKey) {
     const existing = await db.prepare(`
       SELECT id, delta, created_at, metadata, idempotency_hash
@@ -1251,7 +1321,7 @@ export async function releaseConsumedCredits(
         AND reason = ?
         AND idempotency_key = ?
       LIMIT 1
-    `).bind(activeCreditTeam.teamId, reason, idempotencyKey).first<{
+    `).bind(teamId, reason, idempotencyKey).first<{
       id: string
       delta: number
       created_at: string
@@ -1260,15 +1330,23 @@ export async function releaseConsumedCredits(
     }>()
 
     if (existing) {
-      if (existing.idempotency_hash && existing.idempotency_hash !== idempotencyHash)
+      const existingMetadata = parseLedgerMetadata(existing.metadata ?? null)
+      const existingAmount = Math.abs(resolveCreditAmount(existing.delta))
+      const matchesCurrentHash = existing.idempotency_hash === idempotencyHash
+      const matchesLegacyAsrHash = Boolean(
+        reservationLedgerId &&
+        legacyIdempotencyHash &&
+        existing.idempotency_hash === legacyIdempotencyHash &&
+        existingMetadata?.reservationLedgerId === undefined,
+      )
+      if (existingAmount !== normalizedAmount || (!matchesCurrentHash && !matchesLegacyAsrHash))
         throw new Error('Credit idempotency conflict.')
 
-      const existingMetadata = parseLedgerMetadata(existing.metadata ?? null)
       return {
         ledgerId: existing.id,
-        teamId: activeCreditTeam.teamId,
+        teamId,
         userId,
-        amount: Math.abs(resolveCreditAmount(existing.delta)),
+        amount: existingAmount,
         reason,
         createdAt: existing.created_at,
         metadata: existingMetadata && Object.keys(existingMetadata).length ? existingMetadata : ledgerMetadata,
@@ -1295,14 +1373,14 @@ export async function releaseConsumedCredits(
       )
     `).bind(
       id,
-      activeCreditTeam.teamId,
+      teamId,
       normalizedAmount,
       reason,
       now,
       JSON.stringify(ledgerMetadata),
       idempotencyKey,
       idempotencyHash,
-      activeCreditTeam.teamId,
+      teamId,
       month,
       normalizedAmount,
       userId,
@@ -1317,7 +1395,7 @@ export async function releaseConsumedCredits(
         AND month = ?
         AND used >= ?
         AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
-    `).bind(normalizedAmount, activeCreditTeam.teamId, month, normalizedAmount, id),
+    `).bind(normalizedAmount, teamId, month, normalizedAmount, id),
     db.prepare(`
       UPDATE ${CREDIT_BALANCES_TABLE}
       SET used = used - ?
@@ -1337,7 +1415,7 @@ export async function releaseConsumedCredits(
 
   return {
     ledgerId: id,
-    teamId: activeCreditTeam.teamId,
+    teamId,
     userId,
     amount: normalizedAmount,
     reason,

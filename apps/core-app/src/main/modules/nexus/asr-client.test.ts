@@ -91,6 +91,106 @@ describe('transcribeNexusAudio', () => {
     ).toBe(true)
   })
 
+  it('uses a caller-supplied idempotency UUID unchanged so a retry is the same server submission', async () => {
+    const idempotencyKey = '11111111-2222-4333-8444-555555555555'
+    auth.performNexusRequestWithAuth.mockResolvedValueOnce(
+      nexusResponse({
+        requestId: 'asr_keyed',
+        status: 'settled',
+        transcript: 'keyed',
+        creditsCharged: 3,
+        billedSeconds: 1
+      })
+    )
+
+    await expect(
+      transcribeNexusAudio({ audio: wavBytes() }, { idempotencyKey })
+    ).resolves.toMatchObject({ text: 'keyed' })
+
+    expect(auth.performNexusRequestWithAuth.mock.calls[0]?.[0]).toMatchObject({
+      method: 'POST',
+      headers: { 'X-Idempotency-Key': idempotencyKey }
+    })
+  })
+
+  it.each(['buffered-request-1', '11111111-2222-6333-8444-555555555555'])(
+    'generates a safe key instead of forwarding malformed idempotency input %s',
+    async (idempotencyKey) => {
+      auth.performNexusRequestWithAuth.mockResolvedValueOnce(
+        nexusResponse({
+          requestId: 'asr_fallback',
+          status: 'settled',
+          transcript: 'fallback',
+          creditsCharged: 3,
+          billedSeconds: 1
+        })
+      )
+
+      await expect(
+        transcribeNexusAudio({ audio: wavBytes() }, { idempotencyKey })
+      ).resolves.toMatchObject({ text: 'fallback' })
+
+      const header =
+        auth.performNexusRequestWithAuth.mock.calls[0]?.[0]?.headers?.['X-Idempotency-Key']
+      expect(header).not.toBe(idempotencyKey)
+      expect(header).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+    }
+  )
+
+  it('returns a synchronously settled result from the initial response without polling', async () => {
+    auth.performNexusRequestWithAuth.mockResolvedValueOnce(
+      nexusResponse({
+        requestId: 'asr_sync',
+        status: 'settled',
+        transcript: 'buffered note',
+        creditsCharged: 5,
+        billedSeconds: 2
+      })
+    )
+
+    const transcription = transcribeNexusAudio({ audio: wavBytes() })
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    await expect(transcription).resolves.toEqual({
+      text: 'buffered note',
+      billing: { requestId: 'asr_sync', creditsCharged: 5, billedSeconds: 2 }
+    })
+
+    const calls = auth.performNexusRequestWithAuth.mock.calls
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.[0]).toMatchObject({
+      method: 'POST',
+      path: '/api/v1/ai/audio/transcribe'
+    })
+  })
+
+  it('polls when the initial response settles without a transcript to recover', async () => {
+    auth.performNexusRequestWithAuth
+      .mockResolvedValueOnce(nexusResponse({ requestId: 'asr_partial', status: 'settled' }))
+      .mockResolvedValueOnce(
+        nexusResponse({
+          requestId: 'asr_partial',
+          status: 'settled',
+          transcript: 'recovered',
+          creditsCharged: 3,
+          billedSeconds: 1
+        })
+      )
+
+    const transcription = transcribeNexusAudio({ audio: wavBytes() })
+    await vi.advanceTimersByTimeAsync(600)
+
+    await expect(transcription).resolves.toEqual({
+      text: 'recovered',
+      billing: { requestId: 'asr_partial', creditsCharged: 3, billedSeconds: 1 }
+    })
+
+    expect(auth.performNexusRequestWithAuth.mock.calls.map(([request]) => request.method)).toEqual([
+      'POST',
+      'GET'
+    ])
+  })
+
   it('retrieves an already-settled idempotency replay through its request status without a second submission', async () => {
     auth.performNexusRequestWithAuth
       .mockResolvedValueOnce(nexusResponse({ requestId: 'asr_existing', status: 'settled' }))

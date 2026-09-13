@@ -162,6 +162,17 @@ class ReleaseDatabase {
       return team ? { owner_user_id: team.ownerUserId } : null
     }
 
+    if (sql.includes('SELECT scope_id, delta, created_at, metadata')) {
+      const entry = this.ledger.get(String(args[0]))
+      if (!entry) return null
+      return {
+        scope_id: entry.scopeId,
+        delta: entry.delta,
+        created_at: entry.createdAt,
+        metadata: entry.metadata,
+      }
+    }
+
     if (sql.includes('SELECT id, delta, created_at, metadata, idempotency_hash')) {
       const [teamId, reason, idempotencyKey] = args
       for (const entry of this.ledger.values()) {
@@ -242,5 +253,126 @@ describe('releaseConsumedCredits reservation idempotency', () => {
     expect([...database.ledger.values()]).toHaveLength(1)
     expect(database.balance('team', 'team_user_1', month)?.used).toBe(6)
     expect(database.balance('user', 'user_1', month)?.used).toBe(6)
+  })
+
+  /**
+   * A held ASR request can outlive a team switch. Releasing against the active team then would
+   * credit a bucket the hold never touched — and leave the original team short.
+   */
+  it('releases against the reservation ledger’s original team and month even after the active team changes', async () => {
+    const database = new ReleaseDatabase(0)
+    const event = createEvent(database)
+    const reservationId = 'ledger_reservation_1'
+    const reservationMonth = '2026-08'
+
+    database.ledger.set(reservationId, {
+      id: reservationId,
+      scopeId: 'team_original',
+      delta: -10,
+      reason: 'asr-reservation',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      metadata: JSON.stringify({ userId: 'user_1' }),
+      idempotencyKey: null,
+      idempotencyHash: null,
+    })
+    database.balances.set('team:team_original:2026-08', { quota: 100, used: 10 })
+    database.balances.set('user:user_1:2026-08', { quota: 100, used: 10 })
+    // The team active *now* is a different bucket; a naive release would use it (and the
+    // current month) instead of the ledger that actually took the hold.
+    const activeMonth = new Date().toISOString().slice(0, 7)
+    database.balances.set(`team:team_user_1:${activeMonth}`, { quota: 100, used: 4 })
+    database.balances.set(`user:user_1:${activeMonth}`, { quota: 100, used: 4 })
+
+    const options = {
+      idempotencyKey: 'asr-release:request-1:0',
+      reservationLedgerId: reservationId,
+    }
+    const first = await releaseConsumedCredits(event, 'user_1', 10, 'asr-reservation-release', {
+      requestId: 'request-1',
+    }, options)
+    const second = await releaseConsumedCredits(event, 'user_1', 10, 'asr-reservation-release', {
+      requestId: 'request-1',
+    }, options)
+
+    expect(first.teamId).toBe('team_original')
+    expect(database.balance('team', 'team_original', reservationMonth)?.used).toBe(0)
+    expect(database.balance('user', 'user_1', reservationMonth)?.used).toBe(0)
+    expect(database.balance('team', 'team_user_1', activeMonth)?.used).toBe(4)
+    expect(database.balance('user', 'user_1', activeMonth)?.used).toBe(4)
+
+    // A retry with the same business key collapses onto the one release entry, not a second refund.
+    expect(second.ledgerId).toBe(first.ledgerId)
+    const releases = [...database.ledger.values()].filter(entry => entry.reason === 'asr-reservation-release')
+    expect(releases).toHaveLength(1)
+    expect(releases[0]?.scopeId).toBe('team_original')
+  })
+
+  /**
+   * Requests admitted before release learned about reservation ledgers already wrote their
+   * release entry — with a hash that has no ledger in its metadata. Those rows must be
+   * replayable exactly once, or a retried release either double-refunds or strands the hold.
+   */
+  it('accepts a legacy release entry whose metadata predates the reservation ledger, then rejects altered replays', async () => {
+    const database = new ReleaseDatabase(13)
+    const event = createEvent(database)
+    const idempotencyKey = 'asr-release:request-1:0'
+    const month = new Date().toISOString().slice(0, 7)
+    const reservationId = 'ledger_reservation_legacy'
+    database.ledger.set(reservationId, {
+      id: reservationId,
+      scopeId: 'team_user_1',
+      delta: -7,
+      reason: 'asr-reservation',
+      createdAt: `${month}-05T00:00:00.000Z`,
+      metadata: JSON.stringify({ userId: 'user_1' }),
+      idempotencyKey: null,
+      idempotencyHash: null,
+    })
+
+    // The old release path: no reservation option, so the hash covers metadata without a ledger.
+    const legacy = await releaseConsumedCredits(
+      event,
+      'user_1',
+      7,
+      'asr-reservation-release',
+      { requestId: 'request-1' },
+      { idempotencyKey },
+    )
+    // The current path replays the same release while pointing at the reservation ledger.
+    const replayed = await releaseConsumedCredits(
+      event,
+      'user_1',
+      7,
+      'asr-reservation-release',
+      { requestId: 'request-1' },
+      { idempotencyKey, reservationLedgerId: reservationId },
+    )
+
+    expect(replayed.ledgerId).toBe(legacy.ledgerId)
+    expect([...database.ledger.values()].filter(entry => entry.reason === 'asr-reservation-release')).toHaveLength(1)
+    expect(database.balance('team', 'team_user_1', month)?.used).toBe(6)
+    expect(database.balance('user', 'user_1', month)?.used).toBe(6)
+
+    // Same business key, different money: not the same release.
+    await expect(releaseConsumedCredits(
+      event,
+      'user_1',
+      6,
+      'asr-reservation-release',
+      { requestId: 'request-1' },
+      { idempotencyKey, reservationLedgerId: reservationId },
+    )).rejects.toThrow('Credit idempotency conflict.')
+    // Same key and amount, different request: still not the same release.
+    await expect(releaseConsumedCredits(
+      event,
+      'user_1',
+      7,
+      'asr-reservation-release',
+      { requestId: 'request-2' },
+      { idempotencyKey, reservationLedgerId: reservationId },
+    )).rejects.toThrow('Credit idempotency conflict.')
+
+    expect([...database.ledger.values()].filter(entry => entry.reason === 'asr-reservation-release')).toHaveLength(1)
+    expect(database.balance('team', 'team_user_1', month)?.used).toBe(6)
   })
 })

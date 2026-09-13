@@ -15,6 +15,8 @@ const MAX_POLL_DEADLINE_MS = 10 * 60 * 1000
 const POLL_INTERVAL_MS = 500
 const MAX_TRANSCRIPT_LENGTH = 1_000_000
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{1,256}$/
+const IDEMPOTENCY_KEY_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SUPPORTED_STATES = new Set([
   'pending',
   'reserved',
@@ -51,6 +53,10 @@ function isNexusError(value: unknown): value is NexusError {
     typeof (value as NexusError).code === 'string' &&
     isIntelligenceErrorCode((value as NexusError).code)
   )
+}
+
+function resolveIdempotencyKey(value: unknown): string {
+  return typeof value === 'string' && IDEMPOTENCY_KEY_PATTERN.test(value) ? value : randomUUID()
 }
 
 function mapHttpError(status: number): NexusError {
@@ -274,7 +280,7 @@ async function waitForPoll(signal: AbortSignal, ms: number): Promise<void> {
 
 export async function transcribeNexusAudio(
   payload: IntelligenceSTTPayload,
-  options: { signal?: AbortSignal; timeout?: number } = {}
+  options: { signal?: AbortSignal; timeout?: number; idempotencyKey?: string } = {}
 ): Promise<IntelligenceSTTResult> {
   const bytes = validateWav(payload)
   const configuredTimeout =
@@ -289,7 +295,7 @@ export async function transcribeNexusAudio(
     deadlineController.signal
   ])
   const baseUrl = getRuntimeNexusBaseUrl()
-  const key = randomUUID()
+  const key = resolveIdempotencyKey(options.idempotencyKey)
   try {
     throwIfAborted(signal)
     const submit = await performNexusRequestWithAuth(
@@ -307,6 +313,8 @@ export async function transcribeNexusAudio(
     const initial = parseResponse(submit.body)
     const requestId = normalizeRequestId(initial.requestId)
     let state = normalizeState(initial.status)
+    if (state === 'settled' && typeof initial.transcript === 'string' && initial.transcript.trim())
+      return settledResult(initial, requestId)
     if (state === 'released' || state === 'failed') terminalFailure(initial, state)
     while (true) {
       await waitForPoll(signal, POLL_INTERVAL_MS)
