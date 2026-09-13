@@ -1,15 +1,16 @@
-import type { ConversationMessage } from './useHomeConversation'
 import type {
   ConversationRecord,
   ConversationSaveRequest
 } from '@talex-touch/utils/transport/sdk/domains/conversation'
-import { createRendererLogger } from '~/utils/renderer-log'
+import type { Ref } from 'vue'
+import type { ConversationMessage } from './useHomeConversation'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import {
   ConversationEvents,
   createConversationSdk
 } from '@talex-touch/utils/transport/sdk/domains/conversation'
-import { ref, toRaw, type Ref } from 'vue'
+import { ref, toRaw } from 'vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 export interface UseConversationHistoryReturn {
   conversations: Ref<ConversationRecord[]>
@@ -20,8 +21,15 @@ export interface UseConversationHistoryReturn {
    * recomputes the working title from the opening message, and without the stored one the top bar
    * and the sidebar would disagree after a reload.
    */
-  load: (id: string) => Promise<{ title: string; messages: ConversationMessage[] } | null>
-  persist: (id: string, title: string, messages: ConversationMessage[]) => Promise<void>
+  load: (
+    id: string
+  ) => Promise<{ title: string; messages: ConversationMessage[]; projectId: string | null } | null>
+  persist: (
+    id: string,
+    title: string,
+    messages: ConversationMessage[],
+    projectId: string | null
+  ) => Promise<void>
   remove: (id: string) => Promise<void>
 }
 
@@ -62,11 +70,13 @@ function toStoredParts(parts: ConversationMessage['parts']): unknown[] | undefin
 function toSaveRequest(
   id: string,
   title: string,
-  messages: ConversationMessage[]
+  messages: ConversationMessage[],
+  projectId: string | null
 ): ConversationSaveRequest {
   return {
     id,
     title,
+    projectId,
     /**
      * A streaming placeholder is stored as `failed`, not as `streaming`: the stream cannot survive
      * the write, so a reload would otherwise restore a bubble that waits forever for deltas that
@@ -127,7 +137,7 @@ export function useConversationHistory(): UseConversationHistoryReturn {
 
   async function load(
     id: string
-  ): Promise<{ title: string; messages: ConversationMessage[] } | null> {
+  ): Promise<{ title: string; messages: ConversationMessage[]; projectId: string | null } | null> {
     let detail: Awaited<ReturnType<typeof sdk.get>>
     try {
       detail = await sdk.get(id)
@@ -161,16 +171,17 @@ export function useConversationHistory(): UseConversationHistoryReturn {
         ...(Array.isArray(parts) && parts.length > 0 ? { parts } : {})
       }
     }) as ConversationMessage[]
-    return { title: detail.title ?? '', messages }
+    return { title: detail.title ?? '', messages, projectId: detail.projectId }
   }
 
   async function persist(
     id: string,
     title: string,
-    messages: ConversationMessage[]
+    messages: ConversationMessage[],
+    projectId: string | null
   ): Promise<void> {
     if (messages.length === 0) return
-    await sdk.save(toSaveRequest(id, title, messages))
+    await sdk.save(toSaveRequest(id, title, messages, projectId))
     await refresh()
   }
 

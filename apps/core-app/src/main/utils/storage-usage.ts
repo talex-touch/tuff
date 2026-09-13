@@ -169,6 +169,11 @@ const TABLE_CATALOG: Array<{ name: string; label: string; category: string }> = 
   { name: 'voice_insight_days', label: '语音-洞察日统计', category: 'voice' },
   { name: 'voice_insight_captures', label: '语音-洞察去重标识', category: 'voice' },
   { name: 'voice_polish_telemetry', label: '语音-润色遥测', category: 'voice' },
+  { name: 'projects', label: '项目-目录元数据', category: 'projects' },
+  { name: 'conversations', label: '对话-会话', category: 'conversations' },
+  { name: 'conversation_messages', label: '对话-消息', category: 'conversations' },
+  { name: 'conversation_sync_state', label: '对话-同步状态', category: 'conversations' },
+  { name: 'local_ai_cli_sessions', label: '本机代理-会话指针', category: 'local-ai-cli' },
   { name: 'app_update_records', label: '更新-记录', category: 'updates' }
 ]
 

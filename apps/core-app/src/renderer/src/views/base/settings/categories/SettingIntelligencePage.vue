@@ -7,6 +7,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { settingCategoryChildren } from '~/modules/settings/categories'
 import SettingAssistant from '../SettingAssistant.vue'
 import SettingSkillsMcp from '../SettingSkillsMcp.vue'
+import SettingLocalAiCli from '../SettingLocalAiCli.vue'
 
 const { t } = useI18n()
 const router = useRouter()

@@ -40,7 +40,8 @@ function capabilityLabel(provider: LocalAiCliProviderStatus): string {
     capabilities.taskWriteApproval ? t('settingLocalAiCli.capabilities.taskApproval') : '',
     capabilities.terminalRead ? t('settingLocalAiCli.capabilities.terminal') : '',
     capabilities.terminalWriteApproval ? t('settingLocalAiCli.capabilities.terminalApproval') : '',
-    capabilities.resume ? t('settingLocalAiCli.capabilities.resume') : ''
+    capabilities.taskResume ? t('settingLocalAiCli.capabilities.taskResume') : '',
+    capabilities.terminalResume ? t('settingLocalAiCli.capabilities.terminalResume') : ''
   ].filter(Boolean)
   return labels.length > 0 ? labels.join(' · ') : t('settingLocalAiCli.capabilities.unavailable')
 }
