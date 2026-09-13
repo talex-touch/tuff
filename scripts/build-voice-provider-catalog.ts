@@ -74,7 +74,7 @@ const {
   CATALOG_PAYLOAD_NONCE_BYTES: number
   createCatalogManifestSigningPayload: (manifest: CatalogManifestV1) => Uint8Array
   createCatalogPayloadEncryptionAad: (input: CatalogPayloadEncryptionContext) => Uint8Array
-  normalizeCatalogPayloadKey: (value: unknown) => { key: string; keyId: string }
+  normalizeCatalogPayloadKey: (value: unknown) => { key: string, keyId: string }
   serializeCatalogEncryptedPayloadEnvelope: (input: {
     version: 1
     algorithm: 'aes-256-gcm'
@@ -245,7 +245,8 @@ export function buildVoiceProviderCatalog(
       publicKeyFingerprint: pinnedFingerprint,
       payloadEncryptionKeyFingerprint: createHash('sha256').update(key).digest('hex'),
     }
-  } finally {
+  }
+  finally {
     key.fill(0)
     nonce.fill(0)
     plaintextBytes.fill(0)
@@ -300,7 +301,8 @@ export async function readPayloadEncryptionKey(payloadKeyPath: string | null): P
   let raw: string | undefined
   if (payloadKeyPath) {
     raw = await readFile(resolve(payloadKeyPath), 'utf8')
-  } else {
+  }
+  else {
     const envPath = process.env[PAYLOAD_KEY_PATH_ENV]?.trim()
     raw = envPath
       ? await readFile(resolve(envPath), 'utf8')
@@ -332,8 +334,8 @@ async function main() {
   const privateKeyPath = getArgValue(argv, '--private-key')
   const createdAt = getArgValue(argv, '--created-at')
   const payloadKeyPath = getArgValue(argv, '--payload-key')
-  const payloadKeyId =
-    getArgValue(argv, '--payload-key-id') || process.env[PAYLOAD_KEY_ID_ENV]?.trim()
+  const payloadKeyId
+    = getArgValue(argv, '--payload-key-id') || process.env[PAYLOAD_KEY_ID_ENV]?.trim()
 
   if (!packPath || !payloadKeyId) {
     throw new Error(
@@ -358,7 +360,8 @@ async function main() {
       encryptionKeyId: payloadKeyId,
       ...(createdAt ? { createdAt } : {}),
     })
-  } finally {
+  }
+  finally {
     payloadKey.fill(0)
   }
   const written = await writeVoiceProviderCatalog(outDir, built)
@@ -380,7 +383,7 @@ async function main() {
       built.manifest.type,
       built.manifest.packId,
       built.manifest.version,
-      payloadEncryption.keyId
+      payloadEncryption.keyId,
     ].join('/'),
     publicKeyFingerprint: built.publicKeyFingerprint,
     payloadEncryption: built.manifest.payloadEncryption,

@@ -1,15 +1,16 @@
+import type { CatalogManifestV1, CatalogPayloadEncryptionContext } from '../packages/utils/i18n/catalog.ts'
+import type { VoiceProviderPackV1 } from '../packages/utils/i18n/voice-provider-catalog.ts'
+import type { BuiltVoiceProviderCatalog } from './build-voice-provider-catalog.ts'
 import {
   createDecipheriv,
   createHash,
   generateKeyPairSync,
   verify as verifyBytes,
 } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { CatalogManifestV1, CatalogPayloadEncryptionContext } from '../packages/utils/i18n/catalog.ts'
-import type { VoiceProviderPackV1 } from '../packages/utils/i18n/voice-provider-catalog.ts'
 import {
   createCatalogManifestSigningPayload,
   createCatalogPayloadEncryptionAad,
@@ -22,7 +23,7 @@ import {
 } from '../packages/utils/i18n/voice-provider-catalog.ts'
 import {
   buildVoiceProviderCatalog,
-  type BuiltVoiceProviderCatalog,
+
   readPayloadEncryptionKey,
   writeVoiceProviderCatalog,
 } from './build-voice-provider-catalog.ts'
@@ -39,10 +40,10 @@ const PRIVATE_KEY_PEM = pinnedPrivateKey.export({ type: 'pkcs8', format: 'pem' }
 const PUBLIC_KEY_PEM = pinnedPublicKey.export({ type: 'spki', format: 'pem' }) as string
 const PRIVATE_KEY_BODY = PRIVATE_KEY_PEM.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')
 
-const AES_KEY = new Uint8Array(32).fill(0x2a)
+const AES_KEY = new Uint8Array(32).fill(0x2A)
 const AES_KEY_BASE64 = Buffer.from(AES_KEY).toString('base64')
 const AES_KEY_HEX = Buffer.from(AES_KEY).toString('hex')
-const NONCE = new Uint8Array(12).fill(0x5c)
+const NONCE = new Uint8Array(12).fill(0x5C)
 const KEY_ID = 'payload-2026-07'
 const CREATED_AT = '2026-07-15T00:00:00.000Z'
 const CANARY = 'canary-b9134f'
@@ -110,7 +111,8 @@ function manifestAad(
   overrides: Partial<CatalogPayloadEncryptionContext> = {},
 ): Uint8Array {
   const payloadEncryption = built.manifest.payloadEncryption
-  if (!payloadEncryption) throw new Error('built manifest is missing payloadEncryption')
+  if (!payloadEncryption)
+    throw new Error('built manifest is missing payloadEncryption')
   return createCatalogPayloadEncryptionAad({
     contractVersion: 1,
     type: 'voice-provider',
@@ -125,7 +127,7 @@ function manifestAad(
 
 function decryptPayload(
   built: BuiltVoiceProviderCatalog,
-  options: { key?: Uint8Array; aad?: Uint8Array; authTag?: Uint8Array } = {},
+  options: { key?: Uint8Array, aad?: Uint8Array, authTag?: Uint8Array } = {},
 ): string {
   const envelope = parseCatalogEncryptedPayloadEnvelopeBytes(built.payloadBytes)
   const decipher = createDecipheriv(
@@ -202,7 +204,7 @@ describe('voice provider catalog builder', () => {
     const built = buildFixture()
     const envelope = parseCatalogEncryptedPayloadEnvelopeBytes(built.payloadBytes)
 
-    expect(() => decryptPayload(built, { key: new Uint8Array(32).fill(0x2b) })).toThrow()
+    expect(() => decryptPayload(built, { key: new Uint8Array(32).fill(0x2B) })).toThrow()
     expect(() =>
       decryptPayload(built, { aad: manifestAad(built, { packId: 'official.voice-provider.alt' }) }),
     ).toThrow()
@@ -226,7 +228,8 @@ describe('voice provider catalog builder', () => {
     expect(built.manifest.payloadEncryption).toEqual({ algorithm: 'aes-256-gcm', keyId: KEY_ID })
 
     const payloadEncryption = built.manifest.payloadEncryption
-    if (!payloadEncryption) throw new Error('built manifest is missing payloadEncryption')
+    if (!payloadEncryption)
+      throw new Error('built manifest is missing payloadEncryption')
     const envelope = parseCatalogEncryptedPayloadEnvelopeBytes(built.payloadBytes)
     expect(envelope.keyId).toBe(payloadEncryption.keyId)
 
@@ -314,9 +317,11 @@ describe('voice provider catalog builder', () => {
     for (const name of envVars) delete process.env[name]
     try {
       await expect(readPayloadEncryptionKey(null)).rejects.toThrow(/is required/)
-    } finally {
+    }
+    finally {
       for (const [name, value] of saved) {
-        if (value === undefined) delete process.env[name]
+        if (value === undefined)
+          delete process.env[name]
         else process.env[name] = value
       }
     }
