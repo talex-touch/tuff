@@ -254,6 +254,7 @@ describe('DashScope Qwen Audio Flash adapter transport uncertainty', () => {
   })
 
   it('aborts an unresponsive provider at the adapter-owned deadline', async () => {
+    const caller = new AbortController()
     let observedSignal: AbortSignal | null = null
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       observedSignal = init?.signal ?? null
@@ -274,13 +275,53 @@ describe('DashScope Qwen Audio Flash adapter transport uncertainty', () => {
           createEvent(),
           dashScopeProvider(),
           Buffer.from('synthetic-pcm-audio-bytes'),
-          { durationSeconds: 1 },
+          { durationSeconds: 1, signal: caller.signal },
         ),
       { code: 'ASR_PROVIDER_UNAVAILABLE', accepted: true },
     )
 
     expect(observedSignal?.aborted).toBe(true)
+    // The adapter owns its deadline, so cancelling the request must not cancel the caller.
+    expect(caller.signal.aborted).toBe(false)
     expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * A completed request must be inert: the adapter owns one controller whose deadline timer and
+   * caller listener are detached in `finally`. A leftover listener or timer would abort an
+   * already-finished request, making its result look cancelled to the request state machine.
+   */
+  it('detaches its deadline and caller listeners once the request has completed', async () => {
+    vi.useFakeTimers()
+    try {
+      const caller = new AbortController()
+      let observedSignal: AbortSignal | null = null
+      const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+        observedSignal = init?.signal ?? null
+        return new Response(JSON.stringify({ output: { text: 'finished' }, usage: { duration: 1 } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      })
+
+      const result = await createDashScopeQwenAudioAsrAdapter({
+        fetch: fetcher,
+        requestTimeoutMs: 30,
+      }).transcribe(createEvent(), dashScopeProvider(), pcmWav(1_600), {
+        durationSeconds: 1,
+        signal: caller.signal,
+      })
+
+      expect(result).toEqual({ transcript: 'finished', billedSeconds: 1 })
+      expect(observedSignal?.aborted).toBe(false)
+
+      caller.abort()
+      vi.advanceTimersByTime(60_000)
+      expect(observedSignal?.aborted).toBe(false)
+      expect(fetcher).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it.each([
