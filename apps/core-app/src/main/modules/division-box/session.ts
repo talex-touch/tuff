@@ -384,6 +384,9 @@ export class DivisionBoxSession {
 
       // Update window title with unique identifier for Windows taskbar grouping
       this.touchWindow.window.setTitle(`${this.config.title} - Tuff Division`)
+      if (this.config.alwaysOnTop) {
+        this.touchWindow.window.setAlwaysOnTop(true, 'floating')
+      }
       this.applyInitialBounds()
 
       // Windows-specific: Set unique AppUserModelId to ensure separate taskbar entries

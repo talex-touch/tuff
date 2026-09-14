@@ -17,6 +17,24 @@ vi.mock('../plugin/plugin-module', () => ({
   pluginModule: { pluginManager: null }
 }))
 
+// createWindow acquires a pooled native window and announces the session on the division-box
+// runtime; both are external to the session's own lifecycle logic.
+const windowMocks = vi.hoisted(() => ({
+  acquire: vi.fn(),
+  release: vi.fn(),
+  broadcastToWindow: vi.fn()
+}))
+
+vi.mock('./window-pool', () => ({
+  windowPool: { acquire: windowMocks.acquire, release: windowMocks.release }
+}))
+
+vi.mock('../../core/runtime-accessor', () => ({
+  getRegisteredMainRuntime: vi.fn(() => ({
+    transport: { broadcastToWindow: windowMocks.broadcastToWindow }
+  }))
+}))
+
 const WINDOW_WEB_CONTENTS_ID = 4210
 
 interface DivisionBoxSessionHarness {
@@ -137,6 +155,41 @@ describe('DivisionBoxSession key forwarding', () => {
 
     expect(session.forwardKeyEventToUIView(arrowRightEvent)).toBe(false)
     expect(sendInputEvent).not.toHaveBeenCalled()
+  })
+})
+
+describe('DivisionBoxSession window creation', () => {
+  it('floats the window when the session config requests always-on-top', async () => {
+    const setAlwaysOnTop = vi.fn()
+    const browserWindow = {
+      id: 42,
+      setTitle: vi.fn(),
+      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 720, height: 500 })),
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      isFocused: vi.fn(() => true),
+      show: vi.fn(),
+      focus: vi.fn(),
+      on: vi.fn(),
+      once: vi.fn(),
+      destroy: vi.fn(),
+      setAlwaysOnTop,
+      webContents: { id: 42 },
+      contentView: { removeChildView: vi.fn() }
+    }
+    windowMocks.acquire.mockResolvedValue({ window: browserWindow })
+
+    const session = new DivisionBoxSession('pin-test', {
+      url: 'plugin://demo-plugin/index.html',
+      title: 'Demo Plugin',
+      pluginId: 'demo-plugin',
+      alwaysOnTop: true
+    })
+
+    await session.createWindow()
+
+    // A 'floating' level (not a bare true) is what keeps the preview above ordinary app windows.
+    expect(setAlwaysOnTop).toHaveBeenCalledWith(true, 'floating')
   })
 })
 
