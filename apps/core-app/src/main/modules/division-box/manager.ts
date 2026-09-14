@@ -369,6 +369,21 @@ export class DivisionBoxManager {
   }
 
   /**
+   * Resolves the session that owns a given renderer webContents.
+   *
+   * Renderer-originated IPC carries only the sender id, so key forwarding has to map it back to
+   * the DivisionBox that hosts the plugin UI view before it can reach the right webContents.
+   */
+  findSessionByWindowWebContentsId(webContentsId: number): DivisionBoxSession | undefined {
+    for (const session of this.sessions.values()) {
+      if (session.getWindowWebContentsId() === webContentsId) {
+        return session
+      }
+    }
+    return undefined
+  }
+
+  /**
    * Gets a session by ID
    *
    * @param sessionId - ID of the session to retrieve

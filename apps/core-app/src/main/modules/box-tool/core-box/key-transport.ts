@@ -1,5 +1,7 @@
-import { createLogger } from '../../../utils/logger'
+import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { createLogger } from '../../../utils/logger'
+import { DivisionBoxManager } from '../../division-box/manager'
 import { coreBoxManager } from './manager'
 import { coreBoxTransport } from './transport/core-box-transport'
 import { windowManager } from './window'
@@ -66,7 +68,7 @@ class CoreBoxKeyTransport {
     coreBoxTransport.register<ForwardedKeyEvent>(
       'main',
       CoreBoxEvents.ui.forwardKeyEvent.toEventName(),
-      (data) => this.handleKeyEvent(data)
+      (data, context) => this.handleKeyEvent(data, context)
     )
 
     coreBoxTransport.register<void>('main', CoreBoxEvents.ui.getUIViewState.toEventName(), () =>
@@ -81,10 +83,25 @@ class CoreBoxKeyTransport {
    *
    * @param event - The forwarded keyboard event data
    */
-  private handleKeyEvent(event: ForwardedKeyEvent): void {
+  private handleKeyEvent(event: ForwardedKeyEvent, context?: HandlerContext): void {
     if (BLOCKED_FUNCTION_KEY_PATTERN.test(event.key)) {
       keyTransportLog.debug(`Key event ignored: blocked function key ${event.key}`)
       return
+    }
+
+    // A detached DivisionBox keeps the CoreBox header while its plugin UI lives in the session's
+    // own WebContentsView, so the key has to be routed by the sending window instead of assuming
+    // the CoreBox window owns it.
+    const senderWebContentsId = context?.sender?.id
+    if (typeof senderWebContentsId === 'number') {
+      const session =
+        DivisionBoxManager.getInstance().findSessionByWindowWebContentsId(senderWebContentsId)
+      if (session) {
+        if (!session.forwardKeyEventToUIView(event)) {
+          keyTransportLog.debug('Key event ignored: DivisionBox has no live plugin UI view')
+        }
+        return
+      }
     }
 
     if (!windowManager.isUIViewActive()) {
