@@ -54,6 +54,7 @@ const mocks = vi.hoisted(() => ({
   setPinned: vi.fn(),
   isPinned: vi.fn(() => false),
   executeMetaOverlayAction: vi.fn(),
+  ownsMetaOverlayRenderer: vi.fn((_senderId: number) => false),
   isCollapsed: false,
   currentWindow: null as null | {
     isDestroyed: () => boolean
@@ -169,6 +170,7 @@ vi.mock('./meta-overlay', () => ({
     show: vi.fn(),
     hide: vi.fn(),
     getVisible: vi.fn(() => false),
+    ownsRenderer: mocks.ownsMetaOverlayRenderer,
     executeAction: mocks.executeMetaOverlayAction,
     registerPluginAction: vi.fn(),
     unregisterPluginAction: vi.fn(),
@@ -223,6 +225,7 @@ describe('CoreBox IPC hide transport', () => {
     mocks.handlers.clear()
     mocks.streamHandlers.clear()
     mocks.isPinned.mockReturnValue(false)
+    mocks.ownsMetaOverlayRenderer.mockReturnValue(false)
     mocks.isCollapsed = false
     mocks.currentWindow = null
     mocks.detachUIViewToDivisionBox.mockResolvedValue({
@@ -593,19 +596,22 @@ describe('CoreBox IPC hide transport', () => {
     expect(mocks.shrink).not.toHaveBeenCalled()
   })
 
-  it('forwards overlay action requests to the manager without consulting the caller sender', async () => {
+  it('executes overlay actions only for the active MetaOverlay renderer', async () => {
     const handler = soleHandler(MetaOverlayEvents.action.execute)
     const item = { id: 'item-1', kind: 'app' }
+    mocks.ownsMetaOverlayRenderer.mockImplementation((senderId: number) => senderId === 71)
 
     expect(handler).toBeTypeOf('function')
     await handler?.({ actionId: 'copy-answer', item }, { sender: { id: 71 } })
-    // The overlay parent window is the only valid target, so a caller-supplied sender must not
-    // reach the manager; the item must survive too, or the manager falls back to its own
-    // (already dismissed) current item and relays the wrong one.
     expect(mocks.executeMetaOverlayAction).toHaveBeenCalledExactlyOnceWith('copy-answer', item)
 
-    mocks.executeMetaOverlayAction.mockClear()
-    await handler?.({ actionId: 'copy-answer', item })
-    expect(mocks.executeMetaOverlayAction).toHaveBeenCalledExactlyOnceWith('copy-answer', item)
+    await expect(
+      handler?.({ actionId: 'copy-answer', item }, { sender: { id: 72 } })
+    ).resolves.toEqual({ success: false, error: 'Unauthorized MetaOverlay sender' })
+    await expect(handler?.({ actionId: 'copy-answer', item })).resolves.toEqual({
+      success: false,
+      error: 'Unauthorized MetaOverlay sender'
+    })
+    expect(mocks.executeMetaOverlayAction).toHaveBeenCalledTimes(1)
   })
 })

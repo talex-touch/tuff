@@ -213,6 +213,11 @@ export class MetaOverlayManager {
     return this.metaView
   }
 
+  /** Whether a renderer sender is the live WebContents owned by this overlay. */
+  public ownsRenderer(webContentsId: number): boolean {
+    return this.getAliveMetaWebContents()?.id === webContentsId
+  }
+
   public ensureOnTop(): void {
     if (!this.metaView || !this.parentWindow) return
 

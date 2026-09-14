@@ -63,6 +63,7 @@ export class AppDestinationNavigationService {
   private ready = false
   private pendingRoute: string | null = null
   private observedWebContents: WebContents | null = null
+  private failedDeliveryWebContents: WebContents | null = null
   private observedWindow: BrowserWindow | null = null
   private transport: ITuffTransportMain | null = null
 
@@ -99,15 +100,17 @@ export class AppDestinationNavigationService {
       return { status: 'opened', destinationId }
     }
 
-    if (!this.ready) {
+    const canRetryFailedDelivery = !this.ready && this.failedDeliveryWebContents === webContents
+    if (!this.ready && !canRetryFailedDelivery) {
       this.pendingRoute = route
       return { status: 'queued', destinationId }
     }
 
     beforeEffect?.()
     if (!this.broadcastRoute(window, route)) {
-      // Never drop the requested destination: keep it as the latest pending route and drop
-      // readiness so the next primary handshake retries after a transient delivery failure.
+      // Never drop the requested destination. A later routed open may retry immediately only
+      // when the same live renderer had already acknowledged readiness; a replacement renderer
+      // must pass through its own readiness handshake first.
       this.pendingRoute = route
       this.ready = false
 
@@ -121,8 +124,17 @@ export class AppDestinationNavigationService {
         this.resetForUnavailableRenderer()
         return { status: 'unavailable', destinationId, reason: 'renderer-unavailable' }
       }
+      if (currentWindow !== window || currentWebContents !== webContents) {
+        this.observeRenderer(currentWindow, currentWebContents)
+      } else {
+        this.failedDeliveryWebContents = webContents
+      }
       return { status: 'queued', destinationId }
     }
+
+    this.ready = true
+    this.pendingRoute = null
+    this.failedDeliveryWebContents = null
     return { status: 'opened', destinationId }
   }
 
@@ -147,6 +159,7 @@ export class AppDestinationNavigationService {
 
     this.observeRenderer(window, webContents)
     this.ready = true
+    this.failedDeliveryWebContents = null
 
     const route = this.pendingRoute
     if (route === null) {
@@ -156,9 +169,10 @@ export class AppDestinationNavigationService {
       this.pendingRoute = null
       return
     }
-    // Delivery failed transiently (e.g. the channel is not attached yet): keep the route
-    // and drop readiness so the next primary handshake retries instead of losing the intent.
+    // Delivery failed transiently. Retain both the latest route and the renderer that already
+    // proved readiness, so either another handshake or the next routed open can retry it.
     this.ready = false
+    this.failedDeliveryWebContents = webContents
   }
 
   /**
@@ -180,6 +194,7 @@ export class AppDestinationNavigationService {
       return
     }
     this.ready = false
+    this.failedDeliveryWebContents = null
   }
 
   private handleRendererLost = (): void => {
@@ -210,6 +225,7 @@ export class AppDestinationNavigationService {
     if (this.observedWebContents === webContents && this.observedWindow === window) {
       return
     }
+    this.ready = false
     // Detach from the previous renderer/window first: a crash-restart cycle must not leave
     // duplicate handlers feeding this service's readiness state.
     this.releaseObservedRenderer()
@@ -229,6 +245,7 @@ export class AppDestinationNavigationService {
     const window = this.observedWindow
     this.observedWebContents = null
     this.observedWindow = null
+    this.failedDeliveryWebContents = null
     try {
       webContents?.removeListener('did-start-navigation', this.handleMainFrameNavigation)
       webContents?.removeListener('render-process-gone', this.handleRendererLost)

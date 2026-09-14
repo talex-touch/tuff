@@ -645,7 +645,15 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
-      transport.on(MetaOverlayEvents.action.execute, async (request) => {
+      transport.on(MetaOverlayEvents.action.execute, async (request, context: HandlerContext) => {
+        const senderId = context?.sender?.id
+        if (typeof senderId !== 'number' || !metaOverlayManager.ownsRenderer(senderId)) {
+          metaOverlayIpcLog.warn('Rejected action.execute from non-overlay renderer', {
+            meta: { senderId: senderId ?? null }
+          })
+          return { success: false, error: 'Unauthorized MetaOverlay sender' }
+        }
+
         const payload = request as MetaActionExecuteRequest & { item?: TuffItem }
         return await metaOverlayManager.executeAction(payload.actionId, payload.item)
       })

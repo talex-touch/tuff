@@ -13,6 +13,7 @@ import { useRouter } from 'vue-router'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 
 import { normalizeCoreBoxIcon } from '~/components/render/icon-color-mode'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'

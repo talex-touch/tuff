@@ -2,7 +2,7 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import MetaOverlay from './MetaOverlay.vue'
 
@@ -239,8 +239,13 @@ describe('MetaOverlay renderer readiness announcement', () => {
     state.listeners.clear()
     state.send.mockReset()
     state.logError.mockReset()
+    vi.useFakeTimers()
   })
 
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
   it('announces readiness on mount, after its show listener is registered', async () => {
     state.send.mockImplementation((event: { toEventName?: () => string } | string) => {
       if (keyOf(event) === MetaOverlayEvents.ui.ready.toEventName()) {
@@ -266,19 +271,32 @@ describe('MetaOverlay renderer readiness announcement', () => {
     wrapper.unmount()
   })
 
-  it('keeps the panel usable when the readiness announcement is rejected', async () => {
-    state.send.mockImplementation((event: { toEventName?: () => string } | string) =>
-      keyOf(event) === MetaOverlayEvents.ui.ready.toEventName()
-        ? Promise.reject(new Error('channel closed'))
-        : Promise.resolve(undefined)
-    )
+  it('retries a rejected announcement and receives the queued main-process show', async () => {
+    let readyAttempts = 0
+    state.send.mockImplementation((event: { toEventName?: () => string } | string) => {
+      if (keyOf(event) !== MetaOverlayEvents.ui.ready.toEventName()) {
+        return Promise.resolve(undefined)
+      }
+      readyAttempts += 1
+      if (readyAttempts === 1) return Promise.reject(new Error('channel closed'))
+      state.listeners.get(MetaOverlayEvents.ui.show.toEventName())?.({
+        item,
+        builtinActions: [generalAction],
+        itemActions: [],
+        pluginActions: []
+      })
+      return Promise.resolve({ accepted: true })
+    })
 
     const wrapper = mount(MetaOverlay)
     await nextTick()
+    await Promise.resolve()
     expect(state.logError).toHaveBeenCalled()
+    expect(wrapper.findAll('.meta-action')).toHaveLength(0)
 
-    show([generalAction])
+    await vi.runAllTimersAsync()
     await nextTick()
+    expect(sendsFor(MetaOverlayEvents.ui.ready)).toHaveLength(2)
     expect(wrapper.findAll('.meta-action')).toHaveLength(1)
 
     wrapper.unmount()

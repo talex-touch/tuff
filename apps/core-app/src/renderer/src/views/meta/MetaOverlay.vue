@@ -17,6 +17,11 @@ const { t } = useI18n()
 const transport = useTuffTransport()
 const metaOverlayLog = createRendererLogger('MetaOverlay')
 
+const META_OVERLAY_READY_RETRY_DELAYS_MS = [250, 1_000, 3_000] as const
+let readyRetryIndex = 0
+let readyRetryTimer: ReturnType<typeof setTimeout> | null = null
+let rendererMounted = false
+
 const visible = ref(false)
 const searchQuery = ref('')
 const activeIndex = ref(0)
@@ -238,16 +243,45 @@ async function handleClose() {
   }
 }
 
+function scheduleReadyRetry(): void {
+  const delay = META_OVERLAY_READY_RETRY_DELAYS_MS[readyRetryIndex]
+  if (!rendererMounted || delay === undefined) return
+  readyRetryIndex += 1
+  readyRetryTimer = setTimeout(announceReady, delay)
+}
+
+function announceReady(): void {
+  if (!rendererMounted) return
+  try {
+    void transport
+      .send(MetaOverlayEvents.ui.ready)
+      .then((response) => {
+        if (response?.accepted === false) scheduleReadyRetry()
+      })
+      .catch((error) => {
+        metaOverlayLog.error('Failed to announce MetaOverlay readiness', error)
+        scheduleReadyRetry()
+      })
+  } catch (error) {
+    metaOverlayLog.error('Failed to announce MetaOverlay readiness', error)
+    scheduleReadyRetry()
+  }
+}
+
 // Register keyboard handling before announcing readiness. Main can release a queued show request
 // as soon as the ready call reaches it, so every listener needed by the visible panel must exist.
 onMounted(() => {
+  rendererMounted = true
   window.addEventListener('keydown', handleKeyDown, true)
-  void transport.send(MetaOverlayEvents.ui.ready).catch((error) => {
-    metaOverlayLog.error('Failed to announce MetaOverlay readiness', error)
-  })
+  announceReady()
 })
 
 onBeforeUnmount(() => {
+  rendererMounted = false
+  if (readyRetryTimer) {
+    clearTimeout(readyRetryTimer)
+    readyRetryTimer = null
+  }
   unregShow()
   unregHide()
   window.removeEventListener('keydown', handleKeyDown, true)

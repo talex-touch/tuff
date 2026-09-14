@@ -292,6 +292,24 @@ describe('appDestinationNavigationService', () => {
     )
   })
 
+  it('requires a new readiness handshake when the window swaps renderer webContents', () => {
+    const { service, transport, replaceWebContents, window } = createService()
+    service.markPrimaryRendererReady(PRIMARY_WEB_CONTENTS_ID)
+    expect(service.open('home').status).toBe('opened')
+
+    replaceWebContents()
+    expect(service.open('settings-update').status).toBe('queued')
+    expect(transport.broadcastToWindow).toHaveBeenCalledTimes(1)
+
+    service.markPrimaryRendererReady(REPLACEMENT_WEB_CONTENTS_ID)
+    expect(transport.broadcastToWindow).toHaveBeenCalledTimes(2)
+    expect(transport.broadcastToWindow).toHaveBeenLastCalledWith(
+      window.id,
+      AppEvents.window.navigate,
+      { path: '/setting/update' }
+    )
+  })
+
   it('retries after a ready-path broadcast failure instead of dropping the requested route', () => {
     const { service, transport, window } = createService()
     service.markPrimaryRendererReady(PRIMARY_WEB_CONTENTS_ID)
@@ -314,6 +332,47 @@ describe('appDestinationNavigationService', () => {
 
     // The retry delivered it, so the item is not replayed on the next navigation.
     expect(service.open('settings-update').status).toBe('opened')
+    expect(transport.broadcastToWindow).toHaveBeenLastCalledWith(
+      window.id,
+      AppEvents.window.navigate,
+      { path: '/setting/update' }
+    )
+  })
+
+  it('retries a failed ready-path delivery on the next routed open from the same renderer', () => {
+    const { service, transport, window } = createService()
+    service.markPrimaryRendererReady(PRIMARY_WEB_CONTENTS_ID)
+    transport.broadcastToWindow.mockImplementationOnce(() => {
+      throw new Error('channel not ready')
+    })
+
+    expect(service.open('home')).toEqual({ status: 'queued', destinationId: 'home' })
+    expect(service.open('settings-update')).toEqual({
+      status: 'opened',
+      destinationId: 'settings-update'
+    })
+    expect(transport.broadcastToWindow).toHaveBeenCalledTimes(2)
+    expect(transport.broadcastToWindow).toHaveBeenLastCalledWith(
+      window.id,
+      AppEvents.window.navigate,
+      { path: '/setting/update' }
+    )
+  })
+
+  it('waits for a replacement renderer handshake instead of retrying its predecessor state', () => {
+    const { service, transport, replaceWebContents, window } = createService()
+    service.markPrimaryRendererReady(PRIMARY_WEB_CONTENTS_ID)
+    transport.broadcastToWindow.mockImplementationOnce(() => {
+      throw new Error('renderer replaced')
+    })
+
+    expect(service.open('home').status).toBe('queued')
+    replaceWebContents()
+    expect(service.open('settings-update').status).toBe('queued')
+    expect(transport.broadcastToWindow).toHaveBeenCalledTimes(1)
+
+    service.markPrimaryRendererReady(REPLACEMENT_WEB_CONTENTS_ID)
+    expect(transport.broadcastToWindow).toHaveBeenCalledTimes(2)
     expect(transport.broadcastToWindow).toHaveBeenLastCalledWith(
       window.id,
       AppEvents.window.navigate,

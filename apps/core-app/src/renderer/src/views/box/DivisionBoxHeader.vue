@@ -198,7 +198,10 @@ async function handleDebug(): Promise<void> {
 // The descendant part is deliberate: the child's own scoped rule is `.…Label[data-v-child]`
 // (0,2,0), so a bare `:deep(.…Label)` would tie on specificity and depend on stylesheet order.
 :deep(.ActivatedProvidersContainer .Activated-Provider-PillMajor-Label) {
-  max-width: none;
+  max-width: min(16rem, 30vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   animation: none;
 }
 
