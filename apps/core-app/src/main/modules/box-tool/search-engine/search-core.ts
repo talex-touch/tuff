@@ -46,7 +46,7 @@ import {
   macSpotlightFileProvider
 } from '../addon/files/native-file-search-provider'
 import { previewProvider } from '../addon/preview'
-import { mainWindowProvider } from '../addon/system/main-window-provider'
+import { appDestinationProvider } from '../addon/system/app-destination-provider'
 import { systemActionsProvider } from '../addon/system/system-actions-provider'
 import { contextActionsProvider } from '../addon/context-actions/context-actions-provider'
 import { windowsShellFileProvider } from '../addon/system/windows-shell-file-provider'
@@ -341,7 +341,7 @@ export class SearchEngineCore
   private registerDefaults(): void {
     this.sorter.register(tuffSorter)
 
-    this.registerProvider(mainWindowProvider)
+    this.registerProvider(appDestinationProvider)
     this.registerProvider(systemActionsProvider)
     this.registerProvider(contextActionsProvider)
     this.registerProvider(appProvider)

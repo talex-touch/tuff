@@ -41,7 +41,10 @@ export function normalizeCoreBoxIcon(icon: ITuffIcon | string | undefined | null
   return {
     ...icon,
     type: icon.type || 'url',
-    value: icon.value,
+    // A manifest can declare `{ type: 'class', value: 'ri:magic-line' }`. Passing that through
+    // renders an empty <i class="ri:magic-line">, so class values get the same repair the string
+    // branch applies.
+    value: icon.type === 'class' ? normalizeClassIconValue(icon.value) : icon.value,
     status: icon.status || 'normal'
   }
 }

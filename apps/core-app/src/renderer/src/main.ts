@@ -17,6 +17,7 @@ import type { I18nInstance } from '~/modules/lang/i18n'
 import { resolveInitialLanguagePreference, setupI18n, setupLanguageFollow } from '~/modules/lang'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
 import { waitForHydrationSoftTimeout } from '~/modules/startup/hydration-timeout'
+import { announceRendererReadyAfterRouter } from '~/modules/startup/renderer-ready'
 import { createCoreAppIconConfig } from '~/modules/tuffex/icon-config'
 
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -141,6 +142,11 @@ function registerRouterEvents(instance: Router): void {
   transport.on(AppEvents.window.openDownloadCenter, () => {
     instance.push('/downloads').catch(() => {})
   })
+
+  // Listeners register here, before the router is installed, because a navigation arriving
+  // during boot must not be missed. Readiness itself is announced only after the root has
+  // mounted and the initial navigation has resolved (see announceRendererReadyAfterRouter):
+  // pushing a route into a router that is still doing its first navigation loses it.
 }
 
 function registerLifecycleEvents(): void {
@@ -221,6 +227,13 @@ async function bootstrap() {
   const mountBeforeMs = Math.round(performance.now() - rendererBootstrapStartedAt)
   mainLog.info('Renderer shell mounted', { mountBeforeMs })
   schedulePluginStoreInitialization()
+
+  if (router) {
+    // Exactly once, after the root has mounted and `app.use(router)`'s initial navigation has
+    // resolved. Only then may it release the destination that main queued. A readiness rejection
+    // propagates without announcing, and bootstrap's terminal catch reports the failure.
+    await announceRendererReadyAfterRouter(transport, router)
+  }
 
   preloadDebugStep('Renderer shell mounted', 0.02)
 }

@@ -134,10 +134,7 @@ test('production Prelude has no privileged or test-only child surface', () => {
   ]) {
     assert.doesNotMatch(source, pattern)
   }
-  assert.deepEqual(
-    Object.keys(pluginModule).sort(),
-    ['onDestroy', 'onFeatureTriggered', 'onInit', 'onItemAction'],
-  )
+  assert.deepEqual(Object.keys(pluginModule).sort(), ['onDestroy', 'onFeatureTriggered', 'onInit', 'onItemAction'])
 })
 
 test('a foreign feature id is declined without publishing anything', async () => {
@@ -150,8 +147,8 @@ test('a foreign feature id is declined without publishing anything', async () =>
 test('an empty query publishes every platform action under its group header', async () => {
   await trigger('')
 
-  // Group headers first in GROUP_ORDER, each followed by its own actions. Nine darwin actions
-  // plus four headers; an ordering bug shows up as a header landing after its members.
+  // Group headers first in GROUP_ORDER, each followed by its own actions. Eight darwin actions
+  // plus three headers; an ordering bug shows up as a header landing after its members.
   assert.deepEqual(titles(), [
     '电源操作',
     '关机',
@@ -164,8 +161,6 @@ test('an empty query publishes every platform action under its group header', as
     '显示操作',
     '增加亮度',
     '降低亮度',
-    '窗口操作',
-    '打开主窗口',
   ])
 })
 
@@ -176,15 +171,19 @@ test('windows drops the display group entirely rather than showing an empty head
 
   assert.equal(titles().includes('显示操作'), false)
   assert.equal(titles().includes('增加亮度'), false)
-  assert.deepEqual(actionIds(), [
-    'shutdown',
-    'restart',
-    'lock-screen',
-    'volume-up',
-    'volume-down',
-    'mute-toggle',
-    'open-main-window',
-  ])
+  assert.deepEqual(actionIds(), ['shutdown', 'restart', 'lock-screen', 'volume-up', 'volume-down', 'mute-toggle'])
+})
+
+/**
+ * The host still owns the `open-main-window` capability, but this plugin stopped publishing an
+ * item for it: the shared app-destination provider is the one CoreBox surface for `主窗口`, and
+ * two results for one query is the regression this pins.
+ */
+test('publishes no main-window action, so 主窗口 matches nothing', async () => {
+  await trigger('主窗口')
+
+  assert.deepEqual(titles(), ['没有匹配的系统操作'])
+  assert.deepEqual(actionIds(), [])
 })
 
 test('an unsupported platform publishes one explanatory item and no actions', async () => {
@@ -282,10 +281,19 @@ test('a forged item cannot smuggle an action id the plugin does not own', async 
 
 test('an item that is not this plugin\'s, or names another action, executes nothing', async () => {
   const cases = [
-    [{ meta: { defaultAction: 'something-else' }, actions: [{ id: 'run-action', payload: { actionId: 'shutdown' } }] }, {}],
+    [
+      { meta: { defaultAction: 'something-else' }, actions: [{ id: 'run-action', payload: { actionId: 'shutdown' } }] },
+      {},
+    ],
     [{ actions: [{ id: 'run-action', payload: { actionId: 'shutdown' } }] }, {}],
     // A real action id, but reached through an action id the plugin never registered.
-    [{ meta: { defaultAction: 'system-actions' }, actions: [{ id: 'other-action', payload: { actionId: 'shutdown' } }] }, { actionId: 'other-action' }],
+    [
+      {
+        meta: { defaultAction: 'system-actions' },
+        actions: [{ id: 'other-action', payload: { actionId: 'shutdown' } }],
+      },
+      { actionId: 'other-action' },
+    ],
   ]
 
   for (const [item, context] of cases) {
@@ -362,7 +370,10 @@ test('a thrown host capability error maps to a stable reason rather than propaga
   // The message is the reason, never the thrown error — `boom` reaching a log line would mean
   // host internals are surfacing through a plugin.
   assert.equal(state.loggedErrors.length, 5)
-  assert.equal(state.loggedErrors.some(message => String(message).includes('boom')), false)
+  assert.equal(
+    state.loggedErrors.some(message => String(message).includes('boom')),
+    false,
+  )
 })
 
 test('an absent system capability is refused before anything is dispatched', async () => {

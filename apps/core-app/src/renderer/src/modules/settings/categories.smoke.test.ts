@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { APP_DESTINATIONS } from '../../../../shared/app-destinations'
 import {
   SETTING_CATEGORIES,
   groupedSettingCategories,
@@ -161,5 +162,64 @@ describe('settings sub-page table', () => {
       path.split('/').pop()!.replace('.vue', '')
     )
     expect(stems.filter((stem) => !expected.has(stem))).toEqual([])
+  })
+})
+
+/**
+ * The shared destination catalog names renderer routes; the router registers those same routes
+ * from `SETTING_CATEGORIES` in a different package. A catalog route the router never registers is
+ * a search result that lands on a blank page, and a renamed renderer route silently orphans the
+ * destination. Neither side is visible to the renderer-only table tests above.
+ */
+describe('destination catalog route parity', () => {
+  const registeredRoutes = new Set([
+    ...SETTING_CATEGORIES.map((category) => category.path),
+    ...SETTING_CATEGORIES.flatMap((category) =>
+      (category.children ?? []).map((child) => child.path)
+    )
+  ])
+  const routeBySettingKey = new Map<string, string>([
+    ...SETTING_CATEGORIES.map((category) => [category.key, category.path] as const),
+    ...SETTING_CATEGORIES.flatMap((category) =>
+      (category.children ?? []).map((child) => [child.key, child.path] as const)
+    )
+  ])
+
+  it('points every settings destination at the route the renderer registers for its key', () => {
+    const settingsDestinations = APP_DESTINATIONS.filter((definition) =>
+      definition.id.startsWith('settings-')
+    )
+
+    expect(settingsDestinations.length).toBeGreaterThan(0)
+    for (const definition of settingsDestinations) {
+      const key = definition.id.slice('settings-'.length)
+      const expectedRoute = routeBySettingKey.get(key)
+      expect(expectedRoute, `no renderer route registered for ${definition.id}`).toBeDefined()
+      expect(definition.route).toBe(expectedRoute)
+    }
+  })
+
+  it('does not expose advanced/developer-only settings routes as destinations', () => {
+    const advancedRoutes = new Set(
+      SETTING_CATEGORIES.filter((category) => category.advanced).map((category) => category.path)
+    )
+    const exposed = APP_DESTINATIONS.map((definition) => definition.route).filter(
+      (route): route is string => route !== null && advancedRoutes.has(route)
+    )
+
+    expect(exposed).toEqual([])
+  })
+
+  it('keeps the reveal destination route-less and every other route registered', () => {
+    for (const definition of APP_DESTINATIONS) {
+      if (definition.id === 'main-window') {
+        expect(definition.route).toBeNull()
+        continue
+      }
+      expect(
+        registeredRoutes.has(definition.route as string) || definition.route === '/home',
+        `${definition.id} -> ${definition.route} is not a registered route`
+      ).toBe(true)
+    }
   })
 })

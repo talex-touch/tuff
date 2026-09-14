@@ -221,6 +221,7 @@ import { registerPluginStorageTransportHandlers } from './services/plugin-storag
 import { PluginSqliteResourceOwnerRegistry } from './runtime/plugin-sqlite-resource-owner'
 import { registerPluginWindowTransportHandlers } from './services/plugin-window-transport-service'
 import { buildPluginManagerRuntime } from './services/plugin-manager-orchestrator'
+import { getAppDestinationNavigationService } from '../app-destination/app-destination-navigation'
 
 const pluginLog = getLogger('plugin-system')
 
@@ -2430,18 +2431,16 @@ export class PluginModule extends BaseModule {
           }
         }
         assertCurrent()
-        const mainWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
-        if (!mainWindow || mainWindow.isDestroyed()) {
+        // The external plugin action ID stays `open-main-window`; only the reveal sequence
+        // moves behind the shared destination service so the plugin cannot supply a route.
+        // The guard re-validates the activation generation immediately before each native
+        // mutation, so a rotation during `restore` still stops the following `show`/`focus`.
+        const result = getAppDestinationNavigationService(ctx.app).open('main-window', {
+          beforeEffect: assertCurrent
+        })
+        if (result.status === 'unavailable') {
           throw new Error('PLUGIN_SYSTEM_ACTION_MAIN_WINDOW_UNAVAILABLE')
         }
-        if (mainWindow.isMinimized()) {
-          assertCurrent()
-          mainWindow.restore()
-        }
-        assertCurrent()
-        mainWindow.show()
-        assertCurrent()
-        mainWindow.focus()
         assertCurrent()
       }
     })

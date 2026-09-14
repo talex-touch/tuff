@@ -1,0 +1,33 @@
+{
+  "id": "nexus-lexi-translation-pricing",
+  "name": "nexus-lexi-translation-pricing",
+  "title": "Nexus translation pricing for Lexi",
+  "description": "Keep Nexus translation and image-assist capabilities affordable, preserve operator pricing, hide the detailed client price table, and keep routine request telemetry out of INFO logs.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-13",
+  "completedAt": "2026-09-13",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "apps/nexus/server/utils/creditPricingStore.ts",
+    "apps/core-app/src/renderer/src/components/account/CreditsSummaryBlock.vue",
+    "apps/core-app/src/renderer/src/modules/nexus/credits-summary.ts",
+    "apps/core-app/src/main/modules/auth/index.ts"
+  ],
+  "notes": "User feedback replaced the initial expensive defaults before final archival: text translation is 10 credits/1K tokens; OCR/image translation defaults are 10/20/30; CoreApp keeps balance and billing guidance without a detailed price table.",
+  "meta": {
+    "verification": "Nexus pricing tests passed 95/95; CoreApp credits-summary tests and the signed-in no-price-table component test passed; focused lint, Nexus/CoreApp typechecks, CoreApp build, and packaged UI inspection passed."
+  }
+}

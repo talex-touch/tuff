@@ -58,6 +58,10 @@ out/
 .vitepress/dist/
 /index-*.js
 /index--*.js
+# Root node-gyp scratch. f1266e1d1 deleted the tracked config.gypi snapshot but never ignored the
+# directory, so every native install re-dirties the tree with an untracked build/config.gypi.
+# Scoped to the repo root on purpose: apps/core-app/build holds tracked electron-builder resources.
+/build/
 apps/core-app/tuff
 apps/core-app/resources/bundled-plugins/*
 !apps/core-app/resources/bundled-plugins/touch-hosts/

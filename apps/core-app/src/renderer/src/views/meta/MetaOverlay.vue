@@ -7,7 +7,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import MetaActionItem from '~/components/meta/MetaActionItem.vue'
@@ -17,10 +17,15 @@ const { t } = useI18n()
 const transport = useTuffTransport()
 const metaOverlayLog = createRendererLogger('MetaOverlay')
 
+const META_OVERLAY_READY_RETRY_DELAYS_MS = [250, 1_000, 3_000] as const
+let readyRetryIndex = 0
+let readyRetryTimer: ReturnType<typeof setTimeout> | null = null
+let rendererMounted = false
+
 const visible = ref(false)
 const searchQuery = ref('')
 const activeIndex = ref(0)
-const item = ref<TuffItem | null>(null)
+const item = shallowRef<TuffItem | null>(null)
 const allActions = ref<MetaAction[]>([])
 const executingActionId = ref<string | null>(null)
 
@@ -102,6 +107,7 @@ const unregShow = transport.on(MetaOverlayEvents.ui.show, (data: MetaShowRequest
   ].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
   allActions.value = merged
   visible.value = true
+  return { accepted: true }
 })
 
 const unregHide = transport.on(MetaOverlayEvents.ui.hide, () => {
@@ -197,30 +203,36 @@ function normalizeShortcut(shortcut: string): string {
     .toLowerCase()
 }
 
-async function handleActionExecute(action: MetaAction) {
+function handleActionExecute(action: MetaAction) {
   if (executingActionId.value || action.render.disabled) {
     return
   }
 
   executingActionId.value = action.id
   visible.value = false
-  try {
-    const payload: MetaActionExecuteRequest & { item?: TuffItem } = {
-      actionId: action.id,
-      itemId: item.value?.id ?? '',
-      item: item.value ?? undefined
-    }
-    const response = await transport.send(MetaOverlayEvents.action.execute, payload)
-    if (response && response.success === false) {
-      throw new Error(response.error || 'MetaOverlay action failed')
-    }
-  } catch (error) {
-    metaOverlayLog.error('Failed to execute action', error)
-  } finally {
-    searchQuery.value = ''
-    activeIndex.value = 0
-    executingActionId.value = null
+  const payload: MetaActionExecuteRequest & { item?: TuffItem } = {
+    actionId: action.id,
+    itemId: item.value?.id ?? '',
+    item: item.value ?? undefined
   }
+
+  // Dispatch is observed asynchronously, but the UI lock belongs only to this click. The legacy
+  // channel may wait for its response timeout even after main has executed the action; holding
+  // `executingActionId` for that whole period makes every action on a reopened panel inert.
+  const request = transport.send(MetaOverlayEvents.action.execute, payload)
+  searchQuery.value = ''
+  activeIndex.value = 0
+  executingActionId.value = null
+
+  void request
+    .then((response) => {
+      if (response && response.success === false) {
+        throw new Error(response.error || 'MetaOverlay action failed')
+      }
+    })
+    .catch((error) => {
+      metaOverlayLog.error('Failed to execute action', error)
+    })
 }
 
 async function handleClose() {
@@ -231,12 +243,45 @@ async function handleClose() {
   }
 }
 
-// Register keyboard listener
+function scheduleReadyRetry(): void {
+  const delay = META_OVERLAY_READY_RETRY_DELAYS_MS[readyRetryIndex]
+  if (!rendererMounted || delay === undefined) return
+  readyRetryIndex += 1
+  readyRetryTimer = setTimeout(announceReady, delay)
+}
+
+function announceReady(): void {
+  if (!rendererMounted) return
+  try {
+    void transport
+      .send(MetaOverlayEvents.ui.ready)
+      .then((response) => {
+        if (response?.accepted === false) scheduleReadyRetry()
+      })
+      .catch((error) => {
+        metaOverlayLog.error('Failed to announce MetaOverlay readiness', error)
+        scheduleReadyRetry()
+      })
+  } catch (error) {
+    metaOverlayLog.error('Failed to announce MetaOverlay readiness', error)
+    scheduleReadyRetry()
+  }
+}
+
+// Register keyboard handling before announcing readiness. Main can release a queued show request
+// as soon as the ready call reaches it, so every listener needed by the visible panel must exist.
 onMounted(() => {
+  rendererMounted = true
   window.addEventListener('keydown', handleKeyDown, true)
+  announceReady()
 })
 
 onBeforeUnmount(() => {
+  rendererMounted = false
+  if (readyRetryTimer) {
+    clearTimeout(readyRetryTimer)
+    readyRetryTimer = null
+  }
   unregShow()
   unregHide()
   window.removeEventListener('keydown', handleKeyDown, true)

@@ -1732,7 +1732,7 @@ async function executeNexusRequest(
   bodyFactory?: () => unknown
 ): Promise<NexusResponsePayload> {
   const startedAt = Date.now()
-  authLog.info('Executing Nexus request', {
+  authLog.debug('Executing Nexus request', {
     meta: {
       context: context ?? '',
       method,
@@ -1763,7 +1763,7 @@ async function executeNexusRequest(
     }
   }
 
-  authLog.info('Nexus request completed', {
+  authLog.debug('Nexus request completed', {
     meta: {
       context: context ?? '',
       method,

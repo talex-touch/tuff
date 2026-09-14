@@ -1,0 +1,2 @@
+{"file":".trellis/spec/guides/guard-thinking-guide.md","reason":"Pricing tests must prove effective seeded and operator-overridden behavior, not source spelling."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check that chat and unrelated capability defaults remain centralized and unchanged."}

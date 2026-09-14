@@ -1,3 +1,5 @@
+import type { WebContents } from 'electron'
+
 export interface CoreBoxKeyEvent {
   key: string
   code: string
@@ -67,4 +69,35 @@ export function buildCoreBoxKeyModifiers(event: CoreBoxKeyEvent): CoreBoxKeyModi
 
 export function mapDomKeyToElectronKeyCode(key: string): string {
   return ELECTRON_KEY_CODE_BY_DOM_KEY[key] ?? key
+}
+
+/**
+ * Replays a CoreBox key event into another renderer's webContents.
+ *
+ * A plugin UI view is its own webContents, so host keys that the view is supposed to own
+ * (⌘←/⌘→ for its own navigation, Enter, …) have to be re-dispatched here: the view's DOM
+ * listeners only run for events delivered to that webContents.
+ *
+ * @returns True when the event was dispatched, false for blocked function keys.
+ */
+export function forwardKeyEventToWebContents(
+  webContents: WebContents,
+  event: CoreBoxKeyEvent
+): boolean {
+  if (isBlockedCoreBoxFunctionKey(event.key)) {
+    return false
+  }
+
+  const modifiers = buildCoreBoxKeyModifiers(event)
+  const keyCode = mapDomKeyToElectronKeyCode(event.key)
+
+  webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
+
+  if (event.key.length === 1) {
+    webContents.sendInputEvent({ type: 'char', keyCode: event.key, modifiers })
+  }
+
+  webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
+
+  return true
 }

@@ -127,6 +127,7 @@ import {
 } from '../modules/platform/capability-registry'
 import { activeAppService } from '../modules/system/active-app'
 import { wallpaperAdapter } from '../modules/system/wallpaper-adapter'
+import { getAppDestinationNavigationService } from '../modules/app-destination/app-destination-navigation'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { getNetworkService } from '../modules/network'
 import { deviceIdleService } from '../service/device-idle-service'
@@ -1506,6 +1507,15 @@ export class CommonChannelModule extends BaseModule {
       transport.on(PlatformEvents.capabilities.list, async (payload) => {
         const query = normalizeCapabilityQuery(payload)
         return await listPlatformCapabilities(query)
+      }),
+      transport.on(AppEvents.window.rendererReady, (_payload, context) => {
+        // Host-only for the same reason as the other window handlers: a plugin view must not
+        // be able to declare the primary renderer ready and have a queued destination
+        // delivered into a page it does not own.
+        this.assertHostOnly(context, 'window.rendererReady')
+        const sender = context.sender as Electron.WebContents | undefined
+        if (typeof sender?.id !== 'number') return
+        getAppDestinationNavigationService(touchApp).markPrimaryRendererReady(sender.id)
       }),
       transport.on(AppEvents.window.close, (_payload, context) => {
         this.assertHostOnly(context, 'window.close')

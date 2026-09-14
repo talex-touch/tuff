@@ -1,7 +1,7 @@
 {
   "id": "com.tuffex.system-actions",
   "name": "touch-system-actions",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "TalexTouch Team",
   "sdkapi": 260428,
   "category": "utilities",
@@ -9,7 +9,7 @@
     "type": "file",
     "value": "assets/logo.svg"
   },
-  "description": "系统高级控制：关机 / 重启 / 锁屏 / 音量 / 亮度 / 主窗口",
+  "description": "系统高级控制：关机 / 重启 / 锁屏 / 音量 / 亮度",
   "main": "index.js",
   "permissions": {
     "required": ["search.root-results"],
@@ -44,7 +44,7 @@
         "type": "file",
         "value": "assets/logo.svg"
       },
-      "keywords": ["system", "sys", "系统", "关机", "重启", "锁屏", "音量", "亮度", "主窗口"],
+      "keywords": ["system", "sys", "系统", "关机", "重启", "锁屏", "音量", "亮度"],
       "push": true,
       "priority": 7,
       "acceptedInputTypes": ["text"],

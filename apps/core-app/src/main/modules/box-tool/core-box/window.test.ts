@@ -751,6 +751,123 @@ describe('WindowManager CoreBox compact bounds', () => {
     })
   })
 
+  it('pins the detached DivisionBox window above ordinary application windows', async () => {
+    const manager = new WindowManager()
+    const browserWindow = {
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      getBounds: vi.fn(() => ({ x: 200, y: 100, width: 720, height: 600 }))
+    }
+    manager.windows = [
+      {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+    ]
+
+    const view = {} as Electron.WebContentsView
+    const plugin = {
+      name: 'demo-plugin',
+      sdkapi: 2
+    }
+    vi.spyOn(manager, 'getAttachedPlugin').mockReturnValue(plugin as never)
+    vi.spyOn(manager, 'extractUIView').mockReturnValue({ view, plugin: plugin as never })
+
+    await manager.detachUIViewToDivisionBox()
+
+    // A detached quick-preview window must float over the apps it was popped out of; without this
+    // the session falls back to the ordinary window level and the preview hides behind them.
+    expect(mocks.createSessionWithoutUI.mock.calls[0][0]).toMatchObject({ alwaysOnTop: true })
+  })
+
+  it('keeps the plugin file icon type in the detached DivisionBox config', async () => {
+    const manager = new WindowManager()
+    const browserWindow = {
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      getBounds: vi.fn(() => ({ x: 200, y: 100, width: 720, height: 600 }))
+    }
+    manager.windows = [
+      {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+    ]
+
+    const view = {} as Electron.WebContentsView
+    const plugin = {
+      name: 'demo-plugin',
+      sdkapi: 2,
+      icon: { type: 'file', value: '/abs/plugins/demo/assets/logo.svg', status: 'normal' }
+    }
+    vi.spyOn(manager, 'getAttachedPlugin').mockReturnValue(plugin as never)
+    vi.spyOn(manager, 'extractUIView').mockReturnValue({ view, plugin: plugin as never })
+
+    await manager.detachUIViewToDivisionBox()
+
+    // A `file` icon resolves through tfile://; flattening it to `icon.value` rendered an empty header.
+    expect(mocks.createSessionWithoutUI.mock.calls[0][0]?.icon).toMatchObject({
+      type: 'file',
+      value: '/abs/plugins/demo/assets/logo.svg'
+    })
+  })
+
+  it('titles the detached DivisionBox with the localized feature name', async () => {
+    const manager = new WindowManager()
+    const browserWindow = {
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      getBounds: vi.fn(() => ({ x: 200, y: 100, width: 720, height: 600 }))
+    }
+    manager.windows = [
+      {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+    ]
+
+    const view = {} as Electron.WebContentsView
+    const plugin = {
+      name: 'demo-plugin',
+      displayName: 'Demo Plugin',
+      sdkapi: 2
+    }
+    vi.spyOn(manager, 'getAttachedPlugin').mockReturnValue(plugin as never)
+    vi.spyOn(manager, 'extractUIView').mockReturnValue({
+      view,
+      plugin: plugin as never,
+      feature: { id: 'demo-feature', name: '剪贴板历史记录' } as never
+    })
+
+    await manager.detachUIViewToDivisionBox()
+
+    expect(mocks.createSessionWithoutUI.mock.calls[0][0]?.title).toBe('剪贴板历史记录')
+  })
+
+  it('falls back to the plugin display name when the view carries no feature', async () => {
+    const manager = new WindowManager()
+    const browserWindow = {
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      getBounds: vi.fn(() => ({ x: 200, y: 100, width: 720, height: 600 }))
+    }
+    manager.windows = [
+      {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+    ]
+
+    const view = {} as Electron.WebContentsView
+    const plugin = {
+      name: 'demo-plugin',
+      displayName: 'Clipboard History',
+      sdkapi: 2
+    }
+    vi.spyOn(manager, 'getAttachedPlugin').mockReturnValue(plugin as never)
+    vi.spyOn(manager, 'extractUIView').mockReturnValue({ view, plugin: plugin as never })
+
+    await manager.detachUIViewToDivisionBox()
+
+    expect(mocks.createSessionWithoutUI.mock.calls[0][0]?.title).toBe('Clipboard History')
+  })
+
   it('rejects permission before changing plugin view ownership', async () => {
     const manager = new WindowManager()
     const browserWindow = {

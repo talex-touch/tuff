@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { getAppDestination } from '../../../../apps/core-app/src/shared/app-destinations'
 import { createPluginGlobals, loadPluginModuleWithSourceTransform } from './plugin-loader'
 
 /**
@@ -18,9 +19,6 @@ import { createPluginGlobals, loadPluginModuleWithSourceTransform } from './plug
 const intelligencePluginUrl = new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url)
 const hostCapabilitiesPath = fileURLToPath(
   new URL('../../../../apps/core-app/src/main/modules/plugin/host/plugin-business-capabilities.ts', import.meta.url),
-)
-const assistantModulePath = fileURLToPath(
-  new URL('../../../../apps/core-app/src/main/modules/assistant/module.ts', import.meta.url),
 )
 
 const PLUGIN_CONTRACT_CONSTANTS = [
@@ -75,9 +73,7 @@ function readHostNavigationEntry(actionId: string): HostNavigationEntry {
   const path = /path:\s*'([^']+)'/.exec(block[1])
 
   if (!pluginName || !path) {
-    throw new Error(
-      `FIXED_WIDGET_NAVIGATION['${actionId}'] no longer declares a literal pluginName and path.`,
-    )
+    throw new Error(`FIXED_WIDGET_NAVIGATION['${actionId}'] no longer declares a literal pluginName and path.`)
   }
 
   return { pluginName: pluginName[1], path: path[1] }
@@ -90,8 +86,9 @@ describe('intelligence widget navigation contract', () => {
   // returned undefined would make the whole suite vacuous rather than red.
   it('exposes the plugin-side constants it is about to compare', () => {
     for (const name of PLUGIN_CONTRACT_CONSTANTS) {
-      expect(contract[name as keyof PluginContract], `${name} must be readable from the plugin`)
-        .toEqual(expect.any(String))
+      expect(contract[name as keyof PluginContract], `${name} must be readable from the plugin`).toEqual(
+        expect.any(String),
+      )
       expect(contract[name as keyof PluginContract].length).toBeGreaterThan(0)
     }
   })
@@ -110,16 +107,14 @@ describe('intelligence widget navigation contract', () => {
     expect(hostEntry.pluginName).toBe(contract.PLUGIN_NAME)
   })
 
-  // The assistant opens the same surface without going through the plugin, so it carries a
-  // third copy of the literal. It is not validated against the whitelist, which means a partial
-  // migration would leave the voice panel navigating somewhere the widget no longer goes.
-  it('keeps the assistant deep link on the same path as the widget', () => {
-    const source = readFileSync(assistantModulePath, 'utf8')
-    const navigatePaths = [...source.matchAll(/AppEvents\.window\.navigate,\s*\{\s*path:\s*'([^']+)'/g)]
-      .map(match => match[1])
+  // The assistant opens the same surface without going through the plugin: it delegates to the
+  // shared destination `settings-channels` (asserted in the assistant module suite), while the
+  // widget keeps shipping its installed legacy path. The renderer's permanent redirect makes them
+  // agree, so the catalog route must stay the legacy path with the settings prefix.
+  it('keeps the widget legacy path redirecting to the settings destination the assistant opens', () => {
+    const destination = getAppDestination('settings-channels')
 
-    expect(navigatePaths.length, 'assistant no longer navigates by literal path; update this guard')
-      .toBeGreaterThan(0)
-    expect(navigatePaths).toContain(contract.INTELLIGENCE_SETTINGS_PATH)
+    expect(contract.INTELLIGENCE_SETTINGS_PATH.startsWith('/intelligence/')).toBe(true)
+    expect(destination.route).toBe(`/setting${contract.INTELLIGENCE_SETTINGS_PATH}`)
   })
 })

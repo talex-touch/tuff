@@ -10,6 +10,7 @@ import {
   presetUno,
   transformerAttributifyJsx
 } from 'unocss'
+import { APP_DESTINATION_ICON_CLASSES } from './src/shared/app-destinations'
 import { MODEL_FAMILY_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-family-icons'
 import { MODEL_SOURCE_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-source-icons'
 import {
@@ -61,11 +62,19 @@ const MODEL_FAMILY_ICONS_MODULE = fileURLToPath(
 const MODEL_SOURCE_ICONS_MODULE = fileURLToPath(
   new URL('./src/renderer/src/modules/intelligence/model-source-icons.ts', import.meta.url)
 )
+const APP_DESTINATIONS_MODULE = fileURLToPath(
+  new URL('./src/shared/app-destinations.ts', import.meta.url)
+)
 
 export default defineConfig({
   // The dev server watches only the config file itself. Without this, a new icon in the table
   // would stay an empty box until the next restart, which is the same defect one step removed.
-  configDeps: [PROVIDER_ICONS_MODULE, MODEL_FAMILY_ICONS_MODULE, MODEL_SOURCE_ICONS_MODULE],
+  configDeps: [
+    PROVIDER_ICONS_MODULE,
+    MODEL_FAMILY_ICONS_MODULE,
+    MODEL_SOURCE_ICONS_MODULE,
+    APP_DESTINATIONS_MODULE
+  ],
   safelist: [
     ...COREBOX_ACTION_ICONS,
     ...SETTINGS_CATEGORY_ICONS,
@@ -80,7 +89,10 @@ export default defineConfig({
     // Channel icons — the brand mark a filter tab and a group header show for the `codex` or
     // `ollama` a model was listed under; `renderer/src/modules/intelligence/model-source-icons.ts`.
     // Channels the table cannot place draw an initial instead, which needs no class.
-    ...MODEL_SOURCE_ICON_CLASSES
+    ...MODEL_SOURCE_ICON_CLASSES,
+    // CoreBox destination icons, named only in the shared catalog (`src/shared/app-destinations.ts`).
+    // Derived from that module so a new destination cannot ship an invisible glyph.
+    ...APP_DESTINATION_ICON_CLASSES
   ],
   theme: {
     colors: {
@@ -98,9 +110,9 @@ export default defineConfig({
     presetAttributify(),
     presetIcons({
       collections: {
-        ri: ri as IconifyJSON,
-        'simple-icons': simpleIcons as IconifyJSON,
-        carbon: carbonIcons as IconifyJSON
+        ri: () => ri as IconifyJSON,
+        'simple-icons': () => simpleIcons as IconifyJSON,
+        carbon: () => carbonIcons as IconifyJSON
       }
     })
   ],

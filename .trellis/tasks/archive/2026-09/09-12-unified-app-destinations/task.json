@@ -1,0 +1,37 @@
+{
+  "id": "unified-app-destinations",
+  "name": "unified-app-destinations",
+  "title": "Unified Tuff destinations and common settings",
+  "description": "Replace the main-window special case with typed app destinations, grouped common settings actions, shared main-window navigation, and offline first-party icons.",
+  "status": "completed",
+  "dev_type": "feature",
+  "scope": "core-app",
+  "package": "core-app",
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-12",
+  "completedAt": "2026-09-13",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-12-hapigo-capability-backlog",
+  "relatedFiles": [
+    "apps/core-app/src/shared/app-destinations.ts",
+    "apps/core-app/src/main/modules/app-destination/",
+    "apps/core-app/src/main/modules/box-tool/addon/system/main-window-provider.ts",
+    "apps/core-app/src/main/modules/tray/tray-menu-builder.ts",
+    "apps/core-app/src/main/modules/assistant/module.ts",
+    "apps/core-app/src/main/modules/local-ai-cli/index.ts",
+    "apps/core-app/src/main/modules/plugin/host/plugin-system-capabilities.ts",
+    "apps/core-app/src/renderer/src/modules/settings/categories.ts"
+  ],
+  "notes": "Implemented one grouped settings destination system with shared navigation, offline icons, explicit renderer handshakes, and exact Chinese, English, full-pinyin, and pinyin-initial aliases.",
+  "meta": {
+    "verification": "Destination catalog/provider tests passed 188/188 after the alias extension; CoreApp typecheck, focused lint, build, and packaged Electron checks passed, including wangluo and wl resolving the Network destination."
+  }
+}

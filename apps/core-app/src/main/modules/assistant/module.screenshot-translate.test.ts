@@ -8,7 +8,7 @@ import type { CoreBoxImageTranslateResponse } from '../../../shared/events/coreb
 import type { AssistantModule } from './module'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
-import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 
 type AssistantHandler = (payload: unknown, context: HandlerContext) => unknown | Promise<unknown>
 type ScreenPoint = { x: number; y: number }
@@ -157,6 +157,7 @@ const mocks = vi.hoisted(() => ({
   sendTo: vi.fn<
     (target: unknown, event: { toEventName: () => string }, payload: unknown) => Promise<void>
   >(() => Promise.resolve()),
+  navigateOpen: vi.fn(),
   broadcastToWindow: vi.fn(),
   coreBoxTrigger: vi.fn(),
   updateCoreBoxPosition: vi.fn(),
@@ -183,6 +184,10 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
 }))
 vi.mock('../voice/command-gesture', () => ({
   setPlatformVoiceEscapeCapture: vi.fn()
+}))
+
+vi.mock('../app-destination/app-destination-navigation', () => ({
+  getAppDestinationNavigationService: vi.fn(() => ({ open: mocks.navigateOpen }))
 }))
 
 vi.mock('electron', () => ({
@@ -449,6 +454,8 @@ describe('AssistantModule screenshot translation', () => {
     })
     mocks.translateImageBase64.mockResolvedValue(mocks.createTranslateSuccess())
     mocks.sendTo.mockResolvedValue(undefined)
+    mocks.navigateOpen.mockReset()
+    mocks.navigateOpen.mockReturnValue({ status: 'opened', destinationId: 'settings-channels' })
   })
 
   afterEach(() => {
@@ -1256,17 +1263,11 @@ describe('AssistantModule screenshot translation', () => {
     const result = await handler(undefined, {} as HandlerContext)
 
     expect(result).toBe(true)
-    expect(mainWindow.restore).toHaveBeenCalledTimes(1)
-    expect(mainWindow.show).toHaveBeenCalledTimes(1)
-    expect(mainWindow.focus).toHaveBeenCalledTimes(1)
-    expect(mocks.sendTo).toHaveBeenCalledWith(
-      mainWindow.webContents,
-      expect.objectContaining({ toEventName: expect.any(Function) }),
-      { path: '/intelligence/channels' }
-    )
-    expect(mocks.sendTo.mock.calls[0]?.[1]?.toEventName()).toBe(
-      AppEvents.window.navigate.toEventName()
-    )
+    expect(mocks.navigateOpen).toHaveBeenCalledExactlyOnceWith('settings-channels')
+    // The shared destination service owns restore/show/focus; the Assistant must not duplicate it.
+    expect(mainWindow.restore).not.toHaveBeenCalled()
+    expect(mainWindow.show).not.toHaveBeenCalled()
+    expect(mainWindow.focus).not.toHaveBeenCalled()
     expect(voiceDock.window.hide).not.toHaveBeenCalled()
     expect(voiceDock.window.setBounds).toHaveBeenCalledWith(
       expect.objectContaining({ width: 56, height: 56 })
@@ -1275,7 +1276,11 @@ describe('AssistantModule screenshot translation', () => {
     await module.onDestroy({} as never)
   })
   it('keeps the VoiceDock available when Intelligence navigation delivery fails', async () => {
-    mocks.sendTo.mockRejectedValueOnce(new Error('renderer transport unavailable'))
+    mocks.navigateOpen.mockReturnValueOnce({
+      status: 'unavailable',
+      destinationId: 'settings-channels',
+      reason: 'window-unavailable'
+    })
     const mainWindow = {
       isDestroyed: vi.fn(() => false),
       isMinimized: vi.fn(() => false),
@@ -1304,6 +1309,7 @@ describe('AssistantModule screenshot translation', () => {
     const result = await handler(undefined, {} as HandlerContext)
 
     expect(result).toBe(false)
+    expect(mocks.navigateOpen).toHaveBeenCalledExactlyOnceWith('settings-channels')
     expect(voiceDock.window.hide).not.toHaveBeenCalled()
 
     await module.onDestroy({} as never)

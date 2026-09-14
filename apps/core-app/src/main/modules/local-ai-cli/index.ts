@@ -24,9 +24,12 @@ import {
   normalizeLocalAiCliApprovalDecision,
   normalizeLocalAiCliStartRequest
 } from '@talex-touch/utils/transport/events/local-ai-cli'
-import { AppEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { clipboard, dialog, type BrowserWindow, type WebContents } from 'electron'
+import { clipboard, dialog, type WebContents } from 'electron'
+import {
+  getAppDestinationNavigationService,
+  type AppDestinationRuntime
+} from '../app-destination/app-destination-navigation'
 import { BaseModule } from '../abstract-base-module'
 import { shortcutModule } from '../global-shortcon'
 import { omniPanelModule } from '../omni-panel'
@@ -139,7 +142,7 @@ export class LocalAiCliModule extends BaseModule {
   name: ModuleKey = LocalAiCliModule.key
 
   private transport: MainTransport | null = null
-  private mainWindow: BrowserWindow | null = null
+  private destinationRuntime: AppDestinationRuntime | null = null
   private readonly disposers: Array<() => void> = []
   private readonly approvals = new LocalAiCliApprovalBroker()
   private readonly taskProcesses = new Map<string, ChildProcess>()
@@ -157,7 +160,7 @@ export class LocalAiCliModule extends BaseModule {
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
-    this.mainWindow = runtime.app.window.window
+    this.destinationRuntime = runtime.app
     this.workspacePath = join(this.requireDirPath(ctx), 'workspace')
     await mkdir(this.workspacePath, { recursive: true })
     this.registerHandlers()
@@ -229,15 +232,13 @@ export class LocalAiCliModule extends BaseModule {
   }
 
   private async openSettings(): Promise<boolean> {
-    const window = this.mainWindow
-    if (!window || window.isDestroyed() || !this.transport) return false
-    if (window.isMinimized()) window.restore()
+    const runtime = this.destinationRuntime
+    if (!runtime) return false
+
+    const result = getAppDestinationNavigationService(runtime).open('settings-intelligence')
+    if (result.status === 'unavailable') return false
+
     this.pendingPanelReturnUntil = Date.now() + 5 * 60_000
-    window.show()
-    window.focus()
-    await this.transport.sendTo(window.webContents, AppEvents.window.navigate, {
-      path: '/setting?section=local-ai-cli'
-    })
     return true
   }
 
@@ -853,7 +854,7 @@ export class LocalAiCliModule extends BaseModule {
       this.disposeTerminalSession(sessionId)
     }
     this.transport = null
-    this.mainWindow = null
+    this.destinationRuntime = null
     localAiCliLog.info('Local AI CLI runtime destroyed')
   }
 }
