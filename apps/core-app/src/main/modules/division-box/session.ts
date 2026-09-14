@@ -7,6 +7,7 @@
  */
 
 import type { DivisionBoxConfig, SessionMeta, StateChangeEvent } from '@talex-touch/utils'
+import type { CoreBoxKeyEvent } from '../box-tool/core-box/key-event'
 import type { TouchWindow } from '../../core/touch-window'
 import type { TouchPlugin } from '../plugin/plugin'
 import {
@@ -35,6 +36,7 @@ import {
   installPluginViewNavigationPolicy
 } from '../plugin/runtime/plugin-window-policy'
 import { getMainConfig } from '../storage'
+import { forwardKeyEventToWebContents } from '../box-tool/core-box/key-event'
 import defaultCoreBoxThemeCss from '../box-tool/core-box/theme/tuff-element.css?raw'
 import { resolveDivisionBoxHeaderHeight, resolveDivisionBoxInitialWindowBounds } from './layout'
 import { windowPool } from './window-pool'
@@ -382,6 +384,9 @@ export class DivisionBoxSession {
 
       // Update window title with unique identifier for Windows taskbar grouping
       this.touchWindow.window.setTitle(`${this.config.title} - Tuff Division`)
+      if (this.config.alwaysOnTop) {
+        this.touchWindow.window.setAlwaysOnTop(true, 'floating')
+      }
       this.applyInitialBounds()
 
       // Windows-specific: Set unique AppUserModelId to ensure separate taskbar entries
@@ -765,6 +770,36 @@ export class DivisionBoxSession {
    */
   isAlwaysOnTop(): boolean {
     return this.touchWindow?.window.isAlwaysOnTop() ?? false
+  }
+
+  /**
+   * Replays a host key event into this session's attached plugin UI view.
+   *
+   * A detached window keeps the CoreBox header (and its input) while the plugin UI lives in a
+   * child WebContentsView, so keys the plugin view owns have to be re-dispatched to it.
+   *
+   * @returns True when the key reached a live plugin view.
+   */
+  forwardKeyEventToUIView(event: CoreBoxKeyEvent): boolean {
+    const webContents = useAliveWebContents(this.uiView)
+    if (!webContents) {
+      divisionBoxSessionLog.debug('Cannot forward key event: no live UI view', {
+        meta: { sessionId: this.sessionId }
+      })
+      return false
+    }
+
+    return forwardKeyEventToWebContents(webContents, event)
+  }
+
+  /**
+   * WebContents id of the window that owns this session, used to route renderer-originated IPC
+   * (key forwarding) back to the right DivisionBox.
+   */
+  getWindowWebContentsId(): number | null {
+    const window = this.touchWindow?.window
+    if (!window || window.isDestroyed()) return null
+    return window.webContents.id
   }
 
   /**

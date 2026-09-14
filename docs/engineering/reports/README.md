@@ -36,6 +36,7 @@
 - `startup-packaged-cold-runs-2026-06-21/`：packaged cold startup benchmark 摘要与结构化数据。
 - `native-screenshot-rust-2026-06-21/`：native screenshot Rust 验证摘要。
 - `nexus-performance-2026-06-21/`：Nexus performance 当前工作表。
+- [`release-gate-and-worktree-closeout-2026-09-13.md`](./release-gate-and-worktree-closeout-2026-09-13.md)：工作树收口与 `quality:release` 在 clean committed HEAD 上的分阶段复跑证据。
 
 ## 复核要求
 

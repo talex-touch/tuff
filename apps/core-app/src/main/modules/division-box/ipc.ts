@@ -52,6 +52,10 @@ function validateConfig(config: unknown): { valid: boolean; error?: string } {
     return { valid: false, error: 'Invalid "keepAlive" field. Must be a boolean' }
   }
 
+  if (candidate.alwaysOnTop !== undefined && typeof candidate.alwaysOnTop !== 'boolean') {
+    return { valid: false, error: 'Invalid "alwaysOnTop" field. Must be a boolean' }
+  }
+
   if (
     candidate.initialState !== undefined &&
     (!candidate.initialState ||

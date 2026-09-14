@@ -900,9 +900,14 @@ export class WindowManager {
     try {
       const config: DivisionBoxConfig = {
         url: `plugin://${plugin.name}/index.html`,
-        title: plugin.name,
-        icon: plugin.icon?.value || plugin.icon?.toString?.() || undefined,
+        // The detached window shows the same identity as the CoreBox pill: the feature title the
+        // plugin declares (localized at load) instead of the raw directory name, and the plugin's
+        // icon *object*. Passing only `icon.value` collapsed a file icon into a class icon, so the
+        // detached header rendered an empty box while CoreBox still resolved the real logo.
+        title: extracted.feature?.name?.trim() || plugin.displayName || plugin.name,
+        icon: plugin.icon ? { ...plugin.icon } : undefined,
         size: 'medium',
+        alwaysOnTop: true,
         keepAlive: true,
         pluginId: plugin.name,
         ui: { showInput: true, initialInput },

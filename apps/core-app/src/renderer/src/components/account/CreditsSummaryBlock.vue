@@ -28,27 +28,6 @@ const notice = computed(() =>
     'Nexus 官方能力按能力自身的计价单位扣费：文本按 1K tokens、图片按张、语音转写按音频秒（长静音与密集语音取较高者）。调用前会先占用一笔预留额度，结算后自动退回多占部分。'
   )
 )
-/**
- * Capabilities the panel quotes a price for. The labels come from the message catalog, so an
- * English UI does not show Chinese capability names next to English units.
- */
-const PRICED_CAPABILITY_KEYS: readonly string[] = [
-  'text.chat',
-  'vision.ocr',
-  'image.translate.e2e',
-  'audio.transcribe',
-  'audio.stt'
-]
-const pricedCapabilities = computed(() =>
-  credits.pricing.value
-    .filter((rule) => PRICED_CAPABILITY_KEYS.includes(rule.capability))
-    .map((rule) => ({
-      key: rule.capability,
-      label: t(`creditsSummary.capabilities.${rule.capability}`),
-      // A unit the catalog does not name is shown as the raw unit rather than dropped.
-      price: `${formatCredits(rule.creditsPerUnit)} ${t(`creditsSummary.units.${rule.unit}`, rule.unit)}`
-    }))
-)
 const statusDescription = computed(() => {
   if (!credits.isLoggedIn.value) {
     return t('creditsSummary.loginRequired', '登录后可查看 credits 剩余和消耗。')
@@ -209,13 +188,6 @@ onUnmounted(() => {
       </TxButton>
     </TuffBlockSlot>
 
-    <div v-if="credits.isLoggedIn.value && pricedCapabilities.length" class="credits-pricing">
-      <div v-for="entry in pricedCapabilities" :key="entry.key" class="credits-pricing__row">
-        <span class="credits-pricing__label">{{ entry.label }}</span>
-        <span class="credits-pricing__price">{{ entry.price }}</span>
-      </div>
-    </div>
-
     <TuffBlockSlot
       v-if="context === 'intelligence'"
       :title="t('creditsSummary.billingNoticeTitle', '计费提示')"
@@ -279,38 +251,6 @@ onUnmounted(() => {
   color: var(--tx-text-color-primary);
 }
 
-.credits-pricing {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 16px;
-  padding: 0 12px 12px;
-}
-
-.credits-pricing__row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-  font-size: 12px;
-}
-
-.credits-pricing__label,
-.credits-pricing__price {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.credits-pricing__label {
-  color: var(--tx-text-color-secondary);
-}
-
-.credits-pricing__price {
-  color: var(--tx-text-color-primary);
-}
-
 @media (max-width: 920px) {
   .credits-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -319,10 +259,6 @@ onUnmounted(() => {
 
 @media (max-width: 560px) {
   .credits-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .credits-pricing {
     grid-template-columns: 1fr;
   }
 }

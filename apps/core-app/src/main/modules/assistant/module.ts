@@ -42,21 +42,19 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
-import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
+import {
+  getAppDestinationNavigationService,
+  type AppDestinationRuntime
+} from '../app-destination/app-destination-navigation'
 import { setPlatformVoiceEscapeCapture } from '../voice/command-gesture'
 import {
   disableGlobeKeyAction,
   openKeyboardSettings,
   readGlobeKeyStatus
 } from '../voice/globe-key-preference'
-import {
-  dialog,
-  screen,
-  type BrowserWindow,
-  type Rectangle,
-  type SaveDialogOptions
-} from 'electron'
+import { dialog, screen, type Rectangle, type SaveDialogOptions } from 'electron'
 import { AssistantVoiceDockWindowOption } from '../../config/default'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
@@ -264,7 +262,7 @@ export class AssistantModule extends BaseModule {
   name: ModuleKey = AssistantModule.key
 
   private transport: ITuffTransportMain | null = null
-  private mainWindow: BrowserWindow | null = null
+  private destinationRuntime: AppDestinationRuntime | null = null
   private transportDisposers: Array<() => void> = []
   private unsubscribeAppSetting: (() => void) | null = null
   private voiceDockWindow: TouchWindow | null = null
@@ -343,7 +341,6 @@ export class AssistantModule extends BaseModule {
     }
     this.transportDisposers = []
     this.transport = null
-    this.mainWindow = null
 
     this.destroyVoiceDockWindow()
   }
@@ -354,7 +351,7 @@ export class AssistantModule extends BaseModule {
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
-    this.mainWindow = runtime.window?.window ?? runtime.app.window?.window ?? null
+    this.destinationRuntime = runtime.app
   }
 
   private registerTransportHandlers(): void {
@@ -1103,27 +1100,21 @@ export class AssistantModule extends BaseModule {
   }
 
   private async openIntelligenceSettings(): Promise<boolean> {
-    const mainWindow = this.mainWindow
-    const transport = this.transport
-    if (!mainWindow || mainWindow.isDestroyed() || !transport) {
+    const runtime = this.destinationRuntime
+    if (!runtime) {
       return false
     }
 
-    try {
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore()
-      }
-      mainWindow.show()
-      mainWindow.focus()
-      await transport.sendTo(mainWindow.webContents, AppEvents.window.navigate, {
-        path: '/intelligence/channels'
+    const result = getAppDestinationNavigationService(runtime).open('settings-channels')
+    if (result.status === 'unavailable') {
+      assistantLog.warn('Intelligence settings destination unavailable from Assistant', {
+        error: result.reason
       })
-      this.collapseVoicePanel()
-      return true
-    } catch (error) {
-      assistantLog.warn('Failed to open Intelligence settings from Assistant', { error })
       return false
     }
+
+    this.collapseVoicePanel()
+    return true
   }
 
   private async handleVoiceSubmit(

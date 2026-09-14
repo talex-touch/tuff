@@ -217,8 +217,8 @@ vi.mock('../addon/files/file-provider', () => ({
 vi.mock('../addon/preview', () => ({
   previewProvider: { id: 'preview-provider', type: 'preview', onSearch: vi.fn() }
 }))
-vi.mock('../addon/system/main-window-provider', () => ({
-  mainWindowProvider: { id: 'main-window-provider', type: 'system', onSearch: vi.fn() }
+vi.mock('../addon/system/app-destination-provider', () => ({
+  appDestinationProvider: { id: 'app-destination-provider', type: 'system', onSearch: vi.fn() }
 }))
 vi.mock('../addon/system/system-actions-provider', () => ({
   systemActionsProvider: { id: 'system-actions-provider', type: 'system', onSearch: vi.fn() }

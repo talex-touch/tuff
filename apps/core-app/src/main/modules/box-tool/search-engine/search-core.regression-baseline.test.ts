@@ -144,10 +144,10 @@ vi.mock('../addon/preview', () => ({
   }
 }))
 
-vi.mock('../addon/system/main-window-provider', () => ({
-  mainWindowProvider: {
-    id: 'main-window-provider',
-    type: 'command',
+vi.mock('../addon/system/app-destination-provider', () => ({
+  appDestinationProvider: {
+    id: 'app-destination-provider',
+    type: 'system',
     supportedInputTypes: [TuffInputType.Text],
     onSearch: vi.fn()
   }

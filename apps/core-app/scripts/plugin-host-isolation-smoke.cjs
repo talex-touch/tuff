@@ -2382,22 +2382,19 @@ async function run() {
       { text: '' },
       { id: 'system-actions' }
     ])
-    const firstMainWindowAction = firstBatchSystemActions.state.items.find((item) =>
-      item.actions?.some((action) => action.payload?.actionId === 'open-main-window')
-    )
     const firstVolumeAction = firstBatchSystemActions.state.items.find((item) =>
       item.actions?.some((action) => action.payload?.actionId === 'volume-up')
     )
-    assert(firstMainWindowAction && firstVolumeAction)
+    assert(firstVolumeAction)
+    // The shared app-destination provider owns `主窗口` now, so this plugin must not publish a
+    // second CoreBox result for the host capability it no longer surfaces.
+    assert(
+      firstBatchSystemActions.state.items.every((item) =>
+        (item.actions ?? []).every((action) => action.payload?.actionId !== 'open-main-window')
+      )
+    )
+    assert(firstBatchSystemActions.state.mainWindowShows === 0)
     firstBatchSystemActions.state.deniedPermissions.add('system.shell')
-    const openedMainWindow = await firstBatchSystemActions.host.callLifecycle('onItemAction', [
-      firstMainWindowAction,
-      { actionId: 'run-action' }
-    ])
-    assert(openedMainWindow?.status === 'started')
-    assert(openedMainWindow?.success === true)
-    assert(firstBatchSystemActions.state.mainWindowShows === 1)
-    assert(firstBatchSystemActions.state.systemActions.length === 0)
     const deniedVolume = await firstBatchSystemActions.host.callLifecycle('onItemAction', [
       firstVolumeAction,
       { actionId: 'run-action' }
@@ -3018,15 +3015,15 @@ async function run() {
     const secondBatchSystemActions = secondBatch[secondBatchSystemActionsIndex]
     await secondBatchSystemActions.host.callLifecycle('onFeatureTriggered', [
       'system-actions',
-      { text: '主窗口' },
+      { text: '' },
       { id: 'system-actions' }
     ])
-    const secondMainWindowAction = secondBatchSystemActions.state.items.find((item) =>
-      item.actions?.some((action) => action.payload?.actionId === 'open-main-window')
+    const secondVolumeAction = secondBatchSystemActions.state.items.find((item) =>
+      item.actions?.some((action) => action.payload?.actionId === 'volume-up')
     )
-    assert(secondMainWindowAction)
-    const secondMainWindowCall = secondBatchSystemActions.host.callLifecycle('onItemAction', [
-      secondMainWindowAction,
+    assert(secondVolumeAction)
+    const secondVolumeCall = secondBatchSystemActions.host.callLifecycle('onItemAction', [
+      secondVolumeAction,
       { actionId: 'run-action' }
     ])
     const secondSystemObserver =
@@ -3045,10 +3042,11 @@ async function run() {
       ok: true,
       result: 'stale-forged-system-result'
     })
-    const secondMainWindowResult = await secondMainWindowCall
-    assert(secondMainWindowResult?.status === 'started')
-    assert(secondBatchSystemActions.state.mainWindowShows === 1)
-    assert(firstBatchSystemActions.state.mainWindowShows === 1)
+    const secondVolumeResult = await secondVolumeCall
+    assert(secondVolumeResult?.status === 'started')
+    assert(JSON.stringify(secondBatchSystemActions.state.systemActions) === '["volume-up"]')
+    assert(secondBatchSystemActions.state.mainWindowShows === 0)
+    assert(firstBatchSystemActions.state.mainWindowShows === 0)
 
     const secondBatchWorkspaceScriptsIndex = secondBatch.findIndex(
       (runtime) => runtime.host.activation.name === 'touch-workspace-scripts'

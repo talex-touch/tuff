@@ -71,7 +71,7 @@ const ASR_TRANSCRIPTS = [
 
 describe('audio.transcribe continuity', () => {
   describe.each(ASR_TRANSCRIPTS)('$name', ({ transcript }) => {
-    it.each(ASR_BILLED_SECONDS)('prices %s billed seconds as the retired ASR formula did', (billedSeconds) => {
+    it.each(ASR_BILLED_SECONDS)('prices %s billed seconds as the retired ASR formula did', billedSeconds => {
       const units = countTranscriptUnits(transcript)
       const charge = computeCreditCharge(asrRule, { seconds: billedSeconds, units })
       const reservation = computeCreditReservation(asrRule, { seconds: billedSeconds })
@@ -87,19 +87,45 @@ describe('audio.transcribe continuity', () => {
 })
 
 describe('text.chat continuity', () => {
-  it.each([1, 17, 999, 1000, 1001, 4096, 128000])(
-    'charges and holds one credit per token for %s tokens',
-    (tokens) => {
-      const chatRule = selectCreditPricingRule('text.chat', DEFAULT_CREDIT_PRICING)
-      const charge = computeCreditCharge(chatRule, { tokens })
-      const reservation = computeCreditReservation(chatRule, { tokens })
+  it.each([1, 17, 999, 1000, 1001, 4096, 128000])('charges and holds one credit per token for %s tokens', tokens => {
+    const chatRule = selectCreditPricingRule('text.chat', DEFAULT_CREDIT_PRICING)
+    const charge = computeCreditCharge(chatRule, { tokens })
+    const reservation = computeCreditReservation(chatRule, { tokens })
 
-      expect(charge).toBe(tokens)
-      expect(reservation).toBe(tokens)
-      expect(Number.isInteger(charge)).toBe(true)
-      expect(Number.isInteger(reservation)).toBe(true)
-    },
-  )
+    expect(charge).toBe(tokens)
+    expect(reservation).toBe(tokens)
+    expect(Number.isInteger(charge)).toBe(true)
+    expect(Number.isInteger(reservation)).toBe(true)
+  })
+})
+
+/**
+ * The seeded table, read through the lookup every caller uses. Translation shares
+ * chat's token unit but not its price, so both have to be read from rows that the
+ * seeder wrote: a capability folded back into `CHAT_CAPABILITIES` still looks right
+ * against the fallback, which is priced exactly like chat.
+ */
+describe('text pricing defaults', () => {
+  it('seeds translation at 10 credits per 1k tokens with a double hold, leaving chat at one credit per token', async () => {
+    const db = new MockCreditPricingD1Database()
+
+    const rules = await listCreditPricing(makeCreditPricingEvent(db))
+    const translate = rules.find(rule => rule.capability === 'text.translate')!
+    const chat = rules.find(rule => rule.capability === 'text.chat')!
+
+    expect(translate.unit).toBe('1k_tokens')
+    expect(translate.reserveMultiplier).toBe(2)
+    // A blended upstream cost would be a number no single route can be attributed to.
+    expect(translate.upstreamCostUsdPerUnit).toBeNull()
+    expect(computeCreditCharge(translate, { tokens: 1000 })).toBe(10)
+    expect(computeCreditCharge(translate, { tokens: 1 })).toBe(1)
+    expect(computeCreditReservation(translate, { tokens: 1000 })).toBe(20)
+
+    // Read from chat's own seeded row, not the fallback: dropping or mispricing that
+    // row while restructuring the list would otherwise be invisible here.
+    expect(computeCreditCharge(chat, { tokens: 1000 })).toBe(1000)
+    expect(computeCreditReservation(chat, { tokens: 1000 })).toBe(1000)
+  })
 })
 
 describe('computeCreditReservation', () => {
@@ -189,9 +215,9 @@ describe('shipped price list', () => {
   })
 
   it.each([
-    { name: 'vision.ocr', rule: ocr, credits: 2000 },
-    { name: 'image.translate', rule: imageTranslate, credits: 3000 },
-    { name: 'image.translate.e2e', rule: imageTranslateE2e, credits: 4000 },
+    { name: 'vision.ocr', rule: ocr, credits: 10 },
+    { name: 'image.translate', rule: imageTranslate, credits: 20 },
+    { name: 'image.translate.e2e', rule: imageTranslateE2e, credits: 30 },
   ])('charges $credits credits for one $name image', ({ rule, credits }) => {
     expect(computeCreditCharge(rule, { images: 1 })).toBe(credits)
   })
@@ -219,40 +245,100 @@ describe('shipped price list', () => {
 })
 
 describe('listCreditPricing reconciliation', () => {
-  /** The stamp the previous seed wrote; a row still carrying it has never been edited. */
-  const SUPERSEDED_STAMP = '2026-09-10T00:00:00.000Z'
-  const OCR_DEFAULT = DEFAULT_CREDIT_PRICING.find(item => item.capability === 'vision.ocr')!
+  /**
+   * The stamp the previous seed wrote. A row still carrying a listed stamp has never
+   * been edited by an operator — `updateCreditPricing` always stamps a real timestamp —
+   * so it is still a shipped default and has to follow the current one.
+   */
+  const SUPERSEDED_STAMP = '2026-09-13T00:00:00.000Z'
+  const ocr = selectCreditPricingRule('vision.ocr', DEFAULT_CREDIT_PRICING)
+  const imageTranslate = selectCreditPricingRule('image.translate', DEFAULT_CREDIT_PRICING)
+  const imageTranslateE2e = selectCreditPricingRule('image.translate.e2e', DEFAULT_CREDIT_PRICING)
+  const translate = selectCreditPricingRule('text.translate', DEFAULT_CREDIT_PRICING)
 
-  it('moves a never-edited row onto the shipped default', async () => {
-    const db = new MockCreditPricingD1Database()
-    db.rows.set('vision.ocr', storedRow(OCR_DEFAULT, { credits_per_unit: 10, updated_at: SUPERSEDED_STAMP }))
+  /**
+   * The superseded seed priced translation and every image capability far above the
+   * shipped defaults. Such a row is never rewritten by an insert — seeding is additive
+   * per capability — so without the reseed the expensive price survives every deploy,
+   * and every capability in the seed has to move, not just the first one anybody noticed.
+   */
+  const SUPERSEDED_ROWS = [
+    { capability: 'vision.ocr', superseded: 2000, shipped: ocr, usage: { images: 1 } },
+    { capability: 'image.translate', superseded: 3000, shipped: imageTranslate, usage: { images: 1 } },
+    {
+      capability: 'image.translate.e2e',
+      superseded: 4000,
+      shipped: imageTranslateE2e,
+      usage: { images: 1 },
+    },
+    { capability: 'text.translate', superseded: 100, shipped: translate, usage: { tokens: 1000 } },
+  ]
 
-    const rules = await listCreditPricing(makeCreditPricingEvent(db))
-    const reconciled = rules.find(rule => rule.capability === 'vision.ocr')!
+  it.each(SUPERSEDED_ROWS)(
+    'moves a never-edited $capability row off its superseded $superseded price',
+    async ({ capability, superseded, shipped, usage }) => {
+      const db = new MockCreditPricingD1Database()
+      db.rows.set(
+        capability,
+        storedRow(shipped, {
+          credits_per_unit: superseded,
+          updated_at: SUPERSEDED_STAMP,
+        }),
+      )
 
-    // Without this the superseded 10 survives every deploy: seeding is additive per
-    // capability, so an already-seeded row is never rewritten by an insert.
-    expect(computeCreditCharge(reconciled, { images: 1 })).toBe(computeCreditCharge(OCR_DEFAULT, { images: 1 }))
-    expect(reconciled.updatedAt).toBe(OCR_DEFAULT.updatedAt)
-  })
+      const rules = await listCreditPricing(makeCreditPricingEvent(db))
+      const reconciled = rules.find(rule => rule.capability === capability)!
+
+      expect(computeCreditCharge(reconciled, usage)).toBeLessThan(superseded)
+      expect(computeCreditCharge(reconciled, usage)).toBe(computeCreditCharge(shipped, usage))
+      expect(computeCreditReservation(reconciled, usage)).toBe(computeCreditReservation(shipped, usage))
+      // Moving onto the current stamp is what makes a second read converge instead of
+      // reseeding the row again on every request.
+      expect(reconciled.updatedAt).toBe(shipped.updatedAt)
+    },
+  )
 
   it('keeps a price an operator set, even when it equals the superseded default', async () => {
     const db = new MockCreditPricingD1Database()
-    const editedStamp = '2026-09-10T08:15:00.000Z'
-    db.rows.set('vision.ocr', storedRow(OCR_DEFAULT, { credits_per_unit: 10, updated_at: editedStamp }))
+    const editedStamp = '2026-09-13T08:15:00.000Z'
+    db.rows.set('vision.ocr', storedRow(ocr, { credits_per_unit: 2000, updated_at: editedStamp }))
 
     const rules = await listCreditPricing(makeCreditPricingEvent(db))
     const kept = rules.find(rule => rule.capability === 'vision.ocr')!
 
-    // A real timestamp means a human chose this price. The value matching the old seed
-    // is a coincidence, not evidence that nobody touched the row.
-    expect(computeCreditCharge(kept, { images: 1 })).toBe(10)
+    // A real timestamp means a human chose this price. The value matching the superseded
+    // seed is a coincidence, not evidence that nobody touched the row, so a reseed that
+    // migrated by value rather than by stamp would silently undo the decision.
+    expect(computeCreditCharge(kept, { images: 1 })).toBe(2000)
+    expect(kept.updatedAt).toBe(editedStamp)
+  })
+
+  it('keeps both the translation price and reserve multiplier an operator set', async () => {
+    const db = new MockCreditPricingD1Database()
+    const editedStamp = '2026-09-12T09:30:00.000Z'
+    db.rows.set(
+      'text.translate',
+      storedRow(translate, {
+        credits_per_unit: 250,
+        reserve_multiplier: 3,
+        updated_at: editedStamp,
+      }),
+    )
+
+    const rules = await listCreditPricing(makeCreditPricingEvent(db))
+    const kept = rules.find(rule => rule.capability === 'text.translate')!
+
+    // The reseed writes every price column back from the shipped default at once, so a
+    // capability whose default moved would otherwise restore a hold an operator had
+    // deliberately widened alongside the price they meant to change.
+    expect(computeCreditCharge(kept, { tokens: 1000 })).toBe(250)
+    expect(computeCreditReservation(kept, { tokens: 1000 })).toBe(750)
     expect(kept.updatedAt).toBe(editedStamp)
   })
 
   it('rewrites a superseded row once, not on every read', async () => {
     const db = new MockCreditPricingD1Database()
-    db.rows.set('vision.ocr', storedRow(OCR_DEFAULT, { credits_per_unit: 10, updated_at: SUPERSEDED_STAMP }))
+    db.rows.set('vision.ocr', storedRow(ocr, { credits_per_unit: 2000, updated_at: SUPERSEDED_STAMP }))
 
     const first = await listCreditPricing(makeCreditPricingEvent(db))
     expect(db.pricingUpdates).toBe(1)
@@ -260,8 +346,9 @@ describe('listCreditPricing reconciliation', () => {
     const second = await listCreditPricing(makeCreditPricingEvent(db))
 
     expect(db.pricingUpdates).toBe(1)
-    expect(computeCreditCharge(second.find(rule => rule.capability === 'vision.ocr')!, { images: 1 }))
-      .toBe(computeCreditCharge(first.find(rule => rule.capability === 'vision.ocr')!, { images: 1 }))
+    expect(computeCreditCharge(second.find(rule => rule.capability === 'vision.ocr')!, { images: 1 })).toBe(
+      computeCreditCharge(first.find(rule => rule.capability === 'vision.ocr')!, { images: 1 }),
+    )
   })
 })
 
@@ -287,11 +374,10 @@ describe('sellable pricing', () => {
 
     // The fallback prices tokens, and an image request reports none — settling a disabled
     // capability through it would hand the generation over for 0 credits.
-    await expect(resolveSellableCreditPricingRule(makeCreditPricingEvent(db), 'vision.ocr'))
-      .rejects.toMatchObject({
-        statusCode: 503,
-        data: { code: 'CAPABILITY_DISABLED', capability: 'vision.ocr' },
-      })
+    await expect(resolveSellableCreditPricingRule(makeCreditPricingEvent(db), 'vision.ocr')).rejects.toMatchObject({
+      statusCode: 503,
+      data: { code: 'CAPABILITY_DISABLED', capability: 'vision.ocr' },
+    })
   })
 
   it('serves a capability with no price row on the token fallback', async () => {
@@ -307,20 +393,24 @@ describe('sellable pricing', () => {
 describe('operator price updates', () => {
   it('writes only the field the operator named, so a concurrent edit to another survives', async () => {
     const db = new MockCreditPricingD1Database()
-    db.rows.set('text.chat', storedRow(pricingRule({
-      capability: 'text.chat',
-      unit: '1k_tokens',
-      creditsPerUnit: 1000,
-      minCredits: 1
-    })))
+    db.rows.set(
+      'text.chat',
+      storedRow(
+        pricingRule({
+          capability: 'text.chat',
+          unit: '1k_tokens',
+          creditsPerUnit: 1000,
+          minCredits: 1,
+        }),
+      ),
+    )
 
     // A second operator raises the floor between this caller's read and its write. Writing
     // the whole row back from the snapshot would undo that edit without either operator
     // seeing a conflict.
     db.onBeforeUpdate = () => {
       const row = db.rows.get('text.chat')
-      if (row)
-        row.min_credits = 99
+      if (row) row.min_credits = 99
     }
 
     const updated = await updateCreditPricing(db, 'text.chat', { creditsPerUnit: 42 })

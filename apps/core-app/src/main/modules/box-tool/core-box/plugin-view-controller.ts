@@ -28,8 +28,8 @@ import { getMainConfig } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
 import {
   buildCoreBoxKeyModifiers,
+  forwardKeyEventToWebContents,
   isBlockedCoreBoxFunctionKey,
-  mapDomKeyToElectronKeyCode,
   resolveCoreBoxFlowShortcut
 } from './key-event'
 import { coreBoxManager } from './manager'
@@ -646,32 +646,11 @@ export class PluginViewController {
       return
     }
 
-    const modifiers = buildCoreBoxKeyModifiers(event)
-    const keyCode = mapDomKeyToElectronKeyCode(event.key)
-
     pluginViewLog.debug(`Simulating key input: ${event.key}`, {
-      meta: { keyCode, modifiers: modifiers.join(',') }
+      meta: { modifiers: buildCoreBoxKeyModifiers(event).join(',') }
     })
 
-    webContents.sendInputEvent({
-      type: 'keyDown',
-      keyCode,
-      modifiers
-    })
-
-    if (event.key.length === 1) {
-      webContents.sendInputEvent({
-        type: 'char',
-        keyCode: event.key,
-        modifiers
-      })
-    }
-
-    webContents.sendInputEvent({
-      type: 'keyUp',
-      keyCode,
-      modifiers
-    })
+    forwardKeyEventToWebContents(webContents, event)
   }
 
   public openPluginDevTools(pluginName: string): boolean {

@@ -53,6 +53,8 @@ const mocks = vi.hoisted(() => ({
   })),
   setPinned: vi.fn(),
   isPinned: vi.fn(() => false),
+  executeMetaOverlayAction: vi.fn(),
+  ownsMetaOverlayRenderer: vi.fn((_senderId: number) => false),
   isCollapsed: false,
   currentWindow: null as null | {
     isDestroyed: () => boolean
@@ -168,7 +170,8 @@ vi.mock('./meta-overlay', () => ({
     show: vi.fn(),
     hide: vi.fn(),
     getVisible: vi.fn(() => false),
-    executeAction: vi.fn(),
+    ownsRenderer: mocks.ownsMetaOverlayRenderer,
+    executeAction: mocks.executeMetaOverlayAction,
     registerPluginAction: vi.fn(),
     unregisterPluginAction: vi.fn(),
     unregisterPluginActions: vi.fn()
@@ -197,6 +200,7 @@ vi.mock('../../../../shared/events/corebox-scenes', () => ({
 }))
 
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { OnboardingGateError } from '../../storage'
 import { ipcManager } from './ipc'
 
@@ -221,6 +225,7 @@ describe('CoreBox IPC hide transport', () => {
     mocks.handlers.clear()
     mocks.streamHandlers.clear()
     mocks.isPinned.mockReturnValue(false)
+    mocks.ownsMetaOverlayRenderer.mockReturnValue(false)
     mocks.isCollapsed = false
     mocks.currentWindow = null
     mocks.detachUIViewToDivisionBox.mockResolvedValue({
@@ -589,5 +594,24 @@ describe('CoreBox IPC hide transport', () => {
 
     expect(mocks.expand).toHaveBeenCalledWith({ forceMax: true })
     expect(mocks.shrink).not.toHaveBeenCalled()
+  })
+
+  it('executes overlay actions only for the active MetaOverlay renderer', async () => {
+    const handler = soleHandler(MetaOverlayEvents.action.execute)
+    const item = { id: 'item-1', kind: 'app' }
+    mocks.ownsMetaOverlayRenderer.mockImplementation((senderId: number) => senderId === 71)
+
+    expect(handler).toBeTypeOf('function')
+    await handler?.({ actionId: 'copy-answer', item }, { sender: { id: 71 } })
+    expect(mocks.executeMetaOverlayAction).toHaveBeenCalledExactlyOnceWith('copy-answer', item)
+
+    await expect(
+      handler?.({ actionId: 'copy-answer', item }, { sender: { id: 72 } })
+    ).resolves.toEqual({ success: false, error: 'Unauthorized MetaOverlay sender' })
+    await expect(handler?.({ actionId: 'copy-answer', item })).resolves.toEqual({
+      success: false,
+      error: 'Unauthorized MetaOverlay sender'
+    })
+    expect(mocks.executeMetaOverlayAction).toHaveBeenCalledTimes(1)
   })
 })

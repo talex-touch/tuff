@@ -118,9 +118,7 @@ function itemForAction(items: PluginItem[], actionId: string): PluginItem {
 
 describe('isolated system actions Prelude', () => {
   it('contains no privileged, arbitrary-command, or test-only child surface', () => {
-    const sourcePath = fileURLToPath(
-      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
-    )
+    const sourcePath = fileURLToPath(new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url))
     const source = readFileSync(sourcePath, 'utf8')
     const module = loadPluginModule<Record<string, unknown>>(
       new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
@@ -143,21 +141,14 @@ describe('isolated system actions Prelude', () => {
     ]) {
       expect(source).not.toMatch(pattern)
     }
-    expect(Object.keys(module).sort()).toEqual([
-      'onDestroy',
-      'onFeatureTriggered',
-      'onInit',
-      'onItemAction',
-    ])
+    expect(Object.keys(module).sort()).toEqual(['onDestroy', 'onFeatureTriggered', 'onInit', 'onItemAction'])
   })
 
   it('initializes and awaits ordered feature publication with fixed Darwin actions', async () => {
     const harness = createHarness('darwin')
 
     await expect(harness.module.onInit()).resolves.toBeUndefined()
-    await expect(
-      harness.module.onFeatureTriggered('system-actions', { text: '' }),
-    ).resolves.toBe(true)
+    await expect(harness.module.onFeatureTriggered('system-actions', { text: '' })).resolves.toBe(true)
 
     expect(harness.state.events).toEqual(['clear:start', 'clear:end', 'push:start', 'push:end'])
     const ids = harness.state.items.flatMap(item => item.actions?.map(action => action.payload?.actionId) ?? [])
@@ -170,9 +161,9 @@ describe('isolated system actions Prelude', () => {
       'mute-toggle',
       'brightness-up',
       'brightness-down',
-      'open-main-window',
     ])
     expect(ids).not.toContain('mute')
+    expect(ids).not.toContain('open-main-window')
     expect(JSON.stringify(harness.state.items)).not.toContain('command')
   })
 
@@ -186,15 +177,15 @@ describe('isolated system actions Prelude', () => {
     expect(harness.runAction).not.toHaveBeenCalled()
   })
 
-  it('opens the main window through the fixed host action without local permission logic', async () => {
+  it('publishes no main-window action, so 主窗口 matches nothing', async () => {
     const harness = createHarness('darwin')
-    await harness.module.onFeatureTriggered('system-actions', { text: '主窗口' })
-    const item = itemForAction(harness.state.items, 'open-main-window')
 
-    await expect(
-      harness.module.onItemAction(item, { actionId: 'run-action' }),
-    ).resolves.toMatchObject({ externalAction: true, status: 'started', success: true })
-    expect(harness.runAction).toHaveBeenCalledExactlyOnceWith('open-main-window')
+    await harness.module.onFeatureTriggered('system-actions', { text: '主窗口' })
+
+    expect(harness.state.items).toHaveLength(1)
+    expect(harness.state.items[0]?.title).toBe('没有匹配的系统操作')
+    expect(harness.state.items.flatMap(item => item.actions ?? [])).toHaveLength(0)
+    expect(harness.runAction).not.toHaveBeenCalled()
   })
 
   it('passes only the fixed action ID when a forged item adds an arbitrary command', async () => {
@@ -242,13 +233,13 @@ describe('isolated system actions Prelude', () => {
       status: 'blocked',
       reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     }
-    await expect(
-      harness.module.onItemAction(itemForAction(harness.state.items, 'lock-screen')),
-    ).resolves.toMatchObject({
-      status: 'blocked',
-      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
-      success: false,
-    })
+    await expect(harness.module.onItemAction(itemForAction(harness.state.items, 'lock-screen'))).resolves.toMatchObject(
+      {
+        status: 'blocked',
+        reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
+        success: false,
+      },
+    )
   })
 
   it('destroys and re-enables with a fresh fixed host binding', async () => {
@@ -260,10 +251,10 @@ describe('isolated system actions Prelude', () => {
 
     const second = createHarness('darwin')
     await second.module.onInit()
-    await second.module.onFeatureTriggered('system-actions', { text: '主窗口' })
-    await second.module.onItemAction(itemForAction(second.state.items, 'open-main-window'))
+    await second.module.onFeatureTriggered('system-actions', { text: '增加音量' })
+    await second.module.onItemAction(itemForAction(second.state.items, 'volume-up'))
 
     expect(first.state.calls).toEqual(['lock-screen'])
-    expect(second.state.calls).toEqual(['open-main-window'])
+    expect(second.state.calls).toEqual(['volume-up'])
   })
 })

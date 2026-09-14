@@ -10,6 +10,7 @@ import { app, Menu, shell } from 'electron'
 import { t } from '../../utils/i18n-helper'
 import { setQuitIntent } from '../../core/quit-intent'
 import { coreBoxManager } from '../box-tool/core-box/manager'
+import { getAppDestinationNavigationService } from '../app-destination/app-destination-navigation'
 import { screenshotSessionModule } from '../screenshot-session'
 
 const resolveKeyManager = (channel: unknown): unknown =>
@@ -187,14 +188,7 @@ export class TrayMenuBuilder {
       {
         label: t('tray.settings'),
         click: () => {
-          const touchApp = this.requireTouchApp()
-          const mainWindow = touchApp.window.window
-          mainWindow.show()
-          const channel = touchApp.channel
-          const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
-          tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, {
-            path: '/setting'
-          }).catch(() => {})
+          getAppDestinationNavigationService(this.requireTouchApp()).open('settings-overview')
         }
       }
     ]

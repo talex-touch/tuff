@@ -448,6 +448,22 @@ function fixedSystemActionItem(
   return item
 }
 
+/** Fixed host action ids published by a plugin's own items, for negative (not-published) checks. */
+function publishedActionIds(items: Array<Record<string, unknown>>): string[] {
+  const ids: string[] = []
+  for (const item of items) {
+    const actions = item.actions
+    if (!Array.isArray(actions)) continue
+    for (const action of actions) {
+      if (!action || typeof action !== 'object' || !('payload' in action)) continue
+      const payload = action.payload
+      if (!payload || typeof payload !== 'object' || !('actionId' in payload)) continue
+      if (typeof payload.actionId === 'string') ids.push(payload.actionId)
+    }
+  }
+  return ids
+}
+
 describe('official simple Prelude isolation regression', () => {
   it.each([
     ['touch-dev-utils', 'dev-utils', 'camel case'],
@@ -825,7 +841,7 @@ describe('official simple Prelude isolation regression', () => {
     second.runtime.shutdown()
   })
 
-  it('touch-system-actions isolates fixed shell and main-window actions across generations', async () => {
+  it('touch-system-actions isolates fixed shell actions across generations', async () => {
     const first = createHarness('touch-system-actions', 1)
     await expect(first.runtime.callLifecycle('onInit', []).promise).resolves.toBeUndefined()
     await expect(
@@ -836,22 +852,18 @@ describe('official simple Prelude isolation regression', () => {
       ]).promise
     ).resolves.toBe(true)
 
+    // The shared app-destination provider owns `主窗口` now; the plugin must not publish a
+    // second CoreBox result for the host capability it no longer surfaces.
+    expect(publishedActionIds(first.state.items)).not.toContain('open-main-window')
+
     first.state.grantedPermissions.delete('system.shell')
     await expect(
       first.runtime.callLifecycle('onItemAction', [
-        fixedSystemActionItem(first.state.items, 'open-main-window'),
-        { actionId: 'run-action' }
-      ]).promise
-    ).resolves.toMatchObject({ status: 'started', success: true })
-    expect(first.state.systemActions).toEqual(['open-main-window'])
-
-    await expect(
-      first.runtime.callLifecycle('onItemAction', [
-        fixedSystemActionItem(first.state.items, 'lock-screen'),
+        fixedSystemActionItem(first.state.items, 'volume-up'),
         { actionId: 'run-action' }
       ]).promise
     ).resolves.toMatchObject({ status: 'blocked', reason: 'permission-denied' })
-    expect(first.state.systemActions).toEqual(['open-main-window'])
+    expect(first.state.systemActions).toEqual([])
 
     first.state.grantedPermissions.add('system.shell')
     await expect(
@@ -860,26 +872,26 @@ describe('official simple Prelude isolation regression', () => {
         { actionId: 'run-action' }
       ]).promise
     ).resolves.toMatchObject({ status: 'started', success: true })
-    expect(first.state.systemActions).toEqual(['open-main-window', 'volume-up'])
+    expect(first.state.systemActions).toEqual(['volume-up'])
     first.runtime.shutdown()
 
     const second = createHarness('touch-system-actions', 2)
     await second.runtime.callLifecycle('onInit', []).promise
     await second.runtime.callLifecycle('onFeatureTriggered', [
       'system-actions',
-      { text: '主窗口' },
+      { text: '锁屏' },
       { id: 'system-actions' }
     ]).promise
     await expect(
       second.runtime.callLifecycle('onItemAction', [
-        fixedSystemActionItem(second.state.items, 'open-main-window'),
+        fixedSystemActionItem(second.state.items, 'lock-screen'),
         { actionId: 'run-action' }
       ]).promise
     ).resolves.toMatchObject({ status: 'started' })
     await expect(
       first.runtime.callLifecycle('onFeatureTriggered', ['system-actions', { text: '' }]).promise
     ).rejects.toEqual(new PluginHostChildError('PLUGIN_HOST_CHILD_CLOSED'))
-    expect(second.state.systemActions).toEqual(['open-main-window'])
+    expect(second.state.systemActions).toEqual(['lock-screen'])
     second.runtime.shutdown()
   })
 

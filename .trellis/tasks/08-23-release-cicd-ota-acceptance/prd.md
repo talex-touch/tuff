@@ -24,6 +24,7 @@
 - 同一隔离源进程在安装前的 clipboard `vision.ocr` 成功返回后 abort；minidump 指向 `tuff_native_ocr.node` 的 N-API AsyncWorker 完成路径。根因是父进程在 terminal message 到达时立即 `worker.terminate()`，可能在 native completion callback 尚未退栈时销毁环境；本地已改为 terminal message 后自然退出，并验证 jobId/result/error 消息边界，聚焦测试 `20/20`、负向变异和 200 个真实 Electron native worker 自然退出 smoke 通过。Beta32 仍含旧实现，修复必须随下一官方版本发布后再解除推广风险。
 - Beta33 的 GitHub release、Nexus latest、manifest v2、四个首选平台资产、签名下载路由与回退路由已收敛；严格生产 Gate E `18/18` 通过，详见 `evidence/release-matrix-beta33.md`。
 - 官方 macOS arm64 Beta32 -> Beta33 已从隔离 profile 完成发现、下载、校验、Settings UI `Restart to Update`、无提权 helper、DMG 原位替换、Beta33 官方 attestation、startup health 和 attempt-bound `healthy` ack；同一发布包的 11 个真实 OCR worker 任务全部完成且进程保持存活，详见 `evidence/macos-ota-beta32-beta33.md`。
+- 2026-09-13：先前记录的 `quality:release` 通过发生在未提交的多任务批次上；clean committed HEAD `55da5867d` 上已逐步复跑同一门禁，lint / typecheck:all / test:targeted / electron-builder preflight / CoreApp production build 五步均 exit 0，工作树为空（含未跟踪）。这刷新了本地 preflight 绑定到具体提交的证据，但仍不改变 AC7/AC8 的外部真机结论。脱敏摘要见 `evidence/local-release-preflight.md` 的 “Rerun 2026-09-13 On Clean Committed HEAD”。
 
 ## Requirements
 

@@ -14,10 +14,10 @@ import { requireDatabase } from './creditsStore'
  *
  * The seeded defaults reproduce the prices that were already shipped before this
  * table existed (see `DEFAULT_CREDIT_PRICING`), so introducing it is not a price
- * change — with one deliberate exception: `vision.ocr` and `image.translate.e2e`
- * were priced at a tenth of a chat turn while they do several turns' worth of work,
- * and they are the two capabilities whose price is derived rather than inherited
- * (see the seed comment).
+ * change — with deliberate exceptions: `vision.ocr`, `image.translate` and
+ * `image.translate.e2e` are derived rather than inherited, and `text.translate`
+ * ships at a tenth of the chat price rather than the chat price itself (see the
+ * seed comment).
  *
  * The anchor is chat: 1,000 credits per 1K tokens, i.e. one credit per token. Every
  * other capability is priced by expressing its upstream workload in that same unit,
@@ -73,11 +73,11 @@ export const FALLBACK_CREDIT_PRICING: Omit<CreditPricingRule, 'capability' | 'up
   minCredits: 1,
   reserveMultiplier: 1,
   upstreamCostUsdPerUnit: null,
-  active: true
+  active: true,
 }
 
 /** Stamp the current seed writes into `updated_at`. */
-const SEEDED_AT = '2026-09-11T00:00:00.000Z'
+const SEEDED_AT = '2026-09-13T12:00:00.000Z'
 
 /**
  * Stamps earlier versions wrote. A row still carrying one has never been edited by an
@@ -85,14 +85,23 @@ const SEEDED_AT = '2026-09-11T00:00:00.000Z'
  * shipped default and has to move with the code when a default changes. Without this a
  * price fix would only ever reach databases that had not been seeded yet: seeding is
  * additive per capability, so an existing row keeps its superseded price forever.
+ *
+ * Advance `SEEDED_AT` and add the stamp it replaces here whenever any default changes
+ * in a way that must reach already-seeded databases. Every row still on a listed stamp
+ * is rewritten to the current default, which is a no-op for capabilities whose default
+ * did not move.
  */
-const SUPERSEDED_SEED_STAMPS = new Set(['2026-09-10T00:00:00.000Z'])
+const SUPERSEDED_SEED_STAMPS: Record<string, true> = {
+  '2026-09-10T00:00:00.000Z': true,
+  '2026-09-11T00:00:00.000Z': true,
+  '2026-09-13T00:00:00.000Z': true,
+}
 
 function rule(
   capability: string,
   unit: CreditPricingUnit,
   creditsPerUnit: number,
-  extra: Partial<CreditPricingRule> = {}
+  extra: Partial<CreditPricingRule> = {},
 ): CreditPricingRule {
   return {
     capability,
@@ -105,13 +114,12 @@ function rule(
     upstreamCostUsdPerUnit: null,
     active: true,
     updatedAt: SEEDED_AT,
-    ...extra
+    ...extra,
   }
 }
 
 const CHAT_CAPABILITIES = [
   'text.chat',
-  'text.translate',
   'text.summarize',
   'text.rewrite',
   'text.grammar',
@@ -120,7 +128,7 @@ const CHAT_CAPABILITIES = [
   'code.explain',
   'code.review',
   'code.refactor',
-  'code.debug'
+  'code.debug',
 ]
 
 /**
@@ -131,37 +139,35 @@ const CHAT_CAPABILITIES = [
  * speech is about four tokens, so ASR already sat on the same one-credit-per-token
  * anchor as chat.
  *
- * The two image capabilities do not inherit a price, because before this table they
- * were not billed at all. They are derived from the same anchor by their upstream
- * workload instead: one `vision.ocr` call sends a picture plus a prompt and a
- * completion, and the vision tokenizer bills a 1024×1024 image as 765 tokens at
- * 512-pixel tiling, so ~2,000 credits (about two chat replies); `image.translate.e2e`
- * chains recognition, translation and re-render, so ~4,000 credits. Both were seeded
- * at 10 credits — a hundredth of a chat reply for work that costs several — which is
- * the price bug this table was meant to make visible, not a price to preserve.
+ * `text.translate` is the one chat-shaped capability that does not inherit the chat
+ * price. It is a narrow, high-volume call served by a dedicated translation route,
+ * so it ships at 10 credits/1k tokens while retaining the double reservation needed
+ * before trusted provider usage arrives. It needs its own row so translation and chat
+ * prices can move independently.
  *
- * `image.translate` is the recognize-and-translate sibling of the e2e pipeline (it
- * returns the source and target text without re-rendering the picture), so it sits
- * between OCR and e2e at 3,000. It needs a row of its own for a second reason: the
- * fallback prices in tokens, so a capability that reports `{unit:'image'}` and has no
- * row settles at zero — the exact "served at zero cost by accident" case the fallback
- * exists to prevent.
+ * Image OCR and translation also report images rather than tokens, so each capability
+ * needs an explicit image-priced row. The deliberately low product defaults keep these
+ * common assistive actions usable within a monthly credit allowance: OCR costs 10 per
+ * image, recognize-and-translate costs 20, and the full translate-and-render pipeline
+ * costs 30. Route-specific upstream cost remains unset until trusted cost evidence is
+ * available; these product prices must not pretend to be a provider exchange rate.
  */
 export const DEFAULT_CREDIT_PRICING: readonly CreditPricingRule[] = [
   ...CHAT_CAPABILITIES.map(capability => rule(capability, '1k_tokens', 1000)),
-  rule('vision.ocr', 'image', 2000),
-  rule('image.translate', 'image', 3000),
-  rule('image.translate.e2e', 'image', 4000),
+  rule('text.translate', '1k_tokens', 10, { reserveMultiplier: 2 }),
+  rule('vision.ocr', 'image', 10),
+  rule('image.translate', 'image', 20),
+  rule('image.translate.e2e', 'image', 30),
   rule('audio.transcribe', 'audio_second', 4, {
     secondaryUnit: 'transcript_unit',
     secondaryCreditsPerUnit: 1,
-    reserveMultiplier: 2.5
+    reserveMultiplier: 2.5,
   }),
   rule('audio.stt', 'audio_second', 4, {
     secondaryUnit: 'transcript_unit',
     secondaryCreditsPerUnit: 1,
-    reserveMultiplier: 2.5
-  })
+    reserveMultiplier: 2.5,
+  }),
 ]
 
 /** How many native units make up one priced unit. */
@@ -169,7 +175,7 @@ const NATIVE_UNITS_PER_PRICED_UNIT: Record<CreditPricingUnit, number> = {
   '1k_tokens': 1000,
   audio_second: 1,
   transcript_unit: 1,
-  image: 1
+  image: 1,
 }
 
 /** Provider-reported usage, in native units. A missing field means "not reported". */
@@ -181,8 +187,8 @@ export interface CreditPricingUsage {
 }
 
 function readQuantity(unit: CreditPricingUnit, usage: CreditPricingUsage): number | null {
-  const raw
-    = unit === '1k_tokens'
+  const raw =
+    unit === '1k_tokens'
       ? usage.tokens
       : unit === 'audio_second'
         ? usage.seconds
@@ -194,11 +200,7 @@ function readQuantity(unit: CreditPricingUnit, usage: CreditPricingUsage): numbe
   return quantity
 }
 
-function basisCredits(
-  unit: CreditPricingUnit,
-  creditsPerUnit: number,
-  usage: CreditPricingUsage
-): number | null {
+function basisCredits(unit: CreditPricingUnit, creditsPerUnit: number, usage: CreditPricingUsage): number | null {
   const quantity = readQuantity(unit, usage)
   if (quantity === null) return null
   return (quantity / NATIVE_UNITS_PER_PRICED_UNIT[unit]) * creditsPerUnit
@@ -238,40 +240,27 @@ export function computeCreditCharge(rule: CreditPricingRule, usage: CreditPricin
  * settled charge first and multiplying afterwards would inflate short holds (a
  * 0.1-second ASR clip would hold 3 credits instead of the 1 the shipped reserve held).
  */
-export function computeCreditReservation(
-  rule: CreditPricingRule,
-  estimate: CreditPricingUsage
-): number {
-  const multiplier = Number.isFinite(rule.reserveMultiplier) && rule.reserveMultiplier > 0
-    ? rule.reserveMultiplier
-    : 1
+export function computeCreditReservation(rule: CreditPricingRule, estimate: CreditPricingUsage): number {
+  const multiplier = Number.isFinite(rule.reserveMultiplier) && rule.reserveMultiplier > 0 ? rule.reserveMultiplier : 1
   const bases = rawBases(rule, estimate)
   if (!bases.length) return rule.minCredits
   return Math.max(Math.ceil(Math.max(...bases) * multiplier), rule.minCredits)
 }
 
 /** Pure lookup against an explicit rule set. Unknown capabilities take the fallback. */
-export function selectCreditPricingRule(
-  capability: string,
-  rules: readonly CreditPricingRule[]
-): CreditPricingRule {
+export function selectCreditPricingRule(capability: string, rules: readonly CreditPricingRule[]): CreditPricingRule {
   const normalized = typeof capability === 'string' ? capability.trim() : ''
   const matched = rules.find(item => item.capability === normalized && item.active)
   if (matched) return matched
   return {
     capability: normalized,
     ...FALLBACK_CREDIT_PRICING,
-    updatedAt: SEEDED_AT
+    updatedAt: SEEDED_AT,
   }
 }
 
 /** Priced units, as a runtime guard for values that came back from storage. */
-const CREDIT_PRICING_UNITS: readonly CreditPricingUnit[] = [
-  '1k_tokens',
-  'audio_second',
-  'transcript_unit',
-  'image'
-]
+const CREDIT_PRICING_UNITS: readonly CreditPricingUnit[] = ['1k_tokens', 'audio_second', 'transcript_unit', 'image']
 
 function isCreditPricingUnit(value: unknown): value is CreditPricingUnit {
   return typeof value === 'string' && (CREDIT_PRICING_UNITS as readonly string[]).includes(value)
@@ -296,7 +285,7 @@ export interface CreditPricingResolution {
 
 export function resolveCreditPricingEntry(
   capability: string,
-  rules: readonly CreditPricingRule[]
+  rules: readonly CreditPricingRule[],
 ): CreditPricingResolution {
   const normalized = typeof capability === 'string' ? capability.trim() : ''
   const stored = rules.find(item => item.capability === normalized)
@@ -305,9 +294,9 @@ export function resolveCreditPricingEntry(
       rule: {
         capability: normalized,
         ...FALLBACK_CREDIT_PRICING,
-        updatedAt: SEEDED_AT
+        updatedAt: SEEDED_AT,
       },
-      disabled: false
+      disabled: false,
     }
   }
   return { rule: stored, disabled: !stored.active }
@@ -324,21 +313,17 @@ function normalizeRule(row: Record<string, unknown>): CreditPricingRule {
         ? null
         : Number(row.secondary_credits_per_unit),
     minCredits: Number(row.min_credits ?? FALLBACK_CREDIT_PRICING.minCredits),
-    reserveMultiplier: Number(
-      row.reserve_multiplier ?? FALLBACK_CREDIT_PRICING.reserveMultiplier
-    ),
+    reserveMultiplier: Number(row.reserve_multiplier ?? FALLBACK_CREDIT_PRICING.reserveMultiplier),
     upstreamCostUsdPerUnit:
       row.upstream_cost_usd_per_unit === null || row.upstream_cost_usd_per_unit === undefined
         ? null
         : Number(row.upstream_cost_usd_per_unit),
     active: row.active === 1 || row.active === true || row.active === '1',
-    updatedAt: String(row.updated_at ?? SEEDED_AT)
+    updatedAt: String(row.updated_at ?? SEEDED_AT),
   }
 }
 
-export async function ensureCreditPricingSchema(
-  db: D1Database
-): Promise<void> {
+export async function ensureCreditPricingSchema(db: D1Database): Promise<void> {
   await db
     .prepare(
       `CREATE TABLE IF NOT EXISTS ${CREDIT_PRICING_TABLE} (
@@ -352,7 +337,7 @@ export async function ensureCreditPricingSchema(
         upstream_cost_usd_per_unit REAL,
         active INTEGER NOT NULL DEFAULT 1,
         updated_at TEXT NOT NULL
-      )`
+      )`,
     )
     .run()
 }
@@ -367,9 +352,7 @@ export async function ensureCreditPricingSchema(
  * superseded seed stamp (see `SUPERSEDED_SEED_STAMPS`): that row is a shipped default
  * nobody has edited, so it follows the default.
  */
-export async function listCreditPricing(
-  event: H3Event | D1Database
-): Promise<CreditPricingRule[]> {
+export async function listCreditPricing(event: H3Event | D1Database): Promise<CreditPricingRule[]> {
   const db = isDatabase(event) ? event : requireDatabase(event as H3Event)
   await ensureCreditPricingSchema(db)
   const existing = await db.prepare(`SELECT * FROM ${CREDIT_PRICING_TABLE}`).all()
@@ -384,7 +367,7 @@ export async function listCreditPricing(
           `INSERT OR IGNORE INTO ${CREDIT_PRICING_TABLE}
             (capability, unit, credits_per_unit, secondary_unit, secondary_credits_per_unit,
              min_credits, reserve_multiplier, upstream_cost_usd_per_unit, active, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           item.capability,
@@ -396,16 +379,17 @@ export async function listCreditPricing(
           item.reserveMultiplier,
           item.upstreamCostUsdPerUnit,
           item.active ? 1 : 0,
-          item.updatedAt
-        )
+          item.updatedAt,
+        ),
     )
     await db.batch(statements)
   }
 
   const reseeded = await reseedSupersededDefaults(db, rows)
-  const stored = missing.length || reseeded
-    ? ((await db.prepare(`SELECT * FROM ${CREDIT_PRICING_TABLE}`).all())?.results ?? [])
-    : rows
+  const stored =
+    missing.length || reseeded
+      ? ((await db.prepare(`SELECT * FROM ${CREDIT_PRICING_TABLE}`).all())?.results ?? [])
+      : rows
   return (stored as Array<Record<string, unknown>>)
     .map(normalizeRule)
     .sort((a, b) => a.capability.localeCompare(b.capability))
@@ -417,15 +401,12 @@ export async function listCreditPricing(
  * snapshot it took before the update. The new stamp is the current one, so a second
  * read converges: this rewrites a row at most once per seed version.
  */
-async function reseedSupersededDefaults(
-  db: D1Database,
-  rows: Array<Record<string, unknown>>
-): Promise<boolean> {
+async function reseedSupersededDefaults(db: D1Database, rows: Array<Record<string, unknown>>): Promise<boolean> {
   if (!rows.length) return false
   const defaults = new Map(DEFAULT_CREDIT_PRICING.map(item => [item.capability, item]))
-  const statements: D1PreparedStatement[] = rows.flatMap((row) => {
+  const statements: D1PreparedStatement[] = rows.flatMap(row => {
     const stamp = String(row.updated_at ?? '')
-    if (!SUPERSEDED_SEED_STAMPS.has(stamp)) return []
+    if (SUPERSEDED_SEED_STAMPS[stamp] !== true) return []
     const item = defaults.get(String(row.capability))
     if (!item) return []
     return [
@@ -435,7 +416,7 @@ async function reseedSupersededDefaults(
              SET unit = ?, credits_per_unit = ?, secondary_unit = ?, secondary_credits_per_unit = ?,
                  min_credits = ?, reserve_multiplier = ?, upstream_cost_usd_per_unit = ?, active = ?,
                  updated_at = ?
-           WHERE capability = ? AND updated_at = ?`
+           WHERE capability = ? AND updated_at = ?`,
         )
         .bind(
           item.unit,
@@ -451,8 +432,8 @@ async function reseedSupersededDefaults(
           // Compare-and-swap on the stamp this row carried when it was read: an
           // operator who edited the row in the meantime stamped a real timestamp, so
           // the reseed must not overwrite their price with the shipped default.
-          stamp
-        )
+          stamp,
+        ),
     ]
   })
   if (!statements.length) return false
@@ -467,7 +448,7 @@ function isDatabase(value: unknown): value is D1Database {
 /** The effective rule for one capability, resolved against the stored price list. */
 export async function resolveCreditPricingRule(
   event: H3Event | D1Database,
-  capability: string
+  capability: string,
 ): Promise<CreditPricingRule> {
   const rules = await listCreditPricing(event)
   return selectCreditPricingRule(capability, rules)
@@ -482,7 +463,7 @@ export async function resolveCreditPricingRule(
  */
 export async function resolveSellableCreditPricingRule(
   event: H3Event | D1Database,
-  capability: string
+  capability: string,
 ): Promise<CreditPricingRule> {
   const rules = await listCreditPricing(event)
   const entry = resolveCreditPricingEntry(capability, rules)
@@ -490,7 +471,7 @@ export async function resolveSellableCreditPricingRule(
     throw createError({
       statusCode: 503,
       statusMessage: 'CAPABILITY_DISABLED',
-      data: { code: 'CAPABILITY_DISABLED', capability: entry.rule.capability }
+      data: { code: 'CAPABILITY_DISABLED', capability: entry.rule.capability },
     })
   }
   return entry.rule
@@ -512,7 +493,7 @@ export function serializeCreditPricingRule(rule: CreditPricingRule): string {
     minCredits: rule.minCredits,
     reserveMultiplier: rule.reserveMultiplier,
     active: rule.active,
-    updatedAt: rule.updatedAt
+    updatedAt: rule.updatedAt,
   })
 }
 
@@ -545,7 +526,8 @@ export function parseCreditPricingRuleSnapshot(value: unknown): CreditPricingRul
   if (secondaryUnit !== null && !isCreditPricingUnit(secondaryUnit)) return null
   if (secondaryUnit === null && secondaryRaw !== null) return null
   const secondaryCreditsPerUnit = secondaryRaw === null ? null : Number(secondaryRaw)
-  if (secondaryCreditsPerUnit !== null && (!Number.isFinite(secondaryCreditsPerUnit) || secondaryCreditsPerUnit <= 0)) return null
+  if (secondaryCreditsPerUnit !== null && (!Number.isFinite(secondaryCreditsPerUnit) || secondaryCreditsPerUnit <= 0))
+    return null
 
   return {
     capability: String(raw.capability ?? ''),
@@ -557,7 +539,7 @@ export function parseCreditPricingRuleSnapshot(value: unknown): CreditPricingRul
     reserveMultiplier,
     upstreamCostUsdPerUnit: null,
     active: raw.active === true,
-    updatedAt: String(raw.updatedAt ?? SEEDED_AT)
+    updatedAt: String(raw.updatedAt ?? SEEDED_AT),
   }
 }
 
@@ -580,7 +562,7 @@ export async function updateCreditPricing(
     reserveMultiplier?: number
     upstreamCostUsdPerUnit?: number | null
     active?: boolean
-  }
+  },
 ): Promise<CreditPricingRule | null> {
   const db = isDatabase(event) ? event : requireDatabase(event as H3Event)
   await ensureCreditPricingSchema(db)
