@@ -134,6 +134,9 @@ export interface DivisionBoxConfig {
   /** Enable keepAlive caching mode */
   keepAlive?: boolean
 
+  /** Open the native window above ordinary application windows */
+  alwaysOnTop?: boolean
+
   /** Header configuration */
   header?: HeaderConfig
 

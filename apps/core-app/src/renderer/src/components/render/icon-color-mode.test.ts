@@ -45,6 +45,27 @@ describe('corebox icon color mode', () => {
     })
   })
 
+  it('repairs object-form class icons the same way as class strings', () => {
+    expect(normalizeCoreBoxIcon({ type: 'class', value: 'ri:magic-line' })).toEqual({
+      type: 'class',
+      value: 'i-ri-magic-line',
+      status: 'normal'
+    })
+    expect(normalizeCoreBoxIcon({ type: 'class', value: 'ri-tools-line' })).toEqual({
+      type: 'class',
+      value: 'i-ri-tools-line',
+      status: 'normal'
+    })
+  })
+
+  it('keeps object-form file icons pointing at their real asset', () => {
+    expect(normalizeCoreBoxIcon({ type: 'file', value: '/plugins/demo/assets/logo.svg' })).toEqual({
+      type: 'file',
+      value: '/plugins/demo/assets/logo.svg',
+      status: 'normal'
+    })
+  })
+
   it('defaults CoreBox result icons to theme color', () => {
     expect(shouldRenderCoreBoxIconColorful(undefined)).toBe(false)
     expect(shouldRenderCoreBoxIconColorful('i-ri-translate-2')).toBe(false)

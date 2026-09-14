@@ -14,7 +14,7 @@ import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 
-import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
+import { normalizeCoreBoxIcon } from '~/components/render/icon-color-mode'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import FlowSelector from '~/components/flow/FlowSelector.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
@@ -462,20 +462,13 @@ const divisionBoxProviders = computed<IProviderActivate[]>(() => {
   if (!isDivisionBox.value || !divisionBoxMeta.value) return []
 
   const meta = divisionBoxMeta.value
-  const iconValue = meta.icon
 
-  let icon: ITuffIcon | undefined
-  if (iconValue) {
-    if (typeof iconValue === 'string') {
-      icon = { type: 'class', value: iconValue }
-    } else if (typeof iconValue === 'object' && 'value' in iconValue) {
-      icon = iconValue as ITuffIcon
-    }
-  }
-
-  if (!icon) {
-    icon = { type: 'class', value: 'i-carbon-application' }
-  }
+  // `normalizeCoreBoxIcon` is the same normalizer the CoreBox pill uses: it keeps the declared
+  // icon type (a file icon must stay `file` so the renderer resolves it through `tfile://`
+  // instead of rendering an empty class icon) and repairs iconify/`ri:` class values.
+  const icon = meta.icon
+    ? normalizeCoreBoxIcon(meta.icon)
+    : { type: 'class' as const, value: 'i-carbon-application' }
 
   return [
     {

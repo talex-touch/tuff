@@ -48,7 +48,7 @@ const inputValue = computed({
 })
 
 // Window control state
-const pinned = ref(false)
+const pinned = ref(Boolean(windowState.divisionBox?.config.alwaysOnTop))
 const opacity = ref(1.0)
 
 const opacityIcon = computed(() => {
@@ -188,6 +188,18 @@ async function handleDebug(): Promise<void> {
 :deep(.ActivatedProvidersContainer) {
   flex-shrink: 0;
   -webkit-app-region: no-drag;
+}
+
+// The pill's label runs a `truncateShrink` animation that collapses it to zero width ~3.5s after
+// it appears. CoreBox still names the active feature through the pill's "vice" section, but a
+// detached window has no vice section and no other place to name its plugin, so the header would
+// end up icon-only. Keep the plugin name readable here.
+//
+// The descendant part is deliberate: the child's own scoped rule is `.…Label[data-v-child]`
+// (0,2,0), so a bare `:deep(.…Label)` would tie on specificity and depend on stylesheet order.
+:deep(.ActivatedProvidersContainer .Activated-Provider-PillMajor-Label) {
+  max-width: none;
+  animation: none;
 }
 
 .DivisionBox-Spacer {
