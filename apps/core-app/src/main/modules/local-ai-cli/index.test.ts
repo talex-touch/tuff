@@ -74,6 +74,7 @@ import { LocalAiCliModule } from './index'
 
 const WORKSPACE_ROOT = mkdtempSync(join(tmpdir(), 'local-ai-cli-navigation-'))
 const HOST_CONTEXT = { sender: { id: 1 } } as never
+const ORIGINAL_PLATFORM = process.platform
 
 function handlerFor(event: { toEventName: () => string }) {
   const handler = mocks.handlers.get(event.toEventName())
@@ -102,6 +103,7 @@ async function createModule(): Promise<InstanceType<typeof LocalAiCliModule>> {
 describe('LocalAiCliModule settings navigation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
     mocks.handlers.clear()
     process.env.TUFF_ENABLE_LOCAL_AI_CLI = '1'
     mocks.getMainConfig.mockReturnValue({
@@ -118,6 +120,7 @@ describe('LocalAiCliModule settings navigation', () => {
   })
 
   afterAll(() => {
+    Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM, configurable: true })
     rmSync(WORKSPACE_ROOT, { recursive: true, force: true })
   })
 
