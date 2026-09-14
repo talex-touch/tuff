@@ -319,7 +319,7 @@ export class DashScopeQwenAudioAsrAdapter {
   private readonly requestTimeoutMs: number
 
   constructor(options: DashScopeQwenAudioAsrAdapterOptions = {}) {
-    const fetcher = options.fetch ?? fetch
+    const fetcher = options.fetch ?? globalThis.fetch.bind(globalThis)
     this.fetcher = (input, init) => fetcher(input, init)
     this.maxDataUriBytes =
       Number.isFinite(options.maxDataUriBytes) && (options.maxDataUriBytes ?? 0) > 0
@@ -474,7 +474,7 @@ export class DashScopeFiletransAdapter {
   private readonly fetcher: typeof fetch
 
   constructor(options: DashScopeFiletransAdapterOptions = {}) {
-    const fetcher = options.fetch ?? fetch
+    const fetcher = options.fetch ?? globalThis.fetch.bind(globalThis)
     this.fetcher = (input, init) => fetcher(input, init)
   }
 
