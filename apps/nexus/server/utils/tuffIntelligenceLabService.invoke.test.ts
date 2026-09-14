@@ -1,6 +1,11 @@
 import type { IntelligenceProviderRecord } from './intelligenceStore'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_CREDIT_PRICING, selectCreditPricingRule } from './creditPricingStore'
+import {
+  computeCreditCharge,
+  computeCreditReservation,
+  DEFAULT_CREDIT_PRICING,
+  selectCreditPricingRule,
+} from './creditPricingStore'
 import type { CreditPricingRule } from './creditPricingStore'
 import {
   listPlatformGovernanceEvents,
@@ -256,8 +261,14 @@ describe('invokeIntelligenceCapability', () => {
     // before the account is known to afford the call.
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledTimes(1)
     const hold = requestedHold()
-    // The reply bound alone is 512 credits; the prompt's own tokens are held on top.
-    expect(hold).toBeGreaterThanOrEqual(512)
+    const reserveMetadata = creditStoreMocks.consumeCredits.mock.calls[0]?.[4]
+    const estimatedUsage = reserveMetadata?.estimatedUsage as { tokens?: number } | undefined
+    // The estimate remains token-denominated, while the hold is now priced independently in
+    // credits. This guards against restoring the retired one-credit-per-token assumption.
+    expect(estimatedUsage?.tokens).toBeGreaterThan(512)
+    const translationRule = selectCreditPricingRule('text.translate', DEFAULT_CREDIT_PRICING)
+    expect(hold).toBe(computeCreditReservation(translationRule, estimatedUsage ?? {}))
+    const chargedCredits = computeCreditCharge(translationRule, { tokens: 7 })
     expect(creditStoreMocks.consumeCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
@@ -267,7 +278,7 @@ describe('invokeIntelligenceCapability', () => {
         capabilityId: 'text.translate',
         unit: '1k_tokens',
         reservedCredits: hold,
-        estimatedUsage: { tokens: hold },
+        estimatedUsage,
         source: 'core-app',
         caller: 'workflow.use-model',
         sessionId: 'session_1',
@@ -277,20 +288,20 @@ describe('invokeIntelligenceCapability', () => {
     expect(creditStoreMocks.consumeCredits.mock.invocationCallOrder[0])
       .toBeLessThan(langchainMocks.invoke.mock.invocationCallOrder[0]!)
 
-    // The provider reported 7 tokens against the hold, so 7 is the charge and the rest
-    // of the hold goes back.
+    // The provider reported 7 tokens; settlement prices those native tokens through the
+    // translation rule and returns the unspent part of the credit hold.
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledTimes(1)
     expect(creditStoreMocks.releaseConsumedCredits).toHaveBeenCalledWith(
       expect.anything(),
       'user_1',
-      hold - 7,
+      hold - chargedCredits,
       'intelligence-invoke-release',
       expect.objectContaining({
         traceId: result.traceId,
         capabilityId: 'text.translate',
         reservedCredits: hold,
-        releasedCredits: hold - 7,
-        chargedCredits: 7,
+        releasedCredits: hold - chargedCredits,
+        chargedCredits,
       }),
       { idempotencyKey: `intelligence-invoke-release:${result.traceId}` },
     )
@@ -345,7 +356,7 @@ describe('invokeIntelligenceCapability', () => {
         workflowStepId: 'step_1',
         billing: {
           ledgerId: `ledger_intelligence-invoke-reserve_${hold}`,
-          chargedCredits: 7,
+          chargedCredits,
           unit: '1k_tokens',
           quantity: 7,
           reservedCredits: hold,
