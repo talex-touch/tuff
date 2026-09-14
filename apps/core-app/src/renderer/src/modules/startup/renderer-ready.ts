@@ -10,6 +10,24 @@ export interface RendererReadyChannel {
   send(event: typeof AppEvents.window.rendererReady): Promise<unknown>
 }
 
+const RENDERER_READY_RETRY_DELAYS_MS = [250, 1_000, 3_000] as const
+
+function scheduleRendererReadyRetry(channel: RendererReadyChannel, retryIndex: number): void {
+  const delay = RENDERER_READY_RETRY_DELAYS_MS[retryIndex]
+  if (delay === undefined) return
+  setTimeout(() => sendRendererReady(channel, retryIndex + 1), delay)
+}
+
+function sendRendererReady(channel: RendererReadyChannel, retryIndex: number): void {
+  try {
+    void channel
+      .send(AppEvents.window.rendererReady)
+      .catch(() => scheduleRendererReadyRetry(channel, retryIndex))
+  } catch {
+    scheduleRendererReadyRetry(channel, retryIndex)
+  }
+}
+
 /**
  * Tells main that this renderer is ready to receive destination routes.
  *
@@ -20,11 +38,9 @@ export interface RendererReadyChannel {
  * window announcing is harmless — main keeps only the primary renderer's sender id.
  */
 export function announceRendererReady(channel: RendererReadyChannel): void {
-  try {
-    void channel.send(AppEvents.window.rendererReady).catch(() => {})
-  } catch {
-    // A dropped announcement only delays queued destinations until the next handshake.
-  }
+  // Renderer boot has no transport-recovery callback. Retry a small bounded sequence so a
+  // transient channel attach race cannot strand queued destinations until the next reload.
+  sendRendererReady(channel, 0)
 }
 
 /**

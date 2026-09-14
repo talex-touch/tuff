@@ -1,5 +1,5 @@
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { announceRendererReady, announceRendererReadyAfterRouter } from './renderer-ready'
 
 /**
@@ -8,6 +8,15 @@ import { announceRendererReady, announceRendererReadyAfterRouter } from './rende
  * destination, so both the exact event and the failure policy are pinned here.
  */
 describe('announceRendererReady', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
   it('sends the readiness event on the window channel', () => {
     const send = vi.fn(async () => undefined)
 
@@ -29,6 +38,20 @@ describe('announceRendererReady', () => {
     expect(() => announceRendererReady({ send: throwing })).not.toThrow()
     expect(rejecting).toHaveBeenCalledTimes(1)
     expect(throwing).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a rejected announcement and stops after transport accepts it', async () => {
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('channel attaching'))
+      .mockResolvedValue(undefined)
+
+    announceRendererReady({ send })
+    await Promise.resolve()
+    await vi.runAllTimersAsync()
+
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(send).toHaveBeenNthCalledWith(2, AppEvents.window.rendererReady)
   })
 })
 

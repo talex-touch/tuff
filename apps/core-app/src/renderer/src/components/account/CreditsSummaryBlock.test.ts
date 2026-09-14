@@ -66,7 +66,7 @@ vi.mock('vue-i18n', () => ({
 }))
 
 vi.mock('~/modules/nexus/credits-summary', () => ({
-  useCreditsSummary: () => creditsMock.state
+  useCreditsSummary: () => ({ ...creditsMock.state, pricing: creditsMock.pricing })
 }))
 
 const stubs = {
