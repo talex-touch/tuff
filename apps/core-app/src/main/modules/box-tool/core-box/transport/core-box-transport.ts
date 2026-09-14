@@ -1,9 +1,10 @@
 import type { TouchApp } from '../../../../core/touch-app'
+import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getRegisteredMainRuntime } from '../../../../core/runtime-accessor'
 
-type Handler<TPayload> = (payload: TPayload) => void | TPayload
+type Handler<TPayload> = (payload: TPayload, context: HandlerContext) => void | TPayload
 type TransportScope = 'main' | 'plugin'
 
 const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
@@ -56,7 +57,7 @@ export class CoreBoxTransport {
       if (scope === 'plugin' && !isPlugin) {
         return
       }
-      return handler(payload as TPayload)
+      return handler(payload as TPayload, context)
     })
   }
 }

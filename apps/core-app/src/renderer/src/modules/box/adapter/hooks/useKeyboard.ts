@@ -769,6 +769,7 @@ export function useKeyboard(
     const uiMode = isInUIMode()
     const inputAllowed = Boolean(activeActivations.value?.some((a) => a?.showInput === true))
     const inputHidden = uiMode && !inputAllowed
+    const isDivisionBoxHost = document.body.classList.contains('division-box')
 
     // Command/Ctrl+K: Open MetaOverlay action panel (should work even in UI mode)
     if (
@@ -812,8 +813,30 @@ export function useKeyboard(
       )
     }
 
-    // Forward keys to plugin UI view when in UI mode
-    if (uiMode && shouldForwardKey(event, inputHidden)) {
+    // ⌘/Ctrl+←/→ stay reserved for the CoreBox calculation-history panel while results are on
+    // screen (`shouldForwardKey` blocks them), but an attached plugin view owns the surface: it
+    // advertises these keys for its own category/step navigation, and there are no results to
+    // browse. Without this the key died in the host input and never reached the plugin view,
+    // which is a separate webContents with its own keydown listener.
+    //
+    // A detached DivisionBox window is the same situation without CoreBox's activations: its
+    // plugin view is attached by the division-box session (the core-box module adds the
+    // `division-box` body class), and the main process routes the forwarded key to that session.
+    if (
+      (uiMode || isDivisionBoxHost) &&
+      (event.metaKey || event.ctrlKey) &&
+      !event.altKey &&
+      (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+    ) {
+      event.preventDefault()
+      forwardToUIView(event)
+      return
+    }
+
+    // A detached DivisionBox has no CoreBox activation record, but its hosted plugin still owns
+    // navigation and action keys. Keep text-editing shortcuts in the visible header input while
+    // forwarding Enter/Cmd+Enter and the other plugin keys selected by the shared policy.
+    if ((uiMode || isDivisionBoxHost) && shouldForwardKey(event, inputHidden)) {
       forwardToUIView(event)
       event.preventDefault()
       return
