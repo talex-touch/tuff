@@ -1,0 +1,7 @@
+name = "tuff-qwen-asr-relay"
+main = "index.mjs"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat", "enable_nodejs_http_modules", "no_nodejs_compat_v2"]
+
+[vars]
+DASHSCOPE_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1"
