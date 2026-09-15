@@ -22,15 +22,18 @@ function endpointBase(value) {
     if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash)
       throw new Error('invalid endpoint')
     url.pathname = url.pathname.replace(/\/+$/, '') || '/api/v1'
-    if (!url.pathname.endsWith('/api/v1')) throw new Error('invalid endpoint')
+    if (!url.pathname.endsWith('/api/v1'))
+      throw new Error('invalid endpoint')
     return url
-  } catch {
+  }
+  catch {
     throw new Error('RELAY_ENDPOINT_INVALID')
   }
 }
 
 function constantTimeEqual(left, right) {
-  if (left.length !== right.length) return false
+  if (left.length !== right.length)
+    return false
   let difference = 0
   for (let index = 0; index < left.length; index += 1)
     difference |= left.charCodeAt(index) ^ right.charCodeAt(index)
@@ -38,9 +41,11 @@ function constantTimeEqual(left, right) {
 }
 
 async function authorized(request, secret) {
-  if (typeof secret !== 'string' || !secret) return false
+  if (typeof secret !== 'string' || !secret)
+    return false
   const header = request.headers.get('authorization') || ''
-  if (!header.startsWith('Bearer ')) return false
+  if (!header.startsWith('Bearer '))
+    return false
   return constantTimeEqual(header.slice(7), secret)
 }
 
@@ -50,13 +55,15 @@ async function readBoundedJson(request) {
     throw new Error('RELAY_BODY_TOO_LARGE')
 
   const reader = request.body?.getReader()
-  if (!reader) throw new Error('RELAY_BODY_INVALID')
+  if (!reader)
+    throw new Error('RELAY_BODY_INVALID')
   const chunks = []
   let size = 0
   try {
     for (;;) {
       const { done, value } = await reader.read()
-      if (done) break
+      if (done)
+        break
       size += value.byteLength
       if (size > MAX_DATA_URI_BYTES + 32_768) {
         await reader.cancel().catch(() => {})
@@ -64,7 +71,8 @@ async function readBoundedJson(request) {
       }
       chunks.push(value)
     }
-  } finally {
+  }
+  finally {
     reader.releaseLock()
   }
   const bytes = new Uint8Array(size)
@@ -75,18 +83,23 @@ async function readBoundedJson(request) {
   }
   try {
     return JSON.parse(new TextDecoder().decode(bytes))
-  } catch {
+  }
+  catch {
     throw new Error('RELAY_BODY_INVALID')
   }
 }
 
 function normalizeRequest(body) {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('RELAY_BODY_INVALID')
-  if (body.model !== MODEL) throw new Error('RELAY_MODEL_UNSUPPORTED')
+  if (!body || typeof body !== 'object' || Array.isArray(body))
+    throw new Error('RELAY_BODY_INVALID')
+  if (body.model !== MODEL)
+    throw new Error('RELAY_MODEL_UNSUPPORTED')
   const messages = body.input?.messages
-  if (!Array.isArray(messages) || messages.length !== 1) throw new Error('RELAY_AUDIO_INVALID')
+  if (!Array.isArray(messages) || messages.length !== 1)
+    throw new Error('RELAY_AUDIO_INVALID')
   const content = messages[0]?.content
-  if (!Array.isArray(content) || content.length !== 1) throw new Error('RELAY_AUDIO_INVALID')
+  if (!Array.isArray(content) || content.length !== 1)
+    throw new Error('RELAY_AUDIO_INVALID')
   const data = content[0]?.input_audio?.data
   if (typeof data !== 'string' || !data.startsWith(DATA_URI_PREFIX) || data.length > MAX_DATA_URI_BYTES)
     throw new Error('RELAY_AUDIO_INVALID')
@@ -94,7 +107,8 @@ function normalizeRequest(body) {
     ? body.parameters
     : {}
   const sampleRate = parameters.sample_rate
-  if (sampleRate !== undefined && sampleRate !== 16_000) throw new Error('RELAY_AUDIO_FORMAT_UNSUPPORTED')
+  if (sampleRate !== undefined && sampleRate !== 16_000)
+    throw new Error('RELAY_AUDIO_FORMAT_UNSUPPORTED')
   const hints = parameters.language_hints
   if (hints !== undefined && (!Array.isArray(hints) || hints.length > 1 || (hints[0] !== undefined && typeof hints[0] !== 'string')))
     throw new Error('RELAY_LANGUAGE_INVALID')
@@ -116,13 +130,15 @@ function normalizeRequest(body) {
 
 async function readCappedText(response) {
   const reader = response.body?.getReader()
-  if (!reader) return ''
+  if (!reader)
+    return ''
   const chunks = []
   let size = 0
   try {
     for (;;) {
       const { done, value } = await reader.read()
-      if (done) break
+      if (done)
+        break
       size += value.byteLength
       if (size > MAX_RESPONSE_BYTES) {
         await reader.cancel().catch(() => {})
@@ -130,7 +146,8 @@ async function readCappedText(response) {
       }
       chunks.push(value)
     }
-  } finally {
+  }
+  finally {
     reader.releaseLock()
   }
   const bytes = new Uint8Array(size)
@@ -155,7 +172,8 @@ export default {
     let payload
     try {
       payload = normalizeRequest(await readBoundedJson(request))
-    } catch (error) {
+    }
+    catch (error) {
       const code = error instanceof Error ? error.message : 'RELAY_BODY_INVALID'
       const status = code === 'RELAY_BODY_TOO_LARGE' ? 413 : 400
       return json({ error: code }, status)
@@ -173,7 +191,7 @@ export default {
       upstream = await fetch(upstreamUrl, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${env.DASHSCOPE_API_KEY}`,
+          'Authorization': `Bearer ${env.DASHSCOPE_API_KEY}`,
           'Content-Type': 'application/json',
           'X-DashScope-SSE': 'disable',
         },
@@ -189,9 +207,11 @@ export default {
           'X-Content-Type-Options': 'nosniff',
         },
       })
-    } catch (error) {
+    }
+    catch (error) {
       return json({ error: error instanceof Error && error.name === 'AbortError' ? 'RELAY_UPSTREAM_TIMEOUT' : 'RELAY_UPSTREAM_UNAVAILABLE' }, 502)
-    } finally {
+    }
+    finally {
       clearTimeout(timer)
     }
   },
