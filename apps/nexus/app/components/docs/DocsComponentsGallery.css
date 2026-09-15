@@ -394,8 +394,14 @@
   width: min(360px, 100%);
 }
 
+/* The spark specimen is the scrubber's stage: 168px leaves room for the x/y
+   axes and the tooltip the stage paints above the canvas. */
 .docs-gallery__spark {
-  height: 76px;
+  height: 168px;
+}
+
+.docs-gallery__spark-stage {
+  height: 100%;
 }
 
 .docs-gallery__glow {

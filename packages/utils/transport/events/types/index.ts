@@ -6,6 +6,8 @@
 // Agents domain types
 export * from './agents'
 
+// Catalog domain types
+export * from './catalog'
 // App domain types
 export * from './app'
 

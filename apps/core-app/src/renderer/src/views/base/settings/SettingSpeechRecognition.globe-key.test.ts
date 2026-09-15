@@ -28,7 +28,7 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('@talex-touch/utils/transport', () => ({
-  useTuffTransport: () => ({ send: mocks.send })
+  useTuffTransport: () => ({ send: mocks.send, on: vi.fn(() => () => {}) })
 }))
 
 vi.mock('~/modules/storage/app-storage', () => ({

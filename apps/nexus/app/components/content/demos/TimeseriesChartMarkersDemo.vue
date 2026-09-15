@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { TimeseriesData, TimeseriesMarker, TimeseriesThreshold } from '@talex-touch/tuffex-charts'
-import { ChartPalette, TxTimeseriesChart } from '@talex-touch/tuffex-charts'
+import type { TimeseriesData, TimeseriesMarker, TimeseriesThreshold } from '@talex-touch/tuffex/charts'
+import { ChartPalette, TxTimeseriesChart } from '@talex-touch/tuffex/charts'
 
 const start = Date.UTC(2026, 7, 30)
 const hour = 3_600_000

@@ -103,6 +103,34 @@ describe('main storage app settings normalization', () => {
     })
   })
 
+  it('keeps voice input off unless the stored profile opts in or both legacy gates were on', () => {
+    const fresh = resolveMainStorageValue(StorageList.APP_SETTING, null)
+    const empty = resolveMainStorageValue(StorageList.APP_SETTING, {})
+    // An unreadable value must not be read as consent: only the explicit user switch enables input.
+    const malformed = resolveMainStorageValue(StorageList.APP_SETTING, {
+      voiceInput: { enabled: 'yes' },
+      assistant: { enabled: true },
+      voiceWake: { enabled: true }
+    })
+
+    expect(fresh.voiceInput.enabled).toBe(false)
+    expect(empty.voiceInput.enabled).toBe(false)
+    expect(malformed.voiceInput.enabled).toBe(false)
+
+    // The preserved prior choice: a profile that only ever had the combined voice gate on.
+    const legacyBothOn = resolveMainStorageValue(StorageList.APP_SETTING, {
+      assistant: { enabled: true },
+      voiceWake: { enabled: true, language: 'fr-FR' }
+    })
+    const legacyHalfOn = resolveMainStorageValue(StorageList.APP_SETTING, {
+      assistant: { enabled: true },
+      voiceWake: { enabled: false }
+    })
+
+    expect(legacyBothOn.voiceInput).toMatchObject({ enabled: true, language: 'fr-FR' })
+    expect(legacyHalfOn.voiceInput.enabled).toBe(false)
+  })
+
   it('removes legacy auth preference overrides while retaining the main-owned marker', () => {
     const normalized = resolveMainStorageValue(StorageList.APP_SETTING, {
       auth: {

@@ -28,6 +28,8 @@ describe('readCloudflareBindings', () => {
       PLUGIN_ATTESTATION_PRIVATE_KEY_PEM: 'local-attestation-private-key',
       PROVIDER_REGISTRY_SECURE_STORE_KEY: 'local-provider-store-key',
       STORAGE_SECURE_STORE_KEY: 'local-storage-store-key',
+      // Opaque, non-JSON value: the overlay must copy it verbatim, never parse it.
+      VOICE_PROVIDER_CATALOG_KEYS: 'local-voice-provider-catalog-keys-not-json',
     }
     const bindings = { DB: db, R2: bucket, AUTH_SECRET: null }
 

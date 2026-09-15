@@ -35,6 +35,7 @@ describe('provider-runtime', () => {
       apiKey: 'app-token',
       metadata: {
         origin: 'tuff-nexus',
+        voiceAsr: { protocol: 'nexus-pack' },
         tokenInjected: true,
         tokenMode: 'auth'
       }
@@ -58,6 +59,7 @@ describe('provider-runtime', () => {
       apiKey: 'guest',
       metadata: {
         origin: 'tuff-nexus',
+        voiceAsr: { protocol: 'nexus-pack' },
         tokenInjected: false,
         tokenMode: 'guest'
       }

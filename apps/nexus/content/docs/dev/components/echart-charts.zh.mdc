@@ -1,0 +1,308 @@
+---
+title: "ECharts 图表家族"
+description: "Tuffex 的 ECharts 图表：主题化宿主 TxEChart，以及折线、柱状、饼图、漏斗、雷达、仪表盘、散点、热力图、矩形树图等类型化封装。"
+category: Charts
+status: beta
+since: 0.6.0
+tags: [chart, echarts, line, bar, pie, funnel, radar, gauge, scatter, heatmap, treemap]
+syncStatus: reviewed
+verified: true
+---
+# ECharts 图表家族
+
+## 安装与引入
+
+`echarts` 是可选 peer 依赖：宿主装了它，这一族就点亮；不装，Tuffex 其它部分毫无变化。它永远不会被打进主包——组件在挂载时动态引入，因此第一次渲染才单独出一块 chunk。
+
+```bash
+pnpm add echarts @talex-touch/tuffex
+```
+
+```ts
+import { TxEChart, TxLineChart } from '@talex-touch/tuffex/charts'
+```
+
+## 何时用哪一族
+
+原生 SVG 家族（`TxChart`、`TxTimeseriesChart`、`TxSankeyChart`、`TxChoroplethMap`、`TxSparkChart`、`TxAllocationBar`）仍是默认选择：体积更小、走 CSS token 主题化、形状贴合产品真实要画的东西。当你需要原生家族没有的图表类型，或者想直接用 ECharts 自己的配置面——dataZoom、visualMap、自定义 series、逐点样式——就用 `TxEChart` 及其类型化封装。
+
+两族读同一套颜色 token，所以把 ECharts 图放在原生图旁边，两种主题下都自动对齐，一个样式 prop 都不用传。
+
+## 主题化宿主
+
+`TxEChart` 负责整个生命周期：解析当前主题的图表 token、应用主题、再把你的 option 画上去。传一份完整的 ECharts option 即可——这就是自定义出口，ECharts 支持的一切都属于这里。
+
+```vue
+<script setup lang="ts">
+import { TxEChart } from '@talex-touch/tuffex/charts'
+
+const option = {
+  tooltip: { trigger: 'item' },
+  series: [{ type: 'treemap', data: [{ name: 'Docs', value: 40 }, { name: 'Blog', value: 25 }] }],
+}
+</script>
+
+<template>
+  <TxEChart :option="option" :height="280" aria-label="Traffic by section" />
+</template>
+```
+
+## 图表
+
+### 折线图
+
+`TxLineChart` 在类目轴上绘制一条或多条series，可选面积填充、堆叠与平滑曲线。多条series共用同一坐标轴；tooltip 按轴触发，所以悬停类目下的每条series都会列出。
+
+:::TuffDemoWrapper{demo="EChartLineChartDemo" code-lang="vue" title="Typed wrapper" description="TxLineChart is the thin typed wrapper over the same host."}
+---
+code: |
+  <script setup lang="ts">
+  const categories = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const series = [
+    { name: 'Installs', data: [420, 468, 512, 494, 548, 610, 586], area: true },
+    { name: 'Sessions', data: [820, 932, 901, 934, 1290, 1330, 1320] },
+  ]
+  </script>
+
+  <template>
+    <TxLineChart :series="series" :categories="categories" y-axis-name="Count" :height="260" />
+  </template>
+---
+:::
+
+### 柱状图
+
+`TxBarChart` 在类目轴上绘制分组或堆叠柱，默认纵向。`stacked` 会给未自带 `stack` 的每条series都挂上共享 id `total`，于是堆叠与独立series可以共存于一张图；`showLabel` 把数值写在柱上（`horizontal` 时写在右侧）。
+
+:::TuffDemoWrapper{demo="EChartBarChartDemo" code-lang="vue" title="分组柱状图" description="两条series共用类目轴，图例可单独开关。"}
+---
+code: |
+  <script setup lang="ts">
+  const categories = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const series = [
+    { name: 'Installs', data: [420, 468, 512, 494, 548, 610, 586] },
+    { name: 'Sessions', data: [820, 932, 901, 934, 1290, 1330, 1320] },
+  ]
+  </script>
+
+  <template>
+    <TxBarChart :series="series" :categories="categories" y-axis-name="Count" :height="260" />
+  </template>
+---
+:::
+
+### 饼图
+
+整体的切片，可选择中空。`donut` 传 `true` 用 60% 内径，传数字则精确指定内径百分比；`centerLabel` 只在环形图里渲染，`labelPosition` 把切片标签放到外侧、内侧或中心。
+
+:::TuffDemoWrapper{demo="EChartPieChartDemo" code-lang="vue" title="环形图" description="五个切片，占比写在空心处。"}
+---
+code: |
+  <script setup lang="ts">
+  const data = [
+    { name: 'Docs', value: 4820 },
+    { name: 'Blog', value: 3160 },
+    { name: 'Store', value: 2140 },
+    { name: 'Pricing', value: 980 },
+    { name: 'Other', value: 640 },
+  ]
+  </script>
+
+  <template>
+    <TxPieChart :data="data" donut center-label="Traffic share" unit="views" :height="260" />
+  </template>
+---
+:::
+
+### 漏斗图
+
+逐级转化。`sort` 重排阶段（默认 `descending`）；`labelPosition: 'outside'` 映射到 ECharts 的 `outer` 位置，于是阶段名落在漏斗旁边而不是内部。每个标签的转化率以 `data` 的第一个元素为基数，所以请按希望被统计的顺序传入阶段。
+
+:::TuffDemoWrapper{demo="EChartFunnelChartDemo" code-lang="vue" title="注册漏斗" description="五个阶段，标签带各自占首级的比例。"}
+---
+code: |
+  <script setup lang="ts">
+  const data = [
+    { name: 'Visit', value: 12000 },
+    { name: 'Signup', value: 3600 },
+    { name: 'Trial', value: 1800 },
+    { name: 'Paid', value: 540 },
+    { name: 'Renew', value: 380 },
+  ]
+  </script>
+
+  <template>
+    <TxFunnelChart :data="data" unit="users" :height="260" />
+  </template>
+---
+:::
+
+### 雷达图
+
+在同一组坐标轴上比较多个对象。`indicators` 的每一项是一根轴，每条series按位置给数值：`data[i]` 对应 `indicators[i]`。`shape` 在 `polygon` 与 `circle` 之间切换外框，`splitNumber` 设置环数，`showAxisName: false` 在周边文案已点明时去掉轴名。
+
+:::TuffDemoWrapper{demo="EChartRadarChartDemo" code-lang="vue" title="能力对比" description="同一组五根轴给两个版本打分。"}
+---
+code: |
+  <script setup lang="ts">
+  const indicators = [
+    { name: 'Launch', max: 100 },
+    { name: 'Search', max: 100 },
+    { name: 'Plugins', max: 100 },
+    { name: 'Sync', max: 100 },
+    { name: 'Memory', max: 100 },
+  ]
+  const series = [
+    { name: 'Desktop', data: [92, 88, 84, 90, 62], area: true },
+    { name: 'Mobile', data: [78, 82, 70, 86, 88], area: true },
+  ]
+  </script>
+
+  <template>
+    <TxRadarChart :indicators="indicators" :series="series" :height="260" />
+  </template>
+---
+:::
+
+### 仪表盘
+
+一个读数画在表盘上；传 `progress` 则变成细圆环。`precision` 控制读数位数，`unit` 直接拼接且不加分隔符（`72` 加 `%` 显示为 `72%`）。`color` 只染进度环与读数、不染表盘，所以刻度质感仍由主题决定。
+
+:::TuffDemoWrapper{demo="EChartGaugeChartDemo" code-lang="vue" title="表盘" description="单个 P95 读数；加 `progress` 即切换为细圆环。"}
+---
+code: |
+  <template>
+    <TxGaugeChart :value="72" name="P95 hit rate" unit="%" :height="260" />
+  </template>
+---
+:::
+
+### 散点图
+
+数值平面上的点，每条series一对坐标轴。`symbolSize` 设置整图点径，series 级的值优先；需要多张图共用同一量纲时，用 `xMin` / `xMax` / `yMin` / `yMax` 固定值域。
+
+:::TuffDemoWrapper{demo="EChartScatterChartDemo" code-lang="vue" title="延迟 vs 吞吐" description="同一数值平面上的两簇点。"}
+---
+code: |
+  <script setup lang="ts">
+  const series = [
+    { name: 'On-device', data: [[12, 180], [18, 240], [24, 260], [31, 300]] },
+    { name: 'Cloud', data: [[48, 620], [62, 780], [75, 860], [90, 940]] },
+  ]
+  </script>
+
+  <template>
+    <TxScatterChart :series="series" x-axis-name="Latency (ms)" y-axis-name="Throughput (req/s)" :height="260" />
+  </template>
+---
+:::
+
+### 热力图
+
+强度矩阵。`values` 按行主序传入（`values[row][column]`），`rows` 与 `columns` 命名两个类目轴。构造器把这两个数组原样交给 ECharts，而 ECharts 把第一个类目画在底部——所以 `rows[0]` 是最下面那一行。声明的 `visualMap` 默认读顺序色板的 token 渐变，除非你自己传 `inRange.color`。
+
+:::TuffDemoWrapper{demo="EChartHeatmapChartDemo" code-lang="vue" title="时段活跃度" description="五个时段铺满一周。"}
+---
+code: |
+  <script setup lang="ts">
+  const columns = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const rows = ['00-04', '04-08', '08-12', '12-16', '16-20']
+  const values = [
+    [10, 8, 12, 9, 7, 22, 27],
+    [6, 5, 8, 7, 4, 12, 15],
+    [38, 43, 40, 47, 52, 32, 26],
+    [50, 55, 52, 58, 65, 40, 34],
+    [34, 40, 37, 42, 60, 47, 30],
+  ]
+  </script>
+
+  <template>
+    <TxHeatmapChart :values="values" :rows="rows" :columns="columns" :height="260" />
+  </template>
+---
+:::
+
+### 矩形树图
+
+面向层级的占比图。节点通过 `children` 嵌套，节点的 `color` 就是它的填充色，`showBreadcrumb` 打开 ECharts 的面包屑下钻条；`maxDepth` 只画前 N 层并开启该下钻，不传则整棵树一次画完。不传 `children` 时同一个 prop 画出扁平矩形树。
+
+:::TuffDemoWrapper{demo="EChartTreemapChartDemo" code-lang="vue" title="嵌套分区" description="两个分区，各自再分小节。"}
+---
+code: |
+  <script setup lang="ts">
+  const data = [
+    { name: 'Desktop', children: [
+      { name: 'Workbench', value: 46 },
+      { name: 'Marketplace', value: 28 },
+      { name: 'Settings', value: 14 },
+    ] },
+    { name: 'Mobile', children: [
+      { name: 'Home', value: 38 },
+      { name: 'Messages', value: 22 },
+      { name: 'Profile', value: 12 },
+    ] },
+  ]
+  </script>
+
+  <template>
+    <TxTreemapChart :data="data" unit="visits" :height="260" />
+  </template>
+---
+:::
+
+## API
+
+这一族每张图都接受下列公共 props，外加各自的data props，并且都转发一份原始 `option` 覆盖在生成的 option 之上——`series` 数组整体替换，其余键深度合并。
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `option` | `EChartsOption` | — | 覆盖在生成 option 之上：每张图的自定义出口。 |
+| `height` | `number \| string` | `320` | 图表高度：px 或任意 CSS 长度。 |
+| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` 跟随周围主题。 |
+| `ariaLabel` | `string` | — | 无障碍名称；同时在宿主上加 `role="img"`。 |
+| `loading` | `boolean` | `false` | 数据到达前的主题化 loading 遮罩。 |
+
+`update` 只存在于 `TxEChart`：`'replace'`（默认）整体替换series数组，被移除的series立即停止绘制；`'merge'` 保留 ECharts 自身的合并语义。
+
+### Per-chart props
+
+| 图表 | Props |
+|------|------|
+| `TxLineChart` | `series`（`name`、`data`、`color?`、`area?`、`smooth?`、`stack?`、`dashed?`）、`categories?`、`xAxisName?`、`yAxisName?`、`showLegend?`、`grid?` |
+| `TxBarChart` | `series`（`name`、`data`、`color?`、`stack?`）、`categories?`、`xAxisName?`、`yAxisName?`、`showLegend?`、`grid?`、`stacked?`、`horizontal?`、`barWidth?`、`showLabel?` |
+| `TxPieChart` | `data`（`name`、`value`、`color?`）、`donut?`、`roseType?`、`showLegend?`、`labelPosition?`、`centerLabel?`、`unit?` |
+| `TxFunnelChart` | `data`（`name`、`value`、`color?`）、`sort?`、`gap?`、`minSize?`、`maxSize?`、`labelPosition?`、`showLabel?`、`showLegend?`、`unit?` |
+| `TxRadarChart` | `indicators`（`name`、`max`、`min?`）、`series`（`name`、`data`、`color?`、`area?`）、`shape?`、`splitNumber?`、`showLegend?`、`showAxisName?` |
+| `TxGaugeChart` | `value`、`min?`、`max?`、`name?`、`unit?`、`precision?`、`progress?`、`segments?`、`color?` |
+| `TxScatterChart` | `series`（`name`、`data`、`color?`、`symbolSize?`）、`xAxisName?`、`yAxisName?`、`symbolSize?`、`showLegend?`、`grid?`、`xMin?`、`xMax?`、`yMin?`、`yMax?` |
+| `TxHeatmapChart` | `values`、`rows`、`columns`、`xAxisName?`、`yAxisName?`、`visualMap?`、`min?`、`max?`、`showLabel?`、`unit?` |
+| `TxTreemapChart` | `data`（`name`、`value?`、`color?`、`children?`）、`maxDepth?`、`showBreadcrumb?`、`showLabel?`、`unit?`、`roam?` |
+
+构造器本身也是公开 API——`buildBarChartOption`、`buildLineChartOption` 等都返回一份普通 `EChartsOption`。需要在一张图里混用图形类型时，用它们先各自生成再合并，然后把结果交给 `TxEChart`。
+
+## Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `ready` | `(instance: ECharts)` | 实例已就绪——option 表达不了的事情从这里拿命令式句柄。 |
+| `click` / `dblclick` | `(params: EChartEventParams)` | series 与标记上的指针事件。 |
+| `mouseover` / `mouseout` | `(params: EChartEventParams)` | series 与标记上的悬停事件。 |
+| `legendselectchanged` | `(params: EChartEventParams)` | 图例项被切换。 |
+| `datazoom` | `(params: EChartEventParams)` | dataZoom 区间变化。 |
+
+## 最佳实践
+
+- 给宿主一个确定的高度。高度为 0 的容器画不出任何东西。
+- 优先用类型化封装；只有长尾类型（candlestick、graph、boxplot、sunburst）才落到带原始 option 的 `TxEChart`。
+- 传 `aria-label`：它让 canvas 图表对辅助技术可读。
+- 传数据而不是像素：封装负责把数据映射成 option，主题色与坐标轴质感才能保持一致。
+- 在宿主应用里安装 `echarts`；缺少 peer 时容器内会给出提示，而不是静默空白。
+
+## 源码
+
+- 组件源码：`packages/tuffex/packages/components/src/charts/src/echart/src/`。
+- option 构造器：`packages/tuffex/packages/components/src/charts/src/echart/src/options/`。
+- 主题与 token：`packages/tuffex/packages/components/src/charts/src/echart/src/core/theme.ts`。
+- 改编自 Cloudflare kumo (https://github.com/cloudflare/kumo)，© Cloudflare, Inc.，MIT —— `EChart.tsx`。
+
+<TuffDocSourceLink />

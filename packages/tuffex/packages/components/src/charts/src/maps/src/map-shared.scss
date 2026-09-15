@@ -1,0 +1,82 @@
+// Shared styles for TxBubbleMap / TxChoroplethMap (each component compiles
+// its own scoped copy — the surface is tiny).
+
+.tx-map {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: hidden;
+
+  &__svg {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+  }
+
+  // kumo sets `emphasis: { disabled: true }` on the geo layer, so the land base
+  // never reacts to hover.
+  &__land {
+    fill: var(--tx-chart-map-area, #e5e7eb);
+    stroke: var(--tx-chart-map-area, #e5e7eb);
+  }
+
+  // Bubbles are ECharts scatter symbols: opacity/scale are animated inline (see
+  // the component), scaled about the symbol's own centre.
+  &__bubble {
+    cursor: default;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  &__region {
+    stroke: var(--tx-chart-map-area, #e5e7eb);
+
+    &.has-data {
+      cursor: default;
+    }
+  }
+
+  &__tooltip {
+    position: absolute;
+    z-index: 10;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 100px;
+    max-width: 20rem;
+    padding: 0.5rem;
+    border: 1px solid var(--tx-chart-grid-line, rgb(107 114 128 / 20%));
+    border-radius: 0.5rem;
+    background: var(--tx-chart-tooltip-bg, canvas);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
+    font-size: 0.75rem;
+    pointer-events: none;
+  }
+
+  &__tooltip-value {
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  // Sits in its own row under the plot rather than floating over it: the
+  // projection reserves the same height (`LEGEND_INSET` in TxChoroplethMap), so
+  // the legend can never cover a country.
+  &__legend {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    height: var(--tx-map-legend-inset, 22px);
+    padding-left: 0.75rem;
+    font-size: 0.6875rem;
+    color: var(--tx-chart-text-primary, #6b7280);
+  }
+
+  &__legend-bar {
+    width: 96px;
+    height: 8px;
+    border-radius: 4px;
+  }
+}

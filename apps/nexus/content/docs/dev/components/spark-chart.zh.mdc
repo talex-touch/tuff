@@ -1,6 +1,6 @@
 ---
 title: "SparkChart 迷你折线图"
-description: "卡片里的静态多序列折线：canvas 绘制，配 DOM 层的游标与提示框。"
+description: "带平滑曲线、可选坐标轴、活动十字线与可访问悬停读值的 canvas 趋势图。"
 category: Visualization
 status: beta
 since: 0.3.9
@@ -14,50 +14,54 @@ verified: true
 
 ### SparkChart + ChartScrubber
 
-:::TuffDemoWrapper{demo="SparkChartSparkChartDemo" code-lang="vue" title="可擦洗的趋势快照" description="双序列折线，指针横扫读值。"}
+::::TuffDemoWrapper{demo="SparkChartSparkChartDemo" code-lang="vue" title="可擦洗的趋势快照" description="平滑的双趋势、坐标轴与指针下的数值读数。"}
 ---
 code: |
   <script setup lang="ts">
   import { computed, ref } from 'vue'
 
-  const mint = [-2.9, -3.4, -3.05, -3.86, -3.52, -4.1, -3.82, -4.41]
-    .map((value, index) => ({ time: index * 6, value }))
-
-  const series = [{ id: 'mint', data: mint, color: 'var(--tx-bui-orange)' }]
-  const hover = ref<number | null>(null)
-
-  const rows = computed(() => hover.value === null
+  const data = [0.22, 0.31, 0.45, 0.58, 0.51, 0.74, 0.91]
+    .map((value, index) => ({ time: index * 5, value }))
+  const activeIndex = ref<number | null>(null)
+  const series = [{ id: 'trend', data }]
+  const rows = computed(() => activeIndex.value === null
     ? []
-    : [{ label: '薄荷脆片', value: `${mint[hover.value].value}%`, color: 'var(--tx-bui-orange)' }])
+    : [{ label: 'Trend', value: `${data[activeIndex.value]?.value ?? 0}` }])
   </script>
 
   <template>
     <TxChartScrubber
-      :point-count="mint.length"
+      :point-count="data.length"
+      :active-index="activeIndex"
       :rows="rows"
-      time-label="今天 12:00"
-      @scrub="hover = $event"
-      @leave="hover = null"
+      @update:active-index="activeIndex = $event"
     >
-      <TxSparkChart :series="series" aria-label="趋势快照" />
+      <TxSparkChart
+        :series="series"
+        :active-index="activeIndex"
+        x-axis
+        y-axis
+        grid
+        aria-label="Trend snapshot"
+      />
     </TxChartScrubber>
   </template>
 ---
-:::
+::::
 
 ## 尺寸与主题
 
-图表填满容器，尺寸从**容器**量出来而不是靠 prop 指定，宿主给多大就画多大——所以外层必须有确定的高度（示例里是 166px）。容器尺寸变化由 `ResizeObserver` 捕捉后重绘。
+图表填满容器，尺寸从**容器**量出来而不是靠宽高 prop 指定。外层必须有确定高度。`ResizeObserver` 会在尺寸变化后重绘；位图按 `devicePixelRatio`（上限 2）放大，绘制计算仍使用 CSS 像素。
 
-canvas 读不到 CSS 变量，所以主题切换必须触发重绘。`theme` 默认 `'auto'`，同时认 `<html>`/`<body>` 上的 `data-theme` 属性与 `.dark` 类——这正是 tuffex token 层的两个开关。位图按 `devicePixelRatio`（上限 2）放大，绘制坐标仍是 CSS 像素。
+`theme` 默认 `'auto'`，跟随 `<html>` 与 `<body>` 上的 `data-theme` 或 `.dark`。canvas 不能继承 CSS 变量，因此主题切换会用当前 token 色重绘。
 
-## ChartScrubber
+## 曲线、坐标轴与悬停
 
-擦洗层是纯 DOM，不往 canvas 里画：提示框因此可以被选中，游标线在任何像素比下都是一像素。它是外层容器，图表放进它的默认插槽。
+默认 `curve="monotone"` 使用与完整 `@talex-touch/tuffex/charts` 折线系列相同的 d3 曲线工厂：它消除折角而不会越过局部极值。只有编码确实需要时才选择 `linear`、`natural` 或 `step`。
 
-指针位置按容器宽度折算成最近的采样点下标；提示框锚点被夹在 28%–72% 之间，贴边时不会溢出舞台。`activeIndex` 不传时下标由组件自持——它是纯交互瞬态，多数宿主只需要监听 `@scrub`。
+`xAxis` 与 `yAxis` 在 canvas 内画紧凑的基线和刻度，并自动预留边距。原始时间或数值不适合阅读时，传入 `xTickFormat` 与 `yTickFormat`。
 
-舞台上 `touch-action: pan-y`：横向归擦洗，纵向留给页面滚动。
+`interactive` 让独立图表拥有指针/键盘十字线：方向键、Home、End 与 Escape 移动或清除活动采样点。受控 `activeIndex` 让外层 `TxChartScrubber` 持有提示框，而 canvas 仍绘制高亮点。图表与擦洗层都会通过 polite live region 宣读当前值。
 
 ## API
 
@@ -70,74 +74,75 @@ canvas 读不到 CSS 变量，所以主题切换必须触发重绘。`theme` 默
 | `grid` | `boolean` | `false` | 是否画水平发丝网格线。 |
 | `gridLines` | `number` | `4` | 网格线条数。 |
 | `lineWidth` | `number` | `2.25` | 线宽（CSS 像素）。 |
-| `padding` | `Partial<SparkChartPadding>` | `{ top: 24, right: 0, bottom: 22, left: 0 }` | 内边距，缺省的边取默认值。 |
+| `curve` | `LineCurve` | `'monotone'` | `linear`、`monotone`、`natural` 或 `step`。 |
+| `xAxis` / `yAxis` | `boolean` | `false` | 是否画紧凑 x/y 基线与标签。 |
+| `xTicks` / `yTicks` | `number` | `3` / `4` | x/y 标签条数。 |
+| `xTickFormat` / `yTickFormat` | `(value: number) => string` | — | 覆盖 x/y 标签格式化。 |
+| `padding` | `Partial<SparkChartPadding>` | `{ top: 24, right: 0, bottom: 22, left: 0 }` | 内边距；坐标轴会额外保留最小边缘。 |
 | `domain` | `[number, number]` | — | 固定纵轴范围，省略则按数据自适应。 |
-| `ariaLabel` | `string` | — | canvas 的可访问名。不传则 canvas 对辅助技术隐藏。 |
+| `activeIndex` | `number \| null` | — | 受控的高亮采样点。 |
+| `interactive` | `boolean` | `true` | 是否启用指针与键盘悬停状态。 |
+| `animation` | `boolean` | `true` | ECharts 对齐的 1000ms 进入与 500ms 更新动效。 |
+| `ariaLabel` | `string` | — | canvas 的可访问名。 |
 
-`SparkPoint` 是 `{ time: number, value: number }`；`time` 只用来定横向位置，不需要是真实时间戳。
+`SparkPoint` 是 `{ time: number, value: number }`；`time` 用来定位采样点，不要求是真实时间戳。给 `SparkSeries.label` 后，悬停宣读会使用它。
 
-### SparkChart Exposed
+### SparkChart Events
 
-| 方法名 | 说明 |
-|------|------|
-| `redraw()` | 立即重绘，供原地修改序列数据的宿主调用。 |
+| 事件名 | 回调参数 | 说明 |
+|------|------|------|
+| `update:activeIndex` | `(index: number \| null)` | 受控悬停写回。 |
+| `hover` | `(index: number)` | 到达新的活动采样点。 |
+| `leave` | — | 指针离开或 Escape 清除了活动采样点。 |
 
 ### ChartScrubber Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
+|------|------|------|------|
 | `pointCount` | `number` | — | 指针映射到的采样点总数。 |
 | `activeIndex` | `number \| null` | — | 受控下标。不传则由组件自持。 |
 | `rows` | `ChartTooltipRow[]` | — | 提示框行，`{ label, value, color? }`。 |
 | `timeLabel` | `string` | — | 提示框顶部的时间行。 |
 | `tooltip` | `boolean` | `true` | 关掉后只保留游标线。 |
-| `anchorMin` / `anchorMax` | `number` | `28` / `72` | 提示框锚点的夹取范围（百分比）。 |
+| `anchorMargin` | `number` | `8` | 提示框与舞台边缘保留的间距（px）。 |
 | `disabled` | `boolean` | `false` | 关掉指针响应。 |
 
 ### ChartScrubber Events
 
 | 事件名 | 回调参数 | 说明 |
 |------|------|------|
-| `scrub` | `(index: number)` | 指针落到新的采样点。同一点不会重复触发。 |
+| `scrub` | `(index: number)` | 指针落到新的采样点。 |
 | `leave` | — | 指针离开、抬起或被取消。 |
 | `update:activeIndex` | `(index: number \| null)` | 受控写回。 |
 
-### ChartScrubber Slots
-
-| 插槽名 | 作用域参数 | 说明 |
-|------|------|------|
-| `default` | — | 舞台内容，通常是 `TxSparkChart`。 |
-| `tooltip` | `{ index, rows }` | 整体替换提示框。 |
-
 ## 交互契约
 
-- 图表**不画坐标轴、不画图例、不画数值标签**：这些都属于卡片，由宿主排版。
-- 序列不传 `color` 时按序落到 `--tx-bui-accent` / `-orange` / `-green` / `-red`。上游把这几个颜色写成了暗色主题的字面量，在亮色下偏亮，这里改读 token。
-- 所有序列共用一套纵轴范围，横轴按 `time` 折算；全部样本时间相同时退化为按下标均分。单点序列画在正中，靠圆头线帽显示成一个点。
-- 数据为空或容器尺寸为 0 时什么都不画，不会抛错。宿主拿不到 2D 上下文（如 jsdom）时同样安全跳过。
-- 擦洗层只在下标**变化**时发事件；上游是每次指针移动都重设一次状态。
-- 两个组件都没有动画，因此没有需要在减弱动效下关掉的东西。
+- 所有序列共用一套纵轴范围；横轴按 `time` 折算，时间全部相同则按下标均分。单点居中并由圆头线帽画成点。
+- 存在受控下标时，活动十字线与点使用该下标。外层擦洗层可以持有 DOM 提示框而不丢失 canvas 反馈。
+- 数据为空、容器尺寸为 0 或宿主没有 2D 上下文时什么都不画，也不会抛错。
+- 进入动效为 1000ms `cubicInOut`；数据更新为 500ms `cubicInOut`；超过 2000 点或 `prefers-reduced-motion: reduce` 时两者都跳过。
 
 ## 最佳实践
 
-- 给舞台一个确定高度，否则容器高度为 0 时图表不可见。
-- 用 `aria-label` 描述图表说明的是什么；不传时 canvas 会被标成 `aria-hidden`，避免辅助技术念出一个空元素。数值本身应该在提示框或旁边的文字里可读。
-- 提示框的数值请自己格式化好再传：组件不做数字格式化，负号建议用 U+2212（`−`）以对齐等宽数字。
-- 需要实时推数据时，改 `series` 引用即可触发重绘；原地 push 后调 `redraw()`。
+- 给舞台确定高度，否则零高度容器无法绘制。
+- 传入 `aria-label` 与 `SparkSeries.label`，悬停数值就不会只存在于视觉提示框里。
+- 默认 monotone 配合均匀且足够密集的采样点。稀疏数据仍然稀疏，平滑不应凭空发明数据。
+- 同时使用两个组件时，把同一个 `activeIndex` 绑定到 `TxChartScrubber` 与 `TxSparkChart`。
+- 两者都按**绘图区**（而非整个舞台）换算指针位置，十字线才会落在它所报告的采样点上。图表把自己留出的横向边距以 `--tx-bui-plot-left` / `--tx-bui-plot-right` 写在根节点上，擦洗层从被包裹的元素读取，无需手工同步。
+- 提示框居中跟随指针，只有将要越出舞台时才被拉回。提示框宽度需小于舞台，否则它就没有可移动的空间。
 
 ## Source
 
 - 组件源码：`packages/tuffex/packages/components/src/spark-chart/src/TxSparkChart.vue`、`TxChartScrubber.vue`。
 - 投影与绘制：`packages/tuffex/packages/components/src/spark-chart/src/geometry.ts`、`draw.ts`。
 - 类型：`packages/tuffex/packages/components/src/spark-chart/src/types.ts`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/spark-chart/__tests__/spark-chart.test.ts`（27 项）覆盖定义域求解、时间/下标两种横轴映射、单点居中、锚点夹取、绘制调用序列、擦洗事件去重与受控模式。
+- **实测覆盖:** `packages/tuffex/packages/components/src/spark-chart/__tests__/spark-chart.test.ts`（33 项）覆盖定义域、投影、monotone canvas 描边、x/y 坐标轴与边缘标签收边、悬停点、键盘状态、擦洗层受控模式与可访问性。
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
 
 ## 审阅说明
 
-- **没有上游视觉基准:** 上游截图的图表区域显示的是「No data to display」——抓图那一版根本没画出线。卡片外框、图例、大数与追问 pill 的截图仍然有效，**图表本身按规格实现**（静态多序列折线、线宽 2.25、可选网格、内边距 24/22），不要拿那两张 PNG 对图表区域做像素比对。
-- **为什么不用图表库:** 上游用的 `liveline` 只有 React 版本（`peerDependencies` 仅 react），且把它的实时能力全关了（`paused`、`scrub={false}`、`pulse={false}`），实际只用到静态折线渲染这一小块。这里直接实现那一小块，不引入依赖。
-- **不做面积填充:** 上游唯一可验证的用法是 `fill={false}`，另一处无从核对，因此不提供 `fill`。
-- 绘制逻辑单独放在 `draw.ts`：jsdom 的 `getContext('2d')` 返回 `null`，写在 SFC 里就完全无法测试。
+- 图表刻意以 canvas 为先：即使 jsdom 没有 2D 上下文，绘制调用面仍可测试。
+- 完整图表族已位于 `@talex-touch/tuffex/charts`；SparkChart 仍是根 TuffEx 入口里的紧凑卡片原语。
+- 不提供面积填充：用户要的是可读趋势，不是在稀疏点之间做不确定的外推。

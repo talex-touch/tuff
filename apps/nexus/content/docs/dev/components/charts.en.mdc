@@ -1,6 +1,6 @@
 ---
 title: "Charts"
-description: "@talex-touch/tuffex-charts overview: a kumo-shaped API surface, Vue-rendered SVG, no echarts."
+description: "@talex-touch/tuffex/charts overview: a kumo-shaped API surface, Vue-rendered SVG, no echarts."
 category: Charts
 status: beta
 since: 0.1.0
@@ -12,15 +12,15 @@ verified: true
 
 ## Install & Import
 
-The chart family lives in the standalone `@talex-touch/tuffex-charts` package. Its API surface mirrors Cloudflare kumo's chart family, but the renderer is Vue-emitted SVG — no echarts and no chart framework; math comes from tree-shakeable d3 micro-modules only (`d3-scale` / `d3-shape` / `d3-sankey` / `d3-geo`).
+The chart family ships inside Tuffex behind its own subpath, `@talex-touch/tuffex/charts`. Its API surface mirrors Cloudflare kumo's chart family, but the renderer is Vue-emitted SVG — no echarts and no chart framework; math comes from tree-shakeable d3 micro-modules only (`d3-scale` / `d3-shape` / `d3-sankey` / `d3-geo`). For chart types this family does not cover — and for ECharts' own option surface — use the [ECharts Family](/docs/dev/components/echart-charts), which shares these colour tokens and ships as an optional `echarts` peer.
 
 ```bash
-pnpm add @talex-touch/tuffex-charts
+pnpm add @talex-touch/tuffex
 ```
 
 ```ts
-import { TxTimeseriesChart } from '@talex-touch/tuffex-charts'
-import '@talex-touch/tuffex-charts/style.css'
+import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
+import '@talex-touch/tuffex/charts/style.css'
 ```
 
 ## Available Charts
@@ -42,15 +42,15 @@ Every component in the suite, grouped by category. The list is read from each do
 
 ## Legend
 
-`TxChartLegendItem` ships two legend layouts: `small` inline rows (multi-series legends) and `large` stacked metrics (dashboard cards). `loading` renders skeleton placeholders; with a `click` listener attached it renders as a native `button`, so Enter/Space work out of the box.
+`TxChartLegendItem` ships two legend layouts: `small` inline rows (multi-series legends) and `large` stacked metrics that compose into the metric band of a dashboard card. `loading` renders skeleton placeholders; with a `click` listener attached it renders as a native `button`, so Enter/Space work out of the box.
 
 ### Legend items
 
-:::TuffDemoWrapper{demo="ChartsLegendItemsDemo" code-lang="vue" title="Small / Large / Loading" description="Click the first item to toggle the second one's inactive state."}
+:::TuffDemoWrapper{demo="ChartsLegendItemsDemo" code-lang="vue" title="Small / Loading" description="Click the first item to toggle the second one's inactive state."}
 ---
 code: |
   <script setup lang="ts">
-  import { ChartPalette, TxChartLegendItem } from '@talex-touch/tuffex-charts'
+  import { ChartPalette, TxChartLegendItem } from '@talex-touch/tuffex/charts'
   import { ref } from 'vue'
 
   const inactive = ref(false)
@@ -60,10 +60,60 @@ code: |
     <TxChartLegendItem name="Requests" :color="ChartPalette.categoricalVar(0)" value="1,234" @click="inactive = !inactive" />
     <TxChartLegendItem name="Errors" :color="ChartPalette.categoricalVar(2)" value="87" :inactive="inactive" />
     <TxChartLegendItem loading />
-    <TxChartLegendItem variant="large" name="Latency" :color="ChartPalette.categoricalVar(3)" value="42" unit="ms" />
   </template>
 ---
 :::
+
+### Dashboard metrics
+
+Four `large` items in one row form a dashboard metric band: the dot and name sit on top, the reading and its unit underneath, and hairline rules separate the columns so the band spans the full card width. It pairs with any chart — here a four-series `TxTimeseriesChart`, where hover reads all four percentiles at one timestamp.
+
+:::TuffDemoWrapper{demo="ChartsLegendDashboardDemo" code-lang="vue" title="Large metrics in a dashboard row" description="Hover the chart: the tooltip lists every percentile for that timestamp."}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette, TxChartLegendItem, TxTimeseriesChart } from '@talex-touch/tuffex/charts'
+
+  const percentiles = [
+    { name: 'P99', reading: '124', slot: 0 },
+    { name: 'P95', reading: '76', slot: 1 },
+    { name: 'P75', reading: '32', slot: 2 },
+    { name: 'P50', reading: '10', slot: 3 },
+  ]
+  </script>
+
+  <template>
+    <div class="metrics">
+      <div v-for="item in percentiles" :key="item.name" class="metrics__column">
+        <TxChartLegendItem
+          variant="large"
+          :name="item.name"
+          :color="ChartPalette.categoricalVar(item.slot)"
+          :value="item.reading"
+          unit="ms"
+        />
+      </div>
+    </div>
+    <TxTimeseriesChart
+      :data="data"
+      :height="300"
+      x-axis-name="Time (UTC)"
+      :x-axis-tick-format="formatTime"
+      :timestamp-format="formatStamp"
+      :tooltip-value-format="formatValue"
+      tooltip-footer="Percentiles use a five-minute rolling window."
+    />
+  </template>
+---
+:::
+
+## Animation
+
+Every chart follows ECharts' default timing: first render animates in over 1000ms `cubicInOut`, a data update morphs geometry over 500ms `cubicInOut`, and hover/focus state transitions run 300ms `cubicOut`. Above 2000 points in one series the animation is skipped and the final frame renders directly. Lines and areas are the exception on first render — they take the ECharts line-series default and reveal left to right with `linear`.
+
+The values are copied from the `echarts ^6.0.0` that kumo pins (`src/model/globalDefault.ts`, with separate defaults for the line series and the tooltip). This package ships no ECharts runtime, so they are frozen as exported constants: `ENTER_DURATION` (1000), `UPDATE_DURATION` (500), `STATE_DURATION` (300), `ANIMATION_THRESHOLD` (2000). When the host sets `prefers-reduced-motion: reduce` every animation lands on its final frame, and all CSS transitions sit inside `@media (prefers-reduced-motion: no-preference)`.
+
+What each chart does with that timing (bars growing from the base axis, scatter scaling in, arcs expanding by angle, tooltip movement and collision boundary, Sankey and maps having no geometry animation) lives on the corresponding chart page (Timeseries, Maps, Sankey, Custom Chart) and is not repeated here.
 
 ## API
 
@@ -71,7 +121,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `variant` | `'small' \| 'large'` | `'small'` | Inline row / stacked metric layout. |
+| `variant` | `'small' \| 'large'` | `'small'` | Inline row, or a stacked metric sized to sit in a dashboard metric row. |
 | `name` | `string` | — | Series name. Optional while `loading`. |
 | `color` | `string` | — | Indicator dot color; any CSS color including `var()`. |
 | `value` | `string` | — | Pre-formatted value text. |
@@ -84,3 +134,9 @@ code: |
 - No `echarts` instance prop — the renderer is built in; consumers neither need nor can pass echarts.
 - No `isDarkMode` prop — every color reads `--tx-chart-*` CSS variables and follows the host's `.dark` / `[data-theme='dark']` automatically.
 - Every HTML-string formatter became a slot (VNodes), so there is no XSS-escaping surface.
+
+## Best Practices
+
+- Choose the dedicated chart wrapper (`TxTimeseriesChart`, `TxBubbleMap`, `TxChoroplethMap`, `TxSankeyChart`, `TxSparkChart`, or `TxEChart`) for standard metrics before assembling custom series primitives.
+- Rely on CSS variables for palette tokens (`--tx-chart-*`) and theme switching instead of hard-coding theme conditionals or HEX colors.
+- Keep series counts within readability limits (typically 3–7 series per visual surface) and supply accessible legend items or tooltips for every data point.

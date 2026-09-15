@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxAxis, TxChart, TxChartTooltip, TxGrid, TxScatterSeries } from '@talex-touch/tuffex-charts'
+import { TxAxis, TxChart, TxChartGrid, TxChartTooltip, TxScatterSeries } from '@talex-touch/tuffex/charts'
 
 interface Point { x: number, y: number, size: number }
 
@@ -12,7 +12,7 @@ const points: Point[] = Array.from({ length: 40 }, (_, i) => ({
 
 <template>
   <TxChart :height="260">
-    <TxGrid y />
+    <TxChartGrid y />
     <TxAxis position="bottom" />
     <TxAxis position="left" />
     <TxScatterSeries :data="points" x="x" y="y" :r="(d: Point) => d.size" :fill-opacity="0.7" />
