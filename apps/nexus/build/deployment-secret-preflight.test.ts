@@ -344,6 +344,32 @@ describe('deployable configuration', () => {
     expect(documentation).not.toContain('change-me-admin-emergency-jwt-secret')
   })
 
+  it('documents every exit-78 error code in the alert issue body', () => {
+    const workflow = readFileSync(
+      new URL('../../../.github/workflows/nexus-deployment-secret-watch.yml', import.meta.url),
+      'utf8',
+    )
+
+    // The workflow opens the drift issue on exit 78 only, so these are the codes an operator can
+    // ever read there. Both sides are derived: a new 78 code, or a renamed one, fails here until
+    // the operator-facing body explains it.
+    const driftCodes = Object.keys(DEPLOYMENT_SECRET_EXIT_CODES)
+      .filter(key => DEPLOYMENT_SECRET_EXIT_CODES[key as keyof typeof DEPLOYMENT_SECRET_EXIT_CODES] === 78)
+      .map(key => DEPLOYMENT_SECRET_ERROR_CODES[key as keyof typeof DEPLOYMENT_SECRET_ERROR_CODES])
+      .sort()
+
+    const issueBody = workflow.match(/cat <<'([A-Z_]+)'\n([\s\S]*?)\n *\1\n/)?.[2] ?? ''
+    expect(issueBody, 'alert issue body heredoc').not.toBe('')
+
+    const documentedCodes = [
+      ...new Set(
+        [...issueBody.matchAll(/^ *- `((?:DEPLOYMENT|PREVIEW)_[A-Z0-9_]+)`/gm)].map(match => match[1]),
+      ),
+    ].sort()
+
+    expect(documentedCodes).toEqual(driftCodes)
+  })
+
   it('uses a fixed Preview deployment orchestrator', () => {
     const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
