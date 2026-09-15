@@ -140,12 +140,46 @@ export function ratioFromIndex(index: number, pointCount: number): number {
   return clamp(index, 0, pointCount - 1) / (pointCount - 1)
 }
 
+/** Horizontal gutters the samples are inset by — the axis labels live here. */
+export interface PlotInset {
+  left: number
+  right: number
+}
+
 /**
- * Keeps the tooltip anchor away from the stage edges. Upstream clamps to
- * 28–72% so a 154px-wide tooltip never overhangs a 380px card.
+ * Pointer x to the nearest sample. Samples span the **plot box**, not the
+ * stage: mapping the raw stage ratio drifts away from the drawn points by
+ * whatever the y-axis gutter is, so the crosshair stops sitting on its sample.
  */
-export function clampAnchorPercent(percent: number, min = 28, max = 72): number {
-  if (min > max)
-    return percent
-  return clamp(percent, min, max)
+export function indexFromPointerX(
+  clientX: number,
+  rect: { left: number, width: number },
+  pointCount: number,
+  inset: PlotInset,
+): number {
+  const width = rect.width - inset.left - inset.right
+  if (width <= 0)
+    return 0
+  return indexFromRatio((clientX - rect.left - inset.left) / width, pointCount)
+}
+
+/** Sample index to its x inside the plot box, in stage pixels. */
+export function plotX(index: number, pointCount: number, inset: PlotInset, stageWidth: number): number {
+  const width = Math.max(0, stageWidth - inset.left - inset.right)
+  return inset.left + ratioFromIndex(index, pointCount) * width
+}
+
+/**
+ * Keeps the tooltip's centre inside the stage. The box is centred on the
+ * cursor, so only the outer half-width at each end can overhang — clamping in
+ * pixels lets it travel as far as the stage physically allows, where a fixed
+ * percentage band freezes it over the outer third of a wide card.
+ */
+export function clampAnchorCenter(center: number, halfWidth: number, stageWidth: number, margin = 0): number {
+  const min = halfWidth + margin
+  const max = stageWidth - halfWidth - margin
+  // A stage narrower than its own tooltip: centre it rather than oscillate.
+  if (min >= max)
+    return stageWidth / 2
+  return clamp(center, min, max)
 }

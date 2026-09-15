@@ -60,6 +60,15 @@ code: |
 
 Choropleth shading is **continuous**: normalized values land between two adjacent stops of `--tx-chart-map-scale-1..5` and blend with CSS `color-mix(in oklab, …)` — the ramp flips automatically with the theme and no JS ever parses a color. `colorRange` swaps the ramp; `min`/`max` pin the scale bounds.
 
+## Interaction & Animation
+
+The maps carry ECharts' `emphasis` / `blur` and `stateAnimation`, with kumo's defaults reproduced verbatim:
+
+- Bubbles sit at 0.8 base opacity; the hovered bubble scales to 1.2 with opacity 1, switched over 300ms `cubicOut`. On first render every bubble grows from its own centre and fades in from 0, over 1000ms `cubicInOut`; above 2000 data points the enter is skipped and they land on the final frame.
+- Choropleth hover keeps the hovered region's own ramp colour while every other region drops to `blur.itemStyle.opacity` 0.45, again 300ms `cubicOut`; regions without data never take emphasis.
+- As in ECharts' own maps, neither component has **geometry animation** (`animationDurationUpdate: 0`): roam and zoom only rewrite the SVG `transform`, never tweening paths or coordinates.
+- Under `prefers-reduced-motion: reduce` the tweens land on their final frame: bubbles appear at full size and opacity, and emphasis switches instantly.
+
 ## API
 
 ### Shared Props (both components)

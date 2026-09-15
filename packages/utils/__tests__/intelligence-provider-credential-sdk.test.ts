@@ -148,6 +148,18 @@ describe('intelligence provider credential SDK', () => {
         capabilities: ['audio.asr'],
         metadata: { voiceAsr: { protocol: 'bailian-paraformer', resourceId: 'wrong' } }
       }
+    },
+    {
+      name: 'user-authored Nexus cloud protocol metadata',
+      provider: {
+        id: 'voice-asr-channel',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Voice ASR channel',
+        enabled: true,
+        models: ['asr-model'],
+        capabilities: ['audio.asr'],
+        metadata: { voiceAsr: { protocol: 'nexus-pack' } }
+      }
     }
   ])('rejects an audio.asr channel with $name', ({ provider: asrProvider }) => {
     expect(() =>

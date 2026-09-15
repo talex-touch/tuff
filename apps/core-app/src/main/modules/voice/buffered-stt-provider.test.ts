@@ -33,6 +33,7 @@ interface InvokeCall {
 
 const PROVIDER_ID = 'tuff-nexus-default'
 const FROZEN_MODEL = 'nexus-audio-transcribe'
+
 const WAV_DATA_URI_PREFIX = 'data:audio/wav;base64,'
 
 function invokeResult(
@@ -70,7 +71,12 @@ function request(overrides: Partial<VoiceStreamRequest> = {}): VoiceStreamReques
 
 function providerWith(
   invoke: SttInvoker,
-  options: { authorityCheck?: () => boolean } = {}
+  options: {
+    authorityCheck?: () => boolean
+    maxBufferBytes?: number
+    maxDurationSec?: number
+    timeoutMs?: number
+  } = {}
 ): VoiceProviderAdapter {
   return createBufferedSttVoiceProvider({
     providerId: PROVIDER_ID,
@@ -223,7 +229,6 @@ describe('createBufferedSttVoiceProvider', () => {
       )
     }
   )
-
   it.each([
     {
       name: 'a coded provider failure',
@@ -331,6 +336,34 @@ describe('createBufferedSttVoiceProvider', () => {
     }
   )
 
+  it('bounds the buffered audio to the frozen pack byte limit', async () => {
+    const { invoke, calls } = recordingInvoker()
+    const stream = await providerWith(invoke, { maxBufferBytes: 100 }).createStream(request())
+
+    // The pack's own ceiling is accepted exactly; the byte past it is refused before the provider runs.
+    await expect(stream.writePcm(Buffer.alloc(100))).resolves.toBeUndefined()
+    await expectProviderError(stream.writePcm(Buffer.alloc(1)), 'VOICE_AUDIO_TOO_LARGE')
+
+    expect(calls).toEqual([])
+  })
+
+  it.each([
+    { name: '24 kHz', sampleRate: 24_000, maxBytes: 48_000 },
+    { name: '16 kHz', sampleRate: 16_000, maxBytes: 32_000 }
+  ])(
+    'bounds the buffered audio to one frozen pack second at $name',
+    async ({ sampleRate, maxBytes }) => {
+      const { invoke, calls } = recordingInvoker()
+      const stream = await providerWith(invoke, { maxDurationSec: 1 }).createStream(
+        request({ audio: { format: 'pcm', sampleRate, channels: 1, bitsPerSample: 16 } })
+      )
+
+      await expect(stream.writePcm(Buffer.alloc(maxBytes))).resolves.toBeUndefined()
+      await expectProviderError(stream.writePcm(Buffer.alloc(1)), 'VOICE_AUDIO_TOO_LARGE')
+      expect(calls).toEqual([])
+    }
+  )
+
   it('discards a transcript that arrives after the authority changed mid-upload', async () => {
     let current = true
     const { invoke, calls } = recordingInvoker(async () => {
@@ -354,4 +387,32 @@ describe('createBufferedSttVoiceProvider', () => {
     expect(JSON.stringify(events)).not.toContain('previous account')
     expect(calls).toHaveLength(1)
   })
+  it.each([
+    {
+      name: 'the frozen pack deadline when it is shorter',
+      packTimeoutMs: 5_000,
+      requestTimeoutMs: 9_000,
+      expected: 5_000
+    },
+    {
+      name: 'the caller deadline when it is shorter',
+      packTimeoutMs: 9_000,
+      requestTimeoutMs: 3_000,
+      expected: 3_000
+    }
+  ])(
+    'propagates $name to the outbound transcription call',
+    async ({ packTimeoutMs, requestTimeoutMs, expected }) => {
+      const { invoke, calls } = recordingInvoker()
+      const stream = await providerWith(invoke, { timeoutMs: packTimeoutMs }).createStream(
+        request({ timeoutMs: requestTimeoutMs })
+      )
+
+      await stream.writePcm(Buffer.from([0x01, 0x02]))
+      await stream.end()
+      await collect(stream.events)
+
+      expect(calls[0]?.options?.timeout).toBe(expected)
+    }
+  )
 })

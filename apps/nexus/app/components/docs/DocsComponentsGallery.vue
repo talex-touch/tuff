@@ -6,10 +6,14 @@ import {
   TxArcSeries,
   TxChart,
   TxChartLegendItem,
+  TxChartTooltip,
   TxChoroplethMap,
+  TxEChart,
   TxSankeyChart,
   TxTimeseriesChart,
-} from '@talex-touch/tuffex-charts'
+} from '@talex-touch/tuffex/charts'
+import type { EChartsOption } from 'echarts'
+import { MINI_WORLD_GEO } from './mini-world-geo'
 import type { FileUploaderFile } from '@tuffex-components/file-uploader'
 import type { ImageUploaderFile } from '@tuffex-components/image-uploader'
 import type { AiChainStep, AiElementMessage } from '@tuffex-components/ai-elements'
@@ -106,9 +110,9 @@ const copy = computed(() => (localeKey.value === 'zh'
       closableTag: '可关闭',
       steps: ['下载', '安装', '完成'],
       allocation: [
-        { key: 'stable', label: '稳定版', percent: 56 },
-        { key: 'beta', label: '测试版', percent: 30 },
-        { key: 'snapshot', label: '快照版', percent: 14 },
+        { key: 'stable', label: '稳定版', percent: 56, description: '面向所有用户的默认通道' },
+        { key: 'beta', label: '测试版', percent: 30, description: '提前体验新特性' },
+        { key: 'snapshot', label: '快照版', percent: 14, description: '主分支的每夜构建' },
       ],
       confidence: [
         { value: 1, label: '低', tone: 'var(--tx-color-danger)' },
@@ -186,9 +190,9 @@ const copy = computed(() => (localeKey.value === 'zh'
       closableTag: 'Closable',
       steps: ['Download', 'Install', 'Done'],
       allocation: [
-        { key: 'stable', label: 'Stable', percent: 56 },
-        { key: 'beta', label: 'Beta', percent: 30 },
-        { key: 'snapshot', label: 'Snapshot', percent: 14 },
+        { key: 'stable', label: 'Stable', percent: 56, description: 'Default channel for everyone' },
+        { key: 'beta', label: 'Beta', percent: 30, description: 'Early access to new features' },
+        { key: 'snapshot', label: 'Snapshot', percent: 14, description: 'Nightly builds off main' },
       ],
       confidence: [
         { value: 1, label: 'Low', tone: 'var(--tx-color-danger)' },
@@ -580,41 +584,115 @@ const recommendationOptions = computed(() => [
   { key: 'stable', label: copy.value.channels[0]?.label ?? '', short: copy.value.installBody, text: copy.value.installBody, confidence: 'high' as const },
   { key: 'beta', label: copy.value.channels[1]?.label ?? '', short: copy.value.aboutBody, text: copy.value.aboutBody, confidence: 'medium' as const },
 ])
-/* ── Data band. Charts come from `@talex-touch/tuffex-charts`, which is aliased
+/* ── Data band. Charts come from `@talex-touch/tuffex/charts`, which is aliased
    but not globally registered, so they are imported explicitly — and never as
-   `TxGrid`, which would shadow the layout grid used above. ── */
+   `TxGrid`, which would shadow the layout grid used above.
+   Every specimen below is the component's real interaction rather than a
+   still picture: hover reports values, and Cartesian charts carry both axes. ── */
 const donutSlices = [
   { label: 'Stable', count: 4820 },
   { label: 'Beta', count: 3160 },
   { label: 'Snapshot', count: 940 },
 ]
+const donutTotal = donutSlices.reduce((sum, slice) => sum + slice.count, 0)
+const donutHover = ref<{ name?: string, index: number, value: number } | null>(null)
+const donutRows = computed(() => donutHover.value
+  ? [{
+      name: 'Installs',
+      color: ChartPalette.categoricalVar(donutHover.value.index),
+      value: `${donutHover.value.value.toLocaleString()} · ${Math.round(donutHover.value.value / donutTotal * 100)}%`,
+    }]
+  : [])
+
 const DAY = 86_400_000
 const seriesStart = Date.UTC(2026, 1, 9)
 const timeseriesData = [
   { name: 'Installs', data: Array.from({ length: 7 }, (_, i) => [seriesStart + i * DAY, 420 + (i % 3) * 80] as [number, number]) },
   { name: 'Errors', data: Array.from({ length: 7 }, (_, i) => [seriesStart + i * DAY, 40 + (i % 4) * 18] as [number, number]) },
 ]
+
+/* Twelve evenly spaced days. Both series stay inside one value band so the y
+   axis has something to label, and the gaps are uniform so the default
+   monotone curve reads as a trend instead of a zig-zag. */
+const sparkSeries = [
+  { id: 'installs', label: 'Installs', color: ChartPalette.categoricalVar(0), data: [420, 468, 512, 494, 548, 610, 586, 642, 705, 678, 742, 804].map((value, time) => ({ time, value })) },
+  { id: 'errors', label: 'Errors', color: ChartPalette.categoricalVar(2), data: [186, 204, 178, 216, 232, 208, 244, 226, 258, 240, 268, 286].map((value, time) => ({ time, value })) },
+]
+const sparkIndex = ref<number | null>(null)
+const sparkRows = computed(() => sparkIndex.value === null
+  ? []
+  : sparkSeries.map(series => ({
+      label: series.label,
+      color: series.color,
+      value: (series.data[sparkIndex.value!]?.value ?? 0).toLocaleString(),
+    })))
+const sparkTimeLabel = computed(() =>
+  sparkIndex.value === null ? '' : `Mar ${sparkIndex.value + 1}`)
+function sparkTick(value: number): string {
+  return `Mar ${Math.round(value) + 1}`
+}
+
+/* The gallery's only raw-option chart: a bar plus a line on one grid, which is
+   the proof that the escape hatch carries the themed axis chrome and tooltip
+   without a typed wrapper. Bars and line share the category axis, so the trend
+   is read against the same seven days. */
+const echartDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const echartOption = computed<EChartsOption>(() => ({
+  tooltip: { trigger: 'axis' },
+  legend: {},
+  grid: { left: 44, right: 12, top: 30, bottom: 28 },
+  xAxis: { type: 'category', data: echartDays },
+  yAxis: { type: 'value' },
+  series: [
+    {
+      name: 'Installs',
+      type: 'bar',
+      data: [420, 468, 512, 494, 548, 610, 586],
+      barWidth: 14,
+      itemStyle: { borderRadius: [3, 3, 0, 0] },
+    },
+    {
+      name: 'Sessions',
+      type: 'line',
+      data: [820, 932, 901, 934, 1290, 1330, 1320],
+      smooth: true,
+      showSymbol: false,
+    },
+  ],
+}))
+
+/* Ported from kumo's compact Sankey preview: every intermediate node's inflow
+   and outflow balance, so nothing hangs below its links as an unaccounted tail. */
 const sankeyNodes = [
-  { name: 'Search', value: 5200 },
-  { name: 'Docs', value: 5200 },
-  { name: 'Install', value: 3100 },
+  { name: 'Search', value: 50 },
+  { name: 'Community', value: 40 },
+  { name: 'Paid', value: 35 },
+  { name: 'Install', value: 55 },
+  { name: 'Store', value: 70 },
 ]
 const sankeyLinks = [
-  { source: 0, target: 1, value: 5200 },
-  { source: 1, target: 2, value: 3100 },
+  { source: 0, target: 3, value: 30 },
+  { source: 0, target: 4, value: 20 },
+  { source: 1, target: 3, value: 25 },
+  { source: 1, target: 4, value: 15 },
+  { source: 2, target: 4, value: 35 },
 ]
-/* Inline geometry so the map specimen never depends on a fetch. */
-const miniGeoJson = {
-  type: 'FeatureCollection' as const,
-  features: [
-    { type: 'Feature' as const, properties: { country: 'West' }, geometry: { type: 'Polygon' as const, coordinates: [[[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]]] } },
-    { type: 'Feature' as const, properties: { country: 'East' }, geometry: { type: 'Polygon' as const, coordinates: [[[5, 0], [9, 0], [9, 4], [5, 4], [5, 0]]] } },
-  ],
+/* Real but rounded country outlines, inlined so the specimen never waits on a
+   fetch — and joined on `properties.name`, which is the key the choropleth
+   reads by default. */
+const mapGeoJson = MINI_WORLD_GEO
+const mapShares = [
+  { country: 'United States of America', share: 31 },
+  { country: 'Brazil', share: 12 },
+  { country: 'China', share: 24 },
+  { country: 'India', share: 14 },
+  { country: 'Australia', share: 7 },
+  { country: 'South Africa', share: 4 },
+]
+function mapValueFormat(value: number): string {
+  return `${value}%`
 }
-const miniGeoData = [
-  { country: 'West', share: 62 },
-  { country: 'East', share: 28 },
-]
+const allocationKey = ref('stable')
 const diffColumns = [
   { key: 'name', title: 'Plugin', width: '55%' },
   { key: 'channel', title: 'Channel', width: '45%' },
@@ -647,11 +725,6 @@ const statusStates = computed(() => [
   { slug: 'permission-state', is: TxPermissionState, en: 'PermissionState', zh: '权限态' },
   { slug: 'search-empty', is: TxSearchEmpty, en: 'SearchEmpty', zh: '搜索无结果' },
 ])
-
-const sparkSeries = [{
-  id: 'adoption',
-  data: [4, 6, 5, 8, 7, 10, 9, 12, 11].map((value, time) => ({ time, value })),
-}]
 
 const orbStates: OrbState[] = ['working', 'searching', 'solving']
 
@@ -3413,7 +3486,24 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__spark">
-              <TxSparkChart :series="sparkSeries" grid />
+              <TxChartScrubber
+                class="docs-gallery__spark-stage"
+                :point-count="sparkSeries[0]?.data.length ?? 0"
+                :active-index="sparkIndex"
+                :rows="sparkRows"
+                :time-label="sparkTimeLabel"
+                @update:active-index="sparkIndex = $event"
+              >
+                <TxSparkChart
+                  :series="sparkSeries"
+                  :active-index="sparkIndex"
+                  :padding="{ top: 14, right: 10, bottom: 24, left: 36 }"
+                  :x-tick-format="sparkTick"
+                  grid
+                  x-axis
+                  y-axis
+                />
+              </TxChartScrubber>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -3429,7 +3519,7 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxAllocationBar :segments="copy.allocation" />
+              <TxAllocationBar v-model="allocationKey" :segments="copy.allocation" detail />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -3503,7 +3593,20 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxChart :height="150" :padding="8">
-                <TxArcSeries :data="donutSlices" value="count" name="label" :inner-radius="0.65" />
+                <TxArcSeries
+                  :data="donutSlices"
+                  value="count"
+                  name="label"
+                  :inner-radius="0.65"
+                  @slice-hover="donutHover = $event"
+                />
+                <template #overlay>
+                  <TxChartTooltip
+                    :open="donutHover !== null"
+                    :title="donutHover?.name"
+                    :rows="donutRows"
+                  />
+                </template>
               </TxChart>
             </div>
             <template #fallback>
@@ -3520,7 +3623,15 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxChoroplethMap :geo-json="miniGeoJson" :data="miniGeoData" name="country" value="share" :height="140" />
+              <TxChoroplethMap
+                :geo-json="mapGeoJson"
+                :data="mapShares"
+                name="country"
+                value="share"
+                :height="176"
+                :value-format="mapValueFormat"
+                show-legend
+              />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -3536,7 +3647,7 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxSankeyChart :nodes="sankeyNodes" :links="sankeyLinks" :height="150" />
+              <TxSankeyChart :nodes="sankeyNodes" :links="sankeyLinks" :height="170" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -3569,6 +3680,22 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxDiffTable :columns="diffColumns" :rows="diffRows" play="auto" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('echart-charts')">
+          {{ cellLabel('ECharts', 'ECharts 图表') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__block">
+              <TxEChart :option="echartOption" :height="220" aria-label="Installs and sessions by weekday" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />

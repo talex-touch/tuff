@@ -62,7 +62,7 @@ Additionally required in **Production**, because the data they protect is unread
 Feature-gated credential names may be absent while their owning feature is disabled, but every configured name must use `secret_text`:
 
 - OAuth and access control: `GITHUB_CLIENT_SECRET`, `LINUXDO_CLIENT_SECRET`, `ADMIN_CF_ACCESS_CLIENT_SECRET`, `ADMINSECRET`
-- Encrypted stores: `STORAGE_SECURE_STORE_KEY` (object-storage credentials; its store is empty and its consumer fails closed, so it is not gated in Production)
+- Encrypted stores and catalogs: `STORAGE_SECURE_STORE_KEY` (object-storage credentials; its store is empty and its consumer fails closed, so it is not gated in Production), `VOICE_PROVIDER_CATALOG_KEYS` (a JSON secret map keyed as `voice-provider/<packId>/<version>/<keyId>` whose values are 32-byte base64 AES keys)
 - Signing, integrations, and build upload: `PLUGIN_ATTESTATION_PRIVATE_KEY_PEM`, `EXCHANGE_RATE_API_KEY`, `SENTRY_AUTH_TOKEN`
 
 Optional or compatibility credential names may also be absent, but must use `secret_text` when configured: `ADMIN_SECRET`, `NUXT_DOC_TOKEN_SECRET`, and `RELEASE_DOWNLOAD_SIGNING_SECRET`. Public client IDs, origins, public keys, and key IDs are ordinary configuration and are not in this catalog.

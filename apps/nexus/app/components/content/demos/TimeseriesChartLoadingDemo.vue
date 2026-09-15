@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { TimeseriesData } from '@talex-touch/tuffex-charts'
-import { TxTimeseriesChart } from '@talex-touch/tuffex-charts'
+import type { TimeseriesData } from '@talex-touch/tuffex/charts'
+import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
 import { onBeforeUnmount, ref } from 'vue'
 
 const loading = ref(true)

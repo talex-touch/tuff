@@ -1,5 +1,7 @@
 // Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
+import type { LineCurve } from '../../charts/src/series/src/types'
+
 export interface SparkPoint {
   /** Epoch seconds (or any monotonic x value). Uniform gaps read as an even series. */
   time: number
@@ -11,7 +13,7 @@ export interface SparkSeries {
   data: SparkPoint[]
   /** Stroke colour. Falls back to the BUI accent ramp by series order. */
   color?: string
-  /** Only used by hosts building legends; the canvas draws no labels. */
+  /** Used in hover announcements when provided. */
   label?: string
 }
 
@@ -34,12 +36,38 @@ export interface SparkChartProps {
   gridLines?: number
   /** @default 2.25 — the upstream stroke weight. */
   lineWidth?: number
+  /** `d3-shape` curve. @default 'monotone' */
+  curve?: LineCurve
+  /** Draw an x baseline and time ticks. @default false */
+  xAxis?: boolean
+  /** Draw a y baseline and value ticks. @default false */
+  yAxis?: boolean
+  /** Number of x tick labels. @default 3 */
+  xTicks?: number
+  /** Number of y tick labels. @default 4 */
+  yTicks?: number
+  /** Formats x tick values. The default uses UTC HH:MM for epoch values. */
+  xTickFormat?: (time: number) => string
+  /** Formats y tick values. @default compact decimal */
+  yTickFormat?: (value: number) => string
   /** Inner inset in CSS pixels. @default { top: 24, right: 0, bottom: 22, left: 0 } */
   padding?: Partial<SparkChartPadding>
   /** Fixed value range; omit to fit the data. */
   domain?: [number, number]
+  /** Controlled highlighted sample. Omit to let the chart own pointer and key state. */
+  activeIndex?: number | null
+  /** Enables pointer, keyboard crosshair and value announcement. @default true */
+  interactive?: boolean
+  /** Enables ECharts-parity enter and update motion. @default true */
+  animation?: boolean
   /** Accessible name for the canvas (`role="img"`). */
   ariaLabel?: string
+}
+
+export interface SparkChartEmits {
+  (e: 'update:activeIndex', index: number | null): void
+  (e: 'hover', index: number): void
+  (e: 'leave'): void
 }
 
 export interface ChartTooltipRow {
@@ -63,9 +91,13 @@ export interface ChartScrubberProps {
   timeLabel?: string
   /** @default true — set false for a bare cursor line. */
   tooltip?: boolean
-  /** Anchor clamp so the tooltip never overhangs the stage. @default 28 / 72 */
-  anchorMin?: number
-  anchorMax?: number
+  /**
+   * Gap kept between the tooltip and the stage edges, in px. The tooltip is
+   * clamped only when it would overhang, so it tracks the pointer across the
+   * whole width instead of freezing inside a fixed percentage band.
+   * @default 8
+   */
+  anchorMargin?: number
   disabled?: boolean
 }
 

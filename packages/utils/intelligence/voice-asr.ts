@@ -1,4 +1,9 @@
-export const VOICE_ASR_PROTOCOLS = ['bailian-paraformer', 'dashscope-qwen-asr-realtime', 'doubao'] as const
+export const VOICE_ASR_PROTOCOLS = [
+  'bailian-paraformer',
+  'dashscope-qwen-asr-realtime',
+  'doubao',
+  'nexus-pack'
+] as const
 
 export type VoiceAsrProtocol = (typeof VOICE_ASR_PROTOCOLS)[number]
 
@@ -63,6 +68,7 @@ export function normalizeVoiceAsrMetadata(value: unknown): VoiceAsrMetadata | un
     const resourceId = normalizeIdentifier(record.resourceId, MAX_RESOURCE_ID_LENGTH)
     return resourceId ? { protocol: record.protocol, resourceId } : undefined
   }
+  if (record.protocol === 'nexus-pack') return { protocol: record.protocol }
   return undefined
 }
 

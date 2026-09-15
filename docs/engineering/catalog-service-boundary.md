@@ -1,13 +1,13 @@
 # CatalogService 完成边界
 
-> 更新时间：2026-08-20
-> 定位：R8-F CatalogService MVP 的已完成/未完成边界。任务契约见 [`.trellis/tasks/07-13-catalog-service-mvp/prd.md`](../../.trellis/tasks/07-13-catalog-service-mvp/prd.md)，产品契约见 [`plan-prd/03-features/i18n-lexicon-catalog-2.6.0-prd.md`](../plan-prd/03-features/i18n-lexicon-catalog-2.6.0-prd.md)。
+> 更新时间：2026-09-13
+> 定位：R8-F CatalogService 的 **2026-08-20 domain-lexicon 基线**。`voice-provider` 已于 2026-09-13 接出登录触发、typed host controls、Settings 状态页、A256GCM artifact、Nexus routes 与 main-owned `nexus-pack` runtime，当前边界见 [`plan-prd/03-features/voice-provider-cloud-pack-prd.md`](../plan-prd/03-features/voice-provider-cloud-pack-prd.md)。下文历史结论不得外推到 `voice-provider`。
 
 ## 一句话结论
 
-**服务契约已完成并可验证；触发面尚未接出。** CatalogService 的验签、导入、激活、回滚全部实现且有测试覆盖，但除内置 pack 的 seed/activate 之外，**运行中的应用没有任何代码路径会调用它们** —— 远程更新那一半今天只能从测试里到达。
+**2026-08-20 的 domain-lexicon 结论：服务契约完成，远程触发未接出。** 当时除内置 pack seed/activate 外，运行中应用没有调用远程更新阶段；这仍描述 `domain-lexicon`，但已不描述 `voice-provider`。
 
-把「CatalogService 已完成」读成「用户或运维今天可以更新 catalog」是错的，这份文档存在的唯一目的就是拦住这个误读。
+把历史“CatalogService 只有测试调用方”继续套到整个 Catalog 家族是错的；`voice-provider` 现在已有登录后一次同步、手动 check/sync/rollback，以及每次语音采集前的 active descriptor 读取。
 
 ## 已完成（2026-08-20 复核）
 
@@ -41,21 +41,27 @@
 | 两个包各自的 eslint 配置 | 0 error |
 | `tsconfig.node.json` / `tsconfig.web.json` typecheck | 0 error |
 
-## 未完成：已实现但运行时不可达
+## 2026-08-20 未完成项：仅 domain-lexicon
 
 这是本文档的核心，也是任务 PRD 那 8 个 `[x]` 无法自己说清楚的部分。
 
-**远程更新全链路没有调用方。** `checkUpdates` / `downloadPack` / `importPack` / `activatePack` / `rollback` 实现完整、测试充分，但在 `apps/core-app/src` 与 `packages/` 中，除 `modules/catalog/` 自身及其测试外没有任何调用点。仓库里其它 `checkUpdates` 调用属于插件商店与 agent store，其它 `rollback` 调用属于 `invocation` / `buffer` / 插件 host registry，都是同名不同物。
+**domain-lexicon 的远程更新仍无产品调用方。** 它的 `checkUpdates` / `downloadPack` / `importPack` / `activatePack` / `rollback` 保持显式服务 API。`voice-provider` 不同：`CatalogModule` 已在登录状态转换中运行 check→download→key→decrypt→import→activate，并注册 host-only typed controls；`voice-provider-runtime` 每次采集前读取 active registry，冻结同源 Nexus descriptor/model 与收紧后的限额。
 
-**诊断状态算得出来，但没有出口。** `getCatalogService()` 在 catalog 模块之外零调用方，没有 IPC channel、没有诊断页、没有渲染端消费者会读 `getStatus()`。`CatalogStatus` 的字段是对的，可用性、active/previous 身份与 hash、签名状态、更新时间、回滚原因、稳定错误码都在 —— 但今天它是一个内部 API 契约，不是可观测的功能。
+**domain-lexicon 状态仍无渲染出口；voice-provider 已有。** `/setting/intelligence/voice` 只接收安全的 `CatalogStatus`/`CatalogPackDiagnostic` 投影，展示 active/previous、ciphertext hash、签名状态与稳定错误码；raw envelope、DEK、签名和 payload 不跨 IPC。运行时的 pack expiry/sdkapi/protocol/origin/model 失败另以 `VOICE_ASR_PACK_*` 投影，并将恢复动作导向该页的云端路由控件。
 
 **今天真正在跑的只有 read 路径。** 启动时 seed 并激活内置 pack，插件通过 `officialDomainLexiconRegistry` facade 读到当前 official registry，activate 时 facade 保持对象身份不变而内容被替换，插件 overlay 与跨插件隔离在 activate→rollback 全程保持。这条链路是活的、被测试的、被使用的。
 
-上述三点与 PRD 的 Scope Boundaries 一致（不做 Settings UI、不做自动轮询），**不是缺陷**。记录它们是因为「done」在这里的含义是「服务契约成立」，不是「能力已交付给用户」。要让它成为可交付能力，还需要一个触发面（Settings 入口、IPC channel 或运维命令）与一个状态展示面 —— 两者都在本批范围之外。
+上述历史边界对 `domain-lexicon` 仍成立；`voice-provider` 的触发/状态面由独立 PRD 显式扩展，不代表自动轮询，也不允许 renderer 解析包。
 
 ## 明确不在范围内（复核未越界）
 
-`CatalogPackType` 是字面量 `"domain-lexicon"` 而非联合类型，`CATALOG_SCHEMA_VERSION` 固定为 1，没有 delta patch 路径、没有发布/管理 API、没有 D1/R2 代码、渲染端零 catalog 引用、插件 overlay 只在内存 `Map` 中不持久化。既有单位换算行为与 `KB` / `Kb` 语义未改动。
+2026-08-20 时 `CatalogPackType` 还是字面量 `"domain-lexicon"`；现在已加法式扩为 `"domain-lexicon" | "voice-provider"`，并保持两种 entry/registry/persistence 类型隔离。仍没有 delta patch 或 mutable catalog 业务表；插件 overlay 继续只驻内存。
+
+## 后续云控类型扩展契约
+
+Catalog 是声明式可信内容的**交付平面**，不是脚本平台。后续类型可以复用 manifest/signature/content-address/envelope/key identity/SQLite lifecycle，但必须各自增加随客户端发布的 typed normalizer、typed rows、runtime adapter 和失败码；不得把 arbitrary JSON、表达式或下载代码塞进共享 evaluator。
+
+远程 check/download/key/activate 统一以登录完成为前提，未登录必须在网络前返回 `CATALOG_AUTH_REQUIRED`。status 与本地 rollback 保持可达。云控包只调整客户端已实现的参数，不得打开本机可选功能、权限或麦克风；新增实质性类别/用途前同步用户协议或独立告知。
 
 ## 一处悬空引用
 
@@ -68,10 +74,11 @@
 cd apps/core-app && npx vitest run src/main/modules/catalog
 cd packages/utils && npx vitest run __tests__/i18n
 
-# 「无调用方」这一条 —— 注意先确认扫描本身有效（正控）
-grep -rln "CatalogService" apps/core-app/src --include="*.ts" | grep -v node_modules   # 应能列出 catalog 模块文件
-grep -rn "getCatalogService" apps/core-app/src packages --include="*.ts" --include="*.vue" \
-  | grep -v node_modules | grep -v "modules/catalog/"                                   # 应为空
+# domain-lexicon 产品触发仍为空；voice-provider 的触发和 transport 证据改看其任务测试
+grep -rn "checkUpdates('voice-provider')" apps/core-app/src/main/modules/catalog
+node ../../node_modules/vitest/vitest.mjs run \
+  src/main/modules/catalog/index.test.ts \
+  src/renderer/src/views/base/settings/VoiceProviderCatalogSettings.test.ts
 ```
 
-第二条命令若返回空，先跑第一条确认 grep 确实看得见这些文件 —— 一个拼错的路径同样返回空，而那看起来和「没有调用方」一模一样。
+核对时必须按 pack type 区分：`domain-lexicon` 的历史产品边界不能代替 `voice-provider` 的当前触发、加密和 Settings 证据。

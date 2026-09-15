@@ -1,5 +1,6 @@
 <script setup lang="ts" name="SettingSpeechRecognition">
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { useEventListener } from '@vueuse/core'
@@ -19,6 +20,7 @@ import {
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import { appSetting } from '~/modules/storage/app-storage'
+import VoiceProviderCatalogSettings from './VoiceProviderCatalogSettings.vue'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
@@ -131,11 +133,26 @@ function openCapabilities(): void {
   >
     <TuffBlockSwitch
       v-model="voiceInputEnabled"
+      data-testid="voice-input-enabled-toggle"
       :title="t('settingSpeechRecognition.input.title')"
       :description="t('settingSpeechRecognition.input.description')"
       default-icon="i-carbon-microphone"
       active-icon="i-carbon-microphone-filled"
-    />
+    >
+      <template #tags>
+        <TxTag
+          size="sm"
+          :type="voiceInputEnabled ? 'success' : 'info'"
+          data-testid="voice-input-opt-in-status"
+        >
+          {{
+            voiceInputEnabled
+              ? t('settingSpeechRecognition.input.manualOnLabel')
+              : t('settingSpeechRecognition.input.defaultOffLabel')
+          }}
+        </TxTag>
+      </template>
+    </TuffBlockSwitch>
 
     <!--
       Only while voice input is on: a machine that is not using Fn for dictation has no conflict
@@ -214,6 +231,7 @@ function openCapabilities(): void {
       </TxButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
+  <VoiceProviderCatalogSettings />
 </template>
 
 <style scoped lang="scss">

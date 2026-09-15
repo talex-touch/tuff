@@ -392,7 +392,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/fine-tune-card',
     // ── suite: data — overview
     '/docs/dev/components/data-suite',
-    // data — Charts (@talex-touch/tuffex-charts; mirrors the kumo docs order)
+    // data — Charts (the @talex-touch/tuffex/charts subpath; mirrors the kumo docs order)
     '/docs/dev/components/charts',
     '/docs/dev/components/chart-colors',
     '/docs/dev/components/timeseries-chart',
@@ -442,8 +442,9 @@ const SECTION_ORDER: Record<string, string[]> = {
 // Categories and their suite assignment mirror
 // scripts/recategorize-component-docs.py — keep the two files in sync. The
 // tuffex entry barrels stay base/pro/ai: 'data' is a docs-level split
-// (Visualization components still import from the pro barrel; the chart family
-// is the standalone @talex-touch/tuffex-charts package).
+// (Visualization components and the chart family both import from the pro
+// barrel; the chart family also ships behind the @talex-touch/tuffex/charts
+// subpath).
 type SuiteKey = DocsSuiteKey
 
 interface SuiteDef {
