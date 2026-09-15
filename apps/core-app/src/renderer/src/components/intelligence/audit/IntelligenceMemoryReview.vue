@@ -7,6 +7,7 @@ import type {
   MemoryReplacementInput
 } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -587,7 +588,7 @@ onMounted(() => {
       </div>
 
       <div v-if="loadingMemories && memories.length === 0" class="memory-review__empty">
-        <i class="i-carbon-circle-dash animate-spin" />
+        <TxSpinner :size="16" />
         {{ t('common.loading') }}
       </div>
       <div v-else-if="memories.length === 0" class="memory-review__empty">

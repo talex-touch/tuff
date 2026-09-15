@@ -2,6 +2,7 @@
 import type { FileIndexFailedFile } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { inject, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -103,7 +104,7 @@ function close() {
     </div>
 
     <div v-else-if="loading" class="dialog-loading">
-      <div class="i-carbon-circle-dash text-24px animate-spin" />
+      <TxSpinner :size="24" />
     </div>
 
     <template v-else>
@@ -348,18 +349,5 @@ function close() {
 
 .file-flip-move {
   transition: transform 0.4s ease;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

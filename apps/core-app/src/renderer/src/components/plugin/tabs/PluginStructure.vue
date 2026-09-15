@@ -4,6 +4,7 @@ import type { PluginFileTreeNode } from '@talex-touch/utils/transport/events/typ
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxEmpty } from '@talex-touch/tuffex/empty'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
@@ -195,7 +196,7 @@ watch(
       </div>
 
       <div v-if="loading" class="PluginStructure-Loading">
-        <i class="i-ri-loader-4-line animate-spin" />
+        <TxSpinner :size="16" />
         <span>{{ t('plugin.structure.loading') }}</span>
       </div>
 
