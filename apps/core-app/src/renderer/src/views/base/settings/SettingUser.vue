@@ -2,6 +2,7 @@
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TxModal as TModal } from '@talex-touch/tuffex/modal'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { formatCompactAccountLabel, formatCompactEmail } from '@talex-touch/utils/account'
 import { isDevEnv } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -432,13 +433,18 @@ function openProfileEditor() {
   <TModal v-model="loginDialogVisible" :title="loginDialogTitle">
     <div class="login-dialog" data-testid="login-recovery-dialog">
       <div class="login-dialog__icon" :class="`is-${authLoadingState.loginStage}`">
+        <TxSpinner
+          v-if="
+            authLoadingState.loginStage !== 'failed' && authLoadingState.loginStage !== 'success'
+          "
+          :size="24"
+        />
         <span
+          v-else
           :class="
             authLoadingState.loginStage === 'failed'
               ? 'i-carbon-warning-filled'
-              : authLoadingState.loginStage === 'success'
-                ? 'i-carbon-checkmark-filled'
-                : 'i-carbon-circle-dash animate-spin'
+              : 'i-carbon-checkmark-filled'
           "
         />
       </div>

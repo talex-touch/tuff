@@ -3,6 +3,7 @@
 import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import type { WritableComputedRef } from 'vue'
 import { computed, useId } from 'vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -64,10 +65,7 @@ function handleClick(event: MouseEvent) {
     </template>
     <template v-if="!guidance">
       <div class="flex items-center gap-3">
-        <span
-          v-if="loading"
-          class="i-ri-loader-4-line text-[var(--tx-text-color-secondary)] animate-spin"
-        />
+        <TxSpinner v-if="loading" :size="16" class="text-[var(--tx-text-color-secondary)]" />
         <TxSwitch
           v-model="value"
           :disabled="disabled || loading"
