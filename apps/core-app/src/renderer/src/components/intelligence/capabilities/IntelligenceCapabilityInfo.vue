@@ -6,9 +6,9 @@ import type {
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { getVoiceCapabilityRecommendedModels } from '@talex-touch/utils/intelligence/voice-asr'
 import { useI18n } from 'vue-i18n'
-import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
@@ -35,7 +35,7 @@ const props = defineProps<{
 const emits = defineEmits<{
   toggleProvider: [providerId: string, enabled: boolean]
   updateModels: [providerId: string, value: string[]]
-  updatePrompt: [prompt: string]
+  updatePrompt: [capabilityId: string, prompt: string]
   test: [
     options?: {
       providerId?: string
@@ -46,17 +46,15 @@ const emits = defineEmits<{
     }
   ]
   reorderProviders: [bindings: IntelligenceCapabilityProviderBinding[]]
-  save: []
 }>()
 
 const { t } = useI18n()
 
 const promptValue = ref(props.capability.promptTemplate || '')
 const focusedProviderId = ref<string>('')
-const showModelDialog = ref(false)
+const showModelDrawer = ref(false)
 const showPromptDrawer = ref(false)
 const showTestDrawer = ref(false)
-const modelDialogSource = ref<HTMLElement | null>(null)
 let promptTimer: number | null = null
 let syncingFromProps = false
 
@@ -174,6 +172,13 @@ function getBindingModelSummary(binding: CapabilityBinding): string {
   return t('settings.intelligence.capabilityModelCount', { count })
 }
 
+/** What the open model drawer is editing, shown under its provider name. */
+const focusedModelSummary = computed(() =>
+  focusedBinding.value
+    ? getBindingModelSummary(focusedBinding.value)
+    : t('settings.intelligence.capabilityBindingModelsDesc')
+)
+
 watch(
   () => props.capability.promptTemplate,
   (value) => {
@@ -183,9 +188,14 @@ watch(
   }
 )
 
+/**
+ * The prompt travels with the capability it belongs to. The last edit of a draft is flushed from
+ * `onBeforeUnmount`, which runs after the page has already switched selection — writing to
+ * "whatever is selected now" would copy this capability's prompt onto the next one.
+ */
 function flushPrompt(): void {
   if (syncingFromProps) return
-  emits('updatePrompt', promptValue.value)
+  emits('updatePrompt', props.capability.id, promptValue.value)
 }
 
 function schedulePromptSync(): void {
@@ -230,20 +240,11 @@ function handleModelTransferUpdates(models: string[]): void {
   emits('updateModels', focusedProviderId.value, models)
 }
 
-function resolveDialogSource(event?: MouseEvent): HTMLElement | null {
-  return event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
-}
-
-function openModelDialogForProvider(providerId: string, event?: MouseEvent): void {
+function openModelDrawerForProvider(providerId: string): void {
   focusedProviderId.value = providerId
-  openModelDialog(event)
-}
-
-function openModelDialog(event?: MouseEvent): void {
   if (!focusedProvider.value) return
   if (!canEditModels.value) return
-  modelDialogSource.value = resolveDialogSource(event)
-  showModelDialog.value = true
+  showModelDrawer.value = true
 }
 
 function openPromptDrawer(): void {
@@ -265,8 +266,12 @@ function handleTest(options?: {
   emits('test', options)
 }
 
+/**
+ * The single header indicator that replaced the status line plus manual save button: the page
+ * autosaves, so the box only has to say where the write stands — including the error text,
+ * which is the one state the user must be able to read.
+ */
 const saveStatusIcon = computed(() => {
-  if (props.isSaving) return 'i-carbon-renew animate-spin'
   if (props.saveState === 'saved') return 'i-carbon-checkmark'
   if (props.saveState === 'error') return 'i-carbon-warning-alt'
   if (props.hasPendingChanges) return 'i-carbon-dot-mark'
@@ -274,26 +279,17 @@ const saveStatusIcon = computed(() => {
 })
 
 const saveStatusText = computed(() => {
-  if (props.isSaving) return t('settings.intelligence.capabilitySaveSaving')
-  if (props.saveState === 'saved') return t('settings.intelligence.capabilitySaveSaved')
+  if (props.isSaving) return t('settings.intelligence.autoSaveSaving')
+  if (props.saveState === 'saved') return t('settings.intelligence.autoSaveSaved')
   if (props.saveState === 'error') {
     const detail = props.saveErrorDetail?.trim()
     return detail
       ? t('settings.intelligence.capabilitySaveErrorWithDetail', { detail })
       : t('settings.intelligence.capabilitySaveError')
   }
-  if (props.hasPendingChanges) return t('settings.intelligence.capabilitySavePending')
-  return t('settings.intelligence.capabilitySaveIdle')
+  if (props.hasPendingChanges) return t('settings.intelligence.autoSavePending')
+  return t('settings.intelligence.autoSaveEnabled')
 })
-
-function handleManualSave(): void {
-  if (promptTimer) {
-    clearTimeout(promptTimer)
-    promptTimer = null
-  }
-  flushPrompt()
-  emits('save')
-}
 
 watch(
   () => [props.providers, props.capability.id],
@@ -330,21 +326,16 @@ onBeforeUnmount(() => {
       <CapabilityHeader :capability="capability">
         <template #actions>
           <div class="capability-info__header-actions">
-            <div class="capability-info__save-status" role="status" aria-live="polite">
-              <i :class="saveStatusIcon" aria-hidden="true" />
+            <div
+              class="capability-info__save-status"
+              :data-status="isSaving ? 'saving' : saveState"
+              role="status"
+              aria-live="polite"
+            >
+              <TxSpinner v-if="isSaving" :size="14" :label="saveStatusText" />
+              <i v-else :class="saveStatusIcon" aria-hidden="true" />
               <span>{{ saveStatusText }}</span>
             </div>
-            <TxButton
-              class="capability-info__save-button"
-              variant="flat"
-              type="primary"
-              :disabled="isSaving"
-              :aria-busy="isSaving"
-              @click="handleManualSave"
-            >
-              <i class="i-carbon-save" aria-hidden="true" />
-              <span>{{ t('settings.intelligence.capabilitySaveButton') }}</span>
-            </TxButton>
             <TxButton
               class="capability-info__test-button"
               variant="flat"
@@ -400,12 +391,12 @@ onBeforeUnmount(() => {
             :description="getBindingModelSummary(binding)"
             default-icon="i-carbon-model"
             :active="!!binding.models?.length"
-            @click="openModelDialogForProvider(binding.providerId, $event)"
+            @click="openModelDrawerForProvider(binding.providerId)"
           >
             <TxButton
               variant="flat"
               type="primary"
-              @click.stop="openModelDialogForProvider(binding.providerId, $event)"
+              @click.stop="openModelDrawerForProvider(binding.providerId)"
             >
               <i class="i-carbon-settings" aria-hidden="true" />
               <span>{{ t('settings.intelligence.manageModels') }}</span>
@@ -435,22 +426,23 @@ onBeforeUnmount(() => {
     </template>
   </TxScroll>
 
-  <FlipDialog
-    v-model="showModelDialog"
-    :reference="modelDialogSource"
-    :header-title="t('settings.intelligence.capabilityBindingModelsTitle')"
-    :header-desc="focusedProvider?.name || focusedProviderId"
-    size="xl"
-    max-height="calc(86dvh - 24px)"
+  <TxDrawer
+    v-model:visible="showModelDrawer"
+    :title="t('settings.intelligence.capabilityBindingModelsTitle')"
   >
-    <CapabilityModelTransfer
-      :scope-key="focusedProviderId"
-      :model-value="focusedBinding?.models || []"
-      :available-models="focusedProviderModels"
-      :disabled="!canEditModels"
-      @update:model-value="handleModelTransferUpdates"
-    />
-  </FlipDialog>
+    <div class="capability-info__drawer">
+      <p class="capability-info__drawer-description">
+        {{ focusedProvider?.name || focusedProviderId }} · {{ focusedModelSummary }}
+      </p>
+      <CapabilityModelTransfer
+        :scope-key="focusedProviderId"
+        :model-value="focusedBinding?.models || []"
+        :available-models="focusedProviderModels"
+        :disabled="!canEditModels"
+        @update:model-value="handleModelTransferUpdates"
+      />
+    </div>
+  </TxDrawer>
 
   <TxDrawer
     v-model:visible="showPromptDrawer"
@@ -523,7 +515,7 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  max-width: 15rem;
+  max-width: 18rem;
   color: var(--tx-text-color-secondary);
   font-size: 0.75rem;
 
@@ -532,10 +524,10 @@ onBeforeUnmount(() => {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-}
 
-.capability-info__save-button {
-  flex-shrink: 0;
+  &[data-status='error'] {
+    color: var(--tx-color-danger);
+  }
 }
 
 .capability-info__test-button {
