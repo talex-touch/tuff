@@ -7,7 +7,7 @@ import {
   assertCredentialObject,
   assertNonEmptyString,
   createSecureCredentialCrypto,
-  getD1Database,
+  requireD1Database,
   type SecureCredentialRow,
 } from './secureCredentialStore'
 
@@ -132,7 +132,7 @@ export async function storeProviderCredential(
   input: StoreProviderCredentialInput,
   createdBy: string,
 ): Promise<StoreProviderCredentialResult> {
-  const db = getD1Database(event)
+  const db = requireD1Database(event)
   await ensureProviderCredentialSchema(db)
 
   const authRef = crypto.normalizeAuthRef(input.authRef)
@@ -171,7 +171,7 @@ export async function getProviderCredential(
   event: H3Event,
   authRef: string,
 ): Promise<ProviderCredentialPayload | null> {
-  const db = getD1Database(event)
+  const db = requireD1Database(event)
   await ensureProviderCredentialSchema(db)
 
   const normalizedAuthRef = crypto.normalizeAuthRef(authRef)
@@ -197,7 +197,7 @@ export async function deleteProviderCredential(
   event: H3Event,
   authRef: string,
 ): Promise<boolean> {
-  const db = getD1Database(event)
+  const db = requireD1Database(event)
   await ensureProviderCredentialSchema(db)
 
   const normalizedAuthRef = crypto.normalizeAuthRef(authRef)
