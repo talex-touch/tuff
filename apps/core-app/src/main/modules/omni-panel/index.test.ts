@@ -1,4 +1,10 @@
+import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
+
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { omniPanelRendererReadyEvent } from '../../../shared/events/omni-panel'
+import { getMainConfig } from '../storage'
+import { OmniPanelModule } from './index'
 
 const {
   getTuffTransportMainMock,
@@ -235,11 +241,6 @@ vi.mock('../../utils/logger', () => ({
   }))
 }))
 
-import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { OmniPanelModule } from './index'
-import { getMainConfig } from '../storage'
-
 afterEach(() => {
   vi.clearAllMocks()
   touchWindowInstances.length = 0
@@ -264,7 +265,7 @@ function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   }
 }
 
-describe('OmniPanelModule registry initialization', () => {
+describe('omniPanelModule registry initialization', () => {
   it('initializes builtin feature registry when empty', () => {
     const module = new OmniPanelModule() as unknown as {
       initializeFeatureRegistry: (items: unknown[]) => {
@@ -290,7 +291,7 @@ describe('OmniPanelModule registry initialization', () => {
   })
 })
 
-describe('OmniPanel settings normalization', () => {
+describe('omniPanel settings normalization', () => {
   it('reads custom mouse long press duration from settings snapshot', () => {
     vi.mocked(getMainConfig).mockReturnValue({
       omniPanel: {
@@ -337,7 +338,7 @@ describe('OmniPanel settings normalization', () => {
   })
 })
 
-describe('OmniPanelModule execute dispatch', () => {
+describe('omniPanelModule execute dispatch', () => {
   it('dispatches builtin/corebox/plugin/system routes correctly', async () => {
     const module = new OmniPanelModule() as unknown as {
       featureRegistry: Array<{
@@ -397,7 +398,7 @@ describe('OmniPanelModule execute dispatch', () => {
   })
 })
 
-describe('OmniPanelModule selection capture diagnostics', () => {
+describe('omniPanelModule selection capture diagnostics', () => {
   it('delegates Linux capture diagnostics to the shared selection capture service', async () => {
     const expected = {
       text: '',
@@ -424,7 +425,7 @@ describe('OmniPanelModule selection capture diagnostics', () => {
   })
 })
 
-describe('OmniPanelModule auto-mount', () => {
+describe('omniPanelModule auto-mount', () => {
   it('enables auto-mount by default while preserving explicit trigger and auto-mount values', () => {
     const module = new OmniPanelModule() as unknown as {
       getSettingsSnapshot: (setting: Record<string, unknown>) => {
@@ -559,7 +560,7 @@ describe('OmniPanelModule auto-mount', () => {
   })
 })
 
-describe('OmniPanelModule hard-cut transport', () => {
+describe('omniPanelModule hard-cut transport', () => {
   it('does not register retired feature toggle handler', async () => {
     const retiredEventName = 'omni-panel:feature:toggle'
     const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
@@ -585,7 +586,7 @@ describe('OmniPanelModule hard-cut transport', () => {
   })
 })
 
-describe('OmniPanel smoke', () => {
+describe('omniPanel smoke', () => {
   it('hides when the panel window loses focus', async () => {
     const module = new OmniPanelModule() as unknown as {
       ensureWindow: () => Promise<void>
@@ -687,7 +688,7 @@ describe('OmniPanel smoke', () => {
   })
 })
 
-describe('OmniPanel context capsule', () => {
+describe('omniPanel context capsule', () => {
   it('pushes transient desktop context capsule without persistence', async () => {
     const { clipboard } = await import('electron')
     vi.mocked(clipboard.readText).mockReturnValue('clipboard text')
@@ -732,7 +733,7 @@ describe('OmniPanel context capsule', () => {
   })
 })
 
-describe('OmniPanel execute failure paths', () => {
+describe('omniPanel execute failure paths', () => {
   it('returns FEATURE_UNAVAILABLE when resolved feature is unavailable', async () => {
     const module = new OmniPanelModule() as unknown as {
       featureRegistry: Array<Record<string, unknown>>
@@ -901,7 +902,7 @@ describe('OmniPanel execute failure paths', () => {
   })
 })
 
-describe('OmniPanel CoreBox transfer', () => {
+describe('omniPanel CoreBox transfer', () => {
   it('shows CoreBox and broadcasts only a non-empty typed query', async () => {
     getCoreBoxWindowMock.mockReturnValue({
       window: { id: 77, isDestroyed: () => false }
@@ -932,7 +933,7 @@ describe('OmniPanel CoreBox transfer', () => {
   })
 })
 
-describe('OmniPanel shortcut and input-hook guards', () => {
+describe('omniPanel shortcut and input-hook guards', () => {
   it('opens CoreBox Context Actions immediately when shortcut key map is unavailable', () => {
     const module = new OmniPanelModule() as unknown as {
       shortcutHoldEnabled: boolean
@@ -1290,5 +1291,166 @@ describe('OmniPanel shortcut and input-hook guards', () => {
 
     expect(transitions).toEqual(['down:escape:1', 'up:escape:1'])
     unregister()
+  })
+})
+
+describe('omniPanel project-local-ai context', () => {
+  interface SendToTransport {
+    sendTo: { mock: { calls: unknown[][] } }
+  }
+
+  interface PanelModuleHarness {
+    transport: SendToTransport
+    panelWindow: { window: { isDestroyed: () => boolean; webContents: object } }
+    panelRendererReady: boolean
+    lastContext: { source?: string; localAi?: Record<string, unknown> }
+    notifyFeatureRefresh: (reason: string) => void
+    markPanelRendererReady: () => void
+    pushContext: (...args: unknown[]) => Promise<void>
+    showLocalAi: (draftText?: string) => Promise<void>
+    ensureWindow: () => Promise<{
+      window: { show: () => void; focus: () => void; isDestroyed: () => boolean }
+    }>
+    positionWindowNearCursor: () => void
+    buildDesktopContextCapsule: (...args: unknown[]) => Promise<Record<string, unknown>>
+    captureSelectionText: () => Promise<{ text: string; supportLevel: string }>
+  }
+
+  function createHarness() {
+    const sendTo = vi.fn(
+      async (_target: unknown, _event: unknown, _payload: unknown): Promise<void> => undefined
+    )
+    const module = new OmniPanelModule() as unknown as PanelModuleHarness
+    module.transport = { sendTo }
+    module.panelWindow = { window: { isDestroyed: () => false, webContents: {} } }
+    module.panelRendererReady = true
+    module.notifyFeatureRefresh = vi.fn()
+    module.positionWindowNearCursor = vi.fn()
+    module.buildDesktopContextCapsule = vi.fn(async () => ({ capturedAt: 1 }))
+    module.ensureWindow = vi.fn(async () => ({
+      window: { show: vi.fn(), focus: vi.fn(), isDestroyed: () => false }
+    }))
+    module.captureSelectionText = vi.fn(async () => ({ text: '', supportLevel: 'supported' }))
+    return { module, sendTo }
+  }
+
+  function pushedPayload(transport: SendToTransport): Record<string, unknown> {
+    const payload = transport.sendTo.mock.calls[0]?.[2]
+    if (!payload || typeof payload !== 'object') throw new Error('No context payload was pushed')
+    return payload as Record<string, unknown>
+  }
+
+  it('pushes only opaque project-local-ai identifiers to the renderer', async () => {
+    const { module, sendTo } = createHarness()
+
+    await module.pushContext(
+      'draft',
+      'project-local-ai',
+      undefined,
+      undefined,
+      { capturedAt: 1 },
+      {
+        projectId: 'proj-1',
+        sessionRef: 'sess-1',
+        provider: 'pi'
+      }
+    )
+
+    const payload = pushedPayload({ sendTo })
+    expect(payload.source).toBe('project-local-ai')
+    expect(payload.localAi).toEqual({ projectId: 'proj-1', sessionRef: 'sess-1', provider: 'pi' })
+  })
+
+  it('drops non-opaque or unknown project-local-ai values before delivery', async () => {
+    const { module, sendTo } = createHarness()
+
+    await module.pushContext(
+      'draft',
+      'project-local-ai',
+      undefined,
+      undefined,
+      { capturedAt: 1 },
+      {
+        projectId: '../../etc/passwd',
+        sessionRef: 'x'.repeat(129),
+        provider: 'gemini' as never
+      }
+    )
+
+    expect(pushedPayload({ sendTo }).localAi).toEqual({})
+  })
+
+  it('holds project-local-ai context until the renderer is ready', async () => {
+    const { module, sendTo } = createHarness()
+    module.panelRendererReady = false
+
+    const pending = module.pushContext(
+      'draft',
+      'project-local-ai',
+      undefined,
+      undefined,
+      { capturedAt: 1 },
+      { projectId: 'proj-1', sessionRef: 'sess-1', provider: 'pi' }
+    )
+    expect(sendTo).not.toHaveBeenCalled()
+
+    module.markPanelRendererReady()
+    await pending
+
+    expect(pushedPayload({ sendTo }).localAi).toEqual({
+      projectId: 'proj-1',
+      sessionRef: 'sess-1',
+      provider: 'pi'
+    })
+  })
+
+  it('replays the deferred project-local-ai context when the renderer announces readiness', async () => {
+    const sendTo = vi.fn(
+      async (_target: unknown, _event: unknown, _payload: unknown): Promise<void> => undefined
+    )
+    const handlers = new Map<string, (payload: unknown) => unknown>()
+    getTuffTransportMainMock.mockReturnValue({
+      on: vi.fn((event: { toEventName: () => string }, handler: (payload: unknown) => unknown) => {
+        handlers.set(event.toEventName(), handler)
+        return vi.fn()
+      }),
+      broadcast: vi.fn(),
+      sendTo,
+      sendToWindow: vi.fn()
+    } as never)
+    const module = new OmniPanelModule() as unknown as {
+      panelWindow: { window: { isDestroyed: () => boolean; webContents: object } }
+      lastContext: { source?: string; localAi?: Record<string, unknown> }
+      onInit: (ctx: unknown) => Promise<void>
+    }
+    await module.onInit({} as never)
+    module.panelWindow = { window: { isDestroyed: () => false, webContents: {} } }
+    module.lastContext = {
+      source: 'project-local-ai',
+      localAi: { projectId: 'proj-1', sessionRef: 'sess-1', provider: 'pi' }
+    }
+
+    handlers.get(omniPanelRendererReadyEvent.toEventName())?.(undefined)
+
+    expect(pushedPayload({ sendTo }).localAi).toEqual({
+      projectId: 'proj-1',
+      sessionRef: 'sess-1',
+      provider: 'pi'
+    })
+  })
+
+  it('leaves CoreBox and shortcut contexts free of project-local-ai metadata', async () => {
+    const { module, sendTo } = createHarness()
+
+    await module.pushContext('corebox draft', 'corebox-local-ai')
+    expect(pushedPayload({ sendTo }).localAi).toBeUndefined()
+
+    sendTo.mockClear()
+    await module.showLocalAi('shortcut draft')
+
+    const payload = pushedPayload({ sendTo })
+    expect(payload.source).toBe('local-ai-shortcut')
+    expect(payload.text).toBe('shortcut draft')
+    expect(payload.localAi).toBeUndefined()
   })
 })

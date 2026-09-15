@@ -3,6 +3,7 @@ import type { IntelligenceCapabilityConfig } from '@talex-touch/tuff-intelligenc
 import type { CapabilityTestResult as UiCapabilityTestResult } from '~/components/intelligence/capabilities/types'
 import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { useAppSdk, useIntelligenceSdk } from '@talex-touch/utils/renderer'
@@ -784,9 +785,10 @@ onBeforeUnmount(() => {
                       class="prompt-actions__status"
                       :data-status="autoSaveStatus"
                     >
-                      <i
+                      <TxSpinner
                         v-if="autoSaveStatus === 'pending' || autoSaveStatus === 'saving'"
-                        class="i-carbon-renew animate-spin text-[var(--tx-text-color-secondary)]"
+                        :size="14"
+                        class="text-[var(--tx-text-color-secondary)]"
                       />
                       <i
                         v-else-if="autoSaveStatus === 'saved'"

@@ -84,6 +84,7 @@ import type {
   TxGridInstance,
   TxGridItemInstance,
 } from './src/grid/index'
+import type { IconMorphProps } from './src/icon-morph/index'
 import type { TxIconButtonProps } from './src/button/index'
 import type { TxImageGalleryInstance } from './src/image-gallery/index'
 import type { KbdProps } from './src/kbd/index'
@@ -159,6 +160,8 @@ export type MissingExportContract = [
   TxGridItemInstance,
   // button (icon-button lives in the button entry)
   TxIconButtonProps,
+  // icon-morph
+  IconMorphProps,
   // image-gallery
   TxImageGalleryInstance,
   // kbd

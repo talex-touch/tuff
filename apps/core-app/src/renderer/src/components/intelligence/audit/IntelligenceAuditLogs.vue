@@ -6,6 +6,7 @@ import type {
 } from './context-package-log-summary'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -314,7 +315,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
     </div>
 
     <div v-if="loading && logs.length === 0" class="loading">
-      <i class="i-carbon-circle-dash animate-spin" />
+      <TxSpinner :size="16" />
       {{ t('common.loading') }}
     </div>
 
@@ -390,7 +391,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
               </span>
             </div>
             <div v-if="packageLogsLoading[log.traceId]" class="context-package-state">
-              <i class="i-carbon-circle-dash animate-spin" />
+              <TxSpinner :size="16" />
               {{ t('common.loading') }}
             </div>
             <div
@@ -505,7 +506,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
                     v-if="checkpointsLoadingBySessionId[summary.sessionId]"
                     class="context-package-state"
                   >
-                    <i class="i-carbon-circle-dash animate-spin" />
+                    <TxSpinner :size="16" />
                     {{ t('common.loading') }}
                   </div>
                   <div

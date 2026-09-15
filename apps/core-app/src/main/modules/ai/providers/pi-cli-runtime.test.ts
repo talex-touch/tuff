@@ -593,3 +593,101 @@ describe('buildPiArgs tool allowlist', () => {
     }
   })
 })
+
+/**
+ * A Home turn continues the conversation's own native Pi transcript. `--session-id` creates that
+ * transcript, `--session` resumes it; a call without a session binding must keep the ephemeral
+ * `--no-session` shape, or the shared quick-invoke workspace would start persisting Pi sessions on
+ * the user's machine. Flipping `create` for an existing binding forks a second transcript, so the
+ * flag/id pair is the contract, not the mere presence of a session flag.
+ */
+describe('buildPiArgs native session selector', () => {
+  const prompt = { systemPrompt: 'sys', prompt: 'hi' }
+  const isolationFlags = ['--no-tools', '--no-extensions', '--no-skills', '--no-context-files']
+
+  it('creates the Home transcript with --session-id instead of going session-less', () => {
+    const args = buildPiArgs(prompt, undefined, { session: { id: 'native-1', create: true } })
+
+    expect(args.slice(args.indexOf('--session-id'), args.indexOf('--session-id') + 2)).toEqual([
+      '--session-id',
+      'native-1'
+    ])
+    expect(args).not.toContain('--no-session')
+    expect(args).not.toContain('--session')
+  })
+
+  it('resumes the existing Home transcript with --session and the same id', () => {
+    const args = buildPiArgs(prompt, undefined, { session: { id: 'native-1', create: false } })
+
+    expect(args.slice(args.indexOf('--session'), args.indexOf('--session') + 2)).toEqual([
+      '--session',
+      'native-1'
+    ])
+    expect(args).not.toContain('--session-id')
+    expect(args).not.toContain('--no-session')
+  })
+
+  it('keeps every isolation flag when a session is resumed', () => {
+    const args = buildPiArgs(prompt, undefined, { session: { id: 'native-1', create: false } })
+    for (const flag of isolationFlags) expect(args).toContain(flag)
+  })
+
+  it('stays ephemeral when the caller has no session binding', () => {
+    for (const args of [buildPiArgs(prompt), buildPiArgs(prompt, undefined, { tools: ['read'] })]) {
+      expect(args).toContain('--no-session')
+      expect(args).not.toContain('--session')
+      expect(args).not.toContain('--session-id')
+    }
+  })
+})
+
+/**
+ * A bound Home session already holds the earlier turns in Pi's own transcript, so the positional
+ * prompt must be exactly the newest user turn. Framing the app-visible history again would replay
+ * every prior assistant message into the same native session — and pi records a positional argument
+ * as a user message, so the replay would double as a fabricated user turn.
+ *
+ * The bootstrap case is the opposite side of the same contract: the one send before any pointer
+ * exists must carry the visible history, because that transcript is the only place it will live.
+ */
+describe('buildPiPrompt native continuation', () => {
+  const history = [
+    { role: 'user' as const, content: 'first question' },
+    { role: 'assistant' as const, content: 'PRIOR_ASSISTANT_CANARY' },
+    { role: 'user' as const, content: 'newest question' }
+  ]
+
+  it('sends only the newest user turn when the native transcript owns the history', () => {
+    const prompt = buildPiPrompt(history, { nativeContinuation: true })
+
+    expect(prompt.prompt).toBe('newest question')
+    expect(prompt.prompt).not.toContain('PRIOR_ASSISTANT_CANARY')
+    expect(prompt.prompt).not.toContain('Conversation so far')
+    expect(prompt.prompt).not.toContain('first question')
+  })
+
+  it('seeds the visible history once when no native pointer exists yet', () => {
+    const prompt = buildPiPrompt(history)
+
+    expect(prompt.prompt).toContain('Conversation so far')
+    expect(prompt.prompt).toContain('PRIOR_ASSISTANT_CANARY')
+    expect(prompt.prompt).toContain('newest question')
+  })
+
+  it('does not let the bootstrap budget pressure a continuation send', () => {
+    // Pi's own compaction governs the stored context; the app-side bootstrap cap must never drop
+    // or annotate turns on a send that Pi already owns.
+    const giant = 'y'.repeat(PI_CLI_TRANSCRIPT_CHAR_BUDGET + 5000)
+    const prompt = buildPiPrompt(
+      [
+        { role: 'user', content: 'old' },
+        { role: 'assistant', content: 'reply' },
+        { role: 'user', content: giant }
+      ],
+      { nativeContinuation: true }
+    )
+
+    expect(prompt.prompt).toBe(giant)
+    expect(prompt.prompt).not.toContain('omitted')
+  })
+})

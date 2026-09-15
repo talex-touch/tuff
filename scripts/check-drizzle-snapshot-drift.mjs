@@ -62,8 +62,17 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * adds the voice provider catalog pack table. Its full-chain SQLite regression is in
  * voice-provider-entries-schema.test.ts. This records only that migration's known gap; it does
  * not regenerate or claim to repair snapshot history.
+ *
+ * Raised 33 → 35 on 2026-09-15 while merging `pi-desktop-analysis`, for its two hand-written
+ * migrations. Both collided at `0046` with master's `0046_voice_provider_entries` and were
+ * renumbered on merge — `0046_folder_projects_native_sessions` → `0047`, and
+ * `0047_home_pi_native_sessions` → `0048` — the same renumber-on-merge precedent as the
+ * 24 → 25 raise above, which moved an existing gap rather than losing a snapshot. Their
+ * full-chain SQLite regressions are in project-native-sessions-schema.test.ts and the Local
+ * AI CLI continuation suite. This records the two known additions; it does not regenerate or
+ * claim to repair snapshot history.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 33
+export const KNOWN_MISSING_SNAPSHOTS = 35
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))

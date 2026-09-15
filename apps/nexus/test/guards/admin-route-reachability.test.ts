@@ -19,19 +19,28 @@ import type { SourceFile, Violation } from './helpers/repo'
  */
 
 const RULE = 'admin-route-orphan'
-const ADMIN_PAGES_DIR = 'app/pages/dashboard/admin'
+const ADMIN_PAGES_DIR = 'app/pages/admin'
 
 /**
  * Occurrences that only *recognise* a path rather than navigate to it.
- * `DashboardNav` matches every admin path in its active-state helper, so
- * without this the guard would call every route reachable and prove nothing.
+ * `AdminNav` matches every console path in its active-state helper, so without
+ * this the guard would call every route reachable and prove nothing.
  */
 const MATCHING_CALL_SUFFIX = /(?:startsWith|endsWith|includes|indexOf|match|test|replace|startsWithAny)\s*\(\s*$/
 const COMPARISON_SUFFIX = /(?:===|!==|==|!=)\s*$/
 
+/**
+ * A route path is only a link when it starts where the string does. Since the
+ * console moved from `/dashboard/admin/*` to `/admin/*`, every page route is a
+ * suffix of its own API route — `/admin/codes` occurs inside the four
+ * `'/api/admin/codes'` calls in `subscriptions.vue` — and a plain substring
+ * scan reported the orphaned activation-codes page as reachable.
+ */
+const PATH_SEGMENT_CHARACTER = /[\w\-./]/
+
 export function routePathForPage(relativePath: string): string {
   const name = relativePath.slice(`${ADMIN_PAGES_DIR}/`.length).replace(/\.vue$/, '')
-  return `/dashboard/admin/${name}`
+  return `/admin/${name}`
 }
 
 /**
@@ -59,9 +68,15 @@ function countLinkOccurrences(sources: SourceFile[], routePath: string, excludeP
       continue
     let index = source.content.indexOf(routePath)
     while (index !== -1) {
+      const previousCharacter = index > 0 ? source.content[index - 1]! : ''
       const preceding = source.content.slice(Math.max(0, index - 40), index).replace(/['"`]\s*$/, '')
-      if (!MATCHING_CALL_SUFFIX.test(preceding) && !COMPARISON_SUFFIX.test(preceding))
+      if (
+        !PATH_SEGMENT_CHARACTER.test(previousCharacter)
+        && !MATCHING_CALL_SUFFIX.test(preceding)
+        && !COMPARISON_SUFFIX.test(preceding)
+      ) {
         total += 1
+      }
       index = source.content.indexOf(routePath, index + 1)
     }
   }
@@ -110,18 +125,17 @@ function loadAdminPages(): SourceFile[] {
 /**
  * Orphans that predate this guard. Self-expiring: `no waiver has gone stale`
  * fails as soon as one gains a navigation entry.
+ *
+ * `/admin/intelligence-chat` used to be here and is not any more: the console
+ * made its rail the single navigation surface, and the chat probe became an
+ * entry under Intelligence instead of a URL-only page.
  */
 const KNOWN_ORPHANS = [
   {
-    route: '/dashboard/admin/intelligence-chat',
-    why: 'A working admin chat console with no entry point. Either it belongs in the Admin menu next to '
-      + 'Tuff AI, or it is dead code that should go.',
-  },
-  {
-    route: '/dashboard/admin/codes',
-    why: 'Activation codes. AccountTabs.vue highlights the Subscriptions tab while on this route '
-      + '(AccountTabs.vue:20) but never renders a link to it, and DashboardNav\'s sectionPaths has no '
-      + '`codes` entry — so the page is styled as if it belonged to a tab group it cannot be reached from.',
+    route: '/admin/codes',
+    why: 'Activation codes. AdminNav highlights the Subscriptions entry while on this route so the '
+      + 'forward does not flash the wrong section, but nothing renders a link to it — the page is '
+      + 'a redirect stub that only an old bookmark or a hand-typed URL reaches.',
   },
 ]
 
@@ -135,7 +149,7 @@ describe('guard: every admin page is reachable from the UI', () => {
     expect(pages.length, 'no admin pages found').toBeGreaterThan(10)
     expect(links.length, 'no link sources found').toBeGreaterThan(100)
     expect(
-      countLinkOccurrences(links, '/dashboard/admin/users', 'app/pages/dashboard/admin/users.vue'),
+      countLinkOccurrences(links, '/admin/users', 'app/pages/admin/users.vue'),
       'the users page is linked from the dashboard navigation; if this is 0 the link scan is broken',
     ).toBeGreaterThan(0)
   })
@@ -146,35 +160,60 @@ describe('guard: every admin page is reachable from the UI', () => {
     const matchingOnly: SourceFile[] = [{
       path: 'app/components/dashboard/Nav.vue',
       content: [
-        'if (route.path.startsWith(\'/dashboard/admin/ghost\'))',
+        'if (route.path.startsWith(\'/admin/ghost\'))',
         '  return true',
-        'const active = route.path === \'/dashboard/admin/ghost\'',
+        'const active = route.path === \'/admin/ghost\'',
       ].join('\n'),
     }]
-    expect(countLinkOccurrences(matchingOnly, '/dashboard/admin/ghost', 'x')).toBe(0)
+    expect(countLinkOccurrences(matchingOnly, '/admin/ghost', 'x')).toBe(0)
 
     const linked: SourceFile[] = [{
       path: 'app/components/dashboard/Nav.vue',
-      content: 'const sectionPaths = { ghost: \'/dashboard/admin/ghost\' }',
+      content: 'const sectionPaths = { ghost: \'/admin/ghost\' }',
     }]
-    expect(countLinkOccurrences(linked, '/dashboard/admin/ghost', 'x')).toBe(1)
+    expect(countLinkOccurrences(linked, '/admin/ghost', 'x')).toBe(1)
+  })
+
+  it('does not read an API call as a link to the page of the same name', () => {
+    // The real instance: `/admin/codes` is a suffix of `/api/admin/codes`, and
+    // `subscriptions.vue` calls that endpoint four times. Before the segment
+    // rule those four calls made the orphaned activation-codes page look
+    // reachable, which is the one thing this guard exists to notice.
+    // Assembled rather than written out: a literal interpolation inside a
+    // non-template string is exactly what `no-template-curly-in-string` exists
+    // to catch, and here it is fixture text, not a bug.
+    const interpolation = `$${'{code.id}'}`
+    const apiOnly: SourceFile[] = [{
+      path: 'app/pages/admin/subscriptions.vue',
+      content: [
+        'const res = await rawFetch(\'/api/admin/codes\')',
+        `await rawFetch(\`/api/admin/codes/${interpolation}\`, { method: 'DELETE' })`,
+      ].join('\n'),
+    }]
+    expect(countLinkOccurrences(apiOnly, '/admin/codes', 'x')).toBe(0)
+
+    const linked: SourceFile[] = [{
+      path: 'app/components/admin/AdminNav.vue',
+      content: 'const sectionPaths = { codes: \'/admin/codes\' }',
+    }]
+    expect(countLinkOccurrences(linked, '/admin/codes', 'x')).toBe(1)
   })
 
   it('flags a page nothing links to', () => {
     const page: SourceFile = {
-      path: 'app/pages/dashboard/admin/ghost.vue',
+      path: 'app/pages/admin/ghost.vue',
       content: '<script setup lang="ts">const x = 1</script>\n<template><div>{{ x }}</div></template>',
     }
     const violations = scanAdminRouteReachability({ linkSources: [], pages: [page] })
     expect(violations).toHaveLength(1)
-    expect(violations[0]!.message).toContain('/dashboard/admin/ghost')
+    expect(violations[0]!.message).toContain('/admin/ghost')
   })
 
   it('exempts a page that only forwards elsewhere', () => {
     // intelligence-lab is reachable by URL only on purpose: it redirects.
     const page: SourceFile = {
-      path: 'app/pages/dashboard/admin/retired.vue',
-      content: '<script setup lang="ts">\nawait navigateTo(\'/dashboard/admin/intelligence\')\n</script>\n'
+      path: 'app/pages/admin/retired.vue',
+      content: '<script setup lang="ts">\nawait navigateTo(\'/admin/intelligence\')\n</script>\n'
         + '<template><div /></template>',
     }
     expect(isForwardingPage(page)).toBe(true)

@@ -10,6 +10,8 @@ const title = computed(() => {
     return 'Docs'
   if (layout.value === 'store')
     return 'Store'
+  if (layout.value === 'admin')
+    return 'ADMIN'
   if (layout.value === 'dashboard')
     return 'Dashboard'
   if (layout.value === 'license')

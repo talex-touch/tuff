@@ -80,6 +80,7 @@ function payloadRoute(identity: {
 const PAYLOAD_IDENTITY = {
   packId: 'official.voice-provider',
   version: '2026.09.13',
+  sha256: 'a'.repeat(64),
 }
 
 function keyRoute(identity: {
@@ -168,6 +169,27 @@ describe('catalog artifact routes', () => {
       'Cache-Control',
       'public, max-age=31536000, immutable',
     )
+  })
+
+  it('404s a stored object whose bytes do not match the content-addressed route', async () => {
+    const routeSha256 = 'c'.repeat(64)
+    const bytes = Buffer.from('staged-under-the-wrong-digest')
+    const route = payloadRoute({ ...PAYLOAD_IDENTITY, filename: `${routeSha256}.json` })
+    const event = makeEvent(route.path, route.params)
+    selectParams(route.params)
+
+    await stageCatalogArtifact(
+      event,
+      catalogArtifactPayloadObjectKey({
+        type: 'voice-provider',
+        ...PAYLOAD_IDENTITY,
+        sha256: routeSha256,
+      }),
+      bytes,
+    )
+
+    await expect(payloadHandler(event)).rejects.toMatchObject({ statusCode: 404 })
+    expect(h3Mocks.setResponseHeader).not.toHaveBeenCalled()
   })
 
   it('serves a payload that is not valid JSON byte-for-byte, because the server never parses it', async () => {

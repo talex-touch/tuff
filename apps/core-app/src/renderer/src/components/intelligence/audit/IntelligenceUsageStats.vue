@@ -3,6 +3,7 @@ import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 
 interface IntelligenceUsageSummary {
   period: string
@@ -76,7 +77,7 @@ function formatNumber(num: number): string {
 <template>
   <div class="usage-stats">
     <div v-if="isLoading" class="loading">
-      <i class="i-carbon-circle-dash animate-spin" />
+      <TxSpinner :size="16" />
       {{ t('common.loading') }}
     </div>
 

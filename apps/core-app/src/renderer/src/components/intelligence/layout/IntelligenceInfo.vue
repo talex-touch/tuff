@@ -194,11 +194,7 @@ function handleSyncFromNexus() {
             :loading="authLoadingState.isLoggingIn"
             @click.stop="handleLogin"
           >
-            <i
-              :class="
-                authLoadingState.isLoggingIn ? 'i-carbon-renew animate-spin' : 'i-carbon-login'
-              "
-            />
+            <i v-if="!authLoadingState.isLoggingIn" class="i-carbon-login" aria-hidden="true" />
             <span>{{ t('settings.intelligence.nexusInvokeLoginAction') }}</span>
           </TxButton>
           <TxButton
@@ -322,19 +318,6 @@ function handleSyncFromNexus() {
 
   .is-error {
     color: var(--tx-color-danger);
-  }
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
   }
 }
 </style>

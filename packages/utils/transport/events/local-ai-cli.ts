@@ -29,22 +29,27 @@ export interface LocalAiCliStartRequest {
   prompt: string
   access: LocalAiCliAccess
   context: LocalAiCliContextItem[]
-  workspaceRef?: string
+  projectId?: string
+  sessionRef?: string
 }
 
-export type LocalAiCliErrorCode =
-  | 'BETA_UNAVAILABLE'
-  | 'FEATURE_DISABLED'
-  | 'PROVIDER_DISABLED'
-  | 'PROVIDER_UNAVAILABLE'
-  | 'PROVIDER_VERSION_UNSUPPORTED'
-  | 'WRITE_APPROVAL_UNAVAILABLE'
-  | 'WORKSPACE_INVALID'
-  | 'PROCESS_START_FAILED'
-  | 'PROTOCOL_INVALID'
-  | 'PROCESS_EXITED'
-  | 'CANCELLED'
-  | 'INTERNAL_ERROR'
+export type LocalAiCliErrorCode
+  = | 'BETA_UNAVAILABLE'
+    | 'FEATURE_DISABLED'
+    | 'PROVIDER_DISABLED'
+    | 'PROVIDER_UNAVAILABLE'
+    | 'PROVIDER_VERSION_UNSUPPORTED'
+    | 'WRITE_APPROVAL_UNAVAILABLE'
+    | 'PROVIDER_RESUME_UNSUPPORTED'
+    | 'NATIVE_SESSION_BUSY'
+    | 'NATIVE_SESSION_MISSING'
+    | 'NATIVE_SESSION_CONFLICT'
+    | 'WORKSPACE_INVALID'
+    | 'PROCESS_START_FAILED'
+    | 'PROTOCOL_INVALID'
+    | 'PROCESS_EXITED'
+    | 'CANCELLED'
+    | 'INTERNAL_ERROR'
 
 export interface LocalAiCliApprovalRequest {
   approvalId: string
@@ -73,35 +78,36 @@ export interface LocalAiCliPasteBackResult {
   reason?: 'target-unavailable' | 'target-drift' | 'capture-expired' | 'unsupported'
 }
 
-export type LocalAiCliTaskChunk =
+export type LocalAiCliTaskChunk
+  = | {
+    type: 'session'
+    callId: string
+    provider: LocalAiCliProviderId
+    sessionRef: string
+  }
   | {
-      type: 'session'
-      callId: string
-      provider: LocalAiCliProviderId
-      nativeSessionId?: string
-    }
+    type: 'status'
+    callId: string
+    status: 'starting' | 'running' | 'waiting-approval'
+  }
+  | { type: 'text-delta', callId: string, text: string }
+  | { type: 'approval', callId: string, approval: LocalAiCliApprovalRequest }
+  | { type: 'complete', callId: string, text: string }
   | {
-      type: 'status'
-      callId: string
-      status: 'starting' | 'running' | 'waiting-approval'
-    }
-  | { type: 'text-delta'; callId: string; text: string }
-  | { type: 'approval'; callId: string; approval: LocalAiCliApprovalRequest }
-  | { type: 'complete'; callId: string; text: string }
-  | {
-      type: 'failed'
-      callId: string
-      code: LocalAiCliErrorCode
-      recoverable: boolean
-    }
-  | { type: 'cancelled'; callId: string }
+    type: 'failed'
+    callId: string
+    code: LocalAiCliErrorCode
+    recoverable: boolean
+  }
+  | { type: 'cancelled', callId: string }
 
 export interface LocalAiCliProviderCapabilities {
   taskRead: boolean
   taskWriteApproval: boolean
   terminalRead: boolean
   terminalWriteApproval: boolean
-  resume: boolean
+  taskResume: boolean
+  terminalResume: boolean
 }
 
 export interface LocalAiCliProviderStatus {
@@ -131,8 +137,8 @@ export interface LocalAiCliTerminalCreateRequest {
   access: LocalAiCliAccess
   cols: number
   rows: number
-  nativeSessionId?: string
-  workspaceRef?: string
+  projectId?: string
+  sessionRef?: string
 }
 
 export interface LocalAiCliTerminalCreateResult {
@@ -165,25 +171,73 @@ export interface LocalAiCliTerminalExit {
   signal?: number
 }
 
+export type LocalAiCliSessionState = 'available' | 'missing' | 'conflict'
+export type LocalAiCliSessionOrigin = 'tuff' | 'discovered'
+
+export interface LocalAiCliSessionSummary {
+  sessionRef: string
+  projectId: string | null
+  provider: LocalAiCliProviderId
+  title: string
+  state: LocalAiCliSessionState
+  origin: LocalAiCliSessionOrigin
+  createdAt: number
+  updatedAt: number
+  lastSeenAt: number
+}
+
+export interface LocalAiCliSessionChanged {
+  sessionRef: string
+  projectId: string | null
+  type: 'upsert' | 'forget'
+}
+
+export interface LocalAiCliSessionDiscoveryResult {
+  discovered: number
+  skipped: number
+  incomplete: boolean
+}
+
 const PROVIDERS = new Set<LocalAiCliProviderId>(['pi', 'codex', 'claude', 'oh-my-pi'])
 const ACCESS = new Set<LocalAiCliAccess>(['answer-only', 'workspace-read', 'workspace-write'])
 const CONTEXT_KINDS = new Set<LocalAiCliContextKind>(['selection', 'clipboard', 'active-app', 'active-window'])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return false
   const prototype = Object.getPrototypeOf(value)
   return prototype === Object.prototype || prototype === null
 }
 
 function boundedText(value: unknown, max: number, field: string): string {
-  if (typeof value !== 'string') throw new Error(`LOCAL_AI_CLI_${field}_INVALID`)
+  if (typeof value !== 'string')
+    throw new Error(`LOCAL_AI_CLI_${field}_INVALID`)
   const text = value.trim()
-  if (!text || text.length > max) throw new Error(`LOCAL_AI_CLI_${field}_INVALID`)
+  if (!text || text.length > max)
+    throw new Error(`LOCAL_AI_CLI_${field}_INVALID`)
   return text
 }
 
+function optionalOpaqueId(value: unknown, code: string): string | undefined {
+  if (value === undefined)
+    return undefined
+  if (typeof value !== 'string' || !/^[A-Z0-9-]{1,128}$/i.test(value)) {
+    throw new Error(code)
+  }
+  return value
+}
+
+export function normalizeLocalAiCliProjectId(value: unknown): string | undefined {
+  return optionalOpaqueId(value, 'LOCAL_AI_CLI_PROJECT_INVALID')
+}
+
+export function normalizeLocalAiCliSessionRef(value: unknown): string | undefined {
+  return optionalOpaqueId(value, 'LOCAL_AI_CLI_SESSION_INVALID')
+}
+
 export function normalizeLocalAiCliStartRequest(value: unknown): LocalAiCliStartRequest {
-  if (!isRecord(value)) throw new Error('LOCAL_AI_CLI_REQUEST_INVALID')
+  if (!isRecord(value))
+    throw new Error('LOCAL_AI_CLI_REQUEST_INVALID')
   if (!PROVIDERS.has(value.provider as LocalAiCliProviderId)) {
     throw new Error('LOCAL_AI_CLI_PROVIDER_INVALID')
   }
@@ -193,7 +247,7 @@ export function normalizeLocalAiCliStartRequest(value: unknown): LocalAiCliStart
   if (!Array.isArray(value.context) || value.context.length > LOCAL_AI_CLI_LIMITS.contextItems) {
     throw new Error('LOCAL_AI_CLI_CONTEXT_INVALID')
   }
-  const context = value.context.map(item => {
+  const context = value.context.map((item) => {
     if (!isRecord(item) || !CONTEXT_KINDS.has(item.kind as LocalAiCliContextKind)) {
       throw new Error('LOCAL_AI_CLI_CONTEXT_INVALID')
     }
@@ -202,16 +256,38 @@ export function normalizeLocalAiCliStartRequest(value: unknown): LocalAiCliStart
       text: boundedText(item.text, LOCAL_AI_CLI_LIMITS.contextChars, 'CONTEXT'),
     }
   })
-  const workspaceRef = value.workspaceRef
-  if (workspaceRef !== undefined && (typeof workspaceRef !== 'string' || !workspaceRef.trim())) {
-    throw new Error('LOCAL_AI_CLI_WORKSPACE_INVALID')
-  }
+  const projectId = normalizeLocalAiCliProjectId(value.projectId)
+  const sessionRef = normalizeLocalAiCliSessionRef(value.sessionRef)
   return {
     provider: value.provider as LocalAiCliProviderId,
     prompt: boundedText(value.prompt, LOCAL_AI_CLI_LIMITS.promptChars, 'PROMPT'),
     access: value.access as LocalAiCliAccess,
     context,
-    ...(typeof workspaceRef === 'string' ? { workspaceRef: workspaceRef.trim() } : {}),
+    ...(projectId ? { projectId } : {}),
+    ...(sessionRef ? { sessionRef } : {}),
+  }
+}
+
+export function normalizeLocalAiCliTerminalCreateRequest(
+  value: unknown,
+): LocalAiCliTerminalCreateRequest {
+  if (!isRecord(value))
+    throw new Error('LOCAL_AI_CLI_REQUEST_INVALID')
+  if (!PROVIDERS.has(value.provider as LocalAiCliProviderId)) {
+    throw new Error('LOCAL_AI_CLI_PROVIDER_INVALID')
+  }
+  if (!ACCESS.has(value.access as LocalAiCliAccess)) {
+    throw new Error('LOCAL_AI_CLI_ACCESS_INVALID')
+  }
+  const projectId = normalizeLocalAiCliProjectId(value.projectId)
+  const sessionRef = normalizeLocalAiCliSessionRef(value.sessionRef)
+  return {
+    provider: value.provider as LocalAiCliProviderId,
+    access: value.access as LocalAiCliAccess,
+    cols: typeof value.cols === 'number' ? value.cols : 0,
+    rows: typeof value.rows === 'number' ? value.rows : 0,
+    ...(projectId ? { projectId } : {}),
+    ...(sessionRef ? { sessionRef } : {}),
   }
 }
 
@@ -247,6 +323,24 @@ export const LocalAiCliEvents = {
       .module('task')
       .event('paste-back')
       .define<LocalAiCliPasteBackRequest, LocalAiCliPasteBackResult>(),
+  },
+  session: {
+    list: defineEvent('local-ai-cli')
+      .module('session')
+      .event('list')
+      .define<{ projectId?: string | null } | undefined, LocalAiCliSessionSummary[]>(),
+    discover: defineEvent('local-ai-cli')
+      .module('session')
+      .event('discover')
+      .define<{ projectId: string }, LocalAiCliSessionDiscoveryResult>(),
+    forget: defineEvent('local-ai-cli')
+      .module('session')
+      .event('forget')
+      .define<{ sessionRef: string }, { forgotten: boolean }>(),
+    changed: defineEvent('local-ai-cli')
+      .module('session')
+      .event('changed')
+      .define<LocalAiCliSessionChanged, void>(),
   },
   terminal: {
     create: defineEvent('local-ai-cli')

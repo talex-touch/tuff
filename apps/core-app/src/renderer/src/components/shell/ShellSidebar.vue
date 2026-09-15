@@ -1,7 +1,7 @@
 <script lang="ts" name="ShellSidebar" setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -9,6 +9,7 @@ import { useShellSidebar } from '~/modules/layout/useShellSidebar'
 import { groupedSettingNavigation } from '~/modules/settings/categories'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useEnv } from '~/modules/hooks/env-hooks'
+import { useProjectStore } from '~/stores/projects'
 import ShellBackRow from './ShellBackRow.vue'
 import ShellChromeBar from './ShellChromeBar.vue'
 import ShellConversationList from './ShellConversationList.vue'
@@ -21,6 +22,8 @@ const SNAP_DURATION = 200
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
+const projectStore = useProjectStore()
 const transport = useTuffTransport()
 const { isMac } = useRendererPlatform()
 const { packageJson } = useEnv()
@@ -76,6 +79,21 @@ const appVersion = computed(() =>
 function openCoreBox(): void {
   transport.send(CoreBoxEvents.ui.show).catch(() => {})
 }
+
+onMounted(() => {
+  void projectStore.initialize()
+})
+
+async function createProject(): Promise<void> {
+  const project = await projectStore.selectDirectory()
+  if (!project) return
+  projectStore.beginConversation(project.id)
+  await router.push('/home')
+}
+
+function beginHomeConversation(): void {
+  projectStore.beginConversation(null)
+}
 </script>
 
 <template>
@@ -130,7 +148,17 @@ function openCoreBox(): void {
         />
 
         <nav class="ShellSidebar-Nav">
-          <ShellNavItem icon="i-ri-edit-box-line" :label="t('shell.newChat')" to="/home" />
+          <ShellNavItem
+            icon="i-ri-edit-box-line"
+            :label="t('shell.newChat')"
+            to="/home"
+            @select="beginHomeConversation"
+          />
+          <ShellNavItem
+            icon="i-ri-folder-add-line"
+            :label="t('shell.newProject')"
+            @select="createProject"
+          />
           <!-- Intelligence configuration lives in the settings rail, not the home-mode nav. -->
           <ShellNavItem icon="i-ri-store-2-line" :label="t('shell.store')" to="/store" />
         </nav>

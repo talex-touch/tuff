@@ -35,9 +35,17 @@ export function resolveRouteLocaleChunks(path: string): RouteLocaleChunkName[] {
   if (normalized === '/' || normalized === '/new' || normalized.startsWith('/new/') || normalized === '/next' || normalized.startsWith('/next/'))
     chunks.push('landing')
 
+  /**
+   * `/admin/*` is the administrator console, split out of `/dashboard/*` into
+   * its own shell. Its pages still read `dashboard.*` keys — one message
+   * namespace covers the whole signed-in surface — so it loads the same chunk,
+   * or every console label renders its inline fallback instead.
+   */
   if (
     normalized === '/dashboard'
     || normalized.startsWith('/dashboard/')
+    || normalized === '/admin'
+    || normalized.startsWith('/admin/')
     || normalized === '/store'
     || normalized.startsWith('/store/')
     || normalized === '/team/join'

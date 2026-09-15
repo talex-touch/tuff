@@ -362,7 +362,10 @@ onMounted(async () => {
       <section class="workflow-sidebar card-panel">
         <div class="section-head">
           <div>
-            <h2>{{ t('intelligence.workflow.libraryTitle') }}</h2>
+            <h2>
+              {{ t('intelligence.workflow.libraryTitle') }}
+              <span class="mini-badge mini-badge--ghost">Beta</span>
+            </h2>
             <p>{{ t('intelligence.workflow.libraryDescription') }}</p>
           </div>
           <TxButton variant="flat" @click="createWorkflowFromScratch">

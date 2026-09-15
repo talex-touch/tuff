@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
@@ -543,7 +544,7 @@ watch(
                   v-if="loading"
                   class="h-full flex items-center justify-center text-sm text-[var(--tx-text-color-secondary)]"
                 >
-                  <i class="i-ri-loader-4-line animate-spin mr-2" />
+                  <TxSpinner :size="16" class="mr-2" />
                   {{ t('plugin.storage.loading') }}
                 </div>
 
@@ -857,18 +858,5 @@ watch(
 .PluginStorageDetails-Scroll :deep(.tx-scroll__wrapper),
 .PluginStorageDetails-Scroll :deep(.tx-scroll__content) {
   min-height: 0;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -186,7 +187,7 @@ function formatDate(period: string): string {
 <template>
   <div class="usage-chart">
     <div v-if="isLoading" class="loading">
-      <i class="i-carbon-circle-dash animate-spin" />
+      <TxSpinner :size="16" />
       {{ t('common.loading') }}
     </div>
 

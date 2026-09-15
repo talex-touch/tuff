@@ -1,6 +1,7 @@
 <script lang="ts" name="IntelligenceAuditPage" setup>
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
 import IntelligenceAuditLogs from '~/components/intelligence/audit/IntelligenceAuditLogs.vue'
@@ -143,21 +144,20 @@ function handleCacheExpirationBlur() {
         @blur="handleCacheExpirationBlur"
       >
         <template #control="{ modelValue, update, focus, blur }">
-          <div class="flex items-center gap-2">
-            <input
-              :value="modelValue"
+          <div class="cache-expiration-control">
+            <TxInput
+              :model-value="modelValue"
               type="number"
               min="60"
               max="86400"
+              inputmode="numeric"
               :placeholder="t('intelligence.cache.expirationPlaceholder')"
-              class="tuff-input flex-1"
-              @input="update(($event.target as HTMLInputElement).value)"
+              class="flex-1"
+              @update:model-value="update($event)"
               @focus="focus"
               @blur="blur"
             />
-            <span class="text-sm text-[var(--tx-text-color-secondary)]">{{
-              t('intelligence.cache.seconds')
-            }}</span>
+            <span class="cache-expiration-unit">{{ t('intelligence.cache.seconds') }}</span>
           </div>
         </template>
       </TuffBlockInput>
@@ -166,28 +166,18 @@ function handleCacheExpirationBlur() {
 </template>
 
 <style lang="scss" scoped>
-.tuff-input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--tx-border-color);
-  border-radius: 6px;
-  background: var(--tx-fill-color-blank);
-  color: var(--tx-text-color-primary);
-  font-size: 14px;
-  outline: none;
-  transition: all 0.2s;
+.cache-expiration-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 234px;
+  max-width: 100%;
+}
 
-  &:focus {
-    border-color: var(--tx-color-primary);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  &::placeholder {
-    color: var(--tx-text-color-placeholder);
-  }
+.cache-expiration-unit {
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 </style>

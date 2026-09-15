@@ -64,6 +64,7 @@ import { useModelOptions } from '~/modules/conversation/useModelOptions'
 import { providerIconForId } from '~/modules/intelligence/provider-icons'
 import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
+import { useProjectStore } from '~/stores/projects'
 import HomeModelMenu from './HomeModelMenu.vue'
 import HomePermissionMenu from './HomePermissionMenu.vue'
 import HomeSidePanel from './HomeSidePanel.vue'
@@ -118,7 +119,12 @@ const conversation = useHomeConversation({
   // A getter, not a snapshot: switching model mid-conversation must apply to the next send.
   routing: () => modelRouting.value,
   // Likewise for Auto Context, which the settings page owns — each send reads its current value.
-  autoContext: () => autoContext.value
+  autoContext: () => autoContext.value,
+  identity: () => {
+    const id = conversationId.value
+    if (!id) throw new Error('HOME_CONVERSATION_ID_MISSING')
+    return { conversationId: id, projectId: projectId.value }
+  }
 })
 const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
 
@@ -733,6 +739,7 @@ const composerClearance = computed(() =>
 
 const homeLog = createRendererLogger('HomeConversation')
 const history = useConversationHistory()
+const projectStore = useProjectStore()
 
 /**
  * Allocated on the first send, so an untouched home screen never writes an
@@ -743,6 +750,7 @@ const history = useConversationHistory()
  * at send time), so the key flips only on real thread switches.
  */
 const conversationId = ref<string | null>(null)
+const projectId = ref<string | null>(null)
 
 /**
  * Remote images in a reply are held back until the reader asks for them: an
@@ -772,6 +780,21 @@ watch(conversationId, () => resetRemoteImagePolicy())
  */
 const restoreSequence = createLatestOnly()
 
+async function resetBlankConversation(nextProjectId: string | null): Promise<void> {
+  conversationId.value = null
+  projectId.value = nextProjectId
+  choreography.invalidate()
+  const composerEl = composerRef.value
+  const first = composerEl?.getBoundingClientRect()
+  conversation.reset()
+  generatedTitle.value = null
+  await nextTick()
+  if (composerEl && first && !prefersReducedMotion()) {
+    const dy = first.top - composerEl.getBoundingClientRect().top
+    if (Math.abs(dy) > 8) choreography.playComposerFlip(dy)
+  }
+}
+
 /**
  * Restores the thread named by `/home/c/:id`, and resets to a blank one on plain `/home`.
  *
@@ -786,21 +809,7 @@ watch(
     // otherwise it would land on top of the blank thread reset() just produced.
     const isCurrentRestore = restoreSequence.claim()
     if (!target) {
-      conversationId.value = null
-      // Any half-played send choreography dies with the thread it animated.
-      choreography.invalidate()
-      // The reverse FLIP: leaving a conversation undocks the composer, and the
-      // same node must glide from the bottom dock back to centre stage — the
-      // mirror of the first-send journey, same duration, same easing.
-      const composerEl = composerRef.value
-      const first = composerEl?.getBoundingClientRect()
-      conversation.reset()
-      generatedTitle.value = null
-      await nextTick()
-      if (composerEl && first && !prefersReducedMotion()) {
-        const dy = first.top - composerEl.getBoundingClientRect().top
-        if (Math.abs(dy) > 8) choreography.playComposerFlip(dy)
-      }
+      await resetBlankConversation(projectStore.consumePendingProjectId())
       return
     }
     if (target === conversationId.value) return
@@ -810,6 +819,7 @@ watch(
     if (!isCurrentRestore()) return
     if (!restored) return
     conversationId.value = target
+    projectId.value = restored.projectId
     // Opening a thread from the blank home docks the composer — the same
     // journey as a first send, so it gets the same measured spring instead
     // of teleporting. Thread-to-thread hops measure ~0 and stay still.
@@ -833,6 +843,15 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => projectStore.pendingProjectId,
+  async (pendingProjectId) => {
+    if (pendingProjectId === undefined || typeof route.params.id === 'string') return
+    restoreSequence.claim()
+    await resetBlankConversation(projectStore.consumePendingProjectId())
+  }
 )
 
 /**
@@ -877,7 +896,7 @@ function maybeGenerateTitle(): void {
       // however late this lands, it stores the thread as it is then, never a shrunken snapshot.
       await enqueuePersist(async () => {
         if (conversationId.value !== idAtStart) return
-        await history.persist(idAtStart, title, messages.value)
+        await history.persist(idAtStart, title, messages.value, projectId.value)
       })
     } catch (error) {
       // The working title is already on screen and persisted; a label upgrade may fail silently.
@@ -901,7 +920,12 @@ watch(
     try {
       await enqueuePersist(async () => {
         if (!conversationId.value) return
-        await history.persist(conversationId.value, conversationTitle.value ?? '', messages.value)
+        await history.persist(
+          conversationId.value,
+          conversationTitle.value ?? '',
+          messages.value,
+          projectId.value
+        )
       })
       // Landing on the conversation's own URL is what lets the sidebar and a reload return to it.
       if (route.params.id !== conversationId.value) {

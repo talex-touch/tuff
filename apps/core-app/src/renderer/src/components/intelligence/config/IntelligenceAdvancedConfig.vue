@@ -1,5 +1,6 @@
 <script lang="ts" name="IntelligenceAdvancedConfig" setup>
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -58,12 +59,9 @@ function handlePriorityChange() {
   emits('change')
 }
 
-function parseTimeoutInput(event: Event): number {
-  const target = event.target
-  if (!(target instanceof HTMLInputElement)) {
-    return localTimeout.value
-  }
-  return Number(target.value)
+function parseTimeoutValue(value: string | number): number {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : localTimeout.value
 }
 
 function handleTimeoutBlur() {
@@ -131,20 +129,21 @@ function handleTimeoutControlBlur(onBlur: () => void) {
       @blur="handleTimeoutBlur"
     >
       <template #control="{ modelValue: slotValue, update, focus, blur }">
-        <div class="flex items-center gap-2">
-          <input
-            :value="slotValue"
+        <div class="timeout-control">
+          <TxInput
+            :model-value="slotValue"
             type="number"
             min="1000"
             max="300000"
+            inputmode="numeric"
             :placeholder="t('intelligence.config.advanced.timeoutPlaceholder')"
             :disabled="disabled"
-            class="tuff-input flex-1"
-            @input="update(parseTimeoutInput($event))"
+            class="timeout-input flex-1"
+            @update:model-value="update(parseTimeoutValue($event))"
             @focus="focus"
             @blur="handleTimeoutControlBlur(blur)"
           />
-          <span class="text-sm text-[var(--tx-text-color-secondary)]">
+          <span class="timeout-unit">
             {{ t('intelligence.config.advanced.timeoutUnit') }}
           </span>
         </div>
@@ -155,29 +154,19 @@ function handleTimeoutControlBlur(onBlur: () => void) {
 
 <style lang="scss" scoped>
 .aisdk-advanced-config {
-  .tuff-input {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid var(--tx-border-color);
-    border-radius: 6px;
-    background: var(--tx-fill-color-blank);
-    color: var(--tx-text-color-primary);
-    font-size: 14px;
-    outline: none;
-    transition: all 0.2s;
+  .timeout-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 234px;
+    max-width: 100%;
+  }
 
-    &:focus {
-      border-color: var(--tx-color-primary);
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    &::placeholder {
-      color: var(--tx-text-color-placeholder);
-    }
+  .timeout-unit {
+    font-size: 12px;
+    color: var(--tx-text-color-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 }
 </style>

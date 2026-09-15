@@ -45,6 +45,7 @@ const REQUIRED_IDS = new Set([
   'intelligence-audit-context-memory',
   'analytics-telemetry-diagnostics',
   'home-conversation-content',
+  'local-ai-cli-session-pointer',
   'plugin-ordinary-data',
   'plugin-secrets',
   'temporary-files',

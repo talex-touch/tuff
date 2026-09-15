@@ -138,11 +138,10 @@ async function handleOpenPluginFolder(): Promise<void> {
           variant="flat"
           class="action-btn folder-btn"
           :aria-label="t('plugin.openFolder')"
-          :disabled="loadingStates.openFolder"
+          :loading="loadingStates.openFolder"
           @click="handleOpenPluginFolder"
         >
           <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
-          <i v-else class="i-ri-loader-4-line animate-spin" />
         </TxButton>
       </div>
     </template>
@@ -204,18 +203,5 @@ async function handleOpenPluginFolder(): Promise<void> {
   width: 100%;
   height: 100%;
   overflow: hidden;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
 }
 </style>

@@ -27,6 +27,8 @@ export interface SettingSubPage {
   navIcon?: string
   /** Beta pages stay out of normal navigation until Developer Mode is enabled. */
   beta?: boolean
+  /** Advanced sub-pages require Developer Mode to be visible or navigated to. */
+  advanced?: boolean
 }
 
 export interface SettingCategory {
@@ -122,7 +124,9 @@ export const SETTING_CATEGORIES: SettingCategory[] = [
         key: 'workflows',
         path: '/setting/intelligence/workflows',
         labelKey: 'settingsIntelligenceHub.workflows',
-        descriptionKey: 'settingsIntelligenceHub.workflowsDesc'
+        descriptionKey: 'settingsIntelligenceHub.workflowsDesc',
+        beta: true,
+        advanced: true
       },
       {
         key: 'audit',
@@ -210,9 +214,9 @@ export const LEGACY_SECTION_REDIRECTS: Record<string, string> = {
   'file-index': '/setting/file-index'
 }
 
-export function settingCategoryChildren(key: string, includeBeta = true): SettingSubPage[] {
+export function settingCategoryChildren(key: string, includeRestricted = true): SettingSubPage[] {
   const children = SETTING_CATEGORIES.find((category) => category.key === key)?.children ?? []
-  return includeBeta ? children : children.filter((child) => !child.beta)
+  return includeRestricted ? children : children.filter((child) => !child.beta && !child.advanced)
 }
 
 export function groupedSettingCategories(): { group: SettingGroupKey; items: SettingCategory[] }[] {

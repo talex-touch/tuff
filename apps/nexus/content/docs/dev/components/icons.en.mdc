@@ -82,6 +82,19 @@ code: |
 
 Any single `TxIcon` can override the injected config with its own `urlResolver` / `svgFetcher` props — useful when one surface loads from a different origin than the rest of the app.
 
+## Animated icons
+
+Iconify collections are static glyphs. When a surface wants an icon that *moves* — on hover, on focus, or driven by state — [AnimateIcons](https://animateicons.in/) is a usable source: 542 MIT-licensed animated icons built on Lucide geometry.
+
+It ships as **React components** (`motion/react`), so it is not a dependency you can add to Tuffex or a Vue app. What it is good for is the artwork: the SVG geometry and the per-path animation timings are in the open, and both port cleanly to a Vue component or to Tuffex's existing motion primitives.
+
+Two honest caveats before reaching for it:
+
+- **Not an Iconify collection.** There is no `i-animateicons-*` class. Each icon is a component with its own markup, so it cannot flow through `TxIcon`'s `name` resolution — it is a component you write, not a string you pass.
+- **Check the static answer first.** If the icon does not actually need to move, a glyph from a collection your build already ships (`carbon`, `ri`, `simple-icons`…) is the smaller answer.
+
+Attribution and the MIT notice travel with any geometry you copy.
+
 ## Related components
 
 | Component | For |

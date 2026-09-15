@@ -4,6 +4,7 @@ import { DownloadStatus } from '@talex-touch/utils'
 import { renderMarkdownToSafeHtml } from '@talex-touch/utils/renderer'
 import { TxAlert } from '@talex-touch/tuffex/alert'
 import { TxModal } from '@talex-touch/tuffex/modal'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProgressBar from './DownloadProgressBar.vue'
@@ -203,7 +204,7 @@ function handleCancelDownload() {
       <!-- Download Progress (when downloading) -->
       <div v-if="isDownloading && downloadProgress" class="download-progress-section">
         <h3 class="section-title">
-          <i class="i-carbon-circle-dash animate-spin" />
+          <TxSpinner :size="16" />
           {{ t('update.downloading') }}
         </h3>
         <ProgressBar

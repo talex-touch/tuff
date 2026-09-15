@@ -267,6 +267,39 @@
       ]
     },
     {
+      "id": "local-ai-cli-session-pointer",
+      "classification": "local-project-metadata-and-native-session-pointer",
+      "owner": "ProjectModule/LocalAiCliModule/PiCliProvider",
+      "storageLocations": [
+        "database.db: projects canonical root/name/pin/archive/timestamps",
+        "database.db: conversations.project_id local-only ownership",
+        "database.db: local_ai_cli_sessions optional conversation binding/provider/root/native id/bounded title/state/origin/expected head/timestamps",
+        "provider-owned transcript storage outside Tuff"
+      ],
+      "writers": [
+        "host-only typed Project SDK",
+        "main-owned Local AI CLI discovery/continuation runtime after authoritative native-session handshakes",
+        "main-owned Home Pi provider after exact native session identity observation"
+      ],
+      "readers": [
+        "trusted host shell through typed Project SDK",
+        "main-owned Local AI CLI continuation runtime",
+        "main-owned Home Pi provider"
+      ],
+      "exportPolicy": "never sync or ordinary-export project paths, raw native session ids, expected heads, transcript paths, prompt remainder, output, provider errors, or transcripts",
+      "deletionPolicy": "explicit Forget Pointer deletes only an unbound local_ai_cli_sessions row; local or synced Home conversation deletion removes its bound pointer in the same database transaction; neither path deletes provider transcript data; no project delete API; app-data reset removes local metadata",
+      "retentionPolicy": "unbound pointers remain until explicit pointer forget or app-data reset; conversation-bound pointers remain until conversation deletion or app-data reset; provider transcript lifecycle remains provider-owned",
+      "rendererExposure": "trusted host Project SDK may expose the selected canonical root; Local AI session DTOs expose only opaque sessionRef, projectId, provider, bounded title, state, origin, and timestamps; Home metadata exposes only Tuff conversationId/projectId; raw native id, expected head, transcript path, prompt remainder, output, provider errors, and transcript remain main-only",
+      "portable": false,
+      "migrationStatus": "local-only",
+      "evidence": [
+        "apps/core-app/src/main/modules/project/project-store.ts#symbol=createOrRestoreProject",
+        "apps/core-app/src/main/modules/local-ai-cli/session-store.ts#symbol=upsertLocalAiCliSession",
+        "apps/core-app/src/main/modules/ai/providers/pi-cli-provider.ts#symbol=PiCliProvider",
+        "packages/utils/transport/events/local-ai-cli.ts#symbol=LocalAiCliSessionSummary"
+      ]
+    },
+    {
       "id": "plugin-ordinary-data",
       "classification": "plugin-user-data-and-host-projected-metadata",
       "owner": "PluginDataDispositionProduction/PluginHostsService/PluginVscodeProjectsService/PluginImageToolsCapability",

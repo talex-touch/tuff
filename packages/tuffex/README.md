@@ -89,7 +89,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **150**.
+Current source-of-truth export modules: **152**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -103,7 +103,7 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 
 General, form, layout, navigation, data, feedback and status components. Import from `@talex-touch/tuffex/base`.
 
-- `General (9)`: `button`, `icon`, `icon-chip`, `avatar`, `tag`, `badge`, `status-badge`, `kbd`, `divider`
+- `General (10)`: `button`, `icon`, `icon-chip`, `icon-picker`, `avatar`, `tag`, `badge`, `status-badge`, `kbd`, `divider`
 - `Form (24)`: `form`, `input`, `flat-input`, `textarea`, `number-input`, `search-input`, `tag-input`, `scrub-field`, `select`, `flat-select`, `search-select`, `tree-select`, `cascader`, `picker`, `date-picker`, `radio`, `flat-radio`, `checkbox`, `switch`, `slider`, `segmented-slider`, `rating`, `file-uploader`, `image-uploader`
 - `Layout (11)`: `container`, `flex`, `grid`, `grid-layout`, `stack`, `splitter`, `scroll`, `collapse`, `card`, `card-item`, `group-block`
 - `Navigation (10)`: `tabs`, `tab-bar`, `nav-bar`, `sidebar-nav`, `breadcrumb`, `steps`, `pagination`, `dropdown-menu`, `flat-dropdown`, `context-menu`
@@ -117,7 +117,7 @@ Advanced interaction, visualization, effects and low-level primitives. Import fr
 
 - `Interaction (6)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `virtual-list`, `version-capsule`
 - `Visualization (5)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
-- `Effects (17)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `liquid`, `flip-overlay`
+- `Effects (18)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `liquid`, `flip-overlay`
 - `Primitives (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`
 
 ### ai — AI

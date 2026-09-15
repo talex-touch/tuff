@@ -1448,13 +1448,13 @@ async function triggerRebuild() {
                 !browserBookmarksEnabled ||
                 !isBrowserBookmarksMaintenanceEnabled('scan')
               "
+              :loading="sourceMaintenanceAction[BROWSER_BOOKMARKS_SOURCE_ID] === 'scan'"
               @click="rebuildBrowserBookmarksRuntime"
             >
               <span
-                v-if="sourceMaintenanceAction[BROWSER_BOOKMARKS_SOURCE_ID] === 'scan'"
-                class="i-ri-loader-4-line text-12px animate-spin"
+                v-if="sourceMaintenanceAction[BROWSER_BOOKMARKS_SOURCE_ID] !== 'scan'"
+                class="i-carbon-renew text-12px"
               />
-              <span v-else class="i-carbon-renew text-12px" />
               <span>{{ t('settings.settingFileIndex.browserBookmarksRebuildAction') }}</span>
             </TxButton>
             <TxButton
@@ -1465,13 +1465,13 @@ async function triggerRebuild() {
                 !browserBookmarksSource ||
                 !isBrowserBookmarksMaintenanceEnabled('reset')
               "
+              :loading="sourceMaintenanceAction[BROWSER_BOOKMARKS_SOURCE_ID] === 'reset'"
               @click="clearBrowserBookmarksRuntime"
             >
               <span
-                v-if="sourceMaintenanceAction[BROWSER_BOOKMARKS_SOURCE_ID] === 'reset'"
-                class="i-ri-loader-4-line text-12px animate-spin"
+                v-if="sourceMaintenanceAction[BROWSER_BOOKMARKS_SOURCE_ID] !== 'reset'"
+                class="i-carbon-clean text-12px"
               />
-              <span v-else class="i-carbon-clean text-12px" />
               <span>{{ t('settings.settingFileIndex.browserBookmarksClearAction') }}</span>
             </TxButton>
           </div>
@@ -1668,17 +1668,16 @@ async function triggerRebuild() {
                 isSourceMaintenanceRunning(selectedSourceDiagnostic.descriptor.id) ||
                 !action.enabled
               "
+              :loading="
+                sourceMaintenanceAction[selectedSourceDiagnostic.descriptor.id] === action.action
+              "
               :title="getSourceMaintenanceButtonTitle(action)"
               @click="runSourceMaintenance(selectedSourceDiagnostic, action.action)"
             >
               <span
                 v-if="
-                  sourceMaintenanceAction[selectedSourceDiagnostic.descriptor.id] === action.action
+                  sourceMaintenanceAction[selectedSourceDiagnostic.descriptor.id] !== action.action
                 "
-                class="i-ri-loader-4-line text-12px animate-spin"
-              />
-              <span
-                v-else
                 class="text-12px"
                 :class="getSourceMaintenanceButtonIcon(action.action)"
               />

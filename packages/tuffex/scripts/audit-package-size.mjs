@@ -128,7 +128,11 @@ const LIMITS = {
   // `audit:types` runs first in the CI `&&` chain and was failing on the same
   // commit, so the size run never started. Same contract as every note above:
   // actuals plus minimal headroom, growth from here fails.
-  fullCssBytes: 576 * 1024,
+  // 576 -> 584 on 2026-09-15: `icon-picker` adds its panel, grid, trigger and shape
+  // controls (5.1 KiB measured at dist/es/icon-picker/style.css), which took the full
+  // entry to 576.3 KiB against a 576.0 limit. Same contract as every note above:
+  // actuals plus minimal headroom, growth from here fails.
+  fullCssBytes: 584 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
@@ -144,7 +148,8 @@ const LIMITS = {
   // 568 -> 576 on 2026-09-15: the chart family's per-component stylesheets, the
   // same 12.8 KiB as the `fullCssBytes` note above. Measured 570.4 KiB across 153
   // stylesheets. Actuals plus minimal headroom, growth from here fails.
-  onDemandCssBytes: 576 * 1024,
+  // 576 -> 584 on 2026-09-15: `icon-picker`, as above.
+  onDemandCssBytes: 584 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus

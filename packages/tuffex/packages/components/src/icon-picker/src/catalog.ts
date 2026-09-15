@@ -1,0 +1,311 @@
+import type { IconPickerEntry } from './types'
+
+/**
+ * The bundled catalog: what the picker offers when a host supplies no rows of
+ * its own.
+ *
+ * Two hard constraints shaped it.
+ *
+ * It is curated, not generated. Remix Icon alone is 3,229 glyphs and Simple
+ * Icons 3,722; a picker over all of them would need the host to safelist every
+ * class it could ever show, and UnoCSS bills roughly 0.6 KiB of CSS per `ri`
+ * class and 1.3 KiB per brand — the full set is tens of megabytes of
+ * stylesheet for a control most users open once. The 120 + 68 rows below cost
+ * ~160 KiB, which a host can afford to safelist wholesale.
+ *
+ * Keywords are bilingual. Written English-only, a zh-CN user typing 火箭 gets
+ * an empty grid and concludes the search is broken.
+ *
+ * `ICON_CATALOG_CLASSES` exists because a host using a utility-CSS engine has
+ * to safelist these: none of them appear in a template the extractor scans, so
+ * without it every glyph renders as an empty box. Derived from the rows so it
+ * cannot drift from them.
+ */
+
+function iconEntry(value: string, keywords: string): IconPickerEntry {
+  return { id: `class:${value}`, icon: { type: 'class', value }, keywords }
+}
+
+function emojiEntry(value: string, keywords: string): IconPickerEntry {
+  return { id: `emoji:${value}`, icon: { type: 'emoji', value }, keywords }
+}
+
+/**
+ * Emoji cost nothing to render — they are text, not CSS — so this list is
+ * generous where the class lists have to be frugal.
+ */
+export const EMOJI_CATALOG: IconPickerEntry[] = [
+  emojiEntry('🚀', 'rocket launch startup ship 火箭 发射 启动'),
+  emojiEntry('✨', 'sparkles magic new ai 闪耀 魔法 智能'),
+  emojiEntry('⚡', 'zap fast lightning power 闪电 快速 性能'),
+  emojiEntry('🔥', 'fire hot trending 火 热门 流行'),
+  emojiEntry('⭐', 'star favorite 星 收藏 重要'),
+  emojiEntry('❤️', 'heart love like 心 喜欢 爱'),
+  emojiEntry('🎯', 'target goal aim 目标 靶心 精准'),
+  emojiEntry('🏆', 'trophy win award 奖杯 冠军 成就'),
+  emojiEntry('🎨', 'art palette design 艺术 调色板 设计'),
+  emojiEntry('🎵', 'music note audio 音乐 音符 声音'),
+  emojiEntry('📷', 'camera photo 相机 照片 拍摄'),
+  emojiEntry('🎬', 'movie film video 电影 视频 影片'),
+  emojiEntry('🤖', 'robot bot ai agent 机器人 智能体'),
+  emojiEntry('🧠', 'brain mind think model 大脑 思考 模型'),
+  emojiEntry('💡', 'idea bulb tip 灯泡 想法 提示'),
+  emojiEntry('🔮', 'crystal ball predict 水晶球 预测'),
+  emojiEntry('💬', 'chat message talk 对话 消息 聊天'),
+  emojiEntry('📝', 'note write memo 笔记 编写 备忘'),
+  emojiEntry('📚', 'books docs library 书 文档 资料'),
+  emojiEntry('🔍', 'search find magnify 搜索 查找 放大'),
+  emojiEntry('🗂️', 'folder files organize 文件夹 归档 整理'),
+  emojiEntry('📦', 'package box deliver 包裹 打包 发布'),
+  emojiEntry('🔧', 'wrench tool fix 扳手 工具 修复'),
+  emojiEntry('⚙️', 'gear settings config 齿轮 设置 配置'),
+  emojiEntry('🔑', 'key auth secret 钥匙 认证 密钥'),
+  emojiEntry('🔒', 'lock secure private 锁 安全 私密'),
+  emojiEntry('🛡️', 'shield protect safe 盾 保护 安全'),
+  emojiEntry('🌐', 'globe web network 地球 网络 全球'),
+  emojiEntry('☁️', 'cloud remote 云 远程 云端'),
+  emojiEntry('🖥️', 'desktop computer 电脑 桌面 主机'),
+  emojiEntry('📱', 'phone mobile 手机 移动端'),
+  emojiEntry('⌨️', 'keyboard type input 键盘 输入'),
+  emojiEntry('🔌', 'plug plugin extension 插件 扩展 接口'),
+  emojiEntry('🧩', 'puzzle plugin module 拼图 插件 模块'),
+  emojiEntry('📊', 'chart stats data 图表 统计 数据'),
+  emojiEntry('📈', 'growth up trend 增长 上升 趋势'),
+  emojiEntry('⏰', 'alarm clock time 闹钟 时间 提醒'),
+  emojiEntry('📅', 'calendar date 日历 日期 日程'),
+  emojiEntry('✅', 'check done success 完成 成功 勾选'),
+  emojiEntry('❌', 'cross fail error 失败 错误 关闭'),
+  emojiEntry('⚠️', 'warning caution 警告 注意 风险'),
+  emojiEntry('🏠', 'home house 家 主页 首页'),
+  emojiEntry('🏢', 'office building work 办公 建筑 公司'),
+  emojiEntry('🌍', 'earth world global 世界 地球 国际'),
+  emojiEntry('✈️', 'plane travel flight 飞机 旅行 航班'),
+  emojiEntry('🚗', 'car drive vehicle 汽车 驾驶 车辆'),
+  emojiEntry('🍀', 'clover luck 幸运 四叶草'),
+  emojiEntry('🌱', 'seedling grow plant 幼苗 成长 种植'),
+  emojiEntry('🌙', 'moon night dark 月亮 夜晚 深色'),
+  emojiEntry('☀️', 'sun day light 太阳 白天 浅色'),
+  emojiEntry('🎁', 'gift present 礼物 赠送'),
+  emojiEntry('🎉', 'party celebrate 庆祝 派对 发布'),
+  emojiEntry('👤', 'user person profile 用户 个人 头像'),
+  emojiEntry('👥', 'group team users 团队 群组 多人'),
+  emojiEntry('👻', 'ghost anonymous 幽灵 匿名'),
+  emojiEntry('🐱', 'cat pet 猫 宠物'),
+  emojiEntry('🐶', 'dog pet 狗 宠物'),
+  emojiEntry('🦊', 'fox 狐狸'),
+  emojiEntry('🐼', 'panda 熊猫'),
+  emojiEntry('🦄', 'unicorn rare 独角兽 稀有'),
+]
+
+/**
+ * General-purpose glyphs, from Remix Icon. Line weights only: a picker mixing
+ * `-line` and `-fill` at one size reads as two different icon sets.
+ */
+export const ICON_CATALOG: IconPickerEntry[] = [
+  iconEntry('i-ri-rocket-line', 'rocket launch start 火箭 启动 发射'),
+  iconEntry('i-ri-sparkling-2-line', 'sparkle ai magic 闪耀 智能 魔法'),
+  iconEntry('i-ri-flashlight-line', 'flash fast power 闪电 快速 能量'),
+  iconEntry('i-ri-fire-line', 'fire hot trending 火 热门'),
+  iconEntry('i-ri-star-line', 'star favorite 星 收藏'),
+  iconEntry('i-ri-heart-line', 'heart like love 心 喜欢'),
+  iconEntry('i-ri-bookmark-line', 'bookmark save 书签 保存'),
+  iconEntry('i-ri-flag-line', 'flag mark 旗帜 标记'),
+  iconEntry('i-ri-award-line', 'award medal 奖章 荣誉'),
+  iconEntry('i-ri-vip-crown-line', 'crown vip premium 皇冠 会员 高级'),
+  iconEntry('i-ri-compass-3-line', 'compass explore 指南针 探索'),
+  iconEntry('i-ri-map-pin-line', 'location pin place 位置 地点'),
+  iconEntry('i-ri-earth-line', 'earth world 地球 世界'),
+  iconEntry('i-ri-global-line', 'global network web 全球 网络'),
+  iconEntry('i-ri-plane-line', 'plane travel 飞机 旅行'),
+  iconEntry('i-ri-car-line', 'car vehicle 汽车 车辆'),
+  iconEntry('i-ri-building-line', 'building company 建筑 公司'),
+  iconEntry('i-ri-home-4-line', 'home house 首页 家'),
+  iconEntry('i-ri-store-2-line', 'store shop market 商店 市场'),
+  iconEntry('i-ri-briefcase-line', 'work business job 工作 商务'),
+  iconEntry('i-ri-robot-2-line', 'robot bot agent ai 机器人 智能体'),
+  iconEntry('i-ri-brain-line', 'brain model think 大脑 模型 思考'),
+  iconEntry('i-ri-chat-ai-line', 'chat ai assistant 对话 助手'),
+  iconEntry('i-ri-message-3-line', 'message chat 消息 对话'),
+  iconEntry('i-ri-question-answer-line', 'qa faq answer 问答 回答'),
+  iconEntry('i-ri-customer-service-2-line', 'support service 客服 支持'),
+  iconEntry('i-ri-mic-line', 'mic voice record 麦克风 语音 录音'),
+  iconEntry('i-ri-volume-up-line', 'volume sound audio 音量 声音'),
+  iconEntry('i-ri-headphone-line', 'headphone audio 耳机 音频'),
+  iconEntry('i-ri-speak-line', 'speak tts say 朗读 语音合成'),
+  iconEntry('i-ri-terminal-box-line', 'terminal cli shell 终端 命令行'),
+  iconEntry('i-ri-code-s-slash-line', 'code develop 代码 开发'),
+  iconEntry('i-ri-git-branch-line', 'git branch vcs 分支 版本'),
+  iconEntry('i-ri-bug-line', 'bug debug issue 缺陷 调试'),
+  iconEntry('i-ri-database-2-line', 'database storage 数据库 存储'),
+  iconEntry('i-ri-server-line', 'server backend host 服务器 后端'),
+  iconEntry('i-ri-cloud-line', 'cloud remote 云 云端'),
+  iconEntry('i-ri-cpu-line', 'cpu chip compute 处理器 芯片 算力'),
+  iconEntry('i-ri-hard-drive-2-line', 'disk drive storage 硬盘 存储'),
+  iconEntry('i-ri-stack-line', 'stack layers 堆栈 层'),
+  iconEntry('i-ri-file-text-line', 'file document text 文件 文档'),
+  iconEntry('i-ri-file-code-line', 'code file script 代码文件 脚本'),
+  iconEntry('i-ri-folder-3-line', 'folder directory 文件夹 目录'),
+  iconEntry('i-ri-book-2-line', 'book docs manual 书 文档 手册'),
+  iconEntry('i-ri-article-line', 'article post blog 文章 博客'),
+  iconEntry('i-ri-draft-line', 'draft note 草稿 笔记'),
+  iconEntry('i-ri-quill-pen-line', 'write compose pen 写作 编辑'),
+  iconEntry('i-ri-translate-2', 'translate language 翻译 语言'),
+  iconEntry('i-ri-search-line', 'search find 搜索 查找'),
+  iconEntry('i-ri-filter-3-line', 'filter refine 筛选 过滤'),
+  iconEntry('i-ri-image-line', 'image picture photo 图片 图像'),
+  iconEntry('i-ri-camera-line', 'camera shoot 相机 拍摄'),
+  iconEntry('i-ri-movie-2-line', 'video movie film 视频 影片'),
+  iconEntry('i-ri-music-2-line', 'music audio song 音乐 歌曲'),
+  iconEntry('i-ri-palette-line', 'palette color theme 调色板 颜色 主题'),
+  iconEntry('i-ri-brush-line', 'brush paint draw 画笔 绘制'),
+  iconEntry('i-ri-magic-line', 'magic enhance auto 魔法 增强 自动'),
+  iconEntry('i-ri-scissors-cut-line', 'cut trim clip 剪切 裁剪'),
+  iconEntry('i-ri-crop-line', 'crop resize 裁剪 尺寸'),
+  iconEntry('i-ri-contrast-2-line', 'contrast theme 对比度 主题'),
+  iconEntry('i-ri-settings-3-line', 'settings config gear 设置 配置'),
+  iconEntry('i-ri-tools-line', 'tools utility 工具'),
+  iconEntry('i-ri-hammer-line', 'hammer build 锤子 构建'),
+  iconEntry('i-ri-plug-line', 'plug connect integration 插头 连接 集成'),
+  iconEntry('i-ri-key-2-line', 'key api token 密钥 令牌'),
+  iconEntry('i-ri-lock-2-line', 'lock secure private 锁 安全 私密'),
+  iconEntry('i-ri-shield-check-line', 'shield secure verify 盾 安全 校验'),
+  iconEntry('i-ri-eye-line', 'eye view watch 眼睛 查看 监视'),
+  iconEntry('i-ri-fingerprint-line', 'fingerprint identity auth 指纹 身份'),
+  iconEntry('i-ri-bug-2-line', 'bug error fault 错误 故障'),
+  iconEntry('i-ri-user-3-line', 'user person 用户 个人'),
+  iconEntry('i-ri-group-line', 'group users 群组 多人'),
+  iconEntry('i-ri-team-line', 'team collaborate 团队 协作'),
+  iconEntry('i-ri-account-circle-line', 'account profile avatar 账户 头像'),
+  iconEntry('i-ri-ghost-line', 'ghost anonymous 幽灵 匿名'),
+  iconEntry('i-ri-emotion-line', 'emoji smile face 表情 笑脸'),
+  iconEntry('i-ri-cake-2-line', 'cake birthday 蛋糕 生日'),
+  iconEntry('i-ri-gift-line', 'gift reward 礼物 奖励'),
+  iconEntry('i-ri-trophy-line', 'trophy win 奖杯 胜利'),
+  iconEntry('i-ri-game-line', 'game play 游戏'),
+  iconEntry('i-ri-bar-chart-2-line', 'chart bar stats 柱状图 统计'),
+  iconEntry('i-ri-pie-chart-2-line', 'pie chart share 饼图 占比'),
+  iconEntry('i-ri-line-chart-line', 'line chart trend 折线图 趋势'),
+  iconEntry('i-ri-dashboard-3-line', 'dashboard overview 仪表盘 概览'),
+  iconEntry('i-ri-calendar-2-line', 'calendar date 日历 日期'),
+  iconEntry('i-ri-time-line', 'time clock 时间 时钟'),
+  iconEntry('i-ri-alarm-line', 'alarm remind 闹钟 提醒'),
+  iconEntry('i-ri-timer-line', 'timer countdown 计时 倒计时'),
+  iconEntry('i-ri-hourglass-line', 'hourglass wait pending 沙漏 等待'),
+  iconEntry('i-ri-calculator-line', 'calculator compute 计算器 计算'),
+  iconEntry('i-ri-mail-line', 'mail email 邮件 邮箱'),
+  iconEntry('i-ri-send-plane-line', 'send submit 发送 提交'),
+  iconEntry('i-ri-notification-3-line', 'notification bell alert 通知 提醒'),
+  iconEntry('i-ri-links-line', 'link url chain 链接 地址'),
+  iconEntry('i-ri-share-forward-line', 'share forward 分享 转发'),
+  iconEntry('i-ri-download-2-line', 'download save 下载 保存'),
+  iconEntry('i-ri-upload-2-line', 'upload import 上传 导入'),
+  iconEntry('i-ri-refresh-line', 'refresh reload sync 刷新 同步'),
+  iconEntry('i-ri-loop-right-line', 'loop repeat retry 循环 重试'),
+  iconEntry('i-ri-pulse-line', 'pulse activity health 活动 健康 心跳'),
+  iconEntry('i-ri-sun-line', 'sun light day 太阳 浅色'),
+  iconEntry('i-ri-moon-line', 'moon dark night 月亮 深色'),
+  iconEntry('i-ri-cloudy-line', 'cloudy weather 多云 天气'),
+  iconEntry('i-ri-thunderstorms-line', 'storm thunder 雷暴 天气'),
+  iconEntry('i-ri-leaf-line', 'leaf eco nature 叶子 环保'),
+  iconEntry('i-ri-plant-line', 'plant grow 植物 成长'),
+  iconEntry('i-ri-water-flash-line', 'water energy 水 能量'),
+  iconEntry('i-ri-battery-2-charge-line', 'battery power charge 电池 充电'),
+  iconEntry('i-ri-wifi-line', 'wifi network 无线 网络'),
+  iconEntry('i-ri-bluetooth-line', 'bluetooth pair 蓝牙 配对'),
+  iconEntry('i-ri-apps-2-line', 'apps grid launcher 应用 网格'),
+  iconEntry('i-ri-layout-grid-line', 'layout grid 布局 网格'),
+  iconEntry('i-ri-window-2-line', 'window app 窗口 应用'),
+  iconEntry('i-ri-cursor-line', 'cursor pointer 光标 指针'),
+  iconEntry('i-ri-hand-coin-line', 'pay coin hand 支付 收款'),
+  iconEntry('i-ri-wallet-3-line', 'wallet balance 钱包 余额'),
+  iconEntry('i-ri-coin-line', 'coin credit token 积分 代币'),
+  iconEntry('i-ri-shopping-bag-3-line', 'shopping cart buy 购物 购买'),
+  iconEntry('i-ri-price-tag-3-line', 'price tag label 价格 标签'),
+  iconEntry('i-ri-bank-card-line', 'card payment 银行卡 支付'),
+]
+
+/**
+ * Brand marks, from Simple Icons. Weighted towards what a channel or provider
+ * row in this ecosystem actually needs to identify — model vendors first, then
+ * the platforms and services around them.
+ */
+export const BRAND_CATALOG: IconPickerEntry[] = [
+  iconEntry('i-simple-icons-openai', 'openai gpt chatgpt'),
+  iconEntry('i-simple-icons-anthropic', 'anthropic claude'),
+  iconEntry('i-simple-icons-claude', 'claude anthropic'),
+  iconEntry('i-simple-icons-googlegemini', 'gemini google bard'),
+  iconEntry('i-simple-icons-deepseek', 'deepseek 深度求索'),
+  iconEntry('i-simple-icons-qwen', 'qwen tongyi alibaba 通义 千问'),
+  iconEntry('i-simple-icons-bytedance', 'bytedance doubao volcengine 字节 豆包 火山'),
+  iconEntry('i-simple-icons-mistralai', 'mistral'),
+  iconEntry('i-simple-icons-ollama', 'ollama local llm 本地'),
+  iconEntry('i-simple-icons-huggingface', 'huggingface hf transformers'),
+  iconEntry('i-simple-icons-perplexity', 'perplexity search'),
+  iconEntry('i-simple-icons-meta', 'meta llama facebook'),
+  iconEntry('i-simple-icons-github', 'github git repo'),
+  iconEntry('i-simple-icons-gitlab', 'gitlab git'),
+  iconEntry('i-simple-icons-gitea', 'gitea git'),
+  iconEntry('i-simple-icons-git', 'git vcs 版本'),
+  iconEntry('i-simple-icons-docker', 'docker container 容器'),
+  iconEntry('i-simple-icons-kubernetes', 'kubernetes k8s'),
+  iconEntry('i-simple-icons-linux', 'linux tux'),
+  iconEntry('i-simple-icons-apple', 'apple macos ios 苹果'),
+  iconEntry('i-simple-icons-android', 'android 安卓'),
+  iconEntry('i-simple-icons-nodedotjs', 'node nodejs'),
+  iconEntry('i-simple-icons-deno', 'deno'),
+  iconEntry('i-simple-icons-bun', 'bun'),
+  iconEntry('i-simple-icons-python', 'python py'),
+  iconEntry('i-simple-icons-rust', 'rust cargo'),
+  iconEntry('i-simple-icons-go', 'go golang'),
+  iconEntry('i-simple-icons-typescript', 'typescript ts'),
+  iconEntry('i-simple-icons-javascript', 'javascript js'),
+  iconEntry('i-simple-icons-vuedotjs', 'vue vuejs'),
+  iconEntry('i-simple-icons-react', 'react'),
+  iconEntry('i-simple-icons-nuxt', 'nuxt'),
+  iconEntry('i-simple-icons-nextdotjs', 'next nextjs vercel'),
+  iconEntry('i-simple-icons-svelte', 'svelte'),
+  iconEntry('i-simple-icons-angular', 'angular'),
+  iconEntry('i-simple-icons-vite', 'vite'),
+  iconEntry('i-simple-icons-webpack', 'webpack bundler'),
+  iconEntry('i-simple-icons-tailwindcss', 'tailwind css'),
+  iconEntry('i-simple-icons-electron', 'electron desktop'),
+  iconEntry('i-simple-icons-figma', 'figma design 设计'),
+  iconEntry('i-simple-icons-notion', 'notion notes 笔记'),
+  iconEntry('i-simple-icons-slack', 'slack chat'),
+  iconEntry('i-simple-icons-discord', 'discord chat'),
+  iconEntry('i-simple-icons-telegram', 'telegram chat'),
+  iconEntry('i-simple-icons-linear', 'linear issues'),
+  iconEntry('i-simple-icons-jira', 'jira issues'),
+  iconEntry('i-simple-icons-trello', 'trello board'),
+  iconEntry('i-simple-icons-obsidian', 'obsidian notes 笔记'),
+  iconEntry('i-simple-icons-vercel', 'vercel deploy'),
+  iconEntry('i-simple-icons-cloudflare', 'cloudflare cdn workers'),
+  iconEntry('i-simple-icons-netlify', 'netlify deploy'),
+  iconEntry('i-simple-icons-supabase', 'supabase database'),
+  iconEntry('i-simple-icons-firebase', 'firebase google'),
+  iconEntry('i-simple-icons-amazon', 'amazon aws'),
+  iconEntry('i-simple-icons-googlecloud', 'gcp google cloud'),
+  iconEntry('i-simple-icons-microsoftazure', 'azure microsoft'),
+  iconEntry('i-simple-icons-alibabacloud', 'alibaba aliyun 阿里云'),
+  iconEntry('i-simple-icons-stripe', 'stripe payment 支付'),
+  iconEntry('i-simple-icons-paypal', 'paypal payment 支付'),
+  iconEntry('i-simple-icons-alipay', 'alipay 支付宝'),
+  iconEntry('i-simple-icons-wechat', 'wechat weixin 微信'),
+  iconEntry('i-simple-icons-qq', 'qq tencent 腾讯'),
+  iconEntry('i-simple-icons-bilibili', 'bilibili 哔哩哔哩'),
+  iconEntry('i-simple-icons-youtube', 'youtube video'),
+  iconEntry('i-simple-icons-spotify', 'spotify music'),
+  iconEntry('i-simple-icons-x', 'x twitter'),
+  iconEntry('i-simple-icons-reddit', 'reddit'),
+  iconEntry('i-simple-icons-microsoft', 'microsoft ms'),
+]
+
+/**
+ * Every class the bundled catalog can render, for a host's utility-CSS
+ * safelist. Spread into the host config rather than copied, so adding a row
+ * above cannot ship an invisible glyph.
+ */
+export const ICON_CATALOG_CLASSES: readonly string[] = Object.freeze([
+  ...ICON_CATALOG.map(entry => entry.icon.value),
+  ...BRAND_CATALOG.map(entry => entry.icon.value),
+])

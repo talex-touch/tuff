@@ -210,6 +210,7 @@ await writeFile(
       '@talex-touch/tuffex': `file:${tarball}`,
       typescript: '^5.9.3',
       vue: '^3.5.33',
+      echarts: '^6.1.0',
     },
     ...(Object.keys(overrides).length ? { pnpm: { overrides } } : {}),
   }),

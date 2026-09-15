@@ -134,6 +134,9 @@ watch(filteredCapabilities, (list) => {
 })
 
 function handleSelectCapability(id: string): void {
+  if (id === selectedCapabilityId.value) return
+  // The draft of the outgoing capability is already in the store; write it before the body swaps.
+  flushCapabilityAutoSave()
   selectedCapabilityId.value = id
 }
 
@@ -271,9 +274,8 @@ function onUpdateModels(providerId: string, models: string[]): void {
   handleCapabilityModels(selectedCapability.value.id, providerId, models)
 }
 
-function onUpdatePrompt(prompt: string): void {
-  if (!selectedCapability.value) return
-  handleCapabilityPrompt(selectedCapability.value.id, prompt)
+function onUpdatePrompt(capabilityId: string, prompt: string): void {
+  handleCapabilityPrompt(capabilityId, prompt)
 }
 
 function onReorderProviders(bindings: IntelligenceCapabilityProviderBinding[]): void {
@@ -282,23 +284,68 @@ function onReorderProviders(bindings: IntelligenceCapabilityProviderBinding[]): 
   markCapabilityDirty()
 }
 
+/**
+ * The page autosaves: every edit marks the draft dirty and a debounced writer flushes it, so the
+ * header only reports where the write stands. `dirtyGeneration` counts edits — a write that lands
+ * while a newer edit is pending must not clear that edit's dirty flag, or the change stays in the
+ * renderer and never reaches the main process.
+ */
+const AUTO_SAVE_DELAY = 900
+let autoSaveTimer: number | null = null
+let dirtyGeneration = 0
+
 function markCapabilityDirty(): void {
+  dirtyGeneration += 1
   hasPendingCapabilityChanges.value = true
   saveState.value = 'dirty'
   saveErrorDetail.value = ''
+  scheduleCapabilityAutoSave()
+}
+
+function scheduleCapabilityAutoSave(): void {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+  }
+  autoSaveTimer = window.setTimeout(() => {
+    autoSaveTimer = null
+    void runCapabilityAutoSave()
+  }, AUTO_SAVE_DELAY)
+}
+
+async function runCapabilityAutoSave(): Promise<void> {
+  if (!hasPendingCapabilityChanges.value) return
+  // A write is already in flight; it re-checks when it settles.
+  if (saving.value) return
+  await handleSaveCapabilities()
+}
+
+/** Writes an outstanding change immediately — for a capability switch or page teardown. */
+function flushCapabilityAutoSave(): void {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+  }
+  if (!hasPendingCapabilityChanges.value || saving.value) return
+  void handleSaveCapabilities()
 }
 
 async function handleSaveCapabilities(): Promise<void> {
+  const generation = dirtyGeneration
   try {
     saveErrorDetail.value = ''
     await saveSettings()
+    if (dirtyGeneration !== generation) {
+      // Edits landed during the write and are not in the snapshot that just saved.
+      scheduleCapabilityAutoSave()
+      return
+    }
     hasPendingCapabilityChanges.value = false
     saveState.value = 'saved'
     window.setTimeout(() => {
       if (saveState.value === 'saved') {
         saveState.value = 'idle'
       }
-    }, 1800)
+    }, 1500)
   } catch (error) {
     capabilityPageLog.error('Failed to save capability settings', error)
     saveState.value = 'error'
@@ -330,6 +377,10 @@ function formatSaveError(error: unknown): string {
 
   return message || t('settings.intelligence.capabilitySaveErrorUnknown')
 }
+
+onBeforeUnmount(() => {
+  flushCapabilityAutoSave()
+})
 
 async function handleCapabilityTest(
   capabilityId: string,
@@ -440,7 +491,6 @@ async function handleCapabilityTest(
             @update-models="onUpdateModels"
             @update-prompt="onUpdatePrompt"
             @reorder-providers="onReorderProviders"
-            @save="handleSaveCapabilities"
             @test="
               (params?: {
                 providerId?: string
