@@ -323,8 +323,17 @@ export default defineNuxtConfig({
       secureStoreKey: process.env.STORAGE_SECURE_STORE_KEY,
     },
     releaseDownload: {
-      secret: process.env.RELEASE_DOWNLOAD_SIGNING_SECRET || authSecret,
+      // Two distinct provenances, kept distinct: a dedicated secret is used verbatim so operators
+      // can rotate it predictably, while the AUTH_SECRET fallback is domain-separated in
+      // releaseDownloadSignature.ts rather than signing downloads with session-signing bytes.
+      secret: process.env.RELEASE_DOWNLOAD_SIGNING_SECRET || '',
+      fallbackSecret: authSecret,
       signedTtlSeconds: Number(process.env.RELEASE_DOWNLOAD_SIGNED_TTL_SECONDS || 15 * 60),
+      // Deliberate availability tradeoff, not an oversight. attachSignatureUrls
+      // (server/utils/releaseSignature.ts:22) publishes the unsigned path as `fallbackDownloadUrl`,
+      // and the desktop updater retries it once the 15-minute signed URL expires
+      // (apps/core-app/src/main/modules/update/update-system.ts:226). Failing closed here would
+      // break slow and resumed downloads of Nexus-hosted assets.
       allowUnsignedFallback: process.env.RELEASE_DOWNLOAD_ALLOW_UNSIGNED_FALLBACK !== 'false',
     },
     appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,

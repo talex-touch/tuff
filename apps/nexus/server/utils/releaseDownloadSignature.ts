@@ -2,10 +2,12 @@ import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { getQuery } from 'h3'
+import { deriveSecureCredentialKey } from './secureCredentialStore'
 
 interface ReleaseDownloadRuntimeConfig {
   releaseDownload?: {
     secret?: string
+    fallbackSecret?: string
     signedTtlSeconds?: number
     allowUnsignedFallback?: boolean
   }
@@ -35,19 +37,44 @@ function normalizeTtlSeconds(value: unknown): number {
   return Math.max(MIN_SIGNED_TTL_SECONDS, Math.min(MAX_SIGNED_TTL_SECONDS, Math.floor(ttl)))
 }
 
+/**
+ * The HMAC key for signed download URLs.
+ *
+ * A dedicated `RELEASE_DOWNLOAD_SIGNING_SECRET` is used verbatim, so rotating it is predictable.
+ * Absent one, the key is an HKDF subkey of `AUTH_SECRET` rather than `AUTH_SECRET` itself: that
+ * value also signs user sessions and backs the doc-analytics token, and one secret serving three
+ * trust domains means any single disclosure compromises all three.
+ */
+function resolveSigningKey(runtimeConfig: ReleaseDownloadRuntimeConfig): Buffer | null {
+  const dedicated = typeof runtimeConfig.releaseDownload?.secret === 'string'
+    ? runtimeConfig.releaseDownload.secret.trim()
+    : ''
+  if (dedicated)
+    return Buffer.from(dedicated, 'utf-8')
+
+  const fallback = typeof runtimeConfig.releaseDownload?.fallbackSecret === 'string'
+    ? runtimeConfig.releaseDownload.fallbackSecret.trim()
+    : ''
+  if (!fallback)
+    return null
+
+  return deriveSecureCredentialKey(Buffer.from(fallback, 'utf-8'), {
+    saltPrefix: 'tuff-release-download-signing:',
+    authRef: 'auth-secret-fallback',
+    info: 'release-download-signing:v1',
+  })
+}
+
 function resolveConfig(event: H3Event): {
-  secret: string
+  signingKey: Buffer | null
   signedTtlSeconds: number
   allowUnsignedFallback: boolean
 } {
   const runtimeConfig = useRuntimeConfig(event) as ReleaseDownloadRuntimeConfig
-  const secret = typeof runtimeConfig.releaseDownload?.secret === 'string'
-    ? runtimeConfig.releaseDownload.secret.trim()
-    : ''
   return {
-    secret,
+    signingKey: resolveSigningKey(runtimeConfig),
     signedTtlSeconds: normalizeTtlSeconds(runtimeConfig.releaseDownload?.signedTtlSeconds),
-    allowUnsignedFallback: runtimeConfig.releaseDownload?.allowUnsignedFallback !== false
+    allowUnsignedFallback: runtimeConfig.releaseDownload?.allowUnsignedFallback !== false,
   }
 }
 
@@ -55,8 +82,8 @@ function buildPayload(input: ReleaseDownloadSignatureInput): string {
   return `${input.tag}:${input.platform}:${input.arch}:${input.exp}`
 }
 
-function signPayload(secret: string, payload: string): string {
-  return createHmac('sha256', secret).update(payload).digest('hex')
+function signPayload(signingKey: Buffer, payload: string): string {
+  return createHmac('sha256', signingKey).update(payload).digest('hex')
 }
 
 export function createSignedReleaseDownloadPath(
@@ -69,7 +96,7 @@ export function createSignedReleaseDownloadPath(
   }
 ): string | null {
   const config = resolveConfig(event)
-  if (!config.secret) {
+  if (!config.signingKey) {
     return null
   }
 
@@ -81,7 +108,7 @@ export function createSignedReleaseDownloadPath(
     arch: input.arch,
     exp
   }
-  const sig = signPayload(config.secret, buildPayload(payload))
+  const sig = signPayload(config.signingKey, buildPayload(payload))
   return `/api/releases/${input.tag}/download/${input.platform}/${input.arch}?exp=${exp}&sig=${sig}`
 }
 
@@ -115,7 +142,7 @@ export function verifyReleaseDownloadSignature(
   }
 ): { valid: boolean; reason?: 'missing-secret' | 'expired' | 'mismatch' } {
   const config = resolveConfig(event)
-  if (!config.secret) {
+  if (!config.signingKey) {
     return { valid: false, reason: 'missing-secret' }
   }
 
@@ -125,7 +152,7 @@ export function verifyReleaseDownloadSignature(
   }
 
   const expected = signPayload(
-    config.secret,
+    config.signingKey,
     buildPayload({
       tag: input.tag,
       platform: input.platform,
