@@ -121,8 +121,12 @@ const LIMITS = {
   // rule's original specificity, and the marker class is what makes it short
   // (naming both component roots cost 24 bytes more per selector). Toast's
   // stacking and swipe styles add the rest. Measured 556.2 KiB. Same contract as
-  // every note above: actuals plus minimal headroom, growth from here fails.
-  fullCssBytes: 560 * 1024,
+  // 560 -> 576 on 2026-09-15: folded the native charts family into tuffex (12.8 KiB).
+  // 576 -> 584 on 2026-09-15: `icon-picker` adds its panel, grid, trigger and shape
+  // controls (5.1 KiB measured at dist/es/icon-picker/style.css), which took the full
+  // entry to 576.3 KiB against a 576.0 limit. Same contract as every note above:
+  // actuals plus minimal headroom, growth from here fails.
+  fullCssBytes: 584 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
@@ -134,8 +138,9 @@ const LIMITS = {
   // (it deduped by chunk, not by emitted stylesheet). Both are fixed, and the
   // total fell from 613.5 KiB to 555.3 with `stream-markdown/style.css` going
   // 103.3 -> 50.1. Re-baselined against the smaller artifact so the saving
-  // cannot be quietly spent, same as the `fullCssBytes` note above.
-  onDemandCssBytes: 568 * 1024,
+  // 568 -> 576 on 2026-09-15: folded the native charts family into tuffex components.
+  // 576 -> 584 on 2026-09-15: `icon-picker`, as above.
+  onDemandCssBytes: 584 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
