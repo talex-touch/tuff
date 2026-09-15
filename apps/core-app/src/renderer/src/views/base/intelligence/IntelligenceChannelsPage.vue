@@ -7,9 +7,13 @@ import type {
 } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxIconPicker, type IconPickerShape } from '@talex-touch/tuffex/icon-picker'
 import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import { snapshotIntelligenceProviderConfig } from '~/modules/intelligence/provider-config-snapshot'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
@@ -20,12 +24,18 @@ import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import { useKeyboardNavigation } from '~/composables/useKeyboardNavigation'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import {
   isNexusManagedProvider,
   TUFF_NEXUS_PROVIDER_ID
 } from '~/modules/intelligence/nexus-provider'
+import {
+  PROVIDER_ICON_METADATA_KEY,
+  PROVIDER_ICON_SHAPE_METADATA_KEY,
+  providerIconIdentifier
+} from '~/modules/intelligence/provider-icon-override'
 import {
   getProviderChannelType,
   getRuntimeProviderType,
@@ -35,9 +45,27 @@ import {
 } from '~/modules/intelligence/provider-channel-type'
 import { getRuntimeNexusBaseUrl } from '~/modules/nexus/runtime-base'
 import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
+import { createRendererLogger } from '~/utils/renderer-log'
 
+const channelsLog = createRendererLogger('IntelligenceChannelsPage')
 const { t } = useI18n()
 const aiClient = useIntelligenceSdk()
+const transport = useTuffTransport()
+
+/**
+ * The native file chooser the icon picker uses. Without it the picker falls
+ * back to a browser `<input type="file">`, which yields a data URL — a whole
+ * PNG inlined into the provider record, persisted on every save.
+ */
+const openFileEvent = defineRawEvent<
+  {
+    title?: string
+    buttonLabel?: string
+    properties?: string[]
+    filters?: { name: string; extensions: string[] }[]
+  },
+  { filePaths?: string[] }
+>('dialog:open-file')
 
 const {
   providers,
@@ -59,11 +87,38 @@ const basicDraft = ref<{
   id: string
   name: string
   channelType: ProviderChannelKind
-}>({ id: '', name: '', channelType: ProviderChannelType.COMPATIBLE })
+  icon: string
+  iconShape: IconPickerShape
+}>({
+  id: '',
+  name: '',
+  channelType: ProviderChannelType.COMPATIBLE,
+  icon: '',
+  iconShape: 'rounded'
+})
 
 const canEditSelectedProvider = computed(
   () => !!selectedProvider.value && !isNexusManagedProvider(selectedProvider.value)
 )
+
+/**
+ * TxIconPicker ships English defaults, so every string it draws has to be
+ * handed over for the panel to follow the app's language.
+ */
+const providerIconLabels = computed(() => ({
+  emoji: t('settings.intelligence.providerIconLabels.emoji'),
+  icon: t('settings.intelligence.providerIconLabels.icon'),
+  brand: t('settings.intelligence.providerIconLabels.brand'),
+  file: t('settings.intelligence.providerIconLabels.file'),
+  search: t('settings.intelligence.providerIconLabels.search'),
+  empty: t('settings.intelligence.providerIconLabels.empty'),
+  clear: t('settings.intelligence.providerIconLabels.clear'),
+  chooseFile: t('settings.intelligence.providerIconLabels.chooseFile'),
+  shape: t('settings.intelligence.providerIconLabels.shape'),
+  shapeCircle: t('settings.intelligence.providerIconLabels.shapeCircle'),
+  shapeRounded: t('settings.intelligence.providerIconLabels.shapeRounded'),
+  shapeSquare: t('settings.intelligence.providerIconLabels.shapeSquare')
+}))
 
 function normalizeProviderType(type: string): IntelligenceProviderType {
   switch (type) {
@@ -244,10 +299,16 @@ function handleDuplicateProvider(): void {
 }
 
 function openBasicEditor(provider: IntelligenceProviderConfig): void {
+  const shape = provider.metadata?.[PROVIDER_ICON_SHAPE_METADATA_KEY]
   basicDraft.value = {
     id: provider.id,
     name: provider.name,
-    channelType: getProviderChannelType(provider)
+    channelType: getProviderChannelType(provider),
+    icon: providerIconIdentifier(provider),
+    // Anything but the three known shapes — a hand-edited config, an older
+    // schema — falls back rather than reaching the picker as an unknown value
+    // that matches no shape button and leaves the row with nothing selected.
+    iconShape: shape === 'circle' || shape === 'square' ? shape : 'rounded'
   }
   basicEditorVisible.value = true
 }
@@ -264,10 +325,35 @@ function handleSaveBasicEditor(): void {
     type: getRuntimeProviderType(basicDraft.value.channelType),
     metadata: {
       ...(selectedProvider.value.metadata || {}),
-      channelType: basicDraft.value.channelType
+      channelType: basicDraft.value.channelType,
+      [PROVIDER_ICON_METADATA_KEY]: basicDraft.value.icon,
+      [PROVIDER_ICON_SHAPE_METADATA_KEY]: basicDraft.value.iconShape
     }
   })
   basicEditorVisible.value = false
+}
+
+/**
+ * Opens the native picker for a provider icon image.
+ *
+ * Returns `null` on cancel *and* on failure: TxIconPicker only commits a
+ * non-null path, and the toast is raised here, where the i18n key lives.
+ */
+async function chooseProviderIconFile(): Promise<string | null> {
+  try {
+    const result = await transport.send(openFileEvent, {
+      title: t('settings.intelligence.providerIcon'),
+      properties: ['openFile'],
+      filters: [
+        { name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'ico'] }
+      ]
+    })
+    return result?.filePaths?.[0] ?? null
+  } catch (error) {
+    channelsLog.error('Failed to choose a provider icon file', error)
+    toast.error(t('settings.intelligence.providerIconFileFailed'))
+    return null
+  }
 }
 
 function handleAddProvider(): void {
@@ -436,6 +522,19 @@ useKeyboardNavigation({
         :title="t('settings.intelligence.editProviderBasic')"
       >
         <div class="p-4 space-y-3">
+          <TuffBlockSlot
+            :title="t('settings.intelligence.providerIcon')"
+            :description="t('settings.intelligence.providerIconHint')"
+            default-icon="i-carbon-image"
+            active-icon="i-carbon-image"
+          >
+            <TxIconPicker
+              v-model="basicDraft.icon"
+              v-model:shape="basicDraft.iconShape"
+              :labels="providerIconLabels"
+              :file-chooser="chooseProviderIconFile"
+            />
+          </TuffBlockSlot>
           <TuffBlockInput
             v-model="basicDraft.name"
             :title="t('settings.intelligence.providerName')"

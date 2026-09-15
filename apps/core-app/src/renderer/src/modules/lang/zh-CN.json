@@ -4056,6 +4056,23 @@
       "editProviderBasic": "修改基本信息",
       "providerNameHint": "显示在列表和详情页中的名称。",
       "providerTypeHint": "决定此渠道使用的协议与内置适配器。",
+      "providerIcon": "提供商图标",
+      "providerIconHint": "选择 emoji、内置图标、品牌标识，或使用本地图片。",
+      "providerIconLabels": {
+        "emoji": "表情",
+        "icon": "图标",
+        "brand": "品牌",
+        "file": "文件",
+        "search": "搜索图标",
+        "empty": "没有匹配的图标",
+        "clear": "清除",
+        "chooseFile": "选择本地文件",
+        "shape": "形状",
+        "shapeCircle": "圆形",
+        "shapeRounded": "圆角",
+        "shapeSquare": "方形"
+      },
+      "providerIconFileFailed": "选择图标文件失败",
       "providerTypeOptions": {
         "openai": "OpenAI",
         "anthropic": "Anthropic",
@@ -5413,7 +5430,15 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+      "weekdays": [
+        "日",
+        "一",
+        "二",
+        "三",
+        "四",
+        "五",
+        "六"
+      ]
     },
     "memoryReview": {
       "title": "记忆审核",
