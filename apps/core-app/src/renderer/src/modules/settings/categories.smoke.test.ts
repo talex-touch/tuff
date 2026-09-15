@@ -131,10 +131,11 @@ describe('settings sub-page table', () => {
     const registeredKeys = settingCategoryChildren('intelligence').map((child) => child.key)
     const normalKeys = settingCategoryChildren('intelligence', false).map((child) => child.key)
 
-    expect(registeredKeys).toEqual(expect.arrayContaining(['prompts', 'agents']))
+    expect(registeredKeys).toEqual(expect.arrayContaining(['prompts', 'agents', 'workflows']))
     expect(normalKeys).toEqual(expect.arrayContaining(['channels', 'capabilities']))
     expect(normalKeys).not.toContain('prompts')
     expect(normalKeys).not.toContain('agents')
+    expect(normalKeys).not.toContain('workflows')
   })
 
   it('hides beta-promoted intelligence navigation while retaining ordinary destinations', () => {
