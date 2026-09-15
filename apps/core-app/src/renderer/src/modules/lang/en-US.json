@@ -1425,6 +1425,8 @@
       "appearance": "Appearance",
       "intelligence": "Intelligence",
       "plugins": "Plugins & Tools",
+      "applications": "Applications",
+
       "fileIndex": "File Index",
       "update": "Update",
       "network": "Network",
@@ -1459,8 +1461,6 @@
     "downloadCenter": "Download Center",
     "downloadCenterDesc": "Track download tasks and history.",
     "open": "Open",
-    "application": "Applications",
-    "applicationDesc": "Browse and manage installed applications.",
     "store": "Plugin Store",
     "storeDesc": "Browse, install and manage plugins."
   },
@@ -2686,11 +2686,19 @@
     "name": "Name",
     "type": "Type",
     "value": "Value",
-    "keywords": "Keywords"
-  },
-  "applicationEmpty": {
-    "title": "Choose an application to configure.",
-    "description": "Unleash the power of app customization to tailor your digital space. Fine-tune settings to optimize workflow and seamlessly share configurations via a personal cloud. Explore diverse setups for inspiration and insights. Ready to create your perfect workspace? Select an app to begin."
+    "keywords": "Keywords",
+    "details": {
+      "displayName": "Display Name",
+      "source": "Source",
+      "bundleId": "Bundle ID",
+      "identityKind": "Identity Kind",
+      "launchKind": "Launch Kind",
+      "launchTarget": "Launch Target",
+      "launchArgs": "Launch Arguments",
+      "workingDirectory": "Working Directory",
+      "displayPath": "Display Path",
+      "keywords": "Keywords"
+    }
   },
   "appList": {
     "searchPlaceholder": "Type to search...",
@@ -2737,7 +2745,6 @@
     "details": "Details",
     "styles": "Styles",
     "theme": "Theme",
-    "application": "Application",
     "appSettings": "App Settings",
     "storagable": "Storagable",
     "intelligence": "Intelligence",
@@ -5793,6 +5800,8 @@
       "appearanceSubtitle": "Theme, layout and visual effects",
       "intelligenceSubtitle": "Intelligence hub, workflows and permissions",
       "pluginsSubtitle": "Installed plugins, store and application tools",
+      "applicationsSubtitle": "Installed apps, launch entries and index diagnostics",
+
       "fileIndexSubtitle": "Search index scope and indexing status",
       "networkSubtitle": "Proxy, connectivity and network diagnostics",
       "updateSubtitle": "Version, update channel and release notes",
