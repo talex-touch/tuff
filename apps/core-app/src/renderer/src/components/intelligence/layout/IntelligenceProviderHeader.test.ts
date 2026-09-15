@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+/* eslint-disable vue/one-component-per-file -- The two components declared here are test doubles
+   for the tuffex dropdown the header composes, not components this file owns. */
 /**
  * The provider action menu's official-channel gate.
  *

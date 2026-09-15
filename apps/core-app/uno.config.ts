@@ -67,7 +67,10 @@ const APP_DESTINATIONS_MODULE = fileURLToPath(
   new URL('./src/shared/app-destinations.ts', import.meta.url)
 )
 const ICON_PICKER_CATALOG_MODULE = fileURLToPath(
-  new URL('../../packages/tuffex/packages/components/src/icon-picker/src/catalog.ts', import.meta.url)
+  new URL(
+    '../../packages/tuffex/packages/components/src/icon-picker/src/catalog.ts',
+    import.meta.url
+  )
 )
 
 export default defineConfig({
@@ -107,7 +110,7 @@ export default defineConfig({
     // outside this app's content roots.
     'i-ri-image-add-line',
     'i-ri-folder-image-line',
-    'i-ri-search-line',
+    'i-ri-search-line'
   ],
   theme: {
     colors: {

@@ -344,9 +344,7 @@ async function chooseProviderIconFile(): Promise<string | null> {
     const result = await transport.send(openFileEvent, {
       title: t('settings.intelligence.providerIcon'),
       properties: ['openFile'],
-      filters: [
-        { name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'ico'] }
-      ]
+      filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'ico'] }]
     })
     return result?.filePaths?.[0] ?? null
   } catch (error) {
