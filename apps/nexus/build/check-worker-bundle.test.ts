@@ -374,10 +374,21 @@ describe('Nexus deploy asset budget', () => {
     const guardSource = readFileSync(workerBundleGuardPath, 'utf8')
     const nuxtSource = readFileSync(nuxtConfigPath, 'utf8')
 
-    expect(nuxtSource).toContain("exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*', '/api/docs/page/*']")
+    // Read the real exclusion list rather than matching the source line verbatim: the old
+    // string match broke on reformatting and would have passed on a semantically wrong list.
+    const excludeBlock = nuxtSource.match(/exclude:\s*\[([^\]]*)\]/)
+    expect(excludeBlock).not.toBeNull()
+    const excluded = [...excludeBlock![1].matchAll(/'([^']+)'/g)].map(match => match[1])
+
+    // `*` in `_routes.json` spans path separators, so `/en/docs/*` also covers the nested
+    // raw-Markdown twins. The roots do not match it and need their own entries, or they reach
+    // a Worker with no filesystem to read the Markdown source from.
+    for (const required of ['/en/docs', '/en/docs.md', '/en/docs/*', '/zh/docs', '/zh/docs.md', '/zh/docs/*', '/api/docs/page/*'])
+      expect(excluded).toContain(required)
+
     expect(guardSource).toContain('expectedStaticRoutePatterns')
-    expect(guardSource).toContain("['/en/docs/*', '/zh/docs/*', '/api/docs/page/*']")
-    expect(guardSource).toContain('expectedStaticRoutePatterns.length} patterns')
+    expect(guardSource).toContain('expectedStaticMarkdownRoutes')
+    expect(guardSource).toContain("['/en/docs.md', '/zh/docs.md']")
   })
 
   it('guards production route files and page payload boundaries', () => {

@@ -435,7 +435,18 @@ export default defineNuxtConfig({
           // Pages caps _routes.json at 100 entries and nitro fills it with one entry per
           // prerendered file; the static docs JSON twins alone are over a thousand, so they
           // must be covered by a pattern or most of them silently fall back to the Worker.
-          exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*', '/api/docs/page/*'],
+          // `/en/docs/*` also covers the nested raw-Markdown twins; the root ones
+          // (`/en/docs.md`) sit outside it and need their own entry, or they reach a Worker
+          // that has no filesystem to read the source from.
+          exclude: [
+            '/en/docs',
+            '/en/docs.md',
+            '/en/docs/*',
+            '/zh/docs',
+            '/zh/docs.md',
+            '/zh/docs/*',
+            '/api/docs/page/*',
+          ],
         },
       },
     },
