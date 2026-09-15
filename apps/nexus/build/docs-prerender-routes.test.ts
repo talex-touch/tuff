@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { createDocsPageApiPrerenderRoutes, createDocsPrerenderRoutes, normalizeDocsContentRoute } from './docs-prerender-routes'
+import { createDocsMarkdownPrerenderRoutes, createDocsPageApiPrerenderRoutes, createDocsPrerenderRoutes, normalizeDocsContentRoute } from './docs-prerender-routes'
 import { createNexusPrerenderEvidence, createNexusPrerenderRoutes, docsApiPrerenderRoutes, publicPrerenderRoutes } from './nexus-prerender-routes'
 
 const nexusRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -83,6 +83,28 @@ describe('docs prerender routes', () => {
     ])
   })
 
+  it('prerenders a raw-Markdown twin of every docs page, including directory indexes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'nexus-docs-markdown-routes-'))
+    const docsDir = join(root, 'content/docs/dev/components')
+    mkdirSync(docsDir, { recursive: true })
+    writeFileSync(join(docsDir, 'index.en.mdc'), '# Components')
+    writeFileSync(join(docsDir, 'tabs.en.mdc'), '# Tabs')
+    writeFileSync(join(docsDir, 'tabs.zh.mdc'), '# Tabs 标签页')
+
+    // The handler behind these URLs reads the file off disk and the deployed Worker has no
+    // filesystem, so a page missing from this list is a dead URL rather than a slow one.
+    // The index document gets both spellings: it is scanned as `.../components/index` but its
+    // page is served at `.../components`, and only the latter is reachable by appending `.md`.
+    expect(createDocsMarkdownPrerenderRoutes(root)).toEqual([
+      '/en/docs/dev/components.md',
+      '/en/docs/dev/components/index.md',
+      '/en/docs/dev/components/tabs.md',
+      '/zh/docs/dev/components.md',
+      '/zh/docs/dev/components/index.md',
+      '/zh/docs/dev/components/tabs.md',
+    ])
+  })
+
   it('combines public pages, docs APIs, and scanned docs into Nexus prerender routes', () => {
     const root = mkdtempSync(join(tmpdir(), 'nexus-prerender-routes-'))
     const docsDir = join(root, 'content/docs/guide')
@@ -100,6 +122,9 @@ describe('docs prerender routes', () => {
       '/api/docs/sidebar-components/en',
       '/en/docs/guide/start',
       '/zh/docs/guide/start',
+      // Without these in the Nitro list the source URLs reach a Worker that cannot read files.
+      '/en/docs/guide/start.md',
+      '/zh/docs/guide/start.md',
     ]))
     expect(routes).not.toEqual(expect.arrayContaining([
       '/docs',
@@ -185,6 +210,19 @@ describe('docs prerender routes', () => {
       '/api/docs/page/en/body/dev/components/tabs.json',
       '/api/docs/page/zh/meta/dev/components/tabs.json',
       '/api/docs/page/en/body/index.json',
+    ]))
+    // Every real docs page must ship its source alongside it, and every page named as release
+    // evidence must have one or that URL 404s in production. The count exceeds the page count
+    // because a directory index is published under both its scanned and its canonical URL.
+    expect(evidence.missingRequiredDocsMarkdownRoutes).toEqual([])
+    expect(evidence.docsMarkdownRouteCount).toBeGreaterThanOrEqual(evidence.docsRoutes.length)
+    expect(evidence.docsMarkdownRoutes).toEqual(expect.arrayContaining([
+      '/en/docs/dev/components/tabs.md',
+      '/zh/docs/guide/start.md',
+      '/en/docs.md',
+      // The canonical directory-index twin: the URL an agent actually forms from the page.
+      '/en/docs/dev.md',
+      '/zh/docs/dev/components.md',
     ]))
     expect(evidence.docsRoutes).not.toEqual(expect.arrayContaining([
       '/docs',
