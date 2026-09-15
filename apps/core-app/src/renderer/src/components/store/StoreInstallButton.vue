@@ -205,6 +205,7 @@ function handleClick(event: MouseEvent): void {
     :size="mini ? 'sm' : undefined"
     :title="!isCompatible ? t('store.incompatible') : undefined"
     :disabled="isDisabled"
+    :loading="showSpinner"
     :class="{ 'upgrade-available': isCompatible && hasUpgrade && isInstalled && !isActiveStage }"
     @click="handleClick"
   >
@@ -212,8 +213,7 @@ function handleClick(event: MouseEvent): void {
       <div v-if="showProgressCircle" class="install-progress" :style="progressCircleStyle">
         <span>{{ progressDisplay }}</span>
       </div>
-      <i v-else-if="showSpinner" class="i-ri-loader-4-line animate-spin" />
-      <i v-else :class="buttonIcon" />
+      <i v-else-if="!showSpinner" :class="buttonIcon" />
       <span>{{ buttonLabel }}</span>
     </div>
   </TxButton>
@@ -250,18 +250,5 @@ function handleClick(event: MouseEvent): void {
   position: relative;
   z-index: 1;
   line-height: 1;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

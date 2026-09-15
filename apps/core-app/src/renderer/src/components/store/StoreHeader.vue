@@ -164,8 +164,8 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
           <TxFlatRadioItem value="list" icon="i-carbon-list-boxes" />
         </TxFlatRadio>
 
-        <TxButton variant="flat" size="sm" :disabled="loading" @click="emit('refresh')">
-          <i :class="loading ? 'i-ri-loader-4-line animate-spin' : 'i-ri-refresh-line'" text-base />
+        <TxButton variant="flat" size="sm" :loading="loading" @click="emit('refresh')">
+          <i v-if="!loading" class="i-ri-refresh-line" text-base />
           <span>{{ loading ? t('store.loading') : t('store.refresh') }}</span>
         </TxButton>
       </div>
@@ -291,19 +291,6 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
   gap: 0.2rem;
   color: var(--tx-color-danger);
   font-weight: 500;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .error-drawer {

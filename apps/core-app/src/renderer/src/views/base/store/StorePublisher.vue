@@ -340,8 +340,8 @@ onMounted(() => {
         <p>{{ t('store.publisher.subtitle') }}</p>
       </div>
       <div class="publisher-actions">
-        <TxButton variant="flat" :disabled="loading" @click="loadUserPlugins()">
-          <i :class="loading ? 'i-ri-loader-4-line animate-spin' : 'i-ri-refresh-line'" />
+        <TxButton variant="flat" :loading="loading" @click="loadUserPlugins()">
+          <i v-if="!loading" class="i-ri-refresh-line" />
           {{ t('store.refresh') }}
         </TxButton>
         <TxButton variant="primary" @click="openCreateForm">
