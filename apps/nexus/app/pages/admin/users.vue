@@ -4,7 +4,6 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
-import AccountTabs from '~/components/admin/AccountTabs.vue'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
 import { TuffInput } from '@talex-touch/tuffex/input'
@@ -292,7 +291,6 @@ function formatCreditAmount(value: number | null | undefined) {
   return new Intl.NumberFormat().format(Math.abs(Math.round(value)))
 }
 
-
 function applyUserCreditsResponse(res: {
   summary: {
     month: string
@@ -504,8 +502,6 @@ async function grantSubscription(entry: AdminUser) {
   })
 }
 
-
-
 async function saveEditor() {
   const entry = selectedUser.value
   if (!entry || editorSaving.value)
@@ -595,14 +591,12 @@ onMounted(() => {
   <div class="space-y-6">
     <div>
       <h1 class="apple-heading-md">
-        {{ t('dashboard.sections.menu.accounts', 'Account Management') }}
+        {{ t('dashboard.sections.menu.users', 'User Management') }}
       </h1>
       <p class="mt-2 text-sm text-black/50 dark:text-white/50">
         {{ t('dashboard.sections.users.subtitle', 'Manage access, roles, and account status across your organization.') }}
       </p>
     </div>
-
-    <AccountTabs />
 
     <section class="apple-card-lg p-5 space-y-4">
       <div class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_180px_180px_auto]">

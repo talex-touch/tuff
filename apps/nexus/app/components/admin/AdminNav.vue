@@ -33,7 +33,9 @@ const riskControlEnabled = computed(() => isFeatureFlagEnabled(runtimeConfig.pub
 const sectionPaths: Record<string, string> = {
   updates: '/admin/updates',
   intelligence: '/admin/intelligence',
-  'intelligence-agent': '/admin/intelligence-agent',
+  'intelligence-overview': '/admin/intelligence-overview',
+  'intelligence-chat': '/admin/intelligence-chat',
+  'intelligence-audits': '/admin/intelligence-audits',
   'provider-registry': '/admin/provider-registry',
   governance: '/admin/governance',
   risk: '/admin/risk',
@@ -46,70 +48,188 @@ const sectionPaths: Record<string, string> = {
   analytics: '/admin/analytics',
 }
 
-function mapItems(items: Array<{ id: string, label: string, icon: string }>) {
+interface NavItem {
+  id: string
+  label: string
+  icon: string
+  to: string
+}
+
+interface NavGroup {
+  id: string
+  label: string
+  items: NavItem[]
+}
+
+function mapItems(items: Array<{ id: string, label: string, icon: string }>): NavItem[] {
   return items.map(item => ({
     ...item,
     to: sectionPaths[item.id] ?? '/admin/updates',
   }))
 }
 
-const menuItems = computed(() => {
+/**
+ * The analytics panels, mirroring `analyticsSections` in
+ * `app/pages/admin/analytics.vue`. The labels are English there because that
+ * page renders them untranslated; the `t()` call below prefers a locale entry
+ * and falls back to the same string, so the rail is translated even while the
+ * page's own copy is not.
+ *
+ * `AdminNav.routing.test.ts` pins this list against the page so a panel added
+ * to one and not the other fails instead of silently going unnavigable.
+ */
+const ANALYTICS_SECTIONS = [
+  { id: 'overview', label: 'Overview', icon: 'i-carbon-dashboard' },
+  { id: 'performance', label: 'Performance', icon: 'i-carbon-meter' },
+  { id: 'search', label: 'Search', icon: 'i-carbon-search' },
+  { id: 'usage', label: 'Usage', icon: 'i-carbon-chart-line-smooth' },
+  { id: 'intelligence', label: 'Intelligence', icon: 'i-carbon-ai-status' },
+  { id: 'docs', label: 'Docs', icon: 'i-carbon-document' },
+  { id: 'geo', label: 'Geo', icon: 'i-carbon-earth-americas' },
+  { id: 'exchange', label: 'Exchange', icon: 'i-carbon-currency' },
+  { id: 'messages', label: 'Alerts', icon: 'i-carbon-warning' },
+] as const
+
+/**
+ * The rail is the console's only navigation surface: every destination is one
+ * entry, and nothing is reachable solely through an in-page tab strip.
+ *
+ * Before this, four screens hid behind tabs — Intelligence carried Tuff AI,
+ * overview, service channels and audits; Users and Subscriptions shared one
+ * strip, as did the two comment queues. That meant two different controls for
+ * the same kind of move (rail for some destinations, tabs for others) and made
+ * the hidden ones unlinkable and invisible to anyone reading the rail.
+ *
+ * The groups are what keeps a flat list of thirteen legible. They are labels
+ * only — no collapsing, no state — because a console rail that hides its own
+ * entries reintroduces exactly the problem the tabs had.
+ */
+const menuGroups = computed<NavGroup[]>(() => {
   if (!isAdmin.value)
     return []
 
-  const items: Array<{ id: string, label: string, icon: string }> = [
+  const groups: NavGroup[] = [
     {
-      id: 'updates',
-      label: t('dashboard.sections.menu.updates'),
-      icon: 'i-carbon-notification',
+      id: 'content',
+      label: t('dashboard.sections.menu.groups.content', '内容'),
+      items: mapItems([
+        {
+          id: 'updates',
+          label: t('dashboard.sections.menu.updates'),
+          icon: 'i-carbon-notification',
+        },
+        {
+          id: 'images',
+          label: t('dashboard.sections.menu.images', 'Resources'),
+          icon: 'i-carbon-image',
+        },
+        {
+          id: 'reviews',
+          label: t('dashboard.sections.menu.reviews', 'Review Moderation'),
+          icon: 'i-carbon-chat',
+        },
+        {
+          id: 'doc-comments',
+          label: t('dashboard.sections.menu.docComments', 'Doc Comments'),
+          icon: 'i-carbon-annotation-visibility',
+        },
+      ]),
     },
     {
       id: 'intelligence',
       label: t('dashboard.sections.menu.intelligence', '实验场'),
-      icon: 'i-carbon-machine-learning',
+      items: mapItems([
+        {
+          id: 'intelligence',
+          label: t('dashboard.sections.menu.intelligenceLab', 'Tuff AI'),
+          icon: 'i-carbon-machine-learning',
+        },
+        {
+          id: 'intelligence-overview',
+          label: t('dashboard.sections.menu.intelligenceOverview', '概览'),
+          icon: 'i-carbon-dashboard',
+        },
+        {
+          id: 'intelligence-chat',
+          label: t('dashboard.sections.menu.intelligenceChat', '对话探针'),
+          icon: 'i-carbon-chat-bot',
+        },
+        {
+          id: 'provider-registry',
+          label: t('dashboard.sections.menu.providerRegistry', 'Provider Registry'),
+          icon: 'i-carbon-cloud-service-management',
+        },
+        {
+          id: 'intelligence-audits',
+          label: t('dashboard.sections.menu.intelligenceAudits', 'AI 调用审计'),
+          icon: 'i-carbon-document',
+        },
+      ]),
     },
     {
-      id: 'governance',
-      label: t('dashboard.sections.menu.governance', 'Data Governance'),
-      icon: 'i-carbon-data-vis-4',
-    },
-    {
-      id: 'images',
-      label: t('dashboard.sections.menu.images', 'Resources'),
-      icon: 'i-carbon-image',
-    },
-    {
-      id: 'users',
+      id: 'accounts',
       label: t('dashboard.sections.menu.accounts', 'Account Management'),
-      icon: 'i-carbon-user-avatar',
-    },
-    {
-      id: 'audits',
-      label: t('dashboard.sections.menu.audits', 'Audit Logs'),
-      icon: 'i-carbon-list',
-    },
-    {
-      id: 'reviews',
-      label: t('dashboard.sections.menu.comments', 'Comment Management'),
-      icon: 'i-carbon-chat',
+      items: mapItems([
+        {
+          id: 'users',
+          label: t('dashboard.sections.menu.users', 'User Management'),
+          icon: 'i-carbon-user-avatar',
+        },
+        {
+          id: 'subscriptions',
+          label: t('dashboard.sections.menu.subscriptions', 'Subscription Management'),
+          icon: 'i-carbon-license',
+        },
+      ]),
     },
     {
       id: 'analytics',
       label: t('dashboard.sections.menu.analytics', 'Analytics'),
-      icon: 'i-carbon-chart-line-data',
+      // The nine analytics panels. They address themselves with `?section=`
+      // rather than nine routes because they are one page's worth of state on
+      // one payload — `analytics.vue` loads its data once and switches panels
+      // over it, so nine files would be nine copies of the same fetch.
+      items: ANALYTICS_SECTIONS.map(section => ({
+        id: `analytics:${section.id}`,
+        label: t(`dashboard.sections.analytics.sections.${section.id}`, section.label),
+        icon: section.icon,
+        to: `/admin/analytics?section=${section.id}`,
+      })),
+    },
+    {
+      id: 'operations',
+      label: t('dashboard.sections.menu.groups.operations', '运营'),
+      items: mapItems([
+        {
+          id: 'governance',
+          label: t('dashboard.sections.menu.governance', 'Data Governance'),
+          icon: 'i-carbon-data-vis-4',
+        },
+        {
+          id: 'audits',
+          label: t('dashboard.sections.menu.adminAudits', '管理操作审计'),
+          icon: 'i-carbon-list',
+        },
+      ]),
     },
   ]
 
   if (riskControlEnabled.value) {
-    items.splice(3, 0, {
-      id: 'risk',
-      label: t('dashboard.sections.menu.risk', '风控控制面'),
-      icon: 'i-carbon-warning-alt',
-    })
+    groups
+      .find(group => group.id === 'operations')
+      ?.items.push(...mapItems([
+        {
+          id: 'risk',
+          label: t('dashboard.sections.menu.risk', '风控控制面'),
+          icon: 'i-carbon-warning-alt',
+        },
+      ]))
   }
 
-  return mapItems(items)
+  return groups
 })
+
+const menuItems = computed(() => menuGroups.value.flatMap(group => group.items))
 
 /**
  * Below `lg` the shell stacks, so this rail would sit above the page — a
@@ -136,34 +256,59 @@ onBeforeUnmount(() => {
 })
 
 /**
- * An ordered if-chain: the alias branches (`…/subscriptions` and `…/codes` both
- * light `users`, `…/doc-comments` lights `reviews`) have to sit above the
- * generic segment lookup, and `…/intelligence-agent` above `…/intelligence`.
- * Reordering it is silent, which is why the routing test pins the whole map.
+ * An ordered if-chain. Two things make the order load-bearing:
+ *
+ * - Longer prefixes first. `/admin/intelligence-overview` and
+ *   `/admin/intelligence-audits` both start with `/admin/intelligence`, so a
+ *   generic match on the short one would swallow them.
+ * - Redirect sources light their destination: `…/codes` forwards to
+ *   subscriptions and `…/credits` to users, so they highlight those entries
+ *   during the hop rather than flashing the wrong one.
+ *
+ * Users/subscriptions and the two comment queues each used to collapse onto a
+ * single entry because they shared a tab strip; they are separate rail entries
+ * now, so they light themselves. Reordering this is silent, which is why the
+ * routing test pins the whole map.
  */
 const activeSection = computed(() => {
-  if (route.path.startsWith('/admin/users'))
-    return 'users'
+  if (route.path.startsWith('/admin/intelligence-overview'))
+    return 'intelligence-overview'
+  if (route.path.startsWith('/admin/intelligence-chat'))
+    return 'intelligence-chat'
+  if (route.path.startsWith('/admin/intelligence-audits'))
+    return 'intelligence-audits'
+  if (route.path.startsWith('/admin/intelligence-agent'))
+    return 'intelligence'
+  if (route.path.startsWith('/admin/intelligence-lab'))
+    return 'intelligence'
+  if (route.path.startsWith('/admin/intelligence'))
+    return 'intelligence'
+  if (route.path.startsWith('/admin/provider-registry'))
+    return 'provider-registry'
+  if (route.path.startsWith('/admin/doc-comments'))
+    return 'doc-comments'
+  if (route.path.startsWith('/admin/reviews'))
+    return 'reviews'
   if (route.path.startsWith('/admin/subscriptions'))
+    return 'subscriptions'
+  if (route.path.startsWith('/admin/codes'))
+    return 'subscriptions'
+  if (route.path.startsWith('/admin/credits'))
+    return 'users'
+  if (route.path.startsWith('/admin/users'))
     return 'users'
   if (route.path.startsWith('/admin/audits'))
     return 'audits'
-  if (route.path.startsWith('/admin/codes'))
-    return 'users'
-  if (route.path.startsWith('/admin/reviews'))
-    return 'reviews'
-  if (route.path.startsWith('/admin/doc-comments'))
-    return 'reviews'
-  if (route.path.startsWith('/admin/analytics'))
-    return 'analytics'
-  if (route.path.startsWith('/admin/intelligence-agent'))
-    return 'intelligence'
-  if (route.path.startsWith('/admin/provider-registry'))
-    return 'intelligence'
+  if (route.path.startsWith('/admin/analytics')) {
+    // The analytics entries are one route with nine `?section=` addresses, so
+    // the query — not the path — decides which of them is lit. A bare
+    // `/admin/analytics` is the overview, matching the page's own default.
+    const section = typeof route.query.section === 'string' ? route.query.section : ''
+    const known = ANALYTICS_SECTIONS.some(entry => entry.id === section)
+    return `analytics:${known ? section : 'overview'}`
+  }
   if (route.path.startsWith('/admin/governance'))
     return 'governance'
-  if (route.path.startsWith('/admin/intelligence'))
-    return 'intelligence'
   if (route.path.startsWith('/admin/risk'))
     return 'risk'
 
@@ -201,26 +346,28 @@ useHead(() => ({
       </span>
       <span class="admin-nav-summary-chevron i-carbon-chevron-down text-[15px]" aria-hidden="true" />
     </summary>
-    <nav class="relative p-4" aria-label="Admin console sections">
-      <p class="admin-nav-section-title mb-4 px-3">
-        {{ t('dashboard.sections.menu.adminTitle', '管理员') }}
-      </p>
-      <ul class="flex flex-col list-none gap-1 p-0 text-sm" role="listbox" aria-label="Admin console panels">
-        <li v-for="item in menuItems" :key="item.id">
-          <NuxtLink
-            :to="item.to"
-            class="admin-nav-link group w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left no-underline transition-all duration-200"
-            :class="activeSection === item.id ? 'admin-nav-link--active' : ''"
-            role="option"
-            :aria-selected="activeSection === item.id"
-          >
-            <span class="min-w-0 flex items-center gap-3">
-              <span :class="['admin-nav-icon text-[15px]', item.icon]" aria-hidden="true" />
-              <span class="truncate" :title="item.label">{{ item.label }}</span>
-            </span>
-          </NuxtLink>
-        </li>
-      </ul>
+    <nav class="relative p-4 space-y-5" aria-label="Admin console sections">
+      <section v-for="group in menuGroups" :key="group.id">
+        <p class="admin-nav-section-title mb-2 px-3">
+          {{ group.label }}
+        </p>
+        <ul class="flex flex-col list-none gap-1 p-0 text-sm" role="listbox" :aria-label="group.label">
+          <li v-for="item in group.items" :key="item.id">
+            <NuxtLink
+              :to="item.to"
+              class="admin-nav-link group w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left no-underline transition-all duration-200"
+              :class="activeSection === item.id ? 'admin-nav-link--active' : ''"
+              role="option"
+              :aria-selected="activeSection === item.id"
+            >
+              <span class="min-w-0 flex items-center gap-3">
+                <span :class="['admin-nav-icon text-[15px]', item.icon]" aria-hidden="true" />
+                <span class="truncate" :title="item.label">{{ item.label }}</span>
+              </span>
+            </NuxtLink>
+          </li>
+        </ul>
+      </section>
     </nav>
   </details>
 </template>

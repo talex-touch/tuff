@@ -24,13 +24,24 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const NAV_SOURCE = readFileSync(path.join(HERE, 'AdminNav.vue'), 'utf8')
 
 /**
- * The handful of type annotations inside the lifted blocks. Stripped from the
- * whole file before slicing, because the braces inside `Array<{ … }>` otherwise
- * balance the declaration early and truncate it to its signature.
+ * The type annotations inside the lifted blocks. Stripped from the whole file
+ * before slicing, because the braces inside `Array<{ … }>` otherwise balance
+ * the declaration early and truncate it to its signature.
+ *
+ * Order matters: the `Array<{ … }>` and `Record<…>` forms are removed first,
+ * so the trailing rules only ever see the simple `: Foo` / `: Foo[]` shapes
+ * and cannot eat the `<`-delimited ones halfway.
  */
 const RUNNABLE_SOURCE = NAV_SOURCE
   .replace(/: Record<[^>]*>/g, '')
   .replace(/: Array<\{[^}]*\}>/g, '')
+  // `computed<NavGroup[]>(…)` / `computed<NavItem[]>(…)` — the generic sits on
+  // the call, not after a colon, so the rules below never reach it.
+  .replace(/computed<[^>]*>/g, 'computed')
+  // Return annotations: `): NavItem[] {` and `): NavItem {`.
+  .replace(/\): [A-Z]\w*(?:\[\])? \{/g, ') {')
+  // Local annotations: `const groups: NavGroup[] = [`.
+  .replace(/(const \w+): [A-Z]\w*(?:\[\])? =/g, '$1 =')
 
 /** Reads `const <name> = …` / `function <name>(…)` up to its balanced end. */
 function declaration(name: string): string {
@@ -64,14 +75,17 @@ function declaration(name: string): string {
 interface NavState {
   role?: string | null
   path?: string
+  query?: Record<string, string>
   riskFlag?: unknown
   mounted?: boolean
 }
 
 interface MenuItem { id: string, label: string, icon: string, to: string }
+interface MenuGroup { id: string, label: string, items: MenuItem[] }
 
 interface NavBindings {
   sectionPaths: Record<string, string>
+  menuGroups: MenuGroup[]
   menuItems: MenuItem[]
   activeSection: string
   activeLabel: string
@@ -82,7 +96,9 @@ const LIFTED = [
   'isAdmin',
   'riskControlEnabled',
   'sectionPaths',
+  'ANALYTICS_SECTIONS',
   'mapItems',
+  'menuGroups',
   'menuItems',
   'activeSection',
   'activeLabel',
@@ -97,6 +113,7 @@ function evaluateNav(state: NavState = {}): NavBindings {
 ${body}
 return {
   sectionPaths,
+  menuGroups: menuGroups.value,
   menuItems: menuItems.value,
   activeSection: activeSection.value,
   activeLabel: activeLabel.value,
@@ -111,7 +128,9 @@ return {
     // Returning the key keeps assertions locale-independent; the locale files
     // are covered by dashboard-admin-i18n-coverage / i18n-key-existence.
     t: (key: string) => key,
-    route: { path: state.path ?? '/admin/updates' },
+    // `query` matters as much as `path` now: the analytics panels are one
+    // route addressed nine ways, so the section they light comes from here.
+    route: { path: state.path ?? '/admin/updates', query: state.query ?? {} },
     mounted: ref(state.mounted ?? true),
     // The component resolves the role through useAccountRole(); injecting the
     // flag keeps this test on the routing and menu tables it exists for. The
@@ -124,30 +143,57 @@ return {
 
 /**
  * The mapping every console route resolves to. `activeSection` is an ordered
- * if-chain, so `/admin/intelligence-agent` only reaches `intelligence` because
+ * if-chain, so `/admin/intelligence-overview` only resolves to itself because
  * its branch sits above the `…/intelligence` prefix branch, and `…/codes`
- * reaches `users` only because an explicit branch carries it. Reordering them
- * is silent; this table is what makes it loud.
+ * reaches `subscriptions` only because an explicit branch carries it.
+ * Reordering them is silent; this table is what makes it loud.
  */
 const SECTION_FOR_PATH: Record<string, string> = {
   '/admin/updates': 'updates',
   '/admin/images': 'images',
   '/admin/users': 'users',
   '/admin/users/123': 'users',
-  '/admin/subscriptions': 'users',
-  '/admin/codes': 'users',
+  '/admin/credits': 'users',
+  '/admin/subscriptions': 'subscriptions',
+  '/admin/codes': 'subscriptions',
   '/admin/audits': 'audits',
   '/admin/reviews': 'reviews',
-  '/admin/doc-comments': 'reviews',
-  '/admin/analytics': 'analytics',
+  '/admin/doc-comments': 'doc-comments',
+  '/admin/analytics': 'analytics:overview',
   '/admin/governance': 'governance',
   '/admin/risk': 'risk',
   '/admin/intelligence': 'intelligence',
+  '/admin/intelligence-overview': 'intelligence-overview',
+  '/admin/intelligence-audits': 'intelligence-audits',
   '/admin/intelligence-agent': 'intelligence',
   '/admin/intelligence-lab': 'intelligence',
-  '/admin/intelligence-chat': 'intelligence',
-  '/admin/provider-registry': 'intelligence',
+  '/admin/intelligence-chat': 'intelligence-chat',
+  '/admin/provider-registry': 'provider-registry',
   '/admin/unknown-section': 'updates',
+}
+
+/**
+ * The analytics panels are the one place where the query, not the path,
+ * decides the section. A bare `/admin/analytics` and an unrecognised
+ * `?section=` both fall back to the overview, matching the page's own default.
+ */
+const SECTION_FOR_ANALYTICS_QUERY: Record<string, string> = {
+  overview: 'analytics:overview',
+  performance: 'analytics:performance',
+  search: 'analytics:search',
+  usage: 'analytics:usage',
+  intelligence: 'analytics:intelligence',
+  docs: 'analytics:docs',
+  geo: 'analytics:geo',
+  exchange: 'analytics:exchange',
+  messages: 'analytics:messages',
+  'not-a-panel': 'analytics:overview',
+}
+
+/** Splits a menu href into the shape `evaluateNav` wants. */
+function routeOf(href: string): { path: string, query: Record<string, string> } {
+  const [path, search = ''] = href.split('?')
+  return { path: path!, query: Object.fromEntries(new URLSearchParams(search)) }
 }
 
 describe('adminNav harness', () => {
@@ -168,6 +214,10 @@ describe('adminNav harness', () => {
 describe('activeSection routing', () => {
   it.each(Object.entries(SECTION_FOR_PATH))('maps %s to the %s section', (routePath, section) => {
     expect(evaluateNav({ path: routePath }).activeSection).toBe(section)
+  })
+
+  it.each(Object.entries(SECTION_FOR_ANALYTICS_QUERY))('maps ?section=%s to %s', (query, expected) => {
+    expect(evaluateNav({ path: '/admin/analytics', query: { section: query } }).activeSection).toBe(expected)
   })
 
   it('keeps the intelligence prefixes ordered so the -agent branch wins', () => {
@@ -193,7 +243,10 @@ describe('menu / sectionPaths agreement', () => {
     // mapItems falls back to /admin/updates for an unknown id, so a typo'd id
     // produces a link that silently goes to the wrong page.
     const nav = evaluateNav({ role: 'admin', riskFlag: true })
-    const unmapped = nav.menuItems.filter(item => !nav.sectionPaths[item.id])
+    // The analytics entries carry their own hrefs rather than going through
+    // sectionPaths, so they are exempt by construction - `keeps every href
+    // inside the console namespace` below still covers where they point.
+    const unmapped = nav.menuItems.filter(item => !item.id.startsWith('analytics:') && !nav.sectionPaths[item.id])
     expect(unmapped.map(item => item.id)).toEqual([])
   })
 
@@ -203,7 +256,7 @@ describe('menu / sectionPaths agreement', () => {
     // different one.
     const nav = evaluateNav({ role: 'admin', riskFlag: true })
     for (const item of nav.menuItems)
-      expect(evaluateNav({ path: item.to }).activeSection, `${item.id} → ${item.to}`).toBe(item.id)
+      expect(evaluateNav(routeOf(item.to)).activeSection, `${item.id} → ${item.to}`).toBe(item.id)
   })
 
   it('keeps every href inside the console namespace', () => {
@@ -216,8 +269,14 @@ describe('menu / sectionPaths agreement', () => {
 
   it('labels every entry from the dashboard.sections.menu namespace', () => {
     const nav = evaluateNav({ role: 'admin', riskFlag: true })
-    for (const item of nav.menuItems)
-      expect(item.label, item.id).toMatch(/^dashboard\.sections\.menu\./)
+    for (const item of nav.menuItems) {
+      // The analytics panels name themselves from their own page's namespace,
+      // sharing the key with the heading so the two cannot drift.
+      const namespace = item.id.startsWith('analytics:')
+        ? /^dashboard\.sections\.analytics\.sections\./
+        : /^dashboard\.sections\.menu\./
+      expect(item.label, item.id).toMatch(namespace)
+    }
   })
 })
 
@@ -327,7 +386,7 @@ describe('mobile disclosure', () => {
   it('labels the collapsed summary with the active section', () => {
     // Collapsed, the summary is the only thing naming where you are.
     expect(evaluateNav({ path: '/admin/analytics', role: 'admin' }).activeLabel)
-      .toBe('dashboard.sections.menu.analytics')
+      .toBe('dashboard.sections.analytics.sections.overview')
     expect(NAV_SOURCE).toContain('{{ activeLabel }}')
   })
 })
@@ -338,40 +397,42 @@ describe('mobile disclosure', () => {
  * which is how provider-registry and intelligence-chat ended up as URL-only
  * pages. Each route declares which mechanism carries it, and an undeclared page
  * fails rather than being quietly unreachable.
+ *
+ * There is no `tab` mechanism any more. Tab strips used to carry four screens
+ * the rail never named (the Intelligence panel's overview/channels/audits, the
+ * second half of the account and comment pairs), which meant two different
+ * controls for the same kind of move and made those screens invisible to anyone
+ * reading the rail. They are all `menu` now.
  */
 const ADMIN_PAGES_DIR = path.join(HERE, '../../pages/admin')
 
 type Reachability =
   | { via: 'menu', section: string }
-  | { via: 'tab', component: string }
   | { via: 'redirect', to: string }
-  | { via: 'panel-tab', host: string, tab: string }
   | { via: 'link', from: string }
 
 const REACHABILITY: Record<string, Reachability> = {
-  'analytics.vue': { via: 'menu', section: 'analytics' },
+  'analytics.vue': { via: 'menu', section: 'analytics:overview' },
   'audits.vue': { via: 'menu', section: 'audits' },
   'governance.vue': { via: 'menu', section: 'governance' },
   'images.vue': { via: 'menu', section: 'images' },
   'intelligence.vue': { via: 'menu', section: 'intelligence' },
+  'intelligence-overview.vue': { via: 'menu', section: 'intelligence-overview' },
+  'intelligence-audits.vue': { via: 'menu', section: 'intelligence-audits' },
+  'provider-registry.vue': { via: 'menu', section: 'provider-registry' },
   'reviews.vue': { via: 'menu', section: 'reviews' },
+  'doc-comments.vue': { via: 'menu', section: 'doc-comments' },
   'risk.vue': { via: 'menu', section: 'risk' },
   'updates.vue': { via: 'menu', section: 'updates' },
   'users.vue': { via: 'menu', section: 'users' },
-  'subscriptions.vue': { via: 'tab', component: 'AccountTabs.vue' },
-  'doc-comments.vue': { via: 'tab', component: 'CommentTabs.vue' },
+  'subscriptions.vue': { via: 'menu', section: 'subscriptions' },
   'codes.vue': { via: 'redirect', to: '/admin/subscriptions' },
   'credits.vue': { via: 'redirect', to: '/admin/users' },
   'intelligence-agent.vue': { via: 'redirect', to: '/admin/intelligence' },
   'intelligence-lab.vue': { via: 'redirect', to: '/admin/intelligence' },
-  // Renders the same LazyDashboardProviderRegistryAdminPanel that the
-  // Intelligence console embeds as its Service Channels tab (351c289e2), so the
-  // capability is reachable; this route is the deep link to it.
-  'provider-registry.vue': { via: 'panel-tab', host: 'intelligence', tab: 'serviceChannels' },
-  // The only UI for POST /api/admin/intelligence/chat. Not yet folded into the
-  // Intelligence console — tracked in the admin IA report; until it is, this
-  // entry is the record that it is URL-only.
-  'intelligence-chat.vue': { via: 'panel-tab', host: 'intelligence', tab: 'chat' },
+  // The only UI for POST /api/admin/intelligence/chat. It was URL-only for as
+  // long as the console navigated by tabs — a full console page nothing linked.
+  'intelligence-chat.vue': { via: 'menu', section: 'intelligence-chat' },
   // Standalone WebAuthn recovery page, outside the console shell (`layout:
   // false`) and reachable without a session. It shares this directory because
   // it shares the namespace, not the shell.
@@ -404,26 +465,42 @@ describe('admin route reachability', () => {
       if (entry.via !== 'menu')
         continue
       expect(ids, file).toContain(entry.section)
+      // The analytics entries address their page with `?section=`, so their
+      // hrefs are their own rather than a sectionPaths row.
+      if (entry.section.startsWith('analytics:'))
+        continue
       expect(nav.sectionPaths[entry.section]).toBe(`/admin/${file.replace('.vue', '')}`)
     }
   })
 
-  it('backs every tab-reachable page with a tab component that links to it', () => {
+  it('routes every console page through the rail rather than an in-page tab strip', () => {
+    // The rail is the console's only navigation surface. A page that links a
+    // sibling console route from its own body is how tab strips came back the
+    // last time: the destination stops being a rail entry, and the only way to
+    // find it is to already be on the page next to it.
+    const railPaths = new Set(
+      Object.entries(REACHABILITY)
+        .filter(([, entry]) => entry.via === 'menu')
+        .map(([file]) => `/admin/${file.replace('.vue', '')}`),
+    )
+
+    const offenders: string[] = []
     for (const [file, entry] of Object.entries(REACHABILITY)) {
-      if (entry.via !== 'tab')
+      if (entry.via !== 'menu')
         continue
-      const source = readFileSync(path.join(HERE, entry.component), 'utf8')
-      expect(source, entry.component).toContain(`/admin/${file.replace('.vue', '')}`)
-      // The tab bar is useless unless the page actually renders it. Nuxt only
-      // auto-imports components from the top level of app/components, so these
-      // nested ones need an explicit import or they resolve to nothing.
-      const page = readFileSync(path.join(ADMIN_PAGES_DIR, file), 'utf8')
-      const tag = path.basename(entry.component, '.vue')
-      expect(page, file).toMatch(new RegExp(`<${tag}\\b`))
-      expect(page, `${file} must import ${tag} explicitly`).toMatch(
-        new RegExp(`import ${tag} from`),
-      )
+      const source = readFileSync(path.join(ADMIN_PAGES_DIR, file), 'utf8')
+      const self = `/admin/${file.replace('.vue', '')}`
+      for (const target of railPaths) {
+        if (target === self)
+          continue
+        // Quoted, so `/api/admin/...` prefixes and longer sibling paths
+        // (`/admin/users` inside `/admin/users/123`) are not false positives.
+        if (source.includes(`"${target}"`) || source.includes(`'${target}'`))
+          offenders.push(`${file} -> ${target}`)
+      }
     }
+
+    expect(offenders, 'console page navigates to a sibling rail route from its own body').toEqual([])
   })
 
   it('backs every link-reachable page with a page that links to it', () => {

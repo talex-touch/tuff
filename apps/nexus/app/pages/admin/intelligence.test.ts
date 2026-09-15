@@ -4,9 +4,8 @@ import { describe, expect, it } from 'vitest'
 const page = readFileSync(new URL('./intelligence.vue', import.meta.url), 'utf8')
 
 describe('dashboard intelligence admin page contract', () => {
-  it('uses the generated lazy admin panel component name', () => {
-    expect(page).toContain('<LazyDashboardIntelligenceAdminPanel />')
-    expect(page).not.toContain('LazyDashboardIntelligenceIntelligenceAdminPanel')
+  it('renders the Tuff AI workspace directly now that the tabs are rail entries', () => {
+    expect(page).toContain('<LazyDashboardIntelligenceIntelligenceAgentWorkspace />')
   })
 
   // ClientOnly renders a fragment. As the page root that made Nuxt warn the page

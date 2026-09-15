@@ -1243,7 +1243,7 @@ function exportGovernanceReport(): void {
     <header class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 class="apple-heading-md">
-          {{ tt('dashboard.governance.title', 'Data Governance') }}
+          {{ tt('dashboard.sections.menu.governance', 'Data Governance') }}
         </h1>
         <p class="mt-2 max-w-3xl text-sm text-black/50 dark:text-white/50">
           {{ tt('dashboard.governance.subtitle', 'Manage anonymized analytics, upload health, storage limits, notification channels, and provider quotas from one control surface.') }}

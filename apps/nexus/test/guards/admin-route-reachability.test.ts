@@ -125,18 +125,17 @@ function loadAdminPages(): SourceFile[] {
 /**
  * Orphans that predate this guard. Self-expiring: `no waiver has gone stale`
  * fails as soon as one gains a navigation entry.
+ *
+ * `/admin/intelligence-chat` used to be here and is not any more: the console
+ * made its rail the single navigation surface, and the chat probe became an
+ * entry under Intelligence instead of a URL-only page.
  */
 const KNOWN_ORPHANS = [
   {
-    route: '/admin/intelligence-chat',
-    why: 'A working admin chat console with no entry point. Either it belongs in the Admin menu next to '
-      + 'Tuff AI, or it is dead code that should go.',
-  },
-  {
     route: '/admin/codes',
-    why: 'Activation codes. AccountTabs.vue highlights the Subscriptions tab while on this route '
-      + '(AccountTabs.vue:20) but never renders a link to it, and DashboardNav\'s sectionPaths has no '
-      + '`codes` entry — so the page is styled as if it belonged to a tab group it cannot be reached from.',
+    why: 'Activation codes. AdminNav highlights the Subscriptions entry while on this route so the '
+      + 'forward does not flash the wrong section, but nothing renders a link to it — the page is '
+      + 'a redirect stub that only an old bookmark or a hand-typed URL reaches.',
   },
 ]
 
