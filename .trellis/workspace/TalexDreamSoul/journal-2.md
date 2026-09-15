@@ -751,3 +751,85 @@ Grouped signed local commits: model cancellation; unified Voice Input settings/n
 ### Next Steps
 
 - None - task complete
+
+
+## Session 70: Applications browser, overlay warmth, docs source, deployment secrets
+
+**Date**: 2026-09-14
+**Task**: Applications browser, overlay warmth, docs source, deployment secrets
+**Branch**: `master`
+
+### Summary
+
+Batched four independent workstreams out of a shared 59-file dirty worktree, splitting one config file's hunks across two commits. Audits surfaced three checks that could not fail: a Secret preflight reading only Preview while production ran without an encryption key, an unasserted prewarm mock, and a build gate matching config source text. Two worthless tests removed rather than re-pinned.
+
+### Main Changes
+
+### Main Changes
+
+Four unrelated workstreams had accumulated in one shared worktree (59 files), including work from another window. Each was audited and gated independently, then committed separately. `apps/nexus/nuxt.config.ts` carried hunks belonging to two different lines and was split with a partial-stage patch rather than committed whole.
+
+- **Applications split browser** (`7993e8a3e`): moved from a standalone `/application` route into `/setting/applications` as a real settings category. The page is now a split browser — the list stays while a selection renders detail beside it, instead of being replaced. `ApplicationEmpty.vue` deleted rather than kept as a fallback: under the split layout the right pane is empty until a selection exists, so a full-page empty state is unreachable. Scanner `identityKind` (macos-path, windows-uwp, ...) surfaced in the detail pane — the data already existed end to end, only the Tuff meta field and one projection were missing.
+- **MetaOverlay warmth** (`d3847e55c`): the renderer was destroyed on every dismiss, so each open paid a cold start, and the two fixed 100 ms focus delays existed only to wait for that boot. The view is now retained and hidden, with a `ui.hide` dispatch resetting renderer state; both delays became direct focus calls. Teardown on window close and app quit verified still reachable, so retention is bounded rather than a leak. CoreBox show now prewarms the overlay, deferred via `setImmediate` so it misses the reveal frame.
+- **Docs Markdown source** (`e3294273c`): appending `.md` to any docs route returns its source as `text/markdown`, with a discovery `<link>` on each page. The handler reads from disk and the deployed Worker has no filesystem, so every route is prerendered at build time and excluded from the Worker — a missing route is a dead URL, not a slow one.
+- **Deployment Secret preflight** (`76eba22ae`): now validates every environment against its own required set, with production additionally requiring the three encryption keys whose data is unreadable without them. `STORAGE_SECURE_STORE_KEY` deliberately stays feature-gated: empty table, fail-closed consumer. Credential stores consolidated onto one `secureCredentialStore`; release-download signing domain-separated from `AUTH_SECRET`.
+
+### Defects Found by Audit
+
+Three latent defects surfaced, each caused by a check that could not fail:
+
+1. **Permanently-green secret gate.** The preflight read only `deployment_configs.preview.env_vars`, and its required set happened to equal exactly what Preview had. Production ran without `NUXT_INTELLIGENCE_ENCRYPT_KEY` for a long time and nothing noticed. A check that cannot fail is worse than no check, because it is trusted.
+2. **Unasserted prewarm.** `window.test.ts` declared a `prewarmMetaOverlay` mock and wired it into the module mock, but never asserted it — deleting the production call kept the suite green.
+3. **Source-text build gate.** A test compared `nuxt.config.ts` source against a literal string: it broke on reformatting and would have passed on a semantically wrong exclusion list.
+
+Three subtle bugs were also caught while implementing the docs source route:
+
+- Content filenames like `button.en.md` are how docs cross-link each other; treating them as source requests would have made every such link emit Markdown.
+- `docs-legacy-redirect` runs first by filename order and normalizes through a helper that strips `.md` as a content extension, so `/docs/x.md` silently redirected to HTML.
+- A directory index is scanned as `/en/docs/dev/index` but served at `/en/docs/dev`, so the URL a reader actually forms is `/en/docs/dev.md`. Only the `/index.md` spelling was generated — works in dev, 404s in production.
+
+### Tests Removed
+
+Two tests were deleted rather than re-pinned to new text, per the repo bar:
+
+- The `nuxt.config.ts` source-text match above.
+- A tautological assertion comparing `APP_DESTINATION_ICON_CLASSES` against the exact expression that defines it in the source; it cannot fail for any edit. The literal pin above it does the real defending.
+
+### Testing
+
+- Docs `.md` delivery verified against a running server rather than mocks: nested, root, `zh`, and directory-index routes all 200 `text/markdown` with real source bytes; rendered pages unaffected; suffix preserved through redirects; three path-traversal forms including percent-encoded all 404.
+- Mutation-verified gates: removing `/en/docs.md` from the exclusion list reddens the build gate; reverting the directory-index twin fix reddens two evidence tests; deleting `metaOverlayManager.prewarm()` reddens both new window tests; nesting it inside the `shouldFocus` branch reddens only the second.
+- Production-gap probe (throwaway, removed): the exact Preview-complete/Production-incomplete metadata that previously shipped green now fails `DEPLOYMENT_SECRET_INVENTORY_MISSING`, naming all three missing keys.
+- Per-line gates green before each commit — LINE A: ApplicationIndex 2, categories.smoke 14, app-destinations 156, `typecheck:web` 0 errors. LINE B: 33 tests, `typecheck:node` 0 errors. LINE C: 51 tests across 7 files. LINE D: 31 tests.
+- i18n parity confirmed exact in both directions across added and removed keys.
+- Spec `nexus-preview-secret-deployment.md` corrected: its error matrix documented pre-rename codes and its contracts asserted Preview-only semantics — including a required test that pinned the bug verbatim ("assert only Preview names/types are used").
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Four commits are local on `master` and not pushed.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7993e8a3e` | (see git log) |
+| `d3847e55c` | (see git log) |
+| `e3294273c` | (see git log) |
+| `76eba22ae` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
