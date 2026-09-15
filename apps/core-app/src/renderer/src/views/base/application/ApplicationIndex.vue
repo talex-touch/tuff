@@ -146,7 +146,10 @@ function toAppConfigureData(item: TuffItem): AppConfigureData {
     new Set([...readStringArray(item.meta?.keywords), ...readStringArray(extension?.keyWords)])
   )
 
-  const path = app?.path || item.id
+  // `TuffMeta.app.path` is optional, and an application without one has no path to show.
+  // Falling back to `item.id` printed an identity string under a path label; the header
+  // already hides the row when it is absent, and the launch target is in the detail rows.
+  const path = app?.path
   // Application hits carry their path as the subtitle, so the header would print it twice.
   const description = basic?.description || basic?.subtitle
 
