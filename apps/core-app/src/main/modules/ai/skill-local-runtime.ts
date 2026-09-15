@@ -10,12 +10,14 @@
  * is still attached.
  */
 
+import type { AgentSkillRoot } from './agent-skill-roots'
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { LocalSkillConfig } from './skill-local-sources'
 import { StorageList } from '@talex-touch/utils'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { createLogger } from '../../utils/logger'
 import { getMainConfig, saveMainConfigDurable } from '../storage'
+import { existingAgentSkillRoots } from './agent-skill-roots'
 import {
   EMPTY_LOCAL_SKILL_CONFIG,
   localSkillSnapshot,
@@ -37,8 +39,19 @@ export interface LocalSkillView {
   enabled: boolean
 }
 
+/**
+ * One directory a skill was found under. `sourceId` names the agent that owns it and is null for a
+ * directory the user linked; the renderer turns that id into a label, so no display string is
+ * invented here.
+ */
+export interface LocalSkillDirView {
+  path: string
+  sourceId: string | null
+  auto: boolean
+}
+
 export interface LocalSkillSnapshotView {
-  dirs: string[]
+  dirs: LocalSkillDirView[]
   skills: LocalSkillView[]
 }
 
@@ -82,6 +95,37 @@ export function readLocalSkillConfig(): LocalSkillConfig {
   }
 }
 
+/**
+ * Skill libraries the agents on this machine already keep.
+ *
+ * Cached because the reader below feeds the injection path, which is synchronous and runs on every
+ * home turn — resolving a dozen paths per turn would buy nothing. Detection is refreshed when the
+ * settings page asks for a snapshot, so installing an agent and reopening the page is enough.
+ */
+let detectedSkillRoots: AgentSkillRoot[] = []
+
+/** Re-probes the agents' own directories and replaces the cache. */
+async function refreshDetectedSkillRoots(): Promise<AgentSkillRoot[]> {
+  detectedSkillRoots = await existingAgentSkillRoots()
+  return detectedSkillRoots
+}
+
+/**
+ * What the scanner, the reader and the injection actually work from: the user's directories plus the
+ * libraries discovered on this machine.
+ *
+ * Detected roots are never written to storage. They belong to other tools, and persisting them would
+ * turn "remove this library" into a promise the next launch quietly breaks.
+ */
+function effectiveLocalSkillConfig(): LocalSkillConfig {
+  const persisted = readLocalSkillConfig()
+  if (detectedSkillRoots.length === 0) return persisted
+  return {
+    dirs: [...detectedSkillRoots.map((root) => root.path), ...persisted.dirs],
+    disabledIds: persisted.disabledIds
+  }
+}
+
 async function writeLocalSkillConfig(config: LocalSkillConfig): Promise<void> {
   const result = await saveMainConfigDurable(StorageList.SKILL_LOCAL_SOURCES, config, {
     force: true
@@ -89,10 +133,18 @@ async function writeLocalSkillConfig(config: LocalSkillConfig): Promise<void> {
   if (!result.success) throw new Error('LOCAL_SKILL_CONFIG_PERSIST_FAILED')
 }
 
-async function snapshotView(config: LocalSkillConfig): Promise<LocalSkillSnapshotView> {
-  const snapshot = await localSkillSnapshot(config)
+async function snapshotView(): Promise<LocalSkillSnapshotView> {
+  const persisted = readLocalSkillConfig()
+  const snapshot = await localSkillSnapshot(effectiveLocalSkillConfig())
   return {
-    dirs: snapshot.dirs,
+    dirs: [
+      ...detectedSkillRoots.map((root) => ({
+        path: root.path,
+        sourceId: root.id,
+        auto: true
+      })),
+      ...persisted.dirs.map((path) => ({ path, sourceId: null, auto: false }))
+    ],
     skills: snapshot.skills.map(({ id, name, description, path, sourceDir, enabled }) => ({
       id,
       name,
@@ -110,16 +162,20 @@ async function mutate(
   const current = readLocalSkillConfig()
   const updated = await next(current)
   if (updated !== current) await writeLocalSkillConfig(updated)
-  return await snapshotView(updated)
+  return await snapshotView()
 }
 
 export function registerSkillLocalChannels(transport: ITuffTransportMain): () => void {
-  setLocalSkillConfigReader(readLocalSkillConfig)
+  // The injection path reads through this reader, so it sees the agents' own libraries too.
+  setLocalSkillConfigReader(effectiveLocalSkillConfig)
+  void refreshDetectedSkillRoots()
 
   const cleanups = [
     transport.on(skillLocalListEvent, async (_payload, context) => {
       assertHostOwned(context)
-      return await snapshotView(readLocalSkillConfig())
+      // The page is the natural moment to notice an agent installed since launch.
+      await refreshDetectedSkillRoots()
+      return await snapshotView()
     }),
     transport.on(skillLocalAddDirEvent, async (payload, context) => {
       assertHostOwned(context)
@@ -127,6 +183,8 @@ export function registerSkillLocalChannels(transport: ITuffTransportMain): () =>
     }),
     transport.on(skillLocalRemoveDirEvent, async (payload, context) => {
       assertHostOwned(context)
+      if (detectedSkillRoots.some((root) => root.path === payload.path))
+        throw new Error('A detected agent library is not a linked directory')
       return await mutate((config) => withoutLocalSkillDir(config, payload.path))
     }),
     transport.on(skillLocalSetEnabledEvent, async (payload, context) => {

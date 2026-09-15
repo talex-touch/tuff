@@ -2,17 +2,21 @@
   SettingSkillsMcp Component
 
   Skills and MCP servers, the two halves of what the home conversation can reach for beyond the
-  model itself. Both are imported-config items in the orchestrator store, so listing, enabling and
-  deleting ride the channels the Intelligence surface already uses; only liveness probing and
-  hand-entering a server are new.
+  model itself.
 
-  Local skill directories are the third list, and a different thing: nothing is imported, the file
-  on disk stays the skill, and main owns the registry — so this page only sends the directory the
-  user picked and renders the snapshot it gets back.
+  Nothing here needs importing first. The skills list reads what the agents on this machine already
+  keep — Codex, Claude Code, cc-switch and their neighbours — plus whatever the user linked by hand
+  and whatever was imported before; main owns that merge and this page renders the snapshot it gets
+  back. Every row it shows is a skill the conversation can already use.
+
+  MCP servers are the exception, and deliberately so: a discovered server is listed, but adopting it
+  is a click. Importing one enables a stdio command or an HTTP endpoint the agent runtime may then
+  start, and that is a grant the user has to make rather than one this page makes for them.
 -->
 <script lang="ts" name="SettingSkillsMcp" setup>
-import type { AiImportedConfigItem } from '@talex-touch/tuff-intelligence'
+import type { AiImportCandidate, AiImportedConfigItem } from '@talex-touch/tuff-intelligence'
 import type { McpManualServerInput } from '@talex-touch/utils/transport/sdk/domains/mcp-servers'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TxModal } from '@talex-touch/tuffex/modal'
 import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
@@ -23,9 +27,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineEvent, defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import SettingButton from '~/components/settings/SettingButton.vue'
 import SettingChip from '~/components/settings/SettingChip.vue'
 import SettingRow from '~/components/settings/SettingRow.vue'
 import SettingSkeleton from '~/components/settings/SettingSkeleton.vue'
@@ -38,7 +40,7 @@ import {
   resolveMcpTransport
 } from './setting-skills-mcp-display'
 
-/** Row budget per section. Anything past it moves to the Intelligence surface. */
+/** Row budget per section. Everything past it unfolds in place rather than leaving the page. */
 const MAX_VISIBLE_ROWS = 5
 
 type ProbeStatus = 'idle' | 'probing' | 'ok' | 'failed'
@@ -61,7 +63,18 @@ interface ManualDraft {
   headers: string
 }
 
-/** Mirrored from `skill-local-runtime.ts`; edit both copies or neither. */
+/**
+ * Mirrored from `skill-local-runtime.ts`; edit both copies or neither.
+ *
+ * `sourceId` names the agent that owns a directory and is null for one the user linked, so the label
+ * a row shows stays the renderer's decision.
+ */
+interface LocalSkillDirView {
+  path: string
+  sourceId: string | null
+  auto: boolean
+}
+
 interface LocalSkillView {
   id: string
   name: string
@@ -72,8 +85,24 @@ interface LocalSkillView {
 }
 
 interface LocalSkillSnapshotView {
-  dirs: string[]
+  dirs: LocalSkillDirView[]
   skills: LocalSkillView[]
+}
+
+/** Where a row in the unified skills list came from. */
+type SkillRowKind = 'agent' | 'linked' | 'imported'
+
+interface SkillRow {
+  key: string
+  title: string
+  description: string
+  kind: SkillRowKind
+  sourceId: string | null
+  enabled: boolean
+  /** Set for the two rows backed by a file on disk. */
+  local: LocalSkillView | null
+  /** Set for the row backed by an imported item. */
+  item: AiImportedConfigItem | null
 }
 
 const skillLocalListEvent = defineEvent('ai')
@@ -100,8 +129,7 @@ const openFileEvent = defineRawEvent<
 
 const IDLE_PROBE: ProbeState = { status: 'idle' }
 
-const { t } = useI18n()
-const router = useRouter()
+const { t, te } = useI18n()
 const aiClient = useIntelligenceSdk()
 const mcpSdk = useMcpServersSdk()
 const tuffTransport = useTuffTransport()
@@ -112,10 +140,17 @@ const loading = ref(true)
 const loadError = ref('')
 const probeStates = reactive(new Map<string, ProbeState>())
 
-const localDirs = ref<string[]>([])
+const localDirs = ref<LocalSkillDirView[]>([])
 const localSkills = ref<LocalSkillView[]>([])
 const localBusy = ref(false)
-const showAllLocalSkills = ref(false)
+const showAllSkills = ref(false)
+const showAllMcp = ref(false)
+
+/** Servers found on disk that nobody has adopted yet, plus the scan that found them. */
+const scanId = ref('')
+const discovered = ref<AiImportCandidate[]>([])
+const scanFailed = ref(false)
+const adoptingId = ref('')
 
 const dialogVisible = ref(false)
 const dialogSaving = ref(false)
@@ -142,24 +177,39 @@ function displayName(item: AiImportedConfigItem): string {
   return item.alias || item.name
 }
 
-function byActiveThenName(left: AiImportedConfigItem, right: AiImportedConfigItem): number {
-  if (left.active !== right.active) return left.active ? -1 : 1
-  return displayName(left).localeCompare(displayName(right))
-}
-
 function quoteIfNeeded(value: string): string {
   return /\s/.test(value) ? `"${value}"` : value
 }
 
-const mcpServers = computed(() =>
-  items.value.filter((item) => item.kind === 'mcp').sort(byActiveThenName)
-)
-const skills = computed(() =>
-  items.value.filter((item) => item.kind === 'skill').sort(byActiveThenName)
+/** Agent names are brands; only a missing key falls back to the raw id. */
+function agentLabel(sourceId: string): string {
+  const key = `settings.skillsMcp.sources.${sourceId}`
+  return te(key) ? t(key) : sourceId
+}
+
+const mcpServers = computed(() => items.value.filter((item) => item.kind === 'mcp'))
+const importedSkills = computed(() => items.value.filter((item) => item.kind === 'skill'))
+
+/**
+ * Servers nobody has adopted. `added` is what the scanner reports for a config it found with no
+ * stored item behind it, which is exactly the "on this machine, not in Tuff yet" set.
+ */
+type McpCandidate = Extract<AiImportCandidate, { kind: 'mcp' }>
+
+const discoveredServers = computed<McpCandidate[]>(() =>
+  discovered.value.filter(
+    (candidate): candidate is McpCandidate =>
+      candidate.kind === 'mcp' &&
+      candidate.state === 'added' &&
+      candidate.blockingIssues.length === 0 &&
+      candidate.serverNames.length > 0
+  )
 )
 
-const mcpRows = computed(() =>
-  mcpServers.value.slice(0, MAX_VISIBLE_ROWS).map((item) => {
+const mcpRows = computed(() => {
+  const sorted = mcpServers.value.slice().sort(byActiveThenName)
+  const visible = showAllMcp.value ? sorted : sorted.slice(0, MAX_VISIBLE_ROWS)
+  return visible.map((item) => {
     const transport = resolveMcpTransport(item)
     return {
       item,
@@ -175,42 +225,83 @@ const mcpRows = computed(() =>
       probe: probeStates.get(item.id) ?? IDLE_PROBE
     }
   })
-)
+})
 
-const skillRows = computed(() =>
-  skills.value.slice(0, MAX_VISIBLE_ROWS).map((item) => {
-    const description = item.normalizedProjection?.description
+function byActiveThenName(left: AiImportedConfigItem, right: AiImportedConfigItem): number {
+  if (left.active !== right.active) return left.active ? -1 : 1
+  return displayName(left).localeCompare(displayName(right))
+}
+
+/**
+ * One list for every skill the conversation can reach: the agents' own libraries, the directories
+ * the user linked, and anything imported earlier. They differ only in the source chip a row shows —
+ * keeping them in separate lists is what made the page look empty while the disk was full.
+ */
+const skillRowsAll = computed<SkillRow[]>(() => {
+  const agentOfDir = new Map(
+    localDirs.value
+      .filter((dir): dir is LocalSkillDirView & { sourceId: string } => Boolean(dir.sourceId))
+      .map((dir) => [dir.path, dir.sourceId] as const)
+  )
+  const rows: SkillRow[] = localSkills.value.map((skill) => {
+    const sourceId = agentOfDir.get(skill.sourceDir) ?? null
     return {
-      item,
+      key: skill.id,
+      title: skill.name,
+      description: skill.description || t('settings.skillsMcp.skills.noDescription'),
+      kind: sourceId ? 'agent' : 'linked',
+      sourceId,
+      enabled: skill.enabled,
+      local: skill,
+      item: null
+    }
+  })
+
+  for (const item of importedSkills.value) {
+    const description = item.normalizedProjection?.description
+    rows.push({
+      key: item.id,
       title: displayName(item),
       description:
         typeof description === 'string' && description.trim()
           ? description.trim()
-          : t('settings.skillsMcp.skills.noDescription', { provider: item.provider })
-    }
+          : t('settings.skillsMcp.skills.noDescription'),
+      kind: 'imported',
+      sourceId: null,
+      enabled: item.active,
+      local: null,
+      item
+    })
+  }
+
+  return rows.sort((left, right) => {
+    if (left.enabled !== right.enabled) return left.enabled ? -1 : 1
+    return left.title.localeCompare(right.title)
   })
+})
+
+const skillRows = computed(() =>
+  showAllSkills.value ? skillRowsAll.value : skillRowsAll.value.slice(0, MAX_VISIBLE_ROWS)
+)
+const hiddenSkillCount = computed(() =>
+  Math.max(skillRowsAll.value.length - skillRows.value.length, 0)
 )
 
 const hiddenMcpCount = computed(() => Math.max(mcpServers.value.length - MAX_VISIBLE_ROWS, 0))
-const hiddenSkillCount = computed(() => Math.max(skills.value.length - MAX_VISIBLE_ROWS, 0))
 const showStateRow = computed(() => loading.value && items.value.length === 0)
+const showMcpEmptyHint = computed(
+  () =>
+    !loading.value &&
+    !loadError.value &&
+    mcpServers.value.length === 0 &&
+    discoveredServers.value.length === 0
+)
 
 const localDirRows = computed(() =>
-  localDirs.value.map((path) => ({
-    path,
-    count: localSkills.value.filter((skill) => skill.sourceDir === path).length
+  localDirs.value.map((dir) => ({
+    ...dir,
+    count: localSkills.value.filter((skill) => skill.sourceDir === dir.path).length
   }))
-)
-
-/**
- * Capped like the other lists, but expandable rather than deferred elsewhere:
- * these switches exist nowhere else, so a long library must stay reachable.
- */
-const localSkillRows = computed(() =>
-  showAllLocalSkills.value ? localSkills.value : localSkills.value.slice(0, MAX_VISIBLE_ROWS)
-)
-const hiddenLocalSkillCount = computed(() =>
-  Math.max(localSkills.value.length - localSkillRows.value.length, 0)
 )
 
 /**
@@ -232,17 +323,6 @@ const skeletonGroups = computed(() => [
   { label: t('settings.skillsMcp.localDirs.label'), rows: 2, description: true, trailing: true }
 ])
 
-const addServerDescription = computed(() =>
-  mcpServers.value.length === 0 && !loading.value && !loadError.value
-    ? t('settings.skillsMcp.mcp.addDescEmpty')
-    : t('settings.skillsMcp.mcp.addDesc')
-)
-const importSkillsDescription = computed(() =>
-  skills.value.length === 0 && !loading.value && !loadError.value
-    ? t('settings.skillsMcp.skills.importDescEmpty')
-    : t('settings.skillsMcp.skills.importDesc')
-)
-
 const draftValid = computed(() => {
   if (!draft.name.trim()) return false
   return draft.transport === 'stdio' ? Boolean(draft.command.trim()) : Boolean(draft.url.trim())
@@ -261,6 +341,12 @@ function probeChipText(state: ProbeState): string {
   }
   if (state.status === 'failed') return t('settings.skillsMcp.mcp.stateFailed')
   return t('settings.skillsMcp.mcp.stateIdle')
+}
+
+function skillSourceLabel(row: SkillRow): string {
+  if (row.kind === 'imported') return t('settings.skillsMcp.sources.imported')
+  if (row.kind === 'linked') return t('settings.skillsMcp.sources.linked')
+  return agentLabel(row.sourceId ?? '')
 }
 
 async function loadItems(): Promise<void> {
@@ -287,6 +373,53 @@ async function setItemActive(item: AiImportedConfigItem, active: boolean): Promi
   } catch (error) {
     skillsMcpLog.error('Failed to change the imported item state', error)
     toast.error(errorMessage(error, t('settings.skillsMcp.toggleFailed')))
+  }
+}
+
+/**
+ * Finds the servers the local agents already define. A failed scan leaves the section empty rather
+ * than blocking the page: the skills half of it still works, and the retry row is right there.
+ */
+async function refreshDiscovery(): Promise<void> {
+  try {
+    const scan = await aiClient.orchestratorPreviewImport({})
+    scanId.value = scan.scanId
+    discovered.value = scan.candidates
+    scanFailed.value = false
+  } catch (error) {
+    skillsMcpLog.error('Failed to scan local AI CLI configurations', error)
+    scanFailed.value = true
+  }
+}
+
+/**
+ * Adopting a server copies its definition into Tuff's store and turns it on for the agent runtime.
+ * That is a grant, so it takes a click — and when the definition carries credentials, an explicit
+ * confirmation before those values move into the secure store.
+ */
+async function adoptServer(candidate: AiImportCandidate): Promise<void> {
+  if (adoptingId.value) return
+  const secretCount = candidate.kind === 'mcp' ? candidate.secretKeyPaths.length : 0
+  if (
+    secretCount > 0 &&
+    !window.confirm(t('settings.skillsMcp.mcp.sensitiveConfirm', { count: secretCount }))
+  )
+    return
+
+  adoptingId.value = candidate.id
+  try {
+    await aiClient.orchestratorApplyImport({
+      scanId: scanId.value,
+      candidateIds: [candidate.id],
+      ...(secretCount > 0 ? { confirmSecretMigration: true } : {})
+    })
+    toast.success(t('settings.skillsMcp.mcp.adopted'))
+    await Promise.all([loadItems(), refreshDiscovery()])
+  } catch (error) {
+    skillsMcpLog.error('Failed to adopt the discovered MCP server', error)
+    toast.error(errorMessage(error, t('settings.skillsMcp.mcp.adoptFailed')))
+  } finally {
+    adoptingId.value = ''
   }
 }
 
@@ -355,6 +488,15 @@ async function setLocalSkillEnabled(skill: LocalSkillView, enabled: boolean): Pr
     () => tuffTransport.send(skillLocalSetEnabledEvent, { id: skill.id, enabled }),
     'settings.skillsMcp.localDirs.toggleFailed'
   )
+}
+
+/** Imported skills and disk-backed ones are stored in different places, so the toggle splits here. */
+async function setSkillEnabled(row: SkillRow, enabled: boolean): Promise<void> {
+  if (row.item) {
+    await setItemActive(row.item, enabled)
+    return
+  }
+  if (row.local) await setLocalSkillEnabled(row.local, enabled)
 }
 
 async function probeServer(item: AiImportedConfigItem): Promise<void> {
@@ -447,20 +589,21 @@ async function deleteDraftServer(): Promise<void> {
     await aiClient.orchestratorDeleteImportedItem({ itemId })
     probeStates.delete(itemId)
     dialogVisible.value = false
-    await loadItems()
+    await Promise.all([loadItems(), refreshDiscovery()])
   } catch (error) {
     skillsMcpLog.error('Failed to delete the MCP server', error)
     toast.error(errorMessage(error, t('settings.skillsMcp.dialog.deleteFailed')))
   }
 }
 
-function openIntelligence(): void {
-  void router.push('/setting/intelligence')
+async function rescan(): Promise<void> {
+  await Promise.all([loadLocalSkills(), refreshDiscovery()])
 }
 
 onMounted(() => {
   void loadItems()
   void loadLocalSkills()
+  void refreshDiscovery()
 })
 </script>
 
@@ -474,9 +617,9 @@ onMounted(() => {
   <TuffGroupBlock v-else-if="loadError" :name="t('settings.skillsMcp.mcp.label')">
     <SettingRow :title="t('settings.skillsMcp.loadFailed')" :description="loadError">
       <template #trailing>
-        <SettingButton variant="secondary" @click="loadItems">
+        <TxButton variant="secondary" size="sm" @click="loadItems">
           {{ t('settings.skillsMcp.retry') }}
-        </SettingButton>
+        </TxButton>
       </template>
     </SettingRow>
   </TuffGroupBlock>
@@ -513,16 +656,17 @@ onMounted(() => {
           {{ probeChipText(row.probe) }}
         </SettingChip>
 
-        <SettingButton
+        <TxButton
           variant="secondary"
-          :disabled="row.probe.status === 'probing'"
+          size="sm"
+          :loading="row.probe.status === 'probing'"
           @click="probeServer(row.item)"
         >
           {{ t('settings.skillsMcp.mcp.probe') }}
-        </SettingButton>
-        <SettingButton v-if="row.manual" variant="secondary" @click="openEditDialog(row.item)">
+        </TxButton>
+        <TxButton v-if="row.manual" variant="secondary" size="sm" @click="openEditDialog(row.item)">
           {{ t('settings.skillsMcp.mcp.edit') }}
-        </SettingButton>
+        </TxButton>
         <TxSwitch
           :model-value="row.item.active"
           @update:model-value="(value) => setItemActive(row.item, Boolean(value))"
@@ -530,56 +674,116 @@ onMounted(() => {
       </template>
     </SettingRow>
 
+    <!--
+      Found on this machine, not adopted yet. One row per configuration that defines servers, since
+      that is the unit an import acts on; the description names the servers inside it.
+    -->
+    <SettingRow
+      v-for="candidate in discoveredServers"
+      :key="candidate.id"
+      :title="candidate.name"
+      :description="
+        t('settings.skillsMcp.mcp.discoveredDesc', {
+          count: candidate.serverNames.length,
+          names: candidate.serverNames.join('、')
+        })
+      "
+    >
+      <template #trailing>
+        <SettingChip tone="info">{{ t('settings.skillsMcp.mcp.discoveredChip') }}</SettingChip>
+        <SettingChip>{{ agentLabel(candidate.provider) }}</SettingChip>
+        <SettingChip v-if="candidate.secretKeyPaths.length > 0" tone="warning">
+          {{ t('settings.skillsMcp.mcp.secretChip') }}
+        </SettingChip>
+        <TxButton size="sm" :loading="adoptingId === candidate.id" @click="adoptServer(candidate)">
+          {{ t('settings.skillsMcp.mcp.adoptAction') }}
+        </TxButton>
+      </template>
+    </SettingRow>
+
+    <SettingRow
+      v-if="scanFailed"
+      :title="t('settings.skillsMcp.mcp.scanFailed')"
+      :description="t('settings.skillsMcp.mcp.scanFailedDesc')"
+    >
+      <template #trailing>
+        <TxButton variant="secondary" size="sm" @click="refreshDiscovery">
+          {{ t('settings.skillsMcp.mcp.scanAction') }}
+        </TxButton>
+      </template>
+    </SettingRow>
+
     <SettingRow
       v-if="hiddenMcpCount > 0"
-      :title="t('settings.skillsMcp.mcp.viewAllTitle')"
-      :description="t('settings.skillsMcp.mcp.viewAllDesc', { count: hiddenMcpCount })"
+      :title="t('settings.skillsMcp.mcp.showAllTitle')"
+      :description="t('settings.skillsMcp.mcp.showAllDesc', { count: hiddenMcpCount })"
       navigable
-      @activate="openIntelligence"
+      @activate="showAllMcp = true"
     />
 
-    <SettingRow :title="t('settings.skillsMcp.mcp.addTitle')" :description="addServerDescription">
+    <SettingRow
+      :title="t('settings.skillsMcp.mcp.addTitle')"
+      :description="
+        showMcpEmptyHint
+          ? t('settings.skillsMcp.mcp.addDescEmpty')
+          : t('settings.skillsMcp.mcp.addDesc')
+      "
+    >
       <template #trailing>
-        <SettingButton @click="openCreateDialog">
+        <TxButton variant="secondary" size="sm" @click="refreshDiscovery">
+          {{ t('settings.skillsMcp.mcp.scanAction') }}
+        </TxButton>
+        <TxButton size="sm" @click="openCreateDialog">
           {{ t('settings.skillsMcp.mcp.addAction') }}
-        </SettingButton>
+        </TxButton>
       </template>
     </SettingRow>
   </TuffGroupBlock>
 
+  <!--
+    One list, three sources. Everything here is live: the agents' libraries and the linked
+    directories are read from disk on every snapshot, and the imported rows are the leftovers from
+    the earlier one-shot import flow.
+  -->
   <TuffGroupBlock v-if="!showSkeleton" :name="t('settings.skillsMcp.skills.label')">
     <SettingRow v-if="showStateRow" :title="t('settings.skillsMcp.loading')" />
 
     <SettingRow
       v-for="row in skillRows"
-      :key="row.item.id"
+      :key="row.key"
       :title="row.title"
       :description="row.description"
     >
       <template #trailing>
+        <SettingChip :tone="row.kind === 'imported' ? 'neutral' : 'info'">
+          {{ skillSourceLabel(row) }}
+        </SettingChip>
         <TxSwitch
-          :model-value="row.item.active"
-          @update:model-value="(value) => setItemActive(row.item, Boolean(value))"
+          :model-value="row.enabled"
+          :disabled="localBusy"
+          @update:model-value="(value) => setSkillEnabled(row, Boolean(value))"
         />
       </template>
     </SettingRow>
 
     <SettingRow
       v-if="hiddenSkillCount > 0"
-      :title="t('settings.skillsMcp.skills.viewAllTitle')"
-      :description="t('settings.skillsMcp.skills.viewAllDesc', { count: hiddenSkillCount })"
+      :title="t('settings.skillsMcp.skills.showAllTitle')"
+      :description="t('settings.skillsMcp.skills.showAllDesc', { count: hiddenSkillCount })"
       navigable
-      @activate="openIntelligence"
+      @activate="showAllSkills = true"
     />
 
-    <!-- Importing is the Intelligence surface's flow; duplicating its candidate list here would
-         mean two places to keep in step with the scanner. -->
     <SettingRow
-      :title="t('settings.skillsMcp.skills.importTitle')"
-      :description="importSkillsDescription"
-      navigable
-      @activate="openIntelligence"
-    />
+      :title="t('settings.skillsMcp.skills.rescanTitle')"
+      :description="t('settings.skillsMcp.skills.rescanDesc')"
+    >
+      <template #trailing>
+        <TxButton variant="secondary" size="sm" @click="rescan">
+          {{ t('settings.skillsMcp.skills.rescanAction') }}
+        </TxButton>
+      </template>
+    </SettingRow>
 
     <SettingRow
       :title="t('settings.skillsMcp.skills.injectionTitle')"
@@ -589,66 +793,54 @@ onMounted(() => {
 
   <!--
     Linked, not imported: these rows describe files that stay where the user put
-    them, so removing a directory unlinks it and never deletes anything.
+    them, so removing a directory unlinks it and never deletes anything. The detected rows are the
+    agents' own libraries and cannot be unlinked — they are not ours to detach.
   -->
   <TuffGroupBlock v-if="!showSkeleton" :name="t('settings.skillsMcp.localDirs.label')">
     <SettingRow
       v-for="row in localDirRows"
       :key="row.path"
-      :title="row.path"
-      :description="t('settings.skillsMcp.localDirs.dirDesc', { count: row.count })"
-    >
-      <template #trailing>
-        <SettingButton variant="secondary" :disabled="localBusy" @click="removeLocalDir(row.path)">
-          {{ t('settings.skillsMcp.localDirs.remove') }}
-        </SettingButton>
-      </template>
-    </SettingRow>
-
-    <SettingRow
-      v-for="skill in localSkillRows"
-      :key="skill.id"
-      :title="skill.name"
-      :description="skill.description || t('settings.skillsMcp.localDirs.noDescription')"
-    >
-      <template #trailing>
-        <SettingChip>{{ t('settings.skillsMcp.localDirs.linked') }}</SettingChip>
-        <TxSwitch
-          :model-value="skill.enabled"
-          :disabled="localBusy"
-          @update:model-value="(value) => setLocalSkillEnabled(skill, Boolean(value))"
-        />
-      </template>
-    </SettingRow>
-
-    <SettingRow
-      v-if="hiddenLocalSkillCount > 0"
-      :title="t('settings.skillsMcp.localDirs.showAllTitle')"
-      :description="t('settings.skillsMcp.localDirs.showAllDesc', { count: hiddenLocalSkillCount })"
-      navigable
-      @activate="showAllLocalSkills = true"
-    />
-
-    <SettingRow
-      :title="t('settings.skillsMcp.localDirs.addTitle')"
+      :title="row.sourceId ? agentLabel(row.sourceId) : row.path"
       :description="
-        localDirs.length === 0
-          ? t('settings.skillsMcp.localDirs.addDescEmpty')
-          : t('settings.skillsMcp.localDirs.addDesc')
+        row.auto
+          ? t('settings.skillsMcp.localDirs.autoDesc', { count: row.count })
+          : t('settings.skillsMcp.localDirs.dirDesc', { count: row.count })
       "
     >
       <template #trailing>
-        <SettingButton
-          v-if="localDirs.length > 0"
-          variant="secondary"
-          :disabled="localBusy"
-          @click="loadLocalSkills"
+        <SettingChip v-if="row.auto" tone="info">
+          {{ t('settings.skillsMcp.localDirs.auto') }}
+        </SettingChip>
+        <TxTooltip
+          v-if="row.auto"
+          :content="row.path"
+          :anchor="{ placement: 'top', showArrow: true }"
         >
+          <SettingChip mono>{{ t('settings.skillsMcp.localDirs.pathChip') }}</SettingChip>
+        </TxTooltip>
+        <TxButton
+          v-else
+          variant="secondary"
+          size="sm"
+          :disabled="localBusy"
+          @click="removeLocalDir(row.path)"
+        >
+          {{ t('settings.skillsMcp.localDirs.remove') }}
+        </TxButton>
+      </template>
+    </SettingRow>
+
+    <SettingRow
+      :title="t('settings.skillsMcp.localDirs.addTitle')"
+      :description="t('settings.skillsMcp.localDirs.addDesc')"
+    >
+      <template #trailing>
+        <TxButton variant="secondary" size="sm" :disabled="localBusy" @click="loadLocalSkills">
           {{ t('settings.skillsMcp.localDirs.rescan') }}
-        </SettingButton>
-        <SettingButton :disabled="localBusy" @click="addLocalDir">
+        </TxButton>
+        <TxButton size="sm" :disabled="localBusy" @click="addLocalDir">
           {{ t('settings.skillsMcp.localDirs.addAction') }}
-        </SettingButton>
+        </TxButton>
       </template>
     </SettingRow>
   </TuffGroupBlock>
@@ -758,16 +950,21 @@ onMounted(() => {
 
     <template #footer>
       <div class="SettingSkillsMcp-DialogActions">
-        <SettingButton v-if="draft.itemId" variant="secondary" @click="deleteDraftServer">
+        <TxButton v-if="draft.itemId" variant="secondary" size="sm" @click="deleteDraftServer">
           {{ t('settings.skillsMcp.dialog.delete') }}
-        </SettingButton>
+        </TxButton>
         <span class="SettingSkillsMcp-DialogSpacer" />
-        <SettingButton variant="secondary" @click="dialogVisible = false">
+        <TxButton variant="secondary" size="sm" @click="dialogVisible = false">
           {{ t('settings.skillsMcp.dialog.cancel') }}
-        </SettingButton>
-        <SettingButton :disabled="!draftValid || dialogSaving" @click="saveManualServer">
+        </TxButton>
+        <TxButton
+          size="sm"
+          :disabled="!draftValid"
+          :loading="dialogSaving"
+          @click="saveManualServer"
+        >
           {{ t('settings.skillsMcp.dialog.save') }}
-        </SettingButton>
+        </TxButton>
       </div>
     </template>
   </TxModal>
