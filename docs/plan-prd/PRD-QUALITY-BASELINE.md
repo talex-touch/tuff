@@ -142,9 +142,14 @@
 - 2026-07-13 已落地 R8 Phase 3 Domain Lexicon V1：带 `source=builtin` provenance 的只读 registry、53-entry 单位 baseline、跨语言 aliases、locale label 与 PreviewSDK/CoreApp/QuickOps 共享 conversion source。
 - 2026-07-13 已落地 R8 Phase 4 Plugin SDK facade：`sdkapi 260713` main/renderer typed surface、verified context、`i18n.read` / `lexicon.read` / `lexicon.register` fail-closed、host namespace/provenance、原子 bounds、跨插件隔离与 disable/unload cleanup。
 - 2026-08-20 已复核 R8 Phase 5 CatalogService **服务契约**：pinned RSA 信任根（manifest 不能自带密钥）、内容寻址下载、fail-closed 归一化与验签、DB write scheduler 串行化的失败原子导入、activate/rollback 仅在持久化提交后重建 official registry，插件 overlay 与跨插件隔离在 activate→rollback 全程保持。达成口径是服务契约成立而非能力交付：远程更新链路与诊断状态在运行中的应用里没有调用方，边界见 [`../engineering/catalog-service-boundary.md`](../engineering/catalog-service-boundary.md)。质量门禁仍未完成。
+- 2026-09-13 `voice-provider` 将 Phase 5 泛化链路接出到登录后一次同步、host-only typed controls、Settings 状态面和 main-owned `nexus-pack` runtime。公共 artifact 仅含 A256GCM ciphertext；manifest 签名绑定密文 hash/encryption metadata；app-authenticated key route 为 `private, no-store`；main 解密后清零 key buffer。每次采集前必须从 active registry 冻结 descriptor/model，校验 sdkapi/expiry/协议/transport/auth/同源 endpoint/限额，并取 `min(pack, local hard cap)`；无 active pack 才使用内置 Nexus buffered route。错 key/tag/AAD/key id、撤回、账号切换与运行时不兼容不得污染 active。当前证据包含合成 PCM final/end、focused tests、双 typecheck、build 与隔离 Electron DOM/transport smoke；未执行付费真实 Provider，因此不得升级为 Production 转写证据。
 - Domain Lexicon entry 必须包含 stable id、domain/source provenance、version、labels、aliases 与 locale coverage；metadata 必须是 plain JSON，单位换算展示、解析和搜索召回必须消费同一 official registry。
 - 插件 SDK 只能开放受控 facade，不暴露宿主内部 resolver、raw locale store 或未隔离 catalog 写入；plugin overlay 只驻留内存，不能覆盖 official 或跨 plugin 读取。
 - CatalogService 必须覆盖 download、verify、schema validate、SQLite import、activate、rollback 与版本状态；校验失败不得污染 active catalog。
+- 加密 pack 的公共 artifact 不得含明文 endpoint/model/header 或 DEK；固定客户端对称 key 禁止。每包 key identity 必须绑定 `type/packId/version/keyId`，轮换必须递增 pack version；删除 payload 时同步删除 key-map entry。
+- Catalog 云控的共享层只负责 manifest/signature/content address/可选 envelope/key identity/登录态 delivery/SQLite lifecycle；每个新 pack type 必须有客户端随包发布的 typed normalizer、持久化 adapter 与 runtime consumer。禁止通用脚本解释器、任意 JSON 执行或让远端新增客户端尚未实现的语义。
+- 远程 catalog check/download/key/activate 必须在已加载且已登录的账户下执行；未登录返回稳定 `CATALOG_AUTH_REQUIRED`，并在 network/verifier/persistence 前停止。只读 status 与本地 rollback 应保留，避免退出登录后失去恢复入口。
+- 云控内容不得开启本机可选能力或权限。语音输入 fresh default 必须为 off，只有用户手动切换才能开启；UI 同时显示“默认关闭”/“已手动开启”的可见状态，路由包与登录状态都不能改写该偏好。新增实质性云控类别或用途前必须更新用户协议或给出独立通知。
 
 ## 5. PRD 验收模板
 

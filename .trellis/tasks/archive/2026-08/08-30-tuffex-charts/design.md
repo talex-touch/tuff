@@ -210,3 +210,16 @@ v-model:hiddenSeries?: string[]          // 替代 kumo 的 enableLegendSelectio
 8a. **Sankey 已落地（2026-08-30）**：props 面全对齐；tooltip 改插槽；环输入降级空渲染+dev 警告（kumo 会抛）。
 8b. **Maps 已落地（2026-08-30）**：投影常量/纬度钳制/裁两极/sqrt 半径/zoom 限幅全移植；`projection` prop 接 d3-geo 实例（kumo 是 {project,unproject} 包装）、`null`=equirectangular；roam 用 SVG transform 且符号随缩放反缩（尺寸恒定）；choropleth 连续色阶 color-mix 实现、showLegend=CSS 渐变条；`tooltipFormatter`(HTML) → 插槽；choropleth 插槽作用域用 `regionName`（`name` 与 slot 属性冲突）。BubbleMap 增 `bubbleHover`/`bubbleClick` emits 同 kumo onBubbleHover/Click。
 8. **Timeseries 已落地（2026-08-30）**，两处有意简化：`tooltipBoundary`（clipping-ancestors 碰撞）→ 容器钳制+视口翻转；刷选拖拽中的 outOfBrush 30% 变淡（瞬态）→ 只画选区矩形。新增改进：`highlightedSeries` prop 替代 echarts dispatchAction 高亮、`clusterLabel`/`timestampFormat` 文案可覆盖（no-i18n 惯例）、`width` prop（SSR/测试）。其余 14 场景能力逐项有测试或实现（52 用例）。
+
+### 2026-09-13 交互与动画对齐（后续批次，状态更新）
+
+上表 item 8 的两处简化**已消除**，不再是偏离：
+
+- `tooltipBoundary` 与 tooltip 的 `boundary` 现在都是真正的 clipping-ancestors 碰撞：沿 offsetParent 链收集 overflow 非 visible 的裁剪盒，与视口求交后再做碰撞/翻转（`src/tooltip/src/position.ts`）。
+- 刷选拖拽过程中的 outOfBrush 变淡**已实现**：单个亮度 `<mask>`（白绘图区 + 两条 `#4D4D4D` 条带）套在一层包裹 `<g>` 上，序列仍只挂载一次（避免重复挂载抢夺配色位次与 extent 注册）。刷选配色精确取 kumo 值：`rgba(120, 140, 180, 0.3)` 填充 / `rgba(120, 140, 180, 0.8)` 1px 描边。
+- `highlightedSeries` 的变淡值由 30% 改为 10%：ECharts blur 的语义是 `fromState.opacity * 0.1`（echarts `src/util/states.ts`），30% 是当初的近似错误。
+- 新增 props：`yAxisMinInterval`（ECharts `yAxis.minInterval`，丢小数刻度、保留首尾、整数刻度不再打印 `1.0`）、`tooltipFooter`、`tooltipBoundary`。
+
+本批次同时把 ECharts 默认动效逐项复刻（依据 kumo 锁定的 `echarts ^6.0.0` 实测源码 `echarts@6.1.0`）：首次渲染 1000ms（line 用 `linear`，其余 `cubicInOut`）、数据更新 500ms `cubicInOut`、状态动画 300ms `cubicOut`、`animationThreshold` 2000 点以上不做动画；tooltip `showDelay` 0 / `hideDelay` 100ms / 淡出 200ms / 位移 400ms `cubic-bezier(0.23, 1, 0.32, 1)` / 指针采样 50ms 节流。新增 `src/core/animate.ts` 并提供同名公开原语（`easings`/`cubicBezier`/`tween`/`useEnterProgress`/`useTweenedNumbers`/`prefersReducedMotion` 与各时长常量），`prefers-reduced-motion: reduce` 下一律直接落到终态。
+
+新确认的**对齐而非偏离**项：pie 的 `animationType: 'expansion'` 角向生长与 hover 外推 5px；sankey 与 map 无几何动画（ECharts `SankeyView` 没有 `initProps`/`updateProps`，map 显式 `animationDurationUpdate: 0`）；sankey hover 邻接聚焦变淡 10%、map choropleth hover 保色并其余降到 0.45。仍然存在的近似：hover 强调按「光标处的最近序列」判定，ECharts 只在命中实际图形元素时强调。

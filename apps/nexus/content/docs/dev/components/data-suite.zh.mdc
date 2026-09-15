@@ -1,6 +1,6 @@
 ---
 title: 数据套件
-description: 可视化与图表：主包内的数据展示组件，以及独立的图表包
+description: 可视化与图表：主包内的数据展示组件，以及图表家族子路径
 category: DataSuite
 status: beta
 since: 0.4.0
@@ -11,7 +11,7 @@ verified: false
 
 ## 套件定位
 
-数据套件负责把数字变成图形，也是唯一横跨两个包的套件。**可视化**（SparkChart、AllocationBar、DiffTable、SignalMeter）是随主包发布的轻量内联数据展示，经 `@talex-touch/tuffex/pro` 入口引入；**图表**则是独立的 `@talex-touch/tuffex-charts` 包——与 kumo 同构的 API 面、Vue 直渲 SVG、不依赖 echarts，需要单独安装。图表家族从《[Charts 图表](./charts.zh.mdc)》开始看；当版面放不下一张完整图表时，用可视化组件。
+数据套件负责把数字变成图形，汇集了 Tuffex 在这件事上的全部能力。**可视化**（SparkChart、AllocationBar、DiffTable、SignalMeter）是轻量内联数据展示；**图表**是完整的图表家族，经 `@talex-touch/tuffex/charts` 子路径引入——与 kumo 同构的 API 面、Vue 直渲 SVG、不依赖 echarts。两者都在主包内，运行时经 `@talex-touch/tuffex/pro` 入口引入；按族整体引入图表时用 `@talex-touch/tuffex/charts`。图表家族从《[Charts 图表](./charts.zh.mdc)》开始看；当版面放不下一张完整图表时，用可视化组件。整套图表按 ECharts 的默认时序播放动画——1000ms 入场、500ms 数据更新、300ms 状态切换——并在 `prefers-reduced-motion: reduce` 下一律直接落到终帧。
 
 ## 组件预览
 

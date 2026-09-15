@@ -7,12 +7,12 @@ const selected = ref('van')
 
 const segments = computed(() => locale.value === 'zh'
   ? [
-      { key: 'van', label: '香草', short: 'VAN', percent: 72.5, amount: '$51,785', color: 'var(--tx-bui-orange)', description: '当前库存价值的贡献快照。切换分段只换检查对象，卡片不跳。' },
+      { key: 'van', label: '香草', short: 'VAN', percent: 72.5, amount: '$51,785', description: '当前库存价值的贡献快照。切换分段只换检查对象，卡片不跳。' },
       { key: 'choc', label: '巧克力', short: 'CHOC', percent: 22.8, amount: '$16,278', description: '第二大持仓，随季节波动。' },
       { key: 'mint', label: '薄荷', short: 'MINT', percent: 4.7, amount: '$3,357', description: '尾部份额，主要来自限定口味。' },
     ]
   : [
-      { key: 'van', label: 'Vanilla', short: 'VAN', percent: 72.5, amount: '$51,785', color: 'var(--tx-bui-orange)', description: 'Contribution snapshot across current inventory value. Selecting a segment changes the inspected group without moving the card.' },
+      { key: 'van', label: 'Vanilla', short: 'VAN', percent: 72.5, amount: '$51,785', description: 'Contribution snapshot across current inventory value. Selecting a segment changes the inspected group without moving the card.' },
       { key: 'choc', label: 'Chocolate', short: 'CHOC', percent: 22.8, amount: '$16,278', description: 'The second position, swinging with the season.' },
       { key: 'mint', label: 'Mint', short: 'MINT', percent: 4.7, amount: '$3,357', description: 'The tail share, mostly limited runs.' },
     ])

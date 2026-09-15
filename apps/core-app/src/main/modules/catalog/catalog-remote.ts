@@ -3,12 +3,18 @@ import {
   CATALOG_ERROR_CODES,
   CATALOG_MAX_MANIFEST_BYTES,
   CATALOG_MAX_PACK_BYTES,
+  CATALOG_MAX_PAYLOAD_KEY_RESPONSE_BYTES,
   CATALOG_SCHEMA_VERSION,
   CatalogContractError,
+  isCatalogPackType,
   normalizeCatalogManifest,
+  parseCatalogPayloadKeyBytes,
+  type CatalogPayloadKeyV1,
   type CatalogManifestV1,
   type CatalogPackType
 } from '@talex-touch/utils/i18n'
+import type { NexusResponsePayload } from '@talex-touch/utils/transport/events/auth'
+import { Buffer } from 'node:buffer'
 import { NetworkHttpStatusError, type NetworkRequestOptions } from '@talex-touch/utils/network'
 import type { Readable } from 'node:stream'
 import { getNetworkService } from '../network'
@@ -26,9 +32,21 @@ export interface CatalogStreamClient {
   requestStream(options: NetworkRequestOptions): Promise<CatalogStreamResponse>
 }
 
+export interface CatalogPayloadKeyMaterial {
+  keyId: string
+  keyBytes: Uint8Array
+}
+
+export interface VoiceProviderCatalogRemote {
+  fetchVoiceProviderPayloadKey(manifest: CatalogManifestV1): Promise<CatalogPayloadKeyMaterial>
+}
+
+export type CatalogAuthenticatedRequester = (path: string) => Promise<NexusResponsePayload | null>
+
 export interface NexusCatalogRemoteDependencies {
   network?: CatalogStreamClient
   resolveBaseUrl?: () => string
+  requestWithAuth?: CatalogAuthenticatedRequester
 }
 
 export interface CatalogRemote {
@@ -36,17 +54,19 @@ export interface CatalogRemote {
   fetchPack(manifest: CatalogManifestV1): Promise<Uint8Array>
 }
 
-export class NexusCatalogRemote implements CatalogRemote {
+export class NexusCatalogRemote implements CatalogRemote, VoiceProviderCatalogRemote {
   private readonly network: CatalogStreamClient
   private readonly resolveBaseUrl: () => string
+  private readonly requestWithAuth: CatalogAuthenticatedRequester | null
 
   constructor(dependencies: NexusCatalogRemoteDependencies = {}) {
     this.network = dependencies.network ?? getNetworkService()
     this.resolveBaseUrl = dependencies.resolveBaseUrl ?? getRuntimeNexusBaseUrl
+    this.requestWithAuth = dependencies.requestWithAuth ?? null
   }
 
   async fetchLatestManifest(type: CatalogPackType): Promise<Uint8Array | null> {
-    if (type !== 'domain-lexicon') {
+    if (!isCatalogPackType(type)) {
       throw new CatalogContractError(
         CATALOG_ERROR_CODES.typeUnsupported,
         'Unsupported catalog pack type'
@@ -102,6 +122,73 @@ export class NexusCatalogRemote implements CatalogRemote {
       }
       rethrowRemoteFailure(error, CATALOG_ERROR_CODES.remoteUnavailable)
     }
+  }
+
+  async fetchVoiceProviderPayloadKey(
+    manifest: CatalogManifestV1
+  ): Promise<CatalogPayloadKeyMaterial> {
+    const normalized = normalizeCatalogManifest(manifest)
+    if (normalized.type !== 'voice-provider') {
+      throw new CatalogContractError(
+        CATALOG_ERROR_CODES.typeUnsupported,
+        'Catalog payload key is only available for voice-provider packs'
+      )
+    }
+    if (!normalized.payloadEncryption) {
+      throw new CatalogContractError(
+        CATALOG_ERROR_CODES.payloadEncryptionRequired,
+        'Voice provider catalog payload must be encrypted'
+      )
+    }
+    if (!this.requestWithAuth) {
+      throw payloadKeyError()
+    }
+
+    let response: NexusResponsePayload | null
+    try {
+      response = await this.requestWithAuth(this.buildPayloadKeyPath(normalized))
+    } catch {
+      throw payloadKeyError()
+    }
+    if (!response || response.status < 200 || response.status >= 300) {
+      throw payloadKeyError()
+    }
+
+    let payloadKey: CatalogPayloadKeyV1
+    try {
+      const bodyBytes = new TextEncoder().encode(response.body)
+      if (bodyBytes.byteLength > CATALOG_MAX_PAYLOAD_KEY_RESPONSE_BYTES) {
+        throw payloadKeyError()
+      }
+      payloadKey = parseCatalogPayloadKeyBytes(bodyBytes)
+    } catch (error) {
+      if (error instanceof CatalogContractError) throw error
+      throw payloadKeyError()
+    }
+    if (
+      payloadKey.algorithm !== normalized.payloadEncryption.algorithm ||
+      payloadKey.keyId !== normalized.payloadEncryption.keyId
+    ) {
+      throw payloadKeyError()
+    }
+
+    return {
+      keyId: payloadKey.keyId,
+      keyBytes: Buffer.from(payloadKey.key, 'base64')
+    }
+  }
+
+  private buildPayloadKeyPath(manifest: CatalogManifestV1): string {
+    const encryption = manifest.payloadEncryption
+    if (!encryption) throw payloadKeyError()
+    return [
+      '/api/v1/catalogs',
+      encodeURIComponent(manifest.type),
+      encodeURIComponent(manifest.packId),
+      encodeURIComponent(manifest.version),
+      'keys',
+      encodeURIComponent(encryption.keyId)
+    ].join('/')
   }
 
   private buildLatestManifestUrl(type: CatalogPackType): string {
@@ -203,6 +290,13 @@ function rethrowRemoteFailure(
 ): never {
   if (error instanceof CatalogContractError) throw error
   throw remoteError(fallbackCode, 'Catalog request failed')
+}
+
+function payloadKeyError(): CatalogContractError {
+  return new CatalogContractError(
+    CATALOG_ERROR_CODES.payloadKeyUnavailable,
+    'Catalog payload key is unavailable'
+  )
 }
 
 function remoteError(

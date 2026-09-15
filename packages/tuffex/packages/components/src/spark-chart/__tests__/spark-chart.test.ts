@@ -1,10 +1,13 @@
 import type { SparkSeries } from '../src/types'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import { drawSparkChart } from '../src/draw'
 import {
-  clampAnchorPercent,
+  clampAnchorCenter,
+  indexFromPointerX,
   indexFromRatio,
+  plotX,
   projectSeries,
   ratioFromIndex,
   resolvePadding,
@@ -30,11 +33,27 @@ function stubContext() {
     beginPath: vi.fn(() => calls.push('beginPath')),
     moveTo: vi.fn((x: number, y: number) => calls.push(`moveTo(${x},${y})`)),
     lineTo: vi.fn((x: number, y: number) => calls.push(`lineTo(${x},${y})`)),
+    bezierCurveTo: vi.fn(() => calls.push('bezierCurveTo')),
+    rect: vi.fn((...args: number[]) => calls.push(`rect(${args.join(',')})`)),
+    clip: vi.fn(() => calls.push('clip')),
+    save: vi.fn(() => calls.push('save')),
+    restore: vi.fn(() => calls.push('restore')),
+    arc: vi.fn(() => calls.push('arc')),
+    fill: vi.fn(() => calls.push('fill')),
+    measureText: vi.fn((text: string) => ({ width: text.length * 6 }) as TextMetrics),
+    fillText: vi.fn((text: string) => {
+      calls.push(`align(${ctx.textAlign})@${text}`)
+      calls.push(`fillText(${text})`)
+    }),
     stroke: vi.fn(() => calls.push('stroke')),
     lineJoin: '',
     lineCap: '',
     lineWidth: 0,
     strokeStyle: '',
+    fillStyle: '',
+    font: '',
+    textAlign: '',
+    textBaseline: '',
   }
   return { ctx, calls }
 }
@@ -130,11 +149,36 @@ describe('sparkChart geometry', () => {
     expect(ratioFromIndex(1, 1)).toBe(0)
   })
 
-  it('clamps the tooltip anchor away from both edges', () => {
-    expect(clampAnchorPercent(0)).toBe(28)
-    expect(clampAnchorPercent(100)).toBe(72)
-    expect(clampAnchorPercent(50)).toBe(50)
-    expect(clampAnchorPercent(10, 0, 100)).toBe(10)
+  it('maps the pointer through the plot box, not the stage', () => {
+    const rect = { left: 0, width: 200 }
+    const inset = { left: 40, right: 20 }
+
+    // Inside the gutter the sample clamps to the edge instead of drifting.
+    expect(indexFromPointerX(0, rect, 8, inset)).toBe(0)
+    expect(indexFromPointerX(40, rect, 8, inset)).toBe(0)
+    expect(indexFromPointerX(180, rect, 8, inset)).toBe(7)
+    expect(indexFromPointerX(200, rect, 8, inset)).toBe(7)
+    // Halfway across the plot box, not halfway across the stage.
+    expect(indexFromPointerX(110, rect, 8, inset)).toBe(4)
+    // A collapsed stage falls back to the first sample rather than dividing by zero.
+    expect(indexFromPointerX(50, { left: 0, width: 60 }, 8, inset)).toBe(0)
+  })
+
+  it('places a sample inside the plot box', () => {
+    expect(plotX(0, 8, { left: 40, right: 20 }, 200)).toBe(40)
+    expect(plotX(7, 8, { left: 40, right: 20 }, 200)).toBe(180)
+    expect(plotX(4, 8, { left: 0, right: 0 }, 200)).toBe((4 / 7) * 200)
+    expect(plotX(3, 1, { left: 10, right: 10 }, 200)).toBe(10)
+  })
+
+  it('clamps the tooltip only when it would overhang the stage', () => {
+    // Free travel across everything the box fits.
+    expect(clampAnchorCenter(300, 80, 700, 8)).toBe(300)
+    // Pinned at the edges, minus the margin.
+    expect(clampAnchorCenter(0, 80, 700, 8)).toBe(88)
+    expect(clampAnchorCenter(700, 80, 700, 8)).toBe(612)
+    // Wider tooltip than stage: centred, not oscillating.
+    expect(clampAnchorCenter(10, 90, 120, 0)).toBe(60)
   })
 })
 
@@ -148,6 +192,17 @@ describe('sparkChart drawing', () => {
     grid: false,
     gridLines: 4,
     gridColor: '#ecedef',
+    curve: 'monotone' as const,
+    xAxis: false,
+    yAxis: false,
+    xTicks: [],
+    yTicks: [],
+    axisColor: '#e0e2e5',
+    axisTextColor: '#9a9da3',
+    axisFont: '10px system-ui',
+    activeIndex: null,
+    activeColor: '#62656b',
+    revealProgress: 1,
   }
 
   it('scales by dpr, clears, then strokes one path per series', () => {
@@ -156,7 +211,7 @@ describe('sparkChart drawing', () => {
     drawSparkChart(ctx as unknown as CanvasRenderingContext2D, {
       ...base,
       series: [
-        { color: '#f00', points: [{ x: 0, y: 0 }, { x: 10, y: 10 }] },
+        { color: '#f00', points: [{ x: 0, y: 0 }, { x: 5, y: 2 }, { x: 10, y: 10 }] },
         { color: '#0f0', points: [{ x: 0, y: 5 }, { x: 10, y: 15 }] },
       ],
     })
@@ -164,8 +219,7 @@ describe('sparkChart drawing', () => {
     expect(calls[0]).toBe('setTransform(2,0,0,2,0,0)')
     expect(calls[1]).toBe('clearRect')
     expect(calls).toContain('moveTo(0,0)')
-    expect(calls).toContain('lineTo(10,10)')
-    expect(ctx.stroke).toHaveBeenCalledTimes(2)
+    expect(calls).toContain('bezierCurveTo')
     expect(ctx.lineWidth).toBe(2.25)
     // Identity restored so anything painting after us is not silently scaled.
     expect(calls.at(-1)).toBe('setTransform(1,0,0,1,0,0)')
@@ -203,13 +257,55 @@ describe('sparkChart drawing', () => {
     expect(ctx.lineCap).toBe('round')
   })
 
-  it('leaves an empty series out of the path work', () => {
+  it('draws bounded axes and an active crosshair with series dots', () => {
+    const { ctx, calls } = stubContext()
+    drawSparkChart(ctx as unknown as CanvasRenderingContext2D, {
+      ...base,
+      padding: { top: 8, right: 4, bottom: 18, left: 28 },
+      xAxis: true,
+      yAxis: true,
+      xTicks: [{ position: 28, label: '12:00' }, { position: 96, label: '12:10' }],
+      yTicks: [{ position: 8, label: '4' }, { position: 32, label: '0' }],
+      activeIndex: 1,
+      series: [
+        { color: '#f00', points: [{ x: 28, y: 20 }, { x: 96, y: 10 }] },
+        { color: '#0f0', points: [{ x: 28, y: 30 }, { x: 96, y: 24 }] },
+      ],
+    })
+
+    expect(calls).toContain('fillText(12:00)')
+    expect(calls).toContain('fillText(4)')
+    expect(calls.filter(call => call === 'arc')).toHaveLength(4)
+    // The last tick sits on the canvas edge: centring it would clip half of it.
+    expect(calls).toContain('align(right)@12:10')
+  })
+
+  it('keeps edge axis labels inside the canvas', () => {
+    const { ctx, calls } = stubContext()
+    drawSparkChart(ctx as unknown as CanvasRenderingContext2D, {
+      ...base,
+      padding: { top: 8, right: 0, bottom: 18, left: 0 },
+      xAxis: true,
+      yAxis: true,
+      // A label wider than the inset, and one that starts left of the canvas.
+      xTicks: [{ position: 2, label: '12:00' }, { position: 40, label: '12:10' }],
+      yTicks: [{ position: 8, label: '123456' }],
+      series: [{ color: '#f00', points: [{ x: 0, y: 20 }, { x: 100, y: 10 }] }],
+    })
+
+    expect(calls).toContain('align(left)@12:00')
+    expect(calls).toContain('align(center)@12:10')
+    // Right-aligned at `left - 5` would put a 36px label at x = -5; it moves in.
+    expect(ctx.fillText).toHaveBeenCalledWith('123456', 36, 8)
+  })
+
+  it('leaves an empty series out of the series stroke work', () => {
     const { ctx } = stubContext()
     drawSparkChart(ctx as unknown as CanvasRenderingContext2D, {
       ...base,
       series: [{ color: '#00f', points: [] }],
     })
-    expect(ctx.beginPath).not.toHaveBeenCalled()
+    expect(ctx.stroke).not.toHaveBeenCalled()
   })
 })
 
@@ -233,6 +329,21 @@ describe('txSparkChart', () => {
   it('exposes redraw for hosts mutating series in place', () => {
     const wrapper = mount(TxSparkChart, { props: { series: [] } })
     expect(typeof (wrapper.vm as unknown as { redraw: () => void }).redraw).toBe('function')
+  })
+
+  it('maps pointer and keys into an accessible active sample', async () => {
+    const wrapper = mount(TxSparkChart, { props: { series: [makeSeries([1, 2, 3])] } })
+    Object.defineProperty(wrapper.element, 'getBoundingClientRect', {
+      value: () => ({ left: 0, width: 120, top: 0, height: 60, right: 120, bottom: 60, x: 0, y: 0, toJSON: () => ({}) }),
+    })
+
+    await wrapper.trigger('pointermove', { clientX: 120 })
+    expect(wrapper.emitted('hover')).toEqual([[2]])
+    expect(wrapper.emitted('update:activeIndex')).toEqual([[2]])
+
+    await wrapper.trigger('keydown', { key: 'ArrowLeft' })
+    expect(wrapper.emitted('update:activeIndex')?.at(-1)).toEqual([1])
+    expect(wrapper.find('.tx-bui-spark-chart__announcement').text()).toContain('s: 2')
   })
 })
 
@@ -263,16 +374,37 @@ describe('txChartScrubber', () => {
     expect(wrapper.emitted('scrub')).toEqual([[4], [7]])
   })
 
-  it('places the cursor at the sample and clamps the tooltip anchor', async () => {
+  it('places the cursor on the plot box and lets the tooltip follow it', async () => {
     const wrapper = mountScrubber({ rows: [{ label: 'Spend', value: '$2,112', color: 'red' }] })
 
     await wrapper.trigger('pointermove', { clientX: 0 })
-    expect(wrapper.find('.tx-bui-chart-scrubber__cursor').attributes('style')).toContain('left: 0%')
-    expect(wrapper.find('.tx-bui-chart-scrubber__anchor').attributes('style')).toContain('left: 28%')
+    expect(wrapper.find('.tx-bui-chart-scrubber__cursor').attributes('style')).toContain('left: 0px')
+    // Unmeasured tooltip: percent of the sample position, never a fixed band.
+    expect(wrapper.find('.tx-bui-chart-scrubber__anchor').attributes('style')).toContain('left: 0%')
 
     await wrapper.trigger('pointermove', { clientX: 200 })
-    expect(wrapper.find('.tx-bui-chart-scrubber__cursor').attributes('style')).toContain('left: 100%')
-    expect(wrapper.find('.tx-bui-chart-scrubber__anchor').attributes('style')).toContain('left: 72%')
+    expect(wrapper.find('.tx-bui-chart-scrubber__cursor').attributes('style')).toContain('left: 200px')
+    expect(wrapper.find('.tx-bui-chart-scrubber__anchor').attributes('style')).toContain('left: 100%')
+  })
+
+  it('follows the gutters a wrapped chart publishes', async () => {
+    const wrapper = mountScrubber({ activeIndex: 0, rows: [{ label: 'Spend', value: '$1' }] })
+    await nextTick()
+
+    const style = { getPropertyValue: (name: string) => name === '--tx-bui-plot-left' ? '40px' : '20px' }
+    const computed = vi.spyOn(window, 'getComputedStyle')
+      .mockReturnValue(style as unknown as CSSStyleDeclaration)
+    // Row identity change is what re-reads the chart's published gutters.
+    await wrapper.setProps({ rows: [{ label: 'Spend', value: '$2' }] })
+    await nextTick()
+
+    // Sample 0 sits at the gutter instead of the stage edge.
+    expect(wrapper.find('.tx-bui-chart-scrubber__cursor').attributes('style')).toContain('left: 40px')
+
+    await wrapper.setProps({ activeIndex: 7 })
+    expect(wrapper.find('.tx-bui-chart-scrubber__cursor').attributes('style')).toContain('left: 180px')
+
+    computed.mockRestore()
   })
 
   it('renders tooltip rows with a swatch and a tabular value', async () => {
@@ -308,8 +440,9 @@ describe('txChartScrubber', () => {
     // The component reports the move but does not move itself.
     await wrapper.trigger('pointermove', { clientX: 200 })
     expect(wrapper.emitted('scrub')).toEqual([[7]])
+    await wrapper.setProps({ activeIndex: 2 })
     expect(wrapper.find('.tx-bui-chart-scrubber__cursor').attributes('style'))
-      .toContain(`left: ${(2 / 7) * 100}%`)
+      .toContain(`left: ${(2 / 7) * 200}px`)
 
     await wrapper.setProps({ activeIndex: null })
     expect(wrapper.find('.tx-bui-chart-scrubber__cursor').exists()).toBe(false)

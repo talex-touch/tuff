@@ -48,6 +48,7 @@ const EXPECTED_CREDENTIALS = [
   'RELEASE_DOWNLOAD_SIGNING_SECRET',
   'SENTRY_AUTH_TOKEN',
   'STORAGE_SECURE_STORE_KEY',
+  'VOICE_PROVIDER_CATALOG_KEYS',
 ].sort()
 
 function secretEnv(names: string[]) {
@@ -215,6 +216,7 @@ describe('deployment Secret preflight', () => {
       projectPayload({
         ...secretEnv(REQUIRED_SECRETS),
         NUXT_INTELLIGENCE_ENCRYPT_KEY: { type: 'secret_text' },
+        VOICE_PROVIDER_CATALOG_KEYS: { type: 'secret_text' },
         NUXT_DOC_TOKEN_SECRET: { type: 'secret_text' },
         AUTH_ORIGIN: { type: 'plain_text', value: 'https://preview.example.test' },
       }),
@@ -224,7 +226,7 @@ describe('deployment Secret preflight', () => {
     expect(assertCredentialBindings(bindings, 'preview')).toEqual({
       required: REQUIRED_SECRETS,
       environment: 'preview',
-      featureGated: [],
+      featureGated: ['VOICE_PROVIDER_CATALOG_KEYS'],
       optional: ['NUXT_DOC_TOKEN_SECRET'],
     })
   })

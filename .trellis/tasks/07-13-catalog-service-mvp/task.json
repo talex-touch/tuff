@@ -19,7 +19,8 @@
   "pr_url": null,
   "subtasks": [],
   "children": [
-    "09-03-remote-app-alias-catalog"
+    "09-03-remote-app-alias-catalog",
+    "09-13-voice-provider-cloud-pack"
   ],
   "parent": null,
   "relatedFiles": [

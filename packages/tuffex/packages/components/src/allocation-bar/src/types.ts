@@ -6,14 +6,18 @@ export interface AllocationSegment {
   label: string
   /** Short code for the legend chip, e.g. 'VAN'. Falls back to `label`. */
   short?: string
-  /** Share of the whole, 0–100. */
+  /**
+   * Share of the whole, 0–100. Rendered widths stay exactly proportional to it:
+   * the track's fixed separators are split between the segments in proportion to
+   * their percentages, so the gaps never eat into a share.
+   */
   percent: number
   /**
    * Headline figure for the segment, e.g. '$51,785'. The bar does not paint it —
    * it belongs to the card's hero line, which reads it off the active segment.
    */
   amount?: string
-  /** Fill colour. Falls back to the accent-then-greys ladder by position. */
+  /** Fill colour. Falls back to the accent-then-ink ladder by position. */
   color?: string
   /** Body copy for the optional detail panel. */
   description?: string

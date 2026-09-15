@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { SankeyLinkData, SankeyNodeData } from '@talex-touch/tuffex-charts'
-import { TxSankeyChart } from '@talex-touch/tuffex-charts'
+import type { SankeyLinkData, SankeyNodeData } from '@talex-touch/tuffex/charts'
+import { TxSankeyChart } from '@talex-touch/tuffex/charts'
 
 const nodes: SankeyNodeData[] = [
   { name: 'Free', value: 12400 },

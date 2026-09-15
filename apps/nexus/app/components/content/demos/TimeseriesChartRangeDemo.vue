@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { TimeseriesData } from '@talex-touch/tuffex-charts'
-import { TxTimeseriesChart } from '@talex-touch/tuffex-charts'
+import type { TimeseriesData } from '@talex-touch/tuffex/charts'
+import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
 import { ref } from 'vue'
 
 const start = Date.UTC(2026, 7, 30)
