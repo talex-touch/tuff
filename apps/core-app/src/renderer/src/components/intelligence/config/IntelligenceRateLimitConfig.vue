@@ -1,5 +1,6 @@
 <script lang="ts" name="IntelligenceRateLimitConfig" setup>
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
@@ -79,12 +80,10 @@ function handleTokensPerMinuteBlur() {
   }
 }
 
-function parseOptionalNumberInput(event: Event): number | '' {
-  const target = event.target
-  if (!(target instanceof HTMLInputElement)) {
-    return ''
-  }
-  return target.value !== '' ? Number(target.value) : ''
+function parseOptionalNumberValue(value: string | number): number | undefined {
+  if (value === '' || value === null || value === undefined) return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 function emitUpdate() {
@@ -124,23 +123,24 @@ function handleTokensControlBlur(onBlur: () => void) {
       default-icon="i-carbon-request-quote"
       active-icon="i-carbon-request-quote"
       :disabled="disabled"
-      @update:model-value="(val) => (localRequestsPerMinute = val !== '' ? Number(val) : undefined)"
+      @update:model-value="(val) => (localRequestsPerMinute = parseOptionalNumberValue(val))"
       @blur="handleRequestsPerMinuteBlur"
     >
       <template #control="{ modelValue: slotValue, update, focus, blur }">
-        <div class="flex items-center gap-2">
-          <input
-            :value="slotValue ?? ''"
+        <div class="rate-limit-control">
+          <TxInput
+            :model-value="slotValue ?? ''"
             type="number"
             min="0"
+            inputmode="numeric"
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
             :disabled="disabled"
-            class="tuff-input flex-1"
-            @input="update(parseOptionalNumberInput($event))"
+            class="rate-limit-input flex-1"
+            @update:model-value="update($event)"
             @focus="focus"
             @blur="handleRequestsControlBlur(blur)"
           />
-          <span class="text-sm text-[var(--tx-text-color-secondary)]">
+          <span class="rate-limit-unit">
             {{ t('intelligence.config.rateLimit.requestsUnit') }}
           </span>
         </div>
@@ -156,23 +156,24 @@ function handleTokensControlBlur(onBlur: () => void) {
       default-icon="i-carbon-data-1"
       active-icon="i-carbon-data-1"
       :disabled="disabled"
-      @update:model-value="(val) => (localTokensPerMinute = val !== '' ? Number(val) : undefined)"
+      @update:model-value="(val) => (localTokensPerMinute = parseOptionalNumberValue(val))"
       @blur="handleTokensPerMinuteBlur"
     >
       <template #control="{ modelValue: slotValue, update, focus, blur }">
-        <div class="flex items-center gap-2">
-          <input
-            :value="slotValue ?? ''"
+        <div class="rate-limit-control">
+          <TxInput
+            :model-value="slotValue ?? ''"
             type="number"
             min="0"
+            inputmode="numeric"
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
             :disabled="disabled"
-            class="tuff-input flex-1"
-            @input="update(parseOptionalNumberInput($event))"
+            class="rate-limit-input flex-1"
+            @update:model-value="update($event)"
             @focus="focus"
             @blur="handleTokensControlBlur(blur)"
           />
-          <span class="text-sm text-[var(--tx-text-color-secondary)]">
+          <span class="rate-limit-unit">
             {{ t('intelligence.config.rateLimit.tokensUnit') }}
           </span>
         </div>
@@ -262,17 +263,19 @@ function handleTokensControlBlur(onBlur: () => void) {
     }
   }
 
-  :deep(.tuff-input) {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  .rate-limit-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 234px;
+    max-width: 100%;
+  }
 
-    &:hover {
-      transform: translateY(-1px);
-    }
-
-    &.is-focus {
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    }
+  .rate-limit-unit {
+    font-size: 12px;
+    color: var(--tx-text-color-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 }
 
