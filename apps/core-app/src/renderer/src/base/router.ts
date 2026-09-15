@@ -152,7 +152,8 @@ function createSettingCategoryRoutes(withPerf: typeof withRouteComponentPerf): R
           parentRoute: category.path,
           // A cache entry of its own, so leaving and re-entering a sub-page keeps its selection
           // and scroll rather than restarting the category page's.
-          keepAliveKey: `setting-${category.key}-${child.key}`
+          keepAliveKey: `setting-${category.key}-${child.key}`,
+          ...(child.advanced ? { requiresAdvanced: true } : {})
         }
       }
     })
