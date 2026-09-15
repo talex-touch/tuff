@@ -14,7 +14,11 @@ import {
   createNodeVoiceSocketFactory,
   DashscopeQwenAsrRealtimeVoiceProvider,
   DoubaoVoiceProvider,
+  loadInstalledModelSync,
+  LocalOfflineVoiceProvider,
+  resolveModelStoreRoot,
   VoiceProviderError,
+  type ResolvedLocalModel,
   type VoiceProviderAdapter
 } from '@talex-touch/tuff-voice'
 import {
@@ -338,10 +342,6 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
         : 'VOICE_ASR_PROVIDER_UNAVAILABLE'
     )
   }
-  const credential = isNexusManagedProvider(route.provider)
-    ? getAuthToken()
-    : resolveProviderCredential(route.provider)
-  if (!credential) throw new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
   const metadata = getVoiceAsrMetadata(route.provider.metadata)
   if (!metadata) throw new Error('VOICE_ASR_PROVIDER_UNAVAILABLE')
   const recommendedModels = getVoiceCapabilityRecommendedModels(ASR_CAPABILITY_ID, {
@@ -352,6 +352,37 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
     ? recommendedModels.find((candidate) => route.bindingModels.includes(candidate))
     : route.model
   if (!model) throw new Error('VOICE_ASR_MODEL_UNSUPPORTED')
+
+  /*
+   * Local inference settles before the credential gate rather than after it. The weights are
+   * on this machine and no service is contacted, so demanding an API key would make the one
+   * provider that needs no key the one that cannot be selected. Here the route's `model`
+   * names an installed catalog bundle, and "is it installed?" is the only availability
+   * question that applies: the install tool already verified the digest, and re-hashing a
+   * 78 MB file on this path would stall startup to learn nothing new.
+   *
+   * `buffered` is the honest mode. Every decode is a whole-file decode of the audio captured
+   * so far, which can run past the 30 s streaming allowance on a long recording, and the
+   * request id is per-attempt rather than session-scoped.
+   */
+  if (metadata.protocol === 'local-offline') {
+    let installed: ResolvedLocalModel
+    try {
+      installed = loadInstalledModelSync(resolveModelStoreRoot(), model)
+    } catch (error) {
+      throw new Error('VOICE_ASR_PROVIDER_UNAVAILABLE', { cause: error })
+    }
+    return {
+      model: `${installed.descriptor.id}@${installed.descriptor.version}`,
+      mode: 'buffered',
+      provider: new LocalOfflineVoiceProvider({ model: installed })
+    }
+  }
+
+  const credential = isNexusManagedProvider(route.provider)
+    ? getAuthToken()
+    : resolveProviderCredential(route.provider)
+  if (!credential) throw new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
   switch (metadata.protocol) {
     case 'nexus-pack': {
       const resolved = resolveNexusPackRoute(route, true)
