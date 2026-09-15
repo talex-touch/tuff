@@ -8,7 +8,10 @@ const { locale } = useI18n()
 const identifier = ref('emoji:🚀')
 const shape = ref<IconPickerShape>('rounded')
 
-const inlineIdentifier = ref('class:i-ri-plant-line')
+// `carbon` is one of the four collections this app installs. The picker's own catalog is
+// `ri`/`simple`, which Nexus does not carry, so a class from there renders as an empty box —
+// check-icon-collections is the gate that catches it.
+const inlineIdentifier = ref('class:i-carbon-crop-growth')
 
 const copy = computed(() => {
   if (locale.value === 'zh') {

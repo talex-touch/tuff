@@ -24,7 +24,6 @@ import { mkdir, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
-import { AppEvents } from '@talex-touch/utils/transport/events'
 import {
   LOCAL_AI_CLI_LIMITS,
   LocalAiCliEvents,
