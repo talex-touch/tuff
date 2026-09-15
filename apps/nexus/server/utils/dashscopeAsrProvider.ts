@@ -252,12 +252,39 @@ function extractQwenAudioTranscript(body: RecordValue | null): string | null {
   const nestedOutput = asRecord(output?.output)
   const directSentence = asRecord(output?.sentence)
   const nestedSentence = asRecord(nestedOutput?.sentence)
+  const outputChoices = Array.isArray(output?.choices) ? output.choices : []
+  const nestedChoices = Array.isArray(nestedOutput?.choices) ? nestedOutput.choices : []
+  const choiceText = (choices: unknown[]): string | null => {
+    const text = choices
+      .map(choice => {
+        const message = asRecord(asRecord(choice)?.message)
+        const content = Array.isArray(message?.content) ? message.content : []
+        return content
+          .map(item => readString(asRecord(item)?.text, 1_000_000))
+          .filter((item): item is string => Boolean(item))
+          .join('')
+      })
+      .filter(Boolean)
+      .join('\n')
+    return readString(text, 1_000_000)
+  }
   return (
     readString(output?.text, 1_000_000) ??
     readString(directSentence?.text, 1_000_000) ??
     readString(nestedSentence?.text, 1_000_000) ??
-    readString(nestedOutput?.text, 1_000_000)
+    readString(nestedOutput?.text, 1_000_000) ??
+    choiceText(outputChoices) ??
+    choiceText(nestedChoices)
   )
+}
+
+function extractQwenAudioResponseShape(body: RecordValue | null): Record<string, unknown> {
+  const output = asRecord(body?.output)
+  return {
+    topKeys: Object.keys(body ?? {}).slice(0, 32),
+    outputKeys: Object.keys(output ?? {}).slice(0, 32),
+    usageKeys: Object.keys(asRecord(body?.usage) ?? {}).slice(0, 32),
+  }
 }
 
 function extractQwenAudioRequestId(body: RecordValue | null): string | undefined {
@@ -267,7 +294,7 @@ function extractQwenAudioRequestId(body: RecordValue | null): string | undefined
 
 function extractQwenAudioDuration(body: RecordValue | null, fallbackSeconds: number): number | null {
   const usage = asRecord(body?.usage)
-  const duration = usage?.duration
+  const duration = usage?.duration ?? usage?.seconds
   if (duration === undefined) return fallbackSeconds
   return typeof duration === 'number'
     && Number.isFinite(duration)
@@ -292,7 +319,7 @@ export class DashScopeQwenAudioAsrAdapter {
   private readonly requestTimeoutMs: number
 
   constructor(options: DashScopeQwenAudioAsrAdapterOptions = {}) {
-    const fetcher = options.fetch ?? fetch
+    const fetcher = options.fetch ?? globalThis.fetch.bind(globalThis)
     this.fetcher = (input, init) => fetcher(input, init)
     this.maxDataUriBytes =
       Number.isFinite(options.maxDataUriBytes) && (options.maxDataUriBytes ?? 0) > 0
@@ -404,13 +431,25 @@ export class DashScopeQwenAudioAsrAdapter {
     }
     if (!response.ok) {
       const accepted = response.status === 408 || response.status >= 500
+      console.warn('[dashscope-qwen-asr] Provider returned a non-success response', {
+        status: response.status,
+        contentType: response.headers.get('content-type'),
+        ...extractQwenAudioResponseShape(body),
+      })
       throw new DashScopeAsrError(
         accepted ? 'ASR_PROVIDER_UNAVAILABLE' : 'ASR_PROVIDER_REJECTED',
         accepted,
       )
     }
     const transcript = extractQwenAudioTranscript(body)
-    if (!transcript) throw new DashScopeAsrError('ASR_PROVIDER_RESPONSE_INVALID', true)
+    if (!transcript) {
+      console.warn('[dashscope-qwen-asr] Provider response did not contain a transcript', {
+        status: response.status,
+        contentType: response.headers.get('content-type'),
+        ...extractQwenAudioResponseShape(body),
+      })
+      throw new DashScopeAsrError('ASR_PROVIDER_RESPONSE_INVALID', true)
+    }
 
     const qwenRequestId = extractQwenAudioRequestId(body)
     const billedSeconds = extractQwenAudioDuration(body, options.durationSeconds)
@@ -435,7 +474,7 @@ export class DashScopeFiletransAdapter {
   private readonly fetcher: typeof fetch
 
   constructor(options: DashScopeFiletransAdapterOptions = {}) {
-    const fetcher = options.fetch ?? fetch
+    const fetcher = options.fetch ?? globalThis.fetch.bind(globalThis)
     this.fetcher = (input, init) => fetcher(input, init)
   }
 
