@@ -78,6 +78,7 @@ TAXONOMY: dict[str, list[str]] = {
         "tree-select",
         "cascader",
         "picker",
+        "icon-picker",
         "date-picker",
         "radio",
         "flat-radio",
@@ -181,6 +182,7 @@ TAXONOMY: dict[str, list[str]] = {
         "keyframe-stroke-text",
         "tuff-logo-stroke",
         "text-morph",
+        "icon-morph",
         "text-transformer",
         "transition",
         "stagger",
@@ -247,6 +249,7 @@ TAXONOMY: dict[str, list[str]] = {
     "Charts": [
         "charts",
         "chart-colors",
+        "echart-charts",
         "timeseries-chart",
         "maps",
         "sankey-chart",
