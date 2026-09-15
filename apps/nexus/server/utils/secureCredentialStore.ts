@@ -80,7 +80,13 @@ export function getOptionalD1Database(event: H3Event): D1Database | null {
   return readCloudflareBindings(event)?.DB ?? null
 }
 
-export function getD1Database(event: H3Event): D1Database {
+/**
+ * Named `require` rather than `get` because it throws: `docCommentsStore` also exports a
+ * `getD1Database`, and that one returns null. Two same-named auto-importable exports with
+ * opposite absent-database contracts would let a future caller turn a graceful null path into
+ * a 500 by omitting an explicit import.
+ */
+export function requireD1Database(event: H3Event): D1Database {
   const db = getOptionalD1Database(event)
   if (!db)
     throw createError({ statusCode: 500, statusMessage: 'Database not available' })
@@ -332,7 +338,7 @@ export function createTypedCredentialStore<TType extends string, TPayload>(
       input: { authRef: unknown, credentialType: unknown, credentials: unknown },
       createdBy: string,
     ): Promise<StoreTypedCredentialResult<TType>> {
-      const db = getD1Database(event)
+      const db = requireD1Database(event)
       await ensureSchema(db)
 
       const authRef = crypto.normalizeAuthRef(input.authRef)
@@ -363,7 +369,7 @@ export function createTypedCredentialStore<TType extends string, TPayload>(
     },
 
     async get(event: H3Event, authRef: string): Promise<TPayload | null> {
-      const db = getD1Database(event)
+      const db = requireD1Database(event)
       await ensureSchema(db)
 
       const normalizedAuthRef = crypto.normalizeAuthRef(authRef)
@@ -403,7 +409,7 @@ export function createTypedCredentialStore<TType extends string, TPayload>(
     },
 
     async list(event: H3Event): Promise<TypedCredentialRecord<TType>[]> {
-      const db = getD1Database(event)
+      const db = requireD1Database(event)
       await ensureSchema(db)
 
       const { results } = await db.prepare(`
@@ -416,7 +422,7 @@ export function createTypedCredentialStore<TType extends string, TPayload>(
     },
 
     async delete(event: H3Event, authRef: string): Promise<boolean> {
-      const db = getD1Database(event)
+      const db = requireD1Database(event)
       await ensureSchema(db)
 
       const normalizedAuthRef = crypto.normalizeAuthRef(authRef)
