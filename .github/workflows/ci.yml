@@ -357,9 +357,12 @@ jobs:
   #
   # Two of the four check:* scripts are deliberately absent, because they are deployment-time
   # checks rather than PR gates and both fail without their inputs:
-  #   check:preview-secrets  → exit 64, wants CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN
-  #   check:runtime-evidence → exit 1, wants an output/playwright directory from a prior run
-  # They belong in the deploy pipeline, next to the secrets and artifacts they read.
+  #   check:deployment-secrets  → exit 64, wants CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN.
+  #     Now run weekly by nexus-deployment-secret-watch.yml. It reads live Cloudflare state,
+  #     and the drift it catches — a Secret deleted in the dashboard — arrives with no commit
+  #     for a PR gate to run on, so a schedule is the only place it can work.
+  #   check:runtime-evidence → exit 1, wants an output/playwright directory from a prior run.
+  # Neither belongs on a pull request: they read secrets and artifacts a PR does not have.
   job_nexus:
     name: Nexus (build + checks)
     runs-on: ubuntu-latest

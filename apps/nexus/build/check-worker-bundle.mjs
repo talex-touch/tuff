@@ -82,6 +82,9 @@ const expectedStaticRoutes = [
   ...docsApiPrerenderRoutes,
 ]
 const expectedStaticRoutePatterns = ['/en/docs/*', '/zh/docs/*', '/api/docs/page/*']
+// The docs-root raw-Markdown twins sit outside `/xx/docs/*`. Without their own exclusion they
+// reach a Worker with no filesystem, so the source read fails and the URL 404s in production.
+const expectedStaticMarkdownRoutes = ['/en/docs.md', '/zh/docs.md']
 const workerOwnedAppRoutes = [
   '/dashboard',
   '/dashboard/team',
@@ -552,12 +555,14 @@ function checkRoutes() {
   const excluded = new Set(Array.isArray(routesJson.exclude) ? routesJson.exclude : [])
   const missing = expectedStaticRoutes.filter(route => !excluded.has(route))
   const missingPatterns = expectedStaticRoutePatterns.filter(route => !excluded.has(route))
+  const missingMarkdown = expectedStaticMarkdownRoutes.filter(route => !excluded.has(route))
+  const allMissing = [...missing, ...missingPatterns, ...missingMarkdown]
 
   return {
-    ok: missing.length === 0 && missingPatterns.length === 0,
-    message: missing.length || missingPatterns.length
-      ? `Missing static route exclusions: ${[...missing, ...missingPatterns].join(', ')}`
-      : `Static route exclusions verified: ${expectedStaticRoutes.length} routes + ${expectedStaticRoutePatterns.length} patterns`,
+    ok: allMissing.length === 0,
+    message: allMissing.length
+      ? `Missing static route exclusions: ${allMissing.join(', ')}`
+      : `Static route exclusions verified: ${expectedStaticRoutes.length} routes + ${expectedStaticRoutePatterns.length} patterns + ${expectedStaticMarkdownRoutes.length} markdown roots`,
   }
 }
 

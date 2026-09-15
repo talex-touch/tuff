@@ -7,7 +7,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import MetaActionItem from '~/components/meta/MetaActionItem.vue'
@@ -117,15 +117,14 @@ const unregHide = transport.on(MetaOverlayEvents.ui.hide, () => {
   executingActionId.value = null
 })
 
-// Focus search input when visible
-watch(visible, (newVisible) => {
-  if (newVisible) {
-    activeIndex.value = 0
-    searchQuery.value = ''
-    setTimeout(() => {
-      searchInput.value?.focus()
-    }, 100)
-  }
+// Focus search input when visible. `nextTick` rather than a timeout: the input exists as soon as
+// the `v-if` subtree is patched, and a fixed delay only postponed a usable panel.
+watch(visible, async (newVisible) => {
+  if (!newVisible) return
+  activeIndex.value = 0
+  searchQuery.value = ''
+  await nextTick()
+  searchInput.value?.focus()
 })
 
 function handleKeyDown(event: KeyboardEvent) {

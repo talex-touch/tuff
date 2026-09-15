@@ -1,8 +1,8 @@
-# Nexus Preview Secret Deployment
+# Nexus Deployment Secret Contracts
 
-> Cloudflare Pages Preview credential inventory, deployment preflight, runtime validation, and evidence contracts.
+> Cloudflare Pages Preview and Production credential inventory, deployment preflight, runtime validation, and evidence contracts.
 
-## Scenario: Fail-Closed Preview Credential Deployment
+## Scenario: Fail-Closed Deployment Credential Provisioning
 
 ### 1. Scope / Trigger
 
@@ -11,16 +11,16 @@ Apply this contract when changing any of:
 - `wrangler.toml` Preview variables or Cloudflare Pages bindings.
 - `apps/nexus/package.json` Preview build/deploy commands.
 - Nexus auth, app JWT, emergency-control, provider-key encryption, or other environment credentials.
-- Cloudflare Pages Preview provisioning, deployment, smoke tests, or evidence claims.
+- Cloudflare Pages Preview or Production provisioning, deployment, smoke tests, or evidence claims.
 
-The goal is to keep credential values out of deployable configuration while proving that remote Preview uses platform Secret bindings. Local Pages simulation is a separate, explicitly marked trust boundary.
+The goal is to keep credential values out of deployable configuration while proving that every remote environment uses platform Secret bindings. Local Pages simulation is a separate, explicitly marked trust boundary.
 
 ### 2. Signatures
 
-- Name-only catalog: `apps/nexus/shared/security/preview-secret-inventory.json` with disjoint `required`, `featureGated`, and `optional` arrays.
-- Metadata decoder: `parsePreviewBindingMetadata(payload): Array<{ name: string; type: string | null }>`.
-- Inventory guard: `assertPreviewCredentialBindings(bindings)`.
-- Remote preflight: `runPreviewSecretPreflight(options?): Promise<{ required, featureGated, optional, projectName, branch }>`.
+- Name-only catalog: `apps/nexus/shared/security/deployment-secret-inventory.json` with disjoint `required`, `productionRequired`, `featureGated`, and `optional` arrays.
+- Metadata decoder: `parseBindingMetadata(payload, environment): Array<{ name: string; type: string | null }>`.
+- Inventory guard: `assertCredentialBindings(bindings, environment)`.
+- Remote preflight: `runDeploymentSecretPreflight(options?): Promise<{ environments, projectName, branch }>`.
 - Deployment entry: `runPreviewDeployment(options?): Promise<void>`.
 - Package-manager resolver: `resolvePnpmInvocation(options?): { executable: string; prefixArgs: string[] }`.
 - Runtime policy: `assertRuntimeCredential(variableName, value, { localDevelopment, minimumLength? }): string`.
@@ -42,7 +42,8 @@ The catalog is the source of truth for feature-gated and optional credential nam
 ### 3. Contracts
 
 - `[env.preview.vars]` contains only non-sensitive values. Credential names and local-only markers are prohibited even when their value is empty.
-- Cloudflare Pages project metadata is read from `deployment_configs.preview.env_vars`. Production bindings never satisfy Preview inventory.
+- Cloudflare Pages project metadata is read from `deployment_configs.<environment>.env_vars` for every environment in `DEPLOYMENT_ENVIRONMENTS` (`preview` and `production`), and each environment is validated against its own required set. Bindings from one environment never satisfy another's inventory. The gate previously read `preview` alone with a required set that matched exactly what Preview had, so it was permanently green while production ran without `NUXT_INTELLIGENCE_ENCRYPT_KEY`.
+- `productionRequired` names are required in production only. `STORAGE_SECURE_STORE_KEY` stays feature-gated: its table is empty and its consumer already fails closed, so promoting it would red-light every release for an unused feature.
 - Preflight reads only binding names and types. It never reads, requests, stores, compares, or logs Secret values or the API token.
 - Every required credential exists as `secret_text`. Every configured cataloged feature-gated/optional credential is also `secret_text`.
 - Any remote `NEXUS_LOCAL_PAGES_PREVIEW` binding is rejected regardless of binding type.
@@ -61,12 +62,12 @@ The catalog is the source of truth for feature-gated and optional credential nam
 
 ### 4. Validation & Error Matrix
 
-- Missing `CLOUDFLARE_ACCOUNT_ID` or `CLOUDFLARE_API_TOKEN` -> `PREVIEW_SECRET_PREFLIGHT_CONFIG_MISSING`, exit `64`.
-- Cloudflare request, HTTP, JSON, or Preview metadata failure -> `PREVIEW_SECRET_METADATA_UNAVAILABLE`, exit `69`.
-- Missing required Secret names -> `PREVIEW_SECRET_INVENTORY_MISSING`, exit `78`.
-- Cataloged credential present as non-`secret_text` -> `PREVIEW_SECRET_BINDING_TYPE_INVALID`, exit `78`.
-- Remote local marker at any type -> `PREVIEW_LOCAL_MARKER_REMOTE_BINDING`, exit `78`.
-- Missing production branch metadata -> `PREVIEW_PRODUCTION_BRANCH_UNAVAILABLE`, exit `69`.
+- Missing `CLOUDFLARE_ACCOUNT_ID` or `CLOUDFLARE_API_TOKEN` -> `DEPLOYMENT_SECRET_PREFLIGHT_CONFIG_MISSING`, exit `64`.
+- Cloudflare request, HTTP, JSON, or environment metadata failure -> `DEPLOYMENT_SECRET_METADATA_UNAVAILABLE`, exit `69`.
+- Missing required Secret names in either environment -> `DEPLOYMENT_SECRET_INVENTORY_MISSING`, exit `78`.
+- Cataloged credential present as non-`secret_text` -> `DEPLOYMENT_SECRET_BINDING_TYPE_INVALID`, exit `78`.
+- Remote local marker at any type -> `DEPLOYMENT_LOCAL_MARKER_REMOTE_BINDING`, exit `78`.
+- Missing production branch metadata -> `DEPLOYMENT_PRODUCTION_BRANCH_UNAVAILABLE`, exit `69`.
 - Fixed Preview branch equals production branch -> `PREVIEW_DEPLOY_BRANCH_IS_PRODUCTION`, exit `78`.
 - Deployment receives CLI overrides -> `PREVIEW_DEPLOY_ARGUMENTS_UNSUPPORTED`, exit `64`.
 - Package manager or Windows command processor unavailable -> `PREVIEW_DEPLOY_PACKAGE_MANAGER_UNAVAILABLE`, exit `69`.
@@ -81,18 +82,18 @@ The catalog is the source of truth for feature-gated and optional credential nam
 
 ### 5. Good / Base / Bad Cases
 
-- Good: Preview metadata contains the four required names as `secret_text`; optional OAuth credentials are absent; preflight passes twice; deployment targets branch `preview`; remote auth reaches its normal `200/401` boundary without a credential error.
+- Good: Preview metadata contains the four required names as `secret_text` and Production additionally carries its `productionRequired` keys; optional OAuth credentials are absent; preflight passes twice; deployment targets branch `preview`; remote auth reaches its normal `200/401` boundary without a credential error.
 - Good: local Nitro Cloudflare dev keeps Preview D1/R2 bindings, overlays a locally loaded `AUTH_SECRET`, marks the returned binding view as local, and serves the first Nuxt Content query without `NEXUS_RUNTIME_CREDENTIAL_INVALID`.
 - Base: an optional Turnstile or OAuth secret is not configured because the feature is disabled; preflight still passes.
 - Good: an optional credential is later enabled as `secret_text`; preflight reports only its name/category and continues without reading the value.
 - Bad: committing `AUTH_SECRET = "change-me"`, an empty `GITHUB_CLIENT_SECRET`, or `NEXUS_LOCAL_PAGES_PREVIEW` under `[env.preview.vars]`.
-- Bad: accepting a Production secret list as Preview evidence, trusting an unqualified Pages secret command, or treating local Wrangler smoke as deployed Preview proof.
+- Bad: accepting one environment's secret list as evidence for another, trusting an unqualified Pages secret command, or treating local Wrangler smoke as deployed Preview proof.
 - Bad: invoking a native pnpm binary as `node <pnpm-binary>`; Node parses binary bytes and deployment fails before build.
 - Bad: fixing local Nitro dev by restoring credential values in `wrangler.toml`, copying all of `process.env` into bindings, or allowing process fallback whenever any Cloudflare binding object exists.
 
 ### 6. Tests Required
 
-- Parse synthetic Cloudflare payloads with separate Production and Preview maps; assert only Preview names/types are used.
+- Parse synthetic Cloudflare payloads with separate Production and Preview maps; assert each environment is validated against its own required set, and that a name present only in the other environment does not satisfy it.
 - Use throwing `value` accessors and canary values; assert parser/preflight never accesses or logs values/tokens.
 - Cover complete and missing required inventories.
 - Cover required, feature-gated, and optional credentials as `plain_text`; assert stable name-only rejection.
@@ -119,7 +120,7 @@ GITHUB_CLIENT_SECRET = ""
 ```
 
 ```js
-// Wrong: Production/unqualified inventory is not Preview evidence.
+// Wrong: an unqualified inventory is not evidence for a specific environment.
 execFileSync('wrangler', ['pages', 'secret', 'list'])
 execFileSync(process.execPath, [process.env.npm_execpath, 'run', 'build'])
 
@@ -142,8 +143,8 @@ ADMIN_BREAKGLASS_ENABLED = "false"
 
 ```js
 const metadata = await readPagesProjectMetadata()
-const bindings = parsePreviewBindingMetadata(metadata)
-assertPreviewCredentialBindings(bindings)
+const bindings = parseBindingMetadata(metadata, environment)
+assertCredentialBindings(bindings, environment)
 
 const { executable, prefixArgs } = resolvePnpmInvocation()
 execFileSync(executable, [...prefixArgs, 'run', 'build'])

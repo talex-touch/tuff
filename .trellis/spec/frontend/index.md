@@ -39,7 +39,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Type Safety](./type-safety.md)                               | TypeScript, runtime guards, typed transport                                          | Filled |
 | [Plugin Runtime Security](./plugin-runtime-security.md)       | Privileged plugin handlers, views, preload, and Electron policy                      | Filled |
 | [Privacy Data Lifecycle](./privacy-data-lifecycle.md)         | Typed Privacy transport, retention/export, and main-owned credential transactions    | Filled |
-| [Nexus Preview Secrets](./nexus-preview-secret-deployment.md) | Cloudflare Preview Secret inventory, deploy preflight, runtime policy, and evidence  | Filled |
+| [Nexus Deployment Secrets](./nexus-preview-secret-deployment.md) | Cloudflare Preview and Production Secret inventory, deploy preflight, runtime policy, and evidence | Filled |
 | [Nexus Docs Rendering](./nexus-docs-rendering-contract.md)    | Docs HTML always embeds the body; payload-key agreement, body-fetch retry rules       | Filled |
 | [Nexus Docs Static Delivery](./nexus-docs-static-delivery.md) | `<route>.html` layout, `_headers` edge cache windows, i18n preload off the hydration path, one nav request | Filled |
 | [Nexus DashScope Filetrans](./nexus-dashscope-filetrans-contract.md) | Nexus-owned DashScope ASR handoff, routing, reservation, and disclosure rules | Filled |
@@ -63,7 +63,7 @@ Before editing frontend code:
 9. Read [Type Safety](./type-safety.md) before changing payloads, event kinds, SDK domains, manifest shapes, or JSON evidence.
 10. Read [Plugin Runtime Security](./plugin-runtime-security.md) before changing plugin windows, hosted plugin views, permission handlers, preload bridges, or plugin Electron preferences.
 11. Read [Privacy Data Lifecycle](./privacy-data-lifecycle.md) before changing Privacy SDK payloads, retention/export owners, Provider or Plugin credential persistence/runtime resolution, Secret backup envelopes, portable credential catalogs, secure-store batch mutation, the sensitive-data inventory, or the isolated Privacy lifecycle smoke.
-12. Read [Nexus Preview Secrets](./nexus-preview-secret-deployment.md) before changing Preview variables, Cloudflare Pages credentials, auth/emergency runtime secrets, deployment commands, or Preview evidence.
+12. Read [Nexus Deployment Secrets](./nexus-preview-secret-deployment.md) before changing Preview or Production variables, Cloudflare Pages credentials, auth/emergency runtime secrets, deployment commands, or deployment evidence.
 13. Read [Native Resource Protocols](./native-resource-protocols.md) before adding native media/file callbacks, worker/IPC byte payloads, custom protocol consumers, or macOS application-icon extraction.
 14. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
 15. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance.

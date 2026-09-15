@@ -84,6 +84,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
       app: {
         path: app.path,
         bundleId: app.extensions.bundleId || '',
+        identityKind: app.extensions.identityKind || '',
         launchKind,
         launchTarget: app.extensions.launchTarget || app.path,
         launchArgs: app.extensions.launchArgs || '',

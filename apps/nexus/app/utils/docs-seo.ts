@@ -1,4 +1,5 @@
 import { DOCS_SUPPORTED_LOCALES, normalizeDocsPagePath, toLocalizedDocsPath, type DocsLocale } from '#shared/utils/docs-path'
+import { toDocsMarkdownPath } from '#shared/utils/docs-markdown'
 
 export interface DocsSeoHeadInput {
   appName: string
@@ -88,12 +89,19 @@ export function buildDocsSeoHead(input: DocsSeoHeadInput) {
       structuredData.dateModified = modifiedAt.toISOString()
   }
 
+  // Only a page with content has a source file behind it; advertising the URL for a 404 would
+  // point agents at a route that answers 404 too.
+  const markdownSourceUrl = input.hasContent
+    ? resolveDocsAbsoluteUrl(input.origin, toDocsMarkdownPath(canonicalPath, input.locale))
+    : ''
+
   return {
     pageTitle,
     description: input.description,
     canonicalPath,
     canonicalUrl,
     alternateLinks,
+    markdownSourceUrl,
     robotsContent: input.hasContent ? 'index,follow' : 'noindex,nofollow',
     ogLocale: input.locale === 'zh' ? 'zh_CN' : 'en_US',
     ogAlternateLocale: input.locale === 'zh' ? 'en_US' : 'zh_CN',

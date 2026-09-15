@@ -1043,6 +1043,8 @@ export interface TuffMeta {
   app?: {
     /** 应用包标识符 */
     bundleId?: string
+    /** Stable scanner identity kind, such as macos-path or windows-uwp. */
+    identityKind?: string
     /** @deprecated Use bundleId instead. */
     bundle_id?: string
     /** 应用版本 */
