@@ -122,7 +122,13 @@ const LIMITS = {
   // (naming both component roots cost 24 bytes more per selector). Toast's
   // stacking and swipe styles add the rest. Measured 556.2 KiB. Same contract as
   // every note above: actuals plus minimal headroom, growth from here fails.
-  fullCssBytes: 560 * 1024,
+  // 560 -> 576 on 2026-09-15: the TuffEx chart family landed (ECharts host, legend,
+  // decoration, and the option presets), and its stylesheets are 12.8 KiB that did
+  // not exist before. Measured 571.2 KiB. The gate never reported this because
+  // `audit:types` runs first in the CI `&&` chain and was failing on the same
+  // commit, so the size run never started. Same contract as every note above:
+  // actuals plus minimal headroom, growth from here fails.
+  fullCssBytes: 576 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
@@ -135,7 +141,10 @@ const LIMITS = {
   // total fell from 613.5 KiB to 555.3 with `stream-markdown/style.css` going
   // 103.3 -> 50.1. Re-baselined against the smaller artifact so the saving
   // cannot be quietly spent, same as the `fullCssBytes` note above.
-  onDemandCssBytes: 568 * 1024,
+  // 568 -> 576 on 2026-09-15: the chart family's per-component stylesheets, the
+  // same 12.8 KiB as the `fullCssBytes` note above. Measured 570.4 KiB across 153
+  // stylesheets. Actuals plus minimal headroom, growth from here fails.
+  onDemandCssBytes: 576 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
