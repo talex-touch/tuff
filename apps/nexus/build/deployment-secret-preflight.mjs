@@ -309,7 +309,10 @@ export async function runDeploymentSecretPreflight({
       const [first] = failures
       throw new DeploymentSecretPreflightError(
         first.code,
-        failures.map(failure => failure.message).join(' '),
+        // `.message` already carries this error's own `[CODE]` prefix from the constructor,
+        // and the constructor below prefixes again. Strip it here so the operator-facing
+        // alert reads `[CODE] first. second.` rather than repeating the code on every clause.
+        failures.map(failure => failure.message.replace(/^\[[A-Z_]+\] /, '')).join(' '),
         {
           exitCode: first.exitCode,
           missingNames: failures.flatMap(failure => failure.missingNames),
