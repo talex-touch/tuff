@@ -238,6 +238,17 @@ defineExpose({
     &::placeholder {
       color: var(--tx-text-color-placeholder, #a8abb2);
     }
+
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      margin: 0;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    &[type='number'] {
+      -moz-appearance: textfield;
+    }
   }
 
   &__textarea {
