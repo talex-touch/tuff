@@ -8,11 +8,32 @@ import type {
   IntelligenceUsageInfo
 } from '@talex-touch/tuff-intelligence'
 import type { CliLineEvent } from './cli/cli-process-runtime'
+import type { StoredLocalAiCliSession } from '../../local-ai-cli/session-store'
+import type { PiSessionFileCapture } from '../../local-ai-cli/pi-native-session'
+import { randomUUID } from 'node:crypto'
+import { realpath, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { app } from 'electron'
 import { createLogger } from '../../../utils/logger'
+import { INTELLIGENCE_HOME_SURFACE } from '@talex-touch/utils/types/intelligence'
+import { nativeSessionLeaseRegistry } from '../../local-ai-cli/native-session-lease'
+import { isNativeSessionMissingError } from '../../local-ai-cli/native-session-errors'
+import { findPiNativeSessionFile } from '../../local-ai-cli/native-session-discovery'
+import {
+  capturePiSessionFile,
+  readPiSessionFileHead,
+  verifyPiLinearFileAppend
+} from '../../local-ai-cli/pi-native-session'
+import {
+  getLocalAiCliSessionForConversation,
+  markLocalAiCliSessionState,
+  touchLocalAiCliSession,
+  upsertLocalAiCliSession
+} from '../../local-ai-cli/session-store'
+import { getLocalAiCliWorkspaceRoot } from '../../local-ai-cli/workspace-root'
+import { getProject } from '../../project/project-store'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { collectMessageAttachments } from './attachment-spill'
 import { runCliChat } from './cli/cli-process-runtime'
@@ -24,10 +45,23 @@ import {
   PI_CLI_TERMINATION_FAILED,
   PI_SESSION_PROTOCOL_VERSION,
   readPiSessionProtocolVersion,
+  readPiSessionInfo,
   resolvePiExecutable
 } from './pi-cli-runtime'
 
 const piCliLog = createLogger('Intelligence').child('PiCli')
+const activeHomeConversations = new Set<string>()
+
+function acquireHomeConversationLease(conversationId: string): () => void {
+  if (activeHomeConversations.has(conversationId)) throw new Error('NATIVE_SESSION_BUSY')
+  activeHomeConversations.add(conversationId)
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    activeHomeConversations.delete(conversationId)
+  }
+}
 
 export interface PiToolRuntimeConfig {
   url: string
@@ -110,6 +144,53 @@ function createPiLineParser(): (line: string) => CliLineEvent | null {
   }
 }
 
+interface PiHomeSessionContext {
+  conversationId: string
+  projectId: string | null
+}
+
+function opaqueId(value: unknown): string | null {
+  return typeof value === 'string' && /^[A-Z0-9-]{1,128}$/i.test(value) ? value : null
+}
+
+function resolveHomeSessionContext(
+  options: IntelligenceInvokeOptions
+): PiHomeSessionContext | null {
+  const metadata = options.metadata
+  if (metadata?.surface !== INTELLIGENCE_HOME_SURFACE) return null
+  if (typeof metadata.caller === 'string' && metadata.caller) {
+    throw new Error('PI_NATIVE_SESSION_CONTEXT_INVALID')
+  }
+  const conversationId = opaqueId(metadata.conversationId)
+  const projectId = metadata.projectId === null ? null : opaqueId(metadata.projectId)
+  if (!conversationId || (metadata.projectId !== null && !projectId)) {
+    throw new Error('PI_NATIVE_SESSION_CONTEXT_INVALID')
+  }
+  return { conversationId, projectId }
+}
+
+async function resolveHomeSessionRoot(projectId: string | null): Promise<string> {
+  const storedRoot = projectId
+    ? (await getProject(projectId))?.rootPath
+    : getLocalAiCliWorkspaceRoot()
+  if (!storedRoot) throw new Error('WORKSPACE_INVALID')
+  try {
+    const canonicalRoot = await realpath(storedRoot)
+    const details = await stat(canonicalRoot)
+    if (!details.isDirectory() || (projectId && canonicalRoot !== storedRoot)) {
+      throw new Error('WORKSPACE_INVALID')
+    }
+    return canonicalRoot
+  } catch (error) {
+    if (error instanceof Error && error.message === 'WORKSPACE_INVALID') throw error
+    throw new Error('WORKSPACE_INVALID')
+  }
+}
+
+function firstUserPrompt(payload: IntelligenceChatPayload): string {
+  return payload.messages.find((message) => message.role === 'user')?.content ?? ''
+}
+
 /**
  * Chat backed by the locally installed `pi` CLI.
  *
@@ -140,42 +221,162 @@ export class PiCliProvider extends IntelligenceProvider {
       )
     }
 
-    const toolRuntime = resolveToolRuntime?.() ?? null
-    const toolsGranted = (toolRuntime?.tools.length ?? 0) > 0
-    const prompt = buildPiPrompt(payload.messages, { toolsGranted })
-    const model = this.resolveModel(options)
-    const toolOptions = toolRuntime
-      ? { tools: toolRuntime.tools, extensionPath: resolveTuffExtensionPath() ?? undefined }
-      : undefined
+    const home = resolveHomeSessionContext(options)
+    const cwd = home ? await resolveHomeSessionRoot(home.projectId) : undefined
+    let pointer: StoredLocalAiCliSession | null = home
+      ? await getLocalAiCliSessionForConversation(home.conversationId)
+      : null
+    if (home && pointer) {
+      if (
+        pointer.provider !== 'pi' ||
+        pointer.projectId !== home.projectId ||
+        pointer.projectRoot !== cwd
+      ) {
+        throw new Error('NATIVE_SESSION_CONFLICT')
+      }
+      if (pointer.state === 'missing') throw new Error('NATIVE_SESSION_MISSING')
+      if (pointer.state === 'conflict') throw new Error('NATIVE_SESSION_CONFLICT')
+    }
 
-    yield* runCliChat(
-      {
-        name: 'pi',
-        errorPrefix: '[PiCliProvider]',
-        executable,
-        args: (attachmentPaths) => buildPiArgs(prompt, model, toolOptions, attachmentPaths),
-        env: {
-          // Defence in depth against duplicated answers. The `pi-retry` extension aborts a stream
-          // that goes 90s without a token and hands the turn to pi's auto-retry — a watchdog built
-          // for the interactive TUI, where a "retrying" banner explains the pause. Here nobody sees
-          // it, so it only produces a second copy of the answer. The runtime's commit/rollback
-          // handling survives a retry either way; this stops provoking them.
-          PI_RETRY_STALL_TIMEOUT_MS: '0',
-          // The extension reads these to reach back into the app. Absent them it
-          // registers nothing, so a stale `--tools` list can't grant anything.
-          ...(toolRuntime
+    const nativeSessionId = home ? (pointer?.nativeSessionId ?? randomUUID()) : undefined
+    const releaseConversationLease = home
+      ? acquireHomeConversationLease(home.conversationId)
+      : undefined
+    let releaseNativeLease: (() => void) | undefined
+    let fileCapture: PiSessionFileCapture | null = null
+    let capturedHead: string | null = null
+
+    try {
+      if (home && cwd && pointer) {
+        releaseNativeLease = nativeSessionLeaseRegistry.acquire({
+          provider: 'pi',
+          projectRoot: cwd,
+          nativeSessionId: pointer.nativeSessionId
+        })
+      }
+      if (home && pointer) {
+        const sessionFile = await findPiNativeSessionFile(pointer.nativeSessionId)
+        if (!sessionFile) {
+          await markLocalAiCliSessionState(pointer.id, 'missing')
+          throw new Error('NATIVE_SESSION_MISSING')
+        }
+        fileCapture = await capturePiSessionFile(sessionFile, pointer.nativeSessionId, cwd!)
+        capturedHead = await readPiSessionFileHead(fileCapture)
+        if (capturedHead !== pointer.expectedHeadId) throw new Error('NATIVE_SESSION_CONFLICT')
+      }
+
+      const toolRuntime = resolveToolRuntime?.() ?? null
+      const toolsGranted = (toolRuntime?.tools.length ?? 0) > 0
+      const prompt = buildPiPrompt(payload.messages, {
+        toolsGranted,
+        nativeContinuation: Boolean(pointer)
+      })
+      const model = this.resolveModel(options)
+      const toolOptions =
+        toolRuntime || nativeSessionId
+          ? {
+              ...(toolRuntime
+                ? {
+                    tools: toolRuntime.tools,
+                    extensionPath: resolveTuffExtensionPath() ?? undefined
+                  }
+                : {}),
+              ...(nativeSessionId
+                ? { session: { id: nativeSessionId, create: pointer === null } }
+                : {})
+            }
+          : undefined
+      let sessionObserved = !home
+
+      const stream = runCliChat(
+        {
+          name: 'pi',
+          errorPrefix: '[PiCliProvider]',
+          executable,
+          args: (attachmentPaths) => buildPiArgs(prompt, model, toolOptions, attachmentPaths),
+          ...(cwd ? { cwd } : {}),
+          ...(home && nativeSessionId
             ? {
-                TUFF_TOOL_GATEWAY_URL: toolRuntime.url,
-                TUFF_TOOL_GATEWAY_TOKEN: toolRuntime.token
+                onLine: async (line: string) => {
+                  const session = readPiSessionInfo(line)
+                  if (!session) return
+                  if (session.version !== PI_SESSION_PROTOCOL_VERSION) {
+                    throw new Error('PROVIDER_RESUME_UNSUPPORTED')
+                  }
+                  if (session.id !== nativeSessionId) {
+                    throw new Error(pointer ? 'NATIVE_SESSION_MISSING' : 'NATIVE_SESSION_CONFLICT')
+                  }
+                  if (!pointer) {
+                    releaseNativeLease = nativeSessionLeaseRegistry.acquire({
+                      provider: 'pi',
+                      projectRoot: cwd!,
+                      nativeSessionId
+                    })
+                    pointer = await upsertLocalAiCliSession({
+                      conversationId: home.conversationId,
+                      projectId: home.projectId,
+                      provider: 'pi',
+                      projectRoot: cwd!,
+                      nativeSessionId,
+                      prompt: firstUserPrompt(payload)
+                    })
+                  }
+                  sessionObserved = true
+                }
               }
-            : {})
+            : {}),
+          env: {
+            PI_RETRY_STALL_TIMEOUT_MS: '0',
+            ...(toolRuntime
+              ? {
+                  TUFF_TOOL_GATEWAY_URL: toolRuntime.url,
+                  TUFF_TOOL_GATEWAY_TOKEN: toolRuntime.token
+                }
+              : {})
+          },
+          parseLine: createPiLineParser(),
+          terminationErrorCode: PI_CLI_TERMINATION_FAILED,
+          logger: piCliLog
         },
-        parseLine: createPiLineParser(),
-        terminationErrorCode: PI_CLI_TERMINATION_FAILED,
-        logger: piCliLog
-      },
-      { signal, attachments: collectMessageAttachments(payload.messages) }
-    )
+        { signal, attachments: collectMessageAttachments(payload.messages) }
+      )
+      for await (const chunk of stream) yield chunk
+      if (signal?.aborted) return
+
+      if (home) {
+        if (!sessionObserved || !pointer) throw new Error('PROTOCOL_INVALID')
+        let finalHead: string | null
+        if (fileCapture) {
+          finalHead = await verifyPiLinearFileAppend({ capture: fileCapture, capturedHead })
+        } else {
+          const sessionFile = await findPiNativeSessionFile(pointer.nativeSessionId)
+          if (!sessionFile) throw new Error('NATIVE_SESSION_CONFLICT')
+          const completedFile = await capturePiSessionFile(
+            sessionFile,
+            pointer.nativeSessionId,
+            cwd!
+          )
+          finalHead = await readPiSessionFileHead(completedFile)
+        }
+        if (!finalHead) throw new Error('NATIVE_SESSION_CONFLICT')
+        await touchLocalAiCliSession(pointer.id, finalHead)
+      }
+    } catch (error) {
+      if (pointer && error instanceof Error && error.message === 'NATIVE_SESSION_CONFLICT') {
+        await markLocalAiCliSessionState(pointer.id, 'conflict')
+      } else if (
+        pointer &&
+        ((error instanceof Error && error.message === 'NATIVE_SESSION_MISSING') ||
+          isNativeSessionMissingError(error))
+      ) {
+        await markLocalAiCliSessionState(pointer.id, 'missing')
+        throw new Error('NATIVE_SESSION_MISSING')
+      }
+      throw error
+    } finally {
+      releaseNativeLease?.()
+      releaseConversationLease?.()
+    }
   }
 
   async chat(

@@ -17,6 +17,7 @@ import { enforceDevReleaseStartupConstraint } from './core/startup-version-guard
 import { addonOpenerModule } from './modules/addon-opener'
 import { intelligenceModule } from './modules/ai/intelligence-module'
 import { analyticsModule, getStartupAnalytics } from './modules/analytics'
+import { getAnalyticsMessageStore } from './modules/analytics/message-store'
 import { assistantModule } from './modules/assistant'
 import { authModule } from './modules/auth'
 import { coreBoxModule } from './modules/box-tool/core-box/index'
@@ -40,6 +41,7 @@ import { omniPanelModule } from './modules/omni-panel'
 import { PermissionModule } from './modules/permission'
 import { pluginModule } from './modules/plugin/plugin-module'
 import { privacyLifecycleModule } from './modules/privacy/privacy-module'
+import { projectModule } from './modules/project'
 import { quickOpsModule } from './modules/quick-ops'
 import { screenshotSessionModule } from './modules/screenshot-session'
 import { sentryModule } from './modules/sentry'
@@ -54,11 +56,10 @@ import { toolGatewayModule } from './modules/tool-gateway'
 import { trayManagerModule } from './modules/tray/tray-manager'
 import { updateServiceModule } from './modules/update/UpdateService'
 import { voiceModule } from './modules/voice/voice-module'
-import { pluginLogModule } from './service/plugin-log.service'
 
+import { pluginLogModule } from './service/plugin-log.service'
 import { loggerManager, mainLog } from './utils/logger'
 import './polyfills'
-import { getAnalyticsMessageStore } from './modules/analytics/message-store'
 
 // 设置环境变量禁用 ws 模块的可选依赖
 process.env.WS_NO_UTF_8_VALIDATE = 'true'
@@ -199,6 +200,7 @@ function reportOptionalModuleFailure(tier: 'foreground' | 'deferred', moduleName
 
 const foregroundModulesToLoad = [
   databaseModule,
+  projectModule,
   conversationModule,
   toolGatewayModule,
   storageModule,

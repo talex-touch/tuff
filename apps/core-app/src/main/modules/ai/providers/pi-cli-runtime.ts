@@ -10,11 +10,12 @@ import {
   resetCliExecutableCache,
   resolveCliExecutable
 } from './cli/cli-executable'
+import { PI_CLI_PROVIDER_ID } from '@talex-touch/utils/types/intelligence'
 import { isFailedStopReason } from './cli/cli-process-runtime'
 
 export { isFailedStopReason }
 
-export const PI_CLI_PROVIDER_ID = 'pi-cli-default'
+export { PI_CLI_PROVIDER_ID }
 export const PI_CLI_ORIGIN = 'pi-cli'
 
 /**
@@ -142,11 +143,11 @@ function currentDateLine(now: Date): string {
 }
 
 /**
- * Cap on replayed transcript characters (≈24k tokens at the 4-chars/token
- * heuristic). The app owns history — every spawn is `--no-session` — so
- * nothing else bounds a long thread: pi's own compaction lives and dies
- * inside a single spawn. Oldest turns drop wholesale; the newest always
- * survives, even alone over budget.
+ * Cap on a legacy or cross-device transcript seeded into a new native session
+ * (≈24k tokens at the 4-chars/token heuristic). Native continuation sends only
+ * the newest user turn and lets Pi's own compaction govern the stored context.
+ * Oldest bootstrap turns drop wholesale; the newest always survives, even
+ * alone over budget.
  */
 export const PI_CLI_TRANSCRIPT_CHAR_BUDGET = 96_000
 
@@ -167,16 +168,14 @@ export interface PiCliPrompt {
 }
 
 /**
- * Flattens the turn history into one prompt.
- *
- * Positional arguments look like multi-turn input but are all recorded as *user* messages, so there
- * is no argument shape that can carry assistant turns back in. Reusing `pi`'s own session store
- * (`--session-id`) would carry them, at the cost of a second history that diverges from the app's
- * the moment a turn is stopped or retried.
+ * Builds either a one-time legacy/bootstrap prompt or the newest turn for an
+ * already-bound native Pi session. Positional arguments record as user messages,
+ * so native continuation must never flatten assistant turns back into the next
+ * user prompt.
  */
 export function buildPiPrompt(
   messages: IntelligenceMessage[],
-  options?: { toolsGranted?: boolean; now?: Date }
+  options?: { toolsGranted?: boolean; now?: Date; nativeContinuation?: boolean }
 ): PiCliPrompt {
   const systemParts: string[] = []
   const turns: IntelligenceMessage[] = []
@@ -199,6 +198,9 @@ export function buildPiPrompt(
   const systemPrompt = `${stable}\n\n${currentDateLine(options?.now ?? new Date())}`
 
   const latest = turns[turns.length - 1]
+  if (options?.nativeContinuation) {
+    return { systemPrompt, prompt: latest?.content ?? '' }
+  }
   // A single user turn needs no transcript framing; sending the bare text keeps the common case
   // identical to what the user typed.
   if (turns.length <= 1) {
@@ -252,6 +254,8 @@ export interface PiCliToolOptions {
    * under `--no-extensions` on pi 0.84).
    */
   extensionPath?: string
+  /** Native Pi session selector. Absence keeps non-conversation calls ephemeral. */
+  session?: { id: string; create: boolean }
 }
 
 /**
@@ -276,9 +280,9 @@ export function buildPiArgs(
     // the agent must not be able to read, write or run anything on the user's
     // machine. With one, only the named tools are enabled — never pi's defaults.
     ...(allowedTools.length > 0 ? ['--tools', allowedTools.join(',')] : ['--no-tools']),
-    // History is owned by the app; letting `pi` persist its own would create a second source of
-    // truth that survives beyond the conversation the user can see.
-    '--no-session',
+    ...(toolOptions?.session
+      ? [toolOptions.session.create ? '--session-id' : '--session', toolOptions.session.id]
+      : ['--no-session']),
     // Unconditional: the user's globally installed extensions must never ride
     // into the app's headless runs. Tuff's own tool forwarder is loaded
     // explicitly below — `-e` still honours the path under `--no-extensions`.
@@ -401,14 +405,13 @@ function parseUsage(value: unknown): IntelligenceUsageInfo | undefined {
  */
 export const PI_SESSION_PROTOCOL_VERSION = 3
 
-/**
- * The protocol version from a `session` line, or null for every other line.
- *
- * Deliberately separate from `parsePiCliLine` rather than folded into it: that function's contract
- * is "null for events the chat surface has no use for", and a `session` line is still one of
- * those. Drift detection is the caller's business, not the mapper's.
- */
-export function readPiSessionProtocolVersion(line: string): number | null {
+export interface PiSessionInfo {
+  id: string
+  version: number
+}
+
+/** Exact native identity and protocol revision from a Pi `session` line. */
+export function readPiSessionInfo(line: string): PiSessionInfo | null {
   const trimmed = line.trim()
   if (!trimmed) return null
   let parsed: unknown
@@ -419,8 +422,13 @@ export function readPiSessionProtocolVersion(line: string): number | null {
   }
   const record = asRecord(parsed)
   if (!record || readString(record.type) !== 'session') return null
+  const id = readString(record.id)
   const version = record.version
-  return typeof version === 'number' && Number.isFinite(version) ? version : null
+  return id && typeof version === 'number' && Number.isFinite(version) ? { id, version } : null
+}
+
+export function readPiSessionProtocolVersion(line: string): number | null {
+  return readPiSessionInfo(line)?.version ?? null
 }
 
 /**

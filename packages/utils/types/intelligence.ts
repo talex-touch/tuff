@@ -432,6 +432,9 @@ export interface IntelligenceInvokeOptions {
   testRun?: boolean
 }
 
+/** Stable provider id for the built-in local Pi CLI runtime. */
+export const PI_CLI_PROVIDER_ID = 'pi-cli-default' as const
+
 /**
  * Marks an invocation as originating from the home conversation.
  *
@@ -457,6 +460,10 @@ export interface IntelligenceHomeSurfaceMetadata {
    * the composer toggle writes cannot go stale between the toggle and the send.
    */
   autoContext: boolean
+  /** Device-local native-session owner. Required by the local Pi provider on Home turns. */
+  conversationId?: string
+  /** Local folder-project owner; null keeps the isolated Home workspace. */
+  projectId?: string | null
 }
 
 /**

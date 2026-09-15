@@ -1,0 +1,30 @@
+{
+  "id": "pi-desktop-session-convergence",
+  "name": "pi-desktop-session-convergence",
+  "title": "PI Desktop session convergence and migration audit",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-13",
+  "completedAt": "2026-09-14",
+  "branch": null,
+  "base_branch": "pi-desktop-analysis",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-13-external-native-session-adoption",
+    "09-13-pi-native-session-authority",
+    "09-13-pi-desktop-migration-audit"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
