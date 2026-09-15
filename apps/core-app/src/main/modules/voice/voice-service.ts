@@ -38,6 +38,7 @@ import { clipboardModule } from '../clipboard'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { intelligenceTtsService } from '../ai/intelligence-tts-service'
 import { activeAppService, type ActiveAppInfo } from '../system/active-app'
+import { appFormatContextFromActiveApp, formatDictationText } from './app-context'
 import { getVoicePolishPrompt, wrapTranscription } from './polish-prompt'
 import { createLiveDelivery } from './voice-live-delivery'
 import { getConfiguredAsrProvider } from './voice-provider-runtime'
@@ -792,7 +793,7 @@ export class VoiceService {
   private async deliverText(
     text: string,
     targetKey: string | null,
-    options: { allowPaste?: boolean } = {}
+    options: { allowPaste?: boolean; format?: boolean } = {}
   ): Promise<VoiceDeliveryResult> {
     // Live delivery forbids the paste path: pasting once per partial would overwrite the
     // user's clipboard several times a second and fire a ⌘V storm at the target. Its
@@ -807,16 +808,29 @@ export class VoiceService {
      * trailing space is meaningful precisely because this text is being appended to text
      * that is already there.
      */
-    const outgoing = allowPaste ? text.trim() : text
-    if (!outgoing) return { method: 'none', reason: 'empty' }
+    const staged = allowPaste ? text.trim() : text
+    if (!staged) return { method: 'none', reason: 'empty' }
     if (!targetKey) return { method: 'none', reason: 'target-unavailable' }
 
-    const currentTargetKey = activeAppKey(
-      await activeAppService.getActiveApp({ forceRefresh: true })
-    )
-    if (currentTargetKey !== targetKey) {
+    const activeApp = await activeAppService.getActiveApp({ forceRefresh: true })
+    if (activeAppKey(activeApp) !== targetKey) {
       return { method: 'none', reason: 'target-changed' }
     }
+
+    /*
+     * Shape the transcript for the application that is about to receive it: a command line
+     * should not gain a full stop from how the speaker phrased the sentence, and an editor
+     * wants identifiers where a chat window wants prose.
+     *
+     * Live deltas opt out. They are fragments being appended to text the target already
+     * holds, so a rule such as "drop trailing sentence punctuation" would fire on every
+     * fragment instead of once at the end — and once typed, it cannot be taken back.
+     */
+    const outgoing =
+      options.format === false
+        ? staged
+        : formatDictationText(staged, appFormatContextFromActiveApp(activeApp)).text
+    if (!outgoing) return { method: 'none', reason: 'empty' }
 
     const native = nativeAudio as unknown as {
       typeText?: (value: string) => Promise<{ ok: boolean; reason?: string }>
@@ -1233,7 +1247,7 @@ export class VoiceService {
       const live =
         payload.deliveryTiming === 'live' && payload.delivery === 'active-app'
           ? createLiveDelivery((delta) =>
-              this.deliverText(delta, session.targetKey, { allowPaste: false })
+              this.deliverText(delta, session.targetKey, { allowPaste: false, format: false })
             )
           : null
 
