@@ -73,5 +73,8 @@ describe('drizzle snapshot drift', () => {
     assert.ok(gap.missing.includes('0040'))
     assert.ok(gap.missing.includes('0041'))
     assert.ok(gap.missing.includes('0045'))
+    // 0047/0048 are the pi-desktop-analysis migrations, renumbered off master's 0046 on merge.
+    assert.ok(gap.missing.includes('0047'))
+    assert.ok(gap.missing.includes('0048'))
   })
 })

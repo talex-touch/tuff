@@ -4,6 +4,9 @@ import type {
   LocalAiCliPasteBackRequest,
   LocalAiCliPasteBackResult,
   LocalAiCliProviderStatus,
+  LocalAiCliSessionChanged,
+  LocalAiCliSessionDiscoveryResult,
+  LocalAiCliSessionSummary,
   LocalAiCliStartRequest,
   LocalAiCliStatus,
   LocalAiCliTaskChunk,
@@ -29,6 +32,12 @@ export interface LocalAiCliSdk {
   ) => Promise<StreamController>
   resolveApproval: (decision: LocalAiCliApprovalDecision) => Promise<void>
   pasteBack: (request: LocalAiCliPasteBackRequest) => Promise<LocalAiCliPasteBackResult>
+  session: {
+    list: (projectId?: string | null) => Promise<LocalAiCliSessionSummary[]>
+    discover: (projectId: string) => Promise<LocalAiCliSessionDiscoveryResult>
+    forget: (sessionRef: string) => Promise<{ forgotten: boolean }>
+    onChanged: (listener: (payload: LocalAiCliSessionChanged) => void) => () => void
+  }
   terminal: {
     create: (request: LocalAiCliTerminalCreateRequest) => Promise<LocalAiCliTerminalCreateResult>
     write: (request: LocalAiCliTerminalWriteRequest) => Promise<void>
@@ -48,6 +57,16 @@ export function createLocalAiCliSdk(transport: ITuffTransport): LocalAiCliSdk {
     streamTask: (request, options) => transport.stream(LocalAiCliEvents.task.stream, request, options),
     resolveApproval: decision => transport.send(LocalAiCliEvents.task.approval, decision),
     pasteBack: request => transport.send(LocalAiCliEvents.task.pasteBack, request),
+    session: {
+      list: projectId =>
+        transport.send(
+          LocalAiCliEvents.session.list,
+          projectId === undefined ? undefined : { projectId },
+        ),
+      discover: projectId => transport.send(LocalAiCliEvents.session.discover, { projectId }),
+      forget: sessionRef => transport.send(LocalAiCliEvents.session.forget, { sessionRef }),
+      onChanged: listener => transport.on(LocalAiCliEvents.session.changed, listener),
+    },
     terminal: {
       create: request => transport.send(LocalAiCliEvents.terminal.create, request),
       write: request => transport.send(LocalAiCliEvents.terminal.write, request),

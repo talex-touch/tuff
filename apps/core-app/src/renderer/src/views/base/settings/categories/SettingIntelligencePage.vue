@@ -10,6 +10,7 @@ import { settingCategoryChildren } from '~/modules/settings/categories'
 import { appSetting } from '~/modules/storage/app-storage'
 import SettingAssistant from '../SettingAssistant.vue'
 import SettingSkillsMcp from '../SettingSkillsMcp.vue'
+import SettingLocalAiCli from '../SettingLocalAiCli.vue'
 
 const { t } = useI18n()
 const router = useRouter()

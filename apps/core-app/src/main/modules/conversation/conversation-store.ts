@@ -1,6 +1,12 @@
 import { and, asc, desc, eq } from 'drizzle-orm'
 import { scheduleDbWrite } from '../../db/db-write'
-import { conversationMessages, conversations, conversationSyncState } from '../../db/schema'
+import {
+  conversationMessages,
+  conversations,
+  conversationSyncState,
+  localAiCliSessions,
+  projects
+} from '../../db/schema'
 import { databaseModule } from '../database'
 
 export type ConversationRole = 'user' | 'assistant'
@@ -19,6 +25,7 @@ export interface StoredConversationMessage {
 export interface StoredConversation {
   id: string
   title: string
+  projectId: string | null
   createdAt: number
   updatedAt: number
 }
@@ -29,6 +36,7 @@ export interface ConversationWithMessages extends StoredConversation {
 
 export interface SaveConversationInput {
   id: string
+  projectId: string | null
   title: string
   messages: Array<Omit<StoredConversationMessage, 'seq' | 'createdAt'> & { createdAt?: number }>
 }
@@ -74,15 +82,25 @@ function parseMeta(value: string | null): Record<string, unknown> | undefined {
 async function writeConversationSnapshot(
   snapshot: ConversationWithMessages,
   label: string,
-  notifySource: ConversationMutation['source'] | null
+  notifySource: ConversationMutation['source'] | null,
+  preserveLocalProject = false
 ): Promise<void> {
   const db = databaseModule.getDb()
   await scheduleDbWrite(label, async () => {
     await db.transaction(async (tx) => {
+      const projectId = preserveLocalProject
+        ? ((
+            await tx
+              .select({ projectId: conversations.projectId })
+              .from(conversations)
+              .where(eq(conversations.id, snapshot.id))
+          )[0]?.projectId ?? null)
+        : snapshot.projectId
       await tx
         .insert(conversations)
         .values({
           id: snapshot.id,
+          projectId,
           title: snapshot.title,
           createdAt: snapshot.createdAt,
           updatedAt: snapshot.updatedAt
@@ -90,6 +108,7 @@ async function writeConversationSnapshot(
         .onConflictDoUpdate({
           target: conversations.id,
           set: {
+            projectId,
             title: snapshot.title,
             createdAt: snapshot.createdAt,
             updatedAt: snapshot.updatedAt
@@ -155,6 +174,7 @@ export async function listConversations(limit = 200): Promise<StoredConversation
   return rows.map((row) => ({
     id: row.id,
     title: row.title,
+    projectId: row.projectId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   }))
@@ -173,6 +193,7 @@ export async function getConversation(id: string): Promise<ConversationWithMessa
 
   return {
     id: conversation.id,
+    projectId: conversation.projectId,
     title: conversation.title,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
@@ -197,12 +218,24 @@ export async function getConversation(id: string): Promise<ConversationWithMessa
  * other reason to keep. Threads are a few dozen short rows, so rewriting one is cheap.
  */
 export async function saveConversation(input: SaveConversationInput): Promise<StoredConversation> {
+  if (input.projectId !== null) {
+    if (typeof input.projectId !== 'string' || !/^[A-Z0-9-]{1,128}$/i.test(input.projectId)) {
+      throw new Error('CONVERSATION_PROJECT_INVALID')
+    }
+    const [project] = await databaseModule
+      .getDb()
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.id, input.projectId))
+    if (!project) throw new Error('CONVERSATION_PROJECT_INVALID')
+  }
   const db = databaseModule.getDb()
   const now = Date.now()
   const [existing] = await db.select().from(conversations).where(eq(conversations.id, input.id))
   const snapshot: ConversationWithMessages = {
     id: input.id,
     title: input.title,
+    projectId: input.projectId,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     messages: input.messages.map((message, index) => ({
@@ -216,6 +249,7 @@ export async function saveConversation(input: SaveConversationInput): Promise<St
   return {
     id: snapshot.id,
     title: snapshot.title,
+    projectId: snapshot.projectId,
     createdAt: snapshot.createdAt,
     updatedAt: snapshot.updatedAt
   }
@@ -226,6 +260,7 @@ export async function deleteConversation(id: string): Promise<{ deleted: boolean
   const deletedAt = Date.now()
   await scheduleDbWrite('conversation.delete', async () => {
     await db.transaction(async (tx) => {
+      await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
       await tx.delete(conversations).where(eq(conversations.id, id))
       await tx
         .insert(conversationSyncState)
@@ -302,16 +337,31 @@ export async function clearConversationSyncState(
   )
 }
 
+export type ConversationSyncSnapshot = Omit<ConversationWithMessages, 'projectId'>
+
+export function toConversationSyncSnapshot(
+  conversation: ConversationWithMessages
+): ConversationSyncSnapshot {
+  const { projectId: _localProjectId, ...snapshot } = conversation
+  return snapshot
+}
+
 export async function applyConversationSyncSnapshot(
-  snapshot: ConversationWithMessages
+  snapshot: ConversationSyncSnapshot
 ): Promise<void> {
-  await writeConversationSnapshot(snapshot, 'conversation.sync-apply', 'sync')
+  await writeConversationSnapshot(
+    { ...snapshot, projectId: null },
+    'conversation.sync-apply',
+    'sync',
+    true
+  )
 }
 
 export async function applyConversationSyncDeletion(id: string, deletedAt: number): Promise<void> {
   const db = databaseModule.getDb()
   await scheduleDbWrite('conversation.sync-delete', async () => {
     await db.transaction(async (tx) => {
+      await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
       await tx.delete(conversations).where(eq(conversations.id, id))
       await tx.delete(conversationSyncState).where(eq(conversationSyncState.conversationId, id))
     })
@@ -328,7 +378,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-export function normalizeConversationSyncSnapshot(value: unknown): ConversationWithMessages | null {
+export function normalizeConversationSyncSnapshot(value: unknown): ConversationSyncSnapshot | null {
   if (!isRecord(value) || !Array.isArray(value.messages)) return null
   if (
     typeof value.id !== 'string' ||

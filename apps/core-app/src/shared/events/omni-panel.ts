@@ -1,5 +1,6 @@
-import { defineEvent, defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import type { LocalAiCliProviderId } from '@talex-touch/utils/transport/events/local-ai-cli'
 import type { DesktopContextCapsule } from '../intelligence/desktop-context-capsule'
+import { defineEvent, defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
 export interface OmniPanelShowRequest {
   /**
@@ -12,6 +13,11 @@ export interface OmniPanelShowRequest {
   source?: OmniPanelContextSource | string
   /** Bounded draft text forwarded from a trusted host surface such as CoreBox. */
   draftText?: string
+  localAi?: {
+    projectId?: string
+    sessionRef?: string
+    provider?: LocalAiCliProviderId
+  }
 }
 
 export type OmniPanelContextSource =
@@ -21,6 +27,7 @@ export type OmniPanelContextSource =
   | 'command'
   | 'corebox-local-ai'
   | 'local-ai-shortcut'
+  | 'project-local-ai'
   | 'unknown'
 
 export type OmniPanelSelectionSupportLevel = 'supported' | 'best_effort' | 'unsupported'
@@ -37,6 +44,11 @@ export interface OmniPanelContextPayload {
   selectionLimitations?: string[]
   capturedAt: number
   capsule?: OmniPanelDesktopContextCapsule
+  localAi?: {
+    projectId?: string
+    sessionRef?: string
+    provider?: LocalAiCliProviderId
+  }
 }
 
 export type OmniPanelDesktopContextCapsule = DesktopContextCapsule & {

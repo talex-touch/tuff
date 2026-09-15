@@ -14,7 +14,10 @@ import type {
 import type { ComputedRef } from 'vue'
 import type { ConversationError } from './conversation-error-display'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
-import { INTELLIGENCE_HOME_SURFACE } from '@talex-touch/utils/types/intelligence'
+import {
+  INTELLIGENCE_HOME_SURFACE,
+  PI_CLI_PROVIDER_ID
+} from '@talex-touch/utils/types/intelligence'
 import { computed, getCurrentScope, onScopeDispose, ref, toRaw } from 'vue'
 import { toModelAttachments } from './attachment-payload'
 import {
@@ -111,6 +114,8 @@ export interface UseHomeConversationOptions {
    * `appSetting.tools.autoContext`.
    */
   autoContext?: () => boolean
+  /** Live Home thread identity, allocated before the first send and never inferred from UI state. */
+  identity?: () => { conversationId: string; projectId: string | null }
 }
 
 export interface UseHomeConversationReturn {
@@ -144,7 +149,8 @@ export function useHomeConversation(
     const metadata: IntelligenceHomeSurfaceMetadata = {
       surface: INTELLIGENCE_HOME_SURFACE,
       operation: INTELLIGENCE_HOME_SURFACE,
-      autoContext: options.autoContext?.() !== false
+      autoContext: options.autoContext?.() !== false,
+      ...(options.identity?.() ?? {})
     }
     // The surface marker rides every turn, pinned model or not: it is what tells main this is a
     // user conversation rather than a capability test running on the same `text.chat` id.
@@ -402,6 +408,7 @@ export function useHomeConversation(
     })
 
     let settled = false
+    let nativePiSessionStarted = false
     let hasProviderActivity = false
     let controller: StreamController | null = null
     let cancelRequested = false
@@ -467,6 +474,9 @@ export function useHomeConversation(
 
     const handlers: IntelligenceStreamOptions<string> = {
       onStart: (event) => {
+        nativePiSessionStarted =
+          event.provider === PI_CLI_PROVIDER_ID &&
+          typeof invokeOptions.metadata?.conversationId === 'string'
         recordMeta({ provider: event.provider, model: event.model })
       },
       onDelta: (delta, event) => {
@@ -512,7 +522,7 @@ export function useHomeConversation(
       },
       onError: (error) => {
         if (settled) return
-        if (hasProviderActivity) {
+        if (hasProviderActivity || nativePiSessionStarted) {
           fail(error)
           return
         }
@@ -539,11 +549,11 @@ export function useHomeConversation(
       controller = await sdk.stream(CHAT_CAPABILITY_ID, payload, handlers, invokeOptions)
       if (cancelRequested) controller.cancel()
     } catch (error) {
+      if (settled) return
       // `stream()` rejects when the stream never starts (no stream-capable transport, handshake
       // failure). A defensive activity check also prevents a non-conforming transport from
       // triggering a second billable request after invoking a handler before rejecting.
-      if (settled) return
-      if (hasProviderActivity) fail(error)
+      if (hasProviderActivity || nativePiSessionStarted) fail(error)
       else await fallback(error)
       return
     }

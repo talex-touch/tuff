@@ -7,61 +7,42 @@ import type {
   TuffQuery
 } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
-import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { SelectionCaptureResult as HostSelectionCaptureResult } from '@talex-touch/utils/transport/events/types'
-import type { TalexEvents } from '../../core/eventbus/touch-event'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
+  OmniPanelContextPayload,
   OmniPanelContextSource,
   OmniPanelDesktopContextCapsule,
-  OmniPanelContextPayload,
   OmniPanelFeatureExecuteErrorCode,
+  OmniPanelFeatureExecuteRequest,
+  OmniPanelFeatureExecuteResponse,
   OmniPanelFeatureIconPayload,
   OmniPanelFeatureInputType,
   OmniPanelFeatureItemPayload,
   OmniPanelFeatureListResponse,
   OmniPanelFeatureRefreshPayload,
+  OmniPanelFeatureReorderRequest,
   OmniPanelFeatureSource,
   OmniPanelFeatureUnavailableReason,
-  OmniPanelFeatureExecuteRequest,
-  OmniPanelFeatureExecuteResponse,
-  OmniPanelFeatureReorderRequest,
   OmniPanelShowRequest,
   OmniPanelTransferTarget
 } from '../../../shared/events/omni-panel'
+import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import process from 'node:process'
 import {
+  createCoreBoxContextActionsOpenRequest,
   StorageList,
-  TuffInputType,
-  createCoreBoxContextActionsOpenRequest
+  TuffInputType
 } from '@talex-touch/utils'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { ShortcutTriggerKind } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { OMNI_TRANSFER_DECLARATIVE_MIN_VERSION } from '@talex-touch/utils/plugin'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { app, clipboard, screen, shell, systemPreferences } from 'electron'
-import { OmniPanelWindowOption } from '../../config/default'
-import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
-import { activeAppService } from '../system/active-app'
-import { selectionCaptureService } from '../system/selection-capture'
-import { TouchWindow } from '../../core/touch-window'
-import { getCoreBoxWindow, windowManager } from '../box-tool/core-box/window'
-import { getCoreBoxRendererPath } from '../../utils/renderer-url'
-import { BaseModule } from '../abstract-base-module'
-import { shortcutModule } from '../global-shortcon'
-import { extractTranslatedTextFromSceneRun, runNexusScene } from '../nexus/scene-client'
-import { pluginModule } from '../plugin/plugin-module'
-import { getMainConfig, saveMainConfig } from '../storage'
-import { openValidatedExternalUrl } from '../../utils/external-url-policy'
-import { t } from '../../utils/i18n-helper'
-import {
-  OMNI_PANEL_BUILTIN_FEATURE_DEFINITIONS,
-  OMNI_PANEL_BUILTIN_FEATURE_MAP,
-  OMNI_PANEL_EXECUTE_ERROR_MESSAGES
-} from './omni-panel-builtin-features'
 import {
   omniPanelContextEvent,
   omniPanelFeatureExecuteEvent,
@@ -73,7 +54,26 @@ import {
   omniPanelShowEvent
 } from '../../../shared/events/omni-panel'
 import { createDesktopContextCapsule } from '../../../shared/intelligence/desktop-context-capsule'
+import { OmniPanelWindowOption } from '../../config/default'
+import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import { TouchWindow } from '../../core/touch-window'
+import { openValidatedExternalUrl } from '../../utils/external-url-policy'
+import { t } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
+import { getCoreBoxRendererPath } from '../../utils/renderer-url'
+import { BaseModule } from '../abstract-base-module'
+import { getCoreBoxWindow, windowManager } from '../box-tool/core-box/window'
+import { shortcutModule } from '../global-shortcon'
+import { extractTranslatedTextFromSceneRun, runNexusScene } from '../nexus/scene-client'
+import { pluginModule } from '../plugin/plugin-module'
+import { getMainConfig, saveMainConfig } from '../storage'
+import { activeAppService } from '../system/active-app'
+import { selectionCaptureService } from '../system/selection-capture'
+import {
+  OMNI_PANEL_BUILTIN_FEATURE_DEFINITIONS,
+  OMNI_PANEL_BUILTIN_FEATURE_MAP,
+  OMNI_PANEL_EXECUTE_ERROR_MESSAGES
+} from './omni-panel-builtin-features'
 
 const omniPanelLog = createLogger('OmniPanel')
 const requireFromCurrentModule = createRequire(import.meta.url)
@@ -97,6 +97,7 @@ const OMNI_SOURCE_VALUES: OmniPanelContextSource[] = [
   'command',
   'corebox-local-ai',
   'local-ai-shortcut',
+  'project-local-ai',
   'unknown'
 ]
 const SELECTION_TRANSLATE_SCENE_ID = 'corebox.selection.translate'
@@ -199,7 +200,9 @@ interface ExecutePayloadValidationResult {
   response?: OmniPanelFeatureExecuteResponse
 }
 
-type QuitStateProvider = { isQuitting?: boolean }
+interface QuitStateProvider {
+  isQuitting?: boolean
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -240,7 +243,7 @@ function normalizeMouseLongPressDurationMs(value: unknown): number {
       ? value
       : typeof value === 'string' && value.trim()
         ? Number(value)
-        : NaN
+        : Number.NaN
   if (!Number.isFinite(raw)) {
     return DEFAULT_LONG_PRESS_MS
   }
@@ -357,6 +360,7 @@ export class OmniPanelModule extends BaseModule {
     event: string
     callback: (event: InputHookEvent) => void
   }> = []
+
   private globalKeyListeners = new Set<OmniPanelGlobalKeyListener>()
   private pressedGlobalKeycodes = new Set<number>()
   private primaryModifierHadOtherKeys = false
@@ -372,6 +376,7 @@ export class OmniPanelModule extends BaseModule {
       this.syncInputHookState()
     }
   }
+
   private featureRegistry: OmniPanelFeatureRegistryItem[] = []
   private registryUpdatedAt = Date.now()
   private lastContext: OmniPanelContextPayload = {
@@ -380,6 +385,7 @@ export class OmniPanelModule extends BaseModule {
     source: 'manual',
     capturedAt: Date.now()
   }
+
   private handlingInstallEventPlugins = new Set<string>()
   private destroying = false
   private touchApp: QuitStateProvider | null = null
@@ -931,6 +937,7 @@ export class OmniPanelModule extends BaseModule {
       draftText
     })
   }
+
   async restoreLocalAi(): Promise<void> {
     const targetWindow = await this.ensureWindow()
     this.positionWindowNearCursor(targetWindow)
@@ -961,7 +968,8 @@ export class OmniPanelModule extends BaseModule {
       normalizedSource.source,
       normalizedSource.sourceRaw,
       captureResult,
-      capsule
+      capsule,
+      options?.localAi
     )
     this.notifyFeatureRefresh('show')
   }
@@ -1077,7 +1085,8 @@ export class OmniPanelModule extends BaseModule {
     source: OmniPanelContextSource,
     sourceRaw?: string,
     selectionCapture?: SelectionCaptureResult,
-    capsule?: OmniPanelDesktopContextCapsule
+    capsule?: OmniPanelDesktopContextCapsule,
+    localAi?: OmniPanelShowRequest['localAi']
   ): Promise<void> {
     if (!this.transport) return
     if (!this.panelWindow || this.panelWindow.window.isDestroyed()) return
@@ -1093,7 +1102,8 @@ export class OmniPanelModule extends BaseModule {
       selectionIssueMessage: selectionCapture?.issueMessage,
       selectionLimitations: selectionCapture?.limitations,
       capturedAt,
-      capsule: capsule ?? (await this.buildDesktopContextCapsule(text, source, capturedAt))
+      capsule: capsule ?? (await this.buildDesktopContextCapsule(text, source, capturedAt)),
+      localAi: this.normalizeLocalAiContext(localAi)
     }
     this.lastContext = payload
     this.contextDeliveryPending = true
@@ -1116,6 +1126,24 @@ export class OmniPanelModule extends BaseModule {
       this.notifyFeatureRefresh('context-updated')
     } finally {
       this.contextDeliveryPending = false
+    }
+  }
+
+  private normalizeLocalAiContext(
+    value: OmniPanelShowRequest['localAi']
+  ): OmniPanelContextPayload['localAi'] {
+    if (!value || typeof value !== 'object') return undefined
+    const opaqueId = (candidate: unknown): string | undefined =>
+      typeof candidate === 'string' && /^[A-Z0-9-]{1,128}$/i.test(candidate) ? candidate : undefined
+    const provider = ['pi', 'codex', 'claude', 'oh-my-pi'].includes(value.provider ?? '')
+      ? value.provider
+      : undefined
+    const projectId = opaqueId(value.projectId)
+    const sessionRef = opaqueId(value.sessionRef)
+    return {
+      ...(projectId ? { projectId } : {}),
+      ...(sessionRef ? { sessionRef } : {}),
+      ...(provider ? { provider } : {})
     }
   }
 
