@@ -147,6 +147,14 @@ export const SETTING_CATEGORIES: SettingCategory[] = [
     group: 'capability'
   },
   {
+    key: 'applications',
+    path: '/setting/applications',
+    icon: 'i-ri-apps-2-line',
+    labelKey: 'applications',
+    group: 'capability'
+  },
+
+  {
     key: 'file-index',
     path: '/setting/file-index',
     icon: 'i-ri-file-search-line',

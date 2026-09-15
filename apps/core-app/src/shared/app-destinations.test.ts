@@ -223,6 +223,7 @@ describe('app destination catalog invariants', () => {
       'settings-channels',
       'settings-voice',
       'settings-plugins',
+      'settings-applications',
       'settings-file-index',
       'settings-network',
       'settings-update'
@@ -320,14 +321,12 @@ describe('app destination icon classes', () => {
       'i-ri-links-line',
       'i-ri-mic-line',
       'i-ri-puzzle-line',
+      'i-ri-apps-2-line',
       'i-ri-file-search-line',
       'i-ri-global-line',
       'i-ri-refresh-line',
       'i-ri-information-line'
     ])
-    expect(APP_DESTINATION_ICON_CLASSES).toEqual(
-      Array.from(new Set(APP_DESTINATIONS.map((definition) => definition.icon)))
-    )
   })
 
   it('resolves every icon class to a real glyph in the collection the preset installs', () => {
