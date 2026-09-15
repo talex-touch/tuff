@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { normalizeDocsPagePath, toLocalizedDocsPaths } from '../shared/utils/docs-path'
+import { canonicalDocsPageIdentity, normalizeDocsPagePath, toLocalizedDocsPaths } from '../shared/utils/docs-path'
 import { toStaticDocsPageJsonPaths } from '../shared/utils/docs-page-json'
+import { toDocsMarkdownPaths } from '../shared/utils/docs-markdown'
 
 const DOC_FILE_PATTERN = /\.(md|mdc)$/i
 const LOCALE_SUFFIX_PATTERN = /\.(en|zh)$/i
@@ -69,6 +70,38 @@ export function createDocsPageApiPrerenderRoutes(nexusRoot: string) {
   for (const route of createDocsPrerenderRoutes(nexusRoot)) {
     for (const jsonRoute of toStaticDocsPageJsonPaths(normalizeDocsPagePath(route)))
       routes.add(jsonRoute)
+  }
+
+  return [...routes].sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * The raw-Markdown twin of every docs page: `/<locale>/docs/<path>.md`, the source an agent
+ * reads instead of scraping the rendered HTML.
+ *
+ * Prerendered rather than served live for the same reason as the JSON twins, plus one that is
+ * specific to these: the handler behind them reads the Markdown file off disk, and the
+ * deployed Cloudflare Worker has no filesystem. Rendering them during the build — which still
+ * runs on Node — is what makes the route work in production at all.
+ *
+ * A directory index is scanned as `/docs/dev/index` but its page is served at `/docs/dev`, so
+ * both spellings get a twin. Only the canonical one is reachable by appending `.md` to a docs
+ * URL, and without it that URL would reach the Worker and 404 — the rendered pages solve the
+ * same mismatch with a post-build alias copy (`materialize-docs-index-aliases.mjs`).
+ */
+export function createDocsMarkdownPrerenderRoutes(nexusRoot: string) {
+  const routes = new Set<string>()
+
+  for (const route of createDocsPrerenderRoutes(nexusRoot)) {
+    const normalized = normalizeDocsPagePath(route)
+    for (const markdownRoute of toDocsMarkdownPaths(normalized))
+      routes.add(markdownRoute)
+
+    const canonical = canonicalDocsPageIdentity(normalized)
+    if (canonical === normalized)
+      continue
+    for (const markdownRoute of toDocsMarkdownPaths(canonical))
+      routes.add(markdownRoute)
   }
 
   return [...routes].sort((a, b) => a.localeCompare(b))

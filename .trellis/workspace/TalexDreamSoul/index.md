@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 69
-- **Last Active**: 2026-09-10
+- **Total Sessions**: 70
+- **Last Active**: 2026-09-14
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~753 | Active |
+| `journal-2.md` | ~835 | Active |
 | `journal-1.md` | ~2005 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -31,6 +31,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 70 | 2026-09-14 | Applications browser, overlay warmth, docs source, deployment secrets | `7993e8a3e`, `d3847e55c`, `e3294273c`, `76eba22ae` | `master` |
 | 69 | 2026-09-10 | Batch voice input and search fixes | `de408cb71e3a39fdcdcc1474b6229545c90462dc`, `cb0f0628adcc41b4ab50fe8409c157d5c8a4a7ad`, `dd4ac7f4b5e935e06f3710b393b03b9dfa32552a`, `1a23015e93f7828b06117ee6ea3bfa131fcdbe37`, `72c7202b3e2fa914e925ac3e9cb4cc9b11a0165c`, `5efe674e95704cddf8d7e598dfd6541a83dabe31`, `ead4fd2c9dc2428873587da667281288c78f5272` | `master` |
 | 68 | 2026-09-08 | 剪贴板识别 SSH 与主机端点 | `49560c7cf`, `ec081c9e8`, `205190ed8`, `8da78649b`, `96e5f7894`, `8b00fff05` | `master` |
 | 67 | 2026-09-08 | 剪贴板历史：系统预览、快速标注、OCR 收纳 | `7bad7935d`, `e2eeac327`, `d5a703d8e`, `d5c10d261`, `c9f42a721` | `master` |

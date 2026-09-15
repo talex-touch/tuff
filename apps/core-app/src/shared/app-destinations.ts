@@ -19,6 +19,7 @@ export type AppDestinationId =
   | 'settings-channels'
   | 'settings-voice'
   | 'settings-plugins'
+  | 'settings-applications'
   | 'settings-file-index'
   | 'settings-network'
   | 'settings-update'
@@ -231,6 +232,21 @@ const APP_DESTINATION_LIST: readonly AppDestinationDefinition[] = [
     commonSetting: true
   },
   {
+    id: 'settings-applications',
+    route: '/setting/applications',
+    titleKey: 'settingsNav.category.applications',
+    subtitleKey: 'corebox.destinations.applicationsSubtitle',
+    icon: 'i-ri-apps-2-line',
+    aliases: {
+      en: ['applications', 'application settings', 'installed applications', 'app index'],
+      zh: ['应用', '应用管理', '已安装应用', '应用索引'],
+      pinyin: ['yingyong', 'yy', 'yingyongshezhi', 'yingyongsuoyin', 'yysy']
+    },
+    searchable: true,
+    advanced: false,
+    commonSetting: true
+  },
+  {
     id: 'settings-file-index',
     route: '/setting/file-index',
     titleKey: 'settingsNav.category.fileIndex',
@@ -299,6 +315,7 @@ export const COMMON_SETTING_DESTINATION_IDS: readonly AppDestinationId[] = [
   'settings-channels',
   'settings-voice',
   'settings-plugins',
+  'settings-applications',
   'settings-file-index',
   'settings-network',
   'settings-update'

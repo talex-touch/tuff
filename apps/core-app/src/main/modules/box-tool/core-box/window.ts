@@ -406,6 +406,11 @@ export class WindowManager {
     })
     touchEventBus.emit(TalexEvents.COREBOX_WINDOW_SHOWN, new CoreBoxWindowShownEvent())
 
+    // The action panel is one keystroke away from here, and building its renderer on that
+    // keystroke gates the panel on a renderer cold start. Deferred inside prewarm() so it does not
+    // land in this frame's reveal.
+    metaOverlayManager.prewarm()
+
     if (triggeredByShortcut) {
       this.getTransport().broadcastToWindow(
         window.window.id,

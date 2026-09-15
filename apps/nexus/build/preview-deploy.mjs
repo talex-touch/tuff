@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { extname } from 'node:path'
-import { PREVIEW_DEPLOY_BRANCH, runPreviewSecretPreflight } from './preview-secret-preflight.mjs'
+import { PREVIEW_DEPLOY_BRANCH, runDeploymentSecretPreflight } from './deployment-secret-preflight.mjs'
 
 export const PREVIEW_DEPLOY_ERROR_CODES = Object.freeze({
   argumentsUnsupported: 'PREVIEW_DEPLOY_ARGUMENTS_UNSUPPORTED',
@@ -61,7 +61,7 @@ function runPnpm(args, env) {
 export async function runPreviewDeployment({
   args = process.argv.slice(2),
   env = process.env,
-  preflight = () => runPreviewSecretPreflight({ env }),
+  preflight = () => runDeploymentSecretPreflight({ env }),
   execute = commandArgs => runPnpm(commandArgs, env),
 } = {}) {
   if (args.length > 0) {

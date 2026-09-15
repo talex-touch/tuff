@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runtimeConfig = {
@@ -65,7 +66,16 @@ describe('adminEmergencyToken', () => {
       exp: Math.floor(Date.now() / 1000) + 600,
     })
 
-    const tampered = `${token.slice(0, -2)}xx`
+    // Flip a bit in the decoded signature rather than editing the base64url text.
+    // The previous `${token.slice(0, -2)}xx` failed roughly 1 in 1024 runs: a 32-byte
+    // signature is 43 base64url chars, and the last one carries only 4 meaningful
+    // bits, so for a signature ending in `xw` the `xx` text decodes to the very same
+    // bytes and the token verifies — correctly, because it was never really tampered.
+    const [headerPart, payloadPart, signaturePart] = token.split('.')
+    const signature = Buffer.from(signaturePart, 'base64url')
+    signature[0] ^= 0x01
+    const tampered = `${headerPart}.${payloadPart}.${signature.toString('base64url')}`
+
     const claims = verifyAdminEmergencyToken(event, tampered)
     expect(claims).toBeNull()
   })

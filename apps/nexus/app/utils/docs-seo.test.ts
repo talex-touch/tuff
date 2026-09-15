@@ -35,6 +35,10 @@ describe('docs SEO head', () => {
       dateModified: '2026-06-13T10:00:00.000Z',
     })
     expect(seo.structuredDataText).toContain('"@type":"TechArticle"')
+    // The canonical URL plus `.md`: the link that lets an agent fetch the source instead of
+    // scraping this page. It follows the canonical path, so a directory index advertises
+    // `/zh/docs.md` rather than the scanned `/zh/docs/index.md`.
+    expect(seo.markdownSourceUrl).toBe('https://docs.tuff.chat/zh/docs.md')
   })
 
   it('marks missing docs content as noindex without structured data', () => {
@@ -54,6 +58,8 @@ describe('docs SEO head', () => {
     expect(seo.robotsContent).toBe('noindex,nofollow')
     expect(seo.structuredData).toBeNull()
     expect(seo.structuredDataText).toBe('')
+    // No source file backs a missing page, so advertising one would point at another 404.
+    expect(seo.markdownSourceUrl).toBe('')
   })
 
   it('normalizes directory index canonical paths', () => {

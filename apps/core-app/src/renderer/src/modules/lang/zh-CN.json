@@ -1462,6 +1462,8 @@
       "appearance": "外观",
       "intelligence": "智能",
       "plugins": "插件与工具",
+      "applications": "应用",
+
       "fileIndex": "文件索引",
       "update": "更新",
       "network": "网络",
@@ -1496,8 +1498,6 @@
     "downloadCenter": "下载中心",
     "downloadCenterDesc": "查看下载任务与历史记录。",
     "open": "打开",
-    "application": "应用",
-    "applicationDesc": "查看与管理已安装的应用。",
     "store": "插件市场",
     "storeDesc": "浏览、安装与管理插件。"
   },
@@ -2723,11 +2723,19 @@
     "name": "名称",
     "type": "类型",
     "value": "值",
-    "keywords": "关键词"
-  },
-  "applicationEmpty": {
-    "title": "选择一个应用进行配置。",
-    "description": "释放应用定制的力量，量身打造您的数字空间。微调设置以优化工作流程，并通过个人云无缝共享配置。探索多样的设置以获取灵感和见解。准备好创建您的完美工作区了吗？选择一个应用开始吧。"
+    "keywords": "关键词",
+    "details": {
+      "displayName": "显示名称",
+      "source": "来源",
+      "bundleId": "bundleId",
+      "identityKind": "身份类型",
+      "launchKind": "启动类型",
+      "launchTarget": "启动目标",
+      "launchArgs": "启动参数",
+      "workingDirectory": "工作目录",
+      "displayPath": "展示路径",
+      "keywords": "关键词"
+    }
   },
   "appList": {
     "searchPlaceholder": "输入以搜索...",
@@ -2774,7 +2782,6 @@
     "details": "详细信息",
     "styles": "样式",
     "theme": "主题",
-    "application": "应用",
     "appSettings": "应用设置",
     "storagable": "存储",
     "intelligence": "智能",
@@ -5830,6 +5837,8 @@
       "appearanceSubtitle": "主题、布局与视觉效果",
       "intelligenceSubtitle": "智能中心、工作流与权限",
       "pluginsSubtitle": "已安装插件、插件市场与应用工具",
+      "applicationsSubtitle": "已安装应用、启动入口与索引诊断",
+
       "fileIndexSubtitle": "搜索索引范围与索引状态",
       "networkSubtitle": "代理、连通性与网络诊断",
       "updateSubtitle": "版本、更新通道与更新日志",

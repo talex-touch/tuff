@@ -6,10 +6,11 @@ import {
 } from '@talex-touch/tuff-intelligence/light'
 import type { H3Event } from 'h3'
 import crypto from 'uncrypto'
-import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { readCloudflareBindings } from './cloudflare'
 import { assertRuntimeCredential, isLocalDevelopmentRuntime, selectRuntimeCredential } from './runtimeCredentialPolicy'
+import { deriveSecureCredentialKey } from './secureCredentialStore'
 
 const PROVIDERS_TABLE = 'intelligence_providers'
 const SETTINGS_TABLE = 'intelligence_settings'
@@ -447,56 +448,52 @@ function normalizeAuditMetadata(value?: Record<string, any> | null): string | nu
 
 // ---------- API key encryption (AES-256-GCM) ----------
 //
-// User-supplied provider API keys are stored encrypted in the D1
-// `api_key_encrypted` column, mirroring the AES-256-GCM + HKDF pattern used by
-// providerCredentialStore / storageCredentialStore. Fails closed in production
-// when no key is configured. Legacy repeating-key XOR ciphertext written before
-// this change stays decryptable for backward compatibility.
+// User-supplied provider API keys are stored encrypted in the D1 `api_key_encrypted` column,
+// using the same AES-256-GCM + HKDF primitives as the secure credential stores. Fails closed in
+// production when no key is configured.
+//
+// This column is not a `secure_store` table: its envelope is a `v1:a256gcm:` prefix over packed
+// bytes rather than a JSON envelope, and its key is per-column rather than per-authRef. Only the
+// derivation is shared.
+//
+// A repeating-key XOR path used to decrypt ciphertext written before the GCM envelope existed. It
+// was removed once production held zero non-GCM rows: unlike the JSON-envelope stores, it could
+// not tell legacy ciphertext from corrupt input, so it returned XOR garbage as a plaintext API key
+// instead of failing. Any future non-GCM value now fails loudly.
 
-const AES_256_KEY_BYTES = 32
 const AES_GCM_NONCE_BYTES = 12
 const AES_GCM_TAG_BYTES = 16
 const API_KEY_ENVELOPE_PREFIX = 'v1:a256gcm:'
-const LEGACY_ENCRYPTION_KEY = 'tuff-intelligence-default-key-change-me'
 const DEV_FALLBACK_ENCRYPTION_KEY = 'tuff-intelligence-dev-encrypt-key'
 
-function readApiKeyEncryptionCredential(event: H3Event) {
-  const bindings = readCloudflareBindings(event)
-  return {
-    configured: selectRuntimeCredential(bindings, bindings?.NUXT_INTELLIGENCE_ENCRYPT_KEY, [
-      process.env.NUXT_INTELLIGENCE_ENCRYPT_KEY,
-    ]),
-    localDevelopment: isLocalDevelopmentRuntime(bindings?.NEXUS_LOCAL_PAGES_PREVIEW, bindings),
-  }
-}
-
 function resolveApiKeyEncryptionSecret(event: H3Event): Buffer {
-  const { configured, localDevelopment } = readApiKeyEncryptionCredential(event)
-  if (configured !== undefined && configured !== null) {
-    const secret = assertRuntimeCredential('NUXT_INTELLIGENCE_ENCRYPT_KEY', configured, {
-      localDevelopment,
-    })
-    return createHash('sha256').update(secret).digest()
+  const bindings = readCloudflareBindings(event)
+  const configured = selectRuntimeCredential(bindings, bindings?.NUXT_INTELLIGENCE_ENCRYPT_KEY, [
+    process.env.NUXT_INTELLIGENCE_ENCRYPT_KEY,
+  ])
+  const localDevelopment = isLocalDevelopmentRuntime(bindings?.NEXUS_LOCAL_PAGES_PREVIEW, bindings)
+
+  if (configured === undefined || configured === null) {
+    if (!localDevelopment)
+      assertRuntimeCredential('NUXT_INTELLIGENCE_ENCRYPT_KEY', configured, { localDevelopment: false })
+
+    return createHash('sha256').update(DEV_FALLBACK_ENCRYPTION_KEY).digest()
   }
 
-  if (!localDevelopment) {
-    const secret = assertRuntimeCredential('NUXT_INTELLIGENCE_ENCRYPT_KEY', configured, {
-      localDevelopment: false,
-    })
-    return createHash('sha256').update(secret).digest()
-  }
-
-  return createHash('sha256').update(DEV_FALLBACK_ENCRYPTION_KEY).digest()
+  const secret = assertRuntimeCredential('NUXT_INTELLIGENCE_ENCRYPT_KEY', configured, { localDevelopment })
+  return createHash('sha256').update(secret).digest()
 }
 
-function deriveApiKeyEncryptionKey(masterSecret: Buffer): Buffer {
-  const salt = createHash('sha256').update('tuff-intelligence-secure-store:provider-api-key').digest()
-  const info = Buffer.from('intelligence-secure-store:v1:provider-api-key', 'utf-8')
-  return Buffer.from(hkdfSync('sha256', masterSecret, salt, info, AES_256_KEY_BYTES))
+function deriveApiKeyEncryptionKey(event: H3Event): Buffer {
+  return deriveSecureCredentialKey(resolveApiKeyEncryptionSecret(event), {
+    saltPrefix: 'tuff-intelligence-secure-store:',
+    authRef: 'provider-api-key',
+    info: 'intelligence-secure-store:v1:provider-api-key',
+  })
 }
 
 function encryptApiKey(event: H3Event, apiKey: string): string {
-  const key = deriveApiKeyEncryptionKey(resolveApiKeyEncryptionSecret(event))
+  const key = deriveApiKeyEncryptionKey(event)
   const nonce = randomBytes(AES_GCM_NONCE_BYTES)
   const cipher = createCipheriv('aes-256-gcm', key, nonce, { authTagLength: AES_GCM_TAG_BYTES })
   const ciphertext = Buffer.concat([cipher.update(apiKey, 'utf-8'), cipher.final()])
@@ -505,42 +502,21 @@ function encryptApiKey(event: H3Event, apiKey: string): string {
 }
 
 function decryptApiKey(event: H3Event, encrypted: string): string {
-  if (encrypted.startsWith(API_KEY_ENVELOPE_PREFIX))
-    return decryptApiKeyGcm(event, encrypted.slice(API_KEY_ENVELOPE_PREFIX.length))
+  if (!encrypted.startsWith(API_KEY_ENVELOPE_PREFIX))
+    throw new Error('INTELLIGENCE_API_KEY_ENVELOPE_INVALID')
 
-  return decryptApiKeyLegacyXor(event, encrypted)
-}
-
-function decryptApiKeyGcm(event: H3Event, packedBase64: string): string {
-  const packed = Buffer.from(packedBase64, 'base64')
+  const packed = Buffer.from(encrypted.slice(API_KEY_ENVELOPE_PREFIX.length), 'base64')
   const nonce = packed.subarray(0, AES_GCM_NONCE_BYTES)
   const tag = packed.subarray(AES_GCM_NONCE_BYTES, AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES)
   const ciphertext = packed.subarray(AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES)
-  const key = deriveApiKeyEncryptionKey(resolveApiKeyEncryptionSecret(event))
-  const decipher = createDecipheriv('aes-256-gcm', key, nonce, { authTagLength: AES_GCM_TAG_BYTES })
+  if (nonce.byteLength !== AES_GCM_NONCE_BYTES || tag.byteLength !== AES_GCM_TAG_BYTES)
+    throw new Error('INTELLIGENCE_API_KEY_ENVELOPE_INVALID')
+
+  const decipher = createDecipheriv('aes-256-gcm', deriveApiKeyEncryptionKey(event), nonce, {
+    authTagLength: AES_GCM_TAG_BYTES,
+  })
   decipher.setAuthTag(tag)
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf-8')
-}
-
-// Backward compatibility: decrypt legacy repeating-key XOR + base64 ciphertext.
-function decryptApiKeyLegacyXor(event: H3Event, encrypted: string): string {
-  const { configured, localDevelopment } = readApiKeyEncryptionCredential(event)
-  const key =
-    configured !== undefined && configured !== null
-      ? assertRuntimeCredential('NUXT_INTELLIGENCE_ENCRYPT_KEY', configured, { localDevelopment })
-      : localDevelopment
-        ? LEGACY_ENCRYPTION_KEY
-        : assertRuntimeCredential('NUXT_INTELLIGENCE_ENCRYPT_KEY', configured, { localDevelopment: false })
-  const bytes = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0))
-  const keyBytes = new TextEncoder().encode(key)
-  const keyLength = keyBytes.length || 1
-  const decrypted = new Uint8Array(bytes.length)
-  for (let i = 0; i < bytes.length; i++) {
-    const keyByte = keyBytes[i % keyLength] ?? 0
-    const cipherByte = bytes[i] ?? 0
-    decrypted[i] = cipherByte ^ keyByte
-  }
-  return new TextDecoder().decode(decrypted)
 }
 
 // ---------- Provider CRUD ----------

@@ -321,8 +321,17 @@ export default defineNuxtConfig({
       secureStoreKey: process.env.STORAGE_SECURE_STORE_KEY,
     },
     releaseDownload: {
-      secret: process.env.RELEASE_DOWNLOAD_SIGNING_SECRET || authSecret,
+      // Two distinct provenances, kept distinct: a dedicated secret is used verbatim so operators
+      // can rotate it predictably, while the AUTH_SECRET fallback is domain-separated in
+      // releaseDownloadSignature.ts rather than signing downloads with session-signing bytes.
+      secret: process.env.RELEASE_DOWNLOAD_SIGNING_SECRET || '',
+      fallbackSecret: authSecret,
       signedTtlSeconds: Number(process.env.RELEASE_DOWNLOAD_SIGNED_TTL_SECONDS || 15 * 60),
+      // Deliberate availability tradeoff, not an oversight. attachSignatureUrls
+      // (server/utils/releaseSignature.ts:22) publishes the unsigned path as `fallbackDownloadUrl`,
+      // and the desktop updater retries it once the 15-minute signed URL expires
+      // (apps/core-app/src/main/modules/update/update-system.ts:226). Failing closed here would
+      // break slow and resumed downloads of Nexus-hosted assets.
       allowUnsignedFallback: process.env.RELEASE_DOWNLOAD_ALLOW_UNSIGNED_FALLBACK !== 'false',
     },
     appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
@@ -433,7 +442,18 @@ export default defineNuxtConfig({
           // Pages caps _routes.json at 100 entries and nitro fills it with one entry per
           // prerendered file; the static docs JSON twins alone are over a thousand, so they
           // must be covered by a pattern or most of them silently fall back to the Worker.
-          exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*', '/api/docs/page/*'],
+          // `/en/docs/*` also covers the nested raw-Markdown twins; the root ones
+          // (`/en/docs.md`) sit outside it and need their own entry, or they reach a Worker
+          // that has no filesystem to read the source from.
+          exclude: [
+            '/en/docs',
+            '/en/docs.md',
+            '/en/docs/*',
+            '/zh/docs',
+            '/zh/docs.md',
+            '/zh/docs/*',
+            '/api/docs/page/*',
+          ],
         },
       },
     },

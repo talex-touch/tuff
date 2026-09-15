@@ -8,6 +8,7 @@ import type { H3Event } from 'h3'
 import process from 'node:process'
 import { queryCollection } from '@nuxt/content/server'
 import { cacheDocsContent, docsContentAvailability, uncacheableDocsContent } from './docsContentCache'
+import { buildDocsContentCandidates, docsContentRoots, isFileNotFound, isInsideDocsRoot } from './docsContentFile'
 import { isMissingDocsContentTableError } from './docsContentError'
 
 export type DocsPageRecord = Record<string, unknown> & {
@@ -137,49 +138,11 @@ function shouldPreferDevDocsMetadataFileLookup(docPath: string, includeBody: boo
   return process.env.NODE_ENV === 'development' && !includeBody && docPath.includes('/docs/dev/components')
 }
 
-function normalizeDocsContentStem(contentPath: string) {
-  if (contentPath === '/docs')
-    return 'index'
-
-  if (contentPath.startsWith('/docs/'))
-    return contentPath.slice('/docs/'.length) || 'index'
-
-  if (contentPath.startsWith('/docs.'))
-    return `index${contentPath.slice('/docs'.length)}`
-
-  return null
-}
-
-function isSafeContentStem(stem: string) {
-  if (!stem || stem.includes('\0'))
-    return false
-
-  return stem
-    .split('/')
-    .every(segment => segment && segment !== '.' && segment !== '..')
-}
-
-function buildDevDocsContentCandidates(contentPath: string) {
-  const stem = normalizeDocsContentStem(contentPath)
-  if (!stem || !isSafeContentStem(stem))
-    return []
-
-  return [`${stem}.mdc`, `${stem}.md`]
-}
-
-function isFileNotFound(error: unknown) {
-  return Boolean(
-    error
-    && typeof error === 'object'
-    && (error as { code?: unknown }).code === 'ENOENT',
-  )
-}
-
 async function readDevDocsPageFromFile(contentPath: string, includeBody: boolean): Promise<DocsPageRecord | null> {
   if (isProduction())
     return null
 
-  const candidates = buildDevDocsContentCandidates(contentPath)
+  const candidates = buildDocsContentCandidates(contentPath)
   if (!candidates.length)
     return null
 
@@ -187,16 +150,11 @@ async function readDevDocsPageFromFile(contentPath: string, includeBody: boolean
     import('node:fs/promises'),
     import('node:path'),
   ])
-  const docsRootCandidates = [
-    resolve(process.cwd(), 'content/docs'),
-    resolve(process.cwd(), 'apps/nexus/content/docs'),
-  ]
 
   for (const relativeFile of candidates) {
-    for (const docsRoot of docsRootCandidates) {
-      const docsRootPrefix = `${docsRoot}${sep}`
+    for (const docsRoot of docsContentRoots(resolve)) {
       const filePath = resolve(docsRoot, relativeFile)
-      if (filePath !== docsRoot && !filePath.startsWith(docsRootPrefix))
+      if (!isInsideDocsRoot(filePath, docsRoot, sep))
         continue
 
       let fileStat: { mtimeMs: number }
