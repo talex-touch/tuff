@@ -290,6 +290,10 @@ rows:
     description: '自定义 z-index。不传时由运行时 z-index 管理器分配（种子 `10000`，逐个抽屉递增）；仅在需要与外部固定层级共存时手动指定。'
     type: 'number'
     default: '-'
+  - name: lazy
+    description: '首次打开前不渲染插槽内容。面板本身仍然挂载，滑出动画不受影响；首次打开后内容会保留，重复开关不会重新执行子组件 setup。需要子组件提前挂载时设为 `false`。'
+    type: 'boolean'
+    default: 'true'
 ---
 ::
 

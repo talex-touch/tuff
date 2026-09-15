@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { mount } from '@vue/test-utils'
 import * as sass from 'sass'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
 import TxDrawer from '../src/TxDrawer.vue'
 
 const DESKTOP_WIDTH = 1024
@@ -251,6 +251,10 @@ describe('txDrawer', () => {
       props: {
         visible: false,
         title: 'Settings',
+        // Eager content: `inert` is what keeps a *rendered* closed subtree out of the Tab order.
+        // The lazy default never renders the slot before the first open, which would make the
+        // assertion below vacuous rather than prove inert works.
+        lazy: false,
       },
       slots: {
         default: '<button class="drawer-action">Action</button>',
@@ -430,5 +434,58 @@ describe('txDrawer', () => {
     finally {
       style.remove()
     }
+  })
+
+  it('defers slot content until first open and keeps it mounted across close', async () => {
+    // Gating content on `visible` alone would tear it down mid-close - dropping the panel's
+    // contents while it is still sliding out - and would re-run child `setup` on every reopen.
+    // The gate therefore latches on first open instead of tracking `visible`.
+    const setups = vi.fn()
+    const Child = defineComponent({
+      setup() {
+        setups()
+        return () => h('button', { class: 'drawer-child' }, 'child')
+      },
+    })
+    const mountChild = (props: Record<string, unknown>) => mount(TxDrawer, {
+      props,
+      slots: { default: () => h(Child) },
+      attachTo: document.body,
+    })
+
+    const wrapper = mountChild({ visible: false, title: 'Settings' })
+    await nextTick()
+    // The panel itself stays mounted so the slide-out animation and paint contract survive.
+    expect(document.body.querySelector('.tx-drawer__panel')).not.toBeNull()
+    expect(setups).not.toHaveBeenCalled()
+    expect(document.body.querySelector('.drawer-child')).toBeNull()
+
+    await wrapper.setProps({ visible: true })
+    await nextTick()
+    expect(setups).toHaveBeenCalledTimes(1)
+    expect(document.body.querySelector('.drawer-child')).not.toBeNull()
+
+    await wrapper.setProps({ visible: false })
+    await nextTick()
+    // Still mounted while closing, and reopening must not pay for a second `setup`.
+    expect(document.body.querySelector('.drawer-child')).not.toBeNull()
+    await wrapper.setProps({ visible: true })
+    await nextTick()
+    expect(setups).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+
+    // A drawer that is already open when it mounts must render on its first frame.
+    setups.mockClear()
+    const bornOpen = mountChild({ visible: true, title: 'Settings' })
+    await nextTick()
+    expect(setups).toHaveBeenCalledTimes(1)
+    bornOpen.unmount()
+
+    // `lazy: false` opts a child back into eager mounting.
+    setups.mockClear()
+    const eager = mountChild({ visible: false, title: 'Settings', lazy: false })
+    await nextTick()
+    expect(setups).toHaveBeenCalledTimes(1)
+    eager.unmount()
   })
 })

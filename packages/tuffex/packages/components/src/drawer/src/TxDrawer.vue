@@ -42,6 +42,7 @@ const props = withDefaults(defineProps<DrawerProps>(), {
   panelTransparent: false,
   mobileAdapt: true,
   full: false,
+  lazy: true,
 })
 
 const emit = defineEmits<DrawerEmits>()
@@ -52,6 +53,14 @@ const internalZIndex = ref(zIndexAllocator.get())
 const titleId = useId()
 const isMobile = ref(false)
 let previouslyFocusedElement: HTMLElement | null = null
+/**
+ * Latched on the drawer's first open and never cleared: gating the slot content on `visible`
+ * alone would tear the content down mid-close, so content outlives the first open and reopening
+ * costs no child `setup`.
+ */
+const hasEverOpened = ref(props.visible)
+const shouldRenderContent = computed(() => !props.lazy || hasEverOpened.value)
+
 const display = computed({
   get: () => props.visible,
   set: (value: boolean) => emit('update:visible', value),
@@ -67,8 +76,8 @@ const effectiveDirection = computed<DrawerDirection>(() => {
 const resolvedSize = computed(() => normalizeDrawerSize(props.full ? 'full' : props.size ?? props.width))
 const isHorizontalDirection = computed(() => effectiveDirection.value === 'left' || effectiveDirection.value === 'right')
 
-const shouldRenderHeader = computed<boolean>(() => props.showHeader && (Boolean(slots.header) || Boolean(props.title) || props.showClose))
-const shouldRenderFooter = computed<boolean>(() => props.showFooter && Boolean(slots.footer))
+const shouldRenderHeader = computed<boolean>(() => shouldRenderContent.value && props.showHeader && (Boolean(slots.header) || Boolean(props.title) || props.showClose))
+const shouldRenderFooter = computed<boolean>(() => shouldRenderContent.value && props.showFooter && Boolean(slots.footer))
 const drawerAriaLabelledBy = computed<string | undefined>(() => shouldRenderHeader.value ? titleId : undefined)
 const drawerAriaLabel = computed<string | undefined>(() => shouldRenderHeader.value ? undefined : props.title || undefined)
 
@@ -171,6 +180,9 @@ watch(
   () => props.visible,
   (newVal) => {
     if (newVal) {
+      // Before the focus/`nextTick` below, so lazy content exists by the time we look for
+      // something focusable inside it.
+      hasEverOpened.value = true
       if (props.zIndex != null) {
         zIndexAllocator.refresh(props.zIndex, 'drawer(zIndex prop)')
       }
@@ -268,7 +280,7 @@ onUnmounted(() => {
         <TxDivider v-if="shouldRenderHeader" class="tx-drawer__divider" />
 
         <div class="tx-drawer__body">
-          <slot />
+          <slot v-if="shouldRenderContent" />
         </div>
 
         <TxDivider v-if="shouldRenderFooter" class="tx-drawer__divider" />
