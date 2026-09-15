@@ -7,6 +7,7 @@ import {
   isLocalSkillId,
   listEnabledLocalSkills,
   localSkillId,
+  MAX_ENTRIES_PER_DIR,
   normalizeLocalSkillConfig,
   parseSkillFrontmatter,
   readEnabledLocalSkill,
@@ -130,13 +131,15 @@ describe('scanning', () => {
     expect(skills).toHaveLength(1)
   })
 
-  it('stops at 50 skills in one directory', async () => {
-    for (let index = 0; index < 55; index += 1) {
+  it('stops at MAX_ENTRIES_PER_DIR skills in one directory', async () => {
+    for (let index = 0; index < MAX_ENTRIES_PER_DIR + 5; index += 1) {
       const padded = String(index).padStart(3, '0')
       await writeSkill(join(root, 'lib', `skill-${padded}`), skillDoc(`Skill ${padded}`, ''))
     }
 
-    expect(await scanLocalSkills(config({ dirs: [join(root, 'lib')] }))).toHaveLength(50)
+    expect(await scanLocalSkills(config({ dirs: [join(root, 'lib')] }))).toHaveLength(
+      MAX_ENTRIES_PER_DIR
+    )
   })
 
   it('contributes nothing for a directory that is gone, without failing the scan', async () => {

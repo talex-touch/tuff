@@ -1,8 +1,8 @@
 /**
  * Local skill directories — linked, never imported.
  *
- * The user registers a directory (say `~/tuff-skills/`); every `SKILL.md` under
- * it becomes a skill the home conversation can reach. Unlike an imported skill,
+ * A registered directory (say `~/tuff-skills/`, or an agent's own `~/.codex/skills`); every
+ * `SKILL.md` under it becomes a skill the home conversation can reach. Unlike an imported skill,
  * nothing is copied: the file on disk stays the only body, so editing it takes
  * effect on the next turn with no re-import step. That is the whole point of the
  * feature, and it is why nothing here writes to the content store.
@@ -32,11 +32,32 @@ const localSkillLog = createLogger('Intelligence').child('LocalSkills')
 
 export const LOCAL_SKILL_ID_PREFIX = 'local:'
 
-/** Past this a mis-picked directory (a whole source tree, say) stops being a skill library. */
-const MAX_ENTRIES_PER_DIR = 50
+/**
+ * Past this a mis-picked directory (a whole source tree, say) stops being a skill library. High
+ * enough for the libraries that arrive on their own: a cc-switch install carries dozens of skills
+ * under one root, and truncating it would silently hide what the user owns.
+ */
+export const MAX_ENTRIES_PER_DIR = 200
+
+/**
+ * How deep under a registered root a skill may live. Agents sometimes group their skills
+ * (`~/.codex/skills/.system/<skill>`, `~/.pi/agent/skills/pi-skills/<skill>`), so two levels is what
+ * the layouts actually need; the third buys headroom without turning a mis-picked root into a walk
+ * of the whole disk.
+ */
+const MAX_SKILL_DEPTH = 3
+/** Directories visited across every registered root in one scan, before giving up. */
+const MAX_SCANNED_DIRECTORIES = 4_000
 
 /** Frontmatter is metadata for the picker and the prompt, not a document. */
 const MAX_MANIFEST_CHARS = 512 * 1024
+
+/**
+ * Manifests are read for their header during a scan, and this bounds that read. The scan runs on
+ * every turn that injects context, and a library of a few hundred skills would otherwise read a few
+ * hundred full bodies per turn to look at their first twenty lines.
+ */
+const MAX_MANIFEST_SCAN_CHARS = 16 * 1024
 
 export interface LocalSkillConfig {
   /** Directories the user registered, as they typed them. */
@@ -139,63 +160,75 @@ interface LocalSkillLocation {
 }
 
 /**
- * Skill directories under one registered root: the root itself when it holds a
- * `SKILL.md`, plus every child directory that does.
+ * Skill directories under one registered root.
+ *
+ * A directory holding a `SKILL.md` is a skill; its subdirectories are that skill's own references
+ * and are not descended into. A directory without one is walked, because agents group their skills
+ * (`~/.codex/skills/.system/<skill>`). Both the depth and the total directory count are bounded so a
+ * mis-picked root cannot turn one scan into a walk of the disk.
  */
-async function locationsInDir(sourceDir: string): Promise<LocalSkillLocation[]> {
-  let root: string
-  try {
-    root = await realpath(sourceDir)
-  } catch {
-    // A directory the user removed or unplugged is not an error the settings
-    // page has to surface — it simply contributes nothing this scan.
-    localSkillLog.warn(`Skill directory is unreachable: ${sourceDir}`)
-    return []
+async function collectSkillLocations(
+  sourceDir: string,
+  dir: string,
+  depth: number,
+  budget: { directories: number },
+  locations: LocalSkillLocation[]
+): Promise<void> {
+  if (depth > MAX_SKILL_DEPTH || budget.directories <= 0) return
+  if (locations.length >= MAX_ENTRIES_PER_DIR) return
+  budget.directories -= 1
+
+  if (await hasManifest(dir)) {
+    locations.push({ path: dir, manifestPath: join(dir, 'SKILL.md'), sourceDir })
+    if (depth > 0) return
   }
-
-  const locations: LocalSkillLocation[] = []
-  const push = (path: string): void => {
-    locations.push({ path, manifestPath: join(path, 'SKILL.md'), sourceDir })
-  }
-
-  if (await hasManifest(root)) push(root)
-
   let names: string[]
   try {
-    names = (await readdir(root, { withFileTypes: true }))
+    names = (await readdir(dir, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
       .map((entry) => entry.name)
       .sort()
   } catch {
-    localSkillLog.warn(`Skill directory could not be listed: ${sourceDir}`)
-    return locations
+    localSkillLog.warn(`Skill directory could not be listed: ${dir}`)
+    return
   }
 
   for (const name of names) {
-    if (locations.length >= MAX_ENTRIES_PER_DIR) {
-      localSkillLog.warn(
-        `Skill directory ${sourceDir} holds more than ${MAX_ENTRIES_PER_DIR} skills; the rest are ignored`
-      )
-      break
-    }
-    const child = join(root, name)
-    if (!(await isDirectory(child)) || !(await hasManifest(child))) continue
+    if (budget.directories <= 0 || locations.length >= MAX_ENTRIES_PER_DIR) return
+    const child = join(dir, name)
+    if (!(await isDirectory(child))) continue
     try {
       // A symlinked entry resolves to its target, and the target — not the link
       // site — becomes the boundary its reads may not leave.
-      push(await realpath(child))
+      await collectSkillLocations(sourceDir, await realpath(child), depth + 1, budget, locations)
     } catch {
       continue
     }
   }
-  return locations
 }
 
 /** Every skill directory the config points at, deduplicated by real path. */
 async function locationsFor(config: LocalSkillConfig): Promise<Map<string, LocalSkillLocation>> {
   const byId = new Map<string, LocalSkillLocation>()
+  const budget = { directories: MAX_SCANNED_DIRECTORIES }
   for (const dir of config.dirs) {
-    for (const location of await locationsInDir(dir)) {
+    let root: string
+    try {
+      root = await realpath(dir)
+    } catch {
+      // A directory the user removed or unplugged is not an error the settings
+      // page has to surface — it simply contributes nothing this scan.
+      localSkillLog.warn(`Skill directory is unreachable: ${dir}`)
+      continue
+    }
+    const locations: LocalSkillLocation[] = []
+    await collectSkillLocations(dir, root, 0, budget, locations)
+    if (locations.length >= MAX_ENTRIES_PER_DIR) {
+      localSkillLog.warn(
+        `Skill directory ${dir} holds more than ${MAX_ENTRIES_PER_DIR} skills; the rest are ignored`
+      )
+    }
+    for (const location of locations) {
       const id = localSkillId(location.path)
       if (!byId.has(id)) byId.set(id, location)
     }
@@ -203,7 +236,10 @@ async function locationsFor(config: LocalSkillConfig): Promise<Map<string, Local
   return byId
 }
 
-async function readManifest(location: LocalSkillLocation): Promise<string> {
+async function readManifest(
+  location: LocalSkillLocation,
+  limit = MAX_MANIFEST_CHARS
+): Promise<string> {
   // The scan already resolved the directory; re-resolving the manifest catches a
   // `SKILL.md` that is itself a symlink pointing out of the skill.
   const resolved = await realpath(location.manifestPath)
@@ -211,7 +247,7 @@ async function readManifest(location: LocalSkillLocation): Promise<string> {
     throw new Error(`Local skill manifest ${location.manifestPath} resolves outside its directory`)
   }
   const content = await readFile(resolved, 'utf8')
-  return content.length > MAX_MANIFEST_CHARS ? content.slice(0, MAX_MANIFEST_CHARS) : content
+  return content.length > limit ? content.slice(0, limit) : content
 }
 
 /**
@@ -227,7 +263,9 @@ export async function scanLocalSkills(config: LocalSkillConfig): Promise<LocalSk
   for (const [id, location] of await locationsFor(config)) {
     let frontmatter: { name?: string; description?: string }
     try {
-      frontmatter = parseSkillFrontmatter(await readManifest(location))
+      // Header only: a scan reads every manifest in every linked library, and the
+      // bodies behind them are what `tuff_skill_read` is for.
+      frontmatter = parseSkillFrontmatter(await readManifest(location, MAX_MANIFEST_SCAN_CHARS))
     } catch (error) {
       localSkillLog.warn(`Skill manifest could not be read: ${location.manifestPath}`, { error })
       continue
