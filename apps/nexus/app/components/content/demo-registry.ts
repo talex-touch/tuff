@@ -208,6 +208,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   IconChipIconChipDemo: () => import('./demos/IconChipIconChipDemo.vue'),
   IconTxStatusIconDemo: () => import('./demos/IconTxStatusIconDemo.vue'),
   IconButtonIconButtonDemo: () => import('./demos/IconButtonIconButtonDemo.vue'),
+  IconMorphIconMorphDemo: () => import('./demos/IconMorphIconMorphDemo.vue'),
   IconPickerIconPickerDemo: () => import('./demos/IconPickerIconPickerDemo.vue'),
   ImageGalleryImageGalleryDemo: () => import('./demos/ImageGalleryImageGalleryDemo.vue'),
   ImageUploaderImageUploaderDemo: () => import('./demos/ImageUploaderImageUploaderDemo.vue'),
