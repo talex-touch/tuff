@@ -14,7 +14,7 @@
     "check:doc-parity": "node build/check-doc-translation-parity.mjs",
     "check:demo-registry": "node build/check-demo-registry-orphans.mjs",
     "check:icon-collections": "node build/check-icon-collections.mjs",
-    "check:preview-secrets": "node scripts/preview-secret-preflight.mjs",
+    "check:deployment-secrets": "node scripts/deployment-secret-preflight.mjs",
     "check:runtime-evidence": "node build/check-runtime-evidence.mjs",
     "check:runtime-evidence:deployed": "node build/check-runtime-evidence.mjs --require-deployed-preview",
     "check:runtime-evidence:template": "node build/check-runtime-evidence.mjs --print-deployed-preview-template",
