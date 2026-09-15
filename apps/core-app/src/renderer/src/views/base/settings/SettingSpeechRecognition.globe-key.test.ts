@@ -1,23 +1,20 @@
 // @vitest-environment jsdom
+
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
-import type * as VueModule from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SettingSpeechRecognition from './SettingSpeechRecognition.vue'
 
 const router = vi.hoisted(() => ({ push: vi.fn() }))
 const mocks = vi.hoisted(() => ({ send: vi.fn() }))
-const settings = vi.hoisted(() => {
-  const { reactive } = require('vue') as typeof VueModule
-  return reactive({
-    voiceInput: {
-      enabled: true,
-      historyEnabled: false,
-      polishEnabled: true,
-      polishStrength: 'structured'
-    }
-  })
-})
+const settings = vi.hoisted(() => ({
+  voiceInput: {
+    enabled: true,
+    historyEnabled: false,
+    polishEnabled: true,
+    polishStrength: 'structured'
+  }
+}))
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key })
@@ -79,13 +76,17 @@ function mountSettings(): VueWrapper {
           emits: ['click'],
           template:
             '<button :disabled="disabled" @click="$emit(\'click\', $event)"><slot /></button>'
+        },
+        VoiceProviderCatalogSettings: {
+          name: 'VoiceProviderCatalogSettings',
+          template: '<section />'
         }
       }
     }
   })
 }
 
-describe('SettingSpeechRecognition Globe key handover', () => {
+describe('settingSpeechRecognition Globe key handover', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     settings.voiceInput = {
