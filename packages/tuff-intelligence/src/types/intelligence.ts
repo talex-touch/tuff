@@ -12,8 +12,8 @@
  * (#519), and at the point of this rewrite two upstream types were reachable from neither the
  * forward list nor a local re-declaration -- invisible to the renderer until someone noticed.
  *
- * `export type *` forwards types only, so the nine value exports are listed explicitly. That
- * list is the one thing here that still needs maintaining, and it is short enough to see.
+ * `export type *` forwards types only, so the value exports are listed explicitly. That list is
+ * the one thing here that still needs maintaining, and it is short enough to see.
  */
 
 export type * from "@talex-touch/utils/types/intelligence";
@@ -27,6 +27,7 @@ export {
   IntelligenceCapabilityType,
   IntelligenceProviderType,
   NEXUS_AUDIO_TRANSCRIBE_MODEL,
+  PI_CLI_PROVIDER_ID,
   TUFF_INTELLIGENCE_AGENT_TRACE_CONTRACT_VERSION,
   TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION
 } from "@talex-touch/utils/types/intelligence";
