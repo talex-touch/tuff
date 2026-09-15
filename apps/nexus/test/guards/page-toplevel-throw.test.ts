@@ -64,7 +64,7 @@ describe('guard: pages do not throw at setup top level', () => {
   })
 
   it('clears the navigateTo rewrite', () => {
-    const fixed = 'app/pages/dashboard/admin/intelligence-lab.vue'
+    const fixed = 'app/pages/admin/intelligence-lab.vue'
     if (!fileExists(fixed))
       return
     expect(formatViolations(scanPageTopLevelThrows([readSource(fixed)]))).toBe('')

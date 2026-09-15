@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-const governanceTypes = readFileSync(new URL('../../../types/admin-governance.ts', import.meta.url), 'utf8')
-const governanceFormatters = readFileSync(new URL('../../../utils/admin-governance.ts', import.meta.url), 'utf8')
+const governanceTypes = readFileSync(new URL('../../types/admin-governance.ts', import.meta.url), 'utf8')
+const governanceFormatters = readFileSync(new URL('../../utils/admin-governance.ts', import.meta.url), 'utf8')
 
 function expectSourceContracts(source: string, contracts: string[]) {
   for (const contract of contracts)

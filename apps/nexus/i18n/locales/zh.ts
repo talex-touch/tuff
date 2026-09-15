@@ -6,6 +6,7 @@ export default {
     login: '登录',
     logout: '退出',
     dashboard: '控制台',
+    adminConsole: '管理控制台',
     pricing: '订阅方案',
     store: '商店',
     doc: '开发',

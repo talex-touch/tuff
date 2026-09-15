@@ -37,6 +37,8 @@ type UpdateSourceFilter = 'all' | 'auto' | 'manual'
 type UpdateDateRangeFilter = 'all' | '7d' | '30d' | '90d'
 
 definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
   pageTransition: {
     name: 'fade',
     mode: 'out-in',
@@ -381,7 +383,7 @@ function closeDeleteConfirm() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl space-y-6">
+  <div class="space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 class="apple-heading-sm">

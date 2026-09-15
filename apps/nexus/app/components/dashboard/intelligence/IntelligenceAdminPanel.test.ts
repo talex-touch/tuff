@@ -15,7 +15,7 @@ describe('IntelligenceAdminPanel service channel consolidation', () => {
   it('embeds Service Channels as an Intelligence tab without navigating away', () => {
     expect(panel).toContain('name="serviceChannels"')
     expect(panel).toContain('<LazyDashboardProviderRegistryAdminPanel />')
-    expect(panel).not.toContain("navigateTo('/dashboard/admin/provider-registry')")
+    expect(panel).not.toContain("navigateTo('/admin/provider-registry')")
   })
 
   it('mounts Provider Registry only when the Service Channels tab is active', () => {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Retired alongside /dashboard/admin/intelligence-agent; the API surface keeps
+// Retired alongside /admin/intelligence-agent; the API surface keeps
 // its 410 contract (see intelligence-compat-retired.api.test.ts) but the page
 // forwards to the live admin console instead of dead-ending in an error.
 //
@@ -8,7 +8,7 @@
 // URL only forwarded once hydration ran. A `redirect` on the route sends a real
 // 302 and never instantiates this component.
 definePageMeta({
-  redirect: '/dashboard/admin/intelligence',
+  redirect: '/admin/intelligence',
 })
 
 defineI18nRoute(false)

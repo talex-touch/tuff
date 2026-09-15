@@ -17,6 +17,11 @@ import type {
 import { createGovernanceFormatters } from '~/utils/admin-governance'
 import { requestJson } from '~/utils/request'
 
+definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
+})
+
 defineI18nRoute(false)
 
 const { t, te, locale } = useI18n()
@@ -1234,7 +1239,7 @@ function exportGovernanceReport(): void {
 </script>
 
 <template>
-  <div class="mx-auto max-w-6xl space-y-6">
+  <div class="space-y-6">
     <header class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 class="apple-heading-md">

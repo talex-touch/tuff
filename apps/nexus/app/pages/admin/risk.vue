@@ -6,6 +6,8 @@ import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
   pageTransition: {
     name: 'fade',
     mode: 'out-in',
@@ -356,7 +358,7 @@ function useOperationId() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-6xl space-y-6 px-5 py-6">
+  <div class="space-y-6 px-5 py-6">
     <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div class="space-y-2">
         <h1 class="text-2xl font-semibold">

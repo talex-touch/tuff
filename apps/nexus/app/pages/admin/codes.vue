@@ -1,5 +1,7 @@
 <script setup lang="ts">
 definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
   pageTransition: {
     name: 'fade',
     mode: 'out-in',
@@ -17,7 +19,7 @@ watch(() => user.value, (current) => {
   // Back lands here and is immediately forwarded again — the reader cannot get
   // out of the subscriptions page with the Back button.
   if (isAdminAccountRole(current.role)) {
-    navigateTo('/dashboard/admin/subscriptions', { replace: true })
+    navigateTo('/admin/subscriptions', { replace: true })
     return
   }
   navigateTo('/dashboard/overview', { replace: true })

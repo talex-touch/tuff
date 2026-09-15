@@ -5,7 +5,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
 import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
 import { TuffInput } from '@talex-touch/tuffex/input'
-import AccountTabs from '~/components/dashboard/admin/AccountTabs.vue'
+import AccountTabs from '~/components/admin/AccountTabs.vue'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxRowSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
@@ -13,6 +13,8 @@ import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { useToast } from '~/composables/useToast'
 
 definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
   pageTransition: {
     name: 'fade',
     mode: 'out-in',
@@ -443,7 +445,7 @@ async function revokeCode(code: ActivationCode) {
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl space-y-6">
+  <div class="space-y-6">
     <div>
       <h1 class="apple-heading-md">
         {{ t('dashboard.sections.menu.accounts', 'Account Management') }}

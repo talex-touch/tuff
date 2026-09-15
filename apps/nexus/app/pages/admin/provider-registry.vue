@@ -1,5 +1,7 @@
 <script setup lang="ts">
 definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
   pageTransition: {
     name: 'fade',
     mode: 'out-in',

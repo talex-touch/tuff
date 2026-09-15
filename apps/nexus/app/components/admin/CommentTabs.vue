@@ -5,12 +5,12 @@ const route = useRoute()
 const tabs = computed(() => [
   {
     id: 'reviews',
-    to: '/dashboard/admin/reviews',
+    to: '/admin/reviews',
     label: t('dashboard.sections.reviews.title', 'Review Moderation'),
   },
   {
     id: 'doc-comments',
-    to: '/dashboard/admin/doc-comments',
+    to: '/admin/doc-comments',
     label: t('dashboard.sections.docComments.title', 'Doc Comments'),
   },
 ])

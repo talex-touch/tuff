@@ -10,6 +10,8 @@ import { hasWindow } from '@talex-touch/utils/env'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
   pageTransition: {
     name: 'fade',
     mode: 'out-in',
@@ -284,7 +286,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl space-y-6">
+  <div class="space-y-6">
     <div>
       <h1 class="apple-heading-md">
         {{ t('dashboard.sections.audits.title', 'Audit Logs') }}

@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { isFeatureFlagEnabled } from '#shared/utils/feature-flags'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
 const { t } = useI18n()
 const route = useRoute()
 const { user, refresh, isAuthenticated } = useAuthUser()
-const runtimeConfig = useRuntimeConfig()
 const notificationUnreadCount = useState<number>('dashboard-notification-unread-count', () => 0)
 const mounted = ref(false)
 const { data: teamData, refresh: refreshTeamData } = useTypedFetch<{
@@ -68,7 +66,7 @@ onMounted(() => {
 watch(
   () => route.path,
   (path) => {
-    if (path.startsWith('/dashboard/admin') || !user.value)
+    if (!user.value)
       revalidateUser()
     if (path.startsWith('/dashboard/team') || path.startsWith('/dashboard/oauth'))
       revalidateTeam()
@@ -92,9 +90,9 @@ watch(
 )
 
 /**
- * Both gates wait for `mounted`: the admin sections are absent from the SSR
- * markup (no user payload there), so rendering them on the first client tick
- * would be a hydration mismatch.
+ * Both gates wait for `mounted`: the OAuth entry is absent from the SSR markup
+ * (no user payload there), so rendering it on the first client tick would be a
+ * hydration mismatch.
  */
 const { isAdmin: isAccountAdmin } = useAccountRole()
 const { isTeamAdmin: isTeamAdminRole } = useTeamRole(() => teamData.value?.team)
@@ -102,7 +100,6 @@ const { isTeamAdmin: isTeamAdminRole } = useTeamRole(() => teamData.value?.team)
 const isAdmin = computed(() => mounted.value && isAccountAdmin.value)
 const isTeamAdmin = computed(() => mounted.value && isTeamAdminRole.value)
 const canManageOauthApps = computed(() => isAdmin.value || isTeamAdmin.value)
-const riskControlEnabled = computed(() => isFeatureFlagEnabled(runtimeConfig.public?.riskControl?.enabled))
 const notificationUnreadBadgeText = computed(() => notificationUnreadCount.value > 99 ? '99+' : String(notificationUnreadCount.value))
 const notificationUnreadBadgeLabel = computed(() => t('dashboard.notifications.unreadBadgeLabel', {
   count: notificationUnreadCount.value,
@@ -112,22 +109,9 @@ const sectionPaths: Record<string, string> = {
   overview: '/dashboard/overview',
   assets: '/dashboard/assets',
   plugins: '/dashboard/assets',
-  intelligence: '/dashboard/admin/intelligence',
-  'intelligence-agent': '/dashboard/admin/intelligence-agent',
-  'provider-registry': '/dashboard/admin/provider-registry',
-  governance: '/dashboard/admin/governance',
-  risk: '/dashboard/admin/risk',
-  users: '/dashboard/admin/users',
-  subscriptions: '/dashboard/admin/subscriptions',
-  audits: '/dashboard/admin/audits',
   team: '/dashboard/team',
   'api-keys': '/dashboard/api-keys',
   oauth: '/dashboard/oauth',
-  updates: '/dashboard/updates',
-  images: '/dashboard/images',
-  reviews: '/dashboard/admin/reviews',
-  'doc-comments': '/dashboard/admin/doc-comments',
-  analytics: '/dashboard/admin/analytics',
   privacy: '/dashboard/privacy',
   account: '/dashboard/account',
   devices: '/dashboard/devices',
@@ -205,65 +189,6 @@ const accountMenuItems = computed(() => {
   return mapItems(items)
 })
 
-const adminMenuItems = computed(() => {
-  if (!isAdmin.value) {
-    return []
-  }
-
-  const items: Array<{ id: string, label: string, icon: string }> = [
-    {
-      id: 'updates',
-      label: t('dashboard.sections.menu.updates'),
-      icon: 'i-carbon-notification',
-    },
-    {
-      id: 'intelligence',
-      label: t('dashboard.sections.menu.intelligence', '实验场'),
-      icon: 'i-carbon-machine-learning',
-    },
-    {
-      id: 'governance',
-      label: t('dashboard.sections.menu.governance', 'Data Governance'),
-      icon: 'i-carbon-data-vis-4',
-    },
-    {
-      id: 'images',
-      label: t('dashboard.sections.menu.images', 'Resources'),
-      icon: 'i-carbon-image',
-    },
-    {
-      id: 'users',
-      label: t('dashboard.sections.menu.accounts', 'Account Management'),
-      icon: 'i-carbon-user-avatar',
-    },
-    {
-      id: 'audits',
-      label: t('dashboard.sections.menu.audits', 'Audit Logs'),
-      icon: 'i-carbon-list',
-    },
-    {
-      id: 'reviews',
-      label: t('dashboard.sections.menu.comments', 'Comment Management'),
-      icon: 'i-carbon-chat',
-    },
-    {
-      id: 'analytics',
-      label: t('dashboard.sections.menu.analytics', 'Analytics'),
-      icon: 'i-carbon-chart-line-data',
-    },
-  ]
-
-  if (riskControlEnabled.value) {
-    items.splice(3, 0, {
-      id: 'risk',
-      label: t('dashboard.sections.menu.risk', '风控控制面'),
-      icon: 'i-carbon-warning-alt',
-    })
-  }
-
-  return mapItems(items)
-})
-
 /**
  * Below `lg` the dashboard shell drops to one column, so this whole nav used to
  * stack above the page: ~270px of links to scroll past before the heading, on
@@ -290,36 +215,12 @@ onBeforeUnmount(() => {
 })
 
 const activeLabel = computed(() => {
-  const all = [...workspaceMenuItems.value, ...accountMenuItems.value, ...adminMenuItems.value]
+  const all = [...workspaceMenuItems.value, ...accountMenuItems.value]
   return all.find(item => item.id === activeSection.value)?.label
     ?? t('dashboard.sections.menu.workspaceTitle', '工作台')
 })
 
 const activeSection = computed(() => {
-  if (route.path.startsWith('/dashboard/admin/users'))
-    return 'users'
-  if (route.path.startsWith('/dashboard/admin/subscriptions'))
-    return 'users'
-  if (route.path.startsWith('/dashboard/admin/audits'))
-    return 'audits'
-  if (route.path.startsWith('/dashboard/admin/codes'))
-    return 'users'
-  if (route.path.startsWith('/dashboard/admin/reviews'))
-    return 'reviews'
-  if (route.path.startsWith('/dashboard/admin/doc-comments'))
-    return 'reviews'
-  if (route.path.startsWith('/dashboard/admin/analytics'))
-    return 'analytics'
-  if (route.path.startsWith('/dashboard/admin/intelligence-agent'))
-    return 'intelligence'
-  if (route.path.startsWith('/dashboard/admin/provider-registry'))
-    return 'intelligence'
-  if (route.path.startsWith('/dashboard/admin/governance'))
-    return 'governance'
-  if (route.path.startsWith('/dashboard/admin/intelligence'))
-    return 'intelligence'
-  if (route.path.startsWith('/dashboard/admin/risk'))
-    return 'risk'
   if (route.path.startsWith('/dashboard/account'))
     return 'account'
   if (route.path.startsWith('/dashboard/oauth'))
@@ -410,30 +311,6 @@ useHead(() => ({
               :aria-label="notificationUnreadBadgeLabel"
             >
               {{ notificationUnreadBadgeText }}
-            </span>
-          </NuxtLink>
-        </li>
-      </ul>
-    </nav>
-
-    <div v-show="adminMenuItems.length > 0" class="mx-4 border-t border-black/[0.04] dark:border-white/[0.06]" />
-
-    <nav v-show="adminMenuItems.length > 0" class="relative p-4 pt-0" aria-label="Admin panels">
-      <p class="dashboard-nav-section-title mb-4 px-3">
-        {{ t('dashboard.sections.menu.adminTitle', '管理员') }}
-      </p>
-      <ul class="flex flex-col list-none gap-1 p-0 text-sm" role="listbox" aria-label="Admin panels">
-        <li v-for="item in adminMenuItems" :key="item.id">
-          <NuxtLink
-            :to="item.to"
-            class="dashboard-nav-link group w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left no-underline transition-all duration-200"
-            :class="activeSection === item.id ? 'dashboard-nav-link--active' : ''"
-            role="option"
-            :aria-selected="activeSection === item.id"
-          >
-            <span class="min-w-0 flex items-center gap-3">
-              <span :class="['dashboard-nav-icon text-[15px]', item.icon]" aria-hidden="true" />
-              <span class="truncate" :title="item.label">{{ item.label }}</span>
             </span>
           </NuxtLink>
         </li>

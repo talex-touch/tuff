@@ -289,11 +289,20 @@ const chinese = buildLocale(zh as LocaleMessages, {
 })
 const scanOptions: I18nScanOptions = { english, chinese }
 
-/** Admin surface: the pages and components the audit covered. */
+/**
+ * Admin surface: the pages and components the audit covered, across both
+ * signed-in shells. `app/pages/admin` and `app/components/admin` are the
+ * administrator console; when it was split out of `/dashboard/*` this loader
+ * kept scanning only the dashboard tree, and the governance debt counter
+ * silently dropped to "0 keys across 0 call sites" — a guard reporting success
+ * because it had stopped looking.
+ */
 function loadAdminSources(): SourceFile[] {
   return [
     ...loadSources('app/pages/dashboard', ['.vue']),
+    ...loadSources('app/pages/admin', ['.vue']),
     ...loadSources('app/components/dashboard', ['.vue']),
+    ...loadSources('app/components/admin', ['.vue']),
   ].filter(file => !file.path.includes('.test.'))
 }
 
@@ -328,7 +337,7 @@ const KNOWN_MISSING_KEYS: KnownWrongKey[] = []
  * still fails.
  */
 const GOVERNANCE_PENDING_TRANSLATION = {
-  file: 'app/pages/dashboard/admin/governance.vue',
+  file: 'app/pages/admin/governance.vue',
   keyPrefix: 'dashboard.governance.',
   /**
    * Distinct untranslated keys when this was recorded (2026-08-27), across 348
@@ -366,7 +375,7 @@ const KNOWN_WRONG_KEYS: KnownWrongKey[] = [
     renders: 'the kick-out action renders "Revoke" / "撤销" instead of "踢出"',
   },
   {
-    file: 'app/pages/dashboard/images.vue',
+    file: 'app/pages/admin/images.vue',
     key: 'dashboard.sections.images.errors.unknown',
     renders: 'upload and delete failures both render the generic "Something went wrong while managing resources."',
   },
@@ -460,7 +469,7 @@ describe('guard: translation keys exist and inline fallbacks tell the truth', ()
   it('catches the governance console through its tt() proxy', () => {
     // The real instance, and the reason the alias rule exists: 332 distinct keys
     // that neither this guard nor i18n-cjk-fallback-coverage.test.ts could see.
-    const governance = 'app/pages/dashboard/admin/governance.vue'
+    const governance = 'app/pages/admin/governance.vue'
     if (!fileExists(governance))
       return
     const source = readSource(governance)
@@ -504,7 +513,7 @@ describe('guard: translation keys exist and inline fallbacks tell the truth', ()
   })
 
   it('clears the corrected heading', () => {
-    const fixed = 'app/pages/dashboard/admin/risk.vue'
+    const fixed = 'app/pages/admin/risk.vue'
     if (!fileExists(fixed))
       return
     expect(formatViolations(scanTranslationUsages([readSource(fixed)], scanOptions))).toBe('')

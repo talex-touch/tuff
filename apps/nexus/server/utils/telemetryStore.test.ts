@@ -476,7 +476,7 @@ describe('telemetryStore search provider metrics', () => {
       platform: 'darwin',
       version: '2.4.10',
       metadata: {
-        route: '/dashboard/admin/governance?token=secret#details',
+        route: '/admin/governance?token=secret#details',
         page: 'Data Governance',
         surface: 'dashboard-admin',
         referrer: '/dashboard/plugins?query=private',
@@ -497,7 +497,7 @@ describe('telemetryStore search provider metrics', () => {
       scope: 'app',
       action: 'visit',
       resourceType: 'route',
-      resourceId: '/dashboard/admin/governance',
+      resourceId: '/admin/governance',
       channel: 'dashboard-admin',
       unit: 'visit',
       quantity: 1,
@@ -505,7 +505,7 @@ describe('telemetryStore search provider metrics', () => {
     expect(governanceRows[0]?.actorHash).toMatch(/^[a-f0-9]{64}$/)
     expect(governanceRows[0]?.actorHash).not.toBe('visitor-client')
     expect(governanceRows[0]?.metadata).toMatchObject({
-      route: '/dashboard/admin/governance',
+      route: '/admin/governance',
       page: 'Data Governance',
       surface: 'dashboard-admin',
       referrer: '/dashboard/plugins',
@@ -524,7 +524,7 @@ describe('telemetryStore search provider metrics', () => {
 
     const analytics = await getPlatformGovernanceAnalytics(makeEvent(), { days: 7, limit: 100, topLimit: 20 })
     expect(analytics.visits.byRoute).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: '/dashboard/admin/governance', events: 1 }),
+      expect.objectContaining({ key: '/admin/governance', events: 1 }),
     ]))
     expect(analytics.visits.byPage).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'Data Governance', events: 1 }),

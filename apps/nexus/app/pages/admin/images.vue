@@ -10,6 +10,8 @@ interface DashboardImage {
 }
 
 definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
   pageTransition: {
     name: 'fade',
     mode: 'out-in',
@@ -132,7 +134,7 @@ watchEffect(() => {
 </script>
 
 <template>
-  <section class="mx-auto max-w-5xl apple-card-lg p-6">
+  <section class="apple-card-lg p-6">
     <div>
       <h2 class="apple-heading-sm">
         {{ t('dashboard.sections.images.title', 'Resources') }}

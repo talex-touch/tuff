@@ -138,7 +138,7 @@ const adminAnalyticsHref = computed(() => {
   params.set('source', 'docs_page')
   if (docAnalyticsPath.value)
     params.set('path', docAnalyticsPath.value)
-  return `/dashboard/admin/analytics?${params.toString()}`
+  return `/admin/analytics?${params.toString()}`
 })
 
 function formatCompactDuration(ms: number) {
