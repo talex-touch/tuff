@@ -37,6 +37,7 @@ export function normalizeProviderForRuntime(
     metadata: {
       ...(provider.metadata || {}),
       origin: 'tuff-nexus',
+      voiceAsr: { protocol: 'nexus-pack' },
       tokenInjected: Boolean(authToken),
       tokenMode: authToken ? 'auth' : 'guest'
     }

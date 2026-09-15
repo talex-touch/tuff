@@ -38,6 +38,7 @@ let disposed = false
  */
 const unreadable = computed(() => loadFailed.value)
 const visible = computed(() => !loading.value && (unreadable.value || status.value?.ready !== true))
+const catalogFailure = computed(() => status.value?.reason?.startsWith('VOICE_ASR_PACK_') === true)
 
 const message = computed(() => {
   if (unreadable.value) return t('settingSpeechRecognition.unavailable.description')
@@ -46,6 +47,15 @@ const message = computed(() => {
       return t('settingSpeechRecognition.asr.notConfigured')
     case 'VOICE_ASR_CREDENTIAL_UNAVAILABLE':
       return t('settingSpeechRecognition.reasons.credentialMissing')
+    case 'VOICE_ASR_PACK_NOT_CONFIGURED':
+      return t('settingSpeechRecognition.reasons.catalogMissing')
+    case 'VOICE_ASR_PACK_EXPIRED':
+      return t('settingSpeechRecognition.reasons.catalogExpired')
+    case 'VOICE_ASR_PACK_SIGNATURE_INVALID':
+    case 'VOICE_ASR_PACK_SCHEMA_INVALID':
+      return t('settingSpeechRecognition.reasons.catalogRejected')
+    case 'VOICE_ASR_PACK_UNSUPPORTED':
+      return t('settingSpeechRecognition.reasons.catalogUnsupported')
     default:
       return t('settingSpeechRecognition.reasons.unavailable')
   }
@@ -72,7 +82,16 @@ async function loadStatus(): Promise<void> {
   }
 }
 
-function openCapabilities(): void {
+function openRecovery(): void {
+  if (catalogFailure.value) {
+    const target = document.querySelector<HTMLElement>(
+      '[data-testid="voice-provider-catalog-status"]'
+    )
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+    return
+  }
   void router.push('/setting/intelligence/capabilities')
 }
 
@@ -112,10 +131,14 @@ onBeforeUnmount(() => {
       v-else
       size="small"
       variant="ghost"
-      data-testid="voice-status-configure"
-      @click="openCapabilities"
+      :data-testid="catalogFailure ? 'voice-status-catalog' : 'voice-status-configure'"
+      @click="openRecovery"
     >
-      {{ t('settingSpeechRecognition.capabilities.action') }}
+      {{
+        catalogFailure
+          ? t('settingSpeechRecognition.catalog.recovery')
+          : t('settingSpeechRecognition.capabilities.action')
+      }}
     </TxButton>
   </div>
 </template>

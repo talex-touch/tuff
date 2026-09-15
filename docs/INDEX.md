@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-07-31
+> 更新时间：2026-09-13
 > 定位：仓库文档导航，不保存易漂移的本地 `HEAD`、分支、工作区或“当前版本”快照。项目全貌一览见根目录 [`ROADMAP.md`](../ROADMAP.md)。
 
 ## 30 秒入口
@@ -43,6 +43,7 @@ Usage 单写者、Nexus 同步原子批处理和 Trellis 任务/文档收敛三�
 - [`plan-prd/TODO-nexus.md`](./plan-prd/TODO-nexus.md)：Nexus 性能专题。
 - [`plan-prd/TODO-BACKLOG-LONG-TERM.md`](./plan-prd/TODO-BACKLOG-LONG-TERM.md)：非当前窗口的长期债务。
 - [`design/README.md`](./design/README.md)：CoreBox / Nexus 设计文档与资产索引。
+- [`plan-prd/03-features/voice-provider-cloud-pack-prd.md`](./plan-prd/03-features/voice-provider-cloud-pack-prd.md)：签名 + A256GCM 语音 Provider Catalog、登录态每包密钥分发、当前实施状态与 P3 运行时阻塞。
 
 ### 3. 工程交接与审计层
 

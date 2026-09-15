@@ -43,7 +43,6 @@ const LEGEND_INSET = 22
 const base = useMapBase(props, {
   heightInset: () => props.showLegend ? LEGEND_INSET : 0,
 })
-const container = base.container
 
 const joined = computed(() => {
   const map = new Map<string, { row: T, value: number }>()
@@ -143,7 +142,7 @@ const legendGradient = computed(() => rampGradient(props.colorRange))
 
 <template>
   <div
-    ref="container"
+    :ref="base.container"
     class="tx-map tx-map--choropleth"
     :style="base.rootStyle.value"
     @wheel="base.onWheel"

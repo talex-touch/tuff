@@ -2,7 +2,7 @@
 // Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 import type { AllocationBarEmits, AllocationBarProps, AllocationSegment } from './types'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 defineOptions({ name: 'TxAllocationBar' })
 
@@ -16,21 +16,50 @@ const props = withDefaults(defineProps<AllocationBarProps>(), {
 
 const emit = defineEmits<AllocationBarEmits>()
 
+// The track spends this pair of pixels — 2px of inner padding and a 2px gap
+// between neighbours. The shares are carved out of the gap budget, so the
+// separators never rewrite the data (see `widthOf`).
+const TRACK_GAP = 2
+
 // Upstream colours the hero share and leaves the remainder in receding greys;
-// a host that has real category colours passes `color` per segment.
+// a host that has real category colours passes `color` per segment. The greys
+// are the neutral ink ramp — `--tx-bui-line` / `--tx-bui-line-strong` sit within
+// ΔRGB 5–18 of the track's `--tx-bui-field` and vanish in both themes, while
+// ink→ink-2→ink-3 recede by ≥56 per channel and hold ≥2.4:1 against the track.
 const FALLBACK_COLORS = [
   'var(--tx-bui-accent, #0285ff)',
-  'var(--tx-bui-line-strong, #e0e2e5)',
-  'var(--tx-bui-line, #ecedef)',
+  'var(--tx-bui-ink, #1f2124)',
+  'var(--tx-bui-ink-2, #62656b)',
+  'var(--tx-bui-ink-3, #9a9da3)',
 ] as const
 
 const activeKey = computed(() => props.modelValue ?? props.segments[0]?.key)
-const activeSegment = computed(() =>
-  props.segments.find(segment => segment.key === activeKey.value) ?? props.segments[0],
+const activeIndex = computed(() => {
+  const index = props.segments.findIndex(segment => segment.key === activeKey.value)
+  return index === -1 ? 0 : index
+})
+const activeSegment = computed(() => props.segments[activeIndex.value])
+const activeColor = computed(() =>
+  activeSegment.value ? colorOf(activeSegment.value, activeIndex.value) : undefined,
 )
+const totalGap = computed(() => Math.max(0, props.segments.length - 1) * TRACK_GAP)
+
+const control = ref<HTMLElement | null>(null)
 
 function colorOf(segment: AllocationSegment, index: number): string {
   return segment.color ?? FALLBACK_COLORS[Math.min(index, FALLBACK_COLORS.length - 1)]!
+}
+
+/**
+ * A share is a share of the width *left over*: the fixed gap budget is split
+ * between the segments in proportion to their percentages and subtracted from
+ * each width (`calc(percent% - its slice)`). The rendered widths therefore stay
+ * exactly proportional to `percent` — the gaps cost layout space without eating
+ * into any share, and flex has nothing left to shrink.
+ */
+function widthOf(percent: number): string {
+  const gapShare = totalGap.value * (percent / 100)
+  return gapShare === 0 ? `${percent}%` : `calc(${percent}% - ${+gapShare.toFixed(4)}px)`
 }
 
 function formatPercent(percent: number): string {
@@ -43,50 +72,92 @@ function select(segment: AllocationSegment): void {
   emit('update:modelValue', segment.key)
   emit('change', segment)
 }
+
+/**
+ * Arrow keys move within the set that has focus, carrying the selection — the
+ * radiogroup contract. The value stays controlled: this only emits.
+ */
+function onArrowKey(event: KeyboardEvent, index: number, set: 'segment' | 'chip'): void {
+  const step = event.key === 'ArrowRight' || event.key === 'ArrowDown'
+    ? 1
+    : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+      ? -1
+      : 0
+  if (step === 0 || props.segments.length === 0)
+    return
+
+  event.preventDefault()
+  const count = props.segments.length
+  const next = (index + step + count) % count
+  control.value
+    ?.querySelector<HTMLElement>(`[data-tx-set="${set}"][data-tx-index="${next}"]`)
+    ?.focus()
+
+  const segment = props.segments[next]
+  if (segment)
+    select(segment)
+}
 </script>
 
 <template>
   <div class="tx-bui-allocation-bar">
-    <div class="tx-bui-allocation-bar__track" role="group" :aria-label="ariaLabel">
-      <button
-        v-for="(segment, index) in segments"
-        :key="segment.key"
-        type="button"
-        class="tx-bui-allocation-bar__segment"
-        :class="{ 'is-active': segment.key === activeKey }"
-        :style="{ width: `${segment.percent}%`, background: colorOf(segment, index) }"
-        :aria-pressed="segment.key === activeKey"
-        :aria-label="`${segment.label}: ${formatPercent(segment.percent)}`"
-        @click="select(segment)"
-      >
-        <span class="tx-bui-allocation-bar__sheen" aria-hidden="true" />
-      </button>
-    </div>
+    <div
+      ref="control"
+      class="tx-bui-allocation-bar__control"
+      role="radiogroup"
+      :aria-label="ariaLabel"
+    >
+      <div class="tx-bui-allocation-bar__track">
+        <button
+          v-for="(segment, index) in segments"
+          :key="segment.key"
+          type="button"
+          role="radio"
+          class="tx-bui-allocation-bar__segment"
+          :class="{ 'is-active': segment.key === activeKey }"
+          :style="{ width: widthOf(segment.percent), background: colorOf(segment, index) }"
+          :aria-checked="segment.key === activeKey"
+          :aria-label="`${segment.label}: ${formatPercent(segment.percent)}`"
+          :tabindex="segment.key === activeKey ? 0 : -1"
+          data-tx-set="segment"
+          :data-tx-index="index"
+          @click="select(segment)"
+          @keydown="onArrowKey($event, index, 'segment')"
+        >
+          <span class="tx-bui-allocation-bar__sheen" aria-hidden="true" />
+        </button>
+      </div>
 
-    <div v-if="legend" class="tx-bui-allocation-bar__legend">
-      <button
-        v-for="(segment, index) in segments"
-        :key="segment.key"
-        type="button"
-        class="tx-bui-allocation-bar__chip"
-        :class="{ 'is-active': segment.key === activeKey }"
-        :aria-pressed="segment.key === activeKey"
-        @click="select(segment)"
-      >
-        <span
-          class="tx-bui-allocation-bar__dot"
-          aria-hidden="true"
-          :style="{ background: colorOf(segment, index) }"
-        />
-        {{ segment.short ?? segment.label }}
-        <span class="tx-bui-allocation-bar__percent">{{ formatPercent(segment.percent) }}</span>
-      </button>
+      <div v-if="legend" class="tx-bui-allocation-bar__legend">
+        <button
+          v-for="(segment, index) in segments"
+          :key="segment.key"
+          type="button"
+          role="radio"
+          class="tx-bui-allocation-bar__chip"
+          :class="{ 'is-active': segment.key === activeKey }"
+          :aria-checked="segment.key === activeKey"
+          :tabindex="segment.key === activeKey ? 0 : -1"
+          data-tx-set="chip"
+          :data-tx-index="index"
+          @click="select(segment)"
+          @keydown="onArrowKey($event, index, 'chip')"
+        >
+          <span
+            class="tx-bui-allocation-bar__dot"
+            aria-hidden="true"
+            :style="{ background: colorOf(segment, index) }"
+          />
+          {{ segment.short ?? segment.label }}
+          <span class="tx-bui-allocation-bar__percent">{{ formatPercent(segment.percent) }}</span>
+        </button>
+      </div>
     </div>
 
     <div v-if="detail && activeSegment" class="tx-bui-allocation-bar__detail">
       <span
         class="tx-bui-allocation-bar__detail-label"
-        :style="{ color: activeSegment.color }"
+        :style="{ color: activeColor }"
       >{{ activeSegment.label }}</span>
       <span v-if="activeSegment.description" class="tx-bui-allocation-bar__detail-body">
         {{ activeSegment.description }}
@@ -106,6 +177,11 @@ $allocation-ease: cubic-bezier(0.16, 1, 0.3, 1);
 .tx-bui-allocation-bar {
   @include bui-scope;
 
+  display: flex;
+  flex-direction: column;
+}
+
+.tx-bui-allocation-bar__control {
   display: flex;
   flex-direction: column;
 }

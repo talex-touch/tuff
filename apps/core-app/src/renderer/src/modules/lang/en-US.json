@@ -557,7 +557,9 @@
     "refresh": "Try again",
     "input": {
       "title": "Voice input",
-      "description": "Briefly press Fn on macOS or Ctrl on Windows/Linux to start, then press again to finish. Hold and release to finish. The microphone is captured only while voice input is active."
+      "description": "Off by default. Fn/Ctrl starts voice input only after you turn it on manually; the microphone is captured only during an active voice-input session.",
+      "defaultOffLabel": "Off by default",
+      "manualOnLabel": "Manually enabled"
     },
     "globeKey": {
       "title": "The system still owns the Fn key",
@@ -569,6 +571,37 @@
       "title": "Channel and model",
       "description": "Set in Intelligence — binding and order are on that page.",
       "action": "Open Intelligence"
+    },
+    "catalog": {
+      "title": "Cloud voice routing",
+      "description": "Only after sign-in, Tuff downloads and applies an AES-256-GCM encrypted declarative routing pack verified by the Tuff release key. Packs contain no credentials or code and never enable voice input themselves.",
+      "activeTitle": "Active routing pack",
+      "activeDescription": "{packId} · v{version} · SHA-256 {hash}… · signature verified",
+      "builtinDescription": "No cloud pack is active; the built-in Nexus voice route remains in use.",
+      "statusTitle": "Catalog status",
+      "statusLoading": "Reading local status.",
+      "statusUnavailable": "Cloud voice routing status is unavailable.",
+      "notCheckedDescription": "Not checked yet. Sign-in checks once; you can also check or sync manually after signing in.",
+      "currentDescription": "Up to date. Sign-in checks once; manual sync remains available.",
+      "updateDescription": "{packId} v{version} · SHA-256 {hash}… is ready to sync.",
+      "errorDescription": "The latest operation failed: {code}. The active route was kept unchanged.",
+      "loginRequiredDescription": "Sign in first. While signed out, Tuff does not check, download, or apply cloud routing packs.",
+      "rollbackTitle": "Roll back the previous version",
+      "rollbackDescription": "Roll back to {packId} version {version}; the route is rebuilt from local SQLite.",
+      "refresh": "Refresh status",
+      "check": "Check",
+      "sync": "Sync now",
+      "rollback": "Roll back",
+      "login": "Sign in to enable",
+      "upToDate": "Cloud voice routing is up to date",
+      "updateAvailable": "A new cloud voice routing pack is available",
+      "activated": "Cloud voice routing was verified and activated",
+      "rolledBack": "Rolled back to the previous voice routing pack",
+      "checkFailed": "Could not check cloud voice routing",
+      "syncFailed": "Cloud voice routing sync failed; the active route was kept",
+      "rollbackFailed": "Voice routing rollback failed; the active route was kept",
+      "loginFailed": "Sign-in did not complete; cloud voice routing remains off",
+      "recovery": "View cloud routing"
     },
     "history": {
       "title": "Keep recognition records",
@@ -605,7 +638,11 @@
     },
     "reasons": {
       "credentialMissing": "The selected channel has no credential",
-      "unavailable": "Recognition is unavailable right now"
+      "unavailable": "Recognition is unavailable right now",
+      "catalogMissing": "The cloud voice routing pack is not ready. Check or sync it below.",
+      "catalogExpired": "The active cloud voice routing pack has expired. Sync or roll it back.",
+      "catalogRejected": "The cloud voice routing pack failed integrity or schema validation and was not used.",
+      "catalogUnsupported": "This Tuff version cannot use the active voice routing pack. Update Tuff or roll it back."
     },
     "asr": {
       "notReady": "Speech recognition is not set up",

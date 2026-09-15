@@ -98,6 +98,10 @@ identity, and plugin permissions remain in main.
 - A live ASR session and its recovery retain the original adapter/model; no cross-provider/STT replay.
   Local file transcription is host-owned, bounded, cancellable through the network layer, and returns text
   without active-app delivery. Raw paths, bytes, and credentials do not cross into the renderer.
+- The internal Nexus `metadata.voiceAsr.protocol = 'nexus-pack'` is not a user-authored Provider protocol or a second capability table. It resolves the matching provider id from the active RSA-verified/A256GCM-decrypted Catalog registry once before capture, then freezes descriptor and model for the session.
+- A Nexus pack may replace only same-origin submit/poll paths, allowlisted non-credential headers, model allowlist, and bounded bytes/duration/deadline. Protocol/transport/auth/body/idempotency shape stays code-owned, and every numeric bound is `min(pack, local hard cap)`. Expiry/sdkapi/origin/model mismatch fails with `VOICE_ASR_PACK_*`; no active pack retains the built-in Nexus buffered route.
+- Remote voice catalog check/sync and authenticated key delivery require a loaded signed-in account and stop before network work with `CATALOG_AUTH_REQUIRED` otherwise. Catalog status and local rollback remain reachable while signed out; the runtime itself still requires the Nexus session token.
+- Pack activation and login never mutate `AppSetting.voiceInput.enabled`. The fresh and malformed-value default is off; only the explicit Settings switch may enable it, and that row must visibly distinguish “off by default” from “manually enabled”. The historical both-Assistant-and-VoiceWake migration remains a preserved prior user choice, not a new default.
 
 ## Capture signal chain
 

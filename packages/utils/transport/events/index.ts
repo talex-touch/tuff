@@ -575,6 +575,7 @@ import type {
 import { defineEvent, defineRawEvent } from '../event/builder'
 import { AppEvents } from './app'
 import { AccountEvents, AuthEvents } from './auth'
+import { CatalogEvents } from './catalog'
 import { LocalAiCliEvents } from './local-ai-cli'
 import { MetaOverlayEvents } from './meta-overlay'
 
@@ -2713,6 +2714,7 @@ export const TuffEvents = {
   platform: PlatformEvents,
   quickOps: QuickOpsEvents,
   agents: AgentsEvents,
+  catalog: CatalogEvents,
   auth: AuthEvents,
   account: AccountEvents,
   transport: TransportEvents,
@@ -2733,6 +2735,7 @@ export {
   AccountEvents,
   AppEvents,
   AuthEvents,
+  CatalogEvents,
   LocalAiCliEvents,
   MetaOverlayEvents,
   OpenerEvents,

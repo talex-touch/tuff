@@ -41,7 +41,12 @@ function mountSettings(): VueWrapper {
           name: 'TuffBlockSwitch',
           props: ['modelValue', 'title'],
           emits: ['update:modelValue'],
-          template: '<section>{{ title }}</section>'
+          template: '<section>{{ title }}<slot name="tags" /></section>'
+        },
+        TxTag: {
+          name: 'TxTag',
+          props: ['size', 'type'],
+          template: '<span><slot /></span>'
         },
         TuffBlockSelect: {
           name: 'TuffBlockSelect',
@@ -60,6 +65,10 @@ function mountSettings(): VueWrapper {
           emits: ['click'],
           template:
             '<button :disabled="disabled" @click="$emit(\'click\', $event)"><slot /></button>'
+        },
+        VoiceProviderCatalogSettings: {
+          name: 'VoiceProviderCatalogSettings',
+          template: '<section />'
         }
       }
     }
@@ -119,6 +128,34 @@ describe('SettingSpeechRecognition', () => {
       controlByTitle(wrapper, 'settingSpeechRecognition.input.title').props('modelValue')
     ).toBe(true)
     expect(settings.voiceInput).toMatchObject({ enabled: true, language: 'fr-FR' })
+
+    wrapper.unmount()
+  })
+
+  it('labels the Voice Input opt-in state without disturbing the sibling preferences', async () => {
+    const wrapper = mountSettings()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="voice-input-opt-in-status"]').text().trim()).toBe(
+      'settingSpeechRecognition.input.defaultOffLabel'
+    )
+
+    await controlByTitle(wrapper, 'settingSpeechRecognition.input.title').vm.$emit(
+      'update:modelValue',
+      true
+    )
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="voice-input-opt-in-status"]').text().trim()).toBe(
+      'settingSpeechRecognition.input.manualOnLabel'
+    )
+    expect(settings.assistant.enabled).toBe(false)
+    expect(settings.floatingBall.enabled).toBe(false)
+    expect(settings.voiceInput).toMatchObject({
+      enabled: true,
+      polishEnabled: true,
+      historyEnabled: true
+    })
 
     wrapper.unmount()
   })

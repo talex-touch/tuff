@@ -1,7 +1,16 @@
 # 变更日志
 
-> 更新时间：2026-08-20
+> 更新时间：2026-09-13
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-09-13
+
+### voice: complete signed cloud-delivered Nexus routing packs
+
+- `voice-provider` 作为独立 typed Catalog pack 落地：RSA-signed manifest 绑定 A256GCM ciphertext digest/encryption metadata，登录态 no-store key route 按 `type/packId/version/keyId` 返回每包 DEK；CoreApp 验签/解密后清零 key buffer，经 SQLite 原子 import/activate/rollback。登录后一次同步不进入启动关键路径；未登录的手动 check/sync 在网络前以 `CATALOG_AUTH_REQUIRED` 阻断，status 与本机 rollback 保持可用。
+- main-owned runtime 在每次采集前冻结 active descriptor/model，拒绝过期、sdkapi 过新、协议/transport/auth/body 不兼容、非 Nexus 同源 endpoint 和模型不匹配；端点/allowlisted headers/max bytes/duration/deadline 可下发但只能收紧本地 20 MiB/600 s/10 min 与 buffered 7.5 MB 硬上限。无 active pack 保留内置 Nexus buffered route，三个既有直连语音协议不变，未增加下载代码执行。
+- Catalog 明确定位为声明式交付平面而非脚本引擎：后续云控类型复用签名/envelope/lifecycle，但必须随客户端交付独立 typed normalizer、persistence adapter 与 runtime consumer。云控不能开启本机可选能力；语音输入 fresh/malformed default 均为 off，Settings 明示“默认关闭/已手动开启”。CoreApp 内置协议与 Nexus 中英文 Terms/Software Agreement 已披露登录态云控、无下载代码/凭据及本机退出方式。
+- 验证：CoreApp **16 files / 184 tests**、shared **8 files / 172 tests**、Nexus catalog/key/policy **5 files / 67 tests**、builder/migration **2 files / 14 tests** 均通过；精确 feature-tree snapshot 通过 CoreApp node/web、Nexus typecheck、TuffEx + Electron build、签名/迁移门禁。真实 TuffEx switch/tag harness 以可见几何与命中测试证明“默认关闭”切换为“已手动开启”；本地 Nexus policy API 返回中英文云控协议。共享脏树单独存在未提交 Charts 的 d3/duplicate-TxGrid web typecheck 红项，本提交不包含。真实付费 Provider、Production 配置及已激活客户端远程强制撤回不在本地证据内。
 
 ## 2026-08-20
 

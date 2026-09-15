@@ -145,4 +145,56 @@ describe('VoiceRecognitionStatus', () => {
 
     wrapper.unmount()
   })
+
+  /**
+   * A catalog failure is not a missing binding: the cloud pack lives on this same page, so the
+   * action scrolls to the existing catalog controls instead of sending the user to Intelligence.
+   */
+  it.each([
+    {
+      reason: 'VOICE_ASR_PACK_NOT_CONFIGURED',
+      copy: 'settingSpeechRecognition.reasons.catalogMissing'
+    },
+    { reason: 'VOICE_ASR_PACK_EXPIRED', copy: 'settingSpeechRecognition.reasons.catalogExpired' },
+    {
+      reason: 'VOICE_ASR_PACK_SIGNATURE_INVALID',
+      copy: 'settingSpeechRecognition.reasons.catalogRejected'
+    },
+    {
+      reason: 'VOICE_ASR_PACK_SCHEMA_INVALID',
+      copy: 'settingSpeechRecognition.reasons.catalogRejected'
+    },
+    {
+      reason: 'VOICE_ASR_PACK_UNSUPPORTED',
+      copy: 'settingSpeechRecognition.reasons.catalogUnsupported'
+    }
+  ])(
+    'points a $reason failure at the cloud catalog controls with catalog copy',
+    async ({ reason, copy }) => {
+      const target = document.createElement('div')
+      target.setAttribute('data-testid', 'voice-provider-catalog-status')
+      const scrollIntoView = vi.fn()
+      Object.defineProperty(target, 'scrollIntoView', { value: scrollIntoView, configurable: true })
+      document.body.appendChild(target)
+      voiceSdk.getRecognitionStatus.mockResolvedValue({
+        asr: { ready: false, reason },
+        stt: { ready: true }
+      })
+
+      const wrapper = await mountStatus()
+
+      const box = alert(wrapper)
+      expect(box.text()).toContain(copy)
+      expect(box.text()).toContain('settingSpeechRecognition.catalog.recovery')
+      expect(box.text()).not.toContain('settingSpeechRecognition.reasons.unavailable')
+      expect(wrapper.find('[data-testid="voice-status-configure"]').exists()).toBe(false)
+
+      await wrapper.find('[data-testid="voice-status-catalog"]').trigger('click')
+      expect(scrollIntoView).toHaveBeenCalledTimes(1)
+      expect(router.push).not.toHaveBeenCalled()
+
+      wrapper.unmount()
+      target.remove()
+    }
+  )
 })
