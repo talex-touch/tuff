@@ -2,6 +2,7 @@ export const VOICE_ASR_PROTOCOLS = [
   'bailian-paraformer',
   'dashscope-qwen-asr-realtime',
   'doubao',
+  'local-offline',
   'nexus-pack'
 ] as const
 
@@ -69,6 +70,9 @@ export function normalizeVoiceAsrMetadata(value: unknown): VoiceAsrMetadata | un
     return resourceId ? { protocol: record.protocol, resourceId } : undefined
   }
   if (record.protocol === 'nexus-pack') return { protocol: record.protocol }
+  // Local inference carries no endpoint and no credential: the model identifier lives in
+  // the route's own `model` field, so there is nothing else worth retaining here.
+  if (record.protocol === 'local-offline') return { protocol: record.protocol }
   return undefined
 }
 

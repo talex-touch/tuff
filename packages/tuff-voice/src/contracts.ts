@@ -1,6 +1,6 @@
 import type { Buffer } from 'node:buffer'
 
-export type VoiceProviderKind = 'doubao' | 'bailian'
+export type VoiceProviderKind = 'doubao' | 'bailian' | 'local'
 export type VoiceRecognitionMode = 'realtime' | 'stream' | 'upload'
 export type VoiceAudioFormat = 'pcm' | 'wav' | 'mp3' | 'ogg' | 'opus' | 'speex' | 'aac' | 'amr' | 'm4a'
 
