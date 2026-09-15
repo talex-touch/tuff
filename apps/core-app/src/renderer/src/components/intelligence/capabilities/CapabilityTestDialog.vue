@@ -121,14 +121,12 @@ function handleCancel(): void {
           variant="flat"
           type="primary"
           block
-          :disabled="isTesting || !selectedProviderId"
+          :disabled="!selectedProviderId"
+          :loading="isTesting"
           :aria-busy="isTesting"
           @click="handleTest"
         >
-          <i
-            :class="isTesting ? 'i-carbon-renew animate-spin' : 'i-carbon-flash'"
-            aria-hidden="true"
-          />
+          <i v-if="!isTesting" class="i-carbon-flash" aria-hidden="true" />
           <span>{{
             isTesting ? t('settings.intelligence.testing') : t('settings.intelligence.runTest')
           }}</span>
