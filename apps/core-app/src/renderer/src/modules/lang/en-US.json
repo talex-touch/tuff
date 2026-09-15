@@ -4060,6 +4060,23 @@
       "editProviderBasic": "Edit basic info",
       "providerNameHint": "Name shown in the list and details panel.",
       "providerTypeHint": "Determines this channel's protocol and built-in adapter.",
+      "providerIcon": "Provider icon",
+      "providerIconHint": "Pick an emoji, a built-in icon, a brand mark, or use a local image.",
+      "providerIconLabels": {
+        "emoji": "Emoji",
+        "icon": "Icons",
+        "brand": "Brands",
+        "file": "File",
+        "search": "Search icons",
+        "empty": "No matching icon",
+        "clear": "Clear",
+        "chooseFile": "Choose local file",
+        "shape": "Shape",
+        "shapeCircle": "Circle",
+        "shapeRounded": "Rounded",
+        "shapeSquare": "Square"
+      },
+      "providerIconFileFailed": "Failed to choose an icon file",
       "providerTypeOptions": {
         "openai": "OpenAI",
         "anthropic": "Anthropic",
@@ -5413,7 +5430,15 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+      "weekdays": [
+        "Sun",
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat"
+      ]
     },
     "memoryReview": {
       "title": "Memory Review",

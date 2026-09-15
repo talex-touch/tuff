@@ -13,7 +13,7 @@ import {
   isNexusManagedProvider as checkNexusManagedProvider,
   TUFF_NEXUS_PROVIDER_ICON
 } from '~/modules/intelligence/nexus-provider'
-import { providerIconForChannel } from '~/modules/intelligence/provider-icons'
+import { resolveProviderIcon } from '~/modules/intelligence/provider-icon-override'
 import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
 
 enum IntelligenceProviderType {
@@ -81,7 +81,7 @@ const providerIcon = computed<ITuffIcon>(() => {
   if (isNexusManagedProvider.value) {
     return TUFF_NEXUS_PROVIDER_ICON
   }
-  return providerIconForChannel(getProviderChannelType(props.provider), props.provider.type)
+  return resolveProviderIcon(props.provider, getProviderChannelType(props.provider))
 })
 
 const deleteConfirmVisible = ref(false)
@@ -241,7 +241,11 @@ function closeDeleteConfirm() {
             <span>{{ t('settings.intelligence.copyProvider') }}</span>
           </span>
         </TxDropdownItem>
-        <TxDropdownItem class="provider-action-item" @select="handleCopyConfig">
+        <TxDropdownItem
+          v-if="!isNexusManagedProvider"
+          class="provider-action-item"
+          @select="handleCopyConfig"
+        >
           <span class="provider-action-item__content">
             <TuffIcon
               :icon="configIcon"
@@ -251,7 +255,11 @@ function closeDeleteConfirm() {
             <span>{{ t('settings.intelligence.copyProviderConfig') }}</span>
           </span>
         </TxDropdownItem>
-        <TxDropdownItem class="provider-action-item" @select="handleShareConfig">
+        <TxDropdownItem
+          v-if="!isNexusManagedProvider"
+          class="provider-action-item"
+          @select="handleShareConfig"
+        >
           <span class="provider-action-item__content">
             <TuffIcon
               :icon="shareIcon"
@@ -261,7 +269,11 @@ function closeDeleteConfirm() {
             <span>{{ t('settings.intelligence.shareProviderConfig') }}</span>
           </span>
         </TxDropdownItem>
-        <TxDropdownItem class="provider-action-item" @select="handleExportConfig">
+        <TxDropdownItem
+          v-if="!isNexusManagedProvider"
+          class="provider-action-item"
+          @select="handleExportConfig"
+        >
           <span class="provider-action-item__content">
             <TuffIcon
               :icon="exportIcon"
