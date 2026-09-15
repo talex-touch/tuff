@@ -153,6 +153,7 @@ The everyday building blocks, importable through the `@talex-touch/tuffex/base` 
 - [Cascader](./cascader.en.mdc)
 - [Picker](./picker.en.mdc)
 - [DatePicker](./date-picker.en.mdc)
+- [IconPicker](./icon-picker.en.mdc)
 - [Radio](./radio.en.mdc)
 - [FlatRadio](./flat-radio.en.mdc)
 - [Checkbox](./checkbox.en.mdc)
