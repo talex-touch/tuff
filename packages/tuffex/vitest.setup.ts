@@ -7,7 +7,7 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: (query: string) => ({
-      matches: query.includes('prefers-reduced-motion'),
+      matches: false,
       media: query,
       onchange: null,
       addListener: () => {},
