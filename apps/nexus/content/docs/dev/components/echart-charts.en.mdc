@@ -1,0 +1,308 @@
+---
+title: "ECharts Family"
+description: "ECharts-backed charts for Tuffex: themed TxEChart plus typed line, bar, pie, funnel, radar, gauge, scatter, heatmap and treemap wrappers."
+category: Charts
+status: beta
+since: 0.6.0
+tags: [chart, echarts, line, bar, pie, funnel, radar, gauge, scatter, heatmap, treemap]
+syncStatus: reviewed
+verified: true
+---
+# ECharts Family
+
+## Install & Import
+
+`echarts` is an optional peer dependency: install it in the host application and the family lights up, leave it out and nothing else in Tuffex changes. It is never bundled — the components import it dynamically, so it lands in its own chunk the first time one of them mounts.
+
+```bash
+pnpm add echarts @talex-touch/tuffex
+```
+
+```ts
+import { TxEChart, TxLineChart } from '@talex-touch/tuffex/charts'
+```
+
+## When to use which family
+
+The native SVG family (`TxChart`, `TxTimeseriesChart`, `TxSankeyChart`, `TxChoroplethMap`, `TxSparkChart`, `TxAllocationBar`) stays the default: smaller, themeable through CSS tokens, and shaped for what the product actually renders. Reach for `TxEChart` and its typed wrappers when you need a chart type the native family does not have, or when you want ECharts' own option surface — dataZoom, visualMap, custom series, per-point styling.
+
+Both families read the same colour tokens, so an ECharts chart dropped next to a native one matches it in either theme without a single styling prop.
+
+## Themed host
+
+`TxEChart` owns the lifecycle: it resolves the chart tokens for the current theme, applies them, then paints your option over them. Pass a complete ECharts option — this is the customization hatch, so anything ECharts supports belongs here.
+
+```vue
+<script setup lang="ts">
+import { TxEChart } from '@talex-touch/tuffex/charts'
+
+const option = {
+  tooltip: { trigger: 'item' },
+  series: [{ type: 'treemap', data: [{ name: 'Docs', value: 40 }, { name: 'Blog', value: 25 }] }],
+}
+</script>
+
+<template>
+  <TxEChart :option="option" :height="280" aria-label="Traffic by section" />
+</template>
+```
+
+## Charts
+
+### Line chart
+
+`TxLineChart` draws one or more series over a category axis, with optional area fill, stacking and smooth curves. Multiple series share the axis; the tooltip triggers by axis so every series at the hovered category is listed.
+
+:::TuffDemoWrapper{demo="EChartLineChartDemo" code-lang="vue" title="Typed wrapper" description="TxLineChart is the thin typed wrapper over the same host."}
+---
+code: |
+  <script setup lang="ts">
+  const categories = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const series = [
+    { name: 'Installs', data: [420, 468, 512, 494, 548, 610, 586], area: true },
+    { name: 'Sessions', data: [820, 932, 901, 934, 1290, 1330, 1320] },
+  ]
+  </script>
+
+  <template>
+    <TxLineChart :series="series" :categories="categories" y-axis-name="Count" :height="260" />
+  </template>
+---
+:::
+
+### Bar chart
+
+`TxBarChart` draws grouped or stacked bars on a category axis, vertical by default. `stacked` gives every series that declares no `stack` of its own the shared id `total`, so stacked and independent series can share one chart; `showLabel` writes the value on each bar (to its `right` when `horizontal`).
+
+:::TuffDemoWrapper{demo="EChartBarChartDemo" code-lang="vue" title="Grouped bars" description="Two series share the category axis; the legend toggles either one."}
+---
+code: |
+  <script setup lang="ts">
+  const categories = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const series = [
+    { name: 'Installs', data: [420, 468, 512, 494, 548, 610, 586] },
+    { name: 'Sessions', data: [820, 932, 901, 934, 1290, 1330, 1320] },
+  ]
+  </script>
+
+  <template>
+    <TxBarChart :series="series" :categories="categories" y-axis-name="Count" :height="260" />
+  </template>
+---
+:::
+
+### Pie chart
+
+Slices of one whole, optionally hollow. `donut` takes `true` for a 60% hole or a number for an exact inner-radius percent; `centerLabel` renders inside a donut only, and `labelPosition` moves the slice labels outside, inside or into the centre.
+
+:::TuffDemoWrapper{demo="EChartPieChartDemo" code-lang="vue" title="Donut" description="Five slices with the share called out in the hole."}
+---
+code: |
+  <script setup lang="ts">
+  const data = [
+    { name: 'Docs', value: 4820 },
+    { name: 'Blog', value: 3160 },
+    { name: 'Store', value: 2140 },
+    { name: 'Pricing', value: 980 },
+    { name: 'Other', value: 640 },
+  ]
+  </script>
+
+  <template>
+    <TxPieChart :data="data" donut center-label="Traffic share" unit="views" :height="260" />
+  </template>
+---
+:::
+
+### Funnel chart
+
+Stage-by-stage conversion. `sort` reorders the stages (`descending` by default) and `labelPosition: 'outside'` maps onto ECharts' `outer` position, so stage names sit beside the funnel instead of inside it. Each label's share is measured against the first element of `data`, so pass the stages in the order you want them counted.
+
+:::TuffDemoWrapper{demo="EChartFunnelChartDemo" code-lang="vue" title="Signup funnel" description="Five stages; each label carries its share of the first one."}
+---
+code: |
+  <script setup lang="ts">
+  const data = [
+    { name: 'Visit', value: 12000 },
+    { name: 'Signup', value: 3600 },
+    { name: 'Trial', value: 1800 },
+    { name: 'Paid', value: 540 },
+    { name: 'Renew', value: 380 },
+  ]
+  </script>
+
+  <template>
+    <TxFunnelChart :data="data" unit="users" :height="260" />
+  </template>
+---
+:::
+
+### Radar chart
+
+Several entities measured on one set of axes. Every entry of `indicators` becomes a spoke, and each series supplies values positionally, so `data[i]` belongs to `indicators[i]`. `shape` switches the frame between `polygon` and `circle`, `splitNumber` sets the number of rings, and `showAxisName: false` drops the spoke labels when the surrounding copy already names them.
+
+:::TuffDemoWrapper{demo="EChartRadarChartDemo" code-lang="vue" title="Capability comparison" description="Two builds scored on the same five spokes."}
+---
+code: |
+  <script setup lang="ts">
+  const indicators = [
+    { name: 'Launch', max: 100 },
+    { name: 'Search', max: 100 },
+    { name: 'Plugins', max: 100 },
+    { name: 'Sync', max: 100 },
+    { name: 'Memory', max: 100 },
+  ]
+  const series = [
+    { name: 'Desktop', data: [92, 88, 84, 90, 62], area: true },
+    { name: 'Mobile', data: [78, 82, 70, 86, 88], area: true },
+  ]
+  </script>
+
+  <template>
+    <TxRadarChart :indicators="indicators" :series="series" :height="260" />
+  </template>
+---
+:::
+
+### Gauge chart
+
+One reading on a dial — or a thin ring when `progress` is set. `precision` controls the decimals in the reading and `unit` is appended with no separator, so `72` with `%` renders as `72%`. `color` tints the progress ring and the reading, never the dial, so the axis chrome stays themed.
+
+:::TuffDemoWrapper{demo="EChartGaugeChartDemo" code-lang="vue" title="Dial" description="A single P95 reading; add `progress` for the thin ring look."}
+---
+code: |
+  <template>
+    <TxGaugeChart :value="72" name="P95 hit rate" unit="%" :height="260" />
+  </template>
+---
+:::
+
+### Scatter chart
+
+Points on a numeric plane, one axis pair per series. `symbolSize` sets the mark size for the whole chart and a series-level value wins; the optional `xMin` / `xMax` / `yMin` / `yMax` pin the domain when several charts have to share one scale.
+
+:::TuffDemoWrapper{demo="EChartScatterChartDemo" code-lang="vue" title="Latency vs throughput" description="Two clusters on one numeric plane."}
+---
+code: |
+  <script setup lang="ts">
+  const series = [
+    { name: 'On-device', data: [[12, 180], [18, 240], [24, 260], [31, 300]] },
+    { name: 'Cloud', data: [[48, 620], [62, 780], [75, 860], [90, 940]] },
+  ]
+  </script>
+
+  <template>
+    <TxScatterChart :series="series" x-axis-name="Latency (ms)" y-axis-name="Throughput (req/s)" :height="260" />
+  </template>
+---
+:::
+
+### Heatmap chart
+
+A matrix of intensities. Pass `values` row-major (`values[row][column]`) with `rows` and `columns` naming the two category axes. The builder hands both arrays to ECharts untouched, and ECharts plots the first category at the bottom — so `rows[0]` is the bottom band, not the top one. The declared `visualMap` takes the sequential token ramp unless you pass your own `inRange.color`.
+
+:::TuffDemoWrapper{demo="EChartHeatmapChartDemo" code-lang="vue" title="Activity by hour" description="Five time buckets across the week."}
+---
+code: |
+  <script setup lang="ts">
+  const columns = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const rows = ['00-04', '04-08', '08-12', '12-16', '16-20']
+  const values = [
+    [10, 8, 12, 9, 7, 22, 27],
+    [6, 5, 8, 7, 4, 12, 15],
+    [38, 43, 40, 47, 52, 32, 26],
+    [50, 55, 52, 58, 65, 40, 34],
+    [34, 40, 37, 42, 60, 47, 30],
+  ]
+  </script>
+
+  <template>
+    <TxHeatmapChart :values="values" :rows="rows" :columns="columns" :height="260" />
+  </template>
+---
+:::
+
+### Treemap chart
+
+Part-to-whole for a hierarchy. Nodes nest through `children`, a node's `color` becomes its fill, and `showBreadcrumb` turns on ECharts' breadcrumb bar for drilling down. `maxDepth` renders only the first N levels and enables that drill-down; leave it out to draw the whole tree. Without `children` the same prop draws a flat treemap.
+
+:::TuffDemoWrapper{demo="EChartTreemapChartDemo" code-lang="vue" title="Nested areas" description="Two areas, each split into its own sections."}
+---
+code: |
+  <script setup lang="ts">
+  const data = [
+    { name: 'Desktop', children: [
+      { name: 'Workbench', value: 46 },
+      { name: 'Marketplace', value: 28 },
+      { name: 'Settings', value: 14 },
+    ] },
+    { name: 'Mobile', children: [
+      { name: 'Home', value: 38 },
+      { name: 'Messages', value: 22 },
+      { name: 'Profile', value: 12 },
+    ] },
+  ]
+  </script>
+
+  <template>
+    <TxTreemapChart :data="data" unit="visits" :height="260" />
+  </template>
+---
+:::
+
+## API
+
+Every chart in the family accepts the shared props below plus its own data props, and every one forwards a raw `option` that is merged over the built option — `series` arrays are replaced, every other key merges deep.
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `option` | `EChartsOption` | — | Merged over the built option: the per-chart customization hatch. |
+| `height` | `number \| string` | `320` | Chart height: px, or any CSS length. |
+| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` follows the surrounding theme. |
+| `ariaLabel` | `string` | — | Accessible name; adds `role="img"` to the host. |
+| `loading` | `boolean` | `false` | Themed loading mask until data arrives. |
+
+`update` only exists on `TxEChart`: `'replace'` (default) swaps the series array so removed series stop being drawn, `'merge'` keeps ECharts' own merge semantics.
+
+### Per-chart props
+
+| Chart | Props |
+|------|------|
+| `TxLineChart` | `series` (`name`, `data`, `color?`, `area?`, `smooth?`, `stack?`, `dashed?`), `categories?`, `xAxisName?`, `yAxisName?`, `showLegend?`, `grid?` |
+| `TxBarChart` | `series` (`name`, `data`, `color?`, `stack?`), `categories?`, `xAxisName?`, `yAxisName?`, `showLegend?`, `grid?`, `stacked?`, `horizontal?`, `barWidth?`, `showLabel?` |
+| `TxPieChart` | `data` (`name`, `value`, `color?`), `donut?`, `roseType?`, `showLegend?`, `labelPosition?`, `centerLabel?`, `unit?` |
+| `TxFunnelChart` | `data` (`name`, `value`, `color?`), `sort?`, `gap?`, `minSize?`, `maxSize?`, `labelPosition?`, `showLabel?`, `showLegend?`, `unit?` |
+| `TxRadarChart` | `indicators` (`name`, `max`, `min?`), `series` (`name`, `data`, `color?`, `area?`), `shape?`, `splitNumber?`, `showLegend?`, `showAxisName?` |
+| `TxGaugeChart` | `value`, `min?`, `max?`, `name?`, `unit?`, `precision?`, `progress?`, `segments?`, `color?` |
+| `TxScatterChart` | `series` (`name`, `data`, `color?`, `symbolSize?`), `xAxisName?`, `yAxisName?`, `symbolSize?`, `showLegend?`, `grid?`, `xMin?`, `xMax?`, `yMin?`, `yMax?` |
+| `TxHeatmapChart` | `values`, `rows`, `columns`, `xAxisName?`, `yAxisName?`, `visualMap?`, `min?`, `max?`, `showLabel?`, `unit?` |
+| `TxTreemapChart` | `data` (`name`, `value?`, `color?`, `children?`), `maxDepth?`, `showBreadcrumb?`, `showLabel?`, `unit?`, `roam?` |
+
+The builders themselves are public too — `buildBarChartOption`, `buildLineChartOption`, and the rest return a plain `EChartsOption`. Use one when a chart has to mix mark types: build the options you want and hand the merged result to `TxEChart`.
+
+## Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `ready` | `(instance: ECharts)` | The instance exists — imperative handle for anything the option cannot express. |
+| `click` / `dblclick` | `(params: EChartEventParams)` | Pointer events on series and marks. |
+| `mouseover` / `mouseout` | `(params: EChartEventParams)` | Hover on series and marks. |
+| `legendselectchanged` | `(params: EChartEventParams)` | A legend entry was toggled. |
+| `datazoom` | `(params: EChartEventParams)` | A dataZoom range changed. |
+
+## Best Practices
+
+- Give the host a definite height. A zero-height container cannot paint.
+- Prefer a typed wrapper; drop to `TxEChart` with a raw option for the long tail (candlestick, graph, boxplot, sunburst).
+- Use `aria-label`: the label makes a canvas chart readable to assistive tech.
+- Pass data, not pixels: the wrappers map your data onto the option, so theme colours and axis chrome stay consistent.
+- Install `echarts` in the host application; a missing peer is reported in the container instead of failing silently.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/charts/src/echart/src/`.
+- Option builders: `packages/tuffex/packages/components/src/charts/src/echart/src/options/`.
+- Theme and tokens: `packages/tuffex/packages/components/src/charts/src/echart/src/core/theme.ts`.
+- Adapted from Cloudflare kumo (https://github.com/cloudflare/kumo), © Cloudflare, Inc., MIT — `EChart.tsx`.
+
+<TuffDocSourceLink />

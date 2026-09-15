@@ -6,6 +6,8 @@ import {
   DomainLexiconRegistry,
   normalizeCatalogManifest,
   normalizeDomainLexiconCatalogPack,
+  normalizeVoiceProviderPack,
+  VoiceProviderRegistry,
   type AppLocale,
   type CatalogPackRef,
   type CatalogPackSource,
@@ -14,15 +16,22 @@ import {
   type CatalogRollbackReason,
   type CatalogSignatureStatus,
   type DomainLexiconCatalogEntryV1,
-  type DomainLexiconEntry
+  type DomainLexiconEntry,
+  type VoiceProviderDescriptorV1,
+  type VoiceProviderPackV1
 } from '@talex-touch/utils/i18n'
 import { and, asc, eq } from 'drizzle-orm'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { scheduleDbWrite } from '../../db/db-write'
-import { catalogDomainLexiconEntries, catalogPacks, catalogState } from '../../db/schema'
+import {
+  catalogDomainLexiconEntries,
+  catalogPacks,
+  catalogState,
+  voiceProviderEntries
+} from '../../db/schema'
 import * as schema from '../../db/schema'
 import { withSqliteRetry } from '../../db/sqlite-retry'
-import type { VerifiedDomainLexiconPack } from './catalog-verifier'
+import type { VerifiedDomainLexiconPack, VerifiedVoiceProviderPack } from './catalog-verifier'
 
 const ENTRY_INSERT_BATCH_SIZE = 200
 
@@ -94,7 +103,43 @@ interface StoredCandidate {
   registry: DomainLexiconRegistry
 }
 
-export class SqliteCatalogRepository implements CatalogRepository {
+export interface VoiceProviderCatalogSnapshot extends CatalogRepositoryStatus {
+  active: CatalogStoredPack
+  registry: VoiceProviderRegistry
+  pack: VoiceProviderPackV1
+}
+
+/**
+ * Typed persistence for `voice-provider` packs. Kept separate from {@link CatalogRepository} so the
+ * domain-lexicon contract (and its registry type) is untouched; one SQLite instance implements both.
+ */
+export interface VoiceProviderCatalogRepository {
+  importVoiceProviderPack(pack: VerifiedVoiceProviderPack): Promise<CatalogStoredPack>
+  activateVoiceProviderPack(ref: CatalogPackRef): Promise<VoiceProviderCatalogSnapshot>
+  rollbackVoiceProvider(reason: CatalogRollbackReason): Promise<VoiceProviderCatalogSnapshot>
+  getVoiceProviderStatus(): Promise<CatalogRepositoryStatus>
+  /** Rebuilds the active voice registry from SQLite; null when no voice pack is active. */
+  loadVoiceProviderSnapshot(): Promise<VoiceProviderCatalogSnapshot | null>
+}
+
+interface PackInsertSource {
+  metadata: CatalogPackMetadata
+  source: CatalogPackSource
+  signatureStatus: CatalogSignatureStatus
+}
+
+interface PreparedVoiceProviderPack extends PackInsertSource {
+  pack: VoiceProviderPackV1
+  providerRows: Array<typeof voiceProviderEntries.$inferInsert>
+}
+
+interface VoiceProviderCandidate {
+  stored: CatalogStoredPack
+  pack: VoiceProviderPackV1
+  registry: VoiceProviderRegistry
+}
+
+export class SqliteCatalogRepository implements CatalogRepository, VoiceProviderCatalogRepository {
   private readonly now: () => number
 
   constructor(
@@ -332,6 +377,229 @@ export class SqliteCatalogRepository implements CatalogRepository {
     }
   }
 
+  async importVoiceProviderPack(pack: VerifiedVoiceProviderPack): Promise<CatalogStoredPack> {
+    const prepared = prepareVoiceProviderPack(pack)
+    try {
+      return await scheduleDbWrite('catalog.import.voice-provider', async () => {
+        const now = this.now()
+        const row = await this.db.transaction(async (tx) => {
+          const [existing] = await tx
+            .select()
+            .from(catalogPacks)
+            .where(packIdentity(prepared.metadata))
+            .limit(1)
+          if (existing) {
+            if (existing.payloadSha256 !== prepared.metadata.payloadSha256) {
+              throw catalogError(
+                CATALOG_ERROR_CODES.versionConflict,
+                'Catalog pack version conflicts with stored content'
+              )
+            }
+            return existing
+          }
+
+          const values = packInsertValues(prepared, 'ready', now, null)
+          await tx.insert(catalogPacks).values(values)
+          await insertVoiceProviderRows(tx, prepared.providerRows)
+          return values as CatalogPackRow
+        })
+        return toStoredPack(row)
+      })
+    } catch (error) {
+      rethrowRepositoryError(error, CATALOG_ERROR_CODES.importFailed, 'Catalog import failed')
+    }
+  }
+
+  async activateVoiceProviderPack(ref: CatalogPackRef): Promise<VoiceProviderCatalogSnapshot> {
+    if (ref.type !== 'voice-provider') {
+      throw catalogError(
+        CATALOG_ERROR_CODES.typeUnsupported,
+        'Catalog pack is not a voice provider pack'
+      )
+    }
+    try {
+      return await scheduleDbWrite('catalog.activate.voice-provider', async () => {
+        const candidate = await this.loadVoiceProviderCandidate(ref)
+        const current = await this.getStatusInternal(ref.type)
+        if (samePack(current.active, ref)) {
+          return {
+            ...current,
+            active: candidate.stored,
+            registry: candidate.registry,
+            pack: candidate.pack
+          }
+        }
+        if (
+          current.active &&
+          current.active.packId === ref.packId &&
+          compareVoiceProviderVersion(ref.version, current.active.version) <= 0
+        ) {
+          throw catalogError(
+            CATALOG_ERROR_CODES.versionConflict,
+            'Catalog voice provider version is not newer than the active pack'
+          )
+        }
+
+        const now = this.now()
+        await this.db.transaction(async (tx) => {
+          if (current.previous) {
+            await tx
+              .update(catalogPacks)
+              .set({ status: 'ready' })
+              .where(packIdentity(current.previous))
+          }
+          if (current.active) {
+            await tx
+              .update(catalogPacks)
+              .set({ status: 'previous' })
+              .where(packIdentity(current.active))
+          }
+          await tx
+            .update(catalogPacks)
+            .set({ status: 'active', activatedAt: now })
+            .where(packIdentity(ref))
+
+          if (current.active) {
+            await tx
+              .update(catalogState)
+              .set({
+                activePackId: ref.packId,
+                activePackVersion: ref.version,
+                previousPackId: current.active.packId,
+                previousPackVersion: current.active.version,
+                lastUpdatedAt: now,
+                rollbackReason: null,
+                updatedAt: now
+              })
+              .where(eq(catalogState.type, ref.type))
+          } else {
+            await tx.insert(catalogState).values({
+              type: ref.type,
+              activePackId: ref.packId,
+              activePackVersion: ref.version,
+              previousPackId: null,
+              previousPackVersion: null,
+              lastCheckedAt: null,
+              lastUpdatedAt: now,
+              rollbackReason: null,
+              updatedAt: now
+            })
+          }
+        })
+
+        return {
+          active: { ...candidate.stored, status: 'active', activatedAt: now },
+          previous: current.active ? { ...current.active, status: 'previous' } : null,
+          lastCheckedAt: current.lastCheckedAt,
+          lastUpdatedAt: now,
+          rollbackReason: null,
+          registry: candidate.registry,
+          pack: candidate.pack
+        }
+      })
+    } catch (error) {
+      rethrowRepositoryError(
+        error,
+        CATALOG_ERROR_CODES.activationFailed,
+        'Catalog activation failed'
+      )
+    }
+  }
+
+  async rollbackVoiceProvider(
+    reason: CatalogRollbackReason
+  ): Promise<VoiceProviderCatalogSnapshot> {
+    if (!(CATALOG_ROLLBACK_REASONS as readonly string[]).includes(reason)) {
+      throw catalogError(CATALOG_ERROR_CODES.rollbackFailed, 'Catalog rollback reason is invalid')
+    }
+    const type: CatalogPackType = 'voice-provider'
+
+    try {
+      return await scheduleDbWrite('catalog.rollback.voice-provider', async () => {
+        const current = await this.getStatusInternal(type)
+        if (!current.active || !current.previous) {
+          throw catalogError(CATALOG_ERROR_CODES.noPrevious, 'Catalog has no previous pack')
+        }
+        const candidate = await this.loadVoiceProviderCandidate(current.previous)
+        const now = this.now()
+
+        await this.db.transaction(async (tx) => {
+          await tx
+            .update(catalogPacks)
+            .set({ status: 'previous' })
+            .where(packIdentity(current.active!))
+          await tx
+            .update(catalogPacks)
+            .set({ status: 'active', activatedAt: now })
+            .where(packIdentity(current.previous!))
+          await tx
+            .update(catalogState)
+            .set({
+              activePackId: current.previous!.packId,
+              activePackVersion: current.previous!.version,
+              previousPackId: current.active!.packId,
+              previousPackVersion: current.active!.version,
+              lastUpdatedAt: now,
+              rollbackReason: reason,
+              updatedAt: now
+            })
+            .where(eq(catalogState.type, type))
+        })
+
+        return {
+          active: { ...candidate.stored, status: 'active', activatedAt: now },
+          previous: { ...current.active, status: 'previous' },
+          lastCheckedAt: current.lastCheckedAt,
+          lastUpdatedAt: now,
+          rollbackReason: reason,
+          registry: candidate.registry,
+          pack: candidate.pack
+        }
+      })
+    } catch (error) {
+      rethrowRepositoryError(error, CATALOG_ERROR_CODES.rollbackFailed, 'Catalog rollback failed')
+    }
+  }
+
+  async getVoiceProviderStatus(): Promise<CatalogRepositoryStatus> {
+    try {
+      return await withSqliteRetry(() => this.getStatusInternal('voice-provider'), {
+        label: 'catalog.status.voice-provider'
+      })
+    } catch (error) {
+      rethrowRepositoryError(
+        error,
+        CATALOG_ERROR_CODES.databaseUnavailable,
+        'Catalog status is unavailable'
+      )
+    }
+  }
+
+  async loadVoiceProviderSnapshot(): Promise<VoiceProviderCatalogSnapshot | null> {
+    try {
+      return await withSqliteRetry(
+        async () => {
+          const status = await this.getStatusInternal('voice-provider')
+          if (!status.active) return null
+          const candidate = await this.loadVoiceProviderCandidate(status.active)
+          return {
+            ...status,
+            active: candidate.stored,
+            registry: candidate.registry,
+            pack: candidate.pack
+          }
+        },
+        { label: 'catalog.snapshot.voice-provider' }
+      )
+    } catch (error) {
+      rethrowRepositoryError(
+        error,
+        CATALOG_ERROR_CODES.databaseUnavailable,
+        'Catalog voice provider snapshot is unavailable'
+      )
+    }
+  }
+
   async getStatus(type: CatalogPackType): Promise<CatalogRepositoryStatus> {
     try {
       return await withSqliteRetry(() => this.getStatusInternal(type), {
@@ -465,6 +733,56 @@ export class SqliteCatalogRepository implements CatalogRepository {
       throw catalogError(
         CATALOG_ERROR_CODES.activePackInvalid,
         'Catalog stored entries are invalid'
+      )
+    }
+  }
+
+  private async loadVoiceProviderCandidate(ref: CatalogPackRef): Promise<VoiceProviderCandidate> {
+    const stored = await this.loadStoredPack(ref)
+    if (!stored) {
+      throw catalogError(CATALOG_ERROR_CODES.packNotFound, 'Catalog pack is unavailable')
+    }
+
+    try {
+      const rows = await this.db
+        .select()
+        .from(voiceProviderEntries)
+        .where(
+          and(
+            eq(voiceProviderEntries.packType, 'voice-provider'),
+            eq(voiceProviderEntries.packId, ref.packId),
+            eq(voiceProviderEntries.packVersion, ref.version)
+          )
+        )
+        .orderBy(asc(voiceProviderEntries.providerId))
+      if (rows.length !== stored.entryCount) {
+        throw new Error('Catalog provider count mismatch')
+      }
+
+      const expiryAt = rows[0]?.expiryAt ?? null
+      const result = normalizeVoiceProviderPack({
+        contractVersion: CATALOG_CONTRACT_VERSION,
+        type: 'voice-provider',
+        packId: stored.packId,
+        version: stored.version,
+        schemaVersion: stored.schemaVersion,
+        createdAt: stored.createdAt,
+        minSdkApi: stored.minSdkapi,
+        ...(expiryAt === null ? {} : { expiry: new Date(expiryAt).toISOString() }),
+        providers: rows.map(rowToVoiceProviderDescriptor)
+      })
+      if (!result.ok) {
+        throw new Error(result.message)
+      }
+      return {
+        stored,
+        pack: result.pack,
+        registry: new VoiceProviderRegistry(result.pack)
+      }
+    } catch {
+      throw catalogError(
+        CATALOG_ERROR_CODES.activePackInvalid,
+        'Catalog stored voice providers are invalid'
       )
     }
   }
@@ -627,7 +945,7 @@ function toStoredPack(row: CatalogPackRow): CatalogStoredPack {
 }
 
 function packInsertValues(
-  prepared: PreparedPack,
+  prepared: PackInsertSource,
   status: CatalogPackStatus,
   importedAt: number,
   activatedAt: number | null
@@ -660,6 +978,109 @@ async function insertEntryRows(
       .insert(catalogDomainLexiconEntries)
       .values(rows.slice(offset, offset + ENTRY_INSERT_BATCH_SIZE))
   }
+}
+
+function prepareVoiceProviderPack(pack: VerifiedVoiceProviderPack): PreparedVoiceProviderPack {
+  try {
+    if (pack.manifest.type !== 'voice-provider') {
+      throw new Error('Catalog pack is not a voice provider pack')
+    }
+    const metadata = normalizePackMetadata(pack.manifest)
+    const result = normalizeVoiceProviderPack(pack.pack)
+    if (!result.ok) {
+      throw new Error(result.message)
+    }
+    if (result.pack.providers.length !== metadata.entryCount) {
+      throw new Error('Catalog voice provider provenance mismatch')
+    }
+    const expiryAt = result.pack.expiry === undefined ? null : Date.parse(result.pack.expiry)
+
+    return {
+      metadata,
+      source: pack.source,
+      signatureStatus: pack.signatureStatus,
+      pack: result.pack,
+      providerRows: result.pack.providers.map((provider) =>
+        voiceProviderRowValues(metadata, provider, expiryAt)
+      )
+    }
+  } catch (error) {
+    if (error instanceof CatalogContractError) throw error
+    throw catalogError(CATALOG_ERROR_CODES.packInvalid, 'Voice provider pack input is invalid')
+  }
+}
+
+function voiceProviderRowValues(
+  metadata: CatalogPackMetadata,
+  provider: VoiceProviderDescriptorV1,
+  expiryAt: number | null
+): typeof voiceProviderEntries.$inferInsert {
+  return {
+    packType: 'voice-provider',
+    packId: metadata.packId,
+    packVersion: metadata.version,
+    providerId: provider.id,
+    protocol: provider.protocol,
+    transport: provider.transport,
+    displayNameJson: JSON.stringify(provider.displayName),
+    baseUrl: provider.endpoint.baseUrl,
+    submitPath: provider.endpoint.submitPath,
+    pollPath: provider.endpoint.pollPath ?? null,
+    authMode: provider.auth.mode,
+    authRef: provider.auth.ref ?? null,
+    requestBody: provider.request.body,
+    contentTypePolicy: provider.request.contentTypePolicy,
+    headersJson:
+      provider.request.headers === undefined ? null : JSON.stringify(provider.request.headers),
+    idempotencyHeader: provider.request.idempotencyHeader ?? null,
+    modelsJson: JSON.stringify(provider.models),
+    limitsJson: JSON.stringify(provider.limits),
+    expiryAt
+  }
+}
+
+function rowToVoiceProviderDescriptor(
+  row: typeof voiceProviderEntries.$inferSelect
+): VoiceProviderDescriptorV1 {
+  const descriptor = {
+    id: row.providerId,
+    displayName: parseJson(row.displayNameJson),
+    protocol: row.protocol,
+    transport: row.transport,
+    endpoint: {
+      baseUrl: row.baseUrl,
+      submitPath: row.submitPath,
+      ...(row.pollPath === null ? {} : { pollPath: row.pollPath })
+    },
+    auth: {
+      mode: row.authMode,
+      ...(row.authRef === null ? {} : { ref: row.authRef })
+    },
+    request: {
+      body: row.requestBody,
+      contentTypePolicy: row.contentTypePolicy,
+      ...(row.headersJson === null ? {} : { headers: parseJson(row.headersJson) }),
+      ...(row.idempotencyHeader === null ? {} : { idempotencyHeader: row.idempotencyHeader })
+    },
+    models: parseJson(row.modelsJson),
+    limits: parseJson(row.limitsJson)
+  }
+  return descriptor as VoiceProviderDescriptorV1
+}
+
+async function insertVoiceProviderRows(
+  tx: Parameters<Parameters<CatalogDatabase['transaction']>[0]>[0],
+  rows: PreparedVoiceProviderPack['providerRows']
+): Promise<void> {
+  for (let offset = 0; offset < rows.length; offset += ENTRY_INSERT_BATCH_SIZE) {
+    await tx
+      .insert(voiceProviderEntries)
+      .values(rows.slice(offset, offset + ENTRY_INSERT_BATCH_SIZE))
+  }
+}
+
+function compareVoiceProviderVersion(left: string, right: string): number {
+  return Number(left) - Number(right)
 }
 
 function packIdentity(ref: CatalogPackRef) {

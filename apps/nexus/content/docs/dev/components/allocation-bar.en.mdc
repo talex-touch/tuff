@@ -22,7 +22,7 @@ code: |
 
   const selected = ref('van')
   const segments = [
-    { key: 'van', label: 'Vanilla', short: 'VAN', percent: 72.5, amount: '$51,785', color: 'var(--tx-bui-orange)', description: 'Contribution snapshot across current inventory value.' },
+    { key: 'van', label: 'Vanilla', short: 'VAN', percent: 72.5, amount: '$51,785', description: 'Contribution snapshot across current inventory value.' },
     { key: 'choc', label: 'Chocolate', short: 'CHOC', percent: 22.8, amount: '$16,278' },
     { key: 'mint', label: 'Mint', short: 'MINT', percent: 4.7, amount: '$3,357' },
   ]
@@ -66,17 +66,17 @@ The selection is fully controlled. With no `modelValue` the first segment reads 
 
 ## Interaction Contract
 
-- The segments and the legend are **two sets of buttons over one value**; both carry `aria-pressed`, the segments add `aria-label="{label}: {percent}"`, and the container is a `role="group"`.
+- The segments and the legend are **two sets of controls over one value inside a single radio group**: the wrapper is `role="radiogroup"` with an `aria-label`, every segment and chip is `role="radio"` reporting `aria-checked`, and only the selected item keeps `tabindex="0"`; arrow keys move focus and the selection within the set that has focus (wrapping). The segments add `aria-label="{label}: {percent}"`.
 - Clicking the active segment again emits nothing — there is no "deselect" here.
-- A segment without `color` falls back through an accent-then-receding-greys ladder, which is how upstream expresses "colour the headline share, leave the rest grey".
-- Segment width is exactly `percent%`; if the shares overrun 100% slightly, flex shrinks them proportionally rather than clipping the last one.
+- A segment without `color` falls back through an accent-then-receding-ink ladder by position: `--tx-bui-accent` → `--tx-bui-ink` → `--tx-bui-ink-2` → `--tx-bui-ink-3`, reusing the last step past four segments. That is how upstream expresses "colour the headline share, leave the rest grey"; the greys are the ink ramp rather than `--tx-bui-line*` because those sit a ΔRGB of 5–18 (≈1.03:1) from the track's `--tx-bui-field` and read as bare track in both themes.
+- Segment width stays exactly proportional to `percent`: the track spends 2px of padding and a 2px gap, and each segment's slice of that gap budget is subtracted from its width up front (`width: calc(percent% - its share of the gaps)`), so the separators cost fixed pixels without redrawing the data; if the shares overrun 100% flex still shrinks them proportionally rather than clipping the last one.
 - The selected sheen is **class-driven, not animation-driven**: with motion reduced the transition is dropped and the sheen still appears immediately, with no blank gap.
 - The easing is `cubic-bezier(0.16, 1, 0.3, 1)` (upstream's `--ease-link`), heavier than this family's usual `--tx-ease-out-strong`. That difference is deliberate.
 
 ## Best Practices
 
-- Keep it to three to five segments and fold the tail into an "other". Anything under ~2% is neither clickable nor readable.
-- Colour the headline share and let the rest take the default greys — colouring everything erases the point of the bar.
+- Keep it to three to five segments and fold the tail into an "other"; the default ladder has four steps (accent plus three inks), so give the fifth segment an explicit `color`. Anything under ~2% is neither clickable nor readable.
+- The default ladder already paints the headline share with the accent and leaves the rest in receding inks; pass `color` only when the segments have real category colours — colouring everything erases the point of the bar.
 - Colour is never the only carrier: the legend always shows the code and the percentage, and the detail panel names the segment in full.
 - Render the headline figure (`$51,785`) yourself, reading it off `segments` by `modelValue`, so the card's height does not change with the selection.
 
@@ -84,7 +84,7 @@ The selection is fully controlled. With no `modelValue` the first segment reads 
 
 - Component source: `packages/tuffex/packages/components/src/allocation-bar/src/TxAllocationBar.vue`.
 - Types: `packages/tuffex/packages/components/src/allocation-bar/src/types.ts`.
-- **Tested coverage:** `packages/tuffex/packages/components/src/allocation-bar/__tests__/allocation-bar.test.ts` (13 cases) covers widths and accessible names, the colour-ladder fallback, controlled selection, silence on a repeat click, legend/segment parity, the formatter, the detail panel switch, and the reduced-motion contract against compiled CSS.
+- **Tested coverage:** `packages/tuffex/packages/components/src/allocation-bar/__tests__/allocation-bar.test.ts` (17 cases) covers the exact rendered widths at the demo width once the gaps are carved out, accessible names and the radio-group semantics, arrow-key selection, the colour-ladder fallback and its contrast across both themes, the detail label's resolved colour, controlled selection, silence on a repeat click, legend/segment parity, the formatter, the detail panel switch, and the reduced-motion contract against compiled CSS.
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
@@ -94,3 +94,5 @@ The selection is fully controlled. With no `modelValue` the first segment reads 
 - **Versus `TxProgressBar`:** a progress bar expresses one advancing quantity; this expresses composition. They look similar and mean different things, so they are not interchangeable.
 - **The detail panel is additive:** upstream puts that panel in the card rather than the bar. Here it is a `detail` switch, off by default, which keeps "bar plus legend" as the smallest reusable unit.
 - **Reduced motion:** the only element resting at `opacity: 0` is the selection sheen, and it is lit by the `.is-active` class rather than an animation fill — a contract the tests pin separately.
+- **Geometry:** the gap budget is subtracted from each width in proportion to `percent` up front rather than left to flex to shrink afterwards, so the declared share is the rendered share while the over-100% shrink fallback still holds.
+- **Accessibility:** the bar and the legend share one `radiogroup` (the legend used to sit outside the `role="group"`), and `aria-pressed` became `aria-checked` — this expresses a single choice, not buttons that toggle independently.

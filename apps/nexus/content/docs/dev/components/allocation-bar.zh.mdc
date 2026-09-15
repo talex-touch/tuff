@@ -22,7 +22,7 @@ code: |
 
   const selected = ref('van')
   const segments = [
-    { key: 'van', label: '香草', short: 'VAN', percent: 72.5, amount: '$51,785', color: 'var(--tx-bui-orange)', description: '当前库存价值的贡献快照。' },
+    { key: 'van', label: '香草', short: 'VAN', percent: 72.5, amount: '$51,785', description: '当前库存价值的贡献快照。' },
     { key: 'choc', label: '巧克力', short: 'CHOC', percent: 22.8, amount: '$16,278' },
     { key: 'mint', label: '薄荷', short: 'MINT', percent: 4.7, amount: '$3,357' },
   ]
@@ -66,17 +66,17 @@ code: |
 
 ## 交互契约
 
-- 分段与图例是**两组按钮控制同一个值**，都带 `aria-pressed`，分段另带 `aria-label="{label}: {percent}"`；容器是 `role="group"`。
+- 分段与图例是**同一个单选组的两套控件**，共同持有同一个值：整组是 `role="radiogroup"` 并带 `aria-label`，每个分段与图例胶囊是 `role="radio"`、以 `aria-checked` 表达选中，`tabindex` 只在选中项上为 0；方向键在当前这套控件内移动焦点并同步选中（循环）。分段另带 `aria-label="{label}: {percent}"`。
 - 再次点击当前段不发事件——选中态没有「取消」语义。
-- 未指定 `color` 的分段按位置落到「强调色 → 渐次变浅的灰」阶梯，这是上游「主份额着色、其余留灰」的表达方式。
-- 分段宽度就是 `percent%`；总和略超 100% 时由 flex 等比收缩，不会裁切最后一段。
+- 未指定 `color` 的分段按位置落到「强调色 → 向轨道底色逐级淡出的墨色」阶梯：`--tx-bui-accent` → `--tx-bui-ink` → `--tx-bui-ink-2` → `--tx-bui-ink-3`，超过四段会重用到最后一档。这是上游「主份额着色、其余留灰」的表达方式；灰阶取 ink 系而不是 `--tx-bui-line*`，因为后两者与轨道底色 `--tx-bui-field` 只差 ΔRGB 5–18（约 1.03:1），两套主题下都读成空轨道。
+- 分段宽度与 `percent` 严格成比例：轨道留出 2px 内边距与 2px 间隙，间隙预算按各段 `percent` 的比例预先从其宽度里扣除（`width: calc(percent% - 该段分摊的间隙)`），所以间隙只花固定像素、不会改写数据；总和略超 100% 时仍由 flex 等比收缩，不会裁切最后一段。
 - 选中段的高光是**类驱动**而非动画驱动：减弱动效下过渡被关掉，高光仍然立刻出现，不会留空白。
 - 缓动用的是 `cubic-bezier(0.16, 1, 0.3, 1)`（上游的 `--ease-link`），比这一族常用的 `--tx-ease-out-strong` 更「沉」，是刻意保留的差异。
 
 ## 最佳实践
 
-- 分段数控制在 3–5 个，尾部合并成「其他」。宽度小于 ~2% 的段点不中，也读不出来。
-- 颜色只给主份额，其余交给默认灰阶——全部上色会让「谁是重点」这件事消失。
+- 分段数控制在 3–5 个，尾部合并成「其他」；默认阶梯只有四档（强调色 + 三层墨色），第 5 段起请显式给 `color`。宽度小于 ~2% 的段点不中，也读不出来。
+- 默认阶梯已经把主份额涂成强调色、其余留作逐级淡出的墨色；只有分段有真实类目色时才传 `color`——全部上色会让「谁是重点」这件事消失。
 - 颜色不是唯一载体：图例里始终带短码与百分比，明细面板带完整名称。
 - 需要主数字（如 `$51,785`）时由宿主渲染，跟随 `modelValue` 从 `segments` 里取——这样卡片高度不随选中变化。
 
@@ -84,7 +84,7 @@ code: |
 
 - 组件源码：`packages/tuffex/packages/components/src/allocation-bar/src/TxAllocationBar.vue`。
 - 类型：`packages/tuffex/packages/components/src/allocation-bar/src/types.ts`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/allocation-bar/__tests__/allocation-bar.test.ts`（13 项）覆盖宽度与可访问名、颜色阶梯回退、受控选中、重复点击静默、图例与分段同源、格式化器、明细面板开关，以及编译后 CSS 的减弱动效契约。
+- **实测覆盖:** `packages/tuffex/packages/components/src/allocation-bar/__tests__/allocation-bar.test.ts`（17 项）覆盖示例宽度下扣除间隙后的精确渲染宽度、可访问名与单选组语义、方向键选中、颜色阶梯回退与两套主题下的阶梯对比度、明细标签的解析色、受控选中、重复点击静默、图例与分段同源、格式化器、明细面板开关，以及编译后 CSS 的减弱动效契约。
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
@@ -94,3 +94,5 @@ code: |
 - **与 `TxProgressBar` 的分工:** 进度条表达单一进度，这里表达构成。两者视觉相近但语义不同，不要互相替代。
 - **明细面板是加法:** 上游把面板写在卡片里而不是条子里；这里做成 `detail` 开关，默认关闭，保持「条 + 图例」这个最小可复用单元不变。
 - **减弱动效:** 唯一静止在 `opacity: 0` 的元素是选中高光，它由 `.is-active` 类点亮而不是靠动画填充——这是测试里单独锁住的一条。
+- **几何:** 间隙预算按 `percent` 的比例先从各段宽度里扣掉，而不是让 flex 事后等比收缩；这样声明的份额就是渲染出来的份额，同时保住总和超 100% 时的收缩兜底。
+- **可访问性:** 条与图例共用一个 `radiogroup`（图例原先在 `role="group"` 之外），`aria-pressed` 换成 `aria-checked`——这里表达的是单选，而不是可各自开关的按钮组。

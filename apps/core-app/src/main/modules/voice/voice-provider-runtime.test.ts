@@ -4,13 +4,24 @@ const runtime = vi.hoisted(() => ({
   bindings: {} as Record<string, Array<Record<string, unknown>>>,
   providers: {} as Record<string, { getConfig: () => Record<string, unknown> }>,
   credentials: {} as Record<string, string>,
+  nexusBaseUrl: 'https://nexus.example.test',
   ensureLoaded: vi.fn(),
   supportsCapability: vi.fn(),
   stt: vi.fn(),
   authToken: 'nexus-session-token' as string | null,
-  authUserId: 'user-1' as string | null,
-  nexusBaseUrl: 'https://nexus.example.com'
+  authUserId: 'user-1' as string | null
 }))
+const catalog = vi.hoisted(() => ({
+  registry: null as null | {
+    packId: string
+    version: string
+    minSdkApi: number
+    expiry?: string
+    get: (id: string) => unknown
+  },
+  status: null as null | { lastErrorCode: string | null }
+}))
+const nexusClient = vi.hoisted(() => ({ transcribeNexusAudio: vi.fn() }))
 const adapterOptions = vi.hoisted(() => ({
   bailian: [] as Array<Record<string, unknown>>,
   qwen: [] as Array<Record<string, unknown>>,
@@ -36,6 +47,16 @@ vi.mock('../ai/intelligence-sdk', () => ({
 vi.mock('../ai/provider-credential-runtime', () => ({
   resolveProviderCredential: (provider: { id: string }) => runtime.credentials[provider.id]
 }))
+vi.mock('../catalog', () => ({
+  getCatalogService: () => ({
+    getVoiceProviderRegistry: () => catalog.registry,
+    getVoiceProviderStatus: () => catalog.status
+  })
+}))
+vi.mock('../nexus/asr-client', () => nexusClient)
+vi.mock('../nexus/runtime-base', () => ({
+  getRuntimeNexusBaseUrl: () => runtime.nexusBaseUrl
+}))
 // The Nexus-managed route is authorised by the signed-in session token rather than a per-provider
 // credential, so the fallback path is only reachable with a token present.
 vi.mock('../auth', () => ({
@@ -45,9 +66,6 @@ vi.mock('../auth', () => ({
     isSignedIn: runtime.authUserId !== null,
     user: runtime.authUserId ? { id: runtime.authUserId } : null
   })
-}))
-vi.mock('../nexus/runtime-base', () => ({
-  getRuntimeNexusBaseUrl: () => runtime.nexusBaseUrl
 }))
 vi.mock('@talex-touch/tuff-voice', () => ({
   createFetchHttpClient: vi.fn(() => ({ request: vi.fn() })),
@@ -94,6 +112,8 @@ import type {
   VoiceProviderEvent,
   VoiceStreamRequest
 } from '@talex-touch/tuff-voice'
+import { CATALOG_CLIENT_SDKAPI, CATALOG_ERROR_CODES } from '@talex-touch/utils/i18n'
+import type { VoiceProviderDescriptorV1 } from '@talex-touch/utils/i18n'
 import { getConfiguredAsrProvider, getRecognitionStatus } from './voice-provider-runtime'
 
 function channel(
@@ -152,6 +172,70 @@ function nexusSttBinding() {
   }
 }
 
+const PACK_PROVIDER_ID = 'tuff-nexus-cloud'
+const PACK_MODEL = 'catalog.audio.transcribe'
+
+/** A frozen descriptor as the active catalog registry would hand it to the runtime. */
+function catalogDescriptor(
+  overrides: Partial<VoiceProviderDescriptorV1> = {}
+): VoiceProviderDescriptorV1 {
+  return {
+    id: PACK_PROVIDER_ID,
+    displayName: { default: 'Nexus cloud ASR' },
+    protocol: 'nexus-pack',
+    transport: 'http-upload',
+    endpoint: {
+      baseUrl: 'https://nexus.example.test',
+      submitPath: '/api/v1/ai/audio/transcribe',
+      pollPath: '/api/v1/ai/audio/transcriptions/:requestId'
+    },
+    auth: { mode: 'nexus-session' },
+    request: {
+      body: 'raw-bytes',
+      contentTypePolicy: 'audio/*',
+      idempotencyHeader: 'x-idempotency-key'
+    },
+    models: [{ id: PACK_MODEL }],
+    limits: { maxBytes: 20 * 1024 * 1024, maxDurationSec: 600, timeoutMs: 600_000 },
+    ...overrides
+  }
+}
+
+function activeRegistry(
+  descriptor: VoiceProviderDescriptorV1,
+  overrides: { minSdkApi?: number; expiry?: string } = {}
+) {
+  return {
+    packId: 'official.voice-provider',
+    version: '7',
+    minSdkApi: overrides.minSdkApi ?? CATALOG_CLIENT_SDKAPI,
+    ...(overrides.expiry ? { expiry: overrides.expiry } : {}),
+    get: (id: string) => (id === descriptor.id ? descriptor : undefined)
+  }
+}
+
+function nexusPackChannel(options: { models?: string[] } = {}) {
+  return channel(PACK_PROVIDER_ID, {
+    capabilities: ['audio.asr'],
+    models: options.models ?? [PACK_MODEL],
+    metadata: { origin: 'tuff-nexus', voiceAsr: { protocol: 'nexus-pack' } }
+  })
+}
+
+function nexusPackBinding(models: string[] = [PACK_MODEL]) {
+  return { providerId: PACK_PROVIDER_ID, enabled: true, priority: 1, models }
+}
+
+/** Pack failures carry the stable code on the error, not in its human-readable message. */
+function expectVoiceProviderCode(run: () => unknown, code: string): void {
+  let failure: unknown
+  try {
+    run()
+  } catch (error) {
+    failure = error
+  }
+  expect(failure).toMatchObject({ code })
+}
 describe('capability-bound voice ASR provider resolution', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -160,8 +244,11 @@ describe('capability-bound voice ASR provider resolution', () => {
     runtime.credentials = {}
     runtime.authToken = 'nexus-session-token'
     runtime.authUserId = 'user-1'
-    runtime.nexusBaseUrl = 'https://nexus.example.com'
+    runtime.nexusBaseUrl = 'https://nexus.example.test'
     runtime.stt.mockReset()
+    catalog.registry = null
+    catalog.status = null
+    nexusClient.transcribeNexusAudio.mockReset()
     adapterOptions.bailian = []
     adapterOptions.qwen = []
     adapterOptions.doubao = []
@@ -496,5 +583,183 @@ describe('capability-bound voice ASR provider resolution', () => {
     expect(events.map((event) => event.type)).toEqual(['final', 'end'])
     expect(events[0]).toMatchObject({ type: 'final', text: 'hello' })
     expect(runtime.stt).toHaveBeenCalledTimes(1)
+  })
+
+  it('drives the resolved nexus-pack descriptor through the buffered adapter and the Nexus client', async () => {
+    const descriptor = catalogDescriptor()
+    configure({ [PACK_PROVIDER_ID]: nexusPackChannel() }, { 'audio.asr': [nexusPackBinding()] })
+    catalog.registry = activeRegistry(descriptor)
+    catalog.status = { lastErrorCode: null }
+    nexusClient.transcribeNexusAudio.mockResolvedValue({
+      text: 'pack transcript',
+      billing: { requestId: 'pack-1', creditsCharged: 3, billedSeconds: 2 }
+    })
+
+    expect(getRecognitionStatus().asr).toEqual({ ready: true, mode: 'buffered' })
+
+    const configured = getConfiguredAsrProvider()
+    expect(configured.mode).toBe('buffered')
+    expect(configured.model).toBe(PACK_MODEL)
+    expect(configured.provider.id).toBe('nexus-audio-stt-buffered')
+
+    const stream = await configured.provider.createStream({
+      model: 'client-requested-model',
+      requestId: 'req-pack-1',
+      audio: { format: 'pcm', sampleRate: 16_000, channels: 1, bitsPerSample: 16 }
+    })
+    await stream.writePcm(Buffer.from([0x01, 0x02, 0x03, 0x04]))
+    await stream.end()
+
+    const events: unknown[] = []
+    for await (const event of stream.events) events.push(event)
+    expect(events).toEqual([
+      {
+        type: 'final',
+        text: 'pack transcript',
+        requestId: 'req-pack-1',
+        usage: { durationMs: 2000 }
+      },
+      { type: 'end', requestId: 'req-pack-1' }
+    ])
+
+    expect(nexusClient.transcribeNexusAudio).toHaveBeenCalledTimes(1)
+    const [payload, options] = nexusClient.transcribeNexusAudio.mock.calls[0]
+    expect(options.route).toBe(descriptor)
+    expect(options.timeout).toBe(descriptor.limits.timeoutMs)
+    expect(payload).toMatchObject({ format: 'wav' })
+    expect(payload.audio).toMatch(/^data:audio\/wav;base64,/)
+  })
+
+  it.each([
+    { name: 'no active pack', errorCode: null, reason: 'VOICE_ASR_PACK_NOT_CONFIGURED' },
+    {
+      name: 'an expired pack',
+      errorCode: CATALOG_ERROR_CODES.packExpired,
+      reason: 'VOICE_ASR_PACK_EXPIRED'
+    },
+    {
+      name: 'a forged signature',
+      errorCode: CATALOG_ERROR_CODES.signatureInvalid,
+      reason: 'VOICE_ASR_PACK_SIGNATURE_INVALID'
+    },
+    {
+      name: 'a hash mismatch',
+      errorCode: CATALOG_ERROR_CODES.hashMismatch,
+      reason: 'VOICE_ASR_PACK_SIGNATURE_INVALID'
+    },
+    {
+      name: 'an invalid manifest',
+      errorCode: CATALOG_ERROR_CODES.manifestInvalid,
+      reason: 'VOICE_ASR_PACK_SCHEMA_INVALID'
+    },
+    {
+      name: 'a failed payload decrypt',
+      errorCode: CATALOG_ERROR_CODES.payloadDecryptFailed,
+      reason: 'VOICE_ASR_PACK_SCHEMA_INVALID'
+    },
+    {
+      name: 'an incompatible sdkapi',
+      errorCode: CATALOG_ERROR_CODES.sdkIncompatible,
+      reason: 'VOICE_ASR_PACK_UNSUPPORTED'
+    },
+    {
+      name: 'an unsupported catalog type',
+      errorCode: CATALOG_ERROR_CODES.typeUnsupported,
+      reason: 'VOICE_ASR_PACK_UNSUPPORTED'
+    }
+  ])(
+    'fails an explicit nexus-pack binding closed with $reason for $name',
+    ({ errorCode, reason }) => {
+      configure({ [PACK_PROVIDER_ID]: nexusPackChannel() }, { 'audio.asr': [nexusPackBinding()] })
+      catalog.registry = null
+      catalog.status = { lastErrorCode: errorCode }
+
+      expect(getRecognitionStatus().asr).toEqual({ ready: false, reason })
+      expectVoiceProviderCode(getConfiguredAsrProvider, reason)
+      expect(nexusClient.transcribeNexusAudio).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    {
+      name: 'an expired active pack',
+      descriptor: catalogDescriptor(),
+      registry: { expiry: '2000-01-01T00:00:00.000Z' },
+      reason: 'VOICE_ASR_PACK_EXPIRED'
+    },
+    {
+      name: 'a pack that requires a newer client sdkapi',
+      descriptor: catalogDescriptor(),
+      registry: { minSdkApi: CATALOG_CLIENT_SDKAPI + 1 },
+      reason: 'VOICE_ASR_PACK_UNSUPPORTED'
+    },
+    {
+      name: 'a descriptor whose transport is not the supported upload shape',
+      descriptor: catalogDescriptor({ transport: 'http-realtime' }),
+      registry: {},
+      reason: 'VOICE_ASR_PACK_UNSUPPORTED'
+    },
+    {
+      name: 'a descriptor whose endpoint origin is not the runtime Nexus origin',
+      descriptor: catalogDescriptor({
+        endpoint: {
+          baseUrl: 'https://evil.example.test',
+          submitPath: '/submit',
+          pollPath: '/poll/:requestId'
+        }
+      }),
+      registry: {},
+      reason: 'VOICE_ASR_PACK_UNSUPPORTED'
+    }
+  ])(
+    'refuses an explicit nexus-pack binding for $name with $reason',
+    ({ descriptor, registry, reason }) => {
+      configure({ [PACK_PROVIDER_ID]: nexusPackChannel() }, { 'audio.asr': [nexusPackBinding()] })
+      catalog.registry = activeRegistry(descriptor, registry)
+      catalog.status = { lastErrorCode: null }
+
+      expect(getRecognitionStatus().asr).toEqual({ ready: false, reason })
+      expectVoiceProviderCode(getConfiguredAsrProvider, reason)
+      expect(nexusClient.transcribeNexusAudio).not.toHaveBeenCalled()
+    }
+  )
+
+  it('rejects a nexus-pack descriptor that does not offer the resolved model', () => {
+    configure(
+      { [PACK_PROVIDER_ID]: nexusPackChannel({ models: ['bound.model'] }) },
+      { 'audio.asr': [nexusPackBinding(['bound.model'])] }
+    )
+    catalog.registry = activeRegistry(catalogDescriptor({ models: [{ id: 'descriptor.model' }] }))
+    catalog.status = { lastErrorCode: null }
+
+    expect(getRecognitionStatus().asr).toEqual({
+      ready: false,
+      reason: 'VOICE_ASR_PACK_UNSUPPORTED'
+    })
+    expectVoiceProviderCode(getConfiguredAsrProvider, 'VOICE_ASR_PACK_UNSUPPORTED')
+    expect(nexusClient.transcribeNexusAudio).not.toHaveBeenCalled()
+  })
+
+  it('keeps the built-in buffered adapter on the implicit Nexus audio.stt fallback when no pack is active', () => {
+    configure(
+      {
+        'tuff-nexus-default': channel('tuff-nexus-default', {
+          capabilities: ['audio.stt'],
+          models: [NEXUS_AUDIO_TRANSCRIBE_MODEL],
+          metadata: { origin: 'tuff-nexus', voiceAsr: { protocol: 'nexus-pack' } }
+        })
+      },
+      { 'audio.stt': [nexusSttBinding()] }
+    )
+    catalog.registry = null
+    catalog.status = { lastErrorCode: null }
+
+    expect(getRecognitionStatus().asr).toEqual({ ready: true, mode: 'buffered' })
+
+    const configured = getConfiguredAsrProvider()
+    expect(configured.mode).toBe('buffered')
+    expect(configured.model).toBe(NEXUS_AUDIO_TRANSCRIBE_MODEL)
+    expect(configured.provider.id).toBe('nexus-audio-stt-buffered')
+    expect(nexusClient.transcribeNexusAudio).not.toHaveBeenCalled()
   })
 })

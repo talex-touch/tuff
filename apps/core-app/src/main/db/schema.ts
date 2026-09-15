@@ -1507,7 +1507,7 @@ export const flowAuditLogs = sqliteTable(
 export const catalogPacks = sqliteTable(
   'catalog_packs',
   {
-    type: text('type', { enum: ['domain-lexicon'] }).notNull(),
+    type: text('type', { enum: ['domain-lexicon', 'voice-provider'] }).notNull(),
     packId: text('pack_id').notNull(),
     version: text('version').notNull(),
     schemaVersion: integer('schema_version').notNull(),
@@ -1532,7 +1532,7 @@ export const catalogPacks = sqliteTable(
 export const catalogDomainLexiconEntries = sqliteTable(
   'catalog_domain_lexicon_entries',
   {
-    packType: text('pack_type', { enum: ['domain-lexicon'] }).notNull(),
+    packType: text('pack_type', { enum: ['domain-lexicon', 'voice-provider'] }).notNull(),
     packId: text('pack_id').notNull(),
     packVersion: text('pack_version').notNull(),
     entryId: text('entry_id').notNull(),
@@ -1561,7 +1561,7 @@ export const catalogDomainLexiconEntries = sqliteTable(
 )
 
 export const catalogState = sqliteTable('catalog_state', {
-  type: text('type', { enum: ['domain-lexicon'] }).primaryKey(),
+  type: text('type', { enum: ['domain-lexicon', 'voice-provider'] }).primaryKey(),
   activePackId: text('active_pack_id').notNull(),
   activePackVersion: text('active_pack_version').notNull(),
   previousPackId: text('previous_pack_id'),
@@ -1571,6 +1571,51 @@ export const catalogState = sqliteTable('catalog_state', {
   rollbackReason: text('rollback_reason'),
   updatedAt: integer('updated_at').notNull()
 })
+
+/**
+ * Declarative voice-provider descriptors for a stored `voice-provider` catalog pack.
+ *
+ * `expiry_at` is pack-level but stamped on every row so activation and rollback can rebuild the
+ * active pack from SQLite alone (no in-memory reuse of the verified pack).
+ */
+export const voiceProviderEntries = sqliteTable(
+  'voice_provider_entries',
+  {
+    packType: text('pack_type', { enum: ['voice-provider'] }).notNull(),
+    packId: text('pack_id').notNull(),
+    packVersion: text('pack_version').notNull(),
+    providerId: text('provider_id').notNull(),
+    protocol: text('protocol').notNull(),
+    transport: text('transport').notNull(),
+    displayNameJson: text('display_name_json').notNull(),
+    baseUrl: text('base_url').notNull(),
+    submitPath: text('submit_path').notNull(),
+    pollPath: text('poll_path'),
+    authMode: text('auth_mode').notNull(),
+    authRef: text('auth_ref'),
+    requestBody: text('request_body').notNull(),
+    contentTypePolicy: text('content_type_policy').notNull(),
+    headersJson: text('headers_json'),
+    idempotencyHeader: text('idempotency_header'),
+    modelsJson: text('models_json').notNull(),
+    limitsJson: text('limits_json').notNull(),
+    expiryAt: integer('expiry_at')
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.packType, table.packId, table.packVersion, table.providerId]
+    }),
+    packFk: foreignKey({
+      columns: [table.packType, table.packId, table.packVersion],
+      foreignColumns: [catalogPacks.type, catalogPacks.packId, catalogPacks.version]
+    }).onDelete('cascade'),
+    packIdx: index('idx_voice_provider_entries_pack').on(
+      table.packType,
+      table.packId,
+      table.packVersion
+    )
+  })
+)
 // 15. AI CLI Orchestration Runtime
 // =============================================================================
 

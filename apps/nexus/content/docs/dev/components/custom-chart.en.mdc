@@ -12,7 +12,7 @@ verified: true
 
 ## Basic Usage
 
-kumo's escape hatch pipes raw echarts options into a low-level `Chart`; without echarts, the escape hatch here is **composition**: `TxChart` establishes the coordinate system (measures the container, derives scales, allocates palette slots) and axes/grid/series mount as children in its default slot. Series read data through accessors (a key or `(d, i) => v`); without `color` they take categorical slots in mount order. The x/y domains derive from the union of all series data, and `xDomain`/`yDomain` override explicitly.
+kumo's escape hatch pipes raw echarts options into a low-level `Chart`; here that job belongs to the [ECharts Family](/docs/dev/components/echart-charts) (`TxEChart` plus typed wrappers), and this page is the **composition** hatch: `TxChart` establishes the coordinate system (measures the container, derives scales, allocates palette slots) and axes/grid/series mount as children in its default slot. Series read data through accessors (a key or `(d, i) => v`); without `color` they take categorical slots in mount order. The x/y domains derive from the union of all series data, and `xDomain`/`yDomain` override explicitly.
 
 ### Bars + line composed
 
@@ -21,7 +21,7 @@ kumo's escape hatch pipes raw echarts options into a low-level `Chart`; without 
 code: |
   <template>
     <TxChart x-type="band" :height="280" :padding="{ top: 24, right: 24, bottom: 36, left: 56 }">
-      <TxGrid y />
+      <TxChartGrid y />
       <TxAxis position="bottom" />
       <TxAxis position="left" :format="(v) => `${v}k`" />
       <TxBarSeries :data="rows" x="month" y="revenue" :radius="3" />
@@ -72,6 +72,40 @@ code: |
 - The `#overlay` slot is a DOM layer above the SVG (`pointer-events: none`) for tooltips and annotations.
 - For deep customization, call `useChartContext()` in your own layer, or read scales from the `context` exposed on the `TxChart` instance.
 
+## Animation
+
+A custom layer does not animate on its own: `TxChart` only supplies the coordinate system, and the exported primitives the series share do the motion. Use `useEnterProgress()` for the first render (a 0 → 1 `Ref<number>`), `useTweenedNumbers(source)` for data updates (tweens a number array towards its latest values), and `tween()` with `easings` / `cubicBezier()` when you need your own cadence. Durations and the threshold are exported too: `ENTER_DURATION` (1000), `UPDATE_DURATION` (500), `STATE_DURATION` (300), `ANIMATION_THRESHOLD` (2000). Series above the threshold do not animate, and under `prefers-reduced-motion: reduce` every tween lands on its final frame.
+
+```vue
+<script setup lang="ts">
+import { ANIMATION_THRESHOLD, ENTER_DURATION, easings, useChartContext, useEnterProgress } from '@talex-touch/tuffex/charts'
+import { computed } from 'vue'
+
+const props = defineProps<{ pointCount: number }>()
+const ctx = useChartContext('MyLayer')
+const plot = computed(() => ctx.plot.value)
+
+// 0 → 1 while the enter reveal runs; stays at 1 above the threshold or under reduced motion
+const enter = useEnterProgress({
+  duration: ENTER_DURATION,
+  easing: easings.linear,
+  enabled: () => props.pointCount <= ANIMATION_THRESHOLD,
+})
+const enterWidth = computed(() => plot.value.width * enter.value)
+</script>
+
+<template>
+  <defs>
+    <clipPath id="my-layer-enter">
+      <rect :x="plot.x" :y="plot.y" :width="enterWidth" :height="plot.height" />
+    </clipPath>
+  </defs>
+  <g :clip-path="'url(#my-layer-enter)'">
+    <slot />
+  </g>
+</template>
+```
+
 ## API
 
 ### Chart Props
@@ -95,7 +129,7 @@ code: |
 | `x` / `y` | `keyof T \| (d, i) => v` | Accessors. |
 | `color` | `string` | Defaults to categorical slots in mount order. |
 
-`TxLineSeries` adds `curve` (`linear/monotone/natural/step`), `strokeWidth`, `showSymbol`, `dashed`; `TxAreaSeries` adds `gradient` (on by default) and `fillOpacity`; `TxBarSeries` adds `stack`, `barWidth`, `radius`; `TxScatterSeries` adds `r` (constant or accessor); `TxArcSeries` takes `value/name?/color?` accessors plus `innerRadius/padAngle/cornerRadius` and emits `slice-click`.
+`TxLineSeries` adds `curve` (`linear/monotone/natural/step`), `strokeWidth`, `showSymbol`, `dashed`; `TxAreaSeries` adds `gradient` (on by default) and `fillOpacity`; `TxBarSeries` adds `stack`, `barWidth`, `radius`; `TxScatterSeries` adds `r` (constant or accessor); `TxArcSeries` takes `value/name?/color?` accessors plus `innerRadius/padAngle/cornerRadius`, and emits `slice-click` plus `slice-hover` with the hovered slice (`{ datum, index, name, value }`, and `null` once the pointer leaves the arc) — the axis-free arc has no chart context to read, so this is how an `#overlay` `<TxChartTooltip>` gets its values.
 
 ### ChartTooltip Props
 
@@ -104,4 +138,8 @@ code: |
 | `open` | `boolean \| 'auto'` | `'auto'` | `'auto'` shows while the pointer is inside; a boolean is controlled mode. |
 | `follow` | `'both' \| 'x'` | `'both'` | `x` pins the vertical position. |
 | `offset` | `number` | `12` | Gap between pointer and tooltip. |
+| `footer` | `string` | — | Extra line below the row list (kumo's `tooltipFooter`). |
+| `boundary` | `'clipping-ancestors' \| Element \| Element[]` | `'clipping-ancestors'` | Collision boundary (ECharts `confine`): by default intersects the clipping ancestors with the viewport and flips. |
 | `title` / `rows` / `hiddenCount` | — | — | Default content; the slot replaces it entirely. |
+
+The tooltip keeps ECharts' cadence as well: it waits out a 100ms `hideDelay` before the 200ms fade-out and DOM removal, so a brief pointer excursion does not flicker it; movement is handed to the browser as a 400ms `transform: translate3d()` transition; and pointer tracking is throttled to 50ms, sampling once on entry and once on exit.

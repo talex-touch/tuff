@@ -18,6 +18,20 @@
 
 > When you use a product labeled 'talex-touch' or with the 'PolyglotBox' tag, you are agreeing to the following agreement
 
+## 登录后的声明式云控配置 / Signed cloud configuration after sign-in
+
+登录后，Tuff 可能从 Nexus 获取并应用带签名、带版本，并在适用时经过加密的**声明式配置包**。对于客户端已经实现的功能，这些配置包可以调整接口路径、Provider 或模型白名单、安全限额、功能参数以及灰度或回滚设置，而无需重新安装客户端。配置包只包含数据，不包含可执行脚本、账户凭据或 Provider 凭据；客户端只会在签名、结构、兼容性、来源和本地安全上限校验通过后接受它。新增可执行协议或能力仍必须更新客户端。
+
+云控配置不会覆盖您的本机选择。语音输入默认关闭，只有在您通过带明确状态标识的设置开关手动开启后才会启用；麦克风只在一次语音输入会话进行期间采集。收到语音路由包、登录账户或同步配置都不会自动开启语音输入或麦克风权限。未登录时，Tuff 不会检查、下载或激活云控配置包；只读状态和本机回滚仍可用于诊断恢复。
+
+登录并使用支持云控的功能，即表示您同意使用上述下发机制。您可以通过退出登录或保持可选功能关闭来停止使用。若云控配置类别或用途发生实质性扩展，我们将更新协议或另行通知。
+
+When signed in, Tuff may retrieve and apply signed, versioned, and, where appropriate, encrypted **declarative configuration packs** from Nexus. These packs may adjust endpoint paths, Provider or model allowlists, safety limits, feature parameters, and rollout or rollback settings only for behavior already implemented in the installed client. They contain data only—no executable scripts, account credentials, or Provider credentials—and are accepted only after client-side signature, schema, compatibility, origin, and local safety-limit checks. New executable behavior still requires a client update.
+
+Cloud configuration never overrides local opt-in. Voice input is off by default and starts only after you enable it manually through the clearly labelled Settings switch; microphone capture occurs only during an active voice-input session. A routing pack, sign-in, or sync never enables voice input or microphone permission. While signed out, Tuff does not check, download, or activate cloud-controlled packs; read-only status and local rollback remain available for recovery.
+
+By signing in and using a supported cloud-controlled feature, you authorize this delivery mechanism. You can opt out by signing out or keeping the optional feature disabled. Material new configuration categories or purposes require updated terms or a separate notice.
+
 # Privacy Policy
 
 "talex-touch" and related services refer to the web-based application labeled "talex-touch", which is independently developed and operated by talex-touch organization (GITHUB with the same name) (hereinafter referred to as "we"). As the operator of "talex-touch", we understand the importance of your personal information, and your trust is very important to us. We will protect your personal information and privacy security in accordance with the provisions of laws and regulations and industry best practices. We have formulated this "Privacy Policy" and specifically remind you: we hope you carefully read and understand this privacy policy before using talex-touch and related services, so as to make appropriate choices.
