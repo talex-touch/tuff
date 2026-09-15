@@ -5,7 +5,6 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
 import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
 import { TuffInput } from '@talex-touch/tuffex/input'
-import AccountTabs from '~/components/admin/AccountTabs.vue'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxRowSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
@@ -448,14 +447,12 @@ async function revokeCode(code: ActivationCode) {
   <div class="space-y-6">
     <div>
       <h1 class="apple-heading-md">
-        {{ t('dashboard.sections.menu.accounts', 'Account Management') }}
+        {{ t('dashboard.sections.menu.subscriptions', 'Subscription Management') }}
       </h1>
       <p class="mt-2 text-sm text-black/50 dark:text-white/50">
         {{ t('dashboard.sections.subscriptions.subtitle', 'Manage plans, renewals, and activation codes.') }}
       </p>
     </div>
-
-    <AccountTabs />
 
     <section class="apple-card-lg p-5 space-y-4">
       <div class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_180px_180px_auto]">

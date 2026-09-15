@@ -13,17 +13,13 @@ defineI18nRoute(false)
 
 <template>
   <!--
-    This route used to host a four-tab panel (Tuff AI / overview / service
-    channels / audits). The tabs are rail entries now, so it renders the Tuff AI
-    workspace alone — the tab that was the reason to come here.
-
     ClientOnly renders a fragment, so using it as the page root made Nuxt warn that
     this page "does not have a single root node and will cause errors when navigating
     between routes", and left the declared fade pageTransition with nothing to animate.
   -->
   <div>
     <ClientOnly>
-      <LazyDashboardIntelligenceIntelligenceAgentWorkspace />
+      <LazyDashboardIntelligenceIntelligenceAuditsPanel />
       <template #fallback>
         <div class="space-y-6">
           <div class="space-y-3">

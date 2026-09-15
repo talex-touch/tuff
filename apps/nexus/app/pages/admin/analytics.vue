@@ -55,7 +55,33 @@ const {
   fetchAnalytics: loadAnalytics, fetchGeoAnalytics: loadGeoAnalytics, fetchDocsAnalytics: loadDocsAnalytics,
   fetchIntelligenceAnalytics: loadIntelligenceAnalytics, fetchMessages: loadMessages, fetchExchangeHistory: loadExchangeHistory,
 } = useAdminAnalyticsData({ request: requestJson })
-const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'intelligence' | 'docs' | 'geo' | 'messages' | 'exchange'>('overview')
+/**
+ * The section is in the URL, not in local state. It used to be a tab strip
+ * under the header: nine panels the rail never named, none of them linkable,
+ * and a second navigation control for the same kind of move the rail already
+ * handles. The strip is gone — `AdminNav` lists the nine as entries and each
+ * one is a real address you can bookmark, share, or land on from a redirect.
+ *
+ * `route.query` is the single source of truth rather than a ref synced to it,
+ * so back/forward work and two copies of "where am I" cannot disagree.
+ */
+type AnalyticsSection = 'overview' | 'performance' | 'search' | 'usage' | 'intelligence' | 'docs' | 'geo' | 'messages' | 'exchange'
+
+const ANALYTICS_SECTIONS = ['overview', 'performance', 'search', 'usage', 'intelligence', 'docs', 'geo', 'messages', 'exchange'] as const
+
+const activeSection = computed<AnalyticsSection>({
+  get() {
+    const requested = typeof route.query.section === 'string' ? route.query.section : ''
+    return (ANALYTICS_SECTIONS as readonly string[]).includes(requested)
+      ? requested as AnalyticsSection
+      : 'overview'
+  },
+  set(value) {
+    // `replace` so flipping sections does not stack history entries the Back
+    // button then has to walk back through one panel at a time.
+    navigateTo({ query: { ...route.query, section: value } }, { replace: true })
+  },
+})
 const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
 const versionPalette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
@@ -70,6 +96,21 @@ const analyticsSections = [
   { id: 'exchange', label: 'Exchange', icon: 'i-carbon-currency' },
   { id: 'messages', label: 'Alerts', icon: 'i-carbon-warning' },
 ] as const
+
+/**
+ * The heading names the panel you are on. With the tab strip gone it was the
+ * only thing still saying "Analytics Dashboard" on all nine of them, which
+ * made the rail entry and the page title disagree.
+ *
+ * Same key the rail uses, so the two cannot drift; the hardcoded English in
+ * `analyticsSections` is the fallback rather than the source.
+ */
+const activeSectionLabel = computed(() => {
+  const section = analyticsSections.find(entry => entry.id === activeSection.value)
+  if (!section)
+    return t('dashboard.sections.analytics.title', 'Analytics Dashboard')
+  return t(`dashboard.sections.analytics.sections.${section.id}`, section.label)
+})
 const topModuleLoads = computed(() => analytics.value?.summary.moduleLoadMetrics.slice(0, 10) ?? [])
 const realtimeStatCards = computed(() => {
   const realtime = analytics.value?.realtime
@@ -292,10 +333,8 @@ async function fetchExchangeHistory(): Promise<void> {
 }
 
 onMounted(() => {
-  const initialSection = typeof route.query.section === 'string' ? route.query.section : ''
-  if (initialSection === 'docs')
-    activeSection.value = 'docs'
-
+  // `section` is no longer seeded here — `activeSection` reads the query
+  // directly, so a deep link is already on the right panel before mount.
   const initialPath = typeof route.query.path === 'string' ? route.query.path.trim() : ''
   if (initialPath)
     docsPath.value = initialPath.toLowerCase()
@@ -397,7 +436,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
     <header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h1 class="apple-heading-md">
-          {{ t('dashboard.sections.analytics.title', 'Analytics Dashboard') }}
+          {{ activeSectionLabel }}
         </h1>
         <p class="mt-2 text-sm text-black/50 dark:text-white/50">
           {{ t('dashboard.sections.analytics.subtitle', 'Usage statistics and insights') }}
@@ -426,9 +465,6 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         >
           <TxSkeleton :loading="true" :lines="2" />
         </div>
-      </div>
-      <div class="flex flex-wrap items-center gap-2 rounded-2xl bg-black/[0.02] p-2 dark:bg-white/[0.03]">
-        <TxSkeleton v-for="tab in analyticsSections.length" :key="`tab-skeleton-${tab}`" :loading="true" :lines="1" class="w-20" />
       </div>
       <div class="grid gap-4 lg:grid-cols-4">
         <div
@@ -470,20 +506,6 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
       </div>
 
-      <div class="mt-5 flex flex-wrap items-center gap-2 rounded-2xl bg-black/[0.02] p-2 text-sm dark:bg-white/[0.03]">
-        <TxButton
-          v-for="section in analyticsSections"
-          :key="section.id"
-          variant="bare"
-          native-type="button"
-          class="text-xs transition"
-          :class="activeSection === section.id ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'"
-          @click="activeSection = section.id"
-        >
-          <span :class="[section.icon, 'text-sm']" aria-hidden="true" />
-          {{ section.label }}
-        </TxButton>
-      </div>
 
       <div class="mt-5 space-y-5">
       <!-- Summary Stats -->

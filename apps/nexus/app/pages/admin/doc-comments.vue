@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import CommentTabs from '~/components/admin/CommentTabs.vue'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { requestJson } from '~/utils/request'
 
@@ -218,7 +217,7 @@ onMounted(() => {
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="apple-heading-md">
-          {{ t('dashboard.sections.menu.comments', 'Comment Management') }}
+          {{ t('dashboard.sections.menu.docComments', 'Doc Comments') }}
         </h1>
         <p class="mt-2 text-sm text-black/50 dark:text-white/50">
           {{ t('dashboard.sections.docComments.subtitle', 'Moderate and manage documentation comments.') }}
@@ -231,8 +230,6 @@ onMounted(() => {
         {{ t('dashboard.sections.docComments.analytics', 'View docs analytics') }}
       </NuxtLink>
     </div>
-
-    <CommentTabs />
 
     <section class="apple-card-lg p-5">
       <div>

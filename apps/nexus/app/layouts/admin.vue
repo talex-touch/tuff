@@ -1,6 +1,6 @@
 <template>
   <div class="admin-shell h-screen flex flex-col overflow-hidden from-white via-white to-slate-100 bg-gradient-to-br text-black dark:from-dark dark:via-dark/95 dark:to-dark/85 dark:text-light">
-    <TheHeader class="z-10 border-b border-transparent" />
+    <TheHeader class="admin-shell-header z-10" />
     <div class="admin-shell-body min-h-0 w-full flex flex-1 flex-col pt-22 lg:flex-row">
       <AdminNav />
       <main class="admin-shell-main min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-6 lg:px-8">
@@ -45,6 +45,21 @@
 .admin-shell {
   --nexus-frame-max: calc(100vw - 2rem);
   --nexus-frame-compact: calc(100vw - 2rem);
+}
+
+/*
+ * The divider sits on the header *band*, not on the pill: the pill is a
+ * floating rounded card, so a border on it draws a line that stops short of
+ * both edges and follows the corner radius. `.TuffHeader` is the full-width
+ * fixed band the pill floats inside, and `pt-22` on the body is measured to it,
+ * so a bottom border there is exactly where the content starts.
+ */
+.admin-shell .TuffHeader {
+  border-bottom: 1px solid rgb(0 0 0 / 6%);
+}
+
+:root.dark .admin-shell .TuffHeader {
+  border-bottom-color: rgb(255 255 255 / 8%);
 }
 
 .admin-shell .apple-card,
