@@ -6,6 +6,7 @@ export default {
     login: 'Log in',
     logout: 'Log out',
     dashboard: 'Dashboard',
+    adminConsole: 'Admin console',
     pricing: 'Pricing',
     store: 'Store',
     doc: 'Developer',

@@ -13,11 +13,13 @@ import type { SourceFile, Violation } from './helpers/repo'
  * Guard 1 — a component that lives in a nested `app/components/` subdirectory
  * cannot be used under its bare file name.
  *
- * `app/components/dashboard/admin/AccountTabs.vue` auto-imports as
- * `DashboardAdminAccountTabs`. Four admin pages wrote `<AccountTabs />`, which
- * Vue could not resolve; it logged a dev-only `Failed to resolve component`
- * warning and rendered nothing at all, so the subscriptions and doc-comments
- * tab bars silently never existed.
+ * `app/components/admin/AccountTabs.vue` auto-imports as `AdminAccountTabs`.
+ * Four admin pages wrote `<AccountTabs />`, which Vue could not resolve; it
+ * logged a dev-only `Failed to resolve component` warning and rendered nothing
+ * at all, so the subscriptions and doc-comments tab bars silently never
+ * existed. (The frozen fixtures still carry the name the file had then,
+ * `DashboardAdminAccountTabs`, because the component has since moved with the
+ * console into `app/components/admin/`.)
  */
 
 const RULE = 'component-auto-import'
@@ -258,16 +260,20 @@ describe('guard: nested components are never used under their bare file name', (
       registry,
     )
     expect(subscriptions[0]!.line).toBe(389)
-    expect(subscriptions[0]!.message).toContain('DashboardAdminAccountTabs')
+    // The name comes from the live registry, not from the fixture: the file now
+    // sits in `app/components/admin/`, so the message names what Vue would look
+    // for today.
+    expect(subscriptions[0]!.message).toContain('AdminAccountTabs')
   })
 
   it('clears the fixed files', () => {
     // Negative control: the shipped fix must not still register as a violation,
     // otherwise "flags the bug" above would pass for the wrong reason.
-    const fixed = ['app/pages/dashboard/admin/subscriptions.vue', 'app/pages/dashboard/admin/doc-comments.vue']
-      .filter(fileExists)
-      .map(readSource)
-    expect(formatViolations(scanComponentAutoImports(fixed, registry))).toBe('')
+    const paths = ['app/pages/admin/subscriptions.vue', 'app/pages/admin/doc-comments.vue']
+    // Both have moved once already; a typo here would silently empty the list
+    // and turn this control into an assertion about nothing.
+    expect(paths.filter(fileExists)).toEqual(paths)
+    expect(formatViolations(scanComponentAutoImports(paths.map(readSource), registry))).toBe('')
   })
 
   it('reports no unresolvable nested components in app/', () => {

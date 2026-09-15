@@ -9,11 +9,11 @@ import { describe, expect, it } from 'vitest'
  * Both shipped broken, and both looked correct in review.
  */
 
-const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
+const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const SERVER_API = path.join(APP_ROOT, 'server/api')
 
 function readPage(name: string): string {
-  return readFileSync(path.join(APP_ROOT, 'app/pages/dashboard/admin', name), 'utf8')
+  return readFileSync(path.join(APP_ROOT, 'app/pages/admin', name), 'utf8')
 }
 
 function sourceFiles(dir: string, found: string[] = []): string[] {

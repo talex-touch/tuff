@@ -5,19 +5,19 @@ const route = useRoute()
 const tabs = computed(() => [
   {
     id: 'users',
-    to: '/dashboard/admin/users',
+    to: '/admin/users',
     label: t('dashboard.sections.users.title', 'User Management'),
   },
   {
     id: 'subscriptions',
-    to: '/dashboard/admin/subscriptions',
+    to: '/admin/subscriptions',
     label: t('dashboard.sections.subscriptions.title', 'Subscription Management'),
   },
 ])
 
 function isActive(path: string) {
-  if (path === '/dashboard/admin/subscriptions')
-    return route.path.startsWith('/dashboard/admin/subscriptions') || route.path.startsWith('/dashboard/admin/codes')
+  if (path === '/admin/subscriptions')
+    return route.path.startsWith('/admin/subscriptions') || route.path.startsWith('/admin/codes')
   return route.path.startsWith(path)
 }
 </script>

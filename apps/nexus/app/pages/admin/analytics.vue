@@ -17,6 +17,8 @@ import { requestJson } from '~/utils/request'
 const LazyGeoLeafletMap = defineAsyncComponent(() => import('~/components/dashboard/GeoLeafletMap.client.vue'))
 
 definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
   pageTransition: {
     name: 'fade',
     mode: 'out-in',
@@ -391,7 +393,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl space-y-6">
+  <div class="space-y-6">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h1 class="apple-heading-md">

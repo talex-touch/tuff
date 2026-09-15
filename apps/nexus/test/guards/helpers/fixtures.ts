@@ -26,19 +26,19 @@ export interface HistoricalFixture {
 export const historicalFixtures = {
   componentAutoImportSubscriptions: {
     fixture: 'subscriptions.buggy.vue.txt',
-    originalPath: 'app/pages/dashboard/admin/subscriptions.vue',
+    originalPath: 'app/pages/admin/subscriptions.vue',
     blob: '12f1fe05f181fdf956d12cd790a6b9373fdde947',
     expectation: '<AccountTabs /> at line 389 resolves to nothing (auto-import name is DashboardAdminAccountTabs)',
   },
   componentAutoImportDocComments: {
     fixture: 'doc-comments.buggy.vue.txt',
-    originalPath: 'app/pages/dashboard/admin/doc-comments.vue',
+    originalPath: 'app/pages/admin/doc-comments.vue',
     blob: 'd68ce8dfbd331b4ef52590eb2d976eee7eebea66',
     expectation: '<CommentTabs /> at line 232 resolves to nothing (auto-import name is DashboardAdminCommentTabs)',
   },
   formSubmitButton: {
     fixture: 'intelligence-chat.buggy.vue.txt',
-    originalPath: 'app/pages/dashboard/admin/intelligence-chat.vue',
+    originalPath: 'app/pages/admin/intelligence-chat.vue',
     blob: '18aada7403ac6ce21c8cfeb5680b4e8d8a8896f9',
     expectation: 'TxButton at line 246 inside the @submit.prevent form has neither native-type nor @click',
   },
@@ -50,13 +50,13 @@ export const historicalFixtures = {
   },
   pageTopLevelThrow: {
     fixture: 'intelligence-lab.buggy.vue.txt',
-    originalPath: 'app/pages/dashboard/admin/intelligence-lab.vue',
+    originalPath: 'app/pages/admin/intelligence-lab.vue',
     blob: '1ef54f622a7e4ca7f5d5b5a6c8f2b65d01835294',
     expectation: 'throw createError(...) at line 11 runs at <script setup> top level',
   },
   i18nFallbackMismatch: {
     fixture: 'risk.buggy.vue.txt',
-    originalPath: 'app/pages/dashboard/admin/risk.vue',
+    originalPath: 'app/pages/admin/risk.vue',
     blob: 'b290a624b0b2d20ba7dc3c6e701f966bfc98fded',
     expectation: 't(\'dashboard.sections.analytics.title\', \'Risk Control\') at line 146 contradicts the locale value',
   },

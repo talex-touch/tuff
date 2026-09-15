@@ -8,6 +8,8 @@ import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 
 definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
   pageTransition: {
     name: 'fade',
     mode: 'out-in',

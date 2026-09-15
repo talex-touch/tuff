@@ -82,6 +82,19 @@ code: |
 
 单个 `TxIcon` 也可以用自己的 `urlResolver` / `svgFetcher` prop 覆盖注入的配置——某一块界面的图标来自另一个源时很有用。
 
+## 动效图标
+
+Iconify 图标集里都是静态字形。当某处界面需要一个**会动**的图标——hover、focus，或者由状态驱动——可以用 [AnimateIcons](https://animateicons.in/)：542 个 MIT 协议的动效图标，基于 Lucide 的几何形状。
+
+它以 **React 组件**（`motion/react`）的形式分发，所以并不是一个能直接装进 Tuffex 或 Vue 应用的依赖。真正可用的是素材本身：SVG 几何路径和每条路径的动画时序都是公开的，移植成 Vue 组件、或者交给 Tuffex 已有的动效原语，都很直接。
+
+动手之前有两点要讲清楚：
+
+- **它不是 Iconify 图标集。** 没有 `i-animateicons-*` 这种 class。每个图标都是带自己结构的组件，走不通 `TxIcon` 的 `name` 解析——它是你写的一个组件，不是你传的一个字符串。
+- **先看静态方案。** 如果这个图标其实并不需要动，从构建里已经带的图标集（`carbon`、`ri`、`simple-icons`……）挑一个字形是更小的答案。
+
+复制了几何路径，就要一并带上署名与 MIT 声明。
+
 ## 相关组件
 
 | 组件 | 用途 |

@@ -4,7 +4,7 @@
 // server, so the retired URL only forwarded once hydration ran. A `redirect` on
 // the route sends a real 302 and never instantiates this component.
 definePageMeta({
-  redirect: '/dashboard/admin/intelligence',
+  redirect: '/admin/intelligence',
 })
 
 defineI18nRoute(false)

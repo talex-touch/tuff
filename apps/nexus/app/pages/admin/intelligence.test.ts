@@ -29,7 +29,7 @@ describe('retired intelligence admin routes', () => {
   it.each(retired)('%s forwards to the live console instead of throwing', (file) => {
     const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')
 
-    expect(source).toContain("redirect: '/dashboard/admin/intelligence'")
+    expect(source).toContain("redirect: '/admin/intelligence'")
     expect(source).not.toContain('createError')
   })
 
@@ -44,7 +44,7 @@ describe('retired intelligence admin routes', () => {
 
   it.each(retired)('%s does not redirect to itself', (file) => {
     const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')
-    const self = `/dashboard/admin/${file.replace('.vue', '')}`
+    const self = `/admin/${file.replace('.vue', '')}`
 
     expect(source).not.toContain(`redirect: '${self}'`)
   })

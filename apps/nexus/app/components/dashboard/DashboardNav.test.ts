@@ -3,30 +3,12 @@ import { describe, expect, it } from 'vitest'
 
 const nav = readFileSync(new URL('./DashboardNav.vue', import.meta.url), 'utf8')
 
-describe('DashboardNav Intelligence consolidation', () => {
+describe('dashboardNav rail', () => {
   it('keeps the sidebar sticky and internally scrollable', () => {
     expect(nav).toContain('sticky top-24')
     expect(nav).toContain('max-h-[calc(100vh-6rem)]')
     expect(nav).toContain('self-start')
     expect(nav).toContain('overflow-y-auto')
-  })
-
-  it('uses the Lab module as the single Intelligence sidebar entry', () => {
-    expect(nav).toContain("label: t('dashboard.sections.menu.intelligence', '实验场')")
-  })
-
-  it('keeps provider registry routed through the Intelligence navigation section', () => {
-    expect(nav).toContain("'provider-registry': '/dashboard/admin/provider-registry'")
-    expect(nav).toContain("if (route.path.startsWith('/dashboard/admin/provider-registry'))\n    return 'intelligence'")
-  })
-
-  it('does not expose Provider Registry as a separate admin menu item', () => {
-    const adminItemsStart = nav.indexOf('const adminMenuItems = computed')
-    const adminItemsEnd = nav.indexOf('const activeSection = computed')
-    const adminItems = nav.slice(adminItemsStart, adminItemsEnd)
-
-    expect(adminItems).not.toContain("id: 'provider-registry'")
-    expect(adminItems).not.toContain("dashboard.sections.menu.providerRegistry")
   })
 
   it('does not expose standalone credit navigation items', () => {
@@ -37,8 +19,16 @@ describe('DashboardNav Intelligence consolidation', () => {
     expect(workspaceItems).not.toContain("id: 'credits'")
     expect(nav).not.toContain('dashboard.sections.menu.credits')
     expect(nav).not.toContain('dashboard.sections.menu.adminCredits')
-    expect(nav).not.toContain("'adminCredits': '/dashboard/admin/credits'")
     expect(nav).not.toContain("route.path.startsWith('/dashboard/credits')")
-    expect(nav).not.toContain("route.path.startsWith('/dashboard/admin/credits')")
+  })
+
+  it('carries no administrator section any more', () => {
+    // The console is its own shell with its own rail. These are the shapes that
+    // would bring the second copy back: an admin group, its section heading, or
+    // a console href smuggled into the workspace tables.
+    expect(nav).not.toContain('adminMenuItems')
+    expect(nav).not.toContain('dashboard.sections.menu.adminTitle')
+    expect(nav).not.toContain('riskControlEnabled')
+    expect(nav).not.toContain('/admin/')
   })
 })

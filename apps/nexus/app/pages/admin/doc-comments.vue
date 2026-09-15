@@ -3,11 +3,13 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import CommentTabs from '~/components/dashboard/admin/CommentTabs.vue'
+import CommentTabs from '~/components/admin/CommentTabs.vue'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
   pageTransition: {
     name: 'fade',
     mode: 'out-in',
@@ -178,7 +180,7 @@ function docsAnalyticsLink(path?: string) {
   params.set('section', 'docs')
   if (path)
     params.set('path', normalizeDocPath(path))
-  return `/dashboard/admin/analytics?${params.toString()}`
+  return `/admin/analytics?${params.toString()}`
 }
 
 let pathFilterTimer: ReturnType<typeof setTimeout> | null = null
@@ -212,7 +214,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl space-y-6">
+  <div class="space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="apple-heading-md">

@@ -79,7 +79,7 @@ describe('guard: buttons inside submitting forms are not inert', () => {
   it('accepts a button once native-type="submit" is added', () => {
     // Negative control against the shipped fix, so the assertion above cannot
     // be passing because the scanner flags every TxButton it sees.
-    const fixed = 'app/pages/dashboard/admin/intelligence-chat.vue'
+    const fixed = 'app/pages/admin/intelligence-chat.vue'
     if (!fileExists(fixed))
       return
     expect(formatViolations(scanFormSubmitButtons([readSource(fixed)]))).toBe('')

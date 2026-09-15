@@ -3,11 +3,13 @@ import { $fetch as rawFetch } from 'ofetch'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
-import CommentTabs from '~/components/dashboard/admin/CommentTabs.vue'
+import CommentTabs from '~/components/admin/CommentTabs.vue'
 import { useStoreFormatters } from '~/composables/useStoreFormatters'
 import { useToast } from '~/composables/useToast'
 
 definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
   pageTransition: {
     name: 'fade',
     mode: 'out-in',
@@ -152,7 +154,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl space-y-6">
+  <div class="space-y-6">
     <div>
       <h1 class="apple-heading-md">
         {{ t('dashboard.sections.menu.comments', 'Comment Management') }}

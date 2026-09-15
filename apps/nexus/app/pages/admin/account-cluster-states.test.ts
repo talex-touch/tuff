@@ -139,12 +139,12 @@ describe('account cluster localisation', () => {
  */
 describe('account cluster redirects leave history usable', () => {
   it('codes.vue replaces itself in history', () => {
-    expect(codes).toContain("navigateTo('/dashboard/admin/subscriptions', { replace: true })")
+    expect(codes).toContain("navigateTo('/admin/subscriptions', { replace: true })")
     expect(codes).toContain("navigateTo('/dashboard/overview', { replace: true })")
   })
 
   it('credits.vue replaces itself in history', () => {
-    expect(credits).toContain("navigateTo('/dashboard/admin/users', { replace: true })")
+    expect(credits).toContain("navigateTo('/admin/users', { replace: true })")
   })
 })
 
