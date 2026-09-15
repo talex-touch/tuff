@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     display,
     captureForegroundAppSnapshot: vi.fn(),
     updateMetaOverlayBounds: vi.fn(),
+    prewarmMetaOverlay: vi.fn(),
     unregisterPolling: vi.fn(),
     getMainConfig: vi.fn(() => ({})),
     subscribeMainConfig: vi.fn(),
@@ -234,6 +235,7 @@ vi.mock('./meta-overlay', () => ({
   metaOverlayManager: {
     updateBounds: mocks.updateMetaOverlayBounds,
     init: vi.fn(),
+    prewarm: mocks.prewarmMetaOverlay,
     destroy: vi.fn()
   }
 }))
@@ -604,6 +606,59 @@ describe('WindowManager CoreBox compact bounds', () => {
       )
       expect(mocks.transport.sendTo).not.toHaveBeenCalled()
     } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('prewarms the meta overlay after the box window is revealed', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    vi.useFakeTimers()
+    try {
+      const manager = new WindowManager()
+      const order: string[] = []
+      mocks.prewarmMetaOverlay.mockImplementation(() => {
+        order.push('prewarm')
+      })
+      const browserWindow = createShowOrderWindow(order)
+
+      manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
+
+      manager.show(true)
+
+      // The action panel is one keystroke away from the shown box, so building its renderer must
+      // belong to the show path — and only after the window is on screen, or the construction work
+      // lands inside the reveal frame.
+      expect(order).toEqual(['show', 'prewarm'])
+    } finally {
+      mocks.prewarmMetaOverlay.mockReset()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      vi.useRealTimers()
+    }
+  })
+
+  it('prewarms the meta overlay on the non-focus show path too', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    vi.useFakeTimers()
+    try {
+      const manager = new WindowManager()
+      const order: string[] = []
+      mocks.prewarmMetaOverlay.mockImplementation(() => {
+        order.push('prewarm')
+      })
+      const browserWindow = createShowOrderWindow(order)
+
+      manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
+
+      manager.show(false)
+
+      // A box shown without focus still answers the panel keystroke, so the warm-up cannot be
+      // nested inside the focus branch without reintroducing the cold renderer there.
+      expect(order).toEqual(['show-inactive', 'prewarm'])
+    } finally {
+      mocks.prewarmMetaOverlay.mockReset()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
       vi.useRealTimers()
     }
   })

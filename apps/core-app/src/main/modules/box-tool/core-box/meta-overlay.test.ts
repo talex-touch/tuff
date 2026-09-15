@@ -169,7 +169,8 @@ describe('MetaOverlayManager action execution', () => {
       CoreBoxEvents.metaOverlay.itemAction,
       { actionId: 'reveal-in-finder', item }
     )
-    expect(mocks.sendTo).not.toHaveBeenCalled()
+    // The overlay's own `ui.hide` reset is the only `sendTo` this path may make.
+    expect(mocks.sendTo.mock.calls.map(([, event]) => event)).toEqual([MetaOverlayEvents.ui.hide])
   })
 
   it('relays item actions to the parent window rather than the top-level CoreBox window', async () => {
@@ -270,10 +271,11 @@ describe('MetaOverlayManager action execution', () => {
 })
 
 /**
- * A dismissed overlay destroys its WebContentsView, so the next show builds a fresh renderer whose
- * `isLoading()` is already false before `MetaOverlay.vue` has mounted its `ui.show` listener. Sending
- * on load completion therefore raced the listener and left a blank overlay; readiness is now an
- * explicit announcement from the current renderer.
+ * The overlay renderer is built once and retained across dismissals, so main must not deliver a
+ * show before that renderer has mounted its `ui.show` listener: `webContents.isLoading() === false`
+ * is already true while the async renderer bootstrap is still between document load and mount.
+ * Retention is what the reuse cases below defend - rebuilding per dismissal put a full renderer
+ * cold start in front of every open.
  */
 describe('MetaOverlayManager renderer readiness handshake', () => {
   beforeEach(() => {
@@ -336,23 +338,60 @@ describe('MetaOverlayManager renderer readiness handshake', () => {
     expect(showDispatches()).toHaveLength(1)
   })
 
-  it('waits for the rebuilt renderer after the overlay was dismissed', () => {
+  it('reuses the retained renderer for a later show instead of rebuilding it', () => {
     metaOverlayManager.init(mocks.parentWindow as never)
     metaOverlayManager.show(showRequest)
-    const dismissedRendererId = currentMetaWebContents().id
-    expect(metaOverlayManager.markRendererReady(dismissedRendererId)).toBe(true)
+    const rendererId = currentMetaWebContents().id
+    expect(metaOverlayManager.markRendererReady(rendererId)).toBe(true)
     expect(showDispatches()).toHaveLength(1)
 
     metaOverlayManager.hide()
+
+    // A second open must not pay for a renderer, and must not wait for another handshake: the
+    // renderer that already announced readiness is still the live one.
+    metaOverlayManager.show(showRequest)
+
+    expect(mocks.createdMetaWebContents).toHaveLength(1)
+    expect(currentMetaWebContents().id).toBe(rendererId)
+    expect(showDispatches()).toHaveLength(2)
+    expect(metaOverlayManager.getVisible()).toBe(true)
+  })
+
+  it('resets the retained renderer on hide so a reused panel does not keep dismissed state', () => {
+    metaOverlayManager.init(mocks.parentWindow as never)
+    metaOverlayManager.show(showRequest)
+    expect(metaOverlayManager.markRendererReady(currentMetaWebContents().id)).toBe(true)
+
+    metaOverlayManager.hide()
+
+    // Without this the renderer's `visible` never leaves `true`, so its watcher never re-runs and
+    // the reused panel keeps the previous query, selection and action lock.
+    const hideDispatches = mocks.sendTo.mock.calls.filter(
+      ([, event]) => event === MetaOverlayEvents.ui.hide
+    )
+    expect(hideDispatches).toHaveLength(1)
+    expect(hideDispatches[0][0]).toBe(currentMetaWebContents())
+    expect(metaOverlayManager.getVisible()).toBe(false)
+  })
+
+  it('waits for a rebuilt renderer after the retained one died', () => {
+    metaOverlayManager.init(mocks.parentWindow as never)
+    metaOverlayManager.show(showRequest)
+    const deadRendererId = currentMetaWebContents().id
+    expect(metaOverlayManager.markRendererReady(deadRendererId)).toBe(true)
+    expect(showDispatches()).toHaveLength(1)
+
+    // Only a renderer loss rebuilds now; destroy() is how that path is reached in this harness,
+    // and it detaches the parent, so the caller reattaches exactly as CoreBox does on next show.
+    metaOverlayManager.destroy()
     metaOverlayManager.init(mocks.parentWindow as never)
     metaOverlayManager.show(showRequest)
 
-    // The destroyed renderer's id must not release the rebuilt one's pending request.
-    expect(metaOverlayManager.markRendererReady(dismissedRendererId)).toBe(false)
+    expect(metaOverlayManager.markRendererReady(deadRendererId)).toBe(false)
     expect(showDispatches()).toHaveLength(1)
 
     const rebuiltRendererId = currentMetaWebContents().id
-    expect(rebuiltRendererId).not.toBe(dismissedRendererId)
+    expect(rebuiltRendererId).not.toBe(deadRendererId)
     expect(metaOverlayManager.markRendererReady(rebuiltRendererId)).toBe(true)
     expect(showDispatches()).toHaveLength(2)
   })
@@ -362,11 +401,25 @@ describe('MetaOverlayManager renderer readiness handshake', () => {
     metaOverlayManager.show(showRequest)
     expect(showDispatches()).toHaveLength(0)
 
-    metaOverlayManager.hide()
+    metaOverlayManager.destroy()
     metaOverlayManager.init(mocks.parentWindow as never)
 
     // The request belonged to the renderer that was destroyed. Replaying it into the rebuilt one
     // would pop the overlay for an item the user is no longer looking at.
+    expect(metaOverlayManager.markRendererReady(currentMetaWebContents().id)).toBe(true)
+    expect(showDispatches()).toHaveLength(0)
+    expect(metaOverlayManager.getVisible()).toBe(false)
+  })
+
+  it('drops a queued show when the user dismisses before the renderer is ready', () => {
+    metaOverlayManager.init(mocks.parentWindow as never)
+    metaOverlayManager.show(showRequest)
+    expect(showDispatches()).toHaveLength(0)
+
+    // ESC during a cold first open. The retained renderer announces readiness moments later, and
+    // must not surface a panel the user already dismissed.
+    metaOverlayManager.hide()
+
     expect(metaOverlayManager.markRendererReady(currentMetaWebContents().id)).toBe(true)
     expect(showDispatches()).toHaveLength(0)
     expect(metaOverlayManager.getVisible()).toBe(false)
