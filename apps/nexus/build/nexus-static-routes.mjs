@@ -71,6 +71,14 @@ export const docsStaticJsonHeaderRoutes = [
   '/api/docs/sidebar-components/**',
   '/api/docs/component-sync',
 ]
+/**
+ * The raw Markdown twins (`/<locale>/docs/<path>.md`) deliberately have no header rule of their
+ * own. They already match `docsStaticHtmlHeaderRoutes`, so they inherit the docs cache window,
+ * and their content type comes from the real `.md` extension — the thing the extension-less
+ * JSON above had to state explicitly. A `/en/docs/**.md` rule would be worse than redundant:
+ * the route matcher treats `**` as a catch-all and ignores the suffix, so such a rule also
+ * matches every docs HTML page and would serve it as Markdown.
+ */
 export const i18nMessagesHeaderRoutes = ['/_i18n/**']
 
 /**

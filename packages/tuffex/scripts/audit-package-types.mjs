@@ -175,11 +175,38 @@ for (const name of siblings) {
   overrides[name] = `file:${await packWorkspacePackage(siblingRoot)}`
 }
 
+/*
+ * Peer dependencies are installed too, including optional ones.
+ *
+ * `TSCONFIG` keeps `skipLibCheck: false` on purpose, so tsc checks every shipped
+ * declaration rather than only the ones the sample imports. The chart
+ * declarations `import type` from `echarts`, which is an optional peer: a
+ * consumer who never imports `@talex-touch/tuffex/charts` should not have to
+ * install ECharts, and at runtime they do not — those imports are type-only and
+ * erase. But the declarations still ship, so without the peer present tsc cannot
+ * resolve them and the audit fails on a surface no sample touches (15 TS2307s
+ * once the charts family landed).
+ *
+ * Installing the peers is what a consumer of that subpath would do, so it keeps
+ * the audit measuring the declarations instead of the harness's own omission.
+ * Deriving them from the manifest rather than naming echarts means the next
+ * optional peer is covered without anyone remembering this.
+ */
+const peers = Object.fromEntries(
+  Object.entries(manifest.peerDependencies ?? {}).filter(
+    ([name]) => !name.startsWith('@talex-touch/'),
+  ),
+)
+
 await writeFile(
   join(workspace, 'package.json'),
   JSON.stringify({
     type: 'module',
     dependencies: {
+      // Peers first: the explicit pins below are deliberate and must win. `vue` is
+      // itself a peer, and its peer range is looser than the version this audit
+      // compiles against.
+      ...peers,
       '@talex-touch/tuffex': `file:${tarball}`,
       typescript: '^5.9.3',
       vue: '^3.5.33',

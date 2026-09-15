@@ -24,18 +24,8 @@ const router = useRouter()
     <SettingTools />
     <SettingTools advanced-only />
 
-    <!--
-      Cross-links to other surfaces, not a transit page: `/application` and `/store/installed`
-      have no other entry point since the sidebar collapsed to v2. The former "Entries" heading
-      is dropped so the page reads as content rather than a menu.
-    -->
+    <!-- The Applications category now has its own sidebar entry; this page keeps the store link. -->
     <TuffGroupBlock>
-      <SettingRow
-        :title="t('settingsEntries.application')"
-        :description="t('settingsEntries.applicationDesc')"
-        navigable
-        @activate="router.push('/application')"
-      />
       <SettingRow
         :title="t('settingsEntries.store')"
         :description="t('settingsEntries.storeDesc')"

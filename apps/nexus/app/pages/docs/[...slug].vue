@@ -1190,6 +1190,14 @@ useHead(() => ({
       hreflang: link.hreflang,
       href: link.href,
     })),
+    // How an agent discovers the raw source without having to guess the `.md` convention.
+    ...(docSeoHead.value.markdownSourceUrl
+      ? [{
+          rel: 'alternate',
+          type: 'text/markdown',
+          href: docSeoHead.value.markdownSourceUrl,
+        }]
+      : []),
   ],
   script: docSeoHead.value.structuredDataText
     ? [

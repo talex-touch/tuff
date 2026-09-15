@@ -1,19 +1,22 @@
 <script name="AppConfigure" setup lang="ts">
-import type { ITuffIcon } from '@talex-touch/utils'
+import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
+export interface AppConfigureDetail {
+  labelKey: string
+  value: string
+}
+
 export interface AppConfigureData {
   icon?: string | ITuffIcon
   name?: string
   desc?: string
-  names?: string
-  type?: string
-  value?: string
-  keyWords?: string
-  [key: string]: unknown
+  path?: string
+  details?: AppConfigureDetail[]
+  raw?: TuffItem
 }
 
 const props = defineProps<{
@@ -57,8 +60,11 @@ function handleHelp(): void {
         <div class="AppConfigure-Head-Right-Top">
           {{ data.name }}
         </div>
-        <div class="AppConfigure-Head-Right-Bottom">
+        <div v-if="data.desc" class="AppConfigure-Head-Right-Bottom">
           {{ data.desc }}
+        </div>
+        <div v-if="data.path" class="AppConfigure-Head-Right-Path">
+          {{ data.path }}
         </div>
       </div>
     </div>
@@ -85,18 +91,12 @@ function handleHelp(): void {
             :name="t('appConfigure.stats')"
             default-icon="i-ri-dashboard-horizontal-line"
           >
-            <TuffBlockLine :title="t('appConfigure.name')">
-              <template #description>
-                {{ data.names }}
-              </template>
-            </TuffBlockLine>
-            <TuffBlockLine :title="t('appConfigure.type')" :description="data.type" />
-            <TuffBlockLine :title="t('appConfigure.value')" :description="data.value" />
-            <TuffBlockLine :title="t('appConfigure.keywords')">
-              <template #description>
-                {{ data.keyWords }}
-              </template>
-            </TuffBlockLine>
+            <TuffBlockLine
+              v-for="detail in data.details ?? []"
+              :key="detail.labelKey"
+              :title="t(detail.labelKey)"
+              :description="detail.value"
+            />
           </TuffGroupBlock>
         </div>
       </TxScroll>
@@ -110,8 +110,12 @@ function handleHelp(): void {
   padding: 1rem;
   display: flex;
 
+  // Sized by its content rather than a fixed height: the header carries a name, an optional
+  // description and an optional path, and a fixed 48px (which excluded its own padding) clipped
+  // the title once more than one line was present.
+  flex-shrink: 0;
   width: 100%;
-  height: 48px;
+  box-sizing: border-box;
 
   gap: 1rem;
 
@@ -123,8 +127,6 @@ function handleHelp(): void {
 
     align-items: center;
     justify-content: center;
-
-    height: 100%;
 
     .tuff-icon {
       font-size: 32px;
@@ -141,13 +143,19 @@ function handleHelp(): void {
       font-size: 0.8rem;
     }
 
+    &-Path {
+      opacity: 0.6;
+      font-size: 0.75rem;
+      word-break: break-all;
+    }
+
     position: relative;
     display: flex;
     flex-direction: column;
+    gap: 2px;
 
     justify-content: center;
-
-    height: 100%;
+    min-width: 0;
   }
 }
 
@@ -160,14 +168,18 @@ function handleHelp(): void {
     position: relative;
     padding: 1rem 0;
 
+    // Takes whatever the header leaves instead of subtracting a hard-coded header height.
+    flex: 1 1 auto;
     width: 100%;
-    height: calc(100% - 48px);
+    min-height: 0;
 
     box-sizing: border-box;
   }
 
   position: relative;
+  display: flex;
   flex: 1;
+  flex-direction: column;
 
   width: 100%;
   height: 100%;

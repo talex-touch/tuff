@@ -121,7 +121,13 @@ const LIMITS = {
   // rule's original specificity, and the marker class is what makes it short
   // (naming both component roots cost 24 bytes more per selector). Toast's
   // stacking and swipe styles add the rest. Measured 556.2 KiB. Same contract as
-  // 560 -> 576 on 2026-09-15: folded the native charts family into tuffex (12.8 KiB).
+  // every note above: actuals plus minimal headroom, growth from here fails.
+  // 560 -> 576 on 2026-09-15: the TuffEx chart family landed (ECharts host, legend,
+  // decoration, and the option presets), and its stylesheets are 12.8 KiB that did
+  // not exist before. Measured 571.2 KiB. The gate never reported this because
+  // `audit:types` runs first in the CI `&&` chain and was failing on the same
+  // commit, so the size run never started. Same contract as every note above:
+  // actuals plus minimal headroom, growth from here fails.
   // 576 -> 584 on 2026-09-15: `icon-picker` adds its panel, grid, trigger and shape
   // controls (5.1 KiB measured at dist/es/icon-picker/style.css), which took the full
   // entry to 576.3 KiB against a 576.0 limit. Same contract as every note above:
@@ -138,7 +144,10 @@ const LIMITS = {
   // (it deduped by chunk, not by emitted stylesheet). Both are fixed, and the
   // total fell from 613.5 KiB to 555.3 with `stream-markdown/style.css` going
   // 103.3 -> 50.1. Re-baselined against the smaller artifact so the saving
-  // 568 -> 576 on 2026-09-15: folded the native charts family into tuffex components.
+  // cannot be quietly spent, same as the `fullCssBytes` note above.
+  // 568 -> 576 on 2026-09-15: the chart family's per-component stylesheets, the
+  // same 12.8 KiB as the `fullCssBytes` note above. Measured 570.4 KiB across 153
+  // stylesheets. Actuals plus minimal headroom, growth from here fails.
   // 576 -> 584 on 2026-09-15: `icon-picker`, as above.
   onDemandCssBytes: 584 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at

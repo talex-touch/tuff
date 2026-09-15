@@ -35,8 +35,8 @@ const resolveKeyManager = (channel: unknown): unknown =>
 const getCoreBoxRuntimeOrNull = () => maybeGetRegisteredMainRuntime('core-box')
 
 /**
- * Manages the lazily created MetaOverlay view attached above the current CoreBox window.
- * The renderer is released on hide and must handshake again before another show is delivered.
+ * Manages the MetaOverlay view attached above the current CoreBox window. The renderer is built
+ * once and retained across dismissals, so only the first show pays a renderer start.
  */
 export class MetaOverlayManager {
   private static instance: MetaOverlayManager
@@ -186,12 +186,7 @@ export class MetaOverlayManager {
   }
 
   private ensureInitialized(): boolean {
-    if (
-      this.metaView &&
-      this.parentWindow &&
-      this.getAliveMetaWebContents() &&
-      this.getAliveParentWindow()
-    ) {
+    if (this.isRendererAlive()) {
       return true
     }
 
@@ -201,12 +196,31 @@ export class MetaOverlayManager {
       this.init(coreBoxParentWindow)
     }
 
+    return this.isRendererAlive()
+  }
+
+  private isRendererAlive(): boolean {
     return Boolean(
       this.metaView &&
       this.parentWindow &&
       this.getAliveMetaWebContents() &&
       this.getAliveParentWindow()
     )
+  }
+
+  /**
+   * Builds the overlay renderer before the first show so the panel is not gated on a cold start.
+   *
+   * Deferred off the caller's frame: CoreBox calls this while it is revealing its own window, and
+   * constructing a WebContentsView there would land inside that animation.
+   */
+  public prewarm(): void {
+    if (this.isRendererAlive()) return
+
+    setImmediate(() => {
+      if (this.isRendererAlive()) return
+      this.ensureInitialized()
+    })
   }
 
   public getView(): WebContentsView | null {
@@ -319,13 +333,11 @@ export class MetaOverlayManager {
       `MetaOverlay shown with ${actionCount} actions, visible: ${metaView.getVisible()}, bounds: ${bounds.width}x${bounds.height}`
     )
 
-    const rendererId = metaWebContents.id
-    setTimeout(() => {
-      const focusTarget = this.getAliveMetaWebContents()
-      if (!this.isVisible || focusTarget?.id !== rendererId) return
+    const focusTarget = this.getAliveMetaWebContents()
+    if (focusTarget) {
       focusTarget.focus()
       metaOverlayLog.debug('MetaOverlay focused')
-    }, 100)
+    }
   }
 
   private scheduleHeightSync(): void {
@@ -349,17 +361,45 @@ export class MetaOverlayManager {
   }
 
   /**
-   * Hides MetaOverlay.
+   * Hides the overlay without releasing its renderer.
+   *
+   * Rebuilding per dismissal made every open pay a full renderer cold start - a new process
+   * parsing the whole CoreApp entry chunk - before main was allowed to deliver the panel at all,
+   * because delivery is gated on that renderer's readiness handshake.
+   *
+   * `ui.hide` must reach the retained renderer: it is what resets `visible`, `searchQuery`,
+   * `activeIndex` and `executingActionId`. Without it a reused renderer keeps the dismissed
+   * panel's state, and its `visible` watcher never re-runs because `visible` never left `true`.
    */
   public hide(): void {
     this.clearHeightSyncTimer()
+    // A show queued for a panel the user just dismissed must not surface on a later handshake.
+    this.pendingShowRequest = null
     const parentWindow = this.getAliveParentWindow()
-    if (this.metaView && this.getAliveMetaWebContents()) this.metaView.setVisible(false)
+    const metaWebContents = this.getAliveMetaWebContents()
+    if (this.metaView && metaWebContents) {
+      this.metaView.setVisible(false)
+      this.dispatchHideToRenderer(metaWebContents)
+    }
     this.isVisible = false
     this.currentItem = null
     useAliveWebContents(parentWindow)?.focus()
-    this.destroyRenderer()
-    metaOverlayLog.debug('MetaOverlay hidden and renderer released')
+    metaOverlayLog.debug('MetaOverlay hidden, renderer retained')
+  }
+
+  private dispatchHideToRenderer(metaWebContents: Electron.WebContents): void {
+    const runtime = getCoreBoxRuntimeOrNull()
+    if (!runtime) {
+      metaOverlayLog.debug('Skip MetaOverlay hide sync: CoreBox runtime unavailable')
+      return
+    }
+
+    const tx = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
+    void tx
+      .sendTo(metaWebContents, MetaOverlayEvents.ui.hide, undefined)
+      .catch((error) =>
+        metaOverlayLog.error('Failed to deliver MetaOverlay hide request', { error })
+      )
   }
 
   /**
@@ -511,7 +551,10 @@ export class MetaOverlayManager {
   }
 
   /**
-   * Updates window bounds when parent window resizes.
+   * Updates view bounds when the parent window resizes.
+   *
+   * Runs while hidden too: the retained view stays attached across dismissals, and a view left at
+   * the previous window size would show at the wrong bounds on the frame the next show reveals it.
    */
   public updateBounds(): void {
     const parentWindow = this.getAliveParentWindow()

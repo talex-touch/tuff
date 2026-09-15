@@ -82,6 +82,8 @@ function createSettingCategoryRoutes(withPerf: typeof withRouteComponentPerf): R
     appearance: () => import('../views/base/settings/categories/SettingAppearancePage.vue'),
     intelligence: () => import('../views/base/settings/categories/SettingIntelligencePage.vue'),
     plugins: () => import('../views/base/settings/categories/SettingPluginsPage.vue'),
+    applications: () => import('../views/base/settings/categories/SettingApplicationsPage.vue'),
+
     'file-index': () => import('../views/base/settings/categories/SettingFileIndexPage.vue'),
     update: () => import('../views/base/settings/categories/SettingUpdatePage.vue'),
     network: () => import('../views/base/settings/categories/SettingNetworkPage.vue'),
@@ -332,16 +334,11 @@ const routes: RouteRecordRaw[] = [
     redirect: '/setting/appearance'
   },
   {
+    // The app browser moved onto its own settings category, which is where the destination
+    // catalog points and the only place the sidebar links. Kept as a redirect the way
+    // `/styles` and `/setting/advanced` are, so older deep links still land on it.
     path: '/application',
-    name: '$I18n:router.application',
-    component: withRouteComponentPerf(
-      '/application',
-      () => import('../views/base/application/ApplicationIndex.vue')
-    ),
-    meta: {
-      index: 6,
-      keepAlive: true
-    }
+    redirect: '/setting/applications'
   },
   {
     path: '/setting',
