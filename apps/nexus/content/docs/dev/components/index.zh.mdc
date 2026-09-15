@@ -153,6 +153,7 @@ code: |
 - [Cascader 级联选择](./cascader.zh.mdc)
 - [Picker 滚轮选择](./picker.zh.mdc)
 - [DatePicker 日期选择](./date-picker.zh.mdc)
+- [IconPicker 图标选择器](./icon-picker.zh.mdc)
 - [Radio 单选框](./radio.zh.mdc)
 - [FlatRadio 平铺单选](./flat-radio.zh.mdc)
 - [Checkbox 复选框](./checkbox.zh.mdc)
