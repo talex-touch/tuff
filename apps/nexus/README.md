@@ -44,34 +44,40 @@ Auth email delivery is governed by notification channels. Configure a `notificat
 
 The Nexus deployment reads configuration from `.env*` files locally and from Cloudflare Pages environment variables in production. The list below is derived from `apps/nexus/nuxt.config.ts` and server utils.
 
-Required in every non-local Cloudflare Pages Preview runtime:
+Required in every non-local Cloudflare Pages runtime, Preview and Production alike:
 
 - `AUTH_SECRET` (session signing, >= 16 chars)
 - `APP_AUTH_JWT_SECRET` (app/CLI JWT signing, >= 16 chars)
 - `ADMIN_EMERGENCY_JWT_SECRET` (emergency-control JWT signing, >= 16 chars)
 - `ADMIN_CONTROL_PLANE_PEPPER` (emergency-control one-way hashing, >= 16 chars)
 
-These four names are the required group in the exact, name-only credential catalog at `shared/security/preview-secret-inventory.json`. They must be Cloudflare Pages **Preview** `secret_text` bindings, not `[env.preview.vars]` values.
+These four names are the required group in the exact, name-only credential catalog at `shared/security/deployment-secret-inventory.json`. They must be Cloudflare Pages `secret_text` bindings, not `[env.preview.vars]` values.
+
+Additionally required in **Production**, because the data they protect is unreadable without them:
+
+- `NUXT_INTELLIGENCE_ENCRYPT_KEY` (AI provider API keys)
+- `PROVIDER_REGISTRY_SECURE_STORE_KEY` (provider registry credentials)
+- `NOTIFICATION_SECURE_STORE_KEY` (notification channel credentials)
 
 Feature-gated credential names may be absent while their owning feature is disabled, but every configured name must use `secret_text`:
 
 - OAuth and access control: `GITHUB_CLIENT_SECRET`, `LINUXDO_CLIENT_SECRET`, `ADMIN_CF_ACCESS_CLIENT_SECRET`, `ADMINSECRET`
-- Encrypted stores and catalogs: `NUXT_INTELLIGENCE_ENCRYPT_KEY`, `PROVIDER_REGISTRY_SECURE_STORE_KEY`, `NOTIFICATION_SECURE_STORE_KEY`, `STORAGE_SECURE_STORE_KEY`, `VOICE_PROVIDER_CATALOG_KEYS` (`NUXT_INTELLIGENCE_ENCRYPT_KEY` is required before storing AI provider API keys; `VOICE_PROVIDER_CATALOG_KEYS` is a JSON secret map keyed as `voice-provider/<packId>/<version>/<keyId>` whose values are 32-byte base64 AES keys)
+- Encrypted stores and catalogs: `STORAGE_SECURE_STORE_KEY` (object-storage credentials; its store is empty and its consumer fails closed, so it is not gated in Production), `VOICE_PROVIDER_CATALOG_KEYS` (a JSON secret map keyed as `voice-provider/<packId>/<version>/<keyId>` whose values are 32-byte base64 AES keys)
 - Signing, integrations, and build upload: `PLUGIN_ATTESTATION_PRIVATE_KEY_PEM`, `EXCHANGE_RATE_API_KEY`, `SENTRY_AUTH_TOKEN`
 
 Optional or compatibility credential names may also be absent, but must use `secret_text` when configured: `ADMIN_SECRET`, `NUXT_DOC_TOKEN_SECRET`, and `RELEASE_DOWNLOAD_SIGNING_SECRET`. Public client IDs, origins, public keys, and key IDs are ordinary configuration and are not in this catalog.
 
-Provision the four names in Cloudflare Dashboard: open **Workers & Pages → tuff → Settings → Variables and Secrets**, select the **Preview** environment, add each name, choose **Secret** as the binding type, and enter the value there. The installed Wrangler `pages secret put` command has no `--env` option, so it must not be used to claim that a Secret was written to Preview.
+Provision these names in Cloudflare Dashboard: open **Workers & Pages → tuff → Settings → Variables and Secrets**, select the environment, add each name, choose **Secret** as the binding type, and enter the value there. The installed Wrangler `pages secret put` command has no `--env` option, so it must not be used to claim that a Secret was written to a specific environment.
 
-Verify Preview inventory without reading or printing values:
+Verify both environments' inventory without reading or printing values:
 
 ```bash
 export CLOUDFLARE_ACCOUNT_ID
 export CLOUDFLARE_API_TOKEN
-pnpm check:preview-secrets
+pnpm check:deployment-secrets
 ```
 
-`check:preview-secrets` calls the Cloudflare Pages project metadata API and inspects only names and binding types under `deployment_configs.preview.env_vars`. Missing required names fail with `PREVIEW_SECRET_INVENTORY_MISSING`; any cataloged credential configured as a non-Secret binding fails with `PREVIEW_SECRET_BINDING_TYPE_INVALID`; both use exit code `78` and list names only. A remote `NEXUS_LOCAL_PAGES_PREVIEW` binding fails with `PREVIEW_LOCAL_MARKER_REMOTE_BINDING`. `deploy:cf` checks before build and again immediately before the fixed `preview` branch deployment, rejects command-line overrides, and performs no Secret writes.
+`check:deployment-secrets` calls the Cloudflare Pages project metadata API once and inspects only names and binding types under `deployment_configs.preview.env_vars` **and** `deployment_configs.production.env_vars`, reporting every environment's problems in one run. Missing required names fail with `DEPLOYMENT_SECRET_INVENTORY_MISSING`; any cataloged credential configured as a non-Secret binding fails with `DEPLOYMENT_SECRET_BINDING_TYPE_INVALID`; both use exit code `78` and list names only. A remote `NEXUS_LOCAL_PAGES_PREVIEW` binding in either environment fails with `DEPLOYMENT_LOCAL_MARKER_REMOTE_BINDING`. `deploy:cf` checks before build and again immediately before the fixed `preview` branch deployment, rejects command-line overrides, and performs no Secret writes.
 
 Other required production configuration:
 

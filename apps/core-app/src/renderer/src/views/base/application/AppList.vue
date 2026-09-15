@@ -1,5 +1,6 @@
 <script name="AppList" setup lang="ts">
 import type { ITuffIcon } from '@talex-touch/utils'
+import type { AppConfigureData } from './AppConfigure.vue'
 import { useI18n } from 'vue-i18n'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
@@ -7,6 +8,7 @@ export interface AppListItem {
   name: string
   icon?: ITuffIcon
   matched?: [number, number]
+  configure?: AppConfigureData
 }
 
 const props = defineProps<{

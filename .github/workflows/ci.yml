@@ -357,7 +357,7 @@ jobs:
   #
   # Two of the four check:* scripts are deliberately absent, because they are deployment-time
   # checks rather than PR gates and both fail without their inputs:
-  #   check:preview-secrets  → exit 64, wants CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN
+  #   check:deployment-secrets  → exit 64, wants CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN
   #   check:runtime-evidence → exit 1, wants an output/playwright directory from a prior run
   # They belong in the deploy pipeline, next to the secrets and artifacts they read.
   job_nexus:

@@ -153,25 +153,32 @@ pnpm preview:cf -- --port 8791
    - Build command: `pnpm install --frozen-lockfile && pnpm nexus:build`
    - Build output directory: `apps/nexus/dist`
 2. 在 Pages 项目的 **Settings → Functions** 区域开启 Functions，并填写与 `wrangler.toml` 一致的绑定。
-3. 在 **Preview** 环境中把以下固定库存配置为 Cloudflare Pages Secrets（`secret_text`），不要写入 `wrangler.toml`：
+3. 在 **Preview** 与 **Production** 两个环境中都把以下固定库存配置为 Cloudflare Pages Secrets（`secret_text`），不要写入 `wrangler.toml`：
    - `AUTH_SECRET`
    - `APP_AUTH_JWT_SECRET`
    - `ADMIN_EMERGENCY_JWT_SECRET`
    - `ADMIN_CONTROL_PLANE_PEPPER`
 
-   `shared/security/preview-secret-inventory.json` 还维护完整的 feature-gated 与 optional 凭据名称。它们在对应功能关闭时 may be absent，不阻塞基础 Preview 部署；但只要出现在 Preview 环境中，就 must use `secret_text`，不能使用 `plain_text`。目录覆盖 OAuth、admin bootstrap、OOB Cloudflare Access、AI/Provider/Notification/Storage 加密密钥、插件签名私钥、汇率 API、Sentry 上传 token 与文档/下载签名覆盖项。公开 client ID、origin、public key 和 key ID 不属于 Secret。
+   **Production 另外必须配置**以下加密主密钥；缺少它们时对应数据不可读，而且历史上正是因为预检只看 Preview，生产长期缺失 `NUXT_INTELLIGENCE_ENCRYPT_KEY` 也没有被发现：
+   - `NUXT_INTELLIGENCE_ENCRYPT_KEY`
+   - `PROVIDER_REGISTRY_SECURE_STORE_KEY`
+   - `NOTIFICATION_SECURE_STORE_KEY`
 
-   在 Cloudflare Dashboard 中打开 **Workers & Pages → tuff → Settings → Variables and Secrets**，选择 **Preview** 环境，逐个添加上述名称，将类型设为 **Secret**，并在 Dashboard 中录入值。当前安装的 Wrangler `pages secret put` 没有 `--env` 选项，不能用它声称 Secret 已写入 Preview。
+   `shared/security/deployment-secret-inventory.json` 还维护完整的 feature-gated 与 optional 凭据名称。它们在对应功能关闭时 may be absent，不阻塞部署；但只要出现在任一环境中，就 must use `secret_text`，不能使用 `plain_text`。目录覆盖 OAuth、admin bootstrap、OOB Cloudflare Access、Storage 加密密钥、插件签名私钥、汇率 API、Sentry 上传 token 与文档/下载签名覆盖项。公开 client ID、origin、public key 和 key ID 不属于 Secret。
 
-   使用只校验 Preview 名称和类型的预检：
+   `STORAGE_SECURE_STORE_KEY` 仍保留在 feature-gated：其 D1 表为空，且唯一消费者在缺少密钥时已经 fail-closed 返回 500，把它升级为 Production 必需只会为一个未启用的功能红灯所有发布。
+
+   在 Cloudflare Dashboard 中打开 **Workers & Pages → tuff → Settings → Variables and Secrets**，分别选择 **Preview** 与 **Production** 环境，逐个添加上述名称，将类型设为 **Secret**，并在 Dashboard 中录入值。当前安装的 Wrangler `pages secret put` 没有 `--env` 选项，不能用它声称 Secret 已写入某个环境。
+
+   使用只校验名称和类型、同时覆盖两个环境的预检：
 
    ```bash
    export CLOUDFLARE_ACCOUNT_ID
    export CLOUDFLARE_API_TOKEN
-   pnpm check:preview-secrets
+   pnpm check:deployment-secrets
    ```
 
-   缺失固定库存时命令返回 `PREVIEW_SECRET_INVENTORY_MISSING`（exit code `78`）；目录内任意凭据使用非 Secret 类型时返回 `PREVIEW_SECRET_BINDING_TYPE_INVALID`（exit code `78`），且只列名称；远端存在 `NEXUS_LOCAL_PAGES_PREVIEW` binding 时返回 `PREVIEW_LOCAL_MARKER_REMOTE_BINDING`。`deploy:cf` 会在 build 前和固定 `preview` 分支部署前各执行一次预检，并拒绝命令行覆盖部署参数；该流程不会读取、输出或写入 Secret 值。
+   缺失固定库存时命令返回 `DEPLOYMENT_SECRET_INVENTORY_MISSING`（exit code `78`）；目录内任意凭据使用非 Secret 类型时返回 `DEPLOYMENT_SECRET_BINDING_TYPE_INVALID`（exit code `78`），且只列名称；任一环境存在 `NEXUS_LOCAL_PAGES_PREVIEW` binding 时返回 `DEPLOYMENT_LOCAL_MARKER_REMOTE_BINDING`。两个环境在一次运行中一起校验，一次列出全部问题。`deploy:cf` 会在 build 前和固定 `preview` 分支部署前各执行一次预检，并拒绝命令行覆盖部署参数；该流程不会读取、输出或写入 Secret 值。
 
 4. 若需要在部署后同步 R2 或运行 D1 迁移，可以：
    - 使用 Cloudflare Pages 的 `Post-deployment hooks` 调用 webhook。
