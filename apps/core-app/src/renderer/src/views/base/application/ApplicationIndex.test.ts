@@ -258,4 +258,52 @@ describe('ApplicationIndex search session transport', () => {
 
     wrapper.unmount()
   })
+
+  /**
+   * `TuffMeta.app.path` is optional. An application without one has no path to show, so the
+   * detail pane must receive `undefined` and let `AppConfigure` hide the row — falling back to
+   * `item.id` printed the internal provider identity under a path label.
+   */
+  it('leaves the detail path unset for an application with no filesystem path', async () => {
+    const wrapper = mount(ApplicationIndex, {
+      global: {
+        stubs: {
+          AppConfigure: {
+            name: 'AppConfigure',
+            props: ['data'],
+            template: '<div />'
+          },
+          SettingFileIndexAppIndexManager: true,
+          TxScroll: { name: 'TxScroll', template: '<div><slot /></div>' },
+          AppList: {
+            name: 'AppList',
+            props: ['index', 'list'],
+            template: '<div />'
+          }
+        }
+      }
+    })
+    await flushPromises()
+
+    state.streams[0].options.onData({ type: 'session', sessionId: 'application-session-3' })
+    state.streams[0].options.onData({
+      type: 'snapshot',
+      sessionId: 'application-session-3',
+      result: result('application-session-3', [item('pathless-app', 'Pathless App')])
+    })
+    await nextTick()
+
+    const list = wrapper.findComponent({ name: 'AppList' })
+    list.vm.$emit('select', (list.props('list') as Array<unknown>)[0], 0)
+    await nextTick()
+
+    const data = wrapper.findComponent({ name: 'AppConfigure' }).props('data') as {
+      path?: string
+    }
+    expect(data.path).toBeUndefined()
+    // The provider id is internal; it must never stand in for a missing path.
+    expect(data.path).not.toBe('pathless-app')
+
+    wrapper.unmount()
+  })
 })
