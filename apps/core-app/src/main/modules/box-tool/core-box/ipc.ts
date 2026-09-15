@@ -621,9 +621,11 @@ export class IpcManager {
             itemActions: request.itemActions?.length ?? 0
           }
         })
+        // Expand first so `show()` reads the final parent bounds: it sizes the overlay view from
+        // them, and expanding afterwards would leave the view at the pre-expand height until the
+        // deferred height sync caught up.
         coreBoxManager.expand({ forceMax: true })
-        const pluginActions = metaOverlayManager.getPluginActions()
-        request.pluginActions = pluginActions
+        request.pluginActions = metaOverlayManager.getPluginActions()
         metaOverlayManager.show(request)
         return { accepted: true }
       })
