@@ -1,9 +1,29 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { mount } from '@vue/test-utils'
+import * as sass from 'sass'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxDrawer from '../src/TxDrawer.vue'
 
 const DESKTOP_WIDTH = 1024
+
+const drawerSfc = resolve(dirname(fileURLToPath(import.meta.url)), '../src/TxDrawer.vue')
+
+/**
+ * The drawer's own stylesheet, compiled exactly the way the build compiles it. Vitest never
+ * injects an SFC `<style>` block into jsdom, so a computed-style assertion has to hand the real
+ * sheet to the document itself — CSS written inside the test would only prove itself.
+ */
+function shippedDrawerCss(): string {
+  const source = readFileSync(drawerSfc, 'utf8')
+  const blocks = [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(match => match[1] ?? '')
+  expect(blocks.length).toBeGreaterThan(0)
+  return blocks
+    .map(block => sass.compileString(block, { url: pathToFileURL(drawerSfc), syntax: 'scss' }).css)
+    .join('\n')
+}
 
 describe('txDrawer', () => {
   beforeEach(() => {
@@ -370,5 +390,45 @@ describe('txDrawer', () => {
 
     wrapper.unmount()
     warn.mockRestore()
+  })
+
+  it('does not paint while closed and keeps painting through the close animation', async () => {
+    // The root stays mounted for the drawer's whole life and a closed one is parked out of the
+    // viewport by `transform` alone — which still paints, so the panel's inward box-shadow smeared
+    // a dark band down the window edge (right-side drawers worst). `visibility` is what actually
+    // stops the painting, and it must be in the transition list: the switch is discrete, so
+    // without it the panel would vanish on the first frame of the slide-out instead of animating.
+    const style = document.createElement('style')
+    style.textContent = shippedDrawerCss()
+    document.head.appendChild(style)
+
+    try {
+      const wrapper = mount(TxDrawer, {
+        props: {
+          visible: false,
+          direction: 'right',
+        },
+        attachTo: document.body,
+      })
+
+      await nextTick()
+      const drawer = document.body.querySelector<HTMLElement>('.tx-drawer')!
+      const panel = document.body.querySelector<HTMLElement>('.tx-drawer__panel')!
+
+      expect(getComputedStyle(drawer).visibility).toBe('hidden')
+      expect(getComputedStyle(panel).visibility).toBe('hidden')
+      const transitioned = getComputedStyle(drawer).transition.split(',').map(part => part.trim().split(/\s+/)[0])
+      expect(transitioned).toContain('visibility')
+
+      await wrapper.setProps({ visible: true })
+      await nextTick()
+      expect(getComputedStyle(drawer).visibility).toBe('visible')
+      expect(getComputedStyle(panel).visibility).toBe('visible')
+
+      wrapper.unmount()
+    }
+    finally {
+      style.remove()
+    }
   })
 })

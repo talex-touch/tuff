@@ -52,7 +52,6 @@ const internalZIndex = ref(zIndexAllocator.get())
 const titleId = useId()
 const isMobile = ref(false)
 let previouslyFocusedElement: HTMLElement | null = null
-
 const display = computed({
   get: () => props.visible,
   set: (value: boolean) => emit('update:visible', value),
@@ -298,8 +297,22 @@ onUnmounted(() => {
   z-index: var(--tx-drawer-z-index, 1998);
   pointer-events: none;
 
+  /**
+   * A closed drawer is moved out of the viewport by `transform` only, which does not stop it
+   * from being painted: the panel's outward `box-shadow` points back into the viewport, so a
+   * closed right-side drawer smears a full-height dark band down the window's right edge (and
+   * two stacked drawers double it). The mask's `backdrop-filter` likewise keeps a compositing
+   * layer alive for nothing.
+   *
+   * `visibility` transitions discretely and stays `visible` for the whole duration whenever
+   * either endpoint is visible, so the slide-out still animates and only then stops painting.
+   */
+  visibility: hidden;
+  transition: visibility var(--tx-drawer-transition);
+
   &--visible {
     pointer-events: auto;
+    visibility: visible;
 
     .tx-drawer__mask {
       opacity: 1;
