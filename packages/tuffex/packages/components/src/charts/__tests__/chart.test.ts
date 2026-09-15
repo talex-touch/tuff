@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { h, nextTick } from 'vue'
 import { TxAxis } from '../src/axis'
 import { TOOLTIP_FADE_DURATION, TOOLTIP_HIDE_DELAY } from '../src/core/animate'
@@ -11,6 +11,19 @@ import { TxChart } from '../src/chart'
 const frame = { width: 400, height: 300, padding: 20 }
 
 interface Point { t: number, v: number }
+
+beforeEach(() => {
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('prefers-reduced-motion'),
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+})
 
 afterEach(() => {
   vi.useRealTimers()
