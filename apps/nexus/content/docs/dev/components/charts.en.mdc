@@ -134,3 +134,9 @@ What each chart does with that timing (bars growing from the base axis, scatter 
 - No `echarts` instance prop — the renderer is built in; consumers neither need nor can pass echarts.
 - No `isDarkMode` prop — every color reads `--tx-chart-*` CSS variables and follows the host's `.dark` / `[data-theme='dark']` automatically.
 - Every HTML-string formatter became a slot (VNodes), so there is no XSS-escaping surface.
+
+## Best Practices
+
+- Choose the dedicated chart wrapper (`TxTimeseriesChart`, `TxBubbleMap`, `TxChoroplethMap`, `TxSankeyChart`, `TxSparkChart`, or `TxEChart`) for standard metrics before assembling custom series primitives.
+- Rely on CSS variables for palette tokens (`--tx-chart-*`) and theme switching instead of hard-coding theme conditionals or HEX colors.
+- Keep series counts within readability limits (typically 3–7 series per visual surface) and supply accessible legend items or tooltips for every data point.

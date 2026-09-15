@@ -56,7 +56,7 @@ These four names are the required group in the exact, name-only credential catal
 Feature-gated credential names may be absent while their owning feature is disabled, but every configured name must use `secret_text`:
 
 - OAuth and access control: `GITHUB_CLIENT_SECRET`, `LINUXDO_CLIENT_SECRET`, `ADMIN_CF_ACCESS_CLIENT_SECRET`, `ADMINSECRET`
-- Encrypted stores: `NUXT_INTELLIGENCE_ENCRYPT_KEY`, `PROVIDER_REGISTRY_SECURE_STORE_KEY`, `NOTIFICATION_SECURE_STORE_KEY`, `STORAGE_SECURE_STORE_KEY` (`NUXT_INTELLIGENCE_ENCRYPT_KEY` is required before storing AI provider API keys)
+- Encrypted stores and catalogs: `NUXT_INTELLIGENCE_ENCRYPT_KEY`, `PROVIDER_REGISTRY_SECURE_STORE_KEY`, `NOTIFICATION_SECURE_STORE_KEY`, `STORAGE_SECURE_STORE_KEY`, `VOICE_PROVIDER_CATALOG_KEYS` (`NUXT_INTELLIGENCE_ENCRYPT_KEY` is required before storing AI provider API keys; `VOICE_PROVIDER_CATALOG_KEYS` is a JSON secret map keyed as `voice-provider/<packId>/<version>/<keyId>` whose values are 32-byte base64 AES keys)
 - Signing, integrations, and build upload: `PLUGIN_ATTESTATION_PRIVATE_KEY_PEM`, `EXCHANGE_RATE_API_KEY`, `SENTRY_AUTH_TOKEN`
 
 Optional or compatibility credential names may also be absent, but must use `secret_text` when configured: `ADMIN_SECRET`, `NUXT_DOC_TOKEN_SECRET`, and `RELEASE_DOWNLOAD_SIGNING_SECRET`. Public client IDs, origins, public keys, and key IDs are ordinary configuration and are not in this catalog.

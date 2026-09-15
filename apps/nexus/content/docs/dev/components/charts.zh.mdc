@@ -134,3 +134,9 @@ code: |
 - 没有 `echarts` 实例 prop——渲染层自研，调用方不需要也不能传 echarts。
 - 没有 `isDarkMode` prop——取色全部走 `--tx-chart-*` CSS 变量，跟随宿主 `.dark` / `[data-theme='dark']` 自动切换。
 - 所有 HTML 字符串 formatter 一律改为插槽（VNode），不存在 XSS 转义面。
+
+## 最佳实践
+
+- 常见指标场景优先使用专用图表封装（`TxTimeseriesChart`、`TxBubbleMap`、`TxChoroplethMap`、`TxSankeyChart`、`TxSparkChart` 或 `TxEChart`），避免过早从零手拼基础序列原语。
+- 样式取色统一通过 `--tx-chart-*` CSS 变量跟随宿主自适应主题，切忌硬编码固定十六进制颜色或手动维护暗色判断分支。
+- 单张图表序列数量建议控制在 3–7 条以内以保持良好可读性，并始终为每条序列提供明确图例或完整 Tooltip 说明。

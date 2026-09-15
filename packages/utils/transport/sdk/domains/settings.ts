@@ -29,6 +29,13 @@ import type {
   TraySettingsUpdateRequest,
 } from "../../events/types/app";
 import type {
+  CatalogVoiceProviderCheckResponse,
+  CatalogVoiceProviderRollbackRequest,
+  CatalogVoiceProviderRollbackResponse,
+  CatalogVoiceProviderStatusResponse,
+  CatalogVoiceProviderSyncResponse,
+} from "../../events/types/catalog";
+import type {
   DeviceIdleDiagnostic,
   DeviceIdleSettings,
 } from "../../events/types/device-idle";
@@ -61,7 +68,7 @@ import type {
   StreamController,
   StreamOptions,
 } from "../../types";
-import { AppEvents } from "../../events";
+import { AppEvents, CatalogEvents } from "../../events";
 import {
   projectFileIndexAddPathResult,
   projectFileIndexBatteryStatus,
@@ -163,6 +170,14 @@ export interface SettingsSdk {
       ) => Promise<AnalyticsMessage | null>;
     };
   };
+  catalog: {
+    getStatus: () => Promise<CatalogVoiceProviderStatusResponse>;
+    checkUpdates: () => Promise<CatalogVoiceProviderCheckResponse>;
+    sync: () => Promise<CatalogVoiceProviderSyncResponse>;
+    rollback: (
+      request?: CatalogVoiceProviderRollbackRequest,
+    ) => Promise<CatalogVoiceProviderRollbackResponse>;
+  };
 }
 
 export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
@@ -248,6 +263,13 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
         mark: (payload) =>
           transport.send(AppEvents.analytics.messages.mark, payload),
       },
+    },
+    catalog: {
+      getStatus: () => transport.send(CatalogEvents.voiceProvider.getStatus),
+      checkUpdates: () => transport.send(CatalogEvents.voiceProvider.checkUpdates),
+      sync: () => transport.send(CatalogEvents.voiceProvider.sync),
+      rollback: (request) =>
+        transport.send(CatalogEvents.voiceProvider.rollback, request ?? {}),
     },
   };
 }

@@ -112,7 +112,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     if (payload?.primaryValue) {
       clipboard.writeText(payload.primaryValue)
       try {
-        await this.recordHistory(payload, searchResult?.query ?? { text: '', inputs: [] })
+        await this.recordHistory(payload, this.resolveHistoryExpression(item, searchResult?.query))
       } catch (error) {
         previewLog.error('Failed to record history', { error })
       }
@@ -149,18 +149,18 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       previewMeta.expression = query.sdkQuery.text
     }
 
-    const payload: PreviewCardPayload = query.explicitCommand
-      ? {
-          ...abilityResult.payload,
-          badges: ['Calculator', ...(abilityResult.payload.badges ?? [])],
-          meta: {
-            ...abilityResult.payload.meta,
-            explicitCommand: query.explicitCommand,
-            rawQuery: query.originalQuery.text ?? '',
-            resolvedQuery: query.sdkQuery.text ?? ''
-          }
-        }
-      : abilityResult.payload
+    const payload: PreviewCardPayload = {
+      ...abilityResult.payload,
+      ...(query.explicitCommand
+        ? { badges: ['Calculator', ...(abilityResult.payload.badges ?? [])] }
+        : {}),
+      meta: {
+        ...abilityResult.payload.meta,
+        rawQuery: query.originalQuery.text ?? '',
+        resolvedQuery: query.sdkQuery.text ?? '',
+        ...(query.explicitCommand ? { explicitCommand: query.explicitCommand } : {})
+      }
+    }
 
     const builder = new TuffItemBuilder(id)
       .setSource(this.type, this.id)
@@ -203,21 +203,35 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     return custom.data as PreviewCardPayload | undefined
   }
 
-  private async recordHistory(payload: PreviewCardPayload, query: TuffQuery): Promise<void> {
+  private resolveHistoryExpression(item: TuffItem, query?: TuffQuery): string {
+    const payload = this.extractPayload(item)
+    const candidates = [
+      query?.text,
+      item.meta?.preview?.expression,
+      payload?.meta?.rawQuery,
+      payload?.title
+    ]
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim()) return candidate
+    }
+    return ''
+  }
+
+  private async recordHistory(payload: PreviewCardPayload, expression: string): Promise<void> {
     if (!payload?.primaryValue) return
     previewLog.debug('Saving preview history', {
       meta: {
-        expressionLength: query.text?.length ?? 0,
+        expressionLength: expression.length,
         valueLength: payload.primaryValue.length,
         abilityId: payload.abilityId
       }
     })
     const result = await clipboardModule.saveCustomEntry({
       content: payload.primaryValue,
-      rawContent: query.text ?? '',
+      rawContent: expression,
       category: 'preview',
       meta: {
-        expression: query.text ?? '',
+        expression,
         abilityId: payload.abilityId,
         payload
       }

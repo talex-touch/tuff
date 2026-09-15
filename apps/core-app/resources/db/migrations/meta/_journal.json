@@ -323,6 +323,13 @@
       "when": 1786320000000,
       "tag": "0045_voice_polish_telemetry",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1786406400000,
+      "tag": "0046_voice_provider_entries",
+      "breakpoints": true
     }
   ]
 }

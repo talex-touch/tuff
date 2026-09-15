@@ -10,12 +10,19 @@ export const CATALOG_CLIENT_SDKAPI = 260713;
 export const CATALOG_MAX_MANIFEST_BYTES = 64 * 1024;
 export const CATALOG_MAX_PACK_BYTES = 4 * 1024 * 1024;
 export const CATALOG_MAX_ENTRIES = 10_000;
+export const CATALOG_PAYLOAD_ENCRYPTION_ALGORITHM = "aes-256-gcm" as const;
+export const CATALOG_PAYLOAD_ENVELOPE_VERSION = 1 as const;
+export const CATALOG_PAYLOAD_KEY_BYTES = 32;
+export const CATALOG_PAYLOAD_NONCE_BYTES = 12;
+export const CATALOG_PAYLOAD_AUTH_TAG_BYTES = 16;
+export const CATALOG_MAX_PAYLOAD_KEY_RESPONSE_BYTES = 4096;
 
 const CATALOG_MAX_ID_LENGTH = 128;
 const CATALOG_MAX_VERSION_LENGTH = 64;
 const CATALOG_MAX_LOCALIZED_TEXT_LENGTH = 256;
 const CATALOG_MAX_ALIAS_LENGTH = 128;
 const CATALOG_MAX_ALIASES_PER_LOCALE = 64;
+const CATALOG_MAX_PAYLOAD_KEY_ID_LENGTH = 96;
 const CATALOG_MAX_METADATA_DEPTH = 6;
 const CATALOG_MAX_METADATA_NODES = 256;
 const CATALOG_MAX_METADATA_KEYS = 64;
@@ -27,21 +34,29 @@ const PACK_ID_PATTERN = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 const VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z._-]*$/;
 const ENTRY_ID_PATTERN = /^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
+const PAYLOAD_KEY_ID_PATTERN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
 const BASE64_PATTERN =
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 export const CATALOG_ERROR_CODES = {
   databaseUnavailable: "CATALOG_DB_UNAVAILABLE",
   trustRootUnavailable: "CATALOG_TRUST_ROOT_UNAVAILABLE",
+  authenticationRequired: "CATALOG_AUTH_REQUIRED",
   manifestTooLarge: "CATALOG_MANIFEST_TOO_LARGE",
   manifestInvalid: "CATALOG_MANIFEST_INVALID",
   typeUnsupported: "CATALOG_TYPE_UNSUPPORTED",
   schemaUnsupported: "CATALOG_SCHEMA_UNSUPPORTED",
   sdkIncompatible: "CATALOG_SDK_INCOMPATIBLE",
+  packExpired: "CATALOG_PACK_EXPIRED",
   localeUnsupported: "CATALOG_LOCALE_UNSUPPORTED",
   signatureInvalid: "CATALOG_SIGNATURE_INVALID",
   payloadTooLarge: "CATALOG_PAYLOAD_TOO_LARGE",
+  payloadEncryptionRequired: "CATALOG_PAYLOAD_ENCRYPTION_REQUIRED",
+  payloadEnvelopeInvalid: "CATALOG_PAYLOAD_ENVELOPE_INVALID",
+  payloadKeyUnavailable: "CATALOG_PAYLOAD_KEY_UNAVAILABLE",
+  payloadDecryptFailed: "CATALOG_PAYLOAD_DECRYPT_FAILED",
   hashMismatch: "CATALOG_HASH_MISMATCH",
   packInvalid: "CATALOG_PACK_INVALID",
   entryLimitExceeded: "CATALOG_ENTRY_LIMIT_EXCEEDED",
@@ -68,14 +83,54 @@ export const CATALOG_ROLLBACK_REASONS = [
 
 export type CatalogRollbackReason = (typeof CATALOG_ROLLBACK_REASONS)[number];
 
-export type CatalogPackType = "domain-lexicon";
+/**
+ * Admission list for declarative cloud-controlled data packs.
+ *
+ * Shared code owns delivery identity, signature, optional envelope encryption, and lifecycle.
+ * Every added type still requires a client-shipped typed normalizer, persistence adapter, and
+ * runtime consumer. This list must never become a registry of downloaded scripts or evaluators.
+ */
+export const CATALOG_PACK_TYPES = ["domain-lexicon", "voice-provider"] as const;
+
+export type CatalogPackType = (typeof CATALOG_PACK_TYPES)[number];
 export type CatalogPackSource = "builtin" | "remote";
 export type CatalogSignatureStatus = "builtin" | "verified";
 export type CatalogPackStatus = "ready" | "active" | "previous";
 
+export interface CatalogPayloadEncryptionV1 {
+  algorithm: typeof CATALOG_PAYLOAD_ENCRYPTION_ALGORITHM;
+  keyId: string;
+}
+
+export interface CatalogEncryptedPayloadEnvelopeV1 {
+  version: typeof CATALOG_PAYLOAD_ENVELOPE_VERSION;
+  algorithm: typeof CATALOG_PAYLOAD_ENCRYPTION_ALGORITHM;
+  keyId: string;
+  nonce: string;
+  ciphertext: string;
+  authTag: string;
+}
+
+export interface CatalogPayloadKeyV1 {
+  version: typeof CATALOG_PAYLOAD_ENVELOPE_VERSION;
+  algorithm: typeof CATALOG_PAYLOAD_ENCRYPTION_ALGORITHM;
+  keyId: string;
+  key: string;
+}
+
+export interface CatalogPayloadEncryptionContext {
+  contractVersion: typeof CATALOG_CONTRACT_VERSION;
+  type: CatalogPackType;
+  packId: string;
+  version: string;
+  schemaVersion: typeof CATALOG_SCHEMA_VERSION;
+  createdAt: string;
+  payloadEncryption: CatalogPayloadEncryptionV1;
+}
+
 export interface CatalogManifestV1 {
   contractVersion: 1;
-  type: "domain-lexicon";
+  type: CatalogPackType;
   packId: string;
   version: string;
   schemaVersion: 1;
@@ -88,6 +143,7 @@ export interface CatalogManifestV1 {
   signatureAlgorithm: "rsa-sha256";
   keyId: "release-v1";
   signature: string;
+  payloadEncryption?: CatalogPayloadEncryptionV1;
 }
 
 export interface DomainLexiconCatalogEntryV1 {
@@ -165,6 +221,7 @@ export function normalizeCatalogManifest(value: unknown): CatalogManifestV1 {
       "entryCount",
       "payloadBytes",
       "payloadSha256",
+      "payloadEncryption",
       "signatureAlgorithm",
       "keyId",
       "signature",
@@ -179,12 +236,7 @@ export function normalizeCatalogManifest(value: unknown): CatalogManifestV1 {
     CATALOG_ERROR_CODES.manifestInvalid,
     "Unsupported catalog contract version",
   );
-  requireLiteral(
-    record.type,
-    "domain-lexicon",
-    CATALOG_ERROR_CODES.typeUnsupported,
-    "Unsupported catalog pack type",
-  );
+  const type = requireCatalogPackType(record.type);
   requireLiteral(
     record.schemaVersion,
     CATALOG_SCHEMA_VERSION,
@@ -230,10 +282,20 @@ export function normalizeCatalogManifest(value: unknown): CatalogManifestV1 {
       "Catalog payload exceeds the supported byte limit",
     );
   }
+  const payloadEncryption =
+    record.payloadEncryption === undefined
+      ? undefined
+      : normalizeCatalogPayloadEncryption(record.payloadEncryption);
+  if (type !== "voice-provider" && payloadEncryption) {
+    fail(
+      CATALOG_ERROR_CODES.manifestInvalid,
+      "Catalog pack type does not support payload encryption",
+    );
+  }
 
   return Object.freeze({
     contractVersion: CATALOG_CONTRACT_VERSION,
-    type: "domain-lexicon",
+    type,
     packId: normalizePackId(record.packId, CATALOG_ERROR_CODES.manifestInvalid),
     version: normalizeVersion(
       record.version,
@@ -262,6 +324,7 @@ export function normalizeCatalogManifest(value: unknown): CatalogManifestV1 {
       "Unsupported catalog signing key",
     ),
     signature: normalizeSignature(record.signature),
+    ...(payloadEncryption ? { payloadEncryption } : {}),
   });
 }
 
@@ -280,6 +343,193 @@ export function parseCatalogManifestBytes(
       "catalog manifest",
       CATALOG_ERROR_CODES.manifestInvalid,
     ),
+  );
+}
+
+export function normalizeCatalogPayloadEncryption(
+  value: unknown,
+): CatalogPayloadEncryptionV1 {
+  const record = requireRecord(
+    value,
+    CATALOG_ERROR_CODES.manifestInvalid,
+    "Catalog payload encryption must be an object",
+  );
+  assertExactKeys(
+    record,
+    ["algorithm", "keyId"],
+    CATALOG_ERROR_CODES.manifestInvalid,
+    "catalog payload encryption",
+  );
+  return Object.freeze({
+    algorithm: requireLiteral(
+      record.algorithm,
+      CATALOG_PAYLOAD_ENCRYPTION_ALGORITHM,
+      CATALOG_ERROR_CODES.manifestInvalid,
+      "Unsupported catalog payload encryption algorithm",
+    ),
+    keyId: normalizePayloadKeyId(record.keyId, CATALOG_ERROR_CODES.manifestInvalid),
+  });
+}
+
+export function normalizeCatalogEncryptedPayloadEnvelope(
+  value: unknown,
+): CatalogEncryptedPayloadEnvelopeV1 {
+  const record = requireRecord(
+    value,
+    CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+    "Catalog encrypted payload envelope must be an object",
+  );
+  assertExactKeys(
+    record,
+    ["version", "algorithm", "keyId", "nonce", "ciphertext", "authTag"],
+    CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+    "catalog encrypted payload envelope",
+  );
+  return Object.freeze({
+    version: requireLiteral(
+      record.version,
+      CATALOG_PAYLOAD_ENVELOPE_VERSION,
+      CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+      "Unsupported catalog payload envelope version",
+    ),
+    algorithm: requireLiteral(
+      record.algorithm,
+      CATALOG_PAYLOAD_ENCRYPTION_ALGORITHM,
+      CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+      "Unsupported catalog payload envelope algorithm",
+    ),
+    keyId: normalizePayloadKeyId(
+      record.keyId,
+      CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+    ),
+    nonce: normalizeBase64Bytes(
+      record.nonce,
+      CATALOG_PAYLOAD_NONCE_BYTES,
+      CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+      "Catalog payload nonce",
+    ),
+    ciphertext: normalizeBase64Bytes(
+      record.ciphertext,
+      null,
+      CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+      "Catalog payload ciphertext",
+      CATALOG_MAX_PACK_BYTES,
+    ),
+    authTag: normalizeBase64Bytes(
+      record.authTag,
+      CATALOG_PAYLOAD_AUTH_TAG_BYTES,
+      CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+      "Catalog payload authentication tag",
+    ),
+  });
+}
+
+export function parseCatalogEncryptedPayloadEnvelopeBytes(
+  bytes: Uint8Array,
+): CatalogEncryptedPayloadEnvelopeV1 {
+  if (bytes.byteLength > CATALOG_MAX_PACK_BYTES) {
+    fail(
+      CATALOG_ERROR_CODES.payloadTooLarge,
+      "Catalog encrypted payload exceeds the supported byte limit",
+    );
+  }
+  return normalizeCatalogEncryptedPayloadEnvelope(
+    parseJsonBytes(
+      bytes,
+      "catalog encrypted payload envelope",
+      CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+    ),
+  );
+}
+
+export function serializeCatalogEncryptedPayloadEnvelope(
+  envelope: CatalogEncryptedPayloadEnvelopeV1,
+): Uint8Array {
+  return encodeUtf8(stableStringify(normalizeCatalogEncryptedPayloadEnvelope(envelope)));
+}
+
+export function normalizeCatalogPayloadKey(value: unknown): CatalogPayloadKeyV1 {
+  const record = requireRecord(
+    value,
+    CATALOG_ERROR_CODES.payloadKeyUnavailable,
+    "Catalog payload key response must be an object",
+  );
+  assertExactKeys(
+    record,
+    ["version", "algorithm", "keyId", "key"],
+    CATALOG_ERROR_CODES.payloadKeyUnavailable,
+    "catalog payload key response",
+  );
+  return Object.freeze({
+    version: requireLiteral(
+      record.version,
+      CATALOG_PAYLOAD_ENVELOPE_VERSION,
+      CATALOG_ERROR_CODES.payloadKeyUnavailable,
+      "Unsupported catalog payload key version",
+    ),
+    algorithm: requireLiteral(
+      record.algorithm,
+      CATALOG_PAYLOAD_ENCRYPTION_ALGORITHM,
+      CATALOG_ERROR_CODES.payloadKeyUnavailable,
+      "Unsupported catalog payload key algorithm",
+    ),
+    keyId: normalizePayloadKeyId(
+      record.keyId,
+      CATALOG_ERROR_CODES.payloadKeyUnavailable,
+    ),
+    key: normalizeBase64Bytes(
+      record.key,
+      CATALOG_PAYLOAD_KEY_BYTES,
+      CATALOG_ERROR_CODES.payloadKeyUnavailable,
+      "Catalog payload key",
+    ),
+  });
+}
+
+export function parseCatalogPayloadKeyBytes(bytes: Uint8Array): CatalogPayloadKeyV1 {
+  if (bytes.byteLength > CATALOG_MAX_PAYLOAD_KEY_RESPONSE_BYTES) {
+    fail(
+      CATALOG_ERROR_CODES.payloadKeyUnavailable,
+      "Catalog payload key response exceeds the supported byte limit",
+    );
+  }
+  return normalizeCatalogPayloadKey(
+    parseJsonBytes(
+      bytes,
+      "catalog payload key response",
+      CATALOG_ERROR_CODES.payloadKeyUnavailable,
+    ),
+  );
+}
+
+export function createCatalogPayloadEncryptionAad(
+  input: CatalogPayloadEncryptionContext,
+): Uint8Array {
+  const payloadEncryption = normalizeCatalogPayloadEncryption(input.payloadEncryption);
+  return encodeUtf8(
+    JSON.stringify({
+      kind: "tuff.catalog.payload-encryption",
+      contractVersion: requireLiteral(
+        input.contractVersion,
+        CATALOG_CONTRACT_VERSION,
+        CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+        "Unsupported catalog contract version",
+      ),
+      type: requireCatalogPackType(input.type),
+      packId: normalizePackId(input.packId, CATALOG_ERROR_CODES.payloadEnvelopeInvalid),
+      version: normalizeVersion(input.version, CATALOG_ERROR_CODES.payloadEnvelopeInvalid),
+      schemaVersion: requireLiteral(
+        input.schemaVersion,
+        CATALOG_SCHEMA_VERSION,
+        CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+        "Unsupported catalog schema version",
+      ),
+      createdAt: normalizeTimestamp(
+        input.createdAt,
+        CATALOG_ERROR_CODES.payloadEnvelopeInvalid,
+      ),
+      payloadEncryption,
+    }),
   );
 }
 
@@ -395,6 +645,9 @@ export function createCatalogManifestSigningPayload(
       entryCount: normalized.entryCount,
       payloadBytes: normalized.payloadBytes,
       payloadSha256: normalized.payloadSha256,
+      ...(normalized.payloadEncryption
+        ? { payloadEncryption: normalized.payloadEncryption }
+        : {}),
       signatureAlgorithm: normalized.signatureAlgorithm,
       keyId: normalized.keyId,
     }),
@@ -729,6 +982,57 @@ function normalizeVersion(value: unknown, code: CatalogErrorCode): string {
   return version;
 }
 
+function normalizePayloadKeyId(value: unknown, code: CatalogErrorCode): string {
+  const keyId = normalizeBoundedText(
+    value,
+    CATALOG_MAX_PAYLOAD_KEY_ID_LENGTH,
+    "Catalog payload key id is invalid",
+    false,
+    code,
+  );
+  if (!PAYLOAD_KEY_ID_PATTERN.test(keyId)) {
+    fail(code, "Catalog payload key id is malformed");
+  }
+  return keyId;
+}
+
+function isCanonicalBase64(value: string): boolean {
+  if (value.endsWith("==")) {
+    const sextet = BASE64_ALPHABET.indexOf(value[value.length - 3] ?? "");
+    return sextet >= 0 && (sextet & 0x0f) === 0;
+  }
+  if (value.endsWith("=")) {
+    const sextet = BASE64_ALPHABET.indexOf(value[value.length - 2] ?? "");
+    return sextet >= 0 && (sextet & 0x03) === 0;
+  }
+  return true;
+}
+
+function normalizeBase64Bytes(
+  value: unknown,
+  expectedBytes: number | null,
+  code: CatalogErrorCode,
+  label: string,
+  maxEncodedLength = 8192,
+): string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > maxEncodedLength ||
+    value.length % 4 !== 0 ||
+    !BASE64_PATTERN.test(value) ||
+    !isCanonicalBase64(value)
+  ) {
+    fail(code, `${label} encoding is invalid`);
+  }
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+  const decodedBytes = (value.length / 4) * 3 - padding;
+  if (expectedBytes !== null && decodedBytes !== expectedBytes) {
+    fail(code, `${label} length is invalid`);
+  }
+  return value;
+}
+
 function normalizeEntryId(value: unknown): string {
   const id = normalizeBoundedText(
     value,
@@ -839,11 +1143,26 @@ function assertExactKeys(
 
 function isOptionalContractKey(key: string): boolean {
   return (
+    key === "payloadEncryption" ||
     key === "searchBoost" ||
     key === "deprecated" ||
     key === "replacedBy" ||
     key === "metadata"
   );
+}
+
+export function isCatalogPackType(value: unknown): value is CatalogPackType {
+  return (
+    typeof value === "string" &&
+    (CATALOG_PACK_TYPES as readonly string[]).includes(value)
+  );
+}
+
+function requireCatalogPackType(value: unknown): CatalogPackType {
+  if (!isCatalogPackType(value)) {
+    fail(CATALOG_ERROR_CODES.typeUnsupported, "Unsupported catalog pack type");
+  }
+  return value;
 }
 
 function requireLiteral<T extends string | number>(

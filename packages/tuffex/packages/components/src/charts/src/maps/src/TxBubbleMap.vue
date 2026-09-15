@@ -33,7 +33,6 @@ defineSlots<{
 }>()
 
 const base = useMapBase(props)
-const container = base.container
 
 interface Bubble {
   key: number
@@ -143,7 +142,7 @@ function onLeave(): void {
 
 <template>
   <div
-    ref="container"
+    :ref="base.container"
     class="tx-map tx-map--bubble"
     :style="base.rootStyle.value"
     @wheel="base.onWheel"

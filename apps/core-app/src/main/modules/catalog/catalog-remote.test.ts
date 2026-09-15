@@ -3,11 +3,13 @@ import {
   CATALOG_ERROR_CODES,
   CATALOG_MAX_MANIFEST_BYTES,
   CATALOG_MAX_PACK_BYTES,
+  CATALOG_MAX_PAYLOAD_KEY_RESPONSE_BYTES,
   CatalogContractError,
   type CatalogErrorCode,
   type CatalogManifestV1
 } from '@talex-touch/utils/i18n'
 import { NetworkHttpStatusError, type NetworkRequestOptions } from '@talex-touch/utils/network'
+import type { NexusResponsePayload } from '@talex-touch/utils/transport/events/auth'
 import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -217,5 +219,183 @@ describe('NexusCatalogRemote', () => {
       throw new Error('sensitive upstream detail')
     })
     await expectCode(failureRemote.fetchPack(manifest()), CATALOG_ERROR_CODES.remoteUnavailable)
+  })
+})
+
+describe('NexusCatalogRemote voice-provider payload key', () => {
+  function voiceManifest(overrides: Partial<CatalogManifestV1> = {}): CatalogManifestV1 {
+    return {
+      contractVersion: 1,
+      type: 'voice-provider',
+      packId: 'official.voice-provider',
+      version: '20260701',
+      schemaVersion: 1,
+      createdAt: '2026-07-15T00:00:00.000Z',
+      minSdkapi: CATALOG_CLIENT_SDKAPI,
+      locales: ['zh-CN', 'en-US'],
+      entryCount: 1,
+      payloadBytes: 200,
+      payloadSha256: 'b'.repeat(64),
+      payloadEncryption: { algorithm: 'aes-256-gcm', keyId: 'voice-key-v1' },
+      signatureAlgorithm: 'rsa-sha256',
+      keyId: 'release-v1',
+      signature: 'AA==',
+      ...overrides
+    }
+  }
+
+  function keyBody(overrides: Record<string, unknown> = {}): string {
+    return JSON.stringify({
+      version: 1,
+      algorithm: 'aes-256-gcm',
+      keyId: 'voice-key-v1',
+      key: Buffer.alloc(32, 9).toString('base64'),
+      ...overrides
+    })
+  }
+
+  function nexusResponse(body: string, status = 200): NexusResponsePayload {
+    return {
+      status,
+      statusText: status === 200 ? 'OK' : 'Error',
+      headers: {},
+      url: 'https://nexus.example.test/keys',
+      body
+    }
+  }
+
+  function voiceRemoteWith(
+    requestWithAuth: (path: string) => Promise<NexusResponsePayload | null>
+  ) {
+    const requester = vi.fn(requestWithAuth)
+    return {
+      requester,
+      remote: new NexusCatalogRemote({
+        network: { requestStream: vi.fn() },
+        resolveBaseUrl: () => 'https://nexus.example.test/root/',
+        requestWithAuth: requester
+      })
+    }
+  }
+
+  it('fetches the payload key from the exact authenticated route and decodes canonical bytes', async () => {
+    const { remote, requester } = voiceRemoteWith(async () => nexusResponse(keyBody()))
+
+    const material = await remote.fetchVoiceProviderPayloadKey(voiceManifest())
+
+    expect(material.keyId).toBe('voice-key-v1')
+    expect(Buffer.from(material.keyBytes)).toEqual(Buffer.alloc(32, 9))
+    expect(requester).toHaveBeenCalledWith(
+      '/api/v1/catalogs/voice-provider/official.voice-provider/20260701/keys/voice-key-v1'
+    )
+  })
+
+  it.each([401, 403, 500])(
+    'maps an authenticated key endpoint status %i to payloadKeyUnavailable',
+    async (status) => {
+      const { remote } = voiceRemoteWith(async () => nexusResponse(keyBody(), status))
+
+      await expectCode(
+        remote.fetchVoiceProviderPayloadKey(voiceManifest()),
+        CATALOG_ERROR_CODES.payloadKeyUnavailable
+      )
+    }
+  )
+
+  it('maps a missing authenticated response to payloadKeyUnavailable', async () => {
+    const { remote } = voiceRemoteWith(async () => null)
+
+    await expectCode(
+      remote.fetchVoiceProviderPayloadKey(voiceManifest()),
+      CATALOG_ERROR_CODES.payloadKeyUnavailable
+    )
+  })
+
+  it('sanitizes an authenticated request failure to payloadKeyUnavailable', async () => {
+    const { remote } = voiceRemoteWith(async () => {
+      throw new Error('sensitive upstream detail')
+    })
+
+    await expectCode(
+      remote.fetchVoiceProviderPayloadKey(voiceManifest()),
+      CATALOG_ERROR_CODES.payloadKeyUnavailable
+    )
+  })
+
+  it.each([
+    ['a non-JSON body', 'not-json'],
+    [
+      'a missing key field',
+      JSON.stringify({ version: 1, algorithm: 'aes-256-gcm', keyId: 'voice-key-v1' })
+    ],
+    ['a wrong-length key', keyBody({ key: Buffer.alloc(16, 9).toString('base64') })],
+    ['a non-canonical key encoding', keyBody({ key: 'not base64!!' })],
+    ['an unexpected field', keyBody({ extra: true })]
+  ])('maps %s to payloadKeyUnavailable', async (_label, body) => {
+    const { remote } = voiceRemoteWith(async () => nexusResponse(body))
+
+    await expectCode(
+      remote.fetchVoiceProviderPayloadKey(voiceManifest()),
+      CATALOG_ERROR_CODES.payloadKeyUnavailable
+    )
+  })
+
+  it('rejects a key response over the supported byte bound with payloadKeyUnavailable', async () => {
+    const { remote } = voiceRemoteWith(async () =>
+      nexusResponse('x'.repeat(CATALOG_MAX_PAYLOAD_KEY_RESPONSE_BYTES + 1))
+    )
+
+    await expectCode(
+      remote.fetchVoiceProviderPayloadKey(voiceManifest()),
+      CATALOG_ERROR_CODES.payloadKeyUnavailable
+    )
+  })
+
+  it.each([
+    ['key id', { keyId: 'other-key-v1' }],
+    ['algorithm', { algorithm: 'aes-128-gcm' }]
+  ])(
+    'rejects a key response whose %s disagrees with the manifest encryption',
+    async (_label, overrides) => {
+      const { remote } = voiceRemoteWith(async () => nexusResponse(keyBody(overrides)))
+
+      await expectCode(
+        remote.fetchVoiceProviderPayloadKey(voiceManifest()),
+        CATALOG_ERROR_CODES.payloadKeyUnavailable
+      )
+    }
+  )
+
+  it('fails closed without an authenticated requester', async () => {
+    const remote = new NexusCatalogRemote({
+      network: { requestStream: vi.fn() },
+      resolveBaseUrl: () => 'https://nexus.example.test/root/'
+    })
+
+    await expectCode(
+      remote.fetchVoiceProviderPayloadKey(voiceManifest()),
+      CATALOG_ERROR_CODES.payloadKeyUnavailable
+    )
+  })
+
+  it('rejects a non-voice-provider manifest with typeUnsupported', async () => {
+    const { remote } = voiceRemoteWith(async () => nexusResponse(keyBody()))
+
+    await expectCode(
+      remote.fetchVoiceProviderPayloadKey(
+        voiceManifest({ type: 'domain-lexicon', payloadEncryption: undefined })
+      ),
+      CATALOG_ERROR_CODES.typeUnsupported
+    )
+  })
+
+  it('requires encryption metadata before requesting a payload key', async () => {
+    const { remote, requester } = voiceRemoteWith(async () => nexusResponse(keyBody()))
+
+    await expectCode(
+      remote.fetchVoiceProviderPayloadKey(voiceManifest({ payloadEncryption: undefined })),
+      CATALOG_ERROR_CODES.payloadEncryptionRequired
+    )
+    expect(requester).not.toHaveBeenCalled()
   })
 })
