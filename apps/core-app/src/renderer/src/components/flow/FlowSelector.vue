@@ -14,6 +14,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 interface Props {
@@ -317,9 +318,7 @@ function getPayloadPreview(): string {
           <TxScroll native no-padding class="flex-1 min-h-0">
             <div class="p-2">
               <div v-if="loading" class="flex items-center justify-center py-8">
-                <i
-                  class="ri:loader-4-line animate-spin text-2xl text-[var(--tx-text-color-secondary)]"
-                />
+                <TxSpinner :size="24" class="text-[var(--tx-text-color-secondary)]" />
               </div>
 
               <div v-else-if="filteredTargets.length === 0" class="text-center py-8">

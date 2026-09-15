@@ -208,11 +208,11 @@ async function saveDevSettings(): Promise<void> {
           >
             <TxButton
               variant="flat"
-              :disabled="!hasChanges || isSaving || manifestLoading"
+              :disabled="!hasChanges"
+              :loading="isSaving || manifestLoading"
               @click="saveDevSettings"
             >
-              <i v-if="isSaving || manifestLoading" class="i-ri-loader-4-line animate-spin" />
-              <i v-else class="i-ri-save-line" />
+              <i v-if="!isSaving && !manifestLoading" class="i-ri-save-line" />
               <span>
                 {{
                   isSaving
@@ -277,18 +277,5 @@ async function saveDevSettings(): Promise<void> {
 .PluginDevSettings-Body {
   padding: 14px 0 18px;
   overflow-y: auto;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
 }
 </style>

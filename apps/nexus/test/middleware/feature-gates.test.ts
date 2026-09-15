@@ -70,7 +70,7 @@ describe('feature-gates middleware', () => {
     })
 
     it('ignores non-API requests entirely', () => {
-      expect(gateOf('/dashboard/admin/risk')).toBe('allowed')
+      expect(gateOf('/admin/risk')).toBe('allowed')
     })
 
     it('carries a machine-readable code so clients need not match the message', () => {

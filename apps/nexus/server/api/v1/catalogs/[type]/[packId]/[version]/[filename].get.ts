@@ -33,6 +33,8 @@ export default defineEventHandler(async (event) => {
 
   if (!artifact)
     throw createError({ statusCode: 404, statusMessage: 'Catalog artifact is not published.' })
+  if (artifact.sha256 !== identity.sha256)
+    throw createError({ statusCode: 404, statusMessage: 'Catalog artifact is not published.' })
 
   setResponseHeader(event, 'Content-Type', artifact.contentType)
   setResponseHeader(event, 'Content-Length', artifact.data.byteLength)

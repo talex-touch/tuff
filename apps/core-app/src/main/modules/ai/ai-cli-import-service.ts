@@ -18,6 +18,7 @@ import { homedir } from 'node:os'
 import {
   basename,
   delimiter,
+  dirname,
   extname,
   isAbsolute,
   join,
@@ -39,6 +40,12 @@ interface SourceLayout {
   userRoot: string
   userFiles: Array<{ path: string; kind: AiImportItemKind }>
   userDirs: Array<{ path: string; kind: AiImportItemKind }>
+  /**
+   * Absolute MCP config files outside `userRoot`. They get their own reader: `.claude.json` is a
+   * large application-state document, and the only part of it this feature needs is the `mcpServers`
+   * block.
+   */
+  userMcpFiles?: Array<{ path: string; name: string }>
   projectFiles: Array<{ path: string; kind: AiImportItemKind }>
   projectDirs: Array<{ path: string; kind: AiImportItemKind }>
 }
@@ -104,6 +111,10 @@ function layouts(home: string): SourceLayout[] {
         { path: 'agents', kind: 'agent' },
         { path: 'rules', kind: 'rule' }
       ],
+      // MCP servers live beside the settings directory rather than inside it. Read as an MCP file,
+      // not as a config one: the same document holds the CLI's project history, and importing it as
+      // configuration would sweep that in with three server definitions.
+      userMcpFiles: [{ path: join(home, '.claude.json'), name: 'Claude Code MCP' }],
       projectFiles: [
         { path: 'CLAUDE.md', kind: 'instruction' },
         { path: '.mcp.json', kind: 'mcp' },
@@ -335,6 +346,42 @@ function configMetadata(content: string, extension: string): CandidateMetadata {
   }
 }
 
+/**
+ * Metadata for a file whose remaining contents are none of this feature's business.
+ *
+ * {@link configMetadata} walks the whole document, which is right for a CLI's own config and wrong
+ * for a file like `.claude.json`: it would put thousands of unrelated key paths into the scan record
+ * to describe three servers.
+ */
+function mcpFileMetadata(content: string, extension: string): CandidateMetadata {
+  const parsed = parseConfig(content, extension)
+  if (!parsed)
+    return {
+      keyPaths: [],
+      sensitiveKeyPaths: [],
+      serverNames: [],
+      transportTypes: [],
+      secretKeyPaths: []
+    }
+  const profiles = parseMcpProfiles(parsed)
+  const secretKeyPaths = profiles.flatMap((profile) => {
+    const prefix = `${profile.rootKey}.${profile.name}`
+    return [
+      ...Object.keys(profile.env).map((key) => `${prefix}.env.${key}`),
+      ...Object.keys(profile.headers).map((key) => `${prefix}.headers.${key}`),
+      ...(profile.bearerToken ? [`${prefix}.bearer_token`] : []),
+      ...(profile.requiresReauth ? [`${prefix}.reauth-required`] : [])
+    ]
+  })
+  return {
+    keyPaths: [],
+    sensitiveKeyPaths: [],
+    serverNames: profiles.map((profile) => profile.name).sort(),
+    transportTypes: Array.from(new Set(profiles.map((profile) => profile.type))).sort(),
+    secretKeyPaths: Array.from(new Set(secretKeyPaths)).sort()
+  }
+}
+
 async function readCandidateFile(
   sourceRoot: string,
   path: string
@@ -353,15 +400,23 @@ function candidateName(path: string, metadata: CandidateMetadata): string {
 async function buildCandidate(
   source: AiImportSourceSnapshot,
   kind: AiImportItemKind,
-  path: string
+  path: string,
+  /**
+   * Directory the file must stay inside. `userRoot` except for the MCP files an agent keeps beside
+   * its config directory, where the root is the directory holding the file itself.
+   */
+  containedBy: string = source.rootPath,
+  nameOverride?: string
 ): Promise<AiImportCandidate[]> {
   try {
-    const { canonicalPath, content, updatedAt } = await readCandidateFile(source.rootPath, path)
+    const { canonicalPath, content, updatedAt } = await readCandidateFile(containedBy, path)
     const extension = extname(canonicalPath).toLowerCase()
     const metadata =
-      kind === 'config' || kind === 'mcp'
-        ? configMetadata(content, extension)
-        : parseFrontmatter(content)
+      kind === 'mcp'
+        ? mcpFileMetadata(content, extension)
+        : kind === 'config'
+          ? configMetadata(content, extension)
+          : parseFrontmatter(content)
     const base = {
       id: `${source.id}:${kind}:${hash(canonicalPath).slice(0, 20)}`,
       sourceId: source.id,
@@ -369,9 +424,9 @@ async function buildCandidate(
       scope: source.scope,
       targetScope: source.scope === 'user' ? ('global' as const) : ('workspace' as const),
       canonicalRootId: source.id,
-      sourceKey: `${kind}:${relative(source.rootPath, canonicalPath)}`,
+      sourceKey: `${kind}:${relative(containedBy, canonicalPath)}`,
       kind,
-      name: candidateName(canonicalPath, metadata),
+      name: nameOverride ?? candidateName(canonicalPath, metadata),
       path: canonicalPath,
       fingerprint: hash(content),
       updatedAt,
@@ -534,7 +589,8 @@ async function scanSource(
   executablePath: string | undefined,
   fileSpecs: SourceLayout['userFiles'],
   dirSpecs: SourceLayout['userDirs'],
-  scannedAt: number
+  scannedAt: number,
+  mcpFiles: NonNullable<SourceLayout['userMcpFiles']> = []
 ): Promise<{ source: AiImportSourceSnapshot; candidates: AiImportCandidate[] }> {
   let canonicalRoot = resolve(rootPath)
   try {
@@ -557,6 +613,12 @@ async function scanSource(
   const candidates: AiImportCandidate[] = []
   for (const file of fileSpecs)
     candidates.push(...(await buildCandidate(source, file.kind, join(canonicalRoot, file.path))))
+
+  // Contained by their own directory: these live next to the agent's config root, not inside it.
+  for (const file of mcpFiles)
+    candidates.push(
+      ...(await buildCandidate(source, 'mcp', file.path, dirname(file.path), file.name))
+    )
 
   const budget = {
     remainingEntries: MAX_SCAN_ENTRIES_PER_SOURCE,
@@ -611,7 +673,8 @@ export class AiCliImportService {
           executablePath,
           layout.userFiles,
           layout.userDirs,
-          scannedAt
+          scannedAt,
+          layout.userMcpFiles ?? []
         ),
         scanSource(
           layout,

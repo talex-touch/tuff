@@ -15,6 +15,7 @@ import {
 } from '@talex-touch/utils/renderer'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxRating } from '@talex-touch/tuffex/rating'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import StoreDetailSkeleton from '~/components/store/StoreDetailSkeleton.vue'
@@ -320,7 +321,7 @@ onMounted(() => {
       <div class="detail-content">
         <div class="readme-section">
           <div v-if="readmeLoading" class="readme-state">
-            <i class="i-ri-loader-4-line animate-spin" />
+            <TxSpinner :size="16" />
             <span>{{ t('store.detailDialog.readmeLoading') }}</span>
           </div>
           <div v-else-if="readmeError" class="readme-state error">
@@ -353,7 +354,7 @@ onMounted(() => {
             </div>
 
             <div v-if="contentLoading && contentPackages.length === 0" class="content-state">
-              <i class="i-ri-loader-4-line animate-spin" />
+              <TxSpinner :size="16" />
               <span>{{ t('store.detailDialog.contentLoading') }}</span>
             </div>
             <div v-else-if="contentErrorText" class="content-state error">
@@ -878,19 +879,6 @@ onMounted(() => {
   .content-package-actions {
     width: 100%;
     justify-content: flex-end;
-  }
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
   }
 }
 </style>

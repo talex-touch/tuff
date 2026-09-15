@@ -118,6 +118,21 @@ export interface DrawerProps {
    * @default 1998
    */
   zIndex?: number
+
+  /**
+   * Whether to defer rendering the drawer's slot content until it first opens.
+   *
+   * The drawer root stays mounted for its whole life so the slide-out animation can run and the
+   * `visibility` paint contract holds; only the header/body/footer content is gated. A drawer that
+   * is never opened therefore costs nothing beyond its own shell, which matters on pages that
+   * mount several of them at once.
+   *
+   * Content is kept alive after the first open, so reopening never re-runs child `setup`.
+   * Set to `false` when a child must mount eagerly - to register a global listener or warm a
+   * request before the user ever opens the drawer, say.
+   * @default true
+   */
+  lazy?: boolean
 }
 
 /**

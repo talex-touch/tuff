@@ -31,18 +31,14 @@ import zh from '../../i18n/locales/route/zh/dashboard'
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-/** Everything an administrator can reach from the admin section of the nav. */
+/** Everything an administrator can reach from the administrator console. */
 const ADMIN_SURFACE = [
-  'pages/dashboard/admin',
-  'components/dashboard/admin',
+  'pages/admin',
+  'components/admin',
   'components/dashboard/intelligence',
-  'components/dashboard/DashboardNav.vue',
   'components/dashboard/provider-registry',
   'composables/useProviderRegistryAdmin.ts',
   'composables/provider-registry',
-  // Admin menu destinations that live outside the admin directory.
-  'pages/dashboard/updates.vue',
-  'pages/dashboard/images.vue',
 ]
 
 function sourceFiles(target: string, found: string[] = []): string[] {

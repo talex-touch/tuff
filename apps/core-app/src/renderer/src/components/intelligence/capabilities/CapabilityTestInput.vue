@@ -170,7 +170,6 @@ if (availableProviders.value.length > 0) {
         @click="handleTest"
       >
         <i v-if="!isTesting" class="i-carbon-play-filled" aria-hidden="true" />
-        <i v-else class="i-carbon-circle-dash animate-spin" aria-hidden="true" />
         <span>{{ testButtonText }}</span>
       </TxButton>
     </div>
@@ -251,18 +250,5 @@ if (availableProviders.value.length > 0) {
 .action-section {
   display: flex;
   gap: 0.75rem;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

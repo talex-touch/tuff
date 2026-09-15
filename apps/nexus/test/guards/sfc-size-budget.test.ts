@@ -118,7 +118,7 @@ function historicalGovernanceSfc(): SourceFile {
     '',
     ...styleLines,
   ]
-  return { path: 'app/pages/dashboard/admin/governance.vue', content: body.join('\n') }
+  return { path: 'app/pages/admin/governance.vue', content: body.join('\n') }
 }
 
 describe('guard: huge SFCs keep their styles in a sibling file', () => {
@@ -143,7 +143,7 @@ describe('guard: huge SFCs keep their styles in a sibling file', () => {
   it('clears the file once the styles move out', () => {
     // Negative control: same size, styles externalised — which is the shipped fix.
     const fixed: SourceFile = {
-      path: 'app/pages/dashboard/admin/governance.vue',
+      path: 'app/pages/admin/governance.vue',
       content: historicalGovernanceSfc().content.replace(/<style scoped>[\s\S]*<\/style>/, ''),
     }
     expect(formatViolations(scanSfcSize([fixed]))).toBe('')
@@ -151,7 +151,7 @@ describe('guard: huge SFCs keep their styles in a sibling file', () => {
 
   it('flags an SFC over the line ceiling', () => {
     const oversized: SourceFile = {
-      path: 'app/pages/dashboard/admin/monster.vue',
+      path: 'app/pages/admin/monster.vue',
       content: ['<template>', ...Array.from({ length: LINE_CEILING }, () => '  <div />'), '</template>'].join('\n'),
     }
     const violations = scanSfcSize([oversized])

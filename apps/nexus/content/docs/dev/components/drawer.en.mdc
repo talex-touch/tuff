@@ -290,6 +290,10 @@ rows:
     description: 'Custom z-index. When unset the runtime z-index manager assigns one (seeded at `10000`, incremented per drawer); set it manually only to coexist with externally fixed layers.'
     type: 'number'
     default: '-'
+  - name: lazy
+    description: 'Defer rendering slot content until the drawer first opens. The panel itself stays mounted, so the slide-out animation is unaffected; content is kept alive after the first open, so reopening never re-runs child setup. Set `false` when a child must mount eagerly.'
+    type: 'boolean'
+    default: 'true'
 ---
 ::
 

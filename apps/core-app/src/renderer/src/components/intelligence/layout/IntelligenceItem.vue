@@ -11,7 +11,7 @@ import {
   isNexusManagedProvider,
   TUFF_NEXUS_PROVIDER_ICON
 } from '~/modules/intelligence/nexus-provider'
-import { providerIconForChannel } from '~/modules/intelligence/provider-icons'
+import { resolveProviderIcon } from '~/modules/intelligence/provider-icon-override'
 import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
 
 enum IntelligenceProviderType {
@@ -114,7 +114,7 @@ function getProviderIcon(provider: IntelligenceProviderConfig): ITuffIcon {
   }
 
   return {
-    ...providerIconForChannel(getProviderChannelType(provider), provider.type),
+    ...resolveProviderIcon(provider, getProviderChannelType(provider)),
     status: 'normal' as const
   }
 }

@@ -85,7 +85,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## 组件梳理
 
-当前源码导出模块总数：**150**。
+当前源码导出模块总数：**152**。
 
 全部模块按三大套件划分，每个套件都有独立的分类入口：
 
@@ -99,7 +99,7 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 
 通用、表单、布局、导航、数据展示、反馈与状态占位组件，从 `@talex-touch/tuffex/base` 引入。
 
-- `通用 (9)`: `button`, `icon`, `icon-chip`, `avatar`, `tag`, `badge`, `status-badge`, `kbd`, `divider`
+- `通用 (10)`: `button`, `icon`, `icon-chip`, `icon-picker`, `avatar`, `tag`, `badge`, `status-badge`, `kbd`, `divider`
 - `表单 (24)`: `form`, `input`, `flat-input`, `textarea`, `number-input`, `search-input`, `tag-input`, `scrub-field`, `select`, `flat-select`, `search-select`, `tree-select`, `cascader`, `picker`, `date-picker`, `radio`, `flat-radio`, `checkbox`, `switch`, `slider`, `segmented-slider`, `rating`, `file-uploader`, `image-uploader`
 - `布局 (11)`: `container`, `flex`, `grid`, `grid-layout`, `stack`, `splitter`, `scroll`, `collapse`, `card`, `card-item`, `group-block`
 - `导航 (10)`: `tabs`, `tab-bar`, `nav-bar`, `sidebar-nav`, `breadcrumb`, `steps`, `pagination`, `dropdown-menu`, `flat-dropdown`, `context-menu`
@@ -113,7 +113,7 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 
 - `高级交互 (6)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `virtual-list`, `version-capsule`
 - `可视化 (5)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
-- `视觉效果 (17)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `liquid`, `flip-overlay`
+- `视觉效果 (18)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `liquid`, `flip-overlay`
 - `底层原语 (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`
 
 ### ai AI 套件

@@ -29,10 +29,15 @@ describe('persist', () => {
     // The stream cannot survive the write, so restoring `streaming` would bring back a bubble that
     // waits forever for deltas that will never arrive.
     const history = useConversationHistory()
-    await history.persist('c1', 'Title', [
-      message({ id: 'u1' }),
-      message({ id: 'a1', role: 'assistant', content: '', status: 'streaming' })
-    ])
+    await history.persist(
+      'c1',
+      'Title',
+      [
+        message({ id: 'u1' }),
+        message({ id: 'a1', role: 'assistant', content: '', status: 'streaming' })
+      ],
+      null
+    )
 
     const saved = send.mock.calls[0]?.[1]
     expect(saved.messages.map((entry: { status: string }) => entry.status)).toEqual([
@@ -43,10 +48,12 @@ describe('persist', () => {
 
   it('keeps complete and failed statuses untouched', async () => {
     const history = useConversationHistory()
-    await history.persist('c1', 'Title', [
-      message({ id: 'u1' }),
-      message({ id: 'a1', role: 'assistant', status: 'failed' })
-    ])
+    await history.persist(
+      'c1',
+      'Title',
+      [message({ id: 'u1' }), message({ id: 'a1', role: 'assistant', status: 'failed' })],
+      null
+    )
 
     const saved = send.mock.calls[0]?.[1]
     expect(saved.messages.map((entry: { status: string }) => entry.status)).toEqual([
@@ -58,16 +65,19 @@ describe('persist', () => {
   it('forwards the title verbatim so long titles are not cut in the data layer', async () => {
     const long = 'x'.repeat(400)
     const history = useConversationHistory()
-    await history.persist('c1', long, [message({})])
+    await history.persist('c1', long, [message({})], null)
 
     expect(send.mock.calls[0]?.[1].title).toBe(long)
   })
 
   it('carries turn metadata through to storage', async () => {
     const history = useConversationHistory()
-    await history.persist('c1', 'Title', [
-      message({ id: 'a1', role: 'assistant', meta: { model: 'gpt-5.6-terra', totalTokens: 42 } })
-    ])
+    await history.persist(
+      'c1',
+      'Title',
+      [message({ id: 'a1', role: 'assistant', meta: { model: 'gpt-5.6-terra', totalTokens: 42 } })],
+      null
+    )
 
     expect(send.mock.calls[0]?.[1].messages[0].meta).toEqual({
       model: 'gpt-5.6-terra',
@@ -77,7 +87,7 @@ describe('persist', () => {
 
   it('writes nothing for an empty thread', async () => {
     const history = useConversationHistory()
-    await history.persist('c1', '', [])
+    await history.persist('c1', '', [], null)
     expect(send).not.toHaveBeenCalled()
   })
 })
@@ -183,19 +193,24 @@ describe('createConversationId', () => {
 describe('parts persistence', () => {
   it('folds parts into meta.parts on save and splits them back out on load', async () => {
     const history = useConversationHistory()
-    await history.persist('c1', 'Title', [
-      message({
-        id: 'a1',
-        role: 'assistant',
-        content: 'Found it.',
-        meta: { provider: 'pi', model: 'gpt' },
-        parts: [
-          { type: 'reasoning', text: 'thinking', done: true },
-          { type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: 'data' },
-          { type: 'text', text: 'Found it.' }
-        ]
-      })
-    ])
+    await history.persist(
+      'c1',
+      'Title',
+      [
+        message({
+          id: 'a1',
+          role: 'assistant',
+          content: 'Found it.',
+          meta: { provider: 'pi', model: 'gpt' },
+          parts: [
+            { type: 'reasoning', text: 'thinking', done: true },
+            { type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: 'data' },
+            { type: 'text', text: 'Found it.' }
+          ]
+        })
+      ],
+      null
+    )
 
     const saved = send.mock.calls[0]?.[1]
     const savedMeta = saved.messages[0].meta
@@ -231,13 +246,18 @@ describe('parts persistence', () => {
   it('truncates verbose tool output before storing', async () => {
     const history = useConversationHistory()
     const huge = 'x'.repeat(10 * 1024)
-    await history.persist('c1', 'Title', [
-      message({
-        id: 'a1',
-        role: 'assistant',
-        parts: [{ type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: huge }]
-      })
-    ])
+    await history.persist(
+      'c1',
+      'Title',
+      [
+        message({
+          id: 'a1',
+          role: 'assistant',
+          parts: [{ type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: huge }]
+        })
+      ],
+      null
+    )
 
     const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
     expect(stored.output.length).toBeLessThanOrEqual(8 * 1024 + 1)
@@ -249,9 +269,12 @@ describe('parts persistence', () => {
     // trail material, not for the answer itself.
     const history = useConversationHistory()
     const huge = 'x'.repeat(10 * 1024)
-    await history.persist('c1', 'Title', [
-      message({ id: 'a1', role: 'assistant', parts: [{ type: 'text', text: huge }] })
-    ])
+    await history.persist(
+      'c1',
+      'Title',
+      [message({ id: 'a1', role: 'assistant', parts: [{ type: 'text', text: huge }] })],
+      null
+    )
 
     const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
     expect(stored.text).toBe(huge)
@@ -260,13 +283,18 @@ describe('parts persistence', () => {
   it('still caps a runaway reasoning span, which is trail material', async () => {
     const history = useConversationHistory()
     const huge = 'x'.repeat(10 * 1024)
-    await history.persist('c1', 'Title', [
-      message({
-        id: 'a1',
-        role: 'assistant',
-        parts: [{ type: 'reasoning', text: huge, done: true }]
-      })
-    ])
+    await history.persist(
+      'c1',
+      'Title',
+      [
+        message({
+          id: 'a1',
+          role: 'assistant',
+          parts: [{ type: 'reasoning', text: huge, done: true }]
+        })
+      ],
+      null
+    )
 
     const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
     expect(stored.text.length).toBeLessThanOrEqual(8 * 1024 + 1)
@@ -275,7 +303,7 @@ describe('parts persistence', () => {
 
   it('stores no meta at all for plain messages', async () => {
     const history = useConversationHistory()
-    await history.persist('c1', 'Title', [message({ id: 'u1' })])
+    await history.persist('c1', 'Title', [message({ id: 'u1' })], null)
 
     expect(send.mock.calls[0]?.[1].messages[0].meta).toBeUndefined()
   })
@@ -319,5 +347,57 @@ describe('load survives a store failure', () => {
     send.mockResolvedValue(null)
 
     await expect(useConversationHistory().load('missing')).resolves.toBeNull()
+  })
+})
+
+/**
+ * A conversation's project is what keeps a project-local thread out of Home and back in its folder
+ * group. `persist` must carry the owner the caller decided; `load` must hand it back, or the next
+ * autosave after a reload would silently reassign the thread to Home.
+ */
+describe('project ownership', () => {
+  it('carries the owning project id the caller decided, including the unowned Home case', async () => {
+    const history = useConversationHistory()
+
+    // Each persist is a save followed by the list refresh, so the saves are calls 0 and 2.
+    await history.persist('c1', 'Title', [message({})], 'p1')
+    await history.persist('c2', 'Title', [message({})], null)
+
+    expect(send.mock.calls[0]?.[1].projectId).toBe('p1')
+    expect(send.mock.calls[2]?.[1].projectId).toBeNull()
+  })
+
+  it('restores the stored project id so a reload keeps writing into the same project', async () => {
+    send.mockResolvedValueOnce({
+      id: 'c1',
+      title: 'Title',
+      projectId: 'p1',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [
+        { id: 'u1', role: 'user', content: 'hi', status: 'complete', seq: 0, createdAt: 1 }
+      ]
+    })
+
+    await expect(useConversationHistory().load('c1')).resolves.toMatchObject({
+      projectId: 'p1'
+    })
+  })
+
+  it('reports a conversation stored before projects existed as unowned', async () => {
+    send.mockResolvedValueOnce({
+      id: 'legacy',
+      title: 'Legacy',
+      projectId: null,
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [
+        { id: 'u1', role: 'user', content: 'hi', status: 'complete', seq: 0, createdAt: 1 }
+      ]
+    })
+
+    await expect(useConversationHistory().load('legacy')).resolves.toMatchObject({
+      projectId: null
+    })
   })
 })

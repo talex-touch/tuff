@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { historicalFixtures, loadHistoricalFixture } from './helpers/fixtures'
 import { collectPascalCaseIdentifiers } from './helpers/js-text'
 import { deriveComponentEntry } from './helpers/nuxt-component-names'
 import { fileExists, formatViolations, listFiles, loadSources, nexusRoot, readSource } from './helpers/repo'
@@ -13,11 +12,16 @@ import type { SourceFile, Violation } from './helpers/repo'
  * Guard 1 — a component that lives in a nested `app/components/` subdirectory
  * cannot be used under its bare file name.
  *
- * `app/components/dashboard/admin/AccountTabs.vue` auto-imports as
- * `DashboardAdminAccountTabs`. Four admin pages wrote `<AccountTabs />`, which
- * Vue could not resolve; it logged a dev-only `Failed to resolve component`
- * warning and rendered nothing at all, so the subscriptions and doc-comments
- * tab bars silently never existed.
+ * The case this was written for: `app/components/admin/AccountTabs.vue`
+ * auto-imported as `AdminAccountTabs`, but four admin pages wrote
+ * `<AccountTabs />`. Vue could not resolve it, logged a dev-only `Failed to
+ * resolve component` warning, and rendered nothing at all — so the subscriptions
+ * and doc-comments tab bars silently never existed.
+ *
+ * Those tab strips have since been deleted outright (the console navigates by
+ * rail now), so the rule is exercised against a component drawn from the live
+ * registry instead of the frozen fixtures: a guard whose only test subject no
+ * longer exists stops proving anything.
  */
 
 const RULE = 'component-auto-import'
@@ -242,32 +246,42 @@ describe('guard: nested components are never used under their bare file name', (
     ).toBe('')
   })
 
-  it('flags the shipped <AccountTabs /> and <CommentTabs /> bugs', () => {
-    const cases = [
-      historicalFixtures.componentAutoImportSubscriptions,
-      historicalFixtures.componentAutoImportDocComments,
-    ]
-    for (const entry of cases) {
-      const violations = scanComponentAutoImports([loadHistoricalFixture(entry)], registry)
-      expect(violations, `${entry.originalPath}: ${entry.expectation}`).toHaveLength(1)
-      expect(violations[0]!.message).toContain('does not resolve')
-    }
-
-    const subscriptions = scanComponentAutoImports(
-      [loadHistoricalFixture(historicalFixtures.componentAutoImportSubscriptions)],
-      registry,
+  it('flags a nested component used under its bare file name', () => {
+    // The rule this guard exists for, exercised against a synthetic case rather
+    // than the historical `<AccountTabs />` fixtures: those pinned a bug in two
+    // pages whose tab strips have since been deleted outright, so the component
+    // they named no longer resolves to anything in the live registry and the
+    // assertion had nothing left to describe.
+    const entry = registry.entries.find(
+      value => value.autoImportName !== value.baseName
+        && (registry.byBaseName.get(value.baseName) ?? []).length === 1,
     )
-    expect(subscriptions[0]!.line).toBe(389)
-    expect(subscriptions[0]!.message).toContain('DashboardAdminAccountTabs')
+
+    // Positive control: an empty registry, or one where nesting stopped
+    // changing the name, would make the scan below trivially clean.
+    expect(entry, 'no nested component in the registry to exercise the rule with').toBeTruthy()
+
+    const bare = entry!.baseName
+    const violations = scanComponentAutoImports([{
+      path: 'app/pages/admin/synthetic.vue',
+      content: `<template>\n  <${bare} />\n</template>\n`,
+    }], registry)
+
+    expect(violations, `<${bare} /> must not resolve`).toHaveLength(1)
+    expect(violations[0]!.message).toContain('does not resolve')
+    expect(violations[0]!.message).toContain(entry!.autoImportName)
   })
 
-  it('clears the fixed files', () => {
-    // Negative control: the shipped fix must not still register as a violation,
-    // otherwise "flags the bug" above would pass for the wrong reason.
-    const fixed = ['app/pages/dashboard/admin/subscriptions.vue', 'app/pages/dashboard/admin/doc-comments.vue']
-      .filter(fileExists)
-      .map(readSource)
-    expect(formatViolations(scanComponentAutoImports(fixed, registry))).toBe('')
+  it('clears a correctly named usage', () => {
+    // Negative control: the auto-import name itself must scan clean, otherwise
+    // the assertion above would pass for any input at all.
+    const entry = registry.entries.find(value => value.autoImportName !== value.baseName)
+    const violations = scanComponentAutoImports([{
+      path: 'app/pages/admin/synthetic.vue',
+      content: `<template>\n  <${entry!.autoImportName} />\n</template>\n`,
+    }], registry)
+
+    expect(formatViolations(violations)).toBe('')
   })
 
   it('reports no unresolvable nested components in app/', () => {

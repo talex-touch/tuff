@@ -41,6 +41,22 @@ const orchestratorGetSnapshot = vi.fn().mockResolvedValue({
 vi.mock('@talex-touch/utils/renderer', () => ({
   useIntelligenceSdk: () => ({
     orchestratorGetSnapshot,
+    orchestratorPreviewImport: vi.fn().mockResolvedValue({
+      scanId: 'scan-1',
+      candidates: [
+        {
+          id: 'candidate-mcp-1',
+          kind: 'mcp',
+          name: 'Discovered Claude MCP',
+          provider: 'claude',
+          state: 'added',
+          blockingIssues: [],
+          serverNames: ['memory', 'fetch'],
+          secretKeyPaths: []
+        }
+      ]
+    }),
+    orchestratorApplyImport: vi.fn(),
     orchestratorSetImportedItemActive: vi.fn(),
     orchestratorDeleteImportedItem: vi.fn()
   }),
@@ -51,7 +67,10 @@ vi.mock('@talex-touch/utils/renderer', () => ({
 }))
 
 const localSnapshot = {
-  dirs: ['/Users/dev/tuff-skills'],
+  dirs: [
+    { path: '/Users/dev/tuff-skills', sourceId: null, auto: false },
+    { path: '/Users/dev/.claude/skills', sourceId: 'claude', auto: true }
+  ],
   skills: [
     {
       id: 'local:abc123def456',
@@ -59,6 +78,14 @@ const localSnapshot = {
       description: 'Sort the inbox',
       path: '/Users/dev/tuff-skills/triage',
       sourceDir: '/Users/dev/tuff-skills',
+      enabled: true
+    },
+    {
+      id: 'local:claude123',
+      name: 'code-review',
+      description: 'Review code diffs',
+      path: '/Users/dev/.claude/skills/code-review',
+      sourceDir: '/Users/dev/.claude/skills',
       enabled: true
     }
   ]
@@ -73,7 +100,8 @@ vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
     t: (key: string, params?: Record<string, unknown>) =>
-      params ? `${key}:${JSON.stringify(params)}` : key
+      params ? `${key}:${JSON.stringify(params)}` : key,
+    te: () => true
   })
 }))
 vi.mock('vue-sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -94,7 +122,7 @@ describe('settingSkillsMcp mounts standalone', () => {
     expect(text).toContain('legacy-server')
   })
 
-  it('lists linked directories and their skills from the local snapshot', async () => {
+  it('lists linked and auto-detected directories and their skills from the local snapshot', async () => {
     const wrapper = mount(SettingSkillsMcp)
     await flushPromises()
 
@@ -103,7 +131,23 @@ describe('settingSkillsMcp mounts standalone', () => {
     expect(text).toContain('/Users/dev/tuff-skills')
     expect(text).toContain('triage')
     expect(text).toContain('Sort the inbox')
-    // One skill under the one directory, reported back to the row.
+    expect(text).toContain('code-review')
+    expect(text).toContain('Review code diffs')
+    // Auto-detected directory shows agent label as title
+    expect(text).toContain('settings.skillsMcp.sources.claude')
+    // Linked directory count
     expect(text).toContain('settings.skillsMcp.localDirs.dirDesc:{"count":1}')
+    // Auto-detected directory count
+    expect(text).toContain('settings.skillsMcp.localDirs.autoDesc:{"count":1}')
+  })
+
+  it('renders discovered unadopted MCP servers with adopt button', async () => {
+    const wrapper = mount(SettingSkillsMcp)
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('Discovered Claude MCP')
+    expect(text).toContain('settings.skillsMcp.mcp.discoveredChip')
+    expect(text).toContain('settings.skillsMcp.mcp.adoptAction')
   })
 })

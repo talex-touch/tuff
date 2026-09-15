@@ -534,14 +534,14 @@ async function handleInstallDegit(): Promise<void> {
             variant="flat"
             type="primary"
             :disabled="disableManualInstall"
+            :loading="manualShowSpinner"
             @click="installPluginFromSource"
           >
             <div class="InstallButtonContent">
               <div v-if="manualShowProgress" class="InstallProgress" :style="manualProgressStyle">
                 <span>{{ manualProgressDisplay }}</span>
               </div>
-              <i v-else-if="manualShowSpinner" class="i-ri-loader-4-line animate-spin" />
-              <i v-else-if="manualStatusIcon" :class="manualStatusIcon" />
+              <i v-else-if="!manualShowSpinner && manualStatusIcon" :class="manualStatusIcon" />
               <span>{{ currentInstallLabel }}</span>
             </div>
           </TxButton>
@@ -891,18 +891,5 @@ async function handleInstallDegit(): Promise<void> {
 .InstallProgress span {
   position: relative;
   z-index: 1;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

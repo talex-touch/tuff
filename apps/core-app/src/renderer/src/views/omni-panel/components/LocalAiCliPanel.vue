@@ -23,6 +23,9 @@ import { createRendererLogger } from '../../../utils/renderer-log'
 interface OpenDraft {
   prompt: string
   capsule?: OmniPanelDesktopContextCapsule
+  projectId?: string
+  sessionRef?: string
+  provider?: LocalAiCliProviderId
 }
 
 interface ContextChip extends LocalAiCliContextItem {
@@ -49,7 +52,8 @@ const draftCapsule = ref<OmniPanelDesktopContextCapsule | undefined>(undefined)
 const phase = ref<'idle' | 'running' | 'done' | 'failed' | 'cancelled'>('idle')
 const output = ref('')
 const errorCode = ref('')
-const nativeSessionId = ref<string | undefined>(undefined)
+const projectId = ref<string | undefined>(undefined)
+const sessionRef = ref<string | undefined>(undefined)
 const approval = ref<LocalAiCliApprovalRequest | null>(null)
 const terminalHost = ref<HTMLElement | null>(null)
 const terminalSessionId = ref<string | null>(null)
@@ -66,13 +70,27 @@ const runnableProviders = computed(() =>
 const selectedProviderStatus = computed(() =>
   status.value?.providers.find((item) => item.id === provider.value)
 )
-const canRun = computed(
-  () =>
+const providerLocked = computed(() => Boolean(sessionRef.value))
+const providerChoices = computed(() =>
+  providerLocked.value
+    ? (status.value?.providers ?? []).filter((item) => item.id === provider.value)
+    : runnableProviders.value
+)
+const canRun = computed(() => {
+  const selected = selectedProviderStatus.value
+  return (
     status.value?.enabled === true &&
     Boolean(provider.value) &&
+    selected?.installed === true &&
+    selected.enabled === true &&
+    selected.capabilities.taskRead &&
+    (!sessionRef.value || selected.capabilities.taskResume) &&
+    errorCode.value !== 'NATIVE_SESSION_MISSING' &&
+    errorCode.value !== 'NATIVE_SESSION_CONFLICT' &&
     prompt.value.trim().length > 0 &&
     phase.value !== 'running'
-)
+  )
+})
 const canPasteBack = computed(
   () =>
     phase.value === 'done' && Boolean(output.value.trim() && draftCapsule.value?.appName?.trim())
@@ -81,6 +99,7 @@ const canOpenTerminal = computed(
   () =>
     phase.value === 'done' &&
     selectedProviderStatus.value?.capabilities.terminalRead === true &&
+    (!sessionRef.value || selectedProviderStatus.value.capabilities.terminalResume) &&
     !terminalSessionId.value
 )
 watch(provider, () => {
@@ -138,6 +157,7 @@ function buildContexts(capsule?: OmniPanelDesktopContextCapsule): ContextChip[] 
 
 async function refreshStatus(): Promise<void> {
   status.value = await sdk.getStatus()
+  if (providerLocked.value) return
   const configured = status.value.defaultProvider
   const next =
     runnableProviders.value.find((item) => item.id === configured) ?? runnableProviders.value[0]
@@ -148,24 +168,43 @@ async function refreshStatus(): Promise<void> {
 
 function handleWindowFocus(): void {
   if (!visible.value) return
-  void refreshStatus().catch((error) => {
-    log.error('Failed to refresh local AI CLI status after focus', error)
+  void refreshStatus().catch(() => {
+    log.error('Failed to refresh local AI CLI status after focus')
   })
 }
 
 async function open(draft: OpenDraft): Promise<void> {
+  const projectChanged = projectId.value !== draft.projectId
+  const sessionChanged = sessionRef.value !== draft.sessionRef
+  if (projectChanged || sessionChanged) {
+    cleanupTask()
+    await closeTerminal()
+    projectId.value = undefined
+    sessionRef.value = undefined
+    provider.value = ''
+    output.value = ''
+    errorCode.value = ''
+    approval.value = null
+    phase.value = 'idle'
+    prompt.value = ''
+    contexts.value = []
+    draftCapsule.value = undefined
+  }
+  projectId.value = draft.projectId
+  sessionRef.value = draft.sessionRef
+  if (draft.provider) provider.value = draft.provider
   visible.value = true
   if (!prompt.value.trim()) prompt.value = draft.prompt
   if (!draftCapsule.value) draftCapsule.value = draft.capsule
   if (contexts.value.length === 0) contexts.value = buildContexts(draft.capsule)
   try {
     await refreshStatus()
-    if (!status.value?.enabled || runnableProviders.value.length === 0) {
+    if (!status.value?.enabled || (!providerLocked.value && runnableProviders.value.length === 0)) {
       emit('settings-opened')
       await sdk.openSettings()
     }
-  } catch (error) {
-    log.error('Failed to prepare local AI CLI panel', error)
+  } catch {
+    log.error('Failed to prepare local AI CLI panel')
     phase.value = 'failed'
     errorCode.value = 'LOCAL_AI_CLI_STATUS_FAILED'
   }
@@ -179,7 +218,7 @@ function applyTemplate(prefix: string): void {
 function handleChunk(chunk: LocalAiCliTaskChunk): void {
   switch (chunk.type) {
     case 'session':
-      nativeSessionId.value = chunk.nativeSessionId
+      sessionRef.value = chunk.sessionRef
       return
     case 'status':
       return
@@ -202,13 +241,26 @@ function handleChunk(chunk: LocalAiCliTaskChunk): void {
   }
 }
 
+function stableTaskErrorCode(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : String(error)
+  for (const code of [
+    'NATIVE_SESSION_BUSY',
+    'NATIVE_SESSION_MISSING',
+    'NATIVE_SESSION_CONFLICT',
+    'PROVIDER_RESUME_UNSUPPORTED',
+    'WORKSPACE_INVALID'
+  ]) {
+    if (message.includes(code)) return code
+  }
+  return fallback
+}
+
 async function run(): Promise<void> {
   if (!canRun.value || !provider.value) return
   cleanupTask()
   phase.value = 'running'
   output.value = ''
   errorCode.value = ''
-  nativeSessionId.value = undefined
   approval.value = null
   try {
     streamController = await sdk.streamTask(
@@ -216,12 +268,15 @@ async function run(): Promise<void> {
         provider: provider.value,
         prompt: prompt.value,
         access: access.value,
-        context: contexts.value.map(({ kind, text }) => ({ kind, text }))
+        context: contexts.value.map(({ kind, text }) => ({ kind, text })),
+        projectId: projectId.value,
+        sessionRef: sessionRef.value
       },
       {
         onData: handleChunk,
         onError: (error) => {
-          log.error('Local AI CLI task stream failed', error)
+          log.error('Local AI CLI task stream failed')
+          errorCode.value = stableTaskErrorCode(error, 'PROCESS_EXITED')
           if (phase.value === 'running') phase.value = 'failed'
         },
         onEnd: () => {
@@ -231,7 +286,8 @@ async function run(): Promise<void> {
       }
     )
   } catch (error) {
-    log.error('Failed to start local AI CLI task', error)
+    log.error('Failed to start local AI CLI task')
+    errorCode.value = stableTaskErrorCode(error, 'PROCESS_START_FAILED')
     phase.value = 'failed'
   }
 }
@@ -293,7 +349,8 @@ async function openTerminal(): Promise<void> {
     const result = await sdk.terminal.create({
       provider: provider.value,
       access: access.value,
-      nativeSessionId: nativeSessionId.value,
+      projectId: projectId.value,
+      sessionRef: sessionRef.value,
       cols: 92,
       rows: 24
     })
@@ -312,8 +369,8 @@ async function openTerminal(): Promise<void> {
     fitAddon.fit()
     terminalInputDispose = terminal.onData((data: string) => {
       if (!terminalSessionId.value) return
-      void sdk.terminal.write({ sessionId: terminalSessionId.value, data }).catch((error) => {
-        log.error('Failed to write local AI CLI terminal input', error)
+      void sdk.terminal.write({ sessionId: terminalSessionId.value, data }).catch(() => {
+        log.error('Failed to write local AI CLI terminal input')
       })
     })
     if (terminalSessionId.value) {
@@ -323,8 +380,8 @@ async function openTerminal(): Promise<void> {
         rows: terminal.rows
       })
     }
-  } catch (error) {
-    log.error('Failed to open local AI CLI terminal', error)
+  } catch {
+    log.error('Failed to open local AI CLI terminal')
     toast.error(t('localAiCliPanel.terminalFailed'))
   }
 }
@@ -340,6 +397,19 @@ async function closeTerminal(): Promise<void> {
   if (sessionId) await sdk.terminal.kill({ sessionId }).catch(() => undefined)
 }
 
+async function newTask(): Promise<void> {
+  cleanupTask()
+  await closeTerminal()
+  sessionRef.value = undefined
+  prompt.value = ''
+  contexts.value = []
+  draftCapsule.value = undefined
+  output.value = ''
+  errorCode.value = ''
+  approval.value = null
+  phase.value = 'idle'
+}
+
 async function reset(): Promise<void> {
   visible.value = false
   cleanupTask()
@@ -347,7 +417,11 @@ async function reset(): Promise<void> {
   prompt.value = ''
   contexts.value = []
   draftCapsule.value = undefined
+  projectId.value = undefined
+  sessionRef.value = undefined
+  provider.value = ''
   output.value = ''
+  errorCode.value = ''
   approval.value = null
   phase.value = 'idle'
 }
@@ -378,7 +452,7 @@ onBeforeUnmount(() => {
   disposeTerminalExit()
 })
 
-defineExpose({ open, reset })
+defineExpose({ open, reset, newTask })
 </script>
 
 <template>
@@ -393,15 +467,19 @@ defineExpose({ open, reset })
       </button>
     </header>
 
-    <div v-if="!status?.enabled || runnableProviders.length === 0" class="LocalAiCliPanel__empty">
+    <div v-if="!status?.enabled || providerChoices.length === 0" class="LocalAiCliPanel__empty">
       <p>{{ t('localAiCliPanel.disabled') }}</p>
       <TxButton size="sm" @click="openSettings">{{ t('localAiCliPanel.openSettings') }}</TxButton>
     </div>
 
     <template v-else>
       <div class="LocalAiCliPanel__controls">
-        <select v-model="provider" :aria-label="t('localAiCliPanel.provider')">
-          <option v-for="item in runnableProviders" :key="item.id" :value="item.id">
+        <select
+          v-model="provider"
+          :aria-label="t('localAiCliPanel.provider')"
+          :disabled="providerLocked"
+        >
+          <option v-for="item in providerChoices" :key="item.id" :value="item.id">
             {{ item.label }} · {{ item.version }}
           </option>
         </select>
@@ -453,6 +531,14 @@ defineExpose({ open, reset })
         </TxButton>
         <TxButton v-else size="sm" variant="ghost" @click="stop">
           {{ t('localAiCliPanel.stop') }}
+        </TxButton>
+        <TxButton
+          v-if="sessionRef && phase !== 'running'"
+          size="sm"
+          variant="ghost"
+          @click="newTask"
+        >
+          {{ t('localAiCliPanel.newTask') }}
         </TxButton>
         <TxButton size="sm" variant="ghost" :disabled="!output" @click="copyResult">
           {{ t('localAiCliPanel.copy') }}

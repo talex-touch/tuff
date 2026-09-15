@@ -14,6 +14,13 @@ const { setManualLocale } = useLocaleOrchestrator()
 const { color, toggleDark } = useTheme()
 
 const isAuthenticated = computed(() => status.value === 'authenticated')
+
+/**
+ * The only entry point to the administrator console: it is a separate shell
+ * (`/admin/*`), so it has no rail of its own to be discovered from, and the
+ * dashboard rail deliberately no longer carries the admin section.
+ */
+const { isAdmin } = useAccountRole()
 const { plan, refresh: refreshSubscription } = useSubscriptionData({ immediate: false })
 const { data: creditsSummary, refresh: refreshCreditsSummary } = useTypedFetch<any>('/api/credits/summary', {
   immediate: false,
@@ -247,6 +254,13 @@ watch(
           <span class="header-user-item">
             <span class="i-carbon-dashboard header-user-item-icon" />
             <span>{{ tSafe('nav.dashboard', 'Dashboard') }}</span>
+          </span>
+        </TxDropdownItem>
+
+        <TxDropdownItem v-if="isAdmin" @select="handleMenuNavigate('/admin/updates')">
+          <span class="header-user-item">
+            <span class="i-carbon-settings-adjust header-user-item-icon" />
+            <span>{{ tSafe('nav.adminConsole', '管理控制台') }}</span>
           </span>
         </TxDropdownItem>
 

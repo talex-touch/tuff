@@ -2,6 +2,7 @@
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { TxSplitButton } from '@talex-touch/tuffex/button'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -583,7 +584,7 @@ async function handlePrimaryAction(): Promise<void> {
                 {{ t('plugin.badges.dev') }}
               </span>
               <span v-if="isPluginRunning" class="PluginInfo-RunningBadge flex-shrink-0">
-                <i class="i-ri-loader-4-line animate-spin" />
+                <TxSpinner :size="16" />
                 {{ t('plugin.actions.running') }}
               </span>
               <button
@@ -622,7 +623,7 @@ async function handlePrimaryAction(): Promise<void> {
                   "
                 >
                   <i v-if="!loadingStates.reload" class="i-ri-refresh-line" />
-                  <i v-else class="i-ri-loader-4-line animate-spin" />
+                  <TxSpinner v-else :size="16" />
                   <span>{{
                     loadingStates.reload
                       ? t('plugin.actions.reloading')
@@ -641,7 +642,7 @@ async function handlePrimaryAction(): Promise<void> {
                   "
                 >
                   <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
-                  <i v-else class="i-ri-loader-4-line animate-spin" />
+                  <TxSpinner v-else :size="16" />
                   <span>{{
                     loadingStates.openFolder
                       ? t('plugin.actions.opening')
@@ -661,7 +662,7 @@ async function handlePrimaryAction(): Promise<void> {
                   "
                 >
                   <i v-if="!loadingStates.openDevTools" class="i-ri-bug-line" />
-                  <i v-else class="i-ri-loader-4-line animate-spin" />
+                  <TxSpinner v-else :size="16" />
                   <span>{{ t('plugin.actions.openDevTools') }}</span>
                 </div>
                 <button
@@ -679,7 +680,7 @@ async function handlePrimaryAction(): Promise<void> {
                   "
                 >
                   <i v-if="!loadingStates.uninstall" class="i-ri-delete-bin-6-line" />
-                  <i v-else class="i-ri-loader-4-line animate-spin" />
+                  <TxSpinner v-else :size="16" />
                   <span>{{
                     loadingStates.uninstall
                       ? t('plugin.actions.uninstalling')
@@ -1001,10 +1002,6 @@ async function handlePrimaryAction(): Promise<void> {
     border: 1px solid rgba(239, 68, 68, 1);
     border-radius: 2px 2px 8px 2px;
   }
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
 }
 
 .PluginInfo-IssuesDialog {

@@ -38,7 +38,8 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
       taskWriteApproval: false,
       terminalRead: true,
       terminalWriteApproval: false,
-      resume: true
+      taskResume: true,
+      terminalResume: true
     }
   },
   {
@@ -51,7 +52,8 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
       taskWriteApproval: true,
       terminalRead: true,
       terminalWriteApproval: false,
-      resume: true
+      taskResume: true,
+      terminalResume: true
     }
   },
   {
@@ -64,7 +66,8 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
       taskWriteApproval: true,
       terminalRead: true,
       terminalWriteApproval: false,
-      resume: true
+      taskResume: true,
+      terminalResume: true
     }
   },
   {
@@ -77,7 +80,8 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
       taskWriteApproval: true,
       terminalRead: true,
       terminalWriteApproval: false,
-      resume: true
+      taskResume: true,
+      terminalResume: true
     }
   }
 ] as const
@@ -91,11 +95,11 @@ export function getLocalAiCliProviderDefinition(
   if (!definition) throw new Error('LOCAL_AI_CLI_PROVIDER_INVALID')
   return definition
 }
-
 export function createLocalAiCliTaskSpec(
   provider: LocalAiCliProviderId,
   prompt: string,
-  access: LocalAiCliAccess
+  access: LocalAiCliAccess,
+  nativeSessionId?: string
 ): LocalAiCliTaskSpec {
   switch (provider) {
     case 'pi':
@@ -110,10 +114,12 @@ export function createLocalAiCliTaskSpec(
           '--no-extensions',
           '--no-skills',
           '--no-prompt-templates',
-          '--no-context-files'
+          '--no-context-files',
+          ...(nativeSessionId ? ['--session', nativeSessionId] : [])
         ],
-        stdin: `${JSON.stringify({ type: 'prompt', message: prompt })}\n`,
+        stdin: `${JSON.stringify({ id: 'tuff-state', type: 'get_state' })}\n`,
         protocol: 'pi-rpc',
+        prompt,
         terminateOnComplete: true
       }
     case 'oh-my-pi':

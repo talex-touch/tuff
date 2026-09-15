@@ -9,6 +9,7 @@ import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxEmpty } from '@talex-touch/tuffex/empty'
 import { TxTag } from '@talex-touch/tuffex/tag'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -425,7 +426,7 @@ onMounted(() => {
   <div class="PluginPermissions w-full space-y-4">
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
-      <i class="i-ri-loader-4-line animate-spin text-2xl" />
+      <TxSpinner :size="24" />
       <span>{{ t('plugin.permissions.loading') }}</span>
     </div>
 

@@ -9,7 +9,8 @@ import {
   primaryKey,
   real,
   sqliteTable,
-  text
+  text,
+  uniqueIndex
 } from 'drizzle-orm/sqlite-core'
 
 // --- 自定义类型 (Custom Types) ---
@@ -1848,6 +1849,32 @@ export const aiAutomationRuns = sqliteTable(
 )
 
 // =============================================================================
+// Folder projects and local AI CLI session pointers
+// =============================================================================
+
+export const projects = sqliteTable(
+  'projects',
+  {
+    id: text('id').primaryKey(),
+    rootPath: text('root_path').notNull(),
+    name: text('name').notNull(),
+    pinned: integer('pinned', { mode: 'boolean' }).notNull().default(false),
+    archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    lastOpenedAt: integer('last_opened_at').notNull()
+  },
+  (table) => ({
+    rootUnique: uniqueIndex('uniq_projects_root').on(table.rootPath),
+    archivePinRecentIdx: index('idx_projects_archive_pin_recent').on(
+      table.archived,
+      table.pinned,
+      table.lastOpenedAt
+    )
+  })
+)
+
+// =============================================================================
 // Home conversations
 // =============================================================================
 
@@ -1862,12 +1889,17 @@ export const conversations = sqliteTable(
   {
     id: text('id').primaryKey(),
     title: text('title').notNull().default(''),
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull()
   },
   (table) => ({
-    // The sidebar lists newest-first and buckets by time, so every read is ordered by this column.
-    updatedIdx: index('idx_conversations_updated').on(table.updatedAt)
+    // The sidebar lists newest-first and buckets by project, so both access paths stay indexed.
+    updatedIdx: index('idx_conversations_updated').on(table.updatedAt),
+    projectUpdatedIdx: index('idx_conversations_project_updated').on(
+      table.projectId,
+      table.updatedAt
+    )
   })
 )
 
@@ -1909,5 +1941,39 @@ export const conversationSyncState = sqliteTable(
   },
   (table) => ({
     dirtyIdx: index('idx_conversation_sync_state_dirty').on(table.dirtyAt)
+  })
+)
+
+/** Local-only pointer to a provider-owned native CLI transcript. */
+export const localAiCliSessions = sqliteTable(
+  'local_ai_cli_sessions',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id'),
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    provider: text('provider').notNull(),
+    projectRoot: text('project_root').notNull(),
+    nativeSessionId: text('native_session_id').notNull(),
+    title: text('title').notNull().default(''),
+    state: text('state').notNull().default('available'),
+    origin: text('origin').notNull().default('tuff'),
+    expectedHeadId: text('expected_head_id'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    lastSeenAt: integer('last_seen_at').notNull()
+  },
+  (table) => ({
+    nativeUnique: uniqueIndex('uniq_local_ai_cli_sessions_native').on(
+      table.provider,
+      table.projectRoot,
+      table.nativeSessionId
+    ),
+    conversationUnique: uniqueIndex('uniq_local_ai_cli_sessions_conversation').on(
+      table.conversationId
+    ),
+    projectRecentIdx: index('idx_local_ai_cli_sessions_project_recent').on(
+      table.projectId,
+      table.lastSeenAt
+    )
   })
 )
