@@ -8,7 +8,12 @@ export const ProviderChannelType = {
   LOCAL: IntelligenceProviderType.LOCAL,
   COMPATIBLE: 'compatible',
   BAILIAN: 'bailian',
-  VOLCENGINE: 'volcengine'
+  VOLCENGINE: 'volcengine',
+  /**
+   * Speech recognition that runs on this machine. It shares no endpoint and no credential with
+   * any of the above, which is why it is its own channel type rather than a flavour of one.
+   */
+  ON_DEVICE: 'on-device'
 } as const
 
 export type ProviderChannelKind = (typeof ProviderChannelType)[keyof typeof ProviderChannelType]
@@ -21,7 +26,8 @@ const PROVIDER_CHANNEL_TYPE_VALUES: Record<ProviderChannelKind, true> = {
   [ProviderChannelType.LOCAL]: true,
   [ProviderChannelType.COMPATIBLE]: true,
   [ProviderChannelType.BAILIAN]: true,
-  [ProviderChannelType.VOLCENGINE]: true
+  [ProviderChannelType.VOLCENGINE]: true,
+  [ProviderChannelType.ON_DEVICE]: true
 }
 
 export const PROVIDER_CHANNEL_TYPE_OPTIONS = Object.values(ProviderChannelType)
@@ -44,15 +50,27 @@ export function getProviderChannelType(provider: {
     return normalizeProviderChannelType(selected)
   }
 
+  const voiceAsr = provider.metadata?.voiceAsr
+  const voiceProtocol =
+    voiceAsr && typeof voiceAsr === 'object' && !Array.isArray(voiceAsr)
+      ? String((voiceAsr as Record<string, unknown>).protocol)
+      : undefined
+
+  /*
+   * Recognised ahead of the endpoint heuristics below, and regardless of provider type: an
+   * on-device channel has no host to inspect, so a protocol is the only thing that can
+   * identify it.
+   */
+  if (voiceProtocol === 'local-offline') {
+    return ProviderChannelType.ON_DEVICE
+  }
+
   if (provider.type === IntelligenceProviderType.CUSTOM) {
-    const voiceAsr = provider.metadata?.voiceAsr
     if (
       voiceAsr &&
       typeof voiceAsr === 'object' &&
       !Array.isArray(voiceAsr) &&
-      ['bailian-paraformer', 'dashscope-qwen-asr-realtime'].includes(
-        String((voiceAsr as Record<string, unknown>).protocol)
-      )
+      ['bailian-paraformer', 'dashscope-qwen-asr-realtime'].includes(voiceProtocol ?? '')
     ) {
       return ProviderChannelType.BAILIAN
     }
@@ -78,6 +96,15 @@ export function getRuntimeProviderType(channelType: ProviderChannelKind): Intell
     case ProviderChannelType.BAILIAN:
     case ProviderChannelType.VOLCENGINE:
       return IntelligenceProviderType.CUSTOM
+    /*
+     * `local` is the runtime's word for "executes here, needs no key", and that is exactly what
+     * this channel is. Routing already exempts a local provider from the API-key requirement, so
+     * reusing the type keeps that rule in one place instead of teaching every caller a new one.
+     * The channel declares only audio capabilities, so the LLM paths that also read this type
+     * never see it.
+     */
+    case ProviderChannelType.ON_DEVICE:
+      return IntelligenceProviderType.LOCAL
     default:
       return channelType
   }

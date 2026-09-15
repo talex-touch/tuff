@@ -1494,7 +1494,6 @@
       "intelligence": "Intelligence",
       "plugins": "Plugins & Tools",
       "applications": "Applications",
-
       "fileIndex": "File Index",
       "update": "Update",
       "network": "Network",
@@ -4156,7 +4155,8 @@
         "local": "Local model (Ollama)",
         "compatible": "Compatible",
         "bailian": "Bailian",
-        "volcengine": "Volcengine"
+        "volcengine": "Volcengine",
+        "on-device": "On-device (offline)"
       },
       "deleteConfirmTitle": "Delete Provider",
       "deleteConfirmMessage": "Are you sure you want to delete provider \"{name}\"? This action cannot be undone.",
@@ -5407,7 +5407,10 @@
         "modelsFetchEmpty": "No models were returned. Check that the local service is reachable and has models installed.",
         "modelsFetchFailedToast": "Failed to fetch models: {message}",
         "modelsFetchedToast": "Fetched {count} models",
-        "confirm": "OK"
+        "confirm": "OK",
+        "voiceAsrOnDeviceModel": "On-device model ID",
+        "voiceAsrOnDeviceModelPlaceholder": "tuff-asr-zh-tiny",
+        "voiceAsrOnDeviceModelHint": "Identifier of an installed speech bundle. Install one into Tuff's speech model directory first."
       },
       "model": {
         "title": "Model Configuration",
@@ -5501,7 +5504,15 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+      "weekdays": [
+        "Sun",
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat"
+      ]
     },
     "memoryReview": {
       "title": "Memory Review",
@@ -5919,7 +5930,6 @@
       "intelligenceSubtitle": "Intelligence hub, workflows and permissions",
       "pluginsSubtitle": "Installed plugins, store and application tools",
       "applicationsSubtitle": "Installed apps, launch entries and index diagnostics",
-
       "fileIndexSubtitle": "Search index scope and indexing status",
       "networkSubtitle": "Proxy, connectivity and network diagnostics",
       "updateSubtitle": "Version, update channel and release notes",

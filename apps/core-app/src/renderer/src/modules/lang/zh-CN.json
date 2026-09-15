@@ -1494,7 +1494,6 @@
       "intelligence": "智能",
       "plugins": "插件与工具",
       "applications": "应用",
-
       "fileIndex": "文件索引",
       "update": "更新",
       "network": "网络",
@@ -4152,7 +4151,8 @@
         "local": "本地模型（Ollama）",
         "compatible": "兼容",
         "bailian": "百炼",
-        "volcengine": "火山引擎"
+        "volcengine": "火山引擎",
+        "on-device": "端侧语音（离线）"
       },
       "deleteConfirmTitle": "删除提供商",
       "deleteConfirmMessage": "确定要删除提供商「{name}」吗？此操作不可撤销。",
@@ -5407,7 +5407,10 @@
         "modelsFetchEmpty": "未从提供商获取到模型，请确认本地服务可访问并已安装模型",
         "modelsFetchFailedToast": "获取模型失败: {message}",
         "modelsFetchedToast": "已获取 {count} 个模型",
-        "confirm": "确定"
+        "confirm": "确定",
+        "voiceAsrOnDeviceModel": "端侧模型标识",
+        "voiceAsrOnDeviceModelPlaceholder": "tuff-asr-zh-tiny",
+        "voiceAsrOnDeviceModelHint": "已安装的语音模型包标识；在 Tuff 的语音模型目录中安装后即可使用。"
       },
       "model": {
         "title": "模型配置",
@@ -5501,7 +5504,15 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+      "weekdays": [
+        "日",
+        "一",
+        "二",
+        "三",
+        "四",
+        "五",
+        "六"
+      ]
     },
     "memoryReview": {
       "title": "记忆审核",
@@ -5919,7 +5930,6 @@
       "intelligenceSubtitle": "智能中心、工作流与权限",
       "pluginsSubtitle": "已安装插件、插件市场与应用工具",
       "applicationsSubtitle": "已安装应用、启动入口与索引诊断",
-
       "fileIndexSubtitle": "搜索索引范围与索引状态",
       "networkSubtitle": "代理、连通性与网络诊断",
       "updateSubtitle": "版本、更新通道与更新日志",
