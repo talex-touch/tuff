@@ -19,6 +19,22 @@ import {
  */
 const PAGE_MODULES = import.meta.glob('../../views/base/settings/categories/*.vue')
 const INTELLIGENCE_PAGE_MODULES = import.meta.glob('../../views/base/intelligence/*.vue')
+const APPLICATION_PAGE_MODULES = import.meta.glob('../../views/base/application/*.vue')
+
+/**
+ * Categories whose page is not a `categories/Setting*Page.vue` wrapper.
+ *
+ * The wrapper exists to give a column page its title and 940px column. A split page mounts
+ * `SettingsPage layout="split"` itself — it has no title and reaches the window edges — so
+ * wrapping it would nest one shell inside another.
+ */
+const CATEGORY_PAGE_OVERRIDES: Record<string, Record<string, () => Promise<unknown>>> = {
+  applications: APPLICATION_PAGE_MODULES
+}
+
+const CATEGORY_PAGE_PATHS: Record<string, string> = {
+  applications: '../../views/base/application/ApplicationIndex.vue'
+}
 
 /** `storage-usage` is the one key whose page file is not a direct transliteration. */
 function pageStem(key: string): string {
@@ -76,12 +92,13 @@ describe('settings category table', () => {
 
   it('has a page file for every category', () => {
     for (const category of SETTING_CATEGORIES) {
-      const stem = pageStem(category.key)
-      const path = `../../views/base/settings/categories/${stem}.vue`
+      const override = CATEGORY_PAGE_PATHS[category.key]
+      const path = override ?? `../../views/base/settings/categories/${pageStem(category.key)}.vue`
+      const modules = CATEGORY_PAGE_OVERRIDES[category.key] ?? PAGE_MODULES
 
       expect(
-        PAGE_MODULES[path],
-        `no page file for category "${category.key}" (expected ${stem}.vue)`
+        modules[path],
+        `no page file for category "${category.key}" (expected ${path})`
       ).toBeTypeOf('function')
     }
   })
@@ -90,7 +107,13 @@ describe('settings category table', () => {
     const stems = Object.keys(PAGE_MODULES).map((path) =>
       path.split('/').pop()!.replace('.vue', '')
     )
-    const expected = new Set(SETTING_CATEGORIES.map((category) => pageStem(category.key)))
+    // A category that owns its own page contributes no wrapper, so its stem must not linger
+    // here either — that is exactly the dead `SettingApplicationsPage.vue` this would catch.
+    const expected = new Set(
+      SETTING_CATEGORIES.filter((category) => !CATEGORY_PAGE_PATHS[category.key]).map((category) =>
+        pageStem(category.key)
+      )
+    )
 
     expect(stems.filter((stem) => !expected.has(stem))).toEqual([])
   })

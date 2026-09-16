@@ -4,12 +4,14 @@ import { drizzle } from 'drizzle-orm/libsql'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import * as schema from '../../../db/schema'
 import { createDbUtils } from '../../../db/utils'
+import { recommendationExposureService } from './recommendation/recommendation-exposure-service'
 import { SearchUsageService } from './search-usage-service'
 import { TimeStatsAggregator } from './time-stats-aggregator'
+import { toUsageEntryPoint } from './usage-entry-point'
 import { UsageSummaryService } from './usage-summary-service'
 
 const schemaMigrationUrls = [
@@ -39,6 +41,34 @@ async function applyMigration(client: Client, migrationUrl: URL): Promise<void> 
   for (const statement of migration.split('--> statement-breakpoint')) {
     if (statement.trim()) await client.execute(statement)
   }
+}
+
+/**
+ * The entry point each execute logged, in write order.
+ *
+ * Narrowed through `toUsageEntryPoint` — the same boundary the applications panel reads `ent`
+ * through — so this asserts the value a consumer buckets, not merely the bytes in the JSON: an
+ * entry point the reader refuses to recognise is not a persisted attribution at all.
+ */
+async function readPersistedEntryPoints(client: Client) {
+  const { rows } = await client.execute(`
+    SELECT item_id AS itemId, context AS context
+    FROM usage_logs
+    ORDER BY id
+  `)
+
+  return rows.map((row) => {
+    let ent: unknown
+    if (typeof row.context === 'string') {
+      try {
+        const parsed: unknown = JSON.parse(row.context)
+        if (parsed && typeof parsed === 'object' && 'ent' in parsed) ent = parsed.ent
+      } catch {
+        // A malformed context carries no attribution; the assertion reports the gap.
+      }
+    }
+    return { itemId: String(row.itemId), ent: toUsageEntryPoint(ent) }
+  })
 }
 
 describe('SearchUsageService execution persistence', () => {
@@ -340,5 +370,129 @@ describe('SearchUsageService execution persistence', () => {
       'application',
       'execute'
     )
+  })
+})
+
+describe('SearchUsageService entry-point attribution', () => {
+  // The exposure set is a process-wide singleton shared with the real execute
+  // path, so each case starts and ends empty rather than inheriting whatever a
+  // previous case rendered.
+  beforeEach(() => {
+    recommendationExposureService.reset()
+  })
+
+  afterEach(() => {
+    recommendationExposureService.reset()
+  })
+
+  it('labels an execute recommendation only while its id is a live exposure', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'tuff-search-usage-entry-point-'))
+    let client: Client | undefined
+
+    try {
+      client = createClient({ url: `file:${join(directory, 'search-usage.sqlite')}` })
+      for (const migrationUrl of schemaMigrationUrls) {
+        await applyMigration(client, migrationUrl)
+      }
+
+      const db = drizzle(client, { schema })
+      const dbUtils = createDbUtils(db)
+      const usageService = new SearchUsageService({ getDbUtils: () => dbUtils })
+      usageService.initialize(db)
+
+      // Only the second id was rendered, so the exposure set is non-empty while
+      // the first one executes: reading the wrong half of the `sourceId:itemId`
+      // key, or treating "anything is exposed" as the answer, flips that row.
+      recommendationExposureService.recordExposure({
+        itemKeys: ['application-provider:app-item-2']
+      })
+
+      await usageService.recordExecute('entry-point-session', item, 'app-item')
+      await usageService.recordExecute('entry-point-session', item, 'app-item-2')
+      await usageService.flush()
+
+      expect(await readPersistedEntryPoints(client)).toEqual([
+        { itemId: 'app-item', ent: 'core-box' },
+        { itemId: 'app-item-2', ent: 'recommendation' }
+      ])
+    } finally {
+      await dbWriteScheduler.drain()
+      client?.close()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the entry point a caller passed instead of deriving one', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'tuff-search-usage-entry-point-passed-'))
+    let client: Client | undefined
+
+    try {
+      client = createClient({ url: `file:${join(directory, 'search-usage.sqlite')}` })
+      for (const migrationUrl of schemaMigrationUrls) {
+        await applyMigration(client, migrationUrl)
+      }
+
+      const db = drizzle(client, { schema })
+      const dbUtils = createDbUtils(db)
+      const usageService = new SearchUsageService({ getDbUtils: () => dbUtils })
+      usageService.initialize(db)
+
+      // Exposed, so a derivation that ignored the argument would answer
+      // `recommendation` and collapse the settings-page launch path — the one
+      // this dimension exists to separate — back into the grid's.
+      recommendationExposureService.recordExposure({ itemKeys: ['application-provider:app-item'] })
+
+      await usageService.recordExecute('entry-point-session', item, item.id, 'settings-app-detail')
+      await usageService.flush()
+
+      expect(await readPersistedEntryPoints(client)).toEqual([
+        { itemId: 'app-item', ent: 'settings-app-detail' }
+      ])
+    } finally {
+      await dbWriteScheduler.drain()
+      client?.close()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('derives the surface before the execute consumes the exposure', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'tuff-search-usage-entry-point-order-'))
+    let client: Client | undefined
+
+    try {
+      client = createClient({ url: `file:${join(directory, 'search-usage.sqlite')}` })
+      for (const migrationUrl of schemaMigrationUrls) {
+        await applyMigration(client, migrationUrl)
+      }
+
+      const db = drizzle(client, { schema })
+      const dbUtils = createDbUtils(db)
+      const usageService = new SearchUsageService({ getDbUtils: () => dbUtils })
+      usageService.initialize(db)
+
+      recommendationExposureService.recordExposure({ itemKeys: ['application-provider:app-item'] })
+
+      await usageService.recordExecute('entry-point-session', item, item.id)
+      await usageService.recordExecute('entry-point-session', item, item.id)
+      await usageService.flush()
+
+      // The ordering guard. `recordExecute` ends by calling `recordClick`, which
+      // deletes the exposure entry it counts, so a derivation moved below that
+      // call asks about an entry that is already gone and logs `core-box` for a
+      // click the user made on a recommendation — silently, and on every future
+      // recommendation click. That reversal reddens this row.
+      //
+      // The second row pins the other half of the invariant: one click per
+      // render, so re-executing the same item without a new exposure is a plain
+      // execute again rather than a second recommendation click.
+      expect(await readPersistedEntryPoints(client)).toEqual([
+        { itemId: 'app-item', ent: 'recommendation' },
+        { itemId: 'app-item', ent: 'core-box' }
+      ])
+    } finally {
+      await dbWriteScheduler.drain()
+      client?.close()
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 })

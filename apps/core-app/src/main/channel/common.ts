@@ -12,11 +12,21 @@ import type {
   AppIndexDiagnoseRequest,
   AppIndexDiagnoseResult,
   AppIndexEntryMutationResult,
+  AppIndexGetAliasesRequest,
+  AppIndexGetAliasesResult,
+  AppIndexLaunchRequest,
+  AppIndexLaunchResult,
+  AppIndexGetShortcutRequest,
+  AppIndexGetShortcutResult,
   AppIndexRemoveEntryRequest,
   AppIndexReindexRequest,
   AppIndexReindexResult,
   AppIndexSetEntryEnabledRequest,
   AppIndexUpsertEntryRequest,
+  AppIndexSetAliasesRequest,
+  AppIndexSetShortcutRequest,
+  AppIndexUsageRequest,
+  AppIndexUsageResult,
   AutoStartGetResponse,
   AutoStartUpdateRequest,
   AutoStartUpdateResponse,
@@ -99,6 +109,7 @@ import {
 } from '../modules/box-tool/search-engine/file-index-public-projection'
 import { getBoxItemManager } from '../modules/box-tool/item-sdk'
 import { indexingRuntime } from '../modules/box-tool/search-engine/indexing-runtime'
+import { toUsageEntryPoint } from '../modules/box-tool/search-engine/usage-entry-point'
 import {
   SEARCH_PROVIDER_CONFIG_KEY,
   getSearchProviderUserConfigs,
@@ -2023,6 +2034,16 @@ export class CommonChannelModule extends BaseModule {
         }
       ),
       transport.on(AppEvents.appIndex.listEntries, () => appProvider.listManagedEntries()),
+      // The app index's management surface: the user's launch history, the names they gave an
+      // app, and the host's own global shortcuts. Every transport handler is registered on the
+      // plugin channel as well and inspecting `context.plugin` is voluntary (#688), so the
+      // audience is asserted here instead of left to each handler's own diligence.
+      transport.on(AppEvents.appIndex.listSummaries, async (_payload, context) => {
+        this.assertHostOnly(context, 'appIndex.listSummaries')
+        // The result is passed through rather than wrapped: a failed usage read reports itself,
+        // and `success: true` here would present every application as never launched.
+        return await appProvider.entryActions.listSummaries()
+      }),
       transport.on<AppIndexUpsertEntryRequest, AppIndexEntryMutationResult>(
         AppEvents.appIndex.upsertEntry,
         (payload) => appProvider.upsertManagedEntry(payload ?? { path: '' })
@@ -2058,6 +2079,95 @@ export class CommonChannelModule extends BaseModule {
       transport.on<AppIndexReindexRequest, AppIndexReindexResult>(
         AppEvents.appIndex.reindex,
         (payload) => appProvider.reindexAppSearchTarget(payload ?? { target: '' })
+      ),
+      transport.on<AppIndexLaunchRequest, AppIndexLaunchResult>(
+        AppEvents.appIndex.launch,
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.launch')
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) {
+            return Promise.resolve({ success: false, reason: 'invalid-path' as const })
+          }
+          // An unknown entry point degrades to the surface that owns this channel rather than
+          // being stored verbatim: `ent` is an enum the reports group by.
+          const entryPoint =
+            toUsageEntryPoint(getOptionalStringProp(payload, 'entryPoint')) ?? 'settings-app-detail'
+          return appProvider.entryActions.launch(inputPath, entryPoint)
+        }
+      ),
+      transport.on<AppIndexUsageRequest, AppIndexUsageResult>(
+        AppEvents.appIndex.usage,
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.usage')
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) {
+            return Promise.resolve({ success: false, reason: 'invalid-path' as const })
+          }
+          return appProvider.entryActions.queryUsage(inputPath)
+        }
+      ),
+      transport.on<AppIndexGetAliasesRequest, AppIndexGetAliasesResult>(
+        AppEvents.appIndex.getAliases,
+        async (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.getAliases')
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) return { success: false, reason: 'invalid-path' as const }
+          const entries = await appProvider.listManagedEntries()
+          const entry = entries.find((candidate) => candidate.path === inputPath)
+          if (!entry) return { success: false, reason: 'not-found' as const }
+          return {
+            success: true,
+            aliases: appProvider.entryActions.getAliases(entry)
+          }
+        }
+      ),
+      transport.on<AppIndexSetAliasesRequest, AppIndexEntryMutationResult>(
+        AppEvents.appIndex.setAliases,
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.setAliases')
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) {
+            return Promise.resolve({
+              success: false,
+              status: 'invalid' as const,
+              reason: 'path-empty'
+            })
+          }
+          const aliases = Array.isArray(payload?.aliases)
+            ? payload.aliases.filter((value): value is string => typeof value === 'string')
+            : []
+          return appProvider.entryActions.setEntryAliases(inputPath, aliases)
+        }
+      ),
+      transport.on<AppIndexGetShortcutRequest, AppIndexGetShortcutResult>(
+        AppEvents.appIndex.getShortcut,
+        async (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.getShortcut')
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) return { success: false }
+          return {
+            success: true,
+            accelerator: await appProvider.entryActions.getShortcut(inputPath)
+          }
+        }
+      ),
+      transport.on<AppIndexSetShortcutRequest, AppIndexEntryMutationResult>(
+        AppEvents.appIndex.setShortcut,
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.setShortcut')
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) {
+            return Promise.resolve({
+              success: false,
+              status: 'invalid' as const,
+              reason: 'path-empty'
+            })
+          }
+          return appProvider.entryActions.setShortcut(
+            inputPath,
+            getOptionalStringProp(payload, 'accelerator') ?? ''
+          )
+        }
       )
     )
   }

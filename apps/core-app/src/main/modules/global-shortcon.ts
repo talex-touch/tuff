@@ -83,6 +83,8 @@ type MainTriggerRegisterOptions = {
 }
 
 const isMacPlatform = process.platform === 'darwin'
+/** Canonical token Escape normalises to; reserved as cancel, so it is never a binding. */
+const ESCAPE_ACCELERATOR_TOKEN = 'Esc'
 const acceleratorTokenAlias = new Map<string, string>([
   ['META', isMacPlatform ? 'Command' : 'Super'],
   ['COMMAND', 'Command'],
@@ -328,6 +330,101 @@ export class ShortcutModule extends BaseModule {
       this.reregisterAllShortcuts()
     }
     return true
+  }
+
+  /**
+   * Registers or rebinds a shortcut that launches one application.
+   *
+   * Distinct from {@link registerMainShortcut}, which refuses a second registration for the same
+   * id: that is right for a fixed system action wired once at boot, but an app binding is user
+   * state — it gets rebound to a different key and unbound entirely, at runtime. Rebinding a
+   * live id here replaces the accelerator and the callback rather than failing.
+   */
+  setAppShortcut(id: string, accelerator: string, callback: () => void): boolean {
+    const normalized = this.normalizeAccelerator(accelerator)
+    if (!normalized) {
+      shortconLog.error(`Invalid accelerator for app shortcut ${id}: ${accelerator}`)
+      return false
+    }
+
+    // Snapshotted before the first write. A rebind that the OS refuses has to leave the previous
+    // accelerator working — by the time the verdict arrives, both the registry and the store hold
+    // the new values, and the key the user was using is already gone.
+    const previousCallback = mainCallbackRegistry.get(id)?.callback
+    const previous = this.storage!.getShortcutById(id)
+
+    mainCallbackRegistry.set(id, { callback })
+
+    const existing = this.storage!.getShortcutById(id)
+    if (existing) {
+      if (existing.accelerator !== normalized) {
+        this.storage!.updateShortcutAccelerator(id, normalized)
+      }
+      this.storage!.updateShortcutEnabled(id, true)
+    } else {
+      this.storage!.addShortcut({
+        id,
+        accelerator: normalized,
+        type: ShortcutType.MAIN,
+        meta: {
+          creationTime: Date.now(),
+          modificationTime: Date.now(),
+          author: SYSTEM_SHORTCUT_AUTHOR,
+          enabled: true
+        }
+      })
+    }
+
+    this.reregisterAllShortcuts()
+    // The accelerator may be taken by the system or another binding; the caller needs to know,
+    // and `reregisterAllShortcuts` has just recomputed that verdict.
+    const state = this.shortcutStatusMap.get(id)?.state
+    if (state === 'conflict' || state === 'unavailable') {
+      this.restoreAppShortcut(id, previousCallback, previous)
+      return false
+    }
+
+    // `disabled` is the global shortcut switch rather than this key: the binding is stored and
+    // becomes live again when the user re-enables shortcuts.
+    return true
+  }
+
+  /**
+   * Puts a binding back the way it was after an attempt that will not fire.
+   *
+   * `conflict` and `unavailable` both mean the accelerator never reaches this callback, so the
+   * attempt is rolled back instead of being left as the user's binding: keeping it would report a
+   * failure while silently having discarded the key that used to work.
+   */
+  private restoreAppShortcut(id: string, previousCallback?: () => void, previous?: Shortcut): void {
+    if (previousCallback) {
+      mainCallbackRegistry.set(id, { callback: previousCallback })
+    } else {
+      mainCallbackRegistry.delete(id)
+    }
+
+    if (previous) {
+      this.storage!.updateShortcutAccelerator(id, previous.accelerator)
+      this.storage!.updateShortcutEnabled(id, previous.meta?.enabled ?? true)
+    } else {
+      // Nothing was bound before, so the attempted accelerator is left in the store for no key
+      // that fires.
+      this.storage!.removeShortcuts([id])
+    }
+
+    this.reregisterAllShortcuts()
+  }
+
+  /** Removes an app shortcut entirely, both its callback and its stored accelerator. */
+  removeAppShortcut(id: string): boolean {
+    mainCallbackRegistry.delete(id)
+    const removed = this.storage?.removeShortcuts([id]) ?? 0
+    if (removed > 0) this.reregisterAllShortcuts()
+    return removed > 0
+  }
+
+  getShortcutAccelerator(id: string): string | null {
+    return this.storage?.getShortcutById(id)?.accelerator ?? null
   }
 
   registerRendererShortcut(
@@ -792,6 +889,13 @@ export class ShortcutModule extends BaseModule {
       .filter((token): token is string => Boolean(token))
 
     if (!normalizedTokens.length) {
+      return null
+    }
+
+    // Escape is the cancel key everywhere else in the app, so it never holds a global binding.
+    // Refusing it here covers the write paths and every re-registration, without touching reads:
+    // an already-stored Escape still reads back, so the user can see and clear it.
+    if (normalizedTokens[normalizedTokens.length - 1] === ESCAPE_ACCELERATOR_TOKEN) {
       return null
     }
 

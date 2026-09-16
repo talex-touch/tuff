@@ -11,6 +11,7 @@ import { fileExtensions, files as filesSchema } from '../../../../../db/schema'
 import {
   APP_ENTRY_ENABLED_EXTENSION_KEY,
   APP_ENTRY_SOURCE_MANUAL,
+  APP_IDENTITY_EXTENSION_KEY,
   buildManagedEntryExtensions,
   isManagedEntryExtensionMap,
   isManagedEntryEnabledExtensionMap,
@@ -209,6 +210,9 @@ export class AppManagedEntryService {
       source: isManualEntry ? APP_ENTRY_SOURCE_MANUAL : 'scanned',
       removable: isManualEntry,
       bundleId: appInfo.bundleId || undefined,
+      // The identity the scan wrote, so an item id resolved from this projection matches the one
+      // the search side records its usage under.
+      appIdentity: app.extensions[APP_IDENTITY_EXTENSION_KEY] || undefined,
       identityKind: appInfo.identityKind,
       launchKind: appInfo.launchKind,
       launchTarget: appInfo.launchTarget,
