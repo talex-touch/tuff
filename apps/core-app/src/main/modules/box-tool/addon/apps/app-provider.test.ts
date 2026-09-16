@@ -1137,6 +1137,15 @@ describe('appProvider rebuild maintenance', () => {
   it('maps path-stable app records with semantic and external aliases', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
+    // Seeding an alias writes it through before adopting it, so the seed needs somewhere to
+    // persist; the record this test is about is built from the map, not from that store.
+    privateProvider.dbUtils = {
+      getDb: () => ({
+        insert: () => ({
+          values: () => ({ onConflictDoUpdate: async () => undefined })
+        })
+      })
+    }
     const appPath = '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app'
     await appProvider.entryActions.replaceAliases({ [appPath]: ['retouch'] })
 
