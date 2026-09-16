@@ -7,11 +7,11 @@ import type {
   ResolvedLocalModel,
 } from './types'
 import { constants } from 'node:fs'
-import { access, mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdtemp } from 'node:fs/promises'
 import { availableParallelism, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { executableCandidates, findExecutable, materializePcmInput, runLocalProcess, withDecodeLock } from './decode'
+import { discardWorkDirectory, executableCandidates, findExecutable, materializePcmInput, runLocalProcess, withDecodeLock } from './decode'
 import { resolveAuxiliaryPath } from './model-store'
 import { LocalEngineError } from './types'
 import { pcmDurationMs } from './wav'
@@ -195,11 +195,39 @@ export class SherpaOnnxLocalEngine implements LocalAsrEngine {
         },
       }
     }
+
     // The tokenizer is as load-bearing as the weights: the recognizer cannot map its own output
-    // without it, so a bundle missing it is a missing model rather than a partial one.
-    const required = [model.weightsPath, resolveAuxiliaryPath(model, 'tokenizer')]
-      .filter((path): path is string => path !== undefined)
-    for (const path of required) {
+    // without it. A bundle that ships none is unavailable here rather than at decode time, and a
+    // descriptor whose auxiliary path escapes its bundle is the same answer — a structured
+    // unavailability, not a thrown error, because this method's whole job is to not throw.
+    let tokenizer: string | undefined
+    try {
+      tokenizer = resolveAuxiliaryPath(model, 'tokenizer')
+    }
+    catch {
+      return {
+        available: false,
+        binaryPath: binary,
+        model,
+        reason: {
+          code: 'LOCAL_ENGINE_MODEL_DESCRIPTOR_INVALID',
+          message: `${model.descriptor.id} declares an auxiliary file outside its own bundle.`,
+        },
+      }
+    }
+    if (!tokenizer) {
+      return {
+        available: false,
+        binaryPath: binary,
+        model,
+        reason: {
+          code: 'LOCAL_ENGINE_MODEL_DESCRIPTOR_INVALID',
+          message: `${model.descriptor.id} declares no tokenizer file, which sense-voice requires.`,
+        },
+      }
+    }
+
+    for (const path of [model.weightsPath, tokenizer]) {
       try {
         await access(path, constants.R_OK)
       }
@@ -277,7 +305,7 @@ export class SherpaOnnxLocalEngine implements LocalAsrEngine {
       }
     }
     finally {
-      await rm(workDirectory, { recursive: true, force: true })
+      await discardWorkDirectory(workDirectory)
     }
   }
 }

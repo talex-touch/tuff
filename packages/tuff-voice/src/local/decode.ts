@@ -2,7 +2,7 @@ import type { LocalAudioInput } from './types'
 import type { WavFormat } from './wav'
 import { spawn } from 'node:child_process'
 import { constants } from 'node:fs'
-import { access, writeFile } from 'node:fs/promises'
+import { access, rm, writeFile } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import process from 'node:process'
 import { LocalEngineError } from './types'
@@ -92,6 +92,15 @@ export function runLocalProcess(
     let settled = false
     let timer: NodeJS.Timeout | undefined
     let onAbort: (() => void) | undefined
+    /**
+     * Why the decode is being torn down early, if it is.
+     *
+     * `child.kill()` only *sends* a signal, so settling on it would release the decode lock and
+     * start deleting the work directory while the child is still running — which is how two
+     * decoders end up overlapping and how a cleanup failure replaces the real reason. The
+     * termination reason is recorded here and settled from `close`, once the process is gone.
+     */
+    let termination: Error | undefined
     const finish = (error?: Error): void => {
       if (settled)
         return
@@ -103,21 +112,20 @@ export function runLocalProcess(
         reject(error)
       else settle({ stdout, stderr })
     }
-    onAbort = (): void => {
+    const terminate = (error: Error): void => {
+      if (settled || termination)
+        return
+      termination = error
       child.kill('SIGKILL')
-      finish(new LocalEngineError('LOCAL_ENGINE_ABORTED', 'Local transcription was cancelled.'))
+    }
+    onAbort = (): void => {
+      terminate(new LocalEngineError('LOCAL_ENGINE_ABORTED', 'Local transcription was cancelled.'))
     }
     timer = setTimeout(() => {
-      child.kill('SIGKILL')
-      finish(new LocalEngineError('LOCAL_ENGINE_TIMEOUT', `Local transcription exceeded ${options.timeoutMs} ms.`, {
+      terminate(new LocalEngineError('LOCAL_ENGINE_TIMEOUT', `Local transcription exceeded ${options.timeoutMs} ms.`, {
         retryable: true,
       }))
     }, options.timeoutMs)
-    if (options.signal?.aborted) {
-      onAbort()
-      return
-    }
-    options.signal?.addEventListener('abort', onAbort, { once: true })
 
     child.on('error', (error) => {
       finish(new LocalEngineError('LOCAL_ENGINE_SPAWN_FAILED', `Could not start ${options.label}: ${error.message}`, {
@@ -127,6 +135,10 @@ export function runLocalProcess(
     // 'close' fires only after the child has exited and its stdio is finished, so the decode
     // lock the caller releases on settle is never released while a child is still running.
     child.on('close', (code) => {
+      if (termination) {
+        finish(termination)
+        return
+      }
       if (code === 0) {
         finish()
       }
@@ -136,7 +148,31 @@ export function runLocalProcess(
         }))
       }
     })
+
+    // Only now is it safe to cancel: termination settles through 'close', so an already-aborted
+    // signal would otherwise kill a child whose exit nobody is listening for and hang forever.
+    if (options.signal?.aborted) {
+      onAbort()
+      return
+    }
+    options.signal?.addEventListener('abort', onAbort, { once: true })
   })
+}
+
+/**
+ * Delete a decode's scratch directory, best effort.
+ *
+ * `force: true` still rejects on a permission or filesystem error, and a cleanup failure must
+ * never replace the decode's own result — a successful transcript discarded because a temporary
+ * directory would not delete is the worse outcome by far.
+ */
+export async function discardWorkDirectory(workDirectory: string): Promise<void> {
+  try {
+    await rm(workDirectory, { recursive: true, force: true })
+  }
+  catch {
+    // Intentionally ignored; see above.
+  }
 }
 
 /** PCM arrives headerless; every supported CLI reads containers, so wrap it before writing. */
