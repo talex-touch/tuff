@@ -14,7 +14,10 @@ const nativeAudioMock = vi.hoisted(() => ({
 }))
 
 const polishPromptMocks = vi.hoisted(() => ({
-  getVoicePolishPrompt: vi.fn((strength: string) => strength)
+  getVoicePolishPrompt: vi.fn((strength: string) => strength),
+  wrapTranscription: vi.fn((transcript: string, context?: unknown) =>
+    JSON.stringify({ transcription: transcript, ...(context ? { context } : {}) })
+  )
 }))
 
 vi.mock('@talex-touch/tuff-native/audio', () => nativeAudioMock)
@@ -49,7 +52,7 @@ vi.mock('./voice-provider-runtime', () => ({
 
 vi.mock('./polish-prompt', () => ({
   getVoicePolishPrompt: polishPromptMocks.getVoicePolishPrompt,
-  wrapTranscription: (transcript: string) => JSON.stringify({ transcription: transcript })
+  wrapTranscription: polishPromptMocks.wrapTranscription
 }))
 
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
@@ -482,6 +485,36 @@ describe('VoiceService canonical session', () => {
 
     expect(getVoicePolishPrompt).toHaveBeenCalledOnce()
     expect(getVoicePolishPrompt).toHaveBeenCalledWith('structured')
+  })
+
+  it('polishes for the target captured at session start, not whatever has focus later', async () => {
+    stt.mockResolvedValue({ result: { text: DICTATED_SENTENCE, language: 'en' } })
+    invoke.mockResolvedValue({ result: 'Raw dictation.' })
+
+    const service = new VoiceService()
+    const sessionId = await service.startSession({ delivery: 'active-app' })
+
+    // The user switches application before releasing the key. Delivery validates the target that
+    // was captured at session start, so the polish pass has to describe that same target —
+    // otherwise text tuned for the browser is typed into the editor.
+    getActiveApp.mockResolvedValue({
+      identifier: 'com.example.browser',
+      displayName: 'Browser',
+      bundleId: 'com.example.browser',
+      processId: 456,
+      executablePath: null,
+      platform: 'macos',
+      windowTitle: null,
+      lastUpdated: Date.now()
+    })
+
+    await service.stopSession(sessionId, { cleanup: true })
+
+    const userTurn = (
+      invoke.mock.calls.at(-1)?.[1] as { messages: { content: string }[] }
+    ).messages.at(-1)?.content
+    expect(userTurn).toContain('Editor')
+    expect(userTurn).not.toContain('Browser')
   })
 
   it('resolves noise suppression once at capture start and defaults it to off', async () => {

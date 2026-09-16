@@ -1,19 +1,27 @@
-import type { LocalModelDescriptor } from '../src/index'
+import type { LocalModelDescriptor, ResolvedLocalModel } from '../src/index'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import process from 'node:process'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  buildSherpaArgs,
   buildWavHeader,
   buildWhisperArgs,
+  createLocalEngine,
   isPrimerEcho,
   listInstalledModels,
   loadInstalledModel,
   LocalOfflineVoiceProvider,
   pcmDurationMs,
+  pickTranscript,
   readModelDescriptor,
+  resolveAuxiliaryPath,
+  resolveSherpaLanguage,
+  runLocalProcess,
+  SherpaOnnxLocalEngine,
   verifyModelIntegrity,
   VoiceProviderError,
   wrapPcmAsWav,
@@ -244,6 +252,191 @@ describe('primer echo guard', () => {
   })
 })
 
+describe('sherpa-onnx argument construction', () => {
+  const sherpaDescriptor = (overrides: Partial<LocalModelDescriptor> = {}): LocalModelDescriptor =>
+    descriptorFixture({
+      engine: 'sherpa-onnx',
+      sherpa: { family: 'sense-voice' },
+      runtime: { kind: 'onnx', file: 'model.int8.onnx', bytes: 4, sha256: '0'.repeat(64) },
+      auxiliary: [{ role: 'tokenizer', file: 'tokens.txt', bytes: 2, sha256: '1'.repeat(64) }],
+      capabilities: { stream: true, upload: true, punctuation: true, itn: true },
+      ...overrides,
+    })
+
+  const model = (overrides: Partial<LocalModelDescriptor> = {}): Parameters<typeof buildSherpaArgs>[0] => ({
+    descriptor: sherpaDescriptor(overrides),
+    directory: '/models/fixture-model/1.0.0',
+    weightsPath: '/models/fixture-model/1.0.0/model.int8.onnx',
+  })
+
+  it('names the sense-voice recognizer and the bundle tokenizer, not the weights alone', () => {
+    const args = buildSherpaArgs(model(), '/tmp/a.wav', {})
+    expect(args).toEqual(expect.arrayContaining([
+      '--sense-voice-model=/models/fixture-model/1.0.0/model.int8.onnx',
+      '--tokens=/models/fixture-model/1.0.0/tokens.txt',
+      '--debug=0',
+    ]))
+    // The audio path is positional and comes last, after every flag.
+    expect(args.at(-1)).toBe('/tmp/a.wav')
+  })
+
+  it('enables inverse text normalisation from the descriptor, not from the caller', () => {
+    expect(buildSherpaArgs(model(), '/tmp/a.wav', {})).toContain('--sense-voice-use-itn=1')
+    // A bundle that does not declare the capability must not be asked for it.
+    const withoutItn = model({ capabilities: { stream: true, upload: true, itn: false } })
+    expect(buildSherpaArgs(withoutItn, '/tmp/a.wav', {})).not.toContain('--sense-voice-use-itn=1')
+  })
+
+  it('narrows a language tag to a value the recognizer accepts', () => {
+    expect(buildSherpaArgs(model(), '/tmp/a.wav', { language: 'zh-Hans' })).toContain('--sense-voice-language=zh')
+    expect(buildSherpaArgs(model(), '/tmp/a.wav', { language: 'yue' })).toContain('--sense-voice-language=yue')
+    // `fr` is not in the recognizer's closed set; detection beats passing a flag it would reject.
+    expect(buildSherpaArgs(model(), '/tmp/a.wav', { language: 'fr' })).toContain('--sense-voice-language=auto')
+    expect(resolveSherpaLanguage(model(), { language: 'zh-CN' })).toBe('zh')
+  })
+
+  it('refuses a bundle whose family this build cannot drive, and one with no tokenizer', () => {
+    const unknownFamily = model({ sherpa: { family: 'paraformer' } as never })
+    expect(() => buildSherpaArgs(unknownFamily, '/tmp/a.wav', {})).toThrow(/cannot drive/)
+
+    const noTokenizer = model({ auxiliary: [] })
+    expect(() => buildSherpaArgs(noTokenizer, '/tmp/a.wav', {})).toThrow(/tokenizer/)
+  })
+
+  it('resolves the tokenizer inside the bundle and refuses one that escapes it', async () => {
+    const root = await makeWorkspace()
+    const descriptor = sherpaDescriptor()
+    const directory = await installFixture(root, descriptor, new Uint8Array([1, 2, 3, 4]))
+    await writeFile(join(directory, 'tokens.txt'), 'a b')
+
+    const installed = await loadInstalledModel(root, 'fixture-model', '1.0.0')
+    expect(resolveAuxiliaryPath(installed, 'tokenizer')).toBe(join(directory, 'tokens.txt'))
+    // A role the bundle does not ship is absent, which is not the same as unreadable.
+    expect(resolveAuxiliaryPath(installed, 'vad')).toBeUndefined()
+
+    const escaping = await makeWorkspace()
+    await installFixture(escaping, sherpaDescriptor({
+      auxiliary: [{ role: 'tokenizer', file: '../../outside.txt', bytes: 2, sha256: '1'.repeat(64) }],
+    }), new Uint8Array([1, 2, 3, 4]))
+    const escaped = await loadInstalledModel(escaping, 'fixture-model', '1.0.0')
+    expect(() => resolveAuxiliaryPath(escaped, 'tokenizer')).toThrow(/escapes/)
+  })
+})
+
+describe('sherpa-onnx result parsing', () => {
+  // The CLI's real stdout: a config banner, then the path, the JSON line, a separator, and a
+  // human-readable summary. Only the recognition line is JSON, so the parse is anchored on that.
+  const realStdout = [
+    'OfflineRecognizerConfig(feat_config=FeatureExtractorConfig(sampling_rate=16000, feature_dim=80), model_config=OfflineModelConfig(sense_voice=OfflineSenseVoiceModelConfig(model="model.int8.onnx", language="auto", use_itn=True)), tokens="tokens.txt", num_threads=1, debug=False, provider="cpu")',
+    'Creating recognizer ...',
+    'recognizer created in 0.576 s',
+    'Started',
+    'Done!',
+    '',
+    './test_wavs/zh.wav',
+    '{"lang": "<|zh|>", "emotion": "<|NEUTRAL|>", "event": "<|Speech|>", "text": "开放时间早上9点至下午5点。", "timestamps": [0.72, 0.96, 1.26], "tokens":["开", "放", "时"]}',
+    '----',
+    'num threads: 1',
+    'decoding method: greedy_search',
+    'Elapsed seconds: 1.392 s',
+    'Real time factor (RTF): 1.392 / 12.744 = 0.109',
+  ].join('\n')
+
+  it('picks the transcript and language out of a real CLI run', () => {
+    expect(pickTranscript(realStdout)).toEqual({ text: '开放时间早上9点至下午5点。', language: 'zh' })
+  })
+
+  it('treats an empty transcript as silence rather than as a missing result', () => {
+    // SenseVoice is non-autoregressive: it reports nothing for nothing, which dictation wants.
+    const silence = '{"lang": "<|zh|>", "text": "", "tokens": []}'
+    expect(pickTranscript(silence)).toEqual({ text: '', language: 'zh' })
+  })
+
+  it('reports no result when the CLI never emitted one', () => {
+    expect(pickTranscript('Creating recognizer ...\nDone!\n')).toBeUndefined()
+    expect(pickTranscript('{ not json at all')).toBeUndefined()
+    expect(pickTranscript('{"tokens": []}')).toBeUndefined()
+  })
+})
+
+describe('sherpa-onnx descriptor contract', () => {
+  it('rejects a sherpa-onnx bundle whose family or weight format it cannot drive', async () => {
+    const root = await makeWorkspace()
+    const directory = join(root, 'fixture-model', '1.0.0')
+    await mkdir(directory, { recursive: true })
+
+    await writeFile(join(directory, 'model.json'), JSON.stringify(descriptorFixture({ engine: 'sherpa-onnx' })))
+    await expect(readModelDescriptor(directory)).rejects.toThrow(/sherpa\.family/)
+
+    await writeFile(join(directory, 'model.json'), JSON.stringify(descriptorFixture({
+      engine: 'sherpa-onnx',
+      sherpa: { family: 'moonshine' } as never,
+    })))
+    await expect(readModelDescriptor(directory)).rejects.toThrow(/not a family this build can drive/)
+
+    await writeFile(join(directory, 'model.json'), JSON.stringify(descriptorFixture({
+      engine: 'sherpa-onnx',
+      sherpa: { family: 'sense-voice' },
+    })))
+    await expect(readModelDescriptor(directory)).rejects.toThrow(/ONNX weights/)
+
+    await writeFile(join(directory, 'model.json'), JSON.stringify(descriptorFixture({
+      engine: 'sherpa-onnx',
+      sherpa: { family: 'sense-voice' },
+      runtime: { kind: 'onnx', file: 'model.onnx', bytes: 4, sha256: '0'.repeat(64) },
+    })))
+    await expect(readModelDescriptor(directory)).resolves.toMatchObject({ engine: 'sherpa-onnx' })
+  })
+
+  it('builds the sherpa engine for a sherpa bundle and narrows what the provider will accept', () => {
+    expect(createLocalEngine('sherpa-onnx').id).toBe('sherpa-onnx')
+
+    const provider = new LocalOfflineVoiceProvider({
+      model: {
+        descriptor: descriptorFixture({
+          engine: 'sherpa-onnx',
+          sherpa: { family: 'sense-voice' },
+          runtime: { kind: 'onnx', file: 'model.int8.onnx', bytes: 4, sha256: '0'.repeat(64) },
+        }),
+        directory: '/models/fixture-model/1.0.0',
+        weightsPath: '/models/fixture-model/1.0.0/model.int8.onnx',
+      },
+    })
+    // sherpa-onnx-offline reads WAV only, so the contract must not promise it can open mp3.
+    expect(provider.capabilities.formats).toEqual(['pcm', 'wav'])
+  })
+
+  it('reports an unusable tokenizer as unavailability instead of throwing or claiming ready', async () => {
+    // The explicit binary only has to be *executable*: these cases are decided after discovery,
+    // so the running Node binary stands in for sherpa-onnx-offline and works on every platform.
+    const engine = new SherpaOnnxLocalEngine({ binaryPath: process.execPath })
+    const withIt = (overrides: Partial<LocalModelDescriptor>): ResolvedLocalModel => ({
+      descriptor: descriptorFixture({
+        engine: 'sherpa-onnx',
+        sherpa: { family: 'sense-voice' },
+        runtime: { kind: 'onnx', file: 'model.onnx', bytes: 4, sha256: '0'.repeat(64) },
+        ...overrides,
+      }),
+      directory: '/models/fixture-model/1.0.0',
+      weightsPath: '/models/fixture-model/1.0.0/model.onnx',
+    })
+
+    // A bundle that ships no tokenizer cannot map its own output, so it is not merely unverified,
+    // and it must not report ready just because the weights happened to be readable.
+    const noTokenizer = await engine.checkAvailability(withIt({ auxiliary: [] }), process.execPath)
+    expect(noTokenizer.available).toBe(false)
+    expect(noTokenizer.reason?.code).toBe('LOCAL_ENGINE_MODEL_DESCRIPTOR_INVALID')
+
+    // A descriptor pointing outside its own bundle is the same answer, not a thrown error:
+    // this method's entire job is to describe unavailability without throwing.
+    const escaping = await engine.checkAvailability(withIt({
+      auxiliary: [{ role: 'tokenizer', file: '../../outside.txt', bytes: 2, sha256: '1'.repeat(64), url: 'https://example.com/tokens.txt' }],
+    }), process.execPath)
+    expect(escaping.available).toBe(false)
+    expect(escaping.reason?.code).toBe('LOCAL_ENGINE_MODEL_DESCRIPTOR_INVALID')
+  })
+})
+
 describe('local provider contract', () => {
   const provider = new LocalOfflineVoiceProvider({
     model: {
@@ -279,5 +472,55 @@ describe('local provider contract', () => {
       source: { kind: 'url', url: 'https://example.com/a.wav' },
       requestId: 'r3',
     })).rejects.toThrow(/local bytes only/)
+  })
+})
+
+describe('local decode lifecycle', () => {
+  /**
+   * A stand-in decoder that is alive and idle until it is killed.
+   *
+   * The runners are subprocesses, so their cancellation and deadline behaviour cannot be tested
+   * through a mock: the whole question is whether a real child is really gone before the decode
+   * lock is released. This Node binary is present on every platform, and `Atomics.wait` parks it
+   * on the main thread without a timer, CPU spin or event-loop handle.
+   */
+  const PARKED_CHILD = ['-e', 'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)']
+
+  it('cancels an already-aborted decode instead of waiting on a child nobody observes', async () => {
+    // The regression this defends: settling on `kill` rather than on `close` means an aborted
+    // signal has to be handled *after* the exit listener exists, or the promise never settles.
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(runLocalProcess(process.execPath, PARKED_CHILD, {
+      timeoutMs: 30_000,
+      label: 'parked child',
+      signal: controller.signal,
+    })).rejects.toThrow(/cancel/i)
+  })
+
+  it('kills a decode that overruns its deadline and reports the deadline, not the kill', async () => {
+    await expect(runLocalProcess(process.execPath, PARKED_CHILD, {
+      timeoutMs: 200,
+      label: 'parked child',
+    })).rejects.toThrow(/exceeded 200 ms/)
+  })
+
+  it('returns what a successful decode wrote to both streams', async () => {
+    // stdout has to be drained: a child that blocks writing into an unread pipe never exits.
+    const result = await runLocalProcess(
+      process.execPath,
+      ['-e', 'console.log("result line"); console.error("warning line")'],
+      { timeoutMs: 30_000, label: 'echo child' },
+    )
+    expect(result.stdout).toContain('result line')
+    expect(result.stderr).toContain('warning line')
+  })
+
+  it('reports a spawn failure as an engine error rather than an unhandled rejection', async () => {
+    await expect(runLocalProcess('/nonexistent/binary', [], {
+      timeoutMs: 5_000,
+      label: 'absent binary',
+    })).rejects.toThrow(/Could not start absent binary/)
   })
 })

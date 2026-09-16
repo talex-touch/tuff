@@ -42,8 +42,12 @@ import { intelligenceTtsService } from '../ai/intelligence-tts-service'
 import { clipboardModule } from '../clipboard'
 import { getMainConfig } from '../storage'
 import { activeAppService } from '../system/active-app'
-import { appFormatContextFromActiveApp, formatDictationText } from './app-context'
-import { getVoicePolishPrompt, wrapTranscription } from './polish-prompt'
+import {
+  appFormatContextFromActiveApp,
+  formatDictationText,
+  resolveAppFormatProfile
+} from './app-context'
+import { getVoicePolishPrompt, wrapTranscription, type PolishContext } from './polish-prompt'
 import { selectVoiceFile } from './voice-file-transcription'
 import { voiceInsightsStore } from './voice-insights-store'
 import { createLiveDelivery } from './voice-live-delivery'
@@ -280,6 +284,13 @@ interface RetryBuffer {
   requestTimeoutMs: number
   polishStrength: VoicePolishStrength
   cleanup: boolean
+  /**
+   * The delivery target's context, snapshotted with the audio.
+   *
+   * A retry replays a recording made for one application, so it must not re-derive the context
+   * from whatever happens to be frontmost when the user asks for another attempt.
+   */
+  polishContext?: PolishContext
   /** Set once the session ends abnormally; until then the buffer belongs to a live session. */
   expiresAt: number | null
   kind: VoiceRecoveryKind | null
@@ -302,6 +313,16 @@ interface VoiceSessionRecord {
   readonly delivery: VoiceDictatePayload['delivery']
   readonly polishStrength: VoicePolishStrength
   readonly targetKey: string | null
+  /**
+   * The delivery target's formatting context, captured with `targetKey` when the session started.
+   *
+   * Resolved once, for the same reason the target key is: the polish pass must describe the
+   * application the user was dictating into, and re-reading the frontmost application after
+   * transcription can describe a different one. A session that starts in an editor and finishes
+   * with a browser focused would otherwise be polished for the browser while being delivered to
+   * the editor, because delivery validates the captured key and the polish context did not.
+   */
+  readonly polishContext?: PolishContext
   readonly startedAt: number
   readonly abortSignal?: AbortSignal
   readonly onAbort?: () => void
@@ -322,6 +343,25 @@ function activeAppKey(info: ActiveAppInfo | null): string | null {
     info.windowTitle || 'unknown'
   ].join('|')
   return `${info.platform ?? 'unknown'}:${identity}`
+}
+
+/**
+ * The formatting context to hand the polish pass, from a frontmost-application record.
+ *
+ * It reuses the same profile resolver the deterministic formatter uses, so polish and formatting
+ * cannot disagree about what kind of application this is. Returns undefined when nothing is
+ * known, which leaves the polish pass with no target hints rather than with invented ones.
+ */
+function polishContextFromActiveApp(info: ActiveAppInfo | null): PolishContext | undefined {
+  const formatContext = appFormatContextFromActiveApp(info)
+  if (!formatContext) return undefined
+  const profile = resolveAppFormatProfile(formatContext)
+  return {
+    ...(formatContext.appName ? { appName: formatContext.appName } : {}),
+    ...(formatContext.bundleId ? { bundleId: formatContext.bundleId } : {}),
+    category: profile.id,
+    ...(formatContext.windowTitle ? { windowTitle: formatContext.windowTitle } : {})
+  }
 }
 
 function delay(ms: number): Promise<void> {
@@ -474,7 +514,8 @@ export class VoiceService {
     requestTimeoutMs: number,
     polishStrength: VoicePolishStrength,
     cleanup: boolean,
-    language?: string
+    language?: string,
+    polishContext?: PolishContext
   ): void {
     if (generation !== this.retryBufferGeneration) return
     this.clearRetryBuffer()
@@ -491,6 +532,7 @@ export class VoiceService {
       polishStrength,
       cleanup,
       ...(language ? { language } : {}),
+      ...(polishContext ? { polishContext } : {}),
       expiresAt: null,
       kind: null,
       overflowed: false
@@ -608,6 +650,7 @@ export class VoiceService {
     }
     const { sessionId: nativeSessionId, deviceName } = captureOutcome.value
     const targetKey = activeAppKey(targetOutcome.value)
+    const polishContext = polishContextFromActiveApp(targetOutcome.value)
     const deviceChanged = this.noteCaptureDevice(deviceName)
     if (this.disposed) {
       try {
@@ -628,6 +671,7 @@ export class VoiceService {
       delivery: payload.delivery ?? 'none',
       polishStrength,
       targetKey,
+      ...(polishContext ? { polishContext } : {}),
       startedAt: Date.now(),
       ...(signal ? { abortSignal: signal } : {}),
       ...(onAbort ? { onAbort } : {})
@@ -679,7 +723,8 @@ export class VoiceService {
         polishStrength: record.polishStrength
       },
       record.abortSignal,
-      record.caller
+      record.caller,
+      record.polishContext
     )
     if (record.delivery === 'active-app' && result.text) {
       result.delivery = await this.deliverText(result.text, record.targetKey)
@@ -745,7 +790,8 @@ export class VoiceService {
     capture: AudioCaptureResult,
     payload: VoiceSessionPayload,
     signal: AbortSignal | undefined,
-    caller: string
+    caller: string,
+    polishContext?: PolishContext
   ): Promise<VoiceDictateResult> {
     if (!capture.audio || capture.audio.length === 0) {
       return {
@@ -780,7 +826,8 @@ export class VoiceService {
           transcript.text,
           normalizeVoicePolishStrength(payload.polishStrength),
           signal,
-          caller
+          caller,
+          polishContext
         )
       : null
     throwIfCancelled(signal)
@@ -1185,7 +1232,8 @@ export class VoiceService {
       requestTimeoutMs,
       session.polishStrength,
       cleanup,
-      payload.language
+      payload.language,
+      session.polishContext
     )
     try {
       // The pump cannot `yield` — it is a detached task, while the generator is parked on
@@ -1268,7 +1316,13 @@ export class VoiceService {
       ): Promise<{ text: string; language?: string; delivery?: VoiceDeliveryResult }> => {
         const normalized = rawText.trim()
         const polishedText = cleanup
-          ? await this.polish(normalized, session.polishStrength, signal, caller)
+          ? await this.polish(
+              normalized,
+              session.polishStrength,
+              signal,
+              caller,
+              session.polishContext
+            )
           : null
         throwIfCancelled(signal)
         const text = polishedText ?? normalized
@@ -1560,7 +1614,7 @@ export class VoiceService {
     const recognized = text.trim()
     if (!recognized) return { text: '' }
     const polishedText = buffer.cleanup
-      ? await this.polish(recognized, buffer.polishStrength, signal, caller)
+      ? await this.polish(recognized, buffer.polishStrength, signal, caller, buffer.polishContext)
       : null
     throwIfCancelled(signal)
     const deliveredText = polishedText ?? recognized
@@ -1662,9 +1716,21 @@ export class VoiceService {
     transcript: string,
     strength: VoicePolishStrength,
     signal?: AbortSignal,
-    caller = VOICE_CALLER
+    caller = VOICE_CALLER,
+    context?: PolishContext
   ): Promise<string | null> {
     if (!transcript.trim()) return null
+    // A caller with a fixed delivery target passes the context it captured at session start, so
+    // a focus change mid-dictation cannot re-describe the target. Only a flow with no target
+    // (a file or a one-shot capture) falls back to whatever is frontmost now.
+    let effectiveContext = context
+    if (!effectiveContext) {
+      try {
+        effectiveContext = polishContextFromActiveApp(await activeAppService.getActiveApp())
+      } catch {
+        // Active application discovery is best-effort; polish proceeds without target hints.
+      }
+    }
     const tier = resolvePolishTier(transcript)
     const units = countPolishUnits(transcript)
     const telemetryId = nextVoiceSessionId()
@@ -1738,7 +1804,7 @@ export class VoiceService {
           {
             messages: [
               { role: 'system', content: getVoicePolishPrompt(effectiveStrength) },
-              { role: 'user', content: wrapTranscription(transcript) }
+              { role: 'user', content: wrapTranscription(transcript, effectiveContext) }
             ]
           },
           {
