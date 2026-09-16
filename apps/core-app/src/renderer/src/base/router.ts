@@ -82,7 +82,9 @@ function createSettingCategoryRoutes(withPerf: typeof withRouteComponentPerf): R
     appearance: () => import('../views/base/settings/categories/SettingAppearancePage.vue'),
     intelligence: () => import('../views/base/settings/categories/SettingIntelligencePage.vue'),
     plugins: () => import('../views/base/settings/categories/SettingPluginsPage.vue'),
-    applications: () => import('../views/base/settings/categories/SettingApplicationsPage.vue'),
+    // The applications surface is a split page, so it mounts `SettingsPage` itself rather than
+    // being wrapped by a `categories/` shim the way the column pages are.
+    applications: () => import('../views/base/application/ApplicationIndex.vue'),
 
     'file-index': () => import('../views/base/settings/categories/SettingFileIndexPage.vue'),
     update: () => import('../views/base/settings/categories/SettingUpdatePage.vue'),

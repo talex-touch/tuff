@@ -125,6 +125,38 @@ describe('appDestinationProvider search', () => {
     expect(item.render.basic?.title?.slice(ranges[0]!.start, ranges[0]!.end)).toBe('主窗口')
   })
 
+  /**
+   * Most of the catalog is reached by pinyin, and a literal `indexOf` finds none of it: `sz` is a
+   * real alias-table hit but appears nowhere in "Tuff 设置", so the row used to render with the
+   * query highlighted nowhere at all.
+   */
+  it.each([
+    ['sz', '设置'],
+    ['shezhi', '设置'],
+    ['设置', '设置']
+  ] as const)('highlights the title characters %s reaches', async (query, expected) => {
+    const provider = await createProvider()
+    const item = onlyItem(await search(provider, query))
+    const ranges = item.meta?.extension?.matchResult as Array<{ start: number; end: number }>
+    const title = item.render.basic?.title ?? ''
+
+    expect(ranges.length).toBeGreaterThan(0)
+    expect(ranges.map((range) => title.slice(range.start, range.end)).join('')).toBe(expected)
+  })
+
+  /**
+   * An alias whose text is simply not in the title has nothing honest to highlight. Painting the
+   * nearest-looking span would claim the query matched characters it never named, so the range
+   * list stays empty and the row renders plain.
+   */
+  it('highlights nothing when the matched alias is absent from the title', async () => {
+    const provider = await createProvider()
+    const item = onlyItem(await search(provider, 'phsz'))
+
+    expect(item.meta?.extension?.destinationId).toBe('settings-overview')
+    expect(item.meta?.extension?.matchResult).toEqual([])
+  })
+
   it('keeps the metadata search tokens bounded to the alias list', async () => {
     const provider = await createProvider()
     const item = onlyItem(await search(provider, '设置'))

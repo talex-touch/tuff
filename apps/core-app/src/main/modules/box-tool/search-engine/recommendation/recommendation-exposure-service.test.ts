@@ -184,6 +184,48 @@ describe('RecommendationExposureService', () => {
 
     expect(auxWrites.every((write) => write.surface === 'core-box')).toBe(true)
   })
+
+  it('reports a rendered id as exposed and anything else as not', async () => {
+    service.recordExposure({ itemKeys: ['app-provider:a'] })
+    await vi.waitFor(() => expect(auxWrites).toHaveLength(4))
+
+    expect(service.isExposed('app-provider', 'a')).toBe(true)
+    expect(service.isExposed('app-provider', 'never-shown')).toBe(false)
+    // Identity is `sourceId:itemId`: the same item id under another source is a
+    // different key, and answering from `itemId` alone would mislabel it.
+    expect(service.isExposed('other-provider', 'a')).toBe(false)
+  })
+
+  it('is read-only: repeated reads leave the entry for recordClick to consume', async () => {
+    service.recordExposure({ itemKeys: ['app-provider:a'] })
+    await vi.waitFor(() => expect(auxWrites).toHaveLength(4))
+    auxWrites.length = 0
+
+    // A read that answered through `recordClick` — or any read that consumed
+    // the entry — flips this to false on the second call, because the usage
+    // recorder asks immediately before the click it is trying to measure.
+    expect(service.isExposed('app-provider', 'a')).toBe(true)
+    expect(service.isExposed('app-provider', 'a')).toBe(true)
+
+    service.recordClick('app-provider', 'a')
+    await vi.waitFor(() => expect(auxWrites).toHaveLength(4))
+
+    // One click's worth of counters, not two: the reads contributed nothing.
+    expect(bucketsFor('clicks')).toEqual([1, 3, 5, 10])
+  })
+
+  it('stops reporting an exposure once it ages past the TTL', () => {
+    vi.useFakeTimers()
+    service.recordExposure({ itemKeys: ['app-provider:a'] })
+
+    // Live first, so the assertion below is about the TTL and not about an
+    // entry that was never recorded.
+    expect(service.isExposed('app-provider', 'a')).toBe(true)
+
+    vi.advanceTimersByTime(11 * 60 * 1000)
+
+    expect(service.isExposed('app-provider', 'a')).toBe(false)
+  })
 })
 
 describe('RecommendationExposureService report bounds', () => {

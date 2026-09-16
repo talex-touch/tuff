@@ -6,6 +6,8 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { getUsageStatsBatchCached, UsageStatsCache } from './usage-stats-cache'
 import { UsageStatsQueue } from './usage-stats-queue'
 import { recommendationExposureService } from './recommendation/recommendation-exposure-service'
+import { resolvePreviousAppContext } from './app-launch-recorder'
+import type { UsageEntryPoint } from './usage-entry-point'
 
 const log = getLogger('search-engine')
 
@@ -141,10 +143,33 @@ export class SearchUsageService {
     }
   }
 
-  async recordExecute(sessionId: string, item: TuffItem, itemId: string): Promise<void> {
+  /**
+   * @param entryPoint Overrides the derived surface. Callers outside the search path pass their
+   * own; a plain CoreBox execute leaves it unset and gets `recommendation` or `core-box` decided
+   * from the exposure state below.
+   */
+  async recordExecute(
+    sessionId: string,
+    item: TuffItem,
+    itemId: string,
+    entryPoint?: UsageEntryPoint
+  ): Promise<void> {
     const dbUtils = this.deps.getDbUtils()
     if (!dbUtils) return
     const now = new Date()
+
+    // Derived rather than passed by the caller: the execute path is shared by the typed-query
+    // list and the recommendation grid, and a parameter threaded through every call site is one
+    // missed argument away from silently mislabelling a whole surface.
+    //
+    // MUST be read before `recordClick` below, which consumes the exposure entry — asking
+    // afterwards always answers "not a recommendation".
+    const resolvedEntryPoint: UsageEntryPoint =
+      entryPoint ??
+      (recommendationExposureService.isExposed(item.source.id, itemId)
+        ? 'recommendation'
+        : 'core-box')
+
     await dbUtils.addUsageLog({
       sessionId,
       itemId,
@@ -156,8 +181,16 @@ export class SearchUsageService {
       source: item.source.id,
       action: 'execute',
       keyword: '',
+      // `ent` rides alongside the scoring snapshot rather than replacing it: the aggregates are
+      // keyed by (source_id, item_id) and cannot carry an entry dimension without forking their
+      // counts, so provenance lives in the log. `prevApp` is captured at the only moment it is
+      // still true - read later, the foreground app is the one just launched.
       timestamp: now,
-      context: JSON.stringify({ scoring: item.scoring })
+      context: JSON.stringify({
+        scoring: item.scoring,
+        ent: resolvedEntryPoint,
+        ...(await resolvePreviousAppContext())
+      })
     })
     await dbUtils.incrementUsageSummary(itemId)
     if (this.statsQueue) {

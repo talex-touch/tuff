@@ -22,6 +22,7 @@ import {
   resolveAppDestinationQuery
 } from '../../../../../shared/app-destinations'
 import { t } from '../../../../utils/i18n-helper'
+import { calculateHighlights } from '../apps/highlighting-service'
 import { getAppDestinationNavigationService } from '../../../app-destination/app-destination-navigation'
 
 const destinationLog = getLogger('app-destination-provider')
@@ -204,17 +205,33 @@ export class AppDestinationProvider implements ISearchProvider<ProviderContext> 
     return [primary, ...grouped]
   }
 
+  /**
+   * Which characters of the title the query actually reached.
+   *
+   * Matching is already settled by the alias table before this runs, so the only question left is
+   * presentational. A literal `indexOf` answers it for a query that shares the title's script -
+   * `settings` against "Tuff Settings", `设置` against "Tuff 设置" - and answers nothing for the
+   * pinyin aliases that make up most of the catalog: `sz` is a real match the user typed, but it
+   * appears nowhere in "Tuff 设置", so the row rendered with no highlight at all.
+   *
+   * `calculateHighlights` covers the rest: it is what the Windows shell provider already uses, and
+   * it maps `sz` and `shezhi` back onto 设置. Fuzzy matching stays off - an alias-table hit needs no
+   * typo tolerance, and letting it guess would paint characters the query never named.
+   *
+   * Aliases whose text simply is not in the title (`偏好设置`, `yysz`) highlight nothing, which is
+   * the honest answer rather than a nearest-looking span.
+   */
   private resolveTitleMatchRanges(
     title: string,
     rawText: string
   ): Array<{ start: number; end: number }> {
     const trimmedQuery = rawText.trim()
-    if (trimmedQuery) {
-      const directMatch = findTitleRange(title, trimmedQuery)
-      if (directMatch) return [directMatch]
-    }
+    if (!trimmedQuery) return []
 
-    return []
+    const directMatch = findTitleRange(title, trimmedQuery)
+    if (directMatch) return [directMatch]
+
+    return calculateHighlights(title, trimmedQuery, false) ?? []
   }
 
   private createEmptyResult(query: TuffQuery, startedAt: number): TuffSearchResult {

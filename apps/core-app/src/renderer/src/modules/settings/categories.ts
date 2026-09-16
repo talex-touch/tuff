@@ -144,20 +144,19 @@ export const SETTING_CATEGORIES: SettingCategory[] = [
     ]
   },
   {
-    key: 'plugins',
-    path: '/setting/plugins',
-    icon: 'i-ri-puzzle-line',
-    labelKey: 'plugins',
-    group: 'capability'
-  },
-  {
     key: 'applications',
     path: '/setting/applications',
     icon: 'i-ri-apps-2-line',
     labelKey: 'applications',
     group: 'capability'
   },
-
+  {
+    key: 'plugins',
+    path: '/setting/plugins',
+    icon: 'i-ri-puzzle-line',
+    labelKey: 'plugins',
+    group: 'capability'
+  },
   {
     key: 'file-index',
     path: '/setting/file-index',

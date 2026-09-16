@@ -2,45 +2,65 @@
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 
+/**
+ * The one shell every settings surface renders inside, in exactly two shapes.
+ *
+ * `column` is the artboard's reading page: a 940px centred column under a large title, scrolling
+ * against pinned edge fades. `split` is the full-canvas master/detail: a searchable aside against
+ * a detail pane, both reaching the window edges with no page title at all.
+ *
+ * They are a closed set on purpose. The four flags this replaced (`fill`, `flush`, `edgeBlur`,
+ * `integratedDragRegion`) only ever appeared together, spelling `split` four times over at four
+ * call sites — each of which then mounted its own `TuffAsideTemplate` with the same three props
+ * and wrapped it in the same hand-written `role="main"` box.
+ */
 const props = withDefaults(
   defineProps<{
-    /** Omit when a full-canvas child owns the drag-safe title-bar inset. */
+    layout?: 'column' | 'split'
+    /** Column layout. Omit when the page has no heading of its own. */
     title?: string
     /**
      * Renders a way back to the page that links here, above the title. Sub-pages are siblings of
-     * their category route, so the sidebar shows no trail into them.
+     * their category route, so the sidebar shows no trail into them. Column layout only.
      */
     backTo?: string
     backLabel?: string
-    /**
-     * Hands the column's height to the content instead of letting it grow and scroll. For pages
-     * that own their own scrolling — a master/detail split, say, which needs a definite height
-     * to size its two panes against.
-     */
-    fill?: boolean
-    /** Removes the outer column padding for full-canvas settings surfaces. */
-    flush?: boolean
-    /** Controls which pinned scroll-edge blur bands the page renders. */
-    edgeBlur?: 'both' | 'top' | 'bottom' | 'none'
-    /** Lets full-canvas children provide their own drag surfaces around live controls. */
-    integratedDragRegion?: boolean
+    /** Split layout: names the master/detail region for assistive technology. */
+    ariaLabel?: string
+    /** Split layout: the aside's search field. */
+    search?: string
+    searchPlaceholder?: string
+    searchId?: string
+    searchable?: boolean
+    clearLabel?: string
+    mainAriaLive?: 'off' | 'polite' | 'assertive'
   }>(),
   {
+    layout: 'column' as const,
     title: undefined,
     backTo: undefined,
     backLabel: undefined,
-    fill: false,
-    flush: false,
-    edgeBlur: 'both' as const,
-    integratedDragRegion: false
+    ariaLabel: undefined,
+    search: '',
+    searchPlaceholder: '',
+    searchId: undefined,
+    searchable: true,
+    clearLabel: '',
+    mainAriaLive: 'polite' as const
   }
 )
 
+const emit = defineEmits<{
+  (event: 'update:search', value: string): void
+  (event: 'search', value: string): void
+  (event: 'clear'): void
+}>()
+
 const router = useRouter()
 
-const showTopEdgeBlur = computed(() => props.edgeBlur === 'both' || props.edgeBlur === 'top')
-const showBottomEdgeBlur = computed(() => props.edgeBlur === 'both' || props.edgeBlur === 'bottom')
+const isSplit = computed(() => props.layout === 'split')
 
 function goBack(): void {
   if (props.backTo) void router.push(props.backTo)
@@ -48,36 +68,74 @@ function goBack(): void {
 </script>
 
 <template>
-  <div class="SettingsPage">
-    <div v-if="!integratedDragRegion" class="SettingsPage-DragRegion" aria-hidden="true" />
+  <div class="SettingsPage" :class="`is-${layout}`">
+    <!--
+      Column pages reserve the macOS title-bar strip wholesale. Split pages cannot: their aside
+      header and detail chrome live in that strip, so `TuffAsideTemplate` marks its own drag
+      surfaces around the live controls instead.
+    -->
+    <div v-if="!isSplit" class="SettingsPage-DragRegion" aria-hidden="true" />
 
     <!--
-      Settings pages can opt into either pinned scroll-edge fade independently. Full-canvas
-      surfaces disable both so their pane geometry reaches the window edges without haze.
+      The pinned scroll-edge fades belong to the reading column. Split panes reach the window
+      edges, where a band of haze would sit over a pane border rather than over scrolling text.
     -->
-    <TxGradualBlur
-      v-if="showTopEdgeBlur"
-      exponential
-      :div-count="10"
-      position="top"
-      height="40px"
-      :strength="1.4"
-      :opacity="0.9"
-      :z-index="20"
-    />
-    <TxGradualBlur
-      v-if="showBottomEdgeBlur"
-      exponential
-      :div-count="10"
-      position="bottom"
-      height="40px"
-      :strength="1.4"
-      :opacity="0.9"
-      :z-index="20"
-    />
+    <template v-if="!isSplit">
+      <TxGradualBlur
+        exponential
+        :div-count="10"
+        position="top"
+        height="40px"
+        :strength="1.4"
+        :opacity="0.9"
+        :z-index="20"
+      />
+      <TxGradualBlur
+        exponential
+        :div-count="10"
+        position="bottom"
+        height="40px"
+        :strength="1.4"
+        :opacity="0.9"
+        :z-index="20"
+      />
+    </template>
 
-    <div class="SettingsPage-Scroll" :class="{ 'is-fill': fill }">
-      <div class="SettingsPage-Column" :class="{ 'is-fill': fill, 'is-flush': flush }">
+    <section v-if="isSplit" class="SettingsPage-Split" role="main" :aria-label="ariaLabel">
+      <TuffAsideTemplate
+        :model-value="search"
+        :search-placeholder="searchPlaceholder"
+        :search-id="searchId ?? 'settings-page-search'"
+        :searchable="searchable"
+        :clear-label="clearLabel"
+        :main-aria-live="mainAriaLive"
+        :main-edge-blur="false"
+        window-drag-region
+        @update:model-value="emit('update:search', $event)"
+        @search="emit('search', $event)"
+        @clear="emit('clear')"
+      >
+        <template v-if="$slots.filter" #filter>
+          <slot name="filter" />
+        </template>
+
+        <slot name="aside" />
+
+        <template v-if="$slots['aside-footer']" #footer>
+          <slot name="aside-footer" />
+        </template>
+
+        <template #main>
+          <slot name="detail" />
+        </template>
+      </TuffAsideTemplate>
+
+      <!-- Dialogs, drawers and file inputs the page owns; outside the panes, over both. -->
+      <slot name="overlay" />
+    </section>
+
+    <div v-else class="SettingsPage-Scroll">
+      <div class="SettingsPage-Column">
         <button v-if="backTo && backLabel" class="SettingsPage-Back" type="button" @click="goBack">
           <span class="SettingsPage-BackIcon i-ri-arrow-left-s-line" />
           <span>{{ backLabel }}</span>
@@ -87,10 +145,7 @@ function goBack(): void {
           {{ title }}
         </h1>
 
-        <div v-if="fill" class="SettingsPage-Body">
-          <slot />
-        </div>
-        <slot v-else />
+        <slot />
       </div>
     </div>
   </div>
@@ -117,17 +172,24 @@ function goBack(): void {
   -webkit-app-region: drag;
 }
 
+.SettingsPage-Split {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.SettingsPage-Split > :deep(.TuffAsideTemplate) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .SettingsPage-Scroll {
   width: 100%;
   height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
-
-  // The content scrolls itself in fill mode; leaving the outer scroll on would let a pane's
-  // overflow push the column instead of scrolling inside it.
-  &.is-fill {
-    overflow: hidden;
-  }
 }
 
 .SettingsPage-Column {
@@ -148,31 +210,6 @@ function goBack(): void {
    */
   padding: 56px 40px 36px;
   box-sizing: border-box;
-
-  &.is-fill {
-    width: 100%;
-    max-width: none;
-    height: 100%;
-    min-height: 0;
-    margin: 0;
-    padding: 52px 24px 24px;
-  }
-
-  &.is-flush {
-    gap: 0;
-    padding: 0;
-  }
-}
-
-/**
- * Fill mode's slot host. A definite height for whatever it wraps: `height: 100%` inside a
- * scrolling column resolves to nothing, which is how a master/detail split ends up invisible.
- */
-.SettingsPage-Body {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
 }
 
 .SettingsPage-Back {

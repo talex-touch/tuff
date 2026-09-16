@@ -129,6 +129,19 @@ export class RecommendationExposureService {
     }
   }
 
+  /**
+   * Whether this item is currently a live recommendation exposure.
+   *
+   * Read-only, unlike {@link recordClick}, which consumes the entry and bumps counters. The usage
+   * recorder needs the answer to attribute an execute to the recommendation surface, and asking
+   * through `recordClick` would both double-count the click and, because it deletes the entry,
+   * make the real click that follows a no-op.
+   */
+  isExposed(sourceId: string, itemId: string): boolean {
+    const entry = this.exposed.get(`${sourceId}:${itemId}`)
+    return !!entry && Date.now() - entry.exposedAt < EXPOSURE_TTL_MS
+  }
+
   /** Execute on a previously exposed item = a click on that recommendation. */
   recordClick(sourceId: string, itemId: string): void {
     const key = `${sourceId}:${itemId}`
