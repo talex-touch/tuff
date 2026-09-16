@@ -84,6 +84,10 @@ function parseDescriptor(raw: unknown, sourcePath: string): LocalModelDescriptor
     const family = (value.sherpa as Record<string, unknown> | undefined)?.family
     if (typeof family !== 'string' || !(SHERPA_ONNX_FAMILIES as readonly string[]).includes(family))
       throw invalid(`sherpa.family ${String(family)} is not a family this build can drive`)
+    // The CLI flag takes an ONNX graph, so a bundle declaring another container format is broken
+    // in a way that would otherwise surface as an opaque decode failure at the user's first use.
+    if (runtime.kind !== 'onnx')
+      throw invalid(`a sherpa-onnx bundle must carry ONNX weights, not ${String(runtime.kind)}`)
   }
 
   return value as unknown as LocalModelDescriptor

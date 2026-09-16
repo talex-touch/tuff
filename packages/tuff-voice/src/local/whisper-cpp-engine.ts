@@ -8,11 +8,11 @@ import type {
   ResolvedLocalModel,
 } from './types'
 import { constants } from 'node:fs'
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { access, mkdtemp, readFile } from 'node:fs/promises'
 import { availableParallelism, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { executableCandidates, findExecutable, materializePcmInput, runLocalProcess, withDecodeLock } from './decode'
+import { discardWorkDirectory, executableCandidates, findExecutable, materializePcmInput, runLocalProcess, withDecodeLock } from './decode'
 import { LocalEngineError } from './types'
 import { pcmDurationMs } from './wav'
 
@@ -184,7 +184,7 @@ export class WhisperCppLocalEngine implements LocalAsrEngine {
       return toTranscriptionResult(payload, audio, elapsedMs, primer)
     }
     finally {
-      await rm(workDirectory, { recursive: true, force: true })
+      await discardWorkDirectory(workDirectory)
     }
   }
 }

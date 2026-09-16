@@ -1,9 +1,10 @@
-import type { LocalModelDescriptor } from '../src/index'
+import type { LocalModelDescriptor, ResolvedLocalModel } from '../src/index'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import process from 'node:process'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildSherpaArgs,
@@ -19,6 +20,8 @@ import {
   readModelDescriptor,
   resolveAuxiliaryPath,
   resolveSherpaLanguage,
+  runLocalProcess,
+  SherpaOnnxLocalEngine,
   verifyModelIntegrity,
   VoiceProviderError,
   wrapPcmAsWav,
@@ -357,7 +360,7 @@ describe('sherpa-onnx result parsing', () => {
 })
 
 describe('sherpa-onnx descriptor contract', () => {
-  it('rejects a sherpa-onnx bundle that does not name a family this build can drive', async () => {
+  it('rejects a sherpa-onnx bundle whose family or weight format it cannot drive', async () => {
     const root = await makeWorkspace()
     const directory = join(root, 'fixture-model', '1.0.0')
     await mkdir(directory, { recursive: true })
@@ -374,6 +377,13 @@ describe('sherpa-onnx descriptor contract', () => {
     await writeFile(join(directory, 'model.json'), JSON.stringify(descriptorFixture({
       engine: 'sherpa-onnx',
       sherpa: { family: 'sense-voice' },
+    })))
+    await expect(readModelDescriptor(directory)).rejects.toThrow(/ONNX weights/)
+
+    await writeFile(join(directory, 'model.json'), JSON.stringify(descriptorFixture({
+      engine: 'sherpa-onnx',
+      sherpa: { family: 'sense-voice' },
+      runtime: { kind: 'onnx', file: 'model.onnx', bytes: 4, sha256: '0'.repeat(64) },
     })))
     await expect(readModelDescriptor(directory)).resolves.toMatchObject({ engine: 'sherpa-onnx' })
   })
@@ -394,6 +404,36 @@ describe('sherpa-onnx descriptor contract', () => {
     })
     // sherpa-onnx-offline reads WAV only, so the contract must not promise it can open mp3.
     expect(provider.capabilities.formats).toEqual(['pcm', 'wav'])
+  })
+
+  it('reports an unusable tokenizer as unavailability instead of throwing or claiming ready', async () => {
+    // The explicit binary only has to be *executable*: these cases are decided after discovery,
+    // so the running Node binary stands in for sherpa-onnx-offline and works on every platform.
+    const engine = new SherpaOnnxLocalEngine({ binaryPath: process.execPath })
+    const withIt = (overrides: Partial<LocalModelDescriptor>): ResolvedLocalModel => ({
+      descriptor: descriptorFixture({
+        engine: 'sherpa-onnx',
+        sherpa: { family: 'sense-voice' },
+        runtime: { kind: 'onnx', file: 'model.onnx', bytes: 4, sha256: '0'.repeat(64) },
+        ...overrides,
+      }),
+      directory: '/models/fixture-model/1.0.0',
+      weightsPath: '/models/fixture-model/1.0.0/model.onnx',
+    })
+
+    // A bundle that ships no tokenizer cannot map its own output, so it is not merely unverified,
+    // and it must not report ready just because the weights happened to be readable.
+    const noTokenizer = await engine.checkAvailability(withIt({ auxiliary: [] }), process.execPath)
+    expect(noTokenizer.available).toBe(false)
+    expect(noTokenizer.reason?.code).toBe('LOCAL_ENGINE_MODEL_DESCRIPTOR_INVALID')
+
+    // A descriptor pointing outside its own bundle is the same answer, not a thrown error:
+    // this method's entire job is to describe unavailability without throwing.
+    const escaping = await engine.checkAvailability(withIt({
+      auxiliary: [{ role: 'tokenizer', file: '../../outside.txt', bytes: 2, sha256: '1'.repeat(64), url: 'https://example.com/tokens.txt' }],
+    }), process.execPath)
+    expect(escaping.available).toBe(false)
+    expect(escaping.reason?.code).toBe('LOCAL_ENGINE_MODEL_DESCRIPTOR_INVALID')
   })
 })
 
@@ -432,5 +472,55 @@ describe('local provider contract', () => {
       source: { kind: 'url', url: 'https://example.com/a.wav' },
       requestId: 'r3',
     })).rejects.toThrow(/local bytes only/)
+  })
+})
+
+describe('local decode lifecycle', () => {
+  /**
+   * A stand-in decoder that is alive and idle until it is killed.
+   *
+   * The runners are subprocesses, so their cancellation and deadline behaviour cannot be tested
+   * through a mock: the whole question is whether a real child is really gone before the decode
+   * lock is released. This Node binary is present on every platform, and `Atomics.wait` parks it
+   * on the main thread without a timer, CPU spin or event-loop handle.
+   */
+  const PARKED_CHILD = ['-e', 'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)']
+
+  it('cancels an already-aborted decode instead of waiting on a child nobody observes', async () => {
+    // The regression this defends: settling on `kill` rather than on `close` means an aborted
+    // signal has to be handled *after* the exit listener exists, or the promise never settles.
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(runLocalProcess(process.execPath, PARKED_CHILD, {
+      timeoutMs: 30_000,
+      label: 'parked child',
+      signal: controller.signal,
+    })).rejects.toThrow(/cancel/i)
+  })
+
+  it('kills a decode that overruns its deadline and reports the deadline, not the kill', async () => {
+    await expect(runLocalProcess(process.execPath, PARKED_CHILD, {
+      timeoutMs: 200,
+      label: 'parked child',
+    })).rejects.toThrow(/exceeded 200 ms/)
+  })
+
+  it('returns what a successful decode wrote to both streams', async () => {
+    // stdout has to be drained: a child that blocks writing into an unread pipe never exits.
+    const result = await runLocalProcess(
+      process.execPath,
+      ['-e', 'console.log("result line"); console.error("warning line")'],
+      { timeoutMs: 30_000, label: 'echo child' },
+    )
+    expect(result.stdout).toContain('result line')
+    expect(result.stderr).toContain('warning line')
+  })
+
+  it('reports a spawn failure as an engine error rather than an unhandled rejection', async () => {
+    await expect(runLocalProcess('/nonexistent/binary', [], {
+      timeoutMs: 5_000,
+      label: 'absent binary',
+    })).rejects.toThrow(/Could not start absent binary/)
   })
 })
