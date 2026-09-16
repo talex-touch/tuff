@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useAuth } from '~/modules/auth/useAuth'
 
 const { authState, isLoading, isAuthenticated, signIn, signOut, getDisplayName, getPrimaryEmail } =

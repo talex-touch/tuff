@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxCard } from '@talex-touch/tuffex/card'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxEmpty } from '@talex-touch/tuffex/empty'

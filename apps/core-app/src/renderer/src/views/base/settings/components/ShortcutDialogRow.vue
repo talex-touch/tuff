@@ -3,6 +3,7 @@ import type { ShortcutRowView } from './shortcut-dialog.types'
 
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 

@@ -36,6 +36,10 @@ const SKIP_DIRECTORIES = new Set([
   'out',
 ])
 
+export function shouldSkipDirectory(name, skip = SKIP_DIRECTORIES) {
+  return skip.has(name) || name.startsWith('.dsh-plugin-hub-')
+}
+
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/
 
 /**
@@ -169,7 +173,7 @@ export function findTestFiles(root, skip = SKIP_DIRECTORIES) {
       return
     }
     for (const entry of entries) {
-      if (skip.has(entry.name))
+      if (shouldSkipDirectory(entry.name, skip))
         continue
       const full = path.join(dir, entry.name)
       if (entry.isDirectory())
@@ -304,6 +308,11 @@ function selfTest() {
       name: 'discovery finds the .cjs and .mjs shapes, not just .ts',
       actual: ['a.test.cjs', 'b.test.mjs', 'c.spec.tsx', 'd.ts'].filter(name => TEST_FILE.test(name)).length,
       expected: 3,
+    },
+    {
+      name: 'local DSH plugin-hub staging directories are excluded from test discovery',
+      actual: shouldSkipDirectory('.dsh-plugin-hub-adapter-staging'),
+      expected: true,
     },
   ]
 
