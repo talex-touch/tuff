@@ -291,7 +291,7 @@ function selfTest() {
 const invokedDirectly
   = process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
-if (process.argv.includes('--self-test')) {
+if (invokedDirectly && process.argv.includes('--self-test')) {
   process.exit(selfTest() > 0 ? 1 : 0)
 }
 
