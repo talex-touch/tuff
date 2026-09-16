@@ -1051,7 +1051,9 @@ describe('CommonChannelModule private helpers', () => {
         application: { identifier: '/Applications/Preview.app', displayName: 'Preview', icon: null }
       })
 
-      // An OS-level failure to identify the app is not an error for the renderer.
+      // An OS-level failure to identify the app is reported as a degraded failure, not as an empty
+      // answer: the renderer keeps its fallback either way, but this now reaches diagnostics
+      // instead of being dressed up as "nothing opens this file".
       fileProviderMock.resolvePreviewResourcePath.mockResolvedValueOnce(
         '/Users/demo/Downloads/missing.pdf'
       )
@@ -1063,7 +1065,29 @@ describe('CommonChannelModule private helpers', () => {
           callback: (error: Error | null) => void
         ) => callback(Object.assign(new Error('osascript timed out'), { killed: true }))
       )
-      await expect(handler?.({ path: '/Users/demo/Downloads/missing.pdf' }, {})).resolves.toEqual({
+      const timedOut = await handler?.({ path: '/Users/demo/Downloads/missing.pdf' }, {})
+      expect(timedOut).toMatchObject({
+        success: false,
+        errorCode: 'FILE_INDEX_DEFAULT_APPLICATION_FAILED'
+      })
+      expect((timedOut as { reportId?: string }).reportId).toEqual(expect.any(String))
+
+      // LaunchServices naming no application is an answer rather than a failure, and stays a plain
+      // empty result so the renderer falls back to the index's own source label.
+      fileProviderMock.resolvePreviewResourcePath.mockResolvedValueOnce(
+        '/Users/demo/Downloads/unassociated.bin'
+      )
+      execFileMock.mockImplementationOnce(
+        (
+          _command: string,
+          _args: string[],
+          _options: unknown,
+          callback: (error: Error | null, stdout?: string) => void
+        ) => callback(null, '')
+      )
+      await expect(
+        handler?.({ path: '/Users/demo/Downloads/unassociated.bin' }, {})
+      ).resolves.toEqual({
         success: true,
         application: null
       })

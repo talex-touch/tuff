@@ -55,10 +55,28 @@ export interface DefaultApplicationTarget {
 }
 
 /**
- * The application the OS associates with `filePath`, or null when the platform cannot answer.
+ * The OS could not be asked, or could not answer coherently.
  *
- * Never throws: an unsupported platform, a missing file, an association the OS resolves to
- * nothing, and a failed `osascript` all report `null` so the caller keeps its fallback.
+ * Thrown instead of folded into `null`: `null` is the OS's own answer that nothing opens this
+ * file, and a caller that cannot tell the two apart reports success with no application — a
+ * failure disguised as an answer, with no report behind it. The transport handler converts a
+ * throw into `FILE_INDEX_DEFAULT_APPLICATION_FAILED` plus a degraded operational report.
+ */
+export class DefaultApplicationResolveError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'DefaultApplicationResolveError'
+  }
+}
+
+/**
+ * The application the OS associates with `filePath`, or null when the OS associates none.
+ *
+ * `null` is reserved for answers: an unsupported platform, a path that is not a usable absolute
+ * path, a file the index no longer has, and a LaunchServices answer that names no application.
+ * Everything that means "the question could not be asked" (an unreadable file, a `osascript`
+ * that fails or times out, a reply that is not the expected JSON) throws
+ * `DefaultApplicationResolveError` so the caller can report it.
  */
 export async function resolveDefaultApplicationTarget(
   filePath: string
@@ -66,37 +84,57 @@ export async function resolveDefaultApplicationTarget(
   if (process.platform !== 'darwin') return null
   if (typeof filePath !== 'string') return null
 
-  const trimmed = filePath.trim()
-  if (!trimmed || trimmed.length > MAX_PATH_LENGTH || !path.isAbsolute(trimmed)) return null
+  // Whitespace is a legal character in a file name, so it is trimmed only to detect an empty
+  // value: the path handed to `fs.access` and to LaunchServices must be the one the index holds.
+  if (!filePath.trim() || filePath.length > MAX_PATH_LENGTH || !path.isAbsolute(filePath))
+    return null
 
   try {
-    await fs.access(trimmed)
-  } catch {
-    return null
+    await fs.access(filePath)
+  } catch (error) {
+    // A file the index no longer has is an answer ("nothing opens it"); any other errno means the
+    // question could not be asked.
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') return null
+    throw new DefaultApplicationResolveError('the indexed file could not be read', { cause: error })
   }
 
+  let stdout: string
   try {
-    const { stdout } = await execFileAsync(
-      OSASCRIPT_PATH,
-      ['-l', 'JavaScript', '-e', JXA_RESOLVE_SOURCE, trimmed],
-      {
-        timeout: RESOLVE_TIMEOUT_MS,
-        maxBuffer: 64 * 1024
-      }
-    )
+    stdout = (
+      await execFileAsync(
+        OSASCRIPT_PATH,
+        ['-l', 'JavaScript', '-e', JXA_RESOLVE_SOURCE, filePath],
+        {
+          timeout: RESOLVE_TIMEOUT_MS,
+          maxBuffer: 64 * 1024
+        }
+      )
+    ).stdout
+  } catch (error) {
+    throw new DefaultApplicationResolveError('the OS association query failed', { cause: error })
+  }
 
-    const payload = stdout.trim()
-    if (!payload) return null
+  const payload = stdout.trim()
+  // The script answers an empty string when LaunchServices names no application. That is an
+  // answer, and the caller's fallback is the correct outcome for it.
+  if (!payload) return null
 
-    const parsed = JSON.parse(payload) as Partial<DefaultApplicationTarget>
-    if (typeof parsed.path !== 'string' || !parsed.path) return null
+  let parsed: Partial<DefaultApplicationTarget> | null
+  try {
+    parsed = JSON.parse(payload) as Partial<DefaultApplicationTarget> | null
+  } catch (error) {
+    throw new DefaultApplicationResolveError('the OS association answer was not JSON', {
+      cause: error
+    })
+  }
+  if (!parsed || typeof parsed.path !== 'string' || !parsed.path) {
+    throw new DefaultApplicationResolveError('the OS association answer named no application path')
+  }
 
-    return {
-      path: parsed.path,
-      bundleId: typeof parsed.bundleId === 'string' ? parsed.bundleId : '',
-      displayName: typeof parsed.displayName === 'string' ? parsed.displayName : ''
-    }
-  } catch {
-    return null
+  return {
+    path: parsed.path,
+    bundleId: typeof parsed.bundleId === 'string' ? parsed.bundleId : '',
+    displayName: typeof parsed.displayName === 'string' ? parsed.displayName : ''
   }
 }

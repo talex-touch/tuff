@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveDefaultApplicationTarget } from './default-application'
+import {
+  DefaultApplicationResolveError,
+  resolveDefaultApplicationTarget
+} from './default-application'
 
 const { accessMock, execFileMock } = vi.hoisted(() => ({
   accessMock: vi.fn(),
@@ -103,6 +106,16 @@ describe('resolveDefaultApplicationTarget guards', () => {
     expect(execFileMock).not.toHaveBeenCalled()
   })
 
+  it('reports a failure when the indexed file cannot be read', async () => {
+    accessMock.mockRejectedValueOnce(Object.assign(new Error('EACCES'), { code: 'EACCES' }))
+    osascriptReply = { stdout: JSON.stringify(APPLICATION) }
+
+    await expect(resolveDefaultApplicationTarget(FILE_PATH)).rejects.toThrow(
+      DefaultApplicationResolveError
+    )
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
   it('accepts a path exactly at the length ceiling and refuses the one past it', async () => {
     const atCeiling = `/${'a'.repeat(4095)}`
     const overCeiling = `/${'a'.repeat(4096)}`
@@ -134,9 +147,16 @@ describe('resolveDefaultApplicationTarget osascript payload', () => {
   })
 
   it('answers nothing for an association the OS cannot name', async () => {
-    const unusablePayloads = [
-      '',
-      '   ',
+    // The JXA script answers an empty string when LaunchServices resolves the file to no
+    // application. That is an answer, and the caller's fallback is the right outcome for it.
+    for (const stdout of ['', '   ']) {
+      osascriptReply = { stdout }
+      await expect(resolveDefaultApplicationTarget(FILE_PATH)).resolves.toBeNull()
+    }
+  })
+
+  it('reports a failure when the OS answer is not the payload it promised', async () => {
+    const malformedPayloads = [
       'not json',
       '"Preview"',
       'null',
@@ -144,17 +164,34 @@ describe('resolveDefaultApplicationTarget osascript payload', () => {
       '{"bundleId":"com.apple.Preview"}'
     ]
 
-    for (const stdout of unusablePayloads) {
+    for (const stdout of malformedPayloads) {
       osascriptReply = { stdout }
-      await expect(resolveDefaultApplicationTarget(FILE_PATH)).resolves.toBeNull()
+      await expect(resolveDefaultApplicationTarget(FILE_PATH)).rejects.toThrow(
+        DefaultApplicationResolveError
+      )
     }
   })
 
-  it('answers nothing instead of throwing when the OS call fails', async () => {
-    osascriptReply = {
-      error: Object.assign(new Error('Command failed: /usr/bin/osascript'), { killed: true })
-    }
+  it('reports a failure when the OS call fails or times out', async () => {
+    const failure = Object.assign(new Error('Command failed: /usr/bin/osascript'), { killed: true })
+    osascriptReply = { error: failure }
 
-    await expect(resolveDefaultApplicationTarget(FILE_PATH)).resolves.toBeNull()
+    await expect(resolveDefaultApplicationTarget(FILE_PATH)).rejects.toThrow(
+      DefaultApplicationResolveError
+    )
+    // The original failure travels on `cause`: it is the detail the operational report records.
+    await expect(resolveDefaultApplicationTarget(FILE_PATH)).rejects.toMatchObject({
+      cause: failure
+    })
+  })
+
+  it('asks about the path as the index holds it, trailing whitespace included', async () => {
+    const spacedPath = '/Users/demo/Documents/report.pdf '
+    osascriptReply = { stdout: JSON.stringify(APPLICATION) }
+
+    await expect(resolveDefaultApplicationTarget(spacedPath)).resolves.toEqual(APPLICATION)
+
+    expect(accessMock).toHaveBeenCalledWith(spacedPath)
+    expect(execFileMock.mock.calls[0]?.[1]).toContain(spacedPath)
   })
 })
