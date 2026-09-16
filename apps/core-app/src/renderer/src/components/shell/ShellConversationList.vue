@@ -278,7 +278,7 @@ function setProjectMenu(projectId: string, open: boolean): void {
           @continue-session="continueSession"
           @forget-session="forgetSession"
         />
-        <div v-else class="ShellConversationList-EmptyProject">
+        <div v-else-if="group.project" class="ShellConversationList-EmptyProject">
           <button
             class="ShellConversationList-EmptyNewChat"
             :class="{
