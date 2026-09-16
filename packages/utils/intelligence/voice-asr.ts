@@ -2,7 +2,8 @@ export const VOICE_ASR_PROTOCOLS = [
   'bailian-paraformer',
   'dashscope-qwen-asr-realtime',
   'doubao',
-  'nexus-pack'
+  'local-offline',
+  'nexus-pack',
 ] as const
 
 export type VoiceAsrProtocol = (typeof VOICE_ASR_PROTOCOLS)[number]
@@ -19,17 +20,18 @@ export const DASHSCOPE_QWEN_ASR_FILE_MODELS = [
 
 /** Returns safe DashScope model recommendations for one voice capability. */
 export function getVoiceCapabilityRecommendedModels(capabilityId: string, metadata: unknown): string[] {
-  const record =
-    metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? (metadata as Record<string, unknown>) : {}
+  const record
+    = metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? (metadata as Record<string, unknown>) : {}
   const voiceAsr = getVoiceAsrMetadata(record)
   const baseUrl = typeof record.baseUrl === 'string' ? record.baseUrl : ''
-  const isBailian =
-    voiceAsr?.protocol === 'bailian-paraformer' ||
-    voiceAsr?.protocol === 'dashscope-qwen-asr-realtime' ||
-    (!voiceAsr &&
-      (record.channelType === 'bailian' ||
-        /(?:^|:)\/\/[^/]*\.?(?:dashscope\.aliyuncs\.com|maas\.aliyuncs\.com)(?:\/|$)/i.test(baseUrl)))
-  if (!isBailian) return []
+  const isBailian
+    = voiceAsr?.protocol === 'bailian-paraformer'
+      || voiceAsr?.protocol === 'dashscope-qwen-asr-realtime'
+      || (!voiceAsr
+        && (record.channelType === 'bailian'
+          || /(?:^|:)\/\/[^/]*(?:dashscope\.aliyuncs\.com|maas\.aliyuncs\.com)(?:\/|$)/i.test(baseUrl)))
+  if (!isBailian)
+    return []
   if (voiceAsr?.protocol === 'dashscope-qwen-asr-realtime') {
     return capabilityId === 'audio.asr'
       ? [...DASHSCOPE_QWEN_ASR_REALTIME_MODELS]
@@ -53,22 +55,31 @@ export interface VoiceAsrMetadata {
 const MAX_RESOURCE_ID_LENGTH = 256
 
 function normalizeIdentifier(value: unknown, maxLength: number): string | undefined {
-  if (typeof value !== 'string') return undefined
+  if (typeof value !== 'string')
+    return undefined
   const normalized = value.trim()
   return normalized && normalized.length <= maxLength ? normalized : undefined
 }
 
 /** Normalizes one metadata.voiceAsr value without retaining unknown or incompatible fields. */
 export function normalizeVoiceAsrMetadata(value: unknown): VoiceAsrMetadata | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return undefined
   const record = value as Record<string, unknown>
-  if (record.protocol === 'bailian-paraformer') return { protocol: record.protocol }
-  if (record.protocol === 'dashscope-qwen-asr-realtime') return { protocol: record.protocol }
+  if (record.protocol === 'bailian-paraformer')
+    return { protocol: record.protocol }
+  if (record.protocol === 'dashscope-qwen-asr-realtime')
+    return { protocol: record.protocol }
   if (record.protocol === 'doubao') {
     const resourceId = normalizeIdentifier(record.resourceId, MAX_RESOURCE_ID_LENGTH)
     return resourceId ? { protocol: record.protocol, resourceId } : undefined
   }
-  if (record.protocol === 'nexus-pack') return { protocol: record.protocol }
+  if (record.protocol === 'nexus-pack')
+    return { protocol: record.protocol }
+  // Local inference carries no endpoint and no credential: the model identifier lives in
+  // the route's own `model` field, so there is nothing else worth retaining here.
+  if (record.protocol === 'local-offline')
+    return { protocol: record.protocol }
   return undefined
 }
 
@@ -87,7 +98,8 @@ export function resolveBailianVoiceEndpoints(value?: string): BailianVoiceEndpoi
   let parsed: URL
   try {
     parsed = new URL(raw)
-  } catch {
+  }
+  catch {
     throw new Error('BAILIAN_BASE_URL_INVALID')
   }
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash) {
@@ -96,11 +108,14 @@ export function resolveBailianVoiceEndpoints(value?: string): BailianVoiceEndpoi
   const host = parsed.hostname.toLowerCase()
   const publicHost = host === 'dashscope.aliyuncs.com'
   const workspaceMatch = host.match(/^([a-z0-9][a-z0-9-]{0,127})\.cn-beijing\.maas\.aliyuncs\.com$/)
-  if (!publicHost && !workspaceMatch) throw new Error('BAILIAN_BASE_URL_INVALID')
+  if (!publicHost && !workspaceMatch)
+    throw new Error('BAILIAN_BASE_URL_INVALID')
   const pathname = parsed.pathname.replace(/\/+$/, '') || '/compatible-mode/v1'
-  if (pathname !== '/compatible-mode/v1') throw new Error('BAILIAN_BASE_URL_INVALID')
+  if (pathname !== '/compatible-mode/v1')
+    throw new Error('BAILIAN_BASE_URL_INVALID')
   const baseUrl = `${parsed.origin}${pathname}`
-  if (publicHost) return { baseUrl, websocketUrl: BAILIAN_PUBLIC_WEBSOCKET_URL }
+  if (publicHost)
+    return { baseUrl, websocketUrl: BAILIAN_PUBLIC_WEBSOCKET_URL }
   const workspaceId = workspaceMatch![1]
   return {
     baseUrl,
@@ -111,6 +126,7 @@ export function resolveBailianVoiceEndpoints(value?: string): BailianVoiceEndpoi
 
 /** Reads normalized ASR metadata from an Intelligence provider metadata record. */
 export function getVoiceAsrMetadata(metadata: unknown): VoiceAsrMetadata | undefined {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata))
+    return undefined
   return normalizeVoiceAsrMetadata((metadata as Record<string, unknown>).voiceAsr)
 }

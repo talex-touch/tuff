@@ -1,4 +1,15 @@
+import type {
+  ResolvedLocalModel,
+  VoiceProviderAdapter,
+  VoiceProviderEvent,
+  VoiceStreamRequest
+} from '@talex-touch/tuff-voice'
+
+import type { VoiceProviderDescriptorV1 } from '@talex-touch/utils/i18n'
+import { CATALOG_CLIENT_SDKAPI, CATALOG_ERROR_CODES } from '@talex-touch/utils/i18n'
+import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getConfiguredAsrProvider, getRecognitionStatus } from './voice-provider-runtime'
 
 const runtime = vi.hoisted(() => ({
   bindings: {} as Record<string, Array<Record<string, unknown>>>,
@@ -26,6 +37,12 @@ const adapterOptions = vi.hoisted(() => ({
   bailian: [] as Array<Record<string, unknown>>,
   qwen: [] as Array<Record<string, unknown>>,
   doubao: [] as Array<Record<string, unknown>>
+}))
+// The on-device store the local-offline branch reads: no test may touch the real filesystem.
+const localStore = vi.hoisted(() => ({
+  loadInstalledModelSync: vi.fn(),
+  resolveModelStoreRoot: vi.fn(() => '/voice-models'),
+  providerOptions: [] as Array<Record<string, unknown>>
 }))
 
 vi.mock('../ai/intelligence-config', () => ({
@@ -103,18 +120,18 @@ vi.mock('@talex-touch/tuff-voice', () => ({
     constructor(options: Record<string, unknown>) {
       adapterOptions.doubao.push(options)
     }
-  }
-}))
+  },
+  LocalOfflineVoiceProvider: class {
+    readonly id = 'local-offline'
+    readonly capabilities = { stream: true, upload: true, formats: ['pcm', 'wav', 'mp3', 'ogg'] }
 
-import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
-import type {
-  VoiceProviderAdapter,
-  VoiceProviderEvent,
-  VoiceStreamRequest
-} from '@talex-touch/tuff-voice'
-import { CATALOG_CLIENT_SDKAPI, CATALOG_ERROR_CODES } from '@talex-touch/utils/i18n'
-import type { VoiceProviderDescriptorV1 } from '@talex-touch/utils/i18n'
-import { getConfiguredAsrProvider, getRecognitionStatus } from './voice-provider-runtime'
+    constructor(options: Record<string, unknown>) {
+      localStore.providerOptions.push(options)
+    }
+  },
+  loadInstalledModelSync: localStore.loadInstalledModelSync,
+  resolveModelStoreRoot: localStore.resolveModelStoreRoot
+}))
 
 function channel(
   id: string,
@@ -124,11 +141,12 @@ function channel(
     defaultModel?: string
     baseUrl?: string
     metadata?: Record<string, unknown>
+    type?: string
   } = {}
 ) {
   const config = {
     id,
-    type: 'custom',
+    type: options.type ?? 'custom',
     name: id,
     enabled: true,
     baseUrl: options.baseUrl,
@@ -236,6 +254,49 @@ function expectVoiceProviderCode(run: () => unknown, code: string): void {
   }
   expect(failure).toMatchObject({ code })
 }
+
+const LOCAL_ASR_MODEL_ID = 'tuff-asr-zh-tiny'
+const LOCAL_ASR_VERSION = '0.1.0'
+
+/** An installed bundle as the store reports it, echoing the requested id so a lookup of the wrong model cannot pass. */
+function installedLocalModel(id: string, version: string = LOCAL_ASR_VERSION): ResolvedLocalModel {
+  return {
+    descriptor: {
+      schemaVersion: 1,
+      id,
+      version,
+      name: 'Whisper tiny (zh)',
+      engine: 'whisper-cpp',
+      languages: ['zh', 'en'],
+      defaultLanguage: 'zh',
+      runtime: {
+        kind: 'ggml',
+        file: 'ggml-tiny-q5_1.bin',
+        bytes: 77_691_713,
+        sha256: '4b3d1d9b0d5f7c1c1ee2d4b8e6b5a2c9f0d7e4a1b8c5d2e9f6a3b0c7d4e1f8a5b'
+      },
+      capabilities: { stream: false, upload: true, timestamps: true },
+      text: { script: 'simplified', requiresSimplifiedConversion: true },
+      license: { spdx: 'MIT', redistributable: true }
+    },
+    directory: `/voice-models/${id}/${version}`,
+    weightsPath: `/voice-models/${id}/${version}/ggml-tiny-q5_1.bin`
+  }
+}
+
+/** A local-offline channel: on-device weights, no endpoint and no credential of any kind. */
+function localOfflineChannel(model: string = LOCAL_ASR_MODEL_ID) {
+  return channel('local-whisper', {
+    // A local-typed channel is what keeps the route eligible without an API key.
+    type: 'local',
+    models: [model],
+    metadata: { voiceAsr: { protocol: 'local-offline' } }
+  })
+}
+
+function localOfflineBinding(model: string = LOCAL_ASR_MODEL_ID) {
+  return { providerId: 'local-whisper', enabled: true, priority: 1, models: [model] }
+}
 describe('capability-bound voice ASR provider resolution', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -252,6 +313,8 @@ describe('capability-bound voice ASR provider resolution', () => {
     adapterOptions.bailian = []
     adapterOptions.qwen = []
     adapterOptions.doubao = []
+    localStore.providerOptions = []
+    localStore.loadInstalledModelSync.mockReset()
     runtime.supportsCapability.mockImplementation(
       (provider: { getConfig: () => { capabilities?: string[] } }, capabilityId: string) =>
         provider.getConfig().capabilities?.includes(capabilityId) ?? false
@@ -761,5 +824,60 @@ describe('capability-bound voice ASR provider resolution', () => {
     expect(configured.model).toBe(NEXUS_AUDIO_TRANSCRIBE_MODEL)
     expect(configured.provider.id).toBe('nexus-audio-stt-buffered')
     expect(nexusClient.transcribeNexusAudio).not.toHaveBeenCalled()
+  })
+
+  it('serves an installed on-device bundle without any credential', () => {
+    const installed = installedLocalModel(LOCAL_ASR_MODEL_ID)
+    // The store echoes the id it was asked for, so a lookup of the wrong bundle cannot pass.
+    localStore.loadInstalledModelSync.mockImplementation((_root: string, id: string) =>
+      installedLocalModel(id)
+    )
+    // Neither the channel nor the Nexus session holds a key. On-device inference contacts no
+    // service, so refusing it for a missing key is exactly the failure this branch removes.
+    runtime.authToken = null
+    configure({ 'local-whisper': localOfflineChannel() }, { 'audio.asr': [localOfflineBinding()] })
+
+    const configured = getConfiguredAsrProvider()
+
+    expect(configured.mode).toBe('buffered')
+    expect(configured.model).toBe(`${installed.descriptor.id}@${installed.descriptor.version}`)
+    expect(configured.provider.id).toBe('local-offline')
+    // The adapter is handed the resolved bundle, not the bare model id it was looked up by.
+    expect(localStore.providerOptions).toEqual([expect.objectContaining({ model: installed })])
+  })
+
+  it('reports an uninstalled on-device bundle as an unavailable provider, not a missing credential', () => {
+    localStore.loadInstalledModelSync.mockImplementation(() => {
+      throw new Error('ENOENT: no such file or directory, open model.json')
+    })
+    runtime.authToken = null
+    configure({ 'local-whisper': localOfflineChannel() }, { 'audio.asr': [localOfflineBinding()] })
+
+    expect(() => getConfiguredAsrProvider()).toThrow('VOICE_ASR_PROVIDER_UNAVAILABLE')
+    expect(localStore.providerOptions).toEqual([])
+  })
+
+  it('still withholds a service protocol from a credential-less channel', () => {
+    const doubaoModel = 'volc.bigasr.sauc.duration'
+    configure(
+      {
+        'local-doubao': channel('local-doubao', {
+          // A local-typed channel is exempt from the route resolver's API-key requirement, which
+          // is what carries the local branch; a service protocol taking the same exemption must
+          // not slip past the credential gate that was moved behind it.
+          type: 'local',
+          models: [doubaoModel],
+          metadata: { voiceAsr: { protocol: 'doubao', resourceId: doubaoModel } }
+        })
+      },
+      {
+        'audio.asr': [
+          { providerId: 'local-doubao', enabled: true, priority: 1, models: [doubaoModel] }
+        ]
+      }
+    )
+
+    expect(() => getConfiguredAsrProvider()).toThrow('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
+    expect(adapterOptions.doubao).toEqual([])
   })
 })
