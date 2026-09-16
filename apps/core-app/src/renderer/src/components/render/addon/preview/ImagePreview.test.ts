@@ -88,6 +88,31 @@ describe('ImagePreview dimension badge', () => {
     expect((pane.get('img').element as HTMLElement).style.display).toBe('none')
   })
 
+  it('ignores a load event that belongs to a picture it is no longer showing', async () => {
+    const pane = mountImage('tfile:///preview/second.png')
+    const image = pane.get('img').element as HTMLImageElement
+    decodeAs(image, 1280, 720)
+
+    // The element still carries the retired resource while the watcher has already cleared the
+    // badge and Vue has not patched `src` yet, so the size it decoded is not the current one.
+    image.setAttribute('src', 'tfile:///preview/first.png')
+    await pane.get('img').trigger('load')
+
+    expect(pane.find('.dimension-badge').exists()).toBe(false)
+    expect(pane.find('.loading-overlay').exists()).toBe(true)
+  })
+
+  it('ignores a failure event that belongs to a picture it is no longer showing', async () => {
+    const pane = mountImage('tfile:///preview/second.png')
+    const image = pane.get('img').element as HTMLImageElement
+
+    image.setAttribute('src', 'tfile:///preview/first.png')
+    await pane.get('img').trigger('error')
+
+    expect(pane.find('.error-state').exists()).toBe(false)
+    expect(pane.find('.loading-overlay').exists()).toBe(true)
+  })
+
   it('drops the previous picture size when a different file is previewed', async () => {
     const pane = mountImage('tfile:///preview/first.png')
     decodeAs(pane.get('img').element as HTMLImageElement, 1280, 720)
