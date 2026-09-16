@@ -104,6 +104,7 @@ onMounted(async () => {
   width: 100%;
   height: 100%;
   left: 0;
+  // Chrome below still owns the window drag; the overlay reclaims only its own panel, below.
   top: 0;
   background-color: #ffffff80;
 
@@ -139,6 +140,21 @@ onMounted(async () => {
     backdrop-filter: saturate(180%) brightness(99%) blur(50px);
     max-width: 900px;
     max-height: 600px;
+
+    /**
+     * The shell sidebar underneath marks itself `-webkit-app-region: drag`. A drag region is
+     * composited per window rather than per stacking context, and `none` - the initial value -
+     * does not punch through it, so presses landing on this overlay were claimed by the OS as
+     * window drags and the renderer never saw a click.
+     *
+     * The hole has to be cut on whatever surface actually takes the hit: declaring it on this
+     * panel alone leaves every descendant back at `none`, still swallowed. Everything the
+     * overlay renders is interactive content, never window chrome, so the whole subtree opts out.
+     */
+    &,
+    * {
+      -webkit-app-region: no-drag;
+    }
   }
 
   .dark & {
