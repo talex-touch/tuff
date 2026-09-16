@@ -84,7 +84,7 @@ describe('search-processing-service', () => {
       ],
       { text: '\u5FAE', inputs: [] } satisfies TuffQuery,
       false,
-      {}
+      () => []
     )
 
     expect(items).toHaveLength(1)
@@ -327,7 +327,7 @@ describe('search-processing-service', () => {
     ] as unknown as Parameters<typeof processSearchResults>[0]
     const query = { text: '网易云', inputs: [] } as Parameters<typeof processSearchResults>[1]
 
-    const items = await processSearchResults(rows, query, false, {})
+    const items = await processSearchResults(rows, query, false, () => [])
     const render = items[0]?.render as { basic?: { title?: string } } | undefined
     const meta = items[0]?.meta as { extension?: { source?: string } } | undefined
 
@@ -352,7 +352,7 @@ describe('search-processing-service', () => {
     ] as unknown as Parameters<typeof processSearchResults>[0]
     const query = { text: 'wechatw', inputs: [] } as Parameters<typeof processSearchResults>[1]
 
-    const items = await processSearchResults(rows, query, false, {})
+    const items = await processSearchResults(rows, query, false, () => [])
     const meta = items[0]?.meta as
       | {
           extension?: {
@@ -394,7 +394,7 @@ describe('search-processing-service', () => {
     ] as unknown as Parameters<typeof processSearchResults>[0]
     const query = { text: 'cp', inputs: [] } as Parameters<typeof processSearchResults>[1]
 
-    const items = await processSearchResults(rows, query, false, {})
+    const items = await processSearchResults(rows, query, false, () => [])
     const meta = items[0]?.meta as
       | {
           extension?: {
@@ -434,13 +434,13 @@ describe('search-processing-service', () => {
       rows,
       { text: 'ps', inputs: [] } as Parameters<typeof processSearchResults>[1],
       false,
-      {}
+      () => []
     )
     const designItems = await processSearchResults(
       rows,
       { text: 'design', inputs: [] } as Parameters<typeof processSearchResults>[1],
       false,
-      {}
+      () => []
     )
 
     expect(psItems).toHaveLength(1)
@@ -494,13 +494,13 @@ describe('search-processing-service', () => {
       rows,
       { text: 'im', inputs: [] } as Parameters<typeof processSearchResults>[1],
       false,
-      {}
+      () => []
     )
     const chatItems = await processSearchResults(
       rows,
       { text: '即时通讯', inputs: [] } as Parameters<typeof processSearchResults>[1],
       false,
-      {}
+      () => []
     )
 
     expect(imItems.map((item) => item.render.basic?.title)).toEqual(['飞书', 'Telegram'])
@@ -545,13 +545,13 @@ describe('search-processing-service', () => {
       rows,
       { text: 'vsc', inputs: [] } as Parameters<typeof processSearchResults>[1],
       false,
-      {}
+      () => []
     )
     const codeItems = await processSearchResults(
       rows,
       { text: 'code', inputs: [] } as Parameters<typeof processSearchResults>[1],
       false,
-      {}
+      () => []
     )
 
     expect(vscItems).toHaveLength(1)
@@ -589,7 +589,7 @@ describe('search-processing-service', () => {
       rows,
       { text: 'codex', inputs: [] } as Parameters<typeof processSearchResults>[1],
       false,
-      {}
+      () => []
     )
 
     expect(items).toHaveLength(1)

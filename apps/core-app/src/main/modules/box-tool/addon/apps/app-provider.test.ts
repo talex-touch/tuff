@@ -1138,7 +1138,7 @@ describe('appProvider rebuild maintenance', () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
     const appPath = '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app'
-    await appProvider.setAliases({ [appPath]: ['retouch'] })
+    await appProvider.entryActions.replaceAliases({ [appPath]: ['retouch'] })
 
     const record = await privateProvider.mapScannedAppToIndexedSourceRecord('app-provider', {
       name: 'Adobe Photoshop 2026',
@@ -3389,7 +3389,7 @@ describe('appProvider rebuild maintenance', () => {
       },
       {
         name: 'set aliases',
-        invoke: async () => await appProvider.setAliases({ [appPath]: ['manual'] })
+        invoke: async () => await appProvider.entryActions.replaceAliases({ [appPath]: ['manual'] })
       },
       {
         name: 'reindex diagnostic target',
