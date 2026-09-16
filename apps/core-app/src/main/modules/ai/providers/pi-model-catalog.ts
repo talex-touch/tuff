@@ -109,9 +109,7 @@ export function listOmpCliModels(): string[] {
         .map((m) => m.trim())
     : []
 
-  const all = dedupe(
-    enabledModels.length > 0 ? [...enabledModels, ...discovered] : discovered
-  )
+  const all = dedupe(enabledModels.length > 0 ? [...enabledModels, ...discovered] : discovered)
 
   ompCache = { signature, patterns: all }
   return all
@@ -240,7 +238,6 @@ function readYamlRecord(path: string): Record<string, unknown> | null {
   }
   return null
 }
-
 
 function readJsonRecord(path: string): Record<string, unknown> | null {
   let raw: string

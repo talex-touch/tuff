@@ -157,10 +157,7 @@ describe('listOmpCliModels', () => {
       join(ompDir, 'models.yml'),
       'providers:\n  codex:\n    models:\n      - id: gpt-5.6-luna\n      - id: gpt-5.6-sol\n  cpa:\n    models:\n      - id: grok-4.5\n'
     )
-    writeFileSync(
-      join(ompDir, 'config.yml'),
-      'enabledModels:\n  - codex/gpt-5.6-sol\n'
-    )
+    writeFileSync(join(ompDir, 'config.yml'), 'enabledModels:\n  - codex/gpt-5.6-sol\n')
     resetCliModelCatalogCache()
 
     const models = listOmpCliModels()
