@@ -2916,7 +2916,9 @@
     "fileSize": "文件大小",
     "bytes": "字节",
     "createdAt": "创建时间",
-    "modifiedAt": "修改时间"
+    "modifiedAt": "修改时间",
+    "openWith": "用 {app} 打开",
+    "defaultApp": "默认应用"
   },
   "download": {
     "migration": {

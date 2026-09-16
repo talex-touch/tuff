@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { computed, ref, watch } from 'vue'
@@ -340,12 +341,15 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
       <div class="header-right">
         <div class="view-mode-group">
           <TxButton
-            :type="viewMode === 'detailed' ? 'primary' : ''"
+            :type="viewMode === 'detailed' ? 'primary' : undefined"
             @click="setViewMode('detailed')"
           >
             <i class="i-carbon-list" />
           </TxButton>
-          <TxButton :type="viewMode === 'compact' ? 'primary' : ''" @click="setViewMode('compact')">
+          <TxButton
+            :type="viewMode === 'compact' ? 'primary' : undefined"
+            @click="setViewMode('compact')"
+          >
             <i class="i-carbon-grid" />
           </TxButton>
         </div>

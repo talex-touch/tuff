@@ -87,6 +87,8 @@ import type {
   FileIndexBatteryStatus,
   FileIndexFailedFilesResult,
   FileIndexProgress,
+  FileIndexDefaultApplicationRequest,
+  FileIndexDefaultApplicationResult,
   FileIndexPreviewResourceRequest,
   FileIndexPreviewResourceResult,
   FileIndexRebuildRequest,
@@ -403,6 +405,14 @@ export const AppEvents = {
       .module('file-index')
       .event('preview-resource')
       .define<FileIndexPreviewResourceRequest, FileIndexPreviewResourceResult>(),
+
+    /**
+     * Resolve the application the OS opens one indexed file with.
+     */
+    defaultApplication: defineEvent('app')
+      .module('file-index')
+      .event('default-application')
+      .define<FileIndexDefaultApplicationRequest, FileIndexDefaultApplicationResult>(),
 
     /**
      * Add a path to file index watch list.

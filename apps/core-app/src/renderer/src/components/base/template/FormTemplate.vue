@@ -1,4 +1,5 @@
 <script setup name="FormTemplate" lang="ts">
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import type { VNode } from 'vue'
 import { provide, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

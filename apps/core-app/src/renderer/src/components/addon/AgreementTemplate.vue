@@ -1,5 +1,6 @@
 <script lang="ts" name="AgreementTemplate" setup>
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { useI18n } from 'vue-i18n'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 
