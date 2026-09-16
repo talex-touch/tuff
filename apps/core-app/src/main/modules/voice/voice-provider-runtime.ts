@@ -1,47 +1,49 @@
-import {
-  resolveFirstIntelligenceProviderRoute,
-  type IntelligenceProviderConfig,
-  type IntelligenceProviderRoute
+import type {
+  IntelligenceProviderConfig,
+  IntelligenceProviderRoute
 } from '@talex-touch/tuff-intelligence'
+import type { ResolvedLocalModel, VoiceProviderAdapter } from '@talex-touch/tuff-voice'
+import type {
+  CatalogStatus,
+  VoiceProviderDescriptorV1,
+  VoiceProviderRegistry
+} from '@talex-touch/utils/i18n'
 import type {
   VoiceRecognitionStatus,
   VoiceRecognitionStatusSnapshot
 } from '@talex-touch/utils/transport/sdk/domains/voice'
-import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
+import { resolveFirstIntelligenceProviderRoute } from '@talex-touch/tuff-intelligence'
 import {
   BailianParaformerVoiceProvider,
   createFetchHttpClient,
   createNodeVoiceSocketFactory,
   DashscopeQwenAsrRealtimeVoiceProvider,
   DoubaoVoiceProvider,
-  VoiceProviderError,
-  type VoiceProviderAdapter
+  loadInstalledModelSync,
+  LocalOfflineVoiceProvider,
+  resolveModelStoreRoot,
+  VoiceProviderError
 } from '@talex-touch/tuff-voice'
+import { CATALOG_CLIENT_SDKAPI, CATALOG_ERROR_CODES } from '@talex-touch/utils/i18n'
+import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
 import {
   getVoiceAsrMetadata,
   getVoiceCapabilityRecommendedModels,
   resolveBailianVoiceEndpoints
 } from '@talex-touch/utils/intelligence/voice-asr'
-import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
-import {
-  CATALOG_CLIENT_SDKAPI,
-  CATALOG_ERROR_CODES,
-  type CatalogStatus,
-  type VoiceProviderDescriptorV1,
-  type VoiceProviderRegistry
-} from '@talex-touch/utils/i18n'
+import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
 import {
   ensureIntelligenceConfigLoaded,
   getCapabilityOptions,
   getEffectiveCapabilityRoutingConfig
 } from '../ai/intelligence-config'
 import { getIntelligenceProviderManager, providerSupportsCapability } from '../ai/intelligence-sdk'
-import { createBufferedSttVoiceProvider } from './buffered-stt-provider'
+import { resolveProviderCredential } from '../ai/provider-credential-runtime'
 import { getAuthToken, getSanitizedAuthSessionState } from '../auth'
 import { getCatalogService } from '../catalog'
 import { transcribeNexusAudio } from '../nexus/asr-client'
-import { resolveProviderCredential } from '../ai/provider-credential-runtime'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
+import { createBufferedSttVoiceProvider } from './buffered-stt-provider'
 
 const ASR_CAPABILITY_ID = 'audio.asr'
 const STT_CAPABILITY_ID = 'audio.stt'
@@ -338,10 +340,6 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
         : 'VOICE_ASR_PROVIDER_UNAVAILABLE'
     )
   }
-  const credential = isNexusManagedProvider(route.provider)
-    ? getAuthToken()
-    : resolveProviderCredential(route.provider)
-  if (!credential) throw new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
   const metadata = getVoiceAsrMetadata(route.provider.metadata)
   if (!metadata) throw new Error('VOICE_ASR_PROVIDER_UNAVAILABLE')
   const recommendedModels = getVoiceCapabilityRecommendedModels(ASR_CAPABILITY_ID, {
@@ -352,6 +350,37 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
     ? recommendedModels.find((candidate) => route.bindingModels.includes(candidate))
     : route.model
   if (!model) throw new Error('VOICE_ASR_MODEL_UNSUPPORTED')
+
+  /*
+   * Local inference settles before the credential gate rather than after it. The weights are
+   * on this machine and no service is contacted, so demanding an API key would make the one
+   * provider that needs no key the one that cannot be selected. Here the route's `model`
+   * names an installed catalog bundle, and "is it installed?" is the only availability
+   * question that applies: the install tool already verified the digest, and re-hashing a
+   * 78 MB file on this path would stall startup to learn nothing new.
+   *
+   * `buffered` is the honest mode. Every decode is a whole-file decode of the audio captured
+   * so far, which can run past the 30 s streaming allowance on a long recording, and the
+   * request id is per-attempt rather than session-scoped.
+   */
+  if (metadata.protocol === 'local-offline') {
+    let installed: ResolvedLocalModel
+    try {
+      installed = loadInstalledModelSync(resolveModelStoreRoot(), model)
+    } catch (error) {
+      throw new Error('VOICE_ASR_PROVIDER_UNAVAILABLE', { cause: error })
+    }
+    return {
+      model: `${installed.descriptor.id}@${installed.descriptor.version}`,
+      mode: 'buffered',
+      provider: new LocalOfflineVoiceProvider({ model: installed })
+    }
+  }
+
+  const credential = isNexusManagedProvider(route.provider)
+    ? getAuthToken()
+    : resolveProviderCredential(route.provider)
+  if (!credential) throw new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
   switch (metadata.protocol) {
     case 'nexus-pack': {
       const resolved = resolveNexusPackRoute(route, true)

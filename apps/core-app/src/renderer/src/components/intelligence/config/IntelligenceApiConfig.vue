@@ -52,22 +52,32 @@ const providerChannelType = computed(() => getProviderChannelType(props.modelVal
 const isVoiceAsrChannel = computed(
   () =>
     providerChannelType.value === ProviderChannelType.BAILIAN ||
-    providerChannelType.value === ProviderChannelType.VOLCENGINE
+    providerChannelType.value === ProviderChannelType.VOLCENGINE ||
+    providerChannelType.value === ProviderChannelType.ON_DEVICE
 )
 const isDoubaoAsrChannel = computed(
   () => providerChannelType.value === ProviderChannelType.VOLCENGINE
 )
+/** Runs on this machine: no endpoint, no credential, and a bundle identifier instead. */
+const isOnDeviceAsrChannel = computed(
+  () => providerChannelType.value === ProviderChannelType.ON_DEVICE
+)
 const voiceAsrProtocol = computed(() => {
+  if (providerChannelType.value === ProviderChannelType.ON_DEVICE) return 'local-offline'
   if (providerChannelType.value !== ProviderChannelType.BAILIAN) return 'doubao'
   return getVoiceAsrMetadata(props.modelValue.metadata)?.protocol === 'dashscope-qwen-asr-realtime'
     ? 'dashscope-qwen-asr-realtime'
     : 'bailian-paraformer'
 })
 const voiceAsrIdentifierTitle = computed(() =>
-  t('intelligence.config.api.voiceAsrDoubaoResourceId')
+  isOnDeviceAsrChannel.value
+    ? t('intelligence.config.api.voiceAsrOnDeviceModel')
+    : t('intelligence.config.api.voiceAsrDoubaoResourceId')
 )
 const voiceAsrIdentifierPlaceholder = computed(() =>
-  t('intelligence.config.api.voiceAsrDoubaoResourceIdPlaceholder')
+  isOnDeviceAsrChannel.value
+    ? t('intelligence.config.api.voiceAsrOnDeviceModelPlaceholder')
+    : t('intelligence.config.api.voiceAsrDoubaoResourceIdPlaceholder')
 )
 
 const localApiKey = computed({
@@ -193,19 +203,26 @@ function validateBaseUrl(value: string): boolean {
 
 function syncVoiceAsrInput(): void {
   const metadata = getVoiceAsrMetadata(props.modelValue.metadata)
-  voiceAsrIdentifierInput.value =
-    metadata?.protocol === 'doubao' && isDoubaoAsrChannel.value ? (metadata.resourceId ?? '') : ''
+  if (isOnDeviceAsrChannel.value) {
+    voiceAsrIdentifierInput.value =
+      props.modelValue.defaultModel ?? props.modelValue.models?.[0] ?? ''
+  } else {
+    voiceAsrIdentifierInput.value =
+      metadata?.protocol === 'doubao' && isDoubaoAsrChannel.value ? (metadata.resourceId ?? '') : ''
+  }
   voiceAsrDirty.value = false
   voiceAsrError.value = ''
 }
 
 function normalizeCurrentVoiceAsrMetadata() {
   return normalizeVoiceAsrMetadata(
-    voiceAsrProtocol.value === 'bailian-paraformer'
-      ? { protocol: 'bailian-paraformer' }
-      : voiceAsrProtocol.value === 'dashscope-qwen-asr-realtime'
-        ? { protocol: 'dashscope-qwen-asr-realtime' }
-        : { protocol: 'doubao', resourceId: voiceAsrIdentifierInput.value }
+    voiceAsrProtocol.value === 'local-offline'
+      ? { protocol: 'local-offline' }
+      : voiceAsrProtocol.value === 'bailian-paraformer'
+        ? { protocol: 'bailian-paraformer' }
+        : voiceAsrProtocol.value === 'dashscope-qwen-asr-realtime'
+          ? { protocol: 'dashscope-qwen-asr-realtime' }
+          : { protocol: 'doubao', resourceId: voiceAsrIdentifierInput.value }
   )
 }
 
@@ -347,12 +364,25 @@ async function handleVoiceAsrBlur(): Promise<void> {
     voiceAsrError.value = t('intelligence.config.api.voiceAsrIdentifierInvalid')
     return
   }
+  const bundleId = voiceAsrIdentifierInput.value.trim()
+  if (isOnDeviceAsrChannel.value && !bundleId) {
+    voiceAsrError.value = t('intelligence.config.api.voiceAsrIdentifierInvalid')
+    return
+  }
   const providerId = props.modelValue.id
   isSavingVoiceAsr.value = true
   try {
     const provider = snapshotProviderForSave({
       ...props.modelValue,
-      metadata: { ...(props.modelValue.metadata || {}), voiceAsr }
+      metadata: { ...(props.modelValue.metadata || {}), voiceAsr },
+      /*
+       * The runtime resolves the on-device bundle from the channel's own model list, so the
+       * identifier has to be written there and not only into metadata: a protocol says how to
+       * run a model, not which one to load.
+       */
+      ...(isOnDeviceAsrChannel.value
+        ? { models: bundleId ? [bundleId] : [], defaultModel: bundleId || undefined }
+        : {})
     })
     const saved = await aiClient.saveProviderConfig({
       provider,
@@ -524,7 +554,7 @@ onDeactivated(clearRevealedCredential)
     </TuffBlockInput>
 
     <TuffBlockInput
-      v-if="isDoubaoAsrChannel"
+      v-if="isDoubaoAsrChannel || isOnDeviceAsrChannel"
       v-model="voiceAsrIdentifierInput"
       :title="voiceAsrIdentifierTitle"
       :placeholder="voiceAsrIdentifierPlaceholder"
