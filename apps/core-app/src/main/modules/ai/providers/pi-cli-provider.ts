@@ -40,15 +40,25 @@ import { runCliChat } from './cli/cli-process-runtime'
 import {
   buildPiArgs,
   buildPiPrompt,
-  parsePiCliLine,
+  CLAUDE_CLI_ORIGIN,
+  CLAUDE_CLI_PROVIDER_ID,
+  CODEX_CLI_ORIGIN,
+  CODEX_CLI_PROVIDER_ID,
+  OMP_CLI_ORIGIN,
+  OMP_CLI_PROVIDER_ID,
   PI_CLI_NOT_FOUND,
+  PI_CLI_ORIGIN,
+  PI_CLI_PROVIDER_ID,
   PI_CLI_TERMINATION_FAILED,
   PI_SESSION_PROTOCOL_VERSION,
-  readPiSessionProtocolVersion,
+  parsePiCliLine,
   readPiSessionInfo,
+  readPiSessionProtocolVersion,
+  resolveClaudeExecutable,
+  resolveCodexExecutable,
+  resolveOmpExecutable,
   resolvePiExecutable
 } from './pi-cli-runtime'
-
 const piCliLog = createLogger('Intelligence').child('PiCli')
 const activeHomeConversations = new Set<string>()
 
@@ -213,14 +223,44 @@ export class PiCliProvider extends IntelligenceProvider {
     const signal = (options as PiCliRuntimeOptions).signal
     if (signal?.aborted) return
 
-    // Resolved before anything is written for the run: a missing CLI has nothing to clean up.
-    const executable = await resolvePiExecutable()
-    if (!executable) {
-      throw new Error(
-        `[PiCliProvider] ${PI_CLI_NOT_FOUND}: the 'pi' CLI was not found on this machine`
-      )
+    const isOmp =
+      this.config.id === OMP_CLI_PROVIDER_ID || this.config.metadata?.origin === OMP_CLI_ORIGIN
+    const isCodex =
+      this.config.id === CODEX_CLI_PROVIDER_ID ||
+      this.config.metadata?.origin === CODEX_CLI_ORIGIN
+    const isClaude =
+      this.config.id === CLAUDE_CLI_PROVIDER_ID ||
+      this.config.metadata?.origin === CLAUDE_CLI_ORIGIN
+
+    let executable: string | null = null
+    let cliName = 'pi'
+    let errorPrefix = '[PiCliProvider]'
+    let localProviderId: LocalAiCliProviderId = 'pi'
+
+    if (isOmp) {
+      executable = await resolveOmpExecutable()
+      cliName = 'omp'
+      errorPrefix = '[OmpCliProvider]'
+      localProviderId = 'oh-my-pi'
+    } else if (isCodex) {
+      executable = await resolveCodexExecutable()
+      cliName = 'codex'
+      errorPrefix = '[CodexCliProvider]'
+      localProviderId = 'codex'
+    } else if (isClaude) {
+      executable = await resolveClaudeExecutable()
+      cliName = 'claude'
+      errorPrefix = '[ClaudeCliProvider]'
+      localProviderId = 'claude'
+    } else {
+      executable = await resolvePiExecutable()
     }
 
+    if (!executable) {
+      throw new Error(
+        `${errorPrefix} ${cliName.toUpperCase()}_CLI_NOT_FOUND: the '${cliName}' CLI was not found on this machine`
+      )
+    }
     const home = resolveHomeSessionContext(options)
     const cwd = home ? await resolveHomeSessionRoot(home.projectId) : undefined
     let pointer: StoredLocalAiCliSession | null = home
@@ -228,7 +268,7 @@ export class PiCliProvider extends IntelligenceProvider {
       : null
     if (home && pointer) {
       if (
-        pointer.provider !== 'pi' ||
+        pointer.provider !== localProviderId ||
         pointer.projectId !== home.projectId ||
         pointer.projectRoot !== cwd
       ) {
@@ -249,7 +289,7 @@ export class PiCliProvider extends IntelligenceProvider {
     try {
       if (home && cwd && pointer) {
         releaseNativeLease = nativeSessionLeaseRegistry.acquire({
-          provider: 'pi',
+          provider: localProviderId,
           projectRoot: cwd,
           nativeSessionId: pointer.nativeSessionId
         })
@@ -290,10 +330,27 @@ export class PiCliProvider extends IntelligenceProvider {
 
       const stream = runCliChat(
         {
-          name: 'pi',
-          errorPrefix: '[PiCliProvider]',
+          name: cliName,
+          errorPrefix,
           executable,
-          args: (attachmentPaths) => buildPiArgs(prompt, model, toolOptions, attachmentPaths),
+          args:
+            isCodex
+              ? (attachmentPaths) => [
+                  'exec',
+                  prompt.text,
+                  ...(model ? ['-m', model] : []),
+                  '--json',
+                  ...attachmentPaths
+                ]
+              : isClaude
+                ? (attachmentPaths) => [
+                    '-p',
+                    prompt.text,
+                    ...(model ? ['--model', model] : []),
+                    '--output-format=stream-json',
+                    ...attachmentPaths
+                  ]
+                : (attachmentPaths) => buildPiArgs(prompt, model, toolOptions, attachmentPaths),
           ...(cwd ? { cwd } : {}),
           ...(home && nativeSessionId
             ? {
@@ -308,14 +365,14 @@ export class PiCliProvider extends IntelligenceProvider {
                   }
                   if (!pointer) {
                     releaseNativeLease = nativeSessionLeaseRegistry.acquire({
-                      provider: 'pi',
+                      provider: localProviderId,
                       projectRoot: cwd!,
                       nativeSessionId
                     })
                     pointer = await upsertLocalAiCliSession({
                       conversationId: home.conversationId,
                       projectId: home.projectId,
-                      provider: 'pi',
+                      provider: localProviderId,
                       projectRoot: cwd!,
                       nativeSessionId,
                       prompt: firstUserPrompt(payload)
@@ -334,7 +391,7 @@ export class PiCliProvider extends IntelligenceProvider {
                 }
               : {})
           },
-          parseLine: createPiLineParser(),
+          parseLine: isCodex || isClaude ? undefined : createPiLineParser(),
           terminationErrorCode: PI_CLI_TERMINATION_FAILED,
           logger: piCliLog
         },

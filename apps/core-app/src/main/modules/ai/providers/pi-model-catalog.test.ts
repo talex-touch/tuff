@@ -2,7 +2,14 @@ import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { listPiCliModels, resetPiModelCatalogCache } from './pi-model-catalog'
+import {
+  listClaudeCliModels,
+  listCodexCliModels,
+  listOmpCliModels,
+  listPiCliModels,
+  resetCliModelCatalogCache,
+  resetPiModelCatalogCache
+} from './pi-model-catalog'
 
 /**
  * Real directories on purpose: the module's whole job is reading files pi
@@ -137,6 +144,57 @@ describe('listPiCliModels', () => {
 
     expect(serialized).not.toContain(FAKE_KEY)
     expect(warnings).not.toContain(FAKE_KEY)
+  })
+})
+
+describe('listOmpCliModels', () => {
+  it('parses YAML models and prioritizes enabledModels', () => {
+    const ompDir = join(agentDir, 'omp')
+    process.env.TUFF_OMP_AGENT_DIR = ompDir
+    const { mkdirSync } = require('node:fs')
+    mkdirSync(ompDir, { recursive: true })
+    writeFileSync(
+      join(ompDir, 'models.yml'),
+      'providers:\n  codex:\n    models:\n      - id: gpt-5.6-luna\n      - id: gpt-5.6-sol\n  cpa:\n    models:\n      - id: grok-4.5\n'
+    )
+    writeFileSync(
+      join(ompDir, 'config.yml'),
+      'enabledModels:\n  - codex/gpt-5.6-sol\n'
+    )
+    resetCliModelCatalogCache()
+
+    const models = listOmpCliModels()
+    expect(models).toEqual(['codex/gpt-5.6-sol', 'codex/gpt-5.6-luna', 'cpa/grok-4.5'])
+  })
+})
+
+describe('listCodexCliModels', () => {
+  it('reads configured model from config.toml and standard models', () => {
+    const codexDir = join(agentDir, 'codex')
+    process.env.CODEX_HOME = codexDir
+    const { mkdirSync } = require('node:fs')
+    mkdirSync(codexDir, { recursive: true })
+    writeFileSync(join(codexDir, 'config.toml'), 'model = "gpt-5.5"\n')
+    resetCliModelCatalogCache()
+
+    const models = listCodexCliModels()
+    expect(models[0]).toBe('gpt-5.5')
+    expect(models).toContain('gpt-4o')
+  })
+})
+
+describe('listClaudeCliModels', () => {
+  it('reads configured model from settings.json and standard models', () => {
+    const claudeDir = join(agentDir, 'claude')
+    process.env.CLAUDE_HOME = claudeDir
+    const { mkdirSync } = require('node:fs')
+    mkdirSync(claudeDir, { recursive: true })
+    writeFileSync(join(claudeDir, 'settings.json'), JSON.stringify({ model: 'claude-3-7-sonnet' }))
+    resetCliModelCatalogCache()
+
+    const models = listClaudeCliModels()
+    expect(models[0]).toBe('claude-3-7-sonnet')
+    expect(models).toContain('claude-3-5-sonnet')
   })
 })
 

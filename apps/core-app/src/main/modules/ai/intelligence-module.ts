@@ -81,7 +81,12 @@ import {
 import { intelligenceTtsService } from './intelligence-tts-service'
 import { intelligenceWorkflowService } from './intelligence-workflow-service'
 import { createCustomProvider, createLocalProvider } from './provider-factory'
-import { probePiCliAvailability } from './providers/pi-cli-runtime'
+import {
+  probeClaudeCliAvailability,
+  probeCodexCliAvailability,
+  probeOmpCliAvailability,
+  probePiCliAvailability
+} from './providers/pi-cli-runtime'
 import { fetchProviderModels } from './provider-models'
 import { normalizeProviderForRuntime } from './provider-runtime'
 import {
@@ -861,14 +866,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
    */
   private async probePiCliProvider(): Promise<void> {
     try {
-      const available = await probePiCliAvailability()
-      if (available) {
-        intelligenceLog.success('Local pi CLI detected; registering as a text.chat provider')
-      } else {
-        intelligenceLog.info('Local pi CLI not found; skipping pi provider')
-      }
+      await Promise.allSettled([
+        probeOmpCliAvailability(),
+        probePiCliAvailability(),
+        probeCodexCliAvailability(),
+        probeClaudeCliAvailability()
+      ])
     } catch (error) {
-      intelligenceLog.warn('Local pi CLI probe failed', { error })
+      intelligenceLog.warn('Local CLI probe failed', { error })
     }
   }
 
