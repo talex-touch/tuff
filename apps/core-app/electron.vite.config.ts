@@ -242,7 +242,8 @@ export default defineConfig({
           '@talex-touch/tuff-intelligence', // 避免运行时直接加载 TS ESM 源码导致导入解析失败
           '@talex-touch/tuff-voice', // Provider protocol source must be bundled for Node ESM resolution
           '@earendil-works/pi-agent-core', // Pi 是 ESM-only，Utility Process worker 必须内联
-          '@earendil-works/pi-ai' // Pi provider bridge 与 agent-core 一并内联
+          '@earendil-works/pi-ai', // Pi provider bridge 与 agent-core 一并内联
+          'yaml'
         ]
       })
     ],

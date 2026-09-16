@@ -443,6 +443,7 @@ onBeforeUnmount(() => {
         @click="choose(null)"
       >
         <span>{{ t('home.modelAuto') }}</span>
+        <span v-if="!resolvedChoice" class="i-ri-check-line HomeModelMenu-Check" />
       </button>
 
       <div class="HomeModelMenu-Divider" />
@@ -489,6 +490,7 @@ onBeforeUnmount(() => {
                 {{ modelSubtitle(choice.providerName, choice.source) }}
               </template>
               <template #right>
+                <span v-if="isSelected(choice)" class="i-ri-check-line HomeModelMenu-Check" />
                 <TxKbd
                   v-if="group.startIndex + index < MODEL_MENU_HOTKEY_COUNT"
                   class="HomeModelMenu-Kbd"
@@ -626,6 +628,7 @@ onBeforeUnmount(() => {
 /* Auto is a plain button, not a row: it is the way out of pinning, not a model to select. */
 .HomeModelMenu-Auto {
   display: flex;
+  justify-content: space-between;
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -760,6 +763,12 @@ onBeforeUnmount(() => {
     outline: 2px solid var(--shell-primary);
     outline-offset: -2px;
   }
+}
+
+.HomeModelMenu-Check {
+  flex: none;
+  font-size: 14px;
+  color: var(--shell-primary, #007aff);
 }
 
 .HomeModelMenu-Hint {

@@ -61,6 +61,7 @@ import {
 } from '~/modules/conversation/useConversationHistory'
 import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
+import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
 import { providerIconForId } from '~/modules/intelligence/provider-icons'
 import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -139,7 +140,9 @@ const modelPill = computed<{ label: string; icon: ITuffIcon | undefined }>(() =>
   return resolved
     ? {
         label: resolved.displayName,
-        icon: providerIconForId(resolved.providerId, resolved.providerType)
+        icon:
+          modelFamilyIconFor(resolved.model) ??
+          providerIconForId(resolved.providerId, resolved.providerType)
       }
     : { label: t('home.modelName'), icon: undefined }
 })

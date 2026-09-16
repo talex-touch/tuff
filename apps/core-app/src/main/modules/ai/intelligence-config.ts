@@ -26,11 +26,19 @@ import { getSanitizedAuthSessionState, subscribeAuthState } from '../auth'
 import { tuffIntelligence } from './intelligence-sdk'
 import { normalizeProviderForRuntime, TUFF_NEXUS_PROVIDER_ID } from './provider-runtime'
 import {
-  getResolvedPiExecutable,
+  CLAUDE_CLI_ORIGIN,
+  CLAUDE_CLI_PROVIDER_ID,
+  CODEX_CLI_ORIGIN,
+  CODEX_CLI_PROVIDER_ID,
+  OMP_CLI_ORIGIN,
+  OMP_CLI_PROVIDER_ID,
   PI_CLI_ORIGIN,
-  PI_CLI_PROVIDER_ID
+  PI_CLI_PROVIDER_ID,
+  getResolvedClaudeExecutable,
+  getResolvedCodexExecutable,
+  getResolvedOmpExecutable,
+  getResolvedPiExecutable
 } from './providers/pi-cli-runtime'
-
 const intelligenceConfigLog = getLogger('intelligence-config')
 
 const SUPPORTED_PROVIDER_TYPES = new Set([
@@ -77,6 +85,21 @@ const INTERNAL_SYSTEM_OCR_MODEL = 'system-ocr'
 /** Below every seeded binding (the default set tops out at 5), so `pi` sorts last in routing. */
 const PI_CLI_BINDING_PRIORITY = 99
 
+const OMP_CLI_PROVIDER: IntelligenceProviderConfig = {
+  id: OMP_CLI_PROVIDER_ID,
+  type: IntelligenceProviderType.LOCAL,
+  name: 'OMP',
+  enabled: true,
+  priority: 0,
+  models: [],
+  timeout: 120000,
+  capabilities: ['text.chat'],
+  metadata: {
+    internal: true,
+    origin: OMP_CLI_ORIGIN
+  }
+}
+
 const PI_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: PI_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
@@ -89,6 +112,36 @@ const PI_CLI_PROVIDER: IntelligenceProviderConfig = {
   metadata: {
     internal: true,
     origin: PI_CLI_ORIGIN
+  }
+}
+
+const CODEX_CLI_PROVIDER: IntelligenceProviderConfig = {
+  id: CODEX_CLI_PROVIDER_ID,
+  type: IntelligenceProviderType.LOCAL,
+  name: 'Codex',
+  enabled: true,
+  priority: 0,
+  models: [],
+  timeout: 120000,
+  capabilities: ['text.chat'],
+  metadata: {
+    internal: true,
+    origin: CODEX_CLI_ORIGIN
+  }
+}
+
+const CLAUDE_CLI_PROVIDER: IntelligenceProviderConfig = {
+  id: CLAUDE_CLI_PROVIDER_ID,
+  type: IntelligenceProviderType.LOCAL,
+  name: 'Claude Code',
+  enabled: true,
+  priority: 0,
+  models: [],
+  timeout: 120000,
+  capabilities: ['text.chat'],
+  metadata: {
+    internal: true,
+    origin: CLAUDE_CLI_ORIGIN
   }
 }
 
@@ -623,15 +676,20 @@ function getLatestConfig(): IntelligenceSDKPersistedConfig | undefined {
  * The priority is deliberately the lowest of any binding, so `pi` only ever answers when every
  * provider the user configured themselves is unusable — it is a floor, not a preference.
  */
-function withPiChatBinding(
+function withCliChatBindings(
   capabilities: Record<string, IntelligenceCapabilityRoutingConfig>,
-  piAvailable: boolean
+  availableProviderIds: string[]
 ): Record<string, IntelligenceCapabilityRoutingConfig> {
-  if (!piAvailable) return capabilities
+  if (availableProviderIds.length === 0) return capabilities
 
   const chatRouting = capabilities['text.chat']
   const bindings = chatRouting?.providers ?? []
-  if (bindings.some((binding) => binding.providerId === PI_CLI_PROVIDER_ID)) {
+  const existingIds = new Set(bindings.map((binding) => binding.providerId))
+  const newBindings = availableProviderIds
+    .filter((id) => !existingIds.has(id))
+    .map((id) => ({ providerId: id, priority: PI_CLI_BINDING_PRIORITY, enabled: true }))
+
+  if (newBindings.length === 0) {
     return capabilities
   }
 
@@ -639,10 +697,7 @@ function withPiChatBinding(
     ...capabilities,
     'text.chat': {
       ...(chatRouting ?? { id: 'text.chat', providers: [] }),
-      providers: [
-        ...bindings,
-        { providerId: PI_CLI_PROVIDER_ID, priority: PI_CLI_BINDING_PRIORITY, enabled: true }
-      ]
+      providers: [...bindings, ...newBindings]
     }
   }
 }
@@ -684,12 +739,35 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
     providers.unshift({ ...INTERNAL_SYSTEM_OCR_PROVIDER })
   }
 
+  const ompAvailable = Boolean(getResolvedOmpExecutable())
+  const hasOmpProvider = providers.some((provider) => provider.id === OMP_CLI_PROVIDER_ID)
+  if (ompAvailable && !hasOmpProvider) {
+    providers.push({ ...OMP_CLI_PROVIDER })
+  }
+
   const piAvailable = Boolean(getResolvedPiExecutable())
   const hasPiProvider = providers.some((provider) => provider.id === PI_CLI_PROVIDER_ID)
   if (piAvailable && !hasPiProvider) {
     providers.push({ ...PI_CLI_PROVIDER })
   }
 
+  const codexAvailable = Boolean(getResolvedCodexExecutable())
+  const hasCodexProvider = providers.some((provider) => provider.id === CODEX_CLI_PROVIDER_ID)
+  if (codexAvailable && !hasCodexProvider) {
+    providers.push({ ...CODEX_CLI_PROVIDER })
+  }
+
+  const claudeAvailable = Boolean(getResolvedClaudeExecutable())
+  const hasClaudeProvider = providers.some((provider) => provider.id === CLAUDE_CLI_PROVIDER_ID)
+  if (claudeAvailable && !hasClaudeProvider) {
+    providers.push({ ...CLAUDE_CLI_PROVIDER })
+  }
+
+  const availableCliIds: string[] = []
+  if (ompAvailable) availableCliIds.push(OMP_CLI_PROVIDER_ID)
+  if (piAvailable) availableCliIds.push(PI_CLI_PROVIDER_ID)
+  if (codexAvailable) availableCliIds.push(CODEX_CLI_PROVIDER_ID)
+  if (claudeAvailable) availableCliIds.push(CLAUDE_CLI_PROVIDER_ID)
   const nextRuntimeConfig = {
     providers,
     defaultStrategy: normalizedStrategy,
@@ -697,7 +775,7 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
     enableCache: stored.globalConfig?.enableCache ?? false,
     enableQuota: stored.globalConfig?.enableQuota ?? true,
     cacheExpiration: stored.globalConfig?.cacheExpiration,
-    capabilities: withPiChatBinding(stored.capabilities ?? {}, piAvailable),
+    capabilities: withCliChatBindings(stored.capabilities ?? {}, availableCliIds),
     promptRegistry: stored.promptRegistry ?? [],
     promptBindings: stored.promptBindings ?? []
   }
