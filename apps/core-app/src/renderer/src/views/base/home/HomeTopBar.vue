@@ -22,6 +22,8 @@ const props = defineProps<{
   /** Metadata of the last settled turn, read by the `⋯` float panel. */
   turn?: ConversationTurnMeta
   messageCount: number
+  projectName?: string
+  projectPath?: string
 }>()
 
 defineEmits<{
@@ -34,6 +36,12 @@ const { t } = useI18n()
 <template>
   <div class="HomeTopBar">
     <div class="HomeTopBar-Left">
+      <div v-if="props.projectName" class="HomeTopBar-ProjectSlot" :title="props.projectPath">
+        <span class="HomeTopBar-ProjectPill">
+          <span class="i-ri-folder-2-line HomeTopBar-ProjectIcon" />
+          <span class="HomeTopBar-ProjectLabel">{{ props.projectName }}</span>
+        </span>
+      </div>
       <!--
         The title takes over the prominent 13/500 slot, which is why the pill demotes itself to a
         filled 11px chip beside it: two elements at the same weight would read as two titles.
@@ -130,6 +138,37 @@ const { t } = useI18n()
   white-space: nowrap;
   font-size: var(--shell-fs-body);
   font-weight: 500;
+}
+
+.HomeTopBar-ProjectSlot {
+  flex: none;
+  -webkit-app-region: no-drag;
+}
+
+.HomeTopBar-ProjectPill {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-surface-2);
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
+  font-weight: 500;
+}
+
+.HomeTopBar-ProjectIcon {
+  display: inline-flex;
+  flex: none;
+  font-size: 13px;
+  color: var(--shell-primary);
+}
+
+.HomeTopBar-ProjectLabel {
+  overflow: hidden;
+  max-width: 140px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /** The bar is a drag region; the pill (and the menu it opens) must stay clickable. */
