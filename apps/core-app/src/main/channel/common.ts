@@ -33,6 +33,8 @@ import type {
   BatteryStatusPayload,
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
+  FileIndexDefaultApplicationRequest,
+  FileIndexDefaultApplicationResult,
   FileIndexPreviewResourceRequest,
   FileIndexPreviewResourceResult,
   IndexedSourceDiagnosticsRequest,
@@ -57,6 +59,7 @@ import type {
 import { cleanupDownloads, cleanupFileIndex, cleanupUpdates } from '../service/storage-maintenance'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { validateExternalUrl } from '../utils/external-url-policy'
+import { resolveDefaultApplicationTarget } from '../utils/default-application'
 import type { Locale } from '../utils/i18n-helper'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
@@ -1780,6 +1783,47 @@ export class CommonChannelModule extends BaseModule {
             return { success: true, ...grant }
           } catch (error) {
             const report = reportFileIndexTransportFailure('PREVIEW_RESOURCE', error)
+            return {
+              success: false,
+              errorCode: report.code,
+              reportId: report.id
+            }
+          }
+        }
+      ),
+      transport.on<FileIndexDefaultApplicationRequest, FileIndexDefaultApplicationResult>(
+        AppEvents.fileIndex.defaultApplication,
+        async (payload, context) => {
+          this.assertHostOnly(context, 'fileIndex.defaultApplication')
+          const inputPath = getOptionalStringProp(payload, 'path')
+          if (!inputPath) {
+            return { success: false, errorCode: 'FILE_INDEX_DEFAULT_APPLICATION_PATH_INVALID' }
+          }
+          try {
+            // Same boundary as the preview grant: the path must be an indexed ordinary file, so
+            // this cannot be used to probe what the OS opens for arbitrary paths.
+            const indexedPath = await fileProvider.resolvePreviewResourcePath(inputPath)
+            if (!indexedPath) {
+              return { success: true, application: null }
+            }
+            const target = await resolveDefaultApplicationTarget(indexedPath)
+            if (!target) {
+              return { success: true, application: null }
+            }
+            // The projection owns the icon and the indexed display name; the LaunchServices
+            // answer is the fallback when the app index has not seen this bundle.
+            const projection =
+              (await appProvider.resolveApplication(target.bundleId || target.path)) ?? null
+            return {
+              success: true,
+              application: projection ?? {
+                identifier: target.bundleId || target.path,
+                displayName: target.displayName || path.basename(target.path, '.app'),
+                icon: null
+              }
+            }
+          } catch (error) {
+            const report = reportFileIndexTransportFailure('DEFAULT_APPLICATION', error)
             return {
               success: false,
               errorCode: report.code,

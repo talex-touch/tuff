@@ -2916,7 +2916,9 @@
     "fileSize": "File Size",
     "bytes": "bytes",
     "createdAt": "Created At",
-    "modifiedAt": "Modified At"
+    "modifiedAt": "Modified At",
+    "openWith": "Open with {app}",
+    "defaultApp": "default app"
   },
   "download": {
     "migration": {

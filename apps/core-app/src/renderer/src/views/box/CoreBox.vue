@@ -754,6 +754,15 @@ function handleGridSelect(index: number, item: TuffItem): void {
 }
 
 /**
+ * The preview pane's open-with control is a shortcut for the same thing Enter does on the focused
+ * item, so it runs the identical execute path (item actions, hide, clipboard bookkeeping).
+ */
+function handlePreviewOpen(): void {
+  if (!activeItem.value) return
+  handleExecute(activeItem.value)
+}
+
+/**
  * BoxGrid wraps tiles past what fits at their minimum width; the keyboard has to step rows by that
  * same count. The window keeps its height on purpose — a re-wrap while the preview pane slides in
  * would otherwise resize the window mid-animation — and the list scrolls instead.
@@ -1120,6 +1129,7 @@ const customCss = computed(() => {
           :item="activeItem"
           :search-query="searchVal"
           :style="getCanvasAreaStyle('addon')"
+          @open-item="handlePreviewOpen"
         />
       </template>
 
