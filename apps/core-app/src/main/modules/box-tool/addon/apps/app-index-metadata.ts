@@ -125,16 +125,22 @@ export function resolveAppItemIds(value: {
 /**
  * The catalog item id for a managed entry, as the usage tables key it.
  *
- * A managed entry is the renderer-facing projection and carries fewer identity columns than the
- * scanned app it came from — no `stableId` or `appIdentity` — so it resolves through the same
- * precedence with the fields it does have. Getting this wrong means a launch is recorded under an
- * id no aggregate row shares, and the count silently lands in its own bucket.
+ * Resolves through the same precedence the scanned side uses, including the persisted
+ * `extensions.appIdentity` the projection carries. Without it a launch from the settings surface
+ * is recorded under the path while the same app's search launches are recorded under its stable
+ * id — one application, two buckets, and counts that omit whichever surface the query did not
+ * name.
  */
 export function resolveManagedEntryItemId(entry: {
+  appIdentity?: string | null
   bundleId?: string | null
   path: string
 }): string {
-  return resolveAppItemId({ bundleId: entry.bundleId, path: entry.path })
+  return resolveAppItemId({
+    appIdentity: entry.appIdentity,
+    bundleId: entry.bundleId,
+    path: entry.path
+  })
 }
 
 export function isManagedEntryExtensionMap(extensions: AppExtensionMap | undefined): boolean {

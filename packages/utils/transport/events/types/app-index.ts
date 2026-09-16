@@ -43,6 +43,13 @@ export interface AppIndexManagedEntry {
   source?: AppIndexManagedEntrySource;
   removable?: boolean;
   bundleId?: string;
+  /**
+   * The identity the scan persisted for this app (`stableId || uniqueId`), when it has one.
+   *
+   * Carried so the surface can resolve the same catalog item id the search projection does, which
+   * is what keeps one application's launches in one usage bucket.
+   */
+  appIdentity?: string;
   identityKind?: AppIndexEntryIdentityKind;
   launchKind: AppIndexEntryLaunchKind;
   launchTarget: string;
