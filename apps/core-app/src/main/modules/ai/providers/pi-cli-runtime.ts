@@ -171,7 +171,6 @@ export function resetAllCliExecutableCaches(): void {
   resetCliExecutableCache(CLAUDE_CLI_LOOKUP.command)
 }
 
-
 // ============================================================================
 // Prompt construction
 // ============================================================================
@@ -376,6 +375,40 @@ export function buildPiArgs(
     // Without this, `pi` pulls AGENTS.md / CLAUDE.md from the working directory into a chat that has
     // nothing to do with the repository the app happens to be launched from.
     '--no-context-files',
+    '--system-prompt',
+    prompt.systemPrompt
+  ]
+
+  if (model) args.push('--model', model)
+  for (const path of attachmentPaths) args.push(`@${path}`)
+  args.push(prompt.prompt)
+  return args
+}
+
+/**
+ * Builds the argument vector for one `omp` run.
+ *
+ * `omp` is a `pi` fork with its own isolation vocabulary: pi's `--no-context-files` is not a flag it
+ * knows (it calls it `--no-rules`), and neither `--session` nor `--session-id` exists — only
+ * `-c/--continue` and `-r/--resume` — so a run is always ephemeral and answer-only. The stream it
+ * writes under `--mode json` is pi's NDJSON event for event, so `parsePiCliLine` reads it unchanged.
+ */
+export function buildOmpArgs(
+  prompt: PiCliPrompt,
+  model?: string,
+  attachmentPaths: string[] = []
+): string[] {
+  const args = [
+    '--print',
+    '--mode',
+    'json',
+    '--no-tools',
+    '--no-extensions',
+    '--no-skills',
+    '--no-rules',
+    '--no-session',
+    '--thinking',
+    'off',
     '--system-prompt',
     prompt.systemPrompt
   ]
