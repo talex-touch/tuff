@@ -94,9 +94,9 @@ export class AppShortcutService {
       void this.options.launch(path)
     })
     if (!registered) {
-      // Taken by the system or another binding: leave nothing behind, or a dead entry accumulates
-      // in the store for a key that never fires.
-      shortcutModule.removeAppShortcut(shortcutId)
+      // `setAppShortcut` has already put the previous binding back — or removed the attempt when
+      // there was none — so the store must not be touched again here: removing it would discard
+      // the accelerator the user had before this failed rebind.
       return false
     }
     this.bindings[shortcutId] = path

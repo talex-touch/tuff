@@ -347,6 +347,12 @@ export class ShortcutModule extends BaseModule {
       return false
     }
 
+    // Snapshotted before the first write. A rebind that the OS refuses has to leave the previous
+    // accelerator working — by the time the verdict arrives, both the registry and the store hold
+    // the new values, and the key the user was using is already gone.
+    const previousCallback = mainCallbackRegistry.get(id)?.callback
+    const previous = this.storage!.getShortcutById(id)
+
     mainCallbackRegistry.set(id, { callback })
 
     const existing = this.storage!.getShortcutById(id)
@@ -372,7 +378,41 @@ export class ShortcutModule extends BaseModule {
     this.reregisterAllShortcuts()
     // The accelerator may be taken by the system or another binding; the caller needs to know,
     // and `reregisterAllShortcuts` has just recomputed that verdict.
-    return this.shortcutStatusMap.get(id)?.state !== 'unavailable'
+    const state = this.shortcutStatusMap.get(id)?.state
+    if (state === 'conflict' || state === 'unavailable') {
+      this.restoreAppShortcut(id, previousCallback, previous)
+      return false
+    }
+
+    // `disabled` is the global shortcut switch rather than this key: the binding is stored and
+    // becomes live again when the user re-enables shortcuts.
+    return true
+  }
+
+  /**
+   * Puts a binding back the way it was after an attempt that will not fire.
+   *
+   * `conflict` and `unavailable` both mean the accelerator never reaches this callback, so the
+   * attempt is rolled back instead of being left as the user's binding: keeping it would report a
+   * failure while silently having discarded the key that used to work.
+   */
+  private restoreAppShortcut(id: string, previousCallback?: () => void, previous?: Shortcut): void {
+    if (previousCallback) {
+      mainCallbackRegistry.set(id, { callback: previousCallback })
+    } else {
+      mainCallbackRegistry.delete(id)
+    }
+
+    if (previous) {
+      this.storage!.updateShortcutAccelerator(id, previous.accelerator)
+      this.storage!.updateShortcutEnabled(id, previous.meta?.enabled ?? true)
+    } else {
+      // Nothing was bound before, so the attempted accelerator is left in the store for no key
+      // that fires.
+      this.storage!.removeShortcuts([id])
+    }
+
+    this.reregisterAllShortcuts()
   }
 
   /** Removes an app shortcut entirely, both its callback and its stored accelerator. */

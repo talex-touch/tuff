@@ -54,7 +54,7 @@ const emit = defineEmits<{
   (e: 'update-shortcut', entry: AppIndexManagedEntry, accelerator: string): void
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 // Same `tfile://` normalization the list applies: the index stores a bare cache path, which
 // `TxIcon` cannot fetch and renders as an empty 0x0 glyph.
@@ -155,7 +155,9 @@ const entryPointRows = computed(() =>
 const lastExecutedLabel = computed(() => {
   const timestamp = props.usage?.lastExecutedAt
   if (!timestamp) return '-'
-  return new Date(timestamp).toLocaleString()
+  // The application's locale, not the runtime's: the two disagree whenever the user picked a
+  // language other than the one the OS is set to.
+  return new Date(timestamp).toLocaleString(locale.value)
 })
 
 /**
@@ -528,7 +530,7 @@ function removeAlias(alias: string): void {
           <TuffBlockLine
             v-for="row in detailRows"
             :key="row.key"
-            :title="row.key"
+            :title="t(`appDetail.field.${row.key}`)"
             :description="row.value"
           />
         </TuffGroupBlock>

@@ -39,6 +39,11 @@ const entries = ref<AppIndexManagedEntry[]>([])
  * round trip per application — hence one list-level read rather than a call from every row.
  */
 const summaries = ref<Record<string, AppIndexEntrySummary>>({})
+/**
+ * Whether the last summaries read failed. Kept beside the map rather than inside it: the list has
+ * to say the totals are missing instead of drawing the zeros an empty map would imply.
+ */
+const summariesDegraded = ref(false)
 const loading = ref(true)
 const loadFailed = ref(false)
 const searchQuery = ref('')
@@ -125,6 +130,9 @@ function toEntryIcon(entry: AppIndexManagedEntry): ITuffIcon | undefined {
 
 async function loadSummaries(): Promise<void> {
   const result = await settingsSdk.appIndex.listSummaries()
+  // A failed usage read reports itself instead of arriving as zero launches per row. The entries
+  // are a separate read, so the list itself still stands — what is missing is the ordering facts.
+  summariesDegraded.value = !result.success
   summaries.value = Object.fromEntries(
     (result.summaries ?? []).map((summary) => [summary.path, summary])
   )
@@ -425,6 +433,7 @@ onMounted(() => {
         :selected-id="selectedPath"
         :loading="loading"
         :load-failed="loadFailed"
+        :usage-degraded="summariesDegraded"
         :searched="searchQuery.trim().length > 0"
         @select="handleSelect"
         @retry="loadEntries"

@@ -1,8 +1,8 @@
 import type {
   AppIndexEntryMutationResult,
-  AppIndexEntrySummary,
   AppIndexLaunchResult,
   AppIndexManagedEntry,
+  AppIndexSummariesResult,
   AppIndexUsageResult
 } from '@talex-touch/utils/transport/events/types'
 import type { DbUtils } from '../../../../../db/utils'
@@ -69,8 +69,11 @@ export class AppManagedEntryActionsService {
    *
    * Composed from three sources that are each cheap in bulk but were only reachable per entry:
    * the usage aggregate table, the shortcut store, and the in-memory alias map.
+   *
+   * A failed usage read is returned as a failure rather than as an empty map: the caller renders
+   * these as per-app totals, so a zero here is indistinguishable from a real "never launched".
    */
-  public async listSummaries(): Promise<AppIndexEntrySummary[]> {
+  public async listSummaries(): Promise<AppIndexSummariesResult> {
     const entries = await this.options.listEntries()
     const paths = entries.map((entry) => entry.path)
 
@@ -79,12 +82,17 @@ export class AppManagedEntryActionsService {
       this.shortcuts.getAccelerators(paths)
     ])
 
-    return entries.map((entry) => ({
-      path: entry.path,
-      executeCount: usage.get(this.itemId(entry)) ?? 0,
-      hasShortcut: Boolean(shortcuts.get(entry.path)),
-      hasAliases: this.getAliases(entry.path, entry.bundleId).length > 0
-    }))
+    if (!usage.ok) return { success: false, reason: usage.reason }
+
+    return {
+      success: true,
+      summaries: entries.map((entry) => ({
+        path: entry.path,
+        executeCount: usage.counts.get(this.itemId(entry)) ?? 0,
+        hasShortcut: Boolean(shortcuts.get(entry.path)),
+        hasAliases: this.getAliases(entry.path, entry.bundleId).length > 0
+      }))
+    }
   }
 
   public getAliases(pathValue: string, bundleId?: string): string[] {

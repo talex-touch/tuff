@@ -59,7 +59,7 @@ describe('AppList semantics', () => {
 
     expect(row.attributes('role')).toBe('button')
     expect(row.attributes('tabindex')).toBe('0')
-    expect(row.attributes('aria-selected')).toBe('false')
+    expect(row.attributes('aria-pressed')).toBe('false')
 
     await row.trigger('keydown.enter')
 

@@ -2773,6 +2773,7 @@
     "searchedOnDevice": "在此设备上搜索到 {count} 个结果。",
     "appsOnDevice": "此设备上有 {count} 个应用。",
     "filteredOnDevice": "已筛选出 {count} 个应用。",
+    "usageUnavailable": "使用统计暂不可用，列表暂按名称排序。",
     "view": {
       "change": "切换列表视图",
       "dictionary": "字典排序",
@@ -2821,6 +2822,17 @@
       "settings-app-detail": "来自设置页",
       "shortcut": "来自快捷键",
       "recommendation": "来自推荐"
+    },
+    "field": {
+      "displayName": "显示名称",
+      "source": "来源",
+      "bundleId": "Bundle ID",
+      "identityKind": "标识类型",
+      "launchKind": "启动方式",
+      "launchTarget": "启动目标",
+      "launchArgs": "启动参数",
+      "workingDirectory": "工作目录",
+      "displayPath": "显示路径"
     },
     "aliasTitle": "自定义关键词",
     "invokeTitle": "唤起方式",

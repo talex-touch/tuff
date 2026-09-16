@@ -2773,6 +2773,7 @@
     "searchedOnDevice": "{count} searched on this device.",
     "appsOnDevice": "{count} applications on this device.",
     "filteredOnDevice": "Filtered to {count} applications.",
+    "usageUnavailable": "Usage statistics are unavailable; the list is ordered by name.",
     "view": {
       "change": "Change list view",
       "dictionary": "Alphabetical",
@@ -2821,6 +2822,17 @@
       "settings-app-detail": "From settings",
       "shortcut": "From shortcut",
       "recommendation": "From recommendations"
+    },
+    "field": {
+      "displayName": "Display name",
+      "source": "Source",
+      "bundleId": "Bundle ID",
+      "identityKind": "Identity kind",
+      "launchKind": "Launch kind",
+      "launchTarget": "Launch target",
+      "launchArgs": "Launch arguments",
+      "workingDirectory": "Working directory",
+      "displayPath": "Display path"
     },
     "aliasTitle": "Custom keywords",
     "invokeTitle": "How to summon",

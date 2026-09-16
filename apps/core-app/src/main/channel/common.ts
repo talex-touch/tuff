@@ -2034,10 +2034,16 @@ export class CommonChannelModule extends BaseModule {
         }
       ),
       transport.on(AppEvents.appIndex.listEntries, () => appProvider.listManagedEntries()),
-      transport.on(AppEvents.appIndex.listSummaries, async () => ({
-        success: true,
-        summaries: await appProvider.entryActions.listSummaries()
-      })),
+      // The app index's management surface: the user's launch history, the names they gave an
+      // app, and the host's own global shortcuts. Every transport handler is registered on the
+      // plugin channel as well and inspecting `context.plugin` is voluntary (#688), so the
+      // audience is asserted here instead of left to each handler's own diligence.
+      transport.on(AppEvents.appIndex.listSummaries, async (_payload, context) => {
+        this.assertHostOnly(context, 'appIndex.listSummaries')
+        // The result is passed through rather than wrapped: a failed usage read reports itself,
+        // and `success: true` here would present every application as never launched.
+        return await appProvider.entryActions.listSummaries()
+      }),
       transport.on<AppIndexUpsertEntryRequest, AppIndexEntryMutationResult>(
         AppEvents.appIndex.upsertEntry,
         (payload) => appProvider.upsertManagedEntry(payload ?? { path: '' })
@@ -2076,7 +2082,8 @@ export class CommonChannelModule extends BaseModule {
       ),
       transport.on<AppIndexLaunchRequest, AppIndexLaunchResult>(
         AppEvents.appIndex.launch,
-        (payload) => {
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.launch')
           const inputPath = getOptionalStringProp(payload, 'path')
           if (!inputPath) {
             return Promise.resolve({ success: false, reason: 'invalid-path' as const })
@@ -2090,7 +2097,8 @@ export class CommonChannelModule extends BaseModule {
       ),
       transport.on<AppIndexUsageRequest, AppIndexUsageResult>(
         AppEvents.appIndex.usage,
-        (payload) => {
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.usage')
           const inputPath = getOptionalStringProp(payload, 'path')
           if (!inputPath) {
             return Promise.resolve({ success: false, reason: 'invalid-path' as const })
@@ -2100,7 +2108,8 @@ export class CommonChannelModule extends BaseModule {
       ),
       transport.on<AppIndexGetAliasesRequest, AppIndexGetAliasesResult>(
         AppEvents.appIndex.getAliases,
-        async (payload) => {
+        async (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.getAliases')
           const inputPath = getOptionalStringProp(payload, 'path')
           if (!inputPath) return { success: false, reason: 'invalid-path' as const }
           const entries = await appProvider.listManagedEntries()
@@ -2114,7 +2123,8 @@ export class CommonChannelModule extends BaseModule {
       ),
       transport.on<AppIndexSetAliasesRequest, AppIndexEntryMutationResult>(
         AppEvents.appIndex.setAliases,
-        (payload) => {
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.setAliases')
           const inputPath = getOptionalStringProp(payload, 'path')
           if (!inputPath) {
             return Promise.resolve({
@@ -2131,7 +2141,8 @@ export class CommonChannelModule extends BaseModule {
       ),
       transport.on<AppIndexGetShortcutRequest, AppIndexGetShortcutResult>(
         AppEvents.appIndex.getShortcut,
-        async (payload) => {
+        async (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.getShortcut')
           const inputPath = getOptionalStringProp(payload, 'path')
           if (!inputPath) return { success: false }
           return {
@@ -2142,7 +2153,8 @@ export class CommonChannelModule extends BaseModule {
       ),
       transport.on<AppIndexSetShortcutRequest, AppIndexEntryMutationResult>(
         AppEvents.appIndex.setShortcut,
-        (payload) => {
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.setShortcut')
           const inputPath = getOptionalStringProp(payload, 'path')
           if (!inputPath) {
             return Promise.resolve({
