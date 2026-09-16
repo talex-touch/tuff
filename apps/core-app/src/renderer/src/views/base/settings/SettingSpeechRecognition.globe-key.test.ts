@@ -138,9 +138,21 @@ describe('settingSpeechRecognition Globe key handover', () => {
     wrapper.unmount()
   })
 
-  it('keeps System Settings reachable for anyone who wants to see the switch', async () => {
-    answerGlobeKey({ applies: true, systemActionActive: true })
+  /**
+   * The row offers one action, not two. System Settings is the way out rather than a peer, so it
+   * appears only after the one-click write has left the preference where it was.
+   */
+  it('offers System Settings only after the one-click handover fails to stick', async () => {
+    answerGlobeKey(
+      { applies: true, systemActionActive: true },
+      { applies: true, systemActionActive: true }
+    )
     const wrapper = mountSettings()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-open-keyboard-settings"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="voice-disable-globe-key"]').trigger('click')
     await flushPromises()
 
     await wrapper.get('[data-testid="voice-open-keyboard-settings"]').trigger('click')
