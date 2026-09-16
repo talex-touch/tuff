@@ -88,31 +88,35 @@ export class AppUserAliasService {
    * uses {@link setForEntry}, which cannot clobber a concurrent edit to another app.
    */
   async replace(aliases: Record<string, string[]>): Promise<void> {
+    await this.persist(aliases)
     this.aliases = aliases
-    await this.save()
   }
 
   /**
    * Replaces one key's aliases, leaving every other app's untouched.
    *
    * An empty list removes the entry rather than storing an empty array, so the map's keys stay a
-   * list of the apps that actually have aliases.
+   * list of the apps that actually have aliases. The candidate map is persisted before it is
+   * adopted: a write that fails has to reach the caller, and a map that outlived its failed write
+   * would read as saved until the next restart.
    */
   async setForEntry(key: string, aliases: string[]): Promise<void> {
     const normalized = normalizeStringList(aliases)
     const next = { ...this.aliases }
     if (normalized.length > 0) next[key] = normalized
     else delete next[key]
+
+    await this.persist(next)
     this.aliases = next
-    await this.save()
   }
 
-  private async save(): Promise<void> {
+  /** Writes the map as it will be held. A failed write throws so the caller can report it. */
+  private async persist(candidate: Record<string, string[]>): Promise<void> {
     const dbUtils = this.options.getDbUtils()
-    if (!dbUtils) return
+    if (!dbUtils) throw new Error('ALIAS_STORE_UNAVAILABLE')
 
     try {
-      const value = JSON.stringify(this.aliases)
+      const value = JSON.stringify(candidate)
       const db = dbUtils.getDb()
       await db
         .insert(configSchema)
@@ -120,6 +124,7 @@ export class AppUserAliasService {
         .onConflictDoUpdate({ target: configSchema.key, set: { value } })
     } catch (error) {
       log.error('Failed to persist user aliases', { error })
+      throw new Error('ALIAS_PERSIST_FAILED')
     }
   }
 }
