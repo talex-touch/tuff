@@ -1,6 +1,7 @@
 import type { LocalAsrEngine, LocalEngineId, ResolvedLocalModel } from './types'
+import type { WhisperCppEngineOptions } from './whisper-cpp-engine'
 import { LocalEngineError } from './types'
-import { WhisperCppLocalEngine, type WhisperCppEngineOptions } from './whisper-cpp-engine'
+import { WhisperCppLocalEngine } from './whisper-cpp-engine'
 
 /** Options passed through to whichever engine the descriptor names. */
 export interface LocalEngineFactoryOptions {

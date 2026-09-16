@@ -65,7 +65,8 @@ const NOT_EXECUTABLE_REASON
  * rather than asserted up front: a missing or renamed key must degrade to `undefined`.
  */
 function jsonProperty(value: unknown, key: string): unknown {
-  if (typeof value !== 'object' || value === null || !(key in value)) return undefined
+  if (typeof value !== 'object' || value === null || !(key in value))
+    return undefined
   return (value as Record<string, unknown>)[key]
 }
 
@@ -84,18 +85,23 @@ function readManifestComponents(manifest: unknown): { versions: Record<string, s
   let mainModelBytes: number | undefined
 
   const models = jsonProperty(manifest, 'models')
-  if (typeof models !== 'object' || models === null) return { versions }
+  if (typeof models !== 'object' || models === null)
+    return { versions }
 
   for (const [logicalName, components] of Object.entries(models as Record<string, unknown>)) {
-    if (!Array.isArray(components)) continue
+    if (!Array.isArray(components))
+      continue
     const installed = components.find(component => jsonProperty(component, 'installState') === 'installed') ?? components[0]
-    if (installed === undefined) continue
+    if (installed === undefined)
+      continue
 
     const version = jsonProperty(installed, 'version')
-    if (typeof version === 'string') versions[logicalName] = version
+    if (typeof version === 'string')
+      versions[logicalName] = version
 
     const size = jsonProperty(installed, 'sourceFileSize')
-    if (logicalName === 'acllm_main_model_mac' && typeof size === 'number') mainModelBytes = size
+    if (logicalName === 'acllm_main_model_mac' && typeof size === 'number')
+      mainModelBytes = size
   }
 
   return mainModelBytes === undefined ? { versions } : { versions, mainModelBytes }

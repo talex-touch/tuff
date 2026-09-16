@@ -1,3 +1,21 @@
+export {
+  appFormatContextFromActiveApp,
+  formatDictationText,
+  resolveAppFormatProfile
+} from './formatter'
+export { APP_FORMAT_PROFILES, DEFAULT_FORMAT_PROFILE } from './profiles'
+export {
+  applyIdentifierCase,
+  buildOrdinalList,
+  collapseWhitespace,
+  dropTrailingSentencePunctuation,
+  normalizeChineseNumerals,
+  normalizePunctuationToAscii,
+  removeSpokenFillers,
+  stripSentencePunctuation,
+  substituteSpokenSymbols,
+  TRANSFORM_RUNNERS
+} from './transforms'
 /**
  * Adaptive dictation formatting — public surface.
  *
@@ -14,21 +32,3 @@ export type {
   AppTransformId,
   IdentifierCase
 } from './types'
-export { APP_FORMAT_PROFILES, DEFAULT_FORMAT_PROFILE } from './profiles'
-export {
-  appFormatContextFromActiveApp,
-  formatDictationText,
-  resolveAppFormatProfile
-} from './formatter'
-export {
-  TRANSFORM_RUNNERS,
-  applyIdentifierCase,
-  buildOrdinalList,
-  collapseWhitespace,
-  dropTrailingSentencePunctuation,
-  normalizeChineseNumerals,
-  normalizePunctuationToAscii,
-  removeSpokenFillers,
-  stripSentencePunctuation,
-  substituteSpokenSymbols
-} from './transforms'

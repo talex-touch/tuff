@@ -13,6 +13,7 @@ import { constants } from 'node:fs'
 import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { availableParallelism, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
+import process from 'node:process'
 import { LocalEngineError } from './types'
 import { pcmDurationMs, wrapPcmAsWav } from './wav'
 
@@ -38,7 +39,8 @@ const SIMPLIFIED_CHINESE_PRIMER = '以下是普通话的句子，请使用简体
 export function isPrimerEcho(text: string, primer: string): boolean {
   const strip = (value: string): string => value.replace(/[\s，。、,.!！?？;；:：]/gu, '')
   const candidate = strip(text)
-  if (!candidate) return false
+  if (!candidate)
+    return false
   return strip(primer).includes(candidate)
 }
 
@@ -94,11 +96,14 @@ function withDecodeLock<T>(task: () => Promise<T>): Promise<T> {
  */
 export async function findWhisperBinary(explicit?: string): Promise<string | undefined> {
   const candidates: string[] = []
-  if (explicit) candidates.push(explicit)
+  if (explicit)
+    candidates.push(explicit)
   const fromEnv = process.env.TUFF_WHISPER_BIN?.trim()
-  if (fromEnv) candidates.push(fromEnv)
+  if (fromEnv)
+    candidates.push(fromEnv)
   for (const directory of (process.env.PATH ?? '').split(delimiter)) {
-    if (directory) candidates.push(join(directory, 'whisper-cli'))
+    if (directory)
+      candidates.push(join(directory, 'whisper-cli'))
   }
   candidates.push('/opt/homebrew/bin/whisper-cli', '/usr/local/bin/whisper-cli')
 
@@ -241,29 +246,34 @@ export class WhisperCppLocalEngine implements LocalAsrEngine {
       child.stderr?.setEncoding('utf8')
       child.stderr?.on('data', (chunk: string) => {
         stderr += chunk
-        if (stderr.length > 8_000) stderr = stderr.slice(-8_000)
+        if (stderr.length > 8_000)
+          stderr = stderr.slice(-8_000)
       })
 
       let settled = false
+      let timer: NodeJS.Timeout | undefined
+      let onAbort: (() => void) | undefined
       const finish = (error?: Error): void => {
-        if (settled) return
+        if (settled)
+          return
         settled = true
         clearTimeout(timer)
-        options.signal?.removeEventListener('abort', onAbort)
-        if (error) reject(error)
+        if (onAbort)
+          options.signal?.removeEventListener('abort', onAbort)
+        if (error)
+          reject(error)
         else settle()
       }
-      const onAbort = (): void => {
+      onAbort = (): void => {
         child.kill('SIGKILL')
         finish(new LocalEngineError('LOCAL_ENGINE_ABORTED', 'Local transcription was cancelled.'))
       }
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         child.kill('SIGKILL')
         finish(new LocalEngineError('LOCAL_ENGINE_TIMEOUT', `Local transcription exceeded ${timeoutMs} ms.`, {
           retryable: true,
         }))
       }, timeoutMs)
-
       if (options.signal?.aborted) {
         onAbort()
         return
@@ -276,10 +286,14 @@ export class WhisperCppLocalEngine implements LocalAsrEngine {
         }))
       })
       child.on('close', (code) => {
-        if (code === 0) finish()
-        else finish(new LocalEngineError('LOCAL_ENGINE_DECODE_FAILED', `whisper-cli exited with code ${code}. ${stderr.trim()}`.trim(), {
-          retryable: code === null,
-        }))
+        if (code === 0) {
+          finish()
+        }
+        else {
+          finish(new LocalEngineError('LOCAL_ENGINE_DECODE_FAILED', `whisper-cli exited with code ${code}. ${stderr.trim()}`.trim(), {
+            retryable: code === null,
+          }))
+        }
       })
     })
   }
@@ -297,12 +311,17 @@ export function buildWhisperArgs(
   const threads = options.threads ?? Math.max(1, Math.min(8, availableParallelism() - 1))
 
   const args = [
-    '-m', model.weightsPath,
-    '-f', audioPath,
-    '-l', language,
-    '-t', String(threads),
+    '-m',
+    model.weightsPath,
+    '-f',
+    audioPath,
+    '-l',
+    language,
+    '-t',
+    String(threads),
     '-oj',
-    '-of', outputBase,
+    '-of',
+    outputBase,
     '-np',
   ]
 
@@ -334,7 +353,8 @@ function toTranscriptionResult(
   const segments: LocalTranscribeSegment[] = []
   for (const entry of payload.transcription ?? []) {
     const text = (entry.text ?? '').trim()
-    if (!text) continue
+    if (!text)
+      continue
     segments.push({
       text,
       startMs: entry.offsets?.from ?? 0,

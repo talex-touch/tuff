@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   APP_FORMAT_PROFILES,
-  DEFAULT_FORMAT_PROFILE,
   appFormatContextFromActiveApp,
   applyIdentifierCase,
   buildOrdinalList,
   collapseWhitespace,
+  DEFAULT_FORMAT_PROFILE,
   dropTrailingSentencePunctuation,
   formatDictationText,
   normalizeChineseNumerals,

@@ -9,9 +9,9 @@
  * microphone.
  */
 import type { ActiveAppInfo } from '../../system/active-app'
+import type { AppFormatContext, AppFormatProfile, AppFormatResult, AppTransformId } from './types'
 import { APP_FORMAT_PROFILES, DEFAULT_FORMAT_PROFILE } from './profiles'
 import { TRANSFORM_RUNNERS } from './transforms'
-import type { AppFormatContext, AppFormatProfile, AppFormatResult, AppTransformId } from './types'
 
 /**
  * Adapter from the frontmost-application record to the context this module formats against.
