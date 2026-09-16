@@ -3,6 +3,8 @@
  * @module @talex-touch/utils/transport/events/types/file-index
  */
 
+import type { ResolvedApplication } from './app';
+
 export type FileIndexStage =
   | "idle"
   | "cleanup"
@@ -101,6 +103,23 @@ export interface FileIndexPreviewResourceResult {
   success: boolean;
   tfileUrl?: string;
   expiresAt?: number;
+  errorCode?: string;
+  reportId?: string;
+}
+
+export interface FileIndexDefaultApplicationRequest {
+  path: string;
+}
+
+/**
+ * The application the OS associates with one indexed file — the app a double-click launches.
+ * `application` is null when the platform has no LaunchServices-equivalent answer (everything
+ * except macOS today), when no application claims the file's type, or when the answer is not a
+ * path this build can project.
+ */
+export interface FileIndexDefaultApplicationResult {
+  success: boolean;
+  application?: ResolvedApplication | null;
   errorCode?: string;
   reportId?: string;
 }

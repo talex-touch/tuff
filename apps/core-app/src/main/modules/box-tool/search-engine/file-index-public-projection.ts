@@ -176,6 +176,7 @@ type FileIndexTransportOperation =
   | 'BATTERY_LEVEL'
   | 'ADD_PATH'
   | 'PREVIEW_RESOURCE'
+  | 'DEFAULT_APPLICATION'
   | 'REBUILD'
   | 'SCAN'
   | 'RECONCILE'
