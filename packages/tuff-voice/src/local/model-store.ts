@@ -1,11 +1,11 @@
-import type { LocalModelDescriptor, ResolvedLocalModel } from './types'
+import type { LocalAuxiliaryRole, LocalModelDescriptor, ResolvedLocalModel } from './types'
 import { createHash } from 'node:crypto'
 import { createReadStream, readdirSync, readFileSync } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import process from 'node:process'
-import { LocalEngineError } from './types'
+import { LocalEngineError, SHERPA_ONNX_FAMILIES } from './types'
 
 export const MODEL_DESCRIPTOR_FILE = 'model.json'
 
@@ -78,6 +78,14 @@ function parseDescriptor(raw: unknown, sourcePath: string): LocalModelDescriptor
   if (!Array.isArray(value.languages) || value.languages.length === 0)
     throw invalid('languages must be a non-empty array')
 
+  if (value.engine === 'sherpa-onnx') {
+    // The family decides which recognizer the runtime constructs, so an unrecognised one is a
+    // bundle this build cannot run — not a bundle it should guess at.
+    const family = (value.sherpa as Record<string, unknown> | undefined)?.family
+    if (typeof family !== 'string' || !(SHERPA_ONNX_FAMILIES as readonly string[]).includes(family))
+      throw invalid(`sherpa.family ${String(family)} is not a family this build can drive`)
+  }
+
   return value as unknown as LocalModelDescriptor
 }
 
@@ -124,21 +132,39 @@ function readModelDescriptorSync(directory: string): LocalModelDescriptor {
 }
 
 /**
- * Resolve the weight file, refusing anything that escapes its own version directory.
+ * Refuse any descriptor-supplied path that escapes its own version directory.
  *
- * The descriptor travels with the bundle, so a hostile or truncated one could point at
- * an arbitrary path; the runtime must not follow it out of the store.
+ * The descriptor travels with the bundle, so a hostile or truncated one could point at an
+ * arbitrary path; the runtime must not follow it out of the store.
  */
-function resolveWeightsPath(directory: string, descriptor: LocalModelDescriptor): string {
+function resolveInsideBundle(directory: string, relative: string): string {
   const base = resolve(directory)
-  const candidate = resolve(base, descriptor.runtime.file)
+  const candidate = resolve(base, relative)
   if (candidate !== base && !candidate.startsWith(base + sep)) {
     throw new LocalEngineError(
       'LOCAL_ENGINE_MODEL_DESCRIPTOR_INVALID',
-      `runtime.file escapes the model directory: ${descriptor.runtime.file}`,
+      `Descriptor file escapes the model directory: ${relative}`,
     )
   }
   return candidate
+}
+
+function resolveWeightsPath(directory: string, descriptor: LocalModelDescriptor): string {
+  return resolveInsideBundle(directory, descriptor.runtime.file)
+}
+
+/**
+ * Absolute path of one auxiliary file, by the role the descriptor gives it.
+ *
+ * Roles rather than filenames: an engine needs "the tokenizer", and which file that is belongs
+ * to the bundle. `undefined` means the bundle does not ship one, which is a different failure
+ * from having it and being unable to read it.
+ */
+export function resolveAuxiliaryPath(model: ResolvedLocalModel, role: LocalAuxiliaryRole): string | undefined {
+  const entry = model.descriptor.auxiliary?.find(file => file.role === role)
+  if (!entry)
+    return undefined
+  return resolveInsideBundle(model.directory, entry.file)
 }
 
 /** Higher version wins; a tie is not possible because versions are unique per directory. */
