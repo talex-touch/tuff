@@ -2,8 +2,10 @@
 import type { GitHubRelease } from '@talex-touch/utils'
 import { DownloadStatus } from '@talex-touch/utils'
 import { renderMarkdownToSafeHtml } from '@talex-touch/utils/renderer'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { TxAlert } from '@talex-touch/tuffex/alert'
 import { TxModal } from '@talex-touch/tuffex/modal'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -163,8 +165,7 @@ function handleCancelDownload() {
       <!-- Version Comparison -->
       <div class="version-section">
         <div class="version-item">
-          <span class="version-label">{{ t('update.current_version') }}</span>
-          <TxTag type="info" size="large">
+          <TxTag type="info" size="md">
             {{ currentVersion }}
           </TxTag>
         </div>
@@ -172,8 +173,7 @@ function handleCancelDownload() {
           <i class="i-carbon-arrow-right text-2xl" />
         </div>
         <div class="version-item">
-          <span class="version-label">{{ t('update.new_version') }}</span>
-          <TxTag type="success" size="large">
+          <TxTag type="success" size="md">
             {{ release.tag_name }}
           </TxTag>
         </div>

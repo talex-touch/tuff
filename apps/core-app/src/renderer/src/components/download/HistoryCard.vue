@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import type { DownloadHistory } from '@talex-touch/utils'
 import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'

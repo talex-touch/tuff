@@ -111,7 +111,8 @@ vi.mock('node:fs/promises', () => ({
     readFile: fsReadFileMock,
     writeFile: vi.fn(),
     mkdir: vi.fn(),
-    rm: vi.fn()
+    rm: vi.fn(),
+    access: vi.fn()
   }
 }))
 
@@ -294,7 +295,8 @@ vi.mock('../modules/box-tool/addon/apps/app-provider', () => ({
     removeManagedEntry: vi.fn(),
     setManagedEntryEnabled: vi.fn(),
     diagnoseAppSearch: vi.fn(),
-    reindexAppSearchTarget: vi.fn()
+    reindexAppSearchTarget: vi.fn(),
+    resolveApplication: vi.fn()
   }
 }))
 
@@ -929,6 +931,170 @@ describe('CommonChannelModule private helpers', () => {
         errorCode: 'FILE_INDEX_PREVIEW_NOT_AVAILABLE'
       }
     )
+  })
+
+  it('answers the default-application lookup only for indexed files and falls back when the app index cannot project it', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const { fileProvider } = await import('../modules/box-tool/addon/files/file-provider')
+    const fileProviderMock = fileProvider as unknown as {
+      resolvePreviewResourcePath: ReturnType<typeof vi.fn>
+    }
+    const { appProvider } = await import('../modules/box-tool/addon/apps/app-provider')
+    const appProviderMock = appProvider as unknown as {
+      resolveApplication: ReturnType<typeof vi.fn>
+    }
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {}, onMaximizedChanged: () => () => {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const handler = handlers.get(AppEvents.fileIndex.defaultApplication.toEventName())
+    expect(handler).toBeTypeOf('function')
+
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+
+    try {
+      execFileMock.mockImplementation(
+        (
+          _command: string,
+          _args: string[],
+          _options: unknown,
+          callback: (error: Error | null, stdout?: string) => void
+        ) =>
+          callback(
+            null,
+            JSON.stringify({
+              path: '/Applications/Preview.app',
+              bundleId: 'com.apple.Preview',
+              displayName: 'Preview'
+            })
+          )
+      )
+      // The projection is keyed by the bundle LaunchServices reported; any other identifier has
+      // no indexed application behind it.
+      appProviderMock.resolveApplication.mockImplementation(async (identifier: string) =>
+        identifier === 'com.apple.Preview'
+          ? { identifier, displayName: 'Preview', icon: 'tfile:///icons/com.apple.Preview.png' }
+          : null
+      )
+
+      await expect(
+        handler?.(
+          { path: '/Users/demo/Downloads/invoice.pdf' },
+          { plugin: { name: 'third-party' } }
+        )
+      ).rejects.toThrow('HOST_ONLY_HANDLER')
+      await expect(handler?.({}, {})).resolves.toEqual({
+        success: false,
+        errorCode: 'FILE_INDEX_DEFAULT_APPLICATION_PATH_INVALID'
+      })
+
+      // A path the index does not own is refused before the OS is asked about it.
+      fileProviderMock.resolvePreviewResourcePath.mockResolvedValueOnce(null)
+      await expect(handler?.({ path: '/etc/passwd' }, {})).resolves.toEqual({
+        success: true,
+        application: null
+      })
+      expect(execFileMock).not.toHaveBeenCalled()
+
+      // An indexed file gets the app index's own projection, icon included.
+      fileProviderMock.resolvePreviewResourcePath.mockResolvedValueOnce(
+        '/Users/demo/Downloads/invoice.pdf'
+      )
+      await expect(handler?.({ path: '/Users/demo/Downloads/invoice.pdf' }, {})).resolves.toEqual({
+        success: true,
+        application: {
+          identifier: 'com.apple.Preview',
+          displayName: 'Preview',
+          icon: 'tfile:///icons/com.apple.Preview.png'
+        }
+      })
+
+      // A bundle the app index has never seen falls back to the LaunchServices answer.
+      fileProviderMock.resolvePreviewResourcePath.mockResolvedValueOnce(
+        '/Users/demo/Downloads/scan.pdf'
+      )
+      execFileMock.mockImplementationOnce(
+        (
+          _command: string,
+          _args: string[],
+          _options: unknown,
+          callback: (error: Error | null, stdout?: string) => void
+        ) =>
+          callback(
+            null,
+            JSON.stringify({ path: '/Applications/Preview.app', bundleId: '', displayName: '' })
+          )
+      )
+      await expect(handler?.({ path: '/Users/demo/Downloads/scan.pdf' }, {})).resolves.toEqual({
+        success: true,
+        application: { identifier: '/Applications/Preview.app', displayName: 'Preview', icon: null }
+      })
+
+      // An OS-level failure to identify the app is reported as a degraded failure, not as an empty
+      // answer: the renderer keeps its fallback either way, but this now reaches diagnostics
+      // instead of being dressed up as "nothing opens this file".
+      fileProviderMock.resolvePreviewResourcePath.mockResolvedValueOnce(
+        '/Users/demo/Downloads/missing.pdf'
+      )
+      execFileMock.mockImplementationOnce(
+        (
+          _command: string,
+          _args: string[],
+          _options: unknown,
+          callback: (error: Error | null) => void
+        ) => callback(Object.assign(new Error('osascript timed out'), { killed: true }))
+      )
+      const timedOut = await handler?.({ path: '/Users/demo/Downloads/missing.pdf' }, {})
+      expect(timedOut).toMatchObject({
+        success: false,
+        errorCode: 'FILE_INDEX_DEFAULT_APPLICATION_FAILED'
+      })
+      expect((timedOut as { reportId?: string }).reportId).toEqual(expect.any(String))
+
+      // LaunchServices naming no application is an answer rather than a failure, and stays a plain
+      // empty result so the renderer falls back to the index's own source label.
+      fileProviderMock.resolvePreviewResourcePath.mockResolvedValueOnce(
+        '/Users/demo/Downloads/unassociated.bin'
+      )
+      execFileMock.mockImplementationOnce(
+        (
+          _command: string,
+          _args: string[],
+          _options: unknown,
+          callback: (error: Error | null, stdout?: string) => void
+        ) => callback(null, '')
+      )
+      await expect(
+        handler?.({ path: '/Users/demo/Downloads/unassociated.bin' }, {})
+      ).resolves.toEqual({
+        success: true,
+        application: null
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+      appProviderMock.resolveApplication.mockReset()
+    }
   })
 
   it('maps each supported desktop wallpaper backend output to a usable path', async () => {

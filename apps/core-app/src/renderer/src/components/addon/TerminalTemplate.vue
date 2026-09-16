@@ -1,4 +1,5 @@
 <script lang="ts" name="TerminalTemplate" setup>
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { useI18n } from 'vue-i18n'
 import InteractiveTerminal from '../terminal/InteractiveTerminal.vue'
 import { devLog } from '~/utils/dev-log'

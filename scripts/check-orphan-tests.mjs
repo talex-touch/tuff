@@ -36,6 +36,19 @@ const SKIP_DIRECTORIES = new Set([
   'out',
 ])
 
+export function shouldSkipDirectory(name, skip = SKIP_DIRECTORIES) {
+  return skip.has(name) || name.startsWith('.dsh-plugin-hub-')
+}
+
+/**
+ * The rule above is about directories. Applying it to an entry by name alone also drops a real
+ * test file whose name happens to start with a staging prefix (`.dsh-plugin-hub-example.test.ts`),
+ * so the decision is taken on the entry, not on its name.
+ */
+export function shouldSkipEntry(entry, skip = SKIP_DIRECTORIES) {
+  return entry.isDirectory() && shouldSkipDirectory(entry.name, skip)
+}
+
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/
 
 /**
@@ -169,7 +182,7 @@ export function findTestFiles(root, skip = SKIP_DIRECTORIES) {
       return
     }
     for (const entry of entries) {
-      if (skip.has(entry.name))
+      if (shouldSkipEntry(entry, skip))
         continue
       const full = path.join(dir, entry.name)
       if (entry.isDirectory())
@@ -304,6 +317,21 @@ function selfTest() {
       name: 'discovery finds the .cjs and .mjs shapes, not just .ts',
       actual: ['a.test.cjs', 'b.test.mjs', 'c.spec.tsx', 'd.ts'].filter(name => TEST_FILE.test(name)).length,
       expected: 3,
+    },
+    {
+      name: 'local DSH plugin-hub staging directories are excluded from test discovery',
+      actual: shouldSkipDirectory('.dsh-plugin-hub-adapter-staging'),
+      expected: true,
+    },
+    {
+      name: 'the skip rule is not applied to a file with a staging prefix in its name',
+      actual: shouldSkipEntry({ name: '.dsh-plugin-hub-example.test.ts', isDirectory: () => false }),
+      expected: false,
+    },
+    {
+      name: 'a staging directory is still skipped',
+      actual: shouldSkipEntry({ name: '.dsh-plugin-hub-staging', isDirectory: () => true }),
+      expected: true,
     },
   ]
 

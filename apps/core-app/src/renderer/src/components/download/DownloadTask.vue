@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { TxAlert } from '@talex-touch/tuffex/alert'
 import { TuffProgress } from '@talex-touch/tuffex/progress'
 import { TxStack } from '@talex-touch/tuffex/stack'

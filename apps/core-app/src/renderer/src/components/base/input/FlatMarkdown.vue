@@ -1,4 +1,5 @@
 <script lang="ts" name="FlatMarkdown" setup>
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { defaultValueCtx, Editor, editorViewOptionsCtx, rootCtx } from '@milkdown/core'
 import type { Ctx } from '@milkdown/ctx'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'

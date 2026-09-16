@@ -1,4 +1,5 @@
 <script lang="ts" name="PluginList" setup>
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import type { ITouchPlugin } from '@talex-touch/utils'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

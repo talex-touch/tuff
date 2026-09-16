@@ -6,12 +6,16 @@ defineProps<{
   item?: TuffItem
   searchQuery?: string
 }>()
+
+const emit = defineEmits<{
+  (event: 'openItem'): void
+}>()
 </script>
 
 <template>
   <div class="TuffItemAddon" :class="{ show: !!type }">
     <template v-if="type === 'preview'">
-      <TuffItemPreviewer :item="item!" :search-query="searchQuery" />
+      <TuffItemPreviewer :item="item!" :search-query="searchQuery" @open-item="emit('openItem')" />
     </template>
   </div>
 </template>
