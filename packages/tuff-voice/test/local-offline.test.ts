@@ -1,4 +1,5 @@
 import type { LocalModelDescriptor } from '../src/index'
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -44,7 +45,8 @@ async function installFixture(
   const directory = join(root, descriptor.id, descriptor.version)
   await mkdir(directory, { recursive: true })
   await writeFile(join(directory, 'model.json'), JSON.stringify(descriptor))
-  if (weights) await writeFile(join(directory, descriptor.runtime.file), weights)
+  if (weights)
+    await writeFile(join(directory, descriptor.runtime.file), weights)
   return directory
 }
 
@@ -164,7 +166,8 @@ describe('model store', () => {
       runtime: { kind: 'ggml', file: 'weights.bin', bytes: 4, sha256: 'a'.repeat(64) },
     }), weights)
     await expect(verifyModelIntegrity(await loadInstalledModel(declaredWrong, 'fixture-model', '1.0.0')))
-      .rejects.toThrow(/hash to/)
+      .rejects
+      .toThrow(/hash to/)
   })
 
   it('accepts weights that match the declared digest and size', async () => {
@@ -205,7 +208,8 @@ describe('whisper argument construction', () => {
     expect(buildWhisperArgs(model(), '/tmp/a.wav', '/tmp/out', { language: 'en' })).not.toContain('--prompt')
     // Nor may a model that already emits Simplified.
     expect(buildWhisperArgs(model({ text: { requiresSimplifiedConversion: false } }), '/tmp/a.wav', '/tmp/out', {}))
-      .not.toContain('--prompt')
+      .not
+      .toContain('--prompt')
   })
 
   it('honours a request for no timestamps, which changes the decode and not just the output', () => {

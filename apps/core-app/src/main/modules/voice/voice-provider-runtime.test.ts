@@ -1,4 +1,15 @@
+import type {
+  ResolvedLocalModel,
+  VoiceProviderAdapter,
+  VoiceProviderEvent,
+  VoiceStreamRequest
+} from '@talex-touch/tuff-voice'
+
+import type { VoiceProviderDescriptorV1 } from '@talex-touch/utils/i18n'
+import { CATALOG_CLIENT_SDKAPI, CATALOG_ERROR_CODES } from '@talex-touch/utils/i18n'
+import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getConfiguredAsrProvider, getRecognitionStatus } from './voice-provider-runtime'
 
 const runtime = vi.hoisted(() => ({
   bindings: {} as Record<string, Array<Record<string, unknown>>>,
@@ -121,17 +132,6 @@ vi.mock('@talex-touch/tuff-voice', () => ({
   loadInstalledModelSync: localStore.loadInstalledModelSync,
   resolveModelStoreRoot: localStore.resolveModelStoreRoot
 }))
-
-import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
-import type {
-  ResolvedLocalModel,
-  VoiceProviderAdapter,
-  VoiceProviderEvent,
-  VoiceStreamRequest
-} from '@talex-touch/tuff-voice'
-import { CATALOG_CLIENT_SDKAPI, CATALOG_ERROR_CODES } from '@talex-touch/utils/i18n'
-import type { VoiceProviderDescriptorV1 } from '@talex-touch/utils/i18n'
-import { getConfiguredAsrProvider, getRecognitionStatus } from './voice-provider-runtime'
 
 function channel(
   id: string,

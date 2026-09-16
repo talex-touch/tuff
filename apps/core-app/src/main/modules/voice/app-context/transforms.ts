@@ -168,7 +168,7 @@ const SPOKEN_SYMBOL_SUBSTITUTIONS: ReadonlyArray<{ patterns: readonly RegExp[]; 
       const core = rule.standaloneOnly
         ? `(?<=^|${SPACE_OR_TAB})${escaped}(?=$|${SPACE_OR_TAB})`
         : escaped
-      const trail = SPACE_OR_TAB + '*'
+      const trail = `${SPACE_OR_TAB}*`
       /**
        * Only a standalone-only symbol may take the space in front of it, and only because that
        * space is part of the dictation: the lookaround above already proved the speaker isolated
@@ -177,7 +177,7 @@ const SPOKEN_SYMBOL_SUBSTITUTIONS: ReadonlyArray<{ patterns: readonly RegExp[]; 
        * gap and read `路径 是 /Users`.
        */
       const weldFallback = new RegExp(
-        `${rule.standaloneOnly ? SPACE_OR_TAB + '*' : ''}${core}${trail}`,
+        `${rule.standaloneOnly ? `${SPACE_OR_TAB}*` : ''}${core}${trail}`,
         'g'
       )
       const patterns =
@@ -422,8 +422,8 @@ export function buildOrdinalList(text: string): string {
   return lead === '' ? list : `${lead}\n\n${list}`
 }
 
-const IDENTIFIER_TOKEN_PATTERN = /^[A-Za-z0-9._\-/]+$/
-const IDENTIFIER_SEPARATOR_PATTERN = /[^A-Za-z0-9]+/
+const IDENTIFIER_TOKEN_PATTERN = /^[\w.\-/]+$/
+const IDENTIFIER_SEPARATOR_PATTERN = /[^A-Z0-9]+/i
 /**
  * A ceiling, not a target. Without it, any English sentence dictated into an editor would be welded
  * into one identifier; with it, that mistake stays confined to short utterances that plausibly were

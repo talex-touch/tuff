@@ -1,10 +1,13 @@
-import { randomUUID } from 'node:crypto'
-import { StorageList } from '@talex-touch/utils'
-import {
-  DEFAULT_VOICE_POLISH_STRENGTH,
-  normalizeVoicePolishStrength,
-  type VoicePolishStrength
-} from '@talex-touch/utils/common/storage/entity/app-settings'
+import type { AudioCaptureResult } from '@talex-touch/tuff-native/audio'
+import type {
+  VoiceProviderAdapter,
+  VoiceProviderEvent,
+  VoiceStreamConnection,
+  VoiceStreamRequest,
+  VoiceUploadRequest,
+  VoiceUsage
+} from '@talex-touch/tuff-voice'
+import type { VoicePolishStrength } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type {
   VoiceAsrStreamEvent,
@@ -22,30 +25,30 @@ import type {
   VoiceTranscribeUploadPayload,
   VoiceTranscribeUploadResult
 } from '@talex-touch/utils/transport/sdk/domains/voice'
-import type { AudioCaptureResult } from '@talex-touch/tuff-native/audio'
+import type { ActiveAppInfo } from '../system/active-app'
+import type { VoicePolishOutcome } from './voice-insights-store'
+import type { VoiceRecognitionRecordInput } from './voice-recognition-store'
+import { randomUUID } from 'node:crypto'
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
+import { assertVoiceUploadUrl } from '@talex-touch/tuff-voice'
+import { StorageList } from '@talex-touch/utils'
 import {
-  assertVoiceUploadUrl,
-  type VoiceProviderAdapter,
-  type VoiceProviderEvent,
-  type VoiceStreamRequest,
-  type VoiceStreamConnection,
-  type VoiceUploadRequest,
-  type VoiceUsage
-} from '@talex-touch/tuff-voice'
+  DEFAULT_VOICE_POLISH_STRENGTH,
+  normalizeVoicePolishStrength
+} from '@talex-touch/utils/common/storage/entity/app-settings'
 import { createLogger } from '../../utils/logger'
-import { clipboardModule } from '../clipboard'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { intelligenceTtsService } from '../ai/intelligence-tts-service'
-import { activeAppService, type ActiveAppInfo } from '../system/active-app'
+import { clipboardModule } from '../clipboard'
+import { getMainConfig } from '../storage'
+import { activeAppService } from '../system/active-app'
 import { appFormatContextFromActiveApp, formatDictationText } from './app-context'
 import { getVoicePolishPrompt, wrapTranscription } from './polish-prompt'
+import { selectVoiceFile } from './voice-file-transcription'
+import { voiceInsightsStore } from './voice-insights-store'
 import { createLiveDelivery } from './voice-live-delivery'
 import { getConfiguredAsrProvider } from './voice-provider-runtime'
-import { selectVoiceFile } from './voice-file-transcription'
-import { voiceRecognitionStore, type VoiceRecognitionRecordInput } from './voice-recognition-store'
-import { getMainConfig } from '../storage'
-import { voiceInsightsStore, type VoicePolishOutcome } from './voice-insights-store'
+import { voiceRecognitionStore } from './voice-recognition-store'
 
 function isVoiceHistoryEnabled(): boolean {
   try {
@@ -459,6 +462,7 @@ export class VoiceService {
     }
     this.retryBuffer = null
   }
+
   private beginRetryBuffer(
     captureId: string,
     generation: number,
@@ -711,6 +715,7 @@ export class VoiceService {
     }
     return result
   }
+
   cancelSession(sessionId: string): void {
     const record = this.sessions.get(sessionId)
     if (!record) return
@@ -790,6 +795,7 @@ export class VoiceService {
       stoppedReason: capture.stoppedReason
     }
   }
+
   private async deliverText(
     text: string,
     targetKey: string | null,
@@ -855,6 +861,7 @@ export class VoiceService {
     if (fallback.success) return { method: 'autopaste' }
     return { method: 'none', reason: fallback.code ?? 'autopaste-failed' }
   }
+
   /** One-shot dictation backed by the canonical Voice Session owner. */
   async dictate(
     payload: VoiceDictatePayload = {},
@@ -929,6 +936,7 @@ export class VoiceService {
         : {})
     }
   }
+
   /** Main-owned file selection and bounded in-memory STT through the configured capability binding. */
   async *transcribeFile(signal?: AbortSignal): AsyncGenerator<VoiceFileTranscriptionEvent> {
     const selected = await selectVoiceFile(signal)
@@ -1190,7 +1198,9 @@ export class VoiceService {
           // Levels are disposable: a renderer that falls behind should drop frames rather
           // than push `final` behind a backlog of amplitudes.
           let levelCount = 0
-          for (const queued of queue) if (queued.kind === 'level') levelCount += 1
+          for (const queued of queue) {
+            if (queued.kind === 'level') levelCount += 1
+          }
           if (levelCount >= MAX_QUEUED_LEVELS) {
             const staleIndex = queue.findIndex((queued) => queued.kind === 'level')
             queue.splice(staleIndex, 1)

@@ -8,6 +8,8 @@
  * speak into Tuff.
  */
 
+import { Buffer } from 'node:buffer'
+
 /** Canonical 44-byte RIFF/WAVE header: RIFF, fmt (16), data. */
 export const WAV_HEADER_BYTES = 44
 
@@ -49,6 +51,7 @@ export function wrapPcmAsWav(pcm: Uint8Array, format: WavFormat): Buffer {
 export function pcmDurationMs(pcmBytes: number, format: WavFormat): number {
   const bitsPerSample = format.bitsPerSample ?? 16
   const blockAlign = format.channels * (bitsPerSample / 8)
-  if (blockAlign <= 0 || format.sampleRate <= 0) return 0
+  if (blockAlign <= 0 || format.sampleRate <= 0)
+    return 0
   return Math.round((pcmBytes / blockAlign / format.sampleRate) * 1000)
 }

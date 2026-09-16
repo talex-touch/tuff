@@ -1,9 +1,10 @@
 import type { LocalModelDescriptor, ResolvedLocalModel } from './types'
 import { createHash } from 'node:crypto'
-import { createReadStream, readFileSync, readdirSync } from 'node:fs'
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { createReadStream, readdirSync, readFileSync } from 'node:fs'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
+import process from 'node:process'
 import { LocalEngineError } from './types'
 
 export const MODEL_DESCRIPTOR_FILE = 'model.json'
@@ -21,9 +22,11 @@ const ENGINES: Record<string, true> = {
  * fetched by that repository is found here without any extra registration step.
  */
 export function resolveModelStoreRoot(explicit?: string): string {
-  if (explicit) return resolve(explicit)
+  if (explicit)
+    return resolve(explicit)
   const fromEnv = process.env.TUFF_SPEECH_MODEL_DIR?.trim()
-  if (fromEnv) return resolve(fromEnv)
+  if (fromEnv)
+    return resolve(fromEnv)
   if (process.platform === 'darwin')
     return join(homedir(), 'Library', 'Application Support', 'Tuff', 'speech-models')
   const dataHome = process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share')
@@ -41,19 +44,28 @@ function parseDescriptor(raw: unknown, sourcePath: string): LocalModelDescriptor
   const invalid = (detail: string): LocalEngineError =>
     new LocalEngineError('LOCAL_ENGINE_MODEL_DESCRIPTOR_INVALID', `${sourcePath}: ${detail}`)
 
-  if (typeof raw !== 'object' || raw === null) throw invalid('descriptor is not an object')
+  if (typeof raw !== 'object' || raw === null)
+    throw invalid('descriptor is not an object')
   const value = raw as Record<string, unknown>
 
-  if (value.schemaVersion !== 1) throw invalid(`unsupported schemaVersion ${String(value.schemaVersion)}`)
-  if (typeof value.id !== 'string' || !value.id) throw invalid('id is missing')
-  if (typeof value.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(value.version)) throw invalid(`version ${String(value.version)} is not semver`)
-  if (typeof value.engine !== 'string' || ENGINES[value.engine] !== true) throw invalid(`unknown engine ${String(value.engine)}`)
+  if (value.schemaVersion !== 1)
+    throw invalid(`unsupported schemaVersion ${String(value.schemaVersion)}`)
+  if (typeof value.id !== 'string' || !value.id)
+    throw invalid('id is missing')
+  if (typeof value.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(value.version))
+    throw invalid(`version ${String(value.version)} is not semver`)
+  if (typeof value.engine !== 'string' || ENGINES[value.engine] !== true)
+    throw invalid(`unknown engine ${String(value.engine)}`)
 
   const runtime = value.runtime as Record<string, unknown> | undefined
-  if (!runtime) throw invalid('runtime is missing')
-  if (typeof runtime.file !== 'string' || !runtime.file) throw invalid('runtime.file is missing')
-  if (!Number.isInteger(runtime.bytes) || (runtime.bytes as number) <= 0) throw invalid('runtime.bytes is invalid')
-  if (typeof runtime.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(runtime.sha256)) throw invalid('runtime.sha256 is not a sha256')
+  if (!runtime)
+    throw invalid('runtime is missing')
+  if (typeof runtime.file !== 'string' || !runtime.file)
+    throw invalid('runtime.file is missing')
+  if (!Number.isInteger(runtime.bytes) || (runtime.bytes as number) <= 0)
+    throw invalid('runtime.bytes is invalid')
+  if (typeof runtime.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(runtime.sha256))
+    throw invalid('runtime.sha256 is not a sha256')
 
   const capabilities = value.capabilities as Record<string, unknown> | undefined
   if (!capabilities || typeof capabilities.stream !== 'boolean' || typeof capabilities.upload !== 'boolean')
@@ -63,7 +75,8 @@ function parseDescriptor(raw: unknown, sourcePath: string): LocalModelDescriptor
   if (!license || typeof license.spdx !== 'string' || typeof license.redistributable !== 'boolean')
     throw invalid('license.spdx/redistributable are required')
 
-  if (!Array.isArray(value.languages) || value.languages.length === 0) throw invalid('languages must be a non-empty array')
+  if (!Array.isArray(value.languages) || value.languages.length === 0)
+    throw invalid('languages must be a non-empty array')
 
   return value as unknown as LocalModelDescriptor
 }
@@ -74,7 +87,8 @@ function descriptorFromText(text: string, sourcePath: string): LocalModelDescrip
     return parseDescriptor(JSON.parse(text), sourcePath)
   }
   catch (error) {
-    if (error instanceof LocalEngineError) throw error
+    if (error instanceof LocalEngineError)
+      throw error
     throw new LocalEngineError('LOCAL_ENGINE_MODEL_DESCRIPTOR_INVALID', `${sourcePath}: ${String(error)}`, { cause: error })
   }
 }
@@ -133,7 +147,8 @@ function compareVersions(a: string, b: string): number {
   const right = b.split('.').map(Number)
   for (let index = 0; index < 3; index += 1) {
     const difference = (left[index] ?? 0) - (right[index] ?? 0)
-    if (difference !== 0) return difference
+    if (difference !== 0)
+      return difference
   }
   return 0
 }
@@ -185,7 +200,8 @@ export async function listInstalledModels(root = resolveModelStoreRoot()): Promi
         // A directory without a descriptor is just a stray folder — users create those.
         // A descriptor that exists but does not validate is a corrupted install, and
         // silently hiding it would leave the user staring at a model that never appears.
-        if (error instanceof LocalEngineError && error.code === 'LOCAL_ENGINE_MODEL_MISSING') continue
+        if (error instanceof LocalEngineError && error.code === 'LOCAL_ENGINE_MODEL_MISSING')
+          continue
         throw error
       }
     }
@@ -270,11 +286,14 @@ function newestInstalledVersionSync(root: string, id: string): string | undefine
   for (const version of versions) {
     try {
       const descriptor = readModelDescriptorSync(join(root, id, version))
-      if (descriptor.id !== id) continue
-      if (newest === undefined || compareVersions(descriptor.version, newest) > 0) newest = descriptor.version
+      if (descriptor.id !== id)
+        continue
+      if (newest === undefined || compareVersions(descriptor.version, newest) > 0)
+        newest = descriptor.version
     }
     catch (error) {
-      if (error instanceof LocalEngineError && error.code === 'LOCAL_ENGINE_MODEL_MISSING') continue
+      if (error instanceof LocalEngineError && error.code === 'LOCAL_ENGINE_MODEL_MISSING')
+        continue
       throw error
     }
   }

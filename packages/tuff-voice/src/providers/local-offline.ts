@@ -127,7 +127,8 @@ export class LocalOfflineVoiceProvider implements VoiceProviderAdapter {
     })()
 
     const settle = async (): Promise<void> => {
-      if (closed) return
+      if (closed)
+        return
       closed = true
       // A partial that is still decoding was asked about audio the final decode now covers
       // in full. Letting it finish would hold the host's single decode slot and delay the
@@ -161,13 +162,16 @@ export class LocalOfflineVoiceProvider implements VoiceProviderAdapter {
       ready,
       events,
       writePcm: async (chunk: Uint8Array | Buffer) => {
-        if (closed) return
+        if (closed)
+          return
         const bytes = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk)
         captured.push(bytes)
         capturedBytes += bytes.byteLength
 
-        if (partialInFlight || capturedBytes > maxPartialBytes) return
-        if (capturedBytes - partialMarkBytes < partialTriggerBytes) return
+        if (partialInFlight || capturedBytes > maxPartialBytes)
+          return
+        if (capturedBytes - partialMarkBytes < partialTriggerBytes)
+          return
         partialMarkBytes = capturedBytes
         partialInFlight = true
         const controller = new AbortController()
@@ -187,7 +191,8 @@ export class LocalOfflineVoiceProvider implements VoiceProviderAdapter {
           }
           finally {
             partialInFlight = false
-            if (partialAbort === controller) partialAbort = null
+            if (partialAbort === controller)
+              partialAbort = null
           }
         })()
       },
@@ -196,7 +201,8 @@ export class LocalOfflineVoiceProvider implements VoiceProviderAdapter {
         await settle()
       },
       abort: async (reason?: string) => {
-        if (closed) return
+        if (closed)
+          return
         closed = true
         events.fail(createAbortError(reason))
       },
@@ -255,15 +261,21 @@ export class LocalOfflineVoiceProvider implements VoiceProviderAdapter {
       language: this.options.language ?? request.language ?? descriptor.defaultLanguage ?? descriptor.languages[0],
       preferSimplifiedChinese: this.options.preferSimplifiedChinese ?? descriptor.text?.requiresSimplifiedConversion ?? false,
     }
-    if (this.options.threads !== undefined) options.threads = this.options.threads
-    if (request.timeoutMs !== undefined) options.timeoutMs = request.timeoutMs
-    else if (this.options.timeoutMs !== undefined) options.timeoutMs = this.options.timeoutMs
+    if (this.options.threads !== undefined)
+      options.threads = this.options.threads
+    if (request.timeoutMs !== undefined)
+      options.timeoutMs = request.timeoutMs
+    else if (this.options.timeoutMs !== undefined)
+      options.timeoutMs = this.options.timeoutMs
 
     const signals = [request.signal, extraSignal].filter((signal): signal is AbortSignal => signal !== undefined)
-    if (signals.length === 1) options.signal = signals[0]
-    else if (signals.length > 1) options.signal = AbortSignal.any(signals)
+    if (signals.length === 1)
+      options.signal = signals[0]
+    else if (signals.length > 1)
+      options.signal = AbortSignal.any(signals)
 
-    if (upload && 'enableTimestamps' in request && request.enableTimestamps !== undefined) options.timestamps = request.enableTimestamps
+    if (upload && 'enableTimestamps' in request && request.enableTimestamps !== undefined)
+      options.timestamps = request.enableTimestamps
     return options
   }
 }
@@ -312,7 +324,8 @@ function toVoiceSegments(segments: NonNullable<LocalTranscribeResult['segments']
 
 /** Preserve the engine's own code, message and retryability across the provider boundary. */
 function toVoiceProviderError(error: unknown, requestId: string): VoiceProviderError {
-  if (error instanceof VoiceProviderError) return error
+  if (error instanceof VoiceProviderError)
+    return error
   if (error instanceof LocalEngineError) {
     return new VoiceProviderError(error.code, error.message, { retryable: error.retryable, requestId, cause: error })
   }

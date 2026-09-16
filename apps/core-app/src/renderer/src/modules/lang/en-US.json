@@ -552,83 +552,83 @@
     "voiceWakeDesc": "Wake-word activation is not available yet."
   },
   "settingSpeechRecognition": {
-    "title": "Voice Input Settings",
-    "description": "Records, and where the settings live.",
-    "refresh": "Try again",
+    "title": "Voice input settings",
+    "description": "Voice input and cloud routing.",
+    "refresh": "Refresh",
     "input": {
       "title": "Voice input",
-      "description": "Off by default. Fn/Ctrl starts voice input only after you turn it on manually; the microphone is captured only during an active voice-input session.",
+      "description": "Off by default; once enabled, Fn/Ctrl starts input. The microphone is captured only while input is active.",
       "defaultOffLabel": "Off by default",
       "manualOnLabel": "Manually enabled"
     },
     "globeKey": {
       "title": "The system still owns the Fn key",
-      "description": "A lone Fn press opens the Emoji panel or switches input source. macOS fires that outside the app, so no app can intercept it — but it can be turned off. Fn then belongs to voice input, the F-key layer and every other Fn combination are untouched, and the Emoji panel is still on Ctrl+Cmd+Space.",
+      "description": "Pressing Fn opens the Emoji panel or switches input source. Turn it off and Fn goes to voice input; other combinations are unaffected.",
       "action": "Turn it off",
       "manual": "System Settings"
     },
     "capabilities": {
       "title": "Channel and model",
-      "description": "Set in Intelligence — binding and order are on that page.",
+      "description": "Channel binding and order live on the Intelligence page.",
       "action": "Open Intelligence"
     },
     "catalog": {
       "title": "Cloud voice routing",
-      "description": "Only after sign-in, Tuff downloads and applies an AES-256-GCM encrypted declarative routing pack verified by the Tuff release key. Packs contain no credentials or code and never enable voice input themselves.",
+      "description": "After sign-in, Tuff downloads and applies an AES-256-GCM encrypted routing pack, enabled once verified.",
       "activeTitle": "Active routing pack",
-      "activeDescription": "{packId} · v{version} · SHA-256 {hash}… · signature verified",
-      "builtinDescription": "No cloud pack is active; the built-in Nexus voice route remains in use.",
+      "activeDescription": "{packId} · v{version} · SHA-256 {hash}… · verified",
+      "builtinDescription": "Not active; using the built-in Nexus route.",
       "statusTitle": "Catalog status",
-      "statusLoading": "Reading local status.",
-      "statusUnavailable": "Cloud voice routing status is unavailable.",
-      "notCheckedDescription": "Not checked yet. Sign-in checks once; you can also check or sync manually after signing in.",
-      "currentDescription": "Up to date. Sign-in checks once; manual sync remains available.",
+      "statusLoading": "Reading…",
+      "statusUnavailable": "Status is unavailable.",
+      "notCheckedDescription": "Not checked yet.",
+      "currentDescription": "Up to date.",
       "updateDescription": "{packId} v{version} · SHA-256 {hash}… is ready to sync.",
-      "errorDescription": "The latest operation failed: {code}. The active route was kept unchanged.",
-      "loginRequiredDescription": "Sign in first. While signed out, Tuff does not check, download, or apply cloud routing packs.",
-      "rollbackTitle": "Roll back the previous version",
-      "rollbackDescription": "Roll back to {packId} version {version}; the route is rebuilt from local SQLite.",
+      "errorDescription": "Operation failed: {code}; the route is unchanged.",
+      "loginRequiredDescription": "Sign in first.",
+      "rollbackTitle": "Roll back",
+      "rollbackDescription": "Roll back to {packId} v{version}.",
       "refresh": "Refresh status",
       "check": "Check",
-      "sync": "Sync now",
+      "sync": "Sync",
       "rollback": "Roll back",
       "login": "Sign in to enable",
-      "upToDate": "Cloud voice routing is up to date",
-      "updateAvailable": "A new cloud voice routing pack is available",
-      "activated": "Cloud voice routing was verified and activated",
-      "rolledBack": "Rolled back to the previous voice routing pack",
-      "checkFailed": "Could not check cloud voice routing",
-      "syncFailed": "Cloud voice routing sync failed; the active route was kept",
-      "rollbackFailed": "Voice routing rollback failed; the active route was kept",
-      "loginFailed": "Sign-in did not complete; cloud voice routing remains off",
+      "upToDate": "Routing pack is up to date",
+      "updateAvailable": "A new routing pack is available",
+      "activated": "Routing pack verified and activated",
+      "rolledBack": "Rolled back to the previous version",
+      "checkFailed": "Check failed",
+      "syncFailed": "Sync failed; the active route is unchanged",
+      "rollbackFailed": "Rollback failed; the active route is unchanged",
+      "loginFailed": "Sign-in did not complete; routing stays off",
       "recovery": "View cloud routing"
     },
     "history": {
       "title": "Keep recognition records",
-      "description": "Keeps source audio and transcripts; off keeps statistics only."
+      "description": "Saves source audio and transcripts; off keeps statistics only."
     },
     "noiseSuppression": {
       "title": "Noise suppression",
-      "description": "Suppresses steady background noise such as fans and air conditioning. Off by default: cloud recognisers are trained on noisy speech, so suppression can cost accuracy. Anti-alias and low-frequency filtering are always on and unaffected by this switch."
+      "description": "Suppresses steady background noise such as fans and air conditioning. Off by default; suppression can cost accuracy."
     },
     "polish": {
       "title": "Audio tidy-up",
-      "description": "Tidy and write once you stop when a Chat channel is ready; otherwise, raw words type as you speak."
+      "description": "With a Chat channel, words are tidied and written once you stop; otherwise raw text types as you speak."
     },
     "polishStrength": {
       "title": "Tidy-up level",
       "options": {
         "natural": {
           "label": "Natural",
-          "description": "Drops filler words and clear self-corrections, keeping your order."
+          "description": "Drops filler words, keeping your order."
         },
         "structured": {
           "label": "Structured",
-          "description": "Groups related points, reshaping into paragraphs or lists when useful."
+          "description": "Groups related points into paragraphs or lists when useful."
         },
         "deep": {
           "label": "Deep",
-          "description": "Edits throughout for clarity; never changes the meaning or the register."
+          "description": "Edits throughout for clarity; never changes the meaning."
         }
       }
     },
@@ -639,10 +639,10 @@
     "reasons": {
       "credentialMissing": "The selected channel has no credential",
       "unavailable": "Recognition is unavailable right now",
-      "catalogMissing": "The cloud voice routing pack is not ready. Check or sync it below.",
-      "catalogExpired": "The active cloud voice routing pack has expired. Sync or roll it back.",
-      "catalogRejected": "The cloud voice routing pack failed integrity or schema validation and was not used.",
-      "catalogUnsupported": "This Tuff version cannot use the active voice routing pack. Update Tuff or roll it back."
+      "catalogMissing": "The routing pack is not ready. Check or sync it below.",
+      "catalogExpired": "The routing pack has expired. Sync or roll it back.",
+      "catalogRejected": "The routing pack failed validation and was not used.",
+      "catalogUnsupported": "This Tuff version cannot use the routing pack. Update Tuff or roll it back."
     },
     "asr": {
       "notReady": "Speech recognition is not set up",
@@ -2769,6 +2769,7 @@
   },
   "appList": {
     "searchPlaceholder": "Type to search...",
+    "searchClear": "Clear search",
     "searchedOnDevice": "{count} searched on this device.",
     "appsOnDevice": "{count} applications on this device.",
     "order": {
@@ -3539,6 +3540,7 @@
       "alertRebuildGenericFailed": "The index rebuild could not start. Please retry later.",
       "statsTitle": "Index Statistics",
       "statsDesc": "Detailed statistics of file indexing",
+      "statsButton": "View statistics",
       "totalFiles": "Files Indexed",
       "failedFiles": "Failed",
       "viewFailedFiles": "View failed files",

@@ -1,13 +1,18 @@
-import {
-  resolveFirstIntelligenceProviderRoute,
-  type IntelligenceProviderConfig,
-  type IntelligenceProviderRoute
+import type {
+  IntelligenceProviderConfig,
+  IntelligenceProviderRoute
 } from '@talex-touch/tuff-intelligence'
+import type { ResolvedLocalModel, VoiceProviderAdapter } from '@talex-touch/tuff-voice'
+import type {
+  CatalogStatus,
+  VoiceProviderDescriptorV1,
+  VoiceProviderRegistry
+} from '@talex-touch/utils/i18n'
 import type {
   VoiceRecognitionStatus,
   VoiceRecognitionStatusSnapshot
 } from '@talex-touch/utils/transport/sdk/domains/voice'
-import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
+import { resolveFirstIntelligenceProviderRoute } from '@talex-touch/tuff-intelligence'
 import {
   BailianParaformerVoiceProvider,
   createFetchHttpClient,
@@ -17,35 +22,28 @@ import {
   loadInstalledModelSync,
   LocalOfflineVoiceProvider,
   resolveModelStoreRoot,
-  VoiceProviderError,
-  type ResolvedLocalModel,
-  type VoiceProviderAdapter
+  VoiceProviderError
 } from '@talex-touch/tuff-voice'
+import { CATALOG_CLIENT_SDKAPI, CATALOG_ERROR_CODES } from '@talex-touch/utils/i18n'
+import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
 import {
   getVoiceAsrMetadata,
   getVoiceCapabilityRecommendedModels,
   resolveBailianVoiceEndpoints
 } from '@talex-touch/utils/intelligence/voice-asr'
-import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
-import {
-  CATALOG_CLIENT_SDKAPI,
-  CATALOG_ERROR_CODES,
-  type CatalogStatus,
-  type VoiceProviderDescriptorV1,
-  type VoiceProviderRegistry
-} from '@talex-touch/utils/i18n'
+import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
 import {
   ensureIntelligenceConfigLoaded,
   getCapabilityOptions,
   getEffectiveCapabilityRoutingConfig
 } from '../ai/intelligence-config'
 import { getIntelligenceProviderManager, providerSupportsCapability } from '../ai/intelligence-sdk'
-import { createBufferedSttVoiceProvider } from './buffered-stt-provider'
+import { resolveProviderCredential } from '../ai/provider-credential-runtime'
 import { getAuthToken, getSanitizedAuthSessionState } from '../auth'
 import { getCatalogService } from '../catalog'
 import { transcribeNexusAudio } from '../nexus/asr-client'
-import { resolveProviderCredential } from '../ai/provider-credential-runtime'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
+import { createBufferedSttVoiceProvider } from './buffered-stt-provider'
 
 const ASR_CAPABILITY_ID = 'audio.asr'
 const STT_CAPABILITY_ID = 'audio.stt'
