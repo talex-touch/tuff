@@ -22,67 +22,74 @@
   font-weight: 500;
 }
 
-.stats-container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  white-space: nowrap;
-}
-
 .stat-divider {
   color: var(--tx-text-color-placeholder);
   font-size: 12px;
   margin: 0 2px;
 }
 
-.stat-label {
+/* 索引统计抽屉：数值逐行列出，不再挤在行内一条横线里 */
+.stats-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stats-drawer-desc {
+  margin: 0;
   font-size: 12px;
   color: var(--tx-text-color-secondary);
-  font-weight: 400;
 }
 
-.stat-value {
-  font-size: 12px;
-  color: var(--tx-text-color-primary);
+.stats-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--tx-border-color);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.stats-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.stats-list-row + .stats-list-row {
+  border-top: 1px solid var(--tx-border-color);
+}
+
+.stats-list-label {
+  font-size: 13px;
+  color: var(--tx-text-color-secondary);
+}
+
+.stats-list-value {
+  font-size: 13px;
   font-weight: 600;
+  color: var(--tx-text-color-primary);
   font-variant-numeric: tabular-nums;
 }
 
-.stat-value.failed {
+.stats-list-value--warning {
+  color: #ff9500;
+}
+
+.stats-list-value--danger {
   color: #ff3b30;
 }
 
-.stat-value-btn {
+.stats-list-value-btn {
   display: inline-flex;
   align-items: center;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  padding: 1px 6px 1px 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.stat-value-btn.failed {
   color: #ff3b30;
-}
-
-.stat-value-btn:hover {
-  background: rgba(255, 59, 48, 0.1);
-}
-
-.stat-value.skipped {
-  color: #ff9500;
+  padding: 1px 6px 1px 0;
 }
 
 .error-trigger {
