@@ -44,7 +44,19 @@ const APPLICATION = {
 // that stale answer would then be handed to the next test.
 let osascriptReply: OsascriptReply = { stdout: '' }
 
+/**
+ * The module short-circuits to `null` off macOS, so the cases below run as if on darwin: nothing
+ * they cover is macOS-specific — the argv handoff, the payload parsing and the path ceiling are
+ * all plain logic — and on a Linux runner they would otherwise all answer `null` and fail without
+ * testing anything. The off-macOS guard case overrides this to `win32`.
+ */
+const hostPlatform = process.platform
+const setPlatform = (value: NodeJS.Platform): void => {
+  Object.defineProperty(process, 'platform', { value, configurable: true })
+}
+
 beforeEach(() => {
+  setPlatform('darwin')
   // The file exists unless a case says otherwise, so a null result can only come from the guard
   // under test rather than from an unrelated failure.
   accessMock.mockResolvedValue(undefined)
@@ -62,19 +74,15 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks()
+  setPlatform(hostPlatform)
 })
 
 describe('resolveDefaultApplicationTarget guards', () => {
   it('answers nothing off macOS', async () => {
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    setPlatform('win32')
+    osascriptReply = { stdout: JSON.stringify(APPLICATION) }
 
-    try {
-      osascriptReply = { stdout: JSON.stringify(APPLICATION) }
-      await expect(resolveDefaultApplicationTarget(FILE_PATH)).resolves.toBeNull()
-    } finally {
-      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
-    }
+    await expect(resolveDefaultApplicationTarget(FILE_PATH)).resolves.toBeNull()
   })
 
   it('never asks the OS about a path that is not absolute', async () => {
