@@ -751,6 +751,17 @@ const projectStore = useProjectStore()
  */
 const conversationId = ref<string | null>(null)
 const projectId = ref<string | null>(null)
+const currentProject = computed(() =>
+  projectId.value ? (projectStore.projects.find((p) => p.id === projectId.value) ?? null) : null
+)
+
+watch(
+  projectId,
+  (id) => {
+    projectStore.setActiveProjectId(id)
+  },
+  { immediate: true }
+)
 
 /**
  * Remote images in a reply are held back until the reader asks for them: an
@@ -789,6 +800,7 @@ async function resetBlankConversation(nextProjectId: string | null): Promise<voi
   conversation.reset()
   generatedTitle.value = null
   await nextTick()
+  inputRef.value?.focus()
   if (composerEl && first && !prefersReducedMotion()) {
     const dy = first.top - composerEl.getBoundingClientRect().top
     if (Math.abs(dy) > 8) choreography.playComposerFlip(dy)
@@ -955,6 +967,8 @@ watch(
       :panel-open="panelOpen"
       :turn="lastTurn"
       :message-count="messages.length"
+      :project-name="currentProject?.name"
+      :project-path="currentProject?.rootPath"
       @toggle-panel="panelOpen = !panelOpen"
     />
 
@@ -967,6 +981,14 @@ watch(
               <h1 class="HomePage-Greeting">
                 {{ t('home.greeting') }}
               </h1>
+              <div
+                v-if="currentProject"
+                class="HomePage-ProjectBadge"
+                :title="currentProject.rootPath"
+              >
+                <span class="i-ri-folder-2-line" />
+                <span>{{ currentProject.name }}</span>
+              </div>
             </div>
           </Transition>
 
@@ -1570,6 +1592,25 @@ watch(
   color: var(--shell-text-primary);
   font-size: var(--shell-fs-display);
   font-weight: 600;
+}
+
+.HomePage-ProjectBadge {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 4px 12px;
+  border: 1px solid var(--shell-border);
+  border-radius: 9999px;
+  background: var(--shell-surface-2);
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
+  font-weight: 500;
+  cursor: default;
+
+  span:first-child {
+    color: var(--shell-primary);
+  }
 }
 
 /** The stream component owns the scroll; this box only claims the flex space. */

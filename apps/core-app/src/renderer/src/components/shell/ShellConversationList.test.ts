@@ -364,6 +364,58 @@ describe('shellConversationList session rows', () => {
     expect(sentEvents).not.toContain(LocalAiCliEvents.terminal.create)
   })
 })
+describe('shellConversationList project new conversation actions', () => {
+  it('renders a direct new chat button on active project headers and begins project conversation', async () => {
+    listState.projects = [project({ id: 'p1', name: 'Active Project' })]
+    const wrapper = await mountList()
+    const store = useProjectStore()
+
+    const actionBtn = wrapper.find('.ShellConversationList-ActionBtn')
+    expect(actionBtn.exists()).toBe(true)
+    expect(actionBtn.attributes('title')).toBe('shell.projects.newChat')
+
+    await actionBtn.trigger('click')
+    await flushPromises()
+
+    expect(store.pendingProjectId).toBe('p1')
+    expect(store.activeProjectId).toBe('p1')
+    expect(pushMock).toHaveBeenCalledWith('/home')
+  })
+
+  it('renders an empty-state new chat row when the project has no conversations or sessions', async () => {
+    listState.projects = [project({ id: 'p1', name: 'Empty Project' })]
+    const wrapper = await mountList()
+    const store = useProjectStore()
+
+    const emptyBtn = wrapper.find('.ShellConversationList-EmptyNewChat')
+    expect(emptyBtn.exists()).toBe(true)
+    expect(emptyBtn.text()).toContain('shell.projects.newChat')
+
+    await emptyBtn.trigger('click')
+    await flushPromises()
+
+    expect(store.pendingProjectId).toBe('p1')
+    expect(store.activeProjectId).toBe('p1')
+    expect(pushMock).toHaveBeenCalledWith('/home')
+  })
+
+  it('starts a project conversation when clicking the project title button', async () => {
+    listState.projects = [project({ id: 'p1', name: 'Clickable Project' })]
+    const wrapper = await mountList()
+    const store = useProjectStore()
+
+    const titleBtn = wrapper.find('.ShellConversationList-ProjectTitleBtn')
+    expect(titleBtn.exists()).toBe(true)
+    expect(titleBtn.text()).toBe('Clickable Project')
+
+    await titleBtn.trigger('click')
+    await flushPromises()
+
+    expect(store.pendingProjectId).toBe('p1')
+    expect(store.activeProjectId).toBe('p1')
+    expect(pushMock).toHaveBeenCalledWith('/home')
+  })
+})
 
 describe('shellConversationList archived projects', () => {
   it('stays collapsed, then offers only unarchive and refuses to dispatch', async () => {
