@@ -1,5 +1,6 @@
 <script lang="ts" name="AgentDetail" setup>
 import type { AgentDescriptor, AgentTask } from '@talex-touch/utils'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { TuffProgress } from '@talex-touch/tuffex/progress'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxTag } from '@talex-touch/tuffex/tag'

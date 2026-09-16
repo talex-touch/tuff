@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DownloadHistory } from '@talex-touch/utils'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxEmpty } from '@talex-touch/tuffex/empty'
 import { TxPagination } from '@talex-touch/tuffex/pagination'
