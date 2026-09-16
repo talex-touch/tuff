@@ -14,12 +14,23 @@ import type {
   AppIndexDiagnoseRequest,
   AppIndexDiagnoseResult,
   AppIndexEntryMutationResult,
+  AppIndexGetAliasesRequest,
+  AppIndexGetAliasesResult,
+  AppIndexLaunchRequest,
+  AppIndexLaunchResult,
+  AppIndexSetAliasesRequest,
+  AppIndexGetShortcutRequest,
+  AppIndexGetShortcutResult,
+  AppIndexSetShortcutRequest,
   AppIndexManagedEntry,
   AppIndexReindexRequest,
   AppIndexReindexResult,
   AppIndexRemoveEntryRequest,
   AppIndexSetEntryEnabledRequest,
+  AppIndexUsageRequest,
+  AppIndexUsageResult,
   AppIndexSettings,
+  AppIndexSummariesResult,
   AppIndexUpsertEntryRequest,
 } from "../../events/types/app-index";
 import type {
@@ -136,6 +147,7 @@ export interface SettingsSdk {
       payload: AppIndexAddPathRequest,
     ) => Promise<AppIndexAddPathResult>;
     listEntries: () => Promise<AppIndexManagedEntry[]>;
+    listSummaries: () => Promise<AppIndexSummariesResult>;
     upsertEntry: (
       payload: AppIndexUpsertEntryRequest,
     ) => Promise<AppIndexEntryMutationResult>;
@@ -151,6 +163,20 @@ export interface SettingsSdk {
     reindex: (
       payload: AppIndexReindexRequest,
     ) => Promise<AppIndexReindexResult>;
+    getAliases: (
+      payload: AppIndexGetAliasesRequest,
+    ) => Promise<AppIndexGetAliasesResult>;
+    getShortcut: (
+      payload: AppIndexGetShortcutRequest,
+    ) => Promise<AppIndexGetShortcutResult>;
+    setShortcut: (
+      payload: AppIndexSetShortcutRequest,
+    ) => Promise<AppIndexEntryMutationResult>;
+    setAliases: (
+      payload: AppIndexSetAliasesRequest,
+    ) => Promise<AppIndexEntryMutationResult>;
+    launch: (payload: AppIndexLaunchRequest) => Promise<AppIndexLaunchResult>;
+    usage: (payload: AppIndexUsageRequest) => Promise<AppIndexUsageResult>;
   };
   analytics: {
     getSnapshot: (
@@ -239,6 +265,7 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
         transport.send(AppEvents.appIndex.updateSettings, settings),
       addPath: (payload) => transport.send(AppEvents.appIndex.addPath, payload),
       listEntries: () => transport.send(AppEvents.appIndex.listEntries),
+      listSummaries: () => transport.send(AppEvents.appIndex.listSummaries),
       upsertEntry: (payload) =>
         transport.send(AppEvents.appIndex.upsertEntry, payload),
       removeEntry: (payload) =>
@@ -248,6 +275,16 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
       diagnose: (payload) =>
         transport.send(AppEvents.appIndex.diagnose, payload),
       reindex: (payload) => transport.send(AppEvents.appIndex.reindex, payload),
+      launch: (payload) => transport.send(AppEvents.appIndex.launch, payload),
+      usage: (payload) => transport.send(AppEvents.appIndex.usage, payload),
+      getAliases: (payload) =>
+        transport.send(AppEvents.appIndex.getAliases, payload),
+      setAliases: (payload) =>
+        transport.send(AppEvents.appIndex.setAliases, payload),
+      getShortcut: (payload) =>
+        transport.send(AppEvents.appIndex.getShortcut, payload),
+      setShortcut: (payload) =>
+        transport.send(AppEvents.appIndex.setShortcut, payload),
     },
     analytics: {
       getSnapshot: (windowType) =>

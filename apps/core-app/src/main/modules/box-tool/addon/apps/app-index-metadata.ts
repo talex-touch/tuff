@@ -122,6 +122,21 @@ export function resolveAppItemIds(value: {
   ])
 }
 
+/**
+ * The catalog item id for a managed entry, as the usage tables key it.
+ *
+ * A managed entry is the renderer-facing projection and carries fewer identity columns than the
+ * scanned app it came from — no `stableId` or `appIdentity` — so it resolves through the same
+ * precedence with the fields it does have. Getting this wrong means a launch is recorded under an
+ * id no aggregate row shares, and the count silently lands in its own bucket.
+ */
+export function resolveManagedEntryItemId(entry: {
+  bundleId?: string | null
+  path: string
+}): string {
+  return resolveAppItemId({ bundleId: entry.bundleId, path: entry.path })
+}
+
 export function isManagedEntryExtensionMap(extensions: AppExtensionMap | undefined): boolean {
   return extensions?.[APP_ENTRY_SOURCE_EXTENSION_KEY] === APP_ENTRY_SOURCE_MANUAL
 }

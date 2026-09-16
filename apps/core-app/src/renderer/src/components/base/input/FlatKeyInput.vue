@@ -1,15 +1,28 @@
 <script setup lang="ts">
 import { useVModel } from '@vueuse/core'
+import { useI18n } from 'vue-i18n'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import FlatInput from './FlatInput.vue'
 
-const props = defineProps<{
-  modelValue: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: string
+    /**
+     * Opt-in clear affordance. Only hosts that can actually drop a binding should enable it: the
+     * settings and plugin rows treat an empty accelerator as a no-op, so a clear button there
+     * would silently do nothing.
+     */
+    clearable?: boolean
+  }>(),
+  { clearable: false }
+)
 const emits = defineEmits<{
   (e: 'update:modelValue', val: string): void
 }>()
+
+const { t } = useI18n()
 
 const model = useVModel(props, 'modelValue', emits)
 const { isMac } = useRendererPlatform()
@@ -26,8 +39,6 @@ const SPECIAL_KEYS: Record<string, string> = {
   ArrowDown: 'Down',
   ArrowLeft: 'Left',
   ArrowRight: 'Right',
-  Escape: 'Esc',
-  Esc: 'Esc',
   Enter: 'Enter',
   Return: 'Enter',
   Tab: 'Tab',
@@ -101,6 +112,14 @@ function formatAccelerator(event: KeyboardEvent): string | null {
 }
 
 function startRecord(e: KeyboardEvent) {
+  // Escape is the cancel key everywhere else in the app, so it ends the capture instead of becoming
+  // a binding. The event is deliberately not default-prevented: the drawer or dialog hosting this
+  // field needs that same Escape to close, which stays broken while the field swallows the key.
+  if (e.key === 'Escape') {
+    ;(e.currentTarget as HTMLElement | null)?.blur()
+    return
+  }
+
   e.preventDefault()
 
   const accelerator = formatAccelerator(e)
@@ -110,20 +129,84 @@ function startRecord(e: KeyboardEvent) {
 
   model.value = accelerator
 }
+
+/** Empty means "no binding"; the host decides whether that unbinds or is refused. */
+function clearBinding(): void {
+  model.value = ''
+}
 </script>
 
 <template>
-  <FlatInput
-    v-model="model"
-    class="FlatKeyInput-Control"
-    tabindex="0"
-    @keydown="startRecord"
-    @focus="shortconApi.disableAll"
-    @blur="shortconApi.enableAll"
-  />
+  <div class="FlatKeyInput">
+    <FlatInput
+      v-model="model"
+      class="FlatKeyInput-Control"
+      :class="{ 'is-clearable': clearable }"
+      tabindex="0"
+      @keydown="startRecord"
+      @focus="shortconApi.disableAll"
+      @blur="shortconApi.enableAll"
+    />
+    <button
+      v-if="clearable"
+      type="button"
+      class="FlatKeyInput-Clear"
+      :disabled="!model"
+      :aria-label="t('common.clearShortcut')"
+      :title="t('common.clearShortcut')"
+      @click="clearBinding"
+    >
+      <RemixIcon name="close" :style="'line'" />
+    </button>
+  </div>
 </template>
 
 <style scoped>
+.FlatKeyInput {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Keeps the longest accelerators off the button without moving the field's own box. */
+:deep(.FlatKeyInput-Control.is-clearable input) {
+  padding-right: 20px;
+}
+
+.FlatKeyInput-Clear {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+
+  background: transparent;
+  color: var(--tx-text-color-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+
+  transition:
+    color 0.2s,
+    background-color 0.2s;
+
+  &:hover:not(:disabled) {
+    color: var(--tx-text-color-primary);
+    background-color: var(--tx-fill-color);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
 :deep(.FlatKeyInput-Control) {
   min-width: 220px;
   max-width: 300px;
