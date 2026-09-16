@@ -1525,8 +1525,8 @@ importers:
         specifier: ^0.2.3
         version: 0.2.3
       '@unocss/eslint-config':
-        specifier: ^66.7.5
-        version: 66.7.5(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+        specifier: ^66.10.2
+        version: 66.10.2(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
       '@unocss/reset':
         specifier: ^66.7.5
         version: 66.7.5
@@ -1676,8 +1676,8 @@ importers:
         specifier: 24.13.2
         version: 24.13.2
       '@unocss/eslint-config':
-        specifier: ^66.7.5
-        version: 66.7.5(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
+        specifier: ^66.10.2
+        version: 66.10.2(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
       '@unocss/eslint-plugin':
         specifier: ^66.7.5
         version: 66.7.5(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
@@ -6523,9 +6523,6 @@ packages:
 
   '@unocss/eslint-config@66.10.2':
     resolution: {integrity: sha512-QhuF2AhKPwswL2AC2x762XWnlRRe7S4nLutyw1wOSIi21M4btVgw20bWhC3PhX3obU+0zIgcPDZJlcpeYCt7bg==}
-
-  '@unocss/eslint-config@66.7.5':
-    resolution: {integrity: sha512-uFy7R0Fmb881p9Arv+ZFmnSzjhL+7E26bIsY8LKX+ueKUvzCFcQ1+OQ6cuHfriau9lwZ4iG7T4sGW8oYayNOYQ==}
 
   '@unocss/eslint-plugin@66.10.2':
     resolution: {integrity: sha512-aLmbgMcBLRVcsc/fyDGtFA1Cvpxs6w+j5c188i6KdQiQO81dQiBBdXO9HPZ5p+haRWMqayjcJJyQmnAQkdFmpg==}
@@ -19415,7 +19412,7 @@ snapshots:
   '@stylistic/eslint-plugin@5.10.0(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))':
     dependencies:
       '@eslint-community/eslint-utils': 4.9.1(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))
-      '@typescript-eslint/types': 8.64.0
+      '@typescript-eslint/types': 8.70.0
       eslint: 9.39.4(jiti@2.7.0)(supports-color@10.2.2)
       eslint-visitor-keys: 4.2.1
       espree: 10.4.0
@@ -20013,14 +20010,6 @@ snapshots:
   '@unocss/eslint-config@66.10.2(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)':
     dependencies:
       '@unocss/eslint-plugin': 66.10.2(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
-    transitivePeerDependencies:
-      - eslint
-      - supports-color
-      - typescript
-
-  '@unocss/eslint-config@66.7.5(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)':
-    dependencies:
-      '@unocss/eslint-plugin': 66.7.5(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@5.9.3)
     transitivePeerDependencies:
       - eslint
       - supports-color
