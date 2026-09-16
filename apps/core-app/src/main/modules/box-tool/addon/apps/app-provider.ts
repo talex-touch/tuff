@@ -109,6 +109,11 @@ import { AppProviderSourceScanner } from './app-provider-source-scanner'
 import { AppIndexedSourceRecordMapper } from './services/app-index-record-sync-service'
 import { AppIndexMaintenanceService } from './services/app-index-maintenance-service'
 import { AppManagedEntryService } from './services/app-managed-entry-service'
+// Leaf modules: they reach the database, the launcher and the active-app service only, never back
+// into search-core, so they do not re-enter the module cycle documented above. The three stores
+// and the entry actions live behind them, which is why this file only wires them.
+import { AppManagedEntryActionsService } from './services/app-managed-entry-actions-service'
+import { AppUserAliasService } from './services/app-user-alias-service'
 import {
   isProbablyCorruptedDisplayName,
   normalizeDisplayName,
@@ -467,7 +472,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private isInitializing: Promise<void> | null = null
   private readonly isMac = process.platform === 'darwin'
   private processingPaths: Set<string> = new Set()
-  private aliases: Record<string, string[]> = {}
   private searchIndex: SearchIndexService | null = null
   private appIndexSettings: AppIndexSettings = { ...DEFAULT_APP_INDEX_SETTINGS }
   private startupBackfillStarted = false
@@ -513,6 +517,24 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     generateKeywords: (app) => this._generateKeywordsForApp(app),
     getAliases: (app) => this._getAliasesForApp(app),
     resolveToolSourceIds: (app) => this.resolveScannedAppToolSourceIds(app)
+  })
+  private readonly userAliases = new AppUserAliasService({ getDbUtils: () => this.dbUtils })
+  /**
+   * The index manager's API: summaries, aliases, launch shortcuts, launch and usage.
+   *
+   * Public because the transport handlers are its only caller and it owns that whole surface —
+   * `app-provider.ts` keeps the wiring, not a pass-through per method (#343).
+   */
+  public readonly entryActions = new AppManagedEntryActionsService({
+    getDbUtils: () => this.dbUtils,
+    listEntries: async () => await this.listManagedEntries(),
+    aliases: this.userAliases,
+    mapDbAppToScannedInfo: (app) => this._mapDbAppToScannedInfo(app),
+    toExtensionMap: (records) => this.toExtensionMap(records),
+    publishUpsert: async (appInfo, reason) => {
+      await this.publishAppRuntimeUpsert(appInfo, reason)
+    },
+    runMutation: (operation) => this.runExternalAppMutation(operation)
   })
   private readonly managedEntries = new AppManagedEntryService({
     getDbUtils: () => this.dbUtils,
@@ -855,6 +877,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this.searchIndex = context.searchIndex
 
     this.loadAppIndexSettings()
+    // Before any scan publishes a projection: `resolveAliasesForApp` folds this map in, so an
+    // empty map at scan time silently drops every user alias from the search index. Awaited
+    // because `_scheduleFullSync` below is what publishes those projections.
+    await this.userAliases.load()
+    // Accelerators survive a restart in the shortcut store, but their callbacks cannot be
+    // serialized: without this the key is registered with the OS and does nothing.
+    await this.entryActions.restoreShortcuts()
     this._scheduleFullSync()
     this._scheduleStartupIndexHealthCheck()
     this._scheduleSemanticAliasCatalogSync()
@@ -1423,16 +1452,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return await this.runExternalAppMutation(
       async () => await this.managedEntries.setEnabled(pathValue, enabled)
     )
-  }
-
-  public async setAliases(aliases: Record<string, string[]>): Promise<void> {
-    await this.runExternalAppMutation(async () => {
-      this.aliases = aliases
-      logApp(
-        'App aliases updated; the next runtime scan will publish the new search projection',
-        LogStyle.info
-      )
-    })
   }
 
   private resolveScannedAppKey(
@@ -2651,14 +2670,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private resolveAliasesForApp(appInfo: ScannedAppInfo): string[] {
-    const uniqueId = resolveAppItemId(appInfo)
-    const aliasesById = this.aliases[uniqueId] || []
-    const aliasesByPath = this.aliases[appInfo.path] || []
-    const aliasesByBundleId = this.aliases[appInfo.bundleId] || []
     return normalizeStringList([
-      ...aliasesById,
-      ...aliasesByPath,
-      ...aliasesByBundleId,
+      ...this.userAliases.resolveForApp(appInfo),
       ...resolveScannedAppSemanticAliases(appInfo)
     ]).map((alias) => alias.toLowerCase())
   }
@@ -3797,7 +3810,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       filteredAppsWithExtensions,
       query,
       isFuzzySearch,
-      this.aliases
+      (app) => this.userAliases.resolveForApp(app)
     )
 
     if (signal?.aborted) {

@@ -16,7 +16,7 @@ import { resolveLocalFilePath, toTfileUrl } from '@talex-touch/utils/network'
 import { buildAppSearchTokens, matchFeature } from '@talex-touch/utils/search'
 import chalk from 'chalk'
 import { pinyin } from 'pinyin-pro'
-import type { AppLaunchKind } from './app-types'
+import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 import type { AppToolSourceId } from './app-tool-source-catalog'
 import { formatLog, LogStyle, parseStringList } from './app-utils'
 import { resolveDisplayName } from './display-name-sync-utils'
@@ -358,7 +358,12 @@ export async function processSearchResults(
   apps: AppSearchRow[],
   query: TuffQuery,
   isFuzzySearch: boolean,
-  aliases: Record<string, string[]> // 需要传入别名数据
+  /**
+   * Every alias one app should be searchable under, already folded across the keys an alias can
+   * be written against. The map lives in `AppUserAliasService`, which owns that fold - passing it
+   * raw meant this function re-implemented the key precedence and could drift from it.
+   */
+  resolveAliases: (app: Pick<ScannedAppInfo, 'bundleId' | 'stableId' | 'path'>) => string[]
 ): Promise<ProcessedTuffItem[]> {
   const processStart = startTiming()
   const queryText = query.text.trim()
@@ -373,9 +378,11 @@ export async function processSearchResults(
     const displayName = resolveDisplayName(app.displayName, app.name)
     const alternateNames = parseStringList(app.extensions[ALTERNATE_NAMES_EXTENSION_KEY])
     const appIdentity = app.extensions.appIdentity || ''
-    const uniqueId = appIdentity || app.path || app.extensions.bundleId || ''
-    const aliasList =
-      aliases[uniqueId] || aliases[app.path] || aliases[app.extensions.bundleId || ''] || []
+    const aliasList = resolveAliases({
+      bundleId: app.extensions.bundleId || '',
+      stableId: appIdentity,
+      path: app.path
+    })
     const displayPath = app.extensions.displayPath || app.path
     const description = app.extensions.description || ''
     const derived = resolveAppSearchDerived({

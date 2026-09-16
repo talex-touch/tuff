@@ -70,10 +70,14 @@ function handleClick(event: MouseEvent) {
 
   .TBlockLine-Description {
     flex: 1;
+    // A flex item's floor is its content width unless told otherwise, so an unbroken value —
+    // a filesystem path, say — pushed the row past the pane's right edge and clipped itself.
+    min-width: 0;
     color: var(--tx-text-color-secondary);
     font-size: 13px;
     line-height: 1.4;
     white-space: pre-line;
+    overflow-wrap: anywhere;
   }
 
   .TBlockLine-LinkSlot {

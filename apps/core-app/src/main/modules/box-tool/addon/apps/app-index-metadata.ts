@@ -122,6 +122,27 @@ export function resolveAppItemIds(value: {
   ])
 }
 
+/**
+ * The catalog item id for a managed entry, as the usage tables key it.
+ *
+ * Resolves through the same precedence the scanned side uses, including the persisted
+ * `extensions.appIdentity` the projection carries. Without it a launch from the settings surface
+ * is recorded under the path while the same app's search launches are recorded under its stable
+ * id — one application, two buckets, and counts that omit whichever surface the query did not
+ * name.
+ */
+export function resolveManagedEntryItemId(entry: {
+  appIdentity?: string | null
+  bundleId?: string | null
+  path: string
+}): string {
+  return resolveAppItemId({
+    appIdentity: entry.appIdentity,
+    bundleId: entry.bundleId,
+    path: entry.path
+  })
+}
+
 export function isManagedEntryExtensionMap(extensions: AppExtensionMap | undefined): boolean {
   return extensions?.[APP_ENTRY_SOURCE_EXTENSION_KEY] === APP_ENTRY_SOURCE_MANUAL
 }

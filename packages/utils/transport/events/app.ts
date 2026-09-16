@@ -59,6 +59,12 @@ import type {
   AppIndexDiagnoseRequest,
   AppIndexDiagnoseResult,
   AppIndexEntryMutationResult,
+  AppIndexGetAliasesRequest,
+  AppIndexGetAliasesResult,
+  AppIndexLaunchRequest,
+  AppIndexLaunchResult,
+  AppIndexGetShortcutRequest,
+  AppIndexGetShortcutResult,
   AppIndexManagedEntry,
   AppIndexReindexRequest,
   AppIndexReindexResult,
@@ -66,6 +72,11 @@ import type {
   AppIndexSetEntryEnabledRequest,
   AppIndexSettings,
   AppIndexUpsertEntryRequest,
+  AppIndexSetAliasesRequest,
+  AppIndexSetShortcutRequest,
+  AppIndexSummariesResult,
+  AppIndexUsageRequest,
+  AppIndexUsageResult,
 } from './types/app-index'
 
 import type { DeviceIdleDiagnostic, DeviceIdleSettings } from './types/device-idle'
@@ -512,6 +523,14 @@ export const AppEvents = {
     listEntries: defineEvent('app').module('app-index').event('entries.list').define<void, AppIndexManagedEntry[]>(),
 
     /**
+     * Usage totals and shortcut/alias state for every entry, in one read.
+     */
+    listSummaries: defineEvent('app')
+      .module('app-index')
+      .event('summaries.list')
+      .define<void, AppIndexSummariesResult>(),
+
+    /**
      * Create or update a user-managed launcher entry.
      */
     upsertEntry: defineEvent('app')
@@ -550,6 +569,59 @@ export const AppEvents = {
       .module('app-index')
       .event('reindex')
       .define<AppIndexReindexRequest, AppIndexReindexResult>(),
+
+    /**
+     * Launch one indexed application, recording the launch against the entry point that asked.
+     *
+     * Distinct from `system.openApp`, which is a generic shell affordance with no idea which
+     * catalog row it is opening: routing the settings page through that handler is why launches
+     * from it were invisible to every per-app statistic.
+     */
+    launch: defineEvent('app')
+      .module('app-index')
+      .event('launch')
+      .define<AppIndexLaunchRequest, AppIndexLaunchResult>(),
+
+    /**
+     * Per-application usage: totals, time-of-day distribution, entry-point split and the apps
+     * the user came from.
+     */
+    usage: defineEvent('app')
+      .module('app-index')
+      .event('usage')
+      .define<AppIndexUsageRequest, AppIndexUsageResult>(),
+
+    /**
+     * Read the user-authored aliases for one entry.
+     */
+    getAliases: defineEvent('app')
+      .module('app-index')
+      .event('aliases.get')
+      .define<AppIndexGetAliasesRequest, AppIndexGetAliasesResult>(),
+
+    /**
+     * Replace the user-authored aliases for one entry, leaving other entries untouched.
+     */
+    setAliases: defineEvent('app')
+      .module('app-index')
+      .event('aliases.set')
+      .define<AppIndexSetAliasesRequest, AppIndexEntryMutationResult>(),
+
+    /**
+     * Read the launch shortcut bound to one entry.
+     */
+    getShortcut: defineEvent('app')
+      .module('app-index')
+      .event('shortcut.get')
+      .define<AppIndexGetShortcutRequest, AppIndexGetShortcutResult>(),
+
+    /**
+     * Bind, rebind or clear the launch shortcut for one entry.
+     */
+    setShortcut: defineEvent('app')
+      .module('app-index')
+      .event('shortcut.set')
+      .define<AppIndexSetShortcutRequest, AppIndexEntryMutationResult>(),
   },
 
   /**

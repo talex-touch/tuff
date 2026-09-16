@@ -1,317 +1,456 @@
 <script name="AppList" setup lang="ts">
 import type { ITuffIcon } from '@talex-touch/utils'
-import type { AppConfigureData } from './AppConfigure.vue'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxPopover } from '@talex-touch/tuffex/popover'
+import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
 export interface AppListItem {
+  id: string
   name: string
   icon?: ITuffIcon
-  matched?: [number, number]
-  configure?: AppConfigureData
+  /** Indexed but excluded from search recall; the row says so rather than hiding the entry. */
+  disabled?: boolean
+  /** Recorded launches, used by the frequency view. Absent until summaries have loaded. */
+  executeCount?: number
+  hasShortcut?: boolean
+  hasAliases?: boolean
 }
 
 const props = defineProps<{
-  list: AppListItem[]
-  index: number
+  items: AppListItem[]
+  selectedId?: string | null
+  loading?: boolean
+  loadFailed?: boolean
+  /**
+   * The summaries read failed, so every row's totals and configured-state flags are absent. The
+   * rows still list; what cannot be told is how often each app was launched.
+   */
+  usageDegraded?: boolean
+  /** Only decides which count sentence to print; the page owns the search field. */
+  searched?: boolean
 }>()
 
 const emits = defineEmits<{
-  (e: 'search', val: string): void
-  (e: 'select', val: AppListItem | null, ind: number): void
+  (e: 'select', id: string | null): void
+  (e: 'retry'): void
 }>()
 
 const { t } = useI18n()
 
-enum EOrderWay {
-  SORT_DESC = 0, // default
-  DIC = 1,
-  D_DIC = 2,
-  FREQ = 3
+/**
+ * How the list orders and narrows itself. Each mode is the entire view rather than a sort key
+ * applied on top of a filter, so the control stays a single choice.
+ */
+export type AppListView = 'dictionary' | 'frequency' | 'shortcut' | 'alias'
+
+const VIEW_MODES: AppListView[] = ['dictionary', 'frequency', 'shortcut', 'alias']
+
+/** Same icons the detail pane uses for the matching block, so a mode reads as that block. */
+const VIEW_ICONS: Record<AppListView, string> = {
+  dictionary: 'i-ri-sort-alphabet-asc',
+  frequency: 'i-ri-fire-line',
+  shortcut: 'i-carbon-keyboard',
+  alias: 'i-carbon-tag'
 }
 
-const _list = ref<AppListItem[]>([])
-const search = ref('')
-const orderWay = ref<EOrderWay>(0)
+const SKELETON_ROWS = 8
 
-watch(
-  () => props.list,
-  () => {
-    _list.value = [...props.list]
+const view = ref<AppListView>('dictionary')
+const viewMenuOpen = ref(false)
+/** Only these two drop rows; the other two reorder the whole list. */
+const isFilterView = computed(() => view.value === 'shortcut' || view.value === 'alias')
 
-    handleOrderWay()
+/** A fast first read must not flash a skeleton; a slow one must not show an empty list. */
+const showSkeleton = useDeferredLoading(() => Boolean(props.loading))
 
-    emits('select', null, -1)
-  },
-  { immediate: true }
+const orderedItems = computed(() => {
+  const items =
+    view.value === 'shortcut'
+      ? props.items.filter((item) => item.hasShortcut)
+      : view.value === 'alias'
+        ? props.items.filter((item) => item.hasAliases)
+        : props.items
+
+  // Most launched first, with never-launched rows last and names breaking ties, so the order does
+  // not reshuffle between reads of equal counts.
+  if (view.value === 'frequency') {
+    return [...items].sort(
+      (a, b) => (b.executeCount ?? 0) - (a.executeCount ?? 0) || a.name.localeCompare(b.name)
+    )
+  }
+
+  return [...items].sort((a, b) => a.name.localeCompare(b.name))
+})
+
+const countText = computed(() => {
+  const count = orderedItems.value.length
+  if (props.searched) return t('appList.searchedOnDevice', { count })
+  if (isFilterView.value) return t('appList.filteredOnDevice', { count })
+  return t('appList.appsOnDevice', { count })
+})
+
+/**
+ * An empty index and a filter that matched nothing are different facts: "this device has no
+ * applications" would be a lie when the list is merely narrowed.
+ */
+const emptyText = computed(() =>
+  props.searched || isFilterView.value
+    ? countText.value
+    : t('settings.settingFileIndex.appIndexManagerEmpty')
 )
 
-function handleOrderWay() {
-  if (orderWay.value === EOrderWay.SORT_DESC) {
-    _list.value = [...props.list]
-    return
-  }
-
-  if (orderWay.value === EOrderWay.DIC) {
-    _list.value = _list.value!.sort((a, b) => a.name.localeCompare(b.name))
-    return
-  }
-
-  if (orderWay.value === EOrderWay.D_DIC) {
-    _list.value = _list.value!.sort((a, b) => b.name.localeCompare(a.name))
-  }
+function selectView(next: AppListView): void {
+  view.value = next
+  viewMenuOpen.value = false
 }
 
-function handleOrderChange() {
-  orderWay.value = (orderWay.value + 1) % 4
-
-  handleOrderWay()
-
-  emits('select', null, -1)
-}
-
-watch(
-  () => search.value,
-  (val) => {
-    emits('search', val)
-    // _list.value = props.list.filter(item => item.name.includes(val))
-  }
-)
-
-function highlightParts(text: string, matched: [number, number]) {
-  const [startIndex, endIndex] = matched
-  return text.split('').map((char, index) => ({
-    text: char,
-    matched: index >= startIndex && index <= endIndex
-  }))
-}
-
-function handleClick(item: AppListItem, ind: number) {
+function handleClick(item: AppListItem): void {
   // Repeat click => cancel
-  if (props.index === ind) {
-    emits('select', null, -1)
-    return
-  }
-  emits('select', item, ind)
+  emits('select', props.selectedId === item.id ? null : item.id)
 }
 </script>
 
 <template>
-  <TxScroll>
-    <TransitionGroup name="list" tag="ul" class="AppList">
-      <div class="AppList-Toolbox">
-        <FlatInput v-model="search" :placeholder="t('appList.searchPlaceholder')" :fetch="search" />
+  <div class="AppList-Scroll">
+    <ul v-if="showSkeleton" class="AppList" aria-hidden="true">
+      <li v-for="row in SKELETON_ROWS" :key="row" class="AppList-Row is-skeleton">
+        <TxSkeleton variant="rect" :width="32" :height="32" :radius="8" />
+        <TxSkeleton :width="140" :height="13" :radius="4" />
+      </li>
+    </ul>
 
-        <button
-          type="button"
-          class="order-way"
-          :aria-label="t('appList.order.change')"
-          @click="handleOrderChange"
-        >
-          <i v-if="orderWay === 0" class="i-ri-sort-desc" />
-          <i v-if="orderWay === 1" class="i-ri-sort-alphabet-asc" />
-          <i v-if="orderWay === 2" class="i-ri-sort-alphabet-desc" />
-          <i v-if="orderWay === 3" class="i-ri-sort-number-asc" />
-        </button>
-      </div>
+    <div v-else-if="loadFailed" class="AppList-Empty" role="status">
+      <span>{{ t('settings.settingFileIndex.appIndexManagerLoadFailed') }}</span>
+      <TxButton variant="flat" size="sm" @click="emits('retry')">
+        {{ t('common.retry') }}
+      </TxButton>
+    </div>
+
+    <div v-else-if="!orderedItems.length" class="AppList-Empty" role="status">
+      <span>{{ emptyText }}</span>
+    </div>
+
+    <TransitionGroup v-else name="list" tag="ul" class="AppList">
       <li
-        v-for="(item, ind) in _list"
-        :key="`${item.name}-${ind}`"
-        :data-index="ind"
-        class="fake-background"
-        :class="{ active: index === ind }"
+        v-for="item in orderedItems"
+        :key="item.id"
+        class="AppList-Row fake-background"
+        :class="{ active: selectedId === item.id, 'is-disabled': item.disabled }"
         role="button"
         tabindex="0"
-        :aria-selected="index === ind"
-        @click="handleClick(item, ind)"
-        @keydown.enter.prevent="handleClick(item, ind)"
-        @keydown.space.prevent="handleClick(item, ind)"
+        :aria-pressed="selectedId === item.id"
+        @click="handleClick(item)"
+        @keydown.enter.prevent="handleClick(item)"
+        @keydown.space.prevent="handleClick(item)"
       >
         <div class="AppList-IconContainer">
-          <PluginIcon v-if="item.icon" :icon="item.icon" :alt="item.name" />
+          <PluginIcon v-if="item.icon" :icon="item.icon" :alt="item.name" :size="32" />
           <div v-else class="AppList-IconPlaceholder">
             <i class="i-ri-apps-2-line" />
           </div>
         </div>
 
-        <div class="Main">
-          <p v-if="item.matched">
-            <span
-              v-for="(part, partIndex) in highlightParts(item.name, item.matched)"
-              :key="partIndex"
-              :class="{ matched: part.matched }"
-            >
-              {{ part.text }}
-            </span>
-          </p>
-          <p v-else v-text="item.name" />
-          <!-- <p class="desc">{{ item.desc }}</p> -->
-        </div>
+        <span class="AppList-Name">{{ item.name }}</span>
+
+        <span v-if="item.disabled" class="AppList-Flag">
+          {{ t('settings.settingFileIndex.appIndexManagerEntryDisabled') }}
+        </span>
       </li>
     </TransitionGroup>
-    <div class="AppList-Info fake-background">
-      <span v-if="search">{{ t('appList.searchedOnDevice', { count: _list!.length }) }}</span>
-      <span v-else>{{ t('appList.appsOnDevice', { count: _list!.length }) }}</span>
-      <span class="order">
-        <span v-if="orderWay === 0">{{ t('appList.order.default') }}</span>
-        <span v-if="orderWay === 1">{{ t('appList.order.dicIn') }}</span>
-        <span v-if="orderWay === 2">{{ t('appList.order.dicDe') }}</span>
-        <span v-if="orderWay === 3">{{ t('appList.order.freq') }}</span>
-      </span>
+
+    <!--
+      Zeros are not shown for a read that failed: the frequency view would then rank every app
+      equally and claim none was ever launched, which is a statement about the data rather than
+      about the database.
+    -->
+    <p v-if="usageDegraded && !loadFailed" class="AppList-Notice" role="status">
+      {{ t('appList.usageUnavailable') }}
+    </p>
+
+    <div class="AppList-Info">
+      <span>{{ countText }}</span>
+
+      <TxPopover
+        v-model="viewMenuOpen"
+        placement="top-end"
+        :width="200"
+        :match-reference-width="false"
+        :toggle-on-reference-click="false"
+      >
+        <template #reference>
+          <button
+            type="button"
+            class="AppList-Order"
+            :aria-label="t('appList.view.change')"
+            @click.stop="viewMenuOpen = !viewMenuOpen"
+          >
+            <i :class="VIEW_ICONS[view]" aria-hidden="true" />
+            <span>{{ t(`appList.view.${view}`) }}</span>
+          </button>
+        </template>
+
+        <ul class="AppList-ViewMenu" role="menu" :aria-label="t('appList.view.change')">
+          <li v-for="mode in VIEW_MODES" :key="mode">
+            <button
+              type="button"
+              role="menuitemradio"
+              class="AppList-ViewOption"
+              :class="{ active: view === mode }"
+              :aria-checked="view === mode"
+              @click="selectView(mode)"
+            >
+              <i :class="VIEW_ICONS[mode]" aria-hidden="true" />
+              <span>{{ t(`appList.view.${mode}`) }}</span>
+              <i
+                v-if="view === mode"
+                class="i-ri-check-line AppList-ViewOptionCheck"
+                aria-hidden="true"
+              />
+            </button>
+          </li>
+        </ul>
+      </TxPopover>
     </div>
-  </TxScroll>
+  </div>
 </template>
 
-<style lang="scss">
+<style lang="scss" scoped>
+// The aside scroller above owns scrolling and the gutter; this is only a full-height wrapper
+// so the sticky count footer has a containing block.
+.AppList-Scroll {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
 .list-enter-active,
 .list-leave-active {
-  transition: all 0.5s ease;
+  transition: all 0.25s ease;
 }
 
 .list-enter-from,
 .list-leave-to {
   opacity: 0;
-  transform: translateX(30px);
+  transform: translateX(16px);
 }
 
-.AppList-Info {
-  span {
-    opacity: 0.75;
-    font-size: 0.8rem;
-  }
-
-  .order span {
-    font-size: 0.7rem;
-  }
-
-  position: sticky;
+.AppList {
   display: flex;
-  padding: 0.25rem 0.75rem;
-
-  justify-content: space-between;
-
-  bottom: 0;
-
-  // background-color: var(--tx-fill-color);
-  backdrop-filter: blur(18px) saturate(180%);
-}
-
-.AppList-Toolbox {
-  .order-way {
-    appearance: none;
-    padding: 0;
-    border: 0;
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-
-    font-size: 1.25rem;
-    color: inherit;
-    background-color: var(--tx-fill-color-dark);
-    border-radius: 8px;
-    cursor: pointer;
-
-    &:hover {
-      background-color: var(--tx-color-primary-light-5);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--tx-color-primary);
-      outline-offset: 2px;
-    }
-  }
-
-  z-index: 100;
-  position: sticky;
-  display: flex;
-  padding: 0.25rem;
-
-  justify-content: space-between;
-
-  top: 0;
-
+  flex-direction: column;
   gap: 0.5rem;
-  border-radius: 8px;
-  background-color: var(--tx-fill-color);
+  margin: 0;
+  // The shell's aside scroller already supplies the 12px gutter. Padding here would sit inside
+  // it and push every row a further 8px in, leaving a dead strip the search field does not have.
+  padding: 0;
+  list-style: none;
 }
 
-.AppList li {
-  &.active {
-    --fake-color: var(--tx-color-primary-light-5);
-    border: 1px solid var(--tx-color-primary);
-  }
-
-  padding: 0 0.5rem;
-
-  top: 0.5rem;
-
+.AppList-Row {
   display: flex;
+  gap: 0.5rem;
   align-items: center;
-  gap: 0.5rem;
-
+  height: 48px;
+  padding: 0 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
   cursor: pointer;
   transition: 0.25s;
-  border: 1px solid transparent;
+  --fake-color: var(--tx-fill-color);
+
+  &.active {
+    --fake-color: var(--tx-color-primary-light-5);
+    border-color: var(--tx-color-primary);
+  }
+
+  // Still indexed, just not recalled — dimmed rather than removed, so the entry can be found
+  // and re-enabled from the detail pane.
+  &.is-disabled .AppList-Name {
+    opacity: 0.55;
+  }
+
+  &.is-skeleton {
+    cursor: default;
+  }
 
   &:focus-visible {
     outline: 2px solid var(--tx-color-primary);
     outline-offset: 2px;
   }
+}
 
-  .AppList-IconContainer {
-    width: 2rem;
-    height: 2rem;
-    flex-shrink: 0;
+.AppList-IconContainer {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+}
 
-    .AppList-IconPlaceholder {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--tx-fill-color-lighter);
-      border-radius: 4px;
-      color: var(--tx-text-color-placeholder);
+.AppList-IconPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--tx-fill-color-lighter);
+  color: var(--tx-text-color-placeholder);
 
-      i {
-        font-size: 1.2rem;
-      }
-    }
-  }
-
-  .Main {
-    p {
-      margin: 0;
-      font-size: 0.8rem;
-    }
-
-    .desc {
-      font-size: 0.8rem;
-      color: var(--tx-text-color-secondary);
-    }
+  i {
+    font-size: 1.2rem;
   }
 }
 
-.AppList {
+.AppList-Name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.AppList-Flag {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--tx-fill-color-dark);
+  color: var(--tx-text-color-secondary);
+  font-size: 0.65rem;
+  line-height: 16px;
+}
+
+.AppList-Empty {
   display: flex;
-  margin: 0;
-  padding: 1rem 0.5rem;
-
-  gap: 0.5rem;
   flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 3rem 1.5rem;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.8rem;
+  text-align: center;
+}
 
-  list-style: none;
+/** Sits with the count it qualifies, above the pinned footer, in the list's own gutter. */
+.AppList-Notice {
+  margin: 0;
+  padding: 0 0.75rem 0.5rem;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
 
-  li {
-    height: 48px;
-    overflow: hidden;
+/**
+ * The list's own footer. Search moved up to the aside header the shell renders, so the only
+ * control left here is the view picker — which belongs beside the count it describes.
+ *
+ * Opaque rather than `fake-background`: that helper paints through a `z-index: -1` ::before,
+ * and a sticky element establishes its own stacking context, so the pseudo-element sits below
+ * the bar's own content but *not* above the rows scrolling underneath it - they read straight
+ * through. Every other pinned bar in the app (ShortcutDialog, PluginFeatureDetailCard) uses the
+ * overlay token for exactly this reason. The blur stays as depth on top of a real surface.
+ */
+.AppList-Info {
+  z-index: 2;
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.75rem;
+  border-top: 1px solid var(--tx-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  backdrop-filter: blur(18px) saturate(180%);
 
-    border-radius: 8px;
-    --fake-color: var(--tx-fill-color);
+  > span {
+    opacity: 0.75;
+    font-size: 0.8rem;
   }
+}
+
+.AppList-Order {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0.15rem 0.4rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.7rem;
+  opacity: 0.75;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    opacity 0.15s ease;
+
+  i {
+    font-size: 0.9rem;
+  }
+
+  &:hover {
+    background-color: var(--tx-fill-color);
+    opacity: 1;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary);
+    outline-offset: 2px;
+  }
+}
+
+.AppList-ViewMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.AppList-ViewOption {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.35rem 0.4rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tx-text-color-primary);
+  font-family: inherit;
+  font-size: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+
+  i {
+    flex: 0 0 auto;
+    font-size: 0.9rem;
+  }
+
+  span {
+    flex: 1 1 auto;
+  }
+
+  &:hover {
+    background-color: var(--tx-fill-color);
+  }
+
+  &.active {
+    color: var(--tx-color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary);
+    outline-offset: -2px;
+  }
+}
+
+.AppList-ViewOptionCheck {
+  color: var(--tx-color-primary);
 }
 </style>
