@@ -16,7 +16,7 @@ import {
   AppLaunchRecorder,
   resolvePreviousAppContext
 } from '../../../search-engine/app-launch-recorder'
-import { resolveAppItemId } from '../app-index-metadata'
+import { resolveManagedEntryItemId } from '../app-index-metadata'
 import { launchApp } from '../app-launcher'
 import { normalizeOptionalString } from '../app-provider-path-utils'
 
@@ -90,13 +90,20 @@ export class AppManagedEntryActionsService {
         path: entry.path,
         executeCount: usage.counts.get(this.itemId(entry)) ?? 0,
         hasShortcut: Boolean(shortcuts.get(entry.path)),
-        hasAliases: this.getAliases(entry.path, entry.bundleId).length > 0
+        hasAliases: this.getAliases(entry).length > 0
       }))
     }
   }
 
-  public getAliases(pathValue: string, bundleId?: string): string[] {
-    return this.options.aliases.get(resolveAppItemId({ bundleId, path: pathValue }))
+  /**
+   * The aliases stored for an entry, read under the same catalog item id the usage and search
+   * sides use — an alias saved under a different id than the one the surface reads back is an
+   * alias the user cannot see.
+   */
+  public getAliases(
+    entry: Pick<AppIndexManagedEntry, 'path' | 'bundleId' | 'appIdentity'>
+  ): string[] {
+    return this.options.aliases.get(resolveManagedEntryItemId(entry))
   }
 
   /**
@@ -247,7 +254,7 @@ export class AppManagedEntryActionsService {
   }
 
   private itemId(entry: AppIndexManagedEntry): string {
-    return resolveAppItemId({ bundleId: entry.bundleId, path: entry.path })
+    return resolveManagedEntryItemId(entry)
   }
 
   /** The lookup every action here opens with: a path the catalog actually knows. */

@@ -2117,7 +2117,7 @@ export class CommonChannelModule extends BaseModule {
           if (!entry) return { success: false, reason: 'not-found' as const }
           return {
             success: true,
-            aliases: appProvider.entryActions.getAliases(entry.path, entry.bundleId)
+            aliases: appProvider.entryActions.getAliases(entry)
           }
         }
       ),
