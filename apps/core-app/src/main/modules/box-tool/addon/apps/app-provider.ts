@@ -37,11 +37,8 @@ import type {
   AppIndexAddPathResult,
   AppIndexDiagnoseRequest,
   AppIndexEntryMutationResult,
-  AppIndexEntrySummary,
-  AppIndexLaunchResult,
   AppIndexManagedEntry,
   AppIndexReindexRequest,
-  AppIndexUsageResult,
   ResolvedApplication,
   AppIndexUpsertEntryRequest
 } from '@talex-touch/utils/transport/events/types'
@@ -106,27 +103,23 @@ export function setAppExecutionRecorder(recorder: AppExecutionRecorder): void {
 }
 
 import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
-import { launchApp, scheduleAppLaunch } from './app-launcher'
+import { scheduleAppLaunch } from './app-launcher'
 import { resolveApplicationProjection } from './app-resolution-service'
 import { AppProviderSourceScanner } from './app-provider-source-scanner'
 import { AppIndexedSourceRecordMapper } from './services/app-index-record-sync-service'
 import { AppIndexMaintenanceService } from './services/app-index-maintenance-service'
 import { AppManagedEntryService } from './services/app-managed-entry-service'
-import { AppUsageQueryService } from './services/app-usage-query-service'
-// Leaf modules: they reach the database and the active-app service only, never back into
-// search-core, so they do not re-enter the module cycle documented above.
-import {
-  AppLaunchRecorder,
-  resolvePreviousAppContext
-} from '../../search-engine/app-launch-recorder'
-import type { UsageEntryPoint } from '../../search-engine/usage-entry-point'
+// Leaf modules: they reach the database, the launcher and the active-app service only, never back
+// into search-core, so they do not re-enter the module cycle documented above. The three stores
+// and the entry actions live behind them, which is why this file only wires them.
+import { AppManagedEntryActionsService } from './services/app-managed-entry-actions-service'
+import { AppUserAliasService } from './services/app-user-alias-service'
 import {
   isProbablyCorruptedDisplayName,
   normalizeDisplayName,
   resolveDisplayName,
   shouldUpdateDisplayName
 } from './display-name-sync-utils'
-import { AppShortcutService } from './services/app-shortcut-service'
 import {
   APP_ALTERNATE_NAMES_EXTENSION_KEY,
   APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY,
@@ -146,7 +139,6 @@ import {
   readAppIdentityKind,
   resolveAppItemId,
   resolveAppItemIds,
-  resolveManagedEntryItemId,
   shouldScanMdlsDisplayName,
   syncScannedAppExtensions,
   upsertAppExtensions
@@ -162,8 +154,7 @@ import {
 import {
   expandWindowsEnvironmentVariables,
   isWindowsUwpAppId,
-  isWindowsUwpShellPath,
-  normalizeOptionalString
+  isWindowsUwpShellPath
 } from './app-provider-path-utils'
 import { formatLog, LogStyle, normalizeStringList } from './app-utils'
 import {
@@ -342,15 +333,6 @@ function logAppDurationMs(
 }
 
 const MISSING_ICON_CONFIG_KEY = 'app_provider_missing_icon_apps'
-/**
- * User-authored aliases, keyed by catalog item id.
- *
- * These survive a reindex for free: the index writer rebuilds a provider's rows wholesale, but it
- * sources every alias through `resolveAliasesForApp`, which folds this map in on each pass. The
- * only thing that was missing is that the map lived in memory and was never written anywhere, so
- * it emptied on restart.
- */
-const USER_ALIASES_CONFIG_KEY = 'app_provider_user_aliases'
 const PENDING_DELETION_CONFIG_KEY = 'app_provider_pending_deletion'
 const BACKFILL_LAST_RUN_CONFIG_KEY = 'app_provider_last_backfill'
 const FULL_SYNC_LAST_RUN_CONFIG_KEY = 'app_provider_last_full_sync'
@@ -490,7 +472,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private isInitializing: Promise<void> | null = null
   private readonly isMac = process.platform === 'darwin'
   private processingPaths: Set<string> = new Set()
-  private aliases: Record<string, string[]> = {}
   private searchIndex: SearchIndexService | null = null
   private appIndexSettings: AppIndexSettings = { ...DEFAULT_APP_INDEX_SETTINGS }
   private startupBackfillStarted = false
@@ -537,13 +518,23 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     getAliases: (app) => this._getAliasesForApp(app),
     resolveToolSourceIds: (app) => this.resolveScannedAppToolSourceIds(app)
   })
-  private readonly launchRecorder = new AppLaunchRecorder({ getDbUtils: () => this.dbUtils })
-  private readonly usageQuery = new AppUsageQueryService({ getDbUtils: () => this.dbUtils })
-  private readonly appShortcuts = new AppShortcutService({
+  private readonly userAliases = new AppUserAliasService({ getDbUtils: () => this.dbUtils })
+  /**
+   * The index manager's API: summaries, aliases, launch shortcuts, launch and usage.
+   *
+   * Public because the transport handlers are its only caller and it owns that whole surface —
+   * `app-provider.ts` keeps the wiring, not a pass-through per method (#343).
+   */
+  public readonly entryActions = new AppManagedEntryActionsService({
     getDbUtils: () => this.dbUtils,
-    launch: async (path) => {
-      await this.launchManagedEntry(path, 'shortcut')
-    }
+    listEntries: async () => await this.listManagedEntries(),
+    aliases: this.userAliases,
+    mapDbAppToScannedInfo: (app) => this._mapDbAppToScannedInfo(app),
+    toExtensionMap: (records) => this.toExtensionMap(records),
+    publishUpsert: async (appInfo, reason) => {
+      await this.publishAppRuntimeUpsert(appInfo, reason)
+    },
+    runMutation: (operation) => this.runExternalAppMutation(operation)
   })
   private readonly managedEntries = new AppManagedEntryService({
     getDbUtils: () => this.dbUtils,
@@ -888,10 +879,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this.loadAppIndexSettings()
     // Before any scan publishes a projection: `resolveAliasesForApp` folds this map in, so an
     // empty map at scan time silently drops every user alias from the search index.
-    void this._loadUserAliases()
+    void this.userAliases.load()
     // Accelerators survive a restart in the shortcut store, but their callbacks cannot be
     // serialized: without this the key is registered with the OS and does nothing.
-    void this.appShortcuts.restore()
+    void this.entryActions.restoreShortcuts()
     this._scheduleFullSync()
     this._scheduleStartupIndexHealthCheck()
     this._scheduleSemanticAliasCatalogSync()
@@ -1441,29 +1432,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return await this.managedEntries.list()
   }
 
-  /**
-   * Every managed entry with the facts the list orders and narrows itself by.
-   *
-   * Composed from three sources that are each cheap in bulk but were only reachable per entry:
-   * the usage aggregate table, the shortcut store, and the in-memory alias map.
-   */
-  public async listManagedEntrySummaries(): Promise<AppIndexEntrySummary[]> {
-    const entries = await this.listManagedEntries()
-    const paths = entries.map((entry) => entry.path)
-
-    const [usage, shortcuts] = await Promise.all([
-      this.usageQuery.countAll(),
-      this.appShortcuts.getAccelerators(paths)
-    ])
-
-    return entries.map((entry) => ({
-      path: entry.path,
-      executeCount: usage.get(resolveManagedEntryItemId(entry)) ?? 0,
-      hasShortcut: Boolean(shortcuts.get(entry.path)),
-      hasAliases: this.getManagedEntryAliases(entry.path, entry.bundleId).length > 0
-    }))
-  }
-
   public async upsertManagedEntry(
     input: AppIndexUpsertEntryRequest
   ): Promise<AppIndexEntryMutationResult> {
@@ -1483,191 +1451,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return await this.runExternalAppMutation(
       async () => await this.managedEntries.setEnabled(pathValue, enabled)
     )
-  }
-
-  /**
-   * Replaces the whole alias map. Callers holding the complete set only — the UI uses
-   * {@link setManagedEntryAliases}, which cannot clobber a concurrent edit to another app.
-   */
-  public async setAliases(aliases: Record<string, string[]>): Promise<void> {
-    await this.runExternalAppMutation(async () => {
-      this.aliases = aliases
-      await this._saveUserAliases()
-      logApp(
-        'App aliases updated; the next runtime scan will publish the new search projection',
-        LogStyle.info
-      )
-    })
-  }
-
-  /**
-   * Sets the aliases for one entry, leaving every other app's untouched.
-   *
-   * Republishes that app's search projection immediately rather than waiting for the next scan:
-   * an alias the user just typed has to be searchable now, and a full scan is minutes away.
-   */
-  public async setManagedEntryAliases(
-    pathValue: string,
-    aliases: string[]
-  ): Promise<AppIndexEntryMutationResult> {
-    const target = normalizeOptionalString(pathValue)
-    if (!target) return { success: false, status: 'invalid', reason: 'path-empty' }
-
-    const entries = await this.listManagedEntries()
-    const entry = entries.find((candidate) => candidate.path === target)
-    if (!entry) return { success: false, status: 'not-found', reason: 'entry-missing' }
-
-    return await this.runExternalAppMutation(async () => {
-      const key = resolveManagedEntryItemId(entry)
-      const normalized = normalizeStringList(aliases)
-      const next = { ...this.aliases }
-      if (normalized.length > 0) next[key] = normalized
-      else delete next[key]
-      this.aliases = next
-      await this._saveUserAliases()
-
-      // Same lookup the managed-entry service uses to re-publish after a mutation: the row plus
-      // its extension map is what `_mapDbAppToScannedInfo` needs to rebuild the projection.
-      const existingFile = await this.dbUtils?.getFileByPath(entry.path)
-      if (existingFile) {
-        const extensions = this.toExtensionMap(
-          await this.dbUtils!.getFileExtensions(existingFile.id)
-        )
-        await this.publishAppRuntimeUpsert(
-          this._mapDbAppToScannedInfo({ ...existingFile, extensions }),
-          'app-user-alias-update'
-        )
-      }
-
-      return { success: true, status: 'updated' }
-    })
-  }
-
-  public async getManagedEntryShortcut(pathValue: string): Promise<string | null> {
-    return await this.appShortcuts.get(pathValue)
-  }
-
-  /**
-   * Binds or clears the launch shortcut for one entry. An empty accelerator clears it.
-   *
-   * Returns `conflict` when the OS refused the accelerator — reserved by the system or already
-   * taken — rather than reporting a success the key will not honour.
-   */
-  public async setManagedEntryShortcut(
-    pathValue: string,
-    accelerator: string
-  ): Promise<AppIndexEntryMutationResult> {
-    const target = normalizeOptionalString(pathValue)
-    if (!target) return { success: false, status: 'invalid', reason: 'path-empty' }
-
-    const entries = await this.listManagedEntries()
-    if (!entries.some((candidate) => candidate.path === target)) {
-      return { success: false, status: 'not-found', reason: 'entry-missing' }
-    }
-
-    const normalized = accelerator.trim()
-    if (!normalized) {
-      await this.appShortcuts.remove(target)
-      return { success: true, status: 'updated' }
-    }
-
-    const bound = await this.appShortcuts.set(target, normalized)
-    return bound
-      ? { success: true, status: 'updated' }
-      : { success: false, status: 'invalid', reason: 'shortcut-conflict' }
-  }
-
-  public getManagedEntryAliases(pathValue: string, bundleId?: string): string[] {
-    return this.aliases[resolveManagedEntryItemId({ bundleId, path: pathValue })] ?? []
-  }
-
-  private async _loadUserAliases(): Promise<void> {
-    if (!this.dbUtils) return
-    try {
-      const [row] = await this.dbUtils
-        .getDb()
-        .select({ value: configSchema.value })
-        .from(configSchema)
-        .where(eq(configSchema.key, USER_ALIASES_CONFIG_KEY))
-        .limit(1)
-      if (!row?.value) return
-
-      const parsed: unknown = JSON.parse(row.value)
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return
-
-      const restored: Record<string, string[]> = {}
-      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-        if (!Array.isArray(value)) continue
-        const aliases = normalizeStringList(value.filter((item) => typeof item === 'string'))
-        if (aliases.length > 0) restored[key] = aliases
-      }
-      this.aliases = restored
-    } catch (error) {
-      // A corrupt map costs the user their aliases, not app search: the scan still publishes
-      // generated keywords.
-      const message = error instanceof Error ? error.message : String(error)
-      logApp(`Failed to load user aliases, continuing without them: ${message}`, LogStyle.warning)
-    }
-  }
-
-  private async _saveUserAliases(): Promise<void> {
-    await this._setConfigValue(USER_ALIASES_CONFIG_KEY, JSON.stringify(this.aliases))
-  }
-
-  /**
-   * Launches one indexed application and records the launch against the surface that asked.
-   *
-   * The applications settings page previously called the generic `system.openApp` shell handler,
-   * which knows nothing about the catalog: it could not resolve an item id, so the launch was
-   * invisible to every per-app statistic, and it bypassed the protocol allowlist and launch-args
-   * handling that `launchApp` owns. Routing it here fixes both.
-   */
-  public async launchManagedEntry(
-    pathValue: string,
-    entryPoint: UsageEntryPoint
-  ): Promise<AppIndexLaunchResult> {
-    const target = normalizeOptionalString(pathValue)
-    if (!target) return { success: false, reason: 'invalid-path' }
-
-    const entries = await this.listManagedEntries()
-    const entry = entries.find((candidate) => candidate.path === target)
-    if (!entry) return { success: false, reason: 'not-found' }
-
-    // Captured before the launch: once the target is frontmost, "what the user came from" is
-    // gone. The recorder falls back to capturing it itself for callers that cannot.
-    const previous = await resolvePreviousAppContext()
-
-    const outcome = await launchApp({
-      name: entry.displayName || entry.name,
-      path: entry.path,
-      launchKind: entry.launchKind,
-      launchTarget: entry.launchTarget || entry.path,
-      launchArgs: entry.launchArgs ?? undefined,
-      workingDirectory: entry.workingDirectory ?? undefined
-    })
-
-    if (outcome.status === 'failed') {
-      return { success: false, reason: 'error', error: outcome.error }
-    }
-
-    await this.launchRecorder.record({
-      itemId: resolveManagedEntryItemId(entry),
-      entryPoint,
-      previousApp: previous.prevApp ?? null
-    })
-
-    return { success: true }
-  }
-
-  public async queryManagedEntryUsage(pathValue: string): Promise<AppIndexUsageResult> {
-    const target = normalizeOptionalString(pathValue)
-    if (!target) return { success: false, reason: 'invalid-path' }
-
-    const entries = await this.listManagedEntries()
-    const entry = entries.find((candidate) => candidate.path === target)
-    if (!entry) return { success: false, reason: 'not-found' }
-
-    return await this.usageQuery.query(resolveManagedEntryItemId(entry), entry.bundleId)
   }
 
   private resolveScannedAppKey(
@@ -2886,14 +2669,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private resolveAliasesForApp(appInfo: ScannedAppInfo): string[] {
-    const uniqueId = resolveAppItemId(appInfo)
-    const aliasesById = this.aliases[uniqueId] || []
-    const aliasesByPath = this.aliases[appInfo.path] || []
-    const aliasesByBundleId = this.aliases[appInfo.bundleId] || []
     return normalizeStringList([
-      ...aliasesById,
-      ...aliasesByPath,
-      ...aliasesByBundleId,
+      ...this.userAliases.resolveForApp(appInfo),
       ...resolveScannedAppSemanticAliases(appInfo)
     ]).map((alias) => alias.toLowerCase())
   }
@@ -4032,7 +3809,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       filteredAppsWithExtensions,
       query,
       isFuzzySearch,
-      this.aliases
+      (app) => this.userAliases.resolveForApp(app)
     )
 
     if (signal?.aborted) {

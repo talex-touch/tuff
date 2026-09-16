@@ -2036,7 +2036,7 @@ export class CommonChannelModule extends BaseModule {
       transport.on(AppEvents.appIndex.listEntries, () => appProvider.listManagedEntries()),
       transport.on(AppEvents.appIndex.listSummaries, async () => ({
         success: true,
-        summaries: await appProvider.listManagedEntrySummaries()
+        summaries: await appProvider.entryActions.listSummaries()
       })),
       transport.on<AppIndexUpsertEntryRequest, AppIndexEntryMutationResult>(
         AppEvents.appIndex.upsertEntry,
@@ -2085,7 +2085,7 @@ export class CommonChannelModule extends BaseModule {
           // being stored verbatim: `ent` is an enum the reports group by.
           const entryPoint =
             toUsageEntryPoint(getOptionalStringProp(payload, 'entryPoint')) ?? 'settings-app-detail'
-          return appProvider.launchManagedEntry(inputPath, entryPoint)
+          return appProvider.entryActions.launch(inputPath, entryPoint)
         }
       ),
       transport.on<AppIndexUsageRequest, AppIndexUsageResult>(
@@ -2095,7 +2095,7 @@ export class CommonChannelModule extends BaseModule {
           if (!inputPath) {
             return Promise.resolve({ success: false, reason: 'invalid-path' as const })
           }
-          return appProvider.queryManagedEntryUsage(inputPath)
+          return appProvider.entryActions.queryUsage(inputPath)
         }
       ),
       transport.on<AppIndexGetAliasesRequest, AppIndexGetAliasesResult>(
@@ -2108,7 +2108,7 @@ export class CommonChannelModule extends BaseModule {
           if (!entry) return { success: false, reason: 'not-found' as const }
           return {
             success: true,
-            aliases: appProvider.getManagedEntryAliases(entry.path, entry.bundleId)
+            aliases: appProvider.entryActions.getAliases(entry.path, entry.bundleId)
           }
         }
       ),
@@ -2126,7 +2126,7 @@ export class CommonChannelModule extends BaseModule {
           const aliases = Array.isArray(payload?.aliases)
             ? payload.aliases.filter((value): value is string => typeof value === 'string')
             : []
-          return appProvider.setManagedEntryAliases(inputPath, aliases)
+          return appProvider.entryActions.setEntryAliases(inputPath, aliases)
         }
       ),
       transport.on<AppIndexGetShortcutRequest, AppIndexGetShortcutResult>(
@@ -2136,7 +2136,7 @@ export class CommonChannelModule extends BaseModule {
           if (!inputPath) return { success: false }
           return {
             success: true,
-            accelerator: await appProvider.getManagedEntryShortcut(inputPath)
+            accelerator: await appProvider.entryActions.getShortcut(inputPath)
           }
         }
       ),
@@ -2151,7 +2151,7 @@ export class CommonChannelModule extends BaseModule {
               reason: 'path-empty'
             })
           }
-          return appProvider.setManagedEntryShortcut(
+          return appProvider.entryActions.setShortcut(
             inputPath,
             getOptionalStringProp(payload, 'accelerator') ?? ''
           )
