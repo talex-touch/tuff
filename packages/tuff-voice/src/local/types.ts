@@ -17,6 +17,23 @@
  */
 export type LocalEngineId = 'whisper-cpp' | 'sherpa-onnx' | 'onnxruntime'
 
+/**
+ * Model family a sherpa-onnx bundle belongs to.
+ *
+ * sherpa-onnx is a runtime, not a model: each family has its own recognizer constructor and
+ * its own flag set, so this is a closed set of the families *this build can drive*. A bundle
+ * naming anything else must fail loudly rather than be handed to a recognizer built from the
+ * wrong flags, which would return plausible text for the wrong model.
+ */
+export const SHERPA_ONNX_FAMILIES = ['sense-voice'] as const
+
+export type SherpaOnnxFamily = (typeof SHERPA_ONNX_FAMILIES)[number]
+
+/** The sherpa-onnx recognizer a bundle expects. Required whenever `engine` is `sherpa-onnx`. */
+export interface LocalModelSherpa {
+  family: SherpaOnnxFamily
+}
+
 /** Weight container format, independent of the engine that happens to load it. */
 export type LocalWeightKind = 'ggml' | 'onnx' | 'tflite' | 'openvino'
 
@@ -92,6 +109,8 @@ export interface LocalModelDescriptor {
   description?: string
   engine: LocalEngineId
   engineMinVersion?: string
+  /** Present, and required, when the engine hosts more than one model family. */
+  sherpa?: LocalModelSherpa
   languages: readonly string[]
   defaultLanguage?: string
   runtime: LocalModelRuntime
