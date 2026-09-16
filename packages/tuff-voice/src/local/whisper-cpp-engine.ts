@@ -7,15 +7,14 @@ import type {
   LocalTranscribeSegment,
   ResolvedLocalModel,
 } from './types'
-import type { WavFormat } from './wav'
-import { spawn } from 'node:child_process'
 import { constants } from 'node:fs'
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, readFile } from 'node:fs/promises'
 import { availableParallelism, tmpdir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { join } from 'node:path'
 import process from 'node:process'
+import { discardWorkDirectory, executableCandidates, findExecutable, materializePcmInput, runLocalProcess, withDecodeLock } from './decode'
 import { LocalEngineError } from './types'
-import { pcmDurationMs, wrapPcmAsWav } from './wav'
+import { pcmDurationMs } from './wav'
 
 /**
  * whisper.cpp's zh output defaults to Traditional Chinese.
@@ -64,59 +63,12 @@ export interface WhisperCppEngineOptions {
 }
 
 /**
- * One decode at a time, host-wide.
- *
- * whisper.cpp saturates the GPU on its own, and letting decodes overlap is
- * catastrophically slower than queueing them. Measured on an M4 Pro, 3.44 s of audio
- * with ggml-base: a single decode takes 0.40 s; three running concurrently take
- * 10.05 s in total, roughly 3.3 s each — an eightfold loss per decode. Since a stream
- * naturally issues a speculative partial and then a final for the same audio, overlap
- * is the common case rather than an edge case, so the queue lives here at module scope
- * instead of per engine instance: two providers sharing a GPU contend just as badly.
- */
-let decodeQueue: Promise<unknown> = Promise.resolve()
-
-function withDecodeLock<T>(task: () => Promise<T>): Promise<T> {
-  const queued = decodeQueue.then(task, task)
-  // The queue must keep draining after a failure, so the stored link swallows the
-  // rejection; the caller still receives it through `queued`.
-  decodeQueue = queued.then(
-    () => undefined,
-    () => undefined,
-  )
-  return queued
-}
-
-/**
  * Locate a usable whisper.cpp CLI.
- *
- * An explicit path is honoured first so a caller can pin a known-good build, then the
- * environment, then PATH, then the two Homebrew prefixes. Nothing here shells out to
- * `which`: the runtime already knows the candidate set and can test it directly.
  */
 export async function findWhisperBinary(explicit?: string): Promise<string | undefined> {
-  const candidates: string[] = []
-  if (explicit)
-    candidates.push(explicit)
-  const fromEnv = process.env.TUFF_WHISPER_BIN?.trim()
-  if (fromEnv)
-    candidates.push(fromEnv)
-  for (const directory of (process.env.PATH ?? '').split(delimiter)) {
-    if (directory)
-      candidates.push(join(directory, 'whisper-cli'))
-  }
-  candidates.push('/opt/homebrew/bin/whisper-cli', '/usr/local/bin/whisper-cli')
-
-  for (const candidate of candidates) {
-    try {
-      await access(candidate, constants.X_OK)
-      return candidate
-    }
-    catch {
-      continue
-    }
-  }
-  return undefined
+  return findExecutable(
+    executableCandidates('whisper-cli', explicit, process.env.TUFF_WHISPER_BIN?.trim()),
+  )
 }
 
 /** Shape of `whisper-cli -oj` output, limited to what the runtime consumes. */
@@ -137,6 +89,20 @@ export class WhisperCppLocalEngine implements LocalAsrEngine {
 
   constructor(options: WhisperCppEngineOptions = {}) {
     this.options = options
+  }
+
+  /**
+   * Engine-level thread and deadline settings are defaults for a caller that supplies neither.
+   *
+   * They live on the instance because a host configures its engine once, and they are folded in
+   * here rather than at construction so a per-call value still wins.
+   */
+  private effectiveOptions(options: LocalTranscribeOptions): LocalTranscribeOptions {
+    return {
+      ...options,
+      ...(options.threads === undefined && this.options.threads !== undefined ? { threads: this.options.threads } : {}),
+      ...(options.timeoutMs === undefined && this.options.timeoutMs !== undefined ? { timeoutMs: this.options.timeoutMs } : {}),
+    }
   }
 
   async checkAvailability(model: ResolvedLocalModel, binaryPath?: string): Promise<LocalEngineAvailability> {
@@ -172,7 +138,8 @@ export class WhisperCppLocalEngine implements LocalAsrEngine {
     model: ResolvedLocalModel,
     options: LocalTranscribeOptions = {},
   ): Promise<LocalTranscribeResult> {
-    return withDecodeLock(() => this.decodeOnce(audio, model, options))
+    const effective = this.effectiveOptions(options)
+    return withDecodeLock(() => this.decodeOnce(audio, model, effective))
   }
 
   private async decodeOnce(
@@ -191,13 +158,17 @@ export class WhisperCppLocalEngine implements LocalAsrEngine {
     try {
       const audioPath = audio.kind === 'file'
         ? audio.path
-        : await this.materializePcm(workDirectory, audio)
+        : await materializePcmInput(workDirectory, audio)
       const outputBase = join(workDirectory, 'result')
       const language = resolveLanguage(model, options)
       const primer = resolvePrimer(model, options, language)
 
       const startedAt = Date.now()
-      await this.run(binary, buildWhisperArgs(model, audioPath, outputBase, options, language, primer), options)
+      await runLocalProcess(binary, buildWhisperArgs(model, audioPath, outputBase, options, language, primer), {
+        timeoutMs: options.timeoutMs ?? this.options.timeoutMs ?? 120_000,
+        label: 'whisper-cli',
+        ...(options.signal ? { signal: options.signal } : {}),
+      })
       const elapsedMs = Date.now() - startedAt
 
       let payload: WhisperJsonPayload
@@ -213,89 +184,8 @@ export class WhisperCppLocalEngine implements LocalAsrEngine {
       return toTranscriptionResult(payload, audio, elapsedMs, primer)
     }
     finally {
-      await rm(workDirectory, { recursive: true, force: true })
+      await discardWorkDirectory(workDirectory)
     }
-  }
-
-  /** PCM arrives headerless; the CLI only reads containers, so wrap it before writing. */
-  private async materializePcm(
-    workDirectory: string,
-    audio: Extract<LocalAudioInput, { kind: 'pcm' }>,
-  ): Promise<string> {
-    if (audio.sampleRate <= 0) {
-      throw new LocalEngineError('LOCAL_ENGINE_AUDIO_INVALID', 'PCM sample rate must be positive.')
-    }
-    const format: WavFormat = { sampleRate: audio.sampleRate, channels: audio.channels, bitsPerSample: 16 }
-    const path = join(workDirectory, 'input.wav')
-    await writeFile(path, wrapPcmAsWav(audio.bytes, format))
-    return path
-  }
-
-  /**
-   * Run one decode to completion.
-   *
-   * Both cancellation paths are honoured: an abort signal from the caller, and a hard
-   * deadline. Without the deadline a pathological input can pin a core indefinitely,
-   * and dictation has no way to surface that to the user.
-   */
-  private async run(binary: string, args: readonly string[], options: LocalTranscribeOptions): Promise<void> {
-    const timeoutMs = options.timeoutMs ?? this.options.timeoutMs ?? 120_000
-    await new Promise<void>((settle, reject) => {
-      const child = spawn(binary, [...args], { stdio: ['ignore', 'pipe', 'pipe'] })
-      let stderr = ''
-      child.stderr?.setEncoding('utf8')
-      child.stderr?.on('data', (chunk: string) => {
-        stderr += chunk
-        if (stderr.length > 8_000)
-          stderr = stderr.slice(-8_000)
-      })
-
-      let settled = false
-      let timer: NodeJS.Timeout | undefined
-      let onAbort: (() => void) | undefined
-      const finish = (error?: Error): void => {
-        if (settled)
-          return
-        settled = true
-        clearTimeout(timer)
-        if (onAbort)
-          options.signal?.removeEventListener('abort', onAbort)
-        if (error)
-          reject(error)
-        else settle()
-      }
-      onAbort = (): void => {
-        child.kill('SIGKILL')
-        finish(new LocalEngineError('LOCAL_ENGINE_ABORTED', 'Local transcription was cancelled.'))
-      }
-      timer = setTimeout(() => {
-        child.kill('SIGKILL')
-        finish(new LocalEngineError('LOCAL_ENGINE_TIMEOUT', `Local transcription exceeded ${timeoutMs} ms.`, {
-          retryable: true,
-        }))
-      }, timeoutMs)
-      if (options.signal?.aborted) {
-        onAbort()
-        return
-      }
-      options.signal?.addEventListener('abort', onAbort, { once: true })
-
-      child.on('error', (error) => {
-        finish(new LocalEngineError('LOCAL_ENGINE_SPAWN_FAILED', `Could not start whisper-cli: ${error.message}`, {
-          cause: error,
-        }))
-      })
-      child.on('close', (code) => {
-        if (code === 0) {
-          finish()
-        }
-        else {
-          finish(new LocalEngineError('LOCAL_ENGINE_DECODE_FAILED', `whisper-cli exited with code ${code}. ${stderr.trim()}`.trim(), {
-            retryable: code === null,
-          }))
-        }
-      })
-    })
   }
 }
 

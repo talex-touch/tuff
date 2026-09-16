@@ -62,12 +62,7 @@ const DEFAULT_MAX_PARTIAL_AUDIO_MS = 45_000
 export class LocalOfflineVoiceProvider implements VoiceProviderAdapter {
   readonly id = 'local-offline'
   readonly kind = 'local' as const
-  readonly capabilities: VoiceProviderCapabilities = {
-    stream: true,
-    upload: true,
-    // The engine reads containers off disk, so these are what it can actually open.
-    formats: ['pcm', 'wav', 'mp3', 'ogg'],
-  }
+  readonly capabilities: VoiceProviderCapabilities
 
   readonly defaultStreamModel: string
   readonly defaultUploadModel: string
@@ -85,6 +80,15 @@ export class LocalOfflineVoiceProvider implements VoiceProviderAdapter {
       ...(options.threads === undefined ? {} : { threads: options.threads }),
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     })
+    // What the engine can actually open, which is not a property of the *provider*: whisper.cpp's
+    // CLI decodes common containers itself, while sherpa-onnx-offline reads WAV only. Advertising
+    // a format the engine cannot open would turn a wrong-format upload into an opaque decode
+    // failure instead of the contract's clear rejection.
+    this.capabilities = {
+      stream: true,
+      upload: true,
+      formats: this.engine.id === 'sherpa-onnx' ? ['pcm', 'wav'] : ['pcm', 'wav', 'mp3', 'ogg'],
+    }
     this.defaultStreamModel = `${options.model.descriptor.id}@${options.model.descriptor.version}`
     this.defaultUploadModel = this.defaultStreamModel
   }
