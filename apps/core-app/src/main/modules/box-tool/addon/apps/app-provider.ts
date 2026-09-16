@@ -878,11 +878,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     this.loadAppIndexSettings()
     // Before any scan publishes a projection: `resolveAliasesForApp` folds this map in, so an
-    // empty map at scan time silently drops every user alias from the search index.
-    void this.userAliases.load()
+    // empty map at scan time silently drops every user alias from the search index. Awaited
+    // because `_scheduleFullSync` below is what publishes those projections.
+    await this.userAliases.load()
     // Accelerators survive a restart in the shortcut store, but their callbacks cannot be
     // serialized: without this the key is registered with the OS and does nothing.
-    void this.entryActions.restoreShortcuts()
+    await this.entryActions.restoreShortcuts()
     this._scheduleFullSync()
     this._scheduleStartupIndexHealthCheck()
     this._scheduleSemanticAliasCatalogSync()

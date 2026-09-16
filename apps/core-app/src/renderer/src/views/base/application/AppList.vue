@@ -24,6 +24,11 @@ const props = defineProps<{
   selectedId?: string | null
   loading?: boolean
   loadFailed?: boolean
+  /**
+   * The summaries read failed, so every row's totals and configured-state flags are absent. The
+   * rows still list; what cannot be told is how often each app was launched.
+   */
+  usageDegraded?: boolean
   /** Only decides which count sentence to print; the page owns the search field. */
   searched?: boolean
 }>()
@@ -136,7 +141,7 @@ function handleClick(item: AppListItem): void {
         :class="{ active: selectedId === item.id, 'is-disabled': item.disabled }"
         role="button"
         tabindex="0"
-        :aria-selected="selectedId === item.id"
+        :aria-pressed="selectedId === item.id"
         @click="handleClick(item)"
         @keydown.enter.prevent="handleClick(item)"
         @keydown.space.prevent="handleClick(item)"
@@ -155,6 +160,15 @@ function handleClick(item: AppListItem): void {
         </span>
       </li>
     </TransitionGroup>
+
+    <!--
+      Zeros are not shown for a read that failed: the frequency view would then rank every app
+      equally and claim none was ever launched, which is a statement about the data rather than
+      about the database.
+    -->
+    <p v-if="usageDegraded && !loadFailed" class="AppList-Notice" role="status">
+      {{ t('appList.usageUnavailable') }}
+    </p>
 
     <div class="AppList-Info">
       <span>{{ countText }}</span>
@@ -317,6 +331,15 @@ function handleClick(item: AppListItem): void {
   color: var(--tx-text-color-secondary);
   font-size: 0.8rem;
   text-align: center;
+}
+
+/** Sits with the count it qualifies, above the pinned footer, in the list's own gutter. */
+.AppList-Notice {
+  margin: 0;
+  padding: 0 0.75rem 0.5rem;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.7rem;
+  line-height: 1.45;
 }
 
 /**

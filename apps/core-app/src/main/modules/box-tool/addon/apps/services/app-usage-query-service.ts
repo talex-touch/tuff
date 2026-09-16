@@ -6,7 +6,7 @@ import type {
   AppUsageTrendPoint
 } from '@talex-touch/utils/transport/events/types'
 import type { CoreDatabase, DbUtils } from '../../../../../db/utils'
-import { and, desc, eq, gte, like } from 'drizzle-orm'
+import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import * as schema from '../../../../../db/schema'
 import { APP_PROVIDER_SOURCE_ID } from '../../../search-engine/app-launch-recorder'
@@ -44,6 +44,16 @@ interface LaunchLogContext {
   prevApp?: unknown
   prevAppName?: unknown
 }
+
+/**
+ * Outcome of the bulk launch-count read.
+ *
+ * A failure is a value rather than an empty map: these totals are rendered as per-app facts, and
+ * "0 launches" is a claim about the user's behaviour rather than an absence of one.
+ */
+export type AppUsageCountsResult =
+  | { ok: true; counts: Map<string, number> }
+  | { ok: false; reason: 'db-not-ready' | 'error' }
 
 /**
  * Per-application usage, assembled for the applications settings detail panel.
@@ -98,7 +108,16 @@ export class AppUsageQueryService {
       const logs = await db
         .select({ context: schema.usageLogs.context })
         .from(schema.usageLogs)
-        .where(and(eq(schema.usageLogs.itemId, itemId), eq(schema.usageLogs.action, 'execute')))
+        .where(
+          and(
+            eq(schema.usageLogs.itemId, itemId),
+            eq(schema.usageLogs.action, 'execute'),
+            // Same source filter as the aggregates and the outbound query: another provider
+            // recording the same item id would otherwise contribute entry points and inbound
+            // transitions to this app's panel.
+            eq(schema.usageLogs.source, APP_PROVIDER_SOURCE_ID)
+          )
+        )
         .orderBy(desc(schema.usageLogs.id))
         .limit(LOG_SCAN_LIMIT)
 
@@ -129,9 +148,9 @@ export class AppUsageQueryService {
    * {@link query} is deliberately expensive — aggregates plus a bounded fold of the raw log — and
    * a list that needs a single number per row must not fan that out per application.
    */
-  async countAll(): Promise<Map<string, number>> {
+  async countAll(): Promise<AppUsageCountsResult> {
     const dbUtils = this.deps.getDbUtils()
-    if (!dbUtils) return new Map()
+    if (!dbUtils) return { ok: false, reason: 'db-not-ready' }
 
     try {
       const rows = await dbUtils
@@ -143,11 +162,10 @@ export class AppUsageQueryService {
         .from(schema.itemUsageStats)
         .where(eq(schema.itemUsageStats.sourceId, APP_PROVIDER_SOURCE_ID))
 
-      return new Map(rows.map((row) => [row.itemId, row.executeCount ?? 0]))
+      return { ok: true, counts: new Map(rows.map((row) => [row.itemId, row.executeCount ?? 0])) }
     } catch (error) {
-      // Ordering by usage degrades to ordering by name; the list itself stays usable.
       log.error('Failed to count usage for all items', { error })
-      return new Map()
+      return { ok: false, reason: 'error' }
     }
   }
 
@@ -159,6 +177,10 @@ export class AppUsageQueryService {
    * with no index on its contents, so a substring pre-filter narrows the scan in SQLite and the
    * exact match is re-checked in `foldOutboundLogs` — `LIKE` would also match an app whose id
    * merely contains this one's.
+   *
+   * SQLite has no default `LIKE` escape character, so `escapeLikePattern`'s backslashes only mean
+   * anything with an explicit `ESCAPE`: without it a bundle id containing `_` asks for a literal
+   * backslash and matches none of its own rows.
    */
   private async queryOutbound(
     db: CoreDatabase,
@@ -174,7 +196,7 @@ export class AppUsageQueryService {
         and(
           eq(schema.usageLogs.action, 'execute'),
           eq(schema.usageLogs.source, APP_PROVIDER_SOURCE_ID),
-          like(schema.usageLogs.context, `%${escapeLikePattern(identity)}%`)
+          sql`${schema.usageLogs.context} LIKE ${`%${escapeLikePattern(identity)}%`} ESCAPE '\\'`
         )
       )
       .orderBy(desc(schema.usageLogs.id))

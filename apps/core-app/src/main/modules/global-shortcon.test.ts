@@ -20,7 +20,7 @@ afterAll(() => {
 })
 
 const electronMocks = vi.hoisted(() => ({
-  register: vi.fn(() => true),
+  register: vi.fn<(accelerator: string, callback: () => void) => boolean>(() => true),
   unregisterAll: vi.fn(),
   getAllWindows: vi.fn(() => [])
 }))
@@ -119,8 +119,16 @@ type MutableShortcut = Shortcut & {
 class InMemoryShortcutStorage {
   private readonly shortcuts = new Map<string, MutableShortcut>()
 
+  /**
+   * Reads hand out copies, as `ShortcutStorage` does. `setAppShortcut` snapshots the previous
+   * binding through this accessor before overwriting it; handing back the live record would
+   * mutate that snapshot into the rejected value, which is the very state the rollback exists to
+   * undo. `getAllShortcuts` stays by-reference because the classification loop backfills a
+   * missing `meta` through it.
+   */
   getShortcutById(id: string): MutableShortcut | undefined {
-    return this.shortcuts.get(id)
+    const shortcut = this.shortcuts.get(id)
+    return shortcut ? structuredClone(shortcut) : undefined
   }
 
   addShortcut(shortcut: Shortcut): void {
@@ -145,6 +153,14 @@ class InMemoryShortcutStorage {
     shortcut.meta.enabled = enabled
     shortcut.meta.modificationTime = Date.now()
     return true
+  }
+
+  removeShortcuts(ids: readonly string[]): number {
+    let removed = 0
+    for (const id of ids) {
+      if (this.shortcuts.delete(id)) removed += 1
+    }
+    return removed
   }
 }
 
@@ -497,6 +513,85 @@ describe('ShortcutModule runtime cleanup', () => {
     expect(module.shortcutStatusMap?.get('core.test.missing-trigger')?.reason).toBe(
       'runtime-missing'
     )
+
+    module.onDestroy()
+  })
+})
+
+describe('ShortcutModule app shortcut rebind', () => {
+  /**
+   * `setAppShortcut` writes the new accelerator and callback before the OS has judged the key, so
+   * by the time the verdict arrives the binding the user was on has already been replaced. What a
+   * caller can observe afterwards is the stored accelerator and the callback
+   * `globalShortcut.register` would fire, so both are asserted: a rollback that restores only one
+   * of them still leaves the user pressing a key that does nothing.
+   */
+  const ACCELERATOR_A = 'CommandOrControl+Shift+A'
+  const ACCELERATOR_B = 'CommandOrControl+Shift+B'
+
+  /**
+   * A fake for `globalShortcut.register` that refuses the listed accelerators the way the OS does
+   * -- returning false -- and hands back the callbacks it accepted, keyed by accelerator.
+   */
+  function installRegisterMock(refused: readonly string[]): Map<string, () => void> {
+    const dispatch = new Map<string, () => void>()
+    electronMocks.register.mockImplementation((accelerator: string, callback: () => void) => {
+      if (refused.includes(accelerator)) return false
+      dispatch.set(accelerator, callback)
+      return true
+    })
+    return dispatch
+  }
+
+  afterEach(() => {
+    electronMocks.register.mockImplementation(() => true)
+  })
+
+  it('a rebind the runtime refuses keeps the previous accelerator firing the previous callback', () => {
+    const { module } = createModule()
+    const dispatch = installRegisterMock([ACCELERATOR_B])
+    const previousCallback = vi.fn()
+    const refusedCallback = vi.fn()
+
+    expect(module.setAppShortcut('app.test.rebind', ACCELERATOR_A, previousCallback)).toBe(true)
+    expect(module.setAppShortcut('app.test.rebind', ACCELERATOR_B, refusedCallback)).toBe(false)
+
+    // The store must be back on the key that still works, not left on the refused one.
+    expect(module.getShortcutAccelerator('app.test.rebind')).toBe(ACCELERATOR_A)
+
+    dispatch.get(ACCELERATOR_A)?.()
+    expect(previousCallback).toHaveBeenCalledTimes(1)
+    expect(refusedCallback).not.toHaveBeenCalled()
+
+    module.onDestroy()
+  })
+
+  it('a first binding the runtime refuses leaves no record behind', () => {
+    const { module, storage } = createModule()
+    installRegisterMock([ACCELERATOR_B])
+
+    expect(module.setAppShortcut('app.test.first', ACCELERATOR_B, vi.fn())).toBe(false)
+
+    expect(module.getShortcutAccelerator('app.test.first')).toBeNull()
+    expect(storage.getShortcutById('app.test.first')).toBeUndefined()
+
+    module.onDestroy()
+  })
+
+  it('a rebind the runtime accepts stores the new accelerator and fires the new callback', () => {
+    const { module } = createModule()
+    const dispatch = installRegisterMock([])
+    const previousCallback = vi.fn()
+    const acceptedCallback = vi.fn()
+
+    module.setAppShortcut('app.test.accepted', ACCELERATOR_A, previousCallback)
+    expect(module.setAppShortcut('app.test.accepted', ACCELERATOR_B, acceptedCallback)).toBe(true)
+
+    expect(module.getShortcutAccelerator('app.test.accepted')).toBe(ACCELERATOR_B)
+
+    dispatch.get(ACCELERATOR_B)?.()
+    expect(acceptedCallback).toHaveBeenCalledTimes(1)
+    expect(previousCallback).not.toHaveBeenCalled()
 
     module.onDestroy()
   })
