@@ -53,14 +53,31 @@ const badgeStyle = computed(() => {
   return { left: `${offset.left}px`, bottom: `${offset.bottom}px` }
 })
 
-function handleError() {
+/**
+ * The watcher below clears the badge before Vue patches `src`, so a `load`/`error` event that
+ * still belongs to the retired picture can land in that gap and paint its result over the new
+ * resource. The element keeps carrying the retired `src` until the patch lands, which is what
+ * identifies such an event — a counter read at event time could not tell, because it is bumped by
+ * the same watcher that runs before the patch. An event is only trusted for the resource whose
+ * source the element actually holds.
+ */
+function isRetiredImageEvent(event: Event): boolean {
+  const image = event.currentTarget as HTMLImageElement | null
+  return !image || image.getAttribute('src') !== imageSrc.value
+}
+
+function handleError(event: Event): void {
+  if (isRetiredImageEvent(event)) return
+
   imageError.value = true
   imageLoading.value = false
   dimensions.value = ''
   badgeOffset.value = null
 }
 
-function handleLoad(event: Event) {
+function handleLoad(event: Event): void {
+  if (isRetiredImageEvent(event)) return
+
   imageLoading.value = false
   const image = event.currentTarget as HTMLImageElement | null
   const width = image?.naturalWidth ?? 0
