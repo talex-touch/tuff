@@ -42,8 +42,12 @@ import { intelligenceTtsService } from '../ai/intelligence-tts-service'
 import { clipboardModule } from '../clipboard'
 import { getMainConfig } from '../storage'
 import { activeAppService } from '../system/active-app'
-import { appFormatContextFromActiveApp, formatDictationText } from './app-context'
-import { getVoicePolishPrompt, wrapTranscription } from './polish-prompt'
+import {
+  appFormatContextFromActiveApp,
+  formatDictationText,
+  resolveAppFormatProfile
+} from './app-context'
+import { getVoicePolishPrompt, wrapTranscription, type PolishContext } from './polish-prompt'
 import { selectVoiceFile } from './voice-file-transcription'
 import { voiceInsightsStore } from './voice-insights-store'
 import { createLiveDelivery } from './voice-live-delivery'
@@ -1662,9 +1666,28 @@ export class VoiceService {
     transcript: string,
     strength: VoicePolishStrength,
     signal?: AbortSignal,
-    caller = VOICE_CALLER
+    caller = VOICE_CALLER,
+    context?: PolishContext
   ): Promise<string | null> {
     if (!transcript.trim()) return null
+    let effectiveContext = context
+    if (!effectiveContext) {
+      try {
+        const activeApp = await activeAppService.getActiveApp()
+        const formatCtx = appFormatContextFromActiveApp(activeApp)
+        if (formatCtx) {
+          const profile = resolveAppFormatProfile(formatCtx)
+          effectiveContext = {
+            appName: formatCtx.appName,
+            bundleId: formatCtx.bundleId,
+            category: profile.id,
+            windowTitle: formatCtx.windowTitle
+          }
+        }
+      } catch {
+        // Active application discovery is best-effort
+      }
+    }
     const tier = resolvePolishTier(transcript)
     const units = countPolishUnits(transcript)
     const telemetryId = nextVoiceSessionId()
@@ -1738,7 +1761,7 @@ export class VoiceService {
           {
             messages: [
               { role: 'system', content: getVoicePolishPrompt(effectiveStrength) },
-              { role: 'user', content: wrapTranscription(transcript) }
+              { role: 'user', content: wrapTranscription(transcript, effectiveContext) }
             ]
           },
           {
