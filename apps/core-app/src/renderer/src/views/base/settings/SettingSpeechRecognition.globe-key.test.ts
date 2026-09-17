@@ -161,6 +161,32 @@ describe('settingSpeechRecognition Globe key handover', () => {
     wrapper.unmount()
   })
 
+  /**
+   * A rejected write leaves the row with nothing but the read, and a read that still sees the
+   * conflict has to keep the manual route: otherwise the failed click retires the only way out.
+   */
+  it('offers System Settings after a rejected write that left the key taken', async () => {
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AssistantEvents.voice.getGlobeKeyStatus) {
+        return { applies: true, systemActionActive: true }
+      }
+      if (event === AssistantEvents.voice.disableGlobeKeyAction) {
+        throw new Error('write refused')
+      }
+      return true
+    })
+    const wrapper = mountSettings()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="voice-disable-globe-key"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="voice-globe-key-hint"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="voice-open-keyboard-settings"]').trigger('click')
+    expect(mocks.send).toHaveBeenCalledWith(AssistantEvents.voice.openKeyboardSettings)
+    wrapper.unmount()
+  })
+
   it('retires a resolved Globe hint when focus returns from Keyboard settings', async () => {
     let reads = 0
     mocks.send.mockImplementation(async (event: unknown) => {

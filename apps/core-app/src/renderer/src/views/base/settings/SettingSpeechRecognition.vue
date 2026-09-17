@@ -115,7 +115,12 @@ async function disableGlobeKeyAction(): Promise<void> {
     globeKeyConflict.value = conflicted
     globeKeyHandoverFailed.value = conflicted
   } catch {
+    // The write did not reach the system, so all the row knows is what the read reports. A read
+    // that still sees the conflict has to leave the manual route on screen: the key is exactly as
+    // taken as it was before the click, and this was the one-click attempt that was meant to fix
+    // it. Leaving the flag alone would hide the only way out.
     await refreshGlobeKeyStatus()
+    globeKeyHandoverFailed.value = globeKeyConflict.value
   }
 }
 
