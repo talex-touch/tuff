@@ -143,6 +143,19 @@ export const AgentToolEvents = {
     .module('api')
     .event('reset-approvals')
     .define<undefined, { reset: boolean }>(),
+  /**
+   * Renderer → main: whether a surface that can show the prompt is on screen.
+   *
+   * The card lives in the home conversation, so a call that arrives while the
+   * user is elsewhere has nobody to ask. The gateway records this so a caller
+   * that cannot be answered — the local MCP server, driven from outside the app
+   * entirely — fails immediately with an explanation instead of hanging until
+   * the confirmation times out.
+   */
+  setConfirmationSurface: defineEvent('agent-tools')
+    .module('api')
+    .event('set-confirmation-surface')
+    .define<{ mounted: boolean }, { mounted: boolean }>(),
 } as const
 
 export interface AgentToolsSdk {
@@ -153,6 +166,7 @@ export interface AgentToolsSdk {
     mode?: AgentToolPermissionMode,
   ) => Promise<{ enabled: boolean, tools: string[] }>
   resetApprovals: () => Promise<{ reset: boolean }>
+  setConfirmationSurface: (mounted: boolean) => Promise<{ mounted: boolean }>
 }
 
 export function createAgentToolsSdk(
@@ -166,5 +180,7 @@ export function createAgentToolsSdk(
       transport.send(AgentToolEvents.setEnabled, { enabled, mode }),
     resetApprovals: () =>
       transport.send(AgentToolEvents.resetApprovals, undefined),
+    setConfirmationSurface: mounted =>
+      transport.send(AgentToolEvents.setConfirmationSurface, { mounted }),
   }
 }
