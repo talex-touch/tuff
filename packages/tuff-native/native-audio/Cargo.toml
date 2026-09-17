@@ -15,7 +15,7 @@ hound = "3.5"
 napi.workspace = true
 napi-derive.workspace = true
 nnnoiseless = { version = "0.5.2", default-features = false }
-symphonia = { version = "0.5", features = ["mp3", "wav", "pcm"] }
+symphonia = { version = "0.6", features = ["mp3", "wav", "pcm"] }
 
 
 [target.'cfg(target_os = "macos")'.dependencies]
