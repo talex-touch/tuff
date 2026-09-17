@@ -578,6 +578,27 @@ describe('ShortcutModule app shortcut rebind', () => {
     module.onDestroy()
   })
 
+  /**
+   * A key already bound to another app shortcut never reaches `globalShortcut.register`, so the
+   * verdict for this id is `conflict` rather than `unavailable`. Reporting success there would
+   * persist a binding that can never fire and quietly leave the user on a dead key.
+   */
+  it('a second app binding to a taken key is refused and rolled back', () => {
+    const { module, storage } = createModule()
+    installRegisterMock([])
+    const firstCallback = vi.fn()
+
+    expect(module.setAppShortcut('app.test.owner', ACCELERATOR_A, firstCallback)).toBe(true)
+    expect(module.setAppShortcut('app.test.duplicate', ACCELERATOR_A, vi.fn())).toBe(false)
+
+    expect(module.getShortcutAccelerator('app.test.duplicate')).toBeNull()
+    expect(storage.getShortcutById('app.test.duplicate')).toBeUndefined()
+    // The binding that already worked is untouched.
+    expect(module.getShortcutAccelerator('app.test.owner')).toBe(ACCELERATOR_A)
+
+    module.onDestroy()
+  })
+
   it('a rebind the runtime accepts stores the new accelerator and fires the new callback', () => {
     const { module } = createModule()
     const dispatch = installRegisterMock([])

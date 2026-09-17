@@ -23,6 +23,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TxPopover } from '@talex-touch/tuffex/popover'
+import { sleep } from '@talex-touch/utils/common'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import type { CoreBoxIndexingDiagnosticsResponse } from '@talex-touch/utils/transport/events/types'
 import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -858,10 +859,14 @@ function openFailedFilesDialog() {
 /**
  * The failed-file list is a `TPopperDialog`, pinned at `z-10000` while every drawer sits on the
  * shared allocator at `>= 10000` — opened from inside the drawer it would come up *behind* it and
- * swallow the clicks on its own buttons. Close the drawer first instead of fighting that order.
+ * swallow the clicks on its own buttons. Close the drawer first instead of fighting that order,
+ * and wait the close out: a drawer keeps painting for its whole transition (`--tx-drawer-transition`
+ * is 0.4s and `visibility` stays `visible` until the slide-out ends), which would leave the dialog
+ * sitting behind the fading mask.
  */
-function openFailedFilesFromStatsDrawer() {
+async function openFailedFilesFromStatsDrawer() {
   statsDrawerVisible.value = false
+  await sleep(400)
   openFailedFilesDialog()
 }
 
@@ -2072,6 +2077,7 @@ async function triggerRebuild() {
             size="sm"
             :border="false"
             class="stats-list-value-btn"
+            :class="`stats-list-value--${row.tone}`"
             :title="t('settings.settingFileIndex.viewFailedFiles')"
             @click="openFailedFilesFromStatsDrawer"
           >

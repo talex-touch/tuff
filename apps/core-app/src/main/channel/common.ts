@@ -2019,13 +2019,18 @@ export class CommonChannelModule extends BaseModule {
         ...(await deviceIdleService.canRun()),
         settings: deviceIdleService.getSettings()
       })),
-      transport.on(AppEvents.appIndex.getSettings, () => appProvider.getAppIndexSettings()),
-      transport.on(AppEvents.appIndex.updateSettings, (payload) =>
-        appProvider.updateAppIndexSettings(payload ?? {})
-      ),
+      transport.on(AppEvents.appIndex.getSettings, (_payload, context) => {
+        this.assertHostOnly(context, 'appIndex.getSettings')
+        return appProvider.getAppIndexSettings()
+      }),
+      transport.on(AppEvents.appIndex.updateSettings, (payload, context) => {
+        this.assertHostOnly(context, 'appIndex.updateSettings')
+        return appProvider.updateAppIndexSettings(payload ?? {})
+      }),
       transport.on<AppIndexAddPathRequest, AppIndexAddPathResult>(
         AppEvents.appIndex.addPath,
-        (payload) => {
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.addPath')
           const inputPath = getOptionalStringProp(payload, 'path')
           if (!inputPath) {
             return { success: false, status: 'invalid', reason: 'path-empty' }
@@ -2033,11 +2038,16 @@ export class CommonChannelModule extends BaseModule {
           return appProvider.addAppByPath(inputPath)
         }
       ),
-      transport.on(AppEvents.appIndex.listEntries, () => appProvider.listManagedEntries()),
+      transport.on(AppEvents.appIndex.listEntries, (_payload, context) => {
+        this.assertHostOnly(context, 'appIndex.listEntries')
+        return appProvider.listManagedEntries()
+      }),
       // The app index's management surface: the user's launch history, the names they gave an
-      // app, and the host's own global shortcuts. Every transport handler is registered on the
-      // plugin channel as well and inspecting `context.plugin` is voluntary (#688), so the
-      // audience is asserted here instead of left to each handler's own diligence.
+      // app, the entries themselves, and the host's own global shortcuts. Every transport handler
+      // is registered on the plugin channel as well and inspecting `context.plugin` is voluntary
+      // (#688), so the audience is asserted on every handler here rather than left to their own
+      // diligence — a plugin that reached one of these could launch an application, delete an
+      // entry, or read back what the user runs.
       transport.on(AppEvents.appIndex.listSummaries, async (_payload, context) => {
         this.assertHostOnly(context, 'appIndex.listSummaries')
         // The result is passed through rather than wrapped: a failed usage read reports itself,
@@ -2046,11 +2056,15 @@ export class CommonChannelModule extends BaseModule {
       }),
       transport.on<AppIndexUpsertEntryRequest, AppIndexEntryMutationResult>(
         AppEvents.appIndex.upsertEntry,
-        (payload) => appProvider.upsertManagedEntry(payload ?? { path: '' })
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.upsertEntry')
+          return appProvider.upsertManagedEntry(payload ?? { path: '' })
+        }
       ),
       transport.on<AppIndexRemoveEntryRequest, AppIndexEntryMutationResult>(
         AppEvents.appIndex.removeEntry,
-        (payload) => {
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.removeEntry')
           const inputPath = getOptionalStringProp(payload, 'path')
           if (!inputPath) {
             return { success: false, status: 'invalid', reason: 'path-empty' }
@@ -2060,7 +2074,8 @@ export class CommonChannelModule extends BaseModule {
       ),
       transport.on<AppIndexSetEntryEnabledRequest, AppIndexEntryMutationResult>(
         AppEvents.appIndex.setEntryEnabled,
-        (payload) => {
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.setEntryEnabled')
           const inputPath = getOptionalStringProp(payload, 'path')
           if (!inputPath) {
             return { success: false, status: 'invalid', reason: 'path-empty' }
@@ -2074,11 +2089,17 @@ export class CommonChannelModule extends BaseModule {
       ),
       transport.on<AppIndexDiagnoseRequest, AppIndexDiagnoseResult>(
         AppEvents.appIndex.diagnose,
-        (payload) => appProvider.diagnoseAppSearch(payload ?? { target: '' })
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.diagnose')
+          return appProvider.diagnoseAppSearch(payload ?? { target: '' })
+        }
       ),
       transport.on<AppIndexReindexRequest, AppIndexReindexResult>(
         AppEvents.appIndex.reindex,
-        (payload) => appProvider.reindexAppSearchTarget(payload ?? { target: '' })
+        (payload, context) => {
+          this.assertHostOnly(context, 'appIndex.reindex')
+          return appProvider.reindexAppSearchTarget(payload ?? { target: '' })
+        }
       ),
       transport.on<AppIndexLaunchRequest, AppIndexLaunchResult>(
         AppEvents.appIndex.launch,

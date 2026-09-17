@@ -243,6 +243,8 @@ export default defineConfig({
           '@talex-touch/tuff-voice', // Provider protocol source must be bundled for Node ESM resolution
           '@earendil-works/pi-agent-core', // Pi 是 ESM-only，Utility Process worker 必须内联
           '@earendil-works/pi-ai', // Pi provider bridge 与 agent-core 一并内联
+          // pi 模型目录（~/.omp/agent/models.yml）的解析器，随 pi bridge 一同内联；其声明
+          // 归 apps/core-app 自己所有，见 package.json 的 dependencies
           'yaml'
         ]
       })
