@@ -2,7 +2,7 @@
 import type { McpHostState } from '@talex-touch/utils/transport/sdk/domains/mcp-host'
 import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The local MCP server section: the one place a user can see that Tuff is being
 // talked to. Everything asserted here is read back from the rendered DOM — the
@@ -15,6 +15,27 @@ const host = vi.hoisted(() => ({
   setPort: vi.fn(),
   rotateToken: vi.fn()
 }))
+
+/** jsdom implements no clipboard, and the copy control is the point of one test. */
+const clipboard = vi.hoisted(() => ({ writeText: vi.fn() }))
+
+/**
+ * Clicking a `TxButton` runs the `v-wave` directive, which asks for the
+ * reduced-motion preference before drawing. jsdom implements no media queries,
+ * so without this stub every click raises inside the directive.
+ */
+vi.hoisted(() => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(() => true)
+  }))
+})
 
 vi.mock('@talex-touch/utils/renderer', () => ({
   useIntelligenceSdk: () => ({
@@ -131,6 +152,17 @@ async function mountSection(state: McpHostState): Promise<VueWrapper> {
   return wrapper
 }
 
+beforeEach(() => {
+  // Each test states the state it needs; nothing carries over from the last one.
+  for (const call of Object.values(host)) call.mockReset()
+  clipboard.writeText.mockReset()
+  clipboard.writeText.mockResolvedValue(undefined)
+  Object.defineProperty(window.navigator, 'clipboard', {
+    value: { writeText: clipboard.writeText },
+    configurable: true
+  })
+})
+
 /** Rows are found by the label a user reads, not by position in the list. */
 function rowNamed(wrapper: VueWrapper, title: string): DOMWrapper<Element> {
   const row = wrapper
@@ -138,6 +170,15 @@ function rowNamed(wrapper: VueWrapper, title: string): DOMWrapper<Element> {
     .find((candidate) => candidate.find('.SettingRow-Title').text() === title)
   if (!row) throw new Error(`no settings row titled ${title}`)
   return row
+}
+
+/** The pasteable block, told apart from the rows by its own card title. */
+function blockNamed(wrapper: VueWrapper, title: string): DOMWrapper<Element> {
+  const block = wrapper
+    .findAll('.TBlockSlot-Container')
+    .find((candidate) => candidate.find('.TBlockSlot-TitleRow h5').text() === title)
+  if (!block) throw new Error(`no block titled ${title}`)
+  return block
 }
 
 function switchOf(row: DOMWrapper<Element>): DOMWrapper<Element> {
@@ -158,6 +199,12 @@ describe('settingSkillsMcp local MCP server section', () => {
     const text = wrapper.text()
 
     expect(text).toContain(ENDPOINT)
+    // Scoped to its own row: the pasteable client config also carries the URL,
+    // so a whole-page search would still pass with the endpoint row missing.
+    expect(
+      rowNamed(wrapper, 'settings.skillsMcp.host.endpointTitle').find('.SettingRow-Trailing').text()
+    ).toContain(ENDPOINT)
+
     for (const tool of LISTENING.tools) {
       const row = rowNamed(wrapper, tool.name)
       expect(row.find('.SettingRow-Desc').text()).toBe(tool.description)
@@ -175,19 +222,94 @@ describe('settingSkillsMcp local MCP server section', () => {
     )
   })
 
-  it('keeps the token masked until the reveal control is used', async () => {
+  it('keeps the token off the page entirely until the reveal control is used', async () => {
     const wrapper = await mountSection(LISTENING)
     const tokenRow = rowNamed(wrapper, 'settings.skillsMcp.host.tokenTitle')
+    const snippet = wrapper.find('pre')
 
-    const masked = tokenRow.find('.SettingRow-Trailing').text()
-    expect(masked).not.toContain(TOKEN)
-    expect(masked).toContain('•')
+    // Nowhere on the page: not the credential row, not the pasteable block.
+    expect(wrapper.text()).not.toContain(TOKEN)
+    expect(tokenRow.find('.SettingRow-Trailing').text()).toContain('•')
+    // The credential is masked inside the snippet, while the endpoint stays readable.
+    expect(snippet.text()).toContain('Bearer •')
+    expect(snippet.text()).toContain(ENDPOINT)
 
     await buttonLabelled(tokenRow, 'settings.skillsMcp.host.reveal').trigger('click')
 
     expect(
       rowNamed(wrapper, 'settings.skillsMcp.host.tokenTitle').find('.SettingRow-Trailing').text()
     ).toContain(TOKEN)
+    expect(wrapper.find('pre').text()).toContain(TOKEN)
+  })
+
+  it('copies the real configuration even while the screen shows the mask', async () => {
+    const wrapper = await mountSection(LISTENING)
+    const block = blockNamed(wrapper, 'settings.skillsMcp.host.configTitle')
+    expect(block.find('pre').text()).not.toContain(TOKEN)
+
+    await buttonLabelled(block, 'settings.skillsMcp.host.copy').trigger('click')
+    await flushPromises()
+
+    const copied = String(clipboard.writeText.mock.calls[0]?.[0] ?? '')
+    expect(copied).toContain(`Bearer ${TOKEN}`)
+    expect(copied).toContain(ENDPOINT)
+    // The mask is for the screen; a client pasted with bullets could not authenticate.
+    expect(copied).not.toContain('•')
+  })
+
+  it('masks the replacement token after a rotation', async () => {
+    const wrapper = await mountSection(LISTENING)
+    const rotated: McpHostState = { ...LISTENING, token: 'b4d2e6f8'.repeat(8) }
+    host.rotateToken.mockResolvedValue(rotated)
+
+    await buttonLabelled(
+      rowNamed(wrapper, 'settings.skillsMcp.host.tokenTitle'),
+      'settings.skillsMcp.host.rotate'
+    ).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain(rotated.token)
+
+    // Revealing proves the page holds the new token and not the retired one.
+    await buttonLabelled(
+      rowNamed(wrapper, 'settings.skillsMcp.host.tokenTitle'),
+      'settings.skillsMcp.host.reveal'
+    ).trigger('click')
+
+    expect(wrapper.text()).toContain(rotated.token)
+    expect(wrapper.text()).not.toContain(TOKEN)
+  })
+
+  it('re-arms the mask when a rotation follows a reveal', async () => {
+    const wrapper = await mountSection(LISTENING)
+    const rotated: McpHostState = { ...LISTENING, token: 'b4d2e6f8'.repeat(8) }
+    host.rotateToken.mockResolvedValue(rotated)
+
+    // The user looked at the old credential first: the reveal is spent on it.
+    await buttonLabelled(
+      rowNamed(wrapper, 'settings.skillsMcp.host.tokenTitle'),
+      'settings.skillsMcp.host.reveal'
+    ).trigger('click')
+    expect(wrapper.text()).toContain(TOKEN)
+
+    await buttonLabelled(
+      rowNamed(wrapper, 'settings.skillsMcp.host.tokenTitle'),
+      'settings.skillsMcp.host.rotate'
+    ).trigger('click')
+    await flushPromises()
+
+    // A rotation the user did not ask to look at must not leave the new one on
+    // screen — neither in the row nor in the pasteable block.
+    expect(wrapper.text()).not.toContain(rotated.token)
+
+    // Revealing again proves the page moved on rather than stuck on the old value.
+    await buttonLabelled(
+      rowNamed(wrapper, 'settings.skillsMcp.host.tokenTitle'),
+      'settings.skillsMcp.host.reveal'
+    ).trigger('click')
+
+    expect(wrapper.text()).toContain(rotated.token)
+    expect(wrapper.text()).not.toContain(TOKEN)
   })
 
   it('sends the flipped tool state and renders the state the host answers with', async () => {

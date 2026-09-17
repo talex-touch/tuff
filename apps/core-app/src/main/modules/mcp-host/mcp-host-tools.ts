@@ -251,3 +251,19 @@ export function createMcpHostToolset(deps: McpHostToolsetDeps): McpHostToolset {
 }
 
 export { hostOwnedFailure }
+
+/**
+ * JSON with sorted keys, so two calls that mean the same thing produce the same
+ * string. Key order is a caller's whim; a remembered approval must not depend on
+ * it, or the same read asked twice would ask the user twice.
+ */
+export function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0
+    )
+    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`).join(',')}}`
+  }
+  return JSON.stringify(value ?? null) ?? 'null'
+}
