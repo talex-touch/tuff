@@ -144,6 +144,102 @@ registry.set('tuff_mcp_list_tools', ...)
 registry.set('tuff_mcp_call', { classify: perCallPlan, ... })
 ```
 
+## Scenario: Tuff As An MCP Server For Other Agents
+
+Established by the local-MCP-host change (`apps/core-app/src/main/modules/mcp-host`,
+PR #1938). Same gate, opposite direction: §2's topology is a local agent calling
+*in* through the pi extension; this is an external agent calling *in* over the
+MCP wire format.
+
+### 1. Scope / Trigger
+
+Any change to what Tuff publishes to external MCP clients, to how such a call
+reaches the confirmation gate, or to the settings surface that turns the listener
+on. `mcp-servers` (Tuff as a client) is the neighbouring domain and is *not* this.
+
+### 2. Contracts
+
+- **One gate, not two.** `toolGatewayModule.requestConfirmation` is the only way
+  in, and it reaches the same pending map, the same broadcast and the same
+  standing `full` grant. A second prompt would be indistinguishable from a call
+  that skipped the first.
+- **Mounting is not visibility.** The card is drawn by `useAgentTools`, which
+  lives in the home conversation and survives route changes. Callers from outside
+  the app must fail closed when it cannot be answered:
+  `AgentToolEvents.setConfirmationSurface` is reported by the renderer per route
+  (`HomePage.vue` watches `route.path === '/home'`) and retracted on scope
+  dispose; `requestConfirmation` refuses with
+  `ToolConfirmationUnavailableError` while the surface is down, and a refusal is
+  never reported to the model as "the user said no".
+- **Remembered approvals are narrower here, never wider.** The card's "remember"
+  is honoured keyed by tool + sha256 of the arguments (`stableStringify`, so key
+  order cannot split one call into two), and only for `read`. The gateway keys
+  `tuff_read_file` by resolved path; a caller that resolves nothing must not fall
+  back to a blanket per-tool key.
+- **The catalogue is hand-written, not derived.** A spec with no registry entry
+  and no host implementation is dropped rather than advertised. UI-only tools
+  (chart / form / widget) and the MCP-client proxies are absent by construction:
+  an external client has no Tuff surface to draw into and brings its own servers.
+- **Off means off.** Nothing binds until the user enables it; `write`/`execute`
+  tools start disabled; the token is minted on first enable; the listener binds
+  loopback only and compares the token in constant time.
+- **Settings are read after storage is ready.** `onInit` runs while storage is
+  still `pending` — reading there throws, falls back to defaults, and the next
+  write persists those defaults over the user's file. Use
+  `waitForMainStorageReady()` + `saveMainConfigDurable`.
+- **The port is the user's.** A stable, persisted default; a port that cannot be
+  bound is reported in state rather than silently swapped for an ephemeral one,
+  which would break a client config pasted elsewhere.
+- **The credential is masked wherever it is rendered**, snippet included, and the
+  reveal is a gesture for one token: rotating re-arms the mask.
+
+### 3. Validation & Error Matrix
+
+| Condition | Behaviour |
+|---|---|
+| Missing/wrong bearer token | 401, no detail |
+| Neighbouring path, wrong method | 404 / 405 (`-32000`, not `-32600` — not the client's malformed request) |
+| Body over 256 KiB | 413, and the declared length is checked *before* the body is consumed: destroying the socket first races the reply away |
+| Endpoint with query parameters | served (`pathname` match, not `request.url`) |
+| Notification (no `id`) | 202, empty body — never a JSON reply |
+| Unknown tool name | `-32602` |
+| Tool ran and failed / user denied / user could not be asked | `isError: true` content result, never a transport error |
+| Host itself throws inside the tool layer | `-32603`, never a successful empty answer |
+| Tool switched off after start | absent from `tools/list` on the next call; refused if called anyway |
+| Settings file malformed | per-field fallback; a token that is not 64 hex (either case) is dropped and re-minted |
+
+### 4. Tests Required
+
+- Real listener + real socket for the HTTP layer (`mcp-host-server.test.ts`):
+  auth, path, method, body cap (both honest and chunked uploads), and a follow-up
+  request on a keep-alive socket — the hang-up after a refused upload is
+  load-bearing and invisible to `fetch`.
+- Protocol suite (`mcp-host-protocol.test.ts`) covering the matrix above.
+- Settings normalizer (`mcp-host-settings.test.ts`), including the uppercase-hex
+  case and the port boundaries.
+- Renderer section (`SettingSkillsMcp.host.test.ts`): masked token page-wide
+  (row *and* pasted-config block), copy path still handing over the real
+  document, rotation re-arming the mask, and the failure reason for a listener
+  that is on but not bound.
+
+### 5. Wrong vs Correct
+
+#### Wrong
+
+```ts
+// A second prompt for external callers, or a remembered set keyed by tool name:
+// an approval the user gave for one read now covers every later read.
+if (this.remembered.has(name)) return await tool.execute(args)
+```
+
+#### Correct
+
+```ts
+const rememberKey = `${name}:${sha256(stableStringify(args))}`
+if (tool.risk === 'read' && this.remembered.has(rememberKey)) return await this.runTool(name, tool, args)
+const decision = await toolGatewayModule.requestConfirmation({ tool: name, risk: tool.risk, summary: tool.summarize(args), input: JSON.stringify(args, null, 2) }, signal)
+```
+
 ## Scenario: Durable Pi Tool Result Replay Without Raw Inputs
 
 ### 1. Scope / Trigger
