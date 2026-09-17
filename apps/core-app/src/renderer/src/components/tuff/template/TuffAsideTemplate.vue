@@ -145,8 +145,21 @@ const emit = defineEmits<{
   gap: 0.5rem;
 }
 
+/**
+ * The scroller's content box already fills the pane, and these two make the aside body grow with
+ * it. Percentages cannot do this job: a height derived from one is not a definite size for its
+ * children, so `min-height: 100%` on the body resolved against the content's own percentage height
+ * and stayed at content height — leaving a list's own footer floating under its rows instead of
+ * sitting on the pane's bottom.
+ */
+.TuffAsideTemplate-AsideScroll :deep(.tx-scroll__content) {
+  display: flex;
+  flex-direction: column;
+}
+
 .TuffAsideTemplate-AsideBody {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 0.75rem;
 }

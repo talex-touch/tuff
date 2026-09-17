@@ -94,11 +94,12 @@ const countText = computed(() => {
 
 /**
  * An empty index and a filter that matched nothing are different facts: "this device has no
- * applications" would be a lie when the list is merely narrowed.
+ * applications" would be a lie when the list is merely narrowed. Neither sentence repeats the
+ * count — the footer carries that, once, on the pane's bottom.
  */
 const emptyText = computed(() =>
   props.searched || isFilterView.value
-    ? countText.value
+    ? t('appList.emptyFiltered')
     : t('settings.settingFileIndex.appIndexManagerEmpty')
 )
 
@@ -218,12 +219,15 @@ function handleClick(item: AppListItem): void {
 </template>
 
 <style lang="scss" scoped>
-// The aside scroller above owns scrolling and the gutter; this is only a full-height wrapper
-// so the sticky count footer has a containing block.
+/**
+ * A flex item of the aside body, so it grows to the pane's height instead of stopping at its rows
+ * (a percentage here resolves against a percentage-derived height and does nothing). The rows keep
+ * their own floor, so a longer list still grows and scrolls.
+ */
 .AppList-Scroll {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  min-height: 100%;
 }
 
 .list-enter-active,
@@ -333,9 +337,13 @@ function handleClick(item: AppListItem): void {
   text-align: center;
 }
 
-/** Sits with the count it qualifies, above the pinned footer, in the list's own gutter. */
+/**
+ * Sits with the count it qualifies, above the pinned footer, in the list's own gutter. The auto
+ * top margin is what drops this pair — and, with no notice rendered, the footer alone — to the
+ * bottom of the pane: with no free space above them they just follow the last row.
+ */
 .AppList-Notice {
-  margin: 0;
+  margin: auto 0 0;
   padding: 0 0.75rem 0.5rem;
   color: var(--tx-text-color-secondary);
   font-size: 0.7rem;
@@ -359,6 +367,7 @@ function handleClick(item: AppListItem): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-top: auto;
   padding: 0.25rem 0.75rem;
   border-top: 1px solid var(--tx-border-color-lighter);
   background: var(--tx-bg-color-overlay);
