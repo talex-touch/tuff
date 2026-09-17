@@ -164,13 +164,15 @@ on. `mcp-servers` (Tuff as a client) is the neighbouring domain and is *not* thi
   standing `full` grant. A second prompt would be indistinguishable from a call
   that skipped the first.
 - **Mounting is not visibility.** The card is drawn by `useAgentTools`, which
-  lives in the home conversation and survives route changes. Callers from outside
-  the app must fail closed when it cannot be answered:
-  `AgentToolEvents.setConfirmationSurface` is reported by the renderer per route
-  (`HomePage.vue` watches `route.path === '/home'`) and retracted on scope
-  dispose; `requestConfirmation` refuses with
-  `ToolConfirmationUnavailableError` while the surface is down, and a refusal is
-  never reported to the model as "the user said no".
+  lives in the home conversation and survives route changes; `/home/c/:id` is the
+  stored-conversation route and renders the same component, so it counts as
+  visible too. Callers from outside the app must fail closed when it cannot be
+  answered: `AgentToolEvents.setConfirmationSurface` is reported by the renderer
+  per route (`HomePage.vue` watches the path) and retracted on scope dispose;
+  `requestConfirmation` refuses with `ToolConfirmationUnavailableError` while the
+  surface is down, and a refusal is never reported to the model as "the user said
+  no". Losing the surface also *settles* what is already pending as `cancelled` —
+  the same answer the two-minute timeout would reach, without the wait.
 - **Remembered approvals are narrower here, never wider.** The card's "remember"
   is honoured keyed by tool + sha256 of the arguments (`stableStringify`, so key
   order cannot split one call into two), and only for `read`. The gateway keys
@@ -181,17 +183,32 @@ on. `mcp-servers` (Tuff as a client) is the neighbouring domain and is *not* thi
   (chart / form / widget) and the MCP-client proxies are absent by construction:
   an external client has no Tuff surface to draw into and brings its own servers.
 - **Off means off.** Nothing binds until the user enables it; `write`/`execute`
-  tools start disabled; the token is minted on first enable; the listener binds
-  loopback only and compares the token in constant time.
+  tools start disabled; the listener binds loopback only and compares the token
+  in constant time.
+- **The credential lives in the secure store, never in settings.**
+  `apps/core-app/AGENTS.md` forbids writing a token to ordinary JSON, so the
+  settings document holds only `{ enabled, port, tools }` and the bearer token is
+  under `MCP_HOST_TOKEN_REF`. A settings file left by a build that did keep it
+  there is ignored, not migrated: `normalizeMcpHostSettings` must never emit a
+  `token` field. Enabling refuses outright when the secure store is unavailable
+  rather than degrading to a plaintext write.
 - **Settings are read after storage is ready.** `onInit` runs while storage is
   still `pending` — reading there throws, falls back to defaults, and the next
   write persists those defaults over the user's file. Use
   `waitForMainStorageReady()` + `saveMainConfigDurable`.
+- **A save that did not land is a failed command, not a warning.**
+  `saveMainConfigDurable` resolves `{ success: false }` and rolls the cache back,
+  so every mutating handler checks it, restores its own previous state, and
+  throws: a listener started for settings that will not survive the restart hands
+  the user a client config pointing at a port that dies with the app.
 - **The port is the user's.** A stable, persisted default; a port that cannot be
   bound is reported in state rather than silently swapped for an ephemeral one,
   which would break a client config pasted elsewhere.
 - **The credential is masked wherever it is rendered**, snippet included, and the
   reveal is a gesture for one token: rotating re-arms the mask.
+- **A read that failed is not an "off" switch.** The settings section renders a
+  retry row when it cannot read the state, instead of a stopped chip over a switch
+  reading false — that would be a claim about a listener nobody asked.
 
 ### 3. Validation & Error Matrix
 
@@ -202,6 +219,7 @@ on. `mcp-servers` (Tuff as a client) is the neighbouring domain and is *not* thi
 | Body over 256 KiB | 413, and the declared length is checked *before* the body is consumed: destroying the socket first races the reply away |
 | Endpoint with query parameters | served (`pathname` match, not `request.url`) |
 | Notification (no `id`) | 202, empty body — never a JSON reply |
+| `id: null` (present but null) | `-32600`; MCP forbids a null id, and silence would read as a lost call |
 | Unknown tool name | `-32602` |
 | Tool ran and failed / user denied / user could not be asked | `isError: true` content result, never a transport error |
 | Host itself throws inside the tool layer | `-32603`, never a successful empty answer |

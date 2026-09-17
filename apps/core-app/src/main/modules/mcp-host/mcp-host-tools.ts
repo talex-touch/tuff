@@ -19,6 +19,7 @@
 import type { ToolDefinition, ToolResult } from '../tool-gateway/tool-registry'
 import type { LocalSkillEntry } from '../ai/skill-local-sources'
 import { listEnabledLocalSkills } from '../ai/skill-local-sources'
+import { formatStableToolError, projectToolError } from '../ai/tool-error-projection'
 import { truncateForModel } from '../tool-gateway/tool-registry'
 
 /** Mirrors the gateway's `ToolRisk`, so a card reads the same wherever it came from. */
@@ -177,9 +178,19 @@ function hostOwnedFailure(message: string): ToolResult {
 }
 
 function describeLocalSkill(skill: LocalSkillEntry): string {
-  const description = skill.description.trim()
-  const suffix = description ? `\t${description}` : ''
-  return `${skill.id}\t${skill.name}${suffix}`
+  return [skill.id, 'linked', skill.name, skill.description.trim()].join('\t')
+}
+
+/**
+ * One row saying this half of the list is missing, in the same four columns as
+ * every other row. The reason is the stable projected one: a caller on the same
+ * machine is still not entitled to the user's home path, which is what a raw
+ * filesystem error carries.
+ */
+function degradedRow(source: string, error: unknown): string {
+  return ['', source, '', `unavailable: ${formatStableToolError(projectToolError(error))}`].join(
+    '\t'
+  )
 }
 
 function buildListSkillsTool(deps: McpHostToolsetDeps): ToolDefinition {
@@ -191,24 +202,18 @@ function buildListSkillsTool(deps: McpHostToolsetDeps): ToolDefinition {
       const lines = ['id\tsource\tname\tdescription']
       try {
         for (const skill of await listEnabledLocalSkills()) {
-          lines.push(`${describeLocalSkill(skill)}\tlinked`)
+          lines.push(describeLocalSkill(skill))
         }
       } catch (error) {
-        // A broken linked directory must not hide the imported half of the list.
-        lines.push(
-          `linked\t\tunavailable: ${error instanceof Error ? error.message : String(error)}`
-        )
+        lines.push(degradedRow('linked', error))
       }
 
       try {
         for (const skill of await deps.listImportedSkills()) {
-          const description = skill.description.trim()
-          lines.push(`${skill.id}\timported\t${skill.name}\t${description}`)
+          lines.push([skill.id, 'imported', skill.name, skill.description.trim()].join('\t'))
         }
       } catch (error) {
-        lines.push(
-          `imported\t\tunavailable: ${error instanceof Error ? error.message : String(error)}`
-        )
+        lines.push(degradedRow('imported', error))
       }
 
       if (lines.length === 1) {

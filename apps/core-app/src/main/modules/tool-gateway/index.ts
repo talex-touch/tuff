@@ -375,6 +375,15 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
       ) => {
         assertHostOwned(context)
         this.confirmationSurfaceMounted = payload.mounted === true
+        if (!this.confirmationSurfaceMounted) {
+          // A call that entered `pending` while the card was on screen would
+          // otherwise wait out the two-minute timeout with no prompt anywhere —
+          // and end as a denial the user never gave. Cancelling now is the same
+          // answer the timeout would reach, minus the wait.
+          for (const settle of [...this.pending.values()]) {
+            settle({ approved: false, remember: false }, 'cancelled')
+          }
+        }
         return { mounted: this.confirmationSurfaceMounted }
       }) as never)
     )

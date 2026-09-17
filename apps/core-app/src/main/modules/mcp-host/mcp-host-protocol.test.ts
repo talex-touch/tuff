@@ -59,10 +59,11 @@ describe('notifications', () => {
     expect(response).toBeNull()
   })
 
-  it('treats id 0 as a real request, not as a notification', async () => {
-    const response = await answered({ jsonrpc: '2.0', id: 0, method: 'tools/list' })
+  it.each([0, '', 'call-7', 42])('answers id %s as a legal request id', async (id) => {
+    const response = await answered({ jsonrpc: '2.0', id, method: 'tools/list' })
 
-    expect(response.id).toBe(0)
+    // An emptiness check on the id would have swallowed 0 and '' alike.
+    expect(response.id).toBe(id)
     expect(response.result).toEqual({ tools: [READ_TOOL] })
   })
 })
@@ -221,6 +222,14 @@ describe('request envelopes', () => {
       id: null
     },
     { case: 'a JSON scalar', raw: '"initialize"', code: JSON_RPC_INVALID_REQUEST, id: null },
+    {
+      // `null` is not a notification: answering it with silence would look to
+      // the client like a lost call.
+      case: 'a JSON null id',
+      raw: '{"jsonrpc":"2.0","id":null,"method":"tools/list"}',
+      code: JSON_RPC_INVALID_REQUEST,
+      id: null
+    },
     {
       case: 'an envelope with no jsonrpc field',
       raw: '{"id":1,"method":"ping"}',

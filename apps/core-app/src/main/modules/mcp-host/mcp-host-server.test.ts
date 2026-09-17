@@ -3,7 +3,11 @@ import type { McpHostServerHandle, McpHostServerOptions } from './mcp-host-serve
 import { Agent, request as httpRequest } from 'node:http'
 import { createServer as createNetServer } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { JSON_RPC_PARSE_ERROR, JSON_RPC_SERVER_ERROR } from './mcp-host-protocol'
+import {
+  JSON_RPC_INVALID_REQUEST,
+  JSON_RPC_PARSE_ERROR,
+  JSON_RPC_SERVER_ERROR
+} from './mcp-host-protocol'
 import { startMcpHostServer } from './mcp-host-server'
 
 const TOKEN = '7f3a'.repeat(16)
@@ -395,6 +399,31 @@ describe('mcp host server', () => {
     // means it was left open, which is the failure the timeout reports.
     await expect(hangUpAfterRefusal(handle)).resolves.toBe(true)
   }, 5000)
+
+  it('refuses a JSON null request id without consulting the tool layer', async () => {
+    const listTools = vi.fn(() => [READ_TOOL])
+    const callTool = vi.fn(async () => ({ output: 'ran', isError: false }))
+    handle = await startHost({ listTools, callTool })
+
+    const { status, body } = await request(handle, {
+      body: {
+        jsonrpc: '2.0',
+        id: null,
+        method: 'tools/call',
+        params: { name: 'read_file', arguments: {} }
+      }
+    })
+
+    // Malformed, not a notification: a silent 202 here would be a lost call.
+    expect(status).toBe(200)
+    expect(body).toMatchObject({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: JSON_RPC_INVALID_REQUEST }
+    })
+    expect(listTools).not.toHaveBeenCalled()
+    expect(callTool).not.toHaveBeenCalled()
+  })
 
   it('stops accepting requests once closed', async () => {
     handle = await startHost()

@@ -33,8 +33,15 @@ import type { ToolResult } from '../tool-gateway/tool-registry'
 import { randomBytes, createHash } from 'node:crypto'
 import { McpHostEvents } from '@talex-touch/utils/transport/sdk/domains/mcp-host'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
+import { app } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
+import { resolveRuntimeRootPath } from '../../utils/app-root-path'
+import {
+  getSecureStoreValue,
+  isSecureStoreAvailable,
+  setSecureStoreValue
+} from '../../utils/secure-store'
 import { getMainConfig, saveMainConfigDurable, waitForMainStorageReady } from '../storage'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
 import { BaseModule } from '../abstract-base-module'
@@ -82,6 +89,14 @@ export class McpHostModule extends BaseModule<TalexEvents> {
    * for a caller that nothing else vouches for.
    */
   private readonly remembered = new Set<string>()
+  /**
+   * The bearer token, held in memory only.
+   *
+   * `apps/core-app/AGENTS.md` forbids writing a token into ordinary JSON, so the
+   * settings document carries no credential at all: this lives in the secure
+   * store under {@link MCP_HOST_TOKEN_REF}.
+   */
+  private token = ''
   private lastError: string | undefined
   private toolset: ReturnType<typeof createMcpHostToolset> | null = null
 
@@ -227,7 +242,7 @@ export class McpHostModule extends BaseModule<TalexEvents> {
       try {
         const handle = await startMcpHostServer({
           port: resolveMcpHostPort(this.settings.port),
-          token: this.settings.token,
+          token: this.token,
           serverVersion: MCP_HOST_SERVER_VERSION,
           instructions: MCP_HOST_INSTRUCTIONS,
           listTools: () => this.listExposedTools(),
@@ -241,7 +256,11 @@ export class McpHostModule extends BaseModule<TalexEvents> {
         this.lastError = error instanceof Error ? error.message : String(error)
         mcpHostLog.warn('MCP host listener failed to start', { error: this.lastError })
         this.settings = { ...this.settings, enabled: false }
-        this.persist()
+        // Awaited, because a save that does not land leaves `enabled: true` on
+        // disk and the next launch retries the bind that just failed.
+        if (!(await this.persist())) {
+          this.lastError = `${this.lastError} (and the switch could not be saved either)`
+        }
         return null
       } finally {
         this.starting = null
@@ -267,6 +286,14 @@ export class McpHostModule extends BaseModule<TalexEvents> {
       try {
         await waitForMainStorageReady()
         this.settings = normalizeMcpHostSettings(getMainConfig(StorageList.MCP_HOST_SETTINGS))
+        // Absent is not an error here: a fresh install has no token until the
+        // user enables the server, which is what minting one is for.
+        this.token =
+          (await getSecureStoreValue(
+            this.secureStoreRoot(),
+            MCP_HOST_TOKEN_REF,
+            MCP_HOST_TOKEN_PURPOSE
+          )) ?? ''
         this.loaded = true
       } catch (error) {
         mcpHostLog.warn('Failed to load MCP host settings, using defaults', {
@@ -279,16 +306,56 @@ export class McpHostModule extends BaseModule<TalexEvents> {
     return await this.loading
   }
 
-  /** Durable, not fire-and-forget: this document holds a credential and a port. */
-  private async persist(): Promise<void> {
+  private secureStoreRoot(): string {
+    return resolveRuntimeRootPath(app)
+  }
+
+  /**
+   * Mints the token on first use and gives it somewhere safe to live. Refuses
+   * rather than falling back to the settings file: a credential written to plain
+   * JSON is exactly what the repository forbids.
+   */
+  private async ensureToken(): Promise<void> {
+    const root = this.secureStoreRoot()
+    if (!isSecureStoreAvailable(root)) {
+      throw new Error('Secure storage is unavailable, so the access token cannot be stored')
+    }
+    this.token = mintMcpHostToken()
+    const stored = await setSecureStoreValue(
+      root,
+      MCP_HOST_TOKEN_REF,
+      this.token,
+      MCP_HOST_TOKEN_PURPOSE
+    )
+    if (!stored) {
+      this.token = ''
+      throw new Error('Failed to store the access token in secure storage')
+    }
+  }
+
+  /**
+   * Durable, not fire-and-forget — and *checked*. `saveMainConfigDurable`
+   * resolves `{ success: false }` (rolling the cache back to the previous value)
+   * when the write cannot land, so a caller that ignores it goes on to start a
+   * listener for settings that will not survive the restart: the client config
+   * the user pasted elsewhere then points at a port that only answers until the
+   * app closes.
+   */
+  private async persist(): Promise<boolean> {
     try {
       await waitForMainStorageReady()
-      await saveMainConfigDurable(StorageList.MCP_HOST_SETTINGS, this.settings)
+      const result = await saveMainConfigDurable(StorageList.MCP_HOST_SETTINGS, this.settings)
+      if (!result?.success) {
+        mcpHostLog.warn('MCP host settings were not persisted')
+        return false
+      }
       this.loaded = true
+      return true
     } catch (error) {
       mcpHostLog.warn('Failed to persist MCP host settings', {
         error: error instanceof Error ? error.message : String(error)
       })
+      return false
     }
   }
 
@@ -305,7 +372,7 @@ export class McpHostModule extends BaseModule<TalexEvents> {
       running: this.handle !== null,
       endpoint: this.handle?.url ?? null,
       port: this.handle?.port ?? resolveMcpHostPort(this.settings.port),
-      token: this.settings.token,
+      token: this.token,
       tools,
       lastError: this.lastError
     }
@@ -330,16 +397,23 @@ export class McpHostModule extends BaseModule<TalexEvents> {
       ) => {
         assertHostOwnedMcpHost(context)
         await this.ensureLoaded()
+        const previous = { ...this.settings }
         if (payload.enabled === true) {
           // A token is minted on first use, not at install time: an unused
-          // feature should not leave a credential on disk.
-          if (!this.settings.token) this.settings.token = mintMcpHostToken()
+          // feature should not leave a credential anywhere.
+          if (!this.token) await this.ensureToken()
           this.settings.enabled = true
-          await this.persist()
+          if (!(await this.persist())) {
+            this.settings = previous
+            throw new Error('Tuff could not save the switch, so the server was left off')
+          }
           await this.startListener()
         } else {
           this.settings.enabled = false
-          await this.persist()
+          if (!(await this.persist())) {
+            this.settings = previous
+            throw new Error('Tuff could not save the switch, so the server was left on')
+          }
           await this.stopListener()
         }
         return this.getState()
@@ -355,8 +429,12 @@ export class McpHostModule extends BaseModule<TalexEvents> {
         if (!toolset.specs.some((spec) => spec.name === payload.name)) {
           throw new Error(`Unknown MCP host tool: ${payload.name}`)
         }
+        const previous = { ...this.settings }
         this.settings.tools = { ...this.settings.tools, [payload.name]: payload.enabled === true }
-        await this.persist()
+        if (!(await this.persist())) {
+          this.settings = previous
+          throw new Error(`Tuff could not save the switch for ${payload.name}`)
+        }
         return this.getState()
       }) as never),
 
@@ -371,8 +449,13 @@ export class McpHostModule extends BaseModule<TalexEvents> {
         // A running listener holds the old port; rebinding is the only way the
         // new one takes effect, and doing it here keeps the state truthful.
         await this.stopListener()
+        const previous = { ...this.settings }
         this.settings.port = port
-        await this.persist()
+        if (!(await this.persist())) {
+          this.settings = previous
+          if (this.isEnabled()) await this.startListener()
+          throw new Error('Tuff could not save the port, so the previous one was kept')
+        }
         if (this.isEnabled()) await this.startListener()
         return this.getState()
       }) as never),
@@ -383,9 +466,14 @@ export class McpHostModule extends BaseModule<TalexEvents> {
       ) => {
         assertHostOwnedMcpHost(context)
         await this.ensureLoaded()
-        this.settings.token = mintMcpHostToken()
-        await this.persist()
-        // The old token is worthless the moment the file changes, but the
+        const previous = this.token
+        try {
+          await this.ensureToken()
+        } catch (error) {
+          this.token = previous
+          throw error
+        }
+        // The old token is worthless the moment the store changes, but the
         // listener compares against the value it started with, so it restarts.
         await this.restartForToken()
         return this.getState()
@@ -398,8 +486,17 @@ export class McpHostModule extends BaseModule<TalexEvents> {
     // they pasted elsewhere is still pointing at this port, and an endpoint that
     // only answers after a manual toggle is a broken config, not a safe default.
     // Driven by readiness rather than ordered after it, because `onInit` runs
-    // while storage is still pending.
-    void this.ensureLoaded().then(() => (this.isEnabled() ? this.startListener() : null))
+    // while storage is still pending. No token means no listener: an endpoint
+    // that rejects every caller is not a working server, and minting one here
+    // would hand out a credential the user never asked for.
+    void this.ensureLoaded().then(() => {
+      if (!this.isEnabled()) return null
+      if (!this.token) {
+        mcpHostLog.warn('MCP host is enabled but has no stored token; leaving the listener down')
+        return null
+      }
+      return this.startListener()
+    })
   }
 
   private async restartForToken(): Promise<void> {
@@ -430,6 +527,10 @@ function assertHostOwnedMcpHost(context: HandlerContext): void {
 export function mintMcpHostToken(): string {
   return randomBytes(32).toString('hex')
 }
+
+/** Secure-store key and purpose for the bearer token; never written to JSON. */
+export const MCP_HOST_TOKEN_REF = 'mcp.host.token'
+export const MCP_HOST_TOKEN_PURPOSE = 'mcp-host-token'
 
 export const MCP_HOST_SERVER_VERSION = '1.0.0'
 

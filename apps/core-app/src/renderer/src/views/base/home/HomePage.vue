@@ -206,9 +206,12 @@ const agentTools = useAgentTools()
  * confirmation card drawn into a hidden page is one nobody can answer. Main needs the difference —
  * a call driven from outside the app (the local MCP server) should be refused with an explanation
  * rather than wait two minutes for a prompt that is not on screen.
+ *
+ * `/home/c/:id` is the stored-conversation route and renders this same component, card included, so
+ * it counts as visible for the same reason `/home` does.
  */
 watch(
-  () => route.path === '/home',
+  () => route.path === '/home' || route.path.startsWith('/home/c/'),
   (visible) => agentTools.setSurfaceVisible(visible),
   { immediate: true }
 )

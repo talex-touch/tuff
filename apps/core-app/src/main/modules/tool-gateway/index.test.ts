@@ -168,6 +168,25 @@ function lastConfirmSettlement(): AgentToolConfirmSettlement {
   return call[1] as AgentToolConfirmSettlement
 }
 
+function confirmRequests(): AgentToolConfirmRequest[] {
+  return mocks.broadcast.mock.calls
+    .filter(([event]) => event === AgentToolEvents.confirmRequest)
+    .map(([, payload]) => payload as AgentToolConfirmRequest)
+}
+
+function confirmSettlements(): AgentToolConfirmSettlement[] {
+  return mocks.broadcast.mock.calls
+    .filter(([event]) => event === AgentToolEvents.confirmSettled)
+    .map(([, payload]) => payload as AgentToolConfirmSettlement)
+}
+
+/** The card being drawn into, or torn out of, the home conversation. */
+async function setConfirmationSurface(mounted: boolean): Promise<{ mounted: boolean }> {
+  const handler = mocks.handlers.get(AgentToolEvents.setConfirmationSurface)
+  if (!handler) throw new Error('setConfirmationSurface handler was never registered')
+  return (await handler({ mounted }, hostContext())) as { mounted: boolean }
+}
+
 beforeEach(async () => {
   vi.unstubAllEnvs()
   vi.clearAllMocks()
@@ -435,6 +454,59 @@ describe('permission mode at the confirmation gate', () => {
       reason: 'cancelled'
     })
     expect(mocks.close).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the confirmation card leaving the conversation', () => {
+  it('cancels every confirmation still waiting when the card unmounts', async () => {
+    await setEnabled({ enabled: true, mode: 'review' })
+    const first = askGate({ tool: 'tuff_read_file' })
+    const second = askGate({ tool: 'tuff_write_file' })
+    await flush()
+
+    const requests = confirmRequests()
+    expect(requests).toHaveLength(2)
+
+    await expect(setConfirmationSurface(false)).resolves.toEqual({ mounted: false })
+
+    await expect(first).resolves.toEqual({ approved: false, remember: false })
+    await expect(second).resolves.toEqual({ approved: false, remember: false })
+    expect(confirmSettlements()).toEqual([
+      { requestId: requests[0]!.requestId, reason: 'cancelled' },
+      { requestId: requests[1]!.requestId, reason: 'cancelled' }
+    ])
+    // Settled means gone: a late decision cannot approve what nobody saw.
+    expect(decide({ requestId: requests[0]!.requestId, approved: true, remember: false })).toEqual({
+      accepted: false
+    })
+  })
+
+  it('does not settle a second time when the card unmounts again', async () => {
+    await setEnabled({ enabled: true, mode: 'review' })
+    const inFlight = askGate()
+    await flush()
+
+    await expect(setConfirmationSurface(false)).resolves.toEqual({ mounted: false })
+    await expect(inFlight).resolves.toEqual({ approved: false, remember: false })
+    expect(confirmSettlements()).toHaveLength(1)
+
+    await setConfirmationSurface(false)
+
+    expect(confirmSettlements()).toHaveLength(1)
+  })
+
+  it('settles nothing while the card is on screen', async () => {
+    await setEnabled({ enabled: true, mode: 'review' })
+    const inFlight = askGate()
+    await flush()
+
+    await expect(setConfirmationSurface(true)).resolves.toEqual({ mounted: true })
+
+    expect(confirmSettlements()).toEqual([])
+    // Still live: the user can answer the card that is actually drawn.
+    const request = lastConfirmRequest()
+    decide({ requestId: request.requestId, approved: true, remember: false })
+    await expect(inFlight).resolves.toEqual({ approved: true, remember: false })
   })
 })
 

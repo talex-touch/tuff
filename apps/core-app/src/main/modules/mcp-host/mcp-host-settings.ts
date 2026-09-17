@@ -17,31 +17,24 @@ export const MCP_HOST_DEFAULT_PORT = 43110
 export interface McpHostSettings {
   enabled: boolean
   port: number
-  /** Empty until the user enables the server for the first time. */
-  token: string
   /** Per-tool overrides; a missing key means the tool spec's own default. */
   tools: Record<string, boolean>
 }
 
+/**
+ * The credential is *not* here. `apps/core-app/AGENTS.md` forbids writing tokens
+ * to ordinary JSON, so the bearer token lives in the secure store under
+ * `MCP_HOST_TOKEN_REF` and this document only says whether the listener is on.
+ */
 export const DEFAULT_MCP_HOST_SETTINGS: McpHostSettings = {
   enabled: false,
   port: MCP_HOST_DEFAULT_PORT,
-  token: '',
   tools: {}
 }
 
 /** Below 1024 needs privileges on macOS; above 65535 is not a port. */
 export const MIN_MCP_HOST_PORT = 1024
 export const MAX_MCP_HOST_PORT = 65535
-
-/**
- * 32 random bytes as hex — the same shape the tool gateway mints.
- *
- * Case-insensitive on read: this file is editable, and a token the user retyped
- * in uppercase is the same credential. Rejecting it would silently mint a new
- * one and invalidate whatever they had already pasted into their client.
- */
-const TOKEN_PATTERN = /^[0-9a-f]{64}$/i
 
 export function resolveMcpHostPort(value: unknown): number {
   const candidate = typeof value === 'number' ? value : Number(value)
@@ -52,6 +45,18 @@ export function resolveMcpHostPort(value: unknown): number {
     : MCP_HOST_DEFAULT_PORT
 }
 
+export function normalizeMcpHostSettings(value: unknown): McpHostSettings {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ...DEFAULT_MCP_HOST_SETTINGS }
+  }
+  const record = value as Record<string, unknown>
+  return {
+    enabled: record.enabled === true,
+    port: resolveMcpHostPort(record.port),
+    tools: normalizeToolOverrides(record.tools)
+  }
+}
+
 function normalizeToolOverrides(value: unknown): Record<string, boolean> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const overrides: Record<string, boolean> = {}
@@ -60,19 +65,4 @@ function normalizeToolOverrides(value: unknown): Record<string, boolean> {
     if (typeof entry === 'boolean') overrides[key] = entry
   }
   return overrides
-}
-
-export function normalizeMcpHostSettings(value: unknown): McpHostSettings {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return { ...DEFAULT_MCP_HOST_SETTINGS }
-  }
-  const record = value as Record<string, unknown>
-  const token =
-    typeof record.token === 'string' && TOKEN_PATTERN.test(record.token) ? record.token : ''
-  return {
-    enabled: record.enabled === true,
-    port: resolveMcpHostPort(record.port),
-    token,
-    tools: normalizeToolOverrides(record.tools)
-  }
 }
