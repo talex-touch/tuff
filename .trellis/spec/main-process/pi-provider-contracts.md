@@ -1,7 +1,8 @@
-# pi Provider Contracts
+# Local CLI Provider Contracts (pi · omp · codex · claude)
 
-Contracts for the `pi` CLI provider path (home conversation). Established by
-08-05-attachments-to-model; commits 647fb3f2a / d9a25ed5f.
+Contracts for the CLI-backed chat providers — the shared runtime, each CLI's own
+argument vector, and the per-stream termination semantics. §1–§9 were established
+on the `pi` path alone; §11 generalises them to the family.
 
 ## 1. Scope / Trigger
 
@@ -360,3 +361,192 @@ buildPiArgs(..., {
 - Discovered Pi pointers capture the current last entry id as their expected
   head, so first continuation applies the same branch-drift guard as a
   Tuff-created pointer. Forget removes only the pointer.
+
+## 11. Scenario: The local CLI provider family (pi / omp / codex / claude)
+
+### 1. Scope / Trigger
+
+- Trigger: adding a CLI to the family, or changing its argument vector, its
+  stream parser, its model-catalogue read, or its executable lookup.
+- One runtime owns the lifecycle for all four (`runCliChat`); everything that
+  differs between them is data — the argv a provider builds and the parser it
+  hands in. A new CLI that needs a third parser is a change to this contract.
+
+### 2. Signatures
+
+```ts
+type CliRunSpec = {
+  name: 'pi' | 'omp' | 'codex' | 'claude'
+  errorPrefix: string
+  executable: string
+  args: string[] | ((attachmentPaths: string[]) => string[])
+  cwd?: string
+  parseLine: (line: string) => CliLineEvent | null
+  terminationErrorCode: string
+  logger: Logger
+}
+
+CliLineEvent = {
+  delta?; usage?; provider?; model?; stopReason?; failure?
+  partEvent?; partEvents?; retry?; commit?; reset?
+}
+
+buildPiArgs(prompt, model?, toolOptions?, attachmentPaths?)   // pi-cli-runtime.ts
+buildOmpArgs(prompt, model?, attachmentPaths?)                // pi-cli-runtime.ts
+createClaudeLineParser()                                      // cli/claude-stream-json.ts
+createCodexLineParser()                                       // cli/codex-exec-json.ts
+resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executable.ts
+```
+
+### 3. Contracts
+
+#### 3.1 Argument matrix
+
+| Concern | pi | omp | codex | claude |
+|---|---|---|---|---|
+| answer-only run | `--print --mode json --no-tools --no-extensions --no-skills --no-session` | `--print --mode json --no-tools --no-extensions --no-skills --no-rules --no-session --thinking off` | `exec --json --ephemeral --ignore-rules -s read-only --color never` | `-p --output-format stream-json --verbose --include-partial-messages --no-session-persistence` |
+| tool suppression | `--no-tools` (+ `-e <extensionPath>` only when tools were granted) | `--no-tools` | `-c mcp_servers={}` | `--tools '' --strict-mcp-config --setting-sources '' --disable-slash-commands --no-chrome` |
+| system prompt | `--system-prompt` | `--system-prompt` | no flag — the text is **prefixed** to the prompt | `--system-prompt` |
+| model | `--model` | `--model` | `-m` | `--model` |
+| attachments | `@<path>` positionals before the prompt | `@<path>` positionals | `-i <path>` (repeatable) | **dropped** — no flag exists |
+| working root | `--no-context-files` + the host's cwd | `--no-rules` is its name for the same idea; no session flags exist | `-C <isolationRoot> --skip-git-repo-check` | cwd = `isolationRoot` |
+
+- `--no-context-files` is **pi's** spelling. omp rejects it (`unknown flag`,
+  exit 2) and calls it `--no-rules`; using pi's vector for omp fails before the
+  first token is generated.
+- omp exposes no `--session` / `--session-id` (only `-c/--continue` and
+  `-r/--resume`), so it is always ephemeral. A session-continuation feature may
+  not be bolted onto it by passing pi's flags.
+
+#### 3.2 Termination semantics are per stream, not per CLI
+
+| CLI | answer carrier | failure carrier | exit code |
+|---|---|---|---|
+| pi / omp | NDJSON events; deltas are preview until `message-commit` | `auto_retry_end.finalError`; unknown model arrives as **plain text on stderr** | not the answer truth |
+| claude | `stream_event.content_block_delta.delta.text` only | `result.is_error === true`, message in `result.result` | secondary |
+| codex | `item.completed{type:'agent_message'}` — whole answer, delta **and** `commit` on one line | `turn.failed{error.message}` | secondary |
+
+- **claude's `subtype` is not the verdict.** A run that failed with
+  `API Error: 400 unknown provider for model …` reported
+  `subtype: "success"` with `is_error: true`. Reading `subtype` renders a failed
+  turn as an empty answer. The same error text also rides an `assistant` line;
+  reading that line as content prints every answer twice, so it is ignored and
+  `result.result` is the single source of the failure text.
+- **`item.completed{type:'error'}` is metadata, not failure** (codex reports
+  non-fatal warnings that way); only `turn.failed` means the run produced nothing.
+- **A run that ends with nothing streamed and no explicit success must throw the
+  CLI's own words.** An empty bubble is the failure mode these parsers exist to
+  prevent (AC5): the words are already in hand — `state.failure`, the stderr
+  tail, or the exit code — and every one of them beats showing nothing.
+- **Cancellation is a normal return**, not an error: `signal.aborted` wins over
+  a concurrent child error, and the caller sees a generator that simply ends.
+  The child must be gone when it does (see the termination window in §8.3).
+
+#### 3.3 Executable lookup, absent vs unprobed
+
+- Order: `TUFF_<CLI>_CLI_PATH` → `PATH` → version-manager roots (mise, volta,
+  nvm, fnm) → fixed bins (`~/.local/bin`, `~/.bun/bin`, `/opt/homebrew/bin`, …).
+  A GUI launch inherits launchd's `PATH` and would otherwise find nothing.
+- The override is **authoritative**: a value that does not point at an
+  executable means *absent*, never "search anyway". That is what makes
+  `TUFF_CLAUDE_CLI_PATH=/nonexistent` a faithful simulation of an uninstalled CLI.
+- `undefined` means **not probed**, `null` means **probed and absent**. Config
+  assembly runs on every invoke, so treating unprobed as absent drops the row
+  until something else forces a re-assembly.
+- `pie` is pi's fallback form (same protocol, same catalogue); the display name
+  hangs off the resolved form, so a `pie`-only machine still reads "Pi · Touch Pie".
+
+#### 3.4 Model catalogue reads and the credential boundary
+
+| CLI | files read | root env | never read |
+|---|---|---|---|
+| pi | `models.json`, `models-store.json` | `PI_CODING_AGENT_DIR` (default `~/.pi/agent`) | `auth.json` |
+| omp | `models.yml` / `models.yaml` / `models.json`, `config.yml` (`enabledModels`) | `TUFF_OMP_AGENT_DIR` (default `~/.omp/agent`) | — |
+| codex | `config.toml` | `CODEX_HOME` (default `~/.codex`) | `auth.json` |
+| claude | `~/.claude.json` aliases | `CLAUDE_HOME` | keychain / OAuth state |
+
+- **The return type is the boundary**: `listXxxCliModels(): string[]` of
+  `<provider>/<id>` patterns — no credential can leave through a string array,
+  so no caller can log one by accident.
+- Warn lines carry a **fixed reason string**, never the caught error: V8's
+  `JSON.parse` message quotes source text, and here the source is
+  credential-bearing.
+- Defensive parse, silent degrade: these are CLI internals, not contracts. An
+  unrecognised shape skips entries; a corrupt file empties that source and warns
+  once per run; a missing file is silent.
+
+#### 3.5 Startup reporting
+
+- Probing the four CLIs emits **exactly one `info` line** naming each CLI's
+  resolved form or `absent`. Absence is normal (a machine without `claude`
+  simply has no such row) and must not be a warning.
+- The line carries names, not paths: an absolute path embeds the user's name and
+  the only actionable fact is whether the CLI is there.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+|---|---|
+| Model id the CLI does not know | throw with the CLI's own text (omp: stderr + exit 1; claude: `result.result`) — never an empty answer |
+| CLI not installed / overridden to a non-executable | that row disappears from model options; one info line says `absent`; no warn |
+| CLI not yet probed | row stays (unprobed ≠ absent) |
+| Turn cancelled mid-flight | generator returns; child gone within the §8 termination window; no orphan |
+| claude answers partially then fails | deltas shown, `is_error` decides the run failed |
+| codex emits a non-fatal `item.completed{error}` and then an answer | answer delivered; the error item is recorded only |
+| attachment sent to claude | dropped, never guessed at with a path in the prompt |
+| two CLI turns at once | independent children; each owns its own teardown |
+
+### 5. Tests Required
+
+- One parser suite per stream (`claude-stream-json.test.ts`,
+  `codex-exec-json.test.ts`, plus the pi/omp NDJSON cases in
+  `pi-cli-runtime.test.ts`), each pinned to the samples in
+  `.trellis/tasks/09-06-local-cli-model-providers/research/cli-protocol-samples.md`.
+- Argv tests per CLI: the flags above, and the **negative** case — omp must not
+  receive `--no-context-files`.
+- Executable lookup: override wins, override-to-non-executable means absent,
+  `pie` fallback form, version-manager roots, probe-cache reset.
+- Model options: four rows when present, row removed when probed absent, row
+  retained when unprobed.
+- Mutation checks that must fail: swap `is_error` for `subtype` in the claude
+  parser; print the whole `assistant` line as content; count
+  `cached_input_tokens` on top of `input_tokens`; treat `item.completed{error}`
+  as terminal.
+
+### 6. Wrong vs Correct
+
+#### Wrong
+
+```ts
+// claude: subtype said "success" on a run that failed with an API error
+if (record.subtype === 'error') return { stopReason: 'error' }
+
+// omp is not pi: this throws `unknown flag: --no-context-files`
+args.push('--no-context-files')
+
+// codex exec --json has no system-prompt flag
+args.push('--system-prompt', prompt.systemPrompt)
+```
+
+#### Correct
+
+```ts
+// claude: the CLI's own verdict and its own words
+if (record.is_error === true) {
+  return { stopReason: 'error', failure: readString(record.result) ?? 'claude reported an error' }
+}
+
+// omp's own isolation vocabulary
+args.push('--no-rules')
+
+// codex: the system text rides in front of the prompt
+args.push(`${prompt.systemPrompt}\n\n---\n\n${prompt.prompt}`)
+```
+
+Verified on this machine (2026-09-16): `omp` answering `pong` through
+`runCliChat`; `omp` + `bogus/nope-9` → `omp exited with code 1: Model "bogus/nope-9"
+not found … Or create ~/.omp/agent/models.yml`; `claude` + `bogus-nope` →
+`claude ended the run without an answer: API Error: 400 unknown provider for
+model bogus-nope`; cancel at 1500 ms → generator returned at 1563 ms with the
+child gone. Codex's success path is **not** verified on this machine (its local
+provider is unreachable); it rests on the recorded samples.
