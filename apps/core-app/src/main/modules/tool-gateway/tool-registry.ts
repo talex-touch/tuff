@@ -237,7 +237,7 @@ function mcpSummary(serverName: string, toolName: string, level: McpRiskLevel): 
 /** Matches the budget the orchestrator gives imported context. */
 const MAX_TOOL_TEXT_CHARS = 64 * 1024
 
-function truncateForModel(text: string): string {
+export function truncateForModel(text: string): string {
   return text.length > MAX_TOOL_TEXT_CHARS
     ? `${text.slice(0, MAX_TOOL_TEXT_CHARS)}\n… truncated at ${MAX_TOOL_TEXT_CHARS} characters.`
     : text

@@ -51,6 +51,7 @@ import { syncModule } from './modules/sync'
 import { systemUpdateModule } from './modules/system-update'
 import { platformPermissionModule } from './modules/system/platform-permission-service'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
+import { mcpHostModule } from './modules/mcp-host'
 import { terminalModule } from './modules/terminal/terminal.manager'
 import { toolGatewayModule } from './modules/tool-gateway'
 import { trayManagerModule } from './modules/tray/tray-manager'
@@ -203,6 +204,7 @@ const foregroundModulesToLoad = [
   projectModule,
   conversationModule,
   toolGatewayModule,
+  mcpHostModule,
   storageModule,
   fileProtocolModule,
   shortcutModule,
