@@ -46,7 +46,6 @@ import { completeTiming, sleep, startTiming, StorageList, timingLogger } from '@
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
-import type { TuffItem } from '@talex-touch/utils'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
 import {
   IndexedSourceGroupedEvidenceService,
@@ -81,35 +80,13 @@ import { iconService } from '../../../../service/icon-service'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { operationalErrorService } from '../../../observability'
 import FileSystemWatcher from '../../file-system-watcher'
-/**
- * How a launched app reports itself back to the search engine.
- *
- * This used to be a direct `import searchEngineCore from '../../search-engine/search-core'`,
- * and search-core imports `appProvider` back, so the two modules instantiated each other at
- * module scope. That only worked because AppProvider's constructor is a single log call --
- * promoting any of its methods into constructor-time work would have dereferenced
- * `searchEngineCore` mid-evaluation and failed at boot rather than at the call site (#712).
- *
- * The recorder is invoked **synchronously**; a lazy `await import()` was tried first and broke
- * `records a session-scoped usage event before handing the app to the launch boundary`, because
- * deferring by a microtask puts the record after the launch it is supposed to precede.
- */
-export type AppExecutionRecorder = (
-  sessionId: string,
-  item: TuffItem,
-  /**
-   * Foreground app captured before the launch was scheduled. Part of the contract rather than an
-   * extra: the recorder writes it into `usage_logs.context.prevApp`, and a recorder free to
-   * capture it itself would read whatever the launch already put in front.
-   */
-  previousApp: string | null
-) => Promise<void>
-
-let recordAppExecution: AppExecutionRecorder = async () => {}
-
-export function setAppExecutionRecorder(recorder: AppExecutionRecorder): void {
-  recordAppExecution = recorder
-}
+// The recorder seam lives in a leaf module beside this one: it breaks the app-provider/search-core
+// cycle documented in that file, and this file may shrink rather than grow (#343).
+import { recordAppExecution } from './services/app-execution-recorder'
+export {
+  setAppExecutionRecorder,
+  type AppExecutionRecorder
+} from './services/app-execution-recorder'
 
 import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
