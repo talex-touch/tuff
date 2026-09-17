@@ -643,21 +643,40 @@ const hostTokenDisplay = computed(() => {
  * What a client pastes. Written as the `mcpServers` block the common clients read, so it is a
  * paste rather than four fields to transcribe by hand.
  */
-const hostClientConfig = computed(() => {
-  const state = mcpHost.value
-  if (!state?.endpoint || !state.token) return ''
+function buildClientConfig(endpoint: string | null, token: string): string {
+  if (!endpoint || !token) return ''
   return JSON.stringify(
     {
       mcpServers: {
         tuff: {
           type: 'http',
-          url: state.endpoint,
-          headers: { Authorization: `Bearer ${state.token}` }
+          url: endpoint,
+          headers: { Authorization: `Bearer ${token}` }
         }
       }
     },
     null,
     2
+  )
+}
+
+/** The real document, for the clipboard. */
+const hostClientConfig = computed(() => {
+  const state = mcpHost.value
+  return buildClientConfig(state?.endpoint ?? null, state?.token ?? '')
+})
+
+/**
+ * The same document with the credential masked, for the screen. A snippet that carries the token in
+ * plain text would make the masked row above it theatre, and this page is the one place the token is
+ * meant to be readable only on request.
+ */
+const hostClientConfigDisplay = computed(() => {
+  const state = mcpHost.value
+  const token = state?.token ?? ''
+  return buildClientConfig(
+    state?.endpoint ?? null,
+    hostTokenRevealed.value ? token : hostTokenDisplay.value
   )
 })
 
@@ -705,6 +724,9 @@ function setHostTool(name: string, enabled: boolean): void {
 }
 
 function rotateHostToken(): void {
+  // Re-armed: a rotation the user did not ask to look at must not leave the new
+  // credential displayed, and the reveal is a deliberate gesture for one token.
+  hostTokenRevealed.value = false
   void runHostCommand(() => mcpHostSdk.rotateToken(), 'settings.skillsMcp.host.rotateFailed')
 }
 
@@ -992,7 +1014,7 @@ onMounted(() => {
       :title="t('settings.skillsMcp.host.configTitle')"
       :description="t('settings.skillsMcp.host.configDesc')"
     >
-      <pre class="SettingsMcpHost-Snippet">{{ hostClientConfig }}</pre>
+      <pre class="SettingsMcpHost-Snippet">{{ hostClientConfigDisplay }}</pre>
       <TxButton
         variant="secondary"
         size="sm"

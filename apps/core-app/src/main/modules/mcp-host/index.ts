@@ -29,7 +29,8 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { McpCallOutcome, McpToolDescriptor } from './mcp-host-protocol'
 import type { McpHostServerHandle } from './mcp-host-server'
 import type { McpHostSettings } from './mcp-host-settings'
-import { randomBytes } from 'node:crypto'
+import type { ToolResult } from '../tool-gateway/tool-registry'
+import { randomBytes, createHash } from 'node:crypto'
 import { McpHostEvents } from '@talex-touch/utils/transport/sdk/domains/mcp-host'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
@@ -45,7 +46,7 @@ import {
   resolveMcpHostPort
 } from './mcp-host-settings'
 import { startMcpHostServer } from './mcp-host-server'
-import { createMcpHostToolset } from './mcp-host-tools'
+import { createMcpHostToolset, stableStringify } from './mcp-host-tools'
 
 export * from './mcp-host-protocol'
 export * from './mcp-host-server'
@@ -70,6 +71,17 @@ export class McpHostModule extends BaseModule<TalexEvents> {
   private loaded = false
   /** The in-flight read, so overlapping callers share one. */
   private loading: Promise<void> | null = null
+  /**
+   * Approvals the user remembered, for this launch only — same lifetime as the
+   * gateway's set, which is cleared when a conversation starts.
+   *
+   * The key is the tool plus a digest of its exact arguments. That is narrower
+   * on purpose: the gateway keys `tuff_read_file` by the resolved path, and the
+   * fallback here cannot resolve anything, so a blanket per-tool key would let
+   * one remembered yes cover every later read. Narrower is the safe direction
+   * for a caller that nothing else vouches for.
+   */
+  private readonly remembered = new Set<string>()
   private lastError: string | undefined
   private toolset: ReturnType<typeof createMcpHostToolset> | null = null
 
@@ -144,6 +156,13 @@ export class McpHostModule extends BaseModule<TalexEvents> {
       return { output: `Tool ${name} is switched off in Tuff settings.`, isError: true }
     }
 
+    // Same rule the gateway applies: only a read may be waved through by a
+    // remembered approval, and only for the exact call that was shown.
+    const rememberKey = `${name}:${createHash('sha256').update(stableStringify(args)).digest('hex')}`
+    if (tool.risk === 'read' && this.remembered.has(rememberKey)) {
+      return await this.runTool(name, tool, args)
+    }
+
     let decision: { approved: boolean; remember: boolean }
     try {
       decision = await toolGatewayModule.requestConfirmation(
@@ -173,7 +192,20 @@ export class McpHostModule extends BaseModule<TalexEvents> {
         isError: true
       }
     }
+    // The card offers "remember for this session" to both callers, so it has to
+    // mean something here too — dropped silently it is a promise the UI makes
+    // and the code does not keep.
+    if (decision.remember && tool.risk === 'read') this.remembered.add(rememberKey)
 
+    return await this.runTool(name, tool, args)
+  }
+
+  /** Runs the tool and reduces both success and failure to a wire-safe outcome. */
+  private async runTool(
+    name: string,
+    tool: { execute: (args: Record<string, unknown>) => Promise<ToolResult> },
+    args: Record<string, unknown>
+  ): Promise<McpCallOutcome> {
     try {
       const result = await tool.execute(args)
       return { output: truncateForModel(result.output), isError: result.isError }
