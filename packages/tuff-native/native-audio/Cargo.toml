@@ -26,3 +26,6 @@ objc2-io-kit = { version = "=0.3.2", default-features = false, features = ["std"
 
 [build-dependencies]
 napi-build.workspace = true
+
+[dev-dependencies]
+napi = { workspace = true, features = ["dyn-symbols"] }
