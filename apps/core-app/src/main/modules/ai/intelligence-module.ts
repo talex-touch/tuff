@@ -82,6 +82,11 @@ import { intelligenceTtsService } from './intelligence-tts-service'
 import { intelligenceWorkflowService } from './intelligence-workflow-service'
 import { createCustomProvider, createLocalProvider } from './provider-factory'
 import {
+  getResolvedClaudeExecutable,
+  getResolvedCodexExecutable,
+  getResolvedOmpExecutable,
+  getResolvedPiExecutable,
+  getResolvedPiForm,
   probeClaudeCliAvailability,
   probeCodexCliAvailability,
   probeOmpCliAvailability,
@@ -760,7 +765,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     // 必须在首次应用配置之前 settle：provider 列表的组装是同步的，探测未完成时 pi provider 会被
     // 当成不存在而整轮缺席，直到下一次配置变更才补上。
-    await this.probePiCliProvider()
+    await this.probeLocalCliProviders()
 
     // 新 manager 必须先强制应用一次配置；后续订阅的当前值回放会被 signature 去重
     ensureIntelligenceConfigLoaded(true)
@@ -860,11 +865,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   /**
-   * 探测本机 `pi` CLI，决定是否把它作为零凭据的 `text.chat` provider 注入运行时配置。
+   * 探测本机四个本地 CLI，决定是否把它们作为零凭据的 `text.chat` provider 注入运行时配置。
    *
-   * 探测失败不是错误：多数机器没装 `pi`，此时只是少一个 provider，不该拖垮整个模块的初始化。
+   * 探测失败不是错误：多数机器不会四个都装，此时只是少几个 provider，不该拖垮整个模块的初始化。
+   * 缺席是常态（`claude` 没装就是没有这一栏），所以每个 CLI 只报名字或 `absent`，一行 info 说完；
+   * 路径与形态不进日志——它们会带上用户名，而用户唯一能据以行动的只有「这个 CLI 有没有」。
    */
-  private async probePiCliProvider(): Promise<void> {
+  private async probeLocalCliProviders(): Promise<void> {
     try {
       await Promise.allSettled([
         probeOmpCliAvailability(),
@@ -874,7 +881,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       ])
     } catch (error) {
       intelligenceLog.warn('Local CLI probe failed', { error })
+      return
     }
+
+    intelligenceLog.info('Local CLI providers resolved', {
+      meta: {
+        pi:
+          getResolvedPiExecutable() === undefined ? 'unprobed' : (getResolvedPiForm() ?? 'absent'),
+        omp: getResolvedOmpExecutable() ? 'omp' : 'absent',
+        codex: getResolvedCodexExecutable() ? 'codex' : 'absent',
+        claude: getResolvedClaudeExecutable() ? 'claude' : 'absent'
+      }
+    })
   }
 
   /**
