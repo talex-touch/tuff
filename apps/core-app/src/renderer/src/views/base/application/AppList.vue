@@ -379,6 +379,16 @@ function handleClick(item: AppListItem): void {
   }
 }
 
+/**
+ * Only the first bar of the bottom group may claim the free space. Both selectors above ask for
+ * it, and flexbox divides free space equally between every auto margin — so with the notice
+ * rendered the two drifted apart and the notice sat alone, halfway down the pane, instead of
+ * staying above the footer it qualifies.
+ */
+.AppList-Notice + .AppList-Info {
+  margin-top: 0;
+}
+
 .AppList-Order {
   display: flex;
   gap: 0.25rem;
