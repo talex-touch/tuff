@@ -19,3 +19,6 @@ tuff-native-napi = { path = "../../native-napi" }
 
 [build-dependencies]
 napi-build.workspace = true
+
+[dev-dependencies]
+napi = { workspace = true, features = ["dyn-symbols"] }
