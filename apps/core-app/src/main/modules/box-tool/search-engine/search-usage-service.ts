@@ -15,6 +15,20 @@ export interface SearchUsageServiceDeps {
   getDbUtils: () => DbUtils | null
 }
 
+/**
+ * Attribution a caller already holds for one execute.
+ *
+ * `previousApp` is the one field that cannot be derived here: it is a foreground read, and a
+ * caller that schedules a launch on the next macrotask has to make it before that launch becomes
+ * frontmost, or the transition records the launched app as having been launched from itself.
+ */
+export interface RecordExecuteOptions {
+  /** Surface that executed. Derived from the exposure state when omitted. */
+  entryPoint?: UsageEntryPoint
+  /** Foreground app captured by the caller before it handed the item to a launch boundary. */
+  previousApp?: string | null
+}
+
 /** DB-backed search usage and pin enrichment, independent of SearchEngineCore. */
 export class SearchUsageService {
   private pinnedCache: { fetchedAt: number; pinnedSet: Set<string> } | null = null
@@ -144,15 +158,17 @@ export class SearchUsageService {
   }
 
   /**
-   * @param entryPoint Overrides the derived surface. Callers outside the search path pass their
-   * own; a plain CoreBox execute leaves it unset and gets `recommendation` or `core-box` decided
-   * from the exposure state below.
+   * @param options.entryPoint Overrides the derived surface. Callers outside the search path pass
+   * their own; a plain CoreBox execute leaves it unset and gets `recommendation` or `core-box`
+   * decided from the exposure state below.
+   * @param options.previousApp Foreground app captured before the launch was handed over. Read
+   * here instead only when the caller had no chance to capture it first.
    */
   async recordExecute(
     sessionId: string,
     item: TuffItem,
     itemId: string,
-    entryPoint?: UsageEntryPoint
+    options?: RecordExecuteOptions
   ): Promise<void> {
     const dbUtils = this.deps.getDbUtils()
     if (!dbUtils) return
@@ -165,7 +181,7 @@ export class SearchUsageService {
     // MUST be read before `recordClick` below, which consumes the exposure entry — asking
     // afterwards always answers "not a recommendation".
     const resolvedEntryPoint: UsageEntryPoint =
-      entryPoint ??
+      options?.entryPoint ??
       (recommendationExposureService.isExposed(item.source.id, itemId)
         ? 'recommendation'
         : 'core-box')
@@ -189,7 +205,9 @@ export class SearchUsageService {
       context: JSON.stringify({
         scoring: item.scoring,
         ent: resolvedEntryPoint,
-        ...(await resolvePreviousAppContext())
+        ...(options?.previousApp
+          ? { prevApp: options.previousApp }
+          : await resolvePreviousAppContext())
       })
     })
     await dbUtils.incrementUsageSummary(itemId)

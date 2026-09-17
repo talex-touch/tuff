@@ -27,6 +27,7 @@ import {
   getWatchPathsMock,
   pinyinMock,
   resetAppRuntimeDelegateMocks,
+  resolvePreviousAppContextMock,
   runMdlsUpdateScanMock,
   searchRecordExecuteMock,
   upsertExtensionRows,
@@ -666,6 +667,10 @@ describe('appProvider rebuild maintenance', () => {
   it('records a session-scoped usage event before handing the app to the launch boundary', async () => {
     const { appProvider } = await loadSubject()
     searchRecordExecuteMock.mockResolvedValueOnce(undefined)
+    // The launch below is only deferred to the next macrotask, so the foreground read has to
+    // happen before it is scheduled: the recorder cannot do it, or a launch that wins the race
+    // records the app as having been launched from itself.
+    resolvePreviousAppContextMock.mockResolvedValueOnce({ prevApp: 'com.apple.Finder' })
     const item = executeItem({
       id: 'recorded-app',
       render: { mode: 'default', basic: { title: 'Recorded App' } },
@@ -683,7 +688,11 @@ describe('appProvider rebuild maintenance', () => {
       searchResult: { sessionId: 'search-session-42' }
     } as IExecuteArgs)
 
-    expect(searchRecordExecuteMock).toHaveBeenCalledWith('search-session-42', item)
+    expect(searchRecordExecuteMock).toHaveBeenCalledWith(
+      'search-session-42',
+      item,
+      'com.apple.Finder'
+    )
     // "before" has to be asserted, not implied by the await: awaiting onExecute drains the
     // microtask queue, so a recorder deferred by a Promise.resolve().then() still ends up
     // called by the time these run. Invocation order is what actually pins it (#712).
@@ -713,7 +722,7 @@ describe('appProvider rebuild maintenance', () => {
     )
 
     expect(searchCore).toContain('setAppExecutionRecorder(')
-    expect(searchCore).toMatch(/setAppExecutionRecorder\(\s*\(sessionId, item\) =>/)
+    expect(searchCore).toMatch(/setAppExecutionRecorder\(\s*\(sessionId, item, previousApp\) =>/)
 
     // And app-provider must not reach back, or the cycle returns.
     const provider = await fs.readFile(path.resolve(here, './app-provider.ts'), 'utf-8')

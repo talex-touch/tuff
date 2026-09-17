@@ -94,7 +94,16 @@ import FileSystemWatcher from '../../file-system-watcher'
  * `records a session-scoped usage event before handing the app to the launch boundary`, because
  * deferring by a microtask puts the record after the launch it is supposed to precede.
  */
-export type AppExecutionRecorder = (sessionId: string, item: TuffItem) => Promise<void>
+export type AppExecutionRecorder = (
+  sessionId: string,
+  item: TuffItem,
+  /**
+   * Foreground app captured before the launch was scheduled. Part of the contract rather than an
+   * extra: the recorder writes it into `usage_logs.context.prevApp`, and a recorder free to
+   * capture it itself would read whatever the launch already put in front.
+   */
+  previousApp: string | null
+) => Promise<void>
 
 let recordAppExecution: AppExecutionRecorder = async () => {}
 
@@ -104,6 +113,9 @@ export function setAppExecutionRecorder(recorder: AppExecutionRecorder): void {
 
 import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
+// Leaf module: it reaches the foreground-app service only, never back into search-core, so this
+// import does not re-enter the module cycle documented above (#712).
+import { resolvePreviousAppContext } from '../../search-engine/app-launch-recorder'
 import { resolveApplicationProjection } from './app-resolution-service'
 import { AppProviderSourceScanner } from './app-provider-source-scanner'
 import { AppIndexedSourceRecordMapper } from './services/app-index-record-sync-service'
@@ -3465,7 +3477,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const sessionId = searchResult?.sessionId
     if (sessionId) {
       logApp(`Recording app execution: ${chalk.cyan(item.id)}`, LogStyle.info)
-      recordAppExecution(sessionId, item).catch((err) => {
+      // Awaited, not fired alongside the launch: `scheduleAppLaunch` only defers to the next
+      // macrotask, and the foreground read behind this answers with whatever is frontmost when it
+      // resolves. Left to race, a slow read reports the app being launched as the app it was
+      // launched from. The read is served from a 3s cache in the common case.
+      const previous = await resolvePreviousAppContext()
+      recordAppExecution(sessionId, item, previous.prevApp ?? null).catch((err) => {
         logApp(`Failed to record execution: ${chalk.red(err.message)}`, LogStyle.error)
       })
     }
