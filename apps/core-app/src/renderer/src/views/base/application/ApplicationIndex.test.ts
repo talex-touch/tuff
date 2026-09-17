@@ -323,4 +323,34 @@ describe('ApplicationIndex', () => {
 
     wrapper.unmount()
   })
+
+  /**
+   * The setter replaces one app's whole alias list, and the pane composes its draft from the
+   * `aliases` prop — which still holds the pre-save array until the first call returns. A second
+   * submission let through therefore carries a list without the alias the first one added, and
+   * being written last it wins: the alias is gone with no error anywhere.
+   */
+  it('drops an alias submission that arrives while one is in flight', async () => {
+    state.listEntries.mockResolvedValue([entry()])
+    const pending = Promise.withResolvers<{ success: boolean }>()
+    state.setAliases.mockReturnValue(pending.promise)
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const detail = wrapper.findComponent({ name: 'AppDetail' })
+    detail.vm.$emit('update-aliases', entry(), ['first'])
+    detail.vm.$emit('update-aliases', entry(), ['second'])
+    await flushPromises()
+
+    expect(state.setAliases).toHaveBeenCalledTimes(1)
+    expect(state.setAliases).toHaveBeenCalledWith({
+      path: '/Applications/Calculator.app',
+      aliases: ['first']
+    })
+
+    pending.resolve({ success: true })
+    await flushPromises()
+    wrapper.unmount()
+  })
 })

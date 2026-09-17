@@ -18,8 +18,25 @@ import {
   getVoiceAsrMetadata,
   getVoiceCapabilityRecommendedModels
 } from '@talex-touch/utils/intelligence/voice-asr'
-import { getResolvedPiExecutable, isPiCliProviderConfig } from './providers/pi-cli-runtime'
-import { listPiCliModels } from './providers/pi-model-catalog'
+import {
+  CLAUDE_CLI_ORIGIN,
+  CLAUDE_CLI_PROVIDER_ID,
+  CODEX_CLI_ORIGIN,
+  CODEX_CLI_PROVIDER_ID,
+  OMP_CLI_ORIGIN,
+  OMP_CLI_PROVIDER_ID,
+  getResolvedClaudeExecutable,
+  getResolvedCodexExecutable,
+  getResolvedOmpExecutable,
+  getResolvedPiExecutable,
+  isPiCliProviderConfig
+} from './providers/pi-cli-runtime'
+import {
+  listClaudeCliModels,
+  listCodexCliModels,
+  listOmpCliModels,
+  listPiCliModels
+} from './providers/pi-model-catalog'
 
 const CAPABILITY_FALLBACK_MODELS: Record<
   string,
@@ -71,12 +88,20 @@ function resolveDeclaredModels(
   capabilityId: string,
   defaultModel: string | null
 ): string[] {
-  // The auto-registered pi provider declares no models; its list lives in the
-  // CLI's own catalogue files. Only a probed-absent executable (`null`) empties
-  // the row — an unprobed machine (`undefined`) must not read as one without
-  // the CLI, mirroring the config-assembly stance in pi-cli-runtime.
+  if (provider.id === OMP_CLI_PROVIDER_ID || provider.metadata?.origin === OMP_CLI_ORIGIN) {
+    return getResolvedOmpExecutable() === null ? [] : listOmpCliModels()
+  }
+
   if (isPiCliProviderConfig(provider)) {
     return getResolvedPiExecutable() === null ? [] : listPiCliModels()
+  }
+
+  if (provider.id === CODEX_CLI_PROVIDER_ID || provider.metadata?.origin === CODEX_CLI_ORIGIN) {
+    return getResolvedCodexExecutable() === null ? [] : listCodexCliModels()
+  }
+
+  if (provider.id === CLAUDE_CLI_PROVIDER_ID || provider.metadata?.origin === CLAUDE_CLI_ORIGIN) {
+    return getResolvedClaudeExecutable() === null ? [] : listClaudeCliModels()
   }
 
   const fallbackModels = resolveCapabilityFallbackModels(capabilityId, provider.type)

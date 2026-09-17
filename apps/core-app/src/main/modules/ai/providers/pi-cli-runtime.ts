@@ -18,6 +18,14 @@ export { isFailedStopReason }
 export { PI_CLI_PROVIDER_ID }
 export const PI_CLI_ORIGIN = 'pi-cli'
 
+export const OMP_CLI_PROVIDER_ID = 'omp-cli'
+export const OMP_CLI_ORIGIN = 'omp-cli'
+
+export const CODEX_CLI_PROVIDER_ID = 'codex-cli'
+export const CODEX_CLI_ORIGIN = 'codex-cli'
+
+export const CLAUDE_CLI_PROVIDER_ID = 'claude-cli'
+export const CLAUDE_CLI_ORIGIN = 'claude-cli'
 /**
  * `pi` ships its own credentials, so the provider has no key to fall back on. When the binary is
  * missing there is nothing to degrade to — the caller has to be told to install it or pick another
@@ -34,6 +42,18 @@ export const PI_CLI_TERMINATION_FAILED = 'PI_CLI_TERMINATION_FAILED'
 
 export function isPiCliProviderConfig(config: IntelligenceProviderConfig): boolean {
   return config.id === PI_CLI_PROVIDER_ID || config.metadata?.origin === PI_CLI_ORIGIN
+}
+
+export function isCliAgentProviderConfig(config: IntelligenceProviderConfig): boolean {
+  return (
+    isPiCliProviderConfig(config) ||
+    config.id === OMP_CLI_PROVIDER_ID ||
+    config.metadata?.origin === OMP_CLI_ORIGIN ||
+    config.id === CODEX_CLI_PROVIDER_ID ||
+    config.metadata?.origin === CODEX_CLI_ORIGIN ||
+    config.id === CLAUDE_CLI_PROVIDER_ID ||
+    config.metadata?.origin === CLAUDE_CLI_ORIGIN
+  )
 }
 
 // ============================================================================
@@ -88,6 +108,67 @@ export function getResolvedPiForm(): CliExecutableForm | undefined {
 
 export async function probePiCliAvailability(): Promise<boolean> {
   return Boolean(await resolvePiExecutable())
+}
+
+const OMP_CLI_LOOKUP: CliExecutableLookup = {
+  command: 'omp',
+  envOverride: 'TUFF_OMP_CLI_PATH'
+}
+
+export async function resolveOmpExecutable(): Promise<string | null> {
+  return (await resolveCliExecutable(OMP_CLI_LOOKUP))?.path ?? null
+}
+
+export function getResolvedOmpExecutable(): string | null | undefined {
+  const resolved = getResolvedCliExecutable(OMP_CLI_LOOKUP.command)
+  return resolved === undefined ? undefined : (resolved?.path ?? null)
+}
+
+export async function probeOmpCliAvailability(): Promise<boolean> {
+  return Boolean(await resolveOmpExecutable())
+}
+
+const CODEX_CLI_LOOKUP: CliExecutableLookup = {
+  command: 'codex',
+  envOverride: 'TUFF_CODEX_CLI_PATH'
+}
+
+export async function resolveCodexExecutable(): Promise<string | null> {
+  return (await resolveCliExecutable(CODEX_CLI_LOOKUP))?.path ?? null
+}
+
+export function getResolvedCodexExecutable(): string | null | undefined {
+  const resolved = getResolvedCliExecutable(CODEX_CLI_LOOKUP.command)
+  return resolved === undefined ? undefined : (resolved?.path ?? null)
+}
+
+export async function probeCodexCliAvailability(): Promise<boolean> {
+  return Boolean(await resolveCodexExecutable())
+}
+
+const CLAUDE_CLI_LOOKUP: CliExecutableLookup = {
+  command: 'claude',
+  envOverride: 'TUFF_CLAUDE_CLI_PATH'
+}
+
+export async function resolveClaudeExecutable(): Promise<string | null> {
+  return (await resolveCliExecutable(CLAUDE_CLI_LOOKUP))?.path ?? null
+}
+
+export function getResolvedClaudeExecutable(): string | null | undefined {
+  const resolved = getResolvedCliExecutable(CLAUDE_CLI_LOOKUP.command)
+  return resolved === undefined ? undefined : (resolved?.path ?? null)
+}
+
+export async function probeClaudeCliAvailability(): Promise<boolean> {
+  return Boolean(await resolveClaudeExecutable())
+}
+
+export function resetAllCliExecutableCaches(): void {
+  resetCliExecutableCache(PI_CLI_LOOKUP.command)
+  resetCliExecutableCache(OMP_CLI_LOOKUP.command)
+  resetCliExecutableCache(CODEX_CLI_LOOKUP.command)
+  resetCliExecutableCache(CLAUDE_CLI_LOOKUP.command)
 }
 
 // ============================================================================
@@ -294,6 +375,40 @@ export function buildPiArgs(
     // Without this, `pi` pulls AGENTS.md / CLAUDE.md from the working directory into a chat that has
     // nothing to do with the repository the app happens to be launched from.
     '--no-context-files',
+    '--system-prompt',
+    prompt.systemPrompt
+  ]
+
+  if (model) args.push('--model', model)
+  for (const path of attachmentPaths) args.push(`@${path}`)
+  args.push(prompt.prompt)
+  return args
+}
+
+/**
+ * Builds the argument vector for one `omp` run.
+ *
+ * `omp` is a `pi` fork with its own isolation vocabulary: pi's `--no-context-files` is not a flag it
+ * knows (it calls it `--no-rules`), and neither `--session` nor `--session-id` exists — only
+ * `-c/--continue` and `-r/--resume` — so a run is always ephemeral and answer-only. The stream it
+ * writes under `--mode json` is pi's NDJSON event for event, so `parsePiCliLine` reads it unchanged.
+ */
+export function buildOmpArgs(
+  prompt: PiCliPrompt,
+  model?: string,
+  attachmentPaths: string[] = []
+): string[] {
+  const args = [
+    '--print',
+    '--mode',
+    'json',
+    '--no-tools',
+    '--no-extensions',
+    '--no-skills',
+    '--no-rules',
+    '--no-session',
+    '--thinking',
+    'off',
     '--system-prompt',
     prompt.systemPrompt
   ]

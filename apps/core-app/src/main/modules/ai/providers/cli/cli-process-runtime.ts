@@ -160,6 +160,10 @@ export async function* runCliChat(
   let streamedLength = 0
   let committedLength = 0
   let stderrTail = ''
+  // The one thing a silent run cannot offer: evidence that the CLI took the turn. A delta, a tool
+  // line or the CLI's own settled marker each count; stdout with none of them is a run that
+  // produced nothing and said nothing about why.
+  let sawEvent = false
 
   child.stderr.setEncoding('utf8')
   const onStderrData = (chunk: string): void => {
@@ -249,6 +253,7 @@ export async function* runCliChat(
       await spec.onLine?.(line)
       const event = spec.parseLine(line)
       if (!event) continue
+      sawEvent = true
 
       if (event.provider) state.provider = event.provider
       if (event.model) state.model = event.model
@@ -292,13 +297,19 @@ export async function* runCliChat(
     const code = aborted ? await Promise.race([aborted, exited]) : await exited
     if (signal?.aborted) return
     if (code === undefined) return
+    // The words to explain an empty run are already in hand, in the order that reads best: what the
+    // CLI said was wrong, then whatever it last wrote to stderr, then its own stop word or the code.
+    const noAnswer =
+      state.failure ||
+      stderrTail.trim() ||
+      (code === 0 ? (state.stopReason ?? 'no output') : `exited with code ${code}`)
     // `pi --mode json` exits 0 however the run went — the non-zero path exists only in text mode —
     // so the CLI's own terminal state is the only trustworthy failure signal. Text that was never
     // committed does not rescue the run: it belongs to an attempt the CLI discarded, which is
     // exactly the case that used to surface as an unexplained empty bubble.
     if (!committedLength && isFailedStopReason(state.stopReason)) {
       throw new Error(
-        `${spec.errorPrefix} ${spec.name} ended the run without an answer: ${state.failure ?? state.stopReason}`
+        `${spec.errorPrefix} ${spec.name} ended the run without an answer: ${noAnswer}`
       )
     }
 
@@ -307,6 +318,15 @@ export async function* runCliChat(
     if (code !== 0 && !streamedLength) {
       throw new Error(
         `${spec.errorPrefix} ${spec.name} exited with code ${code}${stderrTail.trim() ? `: ${stderrTail.trim()}` : ''}`
+      )
+    }
+
+    // A clean exit whose stdout carried no parsed event, no commit and no delta is the empty bubble
+    // this vocabulary exists to prevent: the run produced nothing, so the only explanation left is
+    // what the CLI said, whatever it last wrote to stderr, or the exit code.
+    if (!streamedLength && !sawEvent) {
+      throw new Error(
+        `${spec.errorPrefix} ${spec.name} ended the run without an answer: ${noAnswer}`
       )
     }
 

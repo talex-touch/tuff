@@ -14,6 +14,7 @@ export const useProjectStore = defineStore('projects', () => {
   const localAiSessions = ref<LocalAiCliSessionSummary[]>([])
   const loading = ref(false)
   const pendingProjectId = ref<string | null | undefined>(undefined)
+  const activeProjectId = ref<string | null>(null)
   let initialized = false
   let disposeProjectChanged: (() => void) | null = null
   let disposeSessionChanged: (() => void) | null = null
@@ -88,11 +89,19 @@ export const useProjectStore = defineStore('projects', () => {
 
   function beginConversation(projectId: string | null): void {
     pendingProjectId.value = projectId
+    activeProjectId.value = projectId
+  }
+
+  function setActiveProjectId(projectId: string | null): void {
+    activeProjectId.value = projectId
   }
 
   function consumePendingProjectId(): string | null {
     const projectId = pendingProjectId.value
     pendingProjectId.value = undefined
+    if (projectId !== undefined) {
+      activeProjectId.value = projectId
+    }
     return projectId ?? null
   }
 
@@ -109,6 +118,8 @@ export const useProjectStore = defineStore('projects', () => {
     localAiSessions,
     loading,
     pendingProjectId,
+    activeProjectId,
+    setActiveProjectId,
     initialize,
     refresh,
     selectDirectory,

@@ -19,13 +19,19 @@ vi.mock('electron', () => ({
 vi.mock('../../../../global-shortcon', () => ({
   shortcutModule: {
     getShortcutAccelerator: (shortcutId: string) => shortcutStore.get(shortcutId) ?? null,
-    setAppShortcut: () => true,
-    removeAppShortcut: () => undefined
+    // Stateful rather than a bare `() => true`, so a rollback asserts "the store holds what it
+    // held before" rather than "some mock was called".
+    setAppShortcut: (shortcutId: string, accelerator: string) => {
+      shortcutStore.set(shortcutId, accelerator)
+      return true
+    },
+    removeAppShortcut: (shortcutId: string) => shortcutStore.delete(shortcutId)
   }
 }))
 
 import { AppManagedEntryActionsService } from './app-managed-entry-actions-service'
 import { AppUserAliasService } from './app-user-alias-service'
+import { toShortcutId } from './app-shortcut-service'
 
 const ALPHA_PATH = '/Applications/Alpha.app'
 const BETA_PATH = '/Applications/Beta.app'
@@ -91,6 +97,37 @@ function createService(options: {
   })
 }
 
+/**
+ * The config table as `AppShortcutService` uses it: `restore()` reads the shortcutId → path map
+ * through `…where().limit(1)`, and `save()` writes it back through an upsert that fails here.
+ */
+function shortcutConfigDb(seed: Record<string, string>, failWrite: boolean): DbUtils {
+  return {
+    getDb: () => ({
+      select: () => ({
+        from: () => ({ where: () => ({ limit: async () => [{ value: JSON.stringify(seed) }] }) })
+      }),
+      insert: () => {
+        if (failWrite) throw new Error('SQLITE_FULL')
+        return { values: () => ({ onConflictDoUpdate: async () => undefined }) }
+      }
+    })
+  } as unknown as DbUtils
+}
+
+/** A service holding one live binding for Alpha, whose config write fails. */
+async function boundButUnwritableService(
+  accelerator: string
+): Promise<AppManagedEntryActionsService> {
+  shortcutStore.set(toShortcutId(ALPHA_PATH), accelerator)
+  const service = createService({
+    getDbUtils: () => shortcutConfigDb({ [toShortcutId(ALPHA_PATH)]: ALPHA_PATH }, true),
+    entries: [managedEntry(ALPHA_PATH, 'com.example.alpha')]
+  })
+  await service.restoreShortcuts()
+  return service
+}
+
 beforeEach(() => {
   shortcutStore.clear()
 })
@@ -143,5 +180,40 @@ describe('AppManagedEntryActionsService.listSummaries', () => {
         { path: BETA_PATH, executeCount: 0, hasShortcut: false, hasAliases: true }
       ]
     })
+  })
+})
+
+describe('AppManagedEntryActionsService.setShortcut', () => {
+  /**
+   * A binding is the accelerator plus the shortcutId → path row that rebuilds its callback at
+   * startup. `setAppShortcut` has already given the OS the new key by the time the row is written,
+   * so a failed write reported as success leaves a live shortcut that silently stops working after
+   * a restart — with nothing anywhere saying why.
+   */
+  it('reports a store write that failed and puts the previous binding back', async () => {
+    const service = await boundButUnwritableService('Alt+P')
+
+    const result = await service.setShortcut(ALPHA_PATH, 'Alt+A')
+
+    expect(result).toEqual({
+      success: false,
+      status: 'error',
+      reason: 'shortcut-persist-failed'
+    })
+    expect(shortcutStore.get(toShortcutId(ALPHA_PATH))).toBe('Alt+P')
+  })
+
+  /** The same divergence from the other side: the row would re-register a cleared shortcut. */
+  it('reports a failed write when clearing a binding, and keeps it bound', async () => {
+    const service = await boundButUnwritableService('Alt+P')
+
+    const result = await service.setShortcut(ALPHA_PATH, '')
+
+    expect(result).toEqual({
+      success: false,
+      status: 'error',
+      reason: 'shortcut-persist-failed'
+    })
+    expect(shortcutStore.get(toShortcutId(ALPHA_PATH))).toBe('Alt+P')
   })
 })

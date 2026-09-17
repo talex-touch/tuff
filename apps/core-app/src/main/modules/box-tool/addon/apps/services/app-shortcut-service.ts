@@ -11,12 +11,24 @@ import { config as configSchema } from '../../../../../db/schema'
  * mock `electron` without `ipcMain` and died on import alone. The shortcut module is only needed
  * when a binding is actually touched.
  */
-async function resolveShortcutModule(): Promise<
-  (typeof import('../../../../global-shortcon'))['shortcutModule']
-> {
+async function resolveShortcutModule(): Promise<AppShortcutModule> {
   const module = await import('../../../../global-shortcon')
   return module.shortcutModule
 }
+
+/** The slice of the shortcut module this service drives, named so a helper can take one. */
+export interface AppShortcutModule {
+  getShortcutAccelerator(id: string): string | null
+  setAppShortcut(id: string, accelerator: string, callback: () => void): boolean
+  removeAppShortcut(id: string): boolean
+}
+
+/**
+ * What came of a rebind. The three failures are kept apart because they leave the user in
+ * different places: a refused accelerator never took hold, while a failed write is a live binding
+ * that will not survive the restart.
+ */
+export type AppShortcutBindOutcome = 'bound' | 'conflict' | 'persist-failed'
 const log = getLogger('app-shortcut')
 
 /**
@@ -87,9 +99,14 @@ export class AppShortcutService {
     )
   }
 
-  async set(path: string, accelerator: string): Promise<boolean> {
+  async set(path: string, accelerator: string): Promise<AppShortcutBindOutcome> {
     const shortcutModule = await resolveShortcutModule()
     const shortcutId = toShortcutId(path)
+    // Snapshot before the rebind: `setAppShortcut` overwrites the accelerator in the shortcut
+    // store, so this is the last moment the binding being replaced is still readable.
+    const previousAccelerator = shortcutModule.getShortcutAccelerator(shortcutId)
+    const previousPath = this.bindings[shortcutId]
+
     const registered = shortcutModule.setAppShortcut(shortcutId, accelerator, () => {
       void this.options.launch(path)
     })
@@ -97,19 +114,55 @@ export class AppShortcutService {
       // `setAppShortcut` has already put the previous binding back — or removed the attempt when
       // there was none — so the store must not be touched again here: removing it would discard
       // the accelerator the user had before this failed rebind.
-      return false
+      return 'conflict'
     }
     this.bindings[shortcutId] = path
-    await this.save()
-    return true
+    if (await this.save()) return 'bound'
+
+    this.restoreBinding(shortcutModule, shortcutId, previousAccelerator, previousPath)
+    return 'persist-failed'
   }
 
-  async remove(path: string): Promise<void> {
+  async remove(path: string): Promise<boolean> {
     const shortcutModule = await resolveShortcutModule()
     const shortcutId = toShortcutId(path)
+    // Same snapshot, for the same reason: the clearing below deletes what a rollback needs.
+    const clearedAccelerator = shortcutModule.getShortcutAccelerator(shortcutId)
+    const previousPath = this.bindings[shortcutId]
+
     shortcutModule.removeAppShortcut(shortcutId)
     delete this.bindings[shortcutId]
-    await this.save()
+    if (await this.save()) return true
+
+    this.restoreBinding(shortcutModule, shortcutId, clearedAccelerator, previousPath)
+    return false
+  }
+
+  /**
+   * Puts the OS binding and the in-memory map back the way they were before a mutation whose
+   * persist failed.
+   *
+   * A binding is the pair, not either half: the shortcut store keeps the accelerator and the OS
+   * keeps the key, so a map that failed to persist leaves the two out of step — the shortcut is
+   * live for this session and silently dead (set) or silently resurrected (removed) after a
+   * restart.
+   */
+  private restoreBinding(
+    shortcutModule: AppShortcutModule,
+    shortcutId: string,
+    accelerator: string | null,
+    path: string | undefined
+  ): void {
+    if (path === undefined) delete this.bindings[shortcutId]
+    else this.bindings[shortcutId] = path
+
+    if (!accelerator || path === undefined) {
+      shortcutModule.removeAppShortcut(shortcutId)
+      return
+    }
+    shortcutModule.setAppShortcut(shortcutId, accelerator, () => {
+      void this.options.launch(path)
+    })
   }
 
   private async load(): Promise<void> {
@@ -137,9 +190,16 @@ export class AppShortcutService {
     }
   }
 
-  private async save(): Promise<void> {
+  /**
+   * Writes the map as it will be held.
+   *
+   * False rather than a swallowed log: the accelerator is already live with the OS and in the
+   * shortcut store, so a caller that cannot tell a failed write from a successful one reports a
+   * binding the next restart will not rebuild.
+   */
+  private async save(): Promise<boolean> {
     const dbUtils = this.options.getDbUtils()
-    if (!dbUtils) return
+    if (!dbUtils) return false
     try {
       const value = JSON.stringify(this.bindings)
       const db = dbUtils.getDb()
@@ -147,8 +207,10 @@ export class AppShortcutService {
         .insert(configSchema)
         .values({ key: APP_SHORTCUTS_CONFIG_KEY, value })
         .onConflictDoUpdate({ target: configSchema.key, set: { value } })
+      return true
     } catch (error) {
       log.error('Failed to persist app shortcut bindings', { error })
+      return false
     }
   }
 }

@@ -176,6 +176,9 @@ function clearBinding(): void {
 .FlatKeyInput-Clear {
   position: absolute;
   right: 6px;
+  /* The input is positioned with z-index 1, so an unstacked button behind it never receives a
+     real pointer click - only synthetic events reach it. */
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -204,6 +207,9 @@ function clearBinding(): void {
   &:disabled {
     opacity: 0.35;
     cursor: default;
+    /* The button keeps its box while the field is empty, so it must not swallow the click that
+       would focus the input underneath it. */
+    pointer-events: none;
   }
 }
 

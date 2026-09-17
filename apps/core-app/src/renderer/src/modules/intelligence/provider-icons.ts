@@ -65,7 +65,10 @@ export function providerIconForChannel(channelType: ProviderChannelKind, type: s
  * already the one that task's design names.
  */
 const CLI_PROVIDER_ICONS: Readonly<Record<string, ITuffIcon>> = Object.freeze({
-  'pi-cli-default': { type: 'class', value: 'i-simple-icons-pi' }
+  'pi-cli-default': { type: 'class', value: 'i-simple-icons-pi' },
+  'omp-cli': { type: 'class', value: 'i-simple-icons-pi' },
+  'codex-cli': { type: 'class', value: 'i-simple-icons-openai' },
+  'claude-cli': { type: 'class', value: 'i-simple-icons-anthropic' }
 })
 
 /** Every class `providerIconForId` can add on top of `PROVIDER_ICONS`, for the same safelist. */

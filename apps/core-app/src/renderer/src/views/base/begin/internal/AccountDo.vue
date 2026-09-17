@@ -72,6 +72,7 @@ function handleAgree(): void {
         :class="{ active: !choice }"
         class="transition-cubic AccountDo-Section"
         role="button"
+        :aria-pressed="!choice"
         tabindex="0"
         @click="choice = 0"
         @keydown.enter="choice = 0"
@@ -93,6 +94,7 @@ function handleAgree(): void {
         :class="{ active: choice }"
         class="transition-cubic AccountDo-Section"
         role="button"
+        :aria-pressed="choice === 1"
         tabindex="0"
         @click="choice = 1"
         @keydown.enter="choice = 1"
@@ -223,7 +225,11 @@ function handleAgree(): void {
     cursor: pointer;
     border-radius: 12px;
     box-sizing: border-box;
-    border: 2px solid transparent;
+    // Visible at rest, not just once chosen. A fully transparent border and background left an
+    // unselected option looking like a stray paragraph rather than the other half of a choice,
+    // so the only card that read as clickable was the one already selected.
+    border: 2px solid var(--tx-border-color-lighter);
+    background-color: var(--tx-fill-color-lighter);
     transition: all 0.3s ease;
 
     .tag {

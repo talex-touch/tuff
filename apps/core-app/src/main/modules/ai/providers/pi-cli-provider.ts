@@ -10,9 +10,11 @@ import type {
 import type { CliLineEvent } from './cli/cli-process-runtime'
 import type { StoredLocalAiCliSession } from '../../local-ai-cli/session-store'
 import type { PiSessionFileCapture } from '../../local-ai-cli/pi-native-session'
+import type { LocalAiCliProviderId } from '@talex-touch/utils/transport/events/local-ai-cli'
 import { randomUUID } from 'node:crypto'
-import { realpath, stat } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { app } from 'electron'
@@ -37,18 +39,28 @@ import { getProject } from '../../project/project-store'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { collectMessageAttachments } from './attachment-spill'
 import { runCliChat } from './cli/cli-process-runtime'
+import { createClaudeLineParser } from './cli/claude-stream-json'
+import { createCodexLineParser } from './cli/codex-exec-json'
 import {
+  buildOmpArgs,
   buildPiArgs,
   buildPiPrompt,
-  parsePiCliLine,
-  PI_CLI_NOT_FOUND,
+  CLAUDE_CLI_ORIGIN,
+  CLAUDE_CLI_PROVIDER_ID,
+  CODEX_CLI_ORIGIN,
+  CODEX_CLI_PROVIDER_ID,
+  OMP_CLI_ORIGIN,
+  OMP_CLI_PROVIDER_ID,
   PI_CLI_TERMINATION_FAILED,
   PI_SESSION_PROTOCOL_VERSION,
-  readPiSessionProtocolVersion,
+  parsePiCliLine,
   readPiSessionInfo,
+  readPiSessionProtocolVersion,
+  resolveClaudeExecutable,
+  resolveCodexExecutable,
+  resolveOmpExecutable,
   resolvePiExecutable
 } from './pi-cli-runtime'
-
 const piCliLog = createLogger('Intelligence').child('PiCli')
 const activeHomeConversations = new Set<string>()
 
@@ -213,23 +225,57 @@ export class PiCliProvider extends IntelligenceProvider {
     const signal = (options as PiCliRuntimeOptions).signal
     if (signal?.aborted) return
 
-    // Resolved before anything is written for the run: a missing CLI has nothing to clean up.
-    const executable = await resolvePiExecutable()
-    if (!executable) {
-      throw new Error(
-        `[PiCliProvider] ${PI_CLI_NOT_FOUND}: the 'pi' CLI was not found on this machine`
-      )
+    const isOmp =
+      this.config.id === OMP_CLI_PROVIDER_ID || this.config.metadata?.origin === OMP_CLI_ORIGIN
+    const isCodex =
+      this.config.id === CODEX_CLI_PROVIDER_ID || this.config.metadata?.origin === CODEX_CLI_ORIGIN
+    const isClaude =
+      this.config.id === CLAUDE_CLI_PROVIDER_ID ||
+      this.config.metadata?.origin === CLAUDE_CLI_ORIGIN
+
+    let executable: string | null = null
+    let cliName = 'pi'
+    let errorPrefix = '[PiCliProvider]'
+    let localProviderId: LocalAiCliProviderId = 'pi'
+
+    if (isOmp) {
+      executable = await resolveOmpExecutable()
+      cliName = 'omp'
+      errorPrefix = '[OmpCliProvider]'
+      localProviderId = 'oh-my-pi'
+    } else if (isCodex) {
+      executable = await resolveCodexExecutable()
+      cliName = 'codex'
+      errorPrefix = '[CodexCliProvider]'
+      localProviderId = 'codex'
+    } else if (isClaude) {
+      executable = await resolveClaudeExecutable()
+      cliName = 'claude'
+      errorPrefix = '[ClaudeCliProvider]'
+      localProviderId = 'claude'
+    } else {
+      executable = await resolvePiExecutable()
     }
 
+    if (!executable) {
+      throw new Error(
+        `${errorPrefix} ${cliName.toUpperCase()}_CLI_NOT_FOUND: the '${cliName}' CLI was not found on this machine`
+      )
+    }
     const home = resolveHomeSessionContext(options)
-    const cwd = home ? await resolveHomeSessionRoot(home.projectId) : undefined
-    let pointer: StoredLocalAiCliSession | null = home
-      ? await getLocalAiCliSessionForConversation(home.conversationId)
+    // Native continuation is `pi`'s protocol. `omp` has no `--session`/`--session-id`, and
+    // `codex exec --ephemeral` / `claude -p --no-session-persistence` keep no session either, so
+    // their home-surface turns rebuild the transcript instead of reading the session store.
+    const isPi = !isOmp && !isCodex && !isClaude
+    const nativeSession = home && isPi ? home : null
+    const cwd = nativeSession ? await resolveHomeSessionRoot(nativeSession.projectId) : undefined
+    let pointer: StoredLocalAiCliSession | null = nativeSession
+      ? await getLocalAiCliSessionForConversation(nativeSession.conversationId)
       : null
-    if (home && pointer) {
+    if (nativeSession && pointer) {
       if (
-        pointer.provider !== 'pi' ||
-        pointer.projectId !== home.projectId ||
+        pointer.provider !== localProviderId ||
+        pointer.projectId !== nativeSession.projectId ||
         pointer.projectRoot !== cwd
       ) {
         throw new Error('NATIVE_SESSION_CONFLICT')
@@ -238,23 +284,31 @@ export class PiCliProvider extends IntelligenceProvider {
       if (pointer.state === 'conflict') throw new Error('NATIVE_SESSION_CONFLICT')
     }
 
-    const nativeSessionId = home ? (pointer?.nativeSessionId ?? randomUUID()) : undefined
-    const releaseConversationLease = home
-      ? acquireHomeConversationLease(home.conversationId)
-      : undefined
+    const nativeSessionId = nativeSession ? (pointer?.nativeSessionId ?? randomUUID()) : undefined
     let releaseNativeLease: (() => void) | undefined
     let fileCapture: PiSessionFileCapture | null = null
     let capturedHead: string | null = null
+    // `codex` and `claude` still read AGENTS.md / CLAUDE.md out of their working directory, so a run
+    // started from the app's launch directory would feed unrelated repository rules into the chat.
+    // The throwaway directory is the whole isolation — removed in `finally`, whatever the turn did.
+    const isolationRoot =
+      isCodex || isClaude ? await mkdtemp(join(tmpdir(), 'tuff-cli-')) : undefined
+    // Taken only once there is nothing left to fail before the guarded block: the lease is released
+    // in the `finally` below, so taking it ahead of a call that can reject would strand the thread
+    // in NATIVE_SESSION_BUSY until the app restarted.
+    const releaseConversationLease = home
+      ? acquireHomeConversationLease(home.conversationId)
+      : undefined
 
     try {
-      if (home && cwd && pointer) {
+      if (nativeSession && cwd && pointer) {
         releaseNativeLease = nativeSessionLeaseRegistry.acquire({
-          provider: 'pi',
+          provider: localProviderId,
           projectRoot: cwd,
           nativeSessionId: pointer.nativeSessionId
         })
       }
-      if (home && pointer) {
+      if (nativeSession && pointer) {
         const sessionFile = await findPiNativeSessionFile(pointer.nativeSessionId)
         if (!sessionFile) {
           await markLocalAiCliSessionState(pointer.id, 'missing')
@@ -265,7 +319,10 @@ export class PiCliProvider extends IntelligenceProvider {
         if (capturedHead !== pointer.expectedHeadId) throw new Error('NATIVE_SESSION_CONFLICT')
       }
 
-      const toolRuntime = resolveToolRuntime?.() ?? null
+      // The answer-only CLIs run tool-less by argv (`--no-tools`, `-c mcp_servers={}`,
+      // `--tools ""`), so the tool prompt and the gateway env would advertise capabilities the run
+      // cannot use.
+      const toolRuntime = isPi ? (resolveToolRuntime?.() ?? null) : null
       const toolsGranted = (toolRuntime?.tools.length ?? 0) > 0
       const prompt = buildPiPrompt(payload.messages, {
         toolsGranted,
@@ -286,16 +343,71 @@ export class PiCliProvider extends IntelligenceProvider {
                 : {})
             }
           : undefined
-      let sessionObserved = !home
+      let sessionObserved = !nativeSession
 
       const stream = runCliChat(
         {
-          name: 'pi',
-          errorPrefix: '[PiCliProvider]',
+          name: cliName,
+          errorPrefix,
           executable,
-          args: (attachmentPaths) => buildPiArgs(prompt, model, toolOptions, attachmentPaths),
-          ...(cwd ? { cwd } : {}),
-          ...(home && nativeSessionId
+          args: isOmp
+            ? (attachmentPaths) => buildOmpArgs(prompt, model, attachmentPaths)
+            : isCodex && isolationRoot
+              ? (attachmentPaths) => [
+                  'exec',
+                  '--json',
+                  '--ephemeral',
+                  '--skip-git-repo-check',
+                  '--ignore-rules',
+                  '-s',
+                  'read-only',
+                  '-C',
+                  isolationRoot,
+                  '--color',
+                  'never',
+                  // The user's own MCP servers must not ride into the app's headless run. The flag
+                  // that would also drop their `model_provider` (`--ignore-user-config`) is not used.
+                  '-c',
+                  'mcp_servers={}',
+                  ...(model ? ['-m', model] : []),
+                  // Attachments are images only: the spill writes png/jpg/webp/gif and nothing else.
+                  ...attachmentPaths.flatMap((path) => ['-i', path]),
+                  // `exec --json` has no system-prompt flag, so the system text rides in front.
+                  `${prompt.systemPrompt}\n\n---\n\n${prompt.prompt}`
+                ]
+              : isClaude
+                ? (attachmentPaths) => {
+                    // Claude Code's headless run takes no image input, and answering anyway reads
+                    // as though the model had seen the picture. Refuse the turn before the child
+                    // starts rather than drop it and answer a question that was never asked.
+                    if (attachmentPaths.length > 0) {
+                      throw new Error(
+                        `${errorPrefix} ATTACHMENTS_UNSUPPORTED: the '${cliName}' CLI takes no image input`
+                      )
+                    }
+                    return [
+                      '-p',
+                      '--output-format',
+                      'stream-json',
+                      '--verbose',
+                      '--include-partial-messages',
+                      '--no-session-persistence',
+                      '--strict-mcp-config',
+                      '--setting-sources',
+                      '',
+                      '--tools',
+                      '',
+                      '--disable-slash-commands',
+                      '--no-chrome',
+                      '--system-prompt',
+                      prompt.systemPrompt,
+                      ...(model ? ['--model', model] : []),
+                      prompt.prompt
+                    ]
+                  }
+                : (attachmentPaths) => buildPiArgs(prompt, model, toolOptions, attachmentPaths),
+          ...(isolationRoot ? { cwd: isolationRoot } : cwd ? { cwd } : {}),
+          ...(nativeSession && nativeSessionId
             ? {
                 onLine: async (line: string) => {
                   const session = readPiSessionInfo(line)
@@ -308,14 +420,14 @@ export class PiCliProvider extends IntelligenceProvider {
                   }
                   if (!pointer) {
                     releaseNativeLease = nativeSessionLeaseRegistry.acquire({
-                      provider: 'pi',
+                      provider: localProviderId,
                       projectRoot: cwd!,
                       nativeSessionId
                     })
                     pointer = await upsertLocalAiCliSession({
-                      conversationId: home.conversationId,
-                      projectId: home.projectId,
-                      provider: 'pi',
+                      conversationId: nativeSession.conversationId,
+                      projectId: nativeSession.projectId,
+                      provider: localProviderId,
                       projectRoot: cwd!,
                       nativeSessionId,
                       prompt: firstUserPrompt(payload)
@@ -334,7 +446,11 @@ export class PiCliProvider extends IntelligenceProvider {
                 }
               : {})
           },
-          parseLine: createPiLineParser(),
+          parseLine: isCodex
+            ? createCodexLineParser()
+            : isClaude
+              ? createClaudeLineParser()
+              : createPiLineParser(),
           terminationErrorCode: PI_CLI_TERMINATION_FAILED,
           logger: piCliLog
         },
@@ -343,7 +459,7 @@ export class PiCliProvider extends IntelligenceProvider {
       for await (const chunk of stream) yield chunk
       if (signal?.aborted) return
 
-      if (home) {
+      if (nativeSession) {
         if (!sessionObserved || !pointer) throw new Error('PROTOCOL_INVALID')
         let finalHead: string | null
         if (fileCapture) {
@@ -374,6 +490,7 @@ export class PiCliProvider extends IntelligenceProvider {
       }
       throw error
     } finally {
+      if (isolationRoot) await rm(isolationRoot, { recursive: true, force: true }).catch(() => {})
       releaseNativeLease?.()
       releaseConversationLease?.()
     }

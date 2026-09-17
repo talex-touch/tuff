@@ -72,6 +72,12 @@ const appProviderMocks = vi.hoisted(() => {
       async (_label: string, task: () => Promise<unknown>) => await task()
     ),
     searchRecordExecuteMock: vi.fn(),
+    /**
+     * The foreground-app read behind a launch record. Mocked rather than left to the real service:
+     * that one shells out to `osascript` on macOS, and what the launch path owes is the captured
+     * value, not the platform probe.
+     */
+    resolvePreviousAppContextMock: vi.fn(async (): Promise<{ prevApp?: string }> => ({})),
     shellOpenPathMock: vi.fn(),
     showInternalSystemNotificationMock: vi.fn(),
     pinyinMock: vi.fn(),
@@ -115,6 +121,7 @@ export const runMdlsUpdateScanMock = appProviderMocks.runMdlsUpdateScanMock
 export const saveMainConfigMock = appProviderMocks.saveMainConfigMock
 export const scheduleDbWriteMock = appProviderMocks.scheduleDbWriteMock
 export const searchRecordExecuteMock = appProviderMocks.searchRecordExecuteMock
+export const resolvePreviousAppContextMock = appProviderMocks.resolvePreviousAppContextMock
 export const shellOpenPathMock = appProviderMocks.shellOpenPathMock
 export const showInternalSystemNotificationMock =
   appProviderMocks.showInternalSystemNotificationMock
@@ -319,6 +326,13 @@ vi.mock('./app-scanner', () => ({
     runMdlsUpdateScan: runMdlsUpdateScanMock
   }
 }))
+
+// Partial: the module's provider id is real and read by the usage query, only the foreground probe
+// is replaced.
+vi.mock('../../search-engine/app-launch-recorder', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return { ...actual, resolvePreviousAppContext: resolvePreviousAppContextMock }
+})
 
 vi.mock('./display-name-sync-utils', () => ({
   isProbablyCorruptedDisplayName: vi.fn((value: string | null | undefined) => {

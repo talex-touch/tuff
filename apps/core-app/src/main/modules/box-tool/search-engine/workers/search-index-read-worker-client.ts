@@ -1,7 +1,7 @@
 import type { SearchIndexReadExecutor } from '../search-index-service'
 import type { SQL } from 'drizzle-orm'
 import type {
-  SearchIndexReadWorkerRequest,
+  SearchIndexReadWorkerQueryMessage,
   SearchIndexReadWorkerResponse
 } from './search-index-read-worker-types'
 import { existsSync } from 'node:fs'
@@ -57,7 +57,7 @@ export class SearchIndexReadWorkerQueueFullError extends Error {
 }
 
 interface PendingRead {
-  request: SearchIndexReadWorkerRequest
+  request: SearchIndexReadWorkerQueryMessage
   resolve: (rows: unknown[]) => void
   reject: (error: Error) => void
   signal?: AbortSignal
@@ -128,14 +128,13 @@ function isWorkerResponse(value: unknown): value is SearchIndexReadWorkerRespons
  *
  * Cancellation is intentionally parent-owned: an active native query cannot be
  * interrupted through IPC, so its caller settles immediately while the slot
- * remains occupied until the worker reports completion or is force-terminated.
+ * remains occupied until the worker reports completion or the client retires it.
  */
 export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
   private worker: Worker | null = null
   private active: PendingRead | null = null
   private readonly queued: PendingRead[] = []
   private timeout: NodeJS.Timeout | null = null
-  private termination: Promise<void> | null = null
   private closePromise: Promise<void> | null = null
   private closed = false
   private sequence = 0
@@ -207,7 +206,8 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
 
     const worker = this.worker
     this.worker = null
-    this.closePromise = this.terminateWorker(worker)
+    this.retireWorker(worker)
+    this.closePromise = Promise.resolve()
     return await this.closePromise
   }
 
@@ -315,17 +315,26 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
 
     const activeWorker = this.worker
     this.worker = null
-    void this.terminateWorker(activeWorker)
+    this.retireWorker(activeWorker)
   }
 
-  private terminateWorker(worker: Worker | null): Promise<void> {
-    if (this.termination) return this.termination
-    if (!worker) return Promise.resolve()
-    this.termination = worker.terminate().then(
-      () => undefined,
-      () => undefined
-    )
-    return this.termination
+  private retireWorker(worker: Worker | null): void {
+    if (!worker) return
+
+    // `worker.terminate()` while libSQL has a query in flight makes the native client abort the
+    // whole process (neon asserts on the pending exception, surfacing as SIGABRT), which is why a
+    // reader that may be inside one is asked to close its connection and leave instead. It is
+    // unref'd so a query that never returns cannot hold the app open, and its error handler is
+    // replaced because a listener-less `error` event would crash the process it was retired from.
+    worker.unref()
+    worker.removeAllListeners('message')
+    worker.removeAllListeners('error')
+    worker.on('error', () => undefined)
+    try {
+      worker.postMessage({ type: 'shutdown' })
+    } catch {
+      // Already gone; nothing is left to close.
+    }
   }
 
   private clearOperationTimeout(): void {

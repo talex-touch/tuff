@@ -27,6 +27,13 @@ const transport = useTuffTransport()
 const router = useRouter()
 // Keep the hint hidden until main confirms an active macOS Globe action.
 const globeKeyConflict = ref(false)
+/**
+ * Raised only by a handover that the system did not actually apply.
+ *
+ * The preference is the system's to keep, so a write that does not move it leaves the row in
+ * place with nothing left to click. This is the signal that the manual route is worth showing.
+ */
+const globeKeyHandoverFailed = ref(false)
 
 const voiceInputEnabled = computed({
   get: () => appSetting.voiceInput?.enabled === true,
@@ -82,11 +89,15 @@ watch(
 async function refreshGlobeKeyStatus(): Promise<void> {
   try {
     const status = await transport.send(AssistantEvents.voice.getGlobeKeyStatus)
-    globeKeyConflict.value = status.applies && status.systemActionActive
+    const conflicted = status.applies && status.systemActionActive
+    globeKeyConflict.value = conflicted
+    // A read knows nothing about a write, so it can only clear the fallback by resolving the row.
+    if (!conflicted) globeKeyHandoverFailed.value = false
   } catch {
     // A settings page that cannot reach main has nothing to say about the system keyboard, and
     // a hint that appears on a transport failure would be noise.
     globeKeyConflict.value = false
+    globeKeyHandoverFailed.value = false
   }
 }
 
@@ -100,9 +111,16 @@ async function refreshGlobeKeyStatus(): Promise<void> {
 async function disableGlobeKeyAction(): Promise<void> {
   try {
     const status = await transport.send(AssistantEvents.voice.disableGlobeKeyAction)
-    globeKeyConflict.value = status.applies && status.systemActionActive
+    const conflicted = status.applies && status.systemActionActive
+    globeKeyConflict.value = conflicted
+    globeKeyHandoverFailed.value = conflicted
   } catch {
+    // The write did not reach the system, so all the row knows is what the read reports. A read
+    // that still sees the conflict has to leave the manual route on screen: the key is exactly as
+    // taken as it was before the click, and this was the one-click attempt that was meant to fix
+    // it. Leaving the flag alone would hide the only way out.
     await refreshGlobeKeyStatus()
+    globeKeyHandoverFailed.value = globeKeyConflict.value
   }
 }
 
@@ -156,9 +174,9 @@ function openCapabilities(): void {
 
     <!--
       Only while voice input is on: a machine that is not using Fn for dictation has no conflict
-      to report, and this is a request to change a system preference, not a warning. The primary
-      control performs the change; opening System Settings stays as the manual route for anyone
-      who would rather see the switch they are flipping.
+      to report, and this is a request to change a system preference, not a warning. The row
+      offers one action — take the key. Opening System Settings is not a peer of it but the way
+      out when that write does not stick, so it stays hidden until the handover has failed.
     -->
     <TuffBlockSlot
       v-if="voiceInputEnabled && globeKeyConflict"
@@ -169,18 +187,19 @@ function openCapabilities(): void {
     >
       <TxButton
         size="small"
+        data-testid="voice-disable-globe-key"
+        @click.stop="disableGlobeKeyAction"
+      >
+        {{ t('settingSpeechRecognition.globeKey.action') }}
+      </TxButton>
+      <TxButton
+        v-if="globeKeyHandoverFailed"
+        size="small"
         variant="ghost"
         data-testid="voice-open-keyboard-settings"
         @click.stop="openKeyboardSettings"
       >
         {{ t('settingSpeechRecognition.globeKey.manual') }}
-      </TxButton>
-      <TxButton
-        size="small"
-        data-testid="voice-disable-globe-key"
-        @click.stop="disableGlobeKeyAction"
-      >
-        {{ t('settingSpeechRecognition.globeKey.action') }}
       </TxButton>
     </TuffBlockSlot>
     <TuffBlockSwitch

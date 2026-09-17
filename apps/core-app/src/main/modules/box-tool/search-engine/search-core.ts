@@ -1767,7 +1767,16 @@ export class SearchEngineCore
     }
   }
 
-  public async recordExecute(sessionId: string, item: TuffItem): Promise<void> {
+  /**
+   * @param previousApp Foreground app the caller captured before scheduling the launch this
+   * execute stands for. The recorder seam passes it in; omitting it makes this method capture it
+   * itself, which is only safe when no launch is racing the read.
+   */
+  public async recordExecute(
+    sessionId: string,
+    item: TuffItem,
+    previousApp?: string | null
+  ): Promise<void> {
     const sessionTrace = this.sessionRegistry.getTrace(sessionId)
     if (!this.dbUtils) {
       this.queueExecuteTelemetry(sessionId, item, sessionTrace?.startedAt)
@@ -1778,7 +1787,7 @@ export class SearchEngineCore
     const itemId = this._getItemId(item)
 
     try {
-      await this.searchUsageService.recordExecute(sessionId, item, itemId)
+      await this.searchUsageService.recordExecute(sessionId, item, itemId, { previousApp })
 
       const queryText = sessionTrace?.query.text
       if (queryText && this.queryCompletionService) {
@@ -2372,6 +2381,8 @@ const searchEngineCore = SearchEngineCore.getInstance()
 // between the two (#712). The dependency is registered from this side instead, so app-provider
 // no longer needs to know search-core exists. Registered synchronously at module evaluation:
 // the recorder must run before the launch it precedes, not a microtask later.
-setAppExecutionRecorder((sessionId, item) => searchEngineCore.recordExecute(sessionId, item))
+setAppExecutionRecorder((sessionId, item, previousApp) =>
+  searchEngineCore.recordExecute(sessionId, item, previousApp)
+)
 
 export default searchEngineCore

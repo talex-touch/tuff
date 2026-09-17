@@ -3,7 +3,7 @@ import { CustomProvider } from './providers/custom-provider'
 import { LocalProvider } from './providers/local-provider'
 import { isNexusProviderConfig, NexusProvider } from './providers/nexus-provider'
 import { PiCliProvider } from './providers/pi-cli-provider'
-import { isPiCliProviderConfig } from './providers/pi-cli-runtime'
+import { isCliAgentProviderConfig } from './providers/pi-cli-runtime'
 import type { IntelligenceProvider } from './runtime/base-provider'
 
 export function createCustomProvider(config: IntelligenceProviderConfig): IntelligenceProvider {
@@ -17,5 +17,5 @@ export function createCustomProvider(config: IntelligenceProviderConfig): Intell
  * exhaustive list built from it.
  */
 export function createLocalProvider(config: IntelligenceProviderConfig): IntelligenceProvider {
-  return isPiCliProviderConfig(config) ? new PiCliProvider(config) : new LocalProvider(config)
+  return isCliAgentProviderConfig(config) ? new PiCliProvider(config) : new LocalProvider(config)
 }

@@ -21,7 +21,12 @@ const router = useRouter()
 const transport = useTuffTransport()
 const history = useConversationHistory()
 const projectStore = useProjectStore()
-const { projects, localAiSessions, loading: projectsLoading } = storeToRefs(projectStore)
+const {
+  projects,
+  localAiSessions,
+  loading: projectsLoading,
+  activeProjectId
+} = storeToRefs(projectStore)
 const archivedOpen = ref(false)
 const renamingProjectId = ref<string | null>(null)
 const renameValue = ref('')
@@ -191,6 +196,7 @@ function setProjectMenu(projectId: string, open: boolean): void {
         <div
           v-if="group.project"
           class="ShellConversationList-GroupHeader ShellConversationList-ProjectHeader"
+          :class="{ 'is-menu-open': openProjectMenuId === group.project.id }"
         >
           <input
             v-if="renamingProjectId === group.project.id"
@@ -202,49 +208,69 @@ function setProjectMenu(projectId: string, open: boolean): void {
             @keydown.enter.prevent="saveRename(group.project)"
             @keydown.escape.prevent="cancelRename"
           />
-          <span v-else :title="group.project.rootPath">{{ group.project.name }}</span>
-          <TxDropdownMenu
-            :model-value="openProjectMenuId === group.project.id"
-            placement="bottom-end"
-            @update:model-value="setProjectMenu(group.project.id, $event)"
+          <button
+            v-else
+            class="ShellConversationList-ProjectTitleBtn"
+            type="button"
+            :title="group.project.rootPath"
+            @click="beginProjectConversation(group.project.id)"
           >
-            <template #trigger>
-              <button
-                class="ShellConversationList-More"
-                type="button"
-                :aria-label="t('shell.projects.projectActions')"
-              >
-                <span class="i-ri-more-2-fill" />
-              </button>
-            </template>
-            <TxDropdownItem @select="beginProjectConversation(group.project.id)">
-              {{ t('shell.projects.newChat') }}
-            </TxDropdownItem>
-            <TxDropdownItem @select="openProjectAgent(group.project.id)">
-              {{ t('shell.projects.runLocalAgent') }}
-            </TxDropdownItem>
-            <TxDropdownItem
-              :disabled="discoveringProjectId !== null"
-              @select="discoverSessions(group.project)"
+            <span>{{ group.project.name }}</span>
+          </button>
+          <div class="ShellConversationList-ProjectActions">
+            <button
+              class="ShellConversationList-ActionBtn"
+              type="button"
+              :title="t('shell.projects.newChat')"
+              :aria-label="t('shell.projects.newChat')"
+              @click.stop="beginProjectConversation(group.project.id)"
             >
-              {{
-                discoveringProjectId === group.project.id
-                  ? t('shell.projects.discoveringSessions')
-                  : t('shell.projects.discoverSessions')
-              }}
-            </TxDropdownItem>
-            <TxDropdownItem @select="beginRename(group.project)">
-              {{ t('shell.projects.rename') }}
-            </TxDropdownItem>
-            <TxDropdownItem @select="togglePinned(group.project)">
-              {{ group.project.pinned ? t('shell.projects.unpin') : t('shell.projects.pin') }}
-            </TxDropdownItem>
-            <TxDropdownItem @select="toggleArchived(group.project)">
-              {{ t('shell.projects.archive') }}
-            </TxDropdownItem>
-          </TxDropdownMenu>
+              <span class="i-ri-add-line" />
+            </button>
+            <TxDropdownMenu
+              :model-value="openProjectMenuId === group.project.id"
+              placement="bottom-end"
+              @update:model-value="setProjectMenu(group.project.id, $event)"
+            >
+              <template #trigger>
+                <button
+                  class="ShellConversationList-More"
+                  type="button"
+                  :aria-label="t('shell.projects.projectActions')"
+                >
+                  <span class="i-ri-more-2-fill" />
+                </button>
+              </template>
+              <TxDropdownItem @select="beginProjectConversation(group.project.id)">
+                {{ t('shell.projects.newChat') }}
+              </TxDropdownItem>
+              <TxDropdownItem @select="openProjectAgent(group.project.id)">
+                {{ t('shell.projects.runLocalAgent') }}
+              </TxDropdownItem>
+              <TxDropdownItem
+                :disabled="discoveringProjectId !== null"
+                @select="discoverSessions(group.project)"
+              >
+                {{
+                  discoveringProjectId === group.project.id
+                    ? t('shell.projects.discoveringSessions')
+                    : t('shell.projects.discoverSessions')
+                }}
+              </TxDropdownItem>
+              <TxDropdownItem @select="beginRename(group.project)">
+                {{ t('shell.projects.rename') }}
+              </TxDropdownItem>
+              <TxDropdownItem @select="togglePinned(group.project)">
+                {{ group.project.pinned ? t('shell.projects.unpin') : t('shell.projects.pin') }}
+              </TxDropdownItem>
+              <TxDropdownItem @select="toggleArchived(group.project)">
+                {{ t('shell.projects.archive') }}
+              </TxDropdownItem>
+            </TxDropdownMenu>
+          </div>
         </div>
         <ShellProjectRows
+          v-if="group.rows.length"
           :rows="group.rows"
           :active-id="activeId"
           @open-conversation="openConversation"
@@ -252,6 +278,19 @@ function setProjectMenu(projectId: string, open: boolean): void {
           @continue-session="continueSession"
           @forget-session="forgetSession"
         />
+        <div v-else-if="group.project" class="ShellConversationList-EmptyProject">
+          <button
+            class="ShellConversationList-EmptyNewChat"
+            :class="{
+              'is-active': activeProjectId === group.project.id && !activeId
+            }"
+            type="button"
+            @click="beginProjectConversation(group.project.id)"
+          >
+            <span class="i-ri-add-line" />
+            <span>{{ t('shell.projects.newChat') }}</span>
+          </button>
+        </div>
       </section>
 
       <section v-if="groups.archived.length" class="ShellConversationList-Archived">
@@ -347,7 +386,8 @@ function setProjectMenu(projectId: string, open: boolean): void {
   font-size: var(--shell-fs-caption);
   letter-spacing: 0.4px;
 
-  > span:first-child {
+  > span:first-child,
+  > .ShellConversationList-ProjectTitleBtn {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -356,13 +396,39 @@ function setProjectMenu(projectId: string, open: boolean): void {
   }
 }
 
+.ShellConversationList-ProjectTitleBtn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--shell-text-muted);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  letter-spacing: 0.4px;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  -webkit-app-region: no-drag;
+
+  &:hover {
+    color: var(--shell-text-regular);
+  }
+}
+
+.ShellConversationList-ProjectActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.ShellConversationList-ActionBtn,
 .ShellConversationList-More {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: none;
   border-radius: var(--shell-radius-sm);
@@ -372,12 +438,56 @@ function setProjectMenu(projectId: string, open: boolean): void {
   opacity: 0;
   transition:
     opacity 0.15s ease,
-    color 0.15s ease;
+    color 0.15s ease,
+    background-color 0.15s ease;
   -webkit-app-region: no-drag;
 
+  &:hover {
+    color: var(--shell-text-regular);
+    background: var(--shell-surface-2);
+  }
+
   &:focus-visible,
-  .ShellConversationList-ProjectHeader:hover & {
+  .ShellConversationList-ProjectHeader:hover &,
+  .ShellConversationList-ProjectHeader.is-menu-open & {
     opacity: 1;
+  }
+}
+
+.ShellConversationList-EmptyProject {
+  padding: 2px 6px 4px 10px;
+}
+
+.ShellConversationList-EmptyNewChat {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px dashed var(--shell-border);
+  border-radius: var(--shell-radius-md);
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-family: inherit;
+  font-size: var(--shell-fs-caption);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+  -webkit-app-region: no-drag;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-regular);
+    border-color: var(--shell-border-hover, var(--shell-border));
+  }
+
+  &.is-active {
+    background: var(--shell-primary-soft);
+    color: var(--shell-primary);
+    border-color: transparent;
+    font-weight: 500;
   }
 }
 

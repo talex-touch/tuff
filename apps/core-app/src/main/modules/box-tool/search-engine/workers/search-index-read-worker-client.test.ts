@@ -6,12 +6,24 @@ const workerMock = vi.hoisted(() => {
   class MockWorker {
     readonly messages: unknown[] = []
     terminateCalls = 0
+    unrefCalls = 0
     private readonly handlers = new Map<string, Handler[]>()
 
     on(event: string, handler: Handler): this {
       const handlers = this.handlers.get(event) ?? []
       handlers.push(handler)
       this.handlers.set(event, handlers)
+      return this
+    }
+
+    removeAllListeners(event?: string): this {
+      if (event) this.handlers.delete(event)
+      else this.handlers.clear()
+      return this
+    }
+
+    unref(): this {
+      this.unrefCalls += 1
       return this
     }
 
@@ -64,6 +76,23 @@ function createClient(): SearchIndexReadWorkerClient {
     timeoutMs: 10_000,
     maxQueueDepth: 4
   })
+}
+
+interface RetirableWorker {
+  terminateCalls: number
+  unrefCalls: number
+  messages: unknown[]
+}
+
+/**
+ * Terminating a reader that may be inside a native query aborts the entire process (libSQL's neon
+ * binding asserts on the pending exception), so a retired reader is asked to close its connection
+ * and leave, never killed.
+ */
+function expectRetiredWithoutTermination(worker: RetirableWorker): void {
+  expect(worker.terminateCalls).toBe(0)
+  expect(worker.unrefCalls).toBe(1)
+  expect(worker.messages.at(-1)).toEqual({ type: 'shutdown' })
 }
 
 describe('SearchIndexReadWorkerClient lifecycle', () => {
@@ -147,8 +176,8 @@ describe('SearchIndexReadWorkerClient lifecycle', () => {
 
       await activeRejection
       await queuedRejection
-      expect(worker.terminateCalls).toBe(1)
-      expect(worker.messages).toHaveLength(1)
+      expectRetiredWithoutTermination(worker)
+      expect(worker.messages).toHaveLength(2)
       await expect(client.all(sql`SELECT 'after timeout'`)).rejects.toBeInstanceOf(
         SearchIndexReadWorkerUnavailableError
       )
@@ -170,7 +199,7 @@ describe('SearchIndexReadWorkerClient lifecycle', () => {
     await expect(client.all(sql`SELECT 'after failure'`)).rejects.toBeInstanceOf(
       SearchIndexReadWorkerUnavailableError
     )
-    expect(worker.terminateCalls).toBe(1)
+    expectRetiredWithoutTermination(worker)
   })
 
   it('settles active and queued callers when close races an in-flight read', async () => {
@@ -183,6 +212,6 @@ describe('SearchIndexReadWorkerClient lifecycle', () => {
 
     await expect(active).rejects.toBeInstanceOf(SearchIndexReadWorkerUnavailableError)
     await expect(queued).rejects.toBeInstanceOf(SearchIndexReadWorkerUnavailableError)
-    expect(worker.terminateCalls).toBe(1)
+    expectRetiredWithoutTermination(worker)
   })
 })

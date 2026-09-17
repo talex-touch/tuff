@@ -1968,6 +1968,74 @@ describe('CommonChannelModule private helpers', () => {
     expect(appProvider.reindexAppSearchTarget).toHaveBeenNthCalledWith(2, { target: '' })
   })
 
+  it('refuses every app-index handler on the plugin channel', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const { appProvider } = await import('../modules/box-tool/addon/apps/app-provider')
+    // Only the two handlers used as the host-side control below reach the provider; every other
+    // one is refused before it can, so their mocks deliberately stay unset.
+    ;(appProvider.getAppIndexSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      watchPaths: ['/Users/demo/Documents']
+    })
+    ;(appProvider.addAppByPath as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      status: 'added',
+      path: '/Applications/ChatApp.app'
+    })
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {}, onMaximizedChanged: () => () => {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const pluginContext = { plugin: { name: 'third-party' } }
+    const eventNames = Object.values(AppEvents.appIndex).map((event) => event.toEventName())
+    expect(eventNames.length).toBeGreaterThan(0)
+
+    for (const eventName of eventNames) {
+      const handler = handlers.get(eventName)
+      expect(handler, `${eventName} is not registered`).toBeTypeOf('function')
+      // The guard throws before the handler returns, so the call goes inside an async wrapper: a
+      // synchronous refusal and a rejected promise then fail the same way.
+      await expect(async () =>
+        handler?.({ path: '/Applications/ChatApp.app' }, pluginContext)
+      ).rejects.toThrow('HOST_ONLY_HANDLER')
+    }
+
+    // The host renderer keeps its access — a guard that also refused it would just break the page.
+    await expect(
+      handlers.get(AppEvents.appIndex.getSettings.toEventName())?.({}, {})
+    ).resolves.toEqual({ watchPaths: ['/Users/demo/Documents'] })
+    await expect(
+      handlers.get(AppEvents.appIndex.addPath.toEventName())?.(
+        { path: '/Applications/ChatApp.app' },
+        {}
+      )
+    ).resolves.toEqual({
+      success: true,
+      status: 'added',
+      path: '/Applications/ChatApp.app'
+    })
+  })
+
   it('routes indexed source runtime maintenance handlers', async () => {
     const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
     const transport = {
