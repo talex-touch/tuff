@@ -285,9 +285,6 @@ export class PiCliProvider extends IntelligenceProvider {
     }
 
     const nativeSessionId = nativeSession ? (pointer?.nativeSessionId ?? randomUUID()) : undefined
-    const releaseConversationLease = home
-      ? acquireHomeConversationLease(home.conversationId)
-      : undefined
     let releaseNativeLease: (() => void) | undefined
     let fileCapture: PiSessionFileCapture | null = null
     let capturedHead: string | null = null
@@ -296,6 +293,12 @@ export class PiCliProvider extends IntelligenceProvider {
     // The throwaway directory is the whole isolation — removed in `finally`, whatever the turn did.
     const isolationRoot =
       isCodex || isClaude ? await mkdtemp(join(tmpdir(), 'tuff-cli-')) : undefined
+    // Taken only once there is nothing left to fail before the guarded block: the lease is released
+    // in the `finally` below, so taking it ahead of a call that can reject would strand the thread
+    // in NATIVE_SESSION_BUSY until the app restarted.
+    const releaseConversationLease = home
+      ? acquireHomeConversationLease(home.conversationId)
+      : undefined
 
     try {
       if (nativeSession && cwd && pointer) {
@@ -373,27 +376,35 @@ export class PiCliProvider extends IntelligenceProvider {
                   `${prompt.systemPrompt}\n\n---\n\n${prompt.prompt}`
                 ]
               : isClaude
-                ? () => [
-                    '-p',
-                    '--output-format',
-                    'stream-json',
-                    '--verbose',
-                    '--include-partial-messages',
-                    '--no-session-persistence',
-                    '--strict-mcp-config',
-                    '--setting-sources',
-                    '',
-                    '--tools',
-                    '',
-                    '--disable-slash-commands',
-                    '--no-chrome',
-                    '--system-prompt',
-                    prompt.systemPrompt,
-                    ...(model ? ['--model', model] : []),
-                    // No attachment flag exists, so a picture sent to Claude Code is dropped
-                    // rather than guessed at with a file path in the prompt.
-                    prompt.prompt
-                  ]
+                ? (attachmentPaths) => {
+                    // Claude Code's headless run takes no image input, and answering anyway reads
+                    // as though the model had seen the picture. Refuse the turn before the child
+                    // starts rather than drop it and answer a question that was never asked.
+                    if (attachmentPaths.length > 0) {
+                      throw new Error(
+                        `${errorPrefix} ATTACHMENTS_UNSUPPORTED: the '${cliName}' CLI takes no image input`
+                      )
+                    }
+                    return [
+                      '-p',
+                      '--output-format',
+                      'stream-json',
+                      '--verbose',
+                      '--include-partial-messages',
+                      '--no-session-persistence',
+                      '--strict-mcp-config',
+                      '--setting-sources',
+                      '',
+                      '--tools',
+                      '',
+                      '--disable-slash-commands',
+                      '--no-chrome',
+                      '--system-prompt',
+                      prompt.systemPrompt,
+                      ...(model ? ['--model', model] : []),
+                      prompt.prompt
+                    ]
+                  }
                 : (attachmentPaths) => buildPiArgs(prompt, model, toolOptions, attachmentPaths),
           ...(isolationRoot ? { cwd: isolationRoot } : cwd ? { cwd } : {}),
           ...(nativeSession && nativeSessionId

@@ -36,7 +36,14 @@ import * as schema from '../../../db/schema'
 import { nativeSessionLeaseRegistry } from '../../local-ai-cli/native-session-lease'
 import { setLocalAiCliWorkspaceRoot } from '../../local-ai-cli/workspace-root'
 import { PiCliProvider } from './pi-cli-provider'
-import { PI_CLI_ORIGIN, PI_CLI_PROVIDER_ID, resetPiExecutableCache } from './pi-cli-runtime'
+import {
+  CLAUDE_CLI_ORIGIN,
+  CLAUDE_CLI_PROVIDER_ID,
+  PI_CLI_ORIGIN,
+  PI_CLI_PROVIDER_ID,
+  resetAllCliExecutableCaches,
+  resetPiExecutableCache
+} from './pi-cli-runtime'
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
 
@@ -731,6 +738,41 @@ describe('PiCliProvider Home native sessions', () => {
     expectLeaseFree(nativeSessionId)
     // A process failure is not a transcript verdict: the pointer must stay resumable.
     expect((await pointer(conversationId))?.state).toBe('available')
+  })
+
+  it('does not strand the conversation when the isolation directory cannot be created', async () => {
+    const conversationId = 'conv-isolation-failure'
+    const claudeStub = join(caseDir, 'claude-stub.js')
+    await writeFile(claudeStub, '#!/usr/bin/env node\n', 'utf8')
+    await chmod(claudeStub, 0o755)
+    process.env.TUFF_CLAUDE_CLI_PATH = claudeStub
+    resetAllCliExecutableCaches()
+    // `codex`/`claude` run in a throwaway cwd, and this is the one thing between the conversation
+    // lease and the `finally` that releases it: a directory that is not there makes `mkdtemp`
+    // reject, which used to leave the thread in NATIVE_SESSION_BUSY until the app restarted.
+    process.env.TMPDIR = join(caseDir, 'missing-tmp')
+
+    try {
+      const failed = await collectError(
+        new PiCliProvider({
+          ...CONFIG,
+          id: CLAUDE_CLI_PROVIDER_ID,
+          metadata: { origin: CLAUDE_CLI_ORIGIN }
+        }).chatStream({ messages: TURNS_ONE }, homeOptions(conversationId))
+      )
+      expect(failed.error?.message).toMatch(/ENOENT/)
+
+      delete process.env.TMPDIR
+      // The same thread must still be usable: a stranded lease would answer NATIVE_SESSION_BUSY.
+      const followUp = await collectError(
+        provider().chatStream({ messages: TURNS_ONE }, homeOptions(conversationId))
+      )
+      expect(followUp.error).toBeNull()
+    } finally {
+      delete process.env.TMPDIR
+      delete process.env.TUFF_CLAUDE_CLI_PATH
+      resetAllCliExecutableCaches()
+    }
   })
 
   it('fails closed, before forwarding output, when Pi names a different session', async () => {

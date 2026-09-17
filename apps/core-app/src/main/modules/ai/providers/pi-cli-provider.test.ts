@@ -12,7 +12,14 @@ import { join } from 'node:path'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PiCliProvider } from './pi-cli-provider'
-import { PI_CLI_ORIGIN, PI_CLI_PROVIDER_ID, resetPiExecutableCache } from './pi-cli-runtime'
+import {
+  CLAUDE_CLI_ORIGIN,
+  CLAUDE_CLI_PROVIDER_ID,
+  PI_CLI_ORIGIN,
+  PI_CLI_PROVIDER_ID,
+  resetAllCliExecutableCaches,
+  resetPiExecutableCache
+} from './pi-cli-runtime'
 
 /**
  * These run against a stub executable rather than a mocked `spawn`, because the behaviours under
@@ -47,6 +54,26 @@ function provider(): PiCliProvider {
 
 function userTurn(content = 'hi') {
   return { messages: [{ role: 'user' as const, content }] }
+}
+
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+function imageTurn(content = 'what is this') {
+  return {
+    messages: [
+      {
+        role: 'user' as const,
+        content,
+        attachments: [
+          {
+            type: 'image' as const,
+            dataUrl: `data:image/png;base64,${PNG_BYTES.toString('base64')}`,
+            name: 'shot.png'
+          }
+        ]
+      }
+    ]
+  }
 }
 
 beforeEach(async () => {
@@ -123,6 +150,19 @@ describe('PiCliProvider.chatStream', () => {
     await expect(async () => {
       for await (const _chunk of provider().chatStream(userTurn(), {})) void _chunk
     }).rejects.toThrow(/no credentials configured/)
+  })
+
+  it('reports a clean exit that produced nothing instead of closing on an empty answer', async () => {
+    // The same shape as an unknown model: the reason is on stderr, the exit code is 0, and the
+    // stream used to end on an empty bubble with nothing to show for it.
+    await writeStub(`
+      process.stderr.write('no credentials configured')
+      process.exit(0)
+    `)
+
+    await expect(async () => {
+      for await (const _chunk of provider().chatStream(userTurn(), {})) void _chunk
+    }).rejects.toThrow(/ended the run without an answer: no credentials configured/)
   })
 
   it('keeps deltas that already arrived when pi exits non-zero afterwards', async () => {
@@ -318,7 +358,6 @@ describe('PiCliProvider.chatStream', () => {
 })
 
 describe('PiCliProvider attachments', () => {
-  const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
   const TEMP_ENV_KEYS = ['TMPDIR', 'TMP', 'TEMP'] as const
   let savedTempEnv: Array<string | undefined> = []
 
@@ -336,24 +375,6 @@ describe('PiCliProvider attachments', () => {
       else process.env[key] = previous
     })
   })
-
-  function imageTurn(content = 'what is this') {
-    return {
-      messages: [
-        {
-          role: 'user' as const,
-          content,
-          attachments: [
-            {
-              type: 'image' as const,
-              dataUrl: `data:image/png;base64,${PNG_BYTES.toString('base64')}`,
-              name: 'shot.png'
-            }
-          ]
-        }
-      ]
-    }
-  }
 
   /** Echoes back every `@file` argument together with the bytes found at that path. */
   const ECHO_ATTACHMENTS = `
@@ -416,6 +437,52 @@ describe('PiCliProvider attachments', () => {
     }).rejects.toThrow(/PI_CLI_NOT_FOUND/)
 
     expect(readdirSync(workDir).filter((name) => name.startsWith('tuff-attach-'))).toEqual([])
+  })
+})
+
+/**
+ * One class serves pi, omp, codex and claude; the argv and the parser are the whole difference. The
+ * image case is the one that diverges into a wrong answer rather than an error, so it is pinned
+ * against a stub that records its own spawn.
+ */
+describe('PiCliProvider claude', () => {
+  const CLAUDE_CONFIG: IntelligenceProviderConfig = {
+    ...CONFIG,
+    id: CLAUDE_CLI_PROVIDER_ID,
+    name: 'Claude Code (local CLI)',
+    metadata: { origin: CLAUDE_CLI_ORIGIN }
+  }
+  let spawnMarker: string
+
+  beforeEach(async () => {
+    spawnMarker = join(workDir, 'claude-spawned')
+    await writeFile(
+      stubPath,
+      `#!/usr/bin/env node\nrequire('node:fs').writeFileSync(${JSON.stringify(spawnMarker)}, 'spawned')\n`,
+      'utf8'
+    )
+    await chmod(stubPath, 0o755)
+    process.env.TUFF_CLAUDE_CLI_PATH = stubPath
+    resetAllCliExecutableCaches()
+  })
+
+  afterEach(() => {
+    delete process.env.TUFF_CLAUDE_CLI_PATH
+    resetAllCliExecutableCaches()
+  })
+
+  it('refuses an image turn instead of answering as though the picture had been seen', async () => {
+    await expect(async () => {
+      for await (const _chunk of new PiCliProvider({ ...CLAUDE_CONFIG }).chatStream(
+        imageTurn(),
+        {}
+      )) {
+        void _chunk
+      }
+    }).rejects.toThrow(/ATTACHMENTS_UNSUPPORTED/)
+
+    // Decided from the argv, so the child never existed: nothing was spawned and nothing billed.
+    expect(existsSync(spawnMarker)).toBe(false)
   })
 })
 

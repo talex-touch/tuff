@@ -376,18 +376,20 @@ buildPiArgs(..., {
 
 ```ts
 type CliRunSpec = {
-  name: 'pi' | 'omp' | 'codex' | 'claude'
+  name: string
   errorPrefix: string
   executable: string
   args: string[] | ((attachmentPaths: string[]) => string[])
   cwd?: string
+  onLine?: (line: string) => void | Promise<void>
+  env?: Readonly<Record<string, string>>
   parseLine: (line: string) => CliLineEvent | null
   terminationErrorCode: string
   logger: Logger
 }
 
 CliLineEvent = {
-  delta?; usage?; provider?; model?; stopReason?; failure?
+  delta?; usage?; provider?; model?; done?; stopReason?; failure?
   partEvent?; partEvents?; retry?; commit?; reset?
 }
 
@@ -397,6 +399,14 @@ createClaudeLineParser()                                      // cli/claude-stre
 createCodexLineParser()                                       // cli/codex-exec-json.ts
 resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executable.ts
 ```
+
+- `env` is the provider's extra environment **on top of** the inherited one (`PATH` gains the
+  binary's dirname there), and `onLine` is the ordered protocol observation that runs before
+  `parseLine` on every stdout line. Both are part of the contract because the run is wrong without
+  them: `env` carries the tool gateway's URL/token and `pi`'s retry-stall override, and `onLine` is
+  where the Pi native-session contract validates the session line **and can throw to fail the turn**
+  (`PROTOCOL_INVALID`, `NATIVE_SESSION_CONFLICT`, `PROVIDER_RESUME_UNSUPPORTED`). A provider written
+  from this document without them silently loses tool-runtime env and native-session validation.
 
 ### 3. Contracts
 
@@ -408,7 +418,7 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
 | tool suppression | `--no-tools` (+ `-e <extensionPath>` only when tools were granted) | `--no-tools` | `-c mcp_servers={}` | `--tools '' --strict-mcp-config --setting-sources '' --disable-slash-commands --no-chrome` |
 | system prompt | `--system-prompt` | `--system-prompt` | no flag — the text is **prefixed** to the prompt | `--system-prompt` |
 | model | `--model` | `--model` | `-m` | `--model` |
-| attachments | `@<path>` positionals before the prompt | `@<path>` positionals | `-i <path>` (repeatable) | **dropped** — no flag exists |
+| attachments | `@<path>` positionals before the prompt | `@<path>` positionals | `-i <path>` (repeatable) | **rejected** — no flag exists, so the run fails with `ATTACHMENTS_UNSUPPORTED` before spawn |
 | working root | `--no-context-files` + the host's cwd | `--no-rules` is its name for the same idea; no session flags exist | `-C <isolationRoot> --skip-git-repo-check` | cwd = `isolationRoot` |
 
 - `--no-context-files` is **pi's** spelling. omp rejects it (`unknown flag`,
@@ -434,10 +444,14 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
   `result.result` is the single source of the failure text.
 - **`item.completed{type:'error'}` is metadata, not failure** (codex reports
   non-fatal warnings that way); only `turn.failed` means the run produced nothing.
-- **A run that ends with nothing streamed and no explicit success must throw the
+- **A run that ends with nothing streamed and no parsed event at all must throw the
   CLI's own words.** An empty bubble is the failure mode these parsers exist to
   prevent (AC5): the words are already in hand — `state.failure`, the stderr
-  tail, or the exit code — and every one of them beats showing nothing.
+  tail, or the exit code — and every one of them beats showing nothing. Every
+  protocol reports at least a settled marker on a turn it actually ran (pi's
+  `agent_settled` → `done`; codex's `turn.completed` and claude's non-error
+  `result` → `stopReason: 'stop'`), so stdout that parsed to nothing means the run
+  never produced a turn, and a clean exit is not an answer.
 - **Cancellation is a normal return**, not an error: `signal.aborted` wins over
   a concurrent child error, and the caller sees a generator that simply ends.
   The child must be gone when it does (see the termination window in §8.3).
@@ -463,11 +477,15 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
 | pi | `models.json`, `models-store.json` | `PI_CODING_AGENT_DIR` (default `~/.pi/agent`) | `auth.json` |
 | omp | `models.yml` / `models.yaml` / `models.json`, `config.yml` (`enabledModels`) | `TUFF_OMP_AGENT_DIR` (default `~/.omp/agent`) | — |
 | codex | `config.toml` | `CODEX_HOME` (default `~/.codex`) | `auth.json` |
-| claude | `~/.claude.json` aliases | `CLAUDE_HOME` | keychain / OAuth state |
+| claude | `settings.json` (`model`, `env.ANTHROPIC_MODEL`) | `CLAUDE_HOME` (default `~/.claude`) | keychain / OAuth state |
 
-- **The return type is the boundary**: `listXxxCliModels(): string[]` of
-  `<provider>/<id>` patterns — no credential can leave through a string array,
-  so no caller can log one by accident.
+- **The return type is the boundary**: `listXxxCliModels(): string[]` carries only the model fields
+  the table above names (`models[].id`, `enabledModels[]`, `model = …`) and never a credential
+  field, so no caller can log a key by accident. The values themselves are the user's own text, so
+  every read ends in one shared filter: a pattern is kept only if a CLI could be handed it as a
+  model argument — ≤200 characters, no whitespace, no control character (that is what stops one
+  log line from becoming two) — and `<provider>/<id>` is how pi and omp spell it while codex and
+  claude take bare ids or aliases.
 - Warn lines carry a **fixed reason string**, never the caught error: V8's
   `JSON.parse` message quotes source text, and here the source is
   credential-bearing.
@@ -488,12 +506,13 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
 | Condition | Result |
 |---|---|
 | Model id the CLI does not know | throw with the CLI's own text (omp: stderr + exit 1; claude: `result.result`) — never an empty answer |
+| Clean exit with nothing parsed on stdout | throw with the stderr tail, the CLI's stop word or the exit code — a clean exit is not an answer |
 | CLI not installed / overridden to a non-executable | that row disappears from model options; one info line says `absent`; no warn |
 | CLI not yet probed | row stays (unprobed ≠ absent) |
 | Turn cancelled mid-flight | generator returns; child gone within the §8 termination window; no orphan |
 | claude answers partially then fails | deltas shown, `is_error` decides the run failed |
 | codex emits a non-fatal `item.completed{error}` and then an answer | answer delivered; the error item is recorded only |
-| attachment sent to claude | dropped, never guessed at with a path in the prompt |
+| attachment sent to claude | `ATTACHMENTS_UNSUPPORTED` before the child starts — never guessed at with a path in the prompt, never silently dropped |
 | two CLI turns at once | independent children; each owns its own teardown |
 
 ### 5. Tests Required
