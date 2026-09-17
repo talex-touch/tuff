@@ -1928,43 +1928,55 @@ fn decode_audio_limited(
     bytes: Vec<u8>,
     max_samples: usize,
 ) -> std::result::Result<(Vec<f32>, u32, u16), String> {
-    use symphonia::core::audio::SampleBuffer;
-    use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions};
+    use symphonia::core::codecs::audio::AudioDecoderOptions;
     use symphonia::core::errors::Error as SymphoniaError;
-    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::formats::probe::Hint;
+    use symphonia::core::formats::{FormatOptions, TrackType};
     use symphonia::core::io::MediaSourceStream;
     use symphonia::core::meta::MetadataOptions;
-    use symphonia::core::probe::Hint;
 
     let stream = MediaSourceStream::new(Box::new(Cursor::new(bytes)), Default::default());
-    let probed = symphonia::default::get_probe()
-        .format(
+    let mut format = symphonia::default::get_probe()
+        .probe(
             &Hint::new(),
             stream,
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
+            FormatOptions::default(),
+            MetadataOptions::default(),
         )
         .map_err(|error| format!("probe-failed: {error}"))?;
-    let mut format = probed.format;
 
+    // 0.6 types tracks by media kind; the default audio track is the first one
+    // with a known (non-null) codec, which is the track the 0.5 scan picked.
     let track = format
-        .tracks()
-        .iter()
-        .find(|track| track.codec_params.codec != CODEC_TYPE_NULL)
+        .default_track(TrackType::Audio)
         .ok_or_else(|| "no-audio-track".to_string())?;
     let track_id = track.id;
+    // Taken by value so the format reader can be borrowed mutably by the packet loop.
+    let codec_params = track
+        .codec_params
+        .clone()
+        .and_then(|params| params.audio().cloned())
+        .ok_or_else(|| "no-audio-track".to_string())?;
+
+    // 0.5 exposed gapless trimming (encoder delay/padding removal) as
+    // `FormatOptions::enable_gapless`, defaulting to false; 0.6 moved it onto the
+    // decoder and flipped the default. Pinned off so decoding the same file still
+    // yields the same samples it did on 0.5.
+    let decoder_options = AudioDecoderOptions::default().gapless(false);
 
     let mut decoder = symphonia::default::get_codecs()
-        .make(&track.codec_params, &DecoderOptions::default())
+        .make_audio_decoder(&codec_params, &decoder_options)
         .map_err(|error| format!("decoder-make-failed: {error}"))?;
 
     let mut samples: Vec<f32> = Vec::new();
+    let mut interleaved: Vec<f32> = Vec::new();
     let mut sample_rate: u32 = 0;
     let mut channels: u16 = 0;
 
     loop {
         let packet = match format.next_packet() {
-            Ok(packet) => packet,
+            Ok(Some(packet)) => packet,
+            Ok(None) => break,
             Err(SymphoniaError::IoError(error))
                 if error.kind() == std::io::ErrorKind::UnexpectedEof =>
             {
@@ -1973,17 +1985,19 @@ fn decode_audio_limited(
             Err(SymphoniaError::ResetRequired) => break,
             Err(error) => return Err(format!("packet-read-failed: {error}")),
         };
-        if packet.track_id() != track_id {
+        if packet.track_id != track_id {
             continue;
         }
         match decoder.decode(&packet) {
             Ok(buffer) => {
-                let spec = *buffer.spec();
-                sample_rate = spec.rate;
-                channels = spec.channels.count() as u16;
-                let mut sample_buffer = SampleBuffer::<f32>::new(buffer.capacity() as u64, spec);
-                sample_buffer.copy_interleaved_ref(buffer);
-                samples.extend_from_slice(sample_buffer.samples());
+                let spec = buffer.spec();
+                sample_rate = spec.rate();
+                channels = spec.channels().count() as u16;
+                // `copy_to_slice_interleaved` requires the destination to hold every
+                // plane's frames exactly and writes them in channel-interleaved order.
+                interleaved.resize(buffer.samples_interleaved(), 0.0);
+                buffer.copy_to_slice_interleaved(&mut interleaved);
+                samples.extend_from_slice(&interleaved);
 
                 // Checked here rather than up front: the input byte length bounds
                 // an uncompressed file, but says almost nothing about a compressed
