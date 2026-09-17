@@ -3265,6 +3265,8 @@
       "host": {
         "label": "Local MCP server",
         "loading": "Reading…",
+        "loadFailed": "Could not read the state",
+        "loadFailedDesc": "Tuff does not know whether the local MCP server is listening. Click to retry.",
         "enableTitle": "Let other AIs call Tuff",
         "enableDesc": "Binds a loopback address only; a client still needs the token below.",
         "startingDesc": "Switched on, but the port is not bound yet.",

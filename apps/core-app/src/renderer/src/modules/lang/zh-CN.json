@@ -3265,6 +3265,8 @@
       "host": {
         "label": "本机 MCP 服务",
         "loading": "正在读取…",
+        "loadFailed": "读取状态失败",
+        "loadFailedDesc": "没能读到本机 MCP 服务的状态，未知它是否在监听，点击重试。",
         "enableTitle": "让其他 AI 调用 Tuff",
         "enableDesc": "开启后只监听本机回环地址，别的客户端要带上下面的令牌才能连。",
         "startingDesc": "已开启，但端口还没绑上。",

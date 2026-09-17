@@ -42,24 +42,18 @@ describe('normalizeMcpHostSettings', () => {
     expect(normalizeMcpHostSettings({ enabled: 1 }).enabled).toBe(false)
   })
 
-  it('keeps a whole 32-byte hex credential as it was typed', () => {
-    const lower = 'a1c3'.repeat(16)
-    const upper = 'A1C3'.repeat(16)
-
-    expect(normalizeMcpHostSettings({ token: lower }).token).toBe(lower)
-    // A user who retyped their token in uppercase still holds that credential;
-    // rejecting it would mint a new one and break their client config.
-    expect(normalizeMcpHostSettings({ token: upper }).token).toBe(upper)
-  })
-
-  it('drops a token that is not a whole 32-byte hex credential', () => {
+  /**
+   * `apps/core-app/AGENTS.md` forbids writing a token to ordinary JSON, so the
+   * credential moved to the secure store and this document must never carry one
+   * again — including when it is handed a file written by the build that did
+   * keep it here.
+   */
+  it('never carries a credential, not even one left by an earlier file', () => {
     const token = 'a1c3'.repeat(16)
+    const normalized = normalizeMcpHostSettings({ enabled: true, token })
 
-    expect(normalizeMcpHostSettings({ token: token.slice(0, 64 - 1) }).token).toBe('')
-    expect(normalizeMcpHostSettings({ token: token + 'a' }).token).toBe('')
-    expect(normalizeMcpHostSettings({ token: `${token.slice(0, 62)}zz` }).token).toBe('')
-    expect(normalizeMcpHostSettings({ token: 'z'.repeat(64) }).token).toBe('')
-    expect(normalizeMcpHostSettings({ token: ` ${token}` }).token).toBe('')
+    expect(Object.hasOwn(normalized, 'token')).toBe(false)
+    expect(JSON.stringify(normalized)).not.toContain(token)
   })
 
   it('bounds a hand-edited port like any other', () => {

@@ -37,7 +37,8 @@ export const JSON_RPC_SERVER_ERROR = -32000
 
 export interface JsonRpcRequest {
   jsonrpc: '2.0'
-  id?: string | number | null
+  /** Absent for a notification; never null, per MCP's tightening of JSON-RPC. */
+  id?: string | number
   method: string
   params?: unknown
 }
@@ -88,9 +89,9 @@ function errorResponse(id: string | number | null, error: JsonRpcErrorObject): J
   return { jsonrpc: '2.0', id, error }
 }
 
-/** A request without an `id` is a notification: it must be answered with silence. */
+/** A notification omits `id` entirely. A JSON `null` is a malformed request. */
 export function isNotification(request: JsonRpcRequest): boolean {
-  return request.id === undefined || request.id === null
+  return request.id === undefined
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -119,11 +120,24 @@ export function parseJsonRpcRequest(
   }
 
   const { id, method, jsonrpc } = parsed
-  const validId =
-    id === undefined || id === null || typeof id === 'string' || typeof id === 'number'
-  if (jsonrpc !== '2.0' || typeof method !== 'string' || !method || !validId) {
+  const hasId = Object.hasOwn(parsed, 'id')
+  // MCP tightened base JSON-RPC here: a request id must be a string or a
+  // number, and `null` is neither. Reading one as a notification would answer a
+  // malformed request with silence, which the client can only see as a lost call.
+  if (hasId && id !== null && typeof id !== 'string' && typeof id !== 'number') {
     return {
-      failure: errorResponse(validId ? ((id ?? null) as string | number | null) : null, {
+      failure: errorResponse(null, { code: JSON_RPC_INVALID_REQUEST, message: 'Invalid Request' })
+    }
+  }
+  if (hasId && id === null) {
+    return {
+      failure: errorResponse(null, { code: JSON_RPC_INVALID_REQUEST, message: 'Invalid Request' })
+    }
+  }
+
+  if (jsonrpc !== '2.0' || typeof method !== 'string' || !method) {
+    return {
+      failure: errorResponse((id ?? null) as string | number | null, {
         code: JSON_RPC_INVALID_REQUEST,
         message: 'Invalid Request'
       })
@@ -133,7 +147,7 @@ export function parseJsonRpcRequest(
   return {
     request: {
       jsonrpc: '2.0',
-      id: (id ?? null) as string | number | null,
+      ...(hasId ? { id: id as string | number } : {}),
       method,
       params: parsed.params
     }

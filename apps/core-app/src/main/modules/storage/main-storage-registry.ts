@@ -24,7 +24,7 @@ import { shortcutSettingOriginData } from '@talex-touch/utils/common/storage/ent
 import { createDefaultStoreSourcesPayload } from '@talex-touch/utils/store'
 import { redactProviderConfigDocument } from '../ai/provider-credential-service'
 import { normalizeLocalSkillConfig } from '../ai/skill-local-sources'
-import { normalizeMcpHostSettings } from '../mcp-host/mcp-host-settings'
+import { DEFAULT_MCP_HOST_SETTINGS, normalizeMcpHostSettings } from '../mcp-host/mcp-host-settings'
 
 export const AUTH_REAUTHENTICATION_REQUIRED_FIELD = 'requiresReauthenticationOnNextStartup'
 /**
@@ -358,7 +358,7 @@ export const mainStorageRegistry = {
   }),
   [StorageList.MCP_HOST_SETTINGS]: defineEntry<McpHostSettings>({
     key: StorageList.MCP_HOST_SETTINGS,
-    defaultValue: () => ({ enabled: false, port: 43110, token: '', tools: {} }),
+    defaultValue: () => ({ ...DEFAULT_MCP_HOST_SETTINGS }),
     normalize: normalizeMcpHostSettings
   })
 } as const

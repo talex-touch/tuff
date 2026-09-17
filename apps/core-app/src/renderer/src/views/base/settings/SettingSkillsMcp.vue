@@ -612,8 +612,16 @@ const mcpHost = ref<McpHostState | null>(null)
 const hostBusy = ref(false)
 const hostTokenRevealed = ref(false)
 const hostPortDraft = ref('')
+/**
+ * A state read that failed is not the same as a host that is switched off. Left
+ * unrecorded, the section would show "Off" next to a switch reading false — a
+ * claim about a listener nobody asked.
+ */
+const hostLoadFailed = ref(false)
 
 const hostRunning = computed(() => mcpHost.value?.running === true)
+/** The listener rows describe a running endpoint, and only once the state is known. */
+const hostReady = computed(() => !hostLoadFailed.value && mcpHost.value?.enabled === true)
 const enabledHostToolCount = computed(
   () => (mcpHost.value?.tools ?? []).filter((tool) => tool.enabled).length
 )
@@ -689,9 +697,11 @@ function hostRiskTone(risk: 'read' | 'write' | 'execute'): 'neutral' | 'warning'
 async function loadMcpHost(): Promise<void> {
   try {
     mcpHost.value = await mcpHostSdk.getState()
+    hostLoadFailed.value = false
   } catch (error) {
     // No toast: the section renders its own unavailable state, and a failure
     // here must not look like the MCP servers above failing to load.
+    hostLoadFailed.value = true
     skillsMcpLog.error('Failed to load the local MCP server state', error)
   }
 }
@@ -907,7 +917,21 @@ onMounted(() => {
     so nothing here can run without the user seeing it first.
   -->
   <TuffGroupBlock v-if="!showSkeleton" :name="t('settings.skillsMcp.host.label')">
+    <!-- A read that failed says so, rather than borrowing the stopped look. -->
     <SettingRow
+      v-if="hostLoadFailed"
+      :title="t('settings.skillsMcp.host.loadFailed')"
+      :description="t('settings.skillsMcp.host.loadFailedDesc')"
+    >
+      <template #trailing>
+        <TxButton variant="secondary" size="sm" @click="loadMcpHost">
+          {{ t('settings.skillsMcp.retry') }}
+        </TxButton>
+      </template>
+    </SettingRow>
+
+    <SettingRow
+      v-else
       :title="t('settings.skillsMcp.host.enableTitle')"
       :description="hostStatusDescription"
     >
@@ -928,7 +952,7 @@ onMounted(() => {
     </SettingRow>
 
     <SettingRow
-      v-if="mcpHost?.enabled"
+      v-if="hostReady"
       :title="t('settings.skillsMcp.host.endpointTitle')"
       :description="t('settings.skillsMcp.host.endpointDesc')"
     >
@@ -946,7 +970,7 @@ onMounted(() => {
     </SettingRow>
 
     <SettingRow
-      v-if="mcpHost?.enabled"
+      v-if="hostReady"
       :title="t('settings.skillsMcp.host.portTitle')"
       :description="t('settings.skillsMcp.host.portDesc')"
     >
@@ -963,7 +987,7 @@ onMounted(() => {
     </SettingRow>
 
     <SettingRow
-      v-if="mcpHost?.enabled"
+      v-if="hostReady"
       :title="t('settings.skillsMcp.host.tokenTitle')"
       :description="t('settings.skillsMcp.host.tokenDesc')"
     >
@@ -1010,7 +1034,7 @@ onMounted(() => {
     </SettingRow>
 
     <TuffBlockSlot
-      v-if="mcpHost?.enabled && hostClientConfig"
+      v-if="hostReady && hostClientConfig"
       :title="t('settings.skillsMcp.host.configTitle')"
       :description="t('settings.skillsMcp.host.configDesc')"
     >
