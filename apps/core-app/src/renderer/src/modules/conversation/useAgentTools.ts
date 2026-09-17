@@ -31,6 +31,12 @@ export interface UseAgentToolsReturn {
   setMode: (mode: AgentToolsMode) => Promise<string[]>
   /** Forgets remembered approvals — called when the thread changes. */
   resetApprovals: () => Promise<void>
+  /**
+   * Whether the card is on screen right now. Mounting is not the same thing: the
+   * shell keeps this page alive while the user reads Settings, and a prompt drawn
+   * into a hidden page is one nobody can answer.
+   */
+  setSurfaceVisible: (visible: boolean) => void
 }
 
 /**
@@ -77,6 +83,20 @@ export function useAgentTools(): UseAgentToolsReturn {
     transport.on(AgentToolEvents.confirmSettled, removeSettled)
   ]
 
+  /**
+   * This composable is what puts the card on screen, so its lifetime answers
+   * "can the user be asked at all". The gateway needs that when a call comes
+   * from outside the app — the local MCP server — where waiting for a prompt
+   * that no page renders would just be a two-minute hang ending in a denial.
+   */
+  function announce(visible: boolean): void {
+    void sdk
+      .setConfirmationSurface(visible)
+      .catch((error) => agentToolsLog.warn('Failed to announce the confirmation surface', error))
+  }
+
+  announce(true)
+
   async function settle(approved: boolean, remember: boolean): Promise<void> {
     const request = pending.value
     if (!request) return
@@ -105,6 +125,9 @@ export function useAgentTools(): UseAgentToolsReturn {
   if (getCurrentScope()) {
     onScopeDispose(() => {
       for (const dispose of disposers) dispose()
+      // Retracted with the surface itself: whatever is left in `pending` has no
+      // card to be answered from any more.
+      announce(false)
     })
   }
 
@@ -113,6 +136,7 @@ export function useAgentTools(): UseAgentToolsReturn {
     queued,
     approve: (remember) => settle(true, remember),
     deny: (remember) => settle(false, remember),
+    setSurfaceVisible: announce,
     setMode: async (mode) => {
       // `off` sends no mode at all: the gate behaviour is meaningless with the
       // gateway shut, and omitting it keeps the payload honest about that.

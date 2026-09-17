@@ -23,6 +23,18 @@ export interface ConfirmationDecision {
   remember: boolean
 }
 
+/**
+ * Thrown when there is nobody to ask. Distinct from a denial on purpose: a
+ * caller that reports "the user said no" when no prompt was ever shown is
+ * lying to its model, and the two cases need different words.
+ */
+export class ToolConfirmationUnavailableError extends Error {
+  constructor(message = 'No confirmation surface is on screen') {
+    super(message)
+    this.name = 'ToolConfirmationUnavailableError'
+  }
+}
+
 type AgentToolAuditBase = {
   schema: 'agent-tool-audit/v1'
   callId: string
@@ -61,7 +73,7 @@ export interface ToolGatewayHandle {
   close: () => Promise<void>
 }
 
-function constantTimeEquals(a: string, b: string): boolean {
+export function constantTimeEquals(a: string, b: string): boolean {
   const left = Buffer.from(a)
   const right = Buffer.from(b)
   // `timingSafeEqual` throws on length mismatch, which is itself a leak-free

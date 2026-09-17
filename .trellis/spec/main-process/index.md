@@ -16,7 +16,10 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   model-callable tools reach `pi`: loopback gateway topology, executor arg
   order, confirmation/remember semantics (proxy tools narrow rememberKey via
   `classify`), MCP risk mapping, home skills-injection surface marker,
-  degrade-not-abort rules, opt-in live smoke.
+  degrade-not-abort rules, opt-in live smoke; plus the opposite direction —
+  Tuff as an MCP server for external agents (shared gate, confirmation-surface
+  visibility, per-argument remembered approvals, what is deliberately not
+  published).
 
 - [voice-session-contracts.md](voice-session-contracts.md) — single main-owned dictation session, Rust audio boundary, active-target delivery, clipboard recovery, and plugin/renderer reuse.
 - [database-write-contracts.md](database-write-contracts.md) — single-writer-per-file

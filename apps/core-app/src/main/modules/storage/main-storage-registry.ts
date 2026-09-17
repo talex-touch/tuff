@@ -12,6 +12,7 @@ import type { AppIndexSettings } from '../box-tool/addon/apps/app-provider'
 import type { FileIndexSettings } from '../box-tool/addon/files/types'
 import type { ThemeStyleConfig } from '../box-tool/core-box/window'
 import type { FlowConsentSnapshot } from '../flow-bus/flow-consent'
+import type { McpHostSettings } from '../mcp-host/mcp-host-settings'
 import type { SentryConfig } from '../sentry/sentry-service'
 import { StorageList } from '@talex-touch/utils'
 import {
@@ -23,6 +24,7 @@ import { shortcutSettingOriginData } from '@talex-touch/utils/common/storage/ent
 import { createDefaultStoreSourcesPayload } from '@talex-touch/utils/store'
 import { redactProviderConfigDocument } from '../ai/provider-credential-service'
 import { normalizeLocalSkillConfig } from '../ai/skill-local-sources'
+import { DEFAULT_MCP_HOST_SETTINGS, normalizeMcpHostSettings } from '../mcp-host/mcp-host-settings'
 
 export const AUTH_REAUTHENTICATION_REQUIRED_FIELD = 'requiresReauthenticationOnNextStartup'
 /**
@@ -353,6 +355,11 @@ export const mainStorageRegistry = {
     key: StorageList.SKILL_LOCAL_SOURCES,
     defaultValue: () => ({ dirs: [], disabledIds: [] }),
     normalize: normalizeLocalSkillConfig
+  }),
+  [StorageList.MCP_HOST_SETTINGS]: defineEntry<McpHostSettings>({
+    key: StorageList.MCP_HOST_SETTINGS,
+    defaultValue: () => ({ ...DEFAULT_MCP_HOST_SETTINGS }),
+    normalize: normalizeMcpHostSettings
   })
 } as const
 
