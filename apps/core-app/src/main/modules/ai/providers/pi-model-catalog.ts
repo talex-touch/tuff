@@ -177,13 +177,11 @@ export function listClaudeCliModels(): string[] {
     }
   }
 
-  const standardClaudeModels = [
-    'claude-3-7-sonnet',
-    'claude-3-5-sonnet',
-    'claude-3-5-haiku',
-    'claude-opus-4',
-    'claude-sonnet-4'
-  ]
+  // Claude Code resolves these aliases against whatever the installed CLI currently offers. The
+  // versioned ids they replace (`claude-3-5-sonnet`, `claude-sonnet-4`, …) are retired and come
+  // back as an unknown-provider error. `fable` is deliberately absent: it needs organization
+  // access, and a menu row that fails for most users is worse than no row.
+  const standardClaudeModels = ['opus', 'sonnet', 'haiku']
 
   const patterns = dedupe(
     configuredModel ? [configuredModel, ...standardClaudeModels] : standardClaudeModels
@@ -298,11 +296,28 @@ function readStorePatterns(path: string): string[] {
   return providerPatterns(parsed)
 }
 
+/**
+ * Rejects a pattern that cannot be a model id. These values are the user's own config strings
+ * (`enabledModels`, `model = …`, a provider key), and one is offered in the model menu, passed as an
+ * argv and written into log lines - so a value longer than any model id, carrying whitespace, or
+ * hiding a control character (which is how one log line becomes two) is dropped.
+ */
+function isUnusablePattern(pattern: string): boolean {
+  if (pattern.length > 200) return true
+  for (const char of pattern) {
+    const code = char.codePointAt(0) ?? 0
+    if (code <= 0x20 || code === 0x7f || char.trim() === '') return true
+  }
+  return false
+}
+
+/** The shared funnel every catalogue read ends in: one entry per usable pattern. */
 function dedupe(patterns: string[]): string[] {
   const seen = new Set<string>()
   const unique: string[] = []
   for (const pattern of patterns) {
     if (seen.has(pattern)) continue
+    if (isUnusablePattern(pattern)) continue
     seen.add(pattern)
     unique.push(pattern)
   }

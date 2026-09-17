@@ -186,12 +186,44 @@ describe('listClaudeCliModels', () => {
     process.env.CLAUDE_HOME = claudeDir
     const { mkdirSync } = require('node:fs')
     mkdirSync(claudeDir, { recursive: true })
-    writeFileSync(join(claudeDir, 'settings.json'), JSON.stringify({ model: 'claude-3-7-sonnet' }))
+    writeFileSync(join(claudeDir, 'settings.json'), JSON.stringify({ model: 'claude-opus-4-8' }))
     resetCliModelCatalogCache()
 
     const models = listClaudeCliModels()
-    expect(models[0]).toBe('claude-3-7-sonnet')
-    expect(models).toContain('claude-3-5-sonnet')
+    expect(models[0]).toBe('claude-opus-4-8')
+    // The built-ins are the CLI's own aliases: the versioned ids they replaced are retired and come
+    // back as an unknown-provider error.
+    expect(models).toEqual(['claude-opus-4-8', 'opus', 'sonnet', 'haiku'])
+  })
+})
+
+/**
+ * Every read ends in the same funnel, so one malformed value per provider pins the boundary for all
+ * of them: these are config strings the user owns, and each one is offered in a model menu, passed
+ * as an argv and written into log lines.
+ */
+describe('catalogue value boundary', () => {
+  it('drops values that could never be handed to a CLI as a model', () => {
+    const ompDir = join(agentDir, 'omp')
+    const claudeDir = join(agentDir, 'claude')
+    const codexDir = join(agentDir, 'codex')
+    const { mkdirSync } = require('node:fs')
+    for (const dir of [ompDir, claudeDir, codexDir]) mkdirSync(dir, { recursive: true })
+    process.env.TUFF_OMP_AGENT_DIR = ompDir
+    process.env.CLAUDE_HOME = claudeDir
+    process.env.CODEX_HOME = codexDir
+
+    writeFileSync(
+      join(ompDir, 'config.yml'),
+      'enabledModels:\n  - "codex/gpt-5.6-sol\\nINFO forged log line"\n  - codex/gpt-5.6-luna\n'
+    )
+    writeFileSync(join(claudeDir, 'settings.json'), JSON.stringify({ model: 'sonnet haiku' }))
+    writeFileSync(join(codexDir, 'config.toml'), 'model = "gpt-5.5\ngpt-4o"\n')
+    resetCliModelCatalogCache()
+
+    expect(listOmpCliModels()).toEqual(['codex/gpt-5.6-luna'])
+    expect(listClaudeCliModels()).toEqual(['opus', 'sonnet', 'haiku'])
+    expect(listCodexCliModels()).not.toContain('gpt-5.5\ngpt-4o')
   })
 })
 
