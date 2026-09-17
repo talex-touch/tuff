@@ -2838,7 +2838,6 @@
     "aliasTitle": "自定义关键词",
     "invokeTitle": "唤起方式",
     "shortcutTitle": "快捷键",
-    "shortcutDesc": "按下组合键直接启动该应用，留空则解除绑定",
     "shortcutConflict": "该快捷键已被系统或其他绑定占用",
     "aliasDesc": "为该应用添加别名，搜索这些词也能召回它；重建索引后依然保留",
     "aliasPlaceholder": "输入关键词后回车",

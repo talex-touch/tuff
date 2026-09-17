@@ -491,7 +491,6 @@ function removeAlias(alias: string): void {
         >
           <TuffBlockSlot
             :title="t('appDetail.shortcutTitle')"
-            :description="t('appDetail.shortcutDesc')"
             default-icon="i-carbon-keyboard"
             active-icon="i-carbon-keyboard"
           >
@@ -506,7 +505,6 @@ function removeAlias(alias: string): void {
 
           <TuffBlockSlot
             :title="t('appDetail.aliasTitle')"
-            :description="t('appDetail.aliasDesc')"
             default-icon="i-carbon-tag"
             active-icon="i-carbon-tag"
           >
