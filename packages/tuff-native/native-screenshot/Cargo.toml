@@ -42,3 +42,6 @@ objc2-screen-capture-kit = { version = "=0.3.2", default-features = false, featu
 
 [build-dependencies]
 napi-build.workspace = true
+
+[dev-dependencies]
+napi = { workspace = true, features = ["dyn-symbols"] }
