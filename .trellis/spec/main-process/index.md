@@ -4,10 +4,14 @@ Electron main-process (apps/core-app/src/main) coding contracts.
 
 ## Documents
 
-- [pi-provider-contracts.md](pi-provider-contracts.md) — renderer→main→pi
-  boundary: @files attachment channel (dual-mirrored types, spill validation
+- [pi-provider-contracts.md](pi-provider-contracts.md) — renderer→main→CLI
+  boundary for the local CLI provider family (pi · omp · codex · claude):
+  @files attachment channel (dual-mirrored types, spill validation
   skip-not-fail, hint contract), stream commit/rollback semantics, bounded
-  subprocess cancellation/termination, and packaged ledger comparison.
+  subprocess cancellation/termination, packaged ledger comparison, native Pi
+  sessions, and §11's per-CLI argument matrix, per-stream termination semantics,
+  executable lookup (absent vs unprobed), and the model-catalogue credential
+  boundary.
 - [agent-tool-gateway-contracts.md](agent-tool-gateway-contracts.md) — how
   model-callable tools reach `pi`: loopback gateway topology, executor arg
   order, confirmation/remember semantics (proxy tools narrow rememberKey via

@@ -2770,10 +2770,11 @@
   "appList": {
     "searchPlaceholder": "输入以搜索...",
     "searchClear": "清除搜索",
-    "searchedOnDevice": "在此设备上搜索到 {count} 个结果。",
-    "appsOnDevice": "此设备上有 {count} 个应用。",
-    "filteredOnDevice": "已筛选出 {count} 个应用。",
-    "usageUnavailable": "使用统计暂不可用，列表暂按名称排序。",
+    "searchedOnDevice": "搜到 {count} 个",
+    "appsOnDevice": "共 {count} 个",
+    "filteredOnDevice": "筛选出 {count} 个",
+    "usageUnavailable": "无使用统计，按名称排序",
+    "emptyFiltered": "没有匹配的应用",
     "view": {
       "change": "切换列表视图",
       "dictionary": "字典排序",
@@ -2837,7 +2838,6 @@
     "aliasTitle": "自定义关键词",
     "invokeTitle": "唤起方式",
     "shortcutTitle": "快捷键",
-    "shortcutDesc": "按下组合键直接启动该应用，留空则解除绑定",
     "shortcutConflict": "该快捷键已被系统或其他绑定占用",
     "aliasDesc": "为该应用添加别名，搜索这些词也能召回它；重建索引后依然保留",
     "aliasPlaceholder": "输入关键词后回车",

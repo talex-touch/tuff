@@ -234,7 +234,11 @@ function openAliasDialog(): void {
  */
 function addAlias(): void {
   const value = aliasDraft.value.trim()
-  if (!value || !props.entry) return
+  // `busy` is this entry's own update in flight. The draft list is composed from `props.aliases`,
+  // which still holds the pre-update array until the first save returns, so a second submit would
+  // send an array without the alias the first one just added — and the parent replaces the whole
+  // list, so that earlier alias would be discarded rather than merged.
+  if (!value || !props.entry || props.busy) return
   const current = props.aliases ?? []
   if (current.some((alias) => alias.toLowerCase() === value.toLowerCase())) {
     aliasDraft.value = ''
@@ -491,7 +495,6 @@ function removeAlias(alias: string): void {
         >
           <TuffBlockSlot
             :title="t('appDetail.shortcutTitle')"
-            :description="t('appDetail.shortcutDesc')"
             default-icon="i-carbon-keyboard"
             active-icon="i-carbon-keyboard"
           >
@@ -506,7 +509,6 @@ function removeAlias(alias: string): void {
 
           <TuffBlockSlot
             :title="t('appDetail.aliasTitle')"
-            :description="t('appDetail.aliasDesc')"
             default-icon="i-carbon-tag"
             active-icon="i-carbon-tag"
           >

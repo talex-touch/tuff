@@ -20,14 +20,16 @@ import {
   IndexedSourceScanReasons
 } from '@talex-touch/utils/search'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import { TxInput } from '@talex-touch/tuffex/input'
-import { TxModal as TModal } from '@talex-touch/tuffex/modal'
 import { TxPopover } from '@talex-touch/tuffex/popover'
+import { sleep } from '@talex-touch/utils/common'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import type { CoreBoxIndexingDiagnosticsResponse } from '@talex-touch/utils/transport/events/types'
 import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { useRouter } from 'vue-router'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -41,7 +43,6 @@ import { createRendererLogger } from '~/utils/renderer-log'
 import FailedFilesListDialog from './components/FailedFilesListDialog.vue'
 import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
 import SettingFileIndexAppDiagnostic from './SettingFileIndexAppDiagnostic.vue'
-import SettingFileIndexAppIndexManager from './SettingFileIndexAppIndexManager.vue'
 import {
   formatDeviceBatteryStatus,
   formatDeviceIdleDuration,
@@ -91,6 +92,7 @@ const {
 const settingFileIndexLog = createRendererLogger('SettingFileIndex')
 const { t, te } = useI18n()
 const settingsSdk = useSettingsSdk()
+const router = useRouter()
 
 const indexStatus = ref<FileIndexStatus | null>(null)
 const isRebuilding = ref(false)
@@ -108,6 +110,7 @@ const searchProviderConfigs = ref<SearchProviderRuntimeConfig[]>([])
 const searchProviderConfigLoading = ref(false)
 const searchProviderConfigSaving = ref(false)
 const sourceDiagnosticDialogVisible = ref(false)
+const statsDrawerVisible = ref(false)
 const sourceDiagnosticDialogSource = ref<HTMLElement | null>(null)
 const selectedSourceDiagnosticId = ref<string | null>(null)
 const BROWSER_BOOKMARKS_SOURCE_ID = 'browser-bookmarks'
@@ -224,7 +227,6 @@ const deviceIdleForm = ref<DeviceIdleForm>({
 
 const appIndexSettings = ref<AppIndexSettings | null>(null)
 const appIndexSaving = ref(false)
-const appIndexManagerVisible = ref(false)
 const appIndexForm = ref<AppIndexForm>({
   hideNoisySystemApps: DEFAULT_APP_INDEX_SETTINGS.hideNoisySystemApps,
   startupBackfillEnabled: DEFAULT_APP_INDEX_SETTINGS.startupBackfillEnabled,
@@ -242,8 +244,13 @@ const appIndexForm = ref<AppIndexForm>({
   )
 })
 
+/**
+ * The launch zone lives on the applications page, next to the list it governs. This row is the
+ * pointer to it: the manager used to be mounted a second time in a modal here, so the same
+ * controls existed in two places with two independent reads of the index.
+ */
 function openAppIndexManager() {
-  appIndexManagerVisible.value = true
+  void router.push('/setting/applications')
 }
 
 async function checkStatus() {
@@ -849,7 +856,72 @@ function openFailedFilesDialog() {
   )
 }
 
+/**
+ * The failed-file list is a `TPopperDialog`, pinned at `z-10000` while every drawer sits on the
+ * shared allocator at `>= 10000` — opened from inside the drawer it would come up *behind* it and
+ * swallow the clicks on its own buttons. Close the drawer first instead of fighting that order,
+ * and wait the close out: a drawer keeps painting for its whole transition (`--tx-drawer-transition`
+ * is 0.4s and `visibility` stays `visible` until the slide-out ends), which would leave the dialog
+ * sitting behind the fading mask.
+ */
+async function openFailedFilesFromStatsDrawer() {
+  statsDrawerVisible.value = false
+  await sleep(400)
+  openFailedFilesDialog()
+}
+
 const failedFilesCount = computed(() => indexStats.value?.failedFiles ?? 0)
+
+/**
+ * The stats strip read as one endless line and mangled the row it sat in, so the numbers moved
+ * behind a drawer. Order is fixed here and tone is derived from the value: a zero count stays
+ * neutral instead of shouting red/orange for nothing to look at.
+ */
+const indexStatRows = computed<
+  { key: string; label: string; value: number; tone: 'neutral' | 'warning' | 'danger' }[]
+>(() => {
+  const stats = indexStats.value
+  if (!stats) return []
+
+  return [
+    {
+      key: 'totalFiles',
+      label: t('settings.settingFileIndex.totalFiles'),
+      value: stats.totalFiles,
+      tone: 'neutral'
+    },
+    {
+      key: 'failedFiles',
+      label: t('settings.settingFileIndex.failedFiles'),
+      value: stats.failedFiles,
+      tone: stats.failedFiles > 0 ? 'danger' : 'neutral'
+    },
+    {
+      key: 'skippedFiles',
+      label: t('settings.settingFileIndex.skippedFiles'),
+      value: stats.skippedFiles,
+      tone: stats.skippedFiles > 0 ? 'warning' : 'neutral'
+    },
+    {
+      key: 'completedFiles',
+      label: t('settings.settingFileIndex.completedFiles'),
+      value: stats.completedFiles,
+      tone: 'neutral'
+    },
+    {
+      key: 'embeddingCompletedFiles',
+      label: t('settings.settingFileIndex.embeddingCompletedFiles'),
+      value: stats.embeddingCompletedFiles,
+      tone: 'neutral'
+    },
+    {
+      key: 'embeddingRows',
+      label: t('settings.settingFileIndex.embeddingRows'),
+      value: stats.embeddingRows,
+      tone: 'neutral'
+    }
+  ]
+})
 
 const sourceDiagnosticsSummary = computed(() => sourceDiagnostics.value?.summary ?? null)
 
@@ -1216,7 +1288,7 @@ async function triggerRebuild() {
       </TxButton>
     </TuffBlockSlot>
 
-    <!-- 统计信息 -->
+    <!-- 统计信息：数值改到抽屉里，行内只留入口 -->
     <TuffBlockSlot
       v-if="indexStats"
       :title="t('settings.settingFileIndex.statsTitle')"
@@ -1224,51 +1296,9 @@ async function triggerRebuild() {
       default-icon="i-carbon-document-multiple-01"
       active-icon="i-carbon-document-multiple-01"
     >
-      <div class="stats-container">
-        <div class="stat-item">
-          <span class="stat-label">{{ t('settings.settingFileIndex.totalFiles') }}</span>
-          <span class="stat-value">&nbsp;{{ indexStats.totalFiles }}</span>
-        </div>
-        <span class="stat-divider">·</span>
-        <div class="stat-item">
-          <span class="stat-label">{{ t('settings.settingFileIndex.failedFiles') }}</span>
-          <TxButton
-            v-if="indexStats.failedFiles > 0"
-            variant="ghost"
-            size="sm"
-            :border="false"
-            class="stat-value-btn failed"
-            :title="t('settings.settingFileIndex.viewFailedFiles')"
-            @click="openFailedFilesDialog"
-          >
-            &nbsp;{{ indexStats.failedFiles }}
-            <div class="i-carbon-chevron-right text-10px ml-2px" />
-          </TxButton>
-          <span v-else class="stat-value">&nbsp;{{ indexStats.failedFiles }}</span>
-        </div>
-        <span class="stat-divider">·</span>
-        <div class="stat-item">
-          <span class="stat-label">{{ t('settings.settingFileIndex.skippedFiles') }}</span>
-          <span class="stat-value skipped">&nbsp;{{ indexStats.skippedFiles }}</span>
-        </div>
-        <span class="stat-divider">·</span>
-        <div class="stat-item">
-          <span class="stat-label">{{ t('settings.settingFileIndex.completedFiles') }}</span>
-          <span class="stat-value">&nbsp;{{ indexStats.completedFiles }}</span>
-        </div>
-        <span class="stat-divider">·</span>
-        <div class="stat-item">
-          <span class="stat-label">
-            {{ t('settings.settingFileIndex.embeddingCompletedFiles') }}
-          </span>
-          <span class="stat-value">&nbsp;{{ indexStats.embeddingCompletedFiles }}</span>
-        </div>
-        <span class="stat-divider">·</span>
-        <div class="stat-item">
-          <span class="stat-label">{{ t('settings.settingFileIndex.embeddingRows') }}</span>
-          <span class="stat-value">&nbsp;{{ indexStats.embeddingRows }}</span>
-        </div>
-      </div>
+      <TxButton variant="flat" @click="statsDrawerVisible = true">
+        {{ t('settings.settingFileIndex.statsButton') }}
+      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -2027,15 +2057,40 @@ async function triggerRebuild() {
     <SettingFileIndexAppDiagnostic />
   </TuffGroupBlock>
 
-  <TModal
-    v-model="appIndexManagerVisible"
-    :title="t('settings.settingFileIndex.appIndexManagerDialogTitle')"
-    width="min(92vw, 860px)"
+  <TxDrawer
+    v-model:visible="statsDrawerVisible"
+    :title="t('settings.settingFileIndex.statsTitle')"
+    size="440px"
+    data-testid="file-index-stats-drawer"
   >
-    <div class="app-index-manager-dialog">
-      <SettingFileIndexAppIndexManager />
+    <div class="stats-drawer">
+      <p class="stats-drawer-desc">
+        {{ t('settings.settingFileIndex.statsDesc') }}
+      </p>
+
+      <div class="stats-list">
+        <div v-for="row in indexStatRows" :key="row.key" class="stats-list-row">
+          <span class="stats-list-label">{{ row.label }}</span>
+          <TxButton
+            v-if="row.key === 'failedFiles' && row.value > 0"
+            variant="ghost"
+            size="sm"
+            :border="false"
+            class="stats-list-value-btn"
+            :class="`stats-list-value--${row.tone}`"
+            :title="t('settings.settingFileIndex.viewFailedFiles')"
+            @click="openFailedFilesFromStatsDrawer"
+          >
+            {{ row.value }}
+            <div class="i-carbon-chevron-right text-10px ml-2px" />
+          </TxButton>
+          <span v-else class="stats-list-value" :class="`stats-list-value--${row.tone}`">
+            {{ row.value }}
+          </span>
+        </div>
+      </div>
     </div>
-  </TModal>
+  </TxDrawer>
 </template>
 
 <style scoped src="./SettingFileIndex.css"></style>

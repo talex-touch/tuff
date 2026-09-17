@@ -442,12 +442,47 @@ describe('SearchUsageService entry-point attribution', () => {
       // this dimension exists to separate — back into the grid's.
       recommendationExposureService.recordExposure({ itemKeys: ['application-provider:app-item'] })
 
-      await usageService.recordExecute('entry-point-session', item, item.id, 'settings-app-detail')
+      await usageService.recordExecute('entry-point-session', item, item.id, {
+        entryPoint: 'settings-app-detail'
+      })
       await usageService.flush()
 
       expect(await readPersistedEntryPoints(client)).toEqual([
         { itemId: 'app-item', ent: 'settings-app-detail' }
       ])
+    } finally {
+      await dbWriteScheduler.drain()
+      client?.close()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('persists the previous app a caller captured, rather than racing it', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'tuff-search-usage-previous-app-'))
+    let client: Client | undefined
+
+    try {
+      client = createClient({ url: `file:${join(directory, 'search-usage.sqlite')}` })
+      for (const migrationUrl of schemaMigrationUrls) {
+        await applyMigration(client, migrationUrl)
+      }
+
+      const db = drizzle(client, { schema })
+      const dbUtils = createDbUtils(db)
+      const usageService = new SearchUsageService({ getDbUtils: () => dbUtils })
+      usageService.initialize(db)
+
+      // The caller read the foreground app before it scheduled the launch, which is the only
+      // moment the answer is true. Reading it here instead lands after the app is already in
+      // front, so the transition would claim this app was launched from itself.
+      await usageService.recordExecute('previous-app-session', item, item.id, {
+        previousApp: 'com.apple.Finder'
+      })
+      await usageService.flush()
+
+      const { rows } = await client.execute(`SELECT context AS context FROM usage_logs`)
+      const context = JSON.parse(String(rows[0].context)) as { prevApp?: string }
+      expect(context.prevApp).toBe('com.apple.Finder')
     } finally {
       await dbWriteScheduler.drain()
       client?.close()

@@ -34,7 +34,25 @@ describe('host-only transport handlers', () => {
     'window.minimize',
     'system.getCwd',
     'system.getPackage',
-    'system.getPath'
+    'system.getPath',
+    // The app index's management surface: every handler below either launches an application,
+    // rewrites the entries and bindings the user set up, or reads back what they run.
+    'appIndex.getSettings',
+    'appIndex.updateSettings',
+    'appIndex.addPath',
+    'appIndex.listEntries',
+    'appIndex.listSummaries',
+    'appIndex.upsertEntry',
+    'appIndex.removeEntry',
+    'appIndex.setEntryEnabled',
+    'appIndex.diagnose',
+    'appIndex.reindex',
+    'appIndex.launch',
+    'appIndex.usage',
+    'appIndex.getAliases',
+    'appIndex.setAliases',
+    'appIndex.getShortcut',
+    'appIndex.setShortcut'
   ]
 
   it('is reading the real source', () => {

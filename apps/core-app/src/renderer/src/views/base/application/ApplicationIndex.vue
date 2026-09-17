@@ -235,6 +235,10 @@ async function handleUpdateAliases(
   entry: AppIndexManagedEntry,
   nextAliases: string[]
 ): Promise<void> {
+  // Synchronous, unlike the disabled control below it: the child's draft list is built from the
+  // `aliases` prop, which is stale until this call returns, and the setter replaces the whole
+  // list. Two submissions in flight would therefore let the later one drop the earlier alias.
+  if (busyPath.value === entry.path) return
   busyPath.value = entry.path
   try {
     const result = await settingsSdk.appIndex.setAliases({

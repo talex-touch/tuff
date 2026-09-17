@@ -163,14 +163,17 @@ export class AppManagedEntryActionsService {
 
     const normalized = accelerator.trim()
     if (!normalized) {
-      await this.shortcuts.remove(target)
-      return { success: true, status: 'updated' }
+      const cleared = await this.shortcuts.remove(target)
+      return cleared
+        ? { success: true, status: 'updated' }
+        : { success: false, status: 'error', reason: 'shortcut-persist-failed' }
     }
 
     const bound = await this.shortcuts.set(target, normalized)
-    return bound
-      ? { success: true, status: 'updated' }
-      : { success: false, status: 'invalid', reason: 'shortcut-conflict' }
+    if (bound === 'bound') return { success: true, status: 'updated' }
+    return bound === 'conflict'
+      ? { success: false, status: 'invalid', reason: 'shortcut-conflict' }
+      : { success: false, status: 'error', reason: 'shortcut-persist-failed' }
   }
 
   /** Rebuilds every stored binding's callback after a restart. */

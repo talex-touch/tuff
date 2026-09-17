@@ -32,7 +32,10 @@ vi.mock('./providers/pi-cli-runtime', async (importOriginal) => ({
 }))
 
 vi.mock('./providers/pi-model-catalog', () => ({
-  listPiCliModels: () => piMocks.patterns
+  listPiCliModels: () => piMocks.patterns,
+  listOmpCliModels: () => ['codex/gpt-5.6-luna'],
+  listCodexCliModels: () => ['gpt-5.5'],
+  listClaudeCliModels: () => ['claude-3-7-sonnet']
 }))
 
 class ProviderModelOptionsManager extends FakeProviderManager {

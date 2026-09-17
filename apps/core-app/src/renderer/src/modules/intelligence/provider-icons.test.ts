@@ -62,13 +62,29 @@ describe('providerIconForId', () => {
       type: 'class',
       value: 'i-simple-icons-pi'
     })
+    expect(providerIconForId('omp-cli', 'local')).toEqual({
+      type: 'class',
+      value: 'i-simple-icons-pi'
+    })
+    expect(providerIconForId('codex-cli', 'local')).toEqual({
+      type: 'class',
+      value: 'i-simple-icons-openai'
+    })
+    expect(providerIconForId('claude-cli', 'local')).toEqual({
+      type: 'class',
+      value: 'i-simple-icons-anthropic'
+    })
     // Any other local provider — an Ollama, say — keeps the type's icon.
     expect(providerIconForId('ollama', 'local')).toEqual(providerIconFor('local'))
     expect(providerIconForId('openai-main', 'openai')).toEqual(providerIconFor('openai'))
   })
 
   it('lists the id-level classes for the safelist, spread there rather than copied', () => {
-    expect(PROVIDER_ID_ICON_CLASSES).toEqual(['i-simple-icons-pi'])
+    expect(PROVIDER_ID_ICON_CLASSES).toEqual([
+      'i-simple-icons-pi',
+      'i-simple-icons-openai',
+      'i-simple-icons-anthropic'
+    ])
     const unoConfig = readFileSync(path.resolve(__dirname, '../../../../../uno.config.ts'), 'utf8')
     expect(unoConfig).toMatch(/safelist: \[[^\]]*\.\.\.PROVIDER_ID_ICON_CLASSES/)
     expect(unoConfig).not.toContain("'i-simple-icons-pi'")

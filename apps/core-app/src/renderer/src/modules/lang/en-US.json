@@ -2770,10 +2770,11 @@
   "appList": {
     "searchPlaceholder": "Type to search...",
     "searchClear": "Clear search",
-    "searchedOnDevice": "{count} searched on this device.",
-    "appsOnDevice": "{count} applications on this device.",
-    "filteredOnDevice": "Filtered to {count} applications.",
-    "usageUnavailable": "Usage statistics are unavailable; the list is ordered by name.",
+    "searchedOnDevice": "{count} found",
+    "appsOnDevice": "{count} apps",
+    "filteredOnDevice": "{count} filtered",
+    "usageUnavailable": "No usage data; sorted by name",
+    "emptyFiltered": "No matching applications",
     "view": {
       "change": "Change list view",
       "dictionary": "Alphabetical",
@@ -2837,7 +2838,6 @@
     "aliasTitle": "Custom keywords",
     "invokeTitle": "How to summon",
     "shortcutTitle": "Shortcut",
-    "shortcutDesc": "Press a key combination to launch this application. Leave empty to unbind",
     "shortcutConflict": "That shortcut is taken by the system or another binding",
     "aliasDesc": "Aliases that also match this application in search. They survive a reindex",
     "aliasPlaceholder": "Type a keyword and press Enter",
