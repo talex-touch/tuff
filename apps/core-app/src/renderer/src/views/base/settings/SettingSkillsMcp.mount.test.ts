@@ -63,6 +63,25 @@ vi.mock('@talex-touch/utils/renderer', () => ({
   useMcpServersSdk: () => ({
     probe: vi.fn().mockResolvedValue({ ok: true, toolCount: 3 }),
     upsertManual: vi.fn().mockResolvedValue({ itemId: 'mcp-1' })
+  }),
+  /**
+   * The local MCP server section reads this on mount. Left off by default so the
+   * existing assertions keep describing the MCP-client and skills sections; the
+   * section's own tests turn it on.
+   */
+  useMcpHostSdk: () => ({
+    getState: vi.fn().mockResolvedValue({
+      enabled: false,
+      running: false,
+      endpoint: null,
+      port: 43110,
+      token: '',
+      tools: []
+    }),
+    setEnabled: vi.fn(),
+    setToolEnabled: vi.fn(),
+    setPort: vi.fn(),
+    rotateToken: vi.fn()
   })
 }))
 

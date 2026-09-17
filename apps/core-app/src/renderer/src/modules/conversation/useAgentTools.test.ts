@@ -39,7 +39,10 @@ vi.mock('@talex-touch/utils/transport/sdk/domains/agent-tools', () => ({
   createAgentToolsSdk: () => ({
     decide: mocks.decide,
     setEnabled: vi.fn(async () => ({ tools: [] })),
-    resetApprovals: vi.fn(async () => undefined)
+    resetApprovals: vi.fn(async () => undefined),
+    // The card's visibility is announced on mount and retracted on dispose; a
+    // test that never asserts it still has to let the call through.
+    setConfirmationSurface: vi.fn(async (mounted: boolean) => ({ mounted }))
   })
 }))
 
