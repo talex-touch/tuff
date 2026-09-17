@@ -2770,10 +2770,11 @@
   "appList": {
     "searchPlaceholder": "输入以搜索...",
     "searchClear": "清除搜索",
-    "searchedOnDevice": "在此设备上搜索到 {count} 个结果。",
-    "appsOnDevice": "此设备上有 {count} 个应用。",
-    "filteredOnDevice": "已筛选出 {count} 个应用。",
-    "usageUnavailable": "使用统计暂不可用，列表暂按名称排序。",
+    "searchedOnDevice": "搜到 {count} 个",
+    "appsOnDevice": "共 {count} 个",
+    "filteredOnDevice": "筛选出 {count} 个",
+    "usageUnavailable": "无使用统计，按名称排序",
+    "emptyFiltered": "没有匹配的应用",
     "view": {
       "change": "切换列表视图",
       "dictionary": "字典排序",

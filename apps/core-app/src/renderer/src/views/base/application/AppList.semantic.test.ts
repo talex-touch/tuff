@@ -153,6 +153,6 @@ describe('AppList views', () => {
     await selectView(wrapper, 'shortcut')
 
     expect(rowNames(wrapper)).toEqual([])
-    expect(wrapper.get('.AppList-Empty').text()).toBe('appList.filteredOnDevice')
+    expect(wrapper.get('.AppList-Empty').text()).toBe('appList.emptyFiltered')
   })
 })
