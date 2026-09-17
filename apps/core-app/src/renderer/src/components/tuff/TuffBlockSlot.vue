@@ -71,7 +71,7 @@ function handleClick(event: MouseEvent) {
               <slot name="tags" />
             </div>
           </div>
-          <p>{{ description }}</p>
+          <p v-if="description">{{ description }}</p>
         </template>
       </div>
     </div>

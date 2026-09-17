@@ -2838,7 +2838,6 @@
     "aliasTitle": "Custom keywords",
     "invokeTitle": "How to summon",
     "shortcutTitle": "Shortcut",
-    "shortcutDesc": "Press a key combination to launch this application. Leave empty to unbind",
     "shortcutConflict": "That shortcut is taken by the system or another binding",
     "aliasDesc": "Aliases that also match this application in search. They survive a reindex",
     "aliasPlaceholder": "Type a keyword and press Enter",
