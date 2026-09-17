@@ -88,7 +88,7 @@ const PI_CLI_BINDING_PRIORITY = 99
 const OMP_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: OMP_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
-  name: 'OMP',
+  name: 'OMP (local CLI)',
   enabled: true,
   priority: 0,
   models: [],
@@ -118,7 +118,7 @@ const PI_CLI_PROVIDER: IntelligenceProviderConfig = {
 const CODEX_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: CODEX_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
-  name: 'Codex',
+  name: 'Codex (local CLI)',
   enabled: true,
   priority: 0,
   models: [],
@@ -133,7 +133,7 @@ const CODEX_CLI_PROVIDER: IntelligenceProviderConfig = {
 const CLAUDE_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: CLAUDE_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
-  name: 'Claude Code',
+  name: 'Claude Code (local CLI)',
   enabled: true,
   priority: 0,
   models: [],
@@ -144,6 +144,18 @@ const CLAUDE_CLI_PROVIDER: IntelligenceProviderConfig = {
     origin: CLAUDE_CLI_ORIGIN
   }
 }
+
+/**
+ * The bare names the local CLI providers were seeded with before they carried the `(local CLI)`
+ * suffix. Seeded providers are persisted and only added when absent, so an install that seeded them
+ * earlier would keep the old label forever; these map it forward, matching only that exact old value
+ * so a name the user edited is left alone.
+ */
+const CLI_PROVIDER_NAME_MIGRATIONS: Array<{ id: string; from: string; to: string }> = [
+  { id: OMP_CLI_PROVIDER_ID, from: 'OMP', to: OMP_CLI_PROVIDER.name },
+  { id: CODEX_CLI_PROVIDER_ID, from: 'Codex', to: CODEX_CLI_PROVIDER.name },
+  { id: CLAUDE_CLI_PROVIDER_ID, from: 'Claude Code', to: CLAUDE_CLI_PROVIDER.name }
+]
 
 let lastAppliedRuntimeConfigSignature: string | null = null
 let teardownConfigUpdateListener: (() => void) | null = null
@@ -489,6 +501,14 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     }
     if (JSON.stringify(nexusProvider.capabilities ?? []) !== JSON.stringify([...capabilities])) {
       nexusProvider.capabilities = [...capabilities]
+      changed = true
+    }
+  }
+
+  for (const migration of CLI_PROVIDER_NAME_MIGRATIONS) {
+    const provider = config.providers.find((candidate) => candidate.id === migration.id)
+    if (provider && provider.name === migration.from) {
+      provider.name = migration.to
       changed = true
     }
   }
