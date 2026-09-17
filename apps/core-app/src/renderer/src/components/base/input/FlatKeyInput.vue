@@ -207,6 +207,9 @@ function clearBinding(): void {
   &:disabled {
     opacity: 0.35;
     cursor: default;
+    /* The button keeps its box while the field is empty, so it must not swallow the click that
+       would focus the input underneath it. */
+    pointer-events: none;
   }
 }
 
