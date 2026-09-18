@@ -37,6 +37,20 @@ export interface CoreMetrics {
     avgDuration?: number
     providerTimings?: Record<string, number>
   }
+  /**
+   * Voice recognition, aggregated the way `search` is.
+   *
+   * The two averages are taken over their own samples, not over `totalRecognitions`: a file
+   * transcription has no recording, and one dashed number would drag the average toward zero for
+   * a fact nobody measured. Identifiers are sanitized before they are bucketed.
+   */
+  voice?: {
+    totalRecognitions?: number
+    avgRecordingDuration?: number
+    avgRecognitionDuration?: number
+    models?: Record<string, number>
+    channels?: Record<string, number>
+  }
   startup?: {
     totalTimeMs?: number
     mainProcessTimeMs?: number
@@ -60,7 +74,7 @@ export interface AnalyticsRangeRequest {
 
 export interface AnalyticsExportPayload extends AnalyticsRangeRequest {
   format?: 'json' | 'csv'
-  dimensions?: Array<'ipc' | 'system' | 'modules' | 'plugins' | 'search'>
+  dimensions?: Array<'ipc' | 'system' | 'modules' | 'plugins' | 'search' | 'voice'>
 }
 
 export interface AnalyticsExportResult {

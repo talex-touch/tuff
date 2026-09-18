@@ -49,8 +49,10 @@ import {
   sanitizePluginAnalyticsMetadata,
   sanitizePluginAnalyticsNumber
 } from './analytics-report-sanitizer'
+import type { VoiceRecognitionMetricInput } from './core/analytics-core'
 import { AnalyticsCore } from './core/analytics-core'
 import { getAnalyticsMessageStore } from './message-store'
+
 import { DbStore } from './storage/db-store'
 
 const analyticsLog = createLogger('Analytics')
@@ -89,6 +91,9 @@ interface QueuedMessageReport {
   attempts: number
   count: number
 }
+
+/** Re-exported so the barrel carries it: callers of `recordVoiceMetrics` do not reach into `core/`. */
+export type { VoiceRecognitionMetricInput } from './core/analytics-core'
 
 export class AnalyticsModule extends BaseModule {
   static key: symbol = Symbol.for('AnalyticsModule')
@@ -873,6 +878,14 @@ export class AnalyticsModule extends BaseModule {
 
   recordSearchMetrics(totalDurationMs: number, providerTimings: Record<string, number>): void {
     this.core.recordSearchMetrics(totalDurationMs, providerTimings)
+  }
+
+  /**
+   * One recognition enters the voice metrics. Callers pass what the provider reported; nothing
+   * about the transcript or the audio is part of the input.
+   */
+  recordVoiceMetrics(input: VoiceRecognitionMetricInput): void {
+    this.core.recordVoiceMetrics(input)
   }
 }
 
