@@ -50,7 +50,7 @@
 
 ---
 
-## 📁 活跃 Trellis 任务（部分，本表 18 个）
+## 📁 活跃 Trellis 任务（部分，本表 17 个）
 
 优先级与状态以各任务 `task.json` / `prd.md` 为准。父子任务缩进展示。
 
@@ -65,7 +65,6 @@
 |------|--------|------|
 | [audit-search-system-architecture](.trellis/tasks/07-09-audit-search-system-architecture/prd.md) | **P0** | 🔄 planning [3/7]：搜索架构审计与整改父任务 |
 | └ [unify-search-provider-lifecycle](.trellis/tasks/07-09-unify-search-provider-lifecycle/prd.md) | P2 | planning |
-| [catalog-service-mvp](.trellis/tasks/07-13-catalog-service-mvp/prd.md) | P1 | planning |
 | [optimize-core-utility-plugins](.trellis/tasks/07-27-optimize-core-utility-plugins/prd.md) | P1 | 🔄 planning [0/3] |
 | ├ [optimize-intelligence-plugin](.trellis/tasks/07-27-optimize-intelligence-plugin/prd.md) | P1 | planning |
 | ├ [optimize-translation-plugin](.trellis/tasks/07-27-optimize-translation-plugin/prd.md) | P1 | planning |
