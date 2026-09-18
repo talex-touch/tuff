@@ -24,6 +24,15 @@ function handleError(e: Event): void {
 
 <style lang="scss" scoped>
 .AudioPreview {
+  /**
+   * The host `.preview-area` is a fixed 280px stage, so filling it leaves the transport bar - the
+   * only thing this preview draws - pinned to the top of a mostly empty box. Centring happens
+   * here rather than on the stage because the stage already centres its item along both axes;
+   * what it cannot do is centre content *inside* a child that was told to be full height.
+   */
+  display: flex;
+  justify-content: center;
+  align-items: center;
   width: 100%;
   height: 100%;
 

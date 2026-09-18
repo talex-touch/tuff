@@ -168,7 +168,14 @@ function handleClick(event: MouseEvent) {
   align-items: center;
 
   width: 100%;
-  height: 56px;
+  /**
+   * Floor, not a fixed height. A locked 56px made a row whose description wrapped to two lines
+   * overflow its own box, and the overflow painted straight over the row below — the macOS
+   * permission rows in Settings > General collided that way. The floor keeps the single-line
+   * rhythm identical to `TuffGroupBlock`'s header while letting a wrapped row take the space
+   * it actually needs.
+   */
+  min-height: 56px;
 
   user-select: none;
   border-radius: 12px;

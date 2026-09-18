@@ -30,30 +30,48 @@ function goHome(): void {
 .ShellBackRow {
   display: flex;
   // Same reason as ShellSearchEntry: a fixed height in the sidebar's flex column needs
-  // `flex-shrink: 0`, or an overflowing settings list eats into the 28px.
+  // `flex-shrink: 0`, or an overflowing settings list eats into the 32px.
   flex: 0 0 auto;
-  // Artboard: 232 x 28, icon at x=8, label at x=28 — a 14px glyph with a 6px gap after it.
+  // Artboard: icon at x=8, label at x=28 — a 14px glyph with a 6px gap after it.
   gap: 6px;
   align-items: center;
   width: 100%;
-  height: 28px;
-  padding: 0 8px;
-  border: none;
+  /**
+   * 32px, against the artboard's 28. Its neighbours are both 30 — `ShellSearchEntry` pins that
+   * exactly, `ShellNavItem` lands there from `6px` padding on a 13px label — so two pixels is as
+   * far as this row can grow while still belonging to their rhythm. 36 would make the way out of
+   * settings the tallest control in the column, louder than the page the reader is actually on.
+   */
+  height: 32px;
+  // 9px plus the transparent 1px border puts the glyph on the same 10px inset as every
+  // `ShellNavItem` below it; the borderless 8px left it a pixel short of that column.
+  padding: 0 9px;
+  border: 1px solid transparent;
   border-radius: var(--shell-radius-md);
-  background: transparent;
+  /**
+   * A resting fill, where this row used to be the one control in the settings column with none —
+   * which is why it read as a caption rather than as the way back.
+   *
+   * Neutral on purpose: `--shell-primary-soft` is what marks the *selected* settings category
+   * (`ShellNavItem.active`), so spending it here would make the exit look like a nav selection.
+   * The accent arrives on hover instead, where nothing else in the column is wearing it.
+   */
+  background: var(--shell-surface-2);
   color: var(--shell-text-regular);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
   user-select: none;
   transition:
+    border-color 0.15s ease,
     background-color 0.15s ease,
     color 0.15s ease;
   -webkit-app-region: no-drag;
 
   &:hover {
-    background: var(--shell-surface-2);
-    color: var(--shell-text-primary);
+    border-color: var(--shell-primary-border);
+    background: var(--shell-primary-soft);
+    color: var(--shell-primary);
   }
 
   /**
