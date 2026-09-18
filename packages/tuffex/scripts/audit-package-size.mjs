@@ -156,7 +156,12 @@ const LIMITS = {
   // Pinning `'strict'` in `component-styles.ts` restored breadcrumb (1.4 KiB),
   // pagination (2.7 KiB) and steps (6.9 KiB). Measured 587.8 KiB across 155
   // stylesheets. Actuals plus minimal headroom, growth from here fails.
-  onDemandCssBytes: 592 * 1024,
+  // 592 -> 596 on 2026-09-18: `sensitive-input` (TxSensitiveInput, added in 1e28b6386)
+  // ships its own 6.2 KiB stylesheet. Checked for the inlining this limit exists to
+  // catch: the sheet only carries `.tx-sensitive-input{,--xs,--sm,--lg}` and no other
+  // component's rules. Measured 594.0 KiB across 156 stylesheets. Actuals plus minimal
+  // headroom, growth from here fails.
+  onDemandCssBytes: 596 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus

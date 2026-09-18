@@ -49,10 +49,14 @@
 
 ### 🔴 已证实缺陷（代码级验证过）
 
-- [x] **B1 — 语义搜索接而未用** ✅ 已修（`07-13-fix-ranking-dead-features`，方向=延迟召回二段推送）
-  - 位置：`addon/files/services/file-provider-search-result-service.ts:280`（`semanticScore: 0` 写死）、`addon/files/file-provider.ts:3008`（`scheduleSemanticEnrichment` fire-and-forget，结果不 await/不合并）
-  - 现象：`semanticSearch` 唯一副作用是暖 30min query-embedding 缓存；其余纯烧 CPU（最多 1000 行 cosine 扫描），finalScore 公式无语义项 → 语义相关文件永不因语义进排序。
-  - 交付：移除 fire-and-forget 浪费；新增 `FileProvider.semanticRecall` + search-core `scheduleDeferredSemanticRecall`，首帧后异步召回关键词/FTS 漏掉的语义相关文件，经既有会话推送合并追加，写入真实 `semanticScore`。
+- [ ] **B1 — 语义搜索接而未用** 🔴 读侧已修，写侧仍然缺失 → 生产中仍是空操作（复核 2026-09-18）
+  - 位置：`addon/files/services/file-provider-search-result-service.ts:320-327`（主路径 `semanticScore: 0` 仍写死）、`addon/files/embedding-service.ts:264`（`if (rows.length === 0) return []` 每次早退）
+  - 已交付（读侧，`cbbd6ba7a`）：`FileProvider.semanticRecall` + search-core `scheduleDeferredSemanticRecall`（`search-core.ts:875-912`，调用点 `:1413-1420`），首帧后异步召回并写入真实 `semanticScore`。这部分确实存在且可用。
+  - **未交付（写侧）**：`embeddings` 表在生产中恒为空，因此上面整条读链恒为空操作。
+    - `EmbeddingService.indexFile/indexFiles/removeFiles`（`embedding-service.ts:123-229`）零生产调用点；唯一旧调用点在 `AD124A650` 随 `extractContentForFile` 迁入 worker 时被删除，无替代——worker 线程访问不到主进程 tuffIntelligence SDK。
+    - 唯一的解析器式写入 `file-index-persistence-repository.ts:381` 守卫 `if (fileUpdate.embeddings && …)` 永不为真：仓库唯一注册的 parser `text-parser.ts` 四条 return 分支（`:66/:78/:90/:102`）都不产出 `embeddings`，故 `file-index-worker.ts:307-308` 的 `embeddingStatus` 恒为 `'pending'`。
+  - **运行时取证**（2026-09-18，本机 4 个真实库）：`embeddings` 表 **0 行**；`files` 表合计 **155,716 行**，`embedding_status` 仅有 `none`/`pending`，**没有任何一行是 `completed`**。
+  - 修复面（最小）：在主进程 persist 钩子补回向量生成——`file-provider-index-flush-executor-service.ts:88-93` 或 `file-provider-index-runtime-service.ts:39-43`；不能放回 worker（拿不到 SDK）。
   - **约束carve-out**：渲染端 `search.update` 合并为 append-only（`mergeRenderedItems`）且 `useSearch.ts`/`CoreBox.vue` 为受保护用户改动，故延迟 pass **无法重排已渲染项**，仅能召回追加。"重排已渲染项"另记入下方 backlog。
 
 - [x] **B2 — 补全权重被绕过** ✅ 已修（`07-13-fix-ranking-dead-features`）
@@ -164,7 +168,7 @@
 
 | 子任务                                         | 覆盖                                                                                                      | 状态                                                              |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `07-13-fix-ranking-dead-features`              | B1 + B2                                                                                                   | ✅ done（typecheck 0 err，46 相关用例通过）                       |
+| `07-13-fix-ranking-dead-features`              | B1 + B2                                                                                                   | ⚠️ B2 done；B1 只完成读侧——写侧（embeddings 生产写入者）仍缺失，生产中语义召回恒为空操作，见上方 B1 |
 | `07-16-fix-usage-statistics-double-counting`   | B3                                                                                                        | ✅ done（单写者 + 保守迁移，4 tests + smoke）                     |
 | `07-16-unify-file-filtering-service`           | B4                                                                                                        | ✅ done（统一策略 + 索引/发布双门，83 tests + typecheck + smoke） |
 | `07-28-migrate-search-index-split-write-paths` | R9 remaining provider/file/embedding write migration; default-on topology, readiness-order, isolated-profile evidence, and `=0` rollback gate | planning

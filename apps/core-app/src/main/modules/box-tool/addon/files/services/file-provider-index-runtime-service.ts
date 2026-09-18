@@ -41,6 +41,8 @@ export interface FileProviderIndexRuntimeServiceDeps {
   }
   buildPersistEntries: (entries: IndexWorkerFileResult[]) => FilePersistenceEntry[]
   publishRecords: (entries: IndexWorkerFileResult[]) => Promise<number>
+  /** Optional embeddings writer; see `FileProviderIndexFlushExecutorServiceDeps.indexEmbeddings`. */
+  indexEmbeddings?: (entries: IndexWorkerFileResult[]) => Promise<void>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
   now?: () => number
@@ -62,6 +64,7 @@ export class FileProviderIndexRuntimeService {
   private readonly getSearchIndexWorker: FileProviderIndexRuntimeServiceDeps['getSearchIndexWorker']
   private readonly buildPersistEntries: FileProviderIndexRuntimeServiceDeps['buildPersistEntries']
   private readonly publishRecords: FileProviderIndexRuntimeServiceDeps['publishRecords']
+  private readonly indexEmbeddings: FileProviderIndexRuntimeServiceDeps['indexEmbeddings']
   private readonly logDebug: FileProviderIndexRuntimeServiceDeps['logDebug']
   private readonly logWarn: FileProviderIndexRuntimeServiceDeps['logWarn']
   private readonly now: () => number
@@ -88,6 +91,7 @@ export class FileProviderIndexRuntimeService {
     this.getSearchIndexWorker = deps.getSearchIndexWorker
     this.buildPersistEntries = deps.buildPersistEntries
     this.publishRecords = deps.publishRecords
+    this.indexEmbeddings = deps.indexEmbeddings
     this.logDebug = deps.logDebug
     this.logWarn = deps.logWarn
     this.now = deps.now ?? Date.now
@@ -126,6 +130,7 @@ export class FileProviderIndexRuntimeService {
       getSearchIndexWorker: this.getSearchIndexWorker,
       buildPersistEntries: this.buildPersistEntries,
       publishRecords: this.publishRecords,
+      indexEmbeddings: this.indexEmbeddings,
       logDebug: this.logDebug,
       config: {
         dbBackpressureMaxQueued: this.config.dbBackpressureMaxQueued

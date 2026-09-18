@@ -18,10 +18,7 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [
-    "09-03-remote-app-alias-catalog",
-    "09-13-voice-provider-cloud-pack"
-  ],
+  "children": [],
   "parent": null,
   "relatedFiles": [
     "apps/core-app/src/main/modules/catalog/catalog-service.ts",

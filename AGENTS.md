@@ -25,9 +25,9 @@ Managed by Trellis. Edits outside this block are preserved; edits inside may be 
 Before touching **search / file-indexing / cross-platform** code, read the living audit backlog — it tracks confirmed defects and prioritized risks with `file:line` references so you don't re-discover or re-introduce them:
 
 - **Search & cross-platform audit** → [`.trellis/tasks/07-13-search-crossplatform-audit/prd.md`](.trellis/tasks/07-13-search-crossplatform-audit/prd.md)
-  - 🔴 Confirmed defects: **B1** semantic search wired-but-unused, **B2** completion weighting bypassed by the sorter.
+  - 🔴 Confirmed defect: **B1** semantic search still a production no-op — the read path landed, but nothing ever writes the `embeddings` table (verified 2026-09-18: 0 embedding rows across 155,716 indexed files, no row ever reaching `completed`). **B2** completion weighting is fixed (`01546fdea`).
   - 🟠 High risk: R1 Rust screenshot module not wired into the build; R2 macOS unsigned/arm64-only vs electron-updater; R3 large-dir scan/reconcile memory peaks.
   - 🟡/🟢 Arch debt & cleanup: R4–R9, C1–C6.
-  - Active fix: `.trellis/tasks/07-13-fix-ranking-dead-features/` (B1 + B2).
+  - Active fix: `.trellis/tasks/07-13-fix-ranking-dead-features/` — B2 done; B1 needs a main-process embeddings writer (a worker cannot reach the tuffIntelligence SDK).
 
 Keep this list current: when a finding is fixed or invalidated, check it off in the backlog `prd.md` with a reason.

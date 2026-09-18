@@ -37,6 +37,17 @@ export interface FileProviderIndexFlushExecutorServiceDeps {
   }
   buildPersistEntries: (entries: IndexWorkerFileResult[]) => FilePersistenceEntry[]
   publishRecords: (entries: IndexWorkerFileResult[]) => Promise<number>
+  /**
+   * Generates semantic embeddings for the files a flush just committed.
+   *
+   * Optional on purpose. `EmbeddingService.generate` bills a metered provider per token, so a
+   * build without a configured embedding provider must keep indexing files without ever
+   * reaching for one -- omitting this dep leaves the flush path byte-identical to before.
+   *
+   * Called after the rows are durable, never before: a file that fails to persist must not
+   * produce an embedding row pointing at an id the files table does not have.
+   */
+  indexEmbeddings?: (entries: IndexWorkerFileResult[]) => Promise<void>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   waitForCapacity?: (maxQueued: number) => Promise<void>
   now?: () => number
@@ -54,6 +65,7 @@ export class FileProviderIndexFlushExecutorService {
   private readonly getSearchIndexWorker: FileProviderIndexFlushExecutorServiceDeps['getSearchIndexWorker']
   private readonly buildPersistEntries: FileProviderIndexFlushExecutorServiceDeps['buildPersistEntries']
   private readonly publishRecords: FileProviderIndexFlushExecutorServiceDeps['publishRecords']
+  private readonly indexEmbeddings: FileProviderIndexFlushExecutorServiceDeps['indexEmbeddings']
   private readonly logDebug: FileProviderIndexFlushExecutorServiceDeps['logDebug']
   private readonly waitForCapacity: NonNullable<
     FileProviderIndexFlushExecutorServiceDeps['waitForCapacity']
@@ -76,6 +88,7 @@ export class FileProviderIndexFlushExecutorService {
     this.getSearchIndexWorker = deps.getSearchIndexWorker
     this.buildPersistEntries = deps.buildPersistEntries
     this.publishRecords = deps.publishRecords
+    this.indexEmbeddings = deps.indexEmbeddings
     this.logDebug = deps.logDebug
     this.waitForCapacity =
       deps.waitForCapacity ?? ((maxQueued) => dbWriteScheduler.waitForCapacity(maxQueued))
@@ -100,8 +113,21 @@ export class FileProviderIndexFlushExecutorService {
           staleFileIds.length === 0
             ? entries
             : entries.filter((entry) => !staleFileIds.includes(entry.fileId))
+        const indexedItems = await this.publishRecords(committedEntries)
+        // Embeddings are generated only for rows that actually committed, and only after
+        // publishing: a metered provider call must never block the results reaching the UI,
+        // and a failure here must not fail an otherwise-good flush.
+        if (this.indexEmbeddings && committedEntries.length > 0) {
+          try {
+            await this.indexEmbeddings(committedEntries)
+          } catch (error) {
+            this.logDebug('Embedding indexing failed for flushed batch', {
+              error: error instanceof Error ? error.message : String(error)
+            })
+          }
+        }
         return {
-          indexedItems: await this.publishRecords(committedEntries),
+          indexedItems,
           staleEntries: staleFileIds.length
         }
       }

@@ -149,6 +149,7 @@ import {
   FileProviderIncrementalWriteService,
   type FileProviderIncrementalChangeEntry
 } from './services/file-provider-incremental-write-service'
+import { FileProviderEmbeddingIndexService } from './services/file-provider-embedding-index-service'
 import { FileProviderIndexRuntimeService } from './services/file-provider-index-runtime-service'
 import {
   FileProviderIntegrityService,
@@ -225,8 +226,6 @@ interface FileUpdateRecord {
   type: string
   isDir: boolean
 }
-
-type EmbeddingDbExecutor = Pick<LibSQLDatabase<typeof schema>, 'delete'>
 
 const FILE_PROVIDER_PROGRESS_TASK_ID = 'file-provider.progress-cleanup'
 const pollingService = PollingService.getInstance()
@@ -556,6 +555,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly indexSchedulerService: FileProviderIndexSchedulerService
   private readonly enrichmentResumeService: FileProviderEnrichmentResumeService
   private readonly indexPersistEntryMapper: IndexedWorkerPersistEntryMapperService
+  private readonly embeddingIndexService = new FileProviderEmbeddingIndexService({
+    getEmbeddingService: () => this.embeddingService ?? null,
+    logDebug: (m, meta) => this.logDebug(m, meta)
+  })
   private readonly assetService: FileProviderAssetService
   private readonly searchResultService: FileProviderSearchResultService
   private readonly pathNormalizationService = new FileProviderPathNormalizationService({
@@ -986,6 +989,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getSearchIndexWorker: () => this.requireFilePersistencePort(),
       buildPersistEntries: (entries) => this.indexPersistEntryMapper.map(entries),
       publishRecords: async (entries) => await this.publishCommittedWorkerRecords(entries),
+      indexEmbeddings: (entries) => this.embeddingIndexService.indexCommittedEntries(entries),
       logDebug: (message, meta) => this.logDebug(message, meta),
       logWarn: (message, error, meta) => this.logWarn(message, error, meta)
     })
@@ -3481,7 +3485,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const db = this.dbUtils.getDb()
     await scheduleDbWrite('file-index.incremental.delete', async () => {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
-      await this.deleteEmbeddingsByFileIds(db, idsToDelete)
+      await this.embeddingIndexService.deleteByFileIds(db, idsToDelete)
     })
   }
 
@@ -3500,7 +3504,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const db = this.dbUtils.getDb()
     await scheduleDbWrite('file-index.cleanup.delete', async () => {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
-      await this.deleteEmbeddingsByFileIds(db, idsToDelete)
+      await this.embeddingIndexService.deleteByFileIds(db, idsToDelete)
       await this.scanProgressService.deletePaths(db, pathsToDelete)
     })
   }
@@ -3533,7 +3537,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           await dbWriteScheduler.waitForCapacity(4)
           await scheduleDbWrite('file-index.reconcile.delete', async () => {
             await db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
-            await this.deleteEmbeddingsByFileIds(db, chunk)
+            await this.embeddingIndexService.deleteByFileIds(db, chunk)
           })
         }
       },
@@ -4121,19 +4125,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  private async deleteEmbeddingsByFileIds(
-    executor: EmbeddingDbExecutor,
-    fileIds: number[]
-  ): Promise<void> {
-    if (fileIds.length === 0) return
-    const sourceIds = fileIds.map((id) => String(id))
-    await executor
-      .delete(embeddingsSchema)
-      .where(
-        and(eq(embeddingsSchema.sourceType, 'file'), inArray(embeddingsSchema.sourceId, sourceIds))
-      )
-  }
-
   public async getIndexingProgress(paths?: string[]): Promise<{
     summary: Record<string, number>
     entries: Array<{
@@ -4257,10 +4248,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   /**
-   * Deferred semantic recall entry point used by the search engine after first
-   * results render. Delegates to the search-result service; returns brand-new
-   * semantically-related items only (ids in `excludeIds` are filtered out), so
-   * the caller can append them to the active session without duplicates.
+   * Deferred semantic recall entry point used by the search engine after first results render.
+   * Returns brand-new semantically-related items only (ids in `excludeIds` are filtered out),
+   * so the caller can append them to the active session without duplicates.
    */
   public async semanticRecall(
     query: TuffQuery,
@@ -4270,6 +4260,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!this.embeddingService) return []
     return this.searchResultService.semanticRecall(query, excludeIds, signal)
   }
+
   public hasSearchFilters(rawText: string): boolean {
     return this.searchResultService.hasFilters(rawText)
   }
