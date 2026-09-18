@@ -302,6 +302,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   SelectSelectStatusDemo: () => import('./demos/SelectSelectStatusDemo.vue'),
   SelectSelectWidthDemo: () => import('./demos/SelectSelectWidthDemo.vue'),
   SelectionActionsRewriteDemo: () => import('./demos/SelectionActionsRewriteDemo.vue'),
+  SensitiveInputSensitiveInputDemo: () => import('./demos/SensitiveInputSensitiveInputDemo.vue'),
   SidebarNavSidebarNavDemo: () => import('./demos/SidebarNavSidebarNavDemo.vue'),
   SignalMeterLevelsDemo: () => import('./demos/SignalMeterLevelsDemo.vue'),
   SkeletonCardPlaceholderDemo: () => import('./demos/SkeletonCardPlaceholderDemo.vue'),

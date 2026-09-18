@@ -1,0 +1,128 @@
+---
+title: "SensitiveInput 敏感输入框"
+description: "用于 API Key 与密钥的掩码输入框：点击揭示，不揭示也能复制，失焦自动重新掩码。"
+category: Form
+status: beta
+since: 0.6.0
+tags: [form, input, secret, security]
+syncStatus: reviewed
+verified: true
+---
+# SensitiveInput 敏感输入框
+
+## 基础用法
+
+### SensitiveInput
+
+:::TuffDemoWrapper{demo="SensitiveInputSensitiveInputDemo" code-lang="vue" title="三种状态" description="一个生效的密钥、一个被拒绝的、一个只读的。"}
+---
+code: |
+  <script setup lang="ts">
+  import { TxSensitiveInput } from '@talex-touch/tuffex/sensitive-input'
+  import { ref } from 'vue'
+
+  const apiKey = ref('sk_live_a1b2c3d4e5f6g7h8')
+  </script>
+
+  <template>
+    <TxSensitiveInput
+      v-model="apiKey"
+      label="API Key"
+      description="保管好这个值，不要分享给别人。"
+    />
+  </template>
+---
+:::
+
+## 三种状态
+
+**已掩码。** 有值时的默认状态。字段渲染八个符号而不是真实值，`<input>` 变成 `readonly` 且 `aria-hidden`，容器本身接管控件身份：`role="button"`、可聚焦、点击 / 回车 / 空格都能激活。悬停或聚焦时，符号会换成「点击查看」——两串文案都始终挂载、只切换可见性，所以字段不会在指针下重排。
+
+**已揭示。** `type` 切成 `text`，焦点移进输入框，可以直接编辑。失焦重新掩码；按 Esc 也重新掩码，并把焦点交还给容器——因为输入框一旦掩码就立刻不可 Tab 到达。焦点移到眼睛或复制按钮**不算**失焦，在那里掩码会把控件从触发点击的手底下抽走。
+
+**空。** 没有值，也就没什么可藏。此时它就是一个普通可编辑输入框：没有掩码、没有复制标签、也没有 `role="button"`——宣告一个揭示不出任何东西的动作是在撒谎。输入第一个字符即切换到已揭示；而从外部到达的值（挂载后才取回的 API Key）落地即掩码。
+
+## 不揭示也能复制
+
+复制标签挂在字段右上角外侧，悬停或聚焦时淡入。它的圆角是「字段圆角 − 内缩距离」，所以两条曲线在交接处保持同心。
+
+复制不会揭示。这正是要点：把值交给剪贴板，和把它放到一块可能正在被录屏的屏幕上，是两件不同的事。
+
+优先走 `navigator.clipboard.writeText`；在非安全上下文、或 Permissions Policy 拒绝时，回退到隐藏 textarea 的 `execCommand`，并在 `finally` 里摘除该节点——复制失败也绝不把密钥留在 DOM 里。被拒绝时抛 `copy-error`，而不是悄无声息。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | 密钥本身，受控。 |
+| `label` | `string` | `''` | 字段标签，同时决定掩码容器的可访问名。 |
+| `placeholder` | `string` | `''` | 原生占位文本，仅在空状态可见。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 高度、内边距、圆角与图标尺寸。`md` 与 `TxInput` 对齐。 |
+| `status` | `'default' \| 'error'` | — | 显式视觉状态。不传时由真值 `error` 推导为 `'error'`。 |
+| `description` | `string` | `''` | 字段下方的辅助说明。同时有 `error` 时被其替换。 |
+| `error` | `string` | `''` | 校验信息。为真时字段同时转红并置 `aria-invalid`。 |
+| `disabled` | `boolean` | `false` | 不能揭示、不能复制、不能编辑。 |
+| `readonly` | `boolean` | `false` | 禁止编辑，但仍可揭示与复制。 |
+| `required` | `boolean` | `false` | 在标签上标记必填。 |
+| `copyable` | `boolean` | `true` | 是否渲染复制标签。 |
+| `mask` | `string` | `'••••••••'` | 代替真实值绘制的符号。 |
+| `copiedDuration` | `number` | `2000` | 复制标签保持「已复制」的时长，毫秒。 |
+| `labels` | `Partial<SensitiveInputLabels>` | — | 覆盖组件渲染的每一条文案。 |
+
+### Events
+
+| 事件名 | 回调参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: string)` | 值发生变化。 |
+| `copy` | `(value: string)` | 值已写入剪贴板。 |
+| `copyError` | `(error: unknown)` | 剪贴板拒绝了这次写入。 |
+| `reveal` | — | 值变为可见。凭据类场景值得记审计。 |
+| `mask` | — | 值重新回到掩码之后。 |
+
+### Exposed
+
+| 方法名 | 说明 |
+|------|------|
+| `focus()` | 掩码时聚焦容器，否则聚焦输入框。 |
+| `blur()` | 让输入框失焦。 |
+| `reveal()` | 以编程方式揭示值。 |
+| `mask()` | 重新掩码。 |
+| `copy()` | 执行复制流程，返回 Promise。 |
+
+## 交互契约
+
+- 掩码容器用 `role="button"` 而不是真正的 `<button>`，因为它内部还有眼睛与复制两个按钮，而按钮套按钮是非法 HTML。因此它必须自带 `tabindex`、`aria-label`（`<label>, 已遮蔽。`）、指向屏幕阅读器说明与实时区域的 `aria-describedby`，以及自己的回车 / 空格处理。
+- 掩码期间 `<input>` 是 `aria-hidden` 且 `tabindex="-1"`，这样辅助技术只读到一个控件，而不是「一个按钮包着一个看不见的文本框」。
+- `role="status" aria-live="polite"` 区域负责播报「值已隐藏」与「已复制到剪贴板」。只换可见文案或 `aria-label`，屏幕阅读器永远不会重播；实时区域才是让变化可听见的东西。
+- 点击 `<label>` 触发揭示，而不是转发焦点——它的原生目标是一个已掩码、`pointer-events: none` 且 `aria-hidden` 的输入框。
+- 边框用内阴影环（`box-shadow: inset 0 0 0 1px`）而不是 `border`，所以聚焦时加粗到 1.5px 不会改变盒子高度，表单行里的任何东西都不会位移。
+- `autocomplete="off"` 加上 `data-1p-ignore` / `data-lpignore`，让密码管理器的浮层不要盖到这个并非登录凭据的字段上。
+- 唯一的过渡是复制标签的 `opacity`，且在 `prefers-reduced-motion: reduce` 下关闭。悬停时的颜色变化是即时的。
+- 组件不携带任何文案目录：每一条渲染出来的字符串都来自 `labels`，叠加在 `SENSITIVE_INPUT_DEFAULT_LABELS` 之上。
+
+## 最佳实践
+
+- 只要这个值是「用户之后还要读回来」的存量密钥，就用它而不是 `TxInput type="password"`。`type="password"` 是给正在输入、永不回读的凭据用的。
+- 宿主签发、用户不能改的密钥请加 `readonly`：它依然可揭示、可复制，并且揭示后焦点留在容器上，而不是掉进一个拒绝输入的字段里。
+- 优先让人用复制，而不是「揭示再手选」。每一次揭示都是密钥暴露在屏幕上的一段时间。
+- 值是生产环境凭据、并且这个界面有审计需求时，监听 `reveal`。
+- 传 `error` 而不是 `status="error"`：推导出来的状态不会和文案走散。
+- 用 `labels` 做本地化——一共九条文案，其中七条只有屏幕阅读器听得到。
+
+## Source
+
+- 组件源码：`packages/tuffex/packages/components/src/sensitive-input/src/TxSensitiveInput.vue`。
+- 类型：`packages/tuffex/packages/components/src/sensitive-input/src/types.ts`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/sensitive-input/__tests__/sensitive-input.test.ts`（17 项）覆盖掩码默认态与其 ARIA 形状、点击与回车揭示、只读揭示路径、失焦与 Esc 重新掩码及焦点回收、眼睛/复制按钮的失焦豁免、禁用态、空状态编辑路径、外部到达与外部清空的值、带实时播报与确认时长的复制、被拒绝的剪贴板、由文案推导的错误态、文案本地化、无 label 时的可访问名、眼睛按钮切换，以及 expose 的方法。
+- 行为参考 [Kumo 的 SensitiveInput](https://kumo-ui.com/components/sensitive-input/)；它遵循的设计准则记录在 `.trellis/spec/frontend/tuffex-design-rules.md`。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **为什么不是 `TxInput` 的变体:** `TxInput` 的契约是一个控件——带可选前后缀的输入框。而这个组件在掩码时会让容器**变成**控件，角色、Tab 顺序、ARIA 可见性一起换。把这套状态机塞进 `TxInput`，等于让每一个普通文本框都得绕开它。
+- **为什么符号是画上去的、不是原生的:** 原生密码点数量跟着值的长度走，会泄露密钥有多长。固定八个符号的掩码不会。
+- **相对 Kumo 的偏离:** Kumo 用点击坐标与容器 bounding rect 比对来过滤 label 转发过来的点击。这个移植改为直接拦截 label 自己的 click——不需要任何几何计算，而且在容器被 transform 或手势期间滚动过时依然正确。
+- **被否决的方案:** 加一个 `revealed` prop。揭示是用户的动作；宿主如果能强制它，父组件一次重渲染就可能悄悄把凭据掀开。因此只 expose 一个需要显式调用的 `reveal()`。

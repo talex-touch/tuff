@@ -346,6 +346,7 @@ const pickerColumns = [{
   ],
 }]
 const scrubWidth = ref(324)
+const sensitiveValue = ref('sk_live_a1b2c3d4e5f6')
 const searchText = ref('')
 const searchSelectValue = ref('')
 const searchSelectOptions = [
@@ -1614,6 +1615,22 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('sensitive-input')">
+          {{ cellLabel('SensitiveInput', '敏感输入') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__block">
+              <TxSensitiveInput v-model="sensitiveValue" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('tag-input')">
           {{ cellLabel('TagInput', '标签输入') }}
         </NuxtLink>
@@ -2218,13 +2235,13 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__row">
-              <TxButton size="small" @click="fireToast">
+              <TxButton size="sm" @click="fireToast">
                 {{ copy.toastSaved }}
               </TxButton>
-              <TxButton size="small" variant="ghost" @click="fireToastStack">
+              <TxButton size="sm" variant="ghost" @click="fireToastStack">
                 {{ copy.toastStack }}
               </TxButton>
-              <TxButton size="small" variant="ghost" @click="fireToastAction">
+              <TxButton size="sm" variant="ghost" @click="fireToastAction">
                 {{ copy.toastUndo }}
               </TxButton>
             </div>

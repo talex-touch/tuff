@@ -141,6 +141,7 @@ The everyday building blocks, importable through the `@talex-touch/tuffex/base` 
 - [Form](./form.en.mdc)
 - [Input](./input.en.mdc)
 - [FlatInput](./flat-input.en.mdc)
+- [SensitiveInput](./sensitive-input.en.mdc)
 - [Textarea](./textarea.en.mdc)
 - [NumberInput](./number-input.en.mdc)
 - [SearchInput](./search-input.en.mdc)

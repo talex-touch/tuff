@@ -141,6 +141,7 @@ code: |
 - [Form 表单](./form.zh.mdc)
 - [Input 输入](./input.zh.mdc)
 - [FlatInput 扁平输入](./flat-input.zh.mdc)
+- [SensitiveInput 敏感输入框](./sensitive-input.zh.mdc)
 - [Textarea 多行输入](./textarea.zh.mdc)
 - [NumberInput 数字输入](./number-input.zh.mdc)
 - [SearchInput 搜索输入框](./search-input.zh.mdc)

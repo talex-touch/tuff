@@ -239,6 +239,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/form',
     '/docs/dev/components/input',
     '/docs/dev/components/flat-input',
+    '/docs/dev/components/sensitive-input',
     '/docs/dev/components/textarea',
     '/docs/dev/components/number-input',
     '/docs/dev/components/search-input',

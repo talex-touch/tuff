@@ -67,6 +67,7 @@ TAXONOMY: dict[str, list[str]] = {
         "form",
         "input",
         "flat-input",
+        "sensitive-input",
         "textarea",
         "number-input",
         "search-input",

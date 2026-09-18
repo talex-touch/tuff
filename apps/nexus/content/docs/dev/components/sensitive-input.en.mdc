@@ -1,0 +1,128 @@
+---
+title: "SensitiveInput"
+description: "A masked field for API keys and secrets: click to reveal, copy without revealing, re-masks on blur."
+category: Form
+status: beta
+since: 0.6.0
+tags: [form, input, secret, security]
+syncStatus: reviewed
+verified: true
+---
+# SensitiveInput
+
+## Basic Usage
+
+### SensitiveInput
+
+:::TuffDemoWrapper{demo="SensitiveInputSensitiveInputDemo" code-lang="vue" title="Three states" description="A live key, a rejected one, and a read-only secret."}
+---
+code: |
+  <script setup lang="ts">
+  import { TxSensitiveInput } from '@talex-touch/tuffex/sensitive-input'
+  import { ref } from 'vue'
+
+  const apiKey = ref('sk_live_a1b2c3d4e5f6g7h8')
+  </script>
+
+  <template>
+    <TxSensitiveInput
+      v-model="apiKey"
+      label="API Key"
+      description="Keep this value secure and do not share it."
+    />
+  </template>
+---
+:::
+
+## Three States
+
+**Masked.** The default whenever a value is present. The field renders eight glyphs instead of the value, the `<input>` goes `readonly` and `aria-hidden`, and the container itself becomes the control: `role="button"`, focusable, activated by click, Enter or Space. Hover or focus swaps the glyphs for `Click to reveal` — both strings stay mounted and only toggle visibility, so the field never re-lays out under the pointer.
+
+**Revealed.** `type` flips to `text` and focus moves into the input, so the value can be edited immediately. Blur re-masks it; Escape re-masks it and hands focus back to the container, because the input is untabbable the moment it is masked. Focus moving to the eye or copy button is *not* a blur — masking there would pull the control out from under the click that caused it.
+
+**Empty.** No value, nothing to hide. The field is an ordinary editable input with no mask, no copy tab and no `role="button"` — announcing an action that reveals nothing would be a lie. The first typed character switches to revealed; a value arriving from outside (an API key fetched after mount) lands masked.
+
+## Copying Without Revealing
+
+The copy tab rides above the field's top-right corner and fades in on hover or focus. Its corners are `field radius − inset`, so the two curves stay concentric where they meet.
+
+Copying does not unmask. That is the point: handing the value to the clipboard is a different act from putting it on a screen someone might be recording.
+
+`navigator.clipboard.writeText` is tried first; on an insecure origin or where the Permissions Policy denies it, a hidden-textarea `execCommand` fallback runs, and the textarea is detached in a `finally` so a failed copy never leaves the secret parked in the DOM. A refusal emits `copy-error` rather than silently doing nothing.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string` | `''` | The secret, controlled. |
+| `label` | `string` | `''` | Field label. Also seeds the masked container's accessible name. |
+| `placeholder` | `string` | `''` | Native placeholder, visible only while empty. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Height, padding, radius and icon size. `md` matches `TxInput`. |
+| `status` | `'default' \| 'error'` | — | Explicit visual state. Unset, a truthy `error` selects `'error'`. |
+| `description` | `string` | `''` | Helper text below the field. Replaced by `error` when both are set. |
+| `error` | `string` | `''` | Validation message. Truthy also turns the field red and sets `aria-invalid`. |
+| `disabled` | `boolean` | `false` | No reveal, no copy, no edit. |
+| `readonly` | `boolean` | `false` | Blocks editing but not revealing or copying. |
+| `required` | `boolean` | `false` | Marks the label required. |
+| `copyable` | `boolean` | `true` | Renders the copy tab. |
+| `mask` | `string` | `'••••••••'` | Glyphs drawn in place of the value. |
+| `copiedDuration` | `number` | `2000` | How long the copy tab stays confirmed, ms. |
+| `labels` | `Partial<SensitiveInputLabels>` | — | Overrides for every rendered string. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `update:modelValue` | `(value: string)` | The value changed. |
+| `copy` | `(value: string)` | The value reached the clipboard. |
+| `copyError` | `(error: unknown)` | The clipboard refused the write. |
+| `reveal` | — | The value became visible. Worth auditing for a credential. |
+| `mask` | — | The value went back behind the mask. |
+
+### Exposed
+
+| Method | Description |
+|------|-------------|
+| `focus()` | Focuses the container while masked, the input otherwise. |
+| `blur()` | Blurs the input. |
+| `reveal()` | Reveals the value programmatically. |
+| `mask()` | Re-masks it. |
+| `copy()` | Runs the copy path, returns a promise. |
+
+## Interaction Contract
+
+- The masked container is a `role="button"` rather than a real `<button>` because it holds the eye and copy buttons; a nested `<button>` is invalid HTML. It therefore carries `tabindex`, an `aria-label` (`<label>, masked.`), an `aria-describedby` pointing at a screen-reader instruction plus the live region, and its own Enter / Space handling.
+- The `<input>` is `aria-hidden` and `tabindex="-1"` while masked, so assistive tech reads one control rather than a button wrapping an invisible textbox.
+- A `role="status" aria-live="polite"` region announces `Value hidden` and `Copied to clipboard`. Swapping a visible label or an `aria-label` is never re-announced by a screen reader; the live region is what makes the change audible.
+- Clicking the `<label>` reveals rather than forwarding focus — its native target is an input that is masked, `pointer-events: none` and `aria-hidden`.
+- Border is an inset ring (`box-shadow: inset 0 0 0 1px`), not a `border`, so thickening it to 1.5px on focus does not change the box height and nothing in the form row shifts.
+- `autocomplete="off"` plus `data-1p-ignore` / `data-lpignore` keep password-manager overlays off a field that is not a login credential.
+- The only transition is the copy tab's `opacity`, and it is switched off under `prefers-reduced-motion: reduce`. Colour changes on hover are immediate.
+- The component holds no message catalog: every rendered string comes from `labels`, merged over `SENSITIVE_INPUT_DEFAULT_LABELS`.
+
+## Best Practices
+
+- Reach for this over `TxInput type="password"` whenever the value is a stored secret the user may need to read back. `type="password"` is for a credential being entered, never re-read.
+- Keep `readonly` on a key the host issued and the user cannot edit; it stays revealable and copyable, and the reveal leaves focus on the container rather than dropping it into a field that rejects input.
+- Prefer `copy` over asking people to reveal-and-select. Every reveal is a moment the secret is on screen.
+- Listen to `reveal` when the value is a production credential and the surface keeps an audit trail.
+- Pass `error` rather than `status="error"`; the derived state cannot drift out of sync with the message.
+- Localize through `labels` — there are nine strings and seven of them are only ever heard by a screen reader.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/sensitive-input/src/TxSensitiveInput.vue`.
+- Types: `packages/tuffex/packages/components/src/sensitive-input/src/types.ts`.
+- **Tested coverage:** `packages/tuffex/packages/components/src/sensitive-input/__tests__/sensitive-input.test.ts` (17 cases) covers the masked default and its ARIA shape, reveal by click and by Enter, the read-only reveal path, re-mask on blur and on Escape with focus return, the eye/copy focus exemption, the disabled state, the empty-state edit path, an externally-arriving and an externally-cleared value, copy with its live-region announcement and confirm window, a denied clipboard, error derived from the message, label localization, the label-less accessible name, eye toggling, and the exposed methods.
+- Behaviour modelled on [Kumo's SensitiveInput](https://kumo-ui.com/components/sensitive-input/); the design rules it follows are recorded in `.trellis/spec/frontend/tuffex-design-rules.md`.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **Why not a `TxInput` variant:** `TxInput`'s contract is one control — an input with optional affixes. This one is a container that *becomes* a control while masked, swapping roles, tab order and ARIA visibility as it goes. Folding the state machine into `TxInput` would put it in the way of every ordinary text field.
+- **Why the glyphs are painted, not native:** native password dots track the value's length, which leaks how long the secret is. A fixed eight-glyph mask does not.
+- **Divergence from Kumo:** Kumo reads click coordinates against the container's bounding rect to filter out label-forwarded clicks. This port intercepts the label's own click instead — it needs no geometry, and it is correct when the container has been transformed or scrolled mid-gesture.
+- **Rejected:** a `revealed` prop. Reveal is a user act; a host that can force it would let a parent re-render silently uncover a credential. `reveal()` is exposed as a deliberate call instead.
