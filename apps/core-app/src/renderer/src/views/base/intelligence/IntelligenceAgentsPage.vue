@@ -5,7 +5,6 @@ import { useAgentsSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
 import AgentDetail from '~/components/intelligence/agents/AgentDetail.vue'
 import AgentsList from '~/components/intelligence/agents/AgentsList.vue'
@@ -64,43 +63,36 @@ onMounted(() => {
 </script>
 
 <template>
-  <SettingsPage edge-blur="none" fill flush integrated-drag-region>
-    <TuffAsideTemplate
-      v-model="searchQuery"
-      class="agents-shell flex-1"
-      search-id="agent-search"
-      :search-placeholder="t('intelligence.agents.search')"
-      :clear-label="t('intelligence.search.clear')"
-      :main-edge-blur="false"
-      window-drag-region
-    >
-      <template #default>
-        <AgentsList
-          :agents="filteredAgents"
-          :selected-id="selectedAgentId"
-          :loading="showSkeleton"
-          @select="handleSelectAgent"
-        />
-      </template>
+  <SettingsPage
+    v-model:search="searchQuery"
+    layout="split"
+    :aria-label="t('settingsIntelligenceHub.agents')"
+    search-id="agent-search"
+    :search-placeholder="t('intelligence.agents.search')"
+    :clear-label="t('intelligence.search.clear')"
+  >
+    <template #aside>
+      <AgentsList
+        :agents="filteredAgents"
+        :selected-id="selectedAgentId"
+        :loading="showSkeleton"
+        @select="handleSelectAgent"
+      />
+    </template>
 
-      <template #main>
-        <AgentDetail v-if="selectedAgent" :agent="selectedAgent" />
-        <div v-else class="empty-state">
-          <div class="i-carbon-bot text-4xl op-30" />
-          <p class="mt-2 op-50">
-            {{ t('intelligence.agents.select_hint') }}
-          </p>
-        </div>
-      </template>
-    </TuffAsideTemplate>
+    <template #detail>
+      <AgentDetail v-if="selectedAgent" :agent="selectedAgent" />
+      <div v-else class="empty-state">
+        <div class="i-carbon-bot text-4xl op-30" />
+        <p class="mt-2 op-50">
+          {{ t('intelligence.agents.select_hint') }}
+        </p>
+      </div>
+    </template>
   </SettingsPage>
 </template>
 
 <style lang="scss" scoped>
-.agents-shell {
-  min-height: 0;
-}
-
 .empty-state {
   display: flex;
   flex-direction: column;

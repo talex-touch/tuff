@@ -21,7 +21,6 @@ import SettingsPage from '~/components/settings/SettingsPage.vue'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
 import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.vue'
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
-import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -449,72 +448,69 @@ useKeyboardNavigation({
 </script>
 
 <template>
-  <SettingsPage edge-blur="none" fill flush integrated-drag-region>
-    <div class="flex h-full flex-col" role="main" aria-label="AI Intelligence Channels">
-      <TuffAsideTemplate
-        v-model="searchQuery"
-        class="flex-1"
-        :search-placeholder="t('intelligence.search.placeholder')"
-        :clear-label="t('intelligence.search.clear')"
-        :main-aria-live="selectedProvider ? 'polite' : 'off'"
-        :main-edge-blur="false"
-        window-drag-region
-      >
-        <template #default>
-          <IntelligenceList
-            class="h-full w-full"
-            aria-label="AI Provider List"
-            :providers="providers"
-            :selected-id="selectedProviderId"
-            :search-query="searchQuery"
-            @select="handleSelectProvider"
-          />
-        </template>
+  <SettingsPage
+    v-model:search="searchQuery"
+    layout="split"
+    :aria-label="t('settingsIntelligenceHub.channels')"
+    :search-placeholder="t('intelligence.search.placeholder')"
+    :clear-label="t('intelligence.search.clear')"
+    :main-aria-live="selectedProvider ? 'polite' : 'off'"
+  >
+    <template #aside>
+      <IntelligenceList
+        class="h-full w-full"
+        aria-label="AI Provider List"
+        :providers="providers"
+        :selected-id="selectedProviderId"
+        :search-query="searchQuery"
+        @select="handleSelectProvider"
+      />
+    </template>
 
-        <template #footer>
-          <div class="space-y-2">
-            <TxButton
-              variant="flat"
-              class="w-full"
-              native-type="button"
-              :aria-label="t('settings.intelligence.addChannel')"
-              @click="handleAddProvider"
-            >
-              <i class="i-carbon-add" aria-hidden="true" />
-              <span>{{ t('settings.intelligence.addChannel') }}</span>
-            </TxButton>
-          </div>
-        </template>
+    <template #aside-footer>
+      <div class="space-y-2">
+        <!--
+          Rendered above the action it asks for. The list's own empty text describes the current
+          filter; this one is about the channel set the user has to change.
+        -->
+        <p v-if="providers.length === 0" class="text-sm text-[var(--tx-text-color-secondary)]">
+          {{ t('settings.intelligence.emptyProviders') }}
+        </p>
+        <TxButton
+          variant="flat"
+          class="w-full"
+          native-type="button"
+          :aria-label="t('settings.intelligence.addChannel')"
+          @click="handleAddProvider"
+        >
+          <i class="i-carbon-add" aria-hidden="true" />
+          <span>{{ t('settings.intelligence.addChannel') }}</span>
+        </TxButton>
+      </div>
+    </template>
 
-        <template #main>
-          <div
-            :key="selectedProvider ? selectedProvider.id : 'empty'"
-            class="h-full overflow-hidden"
-          >
-            <IntelligenceInfo
-              v-if="selectedProvider"
-              :provider="selectedProvider"
-              :test-result="testResult"
-              :is-testing="isTesting"
-              :is-syncing-from-nexus="isSyncingFromNexus"
-              :sync-message="syncMessage"
-              :sync-error="syncError"
-              @update="handleUpdateProvider"
-              @test="handleTestProvider"
-              @delete="handleDeleteProvider"
-              @duplicate="handleDuplicateProvider"
-              @edit-basic="handleOpenBasicEditor"
-              @sync-nexus="syncProvidersFromNexus"
-            />
-            <IntelligenceEmptyState v-else />
-          </div>
-        </template>
-      </TuffAsideTemplate>
+    <template #detail>
+      <div :key="selectedProvider ? selectedProvider.id : 'empty'" class="h-full overflow-hidden">
+        <IntelligenceInfo
+          v-if="selectedProvider"
+          :provider="selectedProvider"
+          :test-result="testResult"
+          :is-testing="isTesting"
+          :is-syncing-from-nexus="isSyncingFromNexus"
+          :sync-message="syncMessage"
+          :sync-error="syncError"
+          @update="handleUpdateProvider"
+          @test="handleTestProvider"
+          @delete="handleDeleteProvider"
+          @duplicate="handleDuplicateProvider"
+          @edit-basic="handleOpenBasicEditor"
+          @sync-nexus="syncProvidersFromNexus"
+        />
+        <IntelligenceEmptyState v-else />
+      </div>
+    </template>
 
-      <p v-if="providers.length === 0" class="text-sm text-[var(--tx-text-color-secondary)]">
-        {{ t('settings.intelligence.emptyProviders') }}
-      </p>
-
+    <template #overlay>
       <TxDrawer
         v-model:visible="basicEditorVisible"
         :title="t('settings.intelligence.editProviderBasic')"
@@ -562,6 +558,6 @@ useKeyboardNavigation({
           </div>
         </div>
       </TxDrawer>
-    </div>
+    </template>
   </SettingsPage>
 </template>

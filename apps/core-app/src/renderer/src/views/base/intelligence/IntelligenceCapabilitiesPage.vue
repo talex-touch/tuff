@@ -424,86 +424,83 @@ async function handleCapabilityTest(
 </script>
 
 <template>
-  <SettingsPage edge-blur="none" fill flush integrated-drag-region>
-    <TuffAsideTemplate
-      v-model="searchQuery"
-      class="capability-shell flex-1"
-      search-id="capability-search"
-      :search-placeholder="t('settings.intelligence.capabilitySearchPlaceholder')"
-      :clear-label="t('intelligence.search.clear')"
-      :main-edge-blur="false"
-      window-drag-region
-    >
-      <template #filter>
-        <div class="capability-list-heading">
-          <span>{{ t('settings.intelligence.capabilityPageTitle') }}</span>
-          <span>{{
-            t('settings.intelligence.capabilitySummary', { count: capabilityList.length })
-          }}</span>
-        </div>
-      </template>
+  <SettingsPage
+    v-model:search="searchQuery"
+    layout="split"
+    :aria-label="t('settingsIntelligenceHub.capabilities')"
+    search-id="capability-search"
+    :search-placeholder="t('settings.intelligence.capabilitySearchPlaceholder')"
+    :clear-label="t('intelligence.search.clear')"
+  >
+    <template #filter>
+      <div class="capability-list-heading">
+        <span>{{ t('settings.intelligence.capabilityPageTitle') }}</span>
+        <span>{{
+          t('settings.intelligence.capabilitySummary', { count: capabilityList.length })
+        }}</span>
+      </div>
+    </template>
 
-      <template #default>
-        <!-- Loading skeleton -->
-        <div v-if="loading" class="capability-cards">
-          <CapabilitySkeleton v-for="i in 8" :key="i" />
-        </div>
+    <template #aside>
+      <!-- Loading skeleton -->
+      <div v-if="loading" class="capability-cards">
+        <CapabilitySkeleton v-for="i in 8" :key="i" />
+      </div>
 
-        <!-- Capability list -->
-        <div v-else class="capability-cards">
-          <TuffItemTemplate
-            v-for="capability in filteredCapabilities"
-            :key="capability.id"
-            class="capability-card"
-            :title="capability.label || capability.id"
-            :icon="getCapabilityIcon(capability)"
-            :selected="selectedCapabilityId === capability.id"
-            :top-badge="getCapabilityBadge(capability)"
-            :status-dot="getCapabilityStatusDot(capability)"
-            size="sm"
-            :aria-label="capability.label || capability.id"
-            @click="handleSelectCapability(capability.id)"
-          />
-          <div v-if="filteredCapabilities.length === 0" class="capability-list-empty">
-            <p>{{ t('settings.intelligence.capabilityListEmpty') }}</p>
-          </div>
+      <!-- Capability list -->
+      <div v-else class="capability-cards">
+        <TuffItemTemplate
+          v-for="capability in filteredCapabilities"
+          :key="capability.id"
+          class="capability-card"
+          :title="capability.label || capability.id"
+          :icon="getCapabilityIcon(capability)"
+          :selected="selectedCapabilityId === capability.id"
+          :top-badge="getCapabilityBadge(capability)"
+          :status-dot="getCapabilityStatusDot(capability)"
+          size="sm"
+          :aria-label="capability.label || capability.id"
+          @click="handleSelectCapability(capability.id)"
+        />
+        <div v-if="filteredCapabilities.length === 0" class="capability-list-empty">
+          <p>{{ t('settings.intelligence.capabilityListEmpty') }}</p>
         </div>
-      </template>
+      </div>
+    </template>
 
-      <template #main>
-        <div
-          :key="selectedCapabilityId ?? 'empty'"
-          class="capability-main h-full overflow-hidden"
-          :class="{ 'is-empty': !selectedCapability }"
-        >
-          <IntelligenceCapabilityInfo
-            v-if="selectedCapability"
-            :capability="selectedCapability"
-            :providers="providers"
-            :bindings="activeBindings(selectedCapability.id)"
-            :is-testing="!!capabilityTesting[selectedCapability.id]"
-            :test-result="capabilityTests[selectedCapability.id]"
-            :has-pending-changes="hasPendingCapabilityChanges"
-            :is-saving="saving"
-            :save-state="saveState"
-            :save-error-detail="saveErrorDetail"
-            @toggle-provider="onToggleProvider"
-            @update-models="onUpdateModels"
-            @update-prompt="onUpdatePrompt"
-            @reorder-providers="onReorderProviders"
-            @test="
-              (params?: {
-                providerId?: string
-                userInput?: string
-                model?: string
-                promptTemplate?: string
-                promptVariables?: Record<string, unknown>
-              }) => handleCapabilityTest(selectedCapability!.id, params)
-            "
-          />
-        </div>
-      </template>
-    </TuffAsideTemplate>
+    <template #detail>
+      <div
+        :key="selectedCapabilityId ?? 'empty'"
+        class="capability-main h-full overflow-hidden"
+        :class="{ 'is-empty': !selectedCapability }"
+      >
+        <IntelligenceCapabilityInfo
+          v-if="selectedCapability"
+          :capability="selectedCapability"
+          :providers="providers"
+          :bindings="activeBindings(selectedCapability.id)"
+          :is-testing="!!capabilityTesting[selectedCapability.id]"
+          :test-result="capabilityTests[selectedCapability.id]"
+          :has-pending-changes="hasPendingCapabilityChanges"
+          :is-saving="saving"
+          :save-state="saveState"
+          :save-error-detail="saveErrorDetail"
+          @toggle-provider="onToggleProvider"
+          @update-models="onUpdateModels"
+          @update-prompt="onUpdatePrompt"
+          @reorder-providers="onReorderProviders"
+          @test="
+            (params?: {
+              providerId?: string
+              userInput?: string
+              model?: string
+              promptTemplate?: string
+              promptVariables?: Record<string, unknown>
+            }) => handleCapabilityTest(selectedCapability!.id, params)
+          "
+        />
+      </div>
+    </template>
   </SettingsPage>
 </template>
 
