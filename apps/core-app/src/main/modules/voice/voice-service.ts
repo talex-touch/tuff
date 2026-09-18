@@ -27,6 +27,7 @@ import type {
 } from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { ActiveAppInfo } from '../system/active-app'
 import type { VoicePolishOutcome } from './voice-insights-store'
+import type { VoiceRecognitionMetricInput } from '../analytics'
 import type { VoiceRecognitionRecordInput } from './voice-recognition-store'
 import { randomUUID } from 'node:crypto'
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
@@ -62,6 +63,40 @@ function isVoiceHistoryEnabled(): boolean {
     return setting.voiceInput?.historyEnabled === true
   } catch {
     return false
+  }
+}
+
+/**
+ * Analytics arrives by dynamic import rather than a top-level one.
+ *
+ * `modules/analytics` reaches the window core and from there the native mica module, which no Node
+ * test environment can load: a static import here failed four voice-service suites at collection,
+ * before a single test ran. The temp-file service is loaded the same way, for the same reason.
+ *
+ * The type import above is exempt — types are erased before a module graph exists.
+ */
+let analyticsModuleLoader: Promise<{
+  recordVoiceMetrics: (input: VoiceRecognitionMetricInput) => void
+}> | null = null
+
+/**
+ * One recognition into the metrics pipeline, with sizes and provider-reported names only — never
+ * the transcript, the audio, or a file path.
+ *
+ * Failures are swallowed after a warning: telemetry is never allowed to cost a user a dictation.
+ */
+async function recordVoiceTelemetry(input: VoiceRecognitionRecordInput): Promise<void> {
+  try {
+    analyticsModuleLoader ??= import('../analytics').then((module) => module.analyticsModule)
+    const analytics = await analyticsModuleLoader
+    analytics.recordVoiceMetrics({
+      recordingDurationMs: input.audioDurationMs,
+      recognitionDurationMs: input.recognitionDurationMs,
+      model: input.model,
+      channel: input.channel
+    })
+  } catch (error) {
+    voiceLog.warn('Voice recognition telemetry failed; recognition is unaffected', { error })
   }
 }
 
@@ -578,6 +613,11 @@ export class VoiceService {
   }
 
   private async recordRecognitionDetail(input: VoiceRecognitionRecordInput): Promise<void> {
+    // Usage telemetry is not a retention preference, so it runs before the history gate: a user
+    // who keeps no transcripts still dictates, and the numbers that tune recognition are exactly
+    // the ones that must not disappear with the records they were measured on.
+    await recordVoiceTelemetry(input)
+
     if (!isVoiceHistoryEnabled()) return
     try {
       await voiceRecognitionStore.record(input)

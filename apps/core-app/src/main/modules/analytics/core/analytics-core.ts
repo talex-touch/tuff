@@ -13,6 +13,7 @@ import type { DbStore } from '../storage/db-store'
 import type { StartupMetrics } from '../types'
 import { IpcTracer } from '../collectors/ipc-tracer'
 import { PluginTracer } from '../collectors/plugin-tracer'
+import { sanitizePluginAnalyticsIdentifier } from '../analytics-report-sanitizer'
 import { MemoryStore } from '../storage/memory-store'
 import { TimeWindowCollector } from './time-window-collector'
 
@@ -50,6 +51,22 @@ const BASE_WINDOW_MIN_RECORD_INTERVAL_MS: Record<AnalyticsWindowType, number> = 
 }
 
 /**
+ * One recognition's contribution to the voice metrics.
+ *
+ * Every field is optional on purpose: a file transcription has no recording length, a failed
+ * capture has no model, and an average that counts those as zero is a wrong number rather than a
+ * missing one.
+ */
+export interface VoiceRecognitionMetricInput {
+  recordingDurationMs?: number
+  recognitionDurationMs?: number
+  /** Provider-reported model name. Sanitized before it is bucketed. */
+  model?: string
+  /** Provider-reported channel name. Sanitized before it is bucketed. */
+  channel?: string
+}
+
+/**
  * Core engine responsible for aggregating and serving analytics metrics.
  */
 export class AnalyticsCore {
@@ -61,6 +78,13 @@ export class AnalyticsCore {
   private reportingEnabled = true
   private searchCount = 0
   private totalSearchDuration = 0
+  private voiceCount = 0
+  private totalRecordingDuration = 0
+  private recordingSamples = 0
+  private totalRecognitionDuration = 0
+  private recognitionSamples = 0
+  private readonly voiceModels = new Map<string, number>()
+  private readonly voiceChannels = new Map<string, number>()
 
   private currentMetrics: CoreMetrics = {}
   private lastRecordAtByWindow = new Map<AnalyticsWindowType, number>()
@@ -202,6 +226,51 @@ export class AnalyticsCore {
     return this.recordAndPersist(this.currentMetrics, '1m')
   }
 
+  /**
+   * One recognition enters the voice metrics.
+   *
+   * Mirrors {@link recordSearchMetrics}: running totals that the snapshot carries, so the numbers
+   * survive the window roll-over rather than describing only the last event.
+   *
+   * The model and channel are bucketed by name, which is the one place a value the *provider*
+   * chooses reaches stored metrics — so both go through the identifier sanitizer first. A name
+   * that is not identifier-shaped becomes `redacted` instead of being carried verbatim.
+   */
+  recordVoiceMetrics(input: VoiceRecognitionMetricInput): AnalyticsSnapshot[] {
+    this.voiceCount += 1
+    if (typeof input.recordingDurationMs === 'number' && input.recordingDurationMs > 0) {
+      this.totalRecordingDuration += input.recordingDurationMs
+      this.recordingSamples += 1
+    }
+    if (typeof input.recognitionDurationMs === 'number' && input.recognitionDurationMs > 0) {
+      this.totalRecognitionDuration += input.recognitionDurationMs
+      this.recognitionSamples += 1
+    }
+    if (input.model) {
+      const model = sanitizePluginAnalyticsIdentifier(input.model)
+      this.voiceModels.set(model, (this.voiceModels.get(model) ?? 0) + 1)
+    }
+    if (input.channel) {
+      const channel = sanitizePluginAnalyticsIdentifier(input.channel)
+      this.voiceChannels.set(channel, (this.voiceChannels.get(channel) ?? 0) + 1)
+    }
+
+    this.currentMetrics = {
+      ...this.currentMetrics,
+      voice: {
+        totalRecognitions: this.voiceCount,
+        avgRecordingDuration:
+          this.recordingSamples > 0 ? this.totalRecordingDuration / this.recordingSamples : 0,
+        avgRecognitionDuration:
+          this.recognitionSamples > 0 ? this.totalRecognitionDuration / this.recognitionSamples : 0,
+        models: Object.fromEntries(this.voiceModels),
+        channels: Object.fromEntries(this.voiceChannels)
+      }
+    }
+
+    return this.recordAndPersist(this.currentMetrics, '1m')
+  }
+
   clearPluginRuntimeState(pluginName: string): void {
     this.pluginTracer.clearPlugin(pluginName)
     this.currentMetrics = { ...this.currentMetrics, plugins: this.pluginTracer.snapshot() }
@@ -317,6 +386,7 @@ export class AnalyticsCore {
     const system = metrics.system
     const ipc = metrics.ipc
     const search = metrics.search
+    const voice = metrics.voice
     const pluginCount = Object.keys(metrics.plugins ?? {}).length
     const moduleCount = Object.keys(metrics.modules ?? {}).length
 
@@ -334,6 +404,8 @@ export class AnalyticsCore {
       ipc?.slowRequests ?? 0,
       Math.floor((search?.totalSearches ?? 0) / 10),
       Math.round((search?.avgDuration ?? 0) / 25),
+      Math.floor((voice?.totalRecognitions ?? 0) / 10),
+      Math.round((voice?.avgRecognitionDuration ?? 0) / 250),
       pluginCount,
       moduleCount
     ].join('|')
