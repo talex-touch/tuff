@@ -87,6 +87,16 @@ async function mountPage(props: Record<string, unknown> = {}) {
           inheritAttrs: true,
           template: '<div :data-open="String(visible)" :data-title="title"><slot /></div>'
         },
+        // Contents rendered inline and `modelValue` echoed. Its real behaviour is a FLIP
+        // animation against a source rect, which jsdom has no geometry for; what a test can
+        // check is whether the second click asked for it and whether dismissing it is heard.
+        FlipDialog: {
+          name: 'FlipDialog',
+          props: ['modelValue', 'headerTitle'],
+          emits: ['update:modelValue', 'closed'],
+          inheritAttrs: true,
+          template: '<div :data-open="String(modelValue)" :data-title="headerTitle"><slot /></div>'
+        },
         TxPagination: {
           props: ['currentPage', 'pageSize', 'total'],
           emits: ['update:currentPage'],
@@ -509,9 +519,10 @@ describe('VoiceInsights page composition', () => {
   })
   /**
    * The log reads as a table: the transcript is a column, not something behind a disclosure
-   * triangle. Picking a row opens the audio and the full field list below it.
+   * triangle. The first click opens the record under the table; a second on the same row takes it
+   * full size, and dismissing that returns the table to bare rows.
    */
-  it('lists records in a table and opens the picked row underneath', async () => {
+  it('lists records in a table, opens the picked row, then flips it out on a second click', async () => {
     const wrapper = await mountPage()
 
     expect(transportSendMock).toHaveBeenCalledWith(voiceApiEvents.getInsights, undefined)
@@ -526,6 +537,8 @@ describe('VoiceInsights page composition', () => {
 
     // Closed until asked for: the audio element is what makes a row cost anything.
     expect(wrapper.find('[data-testid="voice-insights-record-details"]').exists()).toBe(false)
+    const dialog = wrapper.find('[data-testid="voice-insights-record-dialog"]')
+    expect(dialog.attributes('data-open')).toBe('false')
 
     await row.trigger('click')
     const details = wrapper.find('[data-testid="voice-insights-record-details"]')
@@ -533,9 +546,34 @@ describe('VoiceInsights page composition', () => {
     expect(details.find('audio').attributes('src')).toBe('tfile://voice/record-1.wav')
     expect(details.text()).toContain('um raw words')
     expect(details.text()).toContain('Bailian workspace')
-
-    // The row is the control, so it closes as well as opens.
+    // Still inline at this point — the dialog is the next click, not this one.
+    expect(
+      wrapper.find('[data-testid="voice-insights-record-dialog"]').attributes('data-open')
+    ).toBe('false')
     await row.trigger('click')
+    expect(
+      wrapper.find('[data-testid="voice-insights-record-dialog"]').attributes('data-open')
+    ).toBe('true')
+    // The inline panel stands down: one `<audio>` per record, not two.
+    expect(wrapper.find('[data-testid="voice-insights-record-details"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /** Dismissing the dialog is the end of the cycle: the row it came from collapses with it. */
+  it('collapses the row when the dialog is dismissed', async () => {
+    const wrapper = await mountPage()
+
+    const row = wrapper.find('.tx-data-table__row')
+    await row.trigger('click')
+    await row.trigger('click')
+    expect(
+      wrapper.find('[data-testid="voice-insights-record-dialog"]').attributes('data-open')
+    ).toBe('true')
+
+    await wrapper.findComponent({ name: 'FlipDialog' }).vm.$emit('closed')
+    await flushPromises()
+
     expect(wrapper.find('[data-testid="voice-insights-record-details"]').exists()).toBe(false)
 
     wrapper.unmount()

@@ -20,6 +20,8 @@ import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
 import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import VoiceRecordDetails from '~/components/intelligence/voice/VoiceRecordDetails.vue'
 import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -200,6 +202,8 @@ const recordPage = ref(1)
  * would keep the panel open on whatever row happened to land in that position.
  */
 const expandedRecordId = ref<string | null>(null)
+/** The full-size reading surface for whichever row is already open. */
+const recordDialogOpen = ref(false)
 const recordPageCount = computed(() =>
   Math.max(1, Math.ceil(records.value.length / RECORDS_PER_PAGE))
 )
@@ -699,26 +703,6 @@ function recordStatusLabel(status: VoiceRecognitionRecord['status']): string {
   return t(`voiceInsights.records.status.${status}`)
 }
 
-function recordTokenLabel(record: VoiceRecognitionRecord): string {
-  const total = record.totalTokens
-  if (total !== undefined) return t('voiceInsights.records.tokensValue', { count: total })
-  if (record.inputTokens !== undefined || record.outputTokens !== undefined) {
-    return t('voiceInsights.records.tokensSplit', {
-      input: record.inputTokens ?? 0,
-      output: record.outputTokens ?? 0
-    })
-  }
-  return t('voiceInsights.records.tokensUnavailable')
-}
-
-function recordAudioLabel(record: VoiceRecognitionRecord): string {
-  if (!record.audioUrl) return t('voiceInsights.records.audioUnavailable')
-  return t('voiceInsights.records.audioMeta', {
-    duration: record.audioDurationMs ? formatDuration(record.audioDurationMs) : '—',
-    bytes: record.audioBytes ?? 0
-  })
-}
-
 /**
  * The status tones.
  *
@@ -734,10 +718,6 @@ const RECORD_STATUS_TONES: Record<VoiceRecognitionRecord['status'], StatusTone> 
 
 function recordStatusTone(status: VoiceRecognitionRecord['status']): StatusTone {
   return RECORD_STATUS_TONES[status]
-}
-
-function recordTitle(record: VoiceRecognitionRecord): string {
-  return record.text || record.rawText || t('voiceInsights.records.emptyText')
 }
 
 /**
@@ -758,10 +738,60 @@ const recordColumns = computed<DataTableColumn<VoiceRecognitionRecord>[]>(() => 
   { key: 'model', title: t('voiceInsights.records.columns.model'), width: 176, nowrap: true }
 ])
 
-/** Clicking the open row closes it: the row is the control, so it has to work both ways. */
+/**
+ * One row, three states.
+ *
+ * First click opens the record under the table, where the transcript and the audio sit without
+ * covering the log. Clicking the same row again takes it full size in a flip dialog — the reading
+ * surface, for a transcript too long to skim in a panel. Closing that returns to the bare table,
+ * so the cycle has an end rather than leaving a row stuck open.
+ */
 function toggleRecord(record: VoiceRecognitionRecord): void {
-  expandedRecordId.value = expandedRecordId.value === record.id ? null : record.id
+  if (expandedRecordId.value !== record.id) {
+    expandedRecordId.value = record.id
+    return
+  }
+  recordDialogOpen.value = true
 }
+
+/** The dialog is the last step of the cycle, so dismissing it collapses the row it came from. */
+function handleRecordDialogClosed(): void {
+  expandedRecordId.value = null
+}
+
+/**
+ * The dialog is headed by when the record was captured, not by what it says.
+ *
+ * The transcript is the body — twice over, raw and final — and as a title it wrapped to two lines
+ * and pushed the close button into a corner of its own.
+ */
+const recordDialogTitle = computed(() =>
+  expandedRecord.value
+    ? recordDateLabel(expandedRecord.value.capturedAt)
+    : t('voiceInsights.records.title')
+)
+
+/**
+ * The panel is opened under a table that can be a full viewport tall, so its first frame is
+ * usually below the fold — which reads as "the click did nothing". Bring it into view.
+ *
+ * `nearest` rather than `start`: when the panel already fits, the drawer must not move at all,
+ * and a nudge of exactly the missing pixels is the whole fix.
+ */
+const recordPanel = ref<HTMLElement | null>(null)
+
+watch(expandedRecordId, async (id) => {
+  if (!id) return
+  await nextTick()
+  const panel = recordPanel.value
+  // jsdom implements no layout, and therefore no scrolling; a themed panel is not worth an
+  // unhandled rejection in every test that opens a row.
+  if (!panel || typeof panel.scrollIntoView !== 'function') return
+  panel.scrollIntoView({
+    block: 'nearest',
+    behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+  })
+})
 
 onMounted(() => {
   void loadInsights()
@@ -1251,8 +1281,18 @@ onBeforeUnmount(() => {
           :selected-keys="expandedRecordId ? [expandedRecordId] : []"
           @row-click="toggleRecord($event.row)"
         >
+          <!--
+            An em dash when nothing was written, not a repeated placeholder.
+            "No text generated" down five rows said the same thing five times, and the status
+            column already says why for each of them. A dash is absence; it does not need a voice.
+          -->
           <template #cell-text="{ row }">
-            <span class="VoiceInsights-RecordText">{{ recordTitle(row) }}</span>
+            <span
+              class="VoiceInsights-RecordText"
+              :class="{ 'is-empty': !(row.text || row.rawText) }"
+            >
+              {{ row.text || row.rawText || '—' }}
+            </span>
           </template>
           <template #cell-capturedAt="{ row }">
             <span class="VoiceInsights-RecordTime">{{ recordDateLabel(row.capturedAt) }}</span>
@@ -1279,64 +1319,38 @@ onBeforeUnmount(() => {
           data-testid="voice-insights-records-pagination"
         />
 
+        <!--
+          The picked row, opened where it was picked. The same block goes full size in the dialog
+          on a second click, so it lives in one component rather than two copies — and only one of
+          the two is mounted at a time, because two `<audio>` elements on one recording is two
+          players a user can start against each other.
+        -->
         <section
-          v-if="expandedRecord"
-          class="VoiceInsights-RecordDetails"
+          v-if="expandedRecord && !recordDialogOpen"
+          ref="recordPanel"
+          class="VoiceInsights-RecordPanel"
           data-testid="voice-insights-record-details"
         >
-          <audio
-            v-if="expandedRecord.audioUrl"
-            controls
-            preload="none"
-            :src="expandedRecord.audioUrl"
-            :aria-label="t('voiceInsights.records.audioLabel')"
-          />
-          <p class="VoiceInsights-RecordAudioMeta">{{ recordAudioLabel(expandedRecord) }}</p>
-          <dl>
-            <div>
-              <dt>{{ t('voiceInsights.records.rawText') }}</dt>
-              <dd>{{ expandedRecord.rawText || '—' }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('voiceInsights.records.finalText') }}</dt>
-              <dd>{{ expandedRecord.text || '—' }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('voiceInsights.records.duration') }}</dt>
-              <dd>
-                {{
-                  expandedRecord.audioDurationMs
-                    ? formatDuration(expandedRecord.audioDurationMs)
-                    : '—'
-                }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ t('voiceInsights.records.recognitionDuration') }}</dt>
-              <dd>
-                {{
-                  expandedRecord.recognitionDurationMs
-                    ? formatDuration(expandedRecord.recognitionDurationMs)
-                    : '—'
-                }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ t('voiceInsights.records.tokens') }}</dt>
-              <dd>{{ recordTokenLabel(expandedRecord) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('voiceInsights.records.channel') }}</dt>
-              <dd>{{ expandedRecord.channel || expandedRecord.providerId || '—' }}</dd>
-            </div>
-            <div v-if="expandedRecord.errorCode">
-              <dt>{{ t('voiceInsights.records.error') }}</dt>
-              <dd>{{ expandedRecord.errorCode }}</dd>
-            </div>
-          </dl>
+          <VoiceRecordDetails :record="expandedRecord" />
         </section>
       </div>
     </TxDrawer>
+
+    <!--
+      The reading surface.
+
+      A transcript long enough to need scrolling does not want to be read in a 728px drawer beside
+      the table it came from, so a second click on an already-open row flips it out full size.
+    -->
+    <FlipDialog
+      v-model="recordDialogOpen"
+      size="lg"
+      :header-title="recordDialogTitle"
+      data-testid="voice-insights-record-dialog"
+      @closed="handleRecordDialogClosed"
+    >
+      <VoiceRecordDetails v-if="expandedRecord" :record="expandedRecord" />
+    </FlipDialog>
 
     <TxBottomDialog
       v-if="clearConfirmVisible"
@@ -2044,60 +2058,26 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+/* Absence, not content: a dash that reads as "nothing here" rather than as a value. */
+.VoiceInsights-RecordText.is-empty {
+  color: var(--shell-text-muted);
+}
+
 .VoiceInsights-RecordTime,
 .VoiceInsights-RecordModel {
   color: var(--shell-text-secondary);
   font-size: var(--shell-fs-caption);
 }
 
-/* The picked row, opened out. Bordered rather than boxed: it belongs to the table above it. */
-.VoiceInsights-RecordDetails {
-  display: grid;
-  gap: var(--shell-space-3);
+/*
+ * The frame only. What is inside it belongs to `VoiceRecordDetails`, which the dialog mounts too
+ * — and the dialog draws its own surface, so the border stays out here where it is wanted.
+ */
+.VoiceInsights-RecordPanel {
   padding: var(--shell-space-4);
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-md);
   background: var(--shell-surface);
-
-  audio {
-    width: min(100%, 520px);
-  }
-
-  dl {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--shell-space-3) var(--shell-space-5);
-    margin: 0;
-  }
-
-  dl > div {
-    min-width: 0;
-  }
-
-  dt {
-    color: var(--shell-text-muted);
-    font-size: var(--shell-fs-caption);
-  }
-
-  dd {
-    margin: var(--shell-space-1) 0 0;
-    color: var(--shell-text-primary);
-    font-size: var(--shell-fs-body);
-    line-height: 1.5;
-    overflow-wrap: anywhere;
-  }
-}
-
-.VoiceInsights-RecordAudioMeta {
-  margin: 0;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
-}
-
-@media (max-width: 680px) {
-  .VoiceInsights-RecordDetails dl {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .VoiceInsights-Loading {

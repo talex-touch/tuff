@@ -208,6 +208,7 @@ declare module 'vue' {
     VideoPreview: typeof import('./src/components/render/addon/preview/VideoPreview.vue')['default']
     ViewTemplate: typeof import('./src/components/base/template/ViewTemplate.vue')['default']
     VirtualTaskList: typeof import('./src/components/download/VirtualTaskList.vue')['default']
+    VoiceRecordDetails: typeof import('./src/components/intelligence/voice/VoiceRecordDetails.vue')['default']
     WhatsChangedDialog: typeof import('./src/components/update/WhatsChangedDialog.vue')['default']
     WidgetFrame: typeof import('./src/components/render/WidgetFrame.vue')['default']
   }
@@ -411,6 +412,7 @@ declare global {
   const VideoPreview: typeof import('./src/components/render/addon/preview/VideoPreview.vue')['default']
   const ViewTemplate: typeof import('./src/components/base/template/ViewTemplate.vue')['default']
   const VirtualTaskList: typeof import('./src/components/download/VirtualTaskList.vue')['default']
+  const VoiceRecordDetails: typeof import('./src/components/intelligence/voice/VoiceRecordDetails.vue')['default']
   const WhatsChangedDialog: typeof import('./src/components/update/WhatsChangedDialog.vue')['default']
   const WidgetFrame: typeof import('./src/components/render/WidgetFrame.vue')['default']
 }
