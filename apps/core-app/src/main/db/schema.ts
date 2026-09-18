@@ -85,25 +85,36 @@ export const searchIndexMeta = sqliteTable(
  * 存储文件系统的核心元数据。
  * 这是文件搜索、FTS全文检索和内容向量化的基础。
  */
-export const files = sqliteTable('files', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  path: text('path').notNull().unique(), // 文件的绝对路径
-  name: text('name').notNull(),
-  displayName: text('display_name'),
-  extension: text('extension'),
-  size: integer('size'),
-  mtime: integer('mtime', { mode: 'timestamp' }).notNull(),
-  ctime: integer('ctime', { mode: 'timestamp' }).notNull(),
-  lastIndexedAt: integer('last_indexed_at', { mode: 'timestamp' }).notNull().default(new Date(0)),
-  isDir: integer('is_dir', { mode: 'boolean' }).notNull().default(false),
-  type: text('type').notNull().default('file'), // 'file', 'app', 'url', etc.
+export const files = sqliteTable(
+  'files',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    path: text('path').notNull().unique(), // 文件的绝对路径
+    name: text('name').notNull(),
+    displayName: text('display_name'),
+    extension: text('extension'),
+    size: integer('size'),
+    mtime: integer('mtime', { mode: 'timestamp' }).notNull(),
+    ctime: integer('ctime', { mode: 'timestamp' }).notNull(),
+    lastIndexedAt: integer('last_indexed_at', { mode: 'timestamp' }).notNull().default(new Date(0)),
+    isDir: integer('is_dir', { mode: 'boolean' }).notNull().default(false),
+    type: text('type').notNull().default('file'), // 'file', 'app', 'url', etc.
 
-  // [AI] 可选的文件内容和向量化状态，用于智能层处理
-  content: text('content'), // 仅对需要深度索引的文件类型存储内容
-  embeddingStatus: text('embedding_status', { enum: ['none', 'pending', 'completed'] })
-    .notNull()
-    .default('none')
-})
+    // [AI] 可选的文件内容和向量化状态，用于智能层处理
+    content: text('content'), // 仅对需要深度索引的文件类型存储内容
+    embeddingStatus: text('embedding_status', { enum: ['none', 'pending', 'completed'] })
+      .notNull()
+      .default('none')
+  },
+  (table) => ({
+    // `getIndexStats` counts `type='file'` and `(type, embedding_status)` on every
+    // diagnostics poll. Without these the planner did a full SCAN of a 106k-row
+    // table inside a 6 GB database — measured 8.1s per diagnostics request, which
+    // is what made the IPC handler block for seconds (#index-stats-scan).
+    typeIdx: index('idx_files_type').on(table.type),
+    typeEmbeddingIdx: index('idx_files_type_embedding_status').on(table.type, table.embeddingStatus)
+  })
+)
 
 /**
  * 存储文件的扩展属性，如应用的 bundleId, icon 等
@@ -141,7 +152,10 @@ export const fileIndexProgress = sqliteTable(
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date(0))
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.fileId] })
+    pk: primaryKey({ columns: [table.fileId] }),
+    // Diagnostics counts failed/skipped/completed separately on every poll; the
+    // primary key is on file_id, so each count was a full table SCAN.
+    statusIdx: index('idx_file_index_progress_status').on(table.status)
   })
 )
 

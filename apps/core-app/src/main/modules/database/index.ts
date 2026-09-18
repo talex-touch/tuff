@@ -1135,15 +1135,25 @@ export class DatabaseModule extends BaseModule {
       await this.applyScanProgressSourceScopeFixup(searchDb)
       // Perf-index parity: embeddings are split-routed, so the worker's
       // delete/select by (source_type, source_id) needs the same index the
-      // primary gets from ensureSearchPerformanceIndexes(). Best-effort like
-      // that primary path — a missing perf index must not abort the split
-      // (unlike the two correctness fixups above).
-      try {
-        await this.searchClient!.execute(
-          'CREATE INDEX IF NOT EXISTS idx_embeddings_source ON embeddings (source_type, source_id)'
-        )
-      } catch (error) {
-        dbLog.warn('Failed to ensure idx_embeddings_source on search database', { error })
+      // primary gets from ensureSearchPerformanceIndexes(). The files /
+      // file_index_progress indexes back `getIndexStats()`, whose six COUNT(*)
+      // queries the diagnostics IPC handler runs on every poll — unindexed they
+      // were full table SCANs, measured 11.5s per diagnostics request against
+      // this 6 GB file versus 25ms with these present. Best-effort like that
+      // primary path — a missing perf index must not abort the split (unlike
+      // the two correctness fixups above).
+      const searchPerfIndexes = [
+        'CREATE INDEX IF NOT EXISTS idx_embeddings_source ON embeddings (source_type, source_id)',
+        'CREATE INDEX IF NOT EXISTS idx_files_type ON files (type)',
+        'CREATE INDEX IF NOT EXISTS idx_files_type_embedding_status ON files (type, embedding_status)',
+        'CREATE INDEX IF NOT EXISTS idx_file_index_progress_status ON file_index_progress (status)'
+      ]
+      for (const statement of searchPerfIndexes) {
+        try {
+          await this.searchClient!.execute(statement)
+        } catch (error) {
+          dbLog.warn('Failed to ensure search database perf index', { error, meta: { statement } })
+        }
       }
       if (this.destroying) return
       this.searchDb = searchDb
@@ -1427,12 +1437,20 @@ export class DatabaseModule extends BaseModule {
     // (idempotent) to match the existing ensure* pattern. Cover the
     // per-keystroke completion LIKE, recommendation ORDER BY, embedding
     // (source_type, source_id) lookups, and usage_logs range scans.
+    //
+    // The files/file_index_progress entries back `getIndexStats()`, which the
+    // diagnostics IPC handler calls on every poll. Unindexed, its six COUNT(*)
+    // queries each did a full table SCAN — 8.1s per request measured on a 6 GB
+    // index, against 27ms once these exist.
     const statements = [
       'CREATE INDEX IF NOT EXISTS idx_query_completions_prefix ON query_completions (prefix)',
       'CREATE INDEX IF NOT EXISTS idx_item_usage_execute_count ON item_usage_stats (execute_count)',
       'CREATE INDEX IF NOT EXISTS idx_item_usage_last_executed ON item_usage_stats (last_executed)',
       'CREATE INDEX IF NOT EXISTS idx_embeddings_source ON embeddings (source_type, source_id)',
-      'CREATE INDEX IF NOT EXISTS idx_usage_logs_action_ts ON usage_logs (action, timestamp)'
+      'CREATE INDEX IF NOT EXISTS idx_usage_logs_action_ts ON usage_logs (action, timestamp)',
+      'CREATE INDEX IF NOT EXISTS idx_files_type ON files (type)',
+      'CREATE INDEX IF NOT EXISTS idx_files_type_embedding_status ON files (type, embedding_status)',
+      'CREATE INDEX IF NOT EXISTS idx_file_index_progress_status ON file_index_progress (status)'
     ]
 
     try {

@@ -2541,8 +2541,42 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   /**
    * 获取索引统计信息
+   *
+   * Single-flighted: one diagnostics request fans out to `getHealth()` and
+   * `getEvidence()` in parallel (indexing-diagnostics-service.ts:36), and both
+   * call this. Without sharing the in-flight promise a single poll ran the six
+   * COUNT(*) queries twice — 12 scans, measured 8.1s on a 6 GB index. The
+   * result is a read-only snapshot, so concurrent callers can safely share it.
    */
+  private inflightIndexStats: Promise<{
+    totalFiles: number
+    failedFiles: number
+    skippedFiles: number
+    completedFiles: number
+    embeddingCompletedFiles: number
+    embeddingRows: number
+  }> | null = null
+
   public async getIndexStats(): Promise<{
+    totalFiles: number
+    failedFiles: number
+    skippedFiles: number
+    completedFiles: number
+    embeddingCompletedFiles: number
+    embeddingRows: number
+  }> {
+    if (this.inflightIndexStats) return await this.inflightIndexStats
+
+    const run = this.computeIndexStats()
+    this.inflightIndexStats = run
+    try {
+      return await run
+    } finally {
+      this.inflightIndexStats = null
+    }
+  }
+
+  private async computeIndexStats(): Promise<{
     totalFiles: number
     failedFiles: number
     skippedFiles: number
