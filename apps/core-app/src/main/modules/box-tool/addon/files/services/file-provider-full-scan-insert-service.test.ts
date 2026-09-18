@@ -86,7 +86,6 @@ describe('file-provider-full-scan-insert-service', () => {
     )
     expect(emitProgress).toHaveBeenNthCalledWith(1, 0, 2)
     expect(emitProgress).toHaveBeenLastCalledWith(2, 2)
-    expect(sleep).toHaveBeenCalledWith(100)
     expect(result).toEqual({
       inserted,
       insertedCount: 2

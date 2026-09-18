@@ -58,11 +58,22 @@ export interface FileProviderAssetServiceDeps {
   enableIconExtraction: boolean
   iconWriteMaxQueue: number
 }
+
+/**
+ * In-flight cap for icon extraction. Each in-flight extraction holds one pending
+ * `file-icon.persist` write on the single-writer lane, so this is the DB-pressure
+ * ceiling a bulk index can apply through the icon path.
+ */
+const MAX_PENDING_ICON_EXTRACTIONS = 64
+const ICON_SHED_LOG_THROTTLE_MS = 30_000
+
 export class FileProviderAssetService {
   private readonly iconExtractionPending = new Map<string, Promise<Buffer | null>>()
   private readonly pendingIconExtractions = new Set<number>()
   private readonly pendingThumbnailExtractions = new Set<number>()
   private thumbnailTaskRunning = false
+  private shedIconExtractions = 0
+  private lastIconShedLogAt = 0
   private readonly now: () => number
 
   constructor(private readonly deps: FileProviderAssetServiceDeps) {
@@ -132,6 +143,26 @@ export class FileProviderAssetService {
 
   async ensureIcon(fileId: number, filePath: string, file?: FileRecord): Promise<void> {
     if (this.pendingIconExtractions.has(fileId)) return
+    // Every extraction ends in one `file-icon.persist` write, and the only
+    // producers are fire-and-forget (`void ensureIcon(...)` per indexed file /
+    // per search hit). Unbounded, a bulk index queues one write per file: a
+    // 106k-file home scan reached q=5897 / avg wait 1505ms / max 10174ms and had
+    // 534 writes dropped, while starving every other label on the same lane.
+    // `pendingIconExtractions` already IS the in-flight set, so it doubles as the
+    // queue bound; shed icons are re-requested by the next search hit or scan.
+    if (this.pendingIconExtractions.size >= MAX_PENDING_ICON_EXTRACTIONS) {
+      this.shedIconExtractions += 1
+      const now = this.now()
+      if (now - this.lastIconShedLogAt >= ICON_SHED_LOG_THROTTLE_MS) {
+        this.lastIconShedLogAt = now
+        this.deps.logWarn(
+          `Deferring icon extraction: ${this.pendingIconExtractions.size} already in flight`,
+          undefined,
+          { shedTotal: this.shedIconExtractions, maxInFlight: MAX_PENDING_ICON_EXTRACTIONS }
+        )
+      }
+      return
+    }
 
     this.pendingIconExtractions.add(fileId)
     try {
