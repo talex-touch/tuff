@@ -141,7 +141,7 @@ describe('TuffItemPreviewer source row', () => {
       'tfile:///icons/com.apple.Preview.png'
     )
 
-    const openWith = pane.get('.open-with')
+    const openWith = pane.get('.open-with-action')
     expect(openWith.attributes('aria-label')).toContain('Preview')
     expect(openWith.text()).toContain('Preview')
 
@@ -159,7 +159,7 @@ describe('TuffItemPreviewer source row', () => {
       expect(sourceRowParts()).toEqual({ name: 'Documents', identifier: null })
       expect(sourceRow().querySelector('img')).toBeNull()
       expect(pane.text()).not.toContain('undefined')
-      expect(pane.find('.open-with').attributes('aria-label')).not.toContain('undefined')
+      expect(pane.find('.open-with-action').attributes('aria-label')).not.toContain('undefined')
     }
   })
 

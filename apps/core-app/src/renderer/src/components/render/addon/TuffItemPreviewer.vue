@@ -8,6 +8,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { toTfileUrl } from '@talex-touch/utils/network'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
+import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import {
   AudioPreview,
@@ -26,6 +27,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'openItem'): void
+  (event: 'openWith', applicationId: string): void
 }>()
 
 const { t } = useI18n()
@@ -169,10 +171,13 @@ watch(
 )
 
 /**
- * The application a double-click on this file would launch. LaunchServices answers it in the main
- * process; until it does, the file keeps its index source label, so the row never renders empty.
+ * What opens this file: the application a double-click would launch, plus every other handler the
+ * OS offers for it. LaunchServices answers both in the main process; until it does, the file
+ * keeps its index source label, so the row never renders empty.
  */
 const defaultApplication = ref<ResolvedApplication | null>(null)
+const candidateApplications = ref<ResolvedApplication[]>([])
+const openWithMenuOpen = ref(false)
 let applicationRequestVersion = 0
 
 watch(
@@ -180,6 +185,9 @@ watch(
   async (filePath) => {
     const requestVersion = ++applicationRequestVersion
     defaultApplication.value = null
+    candidateApplications.value = []
+    // A menu left open across a selection change would be showing the previous file's handlers.
+    openWithMenuOpen.value = false
 
     if (!filePath || !isElectronRenderer() || !transport) {
       return
@@ -192,6 +200,7 @@ watch(
       if (requestVersion !== applicationRequestVersion) return
       if (result.success && result.application) {
         defaultApplication.value = result.application
+        candidateApplications.value = result.candidates ?? []
       }
     } catch {
       // Keep the index source label; an unavailable association is not an error worth surfacing.
@@ -211,6 +220,19 @@ const openWithLabel = computed(() =>
   t('fileInfo.openWith', { app: defaultApplication.value?.displayName || t('fileInfo.defaultApp') })
 )
 
+/**
+ * The alternatives worth a menu. One candidate means the only choice is the default, which the
+ * button already is - a menu there would be a control whose entire contents duplicate its trigger.
+ */
+const alternativeApplications = computed(() =>
+  candidateApplications.value.length > 1 ? candidateApplications.value : []
+)
+
+function handleOpenWith(application: ResolvedApplication): void {
+  openWithMenuOpen.value = false
+  emit('openWith', application.identifier)
+}
+
 function handleSourceIconError(event: Event): void {
   if (event.currentTarget instanceof HTMLImageElement) {
     event.currentTarget.hidden = true
@@ -222,23 +244,60 @@ function handleSourceIconError(event: Event): void {
   <div class="TuffItemPreviewer">
     <TxScroll class="h-full w-full" no-padding :native="isMac" :native-auto-fallback="!isMac">
       <div class="preview-area">
-        <button
-          class="open-with"
-          type="button"
-          :title="openWithLabel"
-          :aria-label="openWithLabel"
-          @click.stop="emit('openItem')"
-        >
-          <img
-            v-if="defaultApplication?.icon"
-            class="open-with-icon"
-            :src="defaultApplication.icon"
-            alt=""
-            @error="handleSourceIconError"
-          />
-          <i v-else class="i-ri-external-link-line open-with-icon" aria-hidden="true" />
-          <span class="open-with-label">{{ openWithLabel }}</span>
-        </button>
+        <div class="open-with">
+          <button
+            class="open-with-action"
+            type="button"
+            :title="openWithLabel"
+            :aria-label="openWithLabel"
+            @click.stop="emit('openItem')"
+          >
+            <img
+              v-if="defaultApplication?.icon"
+              class="open-with-icon"
+              :src="defaultApplication.icon"
+              alt=""
+              @error="handleSourceIconError"
+            />
+            <i v-else class="i-ri-external-link-line open-with-icon" aria-hidden="true" />
+            <span class="open-with-label">{{ openWithLabel }}</span>
+          </button>
+          <TxDropdownMenu
+            v-if="alternativeApplications.length"
+            v-model="openWithMenuOpen"
+            placement="bottom-end"
+            :min-width="200"
+          >
+            <template #trigger>
+              <button
+                class="open-with-more"
+                type="button"
+                :title="t('fileInfo.openWithOther')"
+                :aria-label="t('fileInfo.openWithOther')"
+                @click.stop
+              >
+                <i class="i-ri-arrow-down-s-line" aria-hidden="true" />
+              </button>
+            </template>
+            <TxDropdownItem
+              v-for="application in alternativeApplications"
+              :key="application.identifier"
+              @select="handleOpenWith(application)"
+            >
+              <span class="open-with-option">
+                <img
+                  v-if="application.icon"
+                  class="open-with-option-icon"
+                  :src="application.icon"
+                  alt=""
+                  @error="handleSourceIconError"
+                />
+                <span v-else class="open-with-option-icon placeholder" />
+                <span class="open-with-option-label">{{ application.displayName }}</span>
+              </span>
+            </TxDropdownItem>
+          </TxDropdownMenu>
+        </div>
         <DefaultPreview v-if="previewComponent === DefaultPreview" :item="item" />
         <component
           :is="previewComponent"
@@ -353,45 +412,77 @@ function handleSourceIconError(event: Event): void {
     overflow: hidden;
   }
 
-  // Deliberately small and low-emphasis: it is a shortcut for the same action as Enter, not a
-  // primary control of the pane.
+  /**
+   * Deliberately small and low-emphasis: a shortcut for the same action as Enter, not a primary
+   * control of the pane. The chrome lives on the group so the action and the menu trigger read as
+   * one control with a divider, rather than two chips that happen to be adjacent.
+   */
   .open-with {
     position: absolute;
     top: 4px;
     right: 4px;
     z-index: 2;
     display: inline-flex;
-    align-items: center;
-    gap: 4px;
+    align-items: stretch;
     max-width: 60%;
-    padding: 2px 6px;
     border: 1px solid var(--tx-border-color);
     border-radius: 6px;
     background-color: var(--tx-bg-color, #fff);
     color: var(--tx-text-color-secondary, inherit);
     font-size: 10px;
     line-height: 1.4;
-    cursor: pointer;
+    // Hovering anywhere on the group lifts both halves: the divider would otherwise make the
+    // unhovered half look disabled.
     opacity: 0.7;
     transition: opacity 0.15s ease;
+    overflow: hidden;
 
     &:hover,
-    &:focus-visible {
+    &:focus-within {
       opacity: 1;
     }
+  }
 
-    .open-with-icon {
-      flex-shrink: 0;
-      width: 12px;
-      height: 12px;
-      object-fit: contain;
-    }
+  .open-with-action,
+  .open-with-more {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    padding: 2px 6px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
 
-    .open-with-label {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+    &:hover {
+      background-color: var(--tx-fill-color-light, rgba(0, 0, 0, 0.06));
     }
+  }
+
+  .open-with-action {
+    gap: 4px;
+  }
+
+  .open-with-more {
+    // Hairline rather than a gap: the two halves are one control, and a gap would let the stage
+    // show through between them.
+    border-left: 1px solid var(--tx-border-color);
+    padding: 2px 3px;
+    font-size: 12px;
+  }
+
+  .open-with-icon {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    object-fit: contain;
+  }
+
+  .open-with-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .source-icon {
@@ -405,5 +496,36 @@ function handleSourceIconError(event: Event): void {
       background-color: var(--tx-fill-color-light, rgba(0, 0, 0, 0.06));
     }
   }
+}
+</style>
+
+<style lang="scss">
+/**
+ * Unscoped on purpose: TxDropdownMenu teleports its panel out of this component's tree, so a
+ * scoped rule's data attribute never reaches the rows.
+ */
+.open-with-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.open-with-option-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  border-radius: 4px;
+
+  &.placeholder {
+    background-color: var(--tx-fill-color-light, rgba(0, 0, 0, 0.06));
+  }
+}
+
+.open-with-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

@@ -26,23 +26,50 @@ const MAX_PATH_LENGTH = 4096
 const JXA_RESOLVE_SOURCE = `function run(argv) {
   ObjC.import('AppKit');
   ObjC.import('Foundation');
+  var workspace = $.NSWorkspace.sharedWorkspace;
   var fileUrl = $.NSURL.fileURLWithPath(argv[0]);
-  var appUrl = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL(fileUrl);
+
+  function describe(appPath) {
+    var bundleId = '';
+    var displayName = '';
+    try {
+      var bundle = $.NSBundle.bundleWithPath(appPath);
+      if (bundle && !bundle.isNil()) {
+        bundleId = ObjC.unwrap(bundle.bundleIdentifier) || '';
+        var infoName = bundle.objectForInfoDictionaryKey('CFBundleDisplayName');
+        var shortName = bundle.objectForInfoDictionaryKey('CFBundleName');
+        var chosen = (infoName && !infoName.isNil()) ? infoName : shortName;
+        if (chosen && !chosen.isNil()) displayName = ObjC.unwrap(chosen) || '';
+      }
+    } catch (error) {}
+    return { path: appPath, bundleId: bundleId, displayName: displayName };
+  }
+
+  var appUrl = workspace.URLForApplicationToOpenURL(fileUrl);
   if (!appUrl || appUrl.isNil()) return '';
-  var appPath = ObjC.unwrap(appUrl.path);
-  var bundleId = '';
-  var displayName = '';
+  var target = describe(ObjC.unwrap(appUrl.path));
+
+  // Every handler LaunchServices would offer, in its own ranking - the same order and the same
+  // set the Finder's "Open With" submenu shows. Absent on older systems, where the default alone
+  // is still a complete answer.
+  var candidates = [];
   try {
-    var bundle = $.NSBundle.bundleWithPath(appPath);
-    if (bundle && !bundle.isNil()) {
-      bundleId = ObjC.unwrap(bundle.bundleIdentifier) || '';
-      var infoName = bundle.objectForInfoDictionaryKey('CFBundleDisplayName');
-      var shortName = bundle.objectForInfoDictionaryKey('CFBundleName');
-      var chosen = (infoName && !infoName.isNil()) ? infoName : shortName;
-      if (chosen && !chosen.isNil()) displayName = ObjC.unwrap(chosen) || '';
+    var urls = workspace.URLsForApplicationsToOpenURL(fileUrl);
+    if (urls && !urls.isNil()) {
+      var total = urls.count;
+      for (var i = 0; i < total; i += 1) {
+        var candidatePath = ObjC.unwrap(urls.objectAtIndex(i).path);
+        if (candidatePath) candidates.push(describe(candidatePath));
+      }
     }
   } catch (error) {}
-  return JSON.stringify({ path: appPath, bundleId: bundleId, displayName: displayName });
+
+  return JSON.stringify({
+    path: target.path,
+    bundleId: target.bundleId,
+    displayName: target.displayName,
+    candidates: candidates
+  });
 }`
 
 export interface DefaultApplicationTarget {
@@ -52,6 +79,17 @@ export interface DefaultApplicationTarget {
   bundleId: string
   /** `CFBundleDisplayName` / `CFBundleName`, empty when the bundle declares neither. */
   displayName: string
+}
+
+export interface DefaultApplicationResolution {
+  /** What a double-click launches. */
+  target: DefaultApplicationTarget
+  /**
+   * Every application LaunchServices would offer for this file, in its own ranking, including
+   * `target`. Empty on a system whose AppKit lacks the query — the default alone is still a
+   * complete answer, and the caller renders no alternatives rather than a wrong list.
+   */
+  candidates: DefaultApplicationTarget[]
 }
 
 /**
@@ -80,7 +118,7 @@ export class DefaultApplicationResolveError extends Error {
  */
 export async function resolveDefaultApplicationTarget(
   filePath: string
-): Promise<DefaultApplicationTarget | null> {
+): Promise<DefaultApplicationResolution | null> {
   if (process.platform !== 'darwin') return null
   if (typeof filePath !== 'string') return null
 
@@ -120,9 +158,11 @@ export async function resolveDefaultApplicationTarget(
   // answer, and the caller's fallback is the correct outcome for it.
   if (!payload) return null
 
-  let parsed: Partial<DefaultApplicationTarget> | null
+  let parsed: (Partial<DefaultApplicationTarget> & { candidates?: unknown }) | null
   try {
-    parsed = JSON.parse(payload) as Partial<DefaultApplicationTarget> | null
+    parsed = JSON.parse(payload) as
+      | (Partial<DefaultApplicationTarget> & { candidates?: unknown })
+      | null
   } catch (error) {
     throw new DefaultApplicationResolveError('the OS association answer was not JSON', {
       cause: error
@@ -132,9 +172,37 @@ export async function resolveDefaultApplicationTarget(
     throw new DefaultApplicationResolveError('the OS association answer named no application path')
   }
 
+  const target = readTarget(parsed)
+  if (!target) {
+    throw new DefaultApplicationResolveError('the OS association answer named no application path')
+  }
+
+  // LaunchServices ranks the default first and repeats it in the candidate list. Deduplicating
+  // by bundle path keeps the pane from drawing it twice, and a malformed entry is dropped rather
+  // than thrown on: the default resolved, and losing one alternative is a smaller failure than
+  // losing the answer the pane is built around.
+  const candidates: DefaultApplicationTarget[] = [target]
+  const seen = new Set<string>([target.path])
+
+  if (Array.isArray(parsed.candidates)) {
+    for (const value of parsed.candidates) {
+      const candidate = readTarget(value)
+      if (!candidate || seen.has(candidate.path)) continue
+      seen.add(candidate.path)
+      candidates.push(candidate)
+    }
+  }
+
+  return { target, candidates }
+}
+
+function readTarget(value: unknown): DefaultApplicationTarget | null {
+  if (!value || typeof value !== 'object') return null
+  const entry = value as Partial<DefaultApplicationTarget>
+  if (typeof entry.path !== 'string' || !entry.path) return null
   return {
-    path: parsed.path,
-    bundleId: typeof parsed.bundleId === 'string' ? parsed.bundleId : '',
-    displayName: typeof parsed.displayName === 'string' ? parsed.displayName : ''
+    path: entry.path,
+    bundleId: typeof entry.bundleId === 'string' ? entry.bundleId : '',
+    displayName: typeof entry.displayName === 'string' ? entry.displayName : ''
   }
 }

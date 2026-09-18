@@ -177,6 +177,7 @@ type FileIndexTransportOperation =
   | 'ADD_PATH'
   | 'PREVIEW_RESOURCE'
   | 'DEFAULT_APPLICATION'
+  | 'OPEN_WITH'
   | 'REBUILD'
   | 'SCAN'
   | 'RECONCILE'

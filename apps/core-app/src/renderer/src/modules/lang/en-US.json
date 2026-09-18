@@ -2918,6 +2918,7 @@
     "createdAt": "Created At",
     "modifiedAt": "Modified At",
     "openWith": "Open with {app}",
+    "openWithOther": "Open with another app",
     "defaultApp": "default app"
   },
   "download": {

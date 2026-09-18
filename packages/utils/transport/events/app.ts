@@ -91,6 +91,8 @@ import type {
   FileIndexDefaultApplicationResult,
   FileIndexPreviewResourceRequest,
   FileIndexPreviewResourceResult,
+  FileIndexOpenWithRequest,
+  FileIndexOpenWithResult,
   FileIndexRebuildRequest,
   FileIndexRebuildResult,
   FileIndexStats,
@@ -413,6 +415,14 @@ export const AppEvents = {
       .module('file-index')
       .event('default-application')
       .define<FileIndexDefaultApplicationRequest, FileIndexDefaultApplicationResult>(),
+
+    /**
+     * Open one indexed file with a named application, instead of the OS default.
+     */
+    openWith: defineEvent('app')
+      .module('file-index')
+      .event('open-with')
+      .define<FileIndexOpenWithRequest, FileIndexOpenWithResult>(),
 
     /**
      * Add a path to file index watch list.

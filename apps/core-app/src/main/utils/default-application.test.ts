@@ -121,7 +121,9 @@ describe('resolveDefaultApplicationTarget guards', () => {
     const overCeiling = `/${'a'.repeat(4096)}`
     osascriptReply = { stdout: JSON.stringify(APPLICATION) }
 
-    await expect(resolveDefaultApplicationTarget(atCeiling)).resolves.toEqual(APPLICATION)
+    await expect(resolveDefaultApplicationTarget(atCeiling)).resolves.toMatchObject({
+      target: APPLICATION
+    })
 
     execFileMock.mockClear()
     await expect(resolveDefaultApplicationTarget(overCeiling)).resolves.toBeNull()
@@ -133,16 +135,44 @@ describe('resolveDefaultApplicationTarget osascript payload', () => {
   it('returns the application LaunchServices reports for the file', async () => {
     osascriptReply = { stdout: JSON.stringify(APPLICATION) }
 
-    await expect(resolveDefaultApplicationTarget(FILE_PATH)).resolves.toEqual(APPLICATION)
+    await expect(resolveDefaultApplicationTarget(FILE_PATH)).resolves.toEqual({
+      target: APPLICATION,
+      // No candidate list in the payload still yields one candidate: the default itself, so a
+      // caller never has to special-case "the OS could not enumerate handlers".
+      candidates: [APPLICATION]
+    })
+  })
+
+  it('lists every handler the OS offers, default first and never twice', async () => {
+    const quicktime = {
+      path: '/System/Applications/QuickTime Player.app',
+      bundleId: 'com.apple.QuickTimePlayerX',
+      displayName: 'QuickTime Player'
+    }
+    osascriptReply = {
+      stdout: JSON.stringify({
+        ...APPLICATION,
+        // LaunchServices repeats the default inside the candidate list, and a malformed entry
+        // must not cost the caller the rest of the list.
+        candidates: [APPLICATION, quicktime, { bundleId: 'com.apple.Nothing' }]
+      })
+    }
+
+    await expect(resolveDefaultApplicationTarget(FILE_PATH)).resolves.toEqual({
+      target: APPLICATION,
+      candidates: [APPLICATION, quicktime]
+    })
   })
 
   it('reports a bundle that declares no identifier or name as empty strings', async () => {
     osascriptReply = { stdout: JSON.stringify({ path: '/Applications/Preview.app' }) }
 
-    await expect(resolveDefaultApplicationTarget(FILE_PATH)).resolves.toEqual({
-      path: '/Applications/Preview.app',
-      bundleId: '',
-      displayName: ''
+    await expect(resolveDefaultApplicationTarget(FILE_PATH)).resolves.toMatchObject({
+      target: {
+        path: '/Applications/Preview.app',
+        bundleId: '',
+        displayName: ''
+      }
     })
   })
 
@@ -189,7 +219,9 @@ describe('resolveDefaultApplicationTarget osascript payload', () => {
     const spacedPath = '/Users/demo/Documents/report.pdf '
     osascriptReply = { stdout: JSON.stringify(APPLICATION) }
 
-    await expect(resolveDefaultApplicationTarget(spacedPath)).resolves.toEqual(APPLICATION)
+    await expect(resolveDefaultApplicationTarget(spacedPath)).resolves.toMatchObject({
+      target: APPLICATION
+    })
 
     expect(accessMock).toHaveBeenCalledWith(spacedPath)
     expect(execFileMock.mock.calls[0]?.[1]).toContain(spacedPath)

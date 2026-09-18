@@ -120,6 +120,29 @@ export interface FileIndexDefaultApplicationRequest {
 export interface FileIndexDefaultApplicationResult {
   success: boolean;
   application?: ResolvedApplication | null;
+  /**
+   * Every application that can open the file, in the OS's own ranking, starting with
+   * `application`. Empty whenever `application` is null, and on a platform that cannot enumerate
+   * handlers — a caller offers no alternatives rather than a wrong list.
+   */
+  candidates?: ResolvedApplication[];
+  errorCode?: string;
+  reportId?: string;
+}
+
+export interface FileIndexOpenWithRequest {
+  /** The indexed file to open. */
+  path: string;
+  /**
+   * `identifier` of one entry from this file's own `candidates`. It is matched against a freshly
+   * resolved candidate list rather than trusted, so this names a choice the OS already offered
+   * for this file and never an arbitrary application the caller supplies.
+   */
+  applicationId: string;
+}
+
+export interface FileIndexOpenWithResult {
+  success: boolean;
   errorCode?: string;
   reportId?: string;
 }

@@ -9,13 +9,19 @@ defineProps<{
 
 const emit = defineEmits<{
   (event: 'openItem'): void
+  (event: 'openWith', applicationId: string): void
 }>()
 </script>
 
 <template>
   <div class="TuffItemAddon" :class="{ show: !!type }">
     <template v-if="type === 'preview'">
-      <TuffItemPreviewer :item="item!" :search-query="searchQuery" @open-item="emit('openItem')" />
+      <TuffItemPreviewer
+        :item="item!"
+        :search-query="searchQuery"
+        @open-item="emit('openItem')"
+        @open-with="emit('openWith', $event)"
+      />
     </template>
   </div>
 </template>

@@ -6,7 +6,7 @@ import type { IBoxOptions } from '../../modules/box/adapter'
 import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useElementSize } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -763,6 +763,27 @@ function handlePreviewOpen(): void {
 }
 
 /**
+ * Opening with a non-default application.
+ *
+ * Deliberately not `handleExecute`: that path runs the item's own action, which for a file means
+ * the OS default — the one application this menu exists to bypass. The window still hides, so the
+ * outcome matches every other way of opening a result from the box.
+ */
+async function handlePreviewOpenWith(applicationId: string): Promise<void> {
+  const filePath = activeItem.value?.meta?.file?.path
+  if (!filePath) return
+
+  try {
+    await transport.send(AppEvents.fileIndex.openWith, { path: filePath, applicationId })
+  } catch (error) {
+    devLog('[CoreBox] Failed to open the file with the chosen application:', error)
+    return
+  }
+
+  void transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
+}
+
+/**
  * BoxGrid wraps tiles past what fits at their minimum width; the keyboard has to step rows by that
  * same count. The window keeps its height on purpose — a re-wrap while the preview pane slides in
  * would otherwise resize the window mid-animation — and the list scrolls instead.
@@ -1130,6 +1151,7 @@ const customCss = computed(() => {
           :search-query="searchVal"
           :style="getCanvasAreaStyle('addon')"
           @open-item="handlePreviewOpen"
+          @open-with="handlePreviewOpenWith"
         />
       </template>
 

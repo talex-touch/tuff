@@ -35,6 +35,8 @@ import type {
   FileIndexAddPathResult,
   FileIndexDefaultApplicationRequest,
   FileIndexDefaultApplicationResult,
+  FileIndexOpenWithRequest,
+  FileIndexOpenWithResult,
   FileIndexPreviewResourceRequest,
   FileIndexPreviewResourceResult,
   IndexedSourceDiagnosticsRequest,
@@ -47,6 +49,7 @@ import type {
   IndexedSourceScanRuntimeResult,
   PlatformCapabilityListRequest,
   ReadFileRequest,
+  ResolvedApplication,
   SearchProviderConfigResponse,
   SearchProviderConfigUpdateRequest,
   SearchProviderConfigUpdateResult,
@@ -59,9 +62,12 @@ import type {
 import { cleanupDownloads, cleanupFileIndex, cleanupUpdates } from '../service/storage-maintenance'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { validateExternalUrl } from '../utils/external-url-policy'
+import type { DefaultApplicationTarget } from '../utils/default-application'
 import { resolveDefaultApplicationTarget } from '../utils/default-application'
+import { evaluateInstalledAppPath } from '../utils/installed-app-policy'
 import type { Locale } from '../utils/i18n-helper'
 import { Buffer } from 'node:buffer'
+import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import fs from 'node:fs/promises'
@@ -69,6 +75,7 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 import { StorageList, isLocalhostUrl } from '@talex-touch/utils'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { isSupportedWallpaperImagePath } from '@talex-touch/utils/common/wallpaper'
@@ -171,6 +178,12 @@ const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
 const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
 const DIALOG_APPROVED_MAX = 200
 const PLUGIN_TEMP_RETENTION_MS = 24 * 60 * 60 * 1000
+const execFileAsync = promisify(execFile)
+/**
+ * `open -a` returns as soon as it has handed the file off; the ceiling exists so a wedged
+ * LaunchServices leaves a rejected promise rather than a handler that never settles.
+ */
+const OPEN_WITH_TIMEOUT_MS = 10_000
 const TUFF_CLI_CAPABILITY: PlatformCapability = {
   id: 'platform.tuff-cli',
   name: 'Tuff CLI',
@@ -1804,26 +1817,74 @@ export class CommonChannelModule extends BaseModule {
             // this cannot be used to probe what the OS opens for arbitrary paths.
             const indexedPath = await fileProvider.resolvePreviewResourcePath(inputPath)
             if (!indexedPath) {
-              return { success: true, application: null }
+              return { success: true, application: null, candidates: [] }
             }
-            const target = await resolveDefaultApplicationTarget(indexedPath)
-            if (!target) {
-              return { success: true, application: null }
+            const resolution = await resolveDefaultApplicationTarget(indexedPath)
+            if (!resolution) {
+              return { success: true, application: null, candidates: [] }
             }
-            // The projection owns the icon and the indexed display name; the LaunchServices
-            // answer is the fallback when the app index has not seen this bundle.
-            const projection =
-              (await appProvider.resolveApplication(target.bundleId || target.path)) ?? null
+            const candidates = await Promise.all(
+              resolution.candidates.map((candidate) => projectApplicationTarget(candidate))
+            )
+            // `application` is a copy of `candidates[0]`, never the same object. The two fields
+            // deliberately describe the same application, and handing back one reference twice
+            // made the structured clone across the IPC boundary collapse the repeat: the button
+            // rendered "Music" while the menu's first row arrived with no name and no icon.
+            const [preferred] = candidates
             return {
               success: true,
-              application: projection ?? {
-                identifier: target.bundleId || target.path,
-                displayName: target.displayName || path.basename(target.path, '.app'),
-                icon: null
-              }
+              application: preferred ? { ...preferred } : null,
+              candidates
             }
           } catch (error) {
             const report = reportFileIndexTransportFailure('DEFAULT_APPLICATION', error)
+            return {
+              success: false,
+              errorCode: report.code,
+              reportId: report.id
+            }
+          }
+        }
+      ),
+      transport.on<FileIndexOpenWithRequest, FileIndexOpenWithResult>(
+        AppEvents.fileIndex.openWith,
+        async (payload, context) => {
+          this.assertHostOnly(context, 'fileIndex.openWith')
+          const inputPath = getOptionalStringProp(payload, 'path')
+          const applicationId = getOptionalStringProp(payload, 'applicationId')
+          if (!inputPath || !applicationId) {
+            return { success: false, errorCode: 'FILE_INDEX_OPEN_WITH_REQUEST_INVALID' }
+          }
+          try {
+            const indexedPath = await fileProvider.resolvePreviewResourcePath(inputPath)
+            if (!indexedPath) {
+              return { success: false, errorCode: 'FILE_INDEX_OPEN_WITH_FILE_UNAVAILABLE' }
+            }
+
+            // The caller names a choice, never a path. Re-resolving here means the only
+            // applications reachable through this event are the ones the OS itself offers for
+            // this specific file — a renderer cannot ask for an arbitrary bundle, and a stale
+            // menu cannot launch something LaunchServices no longer associates.
+            const resolution = await resolveDefaultApplicationTarget(indexedPath)
+            const chosen = resolution?.candidates.find(
+              (candidate) => (candidate.bundleId || candidate.path) === applicationId
+            )
+            if (!chosen) {
+              return { success: false, errorCode: 'FILE_INDEX_OPEN_WITH_APPLICATION_UNKNOWN' }
+            }
+
+            // Belt to the re-resolution's braces: the same installed-app policy `system.openApp`
+            // enforces, so a bundle outside the application roots stays unlaunchable however it
+            // came to be in the list.
+            const decision = evaluateInstalledAppPath(chosen.path)
+            if (!decision.allowed) {
+              return { success: false, errorCode: 'FILE_INDEX_OPEN_WITH_APPLICATION_REJECTED' }
+            }
+
+            await openPathWithApplication(indexedPath, chosen.path)
+            return { success: true }
+          } catch (error) {
+            const report = reportFileIndexTransportFailure('OPEN_WITH', error)
             return {
               success: false,
               errorCode: report.code,
@@ -2405,6 +2466,51 @@ export class CommonChannelModule extends BaseModule {
 
 function safeIsOnBatteryPower(): boolean {
   return deviceIdleService.isOnBatteryPower()
+}
+
+/**
+ * One LaunchServices answer as the bounded projection the renderer renders.
+ *
+ * The app index owns the icon and the display name users already see elsewhere in the launcher;
+ * the bundle's own metadata is the fallback for an application the index has not scanned, so a
+ * handler installed outside the watched roots still gets a name rather than a blank row.
+ *
+ * Always a fresh object, never the resolver's own: two entries of one payload that share a
+ * reference are collapsed by the structured clone the IPC boundary performs, and the second
+ * arrives in the renderer stripped of its fields.
+ */
+async function projectApplicationTarget(
+  target: DefaultApplicationTarget
+): Promise<ResolvedApplication> {
+  const identifier = target.bundleId || target.path
+  const projection = await appProvider.resolveApplication(identifier)
+  if (projection) {
+    return {
+      identifier: projection.identifier,
+      displayName: projection.displayName,
+      icon: projection.icon
+    }
+  }
+
+  return {
+    identifier,
+    displayName: target.displayName || path.basename(target.path, '.app'),
+    icon: null
+  }
+}
+
+/**
+ * Hand a file to one specific application.
+ *
+ * `open -a` rather than `shell.openPath`, which has no "with this app" form at all: it consults
+ * the association and would silently launch the default, turning every menu choice into the same
+ * action. `-a` takes the bundle as its own argv entry, and both paths arrive as argv rather than
+ * through a shell, so neither can inject arguments.
+ */
+async function openPathWithApplication(filePath: string, applicationPath: string): Promise<void> {
+  await execFileAsync('/usr/bin/open', ['-a', applicationPath, filePath], {
+    timeout: OPEN_WITH_TIMEOUT_MS
+  })
 }
 
 async function safeGetBatteryPercent(): Promise<number | null> {

@@ -1013,7 +1013,8 @@ describe('CommonChannelModule private helpers', () => {
       fileProviderMock.resolvePreviewResourcePath.mockResolvedValueOnce(null)
       await expect(handler?.({ path: '/etc/passwd' }, {})).resolves.toEqual({
         success: true,
-        application: null
+        application: null,
+        candidates: []
       })
       expect(execFileMock).not.toHaveBeenCalled()
 
@@ -1027,7 +1028,14 @@ describe('CommonChannelModule private helpers', () => {
           identifier: 'com.apple.Preview',
           displayName: 'Preview',
           icon: 'tfile:///icons/com.apple.Preview.png'
-        }
+        },
+        candidates: [
+          {
+            identifier: 'com.apple.Preview',
+            displayName: 'Preview',
+            icon: 'tfile:///icons/com.apple.Preview.png'
+          }
+        ]
       })
 
       // A bundle the app index has never seen falls back to the LaunchServices answer.
@@ -1048,7 +1056,14 @@ describe('CommonChannelModule private helpers', () => {
       )
       await expect(handler?.({ path: '/Users/demo/Downloads/scan.pdf' }, {})).resolves.toEqual({
         success: true,
-        application: { identifier: '/Applications/Preview.app', displayName: 'Preview', icon: null }
+        application: {
+          identifier: '/Applications/Preview.app',
+          displayName: 'Preview',
+          icon: null
+        },
+        candidates: [
+          { identifier: '/Applications/Preview.app', displayName: 'Preview', icon: null }
+        ]
       })
 
       // An OS-level failure to identify the app is reported as a degraded failure, not as an empty
@@ -1089,7 +1104,8 @@ describe('CommonChannelModule private helpers', () => {
         handler?.({ path: '/Users/demo/Downloads/unassociated.bin' }, {})
       ).resolves.toEqual({
         success: true,
-        application: null
+        application: null,
+        candidates: []
       })
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
