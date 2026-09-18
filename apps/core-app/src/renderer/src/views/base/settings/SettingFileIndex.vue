@@ -283,6 +283,7 @@ async function loadSourceDiagnostics() {
     sourceDiagnostics.value = null
     toast.error(t('settings.settingFileIndex.sourceDiagnosticsLoadFailed'))
   } finally {
+    lastDiagnosticsLoadAt = Date.now()
     sourceDiagnosticsLoading.value = false
   }
 }
@@ -724,6 +725,14 @@ function coerceNumberInput(value: string | number): number {
 let unsubscribeProgress: (() => void) | null = null
 let statusCheckInterval: ReturnType<typeof setInterval> | null = null
 let rebuildSettleTimer: ReturnType<typeof setTimeout> | null = null
+let lastDiagnosticsLoadAt = 0
+
+// Scan progress events arrive continuously while indexing, and each one used to
+// trigger a full diagnostics load. That handler counts rows across the whole
+// file index, so during a scan this ran every ~6s and blocked the main process
+// for seconds at a time. The periodic timer below already keeps the panel
+// fresh; progress events only top it up once the data is genuinely stale.
+const PROGRESS_DIAGNOSTICS_MIN_INTERVAL_MS = 30_000
 
 // Everything below the status group is advanced-only; loading (and polling) it
 // while hidden surfaced failure toasts for sections the user could not see.
@@ -750,7 +759,9 @@ onMounted(() => {
     estimatedTimeRemaining.value = progress?.estimatedRemainingMs ?? null
     estimatedTimeStatus.value = progress?.estimateStatus ?? null
     checkStatus()
-    if (showAdvancedSettings.value) loadSourceDiagnostics()
+    if (!showAdvancedSettings.value) return
+    if (Date.now() - lastDiagnosticsLoadAt < PROGRESS_DIAGNOSTICS_MIN_INTERVAL_MS) return
+    loadSourceDiagnostics()
   })
 
   statusCheckInterval = setInterval(() => {
