@@ -1298,7 +1298,6 @@
     },
     "records": {
       "title": "Recognition records",
-      "description": "What you said, what it heard, and what it finally wrote — each one kept here.",
       "empty": "No recognition records yet.",
       "emptyText": "No text generated",
       "clear": "Clear records",
@@ -1317,6 +1316,12 @@
       "tokensUnavailable": "Not returned by channel",
       "channel": "Channel",
       "error": "Error",
+      "columns": {
+        "text": "Transcript",
+        "capturedAt": "Captured",
+        "status": "Status",
+        "model": "Model"
+      },
       "status": {
         "success": "Success",
         "empty": "No content",

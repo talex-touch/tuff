@@ -4,13 +4,14 @@
   "version": "2.0.0",
   "description": "Export unplugin for talex-touch",
   "license": "MIT",
-  "homepage": "https://github.com/talex-touch/unplugin-export-plugin#readme",
+  "homepage": "https://tuff.tagzxia.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/talex-touch/unplugin-export-plugin.git"
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "packages/unplugin-export-plugin"
   },
   "bugs": {
-    "url": "https://github.com/talex-touch/unplugin-export-plugin/issues"
+    "url": "https://github.com/talex-touch/tuff/issues"
   },
   "keywords": [
     "unplugin",

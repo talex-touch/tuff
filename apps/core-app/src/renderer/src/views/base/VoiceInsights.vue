@@ -4,14 +4,18 @@ import type {
   VoiceRecognitionRecord
 } from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { CSSProperties } from 'vue'
+import type { DataTableColumn } from '@talex-touch/tuffex/data-table'
 import type { DialogButton } from '@talex-touch/tuffex/dialog'
+import type { StatusTone } from '@talex-touch/tuffex/status-badge'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCard } from '@talex-touch/tuffex/card'
+import { TxDataTable } from '@talex-touch/tuffex/data-table'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import { TxPagination } from '@talex-touch/tuffex/pagination'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
 import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -189,6 +193,13 @@ const RECORDS_PER_PAGE = 12
 const menuOpen = ref(false)
 const recordsOpen = ref(false)
 const recordPage = ref(1)
+/**
+ * Which row is opened out below the table.
+ *
+ * One at a time, and held by id rather than by index: paging swaps the whole slice, and an index
+ * would keep the panel open on whatever row happened to land in that position.
+ */
+const expandedRecordId = ref<string | null>(null)
 const recordPageCount = computed(() =>
   Math.max(1, Math.ceil(records.value.length / RECORDS_PER_PAGE))
 )
@@ -199,6 +210,9 @@ const pagedRecords = computed(() => {
   const start = (page - 1) * RECORDS_PER_PAGE
   return records.value.slice(start, start + RECORDS_PER_PAGE)
 })
+const expandedRecord = computed<VoiceRecognitionRecord | null>(
+  () => pagedRecords.value.find((record) => record.id === expandedRecordId.value) ?? null
+)
 const showSkeleton = useDeferredLoading(() => !hasLoaded.value && !loadFailed.value)
 let loadRevision = 0
 let disposed = false
@@ -666,6 +680,7 @@ async function clearRecords(): Promise<void> {
   try {
     await voiceSdk.clearRecognitionRecords()
     records.value = []
+    expandedRecordId.value = null
     toast.success(t('voiceInsights.records.clearSuccess'))
   } catch {
     toast.error(t('voiceInsights.records.clearFailed'))
@@ -704,14 +719,59 @@ function recordAudioLabel(record: VoiceRecognitionRecord): string {
   })
 }
 
+/**
+ * The status tones.
+ *
+ * `empty` is not a failure — the recogniser ran and heard nothing worth writing — so it reads as
+ * muted rather than as a warning the user is meant to act on.
+ */
+const RECORD_STATUS_TONES: Record<VoiceRecognitionRecord['status'], StatusTone> = {
+  success: 'success',
+  empty: 'muted',
+  failed: 'danger',
+  cancelled: 'warning'
+}
+
+function recordStatusTone(status: VoiceRecognitionRecord['status']): StatusTone {
+  return RECORD_STATUS_TONES[status]
+}
+
+function recordTitle(record: VoiceRecognitionRecord): string {
+  return record.text || record.rawText || t('voiceInsights.records.emptyText')
+}
+
+/**
+ * Four columns, and the transcript is the only one that flexes.
+ *
+ * The other three are given fixed widths so the times line up down the page and the badges sit in
+ * one column rather than wherever the text before them happened to end.
+ */
+const recordColumns = computed<DataTableColumn<VoiceRecognitionRecord>[]>(() => [
+  { key: 'text', title: t('voiceInsights.records.columns.text'), auto: true },
+  {
+    key: 'capturedAt',
+    title: t('voiceInsights.records.columns.capturedAt'),
+    width: 150,
+    nowrap: true
+  },
+  { key: 'status', title: t('voiceInsights.records.columns.status'), width: 96, nowrap: true },
+  { key: 'model', title: t('voiceInsights.records.columns.model'), width: 176, nowrap: true }
+])
+
+/** Clicking the open row closes it: the row is the control, so it has to work both ways. */
+function toggleRecord(record: VoiceRecognitionRecord): void {
+  expandedRecordId.value = expandedRecordId.value === record.id ? null : record.id
+}
+
 onMounted(() => {
   void loadInsights()
 })
 
 function openRecords(): void {
   // Back to the first page each time. Reopening on page 7 of a log you last read yesterday is a
-  // state nobody asked to be remembered.
+  // state nobody asked to be remembered — and neither is whichever row was open then.
   recordPage.value = 1
+  expandedRecordId.value = null
   recordsOpen.value = true
 }
 
@@ -1149,12 +1209,15 @@ onBeforeUnmount(() => {
     <TxDrawer
       v-model:visible="recordsOpen"
       :title="t('voiceInsights.records.title')"
-      size="560px"
+      size="728px"
       data-testid="voice-insights-records"
     >
       <div class="VoiceInsights-Records">
+        <!--
+          No blurb. The drawer's own title already says what this is, and the sentence under it
+          repeated that in more words — so the first thing under the heading is the log itself.
+        -->
         <header class="VoiceInsights-RecordsHeading">
-          <p>{{ t('voiceInsights.records.description') }}</p>
           <TxButton
             variant="bare"
             type="danger"
@@ -1168,73 +1231,44 @@ onBeforeUnmount(() => {
           </TxButton>
         </header>
 
-        <div v-if="records.length === 0" class="VoiceInsights-RecordsEmpty">
-          {{ t('voiceInsights.records.empty') }}
-        </div>
-        <div v-else class="VoiceInsights-RecordList">
-          <details v-for="record in pagedRecords" :key="record.id" class="VoiceInsights-Record">
-            <summary>
-              <span class="VoiceInsights-RecordSummaryMain">
-                <strong>{{
-                  record.text || record.rawText || t('voiceInsights.records.emptyText')
-                }}</strong>
-                <small>{{ recordDateLabel(record.capturedAt) }}</small>
-              </span>
-              <span class="VoiceInsights-RecordSummaryMeta">
-                <span :data-status="record.status">{{ recordStatusLabel(record.status) }}</span>
-                <span>{{ record.model || record.channel || '—' }}</span>
-              </span>
-            </summary>
-            <div class="VoiceInsights-RecordDetails">
-              <audio
-                v-if="record.audioUrl"
-                controls
-                preload="none"
-                :src="record.audioUrl"
-                :aria-label="t('voiceInsights.records.audioLabel')"
-              />
-              <p class="VoiceInsights-RecordAudioMeta">{{ recordAudioLabel(record) }}</p>
-              <dl>
-                <div>
-                  <dt>{{ t('voiceInsights.records.rawText') }}</dt>
-                  <dd>{{ record.rawText || '—' }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.finalText') }}</dt>
-                  <dd>{{ record.text || '—' }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.duration') }}</dt>
-                  <dd>
-                    {{ record.audioDurationMs ? formatDuration(record.audioDurationMs) : '—' }}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.recognitionDuration') }}</dt>
-                  <dd>
-                    {{
-                      record.recognitionDurationMs
-                        ? formatDuration(record.recognitionDurationMs)
-                        : '—'
-                    }}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.tokens') }}</dt>
-                  <dd>{{ recordTokenLabel(record) }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('voiceInsights.records.channel') }}</dt>
-                  <dd>{{ record.channel || record.providerId || '—' }}</dd>
-                </div>
-                <div v-if="record.errorCode">
-                  <dt>{{ t('voiceInsights.records.error') }}</dt>
-                  <dd>{{ record.errorCode }}</dd>
-                </div>
-              </dl>
-            </div>
-          </details>
-        </div>
+        <!--
+          A table, not a stack of cards.
+
+          Every record carries the same four facts, and a card per record turned four aligned
+          columns into twelve ragged blocks. The transcript that was hidden behind a disclosure
+          triangle is now the first column, so the log is readable without opening anything; the
+          audio and the full field list open out below the table when a row is picked.
+        -->
+        <TxDataTable
+          :columns="recordColumns"
+          :data="pagedRecords"
+          :empty-text="t('voiceInsights.records.empty')"
+          row-key="id"
+          table-layout="fixed"
+          class="VoiceInsights-RecordTable"
+          data-testid="voice-insights-records-table"
+          highlight-selected
+          :selected-keys="expandedRecordId ? [expandedRecordId] : []"
+          @row-click="toggleRecord($event.row)"
+        >
+          <template #cell-text="{ row }">
+            <span class="VoiceInsights-RecordText">{{ recordTitle(row) }}</span>
+          </template>
+          <template #cell-capturedAt="{ row }">
+            <span class="VoiceInsights-RecordTime">{{ recordDateLabel(row.capturedAt) }}</span>
+          </template>
+          <template #cell-status="{ row }">
+            <TxStatusBadge
+              size="sm"
+              :status="recordStatusTone(row.status)"
+              :text="recordStatusLabel(row.status)"
+              :data-status="row.status"
+            />
+          </template>
+          <template #cell-model="{ row }">
+            <span class="VoiceInsights-RecordModel">{{ row.model || row.channel || '—' }}</span>
+          </template>
+        </TxDataTable>
 
         <TxPagination
           v-if="recordPageCount > 1"
@@ -1244,6 +1278,63 @@ onBeforeUnmount(() => {
           :total="records.length"
           data-testid="voice-insights-records-pagination"
         />
+
+        <section
+          v-if="expandedRecord"
+          class="VoiceInsights-RecordDetails"
+          data-testid="voice-insights-record-details"
+        >
+          <audio
+            v-if="expandedRecord.audioUrl"
+            controls
+            preload="none"
+            :src="expandedRecord.audioUrl"
+            :aria-label="t('voiceInsights.records.audioLabel')"
+          />
+          <p class="VoiceInsights-RecordAudioMeta">{{ recordAudioLabel(expandedRecord) }}</p>
+          <dl>
+            <div>
+              <dt>{{ t('voiceInsights.records.rawText') }}</dt>
+              <dd>{{ expandedRecord.rawText || '—' }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('voiceInsights.records.finalText') }}</dt>
+              <dd>{{ expandedRecord.text || '—' }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('voiceInsights.records.duration') }}</dt>
+              <dd>
+                {{
+                  expandedRecord.audioDurationMs
+                    ? formatDuration(expandedRecord.audioDurationMs)
+                    : '—'
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ t('voiceInsights.records.recognitionDuration') }}</dt>
+              <dd>
+                {{
+                  expandedRecord.recognitionDurationMs
+                    ? formatDuration(expandedRecord.recognitionDurationMs)
+                    : '—'
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ t('voiceInsights.records.tokens') }}</dt>
+              <dd>{{ recordTokenLabel(expandedRecord) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('voiceInsights.records.channel') }}</dt>
+              <dd>{{ expandedRecord.channel || expandedRecord.providerId || '—' }}</dd>
+            </div>
+            <div v-if="expandedRecord.errorCode">
+              <dt>{{ t('voiceInsights.records.error') }}</dt>
+              <dd>{{ expandedRecord.errorCode }}</dd>
+            </div>
+          </dl>
+        </section>
       </div>
     </TxDrawer>
 
@@ -1903,117 +1994,70 @@ onBeforeUnmount(() => {
   background: var(--shell-border);
 }
 
+/*
+ * No padding of its own.
+ *
+ * `TxDrawer` already pads its body by 20px; the 32px this carried sat on top of that, so the log
+ * opened 52px in from a panel whose own header sits at 20px. The drawer owns the inset.
+ */
 .VoiceInsights-Records {
-  padding: var(--shell-space-6);
+  display: grid;
+  gap: var(--shell-space-3);
 }
 
+/* One button, so it goes where a lone action goes: the end of the row. */
 .VoiceInsights-RecordsHeading {
   display: flex;
-  gap: var(--shell-space-4);
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-
-  h3 {
-    margin: 0;
-    font-size: var(--shell-fs-lg);
-  }
-
-  p {
-    max-width: 65ch;
-    margin: var(--shell-space-1) 0 0;
-    color: var(--shell-text-secondary);
-    font-size: var(--shell-fs-body);
-  }
+  justify-content: flex-end;
 }
 
 /* It was sitting on the last record. A pager is a separate thing from the list it pages. */
 .VoiceInsights-RecordsPager {
   display: flex;
-  margin-top: var(--shell-space-5);
   justify-content: center;
 }
 
-.VoiceInsights-RecordsEmpty {
-  margin-top: var(--shell-space-4);
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-body);
+/*
+ * The log's own table language: neutral hover, quieter rules, and rows that read as one block
+ * rather than as a striped grid. The variables are the ones `TxDataTable` publishes for exactly
+ * this, so none of it needs an override on specificity.
+ */
+.VoiceInsights-RecordTable {
+  --tx-data-table-row-hover-bg: color-mix(in srgb, var(--shell-text-primary) 5%, transparent);
+  --tx-data-table-row-selected-bg: color-mix(in srgb, var(--shell-text-primary) 8%, transparent);
+
+  border: 1px solid var(--shell-border);
 }
 
 /*
- * `minmax(0, 1fr)`, not `1fr`.
+ * One line per row, ellipsed.
  *
- * A grid item's default `min-width: auto` is its content's, and each record's title is a single
- * nowrap line. One long sentence pushed the track wider than the card and the whole list hung out
- * past its right edge — the ellipsis further down never got a chance, because nothing above it
- * was ever narrow enough to need one.
+ * The transcript is the widest thing on the screen and the only column that flexes; letting it
+ * wrap would give every row a different height and take the table's one advantage — a column of
+ * times you can read down — straight back out.
  */
-.VoiceInsights-RecordList {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--shell-space-2);
-  margin-top: var(--shell-space-4);
+.VoiceInsights-RecordText,
+.VoiceInsights-RecordModel {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.VoiceInsights-Record {
-  min-width: 0;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-md);
-  background: var(--shell-surface);
-
-  summary {
-    display: flex;
-    gap: var(--shell-space-4);
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--shell-space-3) var(--shell-space-4);
-    cursor: pointer;
-    list-style: none;
-  }
-
-  summary::-webkit-details-marker {
-    display: none;
-  }
-}
-
-.VoiceInsights-RecordSummaryMain,
-.VoiceInsights-RecordSummaryMeta {
-  display: flex;
-  min-width: 0;
-  gap: var(--shell-space-2);
-  align-items: baseline;
-}
-
-.VoiceInsights-RecordSummaryMain {
-  flex: 1 1 auto;
-  flex-direction: column;
-
-  strong {
-    overflow: hidden;
-    max-width: 100%;
-    color: var(--shell-text-primary);
-    font-size: var(--shell-fs-body);
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  small {
-    color: var(--shell-text-muted);
-    font-size: var(--shell-fs-caption);
-  }
-}
-
-.VoiceInsights-RecordSummaryMeta {
-  flex: 0 0 auto;
+.VoiceInsights-RecordTime,
+.VoiceInsights-RecordModel {
   color: var(--shell-text-secondary);
   font-size: var(--shell-fs-caption);
 }
 
+/* The picked row, opened out. Bordered rather than boxed: it belongs to the table above it. */
 .VoiceInsights-RecordDetails {
   display: grid;
   gap: var(--shell-space-3);
-  padding: 0 var(--shell-space-4) var(--shell-space-4);
+  padding: var(--shell-space-4);
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-surface);
 
   audio {
     width: min(100%, 520px);
@@ -2051,14 +2095,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 680px) {
-  .VoiceInsights-Records {
-    padding: var(--shell-space-5);
-  }
-
-  .VoiceInsights-RecordSummaryMeta {
-    display: none;
-  }
-
   .VoiceInsights-RecordDetails dl {
     grid-template-columns: minmax(0, 1fr);
   }

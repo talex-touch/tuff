@@ -1298,7 +1298,6 @@
     },
     "records": {
       "title": "识别记录",
-      "description": "每次说了什么、机器听成了什么、最后写出去的是什么，都在这儿。",
       "empty": "还没有可查看的识别记录。",
       "emptyText": "未生成文本",
       "clear": "清空记录",
@@ -1317,6 +1316,12 @@
       "tokensUnavailable": "渠道未返回",
       "channel": "渠道",
       "error": "错误",
+      "columns": {
+        "text": "内容",
+        "capturedAt": "时间",
+        "status": "状态",
+        "model": "模型"
+      },
       "status": {
         "success": "成功",
         "empty": "无有效内容",

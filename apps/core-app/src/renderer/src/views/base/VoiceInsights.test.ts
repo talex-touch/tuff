@@ -319,9 +319,9 @@ describe('VoiceInsights page composition', () => {
     const drawer = wrapper.find('[data-testid="voice-insights-records"]')
     expect(drawer.exists()).toBe(true)
     expect(drawer.attributes('data-open')).toBe('false')
-    // The list is inside it, not loose on the page.
-    expect(wrapper.find('.VoiceInsights-RecordList').exists()).toBe(true)
-    expect(drawer.find('.VoiceInsights-RecordList').exists()).toBe(true)
+    // The table is inside it, not loose on the page.
+    expect(wrapper.find('[data-testid="voice-insights-records-table"]').exists()).toBe(true)
+    expect(drawer.find('[data-testid="voice-insights-records-table"]').exists()).toBe(true)
 
     await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
     expect(wrapper.find('[data-testid="voice-insights-records"]').attributes('data-open')).toBe(
@@ -371,7 +371,7 @@ describe('VoiceInsights page composition', () => {
   it('pages the log', async () => {
     const wrapper = await mountManyRecords()
 
-    expect(wrapper.findAll('.VoiceInsights-Record')).toHaveLength(12)
+    expect(wrapper.findAll('.tx-data-table__row')).toHaveLength(12)
     const pager = wrapper.find('[data-testid="voice-insights-records-pagination"]')
     expect(pager.exists()).toBe(true)
     expect(pager.attributes('data-total')).toBe('30')
@@ -507,20 +507,36 @@ describe('VoiceInsights page composition', () => {
 
     wrapper.unmount()
   })
-  it('loads host recognition records with aggregates and renders audio, transcript, and metadata', async () => {
+  /**
+   * The log reads as a table: the transcript is a column, not something behind a disclosure
+   * triangle. Picking a row opens the audio and the full field list below it.
+   */
+  it('lists records in a table and opens the picked row underneath', async () => {
     const wrapper = await mountPage()
 
     expect(transportSendMock).toHaveBeenCalledWith(voiceApiEvents.getInsights, undefined)
     expect(transportSendMock).toHaveBeenCalledWith(voiceApiEvents.getRecognitionRecords, undefined)
 
-    const record = wrapper.find('.VoiceInsights-Record')
-    expect(record.exists()).toBe(true)
-    expect(record.find('audio').attributes('src')).toBe('tfile://voice/record-1.wav')
-    expect(record.text()).toContain('um raw words')
-    expect(record.text()).toContain('Final words.')
-    expect(record.text()).toContain('paraformer-realtime-v2')
-    expect(record.text()).toContain('Bailian workspace')
-    expect(record.find('[data-status="success"]').exists()).toBe(true)
+    const row = wrapper.find('.tx-data-table__row')
+    expect(row.exists()).toBe(true)
+    // Readable without opening anything.
+    expect(row.text()).toContain('Final words.')
+    expect(row.text()).toContain('paraformer-realtime-v2')
+    expect(row.find('[data-status="success"]').exists()).toBe(true)
+
+    // Closed until asked for: the audio element is what makes a row cost anything.
+    expect(wrapper.find('[data-testid="voice-insights-record-details"]').exists()).toBe(false)
+
+    await row.trigger('click')
+    const details = wrapper.find('[data-testid="voice-insights-record-details"]')
+    expect(details.exists()).toBe(true)
+    expect(details.find('audio').attributes('src')).toBe('tfile://voice/record-1.wav')
+    expect(details.text()).toContain('um raw words')
+    expect(details.text()).toContain('Bailian workspace')
+
+    // The row is the control, so it closes as well as opens.
+    await row.trigger('click')
+    expect(wrapper.find('[data-testid="voice-insights-record-details"]').exists()).toBe(false)
 
     wrapper.unmount()
   })
