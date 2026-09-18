@@ -6,6 +6,14 @@
   },
   "author": "TalexDreamSoul<TalexDreamSoul@gmail.com>",
   "description": "TuffEx - Vue 3 UI source package for the Tuff ecosystem.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "packages/tuffex"
+  },
+  "homepage": "https://tuff.tagzxia.com",
+  "bugs": "https://github.com/talex-touch/tuff/issues",
   "keywords": [
     "tuff",
     "tuffex",

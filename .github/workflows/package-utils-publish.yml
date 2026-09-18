@@ -29,6 +29,8 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      # Required for npm OIDC trusted publishing; see package-tuff-cli-publish.yml.
+      id-token: write
 
     steps:
       - name: Checkout Code
@@ -114,8 +116,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "NPM_TOKEN is required."
-            exit 1
+            echo "NPM_TOKEN is empty; relying on OIDC trusted publishing."
           fi
 
       # Was a bare `npm publish` in packages/utils. npm does not understand pnpm's `catalog:`

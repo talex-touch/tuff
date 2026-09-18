@@ -29,6 +29,8 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      # Required for npm OIDC trusted publishing; see package-tuff-cli-publish.yml.
+      id-token: write
 
     steps:
       - name: Checkout Code
@@ -139,9 +141,12 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Under OIDC there is no token to check and `npm whoami` cannot see the
+          # identity anyway -- it only reports token auth, never the id-token exchange
+          # that happens inside `npm publish`. So this stays a token-only preflight.
           if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "NPM_TOKEN is required."
-            exit 1
+            echo "NPM_TOKEN is empty; relying on OIDC trusted publishing."
+            exit 0
           fi
 
           if ! npm whoami >/tmp/npm-whoami.txt 2>/tmp/npm-whoami.err; then

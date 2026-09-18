@@ -37,6 +37,10 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      # Required for npm OIDC trusted publishing: lets the runner mint the short-lived
+      # id-token that replaces NPM_TOKEN. Without it npm silently falls back to the
+      # token and a missing trusted-publisher config surfaces as an opaque `E404 ... PUT`.
+      id-token: write
     env:
       NEXUS_BASE_URL: ${{ vars.NEXUS_SYNC_BASE_URL || 'https://tuff.tagzxia.com' }}
       NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
@@ -67,9 +71,11 @@ jobs:
         run: |
           set -euo pipefail
 
+          # NPM_TOKEN is the fallback, not the requirement: with `id-token: write` the npm
+          # CLI authenticates over OIDC and never reads this. Failing hard on an empty token
+          # would break the day it is finally revoked, so only warn.
           if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "NPM_TOKEN is required."
-            exit 1
+            echo "NPM_TOKEN is empty; relying on OIDC trusted publishing."
           fi
 
           declare -a PACKAGE_NAMES=(

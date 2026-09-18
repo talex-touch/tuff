@@ -6,8 +6,9 @@
   "author": "TalexDreamSoul",
   "license": "MPL-2.0",
   "repository": {
-    "url": "https://github.com/talex-touch/talex-touch.git",
-    "type": "git"
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "packages/utils"
   },
   "keywords": [
     "vue",
