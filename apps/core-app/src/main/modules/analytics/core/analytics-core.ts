@@ -395,6 +395,19 @@ export class AnalyticsCore {
     const memoryUsageRatio = (system?.memoryUsed ?? 0) / memoryTotal
     const heapUsageRatio = (system?.heapUsed ?? 0) / heapTotal
 
+    // Sorted, and key=count rather than merely the number of keys: a swap between two models, or
+    // a shift in how the recognitions are distributed across them, has to move the signature.
+    // Insertion order would make two equivalent maps disagree; cardinality alone would make two
+    // different ones agree.
+    const voiceBuckets = [
+      ...Object.entries(voice?.models ?? {})
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([model, count]) => `m:${model}=${count}`),
+      ...Object.entries(voice?.channels ?? {})
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([channel, count]) => `c:${channel}=${count}`)
+    ].join(',')
+
     return [
       Math.round((system?.cpuUsage ?? 0) / 5),
       Math.round(memoryUsageRatio * 20),
@@ -405,7 +418,9 @@ export class AnalyticsCore {
       Math.floor((search?.totalSearches ?? 0) / 10),
       Math.round((search?.avgDuration ?? 0) / 25),
       Math.floor((voice?.totalRecognitions ?? 0) / 10),
+      Math.round((voice?.avgRecordingDuration ?? 0) / 250),
       Math.round((voice?.avgRecognitionDuration ?? 0) / 250),
+      voiceBuckets,
       pluginCount,
       moduleCount
     ].join('|')

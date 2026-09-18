@@ -31,15 +31,18 @@ function formatDuration(durationMs: number): string {
     return t('voiceInsights.units.milliseconds', { count: Math.round(durationMs) })
   }
 
-  const totalSeconds = Math.round(durationMs / 1_000)
-  if (totalSeconds < 60) {
+  // Branch on the raw value, not on the rounded one: rounding first sends 59.5s through the
+  // minutes branch and prints "1 min 0 s" for a clip that never reached a minute.
+  if (durationMs < 60_000) {
     return t('voiceInsights.units.seconds', {
       count: secondsFormatter.value.format(durationMs / 1_000)
     })
   }
 
-  // Past a minute the sub-second digit is noise, and rounding an already-rounded value again is
-  // how 59.6s turns into "0 min 60 s".
+  // Past a minute the sub-second digit is noise, so the seconds are rounded once, here, and the
+  // minutes are divided out of that same rounded number — which is why 59.6s cannot read
+  // "0 min 60 s".
+  const totalSeconds = Math.round(durationMs / 1_000)
   return t('voiceInsights.units.minutesSeconds', {
     minutes: Math.floor(totalSeconds / 60),
     seconds: totalSeconds % 60
