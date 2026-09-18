@@ -291,6 +291,33 @@ export function isDuplicateInstance(): boolean {
 
 let hasLoggedReportOnlyCspDelivery = false
 
+/**
+ * Permission denials repeat per request, not per permission — one day of dev logs
+ * has `geolocation` 120 times, `web-app-installation` 120 times and
+ * `background-sync` 12 times (252 identical warns), each producing its own line.
+ * One line per permission per window, carrying how many were folded into it, keeps
+ * the signal and drops the repetition.
+ */
+const DENIED_PERMISSION_LOG_WINDOW_MS = 60_000
+const deniedPermissionLogState = new Map<string, { lastAt: number; suppressed: number }>()
+
+function logDeniedPermissionOnce(permission: string): void {
+  const now = Date.now()
+  const state = deniedPermissionLogState.get(permission) ?? { lastAt: 0, suppressed: 0 }
+  if (now - state.lastAt < DENIED_PERMISSION_LOG_WINDOW_MS) {
+    state.suppressed += 1
+    deniedPermissionLogState.set(permission, state)
+    return
+  }
+  const suppressed = state.suppressed
+  state.lastAt = now
+  state.suppressed = 0
+  deniedPermissionLogState.set(permission, state)
+  mainLog.warn('Denied a permission request on the default session', {
+    meta: { permission, suppressed: suppressed > 0 ? suppressed : undefined }
+  })
+}
+
 void app.whenReady().then(() => {
   // Installed here rather than in a module: modules load after this, and some of
   // them create windows. A window that loads before the handlers are attached
@@ -298,9 +325,7 @@ void app.whenReady().then(() => {
   installDefaultSessionPermissionPolicy(session.defaultSession, {
     onDenied: (permission) => {
       if (getCurrentTouchApp()?.isQuitting === true) return
-      mainLog.warn('Denied a permission request on the default session', {
-        meta: { permission }
-      })
+      logDeniedPermissionOnce(permission)
     }
   })
 

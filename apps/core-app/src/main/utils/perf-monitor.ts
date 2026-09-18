@@ -16,6 +16,7 @@ import {
   IPC_ERROR_MS,
   IPC_LOG_THROTTLE_MS,
   IPC_WARN_MS,
+  LOOP_DIAGNOSTIC_CAUSE_THROTTLE_MS,
   LOOP_DIAGNOSTIC_ERROR_THROTTLE_MS,
   LOOP_DIAGNOSTIC_WARN_THROTTLE_MS,
   LOOP_LAG_ERROR_MS,
@@ -764,8 +765,14 @@ export class PerfMonitor {
     }
     this.pushIncident(incident)
 
-    const shouldLog = this.shouldLog(`event_loop.lag:${severity}`, LOOP_LOG_THROTTLE_MS, now)
-    if (shouldLog || lagMs >= 500) {
+    // `lagMs >= 500` used to bypass this throttle outright, so a machine whose
+    // median lag sits above 500ms rebuilt the whole diagnostic snapshot (context
+    // table + polling diagnostics with three sorts + heap stats) on every tick.
+    // The exemption is gone: severe lags are frequent enough that they have to
+    // share the ordinary budget, and everything expensive below is built only
+    // once this gate passes.
+    const shouldEmit = this.shouldLog(`event_loop.lag:${severity}`, LOOP_LOG_THROTTLE_MS, now)
+    if (shouldEmit) {
       const contexts = getPerfContextSnapshot(3)
       const heapNow = Date.now()
       const heapStats =
@@ -886,9 +893,19 @@ export class PerfMonitor {
       }
       const diagnosticThrottleMs =
         severity === 'error' ? LOOP_DIAGNOSTIC_ERROR_THROTTLE_MS : LOOP_DIAGNOSTIC_WARN_THROTTLE_MS
+      // `diagnosticCauseChanged` is a fast path for a genuinely new cause, but the
+      // key embeds the duration-sorted top polling task, so it churns on almost every
+      // tick: the user's dev log has 622 distinct keys across 1,266 lag events, which
+      // made the `||` short-circuit bypass the throttle entirely. Keep the fast path,
+      // but floor it so a flapping key collapses into one line per window.
       const shouldLogDiagnostic =
         lagMs >= 500 &&
-        (diagnosticCauseChanged ||
+        ((diagnosticCauseChanged &&
+          this.shouldLog(
+            `event_loop.lag:diagnostic:cause:${severity}`,
+            LOOP_DIAGNOSTIC_CAUSE_THROTTLE_MS,
+            now
+          )) ||
           (lagMs >= LOOP_LAG_ERROR_MS &&
             this.shouldLog(`event_loop.lag:diagnostic:${severity}`, diagnosticThrottleMs, now)))
       const messageHints = [
@@ -936,7 +953,7 @@ export class PerfMonitor {
             }
           : undefined
       })
-      if (shouldLog) {
+      if (shouldEmit) {
         if (severity === 'error') {
           loopPerfLog.error(message, { meta })
         } else {
@@ -950,7 +967,7 @@ export class PerfMonitor {
         })
       }
 
-      if (shouldLog) {
+      if (shouldEmit) {
         appendWorkflowDebugLog({
           hid: 'H4',
           loc: 'perf-monitor.recordEventLoopLag',

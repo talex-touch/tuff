@@ -166,6 +166,7 @@ const DEFAULT_BUSY_BASE_DELAY_MS = 200
 const DEFAULT_BUSY_MAX_DELAY_MS = 3_000
 const BUSY_BACKOFF_JITTER_RATIO = 0.2
 const BUSY_RETRY_LOG_THROTTLE_MS = 30_000
+const DROP_LOG_THROTTLE_MS = 10_000
 const DEFAULT_BUSY_RETRIES_BY_PRIORITY: Record<DbWritePriority, number> = {
   critical: 6,
   interactive: 3,
@@ -952,7 +953,17 @@ export class DbWriteScheduler {
 
       // Drop stale tasks under queue pressure.
       if (this.shouldDropTaskByWait(task, waitedMs)) {
-        log.warn(`Dropping stale task after ${waitedMs}ms: ${task.label}`)
+        // One line per dropped task floods the log during bulk indexing: a single
+        // home-wide file scan shed 534 icon writes and produced 1,827 lines in 11s.
+        // The loss is already counted by `recordTaskSettled` and surfaced in label
+        // stats, so the log is a per-label throttle carrying a suppressed counter.
+        const dropLogState = nextSqliteBusyRetryLogState(`drop:${task.label}`, DROP_LOG_THROTTLE_MS)
+        if (dropLogState.shouldLog) {
+          log.warn(
+            `Dropping stale task after ${waitedMs}ms: ${task.label}` +
+              (dropLogState.suppressed > 0 ? ` (suppressed ${dropLogState.suppressed})` : '')
+          )
+        }
         this.recordTaskSettled(task.label, waitedMs, 'dropped')
         task.reject(
           new DbWriteDroppedError(

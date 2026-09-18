@@ -45,6 +45,12 @@ export const RENDERER_LOG_THROTTLE_MS = 5_000
 export const LOOP_LOG_THROTTLE_MS = 3_000
 export const LOOP_SLEEP_SKIP_LOG_THROTTLE_MS = 60_000
 export const LOOP_DIAGNOSTIC_WARN_THROTTLE_MS = 120_000
+/**
+ * Floor for the `diagnosticCauseChanged` fast path. The cause key embeds the
+ * duration-sorted top polling task, so under sustained load it changes nearly every
+ * tick and the `||` short-circuit turned the diagnostic throttle into a no-op.
+ */
+export const LOOP_DIAGNOSTIC_CAUSE_THROTTLE_MS = 15_000
 export const LOOP_DIAGNOSTIC_ERROR_THROTTLE_MS = 30_000
 
 export const PERF_SUMMARY_LOG_SLOW_MS = 2_000

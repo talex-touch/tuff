@@ -1,3 +1,5 @@
+import { getBooleanEnv } from '../../env'
+
 type ConsoleLike = Pick<typeof console, 'debug' | 'warn'>
 
 export interface AdaptiveTaskQueueOptions {
@@ -35,6 +37,20 @@ export interface AdaptiveTaskQueueOptions {
 
 const DEFAULT_YIELD_INTERVAL_MS = 17
 
+/**
+ * `logger.debug?.()` below defaults to `console`, so every call emitted two
+ * unconditional lines (start + completion) in every environment — 2,974 of the
+ * 3,884 lines written to stdout during a 10.6k-file index run (76%). Nothing read
+ * them; they are a debugging aid, so they are opt-in now.
+ */
+const TASK_QUEUE_LOGS_ENABLED = getBooleanEnv('TUFF_TASK_QUEUE_LOGS')
+
+/** Passing a noop logger avoids stdout spam while satisfying ConsoleLike. */
+const silentQueueLogger: ConsoleLike = {
+  debug: () => {},
+  warn: () => {},
+}
+
 async function delay(ms: number): Promise<void> {
   if (ms <= 0)
     return
@@ -61,7 +77,7 @@ export async function runAdaptiveTaskQueue<T>(
     estimatedTaskTimeMs = 1,
     yieldIntervalMs = DEFAULT_YIELD_INTERVAL_MS,
     maxBatchSize,
-    logger = console,
+    logger = TASK_QUEUE_LOGS_ENABLED ? console : silentQueueLogger,
     label = 'AdaptiveTaskQueue',
     onYield,
   } = options
