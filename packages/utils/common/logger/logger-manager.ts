@@ -165,15 +165,17 @@ export class LoggerManager {
   }
 
   /**
-   * Set global log level
+   * Set global log level.
+   *
+   * Delegates to `applyConfig()` rather than raising each logger in place: the old
+   * `if (logger.getLevel() < level)` loop only ever moved levels up, so turning a
+   * verbose-logs setting back off left every already-created logger stuck at DEBUG
+   * while newly created ones honoured the lower level. `applyConfig()` recomputes
+   * both directions and still lets an explicit per-module level override the global.
    */
   setGlobalLevel(level: LogLevel): void {
     this.config.globalLevel = logLevelToLowerString(level)
-    for (const logger of this.loggers.values()) {
-      if (logger.getLevel() < level) {
-        logger.setLevel(level)
-      }
-    }
+    this.applyConfig()
   }
 
   /**

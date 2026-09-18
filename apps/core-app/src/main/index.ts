@@ -5,6 +5,10 @@ import path from 'node:path'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import {
+  LogLevel as ModuleLogLevel,
+  loggerManager as moduleLoggerManager
+} from '@talex-touch/utils/common/logger'
 import { app, nativeTheme, protocol } from 'electron'
 import { resolveThemeModeFromStyle } from '../shared/theme/theme-mode'
 import { commonChannelModule } from './channel/common'
@@ -157,6 +161,14 @@ function applyLoggerConfig(appSettings: unknown): void {
     defaultLevel,
     levels
   })
+  // The module logger stack (`@talex-touch/utils/common/logger`, used by
+  // file-provider / file-system-watcher / app-provider / indexing-runtime / …) is a
+  // separate manager this config never reached: its `globalLevel` stayed at the
+  // hardcoded 'debug' forever, so unregistered namespaces printed debug in packaged
+  // builds too. Mirror the same default level here, and let `verboseLogs` relax it.
+  const moduleLogLevel =
+    verboseLogs || defaultLevel === 'debug' ? ModuleLogLevel.DEBUG : ModuleLogLevel.INFO
+  moduleLoggerManager.setGlobalLevel(moduleLogLevel)
   ;(globalThis as typeof globalThis & { __TALEX_VERBOSE_LOGS__?: boolean }).__TALEX_VERBOSE_LOGS__ =
     verboseLogs
 }
