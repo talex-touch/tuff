@@ -901,117 +901,14 @@ jobs:
             exit 1
           fi
 
+      # Was 109 lines of inline PowerShell that referenced no GitHub context -- pure filesystem
+      # assertions that could only ever be exercised by pushing a tag at a Windows runner. The
+      # logic now lives in a script with a `--self-test`, so a regression in it fails in CI
+      # rather than during a release.
       - name: Assert Windows Installer Exists
         if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          $distPath = "apps/core-app/dist"
-          $packageJsonPath = "apps/core-app/package.json"
-          $expectedVersion = (Get-Content -Path $packageJsonPath -Raw | ConvertFrom-Json).version
-          if ([string]::IsNullOrWhiteSpace($expectedVersion)) {
-            Write-Error "CoreApp package version is missing: $packageJsonPath"
-            exit 1
-          }
-          Write-Host "Checking for Windows installer in: $distPath"
-          Write-Host "Directory exists: $(Test-Path $distPath)"
-
-          if (-not (Test-Path $distPath)) {
-            Write-Error "Dist directory does not exist: $distPath"
-            exit 1
-          }
-
-          Write-Host ""
-          Write-Host "Listing all .exe files in dist:"
-          $allExeFiles = Get-ChildItem -Path $distPath -Recurse -Include "*.exe" -ErrorAction SilentlyContinue
-
-          if ($null -eq $allExeFiles -or $allExeFiles.Count -eq 0) {
-            Write-Host "  No .exe files found"
-            Write-Host ""
-            Write-Host "Checking if dist directory is empty..."
-            $allFiles = Get-ChildItem -Path $distPath -Recurse -ErrorAction SilentlyContinue
-            if ($null -eq $allFiles -or $allFiles.Count -eq 0) {
-              Write-Error "Dist directory exists but is empty. Build may have failed silently."
-              Write-Host "Build artifacts check failed. Please review the build step output above."
-              exit 1
-            } else {
-              Write-Host "Found $($allFiles.Count) files in dist (but no .exe files):"
-              $allFiles | Select-Object -First 10 FullName, PSIsContainer | Format-Table -AutoSize
-            }
-          } else {
-            $allExeFiles | ForEach-Object {
-              $fileSize = [math]::Round($_.Length / 1MB, 2)
-              Write-Host "  - $($_.Name) (Size: $fileSize MB, Path: $($_.FullName))"
-            }
-          }
-
-          Write-Host ""
-          Write-Host "Searching for installer with pattern: *-setup.exe"
-          $exists = $null
-
-          if ($null -ne $allExeFiles -and $allExeFiles.Count -gt 0) {
-            $exists = $allExeFiles | Where-Object { $_.Name -like "*-setup.exe" -or $_.Name -match "-setup\.exe$" }
-          }
-
-          if ($null -eq $exists -or $exists.Count -eq 0) {
-            Write-Host ""
-            Write-Host "Trying alternative search patterns..."
-
-            if ($null -ne $allExeFiles -and $allExeFiles.Count -gt 0) {
-              $alt1 = $allExeFiles | Where-Object { $_.Name -like "*setup*.exe" }
-              $alt2 = $allExeFiles | Where-Object { $_.Name -like "talex-touch*.exe" }
-
-              if ($null -ne $alt1 -and $alt1.Count -gt 0) {
-                Write-Host "Found files matching *setup*.exe:"
-                $alt1 | Select-Object FullName, Name | Format-Table -AutoSize
-              }
-
-              if ($null -ne $alt2 -and $alt2.Count -gt 0) {
-                Write-Host "Found files matching talex-touch*.exe:"
-                $alt2 | Select-Object FullName, Name | Format-Table -AutoSize
-              }
-            }
-
-            Write-Error "NSIS installer not found (*.exe with -setup) in $distPath"
-            Write-Host ""
-            Write-Host "Full directory structure:"
-            Get-ChildItem -Path $distPath -Recurse | Select-Object FullName, PSIsContainer | Format-Table -AutoSize
-            exit 1
-          } else {
-            Write-Host ""
-            Write-Host "Found installer(s):"
-            $exists | ForEach-Object {
-              $fileSize = [math]::Round($_.Length / 1MB, 2)
-              Write-Host "  - $($_.FullName) (Size: $fileSize MB)"
-            }
-          }
-          $expectedInstallerName = "tuff-$expectedVersion-setup.exe"
-          $versionedInstaller = $exists | Where-Object { $_.Name -eq $expectedInstallerName }
-          if ($null -eq $versionedInstaller -or $versionedInstaller.Count -eq 0) {
-            Write-Error "Expected versioned installer not found: $expectedInstallerName"
-            exit 1
-          }
-
-          $latestMetadata = Get-ChildItem -Path $distPath -Recurse -File -Filter "latest.yml" -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-          if ($null -eq $latestMetadata) {
-            Write-Error "Windows updater metadata latest.yml was not generated."
-            exit 1
-          }
-
-          $versionMatch = Select-String -Path $latestMetadata.FullName -Pattern '^version:\s*(.+)\s*$' |
-            Select-Object -First 1
-          if ($null -eq $versionMatch) {
-            Write-Error "Windows updater metadata has no version field: $($latestMetadata.FullName)"
-            exit 1
-          }
-
-          $metadataVersion = $versionMatch.Matches[0].Groups[1].Value.Trim()
-          if ($metadataVersion -ne $expectedVersion) {
-            Write-Error "Windows updater version mismatch: expected $expectedVersion, got $metadataVersion"
-            exit 1
-          }
-
-          Write-Host "Windows installer and updater metadata match CoreApp version: $expectedVersion"
+        shell: bash
+        run: node scripts/check-windows-installer-artifacts.mjs
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7

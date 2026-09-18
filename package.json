@@ -55,6 +55,8 @@
     "check:plugin-blocked-reasons:self-test": "node scripts/check-plugin-blocked-reasons.mjs --self-test",
     "check:module-size-ratchet": "node scripts/check-module-size-ratchet.mjs",
     "check:module-size-ratchet:self-test": "node scripts/check-module-size-ratchet.mjs --self-test",
+    "check:coreapp-ui-contract": "node scripts/check-coreapp-ui-contract.mjs",
+    "check:windows-installer-artifacts:self-test": "node scripts/check-windows-installer-artifacts.mjs --self-test",
     "check:audit-report-claims:self-test": "node scripts/check-audit-report-claims.mjs --self-test",
     "check:orphan-tests": "node scripts/check-orphan-tests.mjs",
     "check:orphan-tests:self-test": "node scripts/check-orphan-tests.mjs --self-test",

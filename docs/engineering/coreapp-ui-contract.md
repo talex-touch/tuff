@@ -21,6 +21,8 @@
 
 ## Validation
 
-- 本地 contract 扫描：`node "scripts/check-coreapp-ui-contract.mjs"`。
+- 本地 contract 扫描：`pnpm check:coreapp-ui-contract`。CI 的 `Check CoreApp UI contract` 步骤跑同一条命令。
+  该门禁此前 import 了工作区从未声明的 `globby`，每次调用都以 `ERR_MODULE_NOT_FOUND` 退出，实际一次也没跑过；
+  现已改用其余 `check-*` 脚本统一的 `readdirSync` 遍历。
 - 最近路径类型检查：`pnpm -C "apps/core-app" run typecheck:web`。
 - Icon 配置单测：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/tuffex/icon-config.test.ts" "src/renderer/src/components/base/tuff-icon-rendering.test.ts"`。

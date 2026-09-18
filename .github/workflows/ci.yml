@@ -211,6 +211,18 @@ jobs:
       - name: Check module size ratchet
         run: pnpm check:module-size-ratchet && pnpm check:module-size-ratchet:self-test
 
+      # The renderer's legacy UI primitives are frozen: existing callers in LEGACY_ALLOWED stay,
+      # new imports of them fail. The gate shipped unwired and importing `globby`, which no
+      # manifest declares, so every invocation would have died on ERR_MODULE_NOT_FOUND -- it had
+      # never run. Rewritten onto the `readdirSync` walk the sibling check-* scripts use.
+      - name: Check CoreApp UI contract
+        run: pnpm check:coreapp-ui-contract
+
+      # The release workflow calls this on a Windows runner only, where a regression would first
+      # surface mid-release. The self-test runs its pure assertions on every platform instead.
+      - name: Check Windows installer artifact assertions
+        run: pnpm check:windows-installer-artifacts:self-test
+
       - name: Run plugin suites
         run: pnpm test:plugins && pnpm test:plugins:self-test
 

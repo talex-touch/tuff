@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { globby } from 'globby'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const root = resolve(__dirname, '..')
 const rendererRoot = resolve(root, 'apps/core-app/src/renderer/src')
+
+const SKIP_DIRECTORIES = new Set(['node_modules', 'dist', 'out', '.nuxt', '.output'])
+const SOURCE_FILE = /\.(?:vue|ts)$/
 
 const LEGACY_PRIMITIVES = new Set([
   'components/base/tuff/TButton.vue',
@@ -33,11 +36,32 @@ const LEGACY_ALLOWED = new Set([
   'components/menu/TouchMenuItem.vue',
 ])
 
-const files = await globby(['**/*.{vue,ts}'], {
-  cwd: rendererRoot,
-  absolute: true,
-  gitignore: true,
-})
+/**
+ * Walks the renderer tree with `readdirSync`, matching every other `check-*` script in this
+ * directory. The original used `globby`, which is declared in no manifest in the workspace --
+ * so this gate threw ERR_MODULE_NOT_FOUND on every invocation and had never once run.
+ */
+function findSourceFiles(dir, found = []) {
+  let entries
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  }
+  catch {
+    return found
+  }
+  for (const entry of entries) {
+    if (entry.name.startsWith('.') || SKIP_DIRECTORIES.has(entry.name))
+      continue
+    const full = resolve(dir, entry.name)
+    if (entry.isDirectory())
+      findSourceFiles(full, found)
+    else if (SOURCE_FILE.test(entry.name))
+      found.push(full)
+  }
+  return found
+}
+
+const files = findSourceFiles(rendererRoot)
 
 const violations = []
 const importSpecifierPattern
