@@ -1,0 +1,200 @@
+# TuffEx Design Rules
+
+> The typography, spacing, colour, border and motion rules every TuffEx component and every surface built from TuffEx must satisfy. Adapted from [Cloudflare Kumo's design skill](https://kumo-ui.com/skill/) and re-expressed against this repo's `--tx-*` tokens, SCSS mixins and BEM class contracts.
+
+Kumo states its rules against Tailwind utilities (`text-kumo-subtle`, `ring-kumo-line`, `font-semibold`). TuffEx has no utility engine: the equivalent vocabulary is the token set in `packages/tuffex/packages/components/style/variables.scss` and the mixins in `style/mixins.scss`. Each rule below is stated in that vocabulary, with the repo evidence that makes it enforceable rather than aspirational.
+
+---
+
+## Typography
+
+### Content text is 13–14px; 16px and up is reserved for headings
+
+Body copy, button labels, table cells, input values, chips — everything a user reads or operates — sits at 13px or 14px. Counted across the library's SFCs, `12px` (96 uses), `13px` (69) and `14px` (40) are the working range, while `16px` appears 10 times and `18px` 11 times, almost entirely on headings and icon glyphs.
+
+- Field-sized controls (`TxInput`, `TxSensitiveInput` at `md`) use **14px** for the value and **13px** for the label.
+- Secondary text — descriptions, helper lines, empty-state copy — is **12px**.
+- Metadata that is not read as prose (`TxTag` at 11px, `TxIconChip` at 7px) is exempt; it is a glyph, not text.
+
+A component that needs 16px content is a component whose hierarchy is wrong. Fix the hierarchy.
+
+### Headings are sentence case; product names are title case
+
+`Recent requests`, not `Recent Requests`. `Account settings`, not `Account Settings`. Product and component names keep their own casing: `TuffEx`, `CoreBox`, `SensitiveInput`.
+
+This applies to docs pages, demo titles and any label a component renders from a prop default.
+
+### Never change tracking on body text
+
+No `letter-spacing` on anything at body size. The library's 22 `letter-spacing` declarations are all on one of three shapes, and nothing else may join them:
+
+- **Uppercase micro-labels** at ≤11px (`TxSidebarNav` section headers `0.08em`, `TxSelect` group headers `0.06em`, `TxCodeBlock` language chips `0.04em`). Uppercase without tracking is unreadable at that size; that is the entire justification.
+- **Display numerals** ≥20px, negative tracking (`TxModal` title `-0.01em`, `TxInsightMetric` `-0.01em`). Large type sets loose by default.
+- **Avatar initials**, where the glyph is centred art, not text.
+
+### `font-weight: 600` for headings, `500` for emphasis; never `700` on prose
+
+The current tree has 12 `font-weight: 700` declarations. Every surviving one is on a ≤11px uppercase micro-label or a ≥28px display number (`TxStatCard`). That is the only remaining licence.
+
+- Heading / title: `600`.
+- Emphasis inside a sentence: `500`.
+- `bold` as a keyword: never. It resolves to 700 and skips the token conversation entirely.
+
+### Inline monospace runs ~0.9em
+
+A code span inside prose uses `font-size: 0.9em` relative to its surrounding text. Monospace faces carry a larger x-height than the UI face, so a 1em code span reads a step too big and breaks the line's rhythm.
+
+---
+
+## Spacing
+
+### Related text is closer to its owner than to its neighbours
+
+A label belongs to its field; a description belongs to its label. The gap inside that group is always smaller than the gap between groups.
+
+`TxSensitiveInput` is the reference: `6px` between label → field → description inside the component, with the host owning the larger inter-field gap. `TxFormItem` uses `12px` between label column and control, `4px` between control and error message.
+
+If a description sits the same distance from its own field as from the next field, the grouping is invisible and the user re-parses the form.
+
+### Vertical padding is optically smaller than horizontal
+
+Text carries its own line-height, so equal numeric padding reads bottom-heavy. `TxScrubField` states this explicitly: `padding: 4px 8px 4px 6px` on a 26px chip.
+
+Rule of thumb: vertical ≈ 0.6–0.75 × horizontal for anything wrapping a single text line.
+
+### Horizontal inset clears the corner radius
+
+`TxInput` sets `padding: 0 12px` against `border-radius: 12px`, with the reason in the source: the caret and placeholder must clear the corner's curve rather than start inside it. Any field whose radius grows must grow its inset with it.
+
+---
+
+## Borders, rings and radii
+
+### A ring, not a border, when the element has a shadow or a fixed height
+
+`border` participates in layout: thickening it on focus moves everything inside by the delta and shifts the row. An `inset` `box-shadow` does not.
+
+```scss
+// Correct — the box stays exactly --tx-si-height tall through focus
+box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
+&:focus-within { box-shadow: inset 0 0 0 1.5px var(--tx-color-primary), 0 0 0 3px var(--tx-color-primary-light-9); }
+```
+
+`TxSensitiveInput` and `TxScrubField` (`box-shadow: 0 0 0 1px`, commented "Ring, not border: the field's box has to stay 26px tall next to its untinted neighbour") both do this. `TxInput` predates the rule and still uses a `1px solid` border; that is legacy, not a pattern to copy.
+
+A drop shadow and a border on the same element are mutually exclusive: the border's hard edge and the shadow's soft one fight, and the corner reads doubled. Use the ring.
+
+### Nested radii must be concentric
+
+When two rounded edges sit ≤8px apart, the outer radius equals the inner radius plus the gap. `outer = inner + padding`. Anything else leaves a visibly uneven ring of background between the two curves.
+
+`TxSensitiveInput`'s copy tab is the worked example: the tab is inset `8px` from the field's right edge, so its top corners are `calc(var(--tx-si-radius) - 6px)` — the field radius minus the inset, keeping the two curves parallel where they meet.
+
+### A sticky element is separated by a border, not a shadow
+
+Sticky headers, toolbars and footers that scroll content underneath use a `1px` line in `--tx-border-color`. A shadow under a sticky bar reads as elevation the element does not have and blurs the first row of content behind it.
+
+---
+
+## Colour
+
+### Every colour comes from a `--tx-*` token
+
+A hex literal or bare `rgba()` in a component is a bug: it survives the `.dark` swap and both high-contrast blocks (`tx-high-contrast-light` / `tx-high-contrast-dark` in `variables.scss`). The `var(--tx-token, #fallback)` form is the convention — the fallback exists for hosts that load a component's CSS without `variables.scss`, not as the real value.
+
+Semantic hues are `--tx-color-{primary,success,warning,danger,info}` with their `-light-3/5/7/9` ramps. Ink is `--tx-text-color-{primary,regular,secondary,placeholder,disabled}`. Surfaces are `--tx-bg-color*` / `--tx-fill-color*`. Lines are `--tx-border-color*`.
+
+### Semantic colour is never the sole carrier of state
+
+Colour is additive to a text label or an icon. A user who cannot distinguish the hue must still be able to read the state.
+
+### White ink on a solid semantic fill is not a supported pairing
+
+Recorded in `component-guidelines.md` with measurements: `TxStep`'s completed icon lands at 1.74:1, `TxTabBar`'s badge and `TxToolConfirmation.is-dangerous` at 2.77:1. Lightening the token makes those worse. Use dark ink on the fill, or use the `-light-9` tint as fill with same-hue ink.
+
+`--tx-color-on-primary` exists for the one sanctioned exception and is per-theme (`#ffffff` light/dark, `#0a2540` in high-contrast dark, where `#7cc4ff` is too light for white).
+
+---
+
+## Motion
+
+### Hover colour changes are immediate
+
+Never put `color`, `background-color` or `border-color` in a `transition` that fires on `:hover`. A hover is a sub-100ms interaction; easing it makes the UI feel like it is lagging behind the pointer.
+
+Transitioning `opacity`, `transform` or `box-shadow` geometry on hover is fine — those are motion, not colour. `TxSensitiveInput`'s copy tab transitions `opacity` alone for exactly this reason.
+
+Legacy violations exist (`TxCopyButton` line 146 transitions `color`/`background-color`; `TxInput` line 197 transitions `border-color`). They are grandfathered; new components must not add more.
+
+### Every transition has a reduced-motion escape
+
+```scss
+@media (prefers-reduced-motion: reduce) { transition: none; }
+```
+
+Non-negotiable for any declared transition or animation. Keyframe animations additionally must keep the *final* state visible when motion is dropped — a skeleton keeps its placeholder, a fade-in keeps its content.
+
+### Collapsing content keeps its size while it closes
+
+A collapse that shrinks its content box during the close animation makes the text reflow on the way out, which reads as a glitch rather than a transition. Animate the container; leave the content at its measured size until the animation ends. See `bui-disclosure-collapse` in `style/mixins.scss`.
+
+---
+
+## Structure
+
+### Overlays use an `open`/`visible` prop, never `v-if` on the root
+
+`v-if` on a dialog's root destroys the component before its leave transition can run, so it vanishes instead of closing.
+
+```vue
+<!-- Correct: TxModal keeps Teleport + Transition mounted, gates the panel -->
+<Teleport to="body">
+  <Transition name="tx-modal">
+    <div v-if="visible" class="tx-modal__overlay">…</div>
+  </Transition>
+</Teleport>
+```
+
+The `v-if` goes **inside** `Transition`, never around it.
+
+### Interactive elements are semantic
+
+A native `<button type="button">` with its appearance reset, not a `div @click`. A `role="button"` container is permitted only when the container must hold other interactive children — nesting a `<button>` inside a `<button>` is invalid HTML. `TxSensitiveInput`'s masked field is that case (it contains the eye and copy buttons) and therefore carries `role="button"`, `tabindex`, an `aria-label`, an `aria-describedby` instruction, and explicit Enter/Space handling. Anything less is a `div @click` wearing a role attribute.
+
+### Icons align optically with the first line of text
+
+An inline icon is optically the same size as the text beside it and is centre-aligned with the **first** line, not with the block. For multi-line text, wrap the icon in a box one line-height tall and centre it there.
+
+### Never stack one card inside another
+
+Two nested elevated surfaces produce a border-on-border seam and an ambiguous shadow direction. Group with whitespace, a hairline, or type hierarchy; reserve the card for a genuinely separate object.
+
+---
+
+## New component checklist
+
+A component is not done when it renders. It is done when all of these hold:
+
+1. Size vocabulary matches an existing one. Run `pnpm -C packages/tuffex audit:vocab` and reuse a union it already prints; do not mint a new one. `xs | sm | md | lg` is the spelling for new components — the button family is the reference (`button/src/size.ts`), trimmed to `sm | md | lg` because it renders three heights and nothing needs a fourth.
+2. One spelling per component. The audit counts unions across the library, and a cross-component difference is tolerable — `TxAvatar` sizing in `large`/`small` hurts nobody. What is not tolerable is a single component accepting two spellings for one behaviour: `TxButton` typed six values for three tiers, so `size="small"` and `size="sm"` appeared side by side in the same template (372 callsites on the long spellings, 45 of them `mini`, which was pixel-identical to `sm`). If a size union contains both a short and a long spelling of the same tier, it is a defect, not a style.
+3. Status vocabulary reuses `'default' | 'error'` (as `TxTextarea` and `TxSelect` do) unless the domain genuinely needs more states. `error` is the prop value even though the token is `--tx-color-danger`; `danger` as a prop value belongs to `variant`/`type`, which name a visual tone rather than a validation state.
+4. Sizes are driven by component-local custom properties on the root (`--tx-si-height`, `--tx-si-pad`, …) set per size class, not by duplicated rule blocks per size.
+5. Every user-visible string is a prop with a documented default. TuffEx owns no message catalog — see `SensitiveInputLabels` / `IconPickerLabels` for the shape.
+6. Screen-reader-only text uses the clip pattern (`position: absolute; width: 1px; height: 1px; clip: rect(0,0,0,0)`), never `display: none`, which removes the node from the a11y tree.
+7. A state that changes without user action gets a `role="status" aria-live="polite"` region. Swapping a visible label or an `aria-label` is never re-announced.
+8. Registration chain complete: component dir → `components.ts` → the matching `base`/`pro`/`ai` barrel (guarded by `src/__tests__/suite-barrels.test.ts`) → `apps/nexus` taxonomy, sidebar, gallery, hub index → `.zh.mdc` + `.en.mdc` + demo + `demo-registry.ts`. See [TuffEx Docs Sync](./tuffex-docs-sync.md).
+
+### Narrowing a published prop union
+
+Removing a value from a prop union in a published package is safe only if the runtime keeps accepting it. A Vue prop union is erased at runtime, so a consumer who compiled against an older version keeps passing the old string from plain JS and Vue hands it straight through. Narrowing the type without keeping the mapping does not raise an error for them — it silently changes rendering.
+
+The shape that works, as `button/src/size.ts` does it: canonical union exported as the prop type; the removed spellings kept only as keys of an untyped `Record<string, Canonical>` so they are unreachable from any typed callsite; one resolver used by every component in the family. Then rewrite every in-repo callsite in the same change and prove it — narrow the type, run the package and app typecheckers, and confirm a deliberate old-spelling callsite is rejected. An attribute-scanning script is not proof: a regex whose tag body excludes `<` stops at the first `:disabled="count <= 0"` and silently skips every attribute after it.
+
+---
+
+## Verification
+
+- `pnpm -C packages/tuffex audit:vocab` — prints every `size` / `status` string union and its users. Report-only; read it before naming a new prop vocabulary.
+- `pnpm -C packages/tuffex audit:cursor` — interactive elements without a `cursor` declaration.
+- `packages/tuffex/packages/components/src/__tests__/bui-dark-neutral-ramp.test.ts` and `shadow-light-source.test.ts` — token-level guards on the dark ramp and shadow direction.
+- Contrast claims must be measured and the number recorded in the source comment, as `variables.scss` does. An unmeasured contrast assertion is not evidence.

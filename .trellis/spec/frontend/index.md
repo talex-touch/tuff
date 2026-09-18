@@ -32,6 +32,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Anchor Overlay Chain](./anchor-overlay-chain.md)             | Nested overlay chain: anchor-delay links, hover travel, outside-click, submenus      | Filled |
 | [Hook Guidelines](./hook-guidelines.md)                       | Custom composables, lifecycle, data access                                           | Filled |
 | [State Management](./state-management.md)                     | Local state, Pinia, host/server state                                                | Filled |
+| [TuffEx Design Rules](./tuffex-design-rules.md)               | Kumo-derived type/spacing/colour/motion rules restated in `--tx-*` tokens and BEM      | Filled |
 | [TuffEx Charts Package](./tuffex-charts-package.md)           | tuffex-charts contracts: no echarts, CSS-var theming, kumo divergences               | Filled |
 | [TuffEx Text Motion](./tuffex-text-motion.md)                 | One text-morph engine: torph port, the shared spring, unscoped styles, mode fallbacks | Filled |
 | [TuffEx Docs Sync](./tuffex-docs-sync.md)                     | Component change → Nexus docs: wrapper blast radius, placement, demos, gate traps    | Filled |
@@ -55,18 +56,19 @@ Before editing frontend code:
 1. Read the package-level `AGENTS.md` for the target area.
 2. Read [Directory Structure](./directory-structure.md) to place files in the existing ownership boundary.
 3. Read [Component Guidelines](./component-guidelines.md) before changing Vue SFCs, UI primitives, accessibility, or i18n.
-4. Read the [Loading States](./component-guidelines.md#loading-states) section before adding or changing a view that waits on data; a skeleton mirroring the loaded layout is the default, not an optional follow-up.
-5. Read [Nexus Docs Static Delivery](./nexus-docs-static-delivery.md) before touching prerender layout, `routeRules` headers, nuxt-i18n options, or anything on the docs hydration path; each rule there removes a measured round trip.
-6. Read [TuffEx Docs Sync](./tuffex-docs-sync.md) before changing any component under `packages/tuffex/packages/components/src/`; the change is not done until the Nexus docs that display it — and the docs of every wrapper component — say what the source now does.
-7. Read [Hook Guidelines](./hook-guidelines.md) before adding or changing a `use*` composable or browser lifecycle code.
-8. Read [State Management](./state-management.md) before adding Pinia state, SDK subscriptions, caches, or host/server data mirrors.
-9. Read [Type Safety](./type-safety.md) before changing payloads, event kinds, SDK domains, manifest shapes, or JSON evidence.
-10. Read [Plugin Runtime Security](./plugin-runtime-security.md) before changing plugin windows, hosted plugin views, permission handlers, preload bridges, or plugin Electron preferences.
-11. Read [Privacy Data Lifecycle](./privacy-data-lifecycle.md) before changing Privacy SDK payloads, retention/export owners, Provider or Plugin credential persistence/runtime resolution, Secret backup envelopes, portable credential catalogs, secure-store batch mutation, the sensitive-data inventory, or the isolated Privacy lifecycle smoke.
-12. Read [Nexus Deployment Secrets](./nexus-preview-secret-deployment.md) before changing Preview or Production variables, Cloudflare Pages credentials, auth/emergency runtime secrets, deployment commands, or deployment evidence.
-13. Read [Native Resource Protocols](./native-resource-protocols.md) before adding native media/file callbacks, worker/IPC byte payloads, custom protocol consumers, or macOS application-icon extraction.
-14. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
-15. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance.
+4. Read [TuffEx Design Rules](./tuffex-design-rules.md) before adding a TuffEx component or restyling one; it fixes the type scale, spacing grouping, ring-vs-border choice, concentric radii, token-only colour, and the immediate-hover motion rule that a new component is otherwise free to reinvent.
+5. Read the [Loading States](./component-guidelines.md#loading-states) section before adding or changing a view that waits on data; a skeleton mirroring the loaded layout is the default, not an optional follow-up.
+6. Read [Nexus Docs Static Delivery](./nexus-docs-static-delivery.md) before touching prerender layout, `routeRules` headers, nuxt-i18n options, or anything on the docs hydration path; each rule there removes a measured round trip.
+7. Read [TuffEx Docs Sync](./tuffex-docs-sync.md) before changing any component under `packages/tuffex/packages/components/src/`; the change is not done until the Nexus docs that display it — and the docs of every wrapper component — say what the source now does.
+8. Read [Hook Guidelines](./hook-guidelines.md) before adding or changing a `use*` composable or browser lifecycle code.
+9. Read [State Management](./state-management.md) before adding Pinia state, SDK subscriptions, caches, or host/server data mirrors.
+10. Read [Type Safety](./type-safety.md) before changing payloads, event kinds, SDK domains, manifest shapes, or JSON evidence.
+11. Read [Plugin Runtime Security](./plugin-runtime-security.md) before changing plugin windows, hosted plugin views, permission handlers, preload bridges, or plugin Electron preferences.
+12. Read [Privacy Data Lifecycle](./privacy-data-lifecycle.md) before changing Privacy SDK payloads, retention/export owners, Provider or Plugin credential persistence/runtime resolution, Secret backup envelopes, portable credential catalogs, secure-store batch mutation, the sensitive-data inventory, or the isolated Privacy lifecycle smoke.
+13. Read [Nexus Deployment Secrets](./nexus-preview-secret-deployment.md) before changing Preview or Production variables, Cloudflare Pages credentials, auth/emergency runtime secrets, deployment commands, or deployment evidence.
+14. Read [Native Resource Protocols](./native-resource-protocols.md) before adding native media/file callbacks, worker/IPC byte payloads, custom protocol consumers, or macOS application-icon extraction.
+15. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
+16. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance.
 
 Also read shared thinking guides when the trigger applies:
 
@@ -81,6 +83,7 @@ Also read shared thinking guides when the trigger applies:
 - A TuffEx component change ships with its Nexus docs in the same commit — the component's own `.zh.mdc` **and** `.en.mdc`, plus every wrapper component's pages. A user-visible change also ships a demo; a props-table row is not a docs update. Place new entries where they belong in each ordered list rather than appending to the tail.
 - Do not add raw `ipcMain`, `ipcRenderer`, raw channels, broad preload exposure, or ad-hoc plugin runtime bridges.
 - New interactive UI must use semantic controls with focus and keyboard behavior. Avoid new `div/span @click` debt.
+- TuffEx visual work follows [TuffEx Design Rules](./tuffex-design-rules.md): content text at 13–14px, colour only from `--tx-*` tokens, an inset ring instead of a border wherever the element has a fixed height or a shadow, concentric nested radii, no `letter-spacing` on body text, no `font-weight: 700` on prose, and no colour in a hover `transition`. Reuse a `size` / `status` union that `pnpm -C packages/tuffex audit:vocab` already prints; a single component offering two spellings of one tier is a defect.
 - A skeleton is the default loading state for any view that waits on data, and it must mirror the loaded layout so nothing shifts when content arrives. Reuse `TxRowSkeleton` / `TxSkeleton` / `SettingSkeleton` and `useDeferredLoading`; do not hand-roll placeholder markup or a local `@keyframes`.
 - Plugins must fail closed when permission SDKs, clipboard SDKs, secret SDKs, or host capabilities are unavailable.
 - New user-facing text must go through the owning message catalog or localized manifest path, not direct `window.$t` / `window.$i18n`.
