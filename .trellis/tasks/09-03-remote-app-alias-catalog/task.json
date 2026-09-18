@@ -19,7 +19,7 @@
   "pr_url": null,
   "subtasks": [],
   "children": [],
-  "parent": "07-13-catalog-service-mvp",
+  "parent": null,
   "relatedFiles": [
     "apps/core-app/src/main/modules/box-tool/addon/apps/app-semantic-catalog.ts",
     "apps/core-app/src/main/modules/catalog/",

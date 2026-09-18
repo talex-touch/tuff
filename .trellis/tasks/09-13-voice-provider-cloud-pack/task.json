@@ -19,7 +19,7 @@
   "pr_url": null,
   "subtasks": [],
   "children": [],
-  "parent": "07-13-catalog-service-mvp",
+  "parent": null,
   "relatedFiles": [
     "packages/utils/i18n/catalog.ts",
     "apps/core-app/src/main/modules/catalog/",
