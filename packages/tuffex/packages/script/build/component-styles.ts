@@ -242,6 +242,13 @@ export async function buildComponentStyles() {
       rollupOptions: {
         external: externalDeps,
         input: entries,
+        // Without this, Rollup applies `preserveEntrySignatures: 'exports-only'`
+        // and an entry whose only statement is `export * from './src'` re-exports
+        // nothing it owns, so its component chunk is dropped and the SFC's
+        // stylesheet is never emitted — breadcrumb/pagination/steps shipped 0-byte
+        // style.css files. 'strict' keeps every entry's own exports and therefore
+        // its CSS.
+        preserveEntrySignatures: 'strict',
         output: {
           exports: 'named',
           format: 'es',

@@ -149,7 +149,14 @@ const LIMITS = {
   // same 12.8 KiB as the `fullCssBytes` note above. Measured 570.4 KiB across 153
   // stylesheets. Actuals plus minimal headroom, growth from here fails.
   // 576 -> 584 on 2026-09-15: `icon-picker`, as above.
-  onDemandCssBytes: 584 * 1024,
+  // 584 -> 592 on 2026-09-17: three components were silently shipping 0-byte
+  // stylesheets. Their `index.ts` is nothing but `export * from './src'`, so
+  // Rollup's default `preserveEntrySignatures: 'exports-only'` treated the entry
+  // as owning no exports, dropped its chunk, and never emitted the SFC CSS.
+  // Pinning `'strict'` in `component-styles.ts` restored breadcrumb (1.4 KiB),
+  // pagination (2.7 KiB) and steps (6.9 KiB). Measured 587.8 KiB across 155
+  // stylesheets. Actuals plus minimal headroom, growth from here fails.
+  onDemandCssBytes: 592 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
