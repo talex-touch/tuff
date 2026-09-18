@@ -1229,7 +1229,10 @@
       "lessThanMinute": "< 1 min",
       "minutes": "{count} min",
       "hours": "{count} hr",
-      "hoursMinutes": "{hours} hr {minutes} min"
+      "hoursMinutes": "{hours} hr {minutes} min",
+      "milliseconds": "{count} ms",
+      "seconds": "{count} s",
+      "minutesSeconds": "{minutes} min {seconds} s"
     },
     "streak": {
       "summary": "{current} days running · longest {longest} · {active} days with anything said"
@@ -1299,7 +1302,6 @@
     "records": {
       "title": "Recognition records",
       "empty": "No recognition records yet.",
-      "emptyText": "No text generated",
       "clear": "Clear records",
       "clearSuccess": "Recognition records cleared",
       "clearFailed": "Recognition records could not be cleared",
@@ -1315,6 +1317,17 @@
       "tokensSplit": "Input {input} · output {output}",
       "tokensUnavailable": "Not returned by channel",
       "channel": "Channel",
+      "source": "Source",
+      "delivery": "Delivery",
+      "sourceValues": {
+        "microphone": "Microphone",
+        "file": "Audio file"
+      },
+      "deliveryValues": {
+        "native": "Typed in",
+        "autopaste": "Auto-pasted",
+        "none": "Not delivered"
+      },
       "error": "Error",
       "columns": {
         "text": "Transcript",

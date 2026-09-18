@@ -1229,7 +1229,10 @@
       "lessThanMinute": "少于 1 分钟",
       "minutes": "{count} 分钟",
       "hours": "{count} 小时",
-      "hoursMinutes": "{hours} 小时 {minutes} 分钟"
+      "hoursMinutes": "{hours} 小时 {minutes} 分钟",
+      "milliseconds": "{count} 毫秒",
+      "seconds": "{count} 秒",
+      "minutesSeconds": "{minutes} 分 {seconds} 秒"
     },
     "streak": {
       "summary": "连着说了 {current} 天 · 最长连过 {longest} 天 · 一共 {active} 天开过口"
@@ -1299,7 +1302,6 @@
     "records": {
       "title": "识别记录",
       "empty": "还没有可查看的识别记录。",
-      "emptyText": "未生成文本",
       "clear": "清空记录",
       "clearSuccess": "识别记录已清空",
       "clearFailed": "识别记录清空失败",
@@ -1315,6 +1317,17 @@
       "tokensSplit": "输入 {input} · 输出 {output}",
       "tokensUnavailable": "渠道未返回",
       "channel": "渠道",
+      "source": "来源",
+      "delivery": "投递",
+      "sourceValues": {
+        "microphone": "麦克风",
+        "file": "音频文件"
+      },
+      "deliveryValues": {
+        "native": "直接写入",
+        "autopaste": "自动粘贴",
+        "none": "未投递"
+      },
       "error": "错误",
       "columns": {
         "text": "内容",
