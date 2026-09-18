@@ -142,10 +142,6 @@ const CI_WORKFLOWS = [
     ],
   },
   {
-    file: 'package-tuff-core-ci.yml',
-    paths: ['packages/tuff-core/**'],
-  },
-  {
     file: 'package-tuff-intelligence-ci.yml',
     paths: ['packages/tuff-intelligence/**', 'packages/utils/**'],
   },
@@ -183,11 +179,6 @@ const PACKAGE_GATES = [
     file: 'package-tuff-cli-ci.yml',
     job: 'cli',
     expected: { 'run-lint': true, 'run-test': true, 'run-build': true },
-  },
-  {
-    file: 'package-tuff-core-ci.yml',
-    job: 'ci',
-    expected: { 'run-lint': true, 'run-build': true },
   },
   {
     file: 'package-tuff-intelligence-ci.yml',
@@ -238,8 +229,6 @@ const PUBLISH_WORKFLOWS = [
       'packages/tuff-cli-core/package.json',
       'packages/tuff-cli-core/src/**',
       'packages/tuff-cli-core/tsup.config.ts',
-      'packages/tuff-core/package.json',
-      'packages/tuff-core/src/**',
       'packages/unplugin-export-plugin/package.json',
       'packages/unplugin-export-plugin/src/**',
       'packages/unplugin-export-plugin/tsup.config.ts',
@@ -425,7 +414,6 @@ describe('package publish workflow contracts', () => {
     const cliGateBlock = script.slice(cliGateStart, cliBuildStart)
 
     for (const packageName of [
-      '@talex-touch/tuff-core',
       '@talex-touch/unplugin-export-plugin',
       '@talex-touch/tuff-cli',
     ]) {

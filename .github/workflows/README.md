@@ -111,10 +111,10 @@ This is a reusable workflow that can be called by other workflows to standardize
   - Runs `tuff-cli-core` lint/test/build, then `tuff-cli` lint/build
 
 - **`package-tuff-cli-publish.yml`** - Publish for CLI/build-tool packages
-  - Publishes `@talex-touch/tuff-core`, `@talex-touch/unplugin-export-plugin`, and `@talex-touch/tuff-cli`
+  - Publishes `@talex-touch/unplugin-export-plugin` and `@talex-touch/tuff-cli`
   - Publishes when a package version changed or the current version is missing from npm
   - Does not publish internal `@talex-touch/tuff-cli-core`
-  - Does not publish the removed `@talex-touch/tuffcli` compatibility package
+  - Does not publish the removed `@talex-touch/tuffcli` compatibility package or the removed `@talex-touch/tuff-core` stub
   - Waits for the current `@talex-touch/utils` version before publishing `@talex-touch/unplugin-export-plugin`
   - Uses `latest` for stable versions and `next` for prereleases
   - Syncs publish summary to Nexus dashboard updates API

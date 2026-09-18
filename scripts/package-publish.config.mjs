@@ -12,12 +12,6 @@ export const publishPackages = [
     testCommand: 'pnpm -C "packages/utils" test',
   },
   {
-    name: '@talex-touch/tuff-core',
-    path: 'packages/tuff-core',
-    access: 'public',
-    buildCommand: 'pnpm --filter "@talex-touch/tuff-core" run build',
-  },
-  {
     name: '@talex-touch/unplugin-export-plugin',
     path: 'packages/unplugin-export-plugin',
     access: 'public',

@@ -12,8 +12,6 @@ on:
       - "packages/tuff-cli-core/package.json"
       - "packages/tuff-cli-core/src/**"
       - "packages/tuff-cli-core/tsup.config.ts"
-      - "packages/tuff-core/package.json"
-      - "packages/tuff-core/src/**"
       - "packages/unplugin-export-plugin/package.json"
       - "packages/unplugin-export-plugin/src/**"
       - "packages/unplugin-export-plugin/tsup.config.ts"
@@ -75,13 +73,11 @@ jobs:
           fi
 
           declare -a PACKAGE_NAMES=(
-            "@talex-touch/tuff-core"
             "@talex-touch/unplugin-export-plugin"
             "@talex-touch/tuff-cli"
           )
 
           declare -A PACKAGE_PATHS=(
-            ["@talex-touch/tuff-core"]="packages/tuff-core/package.json"
             ["@talex-touch/unplugin-export-plugin"]="packages/unplugin-export-plugin/package.json"
             ["@talex-touch/tuff-cli"]="packages/tuff-cli/package.json"
           )

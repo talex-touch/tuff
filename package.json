@@ -152,9 +152,6 @@
     "packages/tuff-cli-core/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/tuff-cli-core\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
-    "packages/tuff-core/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"packages/tuff-core\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
-    ],
     "packages/tuff-native/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/tuff-native\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],

@@ -163,9 +163,9 @@ function assertPublishConfig(packages) {
 
 /**
  * A manifest can point `main` / `module` / `types` at a build output that nothing guarantees to
- * exist. @talex-touch/tuff-core shipped exactly that shape -- `dist/index.js` with no dist, no
- * prepublishOnly and an `export {}` entry -- and this validator passed it, so `npm publish`
- * would have produced a package that fails to resolve for every consumer (#889).
+ * exist. The removed @talex-touch/tuff-core shipped exactly that shape -- `dist/index.js` with no
+ * dist, no prepublishOnly and an `export {}` entry -- and this validator passed it, so
+ * `npm publish` would have produced a package that fails to resolve for every consumer (#889).
  *
  * The rule: if an entry field points into a directory that is not present in the working tree,
  * the package must have a `prepublishOnly` script, so publishing cannot skip the build.
