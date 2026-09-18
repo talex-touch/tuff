@@ -1,4 +1,5 @@
 import type { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
+import type { ITuffTransport } from '@talex-touch/utils/transport/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
@@ -25,11 +26,26 @@ const shortconEvents = {
     'shortcon:update'
   ),
   disableAll: defineRawEvent<void, void>('shortcon:disable-all'),
-  enableAll: defineRawEvent<void, void>('shortcon:enable-all')
+  enableAll: defineRawEvent<void, void>('shortcon:enable-all'),
+  getFeature: defineRawEvent<{ plugin: string }, Record<string, ShortcutWithStatus>>(
+    'shortcon:get-feature'
+  ),
+  setFeature: defineRawEvent<{ plugin: string; feature: string; accelerator: string }, boolean>(
+    'shortcon:set-feature'
+  )
 }
 
 export class ShortconApi {
-  private transport = useTuffTransport()
+  /**
+   * Resolved per call, not at construction.
+   *
+   * `shortconApi` is a module-scope singleton, so a field initialiser runs the moment any
+   * importer is evaluated - which for a lazily routed view can be before the renderer transport
+   * exists, and `useTuffTransport()` then throws inside the import rather than at a call site.
+   */
+  private get transport(): ITuffTransport {
+    return useTuffTransport()
+  }
 
   getAll(): Promise<ShortcutWithStatus[]> {
     return this.transport.send(shortconEvents.getAll)
@@ -45,6 +61,16 @@ export class ShortconApi {
 
   enableAll(): Promise<void> {
     return this.transport.send(shortconEvents.enableAll)
+  }
+
+  /** Every feature binding for one plugin, keyed by feature id. */
+  getFeatureShortcuts(plugin: string): Promise<Record<string, ShortcutWithStatus>> {
+    return this.transport.send(shortconEvents.getFeature, { plugin })
+  }
+
+  /** Binds, rebinds, or - with an empty accelerator - clears one feature's shortcut. */
+  setFeatureShortcut(plugin: string, feature: string, accelerator: string): Promise<boolean> {
+    return this.transport.send(shortconEvents.setFeature, { plugin, feature, accelerator })
   }
 }
 

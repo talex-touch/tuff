@@ -19,6 +19,10 @@ import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
 import { getPermissionModule } from './permission'
 import { pluginModule } from './plugin/plugin-module'
+import {
+  buildFeatureShortcutId,
+  parseFeatureShortcutId
+} from './plugin/services/feature-shortcut-id'
 import { useMainStorage } from './storage'
 
 const shortconLog = createLogger('GlobalShortcon')
@@ -29,6 +33,18 @@ const shortconUpdateEvent = defineRawEvent<
 const shortconDisableAllEvent = defineRawEvent<void, void>('shortcon:disable-all')
 const shortconEnableAllEvent = defineRawEvent<void, void>('shortcon:enable-all')
 const shortconGetAllEvent = defineRawEvent<void, ShortcutWithStatus[]>('shortcon:get-all')
+/**
+ * The feature manager's two calls. Not on the plugin-facing allowlist, so they are reachable only
+ * from the host renderer: binding a key to a feature is the user's act, not a plugin's.
+ */
+const shortconGetFeatureEvent = defineRawEvent<
+  { plugin: string },
+  Record<string, ShortcutWithStatus>
+>('shortcon:get-feature')
+const shortconSetFeatureEvent = defineRawEvent<
+  { plugin: string; feature: string; accelerator: string },
+  boolean
+>('shortcon:set-feature')
 
 // A runtime map to hold callbacks for 'main' type shortcuts
 interface MainShortcutRegistration {
@@ -179,6 +195,21 @@ export class ShortcutModule extends BaseModule {
 
     transport.on(shortconGetAllEvent, () => {
       return this.buildShortcutSnapshot()
+    })
+
+    transport.on(shortconGetFeatureEvent, (data) => {
+      const pluginName = typeof data?.plugin === 'string' ? data.plugin : ''
+      if (!pluginName) return {}
+      return this.getFeatureShortcuts(pluginName)
+    })
+
+    // Host-only by construction: the plugin-facing allowlist does not carry these two, so a
+    // plugin surface cannot bind a key on a feature - its own or anyone else's.
+    transport.on(shortconSetFeatureEvent, (data) => {
+      const pluginName = typeof data?.plugin === 'string' ? data.plugin : ''
+      const featureId = typeof data?.feature === 'string' ? data.feature : ''
+      const accelerator = typeof data?.accelerator === 'string' ? data.accelerator : ''
+      return this.setFeatureShortcut(pluginName, featureId, accelerator)
     })
 
     transport.on(PluginEvents.shortcut.register, (payload, context) => {
@@ -502,6 +533,81 @@ export class ShortcutModule extends BaseModule {
       const meta = shortcut.meta as (Shortcut['meta'] & { shortcutId?: string }) | undefined
       return meta?.shortcutId === triggerId || shortcut.id === triggerId
     })
+  }
+
+  /**
+   * Bind, rebind or clear the accelerator the user put on one plugin feature.
+   *
+   * Separate from `registerRendererShortcut` because the two have different owners: that one is
+   * called by a plugin for itself and is gated on the plugin holding `system.shortcut`, while
+   * this is the user binding a key from the feature manager, where no plugin is asking for
+   * anything. Requiring the permission here would let a plugin refuse the user a keybinding on
+   * the plugin's own feature.
+   *
+   * An empty `accelerator` removes the binding, which is what the clear button in the row sends.
+   */
+  setFeatureShortcut(pluginName: string, featureId: string, accelerator: string): boolean {
+    if (!pluginName || !featureId) return false
+
+    const id = buildFeatureShortcutId(pluginName, featureId)
+    const existing = this.storage!.getShortcutById(id)
+
+    if (!accelerator.trim()) {
+      if (!existing) return true
+      this.storage!.removeShortcuts([id])
+      this.reregisterAllShortcuts()
+      shortconLog.success(`Feature shortcut cleared: ${id}`)
+      return true
+    }
+
+    const normalized = this.normalizeAccelerator(accelerator)
+    if (!normalized) {
+      shortconLog.error(`Invalid accelerator for feature shortcut ${id}: ${accelerator}`)
+      return false
+    }
+
+    if (existing) {
+      this.storage!.updateShortcutAccelerator(id, normalized)
+      this.storage!.updateShortcutEnabled(id, true)
+    } else {
+      this.storage!.addShortcut({
+        id,
+        accelerator: normalized,
+        type: ShortcutType.FEATURE,
+        meta: {
+          creationTime: Date.now(),
+          modificationTime: Date.now(),
+          author: pluginName,
+          enabled: true,
+          featureId
+        }
+      })
+    }
+
+    this.reregisterAllShortcuts()
+    shortconLog.success(`Feature shortcut bound: ${id} (${normalized})`)
+    return true
+  }
+
+  /**
+   * Every feature binding for one plugin, keyed by feature id.
+   *
+   * Keyed by what the *id* says rather than by `meta.featureId`: the id is what the trigger
+   * resolves, so a row keyed off drifted metadata would show a binding on a feature that a key
+   * press would never reach.
+   */
+  getFeatureShortcuts(pluginName: string): Record<string, ShortcutWithStatus> {
+    const statusMap = this.shortcutStatusMap
+    const result: Record<string, ShortcutWithStatus> = {}
+
+    for (const shortcut of this.storage?.getAllShortcuts() ?? []) {
+      if (shortcut.type !== ShortcutType.FEATURE) continue
+      const target = parseFeatureShortcutId(shortcut.id)
+      if (!target || target.pluginName !== pluginName) continue
+      result[target.featureId] = { ...shortcut, status: statusMap.get(shortcut.id) }
+    }
+
+    return result
   }
 
   /**
@@ -865,6 +971,21 @@ export class ShortcutModule extends BaseModule {
           return
         }
         registration.onTrigger()
+        break
+      }
+      case ShortcutType.FEATURE: {
+        // The user bound this to a feature from the feature manager, so the host runs it rather
+        // than notifying the plugin: unlike a RENDERER trigger, this works whether or not the
+        // plugin wrote a listener for it.
+        //
+        // Imported here rather than at module scope: running a feature reaches CoreBox and the
+        // plugin view loader, and pulling that graph in just to *list* bindings would make this
+        // module impossible to load without the whole box-tool stack behind it.
+        void import('./plugin/services/feature-shortcut-service')
+          .then((module) => module.triggerFeatureShortcut(shortcut.id))
+          .catch((error) => {
+            shortconLog.error(`Feature shortcut failed: ${shortcut.id}`, { error })
+          })
         break
       }
     }

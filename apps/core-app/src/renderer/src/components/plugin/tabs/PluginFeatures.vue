@@ -824,6 +824,7 @@ function handlePreviewRenderError(error: Error): void {
           v-model:mock-payload-enabled="mockPayloadEnabled"
           v-model:mock-payload-raw="mockPayloadRaw"
           :feature="selectedFeature"
+          :plugin-name="plugin?.name ?? ''"
           :widget-tab-enabled="isWidgetFeature(selectedFeature)"
           :widget-status="resolveWidgetStatus(selectedFeature)"
           :widget-source-display-path="resolveWidgetSourceDisplayPath(selectedFeature)"

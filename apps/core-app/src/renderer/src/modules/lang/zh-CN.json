@@ -2256,6 +2256,16 @@
         "flagDisabled": "关闭",
         "flagDefault": "默认"
       },
+      "shortcut": {
+        "title": "快捷键",
+        "binding": "全局快捷键",
+        "behaviourRun": "按下后直接执行，不打开搜索框",
+        "behaviourBox": "按下后打开搜索框并进入该功能",
+        "behaviourView": "按下后打开搜索框并载入该功能的界面",
+        "conflict": "该组合键已被占用：{with}",
+        "invalid": "该组合键不可用，请换一个",
+        "saveFailed": "保存失败，请重试"
+      },
       "devDisconnectedTitle": "开发服务器已断开",
       "devDisconnectedReason": "原因：{reason}",
       "widget": {

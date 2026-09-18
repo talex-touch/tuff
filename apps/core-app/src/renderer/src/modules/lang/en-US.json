@@ -2256,6 +2256,16 @@
         "flagDisabled": "Disabled",
         "flagDefault": "Default"
       },
+      "shortcut": {
+        "title": "Shortcut",
+        "binding": "Global shortcut",
+        "behaviourRun": "Runs straight away, without opening the search box",
+        "behaviourBox": "Opens the search box on this feature",
+        "behaviourView": "Opens the search box and loads this feature's view",
+        "conflict": "Already taken by: {with}",
+        "invalid": "That combination cannot be used, try another",
+        "saveFailed": "Could not save, try again"
+      },
       "devDisconnectedTitle": "Dev server disconnected",
       "devDisconnectedReason": "Reason: {reason}",
       "widget": {

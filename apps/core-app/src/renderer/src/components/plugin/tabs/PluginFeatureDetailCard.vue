@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { ComponentPublicInstance } from 'vue'
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { TuffItem } from '@talex-touch/utils'
 import type { IFeatureCommand, IPluginFeature } from '@talex-touch/utils/plugin'
 import { TxButton } from '@talex-touch/tuffex/button'
@@ -14,6 +14,12 @@ import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import WidgetFrame from '~/components/render/WidgetFrame.vue'
+import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
+import type { ShortcutStatus } from '~/modules/channel/main/shortcon'
+import { shortconApi } from '~/modules/channel/main/shortcon'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const featureDetailLog = createRendererLogger('PluginFeatureDetailCard')
 
 type PluginFeatureWithCommandsData = IPluginFeature
 
@@ -47,6 +53,8 @@ interface WidgetPathRow {
 
 const props = defineProps<{
   feature: PluginFeatureWithCommandsData | null
+  /** Owning plugin. Needed to address the feature's shortcut, which is keyed by plugin + feature. */
+  pluginName: string
   detailTab: string
   widgetTabEnabled: boolean
   widgetStatus: string
@@ -118,6 +126,99 @@ watch(
   },
   { immediate: true }
 )
+
+/**
+ * The accelerator the user has put on this feature.
+ *
+ * Held here rather than threaded down from the features tab: the binding belongs to one feature,
+ * and this card is the only thing that shows one. The field reports each captured chord, and each
+ * one is saved immediately - the same contract the application and plugin shortcut rows use, so a
+ * binding never depends on the user closing the card afterwards.
+ */
+const shortcutDraft = ref('')
+const shortcutStatus = ref<ShortcutStatus | null>(null)
+const shortcutSaving = ref(false)
+const shortcutError = ref('')
+
+watch(
+  () => [props.pluginName, props.feature?.id] as const,
+  async ([pluginName, featureId]) => {
+    shortcutDraft.value = ''
+    shortcutStatus.value = null
+    shortcutError.value = ''
+    if (!pluginName || !featureId) return
+
+    try {
+      const bindings = await shortconApi.getFeatureShortcuts(pluginName)
+      // The card may have moved on to another feature while this was in flight.
+      if (props.pluginName !== pluginName || props.feature?.id !== featureId) return
+      const binding = bindings[featureId]
+      shortcutDraft.value = binding?.accelerator ?? ''
+      shortcutStatus.value = binding?.status ?? null
+    } catch (error) {
+      featureDetailLog.warn('Failed to load the feature shortcut', error)
+    }
+  },
+  { immediate: true }
+)
+
+async function commitShortcut(accelerator: string): Promise<void> {
+  const featureId = props.feature?.id
+  if (!featureId || !props.pluginName || shortcutSaving.value) return
+
+  const previous = shortcutDraft.value
+  shortcutDraft.value = accelerator
+  shortcutSaving.value = true
+  shortcutError.value = ''
+  try {
+    const accepted = await shortconApi.setFeatureShortcut(props.pluginName, featureId, accelerator)
+    if (!accepted) {
+      // A refusal means the host stored nothing, so the field must go back to what is bound.
+      shortcutDraft.value = previous
+      shortcutError.value = t('plugin.features.shortcut.invalid')
+      return
+    }
+    // Re-read rather than assume: the host decides the verdict, and a key that another shortcut
+    // already owns is stored but reports a conflict instead of firing.
+    const bindings = await shortconApi.getFeatureShortcuts(props.pluginName)
+    const binding = bindings[featureId]
+    shortcutDraft.value = binding?.accelerator ?? ''
+    shortcutStatus.value = binding?.status ?? null
+  } catch (error) {
+    featureDetailLog.error('Failed to save the feature shortcut', error)
+    shortcutError.value = t('plugin.features.shortcut.saveFailed')
+  } finally {
+    shortcutSaving.value = false
+  }
+}
+
+/**
+ * What the key actually does when pressed, in the feature's own terms.
+ *
+ * The presentation is decided by the host from the feature's declaration, so the row says which
+ * of the three outcomes this feature will get rather than making the user infer it.
+ */
+const shortcutBehaviourKey = computed(() => {
+  const feature = props.feature
+  if (!feature) return 'plugin.features.shortcut.behaviourRun'
+  if (feature.interaction?.type === 'webcontent') return 'plugin.features.shortcut.behaviourView'
+  if (feature.push) return 'plugin.features.shortcut.behaviourBox'
+  if (feature.interaction?.showInput === false) return 'plugin.features.shortcut.behaviourRun'
+  if (feature.interaction?.showInput === true || feature.interaction?.allowInput === true) {
+    return 'plugin.features.shortcut.behaviourBox'
+  }
+  return feature.acceptedInputTypes?.length
+    ? 'plugin.features.shortcut.behaviourBox'
+    : 'plugin.features.shortcut.behaviourRun'
+})
+
+const shortcutConflictHint = computed(() => {
+  const status = shortcutStatus.value
+  if (!status || status.state !== 'conflict') return ''
+  return t('plugin.features.shortcut.conflict', {
+    with: (status.conflictWith ?? []).join(', ')
+  })
+})
 
 const widgetStatusTone = computed(() => {
   if (!props.widgetSourceFilePath && !props.widgetSourceUrl && !props.widgetCompiledPath) {
@@ -408,6 +509,41 @@ function handleClose(): void {
                       </span>
                       <span class="text-sm font-medium">{{ feature.priority }}</span>
                     </div>
+                  </div>
+                </TuffGroupBlock>
+
+                <TuffGroupBlock
+                  class="PluginFeature-Shortcut"
+                  :name="t('plugin.features.shortcut.title')"
+                >
+                  <template #icon>
+                    <i class="i-ri-keyboard-box-line text-[var(--tx-color-primary)]" />
+                  </template>
+                  <div class="p-4 space-y-3">
+                    <div class="flex justify-between items-center gap-4">
+                      <div class="min-w-0">
+                        <div class="text-sm text-[var(--tx-text-color-regular)]">
+                          {{ t('plugin.features.shortcut.binding') }}
+                        </div>
+                        <div class="text-xs text-[var(--tx-text-color-secondary)] mt-1">
+                          {{ t(shortcutBehaviourKey) }}
+                        </div>
+                      </div>
+                      <FlatKeyInput
+                        :model-value="shortcutDraft"
+                        clearable
+                        @update:model-value="commitShortcut"
+                      />
+                    </div>
+                    <p
+                      v-if="shortcutConflictHint"
+                      class="text-xs text-[var(--tx-color-warning)] m-0"
+                    >
+                      {{ shortcutConflictHint }}
+                    </p>
+                    <p v-if="shortcutError" class="text-xs text-[var(--tx-color-danger)] m-0">
+                      {{ shortcutError }}
+                    </p>
                   </div>
                 </TuffGroupBlock>
 
