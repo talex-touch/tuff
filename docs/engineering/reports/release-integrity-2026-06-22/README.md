@@ -38,6 +38,9 @@ pnpm -C "apps/core-app" exec vitest run "src/main/utils/release-signature.test.t
 pnpm -C "apps/nexus" exec vitest run "server/utils/releaseSignature.test.ts" "test/api/releases/signature.get.test.ts" "test/api/releases/assets.post.test.ts"
 ```
 
+> 存档说明：`scripts/backfill-release-assets-from-github.mjs` 是 v2.4.7 一次性回填工具，回填完成后已随仓库收敛删除。
+> 上面的命令摘要记录的是当时实际执行过的链路，保留原样，不再可直接复现。
+
 ## 机器可读摘要
 
 见 `release-integrity-evidence.json`。
