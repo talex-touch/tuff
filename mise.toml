@@ -1,7 +1,9 @@
 [tools]
 actionlint = "1.7.12"
 node = "26.0.0"
-pnpm = "10.34.4"
+# Must match the root package.json `packageManager` field; a mismatch makes `pnpm self-update`
+# silently overwrite this managed install in place, leaving the dir name and binary disagreeing.
+pnpm = "11.24.0"
 # Pinned because actionlint silently skips all run-block analysis when shellcheck is absent:
 # without it the same command reports 0 findings locally and 32 on a GitHub runner.
 shellcheck = "0.10.0"
