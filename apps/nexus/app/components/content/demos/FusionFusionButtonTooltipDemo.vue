@@ -19,7 +19,7 @@ const active = ref(false)
         "
       >
         <div style="display: flex; gap: 8px; align-items: center;">
-          <TxButton size="small" type="primary" @click="active = !active">
+          <TxButton size="sm" type="primary" @click="active = !active">
             Toggle
           </TxButton>
           <div style="font-size: 12px; color: var(--tx-text-color-secondary);">
@@ -99,7 +99,7 @@ const active = ref(false)
         "
       >
         <div style="display: flex; gap: 8px; align-items: center;">
-          <TxButton size="small" type="primary" @click="active = !active">
+          <TxButton size="sm" type="primary" @click="active = !active">
             Toggle
           </TxButton>
           <div style="font-size: 12px; color: var(--tx-text-color-secondary);">

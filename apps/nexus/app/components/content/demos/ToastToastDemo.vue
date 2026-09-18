@@ -71,19 +71,19 @@ function fireAction() {
     </TxFlatRadio>
 
     <div class="toast-demo__row">
-      <TxButton size="small" @click="fireStack">
+      <TxButton size="sm" @click="fireStack">
         {{ labels.stack }}
       </TxButton>
       <TxButton
         v-for="v in variants"
         :key="v"
-        size="small"
+        size="sm"
         variant="ghost"
         @click="fire(v)"
       >
         {{ labels.variants[v as 'success' | 'warning' | 'danger' | 'info'] }}
       </TxButton>
-      <TxButton size="small" variant="ghost" @click="fireAction">
+      <TxButton size="sm" variant="ghost" @click="fireAction">
         {{ labels.withAction }}
       </TxButton>
     </div>

@@ -195,17 +195,13 @@ function formatRemainingTime(seconds: number): string {
         </div>
       </div>
       <div class="task-actions">
-        <TxButton
-          v-if="task.status === 'downloading'"
-          size="small"
-          @click="$emit('pause', task.id)"
-        >
+        <TxButton v-if="task.status === 'downloading'" size="sm" @click="$emit('pause', task.id)">
           <i class="i-carbon-pause" />
           {{ t('download.pause') }}
         </TxButton>
         <TxButton
           v-else-if="task.status === 'paused'"
-          size="small"
+          size="sm"
           type="primary"
           @click="$emit('resume', task.id)"
         >
@@ -214,7 +210,7 @@ function formatRemainingTime(seconds: number): string {
         </TxButton>
         <TxButton
           v-if="task.status === 'failed'"
-          size="small"
+          size="sm"
           type="warning"
           @click="$emit('retry', task.id)"
         >
@@ -223,7 +219,7 @@ function formatRemainingTime(seconds: number): string {
         </TxButton>
         <TxButton
           v-if="['pending', 'downloading', 'paused'].includes(task.status)"
-          size="small"
+          size="sm"
           type="danger"
           @click="$emit('cancel', task.id)"
         >
@@ -232,7 +228,7 @@ function formatRemainingTime(seconds: number): string {
         </TxButton>
         <TxButton
           v-if="['completed', 'failed', 'cancelled'].includes(task.status)"
-          size="small"
+          size="sm"
           type="danger"
           @click="$emit('remove', task.id)"
         >

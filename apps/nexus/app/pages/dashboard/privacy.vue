@@ -586,7 +586,7 @@ onUnmounted(() => {
             <TxButton
               variant="bare"
               circle
-              size="mini"
+              size="sm"
               icon="i-carbon-close"
               :disabled="deletionSubmitting"
               :aria-label="t('common.close', '关闭')"

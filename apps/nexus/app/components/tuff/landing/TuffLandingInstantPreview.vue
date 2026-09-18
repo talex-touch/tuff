@@ -160,7 +160,7 @@ function resolveTypeLabel(type: string) {
                 </div>
                 <TxButton
                   variant="bare"
-                  size="small"
+                  size="sm"
                   native-type="button"
                   class="ai-preview-demo__card-hint"
                 >

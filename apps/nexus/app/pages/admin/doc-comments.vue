@@ -248,7 +248,7 @@ onMounted(() => {
           :placeholder="t('dashboard.sections.docComments.filterPlaceholder', 'Filter by doc path…')"
           class="w-48"
         />
-        <TxButton size="small" type="info" :disabled="loading" @click="refreshComments">
+        <TxButton size="sm" type="info" :disabled="loading" @click="refreshComments">
           <TxSpinner v-if="loading" :size="14" />
           <span class="ml-2">
             {{ t('dashboard.sections.docComments.refresh', 'Refresh') }}
@@ -326,7 +326,7 @@ onMounted(() => {
           </div>
 
           <div class="mt-3 flex items-center justify-end">
-            <TxButton size="small" type="danger" :loading="actionPendingId === comment.id" :disabled="actionsLocked" @click="handleDelete(comment)">
+            <TxButton size="sm" type="danger" :loading="actionPendingId === comment.id" :disabled="actionsLocked" @click="handleDelete(comment)">
               {{ t('dashboard.sections.docComments.delete', 'Delete') }}
             </TxButton>
           </div>
@@ -334,7 +334,7 @@ onMounted(() => {
       </div>
 
       <div v-if="hasMore" class="mt-5 flex justify-center">
-        <TxButton size="small" type="info" :loading="loading" @click="loadMore">
+        <TxButton size="sm" type="info" :loading="loading" @click="loadMore">
           {{ t('dashboard.sections.docComments.loadMore', 'Load more') }}
         </TxButton>
       </div>

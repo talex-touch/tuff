@@ -102,7 +102,7 @@ const previewStyle = computed(() => ({
       <p v-if="lastChange" class="fine-tune-demo__log">
         {{ labels.changed }}<code>{{ lastChange }}</code>
       </p>
-      <TxButton size="small" variant="secondary" @click="reset">
+      <TxButton size="sm" variant="secondary" @click="reset">
         {{ labels.reset }}
       </TxButton>
     </div>

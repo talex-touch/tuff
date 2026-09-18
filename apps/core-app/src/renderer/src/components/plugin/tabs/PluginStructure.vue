@@ -179,11 +179,11 @@ watch(
         </div>
 
         <div class="PluginStructure-Actions">
-          <TxButton size="small" plain icon="i-ri-folder-open-line" @click="openPath('plugin')">
+          <TxButton size="sm" plain icon="i-ri-folder-open-line" @click="openPath('plugin')">
             {{ t('plugin.structure.actions.openRoot') }}
           </TxButton>
           <TxButton
-            size="small"
+            size="sm"
             type="primary"
             plain
             icon="i-ri-refresh-line"

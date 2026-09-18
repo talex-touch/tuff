@@ -558,7 +558,7 @@ function useOperationId() {
         </p>
         <div v-if="outcome.operationId" class="mt-3 flex flex-wrap items-center gap-2">
           <code class="rounded bg-black/5 px-2 py-1 text-xs dark:bg-white/10">{{ outcome.operationId }}</code>
-          <TxButton variant="secondary" size="small" @click="useOperationId">
+          <TxButton variant="secondary" size="sm" @click="useOperationId">
             Use this id below
           </TxButton>
         </div>

@@ -34,12 +34,12 @@ code: |
     <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="14">
       <template #header>
         Card title
-        <TxButton size="small" variant="text">Action</TxButton>
+        <TxButton size="sm" variant="text">Action</TxButton>
       </template>
       Slots: header / default / footer
       <template #footer>
-        <TxButton size="small" variant="outline">Cancel</TxButton>
-        <TxButton size="small" variant="primary">Confirm</TxButton>
+        <TxButton size="sm" variant="outline">Cancel</TxButton>
+        <TxButton size="sm" variant="primary">Confirm</TxButton>
       </template>
     </TxCard>
   </template>
@@ -103,12 +103,12 @@ code: |
     <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="14">
       <template #header>
         User info
-        <TxButton size="small" variant="text">More</TxButton>
+        <TxButton size="sm" variant="text">More</TxButton>
       </template>
       <!-- 头像 + 姓名 / 职位 -->
       <template #footer>
-        <TxButton size="small" variant="outline">Cancel</TxButton>
-        <TxButton size="small" variant="primary">Confirm</TxButton>
+        <TxButton size="sm" variant="outline">Cancel</TxButton>
+        <TxButton size="sm" variant="primary">Confirm</TxButton>
       </template>
     </TxCard>
   </template>
@@ -201,7 +201,7 @@ code: |
     <TxCard variant="plain" background="mask" shadow="none" :padding="16">
       <TxEmpty title="Nothing here" description="Create your first item to get started.">
         <template #action>
-          <TxButton variant="primary" size="small">Create</TxButton>
+          <TxButton variant="primary" size="sm">Create</TxButton>
         </template>
       </TxEmpty>
     </TxCard>
@@ -428,8 +428,8 @@ code: |
 
         <template #footer>
           <div class="card-actions">
-            <TxButton size="small" variant="text">编辑</TxButton>
-            <TxButton size="small" variant="text">删除</TxButton>
+            <TxButton size="sm" variant="text">编辑</TxButton>
+            <TxButton size="sm" variant="text">删除</TxButton>
           </div>
         </template>
       </TxCard>

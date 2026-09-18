@@ -196,16 +196,66 @@ function selfTest() {
   return failures
 }
 
+const MIXED_TIERS = [
+  ['sm', 'small'],
+  ['sm', 'mini'],
+  ['md', 'medium'],
+  ['lg', 'large'],
+  ['xl', 'xlarge'],
+]
+
+/**
+ * A union carrying both spellings of one tier is the defect worth naming.
+ *
+ * A cross-component difference is survivable: `TxAvatar` in `large`/`small`
+ * and `TxStatusBadge` in `sm` never meet. A single component offering `sm` and
+ * `small` is not — it puts both spellings in the same template and buys
+ * nothing, since they render identically. `TxButton` typed six values for
+ * three heights until 2026-09-17; see `button/src/size.ts`.
+ */
+function mixedSpellings(rows) {
+  const offenders = []
+  for (const [vocabulary, components] of rows) {
+    const values = new Set(vocabulary.split(' | '))
+    const pairs = MIXED_TIERS.filter(([short, long]) => values.has(short) && values.has(long))
+    if (pairs.length)
+      offenders.push({ vocabulary, components: [...components].sort(), pairs })
+  }
+  return offenders
+}
+
+function report() {
+  const sizeRows = inventory('size')
+  for (const [prop, rows] of [['size', sizeRows], ['status', inventory('status')]]) {
+    console.log(`\n=== \`${prop}\` vocabularies (${rows.length} distinct) ===`)
+    for (const [vocabulary, components] of rows)
+      console.log(`  ${vocabulary}\n      ${[...components].sort().join(', ')}`)
+  }
+
+  const offenders = mixedSpellings(sizeRows)
+  console.log('\n=== `size` unions mixing two spellings of one tier ===')
+  if (offenders.length === 0) {
+    console.log('  none — every `size` union uses one spelling per tier')
+  }
+  else {
+    for (const { vocabulary, components, pairs } of offenders) {
+      console.log(`  ${vocabulary}`)
+      console.log(`      ${components.join(', ')}`)
+      console.log(`      redundant: ${pairs.map(p => p.join('/')).join(', ')}`)
+    }
+  }
+
+  console.log(
+    '\nA cross-component `size` difference is tolerable; two spellings of one tier'
+    + '\ninside a single union is not — see `button/src/size.ts` for the fix shape.'
+    + '\nMost `status` unions are domain vocabularies that only share a prop name'
+    + '\n(avatar online/away/busy, agent-trace done/running), and merging those'
+    + '\nwould be wrong. `error` is the validation-state spelling; `danger` belongs'
+    + '\nto `variant`/`type`, which name a visual tone.',
+  )
+}
+
 if (process.argv.includes('--self-test'))
   process.exit(selfTest() > 0 ? 1 : 0)
 
-for (const prop of ['size', 'status']) {
-  const rows = inventory(prop)
-  console.log(`\n=== \`${prop}\` vocabularies (${rows.length} distinct) ===`)
-  for (const [vocabulary, components] of rows)
-    console.log(`  ${vocabulary}\n      ${[...components].sort().join(', ')}`)
-}
-console.log(
-  '\nMany `status` unions are separate domain vocabularies that only share a prop name.'
-  + '\nThe split worth deciding is severity: `error` and `danger` name the same state.',
-)
+report()

@@ -664,7 +664,7 @@ async function openTypeReference(typeInfo: RefType) {
             >
               <TxButton
                 variant="bare"
-                size="small"
+                size="sm"
                 native-type="button"
                 :icon="isDescriptionExpanded(row.key) ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down'"
                 class="doc-api-table__desc-toggle"
@@ -876,7 +876,7 @@ async function openTypeReference(typeInfo: RefType) {
               >
                 <TxButton
                   variant="bare"
-                  size="small"
+                  size="sm"
                   native-type="button"
                   :icon="isDescriptionExpanded(row.key) ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down'"
                   class="doc-api-table__desc-toggle"

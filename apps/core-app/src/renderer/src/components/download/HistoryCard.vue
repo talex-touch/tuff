@@ -182,7 +182,7 @@ function formatSpeed(bytesPerSecond: number): string {
           :content="t('download.open_file')"
           placement="top"
         >
-          <TxButton size="small" type="primary" circle @click="$emit('open-file', history.id)">
+          <TxButton size="sm" type="primary" circle @click="$emit('open-file', history.id)">
             <i class="i-carbon-folder-open" />
           </TxButton>
         </TxTooltip>
@@ -191,12 +191,12 @@ function formatSpeed(bytesPerSecond: number): string {
           :content="t('download.show_in_folder')"
           placement="top"
         >
-          <TxButton size="small" circle @click="$emit('show-in-folder', history.id)">
+          <TxButton size="sm" circle @click="$emit('show-in-folder', history.id)">
             <i class="i-carbon-folder" />
           </TxButton>
         </TxTooltip>
         <TxTooltip :content="t('download.clear_history_item')" placement="top">
-          <TxButton size="small" type="danger" circle @click="$emit('clear', history.id)">
+          <TxButton size="sm" type="danger" circle @click="$emit('clear', history.id)">
             <i class="i-carbon-trash-can" />
           </TxButton>
         </TxTooltip>

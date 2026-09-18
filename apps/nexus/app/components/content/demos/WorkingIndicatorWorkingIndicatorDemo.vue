@@ -18,7 +18,7 @@ const startedAt = ref(Date.now())
 
 <template>
   <div class="flex flex-col gap-4">
-    <TxButton class="self-start" size="small" variant="secondary" @click="startedAt = Date.now()">
+    <TxButton class="self-start" size="sm" variant="secondary" @click="startedAt = Date.now()">
       {{ copy.restart }}
     </TxButton>
 

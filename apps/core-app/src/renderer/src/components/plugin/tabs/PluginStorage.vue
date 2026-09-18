@@ -491,7 +491,7 @@ watch(
       <template #header-actions>
         <div class="PluginStorageDetails-Actions">
           <TxButton
-            size="small"
+            size="sm"
             type="primary"
             plain
             icon="i-ri-refresh-line"
@@ -508,7 +508,7 @@ watch(
             :panel-padding="6"
           >
             <template #trigger>
-              <TxButton size="small" plain icon="i-ri-more-2-line" :disabled="loading">
+              <TxButton size="sm" plain icon="i-ri-more-2-line" :disabled="loading">
                 {{ t('plugin.storage.actions.more') }}
               </TxButton>
             </template>

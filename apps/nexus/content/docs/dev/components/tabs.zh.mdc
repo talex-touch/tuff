@@ -132,14 +132,14 @@ code: |
 
           <label class="tx-demo__row" style="gap: 8px;">
             <span class="tx-demo__label">indicator</span>
-            <TxButton size="small" @click="showIndicator = !showIndicator">
+            <TxButton size="sm" @click="showIndicator = !showIndicator">
               {{ showIndicator ? 'on' : 'off' }}
             </TxButton>
           </label>
 
           <label class="tx-demo__row" style="gap: 8px;">
             <span class="tx-demo__label">auto</span>
-            <TxButton size="small" @click="next">Next</TxButton>
+            <TxButton size="sm" @click="next">Next</TxButton>
           </label>
 
           <div style="opacity: 0.7; font-size: 12px;">
@@ -208,13 +208,13 @@ code: |
   <template>
     <div style="display: grid; gap: 10px; min-height: 120px; max-width: 100%;">
       <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-        <TxButton size="small" @click="expanded = !expanded">
+        <TxButton size="sm" @click="expanded = !expanded">
           Toggle details
         </TxButton>
-        <TxButton size="small" :disabled="count <= 0" @click="count--">
+        <TxButton size="sm" :disabled="count <= 0" @click="count--">
           - Item
         </TxButton>
-        <TxButton size="small" @click="count++">
+        <TxButton size="sm" @click="count++">
           + Item
         </TxButton>
       </div>
@@ -339,7 +339,7 @@ code: |
           </TxTabHeader>
 
           <template #nav-right>
-            <TxButton size="small" type="primary" @click="actionWide = !actionWide">
+            <TxButton size="sm" type="primary" @click="actionWide = !actionWide">
               {{ actionWide ? 'More Actions' : 'Action' }}
             </TxButton>
           </template>

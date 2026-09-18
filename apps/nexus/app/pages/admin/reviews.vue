@@ -174,7 +174,7 @@ onMounted(() => {
       </div>
 
       <div class="mt-3">
-        <TxButton size="small" type="text" :disabled="pendingLoading" @click="refreshReviews">
+        <TxButton size="sm" type="text" :disabled="pendingLoading" @click="refreshReviews">
           <TxSpinner v-if="pendingLoading" :size="14" />
           <span class="ml-2">
             {{ t('dashboard.sections.reviews.refresh', 'Refresh') }}
@@ -240,10 +240,10 @@ onMounted(() => {
               <span>{{ formatDate(review.createdAt) }}</span>
             </div>
             <div class="flex items-center gap-2">
-              <TxButton size="small" type="success" :loading="actionPendingId === review.id" :disabled="actionsLocked" @click="updateReviewStatus(review, 'approved')">
+              <TxButton size="sm" type="success" :loading="actionPendingId === review.id" :disabled="actionsLocked" @click="updateReviewStatus(review, 'approved')">
                 {{ t('dashboard.sections.reviews.approve', 'Approve') }}
               </TxButton>
-              <TxButton size="small" type="danger" :loading="actionPendingId === review.id" :disabled="actionsLocked" @click="updateReviewStatus(review, 'rejected')">
+              <TxButton size="sm" type="danger" :loading="actionPendingId === review.id" :disabled="actionsLocked" @click="updateReviewStatus(review, 'rejected')">
                 {{ t('dashboard.sections.reviews.reject', 'Reject') }}
               </TxButton>
             </div>
@@ -252,7 +252,7 @@ onMounted(() => {
       </div>
 
       <div v-if="hasMore && !pendingError" class="mt-5 flex justify-center">
-        <TxButton size="small" type="text" :loading="pendingLoading" @click="loadMore">
+        <TxButton size="sm" type="text" :loading="pendingLoading" @click="loadMore">
           {{ t('dashboard.sections.reviews.loadMore', 'Load more') }}
         </TxButton>
       </div>

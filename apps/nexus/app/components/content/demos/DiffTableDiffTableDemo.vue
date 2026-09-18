@@ -98,7 +98,7 @@ function replay(): void {
       </template>
     </TxDiffTable>
 
-    <TxButton size="small" variant="secondary" @click="replay">
+    <TxButton size="sm" variant="secondary" @click="replay">
       {{ copy.replay }}
     </TxButton>
   </div>

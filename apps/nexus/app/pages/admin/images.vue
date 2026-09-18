@@ -254,7 +254,7 @@ watchEffect(() => {
                   <span :class="copiedImageKey === image.key ? 'i-carbon-checkmark' : 'i-carbon-copy'" class="text-sm" />
                   {{ copiedImageKey === image.key ? t('dashboard.sections.images.copied', 'Copied!') : t('dashboard.sections.images.copyUrl', 'Copy URL') }}
                 </TxButton>
-                <TxButton variant="bare" circle size="mini" native-type="button" class="inline-flex h-8 w-8 items-center justify-center bg-red-50 text-red-500 transition hover:text-red-600 dark:bg-red-500/10 dark:text-red-200" @click="requestDeleteImage(image.key)">
+                <TxButton variant="bare" circle size="sm" native-type="button" class="inline-flex h-8 w-8 items-center justify-center bg-red-50 text-red-500 transition hover:text-red-600 dark:bg-red-500/10 dark:text-red-200" @click="requestDeleteImage(image.key)">
                   <span class="i-carbon-trash-can text-sm" />
                 </TxButton>
               </div>

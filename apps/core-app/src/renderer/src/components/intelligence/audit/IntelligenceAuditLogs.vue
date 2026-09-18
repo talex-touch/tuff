@@ -299,15 +299,15 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
         <span class="logs-count">{{ logs.length }} {{ t('intelligence.audit.records') }}</span>
       </div>
       <div class="header-actions">
-        <TxButton variant="flat" size="small" @click="loadLogs(false)">
+        <TxButton variant="flat" size="sm" @click="loadLogs(false)">
           <i class="i-carbon-renew" />
           {{ t('common.refresh') }}
         </TxButton>
-        <TxButton variant="flat" size="small" @click="handleExportCSV">
+        <TxButton variant="flat" size="sm" @click="handleExportCSV">
           <i class="i-carbon-document-export" />
           CSV
         </TxButton>
-        <TxButton variant="flat" size="small" @click="handleExportJSON">
+        <TxButton variant="flat" size="sm" @click="handleExportJSON">
           <i class="i-carbon-document-export" />
           JSON
         </TxButton>
@@ -421,7 +421,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
                   <span>{{ summary.itemCount }} {{ t('intelligence.audit.contextItems') }}</span>
                   <TxButton
                     variant="flat"
-                    size="small"
+                    size="sm"
                     class="context-explain-button"
                     @click.stop="openContextExplainDrawer(summary)"
                   >

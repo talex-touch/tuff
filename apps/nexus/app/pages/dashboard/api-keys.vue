@@ -202,8 +202,8 @@ const DeleteConfirmDialog = defineComponent({
         h('p', { class: 'ApiKeyDeleteDialog-Desc' }, t('dashboard.sections.apiKeys.deleteDialog.description')),
       ]),
       h('div', { class: 'ApiKeyDeleteDialog-Actions' }, [
-        h(TxButton, { variant: 'secondary', size: 'small', 'native-type': 'button', onClick: handleCancel }, { default: () => t('dashboard.sections.apiKeys.cancel') }),
-        h(TxButton, { variant: 'danger', size: 'small', 'native-type': 'button', onClick: handleDelete }, { default: () => t('dashboard.sections.apiKeys.delete') }),
+        h(TxButton, { variant: 'secondary', size: 'sm', 'native-type': 'button', onClick: handleCancel }, { default: () => t('dashboard.sections.apiKeys.cancel') }),
+        h(TxButton, { variant: 'danger', size: 'sm', 'native-type': 'button', onClick: handleDelete }, { default: () => t('dashboard.sections.apiKeys.delete') }),
       ]),
     ])
   },
@@ -383,12 +383,12 @@ const expiryOptions = computed(() => [
             <code class="flex-1 rounded bg-black/10 px-3 py-2 font-mono text-xs text-black dark:bg-white/10 dark:text-white">
               {{ newlyCreatedKey.secretKey }}
             </code>
-            <TxButton size="small" variant="success" @click="copyKey">
+            <TxButton size="sm" variant="success" @click="copyKey">
               {{ copied ? t('dashboard.sections.apiKeys.actions.copied') : t('dashboard.sections.apiKeys.actions.copy') }}
             </TxButton>
           </div>
         </div>
-        <TxButton variant="bare" circle size="mini" native-type="button" class="text-green-600/60 transition hover:text-green-600" @click="newlyCreatedKey = null">
+        <TxButton variant="bare" circle size="sm" native-type="button" class="text-green-600/60 transition hover:text-green-600" @click="newlyCreatedKey = null">
           <span class="i-carbon-close text-lg" />
         </TxButton>
       </div>
@@ -462,7 +462,7 @@ const expiryOptions = computed(() => [
             </div>
           </div>
         </div>
-        <TxButton variant="bare" circle size="mini" native-type="button" class="rounded-lg text-red-400 transition hover:bg-red-500/10 hover:text-red-500" @click="requestDeleteKey(key.id)">
+        <TxButton variant="bare" circle size="sm" native-type="button" class="rounded-lg text-red-400 transition hover:bg-red-500/10 hover:text-red-500" @click="requestDeleteKey(key.id)">
           <span class="i-carbon-trash-can text-lg" />
         </TxButton>
       </div>
@@ -600,10 +600,10 @@ const expiryOptions = computed(() => [
             </div>
 
             <div class="ApiKeyOverlay-Actions">
-              <TxButton variant="secondary" size="small" @click="close">
+              <TxButton variant="secondary" size="sm" @click="close">
                 {{ t('dashboard.sections.apiKeys.cancel') }}
               </TxButton>
-              <TxButton variant="primary" size="small" :disabled="!newKeyName.trim() || creating" @click="createKey">
+              <TxButton variant="primary" size="sm" :disabled="!newKeyName.trim() || creating" @click="createKey">
                 {{ creating ? t('dashboard.sections.apiKeys.actions.creating') : t('dashboard.sections.apiKeys.actions.createKey') }}
               </TxButton>
             </div>

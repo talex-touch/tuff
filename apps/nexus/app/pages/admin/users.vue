@@ -629,7 +629,7 @@ onMounted(() => {
           </TuffSelect>
         </div>
         <div class="flex items-end">
-          <TxButton variant="secondary" size="small" :disabled="loading" @click="fetchUsers({ resetPage: true })">
+          <TxButton variant="secondary" size="sm" :disabled="loading" @click="fetchUsers({ resetPage: true })">
             {{ t('common.refresh', 'Refresh') }}
           </TxButton>
         </div>
@@ -731,7 +731,7 @@ onMounted(() => {
             <span class="text-sm text-black/60 dark:text-white/60">{{ formatDate(entry.createdAt) }}</span>
           </template>
           <template #cell-actions="{ row: entry }">
-            <TxButton variant="secondary" size="mini" :disabled="actionsLocked" @click="openEditor(entry)">
+            <TxButton variant="secondary" size="sm" :disabled="actionsLocked" @click="openEditor(entry)">
               {{ t('dashboard.sections.users.actions.edit', 'Edit') }}
             </TxButton>
           </template>
@@ -739,10 +739,10 @@ onMounted(() => {
       </div>
 
       <div class="flex items-center justify-end gap-2 border-t border-black/[0.04] p-4 dark:border-white/[0.06]">
-        <TxButton variant="secondary" size="small" :disabled="!hasPrev || loading" @click="goPrev">
+        <TxButton variant="secondary" size="sm" :disabled="!hasPrev || loading" @click="goPrev">
           {{ t('dashboard.sections.users.pagination.prev', 'Prev') }}
         </TxButton>
-        <TxButton variant="secondary" size="small" :disabled="!hasNext || loading" @click="goNext">
+        <TxButton variant="secondary" size="sm" :disabled="!hasNext || loading" @click="goNext">
           {{ t('dashboard.sections.users.pagination.next', 'Next') }}
         </TxButton>
       </div>
@@ -858,7 +858,7 @@ onMounted(() => {
             </div>
             <TxButton
               variant="secondary"
-              size="small"
+              size="sm"
               :loading="userCreditsLoading"
               :disabled="userCreditsLoading"
               @click="fetchSelectedUserCredits({ resetPage: true })"
@@ -964,7 +964,7 @@ onMounted(() => {
               <div class="flex justify-end sm:col-span-2">
                 <TxButton
                   variant="primary"
-                  size="small"
+                  size="sm"
                   :loading="userCreditsSaving"
                   :disabled="userCreditsSaving || selectedUser.status === 'merged'"
                   @click="adjustSelectedUserCredits"
@@ -1025,10 +1025,10 @@ onMounted(() => {
 
       <template #footer>
         <div class="flex items-center justify-end gap-2">
-          <TxButton variant="secondary" size="small" :disabled="editorSaving" @click="editorOpen = false">
+          <TxButton variant="secondary" size="sm" :disabled="editorSaving" @click="editorOpen = false">
             {{ t('common.cancel', 'Cancel') }}
           </TxButton>
-          <TxButton variant="primary" size="small" :loading="editorSaving" :disabled="editorSaving" @click="saveEditor">
+          <TxButton variant="primary" size="sm" :loading="editorSaving" :disabled="editorSaving" @click="saveEditor">
             {{ t('common.save', 'Save') }}
           </TxButton>
         </div>

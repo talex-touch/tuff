@@ -1,4 +1,5 @@
 import type { TxIconButtonProps } from './src/icon-button'
+import type { ButtonSize } from './src/size'
 import type { SplitButtonEmits, SplitButtonProps } from './src/split-button'
 import type { ButtonEmits, ButtonProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
@@ -21,6 +22,7 @@ export {
 }
 
 export type { TxIconButtonProps }
+export type { ButtonSize as TxButtonSize }
 export type TxButtonProps = ButtonProps
 export type TxButtonEmits = ButtonEmits
 export type TxButtonInstance = InstanceType<typeof component>

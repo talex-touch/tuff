@@ -172,9 +172,9 @@ rows:
   - parameter: size
     type:
       kind: enum
-      enums: [sm, md, lg, large, small, mini]
+      enums: [sm, md, lg]
     default: "'md'"
-    description: '按钮尺寸。`lg`/`large` 用于页面主操作，`sm`/`small`/`mini` 用于表格行内与紧凑工具条。'
+    description: '按钮尺寸，三档对应 26px / 32px / 38px。`lg` 用于页面主操作，`sm` 用于表格行内与紧凑工具条。'
   - parameter: block
     type: boolean
     default: 'false'
@@ -267,7 +267,7 @@ rows:
 | 属性名 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
 | `variant` | `'primary' \| 'secondary' \| 'ghost' \| 'danger' \| 'success' \| 'warning' \| 'info'` | `primary` | 主按钮与菜单按钮共享的视觉变体。 |
-| `size` | `'sm' \| 'md' \| 'lg' \| 'large' \| 'small' \| 'mini'` | `md` | 按钮密度；别名会归一化为 `sm`、`md` 或 `lg`。 |
+| `size` | `'sm' \| 'md' \| 'lg'` | `md` | 按钮密度，三档对应 28px / 32px / 40px。 |
 | `disabled` | `boolean` | `false` | 同时禁用主操作和菜单触发器。 |
 | `loading` | `boolean` | `false` | 显示主按钮 spinner，并禁用两个交互区域。 |
 | `icon` | `string` | - | 未处于 loading 时显示在主文案前的图标类名。 |
@@ -472,7 +472,7 @@ code: |
 ## 交互契约
 
 - `variant` 优先级高于语义 `type`；未设置 `variant` 时，`type="text"` 映射为 `ghost`，其它语义类型映射到对应视觉变体。
-- 尺寸别名会归一化为 `sm`、`md`、`lg`；`large` 映射为 `lg`，`small` 和 `mini` 映射为 `sm`。
+- 尺寸只有 `sm`、`md`、`lg` 三档。历史拼写 `large`、`small`、`mini` 已从类型中移除，但运行时仍会归一化（`large` → `lg`，`small` / `mini` → `sm`），因为已发布版本的使用方会从 JS 传入这些字符串。
 - `disabled` 和 `loading` 都会禁用原生 `<button>`，并阻止 `click` 事件向外 emit。
 - `loadingVariant="bar"` 仅在块级按钮上可见；图标按钮和普通内联按钮使用 spinner slot 或 overlay spinner。
 - 非 block、非 circle 的按钮在 loading 切换时会用尺寸 FLIP 过渡宽度变化。
@@ -496,7 +496,7 @@ code: |
 ## 审阅说明
 
 - 已核对 `packages/tuffex/packages/components/src/button/src/button.vue`、`split-button.vue`、`types.ts`、`split-button.ts` 与两个 button 测试文件。
-- **实测覆盖:** `button.test.ts` 覆盖文案渲染、语义 type 映射、variant 优先级、尺寸别名、disabled/loading 点击阻断、loading bar、图标、形态 class、无边框模式与原生 type；`split-button.test.ts` 覆盖菜单渲染、主按钮点击、disabled/loading 阻断与 `menuOpenChange`。
+- **实测覆盖:** `button.test.ts` 覆盖文案渲染、语义 type 映射、variant 优先级、三档尺寸及已发布拼写的运行时归一化与未知值兜底、disabled/loading 点击阻断、loading bar、图标、形态 class、无边框模式与原生 type；`split-button.test.ts` 覆盖菜单渲染、主按钮点击、disabled/loading 阻断与 `menuOpenChange`。
 - **实测覆盖（IconButton / CopyButton）:** `packages/tuffex/packages/components/src/button/__tests__/icon-button.test.ts` 覆盖可访问名称告警与语义状态 class；`copy-button.test.ts` 覆盖剪贴板成功、已复制视觉状态、禁用无操作和错误派发。
 - 可访问性说明：原生 button 已处理基础键盘激活。图标按钮或 `circle` 按钮在图标含义不自明时，应通过外层文案或 attrs 提供可访问名称。
 

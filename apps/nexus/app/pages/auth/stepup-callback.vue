@@ -146,7 +146,7 @@ async function copyToken() {
           <code class="mb-3 block max-h-20 overflow-auto break-all rounded bg-gray-100 p-2 text-xs dark:bg-gray-800">
             {{ stepUpToken }}
           </code>
-          <TxButton size="small" variant="warning" @click="copyToken">
+          <TxButton size="sm" variant="warning" @click="copyToken">
             {{ copied ? '✓ Copied!' : 'Copy Token' }}
           </TxButton>
         </div>

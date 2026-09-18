@@ -608,10 +608,10 @@ function formatHistoryTime(value: string) {
                     </p>
                     <div v-else class="mt-2 flex min-w-0 flex-wrap items-center gap-2">
                       <TuffInput v-model="emailDraft" class="min-w-[240px]" type="email" :placeholder="t('auth.email', '邮箱')" />
-                      <TxButton size="small" :loading="savingEmail" :disabled="!hasEmailChanges" @click="saveEmail">
+                      <TxButton size="sm" :loading="savingEmail" :disabled="!hasEmailChanges" @click="saveEmail">
                         {{ t('common.save', '保存') }}
                       </TxButton>
-                      <TxButton size="small" variant="secondary" :disabled="savingEmail" @click="cancelEmailEdit">
+                      <TxButton size="sm" variant="secondary" :disabled="savingEmail" @click="cancelEmailEdit">
                         {{ t('common.cancel', '取消') }}
                       </TxButton>
                     </div>
@@ -619,7 +619,7 @@ function formatHistoryTime(value: string) {
                       {{ emailMessage }}
                     </p>
                   </div>
-                  <TxButton v-if="!editingEmail" size="small" variant="secondary" @click="editingEmail = true">
+                  <TxButton v-if="!editingEmail" size="sm" variant="secondary" @click="editingEmail = true">
                     {{ t('dashboard.account.editEmail', '编辑') }}
                   </TxButton>
                 </div>
@@ -635,7 +635,7 @@ function formatHistoryTime(value: string) {
                       {{ boundMessage('github', githubAccount?.providerAccountId) }}
                     </p>
                   </div>
-                  <TxButton size="small" :variant="isGithubBound ? 'danger' : 'secondary'" :loading="linkingGithub || unlinkingGithub" :disabled="linkingLinuxdo || unlinkingLinuxdo" @click="handleGithubToggle">
+                  <TxButton size="sm" :variant="isGithubBound ? 'danger' : 'secondary'" :loading="linkingGithub || unlinkingGithub" :disabled="linkingLinuxdo || unlinkingLinuxdo" @click="handleGithubToggle">
                     {{ isGithubBound ? t('dashboard.account.unbind', '解绑') : t('auth.githubLogin', '绑定') }}
                   </TxButton>
                 </div>
@@ -651,7 +651,7 @@ function formatHistoryTime(value: string) {
                       {{ boundMessage('linuxdo', linuxdoAccount?.providerAccountId) }}
                     </p>
                   </div>
-                  <TxButton size="small" :variant="isLinuxdoBound ? 'danger' : 'secondary'" :loading="linkingLinuxdo || unlinkingLinuxdo" :disabled="linkingGithub || unlinkingGithub" @click="handleLinuxdoToggle">
+                  <TxButton size="sm" :variant="isLinuxdoBound ? 'danger' : 'secondary'" :loading="linkingLinuxdo || unlinkingLinuxdo" :disabled="linkingGithub || unlinkingGithub" @click="handleLinuxdoToggle">
                     {{ isLinuxdoBound ? t('dashboard.account.unbind', '解绑') : t('dashboard.account.bind', '绑定') }}
                   </TxButton>
                 </div>
@@ -664,7 +664,7 @@ function formatHistoryTime(value: string) {
                       {{ t('dashboard.account.passkeyDesc', '使用系统 Passkey 快速登录') }}
                     </p>
                   </div>
-                  <TxButton size="small" variant="secondary" :disabled="!supportsPasskey || hasBoundPasskey" :loading="passkeyLoading" @click="handlePasskeyRegister">
+                  <TxButton size="sm" variant="secondary" :disabled="!supportsPasskey || hasBoundPasskey" :loading="passkeyLoading" @click="handlePasskeyRegister">
                     {{ hasBoundPasskey ? t('dashboard.account.passkeyBound', '已绑定') : t('auth.passkeyRegister', '添加') }}
                   </TxButton>
                 </div>
@@ -692,7 +692,7 @@ function formatHistoryTime(value: string) {
                     {{ t('dashboard.account.historyHint', '仅展示最近 5 条') }}
                   </span>
                 </div>
-                <TxButton size="small" variant="secondary" @click="handleRefreshHistory">
+                <TxButton size="sm" variant="secondary" @click="handleRefreshHistory">
                   {{ t('common.refresh', '刷新') }}
                 </TxButton>
               </div>
@@ -841,10 +841,10 @@ function formatHistoryTime(value: string) {
           </p>
 
           <div class="AccountProfileEditOverlay-Actions">
-            <TxButton size="small" variant="secondary" @click="close">
+            <TxButton size="sm" variant="secondary" @click="close">
               {{ t('common.cancel', '取消') }}
             </TxButton>
-            <TxButton size="small" :loading="savingProfile" :disabled="!hasProfileChanges" @click="saveProfile">
+            <TxButton size="sm" :loading="savingProfile" :disabled="!hasProfileChanges" @click="saveProfile">
               {{ t('common.save', '保存') }}
             </TxButton>
           </div>

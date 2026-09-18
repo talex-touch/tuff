@@ -108,7 +108,7 @@ code: |
       :collapsible="false"
     >
       <template #header-extra>
-        <TxButton size="small" variant="secondary">立即同步</TxButton>
+        <TxButton size="sm" variant="secondary">立即同步</TxButton>
       </template>
       <TxBlockLine title="上次同步" description="刚刚" />
     </TxGroupBlock>
@@ -208,7 +208,7 @@ code: |
         <template #tags>
           <TxTag label="已启用" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
         </template>
-        <TxButton size="small" variant="secondary">管理</TxButton>
+        <TxButton size="sm" variant="secondary">管理</TxButton>
       </TxBlockSlot>
     </TxGroupBlock>
   </template>

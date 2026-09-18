@@ -238,7 +238,7 @@ function onKeydown(e: KeyboardEvent): void {
         <TxButton
           v-if="showAttachmentButton"
           variant="ghost"
-          size="small"
+          size="sm"
           :disabled="!canAttach"
           @click="onAttachmentClick"
         >

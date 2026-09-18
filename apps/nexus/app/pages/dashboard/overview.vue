@@ -551,7 +551,7 @@ function isCurrentDevice(device: DeviceItem) {
 
           <div v-if="telemetryErrorText" class="mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-300">
             <div>{{ telemetryErrorText }}</div>
-            <TxButton class="mt-2" size="small" variant="secondary" @click="refreshOverview">
+            <TxButton class="mt-2" size="sm" variant="secondary" @click="refreshOverview">
               {{ t('dashboard.overview.errors.retry') }}
             </TxButton>
           </div>
@@ -650,7 +650,7 @@ function isCurrentDevice(device: DeviceItem) {
 
           <div v-if="historyErrorText" class="rounded-xl bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-300">
             <div>{{ historyErrorText }}</div>
-            <TxButton class="mt-2" size="small" variant="secondary" @click="refreshOverview">
+            <TxButton class="mt-2" size="sm" variant="secondary" @click="refreshOverview">
               {{ t('dashboard.overview.errors.retry') }}
             </TxButton>
           </div>
@@ -712,7 +712,7 @@ function isCurrentDevice(device: DeviceItem) {
 
           <div v-if="devicesErrorText" class="rounded-xl bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-300">
             <div>{{ devicesErrorText }}</div>
-            <TxButton class="mt-2" size="small" variant="secondary" @click="refreshOverview">
+            <TxButton class="mt-2" size="sm" variant="secondary" @click="refreshOverview">
               {{ t('dashboard.overview.errors.retry') }}
             </TxButton>
           </div>

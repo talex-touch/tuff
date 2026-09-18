@@ -117,7 +117,7 @@ function close() {
           <span class="file-count"
             >{{ files.length }} {{ t('settings.settingFileIndex.failedFilesCount') }}</span
           >
-          <TxButton variant="flat" size="small" @click="copyAll">
+          <TxButton variant="flat" size="sm" @click="copyAll">
             <div class="i-carbon-copy text-12px mr-4px" />
             {{ t('settings.settingFileIndex.copyAll') }}
           </TxButton>

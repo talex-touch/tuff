@@ -112,7 +112,7 @@ const labels = computed(() => {
           <div style="color: var(--tx-text-color-secondary); font-size: 12px;">
             {{ labels.panelDescription }}
           </div>
-          <TxButton size="small">
+          <TxButton size="sm">
             {{ labels.action }}
           </TxButton>
         </div>

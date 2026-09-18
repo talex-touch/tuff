@@ -68,7 +68,7 @@ watch(
         </TxTabHeader>
 
         <template #nav-right>
-          <TxButton size="small" type="primary" @click="actionWide = !actionWide">
+          <TxButton size="sm" type="primary" @click="actionWide = !actionWide">
             {{ actionWide ? labels.actionWide : labels.action }}
           </TxButton>
         </template>

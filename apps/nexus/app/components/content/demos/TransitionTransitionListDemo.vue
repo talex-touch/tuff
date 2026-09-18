@@ -31,10 +31,10 @@ const remove = () => {
               </TuffSelect>
             </label>
 
-            <TxButton size="small" @click="add">
+            <TxButton size="sm" @click="add">
               Add
             </TxButton>
-            <TxButton size="small" @click="remove">
+            <TxButton size="sm" @click="remove">
               Remove
             </TxButton>
           </div>
@@ -66,10 +66,10 @@ const remove = () => {
               </TuffSelect>
             </label>
 
-            <TxButton size="small" @click="add">
+            <TxButton size="sm" @click="add">
               Add
             </TxButton>
-            <TxButton size="small" @click="remove">
+            <TxButton size="sm" @click="remove">
               Remove
             </TxButton>
           </div>

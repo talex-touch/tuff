@@ -63,7 +63,7 @@ const treeNodes = [
           <div class="card-compositions-meta">
             Popover panel uses TxCard
           </div>
-          <TxButton size="small" @click="open = false">
+          <TxButton size="sm" @click="open = false">
             Close
           </TxButton>
         </div>

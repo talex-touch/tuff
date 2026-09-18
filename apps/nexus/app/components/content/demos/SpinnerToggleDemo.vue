@@ -12,7 +12,7 @@ const visible = ref(true)
         <div style="font-weight: 600;">
           v-if (no built-in transition)
         </div>
-        <TxButton size="small" @click="showByIf = !showByIf">
+        <TxButton size="sm" @click="showByIf = !showByIf">
           Toggle
         </TxButton>
       </div>
@@ -27,7 +27,7 @@ const visible = ref(true)
         <div style="font-weight: 600;">
           :visible (built-in transition)
         </div>
-        <TxButton size="small" @click="visible = !visible">
+        <TxButton size="sm" @click="visible = !visible">
           Toggle
         </TxButton>
       </div>

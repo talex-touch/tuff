@@ -85,7 +85,7 @@ onMounted(async () => {
   <div class="Beginner">
     <div ref="main" class="Beginner-Main fake-background transition-cubic">
       <div v-if="canBack" class="Beginner-TopBar">
-        <TxButton variant="bare" size="small" @click="back">
+        <TxButton variant="bare" size="sm" @click="back">
           <i class="i-ri-arrow-left-line" />
           <span>{{ t('layout.back') }}</span>
         </TxButton>

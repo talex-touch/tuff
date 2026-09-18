@@ -365,7 +365,7 @@ onMounted(() => {
       <span>{{ t('intelligence.memoryReview.editingId') }}: {{ editingMemory.id }}</span>
       <TxButton
         variant="flat"
-        size="small"
+        size="sm"
         data-testid="memory-review-cancel-edit"
         @click="cancelEdit"
       >
@@ -530,7 +530,7 @@ onMounted(() => {
         </div>
         <TxButton
           variant="flat"
-          size="small"
+          size="sm"
           :loading="loadingMemories"
           data-testid="memory-review-refresh"
           @click="loadMemories"
@@ -578,7 +578,7 @@ onMounted(() => {
         </label>
         <TxButton
           variant="flat"
-          size="small"
+          size="sm"
           data-testid="memory-review-apply-filters"
           @click="applyFilters"
         >
@@ -657,7 +657,7 @@ onMounted(() => {
           <div class="memory-review__saved-actions">
             <TxButton
               variant="flat"
-              size="small"
+              size="sm"
               :data-testid="`memory-review-edit-${memory.id}`"
               @click="startEdit(memory)"
             >
@@ -666,7 +666,7 @@ onMounted(() => {
             </TxButton>
             <TxButton
               variant="flat"
-              size="small"
+              size="sm"
               :loading="togglingMemoryId === memory.id"
               :disabled="Boolean(togglingMemoryId)"
               :data-testid="`memory-review-toggle-${memory.id}`"
@@ -682,7 +682,7 @@ onMounted(() => {
             <TxButton
               variant="flat"
               type="danger"
-              size="small"
+              size="sm"
               :loading="deletingMemoryId === memory.id"
               :disabled="Boolean(deletingMemoryId)"
               :data-testid="`memory-review-delete-${memory.id}`"
@@ -698,7 +698,7 @@ onMounted(() => {
       <div class="memory-review__pagination">
         <TxButton
           variant="flat"
-          size="small"
+          size="sm"
           :disabled="listOffset === 0 || loadingMemories"
           data-testid="memory-review-page-previous"
           @click="showPreviousPage"
@@ -708,7 +708,7 @@ onMounted(() => {
         <span>{{ t('intelligence.memoryReview.page', { page: currentPage }) }}</span>
         <TxButton
           variant="flat"
-          size="small"
+          size="sm"
           :disabled="!hasMoreMemories || loadingMemories"
           data-testid="memory-review-page-next"
           @click="showNextPage"

@@ -9,7 +9,7 @@
           <div class="card-actions-title">
             User info
           </div>
-          <TxButton size="small" variant="ghost">
+          <TxButton size="sm" variant="ghost">
             More
           </TxButton>
         </div>
@@ -29,10 +29,10 @@
 
       <template #footer>
         <div class="card-actions-footer">
-          <TxButton size="small" variant="secondary">
+          <TxButton size="sm" variant="secondary">
             Cancel
           </TxButton>
-          <TxButton size="small" variant="primary">
+          <TxButton size="sm" variant="primary">
             Confirm
           </TxButton>
         </div>

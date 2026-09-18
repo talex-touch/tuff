@@ -113,7 +113,7 @@ function handleProfileEdit() {
                 <p class="truncate text-base leading-tight font-semibold my-0 text-black dark:text-white">
                   {{ displayName }}
                 </p>
-                <TxButton ref="profileEditTriggerRef" size="mini" variant="secondary" icon="i-carbon-edit" class="h-6 shrink-0 text-xs" @click="handleProfileEdit">
+                <TxButton ref="profileEditTriggerRef" size="sm" variant="secondary" icon="i-carbon-edit" class="h-6 shrink-0 text-xs" @click="handleProfileEdit">
                   {{ editProfileText }}
                 </TxButton>
               </div>
@@ -163,7 +163,7 @@ function handleProfileEdit() {
               <span class="text-black/45 dark:text-white/50">
                 {{ daysLeftText }}
               </span>
-              <TxButton size="small" variant="secondary" icon="i-carbon-settings-adjust" class="h-7 text-xs transition-colors" :class="planAccent.button" @click="emit('plan-action')">
+              <TxButton size="sm" variant="secondary" icon="i-carbon-settings-adjust" class="h-7 text-xs transition-colors" :class="planAccent.button" @click="emit('plan-action')">
                 {{ planActionText }}
               </TxButton>
             </div>

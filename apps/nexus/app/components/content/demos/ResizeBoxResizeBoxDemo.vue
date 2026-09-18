@@ -73,7 +73,7 @@ function onResizeEnd() {
         >
           <TxButton
             class="resize-box-demo__segment-button"
-            size="small"
+            size="sm"
             :variant="expanded ? 'ghost' : 'primary'"
             :aria-pressed="!expanded"
             @click="setExpanded(false)"
@@ -82,7 +82,7 @@ function onResizeEnd() {
           </TxButton>
           <TxButton
             class="resize-box-demo__segment-button"
-            size="small"
+            size="sm"
             :variant="expanded ? 'primary' : 'ghost'"
             :aria-pressed="expanded"
             @click="setExpanded(true)"

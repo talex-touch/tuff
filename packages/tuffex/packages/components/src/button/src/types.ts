@@ -1,12 +1,13 @@
+import type { ButtonSize } from './size'
 import type { VibrateType } from '../../../../utils/vibrate'
 
 export interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning' | 'info' | 'flat' | 'bare'
-  size?: 'sm' | 'md' | 'lg' | 'large' | 'small' | 'mini'
+  /** 按钮尺寸；三档对应 26px / 32px / 38px */
+  size?: ButtonSize
   block?: boolean
   /** 语义 tone 别名；未设置 variant 时用于推导视觉变体 */
   type?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'text'
-  /** 按钮尺寸 */
   /** 是否朴素按钮 */
   plain?: boolean
   /** 虚线按钮 */

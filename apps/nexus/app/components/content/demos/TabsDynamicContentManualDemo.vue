@@ -82,13 +82,13 @@ function decrement() {
 <template>
   <div style="display: grid; gap: 10px; min-height: 120px; max-width: 100%;">
     <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-      <TxButton size="small" @click="expanded = !expanded">
+      <TxButton size="sm" @click="expanded = !expanded">
         {{ labels.toggleDetails }}
       </TxButton>
-      <TxButton size="small" :disabled="count <= 0" @click="decrement">
+      <TxButton size="sm" :disabled="count <= 0" @click="decrement">
         {{ labels.removeItem }}
       </TxButton>
-      <TxButton size="small" @click="increment">
+      <TxButton size="sm" @click="increment">
         {{ labels.addItem }}
       </TxButton>
     </div>

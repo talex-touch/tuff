@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SplitButtonEmits, SplitButtonProps } from './split-button'
+import { resolveButtonSize } from './size'
 import { computed, onBeforeUnmount, ref, useSlots, watch } from 'vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
 import Spinner from '../../spinner'
@@ -28,14 +29,7 @@ watch(open, v => emit('menuOpenChange', v))
 
 const hasMenu = computed(() => !!slots.menu)
 
-const normalizedSize = computed(() => {
-  const size = props.size
-  if (size === 'lg' || size === 'large')
-    return 'lg'
-  if (size === 'sm' || size === 'small' || size === 'mini')
-    return 'sm'
-  return 'md'
-})
+const normalizedSize = computed(() => resolveButtonSize(props.size))
 
 const classList = computed(() => {
   return [

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { ButtonEmits, ButtonProps } from './types'
 import type { ObjectDirective, VNode } from 'vue'
+import type { ButtonEmits, ButtonProps } from './types'
+import { resolveButtonSize } from './size'
 import { computed, nextTick, ref, useAttrs, useSlots, watch } from 'vue'
 import { useFlip } from '../../../../utils/animation/flip'
 import { useVibrate, type VibrateType } from '../../../../utils/vibrate'
@@ -109,15 +110,7 @@ const normalizedVariant = computed(() => {
   }
 })
 
-const normalizedSize = computed(() => {
-  if (!props.size)
-    return 'md'
-  if (props.size === 'lg' || props.size === 'large')
-    return 'lg'
-  if (props.size === 'sm' || props.size === 'small' || props.size === 'mini')
-    return 'sm'
-  return 'md'
-})
+const normalizedSize = computed(() => resolveButtonSize(props.size))
 
 const spinnerSize = computed(() => {
   if (normalizedSize.value === 'sm')

@@ -281,10 +281,10 @@ onUnmounted(() => {
           </p>
           <code class="block max-h-24 overflow-auto break-all text-xs text-white/85">{{ sessionToken }}</code>
           <div class="flex justify-center gap-2">
-            <TxButton variant="primary" size="small" @click="copyToken">
+            <TxButton variant="primary" size="sm" @click="copyToken">
               {{ copied ? '✓ Copied!' : 'Copy Token' }}
             </TxButton>
-            <TxButton variant="ghost" size="small" @click="requestCloseTab">
+            <TxButton variant="ghost" size="sm" @click="requestCloseTab">
               {{ t('common.close', '关闭') }}
             </TxButton>
           </div>

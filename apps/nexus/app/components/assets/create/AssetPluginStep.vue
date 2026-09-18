@@ -37,7 +37,7 @@ const { t } = useI18n()
       </div>
 
       <div class="AssetPluginStep-Actions">
-        <TxButton variant="primary" size="small" @click="emit('open-plugin-drawer')">
+        <TxButton variant="primary" size="sm" @click="emit('open-plugin-drawer')">
           <span class="i-carbon-launch mr-1" />
           {{
             t(

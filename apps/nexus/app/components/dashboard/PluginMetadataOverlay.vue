@@ -191,7 +191,7 @@ function handlePackageChange(files: FileUploaderFile[]) {
                       <TxButton
                         v-if="mode === 'edit' && (form.iconPreviewUrl || editingPluginHasIcon)"
                         variant="secondary"
-                        size="mini"
+                        size="sm"
                         class="text-[11px] font-semibold uppercase tracking-wide"
                         @click="emit('removeIcon')"
                       >

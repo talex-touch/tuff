@@ -45,7 +45,7 @@ code: |
             </TuffSelect>
           </label>
 
-          <TxButton size="small" type="primary" @click="toggle">
+          <TxButton size="sm" type="primary" @click="toggle">
             Toggle
           </TxButton>
 
@@ -149,10 +149,10 @@ code: |
             </TuffSelect>
           </label>
 
-          <TxButton size="small" @click="add">
+          <TxButton size="sm" @click="add">
             Add
           </TxButton>
-          <TxButton size="small" @click="remove">
+          <TxButton size="sm" @click="remove">
             Remove
           </TxButton>
         </div>

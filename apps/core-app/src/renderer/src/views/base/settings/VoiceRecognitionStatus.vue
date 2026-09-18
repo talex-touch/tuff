@@ -120,7 +120,7 @@ onBeforeUnmount(() => {
     -->
     <TxButton
       v-if="unreadable"
-      size="small"
+      size="sm"
       variant="ghost"
       data-testid="voice-status-retry"
       @click="loadStatus"
@@ -129,7 +129,7 @@ onBeforeUnmount(() => {
     </TxButton>
     <TxButton
       v-else
-      size="small"
+      size="sm"
       variant="ghost"
       :data-testid="catalogFailure ? 'voice-status-catalog' : 'voice-status-configure'"
       @click="openRecovery"

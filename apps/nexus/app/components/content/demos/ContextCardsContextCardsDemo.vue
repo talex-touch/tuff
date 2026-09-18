@@ -89,7 +89,7 @@ function onOpen(payload: { source: { name: string, href?: string } }) {
     />
 
     <div class="flex flex-wrap items-center gap-3">
-      <TxButton size="small" variant="secondary" @click="replay">
+      <TxButton size="sm" variant="secondary" @click="replay">
         {{ copy.replay }}
       </TxButton>
       <p class="text-xs text-[var(--tx-text-color-secondary)]">

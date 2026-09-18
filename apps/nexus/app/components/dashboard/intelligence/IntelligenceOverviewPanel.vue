@@ -287,7 +287,7 @@ onMounted(() => {
             {{ t('dashboard.sections.intelligence.overview.subtitle') }}
           </p>
         </div>
-        <TxButton variant="bare" size="mini" @click="fetchOverview">
+        <TxButton variant="bare" size="sm" @click="fetchOverview">
           {{ t('dashboard.sections.intelligence.overview.refresh') }}
         </TxButton>
       </div>
@@ -399,7 +399,7 @@ onMounted(() => {
             {{ t('dashboard.sections.intelligence.overview.userUsage.subtitle') }}
           </p>
         </div>
-        <TxButton variant="primary" size="small" :disabled="userUsageLoading || !userUsageQuery.trim()" @click="fetchUserUsage">
+        <TxButton variant="primary" size="sm" :disabled="userUsageLoading || !userUsageQuery.trim()" @click="fetchUserUsage">
           {{ userUsageLoading ? t('dashboard.sections.intelligence.overview.userUsage.loading') : t('dashboard.sections.intelligence.overview.userUsage.action') }}
         </TxButton>
       </div>
@@ -478,7 +478,7 @@ onMounted(() => {
             {{ t('dashboard.sections.intelligence.overview.ipBans.subtitle') }}
           </p>
         </div>
-        <TxButton variant="bare" size="mini" @click="fetchIpBans">
+        <TxButton variant="bare" size="sm" @click="fetchIpBans">
           {{ t('dashboard.sections.intelligence.overview.ipBans.refresh') }}
         </TxButton>
       </div>
@@ -502,7 +502,7 @@ onMounted(() => {
           :placeholder="t('dashboard.sections.intelligence.overview.ipBans.reasonPlaceholder')"
           class="max-w-sm w-full"
         />
-        <TxButton variant="primary" size="small" :disabled="ipBanLoading || !ipBanForm.ip.trim()" @click="addIpBan">
+        <TxButton variant="primary" size="sm" :disabled="ipBanLoading || !ipBanForm.ip.trim()" @click="addIpBan">
           {{ t('dashboard.sections.intelligence.overview.ipBans.add') }}
         </TxButton>
       </div>
@@ -538,10 +538,10 @@ onMounted(() => {
             </p>
           </div>
           <div class="flex items-center gap-2">
-            <TxButton variant="bare" size="mini" @click="toggleIpBan(ban)">
+            <TxButton variant="bare" size="sm" @click="toggleIpBan(ban)">
               {{ ban.enabled ? t('dashboard.sections.intelligence.overview.ipBans.disable') : t('dashboard.sections.intelligence.overview.ipBans.enable') }}
             </TxButton>
-            <TxButton variant="bare" size="mini" class="text-red-500" @click="removeIpBan(ban)">
+            <TxButton variant="bare" size="sm" class="text-red-500" @click="removeIpBan(ban)">
               {{ t('dashboard.sections.intelligence.overview.ipBans.remove') }}
             </TxButton>
           </div>

@@ -1249,7 +1249,7 @@ function exportGovernanceReport(): void {
           {{ tt('dashboard.governance.subtitle', 'Manage anonymized analytics, upload health, storage limits, notification channels, and provider quotas from one control surface.') }}
         </p>
       </div>
-      <TxButton variant="secondary" size="small" :disabled="governancePagePending" @click="refreshAll">
+      <TxButton variant="secondary" size="sm" :disabled="governancePagePending" @click="refreshAll">
         <TxSpinner v-if="governancePagePending" :size="14" />
         <span :class="governancePagePending ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
       </TxButton>
@@ -1278,7 +1278,7 @@ function exportGovernanceReport(): void {
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <TxButton variant="secondary" size="small" :disabled="reportHydratedPending" @click="exportGovernanceReport">
+          <TxButton variant="secondary" size="sm" :disabled="reportHydratedPending" @click="exportGovernanceReport">
             {{ tt('dashboard.governance.report.exportMarkdown', 'Export Markdown') }}
           </TxButton>
           <TxStatusBadge :text="reportStatusLabel(governanceReport.report.status)" size="sm" :status="reportStatusTone(governanceReport.report.status)" />
@@ -3445,7 +3445,7 @@ function exportGovernanceReport(): void {
                 {{ tt('dashboard.governance.forms.analyticsHint', 'Keep event collection granular but hashed and metadata-bounded.') }}
               </p>
             </div>
-            <TxButton size="small" :disabled="saving" @click="saveConfig('analytics_collection', analyticsForm)">
+            <TxButton size="sm" :disabled="saving" @click="saveConfig('analytics_collection', analyticsForm)">
               {{ t('common.save', 'Save') }}
             </TxButton>
           </div>
@@ -3474,11 +3474,11 @@ function exportGovernanceReport(): void {
               </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <TxButton variant="secondary" size="small" :disabled="notificationTesting || !notificationTestForm.configId" @click="testNotificationChannel('plan')">
+              <TxButton variant="secondary" size="sm" :disabled="notificationTesting || !notificationTestForm.configId" @click="testNotificationChannel('plan')">
                 <TxSpinner v-if="notificationTesting" :size="14" />
                 <span :class="notificationTesting ? 'ml-2' : ''">{{ tt('dashboard.governance.notificationTest.dryRun', 'Dry run') }}</span>
               </TxButton>
-              <TxButton size="small" :disabled="notificationTesting || !notificationTestForm.configId" @click="testNotificationChannel('send')">
+              <TxButton size="sm" :disabled="notificationTesting || !notificationTestForm.configId" @click="testNotificationChannel('send')">
                 {{ tt('dashboard.governance.notificationTest.send', 'Send using config') }}
               </TxButton>
             </div>
@@ -3563,7 +3563,7 @@ function exportGovernanceReport(): void {
                 {{ tt('dashboard.governance.forms.storageHint', 'Configure local/R2/S3/OSS ceilings, traffic limits, and warning thresholds.') }}
               </p>
             </div>
-            <TxButton size="small" :disabled="saving" @click="saveConfig('storage_channel', storageForm)">
+            <TxButton size="sm" :disabled="saving" @click="saveConfig('storage_channel', storageForm)">
               {{ t('common.save', 'Save') }}
             </TxButton>
           </div>
@@ -3710,7 +3710,7 @@ function exportGovernanceReport(): void {
                 {{ tt('dashboard.governance.storageCredentials.hint', 'Bind secure://storage/* refs to encrypted D1 access keys for S3-compatible and OSS executors.') }}
               </p>
             </div>
-            <TxButton size="small" :disabled="saving" @click="saveStorageCredential">
+            <TxButton size="sm" :disabled="saving" @click="saveStorageCredential">
               {{ t('common.save', 'Save') }}
             </TxButton>
           </div>
@@ -3750,7 +3750,7 @@ function exportGovernanceReport(): void {
                 {{ tt('dashboard.governance.forms.notificationHint', 'Use provider for the channel instance and config.providerType for browser, Feishu/Lark, Resend, SendGrid, Mailgun, Postmark, SMTP relay, webhook, or Web Push adapters. Credentialed adapters use credentialRef only.') }}
               </p>
             </div>
-            <TxButton size="small" :disabled="saving" @click="saveConfig('notification_channel', notificationForm)">
+            <TxButton size="sm" :disabled="saving" @click="saveConfig('notification_channel', notificationForm)">
               {{ t('common.save', 'Save') }}
             </TxButton>
           </div>
@@ -3806,7 +3806,7 @@ function exportGovernanceReport(): void {
                 {{ tt('dashboard.governance.credentials.hint', 'Bind secure://notifications/* refs to encrypted D1 credentials. Governance configs only keep credentialRef.') }}
               </p>
             </div>
-            <TxButton size="small" :disabled="saving" @click="saveNotificationCredential">
+            <TxButton size="sm" :disabled="saving" @click="saveNotificationCredential">
               {{ t('common.save', 'Save') }}
             </TxButton>
           </div>
@@ -3846,7 +3846,7 @@ function exportGovernanceReport(): void {
                 {{ tt('dashboard.governance.forms.providerQuotaHint', 'Limit Intelligence provider requests and token budgets by channel.') }}
               </p>
             </div>
-            <TxButton size="small" :disabled="saving" @click="saveConfig('intelligence_provider_quota', providerQuotaForm)">
+            <TxButton size="sm" :disabled="saving" @click="saveConfig('intelligence_provider_quota', providerQuotaForm)">
               {{ t('common.save', 'Save') }}
             </TxButton>
           </div>
@@ -3903,10 +3903,10 @@ function exportGovernanceReport(): void {
               {{ tt('dashboard.governance.storageAlerts.title', 'Storage alerts') }}
             </h2>
             <div class="flex items-center gap-2">
-              <TxButton size="small" :disabled="storageAlertNotifying || storagePolicyAlerts.length === 0" @click="notifyStorageAlerts('plan')">
+              <TxButton size="sm" :disabled="storageAlertNotifying || storagePolicyAlerts.length === 0" @click="notifyStorageAlerts('plan')">
                 {{ tt('dashboard.governance.storageAlerts.dryRun', 'Dry run') }}
               </TxButton>
-              <TxButton size="small" :disabled="storageAlertNotifying || storagePolicyAlerts.length === 0" @click="notifyStorageAlerts('send')">
+              <TxButton size="sm" :disabled="storageAlertNotifying || storagePolicyAlerts.length === 0" @click="notifyStorageAlerts('send')">
                 {{ tt('dashboard.governance.storageAlerts.send', 'Send') }}
               </TxButton>
               <TxStatusBadge
@@ -3967,10 +3967,10 @@ function exportGovernanceReport(): void {
               <div class="flex items-center justify-between gap-3">
                 <span class="truncate font-medium text-black dark:text-white">{{ item.name }}</span>
                 <div class="flex shrink-0 items-center gap-2">
-                  <TxButton size="small" variant="secondary" :disabled="storageSmokeRunning" @click="smokeStoragePolicy(item.policyId, 'dry-run')">
+                  <TxButton size="sm" variant="secondary" :disabled="storageSmokeRunning" @click="smokeStoragePolicy(item.policyId, 'dry-run')">
                     {{ tt('dashboard.governance.storageSmoke.dryRun', 'Smoke') }}
                   </TxButton>
-                  <TxButton size="small" :disabled="storageSmokeRunning" @click="smokeStoragePolicy(item.policyId, 'write')">
+                  <TxButton size="sm" :disabled="storageSmokeRunning" @click="smokeStoragePolicy(item.policyId, 'write')">
                     {{ tt('dashboard.governance.storageSmoke.write', 'Write smoke') }}
                   </TxButton>
                   <TxStatusBadge

@@ -15,7 +15,7 @@ const props = withDefaults(defineProps<EmptyStateProps>(), {
   align: 'center',
   size: 'medium',
   surface: 'plain',
-  actionSize: 'small',
+  actionSize: 'sm',
   loading: false,
 })
 

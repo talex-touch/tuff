@@ -44,7 +44,7 @@ const labels = computed(() => locale.value === 'zh'
         <template #tags>
           <TxTag :label="labels.tag" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
         </template>
-        <TxButton size="small" variant="secondary">
+        <TxButton size="sm" variant="secondary">
           {{ labels.action }}
         </TxButton>
       </TxBlockSlot>

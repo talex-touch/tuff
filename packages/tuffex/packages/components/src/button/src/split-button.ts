@@ -1,6 +1,9 @@
+import type { ButtonSize } from './size'
+
 export interface SplitButtonProps {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning' | 'info'
-  size?: 'sm' | 'md' | 'lg' | 'large' | 'small' | 'mini'
+  /** 按钮尺寸；三档对应 28px / 32px / 40px */
+  size?: ButtonSize
   disabled?: boolean
   loading?: boolean
 

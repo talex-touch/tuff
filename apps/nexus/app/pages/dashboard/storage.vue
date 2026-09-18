@@ -662,7 +662,7 @@ watch(showDetailsOverlay, (open) => {
             </div>
           </template>
           <template #cell-action>
-            <TxButton variant="flat" size="mini" @click="handleOpenSyncDetails">
+            <TxButton variant="flat" size="sm" @click="handleOpenSyncDetails">
               {{ t('dashboard.storage.view', 'View') }}
             </TxButton>
           </template>
@@ -726,7 +726,7 @@ watch(showDetailsOverlay, (open) => {
                   : t('dashboard.storage.recoveryMissing', '未配置恢复码')
               }}
             </span>
-            <TxButton variant="flat" size="mini" @click="handleOpenSyncDetails">
+            <TxButton variant="flat" size="sm" @click="handleOpenSyncDetails">
               {{ t('dashboard.storage.viewSyncDetails', '查看同步内容') }}
             </TxButton>
           </div>
@@ -743,7 +743,7 @@ watch(showDetailsOverlay, (open) => {
         :header-desc="t('dashboard.storage.syncDetailDesc', '仅展示分类与元信息，不展示业务明文。')"
       >
         <template #header-actions>
-          <TxButton variant="flat" size="small" :loading="detailsLoading" @click="refreshSyncDetails">
+          <TxButton variant="flat" size="sm" :loading="detailsLoading" @click="refreshSyncDetails">
             {{ t('common.refresh', '刷新') }}
           </TxButton>
         </template>

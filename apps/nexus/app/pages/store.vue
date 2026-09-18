@@ -544,7 +544,7 @@ useSeoMeta({
         />
       </div>
       <div v-if="canLoadMorePlugins" class="StorePage-More">
-        <TxButton size="small" :loading="pluginsLoadingMore" @click="loadMorePlugins">
+        <TxButton size="sm" :loading="pluginsLoadingMore" @click="loadMorePlugins">
           {{ t('store.results.loadMore') }}
         </TxButton>
       </div>
@@ -709,7 +709,7 @@ useSeoMeta({
                           </div>
                           <div v-else-if="!isLoggedIn" class="StoreDetailTextSubtle mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
                             <span>{{ t('store.detail.reviews.signInHint', 'Sign in to submit your review.') }}</span>
-                            <TxButton size="small" @click="handleSignIn">
+                            <TxButton size="sm" @click="handleSignIn">
                               {{ t('store.detail.reviews.signInAction', 'Sign in') }}
                             </TxButton>
                           </div>
@@ -737,7 +737,7 @@ useSeoMeta({
                               <p class="StoreDetailTextMuted text-xs">
                                 {{ t('store.detail.reviews.submitHint') }}
                               </p>
-                              <TxButton size="small" :disabled="reviewSubmitting" @click="submitReview">
+                              <TxButton size="sm" :disabled="reviewSubmitting" @click="submitReview">
                                 <span v-if="reviewSubmitting" class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
                                 {{ t('store.detail.reviews.submit') }}
                               </TxButton>
@@ -808,7 +808,7 @@ useSeoMeta({
                             </div>
                           </article>
                           <div v-if="canLoadMoreReviews" class="flex justify-center pt-2">
-                            <TxButton size="small" :loading="reviewsLoadingMore" @click="loadMoreReviews">
+                            <TxButton size="sm" :loading="reviewsLoadingMore" @click="loadMoreReviews">
                               {{ t('store.detail.reviews.loadMore', 'Load more') }}
                             </TxButton>
                           </div>

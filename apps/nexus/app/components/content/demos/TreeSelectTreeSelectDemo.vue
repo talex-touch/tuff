@@ -38,10 +38,10 @@ const value = ref<string | number | Array<string | number> | undefined>(undefine
   <div v-if="locale === 'zh'">
       <div style="display: flex; flex-direction: column; gap: 12px; width: 420px;">
         <div style="display: flex; gap: 8px; align-items: center;">
-          <TxButton size="small" variant="secondary" @click="multiple = !multiple">
+          <TxButton size="sm" variant="secondary" @click="multiple = !multiple">
             Toggle multiple
           </TxButton>
-          <TxButton size="small" variant="secondary" @click="value = multiple ? [] : undefined">
+          <TxButton size="sm" variant="secondary" @click="value = multiple ? [] : undefined">
             Clear
           </TxButton>
         </div>
@@ -62,10 +62,10 @@ const value = ref<string | number | Array<string | number> | undefined>(undefine
   <div v-else>
       <div style="display: flex; flex-direction: column; gap: 12px; width: 420px;">
         <div style="display: flex; gap: 8px; align-items: center;">
-          <TxButton size="small" variant="secondary" @click="multiple = !multiple">
+          <TxButton size="sm" variant="secondary" @click="multiple = !multiple">
             Toggle multiple
           </TxButton>
-          <TxButton size="small" variant="secondary" @click="value = multiple ? [] : undefined">
+          <TxButton size="sm" variant="secondary" @click="value = multiple ? [] : undefined">
             Clear
           </TxButton>
         </div>

@@ -432,7 +432,7 @@ onMounted(() => {
 
       <TxButton
         ref="browserSetupTriggerRef"
-        size="small"
+        size="sm"
         variant="secondary"
         :loading="browserNotificationBusy || browserPushBusy"
         icon="i-carbon-send-alt"
@@ -485,7 +485,7 @@ onMounted(() => {
 
             <div class="flex flex-wrap items-center justify-end gap-2">
               <TxButton
-                size="small"
+                size="sm"
                 variant="secondary"
                 :disabled="browserNotificationBusy || browserNotificationPermission === 'denied' || browserNotificationPermission === 'unsupported'"
                 :loading="browserNotificationBusy"
@@ -496,7 +496,7 @@ onMounted(() => {
               </TxButton>
               <TxButton
                 v-if="!browserPushSubscription"
-                size="small"
+                size="sm"
                 variant="primary"
                 :disabled="browserPushBusy || browserNotificationPermission !== 'granted' || !browserPushPublicKey"
                 :loading="browserPushBusy"
@@ -507,7 +507,7 @@ onMounted(() => {
               </TxButton>
               <TxButton
                 v-else
-                size="small"
+                size="sm"
                 variant="danger"
                 :disabled="browserPushBusy"
                 :loading="browserPushBusy"
@@ -537,10 +537,10 @@ onMounted(() => {
           <p class="text-xs text-black/45 dark:text-white/45">
             {{ t('dashboard.notifications.scopeHint', '仅显示当前登录用户的通知。') }}
           </p>
-          <TxButton size="small" variant="secondary" :loading="loading" @click="loadNotifications">
+          <TxButton size="sm" variant="secondary" :loading="loading" @click="loadNotifications">
             {{ t('dashboard.notifications.refresh', '刷新') }}
           </TxButton>
-          <TxButton size="small" variant="primary" :disabled="!hasUnread || actionLoading" :loading="actionLoading" icon="i-carbon-checkmark" @click="markAllRead">
+          <TxButton size="sm" variant="primary" :disabled="!hasUnread || actionLoading" :loading="actionLoading" icon="i-carbon-checkmark" @click="markAllRead">
             {{ t('dashboard.notifications.markAllRead', '全部已读') }}
           </TxButton>
         </div>
@@ -594,7 +594,7 @@ onMounted(() => {
               </div>
               <TxButton
                 v-if="item.status === 'unread'"
-                size="small"
+                size="sm"
                 variant="secondary"
                 :disabled="actionLoading"
                 @click="markRead([item.id])"

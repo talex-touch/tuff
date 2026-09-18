@@ -357,7 +357,7 @@ async function copySecret() {
             client_secret: {{ createdSecret.clientSecret }}
           </code>
         </div>
-        <TxButton class="mt-3" size="small" variant="success" @click="copySecret">
+        <TxButton class="mt-3" size="sm" variant="success" @click="copySecret">
           {{ copied ? t('dashboard.sections.oauth.actions.copied', 'Copied') : t('dashboard.sections.oauth.actions.copySecret', 'Copy Secret') }}
         </TxButton>
       </section>
@@ -370,7 +370,7 @@ async function copySecret() {
           <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
             <TxButton
               ref="createDialogTriggerRef"
-              size="small"
+              size="sm"
               variant="primary"
               icon="i-carbon-add"
               native-type="button"
@@ -395,7 +395,7 @@ async function copySecret() {
                     v-for="scope in scopeOptions"
                     :key="scope.value"
                     :variant="activeScope === scope.value ? 'primary' : 'secondary'"
-                    size="small"
+                    size="sm"
                     native-type="button"
                     @click="activeScope = scope.value"
                   >
@@ -445,7 +445,7 @@ async function copySecret() {
 
                 <div class="flex flex-wrap items-center justify-end gap-2">
                   <TxButton
-                    size="small"
+                    size="sm"
                     variant="secondary"
                     native-type="button"
                     :disabled="saving"
@@ -454,7 +454,7 @@ async function copySecret() {
                     {{ t('dashboard.sections.oauth.actions.cancel', 'Cancel') }}
                   </TxButton>
                   <TxButton
-                    size="small"
+                    size="sm"
                     variant="primary"
                     native-type="submit"
                     :loading="saving"
@@ -464,7 +464,7 @@ async function copySecret() {
                 </div>
               </form>
             </LazyFlipDialog>
-            <TxButton size="small" variant="secondary" native-type="button" @click="fetchApplications">
+            <TxButton size="sm" variant="secondary" native-type="button" @click="fetchApplications">
               {{ t('common.refresh', 'Refresh') }}
             </TxButton>
           </div>
@@ -512,7 +512,7 @@ async function copySecret() {
                 </span>
                 <TxButton
                   v-if="app.status === 'active'"
-                  size="small"
+                  size="sm"
                   variant="secondary"
                   @click="beginEdit(app)"
                 >
@@ -520,7 +520,7 @@ async function copySecret() {
                 </TxButton>
                 <TxButton
                   v-if="app.status === 'active'"
-                  size="small"
+                  size="sm"
                   variant="secondary"
                   :loading="rotatingId === app.id"
                   @click="rotateSecret(app)"
@@ -531,7 +531,7 @@ async function copySecret() {
                 </TxButton>
                 <TxButton
                   v-if="app.status === 'active'"
-                  size="small"
+                  size="sm"
                   variant="danger"
                   @click="revokeApplication(app.id)"
                 >
@@ -578,10 +578,10 @@ async function copySecret() {
                 />
               </div>
               <div class="mt-3 flex items-center gap-2">
-                <TxButton size="small" variant="primary" :loading="updating" @click="saveEdit(app.id)">
+                <TxButton size="sm" variant="primary" :loading="updating" @click="saveEdit(app.id)">
                   {{ updating ? t('dashboard.sections.oauth.actions.saving', 'Saving...') : t('dashboard.sections.oauth.actions.save', 'Save') }}
                 </TxButton>
-                <TxButton size="small" variant="secondary" @click="cancelEdit">
+                <TxButton size="sm" variant="secondary" @click="cancelEdit">
                   {{ t('dashboard.sections.oauth.actions.cancel', 'Cancel') }}
                 </TxButton>
               </div>

@@ -31,7 +31,7 @@ const labels = computed(() => locale.value === 'zh'
       :collapsible="false"
     >
       <template #header-extra>
-        <TxButton size="small" variant="secondary">
+        <TxButton size="sm" variant="secondary">
           {{ labels.action }}
         </TxButton>
       </template>

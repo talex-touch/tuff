@@ -88,14 +88,27 @@ describe('txButton', () => {
     expect(wrapper.classes()).not.toContain('variant-danger')
   })
 
-  it('renders different sizes', () => {
-    const wrapper = mount(Button, {
-      props: {
-        size: 'large',
-      },
-    })
+  it('maps each size to its tier class', () => {
+    for (const [size, expected] of [['sm', 'tx-size-sm'], ['md', 'tx-size-md'], ['lg', 'tx-size-lg']] as const) {
+      expect(mount(Button, { props: { size } }).classes()).toContain(expected)
+    }
 
-    expect(wrapper.classes()).toContain('tx-size-lg')
+    expect(mount(Button).classes()).toContain('tx-size-md')
+  })
+
+  it('keeps published spellings rendering their original tier', () => {
+    // `small` / `mini` / `large` are gone from `ButtonSize`, so no callsite in
+    // this repo can produce them. Installed consumers compiled against 0.6.0
+    // still emit them from plain JS, where the union is erased; dropping the
+    // mapping would silently resize their buttons.
+    for (const [legacy, expected] of [['small', 'tx-size-sm'], ['mini', 'tx-size-sm'], ['large', 'tx-size-lg']]) {
+      const wrapper = mount(Button, { props: { size: legacy } as never })
+      expect(wrapper.classes()).toContain(expected)
+    }
+  })
+
+  it('falls back to the default tier for an unknown size', () => {
+    expect(mount(Button, { props: { size: 'enormous' } as never }).classes()).toContain('tx-size-md')
   })
 
   it('renders flat variant', () => {

@@ -809,7 +809,7 @@ watch(
         <div class="docs-analytics-toolbar__main docs-analytics-toolbar__main--icons">
           <TxTooltip :content="docsAnalyticsQuickTips.toggle" :anchor="{ placement: 'bottom', showArrow: true }">
             <TxButton
-              size="small"
+              size="sm"
               circle
               variant="bare"
               native-type="button"
@@ -824,7 +824,7 @@ watch(
           <TxTooltip :content="docsAnalyticsQuickTips.settings" :anchor="{ placement: 'bottom', showArrow: true }">
             <TxButton
               ref="docsAnalyticsConfigTriggerRef"
-              size="small"
+              size="sm"
               circle
               variant="bare"
               native-type="button"
@@ -864,7 +864,7 @@ watch(
           <TxTooltip :content="docsAnalyticsQuickTips.refresh" :anchor="{ placement: 'bottom', showArrow: true }">
             <TxButton
               circle
-              size="small"
+              size="sm"
               variant="bare"
               native-type="button"
               class="docs-analytics-icon-btn"
@@ -913,7 +913,7 @@ watch(
 
           <TxButton
             variant="ghost"
-            size="small"
+            size="sm"
             native-type="button"
             class="docs-analytics-config__advanced-toggle"
             @click="docsAnalyticsAdvancedOpen = !docsAnalyticsAdvancedOpen"
@@ -957,10 +957,10 @@ watch(
           </Transition>
 
           <footer class="docs-analytics-config__actions">
-            <TxButton variant="ghost" size="small" native-type="button" @click="resetDocsAnalyticsConfig">
+            <TxButton variant="ghost" size="sm" native-type="button" @click="resetDocsAnalyticsConfig">
               {{ docsAnalyticsQuickTips.reset }}
             </TxButton>
-            <TxButton variant="primary" size="small" native-type="button" :loading="docsAnalyticsLoading" @click="applyDocsAnalyticsConfig">
+            <TxButton variant="primary" size="sm" native-type="button" :loading="docsAnalyticsLoading" @click="applyDocsAnalyticsConfig">
               {{ docsAnalyticsQuickTips.apply }}
             </TxButton>
           </footer>

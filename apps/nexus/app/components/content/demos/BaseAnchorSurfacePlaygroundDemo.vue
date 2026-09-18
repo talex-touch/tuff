@@ -333,7 +333,7 @@ const panelCard = computed(() => ({
         <TxButton
           v-for="item in animationOptions"
           :key="`animation-${item}`"
-          size="small"
+          size="sm"
           :variant="animationType === item ? 'primary' : 'ghost'"
           @click="animationType = item"
         >
@@ -346,7 +346,7 @@ const panelCard = computed(() => ({
         <TxButton
           v-for="item in surfaceOptions"
           :key="`preset-${item}`"
-          size="small"
+          size="sm"
           :variant="surface === item ? 'primary' : 'ghost'"
           @click="surface = item"
         >
@@ -396,7 +396,7 @@ const panelCard = computed(() => ({
             <TxTag :label="`mask: ${maskOpacity.toFixed(2)}`" size="sm" />
             <TxTag :label="`adapt: ${surfaceMotionAdaptation}`" size="sm" />
           </div>
-          <TxButton size="small" variant="secondary">
+          <TxButton size="sm" variant="secondary">
             {{ labels.panel.action }}
           </TxButton>
         </div>

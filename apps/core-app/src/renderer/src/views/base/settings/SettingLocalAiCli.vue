@@ -164,7 +164,7 @@ onMounted(() => {
       <span>{{ t('settingLocalAiCli.betaLabel') }}</span>
       <TxButton
         variant="ghost"
-        size="small"
+        size="sm"
         :loading="loading"
         :disabled="saving"
         @click="refreshStatus"
@@ -193,7 +193,7 @@ onMounted(() => {
       <template #extra>
         <TxButton
           variant="ghost"
-          size="small"
+          size="sm"
           :loading="locatingProvider === provider.id"
           :disabled="saving"
           @click.stop="locateProvider(provider.id)"

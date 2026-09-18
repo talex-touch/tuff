@@ -319,12 +319,12 @@ onMounted(() => {
           </TuffSelect>
         </div>
         <div class="flex items-end">
-          <TxButton variant="secondary" size="small" :disabled="loading" @click="fetchAudits({ resetPage: true })">
+          <TxButton variant="secondary" size="sm" :disabled="loading" @click="fetchAudits({ resetPage: true })">
             {{ t('common.refresh', 'Refresh') }}
           </TxButton>
         </div>
         <div class="flex items-end">
-          <TxButton variant="secondary" size="small" :disabled="exporting" @click="exportAudits">
+          <TxButton variant="secondary" size="sm" :disabled="exporting" @click="exportAudits">
             {{ exporting ? t('dashboard.sections.audits.export.exporting', 'Exporting...') : t('dashboard.sections.audits.export.label', 'Export CSV') }}
           </TxButton>
         </div>
@@ -401,10 +401,10 @@ onMounted(() => {
       </div>
 
       <div class="flex items-center justify-end gap-2 border-t border-black/[0.04] p-4 dark:border-white/[0.06]">
-        <TxButton variant="secondary" size="small" :disabled="!hasPrev || loading" @click="goPrev">
+        <TxButton variant="secondary" size="sm" :disabled="!hasPrev || loading" @click="goPrev">
           {{ t('dashboard.sections.audits.pagination.prev', 'Prev') }}
         </TxButton>
-        <TxButton variant="secondary" size="small" :disabled="!hasNext || loading" @click="goNext">
+        <TxButton variant="secondary" size="sm" :disabled="!hasNext || loading" @click="goNext">
           {{ t('dashboard.sections.audits.pagination.next', 'Next') }}
         </TxButton>
       </div>

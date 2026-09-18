@@ -528,7 +528,7 @@ onDeactivated(clearRevealedCredential)
           />
           <TxButton
             variant="flat"
-            size="small"
+            size="sm"
             :disabled="control.disabled || isRevealingCredential"
             :aria-label="
               t(

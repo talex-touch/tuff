@@ -485,7 +485,7 @@ async function revokeCode(code: ActivationCode) {
           </TuffSelect>
         </div>
         <div class="flex items-end">
-          <TxButton variant="secondary" size="small" :disabled="subscriptionLoading" @click="fetchSubscriptions({ resetPage: true })">
+          <TxButton variant="secondary" size="sm" :disabled="subscriptionLoading" @click="fetchSubscriptions({ resetPage: true })">
             {{ t('common.refresh', 'Refresh') }}
           </TxButton>
         </div>
@@ -529,7 +529,7 @@ async function revokeCode(code: ActivationCode) {
           <TuffInput v-model="grantForm.durationDays" type="number" min="1" max="3650" class="w-full" />
         </div>
         <div class="flex items-end">
-          <TxButton variant="primary" size="small" :disabled="grantLoading" @click="grantSubscription">
+          <TxButton variant="primary" size="sm" :disabled="grantLoading" @click="grantSubscription">
             <TxSpinner v-if="grantLoading" :size="14" />
             <span>{{ grantLoading ? t('dashboard.sections.subscriptions.grant.granting', 'Granting...') : t('dashboard.sections.subscriptions.grant.action', 'Grant') }}</span>
           </TxButton>
@@ -636,10 +636,10 @@ async function revokeCode(code: ActivationCode) {
       </div>
 
       <div class="flex items-center justify-end gap-2 border-t border-black/[0.04] p-4 dark:border-white/[0.06]">
-        <TxButton variant="secondary" size="small" :disabled="!subscriptionHasPrev || subscriptionLoading" @click="goSubscriptionsPrev">
+        <TxButton variant="secondary" size="sm" :disabled="!subscriptionHasPrev || subscriptionLoading" @click="goSubscriptionsPrev">
           {{ t('dashboard.sections.subscriptions.pagination.prev', 'Prev') }}
         </TxButton>
-        <TxButton variant="secondary" size="small" :disabled="!subscriptionHasNext || subscriptionLoading" @click="goSubscriptionsNext">
+        <TxButton variant="secondary" size="sm" :disabled="!subscriptionHasNext || subscriptionLoading" @click="goSubscriptionsNext">
           {{ t('dashboard.sections.subscriptions.pagination.next', 'Next') }}
         </TxButton>
       </div>
@@ -715,7 +715,7 @@ async function revokeCode(code: ActivationCode) {
           {{ t('dashboard.sections.codes.listTitle', 'All Codes') }}
         </h2>
         <div class="mt-3">
-          <TxButton variant="bare" size="small" native-type="button" :disabled="codesLoading" class="inline-flex items-center gap-1.5 text-sm text-black/60 transition hover:text-black dark:text-white/60 dark:hover:text-light" @click="fetchCodes">
+          <TxButton variant="bare" size="sm" native-type="button" :disabled="codesLoading" class="inline-flex items-center gap-1.5 text-sm text-black/60 transition hover:text-black dark:text-white/60 dark:hover:text-light" @click="fetchCodes">
             <TxSpinner v-if="codesLoading" :size="14" />
             <span v-else class="i-carbon-refresh text-base" />
             {{ t('dashboard.sections.codes.refresh', 'Refresh') }}
@@ -763,7 +763,7 @@ async function revokeCode(code: ActivationCode) {
               <code class="rounded bg-black/5 px-2 py-1 font-mono text-sm text-black dark:bg-white/[0.08] dark:text-white">{{ code.code }}</code>
               <TxButton
                 variant="bare"
-                size="mini"
+                size="sm"
                 native-type="button"
                 :icon="copiedCodeId === code.id ? 'i-carbon-checkmark' : 'i-carbon-copy'"
                 class="text-black/40 transition hover:text-black/70 dark:text-white/40 dark:hover:text-light/70"
@@ -799,7 +799,7 @@ async function revokeCode(code: ActivationCode) {
             <TxButton
               v-if="code.status === 'active'"
               :variant="revokeArmedId === code.id ? 'danger' : 'secondary'"
-              size="mini"
+              size="sm"
               :disabled="codesActionPendingId === code.id"
               @click="requestRevoke(code)"
             >

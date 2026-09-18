@@ -108,7 +108,7 @@ code: |
       :collapsible="false"
     >
       <template #header-extra>
-        <TxButton size="small" variant="secondary">Run now</TxButton>
+        <TxButton size="sm" variant="secondary">Run now</TxButton>
       </template>
       <TxBlockLine title="Last sync" description="Just now" />
     </TxGroupBlock>
@@ -208,7 +208,7 @@ code: |
         <template #tags>
           <TxTag label="Active" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
         </template>
-        <TxButton size="small" variant="secondary">Manage</TxButton>
+        <TxButton size="sm" variant="secondary">Manage</TxButton>
       </TxBlockSlot>
     </TxGroupBlock>
   </template>

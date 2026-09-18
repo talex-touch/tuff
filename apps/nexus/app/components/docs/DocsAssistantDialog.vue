@@ -432,7 +432,7 @@ async function readStreamResponse(streamBody: ReadableStream<Uint8Array> | null,
 
           <div v-if="errorMessage" class="assistant-dialog__error">
             <span>{{ errorMessage }}</span>
-            <TxButton size="mini" variant="ghost" native-type="button" @click="retrySend">
+            <TxButton size="sm" variant="ghost" native-type="button" @click="retrySend">
               {{ labels.retry }}
             </TxButton>
           </div>
@@ -448,7 +448,7 @@ async function readStreamResponse(streamBody: ReadableStream<Uint8Array> | null,
             />
             <TxButton
               variant="primary"
-              size="small"
+              size="sm"
               class="assistant-dialog__send"
               native-type="button"
               :disabled="sending || historyLoading || !input.trim()"

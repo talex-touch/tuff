@@ -106,14 +106,14 @@ function next() {
 
         <label class="tx-demo__row" style="gap: 8px;">
           <span class="tx-demo__label">{{ labels.indicator }}</span>
-          <TxButton size="small" @click="showIndicator = !showIndicator">
+          <TxButton size="sm" @click="showIndicator = !showIndicator">
             {{ showIndicator ? 'on' : 'off' }}
           </TxButton>
         </label>
 
         <label class="tx-demo__row" style="gap: 8px;">
           <span class="tx-demo__label">{{ labels.auto }}</span>
-          <TxButton size="small" @click="next">
+          <TxButton size="sm" @click="next">
             {{ labels.next }}
           </TxButton>
         </label>

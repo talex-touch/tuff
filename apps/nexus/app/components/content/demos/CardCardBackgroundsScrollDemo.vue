@@ -365,7 +365,7 @@ applyRefractionPreset(activePresetId.value)
             :key="group.id"
             class="tx-card-bg-preset-group"
             :variant="activePresetGroup === group.id ? 'primary' : 'secondary'"
-            size="small"
+            size="sm"
             @click="switchRefractionPresetGroup(group.id)"
           >
             {{ group.name }}
@@ -377,7 +377,7 @@ applyRefractionPreset(activePresetId.value)
             :key="preset.id"
             class="tx-card-bg-preset"
             :variant="activePresetId === preset.id ? 'primary' : 'secondary'"
-            size="small"
+            size="sm"
             @click="applyRefractionPreset(preset.id)"
           >
             {{ preset.name }}

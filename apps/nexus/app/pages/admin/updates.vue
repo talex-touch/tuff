@@ -397,14 +397,14 @@ function closeDeleteConfirm() {
       <div class="flex flex-wrap items-center justify-end gap-2">
         <TxButton
           variant="secondary"
-          size="small"
+          size="sm"
           icon="i-carbon-launch"
           native-type="button"
           @click="openUpdateLink('https://docs.tuff.chat/changelog')"
         >
           {{ isZh ? 'Changelog 文档' : 'Changelog' }}
         </TxButton>
-        <TxButton v-if="isAdmin" variant="primary" icon="i-carbon-add" size="small" native-type="button" @click="openCreate">
+        <TxButton v-if="isAdmin" variant="primary" icon="i-carbon-add" size="sm" native-type="button" @click="openCreate">
           {{ t('dashboard.sections.updates.addButton') }}
         </TxButton>
       </div>
@@ -487,7 +487,7 @@ function closeDeleteConfirm() {
         <div class="UpdateFilters-Actions">
           <TxButton
             variant="ghost"
-            size="small"
+            size="sm"
             native-type="button"
             :disabled="!hasActiveFilters"
             @click="clearFilters"

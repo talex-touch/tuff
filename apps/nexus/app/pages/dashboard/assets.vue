@@ -1276,7 +1276,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           <template #cell-actions="{ row: item }">
             <TxButton
               variant="secondary"
-              size="mini"
+              size="sm"
               native-type="button"
               @click.stop="openReviewModal(item, $event)"
             >
@@ -1313,11 +1313,11 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <TxButton variant="secondary" size="small" :loading="pluginsPending" @click="refreshPlugins()">
+          <TxButton variant="secondary" size="sm" :loading="pluginsPending" @click="refreshPlugins()">
             <span class="i-carbon-renew text-sm" />
             {{ t('common.refresh', '刷新') }}
           </TxButton>
-          <TxButton type="primary" size="small" @click="openCreatePluginForm($event)">
+          <TxButton type="primary" size="sm" @click="openCreatePluginForm($event)">
             <span class="i-carbon-add text-sm" />
             {{ t('dashboard.sections.plugins.addButton') }}
           </TxButton>
@@ -1370,7 +1370,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
         class="space-y-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200"
       >
         <p>{{ pluginsLoadErrorMessage }}</p>
-        <TxButton variant="secondary" size="small" @click="refreshPlugins()">
+        <TxButton variant="secondary" size="sm" @click="refreshPlugins()">
           {{ t('common.retry', '重试') }}
         </TxButton>
       </div>
@@ -1468,7 +1468,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
             <template #cell-actions="{ row: plugin }">
               <TxButton
                 variant="secondary"
-                size="mini"
+                size="sm"
                 native-type="button"
                 @click.stop="openPluginDetail(plugin, $event)"
               >

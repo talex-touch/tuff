@@ -112,7 +112,7 @@ code: |
             <div style="color: var(--tx-text-color-secondary); font-size: 12px;">
               Trigger + Surface + Arrow + KeepAlive
             </div>
-            <TxButton size="small">
+            <TxButton size="sm">
               Action
             </TxButton>
           </div>

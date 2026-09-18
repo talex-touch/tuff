@@ -484,7 +484,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <p class="text-sm text-red-500">
         {{ error }}
       </p>
-      <TxButton variant="secondary" size="small" native-type="button" @click="fetchAnalytics">
+      <TxButton variant="secondary" size="sm" native-type="button" @click="fetchAnalytics">
         {{ t('common.retry', 'Retry') }}
       </TxButton>
     </div>
@@ -930,7 +930,7 @@ Slow
             <h3 class="font-semibold text-black dark:text-white">
               Search Scenes
             </h3>
-            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'search'">
+            <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'search'">
               View details
             </TxButton>
           </div>
@@ -946,7 +946,7 @@ Slow
             <h3 class="font-semibold text-black dark:text-white">
               Result Categories
             </h3>
-            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'search'">
+            <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'search'">
               View details
             </TxButton>
           </div>
@@ -962,7 +962,7 @@ Slow
             <h3 class="font-semibold text-black dark:text-white">
               Top Categories
             </h3>
-            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
+            <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
               View details
             </TxButton>
           </div>
@@ -980,7 +980,7 @@ Slow
             <h3 class="font-semibold text-black dark:text-white">
               Update Actions
             </h3>
-            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
+            <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
               View details
             </TxButton>
           </div>
@@ -996,7 +996,7 @@ Slow
             <h3 class="font-semibold text-black dark:text-white">
               Update Results
             </h3>
-            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
+            <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
               View details
             </TxButton>
           </div>
@@ -1012,7 +1012,7 @@ Slow
             <h3 class="font-semibold text-black dark:text-white">
               Update Channels
             </h3>
-            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
+            <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
               View details
             </TxButton>
           </div>
@@ -1028,7 +1028,7 @@ Slow
             <h3 class="font-semibold text-black dark:text-white">
               Update Sources
             </h3>
-            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
+            <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
               View details
             </TxButton>
           </div>
@@ -1044,7 +1044,7 @@ Slow
             <h3 class="font-semibold text-black dark:text-white">
               Update Tags
             </h3>
-            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
+            <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
               View details
             </TxButton>
           </div>
@@ -1147,7 +1147,7 @@ Slow
                 <h3 class="font-semibold text-black dark:text-white">
                   Tool Failures
                 </h3>
-                <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/45 dark:text-white/45" @click="fetchIntelligenceAnalytics">
+                <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/45 dark:text-white/45" @click="fetchIntelligenceAnalytics">
                   Refresh
                 </TxButton>
               </div>
@@ -1240,13 +1240,13 @@ Slow
             <TuffSelectItem value="docs_page" label="Docs page" />
             <TuffSelectItem value="doc_comments_admin" label="Doc comments admin" />
           </TuffSelect>
-          <TxButton variant="bare" size="small" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70" @click="fetchDocsAnalytics">
+          <TxButton variant="bare" size="sm" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70" @click="fetchDocsAnalytics">
             Refresh
           </TxButton>
           <TxButton
             v-if="docsPath"
             variant="bare"
-            size="small"
+            size="sm"
             native-type="button"
             class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70"
             @click="docsPath = ''"
@@ -1429,7 +1429,7 @@ Slow
           <TxButton
             v-if="selectedGeoCountry"
             variant="bare"
-            size="small"
+            size="sm"
             native-type="button"
             class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70"
             @click="resetGeoDrilldown"
@@ -1535,7 +1535,7 @@ Slow
           <h3 class="font-semibold text-black dark:text-white">
             Telemetry Messages
           </h3>
-          <TxButton variant="bare" size="small" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.04] dark:text-white/70" @click="fetchMessages">
+          <TxButton variant="bare" size="sm" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.04] dark:text-white/70" @click="fetchMessages">
             Refresh
           </TxButton>
         </div>
@@ -1597,7 +1597,7 @@ Slow
               Non-free users only. USD base.
             </p>
           </div>
-          <TxButton variant="bare" size="small" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.04] dark:text-white/70" @click="fetchExchangeHistory">
+          <TxButton variant="bare" size="sm" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.04] dark:text-white/70" @click="fetchExchangeHistory">
             Refresh
           </TxButton>
         </div>
@@ -1694,7 +1694,7 @@ Slow
                 Secondary distributions and deep-dive signals
               </p>
             </div>
-            <TxButton variant="bare" circle size="mini" native-type="button" class="bg-black/[0.04] text-black/60 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70" @click="showBreakdown = false">
+            <TxButton variant="bare" circle size="sm" native-type="button" class="bg-black/[0.04] text-black/60 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70" @click="showBreakdown = false">
               <span class="i-carbon-close" />
             </TxButton>
           </div>

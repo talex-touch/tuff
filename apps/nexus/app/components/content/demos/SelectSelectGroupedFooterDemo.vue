@@ -74,7 +74,7 @@ const labels = computed(() => {
   <div class="tx-demo tx-demo__col tx-demo--max-400">
     <TuffSelect v-model="value" :options="labels.options" :placeholder="labels.placeholder">
       <template #footer>
-        <TxButton size="small" variant="ghost" native-type="button">
+        <TxButton size="sm" variant="ghost" native-type="button">
           + {{ labels.action }}
         </TxButton>
       </template>

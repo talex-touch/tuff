@@ -375,7 +375,7 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
           panel-background="pure"
         >
           <template #reference>
-            <TxButton class="DashboardDevices-FilterButton" size="small" variant="secondary" icon="i-carbon-filter">
+            <TxButton class="DashboardDevices-FilterButton" size="sm" variant="secondary" icon="i-carbon-filter">
               {{ t('dashboard.devices.filters.label', '筛选') }}
               <span class="DashboardDevices-FilterSummary">{{ activeSessionFilterLabel }}</span>
               <span class="DashboardDevices-ActionChevron i-carbon-chevron-down" aria-hidden="true" />
@@ -493,7 +493,7 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
                   @update:model-value="setActionMenuOpen(device, $event)"
                 >
                   <template #trigger>
-                    <TxButton class="DashboardDevices-ActionButton" size="small" variant="secondary" icon="i-carbon-overflow-menu-horizontal">
+                    <TxButton class="DashboardDevices-ActionButton" size="sm" variant="secondary" icon="i-carbon-overflow-menu-horizontal">
                       {{ t('dashboard.devices.actions', '操作') }}
                       <span class="DashboardDevices-ActionChevron i-carbon-chevron-down" aria-hidden="true" />
                     </TxButton>
@@ -601,10 +601,10 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
 
           <div v-if="editingId === device.id" class="flex flex-wrap items-center gap-2">
             <TuffInput v-model="renameValue" type="text" :placeholder="t('dashboard.devices.renamePlaceholder', '输入设备名称')" />
-            <TxButton size="small" :loading="actionLoading" @click="saveRename(device)">
+            <TxButton size="sm" :loading="actionLoading" @click="saveRename(device)">
               {{ t('common.save', '保存') }}
             </TxButton>
-            <TxButton size="small" variant="secondary" @click="cancelRename">
+            <TxButton size="sm" variant="secondary" @click="cancelRename">
               {{ t('common.cancel', '取消') }}
             </TxButton>
           </div>

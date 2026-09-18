@@ -544,7 +544,7 @@ watch(() => creditTab.value, (value) => {
               <p class="apple-section-title">
                 {{ t('dashboard.team.planLabel', '当前套餐') }}
               </p>
-              <TxButton variant="secondary" size="small" @click="openManagePlan">
+              <TxButton variant="secondary" size="sm" @click="openManagePlan">
                 {{ t('dashboard.team.managePlan', '管理套餐') }}
               </TxButton>
             </div>
@@ -557,7 +557,7 @@ watch(() => creditTab.value, (value) => {
               <p class="apple-section-title">
                 {{ t('dashboard.sections.team.currentTeam', '当前团队') }}
               </p>
-              <TxButton ref="activationTriggerRef" variant="primary" size="small" @click="activationOverlayVisible = true">
+              <TxButton ref="activationTriggerRef" variant="primary" size="sm" @click="activationOverlayVisible = true">
                 {{ t('dashboard.team.activationButton', '激活') }}
               </TxButton>
             </div>
@@ -586,13 +586,13 @@ watch(() => creditTab.value, (value) => {
 
       <section v-if="canCreateTeam || canInvite || canDisband || (isPersonalTeam && receivedInvites.length)" class="apple-card-lg p-6">
         <div v-if="canCreateTeam || canInvite || canDisband" class="flex flex-wrap items-center gap-2">
-          <TxButton v-if="canCreateTeam" ref="createTriggerRef" variant="secondary" size="small" @click="createOverlayVisible = true">
+          <TxButton v-if="canCreateTeam" ref="createTriggerRef" variant="secondary" size="sm" @click="createOverlayVisible = true">
             {{ t('dashboard.team.modal.createTitle', '创建团队') }}
           </TxButton>
-          <TxButton v-if="canInvite" ref="inviteTriggerRef" variant="secondary" size="small" @click="inviteOverlayVisible = true">
+          <TxButton v-if="canInvite" ref="inviteTriggerRef" variant="secondary" size="sm" @click="inviteOverlayVisible = true">
             {{ t('dashboard.team.modal.inviteTitle', '邀请成员') }}
           </TxButton>
-          <TxButton v-if="canDisband" ref="disbandTriggerRef" variant="danger" size="small" @click="disbandOverlayVisible = true">
+          <TxButton v-if="canDisband" ref="disbandTriggerRef" variant="danger" size="sm" @click="disbandOverlayVisible = true">
             {{ t('dashboard.team.disband', '解散团队') }}
           </TxButton>
         </div>
@@ -678,7 +678,7 @@ watch(() => creditTab.value, (value) => {
 
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <TxButton variant="secondary" size="small" @click="() => fetchTeamCreditUsage()">
+                <TxButton variant="secondary" size="sm" @click="() => fetchTeamCreditUsage()">
                   {{ t('common.refresh', '刷新') }}
                 </TxButton>
               </div>
@@ -700,7 +700,7 @@ watch(() => creditTab.value, (value) => {
                   :placeholder="t('dashboard.team.credits.searchPlaceholder', '搜索用户 ID / 邮箱')"
                   class="w-full max-w-xs"
                 />
-                <TxButton variant="secondary" size="mini" @click="applyCreditUsageFilter">
+                <TxButton variant="secondary" size="sm" @click="applyCreditUsageFilter">
                   {{ t('dashboard.team.credits.filter', '筛选') }}
                 </TxButton>
               </div>
@@ -755,7 +755,7 @@ watch(() => creditTab.value, (value) => {
 
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <TxButton variant="secondary" size="small" @click="fetchTeamCreditTrend">
+                <TxButton variant="secondary" size="sm" @click="fetchTeamCreditTrend">
                   {{ t('common.refresh', '刷新') }}
                 </TxButton>
               </div>
@@ -800,7 +800,7 @@ watch(() => creditTab.value, (value) => {
 
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <TxButton variant="secondary" size="small" @click="() => fetchTeamCreditLedger()">
+                <TxButton variant="secondary" size="sm" @click="() => fetchTeamCreditLedger()">
                   {{ t('common.refresh', '刷新') }}
                 </TxButton>
               </div>
@@ -811,7 +811,7 @@ watch(() => creditTab.value, (value) => {
                   :placeholder="t('dashboard.team.credits.ledgerSearchPlaceholder', '筛选用户 ID / 邮箱')"
                   class="w-full max-w-xs"
                 />
-                <TxButton variant="secondary" size="mini" @click="applyCreditLedgerFilter">
+                <TxButton variant="secondary" size="sm" @click="applyCreditLedgerFilter">
                   {{ t('dashboard.team.credits.filter', '筛选') }}
                 </TxButton>
               </div>
@@ -883,7 +883,7 @@ watch(() => creditTab.value, (value) => {
                 {{ invite.role }} · {{ invite.status }} · {{ formatDateTime(invite.expiresAt) }}
               </p>
             </div>
-            <TxButton v-if="canInvite" variant="secondary" size="small" :disabled="deleteInviteLoading" @click="handleDeleteInvite(invite.id)">
+            <TxButton v-if="canInvite" variant="secondary" size="sm" :disabled="deleteInviteLoading" @click="handleDeleteInvite(invite.id)">
               {{ t('common.delete', '删除') }}
             </TxButton>
           </div>
@@ -920,10 +920,10 @@ watch(() => creditTab.value, (value) => {
             />
 
             <div class="TeamOverlay-Actions">
-              <TxButton variant="secondary" size="small" @click="close">
+              <TxButton variant="secondary" size="sm" @click="close">
                 {{ t('common.cancel', '取消') }}
               </TxButton>
-              <TxButton variant="primary" size="small" :loading="createLoading" @click="handleCreateTeam(close)">
+              <TxButton variant="primary" size="sm" :loading="createLoading" @click="handleCreateTeam(close)">
                 {{ t('dashboard.team.modal.create', '创建') }}
               </TxButton>
             </div>
@@ -961,10 +961,10 @@ watch(() => creditTab.value, (value) => {
             </div>
 
             <div class="TeamOverlay-Actions">
-              <TxButton variant="secondary" size="small" @click="close">
+              <TxButton variant="secondary" size="sm" @click="close">
                 {{ t('common.cancel', '取消') }}
               </TxButton>
-              <TxButton variant="primary" size="small" :loading="inviteLoading" @click="handleCreateInvite(close)">
+              <TxButton variant="primary" size="sm" :loading="inviteLoading" @click="handleCreateInvite(close)">
                 {{ t('dashboard.team.modal.createInvite', '发送邀请') }}
               </TxButton>
             </div>
@@ -999,10 +999,10 @@ watch(() => creditTab.value, (value) => {
               @keyup.enter="handleActivateCode(close)"
             />
             <div class="TeamActivationOverlay-Actions">
-              <TxButton variant="secondary" size="small" @click="close">
+              <TxButton variant="secondary" size="sm" @click="close">
                 {{ t('common.cancel', '取消') }}
               </TxButton>
-              <TxButton variant="primary" size="small" :loading="activationLoading" @click="handleActivateCode(close)">
+              <TxButton variant="primary" size="sm" :loading="activationLoading" @click="handleActivateCode(close)">
                 {{ t('dashboard.team.activateCode', '兑换') }}
               </TxButton>
             </div>
@@ -1026,10 +1026,10 @@ watch(() => creditTab.value, (value) => {
             </p>
 
             <div class="TeamOverlay-Actions">
-              <TxButton variant="secondary" size="small" @click="close">
+              <TxButton variant="secondary" size="sm" @click="close">
                 {{ t('common.cancel', '取消') }}
               </TxButton>
-              <TxButton variant="danger" size="small" :loading="disbandLoading" @click="handleDisband(close)">
+              <TxButton variant="danger" size="sm" :loading="disbandLoading" @click="handleDisband(close)">
                 {{ t('dashboard.team.modal.disbandConfirm', '确认解散') }}
               </TxButton>
             </div>

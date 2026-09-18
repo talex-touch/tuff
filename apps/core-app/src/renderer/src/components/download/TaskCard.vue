@@ -122,7 +122,7 @@ function formatSize(bytes: number): string {
       <div class="task-actions">
         <TxButton
           v-if="task.status === 'downloading'"
-          size="small"
+          size="sm"
           circle
           @click="$emit('pause', task.id)"
         >
@@ -130,7 +130,7 @@ function formatSize(bytes: number): string {
         </TxButton>
         <TxButton
           v-else-if="task.status === 'paused'"
-          size="small"
+          size="sm"
           type="primary"
           circle
           @click="$emit('resume', task.id)"
@@ -139,7 +139,7 @@ function formatSize(bytes: number): string {
         </TxButton>
         <TxButton
           v-if="task.status === 'failed'"
-          size="small"
+          size="sm"
           type="warning"
           circle
           @click="$emit('retry', task.id)"
@@ -148,7 +148,7 @@ function formatSize(bytes: number): string {
         </TxButton>
         <TxButton
           v-if="task.status === 'completed'"
-          size="small"
+          size="sm"
           type="success"
           circle
           @click="$emit('open-file', task.id)"
@@ -157,7 +157,7 @@ function formatSize(bytes: number): string {
         </TxButton>
         <TxDropdownMenu v-if="showMoreActions" v-model="actionMenuOpen" placement="bottom-end">
           <template #trigger>
-            <TxButton size="small" circle>
+            <TxButton size="sm" circle>
               <i class="i-carbon-overflow-menu-vertical" />
             </TxButton>
           </template>

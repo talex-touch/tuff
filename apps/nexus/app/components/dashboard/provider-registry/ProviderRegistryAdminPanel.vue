@@ -511,7 +511,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
           {{ t('dashboard.providerRegistry.subtitle', 'Manage provider capabilities and scene bindings for translation, AI, exchange rates, and future runtime scenes.') }}
         </p>
       </div>
-      <TxButton variant="secondary" size="small" :disabled="loading" @click="fetchRegistry">
+      <TxButton variant="secondary" size="sm" :disabled="loading" @click="fetchRegistry">
         <TxSpinner v-if="loading" :size="14" />
         <span :class="loading ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
       </TxButton>
@@ -652,7 +652,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                     :label="`${filterLabel(option)} ${option.count}`"
                   />
                 </TuffSelect>
-                <TxButton variant="primary" size="small" icon="i-carbon-add" class="shrink-0" @click="openCreateProvider">
+                <TxButton variant="primary" size="sm" icon="i-carbon-add" class="shrink-0" @click="openCreateProvider">
                   {{ t('dashboard.providerRegistry.providers.create', 'Create provider') }}
                 </TxButton>
               </div>
@@ -679,7 +679,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                 <TxButton
                   v-if="providers.length"
                   variant="secondary"
-                  size="mini"
+                  size="sm"
                   @click="providerObservabilityFilter = 'all'"
                 >
                   {{ t(providerObservabilityEmptyState.actionKey, providerObservabilityEmptyState.actionFallback) }}
@@ -790,7 +790,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                   <div class="flex flex-nowrap justify-end gap-2">
                     <TxButton
                       variant="secondary"
-                      size="mini"
+                      size="sm"
                       circle
                       class="provider-action-button"
                       :loading="actionPending === `provider:${provider.id}:check`"
@@ -802,7 +802,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                     />
                     <TxButton
                       variant="secondary"
-                      size="mini"
+                      size="sm"
                       circle
                       class="provider-action-button"
                       icon="i-carbon-edit"
@@ -812,7 +812,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                     />
                     <TxButton
                       variant="secondary"
-                      size="mini"
+                      size="sm"
                       circle
                       class="provider-action-button"
                       icon="i-carbon-wallet"
@@ -822,7 +822,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                     />
                     <TxButton
                       variant="secondary"
-                      size="mini"
+                      size="sm"
                       circle
                       class="provider-action-button"
                       :disabled="actionPending !== null"
@@ -870,7 +870,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                   {{ filterLabel(option) }}
                   <span class="ml-1 text-black/35 dark:text-white/35">{{ option.count }}</span>
                 </button>
-                <TxButton variant="primary" size="small" :disabled="!providers.length" @click="openCreateScene">
+                <TxButton variant="primary" size="sm" :disabled="!providers.length" @click="openCreateScene">
                   {{ t('dashboard.providerRegistry.routes.create', 'Create route') }}
                 </TxButton>
               </div>
@@ -897,7 +897,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                 <TxButton
                   v-if="scenes.length"
                   variant="secondary"
-                  size="mini"
+                  size="sm"
                   @click="sceneObservabilityFilter = 'all'"
                 >
                   {{ t(sceneObservabilityEmptyState.actionKey, sceneObservabilityEmptyState.actionFallback) }}
@@ -958,19 +958,19 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                 </template>
                 <template #cell-actions="{ row: scene }">
                   <div class="flex flex-wrap justify-end gap-2">
-                    <TxButton variant="secondary" size="mini" :disabled="actionPending !== null" @click="openRunScene(scene)">
+                    <TxButton variant="secondary" size="sm" :disabled="actionPending !== null" @click="openRunScene(scene)">
                       {{ t('dashboard.providerRegistry.actions.run', 'Run') }}
                     </TxButton>
-                    <TxButton variant="secondary" size="mini" @click="openEditScene(scene)">
+                    <TxButton variant="secondary" size="sm" @click="openEditScene(scene)">
                       {{ t('dashboard.providerRegistry.actions.edit', 'Edit') }}
                     </TxButton>
-                    <TxButton variant="secondary" size="mini" :disabled="actionPending !== null || scene.status === 'enabled'" @click="updateSceneStatus(scene, 'enabled')">
+                    <TxButton variant="secondary" size="sm" :disabled="actionPending !== null || scene.status === 'enabled'" @click="updateSceneStatus(scene, 'enabled')">
                       {{ t('dashboard.providerRegistry.actions.enable', 'Enable') }}
                     </TxButton>
-                    <TxButton variant="secondary" size="mini" :disabled="actionPending !== null || scene.status === 'disabled'" @click="updateSceneStatus(scene, 'disabled')">
+                    <TxButton variant="secondary" size="sm" :disabled="actionPending !== null || scene.status === 'disabled'" @click="updateSceneStatus(scene, 'disabled')">
                       {{ t('dashboard.providerRegistry.actions.disable', 'Disable') }}
                     </TxButton>
-                    <TxButton variant="secondary" size="mini" :disabled="actionPending !== null" @click="confirmDeleteScene(scene)">
+                    <TxButton variant="secondary" size="sm" :disabled="actionPending !== null" @click="confirmDeleteScene(scene)">
                       {{ t('common.delete', 'Delete') }}
                     </TxButton>
                   </div>
@@ -1082,7 +1082,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                 <TxButton
                   v-if="usageEntries.length"
                   variant="secondary"
-                  size="mini"
+                  size="sm"
                   @click="usageLedgerFilter = 'all'"
                 >
                   {{ t(usageLedgerEmptyState.actionKey, usageLedgerEmptyState.actionFallback) }}
@@ -1198,7 +1198,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                 <TxButton
                   v-if="healthEntries.length"
                   variant="secondary"
-                  size="mini"
+                  size="sm"
                   @click="healthCheckFilter = 'all'"
                 >
                   {{ t(healthCheckEmptyState.actionKey, healthCheckEmptyState.actionFallback) }}
@@ -1389,7 +1389,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
               <h3 class="text-sm font-medium text-black dark:text-white">
                 {{ t('dashboard.providerRegistry.providers.capabilitiesTitle', 'Capabilities') }}
               </h3>
-              <TxButton variant="secondary" size="mini" @click="addCapabilityRow">
+              <TxButton variant="secondary" size="sm" @click="addCapabilityRow">
                 {{ t('dashboard.providerRegistry.actions.addCapability', 'Add capability') }}
               </TxButton>
             </div>
@@ -1515,7 +1515,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
               </div>
               <TxButton
                 variant="secondary"
-                size="mini"
+                size="sm"
                 :loading="fetchingProviderModels === selectedProvider.id"
                 :disabled="fetchingProviderModels !== null"
                 @click="fetchProviderModels(selectedProvider)"
@@ -1597,7 +1597,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
               <h3 class="text-sm font-medium text-black dark:text-white">
                 {{ t('dashboard.providerRegistry.providers.capabilitiesTitle', 'Capabilities') }}
               </h3>
-              <TxButton variant="secondary" size="mini" @click="addProviderCapabilityEditRow(selectedProvider)">
+              <TxButton variant="secondary" size="sm" @click="addProviderCapabilityEditRow(selectedProvider)">
                 {{ t('dashboard.providerRegistry.actions.addCapability', 'Add capability') }}
               </TxButton>
             </div>
@@ -1753,10 +1753,10 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
 
       <template #footer>
         <div class="flex items-center justify-end gap-2">
-          <TxButton variant="secondary" size="small" :disabled="providerDrawerSaving" @click="closeProviderDrawer">
+          <TxButton variant="secondary" size="sm" :disabled="providerDrawerSaving" @click="closeProviderDrawer">
             {{ t('common.cancel', 'Cancel') }}
           </TxButton>
-          <TxButton variant="primary" size="small" :disabled="providerDrawerSaving" @click="submitProviderDrawer">
+          <TxButton variant="primary" size="sm" :disabled="providerDrawerSaving" @click="submitProviderDrawer">
             <TxSpinner v-if="providerDrawerSaving" :size="14" />
             <span :class="providerDrawerSaving ? 'ml-2' : ''">{{ providerDrawerPrimaryLabel }}</span>
           </TxButton>
@@ -1820,7 +1820,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
               <h3 class="text-sm font-medium text-black dark:text-white">
                 {{ t('dashboard.providerRegistry.routes.bindingsTitle', 'Provider bindings') }}
               </h3>
-              <TxButton variant="secondary" size="mini" :disabled="!providers.length" @click="addBindingRow">
+              <TxButton variant="secondary" size="sm" :disabled="!providers.length" @click="addBindingRow">
                 {{ t('dashboard.providerRegistry.actions.addBinding', 'Add binding') }}
               </TxButton>
             </div>
@@ -1914,7 +1914,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
               <h3 class="text-sm font-medium text-black dark:text-white">
                 {{ t('dashboard.providerRegistry.routes.bindingsTitle', 'Provider bindings') }}
               </h3>
-              <TxButton variant="secondary" size="mini" :disabled="!providers.length" @click="addSceneBindingEditRow(selectedScene)">
+              <TxButton variant="secondary" size="sm" :disabled="!providers.length" @click="addSceneBindingEditRow(selectedScene)">
                 {{ t('dashboard.providerRegistry.actions.addBinding', 'Add binding') }}
               </TxButton>
             </div>
@@ -1980,7 +1980,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
             <div class="md:col-span-2">
               <div class="mb-1 flex items-center justify-between gap-2">
                 <label class="apple-section-title block">{{ t('dashboard.providerRegistry.routes.inputJson', 'Input JSON') }}</label>
-                <TxButton variant="secondary" size="mini" @click="selectSceneRunCapability(selectedScene, activeSceneRunPanel.capability)">
+                <TxButton variant="secondary" size="sm" @click="selectSceneRunCapability(selectedScene, activeSceneRunPanel.capability)">
                   {{ t('dashboard.providerRegistry.routes.resetSample', 'Reset sample') }}
                 </TxButton>
               </div>
@@ -2030,20 +2030,20 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
 
       <template #footer>
         <div class="flex items-center justify-end gap-2">
-          <TxButton variant="secondary" size="small" :disabled="sceneDrawerSaving" @click="closeSceneDrawer">
+          <TxButton variant="secondary" size="sm" :disabled="sceneDrawerSaving" @click="closeSceneDrawer">
             {{ t('common.cancel', 'Cancel') }}
           </TxButton>
           <template v-if="sceneDrawerMode === 'run' && selectedScene">
-            <TxButton variant="secondary" size="small" :disabled="actionPending !== null" @click="runScene(selectedScene, true)">
+            <TxButton variant="secondary" size="sm" :disabled="actionPending !== null" @click="runScene(selectedScene, true)">
               <TxSpinner v-if="actionPending === `scene:${selectedScene.id}:run:dry`" :size="14" />
               <span :class="actionPending === `scene:${selectedScene.id}:run:dry` ? 'ml-2' : ''">{{ t('dashboard.providerRegistry.actions.dryRun', 'Dry run') }}</span>
             </TxButton>
-            <TxButton variant="primary" size="small" :disabled="actionPending !== null || selectedScene.status !== 'enabled'" @click="runScene(selectedScene, false)">
+            <TxButton variant="primary" size="sm" :disabled="actionPending !== null || selectedScene.status !== 'enabled'" @click="runScene(selectedScene, false)">
               <TxSpinner v-if="actionPending === `scene:${selectedScene.id}:run:execute`" :size="14" />
               <span :class="actionPending === `scene:${selectedScene.id}:run:execute` ? 'ml-2' : ''">{{ t('dashboard.providerRegistry.actions.execute', 'Execute') }}</span>
             </TxButton>
           </template>
-          <TxButton v-else variant="primary" size="small" :disabled="sceneDrawerSaving" @click="submitSceneDrawer">
+          <TxButton v-else variant="primary" size="sm" :disabled="sceneDrawerSaving" @click="submitSceneDrawer">
             <TxSpinner v-if="sceneDrawerSaving" :size="14" />
             <span :class="sceneDrawerSaving ? 'ml-2' : ''">{{ sceneDrawerPrimaryLabel }}</span>
           </TxButton>
@@ -2146,12 +2146,12 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
 
       <template #footer>
         <div class="flex items-center justify-end gap-2">
-          <TxButton variant="secondary" size="small" :disabled="actionPending !== null" @click="providerCheckDialogOpen = false">
+          <TxButton variant="secondary" size="sm" :disabled="actionPending !== null" @click="providerCheckDialogOpen = false">
             {{ t('common.cancel', 'Cancel') }}
           </TxButton>
           <TxButton
             variant="primary"
-            size="small"
+            size="sm"
             :disabled="!providerCheckDialogProvider || !providerCheckDialogCapability || actionPending !== null"
             @click="submitProviderCheckDialog"
           >

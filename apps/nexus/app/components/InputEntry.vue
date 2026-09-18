@@ -19,7 +19,7 @@ function go() {
       @keydown.enter="go"
     />
     <div>
-      <TxButton class="mt-3" size="small" :disabled="!name" @click="go">
+      <TxButton class="mt-3" size="sm" :disabled="!name" @click="go">
         GO
       </TxButton>
     </div>

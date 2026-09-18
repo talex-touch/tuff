@@ -355,7 +355,7 @@ onBeforeUnmount(() => {
                     <span class="ai-chat-demo__code-lang">vue</span>
                     <TxButton
                       variant="bare"
-                      size="mini"
+                      size="sm"
                       native-type="button"
                       class="ai-chat-demo__code-copy"
                     >

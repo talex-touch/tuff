@@ -44,7 +44,7 @@ const { t } = useI18n()
       </p>
 
       <div class="AssetBetaStep-Actions">
-        <TxButton variant="secondary" size="small" @click="emit('back')">
+        <TxButton variant="secondary" size="sm" @click="emit('back')">
           <span class="i-carbon-arrow-left mr-1" />
           {{ t('dashboard.sections.plugins.assetCreate.backToTypes', 'Back to Type Selection') }}
         </TxButton>

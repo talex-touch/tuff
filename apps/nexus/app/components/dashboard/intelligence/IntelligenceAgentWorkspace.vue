@@ -1343,19 +1343,19 @@ onBeforeUnmount(() => {
               </p>
             </div>
             <div class="flex items-center gap-2">
-              <TxButton variant="ghost" size="small" :disabled="running" @click="openMetricsPanel">
+              <TxButton variant="ghost" size="sm" :disabled="running" @click="openMetricsPanel">
                 ⌁
               </TxButton>
-              <TxButton variant="ghost" size="small" :disabled="running" @click="openTracePanel">
+              <TxButton variant="ghost" size="sm" :disabled="running" @click="openTracePanel">
                 ◎
               </TxButton>
-              <TxButton variant="ghost" size="small" :disabled="running" @click="openHistoryPanel">
+              <TxButton variant="ghost" size="sm" :disabled="running" @click="openHistoryPanel">
                 ⌘
               </TxButton>
-              <TxButton variant="ghost" size="small" :disabled="running" @click="openPromptRegistryPanel">
+              <TxButton variant="ghost" size="sm" :disabled="running" @click="openPromptRegistryPanel">
                 Ψ
               </TxButton>
-              <TxButton variant="ghost" size="small" :disabled="running" @click="() => void clearAll()">
+              <TxButton variant="ghost" size="sm" :disabled="running" @click="() => void clearAll()">
                 {{ labText('dashboard.intelligenceLab.reset', 'Reset') }}
               </TxButton>
             </div>
@@ -1426,7 +1426,7 @@ onBeforeUnmount(() => {
             <TxButton
               v-for="item in QUICK_PROMPTS"
               :key="item.id"
-              size="small"
+              size="sm"
               variant="secondary"
               :disabled="running || historyLoading"
               @click="() => applyQuickPrompt(item.text)"
@@ -1568,10 +1568,10 @@ onBeforeUnmount(() => {
                         {{ ticket.reason }}
                       </p>
                       <div class="mt-2 flex items-center gap-2">
-                        <TxButton size="small" variant="primary" :disabled="approving" @click="handleApproval(ticket, true)">
+                        <TxButton size="sm" variant="primary" :disabled="approving" @click="handleApproval(ticket, true)">
                           {{ t('dashboard.intelligenceLab.metrics.approve') }}
                         </TxButton>
-                        <TxButton size="small" variant="danger" :disabled="approving" @click="handleApproval(ticket, false)">
+                        <TxButton size="sm" variant="danger" :disabled="approving" @click="handleApproval(ticket, false)">
                           {{ t('dashboard.intelligenceLab.metrics.reject') }}
                         </TxButton>
                       </div>
@@ -1597,14 +1597,14 @@ onBeforeUnmount(() => {
                 <div class="flex items-center gap-2">
                   <div class="ti-lab__trace-filter">
                     <TxButton
-                      size="small"
+                      size="sm"
                       :variant="traceFilterMode === 'all' ? 'primary' : 'ghost'"
                       @click="traceFilterMode = 'all'"
                     >
                       {{ t('dashboard.intelligenceLab.trace.filterAll') }}
                     </TxButton>
                     <TxButton
-                      size="small"
+                      size="sm"
                       :variant="traceFilterMode === 'risk' ? 'primary' : 'ghost'"
                       @click="traceFilterMode = 'risk'"
                     >
@@ -1661,7 +1661,7 @@ onBeforeUnmount(() => {
                       <p class="text-xs">
                         seq=<strong>{{ activeTraceEvent.seq }}</strong> · phase=<strong>{{ activeTraceEvent.phase }}</strong>
                       </p>
-                      <TxButton size="small" variant="ghost" @click="() => void copyActiveTracePayload()">
+                      <TxButton size="sm" variant="ghost" @click="() => void copyActiveTracePayload()">
                         {{ copiedTraceSeq === activeTraceEvent?.seq ? t('dashboard.intelligenceLab.trace.copied') : t('dashboard.intelligenceLab.trace.copyPayload') }}
                       </TxButton>
                     </div>
@@ -1737,7 +1737,7 @@ onBeforeUnmount(() => {
                 <h3 class="text-base font-semibold">
                   Prompt Registry
                 </h3>
-                <TxButton size="small" variant="ghost" :disabled="promptRegistryLoading || promptRegistrySaving" @click="() => void loadPromptRegistryData()">
+                <TxButton size="sm" variant="ghost" :disabled="promptRegistryLoading || promptRegistrySaving" @click="() => void loadPromptRegistryData()">
                   Reload
                 </TxButton>
               </header>
@@ -1770,10 +1770,10 @@ onBeforeUnmount(() => {
                     placeholder="Prompt template (supports mustache variables)"
                   />
                   <div class="flex items-center gap-2">
-                    <TxButton size="small" variant="primary" :disabled="promptRegistrySaving" @click="() => void savePromptRegistryRecord()">
+                    <TxButton size="sm" variant="primary" :disabled="promptRegistrySaving" @click="() => void savePromptRegistryRecord()">
                       Save Prompt
                     </TxButton>
-                    <TxButton size="small" variant="ghost" :disabled="promptRegistrySaving" @click="resetPromptRegistryForms">
+                    <TxButton size="sm" variant="ghost" :disabled="promptRegistrySaving" @click="resetPromptRegistryForms">
                       Reset Form
                     </TxButton>
                   </div>
@@ -1791,7 +1791,7 @@ onBeforeUnmount(() => {
                   </div>
                   <TuffInput v-model="promptBindingForm.channel" type="text" placeholder="channel: stable/latest" />
                   <div class="flex items-center gap-2">
-                    <TxButton size="small" variant="primary" :disabled="promptRegistrySaving" @click="() => void savePromptRegistryBinding()">
+                    <TxButton size="sm" variant="primary" :disabled="promptRegistrySaving" @click="() => void savePromptRegistryBinding()">
                       Save Binding
                     </TxButton>
                   </div>
@@ -1819,10 +1819,10 @@ onBeforeUnmount(() => {
                         <pre class="ti-lab__prompt-preview">{{ (record.template || '').slice(0, 320) }}</pre>
                       </div>
                       <div class="flex shrink-0 items-center gap-2">
-                        <TxButton size="small" variant="ghost" :disabled="promptRegistrySaving" @click="populatePromptForm(record)">
+                        <TxButton size="sm" variant="ghost" :disabled="promptRegistrySaving" @click="populatePromptForm(record)">
                           Edit
                         </TxButton>
-                        <TxButton size="small" variant="danger" :disabled="promptRegistrySaving" @click="() => void removePromptRegistryRecord(record)">
+                        <TxButton size="sm" variant="danger" :disabled="promptRegistrySaving" @click="() => void removePromptRegistryRecord(record)">
                           Delete
                         </TxButton>
                       </div>
@@ -1847,10 +1847,10 @@ onBeforeUnmount(() => {
                         </p>
                       </div>
                       <div class="flex shrink-0 items-center gap-2">
-                        <TxButton size="small" variant="ghost" :disabled="promptRegistrySaving" @click="populatePromptBindingForm(binding)">
+                        <TxButton size="sm" variant="ghost" :disabled="promptRegistrySaving" @click="populatePromptBindingForm(binding)">
                           Edit
                         </TxButton>
-                        <TxButton size="small" variant="danger" :disabled="promptRegistrySaving" @click="() => void removePromptRegistryBinding(binding)">
+                        <TxButton size="sm" variant="danger" :disabled="promptRegistrySaving" @click="() => void removePromptRegistryBinding(binding)">
                           Delete
                         </TxButton>
                       </div>

@@ -26,7 +26,7 @@ const toggle = () => {
               </TuffSelect>
             </label>
 
-            <TxButton size="small" type="primary" @click="toggle">
+            <TxButton size="sm" type="primary" @click="toggle">
               Toggle
             </TxButton>
 
@@ -96,7 +96,7 @@ const toggle = () => {
               </TuffSelect>
             </label>
 
-            <TxButton size="small" type="primary" @click="toggle">
+            <TxButton size="sm" type="primary" @click="toggle">
               Toggle
             </TxButton>
 

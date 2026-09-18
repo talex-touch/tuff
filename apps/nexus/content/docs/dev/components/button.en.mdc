@@ -172,9 +172,9 @@ rows:
   - parameter: size
     type:
       kind: enum
-      enums: [sm, md, lg, large, small, mini]
+      enums: [sm, md, lg]
     default: "'md'"
-    description: 'Button size. Use `lg`/`large` for primary page actions, `sm`/`small`/`mini` for table rows and compact toolbars.'
+    description: 'Button size; the three tiers are 26px / 32px / 38px. Use `lg` for primary page actions and `sm` for table rows and compact toolbars.'
   - parameter: block
     type: boolean
     default: 'false'
@@ -267,7 +267,7 @@ rows:
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `variant` | `'primary' \| 'secondary' \| 'ghost' \| 'danger' \| 'success' \| 'warning' \| 'info'` | `primary` | Visual variant shared by the primary and menu buttons. |
-| `size` | `'sm' \| 'md' \| 'lg' \| 'large' \| 'small' \| 'mini'` | `md` | Button density; aliases normalize to `sm`, `md`, or `lg`. |
+| `size` | `'sm' \| 'md' \| 'lg'` | `md` | Button density; the three tiers are 28px / 32px / 40px. |
 | `disabled` | `boolean` | `false` | Disables both the primary action and menu trigger. |
 | `loading` | `boolean` | `false` | Shows the primary spinner and disables both interactive zones. |
 | `icon` | `string` | - | Icon class shown before the primary label while not loading. |
@@ -472,7 +472,7 @@ code: |
 ## Interaction Contract
 
 - `variant` wins over semantic `type`; when `variant` is absent, `type="text"` maps to the `ghost` variant and other semantic types map to their matching variants.
-- Size aliases normalize to `sm`, `md`, and `lg`; `large` maps to `lg`, while `small` and `mini` map to `sm`.
+- Size has exactly three tiers: `sm`, `md`, `lg`. The older spellings `large`, `small` and `mini` are gone from the type but are still normalized at runtime (`large` → `lg`, `small` / `mini` → `sm`), because consumers of published builds pass them from plain JS.
 - `disabled` and `loading` both disable the native `<button>` and suppress the emitted `click` event.
 - `loadingVariant="bar"` is only visible for `block` buttons; icon-only / inline buttons use the spinner slot or overlay spinner.
 - Non-block, non-circle buttons animate loading width changes with a size FLIP transition.
@@ -496,7 +496,7 @@ code: |
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/button/src/button.vue`, `split-button.vue`, `types.ts`, `split-button.ts`, and both button test files.
-- **Verified coverage:** `button.test.ts` covers label rendering, semantic type mapping, variant precedence, size aliases, disabled/loading click suppression, loading bar behavior, icons, shape classes, borderless mode, and native type; `split-button.test.ts` covers menu rendering, primary click, disabled/loading suppression, and `menuOpenChange`.
+- **Verified coverage:** `button.test.ts` covers label rendering, semantic type mapping, variant precedence, each size tier plus the runtime normalization of published spellings and the unknown-value fallback, disabled/loading click suppression, loading bar behavior, icons, shape classes, borderless mode, and native type; `split-button.test.ts` covers menu rendering, primary click, disabled/loading suppression, and `menuOpenChange`.
 - **Verified coverage (IconButton / CopyButton):** `packages/tuffex/packages/components/src/button/__tests__/icon-button.test.ts` covers accessible-name warnings and semantic status classes; `copy-button.test.ts` covers clipboard success, copied visual state, disabled no-op, and error emission.
 - Accessibility note: the native button handles base keyboard activation. For icon-only or `circle` buttons, provide an external accessible label through surrounding markup or attrs where the visual icon is not self-explanatory.
 

@@ -1815,7 +1815,7 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                 <p class="text-xs font-medium uppercase tracking-wide text-black/40 dark:text-white/40">
                   {{ t('dashboard.sections.plugins.versionHistory') }}
                 </p>
-                <TxButton v-if="canPublishVersion" type="primary" size="small" @click="emit('publishVersion', plugin)">
+                <TxButton v-if="canPublishVersion" type="primary" size="sm" @click="emit('publishVersion', plugin)">
                   <span class="i-carbon-cloud-upload text-sm" />
                   {{ t('dashboard.sections.plugins.publishVersion') }}
                 </TxButton>
@@ -1867,7 +1867,7 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                       <TxButton
                         v-if="canEdit && version.status === 'rejected'"
                         variant="secondary"
-                        size="mini"
+                        size="sm"
                         :title="t('dashboard.sections.plugins.reeditVersion')"
                         @click="emit('reeditVersion', plugin, version)"
                       >
@@ -1876,7 +1876,7 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                       <TxButton
                         v-if="canDelete"
                         variant="secondary"
-                        size="mini"
+                        size="sm"
                         @click="emit('deleteVersion', plugin, version)"
                       >
                         <span class="i-carbon-trash-can text-sm" />
@@ -1926,19 +1926,19 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
           </div>
 
           <div class="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-black/[0.04] px-6 py-4 dark:border-white/[0.06]">
-            <TxButton v-if="canSubmitReview" size="small" :disabled="loading" @click="emit('submitReview', plugin)">
+            <TxButton v-if="canSubmitReview" size="sm" :disabled="loading" @click="emit('submitReview', plugin)">
               <span class="i-carbon-send text-sm" />
               {{ t('dashboard.sections.plugins.actions.submitReview') }}
             </TxButton>
-            <TxButton v-if="canWithdrawReview" size="small" :disabled="loading" @click="emit('withdrawReview', plugin)">
+            <TxButton v-if="canWithdrawReview" size="sm" :disabled="loading" @click="emit('withdrawReview', plugin)">
               <span class="i-carbon-undo text-sm" />
               {{ t('dashboard.sections.plugins.actions.withdrawReview') }}
             </TxButton>
-            <TxButton v-if="canEdit" size="small" @click="emit('edit', plugin, $event)">
+            <TxButton v-if="canEdit" size="sm" @click="emit('edit', plugin, $event)">
               <span class="i-carbon-edit text-sm" />
               {{ t('dashboard.sections.plugins.editMetadata') }}
             </TxButton>
-            <TxButton v-if="canDelete" type="danger" size="small" @click="emit('delete', plugin)">
+            <TxButton v-if="canDelete" type="danger" size="sm" @click="emit('delete', plugin)">
               <span class="i-carbon-trash-can text-sm" />
               {{ t('dashboard.sections.plugins.delete') }}
             </TxButton>

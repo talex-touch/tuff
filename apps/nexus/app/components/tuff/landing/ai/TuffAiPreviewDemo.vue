@@ -295,7 +295,7 @@ function setCardRef(el: any, index: number) {
                 <div class="ai-preview-demo__card-footer">
                   <TxButton
                     variant="bare"
-                    size="small"
+                    size="sm"
                     native-type="button"
                     class="ai-preview-demo__card-action-btn"
                   >

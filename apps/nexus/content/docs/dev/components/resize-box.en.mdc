@@ -49,7 +49,7 @@ code: |
         aria-label="Size"
       >
         <TxButton
-          size="small"
+          size="sm"
           :variant="expanded ? 'ghost' : 'primary'"
           :aria-pressed="!expanded"
           @click="setExpanded(false)"
@@ -57,7 +57,7 @@ code: |
           Compact
         </TxButton>
         <TxButton
-          size="small"
+          size="sm"
           :variant="expanded ? 'primary' : 'ghost'"
           :aria-pressed="expanded"
           @click="setExpanded(true)"

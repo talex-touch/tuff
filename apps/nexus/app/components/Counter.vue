@@ -4,10 +4,10 @@ const { count, inc, dec } = useCount()
 
 <template>
   <div class="my-3 inline-flex">
-    <TxButton circle size="small" variant="ghost" icon="i-carbon-subtract" @click="dec()" />
+    <TxButton circle size="sm" variant="ghost" icon="i-carbon-subtract" @click="dec()" />
     <div class="m-auto inline-block w-15 font-mono">
       {{ count }}
     </div>
-    <TxButton circle size="small" variant="ghost" icon="i-carbon-add" @click="inc()" />
+    <TxButton circle size="sm" variant="ghost" icon="i-carbon-add" @click="inc()" />
   </div>
 </template>

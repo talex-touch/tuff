@@ -148,7 +148,7 @@ watch([auditPage, auditPageSize], () => {
             {{ t('dashboard.sections.intelligence.audit.subtitle') }}
           </p>
         </div>
-        <TxButton variant="bare" size="mini" @click="fetchAudits">
+        <TxButton variant="bare" size="sm" @click="fetchAudits">
           {{ t('dashboard.sections.intelligence.audit.refresh') }}
         </TxButton>
       </div>
@@ -159,7 +159,7 @@ watch([auditPage, auditPageSize], () => {
           :placeholder="t('dashboard.sections.intelligence.audit.userFilter')"
           class="max-w-xs w-full"
         />
-        <TxButton variant="secondary" size="mini" @click="applyAuditFilter">
+        <TxButton variant="secondary" size="sm" @click="applyAuditFilter">
           {{ t('dashboard.sections.intelligence.audit.filter') }}
         </TxButton>
       </div>

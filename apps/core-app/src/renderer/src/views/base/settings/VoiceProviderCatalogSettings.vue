@@ -168,7 +168,7 @@ onMounted(() => {
       data-testid="voice-provider-catalog-active"
     >
       <TxButton
-        size="small"
+        size="sm"
         variant="ghost"
         :disabled="busy !== null"
         data-testid="voice-provider-catalog-refresh"
@@ -186,7 +186,7 @@ onMounted(() => {
     >
       <TxButton
         v-if="!isLoggedIn"
-        size="small"
+        size="sm"
         :disabled="busy !== null || authBusy"
         :loading="authBusy"
         data-testid="voice-provider-catalog-login"
@@ -196,7 +196,7 @@ onMounted(() => {
       </TxButton>
       <TxButton
         v-else
-        size="small"
+        size="sm"
         variant="ghost"
         :disabled="busy !== null"
         data-testid="voice-provider-catalog-check"
@@ -206,7 +206,7 @@ onMounted(() => {
       </TxButton>
       <TxButton
         v-if="isLoggedIn"
-        size="small"
+        size="sm"
         :disabled="busy !== null"
         data-testid="voice-provider-catalog-sync"
         @click.stop="syncCatalog"
@@ -228,7 +228,7 @@ onMounted(() => {
       data-testid="voice-provider-catalog-rollback-row"
     >
       <TxButton
-        size="small"
+        size="sm"
         variant="ghost"
         :disabled="busy !== null"
         data-testid="voice-provider-catalog-rollback"

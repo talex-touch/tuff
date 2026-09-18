@@ -185,16 +185,12 @@ function openCapabilities(): void {
       default-icon="i-carbon-keyboard"
       data-testid="voice-globe-key-hint"
     >
-      <TxButton
-        size="small"
-        data-testid="voice-disable-globe-key"
-        @click.stop="disableGlobeKeyAction"
-      >
+      <TxButton size="sm" data-testid="voice-disable-globe-key" @click.stop="disableGlobeKeyAction">
         {{ t('settingSpeechRecognition.globeKey.action') }}
       </TxButton>
       <TxButton
         v-if="globeKeyHandoverFailed"
-        size="small"
+        size="sm"
         variant="ghost"
         data-testid="voice-open-keyboard-settings"
         @click.stop="openKeyboardSettings"
@@ -241,7 +237,7 @@ function openCapabilities(): void {
       default-icon="i-carbon-machine-learning-model"
     >
       <TxButton
-        size="small"
+        size="sm"
         variant="ghost"
         data-testid="voice-open-capabilities"
         @click.stop="openCapabilities"
