@@ -1108,11 +1108,11 @@ export class DatabaseModule extends BaseModule {
   private async initSearchDatabase(databaseDirPath: string): Promise<void> {
     if (!DB_SEARCH_SPLIT_ENABLED) return
 
-    try {
-      this.searchDbPath = this.searchDbPath || path.join(databaseDirPath, 'search-index.db')
+    this.searchDbPath = this.searchDbPath || path.join(databaseDirPath, 'search-index.db')
+
+    const setupSearch = async (): Promise<void> => {
       this.searchClient = createClient({ url: `file:${this.searchDbPath}` })
       await this.configureSqliteClient(this.searchClient, 'search')
-      await this.ensureDatabaseIntegrity(this.searchDbPath, 'search', this.probeDbIntegrity)
       // Search/file-index tables are rebuildable — no data migration. Apply the
       // same drizzle migrations to the dedicated file; providers re-index on
       // the next scan. Redundant main-domain tables created here stay empty and
@@ -1159,10 +1159,51 @@ export class DatabaseModule extends BaseModule {
       this.searchDb = searchDb
       this.searchInitialized = true
       dbLog.info('Search index database initialized', { meta: { path: this.searchDbPath } })
+    }
+
+    try {
+      // NOTE: Unlike primary/aux databases, search-index.db can grow to multiple gigabytes
+      // (e.g. 5GB+) and holds purely derived, rebuildable search indexes.
+      // Running PRAGMA quick_check reads every page synchronously on the main thread,
+      // which freezes startup for 60+ seconds whenever an unclean shutdown occurred (#295).
+      // We skip preemptive quick_check here; if the file is actually corrupt, migrate()
+      // or subsequent setup will throw a SQLite corruption error and trigger quarantine/rebuild.
+      await setupSearch()
     } catch (error) {
-      dbLog.warn('Search index database initialization failed; falling back to primary DB', {
-        error
-      })
+      if (isSqliteCorruptionError(error)) {
+        operationalErrorService.report({
+          domain: 'database',
+          operation: 'integrity.search',
+          error: error instanceof Error ? error : new Error(String(error)),
+          code: 'DATABASE_CORRUPT',
+          severity: 'error',
+          retryable: false,
+          userImpact: 'degraded'
+        })
+        dbLog.error('Corrupt search database detected during init; quarantining and rebuilding', {
+          error,
+          meta: { dbPath: this.searchDbPath }
+        })
+        try {
+          this.searchClient?.close()
+        } catch {
+          // ignore
+        }
+        this.searchClient = null
+        await this.quarantineCorruptDatabaseFiles(this.searchDbPath)
+        try {
+          await setupSearch()
+          return
+        } catch (retryError) {
+          dbLog.warn('Search index database rebuild failed; falling back to primary DB', {
+            error: retryError
+          })
+        }
+      } else {
+        dbLog.warn('Search index database initialization failed; falling back to primary DB', {
+          error
+        })
+      }
       this.searchInitialized = false
       this.searchDb = null
       try {
