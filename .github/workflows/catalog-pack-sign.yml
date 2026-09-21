@@ -29,6 +29,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The step below writes the release signing key to disk and runs the install's
+          # lifecycle scripts, so the token must not sit in .git/config for them to read.
+          persist-credentials: false
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
