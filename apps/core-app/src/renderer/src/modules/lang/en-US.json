@@ -1328,6 +1328,7 @@
       "finalText": "Final text",
       "duration": "Recording duration",
       "recognitionDuration": "Recognition time",
+      "providerLatency": "Provider time",
       "tokens": "Tokens",
       "tokensValue": "{count}",
       "tokensSplit": "Input {input} · output {output}",
