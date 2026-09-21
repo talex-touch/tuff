@@ -1,0 +1,35 @@
+{
+  "contractVersion": 1,
+  "type": "voice-provider",
+  "packId": "official.voice-provider",
+  "version": "20260921",
+  "schemaVersion": 1,
+  "createdAt": "2026-09-21T00:00:00.000Z",
+  "minSdkApi": 260713,
+  "providers": [
+    {
+      "id": "tuff-nexus-default",
+      "displayName": {
+        "default": "Nexus",
+        "locales": { "zh-CN": "Nexus 语音", "en-US": "Nexus" }
+      },
+      "protocol": "nexus-pack",
+      "transport": "http-upload",
+      "endpoint": {
+        "baseUrl": "https://tuff.tagzxia.com",
+        "submitPath": "/api/v1/ai/audio/transcribe",
+        "pollPath": "/api/v1/ai/audio/transcriptions/:requestId"
+      },
+      "auth": { "mode": "nexus-session" },
+      "request": {
+        "body": "raw-bytes",
+        "contentTypePolicy": "audio/*",
+        "idempotencyHeader": "x-idempotency-key"
+      },
+      "models": [
+        { "id": "nexus-audio-transcribe", "label": "Nexus ASR", "languages": ["zh-CN"] }
+      ],
+      "limits": { "maxBytes": 20971520, "maxDurationSec": 600, "timeoutMs": 600000 }
+    }
+  ]
+}
