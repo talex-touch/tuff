@@ -22,16 +22,17 @@
  * on Linux).
  */
 
+import type { Buffer } from 'node:buffer'
+import type { SpeechRuntimeEntryV1 } from './model-catalog'
+import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { createWriteStream } from 'node:fs'
-import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { accessSync, constants, readdirSync, readFileSync } from 'node:fs'
+import { accessSync, constants, createWriteStream, readdirSync, readFileSync } from 'node:fs'
+import { access, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve, sep } from 'node:path'
-import { execFile } from 'node:child_process'
+import process from 'node:process'
 import { Readable } from 'node:stream'
 import { promisify } from 'node:util'
-import type { SpeechRuntimeEntryV1 } from './model-catalog'
 
 const run = promisify(execFile)
 
@@ -39,9 +40,11 @@ export const ENGINE_MANIFEST_FILE = 'runtime.json'
 
 /** Where provisioned runtimes live. Same override rules as the model store. */
 export function resolveEngineRoot(explicit?: string): string {
-  if (explicit) return resolve(explicit)
+  if (explicit)
+    return resolve(explicit)
   const fromEnv = process.env.TUFF_SPEECH_ENGINE_DIR?.trim()
-  if (fromEnv) return resolve(fromEnv)
+  if (fromEnv)
+    return resolve(fromEnv)
   if (process.platform === 'darwin')
     return join(homedir(), 'Library', 'Application Support', 'Tuff', 'speech-engine')
   const dataHome = process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share')
@@ -51,8 +54,10 @@ export function resolveEngineRoot(explicit?: string): string {
 /** Host identity a runtime entry is matched against. */
 export function currentPlatformTag(): string {
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
-  if (process.platform === 'darwin') return `darwin-${arch}`
-  if (process.platform === 'win32') return `win32-${arch}`
+  if (process.platform === 'darwin')
+    return `darwin-${arch}`
+  if (process.platform === 'win32')
+    return `win32-${arch}`
   return `linux-${arch}`
 }
 
@@ -93,7 +98,8 @@ async function isExecutable(path: string): Promise<boolean> {
   try {
     await access(path, constants.X_OK)
     return true
-  } catch {
+  }
+  catch {
     return false
   }
 }
@@ -102,7 +108,8 @@ function isExecutableSync(path: string): boolean {
   try {
     accessSync(path, constants.X_OK)
     return true
-  } catch {
+  }
+  catch {
     return false
   }
 }
@@ -127,7 +134,8 @@ export function resolveInstalledRuntimeSync(
   let versions: string[]
   try {
     versions = readdirSync(join(root, runtimeId))
-  } catch {
+  }
+  catch {
     return null
   }
   const ordered = versions
@@ -171,7 +179,7 @@ export async function resolveInstalledRuntime(
 export interface InstallSpeechRuntimeOptions {
   root?: string
   fetchImpl?: typeof fetch
-  onProgress?: (progress: { received: number; total: number }) => void
+  onProgress?: (progress: { received: number, total: number }) => void
   signal?: AbortSignal
 }
 
@@ -179,7 +187,7 @@ export interface InstallSpeechRuntimeOptions {
 export async function installSpeechRuntime(
   entry: SpeechRuntimeEntryV1,
   options: InstallSpeechRuntimeOptions = {},
-): Promise<{ binaryPath: string; directory: string; downloaded: boolean }> {
+): Promise<{ binaryPath: string, directory: string, downloaded: boolean }> {
   const root = options.root ?? resolveEngineRoot()
   const directory = versionDirectory(root, entry.id, entry.version)
   const manifestPath = join(directory, ENGINE_MANIFEST_FILE)
@@ -196,7 +204,8 @@ export async function installSpeechRuntime(
     const recorded = resolveInside(directory, manifest.binary ?? entry.binary)
     if (manifest.sha256 === entry.sha256 && (await isExecutable(recorded)))
       return { binaryPath: recorded, directory, downloaded: false }
-  } catch {
+  }
+  catch {
     // Not installed, or not readable: fall through and install it.
   }
 
@@ -208,16 +217,18 @@ export async function installSpeechRuntime(
 
   const fetchImpl = options.fetchImpl ?? fetch
   const response = await fetchImpl(entry.url, { redirect: 'follow', ...(options.signal ? { signal: options.signal } : {}) })
-  if (!response.ok)
+  if (!response.ok) {
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_DOWNLOAD_FAILED',
       `${entry.id}@${entry.version}: HTTP ${response.status} ${response.statusText} from ${entry.url}`,
     )
-  if (!response.body)
+  }
+  if (!response.body) {
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_DOWNLOAD_FAILED',
       `${entry.id}@${entry.version}: the response carried no body`,
     )
+  }
 
   const hash = createHash('sha256')
   let received = 0
@@ -229,7 +240,7 @@ export async function installSpeechRuntime(
       received += buffer.byteLength
       hash.update(buffer)
       if (!sink.write(buffer))
-        await Promise.race([new Promise<void>((done) => sink.once('drain', () => done())), writeFailure])
+        await Promise.race([new Promise<void>(done => sink.once('drain', () => done())), writeFailure])
       options.onProgress?.({ received, total: entry.bytes })
     }
     await new Promise<void>((finished, failed) => {
@@ -237,7 +248,8 @@ export async function installSpeechRuntime(
       sink.once('finish', () => finished())
       sink.end()
     })
-  } catch (error) {
+  }
+  catch (error) {
     sink.destroy()
     await rm(archive, { force: true })
     throw new SpeechRuntimeInstallError(
@@ -263,7 +275,8 @@ export async function installSpeechRuntime(
   const tarFlag = entry.archive === 'zip' ? '-xf' : entry.archive === 'tar.gz' ? '-xzf' : '-xjf'
   try {
     await run('tar', [tarFlag, archive, '-C', staging])
-  } catch (error) {
+  }
+  catch (error) {
     await rm(staging, { recursive: true, force: true })
     await rm(archive, { force: true })
     throw new SpeechRuntimeInstallError(
@@ -277,7 +290,8 @@ export async function installSpeechRuntime(
   const stagedBinary = resolveInside(payload, entry.binary)
   try {
     await stat(stagedBinary)
-  } catch {
+  }
+  catch {
     await rm(staging, { recursive: true, force: true })
     await rm(archive, { force: true })
     throw new SpeechRuntimeInstallError(
@@ -304,11 +318,12 @@ export async function installSpeechRuntime(
   const nested = extracted.length === 1 ? (extracted[0] as string) : ''
   const relativeBinary = nested ? `${nested}/${entry.binary}` : entry.binary
   const installedBinary = resolveInside(directory, relativeBinary)
-  if (!(await isExecutable(installedBinary)))
+  if (!(await isExecutable(installedBinary))) {
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_INVALID',
       `${entry.id}@${entry.version}: ${entry.binary} was extracted but is not executable`,
     )
+  }
 
   await writeFile(
     manifestPath,

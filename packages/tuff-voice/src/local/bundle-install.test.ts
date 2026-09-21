@@ -1,3 +1,5 @@
+import type { SpeechBundleSpec } from './bundle-install'
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -7,9 +9,9 @@ import {
   installSpeechBundle,
   removeSpeechBundle,
   SpeechBundleInstallError,
-  type SpeechBundleSpec,
+
 } from './bundle-install'
-import { loadInstalledModelSync, listInstalledModels } from './model-store'
+import { listInstalledModels, loadInstalledModelSync } from './model-store'
 
 const WEIGHTS = Buffer.from('a ggml file, twelve bytes at least'.repeat(4))
 const TOKENS = Buffer.from('a b c\n')
@@ -63,7 +65,8 @@ function serveFiles(bodies: Record<string, Buffer>): Map<string, number> {
       const url = String(input)
       calls.set(url, (calls.get(url) ?? 0) + 1)
       const body = bodies[url]
-      if (!body) return new Response('not found', { status: 404 })
+      if (!body)
+        return new Response('not found', { status: 404 })
       return new Response(new Uint8Array(body), { status: 200 })
     }),
   )
@@ -91,7 +94,7 @@ describe('installing a speech bundle', () => {
     expect(resolved.weightsPath).toBe(join(root, 'demo-model', '1.0.0', 'demo.bin'))
     expect((await readFile(resolved.weightsPath)).equals(WEIGHTS)).toBe(true)
     // And the store lists it, which is what the settings page shows.
-    expect((await listInstalledModels(root)).map((model) => model.id)).toEqual(['demo-model'])
+    expect((await listInstalledModels(root)).map(model => model.id)).toEqual(['demo-model'])
   })
 
   it('refuses bytes that do not match the digest, and leaves nothing resolvable', async () => {

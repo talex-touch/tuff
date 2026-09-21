@@ -16,10 +16,10 @@
  * (`parseModelDescriptor`), which is the only thing that decides what a bundle may declare.
  */
 
-import { createHash } from 'node:crypto'
-import type { LocalModelDescriptor } from './types'
-import { parseModelDescriptor } from './model-store'
 import type { SpeechBundleFileSpec, SpeechBundleSpec } from './bundle-install'
+import type { LocalModelDescriptor } from './types'
+import { createHash } from 'node:crypto'
+import { parseModelDescriptor } from './model-store'
 
 export const SPEECH_MODEL_CATALOG_SCHEMA_VERSION = 1 as const
 
@@ -62,7 +62,7 @@ export interface SpeechRuntimeEntryV1 {
 export interface SpeechModelCatalogV1 {
   schemaVersion: typeof SPEECH_MODEL_CATALOG_SCHEMA_VERSION
   generatedAt: string
-  recommended?: { id: string; version: string }
+  recommended?: { id: string, version: string }
   models: readonly SpeechModelCatalogEntryV1[]
   runtimes: readonly SpeechRuntimeEntryV1[]
 }
@@ -92,12 +92,13 @@ const ARCHIVES = new Set(['tar.bz2', 'tar.gz', 'zip'])
 
 /** Deterministic JSON: sorted keys, no whitespace — the form the digest is taken over. */
 export function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  if (Array.isArray(value))
+    return `[${value.map(stableStringify).join(',')}]`
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>
     const body = Object.keys(record)
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+      .map(key => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
       .join(',')
     return `{${body}}`
   }
@@ -128,7 +129,7 @@ export function bundleFiles(descriptor: LocalModelDescriptor): DescriptorFile[] 
       bytes: descriptor.runtime.bytes,
       sha256: descriptor.runtime.sha256,
     },
-    ...auxiliary.map((item) => ({
+    ...auxiliary.map(item => ({
       role: item.role as SpeechBundleFileSpec['role'],
       file: item.file,
       bytes: item.bytes,
@@ -155,10 +156,12 @@ function requireUrl(value: unknown, where: string): string {
 }
 
 export function catalogEntryToItem(entry: SpeechModelCatalogEntryV1): SpeechModelCatalogItem {
-  if (!ID_PATTERN.test(entry.id)) throw new SpeechCatalogError(`id "${entry.id}" is malformed`)
+  if (!ID_PATTERN.test(entry.id))
+    throw new SpeechCatalogError(`id "${entry.id}" is malformed`)
   if (!VERSION_PATTERN.test(entry.version))
     throw new SpeechCatalogError(`version "${entry.version}" is not semver`)
-  if (!ENGINES.has(entry.engine)) throw new SpeechCatalogError(`unknown engine "${entry.engine}"`)
+  if (!ENGINES.has(entry.engine))
+    throw new SpeechCatalogError(`unknown engine "${entry.engine}"`)
   if (!Number.isInteger(entry.bytes) || entry.bytes <= 0)
     throw new SpeechCatalogError(`${entry.id}@${entry.version}: bytes is not a positive integer`)
   if (!SHA256_PATTERN.test(entry.sha256))
@@ -170,17 +173,18 @@ export function catalogEntryToItem(entry: SpeechModelCatalogEntryV1): SpeechMode
   )
 
   const computed = bundleManifestHash(descriptor)
-  if (computed !== entry.sha256)
+  if (computed !== entry.sha256) {
     throw new SpeechCatalogError(
       `${entry.id}@${entry.version}: the descriptor hashes to ${computed}, but the catalog publishes ${entry.sha256}`,
     )
+  }
 
   const source = descriptor.source as { url?: unknown } | undefined
   const files: SpeechBundleFileSpec[] = bundleFiles(descriptor).map((file) => {
     if (file.role === 'weights') {
       return { ...file, url: requireUrl(source?.url, `${entry.id}@${entry.version} weights`) }
     }
-    const auxiliary = (descriptor.auxiliary ?? []).find((item) => item.file === file.file)
+    const auxiliary = (descriptor.auxiliary ?? []).find(item => item.file === file.file)
     return {
       ...file,
       url: requireUrl(
@@ -191,10 +195,11 @@ export function catalogEntryToItem(entry: SpeechModelCatalogEntryV1): SpeechMode
   })
 
   const total = files.reduce((sum, file) => sum + file.bytes, 0)
-  if (total !== entry.bytes)
+  if (total !== entry.bytes) {
     throw new SpeechCatalogError(
       `${entry.id}@${entry.version}: the catalog says ${entry.bytes} bytes, the files add up to ${total}`,
     )
+  }
 
   return {
     entry,
@@ -227,7 +232,8 @@ export function parseSpeechModelCatalog(value: unknown): ParsedSpeechModelCatalo
   for (const raw of record.models) {
     const item = catalogEntryToItem(raw as SpeechModelCatalogEntryV1)
     const key = `${item.entry.id}@${item.entry.version}`
-    if (seen.has(key)) throw new SpeechCatalogError(`${key} appears twice in the catalog`)
+    if (seen.has(key))
+      throw new SpeechCatalogError(`${key} appears twice in the catalog`)
     seen.add(key)
     items.push(item)
   }
@@ -235,7 +241,8 @@ export function parseSpeechModelCatalog(value: unknown): ParsedSpeechModelCatalo
   const runtimes: SpeechRuntimeEntryV1[] = []
   for (const raw of record.runtimes) {
     const runtime = raw as SpeechRuntimeEntryV1
-    if (!RUNTIME_IDS.has(runtime.id)) throw new SpeechCatalogError(`unknown runtime "${runtime.id}"`)
+    if (!RUNTIME_IDS.has(runtime.id))
+      throw new SpeechCatalogError(`unknown runtime "${runtime.id}"`)
     if (!VERSION_PATTERN.test(runtime.version))
       throw new SpeechCatalogError(`runtime ${runtime.id} version "${runtime.version}" is not semver`)
     if (typeof runtime.platform !== 'string' || !runtime.platform)
@@ -252,25 +259,26 @@ export function parseSpeechModelCatalog(value: unknown): ParsedSpeechModelCatalo
     runtimes.push(runtime)
   }
 
-  const recommendedRaw = record.recommended as { id?: unknown; version?: unknown } | undefined
+  const recommendedRaw = record.recommended as { id?: unknown, version?: unknown } | undefined
   let recommended: SpeechModelCatalogItem | null = null
   if (recommendedRaw) {
-    recommended =
-      items.find(
-        (item) => item.entry.id === recommendedRaw.id && item.entry.version === recommendedRaw.version,
+    recommended
+      = items.find(
+        item => item.entry.id === recommendedRaw.id && item.entry.version === recommendedRaw.version,
       ) ?? null
-    if (!recommended)
+    if (!recommended) {
       throw new SpeechCatalogError(
         `catalog recommends ${String(recommendedRaw.id)}@${String(recommendedRaw.version)}, which it does not list`,
       )
+    }
   }
 
   return {
     catalog: {
       schemaVersion: SPEECH_MODEL_CATALOG_SCHEMA_VERSION,
       generatedAt: typeof record.generatedAt === 'string' ? record.generatedAt : '',
-      ...(recommendedRaw ? { recommended: recommendedRaw as { id: string; version: string } } : {}),
-      models: items.map((item) => item.entry),
+      ...(recommendedRaw ? { recommended: recommendedRaw as { id: string, version: string } } : {}),
+      models: items.map(item => item.entry),
       runtimes,
     },
     items,
@@ -285,5 +293,5 @@ export function runtimeFor(
   engine: string,
   platform: string,
 ): SpeechRuntimeEntryV1 | null {
-  return runtimes.find((runtime) => runtime.id === engine && runtime.platform === platform) ?? null
+  return runtimes.find(runtime => runtime.id === engine && runtime.platform === platform) ?? null
 }

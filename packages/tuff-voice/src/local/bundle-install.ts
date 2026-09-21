@@ -23,6 +23,7 @@
  * own `runtime` block must agree with the weights entry or the install is refused.
  */
 
+import type { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
@@ -53,15 +54,15 @@ export interface SpeechBundleInstallReport {
   id: string
   version: string
   directory: string
-  downloaded: Array<{ file: string; bytes: number }>
-  reused: Array<{ file: string; bytes: number }>
+  downloaded: Array<{ file: string, bytes: number }>
+  reused: Array<{ file: string, bytes: number }>
 }
 
 export interface SpeechBundleInstallOptions {
   /** Root of the model store, as `resolveModelStoreRoot()` returns it. */
   root: string
   fetchImpl?: typeof fetch
-  onProgress?: (progress: { file: string; received: number; total: number }) => void
+  onProgress?: (progress: { file: string, received: number, total: number }) => void
   signal?: AbortSignal
 }
 
@@ -78,7 +79,7 @@ export class SpeechBundleInstallError extends Error {
 const ID_PATTERN = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
-const FILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/
+const FILE_PATTERN = /^[A-Z0-9][\w.-]{0,120}$/i
 const ENGINES = new Set(['whisper-cpp', 'sherpa-onnx', 'onnxruntime'])
 
 function invalid(detail: string): SpeechBundleInstallError {
@@ -94,29 +95,39 @@ function invalid(detail: string): SpeechBundleInstallError {
  * because `join()` would happily follow `../..` out of the store.
  */
 export function assertSpeechBundleSpec(spec: SpeechBundleSpec): void {
-  if (!ID_PATTERN.test(spec.id)) throw invalid(`id "${spec.id}" is not a catalog id`)
-  if (!SEMVER_PATTERN.test(spec.version)) throw invalid(`version "${spec.version}" is not semver`)
-  if (!ENGINES.has(spec.engine)) throw invalid(`unknown engine "${spec.engine}"`)
-  if (!spec.files.length) throw invalid('bundle declares no files')
+  if (!ID_PATTERN.test(spec.id))
+    throw invalid(`id "${spec.id}" is not a catalog id`)
+  if (!SEMVER_PATTERN.test(spec.version))
+    throw invalid(`version "${spec.version}" is not semver`)
+  if (!ENGINES.has(spec.engine))
+    throw invalid(`unknown engine "${spec.engine}"`)
+  if (!spec.files.length)
+    throw invalid('bundle declares no files')
   if (!spec.descriptor || typeof spec.descriptor !== 'object')
     throw invalid('bundle carries no descriptor')
 
   const seen = new Set<string>()
   let weights: SpeechBundleFileSpec | undefined
   for (const file of spec.files) {
-    if (!FILE_PATTERN.test(file.file)) throw invalid(`file "${file.file}" is not a bare file name`)
-    if (seen.has(file.file)) throw invalid(`file "${file.file}" is listed twice`)
+    if (!FILE_PATTERN.test(file.file))
+      throw invalid(`file "${file.file}" is not a bare file name`)
+    if (seen.has(file.file))
+      throw invalid(`file "${file.file}" is listed twice`)
     seen.add(file.file)
     if (!Number.isInteger(file.bytes) || file.bytes <= 0)
       throw invalid(`${file.file}: bytes must be a positive integer`)
-    if (!SHA256_PATTERN.test(file.sha256)) throw invalid(`${file.file}: sha256 is malformed`)
-    if (!/^https:\/\//.test(file.url)) throw invalid(`${file.file}: url must be https`)
+    if (!SHA256_PATTERN.test(file.sha256))
+      throw invalid(`${file.file}: sha256 is malformed`)
+    if (!/^https:\/\//.test(file.url))
+      throw invalid(`${file.file}: url must be https`)
     if (file.role === 'weights') {
-      if (weights) throw invalid('bundle declares two weights files')
+      if (weights)
+        throw invalid('bundle declares two weights files')
       weights = file
     }
   }
-  if (!weights) throw invalid('bundle declares no weights file')
+  if (!weights)
+    throw invalid('bundle declares no weights file')
 
   // The descriptor is what the runtime trusts; a mismatch here would install a bundle the
   // store resolves and the engine then refuses, so it is caught before the download.
@@ -124,7 +135,7 @@ export function assertSpeechBundleSpec(spec: SpeechBundleSpec): void {
     id?: unknown
     version?: unknown
     engine?: unknown
-    runtime?: { file?: unknown; bytes?: unknown; sha256?: unknown }
+    runtime?: { file?: unknown, bytes?: unknown, sha256?: unknown }
   }
   if (descriptor.id !== spec.id)
     throw invalid(`descriptor id ${String(descriptor.id)} contradicts the entry id ${spec.id}`)
@@ -132,10 +143,11 @@ export function assertSpeechBundleSpec(spec: SpeechBundleSpec): void {
     throw invalid(`descriptor version ${String(descriptor.version)} contradicts ${spec.version}`)
   if (descriptor.engine !== spec.engine)
     throw invalid(`descriptor engine ${String(descriptor.engine)} contradicts ${spec.engine}`)
-  if (descriptor.runtime?.file !== weights.file)
+  if (descriptor.runtime?.file !== weights.file) {
     throw invalid(
       `descriptor runtime.file ${String(descriptor.runtime?.file)} contradicts weights ${weights.file}`,
     )
+  }
   if (descriptor.runtime?.bytes !== weights.bytes || descriptor.runtime?.sha256 !== weights.sha256)
     throw invalid('descriptor runtime digest contradicts the weights entry')
 }
@@ -151,9 +163,11 @@ async function sha256File(path: string): Promise<string> {
 async function isVerifiedOnDisk(path: string, spec: SpeechBundleFileSpec): Promise<boolean> {
   try {
     const info = await stat(path)
-    if (info.size !== spec.bytes) return false
+    if (info.size !== spec.bytes)
+      return false
     return (await sha256File(path)) === spec.sha256
-  } catch {
+  }
+  catch {
     return false
   }
 }
@@ -171,22 +185,25 @@ async function downloadVerified(
   let response: Response
   try {
     response = await fetchImpl(spec.url, { redirect: 'follow', ...(signal ? { signal } : {}) })
-  } catch (error) {
+  }
+  catch (error) {
     throw new SpeechBundleInstallError(
       'SPEECH_BUNDLE_DOWNLOAD_FAILED',
       `${spec.file}: ${error instanceof Error ? error.message : String(error)}`,
     )
   }
-  if (!response.ok)
+  if (!response.ok) {
     throw new SpeechBundleInstallError(
       'SPEECH_BUNDLE_DOWNLOAD_FAILED',
       `${spec.file}: HTTP ${response.status} ${response.statusText} from ${spec.url}`,
     )
-  if (!response.body)
+  }
+  if (!response.body) {
     throw new SpeechBundleInstallError(
       'SPEECH_BUNDLE_DOWNLOAD_FAILED',
       `${spec.file}: the response carried no body`,
     )
+  }
 
   const hash = createHash('sha256')
   let received = 0
@@ -197,7 +214,8 @@ async function downloadVerified(
       const buffer = chunk as Buffer
       received += buffer.byteLength
       hash.update(buffer)
-      if (!sink.write(buffer)) await Promise.race([new Promise<void>((done) => sink.once('drain', () => done())), writeFailure])
+      if (!sink.write(buffer))
+        await Promise.race([new Promise<void>(done => sink.once('drain', () => done())), writeFailure])
       onProgress?.({ file: spec.file, received, total: spec.bytes })
     }
     await new Promise<void>((finished, failed) => {
@@ -205,7 +223,8 @@ async function downloadVerified(
       sink.once('finish', () => finished())
       sink.end()
     })
-  } catch (error) {
+  }
+  catch (error) {
     sink.destroy()
     await rm(partial, { force: true })
     throw new SpeechBundleInstallError(
@@ -289,11 +308,13 @@ export async function removeSpeechBundle(root: string, id: string, version: stri
   if (!ID_PATTERN.test(id) || !SEMVER_PATTERN.test(version))
     throw invalid(`refusing to remove "${id}@${version}"`)
   const directory = join(root, id, version)
-  if (!directory.startsWith(resolve(root) + sep)) throw invalid('refusing to remove outside the store')
+  if (!directory.startsWith(resolve(root) + sep))
+    throw invalid('refusing to remove outside the store')
   try {
     await rm(directory, { recursive: true, force: true })
     return true
-  } catch {
+  }
+  catch {
     return false
   }
 }

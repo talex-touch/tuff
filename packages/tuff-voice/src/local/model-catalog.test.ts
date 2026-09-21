@@ -72,7 +72,7 @@ describe('parsing the served speech-model catalog', () => {
     expect(parsed.items).toHaveLength(1)
     const item = parsed.items[0]!
     expect(item.spec.engine).toBe('sherpa-onnx')
-    expect(item.spec.files.map((file) => [file.role, file.file, file.url])).toEqual([
+    expect(item.spec.files.map(file => [file.role, file.file, file.url])).toEqual([
       ['weights', 'model.onnx', 'https://cdn.test/model.onnx'],
       ['tokenizer', 'tokens.txt', 'https://cdn.test/tokens.txt'],
     ])

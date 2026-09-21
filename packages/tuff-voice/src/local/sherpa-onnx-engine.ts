@@ -138,7 +138,8 @@ export function buildSherpaArgs(
   ]
   if (family === 'sense-voice') {
     args.push(`--sense-voice-language=${language}`)
-    if (model.descriptor.capabilities.itn === true) args.push('--sense-voice-use-itn=1')
+    if (model.descriptor.capabilities.itn === true)
+      args.push('--sense-voice-use-itn=1')
   }
   args.push(audioPath)
   return args
