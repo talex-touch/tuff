@@ -5,12 +5,20 @@ import type { StreamContext } from '@talex-touch/utils/transport/types'
 import type {
   VoiceAsrStreamEvent,
   VoiceAsrStreamPayload,
-  VoiceFileTranscriptionEvent
+  VoiceFileTranscriptionEvent,
+  VoiceSpeechModelInstallPayload
 } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { voiceApiEvents } from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
+import {
+  getSpeechModelProgress,
+  installSpeechModel,
+  installedSpeechModels,
+  speechModelCatalogView,
+  uninstallSpeechModel
+} from './speech-model-service'
 import { withPermissionSafeApi } from '../../utils/safe-handler'
 import { withPermission } from '../permission/channel-guard'
 import { BaseModule } from '../abstract-base-module'
@@ -265,6 +273,80 @@ export class VoiceModule extends BaseModule<TalexEvents> {
             await voiceInsightsStore.clearInsights()
           },
           { onError: (error) => voiceLog.error('Voice insights clear failed:', { error }) }
+        )
+      )
+    )
+
+    /*
+     * On-device model catalog and installs.
+     *
+     * Host-renderer only: these handlers read the cloud catalog (which carries digests and
+     * download URLs) and write hundreds of megabytes into the user's model store. A plugin has
+     * no reason to do either, so the context check is the same guard the insights handlers use.
+     */
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.getSpeechModelCatalog,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async (_payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_SPEECH_MODELS_HOST_ONLY')
+            return speechModelCatalogView()
+          },
+          { onError: (error) => voiceLog.error('Speech model catalog read failed:', { error }) }
+        )
+      )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.listInstalledSpeechModels,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async (_payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_SPEECH_MODELS_HOST_ONLY')
+            return installedSpeechModels()
+          },
+          { onError: (error) => voiceLog.error('Installed speech models read failed:', { error }) }
+        )
+      )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.installSpeechModel,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async (payload: VoiceSpeechModelInstallPayload, context) => {
+            if (context?.plugin) throw new Error('VOICE_SPEECH_MODELS_HOST_ONLY')
+            return installSpeechModel(payload.id, payload.version)
+          },
+          { onError: (error) => voiceLog.error('Speech model install failed:', { error }) }
+        )
+      )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.uninstallSpeechModel,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async (payload: VoiceSpeechModelInstallPayload, context) => {
+            if (context?.plugin) throw new Error('VOICE_SPEECH_MODELS_HOST_ONLY')
+            await uninstallSpeechModel(payload.id, payload.version)
+          },
+          { onError: (error) => voiceLog.error('Speech model removal failed:', { error }) }
+        )
+      )
+    )
+
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.getSpeechModelProgress,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async (_payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_SPEECH_MODELS_HOST_ONLY')
+            return getSpeechModelProgress()
+          },
+          { onError: (error) => voiceLog.error('Speech model progress read failed:', { error }) }
         )
       )
     )

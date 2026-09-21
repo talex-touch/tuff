@@ -296,7 +296,9 @@ describe('sherpa-onnx argument construction', () => {
   })
 
   it('refuses a bundle whose family this build cannot drive, and one with no tokenizer', () => {
-    const unknownFamily = model({ sherpa: { family: 'paraformer' } as never })
+    // `paraformer` used to be the example here, back when only sense-voice was wired; the guard
+    // still has to catch a family that no recogniser in this build answers to.
+    const unknownFamily = model({ sherpa: { family: 'wenet-ctc' } as never })
     expect(() => buildSherpaArgs(unknownFamily, '/tmp/a.wav', {})).toThrow(/cannot drive/)
 
     const noTokenizer = model({ auxiliary: [] })

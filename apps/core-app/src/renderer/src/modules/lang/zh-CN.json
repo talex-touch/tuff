@@ -647,6 +647,22 @@
     "asr": {
       "notReady": "语音识别未配置",
       "notConfigured": "没有渠道绑定 audio.asr"
+    },
+    "models": {
+      "title": "端侧模型",
+      "description": "云端目录里可安装的本地识别模型。安装后无需联网即可识别，权重逐字节校验。",
+      "loading": "正在读取云端目录…",
+      "catalogUnavailable": "读不到云端模型目录，请检查网络后重试。",
+      "signInRequired": "登录 Tuff 账号后才能读取云端模型目录。",
+      "retry": "重试",
+      "installed": "已安装",
+      "recommended": "推荐",
+      "needsRuntime": "需要 {engine} 运行时",
+      "install": "安装",
+      "remove": "移除",
+      "installing": "正在安装…",
+      "progress": "已下载 {percent}%（共 {size}）",
+      "actionFailed": "操作失败：{reason}"
     }
   },
   "settingLocalAiCli": {

@@ -19,10 +19,15 @@ const mocks = vi.hoisted(() => ({
   on: vi.fn(),
   onStream: vi.fn(),
   transcribeFile: vi.fn(),
-  getRecognitionStatus: vi.fn(),
   dispose: vi.fn(),
   register: vi.fn(),
-  unregister: vi.fn()
+  unregister: vi.fn(),
+  getRecognitionStatus: vi.fn(),
+  getSpeechModelProgress: vi.fn(),
+  installSpeechModel: vi.fn(),
+  installedSpeechModels: vi.fn(),
+  speechModelCatalogView: vi.fn(),
+  uninstallSpeechModel: vi.fn()
 }))
 
 vi.mock('electron', () => ({ shell: { openExternal: vi.fn() } }))
@@ -70,6 +75,13 @@ vi.mock('./voice-service', () => ({
 }))
 vi.mock('./voice-provider-runtime', () => ({
   getRecognitionStatus: mocks.getRecognitionStatus
+}))
+vi.mock('./speech-model-service', () => ({
+  getSpeechModelProgress: mocks.getSpeechModelProgress,
+  installSpeechModel: mocks.installSpeechModel,
+  installedSpeechModels: mocks.installedSpeechModels,
+  speechModelCatalogView: mocks.speechModelCatalogView,
+  uninstallSpeechModel: mocks.uninstallSpeechModel
 }))
 vi.mock('./voice-insights-store', () => ({
   voiceInsightsStore: { getInsights: vi.fn(), clearInsights: vi.fn() }
