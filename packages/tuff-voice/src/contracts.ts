@@ -76,6 +76,14 @@ export type VoiceProviderEvent
     segments?: readonly VoiceSegment[]
     requestId?: string
     usage?: VoiceUsage
+    /**
+     * The provider request round-trip that produced this text, when the provider measures one.
+     *
+     * Not part of `usage`: usage is what the request consumed, this is how long it took. A
+     * buffered endpoint has a single request to time; the realtime protocols carry no such field,
+     * so they leave it absent.
+     */
+    latencyMs?: number
   }
   | { type: 'metadata', requestId?: string, usage?: VoiceUsage }
   | { type: 'end', requestId?: string, usage?: VoiceUsage }

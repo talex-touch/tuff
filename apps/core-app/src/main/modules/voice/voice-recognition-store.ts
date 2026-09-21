@@ -30,6 +30,7 @@ export interface VoiceRecognitionRecordInput {
   audioBytes?: number
   audioDurationMs?: number
   recognitionDurationMs?: number
+  providerLatencyMs?: number
   rawText?: string
   text?: string
   providerId?: string
@@ -86,6 +87,9 @@ function toRecord(row: typeof schema.voiceRecognitionRecords.$inferSelect): Voic
     ...(row.recognitionDurationMs === null
       ? {}
       : { recognitionDurationMs: Math.max(0, row.recognitionDurationMs) }),
+    ...(row.providerLatencyMs === null
+      ? {}
+      : { providerLatencyMs: Math.max(0, row.providerLatencyMs) }),
     ...(row.rawText ? { rawText: row.rawText } : {}),
     ...(row.text ? { text: row.text } : {}),
     ...(row.providerId ? { providerId: row.providerId } : {}),
@@ -167,6 +171,9 @@ export class VoiceRecognitionStore {
       ...(boundedNumber(input.recognitionDurationMs) === undefined
         ? {}
         : { recognitionDurationMs: boundedNumber(input.recognitionDurationMs) }),
+      ...(boundedNumber(input.providerLatencyMs) === undefined
+        ? {}
+        : { providerLatencyMs: boundedNumber(input.providerLatencyMs) }),
       ...(boundedText(input.rawText) ? { rawText: boundedText(input.rawText) } : {}),
       ...(boundedText(input.text) ? { text: boundedText(input.text) } : {}),
       ...(input.providerId ? { providerId: input.providerId.slice(0, 128) } : {}),

@@ -115,6 +115,19 @@ function readResultUsage(result: { result?: IntelligenceSTTResult } | null | und
     : undefined
 }
 
+/**
+ * The invoke's own round trip, normalized for the event contract.
+ *
+ * Kept out of `readResultUsage` on purpose: usage is what the request consumed, this is how long
+ * it took. A provider that reports nothing usable leaves the field off rather than reporting 0,
+ * which would read as an instantaneous request.
+ */
+function normalizeLatency(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.round(value)
+    : undefined
+}
+
 function readErrorCode(error: unknown): string {
   if (error && typeof error === 'object' && 'code' in error) {
     const code = error.code
@@ -269,11 +282,13 @@ class BufferedSttConnection implements VoiceStreamConnection {
       if (text) {
         const language = readResultLanguage(response)
         const usage = readResultUsage(response)
+        const latencyMs = normalizeLatency(response.latency)
         this.queue.push({
           type: 'final',
           text,
           ...(language ? { language } : {}),
           ...(usage ? { usage } : {}),
+          ...(latencyMs === undefined ? {} : { latencyMs }),
           requestId: this.request.requestId
         })
       }

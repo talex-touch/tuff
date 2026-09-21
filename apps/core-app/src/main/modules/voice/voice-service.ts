@@ -92,6 +92,7 @@ async function recordVoiceTelemetry(input: VoiceRecognitionRecordInput): Promise
     analytics.recordVoiceMetrics({
       recordingDurationMs: input.audioDurationMs,
       recognitionDurationMs: input.recognitionDurationMs,
+      providerLatencyMs: input.providerLatencyMs,
       model: input.model,
       channel: input.channel
     })
@@ -409,6 +410,19 @@ function voiceCancellationError(): Error {
 
 function throwIfCancelled(signal?: AbortSignal): void {
   if (signal?.aborted) throw voiceCancellationError()
+}
+
+/**
+ * The provider's own round trip, bounded for the record column.
+ *
+ * The intelligence contract types `latency` as a required number, but it arrives from a provider
+ * response and the record column rejects anything that is not a finite non-negative integer. A
+ * value that cannot be trusted is dropped rather than rounded into a plausible-looking 0.
+ */
+function normalizeLatency(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.round(value)
+    : undefined
 }
 
 async function awaitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
@@ -777,6 +791,7 @@ export class VoiceService {
       audio: capture.audio,
       audioDurationMs: capture.durationMs,
       recognitionDurationMs: Math.max(0, Date.now() - record.startedAt),
+      ...(result.latencyMs === undefined ? {} : { providerLatencyMs: result.latencyMs }),
       ...(result.raw ? { rawText: result.raw } : {}),
       ...(result.delivery?.method ? { deliveryMethod: result.delivery.method } : {})
     }
@@ -855,6 +870,7 @@ export class VoiceService {
         polished: false,
         ...(language ? { language } : {}),
         ...(transcript.billing ? { billing: transcript.billing } : {}),
+        ...(transcript.latencyMs === undefined ? {} : { latencyMs: transcript.latencyMs }),
         durationMs: capture.durationMs,
         stoppedReason: capture.stoppedReason
       }
@@ -878,6 +894,7 @@ export class VoiceService {
       polished: polishedText !== null,
       ...(language ? { language } : {}),
       ...(transcript.billing ? { billing: transcript.billing } : {}),
+      ...(transcript.latencyMs === undefined ? {} : { latencyMs: transcript.latencyMs }),
       durationMs: capture.durationMs,
       stoppedReason: capture.stoppedReason
     }
@@ -1043,6 +1060,7 @@ export class VoiceService {
     )
     throwIfCancelled(signal)
     const text = typeof response.result?.text === 'string' ? response.result.text.trim() : ''
+    const providerLatencyMs = normalizeLatency(response.latency)
     await this.recordRecognitionDetail({
       id: nextVoiceSessionId(),
       capturedAt: startedAt,
@@ -1053,6 +1071,7 @@ export class VoiceService {
       audioExt: selected.format,
       audioBytes: selected.audio.byteLength,
       recognitionDurationMs: Math.max(0, Date.now() - startedAt),
+      ...(providerLatencyMs === undefined ? {} : { providerLatencyMs }),
       ...(text ? { rawText: text, text } : {}),
       ...(response.result.billing ? { channel: 'audio.stt' } : {})
     })
@@ -1352,7 +1371,8 @@ export class VoiceService {
       const finalizeTranscript = async (
         rawText: string,
         language?: string,
-        usage?: VoiceUsage
+        usage?: VoiceUsage,
+        providerLatencyMs?: number
       ): Promise<{ text: string; language?: string; delivery?: VoiceDeliveryResult }> => {
         const normalized = rawText.trim()
         const polishedText = cleanup
@@ -1380,6 +1400,7 @@ export class VoiceService {
             audioBytes: capturedBytes,
             audioDurationMs: Math.round(capturedBytes / 32),
             recognitionDurationMs: Math.max(0, Date.now() - session.startedAt),
+            ...(providerLatencyMs === undefined ? {} : { providerLatencyMs }),
             rawText: normalized,
             providerId: provider.id,
             model,
@@ -1453,7 +1474,12 @@ export class VoiceService {
           if (!event.text.trim()) continue
           hasFinal = true
           lastPartialText = event.text.trim()
-          const finalized = await finalizeTranscript(event.text, event.language, event.usage)
+          const finalized = await finalizeTranscript(
+            event.text,
+            event.language,
+            event.usage,
+            normalizeLatency(event.latencyMs)
+          )
           yield {
             type: 'final',
             text: finalized.text,
@@ -1718,7 +1744,12 @@ export class VoiceService {
     language?: string,
     signal?: AbortSignal,
     caller = VOICE_CALLER
-  ): Promise<{ text: string; language?: string; billing?: VoiceDictateResult['billing'] }> {
+  ): Promise<{
+    text: string
+    language?: string
+    billing?: VoiceDictateResult['billing']
+    latencyMs?: number
+  }> {
     throwIfCancelled(signal)
     const dataUrl = `data:audio/wav;base64,${audio.toString('base64')}`
     const response = await awaitWithAbort(
@@ -1736,10 +1767,12 @@ export class VoiceService {
     const text = typeof response.result?.text === 'string' ? response.result.text.trim() : ''
     const detected =
       typeof response.result?.language === 'string' ? response.result.language.trim() : ''
+    const latencyMs = normalizeLatency(response.latency)
     return {
       text,
       ...(detected ? { language: detected } : {}),
-      ...(response.result.billing ? { billing: response.result.billing } : {})
+      ...(response.result.billing ? { billing: response.result.billing } : {}),
+      ...(latencyMs === undefined ? {} : { latencyMs })
     }
   }
 

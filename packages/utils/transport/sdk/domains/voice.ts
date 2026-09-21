@@ -73,6 +73,14 @@ export interface VoiceRecognitionRecord {
    * path includes decoding the chosen file. It is end-to-end elapsed time, not provider latency.
    */
   recognitionDurationMs?: number
+  /**
+   * The provider request round-trip alone, when the path has one.
+   *
+   * `recognitionDurationMs` above is end-to-end elapsed time, so a 60-second dictation reports the
+   * whole minute and cannot say how long recognition itself took. The streaming paths have no
+   * single request to time, so this is absent there rather than zero.
+   */
+  providerLatencyMs?: number
   rawText?: string
   text?: string
   providerId?: string
@@ -128,6 +136,13 @@ export interface VoiceDictateResult {
   delivery?: VoiceDeliveryResult
   /** Authoritative STT receipt, when the selected provider returns one. */
   billing?: IntelligenceSTTBilling
+  /**
+   * Provider round-trip for the transcription request, when the selected provider reports one.
+   *
+   * A receipt like `billing`, not a duration: it excludes capture and any polish pass. Absent on
+   * the realtime providers, whose protocols carry no such field.
+   */
+  latencyMs?: number
 }
 
 /** Text-to-speech request. */
