@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 72
-- **Last Active**: 2026-09-14
+- **Total Sessions**: 73
+- **Last Active**: 2026-09-21
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~891 | Active |
+| `journal-2.md` | ~925 | Active |
 | `journal-1.md` | ~2005 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -31,6 +31,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 73 | 2026-09-21 | npm OIDC trusted publisher 五项全量落地 | `e3180d40c`, `5c8225407` | `master` |
 | 72 | 2026-09-14 | PI Desktop native session convergence | `59d7d6aaf` | `pi-desktop-analysis` |
 | 71 | 2026-09-13 | Folder projects and native CLI sessions | `fb2351a4419625fad8908a62b4dfc806775099e5` | `pi-desktop-analysis` |
 | 70 | 2026-09-14 | Applications browser, overlay warmth, docs source, deployment secrets | `7993e8a3e`, `d3847e55c`, `e3294273c`, `76eba22ae` | `master` |
