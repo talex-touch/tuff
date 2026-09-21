@@ -39,7 +39,14 @@ export interface VoiceRecognitionRecordInput {
   inputTokens?: number
   outputTokens?: number
   totalTokens?: number
-  errorCode?: string
+  /**
+   * The failure this record carries, when it carries one.
+   *
+   * `undefined` leaves whatever the row already had and `null` clears it, so a retry that
+   * succeeded can drop the code its row was first written with. Without the distinction a
+   * recovered record would keep showing a failure it no longer has.
+   */
+  errorCode?: string | null
   deliveryMethod?: VoiceRecognitionRecord['deliveryMethod']
 }
 
@@ -188,7 +195,9 @@ export class VoiceRecognitionStore {
       ...(boundedNumber(input.totalTokens) === undefined
         ? {}
         : { totalTokens: boundedNumber(input.totalTokens) }),
-      ...(input.errorCode ? { errorCode: input.errorCode.slice(0, 128) } : {}),
+      ...(input.errorCode === undefined
+        ? {}
+        : { errorCode: input.errorCode ? input.errorCode.slice(0, 128) : null }),
       ...(input.deliveryMethod ? { deliveryMethod: input.deliveryMethod } : {})
     }
 

@@ -1646,6 +1646,10 @@ export class VoiceService {
     let connection: VoiceStreamConnection | null = null
     let text = ''
     let detectedLanguage: string | undefined
+    let providerLatencyMs: number | undefined
+    // A retry is its own recognition attempt, so its record times from here rather than
+    // inheriting a span that includes the capture the failed attempt already accounted for.
+    const attemptStartedAt = Date.now()
     try {
       targetKey = activeAppKey(await activeAppService.getActiveApp())
       throwIfCancelled(signal)
@@ -1667,6 +1671,8 @@ export class VoiceService {
         if (event.type !== 'final' || !event.text.trim()) continue
         text += event.text
         if (event.language) detectedLanguage = event.language
+        const eventLatency = normalizeLatency(event.latencyMs)
+        if (eventLatency !== undefined) providerLatencyMs = eventLatency
       }
     } catch (error) {
       if (error && typeof error === 'object' && 'retryable' in error && error.retryable === false)
@@ -1689,11 +1695,29 @@ export class VoiceService {
         ? await this.deliverText(deliveredText, targetKey)
         : undefined
     if (payload.delivery !== 'active-app' || delivery?.method !== 'none') {
+      // Everything the live path records comes from the buffer here. Without it a recovered
+      // record kept the failure's fields — including the error code — beside a success status.
       await this.recordInsightSuccess(
         buffer.captureId,
         deliveredText,
         Math.round(buffer.bytes / 32),
-        polishedText !== null
+        polishedText !== null,
+        Date.now(),
+        {
+          source: 'microphone',
+          audioFormat: 'pcm',
+          audioSampleRate: buffer.sampleRate,
+          audio: this.snapshotRetryAudio(buffer.captureId),
+          audioBytes: buffer.bytes,
+          audioDurationMs: Math.round(buffer.bytes / 32),
+          recognitionDurationMs: Math.max(0, Date.now() - attemptStartedAt),
+          rawText: recognized,
+          providerId: buffer.provider.id,
+          model: buffer.model,
+          channel: buffer.provider.id,
+          ...(providerLatencyMs === undefined ? {} : { providerLatencyMs }),
+          errorCode: null
+        }
       )
     }
     this.clearRetryBuffer(buffer.captureId)
