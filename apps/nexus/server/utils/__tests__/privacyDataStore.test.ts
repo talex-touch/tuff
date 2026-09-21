@@ -23,9 +23,7 @@ const userState = vi.hoisted(() => ({
   requestedDeletionTermsVersion: null as string | null,
 }))
 
-vi.mock('../cloudflare', () => ({
-  readCloudflareBindings: (event: any) => event.context.cloudflare?.env,
-}))
+vi.mock('../cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../cloudflare')>()), readCloudflareBindings: (event: any) => event.context.cloudflare?.env, }))
 
 vi.mock('../authStore', () => ({
   clearUserAuthEphemeralTokens: vi.fn(async () => undefined),

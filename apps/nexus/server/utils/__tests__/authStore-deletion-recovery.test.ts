@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('../cloudflare', () => ({
-  readCloudflareBindings: (event: any) => event.context.cloudflare?.env,
-}))
+vi.mock('../cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../cloudflare')>()), readCloudflareBindings: (event: any) => event.context.cloudflare?.env, }))
 
 interface UserRow {
   id: string

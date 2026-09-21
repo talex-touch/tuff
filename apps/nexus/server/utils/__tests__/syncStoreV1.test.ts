@@ -569,6 +569,24 @@ class MockR2Bucket {
     }
     this.objects.set(key, value)
   }
+
+  async get(key: string) {
+    const value = this.objects.get(key)
+
+    if (!value)
+      return null
+
+    return {
+      size: value.byteLength,
+      httpMetadata: {},
+      arrayBuffer: async () => value.slice().buffer,
+      text: async () => new TextDecoder().decode(value),
+    }
+  }
+
+  async delete(key: string) {
+    this.objects.delete(key)
+  }
 }
 
 function createEvent(db: MockD1Database, bucket?: MockR2Bucket): H3Event {

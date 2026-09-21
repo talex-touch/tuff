@@ -1,7 +1,7 @@
 import type { D1Database, D1PreparedStatement, R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
-import { readCloudflareBindings } from './cloudflare'
+import { readCloudflareBindings, resolveObjectBucket } from './cloudflare'
 import { countActiveDevices, getDevice, readDeviceId, upsertDevice, readDeviceMetadata } from './authStore'
 import { generatePasswordSalt, hashPassword, verifyPassword } from './authCrypto'
 import { createSyncError } from './syncErrors'
@@ -129,10 +129,7 @@ function requireDatabase(event: H3Event): D1Database {
 }
 
 function getSyncBlobBucket(event?: H3Event | null): R2Bucket | null {
-  if (!event)
-    return null
-  const bindings = readCloudflareBindings(event)
-  return bindings?.R2 ?? bindings?.ASSETS ?? null
+  return resolveObjectBucket(event)
 }
 
 async function ensureSyncSchemaV1(db: D1Database) {

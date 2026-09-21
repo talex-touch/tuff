@@ -43,9 +43,7 @@ vi.mock('nitropack/runtime/internal/storage', () => ({
   }),
 }))
 
-vi.mock('../cloudflare', () => ({
-  readCloudflareBindings: () => undefined,
-}))
+vi.mock('../cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../cloudflare')>()), readCloudflareBindings: () => undefined, }))
 
 vi.mock('../imageStorage', () => ({
   deleteImage: vi.fn(async () => undefined),

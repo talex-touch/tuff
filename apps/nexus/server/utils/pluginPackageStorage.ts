@@ -4,7 +4,7 @@ import type { Buffer } from 'node:buffer'
 import { PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES } from '@talex-touch/utils/plugin'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
-import { readCloudflareBindings } from './cloudflare'
+import { resolveObjectBucket } from './cloudflare'
 import {
   deleteStorageObject,
   getStorageObject,
@@ -33,17 +33,7 @@ interface PluginPackageStorageOptions {
 }
 
 function getPackageBucket(event?: H3Event | null): R2Bucket | null {
-  if (!event)
-    return null
-
-  const bindings = readCloudflareBindings(event)
-  return (
-    bindings?.PLUGIN_PACKAGES
-    ?? bindings?.PACKAGES
-    ?? bindings?.R2
-    ?? bindings?.ASSETS
-    ?? null
-  )
+  return resolveObjectBucket(event, ['PLUGIN_PACKAGES', 'PACKAGES'])
 }
 
 function ensureTpexFile(file: File) {

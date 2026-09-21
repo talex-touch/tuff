@@ -153,9 +153,7 @@ vi.mock('h3', async () => {
 })
 
 vi.mock('../../../../server/utils/auth', () => authMocks)
-vi.mock('../../../../server/utils/cloudflare', () => ({
-  readCloudflareBindings: () => state.db ? { DB: state.db } : undefined,
-}))
+vi.mock('../../../../server/utils/cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../../server/utils/cloudflare')>()), readCloudflareBindings: () => state.db ? { DB: state.db } : undefined, }))
 
 let listInboxHandler: (event: any) => Promise<any>
 let markReadHandler: (event: any) => Promise<any>

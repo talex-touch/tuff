@@ -13,9 +13,7 @@ const networkMocks = vi.hoisted(() => ({
   request: vi.fn(),
 }))
 
-vi.mock('./cloudflare', () => ({
-  readCloudflareBindings: () => undefined,
-}))
+vi.mock('./cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('./cloudflare')>()), readCloudflareBindings: () => undefined, }))
 
 vi.mock('./authStore', () => ({
   getUserById: vi.fn(async (_event, userId: string) => ({

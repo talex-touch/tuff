@@ -5,7 +5,12 @@ declare global {
     DB?: D1Database
     R2?: R2Bucket
     TUFF_INTELLIGENCE_RUNTIME?: KVNamespace
-    ASSETS?: R2Bucket
+    /**
+     * Pages reserves `ASSETS` for the project's static assets, where it is a Fetcher; it is a
+     * bucket only when a deployment binds an R2 bucket under this name. Resolve it through
+     * `resolveObjectBucket` rather than using it directly.
+     */
+    ASSETS?: R2Bucket | { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> }
     IMAGES?: R2Bucket
     PACKAGES?: R2Bucket
     PLUGIN_PACKAGES?: R2Bucket

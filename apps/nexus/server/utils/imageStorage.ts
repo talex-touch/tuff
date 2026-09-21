@@ -3,7 +3,7 @@ import type { H3Event } from 'h3'
 import type { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
-import { readCloudflareBindings } from './cloudflare'
+import { resolveObjectBucketBinding } from './cloudflare'
 import {
   deleteStorageObject,
   getStorageObject,
@@ -133,32 +133,17 @@ function getR2Bucket(event?: H3Event | null): R2Bucket | null {
   if (!event)
     return null
 
-  const bindings = readCloudflareBindings(event)
-  let bucket: R2Bucket | null = null
-  let bindingName: string | null = null
-
-  if (bindings?.IMAGES) {
-    bucket = bindings.IMAGES
-    bindingName = 'IMAGES'
-  }
-  else if (bindings?.R2) {
-    bucket = bindings.R2
-    bindingName = 'R2'
-  }
-  else if (bindings?.ASSETS) {
-    bucket = bindings.ASSETS
-    bindingName = 'ASSETS'
-  }
+  const resolved = resolveObjectBucketBinding(event, ['IMAGES'])
 
   if (!hasLoggedImageStorageBinding) {
     console.warn('[imageStorage] 存储绑定检测', {
-      usingR2: Boolean(bucket),
-      binding: bindingName,
+      usingR2: Boolean(resolved),
+      binding: resolved?.bindingName ?? null,
     })
     hasLoggedImageStorageBinding = true
   }
 
-  return bucket
+  return resolved?.bucket ?? null
 }
 
 /**

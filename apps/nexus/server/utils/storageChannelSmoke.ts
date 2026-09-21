@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
-import { readCloudflareBindings } from './cloudflare'
+import { resolveObjectBucket } from './cloudflare'
 import { listPlatformGovernanceConfigs, recordPlatformGovernanceEvent } from './platformGovernanceStore'
 import {
   deleteStorageObject,
@@ -91,8 +91,7 @@ function safeFailureReason(error: unknown): string {
 function getBucket(event: H3Event, channel: string) {
   if (channel !== 'r2')
     return null
-  const bindings = readCloudflareBindings(event)
-  return bindings?.R2 ?? bindings?.ASSETS ?? bindings?.PACKAGES ?? bindings?.PLUGIN_PACKAGES ?? null
+  return resolveObjectBucket(event, ['R2', 'PACKAGES', 'PLUGIN_PACKAGES'])
 }
 
 async function recordSmokeAudit(

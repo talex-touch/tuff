@@ -16,9 +16,7 @@ import {
 } from './platformGovernanceStore'
 import { deletePluginPackage, getPluginPackage, uploadPluginPackage } from './pluginPackageStorage'
 
-vi.mock('./cloudflare', () => ({
-  readCloudflareBindings: () => undefined,
-}))
+vi.mock('./cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('./cloudflare')>()), readCloudflareBindings: () => undefined, }))
 
 function event(providerId: string) {
   return {

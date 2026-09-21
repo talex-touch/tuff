@@ -146,9 +146,7 @@ const state = vi.hoisted(() => ({
   storage: new Map<string, unknown>(),
 }))
 
-vi.mock('./cloudflare', () => ({
-  readCloudflareBindings: () => state.db ? { DB: state.db } : undefined,
-}))
+vi.mock('./cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('./cloudflare')>()), readCloudflareBindings: () => state.db ? { DB: state.db } : undefined, }))
 
 vi.mock('nitropack/runtime/internal/storage', () => ({
   useStorage: () => ({

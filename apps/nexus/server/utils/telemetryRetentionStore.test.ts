@@ -129,9 +129,7 @@ const state = vi.hoisted(() => ({
   db: null as MockD1Database | null,
 }))
 
-vi.mock('./cloudflare', () => ({
-  readCloudflareBindings: () => state.db ? { DB: state.db } : undefined,
-}))
+vi.mock('./cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('./cloudflare')>()), readCloudflareBindings: () => state.db ? { DB: state.db } : undefined, }))
 
 const event = {} as any
 const now = new Date('2026-06-15T00:00:00.000Z')

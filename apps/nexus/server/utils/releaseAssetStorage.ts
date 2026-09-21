@@ -2,7 +2,7 @@ import type { R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import type { Buffer } from 'node:buffer'
 import { createError } from 'h3'
-import { readCloudflareBindings } from './cloudflare'
+import { resolveObjectBucket } from './cloudflare'
 import {
   getStorageObject,
   putStorageObject,
@@ -22,11 +22,7 @@ interface ReleaseAssetStorageOptions {
 type ReleaseAssetUploadResult = Omit<StorageObjectResult, 'data'>
 
 function getAssetBucket(event?: H3Event | null): R2Bucket | null {
-  if (!event)
-    return null
-
-  const bindings = readCloudflareBindings(event)
-  return bindings?.ASSETS ?? bindings?.R2 ?? null
+  return resolveObjectBucket(event)
 }
 
 export async function uploadReleaseAsset(

@@ -28,7 +28,8 @@ const mockDb = {
   },
 }
 
-vi.mock('../cloudflare', () => ({
+vi.mock('../cloudflare', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../cloudflare')>()),
   readCloudflareBindings: () => ({
     DB: mockDb,
   }),

@@ -17,9 +17,7 @@ interface CloudflareEventShape {
 }
 
 vi.mock('../../../../server/utils/auth', () => authMocks)
-vi.mock('../../../../server/utils/cloudflare', () => ({
-  readCloudflareBindings: (event: CloudflareEventShape) => event.context?.cloudflare?.env,
-}))
+vi.mock('../../../../server/utils/cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../../server/utils/cloudflare')>()), readCloudflareBindings: (event: CloudflareEventShape) => event.context?.cloudflare?.env, }))
 vi.mock('../../../../server/utils/providerUsageLedgerStore', () => usageMocks)
 
 vi.mock('h3', async () => {
