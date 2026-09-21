@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDeviceAuthRequest, getDeviceAuthByDeviceCode } from '../authStore'
 
-vi.mock('../cloudflare', () => ({
-  readCloudflareBindings: (event: any) => event.context.cloudflare?.env,
-}))
+vi.mock('../cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../cloudflare')>()), readCloudflareBindings: (event: any) => event.context.cloudflare?.env, }))
 
 interface DeviceAuthRequestRow {
   device_code: string

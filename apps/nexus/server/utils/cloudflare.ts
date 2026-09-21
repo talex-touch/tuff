@@ -1,3 +1,4 @@
+import type { R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { createError } from 'h3'
 
@@ -67,4 +68,63 @@ export function shouldUseCloudflareBindings() {
   return process.env.NODE_ENV === 'production'
     || process.env.NUXT_USE_CLOUDFLARE_DEV === 'true'
     || process.env.NITRO_PRESET === 'cloudflare-pages'
+}
+
+/**
+ * A binding only counts as an object bucket when it exposes the R2 API.
+ *
+ * The guard is the point: Cloudflare Pages always injects `ASSETS` for the project's
+ * static assets, and that binding is a Fetcher, not a bucket. Calling `.get()` on it
+ * throws inside the Worker, which turns a miss into a 500 — so a candidate is probed
+ * instead of trusted.
+ */
+function asObjectBucket(candidate: unknown): R2Bucket | null {
+  const bucket = candidate as Partial<R2Bucket> | null | undefined
+
+  if (bucket && typeof bucket.get === 'function' && typeof bucket.put === 'function')
+    return bucket as R2Bucket
+
+  return null
+}
+
+export interface ResolvedObjectBucket {
+  bucket: R2Bucket
+  bindingName: keyof TuffCloudflareBindings
+}
+
+/**
+ * Resolve the object bucket for a request, in the order the deployment binds one.
+ *
+ * `preferred` carries deployment-specific names (`IMAGES`, `PLUGIN_PACKAGES`, …); `R2` is the
+ * object store this project binds, and `ASSETS` is accepted last, only when it really is a
+ * bucket.
+ */
+export function resolveObjectBucketBinding(
+  event: H3Event | null | undefined,
+  preferred: readonly (keyof TuffCloudflareBindings)[] = [],
+): ResolvedObjectBucket | null {
+  if (!event)
+    return null
+
+  const bindings = readCloudflareBindings(event)
+
+  if (!bindings)
+    return null
+
+  for (const bindingName of [...preferred, 'R2', 'ASSETS'] as const) {
+    const bucket = asObjectBucket(bindings[bindingName])
+
+    if (bucket)
+      return { bucket, bindingName }
+  }
+
+  return null
+}
+
+/** The object bucket for a request, when the deployment binds one. */
+export function resolveObjectBucket(
+  event: H3Event | null | undefined,
+  preferred: readonly (keyof TuffCloudflareBindings)[] = [],
+): R2Bucket | null {
+  return resolveObjectBucketBinding(event, preferred)?.bucket ?? null
 }

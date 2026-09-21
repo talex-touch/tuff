@@ -14,7 +14,7 @@ import {
   revokeAllDevicesForUser,
 } from './authStore'
 import { deleteApiKeysForUser, listApiKeys } from './apiKeyStore'
-import { readCloudflareBindings } from './cloudflare'
+import { readCloudflareBindings, resolveObjectBucket } from './cloudflare'
 import { listCreditLedger, listUserTeams } from './creditsStore'
 import {
   getStorageObject,
@@ -66,8 +66,7 @@ function getD1Database(event: H3Event): D1Database {
 }
 
 function getExportBucket(event: H3Event): R2Bucket | null {
-  const bindings = readCloudflareBindings(event)
-  return bindings?.ASSETS ?? bindings?.R2 ?? null
+  return resolveObjectBucket(event)
 }
 
 async function ensurePrivacyDataSchema(db: D1Database) {

@@ -244,7 +244,8 @@ const state = vi.hoisted(() => ({
   maintenanceSchedules: [] as Array<{ event: unknown, db: unknown }>,
 }))
 
-vi.mock('./cloudflare', () => ({
+vi.mock('./cloudflare', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./cloudflare')>()),
   readCloudflareBindings: () => state.db ? { DB: state.db } : undefined,
   shouldUseCloudflareBindings: () => true,
 }))

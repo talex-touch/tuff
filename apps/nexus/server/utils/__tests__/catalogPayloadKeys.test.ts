@@ -11,9 +11,7 @@ const cloudflareMocks = vi.hoisted(() => ({
   readCloudflareBindings: vi.fn(),
 }))
 
-vi.mock('../cloudflare', () => ({
-  readCloudflareBindings: cloudflareMocks.readCloudflareBindings,
-}))
+vi.mock('../cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../cloudflare')>()), readCloudflareBindings: cloudflareMocks.readCloudflareBindings, }))
 
 const IDENTITY: CatalogPayloadKeyIdentity = {
   type: 'voice-provider',

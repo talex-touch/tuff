@@ -21,7 +21,7 @@ vi.mock('#auth', () => ({ getToken: vi.fn(async () => null) }))
 vi.mock('../../../server/utils/apiKeyStore', () => apiKeyStoreMocks)
 vi.mock('../../../server/utils/authStore', () => authStoreMocks)
 vi.mock('../../../server/utils/creditsStore', () => ({ ensurePersonalTeam: vi.fn() }))
-vi.mock('../../../server/utils/cloudflare', () => ({ readCloudflareBindings: () => undefined }))
+vi.mock('../../../server/utils/cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../server/utils/cloudflare')>()), readCloudflareBindings: () => undefined }))
 vi.mock('../../../server/utils/sessionAuthSecret', () => ({ resolveSessionAuthSecret: () => 'test-secret-value-32-chars-long!!' }))
 
 function makeEvent(authorization?: string) {

@@ -22,9 +22,7 @@ vi.mock('h3', async () => {
 })
 
 vi.mock('../../../../server/utils/auth', () => authMocks)
-vi.mock('../../../../server/utils/cloudflare', () => ({
-  readCloudflareBindings: () => undefined,
-}))
+vi.mock('../../../../server/utils/cloudflare', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../../server/utils/cloudflare')>()), readCloudflareBindings: () => undefined, }))
 
 let smokeStorageHandler: (event: any) => Promise<any>
 

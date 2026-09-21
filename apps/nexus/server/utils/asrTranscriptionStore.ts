@@ -3,7 +3,7 @@ import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createError } from 'h3'
-import { readCloudflareBindings } from './cloudflare'
+import { readCloudflareBindings, resolveObjectBucket } from './cloudflare'
 import {
   computeCreditCharge,
   computeCreditReservation,
@@ -139,8 +139,7 @@ function getD1Database(event: H3Event): D1Database {
 }
 
 function getAsrBucket(event: H3Event): R2Bucket | null {
-  const bindings = readCloudflareBindings(event)
-  return bindings?.ASSETS ?? bindings?.R2 ?? null
+  return resolveObjectBucket(event)
 }
 
 function requireAsrResultBucket(event: H3Event): R2Bucket {

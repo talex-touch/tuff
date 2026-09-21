@@ -3,7 +3,7 @@ import type { R2Bucket } from '@cloudflare/workers-types'
 import type { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { createError } from 'h3'
-import { readCloudflareBindings } from './cloudflare'
+import { resolveObjectBucket } from './cloudflare'
 import { getStorageObject, putStorageObject, type StorageObjectMemory } from './storageObjectStore'
 
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
@@ -15,11 +15,7 @@ function getUpdatePayloadGovernanceId(key: string): string {
 }
 
 function getAssetBucket(event?: H3Event | null): R2Bucket | null {
-  if (!event)
-    return null
-
-  const bindings = readCloudflareBindings(event)
-  return bindings?.ASSETS ?? bindings?.R2 ?? null
+  return resolveObjectBucket(event)
 }
 
 export async function saveUpdateAsset(
