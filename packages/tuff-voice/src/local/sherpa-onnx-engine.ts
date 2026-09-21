@@ -5,6 +5,7 @@ import type {
   LocalTranscribeOptions,
   LocalTranscribeResult,
   ResolvedLocalModel,
+  SherpaOnnxFamily,
 } from './types'
 import { constants } from 'node:fs'
 import { access, mkdtemp } from 'node:fs/promises'
@@ -12,6 +13,7 @@ import { availableParallelism, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { discardWorkDirectory, executableCandidates, findExecutable, materializePcmInput, runLocalProcess, withDecodeLock } from './decode'
+import { resolveInstalledRuntimeSync } from './engine-provisioning'
 import { resolveAuxiliaryPath } from './model-store'
 import { LocalEngineError } from './types'
 import { pcmDurationMs } from './wav'
@@ -50,11 +52,22 @@ export interface SherpaOnnxEngineOptions {
   timeoutMs?: number
 }
 
-/** Locate a usable sherpa-onnx CLI. */
+/**
+ * Locate a usable sherpa-onnx CLI.
+ *
+ * A resolver for the explicit override and the environment first, then the runtime Tuff itself
+ * provisioned: sherpa-onnx has no Homebrew formula, so for most users the only copy that exists
+ * is the digest-verified one in the engine store, and a model that was downloaded and installed
+ * must not report a missing binary the user cannot install. `PATH` stays the last resort for a
+ * host that has its own build.
+ */
 export async function findSherpaBinary(explicit?: string): Promise<string | undefined> {
-  return findExecutable(
+  const found = await findExecutable(
     executableCandidates(SHERPA_BINARY, explicit, process.env.TUFF_SHERPA_BIN?.trim()),
   )
+  if (found)
+    return found
+  return resolveInstalledRuntimeSync('sherpa-onnx', SHERPA_BINARY) ?? undefined
 }
 
 /** Language to hand the recognizer, narrowed to the values it accepts. */
@@ -66,12 +79,31 @@ export function resolveSherpaLanguage(model: ResolvedLocalModel, options: LocalT
 }
 
 /**
+ * The flag that names a family's weights file.
+ *
+ * sherpa-onnx hosts several unrelated recognisers behind one binary, and each is selected by its
+ * own option — there is no generic `--model`. A family missing from this table is a family this
+ * build cannot construct, which is why `SHERPA_ONNX_FAMILIES` and this map must stay in step.
+ */
+const FAMILY_MODEL_FLAGS: Record<SherpaOnnxFamily, string> = {
+  'sense-voice': '--sense-voice-model',
+  'paraformer': '--paraformer',
+  'zipformer-ctc': '--zipformer-ctc-model',
+  'dolphin-ctc': '--dolphin-model',
+}
+
+/**
  * Argument vector for one decode. Kept separate so it can be asserted without spawning.
  *
  * Inverse text normalisation is driven by the descriptor's own `capabilities.itn` rather than a
  * caller preference: a bundle that declares the capability is a bundle whose text is meant to
  * arrive with digits in it, and the polish stage downstream is a rewrite, not the place the
- * difference between "十五" and "15" should be decided.
+ * difference between "十五" and "15" should be decided. Only the sense-voice CLI takes the switch;
+ * the other families have no ITN to turn on and are not passed a flag they do not know.
+ *
+ * The language flag is a `sense-voice` option too: `--sense-voice-language` on a paraformer run is
+ * an unknown option and the CLI exits 255 rather than ignoring it, so it is emitted only for the
+ * family that declares it.
  */
 export function buildSherpaArgs(
   model: ResolvedLocalModel,
@@ -80,31 +112,35 @@ export function buildSherpaArgs(
   language = resolveSherpaLanguage(model, options),
 ): string[] {
   const family = model.descriptor.sherpa?.family
-  if (family !== 'sense-voice') {
+  if (!family || !(family in FAMILY_MODEL_FLAGS)) {
     throw new LocalEngineError(
       'LOCAL_ENGINE_UNSUPPORTED_MODEL',
       `This build cannot drive the sherpa-onnx family ${String(family)}.`,
     )
   }
 
+  // Every family below is a CTC-style recogniser over the same token table, so the tokenizer is
+  // required rather than optional — a bundle without one is a bundle that cannot decode.
   const tokens = resolveAuxiliaryPath(model, 'tokenizer')
   if (!tokens) {
     throw new LocalEngineError(
       'LOCAL_ENGINE_MODEL_DESCRIPTOR_INVALID',
-      `${model.descriptor.id} declares no tokenizer file, which sense-voice requires.`,
+      `${model.descriptor.id} declares no tokenizer file, which ${family} requires.`,
     )
   }
 
   const threads = options.threads ?? Math.max(1, Math.min(8, availableParallelism() - 1))
   const args = [
-    `--sense-voice-model=${model.weightsPath}`,
+    `${FAMILY_MODEL_FLAGS[family]}=${model.weightsPath}`,
     `--tokens=${tokens}`,
     `--num-threads=${threads}`,
-    `--sense-voice-language=${language}`,
     '--debug=0',
   ]
-  if (model.descriptor.capabilities.itn === true)
-    args.push('--sense-voice-use-itn=1')
+  if (family === 'sense-voice') {
+    args.push(`--sense-voice-language=${language}`)
+    if (model.descriptor.capabilities.itn === true)
+      args.push('--sense-voice-use-itn=1')
+  }
   args.push(audioPath)
   return args
 }
@@ -222,7 +258,7 @@ export class SherpaOnnxLocalEngine implements LocalAsrEngine {
         model,
         reason: {
           code: 'LOCAL_ENGINE_MODEL_DESCRIPTOR_INVALID',
-          message: `${model.descriptor.id} declares no tokenizer file, which sense-voice requires.`,
+          message: `${model.descriptor.id} declares no tokenizer file, which its family requires.`,
         },
       }
     }

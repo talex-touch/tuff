@@ -105,6 +105,17 @@ function descriptorFromText(text: string, sourcePath: string): LocalModelDescrip
   }
 }
 
+/**
+ * Validate a descriptor that did not come from disk.
+ *
+ * A catalog served by the cloud carries the same `model.json` the installer will write,
+ * so it is checked with exactly the rules the runtime will apply afterwards — a second
+ * validator here would be a second answer to "is this bundle loadable?".
+ */
+export function parseModelDescriptor(value: unknown, source: string): LocalModelDescriptor {
+  return parseDescriptor(value, source)
+}
+
 /** Absent and unreadable are the same failure to a caller: there is no bundle here. */
 function missingDescriptor(sourcePath: string, cause: unknown): LocalEngineError {
   return new LocalEngineError('LOCAL_ENGINE_MODEL_MISSING', `No model descriptor at ${sourcePath}.`, { cause })

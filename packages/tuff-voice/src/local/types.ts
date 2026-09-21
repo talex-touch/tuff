@@ -25,7 +25,18 @@ export type LocalEngineId = 'whisper-cpp' | 'sherpa-onnx' | 'onnxruntime'
  * naming anything else must fail loudly rather than be handed to a recognizer built from the
  * wrong flags, which would return plausible text for the wrong model.
  */
-export const SHERPA_ONNX_FAMILIES = ['sense-voice'] as const
+/**
+ * Recogniser families this build can drive.
+ *
+ * Each name is a *different* recogniser constructor in sherpa-onnx with its own flag set, so the
+ * list is a capability statement rather than a preference: handing SenseVoice weights to
+ * `--paraformer` would not fail politely, it would construct the wrong recogniser and decode
+ * nonsense. Every family below was measured on this project's benchmark before being listed
+ * (AISHELL-1 and dictation-shaped TTS, see `asr-arena`), and all of them are offline models —
+ * the streaming encoders are deliberately absent, because this runtime spawns one process per
+ * decode and a streaming model in that shape buys nothing.
+ */
+export const SHERPA_ONNX_FAMILIES = ['sense-voice', 'paraformer', 'zipformer-ctc', 'dolphin-ctc'] as const
 
 export type SherpaOnnxFamily = (typeof SHERPA_ONNX_FAMILIES)[number]
 

@@ -647,6 +647,22 @@
     "asr": {
       "notReady": "Speech recognition is not set up",
       "notConfigured": "No channel is bound to audio.asr"
+    },
+    "models": {
+      "title": "On-device models",
+      "description": "Local speech models available from the cloud catalog. Once installed they run without a network, and every weight file is verified byte for byte.",
+      "loading": "Reading the cloud catalog...",
+      "catalogUnavailable": "The cloud model catalog could not be read. Check the network and retry.",
+      "signInRequired": "Sign in to Tuff to read the cloud model catalog.",
+      "retry": "Retry",
+      "installed": "Installed",
+      "recommended": "Recommended",
+      "needsRuntime": "Needs the {engine} runtime",
+      "install": "Install",
+      "remove": "Remove",
+      "installing": "Installing...",
+      "progress": "{percent}% downloaded ({size})",
+      "actionFailed": "That did not work: {reason}"
     }
   },
   "settingLocalAiCli": {

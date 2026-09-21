@@ -309,6 +309,71 @@ export type VoiceAsrStreamEvent =
   | { type: 'end' }
 
 /**
+ * One installable on-device model, as the cloud catalog describes it.
+ *
+ * `installed` is about this machine's model store; `runnable` is about the engine executable. They
+ * are separate because they fail separately: a sherpa bundle can be installed while the runtime
+ * that decodes it is still missing, which is a state the user must be able to see and fix.
+ */
+export interface VoiceSpeechModelEntry {
+  id: string
+  version: string
+  name: string
+  engine: string
+  languages: string[]
+  bytes: number
+  installed: boolean
+  runnable: boolean
+  /** Engine whose runtime this host still needs before the bundle can run, or null. */
+  needsRuntime: string | null
+}
+
+/** What the cloud says is installable, plus which version it recommends. */
+export interface VoiceSpeechModelCatalog {
+  generatedAt: string
+  recommended: { id: string; version: string } | null
+  models: VoiceSpeechModelEntry[]
+}
+
+/** A bundle sitting in the local model store. */
+export interface VoiceInstalledSpeechModel {
+  id: string
+  version: string
+  name: string
+  engine: string
+  bytes: number
+  directory: string
+}
+
+export interface VoiceSpeechModelInstallPayload {
+  id: string
+  version: string
+}
+
+export interface VoiceSpeechModelInstallResult {
+  id: string
+  version: string
+  bytes: number
+  /** Files that were already on disk and verified again, rather than downloaded. */
+  reused: number
+  downloaded: number
+}
+
+/**
+ * Progress of the install currently running, or null when none is.
+ *
+ * A bundle is tens to hundreds of megabytes: a spinner alone would leave the reader unable to
+ * tell a slow download from a stuck one, so the bytes are reported as they arrive.
+ */
+export interface VoiceSpeechModelInstallProgress {
+  id: string
+  version: string
+  phase: 'runtime' | 'weights' | 'done'
+  received: number
+  total: number
+}
+
+/**
  * Voice domain events. Event names resolve to `voice:api:<action>`.
  */
 export const voiceApiEvents = {
@@ -383,6 +448,36 @@ export const voiceApiEvents = {
     .define<void, VoiceApiResponse>(),
   /** Host-renderer-only permanent deletion of all durable aggregate voice insight counters. */
   clearInsights: defineEvent('voice').module('api').event('clear-insights').define<void, VoiceApiResponse>(),
+  /**
+   * The installable on-device model catalog, as the cloud publishes it.
+   *
+   * Read-only and host-renderer only: it carries digests and download URLs, and it is the input
+   * to an install, so a plugin has no business listing it.
+   */
+  getSpeechModelCatalog: defineEvent('voice')
+    .module('api')
+    .event('get-speech-model-catalog')
+    .define<void, VoiceApiResponse<VoiceSpeechModelCatalog>>(),
+  /** Bundles present in the local model store. */
+  listInstalledSpeechModels: defineEvent('voice')
+    .module('api')
+    .event('list-installed-speech-models')
+    .define<void, VoiceApiResponse<VoiceInstalledSpeechModel[]>>(),
+  /** Download, verify and install one bundle, provisioning its engine runtime first. */
+  installSpeechModel: defineEvent('voice')
+    .module('api')
+    .event('install-speech-model')
+    .define<VoiceSpeechModelInstallPayload, VoiceApiResponse<VoiceSpeechModelInstallResult>>(),
+  /** Remove one installed version from the local model store. */
+  uninstallSpeechModel: defineEvent('voice')
+    .module('api')
+    .event('uninstall-speech-model')
+    .define<VoiceSpeechModelInstallPayload, VoiceApiResponse>(),
+  /** Bytes downloaded so far for the running install, or null when none is running. */
+  getSpeechModelProgress: defineEvent('voice')
+    .module('api')
+    .event('get-speech-model-progress')
+    .define<void, VoiceApiResponse<VoiceSpeechModelInstallProgress | null>>(),
 } as const
 
 /** Minimal transport surface the voice SDK needs (send required, stream optional). */
@@ -417,6 +512,16 @@ export interface VoiceSdk {
   getInsights: () => Promise<VoiceInsights>
   /** Delete all durable aggregate-only voice insights. Available only to the host renderer. */
   clearInsights: () => Promise<void>
+  /** Read the installable on-device model catalog. Available only to the host renderer. */
+  getSpeechModelCatalog: () => Promise<VoiceSpeechModelCatalog>
+  /** List bundles already installed on this machine. */
+  listInstalledSpeechModels: () => Promise<VoiceInstalledSpeechModel[]>
+  /** Install one bundle (and its engine runtime when it needs one). */
+  installSpeechModel: (payload: VoiceSpeechModelInstallPayload) => Promise<VoiceSpeechModelInstallResult>
+  /** Remove one installed bundle. */
+  uninstallSpeechModel: (payload: VoiceSpeechModelInstallPayload) => Promise<void>
+  /** Progress of the install currently running, or null. */
+  getSpeechModelProgress: () => Promise<VoiceSpeechModelInstallProgress | null>
 }
 
 function assertVoiceApiResponse<T>(response: VoiceApiResponse<T>, fallbackMessage: string): T {
@@ -491,6 +596,26 @@ export function createVoiceSdk(transport: VoiceSdkTransport): VoiceSdk {
     async clearInsights() {
       const response = await transport.send(voiceApiEvents.clearInsights, undefined)
       assertVoiceApiResponse(response, 'Voice insights clear failed')
+    },
+    async getSpeechModelCatalog() {
+      const response = await transport.send(voiceApiEvents.getSpeechModelCatalog, undefined)
+      return assertVoiceApiResponse(response, 'Speech model catalog read failed')
+    },
+    async listInstalledSpeechModels() {
+      const response = await transport.send(voiceApiEvents.listInstalledSpeechModels, undefined)
+      return assertVoiceApiResponse(response, 'Installed speech models read failed')
+    },
+    async installSpeechModel(payload) {
+      const response = await transport.send(voiceApiEvents.installSpeechModel, payload)
+      return assertVoiceApiResponse(response, 'Speech model install failed')
+    },
+    async uninstallSpeechModel(payload) {
+      const response = await transport.send(voiceApiEvents.uninstallSpeechModel, payload)
+      assertVoiceApiResponse(response, 'Speech model removal failed')
+    },
+    async getSpeechModelProgress() {
+      const response = await transport.send(voiceApiEvents.getSpeechModelProgress, undefined)
+      return assertVoiceApiResponse(response, 'Speech model progress read failed') ?? null
     },
     async asrStream(payload, options) {
       if (typeof transport.stream !== 'function') {

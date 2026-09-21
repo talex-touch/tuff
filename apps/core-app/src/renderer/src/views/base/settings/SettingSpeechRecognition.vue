@@ -21,6 +21,7 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import { appSetting } from '~/modules/storage/app-storage'
 import VoiceProviderCatalogSettings from './VoiceProviderCatalogSettings.vue'
+import SpeechModelSettings from './SpeechModelSettings.vue'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
@@ -247,6 +248,7 @@ function openCapabilities(): void {
     </TuffBlockSlot>
   </TuffGroupBlock>
   <VoiceProviderCatalogSettings />
+  <SpeechModelSettings />
 </template>
 
 <style scoped lang="scss">
