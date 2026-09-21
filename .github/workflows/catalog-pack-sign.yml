@@ -1,0 +1,83 @@
+name: Catalog Pack Sign
+
+# One-off operator workflow: signs the voice-provider catalog pack with the release key and
+# uploads the two public artifacts (manifest + content-addressed envelope) as a workflow
+# artifact. Publishing to R2 stays a separate, explicit step.
+#
+# It lives on a short-lived branch: workflow_dispatch needs the file on the default branch,
+# but a push-triggered run works from any branch, which is how this is invoked.
+
+on:
+  push:
+    branches:
+      - chore/catalog-pack-sign-20260921
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-pack-sign-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    name: Sign and build voice-provider catalog pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate the pack against the runtime contract
+        run: npx vitest run scripts/catalog-packs/official.voice-provider.test.ts
+
+      - name: Sign the pack
+        env:
+          RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
+          CATALOG_PAYLOAD_KEY: ${{ secrets.VOICE_PROVIDER_CATALOG_PAYLOAD_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "RELEASE_SIGNING_PRIVATE_KEY is required to sign a catalog pack."
+            exit 1
+          fi
+          if [ -z "${CATALOG_PAYLOAD_KEY:-}" ]; then
+            echo "VOICE_PROVIDER_CATALOG_PAYLOAD_KEY is required to encrypt the pack payload."
+            exit 1
+          fi
+          signing_key="${RUNNER_TEMP}/release-signing-private.pem"
+          payload_key="${RUNNER_TEMP}/payload-key.b64"
+          umask 077
+          if [[ "${RELEASE_SIGNING_PRIVATE_KEY}" == -----BEGIN* ]]; then
+            printf '%s' "${RELEASE_SIGNING_PRIVATE_KEY}" > "${signing_key}"
+          else
+            printf '%s' "${RELEASE_SIGNING_PRIVATE_KEY}" | base64 --decode > "${signing_key}"
+          fi
+          printf '%s' "${CATALOG_PAYLOAD_KEY}" > "${payload_key}"
+          npx tsx scripts/build-voice-provider-catalog.ts \
+            --pack scripts/catalog-packs/official.voice-provider.json \
+            --out out \
+            --payload-key "${payload_key}" \
+            --payload-key-id tuffy-20260921 \
+            --private-key "${signing_key}" \
+            | tee build-summary.json
+          rm -f "${signing_key}" "${payload_key}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: voice-provider-catalog
+          path: |
+            out/**
+            build-summary.json
+          if-no-files-found: error
+          retention-days: 7
