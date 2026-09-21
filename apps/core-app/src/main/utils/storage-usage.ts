@@ -169,6 +169,7 @@ const TABLE_CATALOG: Array<{ name: string; label: string; category: string }> = 
   { name: 'voice_insight_days', label: '语音-洞察日统计', category: 'voice' },
   { name: 'voice_insight_captures', label: '语音-洞察去重标识', category: 'voice' },
   { name: 'voice_polish_telemetry', label: '语音-润色遥测', category: 'voice' },
+  { name: 'voice_recognition_records', label: '语音-识别记录', category: 'voice' },
   { name: 'projects', label: '项目-目录元数据', category: 'projects' },
   { name: 'conversations', label: '对话-会话', category: 'conversations' },
   { name: 'conversation_messages', label: '对话-消息', category: 'conversations' },
