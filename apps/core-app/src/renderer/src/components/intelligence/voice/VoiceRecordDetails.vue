@@ -102,6 +102,10 @@ function tokenLabel(): string {
         </dd>
       </div>
       <div>
+        <dt>{{ t('voiceInsights.records.providerLatency') }}</dt>
+        <dd>{{ record.providerLatencyMs ? formatDuration(record.providerLatencyMs) : '—' }}</dd>
+      </div>
+      <div>
         <dt>{{ t('voiceInsights.records.tokens') }}</dt>
         <dd>{{ tokenLabel() }}</dd>
       </div>
