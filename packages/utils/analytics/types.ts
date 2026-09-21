@@ -40,18 +40,23 @@ export interface CoreMetrics {
   /**
    * Voice recognition, aggregated the way `search` is.
    *
-   * The two averages are taken over their own samples, not over `totalRecognitions`: a file
+   * The three averages are taken over their own samples, not over `totalRecognitions`: a file
    * transcription has no recording, and one dashed number would drag the average toward zero for
    * a fact nobody measured. Identifiers are sanitized before they are bucketed.
    *
    * `avgRecognitionDuration` averages the record's own `recognitionDurationMs`, which is
    * end-to-end elapsed time rather than provider latency. It is named after the field it reads so
    * the two cannot drift into different meanings.
+   *
+   * `avgProviderLatency` averages the provider's own round trip — a subset of the recognitions,
+   * since the realtime paths report none — which is the only one of the three that measures the
+   * provider rather than the user's wait.
    */
   voice?: {
     totalRecognitions?: number
     avgRecordingDuration?: number
     avgRecognitionDuration?: number
+    avgProviderLatency?: number
     models?: Record<string, number>
     channels?: Record<string, number>
   }

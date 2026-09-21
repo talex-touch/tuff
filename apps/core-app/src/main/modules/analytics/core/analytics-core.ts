@@ -60,6 +60,13 @@ const BASE_WINDOW_MIN_RECORD_INTERVAL_MS: Record<AnalyticsWindowType, number> = 
 export interface VoiceRecognitionMetricInput {
   recordingDurationMs?: number
   recognitionDurationMs?: number
+  /**
+   * The provider's own round trip, when the path measured one.
+   *
+   * Averaged separately from `recognitionDurationMs`: the end-to-end span includes capture, so
+   * folding a provider number into its average would report a longer provider than exists.
+   */
+  providerLatencyMs?: number
   /** Provider-reported model name. Sanitized before it is bucketed. */
   model?: string
   /** Provider-reported channel name. Sanitized before it is bucketed. */
@@ -83,6 +90,8 @@ export class AnalyticsCore {
   private recordingSamples = 0
   private totalRecognitionDuration = 0
   private recognitionSamples = 0
+  private totalProviderLatency = 0
+  private providerLatencySamples = 0
   private readonly voiceModels = new Map<string, number>()
   private readonly voiceChannels = new Map<string, number>()
 
@@ -246,6 +255,10 @@ export class AnalyticsCore {
       this.totalRecognitionDuration += input.recognitionDurationMs
       this.recognitionSamples += 1
     }
+    if (typeof input.providerLatencyMs === 'number' && input.providerLatencyMs > 0) {
+      this.totalProviderLatency += input.providerLatencyMs
+      this.providerLatencySamples += 1
+    }
     if (input.model) {
       const model = sanitizePluginAnalyticsIdentifier(input.model)
       this.voiceModels.set(model, (this.voiceModels.get(model) ?? 0) + 1)
@@ -263,6 +276,10 @@ export class AnalyticsCore {
           this.recordingSamples > 0 ? this.totalRecordingDuration / this.recordingSamples : 0,
         avgRecognitionDuration:
           this.recognitionSamples > 0 ? this.totalRecognitionDuration / this.recognitionSamples : 0,
+        avgProviderLatency:
+          this.providerLatencySamples > 0
+            ? this.totalProviderLatency / this.providerLatencySamples
+            : 0,
         models: Object.fromEntries(this.voiceModels),
         channels: Object.fromEntries(this.voiceChannels)
       }
@@ -420,6 +437,7 @@ export class AnalyticsCore {
       Math.floor((voice?.totalRecognitions ?? 0) / 10),
       Math.round((voice?.avgRecordingDuration ?? 0) / 250),
       Math.round((voice?.avgRecognitionDuration ?? 0) / 250),
+      Math.round((voice?.avgProviderLatency ?? 0) / 250),
       voiceBuckets,
       pluginCount,
       moduleCount
