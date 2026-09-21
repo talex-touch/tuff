@@ -1,17 +1,19 @@
 name: Catalog Pack Sign
 
-# One-off operator workflow: signs the voice-provider catalog pack with the release key and
-# uploads the two public artifacts (manifest + content-addressed envelope) as a workflow
-# artifact. Publishing to R2 stays a separate, explicit step.
+# Operator workflow: signs a catalog pack with the release signing key and uploads the two
+# public artifacts (manifest + content-addressed envelope) as a workflow artifact. Publishing
+# to R2 stays a separate, explicit step so signing never reaches production by accident.
 #
-# It lives on a short-lived branch: workflow_dispatch needs the file on the default branch,
-# but a push-triggered run works from any branch, which is how this is invoked.
+# The release private key only ever exists as the RELEASE_SIGNING_PRIVATE_KEY repository
+# secret, so this workflow is the only place a catalog pack can be produced.
 
 on:
-  push:
-    branches:
-      - chore/catalog-pack-sign-20260921
   workflow_dispatch:
+    inputs:
+      payload_key_id:
+        description: Payload encryption key id (must match the Nexus VOICE_PROVIDER_CATALOG_KEYS map)
+        required: false
+        default: tuffy-20260921
 
 permissions:
   contents: read
@@ -68,7 +70,7 @@ jobs:
             --pack scripts/catalog-packs/official.voice-provider.json \
             --out out \
             --payload-key "${payload_key}" \
-            --payload-key-id tuffy-20260921 \
+            --payload-key-id "${{ inputs.payload_key_id }}" \
             --private-key "${signing_key}" \
             | tee build-summary.json
           rm -f "${signing_key}" "${payload_key}"
