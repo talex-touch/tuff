@@ -43,6 +43,10 @@ export interface CoreMetrics {
    * The two averages are taken over their own samples, not over `totalRecognitions`: a file
    * transcription has no recording, and one dashed number would drag the average toward zero for
    * a fact nobody measured. Identifiers are sanitized before they are bucketed.
+   *
+   * `avgRecognitionDuration` averages the record's own `recognitionDurationMs`, which is
+   * end-to-end elapsed time rather than provider latency. It is named after the field it reads so
+   * the two cannot drift into different meanings.
    */
   voice?: {
     totalRecognitions?: number

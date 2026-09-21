@@ -66,6 +66,12 @@ export interface VoiceRecognitionRecord {
   audioUrl?: string
   audioBytes?: number
   audioDurationMs?: number
+  /**
+   * Wall-clock ms from the start of the recognition attempt to the moment it settled.
+   *
+   * That span is wider than the provider call: the microphone paths include capture, and the file
+   * path includes decoding the chosen file. It is end-to-end elapsed time, not provider latency.
+   */
   recognitionDurationMs?: number
   rawText?: string
   text?: string
