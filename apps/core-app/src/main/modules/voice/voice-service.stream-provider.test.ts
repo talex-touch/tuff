@@ -11,6 +11,10 @@ const polishPromptMocks = vi.hoisted(() => ({
 
 const storageMocks = vi.hoisted(() => ({ getMainConfig: vi.fn() }))
 
+const recognitionStoreMocks = vi.hoisted(() => ({
+  record: vi.fn<(input: VoiceRecognitionRecordInput) => Promise<void>>(async () => undefined)
+}))
+
 vi.mock('@talex-touch/tuff-native/audio', () => ({
   getNativeAudioSupport: vi.fn(),
   startCapture: vi.fn(),
@@ -60,6 +64,10 @@ vi.mock('./voice-insights-store', () => ({
   }
 }))
 
+vi.mock('./voice-recognition-store', () => ({
+  voiceRecognitionStore: { record: recognitionStoreMocks.record }
+}))
+
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
 import type { VoiceProviderEvent } from '@talex-touch/tuff-voice'
 import type {
@@ -70,6 +78,7 @@ import { clipboardModule } from '../clipboard'
 import { activeAppService } from '../system/active-app'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { getConfiguredAsrProvider } from './voice-provider-runtime'
+import type { VoiceRecognitionRecordInput } from './voice-recognition-store'
 import { VoiceService } from './voice-service'
 
 const support = nativeAudio.getNativeAudioSupport as unknown as ReturnType<typeof vi.fn>
@@ -1632,5 +1641,170 @@ describe('VoiceService recovery status', () => {
     await drainStream(service.streamDictation({}))
 
     expect(service.getRecoveryStatus()).toEqual({ available: false })
+  })
+})
+
+/**
+ * A recovered recording is a recognition in its own right, so the row it leaves in the history
+ * has to read like one: the audio the replay actually uploaded, the transcript the adapter
+ * produced before any polishing, the adapter and model that produced it — and, once it
+ * succeeds, none of the failure it replaced.
+ *
+ * History is switched on for this suite alone, because the record only exists for a user who
+ * keeps one; every other suite here leaves it off and observes a retry through the buffer.
+ */
+describe('VoiceService retry recognition record', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    support.mockReturnValue({ supported: true, platform: 'darwin' })
+    startCapture.mockResolvedValue({ sessionId: 's1' })
+    drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16000, channels: 1 })
+    invoke.mockResolvedValue({ result: 'Hello world.' })
+    typeText.mockReturnValue({ ok: true })
+    isAccessibilityTrusted.mockReturnValue(true)
+    getActiveApp.mockResolvedValue({
+      identifier: 'com.example.editor',
+      displayName: 'Editor',
+      bundleId: 'com.example.editor',
+      processId: 123,
+      executablePath: null,
+      platform: 'macos',
+      windowTitle: null,
+      lastUpdated: Date.now()
+    })
+    getMainConfig.mockReturnValue({
+      voiceInput: { polishStrength: 'deep', historyEnabled: true }
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /**
+   * A session that speaks, fails, and leaves audio behind to recover. `fail` is the lever that
+   * ends it, so each test can name the failure its own history row starts from.
+   */
+  async function failCapture(service: VoiceService, fail: (error: Error) => void): Promise<void> {
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+    const generator = service.streamDictation({ emitLevel: false })
+    const drained = (async () => {
+      try {
+        for await (const _event of generator) {
+          // drain
+        }
+      } catch {
+        // the failure under test
+      }
+    })()
+    await vi.advanceTimersByTimeAsync(300)
+    fail(Object.assign(new Error('provider socket closed'), { code: 'VOICE_ASR_PROVIDER_FAILED' }))
+    await vi.advanceTimersByTimeAsync(500)
+    await drained
+  }
+
+  /** Every row the service handed to the history, in the order it wrote them. */
+  function recordWrites(): VoiceRecognitionRecordInput[] {
+    return recognitionStoreMocks.record.mock.calls.map(([input]) => input)
+  }
+
+  async function failingService() {
+    const fake = createFakeConnection()
+    const provider = { createStream: vi.fn(async () => fake.connection) }
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      provider: { id: 'fake', defaultStreamModel: 'fake-model', ...provider }
+    })
+    const service = new VoiceService()
+    await failCapture(service, fake.fail)
+    return { service, provider }
+  }
+
+  it('records the replayed audio, the raw transcript and the adapter that produced it', async () => {
+    const { service, provider } = await failingService()
+
+    const retry = createFakeConnection(POLISHABLE_TRANSCRIPT, false)
+    retry.push({ type: 'final', text: POLISHABLE_TRANSCRIPT, language: 'en', latencyMs: 42 })
+    let releaseConnection!: () => void
+    provider.createStream.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        releaseConnection = resolve
+      })
+      return retry.connection
+    })
+
+    const replay = service.retryLastFailure({ delivery: 'active-app' })
+    // The clock moves while the handshake is still outstanding, so the span the record reports
+    // can only be the replay's own attempt.
+    await vi.advanceTimersByTimeAsync(1_200)
+    releaseConnection()
+    expect((await replay).text).toBe('Hello world.')
+
+    // One row for the attempt that failed, one for the replay that replaced it.
+    const writes = recordWrites()
+    expect(writes).toHaveLength(2)
+    const recovered = writes[1]
+    expect(recovered).toMatchObject({
+      status: 'success',
+      source: 'microphone',
+      audioFormat: 'pcm',
+      audioSampleRate: 16_000,
+      // The transcript the adapter returned, kept beside the polished text it was delivered as.
+      rawText: POLISHABLE_TRANSCRIPT,
+      text: 'Hello world.',
+      providerId: 'fake',
+      model: 'fake-model',
+      channel: 'fake',
+      providerLatencyMs: 42,
+      errorCode: null
+    })
+
+    // A millisecond of this stream is 32 bytes — 16 kHz, 16-bit mono, the format the request
+    // declared — and the byte count is the audio the replay actually uploaded, not a leftover.
+    const replayedBytes = retry.connection.writePcm.mock.calls.reduce(
+      (total, [chunk]) => total + chunk.length,
+      0
+    )
+    expect(replayedBytes).toBeGreaterThan(0)
+    expect(recovered?.audioBytes).toBe(replayedBytes)
+    expect(recovered?.audioDurationMs).toBe(Math.round(replayedBytes / 32))
+
+    // Timed from the replay, not from the capture it replaced: the failed attempt occupies 800
+    // fake milliseconds of this test, so a span inherited from its start would run past 2s.
+    expect(recovered?.recognitionDurationMs).toBeGreaterThanOrEqual(1_200)
+    expect(recovered?.recognitionDurationMs).toBeLessThan(2_000)
+  })
+
+  it('rewrites the failed row as a success with no error code left beside it', async () => {
+    const { service, provider } = await failingService()
+
+    const retry = createFakeConnection('buffered words')
+    provider.createStream.mockResolvedValueOnce(retry.connection)
+    await service.retryLastFailure()
+
+    const [failedAttempt, recovered] = recordWrites()
+    // The row the recovery replaces: the same capture, carrying the code the failure named.
+    expect(failedAttempt).toMatchObject({
+      status: 'failed',
+      errorCode: 'VOICE_ASR_PROVIDER_FAILED'
+    })
+    // And the row it becomes: a success with nothing left of that failure.
+    expect(recovered).toMatchObject({ status: 'success', errorCode: null })
+    expect(recovered?.id).toBe(failedAttempt?.id)
+  })
+
+  it('leaves the provider latency absent when the provider measured none', async () => {
+    const { service, provider } = await failingService()
+
+    const retry = createFakeConnection('buffered words')
+    provider.createStream.mockResolvedValueOnce(retry.connection)
+    await service.retryLastFailure()
+
+    // A recovery has a round trip of its own to measure, but a provider that reports none leaves
+    // the field off the row rather than writing a zero that claims an instant request.
+    const recovered = recordWrites()[1]
+    expect(recovered).toMatchObject({ status: 'success', text: 'buffered words' })
+    expect(recovered).not.toHaveProperty('providerLatencyMs')
   })
 })
