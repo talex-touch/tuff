@@ -180,11 +180,17 @@ describe('DatabaseModule background startup tasks', () => {
     expect(create).toContain('id text PRIMARY KEY NOT NULL')
     expect(create).toContain('captured_at integer NOT NULL')
     expect(create).toContain('status text NOT NULL')
+    expect(create).toContain('provider_latency_ms integer')
     expect(statements).toContain(
       'CREATE INDEX IF NOT EXISTS idx_voice_recognition_records_captured_at ON voice_recognition_records (captured_at)'
     )
     expect(statements).toContain(
       'CREATE INDEX IF NOT EXISTS idx_voice_recognition_records_status ON voice_recognition_records (status)'
+    )
+    // An aux database that already has the table is where the CREATE above is a no-op, so the
+    // guarded upgrade is the only thing that gives it the column.
+    expect(statements.join('\n')).toContain(
+      'ALTER TABLE voice_recognition_records ADD COLUMN provider_latency_ms integer'
     )
   })
 })

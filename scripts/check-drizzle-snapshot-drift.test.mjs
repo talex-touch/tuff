@@ -76,5 +76,7 @@ describe('drizzle snapshot drift', () => {
     // 0047/0048 are the pi-desktop-analysis migrations, renumbered off master's 0046 on merge.
     assert.ok(gap.missing.includes('0047'))
     assert.ok(gap.missing.includes('0048'))
+    // 0049 is the hand-written provider latency column, journaled without a snapshot.
+    assert.ok(gap.missing.includes('0049'))
   })
 })
