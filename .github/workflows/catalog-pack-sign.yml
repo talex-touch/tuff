@@ -47,6 +47,7 @@ jobs:
         env:
           RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
           CATALOG_PAYLOAD_KEY: ${{ secrets.VOICE_PROVIDER_CATALOG_PAYLOAD_KEY }}
+          PAYLOAD_KEY_ID: ${{ inputs.payload_key_id }}
         run: |
           set -euo pipefail
           if [ -z "${RELEASE_SIGNING_PRIVATE_KEY:-}" ]; then
@@ -70,7 +71,7 @@ jobs:
             --pack scripts/catalog-packs/official.voice-provider.json \
             --out out \
             --payload-key "${payload_key}" \
-            --payload-key-id "${{ inputs.payload_key_id }}" \
+            --payload-key-id "${PAYLOAD_KEY_ID}" \
             --private-key "${signing_key}" \
             | tee build-summary.json
           rm -f "${signing_key}" "${payload_key}"
