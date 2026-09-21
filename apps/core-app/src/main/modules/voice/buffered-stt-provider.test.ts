@@ -37,16 +37,31 @@ const FROZEN_MODEL = 'nexus-audio-transcribe'
 const WAV_DATA_URI_PREFIX = 'data:audio/wav;base64,'
 
 function invokeResult(
-  result: IntelligenceSTTResult
+  result: IntelligenceSTTResult,
+  /** The provider's reported round trip, in milliseconds. */
+  latency = 1
 ): IntelligenceInvokeResult<IntelligenceSTTResult> {
   return {
     result,
     usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     model: FROZEN_MODEL,
-    latency: 1,
+    latency,
     traceId: 'trace-buffered-stt',
     provider: PROVIDER_ID
   }
+}
+
+/**
+ * The same response as a provider that never reported a round trip at all.
+ *
+ * The intelligence contract types `latency` as a required `number`, but it is provider-supplied
+ * data: the adapter is what has to survive a response that does not hold up its end of that type.
+ */
+function withoutReportedLatency(
+  result: IntelligenceSTTResult
+): IntelligenceInvokeResult<IntelligenceSTTResult> {
+  const { latency: _unreported, ...rest } = invokeResult(result)
+  return rest as IntelligenceInvokeResult<IntelligenceSTTResult>
 }
 
 function recordingInvoker(respond: SttInvoker = async () => invokeResult({ text: 'ok' })) {
@@ -136,7 +151,8 @@ describe('createBufferedSttVoiceProvider', () => {
       requestId: 'req-buffered-1',
       text: '开会纪要',
       language: 'zh',
-      usage: { durationMs: 1500 }
+      usage: { durationMs: 1500 },
+      latencyMs: 1
     })
     expect(events[1]).toEqual({ type: 'end', requestId: 'req-buffered-1' })
 
@@ -159,6 +175,51 @@ describe('createBufferedSttVoiceProvider', () => {
     expect(wav.readUInt32LE(4)).toBe(36 + expectedPcm.byteLength)
     expect(wav.readUInt32LE(40)).toBe(expectedPcm.byteLength)
     expect(wav.subarray(44).equals(expectedPcm)).toBe(true)
+  })
+
+  it.each([
+    { name: 'a NaN round trip', respond: async () => invokeResult({ text: 'ok' }, Number.NaN) },
+    {
+      name: 'an infinite round trip',
+      respond: async () => invokeResult({ text: 'ok' }, Number.POSITIVE_INFINITY)
+    },
+    { name: 'a negative round trip', respond: async () => invokeResult({ text: 'ok' }, -1) },
+    {
+      name: 'a response that never carried a round trip',
+      respond: async () => withoutReportedLatency({ text: 'ok' })
+    }
+  ])('omits latencyMs for $name instead of reporting zero', async ({ respond }) => {
+    const { invoke } = recordingInvoker(respond)
+    const stream = await providerWith(invoke).createStream(request())
+
+    await stream.writePcm(Buffer.from([0x01, 0x02]))
+    await stream.end()
+
+    const events = await collect(stream.events)
+    expect(events).toEqual([
+      { type: 'final', text: 'ok', requestId: 'req-buffered-1' },
+      { type: 'end', requestId: 'req-buffered-1' }
+    ])
+    // Zero milliseconds reads as an instantaneous round trip, so an unusable measurement has to be
+    // absent rather than rounded into a plausible number.
+    expect(events[0]).not.toHaveProperty('latencyMs')
+  })
+
+  it('rounds a fractional provider round trip into whole milliseconds', async () => {
+    const { invoke } = recordingInvoker(async () => invokeResult({ text: 'ok' }, 12.6))
+    const stream = await providerWith(invoke).createStream(request())
+
+    await stream.writePcm(Buffer.from([0x01, 0x02]))
+    await stream.end()
+
+    // The record and telemetry columns behind this event are integers, so a fractional provider
+    // report must not reach them as a fraction.
+    expect((await collect(stream.events))[0]).toEqual({
+      type: 'final',
+      text: 'ok',
+      requestId: 'req-buffered-1',
+      latencyMs: 13
+    })
   })
 
   it('emits only end for audio that never carried a byte, without invoking the provider', async () => {

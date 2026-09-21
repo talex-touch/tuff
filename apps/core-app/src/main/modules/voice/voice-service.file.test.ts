@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { VoiceRecognitionRecordInput } from './voice-recognition-store'
 
 const fileSelection = vi.hoisted(() => ({ selectVoiceFile: vi.fn() }))
 const intelligence = vi.hoisted(() => ({ stt: vi.fn(), invoke: vi.fn() }))
 const nativeAudio = vi.hoisted(() => ({ typeText: vi.fn(), isAccessibilityTrusted: vi.fn() }))
+const storage = vi.hoisted(() => ({ getMainConfig: vi.fn() }))
+const recognitionStore = vi.hoisted(() => ({
+  record: vi.fn<(input: VoiceRecognitionRecordInput) => Promise<void>>(async () => undefined)
+}))
 
 vi.mock('./voice-file-transcription', () => fileSelection)
 vi.mock('@talex-touch/tuff-native/audio', () => nativeAudio)
@@ -13,6 +18,12 @@ vi.mock('../clipboard', () => ({ clipboardModule: { applyVoiceText: vi.fn() } })
 vi.mock('../system/active-app', () => ({ activeAppService: { getActiveApp: vi.fn() } }))
 vi.mock('../ai/intelligence-tts-service', () => ({ intelligenceTtsService: { speak: vi.fn() } }))
 vi.mock('./voice-insights-store', () => ({ voiceInsightsStore: { recordSuccess: vi.fn() } }))
+// The recognition history is the sink this suite observes; the history gate above it is on by
+// default only for a user who enabled it, so the file path is exercised with it switched on.
+vi.mock('../storage', () => ({ getMainConfig: storage.getMainConfig }))
+vi.mock('./voice-recognition-store', () => ({
+  voiceRecognitionStore: { record: recognitionStore.record }
+}))
 
 import { VoiceService } from './voice-service'
 
@@ -104,5 +115,32 @@ describe('VoiceService local file transcription', () => {
     await expect(result).rejects.toThrow('VOICE_OPERATION_CANCELLED')
     await expect(stream.next()).resolves.toEqual({ done: true, value: undefined })
     expect(nativeAudio.typeText).not.toHaveBeenCalled()
+  })
+
+  it('records the provider round trip on the file transcription record', async () => {
+    fileSelection.selectVoiceFile.mockResolvedValue(selectedFile)
+    intelligence.stt.mockResolvedValue({ result: { text: 'meeting notes' }, latency: 42 })
+    storage.getMainConfig.mockReturnValue({ voiceInput: { historyEnabled: true } })
+
+    await drain(new VoiceService().transcribeFile())
+
+    expect(recognitionStore.record).toHaveBeenCalledTimes(1)
+    expect(recognitionStore.record.mock.calls[0]?.[0]).toMatchObject({
+      source: 'file',
+      text: 'meeting notes',
+      providerLatencyMs: 42
+    })
+  })
+
+  it('leaves the provider latency off the record when the provider reported no round trip', async () => {
+    fileSelection.selectVoiceFile.mockResolvedValue(selectedFile)
+    intelligence.stt.mockResolvedValue({ result: { text: 'meeting notes' } })
+    storage.getMainConfig.mockReturnValue({ voiceInput: { historyEnabled: true } })
+
+    await drain(new VoiceService().transcribeFile())
+
+    expect(recognitionStore.record).toHaveBeenCalledTimes(1)
+    // A recorded zero would claim an instantaneous provider round trip that was never measured.
+    expect(recognitionStore.record.mock.calls[0]?.[0]).not.toHaveProperty('providerLatencyMs')
   })
 })

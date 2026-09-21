@@ -8,7 +8,7 @@ import type {
 import type { VoiceProviderDescriptorV1 } from '@talex-touch/utils/i18n'
 import { CATALOG_CLIENT_SDKAPI, CATALOG_ERROR_CODES } from '@talex-touch/utils/i18n'
 import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getConfiguredAsrProvider, getRecognitionStatus } from './voice-provider-runtime'
 
 const runtime = vi.hoisted(() => ({
@@ -192,6 +192,8 @@ function nexusSttBinding() {
 
 const PACK_PROVIDER_ID = 'tuff-nexus-cloud'
 const PACK_MODEL = 'catalog.audio.transcribe'
+/** The provider round trip the fake clock advances by while the pack transcription is in flight. */
+const PROVIDER_ROUND_TRIP_MS = 234
 
 /** A frozen descriptor as the active catalog registry would hand it to the runtime. */
 function catalogDescriptor(
@@ -320,6 +322,8 @@ describe('capability-bound voice ASR provider resolution', () => {
         provider.getConfig().capabilities?.includes(capabilityId) ?? false
     )
   })
+  // The pack round trip is measured against the clock, and no other test may inherit a frozen one.
+  afterEach(() => vi.useRealTimers())
 
   it('constructs Bailian from the capability-bound custom channel Base URL and secure credential', () => {
     configure(
@@ -653,9 +657,17 @@ describe('capability-bound voice ASR provider resolution', () => {
     configure({ [PACK_PROVIDER_ID]: nexusPackChannel() }, { 'audio.asr': [nexusPackBinding()] })
     catalog.registry = activeRegistry(descriptor)
     catalog.status = { lastErrorCode: null }
-    nexusClient.transcribeNexusAudio.mockResolvedValue({
-      text: 'pack transcript',
-      billing: { requestId: 'pack-1', creditsCharged: 3, billedSeconds: 2 }
+    // The event's latency is this adapter's own wall-clock measurement of the provider call, so the
+    // test drives the clock instead of asserting whatever a real round trip happened to take.
+    const clockStart = Date.now()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(clockStart)
+    nexusClient.transcribeNexusAudio.mockImplementation(async () => {
+      vi.setSystemTime(clockStart + PROVIDER_ROUND_TRIP_MS)
+      return {
+        text: 'pack transcript',
+        billing: { requestId: 'pack-1', creditsCharged: 3, billedSeconds: 2 }
+      }
     })
 
     expect(getRecognitionStatus().asr).toEqual({ ready: true, mode: 'buffered' })
@@ -675,15 +687,18 @@ describe('capability-bound voice ASR provider resolution', () => {
 
     const events: unknown[] = []
     for await (const event of stream.events) events.push(event)
-    expect(events).toEqual([
-      {
-        type: 'final',
-        text: 'pack transcript',
-        requestId: 'req-pack-1',
-        usage: { durationMs: 2000 }
-      },
-      { type: 'end', requestId: 'req-pack-1' }
-    ])
+    // Exact shape plus the measured round trip: everything except the clock-derived `latencyMs` is
+    // pinned, so an extra field on the event is as much a failure as a missing one.
+    const [finalEvent, endEvent] = events as Array<Record<string, unknown>>
+    const { latencyMs, ...finalEventShape } = finalEvent ?? {}
+    expect(latencyMs).toBe(PROVIDER_ROUND_TRIP_MS)
+    expect(finalEventShape).toEqual({
+      type: 'final',
+      text: 'pack transcript',
+      requestId: 'req-pack-1',
+      usage: { durationMs: 2000 }
+    })
+    expect(endEvent).toEqual({ type: 'end', requestId: 'req-pack-1' })
 
     expect(nexusClient.transcribeNexusAudio).toHaveBeenCalledTimes(1)
     const [payload, options] = nexusClient.transcribeNexusAudio.mock.calls[0]
