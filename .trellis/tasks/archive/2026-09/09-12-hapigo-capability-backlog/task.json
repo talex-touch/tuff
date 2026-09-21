@@ -3,7 +3,7 @@
   "name": "hapigo-capability-backlog",
   "title": "HapiGo capability parity backlog",
   "description": "Plan HapiGo-derived content sources, live tabs, file and clipboard workflows, plus a unified Tuff destination alias catalog and offline-first image asset delivery.",
-  "status": "planning",
+  "status": "completed",
   "dev_type": "feature",
   "scope": "repository",
   "package": "core-app",
@@ -11,14 +11,16 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-09-12",
-  "completedAt": null,
+  "completedAt": "2026-09-21",
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": ["09-12-unified-app-destinations"],
+  "children": [
+    "09-12-unified-app-destinations"
+  ],
   "parent": null,
   "relatedFiles": [
     "apps/core-app/src/main/modules/box-tool/addon/system/main-window-provider.ts",
