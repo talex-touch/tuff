@@ -1328,6 +1328,7 @@
       "finalText": "最终文本",
       "duration": "录音时长",
       "recognitionDuration": "识别耗时",
+      "providerLatency": "服务商耗时",
       "tokens": "Tokens",
       "tokensValue": "{count}",
       "tokensSplit": "输入 {input} · 输出 {output}",

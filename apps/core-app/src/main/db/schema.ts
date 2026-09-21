@@ -760,6 +760,15 @@ export const voiceRecognitionRecords = sqliteTable(
     audioBytes: integer('audio_bytes'),
     audioDurationMs: integer('audio_duration_ms'),
     recognitionDurationMs: integer('recognition_duration_ms'),
+    /**
+     * The provider request round-trip alone, when the path has one.
+     *
+     * Kept beside `recognition_duration_ms` rather than folded into it: that column is end-to-end
+     * elapsed time (capture on microphone paths, decode on the file path), so on a 60-second
+     * dictation it reports ~60s and says nothing about how long recognition itself took. Nullable,
+     * because the streaming paths have no single request to time.
+     */
+    providerLatencyMs: integer('provider_latency_ms'),
     rawText: text('raw_text'),
     text: text('text'),
     providerId: text('provider_id'),

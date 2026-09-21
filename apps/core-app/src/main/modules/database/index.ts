@@ -930,6 +930,7 @@ export class DatabaseModule extends BaseModule {
         audio_bytes integer,
         audio_duration_ms integer,
         recognition_duration_ms integer,
+        provider_latency_ms integer,
         raw_text text,
         text text,
         provider_id text,
@@ -1020,6 +1021,18 @@ export class DatabaseModule extends BaseModule {
     if (clipboardExpiryColumn.rows.length === 0) {
       await this.auxClient.execute(
         'ALTER TABLE clipboard_history ADD COLUMN retention_expires_at integer'
+      )
+    }
+
+    // `CREATE TABLE IF NOT EXISTS` above is a no-op on an aux database that already exists, so the
+    // column has to be added to those separately or the provider latency lands on one home and
+    // fails with `no such column` on the other.
+    const voiceProviderLatencyColumn = await this.auxClient.execute(
+      "SELECT 1 FROM pragma_table_info('voice_recognition_records') WHERE name = 'provider_latency_ms' LIMIT 1"
+    )
+    if (voiceProviderLatencyColumn.rows.length === 0) {
+      await this.auxClient.execute(
+        'ALTER TABLE voice_recognition_records ADD COLUMN provider_latency_ms integer'
       )
     }
 

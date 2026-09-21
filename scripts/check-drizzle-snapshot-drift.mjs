@@ -71,8 +71,13 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * full-chain SQLite regressions are in project-native-sessions-schema.test.ts and the Local
  * AI CLI continuation suite. This records the two known additions; it does not regenerate or
  * claim to repair snapshot history.
+ *
+ * Raised 35 → 36 on 2026-09-21 for `0049_voice_provider_latency`, the hand-written upgrade that
+ * adds the provider round-trip column beside the end-to-end recognition duration. Both homes that
+ * create the table are pinned by voice-recognition-records-schema.test.ts. This records only that
+ * migration's known gap; it does not regenerate or claim to repair snapshot history.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 35
+export const KNOWN_MISSING_SNAPSHOTS = 36
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))
