@@ -1,6 +1,6 @@
 ---
 title: AI 套件
-description: 源自 Beautiful UI 的 19 个 AI 原生界面组件案例集
+description: 源自 Beautiful UI 的 AI 原生界面组件案例集
 category: AiSuite
 status: beta
 since: 0.3.9
@@ -29,7 +29,7 @@ AI 套件在组件侧边栏分为四组：**对话**（Chat、ChatComposer、Pro
 
 ## 来源与授权
 
-本套件移植自 [Beautiful UI](https://www.beautifului.dev)（Turbo 设计工作室 / Shane Levine，© 2026，MIT 协议），共 19 个面向 AI 原生界面的组件案例：聊天、推理轨迹、human-in-the-loop 审批、agent 任务状态等。移植遵循三条原则：像素级还原其视觉语言（独立 `--tx-bui-*` token 层、发丝环阴影、13px 密度体系）；组件做成纯受控原语（演示时间轴留在 demo 层）；与 tuffex 现有组件融合而非重复造轮子——重叠处以变体或组合落地，无障碍缺口按 tuffex 标准补齐。每个组件源码文件头保留 MIT 署名。
+本套件移植自 [Beautiful UI](https://www.beautifului.dev)（Turbo 设计工作室 / Shane Levine，© 2026，MIT 协议）面向 AI 原生界面的组件案例：聊天、推理轨迹、human-in-the-loop 审批、agent 任务状态等。上游现有 21 例，本页索引逐条列出它们各自的落地位置（16 Flowchart 归入流程套件，21 Agent Screen 尚未移植）。移植遵循三条原则：像素级还原其视觉语言（独立 `--tx-bui-*` token 层、发丝环阴影、13px 密度体系）；组件做成纯受控原语（演示时间轴留在 demo 层）；与 tuffex 现有组件融合而非重复造轮子——重叠处以变体或组合落地，无障碍缺口按 tuffex 标准补齐。每个组件源码文件头保留 MIT 署名。
 
 ## 加载与推理状态
 
@@ -319,17 +319,21 @@ code: |
 | 13 Filter Table | [TxFilterChips](/docs/dev/components/filter-chips) + TxDataTable | 新原语 + 组合 |
 | 14 Sidebar Nav | [TxSidebarNav](/docs/dev/components/sidebar-nav) | 新组件 |
 | 15 Search | [TxSearchPanel](/docs/dev/components/search-panel) | 组合薄壳 |
-| 16 Insight Cards | [TxInsightCards](/docs/dev/components/insight-cards) + [TxSparkChart](/docs/dev/components/spark-chart) + [TxAllocationBar](/docs/dev/components/allocation-bar) | 新组件族 |
-| 17 Code Block | [TxCodeStream](/docs/dev/components/code-stream) | 新组件 |
-| 18 Fine-tune Card | [TxFineTuneCard](/docs/dev/components/fine-tune-card) + [TxScrubField](/docs/dev/components/scrub-field) | 新组件 + 新原语 |
-| 19 Selection Actions | [TxSelectionActions](/docs/dev/components/selection-actions) | 组合优先新组件 |
+| 16 Flowchart | [TxFlowchart](/docs/dev/components/flowchart) | 新组件，归入[流程套件](/docs/dev/components/flow-suite) |
+| 17 Insight Cards | [TxInsightCards](/docs/dev/components/insight-cards) + [TxSparkChart](/docs/dev/components/spark-chart) + [TxAllocationBar](/docs/dev/components/allocation-bar) | 新组件族 |
+| 18 Code Block | [TxCodeStream](/docs/dev/components/code-stream) | 新组件 |
+| 19 Fine-tune Card | [TxFineTuneCard](/docs/dev/components/fine-tune-card) + [TxScrubField](/docs/dev/components/scrub-field) | 新组件 + 新原语 |
+| 20 Selection Actions | [TxSelectionActions](/docs/dev/components/selection-actions) | 组合优先新组件 |
+| 21 Agent Screen | [TxAgentScreen](/docs/dev/components/agent-screen) | 新组件 |
 
-共享原语：[TxIconChip](/docs/dev/components/icon-chip)（10/14/16/18 共用图标角标）。
+编号跟随上游现状。上游在 2026-08 首次移植之后新增了 16 Flowchart 与 21 Agent Screen，两者均已于 2026-09-21 补齐——16 归入[流程套件](/docs/dev/components/flow-suite)，21 留在本套件。16–20 相对首版映射表整体后移了一位，不是漏迁，是中间插入了新案例。
+
+共享原语：[TxIconChip](/docs/dev/components/icon-chip)（10/14/17/19 共用图标角标）。
 
 ## 审阅说明
 
 - 上游为自驱动 demo（内容硬编码 + 定时器时间轴）；移植后组件全部受控，时间轴仅存在于本页各 demo 内。
 - reduced-motion 逐组件显式实现：只砍补间不砍状态机，延迟一并归零（相对上游全局 `*` 规则的有意偏离）。
 - 高对比主题（`data-tx-contrast='high'`）下 `--tx-bui-*` 保持原值，为已知限制。
-- 16 的图表区上游截图渲染为 "No data to display"，图表按规格实现、无上游视觉基线。
+- 17 的图表区在 2026-08 首次移植时，上游自己渲染为 "No data to display"，当时没有视觉基线可比，图表只按规格实现。上游此后补上了完整的 scrub 呈现层（扫描线、深色 tooltip、序列色点、虚线基准线、曲线端点），我方尚未跟进——差距记录在 `.trellis/tasks/09-21-bui-parity-audit/`。
 - 全部组件源码文件头携带 MIT 署名：Adapted from Beautiful UI, © 2026 Shane Levine, MIT。

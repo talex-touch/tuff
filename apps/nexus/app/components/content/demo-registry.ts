@@ -3,6 +3,7 @@ import type { DemoLoader } from './demo-loader'
 export type { DemoLoader } from './demo-loader'
 
 export const demoLoaders: Record<string, DemoLoader> = {
+  AgentScreenAgentScreenDemo: () => import('./demos/AgentScreenAgentScreenDemo.vue'),
   AgentTraceStepsDemo: () => import('./demos/AgentTraceStepsDemo.vue'),
   AgentTraceVariantsDemo: () => import('./demos/AgentTraceVariantsDemo.vue'),
   AgentsAgentsListDemo: () => import('./demos/AgentsAgentsListDemo.vue'),
@@ -167,6 +168,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   FlexFlexDemo: () => import('./demos/FlexFlexDemo.vue'),
   FlipOverlayFlipOverlayDemo: () => import('./demos/FlipOverlayFlipOverlayDemo.vue'),
   FloatingFloatingDemo: () => import('./demos/FloatingFloatingDemo.vue'),
+  FlowchartFlowchartDemo: () => import('./demos/FlowchartFlowchartDemo.vue'),
   FormFormDemo: () => import('./demos/FormFormDemo.vue'),
   FusionFusionAvatarBadgeDemo: () => import('./demos/FusionFusionAvatarBadgeDemo.vue'),
   FusionFusionButtonTooltipDemo: () => import('./demos/FusionFusionButtonTooltipDemo.vue'),
@@ -372,6 +374,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   TimeseriesChartLoadingDemo: () => import('./demos/TimeseriesChartLoadingDemo.vue'),
   TimeseriesChartMarkersDemo: () => import('./demos/TimeseriesChartMarkersDemo.vue'),
   TimeseriesChartRangeDemo: () => import('./demos/TimeseriesChartRangeDemo.vue'),
+  ToastPanelToastPanelDemo: () => import('./demos/ToastPanelToastPanelDemo.vue'),
   ToastToastDemo: () => import('./demos/ToastToastDemo.vue'),
   ToolCallCardToolCallCardDemo: () => import('./demos/ToolCallCardToolCallCardDemo.vue'),
   ToolChipsRunFlowDemo: () => import('./demos/ToolChipsRunFlowDemo.vue'),

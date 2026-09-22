@@ -85,7 +85,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## 组件梳理
 
-当前源码导出模块总数：**153**。
+当前源码导出模块总数：**156**。
 
 全部模块按三大套件划分，每个套件都有独立的分类入口：
 
@@ -104,7 +104,7 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 - `布局 (11)`: `container`, `flex`, `grid`, `grid-layout`, `stack`, `splitter`, `scroll`, `collapse`, `card`, `card-item`, `group-block`
 - `导航 (10)`: `tabs`, `tab-bar`, `nav-bar`, `sidebar-nav`, `breadcrumb`, `steps`, `pagination`, `dropdown-menu`, `flat-dropdown`, `context-menu`
 - `数据展示 (11)`: `data-table`, `tree`, `sortable-list`, `timeline`, `transfer`, `stat-card`, `cell-link`, `dot-indicator`, `filter-chips`, `markdown-view`, `image-gallery`
-- `反馈 (12)`: `dialog`, `modal`, `drawer`, `popover`, `tooltip`, `toast`, `alert`, `progress`, `progress-bar`, `spinner`, `loading-overlay`, `selection-actions`
+- `反馈 (13)`: `dialog`, `modal`, `drawer`, `popover`, `tooltip`, `toast`, `toast-panel`, `alert`, `progress`, `progress-bar`, `spinner`, `loading-overlay`, `selection-actions`
 - `状态占位 (13)`: `empty`, `empty-state`, `no-data`, `no-selection`, `search-empty`, `error-state`, `offline-state`, `permission-state`, `guide-state`, `blank-slate`, `loading-state`, `skeleton`, `layout-skeleton`
 
 ### pro 进阶套件
@@ -121,9 +121,10 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 面向 AI 原生界面的对话、智能体、推理与上下文组件，从 `@talex-touch/tuffex/ai` 引入。
 
 - `对话 (6)`: `chat`, `prompt-bar`, `attachment-tray`, `message-actions`, `suggestion-chips`, `conversation-stream`
-- `智能体 (8)`: `agents`, `agent-trace`, `task-rows`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `approval-card`, `working-indicator`
+- `智能体 (9)`: `agents`, `agent-screen`, `agent-trace`, `task-rows`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `approval-card`, `working-indicator`
 - `推理与生成 (8)`: `ai-elements`, `chain-of-thought`, `reasoning-disclosure`, `thinking-orb`, `stream-markdown`, `code-stream`, `inline-citation`, `sources`
 - `上下文与洞察 (5)`: `context-cards`, `context-indicator`, `insight-cards`, `recommendation-card`, `fine-tune-card`
+- `流程编排 (1)`: `flowchart`
 
 参考来源：
 

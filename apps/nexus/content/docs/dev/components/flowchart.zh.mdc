@@ -1,0 +1,114 @@
+---
+title: "Flowchart 流程画布"
+description: "点阵画布上的工作流节点：分类胶囊、卡片插槽、自动贝塞尔连线，可拖拽且始终受控。"
+category: Flow
+status: beta
+since: 0.6.0
+tags: [flow, workflow, canvas, ai]
+syncStatus: reviewed
+verified: true
+---
+# Flowchart 流程画布
+
+## 基础用法
+
+### Flowchart
+
+:::TuffDemoWrapper{demo="FlowchartFlowchartDemo" code-lang="vue" title="订单工作流" description="触发器与条件分支两个节点，连线随卡片高度自动重算；按住卡片可以拖动，落点吸附到点阵。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const nodes = ref([
+    { id: 'trigger', label: 'Trigger', tone: 'violet', x: 240, y: 26 },
+    { id: 'branch', label: 'If / Else', tone: 'orange', x: 240, y: 178 },
+  ])
+
+  const edges = [{ from: 'trigger', to: 'branch' }]
+
+  function place({ id, x, y }) {
+    const node = nodes.value.find(n => n.id === id)
+    if (node) {
+      node.x = x
+      node.y = y
+    }
+  }
+  </script>
+
+  <template>
+    <TxFlowchart :nodes="nodes" :edges="edges" draggable @node-move="place">
+      <template #node="{ node }">
+        <!-- 卡片内容完全由宿主提供 -->
+      </template>
+    </TxFlowchart>
+  </template>
+---
+:::
+
+## 坐标系
+
+`x` 是节点的**水平中心**，不是左边缘——节点用 `translateX(-50%)` 骑在这条中线上，所以同一条竖直流水线上的节点写同一个 `x` 就能对齐，不用先知道卡片有多宽。`y` 是上边缘。两者都是画布内的 CSS 像素。
+
+`grid` 同时是点阵间距和拖拽吸附的步长，默认 `22px`。点阵用 `radial-gradient` 画：圆点落在 1px、渐隐到 1.25px。硬停在 1px 会在栅格尺寸上锯齿成方块，超过约 1.5px 又会变成和卡片抢视线的纹理。
+
+## 连线
+
+`edges` 里的每条连线从 `from` 的**下边缘**画到 `to` 的**上边缘**。卡片高度由内容决定——两行条件比一行触发器高——所以组件用 `ResizeObserver` 实测每张卡的高度再算路径，而不是假设一个值把线头画进卡片里或者悬在卡片下方。
+
+曲线的两个控制点都越过中点并且交叉（各偏 0.55 倍垂距）。竖直对齐的一对因此读作直线，而横向错开的一对仍然是垂直进出卡片，不会像 0.5 那样松垮。
+
+指向画布上不存在的节点的连线会被**跳过**，不会画到原点——否则一条线会横穿整个画布。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `nodes` | `FlowNode[]` | — | 画布上的节点。必填。 |
+| `edges` | `FlowEdge[]` | `[]` | 节点间的连线。 |
+| `height` | `number` | `333` | 画布高度（px）。 |
+| `nodeWidth` | `number` | `290` | 节点默认宽度，可被 `FlowNode.width` 覆盖。 |
+| `grid` | `number` | `22` | 点阵间距，同时是拖拽吸附步长。 |
+| `dots` | `boolean` | `true` | 是否绘制点阵。 |
+| `draggable` | `boolean` | `false` | 是否允许拖拽节点。 |
+| `snap` | `boolean` | `true` | 拖拽时是否吸附到点阵。 |
+| `ariaLabel` | `string` | `'Workflow'` | 画布区域的无障碍名称。 |
+
+`FlowNode` 的字段：`id`、`x`、`y` 必填；`label` 是卡片上方的分类胶囊，`tone` 取 `violet` / `orange` / `accent` / `green` / `red` / `neutral`；`width` 覆盖单个节点宽度；`draggable` 单独关掉某个节点的拖拽。
+
+### Events
+
+| 事件名 | 回调参数 | 说明 |
+|---|---|---|
+| `node-move` | `{ id, x, y }` | 某个节点拖拽结束。组件不会改 `nodes`，宿主要自己写回去这次移动才会留下。 |
+| `node-click` | `{ id, node }` | 节点被点击、或在聚焦时按下 Enter / 空格。 |
+
+### Slots
+
+| 插槽名 | 作用域参数 | 说明 |
+|---|---|---|
+| `node` | `{ node, index }` | 卡片内容。不传则渲染一张空卡。 |
+| `label` | `{ node }` | 替换卡片上方的分类胶囊。 |
+
+## 交互契约
+
+- **始终受控。** 组件不写 `nodes`。拖拽过程中它在内部记一个临时偏移让卡片跟手，松手时清掉偏移并发出 `node-move`；宿主不写回，节点就弹回原位。这一点是刻意的：撤销栈、吸附到别的规则、服务端持久化都应该由宿主决定。
+- **可拖拽节点带 `touch-action: none`。** 否则触摸拖拽会变成滚动页面。
+- **节点可聚焦。** 每个节点是 Tab 停靠点，Enter / 空格触发 `node-click`，焦点环由 `:focus-visible` 给出。
+- 连线画在卡片**下方**，这样卡片的发丝环阴影会盖住线头，而不是让线横穿卡片圆角。
+
+## 最佳实践
+
+- 同一条流水线上的节点写同一个 `x`，让连线退化成直线。
+- 卡片内容自己控制高度，不要给卡片写死 `height`——连线是按实测高度画的，写死会让两者对不上。
+- 分类胶囊的 `tone` 表达的是**步骤种类**（触发、分支、动作），不是状态，所以它用的是 BUI 的强调色集而不是 `--tx-*` 语义色阶。
+
+## Source
+
+- 组件源码：`packages/tuffex/packages/components/src/flowchart/src/TxFlowchart.vue`。
+- 类型：`packages/tuffex/packages/components/src/flowchart/src/types.ts`。
+- 移植自 Beautiful UI（https://www.beautifului.dev）第 16 例 Flowchart，© 2026 Shane Levine，MIT。
+
+<TuffDocSourceLink />
