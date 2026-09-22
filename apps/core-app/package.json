@@ -148,7 +148,7 @@
     "node-pty": "^1.1.0",
     "path-browserify": "^1.0.1",
     "pinia": "catalog:frontend",
-    "pinyin-pro": "^3.28.1",
+    "pinyin-pro": "^3.29.4",
     "plist": "^3.1.0",
     "sharp": "^0.35.4",
     "simple-plist": "1.4.0",
