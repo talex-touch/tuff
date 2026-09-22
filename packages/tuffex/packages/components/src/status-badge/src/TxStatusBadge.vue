@@ -33,17 +33,18 @@ const emit = defineEmits<StatusBadgeEmits>()
 /**
  * Mapping of status tones to their visual properties.
  *
- * The default icons are one outline "circle + glyph" family with a shared stroke weight so
- * every tone carries the same visual mass. A filled success disc next to outlined warning /
- * danger circles reads as "selected vs inactive", a hierarchy the badge does not have.
- * (`i-carbon-warning-filled` is a triangle, so an all-filled family would scatter too.)
+ * The glyphs are solid, not outlined: each one sits knocked out of a filled
+ * disc, so the disc supplies the enclosing circle and an outlined glyph would
+ * draw a second one inside it. `muted` is the exception — it renders as an
+ * empty dashed ring with no glyph at all, which is how a "not started" state
+ * reads as absence rather than as one more filled state.
  */
 const toneMap: Record<StatusTone, ToneMeta> = {
-  success: { color: 'var(--tx-color-success)', icon: 'i-carbon-checkmark-outline' },
-  warning: { color: 'var(--tx-color-warning)', icon: 'i-carbon-warning' },
-  danger: { color: 'var(--tx-color-danger)', icon: 'i-carbon-close-outline' },
+  success: { color: 'var(--tx-color-success)', icon: 'i-carbon-checkmark' },
+  warning: { color: 'var(--tx-color-warning)', icon: 'i-carbon-time' },
+  danger: { color: 'var(--tx-color-danger)', icon: 'i-carbon-close' },
   info: { color: 'var(--tx-color-primary)', icon: 'i-carbon-information' },
-  muted: { color: 'var(--tx-text-color-secondary)', icon: 'i-carbon-circle-dash' },
+  muted: { color: 'var(--tx-text-color-secondary)', icon: '' },
 }
 
 /**
@@ -75,13 +76,17 @@ const toneMeta = computed(() => toneMap[resolvedTone.value])
 
 /**
  * CSS custom properties for dynamic styling.
+ *
+ * `--tx-status-color` tints the label and the fill; `--tx-status-chip` paints
+ * the disc and is a *different, darker* ramp on purpose — see the token comment
+ * in `style/variables.scss`.
  */
 const styleVars = computed(() => {
   const color = toneMeta.value.color
   return {
     '--tx-status-color': color,
-    '--tx-status-bg': `color-mix(in srgb, ${color} 12%, transparent)`,
-    '--tx-status-border': `color-mix(in srgb, ${color} 32%, transparent)`,
+    '--tx-status-bg': `color-mix(in srgb, ${color} 14%, transparent)`,
+    '--tx-status-chip': `var(--tx-status-chip-${resolvedTone.value})`,
   }
 })
 
@@ -90,6 +95,12 @@ const styleVars = computed(() => {
  * Uses custom icon if provided, otherwise uses the default for the tone.
  */
 const iconClass = computed(() => props.icon || toneMeta.value.icon)
+
+/**
+ * `muted` has no glyph, so its disc renders as a dashed outline. A custom
+ * `icon` opts back into the filled disc — the host asked for a symbol.
+ */
+const hollow = computed(() => resolvedTone.value === 'muted' && !props.icon)
 
 const osIconClass = computed(() => {
   switch (props.os) {
@@ -104,8 +115,9 @@ const osIconClass = computed(() => {
   }
 })
 
-/** Whether the pill opens with a glyph — that side then takes the concentric padding, see the style block. */
-const hasIcon = computed(() => Boolean(osIconClass.value || (!props.osOnly && iconClass.value)))
+/** Whether the pill opens with a disc — that side then takes the tighter padding. */
+const hasChip = computed(() => !props.osOnly && (Boolean(iconClass.value) || hollow.value))
+const hasIcon = computed(() => Boolean(osIconClass.value) || hasChip.value)
 
 /**
  * Handles click events on the badge.
@@ -145,33 +157,39 @@ function handleKeydown(event: KeyboardEvent): void {
     @keydown="handleKeydown"
   >
     <i v-if="osIconClass" :class="osIconClass" class="tx-status-badge__icon" aria-hidden="true" />
-    <i
-      v-if="!osOnly && iconClass"
-      :class="iconClass"
-      class="tx-status-badge__icon"
+    <span
+      v-if="hasChip"
+      class="tx-status-badge__chip"
+      :class="{ 'is-hollow': hollow }"
       aria-hidden="true"
-    />
+    >
+      <i v-if="!hollow" :class="iconClass" class="tx-status-badge__glyph" />
+    </span>
     <span class="tx-status-badge__text">{{ text }}</span>
   </div>
 </template>
 
 <style lang="scss">
-// A pill at TxBadge weight. The 8px radius + visible border + 600 weight it used to carry
-// was indistinguishable from a quiet TxButton; the 999px cap and 500 weight put it back
-// in the badge family. The 12% fill / 32% border recipe is shared with TxBadge / TxTag /
-// TxAlert and must not drift here — dark-mode muddiness is a token problem (see the
-// `.dark` block in style/variables.scss), not a recipe problem.
+// A monospace label on a soft tint, with the state's glyph knocked out of a
+// solid disc. The 999px/500-weight pill this replaced read as a quiet TxButton
+// at a glance; the mono face and the square-ish 8px radius give the family its
+// own silhouette, and the disc is what makes the state legible before the text
+// is read.
+//
+// The fill stays a tint of `--tx-status-color` (shared with TxBadge / TxTag /
+// TxAlert) but the border is gone: the tint and the disc already separate the
+// badge from the page, and a hairline on top of both read as a third edge.
 .tx-status-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 999px;
+  border-radius: 8px;
+  font-family: var(--tx-font-mono, ui-monospace, "SF Mono", monospace);
   font-size: 12px;
   font-weight: 500;
   color: var(--tx-status-color, var(--tx-text-color-primary));
-  background: var(--tx-status-bg, color-mix(in srgb, currentColor 12%, transparent));
-  border: 1px solid var(--tx-status-border, color-mix(in srgb, currentColor 32%, transparent));
+  background: var(--tx-status-bg, color-mix(in srgb, currentColor 14%, transparent));
   transition: background-color 0.25s ease;
 
   // Keyed off the role rather than a class: `interactive` is derived from
@@ -187,14 +205,7 @@ function handleKeydown(event: KeyboardEvent): void {
     outline-offset: 2px;
   }
 
-  // Sized with the text rather than a fixed 14px, and boxed at exactly one em:
-  // icon presets draw the glyph in a 1.2× box (nexus runs presetIcons at 1.2),
-  // which put a 14.4px circle beside 12px letters — a third taller than the
-  // capitals, 3px off the top and bottom edges while the text sat 4px in, and the
-  // first thing the eye landed on. At one em the glyph's circle is about a fifth
-  // over cap height, where an inline icon reads as part of the word rather than a
-  // badge on the badge. The `[class]` hook outranks the preset's own box at any
-  // stylesheet order.
+  // The OS marker is a bare glyph, not a disc: it names a platform, not a state.
   &__icon {
     flex: none;
     font-size: 1em;
@@ -206,35 +217,76 @@ function handleKeydown(event: KeyboardEvent): void {
     }
   }
 
+  // The disc. Its fill comes from `--tx-status-chip-*`, a darker ramp than the
+  // label's hue, because a knocked-out glyph on `--tx-color-*` measures
+  // 1.67–2.90:1 — under the 3:1 minimum for a graphical object. Against the
+  // chip ramp the worst pairing across all four themes is 3.30:1 (dark success);
+  // light theme runs 5.02–7.73:1. High-contrast dark inverts the pairing rather
+  // than darkening the disc, since its palette is light-on-dark by design.
+  &__chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    // Driven by a custom property, not a per-size rule block: a host that
+    // compresses the badge (smaller padding and font-size for a dense table
+    // row) has to be able to bring the disc down with it. It used to scale off
+    // the text automatically, and two callers relied on that.
+    width: var(--tx-status-chip-size, 18px);
+    height: var(--tx-status-chip-size, 18px);
+    font-size: var(--tx-status-chip-size, 18px);
+    border-radius: 50%;
+    background: var(--tx-status-chip, var(--tx-status-color));
+    color: var(--tx-status-chip-on, #ffffff);
+
+    // "Not started" is an absence, so it reads as an empty ring rather than one
+    // more filled disc competing with the states that actually happened.
+    &.is-hollow {
+      background: transparent;
+      border: 1.5px dashed var(--tx-status-chip, currentColor);
+    }
+  }
+
+  &__glyph {
+    // Sized off the disc rather than the text: the glyph has to sit inside a
+    // circle, not align with the baseline.
+    font-size: 0.62em;
+    line-height: 1;
+
+    &[class] {
+      width: 0.62em;
+      height: 0.62em;
+    }
+  }
+
   &__text {
     line-height: 1;
   }
 
   &--sm {
-    padding: 2px 8px;
+    --tx-status-chip-size: 15px;
+
+    padding: 4px 8px;
   }
 
-  // Horizontal padding stays >= 10px so the pill's round end caps clear the icon.
   &--md {
-    padding: 3px 10px;
+    --tx-status-chip-size: 18px;
+
+    padding: 5px 10px;
   }
 
-  // A pill that opens with a glyph puts the glyph concentric with its round end
-  // cap: the cap is a circle of radius height/2 centred height/2 in from the
-  // edge, so a leading padding equal to the vertical padding puts the one-em
-  // icon's centre exactly on that circle's centre and the gap between glyph and
-  // edge is the same all the way round — the left and the top read as one
-  // distance. The text side then matches it rather than keeping the 10px of a
-  // text-only pill: letters get two more px than the glyph, because their
-  // square corners meet the cap's curve where a circle's do not.
+  // A badge that opens with a disc tightens the leading inset so the disc sits
+  // the same distance from the edge as it does from the top and bottom.
   &--sm.has-icon {
-    padding-left: 2px;
-    padding-right: 4px;
+    padding-left: 4px;
   }
 
   &--md.has-icon {
-    padding-left: 3px;
-    padding-right: 5px;
+    padding-left: 5px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 }
 </style>
