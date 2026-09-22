@@ -50,6 +50,36 @@ code: |
 ---
 :::
 
+### Unified Diff
+
+Passing `diff` switches from the listing to a diff: removed rows take a soft red tint with a hatched gutter marker, added rows a soft green tint with a solid one, and the header gains `+N −N` on the right. **The hatching is not decoration** — those two tints are exactly the pairing a red/green-blind reader cannot separate, so the marker's shape has to carry the distinction on its own.
+
+A removed row and the added row replacing it **share a gutter number** (each is line 4 of its own revision), which is why numbers are given per row rather than counted by the component.
+
+Every row, removed ones included, goes to Shiki together. The text is briefly not valid source — two versions of one statement in a row — but a highlighter recovers per line, whereas highlighting each row alone loses all surrounding context and mis-colours anything spanning lines.
+
+The copy button always yields `code`, never the diff: a diff with its markers stripped is neither revision, so the host states which text is copyable.
+
+:::TuffDemoWrapper{demo="CodeStreamDiffDemo" code-lang="vue" title="Unified diff" description="One replaced line plus one addition; the gutter number repeats at the replacement."}
+---
+code: |
+  <script setup lang="ts">
+  const CODE = `...the new revision in full, for the copy button...`
+
+  const diff = [
+    { number: 3, content: '  const base = await dairy.fetch({ flavor })' },
+    { number: 4, kind: 'removed', content: '  await freezer.store(base, { temp: "-14C" })' },
+    { number: 4, kind: 'added', content: '  await freezer.store(base, { temp: "-16C" })' },
+    { number: 5, kind: 'added', content: '  if (!base.approved) return null' },
+  ]
+  </script>
+
+  <template>
+    <TxCodeStream :code="CODE" :diff="diff" lang="ts" filename="churn.ts" />
+  </template>
+---
+:::
+
 ## Highlighting and Theming
 
 Highlighting runs through the repository's existing shiki runtime — the same lazy singleton `TxCodeBlock` uses — as a pure async enhancement: the plain-text rendering is always correct, and colour arrives when it arrives. With no `lang`, nothing is highlighted and shiki is never loaded.
@@ -76,6 +106,15 @@ The component splits shiki's output back into lines and pairs each with a number
 | `copyLabel` | `string` | `'Copy'` | Copy button text. |
 | `copiedLabel` | `string` | `'Copied'` | Text shown after a successful copy. |
 | `minHeight` | `number \| string` | — | Floor for the code area. Defaults to the full listing's height. |
+| `diff` | `CodeDiffRow[]` | — | Unified diff rows. When present these render instead of `code`, and the header gains an added/removed tally. |
+
+### CodeDiffRow
+
+| Field | Type | Description |
+|---|---|---|
+| `content` | `string` | The row's text, **without** any `+` / `-` marker — the gutter carries that |
+| `kind` | `'context' \| 'added' \| 'removed'` | Defaults to `'context'` |
+| `number` | `number` | Gutter number. A removed row and the added row replacing it normally share one, which is why it is given per row rather than counted; omit to leave that gutter blank |
 
 ### Events
 

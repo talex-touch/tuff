@@ -533,8 +533,15 @@ function onKeydown(ev: KeyboardEvent) {
   border-radius: var(--tx-card-radius, 14px);
   padding: var(--tx-card-padding, 12px);
   box-sizing: border-box;
-  transition: box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  // `scale` is the standalone property, not a `transform` function, and that is
+  // load-bearing: `transform` here is driven by a rAF spring (`motionX/Y`), so
+  // putting a transition on it would fight the per-frame writes and turn the
+  // inertial follow sticky. The standalone `scale` composites separately and
+  // can be eased on its own.
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease,
+    scale 0.13s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
   transform: translate3d(var(--tx-card-dx, 0px), var(--tx-card-dy, 0px), 0);
+  scale: var(--tx-card-press-scale, 1);
   will-change: transform;
   touch-action: pan-y;
 
@@ -580,6 +587,17 @@ function onKeydown(ev: KeyboardEvent) {
     cursor: pointer;
   }
 
+  // A card that says it is pressable has to answer the press. Only clickable
+  // cards react: giving every card a press state would promise an action that
+  // a plain surface does not have.
+  //
+  // 0.985 rather than something visible-on-paper: the card is a large surface,
+  // and the same ratio that reads as a nudge on a button reads as the whole
+  // page lurching here.
+  &.is-clickable:active:not(.is-disabled) {
+    --tx-card-press-scale: 0.985;
+  }
+
   &.is-clickable:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
     outline-offset: 2px;
@@ -588,6 +606,14 @@ function onKeydown(ev: KeyboardEvent) {
   &.is-disabled {
     opacity: 0.65;
     cursor: not-allowed;
+  }
+
+  // Required of any declared transition, and the card had none before the press
+  // state was added. The press scale is *kept* and only its easing dropped:
+  // it reports "this went down", which a reduced-motion user needs as much as
+  // anyone — what they asked to be spared is the travel, not the feedback.
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 }
 

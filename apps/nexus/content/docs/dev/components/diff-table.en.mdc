@@ -68,6 +68,22 @@ code: |
 | `play` | `'auto' \| 'manual' \| 'settled'` | `'auto'` | Playback mode |
 | `stageDelays` | `[number, number, number]` | `[800, 1000, 1000]` | The three stage lengths, in milliseconds |
 | `duration` | `number` | `400` | Tween length for the tint and the reveal, in milliseconds |
+| `selectable` | `boolean` | `false` | Render an accept control on every changed row, and make the row itself toggle it |
+| `modelValue` | `(string \| number)[]` | - | `v-model` — keys of the accepted rows. Bound, the component is fully controlled; omitted, it tracks toggles internally and a row streamed in later arrives accepted |
+| `footer` | `boolean` | `false` | Render the summary footer (counts left, apply button right) |
+| `hint` | `string` | - | Hint at the right end of the title bar, e.g. "Click changed rows to toggle" |
+| `summaryFormatter` | `(counts: DiffTableCounts) => string` | see below | Footer summary. Defaults to `2 removals · 1 addition` |
+| `applyLabelFormatter` | `(count: number) => string` | see below | Apply button label. Defaults to `Apply N changes` |
+| `rowToggleLabelFormatter` | `(accepted, change) => string` | see below | Accessible name of a row control. Defaults to `Accept / Reject this change` |
+
+All three formatters ship English defaults: TuffEx carries no message catalog, so pluralisation and translation belong to the host.
+
+### DiffTableCounts
+
+| Field | Type | Description |
+|------|------|------|
+| `added` / `removed` / `modified` | `number` | Counts **accepted rows only**, so the summary reports what pressing apply would do rather than what the diff proposed |
+| `total` | `number` | Sum of the three |
 
 ### DiffTableColumn
 
@@ -96,12 +112,17 @@ code: |
 |------|------|------|
 | `stageChange` | `(stage: number)` | Fires on every stage transition |
 | `settled` | `()` | Fires once the final stage is reached, whatever route got it there |
+| `update:modelValue` | `(keys)` | The accepted set changed. Emitted in **row order**, not toggle order |
+| `toggle` | `({ key, accepted })` | One row was accepted or rejected |
+| `apply` | `(keys)` | The apply button was pressed, with the keys still accepted at that moment |
 
 ### Slots
 
 | Name | Description |
 |------|------|
 | `title` | Replaces the card bar heading |
+| `hint` | Replaces the hint at the right end of the title bar |
+| `footer` | Replaces the whole footer; receives `{ counts, accepted }` |
 | `cell-<columnKey>` | Custom cell; receives `{ row, column, value, change, index }`, so the slot can react to the row's own state |
 
 ### Expose

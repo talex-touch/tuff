@@ -50,7 +50,9 @@ code: |
       @accept="run"
     >
       <template #body="{ option }">
-        Reorder waffle cones from <code>cone_king</code> with lead time <code>7_days</code>.
+        Reorder waffle cones from
+        <mark style="--tx-entity-color: #ef720c">Cone King</mark>
+        with lead time <code class="is-success">7 days</code>.
       </template>
     </TxRecommendationCard>
   </template>
@@ -100,7 +102,7 @@ code: |
 
 | Slot | Scope | Description |
 |------|------|-------------|
-| `body` | `{ option }` | Replaces the rationale. Rich content — inline `code`, emphasis — goes here. |
+| `body` | `{ option }` | Replaces the rationale. Rich content goes here: `code` for identifiers, `mark` for entities. |
 | `meter` | `{ option }` | Replaces a meter, used in the footer and in every drawer row. |
 | `footer-extra` | — | Inserted on the left of the footer, before the actions. |
 
@@ -111,7 +113,10 @@ code: |
 - **The collapsed drawer is `inert`.** A `0fr` grid only squeezes the height to zero, leaving its buttons in the tab order; the component marks it `inert` to take them out of the accessibility tree and the focus order. This is a deliberate improvement over upstream.
 - `accepted` only swaps text and colour and has **no undo**. Real workflows usually need one, so it is a controlled prop and the host owns the retraction.
 - The rationale has a minimum height (48px by default) so the card does not jump as options of different lengths swap in. Line heights differ by script; tune it with `--tx-bui-recommendation-card-body-min-height`.
-- `<code>` inside the rationale is styled by the component: an accent tint by default, switched to the warning tone with the `is-warning` class. Filling the `body` slot with rich content needs no styling of its own.
+- Both `<code>` and `<mark>` inside the rationale are styled by the component, so filling the `body` slot with rich content needs no styling of its own:
+  - `<code>` is a **real identifier** — a SKU, a filename, a command. An accent tint by default, switched with the `is-success` / `is-warning` classes.
+  - `<mark>` is an **entity the suggestion refers to** — a supplier, a file, a person. It renders as a pill with a colour dot, not monospaced, because this is a name to read rather than a string to type. The host supplies the dot colour through `--tx-entity-color` (only the host knows what colour a given supplier is); without it the dot falls back to neutral grey.
+  - `<mark>` rather than a convention class, because the element already means "text singled out for reference" and carries that to a screen reader instead of relying on colour.
 - `tone` takes a raw CSS colour string and **does not follow the theme**; prefer `confidence`.
 - The drawer eases more softly than the rest of this family (`cubic-bezier(0.16, 1, 0.3, 1)`). That difference is deliberate upstream and is preserved.
 
@@ -127,7 +132,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/recommendation-card/src/TxRecommendationCard.vue`.
 - Types: `packages/tuffex/packages/components/src/recommendation-card/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/recommendation-card/__tests__/recommendation-card.test.ts` (14 cases) covers promoting the first option by default, the `confidence` to segments-and-colour mapping, `signal` / `tone` overrides, the drawer listing only alternatives, paired `aria-expanded` / `aria-controls`, `inert` while collapsed, promotion clearing the confirmed state, `ctaTone` mapping, controlled `modelValue` / `accepted` precedence, the `cta` fallback, an empty list rendering nothing, and rich content through the `body` slot.
+- **Verified coverage:** `packages/tuffex/packages/components/src/recommendation-card/__tests__/recommendation-card.test.ts` (14 cases) and `recommendation-card-inline.test.ts` (9 compiled-CSS contracts: `code` staying monospaced with its semantic variants on the BUI token layer, `mark` as a non-mono pill, the engine default `mark` highlight being overridden, and the dot reading `--tx-entity-color` with a fallback) covers promoting the first option by default, the `confidence` to segments-and-colour mapping, `signal` / `tone` overrides, the drawer listing only alternatives, paired `aria-expanded` / `aria-controls`, `inert` while collapsed, promotion clearing the confirmed state, `ctaTone` mapping, controlled `modelValue` / `accepted` precedence, the `cta` fallback, an empty list rendering nothing, and rich content through the `body` slot.
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />

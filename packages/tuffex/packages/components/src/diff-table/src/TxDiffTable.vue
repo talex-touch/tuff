@@ -1,6 +1,6 @@
 <script setup lang="ts" generic="T">
 // Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
-import type { DiffChangeKind, DiffTableColumn, DiffTableEmits, DiffTableProps, DiffTableRow } from './types'
+import type { DiffChangeKind, DiffTableColumn, DiffTableCounts, DiffTableEmits, DiffTableProps, DiffTableRow } from './types'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 defineOptions({ name: 'TxDiffTable' })
@@ -11,6 +11,17 @@ const props = withDefaults(defineProps<DiffTableProps<T>>(), {
   play: 'auto',
   stageDelays: () => [800, 1000, 1000],
   duration: 400,
+  selectable: false,
+  footer: false,
+  // Vue hands an absent prop to the component as `undefined` only if the default
+  // says so — for arrays the factory would run and produce `[]`, which is a
+  // legitimate "nothing accepted" value and would make the uncontrolled branch
+  // unreachable.
+  modelValue: undefined,
+  hint: '',
+  summaryFormatter: undefined,
+  applyLabelFormatter: undefined,
+  rowToggleLabelFormatter: undefined,
 })
 
 const emit = defineEmits<DiffTableEmits>()
@@ -18,6 +29,10 @@ const emit = defineEmits<DiffTableEmits>()
 defineSlots<{
   /** Replaces the card bar heading. */
   title?: () => any
+  /** Replaces the hint at the right end of the title bar. */
+  hint?: () => any
+  /** Replaces the whole footer. */
+  footer?: (props: { counts: DiffTableCounts, accepted: (string | number)[] }) => any
   /** Per-column cell body. `change` lets the slot react to the row's own state. */
   [key: `cell-${string}`]: (props: {
     row: DiffTableRow<T>
@@ -119,8 +134,24 @@ function trackOf(column: DiffTableColumn<T>): string {
 
 // The appended row cannot be a <tr> (a table row has no height to animate), so
 // it lives in a colspan cell whose inner grid has to line up with the columns.
-// Deriving both tracks and <colgroup> from `columns` keeps that one truth.
-const gridTemplateColumns = computed(() => props.columns.map(trackOf).join(' '))
+// Deriving both tracks and <colgroup> from `columns` keeps that one truth — the
+// accept control is a real extra column, so it has to join both.
+const SELECT_TRACK = '44px'
+
+const gridTemplateColumns = computed(() => {
+  const tracks = props.columns.map(trackOf)
+  if (!props.selectable)
+    return tracks.join(' ')
+  // The control column is a fixed strip, and a percentage set that already
+  // totals 100% would push it past the grid's right edge — where `overflow:
+  // hidden` eats it, so the appended row silently loses its control while every
+  // <tr> above keeps one. Each percentage track gives back an equal share.
+  const share = `${SELECT_TRACK} / ${tracks.length}`
+  const shrunk = tracks.map(track => (track.endsWith('%') ? `calc(${track} - ${share})` : track))
+  return `${shrunk.join(' ')} ${SELECT_TRACK}`
+})
+
+const columnSpan = computed(() => props.columns.length + (props.selectable ? 1 : 0))
 
 function changeOf(row: DiffTableRow<T>): DiffChangeKind {
   return row.change ?? 'unchanged'
@@ -159,15 +190,118 @@ const shellStyle = computed(() => ({
   '--tx-bui-diff-table-duration': `${props.duration}ms`,
 }))
 
+// ── Accept / reject bookkeeping ──────────────────────────────────────────────
+//
+// Two modes on one surface. With `modelValue` bound the component is fully
+// controlled and never writes. Without it, it tracks *rejections* rather than
+// acceptances, so a row streamed in later arrives accepted like its neighbours
+// instead of silently defaulting to off.
+
+const internalRejected = ref<Set<string | number>>(new Set())
+
+const changedKeys = computed(() =>
+  props.rows.filter(row => changeOf(row) !== 'unchanged').map(row => row.key),
+)
+
+const acceptedKeys = computed<(string | number)[]>(() => {
+  if (props.modelValue !== undefined)
+    return props.modelValue
+  return changedKeys.value.filter(key => !internalRejected.value.has(key))
+})
+
+const acceptedSet = computed(() => new Set(acceptedKeys.value))
+
+function isAccepted(key: string | number): boolean {
+  return acceptedSet.value.has(key)
+}
+
+function toggleRow(row: DiffTableRow<T>): void {
+  const change = changeOf(row)
+  if (!props.selectable || change === 'unchanged')
+    return
+
+  const key = row.key
+  const accepted = !isAccepted(key)
+  // Rebuild from `changedKeys` rather than appending, so the emitted array
+  // keeps row order instead of toggle order.
+  const nextKeys = accepted
+    ? changedKeys.value.filter(candidate => candidate === key || acceptedSet.value.has(candidate))
+    : acceptedKeys.value.filter(candidate => candidate !== key)
+
+  if (props.modelValue === undefined) {
+    const next = new Set(internalRejected.value)
+    if (accepted)
+      next.delete(key)
+    else
+      next.add(key)
+    internalRejected.value = next
+  }
+
+  emit('update:modelValue', nextKeys)
+  emit('toggle', { key, accepted })
+}
+
+/** Tallies only accepted rows, so the footer reports what apply would do. */
+const counts = computed<DiffTableCounts>(() => {
+  let added = 0
+  let removed = 0
+  let modified = 0
+  for (const row of props.rows) {
+    if (!acceptedSet.value.has(row.key))
+      continue
+    const change = changeOf(row)
+    if (change === 'added')
+      added += 1
+    else if (change === 'removed')
+      removed += 1
+    else if (change === 'modified')
+      modified += 1
+  }
+  return { added, removed, modified, total: added + removed + modified }
+})
+
+function defaultSummary(tally: DiffTableCounts): string {
+  const parts: string[] = []
+  if (tally.removed)
+    parts.push(`${tally.removed} removal${tally.removed === 1 ? '' : 's'}`)
+  if (tally.added)
+    parts.push(`${tally.added} addition${tally.added === 1 ? '' : 's'}`)
+  if (tally.modified)
+    parts.push(`${tally.modified} change${tally.modified === 1 ? '' : 's'}`)
+  return parts.join(' · ')
+}
+
+const summaryText = computed(() => (props.summaryFormatter ?? defaultSummary)(counts.value))
+
+const applyLabel = computed(() => {
+  const total = counts.value.total
+  if (props.applyLabelFormatter)
+    return props.applyLabelFormatter(total)
+  return `Apply ${total} change${total === 1 ? '' : 's'}`
+})
+
+function rowToggleLabel(accepted: boolean, change: DiffChangeKind): string {
+  if (props.rowToggleLabelFormatter)
+    return props.rowToggleLabelFormatter(accepted, change)
+  return accepted ? 'Reject this change' : 'Accept this change'
+}
+
+function onApply(): void {
+  emit('apply', acceptedKeys.value)
+}
+
 defineExpose({ play, reset, settle, stage })
 </script>
 
 <template>
   <div class="tx-bui-diff-table" :style="shellStyle">
     <div class="tx-bui-diff-table__shell">
-      <div v-if="title || $slots.title" class="tx-bui-diff-table__bar">
+      <div v-if="title || $slots.title || hint || $slots.hint" class="tx-bui-diff-table__bar">
         <span class="tx-bui-diff-table__title">
           <slot name="title">{{ title }}</slot>
+        </span>
+        <span v-if="hint || $slots.hint" class="tx-bui-diff-table__hint">
+          <slot name="hint">{{ hint }}</slot>
         </span>
       </div>
 
@@ -178,6 +312,7 @@ defineExpose({ play, reset, settle, stage })
             :key="column.key"
             :style="column.width === undefined ? undefined : { width: trackOf(column) }"
           >
+          <col v-if="selectable" :style="{ width: SELECT_TRACK }">
         </colgroup>
         <thead>
           <tr>
@@ -190,12 +325,15 @@ defineExpose({ play, reset, settle, stage })
             >
               {{ column.title }}
             </th>
+            <th v-if="selectable" scope="col" class="tx-bui-diff-table__th">
+              <span class="tx-bui-diff-table__sr">{{ rowToggleLabel(false, 'modified') }}</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           <template v-for="entry in bodyRows" :key="entry.row.key">
             <tr v-if="entry.change === 'added'" class="tx-bui-diff-table__added">
-              <td :colspan="columns.length" class="tx-bui-diff-table__added-cell">
+              <td :colspan="columnSpan" class="tx-bui-diff-table__added-cell">
                 <div class="tx-bui-diff-table__reveal" :class="{ 'is-open': expanded }">
                   <div class="tx-bui-diff-table__reveal-inner">
                     <div
@@ -221,12 +359,29 @@ defineExpose({ play, reset, settle, stage })
                           {{ formatCell(entry.row, column, entry.index) }}
                         </slot>
                       </span>
+                      <span v-if="selectable" class="tx-bui-diff-table__cell is-select">
+                        <button
+                          type="button"
+                          class="tx-bui-diff-table__accept is-added"
+                          :class="{ 'is-on': isAccepted(entry.row.key) }"
+                          :aria-pressed="isAccepted(entry.row.key)"
+                          :aria-label="rowToggleLabel(isAccepted(entry.row.key), entry.change)"
+                          @click.stop="toggleRow(entry.row)"
+                        >
+                          <i class="i-carbon-checkmark" aria-hidden="true" />
+                        </button>
+                      </span>
                     </div>
                   </div>
                 </div>
               </td>
             </tr>
-            <tr v-else class="tx-bui-diff-table__row" :class="rowClass(entry.change)">
+            <tr
+              v-else
+              class="tx-bui-diff-table__row"
+              :class="[rowClass(entry.change), { 'is-toggleable': selectable && entry.change !== 'unchanged' }]"
+              @click="toggleRow(entry.row)"
+            >
               <td
                 v-for="column in columns"
                 :key="column.key"
@@ -244,10 +399,37 @@ defineExpose({ play, reset, settle, stage })
                   {{ formatCell(entry.row, column, entry.index) }}
                 </slot>
               </td>
+              <td v-if="selectable" class="tx-bui-diff-table__cell is-select">
+                <button
+                  v-if="entry.change !== 'unchanged'"
+                  type="button"
+                  class="tx-bui-diff-table__accept"
+                  :class="[`is-${entry.change}`, { 'is-on': isAccepted(entry.row.key) }]"
+                  :aria-pressed="isAccepted(entry.row.key)"
+                  :aria-label="rowToggleLabel(isAccepted(entry.row.key), entry.change)"
+                  @click.stop="toggleRow(entry.row)"
+                >
+                  <i class="i-carbon-checkmark" aria-hidden="true" />
+                </button>
+              </td>
             </tr>
           </template>
         </tbody>
       </table>
+
+      <slot name="footer" :counts="counts" :accepted="acceptedKeys">
+        <div v-if="footer" class="tx-bui-diff-table__foot">
+          <span class="tx-bui-diff-table__summary">{{ summaryText }}</span>
+          <button
+            type="button"
+            class="tx-bui-diff-table__apply"
+            :disabled="counts.total === 0"
+            @click="onApply"
+          >
+            {{ applyLabel }}
+          </button>
+        </div>
+      </slot>
     </div>
   </div>
 </template>
@@ -286,6 +468,115 @@ defineExpose({ play, reset, settle, stage })
   color: var(--tx-bui-ink, #1f2124);
 }
 
+// Secondary to the title, and it names an affordance rather than content, so it
+// takes the muted ink and drops a step in size.
+.tx-bui-diff-table__hint {
+  font-size: 11.5px;
+  color: var(--tx-bui-ink-3, #9a9da3);
+}
+
+// Never `display: none` — that drops the node out of the a11y tree, which is
+// the opposite of what this is for.
+.tx-bui-diff-table__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.tx-bui-diff-table__row.is-toggleable {
+  cursor: pointer;
+}
+
+.tx-bui-diff-table__cell.is-select {
+  width: 44px;
+  padding-right: 10px;
+  text-align: right;
+  vertical-align: middle;
+}
+
+// A filled disc in the row's own tone. White on a solid semantic fill is not a
+// supported pairing in this library (see tuffex-design-rules.md), so the glyph
+// is the row's tint — the same near-white the row is already painted with —
+// which reads as a knockout while keeping the contrast the tint already has.
+.tx-bui-diff-table__accept {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--tx-bui-radius-chip, 6px);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--tx-bui-line-strong, #e0e2e5);
+  color: transparent;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-bui-accent, #0285ff);
+    outline-offset: 2px;
+  }
+
+  &.is-on {
+    box-shadow: none;
+  }
+
+  &.is-on.is-removed,
+  &.is-on.is-modified {
+    background: var(--tx-bui-red, #e3474c);
+    color: var(--tx-bui-red-tint, #fcecec);
+  }
+
+  &.is-on.is-added {
+    background: var(--tx-bui-green, #189a4d);
+    color: var(--tx-bui-green-tint, #e8f5ed);
+  }
+}
+
+.tx-bui-diff-table__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  // A footer that scrolls content past it is separated by a line, not a shadow.
+  border-top: 1px solid var(--tx-bui-line, #ecedef);
+}
+
+.tx-bui-diff-table__summary {
+  font-size: 12px;
+  color: var(--tx-bui-ink-2, #62656b);
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-bui-diff-table__apply {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tx-bui-accent, #0285ff);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+
+  &:disabled {
+    background: var(--tx-bui-hover-2, #e7e9eb);
+    color: var(--tx-bui-ink-3, #9a9da3);
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-bui-accent, #0285ff);
+    outline-offset: 2px;
+  }
+}
+
 .tx-bui-diff-table__table {
   width: 100%;
   table-layout: fixed;
@@ -308,9 +599,20 @@ defineExpose({ play, reset, settle, stage })
 
   font-size: 12.5px;
   color: var(--tx-bui-ink-2, #62656b);
+  // Cells clip rather than wrap: a wrapped value grows the row and knocks the
+  // whole table out of its rhythm, and upstream truncates here too. The
+  // `is-select` cell opts back out — it holds a fixed-size control, not text.
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   transition:
     color var(--tx-bui-diff-table-duration, 400ms) var(--tx-transition-function, cubic-bezier(0.4, 0, 0.2, 1)),
     text-decoration-color var(--tx-bui-diff-table-duration, 400ms) var(--tx-transition-function, cubic-bezier(0.4, 0, 0.2, 1));
+
+  &.is-select {
+    overflow: visible;
+    text-overflow: clip;
+  }
 }
 
 .tx-bui-diff-table__cell:first-child {

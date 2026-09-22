@@ -92,14 +92,15 @@ function onAccept(option: { key: string, short: string }) {
       :accepted-label="copy.acceptedLabel"
       @accept="onAccept"
     >
-      <!-- Rich rationale lives in the slot; inline `code` picks up the tinted
-           treatment from the component's own stylesheet. -->
+      <!-- Rich rationale lives in the slot. `mark` is an entity the suggestion
+           refers to (a supplier), `code` a real identifier — the component's
+           own stylesheet gives each its treatment. -->
       <template #body="{ option }">
         <template v-if="option.key === 'high'">
           {{ locale === 'zh' ? '从' : 'Reorder waffle cones from' }}
-          <code>cone_king</code>
+          <mark style="--tx-entity-color: #ef720c">Cone King</mark>
           {{ locale === 'zh' ? '补货华夫筒，交期' : 'with lead time' }}
-          <code>7_days</code>.
+          <code class="is-success">{{ locale === 'zh' ? '7 天' : '7 days' }}</code>{{ locale === 'zh' ? '。' : '.' }}
         </template>
         <template v-else-if="option.key === 'review'">
           {{ locale === 'zh' ? '旺季把香草换成' : 'Switch vanilla to' }}

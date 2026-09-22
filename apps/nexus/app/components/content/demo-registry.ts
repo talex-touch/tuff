@@ -86,6 +86,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   CheckboxCheckboxVariantsDemo: () => import('./demos/CheckboxCheckboxVariantsDemo.vue'),
   CodeEditorCodeEditorDemo: () => import('./demos/CodeEditorCodeEditorDemo.vue'),
   CodeEditorToolbarDemo: () => import('./demos/CodeEditorToolbarDemo.vue'),
+  CodeStreamDiffDemo: () => import('./demos/CodeStreamDiffDemo.vue'),
   CodeStreamStaticDemo: () => import('./demos/CodeStreamStaticDemo.vue'),
   CodeStreamStreamingDemo: () => import('./demos/CodeStreamStreamingDemo.vue'),
   CollapseBasicDemo: () => import('./demos/CollapseBasicDemo.vue'),

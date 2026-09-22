@@ -46,6 +46,8 @@ function stubContext() {
       calls.push(`fillText(${text})`)
     }),
     stroke: vi.fn(() => calls.push('stroke')),
+    setLineDash: vi.fn((dash: number[]) => calls.push(`setLineDash(${dash.join(',')})`)),
+    globalAlpha: 1,
     lineJoin: '',
     lineCap: '',
     lineWidth: 0,
@@ -203,6 +205,8 @@ describe('sparkChart drawing', () => {
     activeIndex: null,
     activeColor: '#62656b',
     revealProgress: 1,
+    baseline: false,
+    endpointRadius: 0,
   }
 
   it('scales by dpr, clears, then strokes one path per series', () => {
@@ -223,6 +227,103 @@ describe('sparkChart drawing', () => {
     expect(ctx.lineWidth).toBe(2.25)
     // Identity restored so anything painting after us is not silently scaled.
     expect(calls.at(-1)).toBe('setTransform(1,0,0,1,0,0)')
+  })
+
+
+  it('draws no baseline or endpoint unless asked', () => {
+    const { ctx, calls } = stubContext()
+
+    drawSparkChart(ctx as unknown as CanvasRenderingContext2D, {
+      ...base,
+      series: [{ color: '#f00', points: [{ x: 0, y: 0 }, { x: 10, y: 10 }] }],
+    })
+
+    expect(calls.filter(c => c.startsWith('setLineDash'))).toHaveLength(0)
+    expect(calls).not.toContain('arc')
+  })
+
+  it('rules a dashed baseline at each series own starting value', () => {
+    const { ctx, calls } = stubContext()
+
+    drawSparkChart(ctx as unknown as CanvasRenderingContext2D, {
+      ...base,
+      baseline: true,
+      series: [
+        { color: '#f00', points: [{ x: 0, y: 8 }, { x: 10, y: 30 }] },
+        { color: '#0f0', points: [{ x: 0, y: 40 }, { x: 10, y: 12 }] },
+      ],
+    })
+
+    // One rule per series, each starting at that series' first sample — not a
+    // single shared zero line, because two series rarely share a scale.
+    expect(calls.filter(c => c.startsWith('setLineDash(3,3)'))).toHaveLength(2)
+    expect(calls).toContain('moveTo(0,8)')
+    expect(calls).toContain('moveTo(0,40)')
+    // Drawn to the right edge of the box.
+    expect(calls).toContain('lineTo(100,8)')
+  })
+
+  it('restores the dash and alpha it borrowed', () => {
+    const { ctx, calls } = stubContext()
+
+    drawSparkChart(ctx as unknown as CanvasRenderingContext2D, {
+      ...base,
+      baseline: true,
+      series: [{ color: '#f00', points: [{ x: 0, y: 8 }, { x: 10, y: 30 }] }],
+    })
+
+    // Leaving a dash pattern set would turn the next stroke — the data line —
+    // dashed too.
+    const saves = calls.filter(c => c === 'save').length
+    const restores = calls.filter(c => c === 'restore').length
+    expect(restores).toBe(saves)
+  })
+
+  it('caps each line with a filled dot on its last sample', () => {
+    const { ctx, calls } = stubContext()
+
+    drawSparkChart(ctx as unknown as CanvasRenderingContext2D, {
+      ...base,
+      endpointRadius: 3,
+      series: [
+        { color: '#f00', points: [{ x: 0, y: 0 }, { x: 10, y: 10 }] },
+        { color: '#0f0', points: [{ x: 0, y: 5 }, { x: 10, y: 15 }] },
+      ],
+    })
+
+    expect(calls.filter(c => c === 'arc')).toHaveLength(2)
+    expect(calls.filter(c => c === 'fill')).toHaveLength(2)
+  })
+
+  it('keeps the endpoint inside the reveal clip', () => {
+    const { ctx, calls } = stubContext()
+
+    drawSparkChart(ctx as unknown as CanvasRenderingContext2D, {
+      ...base,
+      endpointRadius: 3,
+      revealProgress: 0.5,
+      series: [{ color: '#f00', points: [{ x: 0, y: 0 }, { x: 10, y: 10 }] }],
+    })
+
+    // Outside the clip the dot would appear at full opacity before the line
+    // has reached it.
+    const clipAt = calls.indexOf('clip')
+    const arcAt = calls.indexOf('arc')
+    const restoreAt = calls.lastIndexOf('restore')
+    expect(clipAt).toBeGreaterThanOrEqual(0)
+    expect(arcAt).toBeGreaterThan(clipAt)
+    expect(arcAt).toBeLessThan(restoreAt)
+  })
+
+  it('skips both for an empty series without throwing', () => {
+    const { ctx } = stubContext()
+
+    expect(() => drawSparkChart(ctx as unknown as CanvasRenderingContext2D, {
+      ...base,
+      baseline: true,
+      endpointRadius: 3,
+      series: [{ color: '#f00', points: [] }],
+    })).not.toThrow()
   })
 
   it('skips painting entirely on a zero-sized box', () => {

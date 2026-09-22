@@ -68,6 +68,22 @@ code: |
 | `play` | `'auto' \| 'manual' \| 'settled'` | `'auto'` | 播放模式 |
 | `stageDelays` | `[number, number, number]` | `[800, 1000, 1000]` | 三段阶段时长（毫秒） |
 | `duration` | `number` | `400` | 染色与展开的补间时长（毫秒） |
+| `selectable` | `boolean` | `false` | 变更行右侧渲染采纳开关，整行也成为切换控件 |
+| `modelValue` | `(string \| number)[]` | - | `v-model` — 当前被采纳的行 key。绑定即全受控；不传则组件内部记录，且新到的变更行默认已采纳 |
+| `footer` | `boolean` | `false` | 渲染底部汇总栏（左侧计数、右侧应用按钮） |
+| `hint` | `string` | - | 卡片头右端的提示文案，如「点选变更行可切换是否采纳」 |
+| `summaryFormatter` | `(counts: DiffTableCounts) => string` | 见下 | 汇总文案。默认 `2 removals · 1 addition` 式英文 |
+| `applyLabelFormatter` | `(count: number) => string` | 见下 | 应用按钮文案。默认 `Apply N changes` |
+| `rowToggleLabelFormatter` | `(accepted, change) => string` | 见下 | 行开关的无障碍名。默认 `Accept / Reject this change` |
+
+三个 formatter 都有英文默认值：TuffEx 不带文案目录，复数与翻译归宿主。
+
+### DiffTableCounts
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `added` / `removed` / `modified` | `number` | **仅统计已采纳的行**，因此汇总反映的是「按下应用会发生什么」，而不是「差异提议了什么」 |
+| `total` | `number` | 三者之和 |
 
 ### DiffTableColumn
 
@@ -96,12 +112,17 @@ code: |
 |------|------|------|
 | `stageChange` | `(stage: number)` | 每次阶段推进时触发 |
 | `settled` | `()` | 到达终态时触发一次，无论由哪条路径抵达 |
+| `update:modelValue` | `(keys)` | 采纳集合变化。**按行序**发出，不是按点击顺序 |
+| `toggle` | `({ key, accepted })` | 单行被采纳或取消 |
+| `apply` | `(keys)` | 应用按钮被按下，带上当时仍被采纳的 key |
 
 ### Slots
 
 | 名称 | 说明 |
 |------|------|
 | `title` | 替换卡片头文案 |
+| `hint` | 替换卡片头右端提示 |
+| `footer` | 替换整个底部栏；接收 `{ counts, accepted }` |
 | `cell-<columnKey>` | 自定义单元格；接收 `{ row, column, value, change, index }`，`change` 让插槽内容自行响应变更态 |
 
 ### Expose

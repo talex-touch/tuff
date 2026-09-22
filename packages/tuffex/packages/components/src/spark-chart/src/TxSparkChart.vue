@@ -27,6 +27,8 @@ const props = withDefaults(defineProps<SparkChartProps>(), {
   domain: undefined,
   activeIndex: undefined,
   interactive: true,
+  baseline: true,
+  endpoint: true,
   animation: true,
   ariaLabel: undefined,
 })
@@ -211,6 +213,8 @@ function redraw(): void {
     activeIndex: activeIndex.value,
     activeColor: readToken('--tx-bui-ink-2', '#62656b'),
     revealProgress: enterProgress.value,
+    baseline: props.baseline,
+    endpointRadius: props.endpoint ? props.lineWidth + 0.6 : 0,
     series: drawable.value,
   })
 }
