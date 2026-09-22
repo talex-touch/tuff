@@ -421,13 +421,17 @@ defineExpose({
 <style lang="scss">
 @use '../../../style/mixins.scss' as *;
 
-@include bui-keyframes-pop-in;
+@include bui-keyframes-spring-in;
 @include bui-keyframes-spin;
 @include bui-keyframes-shimmer-text;
 
 .tx-bui-selection-actions {
   @include bui-scope;
-  @include bui-pop-in(220ms);
+  // Springs in rather than fading up: the bar arrives *at* the user, right
+  // under the text they just selected, so it should read as something that
+  // popped into reach. The plain pop-in's ease-out never crosses its end value
+  // and can only ever "appear".
+  @include bui-spring-in(340ms);
 
   display: flex;
   align-items: center;

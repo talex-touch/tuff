@@ -218,9 +218,46 @@ function accept(): void {
     background: var(--tx-bui-accent-tint, #e9f3ff);
     border-radius: 6px;
 
+    &.is-success {
+      color: var(--tx-bui-green, #189a4d);
+      background: var(--tx-bui-green-tint, #e8f5ed);
+    }
+
     &.is-warning {
       color: var(--tx-bui-orange, #ef720c);
       background: var(--tx-bui-orange-tint, #fdf1e5);
+    }
+  }
+
+  // An entity the suggestion refers to — a supplier, a file, a person.
+  //
+  // `mark` rather than a convention class: the element already means "text
+  // singled out for reference", which is exactly what this is, and it carries
+  // that meaning to a screen reader instead of relying on colour. `code` stays
+  // for real identifiers, so the two read as different kinds of thing rather
+  // than two tints of the same one.
+  //
+  // The dot takes the entity's own colour from `--tx-entity-color`, because
+  // only the host knows what colour a supplier is.
+  .tx-bui-recommendation-card__body mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px 2px 5px;
+    border-radius: 999px;
+    background: var(--tx-bui-hover-2, #e7e9eb);
+    color: var(--tx-bui-ink, #1f2124);
+    font-size: 12.5px;
+    // `mark` ships a yellow highlight by default in every engine.
+    background-color: var(--tx-bui-hover-2, #e7e9eb);
+
+    &::before {
+      content: '';
+      flex: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--tx-entity-color, var(--tx-bui-ink-3, #9a9da3));
     }
   }
 

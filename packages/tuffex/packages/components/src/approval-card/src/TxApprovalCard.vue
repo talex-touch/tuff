@@ -17,6 +17,8 @@ const props = withDefaults(defineProps<ApprovalCardProps>(), {
   sendLabel: 'Send answers',
   nextQuestionLabel: 'Next question',
   nextLabel: 'Next',
+  skippable: false,
+  skipLabel: 'Skip',
   prevLabel: 'Previous',
   dismissLabel: 'Dismiss',
   reopenLabel: 'Open approval',
@@ -208,6 +210,27 @@ function submit(): void {
     goTo(currentIndex.value + 1)
 }
 
+/**
+ * Moves past the current question without answering it.
+ *
+ * Distinct from submitting: it records nothing, so the answer map keeps no
+ * entry for a skipped question and a host can tell "declined to answer" from
+ * "answered and moved on". On the last question it ends the run the same way
+ * submitting does, because there is nowhere further to go.
+ */
+function skip(): void {
+  if (isSent.value)
+    return
+
+  clearAdvance()
+  emit('skip', { questionId: question.value?.id ?? '', index: currentIndex.value })
+
+  if (isLast.value)
+    setSent(true)
+  else
+    goTo(currentIndex.value + 1)
+}
+
 function reset(): void {
   clearAdvance()
   setAnswers({})
@@ -346,6 +369,14 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
 
         <span class="tx-bui-approval-card__actions">
           <slot name="footer-extra" />
+          <button
+            v-if="skippable && !isSent"
+            type="button"
+            class="tx-bui-approval-card__skip"
+            @click="skip"
+          >
+            {{ skipLabel }}
+          </button>
           <button
             v-if="!isSent"
             type="button"
@@ -667,6 +698,31 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
       background: transparent;
       border-width: 2.5px;
       border-color: var(--tx-bui-ink, #1f2124);
+    }
+  }
+
+  // Text, not an icon, and quieter than send: skipping is the secondary way out
+  // of a question, and an icon pair would read as two equal choices.
+  .tx-bui-approval-card__skip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    height: 28px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--tx-bui-radius-chip, 6px);
+    background: transparent;
+    color: var(--tx-bui-ink-3, #9a9da3);
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--tx-bui-ink-2, #62656b);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-bui-accent, #0285ff);
+      outline-offset: 2px;
     }
   }
 

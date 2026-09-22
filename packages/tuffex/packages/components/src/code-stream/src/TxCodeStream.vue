@@ -18,6 +18,7 @@ const props = withDefaults(defineProps<CodeStreamProps>(), {
   copiedLabel: 'Copied',
   revealedLines: undefined,
   minHeight: undefined,
+  diff: undefined,
 })
 
 const emit = defineEmits<{
@@ -37,8 +38,65 @@ defineSlots<{
 
 const resolvedTheme = useAutoTheme(() => props.theme)
 
-const plainLines = computed(() => props.code.split('\n'))
+/**
+ * Diff mode is entered by supplying rows, not by a flag: an empty `diff` array
+ * is a diff with nothing in it, which is a listing.
+ */
+const diffRows = computed(() => props.diff ?? [])
+const isDiff = computed(() => diffRows.value.length > 0)
+
+/**
+ * The rendered text, whichever mode is active. Everything downstream — the
+ * highlighter, the gutter, the reveal, the reserved height — reads this, so the
+ * two modes share one pipeline instead of forking the template.
+ */
+const plainLines = computed(() =>
+  isDiff.value ? diffRows.value.map(row => row.content) : props.code.split('\n'),
+)
 const totalLines = computed(() => plainLines.value.length)
+
+/**
+ * What goes to the highlighter.
+ *
+ * In diff mode this is every row joined, removed and added alike, so a replaced
+ * line is tokenized in both revisions. The text is briefly not valid source —
+ * two versions of one statement in a row — but a highlighter recovers per line,
+ * and the alternative (highlighting each row alone) loses all surrounding
+ * context and mis-colours anything spanning lines.
+ */
+const highlightSource = computed(() =>
+  isDiff.value ? plainLines.value.join('\n') : props.code,
+)
+
+/** Added/removed tally for the header, counted from the rows themselves. */
+const diffTally = computed(() => {
+  let added = 0
+  let removed = 0
+  for (const row of diffRows.value) {
+    if (row.kind === 'added')
+      added += 1
+    else if (row.kind === 'removed')
+      removed += 1
+  }
+  return { added, removed }
+})
+
+/**
+ * Per-row helpers. These stay in the script rather than the template: the
+ * gutter and the row class both need an optional chain plus a fallback, and a
+ * template expression is the wrong place for that.
+ */
+function lineClass(index: number): string | undefined {
+  if (!isDiff.value)
+    return undefined
+  return `is-${diffRows.value[index - 1]?.kind ?? 'context'}`
+}
+
+function gutterLabel(index: number): string | number {
+  if (!isDiff.value)
+    return index
+  return diffRows.value[index - 1]?.number ?? ''
+}
 
 /**
  * Shiki output split back into lines, or null to keep the escaped plain-text
@@ -68,7 +126,7 @@ function splitHighlightedLines(html: string): string[] | null {
 }
 
 watch(
-  [() => props.code, () => props.lang, resolvedTheme],
+  [highlightSource, () => props.lang, resolvedTheme],
   () => {
     if (!props.lang) {
       requestToken += 1
@@ -77,7 +135,7 @@ watch(
     }
 
     const token = ++requestToken
-    void highlightToHtml(props.code, props.lang, resolvedTheme.value).then((html) => {
+    void highlightToHtml(highlightSource.value, props.lang, resolvedTheme.value).then((html) => {
       // A newer request (or a language change) superseded this one in flight.
       if (token !== requestToken)
         return
@@ -103,7 +161,7 @@ watch(revealCount, (count, previous) => {
 })
 
 const hasHeader = computed(
-  () => !!(props.filename || props.langLabel || props.copyable || slots.header || slots.actions),
+  () => !!(props.filename || props.langLabel || props.copyable || isDiff.value || slots.header || slots.actions),
 )
 
 /**
@@ -137,6 +195,10 @@ const bodyStyle = computed(() => {
       </slot>
 
       <span class="tx-bui-code-stream__actions">
+        <span v-if="isDiff" class="tx-bui-code-stream__tally">
+          <span v-if="diffTally.added" class="tx-bui-code-stream__added">+{{ diffTally.added }}</span>
+          <span v-if="diffTally.removed" class="tx-bui-code-stream__removed">−{{ diffTally.removed }}</span>
+        </span>
         <slot name="actions" />
         <TxCopyButton
           v-if="copyable"
@@ -158,8 +220,9 @@ const bodyStyle = computed(() => {
         v-for="index in revealCount"
         :key="index"
         class="tx-bui-code-stream__line"
+        :class="lineClass(index)"
       >
-        <span v-if="lineNumbers" class="tx-bui-code-stream__lineno" aria-hidden="true">{{ index }}</span>
+        <span v-if="lineNumbers" class="tx-bui-code-stream__lineno" aria-hidden="true">{{ gutterLabel(index) }}</span>
         <span class="tx-bui-code-stream__content">
           <!-- Shiki emits markup with the code text already escaped; nothing
                user-controlled reaches v-html unescaped. The plain branch below
@@ -253,6 +316,36 @@ const bodyStyle = computed(() => {
     display: flex;
   }
 
+  // Diff rows tint the whole row and mark the gutter edge, so the change is
+  // legible from the margin without reading the code. The marker is a
+  // background on the row rather than a border, or the 2px would shift every
+  // line's text and the two modes would no longer align.
+  .tx-bui-code-stream__line.is-added,
+  .tx-bui-code-stream__line.is-removed {
+    margin: 0 -10px;
+    padding: 0 8px 0 10px;
+    background-repeat: no-repeat;
+    background-position: 0 0;
+    background-size: 2px 100%;
+  }
+
+  .tx-bui-code-stream__line.is-added {
+    background-color: var(--tx-bui-green-tint, #e8f5ed);
+    background-image: linear-gradient(var(--tx-bui-green, #189a4d), var(--tx-bui-green, #189a4d));
+  }
+
+  // Removed rows get a hatched marker rather than a solid one: colour alone
+  // must not be the carrier, and the two tints are the one pairing a
+  // red/green-blind reader cannot separate.
+  .tx-bui-code-stream__line.is-removed {
+    background-color: var(--tx-bui-red-tint, #fcecec);
+    background-image: repeating-linear-gradient(
+      45deg,
+      var(--tx-bui-red, #e3474c) 0 2px,
+      transparent 2px 4px
+    );
+  }
+
   // 10.5px at 1.86 and 11.5px at 1.7 both land on ~19.5px, so the number sits
   // on the same baseline as its line. Changing either side breaks the pairing.
   .tx-bui-code-stream__lineno {
@@ -268,6 +361,26 @@ const bodyStyle = computed(() => {
   .tx-bui-code-stream__content {
     padding-left: 10px;
     white-space: pre;
+  }
+
+  // The tally reads as a figure, so it takes the mono face and tabular digits
+  // — a two-digit count must not shift the filename beside it.
+  .tx-bui-code-stream__tally {
+    @include bui-tabular-nums;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--tx-bui-font-mono, ui-monospace, monospace);
+    font-size: 11.5px;
+  }
+
+  .tx-bui-code-stream__added {
+    color: var(--tx-bui-green, #189a4d);
+  }
+
+  .tx-bui-code-stream__removed {
+    color: var(--tx-bui-red, #e3474c);
   }
 
   .tx-bui-code-stream__code {

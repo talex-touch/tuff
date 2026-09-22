@@ -330,7 +330,7 @@ code: |
 | `refractionLightSpring` | `boolean` | `true` | 仅 `background='refraction'`：鼠标光源是否使用弹簧过渡 |
 | `refractionLightSpringStiffness` | `number` | `0.18` | 仅 `background='refraction'`：鼠标光源弹簧刚度（建议 0.01-0.55） |
 | `refractionLightSpringDamping` | `number` | `0.84` | 仅 `background='refraction'`：鼠标光源弹簧阻尼（建议 0.55-0.99） |
-| `clickable` | `boolean` | `false` | 启用 hover 反馈；未禁用时允许卡片发出 `click`。 |
+| `clickable` | `boolean` | `false` | 启用 hover 与**按压**反馈；未禁用时允许卡片发出 `click`。按下时缩到 `0.985`——卡片是大面积，按钮上读作轻推的比例放到这里会像整页在晃。只有可点击的卡片有按压态：给每张卡都加会许诺一个普通表面并不具备的动作。 |
 | `loading` | `boolean` | `false` | 显示带 `TxSpinner` 的加载遮罩。 |
 | `loadingSpinnerSize` | `number` | - | spinner 尺寸（px）；省略时默认为 `12`。 |
 | `disabled` | `boolean` | `false` | 应用禁用样式，并阻止卡片发出 click 与指针驱动的 motion 更新。 |

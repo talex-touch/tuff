@@ -50,6 +50,36 @@ code: |
 ---
 :::
 
+### 统一 Diff
+
+传 `diff` 就从清单切到 diff：删除行淡红底配斜纹槽标，新增行淡绿底配实心槽标，头部右侧出现 `+N −N`。**斜纹不是装饰**——两种色调正是红绿色盲最难分辨的一对，所以槽标的形状也要能单独区分。
+
+被删行与替换它的新增行**共享同一个行号**（各自是自己那版的第 4 行），所以行号按行给，不由组件计数。
+
+高亮时所有行（含删除行）一起送进 Shiki：中间那段文本短暂地不是合法源码——同一条语句连着出现两个版本——但高亮器逐行会自己恢复，而逐行单独高亮会丢掉全部上下文、把跨行结构染错。
+
+复制按钮给出的始终是 `code`，不是 diff：把标记剥掉的 diff 既不是旧版也不是新版，所以由宿主明确指定哪一份是可复制的文本。
+
+:::TuffDemoWrapper{demo="CodeStreamDiffDemo" code-lang="vue" title="统一 Diff" description="一行被替换 + 一行新增；行号在替换处重复。"}
+---
+code: |
+  <script setup lang="ts">
+  const CODE = `...新版全文，供复制按钮使用...`
+
+  const diff = [
+    { number: 3, content: '  const base = await dairy.fetch({ flavor })' },
+    { number: 4, kind: 'removed', content: '  await freezer.store(base, { temp: "-14C" })' },
+    { number: 4, kind: 'added', content: '  await freezer.store(base, { temp: "-16C" })' },
+    { number: 5, kind: 'added', content: '  if (!base.approved) return null' },
+  ]
+  </script>
+
+  <template>
+    <TxCodeStream :code="CODE" :diff="diff" lang="ts" filename="churn.ts" />
+  </template>
+---
+:::
+
 ## 高亮与主题
 
 高亮走仓库已有的 shiki 运行时（与 `TxCodeBlock` 同一个懒加载单例），是纯异步增强：纯文本渲染永远是对的，颜色到了再叠上去。不传 `lang` 就不高亮，也不会去加载 shiki。
@@ -76,6 +106,15 @@ code: |
 | `copyLabel` | `string` | `'Copy'` | 复制按钮文案。 |
 | `copiedLabel` | `string` | `'Copied'` | 复制成功后的文案。 |
 | `minHeight` | `number \| string` | — | 代码区高度下限。缺省时按完整清单的高度预留。 |
+| `diff` | `CodeDiffRow[]` | — | 统一 diff 行。传了就渲染 diff 而不是 `code`，头部同时出现增删计数。 |
+
+### CodeDiffRow
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `content` | `string` | 该行文本，**不带** `+` / `-` 标记——标记由行槽承载 |
+| `kind` | `'context' \| 'added' \| 'removed'` | 默认 `'context'` |
+| `number` | `number` | 行号。被删行与替换它的新增行通常共享同一个，所以按行给而不是自动计数；不传则该行行槽留空 |
 
 ### Events
 

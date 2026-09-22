@@ -84,6 +84,8 @@ code: |
 | `customPlaceholder` | `string` | `'Type something…'` | 自由作答输入框占位。可被单题覆盖。 |
 | `customLabel` | `string` | `'Custom answer'` | 自由作答输入框的无障碍名。 |
 | `pagerLabelFormatter` | `(position: number) => string` | `` n => `Go to question ${n}` `` | 分页圆点的无障碍名。 |
+| `skippable` | `boolean` | `false` | 渲染「跳过」，不作答直接进入下一题。**默认关闭**：每题都必答的表单上，给出一条出路比没有更糟。 |
+| `skipLabel` | `string` | `'Skip'` | 跳过控件的文案。 |
 
 ### Events
 
@@ -95,6 +97,7 @@ code: |
 | `update:open` | `(open: boolean)` | 收起 / 展开。 |
 | `answer` | `(answer: ApprovalAnswer)` | 单题作答即刻派发，便于宿主增量落库。 |
 | `submit` | `(answers: ApprovalAnswer[])` | 末题提交，按 `questions` 顺序给出已作答项。 |
+| `skip` | `({ questionId, index })` | 当前题被跳过。**不记录任何答案**，因此答案表能让宿主区分「拒答」与「答了并继续」。 |
 | `dismiss` | `()` | 卡片被关闭。 |
 | `reopen` | `()` | 卡片被重新打开。 |
 
