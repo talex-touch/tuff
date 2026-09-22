@@ -330,6 +330,25 @@ $skeleton-shimmer-duration: 1.2s !default;
   }
 }
 
+// A pop-in that overshoots. Same shape as `bui-keyframes-pop-in`, but it starts
+// further down and smaller so the back-eased curve has room to carry the
+// element past its resting size before settling — the difference between
+// "appears" and "springs in". Kept separate because nine components share the
+// plain pop-in and must not start bouncing.
+@mixin bui-keyframes-spring-in {
+  @keyframes tx-bui-spring-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.88) translateY(8px);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+}
+
 @mixin bui-keyframes-spin {
   @keyframes tx-bui-spin {
     to {
@@ -389,6 +408,23 @@ $skeleton-shimmer-duration: 1.2s !default;
 // Entrance — pairs with bui-keyframes-pop-in.
 @mixin bui-pop-in($duration: 300ms, $delay: 0ms) {
   animation: tx-bui-pop-in $duration var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)) $delay both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+// The springy sibling of `bui-pop-in`, for something that arrives *at* the
+// user — a bar surfacing under a selection, a control that just became
+// available. The back-out curve overshoots past scale 1 and settles, which is
+// what reads as bounce; `--tx-ease-out-strong` cannot, because it never
+// crosses its end value.
+//
+// Note the resting styles are the animation's end state and the element is
+// visible without it, so dropping the animation under reduced motion leaves it
+// correctly placed rather than invisible.
+@mixin bui-spring-in($duration: 340ms, $delay: 0ms) {
+  animation: tx-bui-spring-in $duration var(--tx-ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)) $delay both;
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
