@@ -577,6 +577,7 @@ export default {
       pro: 'Pro',
       ai: 'AI',
       data: 'Data',
+      flow: 'Flow',
     },
     categories: {
       basic: 'General',
@@ -595,6 +596,7 @@ export default {
       aiAgent: 'Agents',
       aiReasoning: 'Reasoning',
       aiContext: 'Context & Insight',
+      flow: 'Flow',
       misc: 'Misc',
     },
     families: {

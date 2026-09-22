@@ -4,19 +4,22 @@
 The docs sidebar (app/components/DocsSidebar.vue) groups component pages purely by
 this field, so it is the single source of truth for sidebar structure.
 
-Categories roll up into five suites via DocsSidebar's CATEGORY_SUITE_MAP:
+Categories roll up into six suites via DocsSidebar's CATEGORY_SUITE_MAP:
 
 - concepts 理念: Foundations (index — doubles as the Concepts overview —, foundations, utils)
 - base 基础组件: BaseSuite, Basic, Form, Layout, Navigation, Data, Feedback, Status
 - pro  进阶套件: ProSuite, Advanced, Effects, Primitives
 - ai   AI 套件:  AiSuite, AiChat, AiAgent, AiReasoning, AiContext
-- data 数据:     Charts, Visualization
+- data 数据:     DataSuite, Charts, Visualization
+- flow 流程:     FlowSuite, Flow
 
 The suite assignment table lives in .trellis/tasks/08-30-docs-suite-split/prd.md;
-keep this file and DocsSidebar.vue in sync. The tuffex entry barrels stay
-base/pro/ai: 'data' is a docs-level split (Visualization components and the
-chart family both import from the pro barrel; the chart family also ships
-behind the @talex-touch/tuffex/charts subpath).
+keep this file, DocsSidebar.vue and app/utils/docs-suites.ts in sync — a doc on
+disk with no entry here makes this script exit with an error. The tuffex entry
+barrels stay base/pro/ai: 'data' and 'flow' are docs-level splits (Visualization
+components and the chart family both import from the pro barrel, with the chart
+family also behind the @talex-touch/tuffex/charts subpath; the flow family ships
+from the ai barrel).
 
 `Foundations`, `BaseSuite`, `ProSuite` and `AiSuite` are special cases: the
 sidebar renders their pages as standalone links (suite overview first) rather
@@ -45,6 +48,7 @@ TAXONOMY: dict[str, list[str]] = {
         "icons",
         "accessibility",
         "utils",
+        "sound",
     ],
     # ── suite: base 基础组件 ──────────────────────────────────────────────
     # Suite overview page: rendered as the suite's first standalone link.
@@ -136,6 +140,7 @@ TAXONOMY: dict[str, list[str]] = {
         "popover",
         "tooltip",
         "toast",
+        "toast-panel",
         "alert",
         "progress",
         "progress-bar",
@@ -216,6 +221,7 @@ TAXONOMY: dict[str, list[str]] = {
     "AiAgent": [
         "agents",
         "agent-trace",
+        "agent-screen",
         "task-rows",
         "tool-call-card",
         "tool-chips",
@@ -261,6 +267,12 @@ TAXONOMY: dict[str, list[str]] = {
         "allocation-bar",
         "diff-table",
         "signal-meter",
+    ],
+    "FlowSuite": [
+        "flow-suite",
+    ],
+    "Flow": [
+        "flowchart",
     ],
 }
 

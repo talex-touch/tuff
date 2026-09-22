@@ -1,0 +1,93 @@
+---
+title: "Sound"
+description: "Synthesised UI feedback: click, key, toggle, success, error, open and close. Off by default."
+category: Foundations
+status: beta
+since: 0.6.0
+tags: [sound, audio, feedback, utils]
+syncStatus: reviewed
+verified: true
+---
+# Sound
+
+## It is off by default
+
+```ts
+import { configureSound, sound } from '@talex-touch/tuffex/utils'
+
+configureSound({ enabled: true, volume: 0.6 })
+sound.click()
+```
+
+**Nothing plays until you turn it on, and no `AudioContext` is even created.** A component library that starts making noise on import is one the host has to go and disable; opting in is a single call, opting out after a surprise is a bug report.
+
+The graph is built **lazily** for the same reason: browsers park an `AudioContext` created outside a user gesture in `suspended` state, so a page that imports this and never plays anything would be leaking one.
+
+## Why synthesis rather than audio files
+
+A handful of oscillators and an envelope cost nothing to ship, stay crisp at any sample rate, and cannot 404. The trade is timbre — samples are richer — but UI feedback should be plain anyway.
+
+## The presets
+
+Seven, deliberately. A UI that plays seven different sounds is noise.
+
+| Preset | Use | Measured peak | Measured length |
+|---|---|---|---|
+| `click` | Button press | 0.103 | 40ms |
+| `key` | Per character in a field | **0.056** | 27ms |
+| `toggle` | Switch or checkbox turning on | 0.089 | 65ms |
+| `success` | Completed action (rising pair) | 0.090 | 188ms |
+| `error` | Rejected action (falling pair) | 0.100 | 216ms |
+| `open` | Panel or dialog opening | 0.078 | 91ms |
+| `close` | Panel or dialog closing | 0.077 | 91ms |
+
+Those figures come from rendering each cue through an `OfflineAudioContext` and measuring sample by sample, not from the nominal values. Three design intentions are visible in the data:
+
+- **`key` has the lowest peak.** It fires per character; at `click`'s level it becomes a typewriter.
+- **`open` and `close` mirror each other exactly** in peak and length (0.078 / 0.077, both 91ms), differing only in glide direction — direction carries the meaning, loudness does not.
+- **Nothing clips**; every peak sits between 0.06 and 0.11.
+
+Two kinds of cue get two budgets, enforced by tests: **immediate feedback** (`click` / `key` / `toggle`) is capped at 80ms so it lands while the finger is still down; **status cues** get 250ms, enough for a two-note figure but not enough to arrive after the user has moved on.
+
+## Custom cues
+
+`playSound` also takes a patch built on the spot:
+
+```ts
+import { playSound } from '@talex-touch/tuffex/utils'
+
+playSound({
+  layers: [
+    { wave: 'sine', freq: [400, 700], gain: 0.09, decay: 0.12 },
+    { wave: 'sine', freq: 900, gain: 0.06, decay: 0.1, delay: 0.08 },
+  ],
+})
+```
+
+Two values in `freq` make a glide; `delay` offsets the second voice so the pair reads as a figure rather than a chord.
+
+## API
+
+| Name | Description |
+|---|---|
+| `configureSound({ enabled, volume })` | Toggle and master volume (0–1, clamped). Returns the resulting config |
+| `getSoundConfig()` | A copy of the current config |
+| `playSound(type \| preset)` | Plays. Returns whether it actually did |
+| `sound.click()` / `.key()` / `.toggle()` / `.success()` / `.error()` / `.open()` / `.close()` | Shorthands |
+| `isSoundSupported()` | Whether the browser has Web Audio |
+| `disposeSound()` | Closes the graph; the next play rebuilds it |
+| `SOUND_PRESETS` | The preset table — read the parameters, or start a custom cue from one |
+
+## Contract
+
+- **It never throws.** Disabled, unsupported, or before the browser has seen a gesture, `playSound` returns `false` quietly. A feedback channel must never be the reason an interaction fails.
+- **Autoplay policy is handled.** A parked context is resumed on the next play, and a rejected resume is swallowed.
+- **Nodes are reclaimed.** Each voice disconnects its own envelope when it ends — without that a typing burst leaves hundreds of dead nodes on the master gain.
+- **The noise buffer is shared**, not regenerated per keystroke.
+- A volume change applies to an existing graph immediately; no rebuild.
+
+## Relationship to vibration
+
+`useVibrate` is the other feedback channel at this layer, and its shape is deliberately mirrored here (preset table, main function, shorthand object). They compose, but **do not fire sound and vibration for the same action** — doubled feedback reads as having triggered twice.
+
+<TuffDocSourceLink />

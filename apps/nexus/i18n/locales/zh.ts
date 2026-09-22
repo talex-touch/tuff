@@ -576,6 +576,7 @@ export default {
       pro: '进阶',
       ai: 'AI',
       data: '数据',
+      flow: '流程',
     },
     categories: {
       basic: '通用',
@@ -594,6 +595,7 @@ export default {
       aiAgent: '智能体',
       aiReasoning: '推理与生成',
       aiContext: '上下文与洞察',
+      flow: '流程编排',
       misc: '其他',
     },
     families: {

@@ -222,6 +222,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/icons',
     '/docs/dev/components/accessibility',
     '/docs/dev/components/utils',
+    '/docs/dev/components/sound',
     // ── suite: base — overview
     '/docs/dev/components/base-suite',
     // base — Basic
@@ -303,6 +304,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/popover',
     '/docs/dev/components/tooltip',
     '/docs/dev/components/toast',
+    '/docs/dev/components/toast-panel',
     '/docs/dev/components/alert',
     '/docs/dev/components/progress',
     '/docs/dev/components/progress-bar',
@@ -370,6 +372,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     // ai — AiAgent
     '/docs/dev/components/agents',
     '/docs/dev/components/agent-trace',
+    '/docs/dev/components/agent-screen',
     '/docs/dev/components/task-rows',
     '/docs/dev/components/tool-call-card',
     '/docs/dev/components/tool-chips',
@@ -405,6 +408,10 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/allocation-bar',
     '/docs/dev/components/diff-table',
     '/docs/dev/components/signal-meter',
+    // ── suite: flow — overview
+    '/docs/dev/components/flow-suite',
+    // flow — Flow
+    '/docs/dev/components/flowchart',
   ],
   '/docs/dev/reference': [
     '/docs/dev/reference/index',
@@ -439,13 +446,13 @@ const SECTION_ORDER: Record<string, string[]> = {
   ],
 }
 
-// Component docs are split into five suites (concepts / base / pro / ai / data).
-// Categories and their suite assignment mirror
+// Component docs are split into six suites (concepts / base / pro / ai / data /
+// flow). Categories and their suite assignment mirror
 // scripts/recategorize-component-docs.py — keep the two files in sync. The
-// tuffex entry barrels stay base/pro/ai: 'data' is a docs-level split
+// tuffex entry barrels stay base/pro/ai: 'data' and 'flow' are docs-level splits
 // (Visualization components and the chart family both import from the pro
 // barrel; the chart family also ships behind the @talex-touch/tuffex/charts
-// subpath).
+// subpath, and the flow family ships from the ai barrel).
 type SuiteKey = DocsSuiteKey
 
 interface SuiteDef {
@@ -482,6 +489,7 @@ const SUITES = computed<SuiteDef[]>(() => [
       '/docs/dev/components/icons',
       '/docs/dev/components/accessibility',
       '/docs/dev/components/utils',
+      '/docs/dev/components/sound',
     ],
   },
   {
@@ -507,6 +515,12 @@ const SUITES = computed<SuiteDef[]>(() => [
     label: t('docsSidebar.suites.data'),
     categories: suiteCategories('data'),
     standalonePages: ['/docs/dev/components/data-suite'],
+  },
+  {
+    key: 'flow',
+    label: t('docsSidebar.suites.flow'),
+    categories: suiteCategories('flow'),
+    standalonePages: ['/docs/dev/components/flow-suite'],
   },
 ])
 
