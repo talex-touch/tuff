@@ -16,6 +16,15 @@
   --tx-color-danger: #b42318;
   --tx-color-info: #475569;
 
+  // This ramp is already dark enough to carry a white glyph directly.
+  // success 7.13:1, warning 5.43:1, danger 6.57:1, info 5.98:1, muted 7.58:1.
+  --tx-status-chip-on: #ffffff;
+  --tx-status-chip-success: #166534;
+  --tx-status-chip-warning: #9a5b00;
+  --tx-status-chip-danger: #b42318;
+  --tx-status-chip-info: #005fcc;
+  --tx-status-chip-muted: #475569;
+
   --tx-text-color-primary: #111827;
   --tx-text-color-regular: #1f2937;
   --tx-text-color-secondary: #374151;
@@ -94,6 +103,18 @@
   --tx-color-warning: #facc15;
   --tx-color-danger: #fda4af;
   --tx-color-info: #cbd5e1;
+
+  // This theme is deliberately light-on-dark, so a dark disc would disappear
+  // into the page. The pairing inverts instead of fighting the theme: the disc
+  // keeps the theme's own light hue and the glyph takes the same deep blue
+  // `--tx-color-on-primary` uses here. success 11.07:1, warning 10.15:1,
+  // danger 8.22:1, info 8.28:1, muted 10.47:1.
+  --tx-status-chip-on: #0a2540;
+  --tx-status-chip-success: #86efac;
+  --tx-status-chip-warning: #facc15;
+  --tx-status-chip-danger: #fda4af;
+  --tx-status-chip-info: #7cc4ff;
+  --tx-status-chip-muted: #cbd5e1;
 
   --tx-text-color-primary: #ffffff;
   --tx-text-color-regular: #f3f4f6;
@@ -180,6 +201,28 @@
   --tx-color-danger: #f56c6c;
   --tx-color-info: #909399;
 
+  /**
+   * Status chip discs.
+   *
+   * A solid disc carrying a knocked-out glyph, as used by `TxStatusBadge`. It
+   * deliberately does NOT reuse `--tx-color-{success,…}`: those hues are tuned
+   * to be *ink on a light page*, so a white glyph on them lands at 1.67–2.90:1
+   * — under the 3:1 WCAG minimum for a graphical object, and the source of the
+   * "white ink on a solid semantic fill is not supported" rule in
+   * tuffex-design-rules.md. (The 1.74:1 recorded there is dark-theme
+   * `--tx-color-success #4ade80`.)
+   *
+   * These are a separate, darker ramp measured against `--tx-status-chip-on`:
+   * success 5.02:1, warning 5.02:1, danger 6.47:1, info 6.70:1, muted 7.73:1.
+   * Solver: `.trellis/tasks/09-21-status-mono-redesign/research/chip-palette.mjs`.
+   */
+  --tx-status-chip-on: #ffffff;
+  --tx-status-chip-success: #15803d;
+  --tx-status-chip-warning: #b45309;
+  --tx-status-chip-danger: #b91c1c;
+  --tx-status-chip-info: #1d4ed8;
+  --tx-status-chip-muted: #52525b;
+
   --tx-color-danger-light-5: #fbc4c4;
   --tx-color-danger-light-7: #fcd3d3;
   --tx-color-danger-light-9: #fef0f0;
@@ -250,6 +293,13 @@
   --tx-transition-function: ease-in-out;
   --tx-ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
 
+  // Back-out: overshoots its end value and settles. This is the one curve that
+  // can read as "bounce" — `--tx-ease-out-strong` decelerates hard but never
+  // crosses 1, so no amount of tuning makes it springy. Reserve it for elements
+  // that arrive at the user (a bar surfacing under a selection); on a layout
+  // transition the overshoot reads as a glitch.
+  --tx-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
   // Border Radius
   --tx-border-radius-base: 4px;
   --tx-border-radius-small: 2px;
@@ -317,6 +367,11 @@
 
   --tx-font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
 
+  // Theme-invariant, so it is defined once here rather than per theme. Mirrors
+  // the stack `--tx-bui-font-mono` uses; the two layers stay separate because a
+  // host may override either on its own.
+  --tx-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Menlo", monospace;
+
   --tx-mask-color-extra-light: rgba(0, 0, 0, 0.3);
   --tx-overlay-color: rgba(0, 0, 0, 0.5);
 
@@ -365,6 +420,16 @@
   --tx-color-success: #4ade80;
   --tx-color-warning: #fbbf24;
   --tx-color-danger: #f87171;
+
+  // Status chip discs, one step lighter than the light theme's so they read on
+  // a dark surface. White glyph: success 3.30:1, warning 4.16:1, danger 4.83:1,
+  // info 5.17:1, muted 4.83:1.
+  --tx-status-chip-on: #ffffff;
+  --tx-status-chip-success: #16a34a;
+  --tx-status-chip-warning: #c2620a;
+  --tx-status-chip-danger: #dc2626;
+  --tx-status-chip-info: #2563eb;
+  --tx-status-chip-muted: #6b7280;
 
   --tx-text-color-primary: #e5eaf3;
   --tx-text-color-regular: #cfd3dc;
