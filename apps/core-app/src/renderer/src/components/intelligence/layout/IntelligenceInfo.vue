@@ -93,6 +93,16 @@ const nexusCallStateText = computed(() =>
     : t('settings.intelligence.nexusInvokeFallback')
 )
 
+/**
+ * The row's description carries the sync outcome rather than repeating the group's own copy —
+ * the group header already says what a signed-in Nexus route does. Empty when there is nothing
+ * to report, so `TuffBlockSlot` drops the line instead of reserving a blank one.
+ */
+const nexusSyncResultText = computed(() => {
+  if (!isLoggedIn.value) return ''
+  return props.syncError || props.syncMessage || ''
+})
+
 watch(
   () => props.provider,
   (newProvider) => {
@@ -177,12 +187,13 @@ function handleSyncFromNexus() {
       >
         <TuffBlockSlot
           :title="nexusCallStateText"
-          :description="isLoggedIn ? nexusStatusDescription : ''"
+          :description="nexusSyncResultText"
           :default-icon="isLoggedIn ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
           :active-icon="isLoggedIn ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
           :active="isLoggedIn"
           :icon-size="18"
           class="nexus-status-slot"
+          :class="{ 'is-error': !!syncError }"
         >
           <TxButton
             v-if="!isLoggedIn"
@@ -217,14 +228,6 @@ function handleSyncFromNexus() {
             </span>
           </TxButton>
         </TuffBlockSlot>
-        <div v-if="syncMessage || syncError" class="nexus-status__sync-result">
-          <p v-if="syncMessage" class="is-success">
-            {{ syncMessage }}
-          </p>
-          <p v-if="syncError" class="is-error">
-            {{ syncError }}
-          </p>
-        </div>
       </TuffGroupBlock>
 
       <template v-if="!isNexusManagedProvider">
@@ -293,31 +296,19 @@ function handleSyncFromNexus() {
   :deep(.TBlockSlot-Content > .tuff-icon) {
     color: v-bind("isLoggedIn ? 'var(--tx-color-success)' : 'var(--tx-color-warning)'");
   }
+
+  /* A failed sync keeps the danger colour the removed side row used to carry. */
+  &.is-error :deep(.TBlockSlot-Label > p) {
+    color: var(--tx-color-danger);
+  }
+
+  &:not(.is-error) :deep(.TBlockSlot-Label > p) {
+    color: var(--tx-color-success);
+  }
 }
 
 .nexus-status__action {
   flex-shrink: 0;
   min-width: 112px;
-}
-
-.nexus-status__sync-result {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 16px 12px 56px;
-
-  p {
-    margin: 0;
-    font-size: 0.75rem;
-    line-height: 1.4;
-  }
-
-  .is-success {
-    color: var(--tx-color-success);
-  }
-
-  .is-error {
-    color: var(--tx-color-danger);
-  }
 }
 </style>

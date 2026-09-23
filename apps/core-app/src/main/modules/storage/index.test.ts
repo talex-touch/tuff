@@ -226,7 +226,7 @@ describe('StorageModule', () => {
         value: { beginner: { init: true } },
         persist: true
       })
-    ).resolves.toMatchObject({ success: false })
+    ).resolves.toMatchObject({ success: false, reason: 'persist-failed' })
 
     const restored = storage.getConfig(StorageList.APP_SETTING) as {
       beginner?: { init?: boolean }
@@ -273,6 +273,72 @@ describe('StorageModule', () => {
         })
       ).resolves.toMatchObject({ success: false, version: 0 })
     }
+
+    await storage.onDestroy()
+  })
+
+  it('labels a save whose key is missing or not a string as invalid-key', async () => {
+    const configDir = mkdtempSync(path.join(tmpdir(), 'tuff-storage-invalid-key-'))
+    const storage = new StorageModule()
+    await storage.init({
+      app: { channel: {} },
+      file: { create: true, dirName: 'config', dirPath: configDir }
+    } as unknown as Parameters<StorageModule['init']>[0])
+
+    const registration = (
+      transportMocks.on.mock.calls as unknown as Array<readonly [unknown, unknown]>
+    ).find(([event]) => event === StorageEvents.app.save)
+    const handler = registration?.[1] as
+      | ((request: { key?: unknown; value?: unknown }) => Promise<{
+          success: boolean
+          reason?: string
+        }>)
+      | undefined
+
+    for (const key of [undefined, 42]) {
+      await expect(handler?.({ key, value: { beginner: { init: true } } })).resolves.toMatchObject({
+        success: false,
+        reason: 'invalid-key'
+      })
+    }
+
+    await storage.onDestroy()
+  })
+
+  it('labels a serialized credential-bearing save as credential-rejected', async () => {
+    const configDir = mkdtempSync(path.join(tmpdir(), 'tuff-storage-content-secret-'))
+    const storage = new StorageModule()
+    await storage.init({
+      app: { channel: {} },
+      file: { create: true, dirName: 'config', dirPath: configDir }
+    } as unknown as Parameters<StorageModule['init']>[0])
+
+    const registration = (
+      transportMocks.on.mock.calls as unknown as Array<readonly [unknown, unknown]>
+    ).find(([event]) => event === StorageEvents.app.save)
+    const handler = registration?.[1] as
+      | ((request: { key: string; content: string }) => Promise<{
+          success: boolean
+          reason?: string
+        }>)
+      | undefined
+
+    await expect(
+      handler?.({
+        key: StorageList.IntelligenceConfig,
+        content: JSON.stringify({
+          providers: [
+            {
+              id: 'openai-default',
+              type: 'openai',
+              name: 'OpenAI',
+              enabled: true,
+              apiKey: 'synthetic-provider-secret'
+            }
+          ]
+        })
+      })
+    ).resolves.toMatchObject({ success: false, reason: 'credential-rejected' })
 
     await storage.onDestroy()
   })

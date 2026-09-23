@@ -2,6 +2,7 @@ import type { UnwrapNestedRefs, WatchHandle } from 'vue'
 import type { ITouchClientChannel, ITuffTransport, StreamController } from '../../transport'
 import type {
   StorageGetVersionedResponse,
+  StorageSaveFailureReason,
   StorageSaveRequest,
   StorageSaveResult,
   StorageUpdateNotification,
@@ -36,7 +37,11 @@ export class TouchStorageSaveError extends Error {
     message: string,
     readonly details: {
       key: string
-      reason: 'transport-uninitialized' | 'conflict' | 'remote-failed'
+      /**
+       * The failure as it was observed, not as it was bucketed. `transport-uninitialized` and
+       * `conflict-reload-failed` are raised here; the rest come from the save result.
+       */
+      reason: 'transport-uninitialized' | 'conflict-reload-failed' | StorageSaveFailureReason
       version?: number
     },
   ) {
@@ -376,7 +381,14 @@ export class TouchStorage<T extends object> {
         success: result.success,
         version: typeof result.version === 'number' ? result.version : this.#currentVersion,
         conflict,
-        reason: result.success ? undefined : conflict ? 'conflict' : 'rejected',
+        // Main labels its own refusals; a failure it left unlabelled is honestly just `rejected`.
+        // Dropping this field here is what let an IPC timeout be reported as a storage-service
+        // refusal, so a failure without a reason is the only case that loses detail.
+        reason: result.success
+          ? undefined
+          : conflict
+            ? 'conflict'
+            : ((result.reason as StorageSaveFailureReason | undefined) ?? 'rejected'),
       }
     }
 
@@ -641,7 +653,7 @@ export class TouchStorage<T extends object> {
           }
           throw new TouchStorageSaveError('Storage save conflict reload failed', {
             key: this.#qualifiedName,
-            reason: 'remote-failed',
+            reason: 'conflict-reload-failed',
             version: result.version,
           })
         }
@@ -649,7 +661,7 @@ export class TouchStorage<T extends object> {
       else {
         throw new TouchStorageSaveError('Storage save returned an unsuccessful result', {
           key: this.#qualifiedName,
-          reason: 'remote-failed',
+          reason: result.reason ?? 'rejected',
           version: result.version,
         })
       }

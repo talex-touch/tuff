@@ -11,6 +11,7 @@ import {
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 /**
@@ -170,39 +171,40 @@ onBeforeUnmount(() => {
     class="SpeechModelSettings"
     :name="t('settingSpeechRecognition.models.title')"
     :description="t('settingSpeechRecognition.models.description')"
+    default-icon="i-carbon-chip"
+    active-icon="i-carbon-chip"
   >
-    <div v-if="catalogLoading" class="SpeechModelSettings-Row" data-testid="speech-model-loading">
-      <span class="SpeechModelSettings-Hint">{{
-        t('settingSpeechRecognition.models.loading')
-      }}</span>
-    </div>
+    <TuffBlockSlot
+      v-if="catalogLoading"
+      :title="t('settingSpeechRecognition.models.loading')"
+      default-icon="i-carbon-model"
+      data-testid="speech-model-loading"
+    />
 
-    <div v-else-if="catalogError" class="SpeechModelSettings-Row" data-testid="speech-model-error">
-      <span class="SpeechModelSettings-Hint">
-        {{
-          catalogNeedsAccount
-            ? t('settingSpeechRecognition.models.signInRequired')
-            : t('settingSpeechRecognition.models.catalogUnavailable')
-        }}
-      </span>
+    <TuffBlockSlot
+      v-else-if="catalogError"
+      :title="
+        catalogNeedsAccount
+          ? t('settingSpeechRecognition.models.signInRequired')
+          : t('settingSpeechRecognition.models.catalogUnavailable')
+      "
+      default-icon="i-carbon-warning-alt"
+      data-testid="speech-model-error"
+    >
       <TxButton size="sm" variant="ghost" @click="loadCatalog">
         {{ t('settingSpeechRecognition.models.retry') }}
       </TxButton>
-    </div>
+    </TuffBlockSlot>
 
-    <div
+    <TuffBlockSlot
       v-for="entry in rows"
       :key="keyOf(entry.id, entry.version)"
-      class="SpeechModelSettings-Row"
+      :title="entry.name"
+      :description="`${formatBytes(entry.bytes)} · ${entry.engine} · ${entry.id}@${entry.version}`"
+      default-icon="i-carbon-model"
       :data-testid="`speech-model-${entry.id}`"
     >
-      <div class="SpeechModelSettings-Identity">
-        <span class="SpeechModelSettings-Name">{{ entry.name }}</span>
-        <span class="SpeechModelSettings-Meta">
-          {{ formatBytes(entry.bytes) }} · {{ entry.engine }} · {{ entry.id }}@{{ entry.version }}
-        </span>
-      </div>
-      <div class="SpeechModelSettings-Actions">
+      <template #tags>
         <TxTag v-if="recommendedKey === keyOf(entry.id, entry.version)" size="sm" type="info">
           {{ t('settingSpeechRecognition.models.recommended') }}
         </TxTag>
@@ -212,83 +214,75 @@ onBeforeUnmount(() => {
         <TxTag v-else-if="entry.installed" size="sm" type="success">
           {{ t('settingSpeechRecognition.models.installed') }}
         </TxTag>
-        <span
-          v-if="progress && busyKey === keyOf(entry.id, entry.version)"
-          class="SpeechModelSettings-Hint"
-          :data-testid="`speech-model-progress-${entry.id}`"
-        >
-          {{
-            progressPercent(progress) === null
-              ? t('settingSpeechRecognition.models.installing')
-              : t('settingSpeechRecognition.models.progress', {
-                  percent: progressPercent(progress),
-                  size: formatBytes(progress.total)
-                })
-          }}
-        </span>
-        <TxButton
-          v-if="!entry.installed"
-          size="sm"
-          :disabled="busyKey !== null"
-          :data-testid="`speech-model-install-${entry.id}`"
-          @click="install(entry)"
-        >
-          {{ t('settingSpeechRecognition.models.install') }}
-        </TxButton>
-        <TxButton
-          v-else
-          size="sm"
-          variant="ghost"
-          :disabled="busyKey !== null"
-          :data-testid="`speech-model-remove-${entry.id}`"
-          @click="uninstall(entry)"
-        >
-          {{ t('settingSpeechRecognition.models.remove') }}
-        </TxButton>
-      </div>
-    </div>
-
-    <div v-if="actionError" class="SpeechModelSettings-Row" data-testid="speech-model-action-error">
-      <span class="SpeechModelSettings-Hint">
-        {{ t('settingSpeechRecognition.models.actionFailed', { reason: actionError }) }}
+      </template>
+      <span
+        v-if="progress && busyKey === keyOf(entry.id, entry.version)"
+        class="SpeechModelSettings-Hint"
+        :data-testid="`speech-model-progress-${entry.id}`"
+      >
+        {{
+          progressPercent(progress) === null
+            ? t('settingSpeechRecognition.models.installing')
+            : t('settingSpeechRecognition.models.progress', {
+                percent: progressPercent(progress),
+                size: formatBytes(progress.total)
+              })
+        }}
       </span>
-    </div>
+      <TxButton
+        v-if="!entry.installed"
+        size="sm"
+        :disabled="busyKey !== null"
+        :data-testid="`speech-model-install-${entry.id}`"
+        @click="install(entry)"
+      >
+        {{ t('settingSpeechRecognition.models.install') }}
+      </TxButton>
+      <TxButton
+        v-else
+        size="sm"
+        variant="ghost"
+        :disabled="busyKey !== null"
+        :data-testid="`speech-model-remove-${entry.id}`"
+        @click="uninstall(entry)"
+      >
+        {{ t('settingSpeechRecognition.models.remove') }}
+      </TxButton>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="actionError"
+      :title="t('settingSpeechRecognition.models.actionFailed', { reason: actionError })"
+      default-icon="i-carbon-warning-alt"
+      data-testid="speech-model-action-error"
+    />
   </TuffGroupBlock>
 </template>
 
 <style scoped lang="scss">
 .SpeechModelSettings {
-  &-Row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 8px 0;
+  :deep(.TBlockSlot-Container) {
+    height: auto;
+    min-height: 56px;
+    padding-block: 12px;
   }
 
-  &-Identity {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
+  :deep(.TBlockSlot-Content) {
+    height: auto;
   }
 
-  &-Name {
-    font-size: 13px;
-    font-weight: 500;
+  :deep(.TBlockSlot-TitleRow h5) {
+    margin: 0;
   }
 
-  &-Meta,
+  :deep(.TBlockSlot-Label > p) {
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
   &-Hint {
     font-size: 12px;
     opacity: 0.7;
-  }
-
-  &-Actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
   }
 }
 </style>
