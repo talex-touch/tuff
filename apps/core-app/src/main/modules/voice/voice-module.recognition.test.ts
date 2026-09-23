@@ -25,9 +25,18 @@ const mocks = vi.hoisted(() => ({
   getRecognitionStatus: vi.fn(),
   getSpeechModelProgress: vi.fn(),
   installSpeechModel: vi.fn(),
-  installedSpeechModels: vi.fn(),
+  // A machine with nothing installed: the module's route adoption then has nothing to do, which is
+  // what this suite is not about.
+  installedSpeechModels: vi.fn(async () => []),
   speechModelCatalogView: vi.fn(),
-  uninstallSpeechModel: vi.fn()
+  uninstallSpeechModel: vi.fn(),
+  ensureLocalAsrRoute: vi.fn(),
+  ensureNexusAsrRoute: vi.fn()
+}))
+
+vi.mock('../ai/intelligence-config', () => ({
+  ensureLocalAsrRoute: mocks.ensureLocalAsrRoute,
+  ensureNexusAsrRoute: mocks.ensureNexusAsrRoute
 }))
 
 vi.mock('electron', () => ({ shell: { openExternal: vi.fn() } }))

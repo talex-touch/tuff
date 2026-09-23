@@ -568,13 +568,27 @@
       "manual": "System Settings"
     },
     "capabilities": {
-      "title": "Channel and model",
-      "description": "Channel binding and order live on the Intelligence page.",
       "action": "Open Intelligence"
+    },
+    "source": {
+      "title": "Recognition source",
+      "options": {
+        "cloud": {
+          "label": "Cloud",
+          "description": "Cloud channels only; dictation stops when the network does."
+        },
+        "local": {
+          "label": "On-device",
+          "description": "Installed on-device models only; audio never leaves this Mac."
+        },
+        "hybrid": {
+          "label": "Hybrid",
+          "description": "On-device first, falling back to the cloud when none can run."
+        }
+      }
     },
     "catalog": {
       "title": "Cloud voice routing",
-      "description": "After sign-in, Tuff downloads and applies an AES-256-GCM encrypted routing pack, enabled once verified.",
       "activeTitle": "Active routing pack",
       "activeDescription": "v{version}",
       "builtinDescription": "Not active; using the built-in Nexus route.",

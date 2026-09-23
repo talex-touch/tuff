@@ -6,17 +6,21 @@ import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { useEventListener } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import {
   ensureVoiceInputSetting,
+  normalizeVoiceAsrSource,
   normalizeVoicePolishStrength,
+  VOICE_ASR_SOURCES,
   VOICE_POLISH_STRENGTHS,
+  type VoiceAsrSource,
   type VoiceInputSetting,
   type VoicePolishStrength
 } from '@talex-touch/utils/common/storage/entity/app-settings'
+import { TxFlatRadioItem } from '@talex-touch/tuffex/flat-radio'
+import TuffBlockFlatRadio from '~/components/tuff/TuffBlockFlatRadio.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import { appSetting } from '~/modules/storage/app-storage'
@@ -25,7 +29,6 @@ import SpeechModelSettings from './SpeechModelSettings.vue'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
-const router = useRouter()
 // Keep the hint hidden until main confirms an active macOS Globe action.
 const globeKeyConflict = ref(false)
 /**
@@ -43,6 +46,23 @@ const voiceInputEnabled = computed({
     appSetting.voiceInput.enabled = value
   }
 })
+const voiceSource = computed({
+  get: (): VoiceAsrSource =>
+    normalizeVoiceAsrSource((appSetting.voiceInput as VoiceInputSetting).source),
+  set: (value: string | number) => {
+    ensureVoiceInputSetting(appSetting as Record<string, unknown>)
+    ;(appSetting.voiceInput as VoiceInputSetting).source = normalizeVoiceAsrSource(value)
+  }
+})
+
+/**
+ * Says what the chosen state will actually do, because the three labels alone do not: nothing
+ * tells the reader that 混合 falls back to the cloud, and that is the one thing they are choosing.
+ */
+const voiceSourceDescription = computed(() =>
+  t(`settingSpeechRecognition.source.options.${voiceSource.value}.description`)
+)
+
 const historyEnabled = computed({
   get: () => (appSetting.voiceInput as VoiceInputSetting).historyEnabled === true,
   set: (value: boolean) => {
@@ -138,9 +158,6 @@ onMounted(() => {
 useEventListener(window, 'focus', () => {
   void refreshGlobeKeyStatus()
 })
-function openCapabilities(): void {
-  void router.push('/setting/intelligence/capabilities')
-}
 </script>
 
 <template>
@@ -150,6 +167,21 @@ function openCapabilities(): void {
     default-icon="i-carbon-microphone"
     active-icon="i-carbon-microphone-filled"
   >
+    <TuffBlockFlatRadio
+      v-model="voiceSource"
+      data-testid="voice-source-selector"
+      :title="t('settingSpeechRecognition.source.title')"
+      :description="voiceSourceDescription"
+      default-icon="i-carbon-connect-source"
+      active-icon="i-carbon-connect"
+    >
+      <TxFlatRadioItem
+        v-for="source in VOICE_ASR_SOURCES"
+        :key="source"
+        :value="source"
+        :label="t(`settingSpeechRecognition.source.options.${source}.label`)"
+      />
+    </TuffBlockFlatRadio>
     <TuffBlockSwitch
       v-model="voiceInputEnabled"
       data-testid="voice-input-enabled-toggle"
@@ -232,20 +264,6 @@ function openCapabilities(): void {
       default-icon="i-carbon-waveform"
       active-icon="i-carbon-waveform"
     />
-    <TuffBlockSlot
-      :title="t('settingSpeechRecognition.capabilities.title')"
-      :description="t('settingSpeechRecognition.capabilities.description')"
-      default-icon="i-carbon-machine-learning-model"
-    >
-      <TxButton
-        size="sm"
-        variant="ghost"
-        data-testid="voice-open-capabilities"
-        @click.stop="openCapabilities"
-      >
-        {{ t('settingSpeechRecognition.capabilities.action') }}
-      </TxButton>
-    </TuffBlockSlot>
   </TuffGroupBlock>
   <VoiceProviderCatalogSettings />
   <SpeechModelSettings />

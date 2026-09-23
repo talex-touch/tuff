@@ -32,6 +32,12 @@ const catalog = vi.hoisted(() => ({
   },
   status: null as null | { lastErrorCode: string | null }
 }))
+// The dictation-source preference is read out of app settings before every resolve, so the
+// store is faked here rather than left to a real settings file the suite does not own.
+const settings = vi.hoisted(() => ({
+  value: {} as Record<string, unknown>,
+  readError: null as Error | null
+}))
 const nexusClient = vi.hoisted(() => ({ transcribeNexusAudio: vi.fn() }))
 const adapterOptions = vi.hoisted(() => ({
   bailian: [] as Array<Record<string, unknown>>,
@@ -69,6 +75,12 @@ vi.mock('../catalog', () => ({
     getVoiceProviderRegistry: () => catalog.registry,
     getVoiceProviderStatus: () => catalog.status
   })
+}))
+vi.mock('../storage', () => ({
+  getMainConfig: () => {
+    if (settings.readError) throw settings.readError
+    return settings.value
+  }
 }))
 vi.mock('../nexus/asr-client', () => nexusClient)
 vi.mock('../nexus/runtime-base', () => ({
@@ -142,13 +154,14 @@ function channel(
     baseUrl?: string
     metadata?: Record<string, unknown>
     type?: string
+    enabled?: boolean
   } = {}
 ) {
   const config = {
     id,
     type: options.type ?? 'custom',
     name: id,
-    enabled: true,
+    enabled: options.enabled ?? true,
     baseUrl: options.baseUrl,
     capabilities: options.capabilities ?? ['audio.asr'],
     models: options.models ?? [],
@@ -287,17 +300,60 @@ function installedLocalModel(id: string, version: string = LOCAL_ASR_VERSION): R
 }
 
 /** A local-offline channel: on-device weights, no endpoint and no credential of any kind. */
-function localOfflineChannel(model: string = LOCAL_ASR_MODEL_ID) {
+function localOfflineChannel(model: string = LOCAL_ASR_MODEL_ID, enabled = true) {
   return channel('local-whisper', {
     // A local-typed channel is what keeps the route eligible without an API key.
     type: 'local',
+    enabled,
     models: [model],
     metadata: { voiceAsr: { protocol: 'local-offline' } }
   })
 }
 
-function localOfflineBinding(model: string = LOCAL_ASR_MODEL_ID) {
-  return { providerId: 'local-whisper', enabled: true, priority: 1, models: [model] }
+function localOfflineBinding(model: string = LOCAL_ASR_MODEL_ID, priority = 1) {
+  return { providerId: 'local-whisper', enabled: true, priority, models: [model] }
+}
+
+const CLOUD_ASR_MODEL = 'paraformer-realtime-v2'
+
+/** A credentialed cloud channel: the kind an on-device-only preference must never reach for. */
+function cloudAsrChannel() {
+  return channel('bailian', {
+    baseUrl: BAILIAN_WORKSPACE_BASE_URL,
+    models: [CLOUD_ASR_MODEL],
+    metadata: { voiceAsr: { protocol: 'bailian-paraformer' } }
+  })
+}
+
+/** Pins the dictation preference the runtime reads; `unknown` models whatever the file holds. */
+function storeVoiceSource(source: unknown): void {
+  settings.value = { voiceInput: { source } }
+}
+
+/**
+ * A machine with an on-device and a credentialed cloud channel bound at once, both ready to
+ * serve. `first` decides which one the Intelligence binding order puts ahead, so the only thing
+ * left that can select between them is the dictation preference.
+ */
+function configureBothChannels(first: 'cloud' | 'local'): void {
+  localStore.loadInstalledModelSync.mockImplementation((_root: string, id: string) =>
+    installedLocalModel(id)
+  )
+  configure(
+    { bailian: cloudAsrChannel(), 'local-whisper': localOfflineChannel() },
+    {
+      'audio.asr': [
+        localOfflineBinding(LOCAL_ASR_MODEL_ID, first === 'local' ? 1 : 2),
+        {
+          providerId: 'bailian',
+          enabled: true,
+          priority: first === 'cloud' ? 1 : 2,
+          models: [CLOUD_ASR_MODEL]
+        }
+      ]
+    },
+    { bailian: 'secure-bailian-credential' }
+  )
 }
 describe('capability-bound voice ASR provider resolution', () => {
   beforeEach(() => {
@@ -317,6 +373,9 @@ describe('capability-bound voice ASR provider resolution', () => {
     adapterOptions.doubao = []
     localStore.providerOptions = []
     localStore.loadInstalledModelSync.mockReset()
+    // Every case opts into the dictation preference it depends on; nothing inherits one.
+    settings.value = {}
+    settings.readError = null
     runtime.supportsCapability.mockImplementation(
       (provider: { getConfig: () => { capabilities?: string[] } }, capabilityId: string) =>
         provider.getConfig().capabilities?.includes(capabilityId) ?? false
@@ -894,5 +953,129 @@ describe('capability-bound voice ASR provider resolution', () => {
 
     expect(() => getConfiguredAsrProvider()).toThrow('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
     expect(adapterOptions.doubao).toEqual([])
+  })
+
+  /*
+   * The dictation-source preference. It only ever reorders the channels the Intelligence page
+   * already bound, so each case below binds both kinds at once and lets the preference be the
+   * only thing that differs between an on-device result and a cloud one.
+   */
+  it('keeps an on-device-only preference off the higher-priority cloud channel', () => {
+    const installed = installedLocalModel(LOCAL_ASR_MODEL_ID)
+    configureBothChannels('cloud')
+    storeVoiceSource('local')
+
+    const configured = getConfiguredAsrProvider()
+
+    expect(configured.provider.id).toBe('local-offline')
+    expect(configured.model).toBe(`${installed.descriptor.id}@${installed.descriptor.version}`)
+    // The cloud adapter was never built, so "off" here did not mean "cloud after all".
+    expect(adapterOptions.bailian).toEqual([])
+  })
+
+  it('reports an on-device-only preference unavailable instead of using the bound cloud channel', () => {
+    configure(
+      { bailian: cloudAsrChannel() },
+      {
+        'audio.asr': [
+          { providerId: 'bailian', enabled: true, priority: 1, models: [CLOUD_ASR_MODEL] }
+        ]
+      },
+      { bailian: 'secure-bailian-credential' }
+    )
+    storeVoiceSource('local')
+
+    expect(getRecognitionStatus().asr).toEqual({
+      ready: false,
+      reason: 'VOICE_ASR_PROVIDER_UNAVAILABLE'
+    })
+    expect(() => getConfiguredAsrProvider()).toThrow('VOICE_ASR_PROVIDER_UNAVAILABLE')
+    expect(adapterOptions.bailian).toEqual([])
+  })
+
+  it('keeps a cloud-only preference off the higher-priority on-device channel', () => {
+    configureBothChannels('local')
+    storeVoiceSource('cloud')
+
+    const configured = getConfiguredAsrProvider()
+
+    expect(configured.provider.id).toBe('bailian-paraformer')
+    expect(configured.model).toBe(CLOUD_ASR_MODEL)
+    // An installed bundle was on offer and stayed untouched.
+    expect(localStore.providerOptions).toEqual([])
+  })
+
+  it('prefers the on-device channel under the hybrid preference', () => {
+    configureBothChannels('cloud')
+    storeVoiceSource('hybrid')
+
+    const configured = getConfiguredAsrProvider()
+
+    expect(configured.provider.id).toBe('local-offline')
+    expect(adapterOptions.bailian).toEqual([])
+  })
+
+  it('falls back to the bound cloud channel under hybrid when the on-device channel is switched off', () => {
+    configure(
+      {
+        bailian: cloudAsrChannel(),
+        'local-whisper': localOfflineChannel(LOCAL_ASR_MODEL_ID, false)
+      },
+      {
+        'audio.asr': [
+          localOfflineBinding(LOCAL_ASR_MODEL_ID, 1),
+          { providerId: 'bailian', enabled: true, priority: 2, models: [CLOUD_ASR_MODEL] }
+        ]
+      },
+      { bailian: 'secure-bailian-credential' }
+    )
+    storeVoiceSource('hybrid')
+
+    const configured = getConfiguredAsrProvider()
+
+    expect(configured.provider.id).toBe('bailian-paraformer')
+    expect(localStore.providerOptions).toEqual([])
+  })
+
+  it('withholds the implicit Nexus cloud fallback from an on-device-only preference', () => {
+    // Nothing is bound to audio.asr, so the only route on this machine is the Nexus cloud one.
+    configure({ 'tuff-nexus-default': nexusSttChannel() }, { 'audio.stt': [nexusSttBinding()] })
+
+    storeVoiceSource('local')
+    expect(getRecognitionStatus().asr).toEqual({
+      ready: false,
+      reason: 'VOICE_ASR_NOT_CONFIGURED'
+    })
+    expect(() => getConfiguredAsrProvider()).toThrow('VOICE_ASR_NOT_CONFIGURED')
+
+    // The same machine under the default preference keeps the fallback, which is what makes the
+    // refusal above the preference rather than a broken route.
+    storeVoiceSource('hybrid')
+    const configured = getConfiguredAsrProvider()
+    expect(configured.mode).toBe('buffered')
+    expect(configured.provider.id).toBe('nexus-audio-stt-buffered')
+  })
+
+  it.each([
+    {
+      name: 'the preference cannot be read',
+      stored: {},
+      readError: new Error('EACCES: app settings are unreadable')
+    },
+    { name: 'the stored profile has no dictation entry', stored: {}, readError: null },
+    {
+      name: 'the stored value is not one of the three sources',
+      stored: { voiceInput: { source: 'whatever' } },
+      readError: null
+    }
+  ])('falls back to the hybrid preference when $name', ({ stored, readError }) => {
+    configureBothChannels('cloud')
+    settings.value = stored
+    settings.readError = readError
+
+    const configured = getConfiguredAsrProvider()
+
+    expect(configured.provider.id).toBe('local-offline')
+    expect(adapterOptions.bailian).toEqual([])
   })
 })

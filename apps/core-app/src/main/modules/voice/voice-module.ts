@@ -19,6 +19,7 @@ import {
   speechModelCatalogView,
   uninstallSpeechModel
 } from './speech-model-service'
+import { ensureLocalAsrRoute } from '../ai/intelligence-config'
 import { withPermissionSafeApi } from '../../utils/safe-handler'
 import { withPermission } from '../permission/channel-guard'
 import { BaseModule } from '../abstract-base-module'
@@ -73,6 +74,7 @@ export class VoiceModule extends BaseModule<TalexEvents> {
     voiceLog.info('Initializing Voice module')
     voiceRecognitionStore.initialize()
     this.registerChannels()
+    await this.adoptInstalledSpeechModel()
     globalDictationController.register()
     this.commandGestureController = new CommandVoiceGestureController(
       (payload) => assistantModule.handleVoiceCommandGesture(payload),
@@ -81,6 +83,23 @@ export class VoiceModule extends BaseModule<TalexEvents> {
     )
     this.commandGestureController.register()
     voiceLog.success('Voice module initialized')
+  }
+
+  /**
+   * Gives a machine that already holds on-device weights a route to use them.
+   *
+   * Installing the model is the intent; needing a second, unrelated trip to the channels page to
+   * make it audible is not something a user can be expected to discover. Weight listing is a local
+   * directory read, so this costs nothing when there is nothing installed — and a failure must not
+   * take the module down with it, because dictation is only one of the things this module owns.
+   */
+  private async adoptInstalledSpeechModel(): Promise<void> {
+    try {
+      const installed = await installedSpeechModels()
+      ensureLocalAsrRoute(installed.map((model) => model.id))
+    } catch (error) {
+      voiceLog.warn('On-device speech route adoption failed', { error })
+    }
   }
 
   async onDestroy(): Promise<void> {

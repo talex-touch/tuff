@@ -245,6 +245,271 @@ function applyNexusRouteUserPreference(): boolean {
   return true
 }
 
+/**
+ * The on-device ASR channel this module seeds, and the marker that remembers the user closing it.
+ *
+ * Downloading a model only writes weights to disk; routing is decided by capability bindings. A
+ * machine holding three models and no `audio.asr` binding reports `VOICE_ASR_NOT_CONFIGURED` — the
+ * weights it paid for are never consulted. Seeding the channel and its binding is what turns an
+ * install into something dictation can run.
+ */
+const LOCAL_ASR_PROVIDER_ID = 'tuff-local-asr'
+const LOCAL_ASR_USER_DISABLED_KEY = 'localAsrRouteUserDisabled'
+
+/**
+ * The on-device route's usable state as this module last left or found it, `null` before the first
+ * observation.
+ *
+ * The binding's own `enabled` flag cannot tell this module's write apart from the user's click, and
+ * deleting the binding is indistinguishable from never having bound one. Comparing against what we
+ * wrote is what makes an intentional close stick, exactly as the Nexus route does it.
+ */
+let observedLocalAsrEnabled: boolean | null = null
+
+function findLocalAsrProvider(
+  config: IntelligenceSDKPersistedConfig
+): IntelligenceProviderConfig | undefined {
+  return (config.providers ?? []).find((provider) => provider.id === LOCAL_ASR_PROVIDER_ID)
+}
+
+/** The `audio.asr` entry for the on-device channel; its absence is itself a user decision. */
+function findLocalAsrBinding(config: IntelligenceSDKPersistedConfig) {
+  const bindings = config.capabilities?.['audio.asr']?.providers
+  return Array.isArray(bindings)
+    ? bindings.find((binding) => binding.providerId === LOCAL_ASR_PROVIDER_ID)
+    : undefined
+}
+
+function isLocalAsrRouteUsable(config: IntelligenceSDKPersistedConfig): boolean {
+  const binding = findLocalAsrBinding(config)
+  return Boolean(binding) && binding?.enabled !== false
+}
+
+/**
+ * Records the user switching the on-device route off, so no later launch switches it back on.
+ *
+ * Runs from the config listener before the reload refreshes the observed value. Deleting the
+ * binding counts as switching it off: this module would otherwise read "nothing bound" and seed it
+ * again, which is the loop the marker exists to break.
+ */
+function applyLocalAsrRouteUserPreference(): boolean {
+  const stored = getLatestConfig()
+  if (!stored) return false
+
+  const usable = isLocalAsrRouteUsable(stored)
+  const previous = observedLocalAsrEnabled
+  observedLocalAsrEnabled = usable
+  if (previous !== true || usable) return false
+
+  const provider = findLocalAsrProvider(stored)
+  if (!provider) return false
+  const metadata = { ...(provider.metadata ?? {}) }
+  if (metadata[LOCAL_ASR_USER_DISABLED_KEY] === true) return false
+  metadata[LOCAL_ASR_USER_DISABLED_KEY] = true
+  provider.metadata = metadata
+  saveMainConfig(StorageList.IntelligenceConfig, stored)
+  intelligenceConfigLog.info('On-device ASR route closed by the user')
+  return true
+}
+
+/**
+ * Binds an installed on-device model to `audio.asr` when nothing else routes it.
+ *
+ * Called once per launch with what the model store actually holds. It stays out of the way of every
+ * case it does not own: no model installed, a route the user closed, a channel already routing
+ * `audio.asr`, or an on-device channel that is switched off. A route this module inferred must never
+ * outrank a choice made on the channels page.
+ */
+export function ensureLocalAsrRoute(installedModelIds: string[]): void {
+  const installed = installedModelIds.filter((id) => typeof id === 'string' && id.length > 0)
+  if (installed.length === 0) return
+
+  try {
+    ensureIntelligenceConfigLoaded()
+  } catch (error) {
+    intelligenceConfigLog.warn('On-device ASR route adoption skipped', { error })
+    return
+  }
+
+  const stored = getLatestConfig()
+  const capability = stored?.capabilities?.['audio.asr']
+  if (!stored || !Array.isArray(capability?.providers)) return
+
+  const provider = findLocalAsrProvider(stored)
+  if (provider && provider.enabled === false) return
+  if (provider?.metadata?.[LOCAL_ASR_USER_DISABLED_KEY] === true) return
+
+  const bindings = capability.providers
+  const binding = findLocalAsrBinding(stored)
+  const otherRouteEnabled = bindings.some(
+    (candidate) => candidate.providerId !== LOCAL_ASR_PROVIDER_ID && candidate.enabled !== false
+  )
+  if (!binding && otherRouteEnabled) return
+
+  /*
+   * A model that is already bound stays bound while it is still on disk. Re-picking on every launch
+   * would move dictation off a model the user chose, and the tie-break only has to be stable: with
+   * several models installed there is no server-side recommendation to consult offline.
+   */
+  const boundModel = binding?.models?.find((model) => installed.includes(model))
+  const modelId = boundModel ?? [...installed].sort()[0]!
+
+  const nextProvider: IntelligenceProviderConfig = {
+    ...(provider ?? {}),
+    id: LOCAL_ASR_PROVIDER_ID,
+    type: IntelligenceProviderType.CUSTOM,
+    name: provider?.name ?? 'Local Speech',
+    enabled: true,
+    capabilities: ['audio.asr'],
+    models: [modelId],
+    defaultModel: modelId,
+    metadata: {
+      ...(provider?.metadata ?? {}),
+      channelType: 'on-device',
+      voiceAsr: { protocol: 'local-offline' }
+    }
+  }
+  const nextBinding = {
+    ...(binding ?? {}),
+    providerId: LOCAL_ASR_PROVIDER_ID,
+    models: [modelId],
+    priority: binding?.priority ?? 1,
+    enabled: true
+  }
+  const unchanged =
+    Boolean(provider && binding) &&
+    safeJsonStringify({ provider, binding }) ===
+      safeJsonStringify({ provider: nextProvider, binding: nextBinding })
+
+  // Set before the write: the listener compares against it, and a write that clears it would be
+  // recorded as the user closing the route.
+  observedLocalAsrEnabled = true
+  if (unchanged) return
+
+  stored.providers = provider
+    ? stored.providers.map((candidate) =>
+        candidate.id === LOCAL_ASR_PROVIDER_ID ? nextProvider : candidate
+      )
+    : [...stored.providers, nextProvider]
+  capability.providers = binding
+    ? bindings.map((candidate) =>
+        candidate.providerId === LOCAL_ASR_PROVIDER_ID ? nextBinding : candidate
+      )
+    : [...bindings, nextBinding]
+  saveMainConfig(StorageList.IntelligenceConfig, stored)
+  intelligenceConfigLog.info('Bound the installed on-device model to audio.asr', { modelId })
+}
+
+/**
+ * The signed cloud route this module seeds, and the marker that remembers the user closing it.
+ *
+ * Activating a voice pack delivers a signed descriptor and a place to send audio; it does not bind a
+ * channel. A machine that has synced the pack and signed in therefore holds a usable route that no
+ * capability points at, and the cloud option in the recognition source has nothing to select — the
+ * pack is installed and unusable at the same time. Binding it is what makes "cloud" mean anything.
+ */
+const NEXUS_ASR_PROVIDER_ID = TUFF_NEXUS_PROVIDER_ID
+const NEXUS_ASR_USER_DISABLED_KEY = 'nexusAsrRouteUserDisabled'
+
+/** The route's usable state as this module last left or found it; see the on-device twin above. */
+let observedNexusAsrEnabled: boolean | null = null
+
+function findNexusAsrProvider(
+  config: IntelligenceSDKPersistedConfig
+): IntelligenceProviderConfig | undefined {
+  return (config.providers ?? []).find((provider) => provider.id === NEXUS_ASR_PROVIDER_ID)
+}
+
+/** The `audio.asr` entry for the signed route; its absence is itself a user decision. */
+function findNexusAsrBinding(config: IntelligenceSDKPersistedConfig) {
+  const bindings = config.capabilities?.['audio.asr']?.providers
+  return Array.isArray(bindings)
+    ? bindings.find((binding) => binding.providerId === NEXUS_ASR_PROVIDER_ID)
+    : undefined
+}
+
+function isNexusAsrRouteUsable(config: IntelligenceSDKPersistedConfig): boolean {
+  const binding = findNexusAsrBinding(config)
+  return Boolean(binding) && binding?.enabled !== false
+}
+
+/** Records the user switching the signed route off, so no later sync switches it back on. */
+function applyNexusAsrRouteUserPreference(): boolean {
+  const stored = getLatestConfig()
+  if (!stored) return false
+
+  const usable = isNexusAsrRouteUsable(stored)
+  const previous = observedNexusAsrEnabled
+  observedNexusAsrEnabled = usable
+  if (previous !== true || usable) return false
+
+  const provider = findNexusAsrProvider(stored)
+  if (!provider) return false
+  const metadata = { ...(provider.metadata ?? {}) }
+  if (metadata[NEXUS_ASR_USER_DISABLED_KEY] === true) return false
+  metadata[NEXUS_ASR_USER_DISABLED_KEY] = true
+  provider.metadata = metadata
+  saveMainConfig(StorageList.IntelligenceConfig, stored)
+  intelligenceConfigLog.info('Signed cloud ASR route closed by the user')
+  return true
+}
+
+/**
+ * Binds the active signed voice pack to `audio.asr` as a route the cloud source can select.
+ *
+ * `packModelIds` are the models the signed descriptor actually offers; the caller reads them from
+ * the verified catalog, because a binding naming a model the pack does not carry resolves to
+ * `VOICE_ASR_PACK_UNSUPPORTED` rather than to a route. It stays out of the way of everything it does
+ * not own: no pack, no signed-in account, no channel, a channel switched off, a route the user
+ * closed. Priority keeps the on-device channel ahead of it, so `hybrid` still resolves locally.
+ */
+export function ensureNexusAsrRoute(packModelIds: string[]): void {
+  const models = [...new Set(packModelIds.filter((id) => typeof id === 'string' && id.length > 0))]
+  if (models.length === 0) return
+  if (getSanitizedAuthSessionState().isSignedIn !== true) return
+
+  try {
+    ensureIntelligenceConfigLoaded()
+  } catch (error) {
+    intelligenceConfigLog.warn('Signed cloud ASR route adoption skipped', { error })
+    return
+  }
+
+  const stored = getLatestConfig()
+  const capability = stored?.capabilities?.['audio.asr']
+  if (!stored || !Array.isArray(capability?.providers)) return
+
+  const provider = findNexusAsrProvider(stored)
+  if (!provider || provider.enabled === false) return
+  if (provider.metadata?.[NEXUS_ASR_USER_DISABLED_KEY] === true) return
+
+  const bindings = capability.providers
+  const binding = findNexusAsrBinding(stored)
+  // A model the pack still offers stays bound: re-picking per sync would move dictation off a model
+  // the user chose whenever the descriptor is re-ordered.
+  const boundModel = binding?.models?.find((model) => models.includes(model))
+  const modelId = boundModel ?? models[0]!
+  const nextBinding = {
+    ...(binding ?? {}),
+    providerId: NEXUS_ASR_PROVIDER_ID,
+    models: [modelId],
+    priority: binding?.priority ?? 2,
+    enabled: true
+  }
+
+  // Set before the write, exactly as the on-device path does: the listener compares against it.
+  observedNexusAsrEnabled = true
+  if (binding && safeJsonStringify(binding) === safeJsonStringify(nextBinding)) return
+
+  capability.providers = binding
+    ? bindings.map((candidate) =>
+        candidate.providerId === NEXUS_ASR_PROVIDER_ID ? nextBinding : candidate
+      )
+    : [...bindings, nextBinding]
+  saveMainConfig(StorageList.IntelligenceConfig, stored)
+  intelligenceConfigLog.info('Bound the signed cloud voice route to audio.asr', { modelId })
+}
+
 function normalizeStrategyId(value?: string) {
   if (!value) return undefined
   if (value === 'priority') return 'rule-based-default'
@@ -1008,6 +1273,8 @@ export function setupConfigUpdateListener(): void {
         // Before the reload refreshes the observed value: this is what tells the user's own
         // on/off click apart from a config write of ours.
         applyNexusRouteUserPreference()
+        applyLocalAsrRouteUserPreference()
+        applyNexusAsrRouteUserPreference()
         ensureIntelligenceConfigLoaded()
       } catch {
         // ignore transient storage readiness issues during startup
