@@ -963,3 +963,68 @@ Adopted explicit external Pi, OMP, Claude, and Codex native sessions per existin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 75: BUI 对齐与交互动效收口：补齐提交后自查出的 4 个 CI 门禁缺口并归档
+
+**Date**: 2026-09-22
+**Task**: BUI 对齐与交互动效收口：补齐提交后自查出的 4 个 CI 门禁缺口并归档
+**Branch**: `master`
+
+### Summary
+
+BUI 21 例对齐、Status 重设计、ToastPanel/AgentScreen/Flowchart 新组件与 UI 音效层落地后，提交后按 CI 同款命令逐项自查，补出 4 个我自己引入的门禁缺口（源码 NUL 字节致 git 判二进制、nexus docs 覆盖测试 2 红、core-app typecheck:web 的 TS6133、audit:size 超限）与 Flow 套件预览空白，全部修复并验证；spec 同步纠正 6 处过期事实；父任务与五个子任务归档。全部提交在本地，未推送。
+
+### Main Changes
+
+BUI（beautifului.dev）21 例对齐 + 交互动效/状态/音效整轮收口，含提交后自查补出的 4 个门禁缺口。
+
+**功能提交（09-21 起）**
+- `b73ad0521` token 层：四主题各自一套 `--tx-status-chip-*` 色阶（白字压纯语义色在暗色只有 1.74:1，物理上做不到，所以按主题单独配色，hc-dark 反相）、`--tx-font-mono`、`--tx-ease-spring` + `bui-spring-in`
+- `ad3295e94` StatusBadge 重做：mono 标签 + 14% 底 + 实心字形圆片，muted 为虚线空环
+- `d99cc0c9b` 新增 Flowchart（+ flow 文档套件）、ToastPanel、AgentScreen、UI 音效层（振荡器合成、默认关、OfflineAudioContext 实测 PCM）
+- `f56ecfa33` 存量对齐：DiffTable 采纳层、CodeStream diff、SelectionActions 回弹、ApprovalCard Skip、RecommendationCard 实体 `mark`、SparkChart 基准线/端点、TxCard 按压、AgentTrace 四档切换
+
+**提交后自查补出的缺口（本次会话）**
+- `84b3aa7f9` TxFlowchart 源码里两处原始 NUL 字节 → git 把整个 SFC 判成二进制（PR 里不可审、grep 审计漏掉它）；改 `'\u0000'` 转义
+- `c1c2aad00` nexus 测试（CI 阻断）红 2 例：hub 双语漏链三个新组件；英文 `Best practices` 大小写不符契约。另：Flow 套件页的组件预览整段空白（gallery 没有 flow 分支，零报错）——补分支 + AI 带补 AgentScreen 格
+- `c3d12ba85` `canvasEl` 声明未读 → core-app `typecheck:web` TS6133，master 的 `typecheck:all` 因此变红（另一窗口的 journal 先记下了这个阻塞）
+- `9dcf1ae72` `audit:size` 超限（全量 595.4/584、按需 604.3/596）：增量全部来自本轮（09-18 后无他人改动 tuffex），三张新样式表只含自身根类，无内联；按仓库惯例重设为实测 + 最小余量
+- `30b900acf` / `5a5414a31` / `544c7e789` spec：注册链第 3 步（`plugins/tuffex.ts` 早已不存在）、套件分类表（23 类、六套件、哪些真进 CI）、core-app 类型检查与 publish 审计写进第 6 步
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b73ad0521` | feat(tuffex): token layer — status chip ramp, mono face, spring curve |
+| `ad3295e94` | feat(tuffex): redesign StatusBadge as a mono label with a solid chip |
+| `d99cc0c9b` | feat(tuffex): add Flowchart, ToastPanel, AgentScreen and the UI sound layer |
+| `f56ecfa33` | feat(tuffex): close the remaining Beautiful UI parity gaps |
+| `84b3aa7f9` | fix(tuffex): write Flowchart's id separator as an escape, not a raw NUL byte |
+| `c1c2aad00` | fix(nexus): link, title and preview the components the BUI parity work added |
+| `30b900acf` | docs(spec): correct the BUI family and suite taxonomy facts that had drifted |
+| `c3d12ba85` | fix(tuffex): drop Flowchart's unused canvas ref, which failed core-app typecheck |
+| `5a5414a31` | docs(spec): name the core-app typecheck in the BUI registration chain |
+| `9dcf1ae72` | fix(tuffex): re-baseline the CSS size budgets for the BUI parity components |
+| `544c7e789` | docs(spec): add the tuffex publish audits to the BUI registration chain |
+
+### Testing
+
+- [OK] tuffex：vitest 2586/2586、vue-tsc（含 `--noUncheckedIndexedAccess`）、全包 eslint、audit:exports/readme/types/size（新鲜构建）
+- [OK] nexus：vitest 1905/1905、typecheck、check:mdc-fences/doc-parity/demo-registry/icon-collections、recategorize、生产构建（`NUXT_DISABLE_PRERENDER=true`，186s）
+- [OK] core-app：typecheck:web + typecheck:node 0 错；引用这些组件的 3 个测试 57/57（全量 623 文件未跑）
+- [OK] 其余依赖 tuffex 的工作区 typecheck：intelligence-uikit / json-formatter / touch-translation / tuff-analyse 全 0
+- [OK] 浏览器（无扩展 headless Chrome）：Flow 预览渲染 + 拖拽按网格吸附写回、AI 带 30 格、双语 hub 链接与 Flow 段、英文标题
+- [WARN] `check:module-size-ratchet` 红：core-app `app-provider.ts` 3985/3950、`file-provider.ts` 3782/3703，来自另一窗口的 `66ec1be88` / `5767975bf`，不在本轮范围
+
+### Status
+
+[OK] **Completed** — 父任务与五个子任务已归档（`cea48afea`）。全部提交在本地，未推送。
+
+### Next Steps
+
+- 审计表 03 流式文本 / 07 对话 / 12 记录表格 标为「未单独比对」（多组件组合、无单一对照面），严格按 AC2 仍是缺口，需老板决定是否另立比对
+- PRD「待老板确认」两项按默认落地：音效默认关；「卡片」按 TxCard 本身处理
+- hub 套件总览表计数的既有漂移（基础/进阶/数据 应为 94/29/11）未顺手修
+- 迁移看板不认 `syncStatus: reviewed`，所有 reviewed + verified:false 的页（含各套件总览页）显示「未迁移」
