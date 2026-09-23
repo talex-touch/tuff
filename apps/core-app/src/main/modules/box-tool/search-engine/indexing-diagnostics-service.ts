@@ -14,6 +14,7 @@ import {
   buildIndexedSourceErrorHealth,
   getIndexedSourceContractIssues
 } from '@talex-touch/utils/search'
+import { enterPerfContext } from '../../../utils/perf-context'
 
 const diagnosticsLog = getLogger('indexing-diagnostics')
 
@@ -33,43 +34,52 @@ export class SourceDiagnosticsService {
   async getDiagnostics(sources: IndexedSource[]): Promise<IndexingRuntimeDiagnostics> {
     const diagnostics = await Promise.all(
       sources.map(async (source): Promise<IndexingRuntimeSourceDiagnostics> => {
-        const [health, roots, evidence, progress] = await Promise.all([
-          source.getHealth().catch((error) => {
-            diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' health failed`, {
-              error
-            })
-            return buildIndexedSourceErrorHealth(error)
-          }),
-          source.getRoots().catch((error) => {
-            diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' roots failed`, {
-              error
-            })
-            return [] as IndexedSourceRoot[]
-          }),
-          source.getEvidence?.().catch((error) => {
-            diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' evidence failed`, {
-              error
-            })
-            return [] as IndexedSourceEvidence[]
-          }) ?? Promise.resolve([] as IndexedSourceEvidence[]),
-          source.getProgress?.().catch((error) => {
-            diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' progress failed`, {
-              error
-            })
-            return null as IndexedSourceProgress | null
-          }) ?? Promise.resolve(null as IndexedSourceProgress | null)
-        ])
+        const disposeSource = enterPerfContext(
+          'IndexingDiagnostics.source',
+          { sourceId: source.descriptor.id },
+          { mode: 'blocking' }
+        )
+        try {
+          const [health, roots, evidence, progress] = await Promise.all([
+            source.getHealth().catch((error) => {
+              diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' health failed`, {
+                error
+              })
+              return buildIndexedSourceErrorHealth(error)
+            }),
+            source.getRoots().catch((error) => {
+              diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' roots failed`, {
+                error
+              })
+              return [] as IndexedSourceRoot[]
+            }),
+            source.getEvidence?.().catch((error) => {
+              diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' evidence failed`, {
+                error
+              })
+              return [] as IndexedSourceEvidence[]
+            }) ?? Promise.resolve([] as IndexedSourceEvidence[]),
+            source.getProgress?.().catch((error) => {
+              diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' progress failed`, {
+                error
+              })
+              return null as IndexedSourceProgress | null
+            }) ?? Promise.resolve(null as IndexedSourceProgress | null)
+          ])
 
-        const contractIssues = getIndexedSourceContractIssues(source)
+          const contractIssues = getIndexedSourceContractIssues(source)
 
-        return {
-          descriptor: source.descriptor,
-          health,
-          roots,
-          evidence,
-          progress,
-          admissionIssues: contractIssues.admission,
-          lifecycleIssues: contractIssues.lifecycle
+          return {
+            descriptor: source.descriptor,
+            health,
+            roots,
+            evidence,
+            progress,
+            admissionIssues: contractIssues.admission,
+            lifecycleIssues: contractIssues.lifecycle
+          }
+        } finally {
+          disposeSource()
         }
       })
     )

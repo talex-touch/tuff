@@ -24,6 +24,8 @@ import type {
   ExecWriteResult,
   GetProviderReplacementOutcomeMessage,
   InitMessage,
+  PersistAndApplyProviderItemsMessage,
+  PersistAndApplyProviderItemsResult,
   PersistEntriesMessage,
   RemoveByProviderMessage,
   RemoveFileExtensionsMessage,
@@ -41,6 +43,7 @@ import type {
   UpsertFileRecord
 } from '../file-index-persistence-repository'
 import process from 'node:process'
+import { performance } from 'node:perf_hooks'
 import { parentPort } from 'node:worker_threads'
 import { type Client, createClient, type InValue } from '@libsql/client'
 import { sql } from 'drizzle-orm'
@@ -86,6 +89,7 @@ interface UpsertScanProgressMessage {
 type WorkerRequest =
   | InitMessage
   | ApplyProviderItemsMessage
+  | PersistAndApplyProviderItemsMessage
   | BeginProviderReplacementMessage
   | StageProviderReplacementItemsMessage
   | CommitProviderReplacementMessage
@@ -158,6 +162,40 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
           )
         })
         break
+      case 'persistAndApplyProviderItems': {
+        if (!filePersistenceRepository || !searchIndex) {
+          throw new Error('Worker not initialized — send init first')
+        }
+        // Both operations run on this worker's serialized queue. They remain separate domain
+        // transactions, but the main thread pays one message/clone boundary instead of two.
+        const operationStartedAt = performance.now()
+        const persistStartedAt = operationStartedAt
+        const persisted = await filePersistenceRepository.upsertFiles(message.records)
+        const persistDurationMs = performance.now() - persistStartedAt
+        const applyStartedAt = performance.now()
+        const summary = await searchIndex.applyProviderItems(
+          message.providerId,
+          message.items,
+          message.legacyItemIds
+        )
+        const applyDurationMs = performance.now() - applyStartedAt
+        const metrics = {
+          requestedRows: message.records.length,
+          persistedRows: persisted.length,
+          indexedItems: summary.indexedItems,
+          removedItems: summary.removedItems,
+          legacyItemIds: message.legacyItemIds.length,
+          workerDurationMs: performance.now() - operationStartedAt,
+          persistDurationMs,
+          applyDurationMs
+        }
+        searchIndexWorkerLog.debug('Fused file/index write completed', {
+          meta: { operation: 'persist-and-apply', sourceId: message.providerId, ...metrics }
+        })
+        const result: PersistAndApplyProviderItemsResult = { persisted, summary, metrics }
+        respond({ type: 'result', taskId, result })
+        break
+      }
 
       case 'beginProviderReplacement':
         if (!searchIndex) throw new Error('Worker not initialized — send init first')
