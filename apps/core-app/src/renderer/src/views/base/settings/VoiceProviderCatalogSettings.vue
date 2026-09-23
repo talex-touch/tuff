@@ -147,7 +147,6 @@ onMounted(() => {
   <TuffGroupBlock
     class="VoiceProviderCatalogSettings"
     :name="t('settingSpeechRecognition.catalog.title')"
-    :description="t('settingSpeechRecognition.catalog.description')"
     default-icon="i-carbon-cloud-service-management"
     active-icon="i-carbon-cloud-satellite-services"
     memory-name="voice-provider-catalog"

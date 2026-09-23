@@ -664,7 +664,6 @@
     },
     "models": {
       "title": "On-device models",
-      "description": "Local speech models available from the cloud catalog. Once installed they run without a network, and every weight file is verified byte for byte.",
       "loading": "Reading the cloud catalog...",
       "catalogUnavailable": "The cloud model catalog could not be read. Check the network and retry.",
       "signInRequired": "Sign in to Tuff to read the cloud model catalog.",
@@ -676,6 +675,11 @@
       "remove": "Remove",
       "installing": "Installing...",
       "progress": "{percent}% downloaded ({size})",
+      "moreTitle": "More models",
+      "expandHint": "{count} more bundles, for when a specific engine or size matters.",
+      "collapseHint": "Showing only the recommended and installed models.",
+      "expand": "Show {count}",
+      "collapse": "Show less",
       "actionFailed": "That did not work: {reason}"
     }
   },

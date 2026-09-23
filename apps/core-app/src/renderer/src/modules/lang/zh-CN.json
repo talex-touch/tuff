@@ -664,7 +664,6 @@
     },
     "models": {
       "title": "端侧模型",
-      "description": "云端目录里可安装的本地识别模型。安装后无需联网即可识别，权重逐字节校验。",
       "loading": "正在读取云端目录…",
       "catalogUnavailable": "读不到云端模型目录，请检查网络后重试。",
       "signInRequired": "登录 Tuff 账号后才能读取云端模型目录。",
@@ -676,6 +675,11 @@
       "remove": "移除",
       "installing": "正在安装…",
       "progress": "已下载 {percent}%（共 {size}）",
+      "moreTitle": "更多模型",
+      "expandHint": "还有 {count} 个可安装模型，供需要指定引擎或体积时选择。",
+      "collapseHint": "只看推荐与已安装的模型。",
+      "expand": "展开（{count}）",
+      "collapse": "收起",
       "actionFailed": "操作失败：{reason}"
     }
   },
