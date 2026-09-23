@@ -30,14 +30,12 @@ import type {
   IndexedSourceResetRequest,
   IndexedSourceResetResult,
   IndexedSourceScanRequest,
-  IndexedSourceWatchEvent,
-  IndexedWriteFlushSnapshot
+  IndexedSourceWatchEvent
 } from '@talex-touch/utils/search'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../db/schema'
 import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
-import type { PersistAndApplyProviderItemsMetrics } from '../../search-engine/workers/search-index-worker-types'
 import type { FileIndexSettings, ScannedFileInfo } from './types'
 import type { IndexWorkerFileResult } from './workers/file-index-worker-client'
 import fs from 'node:fs/promises'
@@ -191,6 +189,17 @@ import { FileProviderScanStrategyService } from './services/file-provider-scan-s
 import { FileProviderAssetService } from './services/file-provider-asset-service'
 import { FileProviderSearchResultService } from './services/file-provider-search-result-service'
 import FileSystemWatcher from '../../file-system-watcher'
+import type {
+  FileIndexedSourceRuntimeMutationDelegate,
+  FileIndexedSourceRuntimeResetDelegate,
+  FileIndexedSourceScanResult,
+  FileIndexRunOptions,
+  FileIndexSyncStats,
+  FileProviderRuntimeWriteSnapshot,
+  FileUpdateRecord
+} from './file-provider-index-contracts'
+import { createFileIndexSyncStats } from './file-provider-index-contracts'
+import { resolveFileProviderBaseWatchPaths } from './file-provider-watch-paths'
 
 const fileProviderLog = getLogger('file-provider')
 const FILE_PROVIDER_STARTUP_READY_WAIT_MS = 3_000
@@ -220,22 +229,6 @@ function chunkArray<T>(items: T[], chunkSize: number): T[][] {
     chunks.push(items.slice(i, i + safeChunkSize))
   }
   return chunks
-}
-
-type FileProviderRuntimeWriteSnapshot = Omit<IndexedWriteFlushSnapshot, 'status'> & {
-  status: 'flushed' | 'failed'
-}
-
-interface FileUpdateRecord {
-  id: number
-  path: string
-  name: string
-  extension: string | null
-  size: number | null
-  ctime: Date
-  mtime: Date
-  type: string
-  isDir: boolean
 }
 
 const FILE_PROVIDER_PROGRESS_TASK_ID = 'file-provider.progress-cleanup'
@@ -304,98 +297,10 @@ function classifyFailedFileIndexError(lastError: string | null): string | null {
 //   }
 // }
 
-interface FileIndexSyncStats {
-  added: number
-  changed: number
-  deleted: number
-  skipped: number
-  errors: number
-}
-
-interface FileIndexRunOptions {
-  onRecordBatch?: (batch: IndexedSourceRecordBatch) => void | Promise<void>
-  onDelta?: (delta: IndexedSourceDelta) => void | Promise<void>
-  throwOnFailure?: boolean
-  signal?: AbortSignal
-  mutationLeaseId?: string
-}
-
-export interface FileIndexedSourceRuntimeMutationDelegate {
-  applyBatch: (batch: IndexedSourceRecordBatch) => Promise<unknown>
-  applyBatchWithPersistence?: (
-    batch: IndexedSourceRecordBatch,
-    records: UpsertFileRecord[]
-  ) => Promise<{
-    persisted: Array<Record<string, unknown>>
-    metrics?: PersistAndApplyProviderItemsMetrics
-  }>
-  applyDelta: (delta: IndexedSourceDelta) => Promise<unknown>
-  cleanupSource: (sourceId: string, mutationLeaseId?: string) => Promise<unknown>
-  countSource: (sourceId: string, mutationLeaseId?: string) => Promise<number>
-  drainSource: (sourceId: string, timeoutMs?: number) => Promise<void>
-  scanSource: (reason: IndexedSourceScanRequest['reason']) => Promise<unknown>
-}
-
-interface FileIndexedSourceScanResult {
-  batches: IndexedSourceRecordBatch[]
-}
-
 const FILE_INDEX_SEARCH_DRAIN_TIMEOUT_MS = 30_000
 const FILE_INDEX_SEARCH_DRAIN_INTERVAL_MS = 100
 
-type FileIndexedSourceRuntimeResetDelegate = (
-  request: IndexedSourceResetRequest
-) => Promise<IndexedSourceResetResult>
-
-function createFileIndexSyncStats(): FileIndexSyncStats {
-  return {
-    added: 0,
-    changed: 0,
-    deleted: 0,
-    skipped: 0,
-    errors: 0
-  }
-}
-
-export function resolveFileProviderBaseWatchPaths(input: {
-  envValue?: string
-  platform?: NodeJS.Platform
-  getPath: (
-    name: 'home' | 'documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos'
-  ) => string
-  onPathError?: (name: string, error: unknown) => void
-}): string[] {
-  const envPaths =
-    typeof input.envValue === 'string'
-      ? input.envValue
-          .split(path.delimiter)
-          .map((value) => value.trim())
-          .filter(Boolean)
-          .map((value) => path.resolve(value))
-      : []
-  if (envPaths.length > 0) {
-    return [...new Set(envPaths)]
-  }
-
-  // macOS gets one broad user-space root. Traversal filters prune hidden, system, development,
-  // cache and temporary subtrees. Other platforms retain their existing roots until realtime
-  // watch depth and permission behavior are proven against a whole-home default there.
-  const pathNames: Array<
-    'home' | 'documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos'
-  > =
-    (input.platform ?? process.platform) === 'darwin'
-      ? ['home']
-      : ['documents', 'downloads', 'desktop', 'music', 'pictures', 'videos']
-  const paths = pathNames.map((name) => {
-    try {
-      return input.getPath(name)
-    } catch (error) {
-      input.onPathError?.(name, error)
-      return null
-    }
-  })
-  return [...new Set(paths.filter((value): value is string => Boolean(value)))]
-}
+export { resolveFileProviderBaseWatchPaths }
 
 class FileProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'file-provider'
