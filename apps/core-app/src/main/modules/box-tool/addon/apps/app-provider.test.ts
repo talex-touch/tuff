@@ -3611,7 +3611,15 @@ describe('app freshness hardening (2026-09-21)', () => {
       ]
     })
 
-    await privateProvider._performMdlsUpdateScan()
+    // `_performMdlsUpdateScan` returns early off macOS, and CI runs on Linux: without this the
+    // scan never reaches the deletion routing the test is about.
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
+      await privateProvider._performMdlsUpdateScan()
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    }
 
     expect(processAppsForDeletion).toHaveBeenCalledWith([
       expect.objectContaining({ id: 91, path: dbRow.path })
