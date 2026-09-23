@@ -928,3 +928,38 @@ Adopted explicit external Pi, OMP, Claude, and Codex native sessions per existin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 74: 分批提交搜索索引与 CoreApp 设置改动
+
+**Date**: 2026-09-22
+**Task**: 分批提交搜索索引与 CoreApp 设置改动
+**Branch**: `master`
+
+### Summary
+
+按关注点完成三批本地提交：搜索新鲜度与流传输、融合文件持久化/FTS 与细粒度埋点、存储失败原因契约与设置界面调整。相关聚焦测试和 node typecheck 通过；web typecheck 仍被并行未跟踪的 TuffEx Flowchart canvasEl 未使用错误阻塞。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `66ec1be88` | (see git log) |
+| `5767975bf` | (see git log) |
+| `26f295a92` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
