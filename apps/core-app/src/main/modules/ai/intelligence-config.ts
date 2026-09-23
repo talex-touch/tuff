@@ -932,12 +932,13 @@ function applyNexusProviderAuthState(signedIn: boolean): boolean {
     // Disabling Nexus is mirrored onto every Nexus binding by the patch pass, so the per-binding
     // flags stay owned by one place instead of being flipped twice.
     const changed = patchStoredConfigDefaults(stored) || providerChanged
-    if (!changed) {
-      observedNexusEnabled = false
-      return false
-    }
-    saveMainConfig(StorageList.IntelligenceConfig, stored)
+    // Observed before the write, in both directions. The config listener runs on the storage
+    // notification, and a value it has not yet seen switched off is indistinguishable from the user
+    // switching it off — which is how the app's own sign-out mirror came to be recorded as the user
+    // closing the route, permanently, the first time the app started before auth was ready.
     observedNexusEnabled = false
+    if (!changed) return false
+    saveMainConfig(StorageList.IntelligenceConfig, stored)
     return true
   }
 
@@ -971,13 +972,12 @@ function applyNexusProviderAuthState(signedIn: boolean): boolean {
     }
   }
 
-  if (!changed) {
-    observedNexusEnabled = provider.enabled === true
-    return false
-  }
+  // Observed before the write, for the same reason as the disabling branch above: only a change this
+  // module did not make is the user's, and only that one may set or clear the override.
+  observedNexusEnabled = provider.enabled === true
+  if (!changed) return false
 
   saveMainConfig(StorageList.IntelligenceConfig, stored)
-  observedNexusEnabled = provider.enabled === true
   return true
 }
 
