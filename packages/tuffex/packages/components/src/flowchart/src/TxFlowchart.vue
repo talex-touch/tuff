@@ -41,8 +41,6 @@ defineSlots<{
   label?: (props: { node: FlowNode }) => any
 }>()
 
-const canvasEl = ref<HTMLElement | null>(null)
-
 /**
  * Measured node heights, keyed by node id.
  *
@@ -208,7 +206,6 @@ const canvasStyle = computed(() => ({
 
 <template>
   <div
-    ref="canvasEl"
     class="tx-bui-flowchart"
     :class="{ 'is-dotted': dots }"
     :style="canvasStyle"
