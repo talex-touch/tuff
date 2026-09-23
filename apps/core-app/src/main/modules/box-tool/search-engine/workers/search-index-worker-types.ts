@@ -7,8 +7,8 @@ import type {
   SearchIndexItem,
   SearchIndexProviderReplacementSummary
 } from '../search-index-service'
+import type { FilePersistenceEntry, UpsertFileRecord } from '../file-index-persistence-repository'
 import type { files } from '../../../../db/schema'
-import type { FilePersistenceEntry } from '../file-index-persistence-repository'
 import type { SerializedSearchIndexWorkerError } from './search-index-worker-error'
 
 export type {
@@ -32,6 +32,33 @@ export interface ApplyProviderItemsMessage {
   items: SearchIndexItem[]
   legacyItemIds: string[]
   taskId: string
+}
+
+export interface PersistAndApplyProviderItemsMessage {
+  type: 'persistAndApplyProviderItems'
+  providerId: string
+  items: SearchIndexItem[]
+  legacyItemIds: string[]
+  records: UpsertFileRecord[]
+  taskId: string
+}
+export interface PersistAndApplyProviderItemsMetrics {
+  requestedRows: number
+  persistedRows: number
+  indexedItems: number
+  removedItems: number
+  legacyItemIds: number
+  workerDurationMs: number
+  persistDurationMs: number
+  applyDurationMs: number
+  roundTripDurationMs?: number
+  visibilityDurationMs?: number
+}
+
+export interface PersistAndApplyProviderItemsResult {
+  persisted: Array<Record<string, unknown>>
+  summary: SearchIndexProviderReplacementSummary
+  metrics?: PersistAndApplyProviderItemsMetrics
 }
 
 export interface BeginProviderReplacementMessage {
@@ -174,7 +201,7 @@ export interface ExecWriteResult {
 export type SearchIndexWorkerMessage =
   | InitMessage
   | ApplyProviderItemsMessage
-  | RemoveProviderItemsMessage
+  | PersistAndApplyProviderItemsMessage
   | BeginProviderReplacementMessage
   | StageProviderReplacementItemsMessage
   | CommitProviderReplacementMessage

@@ -23,6 +23,18 @@ Any code that writes to `database.db` (primary), `database-aux.db` (aux), or
 is the emergency shared-file fallback. Never open a second write connection to a file
 another owner writes (the original root cause: worker + main both writing `database.db`).
 
+Pause window (`searchIndexWriter.withPausedAdmission`, reached via
+`SourceScopedIndexWriterRouter.withPausedSelectedAdmission` for a source reset): the writer
+drains in-flight work, then holds every **foreign** write at the admission gate until the
+operation settles. Writes issued by the pausing operation's own async context (tracked with
+`AsyncLocalStorage`) are admitted immediately — the pause exists so that operation can
+mutate the index alone. Do not add an outer `await` on a second `withPausedAdmission`
+from inside an operation, and do not "fix" the bypass by making it wait: that is the
+2026-09-21 manual-rebuild self-deadlock (reset → `clearScanProgress` → `execWrite` waited
+on its own caller's gate; the reset task gate then stayed running for the session and every
+later file watch event was skipped). Regression anchors:
+`search-index-writer.test.ts` "paused-window self writes".
+
 ### 3. Signatures (db/db-write.ts, db/db-write-scheduler.ts)
 
 ```ts

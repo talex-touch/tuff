@@ -150,6 +150,28 @@
   - R9 仍保持 open：App Provider 尚未迁入 search-index worker typed persistence port，`db/utils.ts` policy-free mutations、libSQL client/session owner registry 和 aux compatibility mirror 退场仍待后续收敛。
   - Remaining R9 search-index split write migration is owned by `07-28-migrate-search-index-split-write-paths`: the split has defaulted on since `cd39bdbf6`; `=0` is the emergency rollback. Every remaining 2d/2e writer and provider-before-`searchIndexWriter` readiness assertion still needs focused verification and isolated-profile runtime evidence.
 
+- [ ] **R10 — indexing 期间主进程同步 SQLite 语句与每事件 diagnostics 扇出**
+  - 2026-09-21 现场证据（dev 会话 `tuff-dev/logs/D.2026-09-21.log`）：fullScan 期间 `[Perf:EventLoop] Event loop lag` 连续 0.4–1.3s，并使一次 `storage:app:save` 的 IPC 请求超时——配置未落盘，UI 显示「存储服务返回失败（版本 71）」，而主进程日志里没有任何 storage 侧失败、DB revision 停在 71。
+  - **归因修正（重要）**：日志里的 `context=FileProvider.fullScan 978s` 是 `utils/perf-monitor.ts:864-866` 取「存活最久的 perf context」当标签，**不是阻塞时长**；真实阻塞量是同一行的 `lagMs`。目录遍历与 stat 全程在 worker 线程（`addon/files/workers/file-scan-worker-client.ts:173-174`、`file-scan-worker.ts:110-127`），不占主线程。
+  - 主进程同步语句三处（libSQL local binding 在调用线程同步执行，见 `modules/database/index.ts:48-56`；主库 busy_timeout 2s）：
+    1. `FileProvider.computeIndexStats()` 的 6 条 `COUNT(*)` 打在主进程持有的 6 GB 索引句柄上（`addon/files/file-provider.ts:2583-2655`，`db/utils.ts:119`），调用方包含 diagnostics IPC、`getHealth`、`getIndexedSourceEvidence`，以及**每条 FS 事件**（`indexing-runtime.ts:486-494`）。单次成本取决于 best-effort perf index 是否建成（仓库自测：无索引 8.1–11.5s / 有索引 25–27ms，见 `db/schema.ts:110-113`）。
+    2. `SqliteIndexingTaskStateStore.save()`（`indexing-task-state-store.ts:79-108`，主库同步 upsert）在同一会话执行 **18,257 次**（`DbWriteScheduler` label stats）。`drop=0` 证明队列从不积压，所以 `db-write-scheduler.ts:499-514` 的 `latest_wins` per-budgetKey 清扫在此**没有可合并对象**——修法是降低入队频率，不是加合并。
+    3. 每批一次 `SELECT … WHERE path IN (…)`（`file-provider.ts:1157-1185`）。
+  - 吞吐正反馈：`upsertBatchScheduler` 被显式压到 `initialSize 5 / maxSize 20`（`file-provider.ts:409-416`，而 `AdaptiveBatchScheduler` 默认 maxSize 80）→ 15.5 万行切成 ≥7,800 块，每块付 `appTaskGate.waitForIdle` + 两次 worker 往返 + `publishCommit` 的 reader-visibility barrier；主线程拖延又被 AIMD 当拥塞信号 → 窗口压回 minSize 2 → 块数继续上升。
+  - 剩余候选修法（**每一项都需要在真实规模 profile 上做前后 A/B 才可判定**，不要凭代码阅读直接改）：
+    - A ✅ **已修（2026-09-21）**：`FileProvider.getIndexStats()` 增加 1s TTL 快照（`FILE_INDEX_STATS_CACHE_MS`，与仓库既有 `INDEXED_WORKER_STATUS_SNAPSHOT_CACHE_TTL_MS` 同值），返回值收敛到共享类型 `FileIndexStats`，所有出口返回副本以免调用方互相污染。定案数据：同一连接内 8 条 COUNT 合计 50 ms（单条 ~6 ms，13.7k 行、覆盖索引命中），而**新建连接**每次约 120 ms —— 所以成本在长连接下约 36 ms/次；配合 `indexing-runtime.ts:486-494` 的「每条 FS watch 事件一次 diagnostics」，一次事件风暴就等于一次扫描风暴。TTL 把调用频率压到 1Hz，单次成本不变。这也覆盖了 B 想解决的一半（降低单位时间内的调用次数），B 若仍要做只是为了减少调用**次数**本身。
+    - B 把 watch 路径改成「每窗口一次」而非「每事件一次」（`indexed-source-event-router.ts:63-67` + `indexing-runtime.ts:1299-1304`；影响 recentTasks 粒度与既有断言）——A 的 TTL 已消掉其**成本**侧收益，剩余价值是可观测性粒度，优先级下降。
+    - C 重配 `upsertBatchScheduler` 大小、把 `waitForIdle` 提到 worker 批粒度（影响首帧搜索体验与 AIMD 测试）——未做：需要一次完整 fullScan 的前后对比，且 `maxSize 20` 是显式压低（默认 80），改动会直接换掉时延/吞吐的取舍，应单独立项。
+  - 另一条同场证据（未定位到具体生产者）：本机隔离实例在索引期间高频出现 `[DbWriteScheduler] DB write task waited 3.4–4.3s: file-icon.persist`（累计 300+ slow tasks），说明主库写 lane 在索引期同样被压满。icon 写队列上限 24（`FILE_ICON_WRITE_MAX_QUEUE`）值得单独复核。
+  - 可观测性：给 `computeIndexStats`、`SqliteIndexingTaskStateStore.save`、`IndexingRuntime.getDiagnostics` 各包一层 `enterPerfContext(label, {mode:'blocking'})`，否则 lag 日志永远只能给出误导性的 `fullScan` 标签（本次只能靠读代码定案的原因）。
+- 2026-09-22 **埋点细化已落地**：`FileProvider.computeIndexStats`、`IndexingTaskStateStore.save`、`IndexingRuntime.getDiagnostics` 及每源诊断均有 `blocking` perf context；fused file/FTS 写入记录 worker 持久化、FTS apply、worker 总耗时、IPC 往返与 visibility barrier 阶段，并仅向 diagnostics evidence 暴露数值/稳定枚举。**未改变调度与耗时策略**，R10 的性能 A/B 仍保持 open。
+
+- [x] **R11 — 读 worker 客户端失败后永久不可用** ✅ 已修（2026-09-21）
+  - 症状：`SearchIndexReadWorkerClient.failWorker()` 会置 `closed = true` 且**没有任何重建路径**（客户端只在 `search-core.ts:2048` 构造一次），于是一次超时或 worker exit 之后，该会话内所有文件/应用搜索永久失败，而写侧与 commit 一直正常。运行时证据：`D.2026-09-21.log` 中 `Search index commit has degraded reader visibility` 1475 次、`retry failed` 1277 次、`recovered` 0 次，跨 06:50:43 → 07:17:10 共 26.5 分钟零恢复；`SearchIndex:Writer` 的修复重试（100/500/2000ms）因此变成纯固定开销。
+  - 修复：失败只 retire 当前 worker（`this.worker = null`），下一次 `all()` 经 `ensureWorker()` 重建；`closed` 现在只由显式 `close()` 设置，仍是终结态。新增 `consecutiveFailures` / `cooldownUntil`：worker 级失败计数达 3 次进入 30s 冷却（冷却期内直接 reject，不再重建），一次成功的读把计数归零——避免「永久坏」时每次尝试都泄漏一个只能被请求关停的线程。
+  - 同时补上该文件此前完全缺失的日志（`createLogger('SearchIndex').child('ReadWorker')`，只在首次失败与触发冷却那次告警），这是原故障无法从会话日志回溯的直接原因。
+  - 未做（仍 open）：读 worker 侧同样无日志（`search-index-read-worker.ts`），首次失败的真实原因（15s 慢查询 / worker OOM 退出 / 确定性 SQL 错误）仍需运行时证据；`waitUntilReadable(request)` 把 request 对象按位置传进 signal 形参（本文件被静默忽略）属既有 E-L8。
+
 ### 🟢 低危清理
 
 - [x] **C1 — 死依赖** ✅ 已修（2026-08-07）：`mathjs` 已从两处 manifest、Vite externalize 例外与 electron-builder 排除项一并移除（[#338](https://github.com/talex-touch/tuff/issues/338) / [PR #1088](https://github.com/talex-touch/tuff/pull/1088)）；`tesseract.js` 在依赖树里已不存在，其残留的 build-allowlist 条目随 [#347](https://github.com/talex-touch/tuff/issues/347) / [PR #1084](https://github.com/talex-touch/tuff/pull/1084) 一并清除。

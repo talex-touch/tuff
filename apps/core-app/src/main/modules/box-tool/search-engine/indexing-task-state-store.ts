@@ -11,6 +11,7 @@ import {
 } from '@talex-touch/utils/search'
 import { eq, sql } from 'drizzle-orm'
 import { scheduleDbWrite } from '../../../db/db-write'
+import { enterPerfContext } from '../../../utils/perf-context'
 import * as schema from '../../../db/schema'
 
 const taskHistoryKinds = new Set<IndexedSourceTaskHistoryEntry['kind']>([
@@ -78,33 +79,46 @@ export class SqliteIndexingTaskStateStore implements IndexingTaskStateStore {
 
   async save(sourceId: string, state: IndexedSourceRuntimeTaskState): Promise<void> {
     const stateJson = JSON.stringify(sanitizeTaskState(state) ?? {})
+    const disposeSave = enterPerfContext(
+      'IndexingTaskStateStore.save',
+      {
+        sourceId,
+        stateBytes: Buffer.byteLength(stateJson, 'utf8'),
+        recentTaskCount: state.recentTasks?.length ?? 0
+      },
+      { mode: 'blocking' }
+    )
     const updatedAt = new Date()
-    await scheduleDbWrite(
-      'indexing.task-state.save',
-      async () => {
-        await this.ensureReady()
-        await this.db
-          .insert(schema.indexedSourceTaskState)
-          .values({
-            sourceId,
-            stateJson,
-            updatedAt
-          })
-          .onConflictDoUpdate({
-            target: schema.indexedSourceTaskState.sourceId,
-            set: {
+    try {
+      await scheduleDbWrite(
+        'indexing.task-state.save',
+        async () => {
+          await this.ensureReady()
+          await this.db
+            .insert(schema.indexedSourceTaskState)
+            .values({
+              sourceId,
               stateJson,
               updatedAt
-            }
-          })
-      },
-      {
-        priority: 'best_effort',
-        dropPolicy: 'latest_wins',
-        budgetKey: sourceId,
-        maxQueueWaitMs: 10_000
-      }
-    )
+            })
+            .onConflictDoUpdate({
+              target: schema.indexedSourceTaskState.sourceId,
+              set: {
+                stateJson,
+                updatedAt
+              }
+            })
+        },
+        {
+          priority: 'best_effort',
+          dropPolicy: 'latest_wins',
+          budgetKey: sourceId,
+          maxQueueWaitMs: 10_000
+        }
+      )
+    } finally {
+      disposeSave()
+    }
   }
 
   async delete(sourceId: string): Promise<void> {

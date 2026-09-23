@@ -4,6 +4,7 @@ import {
   mapIndexedSourceRecordToSearchIndexItem,
   SearchIndexStoreAdapter
 } from './indexing-store-adapter'
+import type { UpsertFileRecord, SearchIndexPersistAndIndexResult } from './search-index-writer'
 
 function buildSearchIndex() {
   return {
@@ -120,6 +121,118 @@ describe('SearchIndexStoreAdapter', () => {
       },
       batch
     )
+  })
+
+  it('fuses file-row persistence with the index mutation and forwards the persisted rows', async () => {
+    const persisted: Array<Record<string, unknown>> = [
+      { id: 41, path: '/tmp/report.txt', name: 'report.txt' }
+    ]
+    const persistAndIndexFiles = vi.fn(
+      async (): Promise<SearchIndexPersistAndIndexResult> => ({
+        persisted,
+        commit: {
+          sourceId: 'file-provider',
+          kind: 'index',
+          writer: 'runtime',
+          affectedItems: 1,
+          committed: true,
+          revision: 1,
+          generation: 1,
+          committedAt: 1
+        }
+      })
+    )
+    const searchIndex = { ...buildSearchIndex(), persistAndIndexFiles }
+    const onBatchApplied = vi.fn(async () => {})
+    const adapter = new SearchIndexStoreAdapter(searchIndex as never, { onBatchApplied })
+    const fileRecords: UpsertFileRecord[] = [
+      {
+        path: '/tmp/report.txt',
+        name: 'report.txt',
+        extension: '.txt',
+        size: 12,
+        mtime: new Date(1000),
+        ctime: new Date(1000),
+        lastIndexedAt: new Date(1000),
+        isDir: false,
+        type: 'file'
+      }
+    ]
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'file-provider',
+      records: [
+        {
+          sourceId: 'file-provider',
+          recordId: 'file:/tmp/report.txt',
+          stableKey: 'file:/tmp/report.txt',
+          kind: 'file',
+          title: 'report.txt',
+          path: '/tmp/report.txt',
+          search: {
+            legacyItemIds: ['file:/tmp/report.txt', 'legacy:report', 'legacy:report']
+          }
+        }
+      ],
+      done: true
+    }
+
+    const summary = await adapter.applyBatchWithPersistence(batch, fileRecords)
+
+    expect(persistAndIndexFiles).toHaveBeenCalledWith(
+      'file-provider',
+      fileRecords,
+      [expect.objectContaining({ itemId: 'file:/tmp/report.txt', providerId: 'file-provider' })],
+      // The record's own id is not a legacy alias, and duplicate aliases collapse.
+      { legacyItemIds: ['legacy:report'] }
+    )
+    expect(summary).toEqual({
+      sourceId: 'file-provider',
+      recordCount: 1,
+      indexedItemCount: 1,
+      done: true,
+      cursor: undefined,
+      persisted
+    })
+    expect(onBatchApplied).toHaveBeenCalledWith(summary, batch)
+    // The fused call owns the index mutation; a second, separate index write would
+    // double-apply the same batch.
+    expect(searchIndex.indexItems).not.toHaveBeenCalled()
+  })
+
+  it('rejects the fused batch path when the mutation writer cannot fuse persistence', async () => {
+    const searchIndex = buildSearchIndex()
+    const adapter = new SearchIndexStoreAdapter(searchIndex as never)
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'file-provider',
+      records: [
+        {
+          sourceId: 'file-provider',
+          recordId: 'file:/tmp/report.txt',
+          stableKey: 'file:/tmp/report.txt',
+          kind: 'file',
+          title: 'report.txt',
+          path: '/tmp/report.txt'
+        }
+      ]
+    }
+
+    await expect(
+      adapter.applyBatchWithPersistence(batch, [
+        {
+          path: '/tmp/report.txt',
+          name: 'report.txt',
+          mtime: 0,
+          ctime: 0,
+          lastIndexedAt: 0,
+          isDir: false,
+          type: 'file'
+        }
+      ])
+    ).rejects.toThrow('INDEX_STORE_FUSED_FILE_WRITE_UNAVAILABLE:file-provider')
+
+    // Failing loudly is the contract: silently degrading to the separate mutation path
+    // would drop the file-row persistence the caller asked for.
+    expect(searchIndex.indexItems).not.toHaveBeenCalled()
   })
 
   it('maps a complete source snapshot through a staged writer replacement transaction', async () => {

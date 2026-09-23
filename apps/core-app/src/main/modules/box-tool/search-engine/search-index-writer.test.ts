@@ -4,7 +4,9 @@ import { SearchIndexCommitHub } from './search-index-commit-hub'
 import {
   SearchIndexWriter,
   SourceScopedIndexWriterRouter,
-  type SearchIndexPhysicalWriter
+  type SearchIndexPersistAndApplyResult,
+  type SearchIndexPhysicalWriter,
+  type UpsertFileRecord
 } from './search-index-writer'
 import type { SearchIndexWorkerClient } from './workers/search-index-worker-client'
 
@@ -132,6 +134,98 @@ describe('SourceScopedIndexWriterRouter visibility publication', () => {
 
     expect(visibilityBarrier.waitUntilReadable).toHaveBeenCalledTimes(5)
     expect(writerLog.warn).toHaveBeenCalledTimes(5)
+  })
+
+  it('persists file rows through the fused writer before publishing reader visibility', async () => {
+    const sequence: string[] = []
+    const commitHub = new SearchIndexCommitHub()
+    commitHub.subscribe(() => sequence.push('generation'))
+    const persisted: Array<Record<string, unknown>> = [{ id: 7, path: '/tmp/one.txt' }]
+    const persistAndApplyProviderItems = vi.fn(
+      async (): Promise<SearchIndexPersistAndApplyResult> => {
+        sequence.push('persist')
+        // A count that cannot be derived from the items: the published commit must carry
+        // what the physical writer reported, not a recomputed item total.
+        return { persisted, affectedItems: 5 }
+      }
+    )
+    const runtime: SearchIndexPhysicalWriter = {
+      ...createPhysicalWriter(() => sequence.push('physical commit')),
+      persistAndApplyProviderItems
+    }
+    const visibilityBarrier = {
+      waitUntilReadable: vi.fn(async () => {
+        sequence.push('barrier')
+      })
+    }
+    const router = new SourceScopedIndexWriterRouter({
+      runtime,
+      legacy: runtime,
+      visibilityBarrier,
+      commitHub
+    })
+    const fileRecords: UpsertFileRecord[] = [
+      {
+        path: '/tmp/one.txt',
+        name: 'one.txt',
+        mtime: 0,
+        ctime: 0,
+        lastIndexedAt: 0,
+        isDir: false,
+        type: 'file'
+      }
+    ]
+
+    const result = await router.persistAndIndexFiles(
+      'file-provider',
+      fileRecords,
+      [indexedItem('file:/tmp/one.txt')],
+      { legacyItemIds: ['legacy:one'] }
+    )
+
+    // Records lead and the source id follows: the physical writer's own argument order.
+    expect(persistAndApplyProviderItems).toHaveBeenCalledWith(
+      fileRecords,
+      'file-provider',
+      [expect.objectContaining({ itemId: 'file:/tmp/one.txt' })],
+      ['legacy:one']
+    )
+    expect(result.persisted).toBe(persisted)
+    expect(result.commit).toMatchObject({
+      sourceId: 'file-provider',
+      kind: 'index',
+      writer: 'runtime',
+      affectedItems: 5,
+      committed: true,
+      revision: 1,
+      generation: 1
+    })
+    // Persistence, then the reader-visibility barrier, then the published generation.
+    expect(sequence).toEqual(['persist', 'barrier', 'generation'])
+    // The fused call replaces the separate index mutation for the same batch.
+    expect(runtime.indexItems).not.toHaveBeenCalled()
+  })
+
+  it('fails explicitly when the resolved writer cannot fuse file persistence', async () => {
+    const runtime = createPhysicalWriter(() => undefined)
+    // The legacy writer exposes no fused capability; that has to surface as a hard
+    // failure rather than a silent fallback to the separate index path.
+    const legacy: SearchIndexPhysicalWriter = {
+      ...createPhysicalWriter(() => undefined),
+      mode: 'legacy'
+    }
+    const router = new SourceScopedIndexWriterRouter({
+      runtime,
+      legacy,
+      visibilityBarrier: { waitUntilReadable: vi.fn(async () => undefined) },
+      defaultMode: 'legacy'
+    })
+
+    await expect(
+      router.persistAndIndexFiles('file-provider', [], [indexedItem('file:/tmp/one.txt')])
+    ).rejects.toThrow('SEARCH_INDEX_FUSED_FILE_WRITE_UNAVAILABLE:file-provider:legacy')
+
+    expect(legacy.indexItems).not.toHaveBeenCalled()
   })
 })
 
@@ -355,5 +449,104 @@ describe('SearchIndexWriter admission quiescence', () => {
     await expect(
       writer.indexItems('file-provider', [indexedItem('file:/tmp/after-failure.txt')])
     ).resolves.toBe(1)
+  })
+})
+
+describe('SearchIndexWriter paused-window self writes', () => {
+  function createClient(): Pick<
+    SearchIndexWorkerClient,
+    'init' | 'applyProviderItems' | 'execWrite' | 'drain' | 'getPendingCount'
+  > {
+    return {
+      init: vi.fn(async () => undefined),
+      applyProviderItems: vi.fn(async () => ({ removedItems: 0, indexedItems: 1 })),
+      execWrite: vi.fn(async () => [{ rowsAffected: 1, lastInsertRowid: null, rows: [] }]),
+      drain: vi.fn(async () => undefined),
+      getPendingCount: vi.fn(() => 0)
+    }
+  }
+
+  /**
+   * The manual rebuild clears scan_progress from INSIDE the paused window (reset →
+   * clearScanProgress → execWrite → withAdmission). Before the fix that write waited on the
+   * admission gate its own caller was holding, so the rebuild never completed and the reset
+   * task gate stayed running for the rest of the session.
+   */
+  it('lets the pausing operation write through the writer it paused', async () => {
+    const client = createClient()
+    const writer = new SearchIndexWriter({ client: client as SearchIndexWorkerClient })
+    await writer.initialize('/tmp/search-index-writer-test.db')
+
+    const outcome = await Promise.race([
+      writer.withPausedAdmission('indexed-source.reset.file-provider', async () => {
+        await writer.execWrite([{ sql: 'DELETE FROM scan_progress', args: [] }], 'single')
+        return 'completed'
+      }),
+      new Promise<string>((resolve) => setTimeout(() => resolve('self-deadlock'), 1_000))
+    ])
+
+    expect(outcome).toBe('completed')
+    expect(client.execWrite).toHaveBeenCalledOnce()
+    expect(writer.getStatus().admissionPaused).toBe(false)
+  })
+
+  it('still holds foreign writes until the pausing operation resumes', async () => {
+    let releasePause!: () => void
+    const pauseGate = new Promise<void>((resolve) => {
+      releasePause = resolve
+    })
+    const client = createClient()
+    const writer = new SearchIndexWriter({ client: client as SearchIndexWorkerClient })
+    await writer.initialize('/tmp/search-index-writer-test.db')
+
+    const order: string[] = []
+    const paused = writer.withPausedAdmission('indexed-source.reset.file-provider', async () => {
+      await writer.execWrite([{ sql: 'DELETE FROM scan_progress', args: [] }], 'single')
+      order.push('own-write')
+      await pauseGate
+      order.push('resume')
+      return 'completed'
+    })
+    await vi.waitFor(() => expect(order).toContain('own-write'))
+
+    const foreign = writer
+      .indexItems('file-provider', [indexedItem('file:/tmp/foreign.txt')])
+      .then(() => order.push('foreign-write'))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(client.applyProviderItems).not.toHaveBeenCalled()
+
+    releasePause()
+    await expect(paused).resolves.toBe('completed')
+    await foreign
+
+    expect(order).toEqual(['own-write', 'resume', 'foreign-write'])
+    expect(writer.getStatus().admissionPaused).toBe(false)
+  })
+
+  it('routes the reset shape through withPausedSelectedAdmission without deadlocking', async () => {
+    const client = createClient()
+    const writer = new SearchIndexWriter({ client: client as SearchIndexWorkerClient })
+    await writer.initialize('/tmp/search-index-writer-test.db')
+    const router = new SourceScopedIndexWriterRouter({
+      runtime: writer,
+      legacy: writer,
+      visibilityBarrier: { waitUntilReadable: async () => undefined },
+      commitHub: new SearchIndexCommitHub()
+    })
+
+    const outcome = await Promise.race([
+      router.withPausedSelectedAdmission(
+        'file-provider',
+        async () => {
+          // What FileProviderRuntimeResetService.clearScanProgress does when the split is on.
+          await writer.execWrite([{ sql: 'DELETE FROM scan_progress', args: [] }], 'single')
+          return 'reset-done'
+        },
+        1_000
+      ),
+      new Promise<string>((resolve) => setTimeout(() => resolve('self-deadlock'), 1_500))
+    ])
+
+    expect(outcome).toBe('reset-done')
   })
 })

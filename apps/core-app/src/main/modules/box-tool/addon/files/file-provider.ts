@@ -16,7 +16,8 @@ import type {
   FileIndexFailedFilesResult,
   FileIndexProgress as FileIndexProgressPayload,
   FileIndexRebuildRequest,
-  FileIndexRebuildResult
+  FileIndexRebuildResult,
+  FileIndexStats
 } from '@talex-touch/utils/transport/events/types'
 import type {
   IndexedFileSourceRecordRow,
@@ -36,6 +37,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../db/schema'
 import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
+import type { PersistAndApplyProviderItemsMetrics } from '../../search-engine/workers/search-index-worker-types'
 import type { FileIndexSettings, ScannedFileInfo } from './types'
 import type { IndexWorkerFileResult } from './workers/file-index-worker-client'
 import fs from 'node:fs/promises'
@@ -194,6 +196,15 @@ const fileProviderLog = getLogger('file-provider')
 const FILE_PROVIDER_STARTUP_READY_WAIT_MS = 3_000
 const FILE_EXTENSION_WRITE_MAX_QUEUE = 12
 const FILE_ICON_WRITE_MAX_QUEUE = 24
+/**
+ * How long one `getIndexStats()` snapshot serves every caller.
+ *
+ * Six `COUNT(*)` queries cost ~36 ms against a live index, and each file-system watch event asks
+ * for diagnostics — so a burst of watch events used to issue a burst of scans on the main thread.
+ * One second is set by the readers (progress, health, evidence), all of which poll slower than
+ * that and none of which can act on a sub-second difference in the counts.
+ */
+const FILE_INDEX_STATS_CACHE_MS = 1_000
 /** Extra breathing room after the DB startup degrade window (contracts §7). */
 const FILE_PATH_NORMALIZATION_INITIAL_DELAY_MS = 30_000
 const FILE_PATH_NORMALIZATION_CONFIG_KEY = 'file_provider_path_normalization_version'
@@ -311,6 +322,13 @@ interface FileIndexRunOptions {
 
 export interface FileIndexedSourceRuntimeMutationDelegate {
   applyBatch: (batch: IndexedSourceRecordBatch) => Promise<unknown>
+  applyBatchWithPersistence?: (
+    batch: IndexedSourceRecordBatch,
+    records: UpsertFileRecord[]
+  ) => Promise<{
+    persisted: Array<Record<string, unknown>>
+    metrics?: PersistAndApplyProviderItemsMetrics
+  }>
   applyDelta: (delta: IndexedSourceDelta) => Promise<unknown>
   cleanupSource: (sourceId: string, mutationLeaseId?: string) => Promise<unknown>
   countSource: (sourceId: string, mutationLeaseId?: string) => Promise<number>
@@ -870,6 +888,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         await appTaskGate.waitForIdle()
       },
       upsertFiles: (records, reason) => this.upsertSearchIndexFiles(records, reason),
+      persistAndEmitBatch: (records, runOptions) =>
+        this.persistAndPublishFullScanBatch(records, runOptions),
       emitRecordBatch: (batch, runOptions) =>
         this.emitIndexedSourceRecordBatchFromBatch(batch, runOptions),
       mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
@@ -1811,13 +1831,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
-  private async upsertSearchIndexFiles(
-    records: UpsertFileRecord[],
-    reason: string
-  ): Promise<Array<typeof filesSchema.$inferSelect>> {
-    if (records.length === 0) return []
-
-    const acceptedRecords = records.filter((record) => {
+  private filterSearchIndexUpsertRecords(records: UpsertFileRecord[]): UpsertFileRecord[] {
+    return records.filter((record) => {
       const extension = record.extension?.toLowerCase() || path.extname(record.name).toLowerCase()
       return (
         WHITELISTED_EXTENSIONS.has(extension) &&
@@ -1828,6 +1843,91 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }) === null
       )
     })
+  }
+
+  private async persistAndPublishFullScanBatch(
+    records: UpsertFileRecord[],
+    options?: FileIndexRunOptions
+  ): Promise<Array<typeof filesSchema.$inferSelect>> {
+    if (records.length === 0) return []
+
+    // Custom sinks are an explicit escape hatch used by tests/streaming callers. Preserve their
+    // existing two-step behavior; only the normal consumer path uses the fused worker request.
+    if (options?.onRecordBatch || options?.onDelta) {
+      const persisted = await this.upsertSearchIndexFiles(records, 'full-scan.upsert')
+      if (persisted.length > 0) {
+        await this.emitIndexedSourceRecordBatchFromBatch(
+          {
+            sourceId: this.id,
+            records: persisted.map((row) => this.mapFileToIndexedSourceRecord(row))
+          },
+          options
+        )
+      }
+      return persisted
+    }
+
+    const acceptedRecords = this.filterSearchIndexUpsertRecords(records)
+    if (acceptedRecords.length === 0) return []
+    if (!(await this.ensureSearchIndexWorkerReady('full-scan.fused'))) {
+      throw new Error('FILE_PERSISTENCE_PORT_UNAVAILABLE')
+    }
+    const mutation = this.requireRuntimeMutationDelegate().applyBatchWithPersistence
+    if (!mutation) throw new Error('FILE_INDEX_FUSED_WRITE_UNAVAILABLE')
+
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: this.id,
+      records: acceptedRecords.map((record) => this.mapFileToIndexedSourceRecord(record))
+    }
+    const startedAt = performance.now()
+    try {
+      const result = await mutation(batch, acceptedRecords)
+      const persisted = result.persisted as Array<typeof filesSchema.$inferSelect>
+      const metrics = result.metrics
+      this.recordRuntimeWriteSnapshot(this.ftsWriteSnapshotService, {
+        entries: persisted.length,
+        reason: 'full-scan.upsert.fused',
+        durationMs: performance.now() - startedAt,
+        metadata: {
+          writeMode: 'fused',
+          requestedRows: records.length,
+          acceptedRows: acceptedRecords.length,
+          persistedRows: persisted.length,
+          indexedItems: metrics?.indexedItems,
+          removedItems: metrics?.removedItems,
+          legacyItemIds: metrics?.legacyItemIds,
+          workerDurationMs: metrics?.workerDurationMs,
+          persistDurationMs: metrics?.persistDurationMs,
+          applyDurationMs: metrics?.applyDurationMs,
+          roundTripDurationMs: metrics?.roundTripDurationMs,
+          visibilityDurationMs: metrics?.visibilityDurationMs,
+          storeBoundary: 'file-persistence-fts'
+        }
+      })
+      return persisted
+    } catch (error) {
+      this.recordRuntimeWriteFailureSnapshot(this.ftsWriteSnapshotService, {
+        error,
+        reason: 'full-scan.upsert.fused',
+        entries: acceptedRecords.length,
+        metadata: {
+          writeMode: 'fused',
+          requestedRows: records.length,
+          acceptedRows: acceptedRecords.length,
+          storeBoundary: 'file-persistence-fts'
+        }
+      })
+      throw error
+    }
+  }
+
+  private async upsertSearchIndexFiles(
+    records: UpsertFileRecord[],
+    reason: string
+  ): Promise<Array<typeof filesSchema.$inferSelect>> {
+    if (records.length === 0) return []
+
+    const acceptedRecords = this.filterSearchIndexUpsertRecords(records)
     if (acceptedRecords.length === 0) return []
     if (!(await this.ensureSearchIndexWorkerReady(reason))) {
       throw new Error('FILE_PERSISTENCE_PORT_UNAVAILABLE')
@@ -2551,43 +2651,34 @@ class FileProvider implements ISearchProvider<ProviderContext> {
    * call this. Without sharing the in-flight promise a single poll ran the six
    * COUNT(*) queries twice — 12 scans, measured 8.1s on a 6 GB index. The
    * result is a read-only snapshot, so concurrent callers can safely share it.
+   *
+   * In-flight sharing only covers callers that overlap. The polls that actually happen are
+   * sequential — one per file-system watch event — so the window is capped in time as well; see
+   * `FILE_INDEX_STATS_CACHE_MS`.
    */
-  private inflightIndexStats: Promise<{
-    totalFiles: number
-    failedFiles: number
-    skippedFiles: number
-    completedFiles: number
-    embeddingCompletedFiles: number
-    embeddingRows: number
-  }> | null = null
+  private inflightIndexStats: Promise<FileIndexStats> | null = null
+  private indexStatsCache: { at: number; value: FileIndexStats } | null = null
 
-  public async getIndexStats(): Promise<{
-    totalFiles: number
-    failedFiles: number
-    skippedFiles: number
-    completedFiles: number
-    embeddingCompletedFiles: number
-    embeddingRows: number
-  }> {
-    if (this.inflightIndexStats) return await this.inflightIndexStats
+  public async getIndexStats(): Promise<FileIndexStats> {
+    const cached = this.indexStatsCache
+    // Copy out: a served snapshot must not be mutable through one caller into the next.
+    if (cached && Date.now() - cached.at < FILE_INDEX_STATS_CACHE_MS) return { ...cached.value }
 
-    const run = this.computeIndexStats()
+    if (this.inflightIndexStats) return { ...(await this.inflightIndexStats) }
+
+    const run = this.computeIndexStats().then((value) => {
+      this.indexStatsCache = { at: Date.now(), value }
+      return value
+    })
     this.inflightIndexStats = run
     try {
-      return await run
+      return { ...(await run) }
     } finally {
       this.inflightIndexStats = null
     }
   }
 
-  private async computeIndexStats(): Promise<{
-    totalFiles: number
-    failedFiles: number
-    skippedFiles: number
-    completedFiles: number
-    embeddingCompletedFiles: number
-    embeddingRows: number
-  }> {
+  private async computeIndexStats(): Promise<FileIndexStats> {
     if (!this.dbUtils) {
       return {
         totalFiles: 0,
@@ -2599,58 +2690,71 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    // Live index stats (files / progress / embeddings) belong to the
-    // file-index domain — read the home the worker writes.
-    const db = this.dbUtils.getFileIndexReadDb()
+    const disposeStats = enterPerfContext(
+      'FileProvider.computeIndexStats',
+      {
+        sourceId: this.id,
+        queryCount: 6,
+        readHome: 'file-index'
+      },
+      { mode: 'blocking' }
+    )
+    try {
+      // Live index stats (files / progress / embeddings) belong to the
+      // file-index domain — read the home the worker writes.
+      const db = this.dbUtils.getFileIndexReadDb()
 
-    const [
-      totalFilesResult,
-      failedFilesResult,
-      skippedFilesResult,
-      completedFilesResult,
-      embeddingCompletedFilesResult,
-      embeddingRowsResult
-    ] = await Promise.all([
-      db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(filesSchema)
-        .where(eq(filesSchema.type, 'file')),
-      db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(fileIndexProgress)
-        .where(eq(fileIndexProgress.status, 'failed')),
-      db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(fileIndexProgress)
-        .where(eq(fileIndexProgress.status, 'skipped')),
-      db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(fileIndexProgress)
-        .where(eq(fileIndexProgress.status, 'completed')),
-      db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(filesSchema)
-        .where(and(eq(filesSchema.type, 'file'), eq(filesSchema.embeddingStatus, 'completed'))),
-      db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(embeddingsSchema)
-        .where(eq(embeddingsSchema.sourceType, 'file'))
-    ])
+      const [
+        totalFilesResult,
+        failedFilesResult,
+        skippedFilesResult,
+        completedFilesResult,
+        embeddingCompletedFilesResult,
+        embeddingRowsResult
+      ] = await Promise.all([
+        db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(filesSchema)
+          .where(eq(filesSchema.type, 'file')),
+        db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(fileIndexProgress)
+          .where(eq(fileIndexProgress.status, 'failed')),
+        db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(fileIndexProgress)
+          .where(eq(fileIndexProgress.status, 'skipped')),
+        db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(fileIndexProgress)
+          .where(eq(fileIndexProgress.status, 'completed')),
+        db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(filesSchema)
+          .where(and(eq(filesSchema.type, 'file'), eq(filesSchema.embeddingStatus, 'completed'))),
+        db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(embeddingsSchema)
+          .where(eq(embeddingsSchema.sourceType, 'file'))
+      ])
 
-    const totalFiles = totalFilesResult[0]?.count ?? 0
-    const failedFiles = failedFilesResult[0]?.count ?? 0
-    const skippedFiles = skippedFilesResult[0]?.count ?? 0
-    const completedFiles = completedFilesResult[0]?.count ?? 0
-    const embeddingCompletedFiles = embeddingCompletedFilesResult[0]?.count ?? 0
-    const embeddingRows = embeddingRowsResult[0]?.count ?? 0
+      const totalFiles = totalFilesResult[0]?.count ?? 0
+      const failedFiles = failedFilesResult[0]?.count ?? 0
+      const skippedFiles = skippedFilesResult[0]?.count ?? 0
+      const completedFiles = completedFilesResult[0]?.count ?? 0
+      const embeddingCompletedFiles = embeddingCompletedFilesResult[0]?.count ?? 0
+      const embeddingRows = embeddingRowsResult[0]?.count ?? 0
 
-    return {
-      totalFiles,
-      failedFiles,
-      skippedFiles,
-      completedFiles,
-      embeddingCompletedFiles,
-      embeddingRows
+      return {
+        totalFiles,
+        failedFiles,
+        skippedFiles,
+        completedFiles,
+        embeddingCompletedFiles,
+        embeddingRows
+      }
+    } finally {
+      disposeStats()
     }
   }
 
