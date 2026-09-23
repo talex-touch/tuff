@@ -13,9 +13,9 @@ verified: true
 
 ## Tuffex Components 组件库
 
-Tuffex（`@talex-touch/tuffex`）是服务 Talex Touch 生态的 Vue 3 组件库：同一套组件覆盖桌面端 CoreBox、插件 Surface 与本文档站。组件按套件划分——**基础**承载日常界面主体、**进阶**承载高级交互与视觉表达、**AI** 承载 AI 原生界面、**数据**承载可视化与图表家族——侧边栏顶部的套件切换在这四个组件套件之外，另设「理念」作为第五个纯文档页签；点哪个页签就直接进入该套件的总览页。
+Tuffex（`@talex-touch/tuffex`）是服务 Talex Touch 生态的 Vue 3 组件库：同一套组件覆盖桌面端 CoreBox、插件 Surface 与本文档站。组件按套件划分——**基础**承载日常界面主体、**进阶**承载高级交互与视觉表达、**AI** 承载 AI 原生界面、**数据**承载可视化与图表家族、**流程**承载画布上的流程编排——侧边栏顶部的套件切换在这五个组件套件之外，另设「理念」作为第六个纯文档页签；点哪个页签就直接进入该套件的总览页。
 
-- 交互标本：每个套件页开头都有一块组件预览——《[基础套件](./base-suite.zh.mdc)》《[进阶套件](./pro-suite.zh.mdc)》《[AI 套件](./ai-suite.zh.mdc)》《[数据套件](./data-suite.zh.mdc)》——每个格子都是可交互的真实组件，点名称直达文档。
+- 交互标本：每个套件页开头都有一块组件预览——《[基础套件](./base-suite.zh.mdc)》《[进阶套件](./pro-suite.zh.mdc)》《[AI 套件](./ai-suite.zh.mdc)》《[数据套件](./data-suite.zh.mdc)》《[流程套件](./flow-suite.zh.mdc)》——每个格子都是可交互的真实组件，点名称直达文档。
 - 分套件引入：`@talex-touch/tuffex/base`、`/pro`、`/ai` 三个分类入口按需加载；图表族在同包的 `@talex-touch/tuffex/charts` 子路径下。
 
 ## 安装与引入
@@ -112,12 +112,13 @@ code: |
 
 | 套件 | 分组 | 组件数 | 引入入口 |
 |------|------|--------|----------|
-| [基础套件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 91 | `@talex-touch/tuffex/base` |
+| [基础套件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 92 | `@talex-touch/tuffex/base` |
 | [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 27 | `@talex-touch/tuffex/pro` |
-| [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 29 | `@talex-touch/tuffex/ai` |
+| [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 30 | `@talex-touch/tuffex/ai` |
 | [数据套件](./data-suite.zh.mdc) | 图表 / 可视化 | 10 | `@talex-touch/tuffex/pro`（可视化 + 图表）+ `@talex-touch/tuffex/charts`（图表族入口） |
+| [流程套件](./flow-suite.zh.mdc) | 流程编排 | 1 | `@talex-touch/tuffex/ai` |
 
-理念是第五个套件页签——纯文档性质、不对应组件入口。本页就是这个页签的总览：上半是组件库定位、设计基础与工具函数，下半是完整组件索引。
+理念是第六个套件页签——纯文档性质、不对应组件入口。本页就是这个页签的总览：上半是组件库定位、设计基础与工具函数，下半是完整组件索引。
 
 ## 基础组件
 
@@ -214,6 +215,7 @@ code: |
 - [Popover 弹出层](./popover.zh.mdc)
 - [Tooltip 提示](./tooltip.zh.mdc)
 - [Toast 提示](./toast.zh.mdc)
+- [ToastPanel 浮出面板](./toast-panel.zh.mdc)
 - [Alert 提示条](./alert.zh.mdc)
 - [Progress 进度](./progress.zh.mdc)
 - [ProgressBar 进度条](./progress-bar.zh.mdc)
@@ -297,6 +299,7 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 ### 智能体
 
 - [Agents 智能体列表](./agents.zh.mdc)
+- [AgentScreen 智能体屏幕](./agent-screen.zh.mdc)
 - [AgentTrace 智能体轨迹](./agent-trace.zh.mdc)
 - [TaskRows 任务行](./task-rows.zh.mdc)
 - [ToolCallCard 工具调用卡片](./tool-call-card.zh.mdc)
@@ -345,6 +348,14 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 - [AllocationBar 占比条](./allocation-bar.zh.mdc)
 - [DiffTable 变更表格](./diff-table.zh.mdc)
 - [SignalMeter 信号量表](./signal-meter.zh.mdc)
+
+## 流程
+
+流程编排：点阵画布上的节点、分支与连线。经 `@talex-touch/tuffex/ai` 入口引入——和数据套件一样，这是文档层面的划分。套件页见《[流程套件](./flow-suite.zh.mdc)》。
+
+### 流程编排
+
+- [Flowchart 流程画布](./flowchart.zh.mdc)
 
 ## 审阅说明
 

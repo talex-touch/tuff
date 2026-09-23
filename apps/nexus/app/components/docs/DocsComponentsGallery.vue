@@ -38,7 +38,7 @@ import tuffexPkg from '../../../../../packages/tuffex/package.json'
 
 // One band per render: every suite has its own overview page, so the gallery
 // only ever shows that page's suite. There is no cross-suite hub grid.
-const props = defineProps<{ suite: 'base' | 'pro' | 'ai' | 'data' }>()
+const props = defineProps<{ suite: 'base' | 'pro' | 'ai' | 'data' | 'flow' }>()
 
 const { locale } = useI18n()
 
@@ -119,6 +119,13 @@ const copy = computed(() => (localeKey.value === 'zh'
         { value: 2, label: '中', tone: 'var(--tx-color-warning)' },
         { value: 3, label: '高', tone: 'var(--tx-color-success)' },
       ],
+      screenCursor: '正在打开「照片」',
+      screenAria: '智能体屏幕',
+      flowAria: '订单工作流',
+      flowNodes: {
+        trigger: { label: '触发', title: '新订单创建', detail: '有新订单时触发' },
+        branch: { label: '条件', title: '口味是 Rocky Road', detail: '否则按默认规则补货' },
+      },
       working: '处理中',
       searching: '检索中',
       typing: '正在输入…',
@@ -199,6 +206,13 @@ const copy = computed(() => (localeKey.value === 'zh'
         { value: 2, label: 'Mid', tone: 'var(--tx-color-warning)' },
         { value: 3, label: 'High', tone: 'var(--tx-color-success)' },
       ],
+      screenCursor: 'Opening Photos',
+      screenAria: 'Agent screen',
+      flowAria: 'Order workflow',
+      flowNodes: {
+        trigger: { label: 'Trigger', title: 'New order created', detail: 'Runs when a new order arrives' },
+        branch: { label: 'If / Else', title: 'Flavor is Rocky Road', detail: 'Otherwise restock by the default rule' },
+      },
       working: 'Working',
       searching: 'Searching',
       typing: 'Typing…',
@@ -539,6 +553,32 @@ const chatListMessages = computed(() => [
   { id: 'a1', role: 'assistant' as const, content: copy.value.aboutBody, createdAt: 1_705_000_001_000 },
 ])
 const aiSampleMessage = computed(() => chatMessages.value[1] ?? chatMessages.value[0]!)
+type FlowSpecimenId = 'trigger' | 'branch'
+
+// Flowchart is controlled: it reports a drag and leaves the write to the host.
+// Positions live apart from the copy so a locale switch keeps a dragged node
+// where the reader left it.
+const flowPositions = ref<Record<FlowSpecimenId, { x: number, y: number }>>({
+  trigger: { x: 200, y: 8 },
+  branch: { x: 200, y: 150 },
+})
+
+const flowNodes = computed(() => [
+  { id: 'trigger', tone: 'violet' as const, label: copy.value.flowNodes.trigger.label, ...flowPositions.value.trigger },
+  { id: 'branch', tone: 'orange' as const, label: copy.value.flowNodes.branch.label, ...flowPositions.value.branch },
+])
+
+const flowEdges = [{ from: 'trigger', to: 'branch' }]
+
+function flowCopy(id: string) {
+  return copy.value.flowNodes[id as FlowSpecimenId]
+}
+
+function moveFlowNode({ id, x, y }: { id: string, x: number, y: number }): void {
+  if (id in flowPositions.value)
+    flowPositions.value[id as FlowSpecimenId] = { x, y }
+}
+
 const traceRows = computed(() => [
   { id: 'read', primary: copy.value.toolRows[0]?.label ?? '', secondary: 'manifest.json', mono: true, status: 'done' as const },
   { id: 'run', primary: copy.value.toolRows[1]?.label ?? '', secondary: 'pnpm build', mono: true, status: 'active' as const },
@@ -3229,6 +3269,33 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('agent-screen')">
+          {{ cellLabel('AgentScreen', '智能体屏幕') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__block">
+              <TxAgentScreen
+                :aria-label="copy.screenAria"
+                :cursor="{ x: 46, y: 62, label: copy.screenCursor }"
+              >
+                <!-- A painted stand-in, as in the AgentScreen demo: the frame
+                     takes any surface, and a gallery tile should not ship a
+                     screenshot. -->
+                <div class="docs-gallery__desktop">
+                  <span class="docs-gallery__desktop-window is-back" />
+                  <span class="docs-gallery__desktop-window is-front" />
+                </div>
+              </TxAgentScreen>
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('agents')">
           {{ cellLabel('Agents', '智能体列表') }}
         </NuxtLink>
@@ -3713,6 +3780,39 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxEChart :option="echartOption" :height="220" aria-label="Installs and sessions by weekday" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="props.suite === 'flow'" class="docs-gallery__grid docs-gallery__grid--single">
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('flowchart')">
+          {{ cellLabel('Flowchart', '流程画布') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__flow">
+              <TxFlowchart
+                :nodes="flowNodes"
+                :edges="flowEdges"
+                :height="260"
+                :node-width="240"
+                draggable
+                :aria-label="copy.flowAria"
+                @node-move="moveFlowNode"
+              >
+                <template #node="{ node }">
+                  <div class="docs-gallery__flow-card">
+                    <strong>{{ flowCopy(node.id).title }}</strong>
+                    <small>{{ flowCopy(node.id).detail }}</small>
+                  </div>
+                </template>
+              </TxFlowchart>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />

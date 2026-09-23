@@ -10,7 +10,7 @@ verified: true
 ---
 # Sound
 
-## It is off by default
+## It Is Off by Default
 
 ```ts
 import { configureSound, sound } from '@talex-touch/tuffex/utils'
@@ -23,11 +23,11 @@ sound.click()
 
 The graph is built **lazily** for the same reason: browsers park an `AudioContext` created outside a user gesture in `suspended` state, so a page that imports this and never plays anything would be leaking one.
 
-## Why synthesis rather than audio files
+## Why Synthesis Rather Than Audio Files
 
 A handful of oscillators and an envelope cost nothing to ship, stay crisp at any sample rate, and cannot 404. The trade is timbre — samples are richer — but UI feedback should be plain anyway.
 
-## The presets
+## The Presets
 
 Seven, deliberately. A UI that plays seven different sounds is noise.
 
@@ -49,7 +49,7 @@ Those figures come from rendering each cue through an `OfflineAudioContext` and 
 
 Two kinds of cue get two budgets, enforced by tests: **immediate feedback** (`click` / `key` / `toggle`) is capped at 80ms so it lands while the finger is still down; **status cues** get 250ms, enough for a two-note figure but not enough to arrive after the user has moved on.
 
-## Custom cues
+## Custom Cues
 
 `playSound` also takes a patch built on the spot:
 
@@ -86,7 +86,7 @@ Two values in `freq` make a glide; `delay` offsets the second voice so the pair 
 - **The noise buffer is shared**, not regenerated per keystroke.
 - A volume change applies to an existing graph immediately; no rebuild.
 
-## Relationship to vibration
+## Relationship to Vibration
 
 `useVibrate` is the other feedback channel at this layer, and its shape is deliberately mirrored here (preset table, main function, shorthand object). They compose, but **do not fire sound and vibration for the same action** — doubled feedback reads as having triggered twice.
 

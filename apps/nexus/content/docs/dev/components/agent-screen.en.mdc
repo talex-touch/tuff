@@ -10,7 +10,7 @@ verified: true
 ---
 # AgentScreen
 
-## Basic usage
+## Basic Usage
 
 ### AgentScreen
 
@@ -36,7 +36,7 @@ code: |
 ---
 :::
 
-## The frame owns only the frame
+## The Frame Owns Only the Frame
 
 The component owns three things — **the frame, the pointer and the caption** — while the content comes from `src` or the default slot. The same frame can therefore hold a screenshot, a live canvas, or a streamed video; it does not care what is inside it.
 
@@ -44,7 +44,7 @@ The default slot wins over `src`: a live surface and a stale screenshot must not
 
 `ratio` is the frame's CSS `aspect-ratio`, defaulting to the upstream capture's own `2964 / 1856`. A ratio rather than a height, because the frame's width follows its container while the capture's proportions do not change.
 
-## The pointer is in percent
+## The Pointer Is in Percent
 
 `cursor`'s `x` / `y` are **percentages of the frame's own box**, not pixels. The frame is responsive, and a captured pointer coordinate is only meaningful in pixels relative to the capture it came from; as a percentage it lands in the same place at any size.
 
@@ -52,7 +52,7 @@ Out-of-range coordinates are **clamped to 0–100**. Capture sources occasionall
 
 The pointer is inline SVG rather than an icon font: it has to stay visible over an arbitrary capture, which needs a light fill with a dark outline — something a single-colour glyph cannot do.
 
-## The loading state
+## The Loading State
 
 With `state` set to `loading` the frame swaps to a skeleton placeholder and **drops the capture and the `overlay` slot together** — an overlay annotates the capture, and without one it has nothing to annotate.
 
@@ -88,7 +88,7 @@ The placeholder reuses the library's shared skeleton bar (`skeleton-surface`) ra
 | `overlay` | Above the content, inside the clip; dropped together with it while loading |
 | `label` | Replaces the caption under the frame |
 
-## Best practices
+## Best Practices
 
 - Use the default slot for a live canvas or video and keep `src` for static captures.
 - Let `label` say *whose* screen this is and the pointer's `label` say *what it is doing* — two different jobs, so do not merge them.
