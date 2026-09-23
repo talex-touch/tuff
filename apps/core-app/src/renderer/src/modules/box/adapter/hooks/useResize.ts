@@ -167,6 +167,21 @@ export function useResize(options: UseResizeOptions): void {
       }
     }
 
+    // A streaming search replaces the list layer by layer: the fast-layer snapshot is often
+    // shorter than what the deferred layer adds a moment later. Shrinking on the snapshot and
+    // growing back when the rest lands was the bounce on every pause while typing, so while
+    // results are still arriving the window only grows. The first idle update after the stream
+    // ends carries the true measurement and may shrink.
+    if (
+      isLoading &&
+      lastPayload &&
+      lastPayload.resultCount > 0 &&
+      resultCount > 0 &&
+      height < lastPayload.height
+    ) {
+      height = lastPayload.height
+    }
+
     const payload: CoreBoxLayoutUpdateRequest = {
       height,
       resultCount,

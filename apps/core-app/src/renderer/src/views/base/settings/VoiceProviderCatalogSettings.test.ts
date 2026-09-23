@@ -173,7 +173,7 @@ describe('VoiceProviderCatalogSettings', () => {
     mocks.auth.isLoggedIn.value = true
   })
 
-  it('projects the active pack identity on load without leaking diagnostic payloads', async () => {
+  it('projects the active pack version on load without leaking diagnostic payloads', async () => {
     mocks.catalog.getStatus.mockResolvedValue({
       status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
     })
@@ -181,8 +181,8 @@ describe('VoiceProviderCatalogSettings', () => {
     const wrapper = await mountCatalog()
 
     const active = wrapper.get(ACTIVE)
-    expect(active.text()).toContain(PACK_ID)
     expect(active.text()).toContain('2.1.0')
+    expect(active.text()).not.toContain(PACK_ID)
     expectNoCanaries(wrapper)
     expect(wrapper.findAll(ROLLBACK_ROW)).toHaveLength(0)
 
@@ -254,7 +254,7 @@ describe('VoiceProviderCatalogSettings', () => {
     wrapper.unmount()
   })
 
-  it('renders the checked candidate identity instead of the active pack when an update exists', async () => {
+  it('renders the checked candidate version instead of the active pack when an update exists', async () => {
     mocks.catalog.getStatus.mockResolvedValue({
       status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
     })
@@ -270,8 +270,8 @@ describe('VoiceProviderCatalogSettings', () => {
 
     expect(mocks.catalog.checkUpdates).toHaveBeenCalledTimes(1)
     const status = wrapper.get(STATUS)
-    expect(status.text()).toContain(PACK_ID)
     expect(status.text()).toContain('3.0.0')
+    expect(status.text()).not.toContain(PACK_ID)
     expect(status.text()).not.toContain('2.1.0')
     expectNoCanaries(wrapper)
 

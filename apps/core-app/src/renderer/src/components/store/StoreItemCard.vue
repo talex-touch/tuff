@@ -433,8 +433,8 @@ function handleInstall(): void {
   letter-spacing: 0.01em;
 }
 
-:deep(.StoreItemCard-CategoryTag .tx-status-badge__icon) {
-  font-size: 0.78rem;
+:deep(.StoreItemCard-CategoryTag .tx-status-badge__chip) {
+  --tx-status-chip-size: 0.86rem;
 }
 
 :deep(.StoreItemCard-Tag.tx-tag) {

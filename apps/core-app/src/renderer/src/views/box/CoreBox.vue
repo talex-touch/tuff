@@ -12,6 +12,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRouter } from 'vue-router'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+import { getStaggerDelay } from './stagger-delay'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 
@@ -520,20 +521,6 @@ const itemRefs = ref<ItemRef[]>([])
 const renderedItemIds = ref<Set<string>>(new Set())
 const newItemIds = ref<Set<string>>(new Set())
 let lastResultIds: Set<string> = new Set()
-
-/**
- * Compute eased stagger delay for item animation
- * Front items enter quickly, later items have progressively longer delays
- */
-function getStaggerDelay(index: number, total: number): number {
-  const baseDelay = 0.025 // 25ms base
-  const maxDelay = 0.055 // 55ms max per item
-  // Ease-in curve: delay increases as index grows
-  const progress = total > 1 ? index / (total - 1) : 0
-  const eased = progress * progress // quadratic ease-in
-  const delay = baseDelay + eased * (maxDelay - baseDelay)
-  return index * delay
-}
 
 /**
  * Compute overlap ratio between two ID sets
