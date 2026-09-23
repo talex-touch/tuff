@@ -404,6 +404,65 @@
   height: 100%;
 }
 
+/* A suite with one component: a lone cell in a two-column grid leaves the other
+   half blank, which reads as a missing specimen rather than a complete suite. */
+.docs-gallery__grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Flowchart places nodes in canvas coordinates, so the canvas needs a bounded
+   width for `x: 200` to read as centred — the same reason the Flowchart demo
+   pins its frame. */
+.docs-gallery__flow {
+  width: min(400px, 100%);
+}
+
+.docs-gallery__flow-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+}
+
+.docs-gallery__flow-card strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx-bui-ink, #1f2124);
+}
+
+.docs-gallery__flow-card small {
+  font-size: 11.5px;
+  color: var(--tx-bui-ink-3, #9a9da3);
+}
+
+/* AgentScreen's stand-in surface — a condensed copy of the demo's. */
+.docs-gallery__desktop {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(145deg, #ff8a7a 0%, #c86cf0 42%, #4f7df3 100%);
+}
+
+.docs-gallery__desktop-window {
+  position: absolute;
+  width: 62%;
+  border-radius: 6px;
+  background: #fffffff2;
+  box-shadow: 3px 6px 16px #0000002e;
+}
+
+.docs-gallery__desktop-window.is-back {
+  top: 12%;
+  left: 26%;
+  height: 46%;
+}
+
+.docs-gallery__desktop-window.is-front {
+  top: 30%;
+  left: 8%;
+  height: 52%;
+}
+
 .docs-gallery__glow {
   font-size: 24px;
   font-weight: 650;
