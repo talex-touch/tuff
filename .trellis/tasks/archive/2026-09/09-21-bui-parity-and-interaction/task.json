@@ -1,0 +1,32 @@
+{
+  "id": "bui-parity-and-interaction",
+  "name": "bui-parity-and-interaction",
+  "title": "BUI 对齐与交互体验升级",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-21",
+  "completedAt": "2026-09-22",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-21-bui-parity-audit",
+    "09-21-card-toast-panel",
+    "09-21-status-mono-redesign",
+    "09-21-tuff-sound-system",
+    "09-21-flowchart-flow-suite"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
