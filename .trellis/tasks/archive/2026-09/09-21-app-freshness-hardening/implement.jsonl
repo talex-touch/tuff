@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. List candidates with `find .trellis/spec -name '*.md'` — note that `get_context.py --mode packages` reports layers only and omits spec/guides, which real manifests do cite. Delete this line once real entries are added."}
+{"file": ".trellis/spec/main-process/recommendation-freshness-contracts.md", "reason": "installedAt/新鲜度契约；watch-now fallback 语义"}
+{"file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts", "reason": "五处改动点：_waitForItemStable / processAppPath / _performMdlsUpdateScan / _performStartupBackfill"}
+{"file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-scanner.ts", "reason": "resolveAppInfoByPath 分类：failed 可重试 vs not-app 终态"}

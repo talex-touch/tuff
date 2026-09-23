@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. List candidates with `find .trellis/spec -name '*.md'` — note that `get_context.py --mode packages` reports layers only and omits spec/guides, which real manifests do cite. Delete this line once real entries are added."}
+{"file": ".trellis/spec/main-process/search-hotpath-contracts.md", "reason": "快层 80ms 预算是热路径契约；Spotlight 改 deferred 不改预算"}
+{"file": "apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts", "reason": "fast/deferred 分层与并发常量；注释需同步"}
+{"file": "apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts", "reason": "滞回改动点 sendLayoutUpdate"}

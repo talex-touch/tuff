@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. List candidates with `find .trellis/spec -name '*.md'` — note that `get_context.py --mode packages` reports layers only and omits spec/guides, which real manifests do cite. Delete this line once real entries are added."}
+{"file": ".trellis/spec/main-process/database-write-contracts.md", "reason": "单写者拓扑：search-index.db 只能经 searchIndexWriter 写；本修复改的是 writer 的 admission 语义"}
+{"file": "apps/core-app/src/main/db/db-write-scheduler.ts", "reason": "已有 AsyncLocalStorage 重入识别模式（taskContext），本修复复用同一手法"}
+{"file": "apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.ts", "reason": "resetSourceRuntimeStateInternal:834-840 是生产调用形状（withPausedSelectedAdmission 包住 resetLocalState）"}
