@@ -37,6 +37,16 @@ transport.broadcastToWindow(windowId, event, payload): void
   query never waits for an optional Port upgrade. Explicit environment allowlists
   remain supported; do not add the search session back to the default set merely
   because its output is streamed.
+- Single-path delivery per envelope: main's stream runtime sends each chunk/end/error
+  over the port when it still holds a confirmed record, otherwise over the bridge
+  (`server-runtime.ts sendWithFallback`) — never both. The client runtime therefore
+  delivers whatever arrives on either path; it must not treat a bridge envelope as a
+  duplicate because the port was active earlier. That guard (`portActive` in the bridge
+  handlers) made a long-lived CoreBox deaf to `index-committed` once main dropped its
+  port record (2026-09-21). If double delivery is ever introduced, dedupe by
+  streamId + sequence in the protocol, do not restore the guard. Anchors:
+  `renderer-transport-stream.test.ts` "delivers channel chunks and the channel end
+  after the port has already been active".
 - `broadcastToWindow` throws synchronously if the window id is gone (`sendTo` rejected
   instead) — validate the window (`isDestroyed()`) before sending, as `show()` does.
 - A broadcast to a still-loading webContents is dropped, same as an unanswered `sendTo`

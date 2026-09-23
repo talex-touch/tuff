@@ -55,10 +55,10 @@ const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
   // Layered search options
   fastLayerTimeoutMs: 80,
   deferredLayerDelayMs: 50,
-  // Sized to the fast provider count (7 on darwin: app-destination, system-actions,
-  // context-actions, app, mac-spotlight, plugin-features, preview). At 3, the
-  // last wave could not start inside the 80ms window at all, so those providers
-  // only ever arrived as late results.
+  // Sized to the fast provider count (6 on darwin: app-destination, system-actions,
+  // context-actions, app, plugin-features, preview; the native file providers are
+  // deferred). At 3, the last wave could not start inside the 80ms window at all,
+  // so those providers only ever arrived as late results.
   fastLayerConcurrency: 6,
   deferredLayerConcurrency: 2
 }

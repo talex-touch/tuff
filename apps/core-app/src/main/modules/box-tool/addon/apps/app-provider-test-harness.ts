@@ -634,8 +634,9 @@ export type AppProviderPrivate = {
   _clearPendingDeletions: () => Promise<void>
   _initialize: (options?: { forceRefresh?: boolean }) => Promise<unknown>
   _syncSemanticAliasCatalogIfNeeded: () => Promise<void>
-  _waitForItemStable: (path: string) => Promise<boolean>
+  _waitForItemStable: (path: string, delay?: number, retries?: number) => Promise<boolean>
   publishAppRuntimeUpsert: (appInfo: { path: string }, reason: string) => Promise<void>
+  upsertAppInfo: (appInfo: unknown, options?: unknown) => Promise<'added' | 'updated'>
   appResolutionRetries: Map<
     string,
     { attempt: number; managedEntry: boolean; timer: NodeJS.Timeout | null }
@@ -731,6 +732,9 @@ export type AppProviderPrivate = {
     force?: boolean
   }) => Promise<unknown>
   _performMdlsUpdateScan: () => Promise<unknown>
+  _getLastMdlsLocale: () => Promise<string | null>
+  _setLastScanTime: (timestamp: number) => Promise<void>
+  _setLastMdlsLocale: (locale: string) => Promise<void>
   _performRebuild: () => Promise<void>
   _performStartupBackfill: () => Promise<void>
   _recordMissingIconApps: (apps: unknown[]) => Promise<void>

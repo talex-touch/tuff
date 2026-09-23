@@ -64,7 +64,7 @@ describe("TuffRendererTransport.stream", () => {
     }
   });
 
-  it("receives session and snapshot once through the preloaded port handoff and acknowledges confirmation", async () => {
+  it("delivers port chunks and interleaved bridge chunks through the preloaded port handoff and acknowledges confirmation", async () => {
     const harness = createPortHandoffHarness();
     const pair = createNativePortPair();
     const transport = new TuffRendererTransport();
@@ -104,10 +104,14 @@ describe("TuffRendererTransport.stream", () => {
     const controller = await transport.stream(ClipboardEvents.change, undefined, {
       onData: chunk => {
         chunks.push(chunk);
-        currentHandlers.get(`${eventName}:stream:data:${streamId}`)?.({
-          header: { status: "request" },
-          data: { chunk: { source: "channel-duplicate" } },
-        });
+        // Main lost the port record between two port chunks: one envelope arrives over the
+        // bridge. Single-path delivery means it is real data, not a duplicate.
+        if (chunks.length === 1) {
+          currentHandlers.get(`${eventName}:stream:data:${streamId}`)?.({
+            header: { status: "request" },
+            data: { chunk: { source: "bridge-after-port" } },
+          });
+        }
       },
       onEnd: () => {
         endCount += 1;
@@ -133,7 +137,11 @@ describe("TuffRendererTransport.stream", () => {
     pair.sender.postMessage({ channel: eventName, portId, streamId, type: "end" });
 
     await terminal;
-    expect(chunks).toEqual([{ phase: "session" }, { phase: "snapshot" }]);
+    expect(chunks).toEqual([
+      { phase: "session" },
+      { source: "bridge-after-port" },
+      { phase: "snapshot" },
+    ]);
     expect(endCount).toBe(1);
     expect(sent).toContainEqual({
       eventName: TransportEvents.port.confirm.toEventName(),
@@ -143,6 +151,88 @@ describe("TuffRendererTransport.stream", () => {
       eventName: `${eventName}:stream:start`,
       payload: { streamId, __transportPortId: portId },
     });
+  });
+
+  it("delivers channel chunks and the channel end after the port has already been active", async () => {
+    // Main sends every envelope exactly once: over the port while it still holds the record,
+    // over the bridge once it does not. A consumer that ignores the bridge after the first
+    // port message goes deaf for the rest of its life — that was the long-lived CoreBox whose
+    // index-commit refreshes stopped after a few minutes.
+    const harness = createPortHandoffHarness();
+    const pair = createNativePortPair();
+    const transport = new TuffRendererTransport();
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: harness.targetWindow,
+      writable: true,
+    });
+    testCleanups.push(() => pair.sender.close(), harness.dispose, () => transport.destroy());
+    testCleanups.push(installTransportPortHandoff(harness.ipcRenderer, harness.targetWindow));
+
+    const eventName = ClipboardEvents.change.toEventName();
+    const portId = "renderer-port-2";
+    const chunks: unknown[] = [];
+    let endCount = 0;
+    let resolveFirst!: () => void;
+    const first = new Promise<void>(resolve => {
+      resolveFirst = resolve;
+    });
+    let resolveTerminal!: () => void;
+    const terminal = new Promise<void>(resolve => {
+      resolveTerminal = resolve;
+    });
+    onSend = sentEventName => {
+      if (sentEventName === TransportEvents.port.upgrade.toEventName()) {
+        harness.emit(
+          TransportEvents.port.confirm.toEventName(),
+          { channel: eventName, portId, scope: "window" },
+          [pair.receiver],
+        );
+        return { accepted: true, channel: eventName, portId };
+      }
+      return undefined;
+    };
+
+    const controller = await transport.stream(ClipboardEvents.change, undefined, {
+      onData: chunk => {
+        chunks.push(chunk);
+        if (chunks.length === 1) resolveFirst();
+      },
+      onEnd: () => {
+        endCount += 1;
+        resolveTerminal();
+      },
+    });
+    const { streamId } = controller;
+
+    pair.sender.postMessage({
+      channel: eventName,
+      portId,
+      streamId,
+      type: "data",
+      payload: { chunk: { via: "port", revision: 1 } },
+    });
+    await first;
+
+    // Main lost the port record: the next commit and the terminal travel over the bridge.
+    currentHandlers.get(`${eventName}:stream:data:${streamId}`)?.({
+      header: { status: "request" },
+      data: { chunk: { via: "channel", revision: 2 } },
+    });
+    currentHandlers.get(`${eventName}:stream:end:${streamId}`)?.({});
+
+    await Promise.race([
+      terminal,
+      new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error("channel end was dropped after port activity")), 500),
+      ),
+    ]);
+    expect(chunks).toEqual([
+      { via: "port", revision: 1 },
+      { via: "channel", revision: 2 },
+    ]);
+    expect(endCount).toBe(1);
+    expect(currentHandlers.has(`${eventName}:stream:data:${streamId}`)).toBe(false);
   });
 
   it("falls back to channel terminal delivery when confirmation is unavailable", async () => {

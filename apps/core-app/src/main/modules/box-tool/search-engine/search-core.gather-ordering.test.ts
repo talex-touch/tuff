@@ -551,4 +551,87 @@ describe('search-core gather completion ordering', () => {
       delivered.filter((entry) => entry.sessionId === second.sessionId && entry.type === 'complete')
     ).toEqual([expect.objectContaining({ cancelled: undefined })])
   })
+
+  it('publishes an empty cancelled snapshot when the session is cancelled during the first merge of a done batch', async () => {
+    // A tiny provider set finishes inside the fast window, so the very first gather update is
+    // already `isDone`. That branch awaited the merge and published whatever came back with no
+    // abort re-check, unlike its two siblings — so a keystroke that superseded the search mid-merge
+    // still got the stale snapshot, and `result` could never settle through the cancelled path
+    // because `didResolveInitial` had already been claimed.
+    const query: TuffQuery = { text: 'first batch cancel', inputs: [] }
+    const mergeStarted = createDeferred()
+    const mergeRelease = createDeferred()
+    const callbacks: TuffAggregatorCallback[] = []
+    const controller = {
+      abort: vi.fn(),
+      promise: Promise.resolve(1),
+      signal: new AbortController().signal
+    } satisfies IGatherController
+    gatherAggregatorMock.mockImplementation((_providers, _params, onUpdate) => {
+      callbacks.push(onUpdate)
+      return controller
+    })
+    core.mergeAndRankItems = vi.fn(async ({ items }) => {
+      mergeStarted.resolve()
+      await mergeRelease.promise
+      return {
+        sortedItems: items,
+        sortingDuration: 0,
+        usageStatsDuration: 0,
+        completionDuration: 0,
+        mergeRankDuration: 0
+      }
+    })
+
+    const delivered: Array<{ type: string; count?: number; cancelled?: boolean }> = []
+    const caller = { kind: 'core-box' as const, id: 'core-box:first-batch' }
+    const search = core.startSearch(query, {
+      caller,
+      sink: {
+        start: () => {
+          delivered.push({ type: 'session' })
+        },
+        snapshot: (result) => {
+          delivered.push({ type: 'snapshot', count: result.items.length })
+        },
+        complete: ({ cancelled }) => {
+          delivered.push({ type: 'complete', cancelled })
+        }
+      }
+    })
+    await vi.waitFor(() => expect(callbacks).toHaveLength(1))
+
+    const doneBatch = new TuffSearchResultBuilder(query)
+      .setItems([
+        {
+          id: 'fast-item',
+          source: { id: 'provider-fast', type: 'application' },
+          render: { mode: 'default', basic: { title: 'Fast item' } }
+        }
+      ])
+      .build()
+    const firstUpdate = callbacks[0]({
+      newResults: [doneBatch],
+      totalCount: 1,
+      isDone: true,
+      sourceStats: [],
+      layer: 'fast'
+    })
+
+    await mergeStarted.promise
+    expect(core.cancelSearch(search.sessionId, caller)).toBe(true)
+    mergeRelease.resolve()
+    await firstUpdate
+
+    const result = await search.result
+    await search.completed
+
+    expect(result.items).toEqual([])
+    expect(delivered.filter((entry) => entry.type === 'snapshot')).toEqual([
+      { type: 'snapshot', count: 0 }
+    ])
+    expect(delivered.filter((entry) => entry.type === 'complete')).toEqual([
+      { type: 'complete', cancelled: true }
+    ])
+  })
 })

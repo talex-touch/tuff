@@ -59,6 +59,7 @@ export async function startClientStream<TReq, TChunk>(
   })
   let portHandle: TransportPortHandle | null = null
   let portActive = false
+  let bridgeDeliveryLogged = false
   let cleanupPortListeners: (() => void) | null = null
 
   const cleanupCallbacks: Array<() => void> = []
@@ -250,12 +251,27 @@ export async function startClientStream<TReq, TChunk>(
       }
     }
 
+    // Main delivers every envelope exactly once: over the port while it still holds the
+    // record, over the bridge once it does not (see server-runtime `sendWithFallback`).
+    // So a bridge envelope is never a duplicate of a port one, and these handlers must not
+    // ignore the bridge just because the port was used earlier. They used to (`portActive`
+    // in the guard), and a long-lived CoreBox went deaf to index commits the moment main
+    // fell back to the bridge for it.
+    const noteBridgeDeliveryWhilePortActive = () => {
+      if (!portActive || bridgeDeliveryLogged) {
+        return
+      }
+      bridgeDeliveryLogged = true
+      adapter.logPortFallback?.(eventName, 'bridge_delivery_while_port_active')
+    }
+
     const dataCleanup = adapter.registerChannel(
       streamEvents.data(streamId),
       (raw) => {
-        if (cancelled || cleaned || portActive) {
+        if (cancelled || cleaned) {
           return
         }
+        noteBridgeDeliveryWhilePortActive()
 
         const data = unwrapChannelPayload<{
           chunk?: TChunk
@@ -287,9 +303,10 @@ export async function startClientStream<TReq, TChunk>(
     cleanupCallbacks.push(dataCleanup)
 
     const endCleanup = adapter.registerChannel(streamEvents.end(streamId), () => {
-      if (cancelled || cleaned || portActive) {
+      if (cancelled || cleaned) {
         return
       }
+      noteBridgeDeliveryWhilePortActive()
       try {
         options.onEnd?.()
       }
@@ -302,9 +319,10 @@ export async function startClientStream<TReq, TChunk>(
     const errorCleanup = adapter.registerChannel(
       streamEvents.error(streamId),
       (raw) => {
-        if (cancelled || cleaned || portActive) {
+        if (cancelled || cleaned) {
           return
         }
+        noteBridgeDeliveryWhilePortActive()
         const data = unwrapChannelPayload<{ error?: string, code?: string }>(raw)
         try {
           options.onError?.(

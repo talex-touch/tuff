@@ -248,7 +248,11 @@ async function buildNativeSearchItems(
 abstract class BaseNativeFileSearchProvider implements NativeFileSearchProvider {
   readonly type = 'file' as const
   readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files]
-  readonly priority = 'fast' as const
+  // Deferred, not fast: a native lookup is a child process that takes hundreds of milliseconds
+  // (Spotlight ~300-900ms on a real library), which can never fit the 80ms fast-layer window. As
+  // a fast provider it only ever arrived as a late result, ~1s after the snapshot had already
+  // shrunk the window - the bounce users saw on every pause while typing.
+  readonly priority = 'deferred' as const
   private readonly iconCache = new EverythingIconCache()
   protected available = false
   protected lastError: string | null = null
@@ -349,7 +353,9 @@ class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
     }
 
     const escaped = text.replace(/["\\]/g, '\\$&')
-    const query = `(kMDItemFSName == "*${escaped}*"cd || kMDItemDisplayName == "*${escaped}*"cd)`
+    // File-name only. The display-name clause made mdfind ~3x slower for the same result set:
+    // 900-1245ms vs 300-350ms on a 6GB-index library, with the paths returned being identical.
+    const query = `kMDItemFSName == "*${escaped}*"cd`
     const scopeArgs = searchRoots.flatMap((root) => ['-onlyin', root.path])
     const { stdout } = await execFileAsync('mdfind', ['-0', ...scopeArgs, query], {
       timeout: 1200,
