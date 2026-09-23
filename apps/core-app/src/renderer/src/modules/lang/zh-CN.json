@@ -1336,6 +1336,8 @@
     "records": {
       "title": "识别记录",
       "empty": "还没有可查看的识别记录。",
+      "retentionOff": "当前不保留识别记录，听写完成后不会留下任何内容。",
+      "retentionAction": "开启保留识别记录",
       "clear": "清空记录",
       "clearSuccess": "识别记录已清空",
       "clearFailed": "识别记录清空失败",

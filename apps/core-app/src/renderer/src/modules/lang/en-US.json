@@ -1336,6 +1336,8 @@
     "records": {
       "title": "Recognition records",
       "empty": "No recognition records yet.",
+      "retentionOff": "Nothing is being kept, so a dictation leaves no record behind.",
+      "retentionAction": "Keep recognition records",
       "clear": "Clear records",
       "clearSuccess": "Recognition records cleared",
       "clearFailed": "Recognition records could not be cleared",

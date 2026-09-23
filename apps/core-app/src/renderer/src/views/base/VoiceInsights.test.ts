@@ -20,9 +20,32 @@ vi.mock('vue-i18n', () => ({
 }))
 vi.mock('vue-sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
+/**
+ * The retention switch lives in app storage, and it is the thing that decides whether the main
+ * process writes a recognition record at all. Faked with an empty store — the real one is filled
+ * by the main process, and its default carries no `historyEnabled` at all — so a test can put the
+ * page in front of either state of the switch instead of asserting whatever the last test left.
+ */
+const appSettingMock = vi.hoisted(() => ({
+  appSetting: { voiceInput: {} as { historyEnabled?: boolean } }
+}))
+
+vi.mock('~/modules/storage/app-storage', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('~/modules/storage/app-storage')
+  return { ...actual, appSetting: appSettingMock.appSetting }
+})
+
 import VoiceInsights from './VoiceInsights.vue'
 
 const DAY_MS = 24 * 60 * 60 * 1000
+
+/**
+ * `undefined` is a state of the switch, not a typo: the preference is added by a migration, so a
+ * profile that has never seen the settings page carries no `historyEnabled` at all.
+ */
+function setHistoryRetention(historyEnabled: boolean | undefined): void {
+  appSettingMock.appSetting.voiceInput = { historyEnabled }
+}
 
 /**
  * `recordedFor` is how long counting has been running, which is what decides how much of the
@@ -64,7 +87,14 @@ async function mountPage(props: Record<string, unknown> = {}) {
     props,
     global: {
       stubs: {
-        TxButton: true,
+        // A real `<button>`, because `disabled` is part of what is being asserted: a control is
+        // only unclickable — to a user and to `trigger` alike — when it is an actual form element
+        // carrying the attribute. The label rides the slot, so the slot is rendered as well.
+        TxButton: {
+          props: ['variant', 'type', 'size', 'loading', 'disabled'],
+          inheritAttrs: true,
+          template: '<button :disabled="disabled"><slot /></button>'
+        },
         TxBottomDialog: true,
         TxSkeleton: true,
         // Not stubbed away: the cards' classes and data attributes fall through to its root, and
@@ -164,6 +194,9 @@ describe('VoiceInsights empty state', () => {
 
 describe('VoiceInsights page composition', () => {
   beforeEach(() => {
+    // The retention switch is put in place by the tests that read it, so it is put back here:
+    // otherwise the file would depend on which of them ran last.
+    setHistoryRetention(undefined)
     transportSendMock.mockReset()
     transportSendMock.mockImplementation(async (event: { toEventName: () => string }) => {
       if (event?.toEventName?.() === voiceApiEvents.getInsights.toEventName()) {
@@ -378,6 +411,24 @@ describe('VoiceInsights page composition', () => {
     return mountPage()
   }
 
+  /**
+   * The same page with a log that holds nothing — which is the state the retention hint exists
+   * for, and the state the entry to the log used to be greyed out in.
+   */
+  async function mountEmptyLog() {
+    transportSendMock.mockReset()
+    transportSendMock.mockImplementation(async (event: { toEventName: () => string }) => {
+      if (event?.toEventName?.() === voiceApiEvents.getInsights.toEventName()) {
+        return { ok: true, result: summary() }
+      }
+      if (event?.toEventName?.() === voiceApiEvents.getRecognitionRecords.toEventName()) {
+        return { ok: true, result: [] }
+      }
+      return { ok: true }
+    })
+    return mountPage()
+  }
+
   it('pages the log', async () => {
     const wrapper = await mountManyRecords()
 
@@ -407,6 +458,121 @@ describe('VoiceInsights page composition', () => {
     expect(
       wrapper.find('[data-testid="voice-insights-records-pagination"]').attributes('data-page')
     ).toBe('1')
+
+    wrapper.unmount()
+  })
+
+  /**
+   * An empty log has two causes and only one of them is the reader's to fix. Records are written
+   * by the main process only while the retention switch is on, so a drawer with the switch off is
+   * empty because nothing is being kept — not because nothing has been dictated. The drawer says
+   * which of the two it is looking at, and points at the switch.
+   *
+   * The entry to that drawer has to stay reachable in exactly that state. It was disabled whenever
+   * `records.length === 0`, which greyed out the one screen that explains the emptiness from the
+   * page that shows it — so both halves are asserted here: the entry is live, and the drawer it
+   * opens carries the explanation.
+   */
+  it('keeps the log reachable and explains an empty log when retention is off', async () => {
+    setHistoryRetention(false)
+    const wrapper = await mountEmptyLog()
+
+    const jump = wrapper.find('[data-testid="voice-insights-records-jump"]')
+    // An unbound `disabled` leaves the attribute off the control entirely; the pre-change binding
+    // put it there whenever the log was empty, and a disabled entry is one nobody can open.
+    expect(jump.attributes('disabled')).toBeUndefined()
+
+    await jump.trigger('click')
+    expect(wrapper.find('[data-testid="voice-insights-records"]').attributes('data-open')).toBe(
+      'true'
+    )
+
+    const hint = wrapper.find('[data-testid="voice-insights-records-retention"]')
+    expect(hint.exists()).toBe(true)
+    // The i18n mock hands back keys, so these are the keys the locale files must supply rather
+    // than a restatement of the copy.
+    expect(hint.text()).toContain('voiceInsights.records.retentionOff')
+    expect(hint.find('[data-testid="voice-insights-records-retention-action"]').text()).toContain(
+      'voiceInsights.records.retentionAction'
+    )
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The switch resolves on `=== true`, not on `!== false`. `historyEnabled` is added by a storage
+   * migration, so a profile that has never run it carries no such key at all — and reading that as
+   * "on" would hide the explanation from exactly the readers who have never seen the settings page
+   * that turns retention on in the first place.
+   */
+  it('treats a profile with no retention preference as retention off', async () => {
+    setHistoryRetention(undefined)
+    const wrapper = await mountEmptyLog()
+
+    await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
+    expect(wrapper.find('[data-testid="voice-insights-records-retention"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The other cause of an empty log, and the one with nothing to fix: retention is on, so a log
+   * with no rows means nobody has dictated yet. A hint there would send the reader to a switch
+   * that is already where it should be — and the drawer would be volunteering a settings trip the
+   * page never hears about.
+   */
+  it('stays quiet about retention when the switch is already on', async () => {
+    setHistoryRetention(true)
+    const wrapper = await mountEmptyLog()
+
+    await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
+    expect(wrapper.find('[data-testid="voice-insights-records"]').attributes('data-open')).toBe(
+      'true'
+    )
+
+    expect(wrapper.find('[data-testid="voice-insights-records-retention"]').exists()).toBe(false)
+    expect(wrapper.emitted('open-settings')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The switch itself is not in this drawer and must not be: the drawer asks the page to open
+   * settings, and closes behind the request. Leaving it open would stack a settings panel under a
+   * drawer that has nothing left to say.
+   */
+  it('asks the page for settings from the retention hint and closes the log', async () => {
+    setHistoryRetention(false)
+    const wrapper = await mountEmptyLog()
+
+    await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
+    await wrapper.find('[data-testid="voice-insights-records-retention-action"]').trigger('click')
+
+    expect(wrapper.emitted('open-settings')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="voice-insights-records"]').attributes('data-open')).toBe(
+      'false'
+    )
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The hint is a diagnosis of an *empty* log, not a note about the switch. Thirty records with
+   * retention off is a log that is being kept and simply is not empty, and a drawer full of rows
+   * needs no explanation of why rows are missing — this is the case that keeps the hint from
+   * turning into permanent furniture.
+   */
+  it('offers no retention hint beside a log that has records', async () => {
+    setHistoryRetention(false)
+    const wrapper = await mountManyRecords()
+
+    expect(wrapper.findAll('.tx-data-table__row')).toHaveLength(12)
+
+    await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
+    expect(wrapper.find('[data-testid="voice-insights-records"]').attributes('data-open')).toBe(
+      'true'
+    )
+    expect(wrapper.find('[data-testid="voice-insights-records-retention"]').exists()).toBe(false)
 
     wrapper.unmount()
   })
