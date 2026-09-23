@@ -132,7 +132,15 @@ const LIMITS = {
   // controls (5.1 KiB measured at dist/es/icon-picker/style.css), which took the full
   // entry to 576.3 KiB against a 576.0 limit. Same contract as every note above:
   // actuals plus minimal headroom, growth from here fails.
-  fullCssBytes: 584 * 1024,
+  // 584 -> 600 on 2026-09-22: the Beautiful UI parity round
+  // (.trellis/tasks/archive/2026-09/09-21-bui-parity-and-interaction) adds three
+  // component stylesheets — flowchart 2.3 KiB, agent-screen 1.8, toast-panel 1.3 —
+  // and grows the ones it reworked: status-badge's chip, diff-table's accept
+  // layer, code-stream's diff rows, approval-card's skip, recommendation-card's
+  // inline entity, card's press and selection-actions' spring keyframes.
+  // Measured 595.4 KiB. Same contract as every note above: actuals plus minimal
+  // headroom, growth from here fails.
+  fullCssBytes: 600 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
@@ -161,7 +169,14 @@ const LIMITS = {
   // catch: the sheet only carries `.tx-sensitive-input{,--xs,--sm,--lg}` and no other
   // component's rules. Measured 594.0 KiB across 156 stylesheets. Actuals plus minimal
   // headroom, growth from here fails.
-  onDemandCssBytes: 596 * 1024,
+  // 596 -> 608 on 2026-09-22: the same round as the `fullCssBytes` note above.
+  // 594.0 -> 604.3 KiB across 156 -> 159 stylesheets, with nothing else in
+  // tuffex or its build changed since the 09-18 note: 5.4 KiB is the three new
+  // sheets and 4.9 KiB the reworked ones. Checked for the inlining this limit
+  // exists to catch: each new sheet carries only its own root class
+  // (`.tx-bui-flowchart`, `.tx-bui-agent-screen`, `.tx-toast-panel`). Actuals
+  // plus minimal headroom, growth from here fails.
+  onDemandCssBytes: 608 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
