@@ -157,7 +157,11 @@ describe('app realtime index freshness', () => {
       // `vi.resetModules()` hands each test a fresh mock registry, so the sleep spy has to be read
       // from the same registry the provider just captured rather than from a top-level import.
       const { sleep } = await import('@talex-touch/utils')
-      vi.spyOn(fs, 'stat').mockResolvedValue({ size: 4096 } as never)
+      vi.spyOn(fs, 'stat').mockResolvedValue({
+        size: 4096,
+        mtimeMs: 1_000,
+        isDirectory: () => true
+      } as never)
       const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
 
       const stable = await provider._waitForItemStable(APP_PATH)
@@ -496,6 +500,74 @@ describe('app realtime index freshness', () => {
         if (originalNodeEnv === undefined) delete process.env.NODE_ENV
         else process.env.NODE_ENV = originalNodeEnv
       }
+    })
+  })
+
+  describe('app freshness hardening (2026-09-21)', () => {
+    describe('stability probe on a bundle directory', () => {
+      it('keeps waiting while the bundle directory mtime is still moving', async () => {
+        // A `.app` is a directory: its st_size is a constant 96 on APFS no matter how much is being
+        // copied into it, so comparing size returned "stable" immediately. The directory mtime
+        // moves while entries land, and that is what a copy in progress looks like.
+        const { appProvider } = await loadSubject()
+        const provider = asPrivateProvider(appProvider)
+        let mtime = 1000
+        vi.spyOn(fs, 'stat').mockImplementation(
+          async () => ({ size: 96, mtimeMs: (mtime += 1), isDirectory: () => true }) as never
+        )
+
+        const stable = await provider._waitForItemStable(APP_PATH, 0, 3)
+
+        expect(stable).toBe(false)
+        expect(fs.stat).toHaveBeenCalledTimes(6)
+      })
+
+      it('settles once the bundle directory stops changing', async () => {
+        const { appProvider } = await loadSubject()
+        const provider = asPrivateProvider(appProvider)
+        vi.spyOn(fs, 'stat').mockResolvedValue({
+          size: 96,
+          mtimeMs: 1000,
+          isDirectory: () => true
+        } as never)
+
+        expect(await provider._waitForItemStable(APP_PATH, 0, 3)).toBe(true)
+      })
+    })
+
+    describe('watch event during an in-flight resolve', () => {
+      it('re-runs the path once the in-flight resolve finishes instead of dropping the event', async () => {
+        const provider = await loadProvider()
+        provider.dbUtils = createDbUtils().dbUtils
+        // Isolate the coalescing itself from the DB write: the upsert is exercised elsewhere.
+        const upsertAppInfo = vi.fn(async () => 'added' as const)
+        provider.upsertAppInfo = upsertAppInfo
+        const published: string[] = []
+        provider.publishAppRuntimeUpsert = vi.fn(
+          async (_appInfo: { path: string }, reason: string) => {
+            published.push(reason)
+          }
+        )
+        const firstResolve = Promise.withResolvers<{
+          ok: true
+          appInfo: ReturnType<typeof buildAppInfo>
+        }>()
+        resolveAppInfoByPathMock
+          .mockImplementationOnce(() => firstResolve.promise)
+          .mockImplementation(async () => ({ ok: true, appInfo: buildAppInfo() }))
+
+        const first = provider.processAppPath(APP_PATH, { discovery: 'watch' })
+        await drainMicrotasks()
+        // Second add/change event for the same bundle while the first is still resolving.
+        const second = await provider.processAppPath(APP_PATH, { discovery: 'watch' })
+        expect(second).toMatchObject({ success: false, status: 'invalid', reason: 'processing' })
+
+        firstResolve.resolve({ ok: true, appInfo: buildAppInfo() })
+        await expect(first).resolves.toMatchObject({ success: true })
+        await vi.waitFor(() => expect(resolveAppInfoByPathMock).toHaveBeenCalledTimes(2))
+        await vi.waitFor(() => expect(published).toEqual(['app-provider-watch-rerun']))
+        expect(upsertAppInfo).toHaveBeenCalledTimes(2)
+      })
     })
   })
 })

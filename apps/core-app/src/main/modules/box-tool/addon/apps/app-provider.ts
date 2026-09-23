@@ -159,6 +159,10 @@ import { isSearchableAppRow, processSearchResults } from './search-processing-se
 import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
 const SLOW_SEARCH_THRESHOLD_MS = 400
+/** Second-precision comparison key for app mtimes; the catalog stores them without the fraction. */
+function toMtimeSeconds(value: Date | number | string): number {
+  return Math.floor(new Date(value).getTime() / 1000)
+}
 const APP_INDEX_SCAN_POLL_MS = 75
 const appProviderLog = getLogger('app-provider')
 
@@ -489,6 +493,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private appResolutionSweepTimer: NodeJS.Timeout | null = null
   private readonly startupProducerAbort = new AbortController()
   private readonly externalMutationTasks = new Set<Promise<unknown>>()
+  /** Paths that received another watch event while `processAppPath` was already running them. */
+  private readonly dirtyProcessingPaths = new Set<string>()
   private readonly appIconHydrationPending = new Set<string>()
   private shutdownPreparation: Promise<void> | null = null
   private readonly sourceScanner = new AppProviderSourceScanner({
@@ -2329,6 +2335,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       logApp('Database not initialized, skipping startup backfill', LogStyle.error)
       return
     }
+    // The boot path (runInitialAppScan → scanIndexedSource → here) bypasses the timer in
+    // `_scheduleStartupBackfill`, which is where this setting used to be checked; without the
+    // gate here, turning the backfill off still ran a full one on every launch.
+    if (!this.appIndexSettings.startupBackfillEnabled) {
+      logApp('Startup backfill disabled, skipping', LogStyle.info)
+      return
+    }
 
     // Startup write-storm gate (R4), boot-path edition. The window-gated timer
     // in _scheduleStartupBackfill() no longer owns boot: since the Runtime
@@ -2840,7 +2853,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         const hasIconDrift = hasAppIconDrift(dbApp.extensions.icon, scannedApp.icon)
         const hasLaunchMetadataDrift = hasAppLaunchMetadataDrift(dbApp.extensions, scannedApp)
         if (
-          scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime() ||
+          // `files.mtime` is stored with second precision (drizzle `mode: 'timestamp'`), the
+          // scanner reads the file system's millisecond mtime. Compared in milliseconds every app
+          // with a fractional mtime counted as changed on every reconcile (66 of 201 on a real
+          // machine) and had its metadata rewritten each time.
+          toMtimeSeconds(scannedApp.lastModified) > toMtimeSeconds(dbApp.mtime) ||
           hasDisplayNameDrift ||
           hasNameDrift ||
           hasAlternateNamesDrift ||
@@ -3103,6 +3120,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     } = {}
   ): Promise<AppIndexProcessPathResult> {
     if (this.processingPaths.has(appPath)) {
+      // A second event for a bundle that is still resolving used to be dropped here, and nothing
+      // ever looked at the path again until the next full sync. Remember it and run it once more
+      // when the in-flight resolve settles.
+      this.dirtyProcessingPaths.add(appPath)
       return { success: false, status: 'invalid', reason: 'processing' }
     }
     if (!this.dbUtils) {
@@ -3154,6 +3175,28 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return { success: false, status: 'error', reason: report.publicMessage }
     } finally {
       this.processingPaths.delete(appPath)
+      if (this.dirtyProcessingPaths.delete(appPath) && !this.shuttingDown) {
+        void this.rerunDirtyAppPath(appPath, options)
+      }
+    }
+  }
+
+  /**
+   * Replays a watch event that arrived while the same path was resolving. Like the retry ladder
+   * this runs outside the watch route, so the provider publishes the record itself.
+   */
+  private async rerunDirtyAppPath(
+    appPath: string,
+    options: { managedEntry?: boolean; scheduleRetry?: boolean; discovery?: AppDiscoveryKind }
+  ): Promise<void> {
+    try {
+      const result = await this.processAppPath(appPath, options)
+      if (!result.success || !result.appInfo) return
+      await this.publishAppRuntimeUpsert(result.appInfo, 'app-provider-watch-rerun')
+    } catch (error) {
+      logApp('Re-running a coalesced app watch event failed', LogStyle.warning, {
+        error: error instanceof Error ? error.message : String(error)
+      })
     }
   }
 
@@ -3899,11 +3942,17 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   ): Promise<boolean> {
     logApp(`Waiting for item to stabilize: ${chalk.cyan(itemPath)}`, LogStyle.info)
 
+    // A `.app` is a directory whose st_size is constant (96 on APFS) however much is still being
+    // copied into it, so comparing sizes declared every bundle stable on the first probe. The
+    // directory mtime moves as entries land; files keep the size comparison and add mtime.
+    const fingerprintOf = (stats: { size: number; mtimeMs: number; isDirectory(): boolean }) =>
+      stats.isDirectory() ? `dir:${stats.mtimeMs}` : `file:${stats.size}:${stats.mtimeMs}`
+
     for (let i = 0; i < retries; i++) {
       try {
-        const size1 = (await fs.stat(itemPath)).size
+        const size1 = fingerprintOf(await fs.stat(itemPath))
         await new Promise((resolve) => setTimeout(resolve, delay))
-        const size2 = (await fs.stat(itemPath)).size
+        const size2 = fingerprintOf(await fs.stat(itemPath))
 
         if (size1 === size2) {
           logApp(`Item stabilized: ${chalk.green(itemPath)}`, LogStyle.success)
@@ -4452,12 +4501,24 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
     const t4 = performance.now()
 
+    let confirmedDeletedCount = 0
     if (deletedApps.length > 0) {
       const deletedDbApps = deletedApps.flatMap((app) => {
         const dbApp = dbAppsByUniqueId.get(this.resolveScannedAppKey(app))
         return dbApp ? [dbApp] : []
       })
-      const deletedIds = deletedDbApps.map((app) => app.id)
+      // Same ledger as the full sync: a path the poll could not see has to stay missing across
+      // two passes and three minutes before its row goes. Deleting on the first miss removed
+      // real apps whenever an external volume was unmounted or a permission check failed
+      // during the ten-minute poll.
+      const deletedIds = await this._processAppsForDeletion(
+        deletedDbApps.map((app) => ({
+          id: app.id,
+          path: app.path,
+          uniqueId: this.resolveDbAppKey(app)
+        }))
+      )
+      confirmedDeletedCount = deletedIds.length
       if (deletedIds.length > 0) {
         logApp(
           `Deleting ${chalk.yellow(deletedIds.length)} missing apps from database`,
@@ -4492,7 +4553,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return {
       added: 0,
       changed: updatedCount,
-      deleted: deletedApps.length,
+      // Rows actually removed, not paths merely missing this pass (those wait in the ledger).
+      deleted: confirmedDeletedCount,
       skipped: appsWithDisplayName.length,
       errors: 0
     }

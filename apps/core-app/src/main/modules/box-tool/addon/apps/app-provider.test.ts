@@ -3561,3 +3561,137 @@ describe('appProvider rebuild maintenance', () => {
     }
   })
 })
+
+describe('app freshness hardening (2026-09-21)', () => {
+  it('routes apps the mdls pass could not find through the deletion grace ledger', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const dbRow = {
+      id: 91,
+      path: '/Volumes/External/Apps/Portable.app',
+      name: 'Portable',
+      displayName: 'Portable',
+      type: 'app',
+      mtime: new Date('2026-05-05T08:00:00Z'),
+      ctime: new Date('2026-05-05T08:00:00Z')
+    }
+    const deleteCalls: unknown[] = []
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn().mockResolvedValue([dbRow]),
+      getDb: () => ({
+        delete: vi.fn((table: unknown) => {
+          deleteCalls.push(table)
+          return { where: vi.fn(async () => undefined) }
+        }),
+        update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(async () => undefined) })) }))
+      }),
+      addFileExtensions: vi.fn(async () => undefined)
+    }
+    privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async (files: unknown[]) =>
+      files.map((file) => ({
+        ...(file as typeof dbRow),
+        extensions: { appIdentity: dbRow.path, bundleId: 'com.example.portable' }
+      }))
+    )
+    privateProvider._getLastMdlsLocale = vi.fn(async () => 'zh-CN')
+    privateProvider._setLastScanTime = vi.fn(async () => undefined)
+    privateProvider._setLastMdlsLocale = vi.fn(async () => undefined)
+    const processAppsForDeletion = vi.fn(async () => [] as number[])
+    privateProvider._processAppsForDeletion = processAppsForDeletion
+    // An unmounted external volume during the ten-minute poll: mdls reports the app missing.
+    runMdlsUpdateScanMock.mockResolvedValue({
+      updatedApps: [],
+      updatedCount: 0,
+      deletedApps: [
+        privateProvider._mapDbAppToScannedInfo({
+          ...dbRow,
+          extensions: { appIdentity: dbRow.path, bundleId: 'com.example.portable' }
+        })
+      ]
+    })
+
+    await privateProvider._performMdlsUpdateScan()
+
+    expect(processAppsForDeletion).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 91, path: dbRow.path })
+    ])
+    expect(deleteCalls).toEqual([])
+  })
+
+  it('honours a disabled startup backfill on the boot path, not only on the timer path', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const getFilesByType = vi.fn()
+    privateProvider.dbUtils = { getFilesByType }
+    privateProvider.searchIndex = {}
+    privateProvider.appIndexSettings.startupBackfillEnabled = false
+    privateProvider._getLastBackfillTime = vi.fn(async () => 1_700_000_000_000)
+
+    await privateProvider._performStartupBackfill()
+
+    expect(getAppsMock).not.toHaveBeenCalled()
+    expect(getFilesByType).not.toHaveBeenCalled()
+  })
+})
+
+describe('app reconcile mtime precision (2026-09-21)', () => {
+  it('does not report an app as changed when only the sub-second part of its mtime differs', async () => {
+    // `files.mtime` is stored with second precision (drizzle `mode: "timestamp"`), the scanner
+    // reads the file system's millisecond mtime. Comparing the two in milliseconds flagged every
+    // app with a fractional mtime as changed on every reconcile — 66 of 201 on a real machine —
+    // and rewrote their metadata each time for nothing.
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const storedMtime = new Date('2026-05-01T00:00:00.000Z')
+    const scannedApp = {
+      name: 'Steady',
+      displayName: 'Steady',
+      path: '/Applications/Steady.app',
+      icon: '',
+      bundleId: 'com.example.steady',
+      uniqueId: 'com.example.steady',
+      stableId: 'com.example.steady',
+      launchKind: 'path' as const,
+      launchTarget: '/Applications/Steady.app',
+      displayPath: '/Applications/Steady.app',
+      lastModified: new Date(storedMtime.getTime() + 400)
+    }
+    const dbApp = {
+      id: 77,
+      path: scannedApp.path,
+      name: scannedApp.name,
+      displayName: scannedApp.displayName,
+      type: 'app',
+      mtime: storedMtime,
+      ctime: storedMtime,
+      extensions: {
+        bundleId: scannedApp.bundleId,
+        appIdentity: scannedApp.stableId,
+        launchKind: 'path',
+        launchTarget: scannedApp.launchTarget,
+        displayPath: scannedApp.displayPath
+      }
+    }
+    const updateMock = vi.fn(() => ({
+      set: vi.fn(() => ({ where: vi.fn(async () => undefined) }))
+    }))
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn(async () => [dbApp]),
+      getDb: () => ({
+        update: updateMock,
+        delete: vi.fn(() => ({ where: vi.fn(async () => undefined) }))
+      }),
+      addFileExtensions: vi.fn(async () => undefined)
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [dbApp])
+    privateProvider.loadScannedApps = vi.fn(async () => [scannedApp])
+    privateProvider._recordMissingIconApps = vi.fn(async () => undefined)
+    privateProvider._processAppsForDeletion = vi.fn(async () => [])
+
+    const stats = await privateProvider._initialize({ forceRefresh: true })
+
+    expect(stats).toMatchObject({ added: 0, changed: 0, deleted: 0, skipped: 0, errors: 0 })
+    expect(updateMock).not.toHaveBeenCalled()
+  })
+})

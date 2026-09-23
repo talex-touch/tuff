@@ -95,6 +95,20 @@ function expectRetiredWithoutTermination(worker: RetirableWorker): void {
   expect(worker.messages.at(-1)).toEqual({ type: 'shutdown' })
 }
 
+/**
+ * Drives one worker-level failure (a query timeout) to completion under fake timers, so a caller can
+ * build up the consecutive-failure count the way a real session does.
+ */
+async function failNextReadByTimeout(
+  client: SearchIndexReadWorkerClient,
+  timeoutMs: number
+): Promise<void> {
+  const read = client.all(sql`SELECT 'timed out'`)
+  const rejection = expect(read).rejects.toBeInstanceOf(SearchIndexReadWorkerTimeoutError)
+  await vi.advanceTimersByTimeAsync(timeoutMs)
+  await rejection
+}
+
 describe('SearchIndexReadWorkerClient lifecycle', () => {
   it('fences an active cancelled query until its worker result arrives, then starts the next query', async () => {
     const client = createClient()
@@ -154,7 +168,7 @@ describe('SearchIndexReadWorkerClient lifecycle', () => {
     await client.close()
   })
 
-  it('times out one active read, settles its queue, and never dispatches queued work afterward', async () => {
+  it('times out one active read, settles its queue, then rebuilds a worker for the next query', async () => {
     vi.useFakeTimers()
     try {
       const client = new SearchIndexReadWorkerClient('/tmp/search-index.sqlite', {
@@ -178,15 +192,159 @@ describe('SearchIndexReadWorkerClient lifecycle', () => {
       await queuedRejection
       expectRetiredWithoutTermination(worker)
       expect(worker.messages).toHaveLength(2)
-      await expect(client.all(sql`SELECT 'after timeout'`)).rejects.toBeInstanceOf(
-        SearchIndexReadWorkerUnavailableError
-      )
+
+      // The retired worker is not the client's tombstone: the next read builds a fresh one.
+      const afterTimeout = client.all<{ itemId: string }>(sql`SELECT 'after timeout'`)
+      const rebuilt = workerMock.workers.at(-1)!
+      expect(rebuilt).not.toBe(worker)
+      expect(rebuilt.messages).toHaveLength(1)
+
+      rebuilt.emit('message', {
+        type: 'result',
+        requestId: requestIdOf(rebuilt.messages[0]),
+        rows: [{ itemId: 'after timeout' }]
+      })
+      await expect(afterTimeout).resolves.toEqual([{ itemId: 'after timeout' }])
+      expectRetiredWithoutTermination(worker)
+      expect(rebuilt.terminateCalls).toBe(0)
+      await client.close()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('settles active and queued callers when the worker fails, without retrying reads on the parent', async () => {
+  it('stops rebuilding workers once three consecutive failures trip the cooldown', async () => {
+    vi.useFakeTimers()
+    try {
+      const client = new SearchIndexReadWorkerClient('/tmp/search-index.sqlite', {
+        workerPath: '/fixture/search-index-read-worker.js',
+        timeoutMs: 5,
+        maxQueueDepth: 4
+      })
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await failNextReadByTimeout(client, 5)
+      }
+
+      // A reader failing for a permanent reason must not strand one thread per query.
+      const workersBeforeCooldown = workerMock.workers.length
+      await expect(client.all(sql`SELECT 'during cooldown'`)).rejects.toThrow('cooling down')
+      await expect(client.all(sql`SELECT 'during cooldown'`)).rejects.toBeInstanceOf(
+        SearchIndexReadWorkerUnavailableError
+      )
+      expect(workerMock.workers).toHaveLength(workersBeforeCooldown)
+
+      // The cooldown quiets a broken reader; it never latches it shut for the session.
+      await vi.advanceTimersByTimeAsync(30_000)
+      const afterCooldown = client.all<{ itemId: string }>(sql`SELECT 'after cooldown'`)
+      const rebuilt = workerMock.workers.at(-1)!
+      expect(workerMock.workers).toHaveLength(workersBeforeCooldown + 1)
+
+      rebuilt.emit('message', {
+        type: 'result',
+        requestId: requestIdOf(rebuilt.messages[0]),
+        rows: [{ itemId: 'after cooldown' }]
+      })
+      await expect(afterCooldown).resolves.toEqual([{ itemId: 'after cooldown' }])
+      await client.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resets the consecutive-failure budget after a successful read', async () => {
+    vi.useFakeTimers()
+    try {
+      const client = new SearchIndexReadWorkerClient('/tmp/search-index.sqlite', {
+        workerPath: '/fixture/search-index-read-worker.js',
+        timeoutMs: 5,
+        maxQueueDepth: 4
+      })
+
+      await failNextReadByTimeout(client, 5)
+      await failNextReadByTimeout(client, 5)
+
+      const recovered = client.all<{ itemId: string }>(sql`SELECT 'recovered'`)
+      const recoveredWorker = workerMock.workers.at(-1)!
+      recoveredWorker.emit('message', {
+        type: 'result',
+        requestId: requestIdOf(recoveredWorker.messages[0]),
+        rows: [{ itemId: 'recovered' }]
+      })
+      await expect(recovered).resolves.toEqual([{ itemId: 'recovered' }])
+
+      // Four failures in total, but only two since the last good read, so no cooldown.
+      await failNextReadByTimeout(client, 5)
+      await failNextReadByTimeout(client, 5)
+
+      const stillReadable = client.all<{ itemId: string }>(sql`SELECT 'still readable'`)
+      const rebuilt = workerMock.workers.at(-1)!
+      expect(rebuilt).not.toBe(recoveredWorker)
+
+      rebuilt.emit('message', {
+        type: 'result',
+        requestId: requestIdOf(rebuilt.messages[0]),
+        rows: [{ itemId: 'still readable' }]
+      })
+      await expect(stillReadable).resolves.toEqual([{ itemId: 'still readable' }])
+      await client.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the worker and the failure budget for query-level errors', async () => {
+    vi.useFakeTimers()
+    try {
+      const client = new SearchIndexReadWorkerClient('/tmp/search-index.sqlite', {
+        workerPath: '/fixture/search-index-read-worker.js',
+        timeoutMs: 5,
+        maxQueueDepth: 4
+      })
+      const firstRead = client.all(sql`SELECT 'broken'`)
+      const worker = workerMock.workers.at(-1)!
+      const rejectActiveStatement = (): void => {
+        worker.emit('message', {
+          type: 'error',
+          requestId: requestIdOf(worker.messages.at(-1)),
+          error: { name: 'SqliteError', message: 'no such table: broken', code: 'SQLITE_ERROR' }
+        })
+      }
+
+      // A statement the reader rejects is the caller's problem, not a dying reader.
+      const firstRejection = expect(firstRead).rejects.toThrow('no such table: broken')
+      rejectActiveStatement()
+      await firstRejection
+
+      const secondRead = client.all(sql`SELECT 'broken'`)
+      const secondRejection = expect(secondRead).rejects.toThrow('no such table: broken')
+      rejectActiveStatement()
+      await secondRejection
+
+      expect(worker.unrefCalls).toBe(0)
+      expect(worker.messages).toHaveLength(2)
+
+      // Two real worker failures are still short of the three that trip the cooldown, and they
+      // only stay short if the rejected statements above were not counted as failures.
+      await failNextReadByTimeout(client, 5)
+      await failNextReadByTimeout(client, 5)
+
+      const stillReadable = client.all<{ itemId: string }>(sql`SELECT 'still readable'`)
+      const rebuilt = workerMock.workers.at(-1)!
+      expect(rebuilt).not.toBe(worker)
+      rebuilt.emit('message', {
+        type: 'result',
+        requestId: requestIdOf(rebuilt.messages[0]),
+        rows: [{ itemId: 'still readable' }]
+      })
+      await expect(stillReadable).resolves.toEqual([{ itemId: 'still readable' }])
+      await client.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('settles active and queued callers when the worker fails, then rebuilds a worker for the next read', async () => {
     const client = createClient()
     const active = client.all(sql`SELECT 'active'`)
     const worker = workerMock.workers.at(-1)!
@@ -196,10 +354,20 @@ describe('SearchIndexReadWorkerClient lifecycle', () => {
 
     await expect(active).rejects.toThrow('worker lost')
     await expect(queued).rejects.toThrow('worker lost')
-    await expect(client.all(sql`SELECT 'after failure'`)).rejects.toBeInstanceOf(
-      SearchIndexReadWorkerUnavailableError
-    )
     expectRetiredWithoutTermination(worker)
+
+    const afterFailure = client.all<{ itemId: string }>(sql`SELECT 'after failure'`)
+    const rebuilt = workerMock.workers.at(-1)!
+    expect(rebuilt).not.toBe(worker)
+
+    rebuilt.emit('message', {
+      type: 'result',
+      requestId: requestIdOf(rebuilt.messages[0]),
+      rows: [{ itemId: 'after failure' }]
+    })
+    await expect(afterFailure).resolves.toEqual([{ itemId: 'after failure' }])
+    expect(rebuilt.terminateCalls).toBe(0)
+    await client.close()
   })
 
   it('settles active and queued callers when close races an in-flight read', async () => {

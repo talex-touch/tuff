@@ -36,6 +36,26 @@ describe('app semantic alias catalog', () => {
     )
   })
 
+  it('gives terminal aliases to the Warp terminal but not to Cloudflare WARP', () => {
+    // A bare `warp` needle matched the standalone token in "Cloudflare WARP", so the VPN client
+    // answered searches for 终端 / terminal.
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Cloudflare WARP',
+        bundleId: 'com.cloudflare.1dot1dot1dot1.macos',
+        path: '/Applications/Cloudflare WARP.app'
+      })
+    ).not.toEqual(expect.arrayContaining(['terminal']))
+
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Warp',
+        bundleId: 'dev.warp.Warp-Stable',
+        path: '/Applications/Warp.app'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', '终端']))
+  })
+
   it('resolves database, API and DevOps aliases without assigning git to IDEs', () => {
     expect(resolveAppSemanticAliases({ name: 'TablePlus' })).toEqual(
       expect.arrayContaining(['db', 'database', 'sql', '数据库'])

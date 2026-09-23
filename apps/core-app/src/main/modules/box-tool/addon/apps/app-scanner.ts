@@ -258,13 +258,16 @@ export class AppScanner {
    * that should have resolved? macOS needs the bundle manifest specifically, because a `.app`
    * directory without one is exactly the case the darwin adapter reports as terminal.
    */
+  /**
+   * A path is still a candidate while it exists on disk. On macOS that deliberately does not
+   * require `Contents/Info.plist`: a drag into /Applications fires the add event on the bundle
+   * directory before Finder has copied the manifest, and treating that moment as "not an app" was
+   * terminal, so a large app could stay out of the index for good. The retry ladder is what
+   * covers the copy; only a bundle that is gone altogether is not an app.
+   */
   private async isResolvableAppCandidate(filePath: string): Promise<boolean> {
     if (!filePath) return false
     try {
-      if (process.platform === 'darwin') {
-        await fs.access(path.join(filePath, 'Contents', 'Info.plist'))
-        return true
-      }
       await fs.access(filePath)
       return true
     } catch {

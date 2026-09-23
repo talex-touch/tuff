@@ -356,7 +356,9 @@ const APP_SEMANTIC_CATALOG: readonly AppSemanticCatalogEntry[] = [
     aliases: [...DEV_ALIASES, 'xcode', 'ios dev', 'apple dev']
   },
   {
-    match: ['terminal', 'iterm', 'warp', 'hyper', 'tabby', 'ghostty', 'cmux'],
+    // `dev.warp.warp` rather than a bare `warp`: the bare token also matches "Cloudflare WARP",
+    // which then answered searches for 终端 / terminal.
+    match: ['terminal', 'iterm', 'dev.warp.warp', 'hyper', 'tabby', 'ghostty', 'cmux'],
     aliases: [...DEV_ALIASES, ...TERMINAL_ALIASES]
   },
   {
