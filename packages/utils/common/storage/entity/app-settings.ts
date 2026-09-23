@@ -218,7 +218,7 @@ const _appSettingOriginData = {
   },
   voiceInput: {
     enabled: false,
-    language: 'zh-CN',
+    language: 'zh',
     polishEnabled: true,
     polishStrength: DEFAULT_VOICE_POLISH_STRENGTH as VoicePolishStrength,
 
@@ -577,7 +577,7 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
 
   const source = isSettingRecord(setting.voiceInput) ? setting.voiceInput : {}
   const enabled = typeof source.enabled === 'boolean' ? source.enabled : false
-  const language = typeof source.language === 'string' && source.language.trim() ? source.language : 'zh-CN'
+  const language = typeof source.language === 'string' && source.language.trim() ? source.language : 'zh'
   const polishEnabled = source.polishEnabled !== false
   const polishStrength = normalizeVoicePolishStrength(source.polishStrength)
   const hasHistory = Object.prototype.hasOwnProperty.call(source, 'historyEnabled')
