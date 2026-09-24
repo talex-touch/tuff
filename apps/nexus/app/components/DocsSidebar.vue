@@ -381,6 +381,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/working-indicator',
     // ai — AiReasoning
     '/docs/dev/components/ai-elements',
+    '/docs/dev/components/mode-chip',
     '/docs/dev/components/chain-of-thought',
     '/docs/dev/components/reasoning-disclosure',
     '/docs/dev/components/thinking-orb',

@@ -114,7 +114,7 @@ Each suite has one overview page carrying its own live preview and its own compo
 |-------|--------|------------|-------|
 | [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 92 | `@talex-touch/tuffex/base` |
 | [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 27 | `@talex-touch/tuffex/pro` |
-| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 30 | `@talex-touch/tuffex/ai` |
+| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 31 | `@talex-touch/tuffex/ai` |
 | [Data Suite](./data-suite.en.mdc) | Charts / Visualization | 10 | `@talex-touch/tuffex/pro` (visualization + charts) + `@talex-touch/tuffex/charts` (chart family entry) |
 | [Flow Suite](./flow-suite.en.mdc) | Flow | 1 | `@talex-touch/tuffex/ai` |
 
@@ -291,6 +291,7 @@ AI-native interface components, partly adapted from [Beautiful UI](https://www.b
 - [ChatComposer](./chat-composer.en.mdc)
 - [PromptBar](./prompt-bar.en.mdc)
 - [AttachmentTray](./attachment-tray.en.mdc)
+- [ModeChip](./mode-chip.en.mdc)
 - [MessageActions](./message-actions.en.mdc)
 - [SuggestionChips](./suggestion-chips.en.mdc)
 - [TypingIndicator](./typing-indicator.en.mdc)

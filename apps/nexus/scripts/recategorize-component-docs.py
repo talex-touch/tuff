@@ -238,6 +238,7 @@ TAXONOMY: dict[str, list[str]] = {
         "code-stream",
         "inline-citation",
         "sources",
+        "mode-chip",
     ],
     "AiContext": [
         "context-cards",

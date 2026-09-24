@@ -1,0 +1,136 @@
+---
+title: "ModeChip 模式芯片"
+description: "表示当前模式的按钮：切换模式时原地变身，图标缩放互换、文字模糊交叉，底色和宽度跟着变。"
+category: AiChat
+status: beta
+since: 0.6.0
+tags: [chip, mode, toggle, morph, ai]
+syncStatus: reviewed
+verified: true
+---
+# ModeChip 模式芯片
+
+`TxModeChip` 是一个原生按钮，用来显示输入框或工具栏当前所处的模式，比如"请求批准"和"无限制访问"。模式变化时它原地变身：
+
+- 图标先在固定大小的方框里缩放互换；
+- 50ms 后文字模糊交叉；
+- 底色和墨色随色调过渡，宽度平滑跟上新文字。
+
+悬停只改颜色，而且立即切换。
+
+## 基础用法
+
+### ModeChip
+
+点击芯片在两种模式之间切换。文字说明的就是当前模式，所以芯片不加 `aria-pressed`。
+
+:::TuffDemoWrapper{demo="ModeChipModeChipDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxModeChip
+      :icon="unrestricted ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
+      :label="unrestricted ? '无限制访问' : '请求批准'"
+      :tone="unrestricted ? 'danger' : 'muted'"
+      @click="unrestricted = !unrestricted"
+    />
+  </template>
+---
+:::
+
+### 色调
+
+- `muted`：没有底色，文字用常规墨色，悬停时变为主墨色。
+- 其余色调：底色是该色相的 `-light-9`，文字是该色相与主墨色的混合色。
+- 每个色调的文字对比度，在四套主题的静止和悬停状态下都实测不低于 4.5:1。
+- `info` 用主色（primary）色相，和 `TxStatusBadge` 一致。
+
+:::TuffDemoWrapper{demo="ModeChipTonesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxModeChip tone="muted" icon="i-carbon-touch-1" label="请求批准" />
+    <TxModeChip tone="info" icon="i-carbon-earth" label="联网搜索" />
+    <TxModeChip tone="success" icon="i-carbon-checkmark-outline" label="自动接受编辑" />
+    <TxModeChip tone="warning" icon="i-carbon-warning-alt" label="计划模式" />
+    <TxModeChip tone="danger" icon="i-carbon-unlocked" label="无限制访问" />
+  </template>
+---
+:::
+
+放进输入框的用法见 [ChatComposer 消息输入](/docs/dev/components/chat-composer) 的"搭配模式芯片"和"托盘换位"两节。
+
+## API
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `label` | `string` | - | 显示的文字，也是按钮的可访问名；必填 |
+| `icon` | `string` | `''` | 前置图标的 class，写法和 `TxButton`、`TxStatusBadge` 一样；为空时不占图标位 |
+| `tone` | `'muted' \| 'info' \| 'success' \| 'warning' \| 'danger'` | `'muted'` | 色调，复用 `StatusTone` |
+| `disabled` | `boolean` | `false` | 禁用按钮 |
+
+### Events
+
+没有自定义事件。`click` 等原生事件和其余属性（如 `aria-pressed`、`aria-haspopup`、`title`）都会透传到根元素 `<button>` 上。
+
+### Slots
+
+无插槽。文字只来自 `label`，这样变身时才能统一走 `TxTextTransformer` 的模糊交叉。
+
+### CSS 变量
+
+| 变量 | 说明 |
+|------|------|
+| `--tx-mode-chip-ink` | 文字颜色，每个色调各自设置 |
+| `--tx-mode-chip-ink-hover` | 悬停时的文字颜色，只有 `muted` 设置 |
+| `--tx-mode-chip-fill` | 底色 |
+| `--tx-mode-chip-fill-hover` | 悬停时的底色 |
+
+## 交互契约
+
+- 渲染为原生 `<button type="button">`，高 28px、13px 字、圆角 8px。`label` 是按钮的可访问名，图标不参与命名。
+- `label`、`icon`、`tone` 中任意一个变化都会触发变身：
+  - 旧图标在 14px 方框里 160ms 缩到 0.5 并淡出，新图标 240ms 从 0.5 放大；
+  - 50ms 后文字通过 `TxTextTransformer` 的 fade 模式模糊交叉，旧文字 80ms 消失，新文字 280ms 变清晰；
+  - 宽度用 300ms 跟到新文字。
+- 底色和墨色的过渡只存在于变身期间（`.is-morphing`，约 350ms）；其他时候芯片上根本没有颜色过渡。
+- 悬停立即换色：`muted` 的墨色变为主墨色，其余色调的底色加深、墨色不变。
+- 变身过程中值再次改变，会重新开始计时，宽度从当前实际位置接着过渡。
+- 宽度变大的过程中文字不会被省略号截断，而是由芯片裁切。
+- `prefers-reduced-motion: reduce` 下所有环节立即落到终态：文字不延迟，宽度不做动画，颜色不做过渡。
+- 没有 Web Animations API 的环境里，宽度直接落到新值。
+- 禁用时半透明、光标为 `not-allowed`，也没有悬停变化。
+
+## 最佳实践
+
+- 用它表示"现在处于哪种模式"。文字本身就说明了状态，所以文字随模式变化的芯片不要加 `aria-pressed`：切换按钮的名称在两种状态下必须一致（WAI-ARIA APG），否则读屏会把正在生效的"请求批准"读成"未按下"。`aria-pressed` 留给文字固定、只负责开关某个模式的芯片（比如"联网搜索"）；点击打开模式菜单时加 `aria-haspopup`。
+- 用色调表示风险：默认或安全的模式用 `muted`，放开了保护的模式（比如无限制访问）用 `danger`。文字和图标本身也要说清状态，不能只靠颜色。
+- 文字控制在两到四个词，变身时宽度变化才自然。
+- 放进 `TxChatComposer` 时，工具栏用 `toolbar-left` 插槽，托盘里用 `muted` 色调。
+- 不要高频自动切换。每次切换都是一次动效，只在用户操作或语境真的变化时切。
+
+## 审阅说明
+
+- 组件源码：`packages/tuffex/packages/components/src/mode-chip/src/TxModeChip.vue`。
+- 动效参考：[@flohoeller 的 Chatbox 组件视频](https://x.com/flohoeller/status/2102660458658582913) 里的芯片变身，逐帧实测约 370ms：
+  - 图标先动；
+  - 旧文字约 80ms 消失；
+  - 新文字约 280ms 从模糊到清晰。
+- 文字动效复用 `TxTextTransformer` 的 fade 模式，没有另写一套文字动画引擎。同一轮修好了 fade 模式淡入从未生效的问题（准备态和动画态原先落在同一帧的样式计算里）。
+- 对比度实测表写在源码注释里：
+  - 最差是亮色主题下 `danger` 悬停，4.58:1；
+  - 否决过同色相纯色文字，它在亮色下只有 2.03–2.61:1；
+  - `muted` 不用次级墨色，因为它在白底上只有 3.08:1，在托盘底上只有 2.87:1。
+- 示例里的芯片都不带 `aria-pressed`：它们的文字随模式变化，而切换按钮的名称必须固定。否决过两者叠加的写法，读屏会把正在生效的"请求批准"读成"未按下"。
+- 颜色过渡只挂在 `.is-morphing` 上，这样变身可以做颜色过渡，悬停又能遵守"悬停颜色立即切换"的设计规则。
+- 命名：不叫 `StateChip`，因为本库的 `*-state` 是整页状态组件（EmptyState、ErrorState 等）。
+- **实测覆盖：** Coverage:
+  - `mode-chip/__tests__/mode-chip.test.ts` 覆盖原生按钮与属性透传、可访问名、走 fade 而非 morph 引擎、默认色调、无图标不占位、SSR；
+  - 同一文件还覆盖图标 keyed 互换、文字延后 50ms、`.is-morphing` 的时长与重新计时、宽度过渡与出现图标时的宽度过渡、无 WAAPI、卸载清理、reduced-motion；
+  - `mode-chip-motion.test.ts` 用编译后的样式守住：颜色过渡只在变身期间、文字层不过渡颜色、悬停无过渡、每个动效都有 reduced-motion 退路、色调填充与文字配方、每个 `var()` 都有兜底值。
+
+## Source
+
+<TuffDocSourceLink />

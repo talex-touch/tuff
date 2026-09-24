@@ -11,7 +11,7 @@ verified: true
 
 ## 套件分组
 
-AI 套件在组件侧边栏分为四组：**对话**（Chat、ChatComposer、PromptBar、AttachmentTray、MessageActions、SuggestionChips、TypingIndicator、ConversationStream）、**智能体**（Agents、AgentTrace、TaskRows、ToolCallCard、ToolChips、ToolConfirmation、ApprovalCard、WorkingIndicator）、**推理与生成**（AiElements、ChainOfThought、ReasoningDisclosure、ThinkingOrb、StreamMarkdown、CodeStream、InlineCitation、Sources）、**上下文与洞察**（ContextCards、ContextIndicator、InsightCards、RecommendationCard、FineTuneCard）。全部组件可经 `@talex-touch/tuffex/ai` 分类入口按套件引入。
+AI 套件在组件侧边栏分为四组：**对话**（Chat、ChatComposer、PromptBar、AttachmentTray、ModeChip、MessageActions、SuggestionChips、TypingIndicator、ConversationStream）、**智能体**（Agents、AgentTrace、AgentScreen、TaskRows、ToolCallCard、ToolChips、ToolConfirmation、ApprovalCard、WorkingIndicator）、**推理与生成**（AiElements、ChainOfThought、ReasoningDisclosure、ThinkingOrb、StreamMarkdown、CodeStream、InlineCitation、Sources）、**上下文与洞察**（ContextCards、ContextIndicator、InsightCards、RecommendationCard、FineTuneCard）。全部组件可经 `@talex-touch/tuffex/ai` 分类入口按套件引入。
 
 ## 组件预览
 
