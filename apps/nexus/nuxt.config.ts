@@ -445,7 +445,14 @@ export default defineNuxtConfig({
           // `/en/docs/*` also covers the nested raw-Markdown twins; the root ones
           // (`/en/docs.md`) sit outside it and need their own entry, or they reach a Worker
           // that has no filesystem to read the source from.
+          //
+          // The unprefixed docs entry points are answered by `_redirects` (see
+          // `docsStaticRedirects`), and Pages only applies that file to requests it serves
+          // itself. Left in the Worker's share, `/docs/*` reached `docs-legacy-redirect.ts`
+          // first and the static rules never fired — measured 3–5 s per redirect from CN.
           exclude: [
+            '/docs',
+            '/docs/*',
             '/en/docs',
             '/en/docs.md',
             '/en/docs/*',
