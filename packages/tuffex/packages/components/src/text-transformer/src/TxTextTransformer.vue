@@ -81,6 +81,10 @@ async function runTransition(nextText: string) {
   if (seq !== opSeq)
     return
 
+  // One rAF runs before that frame's style recalc, so without a forced read the setup
+  // state above and `is-animating` would be computed together and nothing would transition.
+  void rootRef.value?.offsetWidth
+
   if (typeof requestAnimationFrame === 'undefined') {
     animating.value = true
   }
@@ -262,8 +266,26 @@ onBeforeUnmount(() => {
   filter: blur(0px);
 }
 
+/*
+  The setup state lands at once. With a tween here the current layer would start
+  easing out, be reversed a frame later, and show the new text without a fade-in.
+*/
+.tx-text-transformer.has-prev:not(.is-animating) .tx-text-transformer__layer {
+  transition: none;
+}
+
 .tx-text-transformer.is-animating .tx-text-transformer__layer--prev {
   opacity: 0;
   filter: blur(var(--tx-tt-blur));
+}
+
+/*
+  The class flips still run; the layers just land on their end state. The morph
+  path needs nothing here: its engine checks the same query in script.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .tx-text-transformer__layer {
+    transition: none;
+  }
 }
 </style>

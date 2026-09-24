@@ -476,7 +476,12 @@ code: |
 - `text` 会通过 `String(...)` 归一化；数字会以字符串形式显示。
 - `morph` 下值交给引擎：完整值放在视觉隐藏的 `[tx-morph-sr]` 节点里，段元素全部 `aria-hidden`；根节点的 `overflow` 放开为 `visible`，否则离场段会被截半。因此 `morph` 不做省略号截断。
 - 根节点带 `aria-live="polite"`；`fade` 下旧文本 layer 带 `aria-hidden`，屏幕阅读器只宣告当前文本。
-- `fade` 下 `text` 变化时组件会记录旧 DOM color，渲染新旧两层，在下一帧启动动画，并在 `durationMs + 34ms` 后移除旧层。
+- `fade` 下 `text` 变化时组件会记录旧 DOM color，然后渲染新旧两层：
+  - 新层先不带过渡地落在准备态（透明加模糊）；
+  - 组件强制提交一次样式，然后在下一帧启动动画；
+  - 旧层在 `durationMs + 34ms` 后移除。
+  少了这次提交，准备态和动画态会落进同一次样式计算，新文字会直接出现，不会淡入。
+- `prefers-reduced-motion: reduce` 下两层都不做过渡，新文字直接替换旧文字。
 - 新一轮文本变化会通过内部序号取消上一轮 timer/frame，避免旧过渡误删当前 layer。
 - `wrap=false` 保持单行省略；`wrap=true` 切换为 `white-space: pre-line`，适合多行或包含换行符的内容。
 - scoped slot 会同时用于当前层和旧层，因此 slot 输出应只依赖传入的 `text`，避免非确定性副作用。
@@ -494,7 +499,12 @@ code: |
 
 - **live-region 说明:** 根节点始终使用 `aria-live="polite"`。不要在同一个密集区域放置多个高频变化实例，否则屏幕阅读器可能播报过多变化。
 - **过渡说明:** 旧 layer 会保留到 `durationMs + 34ms` 后才移除；这段时间 slot 内容会渲染两份。slot 渲染器应保持纯函数且足够轻量。
-- **实测覆盖:** `text-transformer.test.ts` 覆盖 morph 默认路径、插槽与 `wrap` 强制退回 `fade`，以及 `fade` 一侧的 live-region 语义、自定义根标签、duration/blur CSS 变量映射、wrap class、数字文本归一化、新旧 layer、旧颜色保留、旧 layer 的 `aria-hidden`、timer 清理与 scoped slot props。
+- **fade 淡入修复（2026-09-24）：** 修复之前，准备态和动画态落在同一帧的样式计算里，`fade` 模式的新文字从未真正淡入，只有旧文字在模糊淡出。现在准备态不带过渡，并且在请求动画帧之前先强制提交一次样式。起因是 `TxModeChip` 的文字交叉依赖这条淡入。
+- **实测覆盖:** `text-transformer.test.ts` 覆盖：
+  - morph 默认路径，插槽与 `wrap` 强制退回 `fade`；
+  - `fade` 一侧的 live-region 语义、自定义根标签、duration/blur CSS 变量映射、wrap class、数字文本归一化；
+  - 新旧 layer、旧颜色保留、旧 layer 的 `aria-hidden`、timer 清理与 scoped slot props；
+  - 准备态的强制样式提交、准备态不做过渡，以及 reduced-motion 退路。
 
 ## Source
 
