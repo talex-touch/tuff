@@ -40,13 +40,13 @@
 ## Step 5 — 边缘缓存 runbook 与探针
 
 - [x] spec 新增 runbook（表达式、TTL、排除路径、回退判据）；探针脚本 `scripts/probe-docs-edge-cache.mjs` + `package.json` 脚本 `probe:docs-edge-cache`。
-- [ ] 交给老板在 dashboard 建规则；规则开启后再跑探针，落盘 `-after.json`；按判据决定保留或回退，并同步 `DOCS_STATIC_CACHE_CONTROL`（design §4 末条）。
+- [x] Cache Rule 已在 dashboard 建好（老板登录后由 ego 操作）；`probe:docs-edge-cache -- --label after` 28/28 HIT（before 0/28），决定保留；`DOCS_STATIC_CACHE_CONTROL` 改为 `public, max-age=300, s-maxage=300` 并同步测试与 spec（随后续 PR 上线）。
 
 ## Step 6 — spec 与归档
 
 - [x] `nexus-docs-static-delivery.md` 两节改写/新增（design §5）。
 - [x] `08-27-nexus-docs-body-ssg`：追加线上证据、清 blocker、`task.py archive`。
-- [ ] 提交前 `git grep MUTATION HEAD`；只暂存本任务文件；不 push。
+- [x] 提交前 `git grep MUTATION HEAD` 无结果；只暂存本任务文件。老板指示部署后：cherry-pick 到 `nexus/static-delivery-closeout`，PR #1957 七项必需检查通过后 merge commit 合入（`eeff74b4d`），Pages 生产部署 80b95775 于 09:32 上线，线上四条探测通过（见 research）。
 
 ## 回滚点
 

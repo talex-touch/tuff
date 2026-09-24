@@ -59,8 +59,10 @@ What the headers do and do not buy, measured 2026-09-23 against production:
   requests each docs URL twice and writes `output/evidence/docs-edge-cache-<date>-<label>.json`,
   with a hashed `/_nuxt/` asset as the positive control. The rule stays only if the second
   request reads `HIT`/`STALE` and the static-HTML ttfb p50 drops; a chunk-404 incident after a
-  deploy removes it. Once it is kept, lower `s-maxage` in `DOCS_STATIC_CACHE_CONTROL` to 300 and
-  drop the stale-while-revalidate term so `_headers` and the rule agree.
+  deploy removes it. Kept on 2026-09-24: the rule "nexus docs static (HTML/JSON/i18n, 5 min edge
+  TTL)" took 28/28 second requests from `DYNAMIC` to `HIT` (`output/evidence/docs-edge-cache-2026-09-24-{before,after}.json`),
+  and `DOCS_STATIC_CACHE_CONTROL` was lowered to `public, max-age=300, s-maxage=300` so `_headers`
+  and the rule agree.
 - `/en/docs` and `/zh/docs` have blocks of their own: a Pages pattern `/en/docs/*` matches below
   the root, not the root, and the roots shipped with the Pages default until 2026-09-23.
 - `/_i18n/**` is hash-versioned in its path and may be held for a day at the edge.

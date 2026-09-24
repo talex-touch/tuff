@@ -15,16 +15,16 @@
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
-  "commit": "f7f158048",
-  "pr_url": null,
+  "commit": "eeff74b4d",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/1957",
   "subtasks": [],
   "children": [],
   "parent": "09-23-nexus-docs-perf-cms-remediation",
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "blocker": "R4 needs the Cloudflare zone Cache Rule created in the dashboard (boss action); the after-rule probe and the post-deploy re-test of the four curls cannot run before that and before master is deployed.",
-    "evidence": "research/verification-2026-09-24.md (isolated build, gate, wrangler probes, pre-rule edge probe); commits f7f158048 (code), 1839bcd10 (spec), 3b7021cb9 (task).",
-    "nextAction": "After deploy: re-run the four production curls; after the Cache Rule: `pnpm -C apps/nexus probe:docs-edge-cache -- --label after`, then decide keep/rollback and align DOCS_STATIC_CACHE_CONTROL (design §4)."
+    "blocker": "None. All requirements are deployed and verified in production; the s-maxage alignment ships in the follow-up PR.",
+    "evidence": "research/verification-2026-09-24.md — build, gate, wrangler, Pages preview a51c44a7, production eeff74b4d (deployment 80b95775), Cache Rule after-probe 28/28 HIT (output/evidence/docs-edge-cache-2026-09-24-after.json).",
+    "nextAction": "Land the s-maxage alignment PR, then archive the task; child 2 waits for the gallery tasks, child 3 is P2."
   }
 }

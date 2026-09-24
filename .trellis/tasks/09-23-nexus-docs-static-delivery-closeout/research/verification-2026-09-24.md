@@ -90,3 +90,38 @@ gate and `/tmp/nexus-verify.sh` (results appended below by the session).
   `/en/docs/nope` 404 with the rendered page, button page 200 with 9 `<h2>`), and
   `/tmp/nexus-wrangler.log` contains no `invalid redirect rule` warning.
 - Tests: 7 files / 77 passed; eslint 0 errors on touched files; `git diff --check` clean.
+
+## Production (2026-09-24 09:32, merge eeff74b4d via PR #1957, Pages deployment 80b95775)
+
+Preview deployment of the branch (`a51c44a7.tuff-dso.pages.dev`) answered identically before the
+merge. Production, from the workstation (colo SJC):
+
+| Request | Result |
+| --- | --- |
+| `/docs`, `/docs/dev`, `/docs/dev/components/button.md`, `/docs/dev/api/box.en.md` | 308 from the static layer (0-byte bodies), targets as designed; ttfb 0.7–0.9 s after the first connection (the Worker path measured 3–5 s on 2026-09-23) |
+| `/en/docs/nope` | **404**, 9,027 B, `<title>Page not found · Tuff Nexus</title>`, hero present (was: landing page, 200) |
+| `/en/docs/dev/components/button` | 200, 244,323 B, 9 `<h2>`, docs cache window |
+| `/en/docs`, `/zh/docs` | 200, `cache-control: public, max-age=300, s-maxage=3600, stale-while-revalidate=86400` (was Pages default) |
+| `/this-does-not-exist` | 404 from the Worker (unchanged) |
+| `cf-cache-status` | still `DYNAMIC` on every docs response — expected until the zone Cache Rule exists (R4) |
+
+Landing path: direct pushes to `master` are rejected by branch protection (7 required checks), so the
+three commits were cherry-picked onto `origin/master` as `nexus/static-delivery-closeout` and merged
+with a merge commit once the checks passed. The first attempt (#1956, the whole local master) failed
+on two other sessions' commits (core-app typecheck in `nexus-route-marker-ownership.test.ts`,
+tuff-voice `perfectionist/sort-imports`) and on this task's own `DOC-TASK-META` (an `in_progress`
+task needs non-empty `meta.nextAction/blocker/evidence`), which is fixed in the merged commit.
+
+## Cache Rule (R4), 2026-09-24 ~09:50
+
+Created in the dashboard through ego (the wrangler OAuth token has `zone:read` only): rule
+"nexus docs static (HTML/JSON/i18n, 5 min edge TTL)", custom expression over `tuff.tagzxia.com`
+for `/en/docs*`, `/zh/docs*`, `/api/docs/page/*`, `/api/docs/navigation/*`, `/api/docs/search/*`,
+`/api/docs/sidebar-components/*`, `/api/docs/component-sync`, `/_i18n/*`; cache eligible; Edge TTL
+"ignore cache-control, 300 s"; Browser TTL "respect origin". Zone plan: Free — the rule took.
+
+`probe:docs-edge-cache --label after` (`output/evidence/docs-edge-cache-2026-09-24-after.json`):
+**28/28** second requests `HIT` (before: 0/28 `DYNAMIC`); control asset MISS → HIT; three manual
+repeat requests to the button page answered `HIT` with `age` 19 → 22 → 26. Decision: keep.
+`DOCS_STATIC_CACHE_CONTROL` lowered to `public, max-age=300, s-maxage=300` (no SWR) so `_headers`
+matches the rule; this ships in the follow-up PR.
