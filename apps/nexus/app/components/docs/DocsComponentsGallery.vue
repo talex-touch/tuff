@@ -129,6 +129,11 @@ const copy = computed(() => (localeKey.value === 'zh'
       working: '处理中',
       searching: '检索中',
       typing: '正在输入…',
+      composerTray: '上下文',
+      connectApps: '连接应用',
+      selectProject: '选择项目',
+      requestApproval: '请求批准',
+      unrestricted: '无限制访问',
       suggestions: [
         { id: 's1', text: '如何发布插件？' },
         { id: 's2', text: '怎样声明权限？' },
@@ -216,6 +221,11 @@ const copy = computed(() => (localeKey.value === 'zh'
       working: 'Working',
       searching: 'Searching',
       typing: 'Typing…',
+      composerTray: 'Context',
+      connectApps: 'Connect apps',
+      selectProject: 'Select a project',
+      requestApproval: 'Request approval',
+      unrestricted: 'Unrestricted access',
       suggestions: [
         { id: 's1', text: 'How do I publish a plugin?' },
         { id: 's2', text: 'How to declare permissions?' },
@@ -540,6 +550,11 @@ const autoSizerLabel = computed(() => {
 
 /* ── AI band. ── */
 const chatDraft = ref('')
+// The ChatComposer specimen is the reference composer: a context tray that trades
+// sides and a mode chip that morphs. Both are click-driven, so nothing loops.
+const composerTray = ref<'top' | 'bottom'>('bottom')
+const composerUnrestricted = ref(false)
+const modeChipOn = ref(false)
 const promptDraft = ref('')
 const aiAttachments = ref([
   { kind: 'file' as const, id: 'a1', name: 'manifest.json', size: 2048, mime: 'application/json' },
@@ -3112,6 +3127,25 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('mode-chip')">
+          {{ cellLabel('ModeChip', '模式芯片') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <TxModeChip
+              :icon="modeChipOn ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
+              :label="modeChipOn ? copy.unrestricted : copy.requestApproval"
+              :tone="modeChipOn ? 'danger' : 'muted'"
+              @click="modeChipOn = !modeChipOn"
+            />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('tool-chips')">
           {{ cellLabel('ToolChips', '工具调用流') }}
         </NuxtLink>
@@ -3191,7 +3225,37 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxChatComposer v-model="chatDraft" :min-rows="1" :max-rows="3" :placeholder="copy.typeSomething" />
+              <TxChatComposer
+                v-model="chatDraft"
+                :min-rows="1"
+                :max-rows="3"
+                :placeholder="copy.typeSomething"
+                :tray-placement="composerTray"
+                :tray-label="copy.composerTray"
+              >
+                <template #tray>
+                  <TxModeChip
+                    v-if="composerTray === 'bottom'"
+                    icon="i-carbon-plug"
+                    :label="copy.connectApps"
+                    @click="composerTray = 'top'"
+                  />
+                  <TxModeChip
+                    v-else
+                    icon="i-carbon-folder"
+                    :label="copy.selectProject"
+                    @click="composerTray = 'bottom'"
+                  />
+                </template>
+                <template #toolbar-left>
+                  <TxModeChip
+                    :icon="composerUnrestricted ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
+                    :label="composerUnrestricted ? copy.unrestricted : copy.requestApproval"
+                    :tone="composerUnrestricted ? 'danger' : 'muted'"
+                    @click="composerUnrestricted = !composerUnrestricted"
+                  />
+                </template>
+              </TxChatComposer>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />

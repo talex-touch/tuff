@@ -140,7 +140,15 @@ const LIMITS = {
   // inline entity, card's press and selection-actions' spring keyframes.
   // Measured 595.4 KiB. Same contract as every note above: actuals plus minimal
   // headroom, growth from here fails.
-  fullCssBytes: 600 * 1024,
+  // 600 -> 608 on 2026-09-24: two tasks landed together, measured together at 606.0 KiB.
+  // .trellis/tasks/09-23-composer-motion-reference adds `mode-chip` (4.0 KiB, new) and
+  // reworks `chat`'s composer into a shell/card with a tray and icon buttons (~2.9 KiB
+  // more), plus the text transformer's setup-state and reduced-motion rules (~0.2 KiB).
+  // 09-23-nexus-base-gallery-sidebar grows `empty-state` (+2.6 KiB: the error
+  // illustration redrawn, reduced motion for every illustration), `layout-skeleton`
+  // (+0.8) and trims `stat-card` (-0.2). Same contract as every note above: actuals
+  // plus minimal headroom, growth from here fails.
+  fullCssBytes: 608 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
@@ -176,7 +184,13 @@ const LIMITS = {
   // exists to catch: each new sheet carries only its own root class
   // (`.tx-bui-flowchart`, `.tx-bui-agent-screen`, `.tx-toast-panel`). Actuals
   // plus minimal headroom, growth from here fails.
-  onDemandCssBytes: 608 * 1024,
+  // 608 -> 616 on 2026-09-24: the same two tasks as the `fullCssBytes` note above.
+  // 604.3 -> 614.8 KiB across 159 -> 160 stylesheets. Checked for the inlining this
+  // limit exists to catch: `mode-chip/style.css` carries only `.tx-mode-chip*` rules;
+  // its three `.tx-text-transformer__layer` selectors are the chip's own `:deep()`
+  // overrides scoped under `.tx-mode-chip__label`, not a copy of that component's sheet.
+  // Actuals plus minimal headroom, growth from here fails.
+  onDemandCssBytes: 616 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus

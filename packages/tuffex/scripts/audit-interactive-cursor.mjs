@@ -53,7 +53,6 @@ const REVIEWED = {
   'loading-overlay': 'role="status" / tabindex="-1"; a blocking veil, not a control',
   'search-select': 'options render TxCardItem :clickable',
   'button': 'base .tx-button declares pointer; split-button parts declare their own',
-  'chat': 'composer actions render TxButton',
   'context-menu': 'items render TxCardItem :clickable',
   'flat-radio': 'tabindex sits on the radiogroup container; items are TxFlatRadioItem',
   'group-block': 'TxBlockSwitch renders TxBlockSlot, whose content area declares pointer',

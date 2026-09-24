@@ -176,7 +176,7 @@ Every string is a prop with an English default and can be overridden one by one:
 
 ## Review Notes
 
-- **Division of labour with `TxChatComposer`:** that one is the block composer (multi-line input, text buttons beneath) and its contract is settled. This is the compact bar with controls inlined into the input, plus `@` / `/` menus, models and dictation. Parallel components rather than one variant-heavy component, which is how this repo already splits `input` / `flat-input` and `select` / `flat-select`.
+- **Division of labour with `TxChatComposer`:** that one is the block composer (multi-line input, an icon action row beneath, an optional context tray) and its contract is settled. This is the compact bar with controls inlined into the input, plus `@` / `/` menus, models and dictation. Parallel components rather than one variant-heavy component, which is how this repo already splits `input` / `flat-input` and `select` / `flat-select`.
 - **Not ported:** the upstream WebGL rainbow sweep that fires when the flagship model is chosen. It depends on React-only `glimm`, and a shader pipeline for a one-shot celebration is not a trade worth making.
 - **Fixes beyond upstream:** combobox semantics (upstream has only `aria-expanded`), outside-click dismissal, the IME guard extended to the menu path, where the first arrow key lands, and dropping the second, unreachable control nested inside a connectable row.
 - **Known limitation:** the menus use absolute positioning rather than a floating-UI layer, so they do not flip and can be clipped by an ancestor — see the interaction contract.
