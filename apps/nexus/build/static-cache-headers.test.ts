@@ -117,9 +117,12 @@ describe('static cache headers guard', () => {
     ])
   })
 
-  it('keeps the shared windows edge-cacheable', () => {
-    expect(DOCS_STATIC_CACHE_CONTROL).toMatch(/\bs-maxage=[1-9]\d*/)
-    expect(DOCS_STATIC_CACHE_CONTROL).toMatch(/\bstale-while-revalidate=[1-9]\d*/)
+  it('keeps the shared windows edge-cacheable, and the docs window as short as the Cache Rule', () => {
+    // The zone Cache Rule holds docs HTML/JSON for 5 minutes and a Pages deploy does not purge
+    // it, so a longer or stale-while-revalidate window here would only describe a cache that
+    // could hand out HTML pointing at chunks the deploy removed.
+    expect(DOCS_STATIC_CACHE_CONTROL).toBe('public, max-age=300, s-maxage=300')
+    expect(DOCS_STATIC_CACHE_CONTROL).not.toMatch(/stale-while-revalidate/)
     expect(I18N_MESSAGES_CACHE_CONTROL).toMatch(/\bs-maxage=[1-9]\d*/)
   })
 

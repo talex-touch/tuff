@@ -91,13 +91,15 @@ export const docsPrerenderEvidenceRoutes = [
  * each docs visit re-fetched HTML and JSON that only change on deploy — from CN a 1–2 s
  * round trip apiece. Nitro writes these route rules into `dist/_headers`.
  *
- * Browser window (`max-age`) matches the dynamic docs API's 5 minutes; the edge (`s-maxage`)
- * may keep a copy for an hour and serve it stale while it revalidates for a day. A deploy
- * changes the hashed asset names inside the HTML, so an hour-old edge copy still points at
- * assets that exist (immutable, kept alongside). `/_i18n/**` is hash-versioned in the path, so
- * it can be held longer.
+ * Browser window (`max-age`) matches the dynamic docs API's 5 minutes. The edge window is the
+ * same 5 minutes and carries no stale-while-revalidate: Cloudflare only caches HTML/JSON behind
+ * the zone Cache Rule "nexus docs static" (created 2026-09-24, Edge TTL "ignore origin, 5 min"),
+ * a Pages deploy does not purge that cache, and a deploy replaces changed chunks under new
+ * hashes — so a copy older than a few minutes may point at assets that no longer exist. Keep this
+ * value and the rule's TTL equal. `/_i18n/**` is hash-versioned in the path, so it can be held
+ * longer.
  */
-export const DOCS_STATIC_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400'
+export const DOCS_STATIC_CACHE_CONTROL = 'public, max-age=300, s-maxage=300'
 export const I18N_MESSAGES_CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
 
 /**
