@@ -213,6 +213,7 @@ TAXONOMY: dict[str, list[str]] = {
         "chat-composer",
         "prompt-bar",
         "attachment-tray",
+        "mode-chip",
         "message-actions",
         "suggestion-chips",
         "typing-indicator",
@@ -238,7 +239,6 @@ TAXONOMY: dict[str, list[str]] = {
         "code-stream",
         "inline-citation",
         "sources",
-        "mode-chip",
     ],
     "AiContext": [
         "context-cards",

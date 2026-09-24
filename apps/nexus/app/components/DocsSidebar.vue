@@ -365,6 +365,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/chat-composer',
     '/docs/dev/components/prompt-bar',
     '/docs/dev/components/attachment-tray',
+    '/docs/dev/components/mode-chip',
     '/docs/dev/components/message-actions',
     '/docs/dev/components/suggestion-chips',
     '/docs/dev/components/typing-indicator',
@@ -381,7 +382,6 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/working-indicator',
     // ai — AiReasoning
     '/docs/dev/components/ai-elements',
-    '/docs/dev/components/mode-chip',
     '/docs/dev/components/chain-of-thought',
     '/docs/dev/components/reasoning-disclosure',
     '/docs/dev/components/thinking-orb',
