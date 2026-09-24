@@ -1,14 +1,15 @@
 import { createDocsMarkdownPrerenderRoutes, createDocsPageApiPrerenderRoutes, createDocsPrerenderRoutes } from './docs-prerender-routes'
-import { docsApiPrerenderRoutes, docsPrerenderEvidenceRoutes, publicPrerenderRoutes } from './nexus-static-routes.mjs'
+import { docsApiPrerenderRoutes, docsPrerenderEvidenceRoutes, publicPrerenderRoutes, staticFallbackPrerenderRoutes } from './nexus-static-routes.mjs'
 import { toLocalizedDocsPaths } from '../shared/utils/docs-path'
 import { toDocsMarkdownPaths } from '../shared/utils/docs-markdown'
 
-export { docsApiPrerenderRoutes, docsPrerenderEvidenceRoutes, publicPrerenderRoutes }
+export { docsApiPrerenderRoutes, docsPrerenderEvidenceRoutes, publicPrerenderRoutes, staticFallbackPrerenderRoutes }
 
 export function createNexusPrerenderRoutes(nexusRoot: string) {
   return [
     ...new Set([
       ...publicPrerenderRoutes,
+      ...staticFallbackPrerenderRoutes,
       ...docsApiPrerenderRoutes,
       ...createDocsPrerenderRoutes(nexusRoot),
       ...createDocsPageApiPrerenderRoutes(nexusRoot),

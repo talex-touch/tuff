@@ -13,7 +13,11 @@ import {
   docsStaticJsonHeaderRoutes,
   i18nMessagesHeaderRoutes,
   publicPrerenderRoutes,
+  PAGES_CATCH_ALL_SOURCE,
+  docsStaticRedirects,
 } from './nexus-static-routes.mjs'
+import { NOT_FOUND_MARKER } from './materialize-not-found.mjs'
+import { isDynamicRedirect, isValidRedirectStatus, parseRedirectsFile } from './write-static-redirects.mjs'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const nexusRoot = join(currentDir, '..')
@@ -21,6 +25,7 @@ const distRoot = join(nexusRoot, 'dist')
 const workerRoot = join(distRoot, '_worker.js')
 const routesJsonPath = join(distRoot, '_routes.json')
 const headersFilePath = join(distRoot, '_headers')
+const redirectsFilePath = join(distRoot, '_redirects')
 const serviceWorkerPath = join(distRoot, 'sw.js')
 const authHandlerPath = join(nexusRoot, 'server/api/auth/[...].ts')
 const authUtilityPath = join(nexusRoot, 'server/utils/auth.ts')
@@ -553,16 +558,19 @@ function checkRoutes() {
   }
 
   const excluded = new Set(Array.isArray(routesJson.exclude) ? routesJson.exclude : [])
-  const missing = expectedStaticRoutes.filter(route => !excluded.has(route))
+  const missing = expectedStaticRoutes.filter(route => !isExcludedFromWorker(route, excluded))
   const missingPatterns = expectedStaticRoutePatterns.filter(route => !excluded.has(route))
   const missingMarkdown = expectedStaticMarkdownRoutes.filter(route => !excluded.has(route))
-  const allMissing = [...missing, ...missingPatterns, ...missingMarkdown]
+  // `_redirects` only applies to requests Pages serves itself, so every redirect source must
+  // be kept off the Worker or the rule is dead and the Worker middleware answers instead.
+  const missingRedirectSources = docsStaticRedirects.map(rule => rule.from).filter(from => !excluded.has(from))
+  const allMissing = [...missing, ...missingPatterns, ...missingMarkdown, ...missingRedirectSources]
 
   return {
     ok: allMissing.length === 0,
     message: allMissing.length
       ? `Missing static route exclusions: ${allMissing.join(', ')}`
-      : `Static route exclusions verified: ${expectedStaticRoutes.length} routes + ${expectedStaticRoutePatterns.length} patterns + ${expectedStaticMarkdownRoutes.length} markdown roots`,
+      : `Static route exclusions verified: ${expectedStaticRoutes.length} routes + ${expectedStaticRoutePatterns.length} patterns + ${expectedStaticMarkdownRoutes.length} markdown roots + ${docsStaticRedirects.length} redirect sources`,
   }
 }
 
@@ -676,6 +684,93 @@ export function checkStaticCacheHeaders(headersSource) {
   }
 
   return { findings, verified, expected: expectations.length }
+}
+
+/**
+ * Whether `_routes.json` keeps a route off the Worker. Nitro lists every prerendered file it
+ * can see, but a file under a configured pattern (`/en/docs/*`) is never listed on its own —
+ * the pattern is what excludes it. Matching only exact entries reported every docs page under
+ * the pattern as missing, on every build, so the check could not pass and stopped being read.
+ */
+export function isExcludedFromWorker(route, excluded) {
+  if (excluded.has(route))
+    return true
+  for (const entry of excluded) {
+    if (entry.endsWith('/*') && route.startsWith(entry.slice(0, -1)))
+      return true
+  }
+  return false
+}
+
+/**
+ * The docs entry redirects must be in `_redirects`, point where the Worker middleware points,
+ * and sit before any catch-all: Pages reads the file top to bottom, and a rule listed after a
+ * `/*` source is a rule that never fires. Static rules before dynamic ones is the order Pages
+ * documents; a static rule that drifts below a dynamic one is flagged too. So is any line with
+ * a status Pages does not accept — Pages drops it with a warning nobody reads.
+ */
+export function checkStaticRedirects(redirectsSource, rules = docsStaticRedirects) {
+  const findings = []
+  if (redirectsSource === null)
+    return { findings: ['_redirects is missing'], verified: 0, expected: rules.length }
+
+  const parsed = parseRedirectsFile(redirectsSource)
+  const catchAllIndex = parsed.findIndex(entry => entry.from === PAGES_CATCH_ALL_SOURCE)
+  let verified = 0
+  for (const rule of rules) {
+    const index = parsed.findIndex(entry => entry.from === rule.from)
+    if (index === -1) {
+      findings.push(`${rule.from}: no _redirects rule`)
+      continue
+    }
+    const entry = parsed[index]
+    if (entry.to !== rule.to || entry.status !== rule.status) {
+      findings.push(`${rule.from}: redirects to ${entry.to} ${entry.status}, expected ${rule.to} ${rule.status}`)
+      continue
+    }
+    if (catchAllIndex !== -1 && index > catchAllIndex) {
+      findings.push(`${rule.from}: listed after the ${PAGES_CATCH_ALL_SOURCE} catch-all; Pages reads rules in order`)
+      continue
+    }
+    verified += 1
+  }
+
+  const firstDynamicIndex = parsed.findIndex(isDynamicRedirect)
+  parsed.forEach((entry, index) => {
+    if (firstDynamicIndex !== -1 && index > firstDynamicIndex && !isDynamicRedirect(entry))
+      findings.push(`${entry.from}: static rule listed after dynamic rules; Pages documents static rules first`)
+    if (!isValidRedirectStatus(entry))
+      findings.push(`${entry.raw}: status ${entry.status} is not a _redirects status Pages accepts; the line is dropped with a warning`)
+  })
+
+  return { findings, verified, expected: rules.length }
+}
+
+/**
+ * Without a top-level `404.html`, Pages treats the project as a single-page app and answers
+ * every unknown path with `index.html` and a 200 — for the Worker-excluded `/en/docs/*` that
+ * meant the landing page for any mistyped docs URL. The file is the prerendered not-found page
+ * (`staticFallbackPrerenderRoutes`, copied by `materialize-not-found.mjs`), so it must carry
+ * the rendered page rather than the empty shell Nuxt emits for a literal `/404.html` route.
+ * Pages serves it natively; no `_redirects` line is involved (a `404` status there is invalid).
+ */
+export function checkStaticFallback({ notFoundHtml }) {
+  const findings = []
+  if (notFoundHtml === null) {
+    findings.push('404.html is missing from dist; Pages serves index.html with status 200 for every unknown static path')
+  }
+  else {
+    if (/<div id="__nuxt"><\/div>/.test(notFoundHtml))
+      findings.push('404.html is an empty no-SSR shell; prerender the not-found page under a route Nuxt renders with SSR')
+    if (!notFoundHtml.includes(NOT_FOUND_MARKER))
+      findings.push(`404.html does not contain the rendered not-found page (${NOT_FOUND_MARKER})`)
+  }
+
+  return { findings, verified: findings.length ? 0 : 1 }
+}
+
+function readRedirectsFile() {
+  return existsSync(redirectsFilePath) ? readFileSync(redirectsFilePath, 'utf8') : null
 }
 
 function readHeadersFile() {
@@ -1338,6 +1433,10 @@ const routeCheck = checkRoutes()
 const staticCacheHeaderCheck = checkStaticCacheHeaders(readHeadersFile())
 const earlyHintCheck = checkEarlyHints(readHeadersFile(), earlyHintAssetExists)
 const headersFileLimitCheck = checkHeadersFileLimits(readHeadersFile())
+const staticRedirectCheck = checkStaticRedirects(readRedirectsFile())
+const staticFallbackCheck = checkStaticFallback({
+  notFoundHtml: existsSync(join(distRoot, '404.html')) ? readFileSync(join(distRoot, '404.html'), 'utf8') : null,
+})
 const missingStaticRouteFiles = checkStaticRouteFiles()
 const workerOwnedAppRouteFindings = checkWorkerOwnedAppRoutes()
 const suspiciousFindings = checkSuspiciousPatterns(executableFiles)
@@ -1379,6 +1478,8 @@ console.log(`[nexus-worker-bundle] ${routeCheck.message}`)
 console.log(`[nexus-dist-budget] Static cache headers verified: ${staticCacheHeaderCheck.verified}/${staticCacheHeaderCheck.expected ?? 0}`)
 console.log(`[nexus-dist-budget] Early hint Link blocks verified: ${earlyHintCheck.verified}/${earlyHintCheck.blocks ?? 0}`)
 console.log(`[nexus-dist-budget] _headers limits verified: ${headersFileLimitCheck.rules} rules`)
+console.log(`[nexus-dist-budget] Static redirects verified: ${staticRedirectCheck.verified}/${staticRedirectCheck.expected}`)
+console.log(`[nexus-dist-budget] Static 404 fallback verified: ${staticFallbackCheck.verified}/1`)
 console.log(`[nexus-dist-budget] Static route files verified: ${expectedStaticRoutes.length - missingStaticRouteFiles.length}/${expectedStaticRoutes.length}`)
 console.log(`[nexus-dist-budget] Worker-owned app routes verified: ${workerOwnedAppRoutes.length - workerOwnedAppRouteFindings.length}/${workerOwnedAppRoutes.length}`)
 console.log('[nexus-dist-budget] Auth handler singleton verified')
@@ -1559,7 +1660,19 @@ if (headersFileLimitCheck.findings.length) {
     console.error(`  ${finding}`)
 }
 
-if (!routeCheck.ok || staticCacheHeaderCheck.findings.length || earlyHintCheck.findings.length || headersFileLimitCheck.findings.length || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || remoteFontReferenceFindings.length || unprefixedAttributifyFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || workerSourceMapCheck.findings.length || clientContentDatabaseRuntimeFindings.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sharedEntryCssCheck.findings.length || landingImagePrefetchFindings.length || landingDeferredImageFindings.length || landingShowcaseVideoFindings.length || clientChunkCheck.findings.length || sizeFindings.length)
+if (staticRedirectCheck.findings.length) {
+  console.error('[nexus-dist-budget] _redirects violations:')
+  for (const finding of staticRedirectCheck.findings)
+    console.error(`  ${finding}`)
+}
+
+if (staticFallbackCheck.findings.length) {
+  console.error('[nexus-dist-budget] static 404 fallback violations:')
+  for (const finding of staticFallbackCheck.findings)
+    console.error(`  ${finding}`)
+}
+
+if (!routeCheck.ok || staticCacheHeaderCheck.findings.length || earlyHintCheck.findings.length || headersFileLimitCheck.findings.length || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || remoteFontReferenceFindings.length || unprefixedAttributifyFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || workerSourceMapCheck.findings.length || clientContentDatabaseRuntimeFindings.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sharedEntryCssCheck.findings.length || landingImagePrefetchFindings.length || landingDeferredImageFindings.length || landingShowcaseVideoFindings.length || clientChunkCheck.findings.length || sizeFindings.length || staticRedirectCheck.findings.length || staticFallbackCheck.findings.length)
   process.exit(1)
 }
 

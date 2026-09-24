@@ -122,6 +122,17 @@ describe('static cache headers guard', () => {
     expect(DOCS_STATIC_CACHE_CONTROL).toMatch(/\bstale-while-revalidate=[1-9]\d*/)
     expect(I18N_MESSAGES_CACHE_CONTROL).toMatch(/\bs-maxage=[1-9]\d*/)
   })
+
+  it('covers the docs roots, which a /en/docs/* pattern does not match', () => {
+    // `/en/docs` shipped with the Pages default `max-age=0, must-revalidate` while every page
+    // under it carried the window: Pages matches `/en/docs/*` below the root, not at it.
+    const rules = createStaticCacheRouteRules()
+    expect(rules['/en/docs']?.headers).toEqual({ 'cache-control': DOCS_STATIC_CACHE_CONTROL })
+    expect(rules['/zh/docs']?.headers).toEqual({ 'cache-control': DOCS_STATIC_CACHE_CONTROL })
+
+    delete rules['/en/docs']
+    expect(checkStaticCacheHeaders(renderHeadersFile(rules)).findings).toEqual(['/en/docs: no _headers block'])
+  })
 })
 
 describe('_headers file limits', () => {
