@@ -1028,3 +1028,40 @@ BUI（beautifului.dev）21 例对齐 + 交互动效/状态/音效整轮收口，
 - PRD「待老板确认」两项按默认落地：音效默认关；「卡片」按 TxCard 本身处理
 - hub 套件总览表计数的既有漂移（基础/进阶/数据 应为 94/29/11）未顺手修
 - 迁移看板不认 `syncStatus: reviewed`，所有 reviewed + verified:false 的页（含各套件总览页）显示「未迁移」
+
+
+## Session 76: Composer motion from the @flohoeller reference: tray swap, ink-only hover, TxModeChip
+
+**Date**: 2026-09-24
+**Task**: Composer motion from the @flohoeller reference: tray swap, ink-only hover, TxModeChip
+**Branch**: `master`
+
+### Summary
+
+Answered whether AI streaming followed BeautifulUI (it did not: TxStreamMarkdown keeps its own fresh-chunk engine and an orb caret; the gallery Chat cell is static, its glow was a .dark CSS leak from TuffexDocsHeroBackground owned by talex-touch-87, the purple dot the Lexi extension). Measured the reference clip frame by frame and shipped: TxChatComposer tray with a fitted cubic-bezier slide and reference card restyle (intelligence-uikit migrated), new TxModeChip with a morph-gated colour transition and measured 4.5:1 inks, and a TxTextTransformer fix whose fade mode had never faded in. Verified per frame in ego against the clip; restarted the shared :3200 dev server (orphan worker lesson recorded). A zero-context partial-hunk staging misplaced three shared-file lines in 0e5b9e33f, fixed in 55bbc5039; later commits staged anchor-edited HEAD blobs instead.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e43fa1190` | (see git log) |
+| `0e5b9e33f` | (see git log) |
+| `55bbc5039` | (see git log) |
+| `a23b7266e` | (see git log) |
+| `558d6ce82` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
