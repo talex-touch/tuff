@@ -66,6 +66,7 @@ Two rules there are load-bearing and must not be simplified:
 | `TxTextTransformer` | `mode="morph"` by default (renders `TxTextMorph`); `mode="fade"` is the original blur crossfade. |
 | `TxBadge` | Numeric values render through `TxTextMorph`. |
 | `TxSwitch` | Labels go through `TxTextTransformer`, so they morph. |
+| `TxModeChip` | Label goes through `TxTextTransformer mode="fade"` (a whole-label blur crossfade, as in its motion reference), 50ms behind the icon; the chip FLIPs its own width, and narrows the layers' transition to `opacity, filter` so an inherited ink change never eases. |
 
 `TxTextTransformer` forces `fade` regardless of `mode` in two cases, both structural rather
 than stylistic: the default slot is in play (a slot renders arbitrary nodes and the engine
@@ -86,6 +87,20 @@ measured against). Neither is negotiable from the call site.
   `prefers-reduced-motion: reduce` both write `textContent` directly *and* reset
   `previousSegments` / `isInitialRender`. Skipping that reset makes the next enabled morph
   FLIP against elements that are no longer in the DOM.
+- **The fade path must commit its setup state before it animates** (fixed 2026-09-24; before
+  that, fade mode had never faded in).
+  - `runTransition` sets `has-prev`, which parks the current layer at opacity 0 plus blur, then
+    sets `is-animating` inside a `requestAnimationFrame`.
+  - A rAF callback runs *before* that frame's style recalc, so both classes landed in one
+    recalc and nothing transitioned. The new text appeared at once, and only the old one
+    blurred out.
+  - The fix has two halves, and both are load-bearing:
+    - `.has-prev:not(.is-animating) .tx-text-transformer__layer { transition: none }`, so the
+      setup state applies instantly instead of starting a 1→0 tween;
+    - `void root.offsetWidth` after the `nextTick` and before the rAF, so it is committed.
+  - `text-transformer.test.ts` spies on the forced read (exactly one, taken in the setup
+    state), and a style-contract test pins the rule.
+  - Any future "set class A, then class B next frame" animation needs the same treatment.
 
 ## Verification
 

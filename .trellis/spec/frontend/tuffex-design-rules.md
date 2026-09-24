@@ -112,6 +112,22 @@ Colour is additive to a text label or an icon. A user who cannot distinguish the
 
 Recorded in `component-guidelines.md` with measurements: `TxStep`'s completed icon lands at 1.74:1, `TxTabBar`'s badge and `TxToolConfirmation.is-dangerous` at 2.77:1. Lightening the token makes those worse. Use dark ink on the fill, or use the `-light-9` tint as fill with same-hue ink.
 
+"Same-hue ink" has to be measured; the plain hue on its own `-light-9` does **not** clear 4.5:1 for 13px text in the light theme. `TxModeChip` measured it on 2026-09-24: success 2.08, warning 2.03, danger 2.61, info/primary 2.53, and `-dark-2` inks only 3.12 / 3.82. The recipe that passes in all four theme blocks, resting and hovered, over both `--tx-bg-color` and `--tx-fill-color-light`, is the hue mixed toward the primary ink:
+
+```scss
+color: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 55%, var(--tx-text-color-primary, #303133));
+```
+
+It resolves darker in light themes and lighter in dark ones. P is 45 for success/warning, 55 for danger and 50 for info, the largest 5% step that passes; the worst case is 4.58. Record the measured table in the source, as `TxModeChip.vue` does, and re-measure whenever a `-light-9` token moves.
+
+### Resting ink for 13px text is `regular`, not `secondary`
+
+`--tx-text-color-secondary` measures 3.08:1 on white and 2.87:1 on `--tx-fill-color-light`, under the 4.5:1 that 13px text needs. A text action whose hover darkens to `--tx-text-color-primary` rests on `--tx-text-color-regular` (5.69:1 worst case, light theme on the tray), as `TxModeChip`'s `muted` tone and `TxChatComposer`'s tray do. `secondary` stays fine for icon-only glyphs, which need 3:1, and for 12px helper copy that nothing depends on reading.
+
+### A surface that has to hide what is under it needs an opaque backstop
+
+`--tx-fill-color-blank` is `transparent` in the normal dark block. A card that slides over other content, or masks it, cannot use it alone. `TxChatComposer`'s card paints `background-color: var(--tx-bg-color)` under `background-image: linear-gradient(var(--tx-fill-color-blank) 0 0)`: the light and high-contrast themes look identical, and the dark card becomes opaque `#141414` instead of showing the tray through it mid-slide.
+
 `--tx-color-on-primary` exists for the one sanctioned exception and is per-theme (`#ffffff` light/dark, `#0a2540` in high-contrast dark, where `#7cc4ff` is too light for white).
 
 ---
@@ -125,6 +141,27 @@ Never put `color`, `background-color` or `border-color` in a `transition` that f
 Transitioning `opacity`, `transform` or `box-shadow` geometry on hover is fine — those are motion, not colour. `TxSensitiveInput`'s copy tab transitions `opacity` alone for exactly this reason.
 
 Legacy violations exist (`TxCopyButton` line 146 transitions `color`/`background-color`; `TxInput` line 197 transitions `border-color`). They are grandfathered; new components must not add more.
+
+### A state change may ease colour; gate the transition on the change, not the element
+
+A tone or mode switch (`muted` → `danger`) is not a hover, so easing its fill and ink is allowed. Declaring `transition: background-color …` on the element would ease every hover as well, though, because a transition applies to every change of the property. Put the colour transition on a class that exists only while the state is changing:
+
+```scss
+// Wrong — the hover rule below now eases too
+.tx-mode-chip { transition: background-color 240ms, color 240ms; }
+
+// Correct — TxModeChip: `.is-morphing` is set when label/icon/tone change and
+// cleared after the longest leg (delay + max(fade, width) = 350ms)
+.tx-mode-chip.is-morphing {
+  transition: background-color 240ms var(--tx-ease-out-strong), color 240ms var(--tx-ease-out-strong);
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+}
+.tx-mode-chip:hover:not(:disabled) { background-color: var(--tx-mode-chip-fill-hover); } // instant
+```
+
+A child that inherits the ink needs the same care. `TxTextTransformer`'s layers declare their own `color` tween, so `TxModeChip` narrows them to `transition-property: opacity, filter` through `:deep()`. Without that, the label would ease on every hover.
+
+Guard it with a compiled-style contract: sass-compile the SFC style, then assert that no rule outside `.is-morphing` transitions `color` or `background-color` (`mode-chip-motion.test.ts`, `chat-composer-style.test.ts`).
 
 ### Every transition has a reduced-motion escape
 
