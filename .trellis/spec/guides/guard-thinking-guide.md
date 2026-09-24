@@ -30,6 +30,16 @@ Not "does my check pass" — write the broken version and run it. If it still pa
 
 This is the whole of mutation testing, and it costs one minute: change the implementation to the failure you are guarding against, run the test, expect red, revert.
 
+### 1b. Does this check ever pass? A guard that always fails is decorative too
+
+The mirror failure: `check-worker-bundle.mjs::checkRoutes` compared expected docs routes against
+`_routes.json` by exact string, but Nitro never lists a file that a configured pattern (`/en/docs/*`)
+already covers — so "Missing static route exclusions: /en/docs/dev, …" printed on every build from
+the day the pattern was added, and the whole gate's exit code stopped meaning anything. Nobody read
+the other findings either. If a check has been red for weeks, either the property is broken (fix
+it now) or the check does not model the system (fix the check, e.g. pattern-aware matching) — never
+leave it red as "known noise".
+
 ### 2. Am I asserting the config, or the result of the config?
 
 Prefer running the real consumer over reading the text that feeds it.
