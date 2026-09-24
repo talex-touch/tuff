@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/nexus-docs-static-delivery.md", "reason": "Owns the head-hint / chunk-floor / demo-chain rules the gallery split must respect and extend"}
+{"file": ".trellis/spec/frontend/nexus-docs-rendering-contract.md", "reason": "Docs HTML must keep embedding the body; the gallery shell must not change the payload-key contract"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Gallery specimens are the docs surface of tuffex components; moving them must keep the sync rules"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component splitting and async-component conventions for the new gallery/suites modules"}
+{"file": ".trellis/tasks/09-23-nexus-docs-perf-cms-remediation/research/audit-2026-09-23.md", "reason": "Sections 4-6: measured head counts, browser timings and the check-worker-bundle baseline this task is graded against"}

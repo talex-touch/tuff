@@ -3,7 +3,7 @@
   "name": "nexus-docs-body-ssg",
   "title": "Nexus docs true SSG: prerender doc body into HTML",
   "description": "",
-  "status": "in_progress",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -11,7 +11,7 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-08-27",
-  "completedAt": null,
+  "completedAt": "2026-09-24",
   "branch": null,
   "base_branch": "docs/maintenance-audit-2026-08-27",
   "worktree_path": null,
@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "blocker": "Requires deployed SSG body evidence for every gated Nexus documentation route.",
-    "evidence": "The task includes the local verifier, baseline build, and retry-patch research.",
-    "nextAction": "Run the verifier against a deployed candidate and record route-level evidence."
+    "blocker": "",
+    "evidence": "verify/RESULTS.md — 2026-09-23 production probe: body in deployed HTML, zero /api/docs/page requests on hydration; plus the local verifier, baseline build, and retry-patch research.",
+    "nextAction": "None; archived 2026-09-24. Edge caching and the static 404 fallback continue in 09-23-nexus-docs-static-delivery-closeout."
   }
 }

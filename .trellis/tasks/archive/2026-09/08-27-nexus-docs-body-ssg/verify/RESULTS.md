@@ -76,3 +76,24 @@ falls to `not-found`, and the error state — which lives inside the `content` b
 cannot render. Fixed by reading the generation instead of bumping it: this call is a
 follow-on for the navigation already in flight, not a new one. Pinned by a line-scoped
 assertion with a negative control (reverting to `++` turns it red).
+
+## 2026-09-23 production probe (closes the "deployed evidence" blocker)
+
+Measured against `https://tuff.tagzxia.com` from the workstation (Clash egress; Cloudflare colo
+varied SEA/HKG/LAX, so absolute times are noisy and the counts are what matter).
+
+| Probe | Result |
+| --- | --- |
+| `curl /en/docs/dev/components/button` | 200, 244,323 B, `<h2` × 9 in the HTML, 53 `modulepreload` |
+| `curl /en/docs/dev/components/button/` | 308 → `/en/docs/dev/components/button` (Pages canonicalisation: the file is served by Pages, not rendered by the Worker) |
+| response headers | `cache-control: public, max-age=300, s-maxage=3600, stale-while-revalidate=86400` from `_headers`; `cf-cache-status: DYNAMIC` |
+| ego (cache disabled) initial load | `.docs-prose h2` = 9 in the DOM, hydration adopted the server body, **0** `/api/docs/page` requests; runtime requests were only `/_i18n/…/en/messages.json`, `/api/docs/navigation/en/components`, `/api/docs/sidebar-components/en` |
+| timings | TTFB 0.89 s, FCP/LCP 3.70 s, DCL 4.64 s, load 5.30 s, 99 requests / 611 KB |
+
+So the contract this task established — the prerendered HTML is readable on its own and the
+hydrating client issues no body request — holds on the deployed production site. Two things the
+probe surfaced are *not* this task's: the static docs are `DYNAMIC` at the edge despite
+`s-maxage` (Cloudflare caches HTML/JSON only behind a zone Cache Rule), and an unknown docs URL
+returns the landing page with a 200 because `dist/` has no `404.html`. Both are owned by
+`09-23-nexus-docs-static-delivery-closeout`; the full measurement set is in
+`.trellis/tasks/09-23-nexus-docs-perf-cms-remediation/research/audit-2026-09-23.md`.
