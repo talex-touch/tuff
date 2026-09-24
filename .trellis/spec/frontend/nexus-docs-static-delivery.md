@@ -54,7 +54,12 @@ What the headers do and do not buy, measured 2026-09-23 against production:
   `/api/docs/navigation/*`, `/api/docs/search/*`, `/api/docs/sidebar-components/*`,
   `/api/docs/component-sync` and `/_i18n/*`. Never widen it to `/api/docs/*`: `view`, `comments`,
   `feedback`, `engagement` and `assistant` are per-reader. The query-string `/api/docs/page?`
-  route stays DYNAMIC on purpose.
+  route stays DYNAMIC on purpose. Cloudflare documents a 2-hour minimum Edge Cache TTL on the
+  Free plan; the 5-minute override was nevertheless honoured on this zone — entries answered
+  `EXPIRED` / `REVALIDATED` within the hour and no `HIT` carried an `age` above the window. If a
+  probe ever shows a `HIT` with `age` > 300, switch the rule's Edge TTL to *Use cache-control
+  header if present, bypass cache if not*: `_headers` carries `s-maxage=300`, so the window stays
+  the same and the plan minimum no longer applies.
 - Evidence, not belief: `pnpm -C apps/nexus probe:docs-edge-cache -- --label <before|after>`
   requests each docs URL twice and writes `output/evidence/docs-edge-cache-<date>-<label>.json`,
   with a hashed `/_nuxt/` asset as the positive control. The rule stays only if the second
