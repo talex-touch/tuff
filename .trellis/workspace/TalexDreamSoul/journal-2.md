@@ -1065,3 +1065,63 @@ Answered whether AI streaming followed BeautifulUI (it did not: TxStreamMarkdown
 ### Next Steps
 
 - None - task complete
+
+
+## Session 77: Nexus docs static delivery closeout: real 404, static redirects, edge Cache Rule
+
+**Date**: 2026-09-24
+**Task**: Nexus docs static delivery closeout: real 404, static redirects, edge Cache Rule
+**Branch**: `master`
+
+### Summary
+
+Audited why Nexus docs felt un-SSG'd and slow (docs were prerendered but never edge-cached, soft 404, Worker redirects, gallery head bloat, missing admin UI); planned a parent + 3 children; shipped child 1 to production via PR #1957/#1958 with a zone Cache Rule (28/28 HIT).
+
+### Main Changes
+
+### Audit (2026-09-23)
+
+- Nexus docs were already SSG: every `content/docs` page prerendered as HTML + JSON + `.md` twins and excluded from the Worker. The slowness came from the delivery layer, not rendering.
+- Production measurements: docs HTML/JSON/md/i18n all `cf-cache-status: DYNAMIC` (Cloudflare caches HTML/JSON only behind a zone Cache Rule); unknown `/en/docs/*` returned the landing page with 200 (no `404.html`); `/docs/**` 308 ran in the Worker (3–5 s).
+- Biggest page-weight lever: suite gallery pages ship 154 stylesheets + 225 modulepreloads because `DocsComponentsGallery.vue` statically imports 162 Tx components.
+- CMS: no docs content management; 38 of 76 `/api/admin/*` handlers have no UI; `governance.vue` is 4,056 lines. Boss chose "git is the CMS" (path A).
+- Evidence: `.trellis/tasks/09-23-nexus-docs-perf-cms-remediation/research/audit-2026-09-23.md`.
+
+### Delivered (task 09-23-nexus-docs-static-delivery-closeout, archived)
+
+- Real 404: not-found page prerendered as `/__not-found` (a literal `/404.html` route renders as an empty no-SSR shell) and copied to `404.html`.
+- `/docs`, `/docs/*` → static 308s in `_redirects`, sources excluded from the Worker (Pages only applies `_redirects` to requests it serves).
+- Docs roots get the cache window; `DOCS_STATIC_CACHE_CONTROL` aligned to `max-age=300, s-maxage=300`.
+- Worker-bundle gate: pattern-aware `_routes.json` matching (the old exact match had been red on every build), redirect/order/invalid-status and rendered-404 guards. `/* /404.html 404` is an invalid Pages status — caught by trellis-check review.
+- Zone Cache Rule "nexus docs static" created in the dashboard via ego: after-probe 28/28 HIT (before 0/28).
+- Landed via PR #1957 (merge eeff74b4d) and PR #1958 (merge 6cfe5c923); the second Pages production build failed inside Cloudflare's image (`node-build: definition not found: 26.0.0`) and succeeded on API retry.
+- Archived `08-27-nexus-docs-body-ssg` with its deployed evidence.
+
+### Open
+
+- `09-23-nexus-gallery-css-graph-slimming`: starts after the pro/base gallery tasks land.
+- `09-23-nexus-admin-console-gaps`: P2.
+- Local master carries other sessions' commits with two red required checks (core-app TS2345 in `nexus-route-marker-ownership.test.ts`, tuff-voice import order); the next sync PR must fix them first.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f7f158048` | (see git log) |
+| `1839bcd10` | (see git log) |
+| `3b7021cb9` | (see git log) |
+| `4570dac51` | (see git log) |
+| `fb5cc8746` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
