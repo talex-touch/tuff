@@ -484,7 +484,9 @@
     "shortcutLabels": {
       "core_box_toggle": "Open command palette",
       "core_omniPanel_toggle": "Open OmniPanel",
-      "core_omniPanel_mouseLongPress": "OmniPanel mouse trigger"
+      "core_omniPanel_mouseLongPress": "OmniPanel mouse trigger",
+      "voice_dictation_toggle": "Global dictation (press to start, press again to stop)",
+      "voice_quickEdit": "Quick Edit (select text, then speak the change)"
     },
     "shortcutStatus": {
       "conflictSystem": "Conflicts with system shortcuts",
