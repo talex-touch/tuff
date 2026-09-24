@@ -42,7 +42,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Privacy Data Lifecycle](./privacy-data-lifecycle.md)         | Typed Privacy transport, retention/export, and main-owned credential transactions    | Filled |
 | [Nexus Deployment Secrets](./nexus-preview-secret-deployment.md) | Cloudflare Preview and Production Secret inventory, deploy preflight, runtime policy, and evidence | Filled |
 | [Nexus Docs Rendering](./nexus-docs-rendering-contract.md)    | Docs HTML always embeds the body; payload-key agreement, body-fetch retry rules       | Filled |
-| [Nexus Docs Static Delivery](./nexus-docs-static-delivery.md) | `<route>.html` layout, `_headers` edge cache windows, i18n preload off the hydration path, one nav request | Filled |
+| [Nexus Docs Static Delivery](./nexus-docs-static-delivery.md) | `<route>.html` layout, `_headers` windows and the zone Cache Rule they need, `404.html` + `_redirects`, i18n preload off the hydration path, one nav request | Filled |
 | [Nexus DashScope Filetrans](./nexus-dashscope-filetrans-contract.md) | Nexus-owned DashScope ASR handoff, routing, reservation, and disclosure rules | Filled |
 | [Release Acceptance Testing](./release-testing.md)            | Downloaded release, integrity, trust, and isolated packaged-runtime gates            | Filled |
 | [Native Resource Protocols](./native-resource-protocols.md)   | Protocol data-plane rules, path-only native callbacks, and macOS app-icon extraction | Filled |
@@ -58,7 +58,7 @@ Before editing frontend code:
 3. Read [Component Guidelines](./component-guidelines.md) before changing Vue SFCs, UI primitives, accessibility, or i18n.
 4. Read [TuffEx Design Rules](./tuffex-design-rules.md) before adding a TuffEx component or restyling one; it fixes the type scale, spacing grouping, ring-vs-border choice, concentric radii, token-only colour, and the immediate-hover motion rule that a new component is otherwise free to reinvent.
 5. Read the [Loading States](./component-guidelines.md#loading-states) section before adding or changing a view that waits on data; a skeleton mirroring the loaded layout is the default, not an optional follow-up.
-6. Read [Nexus Docs Static Delivery](./nexus-docs-static-delivery.md) before touching prerender layout, `routeRules` headers, nuxt-i18n options, or anything on the docs hydration path; each rule there removes a measured round trip.
+6. Read [Nexus Docs Static Delivery](./nexus-docs-static-delivery.md) before touching prerender layout, `routeRules` headers, `_redirects`, the 404 fallback, nuxt-i18n options, or anything on the docs hydration path; each rule there removes a measured round trip.
 7. Read [TuffEx Docs Sync](./tuffex-docs-sync.md) before changing any component under `packages/tuffex/packages/components/src/`; the change is not done until the Nexus docs that display it — and the docs of every wrapper component — say what the source now does.
 8. Read [Hook Guidelines](./hook-guidelines.md) before adding or changing a `use*` composable or browser lifecycle code.
 9. Read [State Management](./state-management.md) before adding Pinia state, SDK subscriptions, caches, or host/server data mirrors.

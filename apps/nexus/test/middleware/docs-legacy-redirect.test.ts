@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { docsStaticRedirects } from '../../build/nexus-static-routes.mjs'
 
 interface RedirectResult {
   location: string
@@ -83,5 +84,47 @@ describe('docs legacy redirect middleware', () => {
   it('leaves already-localized and non-docs paths alone', () => {
     expect(handler(createRequest('/en/docs/dev/api/box.md'))).toBeUndefined()
     expect(handler(createRequest('/pricing'))).toBeUndefined()
+  })
+})
+
+/**
+ * Applies the `_redirects` rules the way Cloudflare Pages does: first matching source wins, a
+ * trailing `*` is greedy and lands in `:splat`. This is the production path for `/docs/**`;
+ * the middleware above is what development and the Worker fallback run.
+ */
+function applyStaticRedirect(pathname: string): RedirectResult | undefined {
+  for (const rule of docsStaticRedirects) {
+    if (rule.from.endsWith('/*')) {
+      const prefix = rule.from.slice(0, -1)
+      if (pathname.startsWith(prefix))
+        return { location: rule.to.replace(':splat', pathname.slice(prefix.length)), status: rule.status }
+      continue
+    }
+    if (pathname === rule.from)
+      return { location: rule.to, status: rule.status }
+  }
+  return undefined
+}
+
+describe('docs legacy redirect parity with the static _redirects rules', () => {
+  it('sends every canonical docs entry path to the same place by both routes', () => {
+    for (const pathname of ['/docs', '/docs/dev', '/docs/dev/api/box', '/docs/dev/api/box.md', '/docs/guide/start']) {
+      const viaPages = applyStaticRedirect(pathname)
+      expect(viaPages, pathname).toBeDefined()
+      expect(handler(createRequest(pathname)), pathname).toEqual(viaPages)
+    }
+  })
+
+  it('leaves the already-localized paths to the static files, as the middleware does', () => {
+    expect(applyStaticRedirect('/en/docs/dev/api/box')).toBeUndefined()
+    expect(applyStaticRedirect('/pricing')).toBeUndefined()
+  })
+
+  it('documents the one divergence: a splat cannot normalize a locale-suffixed content name', () => {
+    // The middleware resolves `/docs/x.en.md` to the page; the static rule forwards the name
+    // as typed and lets the excluded `/en/docs/*` answer with the real 404. Recorded so the
+    // divergence is a decision, not a drift.
+    expect(applyStaticRedirect('/docs/dev/api/box.en.md')).toEqual({ location: '/en/docs/dev/api/box.en.md', status: 308 })
+    expect(handler(createRequest('/docs/dev/api/box.en.md'))).toEqual({ location: '/en/docs/dev/api/box', status: 308 })
   })
 })

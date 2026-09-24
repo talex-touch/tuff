@@ -1,12 +1,29 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { createDocsMarkdownPrerenderRoutes, createDocsPageApiPrerenderRoutes, createDocsPrerenderRoutes, normalizeDocsContentRoute } from './docs-prerender-routes'
-import { createNexusPrerenderEvidence, createNexusPrerenderRoutes, docsApiPrerenderRoutes, publicPrerenderRoutes } from './nexus-prerender-routes'
+import { createNexusPrerenderEvidence, createNexusPrerenderRoutes, docsApiPrerenderRoutes, publicPrerenderRoutes, staticFallbackPrerenderRoutes } from './nexus-prerender-routes'
+import { NOT_FOUND_PRERENDER_ROUTE } from './nexus-static-routes.mjs'
 
 const nexusRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+describe('static 404 fallback prerender', () => {
+  it('prerenders the not-found page under a private SSR route the catch-all answers with 200', () => {
+    // Without a top-level 404.html Pages serves index.html with a 200 for every unknown
+    // Worker-excluded path. A literal `/404.html` route comes out of Nuxt as an empty shell,
+    // and without the carve-out Nitro would see a 404 and write nothing at all.
+    expect(NOT_FOUND_PRERENDER_ROUTE).not.toMatch(/\.html$/)
+    expect(staticFallbackPrerenderRoutes).toEqual([NOT_FOUND_PRERENDER_ROUTE])
+    expect(createNexusPrerenderRoutes(nexusRoot)).toContain(NOT_FOUND_PRERENDER_ROUTE)
+    expect(publicPrerenderRoutes).not.toContain(NOT_FOUND_PRERENDER_ROUTE)
+
+    const catchAll = readFileSync(join(nexusRoot, 'app/pages/[...all].vue'), 'utf8')
+    expect(catchAll).toContain(`import.meta.prerender && event?.path === '${NOT_FOUND_PRERENDER_ROUTE}'`)
+    expect(catchAll).toMatch(/if \(event && !isStaticFallbackArtifact\)\s+setResponseStatus\(event, 404\)/)
+  })
+})
 
 describe('docs prerender routes', () => {
   it('normalizes locale and markdown suffixes to canonical docs routes', () => {

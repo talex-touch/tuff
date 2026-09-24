@@ -1,0 +1,30 @@
+{
+  "id": "nexus-docs-static-delivery-closeout",
+  "name": "nexus-docs-static-delivery-closeout",
+  "title": "Nexus docs 静态交付收尾：边缘缓存、404.html、/docs 静态重定向",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-23",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "f7f158048",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-23-nexus-docs-perf-cms-remediation",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "R4 needs the Cloudflare zone Cache Rule created in the dashboard (boss action); the after-rule probe and the post-deploy re-test of the four curls cannot run before that and before master is deployed.",
+    "evidence": "research/verification-2026-09-24.md (isolated build, gate, wrangler probes, pre-rule edge probe); commits f7f158048 (code), 1839bcd10 (spec), 3b7021cb9 (task).",
+    "nextAction": "After deploy: re-run the four production curls; after the Cache Rule: `pnpm -C apps/nexus probe:docs-edge-cache -- --label after`, then decide keep/rollback and align DOCS_STATIC_CACHE_CONTROL (design §4)."
+  }
+}
