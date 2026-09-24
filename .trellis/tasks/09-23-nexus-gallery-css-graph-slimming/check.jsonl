@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Check conventions for Nexus frontend changes"}
+{"file": ".trellis/spec/frontend/nexus-docs-static-delivery.md", "reason": "Verify the split keeps every existing static-delivery rule (one nav request, no session request, chunk floor) intact"}
+{"file": ".trellis/tasks/09-23-nexus-docs-perf-cms-remediation/research/audit-2026-09-23.md", "reason": "Baseline numbers to compare the rebuilt dist against"}
