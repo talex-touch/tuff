@@ -8,9 +8,8 @@ tags: [ai, recommendation, confidence, decision]
 syncStatus: reviewed
 verified: true
 ---
-# RecommendationCard 建议卡
 
-## 基础用法
+## 用法
 
 ### 建议与备选
 
@@ -58,20 +57,15 @@ code: |
 ---
 :::
 
-## 置信度怎么映射
+### 最佳实践
 
-`confidence` 是语义入口，组件据此推导量表格数与颜色：
+- `short` 写成一句能独立读懂的话——抽屉里它是唯一的信息。
+- `label` 与量表配对出现，别只给颜色；高对比与色觉障碍下颜色会失效。
+- 高风险动作用 `ctaTone: 'danger'`，让主按钮的分量和后果匹配。
+- 把 `accepted` 提到宿主并在请求成功后再置 true，否则用户会以为已经下单。
+- 备选控制在两三条；超过就该换成列表页而不是抽屉。
 
-| `confidence` | 量表格数 | 默认颜色 |
-|------|------|------|
-| `high` | 3 | `--tx-bui-green` |
-| `medium` | 2 | `--tx-bui-orange` |
-| `low` | 1 | `--tx-bui-red` |
-| `none`（默认） | 0 | `--tx-bui-ink-3` |
-
-`signal` 与 `tone` 是逃生口，分别覆盖格数与颜色。`label` 始终必填——颜色不能是状态的唯一载体。
-
-## API
+## API 参考
 
 ### Props
 
@@ -105,7 +99,20 @@ code: |
 | `meter` | `{ option }` | 覆盖量表，页脚与抽屉每行都会用到。 |
 | `footer-extra` | — | 插在页脚左侧、动作按钮之前。 |
 
-## 交互契约
+## 置信度怎么映射
+
+`confidence` 是语义入口，组件据此推导量表格数与颜色：
+
+| `confidence` | 量表格数 | 默认颜色 |
+|------|------|------|
+| `high` | 3 | `--tx-bui-green` |
+| `medium` | 2 | `--tx-bui-orange` |
+| `low` | 1 | `--tx-bui-red` |
+| `none`（默认） | 0 | `--tx-bui-ink-3` |
+
+`signal` 与 `tone` 是逃生口，分别覆盖格数与颜色。`label` 始终必填——颜色不能是状态的唯一载体。
+
+## 概述
 
 - **选中即提升。** 在抽屉里点一条备选会把它设为当前建议、关闭抽屉，并**清空已确认态**——上一条的确认不该顺延到新方案上。
 - 抽屉只列**其他**方案，当前建议不会重复出现在里面。
@@ -119,15 +126,7 @@ code: |
 - `tone` 收的是裸 CSS 颜色字符串，**不参与主题切换**；优先用 `confidence`。
 - 抽屉的缓动比这套组件的其他部分更柔（`cubic-bezier(0.16, 1, 0.3, 1)`），是上游刻意的差别，已原样保留。
 
-## 最佳实践
-
-- `short` 写成一句能独立读懂的话——抽屉里它是唯一的信息。
-- `label` 与量表配对出现，别只给颜色；高对比与色觉障碍下颜色会失效。
-- 高风险动作用 `ctaTone: 'danger'`，让主按钮的分量和后果匹配。
-- 把 `accepted` 提到宿主并在请求成功后再置 true，否则用户会以为已经下单。
-- 备选控制在两三条；超过就该换成列表页而不是抽屉。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/recommendation-card/src/TxRecommendationCard.vue`。
 - Types: `packages/tuffex/packages/components/src/recommendation-card/src/types.ts`。
@@ -135,8 +134,6 @@ code: |
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **与 `TxToolConfirmation` 的分工:** 那是二元授权（允许 / 拒绝 + 风险分级），本组件是**带证据的多选建议**：有方案列表、置信度与提升语义。只有页脚两颗按钮的外形相似。
 - **量表是独立原语:** 页脚与抽屉每行用的都是 `TxSignalMeter`，可以单独引入，见它自己的文档。

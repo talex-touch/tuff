@@ -8,9 +8,8 @@ tags: [navigation, tabs, layout]
 syncStatus: reviewed
 verified: true
 ---
-# Tabs 标签页
 
-## 基础用法
+## 用法
 
 ### Tabs
 :::TuffDemoWrapper{demo="TabsTabsDemo" code-lang="vue"}
@@ -522,7 +521,16 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+- `TxTabItem name` 保持稳定且唯一，并与 `modelValue` / `defaultValue` 的值一致。
+- Dashboard 设置和高密度后台页优先使用 `placement="left"`；顶部/底部 tabs 更适合短二级切换。
+- 只有在匹配 tab 一定存在时才使用 `defaultValue`；静态非受控示例优先用 `activation`。
+- 不要把必须长期保留的表单状态只放在未激活面板内；切换时未激活内容会卸载。
+- 面板高度会在异步数据或图片加载后变化时，使用直接测量（`contentScrollable=false` 或 `autoHeight`）并在内容稳定后调用 `refresh()`。
+- `nav-right` 保持紧凑；复杂操作放入 `TxDropdownMenu`、`TxPopover` 或 `TxDrawer`，不要撑大 tab bar。
+
+## API 参考
 
 ### TxTabs 属性
 
@@ -622,7 +630,7 @@ code: |
 |------|------|------|
 | `default` | - | 子级 `TxTabItem` 节点。该组件脱离 `TxTabs` 时自身不渲染 DOM。 |
 
-## 交互契约
+## 概述
 
 - `modelValue` 是受控状态来源。父级更新 `modelValue` 不会再次触发 `change` 或 `update:modelValue`。
 - 没有 `modelValue` 时，`defaultValue` 优先于 `activation`。如果 `defaultValue` 不匹配任何 tab，会渲染空状态，而不会回退到 `activation`。
@@ -633,7 +641,20 @@ code: |
 - 高度动画会移除内部滚动容器，让 AutoSizer 直接测量面板高度；手动直测布局可使用 `contentScrollable=false`。
 - 未激活 tab 的面板不会挂载。需要跨切换保留的状态应放在面板子树之外。
 
-## 样式定制
+## 技术实现
+
+- 已对照 `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`、`TxTabItem.vue`、`TxTabHeader.vue`、`TxTabItemGroup.vue` 和 `types.ts` 核对。
+- `indicatorMotionStrength` 是 `TxTabs` 运行时 prop，已同步补入导出的 `TabsProps` 接口。
+- `TxTabItemGroup.vue` 刻意使用空模板；`TxTabs` 读取其子级 `TxTabItem` VNode 并创建分组 DOM。
+- `TxTabs` 会按组件名过滤默认插槽，文档示例不应展示任意包装组件包住 tab item。
+
+- Component sources: `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, and `TxTabItemGroup.vue`.
+- Types: `packages/tuffex/packages/components/src/tabs/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` 覆盖 activation 渲染、可用与禁用 tab 切换、受控更新、fragment、异步 tab item、分组、内容动效变体、隐藏指示器、视觉 prop 归一化、暴露的 AutoSizer 方法，以及指示器在首次布局时显现、在尚无真实尺寸前保持隐藏。
+
+<TuffDocSourceLink />
+
+## 自定义
 
 | 主题变量 / CSS 变量 | 用途 |
 |----------------------------|----------|
@@ -645,27 +666,3 @@ code: |
 | `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | 由指示器动画 props 生成的运行时变量。 |
 | `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | 由内容动画 props 生成的运行时变量。 |
 | `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | 由导航动画 props 生成的运行时变量。 |
-
-## 最佳实践
-
-- `TxTabItem name` 保持稳定且唯一，并与 `modelValue` / `defaultValue` 的值一致。
-- Dashboard 设置和高密度后台页优先使用 `placement="left"`；顶部/底部 tabs 更适合短二级切换。
-- 只有在匹配 tab 一定存在时才使用 `defaultValue`；静态非受控示例优先用 `activation`。
-- 不要把必须长期保留的表单状态只放在未激活面板内；切换时未激活内容会卸载。
-- 面板高度会在异步数据或图片加载后变化时，使用直接测量（`contentScrollable=false` 或 `autoHeight`）并在内容稳定后调用 `refresh()`。
-- `nav-right` 保持紧凑；复杂操作放入 `TxDropdownMenu`、`TxPopover` 或 `TxDrawer`，不要撑大 tab bar。
-
-## 审阅说明
-
-- 已对照 `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`、`TxTabItem.vue`、`TxTabHeader.vue`、`TxTabItemGroup.vue` 和 `types.ts` 核对。
-- `indicatorMotionStrength` 是 `TxTabs` 运行时 prop，已同步补入导出的 `TabsProps` 接口。
-- `TxTabItemGroup.vue` 刻意使用空模板；`TxTabs` 读取其子级 `TxTabItem` VNode 并创建分组 DOM。
-- `TxTabs` 会按组件名过滤默认插槽，文档示例不应展示任意包装组件包住 tab item。
-
-## Source
-
-- Component sources: `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, and `TxTabItemGroup.vue`.
-- Types: `packages/tuffex/packages/components/src/tabs/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` 覆盖 activation 渲染、可用与禁用 tab 切换、受控更新、fragment、异步 tab item、分组、内容动效变体、隐藏指示器、视觉 prop 归一化、暴露的 AutoSizer 方法，以及指示器在首次布局时显现、在尚无真实尺寸前保持隐藏。
-
-<TuffDocSourceLink />

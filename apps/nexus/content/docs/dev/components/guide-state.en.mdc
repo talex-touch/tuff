@@ -8,9 +8,8 @@ tags: [empty, state, guide, onboarding]
 syncStatus: reviewed
 verified: true
 ---
-# GuideState
 
-## Basic Usage
+## Usage
 
 Use the default guide title and description when the surrounding page already explains the context.
 
@@ -25,8 +24,6 @@ code: |
   </template>
 ---
 ::::
-
-## Custom Content
 
 Override copy and surface when the guide needs to stand alone inside a page or panel.
 
@@ -45,7 +42,15 @@ code: |
 ---
 ::::
 
-## API
+### Best Practices
+
+- Use `TxGuideState` for first-use help, setup prompts, or “start here” panels. Use `TxEmptyState variant="no-data"` or dedicated wrappers for data absence.
+- Keep guide copy action-oriented. The title should name the next meaningful step, not just describe an empty screen.
+- Prefer `surface="card"` when the guide sits among other dashboard content; keep `plain` inside already framed panels.
+- Pass slot content only when the preset illustration or generated buttons cannot express the target action.
+- Keep action labels specific, such as “Create workspace” or “Connect account”, rather than generic “Continue”.
+
+## API Reference
 
 `TxGuideState` accepts `GuideStateProps`, defined as `Omit<EmptyStateProps, 'variant'>`. It forwards those props to `TxEmptyState` and injects `variant="guide"`. For the complete base contract, see [EmptyState](./empty-state.en.mdc).
 
@@ -82,7 +87,7 @@ code: |
 | `description` | - | Forwarded description content. |
 | `actions` | - | Replaces generated primary/secondary buttons. |
 
-## Interaction Contract
+## Overview
 
 - `TxGuideState` always renders `TxEmptyState` with `variant="guide"`; callers cannot change the variant through props.
 - Every other `EmptyStateProps` field is forwarded unchanged.
@@ -90,20 +95,10 @@ code: |
 - Generated action buttons and emitted `primary`/`secondary` events come from `TxEmptyState`.
 - The component has no wrapper DOM of its own; styling and semantics are those of `TxEmptyState`.
 
-## Best Practices
-
-- Use `TxGuideState` for first-use help, setup prompts, or “start here” panels. Use `TxEmptyState variant="no-data"` or dedicated wrappers for data absence.
-- Keep guide copy action-oriented. The title should name the next meaningful step, not just describe an empty screen.
-- Prefer `surface="card"` when the guide sits among other dashboard content; keep `plain` inside already framed panels.
-- Pass slot content only when the preset illustration or generated buttons cannot express the target action.
-- Keep action labels specific, such as “Create workspace” or “Connect account”, rather than generic “Continue”.
-
-## Review Notes
+## Technologies
 
 - **Accessibility note:** `TxGuideState` adds no wrapper DOM or independent semantics; accessible structure, headings, action labels, and generated button events come directly from `TxEmptyState`.
 - **Verified coverage:** `guide-state.test.ts` verifies fixed `variant="guide"`, prop forwarding to `TxEmptyState`, named slot forwarding, and plugin installation under `TxGuideState`.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/guide-state/src/TxGuideState.vue`.
 - Types: `packages/tuffex/packages/components/src/guide-state/src/types.ts` exports `GuideStateProps` as `Omit<EmptyStateProps, 'variant'>`.

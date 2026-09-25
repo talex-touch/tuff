@@ -8,9 +8,8 @@ tags: [icon, badge, chip, avatar]
 syncStatus: reviewed
 verified: true
 ---
-# IconChip 图标角标
 
-## 基础用法
+## 用法
 
 ### IconChip
 :::TuffDemoWrapper{demo="IconChipIconChipDemo" code-lang="vue" title="尺寸阶梯与色调" description="14px 文件角标、18px 浅色底、32px 首字母方块与圆形变体。"}
@@ -28,16 +27,14 @@ code: |
 ---
 :::
 
-## 尺寸与圆角的推导关系
+### 最佳实践
 
-`radius` 与 `fontSize` 都可以不传，由 `size` 推导：
+- 文件类型角标固定用 14px，配 `tone` 区分格式（PDF 红、CSV 绿等），并保持全站一致。
+- 首字母方块用 32px + `tone="ink"`，深浅主题会自动反色，不要写死颜色。
+- 需要状态点而不是角标时用 `TxDotIndicator`，不要把 `TxIconChip` 缩到 6px 当圆点使。
+- 除非确有设计依据，不要覆盖 `radius`：推导出的阶梯就是这套视觉语言本身。
 
-- 圆角 = `round(size / 4)`，即 14→4、18→5、32→8，与 Beautiful UI 的三处实际用法逐一吻合。
-- 字号 = `max(7, round(size * 0.4))`，即 14→7（要放下三个大写字母）、32→13。
-
-需要偏离时显式传 `radius` / `fontSize` 覆盖即可；`shape="circle"` 会忽略 `radius`，不与之相争。
-
-## API
+## API 参考
 
 ### Props
 
@@ -62,20 +59,22 @@ code: |
 
 `TxIconChip` 是纯展示叶子组件，不派发事件。
 
-## 交互契约
+## 尺寸与圆角的推导关系
+
+`radius` 与 `fontSize` 都可以不传，由 `size` 推导：
+
+- 圆角 = `round(size / 4)`，即 14→4、18→5、32→8，与 Beautiful UI 的三处实际用法逐一吻合。
+- 字号 = `max(7, round(size * 0.4))`，即 14→7（要放下三个大写字母）、32→13。
+
+需要偏离时显式传 `radius` / `fontSize` 覆盖即可；`shape="circle"` 会忽略 `radius`，不与之相争。
+
+## 概述
 
 - 默认 `aria-hidden="true"`：角标几乎总是与相邻文本重复（`report.pdf` 旁边的 `PDF` 角标）。只有当它是唯一信息载体时才传 `ariaLabel`。
 - `soft` 的发丝环走 `box-shadow` 而非 `border`，因此不占布局，角标的盒尺寸始终等于 `size`。
 - `neutral` 在两种 `variant` 下观感一致（`inset` 底 + 发丝环），它本来就不是填充色。
 
-## 最佳实践
-
-- 文件类型角标固定用 14px，配 `tone` 区分格式（PDF 红、CSV 绿等），并保持全站一致。
-- 首字母方块用 32px + `tone="ink"`，深浅主题会自动反色，不要写死颜色。
-- 需要状态点而不是角标时用 `TxDotIndicator`，不要把 `TxIconChip` 缩到 6px 当圆点使。
-- 除非确有设计依据，不要覆盖 `radius`：推导出的阶梯就是这套视觉语言本身。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/icon-chip/src/TxIconChip.vue`。
 - Types: `packages/tuffex/packages/components/src/icon-chip/src/types.ts`。
@@ -83,8 +82,6 @@ code: |
 - 改编自 [Beautiful UI](https://www.beautifului.dev)，© 2026 Shane Levine，MIT 协议。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **共享原语:** 该组件被 ContextCards（文件角标）与 SidebarNav（工作区方块）共用，改动尺寸推导会同时影响两者。
 - **偏离上游:** 新增了 `variant="soft"`。上游 18px 的图标片是浅色底加 30% 描边，不是填充色，只有 `solid` 无法表达。

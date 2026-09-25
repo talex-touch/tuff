@@ -9,13 +9,11 @@ syncStatus: reviewed
 verified: false
 ---
 
-# Utils 工具函数
-
 ```ts
 import { nextZIndex, toast, hasWindow } from '@talex-touch/tuffex/utils'
 ```
 
-## API
+## API 参考
 
 ### z-index 管理
 
@@ -82,7 +80,7 @@ SSR 安全地检测浏览器 API 是否可用，避免直接访问 `window` / `d
 |------|------|--------|
 | `withInstall(component)` | `<T>(component: T) => T & { install }` | 给组件挂 `install`，支持 `app.use()` 全局注册 |
 
-## Source
+## 技术实现
 
 - 桶文件：`packages/tuffex/packages/components/src/utils/index.ts` 再导出 `packages/tuffex/packages/utils/*`。
 - 子路径入口：`@talex-touch/tuffex/utils`；根入口 `@talex-touch/tuffex` 亦并入这些导出。

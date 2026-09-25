@@ -8,11 +8,10 @@ tags: [resize, layout, animation]
 syncStatus: reviewed
 verified: true
 ---
-# ResizeBox 显式尺寸动画
 
 > `TxResizeBox` 不测量插槽内容，也不使用 `ResizeObserver`。内容变化需要自动测量时，请使用 [`TxAutoSizer`](./auto-sizer.zh.mdc)。
 
-## 基础用法
+## 用法
 
 ### 显式尺寸目标
 
@@ -98,7 +97,17 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+- 当父组件已经知道紧凑与展开状态的宽高目标时，使用 `TxResizeBox`。
+- 当图片、异步渲染、文本换行或其他内容驱动变化需要自动测量时，使用 `TxAutoSizer`。
+- 只设置自己控制的轴；不设置 `width` 或 `height` 可以保留该轴的固有尺寸。
+- 优先使用非负有限数字或有效的 CSS 长度字符串，不要把浏览器拒绝无效目标当作应用层校验。
+- 面板内部内容大于紧凑目标时保留 `clip=true`。只有在溢出是有意设计且外围布局可以容纳时才关闭裁剪。
+- 将 `resize-start` 与 `resize-end` 作为生命周期通知，而不是尺寸值来源；props 始终是尺寸状态的唯一来源。
+- 响应式目标使用 `min(420px, 100%)` 等 CSS 长度字符串，避免显式尺寸在窄屏上造成横向溢出。
+
+## API 参考
 
 ### 属性
 
@@ -132,7 +141,7 @@ code: |
 | `rootEl` | `HTMLElement \| null` | 当前根元素。Vue 会在公共组件实例上解包内部暴露的 ref。 |
 | `animating` | `boolean` | 是否处于启用状态下的显式尺寸过渡生命周期。Vue 会在公共组件实例上解包内部暴露的 ref。 |
 
-## 交互契约
+## 概述
 
 - 根元素通过 `<component :is="as">` 渲染；透传 attrs 应用到该根元素，调用方 `class` / `style` 会与组件类名及尺寸样式合并。
 - 有限数字目标转换为 px。去除首尾空白后的非空字符串会保留，因此可以直接使用 `%`、`rem`、`calc()` 与 `min()` 目标。
@@ -145,23 +154,11 @@ code: |
 - 系统开启减少动态效果时，媒体查询会把 CSS 过渡缩短到 `0.01ms`，同时保留生命周期结束逻辑。
 - 仅插槽内容变化不会开始尺寸调整。组件没有自动内容测量、`ResizeObserver` 或 `v-model` 契约。
 
-## 最佳实践
-
-- 当父组件已经知道紧凑与展开状态的宽高目标时，使用 `TxResizeBox`。
-- 当图片、异步渲染、文本换行或其他内容驱动变化需要自动测量时，使用 `TxAutoSizer`。
-- 只设置自己控制的轴；不设置 `width` 或 `height` 可以保留该轴的固有尺寸。
-- 优先使用非负有限数字或有效的 CSS 长度字符串，不要把浏览器拒绝无效目标当作应用层校验。
-- 面板内部内容大于紧凑目标时保留 `clip=true`。只有在溢出是有意设计且外围布局可以容纳时才关闭裁剪。
-- 将 `resize-start` 与 `resize-end` 作为生命周期通知，而不是尺寸值来源；props 始终是尺寸状态的唯一来源。
-- 响应式目标使用 `min(420px, 100%)` 等 CSS 长度字符串，避免显式尺寸在窄屏上造成横向溢出。
-
-## 审阅说明
+## 技术实现
 
 - 已对照 `packages/tuffex/packages/components/src/resize-box/src/types.ts`、`TxResizeBox.vue` 与 `resize-box.test.ts` 核对。
 - 组件只动画显式目标；内容观察属于 `TxAutoSizer` 的职责。
 - 事件参数为空，组件不暴露 `v-model` 或命令式 resize 方法。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/resize-box/src/TxResizeBox.vue`.
 - Types: `packages/tuffex/packages/components/src/resize-box/src/types.ts`.

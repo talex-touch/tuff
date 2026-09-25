@@ -9,15 +9,13 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Pagination 分页
-
 <script setup lang="ts">
 import { ref } from 'vue'
-
 const page = ref(1)
 </script>
 
-## 基础用法
+## 用法
+
 ### 分页导航
 在多页数据间切换。
 :::TuffDemoWrapper{demo="PaginationPaginationDemo" code-lang="vue"}
@@ -40,7 +38,17 @@ code: |
   </template>
 ---
 :::
-## API
+
+### 最佳实践
+
+- 优先使用 `total + pageSize`，让界面能展示数据总数；只有后端无法返回总数时才使用 `totalPages`。
+- `currentPage` 按 1 开始计数，初始化为 `1`，不要用 `0`。
+- 筛选条件或搜索词变化后，如果旧页码可能越界，应把 `currentPage` 重置为 `1`。
+- 分页控件应紧贴它控制的列表或表格。
+- 使用 `info` 插槽输出本地化范围文案，例如“正在查看第 21–40 条，共 120 条”。
+
+## API 参考
+
 ### Props
 ::TuffPropsTable
 ---
@@ -81,6 +89,7 @@ rows:
 ::
 
 ## Events
+
 ::TuffPropsTable
 ---
 rows:
@@ -96,6 +105,7 @@ rows:
 ::
 
 ## Slots
+
 ::TuffPropsTable
 ---
 rows:
@@ -105,21 +115,6 @@ rows:
     description: 自定义页码信息区域
 ---
 ::
-
-## 交互契约
-
-- `total` 优先用于按 `pageSize` 计算总页数；未提供 `total` 时使用 `totalPages`。
-- `showFirstLast` 会渲染首末页跳转按钮，边界页会禁用首/上一页或下一页/末页。
-- 当前页按钮带 `aria-current="page"`，上一页/下一页/首末页按钮带可读 `aria-label`。
-
-## 最佳实践
-
-- 优先使用 `total + pageSize`，让界面能展示数据总数；只有后端无法返回总数时才使用 `totalPages`。
-- `currentPage` 按 1 开始计数，初始化为 `1`，不要用 `0`。
-- 筛选条件或搜索词变化后，如果旧页码可能越界，应把 `currentPage` 重置为 `1`。
-- 分页控件应紧贴它控制的列表或表格。
-- 使用 `info` 插槽输出本地化范围文案，例如“正在查看第 21–40 条，共 120 条”。
-
 
 ## 后台数据运维面板
 
@@ -140,12 +135,17 @@ code: |
 ---
 ::
 
-## 审阅说明
+## 概述
+
+- `total` 优先用于按 `pageSize` 计算总页数；未提供 `total` 时使用 `totalPages`。
+- `showFirstLast` 会渲染首末页跳转按钮，边界页会禁用首/上一页或下一页/末页。
+- 当前页按钮带 `aria-current="page"`，上一页/下一页/首末页按钮带可读 `aria-label`。
+
+## 技术实现
 
 - 组件源码:`packages/tuffex/packages/components/src/pagination/src/TxPagination.vue` 确认 total/pageSize 页数计算、省略号窗口生成、边界保护、首末页控制、info 插槽参数、`aria-current` 和可读分页按钮标签。
 - 类型契约:`packages/tuffex/packages/components/src/pagination/src/types.ts` 定义 `PaginationProps` 和 `PaginationEmits`。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/pagination/__tests__/pagination.test.ts` 覆盖 total 计算页数、省略号渲染、当前页语义、越界导航抑制、首末页控制、边界禁用状态、自定义 info 插槽参数和正文列表样式隔离。
 - 建议：优先传 `total + pageSize`，只有后端只返回页数时再传 `totalPages`。
 
-## Source
 <TuffDocSourceLink />

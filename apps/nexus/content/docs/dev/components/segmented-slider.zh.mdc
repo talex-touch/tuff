@@ -8,9 +8,8 @@ tags: [segmented, slider, form]
 syncStatus: reviewed
 verified: true
 ---
-# SegmentedSlider 分段滑块
 
-## 基础用法
+## 用法
 
 ### SegmentedSlider
 :::TuffDemoWrapper{demo="SegmentedSliderSegmentedSliderDemo" code-lang="vue"}
@@ -40,6 +39,43 @@ code: |
   </template>
 ---
 :::
+
+### 最佳实践
+
+- 使用 3 到 7 个稳定分段；长列表或动态选项应改用 `TxSelect` 或 `TxSearchSelect`。
+- 分段值保持 primitive 且唯一；重复 value 会让选中状态变得不明确。
+- 只有在相邻文案已经清楚解释每个刻度时才关闭标签；否则标签就是用户理解离散选择的地图。
+- 连续值用 `TxSlider`，有序策略状态用 `TxSegmentedSlider`。
+
+## API 参考
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `number \| string \| null` | `0` | 当前选中的分段值；传入 `null` 时会在挂载后自动选中第一个分段。 |
+| `segments` | `SegmentedSliderSegment[]` | `[]` | 沿轨道渲染的有序分段定义。 |
+| `disabled` | `boolean` | `false` | 禁用后点击与键盘都不再改变选择（不再触发 `update:modelValue`）。 |
+| `showLabels` | `boolean` | `true` | 仅当某个 segment 提供 `label` 时才显示文字。 |
+| `vertical` | `boolean` | `false` | 改为垂直轨道，进度自下而上。 |
+
+### SegmentedSliderSegment
+
+| 属性名 | 类型 | 说明 |
+|------|------|------|
+| `value` | `number \| string` | 分段被选中时发出的值。 |
+| `label` | `string` | 可选，渲染在分段标记旁的文字。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: number \| string)` | 启用的分段请求新值时触发。 |
+| `change` | `(value: number \| string)` | 与 `update:modelValue` 携带同一选中值同步触发，供 change 监听使用。 |
+
+### 插槽
+
+`TxSegmentedSlider` 不暴露公共插槽。标签来自 `segments[].label`，这样可以保持键盘、指针与垂直布局渲染的确定性。
 
 ## 自定义选项
 
@@ -150,7 +186,7 @@ code: |
 ---
 ::
 
-## 交互契约
+## 概述
 
 - 整行是一个 `radiogroup`，每个停靠点是 `radio`，读屏会把它读成一组互斥选项，而不是一排开关。
 - 漫游 tabindex：Tab 只进入该行一次，落在当前值上。方向键移动并在两端夹住，Home / End 直达首尾。纵向布局自下而上，因此向上是前进方向。
@@ -158,50 +194,11 @@ code: |
 - 轨道颜色由文字色调出——这一对才会随主题真正反转——所以在深色背景上依然可见。
 - 焦点环只在键盘操作时出现；悬停会把未选中的点略微放大作为预览。两者在 `prefers-reduced-motion` 下都会停止。
 
-## API
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` | `number \| string \| null` | `0` | 当前选中的分段值；传入 `null` 时会在挂载后自动选中第一个分段。 |
-| `segments` | `SegmentedSliderSegment[]` | `[]` | 沿轨道渲染的有序分段定义。 |
-| `disabled` | `boolean` | `false` | 禁用后点击与键盘都不再改变选择（不再触发 `update:modelValue`）。 |
-| `showLabels` | `boolean` | `true` | 仅当某个 segment 提供 `label` 时才显示文字。 |
-| `vertical` | `boolean` | `false` | 改为垂直轨道，进度自下而上。 |
-
-### SegmentedSliderSegment
-
-| 属性名 | 类型 | 说明 |
-|------|------|------|
-| `value` | `number \| string` | 分段被选中时发出的值。 |
-| `label` | `string` | 可选，渲染在分段标记旁的文字。 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `(value: number \| string)` | 启用的分段请求新值时触发。 |
-| `change` | `(value: number \| string)` | 与 `update:modelValue` 携带同一选中值同步触发，供 change 监听使用。 |
-
-### 插槽
-
-`TxSegmentedSlider` 不暴露公共插槽。标签来自 `segments[].label`，这样可以保持键盘、指针与垂直布局渲染的确定性。
-
-## 最佳实践
-
-- 使用 3 到 7 个稳定分段；长列表或动态选项应改用 `TxSelect` 或 `TxSearchSelect`。
-- 分段值保持 primitive 且唯一；重复 value 会让选中状态变得不明确。
-- 只有在相邻文案已经清楚解释每个刻度时才关闭标签；否则标签就是用户理解离散选择的地图。
-- 连续值用 `TxSlider`，有序策略状态用 `TxSegmentedSlider`。
-
-## 审阅说明
+## 技术实现
 
 - 源码：`packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`。
 - 截图：`.codex-screenshots/nexus-segmented-slider-release-policy-demo-playwright-2026-05-28.png`。
 - 建议：只在选项天然离散且数量稳定时使用；风险档位、套餐档位和质量门禁比连续数值更适合分段滑块。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`.
 - Types: `packages/tuffex/packages/components/src/segmented-slider/src/types.ts`.

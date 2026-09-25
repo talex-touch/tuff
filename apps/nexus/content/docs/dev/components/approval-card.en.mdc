@@ -8,9 +8,8 @@ tags: [ai, approval, questionnaire, human-in-the-loop]
 syncStatus: reviewed
 verified: true
 ---
-# ApprovalCard
 
-## Basic Usage
+## Usage
 
 ### A Multi-Question Walkthrough
 
@@ -55,11 +54,15 @@ code: |
 ---
 :::
 
-## It Is Not an Authorisation Gate
+### Best Practices
 
-`TxToolConfirmation` is a binary authorisation: may this tool call proceed, answered with approve / deny and a risk tier. This component is a **questionnaire**: the agent asks a few things before it acts and gets back a set of answers. The two share neither a data model nor an output contract — do not substitute one for the other, and do not fold a questionnaire into the confirmation card.
+- Persist on `answer` rather than waiting for `submit` — answers to earlier questions should survive a reader dismissing the card halfway.
+- Keep it to three to five questions; beyond that use a form page, since the pager dots stop being scannable around seven or eight.
+- Set `allowCustom: false` on questions that do not need free text — one fewer empty field is one fewer mis-tap.
+- Override the label props together for a non-English UI; changing only some of them produces mixed-language chrome.
+- Lift `sent` into the host after `submit`, or remounting the card drops it back to the unsubmitted state.
 
-## API
+## API Reference
 
 ### Props
 
@@ -117,7 +120,11 @@ code: |
 | `submit()` | Equivalent to pressing send; a no-op without an answer. |
 | `reset()` | Clears answers, returns to the first question, leaves the submitted state, and reopens. |
 
-## Interaction Contract
+## It Is Not an Authorisation Gate
+
+`TxToolConfirmation` is a binary authorisation: may this tool call proceed, answered with approve / deny and a risk tier. This component is a **questionnaire**: the agent asks a few things before it acts and gets back a set of answers. The two share neither a data model nor an output contract — do not substitute one for the other, and do not fold a questionnaire into the confirmation card.
+
+## Overview
 
 - **All four states are dual-mode.** Supply `modelValue` / `index` / `sent` / `open` and the prop wins; omit it and the card owns it. A streaming host that remounts the card keeps its page and answers only if it controls them.
 - **Answers are keyed by `option.value`, never by index.** Reordering the options cannot corrupt them.
@@ -128,15 +135,7 @@ code: |
 - Dismissing swaps the card for a single button without clearing state; only `reset()` or the restart control clears it.
 - Option buttons are `button` + `aria-pressed`, wrapped in a `role="group"` whose `aria-labelledby` points at the prompt, so a screen reader gets the question as context.
 
-## Best Practices
-
-- Persist on `answer` rather than waiting for `submit` — answers to earlier questions should survive a reader dismissing the card halfway.
-- Keep it to three to five questions; beyond that use a form page, since the pager dots stop being scannable around seven or eight.
-- Set `allowCustom: false` on questions that do not need free text — one fewer empty field is one fewer mis-tap.
-- Override the label props together for a non-English UI; changing only some of them produces mixed-language chrome.
-- Lift `sent` into the host after `submit`, or remounting the card drops it back to the unsubmitted state.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/approval-card/src/TxApprovalCard.vue`.
 - Types: `packages/tuffex/packages/components/src/approval-card/src/types.ts`.
@@ -144,8 +143,6 @@ code: |
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **How it divides from `TxToolConfirmation`:** see "It Is Not an Authorisation Gate" above. The names are close and the semantics are orthogonal, so the two docs should be read together.
 - **Accessibility:** the `role="group"` with `aria-labelledby` pointing at the prompt is a deliberate improvement over upstream, which ships bare `aria-pressed` and leaves a screen reader without the question as context.

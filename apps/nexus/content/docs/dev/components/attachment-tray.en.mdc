@@ -8,9 +8,8 @@ tags: [ai, attachment, upload]
 syncStatus: reviewed
 verified: true
 ---
-# Attachment Tray
 
-## Basic Usage
+## Usage
 
 ### Attachment Tray
 ::::TuffDemoWrapper{demo="AttachmentTrayAttachmentTrayDemo" code-lang="vue"}
@@ -30,19 +29,15 @@ code: |
 ---
 ::::
 
-## Interaction Contract
+### Best Practices
 
-- Attachments are split by `kind`: `image` goes to the grid, `file` to the chips. Pass both in the same `attachments` array.
-- `removable` is the switch between the two modes: true shows remove and cancel-upload affordances (composer), false makes the whole area read-only (message).
-- The three events differ in shape. `remove` and `cancel` carry an `id`; `open` is emitted **by file chips only**, carries the whole attachment, and what "open" means is the consumer's call.
-- Images have no `open` event — clicking one opens the built-in viewer (built on `TxModal`), with nothing for the host to wire up.
-- The viewer pages between images only, and the index is clamped to the valid range. Files take no part in it.
-- The viewer title prefers the image's `name` and falls back to `previewTitle`.
-- A thumbnail that fails to load is recorded by `id` and replaced with a placeholder, rather than showing the browser's broken-image glyph or retrying.
-- Upload progress is driven by `uploading` and `progress` (0–1) on the attachment, drawn as a ring.
-- File sizes default to B / KB / MB with one decimal; `sizeFormatter` replaces that entirely.
+- Pass `removable` in a composer and omit it on a message — it is the only signal separating "still editable" from "already sent".
+- `remove` and `cancel` give you an `id` only; drop the item from your own list. The component never mutates `attachments`.
+- Set `uploading: true` **and** `progress` together on an in-flight attachment; one without the other leaves the ring at zero.
+- Implement `open` for files, or clicking a file chip does nothing at all.
+- Override the six label props plus `sizeFormatter` on non-English surfaces. `previousText` and `nextText` are visible text, so missing them is the most obvious.
 
-## API
+## API Reference
 
 ### Props
 
@@ -71,10 +66,14 @@ code: |
 
 `TxAttachmentTray` exposes no slots. The image grid and file chip layouts are fixed.
 
-## Best Practices
+## Overview
 
-- Pass `removable` in a composer and omit it on a message — it is the only signal separating "still editable" from "already sent".
-- `remove` and `cancel` give you an `id` only; drop the item from your own list. The component never mutates `attachments`.
-- Set `uploading: true` **and** `progress` together on an in-flight attachment; one without the other leaves the ring at zero.
-- Implement `open` for files, or clicking a file chip does nothing at all.
-- Override the six label props plus `sizeFormatter` on non-English surfaces. `previousText` and `nextText` are visible text, so missing them is the most obvious.
+- Attachments are split by `kind`: `image` goes to the grid, `file` to the chips. Pass both in the same `attachments` array.
+- `removable` is the switch between the two modes: true shows remove and cancel-upload affordances (composer), false makes the whole area read-only (message).
+- The three events differ in shape. `remove` and `cancel` carry an `id`; `open` is emitted **by file chips only**, carries the whole attachment, and what "open" means is the consumer's call.
+- Images have no `open` event — clicking one opens the built-in viewer (built on `TxModal`), with nothing for the host to wire up.
+- The viewer pages between images only, and the index is clamped to the valid range. Files take no part in it.
+- The viewer title prefers the image's `name` and falls back to `previewTitle`.
+- A thumbnail that fails to load is recorded by `id` and replaced with a placeholder, rather than showing the browser's broken-image glyph or retrying.
+- Upload progress is driven by `uploading` and `progress` (0–1) on the attachment, drawn as a ring.
+- File sizes default to B / KB / MB with one decimal; `sizeFormatter` replaces that entirely.

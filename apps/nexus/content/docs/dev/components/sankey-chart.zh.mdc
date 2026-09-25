@@ -8,9 +8,8 @@ tags: [chart, sankey, flow, d3-sankey]
 syncStatus: reviewed
 verified: true
 ---
-# SankeyChart 桑基图
 
-## 基础用法
+## 用法
 
 `nodes` 是节点数组，`links` 用**节点下标**连接（`source`/`target` 是 `nodes` 的索引）。节点色优先级：`node.color` > `defaultNodeColor` > 分类色板按下标轮转。连线默认按来源色→目标色渐变，`link-color="gray"` 换成整齐的灰。任一节点带 `value` 时值标签自动开启（`showNodeValues` 可强制开关）。
 
@@ -62,17 +61,7 @@ code: |
 ---
 :::
 
-## 容错
-
-环形连接会让 d3-sankey 抛错——组件捕获后渲染空态并在控制台给出 dev 警告，不会拖垮宿主页面。
-
-## 悬停高亮
-
-悬停节点或连线时，只有邻接元素保持原样：节点、连线与标签里不相邻的部分一起降到 10% 不透明度，对应 ECharts 的 `emphasis.focus: 'adjacency'`（blur 取 `fromState.opacity * 0.1`），切换走 300ms `cubicOut`。节点的邻域是它自己、所有与它相连的连线和这些连线另一端的节点；连线的邻域是它自己、两端节点以及触及任一端点的所有连线。
-
-桑基图**没有几何动画**，这一点与 kumo 一致而非缺失：ECharts 的 `SankeyView` 既没有 `initProps` 也没有 `updateProps`，所以 d3-sankey 布局变化时节点与连线直接落到新位置，不做补间。`prefers-reduced-motion: reduce` 下 300ms 过渡被去掉，高亮瞬时切换。
-
-## API
+## API 参考
 
 ### SankeyChart Props
 
@@ -105,6 +94,16 @@ code: |
 | 插槽名 | 作用域参数 | 说明 |
 |------|------|------|
 | `tooltip` | `{ params: SankeyTooltipParams }` | 整体替换提示框内容；`params.type` 为 `'node' \| 'link'`。 |
+
+## 容错
+
+环形连接会让 d3-sankey 抛错——组件捕获后渲染空态并在控制台给出 dev 警告，不会拖垮宿主页面。
+
+## 悬停高亮
+
+悬停节点或连线时，只有邻接元素保持原样：节点、连线与标签里不相邻的部分一起降到 10% 不透明度，对应 ECharts 的 `emphasis.focus: 'adjacency'`（blur 取 `fromState.opacity * 0.1`），切换走 300ms `cubicOut`。节点的邻域是它自己、所有与它相连的连线和这些连线另一端的节点；连线的邻域是它自己、两端节点以及触及任一端点的所有连线。
+
+桑基图**没有几何动画**，这一点与 kumo 一致而非缺失：ECharts 的 `SankeyView` 既没有 `initProps` 也没有 `updateProps`，所以 d3-sankey 布局变化时节点与连线直接落到新位置，不做补间。`prefers-reduced-motion: reduce` 下 300ms 过渡被去掉，高亮瞬时切换。
 
 ## 与 kumo 的差异
 

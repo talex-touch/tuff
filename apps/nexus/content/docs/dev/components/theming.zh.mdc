@@ -116,7 +116,7 @@ code: |
 - 组件已经暴露填充变量时，改 token 而不是写 `background-color`。有些填充是 `background-image` 渐变，`background-color` 只会画在渐变背后。
 - `base.css` 只引一次。引两份时以后加载的那份为准，而那通常不是你改的那份。
 
-## 源码
+## 技术实现
 
 - token 与主题选择器：`packages/tuffex/packages/components/style/variables.scss`。
 - AI 套件 token：`packages/tuffex/packages/components/style/bui-tokens.scss`。

@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Grid
-
-## Basic Usage
+## Usage
 
 ### Grid
 :::TuffDemoWrapper{demo="GridGridDemo" code-lang="vue"}
@@ -48,6 +46,67 @@ code: |
   </template>
 ---
 :::
+
+### Best Practices
+
+- Prefer explicit `cols` for known dashboard grids and `minItemWidth` for card collections that should auto-fit available space.
+- Keep `TxGridItem` spans predictable; oversized spans should be paired with enough columns at every responsive breakpoint.
+- Use numeric gaps for token-like spacing and string gaps only when the layout needs CSS units such as `rem` or `clamp()`.
+- Do not use Grid for semantic tables or ordered lists; keep data tables in table components and navigation in list markup.
+
+## API Reference
+
+### Grid Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| cols | `number \| Responsive<number>` | `0` | Columns; 0 leaves the column template unset |
+| rows | `number` | `0` | Rows; 0 leaves the row template unset |
+| gap | `GridGap` | `16` | Grid gap (number → px, `{ row, col }`, or responsive object) |
+| minItemWidth | `string` | - | Min item width (auto-fit) |
+| justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Horizontal alignment |
+| align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Vertical alignment |
+
+### GridItem Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| colSpan | `number` | `1` | Column span, clamped to at least 1 |
+| rowSpan | `number` | `1` | Row span, clamped to at least 1 |
+| justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | Item horizontal alignment |
+| alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | Item vertical alignment |
+
+### Types
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+
+  type Responsive<T> = Partial<Record<Breakpoint, T>>
+
+  type GridAlign = 'start' | 'end' | 'center' | 'stretch'
+
+  type GridGap =
+    | number
+    | string
+    | { row?: number | string, col?: number | string }
+    | Responsive<number | string>
+---
+:::
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| - | - | `TxGrid` and `TxGridItem` do not emit component-specific events. |
+
+### Slots
+
+| Component | Slot | Props | Description |
+|-----------|------|------|-------------|
+| `TxGrid` | `default` | - | Grid item content, normally `TxGridItem` children. |
+| `TxGridItem` | `default` | - | Cell content rendered inside the grid item wrapper. |
 
 ## Responsive Grid
 
@@ -184,81 +243,18 @@ code: |
 ---
 :::
 
-## API
-
-### Grid Props
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| cols | `number \| Responsive<number>` | `0` | Columns; 0 leaves the column template unset |
-| rows | `number` | `0` | Rows; 0 leaves the row template unset |
-| gap | `GridGap` | `16` | Grid gap (number → px, `{ row, col }`, or responsive object) |
-| minItemWidth | `string` | - | Min item width (auto-fit) |
-| justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Horizontal alignment |
-| align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Vertical alignment |
-
-### GridItem Props
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| colSpan | `number` | `1` | Column span, clamped to at least 1 |
-| rowSpan | `number` | `1` | Row span, clamped to at least 1 |
-| justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | Item horizontal alignment |
-| alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | Item vertical alignment |
-
-### Types
-
-:::TuffCodeBlock{lang="ts"}
----
-code: |
-  type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
-
-  type Responsive<T> = Partial<Record<Breakpoint, T>>
-
-  type GridAlign = 'start' | 'end' | 'center' | 'stretch'
-
-  type GridGap =
-    | number
-    | string
-    | { row?: number | string, col?: number | string }
-    | Responsive<number | string>
----
-:::
-
-### Events
-
-| Event | Payload | Description |
-|------|---------|-------------|
-| - | - | `TxGrid` and `TxGridItem` do not emit component-specific events. |
-
-### Slots
-
-| Component | Slot | Props | Description |
-|-----------|------|------|-------------|
-| `TxGrid` | `default` | - | Grid item content, normally `TxGridItem` children. |
-| `TxGridItem` | `default` | - | Cell content rendered inside the grid item wrapper. |
-
-## Interaction Contract
+## Overview
 
 - `minItemWidth` takes precedence over `cols` and outputs `repeat(auto-fit, minmax(..., 1fr))`.
 - Responsive values are resolved from the current window width with breakpoints `xs < 640`, `sm < 768`, `md < 1024`, `lg < 1280`, and `xl` otherwise.
 - Numeric `gap` values are converted to px; `{ row, col }` controls row and column gaps separately.
 - `TxGridItem` clamps `colSpan` and `rowSpan` to at least 1.
 
-## Best Practices
-
-- Prefer explicit `cols` for known dashboard grids and `minItemWidth` for card collections that should auto-fit available space.
-- Keep `TxGridItem` spans predictable; oversized spans should be paired with enough columns at every responsive breakpoint.
-- Use numeric gaps for token-like spacing and string gaps only when the layout needs CSS units such as `rem` or `clamp()`.
-- Do not use Grid for semantic tables or ordered lists; keep data tables in table components and navigation in list markup.
-
-## Review Notes
+## Technologies
 
 - **Responsive contract:** `TxGrid` resolves responsive `cols` and `gap` against `window.innerWidth`; SSR/default width starts at 1024, so critical first paint layouts should also work at the `md` fallback.
 - **Sizing note:** `minItemWidth` wins over explicit `cols` and emits `repeat(auto-fit, minmax(..., 1fr))`. Use one strategy per grid to avoid surprising reviewers.
 - **Verified coverage:** `grid.test.ts` covers fixed columns/rows/gaps, `minItemWidth` precedence, responsive resize updates, resize listener cleanup, `TxGridItem` span clamping, self alignment, and install registration.
-
-## Source
 
 - Grid source: `packages/tuffex/packages/components/src/grid/src/TxGrid.vue`.
 - Grid item source: `packages/tuffex/packages/components/src/grid/src/TxGridItem.vue`.

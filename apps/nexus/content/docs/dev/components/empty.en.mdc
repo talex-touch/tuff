@@ -8,9 +8,8 @@ tags: [empty, state, placeholder]
 syncStatus: reviewed
 verified: true
 ---
-# Empty
 
-## Basic Usage
+## Usage
 
 ### Empty
 :::TuffDemoWrapper{demo="EmptyEmptyDemo" code-lang="vue"}
@@ -21,8 +20,6 @@ code: |
   </template>
 ---
 :::
-
-## With Actions
 
 ### Empty (action)
 :::TuffDemoWrapper{demo="EmptyEmptyActionDemo" code-lang="vue"}
@@ -38,15 +35,14 @@ code: |
 ---
 :::
 
-## Interaction Contract
+### Best Practices
 
-- Always renders the wrapped `TxEmptyState` with `variant="empty"`, `surface="card"`, and `layout="vertical"`.
-- `compact=false` maps to `size="medium"`; `compact=true` maps to `size="small"`.
-- `iconClass` is forwarded as the wrapped empty-state `icon` prop.
-- Slots are intentionally simpler than `TxEmptyState`: `action` is singular and replaces the wrapped `actions` slot.
-- No events are emitted by `TxEmpty`; action behavior belongs to the slotted control.
+- Use `TxEmpty` for compact list, search, or panel placeholders where the card surface is desirable.
+- Use the more explicit `TxNoData`, `TxNoSelection`, `TxOfflineState`, or `TxPermissionState` when the empty cause has product meaning.
+- Keep `compact` for dense regions such as sidebars and table interiors.
+- Put clickable behavior inside the `action` slot; `TxEmpty` does not proxy action events.
 
-## API
+## API Reference
 
 ### Props
 
@@ -70,19 +66,19 @@ code: |
 | `description` | - | Replaces the description prop content. |
 | `action` | - | Replaces the wrapped `TxEmptyState` actions area. |
 
-## Best Practices
+## Overview
 
-- Use `TxEmpty` for compact list, search, or panel placeholders where the card surface is desirable.
-- Use the more explicit `TxNoData`, `TxNoSelection`, `TxOfflineState`, or `TxPermissionState` when the empty cause has product meaning.
-- Keep `compact` for dense regions such as sidebars and table interiors.
-- Put clickable behavior inside the `action` slot; `TxEmpty` does not proxy action events.
+- Always renders the wrapped `TxEmptyState` with `variant="empty"`, `surface="card"`, and `layout="vertical"`.
+- `compact=false` maps to `size="medium"`; `compact=true` maps to `size="small"`.
+- `iconClass` is forwarded as the wrapped empty-state `icon` prop.
+- Slots are intentionally simpler than `TxEmptyState`: `action` is singular and replaces the wrapped `actions` slot.
+- No events are emitted by `TxEmpty`; action behavior belongs to the slotted control.
 
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/empty/src/TxEmpty.vue` confirms `TxEmptyState` wrapping, forced `variant="empty"`, `surface="card"`, `layout="vertical"`, compact size mapping, and slot remapping.
 - Type contract: `packages/tuffex/packages/components/src/empty/src/types.ts` defines the compact `EmptyProps` surface.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/empty/__tests__/empty.test.ts` covers default prop forwarding, compact sizing, and wrapper-to-empty-state slot mapping.
 - Export: `packages/tuffex/packages/components/src/empty/index.ts` exports `Empty`, `TxEmpty`, `EmptyProps`, and `TxEmptyInstance`.
 
-## Source
 <TuffDocSourceLink />

@@ -8,17 +8,14 @@ tags: [chip, mode, toggle, morph, ai]
 syncStatus: reviewed
 verified: true
 ---
-# ModeChip
 
 `TxModeChip` is a native button that names the mode a composer or toolbar is in, such as "Request approval" or "Unrestricted access". When the mode changes, the chip morphs in place:
-
 - the icon swaps first, with a scale, inside a fixed-size box;
 - 50ms later, the label blur-crossfades;
 - the tint and ink follow the tone, and the width eases to the new label.
-
 Hover changes colour only, and instantly.
 
-## Basic Usage
+## Usage
 
 ### ModeChip
 
@@ -60,7 +57,15 @@ code: |
 
 For the chip inside a composer, see the With a Mode Chip and Tray Placement sections of [ChatComposer](/docs/dev/components/chat-composer).
 
-## API
+### Best Practices
+
+- Use it to name the mode in effect. The label already carries the state, so a chip whose label changes with the mode takes no `aria-pressed`: a toggle's name must stay the same in both states (WAI-ARIA APG), or a screen reader announces the active "Request approval" as "not pressed". Keep `aria-pressed` for a chip with a fixed label that turns one mode on and off (Web search), and add `aria-haspopup` when a click opens a menu of modes.
+- Use tone for risk: `muted` for the default or safe mode, `danger` for a mode that lifts a safeguard (unrestricted access). The label and icon must still state the mode on their own, not just the colour.
+- Keep labels to two to four words so the width change reads as a morph.
+- Inside `TxChatComposer`, put it in the `toolbar-left` slot, and use the `muted` tone in the tray.
+- Do not flip it on a timer. Every change is a morph; change it only on a user action or a real change of context.
+
+## API Reference
 
 ### Props
 
@@ -88,7 +93,7 @@ No slots. The text comes from `label` only, so every change can run through `TxT
 | `--tx-mode-chip-fill` | Fill |
 | `--tx-mode-chip-fill-hover` | Fill on hover |
 
-## Interaction Contract
+## Overview
 
 - Renders a native `<button type="button">`, 28px tall, 13px text, 8px radius. `label` is the accessible name; the icon stays out of it.
 - A change to `label`, `icon` or `tone` starts a morph:
@@ -103,15 +108,7 @@ No slots. The text comes from `label` only, so every change can run through `TxT
 - Where the Web Animations API is missing, the width jumps straight to its new value.
 - Disabled chips are semi-transparent, use the `not-allowed` cursor, and have no hover change.
 
-## Best Practices
-
-- Use it to name the mode in effect. The label already carries the state, so a chip whose label changes with the mode takes no `aria-pressed`: a toggle's name must stay the same in both states (WAI-ARIA APG), or a screen reader announces the active "Request approval" as "not pressed". Keep `aria-pressed` for a chip with a fixed label that turns one mode on and off (Web search), and add `aria-haspopup` when a click opens a menu of modes.
-- Use tone for risk: `muted` for the default or safe mode, `danger` for a mode that lifts a safeguard (unrestricted access). The label and icon must still state the mode on their own, not just the colour.
-- Keep labels to two to four words so the width change reads as a morph.
-- Inside `TxChatComposer`, put it in the `toolbar-left` slot, and use the `muted` tone in the tray.
-- Do not flip it on a timer. Every change is a morph; change it only on a user action or a real change of context.
-
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/mode-chip/src/TxModeChip.vue`.
 - Motion reference: the chip morph in [@flohoeller's Chatbox component clip](https://x.com/flohoeller/status/2102660458658582913), measured frame by frame at about 370ms:
@@ -130,7 +127,5 @@ No slots. The text comes from `label` only, so every change can run through `TxT
   - `mode-chip/__tests__/mode-chip.test.ts` covers the native button and attribute fallthrough, the accessible name, the fade (not morph) path, the default tone, no icon box without an icon, and SSR;
   - the same file covers the keyed icon swap, the 50ms label lead, `.is-morphing`'s length and restart, the width transitions (including when an icon appears), no-WAAPI, unmount cleanup, and reduced motion;
   - `mode-chip-motion.test.ts` pins the compiled style: colour transitions only during a morph, no colour on the label layers, no hover transition, a reduced-motion stop for every tween, the tone fill and ink recipe, and a fallback on every `var()`.
-
-## Source
 
 <TuffDocSourceLink />

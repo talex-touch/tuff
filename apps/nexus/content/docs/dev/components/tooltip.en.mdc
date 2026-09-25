@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Tooltip
-
-## Demo
+## Usage
 
 ### Hover Hint
 
@@ -31,7 +29,6 @@ code: |
 ---
 ::
 
-## Basic Usage
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
@@ -43,107 +40,12 @@ code: |
 ---
 :::
 
-## Anchor Passthrough
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxTooltip
-      content="Bottom tooltip"
-      :anchor="{ placement: 'bottom', showArrow: true, panelBackground: 'mask' }"
-    >
-      <TxButton variant="ghost">Bottom</TxButton>
-    </TxTooltip>
-  </template>
----
-:::
-
-## Click Toggle (close on outside click)
-::TuffDemoWrapper{demo="TooltipClickOutsideCloseDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxTooltip
-      v-model="open"
-      trigger="click"
-      content="Click to toggle, click outside to close"
-      :anchor="{ showArrow: true }"
-    >
-      <TxButton variant="ghost">Click me</TxButton>
-    </TxTooltip>
-  </template>
----
-::
-
-## Click Toggle (keep on outside click)
-::TuffDemoWrapper{demo="TooltipClickOutsideKeepDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxTooltip
-      v-model="open"
-      trigger="click"
-      :close-on-click-outside="false"
-      content="Click to toggle, outside click will not close"
-      :anchor="{ showArrow: true }"
-    >
-      <TxButton variant="ghost">Pinned tooltip</TxButton>
-    </TxTooltip>
-  </template>
----
-::
-
-## API
-
-### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `modelValue` | `boolean` | `undefined` | Optional controlled open state for `v-model`. Unset uses internal state. |
-| `content` | `string` | `''` | Fallback tooltip text when the `content` slot is not provided. |
-| `disabled` | `boolean` | `false` | Blocks opening and closes the tooltip when it becomes disabled. |
-| `trigger` | `'hover' \| 'click' \| 'focus'` | `'hover'` | Trigger strategy for the reference wrapper. |
-| `openDelay` | `number` | From the `layer` preset (`200` for `hint`) | Delay before opening in hover or focus mode, clamped to at least `0`. Left unset, the shared delay service supplies it from `layer`. |
-| `closeDelay` | `number` | From the `layer` preset (`120` for `hint`) | Delay before closing in hover or focus mode, clamped to at least `0`. Left unset, the shared delay service supplies it from `layer`. |
-| `maxHeight` | `number` | `320` | Panel max height in pixels. `<= 0` disables the max height. Content slot defaults to no max height at `320`. |
-| `referenceFullWidth` | `boolean` | `false` | Makes the reference wrapper take `width: 100%`. |
-| `interactive` | `boolean` | `false` | Keeps hover tooltips open while the pointer is inside the floating panel. |
-| `keepAliveContent` | `boolean` | `false` | Passes through to `TxBaseAnchor` to keep floating content mounted after close. |
-| `closeOnClickOutside` | `boolean` | `trigger === 'click'` | Overrides outside-click close behavior. Anchor config is used next, then click mode defaults to `true`. |
-| `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Overrides reference click toggle behavior. Anchor config is used next, then click mode defaults to `true`. |
-| `anchor` | `Partial<TooltipAnchorProps>` | `{}` | Pass-through config for `TxBaseAnchor`; `modelValue` / `disabled` are owned by Tooltip (set them via `v-model` / the `disabled` prop, not `anchor`); tooltip supplies placement, arrow, panel, and animation defaults first. |
-
-### Events
-
-| Event | Payload | Description |
-|------|---------|-------------|
-| `update:modelValue` | `(value: boolean) => void` | Emitted whenever the resolved open state changes. |
-| `open` | `() => void` | Emitted after the tooltip changes from closed to open. |
-| `close` | `() => void` | Emitted after the tooltip changes from open to closed. |
-
-### Slots
-
-| Slot | Props | Description |
-|------|------|-------------|
-| `default` | - | Reference content wrapped by the tooltip trigger span. |
-| `content` | `{ side: string }` | Custom tooltip body. Receives the resolved floating side from `TxBaseAnchor`. |
-
-## Interaction Contract
-
-- Hover and focus triggers use `openDelay` / `closeDelay`; click trigger delegates toggling and outside-click handling to `TxBaseAnchor`.
-- `disabled=true` clears pending timers and forces the resolved open state to `false`.
-- `interactive=true` only affects hover mode; entering the floating panel clears the close timer until the pointer leaves.
-- Tooltip sets `role="tooltip"` on the floating body and exposes `data-side` for placement-aware styling.
-- The default anchor animation is `{ type: 'boom' }` (a symmetric focus zoom in and out); an `anchor.animation` override replaces it entirely.
-
-## Best Practices
+### Best Practices
 
 - Keep tooltip text short and avoid multiline hints.
 - Keep spacing light around the trigger element.
 - Put visual complexity in `anchor`, not in tooltip-specific props.
 - Do not place forms, long explanations, or bulk actions inside Tooltip; upgrade complex content to `TxPopover` / `TxDrawer`.
-
-## Composite Patterns
 
 ### Tooltip Button
 
@@ -185,6 +87,94 @@ code: |
 ---
 ::
 
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `boolean` | `undefined` | Optional controlled open state for `v-model`. Unset uses internal state. |
+| `content` | `string` | `''` | Fallback tooltip text when the `content` slot is not provided. |
+| `disabled` | `boolean` | `false` | Blocks opening and closes the tooltip when it becomes disabled. |
+| `trigger` | `'hover' \| 'click' \| 'focus'` | `'hover'` | Trigger strategy for the reference wrapper. |
+| `openDelay` | `number` | From the `layer` preset (`200` for `hint`) | Delay before opening in hover or focus mode, clamped to at least `0`. Left unset, the shared delay service supplies it from `layer`. |
+| `closeDelay` | `number` | From the `layer` preset (`120` for `hint`) | Delay before closing in hover or focus mode, clamped to at least `0`. Left unset, the shared delay service supplies it from `layer`. |
+| `maxHeight` | `number` | `320` | Panel max height in pixels. `<= 0` disables the max height. Content slot defaults to no max height at `320`. |
+| `referenceFullWidth` | `boolean` | `false` | Makes the reference wrapper take `width: 100%`. |
+| `interactive` | `boolean` | `false` | Keeps hover tooltips open while the pointer is inside the floating panel. |
+| `keepAliveContent` | `boolean` | `false` | Passes through to `TxBaseAnchor` to keep floating content mounted after close. |
+| `closeOnClickOutside` | `boolean` | `trigger === 'click'` | Overrides outside-click close behavior. Anchor config is used next, then click mode defaults to `true`. |
+| `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Overrides reference click toggle behavior. Anchor config is used next, then click mode defaults to `true`. |
+| `anchor` | `Partial<TooltipAnchorProps>` | `{}` | Pass-through config for `TxBaseAnchor`; `modelValue` / `disabled` are owned by Tooltip (set them via `v-model` / the `disabled` prop, not `anchor`); tooltip supplies placement, arrow, panel, and animation defaults first. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `update:modelValue` | `(value: boolean) => void` | Emitted whenever the resolved open state changes. |
+| `open` | `() => void` | Emitted after the tooltip changes from closed to open. |
+| `close` | `() => void` | Emitted after the tooltip changes from open to closed. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Reference content wrapped by the tooltip trigger span. |
+| `content` | `{ side: string }` | Custom tooltip body. Receives the resolved floating side from `TxBaseAnchor`. |
+
+## Anchor Passthrough
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      content="Bottom tooltip"
+      :anchor="{ placement: 'bottom', showArrow: true, panelBackground: 'mask' }"
+    >
+      <TxButton variant="ghost">Bottom</TxButton>
+    </TxTooltip>
+  </template>
+---
+:::
+
+## Click Toggle (close on outside click)
+
+::TuffDemoWrapper{demo="TooltipClickOutsideCloseDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      v-model="open"
+      trigger="click"
+      content="Click to toggle, click outside to close"
+      :anchor="{ showArrow: true }"
+    >
+      <TxButton variant="ghost">Click me</TxButton>
+    </TxTooltip>
+  </template>
+---
+::
+
+## Click Toggle (keep on outside click)
+
+::TuffDemoWrapper{demo="TooltipClickOutsideKeepDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      v-model="open"
+      trigger="click"
+      :close-on-click-outside="false"
+      content="Click to toggle, outside click will not close"
+      :anchor="{ showArrow: true }"
+    >
+      <TxButton variant="ghost">Pinned tooltip</TxButton>
+    </TxTooltip>
+  </template>
+---
+::
+
 ## Dashboard Feedback Center
 
 In admin task panels, Tooltip should explain one action or metric without interrupting the flow. Use `TxToastHost` for persistent task results and `TxLoadingOverlay` when a panel needs to be blocked during refresh.
@@ -203,13 +193,19 @@ code: |
 ---
 ::
 
-## Review Notes
+## Overview
+
+- Hover and focus triggers use `openDelay` / `closeDelay`; click trigger delegates toggling and outside-click handling to `TxBaseAnchor`.
+- `disabled=true` clears pending timers and forces the resolved open state to `false`.
+- `interactive=true` only affects hover mode; entering the floating panel clears the close timer until the pointer leaves.
+- Tooltip sets `role="tooltip"` on the floating body and exposes `data-side` for placement-aware styling.
+- The default anchor animation is `{ type: 'boom' }` (a symmetric focus zoom in and out); an `anchor.animation` override replaces it entirely.
+
+## Technologies
 
 - **Open-state contract:** `TxTooltip` is controlled when `modelValue` is boolean, otherwise it owns `internalOpen`. Opening/closing emits `update:modelValue` plus `open` or `close`, unless `disabled` prevents opening.
 - **Anchor contract:** Click trigger defaults `closeOnClickOutside` and `toggleOnReferenceClick` to `true`; other triggers leave those behaviors off unless props or `anchor` override them.
 - **Verified coverage:** `tooltip.test.ts` covers keep-alive defaults, the boom default and animation forwarding, content slot `side` context, and click outside override behavior.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/tooltip/src/TxTooltip.vue`.
 - Types: `packages/tuffex/packages/components/src/tooltip/src/types.ts`.

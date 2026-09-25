@@ -8,9 +8,8 @@ tags: [status, dot, table, data]
 syncStatus: reviewed
 verified: true
 ---
-# DotIndicator
 
-## Basic Usage
+## Usage
 
 ### DotIndicator
 :::TuffDemoWrapper{demo="DotIndicatorDotIndicatorDemo" code-lang="vue" title="Connection strength" description="The dot carries the colour and the text carries the meaning; neither works alone."}
@@ -29,19 +28,14 @@ code: |
 ---
 :::
 
-## How It Differs From StatusBadge
+### Best Practices
 
-These are not interchangeable, and picking the wrong one gives you a control that is wrong in both size and meaning.
+- Prefer a `label`. Colour must never be the only carrier of state — neither a colour-blind reader nor a greyscale screenshot can tell red from green.
+- Use the `ariaLabel` form only when something else in the same row already conveys the meaning.
+- Take colours from `--tx-bui-*` or `--tx-color-*` variables; a hardcoded hex will not follow a theme change.
+- In a footer aggregate, wrap the default slot in `<strong>` to emphasise the figure while keeping the dot aligned.
 
-| | `TxDotIndicator` | `TxStatusBadge` |
-|------|------|------|
-| Shape | Bare dot plus plain text | Bordered pill with an icon |
-| Palette | Any colour | Five fixed semantic tones |
-| Use | Dense contexts: table cells, footer aggregates | A standalone status marker |
-
-A column of dozens of pills is heavy and pulls the eye away from the data, which is exactly why this primitive exists.
-
-## API
+## API Reference
 
 ### Props
 
@@ -58,7 +52,19 @@ A column of dozens of pills is heavy and pulls the eye away from the data, which
 |------|------|
 | `default` | Replaces the text beside the dot |
 
-## Interaction Contract
+## How It Differs From StatusBadge
+
+These are not interchangeable, and picking the wrong one gives you a control that is wrong in both size and meaning.
+
+| | `TxDotIndicator` | `TxStatusBadge` |
+|------|------|------|
+| Shape | Bare dot plus plain text | Bordered pill with an icon |
+| Palette | Any colour | Five fixed semantic tones |
+| Use | Dense contexts: table cells, footer aggregates | A standalone status marker |
+
+A column of dozens of pills is heavy and pulls the eye away from the data, which is exactly why this primitive exists.
+
+## Overview
 
 The component resolves its own identity in the accessibility tree three ways, so it never announces an empty element:
 
@@ -70,22 +76,13 @@ The component resolves its own identity in the accessibility tree three ways, so
 
 The text uses tabular figures, so percentages and ratios do not shift sideways as the numbers change.
 
-## Best Practices
-
-- Prefer a `label`. Colour must never be the only carrier of state — neither a colour-blind reader nor a greyscale screenshot can tell red from green.
-- Use the `ariaLabel` form only when something else in the same row already conveys the meaning.
-- Take colours from `--tx-bui-*` or `--tx-color-*` variables; a hardcoded hex will not follow a theme change.
-- In a footer aggregate, wrap the default slot in `<strong>` to emphasise the figure while keeping the dot aligned.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/dot-indicator/src/TxDotIndicator.vue`.
 - Types: `packages/tuffex/packages/components/src/dot-indicator/src/types.ts` exports `DotIndicatorProps`.
 - **Test coverage:** `packages/tuffex/packages/components/src/dot-indicator/__tests__/dot-indicator.test.ts` has 5 cases covering the colour and size variables, all three accessibility identities (decorative / `role="img"` / carried by visible text), and the default slot.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Provenance:** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 - **Why not reuse `TxStatusBadge`:** that component is a bordered pill locked to five tones with an icon; it accepts no arbitrary colour and does not suit dense table contexts.

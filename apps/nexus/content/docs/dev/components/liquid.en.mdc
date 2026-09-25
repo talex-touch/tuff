@@ -8,9 +8,8 @@ tags: [liquid, gooey, morph, physics]
 syncStatus: reviewed
 verified: true
 ---
-# Liquid
 
-## Basic Usage
+## Usage
 
 Morph (default): give items `x` / `y` and the library animates the element and its liquid on one JS clock — touching pieces bridge and merge like droplets.
 
@@ -41,32 +40,6 @@ code: |
   </template>
 ---
 :::
-
-## Move Trail
-
-Move: you move the element however you like (CSS, pointer events) — the liquid chases it on a spring and drags a droplet tail.
-
-:::TuffDemoWrapper{demo="LiquidMoveTrailDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const stops = [8, 96, 184]
-  const pos = ref(0)
-  </script>
-
-  <template>
-    <TxLiquid :blur="7" fill="var(--tx-bg-color)">
-      <TxLiquidItem effect="move" :move="{ trail: 0.6 }">
-        <div class="thumb" :style="{ transform: `translateX(${stops[pos]}px)` }" />
-      </TxLiquidItem>
-    </TxLiquid>
-  </template>
----
-:::
-
-## Composition Examples
 
 ### Shape Physics
 
@@ -99,17 +72,15 @@ code: |
 </template>
 ```
 
-## Interaction Contract
+### Best Practices
 
-- `TxLiquid` renders a `position: relative; isolation: isolate` container; the silhouette SVG sits at `z-index: -1` below every child, the melt overlay above the content layer, both `pointer-events: none`.
-- `TxLiquidItem` must live inside a `TxLiquid` group, otherwise it throws.
-- Size the group to contain the items' full travel (like a menu reserving its open footprint); bridging happens roughly once `blur ≳ gap` — raise `blur` before suspecting anything else.
-- Corner radius is measured from computed style (percentages, pills and circles just work); `radius` overrides it.
-- For `x/y/scale`-driven items the component owns the wrapper `transform`; do not write your own transform or filter onto the wrapper.
-- `morph.shape` writes `filter: blur()` onto the content mid-morph; `dissolve` writes `mask-image` onto `<img>` elements — don't combine either with your own.
-- `dissolve` combined with `effect="move"` is ignored with a warning; component-driven transitions collapse to instant snaps under `prefers-reduced-motion: reduce`.
+- Keep item backgrounds transparent — the blob is the surface; opaque content (a round photo) covers its own blob, which is exactly right for image chips.
+- Pass a CSS variable as `fill` (e.g. `var(--tx-bg-color)`) so the liquid follows the theme.
+- Put shadows on `shadow` rather than on children, so one consistent shadow hugs the merged liquid through every merge and split.
+- When pieces that should merge look separate, tune the `blur`-to-gap ratio before touching anything else.
+- Prefer the default `effect="move"` feel for high-frequency dragging; reach for `advanced` only after the defaults prove insufficient.
 
-## API
+## API Reference
 
 ### TxLiquid Props
 
@@ -154,21 +125,45 @@ No public instance methods.
 
 No public CSS variables are consumed; pass `fill="var(--surface)"` for light/dark theming.
 
-## Best Practices
+## Move Trail
 
-- Keep item backgrounds transparent — the blob is the surface; opaque content (a round photo) covers its own blob, which is exactly right for image chips.
-- Pass a CSS variable as `fill` (e.g. `var(--tx-bg-color)`) so the liquid follows the theme.
-- Put shadows on `shadow` rather than on children, so one consistent shadow hugs the merged liquid through every merge and split.
-- When pieces that should merge look separate, tune the `blur`-to-gap ratio before touching anything else.
-- Prefer the default `effect="move"` feel for high-frequency dragging; reach for `advanced` only after the defaults prove insufficient.
+Move: you move the element however you like (CSS, pointer events) — the liquid chases it on a spring and drags a droplet tail.
 
-## Review Notes
+:::TuffDemoWrapper{demo="LiquidMoveTrailDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const stops = [8, 96, 184]
+  const pos = ref(0)
+  </script>
+
+  <template>
+    <TxLiquid :blur="7" fill="var(--tx-bg-color)">
+      <TxLiquidItem effect="move" :move="{ trail: 0.6 }">
+        <div class="thumb" :style="{ transform: `translateX(${stops[pos]}px)` }" />
+      </TxLiquidItem>
+    </TxLiquid>
+  </template>
+---
+:::
+
+## Overview
+
+- `TxLiquid` renders a `position: relative; isolation: isolate` container; the silhouette SVG sits at `z-index: -1` below every child, the melt overlay above the content layer, both `pointer-events: none`.
+- `TxLiquidItem` must live inside a `TxLiquid` group, otherwise it throws.
+- Size the group to contain the items' full travel (like a menu reserving its open footprint); bridging happens roughly once `blur ≳ gap` — raise `blur` before suspecting anything else.
+- Corner radius is measured from computed style (percentages, pills and circles just work); `radius` overrides it.
+- For `x/y/scale`-driven items the component owns the wrapper `transform`; do not write your own transform or filter onto the wrapper.
+- `morph.shape` writes `filter: blur()` onto the content mid-morph; `dissolve` writes `mask-image` onto `<img>` elements — don't combine either with your own.
+- `dissolve` combined with `effect="move"` is ignored with a warning; component-driven transitions collapse to instant snaps under `prefers-reduced-motion: reduce`.
+
+## Technologies
 
 - Manually verified against `index.ts`, `TxLiquid.vue`, `TxLiquidItem.vue`, `types.ts` and `liquid.test.ts` under `packages/tuffex/packages/components/src/liquid/`.
 - The physics engine (`observer.ts`, `spring.ts`, `geometry.ts`, `shadow.ts`) is a verbatim port of upstream `liquid-gooey` (MIT © Jakub Antalik) with strict-TS index hardening only; the filter chain is rebuilt imperatively in `filter-primitives.ts` to avoid SVG namespace ambiguity.
 - Upstream React's `Liquid` / `Liquid.Item` map to `TxLiquid` / `TxLiquidItem`; `className` / `style` are covered by Vue attribute fallthrough.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/liquid/src/TxLiquid.vue`, `TxLiquidItem.vue`.
 - Types: `packages/tuffex/packages/components/src/liquid/src/types.ts`.

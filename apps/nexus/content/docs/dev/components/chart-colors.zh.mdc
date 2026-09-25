@@ -8,7 +8,32 @@ tags: [chart, color, palette, theme]
 syncStatus: reviewed
 verified: true
 ---
-# Chart Colors 图表色板
+
+## API 参考
+
+### ChartPalette
+
+| 方法 | 返回 | 说明 |
+|------|------|------|
+| `categorical(index, isDarkMode?)` | `string` | 第 `index` 位分类色（模 6 回绕）。 |
+| `categoricalVar(index)` | `string` | 同一位次的 `var(--tx-chart-categorical-N, #hex)` 引用，跟随主题。 |
+| `semantic(name, isDarkMode?)` | `string` | 语义色，`name` 为 `'Attention'` 等六个之一。 |
+| `sequential('blues', isDarkMode?)` | `string[]` | 顺序色板五档（每次返回新数组）。 |
+| `text('primary' \| 'secondary', isDarkMode?)` | `string` | 轴与标签文本色。 |
+| `mapColors(isDarkMode?)` | `MapColors` | `{ area, bubble, scale[] }` 地图配色。 |
+
+### CSS 变量
+
+| 变量 | 说明 |
+|------|------|
+| `--tx-chart-categorical-1..6` | 分类色板。 |
+| `--tx-chart-semantic-attention/-warning/-success/-neutral/-disabled/-skeleton` | 语义色。 |
+| `--tx-chart-sequential-blues-1..5` | 顺序色阶。 |
+| `--tx-chart-text-primary/-secondary` | 文本色。 |
+| `--tx-chart-grid-line` | 网格线（主文本色 20% 透明度）。 |
+| `--tx-chart-map-area` / `--tx-chart-map-scale-1..5` | 地图陆地与分级色阶。 |
+
+所有变量都带亮色 fallback，不接宿主主题也能正确渲染；宿主想换品牌色时覆盖变量即可，组件零改动。
 
 ## 双轨取色
 
@@ -42,29 +67,3 @@ code: |
 - **顺序（sequential）**：`blues` 五档，低→高；暗色是方向反转的一套（第 4 档为暗底单独调过，不是简单镜像）。
 
 地图另有一套 `--tx-chart-map-*`（陆地底色 + 五档分级色阶），见 [Maps](/docs/dev/components/maps)。
-
-## API
-
-### ChartPalette
-
-| 方法 | 返回 | 说明 |
-|------|------|------|
-| `categorical(index, isDarkMode?)` | `string` | 第 `index` 位分类色（模 6 回绕）。 |
-| `categoricalVar(index)` | `string` | 同一位次的 `var(--tx-chart-categorical-N, #hex)` 引用，跟随主题。 |
-| `semantic(name, isDarkMode?)` | `string` | 语义色，`name` 为 `'Attention'` 等六个之一。 |
-| `sequential('blues', isDarkMode?)` | `string[]` | 顺序色板五档（每次返回新数组）。 |
-| `text('primary' \| 'secondary', isDarkMode?)` | `string` | 轴与标签文本色。 |
-| `mapColors(isDarkMode?)` | `MapColors` | `{ area, bubble, scale[] }` 地图配色。 |
-
-### CSS 变量
-
-| 变量 | 说明 |
-|------|------|
-| `--tx-chart-categorical-1..6` | 分类色板。 |
-| `--tx-chart-semantic-attention/-warning/-success/-neutral/-disabled/-skeleton` | 语义色。 |
-| `--tx-chart-sequential-blues-1..5` | 顺序色阶。 |
-| `--tx-chart-text-primary/-secondary` | 文本色。 |
-| `--tx-chart-grid-line` | 网格线（主文本色 20% 透明度）。 |
-| `--tx-chart-map-area` / `--tx-chart-map-scale-1..5` | 地图陆地与分级色阶。 |
-
-所有变量都带亮色 fallback，不接宿主主题也能正确渲染；宿主想换品牌色时覆盖变量即可，组件零改动。

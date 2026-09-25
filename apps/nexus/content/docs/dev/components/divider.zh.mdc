@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Divider 分割线
-
-## 基础用法
+## 用法
 
 ### Basic Divider
 水平分割线可以单独使用，也可以通过默认插槽显示文字。
@@ -28,6 +26,38 @@ code: |
   </template>
 ---
 :::
+
+### 最佳实践
+
+- 水平分割线用于分隔语义区块，不要给每一行都加分割线；密集表格和列表应使用行距或表格边框。
+- 文字标签保持短句，只用于区块过渡；长文本应该改成真实标题而不是塞进分割线。
+- 垂直分割线只用于行内元信息或工具栏，且周围文本必须已经提供上下文。
+
+## API 参考
+
+### 属性
+
+::TuffPropsTable
+---
+rows:
+  - name: direction
+    description: '分割线方向'
+    type: "'horizontal' | 'vertical'"
+    default: "'horizontal'"
+  - name: dashed
+    description: '是否显示为虚线'
+    type: 'boolean'
+    default: 'false'
+  - name: textPlacement
+    description: '水平分割线文字位置'
+    type: "'left' | 'center' | 'right'"
+    default: "'center'"
+  - name: gradient
+    description: '渐变透明方向；true 等价于 both'
+    type: "boolean | 'start' | 'end' | 'both'"
+    default: 'false'
+---
+::
 
 ## 渐变分割
 
@@ -66,32 +96,6 @@ code: |
 ---
 :::
 
-## API
-
-### 属性
-
-::TuffPropsTable
----
-rows:
-  - name: direction
-    description: '分割线方向'
-    type: "'horizontal' | 'vertical'"
-    default: "'horizontal'"
-  - name: dashed
-    description: '是否显示为虚线'
-    type: 'boolean'
-    default: 'false'
-  - name: textPlacement
-    description: '水平分割线文字位置'
-    type: "'left' | 'center' | 'right'"
-    default: "'center'"
-  - name: gradient
-    description: '渐变透明方向；true 等价于 both'
-    type: "boolean | 'start' | 'end' | 'both'"
-    default: 'false'
----
-::
-
 ## Slots
 
 ::TuffPropsTable
@@ -108,7 +112,7 @@ rows:
 
 `TxDivider` 不派发组件事件。
 
-## 交互契约
+## 概述
 
 - 根节点使用 `role="separator"`，并根据 `direction` 设置 `aria-orientation`。
 - 水平分割线默认占满容器宽度，文字只在水平模式渲染。
@@ -116,19 +120,10 @@ rows:
 - 垂直渐变使用纵向透明衰减，适合工具栏或元信息行。
 - 需要 Drawer / Card / Form 内部分隔时优先使用 `TxDivider`，避免重复硬编码边框样式。
 
-## 最佳实践
-
-- 水平分割线用于分隔语义区块，不要给每一行都加分割线；密集表格和列表应使用行距或表格边框。
-- 文字标签保持短句，只用于区块过渡；长文本应该改成真实标题而不是塞进分割线。
-- 垂直分割线只用于行内元信息或工具栏，且周围文本必须已经提供上下文。
-
-## 审阅说明
+## 技术实现
 
 - 组件源码:`packages/tuffex/packages/components/src/divider/src/TxDivider.vue` 确认 `role="separator"`、`aria-orientation`、仅水平模式渲染默认插槽文本、虚线样式和渐变模式。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/divider/__tests__/divider.test.ts` 覆盖水平文字、垂直模式忽略文字和渐变 class 模式。
 - 导出入口:`packages/tuffex/packages/components/src/divider/index.ts` 使用 `withInstall` 包装组件并导出 `TxDividerInstance`。
-
-
-## Source
 
 <TuffDocSourceLink />

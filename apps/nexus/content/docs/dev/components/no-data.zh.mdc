@@ -8,9 +8,8 @@ tags: [empty, data, table]
 syncStatus: reviewed
 verified: true
 ---
-# NoData 无数据
 
-## 基础用法
+## 用法
 
 ### NoData
 :::TuffDemoWrapper{demo="NoDataNoDataDemo" code-lang="vue"}
@@ -27,14 +26,14 @@ code: |
 ---
 :::
 
-## 交互契约
+### 最佳实践
 
-- 始终向 `TxEmptyState` 透传 `variant="no-data"`。
-- 不覆盖显式传入的 `title`、`description`、`surface`、`layout`、`align`、`size`、`icon` 或 action props。
-- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
-- 生成按钮触发的 `primary` / `secondary` 事件来自内部 `TxEmptyState`。
+- 数据源有效且返回零记录时使用它；网络失败或权限不足应分别使用 `TxOfflineState` / `TxPermissionState`。
+- 文案要指向具体数据，例如“暂无发票”比“没有内容”更清晰。
+- 只有当前用户确实能创建或导入数据时才展示操作按钮。
+- 仪表盘和表格面板内建议使用 `surface="card"`，让空态区域与加载后容器一致。
 
-## API
+## API 参考
 
 ### Props
 
@@ -82,20 +81,18 @@ code: |
 | `description` | - | 替换解析后的描述。 |
 | `actions` | - | 替换生成的主/次操作按钮。 |
 
-## 最佳实践
+## 概述
 
-- 数据源有效且返回零记录时使用它；网络失败或权限不足应分别使用 `TxOfflineState` / `TxPermissionState`。
-- 文案要指向具体数据，例如“暂无发票”比“没有内容”更清晰。
-- 只有当前用户确实能创建或导入数据时才展示操作按钮。
-- 仪表盘和表格面板内建议使用 `surface="card"`，让空态区域与加载后容器一致。
+- 始终向 `TxEmptyState` 透传 `variant="no-data"`。
+- 不覆盖显式传入的 `title`、`description`、`surface`、`layout`、`align`、`size`、`icon` 或 action props。
+- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
+- 生成按钮触发的 `primary` / `secondary` 事件来自内部 `TxEmptyState`。
 
-## 审阅说明 / Review Notes
+## 技术实现
 
 - **Wrapper contract:** `TxNoData` 是很薄的 `TxEmptyState` wrapper，内部始终传入 `variant="no-data"`；其它 `EmptyStateProps` 字段保持原样透传。
 - **状态选择:** 只在数据源已成功加载但记录数为零时使用。连接失败、权限不足、加载中与搜索无结果都有专门 wrapper，文案和恢复动作会更准确。
 - **实测覆盖:** `no-data.test.ts` 覆盖固定 variant 透传、显式 props/actions、具名 slot 与 install 注册；基础渲染和 action 事件继承自 `TxEmptyState`。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/no-data/src/TxNoData.vue`。
 - Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`。

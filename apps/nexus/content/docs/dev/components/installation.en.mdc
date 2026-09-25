@@ -9,7 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Install
+## Installation
 
 Tuffex ships as `@talex-touch/tuffex`. Vue 3 is a peer dependency, so the app owns the Vue version.
 
@@ -120,7 +120,7 @@ code: |
 
 The full API is in [Utils](./utils.en.mdc).
 
-## Source
+## Technologies
 
 - Entry map: `packages/tuffex/package.json` (`exports`) — `.`, `./utils`, `./base.css`, `./style.css`, `./*`, `./*/style.css`.
 - Suite barrels: `packages/tuffex/packages/components/src/{base,pro,ai}/index.ts`.

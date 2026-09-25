@@ -8,9 +8,8 @@ tags: [loading, state, placeholder]
 syncStatus: reviewed
 verified: true
 ---
-# LoadingState
 
-## Basic Usage
+## Usage
 
 ### LoadingState
 :::TuffDemoWrapper{demo="LoadingStateLoadingStateDemo" code-lang="vue"}
@@ -22,25 +21,15 @@ code: |
 ---
 :::
 
-## Dashboard Recovery States
+### Best Practices
 
-Loading states should reserve the same container size as empty/error states to avoid layout jumps after data resolves.
+- Use `TxLoadingState` for full-panel first loads where the final empty/error/success panel will occupy the same area.
+- Keep copy specific: name the resource being fetched, for example “Loading rules” or “Syncing plugins”.
+- Prefer `surface="card"` when the surrounding layout would otherwise collapse during loading.
+- Pass `loading` only when you want a spinner instead of the preset loading illustration.
+- Use actions sparingly. A cancel or retry action is useful only when the underlying request can actually be interrupted or restarted.
 
-:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="Dashboard recovery states" description="A loading state sharing the same container with empty/error states for dashboard data panels."}
----
-code: |
-  <template>
-    <TxLoadingState
-      title="Loading rules"
-      description="Syncing team automation rules. Please wait."
-      surface="card"
-      size="large"
-    />
-  </template>
----
-:::
-
-## API
+## API Reference
 
 `TxLoadingState` inherits `TxEmptyState` props, slots, and events except `variant`; the wrapper always supplies `variant="loading"`.
 
@@ -77,21 +66,31 @@ code: |
 | `primary` | Emitted when the generated primary action button is clicked. |
 | `secondary` | Emitted when the generated secondary action button is clicked. |
 
-## Interaction Contract
+## Dashboard Recovery States
+
+Loading states should reserve the same container size as empty/error states to avoid layout jumps after data resolves.
+
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="Dashboard recovery states" description="A loading state sharing the same container with empty/error states for dashboard data panels."}
+---
+code: |
+  <template>
+    <TxLoadingState
+      title="Loading rules"
+      description="Syncing team automation rules. Please wait."
+      surface="card"
+      size="large"
+    />
+  </template>
+---
+:::
+
+## Overview
 
 - `TxLoadingState` always forwards `variant="loading"` to `TxEmptyState`.
 - The wrapper does not rewrite `title`, `description`, `loading`, or action config; explicit props are forwarded as-is.
 - `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.
 
-## Best Practices
-
-- Use `TxLoadingState` for full-panel first loads where the final empty/error/success panel will occupy the same area.
-- Keep copy specific: name the resource being fetched, for example “Loading rules” or “Syncing plugins”.
-- Prefer `surface="card"` when the surrounding layout would otherwise collapse during loading.
-- Pass `loading` only when you want a spinner instead of the preset loading illustration.
-- Use actions sparingly. A cancel or retry action is useful only when the underlying request can actually be interrupted or restarted.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/loading-state/src/TxLoadingState.vue`.
 - Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`.
@@ -99,8 +98,6 @@ code: |
 - **Verified coverage:** `packages/tuffex/packages/components/src/loading-state/__tests__/loading-state.test.ts` verifies loading variant locking, explicit prop/action forwarding, named slots, and install behavior.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Wrapper contract:** `TxLoadingState` locks `variant="loading"`; pass `loading` only when the base spinner illustration should replace the default loading illustration.
 - **Recommendation:** Use `TxLoadingState` for full-panel first-load states; use `TxSpinner` or `TxProgressBar loading` for inline/local waiting.

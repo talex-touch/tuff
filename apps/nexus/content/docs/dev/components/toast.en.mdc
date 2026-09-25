@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Toast
-
-## Basic Usage
+## Usage
 
 ### Toast
 Mount host once, then trigger toasts. Several at once collapse into a stack; hovering it fans the stack out and holds every countdown until the pointer leaves.
@@ -42,7 +40,15 @@ code: |
   </template>
 ---
 :::
-## API
+
+### Best Practices
+
+- Mount one host near the app root and pass `position` — do not mount a host per corner. Extra hosts stand down rather than duplicating the queue, but they still cost a container and a development warning.
+- Use stable ids for task, save, sync, and retry notifications so repeated state updates replace the previous toast.
+- Keep descriptions short; long progress, errors with recovery, or forms belong in panels, drawers, or pages.
+- Clear persistent toasts when leaving the owning page or when the underlying task resolves.
+
+## API Reference
 
 ### TxToastHost Props
 
@@ -119,19 +125,6 @@ code: |
 |------|------|-------------|
 | - | - | `TxToastHost` renders from the global toast store and has no slots. |
 
-## Interaction Contract
-
-- `<TxToastHost />` teleports a notification region to `body` with `role="region"`, `aria-label="Notifications"`, and `aria-live="polite"` so new toasts announce while focus is elsewhere.
-- Each toast includes a keyboard-focusable close button named `Dismiss notification`.
-- `toast()` returns the resolved id. Passing the same `id` replaces the existing toast, preventing duplicate stacked notifications for the same operation.
-- `duration > 0` auto-dismisses the toast; `duration: 0` keeps it visible until `dismissToast(id)` or `clearToasts()` is called.
-- Every call raises the host z-index via the shared z-index manager so new notifications sit above the current interaction layer.
-- **Stacking.** The newest toast is in front. Each one behind sits back by `gap` pixels and 5% of scale, so their top edges peek out; anything past `visibleToasts` is transparent and not clickable. Only the front toast takes pointer events while the stack is collapsed.
-- **Hovering holds the stack.** Pointer or keyboard focus entering the region fans it out to full height and calls `pauseToasts()`; leaving collapses it and calls `resumeToasts()`, which continues each countdown from the time it had left. Collapsed, the host itself is `pointer-events: none`, so the empty column above the front toast stays clickable.
-- **Swipe.** Dragging a toast toward the edge it is anchored to dismisses it past 45px, or past 12px if the flick is faster than 0.32px/ms. Dragging the other way moves a fifth of the distance and springs back. A drag that starts on a button is left to the button. Set `swipeToDismiss: false` to turn this off.
-- **One host draws the queue.** Every host reads the same global store, so two would paint each toast twice in the same corner. The first to mount claims it; later hosts keep their container — server markup still hydrates cleanly — and draw nothing, warning once in development. If the owner unmounts, the next host takes over. The claim happens in `onMounted`, so toasts arrive on the tick after mount rather than in the first render.
-- **Motion.** A toast arrives and leaves along the axis of its position over 0.4s; `prefers-reduced-motion: reduce` drops that to a plain opacity change.
-
 ## Dashboard Feedback Center
 
 Mount `TxToastHost` once at the app or page root. Business actions should call `toast()`; persistent status notifications should use a stable `id + duration: 0` so the same queue state does not stack repeatedly. In admin task centers, Toast handles transient feedback, `TxTooltip` explains the action, `TxLoadingOverlay` blocks local refreshes, and `TxSpinner` handles inline waiting.
@@ -179,21 +172,25 @@ code: |
 ---
 :::
 
-## Best Practices
+## Overview
 
-- Mount one host near the app root and pass `position` — do not mount a host per corner. Extra hosts stand down rather than duplicating the queue, but they still cost a container and a development warning.
-- Use stable ids for task, save, sync, and retry notifications so repeated state updates replace the previous toast.
-- Keep descriptions short; long progress, errors with recovery, or forms belong in panels, drawers, or pages.
-- Clear persistent toasts when leaving the owning page or when the underlying task resolves.
+- `<TxToastHost />` teleports a notification region to `body` with `role="region"`, `aria-label="Notifications"`, and `aria-live="polite"` so new toasts announce while focus is elsewhere.
+- Each toast includes a keyboard-focusable close button named `Dismiss notification`.
+- `toast()` returns the resolved id. Passing the same `id` replaces the existing toast, preventing duplicate stacked notifications for the same operation.
+- `duration > 0` auto-dismisses the toast; `duration: 0` keeps it visible until `dismissToast(id)` or `clearToasts()` is called.
+- Every call raises the host z-index via the shared z-index manager so new notifications sit above the current interaction layer.
+- **Stacking.** The newest toast is in front. Each one behind sits back by `gap` pixels and 5% of scale, so their top edges peek out; anything past `visibleToasts` is transparent and not clickable. Only the front toast takes pointer events while the stack is collapsed.
+- **Hovering holds the stack.** Pointer or keyboard focus entering the region fans it out to full height and calls `pauseToasts()`; leaving collapses it and calls `resumeToasts()`, which continues each countdown from the time it had left. Collapsed, the host itself is `pointer-events: none`, so the empty column above the front toast stays clickable.
+- **Swipe.** Dragging a toast toward the edge it is anchored to dismisses it past 45px, or past 12px if the flick is faster than 0.32px/ms. Dragging the other way moves a fifth of the distance and springs back. A drag that starts on a button is left to the button. Set `swipeToDismiss: false` to turn this off.
+- **One host draws the queue.** Every host reads the same global store, so two would paint each toast twice in the same corner. The first to mount claims it; later hosts keep their container — server markup still hydrates cleanly — and draw nothing, warning once in development. If the owner unmounts, the next host takes over. The claim happens in `onMounted`, so toasts arrive on the tick after mount rather than in the first render.
+- **Motion.** A toast arrives and leaves along the axis of its position over 0.4s; `prefers-reduced-motion: reduce` drops that to a plain opacity change.
 
-## Review Notes
+## Technologies
 
 - **Accessibility note:** The host is a labeled `role="region"` that is also a polite `aria-live` region, so a toast appearing while focus is elsewhere is announced; `danger` toasts escalate to `role="alert"`. Still use persistent visible copy or page-level status text for critical failures and long-running operations.
 - **Single-host note:** A second `TxToastHost` renders an empty container and logs a warning in development builds. Rendering nothing at all would change the server markup and break hydration, so the container stays.
 - **Timer note:** Reusing an `id` replaces the store item and first cancels that id's pending auto-dismiss timer (`clearDismissTimer`); the replacement toast restarts timing from its own `duration`. Use `duration: 0` for persistent task toasts.
 - **Verified coverage:** `toast.test.ts` checks id replacement, returned ids, auto-dismiss, persistent toasts, pause/resume from the remaining time, dismiss/clear helpers, host region semantics, variant classes, rendered title/description, accessible close buttons, and close-button dismissal. `toast-host.test.ts` covers stack order and offsets, top/bottom growth, `visibleToasts`, hover expansion and the hold it takes, swipe thresholds and edge resistance, action buttons, and the single-host claim.
-
-## Source
 
 - Host source: `packages/tuffex/packages/components/src/toast/src/TxToastHost.vue`.
 - Utility source: `packages/tuffex/packages/utils/toast.ts` exports `toast`, `dismissToast`, `clearToasts`, `pauseToasts`, `resumeToasts`, `toastsPaused`, `toastStore`, `TxToastOptions`, `TxToastItem`, `TxToastAction`, and `TxToastVariant`.

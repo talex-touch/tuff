@@ -8,9 +8,8 @@ tags: [liquid, gooey, morph, physics]
 syncStatus: reviewed
 verified: true
 ---
-# Liquid 液态流体
 
-## 基础用法
+## 用法
 
 Morph（默认）：给条目 `x` / `y`，元素与液面在同一 JS 时钟里同步动画，相触的块自动像水滴一样桥接、融合。
 
@@ -41,32 +40,6 @@ code: |
   </template>
 ---
 :::
-
-## Move 拖尾
-
-Move：由你自己移动元素（CSS、指针事件都可以），液面在弹簧上追赶它，并拖出小水滴尾巴。
-
-:::TuffDemoWrapper{demo="LiquidMoveTrailDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const stops = [8, 96, 184]
-  const pos = ref(0)
-  </script>
-
-  <template>
-    <TxLiquid :blur="7" fill="var(--tx-bg-color)">
-      <TxLiquidItem effect="move" :move="{ trail: 0.6 }">
-        <div class="thumb" :style="{ transform: `translateX(${stops[pos]}px)` }" />
-      </TxLiquidItem>
-    </TxLiquid>
-  </template>
----
-:::
-
-## 组合示例
 
 ### 形变物理
 
@@ -99,17 +72,15 @@ code: |
 </template>
 ```
 
-## 交互契约
+### 最佳实践
 
-- `TxLiquid` 渲染 `position: relative; isolation: isolate` 容器；剪影 SVG 以 `z-index: -1` 垫在所有子元素之下，熔化叠层渲染在内容层之上，两者均 `pointer-events: none`。
-- `TxLiquidItem` 必须处于 `TxLiquid` 内，否则抛错。
-- 群组尺寸需要容纳条目的完整行程（如菜单展开后的占位）；桥接近似发生在 `blur ≳ 间距` 时，该融合的块显得分离时先调大 `blur`。
-- 圆角从计算样式测量，百分比、胶囊、圆形均可；`radius` 可覆盖。
-- `x/y/scale` 驱动的条目由组件写 `transform`，消费方不要再对包装器写 transform 或 filter。
-- `morph.shape` 运动期间会对内容写 `filter: blur()`；`dissolve` 会对 `<img>` 写 `mask-image`，不要与自己的同名样式组合。
-- `dissolve` 与 `effect="move"` 组合会被忽略并给出警告；`prefers-reduced-motion: reduce` 下组件驱动的过渡塌缩为瞬移。
+- 条目背景保持透明——blob 才是表面；不透明内容（如圆形照片）恰好盖住自己的液面，只在桥接处露出液体。
+- `fill` 传 CSS 变量（如 `var(--tx-bg-color)`），让液面随明暗主题切换。
+- 阴影写在 `shadow` 上而不是子元素上，才能让一份阴影贴着融合后的液面走过每次分合。
+- 该融合不融合优先调 `blur` 与间距的比例，再怀疑其他参数。
+- 高频拖拽场景优先 `effect="move"` 的默认参数；`advanced` 只在确认默认手感不满足时使用。
 
-## API
+## API 参考
 
 ### TxLiquid Props
 
@@ -154,21 +125,45 @@ code: |
 
 不消费公开 CSS 变量；`fill` 可传 `var(--surface)` 实现明暗主题。
 
-## 最佳实践
+## Move 拖尾
 
-- 条目背景保持透明——blob 才是表面；不透明内容（如圆形照片）恰好盖住自己的液面，只在桥接处露出液体。
-- `fill` 传 CSS 变量（如 `var(--tx-bg-color)`），让液面随明暗主题切换。
-- 阴影写在 `shadow` 上而不是子元素上，才能让一份阴影贴着融合后的液面走过每次分合。
-- 该融合不融合优先调 `blur` 与间距的比例，再怀疑其他参数。
-- 高频拖拽场景优先 `effect="move"` 的默认参数；`advanced` 只在确认默认手感不满足时使用。
+Move：由你自己移动元素（CSS、指针事件都可以），液面在弹簧上追赶它，并拖出小水滴尾巴。
 
-## 审阅说明
+:::TuffDemoWrapper{demo="LiquidMoveTrailDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const stops = [8, 96, 184]
+  const pos = ref(0)
+  </script>
+
+  <template>
+    <TxLiquid :blur="7" fill="var(--tx-bg-color)">
+      <TxLiquidItem effect="move" :move="{ trail: 0.6 }">
+        <div class="thumb" :style="{ transform: `translateX(${stops[pos]}px)` }" />
+      </TxLiquidItem>
+    </TxLiquid>
+  </template>
+---
+:::
+
+## 概述
+
+- `TxLiquid` 渲染 `position: relative; isolation: isolate` 容器；剪影 SVG 以 `z-index: -1` 垫在所有子元素之下，熔化叠层渲染在内容层之上，两者均 `pointer-events: none`。
+- `TxLiquidItem` 必须处于 `TxLiquid` 内，否则抛错。
+- 群组尺寸需要容纳条目的完整行程（如菜单展开后的占位）；桥接近似发生在 `blur ≳ 间距` 时，该融合的块显得分离时先调大 `blur`。
+- 圆角从计算样式测量，百分比、胶囊、圆形均可；`radius` 可覆盖。
+- `x/y/scale` 驱动的条目由组件写 `transform`，消费方不要再对包装器写 transform 或 filter。
+- `morph.shape` 运动期间会对内容写 `filter: blur()`；`dissolve` 会对 `<img>` 写 `mask-image`，不要与自己的同名样式组合。
+- `dissolve` 与 `effect="move"` 组合会被忽略并给出警告；`prefers-reduced-motion: reduce` 下组件驱动的过渡塌缩为瞬移。
+
+## 技术实现
 
 - 已人工核对 `packages/tuffex/packages/components/src/liquid/` 下 `index.ts`、`TxLiquid.vue`、`TxLiquidItem.vue`、`types.ts` 与 `liquid.test.ts`。
 - 物理引擎 `observer.ts`、`spring.ts`、`geometry.ts`、`shadow.ts` 逐字移植自上游 `liquid-gooey`（MIT © Jakub Antalik），仅做 strict-TS 索引加固；滤镜链在 `filter-primitives.ts` 改为命令式构建以规避 SVG 命名空间歧义。
 - 上游 React 的 `Liquid` / `Liquid.Item` 对应此处 `TxLiquid` / `TxLiquidItem`；`className` / `style` 由 Vue 属性透传承担。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/liquid/src/TxLiquid.vue`、`TxLiquidItem.vue`。
 - Types: `packages/tuffex/packages/components/src/liquid/src/types.ts`。

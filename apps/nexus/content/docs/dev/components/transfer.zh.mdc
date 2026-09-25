@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Transfer 穿梭框
-
-## 基础用法
+## 用法
 
 ### 可筛选穿梭
 开启 `filterable` 后，左右列表都会显示筛选输入框。`emptyText` 可用于本地化空态文案。
@@ -81,42 +79,21 @@ code: |
 ---
 :::
 
-## 权限资源授权
+### 最佳实践
 
-后台授权场景里，`TxTransfer` 只负责“可分配资源 ↔ 已授权资源”的受控移动；权限域由 `TxTree` 选择，归属团队由 `TxTreeSelect` 选择，审计进度由 `TxTimeline` 呈现，这样每个组件职责都更清晰。
+- `modelValue` 应始终由业务侧受控，并且只保存 item key，不保存完整 item 对象。
+- 保持每个 `data[].key` 唯一且稳定；重复 key 会让左右列表归属不可判断。
+- 目标列表需要保持原始数据顺序时使用 `targetOrder="original"`，选择顺序本身有意义时使用 `targetOrder="push"`。
+- 顺序需要由用户手动调整（优先级、回退链）时开 `orderable`，并把 `targetOrder` 设为 `"push"` 表明意图；此时组件只认 `modelValue` 顺序。
+- 禁用项应保留在 `data` 中展示，不要在外层过滤掉，避免用户误以为资源不存在。
+- 当中间操作按钮只有图标时，必须显式提供 `addAriaLabel` 和 `removeAriaLabel`；开了 `orderable` 就再补 `moveUpAriaLabel` 和 `moveDownAriaLabel`，本地化界面还要给 `selectAllAriaLabel`。
+- `filterable` 适合中大型列表；短权限列表不加双侧筛选框通常更容易扫读。
+- 需要一次性搬走整批时不要自己在外面加"全选"按钮，组件头部已经有了，且它只作用于筛选后的可见行。
+- 面板默认封顶 320px。放进弹窗或抽屉时用 `maxHeight` 贴合容器（如 `min(56dvh, 520px)`），保证滚动始终发生在列表内部，而不是把弹窗撑高。
+- 面板同时有 240px 的下限，而且是硬下限：放进比它更矮的容器时，面板仍按自己的高度排版并溢出容器。放在紧凑位置时记得调低 `minHeight`。
+- 左右空态含义不同时（"没有可选项" vs "至少选一个才能用"）给 `emptyText` 传元组，不要用同一句话糊过去。
 
-:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的资源授权穿梭框。"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const assignedKeys = ref<Array<string | number>>(['read-docs', 'publish-notes'])
-  const resources = [
-    { key: 'read-docs', label: '读取文档' },
-    { key: 'publish-notes', label: '发布日志' },
-    { key: 'manage-assets', label: '管理资源' },
-    { key: 'rotate-keys', label: '轮换密钥', disabled: true },
-    { key: 'view-billing', label: '查看账单' },
-  ]
-  </script>
-
-  <template>
-    <TxTransfer
-      v-model="assignedKeys"
-      :data="resources"
-      :titles="['可分配资源', '已授权']"
-      filterable
-      filter-placeholder="筛选资源"
-      empty-text="暂无资源"
-      add-aria-label="添加选中资源"
-      remove-aria-label="移除选中资源"
-    />
-  </template>
----
-:::
-
-## API
+## API 参考
 
 ### Props
 
@@ -186,6 +163,41 @@ rows:
 ---
 ::
 
+## 权限资源授权
+
+后台授权场景里，`TxTransfer` 只负责“可分配资源 ↔ 已授权资源”的受控移动；权限域由 `TxTree` 选择，归属团队由 `TxTreeSelect` 选择，审计进度由 `TxTimeline` 呈现，这样每个组件职责都更清晰。
+
+:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的资源授权穿梭框。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const assignedKeys = ref<Array<string | number>>(['read-docs', 'publish-notes'])
+  const resources = [
+    { key: 'read-docs', label: '读取文档' },
+    { key: 'publish-notes', label: '发布日志' },
+    { key: 'manage-assets', label: '管理资源' },
+    { key: 'rotate-keys', label: '轮换密钥', disabled: true },
+    { key: 'view-billing', label: '查看账单' },
+  ]
+  </script>
+
+  <template>
+    <TxTransfer
+      v-model="assignedKeys"
+      :data="resources"
+      :titles="['可分配资源', '已授权']"
+      filterable
+      filter-placeholder="筛选资源"
+      empty-text="暂无资源"
+      add-aria-label="添加选中资源"
+      remove-aria-label="移除选中资源"
+    />
+  </template>
+---
+:::
+
 ## Events
 
 | 事件 | 参数 | 说明 |
@@ -197,32 +209,16 @@ rows:
 
 `TxTransfer` 不提供自定义插槽。条目文本通过 `data[].label` 渲染，面板标题通过 `titles` 本地化，空态、筛选框和操作按钮文案通过 props 配置。
 
-## 交互契约
+## 概述
 
 - 每个面板头部有一个全选框，覆盖范围是**当前可见且未禁用**的行：筛选生效时只影响筛出来的那些，不会替用户勾上看不见的条目。部分选中时它报 `aria-checked="mixed"`。
 - 移动条目有两条路径：勾选后按中间按钮，或直接双击一行。双击禁用行不做任何事。
 - 中间按钮有边框和底色，勾选后变主色并显示待移动数量；没有勾选时禁用。纯图标、无边框的按钮夹在两个面板之间会被读成装饰，用户按了以为没反应。
 - `orderable` 时目标行显示名次与上移 / 下移按钮；名次取自 `modelValue`，与筛选状态无关。
 
-## 最佳实践
-
-- `modelValue` 应始终由业务侧受控，并且只保存 item key，不保存完整 item 对象。
-- 保持每个 `data[].key` 唯一且稳定；重复 key 会让左右列表归属不可判断。
-- 目标列表需要保持原始数据顺序时使用 `targetOrder="original"`，选择顺序本身有意义时使用 `targetOrder="push"`。
-- 顺序需要由用户手动调整（优先级、回退链）时开 `orderable`，并把 `targetOrder` 设为 `"push"` 表明意图；此时组件只认 `modelValue` 顺序。
-- 禁用项应保留在 `data` 中展示，不要在外层过滤掉，避免用户误以为资源不存在。
-- 当中间操作按钮只有图标时，必须显式提供 `addAriaLabel` 和 `removeAriaLabel`；开了 `orderable` 就再补 `moveUpAriaLabel` 和 `moveDownAriaLabel`，本地化界面还要给 `selectAllAriaLabel`。
-- `filterable` 适合中大型列表；短权限列表不加双侧筛选框通常更容易扫读。
-- 需要一次性搬走整批时不要自己在外面加"全选"按钮，组件头部已经有了，且它只作用于筛选后的可见行。
-- 面板默认封顶 320px。放进弹窗或抽屉时用 `maxHeight` 贴合容器（如 `min(56dvh, 520px)`），保证滚动始终发生在列表内部，而不是把弹窗撑高。
-- 面板同时有 240px 的下限，而且是硬下限：放进比它更矮的容器时，面板仍按自己的高度排版并溢出容器。放在紧凑位置时记得调低 `minHeight`。
-- 左右空态含义不同时（"没有可选项" vs "至少选一个才能用"）给 `emptyText` 传元组，不要用同一句话糊过去。
-
-## Source
+## 技术实现
 
 <TuffDocSourceLink label="查看源码" />
-
-## 审阅说明
 
 - 组件源码：`packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue` 确认左右列表派生、筛选匹配、禁用项检查、`targetOrder` 和纯图标操作按钮标签。
 - 类型契约：`packages/tuffex/packages/components/src/transfer/src/types.ts` 导出 `TransferItem`、`TransferProps` 和 `TransferEmits`。
@@ -232,4 +228,3 @@ rows:
 - 排序契约：`orderable` 时 `targetItems` 与 `resolveOrder` 都短路 `targetOrder='original'`。曾经只改渲染顺序、留着 `resolveOrder` 按 `data` 重排，结果每次上移/下移都被立刻排回去，表现为按钮"没反应"。名次与首/末项判定都取自未过滤的 `modelValue`，用过滤后的下标会让搜索状态下的名次和禁用态一起算错。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/transfer/__tests__/transfer.test.ts` 覆盖勾选项移动、双击单条移动与禁用行不动、全选（跳过禁用行 / 只作用于筛选结果 / 部分选中报 mixed / 再次点击清空）、自定义空态文案（含左右分别配置）、可访问操作按钮标签、`maxHeight` 与 `minHeight` 变量注入（单独设置与同时设置），以及 `orderable` 的名次渲染、上下移动、边界禁用、筛选状态下的名次与边界。
 - 截图：`.codex-screenshots/nexus-transfer-permission-orchestration-demo-playwright-2026-05-28.png`。
-

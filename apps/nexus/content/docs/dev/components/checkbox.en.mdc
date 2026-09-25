@@ -8,9 +8,8 @@ tags: [checkbox, form, selection]
 syncStatus: reviewed
 verified: true
 ---
-# Checkbox
 
-## Basic Usage
+## Usage
 
 Click the box or its label to toggle the state. The checked state follows the selected visual variant with either fill or tick motion.
 
@@ -29,8 +28,6 @@ code: |
   </template>
 ---
 :::
-
-## Variants
 
 The default `checkmark` variant shows the inner tick. Use `variant="fill"` when you want a quieter pure filled square.
 
@@ -53,6 +50,64 @@ code: |
   </template>
 ---
 :::
+
+`disabled` removes focusability and prevents click or keyboard toggles while preserving the current checked state.
+
+### Checkbox (disabled)
+:::TuffDemoWrapper{demo="CheckboxCheckboxDisabledDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const disabledUnchecked = ref(false)
+  const disabledChecked = ref(true)
+  </script>
+
+  <template>
+    <div style="display: inline-flex; align-items: center; gap: 18px;">
+      <TxCheckbox v-model="disabledUnchecked" label="Disabled" disabled />
+      <TxCheckbox v-model="disabledChecked" label="Disabled checked" disabled />
+    </div>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Prefer a visible `label` or default slot. Use `ariaLabel` only for icon-only or visually label-less controls.
+- Keep `disabled` as the single source for inert state; disabled checkboxes are removed from tab order and emit neither `update:modelValue` nor `change`.
+- `loading` and `disabled` say different things: "committing" versus "unavailable". Using `disabled` for a busy control makes it look permanently inert.
+- Do not write `modelValue` back optimistically while `loading` is set. Leave the box on the old value, commit on success, and simply clear `loading` on failure so the state stays where it was.
+- Use `labelPlacement="start"` for compact settings rows where the text should align before the control.
+
+## API Reference
+
+### Props
+
+| Prop | Description | Type | Default |
+|--------|------|------|--------|
+| modelValue / v-model | Checked state. Updates through click, Enter, or Space when enabled. | `boolean` | `false` |
+| disabled | Disables focus and prevents click or keyboard toggles. | `boolean` | `false` |
+| loading | Pending async commit: the box becomes a spinning ring, adds `is-loading` plus `aria-busy="true"`, and blocks toggling the way `disabled` does — without the disabled palette. | `boolean` | `false` |
+| label | Visible text label rendered next to the checkbox. | `string` | - |
+| labelPlacement | Places the visible label before or after the checkbox box. | `'start' \| 'end'` | `'end'` |
+| variant | Visual variant: `fill` uses a pure filled square; `checkmark` shows the inner tick. | `'checkmark' \| 'fill'` | `'checkmark'` |
+| ariaLabel | Accessible label used only when neither `label` nor the default slot is visible. | `string` | - |
+| indeterminate | Partial selection: some but not all of the governed items are checked. Renders the dash and reports `aria-checked="mixed"`; activating it resolves to checked rather than flipping the boolean, matching a native input's `indeterminate` behaviour. | `boolean` | `false` |
+
+### Events
+
+| Event | Description | Params |
+|--------|------|----------|
+| update:modelValue | v-model update emitted with the next checked state after an enabled toggle. | `(value: boolean) => void` |
+| change | Emitted with the next checked state after an enabled toggle. | `(value: boolean) => void` |
+
+### Slots
+
+| Slot | Description |
+|--------|------|
+| default | Custom visible label content. When present, it replaces `label` rendering. |
 
 ## Label First
 
@@ -90,30 +145,6 @@ code: |
 
   <template>
     <TxCheckbox v-model="checked" aria-label="Toggle option" />
-  </template>
----
-:::
-
-## Disabled State
-
-`disabled` removes focusability and prevents click or keyboard toggles while preserving the current checked state.
-
-### Checkbox (disabled)
-:::TuffDemoWrapper{demo="CheckboxCheckboxDisabledDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const disabledUnchecked = ref(false)
-  const disabledChecked = ref(true)
-  </script>
-
-  <template>
-    <div style="display: inline-flex; align-items: center; gap: 18px;">
-      <TxCheckbox v-model="disabledUnchecked" label="Disabled" disabled />
-      <TxCheckbox v-model="disabledChecked" label="Disabled checked" disabled />
-    </div>
   </template>
 ---
 :::
@@ -177,44 +208,7 @@ code: |
 ---
 :::
 
-## API
-
-### Props
-
-| Prop | Description | Type | Default |
-|--------|------|------|--------|
-| modelValue / v-model | Checked state. Updates through click, Enter, or Space when enabled. | `boolean` | `false` |
-| disabled | Disables focus and prevents click or keyboard toggles. | `boolean` | `false` |
-| loading | Pending async commit: the box becomes a spinning ring, adds `is-loading` plus `aria-busy="true"`, and blocks toggling the way `disabled` does — without the disabled palette. | `boolean` | `false` |
-| label | Visible text label rendered next to the checkbox. | `string` | - |
-| labelPlacement | Places the visible label before or after the checkbox box. | `'start' \| 'end'` | `'end'` |
-| variant | Visual variant: `fill` uses a pure filled square; `checkmark` shows the inner tick. | `'checkmark' \| 'fill'` | `'checkmark'` |
-| ariaLabel | Accessible label used only when neither `label` nor the default slot is visible. | `string` | - |
-| indeterminate | Partial selection: some but not all of the governed items are checked. Renders the dash and reports `aria-checked="mixed"`; activating it resolves to checked rather than flipping the boolean, matching a native input's `indeterminate` behaviour. | `boolean` | `false` |
-
-### Events
-
-| Event | Description | Params |
-|--------|------|----------|
-| update:modelValue | v-model update emitted with the next checked state after an enabled toggle. | `(value: boolean) => void` |
-| change | Emitted with the next checked state after an enabled toggle. | `(value: boolean) => void` |
-
-### Slots
-
-| Slot | Description |
-|--------|------|
-| default | Custom visible label content. When present, it replaces `label` rendering. |
-
-## Best Practices
-
-- Prefer a visible `label` or default slot. Use `ariaLabel` only for icon-only or visually label-less controls.
-- Keep `disabled` as the single source for inert state; disabled checkboxes are removed from tab order and emit neither `update:modelValue` nor `change`.
-- `loading` and `disabled` say different things: "committing" versus "unavailable". Using `disabled` for a busy control makes it look permanently inert.
-- Do not write `modelValue` back optimistically while `loading` is set. Leave the box on the old value, commit on success, and simply clear `loading` on failure so the state stays where it was.
-- Use `labelPlacement="start"` for compact settings rows where the text should align before the control.
-
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue` and `checkbox.test.ts`.
 - **Loading contract:** `loading` is a purely visual and blocking state; the component owns no async logic. The ring's color still follows `modelValue` / `indeterminate`, so it sits on the old value to show that this toggle has not landed yet.
@@ -222,8 +216,6 @@ code: |
 - Accessibility note: the root element owns `role="checkbox"`, `aria-checked`, and keyboard handling; provide a visible label or default slot whenever possible, and reserve `ariaLabel` for controls with no visible text.
 - **Motion fallback:** The ring stops rotating under `prefers-reduced-motion: reduce`; its gapped border is a static glyph on its own, so the busy cue survives.
 - **Verified coverage:** `checkbox.test.ts` covers rendered labels, `aria-label` fallback behavior, label placement, the default `checkmark` variant plus explicit `fill` and `checkmark` variants, click emits, disabled blocking, plus loading blocking, `is-loading` staying separate from `is-disabled`, a partial selection still reporting `mixed` while loading, and the `aria-busy` lifecycle.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue`.
 - Export alias: `packages/tuffex/packages/components/src/checkbox/index.ts` exports both `TuffCheckbox` and `TxCheckbox`.

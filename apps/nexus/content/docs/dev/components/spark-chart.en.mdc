@@ -8,9 +8,8 @@ tags: [ai, chart, canvas, data]
 syncStatus: reviewed
 verified: true
 ---
-# SparkChart
 
-## Basic Usage
+## Usage
 
 ### SparkChart + ChartScrubber
 
@@ -49,21 +48,16 @@ code: |
 ---
 ::::
 
-## Sizing and Theme
+### Best Practices
 
-The chart fills its container and measures that **container** rather than taking a width or height prop. Give the wrapper a definite height. A `ResizeObserver` repaints it on resize; the bitmap is scaled by `devicePixelRatio` (capped at 2) while draw maths stays in CSS pixels.
+- Give the stage a definite height, otherwise a zero-height container cannot paint.
+- Use `aria-label` and `SparkSeries.label`; hover values then remain available outside the visual tooltip.
+- Use the monotone default with evenly spaced, reasonably dense samples. Sparse samples are still sparse data; smoothing should not invent them.
+- Bind one `activeIndex` to `TxChartScrubber` and `TxSparkChart` when both are present.
+- Both map the pointer through the **plot box**, not the stage, so the crosshair lands on the sample it reports. The chart publishes its own gutters as `--tx-bui-plot-left` / `--tx-bui-plot-right` on its root; the scrubber reads them off the element it wraps, so there is nothing to keep in sync by hand.
+- The tooltip is centred on the cursor and only pulled inward when it would overhang the stage. Keep it narrower than the stage or it stops travelling.
 
-`theme` defaults to `'auto'` and follows `data-theme` or `.dark` on `<html>` and `<body>`. Canvas cannot inherit CSS variables, so a theme change repaints with the current token colours.
-
-## Curves, Axes, and Hover
-
-The default `curve="monotone"` uses the same d3 curve factory as the full `@talex-touch/tuffex/charts` line series: it avoids the angular polyline without overshooting local extrema. Choose `linear`, `natural`, or `step` only when that encoding is intentional.
-
-`xAxis` and `yAxis` draw compact baselines and ticks inside the canvas. Their padding is reserved automatically; use `xTickFormat` and `yTickFormat` when raw time or value numbers are not useful to readers.
-
-`interactive` gives the standalone chart a pointer/keyboard crosshair: arrows, Home, End and Escape move or clear the active sample. Controlled `activeIndex` lets a surrounding `TxChartScrubber` own the tooltip while the canvas still draws the highlighted dots. The chart and scrubber both announce active values through a polite live region.
-
-## API
+## API Reference
 
 ### SparkChart Props
 
@@ -117,23 +111,28 @@ The default `curve="monotone"` uses the same d3 curve factory as the full `@tale
 | `leave` | — | Pointer left, lifted, or was cancelled. |
 | `update:activeIndex` | `(index: number \| null)` | Controlled write-back. |
 
-## Interaction Contract
+## Sizing and Theme
+
+The chart fills its container and measures that **container** rather than taking a width or height prop. Give the wrapper a definite height. A `ResizeObserver` repaints it on resize; the bitmap is scaled by `devicePixelRatio` (capped at 2) while draw maths stays in CSS pixels.
+
+`theme` defaults to `'auto'` and follows `data-theme` or `.dark` on `<html>` and `<body>`. Canvas cannot inherit CSS variables, so a theme change repaints with the current token colours.
+
+## Curves, Axes, and Hover
+
+The default `curve="monotone"` uses the same d3 curve factory as the full `@talex-touch/tuffex/charts` line series: it avoids the angular polyline without overshooting local extrema. Choose `linear`, `natural`, or `step` only when that encoding is intentional.
+
+`xAxis` and `yAxis` draw compact baselines and ticks inside the canvas. Their padding is reserved automatically; use `xTickFormat` and `yTickFormat` when raw time or value numbers are not useful to readers.
+
+`interactive` gives the standalone chart a pointer/keyboard crosshair: arrows, Home, End and Escape move or clear the active sample. Controlled `activeIndex` lets a surrounding `TxChartScrubber` own the tooltip while the canvas still draws the highlighted dots. The chart and scrubber both announce active values through a polite live region.
+
+## Overview
 
 - Every series shares one value domain; x is derived from `time`, or even index spacing when timestamps collapse. A single sample is centred and painted as a round-cap dot.
 - The active crosshair and dots use the controlled index when present. An outer scrubber can therefore own the DOM tooltip without losing the canvas affordance.
 - Empty data, a zero-sized container, or no 2D context paint nothing and throw nothing.
 - Enter motion is 1000ms `cubicInOut`; data updates use 500ms `cubicInOut`; both skip above 2000 points and under `prefers-reduced-motion: reduce`.
 
-## Best Practices
-
-- Give the stage a definite height, otherwise a zero-height container cannot paint.
-- Use `aria-label` and `SparkSeries.label`; hover values then remain available outside the visual tooltip.
-- Use the monotone default with evenly spaced, reasonably dense samples. Sparse samples are still sparse data; smoothing should not invent them.
-- Bind one `activeIndex` to `TxChartScrubber` and `TxSparkChart` when both are present.
-- Both map the pointer through the **plot box**, not the stage, so the crosshair lands on the sample it reports. The chart publishes its own gutters as `--tx-bui-plot-left` / `--tx-bui-plot-right` on its root; the scrubber reads them off the element it wraps, so there is nothing to keep in sync by hand.
-- The tooltip is centred on the cursor and only pulled inward when it would overhang the stage. Keep it narrower than the stage or it stops travelling.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/spark-chart/src/TxSparkChart.vue`, `TxChartScrubber.vue`.
 - Projection and painting: `packages/tuffex/packages/components/src/spark-chart/src/geometry.ts`, `draw.ts`.
@@ -142,8 +141,6 @@ The default `curve="monotone"` uses the same d3 curve factory as the full `@tale
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - The chart is intentionally canvas-first: the draw-call surface is testable even where jsdom has no 2D context.
 - The full chart family now lives at `@talex-touch/tuffex/charts`; SparkChart stays a compact card primitive at the root TuffEx entry.

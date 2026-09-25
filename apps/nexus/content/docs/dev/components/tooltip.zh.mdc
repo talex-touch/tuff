@@ -9,9 +9,8 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Tooltip 提示
+## 用法
 
-## Demo
 ### Hover Hint
 
 短文本提示，保持低侵入感。
@@ -30,7 +29,6 @@ code: |
 ---
 ::
 
-## 基础用法
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
@@ -42,107 +40,13 @@ code: |
 ---
 :::
 
-## Anchor 透传
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxTooltip
-      content="底部提示"
-      :anchor="{ placement: 'bottom', showArrow: true, panelBackground: 'mask' }"
-    >
-      <TxButton variant="ghost">Bottom</TxButton>
-    </TxTooltip>
-  </template>
----
-:::
-
-## Click 切换（点击外部关闭）
-::TuffDemoWrapper{demo="TooltipClickOutsideCloseDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxTooltip
-      v-model="open"
-      trigger="click"
-      content="点击切换，点击外部关闭"
-      :anchor="{ showArrow: true }"
-    >
-      <TxButton variant="ghost">点击我</TxButton>
-    </TxTooltip>
-  </template>
----
-::
-
-## Click 切换（点击外部不关闭）
-::TuffDemoWrapper{demo="TooltipClickOutsideKeepDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxTooltip
-      v-model="open"
-      trigger="click"
-      :close-on-click-outside="false"
-      content="点击切换，点击外部不关闭"
-      :anchor="{ showArrow: true }"
-    >
-      <TxButton variant="ghost">固定提示</TxButton>
-    </TxTooltip>
-  </template>
----
-::
-
-## API
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `modelValue` | `boolean` | `undefined` | 可选的受控打开状态，用于 `v-model`；未设置时使用内部状态。 |
-| `content` | `string` | `''` | 未提供 `content` 插槽时使用的备用提示文本。 |
-| `disabled` | `boolean` | `false` | 阻止打开，并在变为禁用时关闭 tooltip。 |
-| `trigger` | `'hover' \| 'click' \| 'focus'` | `'hover'` | reference 包装层的触发方式。 |
-| `openDelay` | `number` | 见 `layer` 预设（`hint` 为 `200`） | hover / focus 模式下的打开延迟，最小按 `0` 处理。不传时由共享延迟服务按 `layer` 取值。 |
-| `closeDelay` | `number` | 见 `layer` 预设（`hint` 为 `120`） | hover / focus 模式下的关闭延迟，最小按 `0` 处理。不传时由共享延迟服务按 `layer` 取值。 |
-| `maxHeight` | `number` | `320` | 面板最大高度，单位 px；`<= 0` 时不限制高度。`content` 插槽在默认 `320` 时不限制高度。 |
-| `referenceFullWidth` | `boolean` | `false` | 让 reference 包装层占满 `width: 100%`。 |
-| `interactive` | `boolean` | `false` | hover 模式下，鼠标进入浮层时保持 tooltip 打开。 |
-| `keepAliveContent` | `boolean` | `false` | 透传给 `TxBaseAnchor`，关闭后仍保留浮层内容挂载。 |
-| `closeOnClickOutside` | `boolean` | `trigger === 'click'` | 覆盖点击外部关闭行为；其次使用 anchor 配置，click 模式默认 `true`。 |
-| `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 覆盖点击 reference 切换行为；其次使用 anchor 配置，click 模式默认 `true`。 |
-| `anchor` | `Partial<TooltipAnchorProps>` | `{}` | 透传给 `TxBaseAnchor` 的配置；`modelValue` / `disabled` 由 Tooltip 自身管理（请用 `v-model` / `disabled` prop 设置），不能通过 `anchor` 传入；tooltip 会先提供定位、箭头、面板和动画默认值。 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `(value: boolean) => void` | resolved 打开状态变化时触发。 |
-| `open` | `() => void` | tooltip 从关闭变为打开后触发。 |
-| `close` | `() => void` | tooltip 从打开变为关闭后触发。 |
-
-### Slots
-
-| 插槽名 | Props | 说明 |
-|------|-------|------|
-| `default` | - | 被 tooltip trigger span 包装的 reference 内容。 |
-| `content` | `{ side: string }` | 自定义 tooltip 内容；接收 `TxBaseAnchor` 解析出的浮层方向。 |
-
-## 交互契约
-
-- hover / focus 触发使用 `openDelay` / `closeDelay`；click 触发把切换与点击外部关闭交给 `TxBaseAnchor`。
-- `disabled=true` 会清理等待中的 timer，并强制 resolved 打开状态为 `false`。
-- `interactive=true` 只影响 hover 模式；鼠标进入浮层会清理关闭 timer，离开后重新安排关闭。
-- Tooltip 在浮层内容上设置 `role="tooltip"`，并暴露 `data-side` 方便按方向写样式。
-- 默认 anchor 动画为 `{ type: 'boom' }`（对称的聚焦缩放开合）；通过 `anchor.animation` 覆盖后完全以覆盖值为准。
-
-## 最佳实践
+### 最佳实践
 
 - 文案尽量短，避免多行提示。
 - 与触发元素的间距保持轻盈。
 - 复杂外观和动效通过 `anchor` 配置，不在 Tooltip 层重复抽象。
 - Tooltip 不承载表单、长说明或批量操作；复杂内容升级为 `TxPopover` / `TxDrawer`。
 
-## 组合示例
 ### 提示按钮
 
 图标按钮搭配提示信息。
@@ -183,6 +87,94 @@ code: |
 ---
 ::
 
+## API 参考
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `modelValue` | `boolean` | `undefined` | 可选的受控打开状态，用于 `v-model`；未设置时使用内部状态。 |
+| `content` | `string` | `''` | 未提供 `content` 插槽时使用的备用提示文本。 |
+| `disabled` | `boolean` | `false` | 阻止打开，并在变为禁用时关闭 tooltip。 |
+| `trigger` | `'hover' \| 'click' \| 'focus'` | `'hover'` | reference 包装层的触发方式。 |
+| `openDelay` | `number` | 见 `layer` 预设（`hint` 为 `200`） | hover / focus 模式下的打开延迟，最小按 `0` 处理。不传时由共享延迟服务按 `layer` 取值。 |
+| `closeDelay` | `number` | 见 `layer` 预设（`hint` 为 `120`） | hover / focus 模式下的关闭延迟，最小按 `0` 处理。不传时由共享延迟服务按 `layer` 取值。 |
+| `maxHeight` | `number` | `320` | 面板最大高度，单位 px；`<= 0` 时不限制高度。`content` 插槽在默认 `320` 时不限制高度。 |
+| `referenceFullWidth` | `boolean` | `false` | 让 reference 包装层占满 `width: 100%`。 |
+| `interactive` | `boolean` | `false` | hover 模式下，鼠标进入浮层时保持 tooltip 打开。 |
+| `keepAliveContent` | `boolean` | `false` | 透传给 `TxBaseAnchor`，关闭后仍保留浮层内容挂载。 |
+| `closeOnClickOutside` | `boolean` | `trigger === 'click'` | 覆盖点击外部关闭行为；其次使用 anchor 配置，click 模式默认 `true`。 |
+| `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 覆盖点击 reference 切换行为；其次使用 anchor 配置，click 模式默认 `true`。 |
+| `anchor` | `Partial<TooltipAnchorProps>` | `{}` | 透传给 `TxBaseAnchor` 的配置；`modelValue` / `disabled` 由 Tooltip 自身管理（请用 `v-model` / `disabled` prop 设置），不能通过 `anchor` 传入；tooltip 会先提供定位、箭头、面板和动画默认值。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: boolean) => void` | resolved 打开状态变化时触发。 |
+| `open` | `() => void` | tooltip 从关闭变为打开后触发。 |
+| `close` | `() => void` | tooltip 从打开变为关闭后触发。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `default` | - | 被 tooltip trigger span 包装的 reference 内容。 |
+| `content` | `{ side: string }` | 自定义 tooltip 内容；接收 `TxBaseAnchor` 解析出的浮层方向。 |
+
+## Anchor 透传
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      content="底部提示"
+      :anchor="{ placement: 'bottom', showArrow: true, panelBackground: 'mask' }"
+    >
+      <TxButton variant="ghost">Bottom</TxButton>
+    </TxTooltip>
+  </template>
+---
+:::
+
+## Click 切换（点击外部关闭）
+
+::TuffDemoWrapper{demo="TooltipClickOutsideCloseDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      v-model="open"
+      trigger="click"
+      content="点击切换，点击外部关闭"
+      :anchor="{ showArrow: true }"
+    >
+      <TxButton variant="ghost">点击我</TxButton>
+    </TxTooltip>
+  </template>
+---
+::
+
+## Click 切换（点击外部不关闭）
+
+::TuffDemoWrapper{demo="TooltipClickOutsideKeepDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      v-model="open"
+      trigger="click"
+      :close-on-click-outside="false"
+      content="点击切换，点击外部不关闭"
+      :anchor="{ showArrow: true }"
+    >
+      <TxButton variant="ghost">固定提示</TxButton>
+    </TxTooltip>
+  </template>
+---
+::
+
 ## 后台反馈中心
 
 Tooltip 在后台任务面板中只解释一个动作或指标，不打断当前流程。若提示需要持续展示任务结果，请使用 `TxToastHost`；若需要阻断刷新中的面板，请使用 `TxLoadingOverlay`。
@@ -201,13 +193,19 @@ code: |
 ---
 ::
 
-## 审阅说明 / Review Notes
+## 概述
+
+- hover / focus 触发使用 `openDelay` / `closeDelay`；click 触发把切换与点击外部关闭交给 `TxBaseAnchor`。
+- `disabled=true` 会清理等待中的 timer，并强制 resolved 打开状态为 `false`。
+- `interactive=true` 只影响 hover 模式；鼠标进入浮层会清理关闭 timer，离开后重新安排关闭。
+- Tooltip 在浮层内容上设置 `role="tooltip"`，并暴露 `data-side` 方便按方向写样式。
+- 默认 anchor 动画为 `{ type: 'boom' }`（对称的聚焦缩放开合）；通过 `anchor.animation` 覆盖后完全以覆盖值为准。
+
+## 技术实现
 
 - **打开状态契约:** 当 `modelValue` 是 boolean 时 `TxTooltip` 受控，否则使用内部 `internalOpen`。打开/关闭会派发 `update:modelValue` 加 `open` 或 `close`；`disabled` 会阻止打开。
 - **Anchor 契约:** click trigger 默认把 `closeOnClickOutside` 和 `toggleOnReferenceClick` 设为 `true`；其它 trigger 除非 props 或 `anchor` 覆盖，否则不启用这两个行为。
 - **实测覆盖:** `tooltip.test.ts` 覆盖 keep-alive 默认值、boom 默认与 animation 透传、content slot 的 `side` 上下文，以及点击外部关闭覆盖行为。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/tooltip/src/TxTooltip.vue`。
 - Types: `packages/tuffex/packages/components/src/tooltip/src/types.ts`。

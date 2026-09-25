@@ -8,9 +8,8 @@ tags: [ai, reasoning, timeline]
 syncStatus: reviewed
 verified: true
 ---
-# Chain of Thought
 
-## 基础用法
+## 用法
 
 ### Chain of Thought
 ::::TuffDemoWrapper{demo="ChainOfThoughtChainOfThoughtDemo" code-lang="vue"}
@@ -30,18 +29,15 @@ code: |
 ---
 ::::
 
-## 交互契约
+### 最佳实践
 
-- 展开态由组件自己持有，初值取 `defaultOpen`（**默认 `true`**，与 `TxReasoningDisclosure` 相反）。同为非受控：之后改 `defaultOpen` 不生效。
-- 点击头部切换并派发 `toggle`，参数是切换**之后**的状态。
-- 头部图标只在 `streaming` 为真**且**存在 `status === 'active'` 的步骤时换成思考球；只设 `streaming` 而没有活跃步骤不会有动效。
-- 头部计数直接取 `steps.length`，不区分状态。
-- 每步按 `status` 呈现三种形态：`active`（旋转指示）、`done`、`error`。`kind` 区分 `thinking` 与 `tool`，用于图标与排版。
-- 任一步骤的 `body` 长度变化都会把活跃步骤的正文滚到底部——这是按正文长度串联监听的，所以流式追加文本时会持续跟随。
-- `body` 可选；未提供的步骤只显示标题，适合表达纯工具调用。
-- 头部是原生 `<button>`，带 `aria-expanded` 与 `aria-controls`；步骤列表是 `<ol>`，序号来自渲染顺序。
+- `id` 用稳定标识而非数组下标，否则步骤追加时会整列重建、丢掉滚动位置。
+- 同一时刻最多保留一个 `active` 步骤。多个活跃步骤在视觉上无法区分先后，自动滚动也只会跟随其中之一。
+- 步骤结束时把 `status` 从 `active` 改成 `done` 或 `error`，否则即使流式已停，旋转指示仍会留在界面上。
+- 工具步骤的 `title` 写成可读的调用签名（`read_file(src/main.ts)`），比只写工具名更有信息量。
+- 中文界面记得覆盖 `label`。
 
-## API
+## API 参考
 
 ### Props
 
@@ -62,10 +58,13 @@ code: |
 
 `TxChainOfThought` 不暴露插槽。步骤的呈现由 `kind` 与 `status` 决定；需要自定义渲染时请自行组合 `TxReasoningDisclosure` 与 `TxToolCallCard`。
 
-## 最佳实践
+## 概述
 
-- `id` 用稳定标识而非数组下标，否则步骤追加时会整列重建、丢掉滚动位置。
-- 同一时刻最多保留一个 `active` 步骤。多个活跃步骤在视觉上无法区分先后，自动滚动也只会跟随其中之一。
-- 步骤结束时把 `status` 从 `active` 改成 `done` 或 `error`，否则即使流式已停，旋转指示仍会留在界面上。
-- 工具步骤的 `title` 写成可读的调用签名（`read_file(src/main.ts)`），比只写工具名更有信息量。
-- 中文界面记得覆盖 `label`。
+- 展开态由组件自己持有，初值取 `defaultOpen`（**默认 `true`**，与 `TxReasoningDisclosure` 相反）。同为非受控：之后改 `defaultOpen` 不生效。
+- 点击头部切换并派发 `toggle`，参数是切换**之后**的状态。
+- 头部图标只在 `streaming` 为真**且**存在 `status === 'active'` 的步骤时换成思考球；只设 `streaming` 而没有活跃步骤不会有动效。
+- 头部计数直接取 `steps.length`，不区分状态。
+- 每步按 `status` 呈现三种形态：`active`（旋转指示）、`done`、`error`。`kind` 区分 `thinking` 与 `tool`，用于图标与排版。
+- 任一步骤的 `body` 长度变化都会把活跃步骤的正文滚到底部——这是按正文长度串联监听的，所以流式追加文本时会持续跟随。
+- `body` 可选；未提供的步骤只显示标题，适合表达纯工具调用。
+- 头部是原生 `<button>`，带 `aria-expanded` 与 `aria-controls`；步骤列表是 `<ol>`，序号来自渲染顺序。

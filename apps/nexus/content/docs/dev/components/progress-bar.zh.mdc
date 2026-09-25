@@ -8,9 +8,8 @@ tags: [progress, bar, loading]
 syncStatus: reviewed
 verified: true
 ---
-# ProgressBar 进度条
 
-## Demo
+## 用法
 
 ### 状态进度
 
@@ -105,25 +104,18 @@ code: |
 ---
 :::
 
-## 交互契约
+### 最佳实践
 
-- 轨道渲染 `role="progressbar"`，并包含 `aria-valuemin="0"` 与 `aria-valuemax="100"`。
-- 确定进度会把 `percentage` 限制在 `0..100`，并通过 `aria-valuenow` 暴露。
-- `loading` 与 `indeterminate` 会省略 `aria-valuenow`；应使用 `message` 描述当前工作。
-- `error` 与 `success` 布尔 props 优先于 `status`。
-- `success` 或 `error` 配合 `message` 且 `percentage` 为 `0` 时，视觉宽度会解析为 `100%`，适合完成类标签。
-- `message` 优先于 `format`，`format` 优先于默认四舍五入百分比文案。
-- 只有存在 `message` 或 `showText=true` 时才显示文本；loading/indeterminate 状态只有存在 `message` 时显示文本。`textPlacement="top"` 与 `outside` 遵循同一规则，只是把文案行渲染在轨道上方。
-- `detail` 只在 `textPlacement="top"` 下渲染，位于主文案之后、以分隔点弱化；它是可见文本，不进入 progressbar 的可访问名（仍为 `ariaLabel` > `message` > `Progress`）。
-- 默认轨道是文字色 10% 的平铺色块，不渲染 `.tx-progress-bar__mask`、不画描边；`maskVariant="solid" | "dashed"` 才生成描边，`maskBackground` 不为 `'none'` 时才渲染 mask 层。
-- 填充默认是 `linear-gradient(90deg, 淡 → 饱和)`；`color` 本身是渐变字符串时原样使用。`.tx-progress-bar__glow` 在所有非 segments 的确定进度条上挂载，位于轨道裁剪之外，且仅在 0% 与 100% 之间可见。渐变 `color` 没有单一色相，所以它的柔光是白色，`top` 文案退回文字色（`--tx-progress-glow`、`--tx-progress-accent`）。
-- `flowEffect="stardust"` 在填充上绘制两层白色星点（`::before` 远层：小、慢、稳定；`::after` 近层：大、快、闪烁），各自按整块贴图宽度平移，流动永远没有接缝。星点以 px 定尺寸，5px 和 14px 的进度条颗粒感一致。`'particles'` 是已废弃的别名，渲染同样的两层。任何 flow 效果都不会画在 `segments` 上，不确定态下也不画。
-- 宽度变化以 480ms `--tx-ease-out-strong` 过渡；不确定态的五种扫光只动合成属性（`transform`，`split` 另加 `opacity`），不动 `left` / `width`，`prefers-reduced-motion` 下停止扫光。行进式扫光（`sweep`、`classic`、`elastic`）匀速运动且首尾都完全在轨道之外，循环点永远不在画面里，进度条不会出现"一顿一顿"。
-- `segments` 会忽略非正数值。填充总宽度使用 `segmentsTotal`，填充区域内的各段宽度按正数 segment 总和归一化。每一段把颜色画在内层 `.tx-progress-bar__segment-fill` 上，并带有 `label · 占比%` 的 `data-tip`（占比相对 `segmentsTotal`；没有 label 时只显示占比）。悬停时该段放大、其余段变暗、提示从进度条上方升起；分段轨道会设为 `overflow: visible` 给放大留出空间。
-- `complete` 在解析进度到达 `100` 时每个完成周期只触发一次；进度回落到 `100` 以下后再次完成可再次触发。
-- `tooltip` 或 `tooltipContent` 会把进度条包在 `TxTooltip` 中；`tooltipProps` 会透传给该 tooltip。
+- 只有进度已知时才使用 `percentage`；未知时长使用 `loading` 或 `indeterminate`。
+- 不要为了成功态伪造 100%；操作完成时传 `success` 和简短 `message`。
+- `message` 同时作为 progressbar 可访问标签，文案应保持简短。
+- segment 代表部分总量时，用 `segmentsTotal` 保持分段进度可信。
+- 动效只用于高价值进度反馈；过多 shimmer/wave/stardust 会让仪表盘变嘈杂。
+- 给每一段都写上 `label`：悬停提示是分段进度条唯一能解释每种颜色含义的地方。
+- 默认是无描边的平铺轨道；需要模糊或玻璃质感的轨道时显式传 `maskBackground`（配合 `maskVariant="solid"` 加描边），不要依赖旧默认值。
+- 上传、下载这类有量级信息的任务用 `textPlacement="top"` + `detail` 把"已传多少"放在文案行，而不是塞进 `message`（它同时是可访问名）。
 
-## API
+## API 参考
 
 ### Props
 
@@ -174,18 +166,25 @@ code: |
 |------|------|------|
 | - | - | `TxProgressBar` 不暴露插槽。标签和 tooltip 内容通过 `message`、`format`、`tooltipContent`、`tooltipProps` 配置。 |
 
-## 最佳实践
+## 概述
 
-- 只有进度已知时才使用 `percentage`；未知时长使用 `loading` 或 `indeterminate`。
-- 不要为了成功态伪造 100%；操作完成时传 `success` 和简短 `message`。
-- `message` 同时作为 progressbar 可访问标签，文案应保持简短。
-- segment 代表部分总量时，用 `segmentsTotal` 保持分段进度可信。
-- 动效只用于高价值进度反馈；过多 shimmer/wave/stardust 会让仪表盘变嘈杂。
-- 给每一段都写上 `label`：悬停提示是分段进度条唯一能解释每种颜色含义的地方。
-- 默认是无描边的平铺轨道；需要模糊或玻璃质感的轨道时显式传 `maskBackground`（配合 `maskVariant="solid"` 加描边），不要依赖旧默认值。
-- 上传、下载这类有量级信息的任务用 `textPlacement="top"` + `detail` 把"已传多少"放在文案行，而不是塞进 `message`（它同时是可访问名）。
+- 轨道渲染 `role="progressbar"`，并包含 `aria-valuemin="0"` 与 `aria-valuemax="100"`。
+- 确定进度会把 `percentage` 限制在 `0..100`，并通过 `aria-valuenow` 暴露。
+- `loading` 与 `indeterminate` 会省略 `aria-valuenow`；应使用 `message` 描述当前工作。
+- `error` 与 `success` 布尔 props 优先于 `status`。
+- `success` 或 `error` 配合 `message` 且 `percentage` 为 `0` 时，视觉宽度会解析为 `100%`，适合完成类标签。
+- `message` 优先于 `format`，`format` 优先于默认四舍五入百分比文案。
+- 只有存在 `message` 或 `showText=true` 时才显示文本；loading/indeterminate 状态只有存在 `message` 时显示文本。`textPlacement="top"` 与 `outside` 遵循同一规则，只是把文案行渲染在轨道上方。
+- `detail` 只在 `textPlacement="top"` 下渲染，位于主文案之后、以分隔点弱化；它是可见文本，不进入 progressbar 的可访问名（仍为 `ariaLabel` > `message` > `Progress`）。
+- 默认轨道是文字色 10% 的平铺色块，不渲染 `.tx-progress-bar__mask`、不画描边；`maskVariant="solid" | "dashed"` 才生成描边，`maskBackground` 不为 `'none'` 时才渲染 mask 层。
+- 填充默认是 `linear-gradient(90deg, 淡 → 饱和)`；`color` 本身是渐变字符串时原样使用。`.tx-progress-bar__glow` 在所有非 segments 的确定进度条上挂载，位于轨道裁剪之外，且仅在 0% 与 100% 之间可见。渐变 `color` 没有单一色相，所以它的柔光是白色，`top` 文案退回文字色（`--tx-progress-glow`、`--tx-progress-accent`）。
+- `flowEffect="stardust"` 在填充上绘制两层白色星点（`::before` 远层：小、慢、稳定；`::after` 近层：大、快、闪烁），各自按整块贴图宽度平移，流动永远没有接缝。星点以 px 定尺寸，5px 和 14px 的进度条颗粒感一致。`'particles'` 是已废弃的别名，渲染同样的两层。任何 flow 效果都不会画在 `segments` 上，不确定态下也不画。
+- 宽度变化以 480ms `--tx-ease-out-strong` 过渡；不确定态的五种扫光只动合成属性（`transform`，`split` 另加 `opacity`），不动 `left` / `width`，`prefers-reduced-motion` 下停止扫光。行进式扫光（`sweep`、`classic`、`elastic`）匀速运动且首尾都完全在轨道之外，循环点永远不在画面里，进度条不会出现"一顿一顿"。
+- `segments` 会忽略非正数值。填充总宽度使用 `segmentsTotal`，填充区域内的各段宽度按正数 segment 总和归一化。每一段把颜色画在内层 `.tx-progress-bar__segment-fill` 上，并带有 `label · 占比%` 的 `data-tip`（占比相对 `segmentsTotal`；没有 label 时只显示占比）。悬停时该段放大、其余段变暗、提示从进度条上方升起；分段轨道会设为 `overflow: visible` 给放大留出空间。
+- `complete` 在解析进度到达 `100` 时每个完成周期只触发一次；进度回落到 `100` 以下后再次完成可再次触发。
+- `tooltip` 或 `tooltipContent` 会把进度条包在 `TxTooltip` 中；`tooltipProps` 会透传给该 tooltip。
 
-## 审阅说明
+## 技术实现
 
 - 已对照 `packages/tuffex/packages/components/src/progress-bar/src/types.ts`、`TxProgressBar.vue` 与 `progress-bar.test.ts` 核对。
 - 现有测试覆盖确定进度钳制、progressbar ARIA 状态、不确定状态省略 `aria-valuenow`、`complete` 每个完成周期只触发一次，以及 segment 按正数总和归一化。
@@ -195,11 +194,8 @@ code: |
 - API 说明：`segments` 只使用正数值。外层填充宽度基于 `segmentsTotal`，填充区域内部各段宽度按正数 segment 总和归一化。
 - 可访问性说明：`message` 会作为可访问进度标签，应保持简短并表达状态。
 
-## Source
-
 - Component source: `packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`.
 - Types: `packages/tuffex/packages/components/src/progress-bar/src/types.ts`.
 - **实测覆盖:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` 验证确定进度钳制与 ARIA 状态、不确定状态省略 `aria-valuenow`、`complete` 每个完成周期只触发一次、segment 按正数总和归一化，默认无 mask 节点、渐变填充与光晕位置、`top` 文案行、关键帧不含 `left` / `width` 与 reduced-motion 停播，以及星点流动（class、别名、渐变白色柔光、无缝贴图平移）和分段悬停（提示、内层 fill、可见溢出、匀速扫光）。
 
 <TuffDocSourceLink />
-

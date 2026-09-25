@@ -9,11 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Positioning
-
-The Data suite is where numbers become a picture, and it gathers everything Tuffex ships for it. **Visualization** (SparkChart, AllocationBar, DiffTable, SignalMeter) are compact, in-line data displays; **Charts** is the full chart family behind the `@talex-touch/tuffex/charts` subpath — a kumo-shaped API over Vue-rendered SVG, with no echarts dependency. Both live in the main package and import through the `@talex-touch/tuffex/pro` entry, or through `@talex-touch/tuffex/charts` for the family as a whole. Start from the [Charts overview](./charts.en.mdc) for the chart family, and reach for a Visualization component when a full chart would be too much for the space you have. It animates on ECharts' default timings — 1000ms enter, 500ms data update, 300ms state switch — and under `prefers-reduced-motion: reduce` every animation lands on its final frame instead.
-
-## Preview
+## Usage
 
 Every cell is a live, interactive component; click the name in the top-left corner to open its documentation.
 
@@ -26,3 +22,7 @@ Every component in the suite, grouped by category. The list is read from each do
 
 ::DocsSuiteCatalog{suite="data"}
 ::
+
+## Overview
+
+The Data suite is where numbers become a picture, and it gathers everything Tuffex ships for it. **Visualization** (SparkChart, AllocationBar, DiffTable, SignalMeter) are compact, in-line data displays; **Charts** is the full chart family behind the `@talex-touch/tuffex/charts` subpath — a kumo-shaped API over Vue-rendered SVG, with no echarts dependency. Both live in the main package and import through the `@talex-touch/tuffex/pro` entry, or through `@talex-touch/tuffex/charts` for the family as a whole. Start from the [Charts overview](./charts.en.mdc) for the chart family, and reach for a Visualization component when a full chart would be too much for the space you have. It animates on ECharts' default timings — 1000ms enter, 500ms data update, 300ms state switch — and under `prefers-reduced-motion: reduce` every animation lands on its final frame instead.

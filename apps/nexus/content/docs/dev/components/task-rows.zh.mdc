@@ -8,9 +8,8 @@ tags: [ai, agent, task, status]
 syncStatus: reviewed
 verified: true
 ---
-# TaskRows 任务行
 
-## 基础用法
+## 用法
 
 ### 胶囊
 
@@ -50,13 +49,16 @@ code: |
 ---
 :::
 
-## 状态徽章与重放
+### 最佳实践
 
-`done` 与 `error` 画的是实心圆徽，带 `pop-in` 入场；`running` 与 `pending` 画的是 24px 环，环内可以放序号。运行中的环是**固定 28% 的弧**在整体旋转——上游注释写的「从 0 扫到 66%」在代码里并不存在，不要去实现它。
+- `capsules` 用于独立浮在页面上的任务组，`list` 用于已经处在卡片里的面板——后者不会再叠一层容器阴影。
+- `running` 与 `pending` 保持无药丸更接近上游观感；确实需要时再传 `runningText` / `pendingText`。
+- 环内序号（`index`）用于表达「第几步」，完成后徽章会换成圆徽，序号自然消失。
+- `amount` 放右对齐的量词（「12 家供应商」），它是等宽数字，流式更新时不会跳宽。
+- 明细的 `meta` 用等宽数字呈现比率与计数，`label` 写清做了什么。
+- 组件宽度自适应，上游的 440px 容器由宿主决定。
 
-徽章和药丸都带 `:key="row.status"`。Vue 会复用同一个元素，而 `both` 填充的动画在复用元素上不会重播；换 key 强制重建，状态切换时的 `pop-in` 与 `fade-in` 才真的出现。
-
-## API
+## API 参考
 
 ### Props
 
@@ -88,7 +90,13 @@ code: |
 | `detail` | `{ row, detail, index }` | 替换单条明细的渲染。 |
 | `trailing` | `{ row }` | 在折叠按钮**之外**渲染宿主自己的控件。 |
 
-## 交互契约
+## 状态徽章与重放
+
+`done` 与 `error` 画的是实心圆徽，带 `pop-in` 入场；`running` 与 `pending` 画的是 24px 环，环内可以放序号。运行中的环是**固定 28% 的弧**在整体旋转——上游注释写的「从 0 扫到 66%」在代码里并不存在，不要去实现它。
+
+徽章和药丸都带 `:key="row.status"`。Vue 会复用同一个元素，而 `both` 填充的动画在复用元素上不会重播；换 key 强制重建，状态切换时的 `pop-in` 与 `fade-in` 才真的出现。
+
+## 概述
 
 - 展开集合是受控/非受控双模：不绑 `openIds` 由组件持有，绑了就完全由宿主说了算，两种情况都会派发 `update:openIds`。
 - 每行的折叠区都有自己的 id，头部按钮通过 `aria-controls` 指向它；收起时带 `inert`，把明细一并移出 Tab 序列。
@@ -98,16 +106,7 @@ code: |
 - 折叠区不会卸载内容：收起的行明细仍在 DOM 里，只是高度为 0。
 - 减弱动效下圆角形变、旋转与入场全部停止，状态本身照常推进。
 
-## 最佳实践
-
-- `capsules` 用于独立浮在页面上的任务组，`list` 用于已经处在卡片里的面板——后者不会再叠一层容器阴影。
-- `running` 与 `pending` 保持无药丸更接近上游观感；确实需要时再传 `runningText` / `pendingText`。
-- 环内序号（`index`）用于表达「第几步」，完成后徽章会换成圆徽，序号自然消失。
-- `amount` 放右对齐的量词（「12 家供应商」），它是等宽数字，流式更新时不会跳宽。
-- 明细的 `meta` 用等宽数字呈现比率与计数，`label` 写清做了什么。
-- 组件宽度自适应，上游的 440px 容器由宿主决定。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/task-rows/src/TxTaskRows.vue`。
 - Types: `packages/tuffex/packages/components/src/task-rows/src/types.ts`。
@@ -115,8 +114,6 @@ code: |
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **与 `TxToolCallCard` 的分工:** 那个是单次工具调用的卡片，带入参、日志、结果与重试；本组件是多行任务状态列表，带环形序号、圆角形变与明细行。数据模型不同，不要互相套用。
 - **状态词汇:** 用 `'error'` 而不是上游的 `'failed'`，与 `AiToolCallPart.status` 对齐；默认药丸文案仍是 `Failed`。

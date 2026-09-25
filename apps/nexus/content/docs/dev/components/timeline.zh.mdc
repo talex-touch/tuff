@@ -9,9 +9,8 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Timeline 时间线
+## 用法
 
-## 基础用法
 ### 时间线
 展示近期动态。
 :::TuffDemoWrapper{demo="TimelineTimelineDemo" code-lang="vue"}
@@ -27,29 +26,16 @@ code: |
 ---
 :::
 
-## 后台审计流程
+### 最佳实践
 
-`TxTimeline` 适合展示授权、发布、同步等后台任务的事件流。当前步骤用 `active` 突出，颜色只表达语义辅助；关键状态仍应写进 `title` 或默认插槽，保证可读性和无障碍体验。
+- 稳定状态应写进 `title` 或默认插槽，`color` 只作为视觉辅助。
+- 步骤流里只标记一个当前事件为 `active`。
+- 短里程碑序列可使用 `layout="horizontal"`；审计日志和长历史保持纵向。
+- `time` 保持简短，并在同一条时间线中使用一致格式。
+- 谨慎使用 `icon`；密集时间线只给异常或关键状态加图标更易读。
 
-::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的授权审计时间线。"}
----
-code: |
-  <template>
-    <TxTimeline>
-      <TxTimelineItem title="选择权限域" time="09:30" color="primary">
-        release
-      </TxTimelineItem>
-      <TxTimelineItem title="分配资源" time="10:20" color="success" active>
-        docs + notes
-      </TxTimelineItem>
-      <TxTimelineItem title="等待复核" time="11:05" color="warning">
-        security review
-      </TxTimelineItem>
-    </TxTimeline>
-  </template>
----
-::
-## API
+## API 参考
+
 ### Props
 :::TuffPropsTable
 ---
@@ -99,22 +85,36 @@ rows:
 
 `TxTimeline` 和 `TxTimelineItem` 不触发事件。
 
-## 交互契约
+## 后台审计流程
+
+`TxTimeline` 适合展示授权、发布、同步等后台任务的事件流。当前步骤用 `active` 突出，颜色只表达语义辅助；关键状态仍应写进 `title` 或默认插槽，保证可读性和无障碍体验。
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的授权审计时间线。"}
+---
+code: |
+  <template>
+    <TxTimeline>
+      <TxTimelineItem title="选择权限域" time="09:30" color="primary">
+        release
+      </TxTimelineItem>
+      <TxTimelineItem title="分配资源" time="10:20" color="success" active>
+        docs + notes
+      </TxTimelineItem>
+      <TxTimelineItem title="等待复核" time="11:05" color="warning">
+        security review
+      </TxTimelineItem>
+    </TxTimeline>
+  </template>
+---
+::
+
+## 概述
 
 - `TxTimeline` 暴露 `role="list"`，每个 `TxTimelineItem` 暴露 `role="listitem"`。
 - `active` 会同时作用于条目和节点圆点，用于突出当前事件。
 - `layout="horizontal"` 会通过 provide/inject 同步到子项，切换为横向事件流布局。
 
-
-## 最佳实践
-
-- 稳定状态应写进 `title` 或默认插槽，`color` 只作为视觉辅助。
-- 步骤流里只标记一个当前事件为 `active`。
-- 短里程碑序列可使用 `layout="horizontal"`；审计日志和长历史保持纵向。
-- `time` 保持简短，并在同一条时间线中使用一致格式。
-- 谨慎使用 `icon`；密集时间线只给异常或关键状态加图标更易读。
-
-## 审阅说明
+## 技术实现
 
 - 组件源码:`packages/tuffex/packages/components/src/timeline/src/TxTimeline.vue` 确认 `role="list"`、纵向/横向布局 class 解析，以及传给子项的上下文。
 - 条目源码:`packages/tuffex/packages/components/src/timeline/src/TxTimelineItem.vue` 确认 `role="listitem"`、title/time/默认插槽渲染、可选图标渲染、语义节点颜色 class、active 条目/节点 class 和注入布局 class。
@@ -122,5 +122,4 @@ rows:
 - **实测覆盖:** `packages/tuffex/packages/components/src/timeline/__tests__/timeline.test.ts` 覆盖列表语义、默认纵向布局、横向布局注入、title/time/默认插槽/图标渲染、语义颜色 class 和 active 条目/节点状态。
 - 建议：使用 `active` 标记当前事件，`color` 只使用 `'default' | 'primary' | 'success' | 'warning' | 'error'`，不要传入未定义语义色。
 
-## Source
 <TuffDocSourceLink />

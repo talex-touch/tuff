@@ -8,9 +8,8 @@ tags: [dropdown, menu, popover]
 syncStatus: reviewed
 verified: true
 ---
-# DropdownMenu
 
-## Basic Usage
+## Usage
 
 ### DropdownMenu
 :::TuffDemoWrapper{demo="DropdownMenuDropdownMenuDemo" code-lang="vue"}
@@ -28,59 +27,6 @@ code: |
   </template>
 ---
 :::
-
-## Navigation Styles
-
-### DropdownMenu (nav)
-:::TuffDemoWrapper{demo="DropdownMenuDropdownMenuNavDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const open = ref(false)
-  </script>
-
-  <template>
-    <div style="display: flex; align-items: center; gap: 10px;">
-      <TxDropdownMenu v-model="open" :min-width="240" placement="bottom-start" :panel-padding="8">
-        <template #trigger>
-          <div
-            style="display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--tx-border-color); border-radius: 12px; user-select: none; cursor: pointer;"
-          >
-            <div style="font-weight: 600;">
-              Repository
-            </div>
-            <div style="color: var(--tx-text-color-secondary); font-weight: 600;">
-              main
-            </div>
-            <TxIcon name="chevron-down" style="opacity: 0.65;" />
-          </div>
-        </template>
-
-        <TxDropdownItem arrow>
-          GitHub
-          <template #right>
-            <span style="opacity: 0.72; display: inline-flex; align-items: center;">
-              <i class="i-ri-external-link-line" style="font-size: 16px;" />
-            </span>
-          </template>
-        </TxDropdownItem>
-        <TxDropdownItem arrow>
-          NPM
-          <template #right>
-            <span style="opacity: 0.72; display: inline-flex; align-items: center;">
-              <i class="i-ri-external-link-line" style="font-size: 16px;" />
-            </span>
-          </template>
-        </TxDropdownItem>
-      </TxDropdownMenu>
-    </div>
-  </template>
----
-:::
-
-## Submenu
 
 `TxDropdownSubmenu` nests another panel inside the menu, at any depth. Hovering the trigger row expands it; pointer travel between the parent and child panels never closes the chain by mistake, and selecting a `TxDropdownItem` inside the child closes the whole chain following the root menu's `closeOnSelect`.
 
@@ -114,48 +60,16 @@ code: |
 ---
 :::
 
-## Dashboard Navigation Composition
+### Best Practices
 
-Admin pages should not put every setting into one large form. Use `TxTabs` for first-level sections, `TxDropdownMenu` for lightweight actions in the current section, `TxPopover` for short explanations, and `TxDrawer` for dense configuration.
+- Keep dropdowns to a short command list. If the panel needs paragraphs, forms, or multiple interaction steps, use `TxPopover`, `TxDrawer`, or `TxContextMenuPanel` composition instead.
+- Use `danger` only for destructive commands and keep those commands visually separated from neutral actions when the list grows.
+- Use `arrow` for navigation/submenu rows; use the `right` slot for external-link icons, keyboard hints, or status badges.
+- Leave `closeOnSelect=true` for normal commands. Set it to `false` only when the row opens another surface or starts a multi-step flow.
+- Set `initialFocus="none"` only when the host places focus itself after opening (focusing a search field inside the panel, for example). Otherwise keyboard users open the menu with focus still on the trigger and need an extra arrow press to reach the list.
+- Prefer `panelBackground="refraction"` / default panel styling unless a surrounding surface already provides strong contrast.
 
-:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="A screenshot-verified Tabs / DropdownMenu / Popover / Drawer composition for Dashboard settings pages."}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref('Overview')
-  const drawerVisible = ref(false)
-  </script>
-
-  <template>
-    <section class="grid gap-3">
-      <TxDropdownMenu>
-        <template #trigger>
-          <TxButton>Release actions</TxButton>
-        </template>
-        <TxDropdownItem>Quick release</TxDropdownItem>
-      </TxDropdownMenu>
-
-      <TxPopover>
-        <template #reference>
-          <TxButton variant="secondary">Policy notes</TxButton>
-        </template>
-        Keep popovers short and action-light.
-      </TxPopover>
-
-      <TxTabs v-model="active" placement="left" indicator-variant="pill">
-        <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
-        <TxTabItem name="Releases">Release settings</TxTabItem>
-      </TxTabs>
-
-      <TxDrawer v-model:visible="drawerVisible" title="Release policy" />
-    </section>
-  </template>
----
-:::
-
-## API
+## API Reference
 
 ### TxDropdownMenu Props
 
@@ -221,6 +135,98 @@ code: |
 |------|------|------|
 | `select` | - | Emitted when an enabled item is clicked. |
 
+## Navigation Styles
+
+### DropdownMenu (nav)
+:::TuffDemoWrapper{demo="DropdownMenuDropdownMenuNavDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <TxDropdownMenu v-model="open" :min-width="240" placement="bottom-start" :panel-padding="8">
+        <template #trigger>
+          <div
+            style="display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--tx-border-color); border-radius: 12px; user-select: none; cursor: pointer;"
+          >
+            <div style="font-weight: 600;">
+              Repository
+            </div>
+            <div style="color: var(--tx-text-color-secondary); font-weight: 600;">
+              main
+            </div>
+            <TxIcon name="chevron-down" style="opacity: 0.65;" />
+          </div>
+        </template>
+
+        <TxDropdownItem arrow>
+          GitHub
+          <template #right>
+            <span style="opacity: 0.72; display: inline-flex; align-items: center;">
+              <i class="i-ri-external-link-line" style="font-size: 16px;" />
+            </span>
+          </template>
+        </TxDropdownItem>
+        <TxDropdownItem arrow>
+          NPM
+          <template #right>
+            <span style="opacity: 0.72; display: inline-flex; align-items: center;">
+              <i class="i-ri-external-link-line" style="font-size: 16px;" />
+            </span>
+          </template>
+        </TxDropdownItem>
+      </TxDropdownMenu>
+    </div>
+  </template>
+---
+:::
+
+## Dashboard Navigation Composition
+
+Admin pages should not put every setting into one large form. Use `TxTabs` for first-level sections, `TxDropdownMenu` for lightweight actions in the current section, `TxPopover` for short explanations, and `TxDrawer` for dense configuration.
+
+:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="A screenshot-verified Tabs / DropdownMenu / Popover / Drawer composition for Dashboard settings pages."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('Overview')
+  const drawerVisible = ref(false)
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxDropdownMenu>
+        <template #trigger>
+          <TxButton>Release actions</TxButton>
+        </template>
+        <TxDropdownItem>Quick release</TxDropdownItem>
+      </TxDropdownMenu>
+
+      <TxPopover>
+        <template #reference>
+          <TxButton variant="secondary">Policy notes</TxButton>
+        </template>
+        Keep popovers short and action-light.
+      </TxPopover>
+
+      <TxTabs v-model="active" placement="left" indicator-variant="pill">
+        <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
+        <TxTabItem name="Releases">Release settings</TxTabItem>
+      </TxTabs>
+
+      <TxDrawer v-model:visible="drawerVisible" title="Release policy" />
+    </section>
+  </template>
+---
+:::
+
 ## Slots
 
 ### TxDropdownMenu
@@ -245,7 +251,7 @@ code: |
 | `right` | - | Trailing metadata on the trigger row, rendered before the submenu chevron. |
 | `menu` | - | Child panel content, usually `TxDropdownItem` rows or nested `TxDropdownSubmenu`. |
 
-## Interaction Contract
+## Overview
 
 - Menu rows use the same outlined hover and active states as every other list row in the library. They previously opted out for a translucent veil; a menu highlighting differently from a select, a tree or a cascader was the more confusing of the two.
 
@@ -259,16 +265,7 @@ code: |
 - The `TxDropdownSubmenu` trigger row is a `role="menuitem"`: `ArrowRight` / `Enter` expand the child panel and focus its first item, and `ArrowLeft` inside the child panel collapses it and returns focus to the trigger row.
 - Pointer travel from parent panel into the child panel never closes the parent; clicks inside the child panel don't count as outside-clicks for the parent, and closing the parent (including preemption by another menu) cascades to its children.
 
-## Best Practices
-
-- Keep dropdowns to a short command list. If the panel needs paragraphs, forms, or multiple interaction steps, use `TxPopover`, `TxDrawer`, or `TxContextMenuPanel` composition instead.
-- Use `danger` only for destructive commands and keep those commands visually separated from neutral actions when the list grows.
-- Use `arrow` for navigation/submenu rows; use the `right` slot for external-link icons, keyboard hints, or status badges.
-- Leave `closeOnSelect=true` for normal commands. Set it to `false` only when the row opens another surface or starts a multi-step flow.
-- Set `initialFocus="none"` only when the host places focus itself after opening (focusing a search field inside the panel, for example). Otherwise keyboard users open the menu with focus still on the trigger and need an extra arrow press to reach the list.
-- Prefer `panelBackground="refraction"` / default panel styling unless a surrounding surface already provides strong contrast.
-
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue` forwards Popover placement, sizing, animation, panel visual props, and trigger/default slots.
 - Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownItem.vue` confirms disabled/danger/arrow/closeOnSelect props, `right` slot behavior, `role="menuitem"`, and close-on-select injection.
@@ -277,6 +274,4 @@ code: |
 - Keyboard contract: `Home` / `End` pass through `input`, `textarea`, and `contenteditable` targets because a search field inside the panel needs them to move the caret; a menu that takes them leaves the field uneditable. Arrow keys are still claimed on editable targets on purpose, since that is the only way the field hands focus to the list. Asking hosts to `stopPropagation` on the field was rejected: it would copy the exception into every host.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts` covers prop forwarding, open/close events, enabled selection, disabled item no-op behavior, `closeOnSelect=false`, `initialFocus="none"` leaving focus alone on open and reopen, and an input / contenteditable inside the panel keeping `Home` / `End` while `ArrowDown` still enters the list.
 
-## Source
 <TuffDocSourceLink />
-

@@ -8,9 +8,8 @@ tags: [tag, label, badge]
 syncStatus: reviewed
 verified: true
 ---
-# Tag 标签
 
-## Demo
+## 用法
 
 ### 标签
 
@@ -101,17 +100,15 @@ code: |
 ---
 :::
 
-## 交互契约
+### 最佳实践
 
-- 根元素是静态元数据，不带 live region 角色；标签文案必须不依赖颜色也能表达含义。
-- `label` 默认是空字符串；`null` 会归一化为空字符串。
-- 默认插槽会替换 `label` 内容，但保留图标和关闭按钮区域。
-- `color` 默认是 `var(--tx-color-primary)`；未传 `background` 与 `border` 时会基于 `color` 用 `color-mix` 派生。
-- 关闭控件是原生 `button type="button"`，带 `aria-label="Remove tag"`。
-- 点击关闭按钮会阻止冒泡，因此 `close` 不会同时触发标签根部的 `click`。
-- `disabled` 会降低透明度、禁用关闭按钮，并阻断 `click` 与 `close` 事件。
+- 标签用于元数据和状态提示，不要替代主按钮。
+- `label` 保持简短；长文本会破坏表格和筛选行的紧凑节奏。
+- 可移除筛选项、用户标签、临时范围使用 `closable`。
+- 使用原始自定义颜色且对比度不足时，显式提供 `background` / `border`。
+- 删除行为需要宿主确认；`TxTag` 只发出操作意图。
 
-## API
+## API 参考
 
 ### Props
 
@@ -154,20 +151,20 @@ code: |
 |------|------|------|
 | `default` | - | 替换标签内容区域中的 `label` 文本。 |
 
-## 最佳实践
+## 概述
 
-- 标签用于元数据和状态提示，不要替代主按钮。
-- `label` 保持简短；长文本会破坏表格和筛选行的紧凑节奏。
-- 可移除筛选项、用户标签、临时范围使用 `closable`。
-- 使用原始自定义颜色且对比度不足时，显式提供 `background` / `border`。
-- 删除行为需要宿主确认；`TxTag` 只发出操作意图。
+- 根元素是静态元数据，不带 live region 角色；标签文案必须不依赖颜色也能表达含义。
+- `label` 默认是空字符串；`null` 会归一化为空字符串。
+- 默认插槽会替换 `label` 内容，但保留图标和关闭按钮区域。
+- `color` 默认是 `var(--tx-color-primary)`；未传 `background` 与 `border` 时会基于 `color` 用 `color-mix` 派生。
+- 关闭控件是原生 `button type="button"`，带 `aria-label="Remove tag"`。
+- 点击关闭按钮会阻止冒泡，因此 `close` 不会同时触发标签根部的 `click`。
+- `disabled` 会降低透明度、禁用关闭按钮，并阻断 `click` 与 `close` 事件。
 
-## 审阅说明
+## 技术实现
 
 - **可访问性说明:** 关闭控件是原生 `button`，但标签级 `click` 绑定在不可聚焦的 `span` 上。`click` 只适合可选的指针交互；必须键盘可达的标签操作应改用按钮或复选模式。
 - **实测覆盖:** `tag.test.ts` 覆盖 label/icon/style 渲染、默认插槽覆盖、click 与 close 事件分离、禁用阻断，以及禁用关闭按钮状态。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/tag/src/TxTag.vue`。
 - Types: `packages/tuffex/packages/components/src/tag/src/types.ts` 导出 `TagProps` 与 `TagEmits`。

@@ -8,9 +8,8 @@ tags: [ai, loading, status, timer]
 syncStatus: reviewed
 verified: true
 ---
-# WorkingIndicator
 
-## Basic Usage
+## Usage
 
 ### WorkingIndicator
 
@@ -44,13 +43,15 @@ code: |
 ---
 :::
 
-## Timing and Remounts
+### Best Practices
 
-Without `startedAt` the clock counts from mount. A streaming host may rebuild this row on every delta, which resets it — passing a timestamp lets the reading survive a remount.
+- Use it for "something is running, and here is how long it has been running". Reach for `TxTypingIndicator` when someone is composing, and `TxSpinner` for a wait with no semantics.
+- Name the work in the label ("Indexing the repository") rather than writing "Working" — the readout already answers *how long*, so the label should answer *what*.
+- A readout is only worth showing past a few seconds; turn `showElapsed` off for instant operations and save both the interval and the visual noise.
+- Always pass `startedAt` in streaming surfaces, or the clock snaps back to zero whenever the component is rebuilt.
+- The component sizes to `fit-content`; the container is the host's decision.
 
-The reading is always `Date.now() - startedAt` rather than a self-incrementing counter: a backgrounded tab throttles timers, and a counter that adds a fixed step per fire falls further behind wall clock the longer it stays hidden.
-
-## API
+## API Reference
 
 ### Props
 
@@ -69,7 +70,13 @@ The reading is always `Date.now() - startedAt` rather than a self-incrementing c
 |------|------|------|
 | `label` | — | Replaces the shimmering label, for rich content. |
 
-## Interaction Contract
+## Timing and Remounts
+
+Without `startedAt` the clock counts from mount. A streaming host may rebuild this row on every delta, which resets it — passing a timestamp lets the reading survive a remount.
+
+The reading is always `Date.now() - startedAt` rather than a self-incrementing counter: a backgrounded tab throttles timers, and a counter that adds a fixed step per fire falls further behind wall clock the longer it stays hidden.
+
+## Overview
 
 - The component has no emits: it presents state and raises nothing.
 - The root is `role="status"`. **The readout carries `aria-hidden="true"`** — it changes ten times a second, and inside a live region every tick would be announced. The label alone is what gets spoken.
@@ -79,15 +86,7 @@ The reading is always `Date.now() - startedAt` rather than a self-incrementing c
 - Under reduced motion the grid freezes in its dim state (`animation: none`) and **the clock keeps ticking** — it reports real progress, so it is not decoration.
 - The directory also exports `useElapsed` and `formatElapsed` for hosts that want to lay the reading out themselves.
 
-## Best Practices
-
-- Use it for "something is running, and here is how long it has been running". Reach for `TxTypingIndicator` when someone is composing, and `TxSpinner` for a wait with no semantics.
-- Name the work in the label ("Indexing the repository") rather than writing "Working" — the readout already answers *how long*, so the label should answer *what*.
-- A readout is only worth showing past a few seconds; turn `showElapsed` off for instant operations and save both the interval and the visual noise.
-- Always pass `startedAt` in streaming surfaces, or the clock snaps back to zero whenever the component is rebuilt.
-- The component sizes to `fit-content`; the container is the host's decision.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/working-indicator/src/TxWorkingIndicator.vue`.
 - Composable: `packages/tuffex/packages/components/src/working-indicator/src/use-elapsed.ts` exports `useElapsed` and `formatElapsed`.
@@ -96,8 +95,6 @@ The reading is always `Date.now() - startedAt` rather than a self-incrementing c
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Unrelated to `TxLoadingState`:** the similarly named `TxLoadingState` in this package is a page-level empty-state wrapper with entirely different semantics. Do not swap one for the other.
 - **Accessibility:** hiding the readout from assistive tech is a deliberate trade — ten announcements a second is not usable. When elapsed time genuinely matters to a screen-reader user, have the host announce the total once the task finishes.

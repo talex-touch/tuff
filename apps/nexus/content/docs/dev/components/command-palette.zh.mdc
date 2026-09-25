@@ -8,7 +8,61 @@ tags: [command, palette, launcher, shortcut]
 syncStatus: reviewed
 verified: true
 ---
-# CommandPalette 命令面板
+
+## 用法
+
+### 最佳实践
+
+- `id` 需要跨版本稳定；埋点、持久化和权限判断都应使用 `id`，不要依赖本地化后的标题。
+- 将同义词、英文别名、插件名和本地化搜索词放进 `keywords`，不要为了搜索变体复制多条命令。
+- 全局快捷键应在应用外壳注册，再驱动 `v-model` 打开面板；`shortcut` 只负责展示键盘提示。
+- `footer` 适合放数据来源、结果数量或键盘帮助；`empty` 适合展示当前 query 和恢复动作。
+- 命令较多时限制 `maxHeight`，保持面板可键盘浏览，并避免超出视口。
+
+## API 参考
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|------|------|
+| `modelValue` | `boolean` | - | 显示状态 |
+| `commands` | `CommandPaletteItem[]` | `[]` | 命令列表 |
+| `placeholder` | `string` | `'Search commands'` | 搜索占位 |
+| `emptyText` | `string` | `'No commands found'` | 空提示 |
+| `maxHeight` | `number` | `320` | 列表最大高度 |
+| `autoFocus` | `boolean` | `true` | 自动聚焦 |
+| `closeOnSelect` | `boolean` | `true` | 选中后关闭 |
+| `overlayClass` | `string \| string[] \| Record<string, boolean>` | - | 叠层自定义类名 |
+| `panelClass` | `string \| string[] \| Record<string, boolean>` | - | 面板自定义类名 |
+
+### CommandPaletteItem
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | 唯一标识 |
+| `title` | `string` | 标题 |
+| `description` | `string` | 描述 |
+| `keywords` | `string[]` | 关键词 |
+| `icon` | `TxIconSource \| string` | 图标 |
+| `shortcut` | `string` | 快捷键 |
+| `disabled` | `boolean` | 禁用 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value)` | 显示状态 |
+| `select` | `(item)` | 选中命令 |
+| `open` | - | 打开 |
+| `close` | - | 关闭 |
+| `update:query` | `(value)` | 搜索输入 |
+
+### Slots
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `empty` | `{ query, emptyText }` | 自定义空状态 |
+| `footer` | `{ query, visibleCount }` | 自定义底部区域 |
 
 ## 启动器场景
 
@@ -113,52 +167,7 @@ code: |
 - `disabled` 命令会显示但无法选中，适合表达缺权限、平台不支持或功能未启用的状态。
 - `closeOnSelect=false` 可用于批量动作或设置面板，默认选中后关闭。
 
-## API
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|------|------|
-| `modelValue` | `boolean` | - | 显示状态 |
-| `commands` | `CommandPaletteItem[]` | `[]` | 命令列表 |
-| `placeholder` | `string` | `'Search commands'` | 搜索占位 |
-| `emptyText` | `string` | `'No commands found'` | 空提示 |
-| `maxHeight` | `number` | `320` | 列表最大高度 |
-| `autoFocus` | `boolean` | `true` | 自动聚焦 |
-| `closeOnSelect` | `boolean` | `true` | 选中后关闭 |
-| `overlayClass` | `string \| string[] \| Record<string, boolean>` | - | 叠层自定义类名 |
-| `panelClass` | `string \| string[] \| Record<string, boolean>` | - | 面板自定义类名 |
-
-### CommandPaletteItem
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `id` | `string` | 唯一标识 |
-| `title` | `string` | 标题 |
-| `description` | `string` | 描述 |
-| `keywords` | `string[]` | 关键词 |
-| `icon` | `TxIconSource \| string` | 图标 |
-| `shortcut` | `string` | 快捷键 |
-| `disabled` | `boolean` | 禁用 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `(value)` | 显示状态 |
-| `select` | `(item)` | 选中命令 |
-| `open` | - | 打开 |
-| `close` | - | 关闭 |
-| `update:query` | `(value)` | 搜索输入 |
-
-### Slots
-
-| 插槽名 | 参数 | 说明 |
-|------|------|------|
-| `empty` | `{ query, emptyText }` | 自定义空状态 |
-| `footer` | `{ query, visibleCount }` | 自定义底部区域 |
-
-## 交互契约
+## 概述
 
 - `modelValue` 是显示状态的唯一来源；面板显示时触发 `open`，从已打开状态关闭时触发 `close`。
 - 搜索只在本地对 `title`、`description` 和每个 `keywords` 做包含匹配；组件不负责排序、节流或远程请求。
@@ -166,21 +175,11 @@ code: |
 - 输入法组合态（`isComposing`、keyCode `229` 或正在 composition）会阻止键盘选择，避免中文/日文/韩文输入被提前提交。
 - `select` 会返回原始 `CommandPaletteItem`；禁用命令以 `role="option"` 保持可见，带 `aria-disabled="true"` 并移出 tab 顺序（`tabindex="-1"`），不会触发 `select`；`closeOnSelect=false` 会在选择后保持面板打开。
 
-## 最佳实践
-
-- `id` 需要跨版本稳定；埋点、持久化和权限判断都应使用 `id`，不要依赖本地化后的标题。
-- 将同义词、英文别名、插件名和本地化搜索词放进 `keywords`，不要为了搜索变体复制多条命令。
-- 全局快捷键应在应用外壳注册，再驱动 `v-model` 打开面板；`shortcut` 只负责展示键盘提示。
-- `footer` 适合放数据来源、结果数量或键盘帮助；`empty` 适合展示当前 query 和恢复动作。
-- 命令较多时限制 `maxHeight`，保持面板可键盘浏览，并避免超出视口。
-
-## 审阅说明
+## 技术实现
 
 - 已核对 `packages/tuffex/packages/components/src/command-palette/src/types.ts`、`TxCommandPalette.vue` 与 `command-palette.test.ts`。
 - 现有测试覆盖本地过滤与选择、禁用命令跳过及 `aria-disabled` / `tabindex` 标记、输入法组合态保护、命中文本高亮，以及自定义 `empty` / `footer` 插槽。
 - 可访问性说明:叠层渲染 `role="dialog"` 与 `aria-modal="true"`;触发按钮文案和 placeholder 应说明当前命令域,不要把展示用 `shortcut` 当作实际快捷键注册。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/command-palette/src/TxCommandPalette.vue`。
 - Types: `packages/tuffex/packages/components/src/command-palette/src/types.ts` 导出 `CommandPaletteProps`、`CommandPaletteEmits`、`CommandPaletteItem` 与 `CommandPaletteClassValue`。

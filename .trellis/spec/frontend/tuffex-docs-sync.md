@@ -36,16 +36,18 @@ Every wrapper from (2) owns its own `.zh.mdc` / `.en.mdc` and must be checked. `
 
 | Section (zh / en) | Goes stale when |
 | --- | --- |
-| `## Demo` / `### <变体>` | The change is user-visible. It needs its own demo section, not just a table row |
-| `### Props` / `Events` / `Slots` | A prop/event/slot is added, removed, renamed, or a default changes |
-| `## 交互契约` / Interaction Contract | DOM, ARIA, class names, focus/keyboard behaviour, or blocking rules change |
-| `## 最佳实践` / Best Practices | There is now a right and a wrong way to drive the new state |
-| `## 审阅说明` → `实测覆盖` / Review Notes → Verified coverage | Tests were added or their assertions changed |
-| CSS-variable table | A `--tx-*` or component-local variable starts or stops being read |
+| `## 用法` / `## Usage` (`### <变体>` / `### <variant>`) | The change is user-visible. It needs its own demo section, not just a table row |
+| `## API 参考` / `## API Reference` → `### 属性` / `### Props` / `Events` / `Slots` | A prop/event/slot is added, removed, renamed, or a default changes |
+| `## 概述` / `## Overview` (was 交互契约 / Interaction Contract) | DOM, ARIA, class names, focus/keyboard behaviour, or blocking rules change |
+| `### 最佳实践` / `### Best Practices` (inside Usage) | There is now a right and a wrong way to drive the new state |
+| `## 技术实现` / `## Technologies` (holds the old Review Notes → Verified coverage lines) | Tests were added or their assertions changed |
+| CSS-variable table (inside `## API 参考` / `## API Reference`) | A `--tx-*` or component-local variable starts or stops being read |
+
+The canonical page shape — section order, which section owns what, and the sidebar grouping above it — is [Nexus Docs Structure](./nexus-docs-structure.md).
 
 zh and en stay section-for-section identical in count and order. `check:doc-parity` enforces the count only; matching prose is on the author.
 
-Record rejected designs in `## 审阅说明` / Review Notes. "Keeping the checkbox fill and drawing a white ring on it was tried first and is invisible on a light page" is what stops the next person re-trying it.
+Record rejected designs in `## 技术实现` / Technologies (the section that replaced Review Notes). "Keeping the checkbox fill and drawing a white ring on it was tried first and is invisible on a light page" is what stops the next person re-trying it.
 
 ---
 

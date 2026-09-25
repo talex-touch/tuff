@@ -8,9 +8,8 @@ since: 1.0.0
 tags: [cascader, form, hierarchy]
 verified: true
 ---
-# Cascader
 
-## Basic Usage
+## Usage
 
 ### Cascader
 :::TuffDemoWrapper{demo="CascaderCascaderDemo" code-lang="vue"}
@@ -71,78 +70,19 @@ code: |
 ---
 :::
 
-## Release Policy Configuration
-
-This component set fits an admin flow that chooses scope first, then policy, then thresholds and metadata. `TxCascader` owns hierarchical scope, `TxFlatSelect` keeps low-noise single selection, `TxSegmentedSlider` / `TxSlider` handle discrete risk and continuous ratios, and `TxTagInput` carries searchable metadata.
-
-::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="Release policy configuration" description="A screenshot-verified Cascader / FlatSelect / SegmentedSlider / Slider / TagInput admin configuration composition."}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const releasePath = ref(['desktop', 'stable', 'macos'])
-  const packageFormat = ref('signed')
-  const rolloutMode = ref('phased')
-  const riskLevel = ref(2)
-  const traffic = ref(35)
-  const labels = ref(['nexus', 'verified'])
-  const scopeOptions = [
-    {
-      value: 'desktop',
-      label: 'Desktop',
-      children: [
-        {
-          value: 'stable',
-          label: 'Stable',
-          children: [{ value: 'macos', label: 'macOS', leaf: true }],
-        },
-      ],
-    },
-  ]
-  const riskSegments = [
-    { value: 1, label: 'Low' },
-    { value: 2, label: 'Med' },
-    { value: 3, label: 'High' },
-    { value: 4, label: 'Freeze' },
-  ]
-  </script>
-
-  <template>
-    <section class="grid gap-3">
-      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="Release scope" />
-      <TxFlatSelect v-model="packageFormat" placeholder="Package format">
-        <TxFlatSelectItem value="signed" label="Signed build" />
-        <TxFlatSelectItem value="archive" label="Archive" />
-      </TxFlatSelect>
-      <TxFlatSelect v-model="rolloutMode" placeholder="Rollout mode">
-        <TxFlatSelectItem value="phased" label="Phased" />
-        <TxFlatSelectItem value="guarded" label="Guarded" />
-      </TxFlatSelect>
-      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
-      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
-      <TxTagInput v-model="labels" placeholder="Press Enter to add tags" :max="5" />
-    </section>
-  </template>
----
-::
-
-## Notes
-
 - Single-select `modelValue` is a path array; multi-select is an array of path arrays.
 - `expandTrigger` chooses how a branch opens: `hover` and `both` open its panel on hover, `click` on click. A click on a branch row always expands it, under every setting.
 - Async `load` only triggers when a node has no `children` and is not marked `leaf`.
 
-## Interaction Contract
+### Best Practices
 
-- Each level is its own floating panel, anchored `right-start` to the row that opened it, rather than a column inside one wide panel. Panels are sized to their own labels (`matchReferenceWidth` is off), and only a branch that has actually been opened is mounted.
-- Hover travel between a row and the panel it opened, the outside-click exemption, and cascading close are owned by the anchor-delay service, the same plumbing `TxDropdownSubmenu` runs on.
-- Rows are `role="option"` inside a `role="listbox"` level. A branch row adds `aria-haspopup="listbox"` and `aria-expanded`; a leaf row carries neither.
-- Keyboard, within the focused level: Up/Down move and wrap, Home/End jump to the ends, ArrowRight opens the focused branch and puts focus on its first row, ArrowLeft closes the level and returns focus to the row that opened it. ArrowLeft at the root level is left alone.
-- Every row on the trail to the open panel stays active, so a deep selection reads as a path instead of one highlighted row.
-- Searching replaces the levels with a flat list of matching leaf paths; clearing the query restores them.
+- Keep hierarchy depth shallow. The panel works best for two to three levels; deeper organization trees should use search or TreeSelect instead.
+- Use stable `value` keys across releases. `modelValue` stores path keys, so changing keys breaks persisted selections.
+- Mark terminal async nodes with `leaf: true`; otherwise a node with no `children` may call `load` instead of becoming selectable.
+- Keep `searchable` enabled when the loaded tree has many leaves, but remember search only covers already loaded local nodes.
+- In `multiple` mode, treat the value as an array of complete paths, not leaf ids. Persist the full path so labels can be reconstructed consistently.
 
-## API
+## API Reference
 
 ### TxCascader Props
 
@@ -204,22 +144,76 @@ code: |
 | `setValue(v)` | `(v) => void` | Emits `update:modelValue` and `change` with the supplied value. |
 | `getValue()` | `() => any` | Returns the current `modelValue` prop. |
 
-## Best Practices
+## Release Policy Configuration
 
-- Keep hierarchy depth shallow. The panel works best for two to three levels; deeper organization trees should use search or TreeSelect instead.
-- Use stable `value` keys across releases. `modelValue` stores path keys, so changing keys breaks persisted selections.
-- Mark terminal async nodes with `leaf: true`; otherwise a node with no `children` may call `load` instead of becoming selectable.
-- Keep `searchable` enabled when the loaded tree has many leaves, but remember search only covers already loaded local nodes.
-- In `multiple` mode, treat the value as an array of complete paths, not leaf ids. Persist the full path so labels can be reconstructed consistently.
+This component set fits an admin flow that chooses scope first, then policy, then thresholds and metadata. `TxCascader` owns hierarchical scope, `TxFlatSelect` keeps low-noise single selection, `TxSegmentedSlider` / `TxSlider` handle discrete risk and continuous ratios, and `TxTagInput` carries searchable metadata.
 
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="Release policy configuration" description="A screenshot-verified Cascader / FlatSelect / SegmentedSlider / Slider / TagInput admin configuration composition."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
 
-## Review Notes
+  const releasePath = ref(['desktop', 'stable', 'macos'])
+  const packageFormat = ref('signed')
+  const rolloutMode = ref('phased')
+  const riskLevel = ref(2)
+  const traffic = ref(35)
+  const labels = ref(['nexus', 'verified'])
+  const scopeOptions = [
+    {
+      value: 'desktop',
+      label: 'Desktop',
+      children: [
+        {
+          value: 'stable',
+          label: 'Stable',
+          children: [{ value: 'macos', label: 'macOS', leaf: true }],
+        },
+      ],
+    },
+  ]
+  const riskSegments = [
+    { value: 1, label: 'Low' },
+    { value: 2, label: 'Med' },
+    { value: 3, label: 'High' },
+    { value: 4, label: 'Freeze' },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="Release scope" />
+      <TxFlatSelect v-model="packageFormat" placeholder="Package format">
+        <TxFlatSelectItem value="signed" label="Signed build" />
+        <TxFlatSelectItem value="archive" label="Archive" />
+      </TxFlatSelect>
+      <TxFlatSelect v-model="rolloutMode" placeholder="Rollout mode">
+        <TxFlatSelectItem value="phased" label="Phased" />
+        <TxFlatSelectItem value="guarded" label="Guarded" />
+      </TxFlatSelect>
+      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
+      <TxTagInput v-model="labels" placeholder="Press Enter to add tags" :max="5" />
+    </section>
+  </template>
+---
+::
+
+## Overview
+
+- Each level is its own floating panel, anchored `right-start` to the row that opened it, rather than a column inside one wide panel. Panels are sized to their own labels (`matchReferenceWidth` is off), and only a branch that has actually been opened is mounted.
+- Hover travel between a row and the panel it opened, the outside-click exemption, and cascading close are owned by the anchor-delay service, the same plumbing `TxDropdownSubmenu` runs on.
+- Rows are `role="option"` inside a `role="listbox"` level. A branch row adds `aria-haspopup="listbox"` and `aria-expanded`; a leaf row carries neither.
+- Keyboard, within the focused level: Up/Down move and wrap, Home/End jump to the ends, ArrowRight opens the focused branch and puts focus on its first row, ArrowLeft closes the level and returns focus to the row that opened it. ArrowLeft at the root level is left alone.
+- Every row on the trail to the open panel stays active, so a deep selection reads as a path instead of one highlighted row.
+- Searching replaces the levels with a flat list of matching leaf paths; clearing the query restores them.
+
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`, `types.ts`, and `cascader.test.ts`.
 - Existing tests cover leaf selection, empty search results, multiple-path toggle and clear, disabled trigger/node blocking, lazy child loading, and exposed state helpers.
 - Accessibility note: the trigger uses `role="combobox"` with `aria-haspopup="listbox"`; preserve a visible field label and do not rely on placeholder text as the only label.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`.
 - Types: `packages/tuffex/packages/components/src/cascader/src/types.ts` exports `CascaderProps`, `CascaderEmits`, `CascaderNode`, and `CascaderValue`.

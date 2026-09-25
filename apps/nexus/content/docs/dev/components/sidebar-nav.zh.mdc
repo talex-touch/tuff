@@ -8,9 +8,8 @@ tags: [navigation, sidebar, workspace, search]
 syncStatus: reviewed
 verified: true
 ---
-# SidebarNav 侧边导航
 
-## 基础用法
+## 用法
 
 ### SidebarNav
 :::TuffDemoWrapper{demo="SidebarNavSidebarNavDemo" code-lang="vue" title="工作区导航" description="快捷搜索可用，按 `/` 聚焦；悬停时高亮块会跟随移动。"}
@@ -33,26 +32,15 @@ code: |
 ---
 :::
 
-## 高亮块的移动与测量
+### 最佳实践
 
-选中态由文字权重和徽标承担，那块浅色底是**指针**：鼠标移到任意一行，它立刻离开当前选中项跟过去；移出列表再回到选中行。键盘 Tab 同样会带动它，因为焦点也算作指针意图。
+- 图标走 `item-icon` 插槽传内联 SVG，尺寸和描边宽度由组件统一控制。
+- 项数超过十几条时优先启用搜索，而不是继续加分组。
+- 远端搜索务必同时传 `filter="items => items"`，否则服务端返回的结果会被内建匹配再过滤一次。
+- 快捷键角标要么写单个可输入字符（真正绑定），要么写完整字形（如 `⌘K`）并自行调用 `focusSearch()`，不要写 `Ctrl` 这种半截提示。
+- 徽标只放需要跟进的计数；纯装饰的数字会让真正的待办失去分量。
 
-它是一个绝对定位的元素，通过测量目标行相对容器的位置来移动，而不是每行各自画背景——这样才有"一个东西在移动"的观感。测量逻辑抽成了 `useIndicatorBox`，与组件一同导出：
-
-```ts
-import { useIndicatorBox } from '@talex-touch/tuffex'
-```
-
-它同时返回 `top / left / width / height` 四条边，水平方向的分段控件可以复用同一次测量。相比上游多了两点：容器与目标都挂了 `ResizeObserver`（上游只在悬停/选中变化时测一次，容器改变尺寸或字体加载完成后高亮块就错位了），以及一个 `revealed` 标志，让首帧直接落位而不是从容器顶部滑进来。
-
-## 快捷搜索与 `/` 快捷键
-
-**这两处都是补齐的功能，上游是纯装饰。** 上游渲染了输入框但从不使用查询值，也没有给 `/` 绑定任何监听。
-
-- 输入即过滤（对 `label` 做大小写无关的 `includes`），过滤后为空的分组会连标题一起收起。远端搜索传 `filter="items => items"` 关掉内建匹配，自己监听 `update:query` 换 `items`。
-- 角标与键位由同一个 prop（`searchHint`）决定，因此不会出现"画了一个 `/` 却按不动"——那正是上游的缺陷形态。具体的单字符绑定、多字符字形、以及让路规则见下方「交互契约」。
-
-## API
+## API 参考
 
 ### Props
 
@@ -106,7 +94,26 @@ import { useIndicatorBox } from '@talex-touch/tuffex'
 | `focusSearch()` | 聚焦搜索框，供宿主绑定自定义快捷键。 |
 | `refreshIndicator()` | 在观察器覆盖不到的布局变化后重新测量高亮块。 |
 
-## 交互契约
+## 高亮块的移动与测量
+
+选中态由文字权重和徽标承担，那块浅色底是**指针**：鼠标移到任意一行，它立刻离开当前选中项跟过去；移出列表再回到选中行。键盘 Tab 同样会带动它，因为焦点也算作指针意图。
+
+它是一个绝对定位的元素，通过测量目标行相对容器的位置来移动，而不是每行各自画背景——这样才有"一个东西在移动"的观感。测量逻辑抽成了 `useIndicatorBox`，与组件一同导出：
+
+```ts
+import { useIndicatorBox } from '@talex-touch/tuffex'
+```
+
+它同时返回 `top / left / width / height` 四条边，水平方向的分段控件可以复用同一次测量。相比上游多了两点：容器与目标都挂了 `ResizeObserver`（上游只在悬停/选中变化时测一次，容器改变尺寸或字体加载完成后高亮块就错位了），以及一个 `revealed` 标志，让首帧直接落位而不是从容器顶部滑进来。
+
+## 快捷搜索与 `/` 快捷键
+
+**这两处都是补齐的功能，上游是纯装饰。** 上游渲染了输入框但从不使用查询值，也没有给 `/` 绑定任何监听。
+
+- 输入即过滤（对 `label` 做大小写无关的 `includes`），过滤后为空的分组会连标题一起收起。远端搜索传 `filter="items => items"` 关掉内建匹配，自己监听 `update:query` 换 `items`。
+- 角标与键位由同一个 prop（`searchHint`）决定，因此不会出现"画了一个 `/` 却按不动"——那正是上游的缺陷形态。具体的单字符绑定、多字符字形、以及让路规则见下方「交互契约」。
+
+## 概述
 
 - 选中项带 `aria-current="page"`；禁用项渲染为真正的 `disabled` 按钮，点击不派发 `select`。
 - **`searchHint` 的长度决定它是键位还是字形。** 单字符（`/`、`k`）会真正绑定到 `document` 上的 keydown：按下即聚焦搜索框并 `preventDefault`，避免那个字符同时被输进别处。多字符（`⌘K`、`Ctrl K`）只作为角标渲染，**不绑定任何键**——它们是符号而不是 `KeyboardEvent.key` 的值，猜测反而会错绑。这类宿主自己监听组合键，再调用 `focusSearch()`。两种情况下角标与行为都由同一个 prop 决定，不会出现"显示了却按不动"。
@@ -115,15 +122,7 @@ import { useIndicatorBox } from '@talex-touch/tuffex'
 - 徽标数值变化时会重建元素以重放 pop-in；数值不变则不重放。
 - 分组标题通过 `aria-labelledby` 关联到自己的列表，id 带组件实例前缀，同页多个侧边栏不会冲突。
 
-## 最佳实践
-
-- 图标走 `item-icon` 插槽传内联 SVG，尺寸和描边宽度由组件统一控制。
-- 项数超过十几条时优先启用搜索，而不是继续加分组。
-- 远端搜索务必同时传 `filter="items => items"`，否则服务端返回的结果会被内建匹配再过滤一次。
-- 快捷键角标要么写单个可输入字符（真正绑定），要么写完整字形（如 `⌘K`）并自行调用 `focusSearch()`，不要写 `Ctrl` 这种半截提示。
-- 徽标只放需要跟进的计数；纯装饰的数字会让真正的待办失去分量。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/sidebar-nav/src/TxSidebarNav.vue`。
 - Composable: `packages/tuffex/packages/components/src/sidebar-nav/src/use-indicator-box.ts`，从 `sidebar-nav/index.ts` 一并导出。
@@ -132,8 +131,6 @@ import { useIndicatorBox } from '@talex-touch/tuffex'
 - 改编自 [Beautiful UI](https://www.beautifului.dev)，© 2026 Shane Levine，MIT 协议。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **命名:** 选中态用 `modelValue` 而非 `active`，与库内其他组件的主绑定保持一致。
 - **偏离上游:** 搜索真的过滤、`/` 真的绑定、行尾操作是真按钮且触屏可见——三处都是把装饰变成功能。

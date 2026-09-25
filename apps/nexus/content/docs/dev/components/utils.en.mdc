@@ -9,13 +9,11 @@ syncStatus: reviewed
 verified: false
 ---
 
-# Utils
-
 ```ts
 import { nextZIndex, toast, hasWindow } from '@talex-touch/tuffex/utils'
 ```
 
-## API
+## API Reference
 
 ### Z-index manager
 
@@ -82,7 +80,7 @@ Serially manages global dialogs by priority with lifecycle callbacks.
 |--------|-----------|-------------|
 | `withInstall(component)` | `<T>(component: T) => T & { install }` | Attach `install` so a component works with `app.use()` |
 
-## Source
+## Technologies
 
 - Barrel: `packages/tuffex/packages/components/src/utils/index.ts` re-exports `packages/tuffex/packages/utils/*`.
 - Subpath entry: `@talex-touch/tuffex/utils`; the root `@talex-touch/tuffex` entry also folds in these exports.

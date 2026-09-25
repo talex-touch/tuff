@@ -8,7 +8,94 @@ tags: [radio, form, selection]
 syncStatus: reviewed
 verified: true
 ---
-# Radio 单选框
+
+## 用法
+
+整组不可操作时禁用 `TxRadioGroup`；只有部分选项不可用时，禁用对应 `TxRadio` 即可。
+
+### Radio (disabled)
+:::TuffDemoWrapper{demo="RadioRadioDisabledDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const groupValue = ref<TxRadioValue>('locked')
+  const optionValue = ref<TxRadioValue>('manual')
+  </script>
+
+  <template>
+    <TxRadioGroup v-model="groupValue" disabled>
+      <TxRadio value="locked">锁定</TxRadio>
+      <TxRadio value="archived">归档</TxRadio>
+    </TxRadioGroup>
+
+    <TxRadioGroup v-model="optionValue">
+      <TxRadio value="automatic" disabled>自动</TxRadio>
+      <TxRadio value="manual">手动</TxRadio>
+    </TxRadioGroup>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 同一个 group 内每个 `TxRadio.value` 必须唯一；重复原始值会让选中状态不可区分。
+- 简单纯文本选项用 `label`；卡片内容或格式化标签用默认插槽。
+- 长表单选项优先用 `type="standard" direction="column"`，短分段选择用 `type="button"`，需要解释文本时用 `type="card"`。
+- 使用 `glass` / `blur` 指示器时，除非表单校验必须立即触发，否则保持 `updateOnSettled` 默认行为，让动画收敛后再发出更新。
+- 单个不可用选项应单独禁用，让用户知道该选项存在但当前不可选；只有只读或加载态才禁用整组。
+- 不要依赖 `direction` 改变按钮组布局；按钮 radio 始终解析为横向布局。
+
+## API 参考
+
+### TxRadioGroup Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` / `v-model` | `string \| number` | - | 当前选中的 radio 值。 |
+| `disabled` | `boolean` | `false` | 禁用整组，并阻止键盘选择。 |
+| `type` | `'button' \| 'standard' \| 'card'` | `'button'` | 子级 radio 共享的视觉样式。 |
+| `direction` | `'row' \| 'column'` | - | 排列方向。`button` 固定为 row，`standard` 默认 row，`card` 默认 column。 |
+| `indicatorVariant` | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - | 按钮组指示器样式。未传时，`glass` 映射为 `glass`，`blur` 映射为 `blur`，否则为 `solid`。 |
+| `glass` | `boolean` | `false` | `glass` 按钮指示器的快捷开关。 |
+| `blur` | `boolean` | `false` | `blur` 按钮指示器的快捷开关。 |
+| `updateOnSettled` | `boolean` | - | 按钮组下是否等指示器动画收敛后再触发 v-model/change；`glass` 或 `blur` 默认启用。 |
+| `stiffness` | `number` | `110` | 按钮指示器弹簧刚度，数值越高收敛越快。 |
+| `damping` | `number` | `12` | 按钮指示器弹簧阻尼，数值越低越弹。 |
+| `blurAmount` | `number` | `1` | `blur` 指示器的背景模糊强度。 |
+| `elastic` | `boolean` | `true` | 是否启用指示器拉伸/撞击动效。 |
+
+### TxRadioGroup Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: string \| number)` | 启用子项选中新的值时触发。 |
+| `change` | `(value: string \| number)` | 启用选择完成后触发。 |
+
+### Keyboard
+
+| 按键 | 行为 |
+|------|------|
+| `ArrowRight` / `ArrowDown` | 选择下一个启用 radio。 |
+| `ArrowLeft` / `ArrowUp` | 选择上一个启用 radio。 |
+| `Home` / `End` | 选择第一个 / 最后一个启用 radio。 |
+
+### TxRadio Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `value` | `string \| number` | - | 选中时写入父级 `TxRadioGroup` 的值。 |
+| `label` | `string` | `''` | 没有默认插槽时的备用可见文本。 |
+| `disabled` | `boolean` | `false` | 禁用当前 radio，并从 group 键盘导航中移除。 |
+| `type` | `'button' \| 'standard' \| 'card'` | `'button'` | 未受 group 控制时的独立视觉样式；在 group 内会继承 group 类型。 |
+
+### TxRadio Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `click` | `(value: string \| number)` | 启用且未选中的 radio 通过父级选中自身后触发。 |
 
 ## 标准单选形式
 
@@ -119,36 +206,6 @@ code: |
 ---
 :::
 
-## 禁用状态
-
-整组不可操作时禁用 `TxRadioGroup`；只有部分选项不可用时，禁用对应 `TxRadio` 即可。
-
-### Radio (disabled)
-:::TuffDemoWrapper{demo="RadioRadioDisabledDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import type { TxRadioValue } from '@talex-touch/tuffex'
-  import { ref } from 'vue'
-
-  const groupValue = ref<TxRadioValue>('locked')
-  const optionValue = ref<TxRadioValue>('manual')
-  </script>
-
-  <template>
-    <TxRadioGroup v-model="groupValue" disabled>
-      <TxRadio value="locked">锁定</TxRadio>
-      <TxRadio value="archived">归档</TxRadio>
-    </TxRadioGroup>
-
-    <TxRadioGroup v-model="optionValue">
-      <TxRadio value="automatic" disabled>自动</TxRadio>
-      <TxRadio value="manual">手动</TxRadio>
-    </TxRadioGroup>
-  </template>
----
-:::
-
 ## Playground
 
 Playground 暴露核心 group props，方便直接比较类型、方向、禁用状态、指示器样式和动效参数。
@@ -179,66 +236,6 @@ code: |
 ---
 :::
 
-## 交互契约
-
-- `TxRadioGroup` 持有当前选中的原始值，并向子级提供类型、禁用状态和键盘导航。
-- 点击一个启用且未选中的 `TxRadio` 时，该项会触发 `click`，父级会触发 `update:modelValue` / `change`。
-- 点击已经选中的 radio 不会重复触发选择；RadioGroup 始终是单选。
-- group 级 `disabled` 会禁用所有子项；item 级 `disabled` 只禁用当前项。
-- 键盘导航只遍历启用项：方向键循环切换，`Home` / `End` 跳到第一个 / 最后一个启用项。
-- 按钮组会渲染动画指示器。`glass` 和 `blur` 指示器下，`updateOnSettled` 默认等指示器动画收敛后再发出模型更新。
-- 按钮组的指示器可横向拖拽：在 `type="button"` 组里按住指示器拖动，松手时会吸附并选中最近的启用项，触发 `update:modelValue` / `change`；整组 `disabled` 时忽略拖拽（pointerdown 不响应）。
-- `direction` 只影响 `standard` 和 `card`；按钮组始终解析为横向布局。
-
-## API
-
-### TxRadioGroup Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` / `v-model` | `string \| number` | - | 当前选中的 radio 值。 |
-| `disabled` | `boolean` | `false` | 禁用整组，并阻止键盘选择。 |
-| `type` | `'button' \| 'standard' \| 'card'` | `'button'` | 子级 radio 共享的视觉样式。 |
-| `direction` | `'row' \| 'column'` | - | 排列方向。`button` 固定为 row，`standard` 默认 row，`card` 默认 column。 |
-| `indicatorVariant` | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - | 按钮组指示器样式。未传时，`glass` 映射为 `glass`，`blur` 映射为 `blur`，否则为 `solid`。 |
-| `glass` | `boolean` | `false` | `glass` 按钮指示器的快捷开关。 |
-| `blur` | `boolean` | `false` | `blur` 按钮指示器的快捷开关。 |
-| `updateOnSettled` | `boolean` | - | 按钮组下是否等指示器动画收敛后再触发 v-model/change；`glass` 或 `blur` 默认启用。 |
-| `stiffness` | `number` | `110` | 按钮指示器弹簧刚度，数值越高收敛越快。 |
-| `damping` | `number` | `12` | 按钮指示器弹簧阻尼，数值越低越弹。 |
-| `blurAmount` | `number` | `1` | `blur` 指示器的背景模糊强度。 |
-| `elastic` | `boolean` | `true` | 是否启用指示器拉伸/撞击动效。 |
-
-### TxRadioGroup Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `(value: string \| number)` | 启用子项选中新的值时触发。 |
-| `change` | `(value: string \| number)` | 启用选择完成后触发。 |
-
-### Keyboard
-
-| 按键 | 行为 |
-|------|------|
-| `ArrowRight` / `ArrowDown` | 选择下一个启用 radio。 |
-| `ArrowLeft` / `ArrowUp` | 选择上一个启用 radio。 |
-| `Home` / `End` | 选择第一个 / 最后一个启用 radio。 |
-
-### TxRadio Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `value` | `string \| number` | - | 选中时写入父级 `TxRadioGroup` 的值。 |
-| `label` | `string` | `''` | 没有默认插槽时的备用可见文本。 |
-| `disabled` | `boolean` | `false` | 禁用当前 radio，并从 group 键盘导航中移除。 |
-| `type` | `'button' \| 'standard' \| 'card'` | `'button'` | 未受 group 控制时的独立视觉样式；在 group 内会继承 group 类型。 |
-
-### TxRadio Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `click` | `(value: string \| number)` | 启用且未选中的 radio 通过父级选中自身后触发。 |
-
 ## Slots
 
 ### TxRadioGroup
@@ -253,21 +250,22 @@ code: |
 |------|------|------|
 | `default` | - | 可见标签或卡片富内容；未传时回退到 `label` 属性。 |
 
-## 最佳实践
+## 概述
 
-- 同一个 group 内每个 `TxRadio.value` 必须唯一；重复原始值会让选中状态不可区分。
-- 简单纯文本选项用 `label`；卡片内容或格式化标签用默认插槽。
-- 长表单选项优先用 `type="standard" direction="column"`，短分段选择用 `type="button"`，需要解释文本时用 `type="card"`。
-- 使用 `glass` / `blur` 指示器时，除非表单校验必须立即触发，否则保持 `updateOnSettled` 默认行为，让动画收敛后再发出更新。
-- 单个不可用选项应单独禁用，让用户知道该选项存在但当前不可选；只有只读或加载态才禁用整组。
-- 不要依赖 `direction` 改变按钮组布局；按钮 radio 始终解析为横向布局。
+- `TxRadioGroup` 持有当前选中的原始值，并向子级提供类型、禁用状态和键盘导航。
+- 点击一个启用且未选中的 `TxRadio` 时，该项会触发 `click`，父级会触发 `update:modelValue` / `change`。
+- 点击已经选中的 radio 不会重复触发选择；RadioGroup 始终是单选。
+- group 级 `disabled` 会禁用所有子项；item 级 `disabled` 只禁用当前项。
+- 键盘导航只遍历启用项：方向键循环切换，`Home` / `End` 跳到第一个 / 最后一个启用项。
+- 按钮组会渲染动画指示器。`glass` 和 `blur` 指示器下，`updateOnSettled` 默认等指示器动画收敛后再发出模型更新。
+- 按钮组的指示器可横向拖拽：在 `type="button"` 组里按住指示器拖动，松手时会吸附并选中最近的启用项，触发 `update:modelValue` / `change`；整组 `disabled` 时忽略拖拽（pointerdown 不响应）。
+- `direction` 只影响 `standard` 和 `card`；按钮组始终解析为横向布局。
 
-## 审阅说明
+## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/radio/src/TxRadioGroup.vue` 定义 group 默认值、方向解析、指示器样式解析、键盘处理接线和按钮指示器渲染。
 - 组件源码：`packages/tuffex/packages/components/src/radio/src/TxRadio.vue` 确认 `button` / `standard` / `card` 三种 item 结构、`label` 回退、禁用处理，以及只有启用且未选中项才触发 `click`。
 - 模型行为：`packages/tuffex/packages/components/src/radio/src/radio-group-model.ts` 只在 `updateOnSettled` 生效时延迟 `update:modelValue` / `change`。
 - **实测覆盖:** `packages/tuffex/packages/components/src/radio/__tests__/radio.test.ts` 覆盖 radiogroup 语义、选中与禁用状态渲染、跳过禁用项的方向键导航、Home/End 选择，以及整组禁用时键盘无操作。
 
-## Source
 <TuffDocSourceLink />

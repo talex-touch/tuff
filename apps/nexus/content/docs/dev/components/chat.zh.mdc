@@ -8,9 +8,8 @@ tags: [chat, ai, markdown]
 syncStatus: reviewed
 verified: true
 ---
-# Chat 消息列表
 
-## 基础用法
+## 用法
 
 ### ChatList
 :::TuffDemoWrapper{demo="ChatChatListDemo" code-lang="vue"}
@@ -38,16 +37,16 @@ code: |
 ---
 :::
 
-## 交互契约
+### 最佳实践
 
-- `TxChatList` 保持 `messages` 顺序，并用稳定 `id` 渲染每条消息。
-- `markdown` 默认是 `true`，正文交给 `TxMarkdownView`；设为 `false` 时渲染纯文本。
-- `stagger` 默认是 `true`，列表会用 `TxStagger` 包裹消息行；虚拟列表或频繁重排的记录应关闭。
-- `createdAt` 只在挂载后格式化，避免 SSR 与客户端时间不一致。
-- 图片附件以原生 `button type="button"` 缩略图渲染，图片使用 lazy loading。
-- `imageClick` 始终包含 `{ url, name, messageId }`，宿主可据此打开预览、下载或审计来源消息。
+- 使用对话存储中的稳定消息 id，不要用数组下标作为 key。
+- 在数据边界归一化远程图片 URL；`TxChatMessage` 不校验或重写附件来源。
+- 虚拟列表或流式过程中会重排消息时关闭 `stagger`。
+- 在宿主处理 `imageClick`，让预览、下载、analytics 和权限检查保留产品语义。
+- 可信助手输出可保持 Markdown 开启；不可信内容进入消息数组前应先清洗或归一化。
+- 输入框和助手 pending 状态分别参考独立的 `TxChatComposer` 与 `TxTypingIndicator` 文档；本页只覆盖对话记录渲染。
 
-## API
+## API 参考
 
 ### Data Models
 
@@ -119,30 +118,22 @@ code: |
 
 不暴露公开实例方法。
 
-## 相关组件
+## 概述
 
-- `TxChatComposer` 负责文本输入、附件、发送保护和工具栏插槽，见 [ChatComposer](./chat-composer.zh.mdc)。
-- `TxTypingIndicator` 负责助手输入中状态，见 [TypingIndicator](./typing-indicator.zh.mdc)。
-- 需要 `tool` 消息或 streaming 状态的新 AI 对话界面，优先使用 [AI Elements](./ai-elements.zh.mdc)。
+- `TxChatList` 保持 `messages` 顺序，并用稳定 `id` 渲染每条消息。
+- `markdown` 默认是 `true`，正文交给 `TxMarkdownView`；设为 `false` 时渲染纯文本。
+- `stagger` 默认是 `true`，列表会用 `TxStagger` 包裹消息行；虚拟列表或频繁重排的记录应关闭。
+- `createdAt` 只在挂载后格式化，避免 SSR 与客户端时间不一致。
+- 图片附件以原生 `button type="button"` 缩略图渲染，图片使用 lazy loading。
+- `imageClick` 始终包含 `{ url, name, messageId }`，宿主可据此打开预览、下载或审计来源消息。
 
-## 最佳实践
-
-- 使用对话存储中的稳定消息 id，不要用数组下标作为 key。
-- 在数据边界归一化远程图片 URL；`TxChatMessage` 不校验或重写附件来源。
-- 虚拟列表或流式过程中会重排消息时关闭 `stagger`。
-- 在宿主处理 `imageClick`，让预览、下载、analytics 和权限检查保留产品语义。
-- 可信助手输出可保持 Markdown 开启；不可信内容进入消息数组前应先清洗或归一化。
-- 输入框和助手 pending 状态分别参考独立的 `TxChatComposer` 与 `TxTypingIndicator` 文档；本页只覆盖对话记录渲染。
-
-## 审阅说明
+## 技术实现
 
 - 已人工核对 `packages/tuffex/packages/components/src/chat/src/types.ts`、`TxChatList.vue`、`TxChatMessage.vue`、`TxChatComposer.vue`、`TxTypingIndicator.vue`、`chat-composer.test.ts` 与 `typing-indicator.test.ts`。
 - API 标题已统一为共享的 `Props`、`Events`、`Slots`，再用子标题区分组件，同时保留 message 数据模型。
 - 已按源码确认 `TxChatList` 会透传 `imageClick`，`TxChatMessage` 发出标准化图片 payload，Markdown 默认开启，stagger 默认开启，时间戳挂载前不渲染。
 - **实测覆盖:** Coverage: 当前没有专用的 `TxChatList` / `TxChatMessage` 单测；`apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 会验证本页与 `ChatChatListDemo`，同目录的 `chat-composer.test.ts` 和 `typing-indicator.test.ts` 覆盖本页链接到的相关组件。
 - `TxChatComposer` 和 `TxTypingIndicator` 位于同一源码目录，但作为相关组件链接，避免在本对话记录页面重复完整 API。
-
-## Source
 
 - List source: `packages/tuffex/packages/components/src/chat/src/TxChatList.vue`
 - Message source: `packages/tuffex/packages/components/src/chat/src/TxChatMessage.vue`
@@ -151,3 +142,9 @@ code: |
 - Tests: `packages/tuffex/packages/components/src/chat/__tests__/chat-composer.test.ts`, `packages/tuffex/packages/components/src/chat/__tests__/typing-indicator.test.ts`
 
 <TuffDocSourceLink />
+
+## 相关组件
+
+- `TxChatComposer` 负责文本输入、附件、发送保护和工具栏插槽，见 [ChatComposer](./chat-composer.zh.mdc)。
+- `TxTypingIndicator` 负责助手输入中状态，见 [TypingIndicator](./typing-indicator.zh.mdc)。
+- 需要 `tool` 消息或 streaming 状态的新 AI 对话界面，优先使用 [AI Elements](./ai-elements.zh.mdc)。

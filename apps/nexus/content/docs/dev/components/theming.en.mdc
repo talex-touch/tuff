@@ -9,6 +9,11 @@ syncStatus: reviewed
 verified: false
 ---
 
+## Usage
+
+- Set tokens, not `background-color`, when a component already exposes a fill hook. Some fills are `background-image` gradients, and a `background-color` override paints behind them.
+- Import `base.css` exactly once. Two copies mean whichever loads last wins, which is rarely the one you edited.
+
 ## The model
 
 No Tuffex component hard-codes a colour. Every visual reads a CSS custom property, which means re-theming is a stylesheet change and never a fork. The properties come in four layers, widest first — pick the narrowest one that solves your problem.
@@ -111,12 +116,7 @@ code: |
 
 Each component page lists the hooks it reads. Prefer these over descendant selectors into component internals: the custom properties are the supported surface, the class names are not.
 
-## Notes
-
-- Set tokens, not `background-color`, when a component already exposes a fill hook. Some fills are `background-image` gradients, and a `background-color` override paints behind them.
-- Import `base.css` exactly once. Two copies mean whichever loads last wins, which is rarely the one you edited.
-
-## Source
+## Technologies
 
 - Token and theme selectors: `packages/tuffex/packages/components/style/variables.scss`.
 - AI suite tokens: `packages/tuffex/packages/components/style/bui-tokens.scss`.

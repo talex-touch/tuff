@@ -8,7 +8,39 @@ tags: [logo, svg, animation]
 syncStatus: reviewed
 verified: true
 ---
-# TuffLogoStroke
+
+## Usage
+
+### Best Practices
+
+- Use `once` for splash, loading-complete, or first-view brand moments.
+- Use `hover` when the logo sits near an interactive affordance and should not animate continuously.
+- Use `breathe` / `loop` sparingly; repeating brand motion can compete with primary UI feedback.
+- Keep custom colors close to the surrounding surface palette. High-saturation gradients work best on calm backgrounds.
+- Do not wrap the SVG in another animation unless you have checked reduced-motion behavior for the combined effect.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `size` | `string \| number` | `120` | SVG width and height. Numeric values are normalized to px. |
+| `mode` | `'once' \| 'breathe' \| 'hover' \| 'loop'` | `'once'` | Animation trigger mode. `loop` is normalized to `breathe`. |
+| `durationMs` | `number` | `2200` | Base animation duration in milliseconds. |
+| `strokeColor` | `string` | `'#4C4CFF'` | Outline stroke color. |
+| `fillStartColor` | `string` | `'#199FFE'` | Start color of the core fill gradient. |
+| `fillEndColor` | `string` | `'#810DC6'` | End color of the core fill gradient. |
+| `outerStartColor` | `string` | `'#D73E4D'` | Start color of the outer radial gradient. |
+| `outerEndColor` | `string` | `'#7F007F'` | End color of the outer radial gradient. |
+
+### Slots
+
+No slots.
+
+### Events
+
+No component events.
 
 ## Animation Modes
 
@@ -47,30 +79,7 @@ code: |
 ---
 ::::
 
-## API
-
-### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `size` | `string \| number` | `120` | SVG width and height. Numeric values are normalized to px. |
-| `mode` | `'once' \| 'breathe' \| 'hover' \| 'loop'` | `'once'` | Animation trigger mode. `loop` is normalized to `breathe`. |
-| `durationMs` | `number` | `2200` | Base animation duration in milliseconds. |
-| `strokeColor` | `string` | `'#4C4CFF'` | Outline stroke color. |
-| `fillStartColor` | `string` | `'#199FFE'` | Start color of the core fill gradient. |
-| `fillEndColor` | `string` | `'#810DC6'` | End color of the core fill gradient. |
-| `outerStartColor` | `string` | `'#D73E4D'` | Start color of the outer radial gradient. |
-| `outerEndColor` | `string` | `'#7F007F'` | End color of the outer radial gradient. |
-
-### Slots
-
-No slots.
-
-### Events
-
-No component events.
-
-## Interaction Contract
+## Overview
 
 - The component renders one SVG with `role="img"` and the accessible name `Tuff logo stroke animation`.
 - `mode="loop"` is an alias for `mode="breathe"`; both produce the breathe state class.
@@ -78,21 +87,11 @@ No component events.
 - `durationMs` is written to `--tx-tuff-logo-duration`; breathe mode derives its pulse duration from that value.
 - The component includes `prefers-reduced-motion: reduce` CSS that disables animations and shows the final drawn state.
 
-## Best Practices
-
-- Use `once` for splash, loading-complete, or first-view brand moments.
-- Use `hover` when the logo sits near an interactive affordance and should not animate continuously.
-- Use `breathe` / `loop` sparingly; repeating brand motion can compete with primary UI feedback.
-- Keep custom colors close to the surrounding surface palette. High-saturation gradients work best on calm backgrounds.
-- Do not wrap the SVG in another animation unless you have checked reduced-motion behavior for the combined effect.
-
-## Review Notes
+## Technologies
 
 - **Motion note:** `breathe` and `loop` are visually identical after normalization. Use `loop` only when matching older call sites; prefer `breathe` in new examples because it names the actual class state.
 - **SVG note:** Gradient and filter ids are generated per instance with `useId()`. This prevents collisions in repeated logos but means snapshots should assert existence/uniqueness, not exact id strings.
 - **Verified coverage:** `tuff-logo-stroke.test.ts` checks accessible SVG semantics, numeric and string sizes, CSS duration variable, `loop` to `breathe` mapping, palette forwarding, instance-scoped SVG ids, and install registration.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/tuff-logo-stroke/src/TxTuffLogoStroke.vue`.
 - Types: `packages/tuffex/packages/components/src/tuff-logo-stroke/src/types.ts` exports `TuffLogoStrokeProps`.

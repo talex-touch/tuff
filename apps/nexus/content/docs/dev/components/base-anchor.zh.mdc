@@ -8,9 +8,8 @@ tags: [popover, overlay, floating, gsap, animation]
 syncStatus: reviewed
 verified: true
 ---
-# BaseAnchor 锚点定位
 
-## 基础用法
+## 用法
 
 ### BaseAnchor
 :::TuffDemoWrapper{demo="BaseAnchorBasicDemo" code-lang="vue"}
@@ -323,7 +322,13 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+- 优先使用 `TxPopover`、`TxDropdownMenu` 或 `TxContextMenu`；只有在构建新的锚点基础组件或需要虚拟 reference 定位时才直接使用 `TxBaseAnchor`。
+- 浮层内容保持轻量；多步骤表单、危险确认或整屏流程应改用 Drawer/Dialog。
+- 坐标锚点菜单应传入 `virtualReference`，并在鼠标位置或画布变换后调用 `updatePosition()`。
+
+## API 参考
 
 ### TxBaseAnchor Props
 
@@ -411,7 +416,7 @@ code: |
 | `toggle` | - | 编程式切换 |
 | `updatePosition` | - | 手动刷新 Floating UI 定位 |
 
-## 交互契约
+## 概述
 
 - `modelValue` 支持受控与非受控用法。点击 reference 会触发 `update:modelValue`，状态变化时同步触发 `open` 或 `close`。
 - `disabled` 会阻断打开；已打开的非受控 Anchor 在切换为 disabled 后会关闭。
@@ -431,14 +436,7 @@ code: |
 - `drip` / `bead` 需要可测量的面板高度；`unlimitedHeight`（或 `maxHeight <= 0`）会回落到瞬时显示/隐藏路径。
 - `prefers-reduced-motion: reduce` 下所有动画类型都直接跳到终态而不播放：GSAP 驱动的 `transfer` / `boom` / `opacity` 立即结束，`drip` / `bead` 通过其 prepare 步骤跳到终态（`none` 本就是瞬时）。
 
-## 最佳实践
-
-- 优先使用 `TxPopover`、`TxDropdownMenu` 或 `TxContextMenu`；只有在构建新的锚点基础组件或需要虚拟 reference 定位时才直接使用 `TxBaseAnchor`。
-- 浮层内容保持轻量；多步骤表单、危险确认或整屏流程应改用 Drawer/Dialog。
-- 坐标锚点菜单应传入 `virtualReference`，并在鼠标位置或画布变换后调用 `updatePosition()`。
-
-
-## 审阅说明
+## 技术实现
 
 - 已核对 `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`、`base-anchor-motion.ts`、`types.ts` 与 `base-anchor.test.ts`。
 - 现有测试覆盖非受控切换、受控的外部点击/Escape 关闭路径、禁用阻断、关闭/切换开关、floating attrs 与 reference class、动画变体及旧版 duration/ease 兼容，以及 surface-motion adaptation 策略。
@@ -448,8 +446,6 @@ code: |
 - `drip` / `bead` 的覆盖分布在 `base-anchor-liquid.test.ts`（cubic-bezier 求解、弹簧拒绝、p=0 / 0.45 / 1 的稿值几何、两条边的独立性、逐项揭示）与 `base-anchor.test.ts`（单一合并 goo 滤镜、腐蚀推导的轮廓环、滤镜外的阴影孪生、箭头/描边/卡片抑制、横向降级、不走 gsap）。
 - `drip` / `bead` 由 rAF 循环驱动而非 GSAP：动效由两条 CSS cubic-bezier 定义，且每帧都要从单一进度标量派生 SVG 几何、阴影孪生与逐项透明度。
 - 浏览器支持：`liquid` 用的是 `filter: url(#…)`，Safari 与 Firefox 均支持。受限的只有 `backdrop-filter: url(#…)`，而 `liquid` 不使用它，因此不需要降级梯度。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`。
 - Type contracts: `packages/tuffex/packages/components/src/base-anchor/src/types.ts` 导出 `BaseAnchorProps`、`BaseAnchorAnimationOptions` 与虚拟 reference 类型。

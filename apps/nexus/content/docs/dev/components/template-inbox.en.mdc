@@ -9,13 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-The mail and notification centre of a Tuff account: plugin review results, CI builds, sign-in alerts, channel mentions, releases and statements all land here. Hundreds of messages have to be skimmable, keyboard-driven and answerable in place, and new mail must not interrupt what is being read. The notification center takes the other road: no reader pane, and every notice carries its own quick action, so the list itself is where things get done.
-
-It fits any "list + reader" interface: a notification centre, ticket and review queues, a support inbox.
-
-## Template
+## Usage
 
 ### Three-pane inbox
 
@@ -157,7 +151,30 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+The mail and notification centre of a Tuff account: plugin review results, CI builds, sign-in alerts, channel mentions, releases and statements all land here. Hundreds of messages have to be skimmable, keyboard-driven and answerable in place, and new mail must not interrupt what is being read. The notification center takes the other road: no reader pane, and every notice carries its own quick action, so the list itself is where things get done.
+
+It fits any "list + reader" interface: a notification centre, ticket and review queues, a support inbox.
+
+- With focus inside the template: ↑ / ↓ or J / K move between messages, E archives, S stars, Enter opens the message and focuses the reply box. Inside a text field the single-letter keys do nothing; the shortcuts sit on the template root and never touch the docs page's own keys.
+- After the stage first scrolls into view, a message arrives at 3.5, 9 and 15 seconds and the unread counts follow; the alert stays for about 4 seconds and View opens it. If the reader has scrolled down, new mail lands above the viewport and the list does not jump back to the top. With reduced motion all three are there from the start, with no alerts and no timers.
+- In the reply box Enter adds a line and ⌘ / Ctrl + Enter sends; about 0.6 seconds later the reply joins the conversation, with Undo.
+- Archive and Move to apply at once and can be undone, and the reader moves on to the next message; switching folders shows skeleton rows for about 0.4 seconds.
+- Expanded (≥ 960px) a fixed 216px sidebar takes over, so only the list and the reader follow the divider; below 640px only the list shows, the reader slides in from the right when a message opens, and Esc or Back returns to the list.
+- Notification center: clicking a row marks it read and says what the host would open, without leaving the docs page; quick actions run in place and turn into a result you can undo. Approve, decline and it was me / not me only ever come from the reader's own click; playback never presses them. Reply opens a field inside the row: Enter sends, Esc cancels.
+- Notification center: with focus inside the template, J / K or ↑ / ↓ move between notices, E toggles read, X selects (the first press enters select mode) and Esc leaves select mode. The ⋯ menu snoozes a notice or mutes its source: snoozed notices collect under Snoozed at the end of the feed, muted sources fade, and both can be undone from the toast.
+- Notification center: after the stage first scrolls into view, a notice arrives at 3, 8 and 14 seconds with an alert at the bottom right of the feed (a full-width strip when narrow), clear of the filters and group headers, and View jumps to it; if the reader has scrolled down, the feed does not jump back to the top. With do-not-disturb on (press Notifications on in the header, or set quiet hours that cover the current 10:30), new notices slip in and are counted instead, and security notices still alert while break-through is on. With reduced motion all three are there from the start. Expanded (≥ 960px) the feed is capped at 760px and the settings stay open on the right.
+
+## Customization
+
+- For bigger mailboxes keep a fixed row height (`item-height`) and move search and paging to the server; fill `aria-setsize` and `aria-posinset` from the real totals.
+- When bodies come from outside, keep TxMarkdownView's default sanitising and intercept link clicks in the host so the system browser opens them.
+- Rebind the shortcuts to suit the product, but keep them on the component root and let single-letter keys through inside editable elements.
+- Attachment upload belongs to the host: TxChatComposer only hands over File objects, and creating and revoking object URLs happens in the host.
+- Notification center: for real push delivery, let one set of quiet-hours and source settings decide whether a notice is inserted with an alert or only inserted; take a quick action's result from the server's reply, and on failure show an error in its place and keep the original buttons.
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -178,22 +195,3 @@ code: |
 | Snoozed (Notification center) | [TxCollapse / TxCollapseItem](/docs/dev/components/collapse) | Collapsed at the end of the feed; each notice can be unsnoozed |
 | Settings (Notification center) | [TuffSwitch](/docs/dev/components/switch), [TxSelect](/docs/dev/components/select), [TxFlatRadio](/docs/dev/components/flat-radio), [TxIconChip](/docs/dev/components/icon-chip), [TxTooltip](/docs/dev/components/tooltip) | Quiet hours as two half-hour selects (tuffex has no time picker), the days they apply on and whether security breaks through; which sources to receive; a permanent side column when expanded |
 | Empty states (Notification center) | [TxEmptyState](/docs/dev/components/empty-state) | Clear filters when a filter leaves nothing; when everything is handled, a way to the snoozed notices |
-
-## Interactions
-
-- With focus inside the template: ↑ / ↓ or J / K move between messages, E archives, S stars, Enter opens the message and focuses the reply box. Inside a text field the single-letter keys do nothing; the shortcuts sit on the template root and never touch the docs page's own keys.
-- After the stage first scrolls into view, a message arrives at 3.5, 9 and 15 seconds and the unread counts follow; the alert stays for about 4 seconds and View opens it. If the reader has scrolled down, new mail lands above the viewport and the list does not jump back to the top. With reduced motion all three are there from the start, with no alerts and no timers.
-- In the reply box Enter adds a line and ⌘ / Ctrl + Enter sends; about 0.6 seconds later the reply joins the conversation, with Undo.
-- Archive and Move to apply at once and can be undone, and the reader moves on to the next message; switching folders shows skeleton rows for about 0.4 seconds.
-- Expanded (≥ 960px) a fixed 216px sidebar takes over, so only the list and the reader follow the divider; below 640px only the list shows, the reader slides in from the right when a message opens, and Esc or Back returns to the list.
-- Notification center: clicking a row marks it read and says what the host would open, without leaving the docs page; quick actions run in place and turn into a result you can undo. Approve, decline and it was me / not me only ever come from the reader's own click; playback never presses them. Reply opens a field inside the row: Enter sends, Esc cancels.
-- Notification center: with focus inside the template, J / K or ↑ / ↓ move between notices, E toggles read, X selects (the first press enters select mode) and Esc leaves select mode. The ⋯ menu snoozes a notice or mutes its source: snoozed notices collect under Snoozed at the end of the feed, muted sources fade, and both can be undone from the toast.
-- Notification center: after the stage first scrolls into view, a notice arrives at 3, 8 and 14 seconds with an alert at the bottom right of the feed (a full-width strip when narrow), clear of the filters and group headers, and View jumps to it; if the reader has scrolled down, the feed does not jump back to the top. With do-not-disturb on (press Notifications on in the header, or set quiet hours that cover the current 10:30), new notices slip in and are counted instead, and security notices still alert while break-through is on. With reduced motion all three are there from the start. Expanded (≥ 960px) the feed is capped at 760px and the settings stay open on the right.
-
-## Adapting it
-
-- For bigger mailboxes keep a fixed row height (`item-height`) and move search and paging to the server; fill `aria-setsize` and `aria-posinset` from the real totals.
-- When bodies come from outside, keep TxMarkdownView's default sanitising and intercept link clicks in the host so the system browser opens them.
-- Rebind the shortcuts to suit the product, but keep them on the component root and let single-letter keys through inside editable elements.
-- Attachment upload belongs to the host: TxChatComposer only hands over File objects, and creating and revoking object URLs happens in the host.
-- Notification center: for real push delivery, let one set of quiet-hours and source settings decide whether a notice is inserted with an alert or only inserted; take a quick action's result from the server's reply, and on failure show an error in its place and keep the original buttons.

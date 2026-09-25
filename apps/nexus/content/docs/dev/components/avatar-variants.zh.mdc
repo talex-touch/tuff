@@ -8,7 +8,6 @@ tags: [avatar, badge, status]
 syncStatus: reviewed
 verified: true
 ---
-# Avatar Variants 头像变体
 
 ## Gallery
 
@@ -54,13 +53,11 @@ code: |
 ---
 :::
 
-## 审阅说明 / Review Notes
+## 技术实现
 
 - **组合说明:** 本页是配方 gallery，不是独立导出的组件。每张卡片组合 `TxAvatar`、`TxCornerOverlay`、`TxOutlineBorder`、`TxIcon` 与本地 CSS 工具类；落地时应复制最小所需模式，不要导入整套 gallery demo。
 - **可访问性说明:** 纯装饰 badge 在 demo 中使用空 `alt` 或 `aria-hidden`。如果 badge 表示用户状态，应在相邻文本或父级控件 label 中暴露状态，不要只依赖颜色或图标轮廓。
 - **实测覆盖:** demo registry 加载 `AvatarVariantsAvatarVariantsGalleryDemo`；底层组件测试为 `avatar.test.ts` 覆盖 `TxAvatar`/`TxAvatarGroup`，并配合 `corner-overlay`、`outline-border` 的组件测试覆盖角标位置与 ring/mask 行为。
-
-## Source
 
 - Demo source: `apps/nexus/app/components/content/demos/AvatarVariantsAvatarVariantsGalleryDemo.vue`。
 - Helper source: `apps/nexus/app/components/content/demos/AvatarVariantCard.vue`。

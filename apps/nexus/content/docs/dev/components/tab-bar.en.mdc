@@ -8,9 +8,8 @@ tags: [navigation, tabs, mobile]
 syncStatus: reviewed
 verified: true
 ---
-# TabBar
 
-## Basic Usage
+## Usage
 
 Disable `fixed` when the tab bar is rendered inside a preview frame, modal, or custom shell instead of the viewport.
 
@@ -34,34 +33,15 @@ code: |
 ---
 ::::
 
-## Indicator
+### Best Practices
 
-`indicator` slides one surface behind the active destination instead of relying on colour alone. `pill` raises a surface the way `TxFlatRadio`'s thumb does; `block` fills the same box with a tint instead, for a bar on a card where another shadow would only add noise; `line` runs a rule along the bar's top edge; `dot` marks the item with a small centred dot; `none` is the colour-only bar. The names match `TxTabs`' `indicatorVariant` so the two read as one family.
+- Keep item count small enough for thumb navigation, usually three to five primary destinations.
+- Use stable primitive `value` fields that map cleanly to routes or view keys.
+- Set `fixed=false` in embedded previews, drawers, and custom app shells to avoid pinning the bar to the real viewport.
+- Keep `badge` short. Use numbers or compact status text; long copy will crowd the icon area.
+- Do not nest interactive controls inside labels. `TxTabBar` already renders each item as a button.
 
-`size` is the same three-step ladder `TxFlatRadio` uses, for the same reason: a bar inside a compact panel and a bar at the bottom of a phone screen are not the same control at the same size.
-
-### TabBar (indicator)
-:::TuffDemoWrapper{demo="TabBarIndicatorDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref('home')
-  const items = [
-    { value: 'home', label: 'Home', iconClass: 'i-carbon-home' },
-    { value: 'search', label: 'Search', iconClass: 'i-carbon-search', badge: 3 },
-    { value: 'me', label: 'Me', iconClass: 'i-carbon-user' },
-  ]
-  </script>
-
-  <template>
-    <TxTabBar v-model="active" :items="items" :fixed="false" indicator="pill" />
-  </template>
----
-:::
-
-## API
+## API Reference
 
 ### Props
 
@@ -97,7 +77,34 @@ No slots. Render tabs through `items`.
 | `update:modelValue` | `TabBarValue` | Emitted with the picked item value. |
 | `change` | `TabBarValue` | Emitted with the same value after a non-disabled item is picked. |
 
-## Interaction Contract
+## Indicator
+
+`indicator` slides one surface behind the active destination instead of relying on colour alone. `pill` raises a surface the way `TxFlatRadio`'s thumb does; `block` fills the same box with a tint instead, for a bar on a card where another shadow would only add noise; `line` runs a rule along the bar's top edge; `dot` marks the item with a small centred dot; `none` is the colour-only bar. The names match `TxTabs`' `indicatorVariant` so the two read as one family.
+
+`size` is the same three-step ladder `TxFlatRadio` uses, for the same reason: a bar inside a compact panel and a bar at the bottom of a phone screen are not the same control at the same size.
+
+### TabBar (indicator)
+:::TuffDemoWrapper{demo="TabBarIndicatorDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('home')
+  const items = [
+    { value: 'home', label: 'Home', iconClass: 'i-carbon-home' },
+    { value: 'search', label: 'Search', iconClass: 'i-carbon-search', badge: 3 },
+    { value: 'me', label: 'Me', iconClass: 'i-carbon-user' },
+  ]
+  </script>
+
+  <template>
+    <TxTabBar v-model="active" :items="items" :fixed="false" indicator="pill" />
+  </template>
+---
+:::
+
+## Overview
 
 - The root is a `nav` landmark; it is site navigation, not a tab widget, so there is no `role="tablist"`. Each item is a `button`, and the active destination carries `aria-current="page"` derived from `modelValue`.
 - The indicator measures through the shared `useIndicatorBox`, the same reading `TxSidebarNav` uses: fractional rects rather than `offsetLeft`, the container's border removed because an absolutely positioned indicator resolves against the padding box, and an ancestor transform normalised out. A `ResizeObserver` re-measures, so the indicator does not strand after a resize or a font swap.
@@ -110,23 +117,13 @@ No slots. Render tabs through `items`.
 - `safeAreaBottom` only controls the spacer node. It can be used with both fixed and non-fixed layouts.
 - `zIndex` is written as a CSS custom property so app shells can override stacking without deep selectors.
 
-## Best Practices
-
-- Keep item count small enough for thumb navigation, usually three to five primary destinations.
-- Use stable primitive `value` fields that map cleanly to routes or view keys.
-- Set `fixed=false` in embedded previews, drawers, and custom app shells to avoid pinning the bar to the real viewport.
-- Keep `badge` short. Use numbers or compact status text; long copy will crowd the icon area.
-- Do not nest interactive controls inside labels. `TxTabBar` already renders each item as a button.
-
-## Review Notes
+## Technologies
 
 - **Model contract:** `TxTabBar` emits `update:modelValue` and `change` only when an enabled item is picked while the bar itself is enabled. Disabled items render native disabled buttons.
 - **Layout note:** `fixed=true` pins the bar to the viewport and `safeAreaBottom=true` adds an `env(safe-area-inset-bottom)` spacer. Turn both off inside previews, modals, and embedded shells.
 - **Indicator note:** the bar deliberately shares `useIndicatorBox` with `TxSidebarNav` and does not grow its own measurement. A bar that travels must not drift from the controls that travel beside it.
 - **Props are declared as a runtime object, not `defineProps<TabBarProps>()`.** The SFC compiler resolves an imported props interface by reading the sibling module, and it does not pick up fields added to `types.ts` afterwards — a cold dev server with every cache cleared still emitted the previous prop list, so `size` arrived as a fallthrough attribute and read as `undefined`. Build output was correct throughout, which is what makes it easy to miss. `TabBarProps` is still exported for callers; it is just not the source of the runtime list. `TxTabs` declares its props the same way.
 - **Verified coverage:** `tab-bar.test.ts` covers navigation semantics (nav landmark with no `role`), the `aria-current="page"` active item, icons, badges, z-index CSS variable, fixed/safe-area toggles, enabled emissions, disabled bar/item blocking, each size tier's inline CSS variables with an unknown-size fallback, every indicator variant's class, and that `none` renders no indicator node.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/tab-bar/src/TxTabBar.vue`.
 - Types: `packages/tuffex/packages/components/src/tab-bar/src/types.ts` exports `TabBarItem`, `TabBarProps`, `TabBarEmits`, `TabBarValue`, `TabBarIndicator`, and `TabBarSize`.

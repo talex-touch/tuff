@@ -8,11 +8,10 @@ tags: [text, morph, number, spring, live-region]
 syncStatus: reviewed
 verified: true
 ---
-# TextMorph 文本形变
 
 > 与 `TxTextTransformer` 的整串淡化不同：这里的动效单位是**字符段**，不是整个字符串。存活的段做 FLIP 位移，新增的段从最近的锚点淡入，离场的段脱离文档流后淡出，数字额外按位值纵向滚动。
 
-## 基础用法
+## 用法
 
 ### TextMorph
 :::TuffDemoWrapper{demo="TextMorphTextMorphDemo" code-lang="vue"}
@@ -42,6 +41,44 @@ code: |
   </template>
 ---
 :::
+
+### 最佳实践
+
+- 计数器、金额、进度百分比这类"同一个量在变"的值优先用它；`numbers` 的位值匹配就是为这类值写的。
+- 输入框里跟随用户键入的数字要传 `cursorIndex`，否则在 `20` 前面插一位会被理解成整列重新编号。
+- 需要软换行或省略号截断的文本用 `TxTextTransformer` 的 `mode="fade"`，引擎表达不了这两件事。
+- 同一屏里不要放太多高频实例：每个字符都是一个带 `will-change` 的元素。
+- 想让容器跟着变化就直接用它——引擎自己动画宽高，不需要再套 `TxAutoSizer`。
+
+## API 参考
+
+### TxTextMorph Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `text` | `string \| number` | - | 要渲染的值。数字会先按 `locale` + `decimals` 格式化。 |
+| `tag` | `string` | `span` | 根节点 HTML 标签。 |
+| `durationMs` | `number` | `400` | 形变时长（ms）。设了 `spring` 时被忽略。 |
+| `easing` | `string` | `cubic-bezier(0.19, 1, 0.22, 1)` | CSS 缓动函数。设了 `spring` 时被忽略。 |
+| `spring` | `'snappy' \| 'smooth' \| 'bouncy' \| { stiffness?, damping?, mass? }` | - | 弹簧物理。同时提供曲线与时长。 |
+| `scale` | `boolean` | `true` | 离场段是否带缩放。 |
+| `numbers` | `boolean` | `true` | 数字按位值滚动；关闭后退回字符级形变。 |
+| `decimals` | `number` | - | 小数位数。仅当 `text` 是数字时生效。 |
+| `locale` | `string` | `en` | 用于分段与数字格式化。 |
+| `cursorIndex` | `number` | - | 光标位置。输入框场景下把单个数字从位值匹配切成光标匹配。 |
+| `disabled` | `boolean` | `false` | 跳过动画，直接写入值。 |
+| `respectReducedMotion` | `boolean` | `true` | 把 `prefers-reduced-motion: reduce` 当作 `disabled`。 |
+| `debug` | `boolean` | `false` | 给根节点和每个段描边，用于排查形变异常。 |
+
+### TxTextMorph Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `animation-start` | - | 一次形变开始时触发；首帧渲染不触发。 |
+| `animation-complete` | - | 形变自然走完。 |
+| `animation-cancel` | - | 形变被下一次更新打断。 |
+
+> 每次形变里 `animation-complete` 与 `animation-cancel` 恰好触发其一。
 
 ## 数字位值滚动
 
@@ -88,37 +125,7 @@ code: |
 ---
 :::
 
-## API
-
-### TxTextMorph Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `text` | `string \| number` | - | 要渲染的值。数字会先按 `locale` + `decimals` 格式化。 |
-| `tag` | `string` | `span` | 根节点 HTML 标签。 |
-| `durationMs` | `number` | `400` | 形变时长（ms）。设了 `spring` 时被忽略。 |
-| `easing` | `string` | `cubic-bezier(0.19, 1, 0.22, 1)` | CSS 缓动函数。设了 `spring` 时被忽略。 |
-| `spring` | `'snappy' \| 'smooth' \| 'bouncy' \| { stiffness?, damping?, mass? }` | - | 弹簧物理。同时提供曲线与时长。 |
-| `scale` | `boolean` | `true` | 离场段是否带缩放。 |
-| `numbers` | `boolean` | `true` | 数字按位值滚动；关闭后退回字符级形变。 |
-| `decimals` | `number` | - | 小数位数。仅当 `text` 是数字时生效。 |
-| `locale` | `string` | `en` | 用于分段与数字格式化。 |
-| `cursorIndex` | `number` | - | 光标位置。输入框场景下把单个数字从位值匹配切成光标匹配。 |
-| `disabled` | `boolean` | `false` | 跳过动画，直接写入值。 |
-| `respectReducedMotion` | `boolean` | `true` | 把 `prefers-reduced-motion: reduce` 当作 `disabled`。 |
-| `debug` | `boolean` | `false` | 给根节点和每个段描边，用于排查形变异常。 |
-
-### TxTextMorph Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `animation-start` | - | 一次形变开始时触发；首帧渲染不触发。 |
-| `animation-complete` | - | 形变自然走完。 |
-| `animation-cancel` | - | 形变被下一次更新打断。 |
-
-> 每次形变里 `animation-complete` 与 `animation-cancel` 恰好触发其一。
-
-## 交互契约
+## 概述
 
 - 完整值以一个视觉隐藏但可读的 `[tx-morph-sr]` 节点存在；所有段元素都是 `aria-hidden`，屏幕阅读器只会读到完整值一次。
 - 段元素由引擎命令式创建，因此组件样式**不是 scoped** 的，作用域由 `tx-morph-*` 属性名保证。
@@ -128,15 +135,7 @@ code: |
 - 根节点是 `white-space: nowrap`，换行由值里的 `\n` 生成 `<br>`；它不做软换行，也不做省略号截断。
 - `cursorIndex` 只在整个值里恰好有一个数字时生效。
 
-## 最佳实践
-
-- 计数器、金额、进度百分比这类"同一个量在变"的值优先用它；`numbers` 的位值匹配就是为这类值写的。
-- 输入框里跟随用户键入的数字要传 `cursorIndex`，否则在 `20` 前面插一位会被理解成整列重新编号。
-- 需要软换行或省略号截断的文本用 `TxTextTransformer` 的 `mode="fade"`，引擎表达不了这两件事。
-- 同一屏里不要放太多高频实例：每个字符都是一个带 `will-change` 的元素。
-- 想让容器跟着变化就直接用它——引擎自己动画宽高，不需要再套 `TxAutoSizer`。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/text-morph/src/TxTextMorph.vue`。
 - Engine: `packages/tuffex/packages/components/src/text-morph/src/engine/`，移植自 [lochie/torph](https://github.com/lochie/torph)（MIT），弹簧层换成了 TuffEx 自己的 `liquid/src/spring.ts`。

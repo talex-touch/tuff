@@ -8,9 +8,8 @@ tags: [loading, state, placeholder]
 syncStatus: reviewed
 verified: true
 ---
-# LoadingState 加载态
 
-## 基础用法
+## 用法
 
 ### LoadingState
 :::TuffDemoWrapper{demo="LoadingStateLoadingStateDemo" code-lang="vue"}
@@ -22,25 +21,15 @@ code: |
 ---
 :::
 
-## 后台恢复状态
+### 最佳实践
 
-加载态建议占用与空态/错误态相同的容器尺寸，避免列表区域在请求完成后跳动。
+- `TxLoadingState` 适合首屏或整块数据面板加载，最终的空态/错误态/成功内容应占用同一块区域。
+- 文案要具体说明正在加载的资源，例如“正在加载规则”或“正在同步插件”。
+- 外层布局在加载时可能塌陷时，优先使用 `surface="card"` 预留容器高度。
+- 只有需要 spinner 替代预设加载插画时才传 `loading`。
+- 谨慎放置操作按钮；只有底层请求真的支持取消或重试时，才提供取消/重试动作。
 
-:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="后台恢复状态" description="加载态与空态/错误态共享容器，适合 Dashboard 数据面板。"}
----
-code: |
-  <template>
-    <TxLoadingState
-      title="正在加载规则"
-      description="正在同步团队自动化规则，请稍等。"
-      surface="card"
-      size="large"
-    />
-  </template>
----
-:::
-
-## API
+## API 参考
 
 `TxLoadingState` 继承 `TxEmptyState` 除 `variant` 以外的 Props、Slots 和 Events；组件内部始终传入 `variant="loading"`。
 
@@ -77,21 +66,31 @@ code: |
 | `primary` | 点击生成的主操作按钮时触发。 |
 | `secondary` | 点击生成的次操作按钮时触发。 |
 
-## 交互契约
+## 后台恢复状态
+
+加载态建议占用与空态/错误态相同的容器尺寸，避免列表区域在请求完成后跳动。
+
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="后台恢复状态" description="加载态与空态/错误态共享容器，适合 Dashboard 数据面板。"}
+---
+code: |
+  <template>
+    <TxLoadingState
+      title="正在加载规则"
+      description="正在同步团队自动化规则，请稍等。"
+      surface="card"
+      size="large"
+    />
+  </template>
+---
+:::
+
+## 概述
 
 - `TxLoadingState` 始终向 `TxEmptyState` 透传 `variant="loading"`。
 - 组件不额外改写 `title`、`description`、`loading` 或 action 配置；显式 props 会原样透传。
 - `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
 
-## 最佳实践
-
-- `TxLoadingState` 适合首屏或整块数据面板加载，最终的空态/错误态/成功内容应占用同一块区域。
-- 文案要具体说明正在加载的资源，例如“正在加载规则”或“正在同步插件”。
-- 外层布局在加载时可能塌陷时，优先使用 `surface="card"` 预留容器高度。
-- 只有需要 spinner 替代预设加载插画时才传 `loading`。
-- 谨慎放置操作按钮；只有底层请求真的支持取消或重试时，才提供取消/重试动作。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/loading-state/src/TxLoadingState.vue`。
 - Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`。
@@ -99,8 +98,6 @@ code: |
 - **实测覆盖:** `packages/tuffex/packages/components/src/loading-state/__tests__/loading-state.test.ts` 验证 loading variant 锁定、显式 props 与 action 透传、具名 slots 转发及 install 注册。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **Wrapper contract:** `TxLoadingState` 锁定 `variant="loading"`；只有需要基础 spinner 插图替代默认 loading 插图时才传入 `loading`。
 - **建议:** 首屏整块加载用 `TxLoadingState`，局部行内等待用 `TxSpinner` 或 `TxProgressBar loading`。

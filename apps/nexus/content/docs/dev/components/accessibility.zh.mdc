@@ -54,7 +54,7 @@ Tuffex 以 WCAG 2.1 AA 为目标。这是组件开发时对齐的标准，不是
 
 发现问题时，对应组件的文档页里有源码位置——改在那里，所有使用方一次性受益。
 
-## 源码
+## 技术实现
 
 - 焦点与对比度 token：`packages/tuffex/packages/components/style/variables.scss`。
 - 主题与对比度选择器：《[主题定制](./theming.zh.mdc)》。

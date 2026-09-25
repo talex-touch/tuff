@@ -9,6 +9,11 @@ syncStatus: reviewed
 verified: true
 ---
 
+## Usage
+
+- Tokens follow the Tuffex default palette.
+- Dark mode uses `[data-theme='dark']` or `.dark`.
+
 ## Typography
 
 **Primary font stack**
@@ -83,18 +88,11 @@ code: |
 | `--tx-border-color-lighter` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ebeef5;"></span><code>#ebeef5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#363637;"></span><code>#363637</code></span> | Lighter borders |
 | `--tx-border-color-extra-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f2f6fc;"></span><code>#f2f6fc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#2b2b2c;"></span><code>#2b2b2c</code></span> | Extra light borders |
 
-## Notes
-
-- Tokens follow the Tuffex default palette.
-- Dark mode uses `[data-theme='dark']` or `.dark`.
-
-## Review Notes
+## Technologies
 
 - **Token note:** The tables document the default light/dark variables from `variables.scss`. High-contrast mixins define alternate values and should be documented separately when Nexus exposes that mode.
 - **Import note:** New pages should use `@talex-touch/tuffex/base.css` plus per-component style imports. The full `@talex-touch/tuffex/style.css` bundle remains a migration compatibility entry, not the preferred docs pattern.
 - **Verified coverage:** This page was manually checked against `variables.scss`; docs smoke coverage is provided by the component-docs coverage test and demo lazy/client-boundary tests.
-
-## Source
 
 - Token source: `packages/tuffex/packages/components/style/variables.scss`.
 - Runtime entry: `@talex-touch/tuffex/base.css` for variables/base styles, and `@talex-touch/tuffex/<component>/style.css` for component-level CSS.

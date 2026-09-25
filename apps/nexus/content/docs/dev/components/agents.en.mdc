@@ -8,9 +8,8 @@ tags: [agents, list, selection]
 syncStatus: reviewed
 verified: true
 ---
-# Agents
 
-## Basic Usage
+## Usage
 
 Bind `selectedId` in the caller and update it from `select`. Use custom group titles when the list is shown outside an English-only surface.
 
@@ -34,7 +33,15 @@ code: |
 ---
 ::::
 
-## API
+### Best Practices
+
+- Keep this component at the picker layer. Start conversations, fetch capabilities, and run agents in the surrounding feature module.
+- Provide localized `enabledTitle`, `disabledTitle`, and `emptyText` when the surrounding page is localized.
+- Use stable ids from backend or registry data; avoid display names as ids because names may be localized or renamed.
+- Keep `badgeText` short: counts, status initials, or compact labels. Use the `badge` slot only when the badge needs custom visuals.
+- Use `loading` for initial data fetches. For per-agent execution status, add status text or badges to each agent record instead of blocking the whole list.
+
+## API Reference
 
 ### TxAgentsList Props
 
@@ -83,7 +90,7 @@ code: |
 |------|---------|-------------|
 | `select` | `string` | Emitted only when an enabled item is activated by click, Enter, or Space. |
 
-## Interaction Contract
+## Overview
 
 - `TxAgentsList` computes enabled and disabled groups from the same `agents` array; it does not mutate or sort inside each group.
 - Loading state wins over list and empty rendering; `agents` content is ignored while `loading=true`.
@@ -91,20 +98,11 @@ code: |
 - `TxAgentItem` is built on `TxCardItem` with `role="option"`, `avatarShape="rounded"`, and `clickable` always on so disabled rows keep their `option` role in the listbox; selection on disabled rows is blocked by `aria-disabled` and the click guard, not by dropping the role.
 - Disabled items suppress click, Enter, and Space selection; enabled items emit the item `id` for all three activation paths.
 
-## Best Practices
-
-- Keep this component at the picker layer. Start conversations, fetch capabilities, and run agents in the surrounding feature module.
-- Provide localized `enabledTitle`, `disabledTitle`, and `emptyText` when the surrounding page is localized.
-- Use stable ids from backend or registry data; avoid display names as ids because names may be localized or renamed.
-- Keep `badgeText` short: counts, status initials, or compact labels. Use the `badge` slot only when the badge needs custom visuals.
-- Use `loading` for initial data fetches. For per-agent execution status, add status text or badges to each agent record instead of blocking the whole list.
-
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/agents/src/TxAgentsList.vue` confirms loading skeletons, enabled/disabled grouping, group badges, empty state, and `select` re-emit behavior.
 - Source: `packages/tuffex/packages/components/src/agents/src/TxAgentItem.vue` confirms `TxCardItem` composition, `role="option"`, disabled guards, `aria-selected`, `aria-disabled`, and `badge` slot rendering.
 - Type contracts: `packages/tuffex/packages/components/src/agents/src/types.ts` defines `AgentItemProps`, `AgentsListGroup`, and `AgentsListProps`.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/agents/__tests__/agents.test.ts` covers group titles, empty text, enabled-only selection, keyboard activation, and disabled suppression.
 
-## Source
 <TuffDocSourceLink />

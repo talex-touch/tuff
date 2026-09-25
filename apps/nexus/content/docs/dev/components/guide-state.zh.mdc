@@ -8,9 +8,8 @@ tags: [empty, state, guide, onboarding]
 syncStatus: reviewed
 verified: true
 ---
-# GuideState 引导状态
 
-## 基础用法
+## 用法
 
 当外围页面已经说明上下文时，可以使用默认的 guide 标题和描述。
 
@@ -25,8 +24,6 @@ code: |
   </template>
 ---
 ::::
-
-## 自定义内容
 
 当引导需要独立出现在页面或面板中时，覆盖文案并使用卡片表面。
 
@@ -45,7 +42,15 @@ code: |
 ---
 ::::
 
-## API
+### 最佳实践
+
+- 用于首次使用帮助、设置提示或“从这里开始”的面板。数据缺失场景用 `TxEmptyState variant="no-data"` 或专用包装更准确。
+- 引导文案要指向行动。标题应命名下一步，而不是只描述空屏。
+- 引导位于后台内容之间时使用 `surface="card"`；已经有外框的面板内部保持 `plain`。
+- 只有预设插画或生成按钮无法表达目标操作时，再传入 slot 内容。
+- 操作文案保持具体，例如“创建工作区”或“连接账号”，避免泛泛的“继续”。
+
+## API 参考
 
 `TxGuideState` 接收 `GuideStateProps`，其类型定义为 `Omit<EmptyStateProps, 'variant'>`。组件会把这些 props 透传给 `TxEmptyState`，并注入 `variant="guide"`。完整基础契约见 [EmptyState](./empty-state.zh.mdc)。
 
@@ -82,7 +87,7 @@ code: |
 | `description` | - | 透传描述内容。 |
 | `actions` | - | 替换生成的主/次按钮。 |
 
-## 交互契约
+## 概述
 
 - `TxGuideState` 始终以 `variant="guide"` 渲染 `TxEmptyState`；调用方不能通过 props 改变变体。
 - 其它所有 `EmptyStateProps` 字段都会原样透传。
@@ -90,20 +95,10 @@ code: |
 - 生成的操作按钮以及 `primary`/`secondary` 事件都来自 `TxEmptyState`。
 - 组件自身没有额外包裹 DOM；样式和语义都由 `TxEmptyState` 决定。
 
-## 最佳实践
-
-- 用于首次使用帮助、设置提示或“从这里开始”的面板。数据缺失场景用 `TxEmptyState variant="no-data"` 或专用包装更准确。
-- 引导文案要指向行动。标题应命名下一步，而不是只描述空屏。
-- 引导位于后台内容之间时使用 `surface="card"`；已经有外框的面板内部保持 `plain`。
-- 只有预设插画或生成按钮无法表达目标操作时，再传入 slot 内容。
-- 操作文案保持具体，例如“创建工作区”或“连接账号”，避免泛泛的“继续”。
-
-## 审阅说明
+## 技术实现
 
 - **可访问性说明：** `TxGuideState` 不添加额外包裹 DOM 或独立语义；可访问结构、标题、操作文案与生成按钮事件都直接来自 `TxEmptyState`。
 - **实测覆盖:** `guide-state.test.ts` 覆盖固定 `variant="guide"`、向 `TxEmptyState` 透传 props、命名插槽转发，以及以 `TxGuideState` 名称完成插件安装。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/guide-state/src/TxGuideState.vue`。
 - Types: `packages/tuffex/packages/components/src/guide-state/src/types.ts` 将 `GuideStateProps` 导出为 `Omit<EmptyStateProps, 'variant'>`。

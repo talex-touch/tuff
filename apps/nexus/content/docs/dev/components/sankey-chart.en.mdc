@@ -8,9 +8,8 @@ tags: [chart, sankey, flow, d3-sankey]
 syncStatus: reviewed
 verified: true
 ---
-# SankeyChart
 
-## Basic Usage
+## Usage
 
 `nodes` is the node array; `links` connect nodes **by index** (`source`/`target` index into `nodes`). Node color precedence: `node.color` > `defaultNodeColor` > the categorical palette by index. Links blend source → target colors by default; `link-color="gray"` switches to a flat gray. Value labels turn on automatically when any node carries a `value` (`showNodeValues` forces either way).
 
@@ -62,17 +61,7 @@ code: |
 ---
 :::
 
-## Resilience
-
-Circular links make d3-sankey throw — the component catches that, renders an empty state and logs a dev warning instead of crashing the host page.
-
-## Hover Highlight
-
-Hovering a node or a link leaves only adjacent elements untouched: the non-adjacent nodes, links and labels dim together to 10% opacity, matching ECharts' `emphasis.focus: 'adjacency'` (blur is `fromState.opacity * 0.1`), switched over 300ms `cubicOut`. A node's neighbourhood is itself, every link touching it and the nodes at those links' other ends; a link's is itself, its two endpoint nodes and every link touching either endpoint.
-
-Sankey has **no geometry animation**, which is parity with kumo rather than a missing feature: ECharts' `SankeyView` has neither `initProps` nor `updateProps`, so when the d3-sankey layout changes the nodes and links land on their new positions without a tween. Under `prefers-reduced-motion: reduce` the 300ms transition drops out and the highlight switches instantly.
-
-## API
+## API Reference
 
 ### SankeyChart Props
 
@@ -105,6 +94,16 @@ Sankey has **no geometry animation**, which is parity with kumo rather than a mi
 | Slot | Scope | Description |
 |------|------|------|
 | `tooltip` | `{ params: SankeyTooltipParams }` | Replaces the tooltip body; `params.type` is `'node' \| 'link'`. |
+
+## Resilience
+
+Circular links make d3-sankey throw — the component catches that, renders an empty state and logs a dev warning instead of crashing the host page.
+
+## Hover Highlight
+
+Hovering a node or a link leaves only adjacent elements untouched: the non-adjacent nodes, links and labels dim together to 10% opacity, matching ECharts' `emphasis.focus: 'adjacency'` (blur is `fromState.opacity * 0.1`), switched over 300ms `cubicOut`. A node's neighbourhood is itself, every link touching it and the nodes at those links' other ends; a link's is itself, its two endpoint nodes and every link touching either endpoint.
+
+Sankey has **no geometry animation**, which is parity with kumo rather than a missing feature: ECharts' `SankeyView` has neither `initProps` nor `updateProps`, so when the d3-sankey layout changes the nodes and links land on their new positions without a tween. Under `prefers-reduced-motion: reduce` the 300ms transition drops out and the highlight switches instantly.
 
 ## Differences from kumo
 

@@ -9,13 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-The Nexus community showcase. Wallpapers, CoreBox themes and plugin covers share one wall where people browse, favourite and rate them; opening a piece shows it large with its palette and variants, and anyone can drop in their own images to preview.
-
-It fits image-first pages: a theme store, an asset library, a screenshot collection, plugin cover review.
-
-## Template
+## Usage
 
 ### Showcase wall
 
@@ -90,7 +84,26 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+The Nexus community showcase. Wallpapers, CoreBox themes and plugin covers share one wall where people browse, favourite and rate them; opening a piece shows it large with its palette and variants, and anyone can drop in their own images to preview.
+
+It fits image-first pages: a theme store, an asset library, a screenshot collection, plugin cover review.
+
+- Every artwork is generated in code: a seed, a four-colour palette and a motif (dunes, soft light, synth grid, rings, a CoreBox window, plugin icons and more) become an SVG; three JPGs already shipped with the site join them. Nothing is fetched from outside.
+- The staggered entrance plays once when the stage first scrolls into view, and again after changing collection, layout, sort order or Favourites only. With reduced motion it never plays, and hover zoom is off too.
+- Thumbnail size drives the column width of both grid and masonry through the CSS variable `--thumb-min`; below 640px the wall is two columns and the toolbar keeps only layout and sorting.
+- Opening a piece shows its details: ← / → step to the previous or next piece, inside the dialog only and never on document. Rating, copying colours and Set as wallpaper report inside the dialog, because it covers the wall.
+- Uploads are previewed on this page only. The template creates an object URL of its own for each file, so the upload entry can unmount (expanding swaps it for the side panel) without breaking a card; all of them are revoked on reset and unmount.
+
+## Customization
+
+- Real artworks need only a `url`, an orientation and a palette each; serve small server-cut thumbnails and load the large image in the details.
+- For a card that flips open into its details, swap TxModal for TxFlipOverlay, using the version that teleports to body: rendered in place inside a `content-visibility` container it lands in the wrong spot.
+- When favourites and ratings go through an API, update the counts optimistically, roll back on failure and say why in the toast.
+- Masonry is CSS multi-column, so it reads down each column first; use the grid when items must read strictly row by row in time order.
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -102,18 +115,3 @@ code: |
 | Feedback | [TxToastPanel](/docs/dev/components/toast-panel) | Favourite and upload results, kept inside the wall |
 | Artwork details | [TxModal](/docs/dev/components/modal), [TxRating](/docs/dev/components/rating), [TxButton](/docs/dev/components/button), [TxImageGallery](/docs/dev/components/image-gallery), [TxToastPanel](/docs/dev/components/toast-panel) | The piece large with its specs, an interactive rating, the palette, Set as wallpaper or Apply theme, a variant lightbox |
 | Collection panel (expanded) | [TxAvatarGroup](/docs/dev/components/avatar), [TxTag](/docs/dev/components/tag), [TxImageUploader](/docs/dev/components/image-uploader) | Collection blurb, stats, popular tags and a standing upload area |
-
-## Interactions
-
-- Every artwork is generated in code: a seed, a four-colour palette and a motif (dunes, soft light, synth grid, rings, a CoreBox window, plugin icons and more) become an SVG; three JPGs already shipped with the site join them. Nothing is fetched from outside.
-- The staggered entrance plays once when the stage first scrolls into view, and again after changing collection, layout, sort order or Favourites only. With reduced motion it never plays, and hover zoom is off too.
-- Thumbnail size drives the column width of both grid and masonry through the CSS variable `--thumb-min`; below 640px the wall is two columns and the toolbar keeps only layout and sorting.
-- Opening a piece shows its details: ← / → step to the previous or next piece, inside the dialog only and never on document. Rating, copying colours and Set as wallpaper report inside the dialog, because it covers the wall.
-- Uploads are previewed on this page only. The template creates an object URL of its own for each file, so the upload entry can unmount (expanding swaps it for the side panel) without breaking a card; all of them are revoked on reset and unmount.
-
-## Adapting it
-
-- Real artworks need only a `url`, an orientation and a palette each; serve small server-cut thumbnails and load the large image in the details.
-- For a card that flips open into its details, swap TxModal for TxFlipOverlay, using the version that teleports to body: rendered in place inside a `content-visibility` container it lands in the wrong spot.
-- When favourites and ratings go through an API, update the counts optimistically, roll back on failure and say why in the toast.
-- Masonry is CSS multi-column, so it reads down each column first; use the grid when items must read strictly row by row in time order.

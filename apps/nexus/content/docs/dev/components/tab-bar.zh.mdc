@@ -8,9 +8,8 @@ tags: [navigation, tabs, mobile]
 syncStatus: reviewed
 verified: true
 ---
-# TabBar 底部导航
 
-## 基础用法
+## 用法
 
 当 TabBar 位于预览框、弹层或自定义外壳内部时，关闭 `fixed`，避免定位到真实视口底部。
 
@@ -34,34 +33,15 @@ code: |
 ---
 ::::
 
-## 指示器
+### 最佳实践
 
-`indicator` 让一个整体在当前项背后滑动，而不再只靠颜色区分。`pill` 像 `TxFlatRadio` 的滑块那样抬起一块表面；`block` 用同一个方框但改为色块填充，适合放在卡片上、再加一层阴影只会更吵的场合；`line` 在 bar 顶边滑动一条细线；`dot` 在当前项下方居中打一个小圆点；`none` 就是过去那个只有颜色的 bar。命名与 `TxTabs` 的 `indicatorVariant` 保持一致，两者读起来属于同一套。
+- 数量保持在适合拇指导航的范围，通常是 3 到 5 个主入口。
+- `value` 使用稳定的 primitive，方便映射到路由或视图 key。
+- 嵌入式预览、抽屉和自定义 App 外壳内设置 `fixed=false`。
+- `badge` 保持短小，优先使用数字或紧凑状态文本，避免挤压图标区。
+- 不要在 label 内再嵌套交互控件；每个 tab 本身已经是按钮。
 
-`size` 与 `TxFlatRadio` 是同一条三档阶梯，理由也相同：嵌在紧凑面板里的 bar 和手机屏幕底部的 bar，本来就不该是同一个尺寸。
-
-### TabBar (indicator)
-:::TuffDemoWrapper{demo="TabBarIndicatorDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const active = ref('home')
-  const items = [
-    { value: 'home', label: '首页', iconClass: 'i-carbon-home' },
-    { value: 'search', label: '搜索', iconClass: 'i-carbon-search', badge: 3 },
-    { value: 'me', label: '我的', iconClass: 'i-carbon-user' },
-  ]
-  </script>
-
-  <template>
-    <TxTabBar v-model="active" :items="items" :fixed="false" indicator="pill" />
-  </template>
----
-:::
-
-## API
+## API 参考
 
 ### Props
 
@@ -97,7 +77,34 @@ code: |
 | `update:modelValue` | `TabBarValue` | 选中项的值，用于 `v-model`。 |
 | `change` | `TabBarValue` | 非禁用项被选择后派发同一个值。 |
 
-## 交互契约
+## 指示器
+
+`indicator` 让一个整体在当前项背后滑动，而不再只靠颜色区分。`pill` 像 `TxFlatRadio` 的滑块那样抬起一块表面；`block` 用同一个方框但改为色块填充，适合放在卡片上、再加一层阴影只会更吵的场合；`line` 在 bar 顶边滑动一条细线；`dot` 在当前项下方居中打一个小圆点；`none` 就是过去那个只有颜色的 bar。命名与 `TxTabs` 的 `indicatorVariant` 保持一致，两者读起来属于同一套。
+
+`size` 与 `TxFlatRadio` 是同一条三档阶梯，理由也相同：嵌在紧凑面板里的 bar 和手机屏幕底部的 bar，本来就不该是同一个尺寸。
+
+### TabBar (indicator)
+:::TuffDemoWrapper{demo="TabBarIndicatorDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('home')
+  const items = [
+    { value: 'home', label: '首页', iconClass: 'i-carbon-home' },
+    { value: 'search', label: '搜索', iconClass: 'i-carbon-search', badge: 3 },
+    { value: 'me', label: '我的', iconClass: 'i-carbon-user' },
+  ]
+  </script>
+
+  <template>
+    <TxTabBar v-model="active" :items="items" :fixed="false" indicator="pill" />
+  </template>
+---
+:::
+
+## 概述
 
 - 根节点是 `nav` 地标；它是站点导航而非 tab 组件，因此没有 `role="tablist"`。每一项是 `button`，当前项带由 `modelValue` 推导的 `aria-current="page"`。
 - 指示器通过共享的 `useIndicatorBox` 测量，和 `TxSidebarNav` 读的是同一份：用带小数的 rect 而非 `offsetLeft`，减去容器边框（绝对定位的指示器是相对 padding box 定位的），并归一化祖先 transform 的缩放。`ResizeObserver` 会重新测量，因此尺寸变化或字体替换后指示器不会滞留。
@@ -108,23 +115,13 @@ code: |
 - `safeAreaBottom` 只控制底部占位节点；fixed 与非 fixed 布局都可以使用。
 - `zIndex` 通过 CSS 变量写入，应用外壳可避免深层选择器覆盖。
 
-## 最佳实践
-
-- 数量保持在适合拇指导航的范围，通常是 3 到 5 个主入口。
-- `value` 使用稳定的 primitive，方便映射到路由或视图 key。
-- 嵌入式预览、抽屉和自定义 App 外壳内设置 `fixed=false`。
-- `badge` 保持短小，优先使用数字或紧凑状态文本，避免挤压图标区。
-- 不要在 label 内再嵌套交互控件；每个 tab 本身已经是按钮。
-
-## 审阅说明 / Review Notes
+## 技术实现
 
 - **Model contract:** `TxTabBar` 只在 tab bar 本身启用且被点击 item 也启用时派发 `update:modelValue` 与 `change`。禁用项会渲染原生 disabled button。
 - **布局说明:** `fixed=true` 会把 tab bar 固定到视口，`safeAreaBottom=true` 会追加 `env(safe-area-inset-bottom)` spacer。预览框、弹层和嵌入式 shell 内应同时关闭。
 - **指示器说明:** 这个 bar 刻意与 `TxSidebarNav` 共用 `useIndicatorBox`，而不是自己长一套测量。会移动的 bar 不应该和它旁边会移动的控件产生漂移。
 - **props 使用运行时对象声明，而不是 `defineProps<TabBarProps>()`。** SFC 编译器解析导入的 props 接口时会去读同级模块，但之后往 `types.ts` 里新增的字段它拿不到——清空全部缓存冷启动的 dev server 依然输出旧的 prop 列表，于是 `size` 变成透传属性、读出来是 `undefined`。构建产物自始至终是对的，这正是它容易被忽略的原因。`TabBarProps` 仍然导出给调用方使用，只是不再作为运行时列表的来源；`TxTabs` 也是同样的声明方式。
 - **实测覆盖:** `tab-bar.test.ts` 覆盖导航语义（nav 地标、无 `role`）、`aria-current="page"` 选中项、图标、badge、z-index CSS 变量、fixed/safe-area 开关、启用态派发、禁用 bar/item 阻断，以及每个尺寸档位下发的行内 CSS 变量（含未知 size 回退 md）、每种指示器变体的 class，和 `none` 时不渲染指示器节点。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/tab-bar/src/TxTabBar.vue`。
 - Types: `packages/tuffex/packages/components/src/tab-bar/src/types.ts` 导出 `TabBarItem`、`TabBarProps`、`TabBarEmits` 与 `TabBarValue`。

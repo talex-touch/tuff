@@ -8,9 +8,8 @@ tags: [avatar, identity, profile]
 syncStatus: reviewed
 verified: true
 ---
-# Avatar 头像
 
-## 基础用法
+## 用法
 
 ### Avatar
 
@@ -144,25 +143,17 @@ code: |
 ---
 :::
 
-## 交互契约
+### 最佳实践
 
-- fallback 优先级是图片、默认插槽、`icon`、`name` 首字母、默认 `user` 图标。
-- 图片加载失败后会进入同一套非图片 fallback 链路。
-- 首字母取第一个单词首字符；存在多个单词时，再取最后一个单词首字符。
-- `size` 支持预设尺寸、正数、正数数字字符串和正数 px 字符串。非法自定义尺寸会回退到预设样式。
-- 自定义数字尺寸会设置头像尺寸、字体尺寸、状态点尺寸和状态点边框宽度 CSS 变量。
-- 设置 `backgroundColor` 时也会设置 `textColor`；未传 `textColor` 时回退为白色。
-- 只有 `clickable=true` 时才会发出 `click`。
-- 状态点位置按 `shape` 内缩：圆形贴 45° 切点、方形与圆角贴角。根节点不做裁切（裁切由图片与 fallback 层承担），否则状态点会被形状切掉大半。
-- `--tx-avatar-status-size` 是状态点的**外径**（含描边），不是描边内侧的直径。状态点与头像组的描边颜色都取 `--tx-avatar-ring`（默认 `--tx-bg-color`，即页面底色），暗色下不再是一圈白边。
-- `TxAvatarGroup` 会保留子节点 props，只给没有自定义 size 的子头像注入 group `size`，并在 `max` 小于子节点数量时渲染 `+N`。
-- 叠放偏移（负 margin 与 `z-index`）由组样式表提供，不再内联注入；子头像上只内联注入 ring 边框与 `--tx-avatar-group-index`。靠内联 `margin-left` / `z-index` 做覆盖的调用方需要改用 CSS 变量。
-- 组内 `z-index` 自左向右递增，所以右侧头像会盖住左侧头像的右下角（包括状态点）；`hoverEffect="lift"` 会把悬浮头像置顶，从而露出被盖住的部分。
-- `overflowPopover` 默认关闭。关闭时 `+N` 就是一个普通头像，不产生任何浮层或包装元素；开启时 `+N` 被 `TxPopover` 包裹，叠放偏移转由 popover 的触发元素承担。
-- `overflowPopover` 开启但没有溢出（`max` 不小于子节点数量）时不渲染 popover。
-- 悬浮位移遵循 `prefers-reduced-motion: reduce`：位移与过渡关闭，`z-index` 置顶与阴影保留。
+- 生成身份标识时优先传 `name`，不要手写固定首字母。
+- `src` 代表真实用户或账号图片时，总是提供有意义的 `alt`。
+- `status` 只表示在线/可用性；文本型系统状态使用 `TxStatusBadge`。
+- 不要把 `clickable` 作为主要操作入口；需要键盘可访问性和清晰操作语义时，头像旁边配合语义化 `TxButton`。
+- 头像组中优先让 group 注入统一 `size`，除非某个成员确实需要不同尺寸。
+- 头像组同时用到 `status` 时，注意右侧头像会盖住左侧头像的状态点；要么加大 `overlap` 让出角落，要么用 `spreadOnHover` 让用户能展开查看。
+- 溢出 popover 只是「看一眼是谁」的附属信息，不要把它当成成员管理入口；需要可操作的成员列表时用真正的列表组件。
 
-## API
+## API 参考
 
 ### Props
 
@@ -226,7 +217,40 @@ code: |
 
 不暴露公开实例方法。
 
-## 样式定制
+## 概述
+
+- fallback 优先级是图片、默认插槽、`icon`、`name` 首字母、默认 `user` 图标。
+- 图片加载失败后会进入同一套非图片 fallback 链路。
+- 首字母取第一个单词首字符；存在多个单词时，再取最后一个单词首字符。
+- `size` 支持预设尺寸、正数、正数数字字符串和正数 px 字符串。非法自定义尺寸会回退到预设样式。
+- 自定义数字尺寸会设置头像尺寸、字体尺寸、状态点尺寸和状态点边框宽度 CSS 变量。
+- 设置 `backgroundColor` 时也会设置 `textColor`；未传 `textColor` 时回退为白色。
+- 只有 `clickable=true` 时才会发出 `click`。
+- 状态点位置按 `shape` 内缩：圆形贴 45° 切点、方形与圆角贴角。根节点不做裁切（裁切由图片与 fallback 层承担），否则状态点会被形状切掉大半。
+- `--tx-avatar-status-size` 是状态点的**外径**（含描边），不是描边内侧的直径。状态点与头像组的描边颜色都取 `--tx-avatar-ring`（默认 `--tx-bg-color`，即页面底色），暗色下不再是一圈白边。
+- `TxAvatarGroup` 会保留子节点 props，只给没有自定义 size 的子头像注入 group `size`，并在 `max` 小于子节点数量时渲染 `+N`。
+- 叠放偏移（负 margin 与 `z-index`）由组样式表提供，不再内联注入；子头像上只内联注入 ring 边框与 `--tx-avatar-group-index`。靠内联 `margin-left` / `z-index` 做覆盖的调用方需要改用 CSS 变量。
+- 组内 `z-index` 自左向右递增，所以右侧头像会盖住左侧头像的右下角（包括状态点）；`hoverEffect="lift"` 会把悬浮头像置顶，从而露出被盖住的部分。
+- `overflowPopover` 默认关闭。关闭时 `+N` 就是一个普通头像，不产生任何浮层或包装元素；开启时 `+N` 被 `TxPopover` 包裹，叠放偏移转由 popover 的触发元素承担。
+- `overflowPopover` 开启但没有溢出（`max` 不小于子节点数量）时不渲染 popover。
+- 悬浮位移遵循 `prefers-reduced-motion: reduce`：位移与过渡关闭，`z-index` 置顶与阴影保留。
+
+## 技术实现
+
+- 已人工核对 `packages/tuffex/packages/components/src/avatar/src/types.ts`、`TxAvatar.vue`、`TxAvatarGroup.vue` 与 `avatar.test.ts`。
+- API 标题已统一为共享的 `Props`、`Events`、`Slots`，再用子标题区分组件，方便自动覆盖检查和读者定位契约。
+- 已按源码确认图片 fallback 顺序、首字母生成、自定义 size 归一化、click gating、group `max` 溢出、group size 注入和 overlap CSS 变量。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts` 覆盖首字母/自定义颜色、图片错误 fallback、插槽优先级、自定义尺寸归一化、click gating、头像组溢出、悬浮 class 契约、叠放偏移不再内联、溢出 popover 的四种情形，以及状态点的 CSS 几何约束。
+- 可访问性边界：组件会转发图片 `alt`，但根节点仍是非语义化 `div`；头像承担主要操作时应使用真实按钮或链接。
+
+- Component source: `packages/tuffex/packages/components/src/avatar/src/TxAvatar.vue`
+- Group source: `packages/tuffex/packages/components/src/avatar/src/TxAvatarGroup.vue`
+- Types: `packages/tuffex/packages/components/src/avatar/src/types.ts`
+- Tests: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts`
+
+<TuffDocSourceLink />
+
+## 自定义
 
 | 变量 | 写入方 | 用途 |
 |------|--------|------|
@@ -243,30 +267,3 @@ code: |
 | `--tx-avatar-group-border` | 调用方 / 主题 | group 中头像项的边框颜色。 |
 
 预设内部还会使用 `--tx-avatar-size-preset`、`--tx-avatar-font-size-preset`、`--tx-avatar-status-size-preset` 和 `--tx-avatar-status-border-preset`；组内部还会使用 `--tx-avatar-status-diameter`、`--tx-avatar-status-ring`、`--tx-avatar-status-inset`、`--tx-avatar-group-gap`、`--tx-avatar-group-index` 和 `--tx-avatar-group-more-z`。调用方应优先使用对应的 prop，而不是直接设置这些变量。
-
-## 最佳实践
-
-- 生成身份标识时优先传 `name`，不要手写固定首字母。
-- `src` 代表真实用户或账号图片时，总是提供有意义的 `alt`。
-- `status` 只表示在线/可用性；文本型系统状态使用 `TxStatusBadge`。
-- 不要把 `clickable` 作为主要操作入口；需要键盘可访问性和清晰操作语义时，头像旁边配合语义化 `TxButton`。
-- 头像组中优先让 group 注入统一 `size`，除非某个成员确实需要不同尺寸。
-- 头像组同时用到 `status` 时，注意右侧头像会盖住左侧头像的状态点；要么加大 `overlap` 让出角落，要么用 `spreadOnHover` 让用户能展开查看。
-- 溢出 popover 只是「看一眼是谁」的附属信息，不要把它当成成员管理入口；需要可操作的成员列表时用真正的列表组件。
-
-## 审阅说明
-
-- 已人工核对 `packages/tuffex/packages/components/src/avatar/src/types.ts`、`TxAvatar.vue`、`TxAvatarGroup.vue` 与 `avatar.test.ts`。
-- API 标题已统一为共享的 `Props`、`Events`、`Slots`，再用子标题区分组件，方便自动覆盖检查和读者定位契约。
-- 已按源码确认图片 fallback 顺序、首字母生成、自定义 size 归一化、click gating、group `max` 溢出、group size 注入和 overlap CSS 变量。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts` 覆盖首字母/自定义颜色、图片错误 fallback、插槽优先级、自定义尺寸归一化、click gating、头像组溢出、悬浮 class 契约、叠放偏移不再内联、溢出 popover 的四种情形，以及状态点的 CSS 几何约束。
-- 可访问性边界：组件会转发图片 `alt`，但根节点仍是非语义化 `div`；头像承担主要操作时应使用真实按钮或链接。
-
-## Source
-
-- Component source: `packages/tuffex/packages/components/src/avatar/src/TxAvatar.vue`
-- Group source: `packages/tuffex/packages/components/src/avatar/src/TxAvatarGroup.vue`
-- Types: `packages/tuffex/packages/components/src/avatar/src/types.ts`
-- Tests: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts`
-
-<TuffDocSourceLink />

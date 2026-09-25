@@ -8,9 +8,8 @@ tags: [breadcrumb, navigation, hierarchy]
 syncStatus: reviewed
 verified: true
 ---
-# Breadcrumb
 
-## Basic Usage
+## Usage
 
 ::::TuffDemoWrapper{demo="BreadcrumbBreadcrumbTrailDemo" code-lang="vue"}
 ---
@@ -32,8 +31,6 @@ code: |
   </template>
 ---
 ::::
-
-## Composition Examples
 
 ### Native Links And Manual Items
 
@@ -65,19 +62,16 @@ function openVirtualCrumb(item: { label: string }, index: number) {
 </template>
 ```
 
-## Interaction Contract
+### Best Practices
 
-- The root renders `nav aria-label="Breadcrumb"` with an ordered list.
-- Every item is rendered inside a list item.
-- Non-current, non-disabled items with `href` render as `<a href="...">` and rely on native navigation.
-- The current item is always rendered as `span`, even if it has `href`, and gets `aria-current="page"`.
-- Disabled items render as `span`, get `aria-disabled="true"`, and do not emit click events.
-- `click` is emitted only for non-current, non-disabled items that do not have `href`.
-- `icon` renders a leading `TxIcon` inside the item label.
-- Separators render between items only and are `aria-hidden`.
-- The default separator icon name is `i-carbon-chevron-right` (TxIcon requires the `i-` prefix; without it the name resolves to `null`).
+- Keep `items` ordered from broadest parent to current page.
+- Provide `href` for real route navigation so browser link semantics, context menus, and copy-link behavior work.
+- Use no-`href` items only for virtual breadcrumbs that need custom app behavior.
+- Do not expect `click` to fire for `href` links; attach route behavior through normal navigation instead.
+- Keep labels short. Breadcrumbs should describe hierarchy, not repeat full page titles.
+- Avoid disabling the current page item; the component already treats the last entry as current and non-interactive.
 
-## API
+## API Reference
 
 ### Props
 
@@ -105,21 +99,23 @@ function openVirtualCrumb(item: { label: string }, index: number) {
 
 `TxBreadcrumb` does not expose slots. Customize labels, icon names, href targets, and disabled state through `items`; compose custom navigation outside the component when item layout must change.
 
-## Best Practices
+## Overview
 
-- Keep `items` ordered from broadest parent to current page.
-- Provide `href` for real route navigation so browser link semantics, context menus, and copy-link behavior work.
-- Use no-`href` items only for virtual breadcrumbs that need custom app behavior.
-- Do not expect `click` to fire for `href` links; attach route behavior through normal navigation instead.
-- Keep labels short. Breadcrumbs should describe hierarchy, not repeat full page titles.
-- Avoid disabling the current page item; the component already treats the last entry as current and non-interactive.
+- The root renders `nav aria-label="Breadcrumb"` with an ordered list.
+- Every item is rendered inside a list item.
+- Non-current, non-disabled items with `href` render as `<a href="...">` and rely on native navigation.
+- The current item is always rendered as `span`, even if it has `href`, and gets `aria-current="page"`.
+- Disabled items render as `span`, get `aria-disabled="true"`, and do not emit click events.
+- `click` is emitted only for non-current, non-disabled items that do not have `href`.
+- `icon` renders a leading `TxIcon` inside the item label.
+- Separators render between items only and are `aria-hidden`.
+- The default separator icon name is `i-carbon-chevron-right` (TxIcon requires the `i-` prefix; without it the name resolves to `null`).
 
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/breadcrumb/src/TxBreadcrumb.vue` confirms semantic `nav` / `ol` structure, current-item detection, href rendering, disabled guards, separators, and manual `click` emission rules.
 - Type contracts: `packages/tuffex/packages/components/src/breadcrumb/src/types.ts` defines `BreadcrumbItem`, `BreadcrumbProps`, and `BreadcrumbEmits`.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/breadcrumb/__tests__/breadcrumb.test.ts` covers navigation semantics, icons, separators, current-page non-link rendering, click emission, and disabled suppression.
 - Export: `packages/tuffex/packages/components/src/breadcrumb/index.ts` re-exports the breadcrumb source module.
 
-## Source
 <TuffDocSourceLink />

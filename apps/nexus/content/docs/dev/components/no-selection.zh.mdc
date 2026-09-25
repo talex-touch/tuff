@@ -8,9 +8,8 @@ tags: [empty, selection, inspector]
 syncStatus: reviewed
 verified: true
 ---
-# NoSelection 未选择
 
-## 基础用法
+## 用法
 
 ### NoSelection
 :::TuffDemoWrapper{demo="NoSelectionNoSelectionDemo" code-lang="vue"}
@@ -27,14 +26,14 @@ code: |
 ---
 :::
 
-## 交互契约
+### 最佳实践
 
-- 始终向 `TxEmptyState` 透传 `variant="no-selection"`。
-- 不覆盖显式传入的 `title`、`description`、`surface`、`layout`、`align`、`size`、`icon` 或 action props。
-- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
-- 生成按钮触发的 `primary` / `secondary` 事件来自内部 `TxEmptyState`。
+- 当前面板有效但依赖用户选择时使用它；数据集本身为空时用 `TxNoData`。
+- 与列表/表格中的可见选中提示配合，让用户知道下一步在哪里操作。
+- 分栏详情区建议加 `surface="card"`，避免空区域边界不清。
+- 操作文案应明确，例如“新建项目”或“打开列表”，不要只写“确定”。
 
-## API
+## API 参考
 
 ### Props
 
@@ -71,20 +70,18 @@ code: |
 | `description` | - | 替换解析后的描述。 |
 | `actions` | - | 替换生成的主/次操作按钮。 |
 
-## 最佳实践
+## 概述
 
-- 当前面板有效但依赖用户选择时使用它；数据集本身为空时用 `TxNoData`。
-- 与列表/表格中的可见选中提示配合，让用户知道下一步在哪里操作。
-- 分栏详情区建议加 `surface="card"`，避免空区域边界不清。
-- 操作文案应明确，例如“新建项目”或“打开列表”，不要只写“确定”。
+- 始终向 `TxEmptyState` 透传 `variant="no-selection"`。
+- 不覆盖显式传入的 `title`、`description`、`surface`、`layout`、`align`、`size`、`icon` 或 action props。
+- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
+- 生成按钮触发的 `primary` / `secondary` 事件来自内部 `TxEmptyState`。
 
-## 审阅说明 / Review Notes
+## 技术实现
 
 - **Wrapper contract:** `TxNoSelection` 始终向 `TxEmptyState` 传入 `variant="no-selection"`，并透传所有非 `variant` props 与具名 slot。
 - **状态选择:** 适用于等待用户选择的详情面板或 inspector；不要用于空数据集或筛选无结果场景。
 - **实测覆盖:** `no-selection.test.ts` 覆盖 variant 锁定、action prop 透传、具名 slot 透传与 install 注册。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/no-selection/src/TxNoSelection.vue`。
 - Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`。

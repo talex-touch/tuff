@@ -8,9 +8,8 @@ tags: [tree, data, hierarchy]
 syncStatus: reviewed
 verified: true
 ---
-# Tree
 
-## Basic Usage
+## Usage
 
 ::TuffDemoWrapper{demo="TreeTreeDemo" code-lang="vue"}
 ---
@@ -53,45 +52,16 @@ code: |
 ---
 ::
 
-## Admin Permission Scopes
+### Best Practices
 
-`TxTree` is a good fit for resource scopes, permission domains, and organization hierarchies in admin pages. Pair it with `TxSearchInput`, pass the keyword into `filterText`, and let the selected key drive details, transfer lists, or audit timelines.
+- Treat `key` as the durable identifier. Do not derive it from display labels that may be translated or renamed.
+- Use `expandedKeys` only when another surface needs to own expansion state; otherwise prefer `defaultExpandedKeys`.
+- Keep permission-scope trees single-select and move actual grant assignment into `TxTransfer`, `DataTable`, or a detail panel.
+- Use `filterMethod` for domain-specific search such as path aliases or hidden metadata; keep `label` search for simple trees.
+- If you use `leaf=false` for lazy-looking placeholders, also provide a loading or empty child state in the surrounding UI. `TxTree` does not fetch children by itself.
+- When replacing rows with the `item` slot, call `toggleExpand()` from the disclosure control and `toggleSelect()` from the selectable region instead of duplicating state logic.
 
-::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="A screenshot-verified Tree / TreeSelect / Transfer / Timeline composition."}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const query = ref('')
-  const selectedScope = ref<string | number>('release')
-  const nodes = [
-    {
-      key: 'workspace',
-      label: 'Workspace',
-      children: [
-        { key: 'release', label: 'Release control' },
-        { key: 'audit', label: 'Audit logs' },
-      ],
-    },
-  ]
-  </script>
-
-  <template>
-    <section class="grid gap-3">
-      <TxSearchInput v-model="query" placeholder="Filter scopes" />
-      <TxTree
-        v-model="selectedScope"
-        :nodes="nodes"
-        :default-expanded-keys="['workspace']"
-        :filter-text="query"
-      />
-    </section>
-  </template>
----
-::
-
-## API
+## API Reference
 
 ### TxTree Props
 
@@ -137,11 +107,49 @@ code: |
 | `item` | `{ node, level, expanded, hasChildren, selected, toggleExpand, toggleSelect, indent }` | Replace the full visible row renderer. Call the slot helpers to preserve selection and expansion behavior. |
 | `empty` | - | Empty state shown when no visible rows remain after filtering. Defaults to `No results`. |
 
+## Admin Permission Scopes
+
+`TxTree` is a good fit for resource scopes, permission domains, and organization hierarchies in admin pages. Pair it with `TxSearchInput`, pass the keyword into `filterText`, and let the selected key drive details, transfer lists, or audit timelines.
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="A screenshot-verified Tree / TreeSelect / Transfer / Timeline composition."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('release')
+  const nodes = [
+    {
+      key: 'workspace',
+      label: 'Workspace',
+      children: [
+        { key: 'release', label: 'Release control' },
+        { key: 'audit', label: 'Audit logs' },
+      ],
+    },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" placeholder="Filter scopes" />
+      <TxTree
+        v-model="selectedScope"
+        :nodes="nodes"
+        :default-expanded-keys="['workspace']"
+        :filter-text="query"
+      />
+    </section>
+  </template>
+---
+::
+
 ## Exposed Methods
 
 None. Control selection and expansion through props and emitted events.
 
-## Interaction Contract
+## Overview
 
 - `expandedKeys` makes expansion controlled. The component still emits `update:expandedKeys`, but does not mutate internal expansion until the parent passes the new keys back.
 - `defaultExpandedKeys` seeds uncontrolled expansion and can reset it later while `expandedKeys` is absent.
@@ -154,32 +162,12 @@ None. Control selection and expansion through props and emitted events.
 - `disabled` and `node.disabled` block selection, but caret expansion remains available for expandable nodes.
 - The root uses `role="tree"` (with `aria-multiselectable` in `multiple` mode); each row wrapper is `role="treeitem"` carrying `aria-level`, `aria-setsize`, and `aria-posinset` (position within its sibling group), plus `aria-expanded` / `aria-selected` / `aria-disabled` as applicable, over a `role="presentation"` list. The `item` slot only replaces the inner row visuals, so these row semantics are preserved automatically.
 
-## Style Customization
-
-| Theme token | Used for |
-|-------------|----------|
-| `--tx-text-color-primary` | Default row label color. |
-| `--tx-text-color-secondary` | Caret and empty-state color. |
-| `--tx-color-primary` | Selected row background tint. |
-| `--tx-fill-color` | Hover row background tint. |
-
-## Best Practices
-
-- Treat `key` as the durable identifier. Do not derive it from display labels that may be translated or renamed.
-- Use `expandedKeys` only when another surface needs to own expansion state; otherwise prefer `defaultExpandedKeys`.
-- Keep permission-scope trees single-select and move actual grant assignment into `TxTransfer`, `DataTable`, or a detail panel.
-- Use `filterMethod` for domain-specific search such as path aliases or hidden metadata; keep `label` search for simple trees.
-- If you use `leaf=false` for lazy-looking placeholders, also provide a loading or empty child state in the surrounding UI. `TxTree` does not fetch children by itself.
-- When replacing rows with the `item` slot, call `toggleExpand()` from the disclosure control and `toggleSelect()` from the selectable region instead of duplicating state logic.
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/tree/src/TxTree.vue` and `types.ts`.
 - Existing tests cover expanded rendering, selection events, and the `role="treeitem"` set/position semantics (`aria-setsize` / `aria-posinset` over a presentational list); docs call out untested but source-visible behavior such as filtering expansion, controlled expansion, and non-cascading checkboxes.
 - The permission orchestration example should keep `TxTree` responsible for scope selection only; assigning resources belongs in adjacent controls.
 - Screenshot reference: `.codex-screenshots/nexus-tree-permission-orchestration-demo-playwright-2026-05-28.png`.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/tree/src/TxTree.vue`.
 - Types: `packages/tuffex/packages/components/src/tree/src/types.ts`.
@@ -187,3 +175,11 @@ None. Control selection and expansion through props and emitted events.
 
 <TuffDocSourceLink />
 
+## Customization
+
+| Theme token | Used for |
+|-------------|----------|
+| `--tx-text-color-primary` | Default row label color. |
+| `--tx-text-color-secondary` | Caret and empty-state color. |
+| `--tx-color-primary` | Selected row background tint. |
+| `--tx-fill-color` | Hover row background tint. |

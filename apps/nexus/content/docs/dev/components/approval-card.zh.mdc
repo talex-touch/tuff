@@ -8,9 +8,8 @@ tags: [ai, approval, questionnaire, human-in-the-loop]
 syncStatus: reviewed
 verified: true
 ---
-# ApprovalCard 澄清问卷卡
 
-## 基础用法
+## 用法
 
 ### 多题走查
 
@@ -55,11 +54,15 @@ code: |
 ---
 :::
 
-## 它不是授权闸门
+### 最佳实践
 
-`TxToolConfirmation` 是一次二元授权：某个工具调用允不允许，输出 approve / deny 和风险分级。本组件是**问卷**：智能体动手前先问清楚几件事，输出一组答案。两者的数据模型与输出契约没有交集，不要互相替代，也不要把问卷塞进授权卡。
+- 接 `answer` 做增量落库，别只等 `submit`——用户中途关掉卡片时前面几题的答案不该丢。
+- 题目控制在 3～5 个，超出就该换成表单页；分页圆点的可扫读性到七八个就崩了。
+- 用不到自由作答的题显式写 `allowCustom: false`，少一行空输入框能省掉一次误触。
+- 非英文界面把文案 props 一起覆盖，只改几个会出现中英混排。
+- `submit` 之后把 `sent` 提到宿主保存，否则重建卡片会退回未提交态。
 
-## API
+## API 参考
 
 ### Props
 
@@ -117,7 +120,11 @@ code: |
 | `submit()` | 等价于按下发送键，无答案时是空操作。 |
 | `reset()` | 清空答案、回到首题、退出提交态并重新打开。 |
 
-## 交互契约
+## 它不是授权闸门
+
+`TxToolConfirmation` 是一次二元授权：某个工具调用允不允许，输出 approve / deny 和风险分级。本组件是**问卷**：智能体动手前先问清楚几件事，输出一组答案。两者的数据模型与输出契约没有交集，不要互相替代，也不要把问卷塞进授权卡。
+
+## 概述
 
 - **四个状态都是双模的。** `modelValue` / `index` / `sent` / `open` 任一传了就以 prop 为准，没传就由组件自持。流式宿主重建这张卡时，只有受控才不会丢页码和答案。
 - **答案按 `option.value` 存，不按下标。** 题目顺序变了答案也不会错位。
@@ -128,15 +135,7 @@ code: |
 - 关闭后整卡换成一颗按钮，内部状态不清空；`reset()` 或 `startOver` 才会清。
 - 题目按钮是 `button` + `aria-pressed`，整组套 `role="group"` 并 `aria-labelledby` 指向题干，读屏能拿到题目上下文。
 
-## 最佳实践
-
-- 接 `answer` 做增量落库，别只等 `submit`——用户中途关掉卡片时前面几题的答案不该丢。
-- 题目控制在 3～5 个，超出就该换成表单页；分页圆点的可扫读性到七八个就崩了。
-- 用不到自由作答的题显式写 `allowCustom: false`，少一行空输入框能省掉一次误触。
-- 非英文界面把文案 props 一起覆盖，只改几个会出现中英混排。
-- `submit` 之后把 `sent` 提到宿主保存，否则重建卡片会退回未提交态。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/approval-card/src/TxApprovalCard.vue`。
 - Types: `packages/tuffex/packages/components/src/approval-card/src/types.ts`。
@@ -144,8 +143,6 @@ code: |
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **与 `TxToolConfirmation` 的分工:** 见上文「它不是授权闸门」。名字相近但语义正交，文档里必须一起读。
 - **可访问性:** `role="group"` + `aria-labelledby` 指向题干是有意超出上游的修正；上游只有裸的 `aria-pressed`，读屏拿不到题目上下文。

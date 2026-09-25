@@ -8,9 +8,8 @@ tags: [empty, data, table]
 syncStatus: reviewed
 verified: true
 ---
-# NoData
 
-## Basic Usage
+## Usage
 
 ### NoData
 :::TuffDemoWrapper{demo="NoDataNoDataDemo" code-lang="vue"}
@@ -27,14 +26,14 @@ code: |
 ---
 :::
 
-## Interaction Contract
+### Best Practices
 
-- Always forwards `variant="no-data"` to `TxEmptyState`.
-- Does not rewrite explicit `title`, `description`, `surface`, `layout`, `align`, `size`, `icon`, or action props.
-- Forwards `icon`, `title`, `description`, and `actions` slots unchanged to `TxEmptyState`.
-- Generated `primary` / `secondary` events come from the wrapped `TxEmptyState` action buttons.
+- Use it when a data source is valid and returned zero records; use `TxOfflineState` or `TxPermissionState` for transport and access failures.
+- Keep copy data-specific: “No invoices yet” is more useful than “Nothing here”.
+- Offer a creation or import action only when the current user can actually populate the dataset.
+- Use `surface="card"` inside dashboards and table panels so the empty region occupies the same container as loaded data.
 
-## API
+## API Reference
 
 ### Props
 
@@ -82,20 +81,18 @@ code: |
 | `description` | - | Replaces resolved description content. |
 | `actions` | - | Replaces generated primary/secondary action buttons. |
 
-## Best Practices
+## Overview
 
-- Use it when a data source is valid and returned zero records; use `TxOfflineState` or `TxPermissionState` for transport and access failures.
-- Keep copy data-specific: “No invoices yet” is more useful than “Nothing here”.
-- Offer a creation or import action only when the current user can actually populate the dataset.
-- Use `surface="card"` inside dashboards and table panels so the empty region occupies the same container as loaded data.
+- Always forwards `variant="no-data"` to `TxEmptyState`.
+- Does not rewrite explicit `title`, `description`, `surface`, `layout`, `align`, `size`, `icon`, or action props.
+- Forwards `icon`, `title`, `description`, and `actions` slots unchanged to `TxEmptyState`.
+- Generated `primary` / `secondary` events come from the wrapped `TxEmptyState` action buttons.
 
-## Review Notes
+## Technologies
 
 - **Wrapper contract:** `TxNoData` is a thin `TxEmptyState` wrapper that always supplies `variant="no-data"`; every other `EmptyStateProps` field is forwarded unchanged.
 - **State choice:** Use this only for valid, loaded datasets with zero records. Connectivity, access, loading, and filtered-result states have dedicated wrappers so copy and recovery actions stay precise.
 - **Verified coverage:** `no-data.test.ts` covers forced variant forwarding, explicit props/actions, named slots, and install registration; base rendering and action events are inherited from `TxEmptyState`.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/no-data/src/TxNoData.vue`.
 - Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`.

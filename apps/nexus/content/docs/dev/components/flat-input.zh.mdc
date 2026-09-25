@@ -8,9 +8,8 @@ tags: [input, form, flat]
 syncStatus: reviewed
 verified: true
 ---
-# FlatInput 扁平输入框
 
-## 基础用法
+## 用法
 
 ::::TuffDemoWrapper{demo="FlatInputFlatInputDemo" code-lang="vue"}
 ---
@@ -30,8 +29,6 @@ code: |
   </template>
 ---
 ::::
-
-## 组合示例
 
 ### 前缀插槽
 
@@ -55,18 +52,15 @@ code: |
 
 `area` 适合短备注，不适合自动高度编辑器。组件渲染固定高度 textarea。
 
-## 交互契约
+### 最佳实践
 
-- `v-model` 从 `modelValue` 读取，并通过 `update:modelValue` 发出当前字符串。
-- 没有 `icon` 和默认插槽时，根节点添加 `none-prefix` 并使用单列布局。
-- 默认插槽会替换图标渲染；它是前缀内容，不是后缀或操作插槽。
-- `password=true` 渲染 `input type="password"`，并在 keydown 时启用 Caps Lock 检测。
-- Caps Lock 检测读取 `KeyboardEvent.getModifierState('CapsLock')` 的实时修饰键状态（不做 keyCode/`shiftKey` 推断）；提示只作信息展示，并且只在密码模式出现。
-- `area=true` 渲染 `textarea` 而不是 `input`，并添加 `area` 类以使用固定高度。
-- `nonWin=true` 会移除 `win` 类，从而关闭 Windows 风格的聚焦视觉。
-- 组件没有暴露 `disabled`、`readonly`、`name` 或校验 props；需要这些契约时应使用更完整的输入组件。
+- 仅在最小 API 足够时使用 `FlatInput`；需要禁用、校验、autocomplete 或表单 `name` 时应选择更完整的输入组件。
+- 前缀插槽适合键盘提示或短标签，不要放可点击控件。
+- 密码字段应配合组件外部真实的表单校验与提交语义。
+- `area` 适合短多行备注；它不会自动高度变化，也不应替代编辑器。
+- 需要标准边框和聚焦样式时传入 `:non-win="true"`，避免旧版 Windows 风格下划线视觉。
 
-## API
+## API 参考
 
 ### Props
 
@@ -95,20 +89,21 @@ code: |
 
 通过插件安装时，`index.ts` 会同时注册 `FlatInput` 与 `TxFlatInput` 两个名称。
 
-## 最佳实践
+## 概述
 
-- 仅在最小 API 足够时使用 `FlatInput`；需要禁用、校验、autocomplete 或表单 `name` 时应选择更完整的输入组件。
-- 前缀插槽适合键盘提示或短标签，不要放可点击控件。
-- 密码字段应配合组件外部真实的表单校验与提交语义。
-- `area` 适合短多行备注；它不会自动高度变化，也不应替代编辑器。
-- 需要标准边框和聚焦样式时传入 `:non-win="true"`，避免旧版 Windows 风格下划线视觉。
+- `v-model` 从 `modelValue` 读取，并通过 `update:modelValue` 发出当前字符串。
+- 没有 `icon` 和默认插槽时，根节点添加 `none-prefix` 并使用单列布局。
+- 默认插槽会替换图标渲染；它是前缀内容，不是后缀或操作插槽。
+- `password=true` 渲染 `input type="password"`，并在 keydown 时启用 Caps Lock 检测。
+- Caps Lock 检测读取 `KeyboardEvent.getModifierState('CapsLock')` 的实时修饰键状态（不做 keyCode/`shiftKey` 推断）；提示只作信息展示，并且只在密码模式出现。
+- `area=true` 渲染 `textarea` 而不是 `input`，并添加 `area` 类以使用固定高度。
+- `nonWin=true` 会移除 `win` 类，从而关闭 Windows 风格的聚焦视觉。
+- 组件没有暴露 `disabled`、`readonly`、`name` 或校验 props；需要这些契约时应使用更完整的输入组件。
 
-## 审阅说明
+## 技术实现
 
 - **可访问性说明：** `FlatInput` 只渲染原生 input/textarea 控件与可选前缀；标签、`aria-label`、`name`、autocomplete、校验提示、禁用/只读状态需要由外层表单提供。
 - **实测覆盖:** `flat-input.test.ts` 覆盖默认文本模式、placeholder/type 输出、`v-model` 更新、图标与前缀插槽优先级、textarea 模式、`nonWin` class 切换、密码 Caps Lock 提示，以及插件安装路径。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/flat-input/src/FlatInput.vue`。
 - Export alias: `packages/tuffex/packages/components/src/flat-input/index.ts` 导出 `FlatInput` 与 `TxFlatInput`，并在插件安装时注册两个名称。

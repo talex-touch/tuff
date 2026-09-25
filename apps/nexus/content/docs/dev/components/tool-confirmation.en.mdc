@@ -8,9 +8,8 @@ tags: [ai, tool, permission]
 syncStatus: reviewed
 verified: true
 ---
-# Tool Confirmation
 
-## Basic Usage
+## Usage
 
 ### Tool Confirmation
 ::::TuffDemoWrapper{demo="ToolConfirmationToolConfirmationDemo" code-lang="vue"}
@@ -29,18 +28,15 @@ code: |
 ---
 ::::
 
-## Interaction Contract
+### Best Practices
 
-- The component runs nothing and remembers nothing. It reports a decision; executing and persisting it are the host's job.
-- Both `approve` and `deny` carry `{ remember: boolean }` — **deny included**, so "deny for the rest of this session" is expressible.
-- `remember` is internal state, starts `false`, and is **not reset after a decision**. The card is single-use: unmount it once a decision arrives.
-- `risk` has three levels, mirrored onto `data-risk`: `read` (default), `write` and `execute`. Anything other than `read` is treated as dangerous for emphasis.
-- Risk text defaults to `Read-only` / `Writes data` / `Executes`. `riskLabels` overrides them, and a partial override is allowed.
-- `summary` and `input` are both optional; each region is omitted entirely when unset.
-- `input` renders verbatim in a `<pre>` with **no processing beyond escaping** — truncate long payloads before passing them in.
-- The root is `role="group"` with an accessible name of `${toolName} confirmation`.
+- Unmount the card as soon as a decision arrives rather than reusing it — `remember` does not reset itself.
+- Report `risk` honestly. Labelling a write as `read` removes both the visual emphasis and the user's basis for deciding.
+- Put only the decision-relevant fields in `input`, pre-truncated. It is the one place a user can see what will actually happen, and a full request body makes them skip it.
+- Override `allowLabel`, `denyLabel`, `rememberLabel` and `riskLabels` together for non-English surfaces.
+- When `remember` is true, scope the grant to the current session. Do not quietly promote it to a permanent one — the label promises otherwise.
 
-## API
+## API Reference
 
 ### Props
 
@@ -66,10 +62,13 @@ code: |
 
 `TxToolConfirmation` exposes no slots. Serialize richer input yourself and pass it through `input`.
 
-## Best Practices
+## Overview
 
-- Unmount the card as soon as a decision arrives rather than reusing it — `remember` does not reset itself.
-- Report `risk` honestly. Labelling a write as `read` removes both the visual emphasis and the user's basis for deciding.
-- Put only the decision-relevant fields in `input`, pre-truncated. It is the one place a user can see what will actually happen, and a full request body makes them skip it.
-- Override `allowLabel`, `denyLabel`, `rememberLabel` and `riskLabels` together for non-English surfaces.
-- When `remember` is true, scope the grant to the current session. Do not quietly promote it to a permanent one — the label promises otherwise.
+- The component runs nothing and remembers nothing. It reports a decision; executing and persisting it are the host's job.
+- Both `approve` and `deny` carry `{ remember: boolean }` — **deny included**, so "deny for the rest of this session" is expressible.
+- `remember` is internal state, starts `false`, and is **not reset after a decision**. The card is single-use: unmount it once a decision arrives.
+- `risk` has three levels, mirrored onto `data-risk`: `read` (default), `write` and `execute`. Anything other than `read` is treated as dangerous for emphasis.
+- Risk text defaults to `Read-only` / `Writes data` / `Executes`. `riskLabels` overrides them, and a partial override is allowed.
+- `summary` and `input` are both optional; each region is omitted entirely when unset.
+- `input` renders verbatim in a `<pre>` with **no processing beyond escaping** — truncate long payloads before passing them in.
+- The root is `role="group"` with an accessible name of `${toolName} confirmation`.

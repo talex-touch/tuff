@@ -8,9 +8,8 @@ tags: [code, editor, json, yaml]
 syncStatus: reviewed
 verified: true
 ---
-# CodeEditor 代码编辑器
 
-## 基础用法
+## 用法
 
 通过 `language` 选择 CodeMirror 语言能力。JSON 和 YAML 具备 formatter / linter；其它语言提供高亮和基础编辑体验。
 
@@ -31,27 +30,15 @@ code: |
 ---
 ::::
 
-## Toolbar 插槽
+### 最佳实践
 
-通过 `toolbar` slot 把编辑器方法接到自定义控件上。`TxCodeEditorToolbar` 提供标准 action button 布局。
+- 需要校验和格式化的可编辑配置界面优先使用 JSON 或 YAML。TOML/INI/JavaScript 模式只在高亮和基础编辑足够时使用。
+- 用户编辑过程中可能保留半成品或非法语法时，不要启用 `formatOnBlur`。
+- 生成内容和示例使用 `readOnly`，不要用禁用表单字段伪装代码展示。
+- 使用 toolbar 提升可发现性，同时保留快捷键给熟练用户。
+- 自定义 `extensions` 保持局部、明确。它们追加在内置扩展之后，可能改变编辑器内部整体行为。
 
-::::TuffDemoWrapper{demo="CodeEditorToolbarDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxCodeEditor v-model="value" language="json">
-      <template #toolbar="{ format, openSearch, foldAll, unfoldAll, copy }">
-        <TxCodeEditorToolbar
-          :actions="toolbarActions"
-          @action="(key) => runEditorAction(key, { format, openSearch, foldAll, unfoldAll, copy })"
-        />
-      </template>
-    </TxCodeEditor>
-  </template>
----
-::::
-
-## API
+## API 参考
 
 ### Props
 
@@ -141,7 +128,27 @@ code: |
 | `getValue()` | `() => string` | 返回当前编辑器文档；运行时挂载前返回 prop 值。 |
 | `getView()` | `() => EditorView \| null` | 运行时挂载后返回 CodeMirror `EditorView`。 |
 
-## 交互契约
+## Toolbar 插槽
+
+通过 `toolbar` slot 把编辑器方法接到自定义控件上。`TxCodeEditorToolbar` 提供标准 action button 布局。
+
+::::TuffDemoWrapper{demo="CodeEditorToolbarDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCodeEditor v-model="value" language="json">
+      <template #toolbar="{ format, openSearch, foldAll, unfoldAll, copy }">
+        <TxCodeEditorToolbar
+          :actions="toolbarActions"
+          @action="(key) => runEditorAction(key, { format, openSearch, foldAll, unfoldAll, copy })"
+        />
+      </template>
+    </TxCodeEditor>
+  </template>
+---
+::::
+
+## 概述
 
 - `TxCodeEditor` 在挂载时动态导入运行时编辑器；导入前 exposed methods 返回安全 fallback。
 - `theme="auto"` 会读取 `html` / `body` 的 `data-theme` 和 `light` / `dark` class，并监听 `html` 的 class / `data-theme` 变化。
@@ -151,7 +158,23 @@ code: |
 - toolbar slot props 来自运行时编辑器函数；运行时组件挂载前不会渲染 toolbar。
 - 编辑器内按 `Cmd/Ctrl+Shift+F` 触发 `format()`；该快捷键始终被拦截（keymap handler 恒返回 `true`），即使当前语言无格式化能力也会吞掉按键。
 
-## 样式定制
+## 技术实现
+
+- 已人工核对 `packages/tuffex/packages/components/src/code-editor/src/types.ts`、`TxCodeEditor.vue`、`TxCodeEditorRuntime.vue`、`TxCodeEditorToolbar.vue`、`code-editor.test.ts` 与 `code-editor-toolbar.test.ts`。
+- API 标题已统一为共享的 `Props`、`Events`、`Slots`，再用子标题区分编辑器和 toolbar，方便覆盖检查与读者定位。
+- 已按源码确认客户端动态 runtime、安全的挂载前 exposed-method fallback、JSON/YAML 格式化、TOML/INI 本地 stream parser、toolbar 默认动作与 disabled action guard。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor.test.ts` 覆盖更新事件、JSON/YAML 格式化和 TOML/INI 语言模式；`code-editor-toolbar.test.ts` 覆盖 toolbar action 派发。
+- `format()` 对只读、语言不支持、输入非法、输出未变化或 runtime 未挂载等状态有意返回 `false`，而不是抛错。
+
+- Component source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditor.vue`
+- Runtime source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorRuntime.vue`
+- Toolbar source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorToolbar.vue`
+- Types: `packages/tuffex/packages/components/src/code-editor/src/types.ts`
+- Tests: `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor.test.ts`, `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor-toolbar.test.ts`
+
+<TuffDocSourceLink />
+
+## 自定义
 
 | 变量 | 写入方 | 用途 |
 |------|--------|------|
@@ -162,29 +185,3 @@ code: |
 | `--tx-code-editor-focus` | 解析后的 theme | focus 边框和外环颜色。 |
 
 优先使用 `theme` prop 选择受支持配色。只有宿主主题需要微调 CodeMirror 外壳时，才建议覆盖这些变量。
-
-## 最佳实践
-
-- 需要校验和格式化的可编辑配置界面优先使用 JSON 或 YAML。TOML/INI/JavaScript 模式只在高亮和基础编辑足够时使用。
-- 用户编辑过程中可能保留半成品或非法语法时，不要启用 `formatOnBlur`。
-- 生成内容和示例使用 `readOnly`，不要用禁用表单字段伪装代码展示。
-- 使用 toolbar 提升可发现性，同时保留快捷键给熟练用户。
-- 自定义 `extensions` 保持局部、明确。它们追加在内置扩展之后，可能改变编辑器内部整体行为。
-
-## 审阅说明
-
-- 已人工核对 `packages/tuffex/packages/components/src/code-editor/src/types.ts`、`TxCodeEditor.vue`、`TxCodeEditorRuntime.vue`、`TxCodeEditorToolbar.vue`、`code-editor.test.ts` 与 `code-editor-toolbar.test.ts`。
-- API 标题已统一为共享的 `Props`、`Events`、`Slots`，再用子标题区分编辑器和 toolbar，方便覆盖检查与读者定位。
-- 已按源码确认客户端动态 runtime、安全的挂载前 exposed-method fallback、JSON/YAML 格式化、TOML/INI 本地 stream parser、toolbar 默认动作与 disabled action guard。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor.test.ts` 覆盖更新事件、JSON/YAML 格式化和 TOML/INI 语言模式；`code-editor-toolbar.test.ts` 覆盖 toolbar action 派发。
-- `format()` 对只读、语言不支持、输入非法、输出未变化或 runtime 未挂载等状态有意返回 `false`，而不是抛错。
-
-## Source
-
-- Component source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditor.vue`
-- Runtime source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorRuntime.vue`
-- Toolbar source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorToolbar.vue`
-- Types: `packages/tuffex/packages/components/src/code-editor/src/types.ts`
-- Tests: `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor.test.ts`, `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor-toolbar.test.ts`
-
-<TuffDocSourceLink />

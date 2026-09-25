@@ -8,9 +8,8 @@ tags: [navigation, tabs, layout]
 syncStatus: reviewed
 verified: true
 ---
-# Tabs
 
-## Basic Usage
+## Usage
 
 ### Tabs
 :::TuffDemoWrapper{demo="TabsTabsDemo" code-lang="vue"}
@@ -522,7 +521,16 @@ code: |
 ---
 :::
 
-## API
+### Best Practices
+
+- Keep `TxTabItem name` values stable, unique, and equal to the values used in `modelValue` / `defaultValue`.
+- Prefer `placement="left"` for Dashboard settings and dense admin surfaces; use top/bottom tabs for short secondary switches.
+- Use `defaultValue` only when the matching tab is guaranteed to exist. Use `activation` for static uncontrolled examples.
+- Do not put long-lived form state only inside inactive panels; inactive tab content is unmounted during switches.
+- For panels whose height changes after async data or image load, combine direct measurement (`contentScrollable=false` or `autoHeight`) with `refresh()` after the content settles.
+- Keep `nav-right` compact. Move dense actions into `TxDropdownMenu`, `TxPopover`, or `TxDrawer` instead of growing the tab bar.
+
+## API Reference
 
 ### TxTabs Props
 
@@ -622,7 +630,7 @@ code: |
 |------|------|------|
 | `default` | - | Child `TxTabItem` nodes. The group component itself renders no DOM outside `TxTabs`. |
 
-## Interaction Contract
+## Overview
 
 - `modelValue` is the controlled source. Parent-driven `modelValue` updates do not emit `change` or `update:modelValue` again.
 - Without `modelValue`, `defaultValue` wins over `activation`. If `defaultValue` does not match a tab, `TxTabs` renders the empty state instead of falling back to `activation`.
@@ -633,7 +641,20 @@ code: |
 - Height animation removes the internal scroll wrapper so AutoSizer can measure panel height directly; use `contentScrollable=false` for manual direct-measurement layouts.
 - Inactive tab panels are not mounted. Store persistent panel state outside the panel subtree when it must survive switching.
 
-## Style Customization
+## Technologies
+
+- Reviewed against `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, `TxTabItemGroup.vue`, and `types.ts`.
+- `indicatorMotionStrength` is a runtime prop on `TxTabs` and is now present in the exported `TabsProps` interface.
+- `TxTabItemGroup.vue` intentionally renders an empty template; `TxTabs` reads its child `TxTabItem` VNodes and creates the group DOM.
+- `TxTabs` filters the default slot by component name, so docs should not show arbitrary wrapper components around tab items.
+
+- Component sources: `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, and `TxTabItemGroup.vue`.
+- Types: `packages/tuffex/packages/components/src/tabs/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` covers activation rendering, enabled and disabled switching, controlled updates, fragments, async tab items, groups, content-animation variants, hidden indicators, visual-prop normalization, exposed AutoSizer methods, and that the indicator reveals on first layout while staying hidden until a real measurement exists.
+
+<TuffDocSourceLink />
+
+## Customization
 
 | Theme token / CSS variable | Used for |
 |----------------------------|----------|
@@ -645,28 +666,3 @@ code: |
 | `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | Runtime variables generated from indicator animation props. |
 | `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | Runtime variables generated from content animation props. |
 | `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | Runtime variables generated from nav animation props. |
-
-## Best Practices
-
-- Keep `TxTabItem name` values stable, unique, and equal to the values used in `modelValue` / `defaultValue`.
-- Prefer `placement="left"` for Dashboard settings and dense admin surfaces; use top/bottom tabs for short secondary switches.
-- Use `defaultValue` only when the matching tab is guaranteed to exist. Use `activation` for static uncontrolled examples.
-- Do not put long-lived form state only inside inactive panels; inactive tab content is unmounted during switches.
-- For panels whose height changes after async data or image load, combine direct measurement (`contentScrollable=false` or `autoHeight`) with `refresh()` after the content settles.
-- Keep `nav-right` compact. Move dense actions into `TxDropdownMenu`, `TxPopover`, or `TxDrawer` instead of growing the tab bar.
-
-## Review Notes
-
-- Reviewed against `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, `TxTabItemGroup.vue`, and `types.ts`.
-- `indicatorMotionStrength` is a runtime prop on `TxTabs` and is now present in the exported `TabsProps` interface.
-- `TxTabItemGroup.vue` intentionally renders an empty template; `TxTabs` reads its child `TxTabItem` VNodes and creates the group DOM.
-- `TxTabs` filters the default slot by component name, so docs should not show arbitrary wrapper components around tab items.
-
-## Source
-
-- Component sources: `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, and `TxTabItemGroup.vue`.
-- Types: `packages/tuffex/packages/components/src/tabs/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` covers activation rendering, enabled and disabled switching, controlled updates, fragments, async tab items, groups, content-animation variants, hidden indicators, visual-prop normalization, exposed AutoSizer methods, and that the indicator reveals on first layout while staying hidden until a real measurement exists.
-
-<TuffDocSourceLink />
-

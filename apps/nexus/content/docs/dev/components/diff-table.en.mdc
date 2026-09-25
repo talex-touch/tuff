@@ -8,9 +8,8 @@ tags: [table, diff, review, data]
 syncStatus: reviewed
 verified: true
 ---
-# DiffTable
 
-## Basic Usage
+## Usage
 
 ### DiffTable
 :::TuffDemoWrapper{demo="DiffTableDiffTableDemo" code-lang="vue" title="Proposed menu cleanup" description="Plays once on mount and rests on the completed diff; the replay button runs reset() + play()."}
@@ -44,19 +43,15 @@ code: |
 ---
 :::
 
-## Stages And Playback Modes
+### Best Practices
 
-`stageDelays` is a three-part timeline of `[hold, tint, expand]`, defaulting to `[800, 1000, 1000]`. **The first segment is a deliberate reading pause**: nothing moves until it and the second have elapsed (1.8s at the defaults), so a reader takes in the original data before the edit lands.
+- Express meaning through `change` rather than painting colours with custom classes; the tint, the strike-through, and the reveal all follow from it.
+- Set `tintText: false` on badge or coloured-chip columns, or the change tone repaints them wholesale.
+- Give columns percentage or fixed pixel widths so the appended row cannot drift out of alignment.
+- Use `play="settled"` for docs, snapshot tests, and anywhere the animation is unwanted — it hands you the finished state directly.
+- For button-triggered playback use `play="manual"` with `reset()` + `play()`; do not remount the component with a changing `:key`.
 
-| Stage | On screen |
-|------|------|
-| 0–1 | Every row plain |
-| 2 | `removed` / `modified` rows tint, recolour, and strike through |
-| 3 (terminal) | `added` rows expand from `0fr` to `1fr` |
-
-`play` decides who drives it: `auto` plays once on mount and rests on the completed diff; `manual` stays plain until `play()` is called; `settled` renders the finished state immediately and registers no timers at all (for docs and tests).
-
-## API
+## API Reference
 
 ### Props
 
@@ -134,7 +129,19 @@ All three formatters ship English defaults: TuffEx carries no message catalog, s
 | `settle()` | Jumps straight to the completed diff |
 | `stage` | Current stage index; equals `stageDelays.length` once settled |
 
-## Interaction Contract
+## Stages And Playback Modes
+
+`stageDelays` is a three-part timeline of `[hold, tint, expand]`, defaulting to `[800, 1000, 1000]`. **The first segment is a deliberate reading pause**: nothing moves until it and the second have elapsed (1.8s at the defaults), so a reader takes in the original data before the edit lands.
+
+| Stage | On screen |
+|------|------|
+| 0–1 | Every row plain |
+| 2 | `removed` / `modified` rows tint, recolour, and strike through |
+| 3 (terminal) | `added` rows expand from `0fr` to `1fr` |
+
+`play` decides who drives it: `auto` plays once on mount and rests on the completed diff; `manual` stays plain until `play()` is called; `settled` renders the finished state immediately and registers no timers at all (for docs and tests).
+
+## Overview
 
 - The stage machine is this component's semantics, not demo choreography: the host sets the pace through `play` and the exposed methods, and describes the edit through `rows[].change`.
 - Timers are cleared in `onBeforeUnmount`; `play="settled"` registers none at all.
@@ -143,15 +150,7 @@ All three formatters ship English defaults: TuffEx carries no message catalog, s
 - A collapsed appended row carries `aria-hidden` and `inert`, so it is neither announced nor in the tab order.
 - The appended row's inner grid and the `<colgroup>` are both derived from `columns` — one source of truth.
 
-## Best Practices
-
-- Express meaning through `change` rather than painting colours with custom classes; the tint, the strike-through, and the reveal all follow from it.
-- Set `tintText: false` on badge or coloured-chip columns, or the change tone repaints them wholesale.
-- Give columns percentage or fixed pixel widths so the appended row cannot drift out of alignment.
-- Use `play="settled"` for docs, snapshot tests, and anywhere the animation is unwanted — it hands you the finished state directly.
-- For button-triggered playback use `play="manual"` with `reset()` + `play()`; do not remount the component with a changing `:key`.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/diff-table/src/TxDiffTable.vue`.
 - Types: `packages/tuffex/packages/components/src/diff-table/src/types.ts` exports `DiffTableProps`, `DiffTableColumn`, `DiffTableRow`, `DiffChangeKind`, `DiffTablePlay`, and `DiffTableEmits`.
@@ -159,8 +158,6 @@ All three formatters ship English defaults: TuffEx carries no message catalog, s
 - **Test coverage:** `packages/tuffex/packages/components/src/diff-table/__tests__/diff-table.test.ts` has 15 cases using fake timers, covering the three-stage timeline, `stageChange` / `settled` emissions, all three playback modes, the three exposed methods, per-column tint and strike, grid-and-colgroup agreement, the collapsed row's `aria-hidden` / `inert`, unmount cleanup, and `play` mode switching.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Provenance:** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 - **Divergence from upstream:** Added rows render at their position in `rows` rather than being pinned last as upstream hardcodes, which preserves diff ordering and supports more than one addition; `modified` is new to this port and has no upstream counterpart.

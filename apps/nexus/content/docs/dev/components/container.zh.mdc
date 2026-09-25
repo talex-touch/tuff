@@ -8,9 +8,8 @@ tags: [container, layout, grid]
 syncStatus: reviewed
 verified: true
 ---
-# Container 容器
 
-## 基础用法
+## 用法
 
 ### Container
 :::TuffDemoWrapper{demo="ContainerContainerDemo" code-lang="vue"}
@@ -59,6 +58,59 @@ code: |
   </template>
 ---
 :::
+
+### 最佳实践
+
+- 每个页面区块优先只使用一个 `TxContainer`；多层嵌套会让宽度和留白难以判断。
+- 使用响应式 `xs` / `sm` / `md` / `lg` / `xl` span 切换布局，不要为不同断点复制多份 DOM。
+- `gutter` 应和页面间距尺度保持一致；避免同一行里混用过大的 gutter 和过小的列内边距。
+- 在布局原语内部放置语义元素（`main`、`aside`、`nav`、`section`），因为这些原语自身只渲染中性 `div`。
+- 只有横向滚动或固定宽度工具栏才设置 `wrap=false`；普通内容栅格应允许换行。
+
+## API 参考
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| fluid | `boolean` | `false` | 移除最大宽度限制，填满父容器 |
+| maxWidth | `string` | `'1200px'` | 非流体模式下的最大宽度 |
+| responsive | `boolean` | `false` | 是否启用内置响应式容器宽度 |
+| padding | `'small' \| 'medium' \| 'large' \| number` | `'medium'` | 水平内边距预设或像素值 |
+| margin | `'auto' \| string \| number` | `'auto'` | 水平外边距；`auto` 表示居中 |
+
+### Row Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| gutter | `number \| Partial<Record<'xs' \| 'sm' \| 'md' \| 'lg' \| 'xl', number>>` | `0` | 栅格间距，可按断点设置 |
+| align | `'top' \| 'middle' \| 'bottom' \| 'stretch'` | `'stretch'` | 垂直对齐方式 |
+| justify | `'start' \| 'end' \| 'center' \| 'space-around' \| 'space-between' \| 'space-evenly'` | `'start'` | 水平分布方式 |
+| wrap | `boolean` | `true` | 是否换行 |
+
+### Col Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| span | `number` | `24` | 栅格占据的列数 |
+| offset | `number` | `0` | 栅格左侧的间隔格数 |
+| xs | `number` | - | 640px 以下使用的列数 |
+| sm | `number` | - | 640px 到 767px 使用的列数 |
+| md | `number` | - | 768px 到 1023px 使用的列数 |
+| lg | `number` | - | 1024px 到 1279px 使用的列数 |
+| xl | `number` | - | 1280px 及以上使用的列数 |
+
+### Slots
+
+| 组件 | 插槽 | 参数 | 说明 |
+|------|------|------|------|
+| `TxContainer` | `default` | - | 受容器宽度和左右留白约束的页面或面板内容。 |
+| `TxRow` | `default` | - | `TxCol` 子项或其他 flex 子项。 |
+| `TxCol` | `default` | - | 列内容。 |
+
+### Events
+
+`TxContainer`、`TxRow` 和 `TxCol` 不触发事件。
 
 ## 容器类型
 
@@ -188,60 +240,6 @@ code: |
 ---
 :::
 
-## API
-
-### Props
-
-| 属性 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| fluid | `boolean` | `false` | 移除最大宽度限制，填满父容器 |
-| maxWidth | `string` | `'1200px'` | 非流体模式下的最大宽度 |
-| responsive | `boolean` | `false` | 是否启用内置响应式容器宽度 |
-| padding | `'small' \| 'medium' \| 'large' \| number` | `'medium'` | 水平内边距预设或像素值 |
-| margin | `'auto' \| string \| number` | `'auto'` | 水平外边距；`auto` 表示居中 |
-
-### Row Props
-
-| 属性 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| gutter | `number \| Partial<Record<'xs' \| 'sm' \| 'md' \| 'lg' \| 'xl', number>>` | `0` | 栅格间距，可按断点设置 |
-| align | `'top' \| 'middle' \| 'bottom' \| 'stretch'` | `'stretch'` | 垂直对齐方式 |
-| justify | `'start' \| 'end' \| 'center' \| 'space-around' \| 'space-between' \| 'space-evenly'` | `'start'` | 水平分布方式 |
-| wrap | `boolean` | `true` | 是否换行 |
-
-### Col Props
-
-| 属性 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| span | `number` | `24` | 栅格占据的列数 |
-| offset | `number` | `0` | 栅格左侧的间隔格数 |
-| xs | `number` | - | 640px 以下使用的列数 |
-| sm | `number` | - | 640px 到 767px 使用的列数 |
-| md | `number` | - | 768px 到 1023px 使用的列数 |
-| lg | `number` | - | 1024px 到 1279px 使用的列数 |
-| xl | `number` | - | 1280px 及以上使用的列数 |
-
-### Slots
-
-| 组件 | 插槽 | 参数 | 说明 |
-|------|------|------|------|
-| `TxContainer` | `default` | - | 受容器宽度和左右留白约束的页面或面板内容。 |
-| `TxRow` | `default` | - | `TxCol` 子项或其他 flex 子项。 |
-| `TxCol` | `default` | - | 列内容。 |
-
-### Events
-
-`TxContainer`、`TxRow` 和 `TxCol` 不触发事件。
-
-
-## 交互契约
-
-- `TxContainer` 始终渲染 `width: 100%` 的块级包裹；`fluid` 会移除最大宽度限制。
-- `padding` 预设分别映射为 12 / 16 / 24 px，数字 padding 会被限制为不小于 0。
-- `margin="auto"` 会水平居中；字符串或数字 margin 会按 `0 <value>` 应用到左右两侧。
-- `TxRow` 会按当前断点计算单一 gutter，并通过 `--tx-row-gutter` 暴露；列组件会把 gutter 均分到左右 padding。
-- 行通过负外边距抵消两侧最外缘的这份 padding，并用 `calc(100% + var(--tx-row-gutter))` 为其买单。单纯写 `100%` 是相对包含块的**内容**宽度解析的，负外边距只会把行整体左移而不加宽，导致右侧正好少一个 gutter——在有 padding 的 `TxContainer` 里，8px gutter 下就表现为左侧内缩 16px、右侧 24px。
-- `TxCol` 会把 `span` 和 `offset` 限制在 0–24 栅格内，断点 prop 未提供时回退到 `span`。
 ## 响应式断点
 
 TouchX UI 使用以下断点：
@@ -266,7 +264,26 @@ code: |
 ---
 :::
 
-## 样式定制
+## 概述
+
+- `TxContainer` 始终渲染 `width: 100%` 的块级包裹；`fluid` 会移除最大宽度限制。
+- `padding` 预设分别映射为 12 / 16 / 24 px，数字 padding 会被限制为不小于 0。
+- `margin="auto"` 会水平居中；字符串或数字 margin 会按 `0 <value>` 应用到左右两侧。
+- `TxRow` 会按当前断点计算单一 gutter，并通过 `--tx-row-gutter` 暴露；列组件会把 gutter 均分到左右 padding。
+- 行通过负外边距抵消两侧最外缘的这份 padding，并用 `calc(100% + var(--tx-row-gutter))` 为其买单。单纯写 `100%` 是相对包含块的**内容**宽度解析的，负外边距只会把行整体左移而不加宽，导致右侧正好少一个 gutter——在有 padding 的 `TxContainer` 里，8px gutter 下就表现为左侧内缩 16px、右侧 24px。
+- `TxCol` 会把 `span` 和 `offset` 限制在 0–24 栅格内，断点 prop 未提供时回退到 `span`。
+
+## 技术实现
+
+- 已核对 `packages/tuffex/packages/components/src/container/src/TxContainer.vue`、`TxRow.vue`、`TxCol.vue` 与 `container.test.ts`。
+- 现有测试覆盖容器 CSS 变量、padding 限制、fluid/responsive 类、自定义 margin、行 gutter/对齐/分布/换行样式、响应式 gutter 选择，以及列 span/offset/响应式样式。
+- 可访问性说明:三个原语都渲染中性 `div`;请在插槽内容里补充语义地标和标题,不要期待布局原语提供文档结构。
+
+- Component source: `packages/tuffex/packages/components/src/container/src/TxContainer.vue`、`TxRow.vue` 与 `TxCol.vue`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/container/__tests__/container.test.ts` 覆盖间距变量、数值限制、响应式类、行 flex 样式、响应式 gutter 与列尺寸。
+<TuffDocSourceLink />
+
+## 自定义
 
 ### CSS 变量
 
@@ -280,23 +297,3 @@ code: |
   }
 ---
 :::
-
-## 最佳实践
-
-- 每个页面区块优先只使用一个 `TxContainer`；多层嵌套会让宽度和留白难以判断。
-- 使用响应式 `xs` / `sm` / `md` / `lg` / `xl` span 切换布局，不要为不同断点复制多份 DOM。
-- `gutter` 应和页面间距尺度保持一致；避免同一行里混用过大的 gutter 和过小的列内边距。
-- 在布局原语内部放置语义元素（`main`、`aside`、`nav`、`section`），因为这些原语自身只渲染中性 `div`。
-- 只有横向滚动或固定宽度工具栏才设置 `wrap=false`；普通内容栅格应允许换行。
-
-## 审阅说明
-
-- 已核对 `packages/tuffex/packages/components/src/container/src/TxContainer.vue`、`TxRow.vue`、`TxCol.vue` 与 `container.test.ts`。
-- 现有测试覆盖容器 CSS 变量、padding 限制、fluid/responsive 类、自定义 margin、行 gutter/对齐/分布/换行样式、响应式 gutter 选择，以及列 span/offset/响应式样式。
-- 可访问性说明:三个原语都渲染中性 `div`;请在插槽内容里补充语义地标和标题,不要期待布局原语提供文档结构。
-
-## Source
-
-- Component source: `packages/tuffex/packages/components/src/container/src/TxContainer.vue`、`TxRow.vue` 与 `TxCol.vue`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/container/__tests__/container.test.ts` 覆盖间距变量、数值限制、响应式类、行 flex 样式、响应式 gutter 与列尺寸。
-<TuffDocSourceLink />

@@ -8,9 +8,8 @@ tags: [virtual-list, performance, list]
 syncStatus: reviewed
 verified: true
 ---
-# VirtualList 虚拟列表
 
-## 基础用法
+## 用法
 
 :::TuffDemoWrapper{demo="VirtualListVirtualListDemo" code-lang="vue"}
 ---
@@ -30,8 +29,6 @@ code: |
   </template>
 ---
 :::
-
-## 组合示例
 
 ### 稳定 item key
 
@@ -62,21 +59,15 @@ function jumpToLatest() {
 </template>
 ```
 
-## 交互契约
+### 最佳实践
 
-- `itemHeight` 必填，且每个渲染行都会被设置为该像素高度。
-- 数字 `height` 会转为 px；字符串 `height` 原样应用。
-- 数字、px 和纯数字字符串高度会立即解析，用于计算 viewport。`%`、`vh`、`vw`、`rem`、`em` 高度会等待真实容器高度。
-- 挂载时组件读取 `clientHeight`；存在 `ResizeObserver` 时，容器尺寸变化后会更新 viewport 高度。
-- `startIndex` 为 `floor(scrollTop / itemHeight) - overscan`，并限制到 `0` 以上。
-- `endIndex` 基于可视 viewport 加 `overscan` 计算，并限制到 `items.length`。
-- spacer 高度是 `items.length * itemHeight`；可见 items 会按 `startIndex * itemHeight` 位移。
-- `itemKey` 可以是字段名或函数。字段值缺失时回退为可见项 index。
-- `scroll` 在内部滚动状态更新后发出 `{ scrollTop, startIndex, endIndex }`。
-- `scrollToIndex(index)` 会把负数 index 限制为 0，但不会限制超过最后一项的 index；调用方应传入有效索引。
-- 容器与行都保持语义中立（无 `role`/`aria-*`）。由于 DOM 中只有可见切片，需要无障碍列表语义时应由使用方在外层补 `role="list"`/`role="listitem"` 与 `aria-setsize`/`aria-posinset`（用真实的 `items.length` 与绝对索引，而非可见切片下标）。
+- 只用于固定高度行。变高内容会让滚动计算失真。
+- 对象列表应提供 `itemKey` 稳定 id；只有不可变数组才适合使用 index key。
+- `overscan` 保持适中。更高 overscan 会让快速滚动更平滑，但增加 DOM 工作量。
+- 避免给 row 外层加垂直 margin；间距应放进固定高度行内部。
+- `scroll` 适合统计或懒加载触发，不要在其中执行逐帧重逻辑。
 
-## API
+## API 参考
 
 ### Props
 
@@ -108,21 +99,25 @@ function jumpToLatest() {
 | `scrollToTop` | `() => void` | 设置 scrollTop 为 `0`。 |
 | `scrollToBottom` | `() => void` | 设置 scrollTop 为 `max(0, totalHeight - viewHeight)`。 |
 
-## 最佳实践
+## 概述
 
-- 只用于固定高度行。变高内容会让滚动计算失真。
-- 对象列表应提供 `itemKey` 稳定 id；只有不可变数组才适合使用 index key。
-- `overscan` 保持适中。更高 overscan 会让快速滚动更平滑，但增加 DOM 工作量。
-- 避免给 row 外层加垂直 margin；间距应放进固定高度行内部。
-- `scroll` 适合统计或懒加载触发，不要在其中执行逐帧重逻辑。
+- `itemHeight` 必填，且每个渲染行都会被设置为该像素高度。
+- 数字 `height` 会转为 px；字符串 `height` 原样应用。
+- 数字、px 和纯数字字符串高度会立即解析，用于计算 viewport。`%`、`vh`、`vw`、`rem`、`em` 高度会等待真实容器高度。
+- 挂载时组件读取 `clientHeight`；存在 `ResizeObserver` 时，容器尺寸变化后会更新 viewport 高度。
+- `startIndex` 为 `floor(scrollTop / itemHeight) - overscan`，并限制到 `0` 以上。
+- `endIndex` 基于可视 viewport 加 `overscan` 计算，并限制到 `items.length`。
+- spacer 高度是 `items.length * itemHeight`；可见 items 会按 `startIndex * itemHeight` 位移。
+- `itemKey` 可以是字段名或函数。字段值缺失时回退为可见项 index。
+- `scroll` 在内部滚动状态更新后发出 `{ scrollTop, startIndex, endIndex }`。
+- `scrollToIndex(index)` 会把负数 index 限制为 0，但不会限制超过最后一项的 index；调用方应传入有效索引。
+- 容器与行都保持语义中立（无 `role`/`aria-*`）。由于 DOM 中只有可见切片，需要无障碍列表语义时应由使用方在外层补 `role="list"`/`role="listitem"` 与 `aria-setsize`/`aria-posinset`（用真实的 `items.length` 与绝对索引，而非可见切片下标）。
 
-## 审阅说明
+## 技术实现
 
 - **viewport 说明:** 无法同步解析的 `height`（`%`、viewport 单位、`rem`、`em`）依赖挂载节点的 `clientHeight`；SSR 或隐藏容器场景应先提供具体高度，再依赖可见区间计算。
 - **滚动说明:** `scrollToIndex()` 会夹取负数索引，但不会限制大于 `items.length - 1` 的索引。用户输入的跳转目标需要调用方先校验。
 - **实测覆盖:** `virtual-list.test.ts` 目前覆盖固定高度下的可见项数量与暴露的 `scrollToIndex` 方法。文档已明确标出仍需人工 review 的契约：ResizeObserver、自定义 `itemKey`、overscan 与 `scroll` payload。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/virtual-list/src/TxVirtualList.vue`。
 - Types: `packages/tuffex/packages/components/src/virtual-list/src/types.ts` 导出 `VirtualListProps`、`VirtualListEmits`、`VirtualListItemKey` 与 `VirtualListKey`。

@@ -95,6 +95,11 @@ Iconify 图标集里都是静态字形。当某处界面需要一个**会动**�
 
 复制了几何路径，就要一并带上署名与 MIT 声明。
 
+## 技术实现
+
+- 解析与渲染：`packages/tuffex/packages/components/src/icon/src/TxIcon.vue`。
+- 配置契约：`packages/tuffex/packages/components/src/icon/src/types.ts`（`TxIconSource`、`TxIconConfig`、`TX_ICON_CONFIG_KEY`）。
+
 ## 相关组件
 
 | 组件 | 用途 |
@@ -102,8 +107,3 @@ Iconify 图标集里都是静态字形。当某处界面需要一个**会动**�
 | 《[Icon 图标](./icon.zh.mdc)》 | 通用场景与完整 prop 列表 |
 | 《[IconChip 图标徽标](./icon-chip.zh.mdc)》 | 承载字形或短标签的小色块 |
 | Status icon | 成功 / 警告 / 错误状态的语义色字形 |
-
-## 源码
-
-- 解析与渲染：`packages/tuffex/packages/components/src/icon/src/TxIcon.vue`。
-- 配置契约：`packages/tuffex/packages/components/src/icon/src/types.ts`（`TxIconSource`、`TxIconConfig`、`TX_ICON_CONFIG_KEY`）。

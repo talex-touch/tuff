@@ -8,9 +8,8 @@ tags: [overlay, badge, corner]
 syncStatus: reviewed
 verified: true
 ---
-# CornerOverlay 角标覆盖层
 
-## 基础用法
+## 用法
 
 ::::TuffDemoWrapper{demo="CornerOverlayBasicDemo" code-lang="vue"}
 ---
@@ -25,8 +24,6 @@ code: |
   </template>
 ---
 ::::
-
-## 组合示例
 
 ### 可点击覆盖层
 
@@ -58,18 +55,15 @@ code: |
 
 字符串偏移值会原样保留。数字偏移值会转换为像素。
 
-## 交互契约
+### 最佳实践
 
-- 根节点渲染为 `position: relative` 的行内块 `span`。
-- 只有存在 `overlay` 插槽时才渲染覆盖层。
-- 覆盖层使用绝对定位；作为装饰时（`overlayPointerEvents="none"`，默认）标记 `aria-hidden="true"`，设为 `overlayPointerEvents="auto"` 则会暴露，使内部可聚焦控件仍可达。
-- `placement` 决定写入 top/left、top/right、bottom/left 或 bottom/right 这一组 x/y inset。
-- `offsetX` 控制 `left` 或 `right`；`offsetY` 控制 `top` 或 `bottom`。
-- 数字偏移会转为 px，字符串偏移会原样传入样式。
-- `overlayPointerEvents` 直接映射为覆盖层的 CSS `pointer-events`。
-- 组件本身不添加 click、focus 或键盘行为。
+- 默认把覆盖层当作装饰内容；由于它是 `aria-hidden`，重要状态还应在附近文本或标签中表达。
+- 需要角标部分超出头像或缩略图时使用负偏移。
+- 只有明确需要交互覆盖层时才设置 `overlayPointerEvents="auto"`，并在插槽内提供语义化控件。
+- 避免放入大块覆盖内容。该组件适合小标记，不适合弹层或菜单。
+- 保持基础内容尺寸稳定；覆盖层绝对定位，不会预留布局空间。
 
-## API
+## API 参考
 
 ### Props
 
@@ -95,21 +89,22 @@ code: |
 
 不暴露公开实例方法。
 
-## 最佳实践
+## 概述
 
-- 默认把覆盖层当作装饰内容；由于它是 `aria-hidden`，重要状态还应在附近文本或标签中表达。
-- 需要角标部分超出头像或缩略图时使用负偏移。
-- 只有明确需要交互覆盖层时才设置 `overlayPointerEvents="auto"`，并在插槽内提供语义化控件。
-- 避免放入大块覆盖内容。该组件适合小标记，不适合弹层或菜单。
-- 保持基础内容尺寸稳定；覆盖层绝对定位，不会预留布局空间。
+- 根节点渲染为 `position: relative` 的行内块 `span`。
+- 只有存在 `overlay` 插槽时才渲染覆盖层。
+- 覆盖层使用绝对定位；作为装饰时（`overlayPointerEvents="none"`，默认）标记 `aria-hidden="true"`，设为 `overlayPointerEvents="auto"` 则会暴露，使内部可聚焦控件仍可达。
+- `placement` 决定写入 top/left、top/right、bottom/left 或 bottom/right 这一组 x/y inset。
+- `offsetX` 控制 `left` 或 `right`；`offsetY` 控制 `top` 或 `bottom`。
+- 数字偏移会转为 px，字符串偏移会原样传入样式。
+- `overlayPointerEvents` 直接映射为覆盖层的 CSS `pointer-events`。
+- 组件本身不添加 click、focus 或键盘行为。
 
-## 审阅说明
+## 技术实现
 
 - 已人工核对 `packages/tuffex/packages/components/src/corner-overlay/src/types.ts`、`TxCornerOverlay.vue` 与 `corner-overlay.test.ts`。
 - `overlay` 插槽按需渲染，仅在装饰态（`overlayPointerEvents="none"`）下 `aria-hidden`；设为 `overlayPointerEvents="auto"` 会暴露，使内部交互控件可达。业务关键状态仍需要附近文本或外部有标签控件表达。
 - `overlayPointerEvents="auto"` 只转发 CSS 指针行为；插槽内控件自行负责键盘、焦点和标签语义。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/corner-overlay/src/TxCornerOverlay.vue`。
 - Types: `packages/tuffex/packages/components/src/corner-overlay/src/types.ts`。

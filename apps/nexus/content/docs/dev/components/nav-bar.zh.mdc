@@ -8,9 +8,8 @@ tags: [navigation, mobile, layout]
 syncStatus: reviewed
 verified: true
 ---
-# NavBar 导航栏
 
-## 基础用法
+## 用法
 
 ::::TuffDemoWrapper{demo="NavBarNavBarDemo" code-lang="vue"}
 ---
@@ -28,8 +27,6 @@ code: |
   </template>
 ---
 ::::
-
-## 组合示例
 
 ### 自定义左侧与标题
 
@@ -61,18 +58,15 @@ code: |
 
 只有在父级布局已经处理设备安全区时，才把 `safeAreaTop` 设为 `false`。
 
-## 交互契约
+### 最佳实践
 
-- 根节点是 `header`；左右操作区都是原生 `button type="button"`。
-- `showBack=true` 且未提供 `left` 插槽时，左侧按钮渲染内置返回图标。
-- 点击内置返回按钮会同时发出 `back` 和 `click-left`。
-- 点击自定义 `left` 插槽只会发出 `click-left`。
-- 点击 `right` 插槽会发出 `click-right`；未提供 `right` 插槽时右侧按钮禁用且不发事件。
-- `disabled=true` 会添加 `is-disabled`，禁用左右按钮，并阻断所有事件。
-- `fixed=true` 使用 sticky 吸顶定位。
-- `zIndex` 通过 `--tx-nav-bar-z-index` 暴露给样式。
+- 导航返回优先监听 `@back`；`@click-left` 更适合自定义左侧插槽。
+- 右侧插槽内容应保持简短；标题会省略，但两侧列仍需要留出空间。
+- 不要在 `left` 或 `right` 内再嵌套交互按钮；这两个操作区本身已经是按钮。
+- 移动端壳层默认保留 `safeAreaTop=true`，除非外层布局已经处理安全区。
+- 路由跳转或保存过程中使用 `disabled`，避免重复触发导航事件。
 
-## API
+## API 参考
 
 ### Props
 
@@ -101,21 +95,22 @@ code: |
 | `title` | 无 | 替换居中标题文本。 |
 | `right` | 无 | 提供右侧操作内容。 |
 
-## 最佳实践
+## 概述
 
-- 导航返回优先监听 `@back`；`@click-left` 更适合自定义左侧插槽。
-- 右侧插槽内容应保持简短；标题会省略，但两侧列仍需要留出空间。
-- 不要在 `left` 或 `right` 内再嵌套交互按钮；这两个操作区本身已经是按钮。
-- 移动端壳层默认保留 `safeAreaTop=true`，除非外层布局已经处理安全区。
-- 路由跳转或保存过程中使用 `disabled`，避免重复触发导航事件。
+- 根节点是 `header`；左右操作区都是原生 `button type="button"`。
+- `showBack=true` 且未提供 `left` 插槽时，左侧按钮渲染内置返回图标。
+- 点击内置返回按钮会同时发出 `back` 和 `click-left`。
+- 点击自定义 `left` 插槽只会发出 `click-left`。
+- 点击 `right` 插槽会发出 `click-right`；未提供 `right` 插槽时右侧按钮禁用且不发事件。
+- `disabled=true` 会添加 `is-disabled`，禁用左右按钮，并阻断所有事件。
+- `fixed=true` 使用 sticky 吸顶定位。
+- `zIndex` 通过 `--tx-nav-bar-z-index` 暴露给样式。
 
-## 审阅说明
+## 技术实现
 
 - **可访问性说明:** 左右操作区本身就是原生按钮。不要在 `left` 或 `right` 内传入嵌套按钮；slot 内应放文本、图标或 span，保持按钮语义有效。
 - **事件说明:** 默认返回按钮会同时发出 `back` 与 `click-left`；自定义 `left` 内容只发出 `click-left`。同一个交互应只选择一条监听路径，避免重复导航。
 - **实测覆盖:** `nav-bar.test.ts` 覆盖标题/安全区/z-index 渲染、fixed 与 disabled class、默认返回事件、自定义 slot 事件、空操作区禁用，以及禁用状态不发事件。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/nav-bar/src/TxNavBar.vue`。
 - Types: `packages/tuffex/packages/components/src/nav-bar/src/types.ts` 导出 `NavBarProps` 与 `NavBarEmits`。

@@ -8,9 +8,8 @@ tags: [border, ring, clip, mask]
 syncStatus: reviewed
 verified: true
 ---
-# OutlineBorder
 
-## Basic Usage
+## Usage
 
 Use `ring-offset` for avatar-style outlines and `border` when the outline should participate in layout.
 
@@ -29,28 +28,14 @@ code: |
 ---
 ::::
 
-## Mask Clipping
+### Best Practices
 
-Use `clip-mode="mask"` for shapes that cannot be expressed with border radius alone, such as hexagons.
+- Prefer `overflow` for circular or rounded avatars; it is cheaper and easier to debug than `mask`.
+- Use `ring-offset` when the outline must stay visually separated from the content surface.
+- Pass explicit width and height on the slotted content so masks and rings have predictable geometry.
+- Use `as="span"` only for inline contexts; keep block wrappers for cards, thumbnails, and list media.
 
-::::TuffDemoWrapper{demo="OutlineBorderMaskClipDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxOutlineBorder
-      variant="ring"
-      :ring-width="2"
-      ring-color="var(--tx-color-primary)"
-      clip-mode="mask"
-      clip-shape="hexagon"
-    >
-      <div class="hex-avatar">AI</div>
-    </TxOutlineBorder>
-  </template>
----
-::::
-
-## API
+## API Reference
 
 ### Props
 
@@ -81,7 +66,28 @@ code: |
 
 No component events.
 
-## Interaction Contract
+## Mask Clipping
+
+Use `clip-mode="mask"` for shapes that cannot be expressed with border radius alone, such as hexagons.
+
+::::TuffDemoWrapper{demo="OutlineBorderMaskClipDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxOutlineBorder
+      variant="ring"
+      :ring-width="2"
+      ring-color="var(--tx-color-primary)"
+      clip-mode="mask"
+      clip-shape="hexagon"
+    >
+      <div class="hex-avatar">AI</div>
+    </TxOutlineBorder>
+  </template>
+---
+::::
+
+## Overview
 
 - Numeric `borderRadius`, `borderWidth`, `ringWidth`, `offset`, and `padding` values are converted to px.
 - `variant="border"` writes a real CSS border; ring variants use `box-shadow` and do not affect layout size.
@@ -90,20 +96,11 @@ No component events.
 - `ring`/`border` outlines are drawn with `box-shadow`/CSS border and follow only `border-radius`; `clipShape` affects the content layer only, so the outline does not trace non-rounded shapes like `hexagon`/`squircle` (use a shaped `drop-shadow` filter if the outline must follow such a shape).
 - The component has no intrinsic size. The slotted content determines the final box.
 
-## Best Practices
-
-- Prefer `overflow` for circular or rounded avatars; it is cheaper and easier to debug than `mask`.
-- Use `ring-offset` when the outline must stay visually separated from the content surface.
-- Pass explicit width and height on the slotted content so masks and rings have predictable geometry.
-- Use `as="span"` only for inline contexts; keep block wrappers for cards, thumbnails, and list media.
-
-## Review Notes
+## Technologies
 
 - **Accessibility note:** `TxOutlineBorder` is a visual wrapper only; it does not add roles, labels, or image semantics. Keep alt text, labels, focus behavior, and click targets on the slotted content or the caller-provided root attributes.
 - **Mask note:** `clipMode="mask"` only emits masks for `circle`, `hexagon`, and `squircle`; rectangular/rounded shapes should use `overflow` or `clipPath`.
 - **Verified coverage:** `outline-border.test.ts` checks dynamic root tags, slot rendering, border style mapping, numeric unit conversion, default ring-offset box shadow, ring/inset variants, default overflow clipping, clip-path/mask modes, and disabled clipping.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/outline-border/src/TxOutlineBorder.vue`.
 - Types: `packages/tuffex/packages/components/src/outline-border/src/types.ts` exports `OutlineBorderProps`, variant, shape, clip-mode, and clip-shape unions.

@@ -8,9 +8,8 @@ tags: [flow, workflow, canvas, ai]
 syncStatus: reviewed
 verified: true
 ---
-# Flowchart
 
-## Basic Usage
+## Usage
 
 ### Flowchart
 
@@ -46,21 +45,13 @@ code: |
 ---
 :::
 
-## Coordinates
+### Best Practices
 
-`x` is the node's **horizontal centre**, not its left edge — nodes sit astride that line via `translateX(-50%)`, so everything on one vertical run shares an `x` without the host needing to know how wide a card is. `y` is the top edge. Both are CSS pixels inside the canvas.
+- Give nodes on one run the same `x` so the connector degenerates to a straight line.
+- Let card content drive its own height; do not pin a card `height` — connectors are drawn from measured heights, and a pinned one puts the two out of step.
+- The chip's `tone` names a **kind of step** (trigger, branch, action), not a status, which is why it draws from the BUI accent set rather than the `--tx-*` semantic ramp.
 
-`grid` is both the dot pitch and the drag snap step, defaulting to `22px`. The grid is a `radial-gradient`: the dot lands at 1px and falls off at 1.25px. A hard 1px stop aliases into a square at the grid size, and anything past about 1.5px becomes a texture competing with the cards.
-
-## Connectors
-
-Each entry in `edges` runs from the **bottom edge** of `from` to the **top edge** of `to`. Card height is content-driven — a two-line condition is taller than a one-line trigger — so the component measures each card with a `ResizeObserver` and recomputes the path, instead of assuming a height that would put the tail inside or below the card.
-
-Both control points sit past the midpoint and cross (±0.55 of the gap). A vertically-aligned pair therefore reads as a straight line, while an offset pair still leaves and enters its cards vertically rather than with the slack a 0.5 factor gives.
-
-An edge naming a node that is not on the canvas is **skipped** rather than drawn to the origin, which would streak a line across the whole surface.
-
-## API
+## API Reference
 
 ### Props
 
@@ -92,20 +83,28 @@ An edge naming a node that is not on the canvas is **skipped** rather than drawn
 | `node` | `{ node, index }` | Card content. Without it the node renders an empty card. |
 | `label` | `{ node }` | Replaces the category chip above the card. |
 
-## Interaction Contract
+## Coordinates
+
+`x` is the node's **horizontal centre**, not its left edge — nodes sit astride that line via `translateX(-50%)`, so everything on one vertical run shares an `x` without the host needing to know how wide a card is. `y` is the top edge. Both are CSS pixels inside the canvas.
+
+`grid` is both the dot pitch and the drag snap step, defaulting to `22px`. The grid is a `radial-gradient`: the dot lands at 1px and falls off at 1.25px. A hard 1px stop aliases into a square at the grid size, and anything past about 1.5px becomes a texture competing with the cards.
+
+## Connectors
+
+Each entry in `edges` runs from the **bottom edge** of `from` to the **top edge** of `to`. Card height is content-driven — a two-line condition is taller than a one-line trigger — so the component measures each card with a `ResizeObserver` and recomputes the path, instead of assuming a height that would put the tail inside or below the card.
+
+Both control points sit past the midpoint and cross (±0.55 of the gap). A vertically-aligned pair therefore reads as a straight line, while an offset pair still leaves and enters its cards vertically rather than with the slack a 0.5 factor gives.
+
+An edge naming a node that is not on the canvas is **skipped** rather than drawn to the origin, which would streak a line across the whole surface.
+
+## Overview
 
 - **Always controlled.** The component never writes `nodes`. During a drag it holds a temporary offset so the card tracks the pointer, then clears it and emits `node-move` on release; if the host does not write back, the node springs home. That is deliberate — undo stacks, alternative snapping and server persistence all belong to the host.
 - **Draggable nodes carry `touch-action: none`**, or a touch drag scrolls the page instead of moving the node.
 - **Nodes are focusable.** Each node is a tab stop, Enter / Space fires `node-click`, and `:focus-visible` draws the ring.
 - Connectors are drawn **beneath** the cards so a card's hairline ring covers the line's endpoint, rather than the line crossing the card's corner.
 
-## Best Practices
-
-- Give nodes on one run the same `x` so the connector degenerates to a straight line.
-- Let card content drive its own height; do not pin a card `height` — connectors are drawn from measured heights, and a pinned one puts the two out of step.
-- The chip's `tone` names a **kind of step** (trigger, branch, action), not a status, which is why it draws from the BUI accent set rather than the `--tx-*` semantic ramp.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/flowchart/src/TxFlowchart.vue`.
 - Types: `packages/tuffex/packages/components/src/flowchart/src/types.ts`.

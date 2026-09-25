@@ -8,9 +8,8 @@ tags: [progress, status, loading]
 syncStatus: reviewed
 verified: true
 ---
-# Progress 进度
 
-## Demo
+## 用法
 
 ### 进度状态
 
@@ -37,8 +36,6 @@ code: |
 ---
 ::::
 
-## 组合示例
-
 ### 自定义文本格式
 
 ```vue
@@ -57,18 +54,15 @@ code: |
 
 未知时长任务应使用不确定状态，而不是展示虚假的百分比。
 
-## 交互契约
+### 最佳实践
 
-- `TuffProgress` 渲染 `TxProgressBar`，自身不增加额外 wrapper DOM。
-- `percentage`、`status`、`indeterminate`、`showText` 和 `format` 会直接转发。
-- `strokeWidth` 会转换为类似 `"6px"` 的 CSS 高度字符串，并作为 `height` 传入。
-- 文本位置固定为 `outside`。
-- 底层进度条使用 `maskVariant="plain"`，轨道跟随 `TxProgressBar` 的默认样式（无描边平铺轨道、渐变填充）。
-- 确定进度通过 `TxProgressBar` 暴露 `role="progressbar"` 和 `aria-valuenow`。
-- 不确定进度会省略 `aria-valuenow`，并应用进度条的不确定状态类。
-- 安装入口注册组件名 `TuffProgress`。
+- 简单行级进度且需要旧公共名称和紧凑 API 时使用 `TuffProgress`。
+- 需要分段、tooltip、message、loading/success/error 布尔状态、动效或自定义文本位置时，直接使用 `TxProgressBar`。
+- `strokeWidth` 保持克制；该封装适合行级进度，不适合英雄指标。
+- 不要为未知工作展示过期百分比。使用 `indeterminate`，除非有可信数值，否则隐藏文本。
+- 周围 UI 需要操作上下文时，把进度条与简短状态标签组合使用。
 
-## API
+## API 参考
 
 ### Props
 
@@ -89,19 +83,21 @@ code: |
 
 `TuffProgress` 不暴露插槽。文本定制使用 `format`；布局需要自定义内容时直接使用 `TxProgressBar`。
 
-## 最佳实践
+## 概述
 
-- 简单行级进度且需要旧公共名称和紧凑 API 时使用 `TuffProgress`。
-- 需要分段、tooltip、message、loading/success/error 布尔状态、动效或自定义文本位置时，直接使用 `TxProgressBar`。
-- `strokeWidth` 保持克制；该封装适合行级进度，不适合英雄指标。
-- 不要为未知工作展示过期百分比。使用 `indeterminate`，除非有可信数值，否则隐藏文本。
-- 周围 UI 需要操作上下文时，把进度条与简短状态标签组合使用。
+- `TuffProgress` 渲染 `TxProgressBar`，自身不增加额外 wrapper DOM。
+- `percentage`、`status`、`indeterminate`、`showText` 和 `format` 会直接转发。
+- `strokeWidth` 会转换为类似 `"6px"` 的 CSS 高度字符串，并作为 `height` 传入。
+- 文本位置固定为 `outside`。
+- 底层进度条使用 `maskVariant="plain"`，轨道跟随 `TxProgressBar` 的默认样式（无描边平铺轨道、渐变填充）。
+- 确定进度通过 `TxProgressBar` 暴露 `role="progressbar"` 和 `aria-valuenow`。
+- 不确定进度会省略 `aria-valuenow`，并应用进度条的不确定状态类。
+- 安装入口注册组件名 `TuffProgress`。
 
-## 审阅说明
+## 技术实现
 
 - 组件源码:`packages/tuffex/packages/components/src/progress/src/TxProgress.vue` 确认封装直接渲染 `TxProgressBar`，并把 `strokeWidth` 映射为 `height`。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/progress/__tests__/progress.test.ts` 覆盖状态透传、自定义格式化、`strokeWidth`、隐藏文本和不确定进度 ARIA 行为。
 - 导出入口:`packages/tuffex/packages/components/src/progress/index.ts` 注册公共组件名 `TuffProgress`。
 
-## Source
 <TuffDocSourceLink />

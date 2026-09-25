@@ -8,9 +8,8 @@ tags: [flex, layout]
 syncStatus: reviewed
 verified: true
 ---
-# Flex
 
-## Basic Usage
+## Usage
 
 :::TuffDemoWrapper{demo="FlexFlexDemo" code-lang="vue"}
 ---
@@ -25,8 +24,6 @@ code: |
   </template>
 ---
 :::
-
-## Composition Examples
 
 ### Wrapping Toolbar
 
@@ -53,16 +50,15 @@ code: |
 </template>
 ```
 
-## Interaction Contract
+### Best Practices
 
-- The root is a `div` with `display: flex` by default.
-- `direction`, `wrap`, `align`, and `justify` are passed directly through to Flexbox CSS variables.
-- Numeric `gap` values become px; string values are passed through unchanged.
-- `inline=true` switches display from `flex` to `inline-flex`.
-- Empty `align`, `justify`, `direction`, or `wrap` values fall back to the component defaults when computed.
-- The root sets `min-width: 0` so children can shrink inside constrained cards.
+- Use `TxFlex` when you need exact Flexbox semantics. Use `TxStack` for common horizontal/vertical rhythm.
+- Use `wrap="wrap"` on toolbars and filter rows that must survive narrow containers.
+- Keep `gap` responsible for spacing; avoid margin hacks on child components.
+- Prefer semantic child controls (`TxButton`, links, form controls) inside `TxFlex`; the container itself does not add roles or keyboard behavior.
+- For grid-like repeated cards, use `TxGridLayout` instead of nested flex rows.
 
-## API
+## API Reference
 
 ### Props
 
@@ -100,21 +96,20 @@ No public instance methods are exposed.
 | `--tx-flex-wrap` | `wrap` | `flex-wrap`. |
 | `--tx-flex-display` | `inline` | `flex` or `inline-flex`. |
 
-## Best Practices
+## Overview
 
-- Use `TxFlex` when you need exact Flexbox semantics. Use `TxStack` for common horizontal/vertical rhythm.
-- Use `wrap="wrap"` on toolbars and filter rows that must survive narrow containers.
-- Keep `gap` responsible for spacing; avoid margin hacks on child components.
-- Prefer semantic child controls (`TxButton`, links, form controls) inside `TxFlex`; the container itself does not add roles or keyboard behavior.
-- For grid-like repeated cards, use `TxGridLayout` instead of nested flex rows.
+- The root is a `div` with `display: flex` by default.
+- `direction`, `wrap`, `align`, and `justify` are passed directly through to Flexbox CSS variables.
+- Numeric `gap` values become px; string values are passed through unchanged.
+- `inline=true` switches display from `flex` to `inline-flex`.
+- Empty `align`, `justify`, `direction`, or `wrap` values fall back to the component defaults when computed.
+- The root sets `min-width: 0` so children can shrink inside constrained cards.
 
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/flex/src/types.ts`, `TxFlex.vue`, and `flex.test.ts`.
 - `TxFlex` is intentionally behaviorless: it adds no role, events, or focus handling beyond the slotted children.
 - Numeric `gap` is normalized to pixels; string gap values remain caller-owned CSS.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/flex/src/TxFlex.vue`.
 - Types: `packages/tuffex/packages/components/src/flex/src/types.ts`.
