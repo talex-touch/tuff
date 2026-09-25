@@ -37,15 +37,19 @@
 
 ## Acceptance Criteria
 
-- [ ] `fusionSurfacePath()` 单测覆盖：无凸起时是标准圆角矩形；四条边各自长出；凹圆角半径被凸起高度限制；凸起中心被夹在直边内；同边两个凸起；`detach` 从 0 增大时颈部宽度单调收窄；断裂后输出两个闭合子路径；所有输出不含 `NaN` / `Infinity`。
-- [ ] 组件单测：挂载后 path 存在且 `aria-hidden`；改 `buds` 后若干帧内 `d` 变化并最终稳定；减少动态效果时一次到位；卸载后没有残留的 rAF。
-- [ ] 样式契约：没有在 hover 上过渡颜色；所有过渡 / 动画都有 `prefers-reduced-motion` 出口；没有硬编码颜色（全部 `var(--tx-*, fallback)`）；阴影方向遵守库里的单一光源约定（`shadow-light-source.test.ts` 通过）。
-- [ ] `pnpm -C packages/tuffex` 下该组件测试、`suite-barrels.test.ts`、类型检查通过。
-- [ ] nexus：`check-doc-translation-parity`、`check-mdc-fences`、`check-demo-registry-orphans`、`tuffex-component-docs-coverage.test.ts` 通过。
-- [ ] ego-browser 实测 nexus 文档页（亮 / 暗两种主题）：托盘 demo 长出与收回都流畅，连接处凹圆角无缝；分裂 demo 颈缩、拉断、回缩都能看到；逐帧截图留证。
+- [x] `fusionSurfacePath()` 单测覆盖：无凸起时是标准圆角矩形；四条边各自长出；凹圆角半径被凸起高度限制；凸起中心被夹在直边内；同边两个凸起；`detach` 从 0 增大时颈部宽度单调收窄；断裂后输出两个闭合子路径；所有输出不含 `NaN` / `Infinity`。
+- [x] 组件单测：挂载后 path 存在且 `aria-hidden`；改 `buds` 后若干帧内 `d` 变化并最终稳定；减少动态效果时一次到位；卸载后没有残留的 rAF。
+- [x] 样式契约：没有在 hover 上过渡颜色；所有过渡 / 动画都有 `prefers-reduced-motion` 出口；没有硬编码颜色（全部 `var(--tx-*, fallback)`）；阴影方向遵守库里的单一光源约定（`shadow-light-source.test.ts` 通过）。
+- [x] `pnpm -C packages/tuffex` 下该组件测试、`suite-barrels.test.ts`、类型检查通过（组件库全量 247 文件 / 2596 条，check 轮 102 条专项）。
+- [x] nexus：`check-doc-translation-parity`、`check-mdc-fences`、`check-demo-registry-orphans`、`tuffex-component-docs-coverage.test.ts` 通过。
+- [x] ego-browser 实测 nexus 文档页（亮 / 暗两种主题）：托盘 demo 长出与收回都流畅，连接处凹圆角无缝；分裂 demo 颈缩、拉断、回缩都能看到；逐帧截图留证（`research/verify/`，逐帧采样 path 离线渲染，见 spec tuffex-docs-sync「Frame-driven SVG geometry」）。
 
 ## 不做
 
 - 不改 `TxLiquid` / `TxFusion` 的行为与 API。
 - 不做任意多边形 / 任意曲线主体，主体只支持圆角矩形。
 - 不做拖拽交互（凸起的开合与位置由调用方驱动）。
+
+## 落地记录
+
+- 2026-09-26 提交 `02fd57ba5`（组件 + nexus 文档 + spec）。实现偏差见 design.md §8；复查轮修了水滴关闭压成线、颈缩起步凹口、`springSteps` 异常配置 NaN、重复 id 双内容层、文档过期数字五处。

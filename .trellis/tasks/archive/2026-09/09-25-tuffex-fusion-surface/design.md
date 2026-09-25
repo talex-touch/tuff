@@ -53,7 +53,7 @@ packages/tuffex/packages/components/src/fusion-surface/
   - **非对称**：腰部以下用长的 `σ_down = v_w − p`（凹陷恰好在底部凹角结束处归零、斜率也归零，于是凹角与侧边 G1 连续，没有膝盖）；腰部以上用短的 `σ_up = min(0.45·e, 18)`，形成水滴底部的凸肩。
   - 横向漂移：`cx(v) = c + drift · smoothstep(v_w − σ_down, v_w + σ_up, v)`，颈部随水滴偏移平滑倾斜。
   - 顶角半径 `m = min(r, e − p, l/2)` 必须先夹住，否则小凸起时采样区间倒置出尖刺（原型第一版踩过）。
-- 调用方（组件驱动器或 core-app）给 `detach` 与 `pinch`；组件内部默认 `pinch = smoothstep(0.15·breakAt, breakAt, d)`。
+- 调用方（组件驱动器或 core-app）给 `detach` 与 `pinch`；组件内部默认 `pinch = smoothstep(0.25·breakAt, breakAt, d)²`（2026-09-26 视觉走查后由 `smoothstep(0.15·breakAt, breakAt, d)` 改来，断裂点随之从约 94% 移到约 96%，默认 28 时为 26.93px）：平方让曲线在起点斜率与曲率都为 0，颈部还短时凹陷只有几 px，拉到约一半 `breakAt` 之后才迅速收成沙漏。旧曲线下 160px 凸起在 d≈7 时凹陷才 2.9px 深、侧边就已斜到 45°，两侧各出一道刻痕（`research/verify/split-sheet.png` t=1181ms）；配合 §8 第 9 条的宽腰起步，现在侧边第一次斜到 45° 时凹陷已有 8.4px 深（d=15），见 `research/geometry-frames-after-polish.png`。
 
 ### 2.4 断裂与残留
 
@@ -129,3 +129,18 @@ fusionSurfacePath(input: FusionGeometryInput): {
 - **不用 goo 滤镜**：goo 能天然处理任意拓扑，但无法描边、阈值会吃掉细节，而且滤镜区域要覆盖整个运动范围；发送分裂场景里水滴要飞过整个会话区，滤镜区域就是整个窗口。
 - **轮廓模型而不是两套控制点插值**：贴合、拉伸、颈缩、断裂都是同一条半宽轮廓公式在不同参数下的结果，命令结构不变（固定采样数），任何参数连续变化都保证形状连续；凹角与顶角沿用 uiarc 的二次贝塞尔，侧边用采样点的 Catmull-Rom 三次段。
 - **组件不自动测量主体圆角**：`TxLiquid` 会读子元素的 `border-radius`，这里主体就是根节点、由调用方定尺寸，`radius` 作为 prop 更可预测。
+
+## 8. 实现偏差（2026-09-26，核心实现落地后记录）
+
+实现按本设计进行，以下几处在实现中有意改动，理由都经过测量：
+
+1. **`springSteps` 子步长是 1/240s**（`spring.ts` 自己的 `DT`），不是 §1 写的 ≤1/60s。1/60s 时 snappy 偏离编译出的 `linear()` 曲线 10.7%（smooth 5.7%、bouncy 10.1%），JS 驱动与 CSS 驱动的同一 preset 会肉眼可见地不同步；1/240s 在 60fps 下偏差 0.2%。仍满足「长帧多子步、不放大步长」。
+2. **侧边用三次 Hermite + 解析导数**连接采样点，替代 §2.3 的 Catmull-Rom。Catmull-Rom 端点用弦作切线，短颈根部会偏约 49°，凹角要么起折、要么被撑大到约 26px（d=12 实测）。采样点与轮廓模型本身不变。
+3. **腰部与肩部的边界**：腰部 `v_w = p + max(0.62·d, 4)`，保证 `σ_down = v_w − p` 严格成立（原型给 σ_down 下限 4，d < 6.5 时凹陷会伸进凹角出膝盖）；肩部 `σ_up` 不超过顶角开始前剩余的高度，否则短凸起分离时顶角冒尖耳。
+4. **水滴尾巴回缩**：不收缩 `σ_up`，而是逐采样点把「断裂时的尖尾」混合到「最终圆角底」（直接收深度会变成梯形倒角，只收 σ 会切掉尖端）。主体残留仍按 §2.4：颈下半段收尖、再竖向压回边缘。
+5. **驱动器补充规则**：断裂快照的 detach 封顶在断裂距离（≈0.96·breakAt，默认曲线改动前为 0.94），快速拉过阈值时残留不会比颈更高；凸起首次可见时已超过断裂点则直接成为水滴、不带残留（否则会弹出 40px 以上的尖刺）；分裂后保持分离，直到凸起完全关闭再打开才重新长出（不做回融，PRD 未要求）。
+6. **命名与 API**：公共类型统一用 `FusionSurface*` 前缀（避免与 TxFusion 的 `Fusion*` 混淆）；几何输出除 `d` / `spans` 外多一个 `rects`（驱动器据此摆放内容层）；额外导出 `fusionSurfacePinch`、`FUSION_SURFACE_BREAK_PINCH`，并从本子路径转导出 `springSteps` 供 core-app 使用；`transition` 只接受预设名或 SpringConfig（不接受 `{ duration }`，逐帧弹簧没有「时长」语义）。
+7. **插槽只给 `{ bud }`**：逐帧的矩形与进度通过内容层盒子（外沿逐帧贴住凸起外沿）和 `--tx-fusion-surface-progress` 传给内容，Vue 不参与逐帧更新；从 `buds` 移除的凸起先动画关闭（期间 `inert`）再卸载内容。
+8. **新增 `src/shadow.ts`**：把 `box-shadow` 语法转成 `drop-shadow()` 链（跳过 inset / spread 层，`var()` 层原样透传）；默认阴影 `drop-shadow(var(--tx-elevation-3))`。CSS 钩子：`--tx-fusion-surface-fill / -stroke / -stroke-width / -filter`。
+9. **颈部宽腰起步**（2026-09-26 视觉走查后）：`neckProfile` 在收窄程度 0→0.5 之间，把腰部与上下两段凹陷长度从「以整条侧边中点为中心、上下对称」`smoothstep(0, 0.5, pinch)` 过渡到 §2.3 的颈部形态；`pinch ≥ 0.5`（所有沙漏帧与断裂帧、断裂后的残留与尾巴）与原来逐点相同。原因：§2.3 的 `σ_down = 0.62·d` 在凹陷刚出现时只有 4–9px，任何深度都会在凹角正上方折出尖 V；只改默认曲线（推迟、缓入）只是把这道刻痕推后几 px，仍然是刻痕（160px 凸起实测：仅换曲线时侧边首次斜到 45° 时凹陷 5.5px 深，加上宽腰起步后 8.4px）。
+10. **水滴朝自身中心关闭**（2026-09-26 视觉走查后）：原先分裂后的凸起关闭时只降低高度（`height = open·H`），外端落回内端、宽度不变，半空留下一条整宽横线（`research/verify/split-sheet.png` t=71…400ms）。现在几何输入 `FusionSurfaceSplit` 多一个可选的 `scale`（默认 1）：水滴按完整尺寸算出轮廓后，以其外框中心为基准整体缩放；驱动器记录 `ref`＝断裂时的 `open`（此后只升不降，上限 1；首次出现即已越过断裂点的水滴取 1），绘制高度 `max(ref, open)·H`、`scale = min(1, open / ref)`。于是断裂那一帧没有跳变（`scale = 1`），断裂时还没完全展开的凸起继续按高度长满，满开后关闭时两个方向同比缩小；bouncy 过冲时仍像相连凸起那样拉高而不放大宽度。内容层先按完整尺寸贴外沿，再绕同一中心按同一比例缩放（`transform-origin: 0 0`，由驱动器算平移），随水滴一起缩走并淡出。前后对比见 `research/drop-close-after-polish.png`（上排旧行为，下排新行为）。
