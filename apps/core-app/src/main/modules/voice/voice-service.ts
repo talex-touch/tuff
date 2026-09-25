@@ -989,7 +989,7 @@ export class VoiceService {
   ): Promise<VoiceDictateResult> {
     const command = resolveQuickEditCommand(transcript.text)
     let replacement: string | null = null
-    let outcome: 'literal' | 'model' | 'cancelled' | 'failed' = 'failed'
+    let outcome: 'literal' | 'model' | 'cancelled' | 'failed'
     if (command?.kind === 'cancel') {
       outcome = 'cancelled'
     } else if (command?.kind === 'replace') {
