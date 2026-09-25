@@ -38,7 +38,11 @@ function persistState(state: SidebarLayoutState): void {
   // Existing configs predate `shell`, and the storage layer hands back whatever is on disk, so
   // the object may genuinely be missing rather than merely stale.
   if (!appSetting.shell || typeof appSetting.shell !== 'object') {
-    appSetting.shell = { sidebarWidth: SIDEBAR_EXPANDED_DEFAULT, sidebarCollapsed: false }
+    appSetting.shell = {
+      sidebarWidth: SIDEBAR_EXPANDED_DEFAULT,
+      sidebarCollapsed: false,
+      expandedProjectIds: []
+    }
   }
 
   appSetting.shell.sidebarWidth = clampExpandedWidth(state.expandedWidth)

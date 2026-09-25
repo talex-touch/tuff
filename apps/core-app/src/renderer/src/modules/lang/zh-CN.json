@@ -1198,9 +1198,14 @@
       "delete": "删除对话"
     },
     "projects": {
-      "home": "主页",
+      "section": "项目",
+      "chats": "对话",
       "archived": "已归档项目",
       "newChat": "新建对话",
+      "newFromFolder": "从文件夹新建项目",
+      "empty": "暂无对话",
+      "expand": "展开 {name}",
+      "collapse": "收起 {name}",
       "runLocalAgent": "运行本机代理",
       "discoverSessions": "发现本机会话",
       "discoveringSessions": "正在发现会话…",

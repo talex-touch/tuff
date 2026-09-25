@@ -1198,9 +1198,14 @@
       "delete": "Delete conversation"
     },
     "projects": {
-      "home": "Home",
+      "section": "Projects",
+      "chats": "Chats",
       "archived": "Archived projects",
       "newChat": "New Chat",
+      "newFromFolder": "New project from folder",
+      "empty": "No chats yet",
+      "expand": "Expand {name}",
+      "collapse": "Collapse {name}",
       "runLocalAgent": "Run Local Agent",
       "discoverSessions": "Discover Local Sessions",
       "discoveringSessions": "Discovering Sessions…",

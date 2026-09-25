@@ -200,6 +200,7 @@ A skeleton is the default loading state, not an optional polish pass. Ship it wi
 - The skeleton must mirror the loaded layout: same group count, same row count, same row height and spacing.
 - A skeleton that does not match still shifts the page when content lands, which is the one thing it exists to prevent. "The page shows a skeleton" is not the bar; "nothing moves when data arrives" is.
 - Build the skeleton from the same containers the loaded view uses, so the two cannot drift apart.
+- Row height comes from the same line box, not from a number. A loaded row is as tall as its label's line box (font-size × the inherited line-height; CoreApp's page line-height is 1.5, set by the Tailwind preflight that ships with the Milkdown theme) plus its padding and borders. A skeleton row sized by `min-height: <number>` drifts by the difference on every row: the 2026-09-26 sidebar skeleton was 30 px against 33.5 px rows and slid 3.5 px further per row. Put the placeholder bar inside an element with the real label's `font-size` and `height: 1lh`, and check the rendered heights in the real app (an insertion-time `getBoundingClientRect` snapshot across a reload); jsdom has no layout, so a unit test can only pin the shared source, not the height.
 
 **Reuse the primitives**
 

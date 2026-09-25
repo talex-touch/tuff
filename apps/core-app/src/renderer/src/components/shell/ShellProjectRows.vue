@@ -103,10 +103,19 @@ function setSessionMenu(sessionRef: string, open: boolean): void {
 </template>
 
 <style scoped lang="scss">
+/**
+ * ShellNavItem's box: a 1px transparent border around the title's line, set in the nav label's type,
+ * which is what gives a nav row its height; the icon's share stands as a floor in case the icon ever
+ * outgrows that line. Rows at the top level start their text in the nav icons' column; a project
+ * folder sets `--shell-rows-indent` so its rows start in the nav labels' column.
+ */
 .ShellProjectRows-Row {
   display: flex;
   align-items: center;
+  box-sizing: border-box;
   width: 100%;
+  min-height: var(--shell-row-min-height);
+  border: 1px solid transparent;
   border-radius: var(--shell-radius-md);
   transition: background-color 0.15s ease;
 
@@ -123,7 +132,8 @@ function setSessionMenu(sessionRef: string, open: boolean): void {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  padding: 6px 9px;
+  padding: var(--shell-row-pad-y) var(--shell-row-pad-x) var(--shell-row-pad-y)
+    calc(var(--shell-row-pad-x) + var(--shell-rows-indent, 0px));
   border: none;
   background: transparent;
   color: var(--shell-text-regular);

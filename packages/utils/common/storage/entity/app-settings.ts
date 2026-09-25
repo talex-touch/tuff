@@ -517,6 +517,12 @@ const _appSettingOriginData = {
     sidebarWidth: 260,
     /** Whether the sidebar is collapsed to the icon-only rail. */
     sidebarCollapsed: false,
+    /**
+     * Projects whose folder is open in the sidebar. A rendering preference only: configs written
+     * before it existed lack it (read as "none open"), and ids of projects that no longer exist
+     * are pruned when the project list loads.
+     */
+    expandedProjectIds: [] as string[],
   },
   setup: {
     fileAccess: false,
