@@ -31,7 +31,10 @@ export interface IndexingRuntimeDiagnostics extends IndexedSourceDiagnosticsSnap
 }
 
 export class SourceDiagnosticsService {
-  async getDiagnostics(sources: IndexedSource[]): Promise<IndexingRuntimeDiagnostics> {
+  async getDiagnostics(
+    sources: IndexedSource[],
+    detail: 'full' | 'routing' = 'full'
+  ): Promise<IndexingRuntimeDiagnostics> {
     const diagnostics = await Promise.all(
       sources.map(async (source): Promise<IndexingRuntimeSourceDiagnostics> => {
         const disposeSource = enterPerfContext(
@@ -53,18 +56,22 @@ export class SourceDiagnosticsService {
               })
               return [] as IndexedSourceRoot[]
             }),
-            source.getEvidence?.().catch((error) => {
-              diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' evidence failed`, {
-                error
-              })
-              return [] as IndexedSourceEvidence[]
-            }) ?? Promise.resolve([] as IndexedSourceEvidence[]),
-            source.getProgress?.().catch((error) => {
-              diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' progress failed`, {
-                error
-              })
-              return null as IndexedSourceProgress | null
-            }) ?? Promise.resolve(null as IndexedSourceProgress | null)
+            detail === 'full'
+              ? (source.getEvidence?.().catch((error) => {
+                  diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' evidence failed`, {
+                    error
+                  })
+                  return [] as IndexedSourceEvidence[]
+                }) ?? Promise.resolve([] as IndexedSourceEvidence[]))
+              : undefined,
+            detail === 'full'
+              ? (source.getProgress?.().catch((error) => {
+                  diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' progress failed`, {
+                    error
+                  })
+                  return null as IndexedSourceProgress | null
+                }) ?? Promise.resolve(null as IndexedSourceProgress | null))
+              : undefined
           ])
 
           const contractIssues = getIndexedSourceContractIssues(source)

@@ -639,6 +639,188 @@ describe('indexingRuntime', () => {
     })
   })
 
+  it('applies a source-scoped watch delta without touching unrelated sources or optional evidence and progress', async () => {
+    const delta: IndexedSourceDelta = {
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/a.txt'
+    }
+    const handleWatchEvent = vi.fn(async () => [delta])
+    // A source-scoped route needs only the target source's CURRENT health and roots. Each getter
+    // below represents a path the route must not read: the unrelated source's diagnostics (that
+    // source may be stuck behind a permission prompt) and the optional evidence/progress hooks
+    // (progress estimators and evidence collection must stay off the watch hot path). They throw
+    // so that touching any of them fails the route outright instead of merely slowing it down.
+    const unrelatedHealth = vi.fn<IndexedSource['getHealth']>(() => {
+      throw new Error('scoped watch route must not read unrelated source health')
+    })
+    const unrelatedRoots = vi.fn<IndexedSource['getRoots']>(() => {
+      throw new Error('scoped watch route must not read unrelated source roots')
+    })
+    const targetEvidence = vi.fn<NonNullable<IndexedSource['getEvidence']>>(() => {
+      throw new Error('scoped watch route must not read target evidence')
+    })
+    const targetProgress = vi.fn<NonNullable<IndexedSource['getProgress']>>(() => {
+      throw new Error('scoped watch route must not read target progress')
+    })
+
+    runtime.registerSource(
+      buildSource({
+        handleWatchEvent,
+        getEvidence: targetEvidence,
+        getProgress: targetProgress
+      })
+    )
+    runtime.registerSource(
+      buildSource({
+        descriptor: { ...descriptor, id: 'unrelated-source' },
+        roots: [
+          { sourceId: 'unrelated-source', path: '/tmp/unrelated', permissionState: 'granted' }
+        ],
+        getHealth: unrelatedHealth,
+        getRoots: unrelatedRoots,
+        handleWatchEvent: vi.fn(async () => [])
+      })
+    )
+
+    const result = await runtime.routeWatchEventWithResult({
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/a.txt',
+      occurredAt: 1700000000000
+    })
+
+    expect(result).toMatchObject({
+      handledSources: 1,
+      appliedDeltas: 1,
+      deltas: [delta]
+    })
+    expect(store.applyDelta).toHaveBeenCalledWith(
+      expect.objectContaining({ ...delta, mutationLeaseId: expect.any(String) })
+    )
+    expect(unrelatedHealth).not.toHaveBeenCalled()
+    expect(unrelatedRoots).not.toHaveBeenCalled()
+    expect(targetEvidence).not.toHaveBeenCalled()
+    expect(targetProgress).not.toHaveBeenCalled()
+  })
+
+  it('routes an unscoped watch event across matching sources without reading optional evidence or progress', async () => {
+    const delta: IndexedSourceDelta = {
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/a.txt'
+    }
+    const handleWatchEvent = vi.fn(async () => [delta])
+    // Unscoped routing still evaluates every source's health and roots, but the per-source
+    // evidence/progress hooks are diagnostic detail, not routing input: reading them here made an
+    // estimator that never settles silently park the whole watch path.
+    const targetEvidence = vi.fn<NonNullable<IndexedSource['getEvidence']>>(() => {
+      throw new Error('unscoped watch route must not read optional evidence')
+    })
+    const targetProgress = vi.fn<NonNullable<IndexedSource['getProgress']>>(() => {
+      throw new Error('unscoped watch route must not read optional progress')
+    })
+
+    runtime.registerSource(
+      buildSource({
+        handleWatchEvent,
+        getEvidence: targetEvidence,
+        getProgress: targetProgress
+      })
+    )
+
+    const result = await runtime.routeWatchEventWithResult({
+      action: 'change',
+      path: '/tmp/tuff-source/a.txt',
+      occurredAt: 1700000000000
+    })
+
+    expect(result).toMatchObject({
+      matchedSources: 1,
+      handledSources: 1,
+      appliedDeltas: 1,
+      deltas: [delta]
+    })
+    expect(targetEvidence).not.toHaveBeenCalled()
+    expect(targetProgress).not.toHaveBeenCalled()
+  })
+
+  it('re-reads target health and roots on every scoped watch event so revoked access blocks the next mutation immediately', async () => {
+    const delta: IndexedSourceDelta = {
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/a.txt'
+    }
+    const handleWatchEvent = vi.fn(async () => [delta])
+    let health: IndexedSourceHealth = readyHealth
+    let roots: IndexedSourceRoot[] = [
+      {
+        sourceId: 'test-source',
+        path: '/tmp/tuff-source',
+        permissionState: 'granted',
+        watchDepth: 2
+      }
+    ]
+
+    runtime.registerSource(
+      buildSource({
+        getHealth: async () => health,
+        getRoots: async () => roots,
+        handleWatchEvent
+      })
+    )
+
+    await runtime.routeWatchEvent({
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/a.txt',
+      occurredAt: 1700000000000
+    })
+    expect(handleWatchEvent).toHaveBeenCalledTimes(1)
+    expect(store.applyDelta).toHaveBeenCalledTimes(1)
+
+    health = {
+      status: 'disabled',
+      permissionState: 'promptable',
+      itemCount: 0,
+      watchState: 'pending-permission',
+      reconcileState: 'idle'
+    }
+    const disabled = await runtime.routeWatchEventWithResult({
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/a.txt',
+      occurredAt: 1700000000001
+    })
+
+    expect(handleWatchEvent).toHaveBeenCalledTimes(1)
+    expect(store.applyDelta).toHaveBeenCalledTimes(1)
+    expect(disabled.skipped).toEqual([{ sourceId: 'test-source', reason: 'health:disabled' }])
+
+    health = readyHealth
+    roots = [{ sourceId: 'test-source', path: '/tmp/tuff-source', permissionState: 'denied' }]
+    const denied = await runtime.routeWatchEventWithResult({
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/a.txt',
+      occurredAt: 1700000000002
+    })
+
+    expect(handleWatchEvent).toHaveBeenCalledTimes(1)
+    expect(store.applyDelta).toHaveBeenCalledTimes(1)
+    expect(denied.skipped).toEqual([{ sourceId: 'test-source', reason: 'root-permission:denied' }])
+
+    roots = [{ sourceId: 'test-source', path: '/tmp/tuff-source', permissionState: 'granted' }]
+    await runtime.routeWatchEvent({
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/a.txt',
+      occurredAt: 1700000000003
+    })
+    expect(handleWatchEvent).toHaveBeenCalledTimes(2)
+    expect(store.applyDelta).toHaveBeenCalledTimes(2)
+  })
+
   it('applies watch deltas and drains the same mutation lease through the index store adapter', async () => {
     const delta: IndexedSourceDelta = {
       sourceId: 'test-source',
@@ -2110,6 +2292,94 @@ describe('indexingRuntime', () => {
     expect(diagnostics.sources[0].recentTasks).toMatchObject([
       {
         kind: 'reset',
+        status: 'succeeded'
+      },
+      {
+        kind: 'scan',
+        status: 'succeeded',
+        jobId: 'test-source:scan:persisted'
+      }
+    ])
+  })
+
+  it('preserves persisted task history when a source-scoped watch is the first runtime action after hydrate', async () => {
+    const save = vi.fn(async () => {})
+    const persistedState: IndexedSourceRuntimeTaskState = {
+      lastScan: {
+        startedAt: 1700000000000,
+        completedAt: 1700000000100,
+        jobId: 'test-source:scan:persisted',
+        batches: 1,
+        records: 2,
+        indexedRecords: 2
+      },
+      recentTasks: [
+        {
+          kind: 'scan',
+          status: 'succeeded',
+          startedAt: 1700000000000,
+          completedAt: 1700000000100,
+          jobId: 'test-source:scan:persisted'
+        }
+      ]
+    }
+    runtime = new IndexingRuntime({
+      store: store,
+      taskStateStore: {
+        load: vi.fn(async () => persistedState),
+        save,
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(
+      buildSource({
+        handleWatchEvent: vi.fn(async () => [
+          { sourceId: 'test-source', action: 'change' as const, path: '/tmp/tuff-source/a.txt' }
+        ])
+      })
+    )
+
+    await runtime.routeWatchEvent({
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/a.txt',
+      occurredAt: 1700000000200
+    })
+
+    // The scoped watch path must hydrate prior scan history before recording the watch; otherwise the
+    // first watcher event after a restart overwrites the persisted state with only its own entry.
+    expect(save).toHaveBeenCalledWith(
+      'test-source',
+      expect.objectContaining({
+        lastScan: expect.objectContaining({
+          jobId: 'test-source:scan:persisted'
+        }),
+        lastWatch: expect.objectContaining({
+          jobId: 'test-source:watch:1',
+          action: 'change'
+        }),
+        recentTasks: [
+          expect.objectContaining({
+            kind: 'watch',
+            status: 'succeeded'
+          }),
+          expect.objectContaining({
+            kind: 'scan',
+            status: 'succeeded',
+            jobId: 'test-source:scan:persisted'
+          })
+        ]
+      })
+    )
+
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].lastScan).toMatchObject({
+      jobId: 'test-source:scan:persisted'
+    })
+    expect(diagnostics.sources[0].recentTasks).toMatchObject([
+      {
+        kind: 'watch',
         status: 'succeeded'
       },
       {
