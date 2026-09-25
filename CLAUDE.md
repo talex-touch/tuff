@@ -7,14 +7,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Core Application Development
 - `pnpm core:dev` - Start development server for the main Electron app
 - `pnpm build` - Build the main application for production
-- `pnpm build:beta` - Build beta version
-- `pnpm build:snapshot` - Build snapshot version
-- `pnpm build:release` - Build release version
+- `pnpm build:app --type=beta` - Package a beta build
+- `pnpm build:app --type=snapshot` - Package a snapshot build
+- `pnpm build:app --type=release` - Package a release build
 
 ### Platform-Specific Builds
-- `pnpm build:snapshot:win` - Build Windows snapshot
-- `pnpm build:snapshot:mac` - Build macOS snapshot
-- `pnpm build:snapshot:linux` - Build Linux snapshot
+`--target` selects the platform (default: host) and `--type` the channel (default: release).
+
+- `pnpm build:app --target=win --type=snapshot` - Build Windows snapshot
+- `pnpm build:app --target=mac --type=snapshot` - Build macOS snapshot
+- `pnpm build:app --target=linux --type=snapshot` - Build Linux snapshot
 
 ### Type Checking (within apps/core-app/)
 - `npm run typecheck` - TypeScript validation for both main and renderer processes
@@ -32,7 +34,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Code Quality
 - `pnpm lint` - Run ESLint on all code
 - `pnpm lint:fix` - Run ESLint with auto-fix
-- `pnpm utils:test` - Run the `packages/test` integration suite once and exit (despite the name, this is not `packages/utils`)
+- `pnpm check <gate> [--self-test]` - Run one static gate; `pnpm check --list` prints every gate
+- `pnpm -F test run test` - Run the `packages/test` integration suite once and exit
 
 ### Publishing
 - `pnpm utils:publish` - Publish @talex-touch/utils package to npm

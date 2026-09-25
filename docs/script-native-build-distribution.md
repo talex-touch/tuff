@@ -22,8 +22,8 @@
 ## 1) 构建与更新基线
 
 构建脚本（apps/core-app/package.json）：
-- `pnpm core:build` → `electron-vite build`
-- `pnpm core:build:snapshot|release` → `scripts/build-target.js`
+- `pnpm build` → `release:notes:catalog` + `typecheck` + `electron-vite build`
+- `pnpm build:target --target=<host|win|mac|linux> --type=<beta|snapshot|release>` → `scripts/build-target.js`
 
 打包输出（electron-builder.yml）：
 - `directories.output: dist`
@@ -109,6 +109,6 @@ Feature Flag（运行时开关）：
 
 ## 7) 验证要点（与回归检查对齐）
 
-- `pnpm core:build:snapshot` 与 `pnpm core:build:release` 输出包含运行时文件。
+- `pnpm build:app --type=snapshot` 与 `pnpm build:app --type=release` 输出包含运行时文件。
 - macOS/Windows 安装后运行时可被发现且能执行（路径解析无误）。
 - 关闭开关后系统稳定运行（功能降级一致、无启动异常）。

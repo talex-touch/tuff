@@ -68,8 +68,8 @@ audio addon 的接线基线已实测：构建 3m38s / 2.56MB / 11 个导出 / `{
 
 | 命令 | 防什么 |
 |---|---|
-| `pnpm check:build-allowlist` | allowlist 陈旧项 / 未审阅的安装脚本 |
-| `pnpm check:doc-metadata` | README 与 LICENSE/manifest 漂移、根缺 homepage |
+| `pnpm check build-allowlist` | allowlist 陈旧项 / 未审阅的安装脚本 |
+| `pnpm check doc-metadata` | README 与 LICENSE/manifest 漂移、根缺 homepage |
 | `pnpm -C apps/core-app check:search-index-writers` | 绕过单写者契约的新写入 |
 | `pnpm -C apps/nexus typecheck` | Volar 插件静默丢失（vue-tsc 打印错误仍 exit 0） |
 | `apps/core-app/scripts/file-scan-memory-benchmark.mjs` | 扫描内存上界（可加参数扩展）|

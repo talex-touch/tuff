@@ -26,15 +26,17 @@
 
 ```bash
 # Snapshot（自动 publish=never）
-pnpm -F @talex-touch/core-app run build:snapshot:mac   # mac arm64
-pnpm -F @talex-touch/core-app run build:snapshot:win   # Windows x64
-pnpm -F @talex-touch/core-app run build:snapshot:linux # Linux x64
+pnpm build:app --target=mac --type=snapshot    # mac arm64
+pnpm build:app --target=win --type=snapshot    # Windows x64
+pnpm build:app --target=linux --type=snapshot  # Linux x64
 
 # Release
-pnpm -F @talex-touch/core-app run build:release:mac
-pnpm -F @talex-touch/core-app run build:release:win
-pnpm -F @talex-touch/core-app run build:release:linux
+pnpm build:app --target=mac --type=release
+pnpm build:app --target=win --type=release
+pnpm build:app --target=linux --type=release
 ```
+
+`build:app` 转发到 CoreApp 的 `build:target`；`--target` 缺省为当前主机平台，`--type` 缺省为 `release`。
 
 ### 环境变量
 

@@ -149,7 +149,7 @@ Each “发版测试” run must assert and record:
 
 ```bash
 # Local build and real profile prove neither the published bytes nor isolation.
-pnpm build:beta:mac
+pnpm build:app --target=mac --type=beta
 open "apps/core-app/dist/mac-arm64/tuff.app"
 # Treat an HTTP redirect or ad-hoc signature as release success.
 ```
@@ -238,7 +238,7 @@ verify-macos-release-signing.mjs \
 
 - Credential preflight: complete PKCS#12 + Team API key -> `developer-id`; absent/partial/Apple-ID-only CI configurations -> non-zero.
 - Runtime resource projection: copied workspace package omits nested `node_modules`; its declared runtime dependency remains in the root resource closure; no absolute/out-of-bundle symlink survives packaging.
-- Local distribution smoke: `pnpm build:beta:mac` logs signing/notarization, postprocess runs in `official` mode, and the command succeeds.
+- Local distribution smoke: `pnpm build:app --target=mac --type=beta` logs signing/notarization, postprocess runs in `official` mode, and the command succeeds.
 - Artifact verification: run deep strict codesign, inspect Authority/TeamIdentifier/Timestamp/runtime, run stapler validation and `spctl`, then repeat codesign/stapler against an extracted distribution ZIP.
 - Workflow validation: actionlint passes and only complete API-key credentials can export `TUFF_OFFICIAL_RELEASE_BUILD=true`.
 - Renderer projection: focused tests cover official pass, verification failure, unavailable/inconsistent attestation, and non-macOS not-applicable; packaged Settings smoke must contain no retired waiver sentinel.

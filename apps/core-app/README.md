@@ -32,8 +32,15 @@ pnpm -C "apps/core-app" run typecheck
 pnpm -C "apps/core-app" run build
 ```
 
-Platform release builds use `build:win`, `build:mac`, or `build:linux`.
-Release and signing acceptance remain separate from a successful local build.
+Platform release builds go through `build:target`:
+
+```bash
+pnpm -C "apps/core-app" run build:target --target=mac --type=release
+```
+
+`--target` selects `win`/`mac`/`linux` (default: this host) and `--type` selects
+`beta`/`snapshot`/`release` (default: `release`). Release and signing acceptance
+remain separate from a successful local build.
 
 ## Architecture
 
