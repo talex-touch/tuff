@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification bar: smallest relevant tests, lint per package, git diff --check"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Confirm only this task's files are touched in a shared tree"}
+{"file": ".trellis/spec/frontend/privacy-data-lifecycle.md", "reason": "Confirm no new sensitive data flow needs an inventory entry"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Typed transport payloads for the new operation"}

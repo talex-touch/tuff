@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification bar: smallest relevant tests, lint per package, git diff --check"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Confirm only this task's files are touched in a shared tree"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Reduced-motion escapes, no colour hover transitions, shadow light source"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Nexus gates that can fail and how to verify the rendered page"}
+{"file": ".trellis/spec/frontend/nexus-docs-structure.md", "reason": "tuffex-component-docs-coverage contract"}
