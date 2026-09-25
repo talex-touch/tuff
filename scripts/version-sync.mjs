@@ -131,7 +131,7 @@ function getCurrentBranch() {
  * 校验发布分支。
  *
  * 这个脚本会打 tag 并 push，而 build-and-release.yml 监听 `push: tags: v*.*.*`，
- * 所以从任意分支跑一次 `pnpm version:patch` 就能从未合并的代码发出一个正式签名版本。
+ * 所以从任意分支跑一次 `pnpm version:sync --patch` 就能从未合并的代码发出一个正式签名版本。
  *
  * 默认只允许仓库默认分支。发布确实经常从长期集成分支打（本仓库 master 落后集成分支
  * 数百个提交），所以这里不是硬禁：交互式下提示确认，非交互式下直接失败。
