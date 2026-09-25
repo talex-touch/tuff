@@ -1,0 +1,30 @@
+{
+  "id": "nexus-docs-templates-tab",
+  "name": "nexus-docs-templates-tab",
+  "title": "Nexus 组件文档新增「模板 Templates」tab：10 个组件组合模板",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-23",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "补 CMS inspector 与 Inbox 阅读区的暗色截图后收尾；TemplateFrame 若形成稳定约定，再补进 tuffex-docs-sync.md 的 Demos 节。",
+    "blocker": "暗色截图依赖并行会话修复 TuffexDocsHeroBackground.vue 的 .dark 泄漏，在此之前 TxMarkdownView 根节点会被刷上白色径向渐变。",
+    "evidence": "implement.md 阶段 D 全部勾选：check-demo-registry-orphans / check-mdc-fences / check-doc-translation-parity / check-icon-collections 四道门禁通过，分类脚本 dry-run 输出 would update 0 file(s)，三组 vitest 通过，eslint 与 vue-tsc 对本任务文件无报错，git diff --check 干净。"
+  }
+}

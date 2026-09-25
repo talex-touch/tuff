@@ -1,0 +1,140 @@
+---
+title: Onboarding
+description: A five-step first run from sign-in and a workspace to preferences and system permissions, ending on the summon shortcut
+category: TemplateApp
+status: beta
+since: 0.6.0
+tags: [template, onboarding, sign-in, setup, permissions]
+syncStatus: reviewed
+verified: false
+---
+
+## Scenario
+
+The guide Tuff Desktop shows on its first launch: sign in, pick a workspace, set preferences, grant system permissions, then try the summon shortcut once. The sign-in methods follow the real Nexus sign-in page — Passkey, GitHub, LINUX DO and an email Magic Link, with no password field — and the rest of the copy comes from the desktop app's real first-run guide. Every step is simulated: no request leaves the page and no real system permission is asked for.
+
+It suits any product people walk through once after installing: a desktop app's first launch, workspace setup after a SaaS sign-up, a utility that needs system access before it can work.
+
+## Template
+
+### First-run setup
+
+:::TuffDemoWrapper{demo="TemplateOnboardingDemo" code-lang="vue" title="First-run setup" description="Once in view the logo and title draw themselves; Watch the flow plays the first three steps and stops at permissions, which only your click grants. Sign-in and permissions are simulated."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const step = ref(0)
+  const entered = ref(false)
+  const perms = reactive({ files: 'unchecked', accessibility: 'unchecked', screen: 'unchecked' })
+
+  // TxBorderBeam is tuned for dark backgrounds by default, and auto follows the system, not the site: pass the site theme
+  const colorMode = useColorMode()
+  const beamTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
+
+  // The entrance effects play when they mount, so they mount once the stage is in view
+  function onEnter() {
+    entered.value = true
+  }
+
+  // Only the reader's click grants; the wait stands in for the system dialog
+  function grant(key: keyof typeof perms) {
+    perms[key] = 'pending'
+    setTimeout(() => {
+      perms[key] = 'granted'
+    }, 1200)
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="First-run setup" :height="560" @enter="onEnter">
+      <template #default="{ width }">
+        <div class="onb" :class="{ 'is-narrow': width > 0 && width < 640 }">
+          <aside class="onb__rail">
+            <TxTuffLogoStroke v-if="entered" :size="56" mode="once" />
+            <TxKeyframeStrokeText v-if="entered" text="Welcome to Tuff" :font-size="24" fill-color="var(--tx-text-color-primary)" />
+            <TxSteps direction="vertical" size="small" :active="step">
+              <!-- TxSteps emits nothing: going back is the host's call, in a native click -->
+              <TxStep v-for="(item, i) in steps" :key="item.key" :step="i" :title="item.title" :clickable="i < step" @click="i < step && (step = i)" />
+            </TxSteps>
+          </aside>
+
+          <main class="onb__main">
+            <TxProgressBar :percentage="(step + 1) * 20" height="4px" aria-label="Setup progress" />
+            <TxTransition preset="slide-fade" :appear="false">
+              <section v-if="step === 0" key="signin">
+                <TxBorderBeam size="sm" :theme="beamTheme" :active="!reducedMotion">
+                  <TxButton block size="lg" :loading="pending === 'passkey'" @click="signIn('passkey')">
+                    Sign in with Passkey
+                  </TxButton>
+                </TxBorderBeam>
+                <TxForm :model="form" :rules="rules" label-position="top" @submit="sendMagicLink">
+                  <TxFormItem label="Email" prop="email">
+                    <template #default="{ id }">
+                      <TxInput :id="id" v-model="form.email" type="email" />
+                    </template>
+                  </TxFormItem>
+                  <TxButton native-type="submit" variant="primary" block>Continue with Email</TxButton>
+                </TxForm>
+              </section>
+              <section v-else-if="step === 3" key="perms">
+                <TxStatusBadge :text="statusText(perms.files)" :status="statusTone(perms.files)" size="sm" />
+                <TxButton size="sm" :loading="perms.files === 'pending'" @click="grant('files')">Allow access</TxButton>
+              </section>
+              <!-- Workspace, preferences and done left out -->
+            </TxTransition>
+            <footer class="onb__footer">
+              <TxButton variant="ghost" :disabled="step === 0" @click="step--">Back</TxButton>
+              <TxButton variant="primary" :disabled="!canContinue" @click="step++">Continue</TxButton>
+            </footer>
+          </main>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .onb {
+    display: grid;
+    grid-template-columns: 264px minmax(0, 1fr);
+    height: 100%;
+  }
+
+  .onb.is-narrow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  </style>
+---
+:::
+
+## Anatomy
+
+| Region | Components | Role |
+|---|---|---|
+| Brand rail | [TxTuffLogoStroke](/docs/dev/components/tuff-logo-stroke), [TxKeyframeStrokeText](/docs/dev/components/keyframe-stroke-text), [TxGlowText](/docs/dev/components/glow-text) | Once in view the logo and "Welcome to Tuff" each draw once and the tagline gets one sweep of light; all three mount only after `@enter` |
+| Steps | [TxSteps / TxStep](/docs/dev/components/steps), [TxProgressBar](/docs/dev/components/progress-bar) | Five-step progress; finished steps can be reopened, and each description says what you chose there |
+| Sign in | [TxBorderBeam](/docs/dev/components/border-beam), [TxButton](/docs/dev/components/button), [TxBadge](/docs/dev/components/badge), [TxForm / TxFormItem](/docs/dev/components/form), [TxInput](/docs/dev/components/input) | Passkey (with the beam and Last used), GitHub, LINUX DO, an email Magic Link, Continue offline |
+| Workspace | [TxRadioGroup / TxRadio](/docs/dev/components/radio), [TxFlatRadio](/docs/dev/components/flat-radio), [TxAvatar](/docs/dev/components/avatar), [TxTagInput](/docs/dev/components/tag-input), [TxCard](/docs/dev/components/card) | Create a personal space (name, colour, icon preview, invitations) or accept a team invitation |
+| Preferences | [TxKbd](/docs/dev/components/kbd), [TxGradientBorder](/docs/dev/components/gradient-border), [TxFlatRadio](/docs/dev/components/flat-radio), [TxRadioGroup / TxRadio](/docs/dev/components/radio), [TuffSwitch](/docs/dev/components/switch) | A recordable summon shortcut (a rotating ring while it listens), theme, language, how you start, launch at login and the tray icon |
+| Permissions | [TxIconChip](/docs/dev/components/icon-chip), [TxTag](/docs/dev/components/tag), [TxStatusBadge](/docs/dev/components/status-badge), [TxProgressBar](/docs/dev/components/progress-bar) | File access (required), accessibility and screen recording (optional); each row shows its state and the footer sums up n/3 granted |
+| Done | [TxKeyframeStrokeText](/docs/dev/components/keyframe-stroke-text), [TxGlowText](/docs/dev/components/glow-text), [TxKbd](/docs/dev/components/kbd), [TxBorderBeam](/docs/dev/components/border-beam), [TxGlassSurface](/docs/dev/components/glass-surface), [TxCardItem](/docs/dev/components/card-item) | Try the summon shortcut and the big keycaps light up as you press; once summoned, a miniature CoreBox gets the beam; a summary of your choices |
+| Transitions and feedback | [TxTransition](/docs/dev/components/transition), [TxToastPanel](/docs/dev/components/toast-panel) | Steps slide and fade into each other; sign-in, joining and grants report at the bottom of the step pane |
+| Live preview (wide) | [TxGlassSurface](/docs/dev/components/glass-surface), [TxStatusBadge](/docs/dev/components/status-badge) | Appears at ≥ 1200px; theme, language, the shortcut and the three permission states show on a miniature CoreBox as you change them |
+
+## Interactions
+
+- The sign-in methods match Nexus: Passkey, GitHub and LINUX DO each simulate about a second of system verification or provider authorization, then move on; email is checked first, then shows Magic Link sent, and I opened the link (demo) finishes signing in. Continue offline skips the workspace step, and the last step notes that cross-device sync is unavailable.
+- Continue works only once the step is satisfied (a sign-in method, a named space or an accepted invitation, file access granted), and the footer says what is missing; Back and the finished steps on the left both go back. When you change steps, focus moves to the new step's heading.
+- The summon shortcut can be recorded: press Record, then a combination that includes ⌘, ⌃ or ⌥; Esc cancels. Combinations the browser keeps, such as ⌘W or ⌘T, are refused with a hint. The recorded shortcut carries over to the last step and the live preview.
+- Every permission waits for you to press Allow access: about 1.2 seconds stand in for the system dialog, then it reads Granted. Screen recording is refused the first time, the row offers Open System Settings, and a second press grants it with a Takes effect after a restart (sample) note.
+- Once in view only the entrance plays: the logo and title draw once, the beam on the Passkey button fades in after about 0.9 s and the tagline sweeps once at 1.4 s. Watch the flow signs in, joins the team, flashes the recording ring on the shortcut, then stops at permissions with a note that the template never grants them for you. A click or any key inside the template stops it; with reduced motion on it jumps straight to permissions, with no beam and no sweep.
+- On the last step, with focus inside the template, press your summon shortcut and the big keycaps light up with it; once summoned a miniature CoreBox pops up. Simulate the press does the same. Wide (≥ 960px) enlarges the brand rail and type, and ≥ 1200px adds the live preview on the right; narrow (< 640px) folds the brand rail into a row across the top and the step bar keeps only its markers.
+
+## Adapting it
+
+- Real sign-in: replace the timer in `signIn()` with the Nexus OAuth redirect or a WebAuthn call, and the Magic Link with the real mail endpoint. Do not add a password field: Nexus has no password sign-in, and a password field that leaves the page after submit also triggers the browser's save-password prompt.
+- Real permissions: read the state from the system (Privacy & Security on macOS, the privacy settings on Windows) and check again after Allow access raises the system dialog. Grants start from the user's click only; onboarding never requests them on its own.
+- The entrance effects (TxTuffLogoStroke with `once`, TxKeyframeStrokeText, TxGlowText with `:repeat="false"`) all play when they mount, so mount them once they are visible and change their `key` to replay. TxBorderBeam's rotating family (`sm`, `md`, `line`) has no reduced-motion fallback, so pass `:active="false"` then; its `theme` defaults to `dark` and `auto` follows the system rather than the site, so pass the current theme explicitly.
+- TxSteps emits nothing: clicking a step only changes its own internal state. To go back, put a native `@click` on TxStep, check that the target step is finished, and give `clickable` to finished steps only.

@@ -151,6 +151,34 @@ describe('SearchSessionRegistry', () => {
   })
 })
 
+describe('SearchSession cancellation terminal', () => {
+  it('reports an aborted session as cancelled even when completion is asked for plainly', async () => {
+    // The gather's own completion callback calls `complete()` without a cancelled flag; if the
+    // session had been cancelled meanwhile the renderer was told the search finished normally
+    // and kept the stale items instead of resetting.
+    const completions: Array<{ cancelled?: boolean }> = []
+    const registry = new SearchSessionRegistry()
+    const session = registry.create({
+      caller: coreBoxCaller,
+      query,
+      activations: [],
+      sink: {
+        complete: (payload) => {
+          completions.push({ cancelled: payload.cancelled })
+        }
+      }
+    })
+    await session.publishSnapshot(createResult(session.id))
+
+    expect(session.cancel(coreBoxCaller)).toBe(true)
+    expect(session.complete()).toBe(true)
+    await session.completed
+
+    expect(session.state).toBe('cancelled')
+    expect(completions).toEqual([{ cancelled: true }])
+  })
+})
+
 describe('SearchSessionRegistry shutdown guard', () => {
   it('keeps refusing new sessions after the drain finishes', async () => {
     // destroyPromise is nulled in a finally so repeat destroy() calls re-drain.

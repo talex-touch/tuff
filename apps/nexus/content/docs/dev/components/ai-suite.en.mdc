@@ -1,6 +1,6 @@
 ---
 title: AI Suite
-description: 19 AI-native interface component showcases adapted from Beautiful UI
+description: AI-native interface component showcases adapted from Beautiful UI
 category: AiSuite
 status: beta
 since: 0.3.9
@@ -11,7 +11,7 @@ verified: true
 
 ## Suite Groups
 
-In the components sidebar the AI suite is split into four groups: **Chat** (Chat, ChatComposer, PromptBar, AttachmentTray, MessageActions, SuggestionChips, TypingIndicator, ConversationStream), **Agents** (Agents, AgentTrace, TaskRows, ToolCallCard, ToolChips, ToolConfirmation, ApprovalCard, WorkingIndicator), **Reasoning** (AiElements, ChainOfThought, ReasoningDisclosure, ThinkingOrb, StreamMarkdown, CodeStream, InlineCitation, Sources) and **Context & Insight** (ContextCards, ContextIndicator, InsightCards, RecommendationCard, FineTuneCard). Every component in the suite can be imported through the `@talex-touch/tuffex/ai` category entry.
+In the components sidebar the AI suite is split into four groups: **Chat** (Chat, ChatComposer, PromptBar, AttachmentTray, ModeChip, MessageActions, SuggestionChips, TypingIndicator, ConversationStream), **Agents** (Agents, AgentTrace, AgentScreen, TaskRows, ToolCallCard, ToolChips, ToolConfirmation, ApprovalCard, WorkingIndicator), **Reasoning** (AiElements, ChainOfThought, ReasoningDisclosure, ThinkingOrb, StreamMarkdown, CodeStream, InlineCitation, Sources) and **Context & Insight** (ContextCards, ContextIndicator, InsightCards, RecommendationCard, FineTuneCard). Every component in the suite can be imported through the `@talex-touch/tuffex/ai` category entry.
 
 ## Preview
 
@@ -29,7 +29,7 @@ Every component in the suite, grouped by category. The list is read from each do
 
 ## Source & License
 
-This suite is adapted from [Beautiful UI](https://www.beautifului.dev) (Turbo design studio / Shane Levine, © 2026, MIT license) — 19 component showcases for AI-native interfaces: chat, reasoning traces, human-in-the-loop approvals, agent task status and more. The port follows three principles: pixel-match the source visual language (a dedicated `--tx-bui-*` token layer, hairline ring shadows, the 13px density system); ship components as pure controlled primitives (demo timelines stay in the demo layer); and fuse with existing tuffex components instead of duplicating them — overlaps land as variants or compositions, and accessibility gaps are filled to tuffex standards. Every component source file carries the MIT attribution in its header.
+This suite is adapted from [Beautiful UI](https://www.beautifului.dev) (Turbo design studio / Shane Levine, © 2026, MIT license) — component showcases for AI-native interfaces: chat, reasoning traces, human-in-the-loop approvals, agent task status and more. Upstream now has 21 cases, and the index below lists where each one landed (16 Flowchart is filed under the Flow suite; 21 Agent Screen is not ported yet). The port follows three principles: pixel-match the source visual language (a dedicated `--tx-bui-*` token layer, hairline ring shadows, the 13px density system); ship components as pure controlled primitives (demo timelines stay in the demo layer); and fuse with existing tuffex components instead of duplicating them — overlaps land as variants or compositions, and accessibility gaps are filled to tuffex standards. Every component source file carries the MIT attribution in its header.
 
 ## Loading & Reasoning States
 
@@ -319,17 +319,21 @@ code: |
 | 13 Filter Table | [TxFilterChips](/docs/dev/components/filter-chips) + TxDataTable | New primitive + composition |
 | 14 Sidebar Nav | [TxSidebarNav](/docs/dev/components/sidebar-nav) | New component |
 | 15 Search | [TxSearchPanel](/docs/dev/components/search-panel) | Thin composition shell |
-| 16 Insight Cards | [TxInsightCards](/docs/dev/components/insight-cards) + [TxSparkChart](/docs/dev/components/spark-chart) + [TxAllocationBar](/docs/dev/components/allocation-bar) | New component family |
-| 17 Code Block | [TxCodeStream](/docs/dev/components/code-stream) | New component |
-| 18 Fine-tune Card | [TxFineTuneCard](/docs/dev/components/fine-tune-card) + [TxScrubField](/docs/dev/components/scrub-field) | New component + new primitive |
-| 19 Selection Actions | [TxSelectionActions](/docs/dev/components/selection-actions) | Composition-first new component |
+| 16 Flowchart | [TxFlowchart](/docs/dev/components/flowchart) | New component, filed under the [Flow suite](/docs/dev/components/flow-suite) |
+| 17 Insight Cards | [TxInsightCards](/docs/dev/components/insight-cards) + [TxSparkChart](/docs/dev/components/spark-chart) + [TxAllocationBar](/docs/dev/components/allocation-bar) | New component family |
+| 18 Code Block | [TxCodeStream](/docs/dev/components/code-stream) | New component |
+| 19 Fine-tune Card | [TxFineTuneCard](/docs/dev/components/fine-tune-card) + [TxScrubField](/docs/dev/components/scrub-field) | New component + new primitive |
+| 20 Selection Actions | [TxSelectionActions](/docs/dev/components/selection-actions) | Composition-first new component |
+| 21 Agent Screen | [TxAgentScreen](/docs/dev/components/agent-screen) | New component |
 
-Shared primitive: [TxIconChip](/docs/dev/components/icon-chip) (icon badge shared by 10/14/16/18).
+Numbering follows upstream as it stands today. Upstream added 16 Flowchart and 21 Agent Screen after the first port in 2026-08; both landed on 2026-09-21 — 16 files under the [Flow suite](/docs/dev/components/flow-suite), 21 stays here. That shifted 16–20 down one place relative to the original table: nothing was dropped, a new case was inserted in the middle.
+
+Shared primitive: [TxIconChip](/docs/dev/components/icon-chip) (icon badge shared by 10/14/17/19).
 
 ## Review Notes
 
 - Upstream ships self-driving demos (hardcoded content + timer timelines); the ported components are fully controlled, and the timelines live only in this page's demos.
 - Reduced motion is implemented per component: tweens are cut, state machines keep running, and delays are zeroed together (a deliberate divergence from upstream's single global `*` rule).
 - Under the high-contrast theme (`data-tx-contrast='high'`) the `--tx-bui-*` tokens keep their standard values — a known limitation.
-- The upstream screenshots for 16's chart area render "No data to display"; the chart is built to spec with no upstream visual baseline.
+- At the first port in 2026-08, upstream's own chart area for 17 rendered "No data to display", so there was no visual baseline to match and the chart was built to spec alone. Upstream has since added the full scrub presentation layer (scanline, dark tooltip, series dots, dashed baselines, curve endpoints), which we have not yet followed — the gap is tracked in `.trellis/tasks/09-21-bui-parity-audit/`.
 - Every component source file header carries the MIT attribution: Adapted from Beautiful UI, © 2026 Shane Levine, MIT.

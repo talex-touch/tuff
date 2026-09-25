@@ -40,6 +40,10 @@ export interface DrawSparkChartOptions {
   activeColor: string
   revealProgress: number
   series: DrawSeries[]
+  /** Dashed rule at each series' starting value. */
+  baseline: boolean
+  /** Filled dot on each series' last sample; 0 disables it. */
+  endpointRadius: number
 }
 
 export function drawSparkChart(
@@ -72,8 +76,22 @@ export function drawSparkChart(
   ctx.lineCap = 'round'
   ctx.lineWidth = options.lineWidth
 
+  // Baselines go under the lines: they are a reference, and a dashed rule
+  // crossing over the data reads as part of it.
+  if (options.baseline) {
+    const right = Math.max(options.padding.left, width - options.padding.right)
+    for (const series of options.series)
+      drawBaseline(ctx, series, right)
+  }
+
   for (const series of options.series)
     strokeSeries(ctx, series, options.curve)
+
+  // Inside the reveal clip, so a dot does not appear before the line reaches it.
+  if (options.endpointRadius > 0) {
+    for (const series of options.series)
+      drawEndpoint(ctx, series, options.endpointRadius)
+  }
 
   ctx.restore()
 
@@ -106,6 +124,50 @@ function strokeSeries(
       .context(ctx)(series.points)
   }
   ctx.stroke()
+}
+
+/**
+ * A dashed rule at each series' own starting value.
+ *
+ * It is what turns a shape into a reading: without a reference the eye can see
+ * that a line wobbles but not whether it ended up above or below where it
+ * began. Per series rather than one shared zero line, because two series on one
+ * spark chart rarely share a scale.
+ */
+function drawBaseline(ctx: CanvasRenderingContext2D, series: DrawSeries, right: number): void {
+  const first = series.points[0]
+  if (!first)
+    return
+
+  ctx.save()
+  ctx.strokeStyle = series.color
+  ctx.globalAlpha = 0.35
+  ctx.lineWidth = 1
+  ctx.setLineDash([3, 3])
+  ctx.beginPath()
+  ctx.moveTo(first.x, first.y)
+  ctx.lineTo(right, first.y)
+  ctx.stroke()
+  ctx.restore()
+}
+
+/**
+ * A filled dot on the last sample.
+ *
+ * The line's end is the current value — the one number the reader is actually
+ * after — and a stroke alone gives it no more weight than any midpoint.
+ */
+function drawEndpoint(ctx: CanvasRenderingContext2D, series: DrawSeries, radius: number): void {
+  const last = series.points[series.points.length - 1]
+  if (!last)
+    return
+
+  ctx.save()
+  ctx.fillStyle = series.color
+  ctx.beginPath()
+  ctx.arc(last.x, last.y, radius, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, options: DrawSparkChartOptions): void {

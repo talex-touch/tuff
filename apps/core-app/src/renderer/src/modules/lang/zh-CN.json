@@ -484,7 +484,9 @@
     "shortcutLabels": {
       "core_box_toggle": "唤起命令面板",
       "core_omniPanel_toggle": "唤起 OmniPanel",
-      "core_omniPanel_mouseLongPress": "OmniPanel 鼠标触发"
+      "core_omniPanel_mouseLongPress": "OmniPanel 鼠标触发",
+      "voice_dictation_toggle": "全局听写（按一下开始，再按一下停止）",
+      "voice_quickEdit": "划词改口（选中文字后按快捷键，说出要改成什么）"
     },
     "shortcutStatus": {
       "conflictSystem": "与系统快捷键冲突",
@@ -568,22 +570,36 @@
       "manual": "去系统设置"
     },
     "capabilities": {
-      "title": "渠道与模型",
-      "description": "渠道绑定与排序在「智能」页。",
       "action": "打开智能"
+    },
+    "source": {
+      "title": "识别来源",
+      "options": {
+        "cloud": {
+          "label": "云端",
+          "description": "只用云端渠道识别，断网时无法听写。"
+        },
+        "local": {
+          "label": "本地",
+          "description": "只用已安装的端侧模型，音频不出本机。"
+        },
+        "hybrid": {
+          "label": "混合",
+          "description": "本地优先，本地不可用时回落云端。"
+        }
+      }
     },
     "catalog": {
       "title": "云端语音路由",
-      "description": "登录后下载并应用 AES-256-GCM 加密的路由包，验签后启用。",
       "activeTitle": "当前路由包",
-      "activeDescription": "{packId} · v{version} · SHA-256 {hash}… · 已验签",
+      "activeDescription": "v{version}",
       "builtinDescription": "未激活，使用内置 Nexus 路由。",
       "statusTitle": "目录状态",
       "statusLoading": "读取中…",
       "statusUnavailable": "无法读取状态。",
       "notCheckedDescription": "尚未检查。",
       "currentDescription": "已是最新。",
-      "updateDescription": "{packId} v{version} · SHA-256 {hash}… 可同步。",
+      "updateDescription": "v{version} 可同步。",
       "errorDescription": "操作失败：{code}；路由未变。",
       "loginRequiredDescription": "需先登录。",
       "rollbackTitle": "回退",
@@ -650,7 +666,6 @@
     },
     "models": {
       "title": "端侧模型",
-      "description": "云端目录里可安装的本地识别模型。安装后无需联网即可识别，权重逐字节校验。",
       "loading": "正在读取云端目录…",
       "catalogUnavailable": "读不到云端模型目录，请检查网络后重试。",
       "signInRequired": "登录 Tuff 账号后才能读取云端模型目录。",
@@ -662,6 +677,11 @@
       "remove": "移除",
       "installing": "正在安装…",
       "progress": "已下载 {percent}%（共 {size}）",
+      "moreTitle": "更多模型",
+      "expandHint": "还有 {count} 个可安装模型，供需要指定引擎或体积时选择。",
+      "collapseHint": "只看推荐与已安装的模型。",
+      "expand": "展开（{count}）",
+      "collapse": "收起",
       "actionFailed": "操作失败：{reason}"
     }
   },
@@ -1318,6 +1338,8 @@
     "records": {
       "title": "识别记录",
       "empty": "还没有可查看的识别记录。",
+      "retentionOff": "当前不保留识别记录，听写完成后不会留下任何内容。",
+      "retentionAction": "开启保留识别记录",
       "clear": "清空记录",
       "clearSuccess": "识别记录已清空",
       "clearFailed": "识别记录清空失败",
@@ -4358,7 +4380,11 @@
       "capabilitySaveErrorWithDetail": "保存失败：{detail}",
       "capabilitySaveErrorTransport": "存储通道未初始化，请重新打开窗口后再试",
       "capabilitySaveErrorConflict": "配置版本冲突，正在重新加载最新数据（版本 {version}）",
-      "capabilitySaveErrorRemote": "存储服务返回失败（版本 {version}），请稍后重试",
+      "capabilitySaveErrorTransportLost": "保存请求超时，没有写入本地配置；请重试",
+      "capabilitySaveErrorConflictReload": "配置版本冲突且重新加载失败（版本 {version}），请重试",
+      "capabilitySaveErrorCredential": "配置里含明文凭据，已被拒绝写入",
+      "capabilitySaveErrorPersist": "写入本地磁盘失败（版本 {version}），请重试",
+      "capabilitySaveErrorRejected": "本地存储拒绝了这次写入（版本 {version}）",
       "capabilitySaveErrorUnknown": "未知错误，请查看控制台日志",
       "capabilitySaveButton": "保存配置",
       "capabilityConfigTitle": "能力配置",

@@ -1,0 +1,211 @@
+---
+title: Dashboard
+description: A product analytics board of KPI cards, a per-platform trend, platform share, service health and a top-plugins table
+category: TemplateData
+status: beta
+since: 0.6.0
+tags: [template, dashboard, analytics, charts, table]
+syncStatus: reviewed
+verified: false
+---
+
+## Scenario
+
+The analytics board a launcher team keeps open. The top shows how daily actives, CoreBox searches, AI requests and plugin installs are moving; below that sit search share by platform, backend service health, this month's AI usage and the most-installed plugins. Every figure follows one time range, so changing the range, picking dates or brushing the chart recomputes the whole page.
+
+It fits any operations back office that shows the big picture first and then lets people dig in: a SaaS console, a plugin-market admin, an internal metrics page.
+
+The second style, Ops wall, is the screen left on the wall on launch day: nothing to filter, figures rolling in real time, dark all the time.
+
+## Template
+
+### Tuff Pulse board
+
+:::TuffDemoWrapper{demo="TemplateDashboardDemo" code-lang="vue" title="Tuff Pulse board" description="The range switch, the date picker, brushing the chart and the legend all recompute the KPI cards, share bar and plugin table. All figures are sample data."}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette } from '@talex-touch/tuffex/charts'
+  import { computed, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const range = ref('30d')
+  const zoom = ref<[number, number] | null>(null)
+  const hidden = ref<string[]>([])
+
+  // KPI cards, legend, share bar and plugin rows all come from one daily
+  // history, cut by range + zoom
+  const kpis = computed(() => buildKpis(range.value, zoom.value))
+
+  // TxTimeseriesChart takes a pixel height, which no container query reaches,
+  // so it is read off the stage
+  function chartHeight(width: number, height: number) {
+    if (width >= 960)
+      return Math.min(320, Math.max(220, Math.round(height * 0.36)))
+    return width >= 640 ? 240 : 176
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Dashboard" @enter="entered = true">
+      <template #default="{ width, height }">
+        <div class="pulse">
+          <header class="pulse__header">
+            <TxFlatRadio v-model="range" size="lg">
+              <TxFlatRadioItem value="7d" label="7d" />
+              <TxFlatRadioItem value="30d" label="30d" />
+              <TxFlatRadioItem value="90d" label="90d" />
+            </TxFlatRadio>
+            <TxDatePicker v-model="dates" variant="field" range />
+          </header>
+
+          <section class="pulse__kpis">
+            <TxStatCard v-for="kpi in kpis" :key="kpi.key" :value="kpi.value" :label="kpi.label" :insight="kpi.insight">
+              <template #value>
+                <TxTextMorph :text="kpi.value" />
+              </template>
+            </TxStatCard>
+          </section>
+
+          <div class="pulse__main">
+            <section class="pulse__trend">
+              <TxChartLegendItem
+                v-for="(item, index) in legend" :key="item.name"
+                :name="item.name" :value="item.value" :color="ChartPalette.categoricalVar(index)"
+                :inactive="hidden.includes(item.name)" @click="toggle(item.name)"
+              />
+              <TxTimeseriesChart
+                v-model:hidden-series="hidden"
+                :data="series" :markers="releases" :incomplete="{ after: yesterday }"
+                :height="chartHeight(width, height)"
+                @time-range-change="(from, to) => (zoom = [from, to])"
+              />
+            </section>
+            <aside class="pulse__rail">
+              <TxAllocationBar v-model="platform" :segments="share" />
+              <TxProgressBar :segments="usage" height="8px" />
+            </aside>
+          </div>
+
+          <TxDataTable v-model:sort="sort" :columns="columns" :data="plugins" row-key="id">
+            <template #cell-trend="{ row }">
+              <TxSparkChart :series="row.trend" :padding="{ top: 4, bottom: 4 }" :baseline="false" :interactive="false" />
+            </template>
+            <template #cell-status="{ row }">
+              <TxStatusBadge size="sm" :status="row.tone" :text="row.status" />
+            </template>
+          </TxDataTable>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .pulse__kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @container template (max-width: 639.98px) { .pulse__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @container template (min-width: 960px) { .pulse__kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+  </style>
+---
+:::
+
+### Ops wall
+
+For screens that are watched rather than worked: launch duty, a live event, an ops or support centre. Unlike the analytics board above, it has no time range, date picker or table, only the present: who is online, where searches go, service health and what just happened. It does not follow the site theme either; the template root sets `data-theme="dark"`, so it stays a dark screen on the light docs page. Every figure is sample data.
+
+:::TuffDemoWrapper{demo="TemplateDashboardOpsDemo" code-lang="vue" title="Ops wall" description="Goes live once it scrolls into view: figures roll, events stream in, the focus card rotates, cloud sync in Tokyo degrades at 18 seconds and recovers at 30. Pause it at any time. All figures are sample data."}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette } from '@talex-touch/tuffex/charts'
+  import { computed, ref, watch } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const sec = ref(0)
+  const paused = ref(false)
+  const hidden = ref(false) // IntersectionObserver (under 10% visible) and visibilitychange
+  const live = computed(() => entered.value && !reduced && !paused.value && !hidden.value)
+
+  // One heartbeat drives every cadence: KPIs 2s, events 3s, cities 4s, focus 8s, sankey window 12s
+  watch(live, on => (on ? later(1000, beat) : clearTimers()))
+
+  // Every middle node passes on exactly what it receives, or the sankey leaves a stub
+  const flow = computed(() => flowAt(flowWindow.value))
+  const bubbleColor = (row: City) => (row.id === 'tyo' && degraded.value ? orange : ChartPalette.categoricalVar(0))
+  </script>
+
+  <template>
+    <TemplateFrame title="Ops wall" :height="600" @enter="onEnter">
+      <template #default="{ width, height }">
+        <!-- A local dark scope: the tuffex, BUI and chart dark blocks accept data-theme on any element -->
+        <div class="ops" data-theme="dark" :style="{ gridTemplateRows: geometry(width, height).rows }">
+          <header class="ops__head">
+            <TxStatusBadge :status="healthy ? 'success' : 'warning'" :text="servicesText" />
+            <TxModeChip :label="paused ? 'Paused' : 'Live'" :tone="paused ? 'warning' : 'success'" @click="paused = !paused" />
+          </header>
+          <div v-for="kpi in kpis" :key="kpi.key" class="ops-kpi">
+            <TxTextMorph :text="kpi.value" :locale="localeTag" />
+            <TxSparkChart :series="kpiSeries[kpi.key]" theme="dark" :animation="false" :interactive="false" />
+          </div>
+          <TxBubbleMap
+            v-if="entered && world" :geo-json="world" :data="cities" lng="lng" lat="lat" value="online"
+            :height="geometry(width, height).map" :bubble-color="bubbleColor" :bubble-border-width="ringWidth"
+          />
+          <TxInsightCards :active-index="focus" :pages="pages" @update:active-index="takeOverRotation" />
+          <TxSankeyChart :nodes="nodes" :links="flow.links" :height="geometry(width, height).sankey" node-label-layout="inline">
+            <template #tooltip="{ params }">
+              {{ params.name }} · {{ count(params) }} / min
+            </template>
+          </TxSankeyChart>
+          <TxTransition group preset="slide-fade" tag="ul">
+            <li v-for="item in events" :key="item.id">{{ item.text }}</li>
+          </TxTransition>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .ops {
+    color-scheme: dark; /* darkens the tooltips' canvas fallback and the scrollbars */
+    --tx-skeleton-base-color: var(--tx-chart-semantic-skeleton); /* tokens :root derives with var() are redeclared here */
+  }
+  </style>
+---
+:::
+
+## Anatomy
+
+| Region | Components | Role |
+|---|---|---|
+| Top bar | [TxFlatRadio](/docs/dev/components/flat-radio), [TxDatePicker](/docs/dev/components/date-picker), [TxStatusBadge](/docs/dev/components/status-badge) | 7 / 30 / 90-day switch and a custom date range; the degraded-service notice. It stays pinned while the board scrolls |
+| KPI cards | [TxStatCard](/docs/dev/components/stat-card), [TxTextMorph](/docs/dev/components/text-morph) | Daily actives, searches per day, AI requests and plugin installs, plus crash rate when wide; each compared with the period of the same length just before |
+| Trend | [TxTimeseriesChart](/docs/dev/components/timeseries-chart), [TxChartLegendItem](/docs/dev/components/charts) | Searches on three platforms; release markers, today's unfinished stretch dashed, brush to zoom |
+| Side rail | [TxAllocationBar](/docs/dev/components/allocation-bar), [TxDotIndicator](/docs/dev/components/dot-indicator), [TxSignalMeter](/docs/dev/components/signal-meter), [TxProgressBar](/docs/dev/components/progress-bar) | Platform share, service health, and this month's AI usage split by route |
+| Insights (wide) | [TxInsightCards](/docs/dev/components/insight-cards), [TxSparkChart / TxChartScrubber](/docs/dev/components/spark-chart), [TxToastPanel](/docs/dev/components/toast-panel) | Three pageable insights whose charts can be scrubbed day by day; a follow-up gets an acknowledgement |
+| Top plugins | [TxDataTable](/docs/dev/components/data-table), [TxSparkChart](/docs/dev/components/spark-chart), [TxSignalMeter](/docs/dev/components/signal-meter), [TxStatusBadge](/docs/dev/components/status-badge) | Plugin ids and versions come from the repo's `plugins/`; sortable by installs and crash-free rate, with a trend line and a stability meter in the cells |
+| Top bar (Ops wall) | [TxModeChip](/docs/dev/components/mode-chip) | The LIVE mark, the clock and the service summary; a "Live ↔ Paused" switch that stops every figure, event and rotation |
+| Big KPIs (Ops wall) | [TxTextMorph](/docs/dev/components/text-morph), [TxSparkChart](/docs/dev/components/spark-chart) | Users online, searches per minute, AI requests and plugin installs, plus sync latency and crash rate when wide; rolling figures beside a strip of the last 30 refreshes |
+| City map (Ops wall) | [TxBubbleMap](/docs/dev/components/maps), [TxSkeleton](/docs/dev/components/skeleton) | Online users as bubbles in 14 cities, a ring on the focus cities and orange for a degraded one; geography from the same-origin `/geo/world-countries.geo.json`, cities only, no country fills |
+| Focus rotation (Ops wall) | [TxInsightCards](/docs/dev/components/insight-cards), [TxAllocationBar](/docs/dev/components/allocation-bar) | East China at peak, on-device AI share and plugin momentum, one page every 8 seconds |
+| Search flow (Ops wall) | [TxSankeyChart](/docs/dev/components/sankey-chart) | Input → plugin → action, every middle node passing on exactly what it receives; the tooltip is localized through its slot |
+| Health and events (Ops wall) | [TxDotIndicator](/docs/dev/components/dot-indicator), [TxSignalMeter](/docs/dev/components/signal-meter), [TxTransition](/docs/dev/components/transition) | A dot, latency and signal bars for seven services; new events slide in at the top while the oldest makes way |
+
+## Interactions
+
+- Switch between 7, 30 and 90 days, or pick a span in the date picker: the KPI figures roll to their new values, and each change is measured against the period of the same length just before. Up to seven days is drawn by the hour, anything longer by the day.
+- Drag across the trend chart to zoom into that span. The KPI cards, legend, share bar and plugin table then count only those days; the "Zoomed" pill beside the title restores the full range.
+- Click a legend item to hide or show a platform, and hover one to fade the other two lines. With the pointer inside Platform share, the chart singles out the selected platform; clicking another segment switches it.
+- Sort the plugin table by installs or crash-free rate from the header. The trend column always holds 24 samples, so a range change morphs the lines instead of redrawing them.
+- The charts start drawing once the template scrolls into view, so the entrance animation is actually seen. This is an interactive template; nothing plays by itself.
+- Wide (≥ 960px) adds the crash-rate card, a large legend with values and the insight cards. Narrow (< 640px) puts the KPI cards in two columns, drops the side rail under the chart and trims the table to plugin, installs and trend.
+- Ops wall: it goes live once it scrolls into view. KPIs roll every 2 seconds, an event streams in every 3, cities update every 4, the focus card turns every 8 and the sankey moves to a new window every 12. At 18 seconds cloud sync in Tokyo degrades (the map bubble and the health light turn orange and the top bar reads 6/7) and at 30 it recovers. Scroll the template away or switch tabs and it stops updating.
+- Ops wall: click Live to pause every update and again to resume; resting the pointer on the focus card, the sankey or the event list holds that part. Page the focus card with ‹ › and the rotation leaves it to you; click Shanghai or Hangzhou on the map to jump to East China. With reduced motion the wall shows one still snapshot and starts no timer.
+- Ops wall: the whole screen is dark whether the site is light or dark. In the docs column it fills the stage exactly with no scrolling; wide (≥ 960px) shows six KPIs and taller map and sankey, with values on the nodes; narrow (< 640px) is one scrolling column with the KPIs in two.
+
+## Adapting it
+
+- Swap the data source: replace `daily()`, which generates the sample history, with the per-day series from your API. `total()`, `average()` and `previousWindow()` already handle a day still in progress and the same-length comparison, so the roll-ups stay as they are.
+- Keep rates such as crash rate or success rate out of TxTimeseriesChart: its y axis always includes 0, so a line near 100% sits flat along the top. Chart the counts instead, or use TxSparkChart with a `domain`.
+- Pixel props such as a chart height or a table `maxHeight` are out of reach of container queries; compute them from the stage size as the template does, or from a ResizeObserver of your own.
+- To drill into a row, add `@row-click` to TxDataTable, swap the trend chart's data for that plugin's installs and add a pill that returns to all platforms.
+- Ops wall: a local dark scope takes only `data-theme="dark"` and `color-scheme: dark` on the root, plus redeclaring the few tokens `:root` derives with `var()` that the dark blocks never rewrite (the three disabled colours, the chart grid line, the skeleton base). Overlays that teleport (tooltips, popovers, dialogs) leave that scope and render in the page theme, so keep them off the wall.

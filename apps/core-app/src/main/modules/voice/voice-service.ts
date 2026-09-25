@@ -49,6 +49,11 @@ import {
   resolveAppFormatProfile
 } from './app-context'
 import { getVoicePolishPrompt, wrapTranscription, type PolishContext } from './polish-prompt'
+import {
+  getVoiceQuickEditPrompt,
+  resolveQuickEditCommand,
+  wrapQuickEditRequest
+} from './quick-edit-prompt'
 import { selectVoiceFile } from './voice-file-transcription'
 import { voiceInsightsStore } from './voice-insights-store'
 import { createLiveDelivery } from './voice-live-delivery'
@@ -225,6 +230,15 @@ const CAPTURE_HARD_TIMEOUT_GRACE_MS = 2_000
  * shipped value instead of a literal that silently stops matching it.
  */
 export const POLISH_TIMEOUT_MS = 8_000
+/**
+ * The edit pass gets longer than the polish pass.
+ *
+ * Dictation waits on a rewrite of its own words and feels slow the moment it does; an edit is a
+ * deliberate act the user triggers and then watches, and the passage it must preserve is longer
+ * than a spoken sentence. Eight seconds is where a spoken instruction stops feeling like a
+ * recognition step and starts feeling broken.
+ */
+export const QUICK_EDIT_TIMEOUT_MS = 20_000
 const CAPABILITY_TIMEOUT_MS = 30_000
 const BUFFERED_TRANSCRIPTION_TIMEOUT_MS = 150_000
 const TRANSCRIPTION_TIMEOUT_MS = 600_000
@@ -299,6 +313,30 @@ const PCM_CHANNELS = 1
 // max duration is only a safety cap.
 type VoiceSessionPayload = VoiceDictatePayload | VoiceAsrStreamPayload
 
+/**
+ * What the user had selected when an edit session started.
+ *
+ * Captured by the caller that opened the session and carried on the session record, because the
+ * selection only means anything for as long as the passage is still selected in the target: the
+ * pass edits what was picked, and delivery relies on that same selection still holding the old text
+ * so that typing over it replaces it — no write access to another application's document is
+ * involved anywhere in this feature.
+ */
+export interface VoiceQuickEditTarget {
+  readonly selection: string
+}
+
+/** The session options the owner understands: the caller's payload plus host-only fields. */
+type VoiceSessionOptions = VoiceSessionPayload & { editTarget?: VoiceQuickEditTarget }
+
+/** One capture's speech-to-text result, normalized. */
+interface VoiceTranscript {
+  text: string
+  language?: string
+  billing?: VoiceDictateResult['billing']
+  latencyMs?: number
+}
+
 /** One slot in the merged capture/provider queue that feeds `streamViaProvider`'s generator. */
 type MergedStreamItem =
   | { kind: 'provider'; event: VoiceProviderEvent }
@@ -359,6 +397,8 @@ interface VoiceSessionRecord {
    * the editor, because delivery validates the captured key and the polish context did not.
    */
   readonly polishContext?: PolishContext
+  /** Present only on an edit session; see `VoiceQuickEditTarget`. */
+  readonly editTarget?: VoiceQuickEditTarget
   readonly startedAt: number
   readonly abortSignal?: AbortSignal
   readonly onAbort?: () => void
@@ -668,7 +708,7 @@ export class VoiceService {
 
   /** Opens the canonical session used by global, renderer and plugin callers. */
   async startSession(
-    payload: VoiceSessionPayload = {},
+    payload: VoiceSessionOptions = {},
     signal?: AbortSignal,
     caller = VOICE_CALLER,
     sampleRate = DEFAULT_ASR_SAMPLE_RATE
@@ -726,6 +766,7 @@ export class VoiceService {
       polishStrength,
       targetKey,
       ...(polishContext ? { polishContext } : {}),
+      ...(payload.editTarget ? { editTarget: payload.editTarget } : {}),
       startedAt: Date.now(),
       ...(signal ? { abortSignal: signal } : {}),
       ...(onAbort ? { onAbort } : {})
@@ -774,14 +815,31 @@ export class VoiceService {
         cleanup: options.cleanup,
         language: options.language,
         delivery: record.delivery,
-        polishStrength: record.polishStrength
+        polishStrength: record.polishStrength,
+        /*
+         * Dropping this field here silently demotes an edit to dictation: the instruction would be
+         * polished and then typed over the passage instead of replacing it.
+         */
+        ...(record.editTarget ? { editTarget: record.editTarget } : {})
       },
       record.abortSignal,
       record.caller,
       record.polishContext
     )
     if (record.delivery === 'active-app' && result.text) {
-      result.delivery = await this.deliverText(result.text, record.targetKey)
+      /*
+       * An edit's replacement is not formatted for the application it lands in.
+       *
+       * `formatDictationText` exists for speech becoming text — a command line should not gain a
+       * full stop from how a sentence was spoken. The edit pass already returned the passage as it
+       * should read, so running it through those rules would be a second, unasked edit, and in a
+       * terminal profile it would strip punctuation the user had just asked for.
+       */
+      result.delivery = await this.deliverText(
+        result.text,
+        record.targetKey,
+        record.editTarget ? { format: false } : {}
+      )
     }
     const recordDetails: Omit<
       VoiceRecognitionRecordInput,
@@ -843,7 +901,7 @@ export class VoiceService {
 
   private async finalizeCapture(
     capture: AudioCaptureResult,
-    payload: VoiceSessionPayload,
+    payload: VoiceSessionOptions,
     signal: AbortSignal | undefined,
     caller: string,
     polishContext?: PolishContext
@@ -876,6 +934,17 @@ export class VoiceService {
       }
     }
 
+    if (payload.editTarget) {
+      return await this.finalizeQuickEdit(
+        capture,
+        transcript,
+        payload.editTarget,
+        signal,
+        caller,
+        polishContext
+      )
+    }
+
     const cleanup = payload.cleanup ?? true
     const polishedText = cleanup
       ? await this.polish(
@@ -897,6 +966,147 @@ export class VoiceService {
       ...(transcript.latencyMs === undefined ? {} : { latencyMs: transcript.latencyMs }),
       durationMs: capture.durationMs,
       stoppedReason: capture.stoppedReason
+    }
+  }
+
+  /**
+   * The edit pass: the transcript is an instruction, the session's selection is what it acts on.
+   *
+   * Nothing here may fall back to the transcript. In dictation raw text is the honest fallback,
+   * because those words are what the user wanted inserted; in an edit the words *are* the
+   * instruction, and delivering them would overwrite the passage with "make this shorter". A failed
+   * or cancelled pass therefore delivers nothing and says why, leaving the selection untouched —
+   * which is also why this path records no polish telemetry: there is no polish tier here, and the
+   * pass either produced a replacement or it did not.
+   */
+  private async finalizeQuickEdit(
+    capture: AudioCaptureResult,
+    transcript: VoiceTranscript,
+    editTarget: VoiceQuickEditTarget,
+    signal: AbortSignal | undefined,
+    caller: string,
+    polishContext?: PolishContext
+  ): Promise<VoiceDictateResult> {
+    const command = resolveQuickEditCommand(transcript.text)
+    let replacement: string | null = null
+    let outcome: 'literal' | 'model' | 'cancelled' | 'failed'
+    if (command?.kind === 'cancel') {
+      outcome = 'cancelled'
+    } else if (command?.kind === 'replace') {
+      replacement = command.text
+      outcome = 'literal'
+    } else {
+      replacement = await this.rewriteSelection(
+        transcript.text,
+        editTarget.selection,
+        signal,
+        caller,
+        polishContext
+      )
+      outcome = replacement === null ? 'failed' : 'model'
+    }
+    throwIfCancelled(signal)
+    const text = replacement ?? ''
+    voiceLog.info('Quick edit pass finished', {
+      meta: {
+        outcome,
+        selectedChars: editTarget.selection.length,
+        instructionChars: transcript.text.length,
+        replacementChars: text.length
+      }
+    })
+    return {
+      text,
+      raw: transcript.text,
+      source: 'native-cpal',
+      polished: outcome === 'model',
+      ...(transcript.language ? { language: transcript.language } : {}),
+      ...(transcript.billing ? { billing: transcript.billing } : {}),
+      ...(transcript.latencyMs === undefined ? {} : { latencyMs: transcript.latencyMs }),
+      durationMs: capture.durationMs,
+      stoppedReason: capture.stoppedReason,
+      ...(text
+        ? {}
+        : {
+            delivery: {
+              method: 'none' as const,
+              reason: outcome === 'cancelled' ? 'quick-edit-cancelled' : 'quick-edit-failed'
+            }
+          })
+    }
+  }
+
+  /**
+   * One rewrite through the intelligence `text.chat` capability. Returns null when the pass failed,
+   * timed out or came back empty; the caller then delivers nothing.
+   *
+   * The polish length gate does not apply: it exists to keep a two-word dictation from costing a
+   * provider call, and an instruction is exactly the kind of utterance that is short — "短一点"
+   * is two characters and the whole point of the feature.
+   */
+  private async rewriteSelection(
+    instruction: string,
+    selection: string,
+    signal?: AbortSignal,
+    caller = VOICE_CALLER,
+    context?: PolishContext
+  ): Promise<string | null> {
+    const spoken = instruction.trim()
+    if (!spoken || !selection.trim()) return null
+    const startedAt = Date.now()
+    const editController = new AbortController()
+    const abortEdit = (): void => editController.abort()
+    let timedOut = false
+    const timeout = setTimeout(() => {
+      timedOut = true
+      editController.abort()
+    }, QUICK_EDIT_TIMEOUT_MS)
+    signal?.addEventListener('abort', abortEdit, { once: true })
+    try {
+      throwIfCancelled(signal)
+      const response = await awaitWithAbort(
+        tuffIntelligence.invoke<string>(
+          'text.chat',
+          {
+            messages: [
+              { role: 'system', content: getVoiceQuickEditPrompt() },
+              { role: 'user', content: wrapQuickEditRequest(selection, spoken, context) }
+            ]
+          },
+          {
+            signal: editController.signal,
+            timeout: QUICK_EDIT_TIMEOUT_MS,
+            metadata: { caller }
+          }
+        ),
+        signal
+      )
+      throwIfCancelled(signal)
+      const edited = typeof response.result === 'string' ? response.result.trim() : ''
+      if (!edited) {
+        voiceLog.warn('Quick edit pass returned nothing; the selection is left as it was', {
+          meta: { elapsedMs: Date.now() - startedAt }
+        })
+        return null
+      }
+      voiceLog.info('Quick edit pass applied', {
+        meta: {
+          elapsedMs: Date.now() - startedAt,
+          selectedChars: selection.length,
+          editedChars: edited.length
+        }
+      })
+      return edited
+    } catch (error) {
+      if (signal?.aborted) throw voiceCancellationError()
+      voiceLog.warn('Quick edit pass failed; the selection is left as it was', {
+        meta: { timedOut, elapsedMs: Date.now() - startedAt },
+        error
+      })
+      return null
+    } finally {
+      clearTimeout(timeout)
+      signal?.removeEventListener('abort', abortEdit)
     }
   }
 
@@ -1768,12 +1978,7 @@ export class VoiceService {
     language?: string,
     signal?: AbortSignal,
     caller = VOICE_CALLER
-  ): Promise<{
-    text: string
-    language?: string
-    billing?: VoiceDictateResult['billing']
-    latencyMs?: number
-  }> {
+  ): Promise<VoiceTranscript> {
     throwIfCancelled(signal)
     const dataUrl = `data:audio/wav;base64,${audio.toString('base64')}`
     const response = await awaitWithAbort(

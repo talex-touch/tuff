@@ -505,7 +505,7 @@ describe("renderer storage transport bootstrap", () => {
     await expect(storage.saveToRemote({ force: true })).rejects.toMatchObject({
       details: {
         key: "conflict-reload-fail.ini",
-        reason: "remote-failed",
+        reason: "conflict-reload-failed",
         version: 2,
       },
     });
@@ -551,7 +551,7 @@ describe("renderer storage transport bootstrap", () => {
     await expect(storage.saveToRemote({ force: true })).rejects.toMatchObject({
       details: {
         key: "conflict-retry-fail.ini",
-        reason: "remote-failed",
+        reason: "rejected",
         version: 2,
       },
     });
@@ -561,7 +561,7 @@ describe("renderer storage transport bootstrap", () => {
     expect(saveCalls).toBe(2);
   });
 
-  it("reports remote save failure when transport returns undefined", async () => {
+  it("reports a rejected save when transport returns undefined", async () => {
     const transport = createTransportMock({
       "unstable-save.ini": { data: { source: "transport" }, version: 3 },
     });
@@ -587,7 +587,7 @@ describe("renderer storage transport bootstrap", () => {
     await expect(storage.saveToRemote({ force: true })).rejects.toMatchObject({
       details: {
         key: "unstable-save.ini",
-        reason: "remote-failed",
+        reason: "rejected",
         version: 3,
       },
     });
@@ -601,7 +601,7 @@ describe("renderer storage transport bootstrap", () => {
     );
   });
 
-  it("reports remote save failure when transport returns a malformed result", async () => {
+  it("reports a rejected save when transport returns a malformed result", async () => {
     const transport = createTransportMock({
       "malformed-save.ini": { data: { source: "transport" }, version: 4 },
     });
@@ -627,7 +627,7 @@ describe("renderer storage transport bootstrap", () => {
     await expect(storage.saveToRemote({ force: true })).rejects.toMatchObject({
       details: {
         key: "malformed-save.ini",
-        reason: "remote-failed",
+        reason: "rejected",
         version: 4,
       },
     });
@@ -639,5 +639,106 @@ describe("renderer storage transport bootstrap", () => {
       ),
       expect.objectContaining({ resultType: "object" }),
     );
+  });
+
+  it("reports a transport failure when the save send never reaches main", async () => {
+    const transport = createTransportMock();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    transport.send.mockImplementation(
+      async (event: unknown, payload?: { key?: string }) => {
+        if (event === StorageEvents.app.save) {
+          throw new Error("IPC timed out before delivery");
+        }
+        if (payload?.key === "undelivered-save.ini") {
+          return { data: { source: "initial" }, version: 3 };
+        }
+        return null;
+      },
+    );
+
+    initializeRendererStorage(transport as any);
+    const storage = new TouchStorage("undelivered-save.ini", {
+      source: "initial",
+    });
+
+    await storage.whenHydrated();
+    storage.data.source = "local";
+
+    await expect(storage.saveToRemote({ force: true })).rejects.toMatchObject({
+      details: {
+        key: "undelivered-save.ini",
+        reason: "transport",
+        version: 3,
+      },
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'save("undelivered-save.ini") transport send failed',
+      ),
+      expect.any(Error),
+    );
+  });
+
+  it("surfaces the failure reason main reported for an unsuccessful save", async () => {
+    const transport = createTransportMock();
+    transport.send.mockImplementation(
+      async (event: unknown, payload?: { key?: string }) => {
+        if (event === StorageEvents.app.save) {
+          return { success: false, version: 7, reason: "credential-rejected" };
+        }
+        if (payload?.key === "credential-refused.ini") {
+          return { data: { source: "initial" }, version: 6 };
+        }
+        return null;
+      },
+    );
+
+    initializeRendererStorage(transport as any);
+    const storage = new TouchStorage("credential-refused.ini", {
+      source: "initial",
+    });
+
+    await storage.whenHydrated();
+    storage.data.source = "local";
+
+    await expect(storage.saveToRemote({ force: true })).rejects.toMatchObject({
+      details: {
+        key: "credential-refused.ini",
+        reason: "credential-rejected",
+        version: 7,
+      },
+    });
+  });
+
+  it("falls back to a rejected save when main reports an unlabelled failure", async () => {
+    const transport = createTransportMock();
+    transport.send.mockImplementation(
+      async (event: unknown, payload?: { key?: string }) => {
+        if (event === StorageEvents.app.save) {
+          return { success: false, version: 9 };
+        }
+        if (payload?.key === "unlabelled-failure.ini") {
+          return { data: { source: "initial" }, version: 8 };
+        }
+        return null;
+      },
+    );
+
+    initializeRendererStorage(transport as any);
+    const storage = new TouchStorage("unlabelled-failure.ini", {
+      source: "initial",
+    });
+
+    await storage.whenHydrated();
+    storage.data.source = "local";
+
+    await expect(storage.saveToRemote({ force: true })).rejects.toMatchObject({
+      details: {
+        key: "unlabelled-failure.ini",
+        reason: "rejected",
+        version: 9,
+      },
+    });
   });
 });

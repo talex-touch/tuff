@@ -9,10 +9,29 @@ import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
 import { deserializeSearchIndexWorkerError } from './search-index-worker-error'
+import { createLogger } from '../../../../utils/logger'
 
 const DEFAULT_QUERY_TIMEOUT_MS = 15_000
 const DEFAULT_MAX_QUEUE_DEPTH = 64
 const sqliteDialect = new SQLiteSyncDialect()
+
+/**
+ * A reader that failed once used to be a reader that never worked again.
+ *
+ * `failWorker` latched the client permanently closed and nothing ever rebuilt it, so a single slow
+ * query or a worker exit made every later read — and therefore every file/app search — fail for
+ * the rest of the session, while the index kept being written normally. The latching, not the
+ * original failure, is what turned one bad query into a session-wide outage; a failure now retires
+ * the worker and the next query builds a new one.
+ *
+ * Rebuilding is not free: a retired worker can only be *asked* to shut down (see `retireWorker`),
+ * so a reader failing for a permanent reason — a corrupt database, say — would strand one thread
+ * per attempt. Consecutive failures therefore trip a cooldown, which keeps a broken reader quiet
+ * without ever pretending it is closed for good.
+ */
+const FAILURE_COOLDOWN_THRESHOLD = 3
+const FAILURE_COOLDOWN_MS = 30_000
+const readWorkerLog = createLogger('SearchIndex').child('ReadWorker')
 
 export interface SearchIndexReadWorkerClientOptions {
   workerPath?: string
@@ -137,6 +156,8 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
   private timeout: NodeJS.Timeout | null = null
   private closePromise: Promise<void> | null = null
   private closed = false
+  private consecutiveFailures = 0
+  private cooldownUntil = 0
   private sequence = 0
   private readonly workerPath: string
   private readonly timeoutMs: number
@@ -154,6 +175,11 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
   all<T>(query: SQL, signal?: AbortSignal): Promise<T[]> {
     if (this.closed) {
       return Promise.reject(new SearchIndexReadWorkerUnavailableError('closed'))
+    }
+    if (this.worker === null && Date.now() < this.cooldownUntil) {
+      return Promise.reject(
+        new SearchIndexReadWorkerUnavailableError('reader is cooling down after repeated failures')
+      )
     }
     if (signal?.aborted) {
       return Promise.reject(new SearchIndexReadWorkerCancelledError())
@@ -265,6 +291,8 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     this.clearOperationTimeout()
     this.active = null
     if (message.type === 'result') {
+      this.consecutiveFailures = 0
+      this.cooldownUntil = 0
       this.settlePending(active, undefined, message.rows)
     } else {
       this.settlePending(active, deserializeSearchIndexWorkerError(message.error))
@@ -304,9 +332,11 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
 
   private failWorker(worker: Worker | null, error: Error): void {
     if (worker && this.worker !== worker) return
+    // Only an explicit `close()` is terminal. A failed worker is retired here and rebuilt by the
+    // next `all()`, which is the whole point: latching `closed` on failure is what made one bad
+    // query permanent.
     if (this.closed) return
 
-    this.closed = true
     this.clearOperationTimeout()
     const active = this.active
     this.active = null
@@ -316,6 +346,24 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     const activeWorker = this.worker
     this.worker = null
     this.retireWorker(activeWorker)
+
+    this.consecutiveFailures += 1
+    if (this.consecutiveFailures >= FAILURE_COOLDOWN_THRESHOLD) {
+      this.cooldownUntil = Date.now() + FAILURE_COOLDOWN_MS
+    }
+    // Log the first failure and the one that trips the cooldown. A reader that died silently and
+    // stayed dead is why the original failure could not be traced back from the session log.
+    if (this.consecutiveFailures === 1 || this.consecutiveFailures === FAILURE_COOLDOWN_THRESHOLD) {
+      readWorkerLog.warn('Search index read worker retired', {
+        error,
+        meta: {
+          consecutiveFailures: this.consecutiveFailures,
+          willRebuild: this.consecutiveFailures < FAILURE_COOLDOWN_THRESHOLD,
+          cooldownMs:
+            this.consecutiveFailures >= FAILURE_COOLDOWN_THRESHOLD ? FAILURE_COOLDOWN_MS : 0
+        }
+      })
+    }
   }
 
   private retireWorker(worker: Worker | null): void {

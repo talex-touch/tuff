@@ -55,9 +55,29 @@ export interface SparkChartProps {
   /** Fixed value range; omit to fit the data. */
   domain?: [number, number]
   /** Controlled highlighted sample. Omit to let the chart own pointer and key state. */
-  activeIndex?: number | null
-  /** Enables pointer, keyboard crosshair and value announcement. @default true */
+  activeIndex?: number | null  /** Enables pointer, keyboard crosshair and value announcement. @default true */
   interactive?: boolean
+
+  /**
+   * Draw a dashed rule at each series' own starting value.
+   *
+   * Without a reference the eye can see that a line wobbles but not whether it
+   * ended up above or below where it began. Per series rather than one shared
+   * zero line, because two series on one spark chart rarely share a scale.
+   *
+   * @default true
+   */
+  baseline?: boolean
+
+  /**
+   * Draw a filled dot on each series' last sample.
+   *
+   * The line's end is the current value — the one number the reader is after —
+   * and a stroke alone gives it no more weight than any midpoint.
+   *
+   * @default true
+   */
+  endpoint?: boolean
   /** Enables ECharts-parity enter and update motion. @default true */
   animation?: boolean
   /** Accessible name for the canvas (`role="img"`). */

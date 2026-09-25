@@ -1,0 +1,104 @@
+---
+title: "AgentScreen"
+description: "What the agent is looking at: a fixed-ratio frame, a pointer overlay, a loading placeholder and one line of caption."
+category: AiAgent
+status: beta
+since: 0.6.0
+tags: [agent, screen, capture, ai]
+syncStatus: reviewed
+verified: true
+---
+# AgentScreen
+
+## Basic Usage
+
+### AgentScreen
+
+:::TuffDemoWrapper{demo="AgentScreenAgentScreenDemo" code-lang="vue" title="Agent screen" description="Switch to Loading for the placeholder state; the pointer overlay carries a line naming the current action."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const state = ref<'working' | 'loading'>('working')
+  </script>
+
+  <template>
+    <TxAgentScreen
+      :state="state"
+      label="Agent's screen"
+      :cursor="{ x: 46, y: 62, label: 'Opening Photos' }"
+    >
+      <!-- Content comes from the host: a screenshot, a canvas, or a video -->
+      <canvas ref="surface" />
+    </TxAgentScreen>
+  </template>
+---
+:::
+
+## The Frame Owns Only the Frame
+
+The component owns three things — **the frame, the pointer and the caption** — while the content comes from `src` or the default slot. The same frame can therefore hold a screenshot, a live canvas, or a streamed video; it does not care what is inside it.
+
+The default slot wins over `src`: a live surface and a stale screenshot must not stack.
+
+`ratio` is the frame's CSS `aspect-ratio`, defaulting to the upstream capture's own `2964 / 1856`. A ratio rather than a height, because the frame's width follows its container while the capture's proportions do not change.
+
+## The Pointer Is in Percent
+
+`cursor`'s `x` / `y` are **percentages of the frame's own box**, not pixels. The frame is responsive, and a captured pointer coordinate is only meaningful in pixels relative to the capture it came from; as a percentage it lands in the same place at any size.
+
+Out-of-range coordinates are **clamped to 0–100**. Capture sources occasionally report a point slightly outside the image, and an un-clamped one escapes the clip and draws on the page.
+
+The pointer is inline SVG rather than an icon font: it has to stay visible over an arbitrary capture, which needs a light fill with a dark outline — something a single-colour glyph cannot do.
+
+## The Loading State
+
+With `state` set to `loading` the frame swaps to a skeleton placeholder and **drops the capture and the `overlay` slot together** — an overlay annotates the capture, and without one it has nothing to annotate.
+
+The placeholder reuses the library's shared skeleton bar (`skeleton-surface`) rather than minting a second shimmer: one timing, one reduced-motion guard, with only the colour pinned to the BUI surface so the placeholder matches the frame it fills. It carries `role="status" aria-live="polite"`, because it changes without user action.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `src` | `string` | - | Image source for the frame. Ignored when the default slot is filled |
+| `alt` | `string` | - | Accessible description. **Required whenever `src` is set** — a screenshot of someone else's screen is content, not decoration |
+| `label` | `string` | - | Caption under the frame. Omit to render none |
+| `state` | `'working' \| 'loading'` | `'working'` | Whether the frame shows content or a placeholder |
+| `cursor` | `AgentScreenCursor` | - | Pointer overlay. Omit to hide it |
+| `ratio` | `string` | `'2964 / 1856'` | CSS `aspect-ratio` for the frame |
+| `ariaLabel` | `string` | `'Agent screen'` | Accessible name for the whole region |
+| `loadingLabel` | `string` | `'Waiting for the agent's screen'` | Announced while loading |
+
+### AgentScreenCursor
+
+| Field | Type | Description |
+|---|---|---|
+| `x` / `y` | `number` | 0–100, as a percentage of the frame; out-of-range values are clamped |
+| `label` | `string` | A line beside the pointer, usually the current action |
+
+### Slots
+
+| Name | Description |
+|---|---|
+| `default` | Replaces the frame content; takes precedence over `src` |
+| `overlay` | Above the content, inside the clip; dropped together with it while loading |
+| `label` | Replaces the caption under the frame |
+
+## Best Practices
+
+- Use the default slot for a live canvas or video and keep `src` for static captures.
+- Let `label` say *whose* screen this is and the pointer's `label` say *what it is doing* — two different jobs, so do not merge them.
+- Between captured frames, switch `state` to `loading` rather than leaving a stale frame up; a stale frame reads as "it is stuck".
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/agent-screen/src/TxAgentScreen.vue`.
+- Types: `packages/tuffex/packages/components/src/agent-screen/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/agent-screen/__tests__/agent-screen.test.ts` (13 cases) covers `src` with alt text, the default slot overriding `src`, the loading swap with its live region, the placeholder when there is nothing to show, percentage pointer placement and out-of-range clamping, the absent pointer, the pointer label, `ratio` pass-through, the optional caption, the region's accessible name, and `overlay` rendering inside the clip yet dropping with the frame while loading.
+- Ported from Beautiful UI (https://www.beautifului.dev) case 21, Agent Screen, © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />

@@ -440,10 +440,12 @@ function resetFilters() {
   margin-top: 24px;
 }
 
-:global(.dark) .UpdatesAllTitle,
-:global([data-theme='dark']) .UpdatesAllTitle,
-:global(.dark) .UpdatesAllItem :deep(.tx-card-item__title),
-:global([data-theme='dark']) .UpdatesAllItem :deep(.tx-card-item__title) {
+/* Plain descendant selectors: `:global(.dark) .UpdatesAllTitle` compiled to the
+   bare `.dark` and set this colour on <html> instead of on the titles. */
+.dark .UpdatesAllTitle,
+[data-theme='dark'] .UpdatesAllTitle,
+.dark .UpdatesAllItem :deep(.tx-card-item__title),
+[data-theme='dark'] .UpdatesAllItem :deep(.tx-card-item__title) {
   color: rgb(248, 250, 252);
 }
 

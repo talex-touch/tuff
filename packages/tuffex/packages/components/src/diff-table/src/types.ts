@@ -102,6 +102,77 @@ export interface DiffTableProps<T = any> {
    * @default 400
    */
   duration?: number
+
+  /**
+   * Render a per-row accept control on every changed row, and make the row
+   * itself toggle it.
+   *
+   * Off by default: the table shipped as a read-only diff, and turning the rows
+   * into controls for existing callers would hand them an affordance they never
+   * asked for.
+   *
+   * @default false
+   */
+  selectable?: boolean
+
+  /**
+   * `v-model` — keys of the changed rows that are currently accepted.
+   *
+   * Controlled: the component never writes this array. Omit it and every
+   * changed row starts accepted, with the component tracking toggles
+   * internally.
+   */
+  modelValue?: (string | number)[]
+
+  /**
+   * Render the summary footer (counts on the left, apply button on the right).
+   * @default false
+   */
+  footer?: boolean
+
+  /**
+   * Hint rendered at the right end of the title bar, e.g. the upstream's
+   * "Click changed rows to toggle". Omit to render nothing.
+   */
+  hint?: string
+
+  /**
+   * Formats the footer's left-hand summary.
+   *
+   * TuffEx ships no message catalog, so pluralisation and translation belong to
+   * the host. The default is English and deliberately plain.
+   *
+   * @default counts => `${counts.removed} removals · ${counts.added} additions`
+   */
+  summaryFormatter?: (counts: DiffTableCounts) => string
+
+  /**
+   * Formats the apply button's label.
+   * @default count => `Apply ${count} changes`
+   */
+  applyLabelFormatter?: (count: number) => string
+
+  /**
+   * Formats a row control's accessible name.
+   * @default (accepted) => accepted ? 'Reject this change' : 'Accept this change'
+   */
+  rowToggleLabelFormatter?: (accepted: boolean, change: DiffChangeKind) => string
+}
+
+/**
+ * Change tallies handed to {@link DiffTableProps.summaryFormatter}.
+ *
+ * Counts **accepted** rows only, so the footer tracks what pressing apply would
+ * actually do rather than what the diff proposed.
+ *
+ * @public
+ */
+export interface DiffTableCounts {
+  added: number
+  removed: number
+  modified: number
+  /** `added + removed + modified`. */
+  total: number
 }
 
 /**
@@ -115,4 +186,13 @@ export interface DiffTableEmits {
 
   /** Fires once the final stage is reached, whatever route got it there. */
   (e: 'settled'): void
+
+  /** `v-model` — the accepted row keys after a toggle. */
+  (e: 'update:modelValue', keys: (string | number)[]): void
+
+  /** One row was accepted or rejected. */
+  (e: 'toggle', payload: { key: string | number, accepted: boolean }): void
+
+  /** The apply button was pressed, with the keys still accepted at that moment. */
+  (e: 'apply', keys: (string | number)[]): void
 }

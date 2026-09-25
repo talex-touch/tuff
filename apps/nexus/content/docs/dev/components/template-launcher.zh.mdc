@@ -1,0 +1,126 @@
+---
+title: Launcher 启动器
+description: 仿 CoreBox 的启动器，跨类搜索、键盘选择、算式计算与实时预览
+category: TemplateApp
+status: beta
+since: 0.6.0
+tags: [template, launcher, search, keyboard, corebox]
+syncStatus: reviewed
+verified: false
+---
+
+## 场景
+
+仿 Tuff CoreBox 的启动器，在桌面上呼出：一个输入框同时搜应用、插件、文件、剪贴板、AI 和系统动作，高亮到哪一项，右侧就预览哪一项，全程不离开键盘。
+
+适合启动器、全局搜索、Spotlight 式的命令入口，以及任何「输入 → 选择 → 执行」的键盘优先界面。
+
+## 模板
+
+### CoreBox 式启动器
+
+:::TuffDemoWrapper{demo="TemplateLauncherDemo" code-lang="vue" title="CoreBox 式启动器" description="输入即搜；↑ ↓ 移动高亮、↵ 执行、⌘K 打开操作、Esc 先清空再重置范围；输入算式直接得出结果。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref, useId } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const query = ref('')
+  const scope = ref('all')
+  const activeIndex = ref(0)
+  const results = computed(() => search(query.value, scope.value))
+  const active = computed(() => results.value[activeIndex.value])
+  const listId = useId()
+
+  // 键盘全在输入框上：焦点一直留在输入框，用 aria-activedescendant 指向高亮项
+  function onKeydown(event: KeyboardEvent) {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      move(event.key === 'ArrowDown' ? 1 : -1)
+    }
+    else if (event.key === 'Enter') {
+      event.preventDefault()
+      run(active.value)
+    }
+    else if (event.key === 'Escape' && query.value) {
+      event.preventDefault()
+      query.value = ''
+    }
+    else if (event.key === 'Escape' && scope.value !== 'all') {
+      event.preventDefault()
+      scope.value = 'all'
+    }
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Launcher" @enter="playTyping">
+      <div class="launcher">
+        <TxGlassSurface width="100%" height="100%" :border-radius="18">
+          <TxSearchInput
+            v-model="query"
+            role="combobox"
+            aria-expanded="true"
+            :aria-controls="listId"
+            :aria-activedescendant="`${listId}-${activeIndex}`"
+            @keydown="onKeydown"
+          />
+          <TxFilterChips v-model="scope" :items="scopes" />
+          <div :id="listId" role="listbox">
+            <div
+              v-for="(item, index) in results"
+              :id="`${listId}-${index}`"
+              :key="item.id"
+              role="option"
+              :aria-selected="index === activeIndex"
+            >
+              <TxIconChip :size="30" :tone="item.tone" variant="soft">
+                <i :class="item.icon" />
+              </TxIconChip>
+              {{ item.title }}
+              <TxTag :label="item.kind" size="sm" variant="soft" />
+              <TxKbd v-if="index < 5">⌘{{ index + 1 }}</TxKbd>
+            </div>
+          </div>
+          <TxMarkdownView :content="active?.preview ?? tips" />
+          <footer>
+            <TxDropdownMenu v-model="actionsOpen" placement="top-end">
+              <!-- 打开、在访达中显示、固定到推荐、停用插件 -->
+            </TxDropdownMenu>
+            <TxStatusBadge text="索引中 82%" status="info" size="sm" />
+          </footer>
+        </TxGlassSurface>
+      </div>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 组成
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 桌面 | [TxIconChip](/docs/dev/components/icon-chip)、手写壁纸与菜单栏 | 令牌渐变壁纸（亮、暗各一套）；宽屏在底部加一排 Dock |
+| 窗体 | [TxGlassSurface](/docs/dev/components/glass-surface) | 折射玻璃窗体；内层再铺一层半透明底色，任何浏览器上文字都清楚 |
+| 输入 | [TxSearchInput](/docs/dev/components/search-input)、[TxKbd](/docs/dev/components/kbd) | combobox 输入框，方向键、↵、Esc 都在这里处理 |
+| 范围 | [TxFilterChips](/docs/dev/components/filter-chips) | 全部、应用、插件、文件、剪贴板、AI、系统；有查询时显示各类命中数 |
+| 结果 | 自建 listbox、[TxIconChip](/docs/dev/components/icon-chip)、[TxTag](/docs/dev/components/tag)、[TxKbd](/docs/dev/components/kbd)、[TxSearchEmpty](/docs/dev/components/search-empty) | 最佳匹配排在前面，命中的字高亮；前五项带 ⌘1–⌘5 提示；无结果时给出「问问 Tuff 智能」 |
+| 预览 | [TxMarkdownView](/docs/dev/components/markdown-view) | 跟着高亮切换的详情；只有一个实例，只换 `content` |
+| 底栏 | [TxDropdownMenu](/docs/dev/components/dropdown-menu)、[TxStatusBadge](/docs/dev/components/status-badge) | 执行结果提示、⌘K 操作菜单、索引进度 |
+
+## 交互要点
+
+- 输入即搜，范围覆盖应用、插件、文件、剪贴板、AI 和系统动作，范围条上的计数跟着查询变。输入 `128*4` 这样的算式，第一行直接给出结果，预览里附十六进制和二进制。
+- ↑ ↓ 移动高亮，预览同步切换，列表只在自己的滚动区里跟随；↵ 执行，底栏左侧显示「已打开…」1.6 秒。⌘K 打开当前结果的操作菜单：打开、在访达中显示、固定到推荐、停用插件；固定的条目会排到推荐的最前面。
+- Esc 分两层：先清空输入，再把范围重置为「全部」，之后的 Esc 不再处理。
+- 没有结果时出现「问问 Tuff 智能」，点击后切到 AI 范围，查询本身变成一条提问。
+- 进入视口后自动演示一次：逐字键入「clip」（直接写入输入值、不聚焦输入框，页面不会被滚动），高亮下移两次，切到「插件」范围后停住。读者一输入或点击就停止；开启「减弱动态效果」时直接显示最终状态。
+- ⌘1–⌘5 只做提示：浏览器保留了 ⌘ 加数字，页面拦截不到。宽屏（≥ 960px）窗体变大并出现 Dock；窄屏（< 640px）收起预览，范围条横向滑动。
+
+## 改造建议
+
+- 接真实数据：把 `CATALOG` 换成索引接口的返回，保留 `kind`、`tone`、`keywords` 三个字段。排序在 `scoreEntry()` 里：标题开头命中 3 分、标题包含 2 分、关键词或副标题命中 1 分。
+- 为什么没用 TxSearchPanel：它不上报高亮项、也不暴露输入框，预览和脚本演示都跟不住。只需要一个内联搜索、不需要预览时，直接用 TxSearchPanel 更省事。
+- 要全局唤起，就把窗体放进 TxModal 或你自己的 Teleport 浮层，键盘逻辑不用改；唤起快捷键同样挂在宿主自己的根节点上，不挂 `window`。
+- 预览 markdown 里不要放链接：TxMarkdownView 渲染的是真的 `<a>`，点了会让页面跳走。桌面应用里改成拦截 click，交给宿主去打开。

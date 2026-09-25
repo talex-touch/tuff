@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. List candidates with `find .trellis/spec -name '*.md'` — note that `get_context.py --mode packages` reports layers only and omits spec/guides, which real manifests do cite. Delete this line once real entries are added."}
+{"file": ".trellis/spec/main-process/channel-transport-contracts.md", "reason": "Port 通道不是分叉：每条信封只走一条路径（port 或 channel 回退）"}
+{"file": "packages/utils/transport/sdk/stream/server-runtime.ts", "reason": "sendWithFallback：port 发送失败才走 channel，从不双发"}
+{"file": "packages/utils/transport/sdk/stream/client-runtime.ts", "reason": "portActive 守卫是丢弃点；修复目标文件"}

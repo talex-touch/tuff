@@ -7,10 +7,16 @@ import type {
 } from '@talex-touch/utils/search'
 import path from 'node:path'
 import type { SearchIndexItem, SearchIndexKeyword } from './search-index-service'
-import type { SearchIndexMutationWriter } from './search-index-writer'
+import type { SearchIndexMutationWriter, UpsertFileRecord } from './search-index-writer'
+import type { PersistAndApplyProviderItemsMetrics } from './workers/search-index-worker-types'
 
 export interface IndexStoreAdapter {
   applyBatch(batch: IndexedSourceRecordBatch): Promise<IndexStoreBatchApplySummary | void>
+  applyBatchWithPersistence?(
+    batch: IndexedSourceRecordBatch,
+    records: UpsertFileRecord[]
+  ): Promise<IndexStoreBatchApplyWithPersistenceSummary>
+
   applyDelta(delta: IndexedSourceDelta): Promise<IndexStoreDeltaApplySummary | void>
   applyDeltas?(
     deltas: readonly IndexedSourceDelta[]
@@ -40,6 +46,10 @@ export interface IndexStoreBatchApplySummary {
   indexedItemCount: number
   done: boolean
   cursor?: string
+}
+export interface IndexStoreBatchApplyWithPersistenceSummary extends IndexStoreBatchApplySummary {
+  persisted: Array<Record<string, unknown>>
+  metrics?: PersistAndApplyProviderItemsMetrics
 }
 
 export interface SearchIndexStoreAdapterOptions {
@@ -259,6 +269,23 @@ export function mapIndexedSourceRecordToSearchIndexItem(
   }
 }
 
+function buildBatchMutation(batch: IndexedSourceRecordBatch): {
+  items: SearchIndexItem[]
+  legacyItemIds: string[]
+} {
+  const items = batch.records
+    .map((record) => mapIndexedSourceRecordToSearchIndexItem(record))
+    .filter((item): item is SearchIndexItem => Boolean(item))
+  const legacyItemIds = Array.from(
+    new Set(
+      batch.records.flatMap((record) =>
+        (record.search?.legacyItemIds ?? []).filter((itemId) => itemId !== resolveItemId(record))
+      )
+    )
+  )
+  return { items, legacyItemIds }
+}
+
 export class SearchIndexStoreAdapter implements IndexStoreAdapter {
   constructor(
     private readonly searchIndex: SearchIndexMutationWriter,
@@ -266,17 +293,7 @@ export class SearchIndexStoreAdapter implements IndexStoreAdapter {
   ) {}
 
   async applyBatch(batch: IndexedSourceRecordBatch): Promise<IndexStoreBatchApplySummary> {
-    const items = batch.records
-      .map((record) => mapIndexedSourceRecordToSearchIndexItem(record))
-      .filter((item): item is SearchIndexItem => Boolean(item))
-    const legacyItemIds = Array.from(
-      new Set(
-        batch.records.flatMap((record) =>
-          (record.search?.legacyItemIds ?? []).filter((itemId) => itemId !== resolveItemId(record))
-        )
-      )
-    )
-
+    const { items, legacyItemIds } = buildBatchMutation(batch)
     if (items.length > 0 || legacyItemIds.length > 0) {
       await this.searchIndex.indexItems(batch.sourceId, items, { legacyItemIds })
     }
@@ -289,6 +306,29 @@ export class SearchIndexStoreAdapter implements IndexStoreAdapter {
       cursor: batch.cursor
     }
 
+    await this.options.onBatchApplied?.(summary, batch)
+    return summary
+  }
+
+  async applyBatchWithPersistence(
+    batch: IndexedSourceRecordBatch,
+    records: UpsertFileRecord[]
+  ): Promise<IndexStoreBatchApplyWithPersistenceSummary> {
+    const fusedWrite = this.searchIndex.persistAndIndexFiles
+    if (!fusedWrite) {
+      throw new Error(`INDEX_STORE_FUSED_FILE_WRITE_UNAVAILABLE:${batch.sourceId}`)
+    }
+    const { items, legacyItemIds } = buildBatchMutation(batch)
+    const result = await fusedWrite(batch.sourceId, records, items, { legacyItemIds })
+    const summary: IndexStoreBatchApplyWithPersistenceSummary = {
+      sourceId: batch.sourceId,
+      recordCount: batch.records.length,
+      indexedItemCount: items.length,
+      done: batch.done === true,
+      cursor: batch.cursor,
+      persisted: result.persisted,
+      metrics: result.metrics
+    }
     await this.options.onBatchApplied?.(summary, batch)
     return summary
   }

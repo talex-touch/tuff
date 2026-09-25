@@ -65,7 +65,7 @@ describe('AppScanner.resolveAppInfoByPath', () => {
     expect(resolution).toMatchObject({ ok: false, outcome: 'failed' })
   })
 
-  it('treats a bundle without a manifest as terminal', async () => {
+  it('treats a bundle that is gone from disk as terminal', async () => {
     const { appScanner } = await import('./app-scanner')
     darwinGetAppInfoMock.mockResolvedValue(null)
     vi.spyOn(fs, 'access').mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
@@ -73,6 +73,23 @@ describe('AppScanner.resolveAppInfoByPath', () => {
     const resolution = await appScanner.resolveAppInfoByPath(APP_PATH)
 
     expect(resolution).toMatchObject({ ok: false, outcome: 'not-app' })
+  })
+
+  it('retries a bundle whose directory exists but whose manifest is not readable yet', async () => {
+    // Dragging an app into /Applications fires the add event on the directory before Finder has
+    // copied Contents/Info.plist. Calling that "not an app" was terminal, so a large app could
+    // stay out of the index for good; the 2s/8s/30s ladder covers the copy instead.
+    const { appScanner } = await import('./app-scanner')
+    darwinGetAppInfoMock.mockResolvedValue(null)
+    vi.spyOn(fs, 'access').mockImplementation(async (target) => {
+      if (String(target).endsWith('Info.plist')) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+    })
+
+    const resolution = await appScanner.resolveAppInfoByPath(APP_PATH)
+
+    expect(resolution).toMatchObject({ ok: false, outcome: 'failed' })
   })
 
   it('treats an unresolved but still-present bundle as retryable', async () => {

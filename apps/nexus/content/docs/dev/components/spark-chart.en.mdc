@@ -82,6 +82,8 @@ The default `curve="monotone"` uses the same d3 curve factory as the full `@tale
 | `domain` | `[number, number]` | — | Fixed value range; omit to fit the data. |
 | `activeIndex` | `number \| null` | — | Controlled highlighted sample. |
 | `interactive` | `boolean` | `true` | Enables pointer and keyboard hover state. |
+| `baseline` | `boolean` | `true` | Dashed rule at each series' **own starting value**. Without a reference the eye can see that a line wobbles but not whether it ended up above or below where it began. Per series rather than one shared zero line, because two series on one spark chart rarely share a scale. |
+| `endpoint` | `boolean` | `true` | Filled dot on each series' last sample. The line's end is the current value — the one number the reader is after — and a stroke alone gives it no more weight than any midpoint. |
 | `animation` | `boolean` | `true` | ECharts-parity 1000ms enter reveal and 500ms updates. |
 | `ariaLabel` | `string` | — | Accessible name for the canvas. |
 

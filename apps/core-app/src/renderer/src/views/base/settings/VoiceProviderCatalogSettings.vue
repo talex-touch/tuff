@@ -22,18 +22,10 @@ const busy = ref<'load' | 'check' | 'sync' | 'rollback' | null>(null)
 const loadFailed = ref(false)
 const authBusy = computed(() => authLoadingState.isSigningIn || authLoadingState.isLoggingIn)
 
-function shortHash(value: string): string {
-  return value.slice(0, 12)
-}
-
 const activeLabel = computed(() => {
   const active = status.value?.active
   return active
-    ? t('settingSpeechRecognition.catalog.activeDescription', {
-        packId: active.packId,
-        version: active.version,
-        hash: shortHash(active.payloadSha256)
-      })
+    ? t('settingSpeechRecognition.catalog.activeDescription', { version: active.version })
     : t('settingSpeechRecognition.catalog.builtinDescription')
 })
 
@@ -52,9 +44,7 @@ const healthLabel = computed(() => {
   }
   if (candidate.value) {
     return t('settingSpeechRecognition.catalog.updateDescription', {
-      packId: candidate.value.packId,
-      version: candidate.value.version,
-      hash: shortHash(candidate.value.payloadSha256)
+      version: candidate.value.version
     })
   }
   return t('settingSpeechRecognition.catalog.currentDescription')
@@ -157,7 +147,6 @@ onMounted(() => {
   <TuffGroupBlock
     class="VoiceProviderCatalogSettings"
     :name="t('settingSpeechRecognition.catalog.title')"
-    :description="t('settingSpeechRecognition.catalog.description')"
     default-icon="i-carbon-cloud-service-management"
     active-icon="i-carbon-cloud-satellite-services"
     memory-name="voice-provider-catalog"
@@ -165,6 +154,7 @@ onMounted(() => {
     <TuffBlockSlot
       :title="t('settingSpeechRecognition.catalog.activeTitle')"
       :description="activeLabel"
+      default-icon="i-carbon-cloud-download"
       data-testid="voice-provider-catalog-active"
     >
       <TxButton

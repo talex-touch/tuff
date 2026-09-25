@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { performance } from 'node:perf_hooks'
 import type { CoreBoxSearchIndexCommitPayload } from '@talex-touch/utils/transport/events/types'
 import type {
   SearchIndexItem,
@@ -16,7 +18,10 @@ import type {
   PersistEntriesSummary,
   UpsertFileRecord
 } from './file-index-persistence-repository'
-import type { ExecWriteResult } from './workers/search-index-worker-types'
+import type {
+  ExecWriteResult,
+  PersistAndApplyProviderItemsMetrics
+} from './workers/search-index-worker-types'
 import { SearchIndexWorkerClient } from './workers/search-index-worker-client'
 
 export type {
@@ -28,6 +33,8 @@ export type {
 } from './file-index-persistence-repository'
 
 const searchIndexWriterLog = createLogger('SearchIndex').child('Writer')
+/** Set for the duration of a `withPausedAdmission` operation, so its own writes bypass the gate. */
+const pausedAdmissionScope = new AsyncLocalStorage<true>()
 const VISIBILITY_RETRY_DELAYS_MS = [100, 500, 2_000] as const
 
 export type SearchIndexWriterMode = 'runtime' | 'legacy'
@@ -59,6 +66,18 @@ export interface SearchIndexWriterCommit {
   committedAt: number | null
 }
 
+export interface SearchIndexPersistAndIndexResult {
+  persisted: Array<Record<string, unknown>>
+  commit: SearchIndexWriterCommit
+  metrics?: PersistAndApplyProviderItemsMetrics
+}
+
+export interface SearchIndexPersistAndApplyResult {
+  persisted: Array<Record<string, unknown>>
+  affectedItems: number
+  metrics?: PersistAndApplyProviderItemsMetrics
+}
+
 export type SearchIndexReplacementSummary = SearchIndexProviderReplacementSummary
 
 export interface SearchIndexWriterStatus {
@@ -75,6 +94,13 @@ export interface SearchIndexPhysicalWriter {
     items: SearchIndexItem[],
     legacyItemIds?: readonly string[]
   ): Promise<number>
+  persistAndApplyProviderItems?(
+    records: UpsertFileRecord[],
+    sourceId: string,
+    items: SearchIndexItem[],
+    legacyItemIds?: readonly string[]
+  ): Promise<SearchIndexPersistAndApplyResult>
+
   beginSourceReplacement(sourceId: string, replacementId: string): Promise<void>
   stageSourceReplacement(
     sourceId: string,
@@ -104,6 +130,12 @@ export interface SearchIndexMutationWriter {
     items: SearchIndexItem[],
     options?: { legacyItemIds?: readonly string[] }
   ): Promise<SearchIndexWriterCommit>
+  persistAndIndexFiles?(
+    sourceId: string,
+    records: UpsertFileRecord[],
+    items: SearchIndexItem[],
+    options?: { legacyItemIds?: readonly string[] }
+  ): Promise<SearchIndexPersistAndIndexResult>
   beginSourceReplacement(sourceId: string, replacementId: string): Promise<void>
   stageSourceReplacement(
     sourceId: string,
@@ -238,6 +270,29 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
       return summary.removedItems + summary.indexedItems
     })
   }
+  async persistAndApplyProviderItems(
+    records: UpsertFileRecord[],
+    sourceId: string,
+    items: SearchIndexItem[],
+    legacyItemIds: readonly string[] = []
+  ): Promise<SearchIndexPersistAndApplyResult> {
+    if (records.length === 0 && items.length === 0 && legacyItemIds.length === 0) {
+      return { persisted: [], affectedItems: 0 }
+    }
+    return await this.withAdmission(async () => {
+      const result = await this.client.persistAndApplyProviderItems(
+        records,
+        sourceId,
+        items,
+        legacyItemIds
+      )
+      return {
+        persisted: result.persisted,
+        affectedItems: result.summary.removedItems + result.summary.indexedItems,
+        metrics: result.metrics
+      }
+    })
+  }
 
   async beginSourceReplacement(sourceId: string, replacementId: string): Promise<void> {
     await this.withAdmission(
@@ -324,7 +379,13 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
     })
     try {
       await this.drain(timeoutMs)
-      return await operation(this.getStatus())
+      // The pause exists so that `operation` can mutate the index alone. Its own writes run in
+      // this async scope, which `withAdmission` recognises and lets through; every other
+      // context still waits at the gate. Without the scope the manual rebuild deadlocked: the
+      // reset it runs clears scan_progress through this very writer, and that write sat behind
+      // the gate its own caller was holding, so the rebuild never finished and the reset task
+      // gate stayed running for the rest of the session.
+      return await pausedAdmissionScope.run(true, async () => await operation(this.getStatus()))
     } finally {
       const resume = this.resumeAdmission
       this.admissionGate = null
@@ -350,7 +411,11 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
 
   private async withAdmission<T>(operation: () => Promise<T>): Promise<T> {
     if (this.closed) throw new Error('SEARCH_INDEX_WRITER_CLOSED')
-    while (this.admissionGate) await this.admissionGate
+    // A write issued by the operation that is holding the pause is admitted immediately; see
+    // `withPausedAdmission`. The gate is for everyone else.
+    if (!pausedAdmissionScope.getStore()) {
+      while (this.admissionGate) await this.admissionGate
+    }
     if (this.closed) throw new Error('SEARCH_INDEX_WRITER_CLOSED')
 
     this.activeAdmissions += 1
@@ -477,6 +542,38 @@ export class SourceScopedIndexWriterRouter implements SearchIndexMutationWriter 
       ...items.map((item) => item.itemId),
       ...(options.legacyItemIds ?? [])
     ])
+  }
+  async persistAndIndexFiles(
+    sourceId: string,
+    records: UpsertFileRecord[],
+    items: SearchIndexItem[],
+    options: { legacyItemIds?: readonly string[] } = {}
+  ): Promise<SearchIndexPersistAndIndexResult> {
+    const writer = this.resolveWriter(sourceId)
+    if (!writer.persistAndApplyProviderItems) {
+      throw new Error(`SEARCH_INDEX_FUSED_FILE_WRITE_UNAVAILABLE:${sourceId}:${writer.mode}`)
+    }
+    const result = await writer.persistAndApplyProviderItems(
+      records,
+      sourceId,
+      items,
+      options.legacyItemIds
+    )
+    const visibilityStartedAt = performance.now()
+    const commit = await this.publishCommit(sourceId, 'index', writer.mode, result.affectedItems, [
+      ...items.map((item) => item.itemId),
+      ...(options.legacyItemIds ?? [])
+    ])
+    return {
+      persisted: result.persisted,
+      commit,
+      metrics: result.metrics
+        ? {
+            ...result.metrics,
+            visibilityDurationMs: performance.now() - visibilityStartedAt
+          }
+        : undefined
+    }
   }
 
   async beginSourceReplacement(sourceId: string, replacementId: string): Promise<void> {

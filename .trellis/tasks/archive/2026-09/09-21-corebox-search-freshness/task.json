@@ -1,0 +1,32 @@
+{
+  "id": "corebox-search-freshness",
+  "name": "corebox-search-freshness",
+  "title": "CoreBox 搜索体验与索引新鲜度修复（父任务）",
+  "description": "真机审计后的五项修复：重建索引自锁、commit 流变聋、Spotlight 层级与窗口抽动、应用新鲜度加固、搜索热路径卫生",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-21",
+  "completedAt": "2026-09-21",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-21-file-index-rebuild-deadlock",
+    "09-21-index-commit-stream-liveness",
+    "09-21-spotlight-deferred-height-hysteresis",
+    "09-21-app-freshness-hardening",
+    "09-21-search-hotpath-hygiene"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

@@ -4,7 +4,6 @@ import type { CatalogPackDiagnostic, CatalogStatus } from '@talex-touch/utils/i1
 import type { CatalogVoiceProviderSyncResponse } from '@talex-touch/utils/transport/events/types/catalog'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as VueModule from 'vue'
-import mockZhCN from '~/modules/lang/zh-CN.json'
 
 const mocks = vi.hoisted(() => {
   const { ref } = require('vue') as typeof VueModule
@@ -62,15 +61,12 @@ vi.mock('~/components/tuff/TuffGroupBlock.vue', () => ({
 
 vi.mock('vue-sonner', () => ({ toast: mocks.toast }))
 
-// Resolve the group copy from the shipped locale so the assertion tracks what users read,
-// while every other key stays a key so structural assertions are not copy-coupled.
+// Every key stays a key: structural assertions must not be coupled to shipped copy.
 vi.mock('vue-i18n', () => {
-  const envelopeCopy = mockZhCN.settingSpeechRecognition.catalog.description
   return {
     useI18n: () => ({
       t: (key: string, params?: Record<string, unknown>) => {
-        const base = key === 'settingSpeechRecognition.catalog.description' ? envelopeCopy : key
-        return params ? `${base}(${Object.values(params).join(',')})` : base
+        return params ? `${key}(${Object.values(params).join(',')})` : key
       }
     })
   }
@@ -173,7 +169,7 @@ describe('VoiceProviderCatalogSettings', () => {
     mocks.auth.isLoggedIn.value = true
   })
 
-  it('projects the active pack identity on load without leaking diagnostic payloads', async () => {
+  it('projects the active pack version on load without leaking diagnostic payloads', async () => {
     mocks.catalog.getStatus.mockResolvedValue({
       status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
     })
@@ -181,8 +177,8 @@ describe('VoiceProviderCatalogSettings', () => {
     const wrapper = await mountCatalog()
 
     const active = wrapper.get(ACTIVE)
-    expect(active.text()).toContain(PACK_ID)
     expect(active.text()).toContain('2.1.0')
+    expect(active.text()).not.toContain(PACK_ID)
     expectNoCanaries(wrapper)
     expect(wrapper.findAll(ROLLBACK_ROW)).toHaveLength(0)
 
@@ -209,21 +205,6 @@ describe('VoiceProviderCatalogSettings', () => {
     expect(row.text()).toContain('1.4.0')
     expect(row.text()).not.toContain('2.1.0')
     withPrevious.unmount()
-  })
-
-  it('states the encrypted-envelope terms in the group copy without exposing key material', async () => {
-    mocks.catalog.getStatus.mockResolvedValue({
-      status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
-    })
-
-    const wrapper = await mountCatalog()
-
-    const copy = wrapper.findComponent({ name: 'TuffGroupBlock' }).props('description')
-    expect(copy).toContain('AES-256-GCM')
-    expect(copy).not.toContain(KEY_MATERIAL_CANARY)
-    expectNoCanaries(wrapper)
-
-    wrapper.unmount()
   })
 
   it('only claims the catalogue is current after a completed check', async () => {
@@ -254,7 +235,7 @@ describe('VoiceProviderCatalogSettings', () => {
     wrapper.unmount()
   })
 
-  it('renders the checked candidate identity instead of the active pack when an update exists', async () => {
+  it('renders the checked candidate version instead of the active pack when an update exists', async () => {
     mocks.catalog.getStatus.mockResolvedValue({
       status: statusOf({ active: diagnostic(PACK_ID, '2.1.0') })
     })
@@ -270,8 +251,8 @@ describe('VoiceProviderCatalogSettings', () => {
 
     expect(mocks.catalog.checkUpdates).toHaveBeenCalledTimes(1)
     const status = wrapper.get(STATUS)
-    expect(status.text()).toContain(PACK_ID)
     expect(status.text()).toContain('3.0.0')
+    expect(status.text()).not.toContain(PACK_ID)
     expect(status.text()).not.toContain('2.1.0')
     expectNoCanaries(wrapper)
 

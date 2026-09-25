@@ -112,43 +112,50 @@ const insightColor = computed(() => {
   return resolveInsightColor((insightValue.value ?? 0) >= 0 ? 'success' : 'danger')
 })
 
-const insightIconClass = computed(() => {
-  if (!hasInsight.value)
-    return ''
-  if (props.insight?.iconClass)
-    return props.insight.iconClass
-  return (insightValue.value ?? 0) >= 0 ? 'i-carbon-growth' : 'i-carbon-arrow-down'
-})
+// The default trend glyph is drawn inline: an icon class would only render if
+// the host's utility engine happened to scan this file, and when it did not the
+// pill kept an empty 14px slot in front of the number.
+const customInsightIconClass = computed(() => (hasInsight.value ? props.insight?.iconClass ?? '' : ''))
+const insightTrendDown = computed(() => (insightValue.value ?? 0) < 0)
 
-const buildGlowColor = (color: string, alpha: number) => {
-  const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i)
-  if (!match)
-    return null
-  const [, r, g, b] = match
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+const glowTinted = ref(false)
+
+// Channels of a computed colour, 0–255. Chromium reports `rgb()` for plain
+// colours and `color(srgb …)` for mixed ones; anything else is left tinted.
+function parseChannels(color: string): [number, number, number] | null {
+  const rgb = color.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i)
+  if (rgb)
+    return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])]
+  const srgb = color.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i)
+  if (srgb)
+    return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255]
+  return null
+}
+
+// A grey icon has no hue to glow with. Mixed into the glow it reads as a smudge
+// of fog behind the number, which is what an untinted `iconClass` produced.
+function isNeutralColor(color: string) {
+  const channels = parseChannels(color)
+  if (!channels)
+    return false
+  return Math.max(...channels) - Math.min(...channels) < 24
 }
 
 const resetGlowVars = () => {
-  if (!cardRef.value)
-    return
-  cardRef.value.style.removeProperty('--tx-stat-card-icon-color')
-  cardRef.value.style.removeProperty('--tx-stat-card-glow-color')
-  cardRef.value.style.removeProperty('--tx-stat-card-glow-color-soft')
+  glowTinted.value = false
+  cardRef.value?.style.removeProperty('--tx-stat-card-icon-color')
 }
 
 const updateGlowVars = () => {
   if (!cardRef.value || !iconRef.value || !props.iconClass)
     return
   const iconColor = getComputedStyle(iconRef.value).color
-  if (!iconColor)
+  if (!iconColor || isNeutralColor(iconColor)) {
+    resetGlowVars()
     return
+  }
   cardRef.value.style.setProperty('--tx-stat-card-icon-color', iconColor)
-  const glowColor = buildGlowColor(iconColor, 0.42)
-  const glowSoftColor = buildGlowColor(iconColor, 0.18)
-  if (glowColor)
-    cardRef.value.style.setProperty('--tx-stat-card-glow-color', glowColor)
-  if (glowSoftColor)
-    cardRef.value.style.setProperty('--tx-stat-card-glow-color-soft', glowSoftColor)
+  glowTinted.value = true
 }
 
 const triggerGlow = () => {
@@ -214,6 +221,7 @@ watch(
     :class="{
       'tx-stat-card--clickable': clickable,
       'tx-stat-card--glow-in': glowReady,
+      'tx-stat-card--tinted': glowTinted,
       'tx-stat-card--insight': hasInsight,
       'tx-stat-card--progress': isProgressVariant,
     }"
@@ -221,6 +229,10 @@ watch(
     :aria-label="ariaLabel || undefined"
     :aria-labelledby="ariaLabel ? undefined : labelId"
   >
+    <div v-if="iconClass && !isProgressVariant" class="tx-stat-card__decoration" aria-hidden="true">
+      <span class="tx-stat-card__glow" />
+    </div>
+
     <div v-if="iconClass && !isProgressVariant" class="tx-stat-card__icon-layer" aria-hidden="true">
       <i ref="iconRef" class="tx-stat-card__icon" :class="iconClass" />
     </div>
@@ -257,10 +269,16 @@ watch(
       </div>
 
       <div v-else-if="hasInsight" class="tx-stat-card__insight" :style="{ color: insightColor || undefined }">
-        <i class="tx-stat-card__insight-icon" :class="insightIconClass" aria-hidden="true" />
-        <span v-if="insightPrefix" class="tx-stat-card__insight-prefix">{{ insightPrefix }}</span>
-        <span v-if="insightValue != null" class="tx-stat-card__insight-value">{{ insightDisplayText }}</span>
-        <span v-if="insightSuffix" class="tx-stat-card__insight-suffix">{{ insightSuffix }}</span>
+        <i v-if="customInsightIconClass" class="tx-stat-card__insight-icon" :class="customInsightIconClass" aria-hidden="true" />
+        <svg v-else class="tx-stat-card__insight-icon tx-stat-card__insight-icon--trend" viewBox="0 0 16 16" aria-hidden="true">
+          <path v-if="insightTrendDown" d="M4.5 4.5l7 7M11.5 6v5.5H6" />
+          <path v-else d="M4.5 11.5l7-7M6 4.5h5.5V10" />
+        </svg>
+        <span class="tx-stat-card__insight-text">
+          <span v-if="insightPrefix" class="tx-stat-card__insight-prefix">{{ insightPrefix }}</span>
+          <span v-if="insightValue != null" class="tx-stat-card__insight-value">{{ insightDisplayText }}</span>
+          <span v-if="insightSuffix" class="tx-stat-card__insight-suffix">{{ insightSuffix }}</span>
+        </span>
       </div>
       <div v-else-if="isProgressVariant && ($slots.meta || meta)" class="tx-stat-card__meta">
         <slot name="meta">
@@ -268,21 +286,16 @@ watch(
         </slot>
       </div>
     </div>
-
-    <div v-if="iconClass && !isProgressVariant" class="tx-stat-card__decoration" aria-hidden="true">
-      <span class="tx-stat-card__glow" />
-      <i
-        class="tx-stat-card__decoration-icon"
-        :class="iconClass"
-      />
-    </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
+// Inherited: the value is bound on `.tx-stat-card__progress` and read by its
+// child ring. Registered with `inherits: false`, the ring only ever saw the
+// 0% initial value, so the progress arc was never drawn.
 @property --tx-stat-card-progress {
   syntax: '<percentage>';
-  inherits: false;
+  inherits: true;
   initial-value: 0%;
 }
 
@@ -297,12 +310,14 @@ watch(
 
   --fake-color: var(--tx-bg-color, #fff);
   --fake-opacity: 0.7;
-  --tx-stat-card-icon-color: var(--tx-text-color-primary, #303133);
-  // Only the no-icon default: with an icon, `updateGlowVars` overwrites both from
-  // the icon's computed colour. These were frozen at the library's old primary
-  // (#409eff), so an iconless card glowed a blue the theme no longer uses.
-  --tx-stat-card-glow-color: color-mix(in srgb, var(--tx-color-primary) 42%, transparent);
-  --tx-stat-card-glow-color-soft: color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
+  // `updateGlowVars` overwrites this with the icon's computed colour, and only
+  // for a tinted icon; the glow is mixed from it here so any colour syntax the
+  // browser reports (`rgb()`, `color(srgb …)`, `oklch()`) works unparsed.
+  --tx-stat-card-icon-color: var(--tx-color-primary, #409eff);
+  --tx-stat-card-glow-color: color-mix(in srgb, var(--tx-stat-card-icon-color) 34%, transparent);
+  --tx-stat-card-glow-color-soft: color-mix(in srgb, var(--tx-stat-card-icon-color) 12%, transparent);
+  --tx-stat-card-icon-opacity: 0.16;
+  --tx-stat-card-icon-opacity-hover: 0.26;
 
   background: transparent;
   border: 1px solid var(--tx-border-color-lighter, #eee);
@@ -313,11 +328,6 @@ watch(
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-end;
-
-  transition:
-    transform 0.18s ease,
-    border-color 0.18s ease,
-    background-color 0.18s ease;
 }
 
 .tx-stat-card--insight {
@@ -350,6 +360,8 @@ watch(
 
 .tx-stat-card--insight .tx-stat-card__insight {
   margin-top: auto;
+  // The content column stretches its children; the pill must hug its text.
+  align-self: flex-start;
 }
 
 .tx-stat-card--progress .tx-stat-card__meta {
@@ -361,25 +373,21 @@ watch(
 }
 
 /* Only clickable cards signal interactivity: the pointer cursor lives on
-   .tx-stat-card--clickable, not the generic hover, so a static card doesn't imply a click. */
+   .tx-stat-card--clickable, not the generic hover, so a static card doesn't imply a click.
+   The hover itself is quiet: the edge firms up at once (colour never eases),
+   the corner icon drifts in toward the figures and the glow behind it warms. */
 .tx-stat-card:hover {
   --fake-opacity: 0.75;
   border-color: var(--tx-border-color, #dcdfe6);
 }
 
-.tx-stat-card:hover .tx-stat-card__decoration {
-  transform: scale(2.05);
-  filter: blur(28px) brightness(160%) saturate(220%);
+.tx-stat-card:hover .tx-stat-card__icon {
+  opacity: var(--tx-stat-card-icon-opacity-hover);
+  transform: translate(-4px, -4px);
 }
 
-.tx-stat-card:hover .tx-stat-card__glow {
-  transform: translateY(-50%) scale(1.2);
-  opacity: 0.75;
-  filter: blur(30px) saturate(220%);
-}
-
-.tx-stat-card:hover .tx-stat-card__icon-layer {
-  transform: scale(1.25) rotate(10deg) translate(-10%, -10%);
+.tx-stat-card--tinted.tx-stat-card--glow-in:hover .tx-stat-card__glow {
+  opacity: 0.85;
 }
 
 .tx-stat-card__content {
@@ -391,6 +399,8 @@ watch(
   font-size: 28px;
   font-weight: 700;
   line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
   color: var(--tx-text-color-primary, #303133);
 }
 
@@ -412,23 +422,42 @@ watch(
   color: var(--tx-text-color-secondary, #909399);
 }
 
+/* One pill, one figure: sign, number and unit sit flush (`+16.7%`); a gap
+   between them read as three separate tokens. The tint is the insight colour
+   itself, so the pill follows success / danger / a custom colour for free. */
 .tx-stat-card__insight {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
   color: var(--tx-color-success, #67c23a);
 }
 
 .tx-stat-card__insight-icon {
-  font-size: 14px;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
 }
 
-.tx-stat-card__insight-prefix,
-.tx-stat-card__insight-suffix {
-  opacity: 0.9;
+.tx-stat-card__insight-icon--trend {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+// Inline text, not a flex row: as flex items the spans would each drop leading
+// white space, so a caller's `suffix: ' pts'` lost the space it asked for.
+.tx-stat-card__insight-text {
+  white-space: nowrap;
 }
 
 .tx-stat-card__progress {
@@ -466,16 +495,13 @@ watch(
   position: absolute;
   inset: 10px;
   border-radius: 999px;
+  // A tint of the ring colour over whatever the card sits on. An `@supports`
+  // override used to mix it into `rgba(0, 0, 0, 0.45)` instead, which reads as a
+  // lens on the dark theme and as a grey blot inside the ring on the light one.
   background: color-mix(in srgb, var(--tx-stat-card-progress-color) 16%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-@supports (color: color-mix(in srgb, #000 50%, transparent)) {
-  .tx-stat-card__progress-inner {
-    background: color-mix(in srgb, var(--tx-stat-card-progress-color) 12%, rgba(0, 0, 0, 0.45));
-  }
 }
 
 .tx-stat-card__progress-icon {
@@ -483,72 +509,76 @@ watch(
   color: var(--tx-stat-card-progress-color);
 }
 
+/* The decorative icon is the card's one flourish: set large, cropped by the
+   bottom-right corner and kept faint, so it reads as a watermark behind the
+   figures rather than a second, competing glyph. Its size is the component's —
+   the selector outranks a host utility such as `text-6xl` — while a colour
+   class on `iconClass` still tints it; an untinted icon inherits the layer's
+   secondary ink. */
 .tx-stat-card__icon-layer {
   position: absolute;
   inset: 0;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
   pointer-events: none;
-  transition: transform 0.35s cubic-bezier(0.33, 1, 0.68, 1);
+  color: var(--tx-text-color-secondary, #909399);
 }
 
 .tx-stat-card__icon {
   position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: -12px;
+  bottom: -16px;
+  font-size: 88px;
+  line-height: 1;
+  opacity: var(--tx-stat-card-icon-opacity);
+  transition:
+    transform 0.35s cubic-bezier(0.33, 1, 0.68, 1),
+    opacity 0.35s ease;
 }
 
 .tx-stat-card__decoration {
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
   pointer-events: none;
-  transform: scale(1.8);
-  filter: blur(22px) brightness(140%) saturate(200%);
-  transition: transform 0.35s cubic-bezier(0.33, 1, 0.68, 1), filter 0.35s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
+/* A soft pool of the icon's own colour under the corner. Only a tinted icon
+   gets one (`tx-stat-card--tinted`): grey has no hue to glow with. */
 .tx-stat-card__glow {
   position: absolute;
-  right: -12px;
-  top: 50%;
+  right: -56px;
+  bottom: -72px;
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  transform: translateY(-50%) scale(0.72);
   background:
     radial-gradient(
       closest-side,
       var(--tx-stat-card-glow-color) 0%,
-      var(--tx-stat-card-glow-color-soft) 45%,
-      transparent 72%
+      var(--tx-stat-card-glow-color-soft) 50%,
+      transparent 100%
     );
   opacity: 0;
-  filter: blur(18px) saturate(160%);
-  transition:
-    transform 0.65s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.65s ease,
-    filter 0.65s ease;
+  transition: opacity 0.6s ease;
 }
 
-.tx-stat-card--glow-in .tx-stat-card__glow {
-  transform: translateY(-50%) scale(1.05);
-  opacity: 0.62;
-  filter: blur(26px) saturate(200%);
+.tx-stat-card--tinted.tx-stat-card--glow-in .tx-stat-card__glow {
+  opacity: 0.6;
 }
 
-.tx-stat-card__decoration-icon {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 64px;
-  line-height: 1;
-  opacity: 0.18;
-  color: var(--tx-stat-card-icon-color, var(--tx-text-color-secondary, #909399));
-  filter: blur(1px) saturate(160%);
+@media (prefers-reduced-motion: reduce) {
+  .tx-stat-card__icon,
+  .tx-stat-card__glow,
+  .tx-stat-card__progress-ring {
+    transition: none;
+  }
+
+  .tx-stat-card:hover .tx-stat-card__icon {
+    transform: none;
+  }
 }
 </style>

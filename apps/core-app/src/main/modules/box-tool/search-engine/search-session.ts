@@ -252,8 +252,16 @@ export class SearchSession {
   complete(payload: Omit<CoreBoxSearchEndPayload, 'searchId'> = {}): boolean {
     if (this.isTerminal) return false
 
-    this.stateValue = payload.cancelled ? 'cancelled' : 'completed'
-    this.pendingTerminal = { ...payload, searchId: this.id }
+    // `cancel()` only aborts the signal; the state stays `running` until someone completes the
+    // session. A completion that arrives after the abort — the gather's own final callback, for
+    // one — used to close the session as finished, so the renderer kept the stale items instead
+    // of resetting. Once aborted, the only truthful terminal is a cancelled one.
+    const cancelled = payload.cancelled === true || this.signal.aborted
+    this.stateValue = cancelled ? 'cancelled' : 'completed'
+    // A normal completion carries no `cancelled` key on the wire; only add it when it is true.
+    this.pendingTerminal = cancelled
+      ? { ...payload, cancelled: true, searchId: this.id }
+      : { ...payload, searchId: this.id }
     this.scheduleTerminalIfReady()
     return true
   }

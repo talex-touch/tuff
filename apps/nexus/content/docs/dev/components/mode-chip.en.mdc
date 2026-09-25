@@ -1,0 +1,136 @@
+---
+title: "ModeChip"
+description: "A button that names the current mode and morphs in place when it changes: the icon swaps with a scale, the label blur-crossfades, and the tint and width follow."
+category: AiChat
+status: beta
+since: 0.6.0
+tags: [chip, mode, toggle, morph, ai]
+syncStatus: reviewed
+verified: true
+---
+# ModeChip
+
+`TxModeChip` is a native button that names the mode a composer or toolbar is in, such as "Request approval" or "Unrestricted access". When the mode changes, the chip morphs in place:
+
+- the icon swaps first, with a scale, inside a fixed-size box;
+- 50ms later, the label blur-crossfades;
+- the tint and ink follow the tone, and the width eases to the new label.
+
+Hover changes colour only, and instantly.
+
+## Basic Usage
+
+### ModeChip
+
+Clicking the chip toggles between two modes. The label names the mode in effect, so the chip carries no `aria-pressed`.
+
+:::TuffDemoWrapper{demo="ModeChipModeChipDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxModeChip
+      :icon="unrestricted ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
+      :label="unrestricted ? 'Unrestricted access' : 'Request approval'"
+      :tone="unrestricted ? 'danger' : 'muted'"
+      @click="unrestricted = !unrestricted"
+    />
+  </template>
+---
+:::
+
+### Tones
+
+- `muted` has no fill and regular ink; hover switches it to the primary ink.
+- Every other tone uses its hue's `-light-9` tint as the fill, with an ink that mixes the hue with the primary ink.
+- Each tone's ink contrast was measured at 4.5:1 or better, resting and hovered, in all four theme blocks.
+- `info` reads the primary hue, as `TxStatusBadge` does.
+
+:::TuffDemoWrapper{demo="ModeChipTonesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxModeChip tone="muted" icon="i-carbon-touch-1" label="Request approval" />
+    <TxModeChip tone="info" icon="i-carbon-earth" label="Web search" />
+    <TxModeChip tone="success" icon="i-carbon-checkmark-outline" label="Auto-accept edits" />
+    <TxModeChip tone="warning" icon="i-carbon-warning-alt" label="Plan mode" />
+    <TxModeChip tone="danger" icon="i-carbon-unlocked" label="Unrestricted access" />
+  </template>
+---
+:::
+
+For the chip inside a composer, see the With a Mode Chip and Tray Placement sections of [ChatComposer](/docs/dev/components/chat-composer).
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `label` | `string` | - | Visible text and the button's accessible name. Required |
+| `icon` | `string` | `''` | Leading icon class, as `TxButton` and `TxStatusBadge` take it; no icon box is reserved when empty |
+| `tone` | `'muted' \| 'info' \| 'success' \| 'warning' \| 'danger'` | `'muted'` | Tone, reusing `StatusTone` |
+| `disabled` | `boolean` | `false` | Disables the button |
+
+### Events
+
+No custom events. `click` and other native events, and any other attribute (such as `aria-pressed`, `aria-haspopup` or `title`), fall through to the root `<button>`.
+
+### Slots
+
+No slots. The text comes from `label` only, so every change can run through `TxTextTransformer`'s blur crossfade.
+
+### CSS Variables
+
+| Variable | Description |
+|----------|-------------|
+| `--tx-mode-chip-ink` | Text colour, set per tone |
+| `--tx-mode-chip-ink-hover` | Text colour on hover, set by `muted` only |
+| `--tx-mode-chip-fill` | Fill |
+| `--tx-mode-chip-fill-hover` | Fill on hover |
+
+## Interaction Contract
+
+- Renders a native `<button type="button">`, 28px tall, 13px text, 8px radius. `label` is the accessible name; the icon stays out of it.
+- A change to `label`, `icon` or `tone` starts a morph:
+  - the old icon scales to 0.5 and fades over 160ms inside a 14px box, and the new one grows from 0.5 over 240ms;
+  - 50ms later, the label blur-crossfades through `TxTextTransformer`'s fade mode: the old label is gone in 80ms, and the new one sharpens over 280ms;
+  - the width eases to the new label over 300ms.
+- Fill and ink transition only during a morph (`.is-morphing`, about 350ms). At any other time the chip has no colour transition at all.
+- Hover switches colour instantly: `muted` moves to the primary ink; the other tones deepen their fill and keep their ink.
+- A change that arrives mid-morph restarts the clock, and the width continues from wherever it visibly is.
+- While the width grows, the label is clipped by the chip rather than truncated with an ellipsis.
+- Under `prefers-reduced-motion: reduce`, every leg lands at once: no label delay, no width animation, no colour transitions.
+- Where the Web Animations API is missing, the width jumps straight to its new value.
+- Disabled chips are semi-transparent, use the `not-allowed` cursor, and have no hover change.
+
+## Best Practices
+
+- Use it to name the mode in effect. The label already carries the state, so a chip whose label changes with the mode takes no `aria-pressed`: a toggle's name must stay the same in both states (WAI-ARIA APG), or a screen reader announces the active "Request approval" as "not pressed". Keep `aria-pressed` for a chip with a fixed label that turns one mode on and off (Web search), and add `aria-haspopup` when a click opens a menu of modes.
+- Use tone for risk: `muted` for the default or safe mode, `danger` for a mode that lifts a safeguard (unrestricted access). The label and icon must still state the mode on their own, not just the colour.
+- Keep labels to two to four words so the width change reads as a morph.
+- Inside `TxChatComposer`, put it in the `toolbar-left` slot, and use the `muted` tone in the tray.
+- Do not flip it on a timer. Every change is a morph; change it only on a user action or a real change of context.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/mode-chip/src/TxModeChip.vue`.
+- Motion reference: the chip morph in [@flohoeller's Chatbox component clip](https://x.com/flohoeller/status/2102660458658582913), measured frame by frame at about 370ms:
+  - the icon leads;
+  - the old label is gone in about 80ms;
+  - the new one sharpens over about 280ms.
+- The label reuses `TxTextTransformer`'s fade mode; there is no second text-animation engine. The same round fixed that mode's fade-in, which had never run: the setup and animating states were computed in the same style recalc.
+- The contrast table lives in a source comment:
+  - the worst case is `danger` on hover in the light theme, 4.58:1;
+  - plain same-hue ink was rejected at 2.03–2.61:1 in the light theme;
+  - `muted` does not use the secondary ink, which measures 3.08:1 on white and 2.87:1 on the tray.
+- The examples carry no `aria-pressed`: their labels change with the mode, and a toggle's name must stay fixed. Pairing the two was rejected because a screen reader then announces the active "Request approval" as "not pressed".
+- Colour transitions live only on `.is-morphing`, so a morph can ease its colours while hover still obeys the "hover colour changes are immediate" design rule.
+- Naming: not `StateChip`, because `*-state` in this library means the full-page state views (EmptyState, ErrorState and the rest).
+- **Verified coverage:** Coverage:
+  - `mode-chip/__tests__/mode-chip.test.ts` covers the native button and attribute fallthrough, the accessible name, the fade (not morph) path, the default tone, no icon box without an icon, and SSR;
+  - the same file covers the keyed icon swap, the 50ms label lead, `.is-morphing`'s length and restart, the width transitions (including when an icon appears), no-WAAPI, unmount cleanup, and reduced motion;
+  - `mode-chip-motion.test.ts` pins the compiled style: colour transitions only during a morph, no colour on the label layers, no hover transition, a reduced-motion stop for every tween, the tone fill and ink recipe, and a fallback on every `var()`.
+
+## Source
+
+<TuffDocSourceLink />

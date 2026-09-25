@@ -63,7 +63,7 @@ describe('TuffPluginTransport.stream', () => {
     }
   }
 
-  it('receives session and snapshot once through the preloaded port handoff and acknowledges confirmation', async () => {
+  it('delivers port chunks and interleaved bridge chunks through the preloaded port handoff and acknowledges confirmation', async () => {
     const harness = createPortHandoffHarness()
     const disposeHandoff = installTransportPortHandoff(
       harness.ipcRenderer,
@@ -103,10 +103,14 @@ describe('TuffPluginTransport.stream', () => {
     const controller = await transport.stream(ClipboardEvents.change, undefined, {
       onData: chunk => {
         chunks.push(chunk)
-        handlers.get(`${eventName}:stream:data:${streamId}`)?.({
-          header: { status: 'request' },
-          data: { chunk: { source: 'channel-duplicate' } },
-        })
+        // Main lost the port record between two port chunks: one envelope arrives over the
+        // bridge. Single-path delivery means it is real data, not a duplicate.
+        if (chunks.length === 1) {
+          handlers.get(`${eventName}:stream:data:${streamId}`)?.({
+            header: { status: 'request' },
+            data: { chunk: { source: 'bridge-after-port' } },
+          })
+        }
       },
       onEnd: () => {
         endCount += 1
@@ -132,7 +136,11 @@ describe('TuffPluginTransport.stream', () => {
     pair.sender.postMessage({ channel: eventName, portId, streamId, type: 'end' })
 
     await terminal
-    expect(chunks).toEqual([{ phase: 'session' }, { phase: 'snapshot' }])
+    expect(chunks).toEqual([
+      { phase: 'session' },
+      { source: 'bridge-after-port' },
+      { phase: 'snapshot' },
+    ])
     expect(endCount).toBe(1)
     expect(sent).toContainEqual({
       eventName: TransportEvents.port.confirm.toEventName(),

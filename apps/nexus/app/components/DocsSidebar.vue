@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DocSection from './docs/DocSection.vue'
+import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { hasWindow } from '@talex-touch/utils/env'
 import type { DocsSuiteKey } from '~/utils/docs-suites'
 import { coerceJsonArray } from '~/utils/docs-api'
@@ -32,7 +33,7 @@ const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
 }
 
 const route = useRoute()
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const navRef = ref<HTMLElement | null>(null)
 const sidebarHydrated = ref(false)
 const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
@@ -222,6 +223,27 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/icons',
     '/docs/dev/components/accessibility',
     '/docs/dev/components/utils',
+    '/docs/dev/components/sound',
+    // ── suite: templates — no overview; the tab lands on the first template
+    // templates — App shells
+    '/docs/dev/components/template-shell',
+    '/docs/dev/components/template-launcher',
+    '/docs/dev/components/template-settings',
+    '/docs/dev/components/template-onboarding',
+    // templates — Content
+    '/docs/dev/components/template-cms',
+    '/docs/dev/components/template-gallery',
+    '/docs/dev/components/template-inbox',
+    '/docs/dev/components/template-files',
+    '/docs/dev/components/template-store',
+    '/docs/dev/components/template-docs',
+    // templates — AI apps
+    '/docs/dev/components/template-agent-chat',
+    '/docs/dev/components/template-research',
+    // templates — Data & flow
+    '/docs/dev/components/template-dashboard',
+    '/docs/dev/components/template-automation',
+    '/docs/dev/components/template-release',
     // ── suite: base — overview
     '/docs/dev/components/base-suite',
     // base — Basic
@@ -303,6 +325,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/popover',
     '/docs/dev/components/tooltip',
     '/docs/dev/components/toast',
+    '/docs/dev/components/toast-panel',
     '/docs/dev/components/alert',
     '/docs/dev/components/progress',
     '/docs/dev/components/progress-bar',
@@ -363,6 +386,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/chat-composer',
     '/docs/dev/components/prompt-bar',
     '/docs/dev/components/attachment-tray',
+    '/docs/dev/components/mode-chip',
     '/docs/dev/components/message-actions',
     '/docs/dev/components/suggestion-chips',
     '/docs/dev/components/typing-indicator',
@@ -370,6 +394,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     // ai — AiAgent
     '/docs/dev/components/agents',
     '/docs/dev/components/agent-trace',
+    '/docs/dev/components/agent-screen',
     '/docs/dev/components/task-rows',
     '/docs/dev/components/tool-call-card',
     '/docs/dev/components/tool-chips',
@@ -405,6 +430,10 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/allocation-bar',
     '/docs/dev/components/diff-table',
     '/docs/dev/components/signal-meter',
+    // ── suite: flow — overview
+    '/docs/dev/components/flow-suite',
+    // flow — Flow
+    '/docs/dev/components/flowchart',
   ],
   '/docs/dev/reference': [
     '/docs/dev/reference/index',
@@ -439,13 +468,13 @@ const SECTION_ORDER: Record<string, string[]> = {
   ],
 }
 
-// Component docs are split into five suites (concepts / base / pro / ai / data).
-// Categories and their suite assignment mirror
+// Component docs are split into seven suites (concepts / templates / base / pro /
+// ai / data / flow). Categories and their suite assignment mirror
 // scripts/recategorize-component-docs.py — keep the two files in sync. The
-// tuffex entry barrels stay base/pro/ai: 'data' is a docs-level split
+// tuffex entry barrels stay base/pro/ai: 'data' and 'flow' are docs-level splits
 // (Visualization components and the chart family both import from the pro
 // barrel; the chart family also ships behind the @talex-touch/tuffex/charts
-// subpath).
+// subpath, and the flow family ships from the ai barrel).
 type SuiteKey = DocsSuiteKey
 
 interface SuiteDef {
@@ -455,6 +484,8 @@ interface SuiteDef {
   // Rendered as flat links above the groups. The first one is the suite's
   // overview page, which picking the tab navigates to.
   standalonePages: string[]
+  // Where picking the tab lands when the suite has no overview page.
+  entryPage?: string
 }
 
 // Category groups come from the shared taxonomy so the sidebar and the suite
@@ -482,7 +513,17 @@ const SUITES = computed<SuiteDef[]>(() => [
       '/docs/dev/components/icons',
       '/docs/dev/components/accessibility',
       '/docs/dev/components/utils',
+      '/docs/dev/components/sound',
     ],
+  },
+  {
+    key: 'templates',
+    label: t('docsSidebar.suites.templates'),
+    categories: suiteCategories('templates'),
+    // Full-page compositions, not components: there is no overview page, so the
+    // tab lands on the first template instead.
+    standalonePages: [],
+    entryPage: '/docs/dev/components/template-shell',
   },
   {
     key: 'base',
@@ -507,6 +548,12 @@ const SUITES = computed<SuiteDef[]>(() => [
     label: t('docsSidebar.suites.data'),
     categories: suiteCategories('data'),
     standalonePages: ['/docs/dev/components/data-suite'],
+  },
+  {
+    key: 'flow',
+    label: t('docsSidebar.suites.flow'),
+    categories: suiteCategories('flow'),
+    standalonePages: ['/docs/dev/components/flow-suite'],
   },
 ])
 
@@ -542,18 +589,114 @@ const suiteOfRoute = computed<SuiteKey | null>(() => {
     item => canonicalDocsPageIdentity(item.normalizedPath) === here,
   )
   const category = current?.category
-  return category ? (CATEGORY_SUITE_MAP[category] ?? null) : null
+  if (category)
+    return CATEGORY_SUITE_MAP[category] ?? null
+  // Before the metadata lands (and during SSR) a suite's own standalone pages —
+  // its overview, the concepts pages — still name it. Without this the switcher
+  // read "Basics" on the Concepts overview until the fetch resolved.
+  return SUITES.value.find(suite =>
+    suite.standalonePages.some(page => canonicalDocsPageIdentity(page) === here),
+  )?.key ?? null
 })
 
-// SSR and the first client frame both resolve to 'base' (componentItems is a
-// client-only lazy fetch), so server and client markup agree; the suite may then
-// snap to the route's suite once metadata arrives — a reactive update, not a
-// hydration mismatch.
+// SSR and the first client frame resolve the suite the same way — from the
+// route's standalone pages, else 'base' (componentItems is a client-only lazy
+// fetch) — so server and client markup agree; on a component page the suite may
+// then snap to the route's suite once metadata arrives — a reactive update, not
+// a hydration mismatch.
 const activeSuite = computed<SuiteKey>(() => selectedSuite.value ?? suiteOfRoute.value ?? 'base')
 
 const activeSuiteDef = computed<SuiteDef>(
   () => SUITES.value.find(suite => suite.key === activeSuite.value) ?? SUITES.value[0]!,
 )
+
+// Suite switcher. The menu renders `SUITES` as-is, so a suite added there shows
+// up without touching this block; one missing from the icon table falls back.
+const SUITE_ICONS: Partial<Record<SuiteKey, string>> = {
+  concepts: 'i-carbon-idea',
+  templates: 'i-carbon-template',
+  base: 'i-carbon-apps',
+  pro: 'i-carbon-magic-wand',
+  ai: 'i-carbon-bot',
+  data: 'i-carbon-chart-line-data',
+  flow: 'i-carbon-flow',
+}
+
+function suiteIcon(key: SuiteKey) {
+  return SUITE_ICONS[key] ?? 'i-carbon-folder'
+}
+
+function suiteDescription(key: SuiteKey) {
+  const messageKey = `docsSidebar.suiteDescriptions.${key}`
+  return te(messageKey) ? t(messageKey) : ''
+}
+
+// Pages per suite, counted off the component metadata; empty until it lands.
+const suiteDocCounts = computed(() => {
+  const counts: Partial<Record<SuiteKey, number>> = {}
+  for (const item of componentItems.value) {
+    const suite = item.category ? CATEGORY_SUITE_MAP[item.category] : undefined
+    if (suite)
+      counts[suite] = (counts[suite] ?? 0) + 1
+  }
+  return counts
+})
+
+const suiteMenuOpen = ref(false)
+const suiteTriggerRef = ref<HTMLButtonElement | null>(null)
+let suiteFocusFrame: number | null = null
+
+function visibleSuiteOptions() {
+  return [...document.querySelectorAll<HTMLElement>('.docs-suite-option')]
+    .filter(option => option.getClientRects().length > 0)
+}
+
+function cancelSuiteFocusFrame() {
+  if (suiteFocusFrame === null)
+    return
+  window.cancelAnimationFrame(suiteFocusFrame)
+  suiteFocusFrame = null
+}
+
+watch(suiteMenuOpen, (open, wasOpen) => {
+  if (!hasWindow())
+    return
+  cancelSuiteFocusFrame()
+
+  // TxDropdownMenu moves focus to its first item on the tick it opens, which is
+  // before its panel has animated in far enough to take focus, so the move is
+  // lost and arrow keys have nowhere to start. Retry for a few frames, landing
+  // on the current suite rather than the first.
+  if (open) {
+    let frames = 0
+    const focusCurrent = () => {
+      suiteFocusFrame = null
+      if (!suiteMenuOpen.value)
+        return
+      const options = visibleSuiteOptions()
+      const target = options.find(option => option.classList.contains('is-current')) ?? options[0]
+      target?.focus()
+      if ((target && document.activeElement === target) || ++frames > 60)
+        return
+      suiteFocusFrame = window.requestAnimationFrame(focusCurrent)
+    }
+    suiteFocusFrame = window.requestAnimationFrame(focusCurrent)
+    return
+  }
+
+  // Escape or a pick closes the menu with focus still on an item. The panel
+  // keeps that item mounted while it animates out and then removes it, which
+  // drops focus to <body>, so hand focus back to the trigger in either case. A
+  // click that moved focus elsewhere — a link in the list below — keeps it
+  // where it went.
+  if (!wasOpen)
+    return
+  void nextTick(() => {
+    const active = document.activeElement
+    if (!active || active === document.body || active.closest('.docs-suite-option'))
+      suiteTriggerRef.value?.focus()
+  })
+})
 
 // The index document is the section root; `/docs/dev/components/index` is a
 // distinct route that path normalization deliberately keeps apart from it.
@@ -561,13 +704,14 @@ const COMPONENTS_INDEX_PATH = '/docs/dev/components/index'
 const COMPONENTS_INDEX_LINK = '/docs/dev/components'
 
 function suiteOverviewLink(suite: SuiteDef | undefined) {
-  const overview = suite?.standalonePages[0]
+  const overview = suite?.standalonePages[0] ?? suite?.entryPage
   if (!overview) return null
   return overview === COMPONENTS_INDEX_PATH ? COMPONENTS_INDEX_LINK : overview
 }
 
-// Picking a tab is a navigation, not just a filter: every suite's first entry
-// is its overview page, and that is what the tab means.
+// Picking a tab is a navigation, not just a filter: a suite's first entry is
+// its overview page — or, for a suite without one, its entry page — and that
+// is what the tab means.
 async function selectSuite(key: SuiteKey) {
   selectedSuite.value = key
 
@@ -1217,6 +1361,7 @@ watch(
 onBeforeUnmount(() => {
   clearComponentDocsMetadataSchedule()
   if (hasWindow() && activeScrollFrame !== null) window.cancelAnimationFrame(activeScrollFrame)
+  if (hasWindow()) cancelSuiteFocusFrame()
 })
 </script>
 
@@ -1228,40 +1373,86 @@ onBeforeUnmount(() => {
     @pointerenter="requestComponentDocsMetadataOnIntent"
     @touchstart.passive="requestComponentDocsMetadataOnIntent"
   >
-    <!-- Top-level section tabs (sticky within sidebar) -->
-    <div v-if="!isTutorialRoute" class="sticky top-0 z-10 -mx-1 mb-3 px-1 pt-1 backdrop-blur-sm">
-      <div class="docs-tab-row">
+    <!-- Section switch + suite switcher (sticky within sidebar). Two fixed rows:
+         the suites used to be a second tab row that wrapped once it outgrew 230px. -->
+    <div v-if="!isTutorialRoute" class="docs-nav-head">
+      <div class="docs-seg" role="group" :aria-label="t('docsSidebar.sections')">
         <NuxtLink
           v-for="sec in TOP_SECTIONS"
           :key="sec.key"
           :to="localizedDocsPath(sec.entryPath || sec.basePath)"
           :prefetch="false"
-          class="docs-tab-link"
+          class="docs-seg__item"
           :class="activeTopSection === sec.key ? 'is-active' : ''"
           :aria-current="activeTopSection === sec.key ? 'true' : undefined"
         >
-          <span :class="sec.icon" class="text-sm" />
+          <span :class="sec.icon" class="docs-seg__icon" aria-hidden="true" />
           <span>{{ sec.label }}</span>
         </NuxtLink>
       </div>
-      <div
+      <TxDropdownMenu
         v-if="activeTopSection === 'components'"
-        class="docs-tab-row docs-tab-row--sub"
-        role="group"
-        :aria-label="t('docsSidebar.components')"
+        v-model="suiteMenuOpen"
+        trigger="click"
+        placement="bottom-start"
+        :offset="6"
+        :min-width="300"
+        reference-full-width
       >
-        <button
+        <template #trigger>
+          <button
+            ref="suiteTriggerRef"
+            type="button"
+            class="docs-suite-trigger"
+            aria-haspopup="menu"
+            :aria-expanded="suiteMenuOpen"
+            @keydown.down.prevent="suiteMenuOpen = true"
+            @keydown.up.prevent="suiteMenuOpen = true"
+          >
+            <span class="docs-suite-trigger__icon" aria-hidden="true">
+              <span :class="suiteIcon(activeSuite)" />
+            </span>
+            <span class="sr-only">{{ t('docsSidebar.suiteSwitcher') }}</span>
+            <span class="docs-suite-trigger__name">{{ activeSuiteDef.label }}</span>
+            <span v-if="suiteDocCounts[activeSuite]" class="docs-suite-trigger__count">
+              {{ suiteDocCounts[activeSuite] }}
+            </span>
+            <span class="docs-suite-trigger__chevron i-carbon-chevron-sort" aria-hidden="true" />
+          </button>
+        </template>
+
+        <!-- Escape is handled on the item and stopped there. Left to bubble to
+             `document`, it also reached the mobile drawer's (TxDrawer) Escape
+             listener, and the whole drawer closed along with the menu. -->
+        <TxDropdownItem
           v-for="suite in SUITES"
           :key="suite.key"
-          type="button"
-          class="docs-tab-link docs-tab-link--sub"
-          :class="activeSuite === suite.key ? 'is-active' : ''"
-          :aria-pressed="activeSuite === suite.key"
+          role="menuitemradio"
+          class="docs-suite-option"
+          :class="activeSuite === suite.key ? 'is-current' : ''"
+          :aria-checked="activeSuite === suite.key"
           @click="selectSuite(suite.key)"
+          @keydown.esc.stop="suiteMenuOpen = false"
         >
-          {{ suite.label }}
-        </button>
-      </div>
+          <span class="docs-suite-option__body">
+            <span class="docs-suite-option__icon" aria-hidden="true">
+              <span :class="suiteIcon(suite.key)" />
+            </span>
+            <span class="docs-suite-option__text">
+              <span class="docs-suite-option__name">{{ suite.label }}</span>
+              <span v-if="suiteDescription(suite.key)" class="docs-suite-option__desc">
+                {{ suiteDescription(suite.key) }}
+              </span>
+            </span>
+          </span>
+          <template #right>
+            <span v-if="activeSuite === suite.key" class="docs-suite-option__check i-carbon-checkmark" aria-hidden="true" />
+            <span v-else-if="suiteDocCounts[suite.key]" class="docs-suite-option__count">
+              {{ suiteDocCounts[suite.key] }}
+            </span>
+          </template>
+        </TxDropdownItem>
+      </TxDropdownMenu>
     </div>
 
     <!-- Scrollable content.
@@ -1412,120 +1603,235 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.docs-tab-row {
+.docs-nav-head {
+  --docs-seg-track: var(--tx-fill-color-light, #f5f7fa);
+  --docs-seg-thumb: var(--tx-bg-color, #fff);
+
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 0 2px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 4px 0 12px;
+  /* Sticky, so a hairline rather than a shadow separates it from the list
+     scrolling underneath. */
+  border-bottom: 1px solid var(--tx-border-color-lighter, #ebeef5);
+  background: color-mix(in srgb, var(--tx-bg-color, #fff) 86%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
-.docs-tab-row--sub {
-  gap: 12px;
-  padding-top: 2px;
-  border-bottom: none;
-  /* Five tabs must never push the 230px sidebar into horizontal scroll;
-     wrapping is the safety valve for long locales. */
-  flex-wrap: wrap;
+/* Under dark the page is darker than every fill token, so the thumb has to be
+   the lighter surface for the active segment to read as raised, not sunk. */
+:global(.dark .docs-nav-head),
+:global([data-theme='dark'] .docs-nav-head) {
+  --docs-seg-track: var(--tx-fill-color-lighter, #1d1d1d);
+  --docs-seg-thumb: var(--tx-fill-color, #303030);
 }
 
-.docs-tab-link {
-  position: relative;
+.docs-seg {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--docs-seg-track);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
+}
+
+.docs-seg__item {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 6px 1px 9px;
-  border: none;
-  background: transparent;
+  height: 28px;
+  /* Concentric with the track: 10px outer radius minus the 3px inset. */
+  border-radius: 7px;
   font-size: 13px;
   font-weight: 500;
-  font-family: inherit;
-  line-height: 1;
-  color: rgba(15, 23, 42, 0.42);
+  color: var(--docs-nav-ink);
   text-decoration: none;
-  cursor: pointer;
-  transition: color 0.2s ease;
 }
 
-.docs-tab-link::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0;
-  transform: scaleX(0.6);
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+.docs-seg__icon {
+  font-size: 14px;
 }
 
-.docs-tab-link:hover {
-  color: rgba(15, 23, 42, 0.7);
+.docs-seg__item:hover {
+  color: var(--tx-text-color-primary, #303133);
 }
 
-.docs-tab-link.is-active {
-  color: rgba(15, 23, 42, 0.95);
+.docs-seg__item.is-active {
+  color: var(--tx-text-color-primary, #303133);
+  background: var(--docs-seg-thumb);
+  box-shadow: var(--tx-elevation-1, 1px 2px 4px rgba(0, 0, 0, 0.08));
+}
+
+.docs-seg__item:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: 1px;
+}
+
+.docs-suite-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px 0 6px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
+  color: var(--tx-text-color-primary, #303133);
+  font: inherit;
+  font-size: 13px;
   font-weight: 600;
+  text-align: left;
+  cursor: pointer;
 }
 
-.docs-tab-link.is-active::after {
-  opacity: 1;
-  transform: scaleX(1);
+.docs-suite-trigger:hover,
+.docs-suite-trigger[aria-expanded='true'] {
+  background: var(--docs-seg-track);
 }
 
-/* Click focus otherwise leaves the UA blue focus ring on the tab; hover/active
-   styles carry the affordance instead. */
-.docs-tab-link:focus,
-.docs-tab-link:focus-visible {
-  outline: none;
+.docs-suite-trigger:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: 2px;
 }
 
-.docs-tab-link--sub {
-  padding: 5px 1px 7px;
+.docs-suite-trigger__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  /* Concentric with the trigger: 12px radius minus the 6px inset. */
+  border-radius: 6px;
+  font-size: 15px;
+  color: var(--tx-color-primary, #409eff);
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
+}
+
+.docs-suite-trigger__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docs-suite-trigger__count {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  /* Mixed from the ink, not a fill token: the trigger itself takes the track
+     fill on hover and while open, and a pill in that colour vanished into it. */
+  background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 8%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--docs-nav-ink);
+}
+
+.docs-suite-trigger__chevron {
+  flex: none;
+  font-size: 14px;
+  color: var(--tx-text-color-secondary, #909399);
+}
+
+/* Menu rows. The panel is teleported, but this markup is slot content and the
+   item root inherits this component's scope, so these rules still reach it. */
+.docs-suite-option__body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.docs-suite-option__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 15px;
+  color: var(--tx-text-color-regular, #606266);
+  background: var(--tx-fill-color-light, #f5f7fa);
+}
+
+.docs-suite-option.is-current .docs-suite-option__icon {
+  color: var(--tx-color-primary, #409eff);
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
+}
+
+.docs-suite-option__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.docs-suite-option__name {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.docs-suite-option__desc {
+  overflow: hidden;
   font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tx-text-color-secondary, #909399);
 }
 
-.docs-tab-link--sub::after {
-  bottom: 0;
+.docs-suite-option__count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-text-color-secondary, #909399);
 }
 
-:global(.dark .docs-tab-row),
-:global([data-theme='dark'] .docs-tab-row) {
-  border-bottom-color: rgba(148, 163, 184, 0.16);
+.docs-suite-option__check {
+  font-size: 14px;
+  color: var(--tx-color-primary, #409eff);
 }
 
-:global(.dark .docs-tab-row--sub),
-:global([data-theme='dark'] .docs-tab-row--sub) {
-  border-bottom: none;
+/* Hover and current-page fills. Under dark the page sits below every fill
+   token, so each step moves one lighter than it does on the light page. */
+.docs-nav {
+  --docs-nav-hover: var(--tx-fill-color-light, #f5f7fa);
+  --docs-nav-active: var(--tx-fill-color, #f0f2f5);
+  /* Resting ink. Secondary (#909399) is 3.1:1 on the light page, under AA for
+     13px text; regular is 6.3:1. The group labels sit a step lighter at ~5:1. */
+  --docs-nav-ink: var(--tx-text-color-regular, #606266);
+  --docs-nav-label: color-mix(in srgb, var(--tx-text-color-regular, #606266) 75%, var(--tx-text-color-secondary, #909399));
 }
 
-:global(.dark .docs-tab-link),
-:global([data-theme='dark'] .docs-tab-link) {
-  color: rgba(226, 232, 240, 0.45);
-}
-
-:global(.dark .docs-tab-link:hover),
-:global([data-theme='dark'] .docs-tab-link:hover) {
-  color: rgba(226, 232, 240, 0.75);
-}
-
-:global(.dark .docs-tab-link.is-active),
-:global([data-theme='dark'] .docs-tab-link.is-active) {
-  color: rgba(248, 250, 252, 0.98);
+:global(.dark .docs-nav),
+:global([data-theme='dark'] .docs-nav) {
+  --docs-nav-hover: var(--tx-fill-color-lighter, #1d1d1d);
+  --docs-nav-active: var(--tx-fill-color-light, #262727);
+  /* 7.6:1 and 5.9:1 on the #121212 page. */
+  --docs-nav-ink: var(--tx-text-color-secondary, #a3a6ad);
+  --docs-nav-label: var(--tx-text-color-placeholder, #8d9095);
 }
 
 :deep(.docs-nav-list) {
   position: relative;
   margin: 0;
-  padding: 0 0 0 2px;
+  padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 1px;
   background: transparent;
   box-shadow: none;
 }
@@ -1571,42 +1877,65 @@ onBeforeUnmount(() => {
   background: rgba(16, 185, 129, 0.1);
   color: rgba(5, 150, 105, 0.95);
 }
+
 :deep(.docs-nav-link) {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 5px 8px 5px calc(2px + var(--wm-jitter-x2, 0px));
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 8px 5px calc(10px + var(--wm-jitter-x2, 0px));
+  border-radius: 7px;
   font-size: 13px;
-  line-height: 1.45;
-  color: rgba(15, 23, 42, 0.6);
+  line-height: 1.4;
+  color: var(--docs-nav-ink);
   letter-spacing: var(--wm-letter-space-2, 0px);
   background: transparent;
-  border-radius: 0;
   box-shadow: none;
   text-decoration: none;
-  transition: color 0.2s ease;
 }
 
 :deep(.docs-nav-link:hover) {
-  color: rgba(15, 23, 42, 0.88);
+  color: var(--tx-text-color-primary, #303133);
+  background: var(--docs-nav-hover);
 }
 
+/* The current page: a filled row plus a short accent bar on its leading edge,
+   so it still reads as "you are here" in a long list scanned at a glance. */
 :deep(.docs-nav-link.is-active) {
-  color: rgba(15, 23, 42, 0.96);
-  font-weight: 600;
-  background: transparent !important;
+  color: var(--tx-text-color-primary, #303133);
+  font-weight: 500;
+  background: var(--docs-nav-active);
 }
 
-:deep(.docs-nav-link.router-link-active),
-:deep(.docs-nav-link.router-link-exact-active) {
-  background: transparent !important;
-  box-shadow: none !important;
+:deep(.docs-nav-link.is-active)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--tx-color-primary, #409eff);
+  transform: translateY(-50%);
 }
 
-/* Click focus otherwise leaves the UA blue focus ring on the active item. */
-:deep(.docs-nav-link:focus),
-:deep(.docs-nav-link:focus-visible) {
+/* A router-active link that is not the current page (an ancestor route) must
+   not pick up a global active-link fill. */
+:deep(.docs-nav-link.router-link-active:not(.is-active)),
+:deep(.docs-nav-link.router-link-exact-active:not(.is-active)) {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* A click leaves no UA ring on the row; keyboard focus still shows one. */
+:deep(.docs-nav-link:focus:not(:focus-visible)) {
   outline: none;
+}
+
+:deep(.docs-nav-link:focus-visible) {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: -2px;
 }
 
 /* Family entry: a nav-link-shaped toggle plus a collapsible member list. */
@@ -1618,6 +1947,21 @@ onBeforeUnmount(() => {
   font-family: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+/* A family row holding the current page marks it with ink and weight only:
+   the member row below carries the fill and the bar, and both carrying them
+   read as two current pages. */
+:deep(.docs-nav-family-toggle.is-active) {
+  background: transparent;
+}
+
+:deep(.docs-nav-family-toggle.is-active:hover) {
+  background: var(--docs-nav-hover);
+}
+
+:deep(.docs-nav-family-toggle.is-active)::before {
+  content: none;
 }
 
 :deep(.docs-nav-family-indicator) {
@@ -1656,38 +2000,27 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-/* The "|" rail from the sketch: indent members under the family toggle. */
+/* The "|" rail from the sketch: indent members under the family toggle, the
+   rail lined up under the toggle's text. */
 :deep(.docs-nav-family-list) {
-  margin-left: 5px;
-  padding-left: 9px;
-  border-left: 1px solid rgba(15, 23, 42, 0.1);
+  margin: 1px 0 0 10px;
+  padding-left: 6px;
+  border-left: 1px solid var(--tx-border-color-lighter, #ebeef5);
 }
 
-:global(.dark .docs-nav-family-list),
-:global([data-theme='dark'] .docs-nav-family-list) {
-  border-left-color: rgba(148, 163, 184, 0.18);
+@media (prefers-reduced-motion: reduce) {
+  :deep(.docs-nav-family-indicator),
+  :deep(.docs-nav-family-body) {
+    transition: none;
+  }
 }
 
 :global(.dark .docs-nav-list),
 :global([data-theme='dark'] .docs-nav-list),
 :global(.dark .docs-nav-item),
-:global([data-theme='dark'] .docs-nav-item),
-:global(.dark .docs-nav-link),
-:global([data-theme='dark'] .docs-nav-link) {
+:global([data-theme='dark'] .docs-nav-item) {
   background: transparent !important;
   box-shadow: none !important;
-}
-
-:global(.dark .docs-nav-item),
-:global([data-theme='dark'] .docs-nav-item) {
-  background: transparent;
-}
-
-:global(.dark .docs-nav-link),
-:global([data-theme='dark'] .docs-nav-link) {
-  color: rgba(226, 232, 240, 0.56);
-  background: transparent;
-  box-shadow: none;
 }
 
 :global(.dark .docs-nav-sync-badge),
@@ -1719,14 +2052,4 @@ onBeforeUnmount(() => {
   background: rgba(6, 95, 70, 0.35);
   color: rgba(110, 231, 183, 0.95);
 }
-:global(.dark .docs-nav-link:hover),
-:global([data-theme='dark'] .docs-nav-link:hover) {
-  color: rgba(226, 232, 240, 0.82);
-}
-
-:global(.dark .docs-nav-link.is-active),
-:global([data-theme='dark'] .docs-nav-link.is-active) {
-  color: rgba(248, 250, 252, 0.95);
-}
-
 </style>

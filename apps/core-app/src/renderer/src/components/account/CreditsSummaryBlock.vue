@@ -104,7 +104,6 @@ onUnmounted(() => {
           :loading="credits.loading.value"
           @click.stop="refreshCredits"
         >
-          <i class="i-carbon-renew" />
           <span>{{ t('creditsSummary.refresh', '刷新') }}</span>
         </TxButton>
         <TxButton

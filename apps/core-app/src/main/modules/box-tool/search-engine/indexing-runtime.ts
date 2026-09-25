@@ -34,10 +34,12 @@ import type {
 import type {
   IndexStoreAdapter,
   IndexStoreBatchApplySummary,
+  IndexStoreBatchApplyWithPersistenceSummary,
   IndexStoreCleanupSourceSummary,
   IndexStoreDeltaApplySummary
 } from './indexing-store-adapter'
-import type { SearchIndexWriterMode } from './search-index-writer'
+import type { SearchIndexWriterMode, UpsertFileRecord } from './search-index-writer'
+
 import type { IndexingTaskStateStore } from './indexing-task-state-store'
 import type { WatchEventRouteResult } from './indexing-watch-router'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -57,6 +59,7 @@ import {
 } from '@talex-touch/utils/search'
 import { isSqliteBusyError } from '../../../db/sqlite-retry'
 import { operationalErrorService } from '../../observability'
+import { enterPerfContext } from '../../../utils/perf-context'
 import { SourceDiagnosticsService } from './indexing-diagnostics-service'
 import { ReconcileEngine } from './indexing-reconcile-engine'
 import { ReconcileScheduler as DefaultReconcileScheduler } from './indexing-reconcile-scheduler'
@@ -304,6 +307,39 @@ export class IndexingRuntime {
       }
     })
   }
+  async applySourceBatchWithPersistence(
+    batch: IndexedSourceRecordBatch,
+    records: UpsertFileRecord[]
+  ): Promise<IndexStoreBatchApplyWithPersistenceSummary | void> {
+    const source = this.requireSource(batch.sourceId)
+    if (!this.store.applyBatchWithPersistence) {
+      throw new Error(`INDEX_RUNTIME_FUSED_BATCH_UNAVAILABLE:${batch.sourceId}`)
+    }
+    if (batch.mutationLeaseId) {
+      return await this.sourceMutationGate.runWithinLease(
+        batch.sourceId,
+        batch.mutationLeaseId,
+        async () => await this.store.applyBatchWithPersistence!(batch, records)
+      )
+    }
+    return await this.sourceMutationGate.run(batch.sourceId, async (lease) => {
+      try {
+        const summary = await this.store.applyBatchWithPersistence!(
+          { ...batch, mutationLeaseId: lease.id },
+          records
+        )
+        if (source.drainMutations) {
+          await source.drainMutations({ leaseId: lease.id, reason: 'mutation' })
+        }
+        return summary
+      } catch (error) {
+        await source
+          .drainMutations?.({ leaseId: lease.id, reason: 'mutation' })
+          .catch(() => undefined)
+        throw error
+      }
+    })
+  }
 
   async applySourceDelta(delta: IndexedSourceDelta): Promise<IndexStoreDeltaApplySummary | void> {
     const source = this.requireSource(delta.sourceId)
@@ -460,11 +496,21 @@ export class IndexingRuntime {
   }
 
   async getDiagnostics(): Promise<IndexingRuntimeDiagnostics> {
-    const diagnostics = await this.diagnosticsService.getDiagnostics(this.listSources())
-    await this.applyTaskState(diagnostics)
-    this.applyTaskRunGateState(diagnostics)
-    this.updateRootPolicy(diagnostics)
-    return diagnostics
+    const sources = this.listSources()
+    const disposeDiagnostics = enterPerfContext(
+      'IndexingRuntime.getDiagnostics',
+      { sourceCount: sources.length },
+      { mode: 'blocking' }
+    )
+    try {
+      const diagnostics = await this.diagnosticsService.getDiagnostics(sources)
+      await this.applyTaskState(diagnostics)
+      this.applyTaskRunGateState(diagnostics)
+      this.updateRootPolicy(diagnostics)
+      return diagnostics
+    } finally {
+      disposeDiagnostics()
+    }
   }
 
   async refreshRootPolicy(): Promise<void> {

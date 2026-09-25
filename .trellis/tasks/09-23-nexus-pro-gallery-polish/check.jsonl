@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "verification bar: lint per package, diff --check, forbidden patterns"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "gates (check-demo-registry-orphans, mdc fences, doc parity) and rendered-page verification"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "review the redesigned specimens against the design rules"}

@@ -192,25 +192,29 @@ function getShapeStyle(shape: ShapeConfig) {
   display: none;
 }
 
-:global(.dark) .tuffex-docs-hero-bg,
-:global([data-theme='dark']) .tuffex-docs-hero-bg {
+/* Plain descendant selectors, not `:global(.dark) .x`: Vue compiles that form
+   down to the bare `.dark`, which painted these rules onto <html> and onto every
+   `[data-theme='dark']` component root (TxMarkdownView, TxCodeEditor, …) while
+   never reaching the hero itself. Scoping puts the attribute on `.x` only. */
+.dark .tuffex-docs-hero-bg,
+[data-theme='dark'] .tuffex-docs-hero-bg {
   background: transparent;
   color: rgba(255, 255, 255, 0.9);
 }
 
-:global(.dark) .tuffex-docs-hero-bg__wash,
-:global([data-theme='dark']) .tuffex-docs-hero-bg__wash {
+.dark .tuffex-docs-hero-bg__wash,
+[data-theme='dark'] .tuffex-docs-hero-bg__wash {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.04), transparent 44%, rgba(244, 63, 94, 0.04));
 }
 
-:global(.dark) .tuffex-docs-hero-bg__shape-core,
-:global([data-theme='dark']) .tuffex-docs-hero-bg__shape-core {
+.dark .tuffex-docs-hero-bg__shape-core,
+[data-theme='dark'] .tuffex-docs-hero-bg__shape-core {
   border-color: rgba(255, 255, 255, 0.2);
   box-shadow: 0 10px 34px rgba(255, 255, 255, 0.12);
 }
 
-:global(.dark) .tuffex-docs-hero-bg__shape-core::after,
-:global([data-theme='dark']) .tuffex-docs-hero-bg__shape-core::after {
+.dark .tuffex-docs-hero-bg__shape-core::after,
+[data-theme='dark'] .tuffex-docs-hero-bg__shape-core::after {
   background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.34), transparent 70%);
 }
 

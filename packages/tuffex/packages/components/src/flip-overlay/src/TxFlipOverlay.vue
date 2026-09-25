@@ -33,6 +33,9 @@ const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({
   name: 'TxFlipOverlay',
+  // The root is a Teleport, which cannot take fallthrough attributes; the
+  // template binds `$attrs` onto the mask, where the old Transition root put them.
+  inheritAttrs: false,
 })
 
 const props = withDefaults(defineProps<FlipOverlayProps>(), {
@@ -646,64 +649,72 @@ const slotProps = computed<FlipOverlaySlotProps>(() => ({
 </script>
 
 <template>
-  <Transition :name="transitionName" :css="useMaskCssTransition">
-    <div v-if="visible" :class="maskClassName" :style="maskStyle" @click="handleMaskClick">
-      <div
-        v-if="props.globalMask && stackMeta.isMaskOwner && stackMeta.stackSize <= 1"
-        class="TxFlipOverlay-GlobalMask"
-      />
-      <div
-        ref="cardRef"
-        :class="cardClassName"
-        :style="props.cardStyle"
-        role="dialog"
-        aria-modal="true"
-        tabindex="-1"
-        :aria-labelledby="(shouldRenderBuiltInHeader && props.headerTitle) ? titleId : undefined"
-        :aria-describedby="(shouldRenderBuiltInHeader && props.headerDesc) ? descId : undefined"
-        @click.stop
-        @keydown.esc="handleMaskClick"
-      >
-        <TxBaseSurface
-          class="TxFlipOverlay-Surface"
-          preset="card"
-          fake
-          :mode="surfaceMode"
-          :color="surfaceColor"
-          :opacity="surfaceOpacity"
-          :moving="animating"
+  <!-- Teleported, like TxModal and TxCommandPalette. In place, the fixed mask
+       and card were laid out against the nearest ancestor with a transform,
+       filter, contain or content-visibility instead of the viewport. On a docs
+       page that ancestor is the article body (`content-visibility: auto`): the
+       card centred itself on the whole article, focusing it scrolled the page
+       870px, and the trigger it flips from left the screen. -->
+  <Teleport to="body">
+    <Transition :name="transitionName" :css="useMaskCssTransition">
+      <div v-if="visible" v-bind="$attrs" :class="maskClassName" :style="maskStyle" @click="handleMaskClick">
+        <div
+          v-if="props.globalMask && stackMeta.isMaskOwner && stackMeta.stackSize <= 1"
+          class="TxFlipOverlay-GlobalMask"
         />
-        <div :class="shellClassName">
-          <slot v-if="hasCustomHeaderSlot" name="header" v-bind="slotProps" />
-          <div v-else-if="shouldRenderBuiltInHeader" class="TxFlipOverlay-Header">
-            <div class="TxFlipOverlay-HeaderDisplay">
-              <slot name="header-display" v-bind="slotProps">
-                <p v-if="props.headerTitle" :id="titleId" class="TxFlipOverlay-HeaderTitle">
-                  {{ props.headerTitle }}
-                </p>
-                <p v-if="props.headerDesc" :id="descId" class="TxFlipOverlay-HeaderDesc">
-                  {{ props.headerDesc }}
-                </p>
-              </slot>
-            </div>
-            <div class="TxFlipOverlay-HeaderActions">
-              <slot name="header-actions" v-bind="slotProps" />
-              <template v-if="props.closable">
-                <slot name="header-close" v-bind="slotProps">
-                  <TxButton circle class="TxFlipOverlay-Close" :aria-label="props.closeAriaLabel" @click="requestClose">
-                    <span class="i-carbon-close w-4 h-4 text-lg inline-flex" aria-hidden="true" />
-                  </TxButton>
+        <div
+          ref="cardRef"
+          :class="cardClassName"
+          :style="props.cardStyle"
+          role="dialog"
+          aria-modal="true"
+          tabindex="-1"
+          :aria-labelledby="(shouldRenderBuiltInHeader && props.headerTitle) ? titleId : undefined"
+          :aria-describedby="(shouldRenderBuiltInHeader && props.headerDesc) ? descId : undefined"
+          @click.stop
+          @keydown.esc="handleMaskClick"
+        >
+          <TxBaseSurface
+            class="TxFlipOverlay-Surface"
+            preset="card"
+            fake
+            :mode="surfaceMode"
+            :color="surfaceColor"
+            :opacity="surfaceOpacity"
+            :moving="animating"
+          />
+          <div :class="shellClassName">
+            <slot v-if="hasCustomHeaderSlot" name="header" v-bind="slotProps" />
+            <div v-else-if="shouldRenderBuiltInHeader" class="TxFlipOverlay-Header">
+              <div class="TxFlipOverlay-HeaderDisplay">
+                <slot name="header-display" v-bind="slotProps">
+                  <p v-if="props.headerTitle" :id="titleId" class="TxFlipOverlay-HeaderTitle">
+                    {{ props.headerTitle }}
+                  </p>
+                  <p v-if="props.headerDesc" :id="descId" class="TxFlipOverlay-HeaderDesc">
+                    {{ props.headerDesc }}
+                  </p>
                 </slot>
-              </template>
+              </div>
+              <div class="TxFlipOverlay-HeaderActions">
+                <slot name="header-actions" v-bind="slotProps" />
+                <template v-if="props.closable">
+                  <slot name="header-close" v-bind="slotProps">
+                    <TxButton circle class="TxFlipOverlay-Close" :aria-label="props.closeAriaLabel" @click="requestClose">
+                      <span class="i-carbon-close w-4 h-4 text-lg inline-flex" aria-hidden="true" />
+                    </TxButton>
+                  </slot>
+                </template>
+              </div>
             </div>
-          </div>
-          <div :class="bodyClassName">
-            <slot v-bind="slotProps" />
+            <div :class="bodyClassName">
+              <slot v-bind="slotProps" />
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </Teleport>
 </template>
 
 <style lang="scss">

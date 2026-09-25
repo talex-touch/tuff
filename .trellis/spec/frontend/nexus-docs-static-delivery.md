@@ -29,23 +29,131 @@ Consequences that must stay true together:
 - `/foo/` (with slash) now 308s to `/foo`. That is the mirror of the old behaviour and only
   affects links copied after being redirected; do not add a redirect rule to "fix" it.
 
-## Static docs responses carry an edge cache window
+## Static docs responses carry a cache window, and the edge needs a rule to honour it
 
 `build/nexus-static-routes.mjs` owns `DOCS_STATIC_CACHE_CONTROL`, `I18N_MESSAGES_CACHE_CONTROL`
 and `createStaticCacheRouteRules()`; `nuxt.config.ts` spreads those into `routeRules` and nitro
 writes them to `dist/_headers`. Without them Pages emits `max-age=0, must-revalidate` for every
-static file and the edge shows `DYNAMIC` — each docs visit re-fetched HTML and JSON that only
-change on deploy.
+static file, so browsers re-validated HTML and JSON that only change on deploy.
 
-- Docs HTML and prerendered docs JSON: browser 5 min, edge 1 h, stale-while-revalidate 1 day.
-  The window matches the dynamic docs API's `DOCS_CONTENT_CACHE_CONTROL`. A deploy changes the
-  hashed asset names inside the HTML; an hour-old edge copy still points at assets that exist.
+What the headers do and do not buy, measured 2026-09-23 against production:
+
+- The browser window (`max-age=300`) works as written.
+- The edge does not cache docs HTML, the JSON twins, the `.md` twins or `/_i18n/*` on the
+  strength of `s-maxage` alone: every one of them answered `cf-cache-status: DYNAMIC` on the
+  second request while `/_nuxt/*.js` went `MISS` → `HIT`. Cloudflare's zone cache caches by file
+  extension by default (js, css, fonts, images); HTML, JSON and extension-less paths need a zone
+  **Cache Rule** with *Eligible for cache* before any `s-maxage` is read. Pages' own
+  per-datacenter asset cache sits behind that layer and is invisible in `cf-cache-status`; the
+  server-side wait for one static HTML swung between 0.26 s and 3.2 s, which is what the rule is
+  meant to remove.
+- A zone cache entry is not purged by a Pages deploy, and a deploy replaces the hashed assets: a
+  chunk that changed is gone under its old name. So the rule must not keep HTML for the hour
+  `s-maxage=3600` suggests. Set **Edge TTL: ignore origin, 5 minutes**, no
+  stale-while-revalidate, scoped to `/en/docs/*`, `/zh/docs/*`, `/api/docs/page/*`,
+  `/api/docs/navigation/*`, `/api/docs/search/*`, `/api/docs/sidebar-components/*`,
+  `/api/docs/component-sync` and `/_i18n/*`. Never widen it to `/api/docs/*`: `view`, `comments`,
+  `feedback`, `engagement` and `assistant` are per-reader. The query-string `/api/docs/page?`
+  route stays DYNAMIC on purpose. Cloudflare documents a 2-hour minimum Edge Cache TTL on the
+  Free plan; the 5-minute override was nevertheless honoured on this zone — entries answered
+  `EXPIRED` / `REVALIDATED` within the hour and no `HIT` carried an `age` above the window. If a
+  probe ever shows a `HIT` with `age` > 300, switch the rule's Edge TTL to *Use cache-control
+  header if present, bypass cache if not*: `_headers` carries `s-maxage=300`, so the window stays
+  the same and the plan minimum no longer applies.
+- Evidence, not belief: `pnpm -C apps/nexus probe:docs-edge-cache -- --label <before|after>`
+  requests each docs URL twice and writes `output/evidence/docs-edge-cache-<date>-<label>.json`,
+  with a hashed `/_nuxt/` asset as the positive control. The rule stays only if the second
+  request reads `HIT`/`STALE` and the static-HTML ttfb p50 drops; a chunk-404 incident after a
+  deploy removes it. Kept on 2026-09-24: the rule "nexus docs static (HTML/JSON/i18n, 5 min edge
+  TTL)" took 28/28 second requests from `DYNAMIC` to `HIT` (`output/evidence/docs-edge-cache-2026-09-24-{before,after}.json`),
+  and `DOCS_STATIC_CACHE_CONTROL` was lowered to `public, max-age=300, s-maxage=300` so `_headers`
+  and the rule agree.
+- `/en/docs` and `/zh/docs` have blocks of their own: a Pages pattern `/en/docs/*` matches below
+  the root, not the root, and the roots shipped with the Pages default until 2026-09-23.
 - `/_i18n/**` is hash-versioned in its path and may be held for a day at the edge.
 - Prerendered JSON has no extension, so Pages guessed `application/octet-stream`; the rule sets
   `content-type: application/json` too.
 - `checkStaticCacheHeaders()` in the worker-bundle guard parses `_headers` and fails the build
   when any of these blocks is missing, loses `s-maxage`, or loses the JSON content type. Change
   the constants, never the guard, when the window needs to move.
+
+## `404.html` and `_redirects`: Pages answers the misses and the entry points itself
+
+Cloudflare Pages treats a project without a top-level `404.html` as a single-page app and serves
+`index.html` with a **200** for every path no file matches. `/en/docs/*` is excluded from the
+Worker, so until 2026-09-23 a mistyped docs URL returned the landing page — 191 KB, status 200: a
+soft 404 for crawlers and a flash of the wrong page for readers.
+
+- `staticFallbackPrerenderRoutes` (`build/nexus-static-routes.mjs`) prerenders the not-found
+  page under the private route `/__not-found`, and `build/materialize-not-found.mjs` copies it
+  to `404.html` and deletes the source file. Two constraints shaped that: Nitro only writes a
+  prerendered route that answered 200, so `app/pages/[...all].vue` skips `setResponseStatus(404)`
+  for exactly that request while prerendering (`import.meta.prerender && event.path ===
+  '/__not-found'`), and a literal `/404.html` route is rendered by Nuxt as its single-page
+  fallback shell — an empty `#__nuxt`, no title, no text (measured 2026-09-24: 3.6 KB) — so the
+  file must come from a route with an ordinary name. `checkStaticFallback()` rejects an empty
+  shell and requires the rendered hero (`aria-label="404"`). Pages serves the file natively for
+  every miss; no `_redirects` line is involved. A `404` status is not a status `_redirects`
+  accepts (only 200, 301, 302, 303, 307, 308), so the `/* /404.html 404` line Nitro writes when it
+  happens to see a `404.html` at compile time is dropped by Pages with a warning in the deploy log;
+  `write-static-redirects.mjs` removes any such line and the guard rejects it.
+- `/docs` and `/docs/*` redirect to `/en/docs` and `/en/docs/:splat` from `_redirects`
+  (`docsStaticRedirects`), written by `build/write-static-redirects.mjs` after nitro. Pages applies
+  `_redirects` only to requests it serves itself, so both sources are also in
+  `cloudflare.pages.routes.exclude` (`nuxt.config.ts`): left in the Worker's share, the request
+  reached `docs-legacy-redirect.ts` first and the static rules never fired (3–5 s TTFB measured
+  from CN). Nitro cannot write a splat from `routeRules` — it copies `to` verbatim — which is why
+  this is a post-build step and not a route rule. `server/middleware/docs-legacy-redirect.ts`
+  keeps the same mapping for development and as the Worker fallback;
+  `test/middleware/docs-legacy-redirect.test.ts` holds both to the same answer and records the
+  one divergence (a locale-suffixed content name is not normalized by a splat; it now lands on
+  the real 404 instead).
+- Ordering is part of the contract: static rules before dynamic rules, and every docs rule above
+  any `/*` catch-all, because Pages reads the file top to bottom. `checkStaticRedirects()` and
+  `checkStaticFallback()` in the worker-bundle guard fail the build when a rule is missing, points elsewhere, carries a
+  status Pages rejects, or is out of order, and `checkRoutes()` fails it when `/docs` or `/docs/*` is missing
+  from `_routes.json`. `wrangler pages dev dist` honours `_redirects` and `404.html`, so the
+  local acceptance is four curls: `/docs/dev` → 308,
+  `/docs/dev/components/button.md` → 308 with the suffix kept, `/en/docs/nope` → 404 with the
+  Nuxt page, `/en/docs/dev/components/button` → 200 with its body.
+
+### Contracts: static fallback and entry redirects
+
+- **Signatures** (`build/nexus-static-routes.mjs`, plain-node importable):
+  `NOT_FOUND_PRERENDER_ROUTE = '/__not-found'`, `staticFallbackPrerenderRoutes = [NOT_FOUND_PRERENDER_ROUTE]`,
+  `docsStaticRedirects: Array<{ from, to, status }>` (`/docs → /en/docs 308`, `/docs/* → /en/docs/:splat 308`),
+  `PAGES_REDIRECT_STATUSES = Set{200, 301, 302, 303, 307, 308}`, `PAGES_CATCH_ALL_SOURCE = '/*'`,
+  `docsStaticHtmlHeaderRoutes` includes the two roots. Post-build: `materializeNotFoundPage(distRoot)`
+  → `{ bytes }` (throws on missing source / empty shell / missing `aria-label="404"`),
+  `mergeStaticRedirects(source, rules)` → file text (drops lines whose status Pages rejects),
+  `writeStaticRedirects(distRoot)`.
+  Guards (exported from `build/check-worker-bundle.mjs`): `checkStaticRedirects(source, rules)`,
+  `checkStaticFallback({ notFoundHtml })`, `isExcludedFromWorker(route, excludedSet)`.
+  Probe: `node scripts/probe-docs-edge-cache.mjs [--base-url https://…] [--label <name>]`.
+- **File contracts**: `_redirects` lines are `<from> <to> <status>` (Nitro writes tabs; the parser
+  accepts any whitespace), static sources before dynamic (`*` / `:param`) sources, every docs rule above any `/*`
+  catch-all, statuses only from `PAGES_REDIRECT_STATUSES`.
+  `_routes.json.exclude` must contain every `docsStaticRedirects[].from` verbatim.
+- **Validation and error matrix** (each is a gate finding, build fails): `<from>: no _redirects rule`;
+  `<from>: redirects to X S, expected Y T`; `<from>: listed after the /* catch-all; Pages reads rules in order`;
+  `<from>: static rule listed after dynamic rules; …`; `404.html is missing from dist; …`;
+  `404.html is an empty no-SSR shell; …`; `404.html does not contain the rendered not-found page (aria-label="404")`;
+  `<line>: status 404 is not a _redirects status Pages accepts; the line is dropped with a warning`; `Missing static route exclusions: … /docs, /docs/*`.
+- **Cases**: Good — `/docs/dev` → 308 from Pages with a 0-byte body, `/en/docs/nope` → 404 with the
+  rendered page. Base — `/en/docs/dev/components/button` → 200 unchanged, `/this-does-not-exist` →
+  Worker 404 unchanged. Bad — `/docs/dev/api/box.en.md` → `/en/docs/dev/api/box.en.md` → 404 (a splat
+  cannot normalise a content name; accepted and recorded in the middleware parity test).
+- **Tests**: `build/static-redirects.test.ts` (writer order/idempotency, every finding string with a
+  positive control), `build/materialize-not-found.test.ts` (copy + delete, shell rejection),
+  `build/docs-prerender-routes.test.ts` (route present, carve-out literal matches the constant),
+  `test/middleware/docs-legacy-redirect.test.ts` (middleware ≡ static rules on canonical paths, one
+  documented divergence), `build/static-cache-headers.test.ts` (root blocks).
+- **Wrong vs correct**: adding `/404.html` to the prerender list and trusting the file — Nuxt emits an
+  empty shell for that name. Correct: prerender `/__not-found`, copy it, assert the content. Wrong:
+  writing `_redirects` rules for a path still in the Worker's `_routes.json` share — they never run.
+  Correct: exclude the source path and let the gate assert it. Wrong: a `/* /404.html 404` line
+  (Nitro's habit) — Pages rejects the status and warns. Correct: no line at all; the top-level
+  `404.html` is served natively.
 
 ## Locale messages ride in the HTML and never gate hydration
 

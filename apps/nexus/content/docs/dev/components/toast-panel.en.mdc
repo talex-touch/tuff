@@ -1,0 +1,94 @@
+---
+title: "ToastPanel"
+description: "An item surfacing beneath the surface it came from: a dashed tether, a card, and a hint of more queued behind it."
+category: Feedback
+status: beta
+since: 0.6.0
+tags: [feedback, toast, surface, motion]
+syncStatus: reviewed
+verified: true
+---
+# ToastPanel
+
+## Basic Usage
+
+### ToastPanel
+
+:::TuffDemoWrapper{demo="ToastPanelToastPanelDemo" code-lang="vue" title="An item surfacing" description="The tether links the new item to the list it came from; press Replay to watch it arrive."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(true)
+  </script>
+
+  <template>
+    <TxToastPanel :open="open" :stack="1" aria-label="Latest signal">
+      <!-- Content comes entirely from the host -->
+      <div class="row">Theo Morgan · Pioneer Cloud</div>
+    </TxToastPanel>
+  </template>
+---
+:::
+
+## How This Differs from Toast
+
+`TxToastHost` is the **global notification stack**: driven by `toastStore`, parked in a viewport corner, queueing and dismissing itself, with no positional relationship to page content.
+
+`TxToastPanel` is the opposite — it is **anchored to something**, fully controlled, and the dashed tether is the entire difference: it says "this came from *that*", not "here is a notification". Use it for the newest row of a list, or the result a panel just produced; use `TxToastHost` for a transient message.
+
+## Hiding Does Not Unmount
+
+With `open` false the component **stays in the DOM**, at zero opacity and back at its travel origin.
+
+Not `v-if`, because destroying the root cuts the leave transition (the panel vanishes instead of retreating) and collapses the tether's box — so the layout jumps upward every time the item changes.
+
+The entrance rides `--tx-ease-spring`. A new item is something arriving *at* the reader, and overshooting past the resting position before settling reads as "just landed" in a way a linear slide does not. Under reduced motion the travel is dropped entirely and only the fade remains — the fade is the minimum signal that the content changed, and removing it too leaves a returning eye with no evidence anything happened.
+
+## The Stack Behind It
+
+`stack` renders decorative slivers peeking out from under the card, suggesting more queued behind. They are purely decorative (`aria-hidden`) and carry no content.
+
+The cap is **hard-coded at 2**: at the default offsets a third sliver shows under a pixel of edge, which only muddies the shadow while costing a node and a shadow layer.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `open` | `boolean` | `true` | Whether it is showing. False keeps it mounted — see above |
+| `tether` | `boolean` | `true` | Draw the dashed tether |
+| `tetherLength` | `number` | `28` | Tether length in px; negatives are treated as 0 |
+| `side` | `'below' \| 'above'` | `'below'` | Which side of its origin it sits on; only the tether's direction changes |
+| `stack` | `number` | `1` | Slivers peeking out behind, clamped to 0–2 |
+| `ariaLabel` | `string` | `'Latest item'` | Accessible name for the region |
+| `live` | `'polite' \| 'off'` | `'polite'` | Announce arrivals, or stay quiet when the host announces elsewhere |
+
+### Slots
+
+| Name | Description |
+|---|---|
+| `default` | The card's contents |
+| `tether` | Replaces the default dashed tether |
+
+## Interaction Contract
+
+- **Positioning belongs to the host.** The component only draws the tether's direction; it does not place itself, because only the host knows what it hangs off. Put it after the origin element.
+- **It announces itself.** The panel appears without a user action, so it carries `role="status"` and `aria-live="polite"`. If the host already announces the same change, set `live="off"` — two live regions for one arrival is worse than none.
+- The stack slivers are `aria-hidden` decoration; do not put content in them.
+
+## Best Practices
+
+- Keep the two ends within reach of each other: too long a `tetherLength` and the link to the origin stops reading.
+- Announce an arrival once. If the host already does, turn `live` off.
+- Compose the row from existing pieces (`TxCardItem` and friends); this component owns only the outer arrival posture.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/toast-panel/src/TxToastPanel.vue`.
+- Types: `packages/tuffex/packages/components/src/toast-panel/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/toast-panel/__tests__/toast-panel.test.ts` (13 cases) covers slot rendering with the default tether, the card surviving a dropped tether, tether length pass-through and negative clamping, `open` toggling a class rather than unmounting, the stack count with 0–2 clamping, each sliver's own depth, the slivers' `aria-hidden`, `role="status"` with `aria-live`, no live region under `live="off"`, the `side="above"` flip, and the tether slot overriding the default.
+
+<TuffDocSourceLink />

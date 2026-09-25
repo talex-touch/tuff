@@ -238,6 +238,65 @@ describe('SearchIndexWorkerClient init gate', () => {
     await expect(applyPromise).resolves.toEqual({ removedItems: 0, indexedItems: 1 })
   })
 
+  it('fuses file-row persistence with the item mutation in a single worker dispatch', async () => {
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    const records = [
+      {
+        path: '/tmp/demo.txt',
+        name: 'demo.txt',
+        extension: '.txt',
+        size: 12,
+        mtime: new Date(1_000),
+        ctime: new Date(1_000),
+        lastIndexedAt: new Date(2_000),
+        isDir: false,
+        type: 'file'
+      }
+    ]
+    const item = {
+      itemId: 'file:/tmp/demo.txt',
+      providerId: 'file-provider',
+      type: 'file',
+      name: 'demo.txt'
+    }
+
+    const persistPromise = client.persistAndApplyProviderItems(
+      records,
+      'file-provider',
+      [item],
+      ['file:/tmp/legacy.txt']
+    )
+    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
+
+    // Raw file rows and mapped items travel in one dispatch, so the worker can commit
+    // them transactionally instead of racing two separate tasks.
+    expect(worker.messages[1]).toMatchObject({
+      type: 'persistAndApplyProviderItems',
+      providerId: 'file-provider',
+      records,
+      items: [item],
+      legacyItemIds: ['file:/tmp/legacy.txt']
+    })
+
+    const combined = {
+      persisted: [{ id: 7, path: '/tmp/demo.txt' }],
+      summary: { removedItems: 0, indexedItems: 1 }
+    }
+    worker.emit('message', {
+      type: 'result',
+      taskId: taskIdOf(worker.messages[1]),
+      result: combined
+    })
+
+    await expect(persistPromise).resolves.toEqual(combined)
+  })
+
   it('rejects pending atomic provider writes on init failure and allows init retry', async () => {
     const client = new SearchIndexWorkerClient()
     const initPromise = client.init('/tmp/search-index.db')

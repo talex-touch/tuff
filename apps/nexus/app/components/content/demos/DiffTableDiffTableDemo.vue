@@ -22,6 +22,10 @@ const copy = computed(() => {
       columns: { flavor: '口味', category: '分类', supplier: '供应商' },
       replay: '重新播放',
       categories: { classic: '经典', retro: '复古', seasonal: '季节限定' },
+      hint: '点选变更行可切换是否采纳',
+      summary: (c: { removed: number, added: number }) => `删除 ${c.removed} 项 · 新增 ${c.added} 项`,
+      apply: (n: number) => `应用 ${n} 项变更`,
+      toggle: (accepted: boolean) => (accepted ? '取消采纳这条变更' : '采纳这条变更'),
     }
   }
 
@@ -30,6 +34,11 @@ const copy = computed(() => {
     columns: { flavor: 'Flavor', category: 'Category', supplier: 'Supplier' },
     replay: 'Replay',
     categories: { classic: 'Classic', retro: 'Retro', seasonal: 'Seasonal' },
+    hint: 'Click changed rows to toggle',
+    summary: (c: { removed: number, added: number }) =>
+      `${c.removed} removal${c.removed === 1 ? '' : 's'} · ${c.added} addition${c.added === 1 ? '' : 's'}`,
+    apply: (n: number) => `Apply ${n} change${n === 1 ? '' : 's'}`,
+    toggle: (accepted: boolean) => (accepted ? 'Reject this change' : 'Accept this change'),
   }
 })
 
@@ -87,6 +96,12 @@ function replay(): void {
       :columns="columns"
       :rows="rows"
       :title="copy.title"
+      :hint="copy.hint"
+      selectable
+      footer
+      :summary-formatter="copy.summary"
+      :apply-label-formatter="copy.apply"
+      :row-toggle-label-formatter="copy.toggle"
       :stage-delays="STAGE_DELAYS"
       play="auto"
     >

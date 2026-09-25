@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 73
-- **Last Active**: 2026-09-21
+- **Total Sessions**: 77
+- **Last Active**: 2026-09-24
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~925 | Active |
+| `journal-2.md` | ~1127 | Active |
 | `journal-1.md` | ~2005 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -31,6 +31,10 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 77 | 2026-09-24 | Nexus docs static delivery closeout: real 404, static redirects, edge Cache Rule | `f7f158048`, `1839bcd10`, `3b7021cb9`, `4570dac51`, `fb5cc8746` | `master` |
+| 76 | 2026-09-24 | Composer motion from the @flohoeller reference: tray swap, ink-only hover, TxModeChip | `e43fa1190`, `0e5b9e33f`, `55bbc5039`, `a23b7266e`, `558d6ce82` | `master` |
+| 75 | 2026-09-22 | BUI 对齐与交互动效收口：补齐提交后自查出的 4 个 CI 门禁缺口并归档 | `b73ad0521`, `ad3295e94`, `d99cc0c9b`, `f56ecfa33`, `84b3aa7f9`, `c1c2aad00`, `30b900acf`, `c3d12ba85`, `5a5414a31`, `9dcf1ae72`, `544c7e789` | `master` |
+| 74 | 2026-09-22 | 分批提交搜索索引与 CoreApp 设置改动 | `66ec1be88`, `5767975bf`, `26f295a92` | `master` |
 | 73 | 2026-09-21 | npm OIDC trusted publisher 五项全量落地 | `e3180d40c`, `5c8225407` | `master` |
 | 72 | 2026-09-14 | PI Desktop native session convergence | `59d7d6aaf` | `pi-desktop-analysis` |
 | 71 | 2026-09-13 | Folder projects and native CLI sessions | `fb2351a4419625fad8908a62b4dfc806775099e5` | `pi-desktop-analysis` |

@@ -3,6 +3,7 @@
 // Membership mirrors the docs suite taxonomy
 // (apps/nexus/scripts/recategorize-component-docs.py); the union of the
 // base/pro/ai barrels must equal components.ts, with no overlap.
+export * from '../agent-screen/index'
 export * from '../agent-trace/index'
 export * from '../agents/index'
 export * from '../ai-elements/index'
@@ -15,9 +16,11 @@ export * from '../context-cards/index'
 export * from '../context-indicator/index'
 export * from '../conversation-stream/index'
 export * from '../fine-tune-card/index'
+export * from '../flowchart/index'
 export * from '../inline-citation/index'
 export * from '../insight-cards/index'
 export * from '../message-actions/index'
+export * from '../mode-chip/index'
 export * from '../prompt-bar/index'
 export * from '../reasoning-disclosure/index'
 export * from '../recommendation-card/index'

@@ -1,10 +1,10 @@
 ---
 title: "ChatComposer 消息输入"
-description: "AI 消息输入、附件 chip、键盘发送和自定义工具栏。"
+description: "AI 消息输入：附件 chip、键盘发送、自定义工具栏，以及可以在卡片上下换位的上下文托盘。"
 category: AiChat
 status: beta
 since: 1.0.0
-tags: [chat, composer, input]
+tags: [chat, composer, input, tray]
 syncStatus: reviewed
 verified: true
 ---
@@ -34,6 +34,52 @@ code: |
 ---
 :::
 
+### 托盘换位
+
+`tray` 插槽在卡片外挂一条平涂托盘，`trayPlacement` 决定它在卡片下方（默认）还是上方。换位时的编排如下：
+
+1. 旧托盘里的内容先淡出，并带一点模糊。
+2. 约 70ms 后，卡片滑过一个托盘行高。
+3. 新托盘的内容本来就在原位，是卡片滑开后露出来的，不做淡入。
+
+两条托盘等高时，整个输入框的外框尺寸不会变。
+
+:::TuffDemoWrapper{demo="ChatComposerTrayDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxChatComposer v-model="text" :tray-placement="placement" tray-label="上下文" show-attachment-button>
+      <template #tray>
+        <TxModeChip v-if="placement === 'bottom'" icon="i-carbon-plug" label="连接应用" @click="placement = 'top'" />
+        <TxModeChip v-else icon="i-carbon-folder" label="选择项目" @click="placement = 'bottom'" />
+      </template>
+    </TxChatComposer>
+  </template>
+---
+:::
+
+### 搭配模式芯片
+
+把 [ModeChip 模式芯片](/docs/dev/components/mode-chip) 放进 `toolbar-left`。切换模式时芯片原地变身：图标缩放互换、文字模糊交叉，底色淡入，宽度跟随新文字。
+
+:::TuffDemoWrapper{demo="ChatComposerModeChipDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxChatComposer v-model="text">
+      <template #toolbar-left>
+        <TxModeChip
+          :icon="unrestricted ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
+          :label="unrestricted ? '无限制访问' : '请求批准'"
+          :tone="unrestricted ? 'danger' : 'muted'"
+          @click="unrestricted = !unrestricted"
+        />
+      </template>
+    </TxChatComposer>
+  </template>
+---
+:::
+
 ## API
 
 ### Props
@@ -42,18 +88,21 @@ code: |
 |------|------|--------|------|
 | `modelValue` | `string` | `''` | textarea 的 `v-model` 值 |
 | `placeholder` | `string` | `'Message…'` | textarea 占位文本 |
+| `ariaLabel` | `string` | - | textarea 的可访问名；不传时用 `placeholder` |
 | `disabled` | `boolean` | `false` | 禁用输入、发送与附件操作 |
 | `submitting` | `boolean` | `false` | 提交中状态，阻断发送 |
 | `allowAttachmentWhileSubmitting` | `boolean` | `false` | 提交中仍允许附件操作 |
-| `minRows` | `number` | `3` | textarea 行数 |
-| `maxRows` | `number` | `6` | 预留给使用方的最大行数 |
+| `minRows` | `number` | `3` | textarea 的静止高度（行数）；输入变多时向上增高 |
+| `maxRows` | `number` | `6` | textarea 增高的上限（行数），超出后滚动；不会低于 `minRows` |
 | `sendOnEnter` | `boolean` | `true` | 启用键盘发送行为 |
 | `sendOnMetaEnter` | `boolean` | `true` | 键盘发送是否需要 Meta/Ctrl+Enter |
 | `allowEmptySend` | `boolean` | `false` | 文本为空时允许仅凭附件发送 |
-| `sendButtonText` | `string` | `'Send'` | 默认发送按钮文本 |
-| `showAttachmentButton` | `boolean` | `false` | 显示默认附件按钮 |
-| `attachmentButtonText` | `string` | `'Attach'` | 默认附件按钮文本 |
+| `sendButtonText` | `string` | `'Send'` | 发送图标按钮的可访问名 |
+| `showAttachmentButton` | `boolean` | `false` | 显示默认的 `+` 附件按钮 |
+| `attachmentButtonText` | `string` | `'Attach'` | `+` 附件按钮的可访问名 |
 | `attachments` | `ChatComposerAttachment[]` | `[]` | textarea 上方的附件 chips |
+| `trayPlacement` | `'top' \| 'bottom'` | `'bottom'` | 托盘在卡片上方还是下方；改变它会触发换位动效 |
+| `trayLabel` | `string` | - | 设了之后，托盘渲染为带该名称的 `role="group"` |
 
 ### Events
 
@@ -63,6 +112,7 @@ code: |
 | `send` | `{ text: string }` | 允许发送时触发，文本已 trim |
 | `attachmentClick` | - | 允许附件操作时触发 |
 | `paste` | `ClipboardEvent` | 透传 textarea paste |
+| `attachmentAdd` | `File[]` | 粘贴或拖入文件时触发，上传由宿主负责 |
 | `focus` | `FocusEvent` | 透传 textarea focus |
 | `blur` | `FocusEvent` | 透传 textarea blur |
 
@@ -70,11 +120,18 @@ code: |
 
 | 插槽 | 作用域 | 说明 |
 |------|--------|------|
+| `tray` | - | 卡片外的上下文托盘内容；位置由 `trayPlacement` 决定 |
 | `attachments` | `{ attachments }` | 替换默认附件 chips |
 | `toolbar` | `{ send, disabled, attachmentClick }` | 替换默认操作行 |
 | `toolbar-left` | `{ disabled }` | 添加到默认操作行左侧 |
 | `actions` | `{ send, disabled }` | 添加到默认发送按钮前 |
-| `footer` | - | 渲染在操作行下方 |
+| `footer` | - | 渲染在卡片内、操作行下方 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `--tx-chat-composer-radius` | `18px` | 外壳和卡片共用的圆角 |
 
 ## 交互契约
 
@@ -84,7 +141,16 @@ code: |
 - 提交中默认阻断附件操作，除非 `allowAttachmentWhileSubmitting=true`。
 - `sendOnMetaEnter=true` 时键盘发送需要 Meta/Ctrl+Enter；关闭后 Enter 发送，Shift+Enter 保留换行。
 - 自定义 `toolbar` 会收到可调用的 `send` / `attachmentClick`，并替换默认操作行。
-
+- textarea 从 `minRows` 行起随内容增高，到 `maxRows` 行后滚动（`field-sizing: content`）。不支持该特性的浏览器会固定为 `minRows` 行并滚动。
+- 根元素是外壳：透传的 class 和属性落在外壳上，白色输入表面是 `.tx-chat-composer__card`。有没有托盘，DOM 结构都一样，所以托盘出现时 textarea 不会重建，焦点和输入法状态都保留。
+- 托盘只在提供了 `tray` 插槽时渲染。换位的时间线：
+  - 旧托盘脱离文档流，钉在原来那一侧，200ms 淡出并模糊 2px；
+  - 70ms 后卡片滑过去，450ms，`cubic-bezier(0.65, 0.16, 0.1, 0.88)`，不回弹；
+  - 新托盘没有入场动画，由卡片让出。
+- 托盘出现、消失或上下高度不同时，外壳高度会在同一时间线上过渡。
+- 焦点在离开的托盘里时，换位后焦点会移到 textarea，不会留在即将移除的节点上。
+- `prefers-reduced-motion: reduce`，或者环境没有 Web Animations API 时，换位直接落到终态。
+- 附件和发送按钮都是原生 `<button>`。`+` 悬停时只换墨色，而且立即切换，没有底板；发送按钮保持实心底色，悬停不变。两者唯一的过渡是按下时的缩放。
 
 ## 最佳实践
 
@@ -93,13 +159,30 @@ code: |
 - 请求进行中使用 `submitting` 防止重复发送。
 - 密集聊天输入里优先保留 Meta/Ctrl+Enter 发送，让 Enter 继续用于换行。
 - `attachments` 适合作为状态 chip；上传进度、删除和重试行为应放在宿主或自定义 `attachments` 插槽中。
+- 托盘内容保持一行，上下两种托盘的高度尽量一致，这样换位时外框不会伸缩。
+- 托盘里的动作用 muted 色调的 `TxModeChip`，或者同样"只变墨色"的按钮，不要再加底板。
+- 让托盘位置跟着语境走（比如"连接应用"变成"选择项目"），不要把换位当装饰动画循环播放。
+- 以前把 `.tx-chat-composer` 当卡片来写样式的宿主，要改为针对 `.tx-chat-composer__card`。
 
 ## 审阅说明
 
-- 组件源码:`packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue` 确认受控 textarea 更新、trim 后发送 payload、仅附件发送保护、附件按钮保护、键盘发送模式、作用域 toolbar 函数和原生 textarea 事件透传。
-- 类型契约:`packages/tuffex/packages/components/src/chat/src/types.ts` 定义 `ChatComposerProps`、`ChatComposerAttachment` 和 `ChatComposerEmits`。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/chat/__tests__/chat-composer.test.ts` 覆盖默认渲染、model 更新、trim 发送、键盘模式、发送阻断、仅附件发送、附件保护、作用域插槽、原生事件和安装注册。
-- 导出入口:`packages/tuffex/packages/components/src/chat/index.ts` 导出 `ChatComposer`、`TxChatComposer` 和公共 composer 类型。
+- 组件源码：`packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue` 确认了：
+  - 受控 textarea 更新、trim 后发送 payload、仅附件发送保护、附件按钮保护；
+  - 键盘发送模式、作用域 toolbar 函数、原生 textarea 事件透传；
+  - 外壳/卡片结构和托盘换位编排。
+- 动效参考：[@flohoeller 的 Chatbox 组件视频](https://x.com/flohoeller/status/2102660458658582913)。卡片滑动的曲线来自对视频逐帧采样后的最小二乘拟合，误差 0.87 视频像素；常见的标准曲线误差都在 2 像素以上。
+- 否决过的方案：
+  - 新托盘淡入：参考里是卡片让出，不是淡入；
+  - 照搬视频 120ms 的悬停渐变：违反"悬停颜色立即切换"的设计规则；
+  - 有托盘时把根元素换成外壳：会重建 textarea，丢掉焦点和输入法状态。
+- 暗色主题下 `--tx-fill-color-blank` 是透明的，所以卡片先垫一层 `--tx-bg-color`，否则滑动时会透出下面的托盘。
+- 托盘文字用 `--tx-text-color-regular`，因为次级文字色放在托盘底色上只有 2.87:1（亮色）。
+- 类型契约：`packages/tuffex/packages/components/src/chat/src/types.ts` 定义 `ChatComposerProps`、`ChatComposerTrayPlacement`、`ChatComposerAttachment` 和 `ChatComposerEmits`。组件本身用运行时对象声明 props，开发服务器才能看到新增的字段。
+- **实测覆盖：** Coverage:
+  - `chat/__tests__/chat-composer.test.ts` 覆盖默认渲染、model 更新、trim 发送、键盘模式、发送阻断、仅附件发送、附件保护、作用域插槽、原生事件和安装注册；
+  - `chat-composer-tray.test.ts` 覆盖托盘位置、标签、运行时 props、textarea 复用、换位与高度动画、中途打断、焦点交接、reduced-motion、无 WAAPI 和 SSR；
+  - `chat-composer-style.test.ts` 用编译后的样式守住：不过渡颜色、悬停无底板、离场托盘脱离文档流、新托盘无入场样式、reduced-motion、ring 加一级阴影、卡片不透明、字体继承。
+- 导出入口：`packages/tuffex/packages/components/src/chat/index.ts` 导出 `ChatComposer`、`TxChatComposer` 和公共 composer 类型。
 
 ## Source
 

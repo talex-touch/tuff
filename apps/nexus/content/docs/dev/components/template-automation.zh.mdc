@@ -1,0 +1,116 @@
+---
+title: Automation 自动化编排
+description: 流程画布、节点配置、运行动画、运行记录与日志组成的自动化编辑器
+category: TemplateData
+status: beta
+since: 0.6.0
+tags: [template, automation, workflow, flowchart, ocr]
+syncStatus: reviewed
+verified: false
+---
+
+## 场景
+
+Tuff 的截图 OCR 就是这样一条流程：复制图片后先用系统自带的 OCR 识别，置信度不够才交给 AI 重读，然后翻译，再把译文写回剪贴板并弹出通知。这个模板把它画成一个可编辑、可运行的自动化：中间是流程画布，右边是节点配置和本次运行，宽屏再加上运行记录和可拖动的日志分栏。
+
+适合 Zapier / n8n 式的工作流编辑器、CI 流水线、审批流，以及任何「配置一串步骤、再看它跑」的界面。
+
+## 模板
+
+### 剪贴板截图翻译
+
+:::TuffDemoWrapper{demo="TemplateAutomationDemo" code-lang="vue" title="剪贴板截图翻译" description="进入视口后自动跑一次；调高最低置信度会让下一次运行走 AI 重读，打开模拟限流可以看到失败后的重试。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const states = reactive({ trigger: 'idle', ocr: 'idle', fallback: 'idle', translate: 'idle', notify: 'idle' })
+  const flight = ref<string | null>(null) // 正在传递数据的那条连线
+  const config = reactive({ ocr: { engine: 'vision', minConfidence: 80 }, translate: { rateLimit: false } })
+
+  const edges = computed(() => [
+    ['trigger', 'ocr'], ['ocr', 'translate'], ['ocr', 'fallback'], ['fallback', 'translate'], ['translate', 'notify'],
+  ].map(([from, to]) => ({ from, to, dashed: flight.value === `${from}>${to}` })))
+
+  // 按下「运行」时按当前配置排好一条可取消的 setTimeout 链
+  function run() {
+    const reread = OCR_CONFIDENCE < config.ocr.minConfidence
+    schedule(0, () => (states.trigger = 'running'))
+    schedule(400, () => {
+      states.trigger = 'done'
+      flight.value = 'trigger>ocr'
+    })
+    // … 识别，然后要么走 AI 重读，要么 states.fallback = 'skipped' …
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Automation" @enter="run">
+      <template #default="{ width, height }">
+        <TxFlowchart
+          :nodes="layout(width, height)" :edges="edges" :height="height - 56"
+          :node-width="212" draggable
+          @node-move="keepOffset" @node-click="({ id }) => (selected = id)"
+        >
+          <template #node="{ node }">
+            <div class="flow-node" :class="`is-${states[node.id]}`">
+              <span class="flow-node__title">{{ titles[node.id] }}</span>
+              <TxWorkingIndicator v-if="states[node.id] === 'running'" variant="dots" :show-elapsed="false" />
+              <TxStatusBadge v-else-if="states[node.id] === 'done'" size="sm" status="success" text="完成" />
+            </div>
+          </template>
+        </TxFlowchart>
+
+        <aside class="flow__rail">
+          <TxFlatSelect v-model="config.ocr.engine">
+            <TxFlatSelectItem value="vision" label="Apple Vision" />
+            <TxFlatSelectItem value="windows" label="Windows OCR" />
+          </TxFlatSelect>
+          <TxScrubField v-model="config.ocr.minConfidence" label="≥" :min="50" :max="99" suffix="%" />
+          <TxTaskRows variant="list" :rows="taskRows" />
+          <TxCodeStream :code="log" :revealed-lines="revealed" :min-height="0" />
+        </aside>
+      </template>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  /* TxFlowchart 的连线只有 dashed 一种变体，模板用它表示「正在传递」 */
+  .flow :deep(.tx-bui-flowchart__edge.is-dashed) { stroke: var(--tx-bui-accent); }
+  @media (prefers-reduced-motion: no-preference) {
+    .flow :deep(.tx-bui-flowchart__edge.is-dashed) { animation: march 0.6s linear infinite; }
+  }
+  @keyframes march { to { stroke-dashoffset: -8; } }
+  </style>
+---
+:::
+
+## 组成
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 顶栏 | [TxWorkingIndicator](/docs/dev/components/working-indicator)、[TxStatusBadge](/docs/dev/components/status-badge)、[TxSteps](/docs/dev/components/steps)、[TxSwitch](/docs/dev/components/switch)、[TxButton](/docs/dev/components/button) | 运行中的计时或上次结果；宽屏显示四步进度；自动运行开关；运行 / 停止 |
+| 画布 | [TxFlowchart](/docs/dev/components/flowchart)、[TxStatusBadge](/docs/dev/components/status-badge)、[TxWorkingIndicator](/docs/dev/components/working-indicator)、[TxDotIndicator](/docs/dev/components/dot-indicator) | 自上而下的五个节点，节点卡片里画运行状态；正在传递数据的连线以流动虚线表示 |
+| 节点配置 | [TxFlatSelect](/docs/dev/components/flat-select)、[TxScrubField](/docs/dev/components/scrub-field)、[TxSwitch](/docs/dev/components/switch)、[TxFineTuneCard](/docs/dev/components/fine-tune-card)、[TxToastPanel](/docs/dev/components/toast-panel) | 每个节点自己的表单；通知节点用微调卡片调样式，下方实时预览通知长什么样 |
+| 本次运行 | [TxTaskRows](/docs/dev/components/task-rows)、[TxCodeStream](/docs/dev/components/code-stream) | 每一步的状态、产出与可展开的明细；逐行出现的运行日志 |
+| 运行记录（宽屏） | [TxTimeline](/docs/dev/components/timeline) | 最近几次运行的结果与耗时，新的一次排在最上面 |
+| 日志分栏（宽屏） | [TxSplitter](/docs/dev/components/splitter) | 拖动分隔条调整画布和日志的高度，画布里的节点随之重新排布 |
+| 完成提示 | [TxToastPanel](/docs/dev/components/toast-panel) | 从「运行」按钮垂下来的结果卡片，4 秒后收起 |
+
+## 交互要点
+
+- 模板第一次进入视口时自动跑一次，约 3.3 秒：节点依次变为运行中、完成，数据经过的连线会流动；侧栏切到「本次运行」，日志逐行出现。开启「减弱动态效果」时直接显示跑完的结果，不启动任何计时器。
+- 点击节点编辑它的配置，配置对下一次运行生效。样例截图在 Apple Vision 下的识别置信度是 93%：把「原生 OCR」的最低置信度调到 94% 或更高，再点「运行」，这次会绕到右侧的 AI 重读；否则该节点显示「跳过」。
+- 在「翻译」节点打开「模拟限流（429）」，下一次运行里翻译会先失败、600ms 后重试成功，运行记录记为「重试后成功」。
+- 运行中可以点「停止」：正在执行的节点标为已取消，日志补一行 `cancelled by user`。
+- 节点可以拖动，落点吸附点阵；布局按画布尺寸重新计算，拖动的距离作为偏移保留，展开到全屏也不会丢。
+- 宽屏（≥ 960px）显示运行记录、四步进度和日志分栏；列内和窄屏把「节点配置 / 本次运行」收进侧栏页签，窄屏再把侧栏排到画布下方。
+
+## 改造建议
+
+- 换成自己的流程：节点和连线都是普通数组，`flowNodes()` 只负责按画布尺寸算坐标。TxFlowchart 的连线总是从上一个节点的底边连到下一个节点的顶边，所以分支节点要横向错开，让跳过它的那条线从旁边直接穿过。
+- 接真实执行器：把 `buildPlan()` 里排好的定时步骤换成后端推来的事件（SSE / WebSocket），每个事件调用一次 `setNode()` 并追加一行日志，其余界面都由这些状态推导出来。
+- TxFlowchart 没有逐条连线的样式 API，模板只借用 `dashed` 表示「正在传递」，颜色和流动写在模板 CSS 里，并且放在 `prefers-reduced-motion: no-preference` 之内。
+- TxFlatSelect 和微调卡片的类型菜单都不 teleport，放在不会被 `overflow: hidden` 裁掉、离容器底边足够远的位置。

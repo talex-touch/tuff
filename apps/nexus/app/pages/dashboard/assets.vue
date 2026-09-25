@@ -1608,8 +1608,8 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
   font-size: 11px;
 }
 
-:deep(.DashboardAssetStatusBadge .tx-status-badge__icon) {
-  font-size: 12px;
+:deep(.DashboardAssetStatusBadge .tx-status-badge__chip) {
+  --tx-status-chip-size: 13px;
 }
 
 :deep(.DashboardAssetVersionTag.tx-tag) {

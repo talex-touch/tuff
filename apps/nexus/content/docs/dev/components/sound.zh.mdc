@@ -1,0 +1,93 @@
+---
+title: "Sound 交互音效"
+description: "合成的 UI 反馈音：点击、按键、开关、成功、失败、开合，默认关闭。"
+category: Foundations
+status: beta
+since: 0.6.0
+tags: [sound, audio, feedback, utils]
+syncStatus: reviewed
+verified: true
+---
+# Sound 交互音效
+
+## 默认是关的
+
+```ts
+import { configureSound, sound } from '@talex-touch/tuffex/utils'
+
+configureSound({ enabled: true, volume: 0.6 })
+sound.click()
+```
+
+**不开就完全不响，而且连 `AudioContext` 都不会建。** 一个 import 进来就开始出声的组件库，宿主得专门去关掉它；主动开启是一行代码，被意外吵到之后再来关掉是一张 issue。
+
+同理，音频图是**懒建**的：浏览器会把非用户手势里创建的 `AudioContext` 挂在 `suspended` 状态，一个永远不播放的页面如果也建一个，那就是纯泄漏。
+
+## 为什么是合成不是音频文件
+
+几个振荡器加一条包络，打包体积是零、任何采样率下都不糊、而且不会 404。代价是音色不如采样丰富——但 UI 反馈音本来就该朴素。
+
+## 预设
+
+七个，刻意不多：一个会发出七种不同声音的界面就是噪音。
+
+| 预设 | 用途 | 实测峰值 | 实测时长 |
+|---|---|---|---|
+| `click` | 按钮按下 | 0.103 | 40ms |
+| `key` | 文本框逐字符 | **0.056** | 27ms |
+| `toggle` | 开关/复选框打开 | 0.089 | 65ms |
+| `success` | 动作完成（上行两音） | 0.090 | 188ms |
+| `error` | 动作被拒（下行两音） | 0.100 | 216ms |
+| `open` | 面板/对话框打开 | 0.078 | 91ms |
+| `close` | 面板/对话框关闭 | 0.077 | 91ms |
+
+数据来自 `OfflineAudioContext` 逐样本测量，不是标称值。三处设计意图可以从数据上读出来：
+
+- **`key` 峰值最低。** 它按字符触发，用 `click` 的音量就成了打字机。
+- **`open` / `close` 峰值与时长完全镜像**（0.078 / 0.077，都是 91ms），只有滑音方向相反——方向承载语义，音量不承载。
+- **全部不削波**，峰值都在 0.06–0.11。
+
+两类音有两套时长预算，由测试守着：**即时反馈**（`click` / `key` / `toggle`）≤ 80ms，必须在手指还没抬起时落地；**状态提示**（其余）≤ 250ms，够一个两音音型，但不能拖到用户已经走开。
+
+## 自定义
+
+`playSound` 也接受现场构造的音型：
+
+```ts
+import { playSound } from '@talex-touch/tuffex/utils'
+
+playSound({
+  layers: [
+    { wave: 'sine', freq: [400, 700], gain: 0.09, decay: 0.12 },
+    { wave: 'sine', freq: 900, gain: 0.06, decay: 0.1, delay: 0.08 },
+  ],
+})
+```
+
+`freq` 给两个值就是滑音；`delay` 让第二个音错开，做出两音音型而不是一个和弦。
+
+## API
+
+| 名称 | 说明 |
+|---|---|
+| `configureSound({ enabled, volume })` | 开关与主音量（0–1，越界夹取）。返回生效后的配置 |
+| `getSoundConfig()` | 当前配置的副本 |
+| `playSound(type \| preset)` | 播放。返回是否真的播了 |
+| `sound.click()` / `.key()` / `.toggle()` / `.success()` / `.error()` / `.open()` / `.close()` | 快捷方法 |
+| `isSoundSupported()` | 浏览器是否支持 Web Audio |
+| `disposeSound()` | 关闭音频图。下次播放会重建 |
+| `SOUND_PRESETS` | 预设表，可读取参数或作为自定义的起点 |
+
+## 契约
+
+- **永远不抛。** 关闭、不支持、或浏览器还没见到用户手势时，`playSound` 静默返回 `false`。反馈通道绝不该成为交互失败的原因。
+- **自动播放策略自己处理。** 被浏览器挂起的 context 会在下次播放时 `resume()`，失败也不抛。
+- **节点会回收。** 每个声音结束后断开自己的包络节点——不然一串连打会在主增益上挂几百个死节点。
+- **噪声缓冲复用**，不按次生成。
+- 主音量改动会立刻作用到已存在的音频图上，不用重建。
+
+## 和震动的关系
+
+`useVibrate` 是同一层的另一条反馈通道，形态刻意保持一致（预设表 + 主函数 + 快捷对象）。两者可以一起用，但**别对同一个动作同时上音效和震动**——双重反馈读起来像是触发了两次。
+
+<TuffDocSourceLink />

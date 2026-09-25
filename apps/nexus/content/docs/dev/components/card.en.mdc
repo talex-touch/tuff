@@ -330,7 +330,7 @@ code: |
 | refractionLightSpring | `boolean` | `true` | Applies when `background='refraction'`: enables spring interpolation for pointer light tracking. |
 | refractionLightSpringStiffness | `number` | `0.18` | Applies when `background='refraction'`: pointer-light spring stiffness (recommended 0.01-0.55). |
 | refractionLightSpringDamping | `number` | `0.84` | Applies when `background='refraction'`: pointer-light spring damping (recommended 0.55-0.99). |
-| clickable | `boolean` | `false` | Enables hover feedback and allows the card to emit `click` when not disabled. |
+| clickable | `boolean` | `false` | Enables hover **and press** feedback, and allows the card to emit `click` when not disabled. A press scales to `0.985` — a card is a large surface, and the ratio that reads as a nudge on a button reads as the page lurching here. Only clickable cards react: a press state on a plain surface promises an action it does not have. |
 | loading | `boolean` | `false` | Shows a loading overlay with `TxSpinner`. |
 | loadingSpinnerSize | `number` | - | Spinner size in px. Defaults to `12` when omitted. |
 | disabled | `boolean` | `false` | Applies disabled styling and blocks card click emission and pointer-driven motion updates. |

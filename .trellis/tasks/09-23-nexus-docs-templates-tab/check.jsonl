@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Forbidden/required patterns and review checklist for the final check"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Gate scripts (demo registry orphans, mdc fences, doc parity) and rendered-page verification rules"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Visual rules to audit templates against (tokens, radii, motion, reduced-motion)"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Suite taxonomy sync points and a11y/i18n rules to verify"}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, type Component } from 'vue'
 import './DocsComponentsGallery.css'
 import {
   ChartPalette,
@@ -35,10 +35,20 @@ import {
 import { useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
 import { toast } from '@talex-touch/tuffex/utils'
 import tuffexPkg from '../../../../../packages/tuffex/package.json'
+// Every `<ClientOnly>` below is this wrapper, not Nuxt's: each one sits directly
+// in a cell's stage, and the wrapper adds the reset button that remounts the
+// specimen so its entrance can be watched again.
+import ClientOnly from './DocsGallerySpecimen.vue'
+import GalleryEdgeMarquee from './gallery/GalleryEdgeMarquee.vue'
+import GalleryFusion from './gallery/GalleryFusion.vue'
+import GalleryLiquidMenu from './gallery/GalleryLiquidMenu.vue'
+import GalleryTextMorph from './gallery/GalleryTextMorph.vue'
+import GalleryTransitionLanes from './gallery/GalleryTransitionLanes.vue'
+import GalleryVirtualList from './gallery/GalleryVirtualList.vue'
 
 // One band per render: every suite has its own overview page, so the gallery
 // only ever shows that page's suite. There is no cross-suite hub grid.
-const props = defineProps<{ suite: 'base' | 'pro' | 'ai' | 'data' }>()
+const props = defineProps<{ suite: 'base' | 'pro' | 'ai' | 'data' | 'flow' }>()
 
 const { locale } = useI18n()
 
@@ -119,9 +129,21 @@ const copy = computed(() => (localeKey.value === 'zh'
         { value: 2, label: '中', tone: 'var(--tx-color-warning)' },
         { value: 3, label: '高', tone: 'var(--tx-color-success)' },
       ],
+      screenCursor: '正在打开「照片」',
+      screenAria: '智能体屏幕',
+      flowAria: '订单工作流',
+      flowNodes: {
+        trigger: { label: '触发', title: '新订单创建', detail: '有新订单时触发' },
+        branch: { label: '条件', title: '口味是 Rocky Road', detail: '否则按默认规则补货' },
+      },
       working: '处理中',
       searching: '检索中',
       typing: '正在输入…',
+      composerTray: '上下文',
+      connectApps: '连接应用',
+      selectProject: '选择项目',
+      requestApproval: '请求批准',
+      unrestricted: '无限制访问',
       suggestions: [
         { id: 's1', text: '如何发布插件？' },
         { id: 's2', text: '怎样声明权限？' },
@@ -132,6 +154,15 @@ const copy = computed(() => (localeKey.value === 'zh'
         { id: 'run', icon: 'run', label: '执行构建', chip: 'pnpm build', mono: true },
       ],
       toolSummary: '2 次工具调用',
+      edit: '编辑',
+      releaseNotes: '发布说明',
+      virtualTitle: '插件目录',
+      virtualCount: (rendered: number, total: string) => `DOM 中 ${rendered} / ${total} 行`,
+      liquidToggle: '展开菜单',
+      liquidItems: ['收藏', '夜间模式', '音乐'] as [string, string, string],
+      syncStages: ['连接中', '已连接', '同步 12 个文件', '同步 148 个文件', '已是最新'],
+      next: '下一步',
+      hoverMe: '悬停',
     }
   : {
       suiteBase: 'Basics',
@@ -199,9 +230,21 @@ const copy = computed(() => (localeKey.value === 'zh'
         { value: 2, label: 'Mid', tone: 'var(--tx-color-warning)' },
         { value: 3, label: 'High', tone: 'var(--tx-color-success)' },
       ],
+      screenCursor: 'Opening Photos',
+      screenAria: 'Agent screen',
+      flowAria: 'Order workflow',
+      flowNodes: {
+        trigger: { label: 'Trigger', title: 'New order created', detail: 'Runs when a new order arrives' },
+        branch: { label: 'If / Else', title: 'Flavor is Rocky Road', detail: 'Otherwise restock by the default rule' },
+      },
       working: 'Working',
       searching: 'Searching',
       typing: 'Typing…',
+      composerTray: 'Context',
+      connectApps: 'Connect apps',
+      selectProject: 'Select a project',
+      requestApproval: 'Request approval',
+      unrestricted: 'Unrestricted access',
       suggestions: [
         { id: 's1', text: 'How do I publish a plugin?' },
         { id: 's2', text: 'How to declare permissions?' },
@@ -212,6 +255,15 @@ const copy = computed(() => (localeKey.value === 'zh'
         { id: 'run', icon: 'run', label: 'Run build', chip: 'pnpm build', mono: true },
       ],
       toolSummary: '2 tool calls',
+      edit: 'Edit',
+      releaseNotes: 'Release notes',
+      virtualTitle: 'Plugin registry',
+      virtualCount: (rendered: number, total: string) => `${rendered} / ${total} rows in the DOM`,
+      liquidToggle: 'Toggle menu',
+      liquidItems: ['Favorite', 'Night mode', 'Music'] as [string, string, string],
+      syncStages: ['Connecting', 'Connected', 'Syncing 12 files', 'Syncing 148 files', 'Up to date'],
+      next: 'Next',
+      hoverMe: 'hover me',
     }))
 
 const inputValue = ref('')
@@ -473,11 +525,16 @@ const galleryItems = [
   { id: 'b', url: tileImage('#064e3b', '#4ade80', '#fef9c3'), name: 'Pine valley' },
   { id: 'c', url: tileImage('#7c2d12', '#fbbf24', '#fff7ed'), name: 'Dune pass' },
 ]
+// Keyed rather than labelled: the list reorders this ref in place, so labels
+// come from a locale lookup instead of being frozen into the items.
 const sortableItems = ref([
-  { id: 'clipboard', label: 'Clipboard' },
-  { id: 'browser', label: 'Browser' },
-  { id: 'actions', label: 'Quick actions' },
+  { id: 'clipboard', icon: 'i-carbon-paste', tone: 'primary', keys: ['⌘', '⇧', 'V'] },
+  { id: 'browser', icon: 'i-carbon-earth', tone: 'success', keys: ['⌘', 'B'] },
+  { id: 'actions', icon: 'i-carbon-flash', tone: 'warning', keys: ['⌘', 'K'] },
 ])
+const sortableLabels = computed<Record<string, string>>(() => (localeKey.value === 'zh'
+  ? { clipboard: '剪贴板', browser: '浏览器', actions: '快捷操作' }
+  : { clipboard: 'Clipboard', browser: 'Browser', actions: 'Quick actions' }))
 const transferValue = ref<Array<string | number>>(['browser'])
 const transferData = [
   { key: 'clipboard', label: 'Clipboard' },
@@ -495,10 +552,23 @@ const treeNodes = [
   },
 ]
 const markdownSample = '### Tuffex\n\n- `pnpm add @talex-touch/tuffex`\n- Vue 3 + TypeScript'
+// The MarkdownView cell's own sample: one of each block it renders, so the
+// specimen shows the typography rather than a two-line list.
+const markdownDoc = computed(() => (localeKey.value === 'zh'
+  ? '#### 快速开始\n安装 **TuffEx**，按需引入即可。\n\n- `pnpm add @talex-touch/tuffex`\n- Vue 3 · TypeScript · 支持 SSR\n\n> 每个组件都可以被 Tree-shaking。'
+  : '#### Getting started\nInstall **TuffEx** and import only what you use.\n\n- `pnpm add @talex-touch/tuffex`\n- Vue 3 · TypeScript · SSR ready\n\n> Every component is tree-shakable.'))
 
 /* ── Pro band. ── */
 const codeSample = 'export function greet(name: string) {\n  return \'Hello \' + name\n}\n'
-const markdownDraft = ref('## Release notes\n\n- Faster CoreBox\n')
+// JSON is the editor's default language and the one it lints; six lines fit
+// the stage at the editor's natural height, so nothing has to crop it.
+const manifestSample = '{\n  "id": "com.talex.clipboard",\n  "version": "1.2.0",\n  "sdkapi": 260713,\n  "features": ["history", "pin"]\n}'
+// A ref, not a computed: the reader edits it in the dialog. Seeded in the
+// page's language once; switching locale keeps whatever they wrote.
+const markdownDraft = ref(localeKey.value === 'zh'
+  ? '## 发布说明\n\n- **更快的** CoreBox 搜索\n- 每个插件一个*权限*面板\n'
+  : '## Release notes\n\n- **Faster** CoreBox search\n- A *permissions* panel per plugin\n')
+const markdownOpen = ref(false)
 const paletteOpen = ref(false)
 const paletteItems = computed(() => [
   { id: 'new', title: copy.value.newPlugin, icon: 'i-carbon-add', shortcut: '⌘N' },
@@ -510,8 +580,6 @@ const searchPanelItems = computed(() => [
   { id: 'browser', label: 'Browser' },
   { id: 'actions', label: copy.value.newPlugin },
 ])
-const virtualRows = Array.from({ length: 200 }, (_, index) => ({ id: index, label: `Row ${index + 1}` }))
-const fusionOpen = ref(false)
 const flipped = ref(false)
 const resizeWide = ref(false)
 const flipTriggerRef = ref<{ $el?: HTMLElement } | null>(null)
@@ -523,9 +591,30 @@ const autoSizerLabel = computed(() => {
     return '—'
   return `${Math.round(size.width)} × ${Math.round(size.height ?? 0)}`
 })
+// Twice over, so the feed is tall enough to keep scrolling through the blur.
+const blurFeed = [...galleryItems, ...galleryItems]
+const staggerItems = [
+  { icon: 'i-carbon-copy', label: 'Clipboard' },
+  { icon: 'i-carbon-earth', label: 'Browser' },
+  { icon: 'i-carbon-flash', label: 'Actions' },
+  { icon: 'i-carbon-window-base', label: 'Windows' },
+  { icon: 'i-carbon-terminal', label: 'Scripts' },
+  { icon: 'i-carbon-machine-learning-model', label: 'AI' },
+]
+const laneStates = computed<[string, string]>(() => [copy.value.online, copy.value.syncing])
+const logoModes = computed(() => [
+  { value: 'once' as const, label: 'once' },
+  { value: 'breathe' as const, label: 'breathe' },
+  { value: 'hover' as const, label: copy.value.hoverMe },
+])
 
 /* ── AI band. ── */
 const chatDraft = ref('')
+// The ChatComposer specimen is the reference composer: a context tray that trades
+// sides and a mode chip that morphs. Both are click-driven, so nothing loops.
+const composerTray = ref<'top' | 'bottom'>('bottom')
+const composerUnrestricted = ref(false)
+const modeChipOn = ref(false)
 const promptDraft = ref('')
 const aiAttachments = ref([
   { kind: 'file' as const, id: 'a1', name: 'manifest.json', size: 2048, mime: 'application/json' },
@@ -539,6 +628,32 @@ const chatListMessages = computed(() => [
   { id: 'a1', role: 'assistant' as const, content: copy.value.aboutBody, createdAt: 1_705_000_001_000 },
 ])
 const aiSampleMessage = computed(() => chatMessages.value[1] ?? chatMessages.value[0]!)
+type FlowSpecimenId = 'trigger' | 'branch'
+
+// Flowchart is controlled: it reports a drag and leaves the write to the host.
+// Positions live apart from the copy so a locale switch keeps a dragged node
+// where the reader left it.
+const flowPositions = ref<Record<FlowSpecimenId, { x: number, y: number }>>({
+  trigger: { x: 200, y: 8 },
+  branch: { x: 200, y: 150 },
+})
+
+const flowNodes = computed(() => [
+  { id: 'trigger', tone: 'violet' as const, label: copy.value.flowNodes.trigger.label, ...flowPositions.value.trigger },
+  { id: 'branch', tone: 'orange' as const, label: copy.value.flowNodes.branch.label, ...flowPositions.value.branch },
+])
+
+const flowEdges = [{ from: 'trigger', to: 'branch' }]
+
+function flowCopy(id: string) {
+  return copy.value.flowNodes[id as FlowSpecimenId]
+}
+
+function moveFlowNode({ id, x, y }: { id: string, x: number, y: number }): void {
+  if (id in flowPositions.value)
+    flowPositions.value[id as FlowSpecimenId] = { x, y }
+}
+
 const traceRows = computed(() => [
   { id: 'read', primary: copy.value.toolRows[0]?.label ?? '', secondary: 'manifest.json', mono: true, status: 'done' as const },
   { id: 'run', primary: copy.value.toolRows[1]?.label ?? '', secondary: 'pnpm build', mono: true, status: 'active' as const },
@@ -711,20 +826,85 @@ const diffRows = [
  * The components are imported rather than named as strings: `<component :is>`
  * resolves a string against the runtime registry, and tuffex components are
  * auto-imported at compile time now, so a string would resolve to nothing.
+ *
+ * Each state carries its own copy. They used to share the component name as the
+ * title and one library blurb as the description, which said nothing about the
+ * state. LayoutSkeleton takes no props and gets none: a stray `title` falls
+ * through to its root as a native tooltip.
  */
-const statusStates = computed(() => [
-  { slug: 'blank-slate', is: TxBlankSlate, en: 'BlankSlate', zh: '空白板' },
-  { slug: 'empty', is: TxEmpty, en: 'Empty', zh: '空' },
-  { slug: 'empty-state', is: TxEmptyState, en: 'EmptyState', zh: '空状态' },
-  { slug: 'error-state', is: TxErrorState, en: 'ErrorState', zh: '错误态' },
-  { slug: 'guide-state', is: TxGuideState, en: 'GuideState', zh: '引导态' },
-  { slug: 'layout-skeleton', is: TxLayoutSkeleton, en: 'LayoutSkeleton', zh: '布局骨架' },
-  { slug: 'loading-state', is: TxLoadingState, en: 'LoadingState', zh: '加载态' },
-  { slug: 'no-data', is: TxNoData, en: 'NoData', zh: '无数据' },
-  { slug: 'no-selection', is: TxNoSelection, en: 'NoSelection', zh: '未选择' },
-  { slug: 'offline-state', is: TxOfflineState, en: 'OfflineState', zh: '离线态' },
-  { slug: 'permission-state', is: TxPermissionState, en: 'PermissionState', zh: '权限态' },
-  { slug: 'search-empty', is: TxSearchEmpty, en: 'SearchEmpty', zh: '搜索无结果' },
+interface StatusCell {
+  slug: string
+  is: Component
+  en: string
+  zh: string
+  props: Record<string, unknown>
+  on?: Record<string, () => void>
+  blockClass?: string
+}
+
+const STATUS_COPY: Record<string, Record<'en' | 'zh', [title: string, description: string]>> = {
+  'blank-slate': { en: ['Start from scratch', 'Create your first workflow to get going.'], zh: ['从零开始', '创建第一个工作流，马上开始。'] },
+  'empty': { en: ['Nothing here yet', 'Items you add will show up here.'], zh: ['这里还没有内容', '添加的内容会显示在这里。'] },
+  'empty-state': { en: ['No plugins installed', 'Browse the store to add your first plugin.'], zh: ['还没有安装插件', '去插件市场添加第一个插件。'] },
+  'error-state': { en: ['Something went wrong', 'We couldn’t load your plugins. Try again in a moment.'], zh: ['出了点问题', '插件列表加载失败，请稍后重试。'] },
+  'guide-state': { en: ['Start here', 'Three quick steps to set up CoreBox.'], zh: ['从这里开始', '三步完成 CoreBox 设置。'] },
+  'loading-state': { en: ['Loading plugins', 'This usually takes a second.'], zh: ['正在加载插件', '通常只需要一秒。'] },
+  'no-data': { en: ['No data yet', 'Metrics appear after the first sync.'], zh: ['暂无数据', '首次同步后会显示指标。'] },
+  'no-selection': { en: ['Nothing selected', 'Pick a plugin to see its details.'], zh: ['未选择任何项', '选择一个插件查看详情。'] },
+  'offline-state': { en: ['You’re offline', 'Check your connection. We’ll retry automatically.'], zh: ['网络已断开', '请检查网络，恢复后会自动重试。'] },
+  'permission-state': { en: ['Access required', 'Ask a workspace admin to grant access.'], zh: ['需要权限', '请联系工作区管理员授权。'] },
+  'search-empty': { en: ['No results for “tuffex”', 'Try a different keyword or filter.'], zh: ['没有找到“tuffex”', '换个关键词或筛选条件试试。'] },
+}
+
+function statusCopy(slug: string) {
+  const [title, description] = STATUS_COPY[slug]?.[localeKey.value] ?? ['', '']
+  return { title, description }
+}
+
+// Retry is a real round trip: the illustration swaps for the spinner and the
+// button locks until the attempt settles, rather than being a dead button.
+const errorRetrying = ref(false)
+let errorRetryTimer: ReturnType<typeof setTimeout> | null = null
+
+function retryErrorState() {
+  if (errorRetrying.value)
+    return
+  errorRetrying.value = true
+  errorRetryTimer = setTimeout(() => {
+    errorRetrying.value = false
+    errorRetryTimer = null
+  }, 1400)
+}
+
+onBeforeUnmount(() => {
+  if (errorRetryTimer)
+    clearTimeout(errorRetryTimer)
+})
+
+const statusStates = computed<StatusCell[]>(() => [
+  { slug: 'blank-slate', is: TxBlankSlate, en: 'BlankSlate', zh: '空白板', props: statusCopy('blank-slate') },
+  { slug: 'empty', is: TxEmpty, en: 'Empty', zh: '空', props: statusCopy('empty') },
+  { slug: 'empty-state', is: TxEmptyState, en: 'EmptyState', zh: '空状态', props: statusCopy('empty-state') },
+  {
+    slug: 'error-state',
+    is: TxErrorState,
+    en: 'ErrorState',
+    zh: '错误态',
+    props: {
+      ...statusCopy('error-state'),
+      loading: errorRetrying.value,
+      primaryAction: { label: localeKey.value === 'zh' ? '重试' : 'Retry', icon: 'i-carbon-renew', disabled: errorRetrying.value },
+    },
+    on: { primary: retryErrorState },
+  },
+  { slug: 'guide-state', is: TxGuideState, en: 'GuideState', zh: '引导态', props: statusCopy('guide-state') },
+  { slug: 'layout-skeleton', is: TxLayoutSkeleton, en: 'LayoutSkeleton', zh: '布局骨架', props: {}, blockClass: 'docs-gallery__layout-skel' },
+  { slug: 'loading-state', is: TxLoadingState, en: 'LoadingState', zh: '加载态', props: statusCopy('loading-state') },
+  { slug: 'no-data', is: TxNoData, en: 'NoData', zh: '无数据', props: statusCopy('no-data') },
+  { slug: 'no-selection', is: TxNoSelection, en: 'NoSelection', zh: '未选择', props: statusCopy('no-selection') },
+  { slug: 'offline-state', is: TxOfflineState, en: 'OfflineState', zh: '离线态', props: statusCopy('offline-state') },
+  { slug: 'permission-state', is: TxPermissionState, en: 'PermissionState', zh: '权限态', props: statusCopy('permission-state') },
+  { slug: 'search-empty', is: TxSearchEmpty, en: 'SearchEmpty', zh: '搜索无结果', props: statusCopy('search-empty') },
 ])
 
 const orbStates: OrbState[] = ['working', 'searching', 'solving']
@@ -1722,30 +1902,36 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
+            <!-- One row per line: a gutter only spaces columns, so four spans
+                 wrapped inside a single row stacked with no gap between lines. -->
             <div class="docs-gallery__block">
               <TxContainer>
-                <TxRow :gutter="8">
-                  <TxCol :span="12">
-                    <div class="docs-gallery__tile">
-                      12
-                    </div>
-                  </TxCol>
-                  <TxCol :span="12">
-                    <div class="docs-gallery__tile">
-                      12
-                    </div>
-                  </TxCol>
-                  <TxCol :span="8">
-                    <div class="docs-gallery__tile">
-                      8
-                    </div>
-                  </TxCol>
-                  <TxCol :span="16">
-                    <div class="docs-gallery__tile">
-                      16
-                    </div>
-                  </TxCol>
-                </TxRow>
+                <div class="docs-gallery__rows">
+                  <TxRow :gutter="8">
+                    <TxCol :span="12">
+                      <div class="docs-gallery__tile">
+                        12
+                      </div>
+                    </TxCol>
+                    <TxCol :span="12">
+                      <div class="docs-gallery__tile">
+                        12
+                      </div>
+                    </TxCol>
+                  </TxRow>
+                  <TxRow :gutter="8">
+                    <TxCol :span="8">
+                      <div class="docs-gallery__tile">
+                        8
+                      </div>
+                    </TxCol>
+                    <TxCol :span="16">
+                      <div class="docs-gallery__tile">
+                        16
+                      </div>
+                    </TxCol>
+                  </TxRow>
+                </div>
               </TxContainer>
             </div>
             <template #fallback>
@@ -2341,7 +2527,13 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxMarkdownView :content="markdownSample" />
+              <div class="docs-gallery__doc">
+                <div class="docs-gallery__doc-bar">
+                  <span class="i-carbon-document" aria-hidden="true" />
+                  README.md
+                </div>
+                <TxMarkdownView :content="markdownDoc" />
+              </div>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2361,13 +2553,19 @@ async function copyInstall() {
               <TxSortableList
                 v-model="sortableItems"
                 handle
-                :item-label="(item) => item.label"
+                :item-label="(item) => sortableLabels[item.id] ?? item.id"
                 :aria-label="cellLabel('SortableList', '可排序列表')"
               >
                 <template #item="{ item, handleAttrs }">
-                  <div class="docs-gallery__scroll-row docs-gallery__sort-row">
+                  <div class="docs-gallery__sort-row">
                     <span class="docs-gallery__grip i-carbon-draggable" v-bind="handleAttrs" />
-                    {{ item.label }}
+                    <span class="docs-gallery__sort-icon" :data-tone="item.tone" aria-hidden="true">
+                      <span :class="item.icon" />
+                    </span>
+                    <span class="docs-gallery__sort-label">{{ sortableLabels[item.id] }}</span>
+                    <span class="docs-gallery__sort-keys" aria-hidden="true">
+                      <TxKbd v-for="key in item.keys" :key="key" size="sm">{{ key }}</TxKbd>
+                    </span>
                   </div>
                 </template>
               </TxSortableList>
@@ -2389,7 +2587,7 @@ async function copyInstall() {
               <TxStatCard
                 :value="1284"
                 :label="copy.online"
-                icon-class="i-carbon-analytics"
+                icon-class="i-carbon-analytics docs-gallery__stat-icon"
                 :insight="{ from: 1100, to: 1284, type: 'percent' }"
               />
             </div>
@@ -2464,8 +2662,8 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block">
-              <component :is="state.is" :title="state.en" :description="copy.aboutBody" />
+            <div class="docs-gallery__block" :class="state.blockClass">
+              <component :is="state.is" v-bind="state.props" v-on="state.on ?? {}" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2517,7 +2715,8 @@ async function copyInstall() {
                 class="docs-gallery__glow-card"
                 tag="div"
                 :duration-ms="2600"
-                :band-size="40"
+                :band-size="36"
+                :opacity="0.6"
               >
                 {{ copy.installBody }}
               </TxGlowText>
@@ -2553,8 +2752,10 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__code">
-              <TxCodeEditor :model-value="codeSample" language="javascript" read-only line-numbers />
+            <!-- Editable, at its natural height. The old 128px frame cropped the
+                 editor's 160px floor and took its bottom edge with it. -->
+            <div class="docs-gallery__block docs-gallery__block--wide docs-gallery__editor">
+              <TxCodeEditor :model-value="manifestSample" language="json" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2586,9 +2787,21 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__code">
-              <TxMarkdownEditor v-model="markdownDraft" />
+            <!-- The source here, the editor in a dialog: eleven actions and three
+                 modes took three toolbar rows at this width and left a 12px
+                 sliver of editor. The dialog is wide enough for one row. -->
+            <div class="docs-gallery__block docs-gallery__doc docs-gallery__md-card">
+              <div class="docs-gallery__doc-bar">
+                <span class="docs-gallery__grow">release-notes.md</span>
+                <TxButton size="sm" icon="i-carbon-edit" @click="markdownOpen = true">
+                  {{ copy.edit }}
+                </TxButton>
+              </div>
+              <pre class="docs-gallery__md-source">{{ markdownDraft }}</pre>
             </div>
+            <TxModal v-model="markdownOpen" :title="copy.releaseNotes" width="min(92vw, 640px)">
+              <TxMarkdownEditor v-model="markdownDraft" :min-height="220" :max-height="360" />
+            </TxModal>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2618,15 +2831,7 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxVirtualList :items="virtualRows" :item-height="32" :height="104" item-key="id">
-                <template #item="{ item }">
-                  <div class="docs-gallery__scroll-row">
-                    {{ item.label }}
-                  </div>
-                </template>
-              </TxVirtualList>
-            </div>
+            <GalleryVirtualList :title="copy.virtualTitle" :count-label="copy.virtualCount" />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2640,12 +2845,47 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
-              <TxAvatar name="Talex" shape="rounded" />
-              <template #overlay>
-                <TxBadge :value="3" />
-              </template>
-            </TxCornerOverlay>
+            <!-- One per placement, each with a different kind of overlay. The
+                 badges sit in a page-coloured ring: they are translucent tints
+                 and read as smudges straight on a photo or an avatar. -->
+            <div class="docs-gallery__row docs-gallery__row--loose">
+              <figure class="docs-gallery__corner" style="--i: 0">
+                <TxCornerOverlay placement="top-left" :offset-x="-6" :offset-y="-6">
+                  <img class="docs-gallery__corner-thumb" :src="galleryItems[0]!.url" alt="">
+                  <template #overlay>
+                    <span class="docs-gallery__corner-ring"><TxBadge value="NEW" variant="primary" /></span>
+                  </template>
+                </TxCornerOverlay>
+                <figcaption>top-left</figcaption>
+              </figure>
+              <figure class="docs-gallery__corner" style="--i: 1">
+                <TxCornerOverlay placement="top-right" :offset-x="-6" :offset-y="-6">
+                  <TxAvatar name="Kiri" shape="rounded" size="large" />
+                  <template #overlay>
+                    <span class="docs-gallery__corner-ring"><TxBadge :value="12" variant="error" /></span>
+                  </template>
+                </TxCornerOverlay>
+                <figcaption>top-right</figcaption>
+              </figure>
+              <figure class="docs-gallery__corner" style="--i: 2">
+                <TxCornerOverlay placement="bottom-left" :offset-x="-5" :offset-y="-5">
+                  <TxIconChip :size="48" tone="red" label="PDF" />
+                  <template #overlay>
+                    <span class="docs-gallery__corner-ring docs-gallery__corner-check"><TxIcon name="check-circle" /></span>
+                  </template>
+                </TxCornerOverlay>
+                <figcaption>bottom-left</figcaption>
+              </figure>
+              <figure class="docs-gallery__corner" style="--i: 3">
+                <TxCornerOverlay placement="bottom-right" :offset-x="1" :offset-y="1">
+                  <TxAvatar name="Talex" size="large" />
+                  <template #overlay>
+                    <span class="docs-gallery__dot" style="background: var(--tx-color-success)" />
+                  </template>
+                </TxCornerOverlay>
+                <figcaption>bottom-right</figcaption>
+              </figure>
+            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2659,15 +2899,7 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxEdgeFadeMask axis="horizontal" :size="32">
-                <div class="docs-gallery__fade-row">
-                  <div v-for="tileIndex in 10" :key="tileIndex" class="docs-gallery__tile">
-                    {{ tileIndex }}
-                  </div>
-                </div>
-              </TxEdgeFadeMask>
-            </div>
+            <GalleryEdgeMarquee />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2688,8 +2920,9 @@ async function copyInstall() {
               v-model="flipped"
               :source="flipTriggerEl"
               :header-title="copy.aboutTitle"
+              :card-style="{ width: 'min(92vw, 340px)' }"
             >
-              <p class="docs-gallery__muted docs-gallery__flip-body">
+              <p class="docs-gallery__flip-body">
                 {{ copy.aboutBody }}
               </p>
             </TxFlipOverlay>
@@ -2706,14 +2939,7 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxFusion v-model="fusionOpen" trigger="hover">
-              <template #a>
-                <TxButton circle icon="i-carbon-add" />
-              </template>
-              <template #b>
-                <TxButton circle icon="i-carbon-edit" />
-              </template>
-            </TxFusion>
+            <GalleryFusion />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2727,11 +2953,14 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxGlassSurface>
-                <div class="docs-gallery__tile docs-gallery__overlay-body">
-                  {{ copy.aboutTitle }}
-                </div>
+            <!-- Glass needs something behind it to bend: over the flat cell the
+                 displacement had nothing to act on and the surface was invisible. -->
+            <div class="docs-gallery__block docs-gallery__glass-stage">
+              <div class="docs-gallery__glass-scene" aria-hidden="true">
+                <span v-for="orb in 5" :key="orb" class="docs-gallery__glass-orb" />
+              </div>
+              <TxGlassSurface :width="200" :height="88" :border-radius="18" :background-opacity="0.06">
+                <span class="docs-gallery__glass-label">GlassSurface</span>
               </TxGlassSurface>
             </div>
             <template #fallback>
@@ -2747,9 +2976,14 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
+            <!-- A solid card inside, 2px in: its 14px radius is the ring's 16
+                 minus the gap, so the two curves stay concentric. -->
             <div class="docs-gallery__block">
-              <TxGradientBorder :padding="14" border-radius="14px">
-                <strong>{{ copy.aboutTitle }}</strong>
+              <TxGradientBorder :border-radius="16" :border-width="2" :padding="2" :animation-duration="6">
+                <div class="docs-gallery__gb-card">
+                  <strong>{{ copy.aboutTitle }}</strong>
+                  <span>{{ copy.aboutBody }}</span>
+                </div>
               </TxGradientBorder>
             </div>
             <template #fallback>
@@ -2765,13 +2999,25 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__blur-stage">
-              <div class="docs-gallery__fade-row">
-                <div v-for="tileIndex in 8" :key="tileIndex" class="docs-gallery__tile">
-                  {{ tileIndex }}
-                </div>
+            <!-- A feed that keeps moving through the blur band. The blur only
+                 acts on what is behind it, and the old tiles sat in the top
+                 34px while the band covered the empty bottom 40%. -->
+            <div class="docs-gallery__block docs-gallery__blur-card">
+              <div class="docs-gallery__blur-feed">
+                <figure v-for="(shot, index) in blurFeed" :key="index" class="docs-gallery__blur-shot">
+                  <img :src="shot.url" alt="">
+                  <figcaption>{{ shot.name }}</figcaption>
+                </figure>
               </div>
-              <TxGradualBlur position="bottom" :strength="2" height="40%" />
+              <TxGradualBlur
+                position="bottom"
+                height="64px"
+                :strength="2.5"
+                :div-count="6"
+                curve="bezier"
+                exponential
+                :z-index="1"
+              />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2786,7 +3032,17 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxKeyframeStrokeText text="Tuffex" :font-size="34" />
+            <!-- Token colours: the defaults are a dark fill for a light page and
+                 left only a thin outline on the dark one. A phrase longer than
+                 any one glyph's outline, or the dash ends before the glyph does. -->
+            <TxKeyframeStrokeText
+              text="Talex Touch"
+              stroke-color="var(--tx-color-primary)"
+              fill-color="var(--tx-text-color-primary)"
+              :stroke-width="1.5"
+              :font-size="44"
+              :duration-ms="2400"
+            />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2800,13 +3056,7 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxLiquid>
-              <TxLiquidItem v-for="tileIndex in 3" :key="tileIndex">
-                <div class="docs-gallery__tile">
-                  {{ tileIndex }}
-                </div>
-              </TxLiquidItem>
-            </TxLiquid>
+            <GalleryLiquidMenu :toggle-label="copy.liquidToggle" :item-labels="copy.liquidItems" />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2820,12 +3070,42 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxOutlineBorder border-radius="14px">
-                <div class="docs-gallery__tile docs-gallery__overlay-body">
-                  {{ copy.installTitle }}
-                </div>
-              </TxOutlineBorder>
+            <!-- The variants side by side, colour on the ring only. The old cell
+                 wrapped a bordered tile in the default ring: two grey lines that
+                 read as a doubled border. `ring-inset` is left out — it paints
+                 under the slot and an avatar covers it entirely. -->
+            <div class="docs-gallery__row docs-gallery__row--loose">
+              <div class="docs-gallery__meter">
+                <TxOutlineBorder :ring-width="2" ring-color="var(--tx-color-primary)" :offset="3">
+                  <TxAvatar name="Talex" :size="44" />
+                </TxOutlineBorder>
+                <span class="docs-gallery__meter-text">ring-offset</span>
+              </div>
+              <div class="docs-gallery__meter">
+                <TxOutlineBorder variant="ring" :ring-width="2" ring-color="var(--tx-color-success)">
+                  <TxAvatar name="Kiri" :size="44" />
+                </TxOutlineBorder>
+                <span class="docs-gallery__meter-text">ring</span>
+              </div>
+              <div class="docs-gallery__meter">
+                <TxOutlineBorder
+                  variant="border"
+                  shape="rect"
+                  :border-radius="15"
+                  :border-width="2"
+                  :padding="3"
+                  border-color="var(--tx-color-warning)"
+                >
+                  <TxAvatar name="Ame" :size="40" shape="rounded" />
+                </TxOutlineBorder>
+                <span class="docs-gallery__meter-text">border</span>
+              </div>
+              <div class="docs-gallery__meter">
+                <TxOutlineBorder clip-mode="mask" clip-shape="hexagon" variant="border" :border-width="0">
+                  <TxAvatar name="Louis" :size="48" shape="square" />
+                </TxOutlineBorder>
+                <span class="docs-gallery__meter-text">mask</span>
+              </div>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2840,9 +3120,12 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxStagger appear :delay-step="80">
-              <div v-for="tileIndex in 3" :key="tileIndex" class="docs-gallery__tile">
-                {{ tileIndex }}
+            <!-- Six items on a grid with a longer rise than the built-in 6px, so
+                 the cascade is visible; the reset button plays it again. -->
+            <TxStagger class="docs-gallery__stagger" name="docs-gallery-stagger" :duration="420" :delay-step="70">
+              <div v-for="item in staggerItems" :key="item.label" class="docs-gallery__tile docs-gallery__stagger-item">
+                <span :class="item.icon" aria-hidden="true" />
+                {{ item.label }}
               </div>
             </TxStagger>
             <template #fallback>
@@ -2858,10 +3141,7 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__stack docs-gallery__stack--center">
-              <TxTextTransformer :text="switchOn ? copy.online : copy.failed" />
-              <TuffSwitch v-model="switchOn" />
-            </div>
+            <GalleryTextMorph :stages="copy.syncStages" :next-label="copy.next" />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2875,14 +3155,7 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__stack docs-gallery__stack--center">
-              <TxTransitionFade>
-                <div v-if="switchOn" class="docs-gallery__tile">
-                  {{ copy.online }}
-                </div>
-              </TxTransitionFade>
-              <TuffSwitch v-model="switchOn" />
-            </div>
+            <GalleryTransitionLanes :states="laneStates" />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -2896,7 +3169,14 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxTuffLogoStroke :size="72" />
+            <!-- All three modes: at 72px one `once` run ended as a glowing dot,
+                 and nothing said the logo could breathe or wait for a hover. -->
+            <div class="docs-gallery__row docs-gallery__row--loose">
+              <div v-for="mode in logoModes" :key="mode.value" class="docs-gallery__meter">
+                <TxTuffLogoStroke :size="64" :mode="mode.value" />
+                <span class="docs-gallery__meter-text">{{ mode.label }}</span>
+              </div>
+            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -3072,6 +3352,25 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('mode-chip')">
+          {{ cellLabel('ModeChip', '模式芯片') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <TxModeChip
+              :icon="modeChipOn ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
+              :label="modeChipOn ? copy.unrestricted : copy.requestApproval"
+              :tone="modeChipOn ? 'danger' : 'muted'"
+              @click="modeChipOn = !modeChipOn"
+            />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('tool-chips')">
           {{ cellLabel('ToolChips', '工具调用流') }}
         </NuxtLink>
@@ -3151,7 +3450,37 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxChatComposer v-model="chatDraft" :min-rows="1" :max-rows="3" :placeholder="copy.typeSomething" />
+              <TxChatComposer
+                v-model="chatDraft"
+                :min-rows="1"
+                :max-rows="3"
+                :placeholder="copy.typeSomething"
+                :tray-placement="composerTray"
+                :tray-label="copy.composerTray"
+              >
+                <template #tray>
+                  <TxModeChip
+                    v-if="composerTray === 'bottom'"
+                    icon="i-carbon-plug"
+                    :label="copy.connectApps"
+                    @click="composerTray = 'top'"
+                  />
+                  <TxModeChip
+                    v-else
+                    icon="i-carbon-folder"
+                    :label="copy.selectProject"
+                    @click="composerTray = 'bottom'"
+                  />
+                </template>
+                <template #toolbar-left>
+                  <TxModeChip
+                    :icon="composerUnrestricted ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
+                    :label="composerUnrestricted ? copy.unrestricted : copy.requestApproval"
+                    :tone="composerUnrestricted ? 'danger' : 'muted'"
+                    @click="composerUnrestricted = !composerUnrestricted"
+                  />
+                </template>
+              </TxChatComposer>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -3220,6 +3549,33 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxAgentTrace :rows="traceRows" working default-open />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('agent-screen')">
+          {{ cellLabel('AgentScreen', '智能体屏幕') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__block">
+              <TxAgentScreen
+                :aria-label="copy.screenAria"
+                :cursor="{ x: 46, y: 62, label: copy.screenCursor }"
+              >
+                <!-- A painted stand-in, as in the AgentScreen demo: the frame
+                     takes any surface, and a gallery tile should not ship a
+                     screenshot. -->
+                <div class="docs-gallery__desktop">
+                  <span class="docs-gallery__desktop-window is-back" />
+                  <span class="docs-gallery__desktop-window is-front" />
+                </div>
+              </TxAgentScreen>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -3713,6 +4069,39 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxEChart :option="echartOption" :height="220" aria-label="Installs and sessions by weekday" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="props.suite === 'flow'" class="docs-gallery__grid docs-gallery__grid--single">
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('flowchart')">
+          {{ cellLabel('Flowchart', '流程画布') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__flow">
+              <TxFlowchart
+                :nodes="flowNodes"
+                :edges="flowEdges"
+                :height="260"
+                :node-width="240"
+                draggable
+                :aria-label="copy.flowAria"
+                @node-move="moveFlowNode"
+              >
+                <template #node="{ node }">
+                  <div class="docs-gallery__flow-card">
+                    <strong>{{ flowCopy(node.id).title }}</strong>
+                    <small>{{ flowCopy(node.id).detail }}</small>
+                  </div>
+                </template>
+              </TxFlowchart>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />

@@ -1,0 +1,121 @@
+---
+title: Store
+description: A plugin store with a featured carousel, categories, search suggestions, permission and version details, and install, update and uninstall flows the reader confirms
+category: TemplateContent
+status: beta
+since: 0.6.0
+tags: [template, store, plugins, install, permissions]
+syncStatus: reviewed
+verified: false
+---
+
+## Scenario
+
+The plugin store inside the Tuff client: browse, search, read the details, then install, update, disable or uninstall. Plugin ids, versions, channels, triggers, required and optional permissions and the reason for each come from the repo’s `plugins/*/manifest.json`; permission names and risk levels come from the permission registry, and the install, update and uninstall wording is the client’s own. Ratings, install counts, reviews, release notes and package sizes are sample data, and the three community plugins are fictional. Every plugin installs directly: there is no price, plan or checkout anywhere.
+
+It fits an in-app extension marketplace, a theme or template store, an integrations directory — anywhere people switch between Discover and Installed, and permissions have to be explained before anything is installed.
+
+## Template
+
+### Plugin store
+
+:::TuffDemoWrapper{demo="TemplateStoreDemo" code-lang="vue" title="Plugin store" description="The carousel turns once and stops, pausing on hover or focus; search suggests plugins by name, feature and trigger (try fy); open a card for its details and enlarge the screenshots. Installs, updates and grants only happen after you click; the community plugin Unit Converter fails its first download to show the retry path."}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+  import TemplateStoreAction from './TemplateStoreAction.vue'
+  import TemplateStorePermissions from './TemplateStorePermissions.vue'
+
+  // One state table keyed by plugin id: cards, carousel, details and the
+  // installed list all read it, so a download shows its progress everywhere
+  const installs = reactive<Record<string, InstallState>>(seedInstalls())
+  const confirm = reactive({ open: false, id: '' })
+
+  // Installing starts with the permission dialog; no timer ever presses Allow
+  function onAction(plugin: Plugin) {
+    if (!installs[plugin.id].version)
+      Object.assign(confirm, { open: true, id: plugin.id })
+  }
+
+  function grant(choice: 'always' | 'session') {
+    confirm.open = false
+    runFlow(confirm.id, choice) // queued → downloading → verifying → installing → installed
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Plugin store" :height="580" @enter="play">
+      <TxFilterChips v-model="view" :items="views" role="tablist" aria-label="Store views" />
+      <TxSearchSelect remote :options="suggestions" placeholder="Search plugins, features or triggers…" @search="filter" @select="openDetail" />
+
+      <!-- A hand-built carousel: the pause button is always there, hidden slides are inert, stacked slides only fade -->
+      <section role="region" aria-roledescription="carousel" aria-label="Editor’s picks">…</section>
+
+      <ul class="grid">
+        <li v-for="plugin in visible" :key="plugin.id">
+          <TxCard size="small" :radius="14">
+            <!-- The title button's ::after covers the whole card; the action sits above it -->
+            <button class="open" @click="openDetail(plugin.id)">{{ plugin.name }}</button>
+            <TemplateStoreAction :view="actionOf(plugin)" compact @press="onAction(plugin)" />
+          </TxCard>
+        </li>
+      </ul>
+
+      <!-- Details are an in-template view (a side panel once expanded), not a TxDrawer -->
+      <section class="detail">
+        <TxTabs v-model="tab" placement="top" borderless :content-scrollable="false" indicator-variant="pill">
+          <TxTabItem name="overview"><TxImageGallery :items="shots" preview-title="Screenshot preview" /></TxTabItem>
+          <TxTabItem name="permissions"><TemplateStorePermissions :rows="permissionRows" /></TxTabItem>
+          <TxTabItem name="versions"><TxTimeline>…</TxTimeline></TxTabItem>
+          <TxTabItem name="reviews"><TxRating v-model="draft.stars" :star-label="n => `Rate ${n} stars`" /></TxTabItem>
+        </TxTabs>
+      </section>
+
+      <TxModal v-model="confirm.open" title="Plugin permission request">
+        <TemplateStorePermissions :rows="requiredRows" compact />
+        <template #footer>
+          <TxButton variant="ghost" @click="reject">Reject install</TxButton>
+          <TxButton variant="secondary" @click="grant('session')">Allow this session</TxButton>
+          <TxButton variant="primary" @click="grant('always')">Always allow</TxButton>
+        </template>
+      </TxModal>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Anatomy
+
+| Region | Components | Role |
+|---|---|---|
+| Header | [TxFilterChips](/docs/dev/components/filter-chips), [TxSearchSelect](/docs/dev/components/search-select) | Discover / Installed switch with tab semantics; search suggests plugins by name, feature and trigger, a pick opens its details, and Enter or a pause filters the list |
+| Categories and sorting | [TxFilterChips](/docs/dev/components/filter-chips), [TxFlatRadio](/docs/dev/components/flat-radio), [TxSidebarNav](/docs/dev/components/sidebar-nav) | Category counts derived from the plugins; sort by installs, last release or rating; expanded, views and categories move into the side navigation |
+| Featured carousel | Hand-built region, [TxButton](/docs/dev/components/button) | tuffex has no carousel: pause, previous and next are always there, dots jump straight to a slide, and the backdrops are generated in code |
+| Plugin cards | [TxCard](/docs/dev/components/card), [TxIconChip](/docs/dev/components/icon-chip), [TxRating](/docs/dev/components/rating), [TxTag](/docs/dev/components/tag) | Icon, author and source, a two-line summary, rating and installs, category and channel; the read-only stars are hidden from screen readers in favour of a sentence |
+| Action slot | [TxButton](/docs/dev/components/button), [TxProgressBar](/docs/dev/components/progress-bar) | Install → progress → Open / Update / Enable / Retry, one state shared by cards, carousel, details and installed rows |
+| Updates notice | [TxStatusBadge](/docs/dev/components/status-badge) | Appears once an update check finishes; View updates goes to the installed list |
+| Details header | [TxCornerOverlay](/docs/dev/components/corner-overlay), [TxTooltip](/docs/dev/components/tooltip), [TxDropdownMenu](/docs/dev/components/dropdown-menu) | Official badge on the icon, source explanation, and disable / uninstall / copy plugin ID under “⋯” |
+| Details tabs | [TxTabs](/docs/dev/components/tabs), [TxImageGallery](/docs/dev/components/image-gallery), [TxKbd](/docs/dev/components/kbd), [TxStatusBadge](/docs/dev/components/status-badge), [TxTimeline](/docs/dev/components/timeline) | Overview (screenshot lightbox, features and triggers), Permissions (reasons and risk), Versions (channel and notes), Reviews |
+| Reviews | [TxRating](/docs/dev/components/rating), [TxProgressBar](/docs/dev/components/progress-bar), [TxAvatar](/docs/dev/components/avatar), [TxTextarea](/docs/dev/components/textarea) | Average and star distribution, review list, Helpful, and a review form whose submissions show as Pending |
+| Installed | [TxCardItem](/docs/dev/components/card-item), [TxSwitch](/docs/dev/components/switch), [TxEmptyState](/docs/dev/components/empty-state) | One row per plugin: the action shows only for an update or work in progress, beside an enable switch and a menu; an empty state once everything is uninstalled |
+| Confirmations | [TxModal](/docs/dev/components/modal) | Permission request, update confirmation (new permissions listed on their own) and uninstall |
+| Empty results and feedback | [TxSearchEmpty](/docs/dev/components/search-empty), [TxToastPanel](/docs/dev/components/toast-panel) | Clear search when nothing matches; install, update and uninstall results stay inside the template, some with Open, Retry or Reinstall |
+
+## Interactions
+
+- Installing, updating, granting and uninstalling only ever start from your click. The script does two things: the carousel turns every 5 seconds and stops after one lap, and after about 1.5 seconds it reports that 2 plugins have updates — that toast closes by itself after a few seconds (a pointer or focus on it holds it open), while the “plugins have new versions” banner stays. With reduced motion the carousel stays put, the update notice is simply there, and no toast appears.
+- The carousel art is dark on both the light and the dark docs page, so the whole carousel renders in the dark theme and its buttons look the same either way.
+- The real client downloads and verifies the signature before it asks for permissions; the template asks when you press Install, so the dialog never appears after you have scrolled away. The three choices use the client’s wording — Always allow, Allow this session, Reject install — and a community plugin adds “comes from an unofficial source. Proceed with installation?” at the top.
+- A download can be cancelled. The community plugin Unit Converter times out on its first download; Retry downloads again without asking for permissions a second time.
+- In the column, details replace the list, and Back or Esc returns to the same scroll position and to the card that opened them; expanded, details are a side panel that follows the selected plugin. They are not a TxDrawer: the drawer takes Tab and Esc on the whole document, so a screenshot lightbox or confirmation opened from it would have focus dragged back to the drawer, and one Esc would close both.
+- The carousel is a region with `aria-roledescription="carousel"`, and slides that are not showing are `inert`; announcements are off while it plays and polite once you step through it. With focus inside it, ← / → change slides — bound to the carousel only, never to the page.
+- Risk colours and icons always come with words; the read-only stars are hidden from screen readers, which hear a sentence such as “Rated 4.8, 1,240 reviews” instead.
+
+## Adapting it
+
+- With a real store, read plugins, channels, permissions and reasons straight from the plugin manifests and the store API, and swap the grouping for the store’s own `category` (the template assigns its groups by hand; most manifests say `utilities`).
+- The install table is keyed by plugin id. For real installs, replace the timers with the phases the client reports — queued, downloading, verifying, awaiting confirmation, installing — and every action slot follows along.
+- Put ratings and reviews through moderation: show a submission as Pending first, and count it in the average only once it is approved.
+- For suggestions with icons, swap TxSearchSelect for TxSearchInput with a hand-built list, at the cost of writing the combobox keyboard and screen-reader behaviour yourself.

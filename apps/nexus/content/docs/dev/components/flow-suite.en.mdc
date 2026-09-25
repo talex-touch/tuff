@@ -1,0 +1,28 @@
+---
+title: Flow Suite
+description: "Workflow orchestration: nodes, branches and connectors on a dotted canvas"
+category: FlowSuite
+status: beta
+since: 0.6.0
+tags: [flow, workflow, canvas, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## Positioning
+
+The Flow suite is for drawing a sequence of operations as a diagram you can read and rearrange. **Flowchart** is the canvas: a dot grid, absolutely-positioned nodes, bezier connectors recomputed from measured card heights, and optional dragging with grid snapping. It deliberately owns only three things — the canvas, the connectors and the category chip — while card content comes from the host through a slot, so the same canvas can draw an automation rule, an agent's tool-call chain, or a deploy pipeline. It imports through the `@talex-touch/tuffex/ai` entry: suites are a **docs-level** split, while the component barrels stay base / pro / ai.
+
+## Preview
+
+Every tile is a live, interactive component. Click the name in its top-left corner to open that component's page.
+
+::DocsComponentsGallery{suite="flow"}
+::
+
+## Groups
+
+Every component in this suite, grouped. The data comes from each doc's `category` frontmatter, so a new component appears here on its own.
+
+::DocsSuiteCatalog{suite="flow"}
+::

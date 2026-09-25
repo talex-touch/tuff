@@ -1,0 +1,118 @@
+---
+title: Gallery 画廊
+description: 合集切换、缩略图密度、网格瀑布流列表三种布局与作品详情组成的作品墙
+category: TemplateContent
+status: beta
+since: 0.6.0
+tags: [template, gallery, media, upload]
+syncStatus: reviewed
+verified: false
+---
+
+## 场景
+
+Nexus 社区的作品墙。壁纸、CoreBox 主题和插件封面放在同一面墙上浏览、收藏和评分；点开一件作品看大图、配色和变体；也能把自己的图片放上来预览。
+
+适合以图为主的页面：主题商店、素材库、截图集、插件封面审核。
+
+## 模板
+
+### 作品墙
+
+:::TuffDemoWrapper{demo="TemplateGalleryDemo" code-lang="vue" title="作品墙" description="切换合集、拖动缩略图大小、在网格、瀑布流和列表之间切换；悬停作品可收藏，点开看详情，详情里用 ← / → 切换。所有作品图由代码生成，另有三张站内图片。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // TxStagger 只在挂载时读取 appear：换 key 让新的一组重播入场，
+  // 第一次在模板滚进视口时播放，减弱动态效果时不播放。
+  const entranceKey = ref(0)
+  const playAppear = ref(false)
+  function play() {
+    playAppear.value = !matchMedia('(prefers-reduced-motion: reduce)').matches
+    entranceKey.value += 1
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Gallery" :height="580" @enter="play">
+      <TxFilterChips v-model="collection" :items="collections" role="tablist" aria-label="作品合集" />
+
+      <section class="wall" :style="{ '--thumb-min': `${thumbMin}px` }">
+        <!-- 玻璃工具条浮在滚动区上方；排序用会 teleport 的下拉，玻璃层裁不到它 -->
+        <TxGlassSurface width="100%" :height="46" :border-radius="14" :background-opacity="0.62">
+          <TxSegmentedSlider v-model="size" :segments="sizes" :show-labels="false" />
+          <TxFlatRadio v-model="layout" size="sm">
+            <TxFlatRadioItem value="grid" icon="i-carbon-grid" aria-label="网格" />
+            <TxFlatRadioItem value="masonry" icon="i-carbon-column" aria-label="瀑布流" />
+            <TxFlatRadioItem value="list" icon="i-carbon-list" aria-label="列表" />
+          </TxFlatRadio>
+          <TxDropdownMenu>…</TxDropdownMenu>
+        </TxGlassSurface>
+
+        <TxEdgeFadeMask axis="vertical">
+          <TxStagger :key="entranceKey" tag="ul" :appear="playAppear">
+            <li v-for="art in visible" :key="art.id">
+              <button type="button" :aria-label="art.title" @click="open(art)">
+                <img :src="art.url" alt="">
+              </button>
+              <TxIconButton
+                :icon="art.liked ? 'i-carbon-favorite-filled' : 'i-carbon-favorite'"
+                :pressed="art.liked"
+                :label="`收藏《${art.title}》`"
+                @click="toggleLike(art)"
+              />
+            </li>
+          </TxStagger>
+        </TxEdgeFadeMask>
+      </section>
+
+      <TxModal v-model="detailOpen" :title="current.title" width="min(960px, calc(100vw - 48px))">
+        <TxRating v-model="current.myRating" :star-label="n => `评 ${n} 星`" />
+        <TxImageGallery :items="variants" preview-title="变体预览" />
+      </TxModal>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .wall :deep(.tx-stagger) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--thumb-min), 1fr));
+  }
+
+  @container template (max-width: 639px) {
+    .wall :deep(.tx-stagger) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  </style>
+---
+:::
+
+## 组成
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 顶栏 | [TxBadge](/docs/dev/components/badge)、[TxAvatarGroup](/docs/dev/components/avatar)、[TxIconButton](/docs/dev/components/button)、[TxTooltip](/docs/dev/components/tooltip)、[TxPopover](/docs/dev/components/popover)、[TxImageUploader](/docs/dev/components/image-uploader) | 作品总数、当前合集的创作者、「只看收藏」开关、上传入口 |
+| 合集 | [TxFilterChips](/docs/dev/components/filter-chips) | 标签页语义，方向键切换，计数从作品数据推导 |
+| 工具条 | [TxGlassSurface](/docs/dev/components/glass-surface)、[TxSegmentedSlider](/docs/dev/components/segmented-slider)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TxDropdownMenu](/docs/dev/components/dropdown-menu) | 缩略图大小、布局、排序；玻璃浮在滚动的作品上方 |
+| 作品墙 | [TxEdgeFadeMask](/docs/dev/components/edge-fade-mask)、[TxStagger](/docs/dev/components/stagger)、[TxRating](/docs/dev/components/rating)、[TxAvatar](/docs/dev/components/avatar)、[TxTag](/docs/dev/components/tag) | 滚动边缘渐隐、错峰入场；卡片上的评分、「新」角标与作者 |
+| 空态 | [TxEmptyState](/docs/dev/components/empty-state) | 打开「只看收藏」但还没有收藏时 |
+| 结果提示 | [TxToastPanel](/docs/dev/components/toast-panel) | 收藏与上传的结果，留在作品墙里 |
+| 作品详情 | [TxModal](/docs/dev/components/modal)、[TxRating](/docs/dev/components/rating)、[TxButton](/docs/dev/components/button)、[TxImageGallery](/docs/dev/components/image-gallery)、[TxToastPanel](/docs/dev/components/toast-panel) | 大图与规格、可交互评分、色板、设为壁纸或应用主题、变体灯箱 |
+| 合集栏（展开后） | [TxAvatarGroup](/docs/dev/components/avatar)、[TxTag](/docs/dev/components/tag)、[TxImageUploader](/docs/dev/components/image-uploader) | 合集简介、统计、热门标签与常驻上传区 |
+
+## 交互要点
+
+- 作品图全部由代码生成：种子、四色板和图案（沙丘、光斑、网格、同心环、CoreBox 窗口、插件图标等）拼成 SVG；另有三张站内已有的 JPG。不请求任何外部图片。
+- 第一次滚进视口时播放一次错峰入场；之后切合集、切布局、换排序或打开「只看收藏」都会重播。开启「减弱动态效果」时不播放，悬停缩放也一并取消。
+- 缩略图大小通过 CSS 变量 `--thumb-min` 同时决定网格与瀑布流的列宽；窄于 640px 固定两列，工具条只留布局和排序。
+- 点作品打开详情：← / → 切换上一件、下一件，只在详情里生效，不挂在 document 上。评分、复制色值、设为壁纸的结果显示在详情内部——对话框会盖住作品墙。
+- 上传的图片只在本页预览。模板为每个文件建一个自己持有的 object URL，所以上传入口卸载（比如展开后换成右侧常驻区）不会让卡片失效；重置或卸载时统一回收。
+
+## 改造建议
+
+- 换成真实作品时，每件只需要 `url`、朝向和色板；缩略图用服务端裁好的小图，大图在详情里按需加载。
+- 想要从卡片「翻开」详情的动效，可以把 TxModal 换成 TxFlipOverlay，前提是用它 teleport 到 body 的版本：放在带 `content-visibility` 的容器里就地渲染会错位。
+- 收藏和评分走接口时先乐观更新计数，失败再回滚，并在提示里说明原因。
+- 瀑布流基于 CSS 多列，阅读顺序是先列后行；需要严格按时间逐行排列时用网格布局。

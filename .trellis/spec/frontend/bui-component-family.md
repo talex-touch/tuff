@@ -1,6 +1,6 @@
 # BUI Component Family (Beautiful UI port)
 
-> Conventions for the 24 tuffex component directories adapted from Beautiful UI (beautifului.dev, MIT, © 2026 Shane Levine), landed 2026-08-15 via `.trellis/tasks/08-15-beautiful-ui-port`. These rules bind any future work on `tx-bui-*` components and any new pixel-matched family.
+> Conventions for the 26 tuffex component directories adapted from Beautiful UI (beautifului.dev, MIT, © 2026 Shane Levine): 24 landed 2026-08-15 via `.trellis/tasks/archive/2026-08/08-15-beautiful-ui-port`, `agent-screen` and `flowchart` on 2026-09-21 via `09-21-bui-parity-and-interaction`. These rules bind any future work on `tx-bui-*` components and any new pixel-matched family.
 
 ---
 
@@ -14,9 +14,10 @@
 
 ## Mixins & keyframes
 
-- `style/mixins.scss` carries `bui-scope` (local reset + 13px base — BUI layouts assume Tailwind preflight, tuffex ships no global reset), 9 `bui-keyframes-*` mixins (`tx-bui-*` names), and surface mixins (`bui-shimmer-text`, `bui-fade-up`, `bui-pop-in`, `bui-disclosure-collapse`, `bui-tabular-nums`, `bui-card-bar/pad`, `bui-press-scale`).
+- `style/mixins.scss` carries `bui-scope` (local reset + 13px base — BUI layouts assume Tailwind preflight, tuffex ships no global reset), 10 `bui-keyframes-*` mixins (`tx-bui-*` names), and surface mixins (`bui-shimmer-text`, `bui-fade-up`, `bui-pop-in`, `bui-spring-in`, `bui-disclosure-collapse`, `bui-tabular-nums`, `bui-card-bar/pad`, `bui-press-scale`).
 - Keyframes are emitted **per component via mixin**, never in the global stylesheet — subpath consumers only get their component's CSS (same rationale as `skeleton-keyframes`, documented at `mixins.scss`).
 - `--tx-ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1)` in `variables.scss` is the family's master easing.
+- `--tx-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1)` is the overshoot curve. `bui-pop-in` is ease-out and can never pass its end value; an entrance that should read as springy uses `bui-spring-in` (`scale(0.88) translateY(8px)` on `--tx-ease-spring`, 340ms) — TxSelectionActions does. Do not retune `bui-pop-in` itself to get that: nine components share it.
 
 ## Hard rules for tx-bui components
 
@@ -33,10 +34,10 @@
 
 1. `packages/components/src/components.ts` — full-path ASCII order (`-` sorts before `/`: `card-item` < `card/`).
 2. `README.md` + `README_ZHCN.md` — total count line + category line (entries per line must equal the parenthesised count; `audit:readme` gates CI).
-3. `apps/nexus/app/plugins/tuffex.ts` — `from*` loader + `GLOBAL_TUFFEX_COMPONENTS` entry. **Composables are NOT registered** (useTokenMenu, useSelectionAnchor, useIndicatorBox, useElapsed — plain imports). Beware: an mdc demo using an unregistered global tag fails only at render time, silently in CI.
+3. Nothing to register by hand in nexus. `apps/nexus/modules/tuffex-components.ts` reads every component directory's barrel (`src/<dir>/index.ts`, following one `export *` hop, skipping the `ai`/`base`/`pro`/`utils` aggregates) and `addComponent`s each `Tx*`/`Tuff*` export, so a component is global the moment its barrel exports it. It replaced a hand-maintained `app/plugins/tuffex.ts` list that had drifted by sixteen components. Two barrels exporting one name throw at config time. **Composables are never registered** (useTokenMenu, useSelectionAnchor, useIndicatorBox, useElapsed — plain imports); a component missing from its own barrel is not either, and an mdc demo using it fails only at render time.
 4. `apps/nexus/app/components/content/demo-registry.ts` — alphabetical. CI-gated since 2026-08-27: `check:demo-registry` fails on registry↔file↔content divergence (a helper .vue imported by another demo is exempt; anything else unreferenced is an orphan).
-5. Doc pair `content/docs/dev/components/<kebab>.{zh,en}.mdc` — 8-field frontmatter, `since: 2.5.0`+ for new adds, 中文段名, zh/en equal section counts. CI-gated since 2026-08-27: `check:doc-parity` fails on zh/en heading-shape divergence.
-6. `pnpm -C packages/tuffex build` before any downstream typecheck (exports resolve to `dist/`), then `pnpm -C apps/nexus typecheck` (wrapper, not `:raw`).
+5. Doc pair `content/docs/dev/components/<kebab>.{zh,en}.mdc` — 8-field frontmatter, `since: 2.5.0`+ for new adds, 中文段名, Title Case English headings, zh/en equal section counts, linked from both hubs. CI-gated since 2026-08-27: `check:doc-parity` fails on zh/en heading-shape divergence; the per-doc contract (`## API`, Props heading, exactly `Best Practices`/`最佳实践`, hub links) is enforced only by the nexus test suite — see component-guidelines › TuffEx Suite Taxonomy.
+6. `pnpm -C packages/tuffex build` before any downstream typecheck (exports resolve to `dist/`), then `pnpm -C apps/nexus typecheck` (wrapper, not `:raw`) and `pnpm -C apps/nexus exec vitest run` — CI blocks on the latter, and the gate scripts do not cover what it checks. Also run core-app's `vue-tsc --noEmit -p tsconfig.web.json --composite false` (its `typecheck:web`, part of CI's `typecheck:all`): core-app compiles tuffex **source** under `noUnusedLocals`, which tuffex's own vue-tsc does not enable, so a local that only a template string ref names (`ref="canvasEl"`) passes in tuffex and fails there with TS6133. Finally run the tuffex publish chain on that fresh build — `audit:exports`, `audit:readme`, `audit:types`, `audit:size` (the publish workflow runs it on every master push touching `packages/tuffex`). A new component's stylesheet usually pushes `audit:size` over: re-baseline `LIMITS` in `scripts/audit-package-size.mjs` to actuals plus minimal headroom with a dated note, after checking the new sheet carries only its own root class (inlining another component's rules is what the on-demand limit exists to catch).
 
 ## Traps confirmed during this port
 
@@ -46,3 +47,4 @@
 - eslint must run per-package (`pnpm -C packages/tuffex exec eslint`, same for nexus) — the root config cannot parse either package's SFCs.
 - A component whose popup anchors a **virtual reference** while its trigger is a sibling element (TxContextMenu's shape) must own outside-close itself and pass `close-on-click-outside: false` to the anchor — the anchor cannot tell the trigger from "outside". The anchor's 60ms post-open grace window masks this class in fast single-file test runs and unmasks it under a slow full suite: never rely on real wall-clock inside open/close logic tests; controlled mounts (`modelValue: true`) start with the window already expired.
 - `TxScroll`'s default (BetterScroll transform) kills `position: sticky` descendants — sticky tables need native `overflow: auto`.
+- **A raw control byte makes git treat a source file as binary.** TxFlowchart's id separator was committed as a literal NUL byte inside `join('…')`: the whole SFC then diffs as `Binary files differ` (unreviewable in a PR) and grep-based audits skip it — the MIT-header count came out one short. Write the escape (`'\u0000'`, same runtime string), and before committing source check `git diff --cached --numstat` for rows whose added/removed counts are `-` — git's mark for a file it considers binary.

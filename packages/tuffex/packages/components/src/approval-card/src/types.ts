@@ -64,6 +64,19 @@ export interface ApprovalCardProps {
   customLabel?: string
   /** Formats the pager dot's accessible name. @default n => `Go to question ${n}` */
   pagerLabelFormatter?: (position: number) => string
+
+  /**
+   * Render a control that moves past the current question without answering.
+   *
+   * Off by default: on a form where every question is required, offering a way
+   * out is worse than not having one.
+   *
+   * @default false
+   */
+  skippable?: boolean
+
+  /** @default 'Skip' */
+  skipLabel?: string
 }
 
 export interface ApprovalCardEmits {
@@ -74,6 +87,13 @@ export interface ApprovalCardEmits {
   /** A single question changed — lets a host persist incrementally. */
   (e: 'answer', answer: ApprovalAnswer): void
   (e: 'submit', answers: ApprovalAnswer[]): void
+  /**
+   * The current question was skipped.
+   *
+   * Nothing is recorded for it, so the answer map lets a host tell "declined to
+   * answer" from "answered and moved on".
+   */
+  (e: 'skip', payload: { questionId: string, index: number }): void
   (e: 'dismiss'): void
   (e: 'reopen'): void
 }

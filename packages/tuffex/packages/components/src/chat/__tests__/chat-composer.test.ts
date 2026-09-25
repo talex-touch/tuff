@@ -23,8 +23,9 @@ describe('txChatComposer', () => {
     expect(wrapper.find('textarea').attributes('placeholder')).toBe('Ask anything')
     expect(wrapper.findAll('.tx-chat-composer__attachment')).toHaveLength(2)
     expect(wrapper.findAll('.tx-chat-composer__attachment')[1].classes()).toContain('is-pending')
-    expect(wrapper.text()).toContain('Upload')
-    expect(wrapper.text()).toContain('Submit')
+    // Both default actions are icon-only; their text props are the accessible names.
+    expect(wrapper.find('.tx-chat-composer__attach').attributes('aria-label')).toBe('Upload')
+    expect(wrapper.find('.tx-chat-composer__send').attributes('aria-label')).toBe('Submit')
   })
 
   it('emits model updates and send payload with trimmed text', async () => {
@@ -35,7 +36,7 @@ describe('txChatComposer', () => {
     })
 
     await wrapper.find('textarea').setValue('Next')
-    await wrapper.findAllComponents({ name: 'TxButton' }).at(-1)?.trigger('click')
+    await wrapper.find('.tx-chat-composer__send').trigger('click')
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['Next'])
     expect(wrapper.emitted('send')?.[0]).toEqual([{ text: 'Send me' }])
@@ -74,7 +75,10 @@ describe('txChatComposer', () => {
         disabled: true,
       },
     })
-    await disabled.findAllComponents({ name: 'TxButton' }).at(-1)?.trigger('click')
+    // VTU skips `trigger` on a disabled element, so the disabled attribute is
+    // asserted too — otherwise the no-send checks below would pass on their own.
+    expect(disabled.find('.tx-chat-composer__send').attributes()).toHaveProperty('disabled')
+    await disabled.find('.tx-chat-composer__send').trigger('click')
     expect(disabled.emitted('send')).toBeUndefined()
 
     const submitting = mount(TxChatComposer, {
@@ -83,7 +87,8 @@ describe('txChatComposer', () => {
         submitting: true,
       },
     })
-    await submitting.findAllComponents({ name: 'TxButton' }).at(-1)?.trigger('click')
+    expect(submitting.find('.tx-chat-composer__send').attributes()).toHaveProperty('disabled')
+    await submitting.find('.tx-chat-composer__send').trigger('click')
     expect(submitting.emitted('send')).toBeUndefined()
 
     const empty = mount(TxChatComposer, {
@@ -91,7 +96,8 @@ describe('txChatComposer', () => {
         modelValue: '   ',
       },
     })
-    await empty.findAllComponents({ name: 'TxButton' }).at(-1)?.trigger('click')
+    expect(empty.find('.tx-chat-composer__send').attributes()).toHaveProperty('disabled')
+    await empty.find('.tx-chat-composer__send').trigger('click')
     expect(empty.emitted('send')).toBeUndefined()
   })
 
@@ -104,7 +110,7 @@ describe('txChatComposer', () => {
       },
     })
 
-    await wrapper.findAllComponents({ name: 'TxButton' }).at(-1)?.trigger('click')
+    await wrapper.find('.tx-chat-composer__send').trigger('click')
 
     expect(wrapper.emitted('send')?.[0]).toEqual([{ text: '' }])
   })
@@ -116,7 +122,7 @@ describe('txChatComposer', () => {
         disabled: true,
       },
     })
-    await disabled.findAllComponents({ name: 'TxButton' })[0].trigger('click')
+    await disabled.find('.tx-chat-composer__attach').trigger('click')
     expect(disabled.emitted('attachmentClick')).toBeUndefined()
 
     const submitting = mount(TxChatComposer, {
@@ -125,7 +131,7 @@ describe('txChatComposer', () => {
         submitting: true,
       },
     })
-    await submitting.findAllComponents({ name: 'TxButton' })[0].trigger('click')
+    await submitting.find('.tx-chat-composer__attach').trigger('click')
     expect(submitting.emitted('attachmentClick')).toBeUndefined()
 
     const allowed = mount(TxChatComposer, {
@@ -135,7 +141,7 @@ describe('txChatComposer', () => {
         allowAttachmentWhileSubmitting: true,
       },
     })
-    await allowed.findAllComponents({ name: 'TxButton' })[0].trigger('click')
+    await allowed.find('.tx-chat-composer__attach').trigger('click')
     expect(allowed.emitted('attachmentClick')).toHaveLength(1)
   })
 

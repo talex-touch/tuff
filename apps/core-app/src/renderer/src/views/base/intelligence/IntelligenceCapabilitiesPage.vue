@@ -360,22 +360,30 @@ function formatSaveError(error: unknown): string {
       ? (error as { details?: { reason?: string; version?: number } }).details
       : undefined
   const message = error instanceof Error ? error.message : String(error || '')
+  const version = details?.version ?? '-'
 
-  if (details?.reason === 'transport-uninitialized') {
-    return t('settings.intelligence.capabilitySaveErrorTransport')
+  // Every reason the storage layer can produce gets its own sentence. Collapsing them into one
+  // "storage service returned a failure" is what made a busy-event-loop IPC timeout read as a
+  // backend outage, and sent the reader looking at a service that does not exist.
+  switch (details?.reason) {
+    case 'transport-uninitialized':
+      return t('settings.intelligence.capabilitySaveErrorTransport')
+    case 'transport':
+      return t('settings.intelligence.capabilitySaveErrorTransportLost')
+    case 'conflict':
+      return t('settings.intelligence.capabilitySaveErrorConflict', { version })
+    case 'conflict-reload-failed':
+      return t('settings.intelligence.capabilitySaveErrorConflictReload', { version })
+    case 'credential-rejected':
+      return t('settings.intelligence.capabilitySaveErrorCredential')
+    case 'persist-failed':
+      return t('settings.intelligence.capabilitySaveErrorPersist', { version })
+    case 'invalid-key':
+    case 'rejected':
+      return t('settings.intelligence.capabilitySaveErrorRejected', { version })
+    default:
+      return message || t('settings.intelligence.capabilitySaveErrorUnknown')
   }
-  if (details?.reason === 'conflict') {
-    return t('settings.intelligence.capabilitySaveErrorConflict', {
-      version: details.version ?? '-'
-    })
-  }
-  if (details?.reason === 'remote-failed') {
-    return t('settings.intelligence.capabilitySaveErrorRemote', {
-      version: details.version ?? '-'
-    })
-  }
-
-  return message || t('settings.intelligence.capabilitySaveErrorUnknown')
 }
 
 onBeforeUnmount(() => {

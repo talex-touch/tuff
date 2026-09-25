@@ -1,0 +1,209 @@
+---
+title: Dashboard 数据看板
+description: 指标卡、分平台趋势、平台占比、服务健康与热门插件表组成的产品数据看板
+category: TemplateData
+status: beta
+since: 0.6.0
+tags: [template, dashboard, analytics, charts, table]
+syncStatus: reviewed
+verified: false
+---
+
+## 场景
+
+给启动器团队看的产品数据看板。打开就能看到日活、CoreBox 搜索量、AI 请求和插件安装的走势；往下是各平台的搜索占比、后台服务健康度、本月 AI 用量，以及安装量最高的插件。所有数字都跟着同一个时间范围走，换范围、选日期、在图上框选，整页一起重算。
+
+适合「一屏看全局、再逐层下钻」的运营后台：SaaS 控制台、插件市场后台、内部指标页。
+
+第二种风格「运营大屏」是发布当天挂在墙上的那块屏：不用筛选，数字实时滚动，始终是暗色。
+
+## 模板
+
+### Tuff Pulse 产品看板
+
+:::TuffDemoWrapper{demo="TemplateDashboardDemo" code-lang="vue" title="Tuff Pulse 产品看板" description="范围切换、日期选择、图上框选和图例都会联动重算指标卡、占比与插件表。图中均为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette } from '@talex-touch/tuffex/charts'
+  import { computed, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const range = ref('30d')
+  const zoom = ref<[number, number] | null>(null)
+  const hidden = ref<string[]>([])
+
+  // 指标卡、图例、占比和插件表都从同一份按天序列里按 range + zoom 算出来
+  const kpis = computed(() => buildKpis(range.value, zoom.value))
+
+  // TxTimeseriesChart 的高度是像素 prop，容器查询够不到，从舞台尺寸算
+  function chartHeight(width: number, height: number) {
+    if (width >= 960)
+      return Math.min(320, Math.max(220, Math.round(height * 0.36)))
+    return width >= 640 ? 240 : 176
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Dashboard" @enter="entered = true">
+      <template #default="{ width, height }">
+        <div class="pulse">
+          <header class="pulse__header">
+            <TxFlatRadio v-model="range" size="lg">
+              <TxFlatRadioItem value="7d" label="7 天" />
+              <TxFlatRadioItem value="30d" label="30 天" />
+              <TxFlatRadioItem value="90d" label="90 天" />
+            </TxFlatRadio>
+            <TxDatePicker v-model="dates" variant="field" range />
+          </header>
+
+          <section class="pulse__kpis">
+            <TxStatCard v-for="kpi in kpis" :key="kpi.key" :value="kpi.value" :label="kpi.label" :insight="kpi.insight">
+              <template #value>
+                <TxTextMorph :text="kpi.value" />
+              </template>
+            </TxStatCard>
+          </section>
+
+          <div class="pulse__main">
+            <section class="pulse__trend">
+              <TxChartLegendItem
+                v-for="(item, index) in legend" :key="item.name"
+                :name="item.name" :value="item.value" :color="ChartPalette.categoricalVar(index)"
+                :inactive="hidden.includes(item.name)" @click="toggle(item.name)"
+              />
+              <TxTimeseriesChart
+                v-model:hidden-series="hidden"
+                :data="series" :markers="releases" :incomplete="{ after: yesterday }"
+                :height="chartHeight(width, height)"
+                @time-range-change="(from, to) => (zoom = [from, to])"
+              />
+            </section>
+            <aside class="pulse__rail">
+              <TxAllocationBar v-model="platform" :segments="share" />
+              <TxProgressBar :segments="usage" height="8px" />
+            </aside>
+          </div>
+
+          <TxDataTable v-model:sort="sort" :columns="columns" :data="plugins" row-key="id">
+            <template #cell-trend="{ row }">
+              <TxSparkChart :series="row.trend" :padding="{ top: 4, bottom: 4 }" :baseline="false" :interactive="false" />
+            </template>
+            <template #cell-status="{ row }">
+              <TxStatusBadge size="sm" :status="row.tone" :text="row.status" />
+            </template>
+          </TxDataTable>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .pulse__kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @container template (max-width: 639.98px) { .pulse__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @container template (min-width: 960px) { .pulse__kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+  </style>
+---
+:::
+
+### 运营大屏
+
+适合发布值守、活动直播、运维或客服中心这类「挂着看」的场景。和上面的分析看板不同，它没有时间范围、日期选择和表格，只看此刻：在线人数、搜索流向、服务健康和刚发生的事。它也不跟随站点主题，模板根上设了 `data-theme="dark"`，在亮色文档页里同样是一块暗屏。所有数字都是示例数据。
+
+:::TuffDemoWrapper{demo="TemplateDashboardOpsDemo" code-lang="vue" title="运营大屏" description="进入视口后开始实时刷新：数字滚动、事件滚入、焦点轮播；18 秒时东京的云同步降级，30 秒恢复。随时可以暂停。所有数字均为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette } from '@talex-touch/tuffex/charts'
+  import { computed, ref, watch } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const sec = ref(0)
+  const paused = ref(false)
+  const hidden = ref(false) // IntersectionObserver（可见 < 10%）与 visibilitychange
+  const live = computed(() => entered.value && !reduced && !paused.value && !hidden.value)
+
+  // 一个心跳驱动全部节奏：指标 2 秒、事件 3 秒、城市 4 秒、焦点 8 秒、桑基窗口 12 秒
+  watch(live, on => (on ? later(1000, beat) : clearTimers()))
+
+  // 每个中间节点流入等于流出，桑基图才不会留下秃尾巴
+  const flow = computed(() => flowAt(flowWindow.value))
+  const bubbleColor = (row: City) => (row.id === 'tyo' && degraded.value ? orange : ChartPalette.categoricalVar(0))
+  </script>
+
+  <template>
+    <TemplateFrame title="运营大屏" :height="600" @enter="onEnter">
+      <template #default="{ width, height }">
+        <!-- 局部暗色：tuffex、BUI 与图表 token 的暗色块都认任意元素上的 data-theme -->
+        <div class="ops" data-theme="dark" :style="{ gridTemplateRows: geometry(width, height).rows }">
+          <header class="ops__head">
+            <TxStatusBadge :status="healthy ? 'success' : 'warning'" :text="servicesText" />
+            <TxModeChip :label="paused ? '已暂停' : '实时刷新中'" :tone="paused ? 'warning' : 'success'" @click="paused = !paused" />
+          </header>
+          <div v-for="kpi in kpis" :key="kpi.key" class="ops-kpi">
+            <TxTextMorph :text="kpi.value" :locale="localeTag" />
+            <TxSparkChart :series="kpiSeries[kpi.key]" theme="dark" :animation="false" :interactive="false" />
+          </div>
+          <TxBubbleMap
+            v-if="entered && world" :geo-json="world" :data="cities" lng="lng" lat="lat" value="online"
+            :height="geometry(width, height).map" :bubble-color="bubbleColor" :bubble-border-width="ringWidth"
+          />
+          <TxInsightCards :active-index="focus" :pages="pages" @update:active-index="takeOverRotation" />
+          <TxSankeyChart :nodes="nodes" :links="flow.links" :height="geometry(width, height).sankey" node-label-layout="inline">
+            <template #tooltip="{ params }">
+              {{ params.name }} · {{ count(params) }} 次 / 分
+            </template>
+          </TxSankeyChart>
+          <TxTransition group preset="slide-fade" tag="ul">
+            <li v-for="item in events" :key="item.id">{{ item.text }}</li>
+          </TxTransition>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .ops {
+    color-scheme: dark; /* tooltip 的 canvas 兜底色与滚动条随之变暗 */
+    --tx-skeleton-base-color: var(--tx-chart-semantic-skeleton); /* :root 用 var() 派生的 token 要在这里重新声明 */
+  }
+  </style>
+---
+:::
+
+## 组成
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 顶栏 | [TxFlatRadio](/docs/dev/components/flat-radio)、[TxDatePicker](/docs/dev/components/date-picker)、[TxStatusBadge](/docs/dev/components/status-badge) | 7 / 30 / 90 天切换与自定义日期范围；服务降级提示。滚动时顶栏保持在最上方 |
+| 指标卡 | [TxStatCard](/docs/dev/components/stat-card)、[TxTextMorph](/docs/dev/components/text-morph) | 日活、日均搜索、AI 请求、插件安装，宽屏加崩溃率；与紧邻的上一段同长度时间对比 |
+| 趋势 | [TxTimeseriesChart](/docs/dev/components/timeseries-chart)、[TxChartLegendItem](/docs/dev/components/charts) | 三个平台的搜索量；版本标记、今天未完成的一段画虚线、横向拖选放大 |
+| 侧栏 | [TxAllocationBar](/docs/dev/components/allocation-bar)、[TxDotIndicator](/docs/dev/components/dot-indicator)、[TxSignalMeter](/docs/dev/components/signal-meter)、[TxProgressBar](/docs/dev/components/progress-bar) | 平台占比、服务健康、本月 AI 用量按调用路径分段 |
+| 洞察（宽屏） | [TxInsightCards](/docs/dev/components/insight-cards)、[TxSparkChart / TxChartScrubber](/docs/dev/components/spark-chart)、[TxToastPanel](/docs/dev/components/toast-panel) | 三条可翻页的洞察，图上拖动可读每天的值；点追问后给出反馈 |
+| 热门插件 | [TxDataTable](/docs/dev/components/data-table)、[TxSparkChart](/docs/dev/components/spark-chart)、[TxSignalMeter](/docs/dev/components/signal-meter)、[TxStatusBadge](/docs/dev/components/status-badge) | 插件 id 与版本取自仓库 `plugins/`；可按安装量、无崩溃率排序，单元格内画趋势线和稳定性 |
+| 顶栏（运营大屏） | [TxModeChip](/docs/dev/components/mode-chip) | 「实时」标记、时钟与服务总览；「实时刷新中 ↔ 已暂停」开关，暂停后数字、事件和轮播全部停下 |
+| 大字指标（运营大屏） | [TxTextMorph](/docs/dev/components/text-morph)、[TxSparkChart](/docs/dev/components/spark-chart) | 在线用户、每分钟搜索、AI 请求、插件安装，宽屏加同步延迟和崩溃率；数字滚动，旁边是最近 30 次刷新的走势条 |
+| 城市地图（运营大屏） | [TxBubbleMap](/docs/dev/components/maps)、[TxSkeleton](/docs/dev/components/skeleton) | 14 个城市的在线人数气泡，焦点城市加环、降级的城市变橙；地理数据来自同源的 `/geo/world-countries.geo.json`，只画城市，不按国家着色 |
+| 焦点轮播（运营大屏） | [TxInsightCards](/docs/dev/components/insight-cards)、[TxAllocationBar](/docs/dev/components/allocation-bar) | 华东高峰、端侧 AI 占比、插件热度三页，每 8 秒翻一页 |
+| 搜索流向（运营大屏） | [TxSankeyChart](/docs/dev/components/sankey-chart) | 输入来源 → 插件 → 动作，每个中间节点流入等于流出；提示框用插槽本地化 |
+| 健康与事件（运营大屏） | [TxDotIndicator](/docs/dev/components/dot-indicator)、[TxSignalMeter](/docs/dev/components/signal-meter)、[TxTransition](/docs/dev/components/transition) | 七项服务的色点、延迟与信号格；新事件从顶部滚入，最旧的一条让位 |
+
+## 交互要点
+
+- 切换 7 天 / 30 天 / 90 天，或在日期选择器里选一段：指标卡数字滚动到新值，涨跌对比的是紧挨着的上一段同长度时间。7 天及以内按小时画，更长按天画。
+- 在趋势图上横向拖选即放大到那一段，指标卡、图例、占比和插件表都只统计这段时间；标题旁的「已放大」胶囊一键还原。
+- 点击图例隐藏或显示平台，悬停图例会淡化另外两条线；指针移入「平台占比」时图上只突出当前选中的平台，点其他分段即切换。
+- 插件表点表头按安装量或无崩溃率排序；趋势列固定 24 个采样点，换范围时折线平滑变形而不是重画。
+- 模板进入视口后图表才开始绘制，读者能看到入场动画；这是交互型模板，没有自动演示。
+- 宽屏（≥ 960px）多出崩溃率指标卡、带数值的大图例和洞察卡；窄屏（< 640px）指标卡两列、侧栏排到图下、插件表只留插件 / 安装量 / 趋势三列。
+- 运营大屏：进入视口后开始实时刷新，指标每 2 秒滚动一次，事件每 3 秒滚入一条，城市每 4 秒更新，焦点每 8 秒翻页，桑基图每 12 秒换一个统计窗口。18 秒时东京的云同步降级：地图气泡变橙、健康灯亮橙、顶栏变成「6/7」，30 秒恢复。模板滚出视口或切到别的标签页时停止刷新。
+- 运营大屏：点「实时刷新中」暂停全部更新，再点继续；指针停在焦点卡、桑基图或事件列表上时，对应部分先停下。用 ‹ › 翻过焦点页后，自动轮播交给你；点地图上的上海或杭州，焦点跳到华东高峰。开启「减弱动态效果」时只显示一张静态快照，不启动任何计时器。
+- 运营大屏：无论站点是亮是暗，整块屏都是暗色。列内正好铺满舞台、不滚动；宽屏（≥ 960px）六个指标，地图和桑基图更高，节点带数值；窄屏（< 640px）单列纵向滚动，指标两列。
+
+## 改造建议
+
+- 换数据源：把生成示例数据的 `daily()` 换成接口返回的按天序列即可。`total()`、`average()`、`previousWindow()` 已经处理了「今天还没过完」和同长度对比，汇总逻辑不用重写。
+- 比率类指标（崩溃率、成功率）不要放进 TxTimeseriesChart：它的 y 轴始终包含 0，接近 100% 的线会贴在顶上。改画次数，或用 TxSparkChart 并传 `domain`。
+- 图表高度、表格 `maxHeight` 这类像素 prop 容器查询够不到，照模板的做法从舞台尺寸（或你自己的 ResizeObserver）算出来。
+- 要按行下钻，给 TxDataTable 加 `@row-click`，把趋势图的数据换成该插件的安装量序列，再放一个返回全部平台的胶囊。
+- 运营大屏：局部暗色只要在根上写 `data-theme="dark"` 和 `color-scheme: dark`，再重新声明 `:root` 里用 `var()` 派生、暗色块没有重写的几个 token（三个禁用态颜色、图表网格线、骨架底色）。会 teleport 的浮层（提示框、弹出层、对话框）会离开这个作用域，按页面主题显示，大屏里不要用。

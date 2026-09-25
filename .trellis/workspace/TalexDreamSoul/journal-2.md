@@ -928,3 +928,200 @@ Adopted explicit external Pi, OMP, Claude, and Codex native sessions per existin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 74: 分批提交搜索索引与 CoreApp 设置改动
+
+**Date**: 2026-09-22
+**Task**: 分批提交搜索索引与 CoreApp 设置改动
+**Branch**: `master`
+
+### Summary
+
+按关注点完成三批本地提交：搜索新鲜度与流传输、融合文件持久化/FTS 与细粒度埋点、存储失败原因契约与设置界面调整。相关聚焦测试和 node typecheck 通过；web typecheck 仍被并行未跟踪的 TuffEx Flowchart canvasEl 未使用错误阻塞。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `66ec1be88` | (see git log) |
+| `5767975bf` | (see git log) |
+| `26f295a92` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 75: BUI 对齐与交互动效收口：补齐提交后自查出的 4 个 CI 门禁缺口并归档
+
+**Date**: 2026-09-22
+**Task**: BUI 对齐与交互动效收口：补齐提交后自查出的 4 个 CI 门禁缺口并归档
+**Branch**: `master`
+
+### Summary
+
+BUI 21 例对齐、Status 重设计、ToastPanel/AgentScreen/Flowchart 新组件与 UI 音效层落地后，提交后按 CI 同款命令逐项自查，补出 4 个我自己引入的门禁缺口（源码 NUL 字节致 git 判二进制、nexus docs 覆盖测试 2 红、core-app typecheck:web 的 TS6133、audit:size 超限）与 Flow 套件预览空白，全部修复并验证；spec 同步纠正 6 处过期事实；父任务与五个子任务归档。全部提交在本地，未推送。
+
+### Main Changes
+
+BUI（beautifului.dev）21 例对齐 + 交互动效/状态/音效整轮收口，含提交后自查补出的 4 个门禁缺口。
+
+**功能提交（09-21 起）**
+- `b73ad0521` token 层：四主题各自一套 `--tx-status-chip-*` 色阶（白字压纯语义色在暗色只有 1.74:1，物理上做不到，所以按主题单独配色，hc-dark 反相）、`--tx-font-mono`、`--tx-ease-spring` + `bui-spring-in`
+- `ad3295e94` StatusBadge 重做：mono 标签 + 14% 底 + 实心字形圆片，muted 为虚线空环
+- `d99cc0c9b` 新增 Flowchart（+ flow 文档套件）、ToastPanel、AgentScreen、UI 音效层（振荡器合成、默认关、OfflineAudioContext 实测 PCM）
+- `f56ecfa33` 存量对齐：DiffTable 采纳层、CodeStream diff、SelectionActions 回弹、ApprovalCard Skip、RecommendationCard 实体 `mark`、SparkChart 基准线/端点、TxCard 按压、AgentTrace 四档切换
+
+**提交后自查补出的缺口（本次会话）**
+- `84b3aa7f9` TxFlowchart 源码里两处原始 NUL 字节 → git 把整个 SFC 判成二进制（PR 里不可审、grep 审计漏掉它）；改 `'\u0000'` 转义
+- `c1c2aad00` nexus 测试（CI 阻断）红 2 例：hub 双语漏链三个新组件；英文 `Best practices` 大小写不符契约。另：Flow 套件页的组件预览整段空白（gallery 没有 flow 分支，零报错）——补分支 + AI 带补 AgentScreen 格
+- `c3d12ba85` `canvasEl` 声明未读 → core-app `typecheck:web` TS6133，master 的 `typecheck:all` 因此变红（另一窗口的 journal 先记下了这个阻塞）
+- `9dcf1ae72` `audit:size` 超限（全量 595.4/584、按需 604.3/596）：增量全部来自本轮（09-18 后无他人改动 tuffex），三张新样式表只含自身根类，无内联；按仓库惯例重设为实测 + 最小余量
+- `30b900acf` / `5a5414a31` / `544c7e789` spec：注册链第 3 步（`plugins/tuffex.ts` 早已不存在）、套件分类表（23 类、六套件、哪些真进 CI）、core-app 类型检查与 publish 审计写进第 6 步
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b73ad0521` | feat(tuffex): token layer — status chip ramp, mono face, spring curve |
+| `ad3295e94` | feat(tuffex): redesign StatusBadge as a mono label with a solid chip |
+| `d99cc0c9b` | feat(tuffex): add Flowchart, ToastPanel, AgentScreen and the UI sound layer |
+| `f56ecfa33` | feat(tuffex): close the remaining Beautiful UI parity gaps |
+| `84b3aa7f9` | fix(tuffex): write Flowchart's id separator as an escape, not a raw NUL byte |
+| `c1c2aad00` | fix(nexus): link, title and preview the components the BUI parity work added |
+| `30b900acf` | docs(spec): correct the BUI family and suite taxonomy facts that had drifted |
+| `c3d12ba85` | fix(tuffex): drop Flowchart's unused canvas ref, which failed core-app typecheck |
+| `5a5414a31` | docs(spec): name the core-app typecheck in the BUI registration chain |
+| `9dcf1ae72` | fix(tuffex): re-baseline the CSS size budgets for the BUI parity components |
+| `544c7e789` | docs(spec): add the tuffex publish audits to the BUI registration chain |
+
+### Testing
+
+- [OK] tuffex：vitest 2586/2586、vue-tsc（含 `--noUncheckedIndexedAccess`）、全包 eslint、audit:exports/readme/types/size（新鲜构建）
+- [OK] nexus：vitest 1905/1905、typecheck、check:mdc-fences/doc-parity/demo-registry/icon-collections、recategorize、生产构建（`NUXT_DISABLE_PRERENDER=true`，186s）
+- [OK] core-app：typecheck:web + typecheck:node 0 错；引用这些组件的 3 个测试 57/57（全量 623 文件未跑）
+- [OK] 其余依赖 tuffex 的工作区 typecheck：intelligence-uikit / json-formatter / touch-translation / tuff-analyse 全 0
+- [OK] 浏览器（无扩展 headless Chrome）：Flow 预览渲染 + 拖拽按网格吸附写回、AI 带 30 格、双语 hub 链接与 Flow 段、英文标题
+- [WARN] `check:module-size-ratchet` 红：core-app `app-provider.ts` 3985/3950、`file-provider.ts` 3782/3703，来自另一窗口的 `66ec1be88` / `5767975bf`，不在本轮范围
+
+### Status
+
+[OK] **Completed** — 父任务与五个子任务已归档（`cea48afea`）。全部提交在本地，未推送。
+
+### Next Steps
+
+- 审计表 03 流式文本 / 07 对话 / 12 记录表格 标为「未单独比对」（多组件组合、无单一对照面），严格按 AC2 仍是缺口，需老板决定是否另立比对
+- PRD「待老板确认」两项按默认落地：音效默认关；「卡片」按 TxCard 本身处理
+- hub 套件总览表计数的既有漂移（基础/进阶/数据 应为 94/29/11）未顺手修
+- 迁移看板不认 `syncStatus: reviewed`，所有 reviewed + verified:false 的页（含各套件总览页）显示「未迁移」
+
+
+## Session 76: Composer motion from the @flohoeller reference: tray swap, ink-only hover, TxModeChip
+
+**Date**: 2026-09-24
+**Task**: Composer motion from the @flohoeller reference: tray swap, ink-only hover, TxModeChip
+**Branch**: `master`
+
+### Summary
+
+Answered whether AI streaming followed BeautifulUI (it did not: TxStreamMarkdown keeps its own fresh-chunk engine and an orb caret; the gallery Chat cell is static, its glow was a .dark CSS leak from TuffexDocsHeroBackground owned by talex-touch-87, the purple dot the Lexi extension). Measured the reference clip frame by frame and shipped: TxChatComposer tray with a fitted cubic-bezier slide and reference card restyle (intelligence-uikit migrated), new TxModeChip with a morph-gated colour transition and measured 4.5:1 inks, and a TxTextTransformer fix whose fade mode had never faded in. Verified per frame in ego against the clip; restarted the shared :3200 dev server (orphan worker lesson recorded). A zero-context partial-hunk staging misplaced three shared-file lines in 0e5b9e33f, fixed in 55bbc5039; later commits staged anchor-edited HEAD blobs instead.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e43fa1190` | (see git log) |
+| `0e5b9e33f` | (see git log) |
+| `55bbc5039` | (see git log) |
+| `a23b7266e` | (see git log) |
+| `558d6ce82` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 77: Nexus docs static delivery closeout: real 404, static redirects, edge Cache Rule
+
+**Date**: 2026-09-24
+**Task**: Nexus docs static delivery closeout: real 404, static redirects, edge Cache Rule
+**Branch**: `master`
+
+### Summary
+
+Audited why Nexus docs felt un-SSG'd and slow (docs were prerendered but never edge-cached, soft 404, Worker redirects, gallery head bloat, missing admin UI); planned a parent + 3 children; shipped child 1 to production via PR #1957/#1958 with a zone Cache Rule (28/28 HIT).
+
+### Main Changes
+
+### Audit (2026-09-23)
+
+- Nexus docs were already SSG: every `content/docs` page prerendered as HTML + JSON + `.md` twins and excluded from the Worker. The slowness came from the delivery layer, not rendering.
+- Production measurements: docs HTML/JSON/md/i18n all `cf-cache-status: DYNAMIC` (Cloudflare caches HTML/JSON only behind a zone Cache Rule); unknown `/en/docs/*` returned the landing page with 200 (no `404.html`); `/docs/**` 308 ran in the Worker (3–5 s).
+- Biggest page-weight lever: suite gallery pages ship 154 stylesheets + 225 modulepreloads because `DocsComponentsGallery.vue` statically imports 162 Tx components.
+- CMS: no docs content management; 38 of 76 `/api/admin/*` handlers have no UI; `governance.vue` is 4,056 lines. Boss chose "git is the CMS" (path A).
+- Evidence: `.trellis/tasks/09-23-nexus-docs-perf-cms-remediation/research/audit-2026-09-23.md`.
+
+### Delivered (task 09-23-nexus-docs-static-delivery-closeout, archived)
+
+- Real 404: not-found page prerendered as `/__not-found` (a literal `/404.html` route renders as an empty no-SSR shell) and copied to `404.html`.
+- `/docs`, `/docs/*` → static 308s in `_redirects`, sources excluded from the Worker (Pages only applies `_redirects` to requests it serves).
+- Docs roots get the cache window; `DOCS_STATIC_CACHE_CONTROL` aligned to `max-age=300, s-maxage=300`.
+- Worker-bundle gate: pattern-aware `_routes.json` matching (the old exact match had been red on every build), redirect/order/invalid-status and rendered-404 guards. `/* /404.html 404` is an invalid Pages status — caught by trellis-check review.
+- Zone Cache Rule "nexus docs static" created in the dashboard via ego: after-probe 28/28 HIT (before 0/28).
+- Landed via PR #1957 (merge eeff74b4d) and PR #1958 (merge 6cfe5c923); the second Pages production build failed inside Cloudflare's image (`node-build: definition not found: 26.0.0`) and succeeded on API retry.
+- Archived `08-27-nexus-docs-body-ssg` with its deployed evidence.
+
+### Open
+
+- `09-23-nexus-gallery-css-graph-slimming`: starts after the pro/base gallery tasks land.
+- `09-23-nexus-admin-console-gaps`: P2.
+- Local master carries other sessions' commits with two red required checks (core-app TS2345 in `nexus-route-marker-ownership.test.ts`, tuff-voice import order); the next sync PR must fix them first.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f7f158048` | (see git log) |
+| `1839bcd10` | (see git log) |
+| `3b7021cb9` | (see git log) |
+| `4570dac51` | (see git log) |
+| `fb5cc8746` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

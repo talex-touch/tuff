@@ -21,6 +21,7 @@ import type {
   FilePersistenceEntry,
   PersistEntriesSummary,
   ExecWriteResult,
+  PersistAndApplyProviderItemsResult,
   ProviderReplacementOutcome,
   WorkerErrorMessage as SearchIndexWorkerErrorMessage,
   WorkerResultMessage
@@ -31,6 +32,7 @@ import type {
   UpsertFileRecord
 } from '../file-index-persistence-repository'
 import { existsSync } from 'node:fs'
+import { performance } from 'node:perf_hooks'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -259,6 +261,38 @@ export class SearchIndexWorkerClient {
       legacyItemIds: [...legacyItemIds]
     })
     return result ?? { removedItems: 0, indexedItems: items.length }
+  }
+  async persistAndApplyProviderItems(
+    records: UpsertFileRecord[],
+    providerId: string,
+    items: SearchIndexItem[],
+    legacyItemIds: readonly string[]
+  ): Promise<PersistAndApplyProviderItemsResult> {
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('persistAndApplyProviderItems')
+    const roundTripStartedAt = performance.now()
+    const result = await this.sendAndWaitWithResult<PersistAndApplyProviderItemsResult>(taskId, {
+      type: 'persistAndApplyProviderItems',
+      taskId,
+      records,
+      providerId,
+      items,
+      legacyItemIds: [...legacyItemIds]
+    })
+    if (!result) {
+      return {
+        persisted: [],
+        summary: { removedItems: 0, indexedItems: items.length }
+      }
+    }
+    if (!result.metrics) return result
+    return {
+      ...result,
+      metrics: {
+        ...result.metrics,
+        roundTripDurationMs: performance.now() - roundTripStartedAt
+      }
+    }
   }
 
   async beginProviderReplacement(providerId: string, replacementId: string): Promise<void> {

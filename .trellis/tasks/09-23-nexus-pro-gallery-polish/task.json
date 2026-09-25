@@ -1,0 +1,30 @@
+{
+  "id": "nexus-pro-gallery-polish",
+  "name": "nexus-pro-gallery-polish",
+  "title": "Nexus Pro 画廊 specimen 整改 + 格子 reset 按钮",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-23",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "无待办；如需继续，仅剩既有正文 hydration 警告（未改动的 ai-suite 页同样存在）不在本任务范围。",
+    "blocker": "无阻塞。",
+    "evidence": "prd.md 验收项 R0–R11 全部勾选：每项均在真实浏览器暗色主题下于 pro-suite 页截图确认，亮色抽查无回归，无新增控制台报错，eslint 与 nexus check-* 门禁通过。"
+  }
+}

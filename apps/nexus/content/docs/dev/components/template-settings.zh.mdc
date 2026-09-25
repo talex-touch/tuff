@@ -1,0 +1,128 @@
+---
+title: Settings 设置中心
+description: 分区导航加分组设置行，改动即时保存，宽屏带实时预览
+category: TemplateApp
+status: beta
+since: 0.6.0
+tags: [template, settings, form, preferences]
+syncStatus: reviewed
+verified: false
+---
+
+## 场景
+
+Tuff 的设置中心。左侧是分组的分区导航，右侧是一组组设置行；任何改动都即时保存，页头只显示保存状态，没有「保存」按钮。展开到宽屏时右侧多出实时预览：改主题、透明度、结果密度或最多结果，迷你 CoreBox 立刻跟着变。
+
+适合桌面应用的偏好设置、SaaS 的账户与工作区设置，以及任何「很多开关、改完即生效」的配置页。
+
+## 模板
+
+### 分区设置页
+
+:::TuffDemoWrapper{demo="TemplateSettingsDemo" code-lang="vue" title="分区设置页" description="改任何一项，页头依次显示「保存中…」和「已保存」；重置、清空剪贴板历史、退出其他设备都先确认。宽屏右侧有实时预览。"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref, watch } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // TxTabs 只渲染当前面板、切走就卸载，所以所有值放在同一个对象里
+  const settings = reactive({ theme: 'system', opacity: 92, density: 'cozy', maxResults: 8 })
+  const page = ref('general')
+  const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  watch(settings, () => {
+    saveState.value = 'saving'
+    clearTimeout(timer)
+    timer = setTimeout(() => (saveState.value = 'saved'), 600)
+  }, { deep: true })
+  </script>
+
+  <template>
+    <TemplateFrame title="Settings" @enter="play">
+      <template #default="{ width }">
+        <div class="settings">
+          <!-- navMinWidth 是内联样式，窄屏只能靠 prop 把导航挪到顶部 -->
+          <TxTabs
+            v-model="page"
+            :placement="width > 0 && width < 640 ? 'top' : 'left'"
+            :nav-min-width="184"
+            :content-padding="0"
+            borderless
+            indicator-variant="block"
+          >
+            <TxTabHeader>
+              <h3>{{ titles[page] }}</h3>
+              <TxStatusBadge :text="saveText[saveState]" :status="saveState === 'saved' ? 'success' : 'info'" size="sm" />
+              <TxButton size="sm" variant="ghost" icon="i-carbon-reset" @click="ask('reset')">
+                重置
+              </TxButton>
+            </TxTabHeader>
+
+            <TxTabItemGroup name="通用">
+              <TxTabItem name="general" icon-class="i-carbon-settings">
+                <template #name>
+                  通用
+                </template>
+                <TxGroupBlock name="外观" default-icon="i-carbon-color-palette" :collapsible="false">
+                  <TxBlockSlot title="主题" description="浅色、深色或跟随系统">
+                    <TxFlatRadio v-model="settings.theme" size="sm">
+                      <TxFlatRadioItem value="light" label="浅色" icon="i-carbon-sun" />
+                      <TxFlatRadioItem value="dark" label="深色" icon="i-carbon-moon" />
+                      <TxFlatRadioItem value="system" label="跟随系统" icon="i-carbon-screen" />
+                    </TxFlatRadio>
+                  </TxBlockSlot>
+                  <TxBlockSlot title="窗口透明度" description="CoreBox 背后透出多少桌面">
+                    <TxSlider v-model="settings.opacity" :min="60" :max="100" show-value />
+                  </TxBlockSlot>
+                </TxGroupBlock>
+              </TxTabItem>
+              <!-- CoreBox、快捷键 -->
+            </TxTabItemGroup>
+            <!-- 智能：AI 模型、隐私；账户 -->
+          </TxTabs>
+
+          <aside v-if="width >= 960" class="settings__preview">
+            <!-- 迷你 CoreBox：主题、透明度、密度、条数都读自 settings -->
+          </aside>
+
+          <TxModal v-model="confirmOpen" :title="confirm.title">
+            {{ confirm.body }}
+          </TxModal>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 组成
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 导航 | [TxTabs / TxTabItemGroup / TxTabItem](/docs/dev/components/tabs) | 分组的分区导航；`name` 用稳定的英文 key，本地化标签放进 `#name` 插槽；指示块滑到当前分区 |
+| 页头 | [TxTabs](/docs/dev/components/tabs) 的 TxTabHeader、[TxStatusBadge](/docs/dev/components/status-badge)、[TxButton](/docs/dev/components/button) | 分区标题、自动保存状态、重置入口 |
+| 设置行 | [TxGroupBlock / TxBlockSlot / TxBlockLine](/docs/dev/components/group-block) | 分组与 56px 设置行，分组固定展开 |
+| 通用与 CoreBox | [TuffSwitch](/docs/dev/components/switch)、[TxFlatSelect](/docs/dev/components/flat-select)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TxSlider](/docs/dev/components/slider)、[TxSelect](/docs/dev/components/select)、[TxSegmentedSlider](/docs/dev/components/segmented-slider)、[TxNumberInput](/docs/dev/components/number-input)、[TxInput](/docs/dev/components/input)、[TxKbd](/docs/dev/components/kbd) | 语言、主题、透明度、开机启动、呼出快捷键（可录制）、自动粘贴、结果密度、最多结果、占位文字 |
+| 快捷键 | [TxSearchInput](/docs/dev/components/search-input)、[TxKbd](/docs/dev/components/kbd)、[TuffSwitch](/docs/dev/components/switch)、[TxSearchEmpty](/docs/dev/components/search-empty) | 可筛选的全局快捷键列表，逐个启停；来源插件写在说明里 |
+| AI 与隐私 | [TxAlert](/docs/dev/components/alert)、[TxSensitiveInput](/docs/dev/components/sensitive-input)、[TxCheckbox](/docs/dev/components/checkbox)、[TxRadioGroup / TxRadio](/docs/dev/components/radio) | Nexus 路由说明、服务商与温度、自带密钥、可读取的上下文、剪贴板保留时长、排除的应用 |
+| 账户 | [TxAvatar](/docs/dev/components/avatar)、[TxImageUploader](/docs/dev/components/image-uploader) | 头像上传、显示名称、邮箱与套餐 |
+| 确认框 | [TxModal](/docs/dev/components/modal)、[TxCheckbox](/docs/dev/components/checkbox) | 重置所有设置、清空剪贴板历史（可同时清除固定内容）、退出其他设备 |
+| 实时预览（宽屏） | [TxIconChip](/docs/dev/components/icon-chip)、手写迷你 CoreBox | 主题、透明度、结果密度、最多结果、占位文字和呼出快捷键实时反映 |
+
+## 交互要点
+
+- 改任何一项，页头先显示「保存中…」，600ms 内没有新改动就变成「已保存 · 刚刚」。
+- 呼出快捷键可以录制：点「录制」后按下带 ⌘、⌃ 或 ⌥ 的组合键即生效，Esc 或点别处取消；快捷键页「打开 CoreBox」一行同步显示新组合。
+- 快捷键页可以筛选、逐个启停。AI 页的 API Key 默认遮盖、点击显示，复制会写入真实剪贴板（示例值，不是真密钥）。
+- 重置、清空剪贴板历史、退出其他设备都先弹出确认框；清空后隐私页顶部给出结果，记录数随之更新。
+- 进入视口后自动演示一次：1 秒切到 CoreBox 分区，1.6 秒把结果密度从「舒适」调成「紧凑」，页头走一遍保存状态，宽屏的预览同时变紧凑。读者一操作就停止；开启「减弱动态效果」时直接显示最终状态，并关掉分区切换的动画。
+- 宽屏（≥ 960px）右侧出现实时预览；窄屏（< 640px）导航挪到顶部横排、分组标题收起，设置行的控件换到标签下方。
+
+## 改造建议
+
+- 接真实存储：把 `watch(settings)` 里的计时器换成防抖写入（本地配置文件或 Nexus 同步），写入失败时把状态改成「未保存」并给出重试。
+- 加一个分区：在对应的 TxTabItemGroup 里加 TxTabItem，`name` 用稳定的英文 key、标签放进 `#name` 插槽——直接把可见标签当 `name` 的话，切换界面语言会让当前分区对不上。TxTabs 会卸载切走的面板，所以值不要存在行组件里；头像这类 object URL 也要自己持有一份，TxImageUploader 卸载时会回收它创建的 URL。
+- TxGroupBlock 统一 `collapsible=false`：它的展开收起由 gsap 驱动，没有减弱动态效果的兜底；也不要设 `memoryName`，否则会写 localStorage。
+- 敏感字段放在分组正文里，不要塞进 56px 的设置行：TxSensitiveInput 的复制按钮浮在输入框上方，会压到上一行。TxFlatSelect 的下拉就地展开、不 teleport，要放在不会被滚动容器裁切的位置，并抬高所在行的层级（每个设置行都是独立的层叠上下文）。

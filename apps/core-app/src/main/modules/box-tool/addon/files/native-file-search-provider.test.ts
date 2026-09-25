@@ -147,10 +147,21 @@ describe('native-file-search-provider', () => {
       expect.objectContaining({ timeout: 1200 }),
       expect.any(Function)
     )
+    // The display-name clause tripled mdfind's wall time on a real library (900-1245ms vs
+    // 300-350ms) for an identical result set: file search matches file names.
+    const predicate = (execFileMock.mock.calls[0]?.[1] as string[]).at(-1) ?? ''
+    expect(predicate).toBe('kMDItemFSName == "*qq*"cd')
+    expect(predicate).not.toContain('kMDItemDisplayName')
     expect(statMock).toHaveBeenCalledTimes(3)
     expect(statMock).not.toHaveBeenCalledWith(
       '/Users/demo/Music/Music Library.musiclibrary/Genius.itdb'
     )
+  })
+
+  it('answers from the deferred layer so an ~900ms mdfind never holds the fast-layer budget', () => {
+    // As a fast provider Spotlight missed the 80ms window on every keystroke and landed a second
+    // later as a late result, collapsing the window on the snapshot and growing it back again.
+    expect(macSpotlightFileProvider.priority).toBe('deferred')
   })
 
   it('subsumes persisted extra paths under the home Spotlight root', async () => {

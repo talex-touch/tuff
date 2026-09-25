@@ -50,7 +50,8 @@ code: |
       @accept="run"
     >
       <template #body="{ option }">
-        从 <code>cone_king</code> 补货华夫筒，交期 <code>7_days</code>。
+        从 <mark style="--tx-entity-color: #ef720c">Cone King</mark>
+        补货华夫筒，交期 <code class="is-success">7 天</code>。
       </template>
     </TxRecommendationCard>
   </template>
@@ -100,7 +101,7 @@ code: |
 
 | 插槽名 | 作用域参数 | 说明 |
 |------|------|------|
-| `body` | `{ option }` | 覆盖正文。富文本（内联 `code`、强调）走这里。 |
+| `body` | `{ option }` | 覆盖正文。富文本走这里：`code` 放标识符，`mark` 放实体。 |
 | `meter` | `{ option }` | 覆盖量表，页脚与抽屉每行都会用到。 |
 | `footer-extra` | — | 插在页脚左侧、动作按钮之前。 |
 
@@ -111,7 +112,10 @@ code: |
 - **收起的抽屉带 `inert`。** `0fr` 网格只是把高度压成零，里面的按钮仍在 Tab 序列里；组件显式加 `inert` 把它们移出无障碍树与焦点顺序。这是有意超出上游的修正。
 - `accepted` 只切文案与配色，**没有撤销**。真实业务通常需要撤回，所以把它做成受控 prop，撤销权在宿主。
 - 正文有一个最小高度（默认 48px），用来防止不同长度的方案切换时卡片跳动。中文行高不同，可用 `--tx-bui-recommendation-card-body-min-height` 调。
-- 正文里的 `<code>` 由组件样式接管：默认是强调色 tint，加 `is-warning` 类切成警示色。用 `body` 插槽填富文本时不必自己写样式。
+- 正文里的 `<code>` 与 `<mark>` 都由组件样式接管，用 `body` 插槽填富文本时不必自己写样式：
+  - `<code>` 是**真正的标识符**——SKU、文件名、命令。默认强调色 tint，加 `is-success` / `is-warning` 切成语义色。
+  - `<mark>` 是建议**指向的实体**——供应商、文件、人。渲染成带色点的胶囊，非等宽，因为这是给人读的名字不是给人敲的字符串。色点颜色由宿主通过 `--tx-entity-color` 给（只有宿主知道某个供应商是什么颜色），不给则落到中性灰。
+  - 用 `<mark>` 而不是自定义类，是因为这个元素本身的语义就是「被单独标出来引用的文字」，读屏软件能读到，不必靠颜色传达。
 - `tone` 收的是裸 CSS 颜色字符串，**不参与主题切换**；优先用 `confidence`。
 - 抽屉的缓动比这套组件的其他部分更柔（`cubic-bezier(0.16, 1, 0.3, 1)`），是上游刻意的差别，已原样保留。
 
@@ -127,7 +131,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/recommendation-card/src/TxRecommendationCard.vue`。
 - Types: `packages/tuffex/packages/components/src/recommendation-card/src/types.ts`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/recommendation-card/__tests__/recommendation-card.test.ts`（14 项）验证默认提升首项、`confidence` → 格数与颜色的映射、`signal` / `tone` 覆盖、抽屉只列其他方案、`aria-expanded` / `aria-controls` 配对、收起态 `inert`、选中即提升并清空确认、`ctaTone` 映射、受控 `modelValue` / `accepted` 优先、`cta` 兜底、空列表不渲染，以及 `body` 插槽的富文本。
+- **实测覆盖:** `packages/tuffex/packages/components/src/recommendation-card/__tests__/recommendation-card.test.ts`（14 项）与 `recommendation-card-inline.test.ts`（9 项编译后 CSS 契约：`code` 的等宽与语义变体落在 BUI token 上、`mark` 的胶囊形状与非等宽、覆盖引擎自带的 `mark` 黄底、色点的 `--tx-entity-color` 与兜底）验证默认提升首项、`confidence` → 格数与颜色的映射、`signal` / `tone` 覆盖、抽屉只列其他方案、`aria-expanded` / `aria-controls` 配对、收起态 `inert`、选中即提升并清空确认、`ctaTone` 映射、受控 `modelValue` / `accepted` 优先、`cta` 兜底、空列表不渲染，以及 `body` 插槽的富文本。
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />

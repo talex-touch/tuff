@@ -23,7 +23,13 @@ useSeoMeta({
 
 if (import.meta.server) {
   const event = useRequestEvent()
-  if (event)
+  // Nitro only writes a prerendered route to disk when it answers 200, so the one request
+  // that produces the static not-found page (`NOT_FOUND_PRERENDER_ROUTE` in
+  // `build/nexus-static-routes.mjs`, copied to `404.html` for Cloudflare Pages) must not carry
+  // the status every real miss gets. At runtime the file is served by Pages with its own 404;
+  // the Worker path is unchanged.
+  const isStaticFallbackArtifact = import.meta.prerender && event?.path === '/__not-found'
+  if (event && !isStaticFallbackArtifact)
     setResponseStatus(event, 404)
 }
 

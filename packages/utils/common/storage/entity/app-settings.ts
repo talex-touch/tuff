@@ -10,6 +10,28 @@ export function normalizeVoicePolishStrength(value: unknown): VoicePolishStrengt
     : DEFAULT_VOICE_POLISH_STRENGTH
 }
 
+/**
+ * Where dictation takes its transcript from.
+ *
+ * The three states order the channels the Intelligence page already binds; none of them invents a
+ * route. `cloud` and `local` keep only their own kind of channel, and `hybrid` prefers an
+ * on-device one and falls back to the cloud when none can run.
+ */
+export const VOICE_ASR_SOURCES = ['cloud', 'local', 'hybrid'] as const
+export type VoiceAsrSource = typeof VOICE_ASR_SOURCES[number]
+/**
+ * Hybrid by default: it is the only state that cannot leave an existing setup unroutable. A
+ * profile whose channels are all cloud, or all on-device, behaves exactly as it did before the
+ * preference existed.
+ */
+export const DEFAULT_VOICE_ASR_SOURCE: VoiceAsrSource = 'hybrid'
+
+export function normalizeVoiceAsrSource(value: unknown): VoiceAsrSource {
+  return value === 'cloud' || value === 'local' || value === 'hybrid'
+    ? value
+    : DEFAULT_VOICE_ASR_SOURCE
+}
+
 /** Default layout atom for 'simple' preset */
 const defaultLayoutAtomSimple: LayoutAtomConfig = {
   preset: 'simple',
@@ -218,7 +240,7 @@ const _appSettingOriginData = {
   },
   voiceInput: {
     enabled: false,
-    language: 'zh-CN',
+    language: 'zh',
     polishEnabled: true,
     polishStrength: DEFAULT_VOICE_POLISH_STRENGTH as VoicePolishStrength,
 
@@ -231,6 +253,14 @@ const _appSettingOriginData = {
      * 与它无关的是采集链路里常开的高通与抗混叠滤波——那两个是缺陷修复，不是偏好。
      */
     noiseSuppression: false,
+
+    /**
+     * 识别来源偏好：云端 / 本地 / 混合。
+     *
+     * 它不接管「智能」页的渠道绑定，只在绑定已经给出的候选里按类别排序，所以默认值必须
+     * 是唯一不会让既有配置失去路由的那个。
+     */
+    source: DEFAULT_VOICE_ASR_SOURCE as VoiceAsrSource,
   },
   clipboard: {
     /**
@@ -544,6 +574,7 @@ export interface VoiceInputSetting {
   language: string
   polishEnabled: boolean
   polishStrength: VoicePolishStrength
+  source?: VoiceAsrSource
   historyEnabled?: boolean
   noiseSuppression?: boolean
 }
@@ -571,13 +602,14 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
           : 'zh-CN',
       polishEnabled: true,
       polishStrength: DEFAULT_VOICE_POLISH_STRENGTH,
+      source: DEFAULT_VOICE_ASR_SOURCE,
     }
     return true
   }
 
   const source = isSettingRecord(setting.voiceInput) ? setting.voiceInput : {}
   const enabled = typeof source.enabled === 'boolean' ? source.enabled : false
-  const language = typeof source.language === 'string' && source.language.trim() ? source.language : 'zh-CN'
+  const language = typeof source.language === 'string' && source.language.trim() ? source.language : 'zh'
   const polishEnabled = source.polishEnabled !== false
   const polishStrength = normalizeVoicePolishStrength(source.polishStrength)
   const hasHistory = Object.prototype.hasOwnProperty.call(source, 'historyEnabled')
@@ -586,6 +618,8 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
   // `=== true` rather than `!== false`: an unreadable value has to land on off. Turning
   // suppression on by accident changes what the recogniser hears, and the user never asked.
   const noiseSuppression = source.noiseSuppression === true
+  const hasSource = Object.prototype.hasOwnProperty.call(source, 'source')
+  const asrSource = normalizeVoiceAsrSource(source.source)
   if (
     isSettingRecord(setting.voiceInput)
     && source.enabled === enabled
@@ -594,6 +628,7 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
     && source.polishStrength === polishStrength
     && (!hasHistory || source.historyEnabled === historyEnabled)
     && (!hasNoiseSuppression || source.noiseSuppression === noiseSuppression)
+    && (!hasSource || source.source === asrSource)
   ) {
     return false
   }
@@ -606,6 +641,7 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
     polishStrength,
     ...(hasHistory ? { historyEnabled } : {}),
     ...(hasNoiseSuppression ? { noiseSuppression } : {}),
+    ...(hasSource ? { source: asrSource } : {}),
   }
   return true
 }

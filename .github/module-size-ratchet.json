@@ -29,9 +29,9 @@
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",
-      "ceiling": 3950,
+      "ceiling": 3878,
       "issue": "#343",
-      "note": "~4,223 when #343 was filed, which is exactly the number that issue cites. +377 since."
+      "note": "~4,223 when #343 was filed, which is exactly the number that issue cites. +377 since. 2026-09-22: logging and stage timing moved to app-provider-log.ts, 3,985 -> 3,878."
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts",

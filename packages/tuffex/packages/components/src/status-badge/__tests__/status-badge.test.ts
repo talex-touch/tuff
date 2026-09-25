@@ -94,10 +94,10 @@ describe('txStatusBadge', () => {
       },
     })
 
-    const icons = wrapper.findAll('.tx-status-badge__icon')
-    expect(icons).toHaveLength(2)
-    expect(icons[0].classes()).toContain('i-simple-icons-apple')
-    expect(icons[1].classes()).toContain('i-carbon-information')
+    // The OS marker stays a bare glyph — it names a platform, not a state — so
+    // it keeps `__icon`, while the tone's glyph moved inside the disc.
+    expect(wrapper.find('.tx-status-badge__icon').classes()).toContain('i-simple-icons-apple')
+    expect(wrapper.find('.tx-status-badge__glyph').classes()).toContain('i-carbon-information')
 
     const osOnly = mount(TxStatusBadge, {
       props: {
@@ -108,6 +108,8 @@ describe('txStatusBadge', () => {
     })
     expect(osOnly.findAll('.tx-status-badge__icon')).toHaveLength(1)
     expect(osOnly.find('.tx-status-badge__icon').classes()).toContain('i-simple-icons-linux')
+    // `osOnly` suppresses the state disc entirely.
+    expect(osOnly.find('.tx-status-badge__chip').exists()).toBe(false)
   })
 
   it('uses custom icon and emits click', async () => {
@@ -118,10 +120,45 @@ describe('txStatusBadge', () => {
       },
     })
 
-    expect(wrapper.find('.tx-status-badge__icon').classes()).toContain('i-carbon-star-filled')
+    expect(wrapper.find('.tx-status-badge__glyph').classes()).toContain('i-carbon-star-filled')
 
     await wrapper.trigger('click')
     expect(wrapper.emitted('click')?.[0][0]).toBeInstanceOf(MouseEvent)
+  })
+
+  it('knocks the glyph out of a filled disc, and leaves muted an empty ring', () => {
+    const approved = mount(TxStatusBadge, { props: { text: 'Approved', status: 'success' } })
+    const disc = approved.find('.tx-status-badge__chip')
+    expect(disc.exists()).toBe(true)
+    expect(disc.classes()).not.toContain('is-hollow')
+    // The disc is decoration; the mono label is what carries the state.
+    expect(disc.attributes('aria-hidden')).toBe('true')
+
+    // "Not started" is an absence, so it renders as a dashed ring with no glyph
+    // rather than one more filled disc.
+    const notStarted = mount(TxStatusBadge, { props: { text: 'Not started', status: 'muted' } })
+    expect(notStarted.find('.tx-status-badge__chip').classes()).toContain('is-hollow')
+    expect(notStarted.find('.tx-status-badge__glyph').exists()).toBe(false)
+  })
+
+  it('lets a custom icon opt muted back into a filled disc', () => {
+    const wrapper = mount(TxStatusBadge, {
+      props: { text: 'Queued', status: 'muted', icon: 'i-carbon-pause' },
+    })
+
+    // The host asked for a symbol, so there is something to knock out.
+    expect(wrapper.find('.tx-status-badge__chip').classes()).not.toContain('is-hollow')
+    expect(wrapper.find('.tx-status-badge__glyph').classes()).toContain('i-carbon-pause')
+  })
+
+  it('paints the disc from the chip ramp, not from the label hue', () => {
+    const wrapper = mount(TxStatusBadge, { props: { text: 'Cancelled', status: 'danger' } })
+    const style = wrapper.attributes('style')!
+
+    // Two different ramps on purpose: a glyph knocked out of `--tx-color-danger`
+    // measures 2.88:1, under the 3:1 minimum for a graphical object.
+    expect(style).toContain('--tx-status-color: var(--tx-color-danger)')
+    expect(style).toContain('--tx-status-chip: var(--tx-status-chip-danger)')
   })
 
   it('becomes a keyboard-reachable button when a click listener is attached', async () => {
@@ -151,18 +188,23 @@ describe('txStatusBadge', () => {
   // to outlined warning / danger reads as "selected vs inactive" — a hierarchy the badge
   // does not have.
   it.each([
-    ['success', 'i-carbon-checkmark-outline'],
-    ['warning', 'i-carbon-warning'],
-    ['danger', 'i-carbon-close-outline'],
+    ['success', 'i-carbon-checkmark'],
+    ['warning', 'i-carbon-time'],
+    ['danger', 'i-carbon-close'],
     ['info', 'i-carbon-information'],
-    ['muted', 'i-carbon-circle-dash'],
-  ] as const)('renders the outline family icon for the %s tone', (status, icon) => {
+  ] as const)('knocks a solid glyph out of the disc for the %s tone', (status, icon) => {
     const wrapper = mount(TxStatusBadge, { props: { text: status, status } })
-    const icons = wrapper.findAll('.tx-status-badge__icon')
-    expect(icons).toHaveLength(1)
-    expect(icons[0].classes()).toContain(icon)
-    // Guard against a stale filled/solid glyph sneaking back in.
-    expect(icons[0].classes().some(c => c.endsWith('-filled'))).toBe(false)
+    const glyphs = wrapper.findAll('.tx-status-badge__glyph')
+    expect(glyphs).toHaveLength(1)
+    expect(glyphs[0].classes()).toContain(icon)
+    // The disc supplies the enclosing circle, so an outlined glyph would draw a
+    // second one inside it.
+    expect(glyphs[0].classes().some(c => c.endsWith('-outline'))).toBe(false)
+  })
+
+  it('gives muted no glyph at all, because absence is not a state symbol', () => {
+    const wrapper = mount(TxStatusBadge, { props: { text: 'Not started', status: 'muted' } })
+    expect(wrapper.findAll('.tx-status-badge__glyph')).toHaveLength(0)
   })
 
   describe('style contract (source)', () => {
@@ -182,10 +224,35 @@ describe('txStatusBadge', () => {
       expect(blockBody(root, '&__icon')).toContain('1em')
     })
 
-    it('is a pill at TxBadge weight, not a button', () => {
+    it('is a mono label, not a pill and not a button', () => {
       const own = ownDeclarations(root)
-      expect(declaration(own, 'border-radius')).toBe('999px')
+      // The 999px cap it used to carry read as a quiet TxButton at a glance.
+      // A square-ish radius plus the mono face gives the family its own
+      // silhouette. 700 would put it back in button territory.
+      expect(declaration(own, 'border-radius')).toBe('8px')
       expect(declaration(own, 'font-weight')).toBe('500')
+      expect(declaration(own, 'font-family')).toContain('--tx-font-mono')
+    })
+
+    it('carries no border: the tint and the disc already bound the badge', () => {
+      // A hairline on top of both reads as a third edge. This is a deliberate
+      // divergence from the TxBadge / TxTag / TxAlert 12%/32% recipe — only the
+      // border half is dropped, the tint stays in family.
+      expect(ownDeclarations(root)).not.toMatch(/(^|\s)border:/)
+    })
+
+    it('paints the disc from the chip ramp and never from --tx-color-*', () => {
+      const chip = ownDeclarations(blockBody(root, '&__chip'))
+      expect(declaration(chip, 'background')).toContain('--tx-status-chip')
+      expect(declaration(chip, 'color')).toContain('--tx-status-chip-on')
+      // Reaching for the label hue here is the 1.67–2.90:1 regression.
+      expect(declaration(chip, 'background')).not.toContain('--tx-color-')
+    })
+
+    it('renders the muted disc as a dashed ring rather than a fill', () => {
+      const hollow = ownDeclarations(blockBody(root, '&.is-hollow'))
+      expect(declaration(hollow, 'background')).toBe('transparent')
+      expect(declaration(hollow, 'border')).toContain('dashed')
     })
 
     it('sizes the icon with the text instead of a fixed pixel size', () => {
@@ -202,20 +269,40 @@ describe('txStatusBadge', () => {
       expect(horizontal).toBeGreaterThanOrEqual(10)
     })
 
-    it('seats a leading glyph concentric with the end cap and matches the text side to it', () => {
-      // The cap is a circle of radius height/2 centred height/2 in from the edge;
-      // with the 1em icon's leading padding equal to the vertical padding, the
-      // glyph's centre lands on that circle's centre and the gap to the edge is
-      // the same all the way round — left and top read as one distance. The
-      // text side follows the glyph side (two px more for letters' square
-      // corners against the curve), not the text-only pill's 10px.
+    it('tightens only the disc side, leaving the text side its own inset', () => {
+      // The disc is a circle: with a leading inset equal to the vertical one,
+      // its centre lands the same distance from the left edge as from the top,
+      // so the two read as one gap. The text side keeps the text-only inset —
+      // letters have square corners and need the room the disc does not.
       for (const size of ['sm', 'md']) {
         const base = ownDeclarations(blockBody(root, `&--${size} {`))
-        const vertical = Number.parseFloat(declaration(base, 'padding')!.split(/\s+/)[0]!)
+        const [vertical, horizontal] = declaration(base, 'padding')!
+          .split(/\s+/)
+          .map(value => Number.parseFloat(value))
         const withIcon = ownDeclarations(blockBody(root, `&--${size}.has-icon`))
+
         expect(Number.parseFloat(declaration(withIcon, 'padding-left')!)).toBe(vertical)
-        expect(Number.parseFloat(declaration(withIcon, 'padding-right')!)).toBe(vertical + 2)
+        // Untouched, so the declaration is absent and the base value stands.
+        expect(declaration(withIcon, 'padding-right')).toBeNull()
+        expect(horizontal).toBeGreaterThan(vertical!)
       }
+    })
+
+    it('drives the disc size from a custom property a host can override', () => {
+      const glyph = ownDeclarations(blockBody(root, '&__glyph'))
+      // The glyph has to sit inside a circle, so it is a fraction of the disc
+      // rather than 1em of the text: at 1em it would touch the disc's edge.
+      expect(Number.parseFloat(declaration(glyph, 'font-size')!)).toBeLessThan(1)
+
+      // A per-size rule block would leave a host no handle. Two callers
+      // (nexus dashboard assets, core-app StoreItemCard) compress the badge for
+      // a dense row and used to scale the glyph via `font-size`; the disc is
+      // px-sized now, so it needs its own knob or it towers over the text.
+      const chip = ownDeclarations(blockBody(root, '&__chip'))
+      expect(declaration(chip, 'width')).toContain('--tx-status-chip-size')
+      expect(declaration(chip, 'height')).toContain('--tx-status-chip-size')
+      expect(blockBody(root, '&--md')).toContain('--tx-status-chip-size: 18px')
+      expect(blockBody(root, '&--sm')).toContain('--tx-status-chip-size: 15px')
     })
   })
 

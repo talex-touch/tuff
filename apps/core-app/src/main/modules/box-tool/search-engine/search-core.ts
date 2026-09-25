@@ -1378,6 +1378,28 @@ export class SearchEngineCore
                   includeCompletion: true,
                   enrichmentMode: 'full'
                 })
+                if (gatherController!.signal.aborted || session.signal.aborted) {
+                  // Cancelled while merging. The sibling branches simply return, but this one
+                  // has already claimed `didResolveInitial` and the gather has delivered its
+                  // last update, so nothing else will ever settle `result`: publish the same
+                  // empty cancelled outcome the cancelled-terminal branch does.
+                  const cancelledDuration = Date.now() - startTime
+                  const cancelledResult = new TuffSearchResultBuilder(query)
+                    .setItems([])
+                    .setDuration(cancelledDuration)
+                    .setSources(update.sourceStats || [])
+                    .build()
+                  cancelledResult.sessionId = sessionId
+                  cancelledResult.activate = session.getActivationState() ?? undefined
+                  this.searchFirstResultMetrics.delete(sessionId)
+                  resolve(cancelledResult)
+                  session.complete({
+                    cancelled: true,
+                    activate: cancelledResult.activate,
+                    sources: update.sourceStats ?? []
+                  })
+                  return
+                }
                 pipelineDurations.mergeRankDuration = mergeRankDuration
                 const sortedItems = this.appendCompatibilityNotice(
                   rawSortedItems,
@@ -2110,6 +2132,11 @@ export class SearchEngineCore
     })
     fileProvider.setIndexedSourceRuntimeMutationDelegate({
       applyBatch: async (batch) => await indexingRuntime.applySourceBatch(batch),
+      applyBatchWithPersistence: async (batch, records) => {
+        const result = await indexingRuntime.applySourceBatchWithPersistence(batch, records)
+        if (!result) throw new Error(`INDEX_RUNTIME_FUSED_BATCH_EMPTY:${batch.sourceId}`)
+        return result
+      },
       applyDelta: async (delta) => await indexingRuntime.applySourceDelta(delta),
       cleanupSource: async (sourceId, mutationLeaseId) =>
         await indexingRuntime.cleanupSource(sourceId, mutationLeaseId),

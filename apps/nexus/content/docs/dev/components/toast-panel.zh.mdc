@@ -1,0 +1,94 @@
+---
+title: "ToastPanel 浮出面板"
+description: "从来源下方浮出的一条新条目：虚线牵引、卡片、以及身后还排着几条的暗示。"
+category: Feedback
+status: beta
+since: 0.6.0
+tags: [feedback, toast, surface, motion]
+syncStatus: reviewed
+verified: true
+---
+# ToastPanel 浮出面板
+
+## 基础用法
+
+### ToastPanel
+
+:::TuffDemoWrapper{demo="ToastPanelToastPanelDemo" code-lang="vue" title="新条目浮出" description="虚线把新条目和它来自的那张列表连起来；点重新播放看入场。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(true)
+  </script>
+
+  <template>
+    <TxToastPanel :open="open" :stack="1" aria-label="最新信号">
+      <!-- 内容完全由宿主给 -->
+      <div class="row">Theo Morgan · Pioneer Cloud</div>
+    </TxToastPanel>
+  </template>
+---
+:::
+
+## 和 Toast 的分工
+
+`TxToastHost` 是**全局通知栈**：由 `toastStore` 驱动、浮在视口角落、自己排队自己消失，和页面内容没有位置关系。
+
+`TxToastPanel` 相反——它**锚在某样东西下面**，完全受控，而那条虚线牵引就是两者的全部差别：它说的是「这条是从**那里**来的」，而不是「有条通知」。同步到某张列表的最新一条、某个面板刚产生的结果，用这个；一次性提示用 `TxToastHost`。
+
+## 隐藏态不卸载
+
+`open` 为 false 时组件**仍在 DOM 里**，只是 opacity 归零并回到位移起点。
+
+不用 `v-if` 是因为：根节点一旦销毁，离场过渡直接被切断（面板会瞬间消失而不是退回去），而且牵引线的盒子跟着塌掉——每次条目变化整段布局都会往上一跳。
+
+入场走 `--tx-ease-spring` 的回弹：新条目是「送到眼前」的东西，冲过终点再落回比匀速滑入更像「刚到」。减弱动效下位移整个去掉，只留淡入——淡入是提醒「内容变了」的最低限度，全砍掉回来的眼睛就看不出发生过什么。
+
+## 身后的堆叠
+
+`stack` 是从卡片底下露出的装饰性薄片，暗示后面还排着。它们是纯装饰（`aria-hidden`），不承载内容。
+
+上限**钉死在 2**：按默认的错位量，第三片露出的边不到一个像素，只会把阴影搅浑，却要多一个节点和一层阴影。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `open` | `boolean` | `true` | 是否显示。false 时保留在 DOM 中，见上 |
+| `tether` | `boolean` | `true` | 是否画虚线牵引 |
+| `tetherLength` | `number` | `28` | 牵引线长度（px），负值按 0 处理 |
+| `side` | `'below' \| 'above'` | `'below'` | 面板在来源的下方还是上方；只影响牵引线的方向 |
+| `stack` | `number` | `1` | 身后露出的薄片数，夹在 0–2 |
+| `ariaLabel` | `string` | `'Latest item'` | 区域的无障碍名 |
+| `live` | `'polite' \| 'off'` | `'polite'` | 是否朗读到达。宿主已在别处播报时设 `'off'` |
+
+### Slots
+
+| 插槽名 | 说明 |
+|---|---|
+| `default` | 卡片内容 |
+| `tether` | 替换默认的虚线牵引 |
+
+## 交互契约
+
+- **位置由宿主决定。** 组件只画牵引线的方向，不定位自己——只有宿主知道它挂在什么下面。把它放在来源元素之后即可。
+- **它会自己播报。** 面板在没有用户动作的情况下出现，所以带 `role="status"` + `aria-live="polite"`。宿主若已在别处播报同一次变化，设 `live="off"` 关掉——一次到达配两个 live region 比没有更糟。
+- 堆叠薄片是 `aria-hidden` 的装饰，不要往里塞内容。
+
+## 最佳实践
+
+- 牵引线两端要在视觉上够得着：`tetherLength` 太长会让人看不出它连着谁。
+- 同一次到达只播报一次：宿主已有播报就把 `live` 关掉。
+- 条目内容用现成的行组件（如 `TxCardItem`）拼，这个组件只负责外层的浮出姿态。
+
+## Source
+
+- 组件源码：`packages/tuffex/packages/components/src/toast-panel/src/TxToastPanel.vue`。
+- 类型：`packages/tuffex/packages/components/src/toast-panel/src/types.ts`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/toast-panel/__tests__/toast-panel.test.ts`（13 项）覆盖插槽渲染与默认牵引、关掉牵引后卡片仍在、牵引长度透传与负值夹取、`open` 切类名而非卸载、堆叠数量与 0–2 夹取、每片各自的层深、薄片的 `aria-hidden`、`role="status"` 与 `aria-live`、`live="off"` 时不设 live region、`side="above"` 翻转、牵引插槽覆盖默认。
+
+<TuffDocSourceLink />

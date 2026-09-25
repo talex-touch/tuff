@@ -1,0 +1,30 @@
+{
+  "id": "nexus-base-gallery-sidebar",
+  "name": "nexus-base-gallery-sidebar",
+  "title": "Nexus 基础套件画廊整改 + 文档侧栏重设计",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-23",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "补完 DocSection 的 page 链接 active 态与分组间距，并完成中英 × 亮暗 × 两个页面的截图与侧栏切换器键盘路径验收。",
+    "blocker": "实现尚未收尾：implement.md 的样式、i18n 追加与截图/键盘验收项仍未勾选，改动停留在计划与部分落地阶段。",
+    "evidence": "prd.md / design.md / implement.md 三份计划文档与 check.jsonl；工作区中 DocsSidebar.vue、DocSection.vue、DocsSuiteCatalog.vue 与 i18n 的对应改动。"
+  }
+}

@@ -84,6 +84,8 @@ code: |
 | `customPlaceholder` | `string` | `'Type something…'` | Placeholder of the free-text row. A question may override it. |
 | `customLabel` | `string` | `'Custom answer'` | Accessible name of the free-text field. |
 | `pagerLabelFormatter` | `(position: number) => string` | `` n => `Go to question ${n}` `` | Accessible name of each pager dot. |
+| `skippable` | `boolean` | `false` | Render a control that moves past the current question without answering. **Off by default**: on a form where every question is required, offering a way out is worse than not having one. |
+| `skipLabel` | `string` | `'Skip'` | Wording for the skip control. |
 
 ### Events
 
@@ -95,6 +97,7 @@ code: |
 | `update:open` | `(open: boolean)` | Collapsed or reopened. |
 | `answer` | `(answer: ApprovalAnswer)` | Fires as each question is answered, so a host can persist incrementally. |
 | `submit` | `(answers: ApprovalAnswer[])` | Submitted on the last question, answered items in `questions` order. |
+| `skip` | `({ questionId, index })` | The current question was skipped. **Nothing is recorded**, so the answer map lets a host tell "declined to answer" from "answered and moved on". |
 | `dismiss` | `()` | The card was dismissed. |
 | `reopen` | `()` | The card was reopened. |
 

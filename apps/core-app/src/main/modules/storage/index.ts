@@ -527,7 +527,7 @@ export class StorageModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(StorageEvents.app.save, async (request: StorageSaveRequest, context) => {
         if (!request?.key || typeof request.key !== 'string') {
-          return { success: false, version: 0 }
+          return { success: false, version: 0, reason: 'invalid-key' }
         }
         const payload = this.preserveMainOwnedAppSettingsFromRenderer(
           request.key,
@@ -535,7 +535,11 @@ export class StorageModule extends BaseModule {
         )
         if (this.containsProviderCredential(request.key, payload)) {
           storageLog.warn('Rejected plaintext credential in Intelligence config storage save')
-          return { success: false, version: this.cache.getVersion(request.key) }
+          return {
+            success: false,
+            version: this.cache.getVersion(request.key),
+            reason: 'credential-rejected'
+          }
         }
 
         const previousValue = request.persist === true ? this.getConfig(request.key) : null
@@ -567,7 +571,11 @@ export class StorageModule extends BaseModule {
             // expected outcome of this request, and an IPC rejection would strand the caller
             // with an opaque cross-process error instead of the version it must resync from.
             storageLog.error(`Durable save failed for ${request.key}`, { error })
-            return { success: false, version: this.cache.getVersion(request.key) }
+            return {
+              success: false,
+              version: this.cache.getVersion(request.key),
+              reason: 'persist-failed'
+            }
           }
         }
         return result

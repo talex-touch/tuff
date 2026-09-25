@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend spec index: Nexus admin pages must follow the ordered reading list and the TuffEx-first UI rule"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component structure and async-splitting conventions for the governance.vue split and the three new admin pages"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Where page data lives (composables vs useState) for the new credits / plugins / release-evidence pages"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Composable conventions for the request wrappers the new pages add"}
+{"file": ".trellis/tasks/09-23-nexus-docs-perf-cms-remediation/research/audit-2026-09-23.md", "reason": "Section 7 lists every orphan admin API with file anchors and the auth contract of each"}

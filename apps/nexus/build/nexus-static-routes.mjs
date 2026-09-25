@@ -14,6 +14,47 @@ export const publicPrerenderRoutes = [
   '/device-auth',
 ]
 
+/**
+ * The not-found page, prerendered under a private route and copied to `404.html` by
+ * `build/materialize-not-found.mjs`. Cloudflare Pages answers every not-found path with the
+ * top-level `404.html` when one exists, and without it treats the project as a single-page app
+ * and serves `index.html` with a 200 instead. `/en/docs/*` is excluded from the Worker, so a
+ * missing docs page could only ever be answered by Pages itself — measured 2026-09-23, an
+ * unknown docs URL returned the landing page, 191 KB, status 200.
+ *
+ * Why not prerender `/404.html` directly: that route came out of Nuxt as a no-SSR shell — an
+ * empty `#__nuxt`, no title, no text (3.6 KB, measured 2026-09-24), the single-page fallback
+ * treatment of that file name — so the reader would get a blank page until hydration. A route
+ * with an ordinary name is server-rendered like every page. Kept apart from
+ * `publicPrerenderRoutes`: it is not a route readers visit, so it gets no early hints and no
+ * `_routes.json` expectation.
+ */
+export const NOT_FOUND_PRERENDER_ROUTE = '/__not-found'
+export const staticFallbackPrerenderRoutes = [NOT_FOUND_PRERENDER_ROUTE]
+
+/**
+ * `_redirects` rules Pages applies before it looks for a static file, so the unprefixed docs
+ * entry points never reach the Worker. `server/middleware/docs-legacy-redirect.ts` keeps the
+ * same mapping for development (the node-server preset reads no `_redirects`) and as the
+ * Worker fallback; `test/middleware/docs-legacy-redirect.test.ts` holds the two to the same
+ * answer. Nitro cannot write these from `routeRules`: it copies `to` verbatim, so a wildcard
+ * destination never becomes `:splat`. `build/write-static-redirects.mjs` writes them instead.
+ */
+export const docsStaticRedirects = [
+  { from: '/docs', to: '/en/docs', status: 308 },
+  { from: '/docs/*', to: '/en/docs/:splat', status: 308 },
+]
+
+/**
+ * Status codes Pages accepts in `_redirects`. Anything else — Nitro's `/* /404.html 404`
+ * fallback included — is dropped by Pages with a warning only in wrangler's output; the real
+ * not-found answer comes from the top-level `404.html` itself, no rule needed.
+ */
+export const PAGES_REDIRECT_STATUSES = new Set([200, 301, 302, 303, 307, 308])
+
+/** A catch-all source; any docs rule listed below one of these never fires. */
+export const PAGES_CATCH_ALL_SOURCE = '/*'
+
 export const docsApiPrerenderRoutes = [
   '/api/docs/component-sync',
   '/api/docs/navigation/en/all',
@@ -50,16 +91,23 @@ export const docsPrerenderEvidenceRoutes = [
  * each docs visit re-fetched HTML and JSON that only change on deploy — from CN a 1–2 s
  * round trip apiece. Nitro writes these route rules into `dist/_headers`.
  *
- * Browser window (`max-age`) matches the dynamic docs API's 5 minutes; the edge (`s-maxage`)
- * may keep a copy for an hour and serve it stale while it revalidates for a day. A deploy
- * changes the hashed asset names inside the HTML, so an hour-old edge copy still points at
- * assets that exist (immutable, kept alongside). `/_i18n/**` is hash-versioned in the path, so
- * it can be held longer.
+ * Browser window (`max-age`) matches the dynamic docs API's 5 minutes. The edge window is the
+ * same 5 minutes and carries no stale-while-revalidate: Cloudflare only caches HTML/JSON behind
+ * the zone Cache Rule "nexus docs static" (created 2026-09-24, Edge TTL "ignore origin, 5 min"),
+ * a Pages deploy does not purge that cache, and a deploy replaces changed chunks under new
+ * hashes — so a copy older than a few minutes may point at assets that no longer exist. Keep this
+ * value and the rule's TTL equal. `/_i18n/**` is hash-versioned in the path, so it can be held
+ * longer.
  */
-export const DOCS_STATIC_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400'
+export const DOCS_STATIC_CACHE_CONTROL = 'public, max-age=300, s-maxage=300'
 export const I18N_MESSAGES_CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
 
-export const docsStaticHtmlHeaderRoutes = ['/en/docs/**', '/zh/docs/**']
+/**
+ * The docs roots are listed on their own because a Pages pattern `/en/docs/*` matches paths
+ * below the root and not the root itself — `/en/docs` shipped with the Pages default
+ * `max-age=0, must-revalidate` while every page below it carried the window.
+ */
+export const docsStaticHtmlHeaderRoutes = ['/en/docs', '/zh/docs', '/en/docs/**', '/zh/docs/**']
 /**
  * Prerendered JSON has no file extension, so Pages served it as `application/octet-stream`;
  * the explicit content-type is part of the same rule.

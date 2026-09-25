@@ -27,7 +27,7 @@ const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
 
 // Mirrors the sidebar's client-only lazy fetch: the docs pages prerender, and
 // the content table is not reliably queryable at that point.
-const { data: payload, pending } = await useTypedFetch<unknown>(
+const { data: payload, status } = await useTypedFetch<unknown>(
   computed(() => `/api/docs/sidebar-components/${docsLocale.value}`),
   {
     key: computed(() => `docs-suite-catalog:${docsLocale.value}`),
@@ -37,6 +37,14 @@ const { data: payload, pending } = await useTypedFetch<unknown>(
     default: () => [],
   },
 )
+
+// Gate on the request having settled, not on `pending`. With `server: false` the
+// request is idle during SSR, so `pending` was false there and the server
+// rendered the (empty) loaded branch, while the client's first frame is pending
+// and rendered the skeleton. Both branches share the `__groups` wrapper, so
+// hydration found fewer children than it expected. Idle and pending both mean
+// "not settled", so server and first client frame now render the same skeleton.
+const settled = computed(() => status.value === 'success' || status.value === 'error')
 
 const categoryKeys = computed(() => SUITE_CATEGORY_KEYS[props.suite] ?? [])
 
@@ -59,13 +67,13 @@ const total = computed(() => groups.value.reduce((sum, group) => sum + group.ite
 </script>
 
 <template>
-  <section class="docs-suite-catalog" :aria-busy="pending || undefined">
-    <p v-if="!pending && total > 0" class="docs-suite-catalog__total">
+  <section class="docs-suite-catalog" :aria-busy="settled ? undefined : true">
+    <p v-if="settled && total > 0" class="docs-suite-catalog__total">
       {{ t('docsSuiteCatalog.total', { count: total, groups: groups.length }) }}
     </p>
 
     <!-- Skeleton mirrors the loaded layout so nothing shifts when data lands. -->
-    <div v-if="pending" class="docs-suite-catalog__groups" aria-hidden="true">
+    <div v-if="!settled" class="docs-suite-catalog__groups" aria-hidden="true">
       <div v-for="key in categoryKeys" :key="key" class="docs-suite-catalog__group">
         <div class="docs-suite-catalog__skeleton-heading" />
         <div class="docs-suite-catalog__grid">

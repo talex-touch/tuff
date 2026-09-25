@@ -82,6 +82,8 @@ code: |
 | `domain` | `[number, number]` | — | 固定纵轴范围，省略则按数据自适应。 |
 | `activeIndex` | `number \| null` | — | 受控的高亮采样点。 |
 | `interactive` | `boolean` | `true` | 是否启用指针与键盘悬停状态。 |
+| `baseline` | `boolean` | `true` | 在每条序列**自己的起始值**上画一条虚线基准。没有基准，眼睛只能看出线在抖，看不出最终比起点高还是低。按序列各画一条而不是共用一条零线——同一张 spark 图上的两条序列很少同刻度。 |
+| `endpoint` | `boolean` | `true` | 在每条序列的最后一个样本上画实心圆点。线的末端是当前值，也就是读者真正要看的那个数，只描边的话它和任何中间点一样重。 |
 | `animation` | `boolean` | `true` | ECharts 对齐的 1000ms 进入与 500ms 更新动效。 |
 | `ariaLabel` | `string` | — | canvas 的可访问名。 |
 

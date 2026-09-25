@@ -89,6 +89,27 @@ export interface StorageSaveRequest {
 }
 
 /**
+ * Why a storage save did not land, as reported by whoever detected it.
+ *
+ * The set is deliberately closed and specific: a single catch-all reason made "the request never
+ * reached main because the event loop was busy" indistinguishable from "main looked at the write
+ * and refused it", and the user-facing copy then blamed a storage service for a timeout.
+ */
+export type StorageSaveFailureReason =
+  /** Main held a newer revision than the one this request carried. */
+  | 'conflict'
+  /** Main answered with an unsuccessful result and no more specific reason. */
+  | 'rejected'
+  /** The request never reached main; the send rejected or timed out. */
+  | 'transport'
+  /** Main rejected the request because its key was missing or not a string. */
+  | 'invalid-key'
+  /** Main's credential gate refused to persist a payload carrying a plaintext credential. */
+  | 'credential-rejected'
+  /** Main accepted the value but the durable backend write failed. */
+  | 'persist-failed'
+
+/**
  * Result for versioned storage save.
  */
 export interface StorageSaveResult {
@@ -102,7 +123,7 @@ export interface StorageSaveResult {
    * lifecycle write — onboarding completion is the one that matters — is indistinguishable from a
    * version conflict at the call site, and the renderer's own logs do not reach the main log.
    */
-  reason?: 'conflict' | 'rejected' | 'transport'
+  reason?: StorageSaveFailureReason
 }
 
 /**

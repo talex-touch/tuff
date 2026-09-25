@@ -1,7 +1,7 @@
 ---
 title: "IconMorph 图标形变"
 description: "基于二维 Procrustes 对齐与极坐标弹簧物理的通用线条矢量图标变形组件。任意图标平滑过渡至另一图标。"
-category: 视觉效果
+category: Effects
 status: beta
 since: 2.4.14
 tags: [icon, morph, vector, animation, spring, svg, 图标, 动效]

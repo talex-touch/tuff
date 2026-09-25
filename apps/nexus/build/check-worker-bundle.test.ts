@@ -115,17 +115,19 @@ describe('Nexus deploy asset budget', () => {
       (entry): entry is [string, string] => Array.isArray(entry) && entry[0].startsWith('i-'),
     )
 
+    // `safelist: false` measures the token alone: `generate()` otherwise appends every safelisted
+    // rule (the MarkdownEditor toolbar icons), and each length below would be non-zero regardless.
     for (const [from] of iconShortcuts) {
-      const { css } = await uno.generate(from, { preflights: false })
+      const { css } = await uno.generate(from, { preflights: false, safelist: false })
       expect(css.length, `shortcut ${from} emits no CSS`).toBeGreaterThan(0)
     }
 
     // The loop above is vacuous while there are no icon shortcuts, and a broken generator would
     // read the same way. Prove the check discriminates: an installed collection resolves, and a
     // name from a collection absent from package.json does not.
-    const installed = await uno.generate('i-carbon-settings', { preflights: false })
+    const installed = await uno.generate('i-carbon-settings', { preflights: false, safelist: false })
     expect(installed.css.length, 'i-carbon-settings should resolve from @iconify-json/carbon').toBeGreaterThan(0)
-    const uninstalled = await uno.generate('i-ri-settings-line', { preflights: false })
+    const uninstalled = await uno.generate('i-ri-settings-line', { preflights: false, safelist: false })
     expect(uninstalled.css.length, 'i-ri-settings-line should not resolve — ri is not a dependency').toBe(0)
   })
 
