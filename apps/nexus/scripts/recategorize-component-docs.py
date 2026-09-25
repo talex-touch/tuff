@@ -4,9 +4,10 @@
 The docs sidebar (app/components/DocsSidebar.vue) groups component pages purely by
 this field, so it is the single source of truth for sidebar structure.
 
-Categories roll up into six suites via DocsSidebar's CATEGORY_SUITE_MAP:
+Categories roll up into seven suites via DocsSidebar's CATEGORY_SUITE_MAP:
 
 - concepts 理念: Foundations (index — doubles as the Concepts overview —, foundations, utils)
+- templates 模板: TemplateApp, TemplateContent, TemplateAi, TemplateData
 - base 基础组件: BaseSuite, Basic, Form, Layout, Navigation, Data, Feedback, Status
 - pro  进阶套件: ProSuite, Advanced, Effects, Primitives
 - ai   AI 套件:  AiSuite, AiChat, AiAgent, AiReasoning, AiContext
@@ -24,6 +25,10 @@ from the ai barrel).
 `Foundations`, `BaseSuite`, `ProSuite` and `AiSuite` are special cases: the
 sidebar renders their pages as standalone links (suite overview first) rather
 than as collapsible groups.
+
+The templates suite has no overview page: its pages are full-page compositions
+of other suites' components, not components, and picking its tab lands on the
+first template (`entryPage` in DocsSidebar's SUITES).
 
 Chart docs (the @talex-touch/tuffex/charts subpath) live in data / "Charts";
 data-suite.mdc is the data suite's overview page.
@@ -49,6 +54,31 @@ TAXONOMY: dict[str, list[str]] = {
         "accessibility",
         "utils",
         "sound",
+    ],
+    # ── suite: templates 模板 ──────────────────────────────────────────────
+    # No overview page; the sidebar tab lands on template-shell.
+    "TemplateApp": [
+        "template-shell",
+        "template-launcher",
+        "template-settings",
+        "template-onboarding",
+    ],
+    "TemplateContent": [
+        "template-cms",
+        "template-gallery",
+        "template-inbox",
+        "template-files",
+        "template-store",
+        "template-docs",
+    ],
+    "TemplateAi": [
+        "template-agent-chat",
+        "template-research",
+    ],
+    "TemplateData": [
+        "template-dashboard",
+        "template-automation",
+        "template-release",
     ],
     # ── suite: base 基础组件 ──────────────────────────────────────────────
     # Suite overview page: rendered as the suite's first standalone link.
