@@ -70,6 +70,13 @@ function mountSettings(): VueWrapper {
         VoiceProviderCatalogSettings: {
           name: 'VoiceProviderCatalogSettings',
           template: '<section />'
+        },
+        // The on-device model block is a separate component with its own suite; here the only
+        // contract is which dictation source the page hands it, so the stub exposes just that.
+        SpeechModelSettings: {
+          name: 'SpeechModelSettings',
+          props: ['source'],
+          template: '<section data-testid="speech-model-settings" />'
         }
       }
     }
@@ -283,4 +290,48 @@ describe('SettingSpeechRecognition', () => {
       wrapper.unmount()
     }
   )
+
+  /**
+   * The on-device model block phrases a catalog failure around the dictation source the reader
+   * picked, so it has to receive that source — normalized the same way the radio is. A settings
+   * file written by another build can hold a name this one does not know, and the block must never
+   * be handed a value the radio would never have shown.
+   */
+  it.each([
+    { name: 'an unset source', stored: undefined, expected: 'hybrid' },
+    { name: 'a value outside the three sources', stored: 'edge', expected: 'hybrid' },
+    { name: 'local', stored: 'local', expected: 'local' },
+    { name: 'cloud', stored: 'cloud', expected: 'cloud' }
+  ])('hands $name to the on-device model settings', async ({ stored, expected }) => {
+    storeVoiceSource(stored)
+
+    const wrapper = mountSettings()
+    await flushPromises()
+
+    expect(wrapper.getComponent({ name: 'SpeechModelSettings' }).props('source')).toBe(expected)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The two blocks read the same preference. Switching the radio re-points the failure copy in the
+   * model block on the spot, rather than leaving it describing the source the user just left.
+   */
+  it('re-points the on-device model settings when the dictation source changes', async () => {
+    storeVoiceSource('hybrid')
+
+    const wrapper = mountSettings()
+    await flushPromises()
+    expect(wrapper.getComponent({ name: 'SpeechModelSettings' }).props('source')).toBe('hybrid')
+
+    await wrapper
+      .getComponent({ name: 'TuffBlockFlatRadio' })
+      .vm.$emit('update:modelValue', 'local')
+    await flushPromises()
+
+    expect(wrapper.getComponent({ name: 'SpeechModelSettings' }).props('source')).toBe('local')
+    expect(settings.voiceInput?.source).toBe('local')
+
+    wrapper.unmount()
+  })
 })

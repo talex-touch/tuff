@@ -16,6 +16,7 @@ import {
   getSpeechModelProgress,
   installSpeechModel,
   installedSpeechModels,
+  projectSpeechCatalogApiError,
   speechModelCatalogView,
   uninstallSpeechModel
 } from './speech-model-service'
@@ -312,7 +313,10 @@ export class VoiceModule extends BaseModule<TalexEvents> {
             if (context?.plugin) throw new Error('VOICE_SPEECH_MODELS_HOST_ONLY')
             return speechModelCatalogView()
           },
-          { onError: (error) => voiceLog.error('Speech model catalog read failed:', { error }) }
+          {
+            onError: (error) => voiceLog.error('Speech model catalog read failed:', { error }),
+            projectError: projectSpeechCatalogApiError
+          }
         )
       )
     )
@@ -338,7 +342,10 @@ export class VoiceModule extends BaseModule<TalexEvents> {
             if (context?.plugin) throw new Error('VOICE_SPEECH_MODELS_HOST_ONLY')
             return installSpeechModel(payload.id, payload.version)
           },
-          { onError: (error) => voiceLog.error('Speech model install failed:', { error }) }
+          {
+            onError: (error) => voiceLog.error('Speech model install failed:', { error }),
+            projectError: projectSpeechCatalogApiError
+          }
         )
       )
     )

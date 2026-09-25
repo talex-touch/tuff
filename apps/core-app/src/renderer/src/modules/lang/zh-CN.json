@@ -665,10 +665,21 @@
       "notConfigured": "没有渠道绑定 audio.asr"
     },
     "models": {
-      "title": "端侧模型",
-      "loading": "正在读取云端目录…",
-      "catalogUnavailable": "读不到云端模型目录，请检查网络后重试。",
-      "signInRequired": "登录 Tuff 账号后才能读取云端模型目录。",
+      "title": "本机语音模型",
+      "description": "用于设备端或混合语音识别；这里的目录状态不代表云端识别状态。",
+      "loading": "正在读取可安装的本机模型目录…",
+      "catalogErrors": {
+        "authRequired": "登录后可查看并安装官方本机语音模型。",
+        "timeout": "本机模型目录请求超时。",
+        "upstreamUnavailable": "本机模型目录服务暂时不可用。",
+        "invalid": "本机模型目录校验失败，为保护安装安全，本次未展示可下载模型。",
+        "unavailable": "无法读取本机模型目录。"
+      },
+      "catalogImpact": {
+        "cloud": "这不会影响当前的云端语音输入；已安装模型仍可管理。",
+        "local": "已安装模型仍可继续使用和移除。",
+        "hybrid": "云端语音输入与已安装模型仍可继续使用。"
+      },
       "retry": "重试",
       "installed": "已安装",
       "recommended": "推荐",
@@ -5691,15 +5702,7 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": [
-        "日",
-        "一",
-        "二",
-        "三",
-        "四",
-        "五",
-        "六"
-      ]
+      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
     },
     "memoryReview": {
       "title": "记忆审核",

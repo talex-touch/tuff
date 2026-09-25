@@ -18,8 +18,47 @@ import { defineEvent } from '../../event/builder'
 /** Outlasts the 150s buffered Provider deadline plus polish and active-target delivery. */
 const VOICE_RETRY_TRANSPORT_TIMEOUT_MS = 180_000
 
+export const VOICE_SPEECH_CATALOG_ERROR_CODES = {
+  authRequired: 'SPEECH_CATALOG_AUTH_REQUIRED',
+  timeout: 'SPEECH_CATALOG_TIMEOUT',
+  upstreamUnavailable: 'SPEECH_CATALOG_UPSTREAM_UNAVAILABLE',
+  invalid: 'SPEECH_CATALOG_INVALID',
+  unavailable: 'SPEECH_CATALOG_UNAVAILABLE',
+} as const
+
+export type VoiceSpeechCatalogErrorCode =
+  (typeof VOICE_SPEECH_CATALOG_ERROR_CODES)[keyof typeof VOICE_SPEECH_CATALOG_ERROR_CODES]
+
+export function isVoiceSpeechCatalogErrorCode(value: unknown): value is VoiceSpeechCatalogErrorCode {
+  switch (value) {
+    case VOICE_SPEECH_CATALOG_ERROR_CODES.authRequired:
+    case VOICE_SPEECH_CATALOG_ERROR_CODES.timeout:
+    case VOICE_SPEECH_CATALOG_ERROR_CODES.upstreamUnavailable:
+    case VOICE_SPEECH_CATALOG_ERROR_CODES.invalid:
+    case VOICE_SPEECH_CATALOG_ERROR_CODES.unavailable:
+      return true
+    default:
+      return false
+  }
+}
+
+/** A safely projected main-process failure that keeps stable machine-readable fields. */
+export class VoiceApiError extends Error {
+  readonly code: string | undefined
+  readonly retryable: boolean | undefined
+
+  constructor(message: string, code?: string, retryable?: boolean) {
+    super(message)
+    this.name = 'VoiceApiError'
+    this.code = code
+    this.retryable = retryable
+  }
+}
+
 /** Standard envelope returned by voice API handlers. */
-export type VoiceApiResponse<T = undefined> = { ok: true; result?: T } | { ok: false; error: string }
+export type VoiceApiResponse<T = undefined> =
+  | { ok: true; result?: T }
+  | { ok: false; error: string; code?: string; retryable?: boolean }
 
 /** Where the canonical session should deliver its final text. */
 export type VoiceDeliveryMode = 'none' | 'active-app'
@@ -547,7 +586,7 @@ export interface VoiceSdk {
 
 function assertVoiceApiResponse<T>(response: VoiceApiResponse<T>, fallbackMessage: string): T {
   if (!response?.ok) {
-    throw new Error(response?.error || fallbackMessage)
+    throw new VoiceApiError(response?.error || fallbackMessage, response?.code, response?.retryable)
   }
   return response.result as T
 }

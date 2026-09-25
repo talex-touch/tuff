@@ -665,10 +665,21 @@
       "notConfigured": "No channel is bound to audio.asr"
     },
     "models": {
-      "title": "On-device models",
-      "loading": "Reading the cloud catalog...",
-      "catalogUnavailable": "The cloud model catalog could not be read. Check the network and retry.",
-      "signInRequired": "Sign in to Tuff to read the cloud model catalog.",
+      "title": "On-device speech models",
+      "description": "Used for on-device or hybrid recognition. This catalog status does not represent cloud recognition.",
+      "loading": "Reading the installable on-device model catalog...",
+      "catalogErrors": {
+        "authRequired": "Sign in to view and install official on-device speech models.",
+        "timeout": "The on-device model catalog request timed out.",
+        "upstreamUnavailable": "The on-device model catalog service is temporarily unavailable.",
+        "invalid": "The on-device model catalog failed validation, so downloadable models are hidden for safety.",
+        "unavailable": "The on-device model catalog could not be read."
+      },
+      "catalogImpact": {
+        "cloud": "This does not affect current cloud dictation. Installed models remain manageable.",
+        "local": "Installed models remain available and can still be removed.",
+        "hybrid": "Cloud dictation and installed models remain available."
+      },
       "retry": "Retry",
       "installed": "Installed",
       "recommended": "Recommended",
@@ -5691,15 +5702,7 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": [
-        "Sun",
-        "Mon",
-        "Tue",
-        "Wed",
-        "Thu",
-        "Fri",
-        "Sat"
-      ]
+      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     },
     "memoryReview": {
       "title": "Memory Review",
