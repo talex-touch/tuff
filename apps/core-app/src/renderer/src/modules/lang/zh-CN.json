@@ -6298,5 +6298,22 @@
         "subtitle": "打开视频文件夹"
       }
     }
+  },
+  "shortcuts": {
+    "palette": "快捷命令",
+    "legendSelect": "切换",
+    "legendRun": "执行",
+    "legendClose": "关闭",
+    "group": {
+      "conversation": "对话",
+      "navigate": "导航",
+      "view": "视图"
+    },
+    "commands": {
+      "openCoreBox": "打开快捷搜索",
+      "toggleSidebar": "切换侧边栏",
+      "togglePanel": "切换预览面板",
+      "focusComposer": "聚焦输入框"
+    }
   }
 }

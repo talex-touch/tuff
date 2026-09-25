@@ -13,6 +13,7 @@ import {
 import { APP_DESTINATION_ICON_CLASSES } from './src/shared/app-destinations'
 import { MODEL_FAMILY_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-family-icons'
 import { MODEL_SOURCE_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-source-icons'
+import { MAIN_WINDOW_COMMAND_ICON_CLASSES } from './src/renderer/src/modules/shortcuts/main-window-command-catalog'
 import {
   PROVIDER_ICON_CLASSES,
   PROVIDER_ID_ICON_CLASSES
@@ -72,6 +73,9 @@ const ICON_PICKER_CATALOG_MODULE = fileURLToPath(
     import.meta.url
   )
 )
+const MAIN_WINDOW_COMMAND_CATALOG_MODULE = fileURLToPath(
+  new URL('./src/renderer/src/modules/shortcuts/main-window-command-catalog.ts', import.meta.url)
+)
 
 export default defineConfig({
   // The dev server watches only the config file itself. Without this, a new icon in the table
@@ -81,7 +85,8 @@ export default defineConfig({
     MODEL_FAMILY_ICONS_MODULE,
     MODEL_SOURCE_ICONS_MODULE,
     APP_DESTINATIONS_MODULE,
-    ICON_PICKER_CATALOG_MODULE
+    ICON_PICKER_CATALOG_MODULE,
+    MAIN_WINDOW_COMMAND_CATALOG_MODULE
   ],
   safelist: [
     ...COREBOX_ACTION_ICONS,
@@ -110,7 +115,12 @@ export default defineConfig({
     // outside this app's content roots.
     'i-ri-image-add-line',
     'i-ri-folder-image-line',
-    'i-ri-search-line'
+    'i-ri-search-line',
+    // The MainWindow command catalog (`modules/shortcuts/main-window-command-catalog.ts`) — the
+    // rows ⌘/ lists and the badge on each control. A row is rendered by v-for, so no template names
+    // its icon; without these the whole palette draws empty boxes. Derived from the catalog so a
+    // command added there cannot ship invisible.
+    ...MAIN_WINDOW_COMMAND_ICON_CLASSES
   ],
   theme: {
     colors: {

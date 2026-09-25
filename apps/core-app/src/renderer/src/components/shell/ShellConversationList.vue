@@ -11,6 +11,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { omniPanelShowEvent } from '../../../../shared/events/omni-panel'
 import { projectConversationGroups } from '~/modules/conversation/conversation-project-groups'
+import { useConversationEntry } from '~/modules/conversation/useConversationEntry'
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import { useProjectStore } from '~/stores/projects'
 import ShellProjectRows from './ShellProjectRows.vue'
@@ -21,6 +22,7 @@ const router = useRouter()
 const transport = useTuffTransport()
 const history = useConversationHistory()
 const projectStore = useProjectStore()
+const { enterConversation } = useConversationEntry()
 const {
   projects,
   localAiSessions,
@@ -67,11 +69,6 @@ async function removeConversation(id: string): Promise<void> {
     return
   }
   if (wasActive) await router.push('/home')
-}
-
-async function beginProjectConversation(projectId: string): Promise<void> {
-  projectStore.beginConversation(projectId)
-  await router.push('/home')
 }
 
 async function openProjectAgent(projectId: string): Promise<void> {
@@ -213,7 +210,7 @@ function setProjectMenu(projectId: string, open: boolean): void {
             class="ShellConversationList-ProjectTitleBtn"
             type="button"
             :title="group.project.rootPath"
-            @click="beginProjectConversation(group.project.id)"
+            @click="enterConversation(group.project.id)"
           >
             <span>{{ group.project.name }}</span>
           </button>
@@ -223,7 +220,7 @@ function setProjectMenu(projectId: string, open: boolean): void {
               type="button"
               :title="t('shell.projects.newChat')"
               :aria-label="t('shell.projects.newChat')"
-              @click.stop="beginProjectConversation(group.project.id)"
+              @click.stop="enterConversation(group.project.id)"
             >
               <span class="i-ri-add-line" />
             </button>
@@ -241,7 +238,7 @@ function setProjectMenu(projectId: string, open: boolean): void {
                   <span class="i-ri-more-2-fill" />
                 </button>
               </template>
-              <TxDropdownItem @select="beginProjectConversation(group.project.id)">
+              <TxDropdownItem @select="enterConversation(group.project.id)">
                 {{ t('shell.projects.newChat') }}
               </TxDropdownItem>
               <TxDropdownItem @select="openProjectAgent(group.project.id)">
@@ -285,7 +282,7 @@ function setProjectMenu(projectId: string, open: boolean): void {
               'is-active': activeProjectId === group.project.id && !activeId
             }"
             type="button"
-            @click="beginProjectConversation(group.project.id)"
+            @click="enterConversation(group.project.id)"
           >
             <span class="i-ri-add-line" />
             <span>{{ t('shell.projects.newChat') }}</span>

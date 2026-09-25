@@ -6298,5 +6298,22 @@
         "subtitle": "Open the Videos folder"
       }
     }
+  },
+  "shortcuts": {
+    "palette": "Command palette",
+    "legendSelect": "Select",
+    "legendRun": "Run",
+    "legendClose": "Close",
+    "group": {
+      "conversation": "Conversation",
+      "navigate": "Navigate",
+      "view": "View"
+    },
+    "commands": {
+      "openCoreBox": "Open quick search",
+      "toggleSidebar": "Toggle sidebar",
+      "togglePanel": "Toggle preview panel",
+      "focusComposer": "Focus the input"
+    }
   }
 }

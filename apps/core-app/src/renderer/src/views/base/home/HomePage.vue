@@ -34,6 +34,7 @@ import { toast } from 'vue-sonner'
 import { createRollbackSync } from '~/utils/rollback-sync'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
+import MetaHintBadge from '~/components/shell/MetaHintBadge.vue'
 import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
 import ToolWidgetCard from '~/components/intelligence/ToolWidgetCard.vue'
 import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
@@ -64,6 +65,7 @@ import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
 import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
 import { providerIconForId } from '~/modules/intelligence/provider-icons'
+import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
 import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { useProjectStore } from '~/stores/projects'
@@ -131,6 +133,12 @@ const conversation = useHomeConversation({
 const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
 
 const panelOpen = ref(false)
+
+/**
+ * Whether this page is the one on screen. Read by the surface watcher below and by the composer's
+ * commands, which an off-screen page must not offer as runnable.
+ */
+const isHomeRoute = computed(() => route.path === '/home' || route.path.startsWith('/home/c/'))
 
 /**
  * Both pills read this: the pinned model's display name and provider icon when it resolves, the
@@ -223,11 +231,7 @@ const agentTools = useAgentTools()
  * `/home/c/:id` is the stored-conversation route and renders this same component, card included, so
  * it counts as visible for the same reason `/home` does.
  */
-watch(
-  () => route.path === '/home' || route.path.startsWith('/home/c/'),
-  (visible) => agentTools.setSurfaceVisible(visible),
-  { immediate: true }
-)
+watch(isHomeRoute, (visible) => agentTools.setSurfaceVisible(visible), { immediate: true })
 
 /**
  * How far the assistant may go with tools: no tools at all, tools that ask before every
@@ -982,6 +986,46 @@ watch(
     }
   }
 )
+
+// ============================================================================
+// Command layer
+// ============================================================================
+
+/**
+ * The composer's commands, registered while this page is alive.
+ *
+ * Their handlers are this component's state — the panel, the draft, the running turn — so they are
+ * registered here rather than in the shell's list, which cannot reach any of it. Two consequences
+ * worth stating: the rows disappear when the page unmounts, and every one of them is gated on the
+ * Home route being visible, because the shell keeps this page alive while the user is in Settings
+ * and an enabled-looking row that quietly toggles an off-screen panel is a lie.
+ */
+const disposeCommands = registerMainWindowCommandHandlers([
+  {
+    id: 'toggle-panel',
+    enabled: () => isHomeRoute.value,
+    run: () => {
+      panelOpen.value = !panelOpen.value
+    }
+  },
+  {
+    id: 'focus-composer',
+    enabled: () => isHomeRoute.value,
+    run: () => inputRef.value?.focus()
+  },
+  {
+    id: 'send',
+    enabled: () => isHomeRoute.value && canSend.value,
+    run: () => submit()
+  },
+  {
+    id: 'stop',
+    enabled: () => isHomeRoute.value && isStreaming.value,
+    run: () => conversation.stop()
+  }
+])
+
+onBeforeUnmount(disposeCommands)
 </script>
 
 <template>
@@ -1395,6 +1439,7 @@ watch(
                       @click="conversation.stop()"
                     >
                       <span class="i-ri-stop-fill" />
+                      <MetaHintBadge command="stop" placement="above" />
                     </button>
                     <button
                       v-else
@@ -1405,6 +1450,7 @@ watch(
                       @click="submit"
                     >
                       <span class="i-ri-arrow-up-line" />
+                      <MetaHintBadge command="send" placement="above" />
                     </button>
                   </div>
                 </div>
@@ -2103,6 +2149,9 @@ textarea.HomePage-Input:focus-visible {
 .HomePage-RoundBtn,
 .HomePage-SendBtn {
   display: inline-flex;
+  // Its hint chip anchors above the button: this control sits on the window's bottom edge, and the
+  // one thing beside it is the voice button.
+  position: relative;
   align-items: center;
   justify-content: center;
   height: 30px;

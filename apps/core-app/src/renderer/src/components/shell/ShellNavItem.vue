@@ -51,6 +51,9 @@ function activate(): void {
   >
     <span class="ShellNavItem-Icon" :class="icon" />
     <span class="ShellNavItem-Label">{{ label }}</span>
+    <!-- The key that runs this row, drawn while ⌘ is held. A slot rather than a prop so the nav
+         item knows nothing about shortcuts: the caller decides whether its row has one. -->
+    <slot name="hint" />
     <span v-if="badge !== undefined" class="ShellNavItem-Badge">{{ badge }}</span>
   </button>
 </template>
@@ -58,6 +61,9 @@ function activate(): void {
 <style lang="scss" scoped>
 .ShellNavItem {
   display: flex;
+  // The hint chip anchors to the row rather than to the sidebar: its trailing edge is the row's
+  // trailing edge, which is where the eye already is.
+  position: relative;
   gap: 10px;
   align-items: center;
   width: 100%;
