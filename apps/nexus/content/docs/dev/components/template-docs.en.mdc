@@ -1,0 +1,114 @@
+---
+title: Docs
+description: A help center reader with a contents tree, a markdown article, an outline that follows the scroll, ⌘K search and article feedback
+category: TemplateContent
+status: beta
+since: 0.6.0
+tags: [template, docs, markdown, outline, search]
+syncStatus: reviewed
+verified: false
+---
+
+## Scenario
+
+The Tuff help center: a collapsible contents tree on the left, a markdown article in the middle, and an “On this page” outline on the right that highlights the section being read as the article scrolls. ⌘K searches every article and its sections; the end of each article has “Was this article helpful?”, previous / next and related articles, and the header says who edited it and when. The featured article, “Plugin permissions”, uses the repo’s real permission registry and manifest fields, echoing the Store chapter; every other article is sample content.
+
+It fits a product help center, developer docs, a team knowledge base or in-app guides — long-form reading that people need to find, finish and give feedback on.
+
+## Template
+
+### Three-pane docs
+
+:::TuffDemoWrapper{demo="TemplateDocsDemo" code-lang="vue" title="Three-pane docs" description="Once it scrolls into view, the article scrolls itself to Risk levels and then Choosing at install time, and stops the moment you touch it. With focus inside, ⌘K searches articles and sections; in-site links open inside the template, and external links only say what the host would do."}
+---
+code: |
+  <script setup lang="ts">
+  import { useIndicatorBox } from '@talex-touch/tuffex/sidebar-nav'
+  import { computed, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // The outline is parsed from the markdown source and matched to the rendered
+  // h2 / h3 by position: TxMarkdownView headings have no id, and must not get
+  // one (the docs page collects id'd headings and scrolls the whole page)
+  const outline = computed(() => parseHeadings(article.value.body))
+
+  // Only the article's own scroller moves; never scrollIntoView
+  function scrollToHeading(index: number) {
+    scroller.value?.scrollTo({ top: offsets[index] - 12, behavior: 'smooth' })
+  }
+
+  // Links in the body are real <a>: one delegated handler, #kb:<id> opens an article
+  function onBodyClick(event: MouseEvent) {
+    const link = (event.target as Element).closest('a')
+    if (!link)
+      return
+    event.preventDefault()
+    const href = link.getAttribute('href') ?? ''
+    if (href.startsWith('#kb:'))
+      openArticle(href.slice(4))
+  }
+
+  // The outline marker slides with the same measurement TxSidebarNav uses
+  const { box } = useIndicatorBox({ container: outlineList, target: () => items[active.value] })
+  </script>
+
+  <template>
+    <TemplateFrame title="Three-pane docs" :height="580" @enter="startTour">
+      <aside>
+        <TxSearchInput v-model="filter" placeholder="Filter contents" />
+        <TxTree :nodes="tree" :model-value="articleId" v-model:expanded-keys="open" :filter-text="filter" @select="onTreeSelect" />
+      </aside>
+
+      <div ref="scroller" class="article" tabindex="0" @scroll.passive="syncActive">
+        <TxBreadcrumb :items="crumbs" @click="onCrumb" />
+        <div @click="onBodyClick" @auxclick="onBodyAuxClick">
+          <TxMarkdownView :content="article.body" />
+        </div>
+        <TxFlatRadio :model-value="vote" size="sm" @update:model-value="onVote">
+          <TxFlatRadioItem value="up" icon="i-carbon-thumbs-up" label="Yes" />
+          <TxFlatRadioItem value="down" icon="i-carbon-thumbs-down" label="No" />
+        </TxFlatRadio>
+        <TxCardItem clickable role="link" :title="next.title" subtitle="Next" @click="openArticle(next.id)" />
+      </div>
+
+      <nav aria-label="On this page">
+        <button v-for="(heading, index) in outline" :key="index" :aria-current="index === active ? 'true' : undefined" @click="scrollToHeading(index)">
+          {{ heading.text }}
+        </button>
+      </nav>
+
+      <!-- ⌘K is bound on the template root; closing the palette hands focus back to the search button -->
+      <TxCommandPalette v-model="paletteOpen" :commands="commands" placeholder="Search articles and sections…" @select="onCommand" @close="focusSearch" />
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Anatomy
+
+| Region | Components | Role |
+|---|---|---|
+| Top bar | [TxKbd](/docs/dev/components/kbd), [TxCommandPalette](/docs/dev/components/command-palette) | A search-field button opens the ⌘K palette over articles, each article’s sections and two quick actions; a pick opens the article at that section |
+| Contents | [TxSearchInput](/docs/dev/components/search-input), [TxTree](/docs/dev/components/tree), [TxBadge](/docs/dev/components/badge) | Collapsible groups that open up around filter matches; the current article is highlighted under control, and new or updated articles carry a badge |
+| Toolbar | [TxBreadcrumb](/docs/dev/components/breadcrumb), [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxProgressBar](/docs/dev/components/progress-bar) | Breadcrumbs lead back up; without a right rail the outline lives in a dropdown; a hairline shows reading progress |
+| Article | [TxMarkdownView](/docs/dev/components/markdown-view), [TxAvatar](/docs/dev/components/avatar) | Headings, callouts, code blocks, tables and inline code; under the title, contributor avatars, the update date and reading time |
+| Article feedback | [TxFlatRadio](/docs/dev/components/flat-radio), [TxCheckbox](/docs/dev/components/checkbox), [TxTextarea](/docs/dev/components/textarea), [TxButton](/docs/dev/components/button) | Yes is recorded at once; No opens reasons and a note |
+| Previous / next and related | [TxCardItem](/docs/dev/components/card-item) | Neighbours follow the contents order; related articles come from each article’s list or its group |
+| On this page (expanded) | Hand-built list + `useIndicatorBox` | Highlights the section being read as the article scrolls; the sliding marker is measured the way TxSidebarNav measures its highlight |
+| Feedback | [TxToastPanel](/docs/dev/components/toast-panel) | Results for external links, Edit this page and article feedback, kept inside the article area |
+
+## Interactions
+
+- The first time the stage scrolls into view, the article scrolls to Risk levels after about 1.2 seconds and to Choosing at install time after about 3.4 seconds, then stops; a click, key press, wheel or touch inside the template ends the tour at once. With reduced motion nothing plays and the article simply sits at Choosing at install time. The tour only moves the article’s own scroller, never the page, and never moves focus.
+- The outline is parsed from the markdown source and matched to the rendered headings by position. TxMarkdownView headings have no id, and the template does not add one: the docs page collects id’d headings for its own outline and scrolls the whole page to them when the hash changes.
+- Picking an outline entry scrolls smoothly to that section and keeps it highlighted until you scroll the article yourself: a short section at the end that cannot reach the top keeps its highlight, and once the stage expands or collapses and the text rewraps, the section is aligned to the top again.
+- Links in the body are intercepted in one place: `#kb:` links open the article inside the template and move focus to its title; external links, middle clicks and ⌘-clicks never leave the docs page and only report what the host would open.
+- In the column (640–959px) the tree sits on the left and the outline moves into a toolbar dropdown; expanded, it is three panes with a capped article width; below 640px the tree becomes a panel that slides in from the left (not a TxDrawer), closed by Esc or the backdrop, and picking an article puts focus on its title.
+- ⌘K works while focus is inside the template, bound on its root so it never takes the docs site’s own shortcut; closing the palette returns focus to the search button.
+
+## Adapting it
+
+- With real docs, keep parsing the outline from the source; if you switch to a renderer that adds heading ids, first make sure no other script on the page scrolls the whole document by id.
+- For highlighted code, render the whole article with TxStreamMarkdown (not streaming) rather than mixing several renderers in one body, which breaks the heading positions.
+- With many articles, run the ⌘K search remotely as the reader types, and index only second-level sections.
+- Have the feedback endpoint record the article id, the reasons chosen and the article version, so “Out of date” can be traced to a specific revision.

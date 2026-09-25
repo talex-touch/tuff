@@ -1,0 +1,113 @@
+---
+title: Docs 知识库
+description: 目录树、Markdown 正文、跟随滚动的本页目录、⌘K 全文检索与文章反馈组成的帮助中心阅读器
+category: TemplateContent
+status: beta
+since: 0.6.0
+tags: [template, docs, markdown, outline, search]
+syncStatus: reviewed
+verified: false
+---
+
+## 场景
+
+Tuff 的帮助中心：左侧是可折叠的目录树，中间是 Markdown 渲染的文章，右侧「本页目录」跟着文章的滚动高亮当前章节。⌘K 能搜所有文章和它们的章节，文章末尾有「这篇文章有帮助吗」、上一篇 / 下一篇和相关文章，标题下方写着谁编辑过、什么时候更新。主推文章「插件权限说明」用的是仓库里真实的权限注册表和插件清单字段，和 Store 插件商店一章呼应；其余文章都是示例内容。
+
+适合产品帮助中心、开发者文档、团队知识库、内置在应用里的说明页——需要「找得到、读得完、还能反馈」的长文阅读场景。
+
+## 模板
+
+### 三栏知识库
+
+:::TuffDemoWrapper{demo="TemplateDocsDemo" code-lang="vue" title="三栏知识库" description="滚进视口后文章会自己滚到「风险等级」和「安装时的授权选择」两节，你一动就停下。焦点在模板里时按 ⌘K 搜索文章和章节；正文里的站内链接在模板内打开，外链只提示宿主会怎么处理。"}
+---
+code: |
+  <script setup lang="ts">
+  import { useIndicatorBox } from '@talex-touch/tuffex/sidebar-nav'
+  import { computed, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // 大纲从 Markdown 源码里解析，按顺序对应渲染出来的 h2 / h3：
+  // TxMarkdownView 的标题没有 id，也不能加（文档页会收集带 id 的标题并滚动整页）
+  const outline = computed(() => parseHeadings(article.value.body))
+
+  // 只滚文章自己的滚动容器，从不 scrollIntoView
+  function scrollToHeading(index: number) {
+    scroller.value?.scrollTo({ top: offsets[index] - 12, behavior: 'smooth' })
+  }
+
+  // 正文里的链接是真 <a>：在外层委托拦截，#kb:<id> 打开站内文章
+  function onBodyClick(event: MouseEvent) {
+    const link = (event.target as Element).closest('a')
+    if (!link)
+      return
+    event.preventDefault()
+    const href = link.getAttribute('href') ?? ''
+    if (href.startsWith('#kb:'))
+      openArticle(href.slice(4))
+  }
+
+  // 本页目录的滑动标记：和 TxSidebarNav 高亮用同一套测量
+  const { box } = useIndicatorBox({ container: outlineList, target: () => items[active.value] })
+  </script>
+
+  <template>
+    <TemplateFrame title="三栏知识库" :height="580" @enter="startTour">
+      <aside>
+        <TxSearchInput v-model="filter" placeholder="筛选目录" />
+        <TxTree :nodes="tree" :model-value="articleId" v-model:expanded-keys="open" :filter-text="filter" @select="onTreeSelect" />
+      </aside>
+
+      <div ref="scroller" class="article" tabindex="0" @scroll.passive="syncActive">
+        <TxBreadcrumb :items="crumbs" @click="onCrumb" />
+        <div @click="onBodyClick" @auxclick="onBodyAuxClick">
+          <TxMarkdownView :content="article.body" />
+        </div>
+        <TxFlatRadio :model-value="vote" size="sm" @update:model-value="onVote">
+          <TxFlatRadioItem value="up" icon="i-carbon-thumbs-up" label="有帮助" />
+          <TxFlatRadioItem value="down" icon="i-carbon-thumbs-down" label="没帮助" />
+        </TxFlatRadio>
+        <TxCardItem clickable role="link" :title="next.title" subtitle="下一篇" @click="openArticle(next.id)" />
+      </div>
+
+      <nav aria-label="本页目录">
+        <button v-for="(heading, index) in outline" :key="index" :aria-current="index === active ? 'true' : undefined" @click="scrollToHeading(index)">
+          {{ heading.text }}
+        </button>
+      </nav>
+
+      <!-- ⌘K 绑在模板根节点上，面板关闭后把焦点还给搜索按钮 -->
+      <TxCommandPalette v-model="paletteOpen" :commands="commands" placeholder="搜索文章或章节…" @select="onCommand" @close="focusSearch" />
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 组成
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 顶栏 | [TxKbd](/docs/dev/components/kbd)、[TxCommandPalette](/docs/dev/components/command-palette) | 按钮样式的搜索框打开 ⌘K 面板：文章、每篇的章节和两个快捷操作都能搜，选中后打开文章并滚到对应章节 |
+| 目录 | [TxSearchInput](/docs/dev/components/search-input)、[TxTree](/docs/dev/components/tree)、[TxBadge](/docs/dev/components/badge) | 分组可折叠，筛选时自动展开命中项所在的分组；当前文章受控高亮，新文章和刚更新的文章带标记 |
+| 工具行 | [TxBreadcrumb](/docs/dev/components/breadcrumb)、[TxDropdownMenu](/docs/dev/components/dropdown-menu)、[TxProgressBar](/docs/dev/components/progress-bar) | 面包屑可回到上级；栏内没有右侧目录，本页目录收进下拉菜单；一条细线显示阅读进度 |
+| 正文 | [TxMarkdownView](/docs/dev/components/markdown-view)、[TxAvatar](/docs/dev/components/avatar) | 标题、提示块、代码块、表格与行内代码；标题下是贡献者头像、更新时间和阅读时长 |
+| 文章反馈 | [TxFlatRadio](/docs/dev/components/flat-radio)、[TxCheckbox](/docs/dev/components/checkbox)、[TxTextarea](/docs/dev/components/textarea)、[TxButton](/docs/dev/components/button) | 「有帮助」直接记下；「没帮助」展开原因与补充说明 |
+| 上一篇 / 下一篇、相关文章 | [TxCardItem](/docs/dev/components/card-item) | 按目录顺序推导上下篇，相关文章按文章配置或同组推导 |
+| 本页目录（展开后） | 手写列表 + `useIndicatorBox` | 跟随文章滚动高亮当前章节，滑动标记与 TxSidebarNav 的高亮是同一套测量 |
+| 结果提示 | [TxToastPanel](/docs/dev/components/toast-panel) | 外链、编辑此页和反馈的结果，留在文章区域里 |
+
+## 交互要点
+
+- 第一次滚进视口时，文章在约 1.2 秒后滚到「风险等级」，约 3.4 秒后滚到「安装时的授权选择」，然后停下；在模板里点击、按键、滚轮或触摸都会立即结束演示。开启「减弱动态效果」时不播放，文章直接停在「安装时的授权选择」。演示只滚文章自己的滚动容器，不动页面，也不移动焦点。
+- 本页目录从 Markdown 源码解析，按顺序对应渲染出来的标题。TxMarkdownView 的标题没有 id，模板也不给它们加：文档页会收集带 id 的标题做自己的目录，并在 hash 变化时滚动整页。
+- 点目录项会平滑滚到那一节并保持高亮，直到你自己滚动文章为止：文末的短章节滚不到顶部，高亮也不会跳到别处；展开或收起舞台、文章重新换行之后，这一节会重新对齐到顶部。
+- 正文里的链接在外层统一拦截：`#kb:` 开头的站内链接在模板里打开对应文章，焦点移到新文章标题；外链、中键和 ⌘ 点击都不会离开文档页，只提示宿主会在浏览器中打开什么。
+- 栏内（640–959px）目录树在左、本页目录收进工具行的下拉菜单；展开后是三栏，文章宽度封顶；窄于 640px 时目录变成从左侧滑出的面板（不是 TxDrawer），Esc 或点遮罩关闭，选中文章后焦点落在文章标题上。
+- ⌘K 只在焦点位于模板里时生效，绑在模板根节点上，不占用文档站自己的快捷键；面板关闭后焦点回到搜索按钮。
+
+## 改造建议
+
+- 接入真实文档时，大纲可以继续从源码解析；如果改用会生成标题 id 的渲染器，先确认页面上没有别的脚本按 id 滚动整页。
+- 需要代码高亮时，把整篇文章换成 TxStreamMarkdown（非流式），不要在正文里混排多个渲染器：标题序号会对不上。
+- 搜索量大时，⌘K 的命令列表改成按输入远程检索，章节可以只收录二级标题。
+- 反馈接口记录文章 id、所选原因和当时的版本号，便于判断「内容过时」指的是哪一版。

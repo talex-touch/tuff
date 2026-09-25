@@ -1,0 +1,116 @@
+---
+title: Automation
+description: An automation editor with a flow canvas, per-node settings, an animated run, run history and a log
+category: TemplateData
+status: beta
+since: 0.6.0
+tags: [template, automation, workflow, flowchart, ocr]
+syncStatus: reviewed
+verified: false
+---
+
+## Scenario
+
+Tuff's screenshot OCR is exactly this flow: when an image is copied, the system's own OCR reads it first, an AI model re-reads it only when the native engine is not confident enough, the text is translated, and the translation goes back on the clipboard with a notification. This template draws it as an automation you can edit and run: the flow canvas in the middle, node settings and the current run on the right, and in the wide layout a run history and a resizable log pane.
+
+It fits workflow editors in the Zapier / n8n mould, CI pipelines, approval flows, and any screen where people set up a chain of steps and then watch it run.
+
+## Template
+
+### Clipboard OCR → Translate
+
+:::TuffDemoWrapper{demo="TemplateAutomationDemo" code-lang="vue" title="Clipboard OCR → Translate" description="Runs once when it scrolls into view. Raise the minimum confidence to send the next run through the AI re-read, or simulate a rate limit to watch the retry."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const states = reactive({ trigger: 'idle', ocr: 'idle', fallback: 'idle', translate: 'idle', notify: 'idle' })
+  const flight = ref<string | null>(null) // the edge carrying the payload right now
+  const config = reactive({ ocr: { engine: 'vision', minConfidence: 80 }, translate: { rateLimit: false } })
+
+  const edges = computed(() => [
+    ['trigger', 'ocr'], ['ocr', 'translate'], ['ocr', 'fallback'], ['fallback', 'translate'], ['translate', 'notify'],
+  ].map(([from, to]) => ({ from, to, dashed: flight.value === `${from}>${to}` })))
+
+  // Pressing Run lays out one cancellable setTimeout chain from the current config
+  function run() {
+    const reread = OCR_CONFIDENCE < config.ocr.minConfidence
+    schedule(0, () => (states.trigger = 'running'))
+    schedule(400, () => {
+      states.trigger = 'done'
+      flight.value = 'trigger>ocr'
+    })
+    // … recognition, then either the AI re-read or states.fallback = 'skipped' …
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Automation" @enter="run">
+      <template #default="{ width, height }">
+        <TxFlowchart
+          :nodes="layout(width, height)" :edges="edges" :height="height - 56"
+          :node-width="212" draggable
+          @node-move="keepOffset" @node-click="({ id }) => (selected = id)"
+        >
+          <template #node="{ node }">
+            <div class="flow-node" :class="`is-${states[node.id]}`">
+              <span class="flow-node__title">{{ titles[node.id] }}</span>
+              <TxWorkingIndicator v-if="states[node.id] === 'running'" variant="dots" :show-elapsed="false" />
+              <TxStatusBadge v-else-if="states[node.id] === 'done'" size="sm" status="success" text="Done" />
+            </div>
+          </template>
+        </TxFlowchart>
+
+        <aside class="flow__rail">
+          <TxFlatSelect v-model="config.ocr.engine">
+            <TxFlatSelectItem value="vision" label="Apple Vision" />
+            <TxFlatSelectItem value="windows" label="Windows OCR" />
+          </TxFlatSelect>
+          <TxScrubField v-model="config.ocr.minConfidence" label="≥" :min="50" :max="99" suffix="%" />
+          <TxTaskRows variant="list" :rows="taskRows" />
+          <TxCodeStream :code="log" :revealed-lines="revealed" :min-height="0" />
+        </aside>
+      </template>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  /* TxFlowchart's only edge variant is `dashed`; the template uses it for "in flight" */
+  .flow :deep(.tx-bui-flowchart__edge.is-dashed) { stroke: var(--tx-bui-accent); }
+  @media (prefers-reduced-motion: no-preference) {
+    .flow :deep(.tx-bui-flowchart__edge.is-dashed) { animation: march 0.6s linear infinite; }
+  }
+  @keyframes march { to { stroke-dashoffset: -8; } }
+  </style>
+---
+:::
+
+## Anatomy
+
+| Region | Components | Role |
+|---|---|---|
+| Top bar | [TxWorkingIndicator](/docs/dev/components/working-indicator), [TxStatusBadge](/docs/dev/components/status-badge), [TxSteps](/docs/dev/components/steps), [TxSwitch](/docs/dev/components/switch), [TxButton](/docs/dev/components/button) | A running timer or the last result; four-step progress when wide; the auto-run switch; Run / Stop |
+| Canvas | [TxFlowchart](/docs/dev/components/flowchart), [TxStatusBadge](/docs/dev/components/status-badge), [TxWorkingIndicator](/docs/dev/components/working-indicator), [TxDotIndicator](/docs/dev/components/dot-indicator) | Five nodes top to bottom, each card drawing its own run state; the edge carrying the payload is a moving dashed line |
+| Node settings | [TxFlatSelect](/docs/dev/components/flat-select), [TxScrubField](/docs/dev/components/scrub-field), [TxSwitch](/docs/dev/components/switch), [TxFineTuneCard](/docs/dev/components/fine-tune-card), [TxToastPanel](/docs/dev/components/toast-panel) | A form per node; the notify node styles its notification with the fine-tune card and previews it live underneath |
+| This run | [TxTaskRows](/docs/dev/components/task-rows), [TxCodeStream](/docs/dev/components/code-stream) | Each step's state, output and expandable details; a run log that appears line by line |
+| Run history (wide) | [TxTimeline](/docs/dev/components/timeline) | Outcome and duration of recent runs, newest first |
+| Log pane (wide) | [TxSplitter](/docs/dev/components/splitter) | Drag the divider to trade canvas height for log height; the nodes re-space to fit |
+| Completion | [TxToastPanel](/docs/dev/components/toast-panel) | A result card hanging from the Run button, gone after four seconds |
+
+## Interactions
+
+- The first time the template scrolls into view it runs once, in about 3.3 seconds: nodes go running, then done, and the edges the data travels along move; the side panel switches to This run and the log fills in line by line. With reduced motion the finished run is shown straight away and no timer starts.
+- Click a node to edit it; changes apply to the next run. Apple Vision reads the sample screenshot at 93% confidence, so set Native OCR's minimum confidence to 94% or more and press Run: this time the run detours through the AI re-read on the right. Otherwise that node shows Skipped.
+- Turn on Simulate rate limit (429) on the Translate node: in the next run translation fails first, retries after 600ms and succeeds, and the history records it as retried.
+- Stop a run while it is going: the step in progress is marked cancelled and the log gains a `cancelled by user` line.
+- Nodes can be dragged and snap to the dot grid. The layout is recomputed from the canvas size and a drag is kept as an offset, so it survives going full screen.
+- Wide (≥ 960px) shows the run history, the four-step progress and the log pane. In the column and on narrow screens, Node and This run become tabs in the side panel, and narrow stacks that panel under the canvas.
+
+## Adapting it
+
+- Use your own flow: nodes and edges are plain arrays, and `flowNodes()` only turns the canvas size into coordinates. TxFlowchart always connects the bottom of one node to the top of the next, so a branch node has to sit to the side, letting the edge that skips it run straight past.
+- Wire it to a real runner: replace the timed steps `buildPlan()` lays out with events pushed from the backend (SSE or WebSocket). Each event calls `setNode()` once and appends a log line; the rest of the screen is derived from those states.
+- TxFlowchart has no per-edge styling API. The template borrows `dashed` to mean "in flight" and puts the colour and the motion in its own CSS, inside `prefers-reduced-motion: no-preference`.
+- TxFlatSelect and the fine-tune card's type menu do not teleport. Keep them where no `overflow: hidden` ancestor can clip them and well away from the container's bottom edge.

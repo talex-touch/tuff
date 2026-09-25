@@ -1378,7 +1378,7 @@ function getInlineCodeElement(target: EventTarget | null) {
   const code = target.closest<HTMLElement>('.docs-prose code')
   if (!code || code.closest('pre'))
     return null
-  if (code.closest('.tuff-code-block') || code.parentElement?.closest('a, button, [role="button"]'))
+  if (code.closest('.tuff-code-block, .not-prose') || code.parentElement?.closest('a, button, [role="button"]'))
     return null
 
   return code
@@ -1456,7 +1456,7 @@ function enhanceInlineCode() {
       return
     if (code.closest('pre'))
       return
-    if (code.closest('.tuff-code-block') || code.parentElement?.closest('a, button, [role="button"]'))
+    if (code.closest('.tuff-code-block, .not-prose') || code.parentElement?.closest('a, button, [role="button"]'))
       return
 
     code.dataset.inlineCodeEnhanced = 'true'
@@ -1797,7 +1797,7 @@ function enhanceCodeBlocks() {
   blocks.forEach((pre) => {
     if (pre.dataset.codeEnhanced === 'true')
       return
-    if (pre.closest('.tuff-code-block'))
+    if (pre.closest('.tuff-code-block, .not-prose'))
       return
     const code = pre.querySelector<HTMLElement>('code')
     if (!code)

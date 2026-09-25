@@ -1,0 +1,140 @@
+---
+title: Onboarding 登录引导
+description: 首次启动的五步引导，从登录、工作区、偏好到系统权限，最后试按呼出快捷键
+category: TemplateApp
+status: beta
+since: 0.6.0
+tags: [template, onboarding, sign-in, setup, permissions]
+syncStatus: reviewed
+verified: false
+---
+
+## 场景
+
+Tuff 桌面版第一次启动时的引导：登录、选工作区、设偏好、授予系统权限，最后试按一次呼出快捷键。登录方式照 Nexus 真实的登录页——Passkey、GitHub、LINUX DO 与邮箱 Magic Link，没有密码框；其余文案取自桌面端真实的首启引导。每一步都是模拟的：不会发出请求，也不会申请真实的系统权限。
+
+适合任何「装好之后先走一遍」的产品：桌面应用的首次启动、SaaS 注册后的工作区设置、需要系统授权才能工作的工具类应用。
+
+## 模板
+
+### 首启引导
+
+:::TuffDemoWrapper{demo="TemplateOnboardingDemo" code-lang="vue" title="首启引导" description="进入视口时标志与标题描一次边；「看一遍流程」自动走完前三步并停在权限页，授权只能由你点击。登录与权限均为模拟。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const step = ref(0)
+  const entered = ref(false)
+  const perms = reactive({ files: 'unchecked', accessibility: 'unchecked', screen: 'unchecked' })
+
+  // TxBorderBeam 默认按深色背景调色，auto 读的是系统而不是站点：显式传站点主题
+  const colorMode = useColorMode()
+  const beamTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
+
+  // 入场特效挂载即播，所以等舞台进入视口再挂载
+  function onEnter() {
+    entered.value = true
+  }
+
+  // 授权只由读者的点击触发；等待时长代替系统弹窗
+  function grant(key: keyof typeof perms) {
+    perms[key] = 'pending'
+    setTimeout(() => {
+      perms[key] = 'granted'
+    }, 1200)
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="首启引导" :height="560" @enter="onEnter">
+      <template #default="{ width }">
+        <div class="onb" :class="{ 'is-narrow': width > 0 && width < 640 }">
+          <aside class="onb__rail">
+            <TxTuffLogoStroke v-if="entered" :size="56" mode="once" />
+            <TxKeyframeStrokeText v-if="entered" text="欢迎来到 Tuff" :font-size="24" fill-color="var(--tx-text-color-primary)" />
+            <TxSteps direction="vertical" size="small" :active="step">
+              <!-- TxSteps 没有 emit：回退由宿主在原生 click 里判断 -->
+              <TxStep v-for="(item, i) in steps" :key="item.key" :step="i" :title="item.title" :clickable="i < step" @click="i < step && (step = i)" />
+            </TxSteps>
+          </aside>
+
+          <main class="onb__main">
+            <TxProgressBar :percentage="(step + 1) * 20" height="4px" aria-label="引导进度" />
+            <TxTransition preset="slide-fade" :appear="false">
+              <section v-if="step === 0" key="signin">
+                <TxBorderBeam size="sm" :theme="beamTheme" :active="!reducedMotion">
+                  <TxButton block size="lg" :loading="pending === 'passkey'" @click="signIn('passkey')">
+                    Passkey 登录
+                  </TxButton>
+                </TxBorderBeam>
+                <TxForm :model="form" :rules="rules" label-position="top" @submit="sendMagicLink">
+                  <TxFormItem label="邮箱" prop="email">
+                    <template #default="{ id }">
+                      <TxInput :id="id" v-model="form.email" type="email" />
+                    </template>
+                  </TxFormItem>
+                  <TxButton native-type="submit" variant="primary" block>使用邮箱继续</TxButton>
+                </TxForm>
+              </section>
+              <section v-else-if="step === 3" key="perms">
+                <TxStatusBadge :text="statusText(perms.files)" :status="statusTone(perms.files)" size="sm" />
+                <TxButton size="sm" :loading="perms.files === 'pending'" @click="grant('files')">允许访问</TxButton>
+              </section>
+              <!-- 工作区、偏好、完成三步从略 -->
+            </TxTransition>
+            <footer class="onb__footer">
+              <TxButton variant="ghost" :disabled="step === 0" @click="step--">上一步</TxButton>
+              <TxButton variant="primary" :disabled="!canContinue" @click="step++">继续</TxButton>
+            </footer>
+          </main>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .onb {
+    display: grid;
+    grid-template-columns: 264px minmax(0, 1fr);
+    height: 100%;
+  }
+
+  .onb.is-narrow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  </style>
+---
+:::
+
+## 组成
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 品牌栏 | [TxTuffLogoStroke](/docs/dev/components/tuff-logo-stroke)、[TxKeyframeStrokeText](/docs/dev/components/keyframe-stroke-text)、[TxGlowText](/docs/dev/components/glow-text) | 进入视口时标志与「欢迎来到 Tuff」各描一次边，副标题扫一次光；三者都在 `@enter` 之后才挂载 |
+| 步骤 | [TxSteps / TxStep](/docs/dev/components/steps)、[TxProgressBar](/docs/dev/components/progress-bar) | 五步进度；已完成的步骤可以点回去，说明行写着你在那一步选了什么 |
+| 登录 | [TxBorderBeam](/docs/dev/components/border-beam)、[TxButton](/docs/dev/components/button)、[TxBadge](/docs/dev/components/badge)、[TxForm / TxFormItem](/docs/dev/components/form)、[TxInput](/docs/dev/components/input) | Passkey（带光束与「上次使用」）、GitHub、LINUX DO、邮箱 Magic Link、离线继续 |
+| 工作区 | [TxRadioGroup / TxRadio](/docs/dev/components/radio)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TxAvatar](/docs/dev/components/avatar)、[TxTagInput](/docs/dev/components/tag-input)、[TxCard](/docs/dev/components/card) | 创建个人空间（名称、颜色、图标预览、邀请成员），或接受团队邀请 |
+| 偏好 | [TxKbd](/docs/dev/components/kbd)、[TxGradientBorder](/docs/dev/components/gradient-border)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TxRadioGroup / TxRadio](/docs/dev/components/radio)、[TuffSwitch](/docs/dev/components/switch) | 录制呼出快捷键（录制时外圈旋转）、主题、语言、使用方式、开机启动与托盘图标 |
+| 权限 | [TxIconChip](/docs/dev/components/icon-chip)、[TxTag](/docs/dev/components/tag)、[TxStatusBadge](/docs/dev/components/status-badge)、[TxProgressBar](/docs/dev/components/progress-bar) | 文件访问（必需）、辅助功能与屏幕录制（可选）；每行显示当前状态，底部汇总「已授权 n/3」 |
+| 完成 | [TxKeyframeStrokeText](/docs/dev/components/keyframe-stroke-text)、[TxGlowText](/docs/dev/components/glow-text)、[TxKbd](/docs/dev/components/kbd)、[TxBorderBeam](/docs/dev/components/border-beam)、[TxGlassSurface](/docs/dev/components/glass-surface)、[TxCardItem](/docs/dev/components/card-item) | 试按呼出快捷键，大键帽随按键亮起；唤起后迷你 CoreBox 套上光束；设置摘要 |
+| 切换与反馈 | [TxTransition](/docs/dev/components/transition)、[TxToastPanel](/docs/dev/components/toast-panel) | 步骤之间滑动淡入；登录、加入、授权等结果在步骤区底部给出提示 |
+| 实时预览（宽屏） | [TxGlassSurface](/docs/dev/components/glass-surface)、[TxStatusBadge](/docs/dev/components/status-badge) | ≥ 1200px 时出现；主题、语言、快捷键与三项权限的状态实时反映在迷你 CoreBox 上 |
+
+## 交互要点
+
+- 登录方式与 Nexus 一致：Passkey、GitHub、LINUX DO 各自模拟约 1 秒的系统验证或第三方授权，然后进入下一步；邮箱先校验格式，再显示「已发送 Magic Link」，点「我已点开链接（演示）」完成登录。选「离线继续」会跳过工作区一步，完成页注明跨设备同步不可用。
+- 「继续」只在这一步满足条件时可用（选了登录方式、空间有名字或已接受邀请、文件访问已授权），旁边写着还差什么；「上一步」和左侧已完成的步骤都能回退。你换步时，焦点移到新步骤的标题上。
+- 呼出快捷键可以录制：点「录制」后按下带 ⌘、⌃ 或 ⌥ 的组合，Esc 取消；⌘W、⌘T 这类被浏览器保留的组合会被拒绝并提示。录好的组合同步到完成页和实时预览。
+- 每一项权限都要你点「允许访问」：约 1.2 秒的等待代替系统弹窗，之后变为「已授权」。屏幕录制第一次会被「拒绝」，行内出现「前往系统设置」，再点一次才授予，并标注「重启后生效（示例）」。
+- 进入视口时只播入场：标志和标题描一次边，约 0.9 秒后 Passkey 按钮的光束淡入，1.4 秒后副标题扫一次光。点「看一遍流程」会自动登录、加入团队、在快捷键一栏闪一下录制外圈，然后停在权限页，提示模板不会替你授权。在模板里点一下或按任意键就停止；开启「减弱动态效果」时直接跳到权限页，光束和扫光都不出现。
+- 完成页里，焦点在模板内时直接按下你的呼出快捷键，大键帽随按键亮起，唤起后弹出迷你 CoreBox；也可以点「模拟按下」。宽屏（≥ 960px）品牌栏和字号放大，≥ 1200px 右侧出现实时预览；窄屏（< 640px）品牌栏收成顶部一行，步骤条只留编号。
+
+## 改造建议
+
+- 接真实登录：把 `signIn()` 里的计时器换成 Nexus 的 OAuth 跳转或 WebAuthn 调用，Magic Link 换成真实的发信接口。不要加密码框：Nexus 本来就没有密码登录，密码框在提交后从页面消失时还会引出浏览器的「保存密码」提示。
+- 接真实权限：状态从系统读取（macOS 的隐私与安全性、Windows 的隐私设置），「允许访问」触发系统弹窗后重新检查。授权只能由用户点击触发，引导里不要自动申请。
+- 入场特效（TxTuffLogoStroke 的 `once`、TxKeyframeStrokeText、TxGlowText 的 `:repeat="false"`）都是挂载即播，要等元素可见时再挂载，重播靠换 `key`。TxBorderBeam 的旋转家族（`sm`、`md`、`line`）没有减弱动态效果的兜底，这时传 `:active="false"`；它的 `theme` 默认是 `dark`，`auto` 跟随的是系统而不是站点，要显式传当前主题。
+- TxSteps 没有 emit，点步骤只改它自己的内部状态。回退要在 TxStep 上挂原生 `@click`，自己判断目标步骤是否已完成，并且只给已完成的步骤 `clickable`。

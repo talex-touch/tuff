@@ -1,0 +1,200 @@
+---
+title: CMS
+description: A content admin with status filters, host-controlled sorting and paging, bulk actions, a drawer editor and undoable feedback
+category: TemplateContent
+status: beta
+since: 0.6.0
+tags: [template, cms, table, form, drawer]
+syncStatus: reviewed
+verified: false
+---
+
+## Scenario
+
+The content workbench behind the Nexus docs and blog. Editors pull up drafts and posts in review by status, publish or archive them in bulk, and change a title, link or body in a drawer; every change can be undone from the toast. The editorial board shows the same posts as a flow instead: pushed from draft to published, and slotted into a day of this week.
+
+It fits any "table + details + form" admin: reviewing entries in a plugin store, a help centre, announcements and changelogs.
+
+## Template
+
+### Content workbench
+
+:::TuffDemoWrapper{demo="TemplateCmsDemo" code-lang="vue" title="Content workbench" description="Status chips, header sorting and paging each simulate a fetch; tick a few rows and the footer turns into bulk actions; click a row to open the editor. Expand it for the details panel. All data is sample data."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // TxDataTable sorts and selects only the page it is handed, so the host
+  // sorts every filtered post first and cuts the page afterwards.
+  const pageRows = computed(() => articles.value
+    .filter(article => matches(article, query.value))
+    .sort((a, b) => compare(a, b, query.value.sort))
+    .slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+
+  // Changing page or filter clears the selection: select-all covers one page.
+  function commit(next: Query) {
+    if (next.page !== query.value.page || next.status !== query.value.status)
+      selected.value = []
+    query.value = next
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="CMS" :height="580">
+      <TxFilterChips v-model="status" :items="statusItems" aria-label="Filter by status" />
+
+      <TxDataTable
+        v-model:selected-keys="selected"
+        :columns="columns"
+        :data="pageRows"
+        :sort="sort"
+        :sort-on-client="false"
+        row-key="id"
+        selectable
+        highlight-selected
+        sticky-header
+        table-layout="fixed"
+        @update:sort="onSort"
+        @row-click="({ row }) => openEditor(row)"
+      >
+        <template #cell-status="{ row }">
+          <TxStatusBadge size="sm" :text="row.statusLabel" :status="row.tone" :icon="row.icon" />
+        </template>
+        <template #cell-actions="{ row }">
+          <!-- A click inside a cell bubbles into row-click; stop it here -->
+          <span @click.stop>
+            <TxDropdownMenu placement="bottom-end">…</TxDropdownMenu>
+          </span>
+        </template>
+      </TxDataTable>
+
+      <TxPagination v-model:current-page="page" :page-size="pageSize" :total="total" />
+
+      <TxDrawer v-model:visible="editing" title="Edit post" size="min(560px, 94vw)">
+        <TxForm ref="form" :model="draft" :rules="rules" label-position="top">…</TxForm>
+        <template #footer>
+          <TxSplitButton variant="primary" menu-icon="i-carbon-chevron-down" @click="save()">
+            Save
+            <template #menu="{ close }">…</template>
+          </TxSplitButton>
+        </template>
+      </TxDrawer>
+
+      <TxToastPanel :open="toast.open" side="above" :stack="0">
+        {{ toast.text }}
+        <button type="button" @click="undo">Undo</button>
+      </TxToastPanel>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+### Editorial board
+
+Four columns, Draft → In review → Scheduled → Published: drag a card to the next column and its status follows, and when expanded drop it on a day of this week to schedule it. Unlike the table it is no place to edit fields one by one; it is for the weekly planning meeting, where the question is which column is piling up, what is overdue and what goes out each day.
+
+:::TuffDemoWrapper{demo="TemplateCmsBoardDemo" code-lang="vue" title="Editorial board" description="Drag cards to reorder them or change column; with a card focused, Space picks it up, ↑ / ↓ move it and ← / → change column; click a card for its details. Expanded, a week lane appears below: drop a card on a day to schedule it. Once it scrolls into view a collaborator comes online and moves a card. All data is sample data."}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const board = reactive({ draft: [], review: [], scheduled: [], published: [] })
+  let pendingMove = null
+
+  // TxSortableList keeps its drag state per instance, so another column never
+  // accepts the drop. The host lets dragover through on the column and only
+  // records the target on drop…
+  function onColumnDragOver(event: DragEvent, column: ColumnKey) {
+    if (!drag.id || column === drag.from)
+      return // ordering inside a column belongs to TxSortableList
+    event.preventDefault()
+    drag.index = insertionIndex(event.currentTarget, event.clientY)
+  }
+  function onColumnDrop(event: DragEvent, column: ColumnKey) {
+    if (drag.id && column !== drag.from)
+      pendingMove = { id: drag.id, to: column, index: drag.index }
+  }
+
+  // …and moves the card on the board root once the source list has settled
+  // in its own dragend
+  function onBoardDragEnd() {
+    if (pendingMove)
+      applyMove(pendingMove)
+    pendingMove = null
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Editorial board" :height="580" @enter="play">
+      <div class="board" @dragstart="onBoardDragStart" @dragend="onBoardDragEnd" @keydown="moveWithArrows">
+        <section
+          v-for="column in columns"
+          :key="column"
+          @dragover="onColumnDragOver($event, column)"
+          @drop="onColumnDrop($event, column)"
+        >
+          <TxBadge :value="board[column].length" :variant="overLimit(column) ? 'warning' : 'default'" />
+          <TxSortableList v-model="board[column]" :item-label="card => card.title" :labels="sortLabels">
+            <template #item="{ item }">
+              <div class="card" @click="openDetail(item)">
+                <!-- The list takes Enter / Space anywhere in a row as pick up; the menu keeps them -->
+                <span @click.stop @keydown.enter.stop @keydown.space.stop>
+                  <TxDropdownMenu>…</TxDropdownMenu>
+                </span>
+              </div>
+            </template>
+          </TxSortableList>
+        </section>
+      </div>
+
+      <TxModal v-model="detailOpen" :title="detail.title">
+        <TxFlatRadio v-model="detailColumn">…</TxFlatRadio>
+        <TxDatePicker v-model="publishDate" variant="field" />
+      </TxModal>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Anatomy
+
+| Region | Components | Role |
+|---|---|---|
+| Header | [TxSearchInput](/docs/dev/components/search-input), [TxButton](/docs/dev/components/button) | Search by title or slug; start a new post |
+| Status filter | [TxFilterChips](/docs/dev/components/filter-chips) | Single-select status; dots and counts are derived from the posts |
+| Post table | [TxDataTable](/docs/dev/components/data-table), [TxStatusBadge](/docs/dev/components/status-badge), [TxTag](/docs/dev/components/tag), [TxAvatar](/docs/dev/components/avatar) | Multi-select, controlled sorting, sticky header; cells carry status, section, author and relative time |
+| Row menu | [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxIconButton](/docs/dev/components/button) | Edit, duplicate as draft, publish or revert, archive, delete |
+| Loading and empty | [TxSkeleton](/docs/dev/components/skeleton), [TxSearchEmpty](/docs/dev/components/search-empty) | Placeholder rows go through the same table while fetching; no results offers Clear filters |
+| Footer | [TxPagination](/docs/dev/components/pagination), [TxButton](/docs/dev/components/button) | Paging; with rows selected it turns into bulk publish, archive and delete |
+| Feedback | [TxToastPanel](/docs/dev/components/toast-panel) | Hangs above the footer; save, publish, archive and delete can all be undone |
+| Details panel (expanded) | [TxCellLink](/docs/dev/components/cell-link), [TxMarkdownView](/docs/dev/components/markdown-view), [TxNoSelection](/docs/dev/components/no-selection) | Summary, metadata, the post link and a body preview |
+| Editor drawer | [TxDrawer](/docs/dev/components/drawer), [TxForm](/docs/dev/components/form), [TxInput](/docs/dev/components/input), [TxSelect](/docs/dev/components/select), [TxTagInput](/docs/dev/components/tag-input), [TxDatePicker](/docs/dev/components/date-picker), [TxFlatRadio](/docs/dev/components/flat-radio), [TuffSwitch](/docs/dev/components/switch), [TxTextarea](/docs/dev/components/textarea), [TxSplitButton](/docs/dev/components/button) | A validated edit form; the Save menu offers Save as draft, Submit for review and Publish now |
+| Header (Editorial board) | [TxAvatarGroup / TxAvatar](/docs/dev/components/avatar) | Collaborators online; while you search titles, matching cards stay bright |
+| Quick filters (Editorial board) | [TxFilterChips](/docs/dev/components/filter-chips), [TxDropdownMenu](/docs/dev/components/dropdown-menu) | All, Mine, Due this week, New comments, counted from the cards; several sections at once; cards that do not match dim rather than disappear |
+| Columns (Editorial board) | [TxSortableList](/docs/dev/components/sortable-list), [TxBadge](/docs/dev/components/badge), [TxTooltip](/docs/dev/components/tooltip) | One sortable list per column for in-column dragging, keyboard pick-up and screen-reader announcements; counts in the header, and a work-in-progress limit of 3 on In review, flagged in amber with the word Over when exceeded |
+| Cards (Editorial board) | [TxTag](/docs/dev/components/tag), [TxAvatar](/docs/dev/components/avatar), [TxDropdownMenu / TxDropdownSubmenu](/docs/dev/components/dropdown-menu), [TxProgressBar](/docs/dev/components/progress-bar) | Section strip and tag, author, due or publish time, comment count; a ⋯ menu with Open details, Move to, Copy link and Delete; expanded, a summary line and the pre-publish checklist too |
+| Week lane (Editorial board, expanded) | [TxIconButton](/docs/dev/components/button), [TxButton](/docs/dev/components/button) | Seven drop cells listing what publishes each day; drop a card on a day to schedule it, past days refuse it; step to the previous or next week |
+| Card details (Editorial board) | [TxModal](/docs/dev/components/modal), [TxFlatRadio](/docs/dev/components/flat-radio), [TxDatePicker](/docs/dev/components/date-picker), [TxCheckbox](/docs/dev/components/checkbox), [TxStatusBadge](/docs/dev/components/status-badge), [TxInput](/docs/dev/components/input) | Stage, due and publish dates, the pre-publish checklist and comments; Delete and a button that moves the card on to its next stage |
+
+## Interactions
+
+- Changing status, searching, sorting and paging each simulate a fetch of about 350 ms: the controls respond at once, the table keeps the old rows, swaps to skeleton rows of the same layout only after 120 ms, and replaces them in one go when the data lands, so nothing jumps.
+- Sorting runs over every filtered post before a page is cut; changing page or filter clears the selection, because the header checkbox only covers the current page.
+- Edit, duplicate, publish, archive and delete apply immediately; the toast stays for about 5 seconds and Undo puts things back as they were.
+- The drawer validates on save only: a title is required; the link takes lowercase letters, digits and hyphens and must not clash with another post; the summary is capped at 160 characters.
+- In the docs column a row click opens the drawer. Expanded (≥ 960px) the table gains section, language and views columns plus a details panel: click a row to inspect it, click again or press Edit to open the drawer. Below 640px only the title column stays, with status and time tucked under the title.
+- Editorial board: drag within a column to reorder and into another column to change status; expanded, drop a card on a day in the week lane to schedule it for 10:00 that day (16:00 if it is today); published cards cannot be scheduled and past days refuse drops. Every move can be undone from the toast. From the keyboard each column is one tab stop: Space picks a card up, ↑ / ↓ move it, Space drops it and Esc cancels; ← / → move it to the neighbouring column, and the card's ⋯ menu has Move to as well. Touch screens have no native drag and drop, so below 640px the board shows one column at a time and cards move through the column switcher and the menu.
+- Editorial board: quick filters and search only dim the cards that do not match, and each column header reads matching / total; dropping into a full In review is allowed, and the toast says the work-in-progress limit is exceeded. Clicking a card opens its details dialog, where stage, dates, checklist and comments apply as you go, and closing it offers one undo for the whole visit; the primary button moves the card on to its next stage.
+- Editorial board: the first time the stage scrolls into view, Mara comes online at 1 second, moves “Changelog: sdkapi 260713” to Scheduled at 1.8 seconds (the card flashes a ring, and View in the toast opens it) and another card gains a new comment at 3.4 seconds. A click or key press inside the template stops the script; with reduced motion the end state is shown at once, with no toast.
+
+## Adapting it
+
+- For a real backend, replace the simulated fetch with a request and cancel the previous one when the next query goes out; the skeleton, empty state and toast stay as they are.
+- With server-side paging keep `sort-on-client` off and send sort, filter and page together; the table only renders.
+- Put new fields in the drawer and the details panel first and keep only the columns people scan; in a narrow container drop columns by priority instead of scrolling sideways.
+- For WYSIWYG editing, TxMarkdownEditor can replace the body textarea; it draws its toolbar with icon classes, so the host must be able to generate them.
+- Editorial board: TxSortableList keeps its drag state to itself, so dragging between columns is the host's job: let `dragover` through on the column, only record the target in `drop`, and change the data when the board root receives `dragend`, when the source list has settled and the source card is still mounted. Every button inside a card has to stop Enter and Space (`@keydown.enter.stop` / `@keydown.space.stop`), or the list takes them as pick up.

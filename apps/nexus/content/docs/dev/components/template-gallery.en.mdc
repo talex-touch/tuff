@@ -1,0 +1,119 @@
+---
+title: Gallery
+description: A showcase wall with collections, thumbnail density, grid, masonry and list layouts, and artwork details
+category: TemplateContent
+status: beta
+since: 0.6.0
+tags: [template, gallery, media, upload]
+syncStatus: reviewed
+verified: false
+---
+
+## Scenario
+
+The Nexus community showcase. Wallpapers, CoreBox themes and plugin covers share one wall where people browse, favourite and rate them; opening a piece shows it large with its palette and variants, and anyone can drop in their own images to preview.
+
+It fits image-first pages: a theme store, an asset library, a screenshot collection, plugin cover review.
+
+## Template
+
+### Showcase wall
+
+:::TuffDemoWrapper{demo="TemplateGalleryDemo" code-lang="vue" title="Showcase wall" description="Switch collections, drag the thumbnail size, and flip between grid, masonry and list; hover a piece to favourite it, open it for details and use the arrow keys inside. Every artwork is generated in code, plus three images already on the site."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // TxStagger reads `appear` only when it mounts: a new key replays the
+  // entrance. It first plays when the stage scrolls into view, never under
+  // reduced motion.
+  const entranceKey = ref(0)
+  const playAppear = ref(false)
+  function play() {
+    playAppear.value = !matchMedia('(prefers-reduced-motion: reduce)').matches
+    entranceKey.value += 1
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Gallery" :height="580" @enter="play">
+      <TxFilterChips v-model="collection" :items="collections" role="tablist" aria-label="Collections" />
+
+      <section class="wall" :style="{ '--thumb-min': `${thumbMin}px` }">
+        <!-- The glass floats over the scroller; sorting uses a dropdown that teleports, so the glass cannot clip it -->
+        <TxGlassSurface width="100%" :height="46" :border-radius="14" :background-opacity="0.62">
+          <TxSegmentedSlider v-model="size" :segments="sizes" :show-labels="false" />
+          <TxFlatRadio v-model="layout" size="sm">
+            <TxFlatRadioItem value="grid" icon="i-carbon-grid" aria-label="Grid" />
+            <TxFlatRadioItem value="masonry" icon="i-carbon-column" aria-label="Masonry" />
+            <TxFlatRadioItem value="list" icon="i-carbon-list" aria-label="List" />
+          </TxFlatRadio>
+          <TxDropdownMenu>…</TxDropdownMenu>
+        </TxGlassSurface>
+
+        <TxEdgeFadeMask axis="vertical">
+          <TxStagger :key="entranceKey" tag="ul" :appear="playAppear">
+            <li v-for="art in visible" :key="art.id">
+              <button type="button" :aria-label="art.title" @click="open(art)">
+                <img :src="art.url" alt="">
+              </button>
+              <TxIconButton
+                :icon="art.liked ? 'i-carbon-favorite-filled' : 'i-carbon-favorite'"
+                :pressed="art.liked"
+                :label="`Favourite ${art.title}`"
+                @click="toggleLike(art)"
+              />
+            </li>
+          </TxStagger>
+        </TxEdgeFadeMask>
+      </section>
+
+      <TxModal v-model="detailOpen" :title="current.title" width="min(960px, calc(100vw - 48px))">
+        <TxRating v-model="current.myRating" :star-label="n => `Rate ${n} stars`" />
+        <TxImageGallery :items="variants" preview-title="Variant preview" />
+      </TxModal>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .wall :deep(.tx-stagger) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--thumb-min), 1fr));
+  }
+
+  @container template (max-width: 639px) {
+    .wall :deep(.tx-stagger) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  </style>
+---
+:::
+
+## Anatomy
+
+| Region | Components | Role |
+|---|---|---|
+| Header | [TxBadge](/docs/dev/components/badge), [TxAvatarGroup](/docs/dev/components/avatar), [TxIconButton](/docs/dev/components/button), [TxTooltip](/docs/dev/components/tooltip), [TxPopover](/docs/dev/components/popover), [TxImageUploader](/docs/dev/components/image-uploader) | Total count, the collection's creators, a Favourites-only toggle, the upload entry |
+| Collections | [TxFilterChips](/docs/dev/components/filter-chips) | Tab semantics, arrow keys switch, counts derived from the artworks |
+| Toolbar | [TxGlassSurface](/docs/dev/components/glass-surface), [TxSegmentedSlider](/docs/dev/components/segmented-slider), [TxFlatRadio](/docs/dev/components/flat-radio), [TxDropdownMenu](/docs/dev/components/dropdown-menu) | Thumbnail size, layout, sorting; the glass floats over the scrolling wall |
+| Wall | [TxEdgeFadeMask](/docs/dev/components/edge-fade-mask), [TxStagger](/docs/dev/components/stagger), [TxRating](/docs/dev/components/rating), [TxAvatar](/docs/dev/components/avatar), [TxTag](/docs/dev/components/tag) | Edge fades while scrolling, a staggered entrance; rating, New badge and author on each card |
+| Empty state | [TxEmptyState](/docs/dev/components/empty-state) | Favourites only, with nothing favourited yet |
+| Feedback | [TxToastPanel](/docs/dev/components/toast-panel) | Favourite and upload results, kept inside the wall |
+| Artwork details | [TxModal](/docs/dev/components/modal), [TxRating](/docs/dev/components/rating), [TxButton](/docs/dev/components/button), [TxImageGallery](/docs/dev/components/image-gallery), [TxToastPanel](/docs/dev/components/toast-panel) | The piece large with its specs, an interactive rating, the palette, Set as wallpaper or Apply theme, a variant lightbox |
+| Collection panel (expanded) | [TxAvatarGroup](/docs/dev/components/avatar), [TxTag](/docs/dev/components/tag), [TxImageUploader](/docs/dev/components/image-uploader) | Collection blurb, stats, popular tags and a standing upload area |
+
+## Interactions
+
+- Every artwork is generated in code: a seed, a four-colour palette and a motif (dunes, soft light, synth grid, rings, a CoreBox window, plugin icons and more) become an SVG; three JPGs already shipped with the site join them. Nothing is fetched from outside.
+- The staggered entrance plays once when the stage first scrolls into view, and again after changing collection, layout, sort order or Favourites only. With reduced motion it never plays, and hover zoom is off too.
+- Thumbnail size drives the column width of both grid and masonry through the CSS variable `--thumb-min`; below 640px the wall is two columns and the toolbar keeps only layout and sorting.
+- Opening a piece shows its details: ← / → step to the previous or next piece, inside the dialog only and never on document. Rating, copying colours and Set as wallpaper report inside the dialog, because it covers the wall.
+- Uploads are previewed on this page only. The template creates an object URL of its own for each file, so the upload entry can unmount (expanding swaps it for the side panel) without breaking a card; all of them are revoked on reset and unmount.
+
+## Adapting it
+
+- Real artworks need only a `url`, an orientation and a palette each; serve small server-cut thumbnails and load the large image in the details.
+- For a card that flips open into its details, swap TxModal for TxFlipOverlay, using the version that teleports to body: rendered in place inside a `content-visibility` container it lands in the wrong spot.
+- When favourites and ratings go through an API, update the counts optimistically, roll back on failure and say why in the toast.
+- Masonry is CSS multi-column, so it reads down each column first; use the grid when items must read strictly row by row in time order.
