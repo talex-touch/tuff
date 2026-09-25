@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend hard rules and pre-development checklist"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Shared working tree with other sessions: staging and commit hygiene"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Type scale, fills, ring-not-border, concentric radii, a11y checklist"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Docs, demos, registry and gallery for a new AI-suite component"}
+{"file": ".trellis/spec/frontend/nexus-docs-structure.md", "reason": "Canonical section order for the choice-card docs page"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Loading-state skeleton rule and keyboard roving behaviour"}

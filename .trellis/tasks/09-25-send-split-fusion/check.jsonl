@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification bar: smallest relevant tests, lint per package, git diff --check"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Confirm only this task's files are touched in a shared tree"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Timers, rAF and listeners cleaned up on unmount and on newer sends"}
+{"file": ".trellis/tasks/08-09-send-flight-layering/prd.md", "reason": "Re-verify the layering acceptance items the old task left open"}
+{"file": ".trellis/tasks/09-25-send-split-fusion/research/stream-rerender-hotspot.md", "reason": "Verify the fix removes per-frame slot renders during the send glide"}

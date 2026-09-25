@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend hard rules and pre-development checklist"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Shared working tree with other sessions: staging and commit hygiene"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Skeleton loading state, i18n catalogs, semantic controls"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useHomePush lifecycle: cancel in-flight model calls when leaving the blank state"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Reading history/project stores without mirroring them"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "New intelligence operation constant shared by renderer and main"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "packages/utils constant + renderer + main audit registration"}
+{"file": ".trellis/spec/frontend/privacy-data-lifecycle.md", "reason": "Clipboard history is sensitive: never sent in the summary, prefill only on click"}

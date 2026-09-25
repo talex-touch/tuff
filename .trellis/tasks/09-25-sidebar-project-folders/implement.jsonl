@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend hard rules and pre-development checklist"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Shared working tree with other sessions: staging and commit hygiene"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Semantic buttons, aria-expanded, i18n catalogs for the new folder rows"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Persisting expanded projects in appSetting.shell alongside sidebar width"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Where ShellProjectFolder.vue and useProjectFolders.ts belong"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Extracting project row logic out of ShellConversationList without duplicating it"}
