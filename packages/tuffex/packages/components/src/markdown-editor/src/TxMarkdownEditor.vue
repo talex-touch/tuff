@@ -10,6 +10,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { hasDocument } from '@talex-touch/utils/env'
 import { TxIcon } from '../../icon'
 import { serializeMarkdown } from './markdown-serializer'
+import { markdownEditorActionMeta as actionMeta, markdownEditorModeMeta as modeMeta } from './toolbar-icons'
 
 defineOptions({
   name: 'TxMarkdownEditor',
@@ -30,26 +31,6 @@ const defaultToolbarActions: MarkdownEditorToolbarActionKey[] = [
 ]
 
 const editorModes: MarkdownEditorMode[] = ['wysiwyg', 'source', 'preview']
-
-const actionMeta: Record<MarkdownEditorToolbarActionKey, { label: string; icon: string }> = {
-  heading: { label: 'Heading', icon: 'i-ri-heading' },
-  bold: { label: 'Bold', icon: 'i-ri-bold' },
-  italic: { label: 'Italic', icon: 'i-ri-italic' },
-  strike: { label: 'Strike', icon: 'i-ri-strikethrough' },
-  quote: { label: 'Quote', icon: 'i-ri-double-quotes-l' },
-  code: { label: 'Code', icon: 'i-ri-code-line' },
-  bulletList: { label: 'Bullet list', icon: 'i-ri-list-unordered' },
-  orderedList: { label: 'Ordered list', icon: 'i-ri-list-ordered' },
-  link: { label: 'Link', icon: 'i-ri-link' },
-  undo: { label: 'Undo', icon: 'i-ri-arrow-go-back-line' },
-  redo: { label: 'Redo', icon: 'i-ri-arrow-go-forward-line' },
-}
-
-const modeMeta: Record<MarkdownEditorMode, { label: string; icon: string }> = {
-  wysiwyg: { label: 'WYSIWYG', icon: 'i-ri-edit-2-line' },
-  source: { label: 'Markdown source', icon: 'i-ri-markdown-line' },
-  preview: { label: 'Preview', icon: 'i-ri-eye-line' },
-}
 
 const props = withDefaults(defineProps<MarkdownEditorProps>(), {
   modelValue: '',
