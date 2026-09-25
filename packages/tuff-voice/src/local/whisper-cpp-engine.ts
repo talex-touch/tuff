@@ -13,8 +13,8 @@ import { availableParallelism, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { discardWorkDirectory, executableCandidates, findExecutable, materializePcmInput, runLocalProcess, withDecodeLock } from './decode'
-import { LocalEngineError } from './types'
 import { narrowToDeclaredLanguages } from './language'
+import { LocalEngineError } from './types'
 import { pcmDurationMs } from './wav'
 
 /**
