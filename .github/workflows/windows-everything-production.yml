@@ -94,7 +94,7 @@ jobs:
         env:
           BUILD_PUBLISH: never
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: pnpm build:snapshot:win
+        run: pnpm build:app --target=win --type=snapshot
 
       - name: Record packaged native evidence
         shell: pwsh
