@@ -1056,14 +1056,6 @@ onBeforeUnmount(disposeCommands)
               <h1 class="HomePage-Greeting">
                 {{ t('home.greeting') }}
               </h1>
-              <div
-                v-if="currentProject"
-                class="HomePage-ProjectBadge"
-                :title="currentProject.rootPath"
-              >
-                <span class="i-ri-folder-2-line" />
-                <span>{{ currentProject.name }}</span>
-              </div>
             </div>
           </Transition>
 
@@ -1677,25 +1669,6 @@ onBeforeUnmount(disposeCommands)
   color: var(--shell-text-primary);
   font-size: var(--shell-fs-display);
   font-weight: 600;
-}
-
-.HomePage-ProjectBadge {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  margin-top: 10px;
-  padding: 4px 12px;
-  border: 1px solid var(--shell-border);
-  border-radius: 9999px;
-  background: var(--shell-surface-2);
-  color: var(--shell-text-secondary);
-  font-size: var(--shell-fs-caption);
-  font-weight: 500;
-  cursor: default;
-
-  span:first-child {
-    color: var(--shell-primary);
-  }
 }
 
 /** The stream component owns the scroll; this box only claims the flex space. */
