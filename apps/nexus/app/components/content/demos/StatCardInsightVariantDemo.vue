@@ -9,7 +9,6 @@ const activeInsight = ref<StatCardInsight>({
   to: activeUsers.value,
   type: 'delta',
   color: 'success',
-  iconClass: 'i-carbon-growth',
 })
 
 const resourceLoad = ref(42)
@@ -54,13 +53,13 @@ function bump() {
       <TxStatCard
         :value="activeUsers"
         :label="locale === 'zh' ? '活跃用户' : 'Active Users'"
-        icon-class="i-carbon-task text-6xl text-[var(--tx-color-success)]"
+        icon-class="i-carbon-task text-[var(--tx-color-success)]"
         :insight="activeInsight"
       />
       <TxStatCard
         :value="resourceLoad"
         :label="locale === 'zh' ? '资源负载' : 'Resource Load'"
-        icon-class="i-carbon-chip text-6xl text-[var(--tx-color-warning)]"
+        icon-class="i-carbon-chip text-[var(--tx-color-warning)]"
         :insight="resourceInsight"
       >
         <template #value>

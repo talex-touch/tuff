@@ -97,11 +97,14 @@ onMounted(async () => {
     role="img"
     :aria-label="text || undefined"
   >
+    <!-- Left at the origin, unlike the two painted layers. It used to take
+         `textX`/`textY` too, so every measurement after the first read back its
+         own offset and cancelled it: once `document.fonts.ready` re-synced,
+         the glyphs sat at x=0, y≈0 — above the viewBox and against its left
+         edge. -->
     <text
       ref="measureRef"
       class="tx-keyframe-stroke-text__measure"
-      :x="textX"
-      :y="textY"
     >
       {{ renderedText }}
     </text>

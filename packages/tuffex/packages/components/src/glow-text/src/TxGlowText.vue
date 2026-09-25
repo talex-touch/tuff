@@ -146,7 +146,17 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
+// Band geometry, shared by both sweep layers. `angle` tilts the band away from
+// vertical, so the gradient runs across it at 90deg + angle. `angle` used to be
+// the gradient's own direction: 20deg then laid the band nearly flat, thicker
+// than a short element is tall, and the sweep washed the whole card instead of
+// crossing it. Both layers are three element-widths wide, so a half-band of a
+// sixth of the gradient line makes `bandSize` a share of the element's width.
 .tx-glow-text {
+  --tx-glow-band-dir: calc(90deg + var(--tx-glow-angle, 20deg));
+  --tx-glow-band-half: calc(var(--tx-glow-band, 38%) / 6);
+  --tx-glow-band-core: calc(var(--tx-glow-band, 38%) / 30);
+
   position: relative;
   display: inline-block;
   width: fit-content;
@@ -183,29 +193,39 @@ onBeforeUnmount(() => {
 
 .tx-glow-text__shine {
   position: absolute;
-  inset: -40%;
+  inset: 0 -100%;
   z-index: 2;
   opacity: var(--tx-glow-opacity, 0.75);
   pointer-events: none;
   mix-blend-mode: var(--tx-glow-blend-mode, screen);
   -webkit-backdrop-filter: var(--tx-glow-backdrop, none);
   backdrop-filter: var(--tx-glow-backdrop, none);
-  --tx-glow-band-size: var(--tx-glow-band, 38%);
-  --tx-glow-band-half: calc(var(--tx-glow-band-size) / 2);
-  --tx-glow-band-soft: calc(var(--tx-glow-band-size) / 3);
 
   background: linear-gradient(
-    var(--tx-glow-angle, 20deg),
-    transparent 0%,
+    var(--tx-glow-band-dir),
     transparent calc(50% - var(--tx-glow-band-half)),
-    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% - var(--tx-glow-band-soft)),
-    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) 50%,
-    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% + var(--tx-glow-band-soft)),
-    transparent calc(50% + var(--tx-glow-band-half)),
-    transparent 100%
+    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% - var(--tx-glow-band-core)),
+    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% + var(--tx-glow-band-core)),
+    transparent calc(50% + var(--tx-glow-band-half))
   );
 
-  transform: translateX(-160%);
+  // The backdrop filter covers the layer's whole box, not just its painted
+  // band. Unmasked, it brightened a strip three element-widths wide whose edge
+  // then crossed the element as a hard vertical seam.
+  -webkit-mask-image: linear-gradient(
+    var(--tx-glow-band-dir),
+    transparent calc(50% - var(--tx-glow-band-half)),
+    #000 50%,
+    transparent calc(50% + var(--tx-glow-band-half))
+  );
+  mask-image: linear-gradient(
+    var(--tx-glow-band-dir),
+    transparent calc(50% - var(--tx-glow-band-half)),
+    #000 50%,
+    transparent calc(50% + var(--tx-glow-band-half))
+  );
+
+  transform: translateX(-33.333%);
   filter: blur(0.4px);
   animation: tx-glow-sweep var(--tx-glow-duration, 1400ms) var(--tx-glow-ease, linear) infinite;
   animation-delay: var(--tx-glow-delay, 0ms);
@@ -227,19 +247,13 @@ onBeforeUnmount(() => {
   -webkit-text-fill-color: transparent;
   -webkit-background-clip: text;
   background-clip: text;
-  --tx-glow-band-size: var(--tx-glow-band, 38%);
-  --tx-glow-band-half: calc(var(--tx-glow-band-size) / 2);
-  --tx-glow-band-soft: calc(var(--tx-glow-band-size) / 3);
 
   background-image: linear-gradient(
-    var(--tx-glow-angle, 20deg),
-    transparent 0%,
+    var(--tx-glow-band-dir),
     transparent calc(50% - var(--tx-glow-band-half)),
-    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% - var(--tx-glow-band-soft)),
-    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) 50%,
-    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% + var(--tx-glow-band-soft)),
-    transparent calc(50% + var(--tx-glow-band-half)),
-    transparent 100%
+    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% - var(--tx-glow-band-core)),
+    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% + var(--tx-glow-band-core)),
+    transparent calc(50% + var(--tx-glow-band-half))
   );
   background-repeat: no-repeat;
   background-size: 300% 100%;
@@ -290,18 +304,22 @@ onBeforeUnmount(() => {
 // band dissolved while still over the element and never appeared to leave —
 // the root is `overflow: hidden` and both endpoints are already outside it, so
 // there is nothing to fade. Opacity only hides the layer during the hold.
+//
+// A third of the layer's width is one element width: the band starts centred
+// half an element to the left of the root and ends half an element past it,
+// the same path `tx-glow-text-sweep` takes across its 300% background.
 @keyframes tx-glow-sweep {
   0% {
-    transform: translateX(-160%);
+    transform: translateX(-33.333%);
     opacity: var(--tx-glow-opacity, 0.75);
   }
   65% {
-    transform: translateX(160%);
+    transform: translateX(33.333%);
     opacity: var(--tx-glow-opacity, 0.75);
   }
   65.01%,
   100% {
-    transform: translateX(160%);
+    transform: translateX(33.333%);
     opacity: 0;
   }
 }

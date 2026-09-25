@@ -287,18 +287,21 @@ function getActionSize(action?: EmptyStateAction) {
             <rect class="tx-empty-state__guide-progress" x="20" y="40" width="12" height="4" rx="2" />
           </svg>
 
-          <!-- Error State (Warning Triangle) -->
+          <!-- Error State (App Window + Alert Badge) -->
           <svg v-else-if="illustrationVariant === 'error'" viewBox="0 0 64 64" aria-hidden="true">
-            <g class="tx-empty-state__error-group">
-              <!-- Triangle -->
-              <path class="tx-empty-state__error-triangle" d="M32 12L8 52h48L32 12z" />
-              <!-- Exclamation mark -->
-              <line class="tx-empty-state__error-exclaim-line" x1="32" y1="26" x2="32" y2="38" />
-              <circle class="tx-empty-state__error-exclaim-dot" cx="32" cy="44" r="2.5" />
-            </g>
-            <!-- Pulse rings -->
-            <circle class="tx-empty-state__error-pulse tx-empty-state__error-pulse--1" cx="32" cy="36" r="18" />
-            <circle class="tx-empty-state__error-pulse tx-empty-state__error-pulse--2" cx="32" cy="36" r="24" />
+            <!-- Window -->
+            <rect class="tx-empty-state__error-window" x="6" y="12" width="44" height="32" rx="6" />
+            <path class="tx-empty-state__error-titlebar" d="M6 20h44" />
+            <circle class="tx-empty-state__error-light" cx="12" cy="16" r="1.25" />
+            <circle class="tx-empty-state__error-light" cx="16.5" cy="16" r="1.25" />
+            <circle class="tx-empty-state__error-light" cx="21" cy="16" r="1.25" />
+            <path class="tx-empty-state__error-content" d="M13 28h20M13 35h12" />
+            <!-- Alert badge, rippling -->
+            <circle class="tx-empty-state__error-pulse" cx="48" cy="46" r="10" />
+            <circle class="tx-empty-state__error-pulse tx-empty-state__error-pulse--late" cx="48" cy="46" r="10" />
+            <circle class="tx-empty-state__error-badge" cx="48" cy="46" r="10" />
+            <path class="tx-empty-state__error-mark" d="M48 41v5.5" />
+            <circle class="tx-empty-state__error-dot" cx="48" cy="50.5" r="1.4" />
           </svg>
         </span>
         <TxIcon v-else-if="iconSource" :icon="iconSource" :size="resolvedIconSize" />
@@ -894,6 +897,122 @@ function getActionSize(action?: EmptyStateAction) {
 .tx-empty-state__guide-progress {
   fill: var(--tx-color-primary-light-5, #b3d8ff);
   animation: tx-empty-state-shimmer 2s infinite;
+}
+
+/* --- Error State ---
+   An app window with a danger badge on its corner: the same "object + badge"
+   shape as the blank slate's sheet and plus. The badge sits on its light-9 tint
+   with danger ink rather than white on a solid fill, which is not a supported
+   pairing. Two rings ripple out of it half a cycle apart; they used to be two
+   static, unstyled circles drawn straight through the old triangle. */
+.tx-empty-state__error-window {
+  fill: color-mix(in srgb, currentColor 8%, transparent);
+  stroke: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+.tx-empty-state__error-titlebar {
+  stroke: color-mix(in srgb, currentColor 30%, transparent);
+  stroke-width: 1.5;
+}
+
+.tx-empty-state__error-light {
+  fill: color-mix(in srgb, currentColor 45%, transparent);
+  stroke: none;
+}
+
+.tx-empty-state__error-content {
+  stroke: color-mix(in srgb, currentColor 22%, transparent);
+  stroke-width: 3;
+}
+
+.tx-empty-state__error-badge {
+  fill: var(--tx-color-danger-light-9, #fef0f0);
+  stroke: var(--tx-color-danger, #f56c6c);
+  stroke-width: 1.5;
+}
+
+.tx-empty-state__error-mark {
+  stroke: var(--tx-color-danger, #f56c6c);
+  stroke-width: 2.2;
+}
+
+.tx-empty-state__error-dot {
+  fill: var(--tx-color-danger, #f56c6c);
+  stroke: none;
+}
+
+.tx-empty-state__error-pulse {
+  fill: none;
+  stroke: var(--tx-color-danger, #f56c6c);
+  stroke-width: 1.5;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tx-empty-state-error-ripple 2.4s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+}
+
+.tx-empty-state__error-pulse--late {
+  animation-delay: 1.2s;
+}
+
+@keyframes tx-empty-state-error-ripple {
+  0% { opacity: 0.55; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.9); }
+}
+
+/* The still frame is the window and its badge; the rings only exist in motion. */
+@media (prefers-reduced-motion: reduce) {
+  .tx-empty-state__error-pulse {
+    animation: none;
+  }
+}
+
+/* Every other illustration is a complete still drawing under reduced motion.
+   The loops stop on their resting frame; the parts that the animation itself
+   draws or places — the no-data line with its end dot and cross marks, the
+   offline slash, the search bubble — are set to the frame their animation ends
+   on, because their resting styles are not a finished frame (a full dash
+   offset or opacity 0 hides them; the bubble sits unshifted over the glass).
+   Particles that only exist in motion (the box dust) stay hidden, like the
+   error rings. */
+@media (prefers-reduced-motion: reduce) {
+  .tx-empty-state__skeleton-block::after,
+  .tx-empty-state__selection-target,
+  .tx-empty-state__selection-cursor,
+  .tx-empty-state__search-group,
+  .tx-empty-state__search-bubble,
+  .tx-empty-state__chart-line,
+  .tx-empty-state__chart-dot,
+  .tx-empty-state__chart-marks,
+  .tx-empty-state__offline-cloud,
+  .tx-empty-state__offline-slash,
+  .tx-empty-state__lock,
+  .tx-empty-state__sheet,
+  .tx-empty-state__sheet-plus-bg,
+  .tx-empty-state__sheet-plus-icon,
+  .tx-empty-state__box-lid,
+  .tx-empty-state__box-dust,
+  .tx-empty-state__guide-arrow,
+  .tx-empty-state__guide-progress {
+    animation: none;
+  }
+
+  .tx-empty-state__chart-line,
+  .tx-empty-state__offline-slash {
+    stroke-dashoffset: 0;
+  }
+
+  .tx-empty-state__chart-dot {
+    opacity: 1;
+  }
+
+  .tx-empty-state__chart-marks {
+    opacity: 0.6;
+  }
+
+  .tx-empty-state__search-bubble {
+    transform: scale(1) translate(-50%, -10px);
+  }
 }
 
 /* --- General --- */

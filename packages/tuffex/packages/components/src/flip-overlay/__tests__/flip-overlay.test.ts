@@ -1,9 +1,19 @@
-import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { config, mount } from '@vue/test-utils'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { h, nextTick } from 'vue'
 import TxFlipOverlay from '../src/TxFlipOverlay.vue'
 
 describe('txFlipOverlay', () => {
+  // The overlay teleports to <body>. Stubbing Teleport renders it in place, so
+  // `wrapper.find` below still reaches the mask and the card.
+  const originalStubs = config.global.stubs
+  beforeAll(() => {
+    config.global.stubs = { ...originalStubs, teleport: true }
+  })
+  afterAll(() => {
+    config.global.stubs = originalStubs
+  })
+
   afterEach(() => {
     delete document.body.dataset.txFlipOverlayLockCount
     delete document.body.dataset.txFlipOverlayLockOverflow
