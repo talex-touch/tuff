@@ -1749,7 +1749,7 @@ async function deleteProviderThroughUi(target: DevToolsTarget): Promise<void> {
         evaluate<boolean>(
           send,
           `(() => {
-            const button = document.querySelector('.tx-bottom-dialog[role="dialog"] .tx-bottom-dialog__buttons button.tx-bottom-dialog__btn:last-of-type')
+            const button = document.querySelector('.tx-bottom-dialog[role="dialog"] .tx-bottom-dialog__rows button.tx-bottom-dialog__row:last-of-type')
             if (!(button instanceof HTMLButtonElement)) return false
             button.click()
             return true

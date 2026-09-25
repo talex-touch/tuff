@@ -122,6 +122,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   DatePickerDatePickerDemo: () => import('./demos/DatePickerDatePickerDemo.vue'),
   DialogBlowDialogDemo: () => import('./demos/DialogBlowDialogDemo.vue'),
   DialogBottomDialogDemo: () => import('./demos/DialogBottomDialogDemo.vue'),
+  DialogBottomDialogRowsDemo: () => import('./demos/DialogBottomDialogRowsDemo.vue'),
   DialogPopperDialogDemo: () => import('./demos/DialogPopperDialogDemo.vue'),
   DialogTouchTipDemo: () => import('./demos/DialogTouchTipDemo.vue'),
   DiffTableDiffTableDemo: () => import('./demos/DiffTableDiffTableDemo.vue'),
