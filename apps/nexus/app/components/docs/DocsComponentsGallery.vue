@@ -39,6 +39,7 @@ import tuffexPkg from '../../../../../packages/tuffex/package.json'
 // in a cell's stage, and the wrapper adds the reset button that remounts the
 // specimen so its entrance can be watched again.
 import ClientOnly from './DocsGallerySpecimen.vue'
+import GalleryChoiceCard from './gallery/GalleryChoiceCard.vue'
 import GalleryEdgeMarquee from './gallery/GalleryEdgeMarquee.vue'
 import GalleryFusion from './gallery/GalleryFusion.vue'
 import GalleryFusionSurface from './gallery/GalleryFusionSurface.vue'
@@ -3358,6 +3359,22 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSuggestionChips :suggestions="copy.suggestions" layout="list" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('choice-card')">
+          {{ cellLabel('ChoiceCard', '选项卡片') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__block">
+              <GalleryChoiceCard />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />

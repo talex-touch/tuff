@@ -1,0 +1,305 @@
+---
+title: "ChoiceCard"
+description: "A question card whose answers are rich rows (an icon, a label and one line of description), optionally split into steps with a pager."
+category: AiChat
+status: beta
+since: 0.6.0
+tags: [ai, choice, options, guide, steps]
+syncStatus: reviewed
+verified: true
+---
+
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
+  import '@talex-touch/tuffex/choice-card/style.css'
+  // It renders TxIcon and TxSkeleton, whose sheets are separate
+  import '@talex-touch/tuffex/icon/style.css'
+  import '@talex-touch/tuffex/skeleton/style.css'
+  import '@talex-touch/tuffex/base.css' // tokens + resets, once per app
+---
+:::
+
+## Usage
+
+`TxChoiceCard` asks one question and offers the answers as rows: an icon, a label and one line of description. Picking a row emits `select`; the card never moves on by itself.
+
+### Single question
+
+Five rows in one column. The picked row is passed back as `selected`, which tints it and adds a check; the last row is disabled because it needs an account first.
+
+:::TuffDemoWrapper{demo="ChoiceCardSingleDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { ChoiceSelectPayload, ChoiceStep } from '@talex-touch/tuffex/choice-card'
+  import { ref } from 'vue'
+
+  const steps: ChoiceStep[] = [{
+    id: 'start',
+    title: 'Where should we start?',
+    options: [
+      { id: 'report', label: 'Write a weekly report', description: 'Sum up what shipped and what is next', icon: 'i-carbon-report' },
+      { id: 'plan', label: 'Plan tomorrow', description: 'Three priorities, in order', icon: 'i-carbon-calendar' },
+      { id: 'inbox', label: 'Catch up on messages', description: 'Everything waiting on a reply', icon: 'i-carbon-email' },
+      { id: 'learn', label: 'Learn something new', description: 'A 10-minute primer on any topic', icon: 'i-carbon-education' },
+      { id: 'calendar', label: 'Sync my calendar', description: 'Connect a calendar account first', icon: 'i-carbon-calendar-add-alt', disabled: true },
+    ],
+  }]
+
+  const selected = ref<string>()
+
+  function onSelect({ option }: ChoiceSelectPayload) {
+    selected.value = option.id
+  }
+  </script>
+
+  <template>
+    <TxChoiceCard :steps="steps" :selected="selected" @select="onSelect" />
+  </template>
+---
+:::
+
+### Steps
+
+A two-step guide: pick a kind of task, then a concrete one. The second page only exists once the first is answered, and the host moves to it through `v-model:step`. Go back with the arrow and the first answer is still marked; pick another kind and the second page is replaced. `columns="2"` lays the rows out two per row.
+
+:::TuffDemoWrapper{demo="ChoiceCardStepsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { ChoiceSelectPayload, ChoiceStep } from '@talex-touch/tuffex/choice-card'
+  import { computed, ref } from 'vue'
+
+  const step = ref(0)
+  const kind = ref<string>()
+  const task = ref<string>()
+
+  const kinds: ChoiceStep = {
+    id: 'kind',
+    title: 'What should we start with?',
+    options: [
+      { id: 'write', label: 'Write', description: 'Reports, emails, meeting notes', icon: 'i-carbon-pen' },
+      { id: 'plan', label: 'Plan', description: 'Schedules, priorities, reviews', icon: 'i-carbon-roadmap' },
+      // …learn, organize
+    ],
+  }
+
+  // The second page follows the first answer: a new kind gives it a new id.
+  const steps = computed<ChoiceStep[]>(() => kind.value
+    ? [kinds, { id: `tasks-${kind.value}`, title: TITLES[kind.value], options: TASKS[kind.value] }]
+    : [kinds])
+
+  // Each page marks its own answer.
+  const selected = computed(() => (step.value === 0 ? kind.value : task.value))
+
+  function onSelect({ stepIndex, option }: ChoiceSelectPayload) {
+    if (stepIndex === 0) {
+      if (kind.value !== option.id)
+        task.value = undefined
+      kind.value = option.id
+      step.value = 1 // the card never advances by itself
+    }
+    else {
+      task.value = option.id
+    }
+  }
+  </script>
+
+  <template>
+    <TxChoiceCard
+      v-model:step="step"
+      :steps="steps"
+      :selected="selected"
+      :columns="2"
+      @select="onSelect"
+    />
+  </template>
+---
+:::
+
+### Loading
+
+While the answers load, `loading` swaps the rows for skeleton rows built from the same boxes, so nothing moves when the options arrive. The question stays. Reload runs the round trip again.
+
+:::TuffDemoWrapper{demo="ChoiceCardLoadingDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { ChoiceOption, ChoiceStep } from '@talex-touch/tuffex/choice-card'
+  import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+  import { computed, ref } from 'vue'
+
+  const pending = ref(true)
+  const picks = ref<ChoiceOption[]>([])
+  // Nothing for 150ms, then at least 400ms: a fast answer never flashes a skeleton.
+  const skeleton = useDeferredLoading(pending)
+
+  const steps = computed<ChoiceStep[]>(() => [{ id: 'for-you', title: 'Ready for you', options: picks.value }])
+
+  fetchPicks().then((options) => {
+    picks.value = options
+    pending.value = false
+  })
+  </script>
+
+  <template>
+    <TxChoiceCard :steps="steps" :loading="skeleton" :loading-rows="3" />
+  </template>
+---
+:::
+
+### Best Practices
+
+- One question per step, three to six answers. Past that, the list stops being something you can take in at a glance.
+- Write labels as things the user would say ("Plan tomorrow"), and give the description one line on what happens next.
+- Advance in `select`, not in the card: set `v-model:step` when the next question depends on the answer, and stay when it was the last one.
+- Give a page a new `id` when its options change with an earlier answer. The new page then blur-fades in, and focus lands on it.
+- Pass `selected` for the page on screen, so going back shows what was picked there.
+- Bind `loading` through `useDeferredLoading`, and set `loadingRows` to the number of answers coming. A fast answer then never flashes a skeleton, and a slow one does not shift the page when it lands.
+- Keep a disabled row rather than hiding it when it needs something first, and say what in its description.
+- Pass `prevLabel`, `nextLabel` and `stepLabel` in the page's language. The card ships English defaults and no message catalog.
+- Use `columns="2"` where height is short and the card is wide. Below 480px it is one column anyway.
+- An icon class only renders if your UnoCSS can generate it. On this site that means the `carbon`, `cib`, `logos` and `twemoji` sets.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `steps` | `ChoiceStep[]` | - | The pages, fields under Types below. Required. With one page there is no pager; with none, nothing renders unless `loading`. |
+| `step` | `number` | `undefined` | Current page, 0-based (`v-model:step`). Left out, the card keeps its own page and still emits `update:step`. Clamped to the pages there are. |
+| `selected` | `string` | `undefined` | Id of the answer to mark on the page on screen: tinted fill, check, `aria-current`, and the list's Tab stop. |
+| `loading` | `boolean` | `false` | Replaces the rows with skeleton rows and sets `aria-busy` on the card. The title and the pager stay. |
+| `loadingRows` | `number` | `3` | How many skeleton rows `loading` draws. |
+| `columns` | `1 \| 2` | `1` | `2` lays the rows out two per row, left to right. Below a 480px card it falls back to one column. |
+| `appear` | `boolean` | `true` | Rows rise in one after another on first render and when `loading` ends. A page change always blur-fades instead. |
+| `prevLabel` | `string` | `'Previous'` | Accessible name of the back arrow. |
+| `nextLabel` | `string` | `'Next'` | Accessible name of the forward arrow. |
+| `stepLabel` | `(current: number, total: number) => string` | `` `${current} / ${total}` `` | Text of the pager counter. Both numbers are 1-based. |
+
+### Events
+
+| Event | Params | Description |
+|-------|--------|-------------|
+| `select` | `(payload: ChoiceSelectPayload)` | An enabled row was clicked, or activated with Enter or Space. `payload` is `{ step, stepIndex, option }`. The card stays on its page. |
+| `update:step` | `(index: number)` | An arrow moved to page `index`, 0-based. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `header` | `{ step: ChoiceStep, stepIndex: number, total: number }` | Replaces the default `<h3>` title, for instance to put an avatar beside the question. Whatever it renders names the card and its answer list, so keep the question in it. |
+
+### Types
+
+`ChoiceStep`, one entry of `steps`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Identity of the page. A new id on the page on screen replays the page entrance. Required. |
+| `title` | `string` | The question: the card's heading, and the name of its answer list. Required. |
+| `options` | `ChoiceOption[]` | The answers. Required. |
+
+`ChoiceOption`, one answer:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `string` | - | Identity within the page, where it must be unique, and what `selected` matches. Required. |
+| `label` | `string` | - | The row's title and its accessible name. Required. |
+| `description` | `string` | - | One line under the label, announced as the row's description. |
+| `icon` | `TxIconSource \| string` | - | A `TxIcon` source, structurally the same as `ITuffIcon`, or an icon class such as `'i-carbon-edit'`, read as `{ type: 'class', value }`. |
+| `disabled` | `boolean` | `false` | Shown dimmed; the arrow keys skip it and it emits nothing. |
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import type {
+    ChoiceCardColumns, // 1 | 2
+    ChoiceCardEmits,
+    ChoiceCardProps,
+    ChoiceOption,
+    ChoiceSelectPayload, // { step, stepIndex, option }
+    ChoiceStep,
+    ChoiceStepLabelFormatter, // (current, total) => string
+    TxChoiceCardInstance,
+  } from '@talex-touch/tuffex/choice-card'
+---
+:::
+
+### CSS Variables
+
+| Variable | Description |
+|----------|-------------|
+| `--tx-choice-card-pad` | Inset between the card edge and the rows. Default `8px`. The card radius grows with it. |
+| `--tx-choice-card-option-radius` | Row corner radius. Default `10px`. The card radius is this plus the inset, so the two corners stay concentric. |
+| `--tx-choice-card-option-pad-x` | Row horizontal inset, and the title's. Default `12px`. |
+| `--tx-choice-card-label-line` | Label line height, and the height of the icon box. Default `20px`. |
+| `--tx-choice-card-desc-line` | Description line height. Default `18px`. |
+
+The component reads these and never sets them, so they can be set on the card or on any ancestor. It also writes `--tx-choice-card-index` on each row, the row's place in the entrance stagger.
+
+## Overview
+
+- Markup: a `<section>` named by the question, a header with the pager and the heading, then a `<ul role="list">` of `<li>` rows, each holding a native `<button type="button">`. A button is named by its label (`aria-labelledby`) and described by its description (`aria-describedby`); icons are `aria-hidden`.
+- `select` never changes the page. The host advances through `v-model:step`, or stays when the answer was the last one.
+- The pager renders only with two or more pages. Each arrow is disabled at its end, and the counter is a `role="status"` region, so a page change is announced.
+- Keyboard:
+  - the list is one Tab stop (roving tabindex): the selected row, or else the first enabled one; the pager comes before it;
+  - Up and Down move to the previous and next enabled row and wrap;
+  - in two columns, Up and Down stay in the column, and Left and Right move in reading order;
+  - Home and End go to the first and last enabled row;
+  - disabled rows are skipped, and keys held with Alt, Ctrl or Meta are left to the page.
+- Two columns fall back to one below a 480px card (a container query on the card). The arrow keys read the number of columns actually rendered, so they follow.
+- When the page changes while focus is in the list, as when a keyboard pick is answered by advancing, focus moves to the new page's Tab stop. When the arrow in use becomes disabled, focus moves to the other arrow.
+- Entrance: on first render, and when `loading` ends, rows rise in 45ms apart (the delay is capped at 360ms); `appear: false` turns this off. A page change blur-fades the heading and the list in together over 160ms. Both are CSS animations on freshly mounted nodes, so rows are clickable from their first frame.
+- Under `prefers-reduced-motion: reduce` both entrances are dropped. The resting style is their end frame, so the rows are simply there.
+- `loading` draws `loadingRows` skeleton rows in the rows' own boxes (icon box, label line, description line), each with an icon and a description bar. The skeleton is `aria-hidden` and the card `aria-busy`. With no page yet, the title is a skeleton bar too.
+- Icons: a string is an icon class, an object goes to `TxIcon` as it is. Once any row on a page has an icon, every row keeps the icon column, so the labels line up.
+- The selected row gets the `--tx-color-primary-light-9` fill, a primary ring, a trailing check and `aria-current="true"`, so colour is never the only mark. Its hover deepens the tint.
+- Hover changes a row's fill at once; nothing on the card transitions colour. Disabled rows are at 50% opacity with a `not-allowed` cursor.
+- With empty `steps` and no `loading`, nothing renders.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/choice-card/src/TxChoiceCard.vue`, with the types in `src/types.ts`.
+- Reference: the "Where do we start?" card of an assistant's opening guide, with icon, title and grey description per answer and a `‹ 1 / 2 ›` pager at the top left. Neighbours that did not cover it: `TxSuggestionChips` has text only and no steps, and `TxRecommendationCard` models one recommendation with a drawer of alternatives.
+- The skeleton rows use the loaded row's own containers with `TxSkeleton` bars inside. `--tx-skeleton-base-color` is set to a darker fill (`--tx-fill-color-darker` in the rows, `--tx-fill-color` for the title bar), because the skeleton's own default, the lightest fill, would vanish on the row fill.
+- Contrast, measured in all four theme blocks against all four row fills (resting, hover, selected, selected hover), is recorded in the source:
+  - the description, in `--tx-text-color-regular`, is at worst 5.06:1 (selected hover, light theme); `--tx-text-color-secondary` was rejected at 2.87:1 on the resting fill;
+  - the check is `TxModeChip`'s `info` ink, at worst 4.82:1.
+- Rejected designs:
+  - `role="listitem"` on the buttons, as `TxSuggestionChips` does, strips their button role; the list uses `<ul>` / `<li>` with the buttons inside;
+  - a `<Transition mode="out-in">` for the page change holds the new page back until the old one has left; the list is keyed and animated with CSS instead;
+  - an `id` on the `<h3>` would put every demo heading into the docs outline, and would leave a `header` slot unnamed; the id sits on a wrapper.
+- Props are declared as a runtime object checked against `ChoiceCardProps`, as in `TxModeChip`: the docs dev server does not recompile an SFC when only its `types.ts` changes.
+- **Verified coverage:**
+  - `choice-card/__tests__/choice-card.test.ts` covers the markup and names, icons, SSR, the pager (arrow states, `v-model:step` both ways, uncontrolled and controlled pages, clamping, prop strings), selection (payload, no advance, disabled rows, the selected mark), the keyboard (roving tab stop, Up/Down, Home/End, two columns, the rendered column count, focus carried to a new page and to the other arrow), loading and both entrances;
+  - `choice-card-motion.test.ts` pins the compiled style: no colour transition anywhere, instant hover fills, animations declared only under `prefers-reduced-motion: no-preference`, start-frame-only keyframes, token-only colour with fallbacks, the row fills, the ring and concentric radii, the type scale, the 480px container query and the focus rings.
+
+<TuffDocSourceLink />
+
+## Use cases
+
+- The opening guide of an assistant: "Where should we start?", one question per step.
+- A "Ready for you" list of suggested tasks that arrives after the card does.
+- Reviewing an answered question: `selected` marks what was picked.
+
+## Related components
+
+| Component | For |
+|-----------|-----|
+| [SuggestionChips](/docs/dev/components/suggestion-chips) | One-line follow-up prompts, as chips or a list |
+| [RecommendationCard](/docs/dev/components/recommendation-card) | One recommended answer with its confidence and a drawer of alternatives |
+| [ApprovalCard](/docs/dev/components/approval-card) | Answers collected across questions, with radio or checkbox options and a send step |

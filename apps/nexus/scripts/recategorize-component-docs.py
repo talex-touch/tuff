@@ -247,6 +247,7 @@ TAXONOMY: dict[str, list[str]] = {
         "mode-chip",
         "message-actions",
         "suggestion-chips",
+        "choice-card",
         "typing-indicator",
         "conversation-stream",
     ],

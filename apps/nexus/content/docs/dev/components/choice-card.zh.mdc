@@ -1,0 +1,305 @@
+---
+title: "ChoiceCard 选项卡片"
+description: "以富选项行（图标、标题、一行说明）作答的问题卡片，可分成几步翻页"
+category: AiChat
+status: beta
+since: 0.6.0
+tags: [ai, choice, options, guide, steps]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
+  import '@talex-touch/tuffex/choice-card/style.css'
+  // 卡片内部渲染 TxIcon 与 TxSkeleton，它们的样式表需单独引入
+  import '@talex-touch/tuffex/icon/style.css'
+  import '@talex-touch/tuffex/skeleton/style.css'
+  import '@talex-touch/tuffex/base.css' // 设计令牌与重置样式，全应用引入一次
+---
+:::
+
+## 用法
+
+`TxChoiceCard` 提一个问题，把答案做成一行行选项：图标、标题和一行说明。点选项派发 `select`，卡片自己从不翻页。
+
+### 单个问题
+
+一列五个选项。选中的选项作为 `selected` 传回，卡片给它着色并打勾；最后一项需要先连接账户，所以是禁用的。
+
+:::TuffDemoWrapper{demo="ChoiceCardSingleDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { ChoiceSelectPayload, ChoiceStep } from '@talex-touch/tuffex/choice-card'
+  import { ref } from 'vue'
+
+  const steps: ChoiceStep[] = [{
+    id: 'start',
+    title: '我们先从哪件事开始？',
+    options: [
+      { id: 'report', label: '写一份周报', description: '整理本周完成的事和下周计划', icon: 'i-carbon-report' },
+      { id: 'plan', label: '规划明天', description: '按顺序列出三件最重要的事', icon: 'i-carbon-calendar' },
+      { id: 'inbox', label: '处理未读消息', description: '汇总需要你回复的消息', icon: 'i-carbon-email' },
+      { id: 'learn', label: '学点新东西', description: '任意主题的 10 分钟入门', icon: 'i-carbon-education' },
+      { id: 'calendar', label: '同步日历', description: '先连接一个日历账户', icon: 'i-carbon-calendar-add-alt', disabled: true },
+    ],
+  }]
+
+  const selected = ref<string>()
+
+  function onSelect({ option }: ChoiceSelectPayload) {
+    selected.value = option.id
+  }
+  </script>
+
+  <template>
+    <TxChoiceCard :steps="steps" :selected="selected" @select="onSelect" />
+  </template>
+---
+:::
+
+### 分步引导
+
+两步引导：先选一类事，再选一件具体的事。第二页在第一步有了答案之后才存在，由宿主通过 `v-model:step` 翻过去。用箭头回到上一步，之前的答案仍然标着；换一类，第二页随之替换。`columns="2"` 让选项两个一行排列。
+
+:::TuffDemoWrapper{demo="ChoiceCardStepsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { ChoiceSelectPayload, ChoiceStep } from '@talex-touch/tuffex/choice-card'
+  import { computed, ref } from 'vue'
+
+  const step = ref(0)
+  const kind = ref<string>()
+  const task = ref<string>()
+
+  const kinds: ChoiceStep = {
+    id: 'kind',
+    title: '我们先从哪类事开始？',
+    options: [
+      { id: 'write', label: '写作', description: '报告、邮件、会议纪要', icon: 'i-carbon-pen' },
+      { id: 'plan', label: '规划', description: '日程、优先级、复盘', icon: 'i-carbon-roadmap' },
+      // …学习、整理
+    ],
+  }
+
+  // 第二页跟着第一步的答案走：换一类就换一个 id
+  const steps = computed<ChoiceStep[]>(() => kind.value
+    ? [kinds, { id: `tasks-${kind.value}`, title: TITLES[kind.value], options: TASKS[kind.value] }]
+    : [kinds])
+
+  // 每一页标出自己那一步的答案
+  const selected = computed(() => (step.value === 0 ? kind.value : task.value))
+
+  function onSelect({ stepIndex, option }: ChoiceSelectPayload) {
+    if (stepIndex === 0) {
+      if (kind.value !== option.id)
+        task.value = undefined
+      kind.value = option.id
+      step.value = 1 // 卡片不会自己翻页
+    }
+    else {
+      task.value = option.id
+    }
+  }
+  </script>
+
+  <template>
+    <TxChoiceCard
+      v-model:step="step"
+      :steps="steps"
+      :selected="selected"
+      :columns="2"
+      @select="onSelect"
+    />
+  </template>
+---
+:::
+
+### 加载中
+
+答案还在加载时，`loading` 把选项换成骨架行，骨架行用的就是选项行本身的盒子，选项到达时页面不会跳动。问题标题保留。「重新加载」会再走一遍请求。
+
+:::TuffDemoWrapper{demo="ChoiceCardLoadingDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { ChoiceOption, ChoiceStep } from '@talex-touch/tuffex/choice-card'
+  import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+  import { computed, ref } from 'vue'
+
+  const pending = ref(true)
+  const picks = ref<ChoiceOption[]>([])
+  // 前 150ms 不显示，显示后至少停留 400ms：快速返回的请求不会闪出骨架屏
+  const skeleton = useDeferredLoading(pending)
+
+  const steps = computed<ChoiceStep[]>(() => [{ id: 'for-you', title: '为你准备', options: picks.value }])
+
+  fetchPicks().then((options) => {
+    picks.value = options
+    pending.value = false
+  })
+  </script>
+
+  <template>
+    <TxChoiceCard :steps="steps" :loading="skeleton" :loading-rows="3" />
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 每一步只问一个问题，给三到六个答案；再多就没法一眼扫完。
+- 标题写成用户会说的话（「规划明天」），说明用一行交代接下来会发生什么。
+- 在 `select` 里决定是否翻页，而不是指望卡片：下一个问题取决于这个答案时，更新 `v-model:step`；这是最后一步时就停在原地。
+- 某一页的选项随前面的答案变化时，给这一页换一个新的 `id`。新页面会模糊淡入，焦点也会落到新页面上。
+- `selected` 传当前页的答案，这样回到上一步时仍能看到当时选了什么。
+- `loading` 通过 `useDeferredLoading` 绑定，并把 `loadingRows` 设成即将到来的答案数量。快速返回不会闪出骨架屏，慢速返回落地时页面也不会跳动。
+- 需要先满足条件的选项保留为禁用而不是隐藏，并在说明里写清需要什么。
+- `prevLabel`、`nextLabel` 和 `stepLabel` 按页面语言传入：卡片只带英文默认值，没有文案目录。
+- `columns="2"` 用在高度紧张、卡片又够宽的位置。卡片窄于 480px 时本来就是一列。
+- 图标类名只有在宿主的 UnoCSS 能生成时才会显示；在本站即 `carbon`、`cib`、`logos`、`twemoji` 这几套。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `steps` | `ChoiceStep[]` | - | 各页，字段见下方「类型」。必填。只有一页时不显示分页；没有页时不渲染，除非 `loading`。 |
+| `step` | `number` | `undefined` | 当前页，从 0 开始（`v-model:step`）。不传时卡片自己记页，仍会派发 `update:step`。超出范围时取最近的有效页。 |
+| `selected` | `string` | `undefined` | 在当前页标出的答案 id：着色、打勾、`aria-current`，并作为列表的 Tab 落点。 |
+| `loading` | `boolean` | `false` | 把选项换成骨架行，并给卡片加 `aria-busy`。标题与分页保留。 |
+| `loadingRows` | `number` | `3` | `loading` 时绘制的骨架行数。 |
+| `columns` | `1 \| 2` | `1` | `2` 让选项两个一行、从左到右排列。卡片窄于 480px 时退回一列。 |
+| `appear` | `boolean` | `true` | 首次渲染与 `loading` 结束时，选项逐行错落浮现。翻页时总是改为模糊淡入。 |
+| `prevLabel` | `string` | `'Previous'` | 后退箭头的无障碍名称。 |
+| `nextLabel` | `string` | `'Next'` | 前进箭头的无障碍名称。 |
+| `stepLabel` | `(current: number, total: number) => string` | `` `${current} / ${total}` `` | 分页计数的文字，两个数字都从 1 开始。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `select` | `(payload: ChoiceSelectPayload)` | 点击了一个可用选项，或用 Enter / 空格激活了它。`payload` 为 `{ step, stepIndex, option }`。卡片停在当前页。 |
+| `update:step` | `(index: number)` | 箭头翻到了第 `index` 页（从 0 开始）。 |
+
+### 插槽
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `header` | `{ step: ChoiceStep, stepIndex: number, total: number }` | 替换默认的 `<h3>` 标题，例如在问题旁放头像。它渲染的内容就是卡片与答案列表的名称，所以请保留问题本身。 |
+
+### 类型
+
+`ChoiceStep`，`steps` 中的一项：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | 页的标识。当前页换成新 id 时会重放翻页入场。必填。 |
+| `title` | `string` | 问题：卡片的标题，也是答案列表的名称。必填。 |
+| `options` | `ChoiceOption[]` | 各答案。必填。 |
+
+`ChoiceOption`，一个答案：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `id` | `string` | - | 页内标识，同一页内不可重复，也是 `selected` 比对的值。必填。 |
+| `label` | `string` | - | 选项的标题与无障碍名称。必填。 |
+| `description` | `string` | - | 标题下的一行说明，作为选项的描述朗读。 |
+| `icon` | `TxIconSource \| string` | - | `TxIcon` 的图标源（结构与 `ITuffIcon` 相同），或图标类名如 `'i-carbon-edit'`，按 `{ type: 'class', value }` 处理。 |
+| `disabled` | `boolean` | `false` | 显示为暗淡；方向键跳过它，点击不派发事件。 |
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import type {
+    ChoiceCardColumns, // 1 | 2
+    ChoiceCardEmits,
+    ChoiceCardProps,
+    ChoiceOption,
+    ChoiceSelectPayload, // { step, stepIndex, option }
+    ChoiceStep,
+    ChoiceStepLabelFormatter, // (current, total) => string
+    TxChoiceCardInstance,
+  } from '@talex-touch/tuffex/choice-card'
+---
+:::
+
+### CSS 变量
+
+| 变量 | 说明 |
+|------|------|
+| `--tx-choice-card-pad` | 卡片边缘到选项的内距，默认 `8px`。卡片圆角随之变大。 |
+| `--tx-choice-card-option-radius` | 选项圆角，默认 `10px`。卡片圆角等于它加上内距，两层圆角保持同心。 |
+| `--tx-choice-card-option-pad-x` | 选项的水平内距，也是标题的水平内距，默认 `12px`。 |
+| `--tx-choice-card-label-line` | 标题行高，也是图标框的高度，默认 `20px`。 |
+| `--tx-choice-card-desc-line` | 说明行高，默认 `18px`。 |
+
+组件只读取、从不设置这些变量，所以可以设在卡片或任意祖先元素上。组件另外会在每一行写入 `--tx-choice-card-index`，即该行在入场错落中的位置。
+
+## 概述
+
+- 结构：以问题命名的 `<section>`，头部是分页与标题，下面是 `<ul role="list">`，每个 `<li>` 里是一个原生 `<button type="button">`。按钮的名称取自标题（`aria-labelledby`），描述取自说明（`aria-describedby`）；图标为 `aria-hidden`。
+- `select` 从不翻页。宿主通过 `v-model:step` 前进；答案是最后一步时就停在原地。
+- 至少两页时才渲染分页。两端的箭头分别禁用；计数是 `role="status"` 区域，翻页会被朗读。
+- 键盘：
+  - 整个列表只占一个 Tab 落点（roving tabindex）：已选项，否则是第一个可用项；分页在它之前；
+  - 上下键移到上一个 / 下一个可用项，首尾循环；
+  - 两列时上下键在同一列内移动，左右键按阅读顺序移动；
+  - Home / End 到第一个 / 最后一个可用项；
+  - 跳过禁用项；按住 Alt、Ctrl 或 Meta 的按键交还给页面。
+- 卡片窄于 480px 时两列退回一列（卡片上的容器查询）。方向键读取实际渲染的列数，所以跟着变。
+- 焦点在列表里时翻页（例如用键盘选了一项、宿主随即前进），焦点会移到新页的 Tab 落点。正在使用的箭头变为禁用时，焦点移到另一个箭头。
+- 入场：首次渲染与 `loading` 结束时，选项每行间隔 45ms 浮现（延迟上限 360ms）；`appear: false` 关闭它。翻页时标题与列表一起在 160ms 内模糊淡入。两者都是新挂载节点上的 CSS 动画，选项从第一帧起就可以点击。
+- `prefers-reduced-motion: reduce` 下两种入场都去掉。静止样式就是它们的末帧，所以选项直接出现在原位。
+- `loading` 在选项行自己的盒子里（图标框、标题行、说明行）绘制 `loadingRows` 行骨架，每行都有图标与说明骨架条。骨架为 `aria-hidden`，卡片为 `aria-busy`。还没有任何页时，标题也是一条骨架条。
+- 图标：字符串按图标类名处理，对象原样交给 `TxIcon`。同一页只要有一个选项带图标，每一行都保留图标列，标题因此对齐。
+- 已选项使用 `--tx-color-primary-light-9` 填充、主色描边、行尾打勾，并带 `aria-current="true"`，颜色从来不是唯一的标记。悬停时着色加深。
+- 悬停立即切换选项的填充色；卡片上没有任何颜色过渡。禁用项为 50% 不透明度，光标为 `not-allowed`。
+- `steps` 为空且没有 `loading` 时不渲染任何内容。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/choice-card/src/TxChoiceCard.vue`，类型在 `src/types.ts`。
+- 参考：助手开场引导里的「我们先从哪件事开始？」卡片，每个答案有图标、标题与灰色说明，左上角是 `‹ 1 / 2 ›` 分页。库里相近的组件都不够：`TxSuggestionChips` 只有文字、没有分步；`TxRecommendationCard` 是一个主推荐加备选抽屉的模型。
+- 骨架行沿用加载后选项行自己的容器，里面放 `TxSkeleton` 骨架条。`--tx-skeleton-base-color` 设为更深的填充色（选项行里用 `--tx-fill-color-darker`，标题骨架条用 `--tx-fill-color`），因为骨架默认的最浅填充色落在选项底色上会看不见。
+- 对比度在全部四个主题块、对四种选项底色（常态、悬停、已选、已选悬停）实测，记录在源码注释里：
+  - 说明文字用 `--tx-text-color-regular`，最差 5.06:1（浅色主题的已选悬停）；`--tx-text-color-secondary` 在常态底色上只有 2.87:1，未采用；
+  - 勾号沿用 `TxModeChip` 的 `info` 墨色，最差 4.82:1。
+- 否决过的方案：
+  - 像 `TxSuggestionChips` 那样给按钮加 `role="listitem"`，会抹掉按钮语义；改为 `<ul>` / `<li>` 包住按钮；
+  - 翻页用 `<Transition mode="out-in">` 会让新页等旧页离场完才出现；改为给列表加 key、用 CSS 动画；
+  - 把 `id` 放在 `<h3>` 上会让每个示例的标题进入文档大纲，也会让 `header` 插槽失去名称；id 放在外层包裹元素上。
+- 属性以运行时对象声明，并以 `ChoiceCardProps` 校验，与 `TxModeChip` 相同：文档开发服务器在只有 `types.ts` 变化时不会重新编译 SFC。
+- **测试覆盖：**
+  - `choice-card/__tests__/choice-card.test.ts` 覆盖结构与名称、图标、SSR、分页（箭头状态、`v-model:step` 双向、受控与非受控、越界取值、文案属性）、选择（事件参数、不自动翻页、禁用项、已选标记）、键盘（roving Tab 落点、上下键、Home / End、两列、实际渲染列数、焦点带到新页与另一个箭头）、加载与两种入场；
+  - `choice-card-motion.test.ts` 锁定编译后的样式：任何地方都没有颜色过渡、悬停立即换底色、动画只在 `prefers-reduced-motion: no-preference` 下声明、关键帧只写起始帧、颜色只来自带回退值的令牌、选项底色、描边与同心圆角、字号层级、480px 容器查询与焦点环。
+
+<TuffDocSourceLink />
+
+## 使用场景
+
+- 助手的开场引导：「我们先从哪件事开始？」，每一步一个问题。
+- 在卡片之后才到达的「为你准备」推荐任务列表。
+- 回看已经回答的问题：`selected` 标出当时选了什么。
+
+## 相关组件
+
+| 组件 | 适用于 |
+|------|--------|
+| [SuggestionChips](/docs/dev/components/suggestion-chips) | 单行的追问建议，胶囊或列表形式 |
+| [RecommendationCard](/docs/dev/components/recommendation-card) | 一个推荐答案，带置信度与备选抽屉 |
+| [ApprovalCard](/docs/dev/components/approval-card) | 跨多个问题收集答案，单选或多选选项，最后统一发送 |

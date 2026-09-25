@@ -175,6 +175,8 @@ Non-negotiable for any declared transition or animation. Keyframe animations add
 
 Worked example: `TxEmptyState`'s illustrations (all variants since 2026-09-24). An element whose resting style is not a finished frame of its animation — a stroke at a full dash offset or a dot at opacity 0 (the hidden start), a bubble not yet shifted into place — must be set to the frame its animation ends on inside the reduced-motion block, not merely have `animation: none`; otherwise the still frame is missing that part or shows it out of place. `empty-state.test.ts` fails when any `animation: tx-empty-state-*` selector has no reduced-motion stop.
 
+The inverse form is equally valid and smaller: declare the animation **only** inside `@media (prefers-reduced-motion: no-preference) { … }`, so reduced motion never starts it and the element simply rests in its declared (final) style. `TxStatCard`, the charts and `TxChoiceCard` use it (2026-09-26: it took ~0.4 KiB off `TxChoiceCard` with pixel-identical output). Pick one form per component; a style-contract test must then assert the form you picked — either every animated selector has a `reduce` stop, or every `animation:` declaration sits inside a `no-preference` block.
+
 ### Collapsing content keeps its size while it closes
 
 A collapse that shrinks its content box during the close animation makes the text reflow on the way out, which reads as a glitch rather than a transition. Animate the container; leave the content at its measured size until the animation ends. See `bui-disclosure-collapse` in `style/mixins.scss`.
@@ -232,6 +234,7 @@ A component is not done when it renders. It is done when all of these hold:
 6. Screen-reader-only text uses the clip pattern (`position: absolute; width: 1px; height: 1px; clip: rect(0,0,0,0)`), never `display: none`, which removes the node from the a11y tree.
 7. A state that changes without user action gets a `role="status" aria-live="polite"` region. Swapping a visible label or an `aria-label` is never re-announced.
 8. Registration chain complete: component dir → `components.ts` → the matching `base`/`pro`/`ai` barrel (guarded by `src/__tests__/suite-barrels.test.ts`) → `apps/nexus` taxonomy, sidebar, gallery, hub index → `.zh.mdc` + `.en.mdc` + demo + `demo-registry.ts`. See [TuffEx Docs Sync](./tuffex-docs-sync.md).
+9. The stylesheet fits `pnpm -C packages/tuffex audit:size`. The full and on-demand CSS gates run with only a few KiB of headroom, so a new component slims before it asks for a gate change: stagger with one rule reading an inline `--<block>-index` custom property instead of generated `:nth-child` rules, put layout variants in container queries, let ink inherit instead of restating it per element, and never re-declare what a composed primitive (`TxSkeleton`, `TxIcon`) already ships. A gate bump, when it is unavoidable, rides in the same commit as the component that needs it, never in a later "fix CI" commit.
 
 ### Narrowing a published prop union
 

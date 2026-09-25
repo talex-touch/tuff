@@ -390,6 +390,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/mode-chip',
     '/docs/dev/components/message-actions',
     '/docs/dev/components/suggestion-chips',
+    '/docs/dev/components/choice-card',
     '/docs/dev/components/typing-indicator',
     '/docs/dev/components/conversation-stream',
     // ai — AiAgent
