@@ -484,7 +484,9 @@
     "shortcutLabels": {
       "core_box_toggle": "Open command palette",
       "core_omniPanel_toggle": "Open OmniPanel",
-      "core_omniPanel_mouseLongPress": "OmniPanel mouse trigger"
+      "core_omniPanel_mouseLongPress": "OmniPanel mouse trigger",
+      "voice_dictation_toggle": "Global dictation (press to start, press again to stop)",
+      "voice_quickEdit": "Quick Edit (select text, then speak the change)"
     },
     "shortcutStatus": {
       "conflictSystem": "Conflicts with system shortcuts",
@@ -568,13 +570,27 @@
       "manual": "System Settings"
     },
     "capabilities": {
-      "title": "Channel and model",
-      "description": "Channel binding and order live on the Intelligence page.",
       "action": "Open Intelligence"
+    },
+    "source": {
+      "title": "Recognition source",
+      "options": {
+        "cloud": {
+          "label": "Cloud",
+          "description": "Cloud channels only; dictation stops when the network does."
+        },
+        "local": {
+          "label": "On-device",
+          "description": "Installed on-device models only; audio never leaves this Mac."
+        },
+        "hybrid": {
+          "label": "Hybrid",
+          "description": "On-device first, falling back to the cloud when none can run."
+        }
+      }
     },
     "catalog": {
       "title": "Cloud voice routing",
-      "description": "After sign-in, Tuff downloads and applies an AES-256-GCM encrypted routing pack, enabled once verified.",
       "activeTitle": "Active routing pack",
       "activeDescription": "v{version}",
       "builtinDescription": "Not active; using the built-in Nexus route.",
@@ -650,7 +666,6 @@
     },
     "models": {
       "title": "On-device models",
-      "description": "Local speech models available from the cloud catalog. Once installed they run without a network, and every weight file is verified byte for byte.",
       "loading": "Reading the cloud catalog...",
       "catalogUnavailable": "The cloud model catalog could not be read. Check the network and retry.",
       "signInRequired": "Sign in to Tuff to read the cloud model catalog.",
@@ -662,6 +677,11 @@
       "remove": "Remove",
       "installing": "Installing...",
       "progress": "{percent}% downloaded ({size})",
+      "moreTitle": "More models",
+      "expandHint": "{count} more bundles, for when a specific engine or size matters.",
+      "collapseHint": "Showing only the recommended and installed models.",
+      "expand": "Show {count}",
+      "collapse": "Show less",
       "actionFailed": "That did not work: {reason}"
     }
   },
@@ -1318,6 +1338,8 @@
     "records": {
       "title": "Recognition records",
       "empty": "No recognition records yet.",
+      "retentionOff": "Nothing is being kept, so a dictation leaves no record behind.",
+      "retentionAction": "Keep recognition records",
       "clear": "Clear records",
       "clearSuccess": "Recognition records cleared",
       "clearFailed": "Recognition records could not be cleared",

@@ -253,9 +253,12 @@ function handleKeydown(event: KeyboardEvent): void {
     font-size: 0.62em;
     line-height: 1;
 
+    // `1em` of the glyph's own 0.62em, so the box is 62% of the disc. It
+    // used to be 0.62em here too, which applied the ratio twice and drew a
+    // 7px glyph in the 18px disc.
     &[class] {
-      width: 0.62em;
-      height: 0.62em;
+      width: 1em;
+      height: 1em;
     }
   }
 

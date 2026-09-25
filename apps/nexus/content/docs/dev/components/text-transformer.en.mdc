@@ -476,7 +476,12 @@ No Vue events are emitted. Drive state from the parent via the `text` prop.
 - `text` is normalized with `String(...)`; numbers are displayed as their string form.
 - Under `morph` the value goes to the engine: the whole value sits in a visually-hidden `[tx-morph-sr]` node and every segment is `aria-hidden`. The root's `overflow` opens back up to `visible`, or exiting segments would be cut in half — which is why `morph` does not ellipsise.
 - The root uses `aria-live="polite"`; under `fade` the previous layer is `aria-hidden` so screen readers announce only the current text.
-- Under `fade`, when `text` changes the component snapshots the previous DOM color, renders both layers, starts animation on the next animation frame, then removes the previous layer after `durationMs + 34ms`.
+- Under `fade`, when `text` changes the component snapshots the previous DOM color, then renders both layers:
+  - the new layer first lands in its setup state (transparent and blurred) with no transition;
+  - the component forces one style commit, then starts the animation on the next animation frame;
+  - the previous layer is removed after `durationMs + 34ms`.
+  Without that commit, the setup and animating states would land in the same style recalc and the new text would appear at once instead of fading in.
+- Under `prefers-reduced-motion: reduce`, neither layer transitions; the new text replaces the old at once.
 - A newer text change cancels the previous timer/frame through an internal sequence guard, so stale transitions cannot remove the active layer.
 - `wrap=false` keeps one-line ellipsis behavior; `wrap=true` switches layers to `white-space: pre-line` for multiline or newline-delimited content.
 - The scoped slot is invoked for both current and previous text, so slot output should be deterministic from the provided `text` value.
@@ -494,7 +499,12 @@ No Vue events are emitted. Drive state from the parent via the `text` prop.
 
 - **Live-region note:** The root always uses `aria-live="polite"`. Avoid placing multiple high-churn instances in the same dense region, or screen readers may announce more changes than users can consume.
 - **Transition note:** The outgoing layer is duplicated until `durationMs + 34ms`; slot content is rendered for both layers during that window. Keep slot renderers pure and cheap.
-- **Verified coverage:** `text-transformer.test.ts` checks the default morph path, the slot and `wrap` fallbacks to `fade`, and on the `fade` side: live-region semantics, custom root tag, CSS variable mapping for duration/blur, wrap class, numeric text normalization, previous/current layers, preserved previous color, `aria-hidden` on the outgoing layer, timer cleanup, and scoped slot props.
+- **Fade-in fix (2026-09-24):** Before this fix, the setup and animating states were computed in the same style recalc, so under `fade` the new text never faded in; only the old text blurred out. The setup state now lands without a transition, and a style commit is forced before the animation frame is requested. `TxModeChip`'s label crossfade, which depends on this fade-in, is what surfaced it.
+- **Verified coverage:** `text-transformer.test.ts` checks:
+  - the default morph path, and the slot and `wrap` fallbacks to `fade`;
+  - on the `fade` side: live-region semantics, custom root tag, CSS variable mapping for duration/blur, wrap class, and numeric text normalization;
+  - previous/current layers, preserved previous color, `aria-hidden` on the outgoing layer, timer cleanup, and scoped slot props;
+  - the forced setup-state commit, the setup state landing without a tween, and the reduced-motion escape.
 
 ## Source
 

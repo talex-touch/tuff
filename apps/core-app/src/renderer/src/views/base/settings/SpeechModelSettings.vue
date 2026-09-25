@@ -37,6 +37,7 @@ const catalogLoading = ref(true)
 const busyKey = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 const progress = ref<VoiceSpeechModelInstallProgress | null>(null)
+const showAll = ref(false)
 let pollTimer: number | null = null
 let disposed = false
 
@@ -155,6 +156,24 @@ const catalogNeedsAccount = computed(
   () => catalogError.value?.includes('SPEECH_CATALOG_AUTH_REQUIRED') === true
 )
 
+/**
+ * Every installable entry is a variation on the same few weights — three whisper.cpp sizes, the
+ * two upstream originals behind them, and one entry per engine. A user meeting this list for the
+ * first time has nothing to rank them by, and the honest answer is that they should not have to:
+ * the catalog already names a recommendation.
+ *
+ * So the default view answers the question for them — the recommended entry, plus whatever is
+ * already on disk (which they may need to remove, and which is a fact about *this* machine) —
+ * and the long tail waits behind an explicit request.
+ */
+const visibleRows = computed(() => {
+  if (showAll.value) return rows.value
+  const recommended = recommendedKey.value
+  return rows.value.filter((row) => keyOf(row.id, row.version) === recommended || row.installed)
+})
+
+const hiddenCount = computed(() => rows.value.length - visibleRows.value.length)
+
 onMounted(() => {
   void loadInstalled()
   void loadCatalog()
@@ -170,7 +189,6 @@ onBeforeUnmount(() => {
   <TuffGroupBlock
     class="SpeechModelSettings"
     :name="t('settingSpeechRecognition.models.title')"
-    :description="t('settingSpeechRecognition.models.description')"
     default-icon="i-carbon-chip"
     active-icon="i-carbon-chip"
   >
@@ -197,7 +215,7 @@ onBeforeUnmount(() => {
     </TuffBlockSlot>
 
     <TuffBlockSlot
-      v-for="entry in rows"
+      v-for="entry in visibleRows"
       :key="keyOf(entry.id, entry.version)"
       :title="entry.name"
       :description="`${formatBytes(entry.bytes)} · ${entry.engine} · ${entry.id}@${entry.version}`"
@@ -247,6 +265,31 @@ onBeforeUnmount(() => {
         @click="uninstall(entry)"
       >
         {{ t('settingSpeechRecognition.models.remove') }}
+      </TxButton>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="hiddenCount > 0 || showAll"
+      :title="t('settingSpeechRecognition.models.moreTitle')"
+      :description="
+        showAll
+          ? t('settingSpeechRecognition.models.collapseHint')
+          : t('settingSpeechRecognition.models.expandHint', { count: hiddenCount })
+      "
+      default-icon="i-carbon-catalog"
+      data-testid="speech-model-more"
+    >
+      <TxButton
+        size="sm"
+        variant="ghost"
+        :data-testid="showAll ? 'speech-model-collapse' : 'speech-model-expand'"
+        @click="showAll = !showAll"
+      >
+        {{
+          showAll
+            ? t('settingSpeechRecognition.models.collapse')
+            : t('settingSpeechRecognition.models.expand', { count: hiddenCount })
+        }}
       </TxButton>
     </TuffBlockSlot>
 

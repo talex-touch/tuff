@@ -1,0 +1,196 @@
+---
+title: Inbox 收件箱
+description: 文件夹、虚拟列表、阅读区与回复框组成的三栏收件箱，带键盘快捷键与新邮件提示
+category: TemplateContent
+status: beta
+since: 0.6.0
+tags: [template, inbox, list, reader, keyboard]
+syncStatus: reviewed
+verified: false
+---
+
+## 场景
+
+Tuff 账户的邮件与通知中心：插件审核结果、CI 构建、登录提醒、频道里的提及、版本发布和账单都汇到这里。几百封邮件要能快速扫读、用键盘切换、就地回复，新邮件到达时不打断正在读的内容。通知中心是另一种做法：没有阅读区，每条通知带着自己的快捷操作，在列表里就能处理完。
+
+适合「列表 + 阅读区」的界面：通知中心、工单与审核队列、客服收件箱。
+
+## 模板
+
+### 三栏收件箱
+
+:::TuffDemoWrapper{demo="TemplateInboxDemo" code-lang="vue" title="三栏收件箱" description="点一下列表后可用 J / K 切换、E 归档、S 加星标、Enter 回复；滚进视口后会陆续到达三封新邮件。展开后左侧出现邮箱导航。图中均为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // 快捷键挂在模板根上，不挂 document；焦点在输入框里时让出单字母键
+  function onKeydown(event: KeyboardEvent) {
+    if (event.defaultPrevented || isEditable(event.target))
+      return
+    if (event.key === 'j' || event.key === 'ArrowDown')
+      move(1)
+    else if (event.key === 'e')
+      archive(selected.value)
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Inbox" :height="580" @enter="startArrivals">
+      <div class="inbox" @keydown="onKeydown">
+        <TxSidebarNav v-if="wide" v-model="view" :items="navItems" :groups="navGroups" action-label="写邮件" />
+        <TxFilterChips v-else v-model="view" :items="folderChips" aria-label="邮箱" />
+
+        <TxSplitter v-model="split" :min="0.3" :max="0.62">
+          <template #a>
+            <!-- TxVirtualList 不带语义：listbox、option 与位置信息由宿主补上 -->
+            <div role="listbox" tabindex="0" aria-label="收件箱" :aria-activedescendant="activeId">
+              <TxVirtualList ref="list" :items="mails" :item-height="76" item-key="id" height="100%">
+                <template #item="{ item, index }">
+                  <div
+                    :id="item.id"
+                    role="option"
+                    :aria-selected="item.id === selectedId"
+                    :aria-setsize="mails.length"
+                    :aria-posinset="index + 1"
+                    @click="select(item.id)"
+                  >
+                    …
+                  </div>
+                </template>
+              </TxVirtualList>
+            </div>
+          </template>
+
+          <template #b>
+            <TxMessageActions :copy-text="plainBody" :appear="false">…</TxMessageActions>
+            <TxMarkdownView :content="selected.body" />
+            <TxAttachmentTray :attachments="selected.attachments" :size-formatter="formatSize" />
+            <TxChatComposer v-model="reply" placeholder="回复…" @send="send" @attachment-add="addFiles" />
+          </template>
+        </TxSplitter>
+      </div>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .inbox { display: grid; grid-template-columns: minmax(0, 1fr); }
+
+  @container template (min-width: 960px) {
+    /* 侧栏用固定宽度：只有列表和阅读区跟着分隔条变化 */
+    .inbox { grid-template-columns: 216px minmax(0, 1fr); }
+  }
+  </style>
+---
+:::
+
+### 通知中心
+
+按天分组的单列信息流。每条通知带着就地的快捷操作——回复、重试、批准、是我 / 不是我——不用打开就能处理完；另有勿扰时段、按来源接收、稍后提醒和批量处理。和三栏收件箱相比，它没有阅读区，适合短、量大、要尽快处理的系统通知；要读长文、来回回复的仍然是收件箱更顺手。
+
+:::TuffDemoWrapper{demo="TemplateInboxNotificationsDemo" code-lang="vue" title="通知中心" description="点一下列表后可用 J / K 切换、E 标为已读或未读、X 选择；每条通知的快捷操作就地执行并可撤销，批准、拒绝这类只由你来点。滚进视口后会陆续到达三条新通知，勿扰期间只计数、不弹提示。展开后右侧出现通知设置。图中均为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // 勿扰期间新通知静默插入、只计数；安全通知在「可穿透」开启时照常提醒
+  function deliver(notice: Notice) {
+    notices.value.unshift(notice)
+    if (dndActive.value && !(notice.urgent && dnd.bypass)) {
+      silenced.value += 1
+      return
+    }
+    showArrival(notice)
+  }
+
+  // 快捷操作只由读者点击触发：自动演示只负责「到达」，从不替你批准
+  function runAction(notice: Notice, action: ActionId) {
+    notice.unread = false
+    notice.result = notice.results[action] ?? null
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="通知中心" :height="580" @enter="startArrivals">
+      <TxModeChip
+        :label="dndActive ? '勿扰中 · 至 11:30' : '通知已开启'"
+        :icon="dndActive ? 'i-carbon-notification-off' : 'i-carbon-notification'"
+        :tone="dndActive ? 'warning' : 'muted'"
+        @click="toggleDnd"
+      />
+      <TxFilterChips v-model="kind" :items="kindItems" aria-label="按类型筛选" />
+
+      <section v-for="group in groups" :key="group.key">
+        <TxCardItem
+          v-for="notice in group.items"
+          :key="notice.id"
+          role="article"
+          clickable
+          :tabindex="notice.id === tabStop ? 0 : -1"
+          @click="markReadAndOpen(notice)"
+        >
+          <template #description>
+            {{ notice.body }}
+            <!-- 按钮的点击不能再冒泡成「标为已读并打开」 -->
+            <span @click.stop>
+              <TxStatusBadge v-if="notice.result" :text="notice.result.text" :status="notice.result.tone" />
+              <template v-else>
+                <TxButton v-for="action in notice.actions" :key="action" size="sm" @click="runAction(notice, action)">…</TxButton>
+              </template>
+            </span>
+          </template>
+        </TxCardItem>
+      </section>
+
+      <TxCollapse v-model="snoozeOpen">
+        <TxCollapseItem name="snoozed" title="已延后 · 2">…</TxCollapseItem>
+      </TxCollapse>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 组成
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 导航（展开后） | [TxSidebarNav](/docs/dev/components/sidebar-nav)、[TxDotIndicator](/docs/dev/components/dot-indicator) | 邮箱与标签两组，未读数从数据推导；写邮件入口；底部同步状态 |
+| 文件夹（列内与窄屏） | [TxFilterChips](/docs/dev/components/filter-chips) | 同一份文件夹数据，显示未读数 |
+| 顶栏 | [TxSearchInput](/docs/dev/components/search-input)、[TxButton](/docs/dev/components/button)、[TxKbd](/docs/dev/components/kbd) | 搜索发件人与主题；写邮件；展开后显示快捷键 |
+| 分栏 | [TxSplitter](/docs/dev/components/splitter) | 列表和阅读区之间唯一的可拖动分隔 |
+| 邮件列表 | [TxVirtualList](/docs/dev/components/virtual-list)、[TxAvatar](/docs/dev/components/avatar)、[TxDotIndicator](/docs/dev/components/dot-indicator)、[TxTag](/docs/dev/components/tag)、[TxIconButton](/docs/dev/components/button)、[TxBadge](/docs/dev/components/badge)、[TxDropdownMenu](/docs/dev/components/dropdown-menu)、[TxSkeleton](/docs/dev/components/skeleton) | 约 160 封邮件的虚拟列表；未读点、标签、星标；排序与筛选菜单；切换文件夹时的骨架行 |
+| 空态 | [TxSearchEmpty](/docs/dev/components/search-empty)、[TxEmptyState](/docs/dev/components/empty-state)、[TxNoSelection](/docs/dev/components/no-selection) | 没有搜索结果、空文件夹、没有选中邮件 |
+| 阅读区 | [TxMessageActions](/docs/dev/components/message-actions)、[TxDropdownMenu](/docs/dev/components/dropdown-menu)、[TxMarkdownView](/docs/dev/components/markdown-view)、[TxAttachmentTray](/docs/dev/components/attachment-tray) | 复制正文、回复、归档、星标与「更多」菜单（标为未读、移动到、静音）；正文、附件与往来 |
+| 回复 | [TxChatComposer](/docs/dev/components/chat-composer)、[TxAttachmentTray](/docs/dev/components/attachment-tray) | 快捷键发送；粘贴或拖入的附件 |
+| 通知 | [TxToastPanel](/docs/dev/components/toast-panel) | 从列表头垂下：新邮件提示带「查看」，操作结果带「撤销」 |
+| 顶栏（通知中心） | [TxBadge](/docs/dev/components/badge)、[TxModeChip](/docs/dev/components/mode-chip)、[TxButton](/docs/dev/components/button)、[TxIconButton](/docs/dev/components/button)、[TxPopover](/docs/dev/components/popover) | 未读数；勿扰开关（窄屏换成可按下的图标按钮）；选择模式与全部已读；列内和窄屏的设置入口 |
+| 类型筛选（通知中心） | [TxFilterChips](/docs/dev/components/filter-chips)、[TuffSwitch](/docs/dev/components/switch) | 提及、构建、安全、插件、系统，计数从数据推导；「仅未读」 |
+| 通知行（通知中心） | [TxCardItem](/docs/dev/components/card-item)、[TxAvatar](/docs/dev/components/avatar)、[TxIconChip](/docs/dev/components/icon-chip)、[TxDotIndicator](/docs/dev/components/dot-indicator)、[TxTag](/docs/dev/components/tag)、[TxStatusBadge](/docs/dev/components/status-badge) | 人用首字母头像，系统来源用字形；未读点；就地的快捷操作，执行后换成结果并可撤销；「回复」在行内展开输入框 |
+| 行菜单（通知中心） | [TxDropdownMenu / TxDropdownSubmenu](/docs/dev/components/dropdown-menu) | 标为已读或未读、稍后提醒、静音此来源（安全通知不能静音）、删除 |
+| 批量（通知中心） | [TxCheckbox](/docs/dev/components/checkbox)、[TxButton](/docs/dev/components/button) | 分组头「全选本组」（部分选中时显示半选）；底部批量栏：标为已读、稍后提醒、删除 |
+| 已延后（通知中心） | [TxCollapse / TxCollapseItem](/docs/dev/components/collapse) | 列表末尾默认折叠，每条都能取消延后 |
+| 通知设置（通知中心） | [TuffSwitch](/docs/dev/components/switch)、[TxSelect](/docs/dev/components/select)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TxIconChip](/docs/dev/components/icon-chip)、[TxTooltip](/docs/dev/components/tooltip) | 勿扰时段用两个半小时一档的下拉（tuffex 没有时间选择器）、生效日期、安全通知可穿透；按来源接收；展开后常驻右栏 |
+| 空态（通知中心） | [TxEmptyState](/docs/dev/components/empty-state) | 筛选为空时给出「清除筛选」；全部处理完时可以查看已延后的通知 |
+
+## 交互要点
+
+- 焦点在模板里时：↑ / ↓ 或 J / K 切换邮件，E 归档，S 加星标，Enter 打开并聚焦回复框。焦点在输入框里时这些单字母键不生效；快捷键挂在模板根节点上，不影响文档站自己的按键。
+- 模板第一次滚进视口后，第 3.5、9、15 秒各到达一封新邮件，未读数随之变化；提示停留约 4 秒，点「查看」直接打开。读者已经往下滚时，新邮件插在视口上方，列表不会跳回顶部。开启「减弱动态效果」时，三封邮件一开始就在，不弹提示、不启动计时器。
+- 回复框里 Enter 换行，⌘ / Ctrl + Enter 发送；约 0.6 秒后回复出现在「往来」里，可以撤销。
+- 归档和「移动到」立即生效并可撤销，阅读区自动换到下一封；切换文件夹时先显示约 0.4 秒的骨架行。
+- 展开后（≥ 960px）左侧换成 216px 的导航栏，宽度固定，只有列表和阅读区随分隔条变化；窄于 640px 时只显示列表，点开邮件后阅读区从右侧滑入，按 Esc 或「返回」回到列表。
+- 通知中心：点一行即标为已读，并提示宿主会打开什么，文档页不会跳走；快捷操作就地执行，按钮换成结果后可以撤销。批准、拒绝、是我 / 不是我这类操作只由读者点击，自动演示从不替你点。「回复」在行内展开输入框，回车发送，Esc 取消。
+- 通知中心：焦点在模板里时 J / K 或 ↑ / ↓ 在通知之间移动，E 切换已读，X 选中（第一次按会进入选择模式），Esc 退出选择模式。⋯ 菜单里可以稍后提醒或静音来源：延后的通知收进列表末尾的「已延后」，静音的来源淡化显示，都能从提示里撤销。
+- 通知中心：第一次滚进视口后，第 3、8、14 秒各到达一条新通知，信息流右下角弹出提示（窄屏是底部整条），不会盖住筛选和分组标题，点「查看」定位到它；读者已经往下滚时列表不会跳回顶部。开启勿扰（点顶栏的「通知已开启」，或在设置里把时段调到包含现在的 10:30）后，新通知静默插入并计数，安全通知在「可穿透」开启时照常提醒。开启「减弱动态效果」时三条通知一开始就在。展开后（≥ 960px）信息流限宽 760px，右侧常驻通知设置。
+
+## 改造建议
+
+- 数据量更大时保持固定行高（`item-height`），把搜索和分页交给服务端；`aria-setsize` 与 `aria-posinset` 按真实总数填写。
+- 正文来自外部时保留 TxMarkdownView 的默认净化，并在宿主里拦截链接点击，交给系统浏览器打开。
+- 快捷键可以按产品习惯改键，但始终挂在组件根节点上，并在可编辑元素里让出单字母键。
+- 附件上传由宿主负责：TxChatComposer 只交出 File 对象，object URL 的创建和回收都在宿主里完成。
+- 通知中心：接真实推送时，用同一份勿扰与来源设置决定一条通知是「插入并提醒」还是「只插入」；快捷操作的结果以服务端返回为准，失败时把结果换成错误状态并保留原来的按钮。

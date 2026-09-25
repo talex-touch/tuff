@@ -125,3 +125,15 @@ for `/en/docs*`, `/zh/docs*`, `/api/docs/page/*`, `/api/docs/navigation/*`, `/ap
 repeat requests to the button page answered `HIT` with `age` 19 → 22 → 26. Decision: keep.
 `DOCS_STATIC_CACHE_CONTROL` lowered to `public, max-age=300, s-maxage=300` (no SWR) so `_headers`
 matches the rule; this ships in the follow-up PR.
+
+## Cache-window alignment (PR #1958), 2026-09-24 10:48–11:18
+
+Merged as `6cfe5c923` (merge commit; auto-merge waited on the Pages preview check and on a
+CodeRabbit thread about the documented 2-hour minimum Edge Cache TTL on Free — answered with the
+live evidence: entries `EXPIRED`/`REVALIDATED` within the hour, so the 5-minute override is
+honoured; fallback recorded in the spec). The first production build failed inside Cloudflare's
+build image (`node-build: definition not found: 26.0.0`, the plugin's git pull of node-build
+definitions failed with `could not read Username for 'https://github.com'`) — infrastructure, not
+code; the retry via `POST …/deployments/<id>/retry` (deployment `a6f8067f`) built and deployed.
+Fresh-origin responses (`?v=<ts>` cache-busting) now carry
+`cache-control: public, max-age=300, s-maxage=300` on docs HTML and JSON.

@@ -89,7 +89,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **156**.
+Current source-of-truth export modules: **157**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -124,7 +124,7 @@ Advanced interaction, visualization, effects and low-level primitives. Import fr
 
 Chat, agent, reasoning and context components for AI-native interfaces. Import from `@talex-touch/tuffex/ai`.
 
-- `Chat (6)`: `chat`, `prompt-bar`, `attachment-tray`, `message-actions`, `suggestion-chips`, `conversation-stream`
+- `Chat (7)`: `chat`, `prompt-bar`, `attachment-tray`, `mode-chip`, `message-actions`, `suggestion-chips`, `conversation-stream`
 - `Agents (9)`: `agents`, `agent-screen`, `agent-trace`, `task-rows`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `approval-card`, `working-indicator`
 - `Reasoning (8)`: `ai-elements`, `chain-of-thought`, `reasoning-disclosure`, `thinking-orb`, `stream-markdown`, `code-stream`, `inline-citation`, `sources`
 - `Context & Insight (5)`: `context-cards`, `context-indicator`, `insight-cards`, `recommendation-card`, `fine-tune-card`

@@ -85,6 +85,7 @@ No slots are exposed. Text must come from the `text` prop so measurement and acc
 - Non-empty `text` is mirrored to `aria-label`; empty `text` omits `aria-label` and renders a non-breaking-space fallback to keep measurement stable.
 - The component measures `getBBox()` and `getComputedTextLength()` after mount and after text, font, or stroke-width inputs change.
 - `document.fonts.ready` triggers an additional measurement pass when the browser exposes the Font Loading API.
+- The measuring `<text>` stays at the origin while the two painted layers take the computed offset, so every pass reads the same box and repeated measurements agree.
 - `strokeColor`, `fillColor`, `durationMs`, `strokeWidth`, measured stroke length, font size, font weight, and font family are applied through CSS variables.
 - The component respects `prefers-reduced-motion: reduce` by disabling the animations and showing the final state.
 
@@ -99,6 +100,7 @@ No slots are exposed. Text must come from the `text` prop so measurement and acc
 ## Review Notes
 
 - **Accessibility note:** The source always renders an SVG with `role="img"`; non-empty `text` becomes the accessible name, but there is no prop for `aria-hidden`. Keep semantic headings or labels outside the component when the animation is decorative.
+- **Measurement:** the measuring layer used to take the same offset as the painted layers, so each pass after the first read back its own offset and cancelled it. Once `document.fonts.ready` re-measured, the glyphs sat at x=0, y≈0 — above the viewBox and against its left edge — on every docs demo as well as the gallery. The unit test mocks `getBBox()` with a constant, which is why it never showed.
 - **Verified coverage:** `keyframe-stroke-text.test.ts` checks the accessible SVG/text layers, CSS variable mapping, empty-text fallback, metric updates after prop changes, and install registration.
 
 ## Source

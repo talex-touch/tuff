@@ -183,6 +183,7 @@ code: |
 - 预设 `variant` 会先解析标题、描述和插画，之后再应用显式 props 或 slots。
 - 同一区域中，slot 内容优先于生成内容；`actions` 插槽会整体替换生成的主/次按钮。
 - `icon=null` 会隐藏整个图标区。`loading=true` 只有在没有 icon 插槽且没有非空 `icon` prop 时才显示 `TxSpinner`。
+- `variant="error"` 的内置插画是一个应用窗口（标题栏三点 + 两条内容线），右下角压一枚危险色角标（圆 + 感叹号），与 `blank-slate` 的“纸张 + 角标”同构。角标用 `--tx-color-danger-light-9` 作底、`--tx-color-danger` 作墨，而不是白字压在实心危险色上。两圈波纹从角标交替扩散（2.4s 一个周期，相差半个周期）；`prefers-reduced-motion: reduce` 时波纹停止并保持隐藏，窗口与角标就是完整的静止帧。
 - 生成按钮按次操作在前、主操作在后渲染；禁用的生成按钮不会触发对应事件。
 - `surface="card"` 只增加视觉容器，不改变语义或按钮行为。
 - 预设包装组件会把 props 和 slots 透传给 `TxEmptyState`；它们只固定 `variant`，其中 `TxBlankSlate` 额外提供大尺寸 blank-slate 默认值。
@@ -199,9 +200,10 @@ code: |
 ## 审阅说明
 
 - 已对照 `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`、`types.ts`、预设包装组件和 empty-state 测试核对。
-- **实测覆盖:** variant 默认值、layout class、显式 title/description 覆盖、slot 替换、生成操作事件、disabled 操作抑制、spinner 优先级、`icon=null` 和 SSR wrapper slot 透传。
 - 建议：数据容器优先用 `variant` 表达状态；只有文案/图标需要业务化时才覆盖 `title`、`description`、`icon`。
 - 可访问性：空态标题需说明用户当前处境，操作按钮需表达下一步；不要只写“暂无”。
+- 动效降级：`prefers-reduced-motion: reduce` 下所有插画都停在一帧完整的静止画面上（2026-09-24 补齐全部变体）。循环动效停在静止姿态；由动画本身画出或摆放到位的部分——无数据图的折线及其端点与叉号、离线的斜杠、搜索气泡——设为其动画结束时的那一帧，因为它们的基础样式不是一帧完成的画面（整段虚线偏移或 opacity 0 把它们藏起，气泡则停在未平移、压住放大镜的位置）；只在运动中存在的粒子（箱子灰尘、error 波纹）保持隐藏。2026-09-23 之前的 error 插画是三角形加感叹号，外加两个没有任何样式的 `__error-pulse` 圆，作为两道静态圆环直接画穿三角形。
+- **实测覆盖:** variant 默认值、layout class、显式 title/description 覆盖、slot 替换、生成操作事件、disabled 操作抑制、spinner 优先级、error 插画结构（窗口、危险角标、两道错峰涟漪）、每个插画动画都有 reduced-motion 停止规则（源码守卫，新增 `animation: tx-empty-state-*` 没有兜底即失败）且被画出的部分停在最终帧、`icon=null` 和 SSR wrapper slot 透传。
 
 ## Source
 

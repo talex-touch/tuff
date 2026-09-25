@@ -13,6 +13,7 @@ import { availableParallelism, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { discardWorkDirectory, executableCandidates, findExecutable, materializePcmInput, runLocalProcess, withDecodeLock } from './decode'
+import { narrowToDeclaredLanguages } from './language'
 import { LocalEngineError } from './types'
 import { pcmDurationMs } from './wav'
 
@@ -43,10 +44,17 @@ export function isPrimerEcho(text: string, primer: string): boolean {
   return strip(primer).includes(candidate)
 }
 
-/** Language resolution shared by the argument builder and the echo guard. */
-function resolveLanguage(model: ResolvedLocalModel, options: LocalTranscribeOptions): string {
+/**
+ * Language to hand whisper.cpp, narrowed to what the bundle declares.
+ *
+ * Exported so an argument vector can be asserted without spawning, and so the narrowing itself is
+ * testable: a locale reaching `-l` is not a degraded transcript, it is whisper printing its usage
+ * and exiting 0 with nothing written.
+ */
+export function resolveWhisperLanguage(model: ResolvedLocalModel, options: LocalTranscribeOptions): string {
   const descriptor = model.descriptor
-  return options.language ?? descriptor.defaultLanguage ?? descriptor.languages[0] ?? 'auto'
+  const requested = options.language ?? descriptor.defaultLanguage ?? descriptor.languages[0] ?? 'auto'
+  return narrowToDeclaredLanguages(model, requested)
 }
 
 /** The primer to attach, or undefined when the model does not need one. */
@@ -160,11 +168,11 @@ export class WhisperCppLocalEngine implements LocalAsrEngine {
         ? audio.path
         : await materializePcmInput(workDirectory, audio)
       const outputBase = join(workDirectory, 'result')
-      const language = resolveLanguage(model, options)
+      const language = resolveWhisperLanguage(model, options)
       const primer = resolvePrimer(model, options, language)
 
       const startedAt = Date.now()
-      await runLocalProcess(binary, buildWhisperArgs(model, audioPath, outputBase, options, language, primer), {
+      const { stderr } = await runLocalProcess(binary, buildWhisperArgs(model, audioPath, outputBase, options, language, primer), {
         timeoutMs: options.timeoutMs ?? this.options.timeoutMs ?? 120_000,
         label: 'whisper-cli',
         ...(options.signal ? { signal: options.signal } : {}),
@@ -176,7 +184,7 @@ export class WhisperCppLocalEngine implements LocalAsrEngine {
         payload = JSON.parse(await readFile(`${outputBase}.json`, 'utf8')) as WhisperJsonPayload
       }
       catch (error) {
-        throw new LocalEngineError('LOCAL_ENGINE_DECODE_FAILED', 'whisper-cli did not produce a readable result.', {
+        throw new LocalEngineError('LOCAL_ENGINE_DECODE_FAILED', describeMissingOutput(stderr), {
           cause: error,
         })
       }
@@ -189,13 +197,33 @@ export class WhisperCppLocalEngine implements LocalAsrEngine {
   }
 }
 
+/**
+ * Why a decode that exited 0 left no result behind.
+ *
+ * whisper.cpp reports an unusable input and an unwritable output the same way: one line on
+ * stderr, then exit 0 with no file. Verified against the CLI this host uses — an audio file
+ * carrying no frames prints `error: failed to read audio file '…'`, and an `-of` path that
+ * cannot be opened prints `open: failed to open '…' for writing`; both exit 0. So the CLI's own
+ * words are the only diagnosis there is, and a message that drops them leaves a bare ENOENT.
+ */
+export function describeMissingOutput(stderr: string): string {
+  const reasons = stderr
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => /error|fail|open:/i.test(line))
+    .slice(-2)
+  if (reasons.length === 0)
+    return 'whisper-cli did not produce a readable result.'
+  return `whisper-cli wrote no readable transcription: ${reasons.join(' | ').slice(0, 400)}`
+}
+
 /** Argument vector for one decode. Kept separate so it can be asserted without spawning. */
 export function buildWhisperArgs(
   model: ResolvedLocalModel,
   audioPath: string,
   outputBase: string,
   options: LocalTranscribeOptions,
-  language = resolveLanguage(model, options),
+  language = resolveWhisperLanguage(model, options),
   primer = resolvePrimer(model, options, language),
 ): string[] {
   const threads = options.threads ?? Math.max(1, Math.min(8, availableParallelism() - 1))

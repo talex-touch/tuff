@@ -1,0 +1,30 @@
+{
+  "id": "nexus-docs-templates-batch-2",
+  "name": "nexus-docs-templates-batch-2",
+  "title": "Nexus 模板第二批：5 个新风格 + 5 个新章节",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-24",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "收尾 Files 文件名断行与根节点图标、Release 紧凑表 sha256 折行两处小瑕疵，随后提交。",
+    "blocker": "无阻塞；仅剩上述两处小瑕疵待修（不阻塞门禁）。",
+    "evidence": "implement.md 阶段 D 记录（2026-09-25）：4 个 check-*、图标名校验 916 处 0 错、分类脚本 dry-run 0、3 组 vitest 28/28、eslint 0 错、vue-tsc 仅 12 个既有错误、已跟踪与未跟踪文件 git diff --check 均干净；trellis-check 复核报告 7 项并已修复。"
+  }
+}

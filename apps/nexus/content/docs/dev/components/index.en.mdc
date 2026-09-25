@@ -13,7 +13,7 @@ verified: true
 
 ## Tuffex Components
 
-Tuffex (`@talex-touch/tuffex`) is the Vue 3 component family powering the Talex Touch ecosystem: one set of components serves the desktop CoreBox, plugin surfaces, and this docs site itself. Components are split into suites — **Basics** carries the everyday interface body, **Pro** carries rich interaction and visual expression, **AI** carries AI-native interfaces, **Data** carries visualization plus the chart family, and **Flow** carries workflow orchestration on a canvas. The suite switcher at the top of the sidebar adds Concepts as a sixth, documentation-only tab alongside these five component suites, and picking a tab takes you straight to that suite's overview.
+Tuffex (`@talex-touch/tuffex`) is the Vue 3 component family powering the Talex Touch ecosystem: one set of components serves the desktop CoreBox, plugin surfaces, and this docs site itself. Components are split into suites — **Basics** carries the everyday interface body, **Pro** carries rich interaction and visual expression, **AI** carries AI-native interfaces, **Data** carries visualization plus the chart family, and **Flow** carries workflow orchestration on a canvas. The suite switcher at the top of the sidebar lists Concepts as a sixth, documentation-only suite alongside these five, and picking a suite takes you straight to its overview.
 
 - Live specimens: every suite page opens with a preview grid — [Basics](./base-suite.en.mdc), [Pro](./pro-suite.en.mdc), [AI](./ai-suite.en.mdc), [Data](./data-suite.en.mdc), [Flow](./flow-suite.en.mdc) — where each cell is a real, interactive component; click its name to open the docs.
 - Per-suite imports: the `@talex-touch/tuffex/base`, `/pro` and `/ai` entries load on demand; the chart family ships behind the `@talex-touch/tuffex/charts` subpath of the same package.
@@ -108,17 +108,17 @@ code: |
 
 ## Suite Overview
 
-Each suite has one overview page carrying its own live preview and its own component list — the first entry under that suite's sidebar tab.
+Each suite has one overview page carrying its own live preview and its own component list — the first entry in the sidebar once that suite is picked in the switcher.
 
 | Suite | Groups | Components | Entry |
 |-------|--------|------------|-------|
 | [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 92 | `@talex-touch/tuffex/base` |
 | [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 27 | `@talex-touch/tuffex/pro` |
-| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 30 | `@talex-touch/tuffex/ai` |
+| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 31 | `@talex-touch/tuffex/ai` |
 | [Data Suite](./data-suite.en.mdc) | Charts / Visualization | 10 | `@talex-touch/tuffex/pro` (visualization + charts) + `@talex-touch/tuffex/charts` (chart family entry) |
 | [Flow Suite](./flow-suite.en.mdc) | Flow | 1 | `@talex-touch/tuffex/ai` |
 
-Concepts is the sixth suite tab — documentation-only, with no component entry of its own. This page is that tab's overview: library positioning, design foundations and utils above, the full component index below.
+Concepts is the sixth suite — documentation-only, with no component entry of its own. This page is its overview: library positioning, design foundations and utils above, the full component index below.
 
 ## Basics
 
@@ -291,6 +291,7 @@ AI-native interface components, partly adapted from [Beautiful UI](https://www.b
 - [ChatComposer](./chat-composer.en.mdc)
 - [PromptBar](./prompt-bar.en.mdc)
 - [AttachmentTray](./attachment-tray.en.mdc)
+- [ModeChip](./mode-chip.en.mdc)
 - [MessageActions](./message-actions.en.mdc)
 - [SuggestionChips](./suggestion-chips.en.mdc)
 - [TypingIndicator](./typing-indicator.en.mdc)

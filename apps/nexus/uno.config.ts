@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import {
   defineConfig,
   presetAttributify,
@@ -8,6 +9,11 @@ import {
   transformerVariantGroup,
 } from 'unocss'
 import presetWebFonts from '@unocss/preset-web-fonts'
+import { MARKDOWN_EDITOR_ICON_CLASSES } from '../../packages/tuffex/packages/components/src/markdown-editor/src/toolbar-icons'
+
+const markdownEditorToolbarIcons = fileURLToPath(
+  new URL('../../packages/tuffex/packages/components/src/markdown-editor/src/toolbar-icons.ts', import.meta.url),
+)
 
 const useWebFonts = process.env.NUXT_DISABLE_WEB_FONTS !== 'true'
   && process.env.UNOCSS_WEBFONTS === 'true'
@@ -26,6 +32,18 @@ export default defineConfig({
       ],
     },
   },
+  // The editor's own table, imported rather than copied so the two cannot
+  // drift; `configDeps` re-reads it when it changes.
+  configDeps: [markdownEditorToolbarIcons],
+  /*
+   * TxMarkdownEditor draws its toolbar with Carbon icons, by class name, from
+   * its own icon table. In dev Nexus resolves tuffex from `dist/*.js`, which
+   * the pipeline above does not scan, and no Nexus file names these icons, so
+   * the toolbar rendered fourteen grey squares: the preflight below sizes an
+   * `i-*` box and TxIcon fills it with `currentColor`, waiting for a mask rule
+   * that never came.
+   */
+  safelist: [...MARKDOWN_EDITOR_ICON_CLASSES],
   shortcuts: [
     // No icon aliases here. The set that used to live at this spot redirected
     // valid carbon names onto `ri`, a collection this app has never installed,

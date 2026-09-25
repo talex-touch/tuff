@@ -1,0 +1,199 @@
+---
+title: Inbox
+description: A three-pane inbox with folders, a virtual list, a reader and replies, plus keyboard shortcuts and new-mail alerts
+category: TemplateContent
+status: beta
+since: 0.6.0
+tags: [template, inbox, list, reader, keyboard]
+syncStatus: reviewed
+verified: false
+---
+
+## Scenario
+
+The mail and notification centre of a Tuff account: plugin review results, CI builds, sign-in alerts, channel mentions, releases and statements all land here. Hundreds of messages have to be skimmable, keyboard-driven and answerable in place, and new mail must not interrupt what is being read. The notification center takes the other road: no reader pane, and every notice carries its own quick action, so the list itself is where things get done.
+
+It fits any "list + reader" interface: a notification centre, ticket and review queues, a support inbox.
+
+## Template
+
+### Three-pane inbox
+
+:::TuffDemoWrapper{demo="TemplateInboxDemo" code-lang="vue" title="Three-pane inbox" description="Click the list, then J / K to move, E to archive, S to star and Enter to reply; three new messages arrive once it scrolls into view. Expand it for the mailbox sidebar. All data is sample data."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // Shortcuts live on the template root, not on document, and step aside
+  // while an editable element has focus.
+  function onKeydown(event: KeyboardEvent) {
+    if (event.defaultPrevented || isEditable(event.target))
+      return
+    if (event.key === 'j' || event.key === 'ArrowDown')
+      move(1)
+    else if (event.key === 'e')
+      archive(selected.value)
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Inbox" :height="580" @enter="startArrivals">
+      <div class="inbox" @keydown="onKeydown">
+        <TxSidebarNav v-if="wide" v-model="view" :items="navItems" :groups="navGroups" action-label="Compose" />
+        <TxFilterChips v-else v-model="view" :items="folderChips" aria-label="Mailboxes" />
+
+        <TxSplitter v-model="split" :min="0.3" :max="0.62">
+          <template #a>
+            <!-- TxVirtualList has no semantics: the host adds listbox, option and position -->
+            <div role="listbox" tabindex="0" aria-label="Inbox" :aria-activedescendant="activeId">
+              <TxVirtualList ref="list" :items="mails" :item-height="76" item-key="id" height="100%">
+                <template #item="{ item, index }">
+                  <div
+                    :id="item.id"
+                    role="option"
+                    :aria-selected="item.id === selectedId"
+                    :aria-setsize="mails.length"
+                    :aria-posinset="index + 1"
+                    @click="select(item.id)"
+                  >
+                    …
+                  </div>
+                </template>
+              </TxVirtualList>
+            </div>
+          </template>
+
+          <template #b>
+            <TxMessageActions :copy-text="plainBody" :appear="false">…</TxMessageActions>
+            <TxMarkdownView :content="selected.body" />
+            <TxAttachmentTray :attachments="selected.attachments" :size-formatter="formatSize" />
+            <TxChatComposer v-model="reply" placeholder="Reply…" @send="send" @attachment-add="addFiles" />
+          </template>
+        </TxSplitter>
+      </div>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .inbox { display: grid; grid-template-columns: minmax(0, 1fr); }
+
+  @container template (min-width: 960px) {
+    /* A fixed-width sidebar: only the list and the reader follow the divider */
+    .inbox { grid-template-columns: 216px minmax(0, 1fr); }
+  }
+  </style>
+---
+:::
+
+### Notification center
+
+One feed grouped by day. Every notice carries its quick action right in the row (reply, retry, approve, it was me / not me), so nothing has to be opened to be handled; around it sit quiet hours, per-source delivery, snoozing and bulk handling. Unlike the three-pane inbox there is no reader, which suits short, frequent notices that want handling quickly; long reads and back-and-forth replies still belong in the inbox.
+
+:::TuffDemoWrapper{demo="TemplateInboxNotificationsDemo" code-lang="vue" title="Notification center" description="Click the list, then J / K to move, E to toggle read and X to select; each notice's quick action runs in place and can be undone, and approvals only ever come from your own click. Three new notices arrive once it scrolls into view; during do-not-disturb they are counted, not announced. Expand it for the settings column. All data is sample data."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // During do-not-disturb new notices slip in and are counted; security notices
+  // still alert while "break through" is on
+  function deliver(notice: Notice) {
+    notices.value.unshift(notice)
+    if (dndActive.value && !(notice.urgent && dnd.bypass)) {
+      silenced.value += 1
+      return
+    }
+    showArrival(notice)
+  }
+
+  // Quick actions only ever run from the reader's click: playback delivers
+  // notices and never approves anything on your behalf
+  function runAction(notice: Notice, action: ActionId) {
+    notice.unread = false
+    notice.result = notice.results[action] ?? null
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Notification center" :height="580" @enter="startArrivals">
+      <TxModeChip
+        :label="dndActive ? 'Do not disturb · until 11:30' : 'Notifications on'"
+        :icon="dndActive ? 'i-carbon-notification-off' : 'i-carbon-notification'"
+        :tone="dndActive ? 'warning' : 'muted'"
+        @click="toggleDnd"
+      />
+      <TxFilterChips v-model="kind" :items="kindItems" aria-label="Filter by type" />
+
+      <section v-for="group in groups" :key="group.key">
+        <TxCardItem
+          v-for="notice in group.items"
+          :key="notice.id"
+          role="article"
+          clickable
+          :tabindex="notice.id === tabStop ? 0 : -1"
+          @click="markReadAndOpen(notice)"
+        >
+          <template #description>
+            {{ notice.body }}
+            <!-- A button click must not bubble into "mark read and open" -->
+            <span @click.stop>
+              <TxStatusBadge v-if="notice.result" :text="notice.result.text" :status="notice.result.tone" />
+              <template v-else>
+                <TxButton v-for="action in notice.actions" :key="action" size="sm" @click="runAction(notice, action)">…</TxButton>
+              </template>
+            </span>
+          </template>
+        </TxCardItem>
+      </section>
+
+      <TxCollapse v-model="snoozeOpen">
+        <TxCollapseItem name="snoozed" title="Snoozed · 2">…</TxCollapseItem>
+      </TxCollapse>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Anatomy
+
+| Region | Components | Role |
+|---|---|---|
+| Navigation (expanded) | [TxSidebarNav](/docs/dev/components/sidebar-nav), [TxDotIndicator](/docs/dev/components/dot-indicator) | Mailboxes and labels in two groups, unread counts derived from the data; Compose; sync status at the foot |
+| Folders (column and narrow) | [TxFilterChips](/docs/dev/components/filter-chips) | The same folder data, with unread counts |
+| Header | [TxSearchInput](/docs/dev/components/search-input), [TxButton](/docs/dev/components/button), [TxKbd](/docs/dev/components/kbd) | Search sender and subject; Compose; shortcut hints when expanded |
+| Split | [TxSplitter](/docs/dev/components/splitter) | The one draggable divider, between list and reader |
+| Message list | [TxVirtualList](/docs/dev/components/virtual-list), [TxAvatar](/docs/dev/components/avatar), [TxDotIndicator](/docs/dev/components/dot-indicator), [TxTag](/docs/dev/components/tag), [TxIconButton](/docs/dev/components/button), [TxBadge](/docs/dev/components/badge), [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxSkeleton](/docs/dev/components/skeleton) | A virtual list of about 160 messages; unread dots, labels, stars; a sort and filter menu; skeleton rows when switching folders |
+| Empty states | [TxSearchEmpty](/docs/dev/components/search-empty), [TxEmptyState](/docs/dev/components/empty-state), [TxNoSelection](/docs/dev/components/no-selection) | No search results, an empty folder, nothing selected |
+| Reader | [TxMessageActions](/docs/dev/components/message-actions), [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxMarkdownView](/docs/dev/components/markdown-view), [TxAttachmentTray](/docs/dev/components/attachment-tray) | Copy text, reply, archive, star and a More menu (mark unread, move to, mute); body, attachments and the conversation |
+| Reply | [TxChatComposer](/docs/dev/components/chat-composer), [TxAttachmentTray](/docs/dev/components/attachment-tray) | Send with a shortcut; pasted or dropped attachments |
+| Notifications | [TxToastPanel](/docs/dev/components/toast-panel) | Hangs from the list header: new mail offers View, actions offer Undo |
+| Header (Notification center) | [TxBadge](/docs/dev/components/badge), [TxModeChip](/docs/dev/components/mode-chip), [TxButton](/docs/dev/components/button), [TxIconButton](/docs/dev/components/button), [TxPopover](/docs/dev/components/popover) | Unread count; the do-not-disturb switch (a pressable icon button when narrow); select mode and Mark all read; the settings entry in the column and on narrow screens |
+| Type filter (Notification center) | [TxFilterChips](/docs/dev/components/filter-chips), [TuffSwitch](/docs/dev/components/switch) | Mentions, builds, security, plugins, system, counted from the data; Unread only |
+| Notice rows (Notification center) | [TxCardItem](/docs/dev/components/card-item), [TxAvatar](/docs/dev/components/avatar), [TxIconChip](/docs/dev/components/icon-chip), [TxDotIndicator](/docs/dev/components/dot-indicator), [TxTag](/docs/dev/components/tag), [TxStatusBadge](/docs/dev/components/status-badge) | Initials for people, a glyph for system sources; an unread dot; quick actions in place that turn into a result with Undo; Reply opens a field inside the row |
+| Row menu (Notification center) | [TxDropdownMenu / TxDropdownSubmenu](/docs/dev/components/dropdown-menu) | Mark read or unread, remind me later, mute this source (never for security), delete |
+| Bulk (Notification center) | [TxCheckbox](/docs/dev/components/checkbox), [TxButton](/docs/dev/components/button) | Select a whole group from its header (mixed while partly selected); a bulk bar to mark read, snooze or delete |
+| Snoozed (Notification center) | [TxCollapse / TxCollapseItem](/docs/dev/components/collapse) | Collapsed at the end of the feed; each notice can be unsnoozed |
+| Settings (Notification center) | [TuffSwitch](/docs/dev/components/switch), [TxSelect](/docs/dev/components/select), [TxFlatRadio](/docs/dev/components/flat-radio), [TxIconChip](/docs/dev/components/icon-chip), [TxTooltip](/docs/dev/components/tooltip) | Quiet hours as two half-hour selects (tuffex has no time picker), the days they apply on and whether security breaks through; which sources to receive; a permanent side column when expanded |
+| Empty states (Notification center) | [TxEmptyState](/docs/dev/components/empty-state) | Clear filters when a filter leaves nothing; when everything is handled, a way to the snoozed notices |
+
+## Interactions
+
+- With focus inside the template: ↑ / ↓ or J / K move between messages, E archives, S stars, Enter opens the message and focuses the reply box. Inside a text field the single-letter keys do nothing; the shortcuts sit on the template root and never touch the docs page's own keys.
+- After the stage first scrolls into view, a message arrives at 3.5, 9 and 15 seconds and the unread counts follow; the alert stays for about 4 seconds and View opens it. If the reader has scrolled down, new mail lands above the viewport and the list does not jump back to the top. With reduced motion all three are there from the start, with no alerts and no timers.
+- In the reply box Enter adds a line and ⌘ / Ctrl + Enter sends; about 0.6 seconds later the reply joins the conversation, with Undo.
+- Archive and Move to apply at once and can be undone, and the reader moves on to the next message; switching folders shows skeleton rows for about 0.4 seconds.
+- Expanded (≥ 960px) a fixed 216px sidebar takes over, so only the list and the reader follow the divider; below 640px only the list shows, the reader slides in from the right when a message opens, and Esc or Back returns to the list.
+- Notification center: clicking a row marks it read and says what the host would open, without leaving the docs page; quick actions run in place and turn into a result you can undo. Approve, decline and it was me / not me only ever come from the reader's own click; playback never presses them. Reply opens a field inside the row: Enter sends, Esc cancels.
+- Notification center: with focus inside the template, J / K or ↑ / ↓ move between notices, E toggles read, X selects (the first press enters select mode) and Esc leaves select mode. The ⋯ menu snoozes a notice or mutes its source: snoozed notices collect under Snoozed at the end of the feed, muted sources fade, and both can be undone from the toast.
+- Notification center: after the stage first scrolls into view, a notice arrives at 3, 8 and 14 seconds with an alert at the bottom right of the feed (a full-width strip when narrow), clear of the filters and group headers, and View jumps to it; if the reader has scrolled down, the feed does not jump back to the top. With do-not-disturb on (press Notifications on in the header, or set quiet hours that cover the current 10:30), new notices slip in and are counted instead, and security notices still alert while break-through is on. With reduced motion all three are there from the start. Expanded (≥ 960px) the feed is capped at 760px and the settings stay open on the right.
+
+## Adapting it
+
+- For bigger mailboxes keep a fixed row height (`item-height`) and move search and paging to the server; fill `aria-setsize` and `aria-posinset` from the real totals.
+- When bodies come from outside, keep TxMarkdownView's default sanitising and intercept link clicks in the host so the system browser opens them.
+- Rebind the shortcuts to suit the product, but keep them on the component root and let single-letter keys through inside editable elements.
+- Attachment upload belongs to the host: TxChatComposer only hands over File objects, and creating and revoking object URLs happens in the host.
+- Notification center: for real push delivery, let one set of quiet-hours and source settings decide whether a notice is inserted with an alert or only inserted; take a quick action's result from the server's reply, and on failure show an error in its place and keep the original buttons.

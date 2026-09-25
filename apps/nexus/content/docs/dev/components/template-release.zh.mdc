@@ -1,0 +1,132 @@
+---
+title: Release 发布控制台
+description: 一次桌面端发布从 CI 构建、签名、公证、分发到灰度放量的控制台，带产物矩阵、构建日志、护栏和人工审批，全部为示例数据
+category: TemplateData
+status: beta
+since: 0.6.0
+tags: [template, release, pipeline, rollout, approval]
+syncStatus: reviewed
+verified: false
+---
+
+## 场景
+
+Tuff 桌面端的一次发布：CI 依次完成构建、签名、公证和分发，然后停下来等人批准，才开始向一小部分 beta 用户灰度。控制台把流水线、五个平台的产物、构建日志、发布说明、灰度比例、护栏和本次动态放在同一屏里。流水线是自动的；凡是会推送给用户的动作，首次放量、晋级、暂停、恢复，都要你亲手确认。
+
+适合所有「先自动准备、再由人放行」的界面：移动端或桌面端的分阶段发布、功能开关的逐步放量、数据库迁移、配置下发。页面上的版本号、sha256、签名和公证结果都是示例数据，版本号带 `-demo` 标识，也没有任何下载链接。
+
+## 模板
+
+### 灰度发布
+
+:::TuffDemoWrapper{demo="TemplateReleaseDemo" code-lang="vue" title="灰度发布" description="进入视口后流水线自动跑完，停在首次放量的审批闸门，点「开始灰度」或「暂不发布」后才继续。所有版本、校验值与签名均为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const steps = reactive({ build: 'completed', sign: 'active', notarize: 'wait', stage: 'wait', rollout: 'wait' })
+  const gate = ref<'hidden' | 'waiting' | 'allowed' | 'denied'>('hidden')
+  // 首次放量之前，目标就是闸门请求的 5%
+  const rollout = reactive({ started: false, current: 0, target: 5, halted: false })
+
+  // CI 各步按计划推进，到分发完成为止；之后不再安排任何计时器
+  function run() {
+    later(1000, () => Object.assign(steps, { sign: 'completed', notarize: 'active' }))
+    // …公证、分发…
+    later(4300, () => {
+      steps.rollout = 'active'
+      gate.value = 'waiting'
+    })
+  }
+
+  // 只有读者点「开始灰度」才会走到这里
+  function onApprove({ remember }: { remember: boolean }) {
+    gate.value = 'allowed'
+    autoHalt.value = remember // 复选框的文案改成了「护栏失守时自动暂停」
+    Object.assign(rollout, { started: true, current: 5, target: 25 })
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Release 发布控制台" :height="600" @enter="run">
+      <template #default="{ width, height }">
+        <header class="release__head">
+          <TxVersionCapsule v-model:panel="panel" version="v2.5.0-demo.4" channel="DEMO">
+            <template #download="{ close }">
+              <!-- builds 不带 href：示例构建不提供下载 -->
+              <TxVersionDownloadPanel :notice="demoNotice" :builds="builds" @select="close()" />
+            </template>
+          </TxVersionCapsule>
+          <TxTag label="示例数据" variant="plain" />
+        </header>
+
+        <!-- :active="-1"：每一步的 status 全部受控，暂停时灰度这一步才能显示为 error -->
+        <TxSteps size="small" :active="-1">
+          <TxStep v-for="key in STEP_KEYS" :key="key" :title="titles[key]" :status="steps[key]" :clickable="false" />
+        </TxSteps>
+
+        <TxDataTable :columns="columns" :data="artifacts" :max-height="width >= 960 ? Math.round(height * 0.42) : undefined">
+          <template #cell-sha="{ row }">
+            <code>{{ row.hash.slice(0, 4) }}…{{ row.hash.slice(-4) }}</code>
+            <TxCopyButton :text="`SAMPLE-${row.hash}`" copy-label="复制示例 sha256" />
+          </template>
+        </TxDataTable>
+        <div class="release__log">
+          <TxCodeStream :code="log" :revealed-lines="revealed" :min-height="0" />
+        </div>
+
+        <aside class="release__rail">
+          <TxToolConfirmation
+            v-if="gate === 'waiting'"
+            tool-name="rollout.start" risk="execute"
+            allow-label="开始灰度" deny-label="暂不发布" remember-label="护栏失守时自动暂停"
+            @approve="onApprove" @deny="onDeny"
+          />
+          <TxTextMorph :text="rollout.current" />
+          <TxSegmentedSlider v-model="rollout.target" :segments="[1, 5, 25, 50, 100].map(value => ({ value, label: `${value}%` }))" />
+          <TxButton :disabled="!!promoteReason" @click="openModal('promote')">晋级到 {{ rollout.target }}%</TxButton>
+          <TxSignalMeter v-for="row in guardrails" :key="row.key" :value="row.level" :tone="row.tone" :label="row.label" />
+          <TxTimeline>
+            <TxTimelineItem v-for="entry in timeline" :key="entry.id" :title="entry.text" :time="entry.time" :color="entry.color" />
+          </TxTimeline>
+        </aside>
+
+        <TxModal v-model="modal.open" :title="modalTitle">…</TxModal>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 组成
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 顶栏 | [TxVersionCapsule](/docs/dev/components/version-capsule)、[TxTag](/docs/dev/components/tag)、[TxWorkingIndicator](/docs/dev/components/working-indicator)、[TxStatusBadge](/docs/dev/components/status-badge)、[TxButton](/docs/dev/components/button) | 当前示例版本；下载面板只列示例构建、没有下载链接，历史面板可切换发布说明；常驻「示例数据」标记；流水线计时或发布状态；「暂停发布」 |
+| 流水线 | [TxSteps](/docs/dev/components/steps) | 构建 → 签名 → 公证 → 分发 → 灰度，每一步的状态都受控，描述写耗时；宽屏竖排在左栏 |
+| 产物 | [TxDataTable](/docs/dev/components/data-table)、[TxCopyButton](/docs/dev/components/button)、[TxStatusBadge](/docs/dev/components/status-badge) | macOS、Windows、Linux 五个产物的大小、示例 sha256 与签名、公证状态；文件名沿用 electron-builder 的真实命名方式 |
+| 日志 | [TxCodeStream](/docs/dev/components/code-stream) | 逐行出现的构建日志，外面包一层滚动容器并自动追到末尾；第一行注明是示例 |
+| 发布说明 | [TxMarkdownView](/docs/dev/components/markdown-view) | 当前版本的说明；在版本历史里选别的版本即切换 |
+| 灰度 | [TxTextMorph](/docs/dev/components/text-morph)、[TxProgressBar](/docs/dev/components/progress-bar)、[TxSegmentedSlider](/docs/dev/components/segmented-slider)、[TxAlert](/docs/dev/components/alert) | 当前比例与目标档位（1 / 5 / 25 / 50 / 100%），晋级按钮和不可用的原因；暂停后显示提醒 |
+| 审批闸门 | [TxToolConfirmation](/docs/dev/components/tool-confirmation) | 首次放量前一直等你点「开始灰度」或「暂不发布」 |
+| 护栏 | [TxSignalMeter](/docs/dev/components/signal-meter)、[TxSwitch](/docs/dev/components/switch)、[TxSparkChart](/docs/dev/components/spark-chart) | 无崩溃会话、更新失败率、回滚请求三项，是否达标同时用文字标出；「模拟崩溃率下滑」开关；宽屏加一条走势 |
+| 本次动态 | [TxTimeline](/docs/dev/components/timeline) | 这次发布发生过的事，新的在上面 |
+| 确认与反馈 | [TxModal](/docs/dev/components/modal)、[TxToastPanel](/docs/dev/components/toast-panel) | 晋级、暂停、恢复前再确认一次；操作结果在舞台里提示 |
+
+## 交互要点
+
+- 模板进入视口后，流水线在约 4 秒内依次跑完签名、公证和分发：日志逐行出现，产物表里 macOS 两行先显示「公证中」再变成已公证。之后停在首次放量的审批闸门，不设任何计时器，旁边提示「发布不会自动开始」。开启「减弱动态效果」时直接显示到闸门为止的状态。
+- 点「开始灰度」后，比例从 0 滚到 5%，三项护栏逐项填好，「晋级」才可用；点「暂不发布」则只分发到预发、不推送给任何人，可以随时重新申请。闸门里的复选框改成了「护栏失守时自动暂停」，这是页面上唯一的自动动作，而且只往安全的方向走。
+- 在分段滑块上选目标档位，再点「晋级到 25%」，确认框会列出护栏检查项；护栏还在收集、有一项未达标或目标不高于当前比例时，按钮不可用，并写明原因。
+- 顶栏的「暂停发布」和灰度卡里的「恢复发布」都要在确认框里再点一次。打开「模拟崩溃率下滑」，无崩溃会话会跌破 99.50%：勾过自动暂停就立即暂停并记一条动态，没勾就挡住晋级。
+- 版本胶囊的下载面板里选任何构建都只提示「示例构建，不提供下载」；历史面板选一个旧版本，「说明」切到它的发布说明。面板打开时按 Esc 只关面板，不会收起全屏。复制 sha256 得到的文本带 `SAMPLE-` 前缀。
+- 宽屏（≥ 960px）左栏竖排流水线，中间是产物表和并排的日志与说明，右栏是灰度、护栏走势和动态；表格区够宽时签名与公证分成两列、文件名收在平台下方；列内（640–959px）用「日志 / 产物 / 说明」页签；窄屏（< 640px）把灰度作为第一个页签，产物表只留平台和状态两列，sha256 收进平台一栏。
+
+## 改造建议
+
+- 接真实 CI：把 `pipelinePlan()` 里排好的定时步骤换成构建系统推来的事件，每个事件更新一步的状态并追加一行日志，其余界面都从这些状态推导。
+- 审批留给人：首次放量这类动作用 TxToolConfirmation 并让它无限等待；它的「记住」复选框无法隐藏，只给它安排往安全方向的含义，比如失守自动暂停，不要用来记住「以后自动晋级」。
+- TxSteps 的 `active` 下标会盖过单步的 `status`，要显示「已暂停」这类错误态，就传 `:active="-1"`，每一步的状态全部由你控制。
+- 示例数据要一眼能认出来：版本号用永远不会发布的预发布标识，校验值和签名标「示例」，TxVersionDownloadPanel 的构建不传 `href`（传了就会渲染成可下载的链接）。

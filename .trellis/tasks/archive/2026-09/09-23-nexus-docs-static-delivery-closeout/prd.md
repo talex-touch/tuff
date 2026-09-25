@@ -34,12 +34,12 @@
 
 ## Acceptance Criteria
 
-- [ ] `pnpm -C apps/nexus run build` 后：`dist/404.html` 存在、`#__nuxt` 非空且含 `aria-label="404"`；`dist/_redirects` 为 `/docs /en/docs 308`、`/terms /license 307`、`/docs/* /en/docs/:splat 308`，不含任何非法状态码行；`dist/_routes.json` exclude 含 `/docs`、`/docs/*`；`dist/_headers` 含 `/en/docs`、`/zh/docs` 两个块。
-- [ ] `npx wrangler pages dev dist` 本地：`/docs/dev` → 308 `/en/docs/dev`；`/docs/dev/components/button.md` → 308 `/en/docs/dev/components/button.md`；`/en/docs/nope` → 404 且正文为 404 页；`/en/docs/dev/components/button` → 200 含正文。
-- [ ] 部署后线上复测同样四条，且 `/docs/dev` 的 ttfb 与 `/en/docs/dev` 静态文件同量级。
-- [ ] `node build/check-worker-bundle.mjs`：新增断言通过，findings 不多于基线。
-- [ ] R4 有开启前后两份探针记录；spec 已按 R5 更新；`08-27` 任务已归档。
-- [ ] `docs-prerender-routes.test.ts`、`static-cache-headers.test.ts`、`check-worker-bundle.test.ts`、`materialize-docs-index-aliases.test.ts` 通过；typecheck、eslint、`git diff --check` 通过。
+- [x] `pnpm -C apps/nexus run build` 后：`dist/404.html` 存在、`#__nuxt` 非空且含 `aria-label="404"`；`dist/_redirects` 为 `/docs /en/docs 308`、`/terms /license 307`、`/docs/* /en/docs/:splat 308`，不含任何非法状态码行；`dist/_routes.json` exclude 含 `/docs`、`/docs/*`；`dist/_headers` 含 `/en/docs`、`/zh/docs` 两个块。
+- [x] `npx wrangler pages dev dist` 本地：`/docs/dev` → 308 `/en/docs/dev`；`/docs/dev/components/button.md` → 308 `/en/docs/dev/components/button.md`；`/en/docs/nope` → 404 且正文为 404 页；`/en/docs/dev/components/button` → 200 含正文。
+- [x] 部署后线上复测同样四条，且 `/docs/dev` 的 ttfb 与 `/en/docs/dev` 静态文件同量级。
+- [x] `node build/check-worker-bundle.mjs`：新增断言通过，findings 不多于基线。
+- [x] R4 有开启前后两份探针记录；spec 已按 R5 更新；`08-27` 任务已归档。
+- [x] `docs-prerender-routes.test.ts`、`static-cache-headers.test.ts`、`check-worker-bundle.test.ts`、`materialize-docs-index-aliases.test.ts` 通过；typecheck、eslint、`git diff --check` 通过。
 
 ## Out of Scope
 

@@ -32,6 +32,8 @@ export interface ChatListProps {
   stagger?: boolean
 }
 
+export type ChatComposerTrayPlacement = 'top' | 'bottom'
+
 export interface ChatComposerProps {
   modelValue?: string
   placeholder?: string
@@ -43,15 +45,27 @@ export interface ChatComposerProps {
   disabled?: boolean
   submitting?: boolean
   allowAttachmentWhileSubmitting?: boolean
+  /** Resting height of the textarea, in lines; it grows with its content from here. */
   minRows?: number
+  /** Height cap of the textarea, in lines; content scrolls past it. Floored at `minRows`. */
   maxRows?: number
   sendOnEnter?: boolean
   sendOnMetaEnter?: boolean
   allowEmptySend?: boolean
+  /** Accessible name of the icon-only send button. */
   sendButtonText?: string
   showAttachmentButton?: boolean
+  /** Accessible name of the icon-only attachment button. */
   attachmentButtonText?: string
   attachments?: ChatComposerAttachment[]
+  /**
+   * Which side of the input card the `tray` slot sits on. Changing it slides the
+   * card across the tray; the outer box keeps its size when both sides' trays are
+   * equally tall.
+   */
+  trayPlacement?: ChatComposerTrayPlacement
+  /** Accessible name for the tray. When set, the tray is a labelled `role="group"`. */
+  trayLabel?: string
 }
 
 export interface ChatComposerAttachment {

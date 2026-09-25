@@ -165,5 +165,5 @@ All three formatters ship English defaults: TuffEx carries no message catalog, s
 - **Provenance:** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 - **Divergence from upstream:** Added rows render at their position in `rows` rather than being pinned last as upstream hardcodes, which preserves diff ordering and supports more than one addition; `modified` is new to this port and has no upstream counterpart.
 - **Upstream defect fixed:** Upstream tints outgoing rows with an inline `style.background`, which outranks its own hover rule and leaves exactly the rows a reader wants to inspect without hover feedback. This port drives the tint from a class instead.
-- **Dark theme:** Red and green fills come from `--tx-bui-*-tint` (translucent overlays), never `--tx-color-success-light-9`, which still mixes toward white in dark mode.
+- **Dark theme:** Red and green fills come from `--tx-bui-*-tint` (translucent overlays), rather than the opaque `--tx-color-success-light-9` family, so the tint reads the same on any surface the table sits on.
 - **Known limitation:** Under high-contrast themes (`html[data-tx-contrast='high']`) the `--tx-bui-*` tokens keep their upstream values and do not join the high-contrast ramp.

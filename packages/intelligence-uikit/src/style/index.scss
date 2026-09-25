@@ -169,29 +169,19 @@
   backdrop-filter: blur(16px) saturate(160%);
 }
 
-.tx-ai-composer {
-  position: relative;
+// `.tx-ai-composer` lands on TxChatComposer's root, which is the shell around an
+// optional tray; the surface is `.tx-chat-composer__card`. The composer keeps the
+// library's card (ring, elevation, borderless auto-growing textarea, icon buttons)
+// rather than repainting the root. The submitting glow runs along the card's
+// bottom edge and is drawn on the card, not the root. The card is opaque and
+// stacked above the root, so a glow on the root would paint underneath it. And
+// clipping the root for the glow would clip the card's elevation shadow too; the
+// card's own overflow clip leaves its own shadow alone.
+.tx-ai-composer.is-submitting .tx-chat-composer__card {
   overflow: hidden;
-  border-color: color-mix(in srgb, var(--tx-border-color, #dcdfe6) 78%, transparent);
-  border-radius: 20px;
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 96%, transparent);
-  box-shadow: var(--tx-box-shadow-light, 0 12px 30px rgb(0 0 0 / 7%));
-  gap: 7px;
-  padding: 10px 12px;
-  transition:
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    background 180ms ease;
 }
 
-.tx-ai-composer:focus-within {
-  border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, var(--tx-border-color, #dcdfe6));
-  box-shadow:
-    0 16px 42px rgb(23 26 29 / 9%),
-    0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, transparent);
-}
-
-.tx-ai-composer.is-submitting::before {
+.tx-ai-composer.is-submitting .tx-chat-composer__card::before {
   content: '';
   position: absolute;
   inset-inline: 0;
@@ -205,7 +195,7 @@
   );
 }
 
-.tx-ai-composer.is-submitting::after {
+.tx-ai-composer.is-submitting .tx-chat-composer__card::after {
   content: '';
   position: absolute;
   left: -40%;
@@ -235,61 +225,6 @@
   padding: 4px 9px;
   color: var(--tx-text-color-primary, #111827);
   font-size: 12px;
-}
-
-.tx-ai-composer .tx-chat-composer__input {
-  min-width: 0;
-}
-
-.tx-ai-composer .tx-chat-composer__textarea {
-  min-height: 48px;
-  height: 48px;
-  max-height: 168px;
-  resize: none;
-  border-color: color-mix(in srgb, var(--tx-border-color, #dcdfe6) 78%, transparent);
-  border-radius: 16px;
-  background: var(--tx-fill-color-blank, #fff);
-  padding: 10px 12px;
-  font-size: 14px;
-  line-height: 1.45;
-  overflow-y: auto;
-  transition:
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    background 180ms ease;
-}
-
-.tx-ai-composer .tx-chat-composer__textarea:focus {
-  border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 40%, var(--tx-border-color, #dcdfe6));
-  box-shadow: none;
-}
-
-.tx-ai-composer .tx-chat-composer__actions {
-  gap: 8px;
-}
-
-.tx-ai-composer .tx-chat-composer__actions-left {
-  min-width: 0;
-}
-
-.tx-ai-composer .tx-chat-composer__actions-left,
-.tx-ai-composer .tx-chat-composer__actions-right {
-  gap: 8px;
-}
-
-.tx-ai-composer .tx-button {
-  min-height: 32px;
-  border-radius: 999px;
-}
-
-.tx-ai-composer .tx-chat-composer__actions-left .tx-button {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 80%, transparent);
-  color: var(--tx-text-color-secondary, #6b7280);
-}
-
-.tx-ai-composer .tx-chat-composer__actions-right .tx-button {
-  min-width: 74px;
 }
 
 .tx-ai-suggestion {
@@ -637,7 +572,7 @@
   .tx-ai-markdown.is-streaming .markdown-body > *,
   .tx-ai-stream-text__cursor,
   .tx-ai-rich-block__thought.is-running .tx-ai-rich-block__thought-title,
-  .tx-ai-composer.is-submitting::after {
+  .tx-ai-composer.is-submitting .tx-chat-composer__card::after {
     animation: none;
   }
 

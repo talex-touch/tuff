@@ -6,6 +6,7 @@ async function highlightAll() {
 
   await nextTick()
   const nodes = Array.from(document.querySelectorAll<HTMLElement>('pre code:not(.tuff-code-block__code)'))
+    .filter(node => !node.closest('.not-prose'))
   if (!nodes.length)
     return
 

@@ -58,7 +58,8 @@ Focusing anything inside an anchored panel right after `open` flips does not wor
 which is two `nextTick`s + `waitForFirstPosition` + `waitForStablePanelSize` (2+ rAF) later, and
 `focus()` inside a `visibility: hidden` subtree is refused. jsdom ignores CSS visibility, so a
 single-`nextTick` focus passes its unit test and silently fails in the app. Host pattern
-(`HomeModelMenu.focusSearchWhenShown`): retry `focus()` once per `requestAnimationFrame`, stop
+(`HomeModelMenu.focusSearchWhenShown`; the Nexus docs sidebar's suite switcher does the same to
+land on its checked `menuitemradio`): retry `focus()` once per `requestAnimationFrame`, stop
 when `document.activeElement` is the target, bound the loop (30 frames), and abort on close /
 unmount via a run token. Known gap: the primitive's own `focusFirstItem()` is a single
 `nextTick` and is subject to the same failure — treat "first item focused on open" as unverified
@@ -73,6 +74,10 @@ three layers: TxPopover applies it to its own wrapper, forwards it to TxTooltip 
 `is-full-width` class to the anchor layer via `referenceClass`. If a trigger row inside a
 panel won't stretch, check this chain before adding `:global` width hacks — HeaderUserMenu
 accumulated ~40 lines of dead/misaimed overrides against exactly this bug.
+
+`TxDropdownMenu` does not declare `referenceFullWidth`, but its root is `TxPopover` and attributes
+fall through, so `<TxDropdownMenu reference-full-width>` reaches all three layers (the Nexus docs
+sidebar's full-width suite switcher relies on this).
 
 ## Verification commands
 

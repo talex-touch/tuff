@@ -14,7 +14,7 @@ verified: true
 
 ### 默认样式
 
-基础卡片布局，不包含趋势和进度增强。
+基础卡片布局，不包含趋势和进度增强。`iconClass` 渲染成一枚大号淡色水印，裁在卡片右下角；类里的颜色类给它着色，角落随之铺开一层同色柔光。
 
 ::TuffDemoWrapper{demo="StatCardDefaultVariantDemo" code-lang="vue"}
 ---
@@ -23,7 +23,7 @@ code: |
     <TxStatCard
       :value="2847"
       label="插件总数"
-      icon-class="i-carbon-download text-6xl text-[var(--tx-color-primary)]"
+      icon-class="i-carbon-download text-[var(--tx-color-primary)]"
       clickable
     />
   </template>
@@ -32,7 +32,7 @@ code: |
 
 ### 趋势样式
 
-通过 `insight` 展示变化趋势和对比信息。
+通过 `insight` 展示变化趋势和对比信息。符号、数值与单位合成一枚带色胶囊（如 `+16.7%`）。本例第一张卡片使用内置的 SVG 趋势箭头，第二张通过 `insight.iconClass` 换成自定义图标。
 
 ::TuffDemoWrapper{demo="StatCardInsightVariantDemo" code-lang="vue"}
 ---
@@ -46,7 +46,6 @@ code: |
     to: activeUsers.value,
     type: 'delta',
     color: 'success',
-    iconClass: 'i-carbon-growth',
   })
 
   const resourceLoad = ref(42)
@@ -91,13 +90,13 @@ code: |
         <TxStatCard
           :value="activeUsers"
           label="活跃用户"
-          icon-class="i-carbon-task text-6xl text-[var(--tx-color-success)]"
+          icon-class="i-carbon-task text-[var(--tx-color-success)]"
           :insight="activeInsight"
         />
         <TxStatCard
           :value="resourceLoad"
           label="资源负载"
-          icon-class="i-carbon-chip text-6xl text-[var(--tx-color-warning)]"
+          icon-class="i-carbon-chip text-[var(--tx-color-warning)]"
           :insight="resourceInsight"
         >
           <template #value>
@@ -215,8 +214,8 @@ code: |
 |------|------|---------|------|
 | `value` | `number \| string` | - | 主数值；传入 number 时会使用默认数字格式化 |
 | `label` | `string` | - | 指标标签；在 insight/progress 布局中显示在顶部 |
-| `iconClass` | `string` | `''` | 图标 class（UnoCSS Icones） |
-| `clickable` | `boolean` | `false` | 开启 hover/press 视觉状态，不会自动添加点击行为 |
+| `iconClass` | `string` | `''` | 装饰图标 class（UnoCSS Icones）。默认与 insight 布局中渲染为右下角的 88px 水印，尺寸由组件决定，类里的颜色类负责着色并点亮柔光；progress 布局中画在进度环中心 |
+| `clickable` | `boolean` | `false` | 只加指针光标；hover 反馈对所有卡片生效，组件不绑定点击行为 |
 | `insight` | `StatCardInsight` | - | 指标变化对象；启用后 label 上移并渲染趋势信息 |
 | `variant` | `StatCardVariant` | `'default'` | 布局变体（`default` \| `progress`） |
 | `progress` | `number` | - | 进度百分比；传入即启用进度变体，进度环会裁剪到 0-100 |
@@ -229,9 +228,9 @@ code: |
 | `from` | `number` | - | 基准值 |
 | `to` | `number` | - | 当前值 |
 | `type` | `'percent' \| 'delta'` | `'percent'` | 百分比变化或绝对增量 |
-| `color` | `'success' \| 'danger' \| 'warning' \| 'info' \| string` | - | 自定义颜色 |
-| `iconClass` | `string` | - | 指标图标 |
-| `suffix` | `string` | - | 自定义后缀（默认 percent 为 `%`） |
+| `color` | `'success' \| 'danger' \| 'warning' \| 'info' \| string` | - | 自定义颜色，同时决定胶囊底色（该色的 12% 混色）；缺省时 ≥0 为 success、<0 为 danger |
+| `iconClass` | `string` | - | 自定义趋势图标 class，渲染为 `<i>`；缺省时使用内置 SVG 箭头（≥0 上升、<0 下降） |
+| `suffix` | `string` | - | 自定义后缀（默认 percent 为 `%`）；与数值紧贴，需要空格时写进后缀，如 `' pts'` |
 | `precision` | `number` | - | 小数精度 |
 
 
@@ -243,23 +242,44 @@ code: |
 | `label` | 自定义标题区域 |
 | `meta` | 进度变体底部说明 |
 
+### CSS 变量
+
+| 变量 | 来源 | 说明 |
+|------|------|------|
+| `--tx-stat-card-icon-opacity` | 组件默认 `0.16`，可在组件的 `style` 上覆写 | 右下角装饰图标的静止透明度。 |
+| `--tx-stat-card-icon-opacity-hover` | 组件默认 `0.26`，可在组件的 `style` 上覆写 | hover 时装饰图标的透明度。 |
+| `--tx-stat-card-icon-color` | 组件写入（图标计算色） | 只在图标着色时写到根节点，灰色图标会移除它；柔光的 `--tx-stat-card-glow-color` / `--tx-stat-card-glow-color-soft` 由它按 34% / 12% `color-mix` 混出。由组件独占，不要用 `:style` 绑定。 |
+
+## 交互契约
+
+- 装饰图标：默认与 insight 布局把 `iconClass` 渲染成 88px、无模糊的水印，静止透明度 `0.16`，从右下角溢出并被卡片圆角裁掉；progress 布局则把图标以 22px 画在进度环中心，颜色跟随进度环，不渲染水印与柔光。水印尺寸由组件决定——选择器优先级高于 `text-6xl` 这类宿主工具类，尺寸类不生效；`iconClass` 里的颜色类仍会着色，未着色的图标继承次要文字色。
+- 柔光只跟随着色图标：挂载时以及 `iconClass` / `variant` 变化时，组件读取图标的计算色；有色相时写入根节点的 `--tx-stat-card-icon-color` 并加上 `tx-stat-card--tinted`，右下角淡入一层同色径向柔光。灰色图标（RGB 通道极差 < 24）不出柔光：它没有色相可发光，混进去只会在数字后面留下一团灰雾。
+- hover 对所有卡片生效：描边立即变为 `--tx-border-color`（颜色不做过渡），角落图标向内位移 4px 并提亮到 `0.26`，柔光增强。`clickable` 只额外加上指针光标。
+- 涨幅胶囊：符号、数值、单位紧贴渲染为一个整体（`+16.7%`），底色是涨幅色的 12% 混色。默认趋势图标是内联 SVG，不依赖宿主扫描图标类；显式 `insight.iconClass` 仍渲染为 `<i>` 图标。数值与涨幅都使用等宽数字，刷新时不抖动。
+
 ## 最佳实践
 
 - 计数类指标优先传 number，让默认格式化补充分隔符；单位或动效布局复杂时再使用 `value` 插槽。
 - 绝对变化用 `insight.type="delta"`，相对变化用 `insight.type="percent"`；默认精度分别是 `0` 与 `1`。
+- 涨幅的符号、数值与单位紧贴成一个整体；单位前需要空格时把空格写进 `suffix`（如 `' pts'`），不要靠外部样式拉开。
 - `variant="progress"` 只用于健康度、容量、配额、完成率等有边界的指标，不用于无限增长的总量。
 - `clickable` 只提供视觉反馈。需要跳转或操作时，应由外层按钮/链接或相邻操作控件承载真实交互。
+- 用 `iconClass` 里的颜色类区分指标类别（如 `i-carbon-task text-[var(--tx-color-success)]`），它同时给水印和柔光着色；不带颜色类的图标不出柔光，适合一排卡片里需要安静的那张。不必再传 `text-6xl` 这类尺寸类。
 
 ## 审阅说明
 
 - 源码：`packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`
 - 建议：普通指标使用默认变体，增减趋势使用 `insight`，0-100 边界明确的健康度/容量使用 `variant="progress"`。
+- 视觉契约变更（2026-09-23）：装饰层不再渲染模糊放大的第二个图标 `.tx-stat-card__decoration-icon`，`.tx-stat-card__decoration` 里只剩 `.tx-stat-card__glow`；默认趋势图标从 `i-carbon-growth` / `i-carbon-arrow-down` 图标类改为内联 SVG `.tx-stat-card__insight-icon--trend`；涨幅文本包进 `.tx-stat-card__insight-text`；根节点新增 `tx-stat-card--tinted`。针对旧 class 或旧图标类写的覆盖样式需要迁移。props、slots、events 与 `progress` 变体不变。
+- 被否决的方案：把图标收进右上角的小号着色徽章。CoreApp 插件页（`PluginFeatures` / `PluginStorage`）传入 `icon-class="i-ri-… text-6xl text-<颜色>"`，依赖的正是大号彩色图标的气质，因此保留大图标，改成裁在角落的淡色水印。旧 hover 把装饰层放大到 2.05 倍并模糊、图标层旋转 10°，一并移除。
+- 进度环修复（2026-09-24）：`--tx-stat-card-progress` 用 `@property` 注册、绑定在 `.tx-stat-card__progress` 上，而真正画弧的进度环是它的子元素。它原先注册为 `inherits: false`，进度环永远只读到初始值 0%，弧从未画出——本文档与 CoreApp 存储页的使用率卡片都是如此。现在改为可继承。环内圆盘也统一为进度色的 16% 混色；此前一条 `@supports (color: color-mix(…))` 覆盖把它改混进 `rgba(0, 0, 0, 0.45)`，暗色下像一块深色镜片，亮色下是环心一团灰斑。
 - 可访问性：组件根节点使用 `role="group"`；在 Dashboard 中应给相邻标题或上下文，避免只显示裸数字。
+- 动效降级：柔光挂载时 0.6s 淡入，hover 时图标的位移与提亮是 0.35s 过渡，进度弧变化是 0.6s 过渡；`prefers-reduced-motion: reduce` 下这些过渡全部关闭（进度弧直接跳到新值）、hover 不再位移，提亮、描边与柔光增强即时生效。
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`。
 - Type contracts: `packages/tuffex/packages/components/src/stat-card/src/types.ts` 导出 `StatCardProps`、`StatCardInsight` 与变体类型。
-- **实测覆盖:** `packages/tuffex/packages/components/src/stat-card/__tests__/stat-card.test.ts` 覆盖默认渲染、自定义 value 与 label 插槽、百分比与增量 insight、进度激活与进度环裁剪，以及自定义 progress meta 插槽。
+- **实测覆盖:** `packages/tuffex/packages/components/src/stat-card/__tests__/stat-card.test.ts` 覆盖默认渲染与 `aria-labelledby` 命名、`ariaLabel` 覆盖、指针光标只挂在 `--clickable` 上（源码断言）、自定义 value 与 label 插槽、百分比与增量 insight（默认内联 SVG 趋势图标、显式 `iconClass`、`+20%` 整体渲染、负值不加 `+`）、柔光只跟随着色图标（`rgb()` 与 `color(srgb …)` 判为着色，灰色不写 `--tx-stat-card-icon-color`）、进度激活与进度环裁剪、进度环读取父元素上绑定的百分比（`@property … inherits: true`，源码断言）且其过渡在 reduced-motion 下关闭、省略 `progress` 时用 ≤100 的数值推断进度，以及自定义 progress meta 插槽。水印尺寸、hover 视觉以及水印与柔光的 reduced-motion 规则只在样式层，vitest 不执行 `<style>`，单测没有断言它们。
 
 <TuffDocSourceLink />

@@ -1,0 +1,115 @@
+---
+title: Files
+description: A file manager with a folder tree, breadcrumbs, grid and list views, bulk actions, a context menu, drag-in upload and quick look
+category: TemplateContent
+status: beta
+since: 0.6.0
+tags: [template, files, tree, upload, context-menu]
+syncStatus: reviewed
+verified: false
+---
+
+## Scenario
+
+The files of a Tuff workspace: documents, screenshots, clipboard exports and themes that sync between the devices you sign in on, plus a Plugin storage partition with one folder per plugin. Its limits are the host's real ones: at most 10 MB per file, 100 MB in total and 1,000 files, no sub-folders, and names made of letters, digits and `. _ -` only.
+
+It fits any "tree + files + preview" interface: synced drives and cloud storage, asset libraries, the data folders of an app or plugin, ticket attachments.
+
+## Template
+
+### Workspace files
+
+:::TuffDemoWrapper{demo="TemplateFilesDemo" code-lang="vue" title="Workspace files" description="Click to select, ⌘ / Ctrl or Shift click for more; double-click or Enter opens, Space quick-looks, F2 renames; right-click or Shift+F10 opens the menu. Drag files from your desktop onto the file area to upload them; plugin folders turn away files that break the real limits. Once it scrolls into view, two screenshots sync in from a MacBook; expand past 1200px for the preview pane. All data is sample data; files stay in the browser and are never really uploaded or downloaded."}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // Plugin storage follows the host's real rules: 10 MB per file, 100 MB in total, 1,000 files, flat
+  const PLUGIN_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
+
+  // One manual menu for the whole template: tiles and the empty area open it alike
+  const menuRef = ref()
+  const menu = reactive({ ids: [] as string[], anchorId: null as string | null })
+  function onContextMenu(event: MouseEvent) {
+    event.preventDefault()
+    prepareMenu(event.target) // fills in menu.ids and menu.anchorId
+    menuRef.value.openAt(event)
+  }
+
+  // TxContextMenu does not hand focus back when it closes; the template returns it to the tile
+  function onMenuClose() {
+    tileOf(menu.anchorId)?.focus({ preventScroll: true })
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Workspace files" :height="580" @enter="syncFromMacBook">
+      <TxBreadcrumb :items="crumbs" separator-icon="i-carbon-chevron-right" @click="onCrumb" />
+
+      <TxTree :nodes="folders" :model-value="folder" :expanded-keys="expanded" @update:model-value="open">
+        <template #item="{ node, expanded, hasChildren, toggleExpand }">
+          <!-- A row click selects; the caret needs .stop or it selects the row too -->
+          <button v-if="hasChildren" type="button" tabindex="-1" @click.stop="toggleExpand()">…</button>
+          <span :class="expanded ? 'i-carbon-folder-open' : 'i-carbon-folder'" />
+          {{ node.label }}
+        </template>
+      </TxTree>
+
+      <div role="listbox" aria-multiselectable="true" @keydown="onGridKeydown" @contextmenu="onContextMenu">
+        <div v-for="file in files" :key="file.id" role="option" :aria-selected="selected.has(file.id)">…</div>
+      </div>
+
+      <!-- Laid over the file area while desktop files are dragged in. It only hands over File
+           objects: progress, thumbnails and revoking their URLs belong to the host -->
+      <div v-show="draggingFiles" class="drop-layer">
+        <TxFileUploader ref="uploader" :model-value="[]" multiple @add="queueUploads" />
+      </div>
+
+      <TxContextMenu ref="menuRef" trigger="manual" @close="onMenuClose">
+        <template #menu>
+          <TxContextMenuItem shortcut="F2" @select="rename">Rename</TxContextMenuItem>
+          <TxContextMenuDivider />
+          <TxContextMenuItem danger shortcut="⌫" @select="remove">Delete</TxContextMenuItem>
+        </template>
+      </TxContextMenu>
+
+      <!-- Progress changes several times a second: the tray stays silent and one
+           sr-only status announces the start and the end instead -->
+      <TxToastPanel :open="trayOpen" live="off">…</TxToastPanel>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Anatomy
+
+| Region | Components | Role |
+|---|---|---|
+| Path and toolbar | [TxBreadcrumb](/docs/dev/components/breadcrumb), [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxIconButton](/docs/dev/components/button), [TxSearchInput](/docs/dev/components/search-input), [TxFlatRadio](/docs/dev/components/flat-radio), [TxButton](/docs/dev/components/button) | Crumbs go back up (no `href`, so the docs page never navigates); narrow keeps the last crumb and folds the parents into a ⋯ menu; search the current folder; switch grid and list; new folder and upload |
+| Folder tree | [TxTree](/docs/dev/components/tree) | The `#item` slot draws 28px rows, open and closed folder icons and file counts; expansion is controlled, and entering a folder opens its parents; drop tiles on a folder in the tree to move them |
+| Quota | [TxProgressBar](/docs/dev/components/progress-bar), [TxStatusBadge](/docs/dev/components/status-badge) | The sidebar lists each plugin's usage; a plugin folder opens with a segmented quota bar (history, index, other) and its limits, flagged Nearly full past 90%; the workspace only reports what it uses, with no plan or upgrade anywhere |
+| Grid | [TxIconChip](/docs/dev/components/icon-chip), [TxCornerOverlay](/docs/dev/components/corner-overlay), [TxCheckbox](/docs/dev/components/checkbox), [TxTag](/docs/dev/components/tag) | Screenshot thumbnails are drawn in code, with a type badge in the corner; a hover checkbox adds a tile without ⌘; files just synced or uploaded say New; folders are tiles too, double-click to enter |
+| List | [TxDataTable](/docs/dev/components/data-table) | Shares the grid's selection; sortable name, size, kind and modified columns, folders always first |
+| Context menu | [TxContextMenu / TxContextMenuItem / TxContextMenuDivider / TxContextMenuSubmenu](/docs/dev/components/context-menu) | One `trigger="manual"` instance serves every tile and the empty area: open, quick look, rename, copy path, move to…, download, delete; the empty area offers new folder, upload, sort by and view as |
+| Drag-in upload | [TxFileUploader](/docs/dev/components/file-uploader), [TxToastPanel](/docs/dev/components/toast-panel), [TxCardItem](/docs/dev/components/card-item), [TxProgressBar](/docs/dev/components/progress-bar) | A drop layer over the file area; a tray hanging from Upload with one progress row per file, and the reason next to any file that was turned away |
+| Preview | [TxModal](/docs/dev/components/modal), [TxMarkdownView](/docs/dev/components/markdown-view), [TxImageGallery](/docs/dev/components/image-gallery), [TxEmptyState](/docs/dev/components/empty-state), [TxSplitter](/docs/dev/components/splitter), [TxNoSelection](/docs/dev/components/no-selection) | Space opens quick look for images, Markdown, text and JSON; from 1200px a resizable preview pane joins on the right, with the folder's images as a strip; kinds with no preview say how the host would open them |
+| Bulk and feedback | [TxButton](/docs/dev/components/button), [TxToastPanel](/docs/dev/components/toast-panel), [TxSearchEmpty](/docs/dev/components/search-empty) | A bulk bar while anything is selected (download, move to…, delete); delete, move and rename can all be undone from the toast; an empty search offers Clear search |
+| Move to… | [TxModal](/docs/dev/components/modal), [TxTree](/docs/dev/components/tree) | Only workspace folders that can take the items, never a moved folder or one of its own sub-folders |
+
+## Interactions
+
+- Selecting: click selects, ⌘ / Ctrl click adds, Shift click extends, ⌘ / Ctrl + A selects everything; the arrow keys move by row and column (the row length is read off the grid itself), Shift + arrows extend, Esc clears. These keys live on the file area and do nothing while focus is elsewhere.
+- Opening: double-click or Enter opens a folder or file; Space opens quick look, where ← / → step through the folder and Space or Esc closes it; F2 renames, Enter confirms and Esc cancels, and a plugin storage name that breaks the host's rule is flagged right in place; ⌫ / Delete deletes, with Undo. Download only says what the host would do; nothing is downloaded.
+- Right-click, Shift + F10 or the Menu key opens the same menu; from the keyboard it anchors to the focused tile, not to a corner of the whole file area. When it closes, focus goes back to the tile it came from, unless the choice took it on purpose (Rename, Quick look, Move to…). Drag tiles onto a folder in the tree to move them; plugin storage files never move.
+- Dragging files in from the desktop shows a drop layer over the file area; after the drop, the tray under Upload shows each file's progress. A plugin folder turns away a file over 10 MB, one that would take the plugin past 100 MB and a name outside the rule, and offers Save to workspace. Images get a thumbnail, and text files up to 256 KB can be previewed. Dropping anywhere else in the template is refused, so the browser never navigates to the file; everything lives in browser memory and is gone when you leave the page.
+- The first time the stage scrolls into view the tray says two screenshots are syncing from a MacBook; about 2 seconds later they appear in Screenshots / 2026-09 marked New, and the tray settles away unless the pointer is on it. With reduced motion both files are there from the start and no tray appears.
+- In the docs column the layout is a 208px tree beside the file area; expanded (≥ 960px) the tree is 240px, tiles grow and New folder joins the toolbar, and from 1200px the preview pane appears too; below 640px the tree hides, sub-folders show up as tiles and the path keeps only the last crumb, a back button and a parents menu.
+
+## Adapting it
+
+- For real storage, replace the simulated progress with the upload request's progress events. TxFileUploader only receives `File` objects; keep validation in the host, sharing one set of constants with the host's real limits so the two sides never disagree.
+- For very large folders, turn the grid into a virtual list grouped by rows (tiles per row come from the container width), and keep the list view on TxDataTable's controlled sorting with server-side paging.
+- For search across folders, show the results as a temporary virtual folder with each item's path, rather than expanding a trail of folders in the tree.
+- When thumbnails come from a server, keep the tile height fixed and images `draggable="false"` so the grid does not jump while they load; revoke object URLs on delete, reset and unmount.

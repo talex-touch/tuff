@@ -519,7 +519,8 @@ describe('AssistantModule screenshot translation', () => {
         language: 'fr-FR',
         polishEnabled: true,
         polishStrength: 'natural',
-        noiseSuppression: false
+        noiseSuppression: false,
+        source: 'hybrid'
       }
     })
     mocks.getMainConfig.mockReturnValue(setting)
@@ -580,7 +581,8 @@ describe('AssistantModule screenshot translation', () => {
           language: 'fr-FR',
           polishEnabled: true,
           polishStrength: 'deep',
-          noiseSuppression: false
+          noiseSuppression: false,
+          source: 'hybrid'
         }
       })
     )
@@ -620,7 +622,8 @@ describe('AssistantModule screenshot translation', () => {
         language: 'fr-FR',
         polishEnabled: true,
         polishStrength: 'deep',
-        noiseSuppression: false
+        noiseSuppression: false,
+        source: 'hybrid'
       }
     })
     mocks.getMainConfig.mockReturnValue(setting)

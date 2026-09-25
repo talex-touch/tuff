@@ -1,0 +1,290 @@
+---
+title: Shell 应用外壳
+description: 侧栏导航、⌘K 命令面板、通知托盘与总览看板组成的应用外壳
+category: TemplateApp
+status: beta
+since: 0.6.0
+tags: [template, shell, navigation, command-palette, dashboard]
+syncStatus: reviewed
+verified: false
+---
+
+## 场景
+
+一个 Tuff 团队工作区的后台外壳。左侧是工作区导航，顶栏放当前位置、页内筛选、⌘K 命令面板、通知和账户菜单，主区是总览看板。切换分区只换主区，外壳本身不动。第二种风格「顶栏控制台」把导航收到顶部两行，把整个宽度留给项目网格，并在全局栏里切换产品与工作区。
+
+适合同时需要「导航 + 全局命令 + 通知」三件套的桌面端或 Web 后台：插件市场后台、团队控制台、运营工作台。
+
+## 模板
+
+### 侧栏工作台
+
+:::TuffDemoWrapper{demo="TemplateShellDemo" code-lang="vue" title="侧栏工作台" description="焦点在模板里时按 ⌘K 打开命令面板；侧栏切换分区，「新建工作流」写进动态；铃铛展开最新通知。图中均为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import type { CommandPaletteItem } from '@talex-touch/tuffex/command-palette'
+  import { ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const section = ref('overview')
+  const paletteOpen = ref(false)
+  const trayOpen = ref(false)
+
+  // ⌘K 绑在模板根节点上：window 上的 ⌘K 属于宿主页面自己的搜索
+  function onKeydown(event: KeyboardEvent) {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault()
+      paletteOpen.value = true
+    }
+  }
+
+  function run(command: CommandPaletteItem) {
+    if (command.id.startsWith('go-'))
+      section.value = command.id.slice(3)
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Shell" :height="580" @enter="play">
+      <div class="shell" @keydown="onKeydown">
+        <TxSidebarNav
+          class="shell__sidebar"
+          :model-value="section"
+          :items="navItems"
+          :groups="navGroups"
+          :workspace="{ name: 'Tuff Labs', description: '团队工作区 · 5 人' }"
+          action-label="新建工作流"
+          @update:model-value="section = $event"
+          @action="createWorkflow"
+        />
+        <div class="shell__main">
+          <header class="shell__topbar">
+            <TxBreadcrumb :items="crumbs" @click="section = 'overview'" />
+            <TxSearchInput v-model="filter" placeholder="筛选动态…" />
+            <button type="button" aria-label="打开命令面板" @click="paletteOpen = true">
+              <TxKbd>⌘K</TxKbd>
+            </button>
+            <TxIconButton icon="i-carbon-notification" :label="`通知，${unread} 条未读`" @click="trayOpen = !trayOpen" />
+            <TxToastPanel :open="trayOpen" :stack="1">
+              <!-- 最新一条通知 -->
+            </TxToastPanel>
+          </header>
+
+          <div class="shell__overview">
+            <TxStatCard
+              v-for="stat in stats"
+              :key="stat.key"
+              :value="stat.value"
+              :label="stat.label"
+              :icon-class="stat.icon"
+              :insight="stat.insight"
+            />
+            <TxTimeline>
+              <TxTimelineItem v-for="row in feed" :key="row.id" :title="row.title" :time="row.time" :color="row.color">
+                {{ row.body }}
+              </TxTimelineItem>
+            </TxTimeline>
+            <TxChartScrubber :point-count="24" :active-index="hour" :rows="hourRows" @update:active-index="hour = $event">
+              <TxSparkChart :series="queries" :active-index="hour" />
+            </TxChartScrubber>
+          </div>
+        </div>
+        <TxCommandPalette v-model="paletteOpen" :commands="commands" @select="run" />
+      </div>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .shell__overview {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+  }
+
+  @container template (min-width: 960px) {
+    .shell__overview { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) 288px; }
+  }
+
+  @container template (max-width: 639px) {
+    .shell__sidebar { display: none; }
+  }
+  </style>
+---
+:::
+
+### 顶栏控制台
+
+导航挪到顶部的控制台：第一行是全局栏（产品切换、工作区与数据区域、搜索、帮助、通知、账户），第二行是分区页签和在线成员，页头的面包屑可以下钻到项目详情再逐级返回。和侧栏工作台相比，它把横向空间全部留给内容网格，适合分区不多（五个以内）、又要在产品和工作区之间频繁切换的团队控制台；分区多、层级深的后台仍然是侧栏更顺手。
+
+:::TuffDemoWrapper{demo="TemplateShellConsoleDemo" code-lang="vue" title="顶栏控制台" description="焦点在模板里时按 ⌘K 打开命令面板；产品、工作区、通知与账户都是下拉菜单，工作区菜单里有「数据区域」子菜单；点项目卡进入详情，面包屑逐级返回。图中均为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import type { CommandPaletteItem } from '@talex-touch/tuffex/command-palette'
+  import { ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const section = ref('overview')
+  const detailId = ref<string | null>(null)
+  const paletteOpen = ref(false)
+
+  // 与侧栏风格一样：⌘K 绑在模板根节点上，不挂 window
+  function onKeydown(event: KeyboardEvent) {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault()
+      paletteOpen.value = true
+    }
+  }
+
+  // 下钻：切到「项目」页签并记下详情，面包屑据此多出一级
+  function openProject(id: string) {
+    section.value = 'projects'
+    detailId.value = id
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="顶栏控制台" :height="580" @enter="play">
+      <div class="console" @keydown="onKeydown">
+        <header class="console__bar">
+          <!-- 菜单面板最宽 360px：产品切换是面板里的两列应用格，方向键照常可用 -->
+          <TxDropdownMenu :min-width="340">
+            <template #trigger>
+              <TxIconButton icon="i-carbon-app-switcher" label="切换产品" />
+            </template>
+            <div class="console__apps">
+              <TxDropdownItem v-for="product in products" :key="product.id" @select="openProduct(product.id)">
+                {{ product.name }}
+              </TxDropdownItem>
+            </div>
+          </TxDropdownMenu>
+          <TxDropdownMenu>
+            <template #trigger>
+              <button type="button" class="console__ws">{{ workspace.name }}</button>
+            </template>
+            <TxDropdownItem v-for="ws in workspaces" :key="ws.id" @select="switchWorkspace(ws.id)">
+              {{ ws.name }}
+            </TxDropdownItem>
+            <TxDropdownSubmenu>
+              数据区域
+              <template #menu>
+                <TxDropdownItem v-for="option in regions" :key="option.id" @select="region = option.id">
+                  {{ option.name }}
+                </TxDropdownItem>
+              </template>
+            </TxDropdownSubmenu>
+          </TxDropdownMenu>
+          <button type="button" class="console__search" @click="paletteOpen = true">
+            搜索项目与命令… <TxKbd>⌘K</TxKbd>
+          </button>
+          <TxDropdownMenu placement="bottom-end" :min-width="320">
+            <template #trigger>
+              <TxCornerOverlay placement="top-right">
+                <TxIconButton icon="i-carbon-notification" :label="`通知，${unread} 条未读`" />
+                <template #overlay>
+                  <TxBadge variant="error" :value="unread" />
+                </template>
+              </TxCornerOverlay>
+            </template>
+            <!-- 通知项……「全部标为已读」设 :close-on-select="false" -->
+          </TxDropdownMenu>
+        </header>
+        <!-- 窄屏：左右两格本身就是按钮，菜单挪进抽屉 -->
+        <TxNavBar class="console__navbar" :safe-area-top="false" @click-left="drawerOpen = true" @click-right="paletteOpen = true" />
+
+        <TxTabs v-model="section" placement="top" indicator-variant="line" borderless :content-padding="0">
+          <template #nav-right>
+            <TxAvatarGroup :max="3" :size="24">
+              <TxAvatar v-for="member in online" :key="member.id" :name="member.name" status="online" />
+            </TxAvatarGroup>
+            <TxTextMorph :text="`${online.length} 人在线`" />
+          </template>
+          <TxTabHeader>
+            <TxBreadcrumb :items="crumbs" @click="onCrumb" />
+            <TxSplitButton icon="i-carbon-add" @click="createProject('plugin')">
+              新建项目
+              <template #menu-icon>
+                <i class="tx-split-button__menu-icon i-carbon-chevron-down" aria-hidden="true" />
+                <span class="sr-only">选择项目类型</span>
+              </template>
+              <template #menu="{ close }">
+                <!-- 插件 / 工作流 / 智能体 / 主题 -->
+              </template>
+            </TxSplitButton>
+          </TxTabHeader>
+          <TxTabItem name="overview">
+            <template #name>概览</template>
+            <div class="console__grid">
+              <TxCard v-for="project in projects" :key="project.id" clickable @click="openProject(project.id)">
+                <TxStatusBadge :text="project.statusText" :status="project.statusTone" size="sm" />
+                <TxProgressBar v-if="project.status === 'building'" :percentage="project.progress" height="4px" />
+              </TxCard>
+            </div>
+          </TxTabItem>
+          <TxTabItem name="settings" :disabled="!isOwner">
+            <template #name>设置</template>
+          </TxTabItem>
+        </TxTabs>
+
+        <TxCommandPalette v-model="paletteOpen" :commands="commands" @select="run" />
+      </div>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .console__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+
+  .console__navbar { display: none; }
+
+  @container template (max-width: 639px) {
+    .console__bar { display: none; }
+    .console__navbar { display: block; }
+  }
+  </style>
+---
+:::
+
+## 组成
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 侧栏 | [TxSidebarNav](/docs/dev/components/sidebar-nav) | 工作区切换、分组导航与计数、「新建工作流」主操作和行内的 + 快捷操作；底部放同步状态 |
+| 顶栏 | [TxBreadcrumb](/docs/dev/components/breadcrumb)、[TxSearchInput](/docs/dev/components/search-input)、[TxKbd](/docs/dev/components/kbd)、[TxTooltip](/docs/dev/components/tooltip) | 当前位置（点工作区名回到总览）、筛选当前页、⌘K 入口 |
+| 通知托盘 | [TxIconButton](/docs/dev/components/button)、[TxBadge](/docs/dev/components/badge)、[TxToastPanel](/docs/dev/components/toast-panel)、[TxIconChip](/docs/dev/components/icon-chip) | 铃铛和未读数；最新一条从铃铛下方垂下，虚线连着来源 |
+| 账户菜单 | [TxDropdownMenu](/docs/dev/components/dropdown-menu)、[TxAvatar](/docs/dev/components/avatar) | 命令面板、暂停剪贴板同步、退出登录 |
+| 命令面板 | [TxCommandPalette](/docs/dev/components/command-palette) | 跳转分区、新建工作流、暂停同步、邀请成员；没有权限的命令置灰 |
+| 指标 | [TxStatCard](/docs/dev/components/stat-card)、[TxTextMorph](/docs/dev/components/text-morph) | 今日启动、已启用插件、搜索耗时；宽屏加索引覆盖（进度变体） |
+| 动态 | [TxTimeline](/docs/dev/components/timeline)、[TxSearchEmpty](/docs/dev/components/search-empty) | 最近活动，新条目从顶部滑入；筛选无结果时给出「清空筛选」 |
+| 查询趋势 | [TxSparkChart / TxChartScrubber](/docs/dev/components/spark-chart) | 今天每小时的 CoreBox 查询量，悬停或用方向键读值；宽屏加坐标轴和热门查询 |
+| 右栏（宽屏） | [TxStatusBadge](/docs/dev/components/status-badge)、[TxAvatar](/docs/dev/components/avatar)、[TxButton](/docs/dev/components/button) | 在线成员、服务状态、设备；列内宽度时只保留服务状态 |
+| 其他分区 | [TxEmptyState](/docs/dev/components/empty-state)、[TuffSwitch](/docs/dev/components/switch)、[TxTag](/docs/dev/components/tag) | 插件页可逐个启停；其余分区是带动作的空状态 |
+| 全局栏（顶栏控制台） | [TxDropdownMenu / TxDropdownItem / TxDropdownSubmenu](/docs/dev/components/dropdown-menu)、[TxIconChip](/docs/dev/components/icon-chip)、[TxKbd](/docs/dev/components/kbd) | 产品切换（两列应用格加最近访问）、工作区切换与「数据区域」子菜单、点开命令面板的搜索入口；宽屏加文档与更新日志 |
+| 通知与账户（顶栏控制台） | [TxCornerOverlay](/docs/dev/components/corner-overlay)、[TxBadge](/docs/dev/components/badge)、[TxDropdownMenu](/docs/dev/components/dropdown-menu)、[TxAvatar](/docs/dev/components/avatar)、[TxTooltip](/docs/dev/components/tooltip) | 铃铛右上角的未读数；通知是菜单项，点开跳到对应项目并标为已读，「全部标为已读」不关菜单；账户菜单 |
+| 分区页签（顶栏控制台） | [TxTabs / TxTabItem](/docs/dev/components/tabs)、[TxAvatarGroup / TxAvatar](/docs/dev/components/avatar)、[TxTextMorph](/docs/dev/components/text-morph) | 下划线页签，「项目」带计数，「设置」需要所有者权限；右侧常驻在线头像与人数 |
+| 页头（顶栏控制台） | [TxTabs](/docs/dev/components/tabs) 的 TxTabHeader、[TxBreadcrumb](/docs/dev/components/breadcrumb)、[TxButton / TxSplitButton](/docs/dev/components/button) | 面包屑下钻到项目详情再逐级返回；邀请成员、按类型新建项目 |
+| 项目（顶栏控制台） | [TxCard](/docs/dev/components/card)、[TxStatusBadge](/docs/dev/components/status-badge)、[TxProgressBar](/docs/dev/components/progress-bar)、[TxFilterChips](/docs/dev/components/filter-chips)、[TxSearchInput](/docs/dev/components/search-input)、[TxCardItem](/docs/dev/components/card-item) | 最近项目的卡片网格（整张卡可点）；项目页按类型筛选与搜索；详情里的版本与协作者 |
+| 右栏（顶栏控制台，宽屏） | [TxCardItem](/docs/dev/components/card-item)、[TxSparkChart](/docs/dev/components/spark-chart) | 在线成员、本周构建（示例数据）与动态；主区多出构建队列 |
+| 窄屏（顶栏控制台） | [TxNavBar](/docs/dev/components/nav-bar)、[TxDrawer](/docs/dev/components/drawer) | 全局栏收成紧凑顶栏，工作区、通知、产品与账户挪进抽屉 |
+
+## 交互要点
+
+- 焦点在模板里时按 ⌘K（Windows 为 Ctrl+K）打开命令面板，点顶栏的 ⌘K 键帽也行。按键绑在模板根节点上并调用 `preventDefault()`，文档站自己的 ⌘K 搜索不会同时弹出。
+- 侧栏切换分区：总览是看板；插件页可以逐个启停，「已启用插件」指标跟着变；其余分区是带动作的空状态。侧栏的「新建工作流」和工作流行上的 + 都会在动态顶部插入一条，并给工作流加计数。
+- 铃铛展开最新一条通知并清零未读。命令面板和账户菜单里的操作（暂停同步、邀请成员、退出登录）也在同一个托盘里给反馈，3.2 秒后自动收起；暂停同步后，服务状态和侧栏底部的同步点一起变黄。
+- 顶栏筛选框只筛当前页：总览筛动态，插件页筛插件，其余分区不可用。
+- 进入视口后自动演示一次：0.8 秒「翻译」插件安装进动态、插件计数加一；1.4 秒铃铛加一并弹出通知；2 秒「今日启动」滚动到 1,291。在模板里点一下或按任意键就停止；开启「减弱动态效果」时直接显示最终状态。
+- 宽屏（≥ 960px）指标卡变 4 张，右侧多出在线成员、服务、设备一栏，查询趋势加坐标轴和热门查询；窄屏（< 640px）侧栏收进顶栏的菜单按钮，指标卡改为横向滑动。
+- 顶栏控制台：⌘K 与侧栏风格一样绑在模板根节点上；全局栏的搜索框只是入口，点它同样打开命令面板。面板里可以跳分区、打开项目、新建插件或工作流、切换工作区，没有所有者权限的「工作区设置」置灰。
+- 顶栏控制台：产品、工作区、通知、账户都是下拉菜单，方向键可用；工作区菜单里的「数据区域」是子菜单（→ 打开、← 返回）。换工作区后项目、成员、动态和页签计数一起换；点项目卡进入详情，面包屑的「项目」和工作区名逐级返回。
+- 顶栏控制台：进入视口后自动演示一次——0.8 秒周以宁上线，在线人数 3 → 4；1.6 秒「翻译」构建完成、发布 2.4.1，动态顶部插入一条；2.2 秒铃铛未读加一，右下角弹出带「查看」的提示。在模板里点一下或按任意键就停止；开启「减弱动态效果」时直接显示最终状态、不弹提示。宽屏（≥ 960px）多出右栏和构建队列，≥ 1200px 最近项目排成 4 列；窄屏（< 640px）全局栏换成 TxNavBar，菜单挪进抽屉。
+
+## 改造建议
+
+- 换导航：`navItems` 就是 TxSidebarNav 的 `items`，窄屏的菜单按钮复用同一份数据。`badge` 写数字即可，数值变化时会重播弹入动画。
+- 全局快捷键不要挂在 `window` 或 `document` 上：宿主页面往往已经占用了 ⌘K 和 `/`。TxSidebarNav 的 `search-hint` 只传多字符的字形（如 `⌘K`），单个字符会让它在 `document` 上抢走整页的这个键。
+- 通知用受控的 TxToastPanel，而不是全局 `toast()`：托盘留在外壳里、跟着铃铛走，也不会和页面上别处的 toast 共用一个队列。
+- 分区多了就把主区换成路由出口（`<RouterView>` 或 `<NuxtPage>`），外壳只保留侧栏、顶栏和命令面板。
+- 顶栏控制台：TxDropdownMenu 的面板最宽 360px，所以产品切换是两列应用格；要真正的多栏大面板，就换成显式传 `width` 的 TxPopover，焦点移入和 Tab、Esc 还焦都要自己补。TxNavBar 左右两格本身就是按钮，里面不能再放菜单，窄屏的菜单只能挪进抽屉；只放图标时补一段读屏文字。

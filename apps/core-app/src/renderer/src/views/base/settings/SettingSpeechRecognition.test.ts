@@ -10,7 +10,6 @@ type SpeechSettingsFixture = Pick<AppSetting, 'assistant' | 'floatingBall' | 'vo
   voiceInput?: VoiceInputSetting
 }
 
-const router = vi.hoisted(() => ({ push: vi.fn() }))
 const settings = vi.hoisted(() => {
   const { reactive } = require('vue') as typeof VueModule
   return reactive({} as SpeechSettingsFixture)
@@ -18,10 +17,6 @@ const settings = vi.hoisted(() => {
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key })
-}))
-
-vi.mock('vue-router', () => ({
-  useRouter: () => router
 }))
 
 vi.mock('~/modules/storage/app-storage', () => ({
@@ -53,6 +48,12 @@ function mountSettings(): VueWrapper {
           props: ['modelValue', 'title', 'description'],
           emits: ['update:modelValue'],
           template: '<section><span>{{ title }}</span><slot /></section>'
+        },
+        TuffBlockFlatRadio: {
+          name: 'TuffBlockFlatRadio',
+          props: ['modelValue', 'title', 'description'],
+          emits: ['update:modelValue'],
+          template: '<section>{{ title }}</section>'
         },
         TuffSelectItem: {
           name: 'TuffSelectItem',
@@ -107,6 +108,14 @@ function resetSettings(): void {
     polishEnabled: true,
     polishStrength: 'structured'
   }
+}
+
+/** Writes the source as stored, including values this build does not recognise. */
+function storeVoiceSource(source: unknown): void {
+  const voiceInput = { ...settings.voiceInput, source }
+  // Deliberately outside VoiceAsrSource: the page has to survive a settings file written by a
+  // build whose source names differ from this one's.
+  settings.voiceInput = voiceInput as VoiceInputSetting
 }
 
 describe('SettingSpeechRecognition', () => {
@@ -239,13 +248,39 @@ describe('SettingSpeechRecognition', () => {
     wrapper.unmount()
   })
 
-  it('opens Intelligence capabilities from the speech settings surface', async () => {
+  it.each([
+    { name: 'a profile with an unset source', stored: undefined },
+    { name: 'a stored value outside the three sources', stored: 'edge' }
+  ])('shows $name as the hybrid dictation source', async ({ stored }) => {
+    storeVoiceSource(stored)
+
     const wrapper = mountSettings()
     await flushPromises()
 
-    await wrapper.get('[data-testid="voice-open-capabilities"]').trigger('click')
+    expect(wrapper.getComponent({ name: 'TuffBlockFlatRadio' }).props('modelValue')).toBe('hybrid')
 
-    expect(router.push).toHaveBeenCalledWith('/setting/intelligence/capabilities')
     wrapper.unmount()
   })
+
+  it.each(['local', 'cloud'])(
+    'stores a %s dictation source without disturbing the sibling preferences',
+    async (source) => {
+      const wrapper = mountSettings()
+      await flushPromises()
+
+      const selector = wrapper.getComponent({ name: 'TuffBlockFlatRadio' })
+      await selector.vm.$emit('update:modelValue', source)
+
+      expect(settings.voiceInput).toMatchObject({
+        source,
+        enabled: false,
+        language: 'fr-FR',
+        historyEnabled: true,
+        polishEnabled: true,
+        polishStrength: 'structured'
+      })
+
+      wrapper.unmount()
+    }
+  )
 })

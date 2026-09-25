@@ -11,7 +11,7 @@ verified: true
 
 ## Suite Groups
 
-In the components sidebar the AI suite is split into four groups: **Chat** (Chat, ChatComposer, PromptBar, AttachmentTray, MessageActions, SuggestionChips, TypingIndicator, ConversationStream), **Agents** (Agents, AgentTrace, TaskRows, ToolCallCard, ToolChips, ToolConfirmation, ApprovalCard, WorkingIndicator), **Reasoning** (AiElements, ChainOfThought, ReasoningDisclosure, ThinkingOrb, StreamMarkdown, CodeStream, InlineCitation, Sources) and **Context & Insight** (ContextCards, ContextIndicator, InsightCards, RecommendationCard, FineTuneCard). Every component in the suite can be imported through the `@talex-touch/tuffex/ai` category entry.
+In the components sidebar the AI suite is split into four groups: **Chat** (Chat, ChatComposer, PromptBar, AttachmentTray, ModeChip, MessageActions, SuggestionChips, TypingIndicator, ConversationStream), **Agents** (Agents, AgentTrace, AgentScreen, TaskRows, ToolCallCard, ToolChips, ToolConfirmation, ApprovalCard, WorkingIndicator), **Reasoning** (AiElements, ChainOfThought, ReasoningDisclosure, ThinkingOrb, StreamMarkdown, CodeStream, InlineCitation, Sources) and **Context & Insight** (ContextCards, ContextIndicator, InsightCards, RecommendationCard, FineTuneCard). Every component in the suite can be imported through the `@talex-touch/tuffex/ai` category entry.
 
 ## Preview
 

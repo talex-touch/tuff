@@ -13,7 +13,7 @@ verified: true
 
 ## Tuffex Components 组件库
 
-Tuffex（`@talex-touch/tuffex`）是服务 Talex Touch 生态的 Vue 3 组件库：同一套组件覆盖桌面端 CoreBox、插件 Surface 与本文档站。组件按套件划分——**基础**承载日常界面主体、**进阶**承载高级交互与视觉表达、**AI** 承载 AI 原生界面、**数据**承载可视化与图表家族、**流程**承载画布上的流程编排——侧边栏顶部的套件切换在这五个组件套件之外，另设「理念」作为第六个纯文档页签；点哪个页签就直接进入该套件的总览页。
+Tuffex（`@talex-touch/tuffex`）是服务 Talex Touch 生态的 Vue 3 组件库：同一套组件覆盖桌面端 CoreBox、插件 Surface 与本文档站。组件按套件划分——**基础**承载日常界面主体、**进阶**承载高级交互与视觉表达、**AI** 承载 AI 原生界面、**数据**承载可视化与图表家族、**流程**承载画布上的流程编排——侧边栏顶部的套件切换器在这五个组件套件之外，另列「理念」作为第六个纯文档套件；选中哪个套件就直接进入它的总览页。
 
 - 交互标本：每个套件页开头都有一块组件预览——《[基础套件](./base-suite.zh.mdc)》《[进阶套件](./pro-suite.zh.mdc)》《[AI 套件](./ai-suite.zh.mdc)》《[数据套件](./data-suite.zh.mdc)》《[流程套件](./flow-suite.zh.mdc)》——每个格子都是可交互的真实组件，点名称直达文档。
 - 分套件引入：`@talex-touch/tuffex/base`、`/pro`、`/ai` 三个分类入口按需加载；图表族在同包的 `@talex-touch/tuffex/charts` 子路径下。
@@ -108,17 +108,17 @@ code: |
 
 ## 套件总览
 
-每个套件都有一个总览页，承载自己那一部分的实时预览和组件清单——也就是该套件页签下的第一个条目。
+每个套件都有一个总览页，承载自己那一部分的实时预览和组件清单——也就是在切换器里选中该套件后，侧边栏的第一个条目。
 
 | 套件 | 分组 | 组件数 | 引入入口 |
 |------|------|--------|----------|
 | [基础套件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 92 | `@talex-touch/tuffex/base` |
 | [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 27 | `@talex-touch/tuffex/pro` |
-| [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 30 | `@talex-touch/tuffex/ai` |
+| [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 31 | `@talex-touch/tuffex/ai` |
 | [数据套件](./data-suite.zh.mdc) | 图表 / 可视化 | 10 | `@talex-touch/tuffex/pro`（可视化 + 图表）+ `@talex-touch/tuffex/charts`（图表族入口） |
 | [流程套件](./flow-suite.zh.mdc) | 流程编排 | 1 | `@talex-touch/tuffex/ai` |
 
-理念是第六个套件页签——纯文档性质、不对应组件入口。本页就是这个页签的总览：上半是组件库定位、设计基础与工具函数，下半是完整组件索引。
+理念是第六个套件——纯文档性质、不对应组件入口。本页就是它的总览：上半是组件库定位、设计基础与工具函数，下半是完整组件索引。
 
 ## 基础组件
 
@@ -291,6 +291,7 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 - [ChatComposer 消息输入](./chat-composer.zh.mdc)
 - [PromptBar 提示条](./prompt-bar.zh.mdc)
 - [AttachmentTray 附件区](./attachment-tray.zh.mdc)
+- [ModeChip 模式芯片](./mode-chip.zh.mdc)
 - [MessageActions 消息操作条](./message-actions.zh.mdc)
 - [SuggestionChips 建议胶囊](./suggestion-chips.zh.mdc)
 - [TypingIndicator 打字中](./typing-indicator.zh.mdc)

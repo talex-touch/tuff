@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Verify no hover colour transition, reduced-motion escapes, ring vs border, token-only colour, measured contrast recorded"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Verify zh/en docs, demos, registry, wrapper docs and rendered pages are in sync with the source"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Code standards, forbidden patterns and the verification bar before reporting done"}
+{"file": ".trellis/spec/frontend/tuffex-text-motion.md", "reason": "Check the chip did not introduce a second text-animation engine"}
+{"file": ".trellis/tasks/09-23-composer-motion-reference/research/reference-motion.md", "reason": "Timing/curve targets (±15%) the motion traces are checked against"}

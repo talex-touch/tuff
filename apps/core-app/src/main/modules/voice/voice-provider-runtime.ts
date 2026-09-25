@@ -12,7 +12,13 @@ import type {
   VoiceRecognitionStatus,
   VoiceRecognitionStatusSnapshot
 } from '@talex-touch/utils/transport/sdk/domains/voice'
-import { resolveFirstIntelligenceProviderRoute } from '@talex-touch/tuff-intelligence'
+import { StorageList } from '@talex-touch/utils'
+import { resolveIntelligenceProviderRoutes } from '@talex-touch/tuff-intelligence'
+import {
+  DEFAULT_VOICE_ASR_SOURCE,
+  normalizeVoiceAsrSource,
+  type VoiceAsrSource
+} from '@talex-touch/utils/common/storage/entity/app-settings'
 import {
   BailianParaformerVoiceProvider,
   createFetchHttpClient,
@@ -41,6 +47,7 @@ import { getIntelligenceProviderManager, providerSupportsCapability } from '../a
 import { resolveProviderCredential } from '../ai/provider-credential-runtime'
 import { getAuthToken, getSanitizedAuthSessionState } from '../auth'
 import { getCatalogService } from '../catalog'
+import { getMainConfig } from '../storage'
 import { transcribeNexusAudio } from '../nexus/asr-client'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { createBufferedSttVoiceProvider } from './buffered-stt-provider'
@@ -63,15 +70,32 @@ function hasEnabledCapabilityBinding(capabilityId: string): boolean {
   )
 }
 
-function resolveCapabilityProvider(
+/**
+ * Which kind of channel this machine's dictation preference allows.
+ *
+ * An unreadable preference is not an unreadable recogniser: the default is returned rather than
+ * throwing, because the caller's failure mode would be a dictation that cannot start.
+ */
+function resolveVoiceAsrSource(): VoiceAsrSource {
+  try {
+    const setting = getMainConfig(StorageList.APP_SETTING) as
+      | { voiceInput?: { source?: unknown } }
+      | undefined
+    return normalizeVoiceAsrSource(setting?.voiceInput?.source)
+  } catch {
+    return DEFAULT_VOICE_ASR_SOURCE
+  }
+}
+
+function resolveCapabilityRoutes(
   capabilityId: string,
   capabilityType: 'asr' | 'stt',
   requireCredential = false
-) {
+): CapabilityRoute[] {
   ensureIntelligenceConfigLoaded()
   const capability = getEffectiveCapabilityRoutingConfig(capabilityId)
   const bindings = capability?.providers ?? []
-  if (!bindings.some((binding) => binding.enabled !== false)) return null
+  if (!bindings.some((binding) => binding.enabled !== false)) return []
 
   const manager = getIntelligenceProviderManager()
   const boundProviderIds = new Set(
@@ -89,7 +113,7 @@ function resolveCapabilityProvider(
       return { ...config, apiKey: credential, hasApiKey: Boolean(credential) }
     })
   const options = getCapabilityOptions(capabilityId)
-  return resolveFirstIntelligenceProviderRoute({
+  return resolveIntelligenceProviderRoutes({
     capabilityId,
     providers,
     capability,
@@ -105,21 +129,55 @@ function resolveCapabilityProvider(
         Boolean(getVoiceAsrMetadata(provider.metadata))
       return supportsGenericCapability || supportsVoiceCapability
     }
-  })
+  }).routes
+}
+
+/**
+ * Picks the route the preference asks for out of the routes the Intelligence bindings already
+ * produced, in the order they produced them.
+ *
+ * The preference reorders; it never adds. A machine with no on-device channel bound has no local
+ * route to prefer, and `local` then reports unavailable rather than quietly reaching the cloud —
+ * the one outcome a user choosing "only on-device" did not ask for.
+ */
+function selectRouteForSource(
+  routes: CapabilityRoute[],
+  source: VoiceAsrSource
+): CapabilityRoute | null {
+  const onDevice = routes.filter(
+    (route) => getVoiceAsrMetadata(route.provider.metadata)?.protocol === 'local-offline'
+  )
+  if (source === 'local') return onDevice[0] ?? null
+  const remote = routes.filter((route) => !onDevice.includes(route))
+  if (source === 'cloud') return remote[0] ?? null
+  return onDevice[0] ?? remote[0] ?? null
+}
+
+function resolveCapabilityProvider(
+  capabilityId: string,
+  capabilityType: 'asr' | 'stt',
+  requireCredential: boolean,
+  source: VoiceAsrSource
+): CapabilityRoute | null {
+  return selectRouteForSource(
+    resolveCapabilityRoutes(capabilityId, capabilityType, requireCredential),
+    source
+  )
 }
 
 function capabilityStatus(
   capabilityId: string,
   capabilityType: 'asr' | 'stt',
-  prefix: 'VOICE_ASR' | 'VOICE_STT'
+  prefix: 'VOICE_ASR' | 'VOICE_STT',
+  source: VoiceAsrSource
 ): VoiceRecognitionStatus {
   if (!hasEnabledCapabilityBinding(capabilityId)) {
     return { ready: false, reason: `${prefix}_NOT_CONFIGURED` }
   }
-  if (!resolveCapabilityProvider(capabilityId, capabilityType)) {
+  if (!resolveCapabilityProvider(capabilityId, capabilityType, false, source)) {
     return { ready: false, reason: `${prefix}_PROVIDER_UNAVAILABLE` }
   }
-  const route = resolveCapabilityProvider(capabilityId, capabilityType, true)
+  const route = resolveCapabilityProvider(capabilityId, capabilityType, true, source)
   if (!route) {
     return { ready: false, reason: `${prefix}_CREDENTIAL_UNAVAILABLE` }
   }
@@ -278,8 +336,16 @@ function recognitionFailure(error: unknown): VoiceRecognitionStatus {
   }
 }
 
-function resolveNexusBufferedSttProvider(): ConfiguredAsrProvider | null {
-  const route = resolveCapabilityProvider(STT_CAPABILITY_ID, 'stt', true)
+/**
+ * The Nexus `audio.stt` route, used when no `audio.asr` channel is bound at all.
+ *
+ * It is a cloud route whenever it resolves, so a preference that forbids the cloud forbids this
+ * too: an on-device-only machine must report itself unconfigured rather than fall back to a
+ * service the user ruled out.
+ */
+function resolveNexusBufferedSttProvider(source: VoiceAsrSource): ConfiguredAsrProvider | null {
+  if (source === 'local') return null
+  const route = resolveCapabilityProvider(STT_CAPABILITY_ID, 'stt', true, source)
   if (!route?.model || !isNexusManagedProvider(route.provider)) return null
   const expectedUserId = getSanitizedAuthSessionState().user?.id
   if (!expectedUserId) return null
@@ -305,37 +371,39 @@ function resolveNexusBufferedSttProvider(): ConfiguredAsrProvider | null {
 
 /** Read-only projection for the voice UI; Intelligence capability bindings remain the route owner. */
 export function getRecognitionStatus(): VoiceRecognitionStatusSnapshot {
-  const asr = capabilityStatus(ASR_CAPABILITY_ID, 'asr', 'VOICE_ASR')
+  const source = resolveVoiceAsrSource()
+  const asr = capabilityStatus(ASR_CAPABILITY_ID, 'asr', 'VOICE_ASR', source)
   if (asr.reason === 'VOICE_ASR_NOT_CONFIGURED') {
     try {
-      const buffered = resolveNexusBufferedSttProvider()
+      const buffered = resolveNexusBufferedSttProvider(source)
       if (buffered) {
         return {
           asr: { ready: true, mode: 'buffered' },
-          stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT')
+          stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT', source)
         }
       }
     } catch (error) {
       return {
         asr: recognitionFailure(error),
-        stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT')
+        stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT', source)
       }
     }
   }
-  return { asr, stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT') }
+  return { asr, stt: capabilityStatus(STT_CAPABILITY_ID, 'stt', 'VOICE_STT', source) }
 }
 
 /** Resolves and freezes the shared route resolver's live-ASR adapter before microphone capture. */
 export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
+  const source = resolveVoiceAsrSource()
   if (!hasEnabledCapabilityBinding(ASR_CAPABILITY_ID)) {
-    const buffered = resolveNexusBufferedSttProvider()
+    const buffered = resolveNexusBufferedSttProvider(source)
     if (buffered) return buffered
     throw new Error('VOICE_ASR_NOT_CONFIGURED')
   }
-  const route = resolveCapabilityProvider(ASR_CAPABILITY_ID, 'asr', true)
+  const route = resolveCapabilityProvider(ASR_CAPABILITY_ID, 'asr', true, source)
   if (!route?.model) {
     throw new Error(
-      resolveCapabilityProvider(ASR_CAPABILITY_ID, 'asr')
+      resolveCapabilityProvider(ASR_CAPABILITY_ID, 'asr', false, source)
         ? 'VOICE_ASR_CREDENTIAL_UNAVAILABLE'
         : 'VOICE_ASR_PROVIDER_UNAVAILABLE'
     )

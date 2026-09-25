@@ -22,6 +22,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import VoiceRecordDetails from '~/components/intelligence/voice/VoiceRecordDetails.vue'
+import { appSetting } from '~/modules/storage/app-storage'
 import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -805,6 +806,23 @@ function openRecords(): void {
   recordsOpen.value = true
 }
 
+/**
+ * Whether recognitions are being kept at all.
+ *
+ * Main writes a record only while `保留识别记录` is on, so an empty log has two causes that look
+ * identical from here: nothing has been dictated yet, or nothing was ever allowed to be kept.
+ * The drawer has to be able to tell the reader which one it is looking at.
+ */
+const historyRetentionEnabled = computed(
+  () => (appSetting.voiceInput as { historyEnabled?: boolean } | undefined)?.historyEnabled === true
+)
+
+/** The switch lives in settings; this drawer only points at it. */
+function openRetentionSettings(): void {
+  recordsOpen.value = false
+  emit('open-settings')
+}
+
 /** A menu item closes the menu, then acts. Leaving it open over a dialog is its own bug. */
 function runFromMenu(action: () => void | Promise<void>): void {
   menuOpen.value = false
@@ -849,11 +867,13 @@ onBeforeUnmount(() => {
       </div>
       <div class="VoiceInsights-HeroActions shell-chrome-safe-inline-end">
         <slot name="status" />
-        <TxButton
-          :disabled="records.length === 0"
-          data-testid="voice-insights-records-jump"
-          @click="openRecords"
-        >
+        <!--
+          Never disabled. A log is something to look at, and with zero rows the drawer still has
+          something to say — it names the retention switch that decides whether rows are written at
+          all. Greying this out left the one screen that explains an empty log unreachable from the
+          page that shows it.
+        -->
+        <TxButton data-testid="voice-insights-records-jump" @click="openRecords">
           <span class="i-ri-history-line" aria-hidden="true" />
           <span>{{ t('voiceInsights.actions.records') }}</span>
         </TxButton>
@@ -1260,6 +1280,27 @@ onBeforeUnmount(() => {
             {{ t('voiceInsights.records.clear') }}
           </TxButton>
         </header>
+
+        <!--
+          Empty because nothing is being kept, which is not the same as empty because nothing has
+          been dictated yet. Only one of the two is the reader's to fix, and only one of them comes
+          with somewhere to go — so the drawer says which, and offers the switch.
+        -->
+        <div
+          v-if="records.length === 0 && !historyRetentionEnabled"
+          class="VoiceInsights-RecordsHint"
+          data-testid="voice-insights-records-retention"
+        >
+          <span>{{ t('voiceInsights.records.retentionOff') }}</span>
+          <TxButton
+            variant="bare"
+            size="sm"
+            data-testid="voice-insights-records-retention-action"
+            @click="openRetentionSettings"
+          >
+            {{ t('voiceInsights.records.retentionAction') }}
+          </TxButton>
+        </div>
 
         <!--
           A table, not a stack of cards.
@@ -2023,6 +2064,22 @@ onBeforeUnmount(() => {
 .VoiceInsights-RecordsHeading {
   display: flex;
   justify-content: flex-end;
+}
+
+/*
+ * Names the switch that decides whether a log exists at all. Muted rather than alarming: nothing
+ * is broken here, and the action beside it is a preference, not a repair.
+ */
+.VoiceInsights-RecordsHint {
+  display: flex;
+  gap: var(--shell-space-4);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--shell-space-2) var(--shell-space-3);
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-sm);
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
 }
 
 /* It was sitting on the last record. A pager is a separate thing from the list it pages. */

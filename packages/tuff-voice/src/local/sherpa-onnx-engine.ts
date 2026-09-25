@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { discardWorkDirectory, executableCandidates, findExecutable, materializePcmInput, runLocalProcess, withDecodeLock } from './decode'
 import { resolveInstalledRuntimeSync } from './engine-provisioning'
+import { narrowLanguageTag } from './language'
 import { resolveAuxiliaryPath } from './model-store'
 import { LocalEngineError } from './types'
 import { pcmDurationMs } from './wav'
@@ -73,9 +74,8 @@ export async function findSherpaBinary(explicit?: string): Promise<string | unde
 /** Language to hand the recognizer, narrowed to the values it accepts. */
 export function resolveSherpaLanguage(model: ResolvedLocalModel, options: LocalTranscribeOptions): string {
   const descriptor = model.descriptor
-  const requested = (options.language ?? descriptor.defaultLanguage ?? descriptor.languages[0] ?? 'auto').toLowerCase()
-  const primary = requested.split(/[-_]/)[0] ?? ''
-  return SENSE_VOICE_LANGUAGES.has(primary) ? primary : 'auto'
+  const requested = options.language ?? descriptor.defaultLanguage ?? descriptor.languages[0] ?? 'auto'
+  return narrowLanguageTag(requested, SENSE_VOICE_LANGUAGES)
 }
 
 /**

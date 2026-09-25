@@ -312,7 +312,7 @@ const transport = useTuffTransport()
 const { t } = useI18n()
 const runtimeConfig = ref<AssistantRuntimeConfig>({
   enabled: false,
-  language: 'zh-CN',
+  language: 'zh',
   polishEnabled: true,
   polishAvailable: false,
   polishStrength: DEFAULT_VOICE_POLISH_STRENGTH

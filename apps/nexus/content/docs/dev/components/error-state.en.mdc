@@ -12,7 +12,7 @@ verified: true
 
 ## Basic Usage
 
-Uses default title and description with action buttons.
+Uses the default title, description, and built-in error illustration (an app window with a danger badge on its bottom-right corner), with action buttons.
 
 ### ErrorState (basic)
 :::TuffDemoWrapper{demo="ErrorStateBasicDemo" code-lang="vue"}
@@ -75,7 +75,7 @@ code: |
 |------|------|---------|-------------|
 | `title` | `string` | `'Something went wrong'` | Error title. Override it with the failed object or operation. |
 | `description` | `string` | `'Please try again later.'` | Supporting recovery guidance. |
-| `icon` | `TxIconSource \| string \| null` | variant default | Custom icon source; set to `null` to suppress the inherited icon. |
+| `icon` | `TxIconSource \| string \| null` | variant default | Custom icon source that replaces the built-in error illustration; set to `null` to hide the icon area entirely. |
 | `iconSize` | `number` | derived from `size` | Icon size forwarded to `TxEmptyState`; when unset it resolves from `size` to 28 / 36 / 44 (small / medium / large). |
 | `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction. |
 | `align` | `'start' \| 'center' \| 'end'` | `'center'` | Content alignment. |
@@ -84,7 +84,7 @@ code: |
 | `primaryAction` | `EmptyStateAction` | - | Primary recovery action config. |
 | `secondaryAction` | `EmptyStateAction` | - | Secondary action config. |
 | `actionSize` | `TxButtonProps['size']` | `'small'` | Size of the generated action buttons; inherits `TxEmptyState`'s `small` default. |
-| `loading` | `boolean` | `false` | Loading state forwarded to generated actions. |
+| `loading` | `boolean` | `false` | When `true` and no `icon` prop or slot is provided, replaces the error illustration with a `TxSpinner`. It does not affect the action buttons. |
 
 ### Events
 
@@ -97,7 +97,7 @@ code: |
 
 | Slot | Props | Description |
 |------|-------|-------------|
-| `icon` | - | Replaces the inherited error icon. |
+| `icon` | - | Replaces the built-in error illustration. |
 | `title` | - | Replaces the title prop rendering. |
 | `description` | - | Replaces the description prop rendering. |
 | `actions` | - | Replaces generated primary/secondary action buttons. |
@@ -105,6 +105,7 @@ code: |
 ## Interaction Contract
 
 - `TxErrorState` always forwards `variant="error"` to `TxEmptyState`.
+- When `icon` is unset (or an empty string), there is no `icon` slot, and `loading` is not `true`, `TxEmptyState` renders its built-in error illustration: an app window with a danger badge on its bottom-right corner, with two rings rippling out of the badge in turn. Under `prefers-reduced-motion: reduce` the rings stop and stay hidden, and the still frame is the window and badge. See [EmptyState](./empty-state.en.mdc) for the drawing.
 - The wrapper does not rewrite `title`, `description`, `surface`, action config, or slots; explicit props and slots are forwarded as-is.
 - The component does not own retry logic. It emits inherited action events or renders custom action slots for the host to handle.
 
@@ -121,6 +122,7 @@ code: |
 - Source: `packages/tuffex/packages/components/src/error-state/src/TxErrorState.vue` confirms the component only binds props to `TxEmptyState` and forces `variant="error"`.
 - Type contracts: `packages/tuffex/packages/components/src/error-state/src/types.ts` defines `ErrorStateProps = Omit<EmptyStateProps, 'variant'>`.
 - Base props/events: `packages/tuffex/packages/components/src/empty-state/src/types.ts` defines inherited props, action shape, and `primary` / `secondary` events.
+- Illustration: `TxEmptyState` draws the error illustration and `TxErrorState` takes no part in it (redrawn 2026-09-23). The badge uses the `-light-9` tint with danger ink, because white ink on a solid danger fill is not a supported pairing in this library; the rings stop and stay hidden under reduced motion.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/error-state/__tests__/error-state.test.ts` covers forced error variant, prop forwarding, named slot forwarding, and install registration.
 
 ## Source

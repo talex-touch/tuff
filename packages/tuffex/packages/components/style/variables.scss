@@ -491,18 +491,26 @@
   --tx-color-danger-rgb: 248 113 113;
   --tx-color-info-rgb: 144 147 153;
 
-  --tx-color-primary-light-8: color-mix(in srgb, var(--tx-color-primary) 20%, white);
+  // Fill tints (-light-8 / -light-9) mix toward the dark surface, the rule the
+  // hand-picked primary ramp above already follows (its -light-9 #18222c is
+  // primary 10% over #141414; the -light-8 below lands on #1d3043, 20%). They
+  // used to mix toward white as in the light theme, so every "soft" badge,
+  // banner or selected row built on them came out as a light tile on the dark
+  // page. The other formula steps below (-light-3 / -5 / -6 / -7) still mix
+  // toward white: core-app reads `--tx-color-warning-light-7` as ink on
+  // coloured fills, and turning the whole ladder needs its own audit.
+  --tx-color-primary-light-8: color-mix(in srgb, var(--tx-color-primary) 20%, var(--tx-bg-color, #141414));
 
   --tx-color-success-light-5: color-mix(in srgb, var(--tx-color-success) 50%, white);
   --tx-color-success-light-7: color-mix(in srgb, var(--tx-color-success) 30%, white);
-  --tx-color-success-light-8: color-mix(in srgb, var(--tx-color-success) 20%, white);
-  --tx-color-success-light-9: color-mix(in srgb, var(--tx-color-success) 10%, white);
+  --tx-color-success-light-8: color-mix(in srgb, var(--tx-color-success) 20%, var(--tx-bg-color, #141414));
+  --tx-color-success-light-9: color-mix(in srgb, var(--tx-color-success) 10%, var(--tx-bg-color, #141414));
 
   --tx-color-warning-light-3: color-mix(in srgb, var(--tx-color-warning) 70%, white);
   --tx-color-warning-light-5: color-mix(in srgb, var(--tx-color-warning) 50%, white);
   --tx-color-warning-light-7: color-mix(in srgb, var(--tx-color-warning) 30%, white);
-  --tx-color-warning-light-8: color-mix(in srgb, var(--tx-color-warning) 20%, white);
-  --tx-color-warning-light-9: color-mix(in srgb, var(--tx-color-warning) 10%, white);
+  --tx-color-warning-light-8: color-mix(in srgb, var(--tx-color-warning) 20%, var(--tx-bg-color, #141414));
+  --tx-color-warning-light-9: color-mix(in srgb, var(--tx-color-warning) 10%, var(--tx-bg-color, #141414));
   --tx-color-warning-dark-2: color-mix(in srgb, var(--tx-color-warning) 80%, black);
 
   --tx-color-danger-light-3: color-mix(in srgb, var(--tx-color-danger) 70%, white);
@@ -510,8 +518,8 @@
   --tx-color-info-light-3: color-mix(in srgb, var(--tx-color-info) 70%, white);
   --tx-color-info-light-6: color-mix(in srgb, var(--tx-color-info) 40%, white);
   --tx-color-info-light-7: color-mix(in srgb, var(--tx-color-info) 30%, white);
-  --tx-color-info-light-8: color-mix(in srgb, var(--tx-color-info) 20%, white);
-  --tx-color-info-light-9: color-mix(in srgb, var(--tx-color-info) 10%, white);
+  --tx-color-info-light-8: color-mix(in srgb, var(--tx-color-info) 20%, var(--tx-bg-color, #141414));
+  --tx-color-info-light-9: color-mix(in srgb, var(--tx-color-info) 10%, var(--tx-bg-color, #141414));
 
   --tx-color-error: var(--tx-color-danger);
   --tx-color-error-light-5: var(--tx-color-danger-light-5);

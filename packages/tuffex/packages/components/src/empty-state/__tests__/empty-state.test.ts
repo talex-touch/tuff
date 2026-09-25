@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxEmptyState from '../src/TxEmptyState.vue'
+import txEmptyStateSource from '../src/TxEmptyState.vue?raw'
 
 describe('txEmptyState', () => {
   it('renders variant defaults and layout classes', () => {
@@ -91,6 +92,57 @@ describe('txEmptyState', () => {
 
     expect(wrapper.emitted('secondary')).toBeUndefined()
     expect(wrapper.emitted('primary')).toHaveLength(1)
+  })
+
+  it('draws the error illustration as a window with a rippling danger badge', () => {
+    const wrapper = mount(TxEmptyState, { props: { variant: 'error' } })
+    const illustration = wrapper.find('.tx-empty-state__illustration')
+
+    expect(illustration.attributes('data-variant')).toBe('error')
+    expect(illustration.find('.tx-empty-state__error-window').exists()).toBe(true)
+    expect(illustration.find('.tx-empty-state__error-badge').exists()).toBe(true)
+    expect(illustration.find('.tx-empty-state__error-mark').exists()).toBe(true)
+    // Two rings half a cycle apart; they used to be two static, unstyled circles.
+    expect(illustration.findAll('.tx-empty-state__error-pulse')).toHaveLength(2)
+    expect(illustration.find('.tx-empty-state__error-pulse--late').exists()).toBe(true)
+  })
+
+  it('styles the error ripple and stops it under reduced motion', () => {
+    expect(txEmptyStateSource).toMatch(/\.tx-empty-state__error-pulse \{[^}]*animation: tx-empty-state-error-ripple/)
+    expect(txEmptyStateSource).toContain('@keyframes tx-empty-state-error-ripple')
+    // The still frame is the window and its badge: the rings rest at opacity 0.
+    expect(txEmptyStateSource).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.tx-empty-state__error-pulse \{\s*animation: none;/,
+    )
+  })
+
+  it('stops every illustration animation under reduced motion on a complete frame', () => {
+    const style = txEmptyStateSource
+      .slice(txEmptyStateSource.indexOf('<style'))
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+    const reducedBlocks = [...style.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g)]
+      .map(match => match[1]!)
+      .join('\n')
+    const stopped = new Set(
+      [...reducedBlocks.matchAll(/([^{}]+)\{\s*animation: none;/g)]
+        .flatMap(match => match[1]!.split(',').map(selector => selector.trim())),
+    )
+    const animated = [...style.matchAll(/\n([^{}\n@][^{}]*)\{[^}]*animation: tx-empty-state-/g)]
+      .flatMap(match => match[1]!.split(',').map(selector => selector.trim()))
+      .filter(Boolean)
+
+    expect(animated.length).toBeGreaterThan(15)
+    for (const selector of animated) {
+      // The dust modifiers (`--1/2/3`) sit on elements that also carry the base class.
+      const base = selector.replace(/--\d$/, '')
+      expect(stopped.has(selector) || stopped.has(base), `${selector} has no reduced-motion stop`).toBe(true)
+    }
+
+    // Parts the animation draws rest on its last frame, not on its hidden start.
+    expect(reducedBlocks).toMatch(/\.tx-empty-state__chart-line,\s*\.tx-empty-state__offline-slash \{\s*stroke-dashoffset: 0;/)
+    expect(reducedBlocks).toMatch(/\.tx-empty-state__chart-dot \{\s*opacity: 1;/)
+    expect(reducedBlocks).toMatch(/\.tx-empty-state__chart-marks \{\s*opacity: 0\.6;/)
+    expect(reducedBlocks).toMatch(/\.tx-empty-state__search-bubble \{\s*transform: scale\(1\) translate\(-50%, -10px\);/)
   })
 
   it('shows a spinner only when loading has no custom icon source', () => {

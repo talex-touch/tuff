@@ -93,10 +93,15 @@ describe('txStatCard', () => {
     expect(wrapper.classes()).toContain('tx-stat-card--insight')
     expect(wrapper.find('.tx-stat-card__label--top').text()).toBe('Requests')
     expect(insight.attributes('style')).toContain('color: var(--tx-color-success, #67c23a)')
-    expect(insight.find('.tx-stat-card__insight-icon').classes()).toContain('i-carbon-growth')
+    // The default trend glyph is inline SVG, so it renders whether or not the
+    // host's utility engine scanned an icon class out of this component.
+    expect(insight.find('svg.tx-stat-card__insight-icon--trend').exists()).toBe(true)
+    expect(insight.find('i.tx-stat-card__insight-icon').exists()).toBe(false)
     expect(insight.find('.tx-stat-card__insight-prefix').text()).toBe('+')
     expect(insight.text()).toContain('20')
     expect(insight.find('.tx-stat-card__insight-suffix').text()).toBe('%')
+    // Sign, number and unit read as one figure, not three spaced tokens.
+    expect(insight.find('.tx-stat-card__insight-text').text()).toBe('+20%')
   })
 
   it('renders delta insight with custom color, icon, suffix, and negative value', async () => {
@@ -125,6 +130,33 @@ describe('txStatCard', () => {
     expect(insight.find('.tx-stat-card__insight-suffix').text()).toBe('pts')
   })
 
+  it('glows only behind a tinted icon, whatever colour syntax the browser reports', async () => {
+    const colors: Record<string, string> = {
+      'tint-rgb': 'rgb(64, 158, 255)',
+      'tint-srgb': 'color(srgb 0.25 0.62 1)',
+      'tint-grey': 'rgb(144, 147, 153)',
+    }
+    const realGetComputedStyle = window.getComputedStyle.bind(window)
+    const spy = vi.spyOn(window, 'getComputedStyle').mockImplementation(((element: Element, pseudo?: string | null) => {
+      const tint = Object.keys(colors).find(name => element.classList.contains(name))
+      return tint ? ({ color: colors[tint] } as CSSStyleDeclaration) : realGetComputedStyle(element, pseudo)
+    }) as typeof window.getComputedStyle)
+
+    const rgb = mount(TxStatCard, { props: { value: 1, label: 'A', iconClass: 'i-carbon-cloud tint-rgb' } })
+    const srgb = mount(TxStatCard, { props: { value: 2, label: 'B', iconClass: 'i-carbon-cloud tint-srgb' } })
+    const grey = mount(TxStatCard, { props: { value: 3, label: 'C', iconClass: 'i-carbon-cloud tint-grey' } })
+    await flushStatCardTimers()
+
+    expect(rgb.classes()).toContain('tx-stat-card--tinted')
+    expect(rgb.attributes('style')).toContain('--tx-stat-card-icon-color: rgb(64, 158, 255)')
+    expect(srgb.classes()).toContain('tx-stat-card--tinted')
+    // A grey icon has no hue to glow with; mixing it in drew fog behind the number.
+    expect(grey.classes()).not.toContain('tx-stat-card--tinted')
+    expect(grey.attributes('style') ?? '').not.toContain('--tx-stat-card-icon-color')
+
+    spy.mockRestore()
+  })
+
   it('renders progress variant from explicit progress and clamps the ring percent', () => {
     const wrapper = mount(TxStatCard, {
       props: {
@@ -145,6 +177,17 @@ describe('txStatCard', () => {
     expect(progress.find('.tx-stat-card__progress-icon').classes()).toContain('i-carbon-cloud')
     expect(wrapper.find('.tx-stat-card__meta').text()).toBe('Last sync 2s ago')
     expect(wrapper.find('.tx-stat-card__icon-layer').exists()).toBe(false)
+  })
+
+  it('lets the progress ring read the percentage bound on its parent', () => {
+    // The value is bound on `.tx-stat-card__progress` and read by the child ring.
+    // Registered with `inherits: false`, the ring only saw the 0% initial value,
+    // so the arc never drew. jsdom has no @property, so the contract is pinned in
+    // the source.
+    expect(txStatCardSource).toMatch(/@property --tx-stat-card-progress \{[^}]*inherits: true;/)
+    expect(txStatCardSource).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[^}]*\.tx-stat-card__progress-ring \{\s*transition: none;/,
+    )
   })
 
   it('treats numeric value under 100 as progress when progress prop is omitted', () => {

@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Motion rules (immediate hover colour, reduced-motion escape), ring-not-border, token-only colour, contrast measurement, new-component checklist for TxModeChip"}
+{"file": ".trellis/spec/frontend/tuffex-text-motion.md", "reason": "The chip label crossfade must reuse TxTextTransformer (one text engine); fade vs morph trade-offs"}
+{"file": ".trellis/spec/frontend/bui-component-family.md", "reason": "Registration chain (components.ts order, README counts, barrels, demo-registry, doc pair, build/audit order) and the confirmed traps (absent boolean props, enableAutoUnmount, jsdom gaps)"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Blast radius (TxAiComposer wrapper), placement of docs entries, demo conventions, gate traps and the shared dev-server hazards"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Vue SFC patterns, props/a11y/i18n conventions and the suite taxonomy for a new AI-suite component"}
+{"file": ".trellis/tasks/09-23-composer-motion-reference/research/reference-motion.md", "reason": "Measured reference timings and curves the implementation must match"}

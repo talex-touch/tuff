@@ -38,6 +38,7 @@ import {
   performNexusRequestWithAuth,
   subscribeAuthState
 } from '../auth'
+import { TUFF_NEXUS_PROVIDER_ID } from '@talex-touch/utils/intelligence/nexus-provider'
 import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
@@ -348,6 +349,37 @@ export class CatalogModule extends BaseModule {
     this.runLoginVoiceProviderSync(accountId)
   }
 
+  /**
+   * Binds the active signed voice route to `audio.asr`, wherever the pack becomes usable.
+   *
+   * A login sync that finds the pack already active and a fresh activation leave the same gap: a
+   * signed descriptor with no channel bound to it, so the cloud recognition source has nothing to
+   * select. The model list comes from the verified registry rather than the manifest, because a
+   * binding naming a model the pack does not carry is a route the runtime refuses to resolve.
+   */
+  private bindActiveVoiceRoute(): void {
+    let models: string[] = []
+    try {
+      const descriptor = this.service?.getVoiceProviderRegistry()?.get(TUFF_NEXUS_PROVIDER_ID)
+      models = (descriptor?.models ?? [])
+        .map((model) => model.id)
+        .filter((id) => typeof id === 'string' && id.length > 0)
+    } catch {
+      catalogLog.warn('Voice route binding skipped', { meta: { operation: 'bind-asr-route' } })
+      return
+    }
+    if (models.length === 0) return
+    // Loaded here rather than at module scope: binding a route is a side effect of a sync that has
+    // already finished, and this module's import graph is deliberately narrow — a static edge to the
+    // AI config drags the Sentry service and Electron's main app into every consumer of the catalog
+    // module, for no behavioural gain.
+    void import('../ai/intelligence-config')
+      .then(({ ensureNexusAsrRoute }) => ensureNexusAsrRoute(models))
+      .catch(() => {
+        catalogLog.warn('Voice route binding skipped', { meta: { operation: 'bind-asr-route' } })
+      })
+  }
+
   private runLoginVoiceProviderSync(accountId: string): void {
     this.loginSyncInFlight = this.syncVoiceProviderCatalog()
       .catch(() => undefined)
@@ -361,6 +393,9 @@ export class CatalogModule extends BaseModule {
               meta: { operation: 'login-sync', code }
             })
           }
+          // Signed in as the account this sync ran for, so whatever the verified registry holds is
+          // this user's route — whether this pass activated it or found it already active.
+          this.bindActiveVoiceRoute()
         }
         const pending = this.pendingLoginSyncAccountId
         this.pendingLoginSyncAccountId = null
@@ -488,6 +523,9 @@ export class CatalogModule extends BaseModule {
       const verified = await service.downloadVoiceProviderPack(checked.manifest)
       const stored = await service.importVoiceProviderPack(verified)
       const status = await service.activateVoiceProviderPack(stored)
+      // Immediately, not on the next launch: a pack that just activated is a route the user is
+      // about to try, and the channel it needs would otherwise stay unbound until a restart.
+      this.bindActiveVoiceRoute()
       return { outcome: 'activated', status, activated: status.active, errorCode: null }
     } catch {
       const status = service.getVoiceProviderStatus()

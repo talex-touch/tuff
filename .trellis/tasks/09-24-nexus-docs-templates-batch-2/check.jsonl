@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/nexus-docs-templates.md", "reason": "Template rules to audit against"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Visual rules to audit against (tokens, motion, weights)"}
+{"file": ".trellis/tasks/09-24-nexus-docs-templates-batch-2/research/app.md", "reason": "Batch-2 research: component risks to audit for this group"}
+{"file": ".trellis/tasks/09-24-nexus-docs-templates-batch-2/research/content-a.md", "reason": "Batch-2 research: component risks to audit for this group"}
+{"file": ".trellis/tasks/09-24-nexus-docs-templates-batch-2/research/content-b.md", "reason": "Batch-2 research: component risks to audit for this group"}
+{"file": ".trellis/tasks/09-24-nexus-docs-templates-batch-2/research/ai-data.md", "reason": "Batch-2 research: component risks to audit for this group"}
