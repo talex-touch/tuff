@@ -12,6 +12,7 @@ import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type { MessageSegment } from '~/modules/conversation/chain-steps'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
+import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
 import { TxIcon } from '@talex-touch/tuffex/icon'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
@@ -148,6 +149,18 @@ const modelPill = computed<{ label: string; icon: ITuffIcon | undefined }>(() =>
 })
 
 const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.value)
+
+/**
+ * The border beam (TuffEx `TxBorderBeam`) on the composer's own box.
+ *
+ * It runs on the untouched home screen only, where the field *is* the page's primary target and
+ * the outward `pulse-outside` bloom is what says so. Once a transcript exists the box keeps its
+ * plain border: static emphasis that never changes state is paint the border already carries.
+ *
+ * The running state is deliberately excluded — while a response streams the composer wears the
+ * living glow on its own pseudo-elements, and two effects on one box fight for the same edge.
+ */
+const composerBeamActive = computed(() => isEmpty.value && !isStreaming.value)
 
 /**
  * The opening message is the working title until the model summarises one (#969).
@@ -1281,114 +1294,122 @@ watch(
               />
             </div>
 
-            <div
-              ref="composerRef"
-              class="HomePage-Composer"
-              :class="{ 'is-dragover': isDragover, 'is-live': isStreaming }"
-              @dragenter="onDragEnter"
-              @dragover="onDragOver"
-              @dragleave="onDragLeave"
-              @drop="onDrop"
+            <!-- The beam wraps rather than decorates: it draws on the composer's own edge, and
+                 reads that edge's 24px radius off the element in its slot. -->
+            <TxBorderBeam
+              class="HomePage-ComposerBeam"
+              size="pulse-outside"
+              :active="composerBeamActive"
             >
-              <TxAttachmentTray
-                v-if="pendingAttachments.length"
-                class="HomePage-ComposerTray"
-                :attachments="pendingAttachments"
-                removable
-                :remove-label="t('home.attachRemove')"
-                :cancel-label="t('home.attachCancel')"
-                :preview-title="t('home.attachPreview')"
-                @remove="removeAttachment"
-              />
+              <div
+                ref="composerRef"
+                class="HomePage-Composer"
+                :class="{ 'is-dragover': isDragover, 'is-live': isStreaming }"
+                @dragenter="onDragEnter"
+                @dragover="onDragOver"
+                @dragleave="onDragLeave"
+                @drop="onDrop"
+              >
+                <TxAttachmentTray
+                  v-if="pendingAttachments.length"
+                  class="HomePage-ComposerTray"
+                  :attachments="pendingAttachments"
+                  removable
+                  :remove-label="t('home.attachRemove')"
+                  :cancel-label="t('home.attachCancel')"
+                  :preview-title="t('home.attachPreview')"
+                  @remove="removeAttachment"
+                />
 
-              <textarea
-                ref="inputRef"
-                v-model="draft"
-                class="HomePage-Input"
-                rows="1"
-                :aria-label="t('home.placeholder')"
-                :placeholder="t('home.placeholder')"
-                @input="autoGrow"
-                @keydown="handleKeydown"
-                @paste="onPaste"
-              />
+                <textarea
+                  ref="inputRef"
+                  v-model="draft"
+                  class="HomePage-Input"
+                  rows="1"
+                  :aria-label="t('home.placeholder')"
+                  :placeholder="t('home.placeholder')"
+                  @input="autoGrow"
+                  @keydown="handleKeydown"
+                  @paste="onPaste"
+                />
 
-              <div class="HomePage-ToolRow">
-                <div class="HomePage-ToolLeft">
-                  <input
-                    ref="fileInputRef"
-                    type="file"
-                    multiple
-                    class="HomePage-FileInput"
-                    :aria-label="t('home.attach')"
-                    @change="onFilePick"
-                  />
-                  <button
-                    class="HomePage-RoundBtn"
-                    type="button"
-                    :aria-label="t('home.attach')"
-                    @click="fileInputRef?.click()"
-                  >
-                    <span class="i-ri-add-line" />
-                  </button>
-                  <HomePermissionMenu
-                    v-model:mode="agentToolsMode"
-                    @reset="resetRememberedApprovals"
-                  />
-                </div>
-
-                <div class="HomePage-ToolRight">
-                  <div class="HomePage-ModelSlot">
-                    <HomeModelMenu placement="top-end">
-                      <template #trigger="{ open }">
-                        <button
-                          class="HomePage-ModelPill"
-                          type="button"
-                          :aria-label="t('home.model')"
-                          :aria-expanded="open"
-                        >
-                          <TxIcon
-                            v-if="modelPill.icon"
-                            class="HomePage-ModelIcon"
-                            :icon="modelPill.icon"
-                            :size="13"
-                          />
-                          <span class="HomePage-ModelName">{{ modelPill.label }}</span>
-                          <span class="HomePage-ModelEffort">{{ t('home.effortHigh') }}</span>
-                          <span class="i-ri-arrow-down-s-line" />
-                        </button>
-                      </template>
-                    </HomeModelMenu>
+                <div class="HomePage-ToolRow">
+                  <div class="HomePage-ToolLeft">
+                    <input
+                      ref="fileInputRef"
+                      type="file"
+                      multiple
+                      class="HomePage-FileInput"
+                      :aria-label="t('home.attach')"
+                      @change="onFilePick"
+                    />
+                    <button
+                      class="HomePage-RoundBtn"
+                      type="button"
+                      :aria-label="t('home.attach')"
+                      @click="fileInputRef?.click()"
+                    >
+                      <span class="i-ri-add-line" />
+                    </button>
+                    <HomePermissionMenu
+                      v-model:mode="agentToolsMode"
+                      @reset="resetRememberedApprovals"
+                    />
                   </div>
-                  <button
-                    class="HomePage-RoundBtn borderless"
-                    type="button"
-                    :aria-label="t('home.voice')"
-                  >
-                    <span class="i-ri-mic-line" />
-                  </button>
-                  <button
-                    v-if="isStreaming"
-                    class="HomePage-SendBtn"
-                    type="button"
-                    :aria-label="t('home.stop')"
-                    @click="conversation.stop()"
-                  >
-                    <span class="i-ri-stop-fill" />
-                  </button>
-                  <button
-                    v-else
-                    class="HomePage-SendBtn"
-                    type="button"
-                    :disabled="!canSend"
-                    :aria-label="t('home.send')"
-                    @click="submit"
-                  >
-                    <span class="i-ri-arrow-up-line" />
-                  </button>
+
+                  <div class="HomePage-ToolRight">
+                    <div class="HomePage-ModelSlot">
+                      <HomeModelMenu placement="top-end">
+                        <template #trigger="{ open }">
+                          <button
+                            class="HomePage-ModelPill"
+                            type="button"
+                            :aria-label="t('home.model')"
+                            :aria-expanded="open"
+                          >
+                            <TxIcon
+                              v-if="modelPill.icon"
+                              class="HomePage-ModelIcon"
+                              :icon="modelPill.icon"
+                              :size="13"
+                            />
+                            <span class="HomePage-ModelName">{{ modelPill.label }}</span>
+                            <span class="HomePage-ModelEffort">{{ t('home.effortHigh') }}</span>
+                            <span class="i-ri-arrow-down-s-line" />
+                          </button>
+                        </template>
+                      </HomeModelMenu>
+                    </div>
+                    <button
+                      class="HomePage-RoundBtn borderless"
+                      type="button"
+                      :aria-label="t('home.voice')"
+                    >
+                      <span class="i-ri-mic-line" />
+                    </button>
+                    <button
+                      v-if="isStreaming"
+                      class="HomePage-SendBtn"
+                      type="button"
+                      :aria-label="t('home.stop')"
+                      @click="conversation.stop()"
+                    >
+                      <span class="i-ri-stop-fill" />
+                    </button>
+                    <button
+                      v-else
+                      class="HomePage-SendBtn"
+                      type="button"
+                      :disabled="!canSend"
+                      :aria-label="t('home.send')"
+                      @click="submit"
+                    >
+                      <span class="i-ri-arrow-up-line" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </TxBorderBeam>
 
             <!-- Explicit duration: the pills stagger via child animations, so
                  the root has no transition of its own for Vue to time against. -->
@@ -1905,12 +1926,22 @@ watch(
   }
 }
 
+/**
+ * The beam is a wrapper, so it owns the lane: the beam draws on its own border box and the composer
+ * fills it. Keeping `--home-chat-lane-width` here alone is what stops the `100%` inside that token
+ * from resolving against a shrink-to-fit parent.
+ */
+.HomePage-ComposerBeam {
+  width: var(--home-chat-lane-width);
+  min-width: 0;
+}
+
 .HomePage-Composer {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  width: var(--home-chat-lane-width);
+  width: 100%;
   min-width: 0;
   padding: 16px 16px 12px;
   border: 1px solid var(--shell-border);
