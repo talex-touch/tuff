@@ -264,6 +264,7 @@ Rich interaction, visual effects and low-level primitives, importable through th
 - [Transition](./transition.en.mdc)
 - [Stagger](./stagger.en.mdc)
 - [Fusion](./fusion.en.mdc)
+- [FusionSurface](./fusion-surface.en.mdc)
 - [Liquid](./liquid.en.mdc)
 - [FlipOverlay](./flip-overlay.en.mdc)
 

@@ -34,14 +34,67 @@ The engine's shape, in the order a morph runs:
 from `packages/tuffex/packages/components/src/liquid/src/spring.ts`. Upstream torph shipped
 its own spring compiler and CSS-easing parser; both were dropped in the port.
 
-This is deliberate, and it is the reason `TxTextMorph`, `TxLiquid` and `TxSlider` all settle
-on the same curves. Do not reintroduce a second spring compiler, and do not "tidy" the
+This is deliberate, and it is the reason `TxTextMorph` and `TxLiquid` settle on the same curves.
+(`TxSlider`'s thumb left this compiler on 2026-09-06: it and every sliding indicator now integrate
+the jelly spring per frame through `utils/animation/jelly.ts` / `utils/use-jelly-indicator.ts`,
+because their targets move under them; see component-guidelines "Sliding indicators ride
+`useJellyIndicator`".) Do not reintroduce a second spring compiler, and do not "tidy" the
 cross-directory import away — `liquid/src/spring.ts` is a leaf module with no Vue and no CSS,
 so importing it costs nothing.
 
 One deviation worth knowing: `easingFunction` never returns `null` (an unparsable spec
 degrades to a clamped linear ramp) where upstream's `parseEasing` did. The `null` branches in
 `container.ts` are kept anyway so a future resolver change cannot fall through unnoticed.
+
+### Frame-driven motion uses `springSteps`, not a new integrator
+
+`resolveTransition` compiles a preset into a fixed CSS `linear()` curve, and a fixed curve
+always starts from rest: retarget it mid-flight and the motion restarts at zero velocity. Motion
+that JS draws frame by frame (SVG geometry, a path `d`, per-frame transforms) and that must keep
+its momentum through a retarget integrates the **same presets** with `springSteps` (added
+2026-09-26 for `TxFusionSurface`; the core-app send split uses it through the
+`@talex-touch/tuffex/fusion-surface` re-export).
+
+```ts
+// liquid/src/spring.ts
+export function springSteps(
+  position: number,
+  velocity: number,
+  target: number,
+  config: TransitionPreset | SpringConfig,
+  dt: number, // wall-clock seconds since the last frame
+): [position: number, velocity: number]
+```
+
+| Input | Result |
+|---|---|
+| `dt <= 0` or `NaN` | `[position, velocity]` unchanged |
+| unknown preset name | integrates `presets.smooth` |
+| missing / non-finite `stiffness` / `damping` / `mass` | that field falls back to `300 / 24 / 1` (the raw-spring default `resolveTransition` uses) |
+| integration produces a non-finite value | `[target, 0]` — a frame loop only sleeps once its springs rest, and `NaN` never does |
+| a long frame (2 s) | more substeps, never a bigger one; lands on the target instead of diverging |
+
+- Substeps are capped at `DT = 1/240 s`, the step `simulate()` compiles the CSS curves with —
+  **not** the 1/60 s cap in `observer.ts`'s private `springSteps`. At 1/60 s snappy drifts
+  10.7% off its own compiled curve (smooth 5.7%, bouncy 10.1%), so a JS-driven and a CSS-driven
+  element on one preset would visibly disagree; at 1/240 s the gap is 0.2%.
+- `observer.ts` keeps its private copy on purpose (upstream port, kept diffable). Do not
+  "dedupe" it onto `springSteps`: its 1/60 s cap is part of how `TxLiquid` currently looks.
+- Guarded by `liquid/__tests__/spring.test.ts`: it traces the compiled curve within 1%, survives a
+  2 s frame, is slice-invariant, keeps velocity across a retarget, and never returns `NaN`.
+
+```ts
+// Wrong — a new hand-rolled spring for new frame-driven motion: its own constants, step and drift
+v += (k * (target - x) - c * v) * dt; x += v * dt
+
+// Correct — the library's presets, the library's step
+;[x, v] = springSteps(x, v, target, 'smooth', dt)
+```
+
+Carve-out: sliding indicators keep `useJellyIndicator`'s own per-frame integrator (Radio's
+reference feel, extracted unchanged; JELLY 110/12, `dt ≤ 24 ms`). Porting it onto `springSteps`
+would re-tune every indicator's feel, so do not "dedupe" it — see component-guidelines "Sliding
+indicators ride `useJellyIndicator`" → "Relation to springSteps".
 
 ## Styles are not scoped, on purpose
 

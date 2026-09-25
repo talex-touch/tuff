@@ -41,6 +41,7 @@ import tuffexPkg from '../../../../../packages/tuffex/package.json'
 import ClientOnly from './DocsGallerySpecimen.vue'
 import GalleryEdgeMarquee from './gallery/GalleryEdgeMarquee.vue'
 import GalleryFusion from './gallery/GalleryFusion.vue'
+import GalleryFusionSurface from './gallery/GalleryFusionSurface.vue'
 import GalleryLiquidMenu from './gallery/GalleryLiquidMenu.vue'
 import GalleryTextMorph from './gallery/GalleryTextMorph.vue'
 import GalleryTransitionLanes from './gallery/GalleryTransitionLanes.vue'
@@ -2940,6 +2941,20 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <GalleryFusion />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('fusion-surface')">
+          {{ cellLabel('FusionSurface', '融合表面') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryFusionSurface />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>

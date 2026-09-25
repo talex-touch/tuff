@@ -264,6 +264,7 @@ code: |
 - [Transition 动效](./transition.zh.mdc)
 - [Stagger 依次进入](./stagger.zh.mdc)
 - [Fusion 交融](./fusion.zh.mdc)
+- [FusionSurface 融合表面](./fusion-surface.zh.mdc)
 - [Liquid 液态流体](./liquid.zh.mdc)
 - [FlipOverlay 翻转遮罩](./flip-overlay.zh.mdc)
 

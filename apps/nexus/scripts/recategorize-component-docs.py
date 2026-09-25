@@ -223,6 +223,7 @@ TAXONOMY: dict[str, list[str]] = {
         "transition",
         "stagger",
         "fusion",
+        "fusion-surface",
         "liquid",
         "flip-overlay",
     ],

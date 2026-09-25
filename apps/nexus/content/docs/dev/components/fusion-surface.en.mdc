@@ -1,0 +1,376 @@
+---
+title: "FusionSurface"
+description: "A rounded surface that grows buds from its edges and pinches them off into drops, drawn as one sharp SVG path that takes a stroke and a shadow."
+category: Effects
+status: beta
+since: 0.6.0
+tags: [fusion, surface, split, svg, spring]
+syncStatus: reviewed
+verified: true
+---
+
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxFusionSurface } from '@talex-touch/tuffex/fusion-surface'
+  import '@talex-touch/tuffex/fusion-surface/style.css'
+  import '@talex-touch/tuffex/base.css' // tokens + resets, once per app
+---
+:::
+
+## Usage
+
+`TxFusionSurface` is a rounded rectangle whose edges grow buds — trays, submenus, bubbles — joined to it by a concave fillet. Pull a bud far enough and its neck pinches, snaps, and lets it float off as a drop.
+
+### Toolbar tray
+
+A tool sprouts its options tray above the toolbar. Press the other tray tool and the same bud slides over to it; press it again and the tray closes where it is.
+
+:::TuffDemoWrapper{demo="FusionSurfaceTrayDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { FusionSurfaceBud } from '@talex-touch/tuffex/fusion-surface'
+  import { computed, ref } from 'vue'
+
+  // Centre of each tray tool along the toolbar, in px from its left edge.
+  const TRAYS = { draw: 106, shapes: 146 }
+  const open = ref<keyof typeof TRAYS | null>(null)
+  const shown = ref<keyof typeof TRAYS>('shapes')
+
+  // One bud, one id: switching tools moves it, so it slides;
+  // dropping it from the list closes it where it is.
+  const buds = computed<FusionSurfaceBud[]>(() => open.value
+    ? [{ id: 'tray', center: TRAYS[open.value], width: 146, height: 44, radius: 14 }]
+    : [])
+
+  function toggle(tool: keyof typeof TRAYS) {
+    open.value = open.value === tool ? null : tool
+    shown.value = tool
+  }
+  </script>
+
+  <template>
+    <TxFusionSurface
+      :buds="buds"
+      :radius="18"
+      stroke="var(--tx-border-color-lighter)"
+      shadow="var(--tx-elevation-4)"
+    >
+      <div class="tools">
+        <!-- …the other tools -->
+        <button type="button" :aria-expanded="open === 'draw'" @click="toggle('draw')">Draw</button>
+        <button type="button" :aria-expanded="open === 'shapes'" @click="toggle('shapes')">Shapes</button>
+      </div>
+      <template #bud>
+        <!-- The options of `shown`: a 146 × 44 row that rides out with the bud -->
+      </template>
+    </TxFusionSurface>
+  </template>
+---
+:::
+
+### Split into a drop
+
+The composer grows a message bud and stretches it; once `detach` passes the break point the neck snaps, the drop floats on into the thread and the stub left on the composer sinks back. Replay starts it over.
+
+:::TuffDemoWrapper{demo="FusionSurfaceSplitDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { FusionSurfaceBud } from '@talex-touch/tuffex/fusion-surface'
+  import { computed, ref } from 'vue'
+
+  const sent = ref(false)
+  const detach = ref(0)
+
+  // On a 320px composer, 320 - (radius 16 + fillet 12) - 168 / 2 = 208:
+  // the furthest right a bud's fillet still lands on the straight edge.
+  const buds = computed<FusionSurfaceBud[]>(() => sent.value
+    ? [{ id: 'message', center: 208, width: 168, height: 36, radius: 12, detach: detach.value }]
+    : [])
+
+  function send() {
+    sent.value = true                            // the bud grows out of the top edge
+    setTimeout(() => (detach.value = 22), 420)   // a neck stretches and pinches
+    setTimeout(() => (detach.value = 44), 940)   // past breakAt: it snaps, the drop floats on
+  }
+  </script>
+
+  <template>
+    <TxFusionSurface :buds="buds" stroke="var(--tx-border-color-lighter)">
+      <span class="draft">Ship it tonight</span>
+      <button type="button" aria-label="Send" @click="send" />
+      <template #bud>
+        <span class="bubble">Ship it tonight</span>
+      </template>
+    </TxFusionSurface>
+  </template>
+---
+:::
+
+### Buds on every edge
+
+All four edges grow at once. A bud asked to sit at a corner stops where its fillet still lands on the straight part of the edge, and a bud under twice the fillet's height gets a fillet of half its height.
+
+:::TuffDemoWrapper{demo="FusionSurfaceEdgesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { FusionSurfaceBud } from '@talex-touch/tuffex/fusion-surface'
+  import { computed, ref } from 'vue'
+
+  const position = ref(50) // % along every edge
+  const height = ref(32)
+
+  // The body is 220 × 132. `center` counts from the left on top and bottom
+  // and from the top on left and right; the component clamps it.
+  const buds = computed<FusionSurfaceBud[]>(() => [
+    { id: 'top', edge: 'top', center: position.value * 2.2, width: 64, height: height.value, radius: 12 },
+    { id: 'right', edge: 'right', center: position.value * 1.32, width: 40, height: height.value, radius: 12 },
+    { id: 'bottom', edge: 'bottom', center: position.value * 2.2, width: 64, height: height.value, radius: 12 },
+    { id: 'left', edge: 'left', center: position.value * 1.32, width: 40, height: height.value, radius: 12 },
+  ])
+  </script>
+
+  <template>
+    <TxFusionSurface :buds="buds" :radius="18" style="width: 220px; height: 132px" />
+    <TxSlider v-model="position" :min="0" :max="100" aria-label="Position along the edge" />
+    <TxSlider v-model="height" :min="4" :max="40" aria-label="Bud height" />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Keep buds on one edge apart. Each bud is fitted onto its edge on its own, so two whose footprints — `width` plus a fillet on each side — cross draw a broken outline.
+- Keep a bud's `id` stable while it moves: a new `center`, `width` or `height` springs the same bud there, while a new `id` closes the old bud and grows another. A new `edge` is no slide around the corner either: the bud leaves the old edge at once and grows again on the new one.
+- To replay a split, close the bud (`open: false`, or drop it from `buds`) and open it again, or send the next one under a new `id`. A split bud stays a drop until it has fully closed; lowering `detach` only moves the drop back.
+- Keep the root free of its own `background`, `border` and `box-shadow`, and never clip it or the space its buds grow into (`overflow: hidden`, `clip-path`, `contain: paint`): the silhouette is the surface, and buds and drops are drawn outside the root's box.
+- Buds take no layout space. Leave room on every edge that grows — padding on the parent, as the demos do.
+- Colour the surface with tokens (`var(--tx-…)`) so it follows the theme, and give the shadow to `shadow`, not to children, so one shadow follows every bud, neck and drop.
+- `fusionSurfacePath({ …, includeBody: false })` closes each attached shape `baseOverlap` px inside the host so its fill covers the host's border at the joint, and a stroke on that path strokes the closing line too. Stroke such an overlay only with its part inside the host clipped away, and break the host's own border along `spans`.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `buds` | `FusionSurfaceBud[]` | `[]` | The buds to grow; fields under Types below. A bud added to the list opens, and one removed from it closes before its content unmounts. |
+| `radius` | `number` | `16` | Body corner radius, capped at half the shorter side. Also every bud's default outer radius. |
+| `fillet` | `number` | `12` | Largest radius of the concave fillet where a bud meets the body; never more than half the bud's current height. |
+| `breakAt` | `number` | `28` | `detach` at which the neck closes completely. It snaps a little before, at about 96% of it. |
+| `fill` | `string` | `var(--tx-bg-color-overlay)` | Surface fill: any CSS colour or `var()`. |
+| `stroke` | `string` | `none` | Outline colour. The outline follows every bud, neck and drop, with round joins. |
+| `strokeWidth` | `number` | `1` | Outline width in px when `stroke` is set. |
+| `shadow` | `string` | `var(--tx-elevation-3)` | `box-shadow` syntax, drawn as a `drop-shadow()` chain on the silhouette. `inset` and spread layers are skipped; a `var()` layer passes through whole and must hold one `x y blur colour` layer, like `--tx-elevation-*`. `'none'` removes it. |
+| `transition` | `'snappy' \| 'smooth' \| 'bouncy' \| SpringConfig` | `'smooth'` | Spring for opening, moving, resizing and pulling buds. There is no `{ duration }` form: buds run frame by frame and keep their velocity when a target moves. |
+| `contentBlur` | `number` | `6` | Blur (px) a bud's content starts from while it opens; `0` turns the blur off and keeps the fade. |
+
+### Events
+
+| Event | Params | Description |
+|-------|--------|-------------|
+| `break` | `(id: string)` | A bud's neck snapped, on that frame. Once per split: the bud stays a drop until it has fully closed. |
+| `settle` | `()` | Every spring has come to rest and the frame loop has gone to sleep. Not fired for a change that moves nothing. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Body content: ordinary, interactive DOM over the silhouette. |
+| `bud` | `{ bud: FusionSurfaceBud }` | One bud's content, in a layer as long as the bud's `width` and as deep as its `height`. The layer's outer edge rides on the bud's (the drop's, after a split, and it shrinks with a closing drop); it is hidden until the bud is 45% open, fully in at 85%, blurred in between, and `inert` while the bud is closed or removed. |
+
+### Types
+
+`FusionSurfaceBud`, one entry of `buds`:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | `string` | - | Identity across updates. Required. |
+| `edge` | `'top' \| 'right' \| 'bottom' \| 'left'` | `'top'` | Edge the bud grows from. |
+| `open` | `boolean \| number` | `true` | Open or closed, or a 0..1 amount open. |
+| `center` | `number` | middle of the edge | Position along the edge in px: from the left on top and bottom, from the top on left and right. Clamped so both fillets land on the straight part of the edge. |
+| `width` | `number` | - | Size along the edge in px, narrowed to fit the straight part. Required. |
+| `height` | `number` | - | Outward size when fully open, in px. Required. |
+| `radius` | `number` | the surface `radius` | Radius of the bud's outer corners, capped by the bud's own size. |
+| `detach` | `number` | `0` | How far the bud is pulled away from the body, in px. Past the break point the neck snaps and the bud becomes a drop. |
+| `drift` | `number` | `0` | Sideways offset of the pulled-away part (of the drop, after a split), in px: rightward on top and bottom, downward on left and right. |
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import type {
+    FusionSurfaceBud,
+    FusionSurfaceEdge, // 'top' | 'right' | 'bottom' | 'left'
+    FusionSurfaceEmits,
+    FusionSurfaceProps,
+    FusionSurfaceTransition, // 'snappy' | 'smooth' | 'bouncy' | SpringConfig
+    TxFusionSurfaceInstance,
+    // fusionSurfacePath(), see Geometry function
+    FusionSurfaceBudShape,
+    FusionSurfaceGeometry,
+    FusionSurfaceGeometryInput,
+    FusionSurfaceRect,
+    FusionSurfaceSpan,
+    FusionSurfaceSplit,
+  } from '@talex-touch/tuffex/fusion-surface'
+---
+:::
+
+### CSS Variables
+
+| Variable | Description |
+|----------|-------------|
+| `--tx-fusion-surface-fill` | Silhouette fill. Written on the root by `fill`; default `var(--tx-bg-color-overlay)`. |
+| `--tx-fusion-surface-stroke` | Outline colour. Written by `stroke`; default `none`. |
+| `--tx-fusion-surface-stroke-width` | Outline width. Written by `strokeWidth`; default `1px`. |
+| `--tx-fusion-surface-filter` | The silhouette's `filter`. Written by `shadow`; default `drop-shadow(var(--tx-elevation-3))`. |
+| `--tx-fusion-surface-progress` | Written on each bud's content layer every frame: how open the bud is, `0`..`1`. For `bud` slot content to read. |
+
+The first four are written only for the props you pass, so an ancestor or a theme can set them for surfaces that pass none.
+
+## Geometry function
+
+`fusionSurfacePath()` is the component's geometry as a pure function, with no Vue and no DOM. Use it to draw buds, necks and drops over a host that should not become a `TxFusionSurface`, such as a composer that sends a message out of itself.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import type { FusionSurfaceSplit } from '@talex-touch/tuffex/fusion-surface'
+  import {
+    FUSION_SURFACE_BREAK_PINCH,
+    fusionSurfacePath,
+    fusionSurfacePinch,
+    springSteps,
+  } from '@talex-touch/tuffex/fusion-surface'
+
+  const overlayPath = document.querySelector<SVGPathElement>('#composer-overlay path')!
+  let detach = 0
+  let velocity = 0
+  let split: FusionSurfaceSplit | null = null
+
+  function frame(dt: number) {
+    // The component's spring, velocity kept across retargets.
+    ;[detach, velocity] = springSteps(detach, velocity, 44, 'smooth', dt)
+    const pinch = fusionSurfacePinch(detach, 28)
+    // Latch the break as the component does (it also caps detach at the break point).
+    if (!split && pinch >= FUSION_SURFACE_BREAK_PINCH)
+      split = { center: 208, width: 168, height: 36, detach, drift: 0, remnant: 1, tail: 1 }
+    // …then spring split.remnant and split.tail down to 0 ('snappy').
+
+    const { d } = fusionSurfacePath({
+      width: 320,
+      height: 48,
+      radius: 16,
+      includeBody: false, // the host draws its own body
+      buds: [{ id: 'message', center: 208, width: 168, height: 36, detach, pinch, split }],
+    })
+    overlayPath.setAttribute('d', d)
+  }
+---
+:::
+
+### Input
+
+`FusionSurfaceGeometryInput`:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `width` / `height` | `number` | - | Body size in px. Nothing is drawn unless both are positive. |
+| `radius` | `number` | `16` | Body corner radius, capped at half the shorter side. |
+| `buds` | `FusionSurfaceBudShape[]` | `[]` | The buds as they are on this frame. |
+| `includeBody` | `boolean` | `true` | `false` outputs only the buds, necks and drops, for a host that draws its own body. |
+| `baseOverlap` | `number` | `2` | With `includeBody: false`, how far (px) each attached shape reaches into the body, so it covers the host's border. |
+
+`FusionSurfaceBudShape` takes `id`, `edge`, `center`, `width`, `radius`, `detach` and `drift` as `FusionSurfaceBud` does, but describes the current frame rather than a target:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `height` | `number` | - | Current outward height: grow it from 0 to open the bud; under 0.5 px nothing is drawn. After a split, the drop's height before `split.scale`. |
+| `fillet` | `number` | `12` | Largest concave fillet radius. |
+| `pinch` | `number` | `0` | 0..1, how far the neck has narrowed; 1 closes it to a point. |
+| `split` | `FusionSurfaceSplit \| null` | `null` | Set once the neck has snapped; `pinch` is ignored from then on. |
+
+`FusionSurfaceSplit` holds the bud as it was on the frame it snapped (`center`, `width`, `height`, `detach`, `drift`), so moving the bud afterwards moves only the drop; the component caps that `detach` at the break point, so a fast pull leaves no taller stub. It also holds two amounts that run from 1 at the break down to 0: `remnant`, the stub sinking back into the body edge, and `tail`, the drop's pointed inner end rounding off. An optional `scale` (default `1`) draws the drop smaller about its own centre, on both axes; the component lowers it to `0` as a split bud closes.
+
+### Output
+
+`FusionSurfaceGeometry`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `d` | `string` | Closed subpaths, clockwise, coordinates to 2 decimals: the body with every attached bud merged in (with `includeBody: false`, each attached shape on its own), then one per drop. Never contains `NaN` or `Infinity`: an unusable number falls back to its default or leaves the bud undrawn. |
+| `spans` | `FusionSurfaceSpan[]` | `{ id, edge, from, to }`: where each attached bud, or its stub, meets the body edge, in `center`'s units. Break a host's own border here. |
+| `rects` | `FusionSurfaceRect[]` | `{ id, edge, x, y, width, height }`: each bud's current outer box in body coordinates, the drop's after a split. The component places `bud` slot content from it. |
+
+### Helpers
+
+- `fusionSurfacePinch(detach, breakAt)`: the component's neck curve. It is 0 for the first quarter of `breakAt`, then eases in (the square of a smoothstep) to 1 at `breakAt`, so a short neck stays a shallow waist and closes late.
+- `FUSION_SURFACE_BREAK_PINCH`: `0.985`, the pinch at which the component latches the split. The waist is then 1.5% of the bud's half-width.
+- `springSteps(position, velocity, target, config, dt)`: the integrator the component runs on, re-exported from the shared spring module. `config` is a preset name or a `SpringConfig`, `dt` is in seconds, and it returns `[position, velocity]`.
+
+## Overview
+
+- Renders a `position: relative; isolation: isolate` root. The silhouette is an SVG laid over it (`inset: 0`, `overflow: visible`, `z-index: -1`, `pointer-events: none`, `aria-hidden="true"`): under the slot content and over the root's own background, the layering `TxLiquid` uses.
+- The root is measured with a `ResizeObserver` (`offsetWidth` / `offsetHeight`) and the outline follows it. A bud without `center` stays in the middle of its edge through a resize, without springing.
+- A bud added to `buds` starts closed and opens; its position and size start at their targets, so it grows in place. A bud removed from `buds` closes first, its content mounted and `inert` until the silhouette has closed.
+- `open`, `center`, `width`, `height`, `detach` and `drift` are springs with their own velocity. A new target bends the motion instead of restarting it.
+- Fitting: a bud is narrowed to the straight part of its edge (the edge minus both corner radii and both fillets), its centre is clamped so both fillets land there, and a bud left with no room is not drawn. The fillet is `min(fillet, height / 2)` at the bud's current height, so it grows with the bud.
+- Splitting: the neck narrows along `fusionSurfacePinch(detach, breakAt)` and snaps once the pinch reaches `0.985`, at about 96% of `breakAt`. `break` fires on that frame; the stub left on the body sinks back and the drop's pointed inner end rounds off, both on the `snappy` spring whatever `transition` is.
+- A split is latched: lowering `detach` moves the drop back without rejoining it. Once the bud has fully closed and its stub has sunk, opening it grows a fresh bud. A bud first shown already past the break point is a drop from its first frame, with no stub.
+- A drop closes toward its own centre. Closing a split bud (`open: false`, or removing it from `buds`) shrinks the drop on both axes about its middle, and its content scales and fades with it; a drop shown already past the break point grows from its middle the same way. Attached buds still open and close by their height, out of the edge.
+- Bud content is placed by the frame loop, which writes each layer's `transform`, `opacity`, `filter` and `--tx-fusion-surface-progress` directly; Vue never re-renders for a frame, and a re-render does not undo them. Until its first frame a layer sits at `opacity: 0`, so server-rendered content never shows off the surface. Each layer carries `data-bud="<id>"`.
+- One `requestAnimationFrame` loop per surface: `d` is written only when it changes, `dt` is wall-clock (capped at 0.25 s after a background tab), and the loop sleeps once every spring is at rest, firing `settle`, until the next change. Unmounting cancels the pending frame and disconnects the observer.
+- Under `prefers-reduced-motion: reduce`, tracked live, every spring lands on its target in one frame: buds appear and disappear, and a pull past the break lands as two separate shapes and still fires `break`.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/fusion-surface/src/`, with `TxFusionSurface.vue` (measuring, slots, props), `geometry.ts` (`fusionSurfacePath()`, no Vue or DOM), `driver.ts` (the per-surface frame loop), `shadow.ts` (`box-shadow` to `drop-shadow()`) and `types.ts`.
+- The attached bud follows the Dock on [uiarc.dev](https://uiarc.dev/), whose technique was observed and no code taken: one path recomputed from a few spring values, a concave quadratic fillet into the body, convex quadratic outer corners, the bud clamped onto the straight part of the edge.
+- The neck is a profile model of this library's own:
+  - each side of the bud is a half-width profile sampled in 22 steps up its height, and a stretched bud's half-width dips by a raised cosine centred on the waist, 62% of `detach` above the fillet;
+  - below the waist the dip spans the whole run to the fillet and dies out there with zero slope, so the fillet meets the side without a knee;
+  - above it the dip is short (0.45 of the bud's height, at most 18px), which gives the drop its convex shoulder;
+  - a shallow dip starts as a broad waist centred on the whole side and takes that form as it deepens, fully by half closed. Pinned to the neck from the start, its lower half was so short that a 2.9px dip already leaned the side 45° just above the fillet: a notch rather than a waist;
+  - attached, stretched, pinched and broken are one formula under different parameters, with one command structure, so every change is continuous.
+- The default pinch is eased in for the same reason: 0 for the first quarter of `breakAt`, then the square of a smoothstep. The neck stays shallow while it is short, then closes quickly into the hourglass; the side first leans 45° with the dip 8.4px deep, at detach 15.
+- Sides are cubic Hermite segments with the profile's exact derivative. Catmull-Rom, the prototype's choice, takes its tangents from chords, which are off by up to about 50° at the base of a short neck; the fillet meeting them kinked or ballooned to about twice its radius.
+- After the break the drop's inner end is blended sample by sample from the pointed tail into its rounded end. Blending the dip's depth instead chamfered the end into a trapezoid while the stub on the body was still pointed.
+- A closing drop is scaled about its centre (`split.scale`), with its content layer scaled by the same amount about the same point. Closing it by height alone, as an attached bud closes, kept its width and left a full-width line in mid-air.
+- No goo filter, unlike `TxLiquid` and `TxFusion`. A blur-and-threshold filter cannot draw a stroke, its threshold softens every edge, and its filter region has to cover the whole travel: for a message floating across a conversation, the whole window, rasterised every frame. The path stays sharp, takes a stroke and a `drop-shadow()`, and costs one path redraw a frame.
+- Springs are the shared `snappy` / `smooth` / `bouncy` presets from `liquid/src/spring.ts`, integrated frame by frame by `springSteps()` there (semi-implicit Euler):
+  - its substep is 1/240 s, the step the presets' CSS `linear()` curves are compiled with;
+  - at 1/60 s a JS-driven spring drifted up to 10.7% off the same preset's CSS curve (snappy), at 1/240 s the gap is 0.2% at 60 fps;
+  - a long frame takes more substeps, never a bigger one.
+- **Verified coverage:**
+  - `fusion-surface/__tests__/geometry.test.ts` covers the plain rounded rectangle (uiarc's Dock at rest, command for command), a bud on each edge, the fillet limit, clamping and narrowing, two buds on one edge, a monotonic neck, a neck that starts as a waist rather than a notch, continuity per half pixel of `detach`, two closed subpaths after the break, no jump at the snap or while stub and tail retract, the settled drop, a drop scaled about its centre, `includeBody: false`, no `NaN` or `Infinity` from hostile input, and the eased `fusionSurfacePinch`;
+  - `fusion-surface.test.ts` covers the hidden silhouette, growing and settling, no wake-up without a change, reduced motion in one frame, the frame cancelled on unmount, a single `break` and the latch, a fresh bud after a split closes, a drop closing toward and regrowing from its centre with its content, `inert` content, layer placement and fade from the loop, a layer mounted while the loop sleeps, removed buds closing first, a repeated id rendered once, and the fill, stroke and shadow mapping;
+  - `fusion-surface-style.test.ts` pins the compiled style: no CSS transition or animation, no hover colour tween, token-only colour with fallbacks, the elevation-scale default shadow, and content hidden until placed;
+  - `liquid/__tests__/spring.test.ts` checks `springSteps` against the compiled curve (within 1%), through a 2 s frame, however the time is sliced, across a retarget, and that no config an untyped caller can pass makes it return `NaN`.
+
+<TuffDocSourceLink />
+
+## Use cases
+
+- A toolbar or dock whose tools grow their option trays, submenus or tooltips out of the bar itself.
+- A panel that grows a bubble or badge from its edge and lets it go.
+- Sending a message: the composer pinches it off and floats it into the thread. Over a host you draw yourself, `fusionSurfacePath()` gives the same shapes.
+
+## Related components
+
+| Component | For |
+|-----------|-----|
+| [Fusion](/docs/dev/components/fusion) | Two slotted shapes that fuse through a goo filter on hover, on click or under manual control |
+| [Liquid](/docs/dev/components/liquid) | Freely moving pieces that bridge and merge like droplets, through a goo filter |
+| [BorderBeam](/docs/dev/components/border-beam) | A glow that travels along, or breathes around, an element's border |
