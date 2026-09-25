@@ -1,0 +1,30 @@
+{
+  "id": "nexus-docs-static-delivery-closeout",
+  "name": "nexus-docs-static-delivery-closeout",
+  "title": "Nexus docs 静态交付收尾：边缘缓存、404.html、/docs 静态重定向",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-23",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "eeff74b4d",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/1957",
+  "subtasks": [],
+  "children": [],
+  "parent": "09-23-nexus-docs-perf-cms-remediation",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "None. All requirements are deployed and verified in production; the s-maxage alignment ships in the follow-up PR.",
+    "evidence": "research/verification-2026-09-24.md — build, gate, wrangler, Pages preview a51c44a7, production eeff74b4d (deployment 80b95775), Cache Rule after-probe 28/28 HIT (output/evidence/docs-edge-cache-2026-09-24-after.json).",
+    "nextAction": "Land the s-maxage alignment PR, then archive the task; child 2 waits for the gallery tasks, child 3 is P2."
+  }
+}
