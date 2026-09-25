@@ -12,7 +12,7 @@
  * The `&&` between the two passes is preserved: a failure in pass 1 skips pass 2
  * and its exit code is the one that surfaces, so CI still fails where it did.
  *
- * Usage: pnpm lint | pnpm lint:fix
+ * Usage: pnpm lint | pnpm lint:fix. --print-plan reports the same commands without running them.
  */
 
 import { spawnSync } from 'node:child_process'
@@ -60,9 +60,9 @@ const EXPLICIT_PLUGIN_DIRS = [
 ]
 
 const argv = process.argv.slice(2).filter(arg => arg !== '--')
-const unknown = argv.filter(arg => arg !== '--fix')
+const unknown = argv.filter(arg => arg !== '--fix' && arg !== '--print-plan')
 if (unknown.length) {
-  process.stderr.write(`Unknown argument(s): ${unknown.join(' ')}\nUsage: pnpm lint [--fix]\n`)
+  process.stderr.write(`Unknown argument(s): ${unknown.join(' ')}\nUsage: pnpm lint [--fix] [--print-plan]\n`)
   process.exit(1)
 }
 
@@ -79,23 +79,34 @@ function run(args) {
   return result.status ?? 1
 }
 
-const workspacesStatus = run([
-  '-r',
-  '--no-bail',
-  ...WORKSPACE_FILTERS.flatMap(filter => ['--filter', filter]),
-  'exec',
-  'eslint',
-  ...eslintFlags,
-  VUE_LINT_EXTENSIONS,
-])
+const commands = [
+  [
+    '-r',
+    '--no-bail',
+    ...WORKSPACE_FILTERS.flatMap(filter => ['--filter', filter]),
+    'exec',
+    'eslint',
+    ...eslintFlags,
+    VUE_LINT_EXTENSIONS,
+  ],
+  [
+    'exec',
+    'eslint',
+    ...eslintFlags,
+    `scripts/${SCRIPT_LINT_EXTENSIONS}`,
+    `plugins/{${EXPLICIT_PLUGIN_DIRS.join(',')}}/${VUE_LINT_EXTENSIONS}`,
+  ],
+]
 
-if (workspacesStatus !== 0)
-  process.exit(workspacesStatus)
+if (argv.includes('--print-plan')) {
+  process.stdout.write(`${JSON.stringify(commands)}\n`)
+  process.exit(0)
+}
 
-process.exit(run([
-  'exec',
-  'eslint',
-  ...eslintFlags,
-  `scripts/${SCRIPT_LINT_EXTENSIONS}`,
-  `plugins/{${EXPLICIT_PLUGIN_DIRS.join(',')}}/${VUE_LINT_EXTENSIONS}`,
-]))
+for (const args of commands) {
+  const status = run(args)
+  if (status !== 0)
+    process.exit(status)
+}
+
+process.exit(0)
