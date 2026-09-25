@@ -117,6 +117,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   CustomChartTooltipDemo: () => import('./demos/CustomChartTooltipDemo.vue'),
   DataTableDataTableDemo: () => import('./demos/DataTableDataTableDemo.vue'),
   DataTableDataTableSelectableDemo: () => import('./demos/DataTableDataTableSelectableDemo.vue'),
+  DataTableExpandableRowsDemo: () => import('./demos/DataTableExpandableRowsDemo.vue'),
   DataTableRecordsDemo: () => import('./demos/DataTableRecordsDemo.vue'),
   DatePickerDatePickerDemo: () => import('./demos/DatePickerDatePickerDemo.vue'),
   DialogBlowDialogDemo: () => import('./demos/DialogBlowDialogDemo.vue'),
