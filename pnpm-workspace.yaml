@@ -234,3 +234,4 @@ peerDependencyRules:
 
 patchedDependencies:
   app-builder-lib@26.15.3: patches/app-builder-lib@26.15.3.patch
+  nitro-cloudflare-dev@0.2.2: patches/nitro-cloudflare-dev@0.2.2.patch
