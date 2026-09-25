@@ -8,9 +8,8 @@ tags: [textarea, form, multiline]
 syncStatus: reviewed
 verified: true
 ---
-# Textarea
 
-## Basic Usage
+## Usage
 
 ### Textarea
 ::::TuffDemoWrapper{demo="TextareaTextareaDemo" code-lang="vue"}
@@ -34,15 +33,14 @@ code: |
 ---
 ::::
 
-## Interaction Contract
+### Best Practices
 
-- `v-model` owns a string value and emits both `update:modelValue` and `input` on native input.
-- Wrapper `class` and `style` stay on the root; other attrs are forwarded to the inner `<textarea>`.
-- `showCount` displays the current length; when `maxLength` is present the format is `current/max`.
-- `status` only changes visual state. Put validation copy in the host form item.
-- `focus()` and `blur()` are exposed for form flows and editor shortcuts.
+- Use `maxLength` with `showCount` for bounded notes, summaries, and prompts.
+- Keep `resize="vertical"` for normal forms; use `none` only when the surrounding layout already controls height.
+- Use `status` as a visual hint and keep accessible validation messages outside the component.
+- Forward `id`, `name`, and form-related attrs directly; the component passes them to the textarea.
 
-## API
+## API Reference
 
 ### Props
 
@@ -79,18 +77,18 @@ code: |
 
 `TxTextarea` does not expose slots. Keep labels, help text, counters beyond `showCount`, and validation messages in the surrounding form item.
 
-## Best Practices
+## Overview
 
-- Use `maxLength` with `showCount` for bounded notes, summaries, and prompts.
-- Keep `resize="vertical"` for normal forms; use `none` only when the surrounding layout already controls height.
-- Use `status` as a visual hint and keep accessible validation messages outside the component.
-- Forward `id`, `name`, and form-related attrs directly; the component passes them to the textarea.
+- `v-model` owns a string value and emits both `update:modelValue` and `input` on native input.
+- Wrapper `class` and `style` stay on the root; other attrs are forwarded to the inner `<textarea>`.
+- `showCount` displays the current length; when `maxLength` is present the format is `current/max`.
+- `status` only changes visual state. Put validation copy in the host form item.
+- `focus()` and `blur()` are exposed for form flows and editor shortcuts.
 
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/textarea/src/TxTextarea.vue` confirms attr forwarding, `class` / `style` placement, count formatting, resize classes, status classes, focus state, and exposed helpers.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/textarea/__tests__/textarea.test.ts` covers value/placeholder/rows, attr forwarding, `input` / `update:modelValue`, count text, status/resize classes, and focus/blur helper exposure.
 - Export: `packages/tuffex/packages/components/src/textarea/index.ts` wraps the component with `withInstall` and exports `TxTextareaInstance`.
 
-## Source
 <TuffDocSourceLink />

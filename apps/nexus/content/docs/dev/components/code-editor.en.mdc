@@ -8,9 +8,8 @@ tags: [code, editor, json, yaml]
 syncStatus: reviewed
 verified: true
 ---
-# CodeEditor
 
-## Basic Usage
+## Usage
 
 Use `language` to select the CodeMirror language package. JSON and YAML receive formatter and linter support; the other languages provide highlighting and editor behavior.
 
@@ -31,27 +30,15 @@ code: |
 ---
 ::::
 
-## Toolbar Slot
+### Best Practices
 
-Use the `toolbar` slot to connect editor methods to custom controls. `TxCodeEditorToolbar` provides the standard action button layout.
+- Use JSON or YAML for editable config surfaces that need validation and formatting. Use TOML/INI/JavaScript modes only when highlighting and basic editing are enough.
+- Keep `formatOnBlur` off for documents where users may intentionally keep partial or invalid syntax while editing.
+- Use `readOnly` for generated output and examples; do not hide the editor behind disabled form fields.
+- Prefer toolbar actions for discoverability, but keep keyboard shortcuts enabled for power users.
+- Keep custom `extensions` narrow and local to the feature. They are appended after built-ins and can change editing behavior globally inside the editor.
 
-::::TuffDemoWrapper{demo="CodeEditorToolbarDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxCodeEditor v-model="value" language="json">
-      <template #toolbar="{ format, openSearch, foldAll, unfoldAll, copy }">
-        <TxCodeEditorToolbar
-          :actions="toolbarActions"
-          @action="(key) => runEditorAction(key, { format, openSearch, foldAll, unfoldAll, copy })"
-        />
-      </template>
-    </TxCodeEditor>
-  </template>
----
-::::
-
-## API
+## API Reference
 
 ### Props
 
@@ -141,7 +128,27 @@ code: |
 | `getValue()` | `() => string` | Returns the current editor document, or the prop value before runtime mount. |
 | `getView()` | `() => EditorView \| null` | Returns the CodeMirror `EditorView` after runtime mount. |
 
-## Interaction Contract
+## Toolbar Slot
+
+Use the `toolbar` slot to connect editor methods to custom controls. `TxCodeEditorToolbar` provides the standard action button layout.
+
+::::TuffDemoWrapper{demo="CodeEditorToolbarDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCodeEditor v-model="value" language="json">
+      <template #toolbar="{ format, openSearch, foldAll, unfoldAll, copy }">
+        <TxCodeEditorToolbar
+          :actions="toolbarActions"
+          @action="(key) => runEditorAction(key, { format, openSearch, foldAll, unfoldAll, copy })"
+        />
+      </template>
+    </TxCodeEditor>
+  </template>
+---
+::::
+
+## Overview
 
 - `TxCodeEditor` dynamically imports the runtime editor on mount; before that, exposed methods return safe fallbacks.
 - `theme="auto"` reads `html` / `body` `data-theme` and `light` / `dark` classes, then observes `html` class and `data-theme` changes.
@@ -151,7 +158,23 @@ code: |
 - Toolbar slot props are functions from the runtime editor. They are unavailable until the runtime component has mounted.
 - `Cmd/Ctrl+Shift+F` inside the editor runs `format()`; the shortcut is always intercepted (the keymap handler always returns `true`), so it is swallowed even when the current language has no formatter.
 
-## Style Customization
+## Technologies
+
+- Reviewed against `packages/tuffex/packages/components/src/code-editor/src/types.ts`, `TxCodeEditor.vue`, `TxCodeEditorRuntime.vue`, `TxCodeEditorToolbar.vue`, `code-editor.test.ts`, and `code-editor-toolbar.test.ts`.
+- API headings now use shared `Props`, `Events`, and `Slots` sections with per-component subsections, so coverage checks and readers find both editor and toolbar contracts.
+- Verified source behavior: client-only runtime import, safe pre-mount exposed-method fallbacks, JSON/YAML formatting, TOML/INI local stream parsers, toolbar default actions, and disabled toolbar action guard.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor.test.ts` covers update emission, JSON/YAML formatting, and TOML/INI language modes; `code-editor-toolbar.test.ts` covers toolbar action emission.
+- `format()` intentionally returns `false` instead of throwing for read-only, unsupported, invalid, unchanged, or unmounted states.
+
+- Component source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditor.vue`
+- Runtime source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorRuntime.vue`
+- Toolbar source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorToolbar.vue`
+- Types: `packages/tuffex/packages/components/src/code-editor/src/types.ts`
+- Tests: `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor.test.ts`, `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor-toolbar.test.ts`
+
+<TuffDocSourceLink />
+
+## Customization
 
 | Variable | Written by | Purpose |
 |----------|------------|---------|
@@ -162,29 +185,3 @@ code: |
 | `--tx-code-editor-focus` | resolved theme | Focus border and ring color. |
 
 Use the `theme` prop for supported palettes. Override these variables only when a host theme must tune the shell around CodeMirror.
-
-## Best Practices
-
-- Use JSON or YAML for editable config surfaces that need validation and formatting. Use TOML/INI/JavaScript modes only when highlighting and basic editing are enough.
-- Keep `formatOnBlur` off for documents where users may intentionally keep partial or invalid syntax while editing.
-- Use `readOnly` for generated output and examples; do not hide the editor behind disabled form fields.
-- Prefer toolbar actions for discoverability, but keep keyboard shortcuts enabled for power users.
-- Keep custom `extensions` narrow and local to the feature. They are appended after built-ins and can change editing behavior globally inside the editor.
-
-## Review Notes
-
-- Reviewed against `packages/tuffex/packages/components/src/code-editor/src/types.ts`, `TxCodeEditor.vue`, `TxCodeEditorRuntime.vue`, `TxCodeEditorToolbar.vue`, `code-editor.test.ts`, and `code-editor-toolbar.test.ts`.
-- API headings now use shared `Props`, `Events`, and `Slots` sections with per-component subsections, so coverage checks and readers find both editor and toolbar contracts.
-- Verified source behavior: client-only runtime import, safe pre-mount exposed-method fallbacks, JSON/YAML formatting, TOML/INI local stream parsers, toolbar default actions, and disabled toolbar action guard.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor.test.ts` covers update emission, JSON/YAML formatting, and TOML/INI language modes; `code-editor-toolbar.test.ts` covers toolbar action emission.
-- `format()` intentionally returns `false` instead of throwing for read-only, unsupported, invalid, unchanged, or unmounted states.
-
-## Source
-
-- Component source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditor.vue`
-- Runtime source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorRuntime.vue`
-- Toolbar source: `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorToolbar.vue`
-- Types: `packages/tuffex/packages/components/src/code-editor/src/types.ts`
-- Tests: `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor.test.ts`, `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor-toolbar.test.ts`
-
-<TuffDocSourceLink />

@@ -8,11 +8,10 @@ tags: [auto-size, layout, animation]
 syncStatus: reviewed
 verified: true
 ---
-# AutoSizer 自适应尺寸
 
 > 实现基于 `ResizeObserver`。当内容中包含图片/异步渲染导致尺寸再次变化时，会自动触发重新测量。
 
-## 基础用法
+## 用法
 
 ### 仅高度（推荐用于 Tabs/Accordion）
 
@@ -272,7 +271,16 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+- Tabs、Accordion、Dropdown 内容区优先使用 `height=true`、`width=false`，让外围布局维持原宽度。
+- Button 文案、内联标签、数字变化优先使用 `width=true`、`height=false`；该模式默认自动收缩到内容宽度。
+- 内容带 blur、scale 或 FLIP 动效时保留 `outerClass="overflow-hidden"`，避免过渡中间态溢出包装层。
+- 明确的状态切换用 `action()` 或 `flip()` 包裹，不要先改状态再手动 `refresh()`；这样才能保留过渡所需的前后快照。
+- 只有 outer 与 inner 都可能独立变化尺寸时才设置 `observeTarget="both"`；普通内容变化只观察 `inner` 可减少不必要刷新。
+- 文本和按钮标签默认使用 `rounding="ceil"`，避免亚像素测量导致内容被裁切；只有父级布局需要更紧边界时再改成 `floor`。
+
+## API 参考
 
 ### Props
 
@@ -313,7 +321,7 @@ code: |
 | `focus()` | `() => void` | 当 outer 包装层可聚焦时，聚焦到该包装层。 |
 | `outerEl` | `HTMLElement \| null` | 暴露 outer 包装层元素，供高级集成使用。 |
 
-## 交互契约
+## 概述
 
 - outer 包装层接收透传 attrs，并合并 `outerClass`、外部 class、基础尺寸样式和外部 style；inner 包装层负责包裹被测内容，并使用 `display: flow-root`。
 - 仅开启宽度跟随（`width=true` 且 `height=false`）时，默认使用 inline shrink-to-content 布局；显式设置 `inline=false` 可保持块级布局。
@@ -321,22 +329,11 @@ code: |
 - `action(fn, options?)` 会在指定 `inner` / `outer` 目标上做前后快照，并返回变化的 `changedKeys`。
 - `observeTarget`、`rounding`、`immediate`、`rafBatch`、`durationMs` 和 `easing` 会透传给底层 resize / FLIP 工具。
 
-## 最佳实践
-
-- Tabs、Accordion、Dropdown 内容区优先使用 `height=true`、`width=false`，让外围布局维持原宽度。
-- Button 文案、内联标签、数字变化优先使用 `width=true`、`height=false`；该模式默认自动收缩到内容宽度。
-- 内容带 blur、scale 或 FLIP 动效时保留 `outerClass="overflow-hidden"`，避免过渡中间态溢出包装层。
-- 明确的状态切换用 `action()` 或 `flip()` 包裹，不要先改状态再手动 `refresh()`；这样才能保留过渡所需的前后快照。
-- 只有 outer 与 inner 都可能独立变化尺寸时才设置 `observeTarget="both"`；普通内容变化只观察 `inner` 可减少不必要刷新。
-- 文本和按钮标签默认使用 `rounding="ceil"`，避免亚像素测量导致内容被裁切；只有父级布局需要更紧边界时再改成 `floor`。
-
-## 审阅说明
+## 技术实现
 
 - 已对照 `packages/tuffex/packages/components/src/auto-sizer/src/types.ts`、`TxAutoSizer.vue` 与 `auto-sizer.test.ts` 核对。
 - 组件公开契约主要是暴露方法，而不是事件；示例应继续围绕 `action()` / `flip()` 的状态协调。
 - `observeTarget="both"` 属于高级用法；普通内容过渡只观察 `inner` 可减少额外测量。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/auto-sizer/src/TxAutoSizer.vue`.
 - Types: `packages/tuffex/packages/components/src/auto-sizer/src/types.ts`.

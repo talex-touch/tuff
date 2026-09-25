@@ -9,13 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-A launcher modelled on Tuff's CoreBox, summoned over the desktop. One field searches apps, plugins, files, the clipboard, AI and system actions at once; whatever is highlighted is previewed on the right, and nothing needs the mouse.
-
-It suits launchers, global search, Spotlight-style command entries and any keyboard-first "type, pick, run" interface.
-
-## Template
+## Usage
 
 ### CoreBox-style launcher
 
@@ -97,7 +91,27 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+A launcher modelled on Tuff's CoreBox, summoned over the desktop. One field searches apps, plugins, files, the clipboard, AI and system actions at once; whatever is highlighted is previewed on the right, and nothing needs the mouse.
+
+It suits launchers, global search, Spotlight-style command entries and any keyboard-first "type, pick, run" interface.
+
+- Results arrive as you type, across apps, plugins, files, the clipboard, AI and system actions, and the counts on the scope row follow the query. Type a sum such as `128*4` and the first row is the answer, with hex and binary in the preview.
+- ↑ ↓ move the highlight and the preview follows; the list keeps the highlight in view inside its own scroll area. ↵ runs the item and the footer says "Opened …" for 1.6 seconds. ⌘K opens the actions for the current result — Open, Reveal in Finder, Pin to suggestions, Disable plugin — and a pinned item moves to the top of the suggestions.
+- Esc works in two steps: first it clears the query, then it resets the scope to All; after that it is left alone.
+- With no results, Ask Tuff Intelligence appears; clicking it switches to the AI scope, where the query itself becomes a prompt.
+- Once in view it plays once: it types "clip" letter by letter (writing the field's value without focusing it, so the page does not scroll), moves the highlight down twice and settles on the Plugins scope. Typing or clicking stops it; with reduced motion on, the final state shows straight away.
+- ⌘1–⌘5 are hints only: the browser reserves ⌘ plus a digit and the page cannot intercept it. Wide (≥ 960px) enlarges the window and shows the Dock; narrow (< 640px) drops the preview and lets the scope row scroll sideways.
+
+## Customization
+
+- Real data: replace `CATALOG` with your index's response and keep the `kind`, `tone` and `keywords` fields. Ranking lives in `scoreEntry()`: 3 when the title starts with the query, 2 when it contains it, 1 for a keyword or subtitle hit.
+- Why not TxSearchPanel: it neither reports the highlighted item nor exposes its input, so neither the preview nor the scripted demo could follow it. For an inline search with no preview, TxSearchPanel is the shorter path.
+- To summon it globally, put the window in a TxModal or your own Teleport overlay; the keyboard logic stays as it is. Bind the summon shortcut on the host's own root as well, not on `window`.
+- Keep links out of preview markdown: TxMarkdownView renders real `<a>` elements and a click navigates the page away. In a desktop app, intercept the click and let the host open it.
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -108,19 +122,3 @@ code: |
 | Results | A hand-built listbox, [TxIconChip](/docs/dev/components/icon-chip), [TxTag](/docs/dev/components/tag), [TxKbd](/docs/dev/components/kbd), [TxSearchEmpty](/docs/dev/components/search-empty) | Best matches first with the matched text highlighted; ⌘1–⌘5 hints on the first five; Ask Tuff Intelligence when nothing matches |
 | Preview | [TxMarkdownView](/docs/dev/components/markdown-view) | Details that follow the highlight; a single instance whose `content` alone changes |
 | Footer | [TxDropdownMenu](/docs/dev/components/dropdown-menu), [TxStatusBadge](/docs/dev/components/status-badge) | Outcome of the last action, the ⌘K actions menu, indexing progress |
-
-## Interactions
-
-- Results arrive as you type, across apps, plugins, files, the clipboard, AI and system actions, and the counts on the scope row follow the query. Type a sum such as `128*4` and the first row is the answer, with hex and binary in the preview.
-- ↑ ↓ move the highlight and the preview follows; the list keeps the highlight in view inside its own scroll area. ↵ runs the item and the footer says "Opened …" for 1.6 seconds. ⌘K opens the actions for the current result — Open, Reveal in Finder, Pin to suggestions, Disable plugin — and a pinned item moves to the top of the suggestions.
-- Esc works in two steps: first it clears the query, then it resets the scope to All; after that it is left alone.
-- With no results, Ask Tuff Intelligence appears; clicking it switches to the AI scope, where the query itself becomes a prompt.
-- Once in view it plays once: it types "clip" letter by letter (writing the field's value without focusing it, so the page does not scroll), moves the highlight down twice and settles on the Plugins scope. Typing or clicking stops it; with reduced motion on, the final state shows straight away.
-- ⌘1–⌘5 are hints only: the browser reserves ⌘ plus a digit and the page cannot intercept it. Wide (≥ 960px) enlarges the window and shows the Dock; narrow (< 640px) drops the preview and lets the scope row scroll sideways.
-
-## Adapting it
-
-- Real data: replace `CATALOG` with your index's response and keep the `kind`, `tone` and `keywords` fields. Ranking lives in `scoreEntry()`: 3 when the title starts with the query, 2 when it contains it, 1 for a keyword or subtitle hit.
-- Why not TxSearchPanel: it neither reports the highlighted item nor exposes its input, so neither the preview nor the scripted demo could follow it. For an inline search with no preview, TxSearchPanel is the shorter path.
-- To summon it globally, put the window in a TxModal or your own Teleport overlay; the keyboard logic stays as it is. Bind the summon shortcut on the host's own root as well, not on `window`.
-- Keep links out of preview markdown: TxMarkdownView renders real `<a>` elements and a click navigates the page away. In a desktop app, intercept the click and let the host open it.

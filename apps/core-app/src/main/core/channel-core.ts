@@ -12,7 +12,10 @@ import { WindowManager } from '../modules/box-tool/core-box/window'
 import { perfMonitor, registerPerfReportListener } from '../utils/perf-monitor'
 import { enterPerfContext } from '../utils/perf-context'
 import { appendWorkflowDebugLog } from '../utils/workflow-debug'
-import { resolveMissingHandlerPolicy } from './channel-missing-handler-policy'
+import {
+  resolveMissingHandlerPolicy,
+  type MissingHandlerPolicy
+} from './channel-missing-handler-policy'
 import {
   maskPluginViewChannelKey,
   resolvePluginKeyByViewNonce,
@@ -175,6 +178,17 @@ class TouchChannel {
 
   app: TalexTouch.TouchApp
 
+  /**
+   * True until the runtime reports that the module chain finished registering handlers.
+   *
+   * The window is shown and Vue mounts while modules are still loading, so an early renderer
+   * request can arrive before its handler exists.
+   */
+  private startupPending = true
+
+  /** Guards the one-time binding of `startupPending`, which must happen after `initPromise` exists. */
+  private startupSettledBound = false
+
   constructor(app: TalexTouch.TouchApp) {
     this.app = app
     this.channelMap.set(ChannelType.MAIN, new Map())
@@ -314,6 +328,73 @@ class TouchChannel {
     throw new Error('Invalid message!')
   }
 
+  /**
+   * Requests that arrived before their handler existed, held until initialization completes.
+   */
+  private deferredRequests: Array<{
+    e: Electron.IpcMainEvent
+    arg: unknown
+    sourceLane?: ChannelType
+  }> = []
+
+  /**
+   * Binds the one-time transition out of `startupPending`, then re-dispatches everything that was
+   * deferred while waiting for it.
+   *
+   * `startupPending` is cleared *before* the replay so a handler that genuinely never registers
+   * falls through to the regular no-handler reply instead of deferring itself forever.
+   *
+   * Bound lazily on the first deferral rather than in the constructor, because `TouchApp` assigns
+   * `initPromise` at the end of its own constructor and the channel can be created before that.
+   */
+  private __bindStartupSettled(): void {
+    if (this.startupSettledBound) return
+    this.startupSettledBound = true
+
+    void this.app
+      .waitUntilInitialized()
+      .catch(() => undefined)
+      .then(() => {
+        this.startupPending = false
+        const deferred = this.deferredRequests
+        this.deferredRequests = []
+        for (const request of deferred) {
+          if (request.e.sender.isDestroyed()) continue
+          this.__handle_main(request.e, request.arg, request.sourceLane)
+        }
+      })
+  }
+
+  /**
+   * Holds a request that arrived before its handler was registered, and re-dispatches it once the
+   * runtime reports initialized.
+   *
+   * The no-handler reply this replaces is not neutral to the caller: the renderer channel resolves
+   * it as `undefined` (its `errorReply` branch only warns), so a first-paint consumer commits an
+   * undefined snapshot and never retries -- the Home session list stayed broken across a whole
+   * session with `sessions is not iterable`. Only asynchronous request/response messages are
+   * eligible, because a `sendSync` caller blocks on `e.returnValue` within the same tick and could
+   * never be answered after a delay. Policies that exist precisely so a missing handler is ignored
+   * stay on the immediate path.
+   *
+   * @returns `true` when the request was taken over and the caller must stop handling it.
+   */
+  private __deferUntilInitialized(
+    e: Electron.IpcMainEvent,
+    arg: unknown,
+    sourceLane: ChannelType | undefined,
+    rawData: RawStandardChannelData,
+    policy: MissingHandlerPolicy
+  ): boolean {
+    if (!rawData.sync) return false
+    if (!this.startupPending) return false
+    if (policy.suppressWarning || policy.replyAsSuccess) return false
+
+    this.deferredRequests.push({ e, arg, sourceLane })
+    this.__bindStartupSettled()
+    return true
+  }
+
   __handle_main(e: Electron.IpcMainEvent, arg: unknown, sourceLane?: ChannelType) {
     // ipcMain.on listeners run inside an EventEmitter, so anything thrown here becomes an
     // uncaught main-process exception -- and the only uncaughtException handler in the tree
@@ -358,6 +439,15 @@ class TouchChannel {
         eventName: rawData.name,
         channelType: rawData.header.type
       })
+
+      // Handlers are registered by the module chain, which finishes after the window is shown, so
+      // an early renderer request can legitimately arrive first. Answering it here is not a no-op:
+      // the renderer channel resolves the reply's `data` (undefined) instead of rejecting, so a
+      // first-paint consumer commits an undefined snapshot and never retries. Replay after startup
+      // instead, and fall back to the reply below for handlers that truly never register.
+      if (this.__deferUntilInitialized(e, arg, sourceLane, rawData, missingHandlerPolicy)) {
+        return
+      }
 
       if (!missingHandlerPolicy.suppressWarning) {
         perfMonitor.recordIpcNoHandler(rawData.name, {

@@ -8,9 +8,8 @@ tags: [glass, blur, refraction]
 syncStatus: reviewed
 verified: true
 ---
-# GlassSurface 玻璃拟态
 
-## 基础用法
+## 用法
 
 ### GlassSurface
 :::TuffDemoWrapper{demo="GlassSurfaceGlassSurfaceDemo" code-lang="vue"}
@@ -47,45 +46,16 @@ code: |
 ---
 :::
 
-## 参数调节（滑块）
+### 最佳实践
 
-### GlassSurface 参数调节
-:::TuffDemoWrapper{demo="GlassSurfaceGlassSurface2Demo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
+- 只有当周围插画、图片或渐变背景确实需要折射感时才使用该组件。普通卡片优先使用 `TxBaseSurface` 或 `TxCard`，保证对比度稳定。
+- 玻璃层覆盖滚动内容或图片时，显式控制 `width`、`height` 与 `borderRadius`；displacement map 会根据实测容器尺寸重新生成。
+- `blur`、`backgroundOpacity` 与 `saturation` 必须结合真实背景调参。低对比内容上使用过重模糊，会让背后的文字不可读。
+- `distortionScale` 与 RGB offsets 是视觉导演参数。大幅负值或宽通道偏移只适合 hero / preview 表面，不适合密集表单。
+- Safari、Firefox、SSR、测试环境和不支持 `CSS.supports` 的环境会进入 fallback 路径；这些路径保留布局和可读性，但不会保留 RGB 折射。
+- 重要交互控件应放在默认插槽内；生成的 SVG 只负责装饰，非交互，并位于 `.tx-glass-surface__content` 下方。
 
-  // 每个光学参数用一个 ref 绑定到一个 TxSlider；此处只示意其中几个，
-  // 完整控制面板（14 个滑块 + xChannel / yChannel / mixBlendMode 下拉）见 demo 源码。
-  const blur = ref(10)
-  const displace = ref(0.6)
-  const distortionScale = ref(-180)
-  </script>
-
-  <template>
-    <div style="display: flex; flex-direction: column; gap: 16px;">
-      <TxGlassSurface
-        :width="360"
-        :height="160"
-        :blur="blur"
-        :displace="displace"
-        :distortion-scale="distortionScale"
-      >
-        <div style="padding: 18px 20px; font-weight: 600; color: rgba(0, 0, 0, 0.68);">
-          GlassSurface
-        </div>
-      </TxGlassSurface>
-
-      <TxSlider v-model="blur" :min="0" :max="24" :step="1" show-value />
-      <TxSlider v-model="displace" :min="0" :max="6" :step="0.1" show-value />
-      <TxSlider v-model="distortionScale" :min="-600" :max="0" :step="10" show-value />
-    </div>
-  </template>
----
-:::
-
-## API
+## API 参考
 
 ### Props
 
@@ -173,6 +143,44 @@ rows:
 |--------|------|------|
 | `default` | - | 面板内容，渲染在生成的 SVG filter 层之上，并由 `.tx-glass-surface__content` 居中。 |
 
+## 参数调节（滑块）
+
+### GlassSurface 参数调节
+:::TuffDemoWrapper{demo="GlassSurfaceGlassSurface2Demo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  // 每个光学参数用一个 ref 绑定到一个 TxSlider；此处只示意其中几个，
+  // 完整控制面板（14 个滑块 + xChannel / yChannel / mixBlendMode 下拉）见 demo 源码。
+  const blur = ref(10)
+  const displace = ref(0.6)
+  const distortionScale = ref(-180)
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      <TxGlassSurface
+        :width="360"
+        :height="160"
+        :blur="blur"
+        :displace="displace"
+        :distortion-scale="distortionScale"
+      >
+        <div style="padding: 18px 20px; font-weight: 600; color: rgba(0, 0, 0, 0.68);">
+          GlassSurface
+        </div>
+      </TxGlassSurface>
+
+      <TxSlider v-model="blur" :min="0" :max="24" :step="1" show-value />
+      <TxSlider v-model="displace" :min="0" :max="6" :step="0.1" show-value />
+      <TxSlider v-model="distortionScale" :min="-600" :max="0" :step="10" show-value />
+    </div>
+  </template>
+---
+:::
+
 ## Fallback 降级
 
 `TxGlassSurface` 会按浏览器能力依次选择渲染路径：
@@ -183,23 +191,12 @@ rows:
 
 Safari 与 Firefox 当前会跳过 SVG filter 折射路径，优先进入后两级 fallback。
 
-## 最佳实践
-
-- 只有当周围插画、图片或渐变背景确实需要折射感时才使用该组件。普通卡片优先使用 `TxBaseSurface` 或 `TxCard`，保证对比度稳定。
-- 玻璃层覆盖滚动内容或图片时，显式控制 `width`、`height` 与 `borderRadius`；displacement map 会根据实测容器尺寸重新生成。
-- `blur`、`backgroundOpacity` 与 `saturation` 必须结合真实背景调参。低对比内容上使用过重模糊，会让背后的文字不可读。
-- `distortionScale` 与 RGB offsets 是视觉导演参数。大幅负值或宽通道偏移只适合 hero / preview 表面，不适合密集表单。
-- Safari、Firefox、SSR、测试环境和不支持 `CSS.supports` 的环境会进入 fallback 路径；这些路径保留布局和可读性，但不会保留 RGB 折射。
-- 重要交互控件应放在默认插槽内；生成的 SVG 只负责装饰，非交互，并位于 `.tx-glass-surface__content` 下方。
-
-## 审阅说明
+## 技术实现
 
 - **渲染契约：** 数字 `width` / `height` 会归一化为 px 字符串，字符串尺寸原样透传，并用实测边界生成 displacement map。
 - **降级契约：** SVG displacement 是高保真路径；不支持时依次降级到原生 `backdrop-filter` 和纯半透明表面，后两者保留布局与可读性但不保留 RGB 折射。
 - **交互契约：** 生成的 SVG/filter 层只负责装饰。可交互控件应放进默认插槽，并位于 `.tx-glass-surface__content` 上方。
 - **实测覆盖:** `glass-surface.test.ts` 覆盖尺寸归一化、插槽渲染、纯色兜底样式和 RGB displacement 通道透传。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/glass-surface/src/TxGlassSurface.vue`.
 - Types: `packages/tuffex/packages/components/src/glass-surface/index.ts` exports `GlassSurfaceProps` and `TxGlassSurfaceInstance`.

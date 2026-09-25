@@ -95,6 +95,11 @@ Two honest caveats before reaching for it:
 
 Attribution and the MIT notice travel with any geometry you copy.
 
+## Technologies
+
+- Resolution and rendering: `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`.
+- Config contract: `packages/tuffex/packages/components/src/icon/src/types.ts` (`TxIconSource`, `TxIconConfig`, `TX_ICON_CONFIG_KEY`).
+
 ## Related components
 
 | Component | For |
@@ -102,8 +107,3 @@ Attribution and the MIT notice travel with any geometry you copy.
 | [Icon](./icon.en.mdc) | The general case, and the full prop list |
 | [IconChip](./icon-chip.en.mdc) | A small tinted plate holding a glyph or a short label |
 | Status icon | A tone-coloured glyph for success / warning / error states |
-
-## Source
-
-- Resolution and rendering: `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`.
-- Config contract: `packages/tuffex/packages/components/src/icon/src/types.ts` (`TxIconSource`, `TxIconConfig`, `TX_ICON_CONFIG_KEY`).

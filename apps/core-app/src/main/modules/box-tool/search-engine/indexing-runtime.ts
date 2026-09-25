@@ -533,7 +533,13 @@ export class IndexingRuntime {
     event: IndexedSourceWatchEvent
   ): Promise<WatchEventRouteResult> {
     const queuedAt = Date.now()
-    const diagnostics = await this.getDiagnostics()
+    // Watch admission needs fresh health/roots, not an all-source diagnostic report.
+    // Optional evidence and unrelated sources must not hold this source's mutations.
+    const source = event.sourceId ? this.sources.get(event.sourceId) : undefined
+    const sources = event.sourceId ? (source ? [source] : []) : this.listSources()
+    const diagnostics = await this.diagnosticsService.getDiagnostics(sources, 'routing')
+    await this.applyTaskState(diagnostics)
+    this.updateRootPolicy(diagnostics)
     const result = await this.watchRouter.routeWithResult(event, this.sources, diagnostics)
     await this.recordWatchResult(event, result, queuedAt)
     return result

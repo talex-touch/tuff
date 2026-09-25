@@ -1,0 +1,12 @@
+diff --git a/dist/runtime/plugin.dev.mjs b/dist/runtime/plugin.dev.mjs
+--- a/dist/runtime/plugin.dev.mjs
++++ b/dist/runtime/plugin.dev.mjs
+@@ -27,7 +27,7 @@
+   });
+   nitroApp.hooks._hooks.request.unshift(nitroApp.hooks._hooks.request.pop());
+   nitroApp.hooks.hook("close", () => {
+-    return _proxy?.then((proxy) => proxy.dispose);
++    return _proxy?.then((proxy) => proxy.dispose());
+   });
+ });
+ async function _getPlatformProxy() {

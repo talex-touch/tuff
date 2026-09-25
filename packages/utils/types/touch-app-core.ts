@@ -9,6 +9,16 @@ export namespace TalexTouch {
     moduleManager: IBaseModuleManager
     config: IConfiguration
     rootPath: string
+
+    /**
+     * Resolves once the runtime finished loading its module chain, and rejects when initialization
+     * failed.
+     *
+     * Channel dispatch awaits this before answering a request whose handler is not registered yet:
+     * the window is shown while modules are still loading, so an early renderer request is a timing
+     * artefact rather than an unknown event.
+     */
+    waitUntilInitialized: () => Promise<void>
   }
 
   export enum AppVersion {

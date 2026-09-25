@@ -8,9 +8,8 @@ tags: [markdown, editor, wysiwyg]
 syncStatus: reviewed
 verified: true
 ---
-# MarkdownEditor
 
-## 基础用法
+## 用法
 
 ### MarkdownEditor
 ::::TuffDemoWrapper{demo="MarkdownEditorMarkdownEditorDemo" code-lang="vue"}
@@ -32,18 +31,14 @@ code: |
 ---
 ::::
 
-## 交互契约
+### 最佳实践
 
-- 提供 `mode` 时组件处于受控模式；否则用 `defaultMode` 初始化内部模式。
-- 用户切换模式时会发出 `update:mode` 与 `mode-change`。
-- `sanitize` 默认是 `true`；只有内容已经可信时才关闭。
-- Source 模式直接编辑 Markdown；WYSIWYG 模式会在输入时把 DOM 序列化回 Markdown。
-- 工具栏动作在各模式复用，但 preview 模式会禁用编辑动作。
-- 工具栏和模式按钮按类名绘制 Carbon 图标（`i-carbon-*`），宿主的 UnoCSS 必须生成这些类。`src/toolbar-icons.ts` 以 `MARKDOWN_EDITOR_ICON_CLASSES` 列出它们，不扫描 tuffex 源码的宿主可以直接加入 safelist，Nexus 就是这样做的。
-- 模式切换器是一个切换按钮组：容器是 `role="group"`（标注 "Markdown editor mode"），每个模式按钮通过 `aria-pressed` 反映当前模式（不是 `role="tab"`，因为没有对应的 tabpanel）。
-- `theme="auto"` 监听 `documentElement` 的 class / `data-theme`，无法判断时回退到 light。
+- 用户或 provider 生成内容保持 `sanitize=true`。
+- 需要把编辑器 tab 写入路由/query 时使用受控 `mode`。
+- 发布说明、评论等窄场景应限制 `toolbarActions`。
+- URL 弹窗属于产品语境，使用 `linkPrompt` 注入，不要让组件自己拥有业务弹窗。
 
-## API
+## API 参考
 
 ### Props
 
@@ -93,21 +88,23 @@ code: |
 | `getValue()` | 返回当前 Markdown 源。 |
 | `setValue(value)` | 设置 Markdown、发出更新并刷新渲染 HTML。 |
 
-## 最佳实践
+## 概述
 
-- 用户或 provider 生成内容保持 `sanitize=true`。
-- 需要把编辑器 tab 写入路由/query 时使用受控 `mode`。
-- 发布说明、评论等窄场景应限制 `toolbarActions`。
-- URL 弹窗属于产品语境，使用 `linkPrompt` 注入，不要让组件自己拥有业务弹窗。
+- 提供 `mode` 时组件处于受控模式；否则用 `defaultMode` 初始化内部模式。
+- 用户切换模式时会发出 `update:mode` 与 `mode-change`。
+- `sanitize` 默认是 `true`；只有内容已经可信时才关闭。
+- Source 模式直接编辑 Markdown；WYSIWYG 模式会在输入时把 DOM 序列化回 Markdown。
+- 工具栏动作在各模式复用，但 preview 模式会禁用编辑动作。
+- 工具栏和模式按钮按类名绘制 Carbon 图标（`i-carbon-*`），宿主的 UnoCSS 必须生成这些类。`src/toolbar-icons.ts` 以 `MARKDOWN_EDITOR_ICON_CLASSES` 列出它们，不扫描 tuffex 源码的宿主可以直接加入 safelist，Nexus 就是这样做的。
+- 模式切换器是一个切换按钮组：容器是 `role="group"`（标注 "Markdown editor mode"），每个模式按钮通过 `aria-pressed` 反映当前模式（不是 `role="tab"`，因为没有对应的 tabpanel）。
+- `theme="auto"` 监听 `documentElement` 的 class / `data-theme`，无法判断时回退到 light。
 
-## 审阅说明
+## 技术实现
 
 - 已人工核对 `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`、`TxMarkdownEditor.vue`、`toolbar-icons.ts`、`markdown-serializer.ts` 与 `markdown-editor.test.ts`。
 - 默认通过 DOMPurify 开启净化；`sanitize=false` 只应作为可信内容的逃生口。
 - `linkPrompt` 是收集业务 URL 的扩展点，让弹窗留在组件契约之外。
 - 工具栏图标原先是 Remix（`i-ri-*`）。Nexus 刻意不依赖 `ri`，文档里每个 demo 都画出十四个灰色方块；Carbon 则是两个宿主都安装了的图标集。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/markdown-editor/src/TxMarkdownEditor.vue`。
 - Types: `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`。

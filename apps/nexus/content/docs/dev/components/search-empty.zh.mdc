@@ -8,9 +8,8 @@ tags: [search, empty, state]
 syncStatus: reviewed
 verified: true
 ---
-# SearchEmpty 搜索空态
 
-## 基础用法
+## 用法
 
 ### SearchEmpty
 :::TuffDemoWrapper{demo="SearchEmptySearchEmptyDemo" code-lang="vue"}
@@ -27,7 +26,15 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+- 只有查询或筛选产生无匹配结果后才使用 `TxSearchEmpty`；未筛选数据为空时使用 `TxNoData`。
+- 尽量在组件附近回显失败的关键词或当前筛选条件，让用户知道系统搜索了什么。
+- 筛选状态可恢复时提供重置或扩大范围动作。
+- 搜索空态应留在原结果容器内，不要放到全局 toast 或脱离列表的横幅里。
+- 替换整块结果面板时使用 `surface="card"`；行内筛选反馈保持 `surface="plain"`。
+
+## API 参考
 
 `TxSearchEmpty` 继承 `TxEmptyState` 除 `variant` 以外的 Props、Slots 和 Events；组件内部始终传入 `variant="search-empty"`。
 
@@ -82,21 +89,13 @@ code: |
 ---
 :::
 
-## 交互契约
+## 概述
 
 - `TxSearchEmpty` 始终向 `TxEmptyState` 透传 `variant="search-empty"`。
 - 组件不额外改写 `title`、`description`、`surface` 或 action 配置；显式 props 会原样透传。
 - `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
 
-## 最佳实践
-
-- 只有查询或筛选产生无匹配结果后才使用 `TxSearchEmpty`；未筛选数据为空时使用 `TxNoData`。
-- 尽量在组件附近回显失败的关键词或当前筛选条件，让用户知道系统搜索了什么。
-- 筛选状态可恢复时提供重置或扩大范围动作。
-- 搜索空态应留在原结果容器内，不要放到全局 toast 或脱离列表的横幅里。
-- 替换整块结果面板时使用 `surface="card"`；行内筛选反馈保持 `surface="plain"`。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/search-empty/src/TxSearchEmpty.vue`。
 - Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`。
@@ -104,8 +103,6 @@ code: |
 - **实测覆盖:** `packages/tuffex/packages/components/src/search-empty/__tests__/search-empty.test.ts` 验证 search-empty variant 锁定、显式 props 与 action 透传、具名 slots 转发及 install 注册。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **Wrapper contract:** `TxSearchEmpty` 始终透传 `variant="search-empty"`，并把结果文案、重置动作、surface、icon 与 slot 留给宿主控制。
 - **建议:** 搜索无结果时优先使用 `TxSearchEmpty`；普通无数据场景继续使用 `TxEmptyState` 或 `TxNoData`。

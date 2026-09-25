@@ -8,11 +8,10 @@ tags: [icon, morph, vector, animation, spring, svg]
 syncStatus: reviewed
 verified: true
 ---
-# IconMorph
 
 > Universal stroke-based vector icon morphing. Uses 2D Procrustes rotation detection, polar coordinate interpolation, and spring physics so rotations and path transitions emerge naturally from the geometry without declaring keyframes.
 
-## Basic Usage
+## Usage
 
 ### IconMorph
 :::TuffDemoWrapper{demo="IconMorphIconMorphDemo" code-lang="vue"}
@@ -33,17 +32,14 @@ code: |
 ---
 :::
 
-## Controlled Progress
+### Best Practices
 
-Pass `from`, `to`, and `progress` to scrub or bind the morph directly to user gestures, scroll positions, or custom transitions without spring animation.
+- Use `TxIconMorph` for stateful action buttons (play/pause, menu/close, search/clear, check/plus).
+- Pair with `spring="snappy"` for tactile click responses, or `spring="smooth"` for relaxed UI transitions.
+- When binding to gesture drag or swipe progress, use the controlled `from`/`to`/`:progress` mode for linear scrubbing.
+- Stroke-based icons (such as Lucide, Tabler, Feather, Heroicons outline) work best. Filled glyphs should use standard icon crossfading.
 
-```vue
-<template>
-  <TxIconMorph from="menu" to="close" :progress="dragProgress" :size="24" />
-</template>
-```
-
-## API
+## API Reference
 
 ### TxIconMorph Props
 
@@ -69,14 +65,17 @@ Pass `from`, `to`, and `progress` to scrub or bind the morph directly to user ge
 | `animation-start` | - | A morph transition began. |
 | `animation-complete` | - | The morph transition completed and settled. |
 
-## Best Practices
+## Controlled Progress
 
-- Use `TxIconMorph` for stateful action buttons (play/pause, menu/close, search/clear, check/plus).
-- Pair with `spring="snappy"` for tactile click responses, or `spring="smooth"` for relaxed UI transitions.
-- When binding to gesture drag or swipe progress, use the controlled `from`/`to`/`:progress` mode for linear scrubbing.
-- Stroke-based icons (such as Lucide, Tabler, Feather, Heroicons outline) work best. Filled glyphs should use standard icon crossfading.
+Pass `from`, `to`, and `progress` to scrub or bind the morph directly to user gestures, scroll positions, or custom transitions without spring animation.
 
-## Source
+```vue
+<template>
+  <TxIconMorph from="menu" to="close" :progress="dragProgress" :size="24" />
+</template>
+```
+
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/icon-morph/src/TxIconMorph.vue`.
 - Core engine: `packages/tuffex/packages/components/src/icon-morph/src/engine/`.

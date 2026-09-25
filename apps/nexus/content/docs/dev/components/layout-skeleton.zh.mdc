@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# LayoutSkeleton 布局骨架
-
-## 基础用法
+## 用法
 
 ### 布局占位
 容器决定骨架尺寸。骨架画出一个完整的应用布局：带分隔线的顶栏、按比例收缩的侧栏（首项为当前项），以及以标题开头的内容区。
@@ -39,7 +37,15 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+- 外层容器必须给出明确高度；组件只填满 `width: 100%` 与 `height: 100%`，不会替页面决定尺寸。
+- 页面、面板、侧边摘要和详情栏加载时，如果最终布局形状稳定，可以使用它保持结构预期。
+- 骨架画的是“顶栏 + 侧栏 + 内容”的应用布局；最终界面没有侧栏或顶栏时，改用 `TxSkeleton`、`TxCardSkeleton` 或 `TxListItemSkeleton` 按真实结构组合，数据到达时布局才不会跳动。
+- 不要把它当作表格行占位。表格主体应使用 `TxSkeleton`、行级占位或 `TxDataTable loading`。
+- 保持文档、SSR、hydration 与视觉测试的确定性；侧栏文字条与内容行宽度刻意使用固定序列，而不是运行时随机数。
+
+## API 参考
 
 ### Props
 ::TuffPropsTable
@@ -60,7 +66,7 @@ rows:
 
 `TxLayoutSkeleton` 不暴露插槽。组件始终渲染下方记录的固定布局骨架。
 
-## 交互契约
+## 概述
 
 - `TxLayoutSkeleton` 无 props、events 或 slots。
 - 组件固定渲染 36px 顶栏（品牌方块、标题条、两枚小胶囊与头像，底部一条 hairline）、6 个 sidebar item（首项带浅底，表示当前项）与 8 条内容行（首行是标题，第 5 行另起一段）。
@@ -68,15 +74,7 @@ rows:
 - 侧栏文字条与内容行的宽度都取自固定序列，不依赖运行时随机数。
 - 根节点是 `aria-hidden="true"`，装饰性骨架不进入无障碍树。页面/面板的加载态应由宿主播报（例如区域上的 `aria-busy`），就绪后再切换到真实内容。
 
-## 最佳实践
-
-- 外层容器必须给出明确高度；组件只填满 `width: 100%` 与 `height: 100%`，不会替页面决定尺寸。
-- 页面、面板、侧边摘要和详情栏加载时，如果最终布局形状稳定，可以使用它保持结构预期。
-- 骨架画的是“顶栏 + 侧栏 + 内容”的应用布局；最终界面没有侧栏或顶栏时，改用 `TxSkeleton`、`TxCardSkeleton` 或 `TxListItemSkeleton` 按真实结构组合，数据到达时布局才不会跳动。
-- 不要把它当作表格行占位。表格主体应使用 `TxSkeleton`、行级占位或 `TxDataTable loading`。
-- 保持文档、SSR、hydration 与视觉测试的确定性；侧栏文字条与内容行宽度刻意使用固定序列，而不是运行时随机数。
-
-## 审阅说明
+## 技术实现
 
 - 已对照 `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue` 与 `layout-skeleton.test.ts` 核对。
 - API 说明：该组件有意不提供 props。尺寸、比例和位置必须由父容器决定。
@@ -85,11 +83,8 @@ rows:
 - 动效降级：每个占位块（含新增的品牌方块、胶囊与头像）都走共享的 `skeleton-surface`，`prefers-reduced-motion: reduce` 时只停闪烁、保留占位块。
 - **实测覆盖:** 固定骨架结构、装饰性 `aria-hidden` 根节点、6 个 sidebar item、8 条内容行、确定性内容宽度和 install 注册；`skeleton/__tests__/skeleton-motion.test.ts` 对编译后的样式断言每个闪烁都有 reduced-motion 兜底、兜底不隐藏占位块、组件不自带 keyframes。
 
-## Source
-
 - Component source: `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue`.
 - Types: `packages/tuffex/packages/components/src/layout-skeleton/index.ts` exports `TxLayoutSkeletonInstance`.
 - Coverage: `packages/tuffex/packages/components/src/layout-skeleton/__tests__/layout-skeleton.test.ts` verifies fixed scaffold counts, deterministic content widths, and install registration.
 
 <TuffDocSourceLink />
-

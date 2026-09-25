@@ -116,6 +116,41 @@ export interface DataTableProps<T = any> {
    * @default false
    */
   stickyFooter?: boolean
+  /**
+   * Renders a leading toggle column and lets a row open a detail row of its
+   * own. Off by default: existing tables render exactly as before.
+   * @default false
+   */
+  expandable?: boolean
+  /**
+   * Initial expanded rows for the uncontrolled mode; the component owns the
+   * state after that.
+   *
+   * Mutually exclusive with {@link DataTableProps.expandedKeys}: passing that
+   * one puts the component in controlled mode and this prop is ignored.
+   */
+  defaultExpandedKeys?: DataTableKey[]
+  /**
+   * Controlled expanded rows. Supply it (including as `[]`) and the component
+   * stops holding its own state — it reports what the reader toggled through
+   * `update:expandedKeys` / `expand` and renders whatever comes back.
+   */
+  expandedKeys?: DataTableKey[]
+  /**
+   * Per-row gate for the toggle. Rows it rejects keep an empty leading cell so
+   * the columns stay aligned, and their detail row cannot be opened.
+   */
+  rowExpandable?: (row: T, index: number) => boolean
+  /**
+   * Accessible name of a closed toggle.
+   * @default 'Expand row'
+   */
+  expandLabel?: string
+  /**
+   * Accessible name of an open toggle.
+   * @default 'Collapse row'
+   */
+  collapseLabel?: string
   /** Extra classes per row, e.g. to tint a row by its state. */
   rowClass?: (row: T, index: number) => DataTableRowClass
   /**
@@ -129,6 +164,8 @@ export interface DataTableProps<T = any> {
 export interface DataTableEmits<T = any> {
   (e: 'update:selectedKeys', value: DataTableKey[]): void
   (e: 'selectionChange', value: DataTableKey[]): void
+  (e: 'update:expandedKeys', value: DataTableKey[]): void
+  (e: 'expand', payload: { row: T, index: number, expanded: boolean }): void
   (e: 'sortChange', value: DataTableSortState | null): void
   (e: 'update:sort', value: DataTableSortState | null): void
   (e: 'rowClick', payload: { row: T, index: number }): void

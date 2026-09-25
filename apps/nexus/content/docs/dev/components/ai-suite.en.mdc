@@ -9,16 +9,16 @@ syncStatus: reviewed
 verified: true
 ---
 
-## Suite Groups
-
-In the components sidebar the AI suite is split into four groups: **Chat** (Chat, ChatComposer, PromptBar, AttachmentTray, ModeChip, MessageActions, SuggestionChips, TypingIndicator, ConversationStream), **Agents** (Agents, AgentTrace, AgentScreen, TaskRows, ToolCallCard, ToolChips, ToolConfirmation, ApprovalCard, WorkingIndicator), **Reasoning** (AiElements, ChainOfThought, ReasoningDisclosure, ThinkingOrb, StreamMarkdown, CodeStream, InlineCitation, Sources) and **Context & Insight** (ContextCards, ContextIndicator, InsightCards, RecommendationCard, FineTuneCard). Every component in the suite can be imported through the `@talex-touch/tuffex/ai` category entry.
-
-## Preview
+## Usage
 
 Every cell is a live, interactive component; click the name in the top-left corner to open its documentation.
 
 ::DocsComponentsGallery{suite="ai"}
 ::
+
+## Suite Groups
+
+In the components sidebar the AI suite is split into four groups: **Chat** (Chat, ChatComposer, PromptBar, AttachmentTray, ModeChip, MessageActions, SuggestionChips, TypingIndicator, ConversationStream), **Agents** (Agents, AgentTrace, AgentScreen, TaskRows, ToolCallCard, ToolChips, ToolConfirmation, ApprovalCard, WorkingIndicator), **Reasoning** (AiElements, ChainOfThought, ReasoningDisclosure, ThinkingOrb, StreamMarkdown, CodeStream, InlineCitation, Sources) and **Context & Insight** (ContextCards, ContextIndicator, InsightCards, RecommendationCard, FineTuneCard). Every component in the suite can be imported through the `@talex-touch/tuffex/ai` category entry.
 
 ## Groups at a Glance
 
@@ -330,7 +330,7 @@ Numbering follows upstream as it stands today. Upstream added 16 Flowchart and 2
 
 Shared primitive: [TxIconChip](/docs/dev/components/icon-chip) (icon badge shared by 10/14/17/19).
 
-## Review Notes
+## Technologies
 
 - Upstream ships self-driving demos (hardcoded content + timer timelines); the ported components are fully controlled, and the timelines live only in this page's demos.
 - Reduced motion is implemented per component: tweens are cut, state machines keep running, and delays are zeroed together (a deliberate divergence from upstream's single global `*` rule).

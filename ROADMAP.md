@@ -184,5 +184,5 @@ pnpm lint              # ESLint 全量检查
 pnpm typecheck         # TypeScript 类型检查
 pnpm test:targeted     # 跑聚焦测试套件
 pnpm quality:pr        # PR 质量门禁（release notes + lint + test + typecheck）
-pnpm build:release:mac # macOS 发布构建
+pnpm build:app --target=mac --type=release # macOS 发布构建
 ```

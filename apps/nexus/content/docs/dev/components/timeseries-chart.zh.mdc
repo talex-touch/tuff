@@ -8,9 +8,8 @@ tags: [chart, timeseries, line, bar]
 syncStatus: reviewed
 verified: true
 ---
-# TimeseriesChart 时序图
 
-## 基础用法
+## 用法
 
 `data` 是序列数组，每条序列的 `data` 是按时间排序的 `[timestamp_ms, value]` 元组。`color` 可省略——按序列位次落到分类色板，位次固定，隐藏某条序列不会让其余序列换色。悬停出 tooltip：多序列按值降序，同名序列去重，二分查找最近采样点。
 
@@ -64,6 +63,43 @@ code: |
   </template>
 ---
 :::
+
+## API 参考
+
+### TimeseriesChart Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `data` | `TimeseriesData[]` | — | `{ name, data: [ts, value][], color? }`；`color` 缺省按位次取分类色。 |
+| `type` | `'line' \| 'bar'` | `'line'` | 柱状自动堆叠。 |
+| `markers` | `TimeseriesMarker[]` | — | `{ timestamp, label?, description?, color?, lineStyle? }`。 |
+| `thresholds` | `TimeseriesThreshold[]` | — | `{ value, label?, color }`，y 轴自动扩展覆盖。 |
+| `xAxisName` / `yAxisName` | `string` | — | 轴名。 |
+| `xAxisTickCount` / `yAxisTickCount` | `number` | `5` | 建议刻度数。 |
+| `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | 刻度格式化。 |
+| `yAxisMinInterval` | `number` | — | y 轴刻度最小间隔（ECharts `yAxis.minInterval`）：更近的刻度被丢弃，最低与最高刻度始终保留；设 `1` 时整数刻度不会再打印成 `1.0`。 |
+| `tooltipValueFormat` | `(v: number) => string` | 原值 | tooltip 数值格式化。 |
+| `tooltipMode` | `'all' \| 'single'` | `'all'` | `single` 只显示离光标 y 值最近的一条。 |
+| `tooltipMaxItems` | `number` | `10` | 超出折叠为「+N more」。 |
+| `tooltipFollowCursor` | `'both' \| 'x'` | `'both'` | `x` 时垂直位置固定，避免抖动。 |
+| `tooltipFooter` | `string` | — | 在 tooltip 行列表下方追加一行文本。 |
+| `tooltipBoundary` | `TimeseriesTooltipBoundary` | `'clipping-ancestors'` | tooltip 碰撞边界；默认沿裁剪祖先（`overflow` 非 `visible` 的 offsetParent）与视口求交后翻转。类型 `TimeseriesTooltipBoundary` 从 `@talex-touch/tuffex/charts` 入口导出。 |
+| `incomplete` | `{ before?, after? }` | — | 不完整周期（仅 line）。 |
+| `gradient` | `boolean` | `false` | 折线渐变填充。 |
+| `loading` | `boolean` | `false` | 骨架态。 |
+| `highlightedSeries` | `string \| null` | — | 高亮序列，其余降到 10% 不透明度。 |
+| `height` | `number` | `350` | 像素高度。 |
+| `width` | `number` | 容器实测 | 显式宽度（SSR/测试用）。 |
+| `ariaDescription` | `string` | — | 无障碍描述（svg `role="img"`）。 |
+| `clusterLabel` | `(n: number) => string` | `` n => `${n} changes` `` | 聚簇标签文案。 |
+| `timestampFormat` | `(ts: number) => string` | 紧凑本地化 | tooltip 时间行格式。 |
+
+### TimeseriesChart Events
+
+| 事件名 | 回调参数 | 说明 |
+|------|------|------|
+| `time-range-change` | `(from: number, to: number)` | 刷选完成。挂上即启用刷选。 |
+| `update:hiddenSeries` | `(names: string[])` | `v-model:hidden-series` 写回。 |
 
 ## 标记与阈值
 
@@ -195,43 +231,6 @@ code: |
 - `prefers-reduced-motion: reduce` 下所有补间直接落到终态，CSS 过渡统一包在 `@media (prefers-reduced-motion: no-preference)` 内。
 
 `@talex-touch/tuffex/charts` 入口同时导出动画原语，便于在自有图表里复用同一套时序：`easings`（`linear | cubicIn | cubicOut | cubicInOut`）、`cubicBezier(x1, y1, x2, y2)`、`tween({ duration, easing, delay, onUpdate, onComplete })`、`useEnterProgress(options)`、`useTweenedNumbers(source, options)`、`prefersReducedMotion()`，以及常量 `ENTER_DURATION` 1000、`UPDATE_DURATION` 500、`STATE_DURATION` 300、`ANIMATION_THRESHOLD` 2000。tooltip 时序常量（`TOOLTIP_FADE_DURATION` 200、`TOOLTIP_MOVE_DURATION` 400、`TOOLTIP_HIDE_DELAY` 100、`TOOLTIP_TRACK_THROTTLE` 50、`tooltipMoveEasing`）由图表入口内的 `core/animate` 提供。
-
-## API
-
-### TimeseriesChart Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `data` | `TimeseriesData[]` | — | `{ name, data: [ts, value][], color? }`；`color` 缺省按位次取分类色。 |
-| `type` | `'line' \| 'bar'` | `'line'` | 柱状自动堆叠。 |
-| `markers` | `TimeseriesMarker[]` | — | `{ timestamp, label?, description?, color?, lineStyle? }`。 |
-| `thresholds` | `TimeseriesThreshold[]` | — | `{ value, label?, color }`，y 轴自动扩展覆盖。 |
-| `xAxisName` / `yAxisName` | `string` | — | 轴名。 |
-| `xAxisTickCount` / `yAxisTickCount` | `number` | `5` | 建议刻度数。 |
-| `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | 刻度格式化。 |
-| `yAxisMinInterval` | `number` | — | y 轴刻度最小间隔（ECharts `yAxis.minInterval`）：更近的刻度被丢弃，最低与最高刻度始终保留；设 `1` 时整数刻度不会再打印成 `1.0`。 |
-| `tooltipValueFormat` | `(v: number) => string` | 原值 | tooltip 数值格式化。 |
-| `tooltipMode` | `'all' \| 'single'` | `'all'` | `single` 只显示离光标 y 值最近的一条。 |
-| `tooltipMaxItems` | `number` | `10` | 超出折叠为「+N more」。 |
-| `tooltipFollowCursor` | `'both' \| 'x'` | `'both'` | `x` 时垂直位置固定，避免抖动。 |
-| `tooltipFooter` | `string` | — | 在 tooltip 行列表下方追加一行文本。 |
-| `tooltipBoundary` | `TimeseriesTooltipBoundary` | `'clipping-ancestors'` | tooltip 碰撞边界；默认沿裁剪祖先（`overflow` 非 `visible` 的 offsetParent）与视口求交后翻转。类型 `TimeseriesTooltipBoundary` 从 `@talex-touch/tuffex/charts` 入口导出。 |
-| `incomplete` | `{ before?, after? }` | — | 不完整周期（仅 line）。 |
-| `gradient` | `boolean` | `false` | 折线渐变填充。 |
-| `loading` | `boolean` | `false` | 骨架态。 |
-| `highlightedSeries` | `string \| null` | — | 高亮序列，其余降到 10% 不透明度。 |
-| `height` | `number` | `350` | 像素高度。 |
-| `width` | `number` | 容器实测 | 显式宽度（SSR/测试用）。 |
-| `ariaDescription` | `string` | — | 无障碍描述（svg `role="img"`）。 |
-| `clusterLabel` | `(n: number) => string` | `` n => `${n} changes` `` | 聚簇标签文案。 |
-| `timestampFormat` | `(ts: number) => string` | 紧凑本地化 | tooltip 时间行格式。 |
-
-### TimeseriesChart Events
-
-| 事件名 | 回调参数 | 说明 |
-|------|------|------|
-| `time-range-change` | `(from: number, to: number)` | 刷选完成。挂上即启用刷选。 |
-| `update:hiddenSeries` | `(names: string[])` | `v-model:hidden-series` 写回。 |
 
 ## 与 kumo 的差异
 

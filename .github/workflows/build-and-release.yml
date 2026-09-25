@@ -512,21 +512,21 @@ jobs:
           if [ "$RELEASE_TYPE" = "beta" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
               echo "Building Windows beta..."
-              echo "Running: pnpm build:beta:win"
-              pnpm build:beta:win || {
+              echo "Running: pnpm build:app --target=win --type=beta"
+              pnpm build:app --target=win --type=beta || {
                 BUILD_FAILED=true
                 echo "ERROR: Windows beta build failed with exit code $?"
               }
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "Building macOS beta..."
               echo "Using NODE_OPTIONS=--max-old-space-size=6144 for macOS beta build"
-              NODE_OPTIONS="--max-old-space-size=6144" SKIP_INSTALL_APP_DEPS=true pnpm build:beta:mac || {
+              NODE_OPTIONS="--max-old-space-size=6144" SKIP_INSTALL_APP_DEPS=true pnpm build:app --target=mac --type=beta || {
                 BUILD_FAILED=true
                 echo "ERROR: macOS beta build failed with exit code $?"
               }
             else
               echo "Building Linux beta..."
-              pnpm build:beta:linux || {
+              pnpm build:app --target=linux --type=beta || {
                 BUILD_FAILED=true
                 echo "ERROR: Linux beta build failed with exit code $?"
               }
@@ -534,21 +534,21 @@ jobs:
           elif [ "$RELEASE_TYPE" = "snapshot" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
               echo "Building Windows snapshot..."
-              echo "Running: pnpm build:snapshot:win"
-              pnpm build:snapshot:win || {
+              echo "Running: pnpm build:app --target=win --type=snapshot"
+              pnpm build:app --target=win --type=snapshot || {
                 BUILD_FAILED=true
                 echo "ERROR: Windows snapshot build failed with exit code $?"
               }
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "Building macOS snapshot..."
               echo "Using NODE_OPTIONS=--max-old-space-size=6144 for macOS snapshot build"
-              NODE_OPTIONS="--max-old-space-size=6144" SKIP_INSTALL_APP_DEPS=true pnpm build:snapshot:mac || {
+              NODE_OPTIONS="--max-old-space-size=6144" SKIP_INSTALL_APP_DEPS=true pnpm build:app --target=mac --type=snapshot || {
                 BUILD_FAILED=true
                 echo "ERROR: macOS snapshot build failed with exit code $?"
               }
             else
               echo "Building Linux snapshot..."
-              pnpm build:snapshot:linux || {
+              pnpm build:app --target=linux --type=snapshot || {
                 BUILD_FAILED=true
                 echo "ERROR: Linux snapshot build failed with exit code $?"
               }
@@ -557,20 +557,20 @@ jobs:
             echo "Building release version..."
             if [ "$RUNNER_OS" = "Windows" ]; then
               echo "Building Windows release..."
-              pnpm build:release:win || {
+              pnpm build:app --target=win --type=release || {
                 BUILD_FAILED=true
                 echo "ERROR: Windows release build failed with exit code $?"
               }
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "Building macOS release..."
               echo "Using NODE_OPTIONS=--max-old-space-size=6144 for macOS release build"
-              NODE_OPTIONS="--max-old-space-size=6144" SKIP_INSTALL_APP_DEPS=true pnpm build:release:mac || {
+              NODE_OPTIONS="--max-old-space-size=6144" SKIP_INSTALL_APP_DEPS=true pnpm build:app --target=mac --type=release || {
                 BUILD_FAILED=true
                 echo "ERROR: macOS release build failed with exit code $?"
               }
             else
               echo "Building Linux release..."
-              pnpm build:release:linux || {
+              pnpm build:app --target=linux --type=release || {
                 BUILD_FAILED=true
                 echo "ERROR: Linux release build failed with exit code $?"
               }

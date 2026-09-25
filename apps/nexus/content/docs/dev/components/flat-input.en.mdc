@@ -8,9 +8,8 @@ tags: [input, form, flat]
 syncStatus: reviewed
 verified: true
 ---
-# FlatInput
 
-## Basic Usage
+## Usage
 
 ::::TuffDemoWrapper{demo="FlatInputFlatInputDemo" code-lang="vue"}
 ---
@@ -30,8 +29,6 @@ code: |
   </template>
 ---
 ::::
-
-## Composition Examples
 
 ### Prefix Slot
 
@@ -55,18 +52,15 @@ The default slot replaces the `icon` prop when both are provided.
 
 Use `area` for short notes, not for autosizing editors. The component renders a fixed-height textarea.
 
-## Interaction Contract
+### Best Practices
 
-- `v-model` reads from `modelValue` and emits `update:modelValue` with the current string.
-- Without an `icon` prop or default slot, the root gets `none-prefix` and uses a single-column layout.
-- The default slot replaces icon rendering; it is prefix content, not a suffix/action slot.
-- `password=true` renders `input type="password"` and enables Caps Lock detection on keydown.
-- Caps Lock detection reads the live modifier state via `KeyboardEvent.getModifierState('CapsLock')` (no keyCode/`shiftKey` inference); the hint is informational and only appears in password mode.
-- `area=true` renders `textarea` instead of `input` and adds the `area` class for fixed height.
-- `nonWin=true` removes the `win` class and therefore the Windows-style focus treatment.
-- The component does not expose `disabled`, `readonly`, `name`, or validation props; use a fuller input primitive when those contracts are required.
+- Use `FlatInput` only where its minimal API is sufficient. Choose a richer input component for disabled, validation, autocomplete, or form-name requirements.
+- Prefer the prefix slot for keyboard hints or short labels; do not place clickable controls inside it.
+- Keep `password` fields paired with real form-level validation and submission semantics outside this component.
+- Use `area` for short multiline notes; it does not autosize and should not replace an editor.
+- Pass `:non-win="true"` when the visual surface should use the standard border/focus treatment instead of the legacy Windows-style underline.
 
-## API
+## API Reference
 
 ### Props
 
@@ -95,20 +89,21 @@ Use `area` for short notes, not for autosizing editors. The component renders a 
 
 `index.ts` registers both `FlatInput` and `TxFlatInput` names when installed as a plugin.
 
-## Best Practices
+## Overview
 
-- Use `FlatInput` only where its minimal API is sufficient. Choose a richer input component for disabled, validation, autocomplete, or form-name requirements.
-- Prefer the prefix slot for keyboard hints or short labels; do not place clickable controls inside it.
-- Keep `password` fields paired with real form-level validation and submission semantics outside this component.
-- Use `area` for short multiline notes; it does not autosize and should not replace an editor.
-- Pass `:non-win="true"` when the visual surface should use the standard border/focus treatment instead of the legacy Windows-style underline.
+- `v-model` reads from `modelValue` and emits `update:modelValue` with the current string.
+- Without an `icon` prop or default slot, the root gets `none-prefix` and uses a single-column layout.
+- The default slot replaces icon rendering; it is prefix content, not a suffix/action slot.
+- `password=true` renders `input type="password"` and enables Caps Lock detection on keydown.
+- Caps Lock detection reads the live modifier state via `KeyboardEvent.getModifierState('CapsLock')` (no keyCode/`shiftKey` inference); the hint is informational and only appears in password mode.
+- `area=true` renders `textarea` instead of `input` and adds the `area` class for fixed height.
+- `nonWin=true` removes the `win` class and therefore the Windows-style focus treatment.
+- The component does not expose `disabled`, `readonly`, `name`, or validation props; use a fuller input primitive when those contracts are required.
 
-## Review Notes
+## Technologies
 
 - **Accessibility note:** `FlatInput` renders only the native input/textarea control plus optional prefix; provide labels, `aria-label`, `name`, autocomplete, validation messaging, and disabled/read-only handling in the surrounding form layer.
 - **Verified coverage:** `flat-input.test.ts` exercises default text mode, placeholder/type output, `v-model` updates, icon versus prefix slot precedence, textarea mode, `nonWin` class switching, password Caps Lock hinting, and plugin installation.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/flat-input/src/FlatInput.vue`.
 - Export alias: `packages/tuffex/packages/components/src/flat-input/index.ts` exports both `FlatInput` and `TxFlatInput`, and registers both names during plugin installation.

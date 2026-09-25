@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLogo from '~/components/icon/AppLogo.vue'
+import MetaHintBadge from '~/components/shell/MetaHintBadge.vue'
 import { useHistoryNavigation } from '~/modules/layout/useHistoryNavigation'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
 import { SIDEBAR_BRAND_LABEL_MIN, SIDEBAR_HISTORY_MIN } from '~/modules/layout/shell-sidebar-state'
@@ -60,6 +61,7 @@ const showHistory = computed(() => !collapsed.value && width.value >= SIDEBAR_HI
     >
       <span class="i-ri-side-bar-line" />
     </button>
+    <MetaHintBadge command="toggle-sidebar" />
 
     <div class="ShellChromeBar-Spacer" />
 
@@ -243,6 +245,15 @@ const showHistory = computed(() => !collapsed.value && width.value >= SIDEBAR_HI
   }
 
   .ShellChromeBar-Spacer {
+    display: none;
+  }
+
+  /**
+   * The rail sheds the hint chips: there is no room beside a 60px column for a key cap, and a
+   * 24px glyph sitting next to the collapse toggle is one more thing to mis-click. The chords
+   * still work.
+   */
+  .MetaHintBadge {
     display: none;
   }
 }

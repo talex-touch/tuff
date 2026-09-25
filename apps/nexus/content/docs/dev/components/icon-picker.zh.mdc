@@ -8,9 +8,8 @@ tags: [icon, picker, emoji, brand, file]
 syncStatus: reviewed
 verified: true
 ---
-# IconPicker
 
-## 基础用法
+## 用法
 
 ### IconPicker
 :::TuffDemoWrapper{demo="IconPickerIconPickerDemo" code-lang="vue" title="触发器模式与内联模式" description="带形状选择的触发器，以及只开放两个分区的内联面板。"}
@@ -31,6 +30,47 @@ code: |
   </template>
 ---
 :::
+
+### 最佳实践
+
+- 原样存储标识符，渲染时再用 `parseIconIdentifier` 解析。不要把它拆成两列，拆开之后两列就可能互相矛盾。
+- 只需要读取存量值的模块，请单独从 `@talex-touch/tuffex/icon-picker` 引入 `parseIconIdentifier`：面板才是重的那部分，而解析字符串并不需要它。
+- 只有在宿主**没有**自己画底板时才传 `shape-selectable`，否则用户选中的形状他永远看不到。
+- 需要展示一个小图标底板时请用 `TxIconChip`；本组件负责的是「选」。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `modelValue` | `string` | `''` | 图标标识符，配合 `v-model`。 |
+| `shape` | `'circle' \| 'rounded' \| 'square'` | `'rounded'` | 底板形状，配合 `v-model:shape`。 |
+| `sections` | `IconPickerSection[]` | 四个分区 | 开放的分区及其标签顺序。无法提供文件选择能力时会去掉 `file`。 |
+| `catalog` | `Partial<Record<'emoji' \| 'icon' \| 'brand', IconPickerEntry[]>>` | - | 替换某个分区的内置行。渲染 `class:` 图标的 CSS 由宿主拥有，所以自带图标集的宿主应当替换整组行，而不是往一个它无法上色的目录里追加。 |
+| `shapeSelectable` | `boolean` | `false` | 是否展示形状选择行。宿主自己画底板时应保持关闭。 |
+| `fileChooser` | `() => Promise<string \| null>` | - | 宿主提供的文件对话框，返回绝对路径，取消时返回 `null`。 |
+| `accept` | `string` | `'image/*'` | 文件对话框的接受列表，回退用的 `<input type="file">` 也会使用。 |
+| `disabled` | `boolean` | `false` | 禁用触发器与面板。 |
+| `size` | `number` | `36` | 触发器底板边长（px）。 |
+| `placeholder` | `string` | - | 未选择时触发器上的文案。 |
+| `inline` | `boolean` | `false` | 直接渲染面板，而不是收在触发器后面。 |
+| `labels` | `Partial<IconPickerLabels>` | 英文默认值 | 分区标题、搜索占位符以及清除/选择文件等操作文案。 |
+
+### 事件
+
+| 事件 | 载荷 | 说明 |
+|------|------|------|
+| `update:modelValue` | `string` | 选中了图标，清除时为 `''`。 |
+| `update:shape` | `IconPickerShape` | 形状发生变化。 |
+| `change` | `string` | 与 `update:modelValue` 同时触发，供不使用 `v-model` 的宿主。 |
+| `file-error` | `unknown` | 选择器抛错，或回退输入框读取文件失败。 |
+
+### 插槽
+
+| 名称 | 说明 |
+|------|------|
+| `trigger` | 替换默认的触发器底板。`inline` 模式下不渲染。 |
 
 ## 标识符
 
@@ -74,52 +114,11 @@ export default defineConfig({
 
 图标目录是一张 `.ts` 表，它的类名不会出现在提取器扫描的任何模板里。不加 safelist，网格里每个格子都会渲染成空白方块。请直接从模块展开而不是复制字符串，这样上游新增的行不会悄悄以「不可见」的状态发出去。
 
-## API
-
-### 属性
-
-| 属性 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `modelValue` | `string` | `''` | 图标标识符，配合 `v-model`。 |
-| `shape` | `'circle' \| 'rounded' \| 'square'` | `'rounded'` | 底板形状，配合 `v-model:shape`。 |
-| `sections` | `IconPickerSection[]` | 四个分区 | 开放的分区及其标签顺序。无法提供文件选择能力时会去掉 `file`。 |
-| `catalog` | `Partial<Record<'emoji' \| 'icon' \| 'brand', IconPickerEntry[]>>` | - | 替换某个分区的内置行。渲染 `class:` 图标的 CSS 由宿主拥有，所以自带图标集的宿主应当替换整组行，而不是往一个它无法上色的目录里追加。 |
-| `shapeSelectable` | `boolean` | `false` | 是否展示形状选择行。宿主自己画底板时应保持关闭。 |
-| `fileChooser` | `() => Promise<string \| null>` | - | 宿主提供的文件对话框，返回绝对路径，取消时返回 `null`。 |
-| `accept` | `string` | `'image/*'` | 文件对话框的接受列表，回退用的 `<input type="file">` 也会使用。 |
-| `disabled` | `boolean` | `false` | 禁用触发器与面板。 |
-| `size` | `number` | `36` | 触发器底板边长（px）。 |
-| `placeholder` | `string` | - | 未选择时触发器上的文案。 |
-| `inline` | `boolean` | `false` | 直接渲染面板，而不是收在触发器后面。 |
-| `labels` | `Partial<IconPickerLabels>` | 英文默认值 | 分区标题、搜索占位符以及清除/选择文件等操作文案。 |
-
-### 事件
-
-| 事件 | 载荷 | 说明 |
-|------|------|------|
-| `update:modelValue` | `string` | 选中了图标，清除时为 `''`。 |
-| `update:shape` | `IconPickerShape` | 形状发生变化。 |
-| `change` | `string` | 与 `update:modelValue` 同时触发，供不使用 `v-model` 的宿主。 |
-| `file-error` | `unknown` | 选择器抛错，或回退输入框读取文件失败。 |
-
-### 插槽
-
-| 名称 | 说明 |
-|------|------|
-| `trigger` | 替换默认的触发器底板。`inline` 模式下不渲染。 |
-
 ## 交互约定
 
 - **文件分区需要宿主配合。** TuffEx 打不开原生对话框，也拒绝猜测。Electron 宿主传入自己的 `dialog.showOpenDialog` 桥接；什么都不传的宿主会回退到隐藏的 `<input type="file">`，其结果是一个 data URL。两者最终都是标识符 —— 但只有宿主知道自己的渲染层真正能加载哪一种。
 - **搜索匹配的是 `keywords`，不是 id。** 内置目录的关键词是双语的：如果索引只有英文，zh-CN 宿主的用户输入「火箭」将一无所获。
 - **`shape` 属于表现，单独存储。** 它不是标识符的一部分：同一个图标可能在一处渲染成圆形、在另一处渲染成方形。
-
-## 最佳实践
-
-- 原样存储标识符，渲染时再用 `parseIconIdentifier` 解析。不要把它拆成两列，拆开之后两列就可能互相矛盾。
-- 只需要读取存量值的模块，请单独从 `@talex-touch/tuffex/icon-picker` 引入 `parseIconIdentifier`：面板才是重的那部分，而解析字符串并不需要它。
-- 只有在宿主**没有**自己画底板时才传 `shape-selectable`，否则用户选中的形状他永远看不到。
-- 需要展示一个小图标底板时请用 `TxIconChip`；本组件负责的是「选」。
 
 ## 来源
 

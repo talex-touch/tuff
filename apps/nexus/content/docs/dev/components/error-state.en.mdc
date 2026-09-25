@@ -8,9 +8,8 @@ tags: [empty, state, error, feedback]
 syncStatus: reviewed
 verified: true
 ---
-# ErrorState
 
-## Basic Usage
+## Usage
 
 Uses the default title, description, and built-in error illustration (an app window with a danger badge on its bottom-right corner), with action buttons.
 
@@ -26,8 +25,6 @@ code: |
   </template>
 ---
 :::
-
-## Custom Content
 
 Override default title and description via props, with `surface="card"` for card style.
 
@@ -46,26 +43,15 @@ code: |
 ---
 :::
 
-## Dashboard Recovery States
+### Best Practices
 
-Error states should share the same data container with loading and empty states, and always provide a clear recovery action instead of only showing red error text.
+- Name the failed object in `title`, for example “Rules failed to load”, instead of a generic “Something went wrong”.
+- Always provide a recovery path: retry, go back, open logs, or contact support.
+- Use `surface="card"` when the error replaces a data panel; use the default plain surface inside an already framed container.
+- Keep technical details in logs or expandable diagnostics. The default description should tell users what they can do next.
+- Use the `actions` slot only when generated `primaryAction` / `secondaryAction` buttons cannot express the recovery flow.
 
-:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="Dashboard recovery states" description="An error state composed with loading/empty states in one Dashboard container."}
----
-code: |
-  <template>
-    <TxErrorState
-      title="Rules failed to load"
-      description="The service is temporarily unavailable. Retry or check backend logs."
-      surface="card"
-      :primary-action="{ label: 'Retry', type: 'primary', icon: 'i-carbon-renew' }"
-      :secondary-action="{ label: 'View guide', icon: 'i-carbon-help' }"
-    />
-  </template>
----
-:::
-
-## API
+## API Reference
 
 `TxErrorState` inherits all props from `TxEmptyState` except `variant`, which is always forced to `error`. See [EmptyState](./empty-state.en.mdc) for the full base component contract.
 
@@ -93,6 +79,25 @@ code: |
 | `primary` | - | Forwarded from `TxEmptyState` when the primary generated action is clicked. |
 | `secondary` | - | Forwarded from `TxEmptyState` when the secondary generated action is clicked. |
 
+## Dashboard Recovery States
+
+Error states should share the same data container with loading and empty states, and always provide a clear recovery action instead of only showing red error text.
+
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="Dashboard recovery states" description="An error state composed with loading/empty states in one Dashboard container."}
+---
+code: |
+  <template>
+    <TxErrorState
+      title="Rules failed to load"
+      description="The service is temporarily unavailable. Retry or check backend logs."
+      surface="card"
+      :primary-action="{ label: 'Retry', type: 'primary', icon: 'i-carbon-renew' }"
+      :secondary-action="{ label: 'View guide', icon: 'i-carbon-help' }"
+    />
+  </template>
+---
+:::
+
 ## Slots
 
 | Slot | Props | Description |
@@ -102,22 +107,14 @@ code: |
 | `description` | - | Replaces the description prop rendering. |
 | `actions` | - | Replaces generated primary/secondary action buttons. |
 
-## Interaction Contract
+## Overview
 
 - `TxErrorState` always forwards `variant="error"` to `TxEmptyState`.
 - When `icon` is unset (or an empty string), there is no `icon` slot, and `loading` is not `true`, `TxEmptyState` renders its built-in error illustration: an app window with a danger badge on its bottom-right corner, with two rings rippling out of the badge in turn. Under `prefers-reduced-motion: reduce` the rings stop and stay hidden, and the still frame is the window and badge. See [EmptyState](./empty-state.en.mdc) for the drawing.
 - The wrapper does not rewrite `title`, `description`, `surface`, action config, or slots; explicit props and slots are forwarded as-is.
 - The component does not own retry logic. It emits inherited action events or renders custom action slots for the host to handle.
 
-## Best Practices
-
-- Name the failed object in `title`, for example “Rules failed to load”, instead of a generic “Something went wrong”.
-- Always provide a recovery path: retry, go back, open logs, or contact support.
-- Use `surface="card"` when the error replaces a data panel; use the default plain surface inside an already framed container.
-- Keep technical details in logs or expandable diagnostics. The default description should tell users what they can do next.
-- Use the `actions` slot only when generated `primaryAction` / `secondaryAction` buttons cannot express the recovery flow.
-
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/error-state/src/TxErrorState.vue` confirms the component only binds props to `TxEmptyState` and forces `variant="error"`.
 - Type contracts: `packages/tuffex/packages/components/src/error-state/src/types.ts` defines `ErrorStateProps = Omit<EmptyStateProps, 'variant'>`.
@@ -125,6 +122,4 @@ code: |
 - Illustration: `TxEmptyState` draws the error illustration and `TxErrorState` takes no part in it (redrawn 2026-09-23). The badge uses the `-light-9` tint with danger ink, because white ink on a solid danger fill is not a supported pairing in this library; the rings stop and stay hidden under reduced motion.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/error-state/__tests__/error-state.test.ts` covers forced error variant, prop forwarding, named slot forwarding, and install registration.
 
-## Source
 <TuffDocSourceLink />
-

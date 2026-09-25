@@ -105,7 +105,7 @@ Recommended order: Summary Notes, What's New, What's Changed, Breaking Changes, 
 2. 获取同渠道上一 tag 到目标 ref 的本地写作上下文：
 
    ```bash
-   pnpm release:notes:prepare -- --version <version> --target-ref HEAD
+   pnpm release:notes prepare --version <version> --target-ref HEAD
    ```
 
    输出包含目标 SHA、上一同渠道 tag、commit 范围和双语模板。需要创建空白模板时可加 `--write`；命令拒绝覆盖已有文件。
@@ -114,7 +114,7 @@ Recommended order: Summary Notes, What's New, What's Changed, Breaking Changes, 
 4. 在打 tag 前执行确定性校验：
 
    ```bash
-   pnpm release:notes:verify -- --version <version> --tag v<version>
+   pnpm release:notes verify --version <version> --tag v<version>
    ```
 
 5. 修复所有校验错误后再提交和发版。

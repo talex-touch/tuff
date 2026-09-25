@@ -29,6 +29,10 @@ export const useProjectStore = defineStore('projects', () => {
         localAiSdk.session.list()
       ])
       if (generation !== refreshGeneration) return
+      // Both SDK calls are typed as arrays, but a channel error reply resolves as `undefined`
+      // rather than rejecting, so a snapshot that is not a pair of arrays must never replace the
+      // last good one -- an undefined `localAiSessions` broke every consumer of this store.
+      if (!Array.isArray(nextProjects) || !Array.isArray(nextSessions)) return
       projects.value = nextProjects
       localAiSessions.value = nextSessions
     } catch {

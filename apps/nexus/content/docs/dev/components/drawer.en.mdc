@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Drawer
-
-## Basic Usage
+## Usage
 
 ### Basic Drawer
 The common drawer pattern.
@@ -27,6 +25,128 @@ code: |
   </template>
 ---
 :::
+
+### Best Practices
+
+- Use Drawer for long forms, audit details, permission matrices, and flows that need footer actions.
+- Keep `title` meaningful even when `showHeader=false`; it becomes the dialog's accessible fallback label.
+- Prefer `size` and `full`; keep `width` only for old call sites that have not migrated yet.
+- Use `mobileAdapt=false` only when preserving side direction is more important than bottom-sheet ergonomics on small screens.
+
+## API Reference
+
+### Props
+
+::TuffPropsTable
+---
+rows:
+  - name: visible
+    description: 'Controls drawer visibility'
+    type: 'boolean'
+    default: '*required*'
+  - name: title
+    description: 'Title text'
+    type: 'string'
+    default: "'Drawer'"
+  - name: size
+    description: 'Active-axis size; width for left/right and height for top/bottom; numbers are px and full maps to 100%'
+    type: "number | string | 'full'"
+    default: "'60%'"
+  - name: full
+    description: 'Open at 100% on the active axis, equivalent to size="full"'
+    type: 'boolean'
+    default: 'false'
+  - name: width
+    description: 'Deprecated compatibility alias; use size instead'
+    type: "number | string | 'full'"
+    default: '-'
+  - name: direction
+    description: 'Slide-in direction'
+    type: "'left' | 'right' | 'top' | 'bottom'"
+    default: "'right'"
+  - name: showHeader
+    description: 'Render the header area'
+    type: 'boolean'
+    default: 'true'
+  - name: showFooter
+    description: 'Render the footer slot area'
+    type: 'boolean'
+    default: 'true'
+  - name: showClose
+    description: 'Show close button'
+    type: 'boolean'
+    default: 'true'
+  - name: closeOnClickMask
+    description: 'Close on mask click'
+    type: 'boolean'
+    default: 'true'
+  - name: closeOnPressEscape
+    description: 'Close on Escape key'
+    type: 'boolean'
+    default: 'true'
+  - name: maskEffect
+    description: 'Mask visual effect'
+    type: "'blur' | 'opacity' | 'transparent'"
+    default: "'blur'"
+  - name: panelTransparent
+    description: 'Make the panel translucent so the back layer shows through'
+    type: 'boolean'
+    default: 'false'
+  - name: mobileAdapt
+    description: 'Force bottom direction on mobile viewport'
+    type: 'boolean'
+    default: 'true'
+  - name: zIndex
+    description: 'Custom z-index. When unset the runtime z-index manager assigns one (seeded at `10000`, incremented per drawer); set it manually only to coexist with externally fixed layers.'
+    type: 'number'
+    default: '-'
+  - name: lazy
+    description: 'Defer rendering slot content until the drawer first opens. The panel itself stays mounted, so the slide-out animation is unaffected; content is kept alive after the first open, so reopening never re-runs child setup. Set `false` when a child must mount eagerly.'
+    type: 'boolean'
+    default: 'true'
+---
+::
+
+### Events
+
+::TuffPropsTable
+---
+rows:
+  - name: update:visible
+    description: 'Emitted on visibility change'
+    type: '(visible: boolean) => void'
+    default: '-'
+  - name: open
+    description: 'Emitted when opened'
+    type: '() => void'
+    default: '-'
+  - name: close
+    description: 'Emitted when closed'
+    type: '() => void'
+    default: '-'
+---
+::
+
+### Slots
+
+::TuffPropsTable
+---
+rows:
+  - name: default
+    description: 'Main content'
+    type: '-'
+    default: '-'
+  - name: header
+    description: 'Custom header; slot props: { close, title, titleId }'
+    type: '-'
+    default: '-'
+  - name: footer
+    description: 'Footer area; slot props: { close }'
+    type: '-'
+    default: '-'
+---
+::
+
 ## Direction
 
 Drawers support `left`, `right`, `top`, and `bottom`. Mobile viewports adapt to `bottom` by default unless `mobile-adapt="false"` is set.
@@ -56,6 +176,7 @@ code: |
   </template>
 ---
 :::
+
 ## Size and Fullscreen
 
 ### Size and Fullscreen
@@ -83,6 +204,7 @@ code: |
   </template>
 ---
 :::
+
 ## Header / Footer Slots and Mask
 
 Use the `header` / `footer` slots to customize the chrome, or disable them with `show-header` / `show-footer`. Built-in header/footer separators reuse `TxDivider`. `mask-effect` supports `blur`, `opacity`, and `transparent`; `panel-transparent` lets the panel surface show content behind it.
@@ -223,121 +345,7 @@ code: |
 ---
 :::
 
-## API
-
-### Props
-
-::TuffPropsTable
----
-rows:
-  - name: visible
-    description: 'Controls drawer visibility'
-    type: 'boolean'
-    default: '*required*'
-  - name: title
-    description: 'Title text'
-    type: 'string'
-    default: "'Drawer'"
-  - name: size
-    description: 'Active-axis size; width for left/right and height for top/bottom; numbers are px and full maps to 100%'
-    type: "number | string | 'full'"
-    default: "'60%'"
-  - name: full
-    description: 'Open at 100% on the active axis, equivalent to size="full"'
-    type: 'boolean'
-    default: 'false'
-  - name: width
-    description: 'Deprecated compatibility alias; use size instead'
-    type: "number | string | 'full'"
-    default: '-'
-  - name: direction
-    description: 'Slide-in direction'
-    type: "'left' | 'right' | 'top' | 'bottom'"
-    default: "'right'"
-  - name: showHeader
-    description: 'Render the header area'
-    type: 'boolean'
-    default: 'true'
-  - name: showFooter
-    description: 'Render the footer slot area'
-    type: 'boolean'
-    default: 'true'
-  - name: showClose
-    description: 'Show close button'
-    type: 'boolean'
-    default: 'true'
-  - name: closeOnClickMask
-    description: 'Close on mask click'
-    type: 'boolean'
-    default: 'true'
-  - name: closeOnPressEscape
-    description: 'Close on Escape key'
-    type: 'boolean'
-    default: 'true'
-  - name: maskEffect
-    description: 'Mask visual effect'
-    type: "'blur' | 'opacity' | 'transparent'"
-    default: "'blur'"
-  - name: panelTransparent
-    description: 'Make the panel translucent so the back layer shows through'
-    type: 'boolean'
-    default: 'false'
-  - name: mobileAdapt
-    description: 'Force bottom direction on mobile viewport'
-    type: 'boolean'
-    default: 'true'
-  - name: zIndex
-    description: 'Custom z-index. When unset the runtime z-index manager assigns one (seeded at `10000`, incremented per drawer); set it manually only to coexist with externally fixed layers.'
-    type: 'number'
-    default: '-'
-  - name: lazy
-    description: 'Defer rendering slot content until the drawer first opens. The panel itself stays mounted, so the slide-out animation is unaffected; content is kept alive after the first open, so reopening never re-runs child setup. Set `false` when a child must mount eagerly.'
-    type: 'boolean'
-    default: 'true'
----
-::
-
-### Events
-
-::TuffPropsTable
----
-rows:
-  - name: update:visible
-    description: 'Emitted on visibility change'
-    type: '(visible: boolean) => void'
-    default: '-'
-  - name: open
-    description: 'Emitted when opened'
-    type: '() => void'
-    default: '-'
-  - name: close
-    description: 'Emitted when closed'
-    type: '() => void'
-    default: '-'
----
-::
-
-### Slots
-
-::TuffPropsTable
----
-rows:
-  - name: default
-    description: 'Main content'
-    type: '-'
-    default: '-'
-  - name: header
-    description: 'Custom header; slot props: { close, title, titleId }'
-    type: '-'
-    default: '-'
-  - name: footer
-    description: 'Footer area; slot props: { close }'
-    type: '-'
-    default: '-'
----
-::
-
-## Interaction Contract
+## Overview
 
 - The drawer root exposes `role="dialog"` and `aria-modal="true"`; with a header it links the title through instance-scoped `aria-labelledby`, and without a header it falls back to `title` as `aria-label`.
 - Opening the drawer focuses the drawer root; hiding or unmounting restores focus to the element that was active before opening.
@@ -345,22 +353,13 @@ rows:
 - `showClose=false` removes the default close button without changing mask or Escape behavior.
 - `mobileAdapt=true` forces bottom direction on mobile; set `:mobile-adapt="false"` to preserve the requested direction.
 
-## Best Practices
-
-- Use Drawer for long forms, audit details, permission matrices, and flows that need footer actions.
-- Keep `title` meaningful even when `showHeader=false`; it becomes the dialog's accessible fallback label.
-- Prefer `size` and `full`; keep `width` only for old call sites that have not migrated yet.
-- Use `mobileAdapt=false` only when preserving side direction is more important than bottom-sheet ergonomics on small screens.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue`.
 - Types: `packages/tuffex/packages/components/src/drawer/src/types.ts`.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/drawer/__tests__/drawer.test.ts` verifies visibility emits, focus restoration, ARIA labeling, close controls, size resolution, mobile adaptation, and separator rendering.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - The drawer root already exposes `role="dialog"` / `aria-modal="true"` and title linkage; form fields inside still need explicit labels.
 - Opening stores the previously focused element and restores it on hide/unmount; avoid manually stealing focus from outside.

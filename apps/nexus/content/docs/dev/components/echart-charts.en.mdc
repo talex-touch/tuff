@@ -8,9 +8,8 @@ tags: [chart, echarts, line, bar, pie, funnel, radar, gauge, scatter, heatmap, t
 syncStatus: reviewed
 verified: true
 ---
-# ECharts Family
 
-## Install & Import
+## Installation
 
 `echarts` is an optional peer dependency: install it in the host application and the family lights up, leave it out and nothing else in Tuffex changes. It is never bundled — the components import it dynamically, so it lands in its own chunk the first time one of them mounts.
 
@@ -22,11 +21,45 @@ pnpm add echarts @talex-touch/tuffex
 import { TxEChart, TxLineChart } from '@talex-touch/tuffex/charts'
 ```
 
-## When to use which family
+## Usage
 
-The native SVG family (`TxChart`, `TxTimeseriesChart`, `TxSankeyChart`, `TxChoroplethMap`, `TxSparkChart`, `TxAllocationBar`) stays the default: smaller, themeable through CSS tokens, and shaped for what the product actually renders. Reach for `TxEChart` and its typed wrappers when you need a chart type the native family does not have, or when you want ECharts' own option surface — dataZoom, visualMap, custom series, per-point styling.
+### Best Practices
 
-Both families read the same colour tokens, so an ECharts chart dropped next to a native one matches it in either theme without a single styling prop.
+- Give the host a definite height. A zero-height container cannot paint.
+- Prefer a typed wrapper; drop to `TxEChart` with a raw option for the long tail (candlestick, graph, boxplot, sunburst).
+- Use `aria-label`: the label makes a canvas chart readable to assistive tech.
+- Pass data, not pixels: the wrappers map your data onto the option, so theme colours and axis chrome stay consistent.
+- Install `echarts` in the host application; a missing peer is reported in the container instead of failing silently.
+
+## API Reference
+
+Every chart in the family accepts the shared props below plus its own data props, and every one forwards a raw `option` that is merged over the built option — `series` arrays are replaced, every other key merges deep.
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `option` | `EChartsOption` | — | Merged over the built option: the per-chart customization hatch. |
+| `height` | `number \| string` | `320` | Chart height: px, or any CSS length. |
+| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` follows the surrounding theme. |
+| `ariaLabel` | `string` | — | Accessible name; adds `role="img"` to the host. |
+| `loading` | `boolean` | `false` | Themed loading mask until data arrives. |
+
+`update` only exists on `TxEChart`: `'replace'` (default) swaps the series array so removed series stop being drawn, `'merge'` keeps ECharts' own merge semantics.
+
+### Per-chart props
+
+| Chart | Props |
+|------|------|
+| `TxLineChart` | `series` (`name`, `data`, `color?`, `area?`, `smooth?`, `stack?`, `dashed?`), `categories?`, `xAxisName?`, `yAxisName?`, `showLegend?`, `grid?` |
+| `TxBarChart` | `series` (`name`, `data`, `color?`, `stack?`), `categories?`, `xAxisName?`, `yAxisName?`, `showLegend?`, `grid?`, `stacked?`, `horizontal?`, `barWidth?`, `showLabel?` |
+| `TxPieChart` | `data` (`name`, `value`, `color?`), `donut?`, `roseType?`, `showLegend?`, `labelPosition?`, `centerLabel?`, `unit?` |
+| `TxFunnelChart` | `data` (`name`, `value`, `color?`), `sort?`, `gap?`, `minSize?`, `maxSize?`, `labelPosition?`, `showLabel?`, `showLegend?`, `unit?` |
+| `TxRadarChart` | `indicators` (`name`, `max`, `min?`), `series` (`name`, `data`, `color?`, `area?`), `shape?`, `splitNumber?`, `showLegend?`, `showAxisName?` |
+| `TxGaugeChart` | `value`, `min?`, `max?`, `name?`, `unit?`, `precision?`, `progress?`, `segments?`, `color?` |
+| `TxScatterChart` | `series` (`name`, `data`, `color?`, `symbolSize?`), `xAxisName?`, `yAxisName?`, `symbolSize?`, `showLegend?`, `grid?`, `xMin?`, `xMax?`, `yMin?`, `yMax?` |
+| `TxHeatmapChart` | `values`, `rows`, `columns`, `xAxisName?`, `yAxisName?`, `visualMap?`, `min?`, `max?`, `showLabel?`, `unit?` |
+| `TxTreemapChart` | `data` (`name`, `value?`, `color?`, `children?`), `maxDepth?`, `showBreadcrumb?`, `showLabel?`, `unit?`, `roam?` |
+
+The builders themselves are public too — `buildBarChartOption`, `buildLineChartOption`, and the rest return a plain `EChartsOption`. Use one when a chart has to mix mark types: build the options you want and hand the merged result to `TxEChart`.
 
 ## Themed host
 
@@ -250,36 +283,6 @@ code: |
 ---
 :::
 
-## API
-
-Every chart in the family accepts the shared props below plus its own data props, and every one forwards a raw `option` that is merged over the built option — `series` arrays are replaced, every other key merges deep.
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `option` | `EChartsOption` | — | Merged over the built option: the per-chart customization hatch. |
-| `height` | `number \| string` | `320` | Chart height: px, or any CSS length. |
-| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` follows the surrounding theme. |
-| `ariaLabel` | `string` | — | Accessible name; adds `role="img"` to the host. |
-| `loading` | `boolean` | `false` | Themed loading mask until data arrives. |
-
-`update` only exists on `TxEChart`: `'replace'` (default) swaps the series array so removed series stop being drawn, `'merge'` keeps ECharts' own merge semantics.
-
-### Per-chart props
-
-| Chart | Props |
-|------|------|
-| `TxLineChart` | `series` (`name`, `data`, `color?`, `area?`, `smooth?`, `stack?`, `dashed?`), `categories?`, `xAxisName?`, `yAxisName?`, `showLegend?`, `grid?` |
-| `TxBarChart` | `series` (`name`, `data`, `color?`, `stack?`), `categories?`, `xAxisName?`, `yAxisName?`, `showLegend?`, `grid?`, `stacked?`, `horizontal?`, `barWidth?`, `showLabel?` |
-| `TxPieChart` | `data` (`name`, `value`, `color?`), `donut?`, `roseType?`, `showLegend?`, `labelPosition?`, `centerLabel?`, `unit?` |
-| `TxFunnelChart` | `data` (`name`, `value`, `color?`), `sort?`, `gap?`, `minSize?`, `maxSize?`, `labelPosition?`, `showLabel?`, `showLegend?`, `unit?` |
-| `TxRadarChart` | `indicators` (`name`, `max`, `min?`), `series` (`name`, `data`, `color?`, `area?`), `shape?`, `splitNumber?`, `showLegend?`, `showAxisName?` |
-| `TxGaugeChart` | `value`, `min?`, `max?`, `name?`, `unit?`, `precision?`, `progress?`, `segments?`, `color?` |
-| `TxScatterChart` | `series` (`name`, `data`, `color?`, `symbolSize?`), `xAxisName?`, `yAxisName?`, `symbolSize?`, `showLegend?`, `grid?`, `xMin?`, `xMax?`, `yMin?`, `yMax?` |
-| `TxHeatmapChart` | `values`, `rows`, `columns`, `xAxisName?`, `yAxisName?`, `visualMap?`, `min?`, `max?`, `showLabel?`, `unit?` |
-| `TxTreemapChart` | `data` (`name`, `value?`, `color?`, `children?`), `maxDepth?`, `showBreadcrumb?`, `showLabel?`, `unit?`, `roam?` |
-
-The builders themselves are public too — `buildBarChartOption`, `buildLineChartOption`, and the rest return a plain `EChartsOption`. Use one when a chart has to mix mark types: build the options you want and hand the merged result to `TxEChart`.
-
 ## Events
 
 | Event | Payload | Description |
@@ -290,15 +293,7 @@ The builders themselves are public too — `buildBarChartOption`, `buildLineChar
 | `legendselectchanged` | `(params: EChartEventParams)` | A legend entry was toggled. |
 | `datazoom` | `(params: EChartEventParams)` | A dataZoom range changed. |
 
-## Best Practices
-
-- Give the host a definite height. A zero-height container cannot paint.
-- Prefer a typed wrapper; drop to `TxEChart` with a raw option for the long tail (candlestick, graph, boxplot, sunburst).
-- Use `aria-label`: the label makes a canvas chart readable to assistive tech.
-- Pass data, not pixels: the wrappers map your data onto the option, so theme colours and axis chrome stay consistent.
-- Install `echarts` in the host application; a missing peer is reported in the container instead of failing silently.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/charts/src/echart/src/`.
 - Option builders: `packages/tuffex/packages/components/src/charts/src/echart/src/options/`.
@@ -306,3 +301,9 @@ The builders themselves are public too — `buildBarChartOption`, `buildLineChar
 - Adapted from Cloudflare kumo (https://github.com/cloudflare/kumo), © Cloudflare, Inc., MIT — `EChart.tsx`.
 
 <TuffDocSourceLink />
+
+## Use cases
+
+The native SVG family (`TxChart`, `TxTimeseriesChart`, `TxSankeyChart`, `TxChoroplethMap`, `TxSparkChart`, `TxAllocationBar`) stays the default: smaller, themeable through CSS tokens, and shaped for what the product actually renders. Reach for `TxEChart` and its typed wrappers when you need a chart type the native family does not have, or when you want ECharts' own option surface — dataZoom, visualMap, custom series, per-point styling.
+
+Both families read the same colour tokens, so an ECharts chart dropped next to a native one matches it in either theme without a single styling prop.

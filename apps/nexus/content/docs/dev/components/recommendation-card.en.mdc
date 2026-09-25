@@ -8,9 +8,8 @@ tags: [ai, recommendation, confidence, decision]
 syncStatus: reviewed
 verified: true
 ---
-# RecommendationCard
 
-## Basic Usage
+## Usage
 
 ### A Suggestion and Its Alternatives
 
@@ -59,20 +58,15 @@ code: |
 ---
 :::
 
-## How Confidence Maps
+### Best Practices
 
-`confidence` is the semantic entry point; the component derives the meter's fill and colour from it:
+- Write `short` so it reads on its own — inside the drawer it is the only information there is.
+- Pair `label` with the meter rather than relying on colour; colour drops out under high contrast and for colour-blind readers.
+- Use `ctaTone: 'danger'` for destructive actions so the primary button's weight matches the consequence.
+- Lift `accepted` into the host and set it true only after the request succeeds, or readers will believe the order was placed.
+- Keep alternatives to two or three; beyond that the choice belongs on a list page, not in a drawer.
 
-| `confidence` | Segments | Default colour |
-|------|------|------|
-| `high` | 3 | `--tx-bui-green` |
-| `medium` | 2 | `--tx-bui-orange` |
-| `low` | 1 | `--tx-bui-red` |
-| `none` (default) | 0 | `--tx-bui-ink-3` |
-
-`signal` and `tone` are the escape hatches, overriding the count and the colour respectively. `label` is always required — colour cannot be the only carrier of state.
-
-## API
+## API Reference
 
 ### Props
 
@@ -106,7 +100,20 @@ code: |
 | `meter` | `{ option }` | Replaces a meter, used in the footer and in every drawer row. |
 | `footer-extra` | — | Inserted on the left of the footer, before the actions. |
 
-## Interaction Contract
+## How Confidence Maps
+
+`confidence` is the semantic entry point; the component derives the meter's fill and colour from it:
+
+| `confidence` | Segments | Default colour |
+|------|------|------|
+| `high` | 3 | `--tx-bui-green` |
+| `medium` | 2 | `--tx-bui-orange` |
+| `low` | 1 | `--tx-bui-red` |
+| `none` (default) | 0 | `--tx-bui-ink-3` |
+
+`signal` and `tone` are the escape hatches, overriding the count and the colour respectively. `label` is always required — colour cannot be the only carrier of state.
+
+## Overview
 
 - **Picking promotes.** Choosing an alternative makes it the current recommendation, closes the drawer, and **clears the confirmed state** — a confirmation of the previous option must not carry over to a new one.
 - The drawer lists only the **other** options; the current recommendation never appears twice.
@@ -120,15 +127,7 @@ code: |
 - `tone` takes a raw CSS colour string and **does not follow the theme**; prefer `confidence`.
 - The drawer eases more softly than the rest of this family (`cubic-bezier(0.16, 1, 0.3, 1)`). That difference is deliberate upstream and is preserved.
 
-## Best Practices
-
-- Write `short` so it reads on its own — inside the drawer it is the only information there is.
-- Pair `label` with the meter rather than relying on colour; colour drops out under high contrast and for colour-blind readers.
-- Use `ctaTone: 'danger'` for destructive actions so the primary button's weight matches the consequence.
-- Lift `accepted` into the host and set it true only after the request succeeds, or readers will believe the order was placed.
-- Keep alternatives to two or three; beyond that the choice belongs on a list page, not in a drawer.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/recommendation-card/src/TxRecommendationCard.vue`.
 - Types: `packages/tuffex/packages/components/src/recommendation-card/src/types.ts`.
@@ -136,8 +135,6 @@ code: |
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **How it divides from `TxToolConfirmation`:** that is a binary authorisation (allow / deny plus a risk tier); this is a **multi-option suggestion with evidence** — an option list, a confidence level, and promotion semantics. Only the two footer buttons look alike.
 - **The meter is its own primitive:** the footer and every drawer row render `TxSignalMeter`, which can be used independently — see its own doc.

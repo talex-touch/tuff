@@ -8,9 +8,8 @@ tags: [steps, progress, workflow]
 syncStatus: reviewed
 verified: true
 ---
-# Steps 步骤条
 
-## 基础用法
+## 用法
 
 常见场景使用数字步骤。当 `active` 和步骤键都是数字时，已完成状态会自动推断。
 
@@ -35,7 +34,15 @@ code: |
 ---
 ::::
 
-## API
+### 最佳实践
+
+- 线性表单和新手引导优先使用数字键，让完成状态自动推断。
+- 命名工作流使用字符串键，但需要显式设置 completed 或 error 状态。
+- 后续步骤依赖前置条件时，把不可跳转步骤设为 `disabled`。
+- 把 `TxSteps` 视为进度/导航提示，而不是路由或表单状态的唯一来源；权威流程状态应保存在父级。
+- 避免在每个步骤里写长描述；需要段落或控件时，把详情放在步骤条下方。
+
+## API 参考
 
 ### TxSteps Props
 
@@ -69,7 +76,7 @@ code: |
 
 不触发事件。可点击步骤只更新 `TxSteps` 内部保存的 active step。
 
-## 交互契约
+## 概述
 
 - `TxSteps` 渲染 `role="list"`；每个 `TxStep` 渲染 `role="listitem"`。
 - 可点击步骤头部是原生 `button type="button"`；不可点击头部渲染为 `div`。
@@ -79,23 +86,13 @@ code: |
 - 数字步骤在数字 active 之前时会自动视为已完成。字符串流程需要显式设置 `status="completed"` 才会显示完成样式。
 - 点击会更新内部 active step，但不会触发 change 事件，也不会自动更新父级状态。
 
-## 最佳实践
-
-- 线性表单和新手引导优先使用数字键，让完成状态自动推断。
-- 命名工作流使用字符串键，但需要显式设置 completed 或 error 状态。
-- 后续步骤依赖前置条件时，把不可跳转步骤设为 `disabled`。
-- 把 `TxSteps` 视为进度/导航提示，而不是路由或表单状态的唯一来源；权威流程状态应保存在父级。
-- 避免在每个步骤里写长描述；需要段落或控件时，把详情放在步骤条下方。
-
-## 审阅说明 / Review Notes
+## 技术实现
 
 - **状态契约:** `TxSteps` 维护内部 `activeStep`，并监听 `active` prop。点击步骤只修改内部值；组件不会派发 `update:active` 或 `change` 事件。
 - **排序说明:** 步骤通过组件 uid 和子节点顺序注册。数字步骤会根据 `effectiveStep < activeStep` 自动推断 completed；字符串流程如果要展示完成态，需要显式传 `status="completed"`。
 - **实测覆盖:** `steps.test.ts` 覆盖 list/listitem 语义、数字步骤自动完成、最后一项不渲染连接线、显式字符串步骤、点击驱动的内部 active 状态、disabled/non-clickable 阻断，以及连接线几何（每个尺寸只设 `--tx-step-icon-size`，连接线按它定位；连接线是标记按钮的兄弟节点，已完成步骤后的一段带 `tx-step__line--completed`）。
 - 视觉（2026-09-06）：标记居中于自己的标题之上，连接线从本标记边缘画到下一标记边缘（此前连接线是按钮内的 flex 兄弟，把每个标记都推到标题左侧）；未到达的步骤是空心环 + 次级文字，已完成与当前步骤同用主色（完成态不再是绿色），当前步骤外加 4px 光晕；已完成步骤后的连接线随之着色；`error` 状态有了自己的样式。
 - 动效（2026-09-06）：全部由 CSS 编排，顺序即阅读顺序——刚完成的标记把数字换成对勾（带一点过冲），它后面的连接线从本标记向下一标记扫过（挂载时按步骤序号错开 140ms，整行从左到右画出进度），新的当前标记在扫过之后弹入并保持一个缓慢的光晕呼吸；回退时连接线通过过渡缓缓退回而不是跳变。`prefers-reduced-motion` 下全部关闭，状态颜色保留。
-
-## Source
 
 - Component sources: `packages/tuffex/packages/components/src/steps/src/TxSteps.vue` 与 `TxStep.vue`。
 - Types: `packages/tuffex/packages/components/src/steps/src/types.ts` 导出 `StepsProps`、`StepProps`、`StepsDirection`、`StepsSize` 与 `StepStatus`。

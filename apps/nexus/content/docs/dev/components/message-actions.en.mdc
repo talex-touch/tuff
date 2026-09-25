@@ -8,9 +8,8 @@ tags: [ai, message, toolbar]
 syncStatus: reviewed
 verified: true
 ---
-# Message Actions
 
-## Basic Usage
+## Usage
 
 ### Message Actions
 ::::TuffDemoWrapper{demo="MessageActionsMessageActionsDemo" code-lang="vue"}
@@ -29,17 +28,14 @@ code: |
 ---
 ::::
 
-## Interaction Contract
+### Best Practices
 
-- The copy button renders whenever `copyText` is **defined** — an empty string still renders it, though clicking does nothing. Omit the prop entirely to hide it.
-- Copying writes through `navigator.clipboard`. The `copy` event is emitted even when that write is denied by permissions policy, so the host can route the copy through its own channel.
-- After a copy the button shows its copied state for 1200 ms and ignores repeat clicks during that window.
-- The bar is `role="toolbar"`: a single tab stop, with ← → ↑ ↓ moving between controls and Home / End jumping to the ends.
-- The roving order is read live from the DOM (`button:not([disabled])`, `[href]`, any non-`-1` `tabindex`), so **focusable elements in the default slot join the same order** with no extra wiring.
-- Disabled buttons are excluded from the roving order.
-- With `appear` set, a slow blur-fade entrance plays once on mount. Turn it off explicitly where an entrance is unwanted.
+- Use native `<button>` elements for custom actions. The roving order is found by tag and `tabindex`, so a wrapping `<div>` is skipped.
+- Do not re-implement the copy as a fallback for clipboard failures — listen to `copy`, which the component already emits in both cases.
+- Override `copyLabel`, `copiedLabel`, `regenerateLabel` and `label` together when localizing; all four affect accessible names only, not the visuals.
+- Hold the toolbar back until a message finishes streaming, or users will copy a half-written answer.
 
-## API
+## API Reference
 
 ### Props
 
@@ -66,9 +62,12 @@ code: |
 |------|-------------|
 | `default` | Appended after the built-in buttons. Focusable elements placed here join the arrow-key roving order automatically. |
 
-## Best Practices
+## Overview
 
-- Use native `<button>` elements for custom actions. The roving order is found by tag and `tabindex`, so a wrapping `<div>` is skipped.
-- Do not re-implement the copy as a fallback for clipboard failures — listen to `copy`, which the component already emits in both cases.
-- Override `copyLabel`, `copiedLabel`, `regenerateLabel` and `label` together when localizing; all four affect accessible names only, not the visuals.
-- Hold the toolbar back until a message finishes streaming, or users will copy a half-written answer.
+- The copy button renders whenever `copyText` is **defined** — an empty string still renders it, though clicking does nothing. Omit the prop entirely to hide it.
+- Copying writes through `navigator.clipboard`. The `copy` event is emitted even when that write is denied by permissions policy, so the host can route the copy through its own channel.
+- After a copy the button shows its copied state for 1200 ms and ignores repeat clicks during that window.
+- The bar is `role="toolbar"`: a single tab stop, with ← → ↑ ↓ moving between controls and Home / End jumping to the ends.
+- The roving order is read live from the DOM (`button:not([disabled])`, `[href]`, any non-`-1` `tabindex`), so **focusable elements in the default slot join the same order** with no extra wiring.
+- Disabled buttons are excluded from the roving order.
+- With `appear` set, a slow blur-fade entrance plays once on mount. Turn it off explicitly where an entrance is unwanted.

@@ -8,9 +8,8 @@ tags: [form, number, drag, inspector]
 syncStatus: reviewed
 verified: true
 ---
-# ScrubField
 
-## Basic Usage
+## Usage
 
 ### ScrubField
 
@@ -31,17 +30,14 @@ code: |
 ---
 :::
 
-## Three Ways In
+### Best Practices
 
-**Drag.** Press on the caption and move sideways: every `pixelsPerStep` (2 by default) advances one `step`. The travel is measured from where the gesture started rather than mapped onto a track — which is why there is no track, and why the drag is not bounded by the control's width and can run all the way to the limits.
+- Keep captions short (`W`, `H`, `Radius`): the caption *is* the handle, and a long one turns the drag target into the loudest thing in the row.
+- Let the host decide `active` — usually "current value differs from the preset", compared against data rather than a hard-coded constant.
+- Use `clampOn="blur"` in forms people type into, and the default `'input'` in inspectors with a live preview.
+- When you need "pick a value by position on a track", use `TxSlider`. Position mapping and travel accumulation are not interchangeable.
 
-**Keyboard.** The handle is a focusable `role="slider"`. ↑ → increase, ↓ ← decrease, Shift multiplies by `shiftMultiplier` (10 by default), and Home / End jump to the bounds.
-
-**Typing.** The value is a real `<input>`. `clampOn` decides when it settles: `'input'` (the default, and upstream's behaviour) clamps on every keystroke, while `'blur'` keeps the text you are typing so that `5` on the way to `50` is not rewritten under you.
-
-Pressing **Escape during a drag abandons the gesture**, returning to the value the drag started from — not the last value the pointer happened to pass over.
-
-## API
+## API Reference
 
 ### Props
 
@@ -75,7 +71,17 @@ Pressing **Escape during a drag abandons the gesture**, returning to the value t
 | `focus()` | Focuses the drag handle. |
 | `focusInput()` | Focuses the number input. |
 
-## Interaction Contract
+## Three Ways In
+
+**Drag.** Press on the caption and move sideways: every `pixelsPerStep` (2 by default) advances one `step`. The travel is measured from where the gesture started rather than mapped onto a track — which is why there is no track, and why the drag is not bounded by the control's width and can run all the way to the limits.
+
+**Keyboard.** The handle is a focusable `role="slider"`. ↑ → increase, ↓ ← decrease, Shift multiplies by `shiftMultiplier` (10 by default), and Home / End jump to the bounds.
+
+**Typing.** The value is a real `<input>`. `clampOn` decides when it settles: `'input'` (the default, and upstream's behaviour) clamps on every keystroke, while `'blur'` keeps the text you are typing so that `5` on the way to `50` is not rewritten under you.
+
+Pressing **Escape during a drag abandons the gesture**, returning to the value the drag started from — not the last value the pointer happened to pass over.
+
+## Overview
 
 - The chip carries horizontal padding on both sides so the handle glyph and the value clear its edge; flush against it the field read as clipped rather than compact.
 
@@ -87,14 +93,7 @@ Pressing **Escape during a drag abandons the gesture**, returning to the value t
 - The wrapper is a `<label>`, but the handle prevents its default forwarding and takes focus itself — otherwise every press on the handle would hand focus to the input.
 - There is no JS animation here, only one state transition (fill and ring), which is switched off under reduced motion.
 
-## Best Practices
-
-- Keep captions short (`W`, `H`, `Radius`): the caption *is* the handle, and a long one turns the drag target into the loudest thing in the row.
-- Let the host decide `active` — usually "current value differs from the preset", compared against data rather than a hard-coded constant.
-- Use `clampOn="blur"` in forms people type into, and the default `'input'` in inspectors with a live preview.
-- When you need "pick a value by position on a track", use `TxSlider`. Position mapping and travel accumulation are not interchangeable.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/scrub-field/src/TxScrubField.vue`.
 - Types: `packages/tuffex/packages/components/src/scrub-field/src/types.ts`.
@@ -102,8 +101,6 @@ Pressing **Escape during a drag abandons the gesture**, returning to the value t
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Why not a `TxSlider` variant:** a slider maps pointer **position** onto a track; this accumulates pointer **travel** into steps and has no track at all. The maths and the DOM are both incompatible. `TxNumberInput` does not fit either — it is a 34px form control with stepper buttons and a different settling rule.
 - **Fixes over upstream:** `pointercancel` / `lostpointercapture` (without which a stolen pointer leaves a live drag), Escape cancellation, Home/End, `aria-orientation`, and quantising travel instead of rounding the result.

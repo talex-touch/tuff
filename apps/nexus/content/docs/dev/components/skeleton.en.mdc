@@ -9,9 +9,8 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Skeleton
+## Usage
 
-## Demo
 ### Skeleton
 Text and avatar placeholders
 :::TuffDemoWrapper{demo="SkeletonSkeletonDemo" code-lang="vue"}
@@ -23,7 +22,28 @@ code: |
   </template>
 ---
 :::
-## API
+### Card Placeholder
+Skeletons inside cards for feeds.
+:::TuffDemoWrapper{demo="SkeletonCardPlaceholderDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard>
+      <TxSkeleton :loading="true" :lines="2" />
+    </TxCard>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Match skeleton width, height, line count, and radius to the final content so loading does not create a second layout.
+- Use `TxSkeleton` for configurable text, rectangle, and avatar placeholders; use `TxCardSkeleton` or `TxListItemSkeleton` when their fixed structure matches the final surface.
+- Keep `loading=false` as the handoff point to real content instead of rendering skeleton and content in separate branches.
+- Do not use skeletons as decorative gray chrome. If the final content is unknown, prefer a neutral empty or loading state with copy.
+- Use `TxDataTable loading` for short table waits; use skeletons for longer waits where preserving surrounding rhythm matters.
+
+## API Reference
 
 ### Props
 ::TuffPropsTable
@@ -80,13 +100,6 @@ rows:
 | `TxCardSkeleton` / `CardSkeleton` | Fixed card/feed placeholder with icon, title, badge, and description blocks. |
 | `TxListItemSkeleton` / `ListItemSkeleton` | Fixed list-row placeholder with icon, name, meta, and trailing badge blocks. |
 
-## Interaction Contract
-
-- `loading=false` renders the default slot instead of the skeleton.
-- `lines` always renders at least one item, preventing empty skeleton output.
-- `variant="circle"` always uses a circular radius and ignores `radius`.
-- The `TxSkeleton` root is `aria-hidden="true"`, so the decorative shimmer is not announced. Let the host region own the loading announcement (for example `aria-busy` or a polite live region), then hand off to real content at `loading=false`.
-
 ## Dashboard Data Operations
 
 For table loading, short waits can use the `TxDataTable loading` overlay; longer waits or side summaries should use `TxSkeleton` to preserve layout rhythm.
@@ -103,40 +116,22 @@ code: |
 ---
 :::
 
-## Composite Patterns
-### Card Placeholder
-Skeletons inside cards for feeds.
-:::TuffDemoWrapper{demo="SkeletonCardPlaceholderDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxCard>
-      <TxSkeleton :loading="true" :lines="2" />
-    </TxCard>
-  </template>
----
-:::
+## Overview
 
-## Best Practices
+- `loading=false` renders the default slot instead of the skeleton.
+- `lines` always renders at least one item, preventing empty skeleton output.
+- `variant="circle"` always uses a circular radius and ignores `radius`.
+- The `TxSkeleton` root is `aria-hidden="true"`, so the decorative shimmer is not announced. Let the host region own the loading announcement (for example `aria-busy` or a polite live region), then hand off to real content at `loading=false`.
 
-- Match skeleton width, height, line count, and radius to the final content so loading does not create a second layout.
-- Use `TxSkeleton` for configurable text, rectangle, and avatar placeholders; use `TxCardSkeleton` or `TxListItemSkeleton` when their fixed structure matches the final surface.
-- Keep `loading=false` as the handoff point to real content instead of rendering skeleton and content in separate branches.
-- Do not use skeletons as decorative gray chrome. If the final content is unknown, prefer a neutral empty or loading state with copy.
-- Use `TxDataTable loading` for short table waits; use skeletons for longer waits where preserving surrounding rhythm matters.
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/skeleton/src/types.ts`, `TxSkeleton.vue`, `TxCardSkeleton.vue`, `TxListItemSkeleton.vue`, and `skeleton.test.ts`.
 - Existing tests cover CSS-variable emission, numeric-to-px conversion, line count clamping, circle radius normalization, the decorative `aria-hidden` root, `loading=false` slot handoff, fixed preset rendering, and install registration.
 - API note: `TxSkeleton` is the configurable primitive; `TxCardSkeleton` and `TxListItemSkeleton` are fixed-shape presets with no props, events, or slots.
 - Rendering note: `variant="circle"` forces `--tx-skeleton-radius: 999px`; callers should set matching `width` and `height` for a true circle.
 
-## Source
-
 - Component source: `packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue`, `TxCardSkeleton.vue`, and `TxListItemSkeleton.vue`.
 - Types: `packages/tuffex/packages/components/src/skeleton/src/types.ts` exports `SkeletonProps` and `SkeletonVariant`.
 - **Verified coverage:** `packages/tuffex/packages/components/src/skeleton/__tests__/skeleton.test.ts` verifies CSS variable output, numeric-to-px conversion, line clamping, circle radius, the decorative `aria-hidden` root, `loading=false` slot handoff, preset rendering, and install registration.
 
 <TuffDocSourceLink />
-

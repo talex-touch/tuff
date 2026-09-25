@@ -122,11 +122,11 @@ jobs:
       # Needs a completed install: it reads the resolved tree to tell a stale allowlist
       # entry apart from a live one.
       - name: Verify build-script allowlist
-        run: pnpm check:build-allowlist
+        run: pnpm check build-allowlist
 
       # Reads LICENSE and the manifests only, so it does not need the install above.
       - name: Verify entry documentation metadata
-        run: pnpm check:doc-metadata && pnpm check:doc-metadata:self-test
+        run: pnpm check doc-metadata && pnpm check doc-metadata --self-test
 
       # Source-level architecture guard: the search-index worker is the sole writer for
       # files / file_extensions / keyword_mappings (#295, confirmed shipped in #331).
@@ -151,7 +151,7 @@ jobs:
       # until #1099 removed it (#1128). If the declaration this commit adds is wrong, this
       # step is where it shows up rather than in whichever release script runs next.
       - name: Validate plugin manifests and package policy
-        run: pnpm plugins:validate && pnpm plugins:validate:self-test
+        run: pnpm plugins:validate && pnpm plugins:validate --self-test
 
       # The per-plugin index.test.cjs suites were passing long before anything ran them.
       # plugins/* is in the pnpm workspace, but most of these directories ship no package.json,
@@ -164,7 +164,7 @@ jobs:
       # runs looks exactly like a test that always passes. This is a directory walk and a set
       # difference, so it does not need to wait for the next person who thinks to count (#330).
       - name: Check for orphan test files
-        run: pnpm check:orphan-tests && pnpm check:orphan-tests:self-test
+        run: pnpm check orphan-tests && pnpm check orphan-tests --self-test
 
       # The maintenance-audit reports are hand-written, one per day, and #1107 exists because a
       # bullet was being carried forward instead of re-derived -- the same sentence about a flag
@@ -180,7 +180,7 @@ jobs:
       # docs:verify's DOC-TASK-META rule. Reports dated on or before the gate date are history and
       # exempt, which is #1107's own fourth acceptance criterion.
       - name: Check maintenance-audit report claims
-        run: pnpm check:audit-report-claims && pnpm check:audit-report-claims:self-test
+        run: pnpm check audit-report-claims && pnpm check audit-report-claims --self-test
 
       # The negated-closing-keyword guard moved to .github/workflows/pr-body-guard.yml (#1773). It
       # has to re-run when a description is edited, and this job's trigger has no `edited` type, so
@@ -196,7 +196,7 @@ jobs:
       # everything from globalThis and contain no imports at all, so this check is what #1711 asked
       # an import to provide.
       - name: Check plugin blocked reasons
-        run: pnpm check:plugin-blocked-reasons && pnpm check:plugin-blocked-reasons:self-test
+        run: pnpm check plugin-blocked-reasons && pnpm check plugin-blocked-reasons --self-test
 
       # plugin.ts was ~3,060 lines when #339 asked for it to be split. Three extraction PRs landed
       # and each reported real progress -- 4,069 to 3,947 to 3,872 to 3,844 -- against a baseline
@@ -209,22 +209,22 @@ jobs:
       # PRs in a row could not answer. The ceiling falls and never rises, and a ceiling left too far
       # above the file also fails -- a ratchet nobody tightens is a comment.
       - name: Check module size ratchet
-        run: pnpm check:module-size-ratchet && pnpm check:module-size-ratchet:self-test
+        run: pnpm check module-size-ratchet && pnpm check module-size-ratchet --self-test
 
       # The renderer's legacy UI primitives are frozen: existing callers in LEGACY_ALLOWED stay,
       # new imports of them fail. The gate shipped unwired and importing `globby`, which no
       # manifest declares, so every invocation would have died on ERR_MODULE_NOT_FOUND -- it had
       # never run. Rewritten onto the `readdirSync` walk the sibling check-* scripts use.
       - name: Check CoreApp UI contract
-        run: pnpm check:coreapp-ui-contract
+        run: pnpm check coreapp-ui-contract
 
       # The release workflow calls this on a Windows runner only, where a regression would first
       # surface mid-release. The self-test runs its pure assertions on every platform instead.
       - name: Check Windows installer artifact assertions
-        run: pnpm check:windows-installer-artifacts:self-test
+        run: pnpm check windows-installer-artifacts --self-test
 
       - name: Run plugin suites
-        run: pnpm test:plugins && pnpm test:plugins:self-test
+        run: pnpm test:plugins && pnpm test:plugins --self-test
 
       # There was no production dependency gate at all. `pnpm audit --prod` sat in #328's
       # Verification block and #325's acceptance criteria while nothing ran it, so the advisory
@@ -234,27 +234,27 @@ jobs:
       # .github/prod-audit-allowlist.json, where an entry needs a reason, an owner and an expiry,
       # and a stale entry fails too so the list cannot only grow (#325, #328).
       - name: Production dependency audit
-        run: pnpm check:prod-audit && pnpm check:prod-audit:self-test
+        run: pnpm check prod-audit && pnpm check prod-audit --self-test
 
       # On darwin, app.getFileIcon(path, { size: 'large' }) is the unsupported path behind the
       # SIGTRAP / EXC_BREAKPOINT reports in #310. canUseElectronFileIcon refuses it -- but a
       # wrapper only protects the callers that use it, and #310's "no unsupported large icon path
       # occurs" was verified once by hand on a real Mac. This makes it a fact about the tree.
       - name: macOS file-icon guard
-        run: pnpm check:file-icon-guard && pnpm check:file-icon-guard:self-test
+        run: pnpm check file-icon-guard && pnpm check file-icon-guard --self-test
 
       # `pnpm lint` reaches plugins either as workspaces or through a hand-maintained brace
       # list, and touch-dictation was in neither (#562). The list is the kind that drifts
       # silently, so this asserts the two paths between them still cover every directory.
       - name: Verify plugin lint coverage
-        run: pnpm check:plugin-lint-coverage && pnpm check:plugin-lint-coverage:self-test
+        run: pnpm check plugin-lint-coverage && pnpm check plugin-lint-coverage --self-test
 
       # Third-party actions must be SHA-pinned (#546). dtolnay/rust-toolchain@stable was a
       # *branch*, in workflows that also hold NPM_TOKEN, RELEASE_SIGNING_PRIVATE_KEY and the
       # Apple notarization credentials — moving that ref is enough to run someone else's code
       # next to the publishing keys. actions/* is exempt and the check says so.
       - name: Verify action pins
-        run: pnpm check:action-pins && pnpm check:action-pins:self-test
+        run: pnpm check action-pins && pnpm check action-pins --self-test
 
       # ${{ }} is substituted into a run: body before bash parses it, so a workflow_dispatch
       # input containing $(…) executes — in the step that had also just written
@@ -262,7 +262,7 @@ jobs:
       # policed; steps.*.outputs.* and github.sha are not, or the check would flag dozens of
       # benign lines and get switched off.
       - name: Verify no workflow script injection
-        run: pnpm check:workflow-injection && pnpm check:workflow-injection:self-test
+        run: pnpm check workflow-injection && pnpm check workflow-injection --self-test
 
       # actionlint was named an "external acceptance gap" in #482 on the grounds that it was
       # unavailable locally. It was not unavailable -- it was never wired: zero references outside

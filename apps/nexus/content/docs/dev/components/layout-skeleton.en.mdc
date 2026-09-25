@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# LayoutSkeleton
-
-## Basic Usage
+## Usage
 
 ### Layout Placeholder
 The wrapper controls the size. The scaffold draws a whole app layout: a header with a hairline under it, a proportional sidebar whose first row is the current item, and a content area that opens with a title.
@@ -39,7 +37,15 @@ code: |
 ---
 :::
 
-## API
+### Best Practices
+
+- Give the wrapper an explicit height; the component fills `width: 100%` and `height: 100%` rather than deciding page dimensions itself.
+- Use it for page, panel, side-summary, and detail-pane loading where the final layout shape is stable.
+- The scaffold draws a header + sidebar + content app layout. When the final UI has no sidebar or no header, compose `TxSkeleton`, `TxCardSkeleton`, or `TxListItemSkeleton` into the real structure instead, so nothing shifts when the data lands.
+- Do not use it as a table row placeholder. Use `TxSkeleton`, row-level placeholders, or `TxDataTable loading` for row bodies.
+- Keep it deterministic for docs, SSR, hydration, and visual tests; sidebar label and content line widths intentionally use fixed sequences instead of runtime randomness.
+
+## API Reference
 
 ### Props
 ::TuffPropsTable
@@ -60,7 +66,7 @@ rows:
 
 `TxLayoutSkeleton` does not expose slots. It always renders the fixed layout scaffold documented below.
 
-## Interaction Contract
+## Overview
 
 - `TxLayoutSkeleton` has no props, events, or slots.
 - The component always renders a 36px header (a brand square, a title bar, two small pills, and an avatar, with a hairline under it), 6 sidebar items (the first on a light fill as the current item), and 8 content lines (the first is a title; the fifth opens a second paragraph).
@@ -68,15 +74,7 @@ rows:
 - Sidebar label and content line widths both come from fixed sequences and do not depend on runtime randomness.
 - The root is `aria-hidden="true"`, so the decorative scaffold stays out of the a11y tree. The host should announce the page/panel loading state (for example `aria-busy` on the region) and swap to real content when ready.
 
-## Best Practices
-
-- Give the wrapper an explicit height; the component fills `width: 100%` and `height: 100%` rather than deciding page dimensions itself.
-- Use it for page, panel, side-summary, and detail-pane loading where the final layout shape is stable.
-- The scaffold draws a header + sidebar + content app layout. When the final UI has no sidebar or no header, compose `TxSkeleton`, `TxCardSkeleton`, or `TxListItemSkeleton` into the real structure instead, so nothing shifts when the data lands.
-- Do not use it as a table row placeholder. Use `TxSkeleton`, row-level placeholders, or `TxDataTable loading` for row bodies.
-- Keep it deterministic for docs, SSR, hydration, and visual tests; sidebar label and content line widths intentionally use fixed sequences instead of runtime randomness.
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue` and `layout-skeleton.test.ts`.
 - API note: this component intentionally has no props. Size, aspect ratio, and placement must come from the parent container.
@@ -85,11 +83,8 @@ rows:
 - Motion fallback: every placeholder, including the new brand square, pills, and avatar, goes through the shared `skeleton-surface`, so `prefers-reduced-motion: reduce` stops only the shimmer and keeps the placeholders.
 - **Verified coverage:** fixed scaffold shape, the decorative `aria-hidden` root, six sidebar items, eight content rows, deterministic content widths, and install registration; `skeleton/__tests__/skeleton-motion.test.ts` asserts against the compiled styles that every shimmer has a reduced-motion fallback, that the fallback never hides a placeholder, and that the component declares no keyframes of its own.
 
-## Source
-
 - Component source: `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue`.
 - Types: `packages/tuffex/packages/components/src/layout-skeleton/index.ts` exports `TxLayoutSkeletonInstance`.
 - Coverage: `packages/tuffex/packages/components/src/layout-skeleton/__tests__/layout-skeleton.test.ts` verifies fixed scaffold counts, deterministic content widths, and install registration.
 
 <TuffDocSourceLink />
-

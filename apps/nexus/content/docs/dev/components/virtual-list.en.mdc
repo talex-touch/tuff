@@ -8,9 +8,8 @@ tags: [virtual-list, performance, list]
 syncStatus: reviewed
 verified: true
 ---
-# VirtualList
 
-## Basic Usage
+## Usage
 
 :::TuffDemoWrapper{demo="VirtualListVirtualListDemo" code-lang="vue"}
 ---
@@ -30,8 +29,6 @@ code: |
   </template>
 ---
 :::
-
-## Composition Examples
 
 ### Stable Item Keys
 
@@ -62,21 +59,15 @@ function jumpToLatest() {
 </template>
 ```
 
-## Interaction Contract
+### Best Practices
 
-- `itemHeight` is required and every rendered row is styled with that exact pixel height.
-- Numeric `height` becomes px; string `height` is applied as-is.
-- Numeric, px, and bare numeric string heights are parsed immediately to compute the viewport. `%`, `vh`, `vw`, `rem`, and `em` heights wait for the real container height.
-- On mount, the component reads `clientHeight`; when `ResizeObserver` is available, it updates viewport height after resize.
-- `startIndex` is `floor(scrollTop / itemHeight) - overscan`, clamped to `0`.
-- `endIndex` is based on visible viewport plus `overscan`, clamped to `items.length`.
-- The spacer height is `items.length * itemHeight`; visible items are translated by `startIndex * itemHeight`.
-- `itemKey` may be a field name or function. Missing field values fall back to the visible item index.
-- `scroll` emits `{ scrollTop, startIndex, endIndex }` after internal scroll state updates.
-- `scrollToIndex(index)` clamps negative indexes to zero but does not clamp indexes above the last item; callers should pass valid indexes.
-- The container and rows stay semantically neutral (no `role`/`aria-*`). Because only the visible slice is in the DOM, consumers who need accessible list semantics should supply `role="list"`/`role="listitem"` plus `aria-setsize`/`aria-posinset` themselves, using the real `items.length` and absolute indices rather than the visible-slice offsets.
+- Use only for fixed-height rows. Variable-height content will desynchronize scroll math.
+- Provide `itemKey` for objects with stable ids; index keys are acceptable only for immutable arrays.
+- Keep `overscan` modest. Higher overscan smooths fast scrolling but increases DOM work.
+- Avoid wrapping rows with vertical margins; put padding inside the fixed-height row instead.
+- Use `scroll` for analytics or lazy data triggers, not for per-frame heavy work.
 
-## API
+## API Reference
 
 ### Props
 
@@ -108,21 +99,25 @@ function jumpToLatest() {
 | `scrollToTop` | `() => void` | Sets scrollTop to `0`. |
 | `scrollToBottom` | `() => void` | Sets scrollTop to `max(0, totalHeight - viewHeight)`. |
 
-## Best Practices
+## Overview
 
-- Use only for fixed-height rows. Variable-height content will desynchronize scroll math.
-- Provide `itemKey` for objects with stable ids; index keys are acceptable only for immutable arrays.
-- Keep `overscan` modest. Higher overscan smooths fast scrolling but increases DOM work.
-- Avoid wrapping rows with vertical margins; put padding inside the fixed-height row instead.
-- Use `scroll` for analytics or lazy data triggers, not for per-frame heavy work.
+- `itemHeight` is required and every rendered row is styled with that exact pixel height.
+- Numeric `height` becomes px; string `height` is applied as-is.
+- Numeric, px, and bare numeric string heights are parsed immediately to compute the viewport. `%`, `vh`, `vw`, `rem`, and `em` heights wait for the real container height.
+- On mount, the component reads `clientHeight`; when `ResizeObserver` is available, it updates viewport height after resize.
+- `startIndex` is `floor(scrollTop / itemHeight) - overscan`, clamped to `0`.
+- `endIndex` is based on visible viewport plus `overscan`, clamped to `items.length`.
+- The spacer height is `items.length * itemHeight`; visible items are translated by `startIndex * itemHeight`.
+- `itemKey` may be a field name or function. Missing field values fall back to the visible item index.
+- `scroll` emits `{ scrollTop, startIndex, endIndex }` after internal scroll state updates.
+- `scrollToIndex(index)` clamps negative indexes to zero but does not clamp indexes above the last item; callers should pass valid indexes.
+- The container and rows stay semantically neutral (no `role`/`aria-*`). Because only the visible slice is in the DOM, consumers who need accessible list semantics should supply `role="list"`/`role="listitem"` plus `aria-setsize`/`aria-posinset` themselves, using the real `items.length` and absolute indices rather than the visible-slice offsets.
 
-## Review Notes
+## Technologies
 
 - **Viewport note:** `height` values that cannot be parsed synchronously (`%`, viewport units, `rem`, `em`) depend on the mounted element's `clientHeight`; server-side or hidden containers should provide a concrete height before relying on visible range math.
 - **Scroll note:** `scrollToIndex()` clamps negative indexes but not indexes above `items.length - 1`. Validate caller indexes for user-provided jump targets.
 - **Verified coverage:** `virtual-list.test.ts` currently checks visible item count from fixed height and the `scrollToIndex` exposed method. The docs therefore call out untested contracts—ResizeObserver, custom `itemKey`, overscan, and `scroll` payloads—explicitly for manual review.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/virtual-list/src/TxVirtualList.vue`.
 - Types: `packages/tuffex/packages/components/src/virtual-list/src/types.ts` exports `VirtualListProps`, `VirtualListEmits`, `VirtualListItemKey`, and `VirtualListKey`.

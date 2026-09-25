@@ -8,9 +8,8 @@ since: 1.0.0
 tags: [tag, input, form]
 verified: true
 ---
-# TagInput
 
-## Basic Usage
+## Usage
 
 ::TuffDemoWrapper{demo="TagInputTagInputDemo" code-lang="vue"}
 ---
@@ -26,6 +25,42 @@ code: |
   </template>
 ---
 ::
+
+### Best Practices
+
+- Keep tags short and searchable. Release notes, approval reasons, and long descriptions belong in text fields or detail forms.
+- Set `max` to the smallest useful limit for the workflow; when the limit is reached the inner input is disabled and the placeholder disappears.
+- Keep `allowDuplicates` off unless duplicate labels are meaningful in the same collection. Duplicate suppression is exact after trimming, not case-insensitive.
+- Add every delimiter you show in help text to `separators`; Enter always confirms the current input, and `confirmOnBlur` controls whether unfinished input is committed on blur.
+
+## API Reference
+
+### TxTagInput Props
+
+| Name | Type | Default | Description |
+|------|------|------|------|
+| `modelValue` | `string[]` | `[]` | Controlled tag list and the single source of truth; every add/remove emits a new array via `update:modelValue`. |
+| `placeholder` | `string` | `'Add tag'` | Placeholder text; cleared once `max` is reached. |
+| `disabled` | `boolean` | `false` | Blocks adding/removing and disables the close button on existing tags. |
+| `max` | `number` | `20` | Hard cap on tag count; set it to the smallest useful limit. Reaching it disables the inner input and hides the placeholder. |
+| `allowDuplicates` | `boolean` | `false` | Whether duplicate tags are allowed; when off, dedup is exact after trimming (case-sensitive). |
+| `separators` | `string[]` | `[',']` | Characters that split pasted / typed text; add every delimiter you show in help text. Enter always confirms the current input. |
+| `confirmOnBlur` | `boolean` | `true` | Whether unfinished input is committed on blur. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `update:modelValue` | `(tags: string[])` | Emitted with the next complete tag list. |
+| `change` | `(tags: string[])` | Emitted with the same next list after add/remove. |
+| `add` | `(tags: string[])` | Emitted with tags accepted by the current operation. |
+| `remove` | `(tag: string)` | Emitted with the removed tag value. |
+| `focus` | `(event: FocusEvent)` | Forwarded native input focus event. |
+| `blur` | `(event: FocusEvent)` | Forwarded native input blur event; may commit unfinished input when `confirmOnBlur=true`. |
+
+### Slots
+
+`TxTagInput` does not expose custom slots. Existing tags are rendered with `TxTag`; compose labels, help text, or validation messages outside the component.
 
 ## Release Policy Configuration
 
@@ -83,7 +118,7 @@ code: |
 ---
 ::
 
-## Interaction Contract
+## Overview
 
 - `modelValue` is treated as the source of truth; every add/remove emits both `update:modelValue` and `change` with a new array.
 - Input text is trimmed before insertion. Empty tags are ignored.
@@ -94,49 +129,11 @@ code: |
 - `disabled` prevents adding/removing tags and disables existing chip close actions.
 - Reaching `max` disables the inner input and clears the placeholder.
 
-## API
-
-### TxTagInput Props
-
-| Name | Type | Default | Description |
-|------|------|------|------|
-| `modelValue` | `string[]` | `[]` | Controlled tag list and the single source of truth; every add/remove emits a new array via `update:modelValue`. |
-| `placeholder` | `string` | `'Add tag'` | Placeholder text; cleared once `max` is reached. |
-| `disabled` | `boolean` | `false` | Blocks adding/removing and disables the close button on existing tags. |
-| `max` | `number` | `20` | Hard cap on tag count; set it to the smallest useful limit. Reaching it disables the inner input and hides the placeholder. |
-| `allowDuplicates` | `boolean` | `false` | Whether duplicate tags are allowed; when off, dedup is exact after trimming (case-sensitive). |
-| `separators` | `string[]` | `[',']` | Characters that split pasted / typed text; add every delimiter you show in help text. Enter always confirms the current input. |
-| `confirmOnBlur` | `boolean` | `true` | Whether unfinished input is committed on blur. |
-
-### Events
-
-| Event | Payload | Description |
-|------|------|------|
-| `update:modelValue` | `(tags: string[])` | Emitted with the next complete tag list. |
-| `change` | `(tags: string[])` | Emitted with the same next list after add/remove. |
-| `add` | `(tags: string[])` | Emitted with tags accepted by the current operation. |
-| `remove` | `(tag: string)` | Emitted with the removed tag value. |
-| `focus` | `(event: FocusEvent)` | Forwarded native input focus event. |
-| `blur` | `(event: FocusEvent)` | Forwarded native input blur event; may commit unfinished input when `confirmOnBlur=true`. |
-
-### Slots
-
-`TxTagInput` does not expose custom slots. Existing tags are rendered with `TxTag`; compose labels, help text, or validation messages outside the component.
-
-## Best Practices
-
-- Keep tags short and searchable. Release notes, approval reasons, and long descriptions belong in text fields or detail forms.
-- Set `max` to the smallest useful limit for the workflow; when the limit is reached the inner input is disabled and the placeholder disappears.
-- Keep `allowDuplicates` off unless duplicate labels are meaningful in the same collection. Duplicate suppression is exact after trimming, not case-insensitive.
-- Add every delimiter you show in help text to `separators`; Enter always confirms the current input, and `confirmOnBlur` controls whether unfinished input is committed on blur.
-
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/tag-input/src/TxTagInput.vue` confirms separator splitting, trim normalization, duplicate checks, max-limit behavior, Enter/backspace/blur handling, disabled guards, and `TxTag` close wiring.
 - Type contracts: `packages/tuffex/packages/components/src/tag-input/src/types.ts` exports `TagInputProps` and `TagInputEmits`.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/tag-input/__tests__/tag-input.test.ts` verifies Enter insertion and close-button removal.
 - Screenshot: `.codex-screenshots/nexus-tag-input-release-policy-demo-playwright-2026-05-28.png`.
-
-## Source
 
 <TuffDocSourceLink />

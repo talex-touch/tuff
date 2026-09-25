@@ -8,9 +8,8 @@ tags: [form, input, secret, security]
 syncStatus: reviewed
 verified: true
 ---
-# SensitiveInput
 
-## Basic Usage
+## Usage
 
 ### SensitiveInput
 
@@ -34,23 +33,16 @@ code: |
 ---
 :::
 
-## Three States
+### Best Practices
 
-**Masked.** The default whenever a value is present. The field renders eight glyphs instead of the value, the `<input>` goes `readonly` and `aria-hidden`, and the container itself becomes the control: `role="button"`, focusable, activated by click, Enter or Space. Hover or focus swaps the glyphs for `Click to reveal` — both strings stay mounted and only toggle visibility, so the field never re-lays out under the pointer.
+- Reach for this over `TxInput type="password"` whenever the value is a stored secret the user may need to read back. `type="password"` is for a credential being entered, never re-read.
+- Keep `readonly` on a key the host issued and the user cannot edit; it stays revealable and copyable, and the reveal leaves focus on the container rather than dropping it into a field that rejects input.
+- Prefer `copy` over asking people to reveal-and-select. Every reveal is a moment the secret is on screen.
+- Listen to `reveal` when the value is a production credential and the surface keeps an audit trail.
+- Pass `error` rather than `status="error"`; the derived state cannot drift out of sync with the message.
+- Localize through `labels` — there are nine strings and seven of them are only ever heard by a screen reader.
 
-**Revealed.** `type` flips to `text` and focus moves into the input, so the value can be edited immediately. Blur re-masks it; Escape re-masks it and hands focus back to the container, because the input is untabbable the moment it is masked. Focus moving to the eye or copy button is *not* a blur — masking there would pull the control out from under the click that caused it.
-
-**Empty.** No value, nothing to hide. The field is an ordinary editable input with no mask, no copy tab and no `role="button"` — announcing an action that reveals nothing would be a lie. The first typed character switches to revealed; a value arriving from outside (an API key fetched after mount) lands masked.
-
-## Copying Without Revealing
-
-The copy tab rides above the field's top-right corner and fades in on hover or focus. Its corners are `field radius − inset`, so the two curves stay concentric where they meet.
-
-Copying does not unmask. That is the point: handing the value to the clipboard is a different act from putting it on a screen someone might be recording.
-
-`navigator.clipboard.writeText` is tried first; on an insecure origin or where the Permissions Policy denies it, a hidden-textarea `execCommand` fallback runs, and the textarea is detached in a `finally` so a failed copy never leaves the secret parked in the DOM. A refusal emits `copy-error` rather than silently doing nothing.
-
-## API
+## API Reference
 
 ### Props
 
@@ -91,7 +83,23 @@ Copying does not unmask. That is the point: handing the value to the clipboard i
 | `mask()` | Re-masks it. |
 | `copy()` | Runs the copy path, returns a promise. |
 
-## Interaction Contract
+## Three States
+
+**Masked.** The default whenever a value is present. The field renders eight glyphs instead of the value, the `<input>` goes `readonly` and `aria-hidden`, and the container itself becomes the control: `role="button"`, focusable, activated by click, Enter or Space. Hover or focus swaps the glyphs for `Click to reveal` — both strings stay mounted and only toggle visibility, so the field never re-lays out under the pointer.
+
+**Revealed.** `type` flips to `text` and focus moves into the input, so the value can be edited immediately. Blur re-masks it; Escape re-masks it and hands focus back to the container, because the input is untabbable the moment it is masked. Focus moving to the eye or copy button is *not* a blur — masking there would pull the control out from under the click that caused it.
+
+**Empty.** No value, nothing to hide. The field is an ordinary editable input with no mask, no copy tab and no `role="button"` — announcing an action that reveals nothing would be a lie. The first typed character switches to revealed; a value arriving from outside (an API key fetched after mount) lands masked.
+
+## Copying Without Revealing
+
+The copy tab rides above the field's top-right corner and fades in on hover or focus. Its corners are `field radius − inset`, so the two curves stay concentric where they meet.
+
+Copying does not unmask. That is the point: handing the value to the clipboard is a different act from putting it on a screen someone might be recording.
+
+`navigator.clipboard.writeText` is tried first; on an insecure origin or where the Permissions Policy denies it, a hidden-textarea `execCommand` fallback runs, and the textarea is detached in a `finally` so a failed copy never leaves the secret parked in the DOM. A refusal emits `copy-error` rather than silently doing nothing.
+
+## Overview
 
 - The masked container is a `role="button"` rather than a real `<button>` because it holds the eye and copy buttons; a nested `<button>` is invalid HTML. It therefore carries `tabindex`, an `aria-label` (`<label>, masked.`), an `aria-describedby` pointing at a screen-reader instruction plus the live region, and its own Enter / Space handling.
 - The `<input>` is `aria-hidden` and `tabindex="-1"` while masked, so assistive tech reads one control rather than a button wrapping an invisible textbox.
@@ -102,16 +110,7 @@ Copying does not unmask. That is the point: handing the value to the clipboard i
 - The only transition is the copy tab's `opacity`, and it is switched off under `prefers-reduced-motion: reduce`. Colour changes on hover are immediate.
 - The component holds no message catalog: every rendered string comes from `labels`, merged over `SENSITIVE_INPUT_DEFAULT_LABELS`.
 
-## Best Practices
-
-- Reach for this over `TxInput type="password"` whenever the value is a stored secret the user may need to read back. `type="password"` is for a credential being entered, never re-read.
-- Keep `readonly` on a key the host issued and the user cannot edit; it stays revealable and copyable, and the reveal leaves focus on the container rather than dropping it into a field that rejects input.
-- Prefer `copy` over asking people to reveal-and-select. Every reveal is a moment the secret is on screen.
-- Listen to `reveal` when the value is a production credential and the surface keeps an audit trail.
-- Pass `error` rather than `status="error"`; the derived state cannot drift out of sync with the message.
-- Localize through `labels` — there are nine strings and seven of them are only ever heard by a screen reader.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/sensitive-input/src/TxSensitiveInput.vue`.
 - Types: `packages/tuffex/packages/components/src/sensitive-input/src/types.ts`.
@@ -119,8 +118,6 @@ Copying does not unmask. That is the point: handing the value to the clipboard i
 - Behaviour modelled on [Kumo's SensitiveInput](https://kumo-ui.com/components/sensitive-input/); the design rules it follows are recorded in `.trellis/spec/frontend/tuffex-design-rules.md`.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Why not a `TxInput` variant:** `TxInput`'s contract is one control — an input with optional affixes. This one is a container that *becomes* a control while masked, swapping roles, tab order and ARIA visibility as it goes. Folding the state machine into `TxInput` would put it in the way of every ordinary text field.
 - **Why the glyphs are painted, not native:** native password dots track the value's length, which leaks how long the secret is. A fixed eight-glyph mask does not.

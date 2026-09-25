@@ -8,9 +8,8 @@ tags: [border, beam, glow, highlight]
 syncStatus: reviewed
 verified: true
 ---
-# BorderBeam 流光边框
 
-## 基础用法
+## 用法
 
 :::TuffDemoWrapper{demo="BorderBeamShowcaseDemo" code-lang="vue"}
 ---
@@ -35,35 +34,6 @@ code: |
   </template>
 ---
 :::
-
-## 脉冲形态
-
-Pulse 家族不旋转，光晕以约 30fps 的共享 rAF 循环呼吸；`pulse-outside` 的光晕渲染在内容层背后并向外扩散，因此需要不透明的子元素和自带的 1px 边框。
-
-:::TuffDemoWrapper{demo="BorderBeamPulseDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  const colorMode = useColorMode()
-  const beamTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
-  const active = ref(true)
-  </script>
-
-  <template>
-    <TxBorderBeam size="pulse-inner" :theme="beamTheme" :active="active" :border-radius="16">
-      <TxCard :radius="16" :padding="28">pulse-inner</TxCard>
-    </TxBorderBeam>
-    <TxBorderBeam size="pulse-outside" :theme="beamTheme" :active="active" :border-radius="16">
-      <TxCard :radius="16" :padding="28">pulse-outside</TxCard>
-    </TxBorderBeam>
-    <TxSwitch v-model="active" />
-  </template>
----
-:::
-
-## 组合示例
 
 ### 配色与主题
 
@@ -95,16 +65,15 @@ code: |
 </template>
 ```
 
-## 交互契约
+### 最佳实践
 
-- 组件包裹插槽内容并叠加光束层；所有特效层均为 `pointer-events: none`，不影响插槽交互。
-- 未指定 `borderRadius` 时，自动读取第一个插槽元素的 `border-top-left-radius`，检测失败回退到尺寸预设默认值。
-- `active` 切换触发淡入/淡出过渡，动画结束后分别发出 `activate` / `deactivate` 事件。
-- 元素滚出视口（余量 256px）时动画自动暂停（`data-paused`），不会触发 activate/deactivate。
-- 每个实例注入一段独立 `<style>`，选择器以实例 id（`data-beam`）隔离。
-- Pulse 家族在 `prefers-reduced-motion: reduce` 下停用呼吸驱动。
+- 插槽内容自带背景色，且圆角与检测/指定的 `borderRadius` 一致，避免光束与内容边缘错位。
+- `pulse-outside` 需要不透明子元素和自带 1px 边框，并保证周围布局有溢出空间（`overflow: visible`）。
+- 页面同屏多个实例时降低 `strength` 或放慢 `duration`；这是强注意力特效，一个视图区块保留一个即可。
+- 浅色页面用 `theme="light"` 或 `"auto"`，暗色光束参数在浅背景上对比度不足。
+- 光束层不参与命中测试，插槽内容自行处理 focus 样式。
 
-## API
+## API 参考
 
 ### Props
 
@@ -147,21 +116,47 @@ code: |
 | `--pulse-glow-sx` / `--pulse-glow-sy` | 内部测量 | `pulse-outside` 光晕按元素尺寸的轴向缩放。 |
 | `--pulse-glow-boost` | 消费方可选 | 脉冲光晕增益钩子，默认 `1`。 |
 
-## 最佳实践
+## 脉冲形态
 
-- 插槽内容自带背景色，且圆角与检测/指定的 `borderRadius` 一致，避免光束与内容边缘错位。
-- `pulse-outside` 需要不透明子元素和自带 1px 边框，并保证周围布局有溢出空间（`overflow: visible`）。
-- 页面同屏多个实例时降低 `strength` 或放慢 `duration`；这是强注意力特效，一个视图区块保留一个即可。
-- 浅色页面用 `theme="light"` 或 `"auto"`，暗色光束参数在浅背景上对比度不足。
-- 光束层不参与命中测试，插槽内容自行处理 focus 样式。
+Pulse 家族不旋转，光晕以约 30fps 的共享 rAF 循环呼吸；`pulse-outside` 的光晕渲染在内容层背后并向外扩散，因此需要不透明的子元素和自带的 1px 边框。
 
-## 审阅说明
+:::TuffDemoWrapper{demo="BorderBeamPulseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const colorMode = useColorMode()
+  const beamTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
+  const active = ref(true)
+  </script>
+
+  <template>
+    <TxBorderBeam size="pulse-inner" :theme="beamTheme" :active="active" :border-radius="16">
+      <TxCard :radius="16" :padding="28">pulse-inner</TxCard>
+    </TxBorderBeam>
+    <TxBorderBeam size="pulse-outside" :theme="beamTheme" :active="active" :border-radius="16">
+      <TxCard :radius="16" :padding="28">pulse-outside</TxCard>
+    </TxBorderBeam>
+    <TxSwitch v-model="active" />
+  </template>
+---
+:::
+
+## 概述
+
+- 组件包裹插槽内容并叠加光束层；所有特效层均为 `pointer-events: none`，不影响插槽交互。
+- 未指定 `borderRadius` 时，自动读取第一个插槽元素的 `border-top-left-radius`，检测失败回退到尺寸预设默认值。
+- `active` 切换触发淡入/淡出过渡，动画结束后分别发出 `activate` / `deactivate` 事件。
+- 元素滚出视口（余量 256px）时动画自动暂停（`data-paused`），不会触发 activate/deactivate。
+- 每个实例注入一段独立 `<style>`，选择器以实例 id（`data-beam`）隔离。
+- Pulse 家族在 `prefers-reduced-motion: reduce` 下停用呼吸驱动。
+
+## 技术实现
 
 - 已人工核对 `packages/tuffex/packages/components/src/border-beam/` 下 `index.ts`、`TxBorderBeam.vue`、`types.ts` 与 `border-beam.test.ts`。
 - CSS 生成引擎 `styles.ts` 与脉冲驱动 `pulse-driver.ts` 逐字移植自上游 `border-beam`（MIT © Jakub Antalik），仅做 strict-TS 索引加固。
 - 事件为 `activate` / `deactivate`，对应上游 React 版的 `onActivate` / `onDeactivate` 回调。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/border-beam/src/TxBorderBeam.vue`。
 - Types: `packages/tuffex/packages/components/src/border-beam/src/types.ts`。

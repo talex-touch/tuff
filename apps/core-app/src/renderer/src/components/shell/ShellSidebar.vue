@@ -1,15 +1,17 @@
 <script lang="ts" name="ShellSidebar" setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { useConversationEntry } from '~/modules/conversation/useConversationEntry'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { groupedSettingNavigation } from '~/modules/settings/categories'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { useProjectStore } from '~/stores/projects'
+import MetaHintBadge from './MetaHintBadge.vue'
 import ShellBackRow from './ShellBackRow.vue'
 import ShellChromeBar from './ShellChromeBar.vue'
 import ShellConversationList from './ShellConversationList.vue'
@@ -22,12 +24,12 @@ const SNAP_DURATION = 200
 
 const { t } = useI18n()
 const route = useRoute()
-const router = useRouter()
 const projectStore = useProjectStore()
 const transport = useTuffTransport()
 const { isMac } = useRendererPlatform()
 const { packageJson } = useEnv()
 const { collapsed, isDragging, startDrag } = useShellSidebar()
+const { enterConversation, enterPickedProjectConversation } = useConversationEntry()
 
 /**
  * A width transition is off while the grip is held so the edge stays under the pointer. Snapping
@@ -84,16 +86,12 @@ onMounted(() => {
   void projectStore.initialize()
 })
 
-async function createProject(): Promise<void> {
-  const project = await projectStore.selectDirectory()
-  if (!project) return
-  projectStore.beginConversation(project.id)
-  await router.push('/home')
-}
-
-function beginHomeConversation(): void {
-  projectStore.beginConversation(null)
-}
+/**
+ * New Chat is active on Home and on any conversation under it. The row has no `to`: entering a
+ * conversation is the store's job before the route's, and two writers to the same navigation is
+ * how the pending owner gets claimed twice.
+ */
+const isHomeActive = computed(() => route.path === '/home' || route.path.startsWith('/home/'))
 </script>
 
 <template>
@@ -151,23 +149,31 @@ function beginHomeConversation(): void {
           <ShellNavItem
             icon="i-ri-edit-box-line"
             :label="t('shell.newChat')"
-            to="/home"
-            @select="beginHomeConversation"
-          />
+            :active="isHomeActive"
+            @select="enterConversation(null)"
+          >
+            <template #hint><MetaHintBadge command="new-chat" placement="trailing" /></template>
+          </ShellNavItem>
           <ShellNavItem
             icon="i-ri-folder-add-line"
             :label="t('shell.newProject')"
-            @select="createProject"
-          />
+            @select="enterPickedProjectConversation"
+          >
+            <template #hint><MetaHintBadge command="new-project" placement="trailing" /></template>
+          </ShellNavItem>
           <!-- Intelligence configuration lives in the settings rail, not the home-mode nav. -->
-          <ShellNavItem icon="i-ri-store-2-line" :label="t('shell.store')" to="/store" />
+          <ShellNavItem icon="i-ri-store-2-line" :label="t('shell.store')" to="/store">
+            <template #hint><MetaHintBadge command="open-store" placement="trailing" /></template>
+          </ShellNavItem>
         </nav>
 
         <ShellConversationList />
 
         <div class="ShellSidebar-Spacer" />
 
-        <ShellNavItem icon="i-ri-settings-3-line" :label="t('shell.setting')" to="/setting" />
+        <ShellNavItem icon="i-ri-settings-3-line" :label="t('shell.setting')" to="/setting">
+          <template #hint><MetaHintBadge command="open-settings" placement="trailing" /></template>
+        </ShellNavItem>
       </div>
     </Transition>
 
@@ -224,6 +230,15 @@ function beginHomeConversation(): void {
   gap: 4px;
   padding: 10px 6px;
   align-items: center;
+
+  /**
+   * The rail has no room beside a 60px column for a key cap — the nav rows stack their label under
+   * the icon there, so a chip anchored to the row's trailing edge would hang over the resize grip.
+   * The chords still run; only the reminder is shed.
+   */
+  .MetaHintBadge {
+    display: none;
+  }
 }
 
 // A held grip means the width is the pointer position — a transition here would trail the cursor

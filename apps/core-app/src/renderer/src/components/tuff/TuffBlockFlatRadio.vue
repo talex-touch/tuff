@@ -10,7 +10,7 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 const props = withDefaults(
   defineProps<{
     title: string
-    description: string
+    description?: string
     modelValue: string | number | (string | number)[]
     defaultIcon?: string | ITuffIcon
     activeIcon?: string | ITuffIcon

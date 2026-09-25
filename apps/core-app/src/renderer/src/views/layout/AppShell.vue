@@ -1,7 +1,9 @@
 <script lang="ts" name="AppShell" setup>
 import { computed, onMounted } from 'vue'
+import MainWindowCommandPalette from '~/components/shell/MainWindowCommandPalette.vue'
 import ShellSidebar from '~/components/shell/ShellSidebar.vue'
 import ShellWindowControls from '~/components/shell/ShellWindowControls.vue'
+import { useMainWindowCommands } from '~/composables/useMainWindowCommands'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
 import { useWallpaper } from '~/modules/layout/useWallpaper'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
@@ -151,6 +153,13 @@ onMounted(() => {
         : 'light'
   )
 })
+
+/**
+ * The shortcut layer is installed here because this is the MainWindow's root: one capture listener
+ * for the whole window, and one command list the badges and the ⌘/ window both read. A page adds
+ * its own commands (the composer's, the preview panel's) and unregisters them when it goes away.
+ */
+const { paletteOpen, commands, runCommand } = useMainWindowCommands()
 </script>
 
 <template>
@@ -200,6 +209,10 @@ onMounted(() => {
     </main>
 
     <ShellWindowControls v-if="!isMac" />
+
+    <!-- Rendered here, not in HomePage: ⌘/ has to work from every MainWindow route, and the
+         commands it lists belong to the window rather than to one page. -->
+    <MainWindowCommandPalette v-model="paletteOpen" :commands="commands" @run="runCommand" />
   </div>
 </template>
 

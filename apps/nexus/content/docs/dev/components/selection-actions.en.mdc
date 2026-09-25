@@ -8,9 +8,8 @@ tags: [ai, selection, rewrite, floating]
 syncStatus: reviewed
 verified: true
 ---
-# SelectionActions
 
-## Basic Usage
+## Usage
 
 ### Rewriting a Selection
 
@@ -55,40 +54,16 @@ code: |
 ---
 :::
 
-## Two Layers: Tracking and Presentation
+### Best Practices
 
-The component **only presents**: give it a `selection` snapshot and a `state`, and it handles positioning, the width morph, and the action row. Where the selection comes from is the host's business.
+- Call `updatePosition()` right after the text update, in the same frame, rather than deferring it through `setTimeout`.
+- Always list the bar itself in `useSelectionAnchor`'s `ignore`, or the moment a reader clicks the field the selection collapses and the bar disappears.
+- Call `clear()` after `keep` or `discard`, or the snapshot lingers and the bar never retracts.
+- Give custom actions a `busyLabel` — "Improving…" is far more informative than the generic "Editing…".
+- Scope `root` to the article container instead of the whole document, or any selection anywhere on the page pops the bar.
+- Set `hidePrompt` on read-only surfaces and keep just the preset actions.
 
-`useSelectionAnchor()` is the matching tracking layer, built on `useTextSelection` from `@vueuse/core`, and suits ordinary document prose. For contenteditable, virtualised lists, or an iframe, construct a `SelectionPayload` yourself and feed it in.
-
-```ts
-import { resolveSelectionPayload, useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
-
-const { selection, clear } = useSelectionAnchor({
-  root: articleRef,        // track selections inside this subtree only
-  debounce: 120,           // selectionchange fires every frame while dragging
-  minLength: 1,            // a selection too short to be worth a bar
-  ignore: () => [barEl],   // focus landing on the bar is not a deselection
-})
-```
-
-`resolveSelectionPayload()` is the pure rule it uses internally, exported separately for testing or custom tracking.
-
-> `useSelectionAnchor` and `resolveSelectionPayload` are **runtime functions, not components**. `TxSelectionActions` is available as a global tag and can be written straight into a template, but these two must be imported explicitly from `@talex-touch/tuffex/selection-actions` as shown above — they are not in the global component registry.
-
-### useSelectionAnchor Options
-
-| Option | Type | Default | Description |
-|------|------|---------|-------------|
-| `root` | `Element \| null` | — | Confines tracking to one subtree; omit to watch the whole document. |
-| `debounce` | `number` | `120` | Settle time for `selectionchange`, in ms. It fires every frame while dragging. |
-| `minLength` | `number` | `1` | Minimum trimmed length. |
-| `disabled` | `boolean` | `false` | Stop reporting without unmounting. |
-| `ignore` | `Element[]` | `[]` | Focus landing inside these does not count as a deselection. |
-
-Returns `{ selection, clear }`: `selection` is a `Ref<SelectionPayload | null>`, and `clear()` is called once the rewrite has been applied or dropped.
-
-## API
+## API Reference
 
 ### Props
 
@@ -137,7 +112,40 @@ Returns `{ selection, clear }`: `selection` is a `Ref<SelectionPayload | null>`,
 | `focusInput()` | Focus the free-text field. |
 | `el` | The bar's root element. Pass it to `useSelectionAnchor`'s `ignore`. |
 
-## Interaction Contract
+## Two Layers: Tracking and Presentation
+
+The component **only presents**: give it a `selection` snapshot and a `state`, and it handles positioning, the width morph, and the action row. Where the selection comes from is the host's business.
+
+`useSelectionAnchor()` is the matching tracking layer, built on `useTextSelection` from `@vueuse/core`, and suits ordinary document prose. For contenteditable, virtualised lists, or an iframe, construct a `SelectionPayload` yourself and feed it in.
+
+```ts
+import { resolveSelectionPayload, useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
+
+const { selection, clear } = useSelectionAnchor({
+  root: articleRef,        // track selections inside this subtree only
+  debounce: 120,           // selectionchange fires every frame while dragging
+  minLength: 1,            // a selection too short to be worth a bar
+  ignore: () => [barEl],   // focus landing on the bar is not a deselection
+})
+```
+
+`resolveSelectionPayload()` is the pure rule it uses internally, exported separately for testing or custom tracking.
+
+> `useSelectionAnchor` and `resolveSelectionPayload` are **runtime functions, not components**. `TxSelectionActions` is available as a global tag and can be written straight into a template, but these two must be imported explicitly from `@talex-touch/tuffex/selection-actions` as shown above — they are not in the global component registry.
+
+### useSelectionAnchor Options
+
+| Option | Type | Default | Description |
+|------|------|---------|-------------|
+| `root` | `Element \| null` | — | Confines tracking to one subtree; omit to watch the whole document. |
+| `debounce` | `number` | `120` | Settle time for `selectionchange`, in ms. It fires every frame while dragging. |
+| `minLength` | `number` | `1` | Minimum trimmed length. |
+| `disabled` | `boolean` | `false` | Stop reporting without unmounting. |
+| `ignore` | `Element[]` | `[]` | Focus landing inside these does not count as a deselection. |
+
+Returns `{ selection, clear }`: `selection` is a `Ref<SelectionPayload | null>`, and `clear()` is called once the rewrite has been applied or dropped.
+
+## Overview
 
 - **It springs in rather than fading up.** The bar surfaces directly under the line the user just dragged across — it arrives *at* them — so it uses `--tx-ease-spring` (`cubic-bezier(0.34, 1.56, 0.64, 1)`) to carry `scale(0.88) translateY(8px)` past 1 and settle back. The family's shared `bui-pop-in` cannot do this: `--tx-ease-out-strong` decelerates hard but **never crosses its end value**, so it can only "appear", not "pop into reach". This component therefore takes a separate `bui-spring-in`, leaving the nine components that share `bui-pop-in` untouched. Under reduced motion the whole animation is dropped and the element rests on its end state (visible), not on the 0% frame.
 
@@ -153,16 +161,7 @@ Returns `{ selection, clear }`: `selection` is a `Ref<SelectionPayload | null>`,
 - **The width morph runs through the Web Animations API**, which CSS media queries cannot reach, so the component reads `prefers-reduced-motion` in script and skips the tween. The state machine still advances; the width simply lands.
 - An empty `prompt` never emits `submit`.
 
-## Best Practices
-
-- Call `updatePosition()` right after the text update, in the same frame, rather than deferring it through `setTimeout`.
-- Always list the bar itself in `useSelectionAnchor`'s `ignore`, or the moment a reader clicks the field the selection collapses and the bar disappears.
-- Call `clear()` after `keep` or `discard`, or the snapshot lingers and the bar never retracts.
-- Give custom actions a `busyLabel` — "Improving…" is far more informative than the generic "Editing…".
-- Scope `root` to the article container instead of the whole document, or any selection anywhere on the page pops the bar.
-- Set `hidePrompt` on read-only surfaces and keep just the preset actions.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/selection-actions/src/TxSelectionActions.vue`.
 - Composable: `packages/tuffex/packages/components/src/selection-actions/src/use-selection-anchor.ts`.
@@ -171,8 +170,6 @@ Returns `{ selection, clear }`: `selection` is a `Ref<SelectionPayload | null>`,
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Upstream has no real selection.** Its "selection" is a hardcoded highlighted `<span>`; `window.getSelection()` appears nowhere in the source. The tracking layer — `useSelectionAnchor`, the snapshot semantics, and the `pointerdown` focus guard — is a contract written for this port, not a restatement of upstream.
 - **How it divides from `TxMessageActions`:** that is the icon toolbar at the foot of a message (copy / regenerate / speak), with `role="toolbar"` and roving tabindex, no floating layer and no input. This is a rewrite entry point floating over a selection; the two do not share a focus model.

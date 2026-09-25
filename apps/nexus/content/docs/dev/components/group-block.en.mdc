@@ -8,9 +8,55 @@ tags: [group, layout, settings]
 syncStatus: reviewed
 verified: true
 ---
-# GroupBlock
 
-## Basic Usage
+A simple row item for displaying title and description.
+A block container with icon, title, description, and a custom control slot.
+Use `TxBlockInput` when a settings row needs a standard text-like input while preserving GroupBlock spacing, icons, tags, and disabled state.
+### BlockInput
+:::TuffDemoWrapper{demo="GroupBlockBlockInputDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGroupBlock name="Account profile" description="Input controls keep the settings-row rhythm" default-icon="i-ri-user-settings-line" :collapsible="false">
+      <TxBlockInput
+        v-model="displayName"
+        title="Display name"
+        description="Shown in shared workspaces and notifications."
+        placeholder="Enter display name"
+        default-icon="i-carbon-user-profile"
+        clearable
+      />
+    </TxGroupBlock>
+  </template>
+---
+:::
+---
+Use `TxBlockSelect` when a settings row should expose a compact `TxSelect` without rebuilding the row chrome by hand.
+### BlockSelect
+:::TuffDemoWrapper{demo="GroupBlockBlockSelectDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGroupBlock name="Workspace defaults" description="Select controls reuse the same row layout" default-icon="i-ri-dashboard-line" :collapsible="false">
+      <TxBlockSelect
+        v-model="timezone"
+        title="Time display"
+        description="Choose how activity timestamps are shown."
+        placeholder="Select time display"
+        default-icon="i-carbon-time"
+      >
+        <TuffSelectItem value="local" label="Local time" />
+        <TuffSelectItem value="utc" label="UTC" />
+        <TuffSelectItem value="relative" label="Relative time" />
+      </TxBlockSelect>
+    </TxGroupBlock>
+  </template>
+---
+:::
+---
+A block container with an integrated switch control.
+
+## Usage
 
 ### GroupBlock
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockDemo" code-lang="vue"}
@@ -118,12 +164,6 @@ code: |
 
 ---
 
-# BlockLine
-
-A simple row item for displaying title and description.
-
-## Basic Usage
-
 ### BlockLine
 :::TuffDemoWrapper{demo="GroupBlockBlockLineBasicDemo" code-lang="vue"}
 ---
@@ -165,12 +205,6 @@ code: |
 :::
 
 ---
-
-# BlockSlot
-
-A block container with icon, title, description, and a custom control slot.
-
-## Basic Usage
 
 ### BlockSlot
 :::TuffDemoWrapper{demo="GroupBlockBlockSlotDemo" code-lang="vue"}
@@ -238,65 +272,6 @@ code: |
 :::
 
 ---
-
-# BlockInput
-
-Use `TxBlockInput` when a settings row needs a standard text-like input while preserving GroupBlock spacing, icons, tags, and disabled state.
-
-### BlockInput
-:::TuffDemoWrapper{demo="GroupBlockBlockInputDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxGroupBlock name="Account profile" description="Input controls keep the settings-row rhythm" default-icon="i-ri-user-settings-line" :collapsible="false">
-      <TxBlockInput
-        v-model="displayName"
-        title="Display name"
-        description="Shown in shared workspaces and notifications."
-        placeholder="Enter display name"
-        default-icon="i-carbon-user-profile"
-        clearable
-      />
-    </TxGroupBlock>
-  </template>
----
-:::
-
----
-
-# BlockSelect
-
-Use `TxBlockSelect` when a settings row should expose a compact `TxSelect` without rebuilding the row chrome by hand.
-
-### BlockSelect
-:::TuffDemoWrapper{demo="GroupBlockBlockSelectDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxGroupBlock name="Workspace defaults" description="Select controls reuse the same row layout" default-icon="i-ri-dashboard-line" :collapsible="false">
-      <TxBlockSelect
-        v-model="timezone"
-        title="Time display"
-        description="Choose how activity timestamps are shown."
-        placeholder="Select time display"
-        default-icon="i-carbon-time"
-      >
-        <TuffSelectItem value="local" label="Local time" />
-        <TuffSelectItem value="utc" label="UTC" />
-        <TuffSelectItem value="relative" label="Relative time" />
-      </TxBlockSelect>
-    </TxGroupBlock>
-  </template>
----
-:::
-
----
-
-# BlockSwitch
-
-A block container with an integrated switch control.
-
-## Basic Usage
 
 ### BlockSwitch
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchDemo" code-lang="vue"}
@@ -384,7 +359,16 @@ code: |
 
 ---
 
-## API
+### Best Practices
+
+- Use `TxGroupBlock` for compact settings and preference clusters; keep each group focused on one product area.
+- Use unique, stable `memoryName` values. Do not reuse the same key across unrelated groups.
+- Set `collapsible=false` for always-visible status or form sections to avoid implying hidden state.
+- Use `TxBlockLine` for read-only values and lightweight navigation links, `TxBlockSlot` for custom controls, `TxBlockInput` / `TxBlockSelect` for standard form rows, and `TxBlockSwitch` for booleans or guidance rows.
+- Keep row labels short; move long explanations to the description line or a nearby help pattern instead of adding nested layouts inside rows.
+- Rows inside a group are flattened by the group, not by themselves: `TxGroupBlock` resets each row's `--fake-radius` and margin so only the group card is rounded. A row keeps its own 12px radius when used standalone, so do not copy a group's flat look by hard-coding `border-radius: 0` on the row.
+
+## API Reference
 
 ### TxGroupBlock Props
 
@@ -549,7 +533,7 @@ code: |
 
 None. Use props, `update:expanded`, `toggle`, and the row-specific events instead of imperative handles.
 
-## Interaction Contract
+## Overview
 
 - `memoryName` wins over initial defaults; stored state is saved as `{ expand: boolean }` in `localStorage`.
 - `defaultExpand` drives first render when no stored state exists. `collapsed` is then watched as an external input until the user toggles the group.
@@ -561,26 +545,7 @@ None. Use props, `update:expanded`, `toggle`, and the row-specific events instea
 - `TxBlockSwitch` shows the busy cue in exactly one place: `loading` is forwarded to the inner `TuffSwitch`, whose thumb becomes a spinning ring. The row only adds a shimmer and no longer renders a separate spinner.
 - `TxBlockSwitch` guidance mode replaces the switch with a chevron and only emits `click`; it does not mutate `modelValue`.
 
-## Style Customization
-
-| Theme token | Used for |
-|-------------|----------|
-| `--tx-border-color-lighter` | Group card border and header divider. |
-| `--tx-fill-color-dark` / `--tx-fill-color` / `--tx-fill-color-light` | Header, row, hover, and touch-blur surfaces. |
-| `--tx-text-color-primary` / `--tx-text-color-secondary` | Group titles, row labels, descriptions, guidance arrows, and the switch loading ring. |
-| `--tx-color-primary` / `--tx-color-primary-dark-2` | `TxBlockLine link` color and hover color. |
-| `--tx-color-white` | Loading shimmer highlight mixed into `TxBlockSwitch` loading overlay. |
-
-## Best Practices
-
-- Use `TxGroupBlock` for compact settings and preference clusters; keep each group focused on one product area.
-- Use unique, stable `memoryName` values. Do not reuse the same key across unrelated groups.
-- Set `collapsible=false` for always-visible status or form sections to avoid implying hidden state.
-- Use `TxBlockLine` for read-only values and lightweight navigation links, `TxBlockSlot` for custom controls, `TxBlockInput` / `TxBlockSelect` for standard form rows, and `TxBlockSwitch` for booleans or guidance rows.
-- Keep row labels short; move long explanations to the description line or a nearby help pattern instead of adding nested layouts inside rows.
-- Rows inside a group are flattened by the group, not by themselves: `TxGroupBlock` resets each row's `--fake-radius` and margin so only the group card is rounded. A row keeps its own 12px radius when used standalone, so do not copy a group's flat look by hard-coding `border-radius: 0` on the row.
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/group-block/src/types.ts` and all six Vue entry points in the group-block package.
 - `TxBlockLine` only becomes interactive when `link=true`; do not describe it as a generic clickable row.
@@ -590,11 +555,18 @@ None. Use props, `update:expanded`, `toggle`, and the row-specific events instea
 - **Flattening selector:** the reset that squares off rows is a plain descendant selector. `TxGroupBlock`'s `<style>` is *unscoped*, where `:deep()` is passed through untransformed and the browser discards the rule — a package-wide test now fails on `:deep()` in any unscoped block.
 - **Verified coverage:** persisted expansion, static-group behavior, semantic link rows, disabled slot-click blocking, guidance mode, loading-state value-change guards, and that a loading row carries `is-loading` / `aria-busy` on the switch itself with no second spinner.
 
-## Source
-
 - Component sources: `packages/tuffex/packages/components/src/group-block/src/TxGroupBlock.vue`, `TxBlockLine.vue`, `TxBlockSlot.vue`, `TxBlockInput.vue`, `TxBlockSelect.vue`, and `TxBlockSwitch.vue`.
 - Types: `packages/tuffex/packages/components/src/group-block/src/types.ts`.
 - Coverage: `packages/tuffex/packages/components/src/group-block/__tests__/group-block.test.ts` verifies persistence, static groups, semantic link rows, slot click blocking, guidance mode, and loading-state value guards.
 
 <TuffDocSourceLink />
 
+## Customization
+
+| Theme token | Used for |
+|-------------|----------|
+| `--tx-border-color-lighter` | Group card border and header divider. |
+| `--tx-fill-color-dark` / `--tx-fill-color` / `--tx-fill-color-light` | Header, row, hover, and touch-blur surfaces. |
+| `--tx-text-color-primary` / `--tx-text-color-secondary` | Group titles, row labels, descriptions, guidance arrows, and the switch loading ring. |
+| `--tx-color-primary` / `--tx-color-primary-dark-2` | `TxBlockLine link` color and hover color. |
+| `--tx-color-white` | Loading shimmer highlight mixed into `TxBlockSwitch` loading overlay. |

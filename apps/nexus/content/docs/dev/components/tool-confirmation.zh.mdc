@@ -8,9 +8,8 @@ tags: [ai, tool, permission]
 syncStatus: reviewed
 verified: true
 ---
-# Tool Confirmation
 
-## 基础用法
+## 用法
 
 ### Tool Confirmation
 ::::TuffDemoWrapper{demo="ToolConfirmationToolConfirmationDemo" code-lang="vue"}
@@ -29,18 +28,15 @@ code: |
 ---
 ::::
 
-## 交互契约
+### 最佳实践
 
-- 组件不执行任何工具，也不记忆任何授权，只负责派发决定。执行与持久化都由宿主完成。
-- `approve` 与 `deny` 都携带 `{ remember: boolean }`——**拒绝也会带**，因此「本次会话都拒绝」同样可以实现。
-- `remember` 是组件内部状态，初值为 `false`，且在派发后不会重置：这个卡片被设计为一次性使用，决定后应由宿主卸载。
-- `risk` 分三档并写在 `data-risk` 上：`read`（默认）、`write`、`execute`。`read` 以外都被视为危险操作，用于强化视觉。
-- 风险文案默认是 `Read-only` / `Writes data` / `Executes`，可通过 `riskLabels` 按档覆盖，且支持只覆盖其中一档。
-- `summary` 与 `input` 都是可选的；未传时对应区域整块不渲染。
-- `input` 用 `<pre>` 原样渲染，**不做转义以外的处理**，请在传入前自行截断过长内容。
-- 根节点是 `role="group"`，可访问名称固定为 `${toolName} confirmation`。
+- 收到事件后立即卸载这张卡片，不要复用：`remember` 不会自动复位。
+- `risk` 要如实标注。把写操作标成 `read` 会同时削弱视觉强调与用户的判断依据。
+- `input` 只放决策所需的字段，并预先截断；这里是用户唯一能看清「到底要做什么」的地方，但塞进整个请求体反而会让人跳过。
+- 非英文界面需同时覆盖 `allowLabel`、`denyLabel`、`rememberLabel` 与 `riskLabels`。
+- `remember` 为真时，请把授权限定在当前会话内，不要静默升级为永久授权——文案承诺的是「本次会话」。
 
-## API
+## API 参考
 
 ### Props
 
@@ -66,10 +62,13 @@ code: |
 
 `TxToolConfirmation` 不暴露插槽。需要展示更复杂的入参时，请自行序列化后传入 `input`。
 
-## 最佳实践
+## 概述
 
-- 收到事件后立即卸载这张卡片，不要复用：`remember` 不会自动复位。
-- `risk` 要如实标注。把写操作标成 `read` 会同时削弱视觉强调与用户的判断依据。
-- `input` 只放决策所需的字段，并预先截断；这里是用户唯一能看清「到底要做什么」的地方，但塞进整个请求体反而会让人跳过。
-- 非英文界面需同时覆盖 `allowLabel`、`denyLabel`、`rememberLabel` 与 `riskLabels`。
-- `remember` 为真时，请把授权限定在当前会话内，不要静默升级为永久授权——文案承诺的是「本次会话」。
+- 组件不执行任何工具，也不记忆任何授权，只负责派发决定。执行与持久化都由宿主完成。
+- `approve` 与 `deny` 都携带 `{ remember: boolean }`——**拒绝也会带**，因此「本次会话都拒绝」同样可以实现。
+- `remember` 是组件内部状态，初值为 `false`，且在派发后不会重置：这个卡片被设计为一次性使用，决定后应由宿主卸载。
+- `risk` 分三档并写在 `data-risk` 上：`read`（默认）、`write`、`execute`。`read` 以外都被视为危险操作，用于强化视觉。
+- 风险文案默认是 `Read-only` / `Writes data` / `Executes`，可通过 `riskLabels` 按档覆盖，且支持只覆盖其中一档。
+- `summary` 与 `input` 都是可选的；未传时对应区域整块不渲染。
+- `input` 用 `<pre>` 原样渲染，**不做转义以外的处理**，请在传入前自行截断过长内容。
+- 根节点是 `role="group"`，可访问名称固定为 `${toolName} confirmation`。

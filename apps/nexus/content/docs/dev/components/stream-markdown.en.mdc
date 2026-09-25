@@ -8,9 +8,8 @@ tags: [ai, markdown, streaming]
 syncStatus: reviewed
 verified: true
 ---
-# Stream Markdown
 
-## Basic Usage
+## Usage
 
 ### Stream Markdown
 ::::TuffDemoWrapper{demo="StreamMarkdownStreamMarkdownDemo" code-lang="vue"}
@@ -32,20 +31,15 @@ code: |
 ---
 ::::
 
-## Interaction Contract
+### Best Practices
 
-- The document is split into blocks and rendered per block, so appending text does not reflow the whole page — the property that makes this usable while streaming.
-- While `streaming` is true a tail cursor is shown, and **an unclosed tail fence has its rendering deferred**: a half-written code block does not flash in a wrong form first, it waits for the closing fence.
-- `fenceClosed` is `false` only for the still-growing tail fence of a streaming document. Indented code has no fence and also reports `false`; any non-tail block is treated as complete.
-- `sanitize` is on by default and loads dompurify through a dynamic `import()`. **Keep it on** — the content is model output.
-- If dompurify fails to load, the sanitizer is left null and the component keeps working. Sanitization is therefore best-effort and is not a substitute for a server-side trust boundary.
-- Each instance owns its own `Marked` (with `gfm` and `breaks`) rather than mutating the global singleton, which would reconfigure every other consumer in the app.
-- `renderers` are matched by fence language — the first word, lowercased. Unregistered languages fall back to the default code block.
-- A registered renderer receives `StreamMarkdownBlockContext` as props, including `fenceClosed`, so it can show a placeholder until the block completes.
-- `theme` accepts `light`, `dark` or `auto`, with `auto` following the environment.
-- The bundled GitHub-Markdown stylesheet is a *global* import, so every rule in it is scoped to `:where(.tx-markdown-view, .tx-stream-md)`. `.markdown-body` is a very generic class name — before the scope, importing this component restyled any host page that used it for its own prose. `:where()` adds no specificity, so the scope confines the sheet without changing how its rules compete with each other.
+- Do not turn `sanitize` off. Model output is untrusted content and this is where it becomes DOM.
+- Keep `streaming` true for the duration and set it false when generation ends, or the cursor stays at the tail forever.
+- Handle `fenceClosed === false` in custom renderers with a loading state rather than parsing a partial block.
+- Key `renderers` by the lowercase language that opens the fence (` ```mermaid ` → `mermaid`).
+- Use `TxMarkdownView` for static Markdown; it does not need the block-splitting and cursor machinery.
 
-## API
+## API Reference
 
 ### Props
 
@@ -65,10 +59,15 @@ code: |
 
 `TxStreamMarkdown` exposes no slots. Register a component through `renderers` to take over a particular kind of block.
 
-## Best Practices
+## Overview
 
-- Do not turn `sanitize` off. Model output is untrusted content and this is where it becomes DOM.
-- Keep `streaming` true for the duration and set it false when generation ends, or the cursor stays at the tail forever.
-- Handle `fenceClosed === false` in custom renderers with a loading state rather than parsing a partial block.
-- Key `renderers` by the lowercase language that opens the fence (` ```mermaid ` → `mermaid`).
-- Use `TxMarkdownView` for static Markdown; it does not need the block-splitting and cursor machinery.
+- The document is split into blocks and rendered per block, so appending text does not reflow the whole page — the property that makes this usable while streaming.
+- While `streaming` is true a tail cursor is shown, and **an unclosed tail fence has its rendering deferred**: a half-written code block does not flash in a wrong form first, it waits for the closing fence.
+- `fenceClosed` is `false` only for the still-growing tail fence of a streaming document. Indented code has no fence and also reports `false`; any non-tail block is treated as complete.
+- `sanitize` is on by default and loads dompurify through a dynamic `import()`. **Keep it on** — the content is model output.
+- If dompurify fails to load, the sanitizer is left null and the component keeps working. Sanitization is therefore best-effort and is not a substitute for a server-side trust boundary.
+- Each instance owns its own `Marked` (with `gfm` and `breaks`) rather than mutating the global singleton, which would reconfigure every other consumer in the app.
+- `renderers` are matched by fence language — the first word, lowercased. Unregistered languages fall back to the default code block.
+- A registered renderer receives `StreamMarkdownBlockContext` as props, including `fenceClosed`, so it can show a placeholder until the block completes.
+- `theme` accepts `light`, `dark` or `auto`, with `auto` following the environment.
+- The bundled GitHub-Markdown stylesheet is a *global* import, so every rule in it is scoped to `:where(.tx-markdown-view, .tx-stream-md)`. `.markdown-body` is a very generic class name — before the scope, importing this component restyled any host page that used it for its own prose. `:where()` adds no specificity, so the scope confines the sheet without changing how its rules compete with each other.

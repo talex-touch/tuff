@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Icon 图标
-
-## 基础用法
+## 用法
 
 ### UnoCSS 图标类名
 
@@ -196,7 +194,16 @@ code: |
 - `builtin`：内置常用图标。
 - `colorful` 可在组件 prop 或 `icon.colorful` 中声明；SVG 默认使用 currentColor mask，`colorful=true` 时保留原色。
 
-## API
+### 最佳实践
+
+- 产品 UI 优先使用 UnoCSS 图标类（`i-*`），渲染成本低，并且天然继承 `currentColor`。
+- 需要状态、颜色、URL/file 解析或保留 SVG 原色时，再使用 `TxIconSource`。
+- 只有图标本身承载语义时才传有意义的 `alt`；装饰性图标应由周围文本提供语义。
+- 单色 SVG 保持 `colorful=false`，让主题色通过 `currentColor` 生效；品牌标识和多色图使用 `colorful=true`。
+- 插件文件或自定义 SVG 传输建议在应用外壳统一注入 `TX_ICON_CONFIG_KEY`，不要在每个图标上重复传 resolver。
+- `TxOsIcon` 在表格或列表中应搭配可见平台文本；用 CSS 字号调整大小（组件固定 `1em`），回退行为只是视觉默认值，不要当作校验结果。
+
+## API 参考
 
 ### Props
 ::TuffPropsTable
@@ -289,38 +296,6 @@ rows:
 
 `TuffIcon`、`TxIcon`、`TxStatusIcon` 和 `TxOsIcon` 不触发事件。
 
-## 渲染契约
-
-- `name` 以 `i-` 开头时按图标 class 渲染；命中内置名时按 `builtin` SVG 渲染。**未命中**的名称会静默回退为图标 class，若并不存在该 class 就什么都不显示——需要新图标时请加进 `builtinIcons`，不要假设某个名字能解析。
-- 内置名称：`check`、`chevron-down`、`close`、`search`、`user`、`star`、`star-half`，以及 `TxAlert` 使用的状态图标 `info`、`check-circle`、`x-circle`、`alert-triangle`。状态图标画成圆环，中空部分由反向绘制的内圈弧在 nonzero 填充规则下挖出。
-- `file` 与本地绝对 `url` 可通过注入的 `fileProtocol` 或 `urlResolver` 转换。
-- SVG 在 `colorful=false` 时通过 mask 使用 `currentColor`；`colorful=true` 或 `icon.colorful=true` 时渲染为原图。
-- `status='loading' | 'error'` 会优先展示加载或错误状态。
-- `TxOsIcon` 将 `platform` 与 `os` 拼接转小写后识别 macOS / Windows / Linux，未识别值回退 macOS；SVG 为 `aria-hidden`，可访问名称由外层文本承载。
-
-## 最佳实践
-
-- 产品 UI 优先使用 UnoCSS 图标类（`i-*`），渲染成本低，并且天然继承 `currentColor`。
-- 需要状态、颜色、URL/file 解析或保留 SVG 原色时，再使用 `TxIconSource`。
-- 只有图标本身承载语义时才传有意义的 `alt`；装饰性图标应由周围文本提供语义。
-- 单色 SVG 保持 `colorful=false`，让主题色通过 `currentColor` 生效；品牌标识和多色图使用 `colorful=true`。
-- 插件文件或自定义 SVG 传输建议在应用外壳统一注入 `TX_ICON_CONFIG_KEY`，不要在每个图标上重复传 resolver。
-- `TxOsIcon` 在表格或列表中应搭配可见平台文本；用 CSS 字号调整大小（组件固定 `1em`），回退行为只是视觉默认值，不要当作校验结果。
-
-## 图标集
-
-| 图标集 | 前缀 | 描述 |
-|--------|------|------|
-| Remix Icon | `i-ri-` | 通用 UI 图标，线条/填充风格 |
-| Carbon | `i-carbon-` | IBM 设计系统图标 |
-| Simple Icons | `i-simple-icons-` | 品牌/Logo 图标 |
-
-## 图标搜索
-
-访问 [Icônes](https://icones.js.org/) 在线浏览和搜索所有可用图标。
-
-## API 参考
-
 ### classIcon / getIcon
 
 :::TuffCodeBlock{lang="ts"}
@@ -336,14 +311,32 @@ code: |
 ---
 :::
 
+## 渲染契约
 
-## 审阅说明
+- `name` 以 `i-` 开头时按图标 class 渲染；命中内置名时按 `builtin` SVG 渲染。**未命中**的名称会静默回退为图标 class，若并不存在该 class 就什么都不显示——需要新图标时请加进 `builtinIcons`，不要假设某个名字能解析。
+- 内置名称：`check`、`chevron-down`、`close`、`search`、`user`、`star`、`star-half`，以及 `TxAlert` 使用的状态图标 `info`、`check-circle`、`x-circle`、`alert-triangle`。状态图标画成圆环，中空部分由反向绘制的内圈弧在 nonzero 填充规则下挖出。
+- `file` 与本地绝对 `url` 可通过注入的 `fileProtocol` 或 `urlResolver` 转换。
+- SVG 在 `colorful=false` 时通过 mask 使用 `currentColor`；`colorful=true` 或 `icon.colorful=true` 时渲染为原图。
+- `status='loading' | 'error'` 会优先展示加载或错误状态。
+- `TxOsIcon` 将 `platform` 与 `os` 拼接转小写后识别 macOS / Windows / Linux，未识别值回退 macOS；SVG 为 `aria-hidden`，可访问名称由外层文本承载。
+
+## 图标集
+
+| 图标集 | 前缀 | 描述 |
+|--------|------|------|
+| Remix Icon | `i-ri-` | 通用 UI 图标，线条/填充风格 |
+| Carbon | `i-carbon-` | IBM 设计系统图标 |
+| Simple Icons | `i-simple-icons-` | 品牌/Logo 图标 |
+
+## 图标搜索
+
+访问 [Icônes](https://icones.js.org/) 在线浏览和搜索所有可用图标。
+
+## 技术实现
 
 - **可访问性说明：** 仅当设置了 `alt` 时，`TxIcon` 才渲染 `role="img"` 并把 `alt` 映射到 `title`；未设置 `alt` 时图标视为装饰性，会标记 `aria-hidden="true"` 从无障碍树中移除。纯图标交互控件应使用 `TxIconButton label` 或可见文本，不要只依赖图标 title 文案。
 - **实测覆盖:** `icon.test.ts` 覆盖 class 与内置名称渲染、尺寸/颜色样式、emoji/empty/loading/error 状态、注入 file protocol 解析、SVG mask 模式、colorful SVG 回退、data SVG 处理、多色 SVG 检测与状态角标尺寸。
 - **实测覆盖（TxOsIcon）:** `os-icon.test.ts` 覆盖 Windows 别名、Linux 发行版别名、macOS 别名/默认回退，以及装饰性 SVG 的无障碍与 class 形态。
-
-## Source
 
 - Component sources: `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`、`TxStatusIcon.vue` 与 `TxOsIcon.vue`。
 - Types/helpers: `types.ts` 导出 `TxIconSource`、状态/config 类型与 `TX_ICON_CONFIG_KEY`；`svg-color-mode.ts` 判断 SVG 是否可作为 currentColor mask 渲染。

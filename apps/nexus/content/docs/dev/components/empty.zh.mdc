@@ -8,9 +8,8 @@ tags: [empty, state, placeholder]
 syncStatus: reviewed
 verified: true
 ---
-# Empty 空状态
 
-## 基础用法
+## 用法
 
 ### Empty
 :::TuffDemoWrapper{demo="EmptyEmptyDemo" code-lang="vue"}
@@ -21,8 +20,6 @@ code: |
   </template>
 ---
 :::
-
-## 带操作
 
 ### Empty (action)
 :::TuffDemoWrapper{demo="EmptyEmptyActionDemo" code-lang="vue"}
@@ -38,15 +35,14 @@ code: |
 ---
 :::
 
-## 交互契约
+### 最佳实践
 
-- 始终用 `variant="empty"`、`surface="card"`、`layout="vertical"` 渲染内部 `TxEmptyState`。
-- `compact=false` 映射为 `size="medium"`；`compact=true` 映射为 `size="small"`。
-- `iconClass` 会作为内部空状态的 `icon` prop 透传。
-- 插槽刻意比 `TxEmptyState` 简化：`action` 是单数，并替换内部 `actions` 插槽。
-- `TxEmpty` 不发出事件；操作行为由 `action` 插槽里的控件负责。
+- 适用于列表、搜索结果或面板占位，且需要卡片表面时使用 `TxEmpty`。
+- 空原因有产品语义时，优先使用更明确的 `TxNoData`、`TxNoSelection`、`TxOfflineState` 或 `TxPermissionState`。
+- 侧栏、表格内部等密集区域使用 `compact`。
+- 点击逻辑放在 `action` 插槽里的控件上；`TxEmpty` 不代理 action 事件。
 
-## API
+## API 参考
 
 ### Props
 
@@ -70,19 +66,19 @@ code: |
 | `description` | - | 替换 `description` prop 内容。 |
 | `action` | - | 替换内部 `TxEmptyState` 的 actions 区域。 |
 
-## 最佳实践
+## 概述
 
-- 适用于列表、搜索结果或面板占位，且需要卡片表面时使用 `TxEmpty`。
-- 空原因有产品语义时，优先使用更明确的 `TxNoData`、`TxNoSelection`、`TxOfflineState` 或 `TxPermissionState`。
-- 侧栏、表格内部等密集区域使用 `compact`。
-- 点击逻辑放在 `action` 插槽里的控件上；`TxEmpty` 不代理 action 事件。
+- 始终用 `variant="empty"`、`surface="card"`、`layout="vertical"` 渲染内部 `TxEmptyState`。
+- `compact=false` 映射为 `size="medium"`；`compact=true` 映射为 `size="small"`。
+- `iconClass` 会作为内部空状态的 `icon` prop 透传。
+- 插槽刻意比 `TxEmptyState` 简化：`action` 是单数，并替换内部 `actions` 插槽。
+- `TxEmpty` 不发出事件；操作行为由 `action` 插槽里的控件负责。
 
-## 审阅说明
+## 技术实现
 
 - 组件源码:`packages/tuffex/packages/components/src/empty/src/TxEmpty.vue` 确认 `TxEmptyState` 封装、强制 `variant="empty"`、`surface="card"`、`layout="vertical"`、紧凑尺寸映射和插槽重映射。
 - 类型契约:`packages/tuffex/packages/components/src/empty/src/types.ts` 定义紧凑 `EmptyProps` 表面。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/empty/__tests__/empty.test.ts` 覆盖默认 prop 透传、紧凑尺寸和 wrapper 到 empty-state 的插槽映射。
 - 导出入口:`packages/tuffex/packages/components/src/empty/index.ts` 导出 `Empty`、`TxEmpty`、`EmptyProps` 和 `TxEmptyInstance`。
 
-## Source
 <TuffDocSourceLink />

@@ -9,13 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-The Tuff help center: a collapsible contents tree on the left, a markdown article in the middle, and an “On this page” outline on the right that highlights the section being read as the article scrolls. ⌘K searches every article and its sections; the end of each article has “Was this article helpful?”, previous / next and related articles, and the header says who edited it and when. The featured article, “Plugin permissions”, uses the repo’s real permission registry and manifest fields, echoing the Store chapter; every other article is sample content.
-
-It fits a product help center, developer docs, a team knowledge base or in-app guides — long-form reading that people need to find, finish and give feedback on.
-
-## Template
+## Usage
 
 ### Three-pane docs
 
@@ -84,7 +78,27 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+The Tuff help center: a collapsible contents tree on the left, a markdown article in the middle, and an “On this page” outline on the right that highlights the section being read as the article scrolls. ⌘K searches every article and its sections; the end of each article has “Was this article helpful?”, previous / next and related articles, and the header says who edited it and when. The featured article, “Plugin permissions”, uses the repo’s real permission registry and manifest fields, echoing the Store chapter; every other article is sample content.
+
+It fits a product help center, developer docs, a team knowledge base or in-app guides — long-form reading that people need to find, finish and give feedback on.
+
+- The first time the stage scrolls into view, the article scrolls to Risk levels after about 1.2 seconds and to Choosing at install time after about 3.4 seconds, then stops; a click, key press, wheel or touch inside the template ends the tour at once. With reduced motion nothing plays and the article simply sits at Choosing at install time. The tour only moves the article’s own scroller, never the page, and never moves focus.
+- The outline is parsed from the markdown source and matched to the rendered headings by position. TxMarkdownView headings have no id, and the template does not add one: the docs page collects id’d headings for its own outline and scrolls the whole page to them when the hash changes.
+- Picking an outline entry scrolls smoothly to that section and keeps it highlighted until you scroll the article yourself: a short section at the end that cannot reach the top keeps its highlight, and once the stage expands or collapses and the text rewraps, the section is aligned to the top again.
+- Links in the body are intercepted in one place: `#kb:` links open the article inside the template and move focus to its title; external links, middle clicks and ⌘-clicks never leave the docs page and only report what the host would open.
+- In the column (640–959px) the tree sits on the left and the outline moves into a toolbar dropdown; expanded, it is three panes with a capped article width; below 640px the tree becomes a panel that slides in from the left (not a TxDrawer), closed by Esc or the backdrop, and picking an article puts focus on its title.
+- ⌘K works while focus is inside the template, bound on its root so it never takes the docs site’s own shortcut; closing the palette returns focus to the search button.
+
+## Customization
+
+- With real docs, keep parsing the outline from the source; if you switch to a renderer that adds heading ids, first make sure no other script on the page scrolls the whole document by id.
+- For highlighted code, render the whole article with TxStreamMarkdown (not streaming) rather than mixing several renderers in one body, which breaks the heading positions.
+- With many articles, run the ⌘K search remotely as the reader types, and index only second-level sections.
+- Have the feedback endpoint record the article id, the reasons chosen and the article version, so “Out of date” can be traced to a specific revision.
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -96,19 +110,3 @@ code: |
 | Previous / next and related | [TxCardItem](/docs/dev/components/card-item) | Neighbours follow the contents order; related articles come from each article’s list or its group |
 | On this page (expanded) | Hand-built list + `useIndicatorBox` | Highlights the section being read as the article scrolls; the sliding marker is measured the way TxSidebarNav measures its highlight |
 | Feedback | [TxToastPanel](/docs/dev/components/toast-panel) | Results for external links, Edit this page and article feedback, kept inside the article area |
-
-## Interactions
-
-- The first time the stage scrolls into view, the article scrolls to Risk levels after about 1.2 seconds and to Choosing at install time after about 3.4 seconds, then stops; a click, key press, wheel or touch inside the template ends the tour at once. With reduced motion nothing plays and the article simply sits at Choosing at install time. The tour only moves the article’s own scroller, never the page, and never moves focus.
-- The outline is parsed from the markdown source and matched to the rendered headings by position. TxMarkdownView headings have no id, and the template does not add one: the docs page collects id’d headings for its own outline and scrolls the whole page to them when the hash changes.
-- Picking an outline entry scrolls smoothly to that section and keeps it highlighted until you scroll the article yourself: a short section at the end that cannot reach the top keeps its highlight, and once the stage expands or collapses and the text rewraps, the section is aligned to the top again.
-- Links in the body are intercepted in one place: `#kb:` links open the article inside the template and move focus to its title; external links, middle clicks and ⌘-clicks never leave the docs page and only report what the host would open.
-- In the column (640–959px) the tree sits on the left and the outline moves into a toolbar dropdown; expanded, it is three panes with a capped article width; below 640px the tree becomes a panel that slides in from the left (not a TxDrawer), closed by Esc or the backdrop, and picking an article puts focus on its title.
-- ⌘K works while focus is inside the template, bound on its root so it never takes the docs site’s own shortcut; closing the palette returns focus to the search button.
-
-## Adapting it
-
-- With real docs, keep parsing the outline from the source; if you switch to a renderer that adds heading ids, first make sure no other script on the page scrolls the whole document by id.
-- For highlighted code, render the whole article with TxStreamMarkdown (not streaming) rather than mixing several renderers in one body, which breaks the heading positions.
-- With many articles, run the ⌘K search remotely as the reader types, and index only second-level sections.
-- Have the feedback endpoint record the article id, the reasons chosen and the article version, so “Out of date” can be traced to a specific revision.

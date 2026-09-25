@@ -8,9 +8,8 @@ tags: [text, svg, animation]
 syncStatus: reviewed
 verified: true
 ---
-# KeyframeStrokeText 关键帧描边
 
-## 基础用法
+## 用法
 
 使用短文本，并通过 props 调整描边和填充颜色。数字 `fontSize` 会转为 px。
 
@@ -35,28 +34,15 @@ code: |
 ---
 ::::
 
-## 多语言文本
+### 最佳实践
 
-组件会测量真实渲染后的 SVG 文本，因此 CJK 文案和混合语言标签可以使用同一套 API。
+- 用于短文案。长句会降低可读性，也会让 SVG 测量和动画显得沉重。
+- 保持外层布局宽度可预测。SVG 高度跟随 `fontSize`，viewBox 宽度跟随测量出的文本长度。
+- 如果动画文本只是装饰，页面语义标题应放在组件外；`text` 只承载视觉标签本身。
+- 不要在大型列表中随输入逐字重渲染该组件；每次文字或字体变化都会调度测量。
+- 自定义 Web Font 需要在目标页面测试；字体加载完成后测量宽度可能再次变化。
 
-::::TuffDemoWrapper{demo="KeyframeStrokeTextChineseDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxKeyframeStrokeText
-      text="关键帧描边动画"
-      stroke-color="#16a34a"
-      fill-color="#14532d"
-      :duration-ms="2600"
-      :stroke-width="1.6"
-      :font-size="40"
-      :font-weight="700"
-    />
-  </template>
----
-::::
-
-## API
+## API 参考
 
 ### Props
 
@@ -79,7 +65,28 @@ code: |
 
 不暴露插槽。文本必须来自 `text` prop，才能保持测量和可访问性结果确定。
 
-## 交互契约
+## 多语言文本
+
+组件会测量真实渲染后的 SVG 文本，因此 CJK 文案和混合语言标签可以使用同一套 API。
+
+::::TuffDemoWrapper{demo="KeyframeStrokeTextChineseDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxKeyframeStrokeText
+      text="关键帧描边动画"
+      stroke-color="#16a34a"
+      fill-color="#14532d"
+      :duration-ms="2600"
+      :stroke-width="1.6"
+      :font-size="40"
+      :font-weight="700"
+    />
+  </template>
+---
+::::
+
+## 概述
 
 - 根节点是 `role="img"` 的 SVG。
 - 非空 `text` 会同步为 `aria-label`；空文本不输出 `aria-label`，并使用 non-breaking-space 保持测量稳定。
@@ -89,21 +96,11 @@ code: |
 - `strokeColor`、`fillColor`、`durationMs`、`strokeWidth`、测量出的描边长度、字号、字重和字体族都通过 CSS 变量应用。
 - 在 `prefers-reduced-motion: reduce` 下会禁用动画并显示最终状态。
 
-## 最佳实践
-
-- 用于短文案。长句会降低可读性，也会让 SVG 测量和动画显得沉重。
-- 保持外层布局宽度可预测。SVG 高度跟随 `fontSize`，viewBox 宽度跟随测量出的文本长度。
-- 如果动画文本只是装饰，页面语义标题应放在组件外；`text` 只承载视觉标签本身。
-- 不要在大型列表中随输入逐字重渲染该组件；每次文字或字体变化都会调度测量。
-- 自定义 Web Font 需要在目标页面测试；字体加载完成后测量宽度可能再次变化。
-
-## 审阅说明
+## 技术实现
 
 - **可访问性说明:** 源码始终渲染 `role="img"` 的 SVG；非空 `text` 会成为可访问名称，但没有 `aria-hidden` prop。如果动画只是装饰，语义标题或标签仍应放在组件外。
 - **测量：** 过去测量层和绘制层带着同样的偏移，第一次之后的每次测量都会读回自己的偏移并把它抵消。`document.fonts.ready` 重新测量之后，字形落在 x=0、y≈0——在 viewBox 上方、贴着左缘——文档 demo 与画廊都是如此。单测把 `getBBox()` mock 成常量，所以一直没有暴露。
 - **实测覆盖:** `keyframe-stroke-text.test.ts` 覆盖可访问 SVG/文本层、CSS 变量映射、空文本 fallback、prop 变化后的重新测量，以及 install 注册。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/keyframe-stroke-text/src/TxKeyframeStrokeText.vue`。
 - Types: `packages/tuffex/packages/components/src/keyframe-stroke-text/src/types.ts` 导出 `KeyframeStrokeTextProps`。

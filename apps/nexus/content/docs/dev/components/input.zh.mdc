@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Input 输入
-
-## 基础用法
+## 用法
 
 ### 基础输入
 最常见的文本输入用法。
@@ -23,69 +21,28 @@ code: |
   </template>
 ---
 :::
-## 输入框类型
 
-目前支持：`text` / `password` / `textarea` / `date` / `email` / `number`。
+### 最佳实践
 
-### Input Types
-文本、密码与多行文本。
-:::TuffDemoWrapper{demo="InputInputTypesDemo" code-lang="vue"}
+- 聚焦态优先通过边框与阴影的细微变化体现；除非外层表单有统一规范，不要再给包裹层叠加第二套 focus ring。
+- 搜索态更适合保持轻量，用在工具栏与列表筛选；当 Enter 搜索和防抖远程搜索属于契约时，使用 `TxSearchInput`。
+- `type="number"` 在非空输入时发出 number，清空时发出 `''`，持久化前需要在下游 schema 中归一化。
+- 清空控件是可键盘聚焦的 button，并会在禁用或只读状态下隐藏。
+- 插槽内容会覆盖 `prefixIcon` / `suffixIcon`；同一个字段只选择一种路径，避免图标在文档与实现之间漂移。
+
+### 搜索行
+输入框配合按钮完成快速检索。
+:::TuffDemoWrapper{demo="InputSearchRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffInput v-model="text" placeholder="文本输入" />
-    <TuffInput v-model="password" type="password" placeholder="密码输入" />
-    <TuffInput v-model="content" type="textarea" placeholder="多行文本" :rows="4" />
+    <TuffInput placeholder="搜索..." />
+    <TxButton size="sm">搜索</TxButton>
   </template>
 ---
 :::
-## 只读 / 禁用
 
-### Readonly / Disabled
-只读与禁用状态。
-:::TuffDemoWrapper{demo="InputReadonlyDisabledDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TuffInput v-model="readonlyValue" readonly placeholder="只读" />
-    <TuffInput v-model="disabledValue" disabled placeholder="禁用" />
-  </template>
----
-:::
-## 可清空
-
-### Clearable
-支持一键清空内容。
-:::TuffDemoWrapper{demo="InputClearableDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TuffInput v-model="clearableValue" clearable placeholder="可清空" />
-  </template>
----
-:::
-## 前后缀插槽
-
-### Prefix / Suffix
-使用图标增强提示。
-:::TuffDemoWrapper{demo="InputPrefixSuffixDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TuffInput v-model="withPrefix" placeholder="Search">
-      <template #prefix>
-        <TxIcon icon="i-carbon-search" />
-      </template>
-    </TuffInput>
-    <TuffInput v-model="withSuffix" placeholder="User">
-      <template #suffix>
-        <TxIcon icon="i-carbon-user" />
-      </template>
-    </TuffInput>
-  </template>
----
-:::
-## API
+## API 参考
 
 ### Props
 
@@ -211,36 +168,78 @@ rows:
 ---
 :::
 
-## 最佳实践
+## 输入框类型
 
-- 聚焦态优先通过边框与阴影的细微变化体现；除非外层表单有统一规范，不要再给包裹层叠加第二套 focus ring。
-- 搜索态更适合保持轻量，用在工具栏与列表筛选；当 Enter 搜索和防抖远程搜索属于契约时，使用 `TxSearchInput`。
-- `type="number"` 在非空输入时发出 number，清空时发出 `''`，持久化前需要在下游 schema 中归一化。
-- 清空控件是可键盘聚焦的 button，并会在禁用或只读状态下隐藏。
-- 插槽内容会覆盖 `prefixIcon` / `suffixIcon`；同一个字段只选择一种路径，避免图标在文档与实现之间漂移。
+目前支持：`text` / `password` / `textarea` / `date` / `email` / `number`。
 
-## 组合示例
-
-### 搜索行
-输入框配合按钮完成快速检索。
-:::TuffDemoWrapper{demo="InputSearchRowDemo" code-lang="vue"}
+### Input Types
+文本、密码与多行文本。
+:::TuffDemoWrapper{demo="InputInputTypesDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffInput placeholder="搜索..." />
-    <TxButton size="sm">搜索</TxButton>
+    <TuffInput v-model="text" placeholder="文本输入" />
+    <TuffInput v-model="password" type="password" placeholder="密码输入" />
+    <TuffInput v-model="content" type="textarea" placeholder="多行文本" :rows="4" />
   </template>
 ---
 :::
 
-## 审阅说明
+## 只读 / 禁用
+
+### Readonly / Disabled
+只读与禁用状态。
+:::TuffDemoWrapper{demo="InputReadonlyDisabledDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="readonlyValue" readonly placeholder="只读" />
+    <TuffInput v-model="disabledValue" disabled placeholder="禁用" />
+  </template>
+---
+:::
+
+## 可清空
+
+### Clearable
+支持一键清空内容。
+:::TuffDemoWrapper{demo="InputClearableDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="clearableValue" clearable placeholder="可清空" />
+  </template>
+---
+:::
+
+## 前后缀插槽
+
+### Prefix / Suffix
+使用图标增强提示。
+:::TuffDemoWrapper{demo="InputPrefixSuffixDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="withPrefix" placeholder="Search">
+      <template #prefix>
+        <TxIcon icon="i-carbon-search" />
+      </template>
+    </TuffInput>
+    <TuffInput v-model="withSuffix" placeholder="User">
+      <template #suffix>
+        <TxIcon icon="i-carbon-user" />
+      </template>
+    </TuffInput>
+  </template>
+---
+:::
+
+## 技术实现
 
 - **值契约：** `type="number"` 在非空输入时发出 `Number(value)`，清空时保留 `''`，因此持久化层应先做 schema 归一化。
 - **清空契约：** `disabled` 或 `readonly` 时，`clear()` 与清空按钮都会被阻止；其他情况下清空会触发 `update:modelValue`、`input` 和 `clear`。
 - **组合契约：** wrapper 的 `class` / `style` 保留在外层，其余 attrs 透传给原生 `input` / `textarea`；前后缀插槽优先于图标 props。
 - **实测覆盖:** `input.test.ts` 覆盖文本事件、数字归一化、textarea attrs 透传、清空按钮无障碍、禁用/只读阻断和插槽优先级。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/input/src/TxInput.vue`.
 - Export alias: `packages/tuffex/packages/components/src/input/index.ts` exports both `TuffInput` and `TxInput`.

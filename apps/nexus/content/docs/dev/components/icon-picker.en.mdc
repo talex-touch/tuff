@@ -8,9 +8,8 @@ tags: [icon, picker, emoji, brand, file]
 syncStatus: reviewed
 verified: true
 ---
-# IconPicker
 
-## Basic Usage
+## Usage
 
 ### IconPicker
 :::TuffDemoWrapper{demo="IconPickerIconPickerDemo" code-lang="vue" title="Trigger and inline modes" description="A trigger with the shape row, and an inline panel limited to two sections."}
@@ -31,6 +30,47 @@ code: |
   </template>
 ---
 :::
+
+### Best Practices
+
+- Store the identifier as-is and resolve it at render time with `parseIconIdentifier`. Do not split it into two columns — the pair can then disagree.
+- Import `parseIconIdentifier` from `@talex-touch/tuffex/icon-picker` in modules that only read a stored value; the panel is the expensive part and it is not needed to resolve a string.
+- Pass `shape-selectable` only when the host is *not* already drawing the icon on its own plate, or the user picks a shape they never see.
+- Reach for `TxIconChip` when you need to display a small icon plate; this component is for choosing one.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | The icon identifier. Paired with `v-model`. |
+| `shape` | `'circle' \| 'rounded' \| 'square'` | `'rounded'` | Plate shape. Paired with `v-model:shape`. |
+| `sections` | `IconPickerSection[]` | all four | Sections to offer, in tab order. `file` is dropped when `fileChooser` is absent and no fallback is possible. |
+| `catalog` | `Partial<Record<'emoji' \| 'icon' \| 'brand', IconPickerEntry[]>>` | - | Replaces the bundled rows for a section. The host owns the CSS that renders a `class:` icon, so a host with its own icon set replaces rows rather than adding to a catalog it cannot style. |
+| `shapeSelectable` | `boolean` | `false` | Offer the shape row. Leave off when the host draws the icon on its own plate. |
+| `fileChooser` | `() => Promise<string \| null>` | - | Host-supplied file dialog resolving to an absolute path, or `null` on cancel. |
+| `accept` | `string` | `'image/*'` | File-dialog accept list, also used for the fallback `<input type="file">`. |
+| `disabled` | `boolean` | `false` | Disables the trigger and the panel. |
+| `size` | `number` | `36` | Edge length of the trigger plate, in px. |
+| `placeholder` | `string` | - | Trigger text when no icon is picked. |
+| `inline` | `boolean` | `false` | Render the panel directly instead of behind a trigger. |
+| `labels` | `Partial<IconPickerLabels>` | English defaults | Section labels, search placeholder, and the clear/file actions. |
+
+### Events
+
+| Event | Payload | Description |
+|-------|---------|------|
+| `update:modelValue` | `string` | A pick, or `''` when cleared. |
+| `update:shape` | `IconPickerShape` | The shape row changed. |
+| `change` | `string` | Fires alongside `update:modelValue`, for hosts not using `v-model`. |
+| `file-error` | `unknown` | The chooser threw, or the fallback input could not read the file. |
+
+### Slots
+
+| Name | Description |
+|------|------|
+| `trigger` | Replaces the default trigger plate. Not rendered in `inline` mode. |
 
 ## The Identifier
 
@@ -74,54 +114,13 @@ export default defineConfig({
 
 The catalog is a `.ts` table, so its classes appear in no template the extractor scans. Without the safelist every cell in the grid renders as an empty box. Spread from the module rather than copying the strings, so a row added upstream cannot ship invisible.
 
-## API
-
-### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `modelValue` | `string` | `''` | The icon identifier. Paired with `v-model`. |
-| `shape` | `'circle' \| 'rounded' \| 'square'` | `'rounded'` | Plate shape. Paired with `v-model:shape`. |
-| `sections` | `IconPickerSection[]` | all four | Sections to offer, in tab order. `file` is dropped when `fileChooser` is absent and no fallback is possible. |
-| `catalog` | `Partial<Record<'emoji' \| 'icon' \| 'brand', IconPickerEntry[]>>` | - | Replaces the bundled rows for a section. The host owns the CSS that renders a `class:` icon, so a host with its own icon set replaces rows rather than adding to a catalog it cannot style. |
-| `shapeSelectable` | `boolean` | `false` | Offer the shape row. Leave off when the host draws the icon on its own plate. |
-| `fileChooser` | `() => Promise<string \| null>` | - | Host-supplied file dialog resolving to an absolute path, or `null` on cancel. |
-| `accept` | `string` | `'image/*'` | File-dialog accept list, also used for the fallback `<input type="file">`. |
-| `disabled` | `boolean` | `false` | Disables the trigger and the panel. |
-| `size` | `number` | `36` | Edge length of the trigger plate, in px. |
-| `placeholder` | `string` | - | Trigger text when no icon is picked. |
-| `inline` | `boolean` | `false` | Render the panel directly instead of behind a trigger. |
-| `labels` | `Partial<IconPickerLabels>` | English defaults | Section labels, search placeholder, and the clear/file actions. |
-
-### Events
-
-| Event | Payload | Description |
-|-------|---------|------|
-| `update:modelValue` | `string` | A pick, or `''` when cleared. |
-| `update:shape` | `IconPickerShape` | The shape row changed. |
-| `change` | `string` | Fires alongside `update:modelValue`, for hosts not using `v-model`. |
-| `file-error` | `unknown` | The chooser threw, or the fallback input could not read the file. |
-
-### Slots
-
-| Name | Description |
-|------|------|
-| `trigger` | Replaces the default trigger plate. Not rendered in `inline` mode. |
-
-## Interaction Contract
+## Overview
 
 - **The file section needs a host.** TuffEx cannot open a native dialog and refuses to guess. An Electron host passes its `dialog.showOpenDialog` bridge; a host that passes nothing falls back to a hidden `<input type="file">` whose result is a data URL. Both end as an identifier — but only the host knows which of the two its renderer can actually load.
 - **Search is matched against `keywords`, not the id.** The bundled catalog's keywords are bilingual, because a zh-CN host whose users type `火箭` gets nothing back from an English-only index.
 - **`shape` is presentational and stored separately.** It is not part of the identifier: the same icon is rendered on a circle in one surface and a square in another.
 
-## Best Practices
-
-- Store the identifier as-is and resolve it at render time with `parseIconIdentifier`. Do not split it into two columns — the pair can then disagree.
-- Import `parseIconIdentifier` from `@talex-touch/tuffex/icon-picker` in modules that only read a stored value; the panel is the expensive part and it is not needed to resolve a string.
-- Pass `shape-selectable` only when the host is *not* already drawing the icon on its own plate, or the user picks a shape they never see.
-- Reach for `TxIconChip` when you need to display a small icon plate; this component is for choosing one.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/icon-picker/src/TxIconPicker.vue`.
 - Identifier helpers: `packages/tuffex/packages/components/src/icon-picker/src/identifier.ts`.

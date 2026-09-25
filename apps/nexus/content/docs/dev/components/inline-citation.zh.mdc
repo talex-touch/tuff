@@ -8,9 +8,8 @@ tags: [ai, citation, source, inline]
 syncStatus: reviewed
 verified: true
 ---
-# InlineCitation 行内引用
 
-## 基础用法
+## 用法
 
 ### 行内引用
 
@@ -58,7 +57,15 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+- 必须监听 `open`，否则点击引用不会有任何反应。
+- 一段正文里的引用控制在 2~3 枚：胶囊比文字重，密集出现会把段落读成列表。
+- `label` 留空更好——默认的域名回落让读者一眼看出来源出处，自定义文案反而容易掩盖它。
+- 流式场景里给 `source.id` 用稳定标识：图标失败记录按实例持有，节点复用时靠稳定数据避免反复重试坏图。
+- 需要「答案末尾的来源清单」而不是行内引用时，用 `TxSources`；两者是互补关系，常常同时出现。
+
+## API 参考
 
 ### Props
 
@@ -83,7 +90,7 @@ code: |
 | `default` | `{ source, label }` | 替换胶囊文案，可放富文本。 |
 | `icon` | `{ source }` | 替换前置站点图标，例如换成自绘的分类角标。 |
 
-## 交互契约
+## 概述
 
 - **链接不自行导航。** 渲染的是真实 `<a href>`，但点击会 `preventDefault` 并派发 `open`。这在 Electron 渲染进程里是必须的——正文里的引用最不该做的事就是把整个应用导航走。
 - `href` 保留在 DOM 上，所以浏览器原生的「在新标签页打开」「复制链接地址」右键菜单依旧可用。
@@ -92,15 +99,7 @@ code: |
 - 胶囊用 `vertical-align: middle` 加 1px 上移嵌进文字流，行高由所在段落决定，组件自己不设 `line-height`。
 - 入场只在挂载时播放一次；`appear` 是渲染期决策，改它不会追加播放。
 
-## 最佳实践
-
-- 必须监听 `open`，否则点击引用不会有任何反应。
-- 一段正文里的引用控制在 2~3 枚：胶囊比文字重，密集出现会把段落读成列表。
-- `label` 留空更好——默认的域名回落让读者一眼看出来源出处，自定义文案反而容易掩盖它。
-- 流式场景里给 `source.id` 用稳定标识：图标失败记录按实例持有，节点复用时靠稳定数据避免反复重试坏图。
-- 需要「答案末尾的来源清单」而不是行内引用时，用 `TxSources`；两者是互补关系，常常同时出现。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/inline-citation/src/TxInlineCitation.vue`。
 - Types: `packages/tuffex/packages/components/src/inline-citation/src/types.ts`。
@@ -108,8 +107,6 @@ code: |
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **与 `TxSources` 的分工:** `TxSources` 是答案末尾可折叠的来源清单，本组件是正文流中的单枚引用。数据类型共用 `AiSourceItem`，可以同时使用同一份来源数组。
 - **已知偏差:** 上游的行内引用永远取来源数组的第 0 项，与它所在的位置无关——那是 demo 写法。这里要求显式传 `source`，每枚胶囊指向自己的来源。

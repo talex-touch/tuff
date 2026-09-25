@@ -8,9 +8,8 @@ tags: [tree-select, form, hierarchy]
 syncStatus: reviewed
 verified: true
 ---
-# TreeSelect
 
-## Basic Usage
+## Usage
 
 ### TreeSelect
 :::TuffDemoWrapper{demo="TreeSelectTreeSelectDemo" code-lang="vue"}
@@ -79,49 +78,21 @@ code: |
 ---
 :::
 
-## Admin Ownership Picker
-
-In permission, member, and release-policy pages, `TxTreeSelect` works well for owner teams, namespaces, and organization units. It saves space compared with a full tree and composes naturally with `TxTransfer` and `TxTimeline` in authorization flows.
-
-:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="Screenshot-verified owner selection, resource grants, and audit flow."}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const ownerTeam = ref<string | number | undefined>('docs')
-  const nodes = [
-    {
-      key: 'ops',
-      label: 'Operations',
-      children: [
-        { key: 'docs', label: 'Docs maintainers' },
-        { key: 'release', label: 'Release managers' },
-      ],
-    },
-  ]
-  </script>
-
-  <template>
-    <TxTreeSelect
-      v-model="ownerTeam"
-      :nodes="nodes"
-      placeholder="Owner team"
-      :default-expanded-keys="['ops']"
-      :dropdown-max-height="220"
-    />
-  </template>
----
-:::
-
-## Notes
-
 - `TxTreeSelect` reuses `TxTree` internally. The dropdown tree receives `defaultExpandedKeys`, `filterText`, and `multiple`; it does not expose `expandedKeys` or `filterMethod` controls.
 - When `multiple=true`, `modelValue` must be an array and the trigger renders selected labels as tags. Clearing returns `[]`.
 - When `multiple=false`, `modelValue` is one key or `undefined`. Selecting a node closes the dropdown, and clearing returns `undefined`.
 - Disabled nodes cannot be selected, but their caret can still expand when they have children.
 
-## API
+### Best Practices
+
+- Use `TxTreeSelect` for compact ownership, namespace, category, and organization-unit selection. Use full `TxTree` when users need persistent context, bulk tree operations, or custom row controls.
+- Keep `key` values stable and independent from localized labels; label changes should not invalidate saved selections.
+- Match value shape to `multiple` before render. Switching `multiple` at runtime does not coerce an existing scalar into an array or vice versa.
+- Prefer shallow default expansion such as root departments or product areas. Deeply expanded dropdowns are harder to scan and scroll.
+- Use the `node` slot for badges or secondary labels only; avoid adding separate click targets that compete with the row selection behavior.
+- For domain-specific search, wrap the component with an external search experience or use `TxTree` directly until `filterMethod` is exposed.
+
+## API Reference
 
 ### TxTreeSelect Props
 
@@ -179,7 +150,42 @@ code: |
 | `getValue()` | `() => TreeSelectValue` | Returns the current `modelValue` prop. |
 | `getCheckedKeys()` | `() => Array<string \| number>` | Returns selected keys as an array in both single and multiple modes. |
 
-## Interaction Contract
+## Admin Ownership Picker
+
+In permission, member, and release-policy pages, `TxTreeSelect` works well for owner teams, namespaces, and organization units. It saves space compared with a full tree and composes naturally with `TxTransfer` and `TxTimeline` in authorization flows.
+
+:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="Screenshot-verified owner selection, resource grants, and audit flow."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const ownerTeam = ref<string | number | undefined>('docs')
+  const nodes = [
+    {
+      key: 'ops',
+      label: 'Operations',
+      children: [
+        { key: 'docs', label: 'Docs maintainers' },
+        { key: 'release', label: 'Release managers' },
+      ],
+    },
+  ]
+  </script>
+
+  <template>
+    <TxTreeSelect
+      v-model="ownerTeam"
+      :nodes="nodes"
+      placeholder="Owner team"
+      :default-expanded-keys="['ops']"
+      :dropdown-max-height="220"
+    />
+  </template>
+---
+:::
+
+## Overview
 
 - The trigger is a focusable `role="combobox"` with `aria-haspopup="tree"` and `aria-controls` pointing at the popup, which exposes a `TxTree` (`role="tree"`), not a listbox. `Enter` and `Space` toggle the dropdown; `Escape` closes it.
 - The dropdown panel is backed by `TxPopover`; placement and width props pass through to that component.
@@ -189,26 +195,14 @@ code: |
 - `setValue()` is an emitting helper, not internal state. The parent still owns `modelValue` through v-model.
 - `setValue` and `getCheckedKeys` are intentionally thin exposed helpers for form wrappers and test harnesses; prefer v-model for normal product code.
 
-## Best Practices
-
-- Use `TxTreeSelect` for compact ownership, namespace, category, and organization-unit selection. Use full `TxTree` when users need persistent context, bulk tree operations, or custom row controls.
-- Keep `key` values stable and independent from localized labels; label changes should not invalidate saved selections.
-- Match value shape to `multiple` before render. Switching `multiple` at runtime does not coerce an existing scalar into an array or vice versa.
-- Prefer shallow default expansion such as root departments or product areas. Deeply expanded dropdowns are harder to scan and scroll.
-- Use the `node` slot for badges or secondary labels only; avoid adding separate click targets that compete with the row selection behavior.
-- For domain-specific search, wrap the component with an external search experience or use `TxTree` directly until `filterMethod` is exposed.
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue` and `types.ts`.
 - Existing tests cover selection emission, empty-state rendering, and clear behavior.
 - Recommendation: use `key`/`label` in `nodes` instead of legacy select `value` fields; clearing returns `undefined` in single mode and an empty array in multiple mode.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue`.
 - Types: `packages/tuffex/packages/components/src/tree-select/src/types.ts`.
 - **Verified coverage:** `packages/tuffex/packages/components/src/tree-select/__tests__/tree-select.test.ts` covers selection-value emission, empty-state rendering for missing nodes, and single-select clear emission.
 
 <TuffDocSourceLink />
-

@@ -8,42 +8,17 @@ tags: [ai, conversation, message]
 syncStatus: reviewed
 verified: true
 ---
-# AI Elements
 
-## 对话列表
+## 用法
 
-宿主已经维护消息数组，只需要统一的对话排版时使用 `TxAiConversation`。
+### 最佳实践
 
-### AI Conversation
-::::TuffDemoWrapper{demo="AiElementsAiConversationDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import type { AiElementMessage } from '@talex-touch/tuffex/ai-elements'
-  import { computed } from 'vue'
+- 在宿主维护 provider 流式状态，再映射到 `status`。
+- 使用对话存储里的稳定消息 id，不要使用数组下标。
+- 助手输出建议保持 Markdown 开启；不可信 Markdown 应在数据边界做清洗或归一化。
+- 工具卡片或附件建议用 `default` 插槽，不要把自定义 HTML 塞进 `content`。
 
-  const messages = computed<AiElementMessage[]>(() => [
-    { id: 'u1', role: 'user', content: '帮我总结这次发布审阅结果。', name: '你' },
-    { id: 'a1', role: 'assistant', content: '已完成 **组件文档** 审阅。', name: 'Nexus AI' },
-    { id: 't1', role: 'tool', content: '', name: 'Verifier', status: 'streaming' },
-  ])
-  </script>
-
-  <template>
-    <TxAiConversation :messages="messages" show-avatar />
-  </template>
----
-::::
-
-## 交互契约
-
-- `messages` 渲染前会被过滤：空 `content` 会被隐藏，除非 `status` 是 `pending` 或 `streaming`。
-- `markdown` 默认是 `true`，消息正文会交给 `TxMarkdownView` 渲染。
-- `showAvatar` 开启头像列；未提供 `message.avatar` 时显示角色/名称首字母。
-- `pending` 或 `streaming` 且内容为空的消息会显示内置输入中指示器。
-- `TxAiConversation` 使用 `aria-live="polite"`，追加消息时不会抢焦点。
-
-## API
+## API 参考
 
 ### AiElementMessage
 
@@ -80,6 +55,31 @@ code: |
 
 `TxAiConversation` 与 `TxAiMessage` 不派发组件事件。请在宿主对话 store 中更新状态，再把新的 `messages` 数组传回 `TxAiConversation`。
 
+## 对话列表
+
+宿主已经维护消息数组，只需要统一的对话排版时使用 `TxAiConversation`。
+
+### AI Conversation
+::::TuffDemoWrapper{demo="AiElementsAiConversationDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { AiElementMessage } from '@talex-touch/tuffex/ai-elements'
+  import { computed } from 'vue'
+
+  const messages = computed<AiElementMessage[]>(() => [
+    { id: 'u1', role: 'user', content: '帮我总结这次发布审阅结果。', name: '你' },
+    { id: 'a1', role: 'assistant', content: '已完成 **组件文档** 审阅。', name: 'Nexus AI' },
+    { id: 't1', role: 'tool', content: '', name: 'Verifier', status: 'streaming' },
+  ])
+  </script>
+
+  <template>
+    <TxAiConversation :messages="messages" show-avatar />
+  </template>
+---
+::::
+
 ## Slots
 
 ### TxAiConversation
@@ -95,14 +95,15 @@ code: |
 | `default` | `{ message }` | 替换消息正文区域；适合工具卡片、附件或自定义渲染器。 |
 | `avatar` | `{ message }` | `showAvatar` 开启时替换头像图片或回退内容。 |
 
-## 最佳实践
+## 概述
 
-- 在宿主维护 provider 流式状态，再映射到 `status`。
-- 使用对话存储里的稳定消息 id，不要使用数组下标。
-- 助手输出建议保持 Markdown 开启；不可信 Markdown 应在数据边界做清洗或归一化。
-- 工具卡片或附件建议用 `default` 插槽，不要把自定义 HTML 塞进 `content`。
+- `messages` 渲染前会被过滤：空 `content` 会被隐藏，除非 `status` 是 `pending` 或 `streaming`。
+- `markdown` 默认是 `true`，消息正文会交给 `TxMarkdownView` 渲染。
+- `showAvatar` 开启头像列；未提供 `message.avatar` 时显示角色/名称首字母。
+- `pending` 或 `streaming` 且内容为空的消息会显示内置输入中指示器。
+- `TxAiConversation` 使用 `aria-live="polite"`，追加消息时不会抢焦点。
 
-## 审阅说明
+## 技术实现
 
 - 组件源码:`packages/tuffex/packages/components/src/ai-elements/src/TxAiConversation.vue` 确认消息过滤、polite live region、`empty` 插槽和子消息透传。
 - 组件源码:`packages/tuffex/packages/components/src/ai-elements/src/TxAiMessage.vue` 确认角色标签、状态标签、Markdown/纯文本渲染、输入中指示器以及 `default` / `avatar` 插槽。
@@ -110,5 +111,4 @@ code: |
 - **实测覆盖:** Coverage: 当前没有专用的 `ai-elements` 组件单测；`apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 会验证本页具备中英文文档，并确保 `AiElementsAiConversationDemo` 仍注册到存在的 Vue 示例。
 - 导出入口:`packages/tuffex/packages/components/src/ai-elements/index.ts` 导出可安装的 `AiConversation`、`AiMessage`、`TxAiConversation` 和 `TxAiMessage`。
 
-## Source
 <TuffDocSourceLink />

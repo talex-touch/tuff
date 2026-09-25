@@ -9,9 +9,8 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Skeleton 骨架屏
+## 用法
 
-## Demo
 ### Skeleton
 文本与头像混合占位
 :::TuffDemoWrapper{demo="SkeletonSkeletonDemo" code-lang="vue"}
@@ -23,7 +22,28 @@ code: |
   </template>
 ---
 :::
-## API
+### 卡片占位
+骨架屏配合卡片承载列表。
+:::TuffDemoWrapper{demo="SkeletonCardPlaceholderDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard>
+      <TxSkeleton :loading="true" :lines="2" />
+    </TxCard>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 骨架的宽度、高度、行数和圆角应贴近最终内容，避免 loading 阶段形成第二套布局。
+- 可配置文本、矩形、头像占位用 `TxSkeleton`；固定结构刚好匹配最终界面时再用 `TxCardSkeleton` 或 `TxListItemSkeleton`。
+- 把 `loading=false` 作为切换到真实内容的交接点，不要在不同分支里分别维护骨架和内容。
+- 不要把骨架当作灰色装饰。如果最终内容结构未知，优先使用有文案的空态或加载态。
+- 短耗时表格等待用 `TxDataTable loading`；需要保留周围结构节奏的长耗时等待再用骨架。
+
+## API 参考
 
 ### Props
 ::TuffPropsTable
@@ -80,13 +100,6 @@ rows:
 | `TxCardSkeleton` / `CardSkeleton` | 固定卡片 / feed 占位，包含 icon、title、badge 和 description 区块。 |
 | `TxListItemSkeleton` / `ListItemSkeleton` | 固定列表行占位，包含 icon、name、meta 和尾部 badge 区块。 |
 
-## 交互契约
-
-- `loading=false` 时不渲染骨架，直接渲染默认 slot。
-- `lines` 最小渲染 1 行，避免空骨架。
-- `variant="circle"` 固定使用圆形半径，忽略 `radius`。
-- `TxSkeleton` 根节点是 `aria-hidden="true"`，装饰性 shimmer 不会被播报。加载态的播报应由宿主区域负责（例如容器上的 `aria-busy` 或 polite live region），并在 `loading=false` 时切换到真实内容。
-
 ## 后台数据运维面板
 
 表格数据加载时，短耗时可用 `TxDataTable loading` 遮罩；长耗时或侧栏摘要建议用 `TxSkeleton` 保留结构节奏。
@@ -103,36 +116,19 @@ code: |
 ---
 :::
 
-## 组合示例
-### 卡片占位
-骨架屏配合卡片承载列表。
-:::TuffDemoWrapper{demo="SkeletonCardPlaceholderDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxCard>
-      <TxSkeleton :loading="true" :lines="2" />
-    </TxCard>
-  </template>
----
-:::
+## 概述
 
-## 最佳实践
+- `loading=false` 时不渲染骨架，直接渲染默认 slot。
+- `lines` 最小渲染 1 行，避免空骨架。
+- `variant="circle"` 固定使用圆形半径，忽略 `radius`。
+- `TxSkeleton` 根节点是 `aria-hidden="true"`，装饰性 shimmer 不会被播报。加载态的播报应由宿主区域负责（例如容器上的 `aria-busy` 或 polite live region），并在 `loading=false` 时切换到真实内容。
 
-- 骨架的宽度、高度、行数和圆角应贴近最终内容，避免 loading 阶段形成第二套布局。
-- 可配置文本、矩形、头像占位用 `TxSkeleton`；固定结构刚好匹配最终界面时再用 `TxCardSkeleton` 或 `TxListItemSkeleton`。
-- 把 `loading=false` 作为切换到真实内容的交接点，不要在不同分支里分别维护骨架和内容。
-- 不要把骨架当作灰色装饰。如果最终内容结构未知，优先使用有文案的空态或加载态。
-- 短耗时表格等待用 `TxDataTable loading`；需要保留周围结构节奏的长耗时等待再用骨架。
-
-## 审阅说明
+## 技术实现
 
 - 已对照 `packages/tuffex/packages/components/src/skeleton/src/types.ts`、`TxSkeleton.vue`、`TxCardSkeleton.vue`、`TxListItemSkeleton.vue` 与 `skeleton.test.ts` 核对。
 - 现有测试覆盖 CSS 变量输出、number 转 px、行数最小值收敛、circle 半径归一化、装饰性 `aria-hidden` 根节点、`loading=false` slot 交接、固定预设渲染和 install 注册。
 - API 说明：`TxSkeleton` 是可配置基础组件；`TxCardSkeleton` 和 `TxListItemSkeleton` 是固定形状预设，无 props、events 或 slots。
 - 渲染说明：`variant="circle"` 会强制 `--tx-skeleton-radius: 999px`；调用方应同时设置匹配的 `width` 和 `height` 才能得到正圆。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue`, `TxCardSkeleton.vue`, and `TxListItemSkeleton.vue`.
 - Types: `packages/tuffex/packages/components/src/skeleton/src/types.ts` exports `SkeletonProps` and `SkeletonVariant`.

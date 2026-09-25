@@ -8,21 +8,18 @@ tags: [chat, composer, input, tray]
 syncStatus: reviewed
 verified: true
 ---
-# ChatComposer 消息输入
 
 <script setup lang="ts">
 import { ref } from 'vue'
-
 const text = ref('')
 const sent = ref<string[]>([])
-
 function onSend(payload: { text: string }) {
   sent.value.unshift(payload.text)
   text.value = ''
 }
 </script>
 
-## 基础用法
+## 用法
 
 ### ChatComposer
 :::TuffDemoWrapper{demo="ChatComposerChatComposerDemo" code-lang="vue"}
@@ -80,7 +77,19 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+- 在宿主中保持 `modelValue` 受控，只在发送处理器确认接收 payload 后清空。
+- 把 `send` 视为发送意图，而不是投递成功；API 失败时宿主应保留可重试状态。
+- 请求进行中使用 `submitting` 防止重复发送。
+- 密集聊天输入里优先保留 Meta/Ctrl+Enter 发送，让 Enter 继续用于换行。
+- `attachments` 适合作为状态 chip；上传进度、删除和重试行为应放在宿主或自定义 `attachments` 插槽中。
+- 托盘内容保持一行，上下两种托盘的高度尽量一致，这样换位时外框不会伸缩。
+- 托盘里的动作用 muted 色调的 `TxModeChip`，或者同样"只变墨色"的按钮，不要再加底板。
+- 让托盘位置跟着语境走（比如"连接应用"变成"选择项目"），不要把换位当装饰动画循环播放。
+- 以前把 `.tx-chat-composer` 当卡片来写样式的宿主，要改为针对 `.tx-chat-composer__card`。
+
+## API 参考
 
 ### Props
 
@@ -133,7 +142,7 @@ code: |
 |------|--------|------|
 | `--tx-chat-composer-radius` | `18px` | 外壳和卡片共用的圆角 |
 
-## 交互契约
+## 概述
 
 - `send` payload 的 text 会先 trim。
 - 文本为空时默认阻断发送；只有 `allowEmptySend=true` 且存在附件时才允许仅附件发送。
@@ -152,19 +161,7 @@ code: |
 - `prefers-reduced-motion: reduce`，或者环境没有 Web Animations API 时，换位直接落到终态。
 - 附件和发送按钮都是原生 `<button>`。`+` 悬停时只换墨色，而且立即切换，没有底板；发送按钮保持实心底色，悬停不变。两者唯一的过渡是按下时的缩放。
 
-## 最佳实践
-
-- 在宿主中保持 `modelValue` 受控，只在发送处理器确认接收 payload 后清空。
-- 把 `send` 视为发送意图，而不是投递成功；API 失败时宿主应保留可重试状态。
-- 请求进行中使用 `submitting` 防止重复发送。
-- 密集聊天输入里优先保留 Meta/Ctrl+Enter 发送，让 Enter 继续用于换行。
-- `attachments` 适合作为状态 chip；上传进度、删除和重试行为应放在宿主或自定义 `attachments` 插槽中。
-- 托盘内容保持一行，上下两种托盘的高度尽量一致，这样换位时外框不会伸缩。
-- 托盘里的动作用 muted 色调的 `TxModeChip`，或者同样"只变墨色"的按钮，不要再加底板。
-- 让托盘位置跟着语境走（比如"连接应用"变成"选择项目"），不要把换位当装饰动画循环播放。
-- 以前把 `.tx-chat-composer` 当卡片来写样式的宿主，要改为针对 `.tx-chat-composer__card`。
-
-## 审阅说明
+## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue` 确认了：
   - 受控 textarea 更新、trim 后发送 payload、仅附件发送保护、附件按钮保护；
@@ -183,7 +180,5 @@ code: |
   - `chat-composer-tray.test.ts` 覆盖托盘位置、标签、运行时 props、textarea 复用、换位与高度动画、中途打断、焦点交接、reduced-motion、无 WAAPI 和 SSR；
   - `chat-composer-style.test.ts` 用编译后的样式守住：不过渡颜色、悬停无底板、离场托盘脱离文档流、新托盘无入场样式、reduced-motion、ring 加一级阴影、卡片不透明、字体继承。
 - 导出入口：`packages/tuffex/packages/components/src/chat/index.ts` 导出 `ChatComposer`、`TxChatComposer` 和公共 composer 类型。
-
-## Source
 
 <TuffDocSourceLink />

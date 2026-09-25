@@ -8,9 +8,8 @@ tags: [ai, selection, rewrite, floating]
 syncStatus: reviewed
 verified: true
 ---
-# SelectionActions 划词工具条
 
-## 基础用法
+## 用法
 
 ### 划词改写
 
@@ -55,40 +54,16 @@ code: |
 ---
 :::
 
-## 两层：追踪与呈现
+### 最佳实践
 
-组件本身**只负责呈现**：给它一个 `selection` 快照和一个 `state`，它负责定位、形变与动作行。选区从哪来是宿主的事。
+- 流式改写时把 `updatePosition()` 接在文本更新之后、同一帧里调用，别放 `setTimeout`。
+- `useSelectionAnchor` 的 `ignore` 一定要带上工具条本身，否则用户一点输入框，选区收拢，工具条立刻消失。
+- `keep` / `discard` 之后调 `clear()`，否则快照会一直留着，工具条不退。
+- 自定义动作给上 `busyLabel`，「润色中…」比兜底的「编辑中…」准确得多。
+- `root` 限定到正文容器，别监听整篇文档——页面上任何一次选中都会弹条。
+- 只读展示场景可以 `hidePrompt`，留下预设动作即可。
 
-`useSelectionAnchor()` 是配套的追踪层，基于 `@vueuse/core` 的 `useTextSelection`，适用于普通文档正文。contenteditable、虚拟列表、iframe 这类场景自己构造 `SelectionPayload` 喂进来即可。
-
-```ts
-import { resolveSelectionPayload, useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
-
-const { selection, clear } = useSelectionAnchor({
-  root: articleRef,        // 只追踪这棵子树里的选区
-  debounce: 120,           // selectionchange 每帧都触发，必须收敛
-  minLength: 1,            // 太短的选区不值得弹条
-  ignore: () => [barEl],   // 焦点落在工具条上不算「取消选中」
-})
-```
-
-`resolveSelectionPayload()` 是它内部那条纯函数规则，单独导出以便测试或自定义追踪。
-
-> `useSelectionAnchor` 与 `resolveSelectionPayload` 是**运行时函数，不是组件**。`TxSelectionActions` 作为全局标签可以直接写在模板里，但这两个必须像上面那样从 `@talex-touch/tuffex/selection-actions` 显式 `import`——它们不在全局组件注册表里。
-
-### useSelectionAnchor 选项
-
-| 选项 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `root` | `Element \| null` | — | 限定追踪范围，不传则监听整篇文档。 |
-| `debounce` | `number` | `120` | `selectionchange` 的收敛时间（ms）。拖选时它每帧都触发。 |
-| `minLength` | `number` | `1` | 去空白后的最小长度。 |
-| `disabled` | `boolean` | `false` | 暂停上报而不卸载。 |
-| `ignore` | `Element[]` | `[]` | 焦点落进这些元素时不视为取消选中。 |
-
-返回 `{ selection, clear }`：`selection` 是 `Ref<SelectionPayload | null>`，`clear()` 在改写落地或放弃后调用。
-
-## API
+## API 参考
 
 ### Props
 
@@ -137,7 +112,40 @@ const { selection, clear } = useSelectionAnchor({
 | `focusInput()` | 聚焦自由指令输入框。 |
 | `el` | 工具条根元素。传给 `useSelectionAnchor` 的 `ignore`。 |
 
-## 交互契约
+## 两层：追踪与呈现
+
+组件本身**只负责呈现**：给它一个 `selection` 快照和一个 `state`，它负责定位、形变与动作行。选区从哪来是宿主的事。
+
+`useSelectionAnchor()` 是配套的追踪层，基于 `@vueuse/core` 的 `useTextSelection`，适用于普通文档正文。contenteditable、虚拟列表、iframe 这类场景自己构造 `SelectionPayload` 喂进来即可。
+
+```ts
+import { resolveSelectionPayload, useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
+
+const { selection, clear } = useSelectionAnchor({
+  root: articleRef,        // 只追踪这棵子树里的选区
+  debounce: 120,           // selectionchange 每帧都触发，必须收敛
+  minLength: 1,            // 太短的选区不值得弹条
+  ignore: () => [barEl],   // 焦点落在工具条上不算「取消选中」
+})
+```
+
+`resolveSelectionPayload()` 是它内部那条纯函数规则，单独导出以便测试或自定义追踪。
+
+> `useSelectionAnchor` 与 `resolveSelectionPayload` 是**运行时函数，不是组件**。`TxSelectionActions` 作为全局标签可以直接写在模板里，但这两个必须像上面那样从 `@talex-touch/tuffex/selection-actions` 显式 `import`——它们不在全局组件注册表里。
+
+### useSelectionAnchor 选项
+
+| 选项 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `root` | `Element \| null` | — | 限定追踪范围，不传则监听整篇文档。 |
+| `debounce` | `number` | `120` | `selectionchange` 的收敛时间（ms）。拖选时它每帧都触发。 |
+| `minLength` | `number` | `1` | 去空白后的最小长度。 |
+| `disabled` | `boolean` | `false` | 暂停上报而不卸载。 |
+| `ignore` | `Element[]` | `[]` | 焦点落进这些元素时不视为取消选中。 |
+
+返回 `{ selection, clear }`：`selection` 是 `Ref<SelectionPayload | null>`，`clear()` 在改写落地或放弃后调用。
+
+## 概述
 
 - **入场是回弹，不是渐显。** 工具条浮现在用户刚划过的那行字下面，是「送到手边」的东西，所以用 `--tx-ease-spring`（`cubic-bezier(0.34, 1.56, 0.64, 1)`）从 `scale(0.88) translateY(8px)` 冲过 1 再落回。家族共用的 `bui-pop-in` 做不出这个——`--tx-ease-out-strong` 减速再狠也**不会越过终值**，只能「出现」而不是「弹出来」。这里因此走独立的 `bui-spring-in`，另外九个共用 `bui-pop-in` 的组件不受影响。减弱动效下整条动画去掉，元素停在终态（可见），不是停在 0% 帧。
 
@@ -153,16 +161,7 @@ const { selection, clear } = useSelectionAnchor({
 - **宽度形变走 WAAPI**，CSS 媒体查询管不到它，因此组件在脚本里读 `prefers-reduced-motion` 并跳过补间；状态机照常推进，只是宽度直接落位。
 - 空白 `prompt` 不会派发 `submit`。
 
-## 最佳实践
-
-- 流式改写时把 `updatePosition()` 接在文本更新之后、同一帧里调用，别放 `setTimeout`。
-- `useSelectionAnchor` 的 `ignore` 一定要带上工具条本身，否则用户一点输入框，选区收拢，工具条立刻消失。
-- `keep` / `discard` 之后调 `clear()`，否则快照会一直留着，工具条不退。
-- 自定义动作给上 `busyLabel`，「润色中…」比兜底的「编辑中…」准确得多。
-- `root` 限定到正文容器，别监听整篇文档——页面上任何一次选中都会弹条。
-- 只读展示场景可以 `hidePrompt`，留下预设动作即可。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/selection-actions/src/TxSelectionActions.vue`。
 - Composable: `packages/tuffex/packages/components/src/selection-actions/src/use-selection-anchor.ts`。
@@ -171,8 +170,6 @@ const { selection, clear } = useSelectionAnchor({
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **上游没有真实选区。** 上游的「选区」是一个写死的高亮 `<span>`，全文没有 `window.getSelection()`。追踪层（`useSelectionAnchor`、快照语义、`pointerdown` 防抢焦点）是移植时新写的契约，不是对上游的转述。
 - **与 `TxMessageActions` 的分工:** 那是消息尾部的图标工具条（复制 / 重生成 / 朗读），`role="toolbar"` + roving tabindex，没有浮层也没有输入框。本组件是浮在选区上的改写入口，两者不共用焦点模型。

@@ -9,17 +9,31 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Button 按钮
+## 安装
 
-## Usage
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxButton, TxSplitButton, TxIconButton, TxCopyButton } from '@talex-touch/tuffex/button'
+  import '@talex-touch/tuffex/button/style.css'
+  import '@talex-touch/tuffex/base.css' // 设计令牌与重置样式，全应用引入一次
+---
+:::
+
+## 用法
 
 按钮用于触发明确的动作，建议在界面里保持主次层级清晰：
 
 - 同一界面只保留一个主按钮，避免权重冲突
 - 通过 `variant` 与 `size` 传递动作层级
 - 异步操作必须展示 `loading`，避免重复触发
-
-## Variants
 
 ### Appearance
 
@@ -150,7 +164,129 @@ code: |
 ---
 :::
 
-## API
+### Split Button
+
+用于"主操作 + 更多操作"的组合按钮（例如 RUN + …）。
+
+::TuffDemoWrapper{demo="ButtonSplitDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const loading = ref(false)
+
+  async function handleRun() {
+    if (loading.value)
+      return
+    loading.value = true
+    await new Promise(resolve => setTimeout(resolve, 1200))
+    loading.value = false
+  }
+  </script>
+
+  <template>
+    <TxSplitButton
+      variant="primary"
+      size="sm"
+      icon="i-ri-play-fill"
+      :loading="loading"
+      @click="handleRun"
+    >
+      RUN
+      <template #menu="{ close }">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
+            Settings
+          </TxButton>
+          <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
+            Open Folder
+          </TxButton>
+        </div>
+      </template>
+    </TxSplitButton>
+  </template>
+---
+::
+
+### Primary + Ghost
+
+主动作 + 次动作组合时使用 `primary + ghost` 保持层级清晰。
+
+::TuffDemoWrapper{demo="ButtonPrimaryGhostDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton icon="i-ri-add-line">创建项目</TxButton>
+    <TxButton variant="ghost">次要操作</TxButton>
+  </template>
+---
+::
+
+### Icon Button
+
+纯图标动作按钮：`label` 提供可访问名称，`pressed` 承载持久切换态，`status` 提供语义状态色。
+
+::::TuffDemoWrapper{demo="IconButtonIconButtonDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const pinned = ref(false)
+  </script>
+
+  <template>
+    <div class="flex flex-wrap items-center gap-3">
+      <TxIconButton
+        icon="i-carbon-star"
+        label="置顶工作区"
+        shape="circle"
+        :pressed="pinned"
+        @click="pinned = !pinned"
+      />
+      <TxIconButton icon="i-carbon-edit" label="编辑项目" shape="square" status="info" />
+      <TxIconButton icon="i-carbon-add" label="新增项目" shape="pill" size="lg" status="success" />
+      <TxIconButton icon="i-carbon-warning" label="需要注意的操作" status="warning" />
+      <TxIconButton icon="i-carbon-trash-can" label="删除项目" status="danger" disabled />
+    </div>
+  </template>
+---
+::::
+
+### Copy Button
+
+带复制完成反馈与错误事件的剪贴板按钮。
+
+::::TuffDemoWrapper{demo="CopyButtonCopyButtonDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const installCommand = 'pnpm add @talex-touch/tuffex'
+  </script>
+
+  <template>
+    <TxCopyButton
+      :text="installCommand"
+      copy-label="复制安装命令"
+      copied-label="已复制"
+    />
+  </template>
+---
+::::
+
+### 最佳实践
+
+- 每个视图或卡片只保留一个主按钮。主动作可搭配 `ghost` 或 `secondary` 表达低优先级动作。
+- 只有在表单内才使用 `nativeType="submit"`；默认 `button` 用于避免意外提交表单。
+- 所有异步动作都应设置 `loading`，并在成功和失败路径都清理，避免按钮卡在禁用状态。
+- `circle` 优先用于纯图标动作；`block` 与 `circle` 组合时，组件会刻意保持常规文案布局。
+- 全宽提交条使用 `loadingVariant="bar"`；紧凑按钮或图标按钮继续使用 spinner loading。
+- `TxSplitButton` 的菜单动作完成选择后，应调用 slot 暴露的 `close()` 回调。
+- `TxIconButton` 除非插槽中有可见文本，否则始终设置 `label`；`pressed` 只用于持久开关，一次性动作使用普通点击按钮。
+- `TxCopyButton` 的 `copyLabel` 应明确点名复制目标；复制值很关键时处理 `error`，浏览器可能拒绝非可信手势触发的剪贴板写入。
+
+## API 参考
 
 ### Props
 
@@ -342,7 +478,7 @@ rows:
 |------|------|------|
 | `default` | `{ copied, copying }` | 自定义按钮文案或内容。 |
 
-## Types
+### 类型
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
@@ -356,120 +492,7 @@ code: |
 ---
 :::
 
-## Composition Notes
-
-### Split Button
-
-用于"主操作 + 更多操作"的组合按钮（例如 RUN + …）。
-
-::TuffDemoWrapper{demo="ButtonSplitDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const loading = ref(false)
-
-  async function handleRun() {
-    if (loading.value)
-      return
-    loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 1200))
-    loading.value = false
-  }
-  </script>
-
-  <template>
-    <TxSplitButton
-      variant="primary"
-      size="sm"
-      icon="i-ri-play-fill"
-      :loading="loading"
-      @click="handleRun"
-    >
-      RUN
-      <template #menu="{ close }">
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
-            Settings
-          </TxButton>
-          <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
-            Open Folder
-          </TxButton>
-        </div>
-      </template>
-    </TxSplitButton>
-  </template>
----
-::
-
-### Primary + Ghost
-
-主动作 + 次动作组合时使用 `primary + ghost` 保持层级清晰。
-
-::TuffDemoWrapper{demo="ButtonPrimaryGhostDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxButton icon="i-ri-add-line">创建项目</TxButton>
-    <TxButton variant="ghost">次要操作</TxButton>
-  </template>
----
-::
-
-### Icon Button
-
-纯图标动作按钮：`label` 提供可访问名称，`pressed` 承载持久切换态，`status` 提供语义状态色。
-
-::::TuffDemoWrapper{demo="IconButtonIconButtonDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const pinned = ref(false)
-  </script>
-
-  <template>
-    <div class="flex flex-wrap items-center gap-3">
-      <TxIconButton
-        icon="i-carbon-star"
-        label="置顶工作区"
-        shape="circle"
-        :pressed="pinned"
-        @click="pinned = !pinned"
-      />
-      <TxIconButton icon="i-carbon-edit" label="编辑项目" shape="square" status="info" />
-      <TxIconButton icon="i-carbon-add" label="新增项目" shape="pill" size="lg" status="success" />
-      <TxIconButton icon="i-carbon-warning" label="需要注意的操作" status="warning" />
-      <TxIconButton icon="i-carbon-trash-can" label="删除项目" status="danger" disabled />
-    </div>
-  </template>
----
-::::
-
-### Copy Button
-
-带复制完成反馈与错误事件的剪贴板按钮。
-
-::::TuffDemoWrapper{demo="CopyButtonCopyButtonDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  const installCommand = 'pnpm add @talex-touch/tuffex'
-  </script>
-
-  <template>
-    <TxCopyButton
-      :text="installCommand"
-      copy-label="复制安装命令"
-      copied-label="已复制"
-    />
-  </template>
----
-::::
-
-## 交互契约
+## 概述
 
 - `variant` 优先级高于语义 `type`；未设置 `variant` 时，`type="text"` 映射为 `ghost`，其它语义类型映射到对应视觉变体。
 - 尺寸只有 `sm`、`md`、`lg` 三档。历史拼写 `large`、`small`、`mini` 已从类型中移除，但运行时仍会归一化（`large` → `lg`，`small` / `mini` → `sm`），因为已发布版本的使用方会从 JS 传入这些字符串。
@@ -481,30 +504,24 @@ code: |
 - `TxIconButton` 的 `label` 会成为 `aria-label`，纯图标按钮必须提供；`pressed` 是 boolean 时输出 `aria-pressed` 并应用激活样式；默认插槽接收 `{ hover, pressed }`。
 - `TxCopyButton` 在 `disabled` 或复制进行中忽略点击；只有剪贴板写入成功后才触发 `copy`，两种剪贴板策略都失败时触发 `error`；成功后 `copiedLabel` 显示 `timeout` 毫秒后恢复。
 
-## 最佳实践
+## 技术实现
 
-- 每个视图或卡片只保留一个主按钮。主动作可搭配 `ghost` 或 `secondary` 表达低优先级动作。
-- 只有在表单内才使用 `nativeType="submit"`；默认 `button` 用于避免意外提交表单。
-- 所有异步动作都应设置 `loading`，并在成功和失败路径都清理，避免按钮卡在禁用状态。
-- `circle` 优先用于纯图标动作；`block` 与 `circle` 组合时，组件会刻意保持常规文案布局。
-- 全宽提交条使用 `loadingVariant="bar"`；紧凑按钮或图标按钮继续使用 spinner loading。
-- `TxSplitButton` 的菜单动作完成选择后，应调用 slot 暴露的 `close()` 回调。
-- `TxIconButton` 除非插槽中有可见文本，否则始终设置 `label`；`pressed` 只用于持久开关，一次性动作使用普通点击按钮。
-- `TxCopyButton` 的 `copyLabel` 应明确点名复制目标；复制值很关键时处理 `error`，浏览器可能拒绝非可信手势触发的剪贴板写入。
+- 源码：`packages/tuffex/packages/components/src/button/src/{button,split-button,icon-button,copy-button}.vue`，以及 `types.ts`、`split-button.ts`。
+- 覆盖：`packages/tuffex/packages/components/src/button/__tests__/` 下的 `button.test.ts`、`split-button.test.ts`、`icon-button.test.ts`、`copy-button.test.ts` —— 变体与 `type` 优先级、三档尺寸与已发布旧写法的运行时归位、`disabled`/`loading` 抑制 `click`、加载条、图标、形状、无边框、原生 type、剪贴板成功与失败、缺失可访问名称的告警。
+- 非 block 按钮的加载宽度变化走 size FLIP 过渡；`prefers-reduced-motion: reduce` 下跳过振感抖动。
 
+<TuffDocSourceLink label="View source" />
 
-## 审阅说明
+## 使用场景
 
-- 已核对 `packages/tuffex/packages/components/src/button/src/button.vue`、`split-button.vue`、`types.ts`、`split-button.ts` 与两个 button 测试文件。
-- **实测覆盖:** `button.test.ts` 覆盖文案渲染、语义 type 映射、variant 优先级、三档尺寸及已发布拼写的运行时归一化与未知值兜底、disabled/loading 点击阻断、loading bar、图标、形态 class、无边框模式与原生 type；`split-button.test.ts` 覆盖菜单渲染、主按钮点击、disabled/loading 阻断与 `menuOpenChange`。
-- **实测覆盖（IconButton / CopyButton）:** `packages/tuffex/packages/components/src/button/__tests__/icon-button.test.ts` 覆盖可访问名称告警与语义状态 class；`copy-button.test.ts` 覆盖剪贴板成功、已复制视觉状态、禁用无操作和错误派发。
-- 可访问性说明：原生 button 已处理基础键盘激活。图标按钮或 `circle` 按钮在图标含义不自明时，应通过外层文案或 attrs 提供可访问名称。
+- 页面与卡片动作，一个视图只保留一个主按钮；主按钮与 `ghost` / `secondary` 搭配。
+- 表单提交（`nativeType="submit"`）与抽屉底部操作（`block`）。
+- 异步动作：展示 `loading`，完成前保持不可点。
+- 表格行与工具栏（`size="sm"`）、纯图标操作（`circle` + `label`）。
+- 一个主操作带一组变体（`TxSplitButton`）、复制到剪贴板（`TxCopyButton`）。
 
-## Source
+## 无障碍
 
-- Component source: `packages/tuffex/packages/components/src/button/src/button.vue` and `packages/tuffex/packages/components/src/button/src/split-button.vue`.
-- Types: `packages/tuffex/packages/components/src/button/src/types.ts` and `packages/tuffex/packages/components/src/button/src/split-button.ts`.
-- IconButton / CopyButton：`packages/tuffex/packages/components/src/button/src/icon-button.vue`、`copy-button.vue` 与类型文件 `icon-button.ts`；`button/index.ts` 导出可安装的 `TxIconButton`、`TxCopyButton` 及实例类型。
-- Coverage: `packages/tuffex/packages/components/src/button/__tests__/button.test.ts` verifies variants, semantic type mapping, loading/disabled click suppression, icons, shapes, borderless mode, native type, and loading bar behavior. `split-button.test.ts` verifies primary click, disabled suppression, loading state, menu rendering, and `menuOpenChange`.
-
-<TuffDocSourceLink />
+- 原生 `<button>` 提供键盘激活；`disabled` 与 `loading` 写入原生状态并抑制 `click`。
+- 纯图标按钮必须有可访问名称：`TxIconButton` 用 `label`，`TxButton` 由外部标记或 attrs 提供。
+- `pressed` 转发到 `aria-pressed`；`TxIconButton` 默认插槽收到 `{ hover, pressed }` 用于可见状态。

@@ -8,9 +8,8 @@ tags: [popover, overlay, floating, gsap, animation]
 syncStatus: reviewed
 verified: true
 ---
-# BaseAnchor
 
-## Basic Usage
+## Usage
 
 ### BaseAnchor
 :::TuffDemoWrapper{demo="BaseAnchorBasicDemo" code-lang="vue"}
@@ -319,7 +318,13 @@ code: |
 ---
 :::
 
-## API
+### Best Practices
+
+- Reach for `TxPopover`, `TxDropdownMenu`, or `TxContextMenu` first. Use `TxBaseAnchor` when you are building a new anchored primitive or need virtual-reference positioning.
+- Keep floating panels lightweight. Move multi-step forms, destructive confirmations, or full-screen flows to Drawer/Dialog components.
+- For coordinate-anchored menus, pass `virtualReference` and call `updatePosition()` after pointer or canvas transforms change.
+
+## API Reference
 
 ### TxBaseAnchor Props
 
@@ -407,7 +412,7 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 | `toggle` | - | Programmatically toggle. |
 | `updatePosition` | - | Manually refresh Floating UI placement. |
 
-## Interaction Contract
+## Overview
 
 - `modelValue` may be controlled or uncontrolled. Reference clicks emit `update:modelValue`, plus `open` or `close` when the state changes.
 - `disabled` blocks opening and closes an already open uncontrolled anchor.
@@ -427,14 +432,7 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 - `drip` / `bead` needs a measurable panel height; `unlimitedHeight` (or `maxHeight <= 0`) falls back to the instant show/hide path.
 - Under `prefers-reduced-motion: reduce`, every animating type snaps to its end state instead of running: the GSAP-driven `transfer` / `boom` / `opacity` paths finish immediately, and `drip` / `bead` snaps through its prepare step (`none` is already instant).
 
-## Best Practices
-
-- Reach for `TxPopover`, `TxDropdownMenu`, or `TxContextMenu` first. Use `TxBaseAnchor` when you are building a new anchored primitive or need virtual-reference positioning.
-- Keep floating panels lightweight. Move multi-step forms, destructive confirmations, or full-screen flows to Drawer/Dialog components.
-- For coordinate-anchored menus, pass `virtualReference` and call `updatePosition()` after pointer or canvas transforms change.
-
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`, `base-anchor-motion.ts`, `types.ts`, and `base-anchor.test.ts`.
 - Existing tests cover uncontrolled toggling, controlled outside/Escape close paths, disabled blocking, close/toggle switches, floating attrs and reference classes, animation variants with legacy duration/ease fallbacks, and surface-motion adaptation strategies.
@@ -444,8 +442,6 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 - `drip` / `bead` coverage lives in `base-anchor-liquid.test.ts` (cubic-bezier solver, spring rejection, spec geometry at p=0 / 0.45 / 1, height-edge independence, item reveal) and in `base-anchor.test.ts` (single merged goo filter, erode-derived outline ring, shadow twin outside the filter, arrow/outline/card suppression, horizontal degradation, no gsap path).
 - `drip` / `bead` is driven by a rAF loop rather than GSAP: the motion is specified as two CSS cubic-beziers, and every frame derives SVG geometry, the shadow twin, and per-item opacity from one progress scalar.
 - Browser support: `liquid` uses `filter: url(#…)`, which Safari and Firefox both support. Only `backdrop-filter: url(#…)` is restricted, and `liquid` does not use it — no fallback ladder is needed.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`.
 - Type contracts: `packages/tuffex/packages/components/src/base-anchor/src/types.ts` exports `BaseAnchorProps`, `BaseAnchorAnimationOptions`, and virtual-reference types.

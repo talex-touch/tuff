@@ -8,9 +8,8 @@ tags: [ai, composer, prompt, mention, command]
 syncStatus: reviewed
 verified: true
 ---
-# PromptBar
 
-## Basic Usage
+## Usage
 
 ### The Full Bar
 
@@ -60,27 +59,16 @@ code: |
 ---
 :::
 
-## Using the Token Menu on Its Own
+### Best Practices
 
-Parsing `@` / `/` and running the menu is pure state, exported separately as `useTokenMenu` — for adding mentions to your own input without adopting the whole bar. It touches no DOM and performs no side effects.
+- Attachments are controlled: after `send` the bar clears only its text, so clear the attachment array on your side.
+- Dictation is presentation only. Keep recognition in the host and put the transcript back through `insert()` or the `v-model`.
+- Put brand glyphs through the `#source-icon` slot rather than into the component — third-party marks are product assets, not component assets.
+- Menus are positioned against the bar itself, so an ancestor with `overflow: hidden` will clip them and they do not flip near the viewport edge. Keep the bar outside clipping scroll containers.
+- When you want the block composer (multi-line draft with a button row beneath) and no menus, use `TxChatComposer`. The two coexist; neither replaces the other.
+- Override the text props for non-English surfaces; every default is English.
 
-```ts
-import { parseToken, useTokenMenu } from '@talex-touch/tuffex/prompt-bar'
-
-const draft = ref('')
-const { menu, rows, activeIndex, engaged, move, engage, dismiss, insert } = useTokenMenu({
-  draft,
-  sources,
-  commands,
-})
-
-// Picking a row: replace the pending token, get the new draft back
-draft.value = insert(`@${row.name}`)
-```
-
-The two matching strategies differ on purpose: sources match as a **substring** of the name, commands match as a **prefix** once the leading slash is stripped, so `/comp` narrows to `/compare`. `parseToken` is exported too; it only recognises a trailing token at a word boundary, so `you@host` is never read as a mention.
-
-## API
+## API Reference
 
 ### Props
 
@@ -143,7 +131,27 @@ Every string is a prop with an English default and can be overridden one by one:
 | `closeMenus` | `() => void` | Closes both the + menu and the model menu. |
 | `menuOpen` | `boolean` | Whether any menu is open. The instance proxy unwraps the ref, so this reads as a boolean. |
 
-## Interaction Contract
+## Using the Token Menu on Its Own
+
+Parsing `@` / `/` and running the menu is pure state, exported separately as `useTokenMenu` — for adding mentions to your own input without adopting the whole bar. It touches no DOM and performs no side effects.
+
+```ts
+import { parseToken, useTokenMenu } from '@talex-touch/tuffex/prompt-bar'
+
+const draft = ref('')
+const { menu, rows, activeIndex, engaged, move, engage, dismiss, insert } = useTokenMenu({
+  draft,
+  sources,
+  commands,
+})
+
+// Picking a row: replace the pending token, get the new draft back
+draft.value = insert(`@${row.name}`)
+```
+
+The two matching strategies differ on purpose: sources match as a **substring** of the name, commands match as a **prefix** once the leading slash is stripped, so `/comp` narrows to `/compare`. `parseToken` is exported too; it only recognises a trailing token at a word boundary, so `you@host` is never read as a mention.
+
+## Overview
 
 - **Composition input comes first.** While an IME is composing, Enter only confirms the candidate — it neither sends nor picks a menu row, guarded three ways by `isComposing`, `keyCode === 229` and `compositionstart` / `compositionend`.
 - The menus follow the combobox pattern: the textarea carries `role="combobox"`, `aria-autocomplete="list"`, `aria-controls` and `aria-activedescendant`, the menu is a `listbox` and each row an `option`. **With nothing to offer it does not claim to be a combobox** and stays a plain multi-line text box.
@@ -155,16 +163,7 @@ Every string is a prop with an English default and can be overridden one by one:
 - The send button fills with ink rather than the theme accent. That is this family's signature; the accent is spent on live dictation and the Connect affordance instead.
 - Under reduced motion the pop and the press both stop, but the three dictation bars freeze rather than vanish — they are the only visible sign that the mic is live.
 
-## Best Practices
-
-- Attachments are controlled: after `send` the bar clears only its text, so clear the attachment array on your side.
-- Dictation is presentation only. Keep recognition in the host and put the transcript back through `insert()` or the `v-model`.
-- Put brand glyphs through the `#source-icon` slot rather than into the component — third-party marks are product assets, not component assets.
-- Menus are positioned against the bar itself, so an ancestor with `overflow: hidden` will clip them and they do not flip near the viewport edge. Keep the bar outside clipping scroll containers.
-- When you want the block composer (multi-line draft with a button row beneath) and no menus, use `TxChatComposer`. The two coexist; neither replaces the other.
-- Override the text props for non-English surfaces; every default is English.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/prompt-bar/src/TxPromptBar.vue`.
 - Types: `packages/tuffex/packages/components/src/prompt-bar/src/types.ts`.
@@ -173,8 +172,6 @@ Every string is a prop with an English default and can be overridden one by one:
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Division of labour with `TxChatComposer`:** that one is the block composer (multi-line input, an icon action row beneath, an optional context tray) and its contract is settled. This is the compact bar with controls inlined into the input, plus `@` / `/` menus, models and dictation. Parallel components rather than one variant-heavy component, which is how this repo already splits `input` / `flat-input` and `select` / `flat-select`.
 - **Not ported:** the upstream WebGL rainbow sweep that fires when the flagship model is chosen. It depends on React-only `glimm`, and a shader pipeline for a one-shot celebration is not a trade worth making.

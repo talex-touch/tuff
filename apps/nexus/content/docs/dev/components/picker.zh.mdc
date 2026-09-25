@@ -8,9 +8,8 @@ tags: [picker, form, wheel, selection]
 syncStatus: reviewed
 verified: true
 ---
-# Picker 滚轮选择
 
-## 基础用法
+## 用法
 
 ### 弹层、内联与紧凑行高
 
@@ -124,22 +123,16 @@ code: |
 ---
 :::
 
-## 交互契约
+### 最佳实践
 
-- 每一列是组件自己转动的滚筒，不是原生滚动容器。指针、滚轮、点击与键盘都由列接管，整列的位置只有一个数：以行为单位的偏移，转动过程中是小数。
-- 行都叠放在中心线上，再从那里放到筒面：按与偏移的距离做 `rotateX`，然后沿半径 `itemHeight / 2 / tan(9°)` 推出，使一行的弧长等于它的高度。因为行起始就在中心而不是沿列排布，旋转不必再去抵消排布偏移。
-- 行不参与命中测试（`pointer-events: none`），列改为用 `asin(dy / radius)` 从几何反解出点位对应的行。被变换的行其命中区域会跟着移动，放大的中心行否则会盖住相邻行、吞掉本该属于它们的点击。
-- 拖拽跟手，抬手后依据速度继续滑行，并以三次缓出曲线停在最近的可用行上——起步快、收尾慢。滚轮直接转动列，停止 120ms 后吸附。
-- 只绘制四分之一圈以内的行，默认步进下是十一行，与列的长度无关。每行都带 `aria-setsize` 与 `aria-posinset`，因此这个窗口对读屏是透明的。
+- 让 `modelValue` 保持为与 `columns` 顺序一致的稳定数组；稀疏数组会被归一化，但显式值更利于表单状态审计。
+- 当列会重新排序或条件渲染时提供 `column.key`，避免 Vue 把旧滚动容器复用给不同数据。
+- 保持 option `value` 为稳定原始值；展示名称放在 `label`，不要把文案当作持久化值。
+- 设置页中需要常驻展示时使用内联模式（`popup=false`）；移动端或短任务型选择使用弹层模式。
+- 不要把 disabled 的选项值提交到业务表单。组件只会在归一化或滚动恢复时跳过禁用项。
+- 设计稿中尽量使用奇数 `visibleItemCount`；运行时会把偶数向上修正，截图可能多出一行。
 
-- `modelValue` 始终是数组，每一列对应一个 `string | number` 值。
-- 缺失、非法或非数组值会归一化到每列第一个可用选项。
-- 禁用选项不能被选中，并且会在归一化回退时被跳过。
-- 弹层模式由 `visible` / `v-model:visible` 控制；`popup` 为 `false` 时直接内联渲染。
-- `visibleItemCount` 会向上修正为奇数，且不小于 `3`；`itemHeight` 最小会限制为 `24`。
-- 滚动选择会触发 `update:modelValue` 和 `change`；点击确认会用当前归一化值触发 `confirm`，随后关闭弹层。
-
-## API
+## API 参考
 
 ### Props
 
@@ -204,20 +197,25 @@ type PickerValue = Array<string | number>
 
 `TxPicker` 不提供插槽。选项可见文本使用 `columns[].options[].label`，工具栏文案使用 `title` / `confirmText` / `cancelText`。
 
-## 最佳实践
+## 概述
 
-- 让 `modelValue` 保持为与 `columns` 顺序一致的稳定数组；稀疏数组会被归一化，但显式值更利于表单状态审计。
-- 当列会重新排序或条件渲染时提供 `column.key`，避免 Vue 把旧滚动容器复用给不同数据。
-- 保持 option `value` 为稳定原始值；展示名称放在 `label`，不要把文案当作持久化值。
-- 设置页中需要常驻展示时使用内联模式（`popup=false`）；移动端或短任务型选择使用弹层模式。
-- 不要把 disabled 的选项值提交到业务表单。组件只会在归一化或滚动恢复时跳过禁用项。
-- 设计稿中尽量使用奇数 `visibleItemCount`；运行时会把偶数向上修正，截图可能多出一行。
+- 每一列是组件自己转动的滚筒，不是原生滚动容器。指针、滚轮、点击与键盘都由列接管，整列的位置只有一个数：以行为单位的偏移，转动过程中是小数。
+- 行都叠放在中心线上，再从那里放到筒面：按与偏移的距离做 `rotateX`，然后沿半径 `itemHeight / 2 / tan(9°)` 推出，使一行的弧长等于它的高度。因为行起始就在中心而不是沿列排布，旋转不必再去抵消排布偏移。
+- 行不参与命中测试（`pointer-events: none`），列改为用 `asin(dy / radius)` 从几何反解出点位对应的行。被变换的行其命中区域会跟着移动，放大的中心行否则会盖住相邻行、吞掉本该属于它们的点击。
+- 拖拽跟手，抬手后依据速度继续滑行，并以三次缓出曲线停在最近的可用行上——起步快、收尾慢。滚轮直接转动列，停止 120ms 后吸附。
+- 只绘制四分之一圈以内的行，默认步进下是十一行，与列的长度无关。每行都带 `aria-setsize` 与 `aria-posinset`，因此这个窗口对读屏是透明的。
 
-## 审阅说明
+- `modelValue` 始终是数组，每一列对应一个 `string | number` 值。
+- 缺失、非法或非数组值会归一化到每列第一个可用选项。
+- 禁用选项不能被选中，并且会在归一化回退时被跳过。
+- 弹层模式由 `visible` / `v-model:visible` 控制；`popup` 为 `false` 时直接内联渲染。
+- `visibleItemCount` 会向上修正为奇数，且不小于 `3`；`itemHeight` 最小会限制为 `24`。
+- 滚动选择会触发 `update:modelValue` 和 `change`；点击确认会用当前归一化值触发 `confirm`，随后关闭弹层。
+
+## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/picker/src/TxPicker.vue` 定义弹层/内联两条渲染路径、值归一化回退、滚动吸附、`open` / `close` / `toggle` 暴露方法和行高限制。
 - 类型契约：`packages/tuffex/packages/components/src/picker/src/types.ts` 导出 `PickerValue`、`PickerColumn`、`PickerOption`、`PickerProps` 与 `PickerEmits`。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/picker/__tests__/picker.test.ts` 覆盖值归一化、禁用项回退、工具栏 confirm/cancel 事件、禁用 toolbar/选项和布局变量限制。
 
-## Source
 <TuffDocSourceLink />

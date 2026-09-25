@@ -8,9 +8,8 @@ tags: [blur, edge-fade, overlay, backdrop-filter]
 syncStatus: reviewed
 verified: true
 ---
-# GradualBlur
 
-## Basic Usage
+## Usage
 
 ### GradualBlur
 :::TuffDemoWrapper{demo="GradualBlurGradualBlurDemo" code-lang="vue"}
@@ -314,7 +313,15 @@ code: |
 ---
 :::
 
-## API
+### Best Practices
+
+- Keep the parent `position: relative` and `overflow: hidden` for card-local fades; use `target="page"` only for fixed viewport chrome.
+- Increase `divCount` for smoother fades, then tune `strength`; very high layer counts multiply backdrop-filter work.
+- Prefer presets for common headers/footers and override one or two props instead of repeating the whole parameter matrix.
+- Do not put interactive controls under the overlay unless `hoverIntensity` is required; by default the overlay is pointer-transparent.
+- Check contrast in both themes because `backdrop-filter` output depends on the content behind the overlay.
+
+## API Reference
 
 ### Props
 
@@ -357,7 +364,7 @@ code: |
 
 No Vue events are emitted. Use `onAnimationComplete` when `animated="scroll"` needs a completion hook.
 
-## Interaction Contract
+## Overview
 
 - Presets are merged first; props explicitly present on the component override preset values.
 - `position` controls both edge anchoring and mask-gradient direction. Vertical edges use `height`; horizontal edges use `width` or fall back to `height`.
@@ -368,20 +375,10 @@ No Vue events are emitted. Use `onAnimationComplete` when `animated="scroll"` ne
 - `responsive` installs a debounced resize listener and applies mobile/tablet/desktop dimensions by viewport width (`<=480`, `<=768`, `<=1024`).
 - `style` is merged after generated positioning styles, so parent pages can deliberately override coordinates.
 
-## Best Practices
-
-- Keep the parent `position: relative` and `overflow: hidden` for card-local fades; use `target="page"` only for fixed viewport chrome.
-- Increase `divCount` for smoother fades, then tune `strength`; very high layer counts multiply backdrop-filter work.
-- Prefer presets for common headers/footers and override one or two props instead of repeating the whole parameter matrix.
-- Do not put interactive controls under the overlay unless `hoverIntensity` is required; by default the overlay is pointer-transparent.
-- Check contrast in both themes because `backdrop-filter` output depends on the content behind the overlay.
-
-## Review Notes
+## Technologies
 
 - **Accessibility note:** The blur root is decorative and pointer-transparent by default. Enabling `hoverIntensity` turns on pointer events, so keep it away from focusable controls unless the hover boost is essential.
 - **Verified coverage:** `gradual-blur.test.ts` verifies configured layer rendering, slot content, page-target positioning and z-index offset, GPU styles, preset merging with `divCount` clamping, hover-strength changes, and responsive dimensions.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/gradual-blur/src/TxGradualBlur.vue`.
 - Types: `packages/tuffex/packages/components/src/gradual-blur/src/types.ts` exports `GradualBlurProps` and the position, curve, animated, and target unions.

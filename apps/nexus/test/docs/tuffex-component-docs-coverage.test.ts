@@ -138,8 +138,12 @@ describe('TuffEx component docs coverage', () => {
             present: Array.from(source.matchAll(tuffDemoWrapperPattern)).length > 0,
           },
           {
-            element: 'a level-two ## API section',
-            present: /^## API\s*$/m.test(source),
+            element: locale === 'en' ? 'a level-two ## Usage section' : 'a level-two ## 用法 section',
+            present: /^##\s+(?:Usage|用法)\s*$/m.test(source),
+          },
+          {
+            element: locale === 'en' ? 'a ## API Reference section' : 'a ## API 参考 section',
+            present: /^##\s+(?:API Reference|API 参考)\s*$/m.test(source),
           },
           {
             element: 'a Props or 属性 heading',

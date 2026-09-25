@@ -8,9 +8,8 @@ tags: [image, gallery, preview]
 syncStatus: reviewed
 verified: true
 ---
-# ImageGallery
 
-## Basic Usage
+## Usage
 
 ::::TuffDemoWrapper{demo="ImageGalleryImageGalleryDemo" code-lang="vue"}
 ---
@@ -27,8 +26,6 @@ code: |
   </template>
 ---
 ::::
-
-## Composition Examples
 
 ### Track Preview Opens
 
@@ -54,20 +51,16 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 
 `startIndex` is clamped whenever it changes. It chooses the initial/current preview index but does not open the modal by itself.
 
-## Interaction Contract
+### Best Practices
 
-- The thumbnail grid renders one native `button type="button"` for each item.
-- Thumbnail buttons use `aria-label="Open {label} preview"`, where `label` is `item.name` or a generated `Image N` fallback.
-- Thumbnail and preview image `alt` text use `item.name`; unnamed images intentionally use empty alt text.
-- Empty `items` render no thumbnail buttons and cannot emit `open`.
-- Clicking a thumbnail clamps the clicked index, opens the modal, and emits `open` with `{ index, item }`.
-- `startIndex` changes are clamped to `0..items.length - 1`.
-- When `items` becomes empty, the preview closes and the index resets to `0`.
-- Preview navigation is bounded: previous is disabled at the first image, next is disabled at the last image.
-- The modal title is the current image name, falling back to `Preview`.
-- Close behavior is delegated to `TxModal`; closing emits `close`.
+- Use stable `id` values; do not use array indexes for long-lived gallery data.
+- Provide `name` for informative images so button labels, alt text, and modal titles are meaningful.
+- Keep the list size modest. This component renders all thumbnails; it is not virtualized.
+- Do not pass untrusted remote image URLs without normalizing or proxying them at your application boundary.
+- Use `startIndex` for selected preview context, not as a visibility control.
+- Use `@open` for analytics or detail-panel coordination; do not mutate `items` synchronously in a way that invalidates the opened image.
 
-## API
+## API Reference
 
 ### Props
 
@@ -99,22 +92,24 @@ No public slots are exposed.
 
 No public instance methods are exposed.
 
-## Best Practices
+## Overview
 
-- Use stable `id` values; do not use array indexes for long-lived gallery data.
-- Provide `name` for informative images so button labels, alt text, and modal titles are meaningful.
-- Keep the list size modest. This component renders all thumbnails; it is not virtualized.
-- Do not pass untrusted remote image URLs without normalizing or proxying them at your application boundary.
-- Use `startIndex` for selected preview context, not as a visibility control.
-- Use `@open` for analytics or detail-panel coordination; do not mutate `items` synchronously in a way that invalidates the opened image.
+- The thumbnail grid renders one native `button type="button"` for each item.
+- Thumbnail buttons use `aria-label="Open {label} preview"`, where `label` is `item.name` or a generated `Image N` fallback.
+- Thumbnail and preview image `alt` text use `item.name`; unnamed images intentionally use empty alt text.
+- Empty `items` render no thumbnail buttons and cannot emit `open`.
+- Clicking a thumbnail clamps the clicked index, opens the modal, and emits `open` with `{ index, item }`.
+- `startIndex` changes are clamped to `0..items.length - 1`.
+- When `items` becomes empty, the preview closes and the index resets to `0`.
+- Preview navigation is bounded: previous is disabled at the first image, next is disabled at the last image.
+- The modal title is the current image name, falling back to `Preview`.
+- Close behavior is delegated to `TxModal`; closing emits `close`.
 
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/image-gallery/src/types.ts`, `TxImageGallery.vue`, and `image-gallery.test.ts`.
 - `startIndex` is clamped and updates the current preview index, but it never opens the modal by itself.
 - Unnamed images intentionally use empty image alt text while thumbnail buttons still receive generated open labels.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/image-gallery/src/TxImageGallery.vue`.
 - Types: `packages/tuffex/packages/components/src/image-gallery/src/types.ts`.

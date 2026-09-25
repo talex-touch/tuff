@@ -6,7 +6,7 @@
  *
  *   - `pnpm -r --filter "./plugins/*"` runs eslint inside each plugin *workspace*, which
  *     requires the directory to have a package.json.
- *   - a hand-maintained brace list names the package.json-less directories for the root pass.
+ *   - the lint runner's explicit brace glob names package.json-less directories for the root pass.
  *
  * touch-dictation was in neither (#562), so `pnpm lint` reported clean while the Prelude the
  * app actually loads went unchecked. The omission is not interesting on its own — the list is
@@ -17,6 +17,7 @@
  * nothing looks exactly like full coverage.
  */
 
+import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -29,8 +30,8 @@ const PLUGINS_DIR = path.join(ROOT, 'plugins')
 const EXEMPT = {}
 
 /**
- * The brace list inside the root `lint` script: `plugins/{a,b,c}/**`.
- * Returns null when the script no longer has that shape, which is itself worth failing on —
+ * The brace list from the lint execution plan: `plugins/{a,b,c}/**`.
+ * Returns null when the plan no longer has that shape, which is itself worth failing on —
  * silently reading zero names would report every plugin as uncovered.
  */
 export function parseBraceList(lintScript) {
@@ -86,7 +87,21 @@ function listPluginDirs() {
 
 function readLintScript() {
   const manifest = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
-  return manifest.scripts?.lint
+  if (manifest.scripts?.lint !== 'node scripts/lint.mjs')
+    return null
+
+  const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/lint.mjs'), '--print-plan'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  })
+  if (result.status !== 0)
+    throw new Error(`Unable to read the lint execution plan: ${result.stderr || result.error?.message || result.status}`)
+
+  const plan = JSON.parse(result.stdout)
+  if (!Array.isArray(plan) || plan.some(command => !Array.isArray(command) || command.some(arg => typeof arg !== 'string')))
+    throw new Error('The lint execution plan must be an array of command argument arrays.')
+
+  return plan.map(command => command.join(' ')).join(' && ')
 }
 
 /** Plugins that own an eslint.config.* — the ones a per-plugin lint run is meaningful for. */
@@ -200,8 +215,8 @@ function evaluate() {
 
   if (braceList === null) {
     problems.push(
-      'The root `lint` script no longer contains a `plugins/{…}` brace list. If the plugin '
-      + 'lint strategy changed, update this check; do not leave it reading nothing.',
+      'The root `lint` script must invoke `node scripts/lint.mjs`, whose --print-plan output '
+      + 'must contain the explicit `plugins/{…}` glob; do not leave this check reading nothing.',
     )
     return { problems, braceList: [], pluginDirs: [] }
   }
@@ -211,7 +226,7 @@ function evaluate() {
 
   for (const dir of findUncovered(pluginDirs, braceList, hasPackageJson)) {
     problems.push(
-      `plugins/${dir} has no package.json and is not in the root lint script's brace list, `
+      `plugins/${dir} has no package.json and is not in the lint execution plan's brace list, `
       + `so \`pnpm lint\` never sees it. Add it to the list, or give the plugin a package.json.`,
     )
   }

@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend hard rules and pre-development checklist"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Shared working tree with other sessions: staging and commit hygiene"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useSendChoreography and the new send-split driver are composables with rAF lifecycles"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "HomePage template additions and reduced-motion behaviour"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "TxConversationStream perf change needs a Technologies line and a dist rebuild"}
+{"file": ".trellis/tasks/08-09-send-flight-layering/prd.md", "reason": "Layer scale contract: a flying message stays under the composer"}
+{"file": ".trellis/tasks/09-25-send-split-fusion/research/stream-rerender-hotspot.md", "reason": "Why scroll frames re-render every visible row and the stable-range fix"}

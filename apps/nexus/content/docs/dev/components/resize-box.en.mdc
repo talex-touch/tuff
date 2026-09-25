@@ -8,11 +8,10 @@ tags: [resize, layout, animation]
 syncStatus: reviewed
 verified: true
 ---
-# ResizeBox
 
 > `TxResizeBox` does not measure slot content and does not use `ResizeObserver`. Use [`TxAutoSizer`](./auto-sizer.en.mdc) when content changes should be measured automatically.
 
-## Basic Usage
+## Usage
 
 ### Explicit Size Targets
 
@@ -98,7 +97,17 @@ code: |
 ---
 :::
 
-## API
+### Best Practices
+
+- Use `TxResizeBox` when compact and expanded width/height targets are already known by the parent.
+- Use `TxAutoSizer` when images, async rendering, text wrapping, or other content-driven changes must be measured automatically.
+- Set only the axis you own; leaving `width` or `height` unset preserves intrinsic sizing for that axis.
+- Prefer non-negative finite numbers or valid CSS length strings. Do not rely on the browser rejecting an invalid target as application validation.
+- Keep `clip=true` for panels whose inner content is larger than the compact target. Disable clipping only when overflow is intentional and the surrounding layout can contain it.
+- Treat `resize-start` and `resize-end` as lifecycle notifications, not as a source of size values; the props remain the source of truth.
+- Use CSS length strings for responsive targets such as `min(420px, 100%)` so explicit sizing does not force narrow-screen overflow.
+
+## API Reference
 
 ### Props
 
@@ -132,7 +141,7 @@ code: |
 | `rootEl` | `HTMLElement \| null` | Current root element. Vue unwraps the exposed internal ref on the public component instance. |
 | `animating` | `boolean` | Whether an enabled explicit-size transition lifecycle is active. Vue unwraps the exposed internal ref on the public component instance. |
 
-## Interaction Contract
+## Overview
 
 - The root is rendered through `<component :is="as">`; forwarded attrs are applied to that root, while caller `class` and `style` are merged with component classes and size styles.
 - Finite numeric targets are converted to px. Trimmed non-empty strings are preserved, so `%`, `rem`, `calc()`, and `min()` targets can be used directly.
@@ -145,23 +154,11 @@ code: |
 - The reduced-motion media query shortens the CSS transition duration to `0.01ms` while retaining lifecycle settlement.
 - Slot-content changes alone do not start a resize. There is no automatic content measurement, `ResizeObserver`, or `v-model` contract.
 
-## Best Practices
-
-- Use `TxResizeBox` when compact and expanded width/height targets are already known by the parent.
-- Use `TxAutoSizer` when images, async rendering, text wrapping, or other content-driven changes must be measured automatically.
-- Set only the axis you own; leaving `width` or `height` unset preserves intrinsic sizing for that axis.
-- Prefer non-negative finite numbers or valid CSS length strings. Do not rely on the browser rejecting an invalid target as application validation.
-- Keep `clip=true` for panels whose inner content is larger than the compact target. Disable clipping only when overflow is intentional and the surrounding layout can contain it.
-- Treat `resize-start` and `resize-end` as lifecycle notifications, not as a source of size values; the props remain the source of truth.
-- Use CSS length strings for responsive targets such as `min(420px, 100%)` so explicit sizing does not force narrow-screen overflow.
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/resize-box/src/types.ts`, `TxResizeBox.vue`, and `resize-box.test.ts`.
 - The component animates explicit targets only; content observation belongs to `TxAutoSizer`.
 - Event payloads are empty, and no `v-model` or imperative resize method is exposed.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/resize-box/src/TxResizeBox.vue`.
 - Types: `packages/tuffex/packages/components/src/resize-box/src/types.ts`.

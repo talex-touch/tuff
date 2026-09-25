@@ -8,9 +8,8 @@ tags: [markdown, editor, wysiwyg]
 syncStatus: reviewed
 verified: true
 ---
-# MarkdownEditor
 
-## Basic Usage
+## Usage
 
 ### MarkdownEditor
 ::::TuffDemoWrapper{demo="MarkdownEditorMarkdownEditorDemo" code-lang="vue"}
@@ -32,18 +31,14 @@ code: |
 ---
 ::::
 
-## Interaction Contract
+### Best Practices
 
-- `mode` is controlled when provided; otherwise `defaultMode` initializes internal mode.
-- `update:mode` and `mode-change` emit whenever the user changes modes.
-- `sanitize` defaults to `true`; disable it only for already trusted content.
-- Source mode writes directly to Markdown. WYSIWYG mode serializes edited DOM back to Markdown on input.
-- Toolbar actions are shared across modes, but preview mode disables editing actions.
-- Toolbar and mode buttons draw Carbon icons (`i-carbon-*`) by class name, so the host's UnoCSS has to generate them. `src/toolbar-icons.ts` lists them as `MARKDOWN_EDITOR_ICON_CLASSES` for a host that does not scan tuffex sources to safelist, the way Nexus does.
-- The mode switcher is a toggle-button group: the container is `role="group"` labeled "Markdown editor mode", and each mode button reflects the active mode through `aria-pressed` (not `role="tab"`, since there are no associated tabpanels).
-- `theme="auto"` watches `documentElement` class / `data-theme` and falls back to light.
+- Keep `sanitize=true` for user-authored or provider-authored content.
+- Use controlled `mode` when the host stores the current editor tab in route/query state.
+- Restrict `toolbarActions` for narrow editors such as release notes or comments.
+- Provide `linkPrompt` instead of letting the component own product-specific URL dialogs.
 
-## API
+## API Reference
 
 ### Props
 
@@ -93,21 +88,23 @@ No public slots are exposed; toolbar buttons, editing surfaces, and preview outp
 | `getValue()` | Return current Markdown source. |
 | `setValue(value)` | Set Markdown, emit updates, and refresh rendered HTML. |
 
-## Best Practices
+## Overview
 
-- Keep `sanitize=true` for user-authored or provider-authored content.
-- Use controlled `mode` when the host stores the current editor tab in route/query state.
-- Restrict `toolbarActions` for narrow editors such as release notes or comments.
-- Provide `linkPrompt` instead of letting the component own product-specific URL dialogs.
+- `mode` is controlled when provided; otherwise `defaultMode` initializes internal mode.
+- `update:mode` and `mode-change` emit whenever the user changes modes.
+- `sanitize` defaults to `true`; disable it only for already trusted content.
+- Source mode writes directly to Markdown. WYSIWYG mode serializes edited DOM back to Markdown on input.
+- Toolbar actions are shared across modes, but preview mode disables editing actions.
+- Toolbar and mode buttons draw Carbon icons (`i-carbon-*`) by class name, so the host's UnoCSS has to generate them. `src/toolbar-icons.ts` lists them as `MARKDOWN_EDITOR_ICON_CLASSES` for a host that does not scan tuffex sources to safelist, the way Nexus does.
+- The mode switcher is a toggle-button group: the container is `role="group"` labeled "Markdown editor mode", and each mode button reflects the active mode through `aria-pressed` (not `role="tab"`, since there are no associated tabpanels).
+- `theme="auto"` watches `documentElement` class / `data-theme` and falls back to light.
 
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`, `TxMarkdownEditor.vue`, `toolbar-icons.ts`, `markdown-serializer.ts`, and `markdown-editor.test.ts`.
 - Sanitization is enabled by default through DOMPurify; `sanitize=false` should remain a trusted-content escape hatch only.
 - `linkPrompt` is the extension point for product-specific URL collection, keeping dialogs outside the component contract.
 - The toolbar icons used to be Remix (`i-ri-*`). Nexus keeps `ri` out of its dependencies on purpose, so every docs demo drew fourteen grey squares; Carbon is installed by both hosts.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/markdown-editor/src/TxMarkdownEditor.vue`.
 - Types: `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`.

@@ -8,9 +8,8 @@ tags: [card, surface, layout]
 syncStatus: reviewed
 verified: true
 ---
-# Card 卡片
 
-## 基础用法
+## 用法
 
 ### Basic
 :::TuffDemoWrapper{demo="CardBasicDemo" code-lang="vue"}
@@ -302,7 +301,53 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+### 使用建议
+
+1. **内容组织**：合理使用 header、body、footer 区域组织内容
+2. **视觉层次**：通过不同的卡片变体创建视觉层次
+3. **交互反馈**：为可点击卡片提供明确的视觉反馈
+4. **响应式设计**：确保卡片在不同屏幕尺寸下的良好表现
+
+### 布局示例
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <div class="card-grid">
+      <TxCard 
+        v-for="item in items" 
+        :key="item.id"
+        clickable
+        @click="handleItemClick(item)"
+      >
+        <template #header>
+          <h3>{{ item.title }}</h3>
+        </template>
+
+        <p>{{ item.description }}</p>
+
+        <template #footer>
+          <div class="card-actions">
+            <TxButton size="sm" variant="text">编辑</TxButton>
+            <TxButton size="sm" variant="text">删除</TxButton>
+          </div>
+        </template>
+      </TxCard>
+    </div>
+  </template>
+---
+:::
+
+### 选型建议（TxBaseSurface vs TxCard）
+
+- 需要更高封装与业务直出：优先用 `TxCard`。它已包含 `variant/shadow/slots/loading/inertial` 与 pointer-light + spring 的交互能力。
+- 需要底层材质细调：改用 `TxBaseSurface`。尤其是折射与滤镜底层参数（`displace`、`distortionScale`、`redOffset/greenOffset/blueOffset`、`filterSaturation/filterContrast/filterBrightness`、`refractionHaloOpacity`）。
+- 约定：`TxCard` 维持"开箱即用"稳定 API；材质实验或品牌化渲染直接在 `TxBaseSurface` 层完成。
+
+## API 参考
 
 ### Props
 
@@ -387,7 +432,7 @@ code: |
 - 支持的样式调整优先使用 `variant`、`shadow`、`size`、`radius`、`padding` 和 surface props。
 - 卡片需要跟随应用主题时，应覆盖全局 TuffEx token，例如 `--tx-bg-color-overlay`、`--tx-border-color-light` 和 `--tx-color-primary`。
 
-## 交互契约
+## 概述
 
 - 根节点是非语义化 `div`。`clickable` 只适合卡片级选择/导航；需要原生语义的动作应放在插槽内的真实按钮或链接上。
 - `click` 只在 `clickable=true` 且 `disabled=false` 时发出；禁用卡片仍渲染内容，但会阻止 click 事件和指针驱动 motion 更新。
@@ -397,55 +442,7 @@ code: |
 - `refractionStrength`、light-follow intensity、spring stiffness、spring damping 和 inertial rebound 在用于派生视觉状态前会被收敛。
 - `inertial=true` 会写入指针跟随 transform 变量，并调度 RAF 直到 motion 稳定；关闭 inertial 会重置 motion 状态。
 
-
-## 最佳实践
-
-### 使用建议
-
-1. **内容组织**：合理使用 header、body、footer 区域组织内容
-2. **视觉层次**：通过不同的卡片变体创建视觉层次
-3. **交互反馈**：为可点击卡片提供明确的视觉反馈
-4. **响应式设计**：确保卡片在不同屏幕尺寸下的良好表现
-
-### 布局示例
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <div class="card-grid">
-      <TxCard 
-        v-for="item in items" 
-        :key="item.id"
-        clickable
-        @click="handleItemClick(item)"
-      >
-        <template #header>
-          <h3>{{ item.title }}</h3>
-        </template>
-
-        <p>{{ item.description }}</p>
-
-        <template #footer>
-          <div class="card-actions">
-            <TxButton size="sm" variant="text">编辑</TxButton>
-            <TxButton size="sm" variant="text">删除</TxButton>
-          </div>
-        </template>
-      </TxCard>
-    </div>
-  </template>
----
-:::
-
-### 选型建议（TxBaseSurface vs TxCard）
-
-- 需要更高封装与业务直出：优先用 `TxCard`。它已包含 `variant/shadow/slots/loading/inertial` 与 pointer-light + spring 的交互能力。
-- 需要底层材质细调：改用 `TxBaseSurface`。尤其是折射与滤镜底层参数（`displace`、`distortionScale`、`redOffset/greenOffset/blueOffset`、`filterSaturation/filterContrast/filterBrightness`、`refractionHaloOpacity`）。
-- 约定：`TxCard` 维持"开箱即用"稳定 API；材质实验或品牌化渲染直接在 `TxBaseSurface` 层完成。
-
-
-## 审阅说明
+## 技术实现
 
 - 已人工核对 `packages/tuffex/packages/components/src/card/src/types.ts`、`TxCard.vue` 与 `card.test.ts`。
 - Props 表已覆盖源码中的全部 props，包括此前缺失的 `maskOpacity` 与 `surfaceMoving`。
@@ -453,8 +450,6 @@ code: |
 - 已按测试确认关键行为：默认 mode 是 `pure`，size 派生 padding 为 `10/12/16`，只有启用且未禁用的 clickable 卡片才会发出 click，loading 会渲染 spinner overlay，disabled 会阻止 pointer-driven updates。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/card/__tests__/card.test.ts` 覆盖默认 class/surface props、结构插槽、clickable gating、loading overlay、mask/glass 映射和 refraction 跟随光源映射。
 - 与 `TxBaseSurface` 的选型说明是刻意保留的边界：底层 refraction / filter 控制仍在 `TxBaseSurface`，`TxCard` 负责稳定的容器 API。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/card/src/TxCard.vue`
 - Types: `packages/tuffex/packages/components/src/card/src/types.ts`

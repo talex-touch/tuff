@@ -8,9 +8,8 @@ tags: [sortable, drag-drop, list]
 syncStatus: reviewed
 verified: true
 ---
-# SortableList 拖拽排序
 
-## 基础用法
+## 用法
 
 :::TuffDemoWrapper{demo="SortableListSortableListDemo" code-lang="vue"}
 ---
@@ -36,8 +35,6 @@ code: |
   </template>
 ---
 :::
-
-## 组合示例
 
 ### 拖拽手柄模式
 
@@ -73,29 +70,16 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 </template>
 ```
 
-## 交互契约
+### 最佳实践
 
-- 根节点渲染 `role="list"`；每一项渲染 `role="listitem"`。
-- 每个 item 必须有稳定字符串 `id`；`id` 用于 Vue key 和拖拽状态记录。
-- `disabled=true` 时条目不可拖拽，并阻断 drag start、drag over、drop 重排和排序事件。
-- `handle=false` 时可以从 item 内任意位置开始拖拽。
-- `handle=true` 时，drag 事件目标或祖先必须匹配 `[data-tx-sort-handle="true"]`。
-- drag start 会把 item id 写入 `dataTransfer` 并标记当前拖拽项。
-- **列表在指针经过时就重排，而不是等到 drop。** 每次 `dragover` 落到另一行，就把被拖的行移过去并发出 `update:modelValue`。这个实时预览本身就是拖拽反馈：在此之前，整个拖拽过程屏幕上唯一变化的只有源行 0.65 的透明度。
-- 预览由组件内部持有，因此无论宿主是否把 `modelValue` 写回，行都会跟着动；交互结束的瞬间所有权交还宿主。
-- `reorder` 只在交互结束时发出**一次**，携带起始索引与最终索引，而不是每经过一行发一次。
-- 拖到列表外释放同样算数。`dragend` 以预览的最后状态为准，而不是把用户亲眼看着移动过的行弹回去。
-- `dragend` 与 `drop` 都会清理拖拽状态；先发生的那个负责上报这次移动。
-- 重排使用浅数组拷贝；item 对象本身保持引用。
+- 使用稳定的持久化 id；不要把数组索引当成可排序数据的 id。
+- 用 `v-model` 更新本地数组，用 `reorder` 在服务端有顺序要求时持久化。
+- 行内有按钮、链接、输入框或可选中文本时开启 `handle`。
+- 列表规模保持适中。超长列表应使用其它拖拽策略配合虚拟化，而不是让每一行都可拖拽。
+- 行有 `grab` 光标并在拖拽时抬起；`handle` 模式下光标提示落到手柄上。自定义插槽仍应让自己的手柄看起来像个手柄。
+- id 不是人类可读时务必传 `itemLabel`，否则 live region 会对读屏用户念出 "plugin-a1b3"。
 
-### 键盘
-
-- 整个列表只占一个 tab 停靠点。Tab 进入时落在上次聚焦的行（或第一行），方向键在行间移动。
-- 空格或回车把一行"拿起来"；此后方向键移动这一行本身，空格或回车放下，Escape 放弃本次重排并恢复起始顺序。
-- 拿起状态下失焦会自动放下，而不是把那一行悬在半空。
-- 每一步都通过视觉隐藏的 `role="status"` live region 播报。模板来自 `labels`（可用 `{item}`、`{position}`、`{size}`），条目名称来自 `itemLabel`，未提供时回落到 `id`。
-
-## API
+## API 参考
 
 ### Props
 
@@ -127,22 +111,33 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 |------|------|------|
 | `item` | `{ item, dragging, grabbed, index, handleAttrs }` | 每一项的自定义渲染。默认回落为显示 `id` 的一行（`handle` 开启时带手柄）。把 `handleAttrs` 展开到应当发起拖拽的元素上。 |
 
-## 最佳实践
+## 概述
 
-- 使用稳定的持久化 id；不要把数组索引当成可排序数据的 id。
-- 用 `v-model` 更新本地数组，用 `reorder` 在服务端有顺序要求时持久化。
-- 行内有按钮、链接、输入框或可选中文本时开启 `handle`。
-- 列表规模保持适中。超长列表应使用其它拖拽策略配合虚拟化，而不是让每一行都可拖拽。
-- 行有 `grab` 光标并在拖拽时抬起；`handle` 模式下光标提示落到手柄上。自定义插槽仍应让自己的手柄看起来像个手柄。
-- id 不是人类可读时务必传 `itemLabel`，否则 live region 会对读屏用户念出 "plugin-a1b3"。
+- 根节点渲染 `role="list"`；每一项渲染 `role="listitem"`。
+- 每个 item 必须有稳定字符串 `id`；`id` 用于 Vue key 和拖拽状态记录。
+- `disabled=true` 时条目不可拖拽，并阻断 drag start、drag over、drop 重排和排序事件。
+- `handle=false` 时可以从 item 内任意位置开始拖拽。
+- `handle=true` 时，drag 事件目标或祖先必须匹配 `[data-tx-sort-handle="true"]`。
+- drag start 会把 item id 写入 `dataTransfer` 并标记当前拖拽项。
+- **列表在指针经过时就重排，而不是等到 drop。** 每次 `dragover` 落到另一行，就把被拖的行移过去并发出 `update:modelValue`。这个实时预览本身就是拖拽反馈：在此之前，整个拖拽过程屏幕上唯一变化的只有源行 0.65 的透明度。
+- 预览由组件内部持有，因此无论宿主是否把 `modelValue` 写回，行都会跟着动；交互结束的瞬间所有权交还宿主。
+- `reorder` 只在交互结束时发出**一次**，携带起始索引与最终索引，而不是每经过一行发一次。
+- 拖到列表外释放同样算数。`dragend` 以预览的最后状态为准，而不是把用户亲眼看着移动过的行弹回去。
+- `dragend` 与 `drop` 都会清理拖拽状态；先发生的那个负责上报这次移动。
+- 重排使用浅数组拷贝；item 对象本身保持引用。
 
-## 审阅说明
+### 键盘
+
+- 整个列表只占一个 tab 停靠点。Tab 进入时落在上次聚焦的行（或第一行），方向键在行间移动。
+- 空格或回车把一行"拿起来"；此后方向键移动这一行本身，空格或回车放下，Escape 放弃本次重排并恢复起始顺序。
+- 拿起状态下失焦会自动放下，而不是把那一行悬在半空。
+- 每一步都通过视觉隐藏的 `role="status"` live region 播报。模板来自 `labels`（可用 `{item}`、`{position}`、`{size}`），条目名称来自 `itemLabel`，未提供时回落到 `id`。
+
+## 技术实现
 
 - **可访问性说明:** 重排可以纯键盘完成——一个 tab 停靠点，空格拿起，方向键移动，Escape 取消——每一步都经过 polite live region。原生拖拽仍然只面向指针，它是次要路径，不再是唯一路径。
 - **数据说明:** 重排会发出浅拷贝数组，并保留 item 对象引用。持久化应基于稳定 `id`，不要基于索引或对象身份。
 - **实测覆盖:** `sortable-list.test.ts` 覆盖列表语义、slot props、默认 id 渲染、重排事件、同项 drop 抑制、禁用阻断、仅手柄可拖、dragend 状态清理、`dragover` 期间的实时预览（以及 `reorder` 不会每经过一行就发一次）、拖到列表外结束、内置手柄与插槽拿到的 `handleAttrs`，以及完整键盘路径：拿起、移动、放下、Escape、两端边界、未拿起时的焦点移动、单一 tab 停靠点、播报、`labels` 覆盖与禁用状态。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/sortable-list/src/TxSortableList.vue`。
 - Types: `packages/tuffex/packages/components/src/sortable-list/src/types.ts` 导出 `SortableListItem`、`SortableListProps`、`SortableListLabels` 与 `SortableListEmits`。

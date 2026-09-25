@@ -8,39 +8,10 @@ tags: [text, transition, autosize, live-region]
 syncStatus: reviewed
 verified: true
 ---
-# TextTransformer 文本变换
 
 > 不建议用于高频实时更新（例如逐字流式刷新、每帧变化的状态）。更适合“偶发状态切换 / 标题切换 / 章节切换 / 短句变化”等场景。
 
-## morph 与 fade
-
-`mode` 默认是 `morph`：值交给文本形变引擎，共有的词保持在原位、只有真正变化的字符移动，数字按位值滚动。`fade` 是原来的整串 blur 交叉淡化，也是 `blurPx` 唯一生效的模式。
-
-两种情况下 `mode` 会被忽略、强制走 `fade`：用了默认插槽（插槽渲染的是任意节点，引擎没有可形变的纯文本段），或者开了 `wrap`（引擎把段排在单行 nowrap 上并动画容器宽度，无法度量一个在受限盒子里回流的值）。
-
-### Morph vs fade
-:::TuffDemoWrapper{demo="TextTransformerMorphVsFadeDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { computed, ref } from 'vue'
-
-  const stages = ['Connecting', 'Connected', 'Syncing 12 files', 'Syncing 148 files', 'Up to date']
-  const index = ref(0)
-  const stage = computed(() => stages[index.value] ?? '')
-  </script>
-
-  <template>
-    <!-- 默认：逐字形变，数字按位值滚动 -->
-    <TxTextTransformer :text="stage" :duration-ms="320" />
-
-    <!-- 原来的整串 blur 交叉淡化 -->
-    <TxTextTransformer :text="stage" mode="fade" :duration-ms="320" :blur-px="10" />
-  </template>
----
-:::
-
-## 基础用法
+## 用法
 
 ### TextTransformer
 :::TuffDemoWrapper{demo="TextTransformerTextTransformerDemo" code-lang="vue"}
@@ -114,6 +85,68 @@ code: |
         </TxCard>
       </TxAutoSizer>
     </div>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 适合标签、标题、徽标和偶发状态变化；不要用于逐字流式输出或每帧变化的计数器。
+- 只想要形变、不需要 `fade` 的兼容层时，直接用 `TxTextMorph`——它暴露弹簧、位值开关、locale 与 `cursorIndex` 等完整能力。
+- 与 `TxAutoSizer` 组合时，让 `durationMs` 与外层尺寸事务的时长保持一致；`morph` 引擎自己动画宽高，多数场景不再需要外层 sizer。
+- 按钮/徽标等紧凑场景优先保持 `wrap=false`，避免高度跳变；段落或章节切换才开启 `wrap`（同时自动退回 `fade`）。
+- slot 内容应保持轻量 inline；旧 layer 存在期间 slot 内容会被渲染两份。
+- 如果文本颜色也会变化，把颜色设在 transformer 根节点上；`fade` 的旧层会保留旧 computed color，过渡更自然。
+
+## API 参考
+
+### TxTextTransformer
+
+#### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `text` | `string \| number` | - | 当前显示值；会通过 `String(...)` 归一化，并由 polite live region 宣告。 |
+| `mode` | `'morph' \| 'fade'` | `morph` | `morph` 走文本形变引擎（逐字 diff + 数字位值滚动）；`fade` 是原来的整串 blur 交叉淡化。默认插槽或 `wrap` 会强制走 `fade`。 |
+| `durationMs` | `number` | `240` | 过渡时长（ms）；`fade` 下同时决定旧文本 layer 何时移除。 |
+| `blurPx` | `number` | `8` | 新旧 layer 过渡时使用的 blur 距离。**仅 `fade` 生效**，形变引擎没有 blur 阶段。 |
+| `tag` | `string` | `span` | 根节点 HTML 标签。 |
+| `wrap` | `boolean` | `false` | 开启后把 layer 的空白策略从单行省略切到 `pre-line`，适合多行/换行文本。**会强制 `fade`**。 |
+
+#### Slots
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | `{ text: string }` | 可选的当前/旧文本渲染器。用于包一层轻量 inline 标记，同时复用组件的过渡逻辑。 |
+
+#### Events
+
+不派发 Vue 事件；父组件通过 `text` prop 驱动状态。
+
+## morph 与 fade
+
+`mode` 默认是 `morph`：值交给文本形变引擎，共有的词保持在原位、只有真正变化的字符移动，数字按位值滚动。`fade` 是原来的整串 blur 交叉淡化，也是 `blurPx` 唯一生效的模式。
+
+两种情况下 `mode` 会被忽略、强制走 `fade`：用了默认插槽（插槽渲染的是任意节点，引擎没有可形变的纯文本段），或者开了 `wrap`（引擎把段排在单行 nowrap 上并动画容器宽度，无法度量一个在受限盒子里回流的值）。
+
+### Morph vs fade
+:::TuffDemoWrapper{demo="TextTransformerMorphVsFadeDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const stages = ['Connecting', 'Connected', 'Syncing 12 files', 'Syncing 148 files', 'Up to date']
+  const index = ref(0)
+  const stage = computed(() => stages[index.value] ?? '')
+  </script>
+
+  <template>
+    <!-- 默认：逐字形变，数字按位值滚动 -->
+    <TxTextTransformer :text="stage" :duration-ms="320" />
+
+    <!-- 原来的整串 blur 交叉淡化 -->
+    <TxTextTransformer :text="stage" mode="fade" :duration-ms="320" :blur-px="10" />
   </template>
 ---
 :::
@@ -446,32 +479,7 @@ code: |
 ---
 :::
 
-## API
-
-### TxTextTransformer
-
-#### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `text` | `string \| number` | - | 当前显示值；会通过 `String(...)` 归一化，并由 polite live region 宣告。 |
-| `mode` | `'morph' \| 'fade'` | `morph` | `morph` 走文本形变引擎（逐字 diff + 数字位值滚动）；`fade` 是原来的整串 blur 交叉淡化。默认插槽或 `wrap` 会强制走 `fade`。 |
-| `durationMs` | `number` | `240` | 过渡时长（ms）；`fade` 下同时决定旧文本 layer 何时移除。 |
-| `blurPx` | `number` | `8` | 新旧 layer 过渡时使用的 blur 距离。**仅 `fade` 生效**，形变引擎没有 blur 阶段。 |
-| `tag` | `string` | `span` | 根节点 HTML 标签。 |
-| `wrap` | `boolean` | `false` | 开启后把 layer 的空白策略从单行省略切到 `pre-line`，适合多行/换行文本。**会强制 `fade`**。 |
-
-#### Slots
-
-| 插槽名 | 参数 | 说明 |
-|------|------|------|
-| `default` | `{ text: string }` | 可选的当前/旧文本渲染器。用于包一层轻量 inline 标记，同时复用组件的过渡逻辑。 |
-
-#### Events
-
-不派发 Vue 事件；父组件通过 `text` prop 驱动状态。
-
-## 交互契约
+## 概述
 
 - `text` 会通过 `String(...)` 归一化；数字会以字符串形式显示。
 - `morph` 下值交给引擎：完整值放在视觉隐藏的 `[tx-morph-sr]` 节点里，段元素全部 `aria-hidden`；根节点的 `overflow` 放开为 `visible`，否则离场段会被截半。因此 `morph` 不做省略号截断。
@@ -486,16 +494,7 @@ code: |
 - `wrap=false` 保持单行省略；`wrap=true` 切换为 `white-space: pre-line`，适合多行或包含换行符的内容。
 - scoped slot 会同时用于当前层和旧层，因此 slot 输出应只依赖传入的 `text`，避免非确定性副作用。
 
-## 最佳实践
-
-- 适合标签、标题、徽标和偶发状态变化；不要用于逐字流式输出或每帧变化的计数器。
-- 只想要形变、不需要 `fade` 的兼容层时，直接用 `TxTextMorph`——它暴露弹簧、位值开关、locale 与 `cursorIndex` 等完整能力。
-- 与 `TxAutoSizer` 组合时，让 `durationMs` 与外层尺寸事务的时长保持一致；`morph` 引擎自己动画宽高，多数场景不再需要外层 sizer。
-- 按钮/徽标等紧凑场景优先保持 `wrap=false`，避免高度跳变；段落或章节切换才开启 `wrap`（同时自动退回 `fade`）。
-- slot 内容应保持轻量 inline；旧 layer 存在期间 slot 内容会被渲染两份。
-- 如果文本颜色也会变化，把颜色设在 transformer 根节点上；`fade` 的旧层会保留旧 computed color，过渡更自然。
-
-## 审阅说明
+## 技术实现
 
 - **live-region 说明:** 根节点始终使用 `aria-live="polite"`。不要在同一个密集区域放置多个高频变化实例，否则屏幕阅读器可能播报过多变化。
 - **过渡说明:** 旧 layer 会保留到 `durationMs + 34ms` 后才移除；这段时间 slot 内容会渲染两份。slot 渲染器应保持纯函数且足够轻量。
@@ -505,8 +504,6 @@ code: |
   - `fade` 一侧的 live-region 语义、自定义根标签、duration/blur CSS 变量映射、wrap class、数字文本归一化；
   - 新旧 layer、旧颜色保留、旧 layer 的 `aria-hidden`、timer 清理与 scoped slot props；
   - 准备态的强制样式提交、准备态不做过渡，以及 reduced-motion 退路。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/text-transformer/src/TxTextTransformer.vue`。
 - Types: `packages/tuffex/packages/components/src/text-transformer/src/types.ts` 导出 `TextTransformerProps`。

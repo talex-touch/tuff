@@ -9,15 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-The Plugin Builder agent gets one request: add burn-after-reading to the clipboard-history plugin, so secrets copied into the history clear themselves after a short while. It plans, asks two clarifying questions, searches the code, asks permission to write files, writes the change, gets the tests green and streams a summary. The panel beside the conversation tracks the plan, the changed files and a preview of the plugin as it goes.
-
-It fits any product where AI does the work for you: coding assistants, ops assistants, data or support agents that call tools. The decisions that matter stay with a person: they answer the clarifying questions, and they let the write through.
-
-The second style, Side copilot, swaps the agent for a docs assistant docked beside the page: you are writing the clipboard-history plugin's README, select text to have it explained, improved or translated, and decide yourself whether the page changes.
-
-## Template
+## Usage
 
 ### Coding agent workbench
 
@@ -170,7 +162,33 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+The Plugin Builder agent gets one request: add burn-after-reading to the clipboard-history plugin, so secrets copied into the history clear themselves after a short while. It plans, asks two clarifying questions, searches the code, asks permission to write files, writes the change, gets the tests green and streams a summary. The panel beside the conversation tracks the plan, the changed files and a preview of the plugin as it goes.
+
+It fits any product where AI does the work for you: coding assistants, ops assistants, data or support agents that call tools. The decisions that matter stay with a person: they answer the clarifying questions, and they let the write through.
+
+The second style, Side copilot, swaps the agent for a docs assistant docked beside the page: you are writing the clipboard-history plugin's README, select text to have it explained, improved or translated, and decide yourself whether the page changes.
+
+- The demo starts once the template scrolls into view: plan, clarifying questions, code search, write request. The window's Reset button or Run again in the header replays it from the start.
+- After 3 idle seconds the questionnaire goes ahead with the recommended picks, as the hint under the card says. Click any option and it waits for you to send instead; the duration and secret types you pick carry into the summary and the task details.
+- The write gate never opens by itself. It waits until you click Allow or Deny. Allow writes the code, runs the tests and streams the summary; Deny skips the write and the tests and exports a patch instead.
+- While the agent runs, Stop sits beside the send button: the running tool card is marked stopped and the transcript keeps a line saying so.
+- Task rows in the side panel expand to show details. Clicking a changed file, in the side panel or in the run digest, scrolls the transcript to its code. Only the transcript's own container scrolls, the page never moves, and the demo never takes focus.
+- In the docs column (640–959px) the side panel switches between Tasks, Changes and Preview; from 960px the three stack, and from 1200px the agent list joins on the left. Narrow (< 640px) hides the side panel and puts an expandable task strip above the input. With reduced motion the template renders everything up to the gate at once and settles immediately after you allow, with no timers.
+- Side copilot: about a second after it scrolls into view, the template highlights a sentence under Permissions, raises the selection bar and runs Improve; the panel writes out the suggestion with its before and after, then stops. The page changes only when you click Apply, in the bar or in the panel, and the notice offers Undo. The scripted selection is the template's own highlight and never touches your real selection on the page; with reduced motion the suggestion is simply there.
+- Side copilot: select any text in the article to take over. The bar appears under the selection and stays on the text as the page or the article scrolls, as the panel collapses and as the stage expands; it hides while the selection is scrolled out of view. Explain answers without changing the page; headings, list items and code can only be explained.
+- Side copilot: in "Read-only · explain" the bar offers Explain alone and existing suggestions cannot be applied. The Clipboard tag is only a stand-in and never reads your clipboard. Wide (≥ 1200px) adds an on-this-page outline on the left; narrow (< 640px) folds the copilot into a toolbar button that opens a bottom sheet inside the stage.
+
+## Customization
+
+- Wire a real agent by replacing the demo timeline with your event stream. Rows hold only `id` and `kind` and read their content from reactive state, so a streamed event updates state and never has to replace an array element.
+- Keep a permanent tail item at the end of TxConversationStream. The component always keeps the last item outside the virtual list and remounts it when the next one arrives; with a tail in that slot, each real message mounts once, so tool-card expansion and entrance motion never replay.
+- Tier permissions by risk: a `risk="read"` call can run straight away and leave a trace in the transcript, while `write` and `execute` always wait for a person. The host owns the "remember for this session" choice.
+- Hold the questionnaire's answers through a controlled `v-model` and `v-model:index`, so a rebuilt card keeps them, and only pick the recommended answers while the reader has not touched the card.
+- Side copilot: the selection bar lives on `<body>` and anchors to a virtual reference, and the component only repositions itself on window scroll or resize. Make `selection.rects` a getter that measures the Range live, and call `updatePosition()` after collapsing the panel, expanding the stage or reflowing text, and it stays on the text.
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -190,23 +208,3 @@ code: |
 | Copilot panel (Side copilot) | [TxModeChip](/docs/dev/components/mode-chip), [TxTag](/docs/dev/components/tag) | "Edits need your OK ↔ Read-only · explain"; what it can see: the document, the selection (removable), the clipboard (a sample toggle). The header, echoes, follow-ups and input reuse the components above |
 | Suggestion card (Side copilot) | [TxButton](/docs/dev/components/button), [TxDiffChips](/docs/dev/components/tool-chips) | The original struck through and the suggestion underlined, written out as it streams; Apply to page / Discard; the change summary jumps back to its paragraph |
 | Change notice (Side copilot) | [TxToastPanel](/docs/dev/components/toast-panel) | "Applied to README.md · Undo" |
-
-## Interactions
-
-- The demo starts once the template scrolls into view: plan, clarifying questions, code search, write request. The window's Reset button or Run again in the header replays it from the start.
-- After 3 idle seconds the questionnaire goes ahead with the recommended picks, as the hint under the card says. Click any option and it waits for you to send instead; the duration and secret types you pick carry into the summary and the task details.
-- The write gate never opens by itself. It waits until you click Allow or Deny. Allow writes the code, runs the tests and streams the summary; Deny skips the write and the tests and exports a patch instead.
-- While the agent runs, Stop sits beside the send button: the running tool card is marked stopped and the transcript keeps a line saying so.
-- Task rows in the side panel expand to show details. Clicking a changed file, in the side panel or in the run digest, scrolls the transcript to its code. Only the transcript's own container scrolls, the page never moves, and the demo never takes focus.
-- In the docs column (640–959px) the side panel switches between Tasks, Changes and Preview; from 960px the three stack, and from 1200px the agent list joins on the left. Narrow (< 640px) hides the side panel and puts an expandable task strip above the input. With reduced motion the template renders everything up to the gate at once and settles immediately after you allow, with no timers.
-- Side copilot: about a second after it scrolls into view, the template highlights a sentence under Permissions, raises the selection bar and runs Improve; the panel writes out the suggestion with its before and after, then stops. The page changes only when you click Apply, in the bar or in the panel, and the notice offers Undo. The scripted selection is the template's own highlight and never touches your real selection on the page; with reduced motion the suggestion is simply there.
-- Side copilot: select any text in the article to take over. The bar appears under the selection and stays on the text as the page or the article scrolls, as the panel collapses and as the stage expands; it hides while the selection is scrolled out of view. Explain answers without changing the page; headings, list items and code can only be explained.
-- Side copilot: in "Read-only · explain" the bar offers Explain alone and existing suggestions cannot be applied. The Clipboard tag is only a stand-in and never reads your clipboard. Wide (≥ 1200px) adds an on-this-page outline on the left; narrow (< 640px) folds the copilot into a toolbar button that opens a bottom sheet inside the stage.
-
-## Adapting it
-
-- Wire a real agent by replacing the demo timeline with your event stream. Rows hold only `id` and `kind` and read their content from reactive state, so a streamed event updates state and never has to replace an array element.
-- Keep a permanent tail item at the end of TxConversationStream. The component always keeps the last item outside the virtual list and remounts it when the next one arrives; with a tail in that slot, each real message mounts once, so tool-card expansion and entrance motion never replay.
-- Tier permissions by risk: a `risk="read"` call can run straight away and leave a trace in the transcript, while `write` and `execute` always wait for a person. The host owns the "remember for this session" choice.
-- Hold the questionnaire's answers through a controlled `v-model` and `v-model:index`, so a rebuilt card keeps them, and only pick the recommended answers while the reader has not touched the card.
-- Side copilot: the selection bar lives on `<body>` and anchors to a virtual reference, and the component only repositions itself on window scroll or resize. Make `selection.rects` a getter that measures the Range live, and call `updatePosition()` after collapsing the panel, expanding the stage or reflowing text, and it stays on the text.

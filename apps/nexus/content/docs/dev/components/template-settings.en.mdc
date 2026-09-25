@@ -9,13 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-Tuff's settings centre. Grouped sections run down the left and groups of setting rows fill the right; every change saves on its own, so the header shows the save status instead of a Save button. Widen it and a live preview appears on the right: change the theme, opacity, result density or result count and a miniature CoreBox follows at once.
-
-It suits desktop preferences, SaaS account and workspace settings, and any configuration page made of many controls that apply as soon as they change.
-
-## Template
+## Usage
 
 ### Sectioned settings
 
@@ -97,7 +91,27 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+Tuff's settings centre. Grouped sections run down the left and groups of setting rows fill the right; every change saves on its own, so the header shows the save status instead of a Save button. Widen it and a live preview appears on the right: change the theme, opacity, result density or result count and a miniature CoreBox follows at once.
+
+It suits desktop preferences, SaaS account and workspace settings, and any configuration page made of many controls that apply as soon as they change.
+
+- Change anything and the header shows Saving…, then Saved · just now once 600 ms pass without another change.
+- The summon shortcut can be recorded: press Record, then a combination that includes ⌘, ⌃ or ⌥; Esc or clicking away cancels. The Open CoreBox row on the Shortcuts page shows the new combination too.
+- The Shortcuts page can be filtered and each shortcut switched off. The API key on AI models is masked until clicked, and copying it writes to your real clipboard (it is a sample value, not a real key).
+- Reset, clearing clipboard history and signing out of other devices all confirm first; after a clear, the Privacy page reports the result and the record count updates.
+- Once in view it plays once: at 1 s it moves to CoreBox, at 1.6 s it changes result density from Cozy to Compact and the header runs through its save states, while the wide preview turns compact alongside. Any interaction stops it; with reduced motion on, the final state shows straight away and the tab-switch animation is turned off.
+- Wide (≥ 960px) adds the live preview on the right; narrow (< 640px) moves the navigation into a row across the top, drops the group headings and puts each row's control under its label.
+
+## Customization
+
+- Real storage: replace the timer in `watch(settings)` with a debounced write (a local config file or Nexus sync), and on failure set the status to Not saved with a retry.
+- Adding a section: add a TxTabItem to the right TxTabItemGroup with a stable English `name` and the label in the `#name` slot — using the visible label as `name` loses the current section when the interface language changes. TxTabs unmounts panels you leave, so keep values out of the row components; hold your own object URL for an avatar too, because TxImageUploader revokes the URLs it created when it unmounts.
+- Keep TxGroupBlock at `collapsible=false`: its expand and collapse are driven by gsap with no reduced-motion fallback. Do not set `memoryName` either, or it writes to localStorage.
+- Put sensitive fields in a group's body rather than a 56px row: TxSensitiveInput's copy tab floats above the field and would overlap the row before it. TxFlatSelect opens in place without teleporting, so place it where no scroll container clips it and raise its row's stacking level (every setting row is its own stacking context).
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -110,19 +124,3 @@ code: |
 | Account | [TxAvatar](/docs/dev/components/avatar), [TxImageUploader](/docs/dev/components/image-uploader) | Avatar upload, display name, email and plan |
 | Confirmations | [TxModal](/docs/dev/components/modal), [TxCheckbox](/docs/dev/components/checkbox) | Reset all settings, clear clipboard history (optionally with pinned items), sign out of other devices |
 | Live preview (wide) | [TxIconChip](/docs/dev/components/icon-chip), a hand-built miniature CoreBox | Theme, opacity, result density, max results, placeholder text and the summon shortcut, live |
-
-## Interactions
-
-- Change anything and the header shows Saving…, then Saved · just now once 600 ms pass without another change.
-- The summon shortcut can be recorded: press Record, then a combination that includes ⌘, ⌃ or ⌥; Esc or clicking away cancels. The Open CoreBox row on the Shortcuts page shows the new combination too.
-- The Shortcuts page can be filtered and each shortcut switched off. The API key on AI models is masked until clicked, and copying it writes to your real clipboard (it is a sample value, not a real key).
-- Reset, clearing clipboard history and signing out of other devices all confirm first; after a clear, the Privacy page reports the result and the record count updates.
-- Once in view it plays once: at 1 s it moves to CoreBox, at 1.6 s it changes result density from Cozy to Compact and the header runs through its save states, while the wide preview turns compact alongside. Any interaction stops it; with reduced motion on, the final state shows straight away and the tab-switch animation is turned off.
-- Wide (≥ 960px) adds the live preview on the right; narrow (< 640px) moves the navigation into a row across the top, drops the group headings and puts each row's control under its label.
-
-## Adapting it
-
-- Real storage: replace the timer in `watch(settings)` with a debounced write (a local config file or Nexus sync), and on failure set the status to Not saved with a retry.
-- Adding a section: add a TxTabItem to the right TxTabItemGroup with a stable English `name` and the label in the `#name` slot — using the visible label as `name` loses the current section when the interface language changes. TxTabs unmounts panels you leave, so keep values out of the row components; hold your own object URL for an avatar too, because TxImageUploader revokes the URLs it created when it unmounts.
-- Keep TxGroupBlock at `collapsible=false`: its expand and collapse are driven by gsap with no reduced-motion fallback. Do not set `memoryName` either, or it writes to localStorage.
-- Put sensitive fields in a group's body rather than a 56px row: TxSensitiveInput's copy tab floats above the field and would overlap the row before it. TxFlatSelect opens in place without teleporting, so place it where no scroll container clips it and raise its row's stacking level (every setting row is its own stacking context).

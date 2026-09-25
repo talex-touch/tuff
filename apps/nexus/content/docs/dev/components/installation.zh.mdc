@@ -120,7 +120,7 @@ code: |
 
 完整 API 见《[Utils 工具函数](./utils.zh.mdc)》。
 
-## 源码
+## 技术实现
 
 - 入口映射：`packages/tuffex/package.json` 的 `exports` —— `.`、`./utils`、`./base.css`、`./style.css`、`./*`、`./*/style.css`。
 - 套件入口：`packages/tuffex/packages/components/src/{base,pro,ai}/index.ts`。

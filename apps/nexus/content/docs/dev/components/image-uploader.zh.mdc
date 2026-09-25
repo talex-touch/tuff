@@ -8,9 +8,8 @@ tags: [image, upload, form]
 syncStatus: reviewed
 verified: true
 ---
-# ImageUploader 图片上传
 
-## 基础用法
+## 用法
 
 ::::TuffDemoWrapper{demo="ImageUploaderImageUploaderDemo" code-lang="vue"}
 ---
@@ -26,8 +25,6 @@ code: |
   </template>
 ---
 ::::
-
-## 组合示例
 
 ### 上传新选择的图片
 
@@ -63,22 +60,16 @@ const images = ref([
 
 没有 `file` 的远程条目会正常预览和删除，但组件不会 revoke 它们的 URL。
 
-## 交互契约
+### 最佳实践
 
-- 隐藏原生 input 使用 `type="file"`，并从 props 接收 `multiple`、`accept` 和 `disabled`。
-- 添加块是原生 `button type="button"`，未禁用且未达到上限时会打开 input。
-- 当 `value.length >= max` 时，添加块会禁用。
-- 没有文件或没有剩余容量时，input change 会被忽略。
-- 新文件会按剩余容量截断，并转换为 `{ id, url, name, file }` 记录。
-- 本地新预览使用 `URL.createObjectURL(file)`。
-- 每次 change 后会清空原生 input 值，因此可以再次选择同一个文件。
-- 新增文件会发出 `update:modelValue`，再发出包含完整列表的 `change`。
-- 禁用状态会阻止删除。
-- 删除组件拥有的本地 object URL 时会释放 URL，然后依次发出 `update:modelValue`、`remove`、`change`。
-- 组件卸载时会释放该实例创建的全部 object URL。
-- 预览图使用 `name` 作为 alt；未命名图片使用空 alt。
+- 只需要图片预览时使用 `ImageUploader`。需要通用文件、拖拽、文件大小或 `add` 事件时使用 `FileUploader`。
+- `accept` 只是浏览器提示；MIME、尺寸、文件大小和内容都应在服务端校验。
+- 远程图片记录应使用持久 id；本地生成 id 只适合当前 UI 会话。
+- 不要手动释放组件拥有的 URL；组件会释放它自己创建的 object URL。
+- 上传成功后，在应用状态中用远程图片 URL 记录替换本地 object URL 记录。
+- 让 `max` 与后端限制一致，避免用户选择超过可保存数量的图片。
 
-## API
+## API 参考
 
 ### Props
 
@@ -115,23 +106,27 @@ const images = ref([
 |------|------|------|
 | - | - | `TxImageUploader` 不暴露插槽。自定义远程图片通过受控 `modelValue` 记录传入；上传行或元数据布局需要自定义渲染时改用 `FileUploader`。 |
 
-## 最佳实践
+## 概述
 
-- 只需要图片预览时使用 `ImageUploader`。需要通用文件、拖拽、文件大小或 `add` 事件时使用 `FileUploader`。
-- `accept` 只是浏览器提示；MIME、尺寸、文件大小和内容都应在服务端校验。
-- 远程图片记录应使用持久 id；本地生成 id 只适合当前 UI 会话。
-- 不要手动释放组件拥有的 URL；组件会释放它自己创建的 object URL。
-- 上传成功后，在应用状态中用远程图片 URL 记录替换本地 object URL 记录。
-- 让 `max` 与后端限制一致，避免用户选择超过可保存数量的图片。
+- 隐藏原生 input 使用 `type="file"`，并从 props 接收 `multiple`、`accept` 和 `disabled`。
+- 添加块是原生 `button type="button"`，未禁用且未达到上限时会打开 input。
+- 当 `value.length >= max` 时，添加块会禁用。
+- 没有文件或没有剩余容量时，input change 会被忽略。
+- 新文件会按剩余容量截断，并转换为 `{ id, url, name, file }` 记录。
+- 本地新预览使用 `URL.createObjectURL(file)`。
+- 每次 change 后会清空原生 input 值，因此可以再次选择同一个文件。
+- 新增文件会发出 `update:modelValue`，再发出包含完整列表的 `change`。
+- 禁用状态会阻止删除。
+- 删除组件拥有的本地 object URL 时会释放 URL，然后依次发出 `update:modelValue`、`remove`、`change`。
+- 组件卸载时会释放该实例创建的全部 object URL。
+- 预览图使用 `name` 作为 alt；未命名图片使用空 alt。
 
-## 审阅说明
+## 技术实现
 
 - 已对照 `packages/tuffex/packages/components/src/image-uploader/src/types.ts`、`TxImageUploader.vue` 与 `image-uploader.test.ts` 核对。
 - **实测覆盖:** input 属性、已有远程预览、max 数量截断、禁用时阻止添加/删除、input 值重置、object URL 创建、remove/change 事件和卸载清理。
 - 生命周期说明：组件只释放自己创建的 object URL。远程 URL 或父级自行创建的 blob URL 仍由调用方负责。
 - API 说明：`ImageUploader` 有意不提供 `add` 事件；需要找出本次新增本地图片时，请监听 `change` 并筛选带 `file` 的记录。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/image-uploader/src/TxImageUploader.vue`.
 - Types: `packages/tuffex/packages/components/src/image-uploader/src/types.ts`.

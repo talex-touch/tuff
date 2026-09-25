@@ -8,29 +8,8 @@ tags: [scroll, layout, better-scroll]
 syncStatus: reviewed
 verified: true
 ---
-# Scroll 滚动
 
-## 行为说明
-
-- **BetterScroll 模式**
-  - 支持 `bounce`、更一致的滚动条外观
-  - 内容/容器变化会自动 `refresh()`（可通过 `refreshOnContentChange` 控制）
-- **Native 模式**
-  - 使用浏览器原生滚动
-  - `direction` 会映射为 `overflow-x/y` 以保持结构一致
-  - macOS Safari 直接启用原生滚动
-  - 默认在 macOS + Chromium `145+` 自动回退到原生滚动（Chromium 原生已支持）
-  - 如需跨环境统一由 BetterScroll 接管，可设置 `unified=true`
-
-## 运行时策略（优先级）
-
-1. `native=true`：始终使用原生滚动（最高优先级）。
-2. `unified=true`：始终由 BetterScroll 接管（跨环境统一行为）。
-3. 运行在 macOS Safari：直接使用原生滚动。
-4. `nativeAutoFallback=true` 且满足 `macOS + Chromium >= 145`：自动使用原生滚动。
-5. 其他情况：使用 BetterScroll。
-
-## 基础用法
+## 用法
 
 ### Scroll
 :::TuffDemoWrapper{demo="ScrollScrollDemo" code-lang="vue"}
@@ -51,6 +30,91 @@ code: |
   </template>
 ---
 :::
+
+### 最佳实践
+
+- 普通文章或文档滚动优先使用 Native 模式；只有需要一致滚动条、滚轮桥接、bounce 或 pull 插件时再使用 BetterScroll。
+- 嵌套面板默认保持 `scrollChaining=false`。只有明确需要父子滚动交接且已验证体验时才开启。
+- 子组件自带间距时使用 `noPadding`，尤其是虚拟列表、表格和全出血媒体内容。
+- 横向或双轴内容要提供稳定内容宽度，或让组件设置 `width: max-content`；否则 BetterScroll 无法可靠判断横向溢出。
+- 使用 `pullDownRefresh` / `pullUpLoad` 时，异步成功和失败路径都必须调用对应 finish 方法。
+- 避免把大型可变对象塞进 `options`；已文档化行为优先使用一等 props，方便 watcher 和文档保持准确。
+
+## API 参考
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `native` | `boolean` | `false` | 强制使用浏览器原生滚动，跳过 BetterScroll 初始化 |
+| `unified` | `boolean` | `false` | 强制由 BetterScroll 接管滚动（跨环境统一行为，会覆盖 Safari/Chromium 自动原生；`native=true` 仍优先生效） |
+| `nativeAutoFallback` | `boolean` | `true` | 控制 macOS + Chromium `145+` 自动回退原生滚动；不影响 macOS Safari 的原生优先策略 |
+| `noPadding` | `boolean` | `false` | 移除默认内容内边距；horizontal 与 both 轴模式还会把内容宽度设为 `max-content` |
+| `scrollChaining` | `boolean` | `false` | 是否允许滚动链（到边界后继续带动父级滚动）；不建议默认开启，仅在明确需要父子联动时启用 |
+| `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | 选择滚动轴向；native 模式映射为 `overflow-x/y`，BetterScroll 映射为 `scrollX`、`scrollY` 与 `freeScroll` |
+| `scrollbar` | `boolean` | `true` | 启用 BetterScroll 滚动条插件；native 模式使用浏览器滚动条 |
+| `scrollbarFade` | `boolean` | `true` | 启用 `scrollbar` 时，透传 BetterScroll 滚动条的淡出行为 |
+| `scrollbarInteractive` | `boolean` | `true` | 启用 `scrollbar` 时，允许拖拽 BetterScroll 滚动条 |
+| `scrollbarAlwaysVisible` | `boolean` | `false` | 让 BetterScroll 保持滚动条常显状态（用于 bounce/无边界场景） |
+| `scrollbarMinSize` | `number` | `18` | 通过 `--tx-scrollbar-min-size` 设置 BetterScroll 滚动条滑块的最小尺寸 |
+| `probeType` | `0 \| 1 \| 2 \| 3` | `3` | BetterScroll `probeType` |
+| `bounce` | `boolean` | `true` | 启用 BetterScroll 边界回弹与本地滚轮 overshoot 行为 |
+| `click` | `boolean` | `true` | 透传 BetterScroll 的 click 处理 |
+| `wheel` | `boolean` | `true` | 为 BetterScroll 模式启用本地滚轮桥接；忽略 `ctrl` 滚轮手势 |
+| `refreshOnContentChange` | `boolean` | `true` | 监听内容变更，并在变更后调用 BetterScroll 的 `refresh()` |
+| `pullDownRefresh` | `boolean \| Record<string, unknown>` | `false` | 启用下拉刷新；BetterScroll 模式接收插件选项，native 模式发出基于阈值的触发 |
+| `pullDownThreshold` | `number` | `70` | `pulling-down` 的最小原生触摸位移与 BetterScroll 插件阈值 |
+| `pullDownStop` | `number` | `56` | BetterScroll 下拉停留位置；native 模式不使用该值 |
+| `pullUpLoad` | `boolean \| Record<string, unknown>` | `false` | 启用上拉加载；BetterScroll 模式接收插件选项，native 模式在到达底部阈值时发出 |
+| `pullUpThreshold` | `number` | `0` | `pulling-up` 的原生距底阈值与 BetterScroll 插件阈值 |
+| `options` | `Record<string, unknown>` | `{}` | 额外的 BetterScroll 选项；`wheelOvershoot` 会在透传前被本地消费；macOS 上当 `wheel` 与 `bounce` 同时开启时，会默认注入 `useTransition: false`，在 `options` 里显式传 `useTransition` 可覆盖 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `scroll` | `{ scrollTop: number; scrollLeft: number }` | 滚动事件 |
+| `pulling-down` | - | 触发下拉刷新 |
+| `pulling-up` | - | 触发上拉加载更多 |
+
+### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| `default` | 主滚动内容，渲染在 `.tx-scroll__content` 内。 |
+| `header` | 默认内容之前的可选内容。Native 模式渲染在 `.tx-scroll__content` 之前；BetterScroll 模式渲染在滚动内容内部。 |
+| `footer` | 默认内容之后的可选内容，常用于加载更多状态。 |
+
+### Expose
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `nativeScrollRef` | `Ref<HTMLElement \| null>` | Native 模式下的原生滚动元素引用。 |
+| `scrollTo(x, y, time?)` | `(x: number, y: number, time?: number) => void` | 滚动到绝对偏移。BetterScroll 模式内部会取负偏移并使用 `time`；Native 模式调用 `scrollTo(x, y)`。 |
+| `getScrollInfo()` | `() => TxScrollInfo` | 返回当前偏移、滚动尺寸和可视尺寸。 |
+| `refresh()` | `() => void` | 调用 BetterScroll `refresh()` 并更新可滚动状态；Native 模式无操作。 |
+| `finishPullDown()` | `() => void` | 重置 Native 下拉锁，或转发到 BetterScroll `finishPullDown()` 后调度刷新。 |
+| `finishPullUp()` | `() => void` | 重置 Native 上拉锁，或转发到 BetterScroll `finishPullUp()` 后调度刷新。 |
+
+## 行为说明
+
+- **BetterScroll 模式**
+  - 支持 `bounce`、更一致的滚动条外观
+  - 内容/容器变化会自动 `refresh()`（可通过 `refreshOnContentChange` 控制）
+- **Native 模式**
+  - 使用浏览器原生滚动
+  - `direction` 会映射为 `overflow-x/y` 以保持结构一致
+  - macOS Safari 直接启用原生滚动
+  - 默认在 macOS + Chromium `145+` 自动回退到原生滚动（Chromium 原生已支持）
+  - 如需跨环境统一由 BetterScroll 接管，可设置 `unified=true`
+
+## 运行时策略（优先级）
+
+1. `native=true`：始终使用原生滚动（最高优先级）。
+2. `unified=true`：始终由 BetterScroll 接管（跨环境统一行为）。
+3. 运行在 macOS Safari：直接使用原生滚动。
+4. `nativeAutoFallback=true` 且满足 `macOS + Chromium >= 145`：自动使用原生滚动。
+5. 其他情况：使用 BetterScroll。
 
 ## 方向与滚动条
 
@@ -247,64 +311,7 @@ code: |
 ---
 :::
 
-## API
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `native` | `boolean` | `false` | 强制使用浏览器原生滚动，跳过 BetterScroll 初始化 |
-| `unified` | `boolean` | `false` | 强制由 BetterScroll 接管滚动（跨环境统一行为，会覆盖 Safari/Chromium 自动原生；`native=true` 仍优先生效） |
-| `nativeAutoFallback` | `boolean` | `true` | 控制 macOS + Chromium `145+` 自动回退原生滚动；不影响 macOS Safari 的原生优先策略 |
-| `noPadding` | `boolean` | `false` | 移除默认内容内边距；horizontal 与 both 轴模式还会把内容宽度设为 `max-content` |
-| `scrollChaining` | `boolean` | `false` | 是否允许滚动链（到边界后继续带动父级滚动）；不建议默认开启，仅在明确需要父子联动时启用 |
-| `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | 选择滚动轴向；native 模式映射为 `overflow-x/y`，BetterScroll 映射为 `scrollX`、`scrollY` 与 `freeScroll` |
-| `scrollbar` | `boolean` | `true` | 启用 BetterScroll 滚动条插件；native 模式使用浏览器滚动条 |
-| `scrollbarFade` | `boolean` | `true` | 启用 `scrollbar` 时，透传 BetterScroll 滚动条的淡出行为 |
-| `scrollbarInteractive` | `boolean` | `true` | 启用 `scrollbar` 时，允许拖拽 BetterScroll 滚动条 |
-| `scrollbarAlwaysVisible` | `boolean` | `false` | 让 BetterScroll 保持滚动条常显状态（用于 bounce/无边界场景） |
-| `scrollbarMinSize` | `number` | `18` | 通过 `--tx-scrollbar-min-size` 设置 BetterScroll 滚动条滑块的最小尺寸 |
-| `probeType` | `0 \| 1 \| 2 \| 3` | `3` | BetterScroll `probeType` |
-| `bounce` | `boolean` | `true` | 启用 BetterScroll 边界回弹与本地滚轮 overshoot 行为 |
-| `click` | `boolean` | `true` | 透传 BetterScroll 的 click 处理 |
-| `wheel` | `boolean` | `true` | 为 BetterScroll 模式启用本地滚轮桥接；忽略 `ctrl` 滚轮手势 |
-| `refreshOnContentChange` | `boolean` | `true` | 监听内容变更，并在变更后调用 BetterScroll 的 `refresh()` |
-| `pullDownRefresh` | `boolean \| Record<string, unknown>` | `false` | 启用下拉刷新；BetterScroll 模式接收插件选项，native 模式发出基于阈值的触发 |
-| `pullDownThreshold` | `number` | `70` | `pulling-down` 的最小原生触摸位移与 BetterScroll 插件阈值 |
-| `pullDownStop` | `number` | `56` | BetterScroll 下拉停留位置；native 模式不使用该值 |
-| `pullUpLoad` | `boolean \| Record<string, unknown>` | `false` | 启用上拉加载；BetterScroll 模式接收插件选项，native 模式在到达底部阈值时发出 |
-| `pullUpThreshold` | `number` | `0` | `pulling-up` 的原生距底阈值与 BetterScroll 插件阈值 |
-| `options` | `Record<string, unknown>` | `{}` | 额外的 BetterScroll 选项；`wheelOvershoot` 会在透传前被本地消费；macOS 上当 `wheel` 与 `bounce` 同时开启时，会默认注入 `useTransition: false`，在 `options` 里显式传 `useTransition` 可覆盖 |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `scroll` | `{ scrollTop: number; scrollLeft: number }` | 滚动事件 |
-| `pulling-down` | - | 触发下拉刷新 |
-| `pulling-up` | - | 触发上拉加载更多 |
-
-
-### Slots
-
-| 插槽名 | 说明 |
-|--------|------|
-| `default` | 主滚动内容，渲染在 `.tx-scroll__content` 内。 |
-| `header` | 默认内容之前的可选内容。Native 模式渲染在 `.tx-scroll__content` 之前；BetterScroll 模式渲染在滚动内容内部。 |
-| `footer` | 默认内容之后的可选内容，常用于加载更多状态。 |
-
-### Expose
-
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `nativeScrollRef` | `Ref<HTMLElement \| null>` | Native 模式下的原生滚动元素引用。 |
-| `scrollTo(x, y, time?)` | `(x: number, y: number, time?: number) => void` | 滚动到绝对偏移。BetterScroll 模式内部会取负偏移并使用 `time`；Native 模式调用 `scrollTo(x, y)`。 |
-| `getScrollInfo()` | `() => TxScrollInfo` | 返回当前偏移、滚动尺寸和可视尺寸。 |
-| `refresh()` | `() => void` | 调用 BetterScroll `refresh()` 并更新可滚动状态；Native 模式无操作。 |
-| `finishPullDown()` | `() => void` | 重置 Native 下拉锁，或转发到 BetterScroll `finishPullDown()` 后调度刷新。 |
-| `finishPullUp()` | `() => void` | 重置 Native 上拉锁，或转发到 BetterScroll `finishPullUp()` 后调度刷新。 |
-
-## 交互契约
+## 概述
 
 - `native=true` 始终优先。否则 `unified=true` 强制 BetterScroll；macOS Safari 以及支持原生非根 overscroll 的 macOS Chromium 默认走 Native，除非设置 unified。
 - Native 模式下，`direction` 映射为 CSS overflow；启用轴上 `scrollChaining=false` 会映射为 `overscroll-behavior: contain`。
@@ -313,23 +320,12 @@ code: |
 - 下拉 / 上拉事件触发后会加锁。异步任务完成后必须调用 `finishPullDown()` / `finishPullUp()`，下一轮才会再次触发。
 - Native 下拉是在 `scrollTop=0` 时基于 touch 阈值的降级实现；`pullDownStop` 仅 BetterScroll 模式生效。
 
-## 最佳实践
-
-- 普通文章或文档滚动优先使用 Native 模式；只有需要一致滚动条、滚轮桥接、bounce 或 pull 插件时再使用 BetterScroll。
-- 嵌套面板默认保持 `scrollChaining=false`。只有明确需要父子滚动交接且已验证体验时才开启。
-- 子组件自带间距时使用 `noPadding`，尤其是虚拟列表、表格和全出血媒体内容。
-- 横向或双轴内容要提供稳定内容宽度，或让组件设置 `width: max-content`；否则 BetterScroll 无法可靠判断横向溢出。
-- 使用 `pullDownRefresh` / `pullUpLoad` 时，异步成功和失败路径都必须调用对应 finish 方法。
-- 避免把大型可变对象塞进 `options`；已文档化行为优先使用一等 props，方便 watcher 和文档保持准确。
-
-## 审阅说明
+## 技术实现
 
 - **运行时契约：** `native=true` 始终优先；否则 `unified=true` 强制 BetterScroll，macOS Safari 和支持原生非根 overscroll 的 macOS Chromium 默认走原生降级。
 - **轴向契约：** Native 模式把 `direction` 映射为 CSS overflow 与 `overscroll-behavior`；BetterScroll 模式映射为 `scrollX`、`scrollY` 和 `freeScroll`。
 - **刷新契约：** 尺寸变化和内容变更会先合并再 `refresh()`。下拉/上拉事件带锁，异步结束后必须调用 `finishPullDown()` / `finishPullUp()`。
 - **实测覆盖:** `scroll.test.ts` 覆盖原生 overflow、插槽、滚动事件、`getScrollInfo()`、`scrollTo()`、原生 pull 锁和合并刷新；`scroll-export.test.ts` 保护公开导出边界。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/scroll/src/TxScroll.vue`.
 - Runtime helpers: `packages/tuffex/packages/components/src/scroll/src/scroll-wheel.ts`, `better-scroll-pull-plugins.ts`, and `runtime-capabilities.ts`.

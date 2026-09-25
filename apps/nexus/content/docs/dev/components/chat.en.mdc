@@ -8,9 +8,8 @@ tags: [chat, ai, markdown]
 syncStatus: reviewed
 verified: true
 ---
-# Chat
 
-## Basic Usage
+## Usage
 
 ### ChatList
 :::TuffDemoWrapper{demo="ChatChatListDemo" code-lang="vue"}
@@ -38,16 +37,16 @@ code: |
 ---
 :::
 
-## Interaction Contract
+### Best Practices
 
-- `TxChatList` preserves the order of `messages` and renders each message by its stable `id`.
-- `markdown` defaults to `true`; message bodies are passed to `TxMarkdownView`. Set `markdown=false` to render plain text.
-- `stagger` defaults to `true`; the list wraps rows in `TxStagger`. Disable it for virtualized or frequently re-sorted transcripts.
-- `createdAt` is formatted only after mount, avoiding SSR/client time mismatch.
-- Image attachments render as native `button type="button"` thumbnails with lazy-loaded images.
-- `imageClick` always includes `{ url, name, messageId }`, so the host can open a preview, download, or audit the source message.
+- Use stable message ids from the conversation store; do not key rows by array index.
+- Keep remote image URLs normalized at the data boundary; `TxChatMessage` does not validate or rewrite attachment sources.
+- Disable `stagger` for virtualized lists or when the host reorders messages during streaming.
+- Handle `imageClick` in the host so previews, downloads, analytics, and permission checks remain product-specific.
+- Keep Markdown enabled for trusted assistant output; sanitize or normalize untrusted content before it reaches the message array.
+- Prefer the separate `TxChatComposer` and `TxTypingIndicator` docs for input and assistant-pending behavior; this page covers transcript rendering.
 
-## API
+## API Reference
 
 ### Data Models
 
@@ -125,24 +124,22 @@ No public instance methods are exposed.
 - `TxTypingIndicator` covers pending assistant states. See [TypingIndicator](./typing-indicator.en.mdc).
 - New AI transcript surfaces that need `tool` messages or streaming states should prefer [AI Elements](./ai-elements.en.mdc).
 
-## Best Practices
+## Overview
 
-- Use stable message ids from the conversation store; do not key rows by array index.
-- Keep remote image URLs normalized at the data boundary; `TxChatMessage` does not validate or rewrite attachment sources.
-- Disable `stagger` for virtualized lists or when the host reorders messages during streaming.
-- Handle `imageClick` in the host so previews, downloads, analytics, and permission checks remain product-specific.
-- Keep Markdown enabled for trusted assistant output; sanitize or normalize untrusted content before it reaches the message array.
-- Prefer the separate `TxChatComposer` and `TxTypingIndicator` docs for input and assistant-pending behavior; this page covers transcript rendering.
+- `TxChatList` preserves the order of `messages` and renders each message by its stable `id`.
+- `markdown` defaults to `true`; message bodies are passed to `TxMarkdownView`. Set `markdown=false` to render plain text.
+- `stagger` defaults to `true`; the list wraps rows in `TxStagger`. Disable it for virtualized or frequently re-sorted transcripts.
+- `createdAt` is formatted only after mount, avoiding SSR/client time mismatch.
+- Image attachments render as native `button type="button"` thumbnails with lazy-loaded images.
+- `imageClick` always includes `{ url, name, messageId }`, so the host can open a preview, download, or audit the source message.
 
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/chat/src/types.ts`, `TxChatList.vue`, `TxChatMessage.vue`, `TxChatComposer.vue`, `TxTypingIndicator.vue`, `chat-composer.test.ts`, and `typing-indicator.test.ts`.
 - API headings now use shared `Props`, `Events`, and `Slots` sections with per-component subsections, while keeping the message data models explicit.
 - Verified source behavior: `TxChatList` forwards `imageClick`, `TxChatMessage` emits normalized image payloads, Markdown defaults to `true`, stagger defaults to `true`, and timestamps are suppressed until mounted.
 - **Verified coverage:** Coverage: no dedicated `TxChatList` / `TxChatMessage` unit test currently exists; `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies this page and `ChatChatListDemo`, while `packages/tuffex/packages/components/src/chat/__tests__/chat-composer.test.ts` and `typing-indicator.test.ts` cover the related primitives linked from this transcript page.
 - `TxChatComposer` and `TxTypingIndicator` live in the same source folder but are documented as related primitives to avoid duplicating their full API on this transcript page.
-
-## Source
 
 - List source: `packages/tuffex/packages/components/src/chat/src/TxChatList.vue`
 - Message source: `packages/tuffex/packages/components/src/chat/src/TxChatMessage.vue`

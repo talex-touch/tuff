@@ -8,9 +8,8 @@ tags: [tree, data, hierarchy]
 syncStatus: reviewed
 verified: true
 ---
-# Tree 树形
 
-## 基础用法
+## 用法
 
 ::TuffDemoWrapper{demo="TreeTreeDemo" code-lang="vue"}
 ---
@@ -53,45 +52,16 @@ code: |
 ---
 ::
 
-## 后台权限域
+### 最佳实践
 
-`TxTree` 适合承载后台页面的资源域、权限域和组织层级；搭配 `TxSearchInput` 使用时，搜索文本直接传给 `filterText`，选中 key 再驱动右侧详情、穿梭框或审计流。
+- 把 `key` 当作持久标识，不要从会翻译或重命名的显示文案派生。
+- 只有其它界面需要拥有展开状态时才使用 `expandedKeys`；普通树优先用 `defaultExpandedKeys`。
+- 后台权限域树建议保持单选，真实资源授权交给 `TxTransfer`、`DataTable` 或详情面板。
+- 领域搜索（路径别名、隐藏元数据等）用 `filterMethod`；简单树保留默认 label 搜索即可。
+- 如果用 `leaf=false` 表现懒加载占位，外围 UI 也要提供加载或空子级状态。`TxTree` 本身不会拉取子节点。
+- 使用 `item` 插槽替换行时，由展开控件调用 `toggleExpand()`，由可选区域调用 `toggleSelect()`，不要复制内部状态逻辑。
 
-::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的 Tree / TreeSelect / Transfer / Timeline 组合。"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const query = ref('')
-  const selectedScope = ref<string | number>('release')
-  const nodes = [
-    {
-      key: 'workspace',
-      label: '工作区',
-      children: [
-        { key: 'release', label: '发布控制' },
-        { key: 'audit', label: '审计日志' },
-      ],
-    },
-  ]
-  </script>
-
-  <template>
-    <section class="grid gap-3">
-      <TxSearchInput v-model="query" placeholder="过滤权限域" />
-      <TxTree
-        v-model="selectedScope"
-        :nodes="nodes"
-        :default-expanded-keys="['workspace']"
-        :filter-text="query"
-      />
-    </section>
-  </template>
----
-::
-
-## API
+## API 参考
 
 ### TxTree 属性
 
@@ -137,11 +107,49 @@ code: |
 | `item` | `{ node, level, expanded, hasChildren, selected, toggleExpand, toggleSelect, indent }` | 替换完整可见行渲染。调用插槽 helper 可保留选择和展开行为。 |
 | `empty` | - | 过滤后没有可见行时的空状态；默认文本为 `No results`。 |
 
+## 后台权限域
+
+`TxTree` 适合承载后台页面的资源域、权限域和组织层级；搭配 `TxSearchInput` 使用时，搜索文本直接传给 `filterText`，选中 key 再驱动右侧详情、穿梭框或审计流。
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的 Tree / TreeSelect / Transfer / Timeline 组合。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('release')
+  const nodes = [
+    {
+      key: 'workspace',
+      label: '工作区',
+      children: [
+        { key: 'release', label: '发布控制' },
+        { key: 'audit', label: '审计日志' },
+      ],
+    },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" placeholder="过滤权限域" />
+      <TxTree
+        v-model="selectedScope"
+        :nodes="nodes"
+        :default-expanded-keys="['workspace']"
+        :filter-text="query"
+      />
+    </section>
+  </template>
+---
+::
+
 ## 暴露方法
 
 无。选择与展开都通过 props 和事件控制。
 
-## 交互契约
+## 概述
 
 - 传入 `expandedKeys` 后展开状态受控。组件仍会触发 `update:expandedKeys`，但只有父级回传新数组后视图才更新。
 - `defaultExpandedKeys` 用于初始化非受控展开；没有 `expandedKeys` 时，后续变化也会重置内部展开状态。
@@ -154,7 +162,20 @@ code: |
 - `disabled` 和 `node.disabled` 会阻止选择，但可展开节点的 caret 仍可展开/折叠。
 - 根节点使用 `role="tree"`（`multiple` 模式下带 `aria-multiselectable`）；每行外层是 `role="treeitem"`，带 `aria-level`、`aria-setsize`、`aria-posinset`（在同级兄弟中的位置），并按需带 `aria-expanded` / `aria-selected` / `aria-disabled`，外层列表为 `role="presentation"`。`item` 插槽只替换行内视觉，因此这些行语义会自动保留。
 
-## 样式定制
+## 技术实现
+
+- 已对照 `packages/tuffex/packages/components/src/tree/src/TxTree.vue` 和 `types.ts` 核对。
+- 现有测试覆盖默认展开渲染、选择事件，以及 `role="treeitem"` 的 set/position 语义（`aria-setsize` / `aria-posinset`，外层为 presentation 列表）；文档补充了源码可见但测试未直接覆盖的过滤展开、受控展开和非级联 checkbox 行为。
+- 权限编排示例应让 `TxTree` 只负责范围选择；资源分配交给相邻控件。
+- 截图参考：`.codex-screenshots/nexus-tree-permission-orchestration-demo-playwright-2026-05-28.png`。
+
+- Component source: `packages/tuffex/packages/components/src/tree/src/TxTree.vue`.
+- Types: `packages/tuffex/packages/components/src/tree/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/tree/__tests__/tree.test.ts` 覆盖默认展开的子节点渲染、选择值发出，以及每个兄弟组的 `aria-setsize` / `aria-posinset`（外层 `role="presentation"` 列表）。
+
+<TuffDocSourceLink />
+
+## 自定义
 
 | 主题变量 | 用途 |
 |-------------|----------|
@@ -162,27 +183,3 @@ code: |
 | `--tx-text-color-secondary` | caret 与空状态颜色。 |
 | `--tx-color-primary` | 选中行背景色调。 |
 | `--tx-fill-color` | hover 行背景色调。 |
-
-## 最佳实践
-
-- 把 `key` 当作持久标识，不要从会翻译或重命名的显示文案派生。
-- 只有其它界面需要拥有展开状态时才使用 `expandedKeys`；普通树优先用 `defaultExpandedKeys`。
-- 后台权限域树建议保持单选，真实资源授权交给 `TxTransfer`、`DataTable` 或详情面板。
-- 领域搜索（路径别名、隐藏元数据等）用 `filterMethod`；简单树保留默认 label 搜索即可。
-- 如果用 `leaf=false` 表现懒加载占位，外围 UI 也要提供加载或空子级状态。`TxTree` 本身不会拉取子节点。
-- 使用 `item` 插槽替换行时，由展开控件调用 `toggleExpand()`，由可选区域调用 `toggleSelect()`，不要复制内部状态逻辑。
-
-## 审阅说明
-
-- 已对照 `packages/tuffex/packages/components/src/tree/src/TxTree.vue` 和 `types.ts` 核对。
-- 现有测试覆盖默认展开渲染、选择事件，以及 `role="treeitem"` 的 set/position 语义（`aria-setsize` / `aria-posinset`，外层为 presentation 列表）；文档补充了源码可见但测试未直接覆盖的过滤展开、受控展开和非级联 checkbox 行为。
-- 权限编排示例应让 `TxTree` 只负责范围选择；资源分配交给相邻控件。
-- 截图参考：`.codex-screenshots/nexus-tree-permission-orchestration-demo-playwright-2026-05-28.png`。
-
-## Source
-
-- Component source: `packages/tuffex/packages/components/src/tree/src/TxTree.vue`.
-- Types: `packages/tuffex/packages/components/src/tree/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/tree/__tests__/tree.test.ts` 覆盖默认展开的子节点渲染、选择值发出，以及每个兄弟组的 `aria-setsize` / `aria-posinset`（外层 `role="presentation"` 列表）。
-
-<TuffDocSourceLink />

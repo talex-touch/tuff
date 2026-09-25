@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import type { DataTableColumn, DataTableEmits, DataTableHeaderSlotProps, DataTableKey, DataTableProps, DataTableSortOrder, DataTableSortState } from './types'
-import { computed, getCurrentInstance, ref, useSlots, watch } from 'vue'
+import { computed, getCurrentInstance, ref, useId, useSlots, watch } from 'vue'
 import { TxCheckbox } from '../../checkbox'
 import { TxEmptyState } from '../../empty-state'
 import { TxSpinner } from '../../spinner'
 
 defineOptions({ name: 'TxDataTable' })
+
+// Kept in step with `.tx-data-table__th--select` / `--expand` in the style block:
+// a fixed-left column sticks after them, so their widths are part of the offset.
+const SELECT_COLUMN_WIDTH = 42
+const EXPAND_COLUMN_WIDTH = 40
 
 const props = withDefaults(defineProps<DataTableProps<any>>(), {
   columns: () => [],
@@ -18,6 +23,10 @@ const props = withDefaults(defineProps<DataTableProps<any>>(), {
   interactiveRows: false,
   selectable: false,
   selectedKeys: () => [],
+  expandable: false,
+  defaultExpandedKeys: () => [],
+  expandLabel: 'Expand row',
+  collapseLabel: 'Collapse row',
   sortOnClient: true,
   sortCycle: 'tri',
   tableLayout: 'auto',
@@ -193,6 +202,58 @@ function toggleAll() {
   emit('selectionChange', next)
 }
 
+// --- Row expansion ---------------------------------------------------------
+// Same controlled/uncontrolled split as `sort`: an inline `:default-expanded-keys`
+// literal must not roll the reader's toggles back on every parent render, so the
+// watch tracks the key list by value rather than by array identity.
+const localExpandedKeys = ref<DataTableKey[]>([...(props.defaultExpandedKeys ?? [])])
+const defaultExpandedSignature = computed(() =>
+  (props.defaultExpandedKeys ?? []).map(key => String(key)).join('\u0000'),
+)
+
+watch(defaultExpandedSignature, () => {
+  localExpandedKeys.value = [...(props.defaultExpandedKeys ?? [])]
+})
+
+const isExpandControlled = computed(() => props.expandedKeys !== undefined)
+const expandedSet = computed(
+  () => new Set(isExpandControlled.value ? (props.expandedKeys ?? []) : localExpandedKeys.value),
+)
+
+const tableId = useId()
+
+function detailRowId(row: any, index: number) {
+  return `${tableId}-detail-${getRowKey(row, index)}`
+}
+
+function isRowExpandable(row: any, index: number): boolean {
+  return props.rowExpandable ? props.rowExpandable(row, index) : true
+}
+
+function isRowExpanded(row: any, index: number): boolean {
+  if (!props.expandable || !isRowExpandable(row, index))
+    return false
+  return expandedSet.value.has(getRowKey(row, index))
+}
+
+function toggleExpand(row: any, index: number) {
+  if (!isRowExpandable(row, index))
+    return
+  const key = getRowKey(row, index)
+  const next = new Set(expandedSet.value)
+  const expanded = !next.has(key)
+  if (expanded)
+    next.add(key)
+  else
+    next.delete(key)
+
+  const updated = Array.from(next)
+  if (!isExpandControlled.value)
+    localExpandedKeys.value = updated
+  emit('update:expandedKeys', updated)
+  emit('expand', { row, index, expanded })
+}
+
 function formatCell(row: any, column: DataTableColumn, index: number): string {
   const value = getCellValue(row, column)
   if (column.format)
@@ -229,7 +290,9 @@ function getStickyWidth(column: DataTableColumn): number {
 const fixedColumnOffsets = computed(() => {
   const left = new Map<string, string>()
   const right = new Map<string, string>()
-  let leftOffset = 0
+  // The leading utility columns are not part of `columns`, so a fixed-left
+  // column has to start after them or it sticks over the toggle / checkbox.
+  let leftOffset = (props.expandable ? EXPAND_COLUMN_WIDTH : 0) + (props.selectable ? SELECT_COLUMN_WIDTH : 0)
   let rightOffset = 0
 
   for (const column of props.columns) {
@@ -289,7 +352,9 @@ function columnClass(column: DataTableColumn, type: 'header' | 'cell') {
   ]
 }
 
-const colspan = computed(() => props.columns.length + (props.selectable ? 1 : 0))
+const colspan = computed(
+  () => props.columns.length + (props.selectable ? 1 : 0) + (props.expandable ? 1 : 0),
+)
 
 // Plain functions, not computeds: slot presence is read at render time, so a
 // parent that starts passing a footer slot gets a footer without a key change.
@@ -302,6 +367,10 @@ function rowClasses(row: any, index: number) {
     {
       'is-interactive': rowInteractive.value,
       'is-selected': selectedSet.value.has(getRowKey(row, index)),
+      'is-expanded': isRowExpanded(row, index),
+      // With detail rows in the tbody, `tr:nth-child(odd)` no longer lines up
+      // with the data rows; the stripe moves onto the row itself.
+      'is-stripe': props.expandable && props.striped && index % 2 === 0,
     },
     props.rowClass?.(row, index),
   ]
@@ -349,6 +418,7 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
       'has-sticky-header': stickyHeader,
       'has-sticky-footer': stickyFooter,
       'is-highlight-selected': highlightSelected,
+      'is-expandable': expandable,
       [`is-layout-${tableLayout}`]: true,
     }"
     :style="shellStyle"
@@ -360,6 +430,7 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
     <table class="tx-data-table__table" :style="{ tableLayout }" :aria-busy="loading">
       <thead>
         <tr>
+          <th v-if="expandable" class="tx-data-table__th tx-data-table__th--expand" scope="col" />
           <th v-if="selectable" class="tx-data-table__th tx-data-table__th--select" scope="col">
             <TxCheckbox
               :model-value="allSelected"
@@ -403,40 +474,65 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-for="(row, index) in displayRows"
-          :key="getRowKey(row, index)"
-          class="tx-data-table__row"
-          :class="rowClasses(row, index)"
-          :tabindex="rowInteractive ? 0 : undefined"
-          @click="emitRowClick(row, index)"
-          @keydown="handleRowKeydown($event, row, index)"
-        >
-          <td v-if="selectable" class="tx-data-table__cell tx-data-table__cell--select" @click.stop>
-            <TxCheckbox
-              :model-value="selectedSet.has(getRowKey(row, index))"
-              aria-label="Select row"
-              @update:model-value="() => toggleRow(getRowKey(row, index))"
-            />
-          </td>
-          <td
-            v-for="column in columns"
-            :key="column.key"
-            class="tx-data-table__cell"
-            :class="columnClass(column, 'cell')"
-            :style="columnStyle(column)"
+        <template v-for="(row, index) in displayRows" :key="getRowKey(row, index)">
+          <tr
+            class="tx-data-table__row"
+            :class="rowClasses(row, index)"
+            :tabindex="rowInteractive ? 0 : undefined"
+            @click="emitRowClick(row, index)"
+            @keydown="handleRowKeydown($event, row, index)"
           >
-            <slot
-              :name="`cell-${column.key}`"
-              :row="row"
-              :column="column"
-              :value="getCellValue(row, column)"
-              :index="index"
+            <td v-if="expandable" class="tx-data-table__cell tx-data-table__cell--expand" @click.stop>
+              <button
+                v-if="isRowExpandable(row, index)"
+                type="button"
+                class="tx-data-table__expand-toggle"
+                :class="{ 'is-expanded': isRowExpanded(row, index) }"
+                :aria-expanded="isRowExpanded(row, index)"
+                :aria-controls="detailRowId(row, index)"
+                :aria-label="isRowExpanded(row, index) ? collapseLabel : expandLabel"
+                @click="toggleExpand(row, index)"
+              >
+                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                  <path fill="currentColor" d="M9 6l6 6-6 6z" />
+                </svg>
+              </button>
+            </td>
+            <td v-if="selectable" class="tx-data-table__cell tx-data-table__cell--select" @click.stop>
+              <TxCheckbox
+                :model-value="selectedSet.has(getRowKey(row, index))"
+                aria-label="Select row"
+                @update:model-value="() => toggleRow(getRowKey(row, index))"
+              />
+            </td>
+            <td
+              v-for="column in columns"
+              :key="column.key"
+              class="tx-data-table__cell"
+              :class="columnClass(column, 'cell')"
+              :style="columnStyle(column)"
             >
-              {{ formatCell(row, column, index) }}
-            </slot>
-          </td>
-        </tr>
+              <slot
+                :name="`cell-${column.key}`"
+                :row="row"
+                :column="column"
+                :value="getCellValue(row, column)"
+                :index="index"
+              >
+                {{ formatCell(row, column, index) }}
+              </slot>
+            </td>
+          </tr>
+          <tr
+            v-if="isRowExpanded(row, index)"
+            :id="detailRowId(row, index)"
+            class="tx-data-table__row tx-data-table__row--detail"
+          >
+            <td :colspan="colspan" class="tx-data-table__cell tx-data-table__cell--detail">
+              <slot name="expanded" :row="row" :index="index" />
+            </td>
+          </tr>
+        </template>
         <tr v-if="!displayRows.length && !loading">
           <td :colspan="colspan" class="tx-data-table__empty">
             <slot name="empty">
@@ -451,6 +547,7 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
                span columns; `footer-<key>` fills one cell per column. -->
           <slot v-if="$slots.footer" name="footer" :columns="columns" :data="data" :selected-keys="selectedKeys" />
           <template v-else>
+            <td v-if="expandable" class="tx-data-table__footer-cell tx-data-table__footer-cell--expand" />
             <td v-if="selectable" class="tx-data-table__footer-cell tx-data-table__footer-cell--select" />
             <td
               v-for="column in columns"
@@ -568,6 +665,62 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
   text-align: center;
 }
 
+/* Expandable rows --------------------------------------------------------- */
+
+/* Width is mirrored by EXPAND_COLUMN_WIDTH in the script: a fixed-left column
+   offsets itself by this column. */
+.tx-data-table__th--expand,
+.tx-data-table__cell--expand {
+  width: 40px;
+  padding: 0;
+  text-align: center;
+}
+
+.tx-data-table__expand-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tx-text-color-secondary, #909399);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+
+  &:hover {
+    color: var(--tx-text-color-primary, #303133);
+    background: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent);
+  }
+
+  &.is-expanded {
+    transform: rotate(90deg);
+  }
+}
+
+.tx-data-table__expand-toggle:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-data-table__expand-toggle {
+    transition: none;
+  }
+}
+
+.tx-data-table__row--detail > .tx-data-table__cell--detail {
+  padding: 4px 12px 14px 40px;
+  background: color-mix(in srgb, var(--tx-fill-color-lighter, #fafafa) 70%, transparent);
+  color: var(--tx-text-color-regular, #606266);
+}
+
 .tx-data-table__th.is-sortable {
   padding: 0;
 }
@@ -620,14 +773,20 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
   color: var(--tx-color-primary, #409eff);
 }
 
-.tx-data-table.is-striped tbody tr:nth-child(odd) {
+// Detail rows live in the same tbody, so `nth-child(odd)` stops matching the
+// data rows. An expandable table stripes off the row's own `is-stripe` class.
+.tx-data-table.is-striped:not(.is-expandable) tbody tr:nth-child(odd) {
+  background: color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 60%, transparent);
+}
+
+.tx-data-table.is-striped.is-expandable .tx-data-table__row.is-stripe {
   background: color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 60%, transparent);
 }
 
 // The fallback is the long-standing accent tint. The variable exists so a host
 // with a different table language (a neutral-grey BUI records table, say) can
 // repoint the hover without a prop or an override on `!important`.
-.tx-data-table.is-hover tbody tr:hover {
+.tx-data-table.is-hover tbody tr:hover:not(.tx-data-table__row--detail) {
   background: var(
     --tx-data-table-row-hover-bg,
     color-mix(in srgb, var(--tx-color-primary-light-9, #ecf5ff) 60%, transparent)
@@ -687,6 +846,11 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
 
 .tx-data-table__footer-cell--select {
   width: 42px;
+  text-align: center;
+}
+
+.tx-data-table__footer-cell--expand {
+  width: 40px;
   text-align: center;
 }
 

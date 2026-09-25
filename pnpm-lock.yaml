@@ -210,6 +210,7 @@ overrides:
 
 patchedDependencies:
   app-builder-lib@26.15.3: 4688f96749e3d76cf27bc535d874470bf264610a331db13644df7715d699acf1
+  nitro-cloudflare-dev@0.2.2: c47392fbb49830b9eb6094045394a3e5cc9b54f556f303919d7acaf55e95cbf2
 
 importers:
 
@@ -788,7 +789,7 @@ importers:
         version: 4.24.15
       nitro-cloudflare-dev:
         specifier: catalog:dev
-        version: 0.2.2
+        version: 0.2.2(patch_hash=c47392fbb49830b9eb6094045394a3e5cc9b54f556f303919d7acaf55e95cbf2)
       nuxt:
         specifier: ^4.4.8
         version: 4.4.8(8cbc24d99ad8443610e824bbdc3bc3bf)
@@ -25461,7 +25462,7 @@ snapshots:
       preact-render-to-string: 5.2.3(preact@10.29.6)
       uuid: 14.0.1
 
-  nitro-cloudflare-dev@0.2.2:
+  nitro-cloudflare-dev@0.2.2(patch_hash=c47392fbb49830b9eb6094045394a3e5cc9b54f556f303919d7acaf55e95cbf2):
     dependencies:
       consola: 3.4.2
       mlly: 1.8.2

@@ -9,13 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-The content workbench behind the Nexus docs and blog. Editors pull up drafts and posts in review by status, publish or archive them in bulk, and change a title, link or body in a drawer; every change can be undone from the toast. The editorial board shows the same posts as a flow instead: pushed from draft to published, and slotted into a day of this week.
-
-It fits any "table + details + form" admin: reviewing entries in a plugin store, a help centre, announcements and changelogs.
-
-## Template
+## Usage
 
 ### Content workbench
 
@@ -160,7 +154,30 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+The content workbench behind the Nexus docs and blog. Editors pull up drafts and posts in review by status, publish or archive them in bulk, and change a title, link or body in a drawer; every change can be undone from the toast. The editorial board shows the same posts as a flow instead: pushed from draft to published, and slotted into a day of this week.
+
+It fits any "table + details + form" admin: reviewing entries in a plugin store, a help centre, announcements and changelogs.
+
+- Changing status, searching, sorting and paging each simulate a fetch of about 350 ms: the controls respond at once, the table keeps the old rows, swaps to skeleton rows of the same layout only after 120 ms, and replaces them in one go when the data lands, so nothing jumps.
+- Sorting runs over every filtered post before a page is cut; changing page or filter clears the selection, because the header checkbox only covers the current page.
+- Edit, duplicate, publish, archive and delete apply immediately; the toast stays for about 5 seconds and Undo puts things back as they were.
+- The drawer validates on save only: a title is required; the link takes lowercase letters, digits and hyphens and must not clash with another post; the summary is capped at 160 characters.
+- In the docs column a row click opens the drawer. Expanded (≥ 960px) the table gains section, language and views columns plus a details panel: click a row to inspect it, click again or press Edit to open the drawer. Below 640px only the title column stays, with status and time tucked under the title.
+- Editorial board: drag within a column to reorder and into another column to change status; expanded, drop a card on a day in the week lane to schedule it for 10:00 that day (16:00 if it is today); published cards cannot be scheduled and past days refuse drops. Every move can be undone from the toast. From the keyboard each column is one tab stop: Space picks a card up, ↑ / ↓ move it, Space drops it and Esc cancels; ← / → move it to the neighbouring column, and the card's ⋯ menu has Move to as well. Touch screens have no native drag and drop, so below 640px the board shows one column at a time and cards move through the column switcher and the menu.
+- Editorial board: quick filters and search only dim the cards that do not match, and each column header reads matching / total; dropping into a full In review is allowed, and the toast says the work-in-progress limit is exceeded. Clicking a card opens its details dialog, where stage, dates, checklist and comments apply as you go, and closing it offers one undo for the whole visit; the primary button moves the card on to its next stage.
+- Editorial board: the first time the stage scrolls into view, Mara comes online at 1 second, moves “Changelog: sdkapi 260713” to Scheduled at 1.8 seconds (the card flashes a ring, and View in the toast opens it) and another card gains a new comment at 3.4 seconds. A click or key press inside the template stops the script; with reduced motion the end state is shown at once, with no toast.
+
+## Customization
+
+- For a real backend, replace the simulated fetch with a request and cancel the previous one when the next query goes out; the skeleton, empty state and toast stay as they are.
+- With server-side paging keep `sort-on-client` off and send sort, filter and page together; the table only renders.
+- Put new fields in the drawer and the details panel first and keep only the columns people scan; in a narrow container drop columns by priority instead of scrolling sideways.
+- For WYSIWYG editing, TxMarkdownEditor can replace the body textarea; it draws its toolbar with icon classes, so the host must be able to generate them.
+- Editorial board: TxSortableList keeps its drag state to itself, so dragging between columns is the host's job: let `dragover` through on the column, only record the target in `drop`, and change the data when the board root receives `dragend`, when the source list has settled and the source card is still mounted. Every button inside a card has to stop Enter and Space (`@keydown.enter.stop` / `@keydown.space.stop`), or the list takes them as pick up.
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -179,22 +196,3 @@ code: |
 | Cards (Editorial board) | [TxTag](/docs/dev/components/tag), [TxAvatar](/docs/dev/components/avatar), [TxDropdownMenu / TxDropdownSubmenu](/docs/dev/components/dropdown-menu), [TxProgressBar](/docs/dev/components/progress-bar) | Section strip and tag, author, due or publish time, comment count; a ⋯ menu with Open details, Move to, Copy link and Delete; expanded, a summary line and the pre-publish checklist too |
 | Week lane (Editorial board, expanded) | [TxIconButton](/docs/dev/components/button), [TxButton](/docs/dev/components/button) | Seven drop cells listing what publishes each day; drop a card on a day to schedule it, past days refuse it; step to the previous or next week |
 | Card details (Editorial board) | [TxModal](/docs/dev/components/modal), [TxFlatRadio](/docs/dev/components/flat-radio), [TxDatePicker](/docs/dev/components/date-picker), [TxCheckbox](/docs/dev/components/checkbox), [TxStatusBadge](/docs/dev/components/status-badge), [TxInput](/docs/dev/components/input) | Stage, due and publish dates, the pre-publish checklist and comments; Delete and a button that moves the card on to its next stage |
-
-## Interactions
-
-- Changing status, searching, sorting and paging each simulate a fetch of about 350 ms: the controls respond at once, the table keeps the old rows, swaps to skeleton rows of the same layout only after 120 ms, and replaces them in one go when the data lands, so nothing jumps.
-- Sorting runs over every filtered post before a page is cut; changing page or filter clears the selection, because the header checkbox only covers the current page.
-- Edit, duplicate, publish, archive and delete apply immediately; the toast stays for about 5 seconds and Undo puts things back as they were.
-- The drawer validates on save only: a title is required; the link takes lowercase letters, digits and hyphens and must not clash with another post; the summary is capped at 160 characters.
-- In the docs column a row click opens the drawer. Expanded (≥ 960px) the table gains section, language and views columns plus a details panel: click a row to inspect it, click again or press Edit to open the drawer. Below 640px only the title column stays, with status and time tucked under the title.
-- Editorial board: drag within a column to reorder and into another column to change status; expanded, drop a card on a day in the week lane to schedule it for 10:00 that day (16:00 if it is today); published cards cannot be scheduled and past days refuse drops. Every move can be undone from the toast. From the keyboard each column is one tab stop: Space picks a card up, ↑ / ↓ move it, Space drops it and Esc cancels; ← / → move it to the neighbouring column, and the card's ⋯ menu has Move to as well. Touch screens have no native drag and drop, so below 640px the board shows one column at a time and cards move through the column switcher and the menu.
-- Editorial board: quick filters and search only dim the cards that do not match, and each column header reads matching / total; dropping into a full In review is allowed, and the toast says the work-in-progress limit is exceeded. Clicking a card opens its details dialog, where stage, dates, checklist and comments apply as you go, and closing it offers one undo for the whole visit; the primary button moves the card on to its next stage.
-- Editorial board: the first time the stage scrolls into view, Mara comes online at 1 second, moves “Changelog: sdkapi 260713” to Scheduled at 1.8 seconds (the card flashes a ring, and View in the toast opens it) and another card gains a new comment at 3.4 seconds. A click or key press inside the template stops the script; with reduced motion the end state is shown at once, with no toast.
-
-## Adapting it
-
-- For a real backend, replace the simulated fetch with a request and cancel the previous one when the next query goes out; the skeleton, empty state and toast stay as they are.
-- With server-side paging keep `sort-on-client` off and send sort, filter and page together; the table only renders.
-- Put new fields in the drawer and the details panel first and keep only the columns people scan; in a narrow container drop columns by priority instead of scrolling sideways.
-- For WYSIWYG editing, TxMarkdownEditor can replace the body textarea; it draws its toolbar with icon classes, so the host must be able to generate them.
-- Editorial board: TxSortableList keeps its drag state to itself, so dragging between columns is the host's job: let `dragover` through on the column, only record the target in `drop`, and change the data when the board root receives `dragend`, when the source list has settled and the source card is still mounted. Every button inside a card has to stop Enter and Space (`@keydown.enter.stop` / `@keydown.space.stop`), or the list takes them as pick up.

@@ -8,7 +8,6 @@ tags: [avatar, badge, status]
 syncStatus: reviewed
 verified: true
 ---
-# Avatar Variants
 
 ## Gallery
 
@@ -54,13 +53,11 @@ code: |
 ---
 :::
 
-## Review Notes
+## Technologies
 
 - **Composition note:** This page is a recipe gallery, not a standalone exported component. Each card combines `TxAvatar`, `TxCornerOverlay`, `TxOutlineBorder`, `TxIcon`, and local CSS utilities; copy the smallest needed pattern instead of importing the gallery demo.
 - **Accessibility note:** Purely decorative badges use empty `alt` or `aria-hidden` in the demo. If a badge changes user state, expose that state in adjacent text or the parent control label rather than relying on color or icon shape alone.
 - **Verified coverage:** The demo registry loads `AvatarVariantsAvatarVariantsGalleryDemo`; the underlying component tests are `avatar.test.ts` for `TxAvatar`/`TxAvatarGroup`, plus the relevant `corner-overlay` and `outline-border` component tests for overlay placement and ring/mask behavior.
-
-## Source
 
 - Demo source: `apps/nexus/app/components/content/demos/AvatarVariantsAvatarVariantsGalleryDemo.vue`.
 - Helper source: `apps/nexus/app/components/content/demos/AvatarVariantCard.vue`.

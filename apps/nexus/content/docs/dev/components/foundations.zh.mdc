@@ -9,6 +9,11 @@ syncStatus: reviewed
 verified: true
 ---
 
+## 用法
+
+- 变量全部以 Tuffex 默认值为准。
+- 暗色模式支持 `[data-theme='dark']` 与 `.dark` 两种选择器。
+
 ## 字体
 
 **主字体栈**
@@ -83,18 +88,11 @@ code: |
 | `--tx-border-color-lighter` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ebeef5;"></span><code>#ebeef5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#363637;"></span><code>#363637</code></span> | 更浅边框 |
 | `--tx-border-color-extra-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f2f6fc;"></span><code>#f2f6fc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#2b2b2c;"></span><code>#2b2b2c</code></span> | 最浅边框 |
 
-## 说明
-
-- 变量全部以 Tuffex 默认值为准。
-- 暗色模式支持 `[data-theme='dark']` 与 `.dark` 两种选择器。
-
-## 审阅说明 / Review Notes
+## 技术实现
 
 - **Token 说明:** 表格记录的是 `variables.scss` 中默认 light/dark 变量。高对比 mixin 定义了另一组值；Nexus 暴露该模式时应单独补充文档。
 - **导入说明:** 新页面应使用 `@talex-touch/tuffex/base.css` 加按组件的 style import。完整 `@talex-touch/tuffex/style.css` bundle 只是迁移兼容入口，不是文档推荐模式。
 - **实测覆盖:** 本页已按 `variables.scss` 人工核对；docs smoke 覆盖由 component-docs coverage 测试与 demo lazy/client-boundary 测试提供。
-
-## Source
 
 - Token source: `packages/tuffex/packages/components/style/variables.scss`。
 - Runtime entry: `@talex-touch/tuffex/base.css` 提供变量/基础样式，`@talex-touch/tuffex/<component>/style.css` 提供组件级 CSS。

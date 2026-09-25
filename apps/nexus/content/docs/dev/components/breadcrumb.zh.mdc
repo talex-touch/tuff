@@ -8,9 +8,8 @@ tags: [breadcrumb, navigation, hierarchy]
 syncStatus: reviewed
 verified: true
 ---
-# Breadcrumb 面包屑
 
-## 基础用法
+## 用法
 
 ::::TuffDemoWrapper{demo="BreadcrumbBreadcrumbTrailDemo" code-lang="vue"}
 ---
@@ -32,8 +31,6 @@ code: |
   </template>
 ---
 ::::
-
-## 组合示例
 
 ### 原生链接与手动条目
 
@@ -65,19 +62,16 @@ function openVirtualCrumb(item: { label: string }, index: number) {
 </template>
 ```
 
-## 交互契约
+### 最佳实践
 
-- 根节点渲染为 `nav aria-label="Breadcrumb"`，内部是有序列表。
-- 每个条目都会渲染在一个 list item 中。
-- 非当前、非禁用且带 `href` 的条目渲染为 `<a href="...">`，依赖原生导航。
-- 当前项始终渲染为 `span`，即使提供了 `href`，并带有 `aria-current="page"`。
-- 禁用项渲染为 `span`，带有 `aria-disabled="true"`，且不会发出点击事件。
-- `click` 只会在非当前、非禁用且没有 `href` 的条目上发出。
-- `icon` 会在条目文本前渲染一个 `TxIcon`。
-- 分隔符只渲染在条目之间，并且是 `aria-hidden`。
-- 默认分隔图标名是 `i-carbon-chevron-right`（TxIcon 需要 `i-` 前缀，缺前缀会解析为 `null`）。
+- `items` 保持从最上层父级到当前页的顺序。
+- 真实路由导航应提供 `href`，以保留浏览器链接语义、右键菜单和复制链接能力。
+- 没有 `href` 的条目只用于需要自定义应用行为的虚拟面包屑。
+- 不要期待 `href` 链接触发 `click`；路由行为应通过正常导航处理。
+- 标签保持简短。面包屑用于描述层级，不应重复完整页面标题。
+- 避免把当前页条目标记为 disabled；组件已经把最后一项当作当前且不可交互。
 
-## API
+## API 参考
 
 ### Props
 
@@ -105,21 +99,23 @@ function openVirtualCrumb(item: { label: string }, index: number) {
 
 `TxBreadcrumb` 不暴露插槽。标签、图标名、链接目标和禁用状态都通过 `items` 配置；条目布局需要自定义时，应在组件外组合专用导航。
 
-## 最佳实践
+## 概述
 
-- `items` 保持从最上层父级到当前页的顺序。
-- 真实路由导航应提供 `href`，以保留浏览器链接语义、右键菜单和复制链接能力。
-- 没有 `href` 的条目只用于需要自定义应用行为的虚拟面包屑。
-- 不要期待 `href` 链接触发 `click`；路由行为应通过正常导航处理。
-- 标签保持简短。面包屑用于描述层级，不应重复完整页面标题。
-- 避免把当前页条目标记为 disabled；组件已经把最后一项当作当前且不可交互。
+- 根节点渲染为 `nav aria-label="Breadcrumb"`，内部是有序列表。
+- 每个条目都会渲染在一个 list item 中。
+- 非当前、非禁用且带 `href` 的条目渲染为 `<a href="...">`，依赖原生导航。
+- 当前项始终渲染为 `span`，即使提供了 `href`，并带有 `aria-current="page"`。
+- 禁用项渲染为 `span`，带有 `aria-disabled="true"`，且不会发出点击事件。
+- `click` 只会在非当前、非禁用且没有 `href` 的条目上发出。
+- `icon` 会在条目文本前渲染一个 `TxIcon`。
+- 分隔符只渲染在条目之间，并且是 `aria-hidden`。
+- 默认分隔图标名是 `i-carbon-chevron-right`（TxIcon 需要 `i-` 前缀，缺前缀会解析为 `null`）。
 
-## 审阅说明
+## 技术实现
 
 - 组件源码:`packages/tuffex/packages/components/src/breadcrumb/src/TxBreadcrumb.vue` 确认语义化 `nav` / `ol` 结构、当前项判定、href 渲染、禁用保护、分隔符和手动 `click` 派发规则。
 - 类型契约:`packages/tuffex/packages/components/src/breadcrumb/src/types.ts` 定义 `BreadcrumbItem`、`BreadcrumbProps` 和 `BreadcrumbEmits`。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/breadcrumb/__tests__/breadcrumb.test.ts` 覆盖导航语义、图标、分隔符、当前页非链接渲染、点击派发和禁用抑制。
 - 导出入口:`packages/tuffex/packages/components/src/breadcrumb/index.ts` 重新导出 breadcrumb 源模块。
 
-## Source
 <TuffDocSourceLink />

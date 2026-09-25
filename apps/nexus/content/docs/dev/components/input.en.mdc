@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Input
-
-## Basic Usage
+## Usage
 
 ### Basic Input
 The most common text input usage.
@@ -23,69 +21,28 @@ code: |
   </template>
 ---
 :::
-## Input Types
 
-Supported: `text` / `password` / `textarea` / `date` / `email` / `number`.
+### Best Practices
 
-### Input Types
-Text, password, and textarea.
-:::TuffDemoWrapper{demo="InputInputTypesDemo" code-lang="vue"}
+- Use subtle border and shadow shifts to express focus; do not add a second focus ring around the wrapper unless the surrounding form requires it.
+- Search states should stay lightweight for toolbars and lists. Use `TxSearchInput` when Enter search and debounced remote search are part of the contract.
+- `type="number"` emits numbers for non-empty values and `''` when cleared. Normalize downstream schemas before persistence.
+- The clear control is a keyboard-focusable button and is hidden for disabled or readonly input.
+- Slot content overrides `prefixIcon` / `suffixIcon`; choose one path per field so icons do not drift between docs and implementation.
+
+### Search Row
+Input paired with an action button.
+:::TuffDemoWrapper{demo="InputSearchRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffInput v-model="text" placeholder="Text input" />
-    <TuffInput v-model="password" type="password" placeholder="Password input" />
-    <TuffInput v-model="content" type="textarea" placeholder="Multiline text" :rows="4" />
+    <TuffInput placeholder="Search..." />
+    <TxButton size="sm">Go</TxButton>
   </template>
 ---
 :::
-## Readonly / Disabled
 
-### Readonly / Disabled
-Readonly and disabled states.
-:::TuffDemoWrapper{demo="InputReadonlyDisabledDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TuffInput v-model="readonlyValue" readonly placeholder="Readonly" />
-    <TuffInput v-model="disabledValue" disabled placeholder="Disabled" />
-  </template>
----
-:::
-## Clearable
-
-### Clearable
-One-click clear for content.
-:::TuffDemoWrapper{demo="InputClearableDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TuffInput v-model="clearableValue" clearable placeholder="Clearable" />
-  </template>
----
-:::
-## Prefix / Suffix Slots
-
-### Prefix / Suffix
-Icons help reinforce context.
-:::TuffDemoWrapper{demo="InputPrefixSuffixDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TuffInput v-model="withPrefix" placeholder="Search">
-      <template #prefix>
-        <TxIcon icon="i-carbon-search" />
-      </template>
-    </TuffInput>
-    <TuffInput v-model="withSuffix" placeholder="User">
-      <template #suffix>
-        <TxIcon icon="i-carbon-user" />
-      </template>
-    </TuffInput>
-  </template>
----
-:::
-## API
+## API Reference
 
 ### Props
 
@@ -211,36 +168,78 @@ rows:
 ---
 :::
 
-## Best Practices
+## Input Types
 
-- Use subtle border and shadow shifts to express focus; do not add a second focus ring around the wrapper unless the surrounding form requires it.
-- Search states should stay lightweight for toolbars and lists. Use `TxSearchInput` when Enter search and debounced remote search are part of the contract.
-- `type="number"` emits numbers for non-empty values and `''` when cleared. Normalize downstream schemas before persistence.
-- The clear control is a keyboard-focusable button and is hidden for disabled or readonly input.
-- Slot content overrides `prefixIcon` / `suffixIcon`; choose one path per field so icons do not drift between docs and implementation.
+Supported: `text` / `password` / `textarea` / `date` / `email` / `number`.
 
-## Composite Patterns
-
-### Search Row
-Input paired with an action button.
-:::TuffDemoWrapper{demo="InputSearchRowDemo" code-lang="vue"}
+### Input Types
+Text, password, and textarea.
+:::TuffDemoWrapper{demo="InputInputTypesDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffInput placeholder="Search..." />
-    <TxButton size="sm">Go</TxButton>
+    <TuffInput v-model="text" placeholder="Text input" />
+    <TuffInput v-model="password" type="password" placeholder="Password input" />
+    <TuffInput v-model="content" type="textarea" placeholder="Multiline text" :rows="4" />
   </template>
 ---
 :::
 
-## Review Notes
+## Readonly / Disabled
+
+### Readonly / Disabled
+Readonly and disabled states.
+:::TuffDemoWrapper{demo="InputReadonlyDisabledDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="readonlyValue" readonly placeholder="Readonly" />
+    <TuffInput v-model="disabledValue" disabled placeholder="Disabled" />
+  </template>
+---
+:::
+
+## Clearable
+
+### Clearable
+One-click clear for content.
+:::TuffDemoWrapper{demo="InputClearableDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="clearableValue" clearable placeholder="Clearable" />
+  </template>
+---
+:::
+
+## Prefix / Suffix Slots
+
+### Prefix / Suffix
+Icons help reinforce context.
+:::TuffDemoWrapper{demo="InputPrefixSuffixDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="withPrefix" placeholder="Search">
+      <template #prefix>
+        <TxIcon icon="i-carbon-search" />
+      </template>
+    </TuffInput>
+    <TuffInput v-model="withSuffix" placeholder="User">
+      <template #suffix>
+        <TxIcon icon="i-carbon-user" />
+      </template>
+    </TuffInput>
+  </template>
+---
+:::
+
+## Technologies
 
 - **Value contract:** `type="number"` emits `Number(value)` for non-empty input and preserves `''` when cleared, so persistence layers should normalize before saving.
 - **Clear contract:** `clear()` and the clear button are blocked while `disabled` or `readonly`; otherwise clearing emits `update:modelValue`, `input`, and `clear`.
 - **Composition contract:** wrapper `class` / `style` stay on the outer shell while remaining attrs forward to the native `input` / `textarea`; prefix/suffix slots take precedence over icon props.
 - **Verified coverage:** `input.test.ts` covers text emits, number normalization, textarea attr forwarding, clear button accessibility, disabled/readonly clear blocking, and slot precedence.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/input/src/TxInput.vue`.
 - Export alias: `packages/tuffex/packages/components/src/input/index.ts` exports both `TuffInput` and `TxInput`.

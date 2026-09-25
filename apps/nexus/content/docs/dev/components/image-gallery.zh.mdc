@@ -8,9 +8,8 @@ tags: [image, gallery, preview]
 syncStatus: reviewed
 verified: true
 ---
-# ImageGallery 图片预览
 
-## 基础用法
+## 用法
 
 ::::TuffDemoWrapper{demo="ImageGalleryImageGalleryDemo" code-lang="vue"}
 ---
@@ -27,8 +26,6 @@ code: |
   </template>
 ---
 ::::
-
-## 组合示例
 
 ### 追踪预览打开
 
@@ -54,20 +51,16 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 
 `startIndex` 变化时会被收敛到有效范围。它选择初始/当前预览索引，但不会主动打开 Modal。
 
-## 交互契约
+### 最佳实践
 
-- 缩略图网格为每个 item 渲染一个原生 `button type="button"`。
-- 缩略图按钮使用 `aria-label="Open {label} preview"`，其中 `label` 来自 `item.name` 或生成的 `Image N`。
-- 缩略图和预览图的 `alt` 使用 `item.name`；未命名图片会有意使用空 alt。
-- `items` 为空时不渲染缩略图按钮，也不会发出 `open`。
-- 点击缩略图会收敛索引、打开 Modal，并用 `{ index, item }` 发出 `open`。
-- `startIndex` 变化会收敛到 `0..items.length - 1`。
-- 当 `items` 变为空数组时，预览会关闭，索引重置为 `0`。
-- 预览导航有边界：第一张禁用上一张，最后一张禁用下一张。
-- Modal 标题使用当前图片名称，回退为 `Preview`。
-- 关闭行为委托给 `TxModal`；关闭时发出 `close`。
+- 使用稳定 `id`；不要把数组索引用作长期图库数据的 key。
+- 信息性图片应提供 `name`，让按钮标签、alt 文本和 Modal 标题有意义。
+- 列表规模保持适中。该组件会渲染所有缩略图，不做虚拟化。
+- 不要直接传入未经边界归一化或代理处理的不可信远程图片 URL。
+- `startIndex` 用于选择预览上下文，不是可见性控制。
+- `@open` 适合埋点或联动详情面板；不要在事件中同步改动 `items` 导致已打开图片失效。
 
-## API
+## API 参考
 
 ### Props
 
@@ -99,22 +92,24 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 
 不暴露公开实例方法。
 
-## 最佳实践
+## 概述
 
-- 使用稳定 `id`；不要把数组索引用作长期图库数据的 key。
-- 信息性图片应提供 `name`，让按钮标签、alt 文本和 Modal 标题有意义。
-- 列表规模保持适中。该组件会渲染所有缩略图，不做虚拟化。
-- 不要直接传入未经边界归一化或代理处理的不可信远程图片 URL。
-- `startIndex` 用于选择预览上下文，不是可见性控制。
-- `@open` 适合埋点或联动详情面板；不要在事件中同步改动 `items` 导致已打开图片失效。
+- 缩略图网格为每个 item 渲染一个原生 `button type="button"`。
+- 缩略图按钮使用 `aria-label="Open {label} preview"`，其中 `label` 来自 `item.name` 或生成的 `Image N`。
+- 缩略图和预览图的 `alt` 使用 `item.name`；未命名图片会有意使用空 alt。
+- `items` 为空时不渲染缩略图按钮，也不会发出 `open`。
+- 点击缩略图会收敛索引、打开 Modal，并用 `{ index, item }` 发出 `open`。
+- `startIndex` 变化会收敛到 `0..items.length - 1`。
+- 当 `items` 变为空数组时，预览会关闭，索引重置为 `0`。
+- 预览导航有边界：第一张禁用上一张，最后一张禁用下一张。
+- Modal 标题使用当前图片名称，回退为 `Preview`。
+- 关闭行为委托给 `TxModal`；关闭时发出 `close`。
 
-## 审阅说明
+## 技术实现
 
 - 已人工核对 `packages/tuffex/packages/components/src/image-gallery/src/types.ts`、`TxImageGallery.vue` 与 `image-gallery.test.ts`。
 - `startIndex` 会被收敛并更新当前预览索引，但不会主动打开 Modal。
 - 未命名图片会有意使用空图片 alt，同时缩略图按钮仍会获得生成的打开标签。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/image-gallery/src/TxImageGallery.vue`。
 - Types: `packages/tuffex/packages/components/src/image-gallery/src/types.ts`。

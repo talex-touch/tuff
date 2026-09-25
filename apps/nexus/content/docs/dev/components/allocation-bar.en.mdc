@@ -8,9 +8,8 @@ tags: [data, allocation, segment, chart]
 syncStatus: reviewed
 verified: true
 ---
-# AllocationBar
 
-## Basic Usage
+## Usage
 
 ### AllocationBar
 
@@ -34,15 +33,14 @@ code: |
 ---
 :::
 
-## Selecting Is Inspecting
+### Best Practices
 
-The bar is not a read-only chart: clicking a segment — or its legend chip — changes which one you are inspecting, without the bar itself moving. That is what separates it from a progress bar: it says what the whole is *made of*, not how far along it is.
+- Keep it to three to five segments and fold the tail into an "other"; the default ladder has four steps (accent plus three inks), so give the fifth segment an explicit `color`. Anything under ~2% is neither clickable nor readable.
+- The default ladder already paints the headline share with the accent and leaves the rest in receding inks; pass `color` only when the segments have real category colours — colouring everything erases the point of the bar.
+- Colour is never the only carrier: the legend always shows the code and the percentage, and the detail panel names the segment in full.
+- Render the headline figure (`$51,785`) yourself, reading it off `segments` by `modelValue`, so the card's height does not change with the selection.
 
-The selection is fully controlled. With no `modelValue` the first segment reads as active, but a click still only emits — the host either binds `v-model` or handles `change` itself.
-
-`amount` travels with the data but **the bar never paints it**: it belongs to the card's headline figure, laid out by the host (see the example).
-
-## API
+## API Reference
 
 ### Props
 
@@ -64,7 +62,15 @@ The selection is fully controlled. With no `modelValue` the first segment reads 
 | `update:modelValue` | `(key: string)` | A different segment was selected. |
 | `change` | `(segment: AllocationSegment)` | The same move, carrying the whole segment. |
 
-## Interaction Contract
+## Selecting Is Inspecting
+
+The bar is not a read-only chart: clicking a segment — or its legend chip — changes which one you are inspecting, without the bar itself moving. That is what separates it from a progress bar: it says what the whole is *made of*, not how far along it is.
+
+The selection is fully controlled. With no `modelValue` the first segment reads as active, but a click still only emits — the host either binds `v-model` or handles `change` itself.
+
+`amount` travels with the data but **the bar never paints it**: it belongs to the card's headline figure, laid out by the host (see the example).
+
+## Overview
 
 - The segments and the legend are **two sets of controls over one value inside a single radio group**: the wrapper is `role="radiogroup"` with an `aria-label`, every segment and chip is `role="radio"` reporting `aria-checked`, and only the selected item keeps `tabindex="0"`; arrow keys move focus and the selection within the set that has focus (wrapping). The segments add `aria-label="{label}: {percent}"`.
 - Clicking the active segment again emits nothing — there is no "deselect" here.
@@ -73,14 +79,7 @@ The selection is fully controlled. With no `modelValue` the first segment reads 
 - The selected sheen is **class-driven, not animation-driven**: with motion reduced the transition is dropped and the sheen still appears immediately, with no blank gap.
 - The easing is `cubic-bezier(0.16, 1, 0.3, 1)` (upstream's `--ease-link`), heavier than this family's usual `--tx-ease-out-strong`. That difference is deliberate.
 
-## Best Practices
-
-- Keep it to three to five segments and fold the tail into an "other"; the default ladder has four steps (accent plus three inks), so give the fifth segment an explicit `color`. Anything under ~2% is neither clickable nor readable.
-- The default ladder already paints the headline share with the accent and leaves the rest in receding inks; pass `color` only when the segments have real category colours — colouring everything erases the point of the bar.
-- Colour is never the only carrier: the legend always shows the code and the percentage, and the detail panel names the segment in full.
-- Render the headline figure (`$51,785`) yourself, reading it off `segments` by `modelValue`, so the card's height does not change with the selection.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/allocation-bar/src/TxAllocationBar.vue`.
 - Types: `packages/tuffex/packages/components/src/allocation-bar/src/types.ts`.
@@ -88,8 +87,6 @@ The selection is fully controlled. With no `modelValue` the first segment reads 
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Versus `TxProgressBar`:** a progress bar expresses one advancing quantity; this expresses composition. They look similar and mean different things, so they are not interchangeable.
 - **The detail panel is additive:** upstream puts that panel in the card rather than the bar. Here it is a `detail` switch, off by default, which keeps "bar plus legend" as the smallest reusable unit.

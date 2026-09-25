@@ -8,9 +8,8 @@ tags: [ai, context, token]
 syncStatus: reviewed
 verified: true
 ---
-# Context Indicator
 
-## Basic Usage
+## Usage
 
 ### Context Indicator
 ::::TuffDemoWrapper{demo="ContextIndicatorContextIndicatorDemo" code-lang="vue"}
@@ -24,16 +23,14 @@ code: |
 ---
 ::::
 
-## Interaction Contract
+### Best Practices
 
-- The ratio is `usedTokens / maxTokens`, clamped to `0`–`1`, so an over-count never draws past a full ring.
-- A `maxTokens` of `0` or less is treated as a ratio of `0` — no divide-by-zero and no thrown error.
-- Three colour levels are derived from the ratio and exposed on `data-level`: `ok` (≤ 80%), `warning` (> 80%) and `danger` (> 95%). Style overrides can key off that attribute.
-- The default label uses compact counts: `1.2M` at a million or more, `12.3K` at a thousand or more, otherwise a rounded integer. A `formatter` replaces that text entirely.
-- `title` is always "text (percentage)", so the percentage stays visible on hover even with a custom `formatter`.
-- The root is `role="meter"` with `aria-valuemin` / `aria-valuemax` / `aria-valuenow` kept in sync. The SVG is `aria-hidden`, and the accessible name comes from `label`.
+- Pass the model's real window size rather than a hardcoded constant, so the indicator does not lie after a model switch.
+- Use `formatter` for localized number formatting instead of wrapping the component in your own text, or the percentage in `title` will disagree with what is displayed.
+- Only prompt the user near the limit — from `warning` upward. Below that this is background information and should not compete for attention.
+- If you place it inside a clickable region, give that region its own accessible name: `role="meter"` conveys nothing about being actionable.
 
-## API
+## API Reference
 
 ### Props
 
@@ -54,9 +51,11 @@ code: |
 |------|-------|-------------|
 | `detail` | `{ ratio: number, used: number, max: number }` | Appended after the text — a place for a percentage, a remaining count, or a "clear context" affordance. |
 
-## Best Practices
+## Overview
 
-- Pass the model's real window size rather than a hardcoded constant, so the indicator does not lie after a model switch.
-- Use `formatter` for localized number formatting instead of wrapping the component in your own text, or the percentage in `title` will disagree with what is displayed.
-- Only prompt the user near the limit — from `warning` upward. Below that this is background information and should not compete for attention.
-- If you place it inside a clickable region, give that region its own accessible name: `role="meter"` conveys nothing about being actionable.
+- The ratio is `usedTokens / maxTokens`, clamped to `0`–`1`, so an over-count never draws past a full ring.
+- A `maxTokens` of `0` or less is treated as a ratio of `0` — no divide-by-zero and no thrown error.
+- Three colour levels are derived from the ratio and exposed on `data-level`: `ok` (≤ 80%), `warning` (> 80%) and `danger` (> 95%). Style overrides can key off that attribute.
+- The default label uses compact counts: `1.2M` at a million or more, `12.3K` at a thousand or more, otherwise a rounded integer. A `formatter` replaces that text entirely.
+- `title` is always "text (percentage)", so the percentage stays visible on hover even with a custom `formatter`.
+- The root is `role="meter"` with `aria-valuemin` / `aria-valuemax` / `aria-valuenow` kept in sync. The SVG is `aria-hidden`, and the accessible name comes from `label`.

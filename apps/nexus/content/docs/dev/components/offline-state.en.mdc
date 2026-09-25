@@ -8,9 +8,8 @@ tags: [offline, network, state]
 syncStatus: reviewed
 verified: true
 ---
-# OfflineState
 
-## Basic Usage
+## Usage
 
 ### OfflineState
 :::TuffDemoWrapper{demo="OfflineStateOfflineStateDemo" code-lang="vue"}
@@ -27,14 +26,14 @@ code: |
 ---
 :::
 
-## Interaction Contract
+### Best Practices
 
-- Always forwards `variant="offline"` to `TxEmptyState`.
-- Does not rewrite explicit `title`, `description`, `surface`, `layout`, `align`, `size`, `icon`, or action props.
-- Forwards `icon`, `title`, `description`, and `actions` slots unchanged to `TxEmptyState`.
-- Generated `primary` / `secondary` events come from the wrapped `TxEmptyState` action buttons.
+- Use it for recoverable network or offline states; use `TxErrorState` or a product-specific error for server failures that are not connectivity related.
+- Tell users whether local drafts, queued actions, or cached data remain safe.
+- Keep the primary action retry-focused. Avoid destructive actions in an offline empty state.
+- Prefer `surface="card"` inside panels so the network state occupies the same visual container as loaded content.
 
-## API
+## API Reference
 
 ### Props
 
@@ -71,20 +70,18 @@ code: |
 | `description` | - | Replaces resolved description content. |
 | `actions` | - | Replaces generated primary/secondary action buttons. |
 
-## Best Practices
+## Overview
 
-- Use it for recoverable network or offline states; use `TxErrorState` or a product-specific error for server failures that are not connectivity related.
-- Tell users whether local drafts, queued actions, or cached data remain safe.
-- Keep the primary action retry-focused. Avoid destructive actions in an offline empty state.
-- Prefer `surface="card"` inside panels so the network state occupies the same visual container as loaded content.
+- Always forwards `variant="offline"` to `TxEmptyState`.
+- Does not rewrite explicit `title`, `description`, `surface`, `layout`, `align`, `size`, `icon`, or action props.
+- Forwards `icon`, `title`, `description`, and `actions` slots unchanged to `TxEmptyState`.
+- Generated `primary` / `secondary` events come from the wrapped `TxEmptyState` action buttons.
 
-## Review Notes
+## Technologies
 
 - **Wrapper contract:** `TxOfflineState` locks `variant="offline"` on `TxEmptyState`; title, description, surface, actions, icons, and slots remain host-controlled.
 - **State choice:** Use it for recoverable local network/offline states. Server failures that are not caused by connectivity should use the error-state pattern instead.
 - **Verified coverage:** `offline-state.test.ts` covers forced variant forwarding, props/actions, named slots, and install registration.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/offline-state/src/TxOfflineState.vue`.
 - Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`.

@@ -8,9 +8,8 @@ tags: [search, input, form]
 syncStatus: reviewed
 verified: true
 ---
-# SearchInput 搜索输入框
 
-## 基础用法
+## 用法
 
 ### SearchInput
 :::TuffDemoWrapper{demo="SearchInputSearchInputDemo" code-lang="vue"}
@@ -44,8 +43,6 @@ code: |
   </template>
 ---
 :::
-
-## 远程搜索
 
 ### SearchInput (remote)
 :::TuffDemoWrapper{demo="SearchInputSearchInputRemoteDemo" code-lang="vue"}
@@ -120,6 +117,51 @@ code: |
 ---
 :::
 
+### 最佳实践
+
+- 仅需要关键词和 Enter 触发时使用 `TxSearchInput`；需要结果面板或选项回填时优先使用 `TxSearchSelect`。
+- `remote` 模式会在输入变化后按 `searchDebounce` 触发 `search`，Enter 会立即触发 `search`。API 调用方应保持幂等，因为两条路径可能产生同一个查询。
+- 不要只依赖 placeholder 表达业务语义；密集工具栏里应提供外部标签、分组标题或上下文说明。
+- 只有本地或完整缓存搜索才把 `searchDebounce` 设为 `0`；网络搜索应保留防抖，避免请求风暴。
+
+## API 参考
+
+### TxSearchInput Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | 输入值（v-model） |
+| `placeholder` | `string` | `'Search'` | 占位 |
+| `disabled` | `boolean` | `false` | 禁用 |
+| `clearable` | `boolean` | `true` | 可清空 |
+| `remote` | `boolean` | `false` | 是否远程搜索（输入时触发 `search`） |
+| `searchDebounce` | `number` | `200` | 远程搜索防抖（ms） |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(v: string)` | v-model 更新 |
+| `input` | `(v: string)` | 输入 |
+| `focus` | `(e: FocusEvent)` | 聚焦 |
+| `blur` | `(e: FocusEvent)` | 失焦 |
+| `clear` | - | 清空 |
+| `search` | `(v: string)` | Enter 或 remote 输入触发 |
+
+### Expose
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `focus()` | `() => void` | 聚焦 |
+| `blur()` | `() => void` | 失焦 |
+| `clear()` | `() => void` | 清空 |
+| `setValue(v)` | `(v: string) => void` | 设置值 |
+| `getValue()` | `() => string` | 获取值 |
+
+### Slots
+
+`TxSearchInput` 不暴露公共插槽。前缀搜索图标由组件内置；需要自定义前缀或后缀时应直接使用 `TuffInput`。
+
 ## 后台筛选工具栏
 
 `TxSearchInput` 适合承载关键词输入；当筛选还需要“范围/类型”时，搭配 `TxSearchSelect` 和 `TxSearchEmpty` 可以形成完整的列表筛选路径。
@@ -177,59 +219,12 @@ code: |
 ---
 :::
 
-## API
-
-### TxSearchInput Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` | `string` | `''` | 输入值（v-model） |
-| `placeholder` | `string` | `'Search'` | 占位 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `clearable` | `boolean` | `true` | 可清空 |
-| `remote` | `boolean` | `false` | 是否远程搜索（输入时触发 `search`） |
-| `searchDebounce` | `number` | `200` | 远程搜索防抖（ms） |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `(v: string)` | v-model 更新 |
-| `input` | `(v: string)` | 输入 |
-| `focus` | `(e: FocusEvent)` | 聚焦 |
-| `blur` | `(e: FocusEvent)` | 失焦 |
-| `clear` | - | 清空 |
-| `search` | `(v: string)` | Enter 或 remote 输入触发 |
-
-### Expose
-
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `focus()` | `() => void` | 聚焦 |
-| `blur()` | `() => void` | 失焦 |
-| `clear()` | `() => void` | 清空 |
-| `setValue(v)` | `(v: string) => void` | 设置值 |
-| `getValue()` | `() => string` | 获取值 |
-
-### Slots
-
-`TxSearchInput` 不暴露公共插槽。前缀搜索图标由组件内置；需要自定义前缀或后缀时应直接使用 `TuffInput`。
-
-## 最佳实践
-
-- 仅需要关键词和 Enter 触发时使用 `TxSearchInput`；需要结果面板或选项回填时优先使用 `TxSearchSelect`。
-- `remote` 模式会在输入变化后按 `searchDebounce` 触发 `search`，Enter 会立即触发 `search`。API 调用方应保持幂等，因为两条路径可能产生同一个查询。
-- 不要只依赖 placeholder 表达业务语义；密集工具栏里应提供外部标签、分组标题或上下文说明。
-- 只有本地或完整缓存搜索才把 `searchDebounce` 设为 `0`；网络搜索应保留防抖，避免请求风暴。
-
-## 审阅说明
+## 技术实现
 
 - **搜索契约：** Enter 会立即触发 `search`。`remote=true` 时，输入变化还会按防抖触发 `search`，但禁用状态不会发起远程搜索。
 - **清空契约：** 组件转发 `TuffInput` 的清空行为，触发 `clear`，并暴露同一组 focus/blur/value helpers 方便外层集成。
 - **组合契约：** 搜索图标由 `TxSearchInput` 内置管理；需要自定义前后缀插槽时应直接使用 `TuffInput`。
 - **实测覆盖:** `search-input.test.ts` 覆盖输入/搜索事件、远程防抖、禁用远程阻断、清空转发，以及 `getValue()` / `setValue()` helper 暴露。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/search-input/src/TxSearchInput.vue`.
 - Types: `packages/tuffex/packages/components/src/search-input/src/types.ts` exports `SearchInputProps` and `SearchInputEmits`.

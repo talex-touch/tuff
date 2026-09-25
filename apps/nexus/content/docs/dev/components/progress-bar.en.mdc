@@ -8,9 +8,8 @@ tags: [progress, bar, loading]
 syncStatus: reviewed
 verified: true
 ---
-# ProgressBar
 
-## Demo
+## Usage
 
 ### Stateful Progress
 
@@ -105,25 +104,18 @@ code: |
 ---
 :::
 
-## Interaction Contract
+### Best Practices
 
-- The track renders `role="progressbar"` with `aria-valuemin="0"` and `aria-valuemax="100"`.
-- Determinate progress clamps `percentage` to `0..100` and exposes it as `aria-valuenow`.
-- `loading` and `indeterminate` omit `aria-valuenow`; use `message` to describe the work.
-- `error` and `success` boolean props take precedence over `status`.
-- When `success` or `error` has a `message` and `percentage` is `0`, the visual width resolves to `100%` for completion-style labels.
-- `message` wins over `format`, and `format` wins over the default rounded percentage text.
-- Text renders only when `message` is present or `showText=true`; loading/indeterminate states only show text when `message` is present. `textPlacement="top"` follows the same rule as `outside` and renders the text row above the track.
-- `detail` renders only under `textPlacement="top"`, after the label and muted behind a separator dot. It is visible text and never enters the progressbar's accessible name (still `ariaLabel` > `message` > `Progress`).
-- The default track is a flat 10% tint of the text colour: no `.tx-progress-bar__mask` node and no rim. `maskVariant="solid" | "dashed"` draws the rim; the mask layer renders only when `maskBackground` is not `'none'`.
-- The fill defaults to `linear-gradient(90deg, faded → saturated)`; a `color` that is already a gradient string is used verbatim. `.tx-progress-bar__glow` is mounted for every determinate bar that is not segmented, sits outside the track's clipping, and is visible only strictly between 0% and 100%. A gradient `color` has no single hue, so its glow is white and the `top` label falls back to the text colour (`--tx-progress-glow`, `--tx-progress-accent`).
-- `flowEffect="stardust"` draws two white point fields over the fill (`::before` far, small and slow; `::after` near, larger, faster and twinkling), each tiling by whole tile widths so the drift never shows a seam. Points are sized in px, so a 5px and a 14px bar get the same grain. `'particles'` is a deprecated alias that renders the same layers. No flow effect draws over `segments` or while indeterminate.
-- Width changes ease over 480ms on `--tx-ease-out-strong`; the five indeterminate sweeps animate composited properties only (`transform`, plus `opacity` on `split`), never `left` or `width`, and stop under `prefers-reduced-motion`. The travelling sweeps (`sweep`, `classic`, `elastic`) run linear and start and end fully off the track, so the loop point is never on screen and the bar never appears to stall.
-- `segments` ignore non-positive values. The filled width uses `segmentsTotal`; segment widths inside the fill normalize by the sum of positive segment values. Each segment paints its colour on an inner `.tx-progress-bar__segment-fill` and carries a `data-tip` of `label · share%` (share of `segmentsTotal`, or the share alone without a label). On hover the fill scales up, the other segments dim, and the tip rises above the bar; a segmented track sets `overflow: visible` to give the lift room.
-- `complete` emits once when resolved progress reaches `100`, and can emit again after progress drops below `100` and completes again.
-- `tooltip` or `tooltipContent` wraps the bar in `TxTooltip`; `tooltipProps` are forwarded to that tooltip.
+- Use `percentage` only for known progress. Use `loading` or `indeterminate` when duration is unknown.
+- Do not fake 100% for success states; pass `success` with a message when the operation is complete.
+- Keep `message` short because it is also used for the progressbar accessible label.
+- Use `segmentsTotal` to keep segmented bars honest when segments represent a partial total.
+- Reserve animated effects for high-value progress moments; excessive shimmer/wave/stardust usage makes dashboards noisy.
+- Give every segment a `label`: the hover tip is the only place a segmented bar explains what each colour stands for.
+- The default is a flat, rimless track. Pass `maskBackground` explicitly (with `maskVariant="solid"` for a rim) when you need a blurred or glass track instead of relying on the old default.
+- For uploads and downloads with a known size, put the "how much so far" copy in `textPlacement="top"` + `detail` rather than in `message`, which doubles as the accessible name.
 
-## API
+## API Reference
 
 ### Props
 
@@ -174,18 +166,25 @@ code: |
 |------|------|------|
 | - | - | `TxProgressBar` does not expose slots. Use `message`, `format`, `tooltipContent`, and `tooltipProps` for labels and tooltip content. |
 
-## Best Practices
+## Overview
 
-- Use `percentage` only for known progress. Use `loading` or `indeterminate` when duration is unknown.
-- Do not fake 100% for success states; pass `success` with a message when the operation is complete.
-- Keep `message` short because it is also used for the progressbar accessible label.
-- Use `segmentsTotal` to keep segmented bars honest when segments represent a partial total.
-- Reserve animated effects for high-value progress moments; excessive shimmer/wave/stardust usage makes dashboards noisy.
-- Give every segment a `label`: the hover tip is the only place a segmented bar explains what each colour stands for.
-- The default is a flat, rimless track. Pass `maskBackground` explicitly (with `maskVariant="solid"` for a rim) when you need a blurred or glass track instead of relying on the old default.
-- For uploads and downloads with a known size, put the "how much so far" copy in `textPlacement="top"` + `detail` rather than in `message`, which doubles as the accessible name.
+- The track renders `role="progressbar"` with `aria-valuemin="0"` and `aria-valuemax="100"`.
+- Determinate progress clamps `percentage` to `0..100` and exposes it as `aria-valuenow`.
+- `loading` and `indeterminate` omit `aria-valuenow`; use `message` to describe the work.
+- `error` and `success` boolean props take precedence over `status`.
+- When `success` or `error` has a `message` and `percentage` is `0`, the visual width resolves to `100%` for completion-style labels.
+- `message` wins over `format`, and `format` wins over the default rounded percentage text.
+- Text renders only when `message` is present or `showText=true`; loading/indeterminate states only show text when `message` is present. `textPlacement="top"` follows the same rule as `outside` and renders the text row above the track.
+- `detail` renders only under `textPlacement="top"`, after the label and muted behind a separator dot. It is visible text and never enters the progressbar's accessible name (still `ariaLabel` > `message` > `Progress`).
+- The default track is a flat 10% tint of the text colour: no `.tx-progress-bar__mask` node and no rim. `maskVariant="solid" | "dashed"` draws the rim; the mask layer renders only when `maskBackground` is not `'none'`.
+- The fill defaults to `linear-gradient(90deg, faded → saturated)`; a `color` that is already a gradient string is used verbatim. `.tx-progress-bar__glow` is mounted for every determinate bar that is not segmented, sits outside the track's clipping, and is visible only strictly between 0% and 100%. A gradient `color` has no single hue, so its glow is white and the `top` label falls back to the text colour (`--tx-progress-glow`, `--tx-progress-accent`).
+- `flowEffect="stardust"` draws two white point fields over the fill (`::before` far, small and slow; `::after` near, larger, faster and twinkling), each tiling by whole tile widths so the drift never shows a seam. Points are sized in px, so a 5px and a 14px bar get the same grain. `'particles'` is a deprecated alias that renders the same layers. No flow effect draws over `segments` or while indeterminate.
+- Width changes ease over 480ms on `--tx-ease-out-strong`; the five indeterminate sweeps animate composited properties only (`transform`, plus `opacity` on `split`), never `left` or `width`, and stop under `prefers-reduced-motion`. The travelling sweeps (`sweep`, `classic`, `elastic`) run linear and start and end fully off the track, so the loop point is never on screen and the bar never appears to stall.
+- `segments` ignore non-positive values. The filled width uses `segmentsTotal`; segment widths inside the fill normalize by the sum of positive segment values. Each segment paints its colour on an inner `.tx-progress-bar__segment-fill` and carries a `data-tip` of `label · share%` (share of `segmentsTotal`, or the share alone without a label). On hover the fill scales up, the other segments dim, and the tip rises above the bar; a segmented track sets `overflow: visible` to give the lift room.
+- `complete` emits once when resolved progress reaches `100`, and can emit again after progress drops below `100` and completes again.
+- `tooltip` or `tooltipContent` wraps the bar in `TxTooltip`; `tooltipProps` are forwarded to that tooltip.
 
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/progress-bar/src/types.ts`, `TxProgressBar.vue`, and `progress-bar.test.ts`.
 - Existing tests cover determinate clamping, progressbar ARIA state, indeterminate `aria-valuenow` omission, `complete` once-per-cycle emission, and segment normalization by positive segment sum.
@@ -195,11 +194,8 @@ code: |
 - API note: `segments` use positive values only. The outer fill width is based on `segmentsTotal`, while widths inside the fill normalize by the positive segment sum.
 - Accessibility note: keep `message` short and status-specific because it is used as the accessible progress label.
 
-## Source
-
 - Component source: `packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`.
 - Types: `packages/tuffex/packages/components/src/progress-bar/src/types.ts`.
 - **Verified coverage:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` verifies determinate clamping and ARIA state, indeterminate `aria-valuenow` omission, once-per-cycle `complete` emits, segment normalization by positive segment sum, the redesign (no mask node by default, gradient fill and glow placement, the `top` text row, layout-free keyframes and the reduced-motion stop), the stardust flow (class, alias, white glow for gradients, seamless tile drift) and the segment hover (tips, inner fill, visible overflow, linear sweeps).
 
 <TuffDocSourceLink />
-

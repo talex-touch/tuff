@@ -8,9 +8,8 @@ tags: [agent, screen, capture, ai]
 syncStatus: reviewed
 verified: true
 ---
-# AgentScreen
 
-## Basic Usage
+## Usage
 
 ### AgentScreen
 
@@ -36,29 +35,13 @@ code: |
 ---
 :::
 
-## The Frame Owns Only the Frame
+### Best Practices
 
-The component owns three things — **the frame, the pointer and the caption** — while the content comes from `src` or the default slot. The same frame can therefore hold a screenshot, a live canvas, or a streamed video; it does not care what is inside it.
+- Use the default slot for a live canvas or video and keep `src` for static captures.
+- Let `label` say *whose* screen this is and the pointer's `label` say *what it is doing* — two different jobs, so do not merge them.
+- Between captured frames, switch `state` to `loading` rather than leaving a stale frame up; a stale frame reads as "it is stuck".
 
-The default slot wins over `src`: a live surface and a stale screenshot must not stack.
-
-`ratio` is the frame's CSS `aspect-ratio`, defaulting to the upstream capture's own `2964 / 1856`. A ratio rather than a height, because the frame's width follows its container while the capture's proportions do not change.
-
-## The Pointer Is in Percent
-
-`cursor`'s `x` / `y` are **percentages of the frame's own box**, not pixels. The frame is responsive, and a captured pointer coordinate is only meaningful in pixels relative to the capture it came from; as a percentage it lands in the same place at any size.
-
-Out-of-range coordinates are **clamped to 0–100**. Capture sources occasionally report a point slightly outside the image, and an un-clamped one escapes the clip and draws on the page.
-
-The pointer is inline SVG rather than an icon font: it has to stay visible over an arbitrary capture, which needs a light fill with a dark outline — something a single-colour glyph cannot do.
-
-## The Loading State
-
-With `state` set to `loading` the frame swaps to a skeleton placeholder and **drops the capture and the `overlay` slot together** — an overlay annotates the capture, and without one it has nothing to annotate.
-
-The placeholder reuses the library's shared skeleton bar (`skeleton-surface`) rather than minting a second shimmer: one timing, one reduced-motion guard, with only the colour pinned to the BUI surface so the placeholder matches the frame it fills. It carries `role="status" aria-live="polite"`, because it changes without user action.
-
-## API
+## API Reference
 
 ### Props
 
@@ -88,13 +71,29 @@ The placeholder reuses the library's shared skeleton bar (`skeleton-surface`) ra
 | `overlay` | Above the content, inside the clip; dropped together with it while loading |
 | `label` | Replaces the caption under the frame |
 
-## Best Practices
+## The Frame Owns Only the Frame
 
-- Use the default slot for a live canvas or video and keep `src` for static captures.
-- Let `label` say *whose* screen this is and the pointer's `label` say *what it is doing* — two different jobs, so do not merge them.
-- Between captured frames, switch `state` to `loading` rather than leaving a stale frame up; a stale frame reads as "it is stuck".
+The component owns three things — **the frame, the pointer and the caption** — while the content comes from `src` or the default slot. The same frame can therefore hold a screenshot, a live canvas, or a streamed video; it does not care what is inside it.
 
-## Source
+The default slot wins over `src`: a live surface and a stale screenshot must not stack.
+
+`ratio` is the frame's CSS `aspect-ratio`, defaulting to the upstream capture's own `2964 / 1856`. A ratio rather than a height, because the frame's width follows its container while the capture's proportions do not change.
+
+## The Pointer Is in Percent
+
+`cursor`'s `x` / `y` are **percentages of the frame's own box**, not pixels. The frame is responsive, and a captured pointer coordinate is only meaningful in pixels relative to the capture it came from; as a percentage it lands in the same place at any size.
+
+Out-of-range coordinates are **clamped to 0–100**. Capture sources occasionally report a point slightly outside the image, and an un-clamped one escapes the clip and draws on the page.
+
+The pointer is inline SVG rather than an icon font: it has to stay visible over an arbitrary capture, which needs a light fill with a dark outline — something a single-colour glyph cannot do.
+
+## The Loading State
+
+With `state` set to `loading` the frame swaps to a skeleton placeholder and **drops the capture and the `overlay` slot together** — an overlay annotates the capture, and without one it has nothing to annotate.
+
+The placeholder reuses the library's shared skeleton bar (`skeleton-surface`) rather than minting a second shimmer: one timing, one reduced-motion guard, with only the colour pinned to the BUI surface so the placeholder matches the frame it fills. It carries `role="status" aria-live="polite"`, because it changes without user action.
+
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/agent-screen/src/TxAgentScreen.vue`.
 - Types: `packages/tuffex/packages/components/src/agent-screen/src/types.ts`.
